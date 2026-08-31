@@ -30,7 +30,7 @@ const turn = await session.prompt({
     { type: "text", text: "Explain the architecture in this image" },
     {
       type: "file",
-      mediaType: "image/png",
+      media_type: "image/png",
       url: "/absolute/path/architecture.png",
       filename: "architecture.png",
     },
@@ -38,7 +38,7 @@ const turn = await session.prompt({
 });
 ```
 
-The `SessionUserMessagePart` input uses `mediaType`; persisted `SessionMessage` values use `media_type`. These are the Session input and persistence boundaries, so do not feed a read Message Part back into `prompt()` unchanged.
+Both input and persisted messages use Downcity's `snake_case` fields. Parts passed to `prompt()` do not have a `part_id`; they become canonical User Parts only after entering the Session.
 
 Data URL attachments are not written directly into Session Messages. The Session decodes each Data URL into the current Session's `.downcity/.../attachments/` directory and stores only a path relative to the Workspace root in the Message. Before model execution, the Session reads the attachment from that path and converts it into a model-consumable representation.
 

@@ -13,11 +13,11 @@ import {
   generate_model,
 } from "@executor/model/ModelGenerate.js";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
-import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
-import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
 
 const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
 
@@ -36,7 +36,7 @@ export interface EnsureSessionTitleParams {
   /**
    * 当前 session 已落盘消息。
    */
-  messages: SessionRecordV1[];
+  messages: SessionMessage[];
 
   /**
    * 可选模型实例；传入时会尝试生成更短标题。
@@ -72,26 +72,10 @@ function truncateTitle(input: string, maxChars: number): string {
   return title.slice(0, maxChars).trimEnd();
 }
 
-function extractTextFromMessage(message: SessionRecordV1): string {
-  if (!is_session_message_record(message)) return "";
-  if (!Array.isArray(message.parts)) return "";
-  const texts: string[] = [];
-  for (const part of message.parts) {
-    if (!part || typeof part !== "object") continue;
-    const textPart = part as { type?: unknown; text?: unknown };
-    if (textPart.type !== "text" || typeof textPart.text !== "string") continue;
-    const text = textPart.text.trim();
-    if (!text) continue;
-    texts.push(text);
-  }
-  return texts.join("\n").trim();
-}
-
-function resolveFirstUserText(messages: SessionRecordV1[]): string {
+function resolveFirstUserText(messages: SessionMessage[]): string {
   for (const message of messages) {
-    if (!is_session_message_record(message)) continue;
-    if (message.role !== "user") continue;
-    const text = extractTextFromMessage(message);
+    if (message.type !== "user") continue;
+    const text = extract_session_message_text(message);
     if (text) return text;
   }
   return "";

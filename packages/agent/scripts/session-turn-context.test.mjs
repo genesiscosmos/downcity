@@ -12,48 +12,49 @@ import test from "node:test";
 
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 
+function create_user_message(message_id, text, created_at) {
+  return {
+    message_id,
+    session_id: "session-context-test",
+    turn_id: "turn-context-test",
+    sequence: created_at,
+    revision: 1,
+    visibility: "visible",
+    created_at,
+    updated_at: created_at,
+    type: "user",
+    input_type: "steer",
+    parts: [{
+      part_id: `${message_id}:text`,
+      type: "text",
+      text,
+      state: "done",
+    }],
+  };
+}
+
 test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async () => {
   const context = create_session_turn_context({
     session_id: "session-context-test",
     turn_id: "turn-context-test",
     project_root: "/workspace",
-    merge_step_input: async () => [{
-      id: "queued-message",
-      role: "user",
-      metadata: {
-        v: 1,
-        ts: 2,
-        session_id: "session-context-test",
-        source: "ingress",
-        kind: "normal",
-      },
-      parts: [{ type: "text", text: "queued" }],
-    }],
+    merge_step_input: async () => [create_user_message("queued-message", "queued", 2)],
   });
-  context.input.inject_user_message({
-    id: "injected-message",
-    role: "user",
-    metadata: {
-      v: 1,
-      ts: 1,
-      session_id: "session-context-test",
-      source: "ingress",
-      kind: "normal",
-    },
-    parts: [{ type: "text", text: "injected" }],
-  });
+  context.input.inject_user_message(
+    create_user_message("injected-message", "injected", 1),
+  );
   context.output.enqueue_assistant_parts([{
     type: "file",
-    mediaType: "text/plain",
+    media_type: "text/plain",
     url: "/workspace/result.txt",
   }]);
 
   assert.deepEqual(
-    (await context.input.checkpoint()).map((message) => message.id),
+    (await context.input.checkpoint()).map((message) => message.message_id),
     ["injected-message", "queued-message"],
   );
   assert.deepEqual(
-    (await context.input.checkpoint()).map((message) => message.id),
+    (await context.input.checkpoint()).map((message) => message.message_id),
     ["queued-message"],
   );
   assert.equal(context.output.take_assistant_parts().length, 1);

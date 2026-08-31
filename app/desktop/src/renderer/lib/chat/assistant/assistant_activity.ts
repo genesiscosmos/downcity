@@ -57,7 +57,7 @@ export function group_assistant_content(parts: SessionAssistantMessagePart[]): A
   const groups: AssistantContentGroup[] = [];
   for (const part of parts) {
     // 无展示语义的 part 不能切断连续 Tool 活动。
-    if (part.type === "step-start" || part.type === "data") continue;
+    if (part.type === "data") continue;
     if (part.type === "text" && !part.text.trim()) continue;
     if (is_activity_part(part)) {
       const previous = groups[groups.length - 1];
@@ -81,7 +81,7 @@ export function group_assistant_activities(parts: AssistantActivityPart[], show_
 /** Assistant 操作栏只在最后一个具有展示语义的 part 是非空文本时出现。 */
 export function should_show_assistant_actions(parts: SessionAssistantMessagePart[]): boolean {
   const visible = parts.filter((part) => {
-    if (part.type === "step-start" || part.type === "data") return false;
+    if (part.type === "data") return false;
     if (part.type === "text") return Boolean(part.text.trim());
     return true;
   });
@@ -165,7 +165,7 @@ function resolve_tool_state_label(visual_kind: AssistantToolVisualKind, state: E
 }
 
 function resolve_tool_detail(part: Extract<SessionAssistantMessagePart, { type: "tool" }>, visual_kind: AssistantToolVisualKind): string {
-  const input = part.input ?? part.raw_input;
+  const input = part.input;
   if (visual_kind === "read" || visual_kind === "write" || visual_kind === "edit") {
     return read_tool_input_text(input, ["file_path", "path", "filename"]) || part.title || part.tool_name;
   }

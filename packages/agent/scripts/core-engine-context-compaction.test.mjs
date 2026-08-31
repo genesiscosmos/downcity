@@ -82,7 +82,7 @@ function create_turn_input(model, messages, context_window = 100) {
       tools: {},
       context_window,
     }),
-    reload_history: async () => messages,
+    reload_history: async () => ({ messages }),
   };
 }
 
@@ -116,16 +116,8 @@ test("最终 Step 达到 95% 时通过 Turn 结果请求 writer 收口后持久�
     doStream: async () => create_stream_text_result("done", 90, 5),
   });
   const result = await create_runner().execute(create_turn_input(model, [{
-    id: "user-1",
     role: "user",
-    metadata: {
-      v: 1,
-      ts: 1,
-      session_id: "compact-runner-session",
-      source: "ingress",
-      kind: "normal",
-    },
-    parts: [{ type: "text", text: "latest request" }],
+    content: [{ type: "text", text: "latest request" }],
   }]));
   assert.equal(result.success, true);
   assert.equal(result.compact_required, true);
@@ -138,47 +130,27 @@ test("新的持久化 Summary 只按 50% 水位验收一次", async () => {
   });
   const runner = create_runner();
   const messages = [{
-    id: "summary-1",
     role: "assistant",
-    metadata: {
-      v: 1,
-      ts: 1,
-      session_id: "compact-runner-session",
-      source: "compact",
-      kind: "summary",
-    },
-    parts: [{ type: "text", text: "previous checkpoint" }],
+    content: [{ type: "text", text: "previous checkpoint" }],
   }, {
-    id: "user-1",
     role: "user",
-    metadata: {
-      v: 1,
-      ts: 2,
-      session_id: "compact-runner-session",
-      source: "ingress",
-      kind: "normal",
-    },
-    parts: [{ type: "text", text: "latest request" }],
+    content: [{ type: "text", text: "latest request" }],
   }];
-  const first = await runner.execute(create_turn_input(model, messages));
-  const second = await runner.execute(create_turn_input(model, messages));
+  const first_input = create_turn_input(model, messages);
+  first_input.execute_input.history_summary_id = "summary-1";
+  const second_input = create_turn_input(model, messages);
+  second_input.execute_input.history_summary_id = "summary-1";
+  const first = await runner.execute(first_input);
+  const second = await runner.execute(second_input);
   assert.equal(first.compact_required, true);
   assert.equal(second.compact_required, undefined);
 });
 
 test("显式 compact 后在下一次 provider 调用前重载 canonical history", async () => {
   const provider_prompts = [];
-  const compacted_records = [{
-    id: "summary-reloaded",
+  const compacted_messages = [{
     role: "assistant",
-    metadata: {
-      v: 1,
-      ts: 2,
-      session_id: "compact-runner-session",
-      source: "compact",
-      kind: "summary",
-    },
-    parts: [{ type: "text", text: "compacted checkpoint" }],
+    content: [{ type: "text", text: "compacted checkpoint" }],
   }];
   const runner = new CoreEngineRunner({
     session_id: "compact-runner-session",
@@ -194,16 +166,8 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
     },
   });
   const input = create_turn_input(model, [{
-    id: "old-user",
     role: "user",
-    metadata: {
-      v: 1,
-      ts: 1,
-      session_id: "compact-runner-session",
-      source: "ingress",
-      kind: "normal",
-    },
-    parts: [{ type: "text", text: "history before compact" }],
+    content: [{ type: "text", text: "history before compact" }],
   }]);
   input.turn_context = create_session_turn_context({
     session_id: "compact-runner-session",
@@ -214,7 +178,10 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
       return requested;
     },
   });
-  input.reload_history = async () => compacted_records;
+  input.reload_history = async () => ({
+    messages: compacted_messages,
+    summary_id: "summary-reloaded",
+  });
 
   const result = await runner.execute(input);
 
@@ -236,16 +203,8 @@ test("Provider context-length error 在当前 tool-loop 内 deep compact 后重�
   });
   const result = await create_context_error_runner().execute(
     create_turn_input(model, [{
-      id: "user-1",
       role: "user",
-      metadata: {
-        v: 1,
-        ts: 1,
-        session_id: "compact-runner-session",
-        source: "ingress",
-        kind: "normal",
-      },
-      parts: [{ type: "text", text: "latest request" }],
+      content: [{ type: "text", text: "latest request" }],
     }]),
   );
   assert.equal(result.success, true);

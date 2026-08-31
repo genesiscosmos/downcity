@@ -201,6 +201,9 @@ export class Executor implements SessionExecutor {
       query,
       system: step.input.system,
       messages: step.input.messages,
+      ...(step.compose_input.history.summary?.summary_id
+        ? { history_summary_id: step.compose_input.history.summary.summary_id }
+        : {}),
       tools: step.input.tools,
     };
   }
@@ -219,8 +222,15 @@ export class Executor implements SessionExecutor {
       turn_context,
       resolve_step_inputs: async () =>
         await this.resolve_step_inputs(turn_context),
-      reload_history: async () =>
-        (await this.compose_step(turn_context, 0, false)).input.messages,
+      reload_history: async () => {
+        const step = await this.compose_step(turn_context, 0, false);
+        return {
+          messages: step.input.messages,
+          ...(step.compose_input.history.summary?.summary_id
+            ? { summary_id: step.compose_input.history.summary.summary_id }
+            : {}),
+        };
+      },
     });
   }
 
@@ -370,23 +380,44 @@ export class Executor implements SessionExecutor {
               turn_context.output.enqueue_assistant_parts(message.parts);
               continue;
             }
+            const now = Date.now();
             turn_context.input.inject_user_message({
-              id: `u:${turn_context.session.session_id}:${generate_id()}`,
-              role: "user",
-              metadata: {
-                v: 1,
-                ts: Date.now(),
-                session_id: turn_context.session.session_id,
-                turn_id: turn_context.session.turn_id,
-                source: "ingress",
-                kind: "normal",
-                extra: {
-                  internal: "action_result",
-                  tool_name: name,
-                  ...(tool_call_id ? { tool_call_id } : {}),
-                },
-              },
-              parts: [...message.parts],
+              message_id: `runtime-user:${turn_context.session.session_id}:${generate_id()}`,
+              session_id: turn_context.session.session_id,
+              turn_id: turn_context.session.turn_id,
+              sequence: 0,
+              revision: 1,
+              visibility: "internal",
+              created_at: now,
+              updated_at: now,
+              type: "user",
+              input_type: "steer",
+              parts: message.parts.map((part, index) => {
+                if (part.type === "text") {
+                  return {
+                    part_id: `runtime-text:${index + 1}`,
+                    type: "text" as const,
+                    text: part.text,
+                    state: "done" as const,
+                  };
+                }
+                if (part.type === "file") {
+                  return {
+                    part_id: `runtime-file:${index + 1}`,
+                    type: "file" as const,
+                    media_type: part.media_type,
+                    url: part.url,
+                    ...(part.filename ? { filename: part.filename } : {}),
+                  };
+                }
+                return {
+                  part_id: `runtime-data:${index + 1}`,
+                  type: "data" as const,
+                  data_type: part.data_type,
+                  data: part.data,
+                  ...(part.data_id ? { data_id: part.data_id } : {}),
+                };
+              }),
             });
           }
           return output.output;

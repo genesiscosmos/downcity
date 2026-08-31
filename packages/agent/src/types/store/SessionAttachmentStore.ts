@@ -4,7 +4,7 @@
  * Session Message 只保存附件引用，附件内容由该 Store 在 Session 生命周期内持有。
  *
  * 数据边界（中文）：
- * - 输入边界：`session.prompt()` 接收 `type: "file"`、`mediaType` 和 Data URL。
+ * - 输入边界：`session.prompt()` 接收 `type: "file"`、`media_type` 和 Data URL。
  * - 存储边界：Store 解码 Data URL，写入 Agent 私有附件目录。
  * - Message 边界：Session Message 只记录附件的稳定绝对路径。
  * - 模型边界：模型转换器读取该路径，在内存中恢复成模型需要的文件内容。

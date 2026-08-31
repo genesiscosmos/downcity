@@ -5,10 +5,13 @@
  */
 
 import type { JsonObject } from "@/types/common/Json.js";
-import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
+import type {
+  SessionAssistantResultPart,
+  SessionPromptPart,
+} from "@/types/session/SessionContent.js";
 import type {
   SessionAssistantMessagePart,
   SessionUserMessagePart,
@@ -103,18 +106,18 @@ export interface AppendSessionErrorMessageInput {
 
 /** 公开 Session API 追加 User Message 的输入。 */
 export interface AppendExternalSessionUserMessageInput {
-  /** 可选的结构化 User Record。 */
-  message?: SessionRecordV1 | null;
-  /** 未提供结构化 Record 时使用的纯文本。 */
+  /** 可选的结构化 User 内容。 */
+  parts?: SessionPromptPart[];
+  /** 未提供结构化内容时使用的纯文本。 */
   text?: string;
 }
 
 /** 公开 Session API 追加 Assistant Message 的输入。 */
 export interface AppendExternalSessionAssistantMessageInput {
-  /** 可选的结构化 Assistant Record。 */
-  message?: SessionRecordV1 | null;
-  /** 未提供结构化 Record 时使用的纯文本。 */
-  fallback_text?: string;
+  /** 可选的结构化 Assistant 内容。 */
+  parts?: SessionAssistantResultPart[];
+  /** 未提供结构化内容时使用的纯文本。 */
+  text?: string;
 }
 
 /** Session Prompt 转换并持久化的输入。 */

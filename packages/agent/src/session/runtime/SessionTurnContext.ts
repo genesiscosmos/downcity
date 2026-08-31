@@ -7,8 +7,8 @@
  * - Plugin 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
  */
 
-import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
-import type { SessionUserMessageV1 } from "@/executor/types/SessionRecords.js";
+import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
+import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
 import type {
   SessionTurnContext,
   SessionTurnContextInit,
@@ -41,9 +41,9 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private workspace_env_snapshot?: Readonly<Record<string, string>>;
   private agent_systems_snapshot: readonly string[] = Object.freeze([]);
   private plugin_lease?: AgentPluginExecutionLease;
-  private injected_user_messages: SessionUserMessageV1[] = [];
-  private deferred_messages: SessionUserMessageV1[] = [];
-  private pending_assistant_parts: UIMessage["parts"] = [];
+  private injected_user_messages: SessionUserMessage[] = [];
+  private deferred_messages: SessionUserMessage[] = [];
+  private pending_assistant_parts: SessionAssistantResultPart[] = [];
 
   readonly lifecycle: SessionTurnContext["lifecycle"];
   readonly step: SessionTurnContext["step"];
@@ -131,7 +131,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       checkpoint: async () => {
         const injected = context.injected_user_messages;
         context.injected_user_messages = [];
-        let queued: SessionUserMessageV1[] = [];
+        let queued: SessionUserMessage[] = [];
         try {
           queued = (await context.init.merge_step_input?.()) || [];
         } catch {

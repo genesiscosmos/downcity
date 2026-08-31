@@ -8,19 +8,14 @@
  */
 
 import { nanoid } from "nanoid";
-import type { SessionUserMessageV1 } from "@/executor/types/SessionRecords.js";
-import type {
-  SessionActionRecordV1,
-  SessionRecordV1,
-  SessionMessageRecordV1,
-} from "@/executor/types/SessionRecords.js";
+import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
+import type { SessionActionEvent } from "@/types/session/SessionAction.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "@/types/sdk/AgentSessionTurn.js";
-import { extract_text_from_parts } from "@/executor/messages/UIMessageTransformer.js";
 import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
   SessionCompactHistory,
@@ -70,7 +65,7 @@ export class SessionLoop {
   private pending_prompt_count = 0;
   private processing_promise: Promise<void> | null = null;
   private active_turn: ActiveSessionTurnState | null = null;
-  private checkpoint_merged_messages: SessionUserMessageV1[] | null = null;
+  private checkpoint_merged_messages: SessionUserMessage[] | null = null;
 
   constructor(options: SessionLoopOptions) {
     this.session_id = String(options.session_id || "").trim();
@@ -228,10 +223,10 @@ export class SessionLoop {
    */
   private async drain_queued_inputs(
     active_turn: ActiveSessionTurnState,
-  ): Promise<SessionUserMessageV1[]> {
+  ): Promise<SessionUserMessage[]> {
     const drained = this.queue.drain();
     if (drained.length <= 0) return [];
-    const merged: SessionUserMessageV1[] = [];
+    const merged: SessionUserMessage[] = [];
     this.checkpoint_merged_messages = merged;
 
     try {
@@ -266,19 +261,14 @@ export class SessionLoop {
     const turn_id = this.require_active_turn().turn_id;
     try {
       await this.persist_action_event({
-        type: "action",
-        id: completion.id,
+        action_id: completion.id,
+        action_type: "command",
+        turn_id,
         title: completion.title,
         ...(completion.description
           ? { description: completion.description }
           : {}),
-        state: "completed",
-        metadata: {
-          v: 1,
-          ts: Date.now(),
-          session_id: this.session_id,
-          turn_id,
-        },
+        status: "completed",
       }, {
         publish_mutation: completion.publish_mutation !== false,
       });
@@ -310,17 +300,12 @@ export class SessionLoop {
     if (result.reason === "nothing_to_compact") {
       try {
         await this.persist_action_event({
-          type: "action",
-          id: compact_id,
+          action_id: compact_id,
+          action_type: "history-compaction",
+          turn_id,
           title: "Session messages already compact",
           description: "The Session has no active messages to compact.",
-          state: "completed",
-          metadata: {
-            v: 1,
-            ts: Date.now(),
-            session_id: this.session_id,
-            turn_id: turn_id,
-          },
+          status: "completed",
         });
       } catch (error) {
         try {
@@ -512,7 +497,10 @@ export class SessionLoop {
     const query = input.prompt_input.query;
     const executor_query = typeof query === "string"
       ? query
-      : extract_text_from_parts(query);
+      : query
+          .flatMap((part) => part.type === "text" ? [part.text] : [])
+          .join("\n")
+          .trim();
     let result: SessionTurnExecutionResult;
     result = await this.executor.execute({
       query: executor_query,
@@ -591,7 +579,7 @@ export class SessionLoop {
     prompt: AgentSessionPromptInput,
     turn_id: string,
     input_type: "prompt" | "steer",
-  ): Promise<SessionUserMessageV1> {
+  ): Promise<SessionUserMessage> {
     const message = await this.messages.append_prompt_message({
       project_root: this.workspace_path,
       prompt,
@@ -605,10 +593,10 @@ export class SessionLoop {
 
   /** 持久化 Executor Action，并同步刷新 Session metadata。 */
   private async persist_action_event(
-    event: SessionActionRecordV1,
+    event: SessionActionEvent,
     options?: { publish_mutation?: boolean },
   ): Promise<void> {
-    await this.messages.persist_action_record(event, options);
+    await this.messages.persist_action(event, options);
     await this.state.touch_metadata();
   }
 

@@ -70,9 +70,8 @@ import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
 import { ensure_session_title } from "@/session/SessionTitle.js";
-import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
-import type { SessionActionRecordInputV1 } from "@/executor/types/SessionRecords.js";
+import type { SessionActionEventInput } from "@/types/session/SessionAction.js";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 
@@ -517,7 +516,7 @@ export class Session implements AgentSession {
     text: string;
   }): Promise<void> {
     const appended = await this.session_messages.append_external_assistant_message({
-      fallback_text: String(input.text || "").trim(),
+      text: String(input.text || "").trim(),
     });
     if (appended) await this.state.touch_metadata();
   }
@@ -530,13 +529,12 @@ export class Session implements AgentSession {
       this.store.read_metadata(),
       this.session_messages.context_snapshot(),
     ]);
-    const records = to_executor_history(this.id, snapshot);
     const metadata_with_title = metadata.title
       ? metadata
       : await ensure_session_title({
           session_id: this.id,
           store: this.store,
-          messages: records,
+          messages: snapshot.messages,
           logger: this.logger,
         });
     const model_label = String(
@@ -552,7 +550,7 @@ export class Session implements AgentSession {
         ...metadata_with_title,
         ...(model_label ? { model_label } : {}),
       },
-      messages: records,
+      messages: snapshot.messages,
       executing: this.is_executing(),
     });
   }
@@ -605,10 +603,11 @@ export class Session implements AgentSession {
       : messages;
     const action_id = `history-forking:${this.id}:${Date.now()}:${nanoid(8)}`;
     await this.emit_action_event({
-      id: action_id,
+      action_id,
+      action_type: "history-fork",
       title: "Forking session messages",
       description: `Preparing ${String(fork_messages.length)} messages for the new session.`,
-      state: "running",
+      status: "running",
     });
     try {
       const forked = this.create_fork_session(
@@ -625,18 +624,20 @@ export class Session implements AgentSession {
       forked.shell_approval_adapter.set_effective_mode(approval_mode);
       await forked.session_messages.import_messages(fork_messages);
       await this.emit_action_event({
-        id: action_id,
+        action_id,
+        action_type: "history-fork",
         title: "Session messages forked",
         description: `Created ${forked.id} with ${String(fork_messages.length)} messages.`,
-        state: "completed",
+        status: "completed",
       });
       return forked;
     } catch (error) {
       await this.emit_action_event({
-        id: action_id,
+        action_id,
+        action_type: "history-fork",
         title: "Session messages fork failed",
         description: error instanceof Error ? error.message : String(error),
-        state: "failed",
+        status: "failed",
       });
       throw error;
     }
@@ -681,8 +682,8 @@ export class Session implements AgentSession {
       },
       append_assistant_message: async (message_params) => {
         const appended = await this.session_messages.append_external_assistant_message({
-          message: message_params.message,
-          fallback_text: message_params.fallback_text,
+          parts: message_params.parts,
+          text: message_params.text,
         });
         if (appended) await this.state.touch_metadata();
       },
@@ -951,9 +952,10 @@ export class Session implements AgentSession {
   ): Promise<void> {
     const action_id = `compacting:${this.id}:${generate_id()}`;
     await this.emit_action_event({
-      id: action_id,
+      action_id,
+      action_type: "history-compaction",
       title: "Compacting session messages",
-      state: "running",
+      status: "running",
       ...(turn_id
         ? { turn_id }
         : {}),
@@ -964,10 +966,11 @@ export class Session implements AgentSession {
         summary: plan.summary,
       });
       await this.emit_action_event({
-        id: action_id,
+        action_id,
+        action_type: "history-compaction",
         title: "Session messages compacted",
         description: `Closed Active through Message ${plan.boundary_message_id}.`,
-        state: "completed",
+        status: "completed",
         ...(turn_id
           ? { turn_id }
           : {}),
@@ -975,10 +978,11 @@ export class Session implements AgentSession {
       await this.state.touch_metadata();
     } catch (error) {
       await this.emit_action_event({
-        id: action_id,
+        action_id,
+        action_type: "history-compaction",
         title: "Session messages compact failed",
         description: error instanceof Error ? error.message : String(error),
-        state: "failed",
+        status: "failed",
         ...(turn_id
           ? { turn_id }
           : {}),
@@ -1016,21 +1020,16 @@ export class Session implements AgentSession {
   }
 
   /** 持久化并发布一条 canonical Action Message。 */
-  private async emit_action_event(input: SessionActionRecordInputV1): Promise<void> {
-    const action_id = String(input.id || "").trim() ||
+  private async emit_action_event(input: SessionActionEventInput): Promise<void> {
+    const action_id = String(input.action_id || "").trim() ||
       `action:${this.id}:${Date.now()}`;
-    await this.session_messages.persist_action_record({
-      type: "action",
-      id: action_id,
+    await this.session_messages.persist_action({
+      action_id,
+      action_type: input.action_type,
+      ...(input.turn_id ? { turn_id: input.turn_id } : {}),
       title: input.title,
       ...(input.description ? { description: input.description } : {}),
-      state: input.state,
-      metadata: {
-        v: 1,
-        ts: Date.now(),
-        session_id: this.id,
-        ...(input.turn_id ? { turn_id: input.turn_id } : {}),
-      },
+      status: input.status,
     });
     await this.state.touch_metadata();
   }

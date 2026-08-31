@@ -2,30 +2,29 @@
  * Agent Session action 公开类型。
  *
  * 关键点（中文）
- * - action 是 session records 中的 `type: "action"` 记录。
- * - 同一份结构同时用于 JSONL 持久化与 `session.subscribe()` 实时事件。
- * - action 不进入 LLM 输入；组装模型消息前必须过滤。
+ * - Action 运行事件由 Session 收口为 canonical `SessionActionMessage`。
+ * - Action 不进入模型输入。
  */
 
 import type {
-  SessionActionRecordV1,
-  SessionActionStateV1,
-} from "@/executor/types/SessionRecords.js";
+  SessionActionEvent,
+  SessionActionStatus,
+} from "@/types/session/SessionAction.js";
 
 /**
  * Session action 当前状态。
  */
-export type AgentSessionActionState = SessionActionStateV1;
+export type AgentSessionActionState = SessionActionStatus;
 
 /**
  * Session action 记录。
  */
-export type AgentSessionActionRecord = SessionActionRecordV1;
+export type AgentSessionActionRecord = SessionActionEvent;
 
 /**
  * Session action 订阅事件。
  */
-export type AgentSessionActionEvent = SessionActionRecordV1;
+export type AgentSessionActionEvent = SessionActionEvent;
 
 /**
  * Session action 发布回调。

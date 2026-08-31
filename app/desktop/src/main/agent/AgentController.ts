@@ -1296,7 +1296,7 @@ function normalize_chat_input(input: DesktopChatInput): AgentSessionPromptInput[
     if (!data_url.startsWith("data:")) throw new Error("attachment must use a data URL");
     parts.push({
       type: "file",
-      mediaType: String(file?.media_type || "application/octet-stream"),
+      media_type: String(file?.media_type || "application/octet-stream"),
       url: data_url,
       filename: String(file?.filename || "attachment"),
     });

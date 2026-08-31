@@ -1,7 +1,7 @@
 /**
  * Assistant 消息内容与活动日志。
  *
- * 组件按 canonical part 顺序渲染文本、文件、来源、Reasoning、Tool 与 Interaction，
+ * 组件按 canonical part 顺序渲染文本、文件、Reasoning、Tool 与 Interaction，
  * 并复用 Duobox 的连续活动折叠、紧凑状态行和内联交互卡片语义。
  */
 
@@ -47,10 +47,7 @@ export function AssistantContent({ parts, show_reasoning, streaming, respond_int
     const part = group.part;
     if (part.type === "text") return part.text ? <div key={part.part_id} className="text-[0.8125rem] leading-[1.54] text-foreground/90"><ChatMarkdown class_name="min-h-[1.54em]" text={part.text} mode={streaming && part.state === "streaming" ? "streaming" : "static"} /></div> : null;
     if (part.type === "file") return <a key={part.part_id} href={part.url} className="assistant-resource-row" target="_blank" rel="noreferrer"><TbFile aria-hidden /><span>{part.filename || "文件"}</span></a>;
-    if (part.type === "source") return part.source_type === "url"
-      ? <a key={part.part_id} href={part.url} className="assistant-resource-row" target="_blank" rel="noreferrer"><TbFileSearch aria-hidden /><span>{part.title || part.url}</span></a>
-      : <div key={part.part_id} className="assistant-resource-row"><TbFile aria-hidden /><span>{part.title || part.filename || "文档来源"}</span></div>;
-    // data 与 step-start 没有稳定的通用展示语义，由专用 feature 在未来接管。
+    // data 没有稳定的通用展示语义，由专用 feature 在未来接管。
     return null;
   })}</>;
 }
@@ -114,7 +111,7 @@ function ToolRow({ part }: { /** Tool part。 */ part: Extract<AssistantActivity
 
 /** 根据 Tool 语义选择详情面板。 */
 function ToolDetails({ part, visual_kind }: { /** Tool part。 */ part: Extract<AssistantActivityPart, { type: "tool" }>; /** Tool 视觉类型。 */ visual_kind: AssistantToolVisualKind }) {
-  const input = part.input ?? part.raw_input ?? part.input_text;
+  const input = part.input ?? part.input_text;
   if (visual_kind === "write" || visual_kind === "edit") return <FileChangePreview part={part} visual_kind={visual_kind} />;
   if (visual_kind === "shell") {
     const command = read_tool_input_text(input, ["cmd", "command", "input"]);

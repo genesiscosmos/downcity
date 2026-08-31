@@ -131,16 +131,13 @@ export type {
   ListSessionMessagesInput,
   SessionActionMessage,
   SessionAssistantDataPart,
-  SessionAssistantDocumentSourcePart,
   SessionAssistantFilePart,
   SessionAssistantInteractionPart,
   SessionAssistantMessage,
   SessionAssistantMessagePart,
-  SessionAssistantSourcePart,
-  SessionAssistantStepPart,
+  SessionAssistantReasoningPart,
   SessionAssistantTextPart,
   SessionAssistantToolPart,
-  SessionAssistantUrlSourcePart,
   SessionErrorMessage,
   SessionMessage,
   SessionMessagePage,
@@ -222,6 +219,13 @@ export type {
   AgentSessionActionState,
 } from "./types/sdk/AgentSessionAction.js";
 export type { AgentSessionPromptInput } from "./types/sdk/AgentSessionPrompt.js";
+export type {
+  SessionPromptPart,
+  SessionAssistantResultPart,
+  SessionTextInputPart,
+  SessionFileInputPart,
+  SessionDataInputPart,
+} from "./types/session/SessionContent.js";
 export type { AgentSessionStopResult } from "./types/sdk/AgentSessionStop.js";
 export type {
   AgentSessionTurnHandle,
@@ -282,7 +286,6 @@ export type {
 export { DefaultSessionSystemComposer } from "./executor/composer/system/default/DefaultSessionSystemComposer.js";
 export { resolve_session_system_messages } from "./executor/composer/system/default/SystemDomain.js";
 export type {
-  SessionAssistantStepCallback,
   SessionExecutor,
   SessionTurnExecutionResult,
 } from "./types/session/SessionExecution.js";
@@ -299,16 +302,10 @@ export type {
   ToolSessionExecutionScope,
 } from "./types/tools/ToolActionExecutionContext.js";
 export type {
-  SessionActionRecordV1,
-  SessionMessageRecordV1,
-  SessionMetadataV1,
-  SessionRecordV1,
-  SessionUserMessageV1,
-} from "./executor/types/SessionRecords.js";
-export {
-  is_session_action_record,
-  is_session_message_record,
-} from "./executor/types/SessionRecords.js";
+  SessionActionEvent,
+  SessionActionEventInput,
+  SessionActionStatus,
+} from "./types/session/SessionAction.js";
 export type { SessionSystemMessage } from "./executor/types/SessionPrompts.js";
 export { transform_prompts_into_system_messages } from "./executor/composer/system/default/PromptRenderer.js";
 // 通用 plugin 宿主工具
@@ -331,10 +328,11 @@ export {
 export { ActionScheduleStore } from "./plugin/core/ActionScheduleStore.js";
 export { parse_action_schedule_run_at_ms_or_throw } from "./plugin/core/ActionScheduleTime.js";
 export {
-  pick_last_successful_chat_send_text,
-  resolve_assistant_message_for_persistence,
-} from "./executor/messages/UserVisibleText.js";
-export { extract_tool_calls_from_ui_message } from "./executor/messages/UIMessageTransformer.js";
+  extract_session_message_text,
+  extract_session_tool_calls,
+  resolve_session_assistant_visible_text,
+} from "./session/messages/SessionMessageText.js";
+export type { SessionToolCallSummary } from "./session/messages/SessionMessageText.js";
 export {
   build_chat_message_text,
   parse_chat_message_markup,

@@ -49,7 +49,7 @@ function create_tts_message(url = "/workspace/speech.mp3") {
     parts: [
       {
         type: "file",
-        mediaType: "audio/mpeg",
+        media_type: "audio/mpeg",
         filename: "speech.mp3",
         url,
       },

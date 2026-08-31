@@ -1,41 +1,28 @@
 /**
- * SessionMessageLog：assistant 消息日志提取与输出辅助模块。
+ * Canonical Assistant Part 日志输出辅助。
  *
- * 关键点（中文）
- * - 只负责从 session message 中提取可读文本。
- * - 只负责把最终 assistant 文本稳定写入统一 logger。
- * - 不参与模型消息转换，也不感知附件注入逻辑。
+ * 该模块只提取可见文本并写入统一 Logger，不参与协议转换或持久化。
  */
 
-import { is_session_text_part as isTextUIPart } from "@/types/session/SessionUiMessage.js";
+import type { SessionAssistantMessagePart } from "@/types/session/SessionMessage.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
 
-/**
- * 从 UI message 中提取 assistant 文本部分。
- */
+/** 从 canonical Assistant Parts 提取可见文本。 */
 export function extract_assistant_text_for_log(
-  message: SessionMessageRecordV1,
+  parts: readonly SessionAssistantMessagePart[],
 ): string {
-  if (!Array.isArray(message.parts)) return "";
-  return message.parts
-    .filter(isTextUIPart)
-    .map((part) => String(part.text ?? ""))
+  return parts
+    .flatMap((part) => part.type === "text" ? [part.text] : [])
     .join("\n")
     .trim();
 }
 
-/**
- * 立即输出 assistant 文本日志。
- */
+/** 立即输出 Assistant 文本日志。 */
 export async function log_assistant_message_now(
   logger: Logger,
-  message: SessionMessageRecordV1,
+  parts: readonly SessionAssistantMessagePart[],
 ): Promise<void> {
-  const text = extract_assistant_text_for_log(message) || "-";
-  const normalized = text.replace(/\r\n/g, "\n");
-  const lines = normalized.split("\n");
-  const out = [`[assistant] ${lines[0] || "-"}`];
-  if (lines.length > 1) out.push(...lines.slice(1));
-  await logger.log("info", out.join("\n"));
+  const text = extract_assistant_text_for_log(parts) || "-";
+  const lines = text.replace(/\r\n/gu, "\n").split("\n");
+  await logger.log("info", [`[assistant] ${lines[0] || "-"}`, ...lines.slice(1)].join("\n"));
 }

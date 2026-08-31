@@ -300,7 +300,7 @@ const job = await plugin_call({
 
 “Resolved provider input” means this: the Agent only passes simple `prompt` or `content`; `ImagePlugin` reads local files into data URLs and converts `content` into `ImagePluginResolvedInput.messages` before calling `image_create(input)`. This is the internal boundary from ImagePlugin to City / provider adapters, not a third Agent-facing payload format.
 
-The `image_result` callback may return a remote URL or a local path. For a remote URL, ImagePlugin makes the local Workspace path the File Part's primary `url` and preserves the original online address in `providerMetadata.downcity.source_url`. If local storage fails, the remote URL remains usable and `providerMetadata.downcity.localization_error` plus the action message report the failure. Session persists the resulting File Part, while direct callers can read the same localized result from `data`.
+The `image_result` callback may return a remote URL or a local path. For a remote URL, ImagePlugin uses the downloaded Workspace path as the File Part's primary `url`. If local storage fails, it retains the remote URL and reports the failure through the action message. Session persists the resulting File Part, while direct callers can read the same result from `data`.
 
 ## plugin HTTP
 

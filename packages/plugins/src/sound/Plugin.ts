@@ -378,8 +378,8 @@ function normalize_tts_result(result: SoundPluginTtsResult): SoundPluginTtsResul
   const has_audio_file = record.parts.some((part) => {
     const part_record = to_record(part);
     return part_record?.type === "file"
-      && typeof part_record.mediaType === "string"
-      && part_record.mediaType.startsWith("audio/");
+      && typeof part_record.media_type === "string"
+      && part_record.media_type.startsWith("audio/");
   });
   if (!has_audio_file) {
     throw new TypeError("SoundPlugin tts Session message must contain an audio file part");

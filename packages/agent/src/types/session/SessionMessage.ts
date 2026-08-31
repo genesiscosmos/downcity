@@ -12,9 +12,6 @@ import type {
   SessionInteractionStatus,
 } from "@/types/session/SessionInteraction.js";
 
-/** Session 持久化的 Provider metadata 映射。 */
-export type SessionProviderMetadata = Record<string, JsonObject>;
-
 /** Message 默认展示范围。 */
 export type SessionMessageVisibility = "visible" | "internal";
 
@@ -60,8 +57,6 @@ export interface SessionUserTextPart {
   text: string;
   /** User 文本已经完整，不参与流式更新。 */
   state: "done";
-  /** User text part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: SessionProviderMetadata;
 }
 
 /** User 文件 part。 */
@@ -76,8 +71,6 @@ export interface SessionUserFilePart {
   media_type: string;
   /** 可选原始文件名。 */
   filename?: string;
-  /** User file part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: SessionProviderMetadata;
 }
 
 /** User 结构化数据 part。 */
@@ -110,20 +103,34 @@ export interface SessionUserMessage extends SessionMessageBase {
   parts: SessionUserMessagePart[];
 }
 
-/** Assistant 文本或推理 part。 */
+/** Assistant 普通文本 part。 */
 export interface SessionAssistantTextPart {
   /** Assistant Message 内稳定的 part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
-  /** part 是可见文本或推理文本。 */
-  type: "text" | "reasoning";
+  /** part 类型固定为 text。 */
+  type: "text";
   /** 当前已经累计的完整文本。 */
   text: string;
   /** 文本 part 是否已经结束。 */
   state: "streaming" | "done";
-  /** Text / reasoning part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: SessionProviderMetadata;
+}
+
+/** Assistant 推理文本 part。 */
+export interface SessionAssistantReasoningPart {
+  /** Assistant Message 内稳定的 part 标识。 */
+  part_id: string;
+  /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
+  sequence: number;
+  /** part 类型固定为 reasoning。 */
+  type: "reasoning";
+  /** 当前已经累计的完整推理文本。 */
+  text: string;
+  /** 推理 part 是否已经结束。 */
+  state: "streaming" | "done";
+  /** Provider 用于后续模型上下文续接的可选不透明签名。 */
+  reasoning_signature?: string;
 }
 
 /** Assistant 工具 part。 */
@@ -150,20 +157,6 @@ export interface SessionAssistantToolPart {
   error?: string;
   /** 工具调用的可选展示标题。 */
   title?: string;
-  /** 工具调用携带的可序列化工具元数据。 */
-  tool_metadata?: JsonObject;
-  /** 当前工具是否由运行时动态定义。 */
-  dynamic?: boolean;
-  /** Tool output-error 无法解析 input 时保留的原始输入。 */
-  raw_input?: JsonValue;
-  /** 当前工具结果是否只是后续会被替换的临时结果。 */
-  preliminary?: boolean;
-  /** 工具调用阶段由 Provider Adapter 返回的可序列化 metadata。 */
-  call_provider_metadata?: SessionProviderMetadata;
-  /** 工具结果阶段由 Provider Adapter 返回的可序列化 metadata。 */
-  result_provider_metadata?: SessionProviderMetadata;
-  /** 当前工具是否由模型 Provider 直接执行。 */
-  provider_executed?: boolean;
 }
 
 /** Assistant 用户异步交互 part。 */
@@ -204,8 +197,6 @@ export interface SessionAssistantFilePart {
   url: string;
   /** 可选原始文件名。 */
   filename?: string;
-  /** Assistant file part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: SessionProviderMetadata;
 }
 
 /** Assistant 结构化数据 part。 */
@@ -224,72 +215,14 @@ export interface SessionAssistantDataPart {
   data_id?: string;
 }
 
-/** Assistant URL source part。 */
-export interface SessionAssistantUrlSourcePart {
-  /** Assistant Message 内稳定的 part 标识。 */
-  part_id: string;
-  /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
-  sequence: number;
-  /** part 类型固定为 source。 */
-  type: "source";
-  /** source 子类型固定为 URL。 */
-  source_type: "url";
-  /** Source 的稳定标识。 */
-  source_id: string;
-  /** source 指向的网页地址。 */
-  url: string;
-  /** source 的可选展示标题。 */
-  title?: string;
-  /** Source part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: SessionProviderMetadata;
-}
-
-/** Assistant document source part。 */
-export interface SessionAssistantDocumentSourcePart {
-  /** Assistant Message 内稳定的 part 标识。 */
-  part_id: string;
-  /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
-  sequence: number;
-  /** part 类型固定为 source。 */
-  type: "source";
-  /** source 子类型固定为 document。 */
-  source_type: "document";
-  /** Source 的稳定标识。 */
-  source_id: string;
-  /** document source 的 IANA 媒体类型。 */
-  media_type: string;
-  /** document source 的展示标题。 */
-  title: string;
-  /** document source 的可选文件名。 */
-  filename?: string;
-  /** Source part 携带的可序列化 Provider metadata。 */
-  provider_metadata?: SessionProviderMetadata;
-}
-
-/** Assistant source part。 */
-export type SessionAssistantSourcePart =
-  | SessionAssistantUrlSourcePart
-  | SessionAssistantDocumentSourcePart;
-
-/** Assistant step 边界 part。 */
-export interface SessionAssistantStepPart {
-  /** Assistant Message 内稳定的 part 标识。 */
-  part_id: string;
-  /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
-  sequence: number;
-  /** part 类型固定为 step-start。 */
-  type: "step-start";
-}
-
 /** Assistant Message part。 */
 export type SessionAssistantMessagePart =
   | SessionAssistantTextPart
+  | SessionAssistantReasoningPart
   | SessionAssistantToolPart
   | SessionAssistantInteractionPart
   | SessionAssistantFilePart
-  | SessionAssistantDataPart
-  | SessionAssistantSourcePart
-  | SessionAssistantStepPart;
+  | SessionAssistantDataPart;
 
 /** Assistant 顶层 Message。 */
 export interface SessionAssistantMessage extends SessionMessageBase {

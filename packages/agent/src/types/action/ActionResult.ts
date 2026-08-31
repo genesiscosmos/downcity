@@ -7,16 +7,25 @@
  * - Message Parts 复用 Downcity Session UI 协议，不再建立文件、图片或 Plugin 专用桥接。
  */
 
-import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
+import type {
+  SessionAssistantResultPart,
+  SessionPromptPart,
+} from "@/types/session/SessionContent.js";
 
 /** Action 执行后产生的一条 Session 消息。 */
-export interface ActionResultMessage {
-  /** 消息归属；User 消息在下一 Step 生效，Assistant Parts 写入当前回复。 */
-  role: "user" | "assistant";
-
-  /** 应写入对应 Session Message 的标准 UI Parts。 */
-  parts: UIMessage["parts"];
-}
+export type ActionResultMessage =
+  | {
+      /** User 内容在下一 Step 生效。 */
+      role: "user";
+      /** 等待进入 canonical User Message 的内容。 */
+      parts: SessionPromptPart[];
+    }
+  | {
+      /** Assistant 内容写入当前回复。 */
+      role: "assistant";
+      /** 等待进入 canonical Assistant Message 的内容。 */
+      parts: SessionAssistantResultPart[];
+    };
 
 /** Action 或 Tool 内部实现返回的统一结果。 */
 export interface ActionResult<TOutput = unknown> {

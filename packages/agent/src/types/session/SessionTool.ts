@@ -24,6 +24,18 @@ export interface SessionToolInputReady {
   input: unknown;
 }
 
+/** Tool 执行终态输入。 */
+export interface SessionToolExecutionResult {
+  /** 对应模型 Tool Call 标识。 */
+  tool_call_id: string;
+  /** 对应工具注册名称。 */
+  tool_name: string;
+  /** Tool 是否成功执行。 */
+  succeeded: boolean;
+  /** Tool 返回的可序列化结果。 */
+  output: unknown;
+}
+
 /** 等待单个 canonical Tool Part 到达的异步句柄。 */
 export interface SessionToolPartWaiter {
   /** Tool Part 成功持久化后完成，异常结束时拒绝。 */

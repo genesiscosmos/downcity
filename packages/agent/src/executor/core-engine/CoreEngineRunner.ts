@@ -9,20 +9,16 @@
 
 import type { ModelClient, ModelMessage } from "@downcity/type";
 import type { RuntimeTool as Tool } from "@downcity/type";
-import type {
-  SessionUiMessage as UIMessage,
-  SessionUiPart as FileUIPart,
-} from "@/types/session/SessionUiMessage.js";
 import { log_assistant_message_now } from "@executor/messages/SessionMessageLog.js";
-import { pick_last_successful_chat_send_text } from "@executor/messages/UserVisibleText.js";
 import {
   MAX_INCOMPLETE_RESPONSE_RECOVERIES,
   MAX_TOOL_LOOP_STEPS,
   build_incomplete_response_recovery_nudge,
   detect_incomplete_response,
-  merge_assistant_ui_messages,
+  extract_assistant_text,
+  merge_assistant_parts,
+  summarize_assistant_parts_for_debug,
   summarize_step_for_debug,
-  summarize_ui_message_for_debug,
   to_inline_preview,
 } from "@executor/core-engine/CoreEngineSignals.js";
 import {
@@ -52,56 +48,16 @@ import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
 } from "@/types/session/SessionExecution.js";
+import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
 import type {
-  SessionRecordV1,
-  SessionMessageRecordV1,
-} from "@/executor/types/SessionRecords.js";
+  SessionAssistantMessagePart,
+  SessionUserMessage,
+} from "@/types/session/SessionMessage.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
 
 /** Provider context-length error 在当前 step 内最多压缩重试三次。 */
 const MAX_CONTEXT_ERROR_COMPACTION_RETRIES = 3;
-
-/**
- * 生成 file part 去重 key。
- */
-function build_file_part_key(part: FileUIPart): string {
-  return [
-    String(part.type || ""),
-    String(part.mediaType || ""),
-    String(part.filename || ""),
-    String(part.url || ""),
-  ].join("\n");
-}
-
-/**
- * 把 tool/plugin 运行期产生的 file parts 并入最终 assistant UIMessage。
- */
-function merge_assistant_parts(
-  message: SessionMessageRecordV1,
-  parts: UIMessage["parts"],
-): SessionMessageRecordV1 {
-  if (!Array.isArray(parts) || parts.length === 0) return message;
-  const current_parts = Array.isArray(message.parts) ? message.parts : [];
-  const seen = new Set<string>();
-  for (const part of current_parts) {
-    const candidate = part as UIMessage["parts"][number];
-    if (candidate?.type !== "file") continue;
-    seen.add(build_file_part_key(candidate as FileUIPart));
-  }
-  const next_parts = parts.filter((part) => {
-    if (part.type !== "file") return true;
-    const key = build_file_part_key(part as FileUIPart);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  if (next_parts.length === 0) return message;
-  return {
-    ...message,
-    parts: [...current_parts, ...next_parts],
-  };
-}
 
 interface CoreEngineRunnerOptions {
   /** 当前 Session 稳定标识。 */
@@ -148,8 +104,13 @@ interface CoreEngineTurnInput {
     context_window?: number;
   }>;
 
-  /** 持久化 compact 后重新读取 Composer 生成的 canonical history。 */
-  reload_history: () => Promise<SessionRecordV1[]>;
+  /** 持久化 compact 后重新读取 Composer 生成的模型历史与 Summary 身份。 */
+  reload_history: () => Promise<{
+    /** Composer 重新生成的标准模型消息。 */
+    messages: ModelMessage[];
+    /** 当前模型历史包含的最新持久化 Summary 标识。 */
+    summary_id?: string;
+  }>;
 }
 
 /**
@@ -183,21 +144,19 @@ export class CoreEngineRunner {
       : [];
     let tools = input.execute_input.tools;
     let last_observed_stream_error: unknown = undefined;
-      let final_assistant_ui_message: SessionMessageRecordV1 | null = null;
+    let final_assistant_parts: SessionAssistantMessagePart[] = [];
     let compact_required = false;
 
     try {
       const message_state = await CoreEngineMessageState.create({
         messages: input.execute_input.messages,
-        tools,
         project_root: input.turn_context.session.project_root,
       });
-      let persisted_compaction_summary_id = resolve_compaction_summary_id(
-        input.execute_input.messages,
-      );
+      let persisted_compaction_summary_id =
+        input.execute_input.history_summary_id || "";
 
-      const append_merged_user_messages = (messages: SessionRecordV1[]) =>
-        message_state.appendMergedUserMessages(messages);
+      const append_merged_user_messages = (messages: SessionUserMessage[]) =>
+        message_state.append_merged_user_messages(messages);
 
       let step_count = 0;
       let total_tool_call_count = 0;
@@ -240,11 +199,9 @@ export class CoreEngineRunner {
         system = Array.isArray(step_inputs.system) ? step_inputs.system : [];
         tools = step_inputs.tools;
         if (input.turn_context.input.consume_history_reload()) {
-          const canonical_records = await input.reload_history();
-          await message_state.replace_session_messages(canonical_records, tools);
-          persisted_compaction_summary_id = resolve_compaction_summary_id(
-            canonical_records,
-          );
+          const reloaded_history = await input.reload_history();
+          message_state.replace_model_history(reloaded_history.messages);
+          persisted_compaction_summary_id = reloaded_history.summary_id || "";
           compact_validation_pending = Boolean(
             persisted_compaction_summary_id &&
               persisted_compaction_summary_id !==
@@ -252,15 +209,15 @@ export class CoreEngineRunner {
           );
           await this.logger.log("info", "[agent] context.history_reloaded", {
             session_id: session_id,
-            recordCount: canonical_records.length,
+            recordCount: reloaded_history.messages.length,
             compactionSummaryId: persisted_compaction_summary_id || undefined,
           });
         }
         if (compact_pending) {
-          const previous_message_count = message_state.modelMessages.length;
+          const previous_message_count = message_state.model_messages.length;
           message_state.replace_model_messages(
             deep_compact_model_messages(
-              message_state.modelMessages,
+              message_state.model_messages,
               compact_depth,
             ),
           );
@@ -273,12 +230,12 @@ export class CoreEngineRunner {
             reason: "usage_threshold",
             compactDepth: compact_depth,
             previousMessageCount: previous_message_count,
-            nextMessageCount: message_state.modelMessages.length,
+            nextMessageCount: message_state.model_messages.length,
           });
         }
 
         last_observed_stream_error = undefined;
-        let step_assistant_ui_message: SessionMessageRecordV1;
+        let step_assistant_parts: SessionAssistantMessagePart[];
         let executed_steps: ModelStepResult[];
         let canonical_step_started = false;
         let canonical_step_finished = false;
@@ -290,16 +247,11 @@ export class CoreEngineRunner {
           const result = await run_model_step({
             model: step_inputs.model,
             system,
-            messages: message_state.modelMessages,
+            messages: message_state.model_messages,
             tools,
-            session_id,
             abort_signal: input.turn_context.lifecycle.abort_signal,
             ...(input.turn_context.output.assistant
-              ? {
-                  on_chunk: async (chunk) => {
-                    await input.turn_context.output.assistant?.write_chunk(chunk);
-                  },
-                }
+              ? { assistant_output: input.turn_context.output.assistant }
               : {}),
             approve_tool: async (call, tool) => await resolve_tool_approval({
               call,
@@ -307,35 +259,31 @@ export class CoreEngineRunner {
               turn_context: input.turn_context,
             }),
           });
-          step_assistant_ui_message = result.assistant_message;
+          step_assistant_parts = result.assistant_parts;
           await on_step_finish(result.step_result);
 
           if (input.turn_context.output.assistant) {
             await input.turn_context.output.assistant.finish_step(
-              step_assistant_ui_message,
+              step_assistant_parts,
             );
           }
           const action_assistant_parts =
             input.turn_context.output.take_assistant_parts();
           if (action_assistant_parts.length > 0) {
-            await input.turn_context.output.assistant?.append_parts(
+            await input.turn_context.output.assistant?.append_result_parts(
               action_assistant_parts,
             );
-            step_assistant_ui_message = merge_assistant_parts(
-              step_assistant_ui_message,
-              action_assistant_parts,
+            step_assistant_parts = merge_assistant_parts(
+              step_assistant_parts,
+              action_parts_to_canonical(action_assistant_parts),
             );
           }
           canonical_step_finished = true;
 
-          final_assistant_ui_message = merge_assistant_ui_messages(
-            final_assistant_ui_message,
-            step_assistant_ui_message,
+          final_assistant_parts = merge_assistant_parts(
+            final_assistant_parts,
+            step_assistant_parts,
           );
-
-          // 关键点（中文）：先保存本 step 已收敛的 assistant 消息，再等待 Provider 终态。
-          // stop / error 时已经生成的部分内容仍会保留，但 `result.steps` 必须作为错误传播边界。
-          message_state.appendRuntimeSessionMessage(step_assistant_ui_message);
           executed_steps = [result.step_result];
         } catch (error) {
           if (
@@ -354,10 +302,10 @@ export class CoreEngineRunner {
               MAX_CONTEXT_ERROR_COMPACTION_RETRIES
           ) {
             context_error_compaction_retries += 1;
-            const previous_message_count = message_state.modelMessages.length;
+            const previous_message_count = message_state.model_messages.length;
             message_state.replace_model_messages(
               deep_compact_model_messages(
-                message_state.modelMessages,
+                message_state.model_messages,
                 compact_depth,
               ),
             );
@@ -371,7 +319,7 @@ export class CoreEngineRunner {
               retryCount: context_error_compaction_retries,
               compactDepth: compact_depth,
               previousMessageCount: previous_message_count,
-              nextMessageCount: message_state.modelMessages.length,
+              nextMessageCount: message_state.model_messages.length,
               ...summarize_stream_error(compact_error),
             });
             continue;
@@ -411,13 +359,13 @@ export class CoreEngineRunner {
 
         const incomplete_response = detect_incomplete_response({
           step_result: last_step,
-          assistant_message: step_assistant_ui_message,
+          assistant_parts: step_assistant_parts,
         });
         const loop_decision = evaluate_core_engine_loop_decision({
           hasIncompleteResponse: incomplete_response !== null,
           incompleteRecoveryCount: incomplete_response_recovery_count,
           maxIncompleteRecoveries: MAX_INCOMPLETE_RESPONSE_RECOVERIES,
-          toolCallCount: last_step.toolCalls.length,
+          toolCallCount: last_step.tool_calls.length,
         });
 
         await this.logger.log("info", "[agent] loop.decision", {
@@ -429,9 +377,9 @@ export class CoreEngineRunner {
           decisionKind: loop_decision.kind,
           incompleteResponseReason: incomplete_response?.reason ?? null,
           incompleteResponseRecoveryCount: incomplete_response_recovery_count,
-          toolCallCount: last_step.toolCalls.length,
-          toolResultCount: last_step.toolResults.length,
-          finishReason: last_step.finishReason,
+          toolCallCount: last_step.tool_calls.length,
+          toolResultCount: last_step.tool_results.length,
+          finishReason: last_step.finish_reason,
           textPreview: to_inline_preview(last_step.text),
         });
 
@@ -458,7 +406,7 @@ export class CoreEngineRunner {
               step_index: step_count,
             },
           });
-          await message_state.appendUserTextMessage(recovery_message);
+          await message_state.append_user_message(recovery_message);
           continue;
         }
 
@@ -478,7 +426,7 @@ export class CoreEngineRunner {
         const response_messages = Array.isArray(last_step.response?.messages)
           ? last_step.response.messages
           : [];
-        message_state.appendModelMessages(response_messages);
+        message_state.append_model_messages(response_messages);
 
         if (loop_decision.continueForToolCalls) {
           incomplete_response_recovery_count = 0;
@@ -515,14 +463,15 @@ export class CoreEngineRunner {
         });
       }
 
-      const final_message = final_assistant_ui_message ||
-        build_fallback_assistant_message(session_id, "Execution completed");
+      const final_parts = final_assistant_parts.length > 0
+        ? final_assistant_parts
+        : build_fallback_assistant_parts("Execution completed");
 
       await this.logger.log("info", "[agent] final.message", {
         session_id: session_id,
-        ...summarize_ui_message_for_debug(final_message),
+        ...summarize_assistant_parts_for_debug(final_parts),
       });
-      await log_assistant_message_now(this.logger, final_message);
+      await log_assistant_message_now(this.logger, final_parts);
 
       const duration = Date.now() - start_time;
       await this.logger.log("info", "[agent] finish", {
@@ -535,7 +484,7 @@ export class CoreEngineRunner {
 
       return {
         success: true,
-        text: pick_last_successful_chat_send_text(final_message),
+        text: extract_assistant_text(final_parts),
         ...(compact_required ? { compact_required: true } : {}),
         deferred_persisted_user_messages: [
           ...input.turn_context.input.deferred_user_messages(),
@@ -547,12 +496,9 @@ export class CoreEngineRunner {
         await this.logger.log("info", "[agent] stopped", {
           session_id: session_id,
         });
-        const stopped_message = final_assistant_ui_message;
         return {
           success: false,
-          text: stopped_message
-            ? pick_last_successful_chat_send_text(stopped_message)
-            : "",
+          text: extract_assistant_text(final_assistant_parts),
           error: error_text,
           ...(compact_required ? { compact_required: true } : {}),
           deferred_persisted_user_messages: [
@@ -576,9 +522,7 @@ export class CoreEngineRunner {
 
       return {
         success: false,
-        text: final_assistant_ui_message
-          ? pick_last_successful_chat_send_text(final_assistant_ui_message)
-          : "",
+        text: extract_assistant_text(final_assistant_parts),
         error: error_text,
         ...(compact_required ? { compact_required: true } : {}),
         deferred_persisted_user_messages: [
@@ -598,7 +542,7 @@ async function resolve_tool_approval(input: {
   const needs_approval = input.tool.needs_approval;
   const required = typeof needs_approval === "function"
       ? await needs_approval(input.call.input as never, {
-        tool_call_id: input.call.toolCallId,
+        tool_call_id: input.call.tool_call_id,
         messages: [],
       })
     : needs_approval === true;
@@ -607,15 +551,15 @@ async function resolve_tool_approval(input: {
   if (!interactions) {
     throw new Error("Tool approval requires a Session Interaction port");
   }
-  const approval_id = `approval:${input.call.toolCallId}`;
+  const approval_id = `approval:${input.call.tool_call_id}`;
   const handle = await interactions.request({
     interaction_id: `interaction:tool-approval:${approval_id}`,
     turn_id: input.turn_context.session.turn_id,
     type: "approval",
     source: {
       type: "tool",
-      tool_call_id: input.call.toolCallId,
-      tool_name: input.call.toolName,
+      tool_call_id: input.call.tool_call_id,
+      tool_name: input.call.tool_name,
     },
     payload: {
       operation: "tool",
@@ -639,52 +583,73 @@ function build_internal_user_message(input: {
   session_id: string;
   text: string;
   extra: JsonObject;
-}): SessionRecordV1 {
+}): SessionUserMessage {
+  void input.extra;
+  const now = Date.now();
   return {
-    id: `u:${input.session_id}:${Date.now()}`,
-    role: "user",
-    metadata: {
-      v: 1,
-      ts: Date.now(),
-      session_id: input.session_id,
-      source: "ingress",
-      kind: "normal",
-      extra: input.extra,
-    },
-    parts: [{ type: "text", text: input.text }],
+    message_id: `runtime-user:${input.session_id}:${now}`,
+    session_id: input.session_id,
+    sequence: 0,
+    revision: 1,
+    visibility: "internal",
+    created_at: now,
+    updated_at: now,
+    type: "user",
+    input_type: "steer",
+    parts: [{
+      part_id: "runtime-text:1",
+      type: "text",
+      text: input.text,
+      state: "done",
+    }],
   };
 }
 
-/** 构造成功执行但缺少最终消息时使用的临时 Assistant Message。 */
-function build_fallback_assistant_message(
-  session_id: string,
-  text: string,
-): SessionMessageRecordV1 {
-  return {
-    id: `a:${session_id}:${Date.now()}`,
-    role: "assistant",
-    metadata: {
-      v: 1,
-      ts: Date.now(),
-      session_id: session_id,
-      source: "egress",
-      kind: "normal",
-    },
-    parts: [{ type: "text", text }],
-  };
-}
-
-/** 读取当前模型上下文中最新的持久化 compact Summary 标识。 */
-function resolve_compaction_summary_id(messages: SessionRecordV1[]): string {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (!("role" in message) || message.role !== "assistant") continue;
-    if (
-      message.metadata?.source === "compact" &&
-      message.metadata.kind === "summary"
-    ) {
-      return String(message.id || "").trim();
+/** 把 Action 结果内容转换为当前 Turn 使用的 canonical Assistant Parts。 */
+function action_parts_to_canonical(
+  parts: readonly SessionAssistantResultPart[],
+): SessionAssistantMessagePart[] {
+  return parts.map((part, index) => {
+    const sequence = index + 1;
+    if (part.type === "text") {
+      return {
+        part_id: `action-text:${sequence}`,
+        sequence,
+        type: "text",
+        text: part.text,
+        state: "done",
+      };
     }
-  }
-  return "";
+    if (part.type === "file") {
+      return {
+        part_id: `action-file:${sequence}`,
+        sequence,
+        type: "file",
+        media_type: part.media_type,
+        url: part.url,
+        ...(part.filename ? { filename: part.filename } : {}),
+      };
+    }
+    return {
+      part_id: `action-data:${sequence}`,
+      sequence,
+      type: "data",
+      data_type: part.data_type,
+      data: part.data,
+      ...(part.data_id ? { data_id: part.data_id } : {}),
+    };
+  });
+}
+
+/** 构造成功执行但缺少最终内容时使用的 canonical Assistant Parts。 */
+function build_fallback_assistant_parts(
+  text: string,
+): SessionAssistantMessagePart[] {
+  return [{
+    part_id: "fallback-text:1",
+    sequence: 1,
+    type: "text",
+    text,
+    state: "done",
+  }];
 }

@@ -7,7 +7,7 @@
 
 import { build_session_system_blocks } from "@/session/SessionSystem.js";
 import { compose_session_compaction } from "@/session/messages/SessionMessageCompaction.js";
-import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
+import { session_context_to_model_messages } from "@executor/messages/SessionModelMessages.js";
 import type {
   SessionComposer,
   SessionCompactionInput,
@@ -45,9 +45,9 @@ export class DefaultSessionComposer implements SessionComposer {
         content: block.content,
       })),
       system_blocks,
-      messages: to_executor_history(
-        input.session.session_id,
+      messages: await session_context_to_model_messages(
         input.history,
+        input.session.project_root,
       ),
       tools: { ...input.state.tools },
     };

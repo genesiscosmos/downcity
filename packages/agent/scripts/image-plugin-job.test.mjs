@@ -37,7 +37,7 @@ function create_image_message() {
     parts: [
       {
         type: "file",
-        mediaType: "image/png",
+        media_type: "image/png",
         filename: "image.png",
         url: "/workspace/image.png",
       },
@@ -251,7 +251,7 @@ test("ImagePlugin image_result returns final message when succeeded", async () =
   }]);
 });
 
-test("ImagePlugin image_result stores remote images locally and preserves source URLs", async (t) => {
+test("ImagePlugin image_result stores remote images locally", async (t) => {
   const workspace_path = await fs.mkdtemp(path.join(os.tmpdir(), "image-plugin-result-"));
   t.after(() => fs.rm(workspace_path, { recursive: true, force: true }));
   t.mock.method(globalThis, "fetch", async (url) => {
@@ -270,12 +270,12 @@ test("ImagePlugin image_result stores remote images locally and preserves source
     parts: [
       {
         type: "file",
-        mediaType: "image/png",
+        media_type: "image/png",
         url: "https://storage.example.com/first.png",
       },
       {
         type: "file",
-        mediaType: "image/webp",
+        media_type: "image/webp",
         url: "https://storage.example.com/second.webp",
       },
     ],
@@ -302,10 +302,6 @@ test("ImagePlugin image_result stores remote images locally and preserves source
     path.join(workspace_path, "agent-workspace-data", "image", "results", "img_remote", "image_01.png"),
     path.join(workspace_path, "agent-workspace-data", "image", "results", "img_remote", "image_02.webp"),
   ]);
-  assert.deepEqual(
-    result.data.result.parts.map((part) => part.providerMetadata.downcity.source_url),
-    remote_message.parts.map((part) => part.url),
-  );
   assert.equal(
     await fs.readFile(result.data.result.parts[0].url, "utf8"),
     "png-bytes",
@@ -332,7 +328,7 @@ test("ImagePlugin image_result keeps remote URL when local storage fails", async
       result: {
         id: "msg_remote_fallback",
         role: "assistant",
-        parts: [{ type: "file", mediaType: "image/png", url: remote_url }],
+        parts: [{ type: "file", media_type: "image/png", url: remote_url }],
       },
     }),
   });
@@ -347,14 +343,6 @@ test("ImagePlugin image_result keeps remote URL when local storage fails", async
 
   assert.equal(result.success, true);
   assert.equal(result.data.result.parts[0].url, remote_url);
-  assert.equal(
-    result.data.result.parts[0].providerMetadata.downcity.source_url,
-    remote_url,
-  );
-  assert.match(
-    result.data.result.parts[0].providerMetadata.downcity.localization_error,
-    /HTTP 503/,
-  );
   assert.match(result.message, /kept as remote URLs/);
   assert.deepEqual(result.messages[0].parts, result.data.result.parts);
 });

@@ -30,7 +30,7 @@ const turn = await session.prompt({
     { type: "text", text: "说明图片里的架构" },
     {
       type: "file",
-      mediaType: "image/png",
+      media_type: "image/png",
       url: "/absolute/path/architecture.png",
       filename: "architecture.png",
     },
@@ -38,7 +38,7 @@ const turn = await session.prompt({
 });
 ```
 
-输入 API 的 `SessionUserMessagePart` 使用 `mediaType`；读回的持久化 `SessionMessage` 使用 `media_type`。两者属于 Session 输入与持久化两个边界，不应把读回的 Part 原样当作 `prompt()` 输入。
+输入与持久化消息都使用 Downcity 自有的 `snake_case` 字段。`prompt()` 接收的 Part 尚未分配 `part_id`；进入 Session 后才成为 canonical User Part。
 
 Data URL 附件不会直接写入 Session Message。Session 会先把 Data URL 解码并保存到 Agent 存储作用域的
 `sessions/<session_id>/attachments/`，Message 保存该私有文件的绝对路径。模型执行前，Session 再从该路径

@@ -327,7 +327,7 @@ const job = await plugin_call({
 
 所谓“provider 输入解析”指的是：Agent 调用 `plugin_call` 时只传简单的 `prompt` 或 `content`；`ImagePlugin` 在内部把本地图片读成 data URL，并把 `content` 转成 `ImagePluginResolvedInput.messages` 后再交给 `image_create(input)`。这只是 ImagePlugin 到 City / provider adapter 的内部边界，不是给 Agent 使用的新协议。
 
-`image_result` 回调可以返回远程 URL 或本地路径。遇到远程 URL 时，ImagePlugin 会把 Workspace 本地路径作为 File Part 的主 `url`，并在 `providerMetadata.downcity.source_url` 中保留原始在线地址。如果本地存储失败，远程 URL 仍作为可用结果保留，同时通过 `providerMetadata.downcity.localization_error` 和 action message 报告错误。Session 会持久化处理后的 File Part，直接调用方也可以从 `data` 读取同一份本地化结果。
+`image_result` 回调可以返回远程 URL 或本地路径。遇到远程 URL 时，ImagePlugin 会把成功下载的 Workspace 本地路径作为 File Part 的主 `url`；如果本地存储失败，则保留远程 URL，并通过 action message 报告错误。Session 会持久化处理后的 File Part，直接调用方也可以从 `data` 读取同一份结果。
 
 ## plugin HTTP
 

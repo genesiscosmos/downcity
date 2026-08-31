@@ -901,7 +901,7 @@ test("config remains effective when its action message cannot be persisted", asy
       (message) => message.type === "action",
     ).length;
 
-    session.session_messages.persist_action_record = async () => {
+    session.session_messages.persist_action = async () => {
       throw new Error("action store unavailable");
     };
 

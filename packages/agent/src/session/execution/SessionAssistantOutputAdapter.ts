@@ -1,22 +1,22 @@
 /**
- * Downcity Session Assistant 输出到 canonical Message 的协议 Adapter。
+ * Downcity 模型事件到 canonical Assistant Message 的输出 Adapter。
  *
- * 本模块是流式临时 ID、空 Part 与最终 SessionUiMessage 快照能进入的最外层边界。
- * 它只通过 SessionMessages 打开 Writer，不持有第二份 Assistant Message 状态。
+ * Adapter 只负责惰性打开当前 Turn 的唯一 Writer，并把标准模型事件、Tool 结果与
+ * Action 内容转交给 Writer；`SessionMessages` 始终是唯一事实源。
  */
 
-import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
-import { from_ui_assistant_parts } from "@/session/messages/SessionMessageCodec.js";
+import type { ModelStreamEvent } from "@downcity/type";
 import {
   SessionAssistantMessageWriter,
   SessionMessages,
 } from "@/session/SessionMessages.js";
+import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
+import type { SessionAssistantMessagePart } from "@/types/session/SessionMessage.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
-import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
 import type {
-  SessionUiMessage as UIMessage,
-  SessionUiMessageChunk as UIMessageChunk,
-} from "@/types/session/SessionUiMessage.js";
+  SessionToolExecutionResult,
+  SessionToolInputReady,
+} from "@/types/session/SessionTool.js";
 
 /** 单个 Turn 使用的 Assistant 输出 Adapter。 */
 export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
@@ -39,7 +39,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     }
   }
 
-  /** 开始当前 Provider Step。 */
+  /** 开始当前模型 Step。 */
   async begin_step(): Promise<void> {
     if (this.writer) {
       await this.writer.begin_step();
@@ -48,17 +48,25 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     this.step_pending = true;
   }
 
-  /** 把可持久化 Session UI Chunk 写入当前 canonical Message。 */
-  async write_chunk(chunk: UIMessageChunk): Promise<void> {
-    if (!is_assistant_content_chunk(chunk.type)) return;
-    await (await this.ensure_writer()).apply_chunk(chunk);
+  /** 直接写入单个标准模型事件。 */
+  async write_model_event(event: ModelStreamEvent): Promise<void> {
+    if (!is_assistant_content_event(event)) return;
+    await (await this.ensure_writer()).apply_model_event(event);
   }
 
-  /** 使用最终快照校验当前 Step Part 顺序并补齐 metadata。 */
-  async finish_step(message: SessionMessageRecordV1): Promise<void> {
-    await (await this.ensure_writer()).finish_step(
-      from_ui_assistant_parts(message.parts),
-    );
+  /** 在 Tool 执行前提交完整输入。 */
+  async prepare_tool_input(input: SessionToolInputReady): Promise<void> {
+    await (await this.ensure_writer()).prepare_tool_input(input);
+  }
+
+  /** 写入 Tool 执行终态。 */
+  async write_tool_result(result: SessionToolExecutionResult): Promise<void> {
+    await (await this.ensure_writer()).apply_tool_result(result);
+  }
+
+  /** 使用模型聚合出的 canonical Parts 校验当前 Step。 */
+  async finish_step(parts: SessionAssistantMessagePart[]): Promise<void> {
+    await (await this.ensure_writer()).finish_step(parts);
   }
 
   /** 清理异常结束的 Step 作用域。 */
@@ -67,12 +75,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     this.step_pending = false;
   }
 
-  /** 在 Tool 实现开始前提交完整输入。 */
-  async prepare_tool_input(input: SessionToolInputReady): Promise<void> {
-    await (await this.ensure_writer()).prepare_tool_input(input);
-  }
-
-  /** User steer 已持久化后关闭当前 Assistant Message；没有输出时保持为空。 */
+  /** User steer 持久化后关闭它之前的当前 Assistant Message。 */
   async close_current_message(): Promise<void> {
     if (!this.writer) {
       this.step_pending = false;
@@ -82,12 +85,10 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     this.writer = null;
   }
 
-  /** 把 Action 产生的完整 UI Parts 追加到当前 canonical Assistant Message。 */
-  async append_parts(parts: UIMessage["parts"]): Promise<void> {
-    if (!Array.isArray(parts) || parts.length === 0) return;
-    await (await this.ensure_writer()).append_parts(
-      from_ui_assistant_parts(parts),
-    );
+  /** 追加 Action 产生的封闭 Assistant 内容。 */
+  async append_result_parts(parts: readonly SessionAssistantResultPart[]): Promise<void> {
+    if (parts.length === 0) return;
+    await (await this.ensure_writer()).append_result_parts(parts);
   }
 
   /** 按 Turn 结果收口最后一个 canonical Message。 */
@@ -128,20 +129,15 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 }
 
-/** 判断 Session UI Chunk 是否属于 canonical Assistant 内容。 */
-function is_assistant_content_chunk(type: string): boolean {
-  return (
-    type === "text-start" ||
-    type === "text-delta" ||
-    type === "text-end" ||
-    type === "reasoning-start" ||
-    type === "reasoning-delta" ||
-    type === "reasoning-end" ||
-    type.startsWith("tool-") ||
-    type === "file" ||
-    type === "source-url" ||
-    type === "source-document" ||
-    type === "start-step" ||
-    type.startsWith("data-")
-  );
+/** 判断标准模型事件是否会产生 canonical Assistant 内容。 */
+function is_assistant_content_event(event: ModelStreamEvent): boolean {
+  return event.type === "text_start" ||
+    event.type === "text_delta" ||
+    event.type === "text_finish" ||
+    event.type === "reasoning_start" ||
+    event.type === "reasoning_delta" ||
+    event.type === "reasoning_finish" ||
+    event.type === "tool_call_start" ||
+    event.type === "tool_call_delta" ||
+    event.type === "tool_call_finish";
 }

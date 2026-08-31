@@ -68,7 +68,7 @@ test("invoke_plugin_call_tool preserves Action output and messages", async () =>
         parts: [
           {
             type: "file",
-            mediaType: "image/png",
+            media_type: "image/png",
             filename: "image.png",
             url: "/workspace/image.png",
           },
@@ -106,7 +106,7 @@ test("invoke_plugin_call_tool preserves Action output and messages", async () =>
     role: "assistant",
     parts: [{
       type: "file",
-      mediaType: "image/png",
+      media_type: "image/png",
       filename: "image.png",
       url: "/workspace/image.png",
     }],

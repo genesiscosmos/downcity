@@ -6,7 +6,7 @@
  * - 首条输入、运行中补充输入、排队到下一轮的输入，调用侧都使用同一结构。
  */
 
-import type { SessionUiPart } from "@/types/session/SessionUiMessage.js";
+import type { SessionPromptPart } from "@/types/session/SessionContent.js";
 
 /**
  * Session user message part 类型。
@@ -15,7 +15,7 @@ import type { SessionUiPart } from "@/types/session/SessionUiMessage.js";
  * - 这是 Downcity Session 输入边界，不依赖模型协议或第三方 SDK。
  * - 可直接用于 `session.prompt({ query: [...parts] })` 传入 text parts、file parts 等。
  */
-export type SessionUserMessagePart = SessionUiPart;
+export type SessionUserMessagePart = SessionPromptPart;
 
 /**
  * Session prompt 输入。
@@ -27,7 +27,7 @@ export type SessionUserMessagePart = SessionUiPart;
  *     { type: "text", text: "请分析这个附件" },
  *     {
  *       type: "file",
- *       mediaType: "image/png",
+ *       media_type: "image/png",
  *       url: "data:image/png;base64,...",
  *       filename: "image.png",
  *     },
@@ -74,10 +74,7 @@ export function is_agent_session_prompt_input_empty(input: AgentSessionPromptInp
     }
     // 如果所有 parts 都是空文本，也视为空
     return query.every((part) => {
-      if (part && typeof part === "object" && "type" in part && part.type === "text") {
-        return String(part.text ?? "").trim() === "";
-      }
-      return false; // 非文本 part（如 file）不算空
+      return part.type === "text" && part.text.trim() === "";
     });
   }
   return true;

@@ -5,10 +5,9 @@
  * 负责组装模型输入和生成压缩计划，不持久化 Message、Metadata 或事件。
  */
 
-import type { ModelClient } from "@downcity/type";
+import type { ModelClient, ModelMessage } from "@downcity/type";
 import type { RuntimeTool as Tool } from "@downcity/type";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
-import type { SessionRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionContextSnapshot, SessionSegmentSummary } from "@/types/session/SessionSegment.js";
 
@@ -72,8 +71,8 @@ export interface SessionStepInput {
   system: SessionSystemMessage[];
   /** 当前 Step 的可解释 system block；自定义 Composer 可以省略。 */
   system_blocks?: AgentSessionSystemBlock[];
-  /** 当前 Step 的历史与用户消息。 */
-  messages: SessionRecordV1[];
+  /** 当前 Step 已转换完成的标准模型消息。 */
+  messages: ModelMessage[];
   /** 当前 Step 可调用的工具集合。 */
   tools: Record<string, Tool>;
 }

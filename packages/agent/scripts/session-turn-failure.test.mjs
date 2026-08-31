@@ -60,6 +60,28 @@ async function create_turn_harness(execute_turn) {
   return { messages, turn };
 }
 
+/** 通过 Downcity Model Protocol 写入一个完整文本 part。 */
+async function write_text(output, content_id, text) {
+  await output.write_model_event({ type: "text_start", content_id });
+  await output.write_model_event({ type: "text_delta", content_id, delta: text });
+  await output.write_model_event({ type: "text_finish", content_id });
+}
+
+/** 通过 Downcity Model Protocol 写入一个完整工具调用。 */
+async function write_tool_call(output, input) {
+  await output.write_model_event({
+    type: "tool_call_start",
+    content_id: input.content_id,
+    tool_call_id: input.tool_call_id,
+    tool_name: input.tool_name,
+  });
+  await output.write_model_event({
+    type: "tool_call_finish",
+    content_id: input.content_id,
+    input: input.tool_input,
+  });
+}
+
 test("Provider 在输出前失败时只持久化 Error Message", async () => {
   const { messages, turn } = await create_turn_harness(async () => ({
     success: false,
@@ -132,13 +154,7 @@ test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
 test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Error Message", async () => {
   const { messages, turn } = await create_turn_harness(async (turn_context) => {
     await turn_context.output.assistant.begin_step();
-    await turn_context.output.assistant.write_chunk({ type: "text-start", id: "text-1" });
-    await turn_context.output.assistant.write_chunk({
-      type: "text-delta",
-      id: "text-1",
-      delta: "partial response",
-    });
-    await turn_context.output.assistant.write_chunk({ type: "text-end", id: "text-1" });
+    await write_text(turn_context.output.assistant, "text-1", "partial response");
     return {
       success: false,
       text: "partial response",
@@ -166,15 +182,16 @@ test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Erro
 test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async () => {
   const { messages, turn } = await create_turn_harness(async (turn_context) => {
     await turn_context.output.assistant.begin_step();
-    await turn_context.output.assistant.write_chunk({
-      type: "tool-input-start",
-      toolCallId: "call-1",
-      toolName: "shell_exec",
+    await turn_context.output.assistant.write_model_event({
+      type: "tool_call_start",
+      content_id: "tool-1",
+      tool_call_id: "call-1",
+      tool_name: "shell_exec",
     });
-    await turn_context.output.assistant.write_chunk({
-      type: "tool-input-delta",
-      toolCallId: "call-1",
-      inputTextDelta: '{"cmd":"pwd"}',
+    await turn_context.output.assistant.write_model_event({
+      type: "tool_call_delta",
+      content_id: "tool-1",
+      input_delta: '{"cmd":"pwd"}',
     });
     return {
       success: false,
@@ -195,48 +212,36 @@ test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async ()
   assert.equal(assistant?.parts[0]?.error, "stream interrupted");
 });
 
-test("Turn 使用 step canonical chunks 保持 Tool 与最终正文顺序", async () => {
+test("Turn 使用标准模型事件保持 Tool 与最终正文顺序", async () => {
   const { messages, turn } = await create_turn_harness(async (turn_context) => {
     await turn_context.output.assistant.begin_step();
-    await turn_context.output.assistant.write_chunk({
-      type: "tool-input-start",
-      toolCallId: "call-1",
-      toolName: "shell_exec",
+    await write_tool_call(turn_context.output.assistant, {
+      content_id: "tool-1",
+      tool_call_id: "call-1",
+      tool_name: "shell_exec",
+      tool_input: { cmd: "pwd" },
     });
-    await turn_context.output.assistant.write_chunk({
-      type: "tool-input-available",
-      toolCallId: "call-1",
-      toolName: "shell_exec",
-      input: { cmd: "pwd" },
-    });
-    await turn_context.output.assistant.write_chunk({
-      type: "tool-output-available",
-      toolCallId: "call-1",
+    await turn_context.output.assistant.write_tool_result({
+      tool_call_id: "call-1",
+      tool_name: "shell_exec",
+      succeeded: true,
       output: { success: true },
     });
-    await turn_context.output.assistant.write_chunk({ type: "text-start", id: "text-1" });
-    await turn_context.output.assistant.write_chunk({
-      type: "text-delta",
-      id: "text-1",
-      delta: "最终结论",
-    });
-    await turn_context.output.assistant.write_chunk({ type: "text-end", id: "text-1" });
-    const assistant_message = {
-      id: "assistant-1",
-      role: "assistant",
-      parts: [
+    await write_text(turn_context.output.assistant, "text-1", "最终结论");
+    const assistant_parts = [
         {
-          type: "dynamic-tool",
-          toolCallId: "call-1",
-          toolName: "shell_exec",
-          state: "output-available",
+          part_id: "tool:call-1",
+          sequence: 1,
+          type: "tool",
+          tool_call_id: "call-1",
+          tool_name: "shell_exec",
+          state: "completed",
           input: { cmd: "pwd" },
           output: { success: true },
         },
-        { type: "text", text: "最终结论", state: "done" },
-      ],
-    };
-    await turn_context.output.assistant.finish_step(assistant_message);
+        { part_id: "text:text-1", sequence: 2, type: "text", text: "最终结论", state: "done" },
+      ];
+    await turn_context.output.assistant.finish_step(assistant_parts);
     return {
       success: true,
       text: "最终结论",
@@ -257,58 +262,38 @@ test("Turn 使用 step canonical chunks 保持 Tool 与最终正文顺序", asyn
 test("普通 Tool Loop 的多个 Provider Step 始终写入同一个 Assistant Message", async () => {
   const { messages, turn } = await create_turn_harness(async (turn_context) => {
     await turn_context.output.assistant.begin_step();
-    await turn_context.output.assistant.write_chunk({ type: "text-start", id: "text-1" });
-    await turn_context.output.assistant.write_chunk({
-      type: "text-delta",
-      id: "text-1",
-      delta: "先检查项目。",
+    await write_text(turn_context.output.assistant, "text-1", "先检查项目。");
+    await write_tool_call(turn_context.output.assistant, {
+      content_id: "tool-1",
+      tool_call_id: "call-1",
+      tool_name: "shell_exec",
+      tool_input: { cmd: "pnpm typecheck" },
     });
-    await turn_context.output.assistant.write_chunk({ type: "text-end", id: "text-1" });
-    await turn_context.output.assistant.write_chunk({
-      type: "tool-input-start",
-      toolCallId: "call-1",
-      toolName: "shell_exec",
-    });
-    await turn_context.output.assistant.write_chunk({
-      type: "tool-input-available",
-      toolCallId: "call-1",
-      toolName: "shell_exec",
-      input: { cmd: "pnpm typecheck" },
-    });
-    await turn_context.output.assistant.write_chunk({
-      type: "tool-output-available",
-      toolCallId: "call-1",
+    await turn_context.output.assistant.write_tool_result({
+      tool_call_id: "call-1",
+      tool_name: "shell_exec",
+      succeeded: true,
       output: { success: true },
     });
-    await turn_context.output.assistant.finish_step({
-      id: "provider-step-1",
-      role: "assistant",
-      parts: [
-        { type: "text", text: "先检查项目。", state: "done" },
+    await turn_context.output.assistant.finish_step([
+        { part_id: "text:text-1", sequence: 1, type: "text", text: "先检查项目。", state: "done" },
         {
-          type: "dynamic-tool",
-          toolCallId: "call-1",
-          toolName: "shell_exec",
-          state: "output-available",
+          part_id: "tool:call-1",
+          sequence: 2,
+          type: "tool",
+          tool_call_id: "call-1",
+          tool_name: "shell_exec",
+          state: "completed",
           input: { cmd: "pnpm typecheck" },
           output: { success: true },
         },
-      ],
-    });
+      ]);
 
     await turn_context.output.assistant.begin_step();
-    await turn_context.output.assistant.write_chunk({ type: "text-start", id: "text-2" });
-    await turn_context.output.assistant.write_chunk({
-      type: "text-delta",
-      id: "text-2",
-      delta: "检查完成。",
-    });
-    await turn_context.output.assistant.write_chunk({ type: "text-end", id: "text-2" });
-    await turn_context.output.assistant.finish_step({
-      id: "provider-step-2",
-      role: "assistant",
-      parts: [{ type: "text", text: "检查完成。", state: "done" }],
-    });
+    await write_text(turn_context.output.assistant, "text-2", "检查完成。");
+    await turn_context.output.assistant.finish_step([
+      { part_id: "text:text-2", sequence: 1, type: "text", text: "检查完成。", state: "done" },
+    ]);
     return {
       success: true,
       text: "检查完成。",
@@ -339,29 +324,21 @@ test("普通 Tool Loop 的多个 Provider Step 始终写入同一个 Assistant M
 test("Turn 在 step 最终快照出现未流式写入的 Tool 时失败", async () => {
   const { messages, turn } = await create_turn_harness(async (turn_context) => {
     await turn_context.output.assistant.begin_step();
-    await turn_context.output.assistant.write_chunk({ type: "text-start", id: "text-1" });
-    await turn_context.output.assistant.write_chunk({
-      type: "text-delta",
-      id: "text-1",
-      delta: "最终结论",
-    });
-    await turn_context.output.assistant.write_chunk({ type: "text-end", id: "text-1" });
+    await write_text(turn_context.output.assistant, "text-1", "最终结论");
     try {
-      await turn_context.output.assistant.finish_step({
-        id: "assistant-1",
-        role: "assistant",
-        parts: [
+      await turn_context.output.assistant.finish_step([
           {
-            type: "dynamic-tool",
-            toolCallId: "call-1",
-            toolName: "shell_exec",
-            state: "output-available",
+            part_id: "tool:call-1",
+            sequence: 1,
+            type: "tool",
+            tool_call_id: "call-1",
+            tool_name: "shell_exec",
+            state: "completed",
             input: { cmd: "pwd" },
             output: { success: true },
           },
-          { type: "text", text: "最终结论", state: "done" },
-        ],
-      });
+          { part_id: "text:text-1", sequence: 2, type: "text", text: "最终结论", state: "done" },
+        ]);
     } catch (error) {
       await turn_context.output.assistant.abort_step();
       return {

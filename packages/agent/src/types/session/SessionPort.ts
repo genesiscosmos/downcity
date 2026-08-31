@@ -8,9 +8,9 @@
 
 import type { ModelClient } from "@downcity/type";
 import type {
-  SessionMetadataV1,
-  SessionRecordV1,
-} from "@/executor/types/SessionRecords.js";
+  SessionAssistantResultPart,
+  SessionPromptPart,
+} from "@/types/session/SessionContent.js";
 import type { SessionExecutor } from "@/types/session/SessionExecution.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
@@ -50,28 +50,20 @@ export interface SessionPort {
    * 追加一条 user 消息。
    */
   append_user_message(params: {
-    /** 已构造好的完整消息。 */
-    message?: SessionRecordV1 | null;
-
-    /** 未传入完整消息时使用的兜底文本。 */
+    /** 已构造好的 User 内容。 */
+    parts?: SessionPromptPart[];
+    /** 未传入结构化内容时使用的文本。 */
     text?: string;
-
-    /** 当前消息附加元数据。 */
-    extra?: SessionMetadataV1["extra"];
   }): Promise<void>;
 
   /**
    * 追加一条 assistant 消息。
    */
   append_assistant_message(params: {
-    /** 已构造好的完整消息。 */
-    message?: SessionRecordV1 | null;
-
-    /** 未传入完整消息时使用的兜底文本。 */
-    fallback_text?: string;
-
-    /** 当前消息附加元数据。 */
-    extra?: SessionMetadataV1["extra"];
+    /** 已构造好的 Assistant 内容。 */
+    parts?: SessionAssistantResultPart[];
+    /** 未传入结构化内容时使用的文本。 */
+    text?: string;
   }): Promise<void>;
 
   /** 返回当前 Session 是否正在执行。 */

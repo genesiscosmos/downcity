@@ -15,7 +15,10 @@ import type {
   ControlTaskRunSummary,
 } from "@/city/agent/control/types/ControlViewData.js";
 import { truncateText } from "@/city/agent/control/CommonHelpers.js";
-import { loadSessionMessagesFromFile, toUiMessageTimeline } from "@/city/agent/control/MessageTimeline.js";
+import {
+  load_session_messages_from_file,
+  to_message_timeline,
+} from "@/city/agent/control/MessageTimeline.js";
 
 export const TASK_RUN_DIR_REGEX = /^\d{8}-\d{6}-\d{3}$/;
 const TASK_ID_REGEXP = /^[\p{L}\p{N}][\p{L}\p{N}_\-\s]{0,63}$/u;
@@ -200,7 +203,7 @@ export async function readTaskRunDetail(params: {
   };
 
   const messagesPath = path.join(runDir, "messages.jsonl");
-  const messages = await loadSessionMessagesFromFile(messagesPath);
+  const messages = await load_session_messages_from_file(messagesPath);
   const progress = await readJson<{
     status?: string;
     phase?: string;
@@ -237,6 +240,6 @@ export async function readTaskRunDetail(params: {
       dialogue: await readText("dialogue.md"),
       error: await readText("error.md"),
     },
-    messages: messages.slice(-120).flatMap((message) => toUiMessageTimeline(message)),
+    messages: messages.slice(-120).flatMap((message) => to_message_timeline(message)),
   };
 }

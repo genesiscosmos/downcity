@@ -1,5 +1,5 @@
 /**
- * @file 验证 Downcity 模型事件投影失败会终止当前 model step。
+ * @file 验证 Downcity 模型事件写入失败会终止当前 model step。
  */
 
 import assert from "node:assert/strict";
@@ -39,10 +39,11 @@ test("模型事件写入 canonical Session 失败时拒绝继续完成 turn", as
       system: [],
       messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
       tools: {},
-      session_id: "callback-failure-test",
       abort_signal: abort_controller.signal,
-      on_chunk: async () => {
-        throw new Error("canonical write failed");
+      assistant_output: {
+        write_model_event: async () => {
+          throw new Error("canonical write failed");
+        },
       },
     }),
     /canonical write failed/,
@@ -80,7 +81,6 @@ test("Agent 拒绝不合法的 Downcity 模型流状态", async () => {
       system: [],
       messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
       tools: {},
-      session_id: "invalid-stream-test",
       abort_signal: new AbortController().signal,
     }), /Invalid Downcity model stream/);
   }

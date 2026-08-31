@@ -6,7 +6,10 @@
  * 从最新快照严格递增。
  */
 
-import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
+import type {
+  SessionAssistantResultPart,
+  SessionPromptPart,
+} from "@/types/session/SessionContent.js";
 import { generate_id } from "@/utils/Id.js";
 import { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
 import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
@@ -39,17 +42,7 @@ import type {
   SessionInteractionRequest,
   SessionInteractionResponse,
 } from "@/types/session/SessionInteraction.js";
-import type {
-  SessionActionRecordV1,
-  SessionRecordV1,
-  SessionUserMessageV1,
-} from "@/executor/types/SessionRecords.js";
-import { is_session_action_record } from "@/executor/types/SessionRecords.js";
-import {
-  from_ui_assistant_parts,
-  from_ui_user_parts,
-  to_executor_ui_message,
-} from "@/session/messages/SessionMessageCodec.js";
+import type { SessionActionEvent } from "@/types/session/SessionAction.js";
 import { persist_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
 import type {
   AppendCompletedAssistantMessageInput,
@@ -188,69 +181,15 @@ export class SessionMessages {
     return this.get_message(writer.message_id) as SessionAssistantMessage;
   }
 
-  /** 把内部 Executor Record 收口为 canonical Session Message。 */
-  async append_record(record: SessionRecordV1): Promise<void> {
-    if (is_session_action_record(record)) {
-      const action = record as SessionActionRecordV1;
-      const existing = this.get_message(action.id);
-      if (existing?.type === "action") {
-        if (action.state !== "running") {
-          await this.update_action_message(action.id, action.state, {
-            title: action.title,
-            description: action.description,
-          });
-        }
-        return;
-      }
-      const writer = await this.open_action_message({
-        message_id: action.id,
-        turn_id: action.metadata.turn_id,
-        action_type: String(action.id || "").split(":")[0] || "action",
-        title: action.title,
-        description: action.description,
-      });
-      if (action.state === "completed") await writer.complete();
-      if (action.state === "failed") {
-        await writer.fail(action.description || action.title);
-      }
-      return;
-    }
-
-    const turn_id = String(
-      record.metadata?.turn_id || `external:${this.session_id}:${generate_id()}`,
-    );
-    if (record.role === "user") {
-      await this.append_user_message({
-        turn_id,
-        input_type:
-          record.metadata?.extra?.inputType === "steer" ? "steer" : "prompt",
-        parts: from_ui_user_parts(record.parts),
-      });
-      return;
-    }
-    await this.append_completed_assistant_message({
-      turn_id,
-      parts: from_ui_assistant_parts(record.parts),
-      visibility:
-        record.metadata?.extra?.visibility === "internal"
-          ? "internal"
-          : "visible",
-      kind: record.metadata?.kind === "summary" ? "summary" : "normal",
-    });
-  }
-
   /** 把公开 Session API 的 User 输入转换为 canonical Message 并持久化。 */
   async append_external_user_message(
     input: AppendExternalSessionUserMessageInput,
   ): Promise<boolean> {
-    const parts = input.message && "role" in input.message
-      ? from_ui_user_parts(input.message.parts)
-      : [{
-          part_id: `external-user-text:${Date.now()}`,
-          type: "text" as const,
-          text: String(input.text || "").trim(),
-          state: "done" as const,
-        }];
+    const source_parts = input.parts || [{
+      type: "text" as const,
+      text: String(input.text || "").trim(),
+    }];
+    const parts = normalize_session_user_parts(source_parts);
     if (parts.length === 0) return false;
     await this.append_user_message({
       turn_id: `external:${this.session_id}:${Date.now()}`,
@@ -264,24 +203,23 @@ export class SessionMessages {
   async append_external_assistant_message(
     input: AppendExternalSessionAssistantMessageInput,
   ): Promise<boolean> {
-    const parts = input.message && "role" in input.message
-      ? from_ui_assistant_parts(input.message.parts)
-      : [{
-          part_id: `external-assistant-text:${Date.now()}`,
-          sequence: 1,
-          type: "text" as const,
-          text: String(input.fallback_text || "").trim(),
-          state: "done" as const,
-        }];
-    if (parts.length === 0) return false;
-    await this.append_completed_assistant_message({ parts });
+    const parts = input.parts || [{
+      type: "text" as const,
+      text: String(input.text || "").trim(),
+    }];
+    if (!has_assistant_result_content(parts)) return false;
+    const writer = await this.open_assistant_message({
+      turn_id: `external:${this.session_id}:${Date.now()}`,
+    });
+    await writer.append_result_parts(parts);
+    await writer.complete();
     return true;
   }
 
   /** 把 Session prompt 转换为 canonical User Message 并持久化。 */
   async append_prompt_message(
     input: AppendSessionPromptMessageInput,
-  ): Promise<SessionUserMessageV1> {
+  ): Promise<SessionUserMessage> {
     const query = input.prompt.query;
     const ui_parts = typeof query === "string"
       ? [{ type: "text" as const, text: query.trim() }]
@@ -294,53 +232,50 @@ export class SessionMessages {
       input_type: input.input_type,
       parts: normalize_session_user_parts(ui_parts),
     });
-    return to_executor_ui_message(canonical) as SessionUserMessageV1;
+    return canonical;
   }
 
   /** 持久化 Executor 在本轮延迟产生的 User Message。 */
   async append_deferred_user_messages(
-    deferred_messages?: SessionUserMessageV1[],
+    deferred_messages?: SessionUserMessage[],
   ): Promise<number> {
     const messages = Array.isArray(deferred_messages)
       ? deferred_messages
       : [];
     for (const message of messages) {
       await this.append_user_message({
-        turn_id: String(
-          message.metadata?.turn_id ||
-            `deferred:${this.session_id}:${Date.now()}`,
-        ),
+        turn_id: message.turn_id || `deferred:${this.session_id}:${Date.now()}`,
         input_type: "steer",
-        parts: from_ui_user_parts(message.parts),
+        parts: structuredClone(message.parts),
       });
     }
     return messages.length;
   }
 
   /** 按稳定 Action ID 创建或更新 canonical Action Message。 */
-  async persist_action_record(
-    event: SessionActionRecordV1,
+  async persist_action(
+    event: SessionActionEvent,
     options?: { publish_mutation?: boolean },
   ): Promise<void> {
     const publish_mutation = options?.publish_mutation !== false;
-    const existing = this.get_message(event.id);
+    const existing = this.get_message(event.action_id);
     if (!existing) {
       const writer = await this.open_action_message({
-        message_id: event.id,
-        turn_id: event.metadata.turn_id,
-        action_type: infer_action_type(event.id),
+        message_id: event.action_id,
+        turn_id: event.turn_id,
+        action_type: event.action_type,
         title: event.title,
         description: event.description,
         publish_mutation,
       });
-      if (event.state === "completed") await writer.complete();
-      if (event.state === "failed") {
+      if (event.status === "completed") await writer.complete();
+      if (event.status === "failed") {
         await writer.fail(event.description || event.title);
       }
       return;
     }
-    if (existing.type === "action" && event.state !== "running") {
-      await this.update_action_message(event.id, event.state, {
+    if (existing.type === "action" && event.status !== "running") {
+      await this.update_action_message(event.action_id, event.status, {
         title: event.title,
         description: event.description,
       }, { publish_mutation });
@@ -1008,38 +943,45 @@ export class SessionActionMessageWriter {
 
 /** 把 Downcity Session User parts 归一为 canonical User parts。 */
 export function normalize_session_user_parts(
-  parts: UIMessage["parts"] | null | undefined,
+  parts: SessionPromptPart[] | null | undefined,
 ): SessionUserMessagePart[] {
   if (!Array.isArray(parts)) return [];
   return parts.flatMap<SessionUserMessagePart>((part, index) => {
-    if (!part || typeof part !== "object") return [];
-    const candidate = part as Record<string, unknown>;
-    if (candidate.type === "text") {
+    if (part.type === "text") {
       return [{
         part_id: `user-text:${index + 1}`,
         type: "text",
-        text: String(candidate.text || ""),
+        text: part.text,
         state: "done",
       }];
     }
-    if (candidate.type === "file") {
+    if (part.type === "file") {
       return [{
         part_id: `user-file:${index + 1}`,
         type: "file",
-        url: String(candidate.url || ""),
-        media_type: String(candidate.mediaType || "application/octet-stream"),
-        ...(candidate.filename ? { filename: String(candidate.filename) } : {}),
+        url: part.url,
+        media_type: part.media_type,
+        ...(part.filename ? { filename: part.filename } : {}),
       }];
     }
-    if (String(candidate.type || "").startsWith("data-")) {
-      return [{
-        part_id: `user-data:${index + 1}`,
-        type: "data",
-        data_type: String(candidate.type),
-        data: to_session_json_value(candidate.data),
-      }];
-    }
-    return [];
+    return [{
+      part_id: `user-data:${index + 1}`,
+      type: "data",
+      data_type: part.data_type,
+      data: to_session_json_value(part.data),
+      ...(part.data_id ? { data_id: part.data_id } : {}),
+    }];
+  });
+}
+
+/** 判断 Assistant 结果中是否包含可持久化内容。 */
+function has_assistant_result_content(
+  parts: readonly SessionAssistantResultPart[],
+): boolean {
+  return parts.some((part) => {
+    if (part.type === "text") return Boolean(part.text.trim());
+    if (part.type === "file") return Boolean(part.media_type.trim() && part.url.trim());
+    return Boolean(part.data_type.trim());
   });
 }
 

@@ -19,8 +19,11 @@ import {
   build_update_session_compaction_prompt,
   SESSION_COMPACTION_SYSTEM_PROMPT,
 } from "@executor/composer/compaction/jsonl/JsonlSessionCompactionPrompts.js";
-import { to_executor_ui_message } from "@/session/messages/SessionMessageCodec.js";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import type {
+  SessionAssistantMessagePart,
+  SessionMessage,
+  SessionUserMessagePart,
+} from "@/types/session/SessionMessage.js";
 import type {
   SessionCompactionPlan,
 } from "@/types/session/SessionComposer.js";
@@ -89,14 +92,50 @@ export async function compose_session_compaction(input: {
 }
 
 function message_to_compaction_text(message: SessionMessage): string {
-  const projected = to_executor_ui_message(message);
-  if (!projected) return "";
-  const parts = projected.parts
-    .filter((part) => part.type !== "reasoning");
+  if (message.type !== "user" && message.type !== "assistant") return "";
+  const parts = message.parts
+    .map(to_compaction_part)
+    .filter((part) => part !== null);
   return safe_stringify({
-    role: projected.role,
+    role: message.type,
     parts,
   });
+}
+
+/** 把 canonical Part 收窄为 Summary 模型需要的稳定会话事实。 */
+function to_compaction_part(
+  part: SessionUserMessagePart | SessionAssistantMessagePart,
+): Record<string, unknown> | null {
+  if (part.type === "text") return { type: "text", text: part.text };
+  if (part.type === "reasoning" || part.type === "interaction") return null;
+  if (part.type === "file") {
+    return {
+      type: "file",
+      media_type: part.media_type,
+      url: part.url,
+      ...(part.filename ? { filename: part.filename } : {}),
+    };
+  }
+  if (part.type === "data") {
+    return {
+      type: "data",
+      data_type: part.data_type,
+      data: part.data,
+      ...(part.data_id ? { data_id: part.data_id } : {}),
+    };
+  }
+  if (part.type === "tool") {
+    return {
+      type: "tool",
+      tool_call_id: part.tool_call_id,
+      tool_name: part.tool_name,
+      state: part.state,
+      ...(part.input !== undefined ? { input: part.input } : {}),
+      ...(part.output !== undefined ? { output: part.output } : {}),
+      ...(part.error ? { error: part.error } : {}),
+    };
+  }
+  return null;
 }
 
 function safe_stringify(value: unknown): string {

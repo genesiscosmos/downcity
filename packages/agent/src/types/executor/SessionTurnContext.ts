@@ -7,9 +7,9 @@
  * - 可变状态只能通过行为方法更新，消费者不能直接操作内部数组、lease 或 callback。
  */
 
-import type { SessionUiMessage as UIMessage } from "@/types/session/SessionUiMessage.js";
 import type { ShellApprovalGateway } from "@downcity/workspace";
-import type { SessionUserMessageV1 } from "@/executor/types/SessionRecords.js";
+import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
+import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type { AgentPluginExecutionLease } from "@/types/plugin/PluginRuntime.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
@@ -39,7 +39,7 @@ export interface SessionTurnContextInit {
   abort_signal?: AbortSignal;
 
   /** 在 Step 检查点消费 Session 队列，并返回应并入模型上下文的 User 消息。 */
-  merge_step_input?: () => Promise<SessionUserMessageV1[]>;
+  merge_step_input?: () => Promise<SessionUserMessage[]>;
 
   /** 判断是否仍有等待下一个 Step 消费的 User prompt。 */
   has_pending_step_input?: () => boolean;
@@ -121,19 +121,19 @@ export interface SessionTurnContext {
   /** 当前运行的动态 User 输入及延迟持久化输入。 */
   readonly input: {
     /** 在 Step 边界消费运行期注入消息与 Session 队列消息。 */
-    checkpoint(): Promise<SessionUserMessageV1[]>;
+    checkpoint(): Promise<SessionUserMessage[]>;
 
     /** 判断是否有等待下一个 Step 消费的 Session prompt。 */
     has_pending(): boolean;
 
     /** 注入一条只影响当前运行、在下一 Step 生效的 User 消息。 */
-    inject_user_message(message: SessionUserMessageV1): void;
+    inject_user_message(message: SessionUserMessage): void;
 
     /** 延迟到 Assistant 结果落盘后再持久化一条 User 消息。 */
-    defer_user_message(message: SessionUserMessageV1): void;
+    defer_user_message(message: SessionUserMessage): void;
 
     /** 返回延迟持久化 User 消息的不可变快照。 */
-    deferred_user_messages(): readonly SessionUserMessageV1[];
+    deferred_user_messages(): readonly SessionUserMessage[];
 
     /** 消费一次 canonical history 重载请求。 */
     consume_history_reload(): boolean;
@@ -145,10 +145,10 @@ export interface SessionTurnContext {
     readonly assistant?: SessionAssistantOutput;
 
     /** 把 Action 产生的 Assistant Parts 加入当前 Step 收口队列。 */
-    enqueue_assistant_parts(parts: readonly UIMessage["parts"][number][]): void;
+    enqueue_assistant_parts(parts: readonly SessionAssistantResultPart[]): void;
 
     /** 消费当前 Step 中等待写入 canonical Assistant Message 的 Parts。 */
-    take_assistant_parts(): UIMessage["parts"];
+    take_assistant_parts(): SessionAssistantResultPart[];
 
     /** 发布一条不进入 LLM 输入的 Session Action。 */
     publish_action(event: AgentSessionActionEvent): Promise<void>;

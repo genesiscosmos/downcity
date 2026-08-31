@@ -42,9 +42,9 @@ interface SessionMessagePage {
 
 A Session has one top-level Message sequence ordered by `sequence`. Tool calls are neither a second Timeline nor top-level Messages: they live in an Assistant Message's `parts`, so `text -> tool -> text` is persisted in its real generation order.
 
-An ordinary Tool Loop, Provider continuation, or recovery retry does not create another Assistant Message. It appends ordered Parts to the current Assistant. Only a new User Message—including an in-flight steer—closes the preceding Assistant Message, after which later output creates the next Assistant Message. Model-step boundaries use `step-start` Parts and require no separate segment field.
+An ordinary Tool Loop, Provider continuation, or recovery retry does not create another Assistant Message. It appends ordered Parts to the current Assistant. Only a new User Message—including an in-flight steer—closes the preceding Assistant Message, after which later output creates the next Assistant Message. A model step is an execution boundary and is not persisted as a Part.
 
-`SessionMessage` is the persistence format; the internal `SessionUiMessage` is the streaming projection used by the Executor and UI. Serializable User and Assistant UI parts can be projected into Session parts and restored into an equivalent view. `action` and `error` are Downcity Session top-level types and are never sent to the model.
+`SessionMessage` is the single source of truth for persistence and the UI timeline. The Executor consumes Downcity `ModelStreamEvent` values directly, updates the canonical Assistant Message, and publishes live changes through `SessionMutation`; there is no intermediate UI Message or chunk protocol. `action` and `error` are Session top-level types and are never sent to the model.
 
 If a Turn fails before producing any Assistant content, the Session writes one `error` Message and does not fabricate an Assistant reply from the error text. If partial content already exists, that Assistant is retained with `status: "failed"`, followed by the structured `error` Message.
 
@@ -54,34 +54,12 @@ If a Turn fails before producing any Assistant content, the Session writes one `
 | --- | --- | --- |
 | `text` | `text`, `state` | Visible output, `streaming -> done` |
 | `reasoning` | `text`, `state` | Reasoning output; product decides whether to display it |
-| `tool` | `tool_call_id`, `tool_name`, `state`, metadata | Tool input, waiting, execution, and result |
+| `tool` | `tool_call_id`, `tool_name`, `state`, `input`, `output` | Tool input, waiting, execution, and result |
 | `interaction` | `interaction_id`, `interaction_type`, `status`, `request`, `response` | Asynchronous user approval or questions |
-| `file` | `url`, `media_type`, `provider_metadata` | A file generated or referenced by the Assistant |
-| `source` | `source_type`, `source_id`, URL or document fields | A URL or document source |
+| `file` | `url`, `media_type`, `filename` | A file generated or referenced by the Assistant |
 | `data` | `data_type`, `data`, `data_id` | Persisted structured UI data |
-| `step-start` | No business fields | A boundary in a multi-step response |
 
-Every Assistant Part has a stable `part_id` and a `sequence` that never changes after creation. UI chunks from each model step are the sole source of canonical order. The final step snapshot only validates order and enriches metadata; it cannot create, remove, or reorder Parts. A tool state change updates the same Part, so a UI should not create separate request and result rows.
-
-### Tool Provider metadata
-
-A Tool Part preserves metadata attached to the tool call and tool result by the Provider Adapter:
-
-```ts
-interface SessionAssistantToolPart {
-  title?: string;
-  tool_metadata?: JsonObject;
-  dynamic?: boolean;
-  call_provider_metadata?: ProviderMetadata;
-  result_provider_metadata?: ProviderMetadata;
-  provider_executed?: boolean;
-  preliminary?: boolean;
-}
-```
-
-These fields are opaque data required by capabilities such as Provider continuation. Applications may read and persist them unchanged, but should not modify Provider-specific fields. Older Sessions without these optional fields continue to load normally.
-
-Text, reasoning, file, and source parts also preserve their own `provider_metadata`. Stream updates with the same `data_id` or `source_id` replace the existing Part without changing its `sequence`. A Session data chunk with `transient: true` is delivered to the live UI but is not persisted in the Session.
+Every Assistant Part has a stable `part_id` and a `sequence` that never changes after creation. Model stream events create or update canonical Parts in arrival order. The final step snapshot validates count, type, and order; it cannot create, remove, or reorder Parts. A tool state change updates the same Part, so a UI should not create separate request and result rows. Action results with the same `data_id` update the corresponding Data Part without changing its order.
 
 Tool Parts do not carry a duplicate approval snapshot. User participation uses a separate
 Interaction Part:
@@ -105,7 +83,7 @@ not two independent transactions.
 
 Every Message has a stable `message_id`, a creation-time `sequence` that never changes, and a `revision` that increases with each complete snapshot update. A client must not replace a greater revision with a lower one.
 
-At the end of each model step, the SDK validates the final Session projection against canonical chunks by Part count, type, order, and stable identity. An empty Text or Reasoning Part with start/finish but no delta is ignored before validation and is not added to canonical history. Any other final snapshot mismatch or canonical Part write failure fails the Turn. The SDK does not infer identity from text content and never publishes an incomplete completed history. When a client receives a complete `message` Mutation with a greater revision, it should replace the whole Message instead of retaining the older revision's Parts array.
+At the end of each model step, the SDK validates the event collector result against the canonical Assistant Message by Part count, type, and order. An empty Text or Reasoning Part with start/finish but no delta is ignored before validation and is not added to canonical history. Any other final snapshot mismatch or canonical Part write failure fails the Turn. The SDK does not infer identity from text content and never publishes an incomplete completed history. When a client receives a complete `message` Mutation with a greater revision, it should replace the whole Message instead of retaining the older revision's Parts array.
 
 `messages()` returns only `visibility: "visible"` Messages by default. Pass `include_internal: true` for debugging or audit. A Compact Summary is not a Message, consumes no sequence, and never appears in `messages()`.
 

@@ -23,9 +23,10 @@ flowchart LR
     Composer --> Input["system + messages + tools"]
     Executor --> Engine["CoreEngineRunner"]
     Input --> Engine
-    Engine --> Model["LanguageModel"]
+    Engine --> Model["ModelClient"]
     Engine --> Tools["Tools / Plugins"]
-    Engine -->|"Chunk / Callback"| Context
+    Model -->|"ModelStreamEvent"| Engine
+    Engine -->|"ModelStreamEvent / Tool Result"| Context
     Context --> Messages["SessionMessages"]
 ```
 
@@ -33,12 +34,14 @@ flowchart LR
 
 ```text
 Session.prompt()
-  -> SessionLoop 持久化 User Message
+  -> SessionLoop 持久化 canonical User Message
   -> Executor 捕获只读 Session 快照
   -> SessionComposer.compose()
+  -> SessionModelMessages: SessionMessage -> ModelMessage
   -> CoreEngineRunner.execute()
-  -> SessionTurnContext 接收 Stream Chunk
-  -> SessionMessages 完成 Assistant Message
+  -> Federation / Provider 返回 ModelStreamEvent
+  -> SessionAssistantOutput 直接更新 canonical Assistant Message
+  -> SessionMessages 持久化并发布 Mutation
 ```
 
 ## 旧 Composer 去向
@@ -48,7 +51,7 @@ Session.prompt()
 | 旧能力 | 当前归属 |
 | --- | --- |
 | `SystemComposer` | `DefaultSessionComposer.compose()` + `SessionSystem` |
-| `HistoryComposer` | `SessionMessages.context_snapshot()` + `SessionMessageCodec` |
+| `HistoryComposer` | `SessionMessages.context_snapshot()` + `SessionModelMessages` |
 | `ContextComposer` 的 tools | `Session.create_compose_input()` + `SessionComposer.compose()` |
 | `ContextComposer` 的 Step Callback | `SessionLoop` + `CoreEngineRunner` |
 | `ContextComposer` 的 fallback Assistant | `CoreEngineRunner` + `ExecutorRecoveryPolicy` |

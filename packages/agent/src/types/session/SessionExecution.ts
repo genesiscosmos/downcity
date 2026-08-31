@@ -7,91 +7,10 @@
  * - 输出只返回执行结果；Assistant Message 通过显式输出端口写入唯一事实源。
  */
 
-import type { RuntimeTool as Tool } from "@downcity/type";
-import type { SessionUiMessageChunk as UIMessageChunk } from "@/types/session/SessionUiMessage.js";
-import type {
-  SessionRecordV1,
-  SessionMessageRecordV1,
-  SessionUserMessageV1,
-} from "@/executor/types/SessionRecords.js";
+import type { ModelMessage, RuntimeTool as Tool } from "@downcity/type";
+import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
-
-/**
- * Assistant step 可见性。
- *
- * 说明（中文）
- * - `visible`：ACP `agent_message_chunk` 或普通模型文本，属于用户可见回复。
- * - `internal`：ACP `agent_thought_chunk` 等内部过程，应作为 reasoning 保留，但不能混入普通 text。
- */
-export type SessionAssistantStepVisibility = "visible" | "internal";
-
-/**
- * Assistant step 回调入参。
- */
-export interface SessionAssistantStepCallbackInput {
-  /**
-   * 当前 step 生成的文本。
-   */
-  text: string;
-
-  /**
-   * 当前 step 序号（从 1 开始）。
-   */
-  step_index: number;
-
-  /**
-   * 当前 step 的可见性。
-   *
-   * 关键点（中文）
-   * - 未声明时按 `visible` 处理，兼容本地模型与旧调用方。
-   * - `internal` 会落盘为 reasoning part，外部渠道不应当成普通回复文本发送。
-   */
-  visibility?: SessionAssistantStepVisibility;
-
-  /**
-   * 当前 step 的原始结果对象。
-   *
-   * 关键点（中文）
-   * - 由运行时直接透传，供持久化层提取 tool call / tool result 顺序事件。
-   * - 外部调用方不应依赖其稳定结构，只能做 best-effort 读取。
-   */
-  step_result?: unknown;
-}
-
-/**
- * Assistant step 完成回调。
- */
-export type SessionAssistantStepCallback = (
-  input: SessionAssistantStepCallbackInput,
-) => Promise<void>;
-
-/**
- * UI stream chunk 回调入参。
- *
- * 关键点（中文）
- * - 这里复用 Downcity `SessionUiMessageChunk`，让 Session 内核只有一套流式投影。
- * - SDK / HTTP 若需要自己的事件模型，应在更上层做映射。
- */
-export type SessionUiMessageChunk = UIMessageChunk;
-
-/**
- * UI stream chunk 回调。
- */
-export type SessionUiMessageChunkCallback = (
-  chunk: SessionUiMessageChunk,
-) => Promise<void>;
-
-/** 单个模型 UI stream 开始前的 canonical step 回调。 */
-export type SessionUiMessageStepStartCallback = () => Promise<void>;
-
-/** 单个模型 UI stream 完成后的 canonical step 快照回调。 */
-export type SessionUiMessageStepFinishCallback = (
-  message: SessionMessageRecordV1,
-) => Promise<void>;
-
-/** 单个模型 UI stream 未完成时的 canonical step 清理回调。 */
-export type SessionUiMessageStepAbortCallback = () => Promise<void>;
 
 /**
  * Session 执行结果。
@@ -117,7 +36,7 @@ export interface SessionTurnExecutionResult {
    * - 这些消息通常由 tool 运行时在执行过程中动态注入。
    * - 为保证消息顺序稳定，统一在 assistant 结果落盘后再由外层 Session 持久化。
    */
-  deferred_persisted_user_messages?: SessionUserMessageV1[];
+  deferred_persisted_user_messages?: SessionUserMessage[];
 
   /**
    * 本轮结束后是否需要把已完成的 canonical 历史持久化压缩。
@@ -142,7 +61,7 @@ export interface SessionTurnExecutionInput {
    * 本轮唯一的显式 Turn 上下文。
    *
    * 关键点（中文）
-   * - 这里承载 Step 合并、UI chunk 回调等跨组件运行期数据。
+   * - 这里承载标准模型事件输出、Step 合并与取消信号等跨组件运行期数据。
    * - Context 由 Turn 生命周期所有者创建并在 Turn 收口后释放。
    */
   turn_context: SessionTurnContext;
@@ -162,10 +81,11 @@ export interface SessionStepExecutionInput {
    */
   system: SessionSystemMessage[];
 
-  /**
-   * 当前轮 context 语义消息历史。
-   */
-  messages: SessionRecordV1[];
+  /** 当前轮标准模型消息历史。 */
+  messages: ModelMessage[];
+
+  /** 当前模型历史所包含的最新持久化 Summary 标识。 */
+  history_summary_id?: string;
 
   /**
    * 当前轮可用工具集合。

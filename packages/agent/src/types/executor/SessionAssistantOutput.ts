@@ -1,33 +1,35 @@
 /**
- * Executor 到 Session canonical Message 的 Assistant 输出端口。
+ * Executor 到 canonical Session Assistant Message 的输出端口。
  *
- * 该端口集中隔离 Downcity Session UI 流。SessionLoop 只装配端口，不解析 Chunk，具体转换
- * 由 execution Adapter 完成，SessionMessages 仍是唯一 Assistant Message 事实源。
+ * 该端口直接消费 Downcity Model Protocol 事件，不定义或转发 UI-shaped chunk。
  */
 
+import type { ModelStreamEvent } from "@downcity/type";
+import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
+import type { SessionAssistantMessagePart } from "@/types/session/SessionMessage.js";
 import type {
-  SessionUiMessage as UIMessage,
-  SessionUiMessageChunk as UIMessageChunk,
-} from "@/types/session/SessionUiMessage.js";
-import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
-import type { SessionToolInputReady } from "@/types/session/SessionTool.js";
+  SessionToolExecutionResult,
+  SessionToolInputReady,
+} from "@/types/session/SessionTool.js";
 
-/** 单次 Turn 的 Assistant 输出写入端口。 */
+/** Executor 写入当前 Turn Assistant Message 的稳定能力。 */
 export interface SessionAssistantOutput {
-  /** 开始一个 Provider Step 的独立 Part 作用域。 */
+  /** 开始一个模型 Step 的独立 Part 作用域。 */
   begin_step(): Promise<void>;
-  /** 写入一个 Downcity Session UI 流式 Chunk。 */
-  write_chunk(chunk: UIMessageChunk): Promise<void>;
-  /** 使用 Provider 最终快照校验并补齐当前 Step metadata。 */
-  finish_step(message: SessionMessageRecordV1): Promise<void>;
+  /** 直接写入单个标准模型流事件。 */
+  write_model_event(event: ModelStreamEvent): Promise<void>;
+  /** 在 Tool 审批或执行前提交完整输入。 */
+  prepare_tool_input(input: SessionToolInputReady): Promise<void>;
+  /** 写入 Tool 执行终态。 */
+  write_tool_result(result: SessionToolExecutionResult): Promise<void>;
+  /** 使用模型流聚合出的 canonical Parts 校验当前 Step。 */
+  finish_step(parts: SessionAssistantMessagePart[]): Promise<void>;
   /** 放弃当前未完成 Step 的临时作用域。 */
   abort_step(): Promise<void>;
-  /** 在 Tool 实现执行前提交完整输入。 */
-  prepare_tool_input(input: SessionToolInputReady): Promise<void>;
-  /** User steer 已插入会话后，关闭它之前的当前 Assistant Message。 */
+  /** User steer 插入前关闭当前连续 Assistant Message。 */
   close_current_message(): Promise<void>;
-  /** 把 Action 产生的完整 Parts 追加到当前 canonical Assistant Message。 */
-  append_parts(parts: UIMessage["parts"]): Promise<void>;
+  /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
+  append_result_parts(parts: readonly SessionAssistantResultPart[]): Promise<void>;
   /** 按 Turn 最终结果收口 Assistant 输出。 */
   finish(input: {
     /** Assistant 最终状态。 */

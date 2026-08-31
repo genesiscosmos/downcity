@@ -1,261 +1,116 @@
 /**
- * SessionLoopSignals：tool-loop 执行循环的信号判断与调试摘要工具。
+ * CoreEngine Tool Loop 的纯信号与诊断模块。
  *
- * 关键点（中文）
- * - 这里只放“如何判断继续执行 / 如何输出调试摘要”的纯函数。
- * - 不放 tool-loop 主流程，避免执行内核被大量辅助细节淹没。
- * - 目标是让 tool-loop 保持“只看主链路就能理解”的结构。
+ * 所有消息判断都直接读取 canonical `SessionAssistantMessagePart`，不依赖 UI 投影。
  */
 
-import {
-  is_session_text_part as isTextUIPart,
-  is_session_tool_part as isToolUIPart,
-  read_session_tool_name,
-} from "@/types/session/SessionUiMessage.js";
-import type { SessionMessageRecordV1 } from "@/executor/types/SessionRecords.js";
 import type { JsonObject } from "@/types/common/Json.js";
+import type { SessionAssistantMessagePart } from "@/types/session/SessionMessage.js";
 
-/**
- * 单次 tool-loop 允许的最大 step 数。
- */
+/** 单次 Tool Loop 允许的最大 Step 数。 */
 export const MAX_TOOL_LOOP_STEPS = 64;
 
-/**
- * 不完整响应自动恢复的最大次数。
- *
- * 关键点（中文）
- * - 仅针对 provider 流异常结束这类“本该继续、但响应被截断”的情况。
- * - 只补一次，避免在 provider 异常持续时进入长时间空转。
- */
+/** 不完整响应自动恢复的最大次数。 */
 export const MAX_INCOMPLETE_RESPONSE_RECOVERIES = 1;
 
-/**
- * 调试日志中的文本预览最大长度。
- */
+/** 调试日志中的文本预览最大长度。 */
 const DEBUG_TEXT_PREVIEW_MAX_CHARS = 180;
 
-/**
- * UI tool part 中表示“尚未完成”的状态集合。
- */
-const INCOMPLETE_TOOL_PART_STATES = new Set([
-  "input-streaming",
-  "input-available",
-  "output-streaming",
-]);
-
-function toJsonObject(value: unknown): JsonObject | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as JsonObject;
-}
-
-/**
- * 生成日志友好的单行预览文本。
- */
+/** 生成日志友好的单行预览文本。 */
 export function to_inline_preview(value: unknown): string {
-  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+  const normalized = String(value ?? "").replace(/\s+/gu, " ").trim();
   if (!normalized) return "";
   return normalized.length > DEBUG_TEXT_PREVIEW_MAX_CHARS
     ? `${normalized.slice(0, DEBUG_TEXT_PREVIEW_MAX_CHARS)}...`
     : normalized;
 }
 
-function pickToolNames(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      const record = toJsonObject(item);
-      return typeof record?.toolName === "string" ? record.toolName : "";
-    })
-    .filter((name) => Boolean(name))
-    .slice(0, 8);
-}
-
-function pickResponseMessageRoles(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      const record = toJsonObject(item);
-      return typeof record?.role === "string" ? record.role : "";
-    })
-    .filter((role) => Boolean(role))
-    .slice(0, 8);
-}
-
-function summarizeResponseBodyForDebug(body: unknown): JsonObject {
-  const bodyRecord = toJsonObject(body);
-  if (!bodyRecord) return {};
-
-  const outputItems = Array.isArray(bodyRecord.output) ? bodyRecord.output : [];
-  const outputTypes = outputItems
-    .map((item) => {
-      const record = toJsonObject(item);
-      return typeof record?.type === "string" ? record.type : "";
-    })
-    .filter((type) => Boolean(type))
-    .slice(0, 12);
-  const functionCallNames = outputItems
-    .map((item) => {
-      const record = toJsonObject(item);
-      if (record?.type !== "function_call") return "";
-      return typeof record.name === "string" ? record.name : "";
-    })
-    .filter((name) => Boolean(name))
-    .slice(0, 8);
-
-  return {
-    responseBodyKeys: Object.keys(bodyRecord).slice(0, 12),
-    responseOutputCount: outputItems.length,
-    responseOutputTypes: outputTypes,
-    responseHasFunctionCall: functionCallNames.length > 0,
-    responseFunctionCallNames: functionCallNames,
-  };
-}
-
-/**
- * 汇总单个 step 的关键信号，便于定位“为什么没有继续下一轮”。
- */
+/** 汇总单个 Step 的关键信号。 */
 export function summarize_step_for_debug(step_result: unknown): JsonObject {
-  const record = toJsonObject(step_result) || {};
-  const usage = toJsonObject(record.usage);
-  const response = toJsonObject(record.response);
-  const toolCalls = Array.isArray(record.toolCalls) ? record.toolCalls : [];
-  const toolResults = Array.isArray(record.toolResults) ? record.toolResults : [];
-  const responseMessages = Array.isArray(response?.messages)
+  const record = to_json_object(step_result) ?? {};
+  const usage = to_json_object(record.usage);
+  const response = to_json_object(record.response);
+  const tool_calls = Array.isArray(record.tool_calls) ? record.tool_calls : [];
+  const tool_results = Array.isArray(record.tool_results) ? record.tool_results : [];
+  const response_messages = Array.isArray(response?.messages)
     ? response.messages
     : [];
-
   return {
     finishReason:
-      typeof record.finishReason === "string" ? record.finishReason : null,
-    rawFinishReason:
-      typeof record.rawFinishReason === "string" ? record.rawFinishReason : null,
+      typeof record.finish_reason === "string" ? record.finish_reason : null,
     textLength: typeof record.text === "string" ? record.text.length : 0,
     textPreview: to_inline_preview(record.text),
-    toolCallCount: toolCalls.length,
-    toolCallNames: pickToolNames(toolCalls),
-    toolResultCount: toolResults.length,
-    toolResultNames: pickToolNames(toolResults),
-    responseMessageCount: responseMessages.length,
-    responseMessageRoles: pickResponseMessageRoles(responseMessages),
+    toolCallCount: tool_calls.length,
+    toolCallNames: pick_tool_names(tool_calls),
+    toolResultCount: tool_results.length,
+    toolResultNames: pick_tool_names(tool_results),
+    responseMessageCount: response_messages.length,
+    responseMessageRoles: response_messages
+      .map((item) => to_json_object(item)?.role)
+      .filter((role): role is string => typeof role === "string")
+      .slice(0, 8),
     inputTokens:
-      typeof usage?.inputTokens === "number" ? usage.inputTokens : null,
+      typeof usage?.input_tokens === "number" ? usage.input_tokens : null,
     outputTokens:
-      typeof usage?.outputTokens === "number" ? usage.outputTokens : null,
+      typeof usage?.output_tokens === "number" ? usage.output_tokens : null,
     totalTokens:
-      typeof usage?.totalTokens === "number" ? usage.totalTokens : null,
-    ...summarizeResponseBodyForDebug(response?.body),
+      typeof usage?.total_tokens === "number" ? usage.total_tokens : null,
   };
 }
 
-/**
- * 汇总最终 assistant UI 消息的调试摘要。
- */
-export function summarize_ui_message_for_debug(
-  message: SessionMessageRecordV1 | null | undefined,
+/** 汇总最终 canonical Assistant Parts。 */
+export function summarize_assistant_parts_for_debug(
+  parts: readonly SessionAssistantMessagePart[],
 ): JsonObject {
-  const parts = Array.isArray(message?.parts) ? message.parts : [];
-  const text = parts
-    .filter(isTextUIPart)
-    .map((part) => String(part.text ?? ""))
-    .join("\n")
-    .trim();
-  const toolNames = parts
-    .filter(isToolUIPart)
-    .map((part) => String(read_session_tool_name(part) || ""))
-    .filter((name) => Boolean(name))
+  const text = extract_assistant_text(parts);
+  const tool_names = parts
+    .filter((part) => part.type === "tool")
+    .map((part) => part.tool_name)
     .slice(0, 8);
-  const partTypes = parts
-    .map((part) => {
-      const record = toJsonObject(part);
-      return typeof record?.type === "string" ? record.type : "unknown";
-    })
-    .slice(0, 12);
-
   return {
-    role: typeof message?.role === "string" ? message.role : null,
     partCount: parts.length,
-    partTypes,
+    partTypes: parts.map((part) => part.type).slice(0, 12),
     textLength: text.length,
     textPreview: to_inline_preview(text),
-    toolPartCount: toolNames.length,
-    toolNames,
+    toolPartCount: tool_names.length,
+    toolNames: tool_names,
   };
 }
 
-/**
- * 合并多轮 assistant UI 消息。
- *
- * 关键点（中文）
- * - 多 step 场景下，最终 assistant message 需要把各 step 的 UI part 串起来。
- */
-export function merge_assistant_ui_messages(
-  base: SessionMessageRecordV1 | null,
-  incoming: SessionMessageRecordV1,
-): SessionMessageRecordV1 {
-  if (!base) return incoming;
-  const baseMetadata = base.metadata;
-  const incomingMetadata = incoming.metadata;
-  // 原生审批恢复会把上一条 assistant message 作为 originalMessages 传入，
-  // SDK 返回的是同一条消息的完整快照，此时应整体替换而不是重复拼接。
-  const merged_parts =
-    base.id === incoming.id
-      ? incoming.parts
-      : [
-          ...(Array.isArray(base.parts) ? base.parts : []),
-          ...(Array.isArray(incoming.parts) ? incoming.parts : []),
-        ];
-  return {
-    ...base,
-    metadata: {
-      v: incomingMetadata?.v ?? baseMetadata?.v ?? 1,
-      ts: incomingMetadata?.ts ?? baseMetadata?.ts ?? Date.now(),
-      session_id:
-        incomingMetadata?.session_id ?? baseMetadata?.session_id ?? "",
-      ...(baseMetadata || {}),
-      ...(incomingMetadata || {}),
-    },
-    parts: merged_parts,
-  };
+/** 按 Step 顺序合并 canonical Assistant Parts。 */
+export function merge_assistant_parts(
+  base: readonly SessionAssistantMessagePart[],
+  incoming: readonly SessionAssistantMessagePart[],
+): SessionAssistantMessagePart[] {
+  return [...base, ...incoming].map((part, index) => ({
+    ...part,
+    sequence: index + 1,
+  }));
 }
 
-function pickIncompleteToolParts(
-  message: SessionMessageRecordV1 | null | undefined,
-): Array<{
-  tool_name: string;
-  state: string;
-}> {
-  const parts = Array.isArray(message?.parts) ? message.parts : [];
-  return parts
-    .filter(isToolUIPart)
-    .map((part) => ({
-      tool_name: String(read_session_tool_name(part) || "unknown_tool"),
-      state:
-        typeof toJsonObject(part)?.state === "string"
-          ? String(toJsonObject(part)?.state)
-          : "",
-    }))
-    .filter((item) => INCOMPLETE_TOOL_PART_STATES.has(item.state))
-    .slice(0, 8);
-}
-
-function looksLikeIncompleteText(text: string): boolean {
-  const normalized = String(text || "").trim();
-  if (!normalized) return false;
-  if (normalized.endsWith("```")) return false;
-  if (/[。！？.!?]$/.test(normalized)) return false;
-  if (/[:：\-（(`]$/.test(normalized)) return true;
-  if (/#{1,6}\s*$/.test(normalized)) return true;
-  if (/^- [^\n]*$/m.test(normalized.split("\n").slice(-1)[0] || "")) return true;
-  return true;
-}
-
-/**
- * 构造“不完整响应恢复”提示。
- */
-export function build_incomplete_response_recovery_nudge(
-  recoveryIndex: number,
+/** 从 canonical Assistant Parts 提取用户可见文本。 */
+export function extract_assistant_text(
+  parts: readonly SessionAssistantMessagePart[],
 ): string {
-  const round = Math.max(1, recoveryIndex);
+  const chat_send = [...parts].reverse().find(
+    (part) => part.type === "tool" && part.tool_name === "chat_send",
+  );
+  if (chat_send?.type === "tool" && chat_send.input) {
+    const input = to_json_object(chat_send.input);
+    const text = typeof input?.text === "string" ? input.text.trim() : "";
+    if (text && chat_send.state === "completed") return text;
+  }
+  return parts
+    .flatMap((part) => part.type === "text" ? [part.text] : [])
+    .join("\n")
+    .trim();
+}
+
+/** 构造不完整响应恢复提示。 */
+export function build_incomplete_response_recovery_nudge(
+  recovery_index: number,
+): string {
+  const round = Math.max(1, recovery_index);
   return [
     `系统恢复提醒（第 ${round} 次）：上一轮响应在流式阶段异常中断。`,
     "不要复述已完成内容。",
@@ -264,80 +119,56 @@ export function build_incomplete_response_recovery_nudge(
   ].join("\n");
 }
 
-/**
- * 检测“响应被中断但模型没有正常完成”的情况。
- */
-export function detect_incomplete_response(params: {
+/** 检测模型报告未知完成原因或存在未完成 Tool Part 的情况。 */
+export function detect_incomplete_response(input: {
+  /** 当前 Step 结果。 */
   step_result: unknown;
-  assistant_message: SessionMessageRecordV1 | null | undefined;
-}): {
-  reason: string;
-  details: JsonObject;
-} | null {
-  const record = toJsonObject(params.step_result) || {};
-  const finishReason =
-    typeof record.finishReason === "string" ? record.finishReason : "";
-  const rawFinishReason =
-    typeof record.rawFinishReason === "string" ? record.rawFinishReason : "";
+  /** 当前 Step canonical Assistant Parts。 */
+  assistant_parts: readonly SessionAssistantMessagePart[];
+}): { reason: string; details: JsonObject } | null {
+  const record = to_json_object(input.step_result) ?? {};
+  const finish_reason = typeof record.finish_reason === "string"
+    ? record.finish_reason
+    : "";
   const text = typeof record.text === "string" ? record.text.trim() : "";
-  const toolCalls = Array.isArray(record.toolCalls) ? record.toolCalls : [];
-  const toolResults = Array.isArray(record.toolResults) ? record.toolResults : [];
-  const usage = toJsonObject(record.usage);
-  const incompleteToolParts = pickIncompleteToolParts(params.assistant_message);
-
-  if (incompleteToolParts.length > 0) {
+  const incomplete_tools = input.assistant_parts
+    .filter((part): part is Extract<SessionAssistantMessagePart, { type: "tool" }> =>
+      part.type === "tool" &&
+      part.state !== "completed" &&
+      part.state !== "failed"
+    )
+    .map((part) => ({ tool_name: part.tool_name, state: part.state }));
+  if (incomplete_tools.length > 0) {
     return {
       reason: "incomplete_tool_part",
       details: {
-        finishReason: finishReason || null,
-        rawFinishReason: rawFinishReason || null,
-        incompleteToolParts,
+        finishReason: finish_reason || null,
+        incompleteToolParts: incomplete_tools,
         textPreview: to_inline_preview(text),
       },
     };
   }
-
-  if (finishReason !== "other") return null;
-
-  if (!text) {
-    return {
-      reason: "finish_reason_other_empty",
-      details: {
-        finishReason,
-        rawFinishReason: rawFinishReason || null,
-        toolCallCount: toolCalls.length,
-        toolResultCount: toolResults.length,
-      },
-    };
-  }
-
-  if (looksLikeIncompleteText(text)) {
-    return {
-      reason: "finish_reason_other_truncated_text",
-      details: {
-        finishReason,
-        rawFinishReason: rawFinishReason || null,
-        textLength: text.length,
-        textPreview: to_inline_preview(text),
-        toolCallCount: toolCalls.length,
-        toolResultCount: toolResults.length,
-        inputTokens:
-          typeof usage?.inputTokens === "number" ? usage.inputTokens : null,
-        outputTokens:
-          typeof usage?.outputTokens === "number" ? usage.outputTokens : null,
-        totalTokens:
-          typeof usage?.totalTokens === "number" ? usage.totalTokens : null,
-      },
-    };
-  }
-
+  if (finish_reason !== "unknown") return null;
   return {
-    reason: "finish_reason_other",
+    reason: text ? "finish_reason_unknown" : "finish_reason_unknown_empty",
     details: {
-      finishReason,
-      rawFinishReason: rawFinishReason || null,
+      finishReason: finish_reason,
       textLength: text.length,
       textPreview: to_inline_preview(text),
     },
   };
+}
+
+/** 从未知值读取 JSON 对象。 */
+function to_json_object(value: unknown): JsonObject | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as JsonObject;
+}
+
+/** 从 Tool 事实数组提取名称。 */
+function pick_tool_names(value: unknown[]): string[] {
+  return value
+    .map((item) => to_json_object(item)?.tool_name)
+    .filter((name): name is string => typeof name === "string")
+    .slice(0, 8);
 }

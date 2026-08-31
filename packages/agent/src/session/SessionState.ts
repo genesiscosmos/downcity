@@ -25,9 +25,7 @@ import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import { SessionTitleTask } from "@/session/runtime/SessionTitleTask.js";
-import { to_executor_history } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
-import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
@@ -291,20 +289,17 @@ export class SessionState {
     this.title_task.schedule(async (signal) => {
       const before_metadata = await this.store.read_metadata();
       if (String(before_metadata.title || "").trim()) return;
-      const records = to_executor_history(
-        this.session_id,
-        await this.messages.context_snapshot(),
-      );
-      const first_user_message = records.find(
-        (record) => is_session_message_record(record) && record.role === "user",
+      const messages = (await this.messages.context_snapshot()).messages;
+      const first_user_message = messages.find(
+        (message) => message.type === "user",
       );
       if (!first_user_message) return;
-      const first_user_message_id = first_user_message.id;
+      const first_user_message_id = first_user_message.message_id;
       const before_title = String(before_metadata.title || "").trim();
       const next_metadata = await ensure_session_title({
         session_id: this.session_id,
         store: this.store,
-        messages: records,
+        messages,
         model: this.get_model(),
         model_label: this.state.session_config.model_label,
         logger: this.logger,
@@ -314,14 +309,9 @@ export class SessionState {
           const latest_metadata = await this.store.read_metadata();
           if (signal.aborted) return latest_metadata;
           if (String(latest_metadata.title || "").trim()) return latest_metadata;
-          const latest_records = to_executor_history(
-            this.session_id,
-            await this.messages.context_snapshot(),
-          );
-          const source_exists = latest_records.some(
-            (record) =>
-              is_session_message_record(record) &&
-              record.id === first_user_message_id,
+          const latest_messages = (await this.messages.context_snapshot()).messages;
+          const source_exists = latest_messages.some(
+            (message) => message.message_id === first_user_message_id,
           );
           if (!source_exists || signal.aborted) return latest_metadata;
           const next_metadata = { ...latest_metadata, title };

@@ -38,7 +38,7 @@ test("Data URL 落盘后保留用户文件名并保存相对路径", async () =>
     prompt: {
       query: [{
         type: "file",
-        mediaType: "image/png",
+        media_type: "image/png",
         url: "data:image/png;base64,aGVsbG8=",
         filename: "diagram.png",
       }],
@@ -67,7 +67,7 @@ test("视频 Data URL 使用 MIME 类型和扩展名落盘", async () => {
     prompt: {
       query: [{
         type: "file",
-        mediaType: "video/mp4",
+        media_type: "video/mp4",
         url: "data:video/mp4;base64,AQID",
         filename: "demo.mp4",
       }],
@@ -92,7 +92,7 @@ test("无效 Data URL 不会写入 Session Message", async () => {
       prompt: {
         query: [{
           type: "file",
-          mediaType: "image/png",
+          media_type: "image/png",
           url: "data:image/png;base64",
         }],
       },

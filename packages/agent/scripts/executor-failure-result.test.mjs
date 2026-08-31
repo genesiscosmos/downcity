@@ -42,23 +42,15 @@ function create_text_stream(text) {
 
 function create_execution_input(model, turn_context) {
   const messages = [{
-    id: "user-1",
     role: "user",
-    metadata: {
-      v: 1,
-      ts: 1,
-      session_id: "executor-failure-test",
-      source: "ingress",
-      kind: "normal",
-    },
-    parts: [{ type: "text", text: "hello" }],
+    content: [{ type: "text", text: "hello" }],
   }];
   return {
     execute_input: { query: "hello", system: [], messages, tools: {} },
     model,
     turn_context,
     resolve_step_inputs: async () => ({ model, system: [], tools: {} }),
-    reload_history: async () => messages,
+    reload_history: async () => ({ messages }),
   };
 }
 
@@ -75,16 +67,8 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
     should_compact_on_error: () => false,
   });
   const messages = [{
-    id: "user-1",
     role: "user",
-    metadata: {
-      v: 1,
-      ts: 1,
-      session_id: "executor-failure-test",
-      source: "ingress",
-      kind: "normal",
-    },
-    parts: [{ type: "text", text: "hello" }],
+    content: [{ type: "text", text: "hello" }],
   }];
 
   const result = await runner.execute({
@@ -92,7 +76,7 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
     model,
     turn_context: create_turn_context(),
     resolve_step_inputs: async () => ({ model, system: [], tools: {} }),
-    reload_history: async () => messages,
+    reload_history: async () => ({ messages }),
   });
 
   assert.equal(result.success, false);
@@ -116,9 +100,9 @@ test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", as
     create_turn_context({
       assistant_output: {
         begin_step: async () => events.push("start"),
-        write_chunk: async (chunk) => events.push(chunk.type),
-        finish_step: async (message) => {
-          events.push(`finish:${message.parts.map((part) => part.type).join(",")}`);
+        write_model_event: async (event) => events.push(event.type),
+        finish_step: async (parts) => {
+          events.push(`finish:${parts.map((part) => part.type).join(",")}`);
         },
         abort_step: async () => events.push("abort"),
       },
@@ -127,7 +111,7 @@ test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", as
 
   assert.equal(result.success, true);
   assert.equal(events[0], "start");
-  assert.equal(events.includes("text-delta"), true);
+  assert.equal(events.includes("text_delta"), true);
   assert.match(events.at(-1), /^finish:/);
   assert.equal(events.includes("abort"), false);
 });
@@ -148,7 +132,7 @@ test("CoreEngine chunk 写入失败时中止 canonical step", async () => {
     create_turn_context({
       assistant_output: {
         begin_step: async () => events.push("start"),
-        write_chunk: async () => {
+        write_model_event: async () => {
           throw new Error("canonical write failed");
         },
         finish_step: async () => events.push("finish"),

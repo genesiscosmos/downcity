@@ -15,11 +15,6 @@ import type {
   AgentSessionSummary,
   AgentSessionSummaryPage,
 } from "@/types/agent/SessionTypes.js";
-import type {
-  SessionRecordV1,
-  SessionMetadataV1,
-} from "@/executor/types/SessionRecords.js";
-import { is_session_message_record } from "@/executor/types/SessionRecords.js";
 import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
 import { resolve_session_message_preview } from "@/session/preview/SessionMessagePreview.js";
 import {
@@ -31,7 +26,6 @@ import {
   get_workspace_sessions_path,
 } from "@/workspace/store/LocalStorePaths.js";
 import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
-import { to_executor_ui_message } from "@/session/messages/SessionMessageCodec.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type { FileSystem } from "@downcity/workspace";
 
@@ -61,7 +55,7 @@ type SessionBrowseBaseInput = {
    *
    * 说明（中文）：列表查询已有 metadata 摘要时可省略，详情查询仍传完整记录。
    */
-  messages?: SessionRecordV1[];
+  messages?: SessionMessage[];
 
   /**
    * 当前 session 是否正在执行。
@@ -114,7 +108,7 @@ function encodeCursor(offset: number): string | undefined {
 export async function load_session_messages_from_path(
   filePath: string,
   files: FileSystem,
-): Promise<SessionRecordV1[]> {
+): Promise<SessionMessage[]> {
   const messages_by_id = new Map<string, SessionMessage>();
   if (await files.path_exists(filePath)) {
     const raw = (await files.read_file(filePath)).toString("utf8");
@@ -148,8 +142,7 @@ export async function load_session_messages_from_path(
   }
 
   return [...messages_by_id.values()]
-    .sort((left, right) => left.sequence - right.sequence)
-    .flatMap(project_canonical_message_record);
+    .sort((left, right) => left.sequence - right.sequence);
 }
 
 function is_canonical_session_message(input: unknown): input is SessionMessage {
@@ -167,35 +160,16 @@ function is_canonical_session_message(input: unknown): input is SessionMessage {
   );
 }
 
-function project_canonical_message_record(message: SessionMessage): SessionRecordV1[] {
-  const projected = to_executor_ui_message(message);
-  if (projected) return [projected];
-  if (message.type !== "action") return [];
-  return [{
-    type: "action",
-    id: message.message_id,
-    title: message.title,
-    ...(message.description ? { description: message.description } : {}),
-    state: message.status,
-    metadata: {
-      v: 1,
-      ts: message.updated_at,
-      session_id: message.session_id,
-      ...(message.turn_id ? { turn_id: message.turn_id } : {}),
-    },
-  }];
+function is_compact_summary_message(message: SessionMessage): boolean {
+  return message.type === "assistant" && message.kind === "summary";
 }
 
-function isCompactSummaryMessage(message: SessionRecordV1): boolean {
-  if (!is_session_message_record(message)) return false;
-  const metadata = (message.metadata || null) as SessionMetadataV1 | null;
-  return metadata?.source === "compact" || metadata?.kind === "summary";
-}
-
-function filterUserVisibleHistoryMessages(
-  messages: SessionRecordV1[],
-): SessionRecordV1[] {
-  return messages.filter((message) => !isCompactSummaryMessage(message));
+function filter_user_visible_history_messages(
+  messages: SessionMessage[],
+): SessionMessage[] {
+  return messages.filter((message) =>
+    message.visibility === "visible" && !is_compact_summary_message(message)
+  );
 }
 
 /**
@@ -214,7 +188,7 @@ export function build_session_info(
   const message_count = typeof input.metadata.message_count === "number"
     ? input.metadata.message_count
     : messages
-      ? filterUserVisibleHistoryMessages(messages).length
+      ? filter_user_visible_history_messages(messages).length
       : 0;
   const title =
     typeof input.metadata.title === "string" && input.metadata.title.trim()

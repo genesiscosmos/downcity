@@ -1,6 +1,6 @@
 # Downcity Model Protocol 设计
 
-> 状态：待确认
+> 状态：已实施
 >
 > 适用范围：`@downcity/type`、`@downcity/federation`、`@downcity/agent`、Provider Adapter 与相关 HTTP 客户端
 >
@@ -23,8 +23,9 @@ Downcity 应拥有从 Agent 推理到 Federation Provider 执行的完整模型�
 核心执行链：
 
 ```text
-SessionMessage
-  → ModelMessageCodec
+SessionPromptPart
+  → canonical SessionMessage
+  → SessionModelMessages
   → ModelCall
   → ModelClient.stream()
   → Federation /v1/ai/stream
@@ -32,7 +33,9 @@ SessionMessage
   → AIChannel
   → Provider Adapter
   → ModelStreamEvent
-  → Agent ModelRunner / ToolLoop / Session 输出
+  → Agent ModelStepRunner
+  ├→ StepEventCollector → ModelMessage（仅供 Tool Loop 的后续 step）
+  └→ SessionAssistantOutput → canonical SessionMessage + SessionMutation
 ```
 
 本次不提供旧 `LanguageModelV3` transport 的双栈兼容，不保留 AI SDK 作为核心执行后端，也不先对现有 Federation fallback 做局部修复。
@@ -71,7 +74,7 @@ Agent 负责：
 - 聚合 assistant 消息。
 - 执行工具并追加 `tool_result`。
 - 根据完成原因决定结束或进入下一 step。
-- 将模型流投影到 Session/UI 输出。
+- 将模型流直接写入 canonical Session Message，并发布 Session Mutation。
 
 Agent 不负责：
 
@@ -685,7 +688,7 @@ data: {"protocol_version":1,"event":{"type":"model_finish","finish_reason":"stop
 ### 11.1 组件
 
 ```text
-ModelMessageCodec
+SessionModelMessages
   SessionMessage → ModelMessage
 
 ModelCallBuilder
@@ -694,14 +697,14 @@ ModelCallBuilder
 ModelClient
   stream(call, signal) → AsyncIterable<ModelStreamEvent>
 
-ModelStreamCollector
-  校验事件状态机并聚合 assistant ModelMessage
+StepEventCollector
+  聚合 assistant ModelMessage，仅供当前 Tool Loop 构造后续 step
 
 ToolLoop
   执行 tool_call，追加 tool_result，决定下一 step
 
-AssistantOutputProjector
-  ModelStreamEvent → SessionAssistantOutput
+SessionAssistantOutput
+  ModelStreamEvent → canonical SessionMessage + SessionMutation
 
 ModelStepResult
   assistant_message + usage + finish_reason + tool_calls
@@ -734,15 +737,21 @@ streaming
 
 ### 11.3 Session 与 Model 消息分离
 
-`SessionMessage` 继续作为持久化与 UI 时间线的唯一事实源，允许包含 action、审批、错误、显示 metadata 等 Model Protocol 不需要的内容。
+`SessionMessage` 是持久化与 UI 时间线的唯一事实源，允许包含 action、interaction、错误等 Model Protocol 不需要的内容。
 
-`ModelMessageCodec` 是唯一转换边界：
+`SessionModelMessages` 是从 Session 历史进入模型上下文的唯一转换边界：
 
-- 过滤不应发送给模型的 Session record。
+- 过滤不应发送给模型的 Session Message 与 Part。
 - 注入附件。
 - 将本地文件读取并转为 `ModelFileContent`。
 - 忽略或修复策略必须显式测试，不能依赖第三方转换器的隐式容错。
-- Model 输出先聚合为 `ModelMessage`，再投影和持久化为 Session message。
+
+模型输出不存在反向 codec 或 UI 中间协议。同一组已校验的 `ModelStreamEvent` 有两个职责独立的消费者：
+
+- `StepEventCollector` 聚合本 step 的 assistant `ModelMessage`，只用于工具循环继续构造进程内模型上下文。
+- `SessionAssistantOutput` 按事件顺序直接创建或更新 canonical Assistant Part，经 `SessionMessages` 持久化并发布 `SessionMutation`。
+
+这两个消费者共享标准事件，但不互相转换。`ModelMessage` 不会先投影成 UI chunk 再回写 Session，Session Message 也不会从最终文本猜测 identity。
 
 ## 12. Federation 执行状态机
 
@@ -868,11 +877,11 @@ OpenAI 类型不得进入 Model Router、AIChannel 或 Agent。
 
 ### 16.3 `@downcity/agent`
 
-- 新增 Model Runner、Stream Collector、Tool Loop 和输出投影器。
-- 重写 `SessionMessageCodec`，不再调用 `convertToModelMessages()`。
+- 新增 Model Runner、Step Event Collector、Tool Loop 和 canonical 输出端口。
+- 使用 `SessionModelMessages` 作为 canonical Session Message 到 Model Message 的唯一输入转换。
 - 重写 `CoreEngineRunner`，不再调用 `streamText()`。
 - 重写标题生成、消息压缩、Group Dispatch 等 `generateText()` 旁路。
-- 将所有 AI SDK `ModelMessage`、`Tool`、`StepResult`、`UIMessageChunk` 类型替换为 Downcity 类型。
+- 将所有 AI SDK `ModelMessage`、`Tool`、`StepResult`、UI Message 类型替换为 Downcity 类型。
 - 删除核心 `ai` 依赖。
 
 ### 16.4 调用方与文档

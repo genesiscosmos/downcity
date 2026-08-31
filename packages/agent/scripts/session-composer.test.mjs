@@ -69,7 +69,7 @@ test("DefaultSessionComposer 从 canonical 快照组装 Step 输入", async () =
   const step = await new DefaultSessionComposer().compose(input);
 
   assert.equal(step.messages.length, 1);
-  assert.equal(step.messages[0].parts[0].text, "hello");
+  assert.equal(step.messages[0].content[0].text, "hello");
   assert.equal(step.system_blocks[0].content, "Base instruction");
   assert.match(step.system.at(-1).content, /composer-session/);
 });

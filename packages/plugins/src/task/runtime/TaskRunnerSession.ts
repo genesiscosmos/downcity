@@ -246,7 +246,5 @@ export async function appendTaskDeferredMessages(params: {
   const { taskSessionRuntime, session_id, rawResult } = params;
   const messages = taskSessionRuntime.get_messages(session_id);
   const deferredUserMessages = rawResult.deferred_persisted_user_messages || [];
-  for (const deferred of deferredUserMessages) {
-    await messages.append_record(deferred);
-  }
+  await messages.append_deferred_user_messages(deferredUserMessages);
 }

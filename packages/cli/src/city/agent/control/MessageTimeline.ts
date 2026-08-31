@@ -1,327 +1,182 @@
 /**
- * Control 消息时间线 helper。
+ * Control canonical SessionMessage 时间线投影。
  *
- * 关键点（中文）
- * - 负责把上下文消息映射成 control UI 可视时间线。
- * - 同时提供消息文件读取能力。
+ * CLI 只在展示边界把 canonical Message 展开为时间线事件；读取和执行链路不创建
+ * UI Message 中间协议。
  */
 
 import fs from "fs-extra";
-import type {
-  SessionActionRecordV1,
-  SessionRecordV1,
-  SessionMessageRecordV1,
-  SessionMetadataV1,
-} from "@downcity/agent";
+import type { SessionMessage } from "@downcity/agent";
 import {
-  is_session_action_record,
-  is_session_message_record,
+  extract_session_message_text,
+  resolve_session_assistant_visible_text,
 } from "@downcity/agent";
-import { pick_last_successful_chat_send_text } from "@downcity/agent";
-import { extract_tool_calls_from_ui_message } from "@downcity/agent";
-import type { ControlTimelineEvent, ControlTimelineRole } from "@/city/agent/control/types/ControlViewData.js";
+import type {
+  ControlTimelineEvent,
+  ControlTimelineRole,
+} from "@/city/agent/control/types/ControlViewData.js";
 import { truncateText } from "@/city/agent/control/CommonHelpers.js";
 
-type AnyUiPart = SessionMessageRecordV1["parts"][number];
-
-type ToolPartCompatShape = {
-  type?: unknown;
-  state?: unknown;
-  input?: unknown;
-  output?: unknown;
-  errorText?: unknown;
-  error?: unknown;
-  approval?: { reason?: unknown } | null;
-};
-
-function stringifyForDisplay(input: unknown, maxChars = 2400): string {
+/** 把结构化值格式化为时间线文本。 */
+function stringify_for_display(input: unknown, max_chars = 2400): string {
   if (input === undefined) return "";
   if (input === null) return "null";
-  if (typeof input === "string") {
-    const value = input.trim();
-    if (!value) return "";
-    try {
-      const parsed = JSON.parse(value);
-      return truncateText(JSON.stringify(parsed, null, 2), maxChars);
-    } catch {
-      return truncateText(value, maxChars);
-    }
-  }
-  if (typeof input === "number" || typeof input === "boolean") {
-    return truncateText(String(input), maxChars);
-  }
+  if (typeof input === "string") return truncateText(input.trim(), max_chars);
   try {
-    return truncateText(JSON.stringify(input, null, 2), maxChars);
+    return truncateText(JSON.stringify(input, null, 2), max_chars);
   } catch {
-    return truncateText(String(input), maxChars);
+    return truncateText(String(input), max_chars);
   }
 }
 
-function extractMessageText(parts: unknown): string {
-  if (!Array.isArray(parts)) return "";
-  const texts: string[] = [];
-  for (const part of parts) {
-    if (!part || typeof part !== "object") continue;
-    const p = part as { type?: unknown; text?: unknown };
-    if (p.type !== "text") continue;
-    if (typeof p.text !== "string") continue;
-    const value = p.text.trim();
-    if (!value) continue;
-    texts.push(value);
-  }
-  return texts.join("\n").trim();
-}
-
-function extractAssistantToolSummary(message: SessionMessageRecordV1): string {
-  const toolCalls = extract_tool_calls_from_ui_message(message);
-  if (!Array.isArray(toolCalls) || toolCalls.length === 0) return "";
-  const toolNames = Array.from(
-    new Set(toolCalls.map((item) => String(item.tool || "").trim()).filter(Boolean)),
-  );
-  if (toolNames.length === 0) return "";
-  return `[tool] ${toolNames.join(", ")}`;
-}
-
-function resolveToolName(part: ToolPartCompatShape, aiToolName?: string): string {
-  const fromAi = String(aiToolName || "").trim();
-  if (fromAi) return fromAi;
-
-  const rawType = typeof part.type === "string" ? part.type.trim() : "";
-  if (rawType.startsWith("tool-")) return rawType.slice("tool-".length);
-  return "unknown_tool";
-}
-
-/** 判断当前 part 是否为 Session 文本。 */
-function is_text_ui_part(part: unknown): part is { type: "text"; text?: unknown } {
-  return Boolean(
-    part &&
-    typeof part === "object" &&
-    (part as { type?: unknown }).type === "text",
-  );
-}
-
-/** 判断当前 part 是否为 Session 工具调用。 */
-function is_tool_ui_part(part: unknown): part is ToolPartCompatShape {
-  if (!part || typeof part !== "object") return false;
-  const type = (part as { type?: unknown }).type;
-  return typeof type === "string" &&
-    (type === "dynamic-tool" || type.startsWith("tool-"));
-}
-
-/** 从 Session 工具 part 读取稳定工具名称。 */
-function get_tool_name(part: ToolPartCompatShape): string {
-  const record = part as ToolPartCompatShape & { toolName?: unknown };
-  const dynamic_name = String(record.toolName ?? "").trim();
-  if (dynamic_name) return dynamic_name;
-  const type = typeof record.type === "string" ? record.type : "";
-  return type.startsWith("tool-") ? type.slice("tool-".length) : "";
-}
-
-function extractToolCallInput(part: ToolPartCompatShape): unknown {
-  return part.input ?? undefined;
-}
-
-function extractToolResultOutput(part: ToolPartCompatShape): unknown {
-  const state = typeof part.state === "string" ? part.state.trim() : "";
-  if (state === "output-available") return part.output;
-  if (state === "output-error") {
-    return { error: part.errorText ?? part.error ?? "tool_error" };
-  }
-  if (state === "output-denied") {
-    return {
-      error: "tool_denied",
-      reason: part.approval?.reason ?? "",
-    };
-  }
-  if (
-    state === "input-available" ||
-    state === "input-streaming" ||
-    state === "output-streaming"
-  ) {
-    return undefined;
-  }
-  return undefined;
-}
-
-function toUiMessageEvent(params: {
-  message: SessionMessageRecordV1;
+/** 构造一条普通 canonical Message 时间线事件。 */
+function to_message_event(input: {
+  /** 来源 canonical Message。 */
+  message: SessionMessage;
+  /** 展示角色。 */
   role: ControlTimelineRole;
+  /** 展示文本。 */
   text: string;
+  /** Message 内事件序号。 */
   sequence: number;
+  /** 可选工具名称。 */
   tool_name?: string;
 }): ControlTimelineEvent {
-  const { message, role, text, sequence, tool_name } = params;
-  const metadata = (message.metadata || null) as SessionMetadataV1 | null;
-
   return {
-    id: `${String(message.id || "")}:${sequence}`,
-    role,
-    ...(typeof metadata?.ts === "number" ? { ts: metadata.ts } : {}),
-    ...(typeof metadata?.kind === "string" ? { kind: metadata.kind } : {}),
-    ...(typeof metadata?.source === "string" ? { source: metadata.source } : {}),
-    text,
-    ...(tool_name ? { tool_name } : {}),
+    id: `${input.message.message_id}:${String(input.sequence)}`,
+    role: input.role,
+    ts: input.message.updated_at,
+    ...(input.message.type === "assistant" ? { kind: input.message.kind } : {}),
+    text: input.text,
+    ...(input.tool_name ? { tool_name: input.tool_name } : {}),
   };
 }
 
-function toActionEvent(message: SessionActionRecordV1): ControlTimelineEvent {
-  const metadata = message.metadata || null;
-  return {
-    id: `${String(message.id || "")}:0`,
-    role: "action",
-    ...(typeof metadata?.ts === "number" ? { ts: metadata.ts } : {}),
-    text: resolveUiMessageText(message),
-    action_title: message.title,
-    ...(message.description ? { action_description: message.description } : {}),
-    action_state: message.state,
-  };
-}
-
-function resolveUiMessageText(message: SessionRecordV1): string {
-  if (is_session_action_record(message)) {
+/** 读取一条 canonical Message 的用户可见预览。 */
+export function resolve_message_preview(message: SessionMessage): string {
+  if (message.type === "action") {
     return message.description
       ? `${message.title}\n${message.description}`
       : message.title;
   }
-  if (!is_session_message_record(message)) return "";
-
-  const plainText = extractMessageText(message.parts);
-  if (plainText) return plainText;
-
-  if (message.role !== "assistant") return "";
-
-  const userVisible = pick_last_successful_chat_send_text(message).trim();
-  if (userVisible) return userVisible;
-
-  return extractAssistantToolSummary(message);
+  if (message.type === "error") return message.message;
+  if (message.type === "assistant") {
+    const visible_text = resolve_session_assistant_visible_text(message);
+    if (visible_text) return visible_text;
+    const tool_names = [...new Set(
+      message.parts.flatMap((part) => part.type === "tool" ? [part.tool_name] : []),
+    )];
+    return tool_names.length > 0 ? `[tool] ${tool_names.join(", ")}` : "";
+  }
+  return extract_session_message_text(message);
 }
 
-/**
- * 转成 control 时间线。
- */
-export function toUiMessageTimeline(
-  message: SessionRecordV1,
-): ControlTimelineEvent[] {
-  if (is_session_action_record(message)) {
-    return [toActionEvent(message)];
+/** 把一条 canonical Message 展开为 Control 时间线。 */
+export function to_message_timeline(message: SessionMessage): ControlTimelineEvent[] {
+  if (message.type === "action") {
+    return [{
+      id: `${message.message_id}:0`,
+      role: "action",
+      ts: message.updated_at,
+      text: resolve_message_preview(message),
+      action_title: message.title,
+      ...(message.description ? { action_description: message.description } : {}),
+      action_state: message.status,
+    }];
+  }
+  if (message.type === "error") {
+    return [to_message_event({
+      message,
+      role: "assistant",
+      text: message.message,
+      sequence: 0,
+    })];
+  }
+  if (message.type === "user") {
+    return [to_message_event({
+      message,
+      role: "user",
+      text: resolve_message_preview(message),
+      sequence: 0,
+    })];
   }
 
-  if (!is_session_message_record(message)) return [];
-  if (message.role !== "assistant") {
-    return [
-      toUiMessageEvent({
-        message,
-        role: message.role,
-        text: resolveUiMessageText(message),
-        sequence: 0,
-      }),
-    ];
-  }
-
-  const parts = Array.isArray(message.parts)
-    ? (message.parts as AnyUiPart[])
-    : [];
   const events: ControlTimelineEvent[] = [];
-  let sequence = 0;
-
-  for (const part of parts) {
-    if (!part || typeof part !== "object") continue;
-    const partObject = part as ToolPartCompatShape;
-
-    if (is_text_ui_part(part)) {
-      const text = String(part.text || "").trim();
-      if (!text) continue;
-      events.push(
-        toUiMessageEvent({
-          message,
-          role: "assistant",
-          text,
-          sequence,
-        }),
-      );
-      sequence += 1;
-      continue;
-    }
-
-    if (is_tool_ui_part(part)) {
-      const tool_name = resolveToolName(partObject, get_tool_name(partObject));
-      const inputText = stringifyForDisplay(extractToolCallInput(partObject));
-      events.push(
-        toUiMessageEvent({
-          message,
-          role: "tool-call",
-          text: inputText || "(empty)",
-          sequence,
-          tool_name,
-        }),
-      );
-      sequence += 1;
-
-      const output = extractToolResultOutput(partObject);
-      if (output !== undefined) {
-        events.push(
-          toUiMessageEvent({
-            message,
-            role: "tool-result",
-            text: stringifyForDisplay(output) || "(empty)",
-            sequence,
-            tool_name,
-          }),
-        );
-        sequence += 1;
-      }
-      continue;
-    }
-  }
-
-  // 关键点（中文）：assistant 若没有文本 part，也要保留一条可见事件，避免 control UI 空白。
-  if (events.length === 0) {
-    events.push(
-      toUiMessageEvent({
+  for (const part of message.parts) {
+    if (part.type === "text" && part.text.trim()) {
+      events.push(to_message_event({
         message,
         role: "assistant",
-        text: resolveUiMessageText(message),
-        sequence: 0,
-      }),
-    );
+        text: part.text.trim(),
+        sequence: events.length,
+      }));
+    } else if (part.type === "tool") {
+      events.push(to_message_event({
+        message,
+        role: "tool-call",
+        text: stringify_for_display(part.input) || "(empty)",
+        sequence: events.length,
+        tool_name: part.tool_name,
+      }));
+      if (part.state === "completed" || part.state === "failed") {
+        events.push(to_message_event({
+          message,
+          role: "tool-result",
+          text: stringify_for_display(
+            part.state === "failed"
+              ? { error: part.error || "tool_error" }
+              : part.output,
+          ) || "(empty)",
+          sequence: events.length,
+          tool_name: part.tool_name,
+        }));
+      }
+    }
   }
-
+  if (events.length === 0) {
+    events.push(to_message_event({
+      message,
+      role: "assistant",
+      text: resolve_message_preview(message),
+      sequence: 0,
+    }));
+  }
   return events;
 }
 
-/**
- * 读取 session 消息文件。
- */
-export async function loadSessionMessagesFromFile(
-  filePath: string,
-): Promise<SessionRecordV1[]> {
-  if (!(await fs.pathExists(filePath))) return [];
-  const raw = await fs.readFile(filePath, "utf-8");
-  const lines = raw.split("\n").filter(Boolean);
-  const out: SessionRecordV1[] = [];
-  for (const line of lines) {
+/** 从 JSONL 文件读取并折叠 canonical Message revision。 */
+export async function load_session_messages_from_file(
+  file_path: string,
+): Promise<SessionMessage[]> {
+  if (!(await fs.pathExists(file_path))) return [];
+  const raw = await fs.readFile(file_path, "utf-8");
+  const messages_by_id = new Map<string, SessionMessage>();
+  for (const line of raw.split("\n").filter(Boolean)) {
     try {
-      const item = JSON.parse(line) as SessionRecordV1;
-      if (!item || typeof item !== "object") continue;
-      const candidate = item as { type?: unknown; role?: unknown };
-      if (
-        candidate.type !== "action" &&
-        candidate.role !== "user" &&
-        candidate.role !== "assistant"
-      ) {
-        continue;
+      const message = JSON.parse(line) as SessionMessage;
+      if (!is_session_message(message)) continue;
+      const previous = messages_by_id.get(message.message_id);
+      if (!previous || message.revision > previous.revision) {
+        messages_by_id.set(message.message_id, message);
       }
-      out.push(item);
     } catch {
-      // 关键点（中文）：单行损坏不应影响整体可读性。
+      // 单行损坏不应影响其他 canonical Message。
     }
   }
-  return out;
+  return [...messages_by_id.values()].sort(
+    (left, right) => left.sequence - right.sequence,
+  );
 }
 
-/**
- * 读取适合摘要展示的消息预览文本。
- */
-export function resolveUiMessagePreview(message: SessionRecordV1): string {
-  return resolveUiMessageText(message);
+/** 判断未知值是否为 canonical SessionMessage。 */
+function is_session_message(input: unknown): input is SessionMessage {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
+  const candidate = input as Partial<SessionMessage>;
+  return typeof candidate.message_id === "string" &&
+    typeof candidate.sequence === "number" &&
+    typeof candidate.revision === "number" &&
+    (candidate.type === "user" ||
+      candidate.type === "assistant" ||
+      candidate.type === "action" ||
+      candidate.type === "error");
 }

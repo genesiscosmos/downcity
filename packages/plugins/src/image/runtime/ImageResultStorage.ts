@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - City / provider 返回的远程图片先落到当前 Agent private runtime directory 私有目录，再交给 Agent Session。
- * - File Part 的 `url` 使用稳定的本地绝对路径，原始在线地址写入 provider metadata。
+ * - File Part 的 `url` 使用稳定的本地绝对路径。
  * - 单张图片下载失败时保留远程地址，并返回可观察错误，不丢弃已经生成成功的结果。
  */
 
@@ -12,6 +12,7 @@ import type {
   ImagePluginResultStorageInput,
   ImagePluginResultStorageResult,
 } from "@/image/types/ImagePlugin.js";
+import type { SessionAssistantResultPart } from "@downcity/agent";
 
 const HTTP_URL_RE = /^https?:\/\//i;
 const MAX_IMAGE_RESULT_BYTES = 50 * 1024 * 1024;
@@ -24,12 +25,6 @@ const MEDIA_TYPE_EXTENSIONS: Record<string, string> = {
   "image/png": ".png",
   "image/webp": ".webp",
 };
-
-/** 判断未知值是否为普通对象。 */
-function to_record(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
 
 /** 把外部标识压缩为单个安全路径片段。 */
 function to_safe_segment(value: string, fallback: string): string {
@@ -64,27 +59,6 @@ function resolve_extension(input: {
   return extension_from_url(input.source_url) || ".bin";
 }
 
-/** 给 File Part 合并 Downcity 来源元数据。 */
-function with_source_metadata(
-  part: Record<string, unknown>,
-  source_url: string,
-  localization_error?: string,
-): Record<string, unknown> {
-  const provider_metadata = to_record(part.providerMetadata) ?? {};
-  const downcity_metadata = to_record(provider_metadata.downcity) ?? {};
-  return {
-    ...part,
-    providerMetadata: {
-      ...provider_metadata,
-      downcity: {
-        ...downcity_metadata,
-        source_url,
-        ...(localization_error ? { localization_error } : {}),
-      },
-    },
-  };
-}
-
 /** 受大小上限保护地读取远程响应。 */
 async function read_response_bytes(response: Response): Promise<Buffer> {
   const declared_length = Number(response.headers.get("content-length") || 0);
@@ -113,7 +87,7 @@ async function read_response_bytes(response: Response): Promise<Buffer> {
 async function persist_remote_image(input: {
   context: ImagePluginResultStorageInput["context"];
   job_id: string;
-  part: Record<string, unknown>;
+  part: Extract<SessionAssistantResultPart, { type: "file" }>;
   source_url: string;
   part_index: number;
   abort_signal?: AbortSignal;
@@ -125,7 +99,7 @@ async function persist_remote_image(input: {
     throw new Error(`image download failed with HTTP ${response.status}`);
   }
 
-  const declared_media_type = String(input.part.mediaType || "").trim();
+  const declared_media_type = input.part.media_type.trim();
   const response_media_type = String(response.headers.get("content-type") || "")
     .split(";", 1)[0]
     .trim();
@@ -161,31 +135,32 @@ export async function localize_image_result(
   input: ImagePluginResultStorageInput,
 ): Promise<ImagePluginResultStorageResult> {
   const errors: string[] = [];
-  const parts = await Promise.all(input.result.parts.map(async (part, part_index) => {
-    const record = to_record(part);
-    if (record?.type !== "file") return part;
-    const source_url = String(record.url || "").trim();
-    if (!HTTP_URL_RE.test(source_url)) return part;
+  const parts: SessionAssistantResultPart[] = await Promise.all(
+    input.result.parts.map(async (part, part_index): Promise<SessionAssistantResultPart> => {
+      if (part.type !== "file") return part;
+      const source_url = part.url.trim();
+      if (!HTTP_URL_RE.test(source_url)) return part;
 
-    try {
-      const local_url = await persist_remote_image({
-        context: input.context,
-        job_id: input.job_id,
-        part: record,
-        source_url,
-        part_index,
-        abort_signal: input.abort_signal,
-      });
-      return {
-        ...with_source_metadata(record, source_url),
-        url: local_url,
-      } as typeof part;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`part ${part_index + 1}: ${message}`);
-      return with_source_metadata(record, source_url, message) as typeof part;
-    }
-  }));
+      try {
+        const local_url = await persist_remote_image({
+          context: input.context,
+          job_id: input.job_id,
+          part,
+          source_url,
+          part_index,
+          abort_signal: input.abort_signal,
+        });
+        return {
+          ...part,
+          url: local_url,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`part ${part_index + 1}: ${message}`);
+        return part;
+      }
+    }),
+  );
 
   return {
     result: {
