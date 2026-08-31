@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugin",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "type": "module",
   "description": "Downcity Plugin main runtime 与宿主 React Mainview 协议。",
   "main": "./bin/index.js",

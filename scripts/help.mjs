@@ -123,16 +123,10 @@ const HELP_ITEMS = [
     detail: "执行 console 的 Vite dev server，用于调试控制台前端。",
   },
   {
-    name: "publish",
-    summary: "执行 downcity 发布脚本。",
-    detail:
-      "同步 root、@downcity/workspace、@downcity/agent、@downcity/plugins、downcity 版本并推送，触发 scoped 包发布 workflow，并在成功后触发 downcity 镜像包 workflow。",
-  },
-  {
     name: "packages:publish",
-    summary: "在本地按依赖拓扑交互式发布 npm packages。",
+    summary: "交互式发布 Downcity public packages。",
     detail:
-      "检查 npm 登录状态，支持全部 scoped packages、指定 package 或 downcity CLI；不会自动 commit 或 push。",
+      "从仓库 .env 读取 NPM_TOKEN，支持全部或指定 package，按独立版本执行 patch build、tarball 审计、pnpm 拓扑发布与 Registry 校验；不会自动 commit 或 push。",
   },
   {
     name: "homepage:deploy",
