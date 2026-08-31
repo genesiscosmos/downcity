@@ -11,7 +11,6 @@ import {
   type LocalWorkspaceConfig,
   resolve_local_agent_env,
   resolve_local_global_env,
-  type LocalPluginRegistration,
 } from "@downcity/local/product";
 import { resolve_local_root_path } from "@downcity/local";
 import { type AgentModel, type AgentOptions } from "@downcity/agent";
@@ -21,6 +20,7 @@ import type { DesktopLocalData } from "./DesktopLocalData.js";
 import { Embassy, type EmbassyUser } from "@downcity/federation";
 import {
   create_builtin_plugin_registrations,
+  type BuiltinPluginRegistration,
 } from "@downcity/plugins";
 import { create_desktop_platform_sandbox } from "./DesktopPlatformSandbox.js";
 import type { DesktopModelSummary } from "../../common/types/DesktopApi.js";
@@ -216,7 +216,7 @@ class DesktopReasoningAgentModel implements AgentModel {
 /** 创建 Desktop 宿主提供的官方 Plugin 注册。 */
 export function create_desktop_builtin_plugin_registrations(
   data: DesktopLocalData,
-): LocalPluginRegistration[] {
+): BuiltinPluginRegistration[] {
   return create_builtin_plugin_registrations({
   });
 }

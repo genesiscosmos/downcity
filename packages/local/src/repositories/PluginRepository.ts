@@ -21,6 +21,7 @@ import type {
 } from "@/types/LocalPlugin.js";
 
 const PLUGIN_FILE_NAME = "plugin.json";
+const PLUGIN_README_FILE_NAME = "README.md";
 const CONFIG_FILE_NAME = "config.toml";
 
 /** 读取和写入用户级 Plugin 定义与配置。 */
@@ -67,6 +68,15 @@ export class PluginRepository {
       throw new Error(`Invalid installed Plugin definition: ${plugin_id}`);
     }
     return structuredClone(value);
+  }
+
+  /** 读取已安装 Plugin 自己拥有的用户说明；安装完整性由调用方先行校验。 */
+  read_installed_readme(plugin_id_input: string): string {
+    const plugin_id = normalize_plugin_id(plugin_id_input);
+    return fs.readFileSync(
+      path.join(get_local_plugin_path(this.root_path, plugin_id), PLUGIN_README_FILE_NAME),
+      "utf8",
+    );
   }
 
   /** 删除整个第三方 Plugin；调用方必须先完成 Agent 引用检查。 */

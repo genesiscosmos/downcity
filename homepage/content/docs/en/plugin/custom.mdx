@@ -30,14 +30,14 @@ github-plugin/
 │   ├── plugin.ts
 │   ├── agent.ts
 │   ├── main.ts
-│   └── mainview.ts
+│   └── renderer.tsx
 └── dist/
     ├── agent.js
     ├── main.js
-    └── mainview.html
+    └── renderer.js
 ```
 
-`agent.js` and `main.js` must be self-contained ESM files. `mainview.html` must inline every script and style it needs. Downcity does not install dependencies or prescribe a build tool.
+All three entries use ESM. `agent.js` and `main.js` must be self-contained. `renderer.js` is a single-file browser bundle that default-exports the only React Mainview. Downcity does not install dependencies or run build scripts.
 
 ## Direct SDK usage
 
@@ -70,11 +70,11 @@ The following entry protocol is only needed when CLI or Desktop must install, di
   "icon": "./assets/icon.svg",
   "agent": "./dist/agent.js",
   "main": "./dist/main.js",
-  "renderer": "./dist/mainview.html"
+  "renderer": "./dist/renderer.js"
 }
 ```
 
-`package.json` must declare `"type": "module"`. `README.md` is required user documentation. The icon may be an HTTP(S) URL or a file relative to the Plugin root.
+`package.json` must declare `"type": "module"`. `README.md` is required user documentation and is safely rendered in the Desktop Plugin Overview; describe the Plugin's purpose, configuration, and required credentials there. The icon may be an HTTP(S) URL or a file relative to the Plugin root and is used in Plugin navigation and the Overview.
 
 ## Agent entry
 
@@ -127,20 +127,33 @@ One main is activated once per host. The current Profile is injected only for an
 
 ## Mainview entry
 
-Mainview is the Plugin's only frontend slot. Browser source can use the action gateway:
+Mainview is the Plugin's only frontend slot. The Renderer default-exports a React component and composes host-provided UI Components:
 
-```ts
-import { plugin } from "@downcity/plugin/renderer";
+```tsx
+import { useEffect, useState } from "react";
+import { define_plugin_renderer } from "@downcity/plugin/react";
 
-const profile = await plugin.invoke("profile.read");
+export default define_plugin_renderer(function GithubMainview({ plugin, ui }) {
+  const { Button, Group, Input, LoadingState, Page, Row, Toolbar } = ui.components;
+  const [profile, set_profile] = useState<{ api_url: string }>();
 
-await plugin.invoke("profile.save", {
-  api_url: "https://api.github.com",
-  token: "",
+  useEffect(() => {
+    void plugin.invoke<{ api_url: string }>("profile.read").then(set_profile);
+  }, [plugin]);
+
+  if (!profile) return <LoadingState label="Reading Profile…" />;
+  return <Page>
+    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void plugin.invoke("profile.save", profile).then(() => ui.toast({ type: "success", message: "Saved" }))}>Save</Button>} />
+    <Group>
+      <Row label="API URL" trailing={<Input value={profile.api_url} on_value_change={(api_url) => set_profile({ ...profile, api_url })} />} />
+    </Group>
+  </Page>;
 });
 ```
 
-Bundle the code and styles into one self-contained `mainview.html`. Desktop runs it in an isolated iframe bound to the current Plugin/Profile. Mainview receives no Plugin ID, Profile ID, Node, Electron, host DOM, or arbitrary network access. External URLs, clipboard writes, and local file reveals must go through explicit main actions.
+The Renderer bundle must leave `react` and `react/jsx-runtime` as host externals mapped to `downcity-plugin://runtime/react` and `downcity-plugin://runtime/react/jsx-runtime`. Bundle other frontend dependencies into the single `renderer.js` file.
+
+Desktop loads the Renderer in its host React tree and binds the current Plugin/Profile. Props expose only `plugin.invoke()`, `ui.components`, Toast, and Confirm—never the Profile ID or Desktop controller. Renderer is trusted local UI code, so install only trusted sources. External URLs, clipboard writes, file reveals, and business persistence should go through explicit main actions.
 
 ## Profile interaction
 
@@ -165,7 +178,7 @@ city plugin update github
 city plugin uninstall github
 ```
 
-The installer copies only `plugin.json`, `package.json`, `README.md`, declared entries, and an optional local icon. It never runs dependency installation, build scripts, `agent`, or `main`. Entries cannot escape the Plugin root or use symlinks. Installed artifacts receive a SHA-256 integrity digest. Install only trusted sources.
+The installer copies only `plugin.json`, `package.json`, `README.md`, declared entries, and an optional local icon. It never runs dependency installation, build scripts, or any entry. Entries cannot escape the Plugin root or use symlinks. Installed artifacts receive a SHA-256 integrity digest. Install only trusted sources.
 
 Continue with:
 

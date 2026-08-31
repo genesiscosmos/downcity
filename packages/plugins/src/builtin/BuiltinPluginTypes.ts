@@ -9,14 +9,13 @@ import type { Plugin } from "@downcity/agent";
 import type { PluginHostContext } from "@downcity/agent";
 import type { PluginMainModule } from "@downcity/plugin";
 import { CHAT_PLUGIN_MAIN } from "@/chat/main/ChatPluginMain.js";
-import { CHAT_PLUGIN_RENDERER_HTML } from "@/chat/renderer/ChatPluginRenderer.js";
 import {
   IMAGE_PLUGIN_SETTINGS,
   SOUND_PLUGIN_SETTINGS,
   WEB_PLUGIN_SETTINGS,
 } from "@/builtin/PluginSettingsDefinitions.js";
 import { create_plugin_settings_main } from "@/builtin/main/PluginSettingsMain.js";
-import { create_plugin_settings_renderer } from "@/builtin/renderer/PluginSettingsRenderer.js";
+import { BUILTIN_PLUGIN_READMES } from "@/builtin/BuiltinPluginReadmes.js";
 import {
   ChatPlugin,
   type ChatPluginConfig,
@@ -48,6 +47,9 @@ export interface BuiltinPluginDefinition {
   /** Plugin 的用途说明。 */
   description: string;
 
+  /** 宿主 Overview 展示的完整 Markdown 用户说明。 */
+  readme: string;
+
   /** 官方 Plugin 是否提供 Agent 能力。 */
   has_agent: boolean;
 
@@ -68,8 +70,6 @@ export interface BuiltinPluginRegistration {
   /** 可选的宿主 main 生命周期对象。 */
   main?: PluginMainModule;
 
-  /** 可选的自包含 Mainview HTML。 */
-  renderer_html?: string;
 }
 
 /** 创建官方 Plugin 注册集合所需的宿主能力。 */
@@ -93,18 +93,21 @@ export function create_builtin_plugin_registrations(
       "skill",
       "Skill Catalog And Loader",
       "Lists and reads local skills, and injects discovery guidance.",
+      BUILTIN_PLUGIN_READMES.skill,
       () => new SkillPlugin(),
     ),
     simple_registration(
       "workboard",
       "Workboard Snapshot",
       "Collects structured Agent runtime activity snapshots.",
+      BUILTIN_PLUGIN_READMES.workboard,
       () => new WorkboardPlugin(),
     ),
     simple_registration(
       "contact",
       "Contact",
       "Manages trusted relationships and exchanges with remote Agents.",
+      BUILTIN_PLUGIN_READMES.contact,
       () => new ContactPlugin({
         host: options.contact_http?.host,
         port: options.contact_http?.port,
@@ -114,6 +117,7 @@ export function create_builtin_plugin_registrations(
       "task",
       "Task",
       "Manages reusable tasks and their trigger runtime.",
+      BUILTIN_PLUGIN_READMES.task,
       () => new TaskPlugin(),
     ),
     {
@@ -121,12 +125,12 @@ export function create_builtin_plugin_registrations(
         id: "chat",
         title: "Chat",
         description: "Connects Agents to Telegram, Feishu, and QQ channels.",
+        readme: BUILTIN_PLUGIN_READMES.chat,
         has_agent: true,
         has_main: true,
         has_renderer: true,
       },
       main: CHAT_PLUGIN_MAIN,
-      renderer_html: CHAT_PLUGIN_RENDERER_HTML,
       create_agent(context) {
         const config = context.profile as unknown as ChatPluginConfig;
         return new ChatPlugin({
@@ -140,6 +144,7 @@ export function create_builtin_plugin_registrations(
         id: "memory",
         title: "Memory",
         description: "Provides provider-neutral long-term memory, recall, revision, and deletion.",
+        readme: BUILTIN_PLUGIN_READMES.memory,
         has_agent: true,
         has_main: false,
         has_renderer: false,
@@ -153,12 +158,12 @@ export function create_builtin_plugin_registrations(
         id: "web",
         title: "Web",
         description: "Provides web search, document reading, and optional browser sessions.",
+        readme: BUILTIN_PLUGIN_READMES.web,
         has_agent: true,
         has_main: true,
         has_renderer: true,
       },
       main: create_plugin_settings_main(WEB_PLUGIN_SETTINGS),
-      renderer_html: create_plugin_settings_renderer(WEB_PLUGIN_SETTINGS),
       create_agent(context) {
         const config = context.profile as unknown as WebPluginOptions;
         return new WebPlugin(config);
@@ -169,12 +174,12 @@ export function create_builtin_plugin_registrations(
         id: "image",
         title: "Image",
         description: "Discovers image models, generates images, and reads results.",
+        readme: BUILTIN_PLUGIN_READMES.image,
         has_agent: true,
         has_main: true,
         has_renderer: true,
       },
       main: create_plugin_settings_main(IMAGE_PLUGIN_SETTINGS),
-      renderer_html: create_plugin_settings_renderer(IMAGE_PLUGIN_SETTINGS),
       create_agent: (context) => new ImagePlugin({
         ...context.profile,
       }),
@@ -184,12 +189,12 @@ export function create_builtin_plugin_registrations(
         id: "sound",
         title: "Sound",
         description: "Discovers speech models and provides ASR and TTS.",
+        readme: BUILTIN_PLUGIN_READMES.sound,
         has_agent: true,
         has_main: true,
         has_renderer: true,
       },
       main: create_plugin_settings_main(SOUND_PLUGIN_SETTINGS),
-      renderer_html: create_plugin_settings_renderer(SOUND_PLUGIN_SETTINGS),
       create_agent: (context) => new SoundPlugin({
         ...context.profile,
       }),
@@ -203,6 +208,7 @@ function simple_registration(
   id: string,
   title: string,
   description: string,
+  readme: string,
   create_agent: () => Plugin,
 ): BuiltinPluginRegistration {
   return {
@@ -210,6 +216,7 @@ function simple_registration(
       id,
       title,
       description,
+      readme,
       has_agent: true,
       has_main: false,
       has_renderer: false,

@@ -28,7 +28,7 @@
 │       └── dist/
 │           ├── agent.js
 │           ├── main.js
-│           └── mainview.html
+│           └── renderer.js
 └── downcity.db
 ```
 
@@ -79,13 +79,13 @@ Profile 是 City 级共享配置，不属于某个 Agent。多个 Agent 可以�
   "icon": "./assets/github.svg",
   "agent": "./dist/agent.js",
   "main": "./dist/main.js",
-  "renderer": "./dist/mainview.html"
+  "renderer": "./dist/renderer.js"
 }
 ```
 
 - `agent` 默认导出 Agent Plugin factory。
 - `main` 默认导出 `activate/deactivate` 生命周期对象，并注册管理 actions。
-- `renderer` 是唯一、自包含的 Mainview HTML。
+- `renderer` 默认导出唯一 React Mainview；宿主注入统一 UI Components 与 action gateway。
 
 安装不会导入或执行 `agent/main`，不会运行依赖安装或构建脚本。入口与本地图标必须位于 Plugin 根目录内且不能使用 symlink。更新原子替换制品并保留 `config.toml`；仍被 Agent 引用的第三方 Plugin 不能卸载。
 

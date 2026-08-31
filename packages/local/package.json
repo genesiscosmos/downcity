@@ -1,6 +1,6 @@
 {
   "name": "@downcity/local",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "description": "Downcity 本地数据库基础设施与显式产品数据组件。",
   "type": "module",
   "main": "./bin/index.js",

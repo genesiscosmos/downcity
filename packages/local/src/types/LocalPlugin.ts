@@ -33,9 +33,6 @@ export interface LocalPluginRegistration {
 
   /** 官方 Plugin 可直接提供的宿主 main；第三方入口由宿主从清单加载。 */
   main?: PluginMainModule;
-
-  /** 官方 Plugin 可直接提供的自包含 Mainview HTML。 */
-  renderer_html?: string;
 }
 
 /** `plugins/<plugin_id>/plugin.json` 中的第三方 Plugin 定义。 */
@@ -53,7 +50,7 @@ export interface LocalInstalledPluginDefinition extends Omit<
   /** 相对 Plugin 目录的宿主 main ESM 入口。 */
   main?: string;
 
-  /** 相对 Plugin 目录的自包含 Mainview HTML 入口。 */
+  /** 相对 Plugin 目录的单文件 Mainview ESM 入口。 */
   renderer?: string;
   /** 可供更新命令重放的规范化来源。 */
   source: string;

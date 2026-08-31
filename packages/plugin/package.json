@@ -1,8 +1,8 @@
 {
   "name": "@downcity/plugin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
-  "description": "Downcity Plugin main runtime 与 Mainview 协议。",
+  "description": "Downcity Plugin main runtime 与宿主 React Mainview 协议。",
   "main": "./bin/index.js",
   "types": "./bin/index.d.ts",
   "exports": {
@@ -10,9 +10,9 @@
       "types": "./bin/index.d.ts",
       "import": "./bin/index.js"
     },
-    "./renderer": {
-      "types": "./bin/renderer.d.ts",
-      "import": "./bin/renderer.js"
+    "./react": {
+      "types": "./bin/react.d.ts",
+      "import": "./bin/react.js"
     }
   },
   "files": [
@@ -29,7 +29,11 @@
     "version:patch": "node ../../scripts/bump-package-version.mjs ./package.json"
   },
   "license": "MIT",
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
   "devDependencies": {
+    "@types/react": "^19.2.14",
     "@types/node": "^25.9.1",
     "tsc-alias": "^1.8.17",
     "typescript": "^6.0.3"

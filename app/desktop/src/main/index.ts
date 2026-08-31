@@ -7,6 +7,10 @@ import { create_desktop_local_data } from "@/agent/DesktopLocalData.js";
 import { DesktopSettingsController } from "@/settings/DesktopSettingsController.js";
 import { DesktopUserController } from "@/user/DesktopUserController.js";
 import { PluginController } from "@/plugin/PluginController.js";
+import {
+  register_plugin_renderer_protocol,
+  register_plugin_renderer_scheme,
+} from "@/plugin/PluginRendererProtocol.js";
 import { DesktopGlobalEnvController } from "@/settings/DesktopGlobalEnvController.js";
 import { read_city_host_state, request_city_host_shutdown } from "@downcity/agent/city";
 import type {
@@ -28,6 +32,8 @@ const global_env_controller = new DesktopGlobalEnvController(local_data);
 const plugin_controller = new PluginController(local_data);
 let user_controller: DesktopUserController;
 let quitting = false;
+
+register_plugin_renderer_scheme();
 
 /** 向全部仍存活的 Renderer 广播一条安全事件。 */
 function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupEvent): void {
@@ -216,6 +222,7 @@ async function apply_proxy_settings(proxy_enabled: boolean, proxy_url: string): 
 }
 
 app.whenReady().then(async () => {
+  register_plugin_renderer_protocol(local_data);
   const current_settings = settings_controller.get();
   await apply_proxy_settings(current_settings.proxy_enabled, current_settings.proxy_url);
   await prepare_city_host();

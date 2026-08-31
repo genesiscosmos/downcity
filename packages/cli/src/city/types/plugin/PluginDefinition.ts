@@ -38,7 +38,7 @@ export interface PluginPackageDefinition extends Omit<
   /** 相对来源目录的 Plugin main ESM 入口。 */
   main?: string;
 
-  /** 相对来源目录的自包含 Mainview HTML 入口。 */
+  /** 相对来源目录的单文件 Mainview ESM 入口。 */
   renderer?: string;
 }
 

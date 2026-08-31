@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugins",
-  "version": "1.0.278",
+  "version": "1.0.279",
   "type": "module",
   "description": "Downcity 内建 plugin 集合包",
   "main": "./bin/index.js",
@@ -25,6 +25,10 @@
     "./memory": {
       "types": "./bin/memory.d.ts",
       "import": "./bin/memory.js"
+    },
+    "./renderers": {
+      "types": "./bin/renderers.d.ts",
+      "import": "./bin/renderers.js"
     },
     "./skill": {
       "types": "./bin/skill.d.ts",
@@ -75,12 +79,17 @@
     "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.1",
     "@types/node-cron": "^3.0.11",
+    "@types/react": "^19.2.14",
     "@types/ws": "^8.18.1",
+    "react": "^19.2.6",
     "tsc-alias": "^1.8.17",
     "typescript": "^6.0.3"
   }

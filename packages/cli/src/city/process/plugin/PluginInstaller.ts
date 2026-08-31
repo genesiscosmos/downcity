@@ -210,7 +210,7 @@ export async function read_plugin_definition(
   const icon = normalize_plugin_icon(raw.icon, id);
   const agent = normalize_plugin_entry(raw.agent, plugin_root, "agent", [".js", ".mjs"]);
   const main = normalize_plugin_entry(raw.main, plugin_root, "main", [".js", ".mjs"]);
-  const renderer = normalize_plugin_entry(raw.renderer, plugin_root, "renderer", [".html"]);
+  const renderer = normalize_plugin_entry(raw.renderer, plugin_root, "renderer", [".js", ".mjs"]);
   if (!agent && !main && !renderer) {
     throw new Error(`Plugin must provide agent, main, or renderer: ${id}`);
   }

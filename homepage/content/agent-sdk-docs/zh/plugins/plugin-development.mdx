@@ -109,7 +109,7 @@ example-plugin/
 ├── README.md
 ├── dist/agent.js
 ├── dist/main.js
-└── dist/mainview.html
+└── dist/renderer.js
 ```
 
 ```json
@@ -120,13 +120,14 @@ example-plugin/
   "description": "A small example Plugin.",
   "agent": "./dist/agent.js",
   "main": "./dist/main.js",
-  "renderer": "./dist/mainview.html"
+  "renderer": "./dist/renderer.js"
 }
 ```
 
 - `agent` 默认导出 factory，为每个 Agent 返回新的 Plugin 实例。
 - `main` 默认导出管理生命周期对象并注册 Mainview actions。
-- `renderer` 是唯一、自包含 Mainview HTML。
+- `renderer` 默认导出唯一 React Mainview Component，并使用宿主注入的 `ui.components`。
+- `README.md` 记录用途与配置方式，并由 Desktop 在 Plugin Overview 中安全渲染。
 
 至少声明一个入口。不存在通用 `entry`、`config.schema` 或宿主生成表单。
 
@@ -157,14 +158,14 @@ Profile 只是宿主配置空间。SDK Class 不需要知道它来自 TOML；fac
 - 生命周期资源是否完整释放。
 - Agent factory 是否每次返回新实例且 `name` 与 Plugin ID 一致。
 - main 是否拒绝非法配置，并且不会向 Mainview 泄漏凭据。
-- Renderer 是否只使用 action gateway。
+- Renderer 是否只使用 action gateway 与宿主 `ui`。
 
 ## 发布检查清单
 
 1. `plugin.json` 的 ID、版本和入口正确，至少有一个入口。
-2. `agent/main` 是自包含 ESM，`renderer` 是自包含 HTML。
+2. `agent/main` 是自包含 ESM，`renderer` 是单文件 React ESM，React 与 JSX runtime 由宿主共享。
 3. Agent factory 每次创建新实例。
 4. Profile 不包含连接、实例、回调或宿主对象。
 5. 所有长期资源都能释放，异步 action 响应取消。
 6. 私有数据使用 `data_files`，用户文件使用 `files`。
-7. Mainview 不直接访问 Node、Electron、Agent 或配置文件。
+7. Mainview 不直接访问 Node、Electron、Agent 或配置文件，不自带第二套设计系统。

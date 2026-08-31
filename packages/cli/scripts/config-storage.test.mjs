@@ -28,7 +28,7 @@ function write_plugin_source(root, input = {}) {
   const description = input.description ?? "Example Plugin for configuration tests.";
   const agent = input.agent === null ? undefined : input.agent ?? "dist/agent.js";
   const main = input.main === null ? undefined : input.main ?? "dist/main.js";
-  const renderer = input.renderer === null ? undefined : input.renderer ?? "dist/mainview.html";
+  const renderer = input.renderer === null ? undefined : input.renderer ?? "dist/mainview.js";
   fs.writeFileSync(
     path.join(root, "package.json"),
     input.package_source ?? JSON.stringify({ type: "module" }),
@@ -79,7 +79,7 @@ export default {
   if (renderer) {
     const renderer_path = path.join(root, renderer);
     fs.mkdirSync(path.dirname(renderer_path), { recursive: true });
-    fs.writeFileSync(renderer_path, input.renderer_source ?? "<!doctype html><html><body>Example Mainview</body></html>\n");
+    fs.writeFileSync(renderer_path, input.renderer_source ?? "export default function ExampleMainview() { return null; }\n");
   }
   if (input.source_config) {
     fs.writeFileSync(path.join(root, "config.toml"), input.source_config);
@@ -255,13 +255,13 @@ test("第三方 Plugin 使用 definition ID 目录和三入口协议", async () 
     assert.equal(installed.id, "example");
     assert.equal(installed.agent, "dist/agent.js");
     assert.equal(installed.main, "dist/main.js");
-    assert.equal(installed.renderer, "dist/mainview.html");
+    assert.equal(installed.renderer, "dist/mainview.js");
     assert.match(installed.integrity, /^sha256-[a-f0-9]{64}$/u);
     const plugin_dir = path.join(platform_root, "plugins", "example");
     assert.equal(fs.existsSync(path.join(plugin_dir, "plugin.json")), true);
     assert.equal(fs.existsSync(path.join(plugin_dir, "dist", "agent.js")), true);
     assert.equal(fs.existsSync(path.join(plugin_dir, "dist", "main.js")), true);
-    assert.equal(fs.existsSync(path.join(plugin_dir, "dist", "mainview.html")), true);
+    assert.equal(fs.existsSync(path.join(plugin_dir, "dist", "mainview.js")), true);
     assert.equal(fs.existsSync(path.join(plugin_dir, "artifact")), false);
     assert.equal(fs.existsSync(path.join(plugin_dir, "src")), false);
     assert.equal(fs.existsSync(path.join(plugin_dir, "package.json")), true);
@@ -481,8 +481,8 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
     write_plugin_source(plugin_source, { agent: "dist/agent.ts" });
     await assert.rejects(() => installer.install_plugin(plugin_source), /agent must use .js or .mjs/u);
 
-    write_plugin_source(plugin_source, { renderer: "dist/mainview.js" });
-    await assert.rejects(() => installer.install_plugin(plugin_source), /renderer must use .html/u);
+    write_plugin_source(plugin_source, { renderer: "dist/mainview.html" });
+    await assert.rejects(() => installer.install_plugin(plugin_source), /renderer must use .js or .mjs/u);
 
     write_plugin_source(plugin_source, { agent: null, main: null, renderer: null });
     await assert.rejects(() => installer.install_plugin(plugin_source), /must provide agent, main, or renderer/u);
@@ -508,7 +508,7 @@ test("Plugin 安装拒绝内置 ID、非法清单与逃逸入口", async () => {
   }
 });
 
-test("Plugin 安装不执行 Agent 与 main 模块", async () => {
+test("Plugin 安装不执行任何入口，Agent 装配时才加载 agent", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
@@ -516,6 +516,7 @@ test("Plugin 安装不执行 Agent 与 main 模块", async () => {
     write_plugin_source(plugin_source, {
       agent_source: 'throw new Error("agent executed");',
       main_source: 'throw new Error("main executed");',
+      renderer_source: 'throw new Error("renderer executed");',
     });
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
     const agents = await import("../bin/city/process/registry/AgentConfigRepository.js");
@@ -548,7 +549,7 @@ test("Plugin 安装不执行 Agent 与 main 模块", async () => {
   }
 });
 
-test("保存 Plugin Profile 不执行 Agent 与 main 入口", async () => {
+test("保存 Plugin Profile 不执行任何入口", async () => {
   const platform_root = create_temp_root();
   const plugin_source = create_temp_root();
   process.env.DC_PLATFORM_ROOT = platform_root;
@@ -556,6 +557,7 @@ test("保存 Plugin Profile 不执行 Agent 与 main 入口", async () => {
     write_plugin_source(plugin_source, {
       agent_source: 'throw new Error("agent must not run while saving a Profile");',
       main_source: 'throw new Error("main must not run while saving a Profile");',
+      renderer_source: 'throw new Error("renderer must not run while saving a Profile");',
     });
     const installer = await import("../bin/city/process/plugin/PluginInstaller.js");
     const plugins = await import("../bin/city/process/registry/PluginRepository.js");

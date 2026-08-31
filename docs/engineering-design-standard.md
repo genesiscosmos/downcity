@@ -274,7 +274,7 @@ Plugin 可以独立提供三类可选能力：
 
 - `agent`：默认导出 Agent Plugin factory，为每个 Agent 创建独享的运行实例。
 - `main`：默认导出宿主管理生命周期对象，注册 Plugin 自己的管理 actions。
-- `renderer`：唯一 Mainview，是一个自包含 HTML 文档。
+- `renderer`：唯一 Mainview，是默认导出 React 组件的单文件 ESM。
 
 三类能力属于同一个 Plugin ID，不再引入 Extension 身份、多个 UI 插槽或 contributions DSL。SDK 用户也可以不经过安装协议，直接创建 Plugin 实例并传入 Agent。
 
@@ -292,7 +292,7 @@ Plugin 通过 PluginContext 使用 Agent 内核允许的能力。PluginContext �
 
 Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `enter_workspace/leave_workspace`。实现哪些钩子由 Plugin 自己决定，不构成 Plugin 分类。
 
-Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile。Mainview 通过结构化 action gateway 调用 main；宿主在调用时绑定 Plugin ID 与 Profile ID，并只向 action 注入当前 Profile 的配置存储。Renderer 不能直接访问 Electron、Node、Agent 状态或配置文件。
+Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile。Mainview 通过结构化 action gateway 调用 main；宿主在调用时绑定 Plugin ID 与 Profile ID，并只向 action 注入当前 Profile 的配置存储。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。业务能力仍必须通过 Plugin main action 暴露。
 
 ### 4.6 Agent 定义的本地事实源
 
@@ -307,7 +307,7 @@ Plugin 以全局稳定 ID 为身份，定义与 City 级配置保存在 `~/.down
 - `plugin.json`：仅第三方 Plugin 使用，是静态定义、图标地址、可选 `agent`、`main`、`renderer` 入口与安装来源信息的唯一事实源。
 - `package.json`：仅第三方 Plugin 使用，声明 `"type": "module"` 并建立明确的 ESM package 边界。
 - `README.md`：第三方 Plugin 的必需用户文档，安装后保留在 Plugin ID 目录。
-- 自包含入口与本地图标：安装清单声明的 `agent`、`main`、`renderer` 文件，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。`agent/main` 必须是 `.js` 或 `.mjs`，`renderer` 必须是单个自包含 `.html`。
+- 单文件入口与本地图标：安装清单声明的 `agent`、`main`、`renderer` 文件，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。三个运行入口都必须是 `.js` 或 `.mjs`；Renderer bundle 必须保持 React 与 `react/jsx-runtime` 为宿主外部依赖。
 
 `config.toml` 是所有 Agent 共享的 Plugin 配置源；Agent 只保存 profile 引用。Plugin 运行时状态、缓存和私有文件使用 `PluginContext.data_path`，由宿主按 Agent/Plugin 隔离，不按 Workspace 复制。
 

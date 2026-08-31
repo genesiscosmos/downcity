@@ -109,7 +109,7 @@ example-plugin/
 ├── README.md
 ├── dist/agent.js
 ├── dist/main.js
-└── dist/mainview.html
+└── dist/renderer.js
 ```
 
 ```json
@@ -120,13 +120,14 @@ example-plugin/
   "description": "A small example Plugin.",
   "agent": "./dist/agent.js",
   "main": "./dist/main.js",
-  "renderer": "./dist/mainview.html"
+  "renderer": "./dist/renderer.js"
 }
 ```
 
 - `agent` default-exports a factory that returns a new Plugin instance for each Agent.
 - `main` default-exports a management lifecycle object and registers Mainview actions.
-- `renderer` is the single self-contained Mainview HTML.
+- `renderer` default-exports the single React Mainview component and uses host-injected `ui.components`.
+- `README.md` documents purpose and configuration and is safely rendered by Desktop in the Plugin Overview.
 
 At least one entry is required. There is no generic `entry`, `config.schema`, or host-generated form.
 
@@ -157,14 +158,14 @@ See [Custom Plugin](/en/docs/plugin/custom) for a complete example and security 
 - Complete lifecycle resource cleanup.
 - Agent factory returns a new instance each time with `name` matching the Plugin ID.
 - main rejects invalid configuration and never leaks credentials to Mainview.
-- Renderer only uses the action gateway.
+- Renderer only uses the action gateway and host `ui`.
 
 ## Release checklist
 
 1. `plugin.json` has the correct ID, version, and at least one valid entry.
-2. `agent/main` are self-contained ESM and `renderer` is self-contained HTML.
+2. `agent/main` are self-contained ESM and `renderer` is a single-file React ESM bundle that shares the host React and JSX runtimes.
 3. The Agent factory creates a new instance for every call.
 4. Profiles contain no connections, instances, callbacks, or host objects.
 5. Long-lived resources are released and asynchronous actions respond to cancellation.
 6. Private data uses `data_files`; user data uses `files`.
-7. Mainview never accesses Node, Electron, Agent, or configuration files directly.
+7. Mainview never accesses Node, Electron, Agent, or configuration files directly, and does not ship a second design system.

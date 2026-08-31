@@ -24,7 +24,7 @@ Plugin
 
 - `agent` factory 每次装配一个 Agent 时调用，产生 Agent 独享实例。
 - `main` 每个宿主中的每个 Plugin 只激活一次，不绑定 Profile。
-- `renderer` 在用户打开某个 Plugin/Profile 时由隔离 iframe 承载。
+- `renderer` 在用户打开某个 Plugin/Profile 时作为受信任 React 组件加载，由宿主注入 UI 与 action gateway。
 
 ## 3. 依赖与职责
 
@@ -34,7 +34,8 @@ Desktop / CLI ──→ @downcity/local ──→ @downcity/agent
        └────────→ @downcity/plugin
 
 Plugin agent ──→ @downcity/agent
-Plugin main/renderer ──→ @downcity/plugin
+Plugin main ───────────→ @downcity/plugin
+Plugin renderer ───────→ @downcity/plugin/react + react
 ```
 
 City/宿主负责安装、Profile CRUD、Agent 引用、入口加载和生命周期。Agent 内核只运行已经创建好的 Plugin 实例。Plugin 自己负责业务配置结构、校验、安全投影和 Mainview 交互。
@@ -51,11 +52,11 @@ City/宿主负责安装、Profile CRUD、Agent 引用、入口加载和生命周
   "icon": "./assets/icon.svg",
   "agent": "./dist/agent.js",
   "main": "./dist/main.js",
-  "renderer": "./dist/mainview.html"
+  "renderer": "./dist/renderer.js"
 }
 ```
 
-至少声明一个入口。`agent/main` 是自包含 `.js` 或 `.mjs`；`renderer` 是单个自包含 `.html`。`package.json` 必须声明 `"type": "module"`，来源必须包含 `README.md`。
+至少声明一个入口，三个入口都使用 `.js` 或 `.mjs`。`agent/main` 是自包含 ESM；`renderer` 是单文件浏览器 ESM，默认导出唯一 React Mainview，并把 React 与 JSX runtime 映射到宿主运行地址。`package.json` 必须声明 `"type": "module"`，来源必须包含 `README.md`。
 
 安装器只验证并复制声明制品，不求值第三方模块。所有路径都必须留在 Plugin 根目录内且不能经过 symlink。安装内容参与完整性摘要；更新时保留现有 `config.toml`。
 
@@ -98,13 +99,19 @@ export default define_plugin_main({
 
 main 只注册结构化 actions 并管理自己的长期资源。Profile 在每次 action 调用时注入，因此一个 main 可以安全服务多个 Profile。宿主只提供最小系统辅助：受限外链、文件定位、剪贴板和结构化日志。
 
-## 7. Mainview 与安全边界
+## 7. Mainview 与 UI 边界
 
-Renderer 是 Plugin 唯一的前端入口。它通过 `@downcity/plugin/renderer` 的 gateway 调用 main action，消息不携带 Plugin ID 或 Profile ID；身份由宿主承载 frame 绑定。
+Renderer 是 Plugin 唯一的前端入口。它通过 `define_plugin_renderer` 默认导出一个 React 组件，只获得：
 
-Desktop 使用无同源权限的 sandbox iframe 和强制 CSP。Mainview 不能访问 Node、Electron、宿主 DOM、任意网络或本地文件。需要外链、剪贴板等操作时必须调用 main 的明确 action。
+- 已绑定当前 Plugin/Profile 的 `plugin.invoke()`；
+- 宿主统一提供的 `ui.components`；
+- 宿主 Toast 与 Confirm。
 
-Renderer 必须打包成单个 HTML，包括脚本和样式，不允许依赖安装目录中的额外前端资源。
+Profile ID、Plugin ID 与 Desktop controller 不传给组件。宿主继续拥有 Mainview Header、Profile 选择、创建和删除；Plugin 只渲染正文。
+
+Renderer 是受信任本地 UI 代码，不使用 iframe。第三方 bundle 通过受控 `downcity-plugin://` URL 动态加载，并复用宿主 React 与 JSX runtime；源码和构建依赖不进入安装目录。组件不应依赖宿主私有 DOM 或 preload API，外链、剪贴板、文件定位和业务读写通过 main action 完成。
+
+宿主最小 UI 集包括 `Page/Section/Group/Row`、`Stack/Inline/Toolbar`、`Button/Input/Select/Switch` 与统一反馈组件。框架不使用配置 Schema 生成 UI。
 
 ## 8. Profile
 

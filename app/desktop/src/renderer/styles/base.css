@@ -6,6 +6,7 @@
 @import "./tokens.css";
 @import "./chat.css";
 @import "./document-markdown.css";
+@import "./plugin.css";
 
 @layer base {
   * {

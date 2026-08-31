@@ -232,6 +232,8 @@ export interface DesktopPluginSummary {
   description: string;
   /** Plugin 的可选语义化版本。 */
   version?: string;
+  /** Plugin 自己声明的可选图标 URL。 */
+  icon_url?: string;
   /** Plugin 来自官方内置集合或第三方安装。 */
   source: DesktopPluginSource;
   /** 当前绑定该 Plugin 的全部 Agent ID。 */
@@ -252,8 +254,10 @@ export interface DesktopPluginSummary {
 
 /** Renderer 可读取和编辑的完整 Plugin 定义。 */
 export interface DesktopPluginDefinition extends DesktopPluginSummary {
-  /** 第三方自包含 Mainview HTML；不存在时宿主展示无界面状态。 */
-  renderer_html?: string;
+  /** Plugin 自己拥有并由宿主安全渲染的 Markdown 用户说明。 */
+  readme?: string;
+  /** 第三方 Mainview ESM 的受控宿主 URL；内置 Plugin 由 Renderer registry 解析。 */
+  renderer_url?: string;
 }
 
 /** Desktop 创建 Plugin Profile 的输入。 */

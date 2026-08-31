@@ -49,6 +49,21 @@ test("根入口不再导出默认内建集合工厂", async () => {
   assert.equal("BUILTIN_PLUGIN_CLASSES" in plugin_module, false);
 });
 
+test("Renderer 子路径统一导出 React Mainview registry", async () => {
+  const plugin_react = await import("@downcity/plugin/react");
+  const renderers = await import("@downcity/plugins/renderers");
+  assert.equal(typeof plugin_react.define_plugin_renderer, "function");
+  assert.deepEqual(Object.keys(renderers.BUILTIN_PLUGIN_RENDERERS).sort(), [
+    "chat",
+    "image",
+    "sound",
+    "web",
+  ]);
+  for (const renderer of Object.values(renderers.BUILTIN_PLUGIN_RENDERERS)) {
+    assert.equal(typeof renderer, "function");
+  }
+});
+
 test("内建 Plugin 子路径不再公开宿主通用配置 Schema", async () => {
   const schema_exports = [
     ["chat", "CHAT_PLUGIN_CONFIG_JSON_SCHEMA"],

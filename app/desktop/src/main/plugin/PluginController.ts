@@ -5,7 +5,6 @@
  * Renderer 永远拿不到 Profile 原始配置，只能通过当前 Plugin/Profile 绑定的 action gateway。
  */
 
-import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { PluginMainModule } from "@downcity/plugin";
@@ -24,6 +23,10 @@ import { create_desktop_builtin_plugin_registrations } from "../agent/DesktopAge
 import type { DesktopLocalData } from "../agent/DesktopLocalData.js";
 import type { ResolvedDesktopPlugin } from "../types/plugin/PluginController.js";
 import { PluginMainRuntime } from "./PluginMainRuntime.js";
+import {
+  create_installed_plugin_icon_url,
+  create_installed_plugin_renderer_url,
+} from "./PluginRendererProtocol.js";
 
 /** 管理 Desktop 当前可见的 Plugin、Profile 和 Mainview。 */
 export class PluginController {
@@ -65,13 +68,19 @@ export class PluginController {
       .sort((left, right) => left.title.localeCompare(right.title));
   }
 
-  /** 读取 Plugin 定义、Profile 列表和可选 Mainview HTML。 */
+  /** 读取 Plugin 定义、Profile 列表和可选第三方 Mainview URL。 */
   async get(plugin_id: string): Promise<DesktopPluginDefinition> {
     const plugin = await this.resolve_plugin(plugin_id);
-    const renderer_html = await this.read_renderer_html(plugin);
+    const renderer_url = plugin.installed
+      ? create_installed_plugin_renderer_url(plugin.installed)
+      : undefined;
+    const readme = plugin.installed
+      ? this.data.plugins.read_installed_readme(plugin.installed.id)
+      : plugin.definition.readme;
     return {
       ...this.create_summary(plugin),
-      ...(renderer_html ? { renderer_html } : {}),
+      ...(readme?.trim() ? { readme } : {}),
+      ...(renderer_url ? { renderer_url } : {}),
     };
   }
 
@@ -159,24 +168,14 @@ export class PluginController {
     return loaded.default;
   }
 
-  /** 读取自包含 Mainview HTML，不加载其中脚本。 */
-  private async read_renderer_html(
-    plugin: ResolvedDesktopPlugin,
-  ): Promise<string | null> {
-    if (plugin.registration?.renderer_html) return plugin.registration.renderer_html;
-    if (!plugin.installed?.renderer) return null;
-    const renderer_path = resolve_installed_entry(
-      this.data.plugins.plugin_path(plugin.installed.id),
-      plugin.installed.renderer,
-    );
-    return fs.readFileSync(renderer_path, "utf8");
-  }
-
   /** 从定义、Profile 和 Agent 引用创建 Renderer catalog 摘要。 */
   private create_summary(plugin: ResolvedDesktopPlugin): DesktopPluginSummary {
     const profile_ids = Object.keys(
       this.data.plugins.read_config(plugin.definition.id).profiles,
     ).sort();
+    const icon_url = plugin.installed
+      ? create_installed_plugin_icon_url(plugin.installed)
+      : undefined;
     const agent_ids = this.data.agents.list()
       .filter((agent) => Boolean(agent.plugins[plugin.definition.id]))
       .map((agent) => agent.agent_id);
@@ -185,6 +184,7 @@ export class PluginController {
       title: plugin.definition.title || plugin.definition.id,
       description: plugin.definition.description || "",
       ...(plugin.installed ? { version: plugin.installed.version } : {}),
+      ...(icon_url ? { icon_url } : {}),
       source: plugin.source,
       agent_ids,
       profile_count: profile_ids.length,

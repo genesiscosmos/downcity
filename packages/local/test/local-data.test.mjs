@@ -176,6 +176,20 @@ test("PluginRepository 按 Plugin ID 保存明文 TOML profile", async () => {
   }
 });
 
+test("PluginRepository 从安装目录读取 Plugin README", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-readme-"));
+  try {
+    const plugins = new PluginRepository(root_path);
+    const plugin_path = path.join(root_path, "plugins", "example");
+    await fs.mkdir(plugin_path, { recursive: true });
+    await fs.writeFile(path.join(plugin_path, "README.md"), "# Example\n\nPlugin guide.\n", "utf8");
+
+    assert.equal(plugins.read_installed_readme("example"), "# Example\n\nPlugin guide.\n");
+  } finally {
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
 test("LocalDatabase transaction 提交同步写入并回滚异步回调", async () => {
   const { root_path, database } = await create_local_data();
   try {

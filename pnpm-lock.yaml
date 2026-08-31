@@ -625,10 +625,17 @@ importers:
         version: 6.0.3
 
   packages/plugin:
+    dependencies:
+      react:
+        specifier: ^19.0.0
+        version: 19.2.6
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.15
       tsc-alias:
         specifier: ^1.8.17
         version: 1.8.17
@@ -681,9 +688,15 @@ importers:
       '@types/node-cron':
         specifier: ^3.0.11
         version: 3.0.11
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.15
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
       tsc-alias:
         specifier: ^1.8.17
         version: 1.8.17

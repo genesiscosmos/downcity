@@ -10,7 +10,10 @@ import type { DesktopPluginSource } from "../../../common/types/DesktopApi.js";
 /** 内置或第三方 Plugin 的统一解析结果。 */
 export interface ResolvedDesktopPlugin {
   /** 宿主可展示的统一静态定义。 */
-  readonly definition: LocalPluginDefinition;
+  readonly definition: LocalPluginDefinition & {
+    /** 官方 Plugin 随注册定义提供的 Markdown 用户说明。 */
+    readonly readme?: string;
+  };
 
   /** Plugin 的安装来源类型。 */
   readonly source: DesktopPluginSource;
