@@ -21,7 +21,12 @@ test("AIService exposes AIChannel model context_window in the public catalog", (
     upstream_model: "large-context-model",
     name: "Large Context Model",
     context_window: 256000,
-    price: ["输入：1 credit / 1K tokens", "输出：3 credits / 1K tokens"],
+    pricing: {
+      currency: "CREDITS",
+      unit: "token",
+      scale: 1000,
+      rates: { input: 1, output: 3 },
+    },
   }))
 
   const catalog = AIService.listModels(ai, {
@@ -30,7 +35,12 @@ test("AIService exposes AIChannel model context_window in the public catalog", (
   })
 
   assert.equal(catalog[0].context_window, 256000)
-  assert.deepEqual(catalog[0].price, ["输入：1 credit / 1K tokens", "输出：3 credits / 1K tokens"])
+  assert.deepEqual(catalog[0].pricing, [{
+    currency: "CREDITS",
+    unit: "token",
+    scale: 1000,
+    rates: { input: 1, output: 3 },
+  }])
 })
 
 test("AIService rejects invalid model context_window values", () => {

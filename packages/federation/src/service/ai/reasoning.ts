@@ -9,6 +9,7 @@ import type { Context } from "../service.js";
 import type { AIResolvedReasoning } from "../../types/AI.js";
 import { httpError } from "../../utils/helpers.js";
 import type { AIModelDefinition } from "../../types/AI.js";
+import type { ModelCall } from "@downcity/type";
 
 /** Context.locals 中保存已解析推理强度的固定字段名。 */
 const AI_REASONING_LOCAL_KEY = "ai_reasoning";
@@ -58,21 +59,22 @@ export function validate_model_reasoning(model: AIModelDefinition): void {
  */
 export function resolve_model_reasoning(
   model: AIModelDefinition,
-  input: Record<string, unknown>,
+  input: Record<string, unknown> | ModelCall["reasoning"] | undefined,
 ): AIResolvedReasoning | undefined {
-  if (input.effort_id !== undefined) {
+  const request = read_reasoning_request(input);
+  if (request.effort_id !== undefined) {
     throw httpError(422, "effort_id is not supported; use reasoning_effort");
   }
 
   // 调用方显式关闭 reasoning 时，不读取模型默认档位。
-  if (input.reasoning === false) {
-    if (input.reasoning_effort !== undefined) {
+  if (request.reasoning === false) {
+    if (request.reasoning_effort !== undefined) {
       throw httpError(422, "reasoning and reasoning_effort cannot be used together");
     }
     return undefined;
   }
 
-  const requested_value = input.reasoning_effort;
+  const requested_value = request.reasoning_effort;
   const has_requested_effort = requested_value !== undefined;
   if (has_requested_effort && typeof requested_value !== "string") {
     throw httpError(422, "reasoning_effort must be a string");
@@ -102,6 +104,26 @@ export function resolve_model_reasoning(
   return {
     effort,
     source: requested_effort ? "request" : "default",
+  };
+}
+
+/** 将原生 ModelCall.reasoning 与 OpenAI 兼容输入归一为同一读取形状。 */
+function read_reasoning_request(
+  input: Record<string, unknown> | ModelCall["reasoning"] | undefined,
+): { reasoning?: boolean; reasoning_effort?: unknown; effort_id?: unknown } {
+  if (!input || typeof input !== "object") return {};
+  if ("enabled" in input) {
+    const reasoning = input as ModelCall["reasoning"];
+    return {
+      reasoning: reasoning?.enabled,
+      reasoning_effort: reasoning?.effort,
+    };
+  }
+  const record = input as Record<string, unknown>;
+  return {
+    reasoning: typeof record.reasoning === "boolean" ? record.reasoning : undefined,
+    reasoning_effort: record.reasoning_effort,
+    effort_id: record.effort_id,
   };
 }
 

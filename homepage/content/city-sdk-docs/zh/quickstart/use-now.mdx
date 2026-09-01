@@ -105,18 +105,14 @@ const user_embassy = new Embassy({
 });
 
 const catalog = await user_embassy.user.ai.catalog();
-const model = catalog.get("local-echo");
-if (!model) throw new Error("model not found");
+const model = catalog.require("local-echo");
 
 // SDK 通路
-const stream = await user_embassy.user.ai.stream({
-  model,
-  call: {
-    messages: [{
-      role: "user",
-      content: [{ type: "text", text: "你好 Downcity" }],
-    }],
-  },
+const stream = await model.stream({
+  messages: [{
+    role: "user",
+    content: [{ type: "text", text: "你好 Downcity" }],
+  }],
 });
 for await (const event of stream) {
   if (event.type === "text_delta") process.stdout.write(event.delta);

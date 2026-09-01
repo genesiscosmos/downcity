@@ -59,8 +59,6 @@ export interface AIChannelOptions {
   env?: Record<string, string>;
   /** 上游 API 根地址，由 Channel 子类显式使用。 */
   base_url?: string;
-  /** Channel 默认 API Key 对应的 Federation env key。 */
-  env_key?: string;
   /** Channel 下所有模型共享的服务端 Provider 配置。 */
   provider_options?: Record<string, ModelJsonValue>;
 }
@@ -129,8 +127,6 @@ export interface AIModelSpec {
   tags?: string[];
   /** 结构化价格方案；多个方案用于表达条件、时段或档位差异。 */
   pricing?: ModelPricing | ModelPricing[];
-  /** 兼容旧客户端的价格说明列表，由 pricing 派生。 */
-  price?: string[];
   /** 不公开给客户端的模型级 Provider 配置。 */
   provider_options?: Record<string, ModelJsonValue>;
   /** 可公开给客户端的模型扩展信息。 */

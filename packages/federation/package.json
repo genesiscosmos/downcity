@@ -1,6 +1,6 @@
 {
   "name": "@downcity/federation",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Downcity Federation runtime and Embassy SDK for user, admin, and Bureau access.",
   "type": "module",
   "main": "./bin/index.js",

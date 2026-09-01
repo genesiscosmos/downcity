@@ -320,7 +320,7 @@ export type {
   UserImageMessage,
   UserImageResult,
   UserImageTextContent,
-  UserServiceInput,
+  FederationActionInput,
   UserServiceSummary,
   UserStreamChunk,
   UserStreamResult,
@@ -334,8 +334,8 @@ export type {
 } from "./pact/invoker/payment/types.js";
 
 export type {
-  UserModelRef,
-  UserModelInput,
+  FederationModelInput,
+  FederationModelStreamInput,
 } from "./pact/invoker/ai/types.js";
 
 export {

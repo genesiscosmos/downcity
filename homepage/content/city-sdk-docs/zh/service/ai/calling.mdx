@@ -3,17 +3,16 @@ title: 调用模型
 description: 使用 ModelCall、CityModel 和 ModelStreamEvent 调用 Federation 模型。
 ---
 
-## 直接调用 Federation
+## 直接调用 Federation 模型
 
 ```ts
-const stream = await city.ai.stream({
-  model: "deepseek-v4-flash",
-  call: {
-    messages: [{
-      role: "user",
-      content: [{ type: "text", text: "解释这个仓库" }],
-    }],
-  },
+const catalog = await city.ai.catalog();
+const model = catalog.require("deepseek-v4-flash");
+const stream = await model.stream({
+  messages: [{
+    role: "user",
+    content: [{ type: "text", text: "解释这个仓库" }],
+  }],
 });
 
 for await (const event of stream) {
@@ -21,7 +20,7 @@ for await (const event of stream) {
 }
 ```
 
-`city.ai.stream()` 返回 `ReadableStream<ModelStreamEvent>`。成功流以 `model_start` 开始，在 `model_finish` 前提供最终 `model_usage`；协议顺序无效时客户端会直接报错。
+`model.stream()` 返回 `ReadableStream<ModelStreamEvent>`。成功流以 `model_start` 开始，在 `model_finish` 前提供最终 `model_usage`；协议顺序无效时客户端会直接报错。
 
 ## 作为 Agent 模型
 
@@ -29,7 +28,7 @@ for await (const event of stream) {
 
 ```ts
 const catalog = await city.ai.catalog();
-const model = catalog.get("deepseek-v4-flash");
+const model = catalog.require("deepseek-v4-flash");
 const agent = new Agent({ id: "reviewer", model });
 ```
 

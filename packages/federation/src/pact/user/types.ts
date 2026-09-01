@@ -4,7 +4,7 @@
 
 import type { ModelStreamEvent } from "@downcity/type";
 import type { FetchLike } from "../http.js";
-import type { UserModelInput } from "../invoker/ai/types.js";
+import type { FederationModelInput } from "../invoker/ai/types.js";
 import type {
   AIActionMessage,
   AIImageCreateResult,
@@ -128,7 +128,7 @@ export interface UserImageMessage {
 }
 
 /** 图片生成输入。 */
-export interface UserImageInput extends UserServiceInput {
+export interface UserImageInput extends FederationActionInput {
   /** 单句快捷提示词。 */
   prompt?: string;
   /** 多轮或多模态图片生成上下文。 */
@@ -154,7 +154,7 @@ export interface UserImageInput extends UserServiceInput {
 }
 
 /** 语音合成输入。 */
-export interface UserTtsInput extends UserServiceInput {
+export interface UserTtsInput extends FederationActionInput {
   /** 要合成为语音的文本。 */
   text: string;
   /** 可选语音名称或上游 voice id。 */
@@ -168,7 +168,7 @@ export interface UserTtsInput extends UserServiceInput {
 }
 
 /** 语音识别输入。 */
-export interface UserAsrInput extends UserServiceInput {
+export interface UserAsrInput extends FederationActionInput {
   /** 远程音频 URL。 */
   url?: string;
   /** data URL 音频内容。 */
@@ -183,11 +183,10 @@ export interface UserAsrInput extends UserServiceInput {
   provider_options?: UserJsonObject;
 }
 
-/** 发给任意 service 的输入 */
-export interface UserServiceInput {
-  /** AIService 调用必须显式传入的模型引用或模型 ID。 */
-  model: UserModelInput;
-  /** 模型推理强度档位，必须来自模型目录 `reasoning.efforts`。 */
-  reasoning_effort?: string;
+/** 发给图片、视频、语音等 action 的通用输入。 */
+export interface FederationActionInput {
+  /** AIService 调用使用的模型引用或模型 ID。 */
+  model: FederationModelInput;
+  /** Provider action 的专属字段。 */
   [key: string]: unknown;
 }

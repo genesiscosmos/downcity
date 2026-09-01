@@ -10,7 +10,7 @@ class DeepSeekChannel extends AIChannel {
   constructor() {
     super({
       id: "deepseek",
-      env_key: "DEEPSEEK_API_KEY",
+      env: { DEEPSEEK_API_KEY: "DeepSeek API Key" },
       base_url: "https://api.deepseek.com/v1",
     });
   }
@@ -26,6 +26,6 @@ class DeepSeekChannel extends AIChannel {
 }
 ```
 
-`env_key` 会自动为模型目录的管理端视图生成必填 env 声明。一个 Channel 需要多个环境变量时使用 `env`。
+`env` 会为模型目录的管理端视图生成必填 env 声明。一个 Channel 需要多个环境变量时直接添加多个字段。
 
 值存储在 Federation env 表中，执行时通过 `input.env(key)` 读取。它们不会进入 `CityModelDescriptor` 或客户端运行时。

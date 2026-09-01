@@ -2,11 +2,11 @@
  * 终端用户 SDK。
  */
 
-import { AIInvoker, serializeModel } from "../invoker/ai/index.js";
+import { AIInvoker, serialize_model } from "../invoker/ai/index.js";
 import { PaymentInvoker } from "../invoker/payment/index.js";
 import { ServiceClient } from "../invoker/invoker.js";
 import { UserInvoker } from "../invoker/user/index.js";
-import type { UserPactAccessOptions, UserServiceInput, UserServiceSummary } from "./types.js";
+import type { FederationActionInput, UserPactAccessOptions, UserServiceSummary } from "./types.js";
 import {
   requiredString,
   type RequestInitLike,
@@ -98,10 +98,10 @@ export class UserPactAccess {
     return { ...init, headers };
   }
 
-  private buildInput(input: UserServiceInput): Record<string, unknown> {
+  private buildInput(input: FederationActionInput): Record<string, unknown> {
     return {
       ...input,
-      model: serializeModel(input.model),
+      model: serialize_model(input.model),
     };
   }
 

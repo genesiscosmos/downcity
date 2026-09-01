@@ -59,7 +59,7 @@ class DeepSeekChannel extends AIChannel {
     super({
       id: "deepseek",
       base_url: "https://api.deepseek.com/v1",
-      env_key: "DEEPSEEK_API_KEY",
+      env: { DEEPSEEK_API_KEY: "DeepSeek API Key" },
     });
   }
 

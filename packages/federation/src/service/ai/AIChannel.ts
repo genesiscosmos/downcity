@@ -33,18 +33,13 @@ export abstract class AIChannel {
   readonly env?: Record<string, string>;
   /** 上游 API 根地址，由子类显式使用。 */
   protected readonly base_url?: string;
-  /** 默认 API Key 对应的 Federation env key。 */
-  protected readonly env_key?: string;
   /** Channel 级服务端 Provider 配置。 */
   private readonly provider_options?: Record<string, ModelJsonValue>;
 
   constructor(options: AIChannelOptions) {
     this.id = options.id;
-    this.env = options.env ?? (options.env_key
-      ? { [options.env_key]: `${options.id} API Key` }
-      : undefined);
+    this.env = options.env;
     this.base_url = options.base_url;
-    this.env_key = options.env_key;
     this.provider_options = clone_provider_options(options.provider_options);
   }
 
@@ -106,7 +101,6 @@ export abstract class AIChannel {
       ...model_spec,
       channel_id: this.id,
       ...(spec.pricing ? { pricing: clone_pricing(spec.pricing) } : {}),
-      ...(spec.price ? { price: [...spec.price] } : {}),
       env: this.env,
       runtime: {
         ...(stream ? { stream } : {}),

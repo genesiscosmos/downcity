@@ -68,8 +68,6 @@ export interface CityModelDescriptor {
   tags: string[];
   /** 结构化价格方案；多个方案用于表达条件、时段或档位差异。 */
   pricing?: ModelPricing | ModelPricing[];
-  /** 兼容旧客户端的价格说明列表，由 pricing 派生。 */
-  price?: string[];
   /** 模型元数据，供宿主记录 provider、区域、套餐等扩展信息。 */
   meta: Record<string, unknown>;
   /** 模型公开的推理能力；未声明时表示不接受 `reasoning_effort`。 */

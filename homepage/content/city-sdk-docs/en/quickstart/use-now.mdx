@@ -84,12 +84,12 @@ const user_embassy = new Embassy({
   user_token: token.user_token,
 });
 
+const catalog = await user_embassy.user.ai.catalog();
+const model = catalog.require("local-echo");
+
 // SDK pathway
-const stream = await user_embassy.user.ai.stream({
-  model: "local-echo",
-  call: {
-    messages: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
-  },
+const stream = await model.stream({
+  messages: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
 });
 for await (const event of stream) {
   if (event.type === "text_delta") process.stdout.write(event.delta);

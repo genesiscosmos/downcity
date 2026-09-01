@@ -382,13 +382,11 @@ export class AIService extends Service {
       ...ctx.input,
       model: request.model_id,
       call,
-      ...(call.reasoning?.effort ? { reasoning_effort: call.reasoning.effort } : {}),
-      ...(call.reasoning?.enabled === false ? { reasoning: false } : {}),
     };
     const initial_resolved = this.resolve({ model: request.model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
     const routing = this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
     const resolved = routing.resolved;
-    const reasoning = resolved.model ? resolve_model_reasoning(resolved.model, ctx.input) : undefined;
+    const reasoning = resolved.model ? resolve_model_reasoning(resolved.model, call.reasoning) : undefined;
     this.attachResolvedModel(ctx, resolved.model, LANGUAGE_MODEL_MODE, routing);
     attach_resolved_reasoning(ctx, reasoning);
     const started_at = Date.now();

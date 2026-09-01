@@ -85,9 +85,6 @@ export class AIModelRegistry {
       modalities: options.get_modalities(model),
       tags: model.tags ?? [],
       ...(model.pricing ? { pricing: clone_pricing(model.pricing) } : {}),
-      ...(model.pricing
-        ? { price: pricing_to_legacy_price(model.pricing) }
-        : model.price ? { price: [...model.price] } : {}),
       meta: model.meta ?? {},
       ...(model.reasoning ? { reasoning: model.reasoning } : {}),
       ...(include_admin_fields
@@ -130,14 +127,4 @@ function clone_pricing(pricing: AIModelDefinition["pricing"]): ModelPricing[] {
     rates: { ...item.rates },
     ...(item.dimensions ? { dimensions: { ...item.dimensions } } : {}),
   }));
-}
-
-/** 为旧客户端生成稳定、可读且不参与计费的兼容文案。 */
-function pricing_to_legacy_price(pricing: NonNullable<AIModelDefinition["pricing"]>): string[] {
-  return (Array.isArray(pricing) ? pricing : [pricing]).map((item) => {
-    const scale = item.scale ? ` / ${item.scale} ${item.unit}` : ` / ${item.unit}`;
-    const rates = Object.entries(item.rates).map(([key, value]) => `${key}=${value}`).join(", ");
-    const dimensions = item.dimensions ? ` (${Object.entries(item.dimensions).map(([key, value]) => `${key}=${value}`).join(", ")})` : "";
-    return `${item.currency}${scale}: ${rates}${dimensions}`;
-  });
 }

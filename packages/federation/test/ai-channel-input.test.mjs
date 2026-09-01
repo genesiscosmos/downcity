@@ -22,7 +22,11 @@ test("AIChannel stream receives only ModelCall and resolved service context", as
   }
   const provider_options = { service_tier: "default", nested: { value: 1 } }
   const model_options = { service_tier: "priority" }
-  const channel = new TestChannel({ id: "openai", env_key: "UPSTREAM_API_KEY", provider_options })
+  const channel = new TestChannel({
+    id: "openai",
+    env: { UPSTREAM_API_KEY: "Upstream API Key" },
+    provider_options,
+  })
   const model = channel.model({
     id: "public-model", upstream_model: "vendor-model", name: "Public Model",
     provider_options: model_options,
@@ -54,7 +58,10 @@ test("AIChannel action receives a scoped input instead of Federation Context", a
       return { job_id: "image_1", status: "running" }
     }
   }
-  const channel = new TestImageChannel({ id: "images", env_key: "UPSTREAM_API_KEY" })
+  const channel = new TestImageChannel({
+    id: "images",
+    env: { UPSTREAM_API_KEY: "Upstream API Key" },
+  })
   const model = channel.model({ id: "image-model", upstream_model: "vendor-image", name: "Image" })
   const context = create_context({ model: "image-model", prompt: "draw" })
   await model.runtime.actions.image_create(context)

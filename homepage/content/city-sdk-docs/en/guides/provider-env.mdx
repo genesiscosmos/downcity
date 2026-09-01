@@ -10,7 +10,7 @@ class DeepSeekChannel extends AIChannel {
   constructor() {
     super({
       id: "deepseek",
-      env_key: "DEEPSEEK_API_KEY",
+      env: { DEEPSEEK_API_KEY: "DeepSeek API Key" },
       base_url: "https://api.deepseek.com/v1",
     });
   }
@@ -26,6 +26,6 @@ class DeepSeekChannel extends AIChannel {
 }
 ```
 
-`env_key` automatically creates a required env declaration for the model catalog's admin view. Use `env` instead when a Channel needs multiple values.
+`env` declares the variables shown in the model catalog's admin view. Add multiple entries when a Channel needs more than one value.
 
 Values are stored in Federation's env table and read at execution time with `input.env(key)`. They never enter `CityModelDescriptor` or the client runtime.
