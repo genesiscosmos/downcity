@@ -35,7 +35,7 @@ import { resolve_user_message_rewrite } from "@/lib/chat/user_message_rewrite";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
 import { SessionSidebarButton } from "@/layouts/MainViewLayout";
 import { cn } from "@/lib/utils";
-import { is_chat_busy, type ChatHistoryState, type QueuedChatMessage } from "@/types/DesktopView";
+import { is_chat_busy, type ChatHistoryState, type ChatSubmitMode, type QueuedChatMessage } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRewriteAction, DesktopChatRewriteInput, DesktopChatRuntime, DesktopModelSummary, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Session Chat 主视图属性。 */
@@ -74,6 +74,8 @@ interface SessionViewProps {
   draft_references: DesktopChatReferenceInput[];
   /** 当前 Session 待发送队列。 */
   queued_messages: QueuedChatMessage[];
+  /** 当前 Session 的队列是否整体暂停。 */
+  queue_paused: boolean;
   /** 当前 Session 更早历史分页状态。 */
   history?: ChatHistoryState;
   /** Desktop Chat 设置。 */
@@ -98,8 +100,8 @@ interface SessionViewProps {
   update_draft_files(files: DesktopChatFileInput[]): void;
   /** 更新当前消息引用草稿。 */
   update_draft_references(references: DesktopChatReferenceInput[]): void;
-  /** 发送或排队一条消息。 */
-  send_message(input: DesktopChatInput): Promise<void>;
+  /** 按指定意图立即发送或加入下一轮队列。 */
+  send_message(input: DesktopChatInput, mode?: ChatSubmitMode): Promise<void>;
   /** 请求压缩当前 Session 历史上下文。 */
   compact_session?(): Promise<void>;
   /** 刷新模型目录。 */
@@ -120,6 +122,14 @@ interface SessionViewProps {
   rewrite_message?(input: DesktopChatRewriteInput): Promise<void>;
   /** 删除尚未发送的队列项。 */
   remove_queued_message(message_id: string): void;
+  /** 立即提交指定队列项；Session 运行中时作为 steer。 */
+  send_queued_message(message_id: string): Promise<void>;
+  /** 修改指定队列项的文本。 */
+  update_queued_message(message_id: string, text: string): void;
+  /** 切换指定队列项的暂停状态。 */
+  toggle_queued_message_paused(message_id: string): void;
+  /** 设置整个队列的暂停状态。 */
+  set_queue_paused(paused: boolean): void;
   /** 调整尚未发送的队列项顺序。 */
   move_queued_message(message_id: string, direction: "up" | "down"): void;
   /** 读取一个更早历史 Segment。 */
@@ -190,6 +200,7 @@ export function SessionView(props: SessionViewProps) {
               draft_references={props.draft_references}
               runtime={props.runtime}
               queued_messages={props.queued_messages}
+              queue_paused={props.queue_paused}
               configuration={props.configuration}
               models={props.models}
               models_loading={props.models_loading}
@@ -205,6 +216,10 @@ export function SessionView(props: SessionViewProps) {
               set_reasoning_effort={props.set_reasoning_effort}
               set_approval_mode={props.set_approval_mode}
               remove_queued_message={props.remove_queued_message}
+              send_queued_message={props.send_queued_message}
+              update_queued_message={props.update_queued_message}
+              toggle_queued_message_paused={props.toggle_queued_message_paused}
+              set_queue_paused={props.set_queue_paused}
               move_queued_message={props.move_queued_message}
           />
         </div>
@@ -384,7 +399,7 @@ function AssistantMessage({ message, agent, show_reasoning, respond_interaction,
       <AgentAvatar agent={agent} class_name="size-7 rounded-md" />
     </div>
     <div className="flex min-w-0 flex-1 flex-col gap-0 overflow-visible rounded-none pb-0 pt-0.5 text-sm text-foreground">
-      <div className="mb-1 min-w-0 truncate text-xs font-medium text-foreground/85">{agent.agent_id}</div>
+      <div className="mb-1 min-w-0 truncate text-xs font-medium text-foreground/85">{agent.name}</div>
       <div className="min-h-0 w-full">
         <AssistantContent parts={message.parts} show_reasoning={show_reasoning} respond_interaction={respond_interaction} streaming={message.status === "streaming"} />
       </div>
@@ -408,7 +423,7 @@ function MessageActionButton({ title, disabled, on_click, children }: { /** 操�
 /** 新建 Chat 输入框上方的当前上下文。 */
 function NewChatContextSelector({ workspace, workspaces, agent, agents, switch_context }: { /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 可切换 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 可切换 Agent。 */ agents: DesktopAgentSummary[]; /** 提交上下文切换。 */ switch_context(workspace_id: string, agent_id: string): void }) {
   return <div className="flex min-w-0 max-w-full flex-col items-center gap-4">
-    <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="group flex min-w-0 max-w-full flex-col items-center gap-2 rounded-xl px-5 py-3 transition-colors hover:bg-foreground/[0.05]" aria-label="选择联系人"><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" /><span className="flex max-w-64 items-center gap-1.5 text-base font-medium text-foreground"><span className="truncate">{agent.agent_id}</span><TbChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span><span className="text-xs text-muted-foreground">联系人</span></button></DropdownMenuTrigger><DropdownMenuContent align="center" side="bottom" sideOffset={6}>{agents.map((item) => <DropdownMenuItem key={item.agent_id} is_selected={item.agent_id === agent.agent_id} onClick={() => switch_context(workspace.workspace_id, item.agent_id)}><AgentAvatar agent={item} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{item.agent_id}</span>{item.agent_id === agent.agent_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+    <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="group flex min-w-0 max-w-full flex-col items-center gap-2 rounded-xl px-5 py-3 transition-colors hover:bg-foreground/[0.05]" aria-label="选择联系人"><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" /><span className="flex max-w-64 items-center gap-1.5 text-base font-medium text-foreground"><span className="truncate">{agent.name}</span><TbChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span><span className="text-xs text-muted-foreground">联系人</span></button></DropdownMenuTrigger><DropdownMenuContent align="center" side="bottom" sideOffset={6}>{agents.map((item) => <DropdownMenuItem key={item.agent_id} is_selected={item.agent_id === agent.agent_id} onClick={() => switch_context(workspace.workspace_id, item.agent_id)}><AgentAvatar agent={item} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{item.name}</span>{item.agent_id === agent.agent_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
     <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="flex min-w-0 max-w-72 items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground" aria-label="选择 Workspace"><TbFolder className="size-4 shrink-0" /><span className="truncate">{workspace.name}</span><TbChevronDown className="size-3.5 shrink-0" /></button></DropdownMenuTrigger><DropdownMenuContent align="center" side="bottom" sideOffset={6}>{workspaces.map((item) => <DropdownMenuItem key={item.workspace_id} is_selected={item.workspace_id === workspace.workspace_id} onClick={() => switch_context(item.workspace_id, agent.agent_id)}><TbFolder className="size-4" /><span className="min-w-0 flex-1 truncate">{item.name}</span>{item.workspace_id === workspace.workspace_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
     <span className="text-[0.6875rem] text-muted-foreground/70">选择联系人和 Workspace 开始对话</span>
   </div>;
@@ -421,7 +436,7 @@ function ActivityIndicator({ agent, status, compact = false }: { /** 当前 Agen
   return <div className="group is-assistant flex w-full items-start gap-2 py-2 !m-0 !p-0">
     <div className="shrink-0 px-1 pt-0.5"><AgentAvatar agent={agent} class_name="size-7 rounded-md" /></div>
     <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-visible pt-0.5 text-sm text-foreground">
-      <div className="min-w-0 truncate text-xs font-medium text-foreground/85">{agent.agent_id}</div>
+      <div className="min-w-0 truncate text-xs font-medium text-foreground/85">{agent.name}</div>
       <div className="assistant-message-menu-bar flex items-center">{status_content}</div>
     </div>
   </div>;

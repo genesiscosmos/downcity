@@ -84,7 +84,7 @@ export function create_builtin_plugin_registrations(): BuiltinPluginRegistration
     {
       definition: {
         id: "skill",
-        title: "Skill Catalog And Loader",
+        title: "Skills",
         description: "Lists and reads local skills, and injects discovery guidance.",
         readme: builtin_readme_path("skill"),
         has_agent: true,

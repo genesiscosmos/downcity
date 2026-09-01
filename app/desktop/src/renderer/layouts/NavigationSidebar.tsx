@@ -19,6 +19,8 @@ interface NavigationSidebarProps {
   controller: DesktopViewController;
   /** 打开创建 Agent 表单。 */
   open_create_agent(workspace_id?: string): void;
+  /** 打开创建 Group 页面。 */
+  open_create_group(): void;
   /** 打开创建 Workspace 表单。 */
   open_create_workspace(): void;
   /** 打开 Group 并展示其配置侧栏。 */
@@ -51,7 +53,7 @@ export function SidebarContainer({ children, collapsed = false }: { /** Sidebar 
 }
 
 /** Agent 与 Session 的 Duobox 导航视图。 */
-export function NavigationSidebar({ controller, open_create_agent, open_create_workspace, open_group_config, collapsed = false }: NavigationSidebarProps) {
+export function NavigationSidebar({ controller, open_create_agent, open_create_group, open_create_workspace, open_group_config, collapsed = false }: NavigationSidebarProps) {
   const plugin_workspaces = controller.plugins.filter((plugin) => plugin.has_sidebar && plugin.has_mainview);
   const workspace_plugin_id = controller.sidebar_mode.startsWith("plugin:")
     ? controller.sidebar_mode.slice("plugin:".length)
@@ -65,7 +67,7 @@ export function NavigationSidebar({ controller, open_create_agent, open_create_w
     <div className="flex min-h-0 flex-1 overflow-hidden">
       <div className="flex min-h-0 w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} plugin_workspaces={plugin_workspaces} layout="left" /></div>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={() => open_create_agent()} open_group_config={open_group_config} /> : null}
+        {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={() => open_create_agent()} open_create_group={open_create_group} open_group_config={open_group_config} /> : null}
         {controller.sidebar_mode === "workspace" ? <WorkspaceSidebar controller={controller} open_create_workspace={open_create_workspace} /> : null}
         {controller.sidebar_mode === "plugins" ? <PluginSidebar controller={controller} /> : null}
         {workspace_plugin_id ? <PluginWorkspaceSidebar controller={controller} plugin_id={workspace_plugin_id} /> : null}

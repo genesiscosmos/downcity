@@ -56,13 +56,15 @@ export async function createTaskSessionRuntimePort(params: {
   runDirAbs: string;
   runSessionId: string;
   userSimulatorSessionId: string;
-  sourceSessionId: string;
+  sourceSessionId?: string;
 }): Promise<TaskSessionRuntimePort> {
   const { context, runDirAbs, runSessionId, userSimulatorSessionId } = params;
-  const source_session = await context.sessions.get(params.sourceSessionId);
   const task_session = await context.sessions.create();
   const user_simulator_session = await context.sessions.create();
-  if (source_session.config.model) {
+  const source_session = params.sourceSessionId
+    ? await context.sessions.get(params.sourceSessionId)
+    : undefined;
+  if (source_session?.config.model) {
     await task_session.set(
       { model: source_session.config.model },
       { persist_action: false, publish_mutation: false },

@@ -11,6 +11,7 @@ import type {
   ShipTaskRunExecutionStatusV1,
   ShipTaskRunResultStatusV1,
   ShipTaskRunStatusV1,
+  ShipTaskRunTriggerV1,
   ShipTaskStatus,
 } from "./Task.js";
 
@@ -21,8 +22,10 @@ export type TaskCreateRequest = {
   when: string;
   /** 任务描述。 */
   description: string;
-  /** 任务会话标识。 */
-  session_id: string;
+  /** 任务唯一绑定的执行 Workspace。 */
+  workspace_id?: string;
+  /** 可选的结果 Session 标识。 */
+  session_id?: string;
   /** 任务执行类型。 */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核。 */
@@ -61,8 +64,12 @@ export type TaskUpdateRequest = {
   clearWhen?: boolean;
   /** 新任务描述。 */
   description?: string;
-  /** 新会话标识。 */
+  /** 新的执行 Workspace。 */
+  workspace_id?: string;
+  /** 新的可选结果 Session。 */
   session_id?: string;
+  /** 是否移除结果 Session。 */
+  clearSession?: boolean;
   /** 新任务执行类型。 */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核。 */
@@ -95,8 +102,10 @@ export type TaskListItemView = {
   status: string;
   /** 当前是否正在执行。 */
   running?: boolean;
-  /** 任务会话标识。 */
-  session_id: string;
+  /** 任务唯一绑定的执行 Workspace。 */
+  workspace_id: string;
+  /** 可选的结果 Session 标识。 */
+  session_id?: string;
   /** 任务执行类型。 */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核。 */
@@ -111,6 +120,102 @@ export type TaskListResponse = {
   success: true;
   tasks: TaskListItemView[];
 };
+
+/** 读取一个 Task 全部执行记录的输入。 */
+export interface TaskRunHistoryRequest {
+  /** Task 的唯一标题。 */
+  readonly title: string;
+}
+
+/** 读取一条 Task 执行记录详情的输入。 */
+export interface TaskRunDetailRequest {
+  /** Task 的唯一标题。 */
+  readonly title: string;
+
+  /** Run 目录使用的稳定 UTC 时间戳。 */
+  readonly timestamp: string;
+}
+
+/** Task 执行记录列表中的一条摘要。 */
+export interface TaskRunHistoryItemView {
+  /** Run 目录使用的稳定 UTC 时间戳。 */
+  readonly timestamp: string;
+
+  /** 本次执行的唯一标识；早期或不完整记录可能不存在。 */
+  readonly execution_id?: string;
+
+  /** 当前或最终执行状态。 */
+  readonly status: "running" | ShipTaskRunStatusV1;
+
+  /** 本次执行的触发来源。 */
+  readonly trigger: ShipTaskRunTriggerV1["type"];
+
+  /** 执行开始时间，使用 Unix 毫秒时间戳。 */
+  readonly started_at: number;
+
+  /** 最近状态更新时间，使用 Unix 毫秒时间戳。 */
+  readonly updated_at: number;
+
+  /** 执行结束时间，使用 Unix 毫秒时间戳。 */
+  readonly ended_at?: number;
+
+  /** 已完成执行的总耗时，单位为毫秒。 */
+  readonly duration_ms?: number;
+
+  /** 运行中记录当前所在阶段。 */
+  readonly phase?: string;
+
+  /** 运行中记录当前阶段的用户可读说明。 */
+  readonly message?: string;
+
+  /** Agent 或脚本执行阶段的最终状态。 */
+  readonly execution_status?: ShipTaskRunExecutionStatusV1;
+
+  /** 最终产物的校验状态。 */
+  readonly result_status?: ShipTaskRunResultStatusV1;
+
+  /** 执行失败时的简短错误摘要。 */
+  readonly error?: string;
+}
+
+/** Task 一次执行的完整只读详情。 */
+export interface TaskRunDetailView extends TaskRunHistoryItemView {
+  /** 本次执行的最终输出正文。 */
+  readonly output: string;
+
+  /** 本次执行的完整错误正文。 */
+  readonly error_detail: string;
+
+  /** 结果校验失败项。 */
+  readonly result_errors: string[];
+
+  /** Agent 实际完成的对话轮数。 */
+  readonly dialogue_rounds?: number;
+}
+
+/** Task 执行记录列表的领域响应。 */
+export interface TaskRunHistoryResponse {
+  /** 读取是否成功。 */
+  readonly success: boolean;
+
+  /** 按时间倒序排列的执行记录。 */
+  readonly runs?: TaskRunHistoryItemView[];
+
+  /** 读取失败时的错误信息。 */
+  readonly error?: string;
+}
+
+/** Task 执行记录详情的领域响应。 */
+export interface TaskRunDetailResponse {
+  /** 读取是否成功。 */
+  readonly success: boolean;
+
+  /** 成功读取的执行详情。 */
+  readonly run?: TaskRunDetailView;
+
+  /** 读取失败时的错误信息。 */
+  readonly error?: string;
+}
 
 export type TaskRunRequest = {
   title: string;

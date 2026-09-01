@@ -7,6 +7,7 @@
 
 import path from "node:path";
 import fs from "fs-extra";
+import { pinyin } from "pinyin-pro";
 import type { JsonObject } from "@downcity/agent";
 import type {
   LocalAgentConfig,
@@ -37,6 +38,10 @@ interface AgentDefinitionFile {
   schema_version: 2;
   /** Agent 稳定 ID。 */
   id: string;
+  /** Agent 的用户可见名称。 */
+  name: string;
+  /** Agent 对外展示的身份简介。 */
+  description: string;
   /** Agent 定义版本。 */
   version: string;
   /** 默认模型等执行配置。 */
@@ -75,6 +80,10 @@ export class AgentRepository {
   create(input: {
     /** Agent 稳定 ID。 */
     agent_id: string;
+    /** Agent 的用户可见名称。 */
+    name?: string;
+    /** Agent 对外展示的身份简介。 */
+    description?: string;
     /** Agent 定义版本。 */
     version?: string;
     /** 默认模型等执行配置。 */
@@ -92,6 +101,8 @@ export class AgentRepository {
     this.write_definition({
       schema_version: 2,
       id: agent_id,
+      name: normalize_agent_name(input.name || agent_id),
+      description: normalize_agent_description(input.description),
       version: String(input.version || "1.0.0"),
       ...(input.execution ? { execution: structuredClone(input.execution) } : {}),
       ...(input.llm ? { llm: structuredClone(input.llm) } : {}),
@@ -111,6 +122,8 @@ export class AgentRepository {
     this.write_definition({
       schema_version: 2,
       id: agent_id,
+      name: normalize_agent_name(input.name),
+      description: normalize_agent_description(input.description),
       version: String(input.version || "1.0.0"),
       ...(input.execution ? { execution: structuredClone(input.execution) } : {}),
       ...(input.llm ? { llm: structuredClone(input.llm) } : {}),
@@ -137,6 +150,8 @@ export class AgentRepository {
     }
     return {
       agent_id,
+      name: normalize_agent_name(definition.name || agent_id),
+      description: normalize_agent_description(definition.description),
       version: String(definition.version || "1.0.0"),
       ...(is_json_object(definition.execution)
         ? { execution: structuredClone(definition.execution) }
@@ -294,6 +309,25 @@ export function normalize_agent_id(input: string): string {
     .replace(/_{2,}/gu, "_");
   if (!agent_id) throw new Error("agent_id is required");
   return agent_id;
+}
+
+/** 基于用户可见名称生成稳定、可读的 Agent ID。 */
+export function create_agent_id(name_input: string): string {
+  const name = normalize_agent_name(name_input);
+  const transliterated = pinyin(name, { toneType: "none", type: "array", nonZh: "consecutive" }).join("_");
+  return normalize_agent_id(transliterated);
+}
+
+/** 规范化 Agent 用户可见名称。 */
+function normalize_agent_name(input: string): string {
+  const name = String(input || "").trim();
+  if (!name) throw new Error("Agent name is required");
+  return name;
+}
+
+/** 规范化 Agent 对外身份简介。 */
+function normalize_agent_description(input?: string): string {
+  return String(input || "").trim();
 }
 
 /** 校验 Plugin 的公开稳定 ID。 */

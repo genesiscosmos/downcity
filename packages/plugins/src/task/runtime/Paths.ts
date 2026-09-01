@@ -84,13 +84,18 @@ export function formatTaskRunTimestamp(date: Date = new Date()): string {
   return `${yyyy}${mm}${dd}-${hh}${mi}${ss}-${ms}`;
 }
 
+/** 判断字符串是否为 Task Run 使用的安全 UTC 时间戳目录名。 */
+export function is_task_run_timestamp(value: string): boolean {
+  return /^\d{8}-\d{6}-\d{3}$/u.test(String(value || "").trim());
+}
+
 export function getTaskRunDir(
   data_path: string,
   taskId: string,
   timestamp: string,
 ): string {
   const ts = String(timestamp || "").trim();
-  if (!ts) throw new Error("timestamp is required");
+  if (!is_task_run_timestamp(ts)) throw new Error(`Invalid task run timestamp: ${ts}`);
   return path.join(getTaskDir(data_path, taskId), ts);
 }
 

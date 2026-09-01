@@ -17,6 +17,24 @@ description: Agent SDK 是什么，以及如何运行 Agent 工作
 
 ## 创建 Agent
 
+在 Desktop 中点击“创建 Agent”会进入独立创建页面。你可以用自然语言描述想要的角色，让系统默认模型自动生成名称、简介、角色指令和推荐 Plugins；也可以选择“手动配置”，从空白草稿开始填写。AI 只负责生成可编辑草稿，确认后才会真正创建 Agent。
+
+创建时不需要手动设计内部 ID。Desktop 会根据名称生成稳定 ID；例如“研究助手”会生成 `yan_jiu_zhu_shou`。
+
+AI 生成和 Agent 运行模型都默认选中 Desktop 设置中的系统默认文本模型，也可以分别调整；仅当默认模型不可用时才回退到第一个可用文本模型。Desktop 页面统一展示 Agent 名称，稳定 ID 只用于内部路由和存储。
+
+名称和简介用于联系人列表与对话中的身份展示。内部 ID 继续用于本地目录、API 引用和运行时身份；如果名称生成的 ID 已存在，Desktop 会要求换一个名称，不会隐式追加随机后缀。
+
+创建后可以在 Agent 配置中继续修改名称和简介。修改名称不会改变稳定 Agent ID，因此已有 Session、Group 引用和 Plugin 数据路径保持不变。
+
+Agent 配置中的“删除 Agent”会永久删除该 Agent 的定义、头像、Session、日志、Schedule 与 Agent 级 Plugin 数据。正在执行任务或仍属于 Group 的 Agent 不能删除，需要先结束执行或将它移出相关 Group。
+
+## 创建 Group
+
+点击“创建 Group”会进入独立创建页面。你可以描述团队目标，让所选模型根据当前已有 Agent 生成 Group 名称、协作目标和推荐成员；也可以从空白配置手动选择模型与成员。AI 结果在确认前始终只是可编辑草稿。
+
+创建 Group 时只填写用户可见名称，内部 `group_id` 由 Desktop 根据名称自动生成。创建后可以修改名称、协作目标、模型与成员，但稳定 `group_id` 不会改变。Group 头像由成员 Agent 的头像组合展示。
+
 ```ts
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";

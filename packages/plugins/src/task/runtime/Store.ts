@@ -18,6 +18,7 @@ import {
   getTaskMdPath,
   getTaskRootDir,
   getTaskRunDir,
+  is_task_run_timestamp,
   normalizeTaskId,
 } from "./Paths.js";
 
@@ -31,22 +32,13 @@ export type TaskListItem = {
   body?: string;
   when: string;
   status: string;
-  session_id: string;
+  workspace_id: string;
+  session_id?: string;
   kind?: "agent" | "script";
   review?: boolean;
   taskMdPath: string;
   lastRunTimestamp?: string;
 };
-
-/**
- * 判断目录名是否为 run 时间戳格式。
- */
-function isDirectoryNameTimestamp(name: string): boolean {
-  const s = String(name || "").trim();
-  if (!s) return false;
-  // 例如 20260209-083000-123
-  return /^\d{8}-\d{6}-\d{3}$/.test(s);
-}
 
 /**
  * 列出全部任务。
@@ -98,7 +90,7 @@ export async function listTasks(data_path: string): Promise<TaskListItem[]> {
       const taskDir = getTaskDir(root, taskId);
       const child = await fs.readdir(taskDir, { withFileTypes: true });
       const ts = child
-        .filter((d) => d.isDirectory() && isDirectoryNameTimestamp(d.name))
+        .filter((d) => d.isDirectory() && is_task_run_timestamp(d.name))
         .map((d) => d.name)
         .sort()
         .at(-1);
@@ -114,7 +106,8 @@ export async function listTasks(data_path: string): Promise<TaskListItem[]> {
       ...(parsed.task.body ? { body: parsed.task.body } : {}),
       when: parsed.task.frontmatter.when,
       status: parsed.task.frontmatter.status,
-      session_id: parsed.task.frontmatter.session_id,
+      workspace_id: parsed.task.frontmatter.workspace_id,
+      ...(parsed.task.frontmatter.session_id ? { session_id: parsed.task.frontmatter.session_id } : {}),
       kind: parsed.task.frontmatter.kind || "agent",
       ...(parsed.task.frontmatter.kind === "agent"
         ? { review: Boolean(parsed.task.frontmatter.review) }

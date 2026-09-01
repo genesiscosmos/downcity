@@ -1,4 +1,4 @@
-# Skill Catalog And Loader
+# Skills
 
 Discovers skills available to the Agent, reads their instructions, and adds guidance for selecting the right skill during a task.
 

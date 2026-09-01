@@ -37,11 +37,12 @@ export async function registerTaskCronJobs(params: {
   const context = params.context;
   const logger = context.logger;
   const tasks = await listTasks(context.data_path);
+  const workspace_tasks = tasks.filter((task) => task.workspace_id === context.workspace_id);
   const runtimeTimezone = params.timezone;
 
   let jobsScheduled = 0;
 
-  for (const item of tasks) {
+  for (const item of workspace_tasks) {
     if (String(item.status).toLowerCase() !== "enabled") continue;
 
     const expr = resolveTaskWhenCronExpression(item.when);
@@ -245,7 +246,7 @@ export async function registerTaskCronJobs(params: {
   }
 
   return {
-    tasksFound: tasks.length,
+    tasksFound: workspace_tasks.length,
     jobsScheduled,
   };
 }

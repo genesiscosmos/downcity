@@ -17,6 +17,20 @@ The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent wo
 
 ## Creating an Agent
 
+Selecting “Create Agent” opens a dedicated creation page. Describe the role in natural language to let the system default model draft its name, description, instructions, and recommended plugins, or choose manual configuration to start with an empty draft. AI output remains editable and nothing is persisted until you confirm creation.
+
+The editor preselects the system default text model and only falls back when it is unavailable. Desktop surfaces display Agent names throughout the UI; stable IDs remain internal routing and storage references.
+
+The name and description identify the Agent in contacts and conversations. The generated ID remains the stable reference used by local directories, APIs, and runtime ownership. If the generated ID already exists, Desktop asks for another name instead of silently adding a random suffix.
+
+You can edit the name and description later without changing the stable Agent ID. Desktop also supports permanent deletion of the Agent definition, avatar, sessions, logs, schedules, and Agent-scoped plugin data. An Agent cannot be deleted while it is running or still belongs to a Group.
+
+## Creating a Group
+
+Selecting “Create Group” opens a dedicated creation page. Describe the collaboration goal to let the selected model draft a Group name, collaboration instructions, and recommended members from the existing Agents, or start with manual configuration. AI output remains an editable draft until you confirm it.
+
+You only provide the visible Group name. Desktop derives the stable internal `group_id` from that name. The name, instructions, model, and members remain editable later without changing the stable ID. The Group avatar is composed from its member Agent avatars.
+
 ```ts
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/workspace";

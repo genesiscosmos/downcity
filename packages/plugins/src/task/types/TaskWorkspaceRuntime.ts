@@ -1,9 +1,13 @@
 /** TaskPlugin 在单个 Workspace 中持有的运行态类型。 */
 
 import type { TaskCronTriggerEngine } from "@/task/runtime/CronTrigger.js";
+import type { PluginContext } from "@downcity/agent";
 
 /** 单个 Workspace 独立拥有的 Task 调度资源。 */
 export interface TaskWorkspaceRuntime {
+  /** 创建当前调度资源的 Workspace Plugin 上下文。 */
+  readonly context: PluginContext;
+
   /** 当前 Workspace 的 cron 触发引擎。 */
   readonly cron_engine: TaskCronTriggerEngine;
 

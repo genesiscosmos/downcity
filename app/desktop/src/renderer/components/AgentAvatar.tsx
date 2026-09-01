@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 /** Agent 头像展示属性。 */
 interface AgentAvatarProps {
   /** 当前 Agent 摘要。 */
-  agent: Pick<DesktopAgentSummary, "agent_id" | "avatar_url">;
+  agent: Pick<DesktopAgentSummary, "agent_id" | "avatar_url"> & { /** Agent 用户可见名称。 */ name?: string; /** 兼容临时 Group 投影。 */ model_id?: string; /** 兼容临时 Group 投影。 */ version?: string };
   /** 头像容器样式。 */
   class_name?: string;
   /** 图标样式。 */
@@ -17,6 +17,6 @@ interface AgentAvatarProps {
 /** 展示 Agent 自定义头像；未配置时使用默认 Ghost 图标。 */
 export function AgentAvatar({ agent, class_name, icon_class_name }: AgentAvatarProps) {
   return agent.avatar_url
-    ? <img src={agent.avatar_url} alt={`${agent.agent_id} avatar`} className={cn("size-4 shrink-0 rounded-md object-cover", class_name)} />
+    ? <img src={agent.avatar_url} alt={`${agent.name || "Agent"} avatar`} className={cn("size-4 shrink-0 rounded-md object-cover", class_name)} />
     : <TbGhost3 className={cn("size-4 shrink-0 text-muted-foreground", class_name, icon_class_name)} aria-hidden="true" />;
 }

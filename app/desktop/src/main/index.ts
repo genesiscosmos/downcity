@@ -93,8 +93,10 @@ ipcMain.handle("system:open-local-file", async (_event, value: string) => {
 
 ipcMain.handle("agent:list", () => require_agent_controller().list_agents());
 ipcMain.handle("agent:get", (_event, agent_id: string) => require_agent_controller().get_agent(agent_id));
-ipcMain.handle("agent:create", (_event, agent_id: string, model_id: string) => require_agent_controller().create_agent(agent_id, model_id));
+ipcMain.handle("agent:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateAgentInput) => require_agent_controller().create_agent(input));
+ipcMain.handle("agent:generate-draft", (_event, input: import("../common/types/DesktopApi.js").DesktopGenerateAgentDraftInput) => require_agent_controller().generate_agent_draft(input));
 ipcMain.handle("agent:update", (_event, agent_id: string, input: import("../common/types/DesktopApi.js").DesktopUpdateAgentInput) => require_agent_controller().update_agent(agent_id, input));
+ipcMain.handle("agent:remove", (_event, agent_id: string) => require_agent_controller().remove_agent(agent_id));
 ipcMain.handle("agent:choose-avatar", async (_event, agent_id: string) => {
   const result = await dialog.showOpenDialog({
     properties: ["openFile"],
@@ -115,6 +117,7 @@ ipcMain.handle("workspace:read-text-file", (_event, workspace_id: string, relati
 ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => require_agent_controller().connect_agent(agent_id, workspace_id));
 ipcMain.handle("group:list", () => require_agent_controller().list_groups());
 ipcMain.handle("group:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateGroupInput) => require_agent_controller().create_group(input));
+ipcMain.handle("group:generate-draft", (_event, input: import("../common/types/DesktopApi.js").DesktopGenerateGroupDraftInput) => require_agent_controller().generate_group_draft(input));
 ipcMain.handle("group:update", (_event, group_id: string, input: import("../common/types/DesktopApi.js").DesktopUpdateGroupInput) => require_agent_controller().update_group(group_id, input));
 ipcMain.handle("group:remove", (_event, group_id: string) => require_agent_controller().remove_group(group_id));
 ipcMain.handle("group:open", (_event, group_id: string, session_id?: string) => require_agent_controller().open_group(group_id, session_id));

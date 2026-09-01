@@ -10,6 +10,10 @@ import type { RespondSessionInteractionInput, SessionApprovalMode, SessionIntera
 export interface DesktopAgentSummary {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
+  /** Agent 的用户可见名称。 */
+  name: string;
+  /** Agent 对外展示的身份简介。 */
+  description: string;
   /** Agent 头像的 data URL；未配置头像时为空。 */
   avatar_url?: string;
   /** Agent 使用的 City AIService 模型标识。 */
@@ -159,15 +163,33 @@ export type DesktopGroupStatusPhase = "idle" | "dispatching" | "dispatched" | "e
 
 /** 创建运行时 Group 的输入。 */
 export interface DesktopCreateGroupInput {
-  /** Group 稳定标识。 */
-  group_id: string;
-  /** Group 用户可见名称；省略时使用 group_id。 */
-  name?: string;
+  /** Group 用户可见名称；内部 ID 由宿主基于此字段生成。 */
+  name: string;
   /** Group 用于理解群聊意图并决定消息投递的模型标识。 */
   model_id: string;
   /** Group 协作目标。 */
   instruction?: string;
   /** 成员 Agent 标识。 */
+  member_agent_ids: string[];
+}
+
+/** 使用 AI 生成 Group 草稿的输入。 */
+export interface DesktopGenerateGroupDraftInput {
+  /** 用户对目标协作团队的自然语言描述。 */
+  prompt: string;
+  /** 执行草稿生成的模型标识。 */
+  model_id: string;
+  /** 当前可供 AI 推荐的 Agent 摘要。 */
+  agents: Array<{ /** Agent 稳定标识。 */ agent_id: string; /** Agent 用户可见名称。 */ name: string; /** Agent 身份简介。 */ description: string }>;
+}
+
+/** AI 生成但尚未持久化的 Group 草稿。 */
+export interface DesktopGroupDraft {
+  /** AI 建议的 Group 名称。 */
+  name: string;
+  /** AI 建议的协作目标。 */
+  instruction: string;
+  /** AI 推荐的成员 Agent 标识。 */
   member_agent_ids: string[];
 }
 
@@ -205,6 +227,42 @@ export interface DesktopCreateAgentResult {
   agent: DesktopAgentSummary;
 }
 
+/** Desktop 创建 Agent 时一次性提交的完整配置。 */
+export interface DesktopCreateAgentInput {
+  /** Agent 的用户可见名称；内部 ID 由宿主基于此字段生成。 */
+  name: string;
+  /** Agent 对外展示的身份简介。 */
+  description: string;
+  /** 写入 SOUL.md 的 Agent 主体指令。 */
+  instruction: string;
+  /** Agent 使用的默认模型标识。 */
+  model_id: string;
+  /** Agent 初始启用的 Plugin 引用。 */
+  plugins: Record<string, DesktopAgentPluginReference>;
+}
+
+/** 使用 AI 生成 Agent 草稿的输入。 */
+export interface DesktopGenerateAgentDraftInput {
+  /** 用户对目标角色的自然语言描述。 */
+  prompt: string;
+  /** 执行草稿生成的系统默认模型标识。 */
+  model_id: string;
+  /** 当前可供 AI 推荐的 Plugin 摘要。 */
+  plugins: Array<{ /** Plugin 稳定标识。 */ plugin_id: string; /** Plugin 用户可见名称。 */ title: string; /** Plugin 能力说明。 */ description: string }>;
+}
+
+/** AI 生成但尚未持久化的 Agent 草稿。 */
+export interface DesktopAgentDraft {
+  /** AI 建议的用户可见名称。 */
+  name: string;
+  /** AI 建议的身份简介。 */
+  description: string;
+  /** AI 建议写入 SOUL.md 的主体指令。 */
+  instruction: string;
+  /** AI 推荐启用的 Plugin 标识。 */
+  plugin_ids: string[];
+}
+
 /** Agent 定义中的一个 Plugin 引用。 */
 export interface DesktopAgentPluginReference {
   /** Plugin 使用的已保存 profile；不需要配置的 Plugin 不设置此字段。 */
@@ -215,6 +273,10 @@ export interface DesktopAgentPluginReference {
 export interface DesktopAgentDefinition {
   /** Agent 的全局稳定标识；编辑时不可修改。 */
   agent_id: string;
+  /** Agent 的用户可见名称。 */
+  name: string;
+  /** Agent 对外展示的身份简介。 */
+  description: string;
   /** Agent 使用的默认模型标识。 */
   model_id: string;
   /** 从 SOUL.md 读取的 Agent 主体指令。 */
@@ -225,6 +287,10 @@ export interface DesktopAgentDefinition {
 
 /** Desktop 更新 Agent 定义的输入。 */
 export interface DesktopUpdateAgentInput {
+  /** Agent 的用户可见名称；不会改变稳定 Agent ID。 */
+  name: string;
+  /** Agent 对外展示的身份简介。 */
+  description: string;
   /** Agent 使用的默认模型标识。 */
   model_id: string;
   /** 写入 SOUL.md 的 Agent 主体指令。 */
@@ -752,9 +818,13 @@ export interface DesktopApi {
     /** 读取一份完整、可编辑的 Agent 定义。 */
     get(agent_id: string): Promise<DesktopAgentDefinition>;
     /** 创建共享注册记录。 */
-    create(agent_id: string, model_id: string): Promise<DesktopCreateAgentResult>;
+    create(input: DesktopCreateAgentInput): Promise<DesktopCreateAgentResult>;
+    /** 根据自然语言描述生成一份可编辑的 Agent 草稿。 */
+    generate_draft(input: DesktopGenerateAgentDraftInput): Promise<DesktopAgentDraft>;
     /** 保存 Agent 定义并重新装配其运行实例。 */
     update(agent_id: string, input: DesktopUpdateAgentInput): Promise<DesktopAgentSummary>;
+    /** 永久删除 Agent 及其用户级运行数据。 */
+    remove(agent_id: string): Promise<boolean>;
     /** 打开原生文件选择器并保存 Agent 头像。取消选择时返回空值。 */
     choose_avatar(agent_id: string): Promise<DesktopAgentSummary | null>;
     /** 删除 Agent 自定义头像。 */
@@ -856,6 +926,8 @@ export interface DesktopApi {
     list(): Promise<DesktopGroupSummary[]>;
     /** 创建并注册一个运行时 Group。 */
     create(input: DesktopCreateGroupInput): Promise<DesktopGroupSummary>;
+    /** 根据自然语言描述生成一份可编辑的 Group 草稿。 */
+    generate_draft(input: DesktopGenerateGroupDraftInput): Promise<DesktopGroupDraft>;
     /** 更新一个已保存的 Group 定义。 */
     update(group_id: string, input: DesktopUpdateGroupInput): Promise<DesktopGroupSummary>;
     /** 删除一个已保存的 Group。 */

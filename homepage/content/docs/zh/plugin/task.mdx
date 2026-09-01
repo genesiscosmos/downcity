@@ -16,7 +16,9 @@ Task 插件让 Agent 能够调度和运行后台任务。它适用于定期数�
 
 ## Desktop 工作区
 
-Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。打开 Task 一级入口后，左侧 Plugin Sidebar 用于选择 Agent 和 Task，右侧 Mainview 用于选择 Workspace 并查看 Task 列表或详情。这里直接读取所选 Agent 的 Task runtime，不保存第二份任务状态。当前 Desktop 工作区只读；创建、编辑、运行和删除仍通过 Task action 或 CLI 完成。
+Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。打开 Task 一级入口后，左侧 Plugin Sidebar 按 `Agent → Task` 组织全部任务；选中 Task 后，Mainview 内的执行记录 Sidebar 会列出它的全部运行记录，并默认打开最近一次执行。右侧可以查看最终输出、执行状态、触发来源、耗时、结果校验和错误信息，也可以切回任务定义。
+
+Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Workspace 不是页面筛选器，而是每个 Task 自身的执行配置；手动与定时执行始终使用该 Task 绑定的唯一 Workspace。执行记录 Sidebar 可折叠、调整宽度并独立滚动。这里直接使用所选 Agent 的 Task runtime 与既有 run 产物，不保存第二份任务状态。
 
 ## 定义任务
 
@@ -33,7 +35,7 @@ Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Cat
 - 后台文件处理
 - 定时通知
 
-任务执行时会创建独立的 task Session，并复用宿主 Agent 的能力。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Chat 插件；任务完成结果则作为 assistant 消息追加到关联 Session。
+任务执行时会创建独立的 task Session，并复用宿主 Agent 的能力。`session_id` 是可选的结果投递配置：存在时，完成结果会作为 assistant 消息追加到该 Session；不存在时，结果仍可在 Task 执行历史中查看。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Chat 插件。
 
 继续阅读：
 

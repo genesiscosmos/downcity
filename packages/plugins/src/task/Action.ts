@@ -28,12 +28,17 @@ import {
   writeTask,
 } from "./runtime/Store.js";
 import { runTaskNow } from "./runtime/Runner.js";
+import { list_task_runs, read_task_run_detail } from "./runtime/TaskRunStore.js";
 import type {
   TaskCreateRequest,
   TaskCreateResponse,
   TaskDeleteRequest,
   TaskDeleteResponse,
   TaskListResponse,
+  TaskRunDetailRequest,
+  TaskRunDetailResponse,
+  TaskRunHistoryRequest,
+  TaskRunHistoryResponse,
   TaskRunRequest,
   TaskRunResponse,
   TaskUpdateRequest,
@@ -116,13 +121,57 @@ export async function listTaskDefinitions(params: {
         : {}),
       when: task.when,
       status: task.status,
-      session_id: task.session_id,
+      workspace_id: task.workspace_id,
+      ...(task.session_id ? { session_id: task.session_id } : {}),
       kind: task.kind || "agent",
       ...(task.kind === "agent" ? { review: Boolean(task.review) } : {}),
       taskMdPath: task.taskMdPath,
       ...(task.lastRunTimestamp ? { lastRunTimestamp: task.lastRunTimestamp } : {}),
     })),
   };
+}
+
+/** 读取一个 Task 的全部执行记录。 */
+export async function list_task_run_history(params: {
+  /** Agent Plugin 的私有数据根目录。 */
+  readonly data_path: string;
+  /** 执行记录查询输入。 */
+  readonly request: TaskRunHistoryRequest;
+}): Promise<TaskRunHistoryResponse> {
+  const root = path.resolve(params.data_path);
+  const title = String(params.request.title || "").trim();
+  if (!title) return { success: false, error: "Missing title" };
+  try {
+    const task_id = await resolveTaskIdByTitle({ data_path: root, title });
+    await readTask({ taskId: task_id, data_path: root });
+    return { success: true, runs: await list_task_runs({ data_path: root, task_id }) };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+/** 读取一条 Task 执行记录及其用户可见产物。 */
+export async function read_task_run(params: {
+  /** Agent Plugin 的私有数据根目录。 */
+  readonly data_path: string;
+  /** 执行详情查询输入。 */
+  readonly request: TaskRunDetailRequest;
+}): Promise<TaskRunDetailResponse> {
+  const root = path.resolve(params.data_path);
+  const title = String(params.request.title || "").trim();
+  const timestamp = String(params.request.timestamp || "").trim();
+  if (!title) return { success: false, error: "Missing title" };
+  if (!timestamp) return { success: false, error: "Missing timestamp" };
+  try {
+    const task_id = await resolveTaskIdByTitle({ data_path: root, title });
+    await readTask({ taskId: task_id, data_path: root });
+    return {
+      success: true,
+      run: await read_task_run_detail({ data_path: root, task_id, timestamp }),
+    };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
 }
 
 export async function createTaskDefinition(params: {
@@ -134,6 +183,7 @@ export async function createTaskDefinition(params: {
 
   const title = String(req.title || "").trim();
   const description = String(req.description || "").trim();
+  const workspace_id = String(req.workspace_id || "").trim();
   let taskIdFromName = "";
   let taskId = "";
   try {
@@ -151,7 +201,7 @@ export async function createTaskDefinition(params: {
 
   if (!title) return { success: false, error: "Missing title" };
   if (!description) return { success: false, error: "Missing description" };
-  if (!session_id) return { success: false, error: "Missing session_id" };
+  if (!workspace_id) return { success: false, error: "Missing workspace_id" };
   if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
 
   const status = resolveTaskStatus(req.status, "enabled");
@@ -184,7 +234,8 @@ export async function createTaskDefinition(params: {
         title,
         description,
         when: whenNormalized.value,
-        session_id,
+        workspace_id,
+        ...(session_id ? { session_id } : {}),
         kind,
         ...(kind === "agent" && req.review === true ? { review: true } : {}),
         status,
@@ -260,9 +311,15 @@ export async function updateTaskDefinition(params: {
     const whenNormalized = normalizeTaskWhen(whenInput);
     if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
 
-    const session_id =
-      typeof req.session_id === "string" ? req.session_id.trim() : current.frontmatter.session_id;
-    if (!session_id) return { success: false, error: "session_id cannot be empty" };
+    const workspace_id = typeof req.workspace_id === "string"
+      ? req.workspace_id.trim()
+      : current.frontmatter.workspace_id;
+    if (!workspace_id) return { success: false, error: "workspace_id cannot be empty" };
+    const session_id = req.clearSession
+      ? ""
+      : typeof req.session_id === "string"
+        ? req.session_id.trim()
+        : current.frontmatter.session_id || "";
     const kind = normalizeTaskKind(
       req.kind === undefined ? current.frontmatter.kind : req.kind,
     );
@@ -298,7 +355,8 @@ export async function updateTaskDefinition(params: {
         title: nextTitle,
         description,
         when: whenNormalized.value,
-        session_id,
+        workspace_id,
+        ...(session_id ? { session_id } : {}),
         kind,
         ...(kind === "agent" && review ? { review: true } : {}),
         status,
@@ -404,7 +462,7 @@ export async function runTaskDefinition(params: {
       success: true,
       accepted: true,
       // 关键点（中文）：这里直接返回给 agent 作为 tool result，提醒它这是异步任务，无需等待完成即可继续后续流程。
-      message: "The task has started. When it finishes, the result will be appended to the associated Session. Continue the current flow without waiting for the task to complete.",
+      message: "The task has started. Its result will be available in Task history and, when configured, appended to the associated Session. Continue the current flow without waiting for completion.",
       executionId,
       title,
     };

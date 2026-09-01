@@ -17,7 +17,32 @@ import { create_workspace_entry } from "@downcity/agent/internal";
 import { LocalStorageProvider, Workspace } from "../../workspace/bin/index.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { TaskPlugin } from "../bin/task.js";
+import { createTaskDefinition } from "../bin/task/Action.js";
 import { registerTaskCronJobs } from "../bin/task/Scheduler.js";
+
+test("scheduler 只注册当前 Workspace 绑定的 Task", async () => {
+  const data_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-task-workspace-filter-"));
+  try {
+    await createTaskDefinition({ data_path, request: { title: "workspace-a-task", description: "A", workspace_id: "workspace-a", when: "0 9 * * *", status: "enabled" } });
+    await createTaskDefinition({ data_path, request: { title: "workspace-b-task", description: "B", workspace_id: "workspace-b", when: "0 10 * * *", status: "enabled" } });
+    const definitions = [];
+    const result = await registerTaskCronJobs({
+      context: {
+        data_path,
+        workspace_id: "workspace-a",
+        logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
+      },
+      engine: { register: (definition) => definitions.push(definition) },
+      timezone: "Asia/Shanghai",
+      runningTaskIds: new Set(),
+    });
+
+    assert.deepEqual(result, { tasksFound: 1, jobsScheduled: 1 });
+    assert.deepEqual(definitions.map((definition) => definition.id), ["task:workspace-a-task"]);
+  } finally {
+    await fs.rm(data_path, { recursive: true, force: true });
+  }
+});
 
 test("scheduled task appends its result to the linked Workspace Session", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-task-scheduler-"));
@@ -89,6 +114,28 @@ test("scheduled task appends its result to the linked Workspace Session", async 
     });
     unsubscribe();
     assert.equal(triggered.success, true);
+
+    const history = await entry.plugins.run_action({
+      plugin: "task",
+      action: "history",
+      payload: { title: "scheduled-session-result" },
+    });
+    assert.equal(history.success, true);
+    assert.equal(history.data.runs.length, 1);
+    assert.equal(history.data.runs[0].status, "success");
+    assert.equal(history.data.runs[0].trigger, "time");
+
+    const run_detail = await entry.plugins.run_action({
+      plugin: "task",
+      action: "run_detail",
+      payload: {
+        title: "scheduled-session-result",
+        timestamp: history.data.runs[0].timestamp,
+      },
+    });
+    assert.equal(run_detail.success, true);
+    assert.equal(run_detail.data.run.output, "SCHEDULED_TASK_RESULT");
+    assert.equal(run_detail.data.run.error_detail, "");
 
     const messages = await linked_session.messages();
     const final_message = messages.items.at(-1);

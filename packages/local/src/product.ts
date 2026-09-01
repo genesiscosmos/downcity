@@ -18,6 +18,7 @@ export {
 export {
   AgentRepository,
   normalize_agent_id,
+  create_agent_id,
   normalize_plugin_id,
 } from "./repositories/AgentRepository.js";
 export { WorkspaceRepository, normalize_workspace_id } from "./repositories/WorkspaceRepository.js";

@@ -29,7 +29,7 @@ description: task 定义、task actions，以及归属于 plugin 实例的 cron 
 
 ## 用户怎么使用
 
-Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。打开 Task 一级入口后，它自己的 Sidebar 用于选择 Agent 和 Task，Mainview 用于选择 Workspace 并查看 Task 列表或详情。这里读取的是对应 Agent 的真实 Task runtime，不复制第二份状态；当前 Desktop 工作区只读，创建、编辑、运行和删除仍通过 Agent action 或 CLI 完成。
+Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。它自己的 Sidebar 按 `Agent → Task` 组织全部 Task；Mainview 可以新建、编辑、启停、立即运行和删除 Task。选中 Task 后，内部执行记录 Sidebar 按时间倒序展示全部 Run，并默认打开最新记录；右侧展示最终输出、状态、触发来源、耗时、结果校验与错误，也可以切回任务定义。Workspace 是 Task 自身的执行配置，不是页面级筛选。这里读取的是对应 Agent 的真实 Task runtime 和既有 run 产物，不复制第二份状态。
 
 CLI 通过统一 Plugin Action 命令调用 task：
 
@@ -42,7 +42,7 @@ city plugin action task run <agent_id> --input '{"title":"daily-summary","reason
 
 ## SDK 装配
 
-`TaskPlugin` 只需要可选时区配置。agent task 直接使用任务绑定 Session 的有效模型（Session 优先、Agent 兜底）。cron 默认采用当前运行机器的本机时区：
+`TaskPlugin` 只需要可选时区配置。每个 Task 必须绑定一个执行 Workspace；可选的 `session_id` 只用于把完成结果投递到指定 Session。agent task 在有结果 Session 时优先使用其模型，否则使用 Agent 默认模型。cron 默认采用当前运行机器的本机时区：
 
 ```ts
 import { TaskPlugin } from "@downcity/plugins/task";
@@ -67,7 +67,7 @@ await agent.plugins.run_action({
 });
 ```
 
-action 名称是 `list`、`create`、`run`、`delete`、`update`、`status`、`enable`、`disable`。
+action 名称是 `list`、`history`、`run_detail`、`create`、`run`、`delete`、`update`、`status`、`enable`、`disable`。`history` 按时间倒序返回一个 Task 的执行摘要；`run_detail` 使用 `history` 返回的 `timestamp` 读取最终输出和错误等详情。
 
 ## 关键语义
 
@@ -75,7 +75,8 @@ action 名称是 `list`、`create`、`run`、`delete`、`update`、`status`、`e
 - cron 时区来自 constructor `timezone`，默认本机时区
 - agent task 通过 PluginContext 的 Session runtime port 读取有效模型实例
 - 每次执行会创建独立的 task Session，并复用宿主 Agent 的完整 Plugin 能力
-- 任务完成结果会追加为关联 Session 的 assistant 消息；Task runtime 不直接调用 Chat Plugin
+- `workspace_id` 是 Task 的执行配置，调度器只在对应 Workspace 注册它
+- `session_id` 可选；存在时结果会追加为关联 Session 的 assistant 消息，否则保留在执行历史
 - create / update / delete / status 变更后会触发 scheduler reload
 - task 运行中锁归属于 plugin 实例，reload 时也会保持同一 task 串行执行
 - plugin 也支持 reload / reschedule 这类 lifecycle command

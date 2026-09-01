@@ -11,6 +11,12 @@ export interface AgentConfig {
   /** Agent 的全局稳定标识，也是数据库主键。 */
   agent_id: string;
 
+  /** Agent 的用户可见名称。 */
+  name: string;
+
+  /** Agent 对外展示的身份简介。 */
+  description: string;
+
   /** Agent 配置结构版本。 */
   version: string;
 
@@ -35,6 +41,12 @@ export interface CreateAgentConfigInput {
   /** Agent 的全局稳定标识。 */
   agent_id: string;
 
+  /** 可选用户可见名称；未提供时使用 Agent ID。 */
+  name?: string;
+
+  /** 可选对外身份简介。 */
+  description?: string;
+
   /** 可选 Agent 配置结构版本。 */
   version?: string;
 
@@ -52,6 +64,12 @@ export interface CreateAgentConfigInput {
 export interface UpdateAgentConfigInput {
   /** 需要更新的 Agent 全局标识。 */
   agent_id: string;
+
+  /** 新的用户可见名称。 */
+  name?: string;
+
+  /** 新的对外身份简介。 */
+  description?: string;
 
   /** 新的模型执行绑定。 */
   execution?: AgentConfig["execution"];

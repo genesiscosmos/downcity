@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CreateAgentDialog } from "@/components/CreateAgentDialog";
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { Button } from "@/components/ui/button";
 import { use_desktop_controller } from "@/hooks/use_desktop_controller";
@@ -16,6 +15,8 @@ import { SettingsView } from "@/views/SettingsView";
 import { PluginView } from "@/views/PluginView";
 import { PluginWorkspaceView } from "@/views/PluginWorkspaceView";
 import { WelcomeView } from "@/views/WelcomeView";
+import { CreateAgentView } from "@/views/CreateAgentView";
+import { CreateGroupView } from "@/views/CreateGroupView";
 import { WorkspaceIdentityEditor, WorkspaceView, type WorkspaceEditorField } from "@/views/WorkspaceView";
 import { WorkspaceFileView } from "@/views/WorkspaceFileView";
 import { MainViewBayBarFrame } from "@/layouts/BayBar";
@@ -34,9 +35,7 @@ function create_missing_workspace(workspace_id: string): DesktopWorkspaceSummary
 /** Desktop 根组件。 */
 export function App() {
   const controller = use_desktop_controller();
-  const [create_dialog_open, set_create_dialog_open] = useState(false);
   const [create_workspace_dialog_open, set_create_workspace_dialog_open] = useState(false);
-  const [create_workspace_id, set_create_workspace_id] = useState<string>();
   const [sidebar_collapsed, set_sidebar_collapsed] = useState(false);
   const [chat_session_sidebar_collapsed, set_chat_session_sidebar_collapsed] = useState(() => localStorage.getItem("downcity.chat_session_sidebar_collapsed") === "true");
   const [command_palette_open, set_command_palette_open] = useState(false);
@@ -118,6 +117,8 @@ export function App() {
   }, [controller]);
 
   const render_main_view = () => {
+    if (controller.selection?.kind === "create_agent") return <CreateAgentView models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} plugins={controller.plugins} create_agent={controller.create_agent} />;
+    if (controller.selection?.kind === "create_group") return <CreateGroupView agents={controller.agents} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} create_group={controller.create_group} />;
     if (controller.selection?.kind === "settings") return <SettingsMainView key={`settings:${controller.selection.section}`} controller={controller} section={controller.selection.section} sidebar_collapsed={sidebar_collapsed} />;
     if (controller.selection?.kind === "plugin") {
       const plugin_id = controller.selection.plugin_id;
@@ -197,6 +198,7 @@ export function App() {
         draft_files={controller.draft_files_by_session[draft_key] ?? []}
         draft_references={controller.draft_references_by_session[draft_key] ?? []}
         queued_messages={[]}
+        queue_paused={false}
         settings={controller.settings}
         switch_draft_context={controller.switch_draft_context}
         models={controller.models}
@@ -205,7 +207,7 @@ export function App() {
         update_draft={(text) => controller.update_draft(workspace_id, selected_agent.agent_id, draft_id, text)}
         update_draft_files={(files) => controller.update_draft_files(workspace_id, selected_agent.agent_id, draft_id, files)}
         update_draft_references={(references) => controller.update_draft_references(workspace_id, selected_agent.agent_id, draft_id, references)}
-        send_message={(input) => controller.send_message(workspace_id, selected_agent.agent_id, draft_id, input)}
+        send_message={(input, mode) => controller.send_message(workspace_id, selected_agent.agent_id, draft_id, input, mode)}
         refresh_models={controller.refresh_models}
         set_model={(model_id) => controller.set_session_model(workspace_id, selected_agent.agent_id, draft_id, model_id)}
         set_reasoning_effort={(effort) => controller.set_session_reasoning_effort(workspace_id, selected_agent.agent_id, draft_id, effort)}
@@ -214,6 +216,10 @@ export function App() {
         respond_interaction={async () => undefined}
         fork_message={async () => undefined}
         remove_queued_message={() => undefined}
+        send_queued_message={async () => undefined}
+        update_queued_message={() => undefined}
+        toggle_queued_message_paused={() => undefined}
+        set_queue_paused={() => undefined}
         move_queued_message={() => undefined}
         load_earlier_history={async () => undefined}
       />;
@@ -245,6 +251,7 @@ export function App() {
       draft_files={controller.draft_files_by_session[session_key] ?? []}
       draft_references={controller.draft_references_by_session[session_key] ?? []}
       queued_messages={controller.queued_messages_by_session[session_key] ?? []}
+      queue_paused={controller.queue_paused_by_session[session_key] ?? false}
       history={controller.history_by_session[session_key]}
       settings={controller.settings}
       rename_session={(title) => controller.rename_session(workspace_id, selected_agent.agent_id, session.session_id, title)}
@@ -257,7 +264,7 @@ export function App() {
       update_draft={(text) => controller.update_draft(workspace_id, selected_agent.agent_id, session.session_id, text)}
       update_draft_files={(files) => controller.update_draft_files(workspace_id, selected_agent.agent_id, session.session_id, files)}
       update_draft_references={(references) => controller.update_draft_references(workspace_id, selected_agent.agent_id, session.session_id, references)}
-      send_message={(input) => controller.send_message(workspace_id, selected_agent.agent_id, session.session_id, input)}
+      send_message={(input, mode) => controller.send_message(workspace_id, selected_agent.agent_id, session.session_id, input, mode)}
       compact_session={() => controller.compact_session(workspace_id, selected_agent.agent_id, session.session_id)}
       refresh_models={controller.refresh_models}
       set_model={(model_id) => controller.set_session_model(workspace_id, selected_agent.agent_id, session.session_id, model_id)}
@@ -268,6 +275,10 @@ export function App() {
       fork_message={(message_id) => controller.fork_session(workspace_id, selected_agent.agent_id, session.session_id, message_id)}
       rewrite_message={(input) => controller.rewrite_session_message(workspace_id, selected_agent.agent_id, session.session_id, input)}
       remove_queued_message={(message_id) => controller.remove_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id)}
+      send_queued_message={(message_id) => controller.send_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id)}
+      update_queued_message={(message_id, text) => controller.update_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id, text)}
+      toggle_queued_message_paused={(message_id) => controller.toggle_queued_message_paused(workspace_id, selected_agent.agent_id, session.session_id, message_id)}
+      set_queue_paused={(paused) => controller.set_queue_paused(workspace_id, selected_agent.agent_id, session.session_id, paused)}
       move_queued_message={(message_id, direction) => controller.move_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id, direction)}
       load_earlier_history={() => controller.load_earlier_history(workspace_id, selected_agent.agent_id, session.session_id)}
     />;
@@ -279,7 +290,8 @@ export function App() {
         ? <SettingsSidebar controller={controller} collapsed={sidebar_collapsed} />
         : <NavigationSidebar
           controller={controller}
-          open_create_agent={(workspace_id) => { set_create_workspace_id(workspace_id); set_create_dialog_open(true); }}
+          open_create_agent={() => controller.open_create_agent()}
+          open_create_group={() => controller.open_create_group()}
           open_create_workspace={() => set_create_workspace_dialog_open(true)}
           open_group_config={open_group_from_sidebar}
           collapsed={sidebar_collapsed}
@@ -290,7 +302,6 @@ export function App() {
     </div>
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />
     {controller.error ? createPortal(<div className="fixed bottom-5 left-1/2 z-[60] flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div>, document.body) : null}
-    <CreateAgentDialog open={create_dialog_open} close_dialog={() => { set_create_dialog_open(false); set_create_workspace_id(undefined); }} create_agent={controller.create_agent} models={controller.models} models_loading={controller.models_loading} default_model_id={controller.settings.default_text_model_id} workspace={controller.workspaces.find((workspace) => workspace.workspace_id === create_workspace_id)} />
     <CreateWorkspaceDialog open={create_workspace_dialog_open} close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} />
     {command_palette_open ? <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/25 pt-[18vh]" onMouseDown={() => set_command_palette_open(false)}><div className="w-[min(34rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-popover p-2 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); controller.open_settings("user"); }}>打开设置 <span className="ml-auto text-xs text-muted-foreground">⌘,</span></button><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); set_sidebar_collapsed((value) => !value); }}>切换左侧边栏 <span className="ml-auto text-xs text-muted-foreground">⌘B</span></button></div></div> : null}
   </div>;
@@ -308,7 +319,7 @@ function WorkspaceMainView({ workspace, controller, sidebar_collapsed }: { /** �
 function AgentMainView({ agent, controller, sidebar_collapsed, session_sidebar_collapsed, toggle_session_sidebar, main_session }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** Session Sidebar 是否折叠。 */ session_sidebar_collapsed: boolean; /** 切换 Session Sidebar。 */ toggle_session_sidebar(): void; /** Agent 主对话。 */ main_session?: { workspace_id: string; session: DesktopSessionSummary } }) {
   const [section, set_section] = useState<AgentEditorSection>("model");
   const sidebar = <AgentChatSessionSidebar agent={agent} controller={controller} collapsed={session_sidebar_collapsed} />;
-  return <MainViewBayBarFrame view_key={`agent:${agent.agent_id}`} sidebar_collapsed={sidebar_collapsed} title={section === "model" ? "Model" : section === "soul" ? "SOUL.md" : "Plugins"} baybar_content={<AgentInfoSidebar agent={agent} plugins={controller.plugins} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
+  return <MainViewBayBarFrame view_key={`agent:${agent.agent_id}`} sidebar_collapsed={sidebar_collapsed} title={section === "identity" ? "身份" : section === "model" ? "Model" : section === "soul" ? "SOUL.md" : "Plugins"} baybar_content={<AgentInfoSidebar agent={agent} plugins={controller.plugins} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
     {(open_baybar) => <AgentView sidebar={sidebar} sidebar_collapsed={session_sidebar_collapsed} toggle_sidebar={toggle_session_sidebar} agent={agent} workspaces={controller.workspaces} plugins={controller.plugins} main_session={main_session} controller={controller} open_main_session={() => controller.open_agent_chat(agent.agent_id)} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
   </MainViewBayBarFrame>;
 }

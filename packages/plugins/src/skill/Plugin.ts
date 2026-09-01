@@ -57,7 +57,7 @@ function sanitizeXmlAttr(value: string): string {
 function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
   return {
     name: "skill",
-    title: "Skill Catalog And Loader",
+    title: "Skills",
     description:
       "Lists and reads local skills, and injects scan-aware discovery and installation guidance into system prompts.",
     async system(context, execution_context) {

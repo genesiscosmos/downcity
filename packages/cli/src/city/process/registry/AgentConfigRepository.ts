@@ -17,6 +17,8 @@ import type {
 function to_agent_config(config: LocalAgentConfig): AgentConfig {
   return {
     agent_id: config.agent_id,
+    name: config.name,
+    description: config.description,
     version: config.version,
     ...(config.execution ? { execution: config.execution as unknown as AgentConfig["execution"] } : {}),
     ...(config.llm ? { llm: config.llm as unknown as AgentConfig["llm"] } : {}),
@@ -44,6 +46,8 @@ export function create_agent_config(input: CreateAgentConfigInput): AgentConfig 
   return with_cli_local_data((data) => {
     const config = data.agents.create({
       agent_id: input.agent_id,
+      name: input.name || input.agent_id,
+      description: input.description,
       version: input.version,
       execution: input.execution as unknown as JsonObject | undefined,
       llm: input.llm as unknown as JsonObject | undefined,
@@ -60,6 +64,8 @@ export function update_agent_config(input: UpdateAgentConfigInput): AgentConfig 
     if (!current) throw new Error(`Agent not found: ${input.agent_id}`);
     const saved = to_agent_config(data.agents.save({
       ...current,
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.execution !== undefined
         ? { execution: input.execution as unknown as JsonObject }
         : {}),
@@ -76,6 +82,8 @@ export function save_agent_config(input: AgentConfig): AgentConfig {
     const previous = data.agents.get(input.agent_id);
     const saved = to_agent_config(data.agents.save({
       agent_id: input.agent_id,
+      name: input.name,
+      description: input.description,
       version: input.version,
       ...(input.execution ? { execution: input.execution as unknown as JsonObject } : {}),
       ...(input.llm ? { llm: input.llm as unknown as JsonObject } : {}),

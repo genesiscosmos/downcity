@@ -87,6 +87,7 @@ async function activate_task_main() {
       async list_agents() {
         return [
           { agent_id: "task-agent", plugin_ids: ["task", "skill"] },
+          { agent_id: "empty-task-agent", plugin_ids: ["task"] },
           { agent_id: "chat-agent", plugin_ids: ["chat"] },
         ];
       },
@@ -98,19 +99,58 @@ async function activate_task_main() {
       },
       async invoke_agent_plugin(input) {
         invocations.push(input);
+        if (input.action_id === "history") {
+          return {
+            success: true,
+            data: {
+              runs: [{
+                timestamp: "20260901-080000-000",
+                execution_id: "daily-report:1",
+                status: "success",
+                trigger: "manual",
+                started_at: 1_788_246_000_000,
+                updated_at: 1_788_246_001_000,
+                ended_at: 1_788_246_001_000,
+                duration_ms: 1000,
+              }],
+            },
+          };
+        }
+        if (input.action_id === "run_detail") {
+          return {
+            success: true,
+            data: {
+              run: {
+                timestamp: "20260901-080000-000",
+                execution_id: "daily-report:1",
+                status: "success",
+                trigger: "manual",
+                started_at: 1_788_246_000_000,
+                updated_at: 1_788_246_001_000,
+                ended_at: 1_788_246_001_000,
+                duration_ms: 1000,
+                output: "日报正文",
+                error_detail: "",
+                result_errors: [],
+              },
+            },
+          };
+        }
         return {
           success: true,
           data: {
-            tasks: [{
+            tasks: input.agent_id === "task-agent" ? [{
               title: "daily-report",
               description: "生成日报",
               body: "汇总今天的进展",
               when: "0 18 * * *",
               status: "enabled",
               kind: "agent",
+              review: false,
+              workspace_id: "workspace-b",
               session_id: "daily-report",
               lastRunTimestamp: "2026-08-31T10:00:00.000Z",
-            }],
+            }] : [],
           },
         };
       },
@@ -215,34 +255,114 @@ test("Skill main 不需要 Profile 即可浏览和读取 Workspace Skill", async
   }
 });
 
-test("Task main 只展示启用 Task 的 Agent，并从其 runtime 读取任务", async () => {
+test("Task main 按 Agent 聚合所有启用 Task Plugin 的任务", async () => {
   const { actions, invocations } = await activate_task_main();
 
-  const snapshot = await actions.get("tasks.snapshot").run({
-    agent_id: "missing-agent",
-    workspace_id: "workspace-b",
-  });
+  const snapshot = await actions.get("tasks.snapshot").run();
 
-  assert.deepEqual(snapshot.agents, [{ agent_id: "task-agent" }]);
+  assert.deepEqual(snapshot.agents, [{
+    agent_id: "task-agent",
+    tasks: [{
+      title: "daily-report",
+      description: "生成日报",
+      body: "汇总今天的进展",
+      when: "0 18 * * *",
+      status: "enabled",
+      kind: "agent",
+      review: false,
+      workspace_id: "workspace-b",
+      session_id: "daily-report",
+      last_run_at: "2026-08-31T10:00:00.000Z",
+    }],
+  }, {
+    agent_id: "empty-task-agent",
+    tasks: [],
+  }]);
   assert.deepEqual(snapshot.workspaces, [
     { workspace_id: "workspace-a", name: "Workspace A" },
     { workspace_id: "workspace-b", name: "Workspace B" },
   ]);
   assert.deepEqual(invocations, [{
     agent_id: "task-agent",
-    workspace_id: "workspace-b",
+    workspace_id: "workspace-a",
+    plugin_id: "task",
+    action_id: "list",
+    input: {},
+  }, {
+    agent_id: "empty-task-agent",
+    workspace_id: "workspace-a",
     plugin_id: "task",
     action_id: "list",
     input: {},
   }]);
-  assert.deepEqual(snapshot.tasks, [{
-    title: "daily-report",
-    description: "生成日报",
-    body: "汇总今天的进展",
-    when: "0 18 * * *",
-    status: "enabled",
+});
+
+test("Task main 使用 Task 自身 Workspace 完成管理操作", async () => {
+  const { actions, invocations } = await activate_task_main();
+
+  await actions.get("tasks.create").run({
+    agent_id: "task-agent",
+    workspace_id: "workspace-b",
+    title: "weekly-review",
+    description: "生成周报",
+    when: "@manual",
     kind: "agent",
-    session_id: "daily-report",
-    last_run_at: "2026-08-31T10:00:00.000Z",
+    review: true,
+    status: "paused",
+    body: "汇总本周进展",
+  });
+  await actions.get("tasks.update").run({
+    agent_id: "task-agent",
+    workspace_id: "workspace-a",
+    current_title: "weekly-review",
+    title: "weekly-review",
+    description: "更新周报",
+    when: "0 18 * * 5",
+    kind: "agent",
+    review: false,
+    status: "enabled",
+    body: "输出更新后的周报",
+  });
+  await actions.get("tasks.status").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review", status: "paused" });
+  await actions.get("tasks.run").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review" });
+  await actions.get("tasks.delete").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review" });
+
+  assert.deepEqual(invocations.map((invocation) => ({ workspace_id: invocation.workspace_id, action_id: invocation.action_id, input: invocation.input })), [
+    { workspace_id: "workspace-b", action_id: "create", input: { title: "weekly-review", description: "生成周报", workspace_id: "workspace-b", when: "@manual", kind: "agent", review: true, status: "paused", body: "汇总本周进展" } },
+    { workspace_id: "workspace-a", action_id: "update", input: { title: "weekly-review", titleNext: "weekly-review", description: "更新周报", workspace_id: "workspace-a", when: "0 18 * * 5", kind: "agent", review: false, status: "enabled", body: "输出更新后的周报" } },
+    { workspace_id: "workspace-a", action_id: "status", input: { title: "weekly-review", status: "paused" } },
+    { workspace_id: "workspace-a", action_id: "run", input: { title: "weekly-review" } },
+    { workspace_id: "workspace-a", action_id: "delete", input: { title: "weekly-review" } },
+  ]);
+});
+
+test("Task main 通过所选 Agent runtime 读取执行记录与详情", async () => {
+  const { actions, invocations } = await activate_task_main();
+  const context = {
+    agent_id: "task-agent",
+    workspace_id: "workspace-b",
+    task_title: "daily-report",
+  };
+
+  const history = await actions.get("tasks.history").run(context);
+  assert.equal(history.runs[0].status, "success");
+
+  const detail = await actions.get("tasks.run_detail").run({
+    ...context,
+    timestamp: "20260901-080000-000",
+  });
+  assert.equal(detail.run.output, "日报正文");
+  assert.deepEqual(invocations, [{
+    agent_id: "task-agent",
+    workspace_id: "workspace-b",
+    plugin_id: "task",
+    action_id: "history",
+    input: { title: "daily-report" },
+  }, {
+    agent_id: "task-agent",
+    workspace_id: "workspace-b",
+    plugin_id: "task",
+    action_id: "run_detail",
+    input: { title: "daily-report", timestamp: "20260901-080000-000" },
   }]);
 });

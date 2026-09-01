@@ -8,6 +8,7 @@
 
 import type { PluginContext } from "@downcity/agent";
 import type { PluginExecutionContext } from "@downcity/agent";
+import type { JsonValue } from "@downcity/agent";
 import type {
   TaskCronRegisterResult,
   TaskListActionPayload,
@@ -16,6 +17,8 @@ import type {
 import type {
   TaskCreateRequest,
   TaskDeleteRequest,
+  TaskRunDetailRequest,
+  TaskRunHistoryRequest,
   TaskRunRequest,
   TaskSetStatusRequest,
   TaskUpdateRequest,
@@ -24,6 +27,8 @@ import {
   createTaskDefinition,
   deleteTaskDefinition,
   listTaskDefinitions,
+  list_task_run_history,
+  read_task_run,
   runTaskDefinition,
   setTaskStatus,
   updateTaskDefinition,
@@ -120,6 +125,38 @@ export async function executeTaskListAction(params: {
   };
 }
 
+/** 执行 `task.history` action。 */
+export async function execute_task_history_action(params: {
+  /** 当前 Plugin 执行上下文。 */
+  readonly context: PluginContext;
+  /** 执行记录查询输入。 */
+  readonly payload: TaskRunHistoryRequest;
+}) {
+  const result = await list_task_run_history({
+    data_path: params.context.data_path,
+    request: params.payload,
+  });
+  return result.success
+    ? { success: true, data: { runs: result.runs ?? [] } as unknown as JsonValue }
+    : { success: false, error: result.error || "task history failed" };
+}
+
+/** 执行 `task.run_detail` action。 */
+export async function execute_task_run_detail_action(params: {
+  /** 当前 Plugin 执行上下文。 */
+  readonly context: PluginContext;
+  /** 执行详情查询输入。 */
+  readonly payload: TaskRunDetailRequest;
+}) {
+  const result = await read_task_run({
+    data_path: params.context.data_path,
+    request: params.payload,
+  });
+  return result.success && result.run
+    ? { success: true, data: { run: result.run } as unknown as JsonValue }
+    : { success: false, error: result.error || "task run detail failed" };
+}
+
 /**
  * 执行 `task.create` action。
  */
@@ -131,7 +168,10 @@ export async function executeTaskCreateAction(params: {
   const payload = params.payload;
   const result = await createTaskDefinition({
     data_path: params.context.data_path,
-    request: payload,
+    request: {
+      ...payload,
+      workspace_id: payload.workspace_id || params.context.workspace_id,
+    },
   });
   if (!result.success) {
     return {

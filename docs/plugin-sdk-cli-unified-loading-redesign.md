@@ -118,7 +118,7 @@ Profile ID、Plugin ID 与 Desktop controller 不传给组件。宿主持有完�
 
 Renderer 是受信任本地 UI 代码，不使用 iframe。第三方 bundle 通过受控 `downcity-plugin://` URL 动态加载，并复用宿主 React 与 JSX runtime；源码和构建依赖不进入安装目录。组件不应依赖宿主私有 DOM 或 preload API，外链、剪贴板、文件定位和业务读写通过 main action 完成。
 
-宿主最小 UI 集包括 `Page/Section/Group/Row`、`Stack/Inline/Toolbar/Tabs`、`Button/Input/Select/Switch`、`CodeBlock` 与统一反馈组件。框架不使用配置 Schema 生成 UI。
+宿主最小 UI 集包括 `Page/Section/Group/Row`、`Stack/Inline/Toolbar/Tabs`、`Button/Input/Select/Switch`、`CodeBlock` 与统一反馈组件。需要在 Mainview 内提供类似 Chat Session 的第二层历史导航时，Renderer 使用 `MainviewSidebar/MainviewSidebarItem`，由宿主统一拥有折叠、宽度调整、偏好持久化与独立滚动。框架不使用配置 Schema 生成 UI。
 
 ## 8. Profile
 

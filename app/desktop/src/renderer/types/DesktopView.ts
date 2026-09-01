@@ -43,6 +43,8 @@ export type SidebarMode = "chat" | "workspace" | "plugins" | PluginWorkspaceSide
 
 /** 中间主视图当前展示的业务对象。 */
 export type NavigationTarget =
+  | { /** Agent 创建页面。 */ kind: "create_agent" }
+  | { /** Group 创建页面。 */ kind: "create_group" }
   | { /** Plugin 工作区列表。 */ kind: "plugins" }
   | { /** Workspace 管理页。 */ kind: "workspace"; /** Workspace 标识。 */ workspace_id: string }
   | { /** Workspace 文件只读预览。 */ kind: "workspace_file"; /** Workspace 标识。 */ workspace_id: string; /** Workspace 内的相对文件路径。 */ relative_path: string }
@@ -57,10 +59,16 @@ export type NavigationTarget =
 
 /** 创建 Agent 表单的可序列化值。 */
 export interface CreateAgentFormValue {
-  /** 新 Agent 的全局标识。 */
-  agent_id: string;
+  /** Agent 的用户可见名称。 */
+  name: string;
+  /** Agent 对外展示的身份简介。 */
+  description: string;
+  /** 写入 SOUL.md 的 Agent 主体指令。 */
+  instruction: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
+  /** 初始启用的 Plugin 引用。 */
+  plugins: Record<string, import("@common/types/DesktopApi").DesktopAgentPluginReference>;
 }
 
 /** 创建 Workspace 表单的可序列化值。 */
@@ -81,7 +89,12 @@ export interface QueuedChatMessage {
   created_at: number;
   /** 当前队列项是否正在提交。 */
   sending: boolean;
+  /** 是否暂停自动发送；暂停项只在用户显式操作后提交。 */
+  paused: boolean;
 }
+
+/** Chat 输入的提交意图。 */
+export type ChatSubmitMode = "send" | "queue";
 
 /** Session 更早历史的分页状态。 */
 export interface ChatHistoryState {
@@ -149,6 +162,8 @@ export interface DesktopViewController {
   draft_references_by_session: Record<string, DesktopChatReferenceInput[]>;
   /** 按 Session 组合键隔离的待发送队列。 */
   queued_messages_by_session: Record<string, QueuedChatMessage[]>;
+  /** 按 Session 组合键保存队列总暂停状态。 */
+  queue_paused_by_session: Record<string, boolean>;
   /** 按 Session 组合键保存的历史分页状态。 */
   history_by_session: Record<string, ChatHistoryState>;
   /** 当前 Federation 中可用于对话的模型。 */
@@ -207,6 +222,8 @@ export interface DesktopViewController {
   select_group(group_id: string): void;
   /** 创建一个运行时 Group。 */
   create_group(input: DesktopCreateGroupInput): Promise<void>;
+  /** 打开 Group 创建 MainView。 */
+  open_create_group(): void;
   /** 更新一个 Group 定义。 */
   update_group(group_id: string, input: DesktopUpdateGroupInput): Promise<void>;
   /** 删除一个 Group。 */
@@ -249,10 +266,14 @@ export interface DesktopViewController {
   load_earlier_history(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 创建共享 Registry Agent。 */
   create_agent(value: CreateAgentFormValue): Promise<void>;
+  /** 打开 Agent 创建 MainView。 */
+  open_create_agent(): void;
   /** 读取 Agent 的完整定义。 */
   get_agent(agent_id: string): Promise<DesktopAgentDefinition>;
   /** 保存 Agent 定义并刷新 Renderer 摘要。 */
   update_agent(agent_id: string, input: DesktopUpdateAgentInput): Promise<void>;
+  /** 永久删除 Agent 及其运行数据。 */
+  remove_agent(agent_id: string): Promise<void>;
   /** 打开原生文件选择器并保存 Agent 头像。 */
   choose_agent_avatar(agent_id: string): Promise<void>;
   /** 删除 Agent 自定义头像。 */
@@ -279,8 +300,8 @@ export interface DesktopViewController {
   update_draft_files(workspace_id: string, agent_id: string, session_id: string, files: DesktopChatFileInput[]): void;
   /** 替换当前输入的消息引用草稿。 */
   update_draft_references(workspace_id: string, agent_id: string, session_id: string, references: DesktopChatReferenceInput[]): void;
-  /** 发送消息；执行中时自动进入 Renderer 队列。 */
-  send_message(workspace_id: string, agent_id: string, session_id: string, input: DesktopChatInput): Promise<void>;
+  /** 发送消息；send 立即提交，queue 等待当前 Turn 完成后提交。 */
+  send_message(workspace_id: string, agent_id: string, session_id: string, input: DesktopChatInput, mode?: ChatSubmitMode): Promise<void>;
   /** 请求当前 Session 历史上下文压缩。 */
   compact_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 刷新当前 Federation 模型目录。 */
@@ -297,6 +318,14 @@ export interface DesktopViewController {
   respond_interaction(workspace_id: string, agent_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
   /** 删除一条尚未发送的队列消息。 */
   remove_queued_message(workspace_id: string, agent_id: string, session_id: string, message_id: string): void;
+  /** 立即提交指定队列消息；Session 运行中时作为 steer。 */
+  send_queued_message(workspace_id: string, agent_id: string, session_id: string, message_id: string): Promise<void>;
+  /** 修改指定队列消息的文本，附件与引用保持不变。 */
+  update_queued_message(workspace_id: string, agent_id: string, session_id: string, message_id: string, text: string): void;
+  /** 切换指定队列消息的独立暂停状态。 */
+  toggle_queued_message_paused(workspace_id: string, agent_id: string, session_id: string, message_id: string): void;
+  /** 切换当前 Session 整个队列的暂停状态。 */
+  set_queue_paused(workspace_id: string, agent_id: string, session_id: string, paused: boolean): void;
   /** 调整一条队列消息的顺序。 */
   move_queued_message(workspace_id: string, agent_id: string, session_id: string, message_id: string, direction: "up" | "down"): void;
   /** 合并 Desktop 用户级设置。 */

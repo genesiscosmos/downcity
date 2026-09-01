@@ -1,6 +1,6 @@
 {
   "name": "@downcity/local",
-  "version": "0.2.31",
+  "version": "0.2.32",
   "description": "Downcity 本地数据库基础设施与显式产品数据组件。",
   "type": "module",
   "main": "./bin/index.js",
@@ -37,6 +37,7 @@
     "@downcity/workspace": "workspace:^",
     "dotenv": "^17.4.2",
     "fs-extra": "^11.3.5",
+    "pinyin-pro": "^3.27.0",
     "smol-toml": "^1.7.1"
   },
   "devDependencies": {

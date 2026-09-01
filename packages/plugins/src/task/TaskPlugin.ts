@@ -136,6 +136,7 @@ export class TaskPlugin extends BasePlugin {
       });
       await engine.start();
       this.runtimes_by_workspace.set(context.workspace_id, {
+        context,
         cron_engine: engine,
         running_task_ids,
       });
@@ -190,8 +191,39 @@ export class TaskPlugin extends BasePlugin {
       context: params.context,
       action: params.action,
       title: params.title,
-      reloadScheduler: async (context) => this.restart_cron_runtime(context),
+      reloadScheduler: async (context) => this.restart_all_cron_runtimes(context),
     });
+  }
+
+  /**
+   * Task 定义变化后重启所有已激活 Workspace 的调度资源。
+   *
+   * Task 可以在更新时切换执行 Workspace，因此必须同时移除旧 Workspace 的注册项，
+   * 并为新 Workspace 建立注册项。当前 action 的 Workspace 即使此前未激活也会纳入重载。
+   */
+  private async restart_all_cron_runtimes(
+    context: PluginContext,
+  ): Promise<TaskCronRegisterResult> {
+    const contexts_by_workspace = new Map<string, PluginContext>(
+      [...this.runtimes_by_workspace.values()].map((runtime) => [
+        runtime.context.workspace_id,
+        runtime.context,
+      ]),
+    );
+    contexts_by_workspace.set(context.workspace_id, context);
+
+    const results = await Promise.all(
+      [...contexts_by_workspace.values()].map(async (workspace_context) =>
+        this.restart_cron_runtime(workspace_context)
+      ),
+    );
+    return results.reduce<TaskCronRegisterResult>(
+      (total, result) => ({
+        tasksFound: total.tasksFound + result.tasksFound,
+        jobsScheduled: total.jobsScheduled + result.jobsScheduled,
+      }),
+      { tasksFound: 0, jobsScheduled: 0 },
+    );
   }
 
   /**

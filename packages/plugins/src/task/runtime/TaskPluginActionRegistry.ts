@@ -14,6 +14,8 @@ import type { TaskListActionPayload } from "@/task/types/TaskPluginTypes.js";
 import type {
   TaskCreateRequest,
   TaskDeleteRequest,
+  TaskRunDetailRequest,
+  TaskRunHistoryRequest,
   TaskRunRequest,
   TaskSetStatusRequest,
   TaskUpdateRequest,
@@ -25,6 +27,8 @@ import {
   executeTaskRunAction,
   executeTaskStatusAction,
   executeTaskUpdateAction,
+  execute_task_history_action,
+  execute_task_run_detail_action,
   type TaskSchedulerReloadPort,
 } from "./TaskActionExecution.js";
 import {
@@ -49,7 +53,8 @@ const TASK_CREATE_SCHEMA = z.object({
   title: z.string(),
   when: z.string(),
   description: z.string(),
-  session_id: z.string(),
+  workspace_id: z.string().optional(),
+  session_id: z.string().optional(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
   status: TASK_STATUS_SCHEMA.optional(),
@@ -63,7 +68,9 @@ const TASK_UPDATE_SCHEMA = z.object({
   when: z.string().optional(),
   clearWhen: z.boolean().optional(),
   description: z.string().optional(),
+  workspace_id: z.string().optional(),
   session_id: z.string().optional(),
+  clearSession: z.boolean().optional(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
   status: TASK_STATUS_SCHEMA.optional(),
@@ -74,6 +81,15 @@ const TASK_UPDATE_SCHEMA = z.object({
 const TASK_RUN_SCHEMA = z.object({
   title: z.string(),
   reason: z.string().optional(),
+});
+
+const TASK_HISTORY_SCHEMA = z.object({
+  title: z.string(),
+});
+
+const TASK_RUN_DETAIL_SCHEMA = z.object({
+  title: z.string(),
+  timestamp: z.string().regex(/^\d{8}-\d{6}-\d{3}$/u),
 });
 
 const TASK_DELETE_SCHEMA = z.object({
@@ -128,18 +144,56 @@ export function createTaskPluginActions(params: {
         });
       },
     }),
+    history: create_action({
+      description: "List persisted execution records for one task.",
+      input_schema: {
+        zod: TASK_HISTORY_SCHEMA,
+        json_schema: {
+          type: "object",
+          required: ["title"],
+          properties: {
+            title: { type: "string", description: "Task name." },
+          },
+        },
+      },
+      examples: [{ title: "Read execution history", payload: { title: "daily-report" } }],
+      execute: async (action_params) => execute_task_history_action({
+        context: action_params.context,
+        payload: action_params.input as unknown as TaskRunHistoryRequest,
+      }),
+    }),
+    run_detail: create_action({
+      description: "Read one persisted task execution and its user-visible artifacts.",
+      input_schema: {
+        zod: TASK_RUN_DETAIL_SCHEMA,
+        json_schema: {
+          type: "object",
+          required: ["title", "timestamp"],
+          properties: {
+            title: { type: "string", description: "Task name." },
+            timestamp: { type: "string", description: "Run timestamp returned by task.history." },
+          },
+        },
+      },
+      examples: [{ title: "Read one execution", payload: { title: "daily-report", timestamp: "20260901-080000-000" } }],
+      execute: async (action_params) => execute_task_run_detail_action({
+        context: action_params.context,
+        payload: action_params.input as unknown as TaskRunDetailRequest,
+      }),
+    }),
     create: create_action({
       description: "Create a task definition.",
       input_schema: {
         zod: TASK_CREATE_SCHEMA,
         json_schema: {
           type: "object",
-          required: ["title", "when", "description", "session_id"],
+          required: ["title", "when", "description"],
           properties: {
             title: { type: "string", description: "Task name and unique semantic identifier." },
             when: { type: "string", description: "Trigger condition (@manual | cron | time:ISO8601)." },
             description: { type: "string", description: "Task description." },
-            session_id: { type: "string", description: "Task execution session_id." },
+            workspace_id: { type: "string", description: "Execution Workspace. Defaults to the current action Workspace." },
+            session_id: { type: "string", description: "Optional Session that receives the final result." },
             kind: { type: "string", enum: ["agent", "script"], description: "Execution kind." },
             review: { type: "boolean", description: "Whether to enable multi-turn review." },
             status: { type: "string", enum: ["enabled", "paused", "disabled"], description: "Task status." },
@@ -155,7 +209,7 @@ export function createTaskPluginActions(params: {
             title: "daily-report",
             when: "@manual",
             description: "Generate a daily report",
-            session_id: "session-1",
+            workspace_id: "workspace-1",
             status: "enabled",
           },
         },
@@ -169,6 +223,7 @@ export function createTaskPluginActions(params: {
             .option("--when <when>", "Trigger condition (@manual | cron | time:ISO8601).", "@manual")
             .option("--kind <kind>", "Execution kind (agent|script).", "agent")
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
+            .option("--workspace-id <workspace_id>", "Execution Workspace. Defaults to the current Workspace.")
             .option(
               "--session-id <session_id>",
               "Task execution session_id. If omitted, DC_SESSION_ID is used when available.",
@@ -267,7 +322,9 @@ export function createTaskPluginActions(params: {
             when: { type: "string", description: "New trigger condition." },
             clearWhen: { type: "boolean", description: "Whether to clear the trigger condition." },
             description: { type: "string", description: "New description." },
-            session_id: { type: "string", description: "New session_id." },
+            workspace_id: { type: "string", description: "New execution Workspace." },
+            session_id: { type: "string", description: "New optional result Session." },
+            clearSession: { type: "boolean", description: "Remove the result Session." },
             kind: { type: "string", enum: ["agent", "script"] },
             review: { type: "boolean" },
             status: { type: "string", enum: ["enabled", "paused", "disabled"] },
@@ -293,7 +350,9 @@ export function createTaskPluginActions(params: {
             .option("--kind <kind>", "Execution kind (agent|script).")
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
             .option("--clear-when", "Clear when and fall back to @manual.", false)
+            .option("--workspace-id <workspace_id>", "Execution Workspace.")
             .option("--session-id <session_id>", "Task execution session_id.")
+            .option("--clear-session", "Remove the optional result Session.", false)
             .option("--status <status>", "Status (enabled|paused|disabled).")
             .option(
               "--activate",

@@ -34,7 +34,7 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
   const confirmation_resolve_ref = useRef<((confirmed: boolean) => void) | undefined>(undefined);
   const toast_sequence_ref = useRef(0);
   const toast_timer_ref = useRef<number | undefined>(undefined);
-  const ui_components = useMemo(() => create_plugin_renderer_ui_components(), []);
+  const ui_components = useMemo(() => create_plugin_renderer_ui_components({ plugin_id: props.plugin_id, surface: props.slot }), [props.plugin_id, props.slot]);
 
   useEffect(() => {
     let disposed = false;

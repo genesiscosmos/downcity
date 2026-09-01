@@ -34,11 +34,14 @@ import {
   type LocalAgentConfig,
   type LocalGroupConfig,
   type LocalWorkspaceConfig,
-  normalize_agent_id,
+  create_agent_id,
 } from "@downcity/local/product";
 import type {
   DesktopAgentConnection,
   DesktopAgentSummary,
+  DesktopCreateAgentInput,
+  DesktopGenerateAgentDraftInput,
+  DesktopAgentDraft,
   DesktopChatInput,
   DesktopChatRewriteInput,
   DesktopChatRewriteResult,
@@ -59,6 +62,8 @@ import type {
   DesktopWorkspaceTextFile,
   DesktopChatFileInput,
   DesktopCreateGroupInput,
+  DesktopGenerateGroupDraftInput,
+  DesktopGroupDraft,
   DesktopUpdateGroupInput,
   DesktopGroupMessage,
   DesktopGroupEvent,
@@ -89,6 +94,37 @@ const session_model_settings_key = "desktop.session-models";
 const session_reasoning_settings_key = "desktop.session-reasoning";
 const workspace_preview_max_bytes = 2 * 1024 * 1024;
 const hidden_workspace_entry_names = new Set([".git", ".DS_Store", "node_modules", "dist", "build", "out"]);
+
+/** 解析并约束模型返回的 Agent 草稿，避免未安装 Plugin 进入创建流程。 */
+function parse_agent_draft(text: string, available_plugin_ids: ReadonlySet<string>): DesktopAgentDraft {
+  const json_text = text.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
+  let value: Record<string, unknown>;
+  try {
+    value = JSON.parse(json_text) as Record<string, unknown>;
+  } catch {
+    throw new Error("AI 未能生成有效的 Agent 配置，请重新生成");
+  }
+  const name = typeof value.name === "string" ? value.name.trim() : "";
+  const description = typeof value.description === "string" ? value.description.trim() : "";
+  const instruction = typeof value.instruction === "string" ? value.instruction.trim() : "";
+  if (!name || !description || !instruction) throw new Error("AI 生成的 Agent 配置不完整，请重新生成");
+  const plugin_ids = Array.isArray(value.plugin_ids)
+    ? [...new Set(value.plugin_ids.filter((plugin_id): plugin_id is string => typeof plugin_id === "string" && available_plugin_ids.has(plugin_id)))]
+    : [];
+  return { name, description, instruction, plugin_ids };
+}
+
+/** 解析并约束模型返回的 Group 草稿，避免不存在的 Agent 成为成员。 */
+function parse_group_draft(text: string, available_agent_ids: ReadonlySet<string>): DesktopGroupDraft {
+  const json_text = text.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
+  let value: Record<string, unknown>;
+  try { value = JSON.parse(json_text) as Record<string, unknown>; } catch { throw new Error("AI 未能生成有效的 Group 配置，请重新生成"); }
+  const name = typeof value.name === "string" ? value.name.trim() : "";
+  const instruction = typeof value.instruction === "string" ? value.instruction.trim() : "";
+  const member_agent_ids = Array.isArray(value.member_agent_ids) ? [...new Set(value.member_agent_ids.filter((agent_id): agent_id is string => typeof agent_id === "string" && available_agent_ids.has(agent_id)))] : [];
+  if (!name || !instruction || member_agent_ids.length === 0) throw new Error("AI 生成的 Group 配置不完整，请重新生成");
+  return { name, instruction, member_agent_ids };
+}
 
 /** Agent 控制器向 Electron 窗口广播的实时事件。 */
 interface AgentControllerEvents {
@@ -191,6 +227,8 @@ export class AgentController {
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
     return {
       agent_id: config.agent_id,
+      name: config.name,
+      description: config.description,
       model_id: typeof config.execution?.model_id === "string" ? config.execution.model_id : "",
       instruction: config.instruction,
       plugins: Object.fromEntries(Object.entries(config.plugins).map(([plugin_id, reference]) => [plugin_id, reference.profile ? { profile: reference.profile } : {}])),
@@ -244,19 +282,28 @@ export class AgentController {
 
   /** 创建一个不绑定 Workspace 的 Agent。 */
   async create_agent(
-    agent_id: string,
-    model_id: string,
+    input: DesktopCreateAgentInput,
   ): Promise<{ agent: DesktopAgentSummary }> {
-    const normalized_model_id = String(model_id || "").trim();
+    const name = String(input.name || "").trim();
+    const description = String(input.description || "").trim();
+    const normalized_model_id = String(input.model_id || "").trim();
+    if (!name) throw new Error("Agent name is required");
     if (!normalized_model_id) throw new Error("model_id is required");
     await this.ready_promise;
+    const agent_id = create_agent_id(name);
+    if (this.data.agents.get(agent_id)) throw new Error(`名称“${name}”生成的 Agent ID 已存在：${agent_id}`);
     const current_time = new Date().toISOString();
     const candidate: LocalAgentConfig = {
-      agent_id: normalize_agent_id(agent_id),
+      agent_id,
+      name,
+      description,
       version: "1.0.0",
       execution: { type: "api", model_id: normalized_model_id },
-      instruction: "",
-      plugins: {},
+      instruction: String(input.instruction || "").trim(),
+      plugins: Object.fromEntries(Object.entries(input.plugins || {}).map(([plugin_id, reference]) => {
+        const profile = String(reference.profile || "").trim();
+        return [plugin_id, profile ? { profile } : {}];
+      })),
       created_at: current_time,
       updated_at: current_time,
     };
@@ -265,6 +312,8 @@ export class AgentController {
     let registered = false;
     try {
       config = this.data.agents.create(candidate);
+      // 关键点（中文）：创建时即生成独立头像，使 AI 与手动创建拥有一致、完整的身份结果。
+      this.data.agents.set_generated_avatar(config.agent_id, generate_agent_avatar_svg(randomUUID(), read_downcity_logo_svg()));
       this.city.agents.add(agent);
       registered = true;
     } catch (error) {
@@ -276,10 +325,35 @@ export class AgentController {
     return {
       agent: to_desktop_agent_summary({
         agent_id: agent.id,
+        name: config.name,
+        description: config.description,
         version: config.version,
         execution: config.execution,
       }, this.data.agents.get_avatar_url(agent.id)),
     };
+  }
+
+  /** 使用系统默认模型生成一份尚未持久化的 Agent 定义草稿。 */
+  async generate_agent_draft(input: DesktopGenerateAgentDraftInput): Promise<DesktopAgentDraft> {
+    await this.ready_promise;
+    const prompt = String(input.prompt || "").trim();
+    if (!prompt) throw new Error("请描述想创建的角色");
+    const model = await resolve_desktop_agent_model(this.data, input.model_id, resolve_desktop_city_env(this.data));
+    const plugin_catalog = input.plugins.map((plugin) => ({
+      plugin_id: String(plugin.plugin_id || "").trim(),
+      title: String(plugin.title || "").trim(),
+      description: String(plugin.description || "").trim(),
+    })).filter((plugin) => plugin.plugin_id);
+    const response = await model.stream({ messages: [
+      { role: "system", content: [{ type: "text", text: "你负责设计一名 AI Agent。只输出一个 JSON 对象，不使用 Markdown。字段必须是 name、description、instruction、plugin_ids。name 简短自然；description 是一句对外介绍；instruction 使用中文，清晰定义角色、目标、工作原则和输出要求；plugin_ids 只能取自用户提供的列表，没有必要时为空数组。" }] },
+      { role: "user", content: [{ type: "text", text: `角色描述：\n${prompt}\n\n可用 Plugins：\n${JSON.stringify(plugin_catalog)}` }] },
+    ] });
+    let text = "";
+    for await (const event of response) {
+      if (event.type === "model_error") throw new Error(event.error.message);
+      if (event.type === "text_delta") text += event.delta;
+    }
+    return parse_agent_draft(text, new Set(plugin_catalog.map((plugin) => plugin.plugin_id)));
   }
 
   /** 保存 Agent 定义，并以同一稳定 ID 替换进程内实例。 */
@@ -291,9 +365,15 @@ export class AgentController {
       throw new Error("Agent 正在执行 Session，请等待执行结束后再编辑");
     }
     const model_id = String(input.model_id || "").trim();
+    const name = String(input.name || "").trim();
+    if (!name) throw new Error("Agent name is required");
     if (!model_id) throw new Error("model_id is required");
+    const duplicate_name = this.data.agents.list().find((agent) => agent.agent_id !== current.agent_id && agent.name === name);
+    if (duplicate_name) throw new Error(`Agent 名称已存在：${name}`);
     const candidate: LocalAgentConfig = {
       ...current,
+      name,
+      description: String(input.description || "").trim(),
       execution: { ...current.execution, type: "api", model_id },
       instruction: String(input.instruction || ""),
       plugins: Object.fromEntries(Object.entries(input.plugins || {}).map(([plugin_id, reference]) => {
@@ -337,6 +417,29 @@ export class AgentController {
     }
     await previous_agent?.dispose();
     return to_desktop_agent_summary(this.data.agents.get(current.agent_id)!, this.data.agents.get_avatar_url(current.agent_id));
+  }
+
+  /** 永久删除未运行且未被 Group 引用的 Agent。 */
+  async remove_agent(agent_id: string): Promise<boolean> {
+    await this.ready_promise;
+    const current = this.data.agents.get(agent_id);
+    if (!current) return false;
+    if ([...this.runtimes.values()].some((runtime) => runtime.agent_id === current.agent_id && (runtime.status === "submitted" || runtime.status === "streaming" || runtime.status === "waiting_input"))) {
+      throw new Error("Agent 正在执行 Session，请等待执行结束后再删除");
+    }
+    const dependent_groups = this.data.groups.list().filter((group) => group.member_agent_ids.includes(current.agent_id));
+    if (dependent_groups.length > 0) throw new Error(`请先将 Agent 移出 Group：${dependent_groups.map((group) => group.name).join("、")}`);
+    const runtime_agent = this.city.agents.get(current.agent_id);
+    if (runtime_agent) await this.city.agents.remove(current.agent_id);
+    for (const [session_key, unsubscribe] of this.session_unsubscribes) {
+      if (!session_key.startsWith(`${current.agent_id}:`)) continue;
+      unsubscribe();
+      this.session_unsubscribes.delete(session_key);
+      this.runtimes.delete(session_key);
+      this.restored_session_models.delete(session_key);
+    }
+    this.data.agents.remove(current.agent_id);
+    return true;
   }
 
   /** 保存 Agent 头像并返回刷新后的摘要。 */
@@ -392,18 +495,19 @@ export class AgentController {
   /** 创建并注册一个运行时 Group。 */
   async create_group(input: DesktopCreateGroupInput): Promise<DesktopGroupSummary> {
     await this.ready_promise;
-    const group_id = String(input.group_id || "").trim();
+    const name = String(input.name || "").trim();
+    const group_id = create_agent_id(name);
     const model_id = String(input.model_id || "").trim();
     const member_agent_ids = [...new Set((input.member_agent_ids ?? []).map((agent_id) => String(agent_id || "").trim()).filter(Boolean))];
-    if (!group_id) throw new Error("group_id is required");
+    if (!name) throw new Error("Group name is required");
     if (!model_id) throw new Error("model_id is required");
     if (member_agent_ids.length === 0) throw new Error("至少需要一个 Group 成员 Agent");
-    if (this.city.groups.get(group_id)) throw new Error(`Group already exists: ${group_id}`);
+    if (this.city.groups.get(group_id)) throw new Error(`名称“${name}”生成的 Group ID 已存在：${group_id}`);
     for (const agent_id of member_agent_ids) {
       if (!this.city.agents.get(agent_id)) throw new Error(`Agent not found in City: ${agent_id}`);
     }
     await resolve_desktop_agent_model(this.data, model_id, resolve_desktop_city_env(this.data));
-    const config = this.data.groups.create({ ...input, model_id });
+    const config = this.data.groups.create({ ...input, group_id, name, model_id });
     try {
       const group = this.create_runtime_group(config);
       this.city.groups.add(group);
@@ -412,6 +516,25 @@ export class AgentController {
       this.data.groups.remove(config.group_id);
       throw error;
     }
+  }
+
+  /** 使用所选模型生成一份尚未持久化的 Group 协作草稿。 */
+  async generate_group_draft(input: DesktopGenerateGroupDraftInput): Promise<DesktopGroupDraft> {
+    await this.ready_promise;
+    const prompt = String(input.prompt || "").trim();
+    if (!prompt) throw new Error("请描述想创建的协作团队");
+    const model = await resolve_desktop_agent_model(this.data, input.model_id, resolve_desktop_city_env(this.data));
+    const agent_catalog = input.agents.map((agent) => ({ agent_id: String(agent.agent_id || "").trim(), name: String(agent.name || "").trim(), description: String(agent.description || "").trim() })).filter((agent) => agent.agent_id);
+    const stream = await model.stream({ messages: [
+      { role: "system", content: [{ type: "text", text: "你负责设计一个多 Agent 协作 Group。只输出一个 JSON 对象，不使用 Markdown。字段必须是 name、instruction、member_agent_ids。name 简短自然；instruction 使用中文，清晰说明协作目标、成员分工、协作方式和交付要求；member_agent_ids 只能取自用户提供的 Agent 列表，至少选择一个。" }] },
+      { role: "user", content: [{ type: "text", text: `团队描述：\n${prompt}\n\n可用 Agents：\n${JSON.stringify(agent_catalog)}` }] },
+    ] });
+    let text = "";
+    for await (const event of stream) {
+      if (event.type === "model_error") throw new Error(event.error.message);
+      if (event.type === "text_delta") text += event.delta;
+    }
+    return parse_group_draft(text, new Set(agent_catalog.map((agent) => agent.agent_id)));
   }
 
   /** 更新 Group 定义，并替换 City 中的运行时主体。 */
@@ -1217,9 +1340,11 @@ function select_model_reasoning_effort(model: unknown, requested?: string): stri
 }
 
 /** 把 Registry Agent 收敛成 Renderer 所需摘要。 */
-function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "version" | "execution">, avatar_url?: string): DesktopAgentSummary {
+function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "name" | "description" | "version" | "execution">, avatar_url?: string): DesktopAgentSummary {
   return {
     agent_id: record.agent_id,
+    name: record.name,
+    description: record.description,
     ...(avatar_url ? { avatar_url } : {}),
     model_id: typeof record.execution?.model_id === "string" ? record.execution.model_id : "",
     version: record.version,

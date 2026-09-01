@@ -23,7 +23,7 @@ export function RecentSessionsSidebar({ controller, close_sidebar, embedded = fa
     <div className="-mx-3 divide-y divide-border/45 border-y border-border/45">
       {entries.map((entry) => <button key={`${entry.kind}:${entry.workspace_id}:${entry.session_id}`} type="button" className="flex min-h-12 w-full items-center gap-2 px-3 text-left transition-colors hover:bg-interaction-hover" onClick={() => { close_sidebar(); if (entry.kind === "agent") void controller.select_session(entry.workspace_id, entry.agent_id, entry.session_id); else void controller.open_group(entry.group_id, entry.session_id); }}>
         {entry.kind === "agent" ? <TbMessageCircle className="size-4 shrink-0 text-muted-foreground" /> : <TbUsers className="size-4 shrink-0 text-muted-foreground" />}
-        <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-foreground">{entry.title}</span><span className="block truncate text-[10px] text-muted-foreground">{entry.kind === "agent" ? entry.agent_id : entry.group_name}{entry.preview && entry.title !== entry.preview ? ` · ${entry.preview}` : ""}</span></span>
+        <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-foreground">{entry.title}</span><span className="block truncate text-[10px] text-muted-foreground">{entry.kind === "agent" ? controller.agents.find((agent) => agent.agent_id === entry.agent_id)?.name || "Agent" : entry.group_name}{entry.preview && entry.title !== entry.preview ? ` · ${entry.preview}` : ""}</span></span>
       </button>)}
       {entries.length === 0 ? <div className="px-3 py-8 text-center text-xs text-muted-foreground">暂无最近 Session</div> : null}
     </div>

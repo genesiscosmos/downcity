@@ -133,6 +133,8 @@ export async function initCommand(
   if (existing_agent && allowOverwrite) {
     save_agent_config({
       agent_id,
+      name: existing_agent.name,
+      description: existing_agent.description,
       version: "1.0.0",
       execution,
       instruction: existing_agent.instruction,

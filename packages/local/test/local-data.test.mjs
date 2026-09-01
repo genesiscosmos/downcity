@@ -10,6 +10,7 @@ import {
 } from "../bin/index.js";
 import {
   AgentRepository,
+  create_agent_id,
   GroupRepository,
   ensure_local_schema,
   LocalSettingRepository,
@@ -58,12 +59,16 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
     const workspace = workspaces.ensure({ workspace_path: path.join(root_path, "project") });
     const agent = agents.create({
       agent_id: "Lucas Whitman",
+      name: "Lucas Whitman",
+      description: "负责协助维护项目。",
       execution: { type: "api", model_id: "model-test" },
       instruction: "You are Lucas.",
       plugins: { chat: { profile: "lucas" }, task: {} },
     });
 
     assert.equal(agents.get("lucas_whitman")?.instruction, "You are Lucas.");
+    assert.equal(agent.name, "Lucas Whitman");
+    assert.equal(agent.description, "负责协助维护项目。");
     await fs.writeFile(
       path.join(root_path, "agents", "lucas_whitman", "avatar.png"),
       Buffer.from("avatar-content"),
@@ -121,6 +126,28 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
     );
   } finally {
     database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("create_agent_id 将中英文名称转换为可读稳定 ID", () => {
+  assert.equal(create_agent_id("研究助手"), "yan_jiu_zhu_shou");
+  assert.equal(create_agent_id("Downcity 研究助手"), "downcity_yan_jiu_zhu_shou");
+  assert.throws(() => create_agent_id("   "), /Agent name is required/u);
+});
+
+test("AgentRepository 删除 Agent 的完整用户级目录", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-remove-"));
+  try {
+    const agents = new AgentRepository(root_path);
+    agents.create({ agent_id: "removable", name: "可删除 Agent", description: "测试删除", instruction: "test" });
+    const agent_path = path.join(root_path, "agents", "removable");
+    await fs.mkdir(path.join(agent_path, "sessions", "session-one"), { recursive: true });
+    await fs.writeFile(path.join(agent_path, "sessions", "session-one", "meta.json"), "{}", "utf8");
+    agents.remove("removable");
+    await assert.rejects(fs.access(agent_path));
+    assert.equal(agents.get("removable"), null);
+  } finally {
     await fs.rm(root_path, { recursive: true, force: true });
   }
 });

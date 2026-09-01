@@ -107,6 +107,9 @@ export async function runTaskNow(params: {
   const executionId = String(params.executionId || `${params.taskId}:${timestamp}`).trim();
 
   const task = await readTask({ taskId: params.taskId, data_path: root });
+  if (task.frontmatter.workspace_id !== context.workspace_id) {
+    throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${context.workspace_id}`);
+  }
   const runDirAbs = getTaskRunDir(root, task.taskId, timestamp);
   const { runDirRel } = await ensureRunDir({
     taskId: task.taskId,
@@ -127,6 +130,7 @@ export async function runTaskNow(params: {
     progressJsonPath: filePaths.progressJsonPath,
     taskId: task.taskId,
     timestamp,
+    execution_id: executionId,
     trigger: params.trigger,
     kind: taskKind,
     startedAt,
@@ -167,7 +171,7 @@ export async function runTaskNow(params: {
   if (taskKind === "script") {
     const scriptResult = await runScriptTaskBranch({
       context,
-      session_id: task.frontmatter.session_id,
+      session_id: task.frontmatter.session_id || runSessionId,
       scriptBody: task.body,
       runProgress,
     });

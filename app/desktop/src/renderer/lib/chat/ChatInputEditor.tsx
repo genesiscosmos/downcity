@@ -1,14 +1,14 @@
 /** Downcity Desktop 的结构化 Chat Composer、附件、Slash 与发送控制器。 */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { TbArrowDown, TbArrowUp, TbChevronDown, TbCornerDownRight, TbLoader2, TbPaperclip, TbPhoto, TbPlus, TbSquare, TbTrash } from "react-icons/tb";
+import { TbArrowDown, TbArrowUp, TbCheck, TbCornerDownRight, TbLoader2, TbPaperclip, TbPencil, TbPhoto, TbPlayerPause, TbPlayerPlay, TbPlus, TbSquare, TbTrash, TbX } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
-import { is_chat_busy, type QueuedChatMessage } from "@/types/DesktopView";
+import { is_chat_busy, type ChatSubmitMode, type QueuedChatMessage } from "@/types/DesktopView";
 import type { ChatSlashCommand } from "@/types/ChatComposer";
 import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRuntime, DesktopGroupSessionSummary, DesktopGroupStatusPhase, DesktopModelSummary, DesktopSessionConfiguration, DesktopSettings } from "@common/types/DesktopApi";
 import { ChatApprovalModeSelector } from "./ChatApprovalModeSelector";
@@ -45,6 +45,7 @@ interface ChatInputEditorProps {
   /** 当前 Session 运行态。 */ runtime?: DesktopChatRuntime;
   /** Group 当前运行阶段；仅群聊输入使用。 */ group_phase?: DesktopGroupStatusPhase;
   /** 当前输入队列。 */ queued_messages: QueuedChatMessage[];
+  /** 当前队列是否整体暂停。 */ queue_paused: boolean;
   /** 当前 Session 模型和审批配置。 */ configuration?: DesktopSessionConfiguration;
   /** 可选 Federation 模型。 */ models: DesktopModelSummary[];
   /** 模型目录是否正在读取。 */ models_loading: boolean;
@@ -52,7 +53,7 @@ interface ChatInputEditorProps {
   /** 更新文本草稿。 */ update_draft(text: string): void;
   /** 更新附件草稿。 */ update_draft_files(files: DesktopChatFileInput[]): void;
   /** 更新引用草稿。 */ update_draft_references(references: DesktopChatReferenceInput[]): void;
-  /** 提交完整输入。 */ send_message(input: DesktopChatInput): Promise<void>;
+  /** 按指定意图立即提交或加入下一轮队列。 */ send_message(input: DesktopChatInput, mode?: ChatSubmitMode): Promise<void>;
   /** 执行当前 Session 的显式压缩命令。 */ compact_session?(): Promise<void>;
   /** 停止当前 Turn。 */ stop_session(): Promise<void>;
   /** 刷新模型目录。 */ refresh_models(): Promise<void>;
@@ -60,6 +61,10 @@ interface ChatInputEditorProps {
   /** 切换推理强度。 */ set_reasoning_effort(reasoning_effort?: string): Promise<void>;
   /** 切换审批模式。 */ set_approval_mode(approval_mode: DesktopSessionConfiguration["approval_mode"]): Promise<void>;
   /** 删除队列消息。 */ remove_queued_message(message_id: string): void;
+  /** 立即发送队列消息；运行中时作为 steer。 */ send_queued_message(message_id: string): Promise<void>;
+  /** 修改队列消息文本。 */ update_queued_message(message_id: string, text: string): void;
+  /** 切换单条队列消息暂停状态。 */ toggle_queued_message_paused(message_id: string): void;
+  /** 设置整个队列暂停状态。 */ set_queue_paused(paused: boolean): void;
   /** 调整队列消息顺序。 */ move_queued_message(message_id: string, direction: "up" | "down"): void;
 }
 
@@ -74,10 +79,6 @@ interface SlashQuery {
 interface FileQuery { query: string; from: number; to: number; }
 /** Group 成员 @ 查询在编辑器中的范围。 */
 interface MemberQuery { query: string; from: number; to: number; }
-
-const composer_height_storage_key = "downcity.chat_composer_height";
-const default_composer_height = 220;
-const min_composer_height = 160;
 
 /** 支持结构化草稿、多媒体节点、Slash 命令和消息引用的输入表面。 */
 export function ChatInputEditor(props: ChatInputEditorProps) {
@@ -98,8 +99,6 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   const [file_query, set_file_query] = useState<FileQuery>();
   const [member_query, set_member_query] = useState<MemberQuery>();
   const [workspace_files, set_workspace_files] = useState<import("@common/types/DesktopApi").DesktopWorkspaceFile[]>([]);
-  const [queue_expanded, set_queue_expanded] = useState(false);
-  const [composer_height, set_composer_height] = useState(() => normalize_composer_height(Number(localStorage.getItem(composer_height_storage_key)) || default_composer_height));
   slash_query_ref.current = slash_query;
   file_query_ref.current = file_query;
   member_query_ref.current = member_query;
@@ -108,33 +107,6 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     : props.client_mode
       ? props.client_executing === true
     : is_chat_busy(props.runtime);
-
-  const handle_resize_start = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const start_y = event.clientY;
-    const start_height = composer_height;
-    const handle_mouse_move = (move_event: MouseEvent) => {
-      set_composer_height(normalize_composer_height(start_height + start_y - move_event.clientY));
-    };
-    const handle_mouse_up = (up_event: MouseEvent) => {
-      const next_height = normalize_composer_height(start_height + start_y - up_event.clientY);
-      set_composer_height(next_height);
-      localStorage.setItem(composer_height_storage_key, String(next_height));
-      document.removeEventListener("mousemove", handle_mouse_move);
-      document.removeEventListener("mouseup", handle_mouse_up);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.body.style.cursor = "ns-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", handle_mouse_move);
-    document.addEventListener("mouseup", handle_mouse_up);
-  }, [composer_height]);
-
-  const reset_composer_height = useCallback(() => {
-    set_composer_height(default_composer_height);
-    localStorage.setItem(composer_height_storage_key, String(default_composer_height));
-  }, []);
 
   const sync_controlled_draft = useCallback((current_editor: Editor) => {
     if (syncing_ref.current) return;
@@ -181,7 +153,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     const current_editor = editor_ref.current;
     const query = member_query_ref.current;
     if (!current_editor || !query) return;
-    current_editor.chain().focus().deleteRange({ from: query.from, to: query.to }).insertContent(`@${member.agent_id} `).run();
+    current_editor.chain().focus().deleteRange({ from: query.from, to: query.to }).insertContent(`@${member.name} `).run();
     set_member_query(undefined);
   }, []);
 
@@ -230,7 +202,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     }
   }, []);
 
-  const submit_message = useCallback(async () => {
+  const submit_message = useCallback(async (mode: ChatSubmitMode = "send") => {
     const current_editor = editor_ref.current;
     if (!current_editor || submitting_ref.current) return;
     const input = decode_chat_composer(current_editor.getJSON());
@@ -248,7 +220,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     set_submitting(true);
     submitting_ref.current = true;
     try {
-      await props_ref.current.send_message(submitted_input);
+      await props_ref.current.send_message(submitted_input, mode);
       current_editor.commands.focus();
     } finally {
       submitting_ref.current = false;
@@ -294,9 +266,9 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
           : props_ref.current.client_mode
             ? props_ref.current.client_executing === true
           : is_chat_busy(props_ref.current.runtime);
-        if (current_busy && event.shiftKey && (event.metaKey || event.ctrlKey)) {
+        if (!props_ref.current.group_mode && !props_ref.current.client_mode && current_busy && event.shiftKey && (event.metaKey || event.ctrlKey)) {
           event.preventDefault();
-          void submit_message();
+          void submit_message("queue");
           return true;
         }
         const shortcut = props_ref.current.settings.send_message_on_enter ? !event.shiftKey && !event.metaKey && !event.ctrlKey : event.metaKey || event.ctrlKey;
@@ -384,12 +356,17 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     void command.run();
   }, [slash_query]);
 
-  return (<div className="chat-composer relative flex w-full min-w-0 flex-none flex-col" style={{ height: composer_height }}>
-    <div className="chat-composer-resize-handle absolute inset-x-0 top-0 z-20 h-2 cursor-ns-resize" role="separator" aria-label="调整输入区高度" aria-orientation="horizontal" onMouseDown={handle_resize_start} onDoubleClick={reset_composer_height}><span /></div>
+  return (<div className="chat-composer relative flex min-w-0 flex-none flex-col gap-2 p-1">
     <input ref={file_input_ref} type="file" multiple hidden accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.docx,.xlsx,.pptx" onChange={(event) => { void insert_files(event.target.files ?? []); event.currentTarget.value = ""; }} />
     <input ref={image_input_ref} type="file" multiple hidden accept="image/*" onChange={(event) => { void insert_files(event.target.files ?? []); event.currentTarget.value = ""; }} />
-    {!props.group_mode && !props.client_mode ? <div className="chat-composer-toolbar relative flex min-h-10 items-center justify-between gap-2 px-2 pt-2">
-      <div className="flex min-w-0 items-center gap-1">
+    {!props.group_mode && !props.client_mode && props.queued_messages.length > 0 ? <QueuedMessageList {...props} /> : null}
+    {attachment_error ? <div className="px-2 text-[11px] text-destructive">{attachment_error}</div> : null}
+    {member_query && member_candidates.length > 0 ? <div className="absolute bottom-full left-1 z-30 mb-2 w-56 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none">{member_candidates.map((member) => <button key={member.agent_id} type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-foreground/[0.06]" onMouseDown={(event) => event.preventDefault()} onClick={() => select_group_member(member)}><AgentAvatar agent={member} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">@{member.name}</span></button>)}</div> : slash_query ? <ChatSlashMenu commands={slash_commands} select_command={select_slash_command} /> : file_query && file_candidates.length > 0 ? <div className="absolute bottom-full left-1 z-30 mb-2 w-72 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none">{file_candidates.map((file) => <button key={file.relative_path} type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-foreground/[0.06]" onMouseDown={(event) => event.preventDefault()} onClick={() => void select_workspace_file(file)}><TbPaperclip className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{file.relative_path}</span></button>)}</div> : null}
+    <div className="chat-composer-editor min-h-20 max-h-60 w-full overflow-y-auto p-1">
+      <EditorContent editor={editor} className="chat-composer-content" />
+    </div>
+    <div className="flex items-center justify-between gap-2 px-1 pb-1">
+      {!props.group_mode && !props.client_mode ? <div className="flex min-w-0 items-center gap-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button size="icon" className="rounded-full" aria-label="添加内容" title="添加内容" disabled={submitting}><TbPlus className="size-4" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent side="top" sideOffset={4}>
@@ -399,29 +376,42 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
         </DropdownMenu>
         <ChatModelSelector agent={props.agent} configuration={props.configuration} models={props.models} models_loading={props.models_loading} set_model={props.set_model} set_reasoning_effort={props.set_reasoning_effort} />
         <ChatApprovalModeSelector configuration={props.configuration} set_approval_mode={props.set_approval_mode} />
-      </div>
-    </div> : <div className="min-h-2" />}
-    {!props.group_mode && !props.client_mode && props.queued_messages.length > 0 ? <QueuedMessageList {...props} expanded={queue_expanded} toggle_expanded={() => set_queue_expanded((value) => !value)} /> : null}
-    {attachment_error ? <div className="px-3 pb-1 text-[11px] text-destructive">{attachment_error}</div> : null}
-    {member_query && member_candidates.length > 0 ? <div className="absolute bottom-full left-1 z-30 mb-2 w-56 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none">{member_candidates.map((member) => <button key={member.agent_id} type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-foreground/[0.06]" onMouseDown={(event) => event.preventDefault()} onClick={() => select_group_member(member)}><AgentAvatar agent={member} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">@{member.agent_id}</span></button>)}</div> : slash_query ? <ChatSlashMenu commands={slash_commands} select_command={select_slash_command} /> : file_query && file_candidates.length > 0 ? <div className="absolute bottom-full left-1 z-30 mb-2 w-72 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none">{file_candidates.map((file) => <button key={file.relative_path} type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-foreground/[0.06]" onMouseDown={(event) => event.preventDefault()} onClick={() => void select_workspace_file(file)}><TbPaperclip className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{file.relative_path}</span></button>)}</div> : null}
-    <div className="chat-composer-editor min-h-0 w-full flex-1 overflow-y-auto px-3 py-2">
-    <EditorContent editor={editor} className="chat-composer-content h-full" />
-    </div>
-    <div className="flex min-h-10 items-center justify-end gap-2 px-2 pb-2">
-      <Button type="button" onClick={() => void (show_stop ? props.stop_session() : submit_message())} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={show_stop ? "停止生成" : busy ? "加入队列" : "发送消息"} title={show_stop ? "停止生成" : busy ? "加入队列" : "发送消息"}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
+      </div> : <div />}
+      <Button type="button" onClick={() => void (show_stop ? props.stop_session() : submit_message("send"))} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={show_stop ? "停止生成" : busy ? "发送调整" : "发送消息"} title={show_stop ? "停止生成" : busy ? "发送调整；⌘/Ctrl + Shift + Enter 加入下一轮队列" : "发送消息"}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
     </div>
   </div>);
 }
 
-/** 将输入区高度约束在当前窗口可用范围内。 */
-function normalize_composer_height(height: number): number {
-  const max_composer_height = Math.max(min_composer_height, Math.min(560, Math.floor(window.innerHeight * 0.6)));
-  return Math.round(Math.min(max_composer_height, Math.max(min_composer_height, height)));
-}
-
 /** 输入框上方的待发送队列。 */
-function QueuedMessageList(props: Pick<ChatInputEditorProps, "queued_messages" | "remove_queued_message" | "move_queued_message"> & { expanded: boolean; toggle_expanded(): void }) {
-  return <div className="chat-queued-message-list"><button type="button" className="flex min-h-8 w-full items-center gap-1.5 px-3 text-left text-[0.6875rem] text-muted-foreground hover:text-foreground" onClick={props.toggle_expanded}><TbChevronDown className={props.expanded ? "size-3.5 rotate-180 transition-transform" : "size-3.5 transition-transform"} /><span className="flex-1">待发送 {props.queued_messages.length} 条</span><span className="text-[10px]">点击展开</span></button>{props.expanded ? <div className="max-h-28 overflow-y-auto"><div className="flex flex-col">{props.queued_messages.map((message, index) => <div key={message.message_id} className="flex min-h-7 items-center gap-0.5 px-2.5 py-1 text-[0.6875rem] text-muted-foreground">{message.sending ? <TbLoader2 className="size-3 animate-spin" /> : <TbCornerDownRight className="size-3" />}<span className="min-w-0 flex-1 truncate px-1">{message.input.text || `${message.input.files.length + (message.input.references?.length ?? 0)} 个内容`}</span><Button className="size-5 [&_svg]:size-3" title="上移" disabled={index === 0 || message.sending} onClick={() => props.move_queued_message(message.message_id, "up")}><TbArrowUp /></Button><Button className="size-5 [&_svg]:size-3" title="下移" disabled={index === props.queued_messages.length - 1 || message.sending} onClick={() => props.move_queued_message(message.message_id, "down")}><TbArrowDown /></Button><Button className="size-5 [&_svg]:size-3" title="移除" disabled={message.sending} onClick={() => props.remove_queued_message(message.message_id)}><TbTrash /></Button></div>)}</div></div> : null}</div>;
+function QueuedMessageList(props: Pick<ChatInputEditorProps, "queued_messages" | "queue_paused" | "remove_queued_message" | "send_queued_message" | "update_queued_message" | "toggle_queued_message_paused" | "set_queue_paused" | "move_queued_message">) {
+  const [editing, set_editing] = useState<{ message_id: string; text: string }>();
+  const save_editing = () => {
+    if (!editing?.text.trim()) return;
+    props.update_queued_message(editing.message_id, editing.text);
+    set_editing(undefined);
+  };
+  const action_class = "size-5 rounded-sm text-muted-foreground/70 [&_svg]:size-3";
+  return <div className="chat-queued-message-list max-h-32 overflow-y-auto">
+    <div className="flex min-h-6 items-center justify-end px-2">
+      <Button className="h-5 gap-1 rounded-sm px-1 text-[0.625rem] text-muted-foreground/75 [&_svg]:size-3" title={props.queue_paused ? "恢复整个队列" : "暂停整个队列"} onClick={() => props.set_queue_paused(!props.queue_paused)}>{props.queue_paused ? <TbPlayerPlay /> : <TbPlayerPause />}{props.queue_paused ? "恢复队列" : "暂停队列"}</Button>
+    </div>
+    <div className="flex flex-col divide-y divide-border/30">{props.queued_messages.map((message, index) => {
+      const is_editing = editing?.message_id === message.message_id;
+      return <div key={message.message_id} className="flex min-h-7 items-center gap-0.5 px-2.5 py-1 text-[0.6875rem] text-muted-foreground">
+        {message.sending ? <TbLoader2 className="size-3 shrink-0 animate-spin text-muted-foreground/65" /> : <TbCornerDownRight className="size-3 shrink-0 text-muted-foreground/45" />}
+        {is_editing ? <><textarea autoFocus rows={1} value={editing.text} className="min-h-6 min-w-0 flex-1 resize-none rounded-sm border border-border/40 bg-background/50 px-1 py-0.5 text-[0.6875rem] text-foreground" onChange={(event) => set_editing({ message_id: message.message_id, text: event.target.value })} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); save_editing(); } else if (event.key === "Escape") { event.preventDefault(); set_editing(undefined); } }} /><Button className={action_class} title="保存" onClick={save_editing}><TbCheck /></Button><Button className={action_class} title="取消" onClick={() => set_editing(undefined)}><TbX /></Button></> : <>
+          <span className="min-w-0 flex-1 truncate px-1 py-0.5 text-foreground/70">{message.input.text || `${message.input.files.length + (message.input.references?.length ?? 0)} 个内容`}</span>
+          {message.paused && !message.sending ? <span className="shrink-0 px-1 text-[0.625rem] text-muted-foreground/70">已暂停</span> : null}
+          <Button className={action_class} title="编辑" disabled={message.sending} onClick={() => set_editing({ message_id: message.message_id, text: message.input.text })}><TbPencil /></Button>
+          <Button className={action_class} title={message.paused ? "恢复此项" : "暂停此项"} disabled={message.sending} onClick={() => props.toggle_queued_message_paused(message.message_id)}>{message.paused ? <TbPlayerPlay /> : <TbPlayerPause />}</Button>
+          <Button className={action_class} title="上移" disabled={index === 0 || message.sending} onClick={() => props.move_queued_message(message.message_id, "up")}><TbArrowUp /></Button>
+          <Button className={action_class} title="下移" disabled={index === props.queued_messages.length - 1 || message.sending} onClick={() => props.move_queued_message(message.message_id, "down")}><TbArrowDown /></Button>
+          <Button className={action_class} title="立即发送为调整" disabled={message.sending} onClick={() => void props.send_queued_message(message.message_id)}><TbCornerDownRight /></Button>
+          <Button className={action_class} title="删除队列消息" disabled={message.sending} onClick={() => props.remove_queued_message(message.message_id)}><TbTrash /></Button>
+        </>}
+      </div>;
+    })}</div>
+  </div>;
 }
 
 /** 把浏览器文件读取成可跨 IPC 传递的 Data URL。 */

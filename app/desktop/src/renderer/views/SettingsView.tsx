@@ -221,7 +221,7 @@ function GeneralSettings({ controller, open_global_env }: { /** Renderer 根控�
     <SettingSection title="启动">
       <SettingGroup>
         <SettingRow label="默认 Agent" description="启动时优先打开该 Agent。">
-          <SettingSelect value={controller.settings.default_agent_id} label={controller.settings.default_agent_id || "列表中的第一个"} options={[{ value: "", label: "列表中的第一个" }, ...controller.agents.map((agent) => ({ value: agent.agent_id, label: agent.agent_id }))]} on_change={(value) => void controller.update_settings({ default_agent_id: value })} />
+          <SettingSelect value={controller.settings.default_agent_id} label={controller.agents.find((agent) => agent.agent_id === controller.settings.default_agent_id)?.name || "列表中的第一个"} options={[{ value: "", label: "列表中的第一个" }, ...controller.agents.map((agent) => ({ value: agent.agent_id, label: agent.name }))]} on_change={(value) => void controller.update_settings({ default_agent_id: value })} />
         </SettingRow>
         <SettingRow label="启动时打开空对话" description="进入默认 Agent 后直接显示尚未创建的空对话。"><SettingSwitch checked={controller.settings.open_empty_chat_on_start} label="启动时打开空对话" on_change={(checked) => void controller.update_settings({ open_empty_chat_on_start: checked })} /></SettingRow>
       </SettingGroup>

@@ -222,7 +222,8 @@ export async function writeTaskRunInputArtifact(
       `- title: ${params.task.frontmatter.title}`,
       `- when: \`${params.task.frontmatter.when}\``,
       `- status: \`${params.task.frontmatter.status}\``,
-      `- linked_session_id: \`${params.task.frontmatter.session_id}\``,
+      `- workspace_id: \`${params.task.frontmatter.workspace_id}\``,
+      ...(params.task.frontmatter.session_id ? [`- linked_session_id: \`${params.task.frontmatter.session_id}\``] : []),
       `- kind: \`${params.taskKind}\``,
       ...(params.taskKind === "agent"
         ? [`- review: \`${String(params.reviewEnabled)}\``]
@@ -461,7 +462,8 @@ export async function writeTaskRunArtifacts(
     taskId: params.task.taskId,
     timestamp: params.timestamp,
     executionId: params.executionId,
-    session_id: params.task.frontmatter.session_id,
+    workspace_id: params.task.frontmatter.workspace_id,
+    ...(params.task.frontmatter.session_id ? { session_id: params.task.frontmatter.session_id } : {}),
     trigger: params.trigger,
     status: params.status,
     executionStatus: params.executionStatus,

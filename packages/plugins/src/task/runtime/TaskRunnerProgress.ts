@@ -52,6 +52,7 @@ export function createRunProgressWriter(params: {
   progressJsonPath: string;
   taskId: string;
   timestamp: string;
+  execution_id: string;
   trigger: ShipTaskRunTriggerV1;
   kind: ShipTaskKind;
   startedAt: number;
@@ -69,6 +70,7 @@ export function createRunProgressWriter(params: {
       v: 1,
       taskId: params.taskId,
       timestamp: params.timestamp,
+      execution_id: params.execution_id,
       trigger: params.trigger,
       kind: params.kind,
       status: current.status,

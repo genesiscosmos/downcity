@@ -68,14 +68,8 @@ function readTaskKindOrThrow(value?: string): ShipTaskKind | undefined {
   throw new Error(`Invalid task kind: ${value}`);
 }
 
-function resolveSessionIdOrThrow(input?: string): string {
-  const session_id = resolve_session_id({ session_id: input });
-  if (!session_id) {
-    throw new Error(
-      "Missing session_id. Provide --session-id or ensure DC_SESSION_ID is available.",
-    );
-  }
-  return session_id;
+function resolveOptionalSessionId(input?: string): string | undefined {
+  return resolve_session_id({ session_id: input });
 }
 
 function mapTaskListCommandInput(
@@ -93,7 +87,7 @@ function mapTaskCreateCommandInput(
   if (!title) throw new Error("Missing title");
   if (!description) throw new Error("Missing description");
 
-  const session_id = resolveSessionIdOrThrow(getStringOpt(opts, "session_id"));
+  const session_id = resolveOptionalSessionId(getStringOpt(opts, "session_id"));
   const kind = readTaskKindOrThrow(getStringOpt(opts, "kind"));
   const review = getBooleanLikeOpt(opts, "review");
   const status = readTaskStatusOrThrow(getStringOpt(opts, "status"));
@@ -107,7 +101,8 @@ function mapTaskCreateCommandInput(
     title,
     when: String(getStringOpt(opts, "when") || "@manual").trim() || "@manual",
     description,
-    session_id,
+    ...(session_id ? { session_id } : {}),
+    ...(getStringOpt(opts, "workspace_id") ? { workspace_id: getStringOpt(opts, "workspace_id") } : {}),
     ...(kind ? { kind } : {}),
     ...(typeof review === "boolean" ? { review } : {}),
     ...(resolvedStatus ? { status: resolvedStatus } : {}),
@@ -154,7 +149,9 @@ function mapTaskUpdateCommandInput(params: {
     typeof getStringOpt(opts, "title") === "string" ||
     typeof getStringOpt(opts, "when") === "string" ||
     typeof getStringOpt(opts, "description") === "string" ||
+    typeof getStringOpt(opts, "workspace_id") === "string" ||
     typeof getStringOpt(opts, "session_id") === "string" ||
+    getBooleanOpt(opts, "clearSession") === true ||
     typeof kind === "string" ||
     typeof review === "boolean" ||
     getBooleanOpt(opts, "clearWhen") === true ||
@@ -177,9 +174,13 @@ function mapTaskUpdateCommandInput(params: {
     ...(typeof getStringOpt(opts, "description") === "string"
       ? { description: getStringOpt(opts, "description") }
       : {}),
+    ...(typeof getStringOpt(opts, "workspace_id") === "string"
+      ? { workspace_id: getStringOpt(opts, "workspace_id") }
+      : {}),
     ...(typeof getStringOpt(opts, "session_id") === "string"
       ? { session_id: getStringOpt(opts, "session_id") }
       : {}),
+    ...(getBooleanOpt(opts, "clearSession") ? { clearSession: true } : {}),
     ...(typeof kind === "string" ? { kind } : {}),
     ...(typeof review === "boolean" ? { review } : {}),
     ...(getBooleanOpt(opts, "clearWhen") ? { clearWhen: true } : {}),

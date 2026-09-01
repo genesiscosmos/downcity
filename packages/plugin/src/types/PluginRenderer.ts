@@ -75,6 +75,21 @@ export interface PluginRendererPageProps {
   readonly children: ReactNode;
 }
 
+/** Mainview 内部可折叠 Sidebar 与内容区的标准布局属性。 */
+export interface PluginRendererMainviewSidebarProps {
+  /** 内部 Sidebar 顶部的用户可见名称。 */
+  readonly label: ReactNode;
+
+  /** 内部 Sidebar 中的导航项。 */
+  readonly sidebar: ReactNode;
+
+  /** 当前导航项对应的 Mainview 内容。 */
+  readonly children: ReactNode;
+}
+
+/** Mainview 内部 Sidebar 的导航项属性。 */
+export type PluginRendererMainviewSidebarItemProps = PluginRendererSidebarItemProps;
+
 /** Plugin Sidebar 根布局属性。 */
 export interface PluginRendererSidebarProps {
   /** Sidebar 内的全部导航内容。 */
@@ -358,6 +373,42 @@ export interface PluginRendererInputProps {
 
   /** 数字输入允许的最大值。 */
   readonly maximum?: number;
+
+  /** 是否占满当前表单容器的可用宽度。 */
+  readonly fill?: boolean;
+}
+
+/** 表单字段布局属性。 */
+export interface PluginRendererFieldProps {
+  /** 字段的用户可见名称。 */
+  readonly label: ReactNode;
+
+  /** 可选的字段用途或填写说明。 */
+  readonly description?: ReactNode;
+
+  /** 可选的字段校验错误。 */
+  readonly error?: ReactNode;
+
+  /** 字段中承载的输入控件。 */
+  readonly children: ReactNode;
+}
+
+/** 多行文本输入属性。 */
+export interface PluginRendererTextareaProps {
+  /** 当前文本值。 */
+  readonly value: string;
+
+  /** 文本变化回调。 */
+  readonly on_value_change: (value: string) => void;
+
+  /** 可选占位文本。 */
+  readonly placeholder?: string;
+
+  /** 是否禁止输入。 */
+  readonly disabled?: boolean;
+
+  /** 默认展示的文本行数。 */
+  readonly rows?: number;
 }
 
 /** Select 属性。 */
@@ -373,6 +424,9 @@ export interface PluginRendererSelectProps {
 
   /** 是否禁止选择。 */
   readonly disabled?: boolean;
+
+  /** 是否占满当前表单容器的可用宽度。 */
+  readonly fill?: boolean;
 }
 
 /** Switch 属性。 */
@@ -446,6 +500,10 @@ export interface PluginRendererUiComponents {
   readonly ItemMenu: (props: PluginRendererItemMenuProps) => ReactNode;
   /** Mainview 页面根布局。 */
   readonly Page: (props: PluginRendererPageProps) => ReactNode;
+  /** Mainview 内部可折叠、可调整宽度的 Sidebar 布局。 */
+  readonly MainviewSidebar: (props: PluginRendererMainviewSidebarProps) => ReactNode;
+  /** Mainview 内部 Sidebar 的标准导航项。 */
+  readonly MainviewSidebarItem: (props: PluginRendererMainviewSidebarItemProps) => ReactNode;
   /** 带标题和表面的内容分区。 */
   readonly Section: (props: PluginRendererSectionProps) => ReactNode;
   /** 统一成组表面。 */
@@ -468,6 +526,10 @@ export interface PluginRendererUiComponents {
   readonly Button: (props: PluginRendererButtonProps) => ReactNode;
   /** 标准文本或数字输入框。 */
   readonly Input: (props: PluginRendererInputProps) => ReactNode;
+  /** 标准表单字段布局。 */
+  readonly Field: (props: PluginRendererFieldProps) => ReactNode;
+  /** 标准多行文本输入框。 */
+  readonly Textarea: (props: PluginRendererTextareaProps) => ReactNode;
   /** 标准单选选择器。 */
   readonly Select: (props: PluginRendererSelectProps) => ReactNode;
   /** 标准二元开关。 */

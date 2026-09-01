@@ -133,6 +133,7 @@ example-plugin/
 - `agent` 默认导出 factory，为每个 Agent 返回新的 Plugin 实例。
 - `main` 默认导出管理生命周期对象，并分别注册 Plugin 级和 Profile 配置 actions。
 - `renderer` 默认导出成对的 `sidebar + mainview` 和/或独立 `config`，实际插槽必须与清单中的静态声明一致，并使用宿主注入的 `ui.components`。
+- Mainview 需要类似 Chat Session 的内部历史导航时，使用 `MainviewSidebar` 与 `MainviewSidebarItem`；折叠、宽度调整、偏好保存和滚动由宿主统一处理。
 - `readme` 必须指向 Plugin 根目录内的 `.md` 用户文档，由 Desktop 在 Plugin Overview 中安全渲染。
 
 至少声明一个入口。不存在通用 `entry`、`config.schema` 或宿主生成表单。

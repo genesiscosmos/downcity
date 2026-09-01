@@ -10,8 +10,10 @@ const desktop_api: DesktopApi = {
   agent: {
     list: (): Promise<DesktopAgentSummary[]> => ipcRenderer.invoke("agent:list"),
     get: (agent_id) => ipcRenderer.invoke("agent:get", agent_id),
-    create: (agent_id, model_id) => ipcRenderer.invoke("agent:create", agent_id, model_id),
+    create: (input) => ipcRenderer.invoke("agent:create", input),
+    generate_draft: (input) => ipcRenderer.invoke("agent:generate-draft", input),
     update: (agent_id, input) => ipcRenderer.invoke("agent:update", agent_id, input),
+    remove: (agent_id) => ipcRenderer.invoke("agent:remove", agent_id),
     choose_avatar: (agent_id) => ipcRenderer.invoke("agent:choose-avatar", agent_id),
     remove_avatar: (agent_id) => ipcRenderer.invoke("agent:remove-avatar", agent_id),
     generate_avatar: (agent_id) => ipcRenderer.invoke("agent:generate-avatar", agent_id),
@@ -73,6 +75,7 @@ const desktop_api: DesktopApi = {
   group: {
     list: () => ipcRenderer.invoke("group:list"),
     create: (input) => ipcRenderer.invoke("group:create", input),
+    generate_draft: (input) => ipcRenderer.invoke("group:generate-draft", input),
     update: (group_id, input) => ipcRenderer.invoke("group:update", group_id, input),
     remove: (group_id) => ipcRenderer.invoke("group:remove", group_id),
     open: (group_id, session_id) => ipcRenderer.invoke("group:open", group_id, session_id),

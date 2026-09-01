@@ -32,10 +32,18 @@ import type {
 } from "../../common/types/DesktopApi";
 import { apply_session_mutation, merge_session_snapshot } from "../lib/chat/session_mutation";
 import {
+  desktop_navigation_storage_key,
+  get_sidebar_mode_for_navigation,
+  is_restorable_navigation_target,
+  parse_navigation_target,
+  resolve_navigation_target,
+} from "../lib/navigation/desktop_navigation_state";
+import {
   get_session_key,
   get_draft_session_id,
   is_draft_session_id,
   is_chat_busy,
+  type ChatSubmitMode,
   type CreateAgentFormValue,
   type CreateWorkspaceFormValue,
   type DesktopViewController,
@@ -134,6 +142,7 @@ export function use_desktop_controller(): DesktopViewController {
   const [draft_files_by_session, set_draft_files_by_session] = useState<Record<string, DesktopChatFileInput[]>>({});
   const [draft_references_by_session, set_draft_references_by_session] = useState<Record<string, DesktopChatReferenceInput[]>>({});
   const [queued_messages_by_session, set_queued_messages_by_session] = useState<Record<string, QueuedChatMessage[]>>({});
+  const [queue_paused_by_session, set_queue_paused_by_session] = useState<Record<string, boolean>>({});
   const [history_by_session, set_history_by_session] = useState<Record<string, ChatHistoryState>>({});
   const [models, set_models] = useState<DesktopModelSummary[]>([]);
   const [plugins, set_plugins] = useState<DesktopPluginSummary[]>([]);
@@ -154,6 +163,7 @@ export function use_desktop_controller(): DesktopViewController {
 
   const chat_runtime_ref = useRef(chat_runtime_by_session);
   const queue_ref = useRef(queued_messages_by_session);
+  const queue_paused_ref = useRef(queue_paused_by_session);
   const history_ref = useRef(history_by_session);
   const mutation_batches_ref = useRef(new Map<string, SessionMutation[]>());
   const mutation_frame_ref = useRef<number | null>(null);
@@ -161,16 +171,21 @@ export function use_desktop_controller(): DesktopViewController {
   const deleting_session_keys_ref = useRef(new Set<string>());
   const deleted_session_keys_ref = useRef(new Set<string>());
   const processing_queue_ref = useRef(new Set<string>());
+  const hydrated_navigation_keys_ref = useRef(new Set<string>());
   const previous_selection_ref = useRef<NavigationTarget | null>(null);
   const selection_by_sidebar_mode_ref = useRef<Partial<Record<SidebarMode, NavigationTarget>>>({});
 
   useEffect(() => { chat_runtime_ref.current = chat_runtime_by_session; }, [chat_runtime_by_session]);
   useEffect(() => { queue_ref.current = queued_messages_by_session; }, [queued_messages_by_session]);
+  useEffect(() => { queue_paused_ref.current = queue_paused_by_session; }, [queue_paused_by_session]);
   useEffect(() => { history_ref.current = history_by_session; }, [history_by_session]);
   useEffect(() => {
     if (!selection) return;
     const target_mode = get_sidebar_mode_for_target(selection);
     if (target_mode) selection_by_sidebar_mode_ref.current[target_mode] = selection;
+    if (is_restorable_navigation_target(selection)) {
+      localStorage.setItem(desktop_navigation_storage_key, JSON.stringify(selection));
+    }
   }, [selection]);
 
   /** 保存队列并同步异步回调读取的引用。 */
@@ -182,9 +197,9 @@ export function use_desktop_controller(): DesktopViewController {
   /** 提交队首消息；同一 Session 同时只执行一个提交循环。 */
   const process_next_queue = useCallback(async (workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
-    if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || processing_queue_ref.current.has(session_key) || is_chat_busy(chat_runtime_ref.current[session_key])) return;
+    if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || processing_queue_ref.current.has(session_key) || queue_paused_ref.current[session_key] || is_chat_busy(chat_runtime_ref.current[session_key])) return;
     const queued = queue_ref.current[session_key]?.[0];
-    if (!queued) return;
+    if (!queued || queued.paused) return;
     processing_queue_ref.current.add(session_key);
     commit_queue({
       ...queue_ref.current,
@@ -230,6 +245,17 @@ export function use_desktop_controller(): DesktopViewController {
       set_settings(next_settings);
       set_global_env(normalize_global_env_text(next_env));
       set_plugins(next_plugins);
+      const stored_target = parse_navigation_target(localStorage.getItem(desktop_navigation_storage_key));
+      const can_restore_session = stored_target?.kind === "session"
+        && next_agents.some((agent) => agent.agent_id === stored_target.agent_id)
+        && next_workspaces.some((workspace) => workspace.workspace_id === stored_target.workspace_id);
+      const restored_session_entries = can_restore_session
+        ? await window.downcity.chat.list_sessions(stored_target.agent_id, stored_target.workspace_id)
+        : [];
+      const initial_sessions_by_workspace = can_restore_session
+        ? { [stored_target.workspace_id]: restored_session_entries.map((session) => ({ agent_id: stored_target.agent_id, session })) }
+        : {};
+      if (restored_session_entries.length > 0) set_sessions_by_workspace(initial_sessions_by_workspace);
       const initial_agent = next_agents.find((agent) => agent.agent_id === next_settings.default_agent_id) ?? next_agents[0];
       const stored_workspace_id = localStorage.getItem(active_workspace_storage_key) || "";
       const initial_workspace = next_workspaces.find((workspace) => workspace.workspace_id === stored_workspace_id)
@@ -238,7 +264,21 @@ export function use_desktop_controller(): DesktopViewController {
         set_active_workspace_id(initial_workspace.workspace_id);
         localStorage.setItem(active_workspace_storage_key, initial_workspace.workspace_id);
       }
-      if (initial_agent && initial_workspace && next_settings.open_empty_chat_on_start) {
+      const restored_target = stored_target ? resolve_navigation_target(stored_target, {
+        agents: next_agents,
+        workspaces: next_workspaces,
+        groups: next_groups,
+        plugins: next_plugins,
+        sessions_by_workspace: initial_sessions_by_workspace,
+      }, initial_workspace?.workspace_id) : undefined;
+      if (restored_target) {
+        if ("workspace_id" in restored_target) {
+          set_active_workspace_id(restored_target.workspace_id);
+          localStorage.setItem(active_workspace_storage_key, restored_target.workspace_id);
+        }
+        set_sidebar_mode_state(get_sidebar_mode_for_navigation(restored_target));
+        set_selection(restored_target);
+      } else if (initial_agent && initial_workspace && next_settings.open_empty_chat_on_start) {
         set_selection({ kind: "draft", workspace_id: initial_workspace.workspace_id, agent_id: initial_agent.agent_id, draft_id: get_draft_session_id(initial_agent.agent_id) });
       } else if (initial_workspace) {
         set_sidebar_mode_state("workspace");
@@ -459,11 +499,17 @@ export function use_desktop_controller(): DesktopViewController {
       set_groups_by_id((current) => ({ ...current, [group.group_id]: group }));
       set_group_sessions_by_workspace((current) => merge_group_sessions(current, group));
       set_sidebar_mode_state("chat");
-      set_selection(null);
+      set_selection({ kind: "group", group_id: group.group_id });
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
     }
+  }, []);
+
+  const open_create_group = useCallback(() => {
+    set_error("");
+    set_sidebar_mode_state("chat");
+    set_selection({ kind: "create_group" });
   }, []);
 
   const update_group = useCallback(async (group_id: string, input: DesktopUpdateGroupInput) => {
@@ -500,6 +546,7 @@ export function use_desktop_controller(): DesktopViewController {
 
   const open_group = useCallback(async (group_id: string, session_id?: string) => {
     set_error("");
+    if (session_id) hydrated_navigation_keys_ref.current.add(`group:${group_id}:${session_id}`);
     try {
       const fallback_workspace = workspaces.find((workspace) => workspace.workspace_id === active_workspace_id) ?? workspaces[0] ?? await window.downcity.workspace.get_default();
       if (!workspaces.some((workspace) => workspace.workspace_id === fallback_workspace.workspace_id)) set_workspaces((current) => [...current, fallback_workspace]);
@@ -533,6 +580,15 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
     }
   }, [active_workspace_id, workspaces]);
+
+  /** 刷新恢复 GroupSession 时，通过既有打开入口补齐消息与运行上下文。 */
+  useEffect(() => {
+    if (selection?.kind !== "group_session") return;
+    const navigation_key = `group:${selection.group_id}:${selection.session_id}`;
+    if (hydrated_navigation_keys_ref.current.has(navigation_key)) return;
+    hydrated_navigation_keys_ref.current.add(navigation_key);
+    void open_group(selection.group_id, selection.session_id);
+  }, [open_group, selection]);
 
   const create_group_session = useCallback(async (group_id: string, workspace_id?: string) => {
     set_error("");
@@ -654,6 +710,7 @@ export function use_desktop_controller(): DesktopViewController {
   const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
     if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key)) return;
+    hydrated_navigation_keys_ref.current.add(`session:${session_key}`);
     set_error("");
     if (!preserve_sidebar) set_sidebar_mode_state("chat");
     set_active_workspace_id(workspace_id);
@@ -680,6 +737,16 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
     }
   }, []);
+
+  /** 刷新恢复 Session 时，通过既有快照入口补齐消息、配置与运行态。 */
+  useEffect(() => {
+    if (selection?.kind !== "session") return;
+    const session_key = get_session_key(selection.workspace_id, selection.agent_id, selection.session_id);
+    const navigation_key = `session:${session_key}`;
+    if (hydrated_navigation_keys_ref.current.has(navigation_key)) return;
+    hydrated_navigation_keys_ref.current.add(navigation_key);
+    void select_session(selection.workspace_id, selection.agent_id, selection.session_id, true);
+  }, [select_session, selection]);
 
   /** 刷新当前 Agent Session 的 canonical 快照，恢复窗口切换期间错过的 mutation。 */
   const refresh_session_snapshot = useCallback(async (workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
@@ -750,6 +817,12 @@ export function use_desktop_controller(): DesktopViewController {
   const select_agent = useCallback((agent_id: string) => {
     set_error("");
     set_selection({ kind: "agent", agent_id });
+  }, []);
+
+  const open_create_agent = useCallback(() => {
+    set_error("");
+    set_sidebar_mode_state("chat");
+    set_selection({ kind: "create_agent" });
   }, []);
 
   const select_group = useCallback((group_id: string) => {
@@ -908,7 +981,7 @@ export function use_desktop_controller(): DesktopViewController {
 
   const create_agent = useCallback(async (value: CreateAgentFormValue) => {
     set_error("");
-    const result = await window.downcity.agent.create(value.agent_id, value.model_id);
+    const result = await window.downcity.agent.create(value);
     set_agents((current) => [...current.filter((item) => item.agent_id !== result.agent.agent_id), result.agent]);
     set_sidebar_mode_state("chat");
     set_selection({ kind: "agent", agent_id: result.agent.agent_id });
@@ -929,6 +1002,32 @@ export function use_desktop_controller(): DesktopViewController {
       throw reason;
     }
   }, []);
+
+  const remove_agent = useCallback(async (agent_id: string) => {
+    set_error("");
+    try {
+      const removed = await window.downcity.agent.remove(agent_id);
+      if (!removed) return;
+      set_agents((current) => {
+        const next = current.filter((agent) => agent.agent_id !== agent_id);
+        set_selection((selection) => selection && "agent_id" in selection && selection.agent_id === agent_id
+          ? (next[0] ? { kind: "agent", agent_id: next[0].agent_id } : null)
+          : selection);
+        return next;
+      });
+      set_sessions_by_workspace((current) => Object.fromEntries(Object.entries(current).map(([workspace_id, sessions]) => [workspace_id, sessions.filter((session) => session.agent_id !== agent_id)])));
+      set_archived_sessions_by_workspace((current) => Object.fromEntries(Object.entries(current).map(([workspace_id, sessions]) => [workspace_id, sessions.filter((session) => session.agent_id !== agent_id)])));
+      set_plugins(await window.downcity.plugin.list());
+      const next_settings = {
+        default_agent_id: settings.default_agent_id === agent_id ? "" : settings.default_agent_id,
+        agent_main_sessions: Object.fromEntries(Object.entries(settings.agent_main_sessions).filter(([current_agent_id]) => current_agent_id !== agent_id)),
+      };
+      set_settings(await window.downcity.settings.update(next_settings));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, [settings]);
 
   const choose_agent_avatar = useCallback(async (agent_id: string) => {
     set_error("");
@@ -1044,7 +1143,7 @@ export function use_desktop_controller(): DesktopViewController {
     }));
   }, []);
 
-  const send_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: DesktopChatInput) => {
+  const send_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: DesktopChatInput, mode: ChatSubmitMode = "send") => {
     const normalized_input: DesktopChatInput = {
       text: String(input.text || "").trim(),
       files: Array.isArray(input.files) ? input.files : [],
@@ -1089,12 +1188,13 @@ export function use_desktop_controller(): DesktopViewController {
       }
       return;
     }
-    if (is_chat_busy(chat_runtime_ref.current[session_key]) || (queue_ref.current[session_key]?.length ?? 0) > 0) {
+    if (mode === "queue" || is_chat_busy(chat_runtime_ref.current[session_key]) || (queue_ref.current[session_key]?.length ?? 0) > 0) {
       const queued: QueuedChatMessage = {
         message_id: crypto.randomUUID(),
         input: normalized_input,
         created_at: Date.now(),
         sending: false,
+        paused: mode === "queue",
       };
       commit_queue({ ...queue_ref.current, [session_key]: [...(queue_ref.current[session_key] ?? []), queued] });
       if (!is_chat_busy(chat_runtime_ref.current[session_key])) void process_next_queue(workspace_id, agent_id, session_id);
@@ -1220,6 +1320,57 @@ export function use_desktop_controller(): DesktopViewController {
       [session_key]: (queue_ref.current[session_key] ?? []).filter((item) => item.message_id !== message_id || item.sending),
     });
   }, [commit_queue]);
+
+  const send_queued_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    const queued = queue_ref.current[session_key]?.find((item) => item.message_id === message_id);
+    if (!queued || queued.sending) return;
+    commit_queue({
+      ...queue_ref.current,
+      [session_key]: (queue_ref.current[session_key] ?? []).map((item) => item.message_id === message_id ? { ...item, sending: true } : item),
+    });
+    try {
+      await window.downcity.chat.send(agent_id, workspace_id, session_id, queued.input);
+      commit_queue({
+        ...queue_ref.current,
+        [session_key]: (queue_ref.current[session_key] ?? []).filter((item) => item.message_id !== message_id),
+      });
+    } catch (reason) {
+      commit_queue({
+        ...queue_ref.current,
+        [session_key]: (queue_ref.current[session_key] ?? []).map((item) => item.message_id === message_id ? { ...item, sending: false } : item),
+      });
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, [commit_queue]);
+
+  const update_queued_message = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string, text: string) => {
+    const normalized_text = text.trim();
+    if (!normalized_text) return;
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    commit_queue({
+      ...queue_ref.current,
+      [session_key]: (queue_ref.current[session_key] ?? []).map((item) => item.message_id === message_id && !item.sending ? { ...item, input: { ...item.input, text: normalized_text } } : item),
+    });
+  }, [commit_queue]);
+
+  const toggle_queued_message_paused = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    commit_queue({
+      ...queue_ref.current,
+      [session_key]: (queue_ref.current[session_key] ?? []).map((item) => item.message_id === message_id && !item.sending ? { ...item, paused: !item.paused } : item),
+    });
+    if (!queue_paused_ref.current[session_key] && !is_chat_busy(chat_runtime_ref.current[session_key])) void process_next_queue(workspace_id, agent_id, session_id);
+  }, [commit_queue, process_next_queue]);
+
+  const set_queue_paused = useCallback((workspace_id: string, agent_id: string, session_id: string, paused: boolean) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    const next = { ...queue_paused_ref.current, [session_key]: paused };
+    queue_paused_ref.current = next;
+    set_queue_paused_by_session(next);
+    if (!paused && !is_chat_busy(chat_runtime_ref.current[session_key])) void process_next_queue(workspace_id, agent_id, session_id);
+  }, [process_next_queue]);
 
   const move_queued_message = useCallback((workspace_id: string, agent_id: string, session_id: string, message_id: string, direction: "up" | "down") => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
@@ -1348,6 +1499,7 @@ export function use_desktop_controller(): DesktopViewController {
     draft_files_by_session,
     draft_references_by_session,
     queued_messages_by_session,
+    queue_paused_by_session,
     history_by_session,
     models,
     plugins,
@@ -1366,6 +1518,7 @@ export function use_desktop_controller(): DesktopViewController {
     error,
     loading,
     select_agent,
+    open_create_agent,
     select_group,
     open_agent_chat,
     select_plugin,
@@ -1377,6 +1530,7 @@ export function use_desktop_controller(): DesktopViewController {
     select_workspace,
     select_workspace_file,
     create_group,
+    open_create_group,
     update_group,
     remove_group,
     open_group,
@@ -1400,6 +1554,7 @@ export function use_desktop_controller(): DesktopViewController {
     create_agent,
     get_agent,
     update_agent,
+    remove_agent,
     choose_agent_avatar,
     remove_agent_avatar,
     generate_agent_avatar,
@@ -1422,6 +1577,10 @@ export function use_desktop_controller(): DesktopViewController {
     stop_session,
     respond_interaction,
     remove_queued_message,
+    send_queued_message,
+    update_queued_message,
+    toggle_queued_message_paused,
+    set_queue_paused,
     move_queued_message,
     update_settings,
     list_global_env,
