@@ -36,7 +36,7 @@ Agent 负责 Session 上下文、工具循环和审批；Federation 负责最终
 
 ## 多模态 fallback
 
-Fallback 只检查 `ModelCall.messages` 中最新一条 `role: "user"` 消息的 `file` 内容。历史图片仍完整发送给最终模型，但最新用户消息只有文本时不会再次触发 fallback。末尾即使存在 assistant 或 tool 消息，也会向前定位最近的 user。
+Fallback 只检查 `ModelCall.messages` 中最新一条 `role: "user"` 消息的 `file` 内容。最新用户消息只有文本时不会再次触发 fallback；如果最终模型的 fallback 规则不接受某个历史文件，该文件会在本次执行视图中降级为 `filename`、原始 URL 或 MIME type 文本。Session 保存的原始文件不变。末尾即使存在 assistant 或 tool 消息，也会向前定位最近的 user。
 
 ## OpenAI-compatible 客户端
 

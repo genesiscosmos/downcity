@@ -81,6 +81,6 @@ ai.use(channel.model({
 }));
 ```
 
-AIService passes only files from the latest user message to fallback rules. It validates reasoning after selecting the final model and sends the complete, unchanged `ModelCall` to that model's Channel.
+AIService passes only files from the latest user message to fallback rules. After selecting the final model, it validates reasoning and preserves that latest user message unchanged. Historical files matched by the final model's fallback rules become filename, original URL, or MIME type text before the call reaches the target Channel.
 
 Channel and model `provider_options` are merged only on the server and interpreted by the selected Adapter. They are not part of the public model protocol.

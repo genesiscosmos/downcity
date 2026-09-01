@@ -36,7 +36,7 @@ Agent owns Session context, tool loops, and approvals. Federation owns final mod
 
 ## Multimodal fallback
 
-Fallback checks file content only in the latest `role: "user"` message in `ModelCall.messages`. Historical images remain in the full context, but a new text-only user message does not trigger fallback again. Trailing assistant or tool messages do not change which user message is inspected.
+Fallback checks file content only in the latest `role: "user"` message in `ModelCall.messages`. A new text-only user message does not trigger fallback again. When the final model's fallback rules reject a historical file, the execution view replaces that file with its `filename`, original URL, or MIME type as plain text. The original Session file remains unchanged. Trailing assistant or tool messages do not change which user message is inspected.
 
 ## OpenAI-compatible clients
 

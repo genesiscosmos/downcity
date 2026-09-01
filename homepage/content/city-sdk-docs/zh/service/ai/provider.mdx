@@ -81,6 +81,6 @@ ai.use(channel.model({
 }));
 ```
 
-AIService 只把最新 user 消息的 `file` 依次交给规则。选出最终模型后再校验 reasoning，并把完整 `ModelCall` 原样交给目标 Channel。
+AIService 只把最新 user 消息的 `file` 依次交给规则。选出最终模型后再校验 reasoning；最新 user 保持原样，命中最终模型 fallback 规则的历史文件会降级为 filename、原始 URL 或 MIME type 文本，再交给目标 Channel。
 
 Channel 与模型的 `provider_options` 只在服务端合并，由对应 Adapter 解释，不进入公开模型协议。

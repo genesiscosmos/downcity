@@ -49,7 +49,10 @@ import {
   resolve_model_reasoning,
 } from "./reasoning.js";
 import { AIModelRegistry } from "./model-registry.js";
-import { resolve_text_routing_plan } from "./model-routing.js";
+import {
+  project_model_call_for_execution,
+  resolve_text_routing_plan,
+} from "./model-routing.js";
 import {
   claim_image_job,
   finish_image_job_fetch,
@@ -386,6 +389,9 @@ export class AIService extends Service {
     const initial_resolved = this.resolve({ model: request.model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
     const routing = this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
     const resolved = routing.resolved;
+    if (resolved.model) {
+      ctx.input.call = project_model_call_for_execution(call, resolved.model);
+    }
     const reasoning = resolved.model ? resolve_model_reasoning(resolved.model, call.reasoning) : undefined;
     this.attachResolvedModel(ctx, resolved.model, LANGUAGE_MODEL_MODE, routing);
     attach_resolved_reasoning(ctx, reasoning);
@@ -754,6 +760,9 @@ export class AIService extends Service {
       const initial_resolved = this.resolve({ model: model_id, mode: LANGUAGE_MODEL_MODE }, ctx.env);
       const routing = this.plan_text_execution(initial_resolved, ctx, call, LANGUAGE_MODEL_MODE);
       const resolved = routing.resolved;
+      if (resolved.model) {
+        ctx.input.call = project_model_call_for_execution(call, resolved.model);
+      }
       const reasoning = resolved.model
         ? resolve_model_reasoning(resolved.model, body)
         : undefined;

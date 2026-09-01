@@ -1,7 +1,10 @@
 /** 最新用户消息媒体 fallback 路由回归测试。 */
 import assert from "node:assert/strict"
 import test from "node:test"
-import { resolve_text_routing_plan } from "../bin/service/ai/model-routing.js"
+import {
+  project_model_call_for_execution,
+  resolve_text_routing_plan,
+} from "../bin/service/ai/model-routing.js"
 
 const source_action = () => "source"
 const image_action = () => "image"
@@ -36,9 +39,10 @@ function create_fixture(options = {}) {
 }
 
 const text = (value) => ({ type: "text", text: value })
-const file = (media_type) => ({
+const file = (media_type, options = {}) => ({
   type: "file", media_type,
-  source: { type: "url", url: "https://example.com/input" },
+  source: options.source ?? { type: "url", url: "https://example.com/input" },
+  ...(options.filename ? { filename: options.filename } : {}),
 })
 
 function route(messages, options) {
@@ -111,4 +115,47 @@ test("an unavailable target keeps the source model without fallback metadata", (
   const plan = route([{ role: "user", content: [file("image/png")] }], { unavailable: "image-model" })
   assert.equal(plan.resolved.model.id, "source-model")
   assert.equal(plan.fallback_reason, undefined)
+})
+
+test("historical matching files degrade to filename or original source for the final text model", () => {
+  const fixture = create_fixture()
+  const call = {
+    messages: [
+      { role: "user", content: [
+        text("identify"),
+        file("image/png", { filename: "portrait.png" }),
+        file("application/pdf"),
+        file("text/plain", { filename: "notes.txt" }),
+      ] },
+      { role: "assistant", content: [text("done")] },
+      { role: "user", content: [text("continue")] },
+    ],
+  }
+
+  const projected = project_model_call_for_execution(call, fixture.resolved.model)
+  assert.deepEqual(projected.messages[0].content, [
+    text("identify"),
+    text("portrait.png"),
+    text("https://example.com/input"),
+    file("text/plain", { filename: "notes.txt" }),
+  ])
+  assert.equal(call.messages[0].content[1].type, "file")
+  assert.equal(projected.messages[2], call.messages[2])
+})
+
+test("latest user files are never degraded and base64 history falls back to MIME type", () => {
+  const fixture = create_fixture()
+  const historical = file("image/png", {
+    source: { type: "base64", data: "aW1hZ2U=" },
+  })
+  const latest = file("image/png", { filename: "latest.png" })
+  const call = { messages: [
+    { role: "user", content: [historical] },
+    { role: "assistant", content: [text("done")] },
+    { role: "user", content: [text("again"), latest] },
+  ] }
+
+  const projected = project_model_call_for_execution(call, fixture.resolved.model)
+  assert.deepEqual(projected.messages[0].content, [text("image/png")])
+  assert.equal(projected.messages[2].content[1], latest)
 })
