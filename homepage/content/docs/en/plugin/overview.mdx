@@ -19,10 +19,10 @@ Plugin
 - Exposes tools the Agent can call during execution
 - Hooks into the Agent lifecycle (start, stop, session events)
 - Manages its own state, connections, and background tasks
-- Provides a Profile-independent Sidebar + Mainview workspace and edits configuration in a separate Config under Settings
+- Provides a Profile-independent Sidebar + Mainview workspace and edits configuration in a separate Config on its Catalog detail page
 - Runs inside the Agent process boundary, not as a separate service
 
-A Profile is only host-provided configuration space for a Plugin that declares Config; it is unrelated to the functional workspace. Functional Plugins appear in the Plugin List under the Plugins Tab and own their Sidebar and Mainview. Config is centralized under Settings / Plugins. A Plugin without Config does not need a Profile. Business configuration never lives in `agent.json`.
+A Profile is only host-provided configuration space for a Plugin that declares Config; it is unrelated to the functional workspace. The Plugins Sidebar always shows the complete Catalog, and every Plugin opens a detail page with its description, README, and optional Config. Functional Plugins also appear on the top-level navigation rail; selecting one replaces the Sidebar with its own navigation and renders its Mainview. A Plugin without Config does not need a Profile. Business configuration never lives in `agent.json`.
 
 ## Built-in plugins
 

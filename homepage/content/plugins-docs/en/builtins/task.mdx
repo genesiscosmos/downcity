@@ -29,7 +29,7 @@ Use `task` when you need:
 
 ## How users use it
 
-Task does not declare Config, so it needs no Profile. It appears under the Desktop Plugins Tab: its own Sidebar selects an Agent and Task, while the Mainview selects a Workspace and shows the Task list or details. This workspace reads the selected Agent's real Task runtime instead of copying state. The current Desktop workspace is read-only; create, edit, run, and delete operations still use Agent actions or the CLI.
+Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Opening the Task entry shows its own Sidebar for selecting an Agent and Task, while the Mainview selects a Workspace and shows the Task list or details. This workspace reads the selected Agent's real Task runtime instead of copying state. The current Desktop workspace is read-only; create, edit, run, and delete operations still use Agent actions or the CLI.
 
 The CLI invokes task through the shared Plugin Action command:
 
@@ -74,6 +74,8 @@ The action names are `list`, `create`, `run`, `delete`, `update`, `status`, `ena
 - long-lived cron runtime belongs to the plugin instance
 - cron timezone comes from constructor `timezone`, defaulting to the local machine timezone
 - agent tasks read the effective runtime model from the Session port in PluginContext
+- each run creates an independent task Session while reusing the host Agent's complete Plugin capabilities
+- the completed result is appended as an assistant message to the associated Session; the Task runtime does not call the Chat Plugin directly
 - task scheduler reload is triggered after create, update, delete, or status mutation
 - the running-task lock belongs to the plugin instance, so reloads still keep each task serial
 - the plugin can also accept lifecycle commands such as reload or reschedule

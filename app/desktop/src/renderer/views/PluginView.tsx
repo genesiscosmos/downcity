@@ -1,18 +1,16 @@
-/** Plugin 专属 Mainview 页面。 */
+/** Plugin Catalog 中的描述与配置详情页。 */
 
 import { useCallback, useEffect, useState } from "react";
 import { TbChevronDown } from "react-icons/tb";
-import type { PluginJsonValue } from "@downcity/plugin";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
-import { PluginIcon } from "@/lib/plugin/PluginIcon";
-import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";
 import { Markdown } from "@/lib/markdown/Markdown";
+import { PluginIcon } from "@/lib/plugin/PluginIcon";
 import { cn } from "@/lib/utils";
-import { BUILTIN_PLUGIN_RENDERERS } from "@downcity/plugins/renderers";
+import { PluginConfigPanel } from "@/views/PluginSettings";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";
 
-/** 展示 Plugin 介绍与专属 Mainview，不承载 Config 或 Profile。 */
+/** 所有 Plugin 都展示说明；只有声明 Config 时才展示 Profile 配置。 */
 export function PluginView({ plugin, controller }: {
   /** 当前 Plugin。 */ readonly plugin: DesktopPluginSummary;
   /** Renderer 根控制器。 */ readonly controller: DesktopViewController;
@@ -20,35 +18,20 @@ export function PluginView({ plugin, controller }: {
   const [definition, set_definition] = useState<DesktopPluginDefinition>();
   const [error, set_error] = useState("");
   const get_plugin = controller.get_plugin;
-  const invoke_plugin_action = controller.invoke_plugin_action;
   const load = useCallback(async () => {
+    set_definition(undefined);
     set_error("");
     try { set_definition(await get_plugin(plugin.plugin_id)); }
     catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); }
   }, [get_plugin, plugin.plugin_id]);
   useEffect(() => { void load(); }, [load]);
-  const renderer = plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined;
-  const invoke = useCallback((action_id: string, input?: PluginJsonValue) => invoke_plugin_action(plugin.plugin_id, {
-    surface: "mainview",
-    action_id,
-    ...(input !== undefined ? { input } : {}),
-  }), [invoke_plugin_action, plugin.plugin_id]);
   return <MainViewLayout>
     <MainViewHeader />
     <MainViewBody><main className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto bg-background">
       <div className="mx-auto flex min-h-full w-full max-w-[90rem] flex-col gap-5 px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
         <PluginOverview plugin={definition ?? plugin} />
         {error ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-        <PluginRendererHost
-          plugin_id={plugin.plugin_id}
-          slot="mainview"
-          capabilities={plugin}
-          builtin_renderer={renderer}
-          renderer_url={definition?.renderer_url}
-          invoke_mainview={invoke}
-          route={controller.plugin_route}
-          navigate={controller.navigate_plugin}
-        />
+        {plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} set_definition={set_definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-sm text-foreground">无需配置</div><div className="mt-1 text-xs text-muted-foreground">此 Plugin 没有声明 Config，也不需要 Profile。</div></section>}
       </div>
     </main></MainViewBody>
   </MainViewLayout>;

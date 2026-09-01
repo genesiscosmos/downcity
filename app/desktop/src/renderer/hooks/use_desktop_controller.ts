@@ -71,8 +71,19 @@ const active_workspace_storage_key = "downcity.active_workspace_id";
 function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
   if (target.kind === "workspace" || target.kind === "workspace_file") return "workspace";
   if (target.kind === "plugin" || target.kind === "plugins") return "plugins";
+  if (target.kind === "plugin_workspace") return plugin_workspace_mode(target.plugin_id);
   if (target.kind === "settings") return undefined;
   return "chat";
+}
+
+/** 为功能型 Plugin 创建稳定的一级导航模式。 */
+function plugin_workspace_mode(plugin_id: string): SidebarMode {
+  return `plugin:${plugin_id}`;
+}
+
+/** 从动态一级导航模式读取 Plugin ID。 */
+function plugin_id_from_sidebar_mode(mode: SidebarMode): string | undefined {
+  return mode.startsWith("plugin:") ? mode.slice("plugin:".length) : undefined;
 }
 
 /** 将一项 Draft 状态移动到新组合键，避免切换上下文后留下过期副本。 */
@@ -131,7 +142,8 @@ export function use_desktop_controller(): DesktopViewController {
   const [selection, set_selection] = useState<NavigationTarget | null>(null);
   const [active_workspace_id, set_active_workspace_id] = useState("");
   const [sidebar_mode, set_sidebar_mode_state] = useState<SidebarMode>("chat");
-  const [plugin_route, set_plugin_route] = useState<import("@downcity/plugin").PluginJsonObject>({});
+  const [plugin_routes, set_plugin_routes] = useState<Record<string, import("@downcity/plugin").PluginJsonObject>>({});
+  const [plugin_revisions, set_plugin_revisions] = useState<Record<string, number>>({});
   const [settings, set_settings] = useState<DesktopSettings>(default_settings);
   const [global_env, set_global_env] = useState("");
   const [user, set_user] = useState<DesktopUserSummary>(default_user);
@@ -372,18 +384,28 @@ export function use_desktop_controller(): DesktopViewController {
     set_error("");
     set_sidebar_mode_state("plugins");
     set_selection({ kind: "plugin", plugin_id });
-    set_plugin_route({});
   }, []);
 
   const select_plugins = useCallback(() => {
     set_error("");
     set_sidebar_mode_state("plugins");
     set_selection({ kind: "plugins" });
-    set_plugin_route({});
   }, []);
 
-  const navigate_plugin = useCallback((route: import("@downcity/plugin").PluginJsonObject) => {
-    set_plugin_route(structuredClone(route));
+  const select_plugin_workspace = useCallback((plugin_id: string) => {
+    const plugin = plugins.find((item) => item.plugin_id === plugin_id);
+    if (!plugin?.has_sidebar || !plugin.has_mainview) return;
+    set_error("");
+    set_sidebar_mode_state(plugin_workspace_mode(plugin_id));
+    set_selection({ kind: "plugin_workspace", plugin_id });
+  }, [plugins]);
+
+  const navigate_plugin = useCallback((plugin_id: string, route: import("@downcity/plugin").PluginJsonObject) => {
+    set_plugin_routes((current) => ({ ...current, [plugin_id]: structuredClone(route) }));
+  }, []);
+
+  const invalidate_plugin = useCallback((plugin_id: string) => {
+    set_plugin_revisions((current) => ({ ...current, [plugin_id]: (current[plugin_id] ?? 0) + 1 }));
   }, []);
 
   const set_sidebar_mode = useCallback((mode: SidebarMode) => {
@@ -400,6 +422,12 @@ export function use_desktop_controller(): DesktopViewController {
     }
     if (mode === "plugins") {
       set_selection({ kind: "plugins" });
+      return;
+    }
+    const plugin_id = plugin_id_from_sidebar_mode(mode);
+    const plugin = plugin_id ? plugins.find((item) => item.plugin_id === plugin_id) : undefined;
+    if (plugin?.has_sidebar && plugin.has_mainview) {
+      set_selection({ kind: "plugin_workspace", plugin_id: plugin.plugin_id });
       return;
     }
     set_selection(agents[0] ? { kind: "agent", agent_id: agents[0].agent_id } : null);
@@ -975,12 +1003,24 @@ export function use_desktop_controller(): DesktopViewController {
 
   const create_workspace = useCallback(async (value: CreateWorkspaceFormValue) => {
     set_error("");
-    const workspace = await window.downcity.workspace.create(value.workspace_path, value.name);
+    const workspace = await window.downcity.workspace.create(value);
     set_workspaces((current) => [...current.filter((item) => item.workspace_id !== workspace.workspace_id), workspace]);
     set_sidebar_mode_state("workspace");
     set_active_workspace_id(workspace.workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace.workspace_id);
     set_selection({ kind: "workspace", workspace_id: workspace.workspace_id });
+  }, []);
+
+  const update_workspace_name = useCallback(async (workspace_id: string, name: string) => {
+    set_error("");
+    const workspace = await window.downcity.workspace.update_name(workspace_id, name);
+    set_workspaces((current) => current.map((item) => item.workspace_id === workspace_id ? workspace : item));
+  }, []);
+
+  const write_workspace_readme = useCallback(async (workspace_id: string, content: string) => {
+    set_error("");
+    const workspace = await window.downcity.workspace.write_readme(workspace_id, content);
+    set_workspaces((current) => current.map((item) => item.workspace_id === workspace_id ? workspace : item));
   }, []);
 
   const update_draft = useCallback((workspace_id: string, agent_id: string, session_id: string, text: string) => {
@@ -1316,7 +1356,8 @@ export function use_desktop_controller(): DesktopViewController {
     selection,
     active_workspace_id,
     sidebar_mode,
-    plugin_route,
+    plugin_routes,
+    plugin_revisions,
     settings,
     global_env,
     user,
@@ -1329,7 +1370,9 @@ export function use_desktop_controller(): DesktopViewController {
     open_agent_chat,
     select_plugin,
     select_plugins,
+    select_plugin_workspace,
     navigate_plugin,
+    invalidate_plugin,
     set_sidebar_mode,
     select_workspace,
     select_workspace_file,
@@ -1365,6 +1408,8 @@ export function use_desktop_controller(): DesktopViewController {
     remove_plugin_profile,
     invoke_plugin_action,
     create_workspace,
+    update_workspace_name,
+    write_workspace_readme,
     update_draft,
     update_draft_files,
     update_draft_references,

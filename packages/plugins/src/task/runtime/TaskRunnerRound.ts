@@ -10,10 +10,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import type { PluginContext } from "@downcity/agent";
 import type { SessionTurnExecutionResult } from "@downcity/agent";
-import type { SessionTurnContext } from "@downcity/agent";
-import { create_session_turn_context } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
-import { SessionAssistantOutputAdapter } from "@downcity/agent";
 import type {
   ChatSendOutputPick,
   ScriptExecutionResult,
@@ -227,29 +224,15 @@ export async function runAgentRound(params: {
     // ignore
   }
 
-  const turn_id = `task:${params.taskId}:${params.actorId}:${Date.now()}`;
-  const assistant_output = new SessionAssistantOutputAdapter({
-    turn_id,
-    messages: params.taskSessionRuntime.get_messages(params.session_id),
+  const turn = await params.taskSessionRuntime.get_session(params.session_id).prompt({
+    query: params.query,
   });
-  const turn_context = create_task_turn_context(
-    params.session_id,
-    turn_id,
-    assistant_output,
-  );
-  let result: SessionTurnExecutionResult;
-  try {
-    result = await params.taskSessionRuntime.get_executor(params.session_id).execute({
-      query: params.query,
-      turn_context,
-    });
-    await assistant_output.finish({
-      status: result.success ? "completed" : "failed",
-      ...(result.error ? { error: result.error } : {}),
-    });
-  } finally {
-    await turn_context.lifecycle.dispose();
-  }
+  const turn_result = await turn.finished;
+  const result: SessionTurnExecutionResult = {
+    success: turn_result.success,
+    text: turn_result.text,
+    ...(turn_result.error ? { error: turn_result.error } : {}),
+  };
   const outputPick = pickAgentOutput(result.text);
 
   if (!result.success) {
@@ -260,6 +243,11 @@ export async function runAgentRound(params: {
   if (!String(outputPick.text || "").trim()) {
     throw new Error("agent produced no user-visible output");
   }
+
+  // 宿主 Session 保存实际执行历史；run 目录额外保留一份独立调试快照。
+  await params.taskSessionRuntime.get_messages(params.session_id).append_external_assistant_message({
+    text: outputPick.text,
+  });
 
   return {
     outputText: outputPick.text,
@@ -317,21 +305,6 @@ export async function runScriptTask(params: {
   return {
     outputText: combined,
   };
-}
-
-/**
- * 创建 task runner 的显式 Session Turn Context。
- */
-function create_task_turn_context(
-  session_id: string,
-  turn_id: string,
-  assistant_output: SessionAssistantOutputAdapter,
-): SessionTurnContext {
-  return create_session_turn_context({
-    session_id: session_id,
-    turn_id,
-    assistant_output,
-  });
 }
 
 /**

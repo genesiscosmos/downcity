@@ -29,7 +29,7 @@ description: task 定义、task actions，以及归属于 plugin 实例的 cron 
 
 ## 用户怎么使用
 
-Task 不声明 Config，因此不需要 Profile。它出现在 Desktop 的 Plugins Tab 中：Plugin 自己的 Sidebar 用于选择 Agent 和 Task，Mainview 用于选择 Workspace 并查看 Task 列表或详情。这里读取的是对应 Agent 的真实 Task runtime，不复制第二份状态；当前 Desktop 工作区只读，创建、编辑、运行和删除仍通过 Agent action 或 CLI 完成。
+Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。打开 Task 一级入口后，它自己的 Sidebar 用于选择 Agent 和 Task，Mainview 用于选择 Workspace 并查看 Task 列表或详情。这里读取的是对应 Agent 的真实 Task runtime，不复制第二份状态；当前 Desktop 工作区只读，创建、编辑、运行和删除仍通过 Agent action 或 CLI 完成。
 
 CLI 通过统一 Plugin Action 命令调用 task：
 
@@ -74,6 +74,8 @@ action 名称是 `list`、`create`、`run`、`delete`、`update`、`status`、`e
 - 长期 cron runtime 归属于 plugin 实例
 - cron 时区来自 constructor `timezone`，默认本机时区
 - agent task 通过 PluginContext 的 Session runtime port 读取有效模型实例
+- 每次执行会创建独立的 task Session，并复用宿主 Agent 的完整 Plugin 能力
+- 任务完成结果会追加为关联 Session 的 assistant 消息；Task runtime 不直接调用 Chat Plugin
 - create / update / delete / status 变更后会触发 scheduler reload
 - task 运行中锁归属于 plugin 实例，reload 时也会保持同一 task 串行执行
 - plugin 也支持 reload / reschedule 这类 lifecycle command

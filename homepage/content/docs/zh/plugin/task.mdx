@@ -16,7 +16,7 @@ Task 插件让 Agent 能够调度和运行后台任务。它适用于定期数�
 
 ## Desktop 工作区
 
-Task 不声明 Config，因此不需要 Profile。它会出现在 Plugins Tab 的 Plugin List 中：左侧 Plugin Sidebar 用于选择 Agent 和 Task，右侧 Mainview 用于选择 Workspace 并查看 Task 列表或详情。这里直接读取所选 Agent 的 Task runtime，不保存第二份任务状态。当前 Desktop 工作区只读；创建、编辑、运行和删除仍通过 Task action 或 CLI 完成。
+Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。打开 Task 一级入口后，左侧 Plugin Sidebar 用于选择 Agent 和 Task，右侧 Mainview 用于选择 Workspace 并查看 Task 列表或详情。这里直接读取所选 Agent 的 Task runtime，不保存第二份任务状态。当前 Desktop 工作区只读；创建、编辑、运行和删除仍通过 Task action 或 CLI 完成。
 
 ## 定义任务
 
@@ -32,6 +32,8 @@ Task 不声明 Config，因此不需要 Profile。它会出现在 Plugins Tab �
 - 定期报告生成
 - 后台文件处理
 - 定时通知
+
+任务执行时会创建独立的 task Session，并复用宿主 Agent 的能力。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Chat 插件；任务完成结果则作为 assistant 消息追加到关联 Session。
 
 继续阅读：
 

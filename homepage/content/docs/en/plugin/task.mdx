@@ -16,7 +16,7 @@ The Task plugin lets your Agent schedule and run background jobs. It is useful f
 
 ## Desktop workspace
 
-Task does not declare Config, so it needs no Profile. It appears in the Plugin List under the Plugins Tab: the Plugin Sidebar selects an Agent and Task, while the Mainview selects a Workspace and displays the Task list or details. It reads the selected Agent's Task runtime directly instead of storing a second copy. The current Desktop workspace is read-only; create, edit, run, and delete operations still use Task actions or the CLI.
+Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Opening the Task entry shows its Plugin Sidebar for selecting an Agent and Task, while the Mainview selects a Workspace and displays the Task list or details. It reads the selected Agent's Task runtime directly instead of storing a second copy. The current Desktop workspace is read-only; create, edit, run, and delete operations still use Task actions or the CLI.
 
 ## Defining a task
 
@@ -32,6 +32,8 @@ Tasks are defined in the project and registered with the Task plugin at startup.
 - Periodic report generation
 - Background file processing
 - Scheduled notifications
+
+Each run creates an independent task Session while reusing the host Agent's capabilities. If the task Agent needs to send a chat message, it calls the Chat plugin from the task Session. The completed result is appended as an assistant message to the associated Session.
 
 Continue with:
 

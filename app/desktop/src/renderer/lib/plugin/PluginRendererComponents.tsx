@@ -5,18 +5,20 @@
  * 所有组件直接复用 Desktop 基础控件，因此主题、尺寸、焦点和禁用状态与宿主一致。
  */
 
-import { useState, type KeyboardEvent } from "react";
-import { TbChevronDown, TbLoader2 } from "react-icons/tb";
+import { Fragment, useState, type KeyboardEvent } from "react";
+import { TbChevronDown, TbChevronRight, TbDots, TbLoader2 } from "react-icons/tb";
 import type { PluginRendererUiComponents } from "@downcity/plugin/react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Markdown as MarkdownView } from "@/lib/markdown/Markdown";
 import { cn } from "@/lib/utils";
 
 /** 创建稳定的宿主 Plugin UI Components 集合。 */
 export function create_plugin_renderer_ui_components(): PluginRendererUiComponents {
   return {
-    Sidebar: ({ children }) => <div className="sidebar-body-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">{children}</div>,
+    Sidebar: ({ children }) => <div data-sidebar-scrollable="true" className="sidebar-body-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">{children}</div>,
     SidebarSection: ({ label, children }) => <section className="mb-4 min-w-0">
       {label ? <h3 className="px-2 pb-1.5 pt-1 text-[0.625rem] font-medium uppercase tracking-[0.08em] text-muted-foreground/65">{label}</h3> : null}
       <div className="space-y-0.5">{children}</div>
@@ -32,6 +34,27 @@ export function create_plugin_renderer_ui_components(): PluginRendererUiComponen
       <span className="min-w-0 flex-1"><span className="block truncate text-xs">{label}</span>{description ? <span className="mt-0.5 block truncate text-[10px] text-muted-foreground/65">{description}</span> : null}</span>
       {trailing ? <span className="shrink-0 text-[10px] text-muted-foreground/65">{trailing}</span> : null}
     </button>,
+    SidebarTreeItem: ({ label, leading, trailing, depth, kind, active, expanded, on_toggle, disabled, on_select }) => {
+      const is_branch = (kind ?? (on_toggle ? "branch" : "leaf")) === "branch";
+      const aligns_with_parent_text = depth > 0 && !is_branch && !leading;
+      const indentation = aligns_with_parent_text ? 24 + (depth - 1) * 12 : depth * 12;
+      return <div
+        style={indentation === 0 ? undefined : { paddingLeft: indentation }}
+      >
+        <div className={cn("group/item flex min-h-8 w-full items-center gap-1 rounded-lg py-0.5 pr-1 text-left transition-colors duration-150", aligns_with_parent_text ? "pl-2" : "pl-1", active ? "bg-primary/[0.1] text-foreground" : "text-foreground/85 hover:bg-foreground/[0.07]", disabled && "opacity-45")}>
+          {is_branch ? <button type="button" aria-label={`${expanded ? "折叠" : "展开"} ${String(label)}`} aria-expanded={expanded} disabled={disabled} onClick={(event) => { event.stopPropagation(); on_toggle?.(); }} className="flex size-6 shrink-0 items-center justify-center rounded-md bg-transparent p-0 text-muted-foreground/70 outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbChevronRight className={cn("size-3.5 transition-transform duration-150 motion-reduce:transition-none", expanded && "rotate-90")} /></button> : leading ? <span className={cn("flex size-6 shrink-0 items-center justify-center", active ? "text-primary" : "text-muted-foreground/70")} aria-hidden="true">{leading}</span> : null}
+          <button type="button" aria-current={active ? "page" : undefined} disabled={disabled} onClick={on_select} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
+            {is_branch && leading ? <span className={cn("flex size-4 shrink-0 items-center justify-center", active ? "text-primary" : "text-muted-foreground/70")}>{leading}</span> : null}
+            <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
+          </button>
+          {trailing != null ? <span className="flex min-w-6 shrink-0 items-center justify-end gap-1 text-[10px] text-muted-foreground/65">{typeof trailing === "number" ? <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-foreground/[0.06] tabular-nums">{trailing}</span> : trailing}</span> : null}
+        </div>
+      </div>;
+    },
+    ItemMenu: ({ label, actions, reveal_on_hover = false }) => <DropdownMenu>
+      <DropdownMenuTrigger asChild><button type="button" aria-label={label} title={label} onClick={(event) => event.stopPropagation()} className={cn("flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-[background-color,color,opacity] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[state=open]:bg-interaction-hover data-[state=open]:text-foreground", reveal_on_hover && "pointer-events-none opacity-0 group-hover/item:pointer-events-auto group-hover/item:opacity-100 group-focus-within/item:pointer-events-auto group-focus-within/item:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100")}><TbDots className="size-3.5" /></button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>{actions.map((action) => <Fragment key={action.action_id}>{action.separator_before ? <DropdownMenuSeparator /> : null}<DropdownMenuItem disabled={action.disabled} className={action.destructive ? "text-destructive" : undefined} onClick={() => void action.on_select()}>{action.leading}<span>{action.label}</span></DropdownMenuItem></Fragment>)}</DropdownMenuContent>
+    </DropdownMenu>,
     Page: ({ children }) => <div className="flex min-w-0 flex-col gap-5">{children}</div>,
     Section: ({ title, description, action, surface = true, children }) => <section className="flex min-w-0 flex-col gap-2">
       {title || description || action ? <header className="flex min-w-0 items-start justify-between gap-4 px-2">
@@ -77,7 +100,7 @@ export function create_plugin_renderer_ui_components(): PluginRendererUiComponen
         aria-disabled={on_click ? disabled : undefined}
         onClick={on_click ? activate : undefined}
         onKeyDown={handle_key_down}
-        className={cn("flex min-h-12 items-center justify-between gap-4 px-3.5 py-2.5", on_click && "cursor-pointer transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover focus-visible:outline-none", disabled && "pointer-events-none opacity-50")}
+        className={cn("group/item flex min-h-12 items-center justify-between gap-4 px-3.5 py-2.5", on_click && "cursor-pointer transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover focus-visible:outline-none", disabled && "pointer-events-none opacity-50")}
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {leading ? <div className="flex shrink-0 items-center text-muted-foreground">{leading}</div> : null}
@@ -118,6 +141,7 @@ export function create_plugin_renderer_ui_components(): PluginRendererUiComponen
       </button>)}
     </div>,
     CodeBlock: ({ children }) => <pre className="max-h-[32rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-subtle px-4 py-3 font-mono text-[11px] leading-5 text-foreground/85">{children}</pre>,
+    Markdown: ({ text }) => <MarkdownView text={text} mode="static" class_name="!h-auto text-[13px]" />,
     Button: ({ children, on_click, disabled, variant = "default", size = "default", title, aria_label }) => <Button variant={variant} size={size} disabled={disabled} onClick={on_click} title={title} aria-label={aria_label}>{children}</Button>,
     Input: ({ value, on_value_change, placeholder, disabled, type = "text", minimum, maximum }) => <input
       value={value}

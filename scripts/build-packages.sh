@@ -66,53 +66,6 @@ add_package() {
   fi
 }
 
-add_build_package() {
-  local package_name="$1"
-  if contains "$package_name" "${BUILD_PACKAGES[@]}"; then return 0; fi
-  BUILD_PACKAGES+=("$package_name")
-
-  case "$package_name" in
-    sandbox-*)
-      add_build_package "workspace"
-      ;;
-    agent)
-      add_build_package "type"
-      add_build_package "workspace"
-      add_build_package "federation"
-      ;;
-    workspace-cloudflare-computer)
-      add_build_package "workspace"
-      ;;
-    federation|database-*)
-      add_build_package "type"
-      if [[ "$package_name" == database-* ]]; then
-        add_build_package "federation"
-      fi
-      ;;
-    services)
-      add_build_package "type"
-      add_build_package "federation"
-      ;;
-    plugin)
-      ;;
-    plugins)
-      add_build_package "plugin"
-      add_build_package "type"
-      add_build_package "agent"
-      ;;
-    local)
-      add_build_package "agent"
-      add_build_package "plugin"
-      ;;
-    cli)
-      add_build_package "agent"
-      add_build_package "local"
-      add_build_package "services"
-      add_build_package "ui"
-      ;;
-  esac
-}
-
 normalize_selected_packages() {
   local ordered=()
   local package_name
@@ -122,17 +75,6 @@ normalize_selected_packages() {
     fi
   done
   PACKAGES=("${ordered[@]}")
-}
-
-normalize_build_packages() {
-  local ordered=()
-  local package_name
-  for package_name in "${ALL_PACKAGES[@]}"; do
-    if contains "$package_name" "${BUILD_PACKAGES[@]}"; then
-      ordered+=("$package_name")
-    fi
-  done
-  BUILD_PACKAGES=("${ordered[@]}")
 }
 
 run_build() {
@@ -148,14 +90,10 @@ run_build() {
 }
 
 should_sync_global_cli() {
-  local package_name
-  for package_name in "${PACKAGES[@]}"; do
-    case "$package_name" in
-      agent|federation|plugin|plugins|local|ui|cli)
-        return 0
-        ;;
-    esac
-  done
+  local dependency_name
+  while IFS= read -r dependency_name; do
+    if contains "$dependency_name" "${PACKAGES[@]}"; then return 0; fi
+  done < <(node "$ROOT_DIR/scripts/resolve-package-build-order.mjs" cli)
   return 1
 }
 
@@ -195,10 +133,9 @@ if [[ ${#PACKAGES[@]} -eq 0 ]]; then
 fi
 
 normalize_selected_packages
-for package_name in "${PACKAGES[@]}"; do
-  add_build_package "$package_name"
-done
-normalize_build_packages
+while IFS= read -r package_name; do
+  BUILD_PACKAGES+=("$package_name")
+done < <(node "$ROOT_DIR/scripts/resolve-package-build-order.mjs" "${PACKAGES[@]}")
 
 if $BUMP; then
   echo "==> patch bump: ${PACKAGES[*]}"

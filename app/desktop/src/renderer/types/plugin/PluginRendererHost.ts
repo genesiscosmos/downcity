@@ -40,6 +40,10 @@ export interface PluginRendererHostProps {
   readonly route?: PluginJsonObject;
   /** 替换 Sidebar 与 Mainview 共享的宿主路由。 */
   navigate?(route: PluginJsonObject): void;
+  /** 当前 Plugin 功能界面的宿主刷新版本。 */
+  readonly revision?: number;
+  /** 通知同一 Plugin 的 Sidebar 与 Mainview 重新读取业务快照。 */
+  invalidate?(): void;
 }
 
 /** 已动态加载的第三方 Renderer。 */

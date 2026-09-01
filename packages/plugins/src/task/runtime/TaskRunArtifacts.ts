@@ -222,7 +222,7 @@ export async function writeTaskRunInputArtifact(
       `- title: ${params.task.frontmatter.title}`,
       `- when: \`${params.task.frontmatter.when}\``,
       `- status: \`${params.task.frontmatter.status}\``,
-      `- session_id: \`${params.task.frontmatter.session_id}\``,
+      `- linked_session_id: \`${params.task.frontmatter.session_id}\``,
       `- kind: \`${params.taskKind}\``,
       ...(params.taskKind === "agent"
         ? [`- review: \`${String(params.reviewEnabled)}\``]

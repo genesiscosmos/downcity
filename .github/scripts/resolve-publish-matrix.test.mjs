@@ -18,21 +18,19 @@ test("当前 workspace 被解析为四个稳定发布层", () => {
   const graph = resolve_publish_layers(workspace_root);
 
   assert.deepEqual(graph.layers.map((layer) => layer.map((item) => item.name)), [
-    ["@downcity/plugin", "@downcity/type", "@downcity/ui", "@downcity/workspace"],
-    [
-      "@downcity/federation",
-      "@downcity/sandbox-linux",
-      "@downcity/sandbox-macos",
-      "@downcity/sandbox-windows-mxc",
-      "@downcity/sandbox-windows-srt",
-      "@downcity/workspace-cloudflare-computer",
-    ],
+    ["@downcity/plugin", "@downcity/type", "@downcity/ui"],
+    ["@downcity/federation", "@downcity/workspace"],
     [
       "@downcity/agent",
       "@downcity/database-d1",
       "@downcity/database-postgresql",
       "@downcity/database-sqlite",
+      "@downcity/sandbox-linux",
+      "@downcity/sandbox-macos",
+      "@downcity/sandbox-windows-mxc",
+      "@downcity/sandbox-windows-srt",
       "@downcity/services",
+      "@downcity/workspace-cloudflare-computer",
     ],
     ["@downcity/local", "@downcity/plugins"],
   ]);
@@ -43,9 +41,9 @@ test("当前 workspace 被解析为四个稳定发布层", () => {
   assert.equal(outputs.has_layer_3, "true");
   assert.equal(outputs.has_layer_4, "false");
   assert.equal(outputs.has_layer_2, "true");
-  assert.equal(JSON.parse(outputs.layer_0_matrix).include.length, 4);
-  assert.equal(JSON.parse(outputs.layer_1_matrix).include.length, 6);
-  assert.equal(JSON.parse(outputs.layer_2_matrix).include.length, 5);
+  assert.equal(JSON.parse(outputs.layer_0_matrix).include.length, 3);
+  assert.equal(JSON.parse(outputs.layer_1_matrix).include.length, 2);
+  assert.equal(JSON.parse(outputs.layer_2_matrix).include.length, 10);
   assert.equal(JSON.parse(outputs.layer_3_matrix).include.length, 2);
   assert.equal(JSON.parse(outputs.layer_4_matrix).include.length, 0);
 });

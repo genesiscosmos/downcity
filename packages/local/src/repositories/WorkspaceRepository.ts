@@ -61,6 +61,24 @@ export class WorkspaceRepository {
     return config;
   }
 
+  /** 更新 Workspace 自身的用户可见信息。 */
+  update_name(workspace_id_input: string, name_input: string): LocalWorkspaceConfig {
+    const current = this.get(workspace_id_input);
+    if (!current) throw new Error(`Workspace not found: ${workspace_id_input}`);
+    const name = String(name_input || "").trim();
+    if (!name) throw new Error("name is required");
+    const updated_at = new Date().toISOString();
+    const config: LocalWorkspaceConfig = {
+      ...current,
+      name,
+      updated_at,
+    };
+    this.database.prepare(`
+      UPDATE workspaces SET config_json = ?, updated_at = ? WHERE workspace_id = ?;
+    `).run(JSON.stringify(config), updated_at, current.workspace_id);
+    return config;
+  }
+
   /** 列出全部 Workspace。 */
   list(): LocalWorkspaceConfig[] {
     const rows = this.database.prepare(`

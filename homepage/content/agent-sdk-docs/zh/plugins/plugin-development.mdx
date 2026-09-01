@@ -154,7 +154,7 @@ Profile 只是宿主配置空间。SDK Class 不需要知道它来自 TOML；fac
 
 ## Main 与 Renderer
 
-Plugin Sidebar/Mainview 使用 `plugin.action()` 与 `plugin.invoke()`，通过共享的 `navigation` 协同，不依赖 Profile。配置体验使用 `plugin.config_action()` 与 `config.invoke()`，由宿主在设置中心绑定当前 Profile。只有声明 Config 的 Plugin 才有 Profile；内容结构、默认值、校验和 Secret 投影全部由 Plugin 自己负责，宿主只提供 Profile CRUD。
+Plugin Sidebar/Mainview 使用 `plugin.action()` 与 `plugin.invoke()`，通过共享的 `navigation` 协同，不依赖 Profile；声明这两个插槽后，宿主会为 Plugin 增加一级导航入口。配置体验使用 `plugin.config_action()` 与 `config.invoke()`，由宿主在 Plugins Catalog 的详情页绑定当前 Profile。只有声明 Config 的 Plugin 才有 Profile；内容结构、默认值、校验和 Secret 投影全部由 Plugin 自己负责，宿主只提供 Profile CRUD。
 
 完整示例与安全边界见[自定义 Plugin](/zh/docs/plugin/custom)。
 

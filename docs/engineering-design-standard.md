@@ -292,7 +292,7 @@ Plugin 通过 PluginContext 使用 Agent 内核允许的能力。PluginContext �
 
 Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `enter_workspace/leave_workspace`。实现哪些钩子由 Plugin 自己决定，不构成 Plugin 分类。
 
-Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile。Sidebar 与 Mainview 共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用 main，不要求 Profile；Config 只在设置中心出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。业务能力仍必须通过 Plugin main action 暴露。
+Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile。宿主的 Plugins 导航始终列出完整 Plugin Catalog；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用 main，不要求 Profile。Config 只在 Plugin Catalog 详情出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。业务能力仍必须通过 Plugin main action 暴露。
 
 ### 4.6 Agent 定义的本地事实源
 

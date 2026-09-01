@@ -43,9 +43,10 @@ sync_downcity_workspace_packages_globally() {
   local package_dir="$2"
   local package_name
 
-  for package_name in type workspace sandbox-macos sandbox-linux sandbox-windows-mxc sandbox-windows-srt agent federation plugins city services ui; do
+  while IFS= read -r package_name; do
+    if [[ "$package_name" == "cli" ]]; then continue; fi
     sync_downcity_workspace_package_globally "$workspace_root" "$package_dir" "$package_name"
-  done
+  done < <(node "$workspace_root/scripts/resolve-package-build-order.mjs" cli)
 }
 
 deploy_downcity_cli_package() {

@@ -121,7 +121,7 @@ export type TaskRunResponse = {
   success: boolean;
   /** 是否已受理后台执行（true 表示任务已开始异步执行） */
   accepted?: boolean;
-  /** 给调用方的简短提示（例如“任务已开始，完成后 task 会自动发送给用户，请直接继续后续流程，无需等待完成”） */
+  /** 给调用方的简短提示（例如“任务已开始，完成后结果会写入关联 Session，请直接继续后续流程，无需等待完成”）。 */
   message?: string;
   /** 本次执行 ID（可用于 UI 关联执行状态） */
   executionId?: string;

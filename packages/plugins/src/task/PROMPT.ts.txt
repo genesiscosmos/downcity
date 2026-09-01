@@ -12,7 +12,7 @@ Core frontmatter fields:
 - `title`: unique task identifier
 - `description`: task description
 - `when`: trigger condition, supporting `@manual`, cron, or `time:<ISO8601-with-timezone>`
-- `sessionId`: task execution session
+- `session_id`: the Session that created the task and receives the completed result
 - `status`: `enabled|paused|disabled`
 - `kind`: `agent|script`, defaulting to `agent`
 
@@ -52,18 +52,18 @@ Common artifacts:
 ## Action Examples
 
 - `plugin_call({ plugin: "task", action: "list", payload: { status } })`
-- `plugin_call({ plugin: "task", action: "create", payload: { title, description, sessionId, when, kind, status } })`
+- `plugin_call({ plugin: "task", action: "create", payload: { title, description, session_id, when, kind, status } })`
 - `plugin_call({ plugin: "task", action: "run", payload: { title, reason } })`
-- `plugin_call({ plugin: "task", action: "update", payload: { title, description, when, status, sessionId } })`
+- `plugin_call({ plugin: "task", action: "update", payload: { title, description, when, status, session_id } })`
 - `plugin_call({ plugin: "task", action: "delete", payload: { title } })`
 
 ## Key Constraints
 
 - `title` is unique. `create` deduplicates only by exact `title`.
 - After `when=time:...` triggers, the task is automatically set to `paused` and falls back to `when=@manual`.
-- `run` is accepted asynchronously. It returns `accepted=true`, `message`, and `executionId` immediately. Treat this as "the task has entered background execution; the result will be sent automatically through the chat plugin runtime, and the current flow does not need to block."
+- `run` is accepted asynchronously. It returns `accepted=true`, `message`, and `executionId` immediately. Treat this as "the task has entered background execution; the result will be written to the associated Session, and the current flow does not need to block."
 - If `run` returns `accepted=true`:
-  - Do not manually forward task output to the user again.
+  - Do not manually forward task output to the user again from the creating Session.
   - Do not actively poll the run directory, `run-progress.json`, or `output.md`.
   - Inspect run details through the task/control API only when the user explicitly asks to debug, view artifacts, or confirm execution details.
 - Agent tasks only need to produce valid output by default. They should send to an external channel only when the task body explicitly requires it.
@@ -112,10 +112,10 @@ The body should include at least these headings:
 - `# Background And Input` must specify sources, scope, objects, time range, and constraints. Do not assume the executor can see the original chat context.
 - `# Execution Steps` should describe the task workflow, not task-management actions. Do not write "first check whether a task with the same name exists", "then create a task", or "then trigger the task".
 - `# Output Requirements` must clearly specify the final artifact's format, structure, tone, length, and excluded content.
-- Explicitly state that the final assistant message will be written directly to `output.md` and sent to the user. Therefore, the final answer must be exactly the deliverable content.
+- Explicitly state that the final assistant message will be written directly to `output.md` and appended to the associated Session. Therefore, the final answer must be exactly the deliverable content.
 - Content-generation tasks such as daily reports, reminders, morning briefings, summaries, and reports must explicitly require "the final output is the deliverable body itself". Do not let the executor output process notes.
-- If the task result should be sent to the user, the body should require "output send-ready message content" instead of asking the executor to explain what it has sent.
-- Unless truly needed, do not ask the executor to repeat the task title, sessionId, execution time, status, or other metadata in the body.
+- If the task itself should notify a user or external channel, the body should require the task Agent to call the chat plugin directly.
+- Unless truly needed, do not ask the executor to repeat the task title, session_id, execution time, status, or other metadata in the body.
 - Constraints in the body must be executable and checkable. Avoid weak phrases such as "appropriately", "as much as possible", or "depending on the situation".
 - Do not put task creation, task update, task status lookup, or same-title existence checks into the body. Those belong to the task plugin, not to the task deliverable.
 
@@ -159,13 +159,12 @@ The body should include at least these headings:
 
 ### Output Design Principles
 
-- When a task completes, the system automatically sends the final result body back to the chat bound to `sessionId` through the chat plugin runtime's `send`.
+- When a task completes, the final result body is appended as an assistant message to the Session identified by `session_id`.
 - The current implementation uses the simplest rule: the final assistant message is treated directly as the final result body and written to `output.md`.
 - Therefore, the "Output Requirements" section must be written for the final user, not only for developers.
 - For user-facing agent tasks, the body should require "the final assistant message directly outputs the deliverable itself". Do not let the executor explain how it created, checked, updated, triggered, or sent the task.
 - For content-generation tasks such as daily reports, reminders, morning briefings, and summaries, the final output should be exactly that content. It should not include process language such as "I will handle this", "task sent", or "task status summary".
-- By default, do not ask the executor to call chat plugin send actions again. The system handles final-result delivery.
-- Explicitly require chat plugin actions only for cross-conversation sending, additional CCs, multi-channel notifications, or similar cases.
+- The task execution Agent may call the chat plugin itself when the task body explicitly requires a notification. Task completion delivery to the associated Session does not call the chat plugin.
 
 ### Choosing `when` And `status`
 
@@ -199,7 +198,7 @@ The body should include at least these headings:
 - The final assistant message is the final result. Do not include long logs.
 - The final assistant message must output the deliverable itself. Do not output task-management process, sending process, or status reports.
 - Do not use meta language such as "I will help you...", "First, let me...", or "sent".
-- By default, do not call the chat plugin send action again.
+- Call the chat plugin send action from this task Session when the task explicitly requires a notification.
 
 # Trigger And Status Recommendation
 
@@ -207,7 +206,7 @@ The body should include at least these headings:
 
 # Notes
 
-- Call chat plugin send actions only when cross-conversation or additional notifications are explicitly needed.
+- Call chat plugin send actions when the task explicitly requires notifying a user or external channel.
 ```
 
 ### Script Template

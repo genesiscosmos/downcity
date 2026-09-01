@@ -16,7 +16,7 @@ export type ShipTaskFrontmatterV1 = {
   when: string;
   /** 任务描述（给执行器的意图说明） */
   description: string;
-  /** 任务执行会话标识（session_id） */
+  /** 任务关联 Session 标识；任务完成结果会写入该 Session。 */
   session_id: string;
   /** 任务执行类型（agent=交给 agent 执行；script=直接执行 task 正文脚本） */
   kind?: ShipTaskKind;
@@ -126,7 +126,7 @@ export type ShipTaskRunMetaV1 = {
   timestamp: string;
   /** 本次执行唯一 ID */
   executionId: string;
-  /** 任务执行会话标识 */
+  /** 任务关联 Session 标识。 */
   session_id: string;
   /** 触发来源 */
   trigger: ShipTaskRunTriggerV1;

@@ -12,6 +12,7 @@
  */
 
 import { execFile, execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -185,6 +186,15 @@ function assert_publishable_manifest(manifest, package_spec) {
 function verify_package_tarball(item, npm_env) {
   const pack_directory = mkdtempSync(path.join(tmpdir(), "downcity-package-pack-"));
   try {
+    const source_manifest = read_package_manifest(item.path);
+    // `pack` 不执行 prepublishOnly；缺少 prepack 的包必须先 build，避免审计旧产物。
+    if (!source_manifest.scripts?.prepack && source_manifest.scripts?.build) {
+      execFileSync("pnpm", ["run", "build"], {
+        cwd: path.join(workspace_root, item.path),
+        env: npm_env,
+        stdio: "inherit",
+      });
+    }
     execFileSync(
       "pnpm",
       ["pack", "--json", "--pack-destination", pack_directory],
@@ -216,17 +226,19 @@ function verify_package_tarball(item, npm_env) {
       );
     }
     assert_publishable_manifest(manifest, package_spec);
+    const integrity = `sha512-${createHash("sha512").update(readFileSync(tarball_path)).digest("base64")}`;
+    return { integrity, manifest };
   } finally {
     rmSync(pack_directory, { recursive: true, force: true });
   }
 }
 
-/** 判断 npm registry 是否已经存在指定版本。 */
-function is_published(package_name, package_version, npm_env) {
+/** 读取 Registry 中指定 package 版本的 tarball integrity。 */
+function read_published_integrity(package_name, package_version, npm_env) {
   try {
     const output = execFileSync(
       "npm",
-      ["view", `${package_name}@${package_version}`, "version", "--json"],
+      ["view", `${package_name}@${package_version}`, "dist.integrity", "--json"],
       {
         cwd: workspace_root,
         encoding: "utf8",
@@ -234,10 +246,36 @@ function is_published(package_name, package_version, npm_env) {
         stdio: ["ignore", "pipe", "ignore"],
       },
     );
-    return JSON.parse(output) === package_version;
+    return String(JSON.parse(output) ?? "");
   } catch {
-    return false;
+    return "";
   }
+}
+
+/** 已发布版本必须与当前将要发布的真实 tarball 完全一致。 */
+function assert_existing_version_matches(item, npm_env, options = {}) {
+  const read_integrity = options.read_integrity ?? read_published_integrity;
+  const verify_tarball = options.verify_tarball ?? verify_package_tarball;
+  const remote_integrity = read_integrity(item.name, item.version, npm_env);
+  if (!remote_integrity) return false;
+  const { integrity } = verify_tarball(item, npm_env);
+  if (integrity !== remote_integrity) {
+    throw new Error(
+      `${item.name}@${item.version} 已存在，但当前 tarball 内容不同；请先 bump 版本，禁止跳过后继续发布`,
+    );
+  }
+  return true;
+}
+
+/** 读取发布计划涉及目录的未提交变更。 */
+function read_publish_worktree_status(plan) {
+  const package_paths = [...new Set(plan.map((item) => item.path))];
+  if (package_paths.length === 0) return "";
+  return execFileSync("git", ["status", "--short", "--", ...package_paths], {
+    cwd: workspace_root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+  }).trim();
 }
 
 /** 读取 package 当前 Registry 版本、latest 标签与依赖清单。 */
@@ -379,6 +417,13 @@ async function main() {
     console.log("\n本次发布顺序：");
     console.log(plan.map((item, index) => `  ${index + 1}. ${item.name}@${item.version}`).join("\n"));
 
+    const worktree_status = read_publish_worktree_status(plan);
+    if (worktree_status) {
+      console.log("\n本次发布范围包含以下未提交改动：");
+      console.log(worktree_status);
+      if (!(await confirm_prompt(readline, "确认这些改动都属于本次发布？"))) return;
+    }
+
     const should_build = await confirm_prompt(
       readline,
       "是否先执行 patch:build（会增加选中 package 的 patch 版本）？",
@@ -399,8 +444,8 @@ async function main() {
     if (!(await confirm_prompt(readline, "确认继续？"))) return;
 
     for (const item of plan) {
-      if (is_published(item.name, item.version, publish_auth.env)) {
-        console.log(`跳过已存在版本：${item.name}@${item.version}`);
+      if (assert_existing_version_matches(item, publish_auth.env)) {
+        console.log(`跳过内容一致的已存在版本：${item.name}@${item.version}`);
         continue;
       }
       console.log(`\n发布 ${item.name}@${item.version}`);
@@ -429,6 +474,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === current_file) {
 }
 
 export {
+  assert_existing_version_matches,
   build_publish_plan,
   create_publish_auth,
   find_workspace_dependencies,

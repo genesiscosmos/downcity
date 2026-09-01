@@ -1,0 +1,36 @@
+name: Release Integrity
+
+on:
+  pull_request:
+    paths:
+      - ".github/scripts/**"
+      - ".github/workflows/release-integrity.yml"
+      - "package.json"
+      - "packages/**/package.json"
+      - "pnpm-lock.yaml"
+      - "scripts/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/scripts/**"
+      - ".github/workflows/release-integrity.yml"
+      - "package.json"
+      - "packages/**/package.json"
+      - "pnpm-lock.yaml"
+      - "scripts/**"
+
+jobs:
+  release-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm release:test

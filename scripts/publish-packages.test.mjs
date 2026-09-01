@@ -8,6 +8,7 @@ import test from "node:test";
 
 import { resolve_publish_layers } from "../.github/scripts/resolve-publish-matrix.mjs";
 import {
+  assert_existing_version_matches,
   build_publish_plan,
   create_publish_auth,
   find_workspace_dependencies,
@@ -170,5 +171,30 @@ test("Registry 校验拒绝已发布 manifest 中的 workspace 协议", async ()
       wait: async () => {},
     }),
     /发布内容仍包含 workspace 依赖/,
+  );
+});
+
+test("已发布版本只有在 tarball integrity 一致时才允许跳过", () => {
+  const item = { name: "@downcity/example", version: "1.2.3" };
+  assert.equal(
+    assert_existing_version_matches(item, {}, {
+      read_integrity: () => "sha512-same",
+      verify_tarball: () => ({ integrity: "sha512-same" }),
+    }),
+    true,
+  );
+  assert.equal(
+    assert_existing_version_matches(item, {}, {
+      read_integrity: () => "",
+      verify_tarball: () => assert.fail("未发布版本不应生成比较 tarball"),
+    }),
+    false,
+  );
+  assert.throws(
+    () => assert_existing_version_matches(item, {}, {
+      read_integrity: () => "sha512-registry",
+      verify_tarball: () => ({ integrity: "sha512-local" }),
+    }),
+    /当前 tarball 内容不同；请先 bump 版本/,
   );
 });

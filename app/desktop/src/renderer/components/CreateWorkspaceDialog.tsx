@@ -61,7 +61,7 @@ export function CreateWorkspaceDialog({ open, close_dialog, create_workspace }: 
 
   return <Dialog open={open} onOpenChange={(next_open) => { if (!next_open && !submitting) close_dialog(); }} onOpenChangeComplete={(next_open) => { if (!next_open) reset_form(); }}><DialogContent>
     <form onSubmit={(event) => void submit_form(event)}>
-      <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbFolder className="size-4.5" /></div><div><DialogTitle>添加 Workspace</DialogTitle><DialogDescription>Workspace 是对话的一级上下文；添加后再为它创建 Agent。</DialogDescription></div></DialogHeader>
+      <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbFolder className="size-4.5" /></div><div><DialogTitle>添加 Workspace</DialogTitle><DialogDescription>登记一个独立的工作空间及其本地资源目录。</DialogDescription></div></DialogHeader>
       <DialogBody className="flex flex-col gap-3">
         <Field label="目录"><div className="flex gap-1"><input value={workspace_path} readOnly placeholder="选择一个本地目录" className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /><Button type="button" size="icon" className="size-8" title="选择目录" onClick={() => void choose_directory()}><TbFolderOpen /></Button></div></Field>
         <Field label="名称"><input value={name} placeholder="默认使用目录名称" className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" onChange={(event) => { name_edited.current = true; set_name(event.target.value); }} /></Field>

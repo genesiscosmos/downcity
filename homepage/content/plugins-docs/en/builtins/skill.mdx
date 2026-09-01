@@ -11,13 +11,13 @@ description: How the built-in skill plugin discovers, verifies, and loads local 
 
 ## Desktop workspace
 
-Skill does not declare Config, so it needs no Profile. It appears in the Plugin List under the Plugins Tab and provides three scope entries in its own Sidebar:
+Skill does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Opening that entry lists every registered Workspace in a tree matching the Workspace file-tree interaction:
 
-- **Workspace** selects a registered Workspace and browses, filters, reads, or removes its `.agents/skills`.
+- **Workspaces tree** makes each Workspace an expandable root. Expanding it reveals its `.agents/skills`; selecting a root or Skill synchronizes the list or detail in the Mainview.
 - **Personal** manages Skills under `~/.agents/skills`.
 - **Discover** searches the public catalog through the official `skills` CLI and installs into Personal or a selected Workspace.
 
-After a scope is selected, the Mainview shows its Skill list and details. These management operations run through host `main` actions and are separate from the instruction-only Agent `find/install` actions below. Removing a Skill permanently deletes its directory from the selected scope after confirmation.
+Workspace selection is independent of the Desktop's current Workspace, and the Mainview does not duplicate it with another Workspace select. Selecting a root shows its Skill list; selecting a Skill opens a dedicated detail page that safely renders `SKILL.md`. Delete and other row actions live in an Item Menu, and mutations refresh Sidebar and Mainview together. Removing a Skill permanently deletes its directory from the selected scope after confirmation.
 
 ## Registration
 

@@ -9,6 +9,7 @@ import type { DesktopViewController } from "@/types/DesktopView";
 import { SHELL_PANEL_TRANSITION, SHELL_SIDEBAR_DEFAULT_WIDTH, SHELL_SIDEBAR_MAX_WIDTH, SHELL_SIDEBAR_MIN_WIDTH } from "./shellMotion";
 import { ChatSidebar } from "./sidebar/ChatSidebar";
 import { PluginSidebar } from "./sidebar/PluginSidebar";
+import { PluginWorkspaceSidebar } from "./sidebar/PluginWorkspaceSidebar";
 import { WorkspaceSidebar } from "./sidebar/WorkspaceSidebar";
 import { SidebarViewSwitcher } from "./sidebar/SidebarViewSwitcher";
 
@@ -51,6 +52,10 @@ export function SidebarContainer({ children, collapsed = false }: { /** Sidebar 
 
 /** Agent 与 Session 的 Duobox 导航视图。 */
 export function NavigationSidebar({ controller, open_create_agent, open_create_workspace, open_group_config, collapsed = false }: NavigationSidebarProps) {
+  const plugin_workspaces = controller.plugins.filter((plugin) => plugin.has_sidebar && plugin.has_mainview);
+  const workspace_plugin_id = controller.sidebar_mode.startsWith("plugin:")
+    ? controller.sidebar_mode.slice("plugin:".length)
+    : undefined;
   return <SidebarContainer collapsed={collapsed}>
     <div className="relative flex h-10 shrink-0 items-center">
       <div className="header-drag-region absolute inset-0" />
@@ -58,11 +63,12 @@ export function NavigationSidebar({ controller, open_create_agent, open_create_w
       </div>
     </div>
     <div className="flex min-h-0 flex-1 overflow-hidden">
-      <div className="flex w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} layout="left" /></div>
+      <div className="flex min-h-0 w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} plugin_workspaces={plugin_workspaces} layout="left" /></div>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={() => open_create_agent()} open_group_config={open_group_config} /> : null}
         {controller.sidebar_mode === "workspace" ? <WorkspaceSidebar controller={controller} open_create_workspace={open_create_workspace} /> : null}
         {controller.sidebar_mode === "plugins" ? <PluginSidebar controller={controller} /> : null}
+        {workspace_plugin_id ? <PluginWorkspaceSidebar controller={controller} plugin_id={workspace_plugin_id} /> : null}
       </div>
     </div>
     <div className="shrink-0 space-y-0.5 px-2 pb-2"><Button size="sidebar" className="rounded-floating-item text-muted-foreground" actived={controller.selection?.kind === "settings"} onClick={() => controller.open_settings("user")}>{controller.user.avatar_url ? <span className="size-5 shrink-0 overflow-hidden rounded-full"><img src={controller.user.avatar_url} alt="" className="size-full object-cover" /></span> : controller.user.authenticated ? <TbUser /> : <TbSettings />}<span className="min-w-0 flex-1 truncate text-left">{controller.user.display_name || controller.user.email || (controller.user.authenticated ? "Downcity 用户" : "设置与登录")}</span><span className={`size-1.5 rounded-full ${controller.user.authenticated ? "bg-emerald-500" : "bg-muted-foreground/25"}`} /></Button></div>

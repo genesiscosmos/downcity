@@ -19,10 +19,10 @@ Plugin
 - 向 Agent 暴露可调用的工具
 - 接入 Agent 生命周期（启动、停止、会话事件）
 - 管理自己的状态、连接和后台任务
-- 提供不依赖 Profile 的 Sidebar + Mainview 工作区，并在设置中心的独立 Config 中管理配置
+- 提供不依赖 Profile 的 Sidebar + Mainview 工作区，并在 Catalog 详情的独立 Config 中管理配置
 - 在 Agent 进程边界内运行，不作为独立服务
 
-Profile 只是宿主为声明 Config 的 Plugin 提供的配置隔离空间，与业务工作区无关。功能型 Plugin 在 Plugins Tab 的 Plugin List 中出现，并拥有自己的 Sidebar 与 Mainview；Config 则统一位于设置 / Plugins。没有 Config 的 Plugin 不需要 Profile。Agent 只保存 Plugin 启用状态和必要的 Profile 引用，不保存渠道、账号或 Token。
+Profile 只是宿主为声明 Config 的 Plugin 提供的配置隔离空间，与业务工作区无关。Plugins Sidebar 始终显示完整 Catalog，点击任意 Plugin 都能查看描述、README 和可选 Config。功能型 Plugin 还会出现在一级导航条；点击后左侧切换为它自己的 Sidebar，主区域显示 Mainview。没有 Config 的 Plugin 不需要 Profile。Agent 只保存 Plugin 启用状态和必要的 Profile 引用，不保存渠道、账号或 Token。
 
 ## 内置插件
 

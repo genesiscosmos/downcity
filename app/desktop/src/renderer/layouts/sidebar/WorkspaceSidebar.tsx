@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopWorkspaceEntry } from "@common/types/DesktopApi";
+import { SidebarHeader } from "./SidebarHeader";
 
 /** Workspace Sidebar 属性。 */
 interface WorkspaceSidebarProps {
@@ -39,14 +40,14 @@ export function WorkspaceSidebar({ controller, open_create_workspace }: Workspac
   };
 
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-    <div className="flex h-9 shrink-0 items-center gap-2 px-2"><span className="min-w-0 flex-1 truncate px-1 text-xs font-medium text-muted-foreground">Workspace</span><Button size="icon" title="添加 Workspace" aria-label="添加 Workspace" onClick={open_create_workspace}><TbFolderPlus /></Button></div>
+    <SidebarHeader title="Workspace" actions={<Button size="icon" title="添加 Workspace" aria-label="添加 Workspace" onClick={open_create_workspace}><TbFolderPlus /></Button>} />
     <div data-sidebar-scrollable="true" className="sidebar-body-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
       {controller.workspaces.map((workspace) => {
         const key = directory_key(workspace.workspace_id, "");
         const expanded = expanded_keys.has(key);
-        return <section key={workspace.workspace_id} className="mb-0.5"><div className={cn("flex min-h-8 items-center gap-1 rounded-lg p-0.5 hover:bg-foreground/[0.07]", controller.selection?.kind === "workspace" && controller.selection.workspace_id === workspace.workspace_id && "bg-primary/[0.1]")}>
-          <Button size="icon" aria-label={expanded ? "折叠 Workspace" : "展开 Workspace"} onClick={() => void toggle_directory(workspace.workspace_id, "")}><TbChevronRight className={cn("transition-transform", expanded && "rotate-90")} /></Button>
-          <button type="button" className="flex min-w-0 flex-1 items-center gap-1.5 text-left" onClick={() => controller.select_workspace(workspace.workspace_id)}><TbFolder className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate text-xs font-medium">{workspace.name}</span></button>
+        return <section key={workspace.workspace_id} className="mb-0.5"><div className={cn("flex min-h-8 items-center gap-1 rounded-lg px-1 py-0.5 hover:bg-foreground/[0.07]", controller.selection?.kind === "workspace" && controller.selection.workspace_id === workspace.workspace_id && "bg-primary/[0.1]")}>
+          <Button size="icon" className="size-6" aria-label={expanded ? "折叠 Workspace" : "展开 Workspace"} onClick={() => void toggle_directory(workspace.workspace_id, "")}><TbChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} /></Button>
+          <button type="button" className="flex min-w-0 flex-1 items-center text-left" onClick={() => controller.select_workspace(workspace.workspace_id)} onDoubleClick={() => void toggle_directory(workspace.workspace_id, "")}><span className="min-w-0 flex-1 truncate text-xs font-medium">{workspace.name}</span></button>
         </div>{expanded ? <DirectoryChildren workspace_id={workspace.workspace_id} relative_path="" depth={1} entries_by_key={entries_by_key} expanded_keys={expanded_keys} loading_keys={loading_keys} toggle_directory={toggle_directory} select_file={controller.select_workspace_file} /> : null}</section>;
       })}
       {!controller.loading && controller.workspaces.length === 0 ? <div className="flex flex-col items-center px-4 py-10 text-center"><TbFolderPlus className="mb-2 size-5 text-muted-foreground" /><div className="text-xs text-foreground">添加 Workspace</div><Button className="mt-3" variant="primary" onClick={open_create_workspace}>添加</Button></div> : null}
@@ -57,14 +58,14 @@ export function WorkspaceSidebar({ controller, open_create_workspace }: Workspac
 /** 渲染一个已经展开目录的直接子节点。 */
 function DirectoryChildren({ workspace_id, relative_path, depth, entries_by_key, expanded_keys, loading_keys, toggle_directory, select_file }: { /** Workspace 标识。 */ workspace_id: string; /** 当前目录相对路径。 */ relative_path: string; /** 当前缩进深度。 */ depth: number; /** 已加载目录缓存。 */ entries_by_key: Record<string, DesktopWorkspaceEntry[]>; /** 展开节点集合。 */ expanded_keys: Set<string>; /** 正在加载节点集合。 */ loading_keys: Set<string>; /** 切换目录。 */ toggle_directory(workspace_id: string, relative_path: string): Promise<void>; /** 打开文件预览。 */ select_file(workspace_id: string, relative_path: string): void }) {
   const key = directory_key(workspace_id, relative_path);
-  if (loading_keys.has(key)) return <div className="flex h-7 items-center gap-1.5 text-[0.6875rem] text-muted-foreground" style={{ paddingLeft: depth * 12 }}><TbLoader2 className="size-3 animate-spin" />正在读取</div>;
+  if (loading_keys.has(key)) return <div className="flex min-h-8 items-center gap-1.5 text-[0.6875rem] text-muted-foreground" style={{ paddingLeft: depth * 12 }}><TbLoader2 className="size-3 animate-spin" />正在读取</div>;
   const entries = entries_by_key[key] ?? [];
-  return <div>{entries.map((entry) => {
+  return <div className="flex flex-col gap-0.5">{entries.map((entry) => {
     const entry_key = directory_key(workspace_id, entry.relative_path);
     const expanded = expanded_keys.has(entry_key);
-    if (entry.kind === "directory") return <div key={entry.relative_path}><button type="button" className="flex h-7 w-full items-center gap-1 rounded-lg pr-1 text-left text-xs hover:bg-foreground/[0.07]" style={{ paddingLeft: depth * 12 }} onClick={() => void toggle_directory(workspace_id, entry.relative_path)}><TbChevronRight className={cn("size-3.5 shrink-0 transition-transform", expanded && "rotate-90")} /><TbFolder className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{entry.name}</span></button>{expanded ? <DirectoryChildren workspace_id={workspace_id} relative_path={entry.relative_path} depth={depth + 1} entries_by_key={entries_by_key} expanded_keys={expanded_keys} loading_keys={loading_keys} toggle_directory={toggle_directory} select_file={select_file} /> : null}</div>;
-    return <button key={entry.relative_path} type="button" className="flex h-7 w-full items-center gap-1.5 rounded-lg pr-1 text-left text-xs hover:bg-foreground/[0.07]" style={{ paddingLeft: depth * 12 + 17 }} onClick={() => select_file(workspace_id, entry.relative_path)}><TbFile className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{entry.name}</span></button>;
-  })}{entries.length === 0 ? <div className="h-7 text-[0.6875rem] leading-7 text-muted-foreground/60" style={{ paddingLeft: depth * 12 + 17 }}>空目录</div> : null}</div>;
+    if (entry.kind === "directory") return <div key={entry.relative_path} style={{ paddingLeft: depth * 12 }}><div className="flex min-h-8 items-center gap-1 rounded-lg px-1 py-0.5 text-left text-xs hover:bg-foreground/[0.07]"><button type="button" className="flex min-w-0 flex-1 items-center gap-1 text-left" onClick={() => void toggle_directory(workspace_id, entry.relative_path)}><TbChevronRight className={cn("size-3.5 shrink-0 transition-transform", expanded && "rotate-90")} /><TbFolder className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{entry.name}</span></button></div>{expanded ? <DirectoryChildren workspace_id={workspace_id} relative_path={entry.relative_path} depth={depth + 1} entries_by_key={entries_by_key} expanded_keys={expanded_keys} loading_keys={loading_keys} toggle_directory={toggle_directory} select_file={select_file} /> : null}</div>;
+    return <div key={entry.relative_path} style={{ paddingLeft: depth * 12 }}><button type="button" className="flex min-h-8 w-full items-center gap-1.5 rounded-lg px-1 py-0.5 text-left text-xs hover:bg-foreground/[0.07]" onClick={() => select_file(workspace_id, entry.relative_path)}><TbFile className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{entry.name}</span></button></div>;
+  })}{entries.length === 0 ? <div className="min-h-8 p-0.5 text-[0.6875rem] leading-7 text-muted-foreground/60" style={{ marginLeft: depth * 12 }}>空目录</div> : null}</div>;
 }
 
 /** 构造不同 Workspace 间不会冲突的目录缓存键。 */

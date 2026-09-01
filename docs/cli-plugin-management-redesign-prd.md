@@ -98,14 +98,15 @@ Profile 是 City 级共享配置，不属于某个 Agent。多个 Agent 可以�
 ## 6. 交互路径
 
 ```text
-进入 Plugins Tab
-→ 从 Plugin List 打开功能型 Plugin
-→ 在 Plugin 专属 Sidebar 与 Mainview 中使用功能
-→ 有 Config 时到设置 / Plugins 创建或选择 Profile 并完成配置
+进入 Plugins
+→ Sidebar 查看完整 Plugin Catalog
+→ 点击任意 Plugin 查看描述、README 与可选 Config
+→ 功能型 Plugin 同时出现在一级导航条
+→ 点击一级入口后，左侧切换为 Plugin Sidebar，主区域显示 Plugin Mainview
 → Agent 启用 Plugin；有 Config 时选择 Profile
 ```
 
-没有业务工作区的 Plugin 仍可提供 Config，并且不会出现在 Plugin List；没有 Config 的 Plugin 不提供 Profile。CLI 的 `config --set` 只是显式 JSON 替换能力，不承担通用业务表单职责。
+所有 Plugin 都出现在 Catalog。没有业务工作区的 Plugin 仍可提供 Config；没有 Config 的 Plugin 只显示说明且不提供 Profile。CLI 的 `config --set` 只是显式 JSON 替换能力，不承担通用业务表单职责。
 
 ## 7. 数据库边界
 

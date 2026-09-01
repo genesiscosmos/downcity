@@ -82,6 +82,8 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
     agents.set_generated_avatar("lucas_whitman", "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>");
     assert.equal(agents.get_avatar_url("lucas_whitman").startsWith("data:image/svg+xml;base64,"), true);
     assert.equal(workspaces.get(workspace.workspace_id)?.workspace_path, workspace.workspace_path);
+    const updated_workspace = workspaces.update_name(workspace.workspace_id, "新名称");
+    assert.equal(updated_workspace.name, "新名称");
     const workspace_row = database.query({
       sql: "SELECT config_json FROM workspaces WHERE workspace_id = ?;",
       params: [workspace.workspace_id],

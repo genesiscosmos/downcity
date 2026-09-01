@@ -20,7 +20,9 @@ const desktop_api: DesktopApi = {
   workspace: {
     list: () => ipcRenderer.invoke("workspace:list"),
     get_default: () => ipcRenderer.invoke("workspace:get-default"),
-    create: (workspace_path, name) => ipcRenderer.invoke("workspace:create", workspace_path, name),
+    create: (input) => ipcRenderer.invoke("workspace:create", input),
+    update_name: (workspace_id, name) => ipcRenderer.invoke("workspace:update-name", workspace_id, name),
+    write_readme: (workspace_id, content) => ipcRenderer.invoke("workspace:write-readme", workspace_id, content),
     list_entries: (workspace_id, relative_path) => ipcRenderer.invoke("workspace:list-entries", workspace_id, relative_path),
     read_text_file: (workspace_id, relative_path) => ipcRenderer.invoke("workspace:read-text-file", workspace_id, relative_path),
   },

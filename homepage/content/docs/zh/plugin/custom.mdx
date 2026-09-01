@@ -135,7 +135,7 @@ export default define_plugin_main({
 
 ## Renderer 入口
 
-Renderer 入口可以声明三个固定插槽。`sidebar` 与 `mainview` 共同构成 Plugin 工作区，必须成对出现，并共享宿主持有的 JSON route；`config` 与功能工作区无关，只在设置中心按当前 Profile 渲染。三者共用一个 bundle 和宿主 UI Components：
+Renderer 入口可以声明三个固定插槽。`sidebar` 与 `mainview` 共同构成 Plugin 工作区，必须成对出现，并共享宿主持有的 JSON route；宿主会为它动态增加一级导航入口。`config` 与功能工作区无关，只在 Plugin Catalog 详情中按当前 Profile 渲染。三者共用一个 bundle 和宿主 UI Components：
 
 ```tsx
 import { useEffect, useState } from "react";
@@ -163,10 +163,12 @@ Renderer bundle 必须把 `react` 与 `react/jsx-runtime` 保留为宿主外部�
 
 Desktop 在宿主 React 树中加载 Renderer。Sidebar 与 Mainview 通过 `plugin.invoke()` 调用 Plugin 级动作，并通过 `navigation` 协同导航；Config 通过 `config.invoke()` 调用已经绑定当前 Profile 的配置动作。三个插槽都只获得所需 gateway、`ui.components`、Toast 和 Confirm，不会获得 Profile ID 或 Desktop controller。Renderer 属于受信任本地 UI 代码；只安装可信来源。
 
+需要树状 Sidebar 时使用 `SidebarTreeItem`：`depth` 表达层级，`kind` 区分 `branch` 与 `leaf`，父节点通过 `expanded` 与 `on_toggle` 管理展开，`on_select` 通过共享 `navigation` 更新 Mainview。省略 `leading` 时宿主会为分支和叶子节点提供统一默认图标；没有子项的分支可以省略 `on_toggle`，此时不会显示折叠按钮。行级操作使用 `ItemMenu`，Markdown 正文使用宿主安全的 `Markdown`。写操作完成后调用 `ui.invalidate()`，宿主会增加同一 Plugin 的 `ui.revision`，使 Sidebar 与 Mainview 重新读取快照；Plugin 不需要复制宿主样式或把刷新状态写入 route。
+
 ## Profile 交互
 
 ```text
-进入设置 / Plugins
+进入 Plugins Catalog 并选择 Plugin
 → 为声明 Config 的 Plugin 创建或选择 Profile
 → 在 Config 中配置
 → Agent 启用 Plugin；有 Config 时选择 Profile
@@ -180,7 +182,7 @@ Profile 只是声明 Config 的 Plugin 所使用的宿主配置空间，与 Side
 
 ```bash
 city plugin install ./github-plugin
-# 在 Desktop 设置 / Plugins 中创建并配置 production
+# 在 Desktop Plugins Catalog 的 GitHub 详情中创建并配置 production
 city plugin enable github my-agent --profile production
 city plugin update github
 city plugin uninstall github

@@ -7,7 +7,7 @@
  */
 
 import type { SessionMessages } from "@downcity/agent";
-import type { SessionExecutor } from "@downcity/agent";
+import type { SessionPort } from "@downcity/agent";
 import type {
   ShipTaskRunExecutionStatusV1,
   ShipTaskRunProgressPhaseV1,
@@ -175,13 +175,11 @@ export type ScriptExecutionResult = {
  */
 export type TaskSessionRuntimePort = {
   /**
-   * 获取指定 session_id 对应的 Session 执行端口。
-   */
-  get_executor(session_id: string): SessionExecutor;
-  /**
    * 获取指定 session_id 对应的 canonical Session Messages。
    */
   get_messages(session_id: string): SessionMessages;
+  /** 获取 task session 对应的宿主 Session runtime port。 */
+  get_session(session_id: string): SessionPort;
 };
 
 /**

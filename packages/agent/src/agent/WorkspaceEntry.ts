@@ -125,7 +125,7 @@ export class WorkspaceEntry {
         return contextual_plugins;
       },
       get_sessions: () => {
-        return this.agent.sessions;
+        return this.sessions;
       },
     } satisfies Parameters<typeof create_plugin_context>[0];
     this.context = create_plugin_context(context_input);

@@ -11,13 +11,13 @@ description: 说明 skill 内建 plugin 如何发现、验证和读取本地 Ski
 
 ## Desktop 工作区
 
-Skill 不声明 Config，因此不需要 Profile。它出现在 Plugins Tab 的 Plugin List 中，并在自己的 Sidebar 提供三个范围入口：
+Skill 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。打开该入口后，Sidebar 会像 Workspace 文件树一样列出所有已登记 Workspace：
 
-- **工作区**：选择已登记 Workspace，浏览、搜索、读取或删除其中的 `.agents/skills`。
+- **Workspaces 树**：每个 Workspace 都是一个可展开根节点，展开后直接显示其中的 `.agents/skills`；选择根节点或 Skill 后，Mainview 同步显示对应列表或详情。
 - **个人**：管理 `~/.agents/skills` 中的个人 Skill。
 - **发现**：通过官方 `skills` CLI 搜索公开目录，并安装到个人目录或指定 Workspace。
 
-选择范围后，右侧 Mainview 显示对应的 Skill 列表和详情。这些管理操作由宿主 `main` actions 执行，与下面供 Agent 调用的 `find/install` 提示 actions 相互独立。删除会永久移除所选范围内的 Skill 目录，Desktop 会先请求确认。
+Workspace 选择不依赖 Desktop 当前工作区，也不在 Mainview 再提供重复的 Workspace 下拉选择。选择根节点会显示 Skill 列表；选择 Skill 会进入独立详情页，并安全渲染 `SKILL.md`。列表和树节点的删除等操作统一收进 Item Menu，写操作后 Sidebar 与 Mainview 会同步刷新。删除会永久移除所选范围内的 Skill 目录，Desktop 会先请求确认。
 
 ## 注册
 

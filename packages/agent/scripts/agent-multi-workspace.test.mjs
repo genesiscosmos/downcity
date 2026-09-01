@@ -77,6 +77,73 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
 
 });
 
+test("PluginContext sessions keep the current Workspace binding", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-sessions-"));
+  let linked_session_id = "";
+  const plugin = create_plugin({
+    name: "session_probe",
+    title: "Session Probe",
+    description: "Validates the current Workspace Session view.",
+    actions: {
+      inspect: {
+        description: "Restore one Session and create another in the current Workspace.",
+        execute: async ({ context }) => {
+          const linked_session = await context.sessions.get(linked_session_id);
+          const task_session = await context.sessions.create();
+          await context.sessions.runtime(linked_session_id).append_assistant_message({
+            text: "task completed",
+          });
+          return {
+            success: true,
+            data: {
+              linked_workspace_id: linked_session.workspace_id,
+              task_workspace_id: task_session.workspace_id,
+            },
+          };
+        },
+      },
+    },
+  });
+  const agent = new Agent({ id: "plugin-session-agent", plugins: [plugin] });
+  const entry = create_workspace_entry(agent, new Workspace({
+    id: "plugin-session-workspace",
+    path: root,
+    data_root_path: path.join(root, "data"),
+  }));
+
+  try {
+    const linked_session = await entry.sessions.create();
+    linked_session_id = linked_session.id;
+    const mutations = [];
+    const unsubscribe = linked_session.subscribe((mutation) => {
+      mutations.push(mutation);
+    });
+    const result = await entry.plugins.run_action({
+      plugin: "session_probe",
+      action: "inspect",
+    });
+    unsubscribe();
+    assert.equal(result.success, true);
+    assert.deepEqual(result.data, {
+      linked_workspace_id: "plugin-session-workspace",
+      task_workspace_id: "plugin-session-workspace",
+    });
+    const messages = await linked_session.messages();
+    assert.equal(messages.items.at(-1)?.type, "assistant");
+    assert.equal(messages.items.at(-1)?.parts.at(-1)?.type, "text");
+    assert.equal(messages.items.at(-1)?.parts.at(-1)?.text, "task completed");
+    assert.equal(
+      mutations.some((mutation) =>
+        mutation.variant === "message" && mutation.type === "assistant"
+      ),
+      true,
+    );
+  } finally {
+    await agent.dispose();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Plugin runtime data is isolated by Agent and shared across Workspaces", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-plugin-data-"));
   const contexts = [];

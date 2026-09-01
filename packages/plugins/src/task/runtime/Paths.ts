@@ -6,7 +6,7 @@
  * - definition: `<Agent data>/task/<taskId>/task.md`
  * - run dir: `<Agent data>/task/<taskId>/<timestamp>/`
  *
- * 同时定义“task run session_id”格式，用于把 Agent 的 session 映射到 run 目录：
+ * 同时定义 task run 的逻辑标识格式，用于把调试消息映射到 run 目录：
  * - `task-run:<taskId>:<timestamp>`
  */
 

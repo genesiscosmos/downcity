@@ -26,6 +26,20 @@ export interface DesktopWorkspaceSummary {
   workspace_path: string;
   /** Workspace 用户可见名称。 */
   name: string;
+  /** Workspace 根目录 README.md 的当前内容。 */
+  readme: string;
+  /** Workspace 首次登记时间，使用 ISO 8601 字符串。 */
+  created_at: string;
+  /** Workspace 最近更新时间，使用 ISO 8601 字符串。 */
+  updated_at: string;
+}
+
+/** Renderer 创建 Workspace 时提交的信息。 */
+export interface DesktopCreateWorkspaceInput {
+  /** Workspace 指向的绝对目录。 */
+  workspace_path: string;
+  /** Workspace 的用户可见名称。 */
+  name: string;
 }
 
 /** Renderer 可见的 Group 成员。 */
@@ -757,7 +771,11 @@ export interface DesktopApi {
     /** 获取并登记 Desktop Agent 主聊天的默认 Workspace。 */
     get_default(): Promise<DesktopWorkspaceSummary>;
     /** 独立登记一个 Workspace；相同路径返回已有记录。 */
-    create(workspace_path: string, name: string): Promise<DesktopWorkspaceSummary>;
+    create(input: DesktopCreateWorkspaceInput): Promise<DesktopWorkspaceSummary>;
+    /** 更新 Workspace 的 Registry 显示名称。 */
+    update_name(workspace_id: string, name: string): Promise<DesktopWorkspaceSummary>;
+    /** 将内容写入 Workspace 根目录 README.md。 */
+    write_readme(workspace_id: string, content: string): Promise<DesktopWorkspaceSummary>;
     /** 列出 Workspace 指定目录的直接子节点。 */
     list_entries(workspace_id: string, relative_path?: string): Promise<DesktopWorkspaceEntry[]>;
     /** 读取 Workspace 中的 UTF-8 文本文件用于只读预览。 */

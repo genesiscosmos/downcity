@@ -24,7 +24,7 @@ Plugin
 
 - `agent` factory 每次装配一个 Agent 时调用，产生 Agent 独享实例。
 - `main` 每个宿主中的每个 Plugin 只激活一次，不绑定 Profile。
-- `renderer` 在用户打开 Plugin 工作区或设置中心 Config 时加载；业务工作区与配置体验互不混合。
+- `renderer` 在用户打开 Plugin 一级功能工作区或 Catalog 详情 Config 时加载；业务工作区与配置体验互不混合。
 
 ## 3. 依赖与职责
 
@@ -110,11 +110,11 @@ main 只注册结构化 actions 并管理自己的长期资源。`plugin.action(
 Renderer 是 Plugin 唯一的前端入口。它通过 `define_plugin_renderer` 默认导出定义，并可声明三个语义固定的插槽：
 
 - Sidebar 与 Mainview 必须一起声明，获得共享的 `navigation.route` / `navigation.navigate()` 与不依赖 Profile 的 `plugin.invoke()`；
-- Config 独立声明，只在设置中心出现，并获得绑定当前 Profile 的 `config.invoke()`；
+- Config 独立声明，只在 Plugin Catalog 详情出现，并获得绑定当前 Profile 的 `config.invoke()`；
 - 宿主统一提供的 `ui.components`；
 - 宿主 Toast 与 Confirm。
 
-Profile ID、Plugin ID 与 Desktop controller 不传给组件。宿主持有顶层 Plugins Tab、Plugin List、工作区切换，以及设置中心的 Profile 选择、创建和删除；Plugin 只渲染自己的 Sidebar、Mainview 与 Config 正文。
+Profile ID、Plugin ID 与 Desktop controller 不传给组件。宿主持有完整 Plugin Catalog、每个 Plugin 的详情与 Profile CRUD，并把声明 Sidebar + Mainview 的 Plugin 动态放入一级导航；Plugin 只渲染自己的 Sidebar、Mainview 与 Config 正文。
 
 Renderer 是受信任本地 UI 代码，不使用 iframe。第三方 bundle 通过受控 `downcity-plugin://` URL 动态加载，并复用宿主 React 与 JSX runtime；源码和构建依赖不进入安装目录。组件不应依赖宿主私有 DOM 或 preload API，外链、剪贴板、文件定位和业务读写通过 main action 完成。
 

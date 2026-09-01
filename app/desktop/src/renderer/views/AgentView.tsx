@@ -119,7 +119,6 @@ function AgentEditorPanel({ section, definition, plugins, controller, loading, e
   /** 收起右侧容器。 */ close_editor(): void;
   /** 是否嵌入已有信息侧栏。 */ embedded?: boolean;
 }) {
-  const titles: Record<AgentEditorSection, string> = { model: "Model", soul: "SOUL.md", plugins: "Plugins" };
   const content = <>
         {loading && !definition ? <div className="py-10 text-center text-xs text-muted-foreground">加载中…</div> : null}
         {definition && section === "model" ? <ModelEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
@@ -127,8 +126,9 @@ function AgentEditorPanel({ section, definition, plugins, controller, loading, e
         {definition && section === "plugins" ? <PluginEditor definition={definition} plugins={plugins} controller={controller} set_definition={set_definition} /> : null}
         {error ? <div className="mt-3 text-[0.6875rem] leading-4 text-destructive">{error}</div> : null}
   </>;
-  if (embedded && section === "soul") return <div className="h-full min-h-0 w-full">{content}</div>;
-  return embedded ? <SettingsMainContent><SettingsContainer><SettingSection title={titles[section]} description={section === "model" ? "选择 Agent 的默认文本模型" : "选择 Agent 可以使用的扩展能力"}>{content}</SettingSection></SettingsContainer></SettingsMainContent> : <DetailEditorSidebar title={titles[section]} storage_key="downcity.agent_editor_width" default_width={400} max_width={560} on_close={close_editor}>{content}</DetailEditorSidebar>;
+  if (embedded) return <div className={`h-full min-h-0 w-full ${section === "soul" ? "" : "p-2"}`}>{content}</div>;
+  const titles: Record<AgentEditorSection, string> = { model: "Model", soul: "SOUL.md", plugins: "Plugins" };
+  return <DetailEditorSidebar title={titles[section]} storage_key="downcity.agent_editor_width" default_width={400} max_width={560} on_close={close_editor}>{content}</DetailEditorSidebar>;
 }
 
 /** 默认模型编辑器。 */
@@ -139,13 +139,10 @@ function ModelEditor({ definition, controller, set_definition }: { /** 未提交
   return <SettingGroup>
     {text_models.map((model) => {
       const active = model.model_id === definition.model_id;
-      return <SettingActionItem key={model.model_id} icon={<LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />} label={model.name} description={model.description || model.model_id} trailing={model.context_window ? <span>{format_context_window(model.context_window)}</span> : undefined} active={active} on_select={() => set_definition({ ...definition, model_id: model.model_id })} />;
+      return <SettingActionItem key={model.model_id} icon={<LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />} label={model.name} active={active} on_select={() => set_definition({ ...definition, model_id: model.model_id })} />;
     })}
   </SettingGroup>;
 }
-
-/** 格式化模型上下文窗口，保持与设置页模型列表一致。 */
-function format_context_window(value: number): string { return value >= 1000 ? `${Math.round(value / 1000)}K context` : `${value} context`; }
 
 /** Agent 主体指令编辑器。 */
 function SoulEditor({ definition, controller, set_definition }: { /** 未提交定义。 */ definition: DesktopAgentDefinition; /** Renderer 根控制器。 */ controller: DesktopViewController; /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
@@ -164,7 +161,7 @@ function SoulEditor({ definition, controller, set_definition }: { /** 未提交�
     autoFocus
     spellCheck={controller.settings.spellcheck_enabled}
     data-placeholder="开始编辑 SOUL.md…"
-    className="h-full min-h-full w-full overflow-y-auto bg-background px-8 py-6 font-mono text-xs leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground/50 empty:before:content-[attr(data-placeholder)]"
+    className="h-full min-h-full w-full overflow-y-auto bg-transparent p-3 font-mono text-xs leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground/50 empty:before:content-[attr(data-placeholder)]"
     onInput={(event) => set_definition({ ...definition, instruction: event.currentTarget.innerText })}
   />;
 }
@@ -183,7 +180,7 @@ function PluginEditor({ definition, plugins, controller, set_definition }: { /**
     const plugin_id = pending_profile_plugin_id;
     set_missing_profile_plugin(undefined);
     set_pending_profile_plugin_id(undefined);
-    if (plugin_id) controller.open_settings("plugins");
+    if (plugin_id) controller.select_plugin(plugin_id);
   };
   const set_plugin = (plugin: DesktopPluginSummary, enabled: boolean) => {
     const next_plugins = { ...definition.plugins };
@@ -202,7 +199,7 @@ function PluginEditor({ definition, plugins, controller, set_definition }: { /**
     <SettingGroup>{plugins.filter((plugin) => plugin.has_agent).map((plugin) => {
       const reference = definition.plugins[plugin.plugin_id];
       const profile_options = [{ value: "", label: "空配置" }, ...plugin.profile_ids.map((profile_id) => ({ value: profile_id, label: profile_id }))];
-      return <SettingItem key={plugin.plugin_id} label={plugin.title} description={plugin.description || plugin.plugin_id} leading={<TbComponents />}><div className="flex items-center gap-2">{reference && plugin.has_config ? plugin.profile_ids.length > 0 ? <Select value={reference.profile || ""} options={profile_options} on_value_change={(profile) => set_profile(plugin.plugin_id, profile)} className="min-w-28 max-w-44 rounded-full" align="end" /> : <Button className="rounded-full" onClick={() => open_missing_profile_dialog(plugin)}><TbPlus />Profile</Button> : null}<Switch checked={Boolean(reference)} onCheckedChange={(enabled) => set_plugin(plugin, enabled)} aria-label={`${plugin.title} 启用状态`} /></div></SettingItem>;
+      return <SettingItem key={plugin.plugin_id} label={plugin.title} leading={<TbComponents />}><div className="flex items-center gap-2">{reference && plugin.has_config ? plugin.profile_ids.length > 0 ? <Select value={reference.profile || ""} options={profile_options} on_value_change={(profile) => set_profile(plugin.plugin_id, profile)} className="min-w-28 max-w-44 rounded-full" align="end" /> : <Button className="rounded-full" onClick={() => open_missing_profile_dialog(plugin)}><TbPlus />Profile</Button> : null}<Switch checked={Boolean(reference)} onCheckedChange={(enabled) => set_plugin(plugin, enabled)} aria-label={`${plugin.title} 启用状态`} /></div></SettingItem>;
     })}{plugins.every((plugin) => !plugin.has_agent) ? <div className="py-8 text-center text-xs text-muted-foreground">暂无可用 Plugin</div> : null}</SettingGroup>
     <Dialog open={missing_profile_dialog_open} onOpenChange={set_missing_profile_dialog_open} onOpenChangeComplete={complete_missing_profile_dialog}>
       <DialogContent><DialogHeader><DialogTitle>为 {missing_profile_plugin?.title} 添加配置</DialogTitle><DialogDescription>创建一个命名 Profile 后，Agent 可以显式选择它。</DialogDescription></DialogHeader><DialogBody><div className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">创建完成后返回当前 Agent 页面，再展开 Plugin 选择刚刚创建的 Profile。</div></DialogBody><DialogFooter><Button onClick={() => set_missing_profile_dialog_open(false)}>取消</Button><Button variant="primary" onClick={() => { set_pending_profile_plugin_id(missing_profile_plugin?.plugin_id); set_missing_profile_dialog_open(false); }}>去创建配置</Button></DialogFooter></DialogContent>

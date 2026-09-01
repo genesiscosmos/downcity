@@ -33,10 +33,13 @@ import type {
 } from "../../common/types/DesktopApi";
 
 /** 设置主视图当前展示的分区。 */
-export type SettingsSection = "user" | "models" | "plugins" | "general" | "appearance" | "chat";
+export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat";
+
+/** 功能型 Plugin 在一级导航中的动态模式。 */
+export type PluginWorkspaceSidebarMode = `plugin:${string}`;
 
 /** 主导航侧边栏当前展示的业务集合。 */
-export type SidebarMode = "chat" | "workspace" | "plugins";
+export type SidebarMode = "chat" | "workspace" | "plugins" | PluginWorkspaceSidebarMode;
 
 /** 中间主视图当前展示的业务对象。 */
 export type NavigationTarget =
@@ -49,6 +52,7 @@ export type NavigationTarget =
   | { /** 具体 GroupSession Chat。 */ kind: "group_session"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** GroupSession 标识。 */ session_id: string }
   | { /** Group 配置页。 */ kind: "group"; /** Group 标识。 */ group_id: string }
   | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
+  | { /** Plugin 独立功能工作区。 */ kind: "plugin_workspace"; /** Plugin 标识。 */ plugin_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
 /** 创建 Agent 表单的可序列化值。 */
@@ -161,8 +165,10 @@ export interface DesktopViewController {
   active_workspace_id: string;
   /** 主导航侧边栏当前模式。 */
   sidebar_mode: SidebarMode;
-  /** 当前 Plugin Sidebar 与 Mainview 共享的路由。 */
-  plugin_route: PluginJsonObject;
+  /** 各功能型 Plugin 的 Sidebar 与 Mainview 共享路由。 */
+  plugin_routes: Record<string, PluginJsonObject>;
+  /** 各功能型 Plugin 用于同步 Sidebar 与 Mainview 快照的刷新版本。 */
+  plugin_revisions: Record<string, number>;
   /** Desktop 用户级偏好。 */
   settings: DesktopSettings;
   /** 当前 Global Env 快照。 */
@@ -183,10 +189,14 @@ export interface DesktopViewController {
   open_agent_chat(agent_id: string): Promise<void>;
   /** 选择 Plugin 详情页。 */
   select_plugin(plugin_id: string): void;
-  /** 返回 Plugin 工作区列表。 */
+  /** 返回完整 Plugin Catalog。 */
   select_plugins(): void;
-  /** 替换当前 Plugin 工作区路由。 */
-  navigate_plugin(route: PluginJsonObject): void;
+  /** 打开 Plugin 独立功能工作区。 */
+  select_plugin_workspace(plugin_id: string): void;
+  /** 替换指定 Plugin 的工作区路由。 */
+  navigate_plugin(plugin_id: string, route: PluginJsonObject): void;
+  /** 通知指定 Plugin 的 Sidebar 与 Mainview 重新读取业务快照。 */
+  invalidate_plugin(plugin_id: string): void;
   /** 切换主导航侧边栏集合。 */
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */
@@ -259,6 +269,10 @@ export interface DesktopViewController {
   invoke_plugin_action(plugin_id: string, input: DesktopInvokePluginActionInput): ReturnType<Window["downcity"]["plugin"]["invoke"]>;
   /** 独立登记并打开 Workspace。 */
   create_workspace(value: CreateWorkspaceFormValue): Promise<void>;
+  /** 更新 Workspace 的 Registry 显示名称。 */
+  update_workspace_name(workspace_id: string, name: string): Promise<void>;
+  /** 写入 Workspace 根目录 README.md。 */
+  write_workspace_readme(workspace_id: string, content: string): Promise<void>;
   /** 修改 Session 输入草稿。 */
   update_draft(workspace_id: string, agent_id: string, session_id: string, text: string): void;
   /** 替换当前输入的附件草稿。 */

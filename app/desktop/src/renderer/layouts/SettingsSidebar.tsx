@@ -1,6 +1,6 @@
 /** Downcity Desktop 设置路由使用的 Sidebar。 */
 
-import { TbAdjustments, TbArrowLeft, TbBrush, TbComponents, TbCpu, TbMessageCircle, TbUser } from "react-icons/tb";
+import { TbAdjustments, TbArrowLeft, TbBrush, TbCpu, TbMessageCircle, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import type { DesktopViewController, SettingsSection } from "@/types/DesktopView";
 import { SidebarContainer } from "./NavigationSidebar";
@@ -19,7 +19,6 @@ const settings_groups: Array<{ label: string; items: Array<{ section: SettingsSe
     { section: "models", label: "模型", icon: TbCpu },
   ] },
   { label: "应用", items: [
-    { section: "plugins", label: "Plugins", icon: TbComponents },
     { section: "general", label: "通用", icon: TbAdjustments },
     { section: "appearance", label: "外观", icon: TbBrush },
     { section: "chat", label: "对话", icon: TbMessageCircle },

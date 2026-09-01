@@ -85,7 +85,8 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
     route: props.route ?? {},
     navigate,
   }), [navigate, props.route]);
-  const ui = useMemo<PluginRendererUi>(() => ({ components: ui_components, toast: show_toast, confirm }), [confirm, show_toast, ui_components]);
+  const invalidate = useCallback(() => props.invalidate?.(), [props.invalidate]);
+  const ui = useMemo<PluginRendererUi>(() => ({ revision: props.revision ?? 0, invalidate, components: ui_components, toast: show_toast, confirm }), [confirm, invalidate, props.revision, show_toast, ui_components]);
   const definition = props.builtin_renderer ?? (loaded_renderer?.renderer_url === props.renderer_url ? loaded_renderer?.definition : undefined);
   const definition_error = definition ? get_renderer_definition_error(definition, props.capabilities) : undefined;
   const Config = definition?.config;
@@ -98,7 +99,7 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
     resolve?.(confirmed);
   };
 
-  return <div className="relative min-h-0 min-w-0 flex-1">
+  return <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
     {load_error || definition_error ? <ui_components.Callout tone="danger">{load_error || `Plugin renderer definition is invalid: ${props.plugin_id} (${definition_error})`}</ui_components.Callout>
       : !definition ? <ui_components.LoadingState label="正在加载 Plugin…" />
         : props.slot === "config"

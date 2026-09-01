@@ -27,10 +27,7 @@ import {
 } from "./Paths.js";
 import { ensureRunDir, readTask } from "./Store.js";
 import { createRunProgressWriter, serializeDebugSnapshot, summarizeText } from "./TaskRunnerProgress.js";
-import {
-  appendTaskDeferredMessages,
-  createTaskSessionRuntimePort,
-} from "./TaskRunnerSession.js";
+import { createTaskSessionRuntimePort } from "./TaskRunnerSession.js";
 import {
   buildExecutorRoundQuery,
   buildUserSimulatorQuery,
@@ -43,7 +40,7 @@ import {
   writeTaskRunArtifacts,
   writeTaskRunInputArtifact,
 } from "./TaskRunArtifacts.js";
-import { dispatchTaskRunCompletionToChat } from "./TaskRunChatDispatch.js";
+import { dispatchTaskRunCompletionToSession } from "./TaskRunSessionDispatch.js";
 import { runScriptTaskBranch } from "./TaskRunnerScript.js";
 
 const DEFAULT_MAX_DIALOGUE_ROUNDS = 3;
@@ -184,20 +181,12 @@ export async function runTaskNow(params: {
     outputText = scriptResult.outputText;
     errorText = scriptResult.errorText;
   } else {
-    const task_model = context.sessions
-      .runtime(task.frontmatter.session_id)
-      .get_model();
-    if (!task_model) {
-      throw new Error(`Task "${task.taskId}" requires a configured model`);
-    }
-    const taskSessionRuntime = createTaskSessionRuntimePort({
+    const taskSessionRuntime = await createTaskSessionRuntimePort({
       context,
-      model: task_model,
       runDirAbs,
       runSessionId,
       userSimulatorSessionId,
-      ...(params.workspace_env ? { workspace_env: params.workspace_env } : {}),
-      ...(params.agent_systems ? { agent_systems: params.agent_systems } : {}),
+      sourceSessionId: task.frontmatter.session_id,
     });
     let lastRoundRuleErrors: string[] = [];
     let lastRoundDecision: UserSimulatorDecision | null = null;
@@ -244,16 +233,6 @@ export async function runTaskNow(params: {
           { text: executorRound.rawResult.text },
         );
 
-        try {
-          await appendTaskDeferredMessages({
-            taskSessionRuntime,
-            session_id: runSessionId,
-            taskId: task.taskId,
-            rawResult: executorRound.rawResult,
-          });
-        } catch {
-          // ignore
-        }
       } catch (error) {
         executionStatus = "failure";
         errorText = buildTaskExecutionFailureText({
@@ -315,16 +294,6 @@ export async function runTaskNow(params: {
           userSimulatorAssistantMessageSnapshot = serializeDebugSnapshot(
             { text: simulatorRound.rawResult.text },
           );
-          try {
-            await appendTaskDeferredMessages({
-              taskSessionRuntime,
-              session_id: userSimulatorSessionId,
-              taskId: task.taskId,
-              rawResult: simulatorRound.rawResult,
-            });
-          } catch {
-            // ignore
-          }
           decision = parseUserSimulatorDecision(simulatorRound.outputText);
         } catch (error) {
           decision = {
@@ -495,7 +464,7 @@ export async function runTaskNow(params: {
     executionStatus,
     resultStatus,
   });
-  await dispatchTaskRunCompletionToChat({
+  await dispatchTaskRunCompletionToSession({
     context,
     task,
     executionId,

@@ -27,18 +27,18 @@ const HELP_ITEMS = [
     name: "build",
     summary: "完整构建整个仓库。",
     detail:
-      "等价于 `build:all`，会构建 city、services、cli 与 homepage 等主要交付物。",
+      "等价于 `build:all`，按 manifest package graph 构建全部 packages，再构建 homepage。",
   },
   {
     name: "build:all",
     summary: "执行完整仓库构建链路。",
     detail:
-      "按仓库构建脚本完成全量构建；发布版本由 release commit 显式控制。",
+      "按 manifest package graph 完成全量构建并刷新全局 CLI，不修改 package version。",
   },
   {
     name: "build:plugins",
     summary: "只构建 Plugins 包。",
-    detail: "先构建 `@downcity/workspace` 和 Agent，再构建 Plugins，不会修改 package version。",
+    detail: "从 manifest 自动补齐 Plugins 的运行时依赖，不修改 package version。",
   },
   {
     name: "build:federation",
@@ -53,7 +53,7 @@ const HELP_ITEMS = [
   {
     name: "build:cli",
     summary: "构建 Downcity CLI 产品包。",
-    detail: "依次构建 `packages/cli`，不会修改 package version。",
+    detail: "按 manifest graph 构建 CLI 依赖和产品包并刷新全局命令，不修改 package version。",
   },
   {
     name: "build:homepage",
@@ -69,7 +69,7 @@ const HELP_ITEMS = [
   {
     name: "agent:patch:build",
     summary: "只对 @downcity/agent 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --agent`，会先构建 @downcity/workspace 作为依赖。",
+    detail: "等价于 `npm run patch:build -- --agent`，依赖闭包和顺序从 package manifests 自动推导。",
   },
   {
     name: "plugin:patch:build",
@@ -79,7 +79,7 @@ const HELP_ITEMS = [
   {
     name: "plugins:patch:build",
     summary: "只对 @downcity/plugins 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --plugins`，会先构建 workspace 和 agent 作为依赖。",
+    detail: "等价于 `npm run patch:build -- --plugins`，依赖闭包和顺序从 package manifests 自动推导。",
   },
   {
     name: "federation:patch:build",
@@ -90,12 +90,12 @@ const HELP_ITEMS = [
     name: "cli:patch:build",
     summary: "只对 downcity 执行 patch bump + build。",
     detail:
-      "等价于 `npm run patch:build -- --cli`，会构建 Agent、Federation、Plugins、Services 与 UI 等依赖，再构建 packages/cli 并全局安装 downcity 命令。",
+      "等价于 `npm run patch:build -- --cli`，按 manifest 依赖图构建 CLI 运行时依赖，再由 CLI build 装配 UI/Fedman 静态资源并全局安装命令。",
   },
   {
     name: "all:patch:build",
     summary: "对全部 packages 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --all`，会处理 workspace、agent、plugin、plugins、local、services、ui、cli。",
+    detail: "等价于 `npm run patch:build -- --all`，目标范围来自 build-packages 的完整 public package 清单。",
   },
   {
     name: "install:ws",
@@ -118,9 +118,9 @@ const HELP_ITEMS = [
     detail: "保留一个更短的命令入口，便于日常使用。",
   },
   {
-    name: "console",
-    summary: "启动 console 开发模式。",
-    detail: "执行 console 的 Vite dev server，用于调试控制台前端。",
+    name: "release:test",
+    summary: "验证 package graph、版本、workspace 改写和发布器不变量。",
+    detail: "该命令也是 Release Integrity CI 的统一入口，不会执行实际发布。",
   },
   {
     name: "packages:publish",
@@ -133,11 +133,6 @@ const HELP_ITEMS = [
     summary: "在本地构建并部署 homepage 到 Cloudflare Pages。",
     detail:
       "首次使用前执行 `pnpm dlx wrangler@4.95.0 login`，默认部署到 downcity Pages 项目。",
-  },
-  {
-    name: "build:packages",
-    summary: "packages 构建脚本底层入口。",
-    detail: "当前与 `patch:build` 指向同一个脚本，保留给已有使用习惯与兼容调用。",
   },
 ];
 

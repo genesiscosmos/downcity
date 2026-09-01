@@ -66,7 +66,7 @@ import type {
   DesktopGroupSummary,
   DesktopGroupSessionSummary,
 } from "../../common/types/DesktopApi.js";
-import { mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import {
   create_desktop_agent_model,
   create_desktop_group_model,
@@ -200,7 +200,7 @@ export class AgentController {
   /** 列出独立登记的全部 Workspace。 */
   async list_workspaces(): Promise<DesktopWorkspaceSummary[]> {
     await this.ready_promise;
-    return this.data.workspaces.list().map(to_desktop_workspace_summary);
+    return Promise.all(this.data.workspaces.list().map(to_desktop_workspace_summary));
   }
 
   /** 获取 Desktop Agent 主聊天固定使用的本地 Workspace。 */
@@ -208,21 +208,38 @@ export class AgentController {
     await this.ready_promise;
     const workspace_path = path.join(this.data.root_path, "workspaces", "app");
     await mkdir(workspace_path, { recursive: true });
-    return to_desktop_workspace_summary(this.data.workspaces.ensure({ workspace_path, name: "app" }));
+    return await to_desktop_workspace_summary(this.data.workspaces.ensure({ workspace_path, name: "app" }));
   }
 
   /** 独立登记 Workspace，不隐式创建 Agent 或 Session。 */
   async create_workspace(
-    workspace_path: string,
+    input: import("../../common/types/DesktopApi.js").DesktopCreateWorkspaceInput,
+  ): Promise<DesktopWorkspaceSummary> {
+    await this.ready_promise;
+    const normalized_path = String(input.workspace_path || "").trim();
+    if (!normalized_path) throw new Error("workspace_path is required");
+    return await to_desktop_workspace_summary(this.data.workspaces.ensure({
+      workspace_path: normalized_path,
+      name: String(input.name || "").trim(),
+    }));
+  }
+
+  /** 更新 Workspace Registry 中的显示名称。 */
+  async update_workspace_name(
+    workspace_id: string,
     name: string,
   ): Promise<DesktopWorkspaceSummary> {
     await this.ready_promise;
-    const normalized_path = String(workspace_path || "").trim();
-    if (!normalized_path) throw new Error("workspace_path is required");
-    return to_desktop_workspace_summary(this.data.workspaces.ensure({
-      workspace_path: normalized_path,
-      name: String(name || "").trim(),
-    }));
+    return await to_desktop_workspace_summary(this.data.workspaces.update_name(workspace_id, name));
+  }
+
+  /** 将 Workspace 说明写入项目根目录 README.md。 */
+  async write_workspace_readme(workspace_id: string, content: string): Promise<DesktopWorkspaceSummary> {
+    await this.ready_promise;
+    const workspace = this.data.workspaces.get(workspace_id);
+    if (!workspace) throw new Error(`Workspace not found: ${workspace_id}`);
+    await writeFile(path.join(workspace.workspace_path, "README.md"), String(content || ""), "utf8");
+    return await to_desktop_workspace_summary(workspace);
   }
 
   /** 创建一个不绑定 Workspace 的 Agent。 */
@@ -358,7 +375,7 @@ export class AgentController {
     if (!workspace) throw new Error(`Workspace is not registered: ${workspace_id}`);
     if (!this.city.agents.get(config.agent_id)) throw new Error(`Agent is not available in Desktop City: ${config.agent_id}`);
     await this.require_workspace_entry(config.agent_id, workspace_id);
-    return { agent_id: config.agent_id, workspace_id, workspace: to_desktop_workspace_summary(workspace) };
+    return { agent_id: config.agent_id, workspace_id, workspace: await to_desktop_workspace_summary(workspace) };
   }
 
   /** 列出当前 City 中由本地定义恢复的运行时 Group。 */
@@ -1210,12 +1227,25 @@ function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "v
 }
 
 /** 把 Registry Workspace 收敛成 Renderer 所需摘要。 */
-function to_desktop_workspace_summary(record: LocalWorkspaceConfig): DesktopWorkspaceSummary {
+async function to_desktop_workspace_summary(record: LocalWorkspaceConfig): Promise<DesktopWorkspaceSummary> {
   return {
     workspace_id: record.workspace_id,
     workspace_path: record.workspace_path,
     name: record.name,
+    readme: await read_workspace_readme(record.workspace_path),
+    created_at: record.created_at,
+    updated_at: record.updated_at,
   };
+}
+
+/** 读取 Workspace 根目录 README.md；文件不存在时视为空内容。 */
+async function read_workspace_readme(workspace_path: string): Promise<string> {
+  try {
+    return await readFile(path.join(workspace_path, "README.md"), "utf8");
+  } catch (reason) {
+    if ((reason as NodeJS.ErrnoException).code === "ENOENT") return "";
+    throw reason;
+  }
 }
 
 /** 把 SDK Group 收敛成 Renderer 所需的可序列化摘要。 */

@@ -57,7 +57,7 @@ function buildDefaultTaskBody(): string {
   return [
     "# 任务目标",
     "",
-    "- 明确这次任务最终要交付什么结果，最终回复会由系统自动发送到任务绑定的 chat。",
+    "- 明确这次任务最终要交付什么结果，任务完成后结果会写入任务关联的 Session。",
     "- 如果需要向用户交付额外文件，请写入明确的项目路径。",
     "",
     "# 背景与输入",
@@ -76,7 +76,7 @@ function buildDefaultTaskBody(): string {
     "",
     "- 最终输出直接写结果本身，不要包多余寒暄，不要粘贴冗长日志。",
     "- 需要结构时，优先使用短标题、要点列表、表格或 JSON 等稳定格式。",
-    "- 默认不要在正文里重复调用 chat plugin 的发送 action；系统会自动发送最终结果。",
+    "- 如果任务需要通知外部渠道，由执行任务的 Agent 自己调用 chat plugin。",
     "",
     "# 触发与状态建议",
     "",
@@ -88,7 +88,7 @@ function buildDefaultTaskBody(): string {
     "",
     "- 当前是独立 task 上下文，不要假设仍处在原始聊天回合里。",
     "- 任务运行记录由系统保存在当前 Agent 的私有目录；需要交付给用户的文件应明确写入项目目录。",
-    "- 如果任务明确要求跨会话、跨平台或发送额外通知，再显式调用 chat plugin 的发送 action。",
+    "- 任务完成结果写入关联 Session 的 assistant 消息，不会替 Agent 调用 chat plugin。",
     "",
   ].join("\n");
 }
@@ -404,7 +404,7 @@ export async function runTaskDefinition(params: {
       success: true,
       accepted: true,
       // 关键点（中文）：这里直接返回给 agent 作为 tool result，提醒它这是异步任务，无需等待完成即可继续后续流程。
-      message: "The task has started. When it finishes, the task runtime will send the result to the user automatically. Continue the current flow without waiting for the task to complete.",
+      message: "The task has started. When it finishes, the result will be appended to the associated Session. Continue the current flow without waiting for the task to complete.",
       executionId,
       title,
     };

@@ -21,7 +21,6 @@ import { format_model_reasoning, get_default_model_reasoning } from "@/lib/model
 import { cn } from "@/lib/utils";
 import type { DesktopViewController, SettingsSection } from "@/types/DesktopView";
 import type { UsagePeriod } from "@/types/DesktopUsage";
-import { PluginSettings } from "@/views/PluginSettings";
 
 /** 设置主视图属性。 */
 interface SettingsViewProps {
@@ -43,7 +42,6 @@ export function SettingsView({ controller, section, open_global_env }: SettingsV
           <div className="mx-auto w-full max-w-3xl px-8 pb-12 pt-10">
             {section === "user" ? <UserSettingsExact controller={controller} /> : null}
             {section === "models" ? <ModelSettingsExact controller={controller} /> : null}
-            {section === "plugins" ? <PluginSettings controller={controller} /> : null}
             {section === "general" ? <GeneralSettings controller={controller} open_global_env={open_global_env} /> : null}
             {section === "appearance" ? <AppearanceSettings controller={controller} /> : null}
             {section === "chat" ? <ChatSettings controller={controller} /> : null}
