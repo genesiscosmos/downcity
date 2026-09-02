@@ -70,6 +70,69 @@ test("CityModel sends ModelStreamRequest and decodes versioned SSE events", asyn
   assert.deepEqual(output, events)
 })
 
+test("CityModel converts an incomplete Federation SSE envelope into transport_error", async () => {
+  const encoder = new TextEncoder()
+  const model = new CityModel({
+    descriptor: {
+      id: "city-model", name: "City", description: "", modalities: ["stream"], tags: [], meta: {},
+    },
+    request_stream: async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"protocol_version":1,"event":{"type":"text_delta"'))
+        controller.close()
+      },
+    }), {
+      headers: {
+        "content-type": "text/event-stream",
+        "x-request-id": "federation_req_1",
+      },
+    }),
+  })
+
+  const output = []
+  for await (const event of await model.stream(call)) output.push(event)
+
+  assert.equal(output[0].type, "model_start")
+  assert.equal(output[0].request_id, "federation_req_1")
+  assert.deepEqual(output[1], {
+    type: "model_error",
+    error: {
+      code: "transport_error",
+      message: "Federation model stream ended with an incomplete SSE event",
+      retryable: true,
+      provider_request_id: "federation_req_1",
+    },
+  })
+})
+
+test("CityModel converts a complete invalid Federation SSE envelope into provider_error", async () => {
+  const encoder = new TextEncoder()
+  const model = new CityModel({
+    descriptor: {
+      id: "city-model", name: "City", description: "", modalities: ["stream"], tags: [], meta: {},
+    },
+    request_stream: async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode("data: {invalid}\n\n"))
+        controller.close()
+      },
+    }), { headers: { "content-type": "text/event-stream" } }),
+  })
+
+  const output = []
+  for await (const event of await model.stream(call)) output.push(event)
+
+  assert.equal(output[0].type, "model_start")
+  assert.deepEqual(output[1], {
+    type: "model_error",
+    error: {
+      code: "provider_error",
+      message: "Federation returned an invalid model stream event",
+      retryable: false,
+    },
+  })
+})
+
 test("Federation SSE encoder exposes only versioned ModelStreamEvent envelopes", async () => {
   const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 }
   const events = [

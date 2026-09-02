@@ -38,10 +38,16 @@ export function resolve_effective_core_engine_error(params: {
    */
   streamError?: unknown;
 }): string {
-  const outerError = String(params.error ?? "").trim();
-  const innerError = String(params.streamError ?? "").trim();
+  const outerError = read_error_message(params.error);
+  const innerError = read_error_message(params.streamError);
   if (/AI_NoOutputGeneratedError|No output generated/i.test(outerError) && innerError) {
     return innerError;
   }
   return outerError || innerError || "Unknown execution error";
+}
+
+/** 读取适合向上层展示的错误正文，避免泄漏内部 Error class 名称。 */
+function read_error_message(error: unknown): string {
+  if (error instanceof Error) return error.message.trim();
+  return String(error ?? "").trim();
 }

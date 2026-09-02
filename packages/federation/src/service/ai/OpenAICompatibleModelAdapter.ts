@@ -224,22 +224,31 @@ function create_event_stream(
           buffer = parsed.rest;
           for (const data of parsed.data) {
             if (data === "[DONE]") continue;
-            state.accept(JSON.parse(data) as unknown);
+            state.accept(parse_sse_data(data));
           }
         }
         buffer += decoder.decode();
-        for (const data of consume_sse_events(`${buffer}\n\n`).data) {
-          if (data !== "[DONE]") state.accept(JSON.parse(data) as unknown);
+        const final_events = consume_sse_events(buffer);
+        for (const data of final_events.data) {
+          if (data !== "[DONE]") state.accept(parse_sse_data(data));
+        }
+        if (final_events.rest.trim()) {
+          throw new OpenAIStreamError(
+            "transport_error",
+            "Model provider stream ended with an incomplete SSE event",
+          );
         }
         state.finish();
         controller.close();
       } catch (error) {
+        const error_code = classify_stream_error(error);
         controller.enqueue({
           type: "model_error",
           error: {
-            code: input_cancelled(error) ? "cancelled" : "provider_error",
+            code: error_code,
             message: normalize_stream_error_message(error),
-            retryable: !input_cancelled(error),
+            retryable: error_code === "transport_error",
+            provider_request_id: identity.request_id,
           },
         });
         controller.close();
@@ -251,6 +260,30 @@ function create_event_stream(
       await reader.cancel(reason);
     },
   });
+}
+
+/** Provider 流在协议或传输边界产生的稳定内部错误。 */
+class OpenAIStreamError extends Error {
+  /** 映射到 Downcity Model Protocol 的错误码。 */
+  readonly code: "provider_error" | "transport_error";
+
+  constructor(code: "provider_error" | "transport_error", message: string) {
+    super(message);
+    this.name = "OpenAIStreamError";
+    this.code = code;
+  }
+}
+
+/** 解析一个已由 SSE 空行完整收口的数据事件。 */
+function parse_sse_data(data: string): unknown {
+  try {
+    return JSON.parse(data) as unknown;
+  } catch {
+    throw new OpenAIStreamError(
+      "provider_error",
+      "Model provider returned an invalid SSE JSON event",
+    );
+  }
 }
 
 /** OpenAI SSE 到 Downcity 事件的有状态投影器。 */
@@ -447,6 +480,16 @@ async function create_upstream_error(response: Response): Promise<Error> {
 /** 判断异常是否来自取消。 */
 function input_cancelled(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+/** 根据失败边界确定稳定的模型错误类别。 */
+function classify_stream_error(error: unknown): "cancelled" | "provider_error" | "transport_error" {
+  if (input_cancelled(error)) return "cancelled";
+  if (error instanceof OpenAIStreamError) return error.code;
+  const message = error instanceof Error ? error.message : String(error);
+  return error instanceof TypeError || message.trim().toLowerCase() === "terminated"
+    ? "transport_error"
+    : "provider_error";
 }
 
 /** 将 Node fetch 的底层连接错误转换成可操作且不依赖运行时实现的说明。 */

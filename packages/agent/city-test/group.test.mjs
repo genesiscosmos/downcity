@@ -116,6 +116,8 @@ test("Group.model uses AI dispatch to select only the returned members", async (
   await group_session.prompt({ query: "请审查这个变更" });
   await wait_for_group_idle(group_session);
   assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["reviewer"]);
+  assert.match(RecordingSession.created[0].query, /你已被 Group 调度选中，必须直接回复当前消息/);
+  assert.doesNotMatch(RecordingSession.created[0].query, /判断是否需要回复|如果不需要你发言/);
   await city.close();
 });
 
@@ -205,6 +207,50 @@ test("AI Dispatch 未调用 dispatch_group 时记录协议错误", async () => {
 
   assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), []);
   assert.match((await group_session.messages()).at(-1).text, /did not call dispatch_group/);
+  await city.close();
+});
+
+test("AI Dispatch 在同一调度 Turn 内纠正未调用工具的响应", async () => {
+  RecordingSession.created = [];
+  let dispatch_calls = 0;
+  const dispatch_model = new MockModelClient({
+    modelId: "recovering-dispatch-model",
+    doGenerate: async (call) => {
+      dispatch_calls += 1;
+      if (dispatch_calls === 1) {
+        return {
+          content: [{ type: "text", text: "我建议让 responder 回复。" }],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          warnings: [],
+        };
+      }
+      assert.equal(call.messages.some((message) => (
+        message.role === "user" && message.content.some((part) => (
+          part.type === "text" && part.text.includes("上一响应不符合调度协议")
+        ))
+      )), true);
+      return {
+        content: [create_dispatch_tool_call({ steps: [["responder"]], next: "stop" })],
+        finishReason: { unified: "tool-calls", raw: "tool_calls" },
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        warnings: [],
+      };
+    },
+  });
+  const city = new City();
+  const agent = new Agent({ id: "responder", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({ id: "recovering-dispatch-group", model: dispatch_model, members: [agent] });
+  city.groups.add(group);
+  const group_session = await group.sessions.create();
+
+  await group_session.prompt({ query: "请回答" });
+  await wait_for_group_idle(group_session);
+
+  assert.equal(dispatch_calls, 2);
+  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["responder"]);
+  assert.equal((await group_session.messages()).some((message) => message.sender_type === "system"), false);
   await city.close();
 });
 
@@ -414,6 +460,157 @@ test("GroupSession 使用 City Storage 持久化并可恢复", async () => {
   await fs.rm(root_path, { recursive: true, force: true });
 });
 
+test("GroupSession 持久化独享 Dispatch Session 的调度 Turn", async () => {
+  RecordingSession.created = [];
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-dispatch-session-"));
+  const city = new City({ storage: new LocalStorageProvider(root_path) });
+  const agent = new Agent({ id: "dispatch-member", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({ id: "dispatch-session-group", members: [agent], dispatch_strategy: test_dispatch_strategy });
+  city.groups.add(group);
+  const session = await group.sessions.create();
+
+  await session.prompt({ query: "persist dispatch" });
+  await wait_for_group_idle(session);
+
+  const turns_path = path.join(
+    root_path,
+    "groups",
+    "dispatch-session-group",
+    "sessions",
+    encodeURIComponent(session.id),
+    "dispatch",
+    "turns.jsonl",
+  );
+  const records = (await fs.readFile(turns_path, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const user_records = records.filter((record) => record.trigger === "user");
+  assert.deepEqual(user_records.map((record) => record.status), ["queued", "running", "completed"]);
+  assert.deepEqual(user_records.at(-1).decision.nodes[0].member_ids, ["dispatch-member"]);
+  assert.equal(
+    (await session.messages()).find((message) => message.sender_type === "agent").dispatch_id,
+    user_records.at(-1).dispatch_id,
+  );
+  await city.close();
+  await fs.rm(root_path, { recursive: true, force: true });
+});
+
+test("GroupSession stop 会中断 Dispatch Session 且不记录失败消息", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-dispatch-stop-"));
+  let dispatch_started = false;
+  let dispatch_aborted = false;
+  let dispatch_invocations = 0;
+  const strategy = {
+    async decide_dispatch({ abort_signal }) {
+      dispatch_invocations += 1;
+      dispatch_started = true;
+      await new Promise((resolve, reject) => {
+        const abort = () => {
+          dispatch_aborted = true;
+          reject(abort_signal.reason);
+        };
+        if (abort_signal.aborted) abort();
+        else abort_signal.addEventListener("abort", abort, { once: true });
+      });
+      return { nodes: [], terminal: true };
+    },
+  };
+  const city = new City({ storage: new LocalStorageProvider(root_path) });
+  const agent = new Agent({ id: "unused-member", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({ id: "dispatch-stop-group", members: [agent], dispatch_strategy: strategy });
+  city.groups.add(group);
+  const session = await group.sessions.create();
+  await session.prompt({ query: "stop dispatch" });
+  await session.prompt({ query: "cancel queued dispatch" });
+  for (let attempt = 0; attempt < 200 && !dispatch_started; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  await session.stop();
+
+  assert.equal(dispatch_aborted, true);
+  assert.equal(dispatch_invocations, 1);
+  assert.deepEqual((await session.messages()).map((message) => message.text), [
+    "stop dispatch",
+    "cancel queued dispatch",
+  ]);
+  const turns_path = path.join(
+    root_path,
+    "groups",
+    "dispatch-stop-group",
+    "sessions",
+    encodeURIComponent(session.id),
+    "dispatch",
+    "turns.jsonl",
+  );
+  const records = (await fs.readFile(turns_path, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const latest_records = new Map(records.map((record) => [record.dispatch_id, record]));
+  assert.equal(latest_records.size, 2);
+  assert.deepEqual([...latest_records.values()].map((record) => record.status), ["stopped", "stopped"]);
+  await city.close();
+  await fs.rm(root_path, { recursive: true, force: true });
+});
+
+test("GroupSession 恢复时重新执行中断的用户调度", async () => {
+  RecordingSession.created = [];
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-dispatch-recovery-"));
+  let original_abort_signal;
+  let original_dispatch_started = false;
+  const original_city = new City({ storage: new LocalStorageProvider(root_path) });
+  const original_agent = new Agent({ id: "recovery-member", session_class: RecordingSession });
+  original_city.agents.add(original_agent);
+  const original_group = new Group({
+    id: "dispatch-recovery-group",
+    members: [original_agent],
+    dispatch_strategy: {
+      async decide_dispatch({ abort_signal }) {
+        original_abort_signal = abort_signal;
+        original_dispatch_started = true;
+        await new Promise((resolve, reject) => {
+          abort_signal.addEventListener("abort", () => reject(abort_signal.reason), { once: true });
+        });
+        return { nodes: [], terminal: true };
+      },
+    },
+  });
+  original_city.groups.add(original_group);
+  const original_session = await original_group.sessions.create();
+  await original_session.prompt({ query: "recover dispatch" });
+  for (let attempt = 0; attempt < 200 && !original_dispatch_started; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  const restored_city = new City({ storage: new LocalStorageProvider(root_path) });
+  const restored_agent = new Agent({ id: "recovery-member", session_class: RecordingSession });
+  restored_city.agents.add(restored_agent);
+  const restored_group = new Group({
+    id: "dispatch-recovery-group",
+    members: [restored_agent],
+    dispatch_strategy: test_dispatch_strategy,
+  });
+  restored_city.groups.add(restored_group);
+  const restored_session = await restored_group.sessions.get(original_session.id);
+  assert.ok(restored_session);
+  await wait_for_group_idle(restored_session);
+
+  assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["recovery-member"]);
+  assert.deepEqual((await restored_session.messages()).map((message) => message.text), [
+    "recover dispatch",
+    "reply:recovery-member",
+  ]);
+  await original_session.stop();
+  assert.equal(original_abort_signal.aborted, true);
+  await restored_city.close();
+  await original_city.close();
+  await fs.rm(root_path, { recursive: true, force: true });
+});
+
 test("GroupSession 持久化调度检查点并在收口后清理", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-checkpoint-"));
   const storage = new LocalStorageProvider(root_path);
@@ -446,6 +643,56 @@ test("GroupSession 持久化调度检查点并在收口后清理", async () => {
   const completed_meta = JSON.parse(await fs.readFile(meta_path, "utf8"));
   assert.deepEqual(completed_meta.pending_turns, []);
   assert.deepEqual(completed_meta.auto_frontier_message_ids, []);
+  await city.close();
+  await fs.rm(root_path, { recursive: true, force: true });
+});
+
+test("GroupSession 列表首次读取时将 v1 metadata 原子迁移为 v2", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-metadata-migration-"));
+  const group_id = "metadata-migration-group";
+  const session_id = "legacy-session";
+  const session_path = path.join(root_path, "groups", group_id, "sessions", session_id);
+  const meta_path = path.join(session_path, "meta.json");
+  await fs.mkdir(session_path, { recursive: true });
+  await fs.writeFile(meta_path, `${JSON.stringify({
+    v: 1,
+    session_id,
+    group_id,
+    created_at: 1,
+    updated_at: 2,
+    message_count: 1,
+    preview_text: "legacy message",
+    pending_turns: [{
+      turn_id: "legacy-turn",
+      root_message_id: "legacy-message",
+      context_message_ids: [],
+    }],
+    auto_frontier_message_ids: ["legacy-reply"],
+  }, null, 2)}\n`);
+
+  const city = new City({ storage: new LocalStorageProvider(root_path) });
+  const agent = new Agent({ id: "metadata-agent", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({ id: group_id, members: [agent], dispatch_strategy: test_dispatch_strategy });
+  city.groups.add(group);
+
+  assert.deepEqual(await group.sessions.list(), [{
+    id: session_id,
+    group_id,
+    created_at: 1,
+    updated_at: 2,
+    message_count: 1,
+    preview_text: "legacy message",
+  }]);
+  const migrated_metadata = JSON.parse(await fs.readFile(meta_path, "utf8"));
+  assert.equal(migrated_metadata.v, 2);
+  assert.deepEqual(migrated_metadata.pending_turns, [{
+    turn_id: "legacy-turn",
+    root_message_id: "legacy-message",
+    context_message_ids: [],
+    dispatch_stage: "auto",
+  }]);
+  assert.deepEqual(migrated_metadata.auto_frontier_message_ids, ["legacy-reply"]);
   await city.close();
   await fs.rm(root_path, { recursive: true, force: true });
 });
@@ -628,7 +875,7 @@ test("唯一 auto dispatch 等待并合并并发输入批次", async () => {
   await city.close();
 });
 
-test("响应图依赖没有有效回复时不会继续投递下游节点", async () => {
+test("成员返回空内容时记录失败且不继续投递下游节点", async () => {
   RecordingSession.created = [];
   class EmptySession extends Session {
     async prompt() {
@@ -665,6 +912,10 @@ test("响应图依赖没有有效回复时不会继续投递下游节点", async
   await group_session.prompt({ query: "请分析并审查" });
   await wait_for_group_idle(group_session);
   assert.deepEqual(RecordingSession.created.map((entry) => entry.agent_id), ["architect"]);
+  assert.deepEqual((await group_session.messages()).map((message) => [message.sender_type, message.text]), [
+    ["user", "请分析并审查"],
+    ["system", "architect 执行失败：未生成有效回复"],
+  ]);
   await city.close();
 });
 

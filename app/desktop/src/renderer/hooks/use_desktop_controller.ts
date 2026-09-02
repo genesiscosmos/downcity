@@ -579,35 +579,62 @@ export function use_desktop_controller(): DesktopViewController {
       set_group_member_statuses_by_group((current) => { const next = { ...current }; delete next[group_id]; return next; });
       set_group_phase_by_group((current) => { const next = { ...current }; delete next[group_id]; return next; });
       set_group_read_message_ids_by_group((current) => { const next = { ...current }; delete next[group_id]; return next; });
-      if (selection?.kind === "group_session" && selection.group_id === group_id) set_selection(null);
+      active_group_session_ids_ref.current.delete(group_id);
+      if ((selection?.kind === "group_session" || selection?.kind === "group_draft") && selection.group_id === group_id) set_selection(null);
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
     }
   }, [selection]);
 
+  /** 解析 Chat 当前应使用的 Workspace，并确保它进入 Renderer 目录。 */
+  const resolve_chat_workspace = useCallback(async (preferred_workspace_id?: string) => {
+    const target_workspace = workspaces.find((workspace) => workspace.workspace_id === preferred_workspace_id)
+      ?? workspaces.find((workspace) => workspace.workspace_id === active_workspace_id)
+      ?? workspaces[0]
+      ?? await window.downcity.workspace.get_default();
+    if (!workspaces.some((workspace) => workspace.workspace_id === target_workspace.workspace_id)) {
+      set_workspaces((current) => [...current, target_workspace]);
+    }
+    return target_workspace;
+  }, [active_workspace_id, workspaces]);
+
+  /** 打开 Group 的本地 Draft；此阶段不创建任何持久化 GroupSession。 */
+  const open_group_draft = useCallback(async (group_id: string, workspace_id?: string) => {
+    const workspace = await resolve_chat_workspace(workspace_id);
+    const draft_id = get_group_draft_session_id(group_id);
+    active_group_session_ids_ref.current.delete(group_id);
+    set_sidebar_mode_state("chat");
+    set_group_messages_by_group((current) => ({ ...current, [group_id]: [] }));
+    set_group_member_statuses_by_group((current) => ({ ...current, [group_id]: [] }));
+    set_group_phase_by_group((current) => ({ ...current, [group_id]: "idle" }));
+    set_group_read_message_ids_by_group((current) => ({ ...current, [group_id]: [] }));
+    set_group_interactions_by_group((current) => ({ ...current, [group_id]: [] }));
+    set_active_workspace_id(workspace.workspace_id);
+    localStorage.setItem(active_workspace_storage_key, workspace.workspace_id);
+    set_selection({ kind: "group_draft", group_id, workspace_id: workspace.workspace_id, draft_id });
+  }, [resolve_chat_workspace]);
+
   const open_group = useCallback(async (group_id: string, session_id?: string) => {
     set_error("");
     if (session_id) hydrated_navigation_keys_ref.current.add(`group:${group_id}:${session_id}`);
     try {
-      const fallback_workspace = workspaces.find((workspace) => workspace.workspace_id === active_workspace_id) ?? workspaces[0] ?? await window.downcity.workspace.get_default();
-      if (!workspaces.some((workspace) => workspace.workspace_id === fallback_workspace.workspace_id)) set_workspaces((current) => [...current, fallback_workspace]);
       let target_session_id = session_id;
       const summaries = await window.downcity.group.list_sessions(group_id);
       if (!target_session_id) {
         target_session_id = summaries.slice().sort((left, right) => right.updated_at - left.updated_at)[0]?.session_id;
       }
       if (!target_session_id) {
-        const created = await window.downcity.group.create_session(group_id, fallback_workspace.workspace_id);
-        target_session_id = created.active_session_id;
+        await open_group_draft(group_id);
+        return;
       }
-      if (!target_session_id) throw new Error("无法创建 Group 默认 Session");
       const group = await window.downcity.group.open(group_id, target_session_id);
       set_groups_by_id((current) => ({ ...current, [group_id]: group }));
       set_groups((current) => current.map((item) => item.group_id === group_id ? group : item));
       set_group_sessions_by_workspace((current) => replace_group_sessions(current, group));
       const active_session = group.sessions.find((item) => item.session_id === group.active_session_id);
       if (!active_session?.workspace_id || !group.active_session_id) throw new Error("GroupSession 必须绑定 Workspace");
+      active_group_session_ids_ref.current.set(group_id, group.active_session_id);
       const messages = await window.downcity.group.list_messages(group_id, group.active_session_id);
       set_group_messages_by_group((current) => ({ ...current, [group.group_id]: messages }));
       // 切换 GroupSession 后，旧 Session 的运行态和已读标记不能带入新上下文。
@@ -621,7 +648,7 @@ export function use_desktop_controller(): DesktopViewController {
     } catch (reason) {
       set_error(to_error_message(reason));
     }
-  }, [active_workspace_id, workspaces]);
+  }, [open_group_draft]);
 
   /** 刷新恢复 GroupSession 时，通过既有打开入口补齐消息与运行上下文。 */
   useEffect(() => {
@@ -635,20 +662,12 @@ export function use_desktop_controller(): DesktopViewController {
   const create_group_session = useCallback(async (group_id: string, workspace_id?: string) => {
     set_error("");
     try {
-      const group = await window.downcity.group.create_session(group_id, workspace_id);
-      set_groups((current) => current.map((item) => item.group_id === group.group_id ? group : item));
-      set_groups_by_id((current) => ({ ...current, [group.group_id]: group }));
-      set_group_sessions_by_workspace((current) => replace_group_sessions(current, group));
-      set_group_messages_by_group((current) => ({ ...current, [group.group_id]: [] }));
-      set_group_member_statuses_by_group((current) => ({ ...current, [group.group_id]: [] }));
-      set_group_phase_by_group((current) => ({ ...current, [group.group_id]: "idle" }));
-      set_group_read_message_ids_by_group((current) => ({ ...current, [group.group_id]: [] }));
-      await open_group(group.group_id, group.active_session_id);
+      await open_group_draft(group_id, workspace_id);
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, [open_group]);
+  }, [open_group_draft]);
 
   const remove_group_session = useCallback(async (group_id: string, session_id: string) => {
     set_error("");
@@ -663,29 +682,66 @@ export function use_desktop_controller(): DesktopViewController {
       set_group_read_message_ids_by_group((current) => ({ ...current, [group.group_id]: [] }));
       const next_session = group.sessions.find((session) => session.session_id === group.active_session_id);
       const was_default = settings.group_main_sessions[group_id]?.session_id === session_id;
-      if (next_session?.workspace_id && group.active_session_id) await open_group(group.group_id, was_default ? undefined : group.active_session_id);
-      else if (was_default) {
+      if (was_default) {
         const next_group_main_sessions = { ...settings.group_main_sessions };
         delete next_group_main_sessions[group_id];
         set_settings(await window.downcity.settings.update({ group_main_sessions: next_group_main_sessions }));
+      }
+      if (selection?.kind === "group_session" && selection.group_id === group_id && selection.session_id === session_id) {
+        if (next_session?.workspace_id && group.active_session_id) await open_group(group.group_id, group.active_session_id);
+        else await open_group_draft(group_id, selection.workspace_id);
       }
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, [open_group, settings.group_main_sessions]);
+  }, [open_group, open_group_draft, selection, settings.group_main_sessions]);
 
-  const send_group_message = useCallback(async (group_id: string, session_id: string, text: string) => {
+  const send_group_message = useCallback(async (group_id: string, workspace_id: string, session_id: string, text: string) => {
+    const normalized_text = String(text || "").trim();
+    if (!normalized_text) return undefined;
     set_error("");
+    const source_key = get_group_chat_key(workspace_id, group_id, session_id);
+    let target_key = source_key;
+    set_drafts_by_session((current) => ({ ...current, [source_key]: "" }));
     // 调度器尚未选出成员前，不展示上一轮遗留的输入状态。
     set_group_member_statuses_by_group((current) => ({ ...current, [group_id]: [] }));
     try {
-      const result = await window.downcity.group.send(group_id, session_id, { text });
+      let target_session_id = session_id;
+      if (is_group_draft_session_id(session_id)) {
+        const group = await window.downcity.group.create_session(group_id, workspace_id);
+        const created_session = group.sessions.find((item) => item.session_id === group.active_session_id);
+        if (!group.active_session_id || created_session?.workspace_id !== workspace_id) {
+          throw new Error("无法创建当前 Workspace 的 GroupSession");
+        }
+        target_session_id = group.active_session_id;
+        target_key = get_group_chat_key(workspace_id, group_id, target_session_id);
+        active_group_session_ids_ref.current.set(group_id, target_session_id);
+        set_groups((current) => current.map((item) => item.group_id === group.group_id ? group : item));
+        set_groups_by_id((current) => ({ ...current, [group.group_id]: group }));
+        set_group_sessions_by_workspace((current) => replace_group_sessions(current, group));
+        set_group_messages_by_group((current) => ({ ...current, [group.group_id]: [] }));
+        set_group_phase_by_group((current) => ({ ...current, [group.group_id]: "idle" }));
+        set_group_read_message_ids_by_group((current) => ({ ...current, [group.group_id]: [] }));
+        set_group_interactions_by_group((current) => ({ ...current, [group.group_id]: [] }));
+        hydrated_navigation_keys_ref.current.add(`group:${group_id}:${target_session_id}`);
+        set_selection({ kind: "group_session", group_id, workspace_id, session_id: target_session_id });
+      }
+      const result = await window.downcity.group.send(group_id, target_session_id, { text: normalized_text });
       return result.turn_id;
     } catch (reason) {
+      set_drafts_by_session((current) => ({ ...current, [target_key]: normalized_text }));
       set_error(to_error_message(reason));
       return undefined;
     }
+  }, []);
+
+  /** 按 Workspace、Group 和 Session 隔离更新群聊草稿。 */
+  const update_group_draft = useCallback((workspace_id: string, group_id: string, session_id: string, text: string) => {
+    set_drafts_by_session((current) => ({
+      ...current,
+      [get_group_chat_key(workspace_id, group_id, session_id)]: text,
+    }));
   }, []);
 
   const stop_group = useCallback(async (group_id: string, session_id: string) => {
@@ -1580,6 +1636,7 @@ export function use_desktop_controller(): DesktopViewController {
     create_group_session,
     remove_group_session,
     send_group_message,
+    update_group_draft,
     stop_group,
     respond_group_interaction,
     open_settings,

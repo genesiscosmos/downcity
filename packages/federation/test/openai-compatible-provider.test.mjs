@@ -77,6 +77,59 @@ test("Provider Adapter returns malformed tool arguments as a failed tool input",
   assert.equal(events.at(-1).type, "model_finish")
 })
 
+test("Provider Adapter classifies an incomplete trailing SSE event as transport failure", async () => {
+  const encoder = new TextEncoder()
+  const model = create_openai_compatible_model({
+    id: "local-model",
+    upstream_model: "vendor-model",
+    base_url: "https://provider.example/v1",
+    api_key: "secret",
+    fetch: async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"partial'))
+        controller.close()
+      },
+    }), { status: 200, headers: { "x-request-id": "req_incomplete" } }),
+  })
+
+  const events = []
+  for await (const event of await model.stream({
+    messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+  })) events.push(event)
+
+  const error = events.at(-1).error
+  assert.equal(error.code, "transport_error")
+  assert.equal(error.retryable, true)
+  assert.equal(error.provider_request_id, "req_incomplete")
+  assert.equal(error.message, "Model provider stream ended with an incomplete SSE event")
+})
+
+test("Provider Adapter classifies a complete invalid SSE JSON event as provider failure", async () => {
+  const encoder = new TextEncoder()
+  const model = create_openai_compatible_model({
+    id: "local-model",
+    upstream_model: "vendor-model",
+    base_url: "https://provider.example/v1",
+    api_key: "secret",
+    fetch: async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode("data: {invalid}\n\n"))
+        controller.close()
+      },
+    }), { status: 200 }),
+  })
+
+  const events = []
+  for await (const event of await model.stream({
+    messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+  })) events.push(event)
+
+  const error = events.at(-1).error
+  assert.equal(error.code, "provider_error")
+  assert.equal(error.retryable, false)
+  assert.equal(error.message, "Model provider returned an invalid SSE JSON event")
+})
+
 test("Provider Adapter normalizes upstream HTTP errors without exposing the body", async () => {
   const model = create_openai_compatible_model({
     id: "local-model",

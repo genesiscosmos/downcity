@@ -1,12 +1,13 @@
 /** GroupSession 持久化协议：只描述 GroupSession 所需的底层数据能力。 */
 
 import type { GroupMessage } from "@/types/group/Group.js";
+import type { GroupDispatchSessionDataStore } from "@/types/group/GroupDispatchSession.js";
 import type { FileSystem } from "@downcity/workspace";
 
 /** GroupSession 的持久化元数据。 */
 export interface GroupSessionHistoryMeta {
   /** metadata schema 版本。 */
-  readonly v: 1;
+  readonly v: 2;
   /** 当前 GroupSession 标识。 */
   readonly session_id: string;
   /** 所属 Group 标识。 */
@@ -37,12 +38,16 @@ export interface GroupSessionTurnCheckpoint {
   readonly root_message_id: string;
   /** 用户消息写入时冻结的上下文消息标识。 */
   readonly context_message_ids: readonly string[];
+  /** 恢复后应重新执行初始用户调度，还是继续等待自动传播收口。 */
+  readonly dispatch_stage: "user" | "auto";
 }
 
 /** 单个 GroupSession 的持久化数据视图。 */
 export interface GroupSessionDataStore {
   /** 当前 GroupSession 标识。 */
   readonly session_id: string;
+  /** 当前 GroupSession 独享的 Dispatch Session 持久化视图。 */
+  readonly dispatch_session: GroupDispatchSessionDataStore;
   /** 初始化当前 GroupSession 的存储布局。 */
   initialize(): Promise<void>;
   /** 读取完整共享消息历史。 */

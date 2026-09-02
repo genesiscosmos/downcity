@@ -143,6 +143,8 @@ export interface GroupTurnRuntime {
   readonly root_message_id: string;
   /** 用户消息写入时冻结的上下文消息标识。 */
   readonly context_message_ids: readonly string[];
+  /** 当前 Turn 位于初始用户调度还是自动传播阶段。 */
+  dispatch_stage: "user" | "auto";
   /** 当前 GroupTurn 的异步 user dispatch。 */
   user_dispatch?: Promise<void>;
   /** 当前 GroupTurn 是否等待 GroupSession 的 auto dispatch。 */

@@ -8,7 +8,7 @@ export const desktop_navigation_storage_key = "downcity.navigation_target";
 
 /** 判断目标是否属于刷新后仍有明确语义的稳定页面。 */
 export function is_restorable_navigation_target(target: NavigationTarget): target is RestorableNavigationTarget {
-  return target.kind !== "create_agent" && target.kind !== "create_group" && target.kind !== "draft" && target.kind !== "settings";
+  return target.kind !== "create_agent" && target.kind !== "create_group" && target.kind !== "draft" && target.kind !== "group_draft" && target.kind !== "settings";
 }
 
 /** 从稳定导航目标推导一级侧栏，避免持久化第二份可能漂移的状态。 */

@@ -17,6 +17,11 @@ import type { DispatchDecision, DispatchNode, DispatchStrategy } from "@/types/g
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
+import {
+  GroupDispatchSession,
+  GroupDispatchStoppedError,
+} from "@/group/GroupDispatchSession.js";
+import type { GroupDispatchSessionResult } from "@/types/group/GroupDispatchSession.js";
 
 const max_auto_dispatch_count = 32;
 
@@ -47,7 +52,7 @@ export class GroupSession implements GroupSessionContract {
   private readonly group_name: string;
   private readonly instruction?: string;
   private readonly members: readonly Agent[];
-  private readonly dispatch_strategy: DispatchStrategy;
+  private readonly dispatch_session: GroupDispatchSession;
   private readonly workspace?: WorkspaceBase;
   private readonly messages_by_id: GroupMessage[] = [];
   private readonly subscribers = new Set<GroupEventSubscriber>();
@@ -77,7 +82,9 @@ export class GroupSession implements GroupSessionContract {
     this.group_name = options.group_name;
     this.instruction = options.instruction;
     this.members = options.members;
-    this.dispatch_strategy = options.dispatch_strategy;
+    this.dispatch_session = new GroupDispatchSession({
+      dispatch_strategy: options.dispatch_strategy,
+    });
     this.workspace = options.workspace;
     this.workspace_id = options.workspace?.id;
   }
@@ -90,6 +97,7 @@ export class GroupSession implements GroupSessionContract {
     if (this.store === store) return this;
     this.store = store;
     await store.initialize();
+    await this.dispatch_session.initialize(store.dispatch_session);
     const metadata = await store.read_metadata();
     if (metadata.group_id !== this.group_id) {
       throw new Error(`GroupSession "${this.id}" belongs to another Group`);
@@ -112,7 +120,8 @@ export class GroupSession implements GroupSessionContract {
         turn_id: checkpoint.turn_id,
         root_message_id: checkpoint.root_message_id,
         context_message_ids: checkpoint.context_message_ids,
-        auto_pending: true,
+        dispatch_stage: checkpoint.dispatch_stage,
+        auto_pending: checkpoint.dispatch_stage === "auto",
         stopped: false,
         recovered: true,
       });
@@ -151,7 +160,12 @@ export class GroupSession implements GroupSessionContract {
     if (Object.keys(valid_member_session_ids).length !== Object.keys(member_session_ids).length) {
       await store.update_metadata({ member_session_ids: valid_member_session_ids });
     }
-    if (this.group_turns_by_id.size > 0 || this.auto_frontier_messages.length > 0) {
+    for (const group_turn of this.group_turns_by_id.values()) {
+      if (group_turn.dispatch_stage !== "user") continue;
+      const message = this.messages_by_id.find((item) => item.id === group_turn.root_message_id);
+      if (message) this.start_user_dispatch(message, group_turn);
+    }
+    if ([...this.group_turns_by_id.values()].some((turn) => turn.auto_pending) || this.auto_frontier_messages.length > 0) {
       this.request_auto_dispatch();
     }
     return this;
@@ -169,19 +183,14 @@ export class GroupSession implements GroupSessionContract {
       turn_id,
       root_message_id: message.id,
       context_message_ids: [...context_message_ids, message.id],
+      dispatch_stage: "user",
       auto_pending: false,
       stopped: false,
     };
     this.group_turns_by_id.set(turn_id, group_turn);
     await this.persist_dispatch_checkpoint();
     this.publish_status(turn_id, "dispatching", { message_id: message.id });
-    const dispatch = this.run_user_dispatch(message, turn_id);
-    group_turn.user_dispatch = dispatch;
-    this.pending_deliveries.add(dispatch);
-    void dispatch.finally(() => {
-      this.pending_deliveries.delete(dispatch);
-      if (group_turn.auto_pending) this.request_auto_dispatch();
-    });
+    this.start_user_dispatch(message, group_turn);
     return { turn_id, success: true, message_count: this.messages_by_id.length };
   }
 
@@ -217,7 +226,10 @@ export class GroupSession implements GroupSessionContract {
     if (this.disposed) return;
     this.stop_requested = true;
     this.publish_status(undefined, "stopped");
-    await Promise.allSettled([...this.member_sessions.values()].map((session) => session.stop()));
+    await Promise.allSettled([
+      this.dispatch_session.stop(),
+      ...[...this.member_sessions.values()].map((session) => session.stop()),
+    ]);
     await Promise.allSettled([...this.pending_deliveries]);
     if (this.auto_dispatch_promise) await this.auto_dispatch_promise;
     this.auto_dispatch_requested = false;
@@ -232,6 +244,7 @@ export class GroupSession implements GroupSessionContract {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     await this.stop();
+    await this.dispatch_session.dispose();
     this.disposed = true;
     this.subscribers.clear();
     for (const unsubscribe of this.member_session_unsubscribes.values()) unsubscribe();
@@ -250,26 +263,51 @@ export class GroupSession implements GroupSessionContract {
     const group_turn = this.group_turns_by_id.get(turn_id);
     if (!group_turn) return;
     try {
-      const decision = await this.decide_dispatch("user", message, [message]);
+      const dispatch = await this.decide_dispatch("user", message, [message]);
       const context_messages = group_turn.context_message_ids
         .map((message_id) => this.messages_by_id.find((item) => item.id === message_id))
         .filter((item): item is GroupMessage => Boolean(item));
-      await this.run_dispatch_plan(decision, message, context_messages, turn_id);
+      await this.run_dispatch_plan(
+        dispatch.decision,
+        message,
+        context_messages,
+        turn_id,
+        dispatch.dispatch_id,
+      );
       if (this.stop_requested || this.disposed) {
         group_turn.stopped = true;
         this.group_turns_by_id.delete(turn_id);
         await this.persist_dispatch_checkpoint();
         return;
       }
-      group_turn.auto_pending = true;
+      if (dispatch.decision.terminal) {
+        this.group_turns_by_id.delete(turn_id);
+      } else {
+        group_turn.dispatch_stage = "auto";
+        group_turn.auto_pending = true;
+      }
       await this.persist_dispatch_checkpoint();
+      if (dispatch.decision.terminal) this.publish_status(turn_id, "idle");
     } catch (error) {
       group_turn.stopped = this.stop_requested;
-      await this.append_dispatch_failure(message, error);
+      if (!(error instanceof GroupDispatchStoppedError)) {
+        await this.append_dispatch_failure(message, error);
+      }
       this.group_turns_by_id.delete(turn_id);
       await this.persist_dispatch_checkpoint();
       this.publish_status(turn_id, this.stop_requested ? "stopped" : "failed");
     }
+  }
+
+  /** 登记一次用户调度运行；新建和恢复必须经过同一个生命周期入口。 */
+  private start_user_dispatch(message: GroupMessage, group_turn: GroupTurnRuntime): void {
+    const dispatch = this.run_user_dispatch(message, group_turn.turn_id);
+    group_turn.user_dispatch = dispatch;
+    this.pending_deliveries.add(dispatch);
+    void dispatch.finally(() => {
+      this.pending_deliveries.delete(dispatch);
+      if (group_turn.auto_pending) this.request_auto_dispatch();
+    });
   }
 
   /** GroupSession 唯一的自动调度循环，统一消费已完成成员产生的新消息。 */
@@ -299,8 +337,8 @@ export class GroupSession implements GroupSessionContract {
         const message = frontier_messages[frontier_messages.length - 1];
         this.publish_status(undefined, "dispatching", { message_id: message.id });
         try {
-          const decision = await this.decide_dispatch("auto", message, frontier_messages);
-          const dispatch_key = JSON.stringify(decision);
+          const dispatch = await this.decide_dispatch("auto", message, frontier_messages);
+          const dispatch_key = JSON.stringify(dispatch.decision);
           if (this.auto_dispatch_path_keys.has(dispatch_key)) {
             await this.append_message({ sender_type: "system", sender_id: "system", text: "Group auto dispatch detected a repeated path.", reply_to: message.id });
             frontier_messages = [];
@@ -311,8 +349,14 @@ export class GroupSession implements GroupSessionContract {
             continue;
           }
           this.auto_dispatch_path_keys.add(dispatch_key);
-          frontier_messages = await this.run_dispatch_plan(decision, message, this.messages_by_id, undefined, `group-dispatch-${nanoid(12)}`);
-          if (decision.terminal || frontier_messages.length === 0) {
+          frontier_messages = await this.run_dispatch_plan(
+            dispatch.decision,
+            message,
+            this.messages_by_id,
+            undefined,
+            dispatch.dispatch_id,
+          );
+          if (dispatch.decision.terminal || frontier_messages.length === 0) {
             frontier_messages = [];
             this.auto_frontier_messages = [];
             this.auto_dispatch_path_keys.clear();
@@ -324,6 +368,7 @@ export class GroupSession implements GroupSessionContract {
             this.auto_dispatch_requested = true;
           }
         } catch (error) {
+          if (error instanceof GroupDispatchStoppedError) return;
           await this.append_dispatch_failure(message, error);
           this.publish_status(undefined, "failed");
           frontier_messages = [];
@@ -361,16 +406,21 @@ export class GroupSession implements GroupSessionContract {
       batch_turns.forEach((group_turn) => { group_turn.auto_pending = false; });
       for (const message of candidate_messages) this.consumed_auto_message_ids.add(message.id);
       await this.persist_dispatch_checkpoint();
-      const dispatch_id = `group-dispatch-${nanoid(12)}`;
       dispatch_count = 0;
       const message = candidate_messages[candidate_messages.length - 1];
       this.publish_status(undefined, "dispatching", { message_id: message.id });
       try {
-        const decision = await this.decide_dispatch("auto", message, pending_messages);
+        const dispatch = await this.decide_dispatch("auto", message, pending_messages);
         const context_messages = this.messages_by_id.filter((item) => item.turn_id && batch_turn_ids.has(item.turn_id));
-        const outputs = await this.run_dispatch_plan(decision, message, context_messages, undefined, dispatch_id);
+        const outputs = await this.run_dispatch_plan(
+          dispatch.decision,
+          message,
+          context_messages,
+          undefined,
+          dispatch.dispatch_id,
+        );
         for (const turn_id of batch_turn_ids) this.group_turns_by_id.delete(turn_id);
-        if (decision.terminal || outputs.length === 0) {
+        if (dispatch.decision.terminal || outputs.length === 0) {
           this.auto_frontier_messages = [];
           await this.persist_dispatch_checkpoint();
           this.publish_status(undefined, "idle");
@@ -381,6 +431,7 @@ export class GroupSession implements GroupSessionContract {
           this.auto_dispatch_requested = true;
         }
       } catch (error) {
+        if (error instanceof GroupDispatchStoppedError) return;
         await this.append_dispatch_failure(message, error);
         this.publish_status(undefined, "failed");
         for (const turn_id of batch_turn_ids) this.group_turns_by_id.delete(turn_id);
@@ -394,8 +445,8 @@ export class GroupSession implements GroupSessionContract {
     trigger: "user" | "auto",
     message: GroupMessage,
     pending_messages: readonly GroupMessage[],
-  ): Promise<DispatchDecision> {
-    return await this.dispatch_strategy.decide_dispatch({
+  ): Promise<GroupDispatchSessionResult> {
+    return await this.dispatch_session.decide({
       trigger,
       message,
       pending_messages,
@@ -537,7 +588,10 @@ export class GroupSession implements GroupSessionContract {
         await this.append_member_failure(agent, message, result.error || "未知错误");
         return null;
       }
-      if (!result.text?.trim()) return null;
+      if (!result.text?.trim()) {
+        await this.append_member_failure(agent, message, "未生成有效回复");
+        return null;
+      }
       const reply = await this.append_message({
         sender_type: "agent",
         sender_id: agent.id,
@@ -653,7 +707,7 @@ export class GroupSession implements GroupSessionContract {
       `Current message from ${message.sender_type === "agent" ? message.sender_id : "user"}: ${message.text}`,
       dispatch_instruction,
       `你只能代表成员 ${agent.id} 自己发言。不得代替、指挥、裁定、总结或转述其他成员；不得假装自己是其他成员；不得创建队长、裁判或协调者。`,
-      "如果不需要你发言，返回空内容。",
+      "你已被 Group 调度选中，必须直接回复当前消息。",
     ].filter(Boolean).join("\n");
   }
 
@@ -695,6 +749,7 @@ export class GroupSession implements GroupSessionContract {
           turn_id: group_turn.turn_id,
           root_message_id: group_turn.root_message_id,
           context_message_ids: [...group_turn.context_message_ids],
+          dispatch_stage: group_turn.dispatch_stage,
         })),
       auto_frontier_message_ids: this.auto_frontier_messages.map((message) => message.id),
     });

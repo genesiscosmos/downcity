@@ -19,6 +19,7 @@ import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
 import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
+import { is_group_draft_session_id } from "@/types/DesktopView";
 
 /** Group 定义侧栏可以编辑的分区。 */
 export type GroupEditorSection = "model" | "instruction" | "members";
@@ -47,6 +48,18 @@ interface GroupViewProps {
   session: DesktopGroupSessionSummary;
   /** 当前 GroupSession 所属 Workspace。 */
   workspace_id: string;
+  /** 当前 Group Chat 的受控文本草稿。 */
+  draft: string;
+  /** 当前 Group Chat 的受控附件草稿。 */
+  draft_files: DesktopChatFileInput[];
+  /** 当前 Group Chat 的受控引用草稿。 */
+  draft_references: DesktopChatReferenceInput[];
+  /** 更新当前 Group Chat 的文本草稿。 */
+  update_draft(text: string): void;
+  /** 更新当前 Group Chat 的附件草稿。 */
+  update_draft_files(files: DesktopChatFileInput[]): void;
+  /** 更新当前 Group Chat 的引用草稿。 */
+  update_draft_references(references: DesktopChatReferenceInput[]): void;
   /** 向当前 GroupSession 发送文本。 */
   send_message(session_id: string, text: string): Promise<string | undefined>;
   /** 停止 Group 当前执行。 */
@@ -62,11 +75,8 @@ interface GroupViewProps {
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, send_message, stop_session, session_sidebar_collapsed, toggle_session_sidebar, session_sidebar, controller }: GroupViewProps) {
+export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, draft, draft_files, draft_references, update_draft, update_draft_files, update_draft_references, send_message, stop_session, session_sidebar_collapsed, toggle_session_sidebar, session_sidebar, controller }: GroupViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
-  const [draft, set_draft] = useState("");
-  const [draft_files, set_draft_files] = useState<DesktopChatFileInput[]>([]);
-  const [draft_references, set_draft_references] = useState<DesktopChatReferenceInput[]>([]);
   useEffect(() => {
     const container = scroll_ref.current;
     if (container) container.scrollTop = container.scrollHeight;
@@ -80,13 +90,13 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {messages.length === 0 ? <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4"><TbUsers className="size-8 text-muted-foreground/50" /><p className="text-center text-sm text-muted-foreground">开始与 {group.name} 协作</p><p className="text-center text-xs text-muted-foreground/60">{group.members.length} 个 Agent 已加入</p></div> : null}
             {messages.map((message) => <GroupMessageRow key={message.message_id} message={message} agents={agents} read={read_message_ids.includes(message.message_id)} />)}
-            {interactions.map(({ agent_id, part }) => <div key={part.interaction_id} className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2"><div className="size-8 shrink-0"><AgentAvatar agent={agents.find((item) => item.agent_id === agent_id) ?? { agent_id, model_id: "", version: "" }} class_name="size-8 rounded-md" /></div><div className="min-w-0 flex-1 px-1 pt-0.5"><div className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">{agents.find((agent) => agent.agent_id === agent_id)?.name || "Agent"} 需要你的响应</div><AssistantContent parts={[part]} show_reasoning={true} streaming={false} respond_interaction={respond_interaction} /></div></div>)}
+            {interactions.map(({ agent_id, part }) => <div key={part.interaction_id} className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2"><div className="size-8 shrink-0"><AgentAvatar agent={agents.find((item) => item.agent_id === agent_id) ?? { agent_id, model_id: "", version: "" }} class_name="size-8 rounded-md" /></div><div className="min-w-0 flex-1 px-1 pt-0.5"><div className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">{agents.find((agent) => agent.agent_id === agent_id)?.name || "Agent"} 需要你的响应</div><AssistantContent message_id={`group-interaction:${part.interaction_id}`} parts={[part]} show_reasoning={true} streaming={false} respond_interaction={respond_interaction} /></div></div>)}
             {(group_phase === "executing"
               ? member_statuses.filter((status) => status.running).map((status) => status.agent_id)
               : []).map((agent_id) => <GroupTypingRow key={`typing:${agent_id}`} agent={agents.find((item) => item.agent_id === agent_id)} agent_id={agent_id} />)}
           </div>
         </div>
-        <ChatInputEditor group_mode group_members={agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id))} group_sessions={group.sessions} select_group_session={(session_id) => controller.open_group(group.group_id, session_id)} group_phase={group_phase} surface="agent" workspace_id={workspace_id} editor_key={session.session_id} agent={group_agent} draft={draft} draft_files={draft_files} draft_references={draft_references} queued_messages={[]} queue_paused={false} models={[]} models_loading={false} settings={settings} update_draft={set_draft} update_draft_files={set_draft_files} update_draft_references={set_draft_references} send_message={async (input: DesktopChatInput) => { await send_message(session.session_id, input.text); set_draft(""); set_draft_files([]); set_draft_references([]); }} stop_session={() => stop_session(session.session_id)} refresh_models={async () => undefined} set_model={async () => undefined} set_reasoning_effort={async () => undefined} set_approval_mode={async () => undefined} remove_queued_message={() => undefined} send_queued_message={async () => undefined} update_queued_message={() => undefined} toggle_queued_message_paused={() => undefined} set_queue_paused={() => undefined} move_queued_message={() => undefined} />
+        <ChatInputEditor group_mode group_members={agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id))} group_sessions={group.sessions} select_group_session={(session_id) => controller.open_group(group.group_id, session_id)} group_phase={group_phase} surface="agent" workspace_id={workspace_id} editor_key={session.session_id} agent={group_agent} draft={draft} draft_files={draft_files} draft_references={draft_references} queued_messages={[]} queue_paused={false} models={[]} models_loading={false} settings={settings} update_draft={update_draft} update_draft_files={update_draft_files} update_draft_references={update_draft_references} send_message={async (input: DesktopChatInput) => { await send_message(session.session_id, input.text); }} stop_session={() => stop_session(session.session_id)} refresh_models={async () => undefined} set_model={async () => undefined} set_reasoning_effort={async () => undefined} set_approval_mode={async () => undefined} remove_queued_message={() => undefined} send_queued_message={async () => undefined} update_queued_message={() => undefined} toggle_queued_message_paused={() => undefined} set_queue_paused={() => undefined} move_queued_message={() => undefined} />
       </div>
   </ChatSurfaceLayout>;
 }
@@ -103,6 +113,7 @@ export function GroupConfigView({ group, agents, open_config, sidebar, sidebar_c
 
 /** 生成 GroupSession 的紧凑显示标题。 */
 function format_group_session_title(session: DesktopGroupSessionSummary): string {
+  if (is_group_draft_session_id(session.session_id)) return "新对话";
   return session.preview_text?.trim().slice(0, 36) || `Session ${session.session_id.slice(0, 8)}`;
 }
 

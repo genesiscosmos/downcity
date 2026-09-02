@@ -60,16 +60,24 @@ export class CityModel implements CityModelContract {
     if (content_type && !content_type.toLowerCase().includes("text/event-stream")) {
       throw new Error(`Federation language model returned unsupported content type: ${content_type}`);
     }
-    return parse_city_model_stream(response.body);
+    return parse_city_model_stream(response.body, {
+      model_id: this.id,
+      request_id: response.headers?.get("x-request-id") || undefined,
+      signal,
+    });
   }
 }
 
 /** 解析 Federation 返回的标准 SSE 数据流。 */
-function parse_city_model_stream(body: ReadableStream<Uint8Array>): ReadableStream<ModelStreamEvent> {
+function parse_city_model_stream(
+  body: ReadableStream<Uint8Array>,
+  context: { model_id: string; request_id?: string; signal?: AbortSignal },
+): ReadableStream<ModelStreamEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let data_lines: string[] = [];
+  let model_started = false;
   const validator = new ModelStreamValidator();
 
   return new ReadableStream<ModelStreamEvent>({
@@ -80,18 +88,30 @@ function parse_city_model_stream(body: ReadableStream<Uint8Array>): ReadableStre
           if (event !== undefined) {
             const parsed_event = parse_stream_event(event);
             validator.accept(parsed_event);
+            if (parsed_event.type === "model_start") model_started = true;
             controller.enqueue(parsed_event);
             return;
           }
           const chunk = await reader.read();
           if (chunk.done) {
             buffer += decoder.decode();
-            consume_sse_lines(true);
+            consume_sse_lines(false);
             const final_event = read_sse_event();
             if (final_event !== undefined) {
               const parsed_event = parse_stream_event(final_event);
               validator.accept(parsed_event);
+              if (parsed_event.type === "model_start") model_started = true;
               controller.enqueue(parsed_event);
+              return;
+            }
+            if (buffer.trim() || data_lines.some((line) => line.trim())) {
+              enqueue_stream_error(
+                controller,
+                "transport_error",
+                "Federation model stream ended with an incomplete SSE event",
+                true,
+              );
+              return;
             }
             validator.finish();
             controller.close();
@@ -101,7 +121,19 @@ function parse_city_model_stream(body: ReadableStream<Uint8Array>): ReadableStre
           consume_sse_lines(false);
         }
       } catch (error) {
-        controller.error(error);
+        const cancelled = context.signal?.aborted === true ||
+          (error instanceof DOMException && error.name === "AbortError");
+        const transport_error = cancelled || error instanceof TypeError;
+        enqueue_stream_error(
+          controller,
+          cancelled ? "cancelled" : transport_error ? "transport_error" : "provider_error",
+          cancelled
+            ? "Federation model stream was cancelled"
+            : transport_error
+              ? "Federation model stream terminated before completion"
+              : "Federation returned an invalid model stream event",
+          transport_error && !cancelled,
+        );
       }
     },
     async cancel(reason) {
@@ -131,11 +163,47 @@ function parse_city_model_stream(body: ReadableStream<Uint8Array>): ReadableStre
     data_lines = data_lines.slice(boundary + 1);
     return event || undefined;
   }
+
+  /** 以标准终态结束损坏的 transport，供 Agent 复用统一恢复策略。 */
+  function enqueue_stream_error(
+    controller: ReadableStreamDefaultController<ModelStreamEvent>,
+    code: "cancelled" | "provider_error" | "transport_error",
+    message: string,
+    retryable: boolean,
+  ): void {
+    if (!model_started) {
+      const start_event: ModelStreamEvent = {
+        type: "model_start",
+        request_id: context.request_id || `transport_${crypto.randomUUID()}`,
+        model_id: context.model_id,
+      };
+      validator.accept(start_event);
+      controller.enqueue(start_event);
+      model_started = true;
+    }
+    const event: ModelStreamEvent = {
+      type: "model_error",
+      error: {
+        code,
+        message,
+        retryable,
+        ...(context.request_id ? { provider_request_id: context.request_id } : {}),
+      },
+    };
+    validator.accept(event);
+    controller.enqueue(event);
+    controller.close();
+  }
 }
 
 /** 校验并解码单个 City transport 流事件。 */
 function parse_stream_event(data: string): ModelStreamEvent {
-  const parsed = JSON.parse(data) as ModelStreamEnvelope;
+  let parsed: ModelStreamEnvelope;
+  try {
+    parsed = JSON.parse(data) as ModelStreamEnvelope;
+  } catch {
+    throw new Error("Federation returned an invalid model stream JSON event");
+  }
   if (parsed.protocol_version !== MODEL_PROTOCOL_VERSION) {
     throw new Error(`Unsupported Downcity model protocol: ${String(parsed.protocol_version)}`);
   }

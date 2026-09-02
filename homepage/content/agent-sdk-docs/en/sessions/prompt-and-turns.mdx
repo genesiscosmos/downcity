@@ -72,6 +72,8 @@ Read the structured Assistant Message through `messages()` and `subscribe()`; th
 
 If a Tool throws, returns `{ success: false }`, or receives malformed JSON arguments from the model, the SDK marks that same Tool Part as `failed` and sends a failed Tool Result into the next model step. These failures do not end the Turn by themselves. A model Provider stream, canonical Message write, or other execution-infrastructure failure can end the Turn. A transient Provider failure is retried a limited number of times only when no visible output was produced; after partial output, the draft is preserved and the Turn fails explicitly to avoid duplicated text.
 
+If an OpenAI-compatible Provider closes its SSE stream in the middle of an event, the SDK reports a retryable `transport_error`. A complete SSE event containing invalid JSON produces a non-retryable `provider_error`. Public errors use stable descriptions rather than exposing the underlying JSON parser message.
+
 ## Sending input while a Turn runs
 
 You can call `prompt()` again while a Session is running:

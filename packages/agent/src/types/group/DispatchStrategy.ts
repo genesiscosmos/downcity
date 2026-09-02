@@ -3,7 +3,12 @@
 import type { GroupMessage } from "@/types/group/Group.js";
 import type { Agent } from "@/agent/Agent.js";
 import type { AgentModel } from "@/agent/AgentModel.js";
-import type { ModelClient, ModelJsonValue } from "@downcity/type";
+import type {
+  ModelClient,
+  ModelContent,
+  ModelJsonValue,
+  ModelMessage,
+} from "@downcity/type";
 import { generate_model } from "@executor/model/ModelGenerate.js";
 import { z } from "zod";
 
@@ -49,6 +54,8 @@ export interface DispatchStrategy {
     readonly messages: readonly GroupMessage[];
     /** 当前 Group 成员快照。 */
     readonly members: readonly Agent[];
+    /** 当前 Dispatch Session Turn 的取消信号。 */
+    readonly abort_signal: AbortSignal;
   }): Promise<DispatchDecision> | DispatchDecision;
 }
 
@@ -65,6 +72,8 @@ const dispatch_group_input_schema = z.object({
   next: z.enum(["stop", "continue"]),
 });
 
+const max_dispatch_model_steps = 3;
+
 /** 使用 Group.model 理解群聊意图并通过内部 tool call 生成成员投递决定。 */
 export class AiDispatchStrategy implements DispatchStrategy {
   private readonly model?: ModelClient;
@@ -79,34 +88,85 @@ export class AiDispatchStrategy implements DispatchStrategy {
     readonly pending_messages: readonly GroupMessage[];
     readonly messages: readonly GroupMessage[];
     readonly members: readonly Agent[];
+    readonly abort_signal: AbortSignal;
   }): Promise<DispatchDecision> {
     if (!this.model) {
       throw new Error("Group requires a configured model for dispatch");
     }
     try {
-      const result = await generate_model(this.model, {
-        messages: [
-          { role: "system", content: [{ type: "text", text: "你是群聊消息调度器。你只能调用 dispatch_group，不回答用户问题。普通任务默认只选择一个最合适的成员；只有用户明确要求多人分别回答，或确实存在并行的独立工作时，才把多个成员放在同一阶段。外层 steps 阶段按顺序执行，后一个阶段等待前一个阶段完成。只有真实存在的成员才能被选择。" }] },
-          { role: "user", content: [{ type: "text", text: build_dispatch_prompt(input) }] },
-        ],
-        tools: [{
-          name: "dispatch_group",
-          description: "提交当前 Group 的成员投递路径。只调用一次；不要输出普通文本。没有成员需要回复时使用空 steps 和 next=stop。",
-          input_schema: z.toJSONSchema(dispatch_group_input_schema) as Record<string, ModelJsonValue>,
-        }],
-        tool_choice: { type: "tool", tool_name: "dispatch_group" },
-        max_output_tokens: 600,
-        reasoning: { enabled: false },
-      });
-      if (result.tool_calls.length !== 1 || result.tool_calls[0]?.tool_name !== "dispatch_group") {
-        throw new Error("Group dispatch model did not call dispatch_group");
+      const messages: ModelMessage[] = [
+        { role: "system", content: [{ type: "text", text: "你是群聊消息调度器。你只能调用 dispatch_group，不回答用户问题。普通任务默认只选择一个最合适的成员；只有用户明确要求多人分别回答，或确实存在并行的独立工作时，才把多个成员放在同一阶段。外层 steps 阶段按顺序执行，后一个阶段等待前一个阶段完成。只有真实存在的成员才能被选择。" }] },
+        { role: "user", content: [{ type: "text", text: build_dispatch_prompt(input) }] },
+      ];
+      let protocol_error = "Group dispatch model did not call dispatch_group";
+      for (let step_index = 0; step_index < max_dispatch_model_steps; step_index += 1) {
+        const result = await generate_model(this.model, {
+          messages,
+          tools: [{
+            name: "dispatch_group",
+            description: "提交当前 Group 的成员投递路径。只调用一次；不要输出普通文本。没有成员需要回复时使用空 steps 和 next=stop。",
+            input_schema: z.toJSONSchema(dispatch_group_input_schema) as Record<string, ModelJsonValue>,
+          }],
+          tool_choice: { type: "tool", tool_name: "dispatch_group" },
+          max_output_tokens: 600,
+          reasoning: { enabled: false },
+        }, input.abort_signal);
+        const dispatch_call = result.tool_calls.length === 1 && result.tool_calls[0]?.tool_name === "dispatch_group"
+          ? result.tool_calls[0]
+          : undefined;
+        if (dispatch_call) {
+          try {
+            return normalize_dispatch_tool_input(dispatch_call.input, input.members);
+          } catch (error) {
+            protocol_error = error instanceof Error ? error.message : String(error);
+          }
+        } else {
+          protocol_error = "Group dispatch model did not call dispatch_group exactly once";
+        }
+        if (step_index + 1 >= max_dispatch_model_steps) break;
+        append_dispatch_retry_messages(messages, result.text, result.tool_calls, protocol_error);
       }
-      return normalize_dispatch_tool_input(result.tool_calls[0].input, input.members);
+      throw new Error(`${protocol_error} after ${max_dispatch_model_steps} attempts`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(`Group dispatch model failed: ${detail}`, { cause: error });
     }
   }
+}
+
+/** 把协议错误作为下一模型 step 的显式上下文，允许模型在同一调度 Turn 内纠正。 */
+function append_dispatch_retry_messages(
+  messages: ModelMessage[],
+  text: string,
+  tool_calls: readonly { type: "tool_call"; tool_call_id: string; tool_name: string; input: ModelJsonValue }[],
+  error: string,
+): void {
+  const assistant_content: ModelContent[] = [
+    ...(text.trim() ? [{ type: "text" as const, text }] : []),
+    ...tool_calls,
+  ];
+  if (assistant_content.length > 0) {
+    messages.push({ role: "assistant", content: assistant_content });
+  }
+  if (tool_calls.length > 0) {
+    messages.push({
+      role: "tool",
+      content: tool_calls.map((tool_call) => ({
+        type: "tool_result" as const,
+        tool_call_id: tool_call.tool_call_id,
+        tool_name: tool_call.tool_name,
+        outcome: "failed" as const,
+        content: [{ type: "text" as const, text: error }],
+      })),
+    });
+  }
+  messages.push({
+    role: "user",
+    content: [{
+      type: "text",
+      text: `上一响应不符合调度协议：${error}。请只调用一次 dispatch_group。`,
+    }],
+  });
 }
 
 /** 为 AI 调度器构造稳定、有限长度的群聊上下文。 */
@@ -152,7 +212,7 @@ function normalize_dispatch_tool_input(value: unknown, members: readonly Agent[]
       member_ids: unique_member_ids,
       response_mode: unique_member_ids.length > 1 ? "parallel" as const : "single" as const,
       depends_on_node_ids: index === 0 ? [] : [`step-${index - 1}`],
-      instruction: "根据当前 Group 上下文判断是否需要回复，只代表自己发言；不需要时返回空内容。",
+      instruction: "你已被 Group 调度选中，请直接针对当前消息给出回复，并且只代表自己发言。",
     };
   });
   if (nodes.length === 0 && parsed.next === "continue") {

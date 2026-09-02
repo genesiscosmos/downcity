@@ -240,6 +240,8 @@ export interface DesktopViewController {
   remove_group_session(group_id: string, session_id: string): Promise<void>;
   /** 向指定 GroupSession 发送文本。 */
   send_group_message(group_id: string, workspace_id: string, session_id: string, text: string): Promise<string | undefined>;
+  /** 更新指定 Group Chat 的本地文本草稿。 */
+  update_group_draft(workspace_id: string, group_id: string, session_id: string, text: string): void;
   /** 停止 Group 当前执行。 */
   stop_group(group_id: string, session_id: string): Promise<void>;
   /** 响应 Group 成员交互。 */

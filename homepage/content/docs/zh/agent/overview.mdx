@@ -29,6 +29,10 @@ AI 生成和 Agent 运行模型都默认选中 Desktop 设置中的系统默认�
 
 Agent 配置中的“删除 Agent”会永久删除该 Agent 的定义、头像、Session、日志、Schedule 与 Agent 级 Plugin 数据。正在执行任务或仍属于 Group 的 Agent 不能删除，需要先结束执行或将它移出相关 Group。
 
+## Desktop 完成提醒
+
+当 Agent Session 在后台完成一次 Turn 时，Desktop 会在 Chat Sidebar 的 Agent 和对话 Subbar 的对应 Session 上显示蓝色未读圆点，并在系统应用图标上显示未读 Session 数量。正在前台查看该 Session 时不会产生未读；打开对应 Session 后，圆点和系统角标会同步清除。多次完成同一个 Session 只计为一个未读项。
+
 ## 创建 Group
 
 点击“创建 Group”会进入独立创建页面。你可以描述团队目标，让所选模型根据当前已有 Agent 生成 Group 名称、协作目标和推荐成员；也可以从空白配置手动选择模型与成员。AI 结果在确认前始终只是可编辑草稿。

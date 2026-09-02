@@ -61,6 +61,8 @@ const TURN_STOPPED_MESSAGE = "Turn stopped";
 const MAX_CONTEXT_ERROR_COMPACTION_RETRIES = 3;
 /** 无任何可见输出时，临时 Provider 流错误的最大自动重试次数。 */
 const MAX_EMPTY_STREAM_RETRIES = 2;
+/** 无输出流错误的重试退避，避免立即重复冲击同一 Provider。 */
+const EMPTY_STREAM_RETRY_DELAYS_MS = [300, 1_000] as const;
 
 interface CoreEngineRunnerOptions {
   /** 当前 Session 稳定标识。 */
@@ -307,7 +309,12 @@ export class CoreEngineRunner {
               retry_count: empty_stream_retry_count,
               error_code: error.code,
               error: error.message,
+              provider_request_id: error.provider_request_id ?? null,
             });
+            await wait_for_stream_retry(
+              EMPTY_STREAM_RETRY_DELAYS_MS[empty_stream_retry_count - 1] ?? 1_000,
+              input.turn_context.lifecycle.abort_signal,
+            );
             continue;
           }
           const compact_error = this.should_compact_on_error(error)
@@ -549,6 +556,25 @@ export class CoreEngineRunner {
       };
     }
   }
+}
+
+/** 等待下一次模型流重试，并在 Turn 停止时立即结束等待。 */
+async function wait_for_stream_retry(
+  delay_ms: number,
+  abort_signal: AbortSignal,
+): Promise<void> {
+  if (abort_signal.aborted) throw abort_signal.reason;
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      abort_signal.removeEventListener("abort", on_abort);
+      resolve();
+    }, delay_ms);
+    const on_abort = (): void => {
+      clearTimeout(timer);
+      reject(abort_signal.reason);
+    };
+    abort_signal.addEventListener("abort", on_abort, { once: true });
+  });
 }
 
 /** 在工具执行前接入 Session canonical Interaction 生命周期。 */

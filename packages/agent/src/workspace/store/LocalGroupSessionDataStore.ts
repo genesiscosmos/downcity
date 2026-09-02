@@ -3,6 +3,8 @@
 import path from "node:path";
 import type { FileSystem } from "@downcity/workspace";
 import type { GroupMessage } from "@/types/group/Group.js";
+import type { GroupDispatchSessionDataStore } from "@/types/group/GroupDispatchSession.js";
+import { LocalGroupDispatchSessionDataStore } from "@/workspace/store/LocalGroupDispatchSessionDataStore.js";
 import type {
   GroupSessionDataStore,
   GroupSessionHistoryMeta,
@@ -12,6 +14,7 @@ import type {
 /** 单个 GroupSession 的本地文件存储。 */
 export class LocalGroupSessionDataStore implements GroupSessionDataStore {
   readonly session_id: string;
+  readonly dispatch_session: GroupDispatchSessionDataStore;
   private readonly files: FileSystem;
   private readonly group_id: string;
   private readonly session_root_path: string;
@@ -38,6 +41,10 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
       "sessions",
       encodeURIComponent(this.session_id),
     );
+    this.dispatch_session = new LocalGroupDispatchSessionDataStore({
+      files: this.files,
+      session_root_path: this.session_root_path,
+    });
     this.metadata_file_path = path.join(this.session_root_path, "meta.json");
     this.messages_file_path = path.join(this.session_root_path, "messages.jsonl");
     this.transaction_lock_path = path.join(this.session_root_path, ".lock");
@@ -82,7 +89,10 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     if (!(await this.files.path_exists(this.metadata_file_path))) {
       return this.create_initial_metadata();
     }
-    return await this.read_metadata_unlocked();
+    return await this.files.with_file_lock(
+      this.transaction_lock_path,
+      async () => await this.read_metadata_unlocked(),
+    );
   }
 
   /** 在调用方已经持有事务锁时读取 metadata。 */
@@ -92,15 +102,21 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     }
     const raw = JSON.parse(
       (await this.files.read_file(this.metadata_file_path)).toString("utf8"),
-    ) as Partial<GroupSessionHistoryMeta>;
+    ) as Omit<Partial<GroupSessionHistoryMeta>, "v" | "pending_turns"> & {
+      readonly v?: unknown;
+      readonly pending_turns?: unknown[];
+    };
+    if (raw.v !== 1 && raw.v !== 2) {
+      throw new Error(`Unsupported GroupSession metadata version: ${String(raw.v)}`);
+    }
     if (raw.session_id !== this.session_id) {
       throw new Error(`Invalid GroupSession ownership metadata: ${this.session_id}`);
     }
     if (raw.group_id && raw.group_id !== this.group_id) {
       throw new Error(`GroupSession "${this.session_id}" belongs to another Group`);
     }
-    return {
-      v: 1,
+    const metadata: GroupSessionHistoryMeta = {
+      v: 2,
       session_id: this.session_id,
       group_id: String(raw.group_id || this.group_id),
       ...(typeof raw.workspace_id === "string" && raw.workspace_id.trim() ? { workspace_id: raw.workspace_id.trim() } : {}),
@@ -112,12 +128,14 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
         ? { member_session_ids: normalize_member_session_ids(raw.member_session_ids) }
         : {}),
       ...(Array.isArray(raw.pending_turns)
-        ? { pending_turns: normalize_pending_turns(raw.pending_turns) }
+        ? { pending_turns: normalize_pending_turns(raw.pending_turns, raw.v === 1 ? "auto" : undefined) }
         : {}),
       ...(Array.isArray(raw.auto_frontier_message_ids)
         ? { auto_frontier_message_ids: normalize_message_ids(raw.auto_frontier_message_ids) }
         : {}),
     };
+    if (raw.v === 1) await this.write_metadata_unlocked(metadata);
+    return metadata;
   }
 
   /** 原子写入当前 metadata。 */
@@ -148,7 +166,7 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
         ...patch,
         session_id: this.session_id,
         group_id: this.group_id,
-        v: 1 as const,
+        v: 2 as const,
       };
       await this.write_metadata_unlocked(next_metadata);
       return next_metadata;
@@ -200,7 +218,7 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
   private create_initial_metadata(): GroupSessionHistoryMeta {
     const created_at = Date.now();
     return {
-      v: 1,
+      v: 2,
       session_id: this.session_id,
       group_id: this.group_id,
       created_at,
@@ -214,7 +232,10 @@ function normalize_member_session_ids(input: object): Record<string, string> {
   return Object.fromEntries(Object.entries(input).filter(([agent_id, session_id]) => Boolean(agent_id.trim()) && typeof session_id === "string" && session_id.trim()));
 }
 
-function normalize_pending_turns(input: unknown[]): GroupSessionTurnCheckpoint[] {
+function normalize_pending_turns(
+  input: unknown[],
+  default_dispatch_stage?: GroupSessionTurnCheckpoint["dispatch_stage"],
+): GroupSessionTurnCheckpoint[] {
   return input.flatMap((item) => {
     if (!item || typeof item !== "object") return [];
     const candidate = item as Partial<GroupSessionTurnCheckpoint>;
@@ -223,7 +244,12 @@ function normalize_pending_turns(input: unknown[]): GroupSessionTurnCheckpoint[]
     const context_message_ids = Array.isArray(candidate.context_message_ids)
       ? normalize_message_ids(candidate.context_message_ids)
       : [];
-    return turn_id && root_message_id ? [{ turn_id, root_message_id, context_message_ids }] : [];
+    const dispatch_stage = candidate.dispatch_stage === "user" || candidate.dispatch_stage === "auto"
+      ? candidate.dispatch_stage
+      : default_dispatch_stage;
+    return turn_id && root_message_id && dispatch_stage
+      ? [{ turn_id, root_message_id, context_message_ids, dispatch_stage }]
+      : [];
   });
 }
 

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { use_desktop_controller } from "@/hooks/use_desktop_controller";
 import { NavigationSidebar } from "@/layouts/NavigationSidebar";
 import { SettingsSidebar } from "@/layouts/SettingsSidebar";
-import { get_session_key } from "@/types/DesktopView";
+import { get_group_chat_key, get_session_key } from "@/types/DesktopView";
 import type { SettingsSection } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopGroupSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import { SessionView } from "@/views/SessionView";
@@ -82,6 +82,11 @@ export function App() {
       }
       if (modifier && event.key.toLowerCase() === "r") {
         event.preventDefault();
+        const group_id = controller.selection && "group_id" in controller.selection ? controller.selection.group_id : undefined;
+        if (group_id && controller.active_workspace_id) {
+          void controller.create_group_session(group_id, controller.active_workspace_id);
+          return;
+        }
         const agent_id = controller.selection && "agent_id" in controller.selection ? controller.selection.agent_id : controller.agents[0]?.agent_id;
         if (agent_id && controller.active_workspace_id) void controller.create_session(controller.active_workspace_id, agent_id);
       }
@@ -142,26 +147,36 @@ export function App() {
       const workspace = controller.workspaces.find((item) => item.workspace_id === workspace_file_selection.workspace_id);
       return workspace ? <WorkspaceFileView workspace={workspace} relative_path={workspace_file_selection.relative_path} /> : <WelcomeView />;
     }
-    if (controller.selection?.kind === "group_session") {
+    if (controller.selection?.kind === "group_session" || controller.selection?.kind === "group_draft") {
       const group_selection = controller.selection;
       const group = controller.groups.find((item) => item.group_id === group_selection.group_id);
-      const session = group?.sessions.find((item) => item.session_id === group_selection.session_id);
+      const session_id = group_selection.kind === "group_draft" ? group_selection.draft_id : group_selection.session_id;
+      const session = group_selection.kind === "group_draft"
+        ? { session_id, workspace_id: group_selection.workspace_id, created_at: 0, updated_at: 0, message_count: 0 }
+        : group?.sessions.find((item) => item.session_id === session_id);
       if (!group || !session) return <WelcomeView />;
+      const group_chat_key = get_group_chat_key(group_selection.workspace_id, group_selection.group_id, session_id);
       return <GroupView
         group={group}
         workspace_id={group_selection.workspace_id}
         session={session}
         agents={controller.agents}
         settings={controller.settings}
-        messages={controller.group_messages_by_group[group_selection.group_id] ?? []}
+        messages={group_selection.kind === "group_draft" ? [] : controller.group_messages_by_group[group_selection.group_id] ?? []}
         member_statuses={controller.group_member_statuses_by_group[group_selection.group_id] ?? []}
         group_phase={controller.group_phase_by_group[group_selection.group_id] ?? "idle"}
         read_message_ids={controller.group_read_message_ids_by_group[group_selection.group_id] ?? []}
         interactions={controller.group_interactions_by_group[group_selection.group_id] ?? []}
-        respond_interaction={(input) => controller.respond_group_interaction(group_selection.group_id, group_selection.session_id, input)}
+        respond_interaction={(input) => group_selection.kind === "group_session" ? controller.respond_group_interaction(group_selection.group_id, group_selection.session_id, input) : Promise.resolve()}
         controller={controller}
-        send_message={(session_id, text) => controller.send_group_message(group_selection.group_id, session_id, text)}
-        stop_session={(session_id) => controller.stop_group(group_selection.group_id, session_id)}
+        draft={controller.drafts_by_session[group_chat_key] ?? ""}
+        draft_files={[]}
+        draft_references={[]}
+        update_draft={(text) => controller.update_group_draft(group_selection.workspace_id, group_selection.group_id, session_id, text)}
+        update_draft_files={() => undefined}
+        update_draft_references={() => undefined}
+        send_message={(target_session_id, text) => controller.send_group_message(group_selection.group_id, group_selection.workspace_id, target_session_id, text)}
+        stop_session={(target_session_id) => group_selection.kind === "group_session" ? controller.stop_group(group_selection.group_id, target_session_id) : Promise.resolve()}
         session_sidebar_collapsed={chat_session_sidebar_collapsed}
         toggle_session_sidebar={toggle_chat_session_sidebar}
         session_sidebar={<GroupChatSessionSidebar group={group} controller={controller} collapsed={chat_session_sidebar_collapsed} toggle_collapsed={toggle_chat_session_sidebar} />}

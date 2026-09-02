@@ -36,14 +36,15 @@ Session ID 由 `agent.sessions.create()` 内部生成；创建接口不接受调
 `session_id`。恢复已有 Session 时使用 `agent.sessions.get(session_id)`，如果该
 Session 创建时绑定了 Workspace，恢复时必须传入同一个 Workspace。
 
-Group 是和 Agent 并列的可联系主体。Group 持有自己的模型，默认通过 AI 调度器识别消息意图、选择成员和生成当前最佳响应图；没有模型或模型调用失败时，GroupSession 会记录明确的调度失败，不会静默使用另一套规则。需要自定义行为时可显式提供 `dispatch_strategy`。普通群聊消息是否投递给一个或多个成员完全由 Group.model 决定。AI 调度使用一次强制的内部 `dispatch_group` tool call，不依赖 `generateObject`；tool call 只提交 `steps` 和 `next`，SDK 再编译为内部执行图。
+Group 是和 Agent 并列的可联系主体。Group 持有自己的模型，默认通过 AI 调度器识别消息意图、选择成员和生成当前最佳响应图；没有模型或模型调用失败时，GroupSession 会记录明确的调度失败，不会静默使用另一套规则。需要自定义行为时可显式提供 `dispatch_strategy`，异步策略应响应输入中的 `abort_signal`。普通群聊消息是否投递给一个或多个成员完全由 Group.model 决定。每个 GroupSession 拥有唯一的内部 Dispatch Session，调度 Turn 会排队并持久化；AI 调度在同一 Turn 内通过强制的 `dispatch_group` tool call 提交 `steps` 和 `next`，协议输出无效时会先要求模型纠正，再由 SDK 编译为内部执行图。
 
 `steps` 是二维数组：外层阶段按顺序执行，同一阶段数组内的成员并行执行；同一个成员可以出现在不同阶段，表示它在拓扑中再次参与。例如 `[["architect"], ["developer"], ["architect"], ["reviewer"]]` 表示 architect 的回复先交给 developer，再交回 architect，最后交给 reviewer。空数组配合 `next: "stop"` 表示本次不投递成员。
 并通过 `group.sessions.create()` 创建独立的群聊上下文。消息和传播属于 GroupSession；
 成员执行仍通过成员 Agent 的 `AgentSessions` 完成。`prompt()` 立即返回消息回执并异步启动 user dispatch；GroupSession 只运行一个全局 auto dispatch，在当前成员执行完成后统一决定是否扩展响应图。成员运行态可通过
 `subscribe()` 统一订阅共享消息和 Group/成员运行态；Session metadata 会记录 Group 与
-GroupSession 来源。调度检查点也会写入 City Storage；进程中断后只依据已落盘消息继续
-auto dispatch，不会重复提交已经接受的 Agent Turn。`group.sessions.list()` 返回轻量摘要，
+GroupSession 来源。Dispatch Session 的 Turn 日志与传播检查点都会写入 City Storage；
+进程中断后可以根据调度阶段重新执行尚未完成的 user dispatch 或继续 auto dispatch。
+`GroupSession.stop()` 会同时中断调度模型和成员 Session。`group.sessions.list()` 返回轻量摘要，
 `group.sessions.get(id)` 恢复完整上下文。
 
 ## 根目录结构

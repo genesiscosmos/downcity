@@ -2,8 +2,9 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { get_sidebar_mode_for_navigation, parse_navigation_target, resolve_navigation_target } from "../src/renderer/lib/navigation/desktop_navigation_state.ts";
+import { get_sidebar_mode_for_navigation, is_restorable_navigation_target, parse_navigation_target, resolve_navigation_target } from "../src/renderer/lib/navigation/desktop_navigation_state.ts";
 import type { DesktopNavigationCatalog } from "../src/renderer/types/DesktopNavigation.ts";
+import { get_group_chat_key, get_group_draft_session_id, is_group_draft_session_id } from "../src/renderer/types/DesktopView.ts";
 
 const catalog: DesktopNavigationCatalog = {
   agents: [{ agent_id: "writer", name: "Writer", description: "", model_id: "model", plugins: {}, created_at: "", updated_at: "" }],
@@ -16,8 +17,18 @@ const catalog: DesktopNavigationCatalog = {
 test("只解析结构完整的稳定页面", () => {
   assert.deepEqual(parse_navigation_target(JSON.stringify({ kind: "session", workspace_id: "project", agent_id: "writer", session_id: "session" })), { kind: "session", workspace_id: "project", agent_id: "writer", session_id: "session" });
   assert.equal(parse_navigation_target(JSON.stringify({ kind: "draft", workspace_id: "project", agent_id: "writer", draft_id: "draft" })), undefined);
+  assert.equal(parse_navigation_target(JSON.stringify({ kind: "group_draft", workspace_id: "project", group_id: "team", draft_id: "group-draft:team" })), undefined);
   assert.equal(parse_navigation_target(JSON.stringify({ kind: "create_group" })), undefined);
   assert.equal(parse_navigation_target("invalid-json"), undefined);
+});
+
+test("Group Draft 使用隔离键且不会进入持久化导航", () => {
+  const draft_id = get_group_draft_session_id("team");
+  assert.equal(draft_id, "group-draft:team");
+  assert.equal(is_group_draft_session_id(draft_id), true);
+  assert.equal(get_group_chat_key("project-a", "team", draft_id), "project-a:group:team:group-draft:team");
+  assert.equal(get_group_chat_key("project-b", "team", draft_id), "project-b:group:team:group-draft:team");
+  assert.equal(is_restorable_navigation_target({ kind: "group_draft", workspace_id: "project-a", group_id: "team", draft_id }), false);
 });
 
 test("存在的 Session 与 GroupSession 可以恢复", () => {

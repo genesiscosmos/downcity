@@ -18,12 +18,18 @@ export class ModelStreamFailure extends Error {
   /** 失败前是否已经向用户发布正文或工具输入。 */
   readonly has_partial_output: boolean;
 
+  /** Provider 返回的可观测请求标识。 */
+  readonly provider_request_id?: string;
+
   constructor(error: ModelError, has_partial_output: boolean) {
     super(error.message);
     this.name = "ModelStreamFailure";
     this.code = error.code;
     this.retryable = error.retryable;
     this.has_partial_output = has_partial_output;
+    if (error.provider_request_id) {
+      this.provider_request_id = error.provider_request_id;
+    }
   }
 }
 

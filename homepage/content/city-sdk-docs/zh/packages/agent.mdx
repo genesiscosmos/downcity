@@ -20,7 +20,7 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 
 ## Group 与 GroupSession
 
-`Group` 是具有集体主体性的协作主体，拥有自己的 `model` 和 `GroupSession` 集合。`Group.model` 专门用于理解群聊意图并选择投递成员；默认使用 AI 调度。AI 调度通过一次强制的内部 `dispatch_group` tool call 提交最小投递计划，SDK 再将其编译为内部执行图，不依赖 `generateObject`。未提供模型或模型调用失败时，`GroupSession` 会记录明确的调度失败，不会自动切换到另一套规则；如需自定义行为，应显式提供 `dispatch_strategy`。成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
+`Group` 是具有集体主体性的协作主体，拥有自己的 `model` 和 `GroupSession` 集合。`Group.model` 专门用于理解群聊意图并选择投递成员；默认使用 AI 调度。每个 GroupSession 拥有唯一的内部 Dispatch Session，负责调度 Turn 排队、持久化和停止。AI 调度在同一 Turn 内通过强制的 `dispatch_group` tool call 提交最小投递计划；如果模型先返回普通文本或无效参数，Dispatch Session 会把协议错误交还模型纠正，仍未获得有效调用时才记录明确失败。系统不会自动切换到另一套调度规则；如需自定义行为，应显式提供 `dispatch_strategy`，并让异步策略响应输入中的 `abort_signal`。成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
 和工具调用复制进群聊历史。`GroupSession` 的 `prompt()` 只负责立即写入用户消息并启动异步调度；多个调用可以同时进入。GroupSession 只运行一个全局 auto dispatch，在当前成员执行完成后统一判断下一步；消息和 Group/成员运行态统一通过
 `subscribe()` 订阅。
 
@@ -37,6 +37,8 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 ```
 
 同一个成员可以出现在不同阶段，例如 `[["architect"], ["developer"], ["architect"], ["reviewer"]]` 表示回复沿着 `architect -> developer -> architect -> reviewer` 继续传播；同一阶段内不要重复同一个成员。
+
+调度器是“是否发言”的唯一决策边界。成员一旦出现在 `steps` 中，就必须针对当前消息回复，不会在自己的 AgentSession 中再次判断是否需要发言。被选中的成员未生成有效文本时，GroupSession 会把它记录为执行失败；空 `steps` 才表示本轮不需要任何成员回复。
 
 ```ts
 const lead = new Agent({ id: "lead", model });
@@ -60,6 +62,6 @@ const restored = await group.sessions.get(sessions[0].id, { workspace });
 ```
 
 `Workspace` 仍然是 City 提供的资源。Workspace 只注入具体的 GroupSession，再由 GroupSession 注入成员 AgentSession；它不属于 Agent、
-Group，也不决定成员如何协作。加入带持久化 Storage 的 City 后，GroupSession 会保存自己的 Workspace ID、消息摘要、成员 AgentSession ID 映射和调度检查点；
-进程中断后只依据已落盘的 Group 消息继续 auto dispatch，不会重复提交已经接受的 Agent Turn；
+Group，也不决定成员如何协作。加入带持久化 Storage 的 City 后，GroupSession 会保存自己的 Workspace ID、消息摘要、成员 AgentSession ID 映射、传播检查点，以及 `dispatch/turns.jsonl` 中的 Dispatch Session Turn 日志；
+进程中断后会根据已落盘阶段重新执行尚未完成的 user dispatch，或继续尚未完成的 auto dispatch。调用 `group_session.stop()` 会同时中断当前调度模型调用、取消排队调度并停止成员 AgentSession；主动停止不会写入调度失败消息；
 `sessions.list()` 只读取摘要，`sessions.get(id)` 才恢复完整消息和成员会话引用。

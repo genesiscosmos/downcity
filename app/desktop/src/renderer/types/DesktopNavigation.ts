@@ -27,5 +27,6 @@ export type RestorableNavigationTarget = Exclude<NavigationTarget,
   | { kind: "create_agent" }
   | { kind: "create_group" }
   | { kind: "draft" }
+  | { kind: "group_draft" }
   | { kind: "settings" }
 >;

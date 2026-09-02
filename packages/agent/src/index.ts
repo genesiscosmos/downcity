@@ -26,6 +26,11 @@ export type {
   GroupSessionHistoryMeta,
   GroupSessionStore,
 } from "./types/group/GroupSessionStore.js";
+export type {
+  GroupDispatchSessionDataStore,
+  GroupDispatchTurnRecord,
+  GroupDispatchTurnStatus,
+} from "./types/group/GroupDispatchSession.js";
 export { GroupSession, GroupSessions } from "./group/index.js";
 export type {
   GroupMemberRuntime,
