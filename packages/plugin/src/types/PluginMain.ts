@@ -62,6 +62,9 @@ export interface PluginMainAgent {
   /** Agent 的稳定 ID。 */
   readonly agent_id: string;
 
+  /** Agent 的用户可见名称。 */
+  readonly name: string;
+
   /** Agent 当前启用的 Plugin ID。 */
   readonly plugin_ids: string[];
 }

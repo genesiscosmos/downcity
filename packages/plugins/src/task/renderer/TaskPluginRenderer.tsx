@@ -88,7 +88,7 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
           const expanded = expanded_agent_ids.has(agent.agent_id);
           const agent_has_unread = notifications.some((notification) => read_route(notification.route.agent_id) === agent.agent_id);
           return <div key={agent.agent_id}>
-            <SidebarTreeItem depth={0} kind="branch" label={agent.agent_id} trailing={<span className="flex items-center gap-1.5">{agent_has_unread ? <UnreadDot /> : null}<span>{agent.tasks.length}</span></span>} active={agent.agent_id === agent_id && !task_title} expanded={expanded} on_toggle={() => set_expanded_agent_ids((current) => toggle_key(current, agent.agent_id))} on_select={() => navigation.navigate(agent_route(agent.agent_id))} />
+            <SidebarTreeItem depth={0} kind="branch" label={agent.name} trailing={<span className="flex items-center gap-1.5">{agent_has_unread ? <UnreadDot /> : null}<span>{agent.tasks.length}</span></span>} active={agent.agent_id === agent_id && !task_title} expanded={expanded} on_toggle={() => set_expanded_agent_ids((current) => toggle_key(current, agent.agent_id))} on_select={() => navigation.navigate(agent_route(agent.agent_id))} />
             {expanded ? <div className="flex flex-col gap-0.5">{agent.tasks.map((task) => {
               const notification = find_task_notification(notifications, agent.agent_id, task.title);
               return <SidebarTreeItem key={task.title} kind="leaf" depth={1} label={task.title} trailing={<span className="flex items-center gap-0.5">{notification ? <UnreadDot /> : null}{task_menu(task)}</span>} active={agent.agent_id === agent_id && task.title === task_title} on_select={() => navigation.navigate(notification?.route ?? task_route(agent.agent_id, task.title))} />;

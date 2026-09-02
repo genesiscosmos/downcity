@@ -86,9 +86,9 @@ async function activate_task_main() {
     system: {
       async list_agents() {
         return [
-          { agent_id: "task-agent", plugin_ids: ["task", "skill"] },
-          { agent_id: "empty-task-agent", plugin_ids: ["task"] },
-          { agent_id: "chat-agent", plugin_ids: ["chat"] },
+          { agent_id: "task-agent", name: "Task Agent", plugin_ids: ["task", "skill"] },
+          { agent_id: "empty-task-agent", name: "Empty Task Agent", plugin_ids: ["task"] },
+          { agent_id: "chat-agent", name: "Chat Agent", plugin_ids: ["chat"] },
         ];
       },
       async list_workspaces() {
@@ -262,6 +262,7 @@ test("Task main 按 Agent 聚合所有启用 Task Plugin 的任务", async () =>
 
   assert.deepEqual(snapshot.agents, [{
     agent_id: "task-agent",
+    name: "Task Agent",
     tasks: [{
       title: "daily-report",
       description: "生成日报",
@@ -276,6 +277,7 @@ test("Task main 按 Agent 聚合所有启用 Task Plugin 的任务", async () =>
     }],
   }, {
     agent_id: "empty-task-agent",
+    name: "Empty Task Agent",
     tasks: [],
   }]);
   assert.deepEqual(snapshot.workspaces, [

@@ -8,6 +8,9 @@ export interface TaskMainviewAgent {
   /** Agent 的稳定 ID。 */
   readonly agent_id: string;
 
+  /** Agent 的用户可见名称。 */
+  readonly name: string;
+
   /** 当前 Agent 拥有的全部 Task。 */
   readonly tasks: TaskMainviewItem[];
 }

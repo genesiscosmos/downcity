@@ -157,6 +157,7 @@ function create_main_context(
       async list_agents() {
         return data.agents.list().map((agent) => ({
           agent_id: agent.agent_id,
+          name: agent.name,
           plugin_ids: Object.keys(agent.plugins).sort(),
         }));
       },

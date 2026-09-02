@@ -52,6 +52,7 @@ async function create_snapshot(context: PluginMainContext): Promise<TaskMainview
   const transport_workspace_id = workspaces[0]?.workspace_id;
   const agent_snapshots = await Promise.all(task_agents.map(async (agent) => ({
     agent_id: agent.agent_id,
+    name: agent.name,
     tasks: transport_workspace_id ? await read_agent_tasks(context, agent.agent_id, transport_workspace_id) : [],
   })));
   return {
