@@ -36,6 +36,7 @@ function create_user_message(message_id, text, created_at) {
 test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async () => {
   const context = create_session_turn_context({
     session_id: "session-context-test",
+    session_origin: { type: "chat" },
     turn_id: "turn-context-test",
     project_root: "/workspace",
     merge_step_input: async () => [create_user_message("queued-message", "queued", 2)],
@@ -71,6 +72,7 @@ test("SessionTurnContext 负责 Plugin lease 与只读投影生命周期", async
   });
   const context = create_session_turn_context({
     session_id: "session-context-test",
+    session_origin: { type: "group", group_id: "group-1" },
     turn_id: "turn-context-test",
     project_root: "/workspace",
   });
@@ -88,11 +90,16 @@ test("SessionTurnContext 负责 Plugin lease 与只读投影生命周期", async
     "call_id",
     "project_root",
     "session_id",
+    "session_origin",
     "turn_id",
     "workspace_env",
   ]);
   assert.equal(Object.isFrozen(plugin_execution_context), true);
   assert.equal(plugin_execution_context.call_id, "call-context-test");
+  assert.deepEqual(plugin_execution_context.session_origin, {
+    type: "group",
+    group_id: "group-1",
+  });
   assert.deepEqual(plugin_execution_context.workspace_env, { REGION: "cn" });
   assert.deepEqual(released, ["first"]);
 

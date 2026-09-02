@@ -20,6 +20,7 @@ import type {
 import type { SessionQueue } from "@/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /** Promise 延迟控制器。 */
 export interface SessionDeferred<T> {
@@ -49,6 +50,8 @@ export interface ActiveSessionTurnState {
 export interface SessionLoopOptions {
   /** 当前 Session 的稳定标识。 */
   session_id: string;
+  /** 当前 Session 的完整来源元数据。 */
+  session_origin: SessionOrigin;
   /** 当前 Session 所属 Workspace 的绝对根目录。 */
   workspace_path: string;
   /** 当前 Session 的模型执行器。 */

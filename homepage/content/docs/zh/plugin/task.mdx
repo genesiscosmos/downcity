@@ -37,7 +37,7 @@ Task 成功或失败并完成执行记录持久化后，会通过统一 Notifica
 - 后台文件处理
 - 定时通知
 
-任务执行时会创建独立的 task Session，并复用宿主 Agent 的能力。`session_id` 是可选的结果投递配置：存在时，完成结果会作为 assistant 消息追加到该 Session；不存在时，结果仍可在 Task 执行历史中查看。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Chat 插件。
+任务执行时会创建独立的 task Session，并复用宿主 Agent 的能力。从 Agent Session 调用 `create` 时，运行时会直接捕获当前 `session_id` 与 `origin.type`，Task 完成后把结果作为 assistant 消息追加回该 Session；模型无需也不能填写 Session 路由。通过 CLI、HTTP 或宿主管理界面等无 Session 上下文入口创建的 Task 不绑定交付目标，结果保留在执行历史。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Chat 插件。
 
 继续阅读：
 

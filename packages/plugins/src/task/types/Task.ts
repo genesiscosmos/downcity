@@ -6,8 +6,22 @@
  * - 每次执行产出 run 目录用于审计
  */
 
+import type { JsonValue } from "@downcity/agent";
+
 export type ShipTaskStatus = "enabled" | "paused" | "disabled";
 export type ShipTaskKind = "agent" | "script";
+
+/** Task 完成结果的固定 Session 交付目标。 */
+export interface TaskDeliverySession {
+  /** 保证该值对象可以安全进入 Plugin JSON 协议。 */
+  readonly [key: string]: JsonValue;
+
+  /** 目标 Agent Session 的稳定标识。 */
+  readonly session_id: string;
+
+  /** 目标 Agent Session 的来源分区；允许任意非空字符串。 */
+  readonly origin_type: string;
+}
 
 export type ShipTaskFrontmatterV1 = {
   /** 任务名称（唯一语义标识；对外统一使用 title） */
@@ -18,8 +32,8 @@ export type ShipTaskFrontmatterV1 = {
   description: string;
   /** 任务唯一绑定的执行 Workspace。 */
   workspace_id: string;
-  /** 可选的结果 Session；存在时任务完成结果会追加到该 Session。 */
-  session_id?: string;
+  /** 创建 Task 时由调用上下文自动捕获的结果交付 Session。 */
+  delivery_session?: TaskDeliverySession;
   /** 任务执行类型（agent=交给 agent 执行；script=直接执行 task 正文脚本） */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核（仅 `kind=agent` 生效；默认 false，false 时单轮执行） */
@@ -132,8 +146,8 @@ export type ShipTaskRunMetaV1 = {
   executionId: string;
   /** 本次执行使用的 Workspace ID。 */
   workspace_id: string;
-  /** 可选的结果 Session 标识。 */
-  session_id?: string;
+  /** 本次运行使用的固定结果交付 Session。 */
+  delivery_session?: TaskDeliverySession;
   /** 触发来源 */
   trigger: ShipTaskRunTriggerV1;
   /** 最终状态（综合执行阶段 + 结果校验） */

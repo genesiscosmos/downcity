@@ -54,7 +54,6 @@ const TASK_CREATE_SCHEMA = z.object({
   when: z.string(),
   description: z.string(),
   workspace_id: z.string().optional(),
-  session_id: z.string().optional(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
   status: TASK_STATUS_SCHEMA.optional(),
@@ -69,8 +68,6 @@ const TASK_UPDATE_SCHEMA = z.object({
   clearWhen: z.boolean().optional(),
   description: z.string().optional(),
   workspace_id: z.string().optional(),
-  session_id: z.string().optional(),
-  clearSession: z.boolean().optional(),
   kind: TASK_KIND_SCHEMA.optional(),
   review: z.boolean().optional(),
   status: TASK_STATUS_SCHEMA.optional(),
@@ -195,7 +192,6 @@ export function createTaskPluginActions(params: {
             when: { type: "string", description: "Trigger condition (@manual | cron | time:ISO8601)." },
             description: { type: "string", description: "Task description." },
             workspace_id: { type: "string", description: "Execution Workspace. Defaults to the current action Workspace." },
-            session_id: { type: "string", description: "Optional Session that receives the final result." },
             kind: { type: "string", enum: ["agent", "script"], description: "Execution kind." },
             review: { type: "boolean", description: "Whether to enable multi-turn review." },
             status: { type: "string", enum: ["enabled", "paused", "disabled"], description: "Task status." },
@@ -227,10 +223,6 @@ export function createTaskPluginActions(params: {
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
             .option("--workspace-id <workspace_id>", "Execution Workspace. Defaults to the current Workspace.")
             .option(
-              "--session-id <session_id>",
-              "Task execution session_id. If omitted, DC_SESSION_ID is used when available.",
-            )
-            .option(
               "--status <status>",
               "Status (enabled|paused|disabled, default enabled).",
             )
@@ -248,6 +240,7 @@ export function createTaskPluginActions(params: {
         return executeTaskCreateAction({
           context: actionParams.context,
           payload: actionParams.input as TaskCreateRequest,
+          execution: actionParams.execution,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
       },
@@ -327,8 +320,6 @@ export function createTaskPluginActions(params: {
             clearWhen: { type: "boolean", description: "Whether to clear the trigger condition." },
             description: { type: "string", description: "New description." },
             workspace_id: { type: "string", description: "New execution Workspace." },
-            session_id: { type: "string", description: "New optional result Session." },
-            clearSession: { type: "boolean", description: "Remove the result Session." },
             kind: { type: "string", enum: ["agent", "script"] },
             review: { type: "boolean" },
             status: { type: "string", enum: ["enabled", "paused", "disabled"] },
@@ -355,8 +346,6 @@ export function createTaskPluginActions(params: {
             .option("--review <review>", "Whether to enable multi-turn review (true|false).")
             .option("--clear-when", "Clear when and fall back to @manual.", false)
             .option("--workspace-id <workspace_id>", "Execution Workspace.")
-            .option("--session-id <session_id>", "Task execution session_id.")
-            .option("--clear-session", "Remove the optional result Session.", false)
             .option("--status <status>", "Status (enabled|paused|disabled).")
             .option(
               "--activate",

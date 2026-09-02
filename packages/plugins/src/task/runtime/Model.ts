@@ -16,6 +16,7 @@ import type {
   ShipTaskFrontmatterV1,
   ShipTaskKind,
   ShipTaskStatus,
+  TaskDeliverySession,
 } from "@/task/types/Task.js";
 import type { JsonObject, JsonValue } from "@downcity/agent";
 
@@ -31,6 +32,25 @@ const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
 ];
 
 type TaskRawValue = JsonValue | undefined;
+
+/** 校验并归一化 Task 的固定 Session 交付目标。 */
+function normalize_task_delivery_session(
+  input: TaskRawValue,
+): { ok: true; value?: TaskDeliverySession } | { ok: false; error: string } {
+  if (input === undefined || input === null) return { ok: true };
+  if (typeof input !== "object" || Array.isArray(input)) {
+    return { ok: false, error: "Invalid delivery_session: expected an object" };
+  }
+  const session_id = String(input.session_id || "").trim();
+  const origin_type = String(input.origin_type || "").trim();
+  if (!session_id || !origin_type) {
+    return {
+      ok: false,
+      error: "Invalid delivery_session: session_id and origin_type are required",
+    };
+  }
+  return { ok: true, value: { session_id, origin_type } };
+}
 
 function normalizeTaskReview(input: TaskRawValue): boolean | null {
   if (typeof input === "boolean") return input;
@@ -267,6 +287,8 @@ export function parseTaskMarkdown(params: {
   }
 
   const kind = normalizeTaskKind(meta.kind);
+  const delivery_session = normalize_task_delivery_session(meta.delivery_session);
+  if (!delivery_session.ok) return delivery_session;
   const body_text = String(body ?? "").trim();
   if (kind === "script" && !body_text) {
     return { ok: false, error: "script task body cannot be empty" };
@@ -277,7 +299,9 @@ export function parseTaskMarkdown(params: {
     when: whenNormalized.value,
     description: String(meta.description).trim(),
     workspace_id: String(meta.workspace_id).trim(),
-    ...(String(meta.session_id || "").trim() ? { session_id: String(meta.session_id).trim() } : {}),
+    ...(delivery_session.value
+      ? { delivery_session: delivery_session.value }
+      : {}),
     kind,
     ...(kind === "agent" && normalizeTaskReview(meta.review) === true ? { review: true } : {}),
     status,
@@ -313,6 +337,10 @@ export function buildTaskMarkdown(params: {
   }
 
   const kind = normalizeTaskKind(frontmatter.kind);
+  const delivery_session = normalize_task_delivery_session(
+    frontmatter.delivery_session,
+  );
+  if (!delivery_session.ok) throw new Error(delivery_session.error);
   const body_text = String(body ?? "").trim();
   if (kind === "script" && !body_text) {
     throw new Error("script task body cannot be empty");
@@ -323,7 +351,9 @@ export function buildTaskMarkdown(params: {
     when: whenNormalized.value,
     description: String(frontmatter.description || "").trim(),
     workspace_id: String(frontmatter.workspace_id || "").trim(),
-    ...(String(frontmatter.session_id || "").trim() ? { session_id: String(frontmatter.session_id).trim() } : {}),
+    ...(delivery_session.value
+      ? { delivery_session: delivery_session.value }
+      : {}),
     kind,
     ...(kind === "agent" ? { review: Boolean(frontmatter.review) } : {}),
     status: String(frontmatter.status || "").trim(),

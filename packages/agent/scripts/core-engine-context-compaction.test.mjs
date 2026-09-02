@@ -74,6 +74,7 @@ function create_turn_input(model, messages, context_window = 100) {
     model,
     turn_context: create_session_turn_context({
       session_id: "compact-runner-session",
+      session_origin: { type: "chat" },
       turn_id: "compact-runner-turn",
     }),
     resolve_step_inputs: async () => ({
@@ -220,6 +221,7 @@ test("显式 compact 后在下一次 provider 调用前重载 canonical history"
   }]);
   input.turn_context = create_session_turn_context({
     session_id: "compact-runner-session",
+    session_origin: { type: "chat" },
     turn_id: "compact-runner-turn",
     consume_history_reload: () => {
       const requested = reload_requested;

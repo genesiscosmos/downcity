@@ -15,11 +15,15 @@ import type {
 } from "@/types/executor/SessionTurnContext.js";
 import type { AgentPluginExecutionLease } from "@/types/plugin/PluginRuntime.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import { normalize_session_origin } from "@/session/SessionOrigin.js";
 
 /** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */
 export interface CreateSessionPluginExecutionContextInput {
   /** 当前 Session 标识。 */
   session_id: string;
+  /** 当前 Session 的完整来源元数据。 */
+  session_origin: SessionOrigin;
   /** 当前 Session 所属项目根目录。 */
   project_root: string;
   /** 当前 Session 已生效的 Workspace 环境变量。 */
@@ -62,6 +66,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     const project_root = String(init.project_root || "").trim();
     this.session = Object.freeze({
       session_id,
+      origin: Object.freeze(normalize_session_origin(init.session_origin)),
       turn_id,
       ...(project_root ? { project_root } : {}),
     });
@@ -172,6 +177,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     const normalized_call_id = String(call_id || "").trim();
     return Object.freeze({
       session_id: this.session.session_id,
+      session_origin: this.session.origin,
       turn_id: this.session.turn_id,
       ...(normalized_call_id ? { call_id: normalized_call_id } : {}),
       ...(this.session.project_root
@@ -217,6 +223,7 @@ export function create_session_plugin_execution_context(
 ): PluginExecutionContext {
   return Object.freeze({
     session_id: input.session_id,
+    session_origin: Object.freeze(normalize_session_origin(input.session_origin)),
     project_root: input.project_root,
     workspace_env: Object.freeze({ ...input.workspace_env }),
     agent_systems: Object.freeze([...input.agent_systems]),

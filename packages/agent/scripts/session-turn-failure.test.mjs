@@ -17,7 +17,7 @@ import { SessionEventHub } from "../bin/session/runtime/SessionEventHub.js";
 import { SessionLoop } from "../bin/session/SessionLoop.js";
 import { SessionQueue } from "../bin/session/SessionQueue.js";
 
-async function create_turn_harness(execute_turn) {
+async function create_turn_harness(execute_turn, session_origin = { type: "chat" }) {
   const session_id = "session-turn-failure-test";
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-turn-failure-"));
   const messages = new SessionMessages({
@@ -38,6 +38,7 @@ async function create_turn_harness(execute_turn) {
 
   const turn = new SessionLoop({
     session_id,
+    session_origin,
     workspace_path: root_path,
     executor: {
       execute: async ({ turn_context }) => await execute_turn(turn_context),
@@ -59,6 +60,30 @@ async function create_turn_harness(execute_turn) {
 
   return { messages, turn };
 }
+
+test("Plugin execution context 保留完整 Session origin", async () => {
+  const origin = {
+    type: "group",
+    group_id: "review-team",
+    group_session_id: "group-session-1",
+  };
+  let execution_context;
+  const { turn } = await create_turn_harness(async (turn_context) => {
+    execution_context = turn_context.step.plugin_execution_context("call-1");
+    return {
+      success: true,
+      text: "done",
+      deferred_persisted_user_messages: [],
+    };
+  }, origin);
+
+  const handle = await turn.prompt({ query: "hello" });
+  await handle.finished;
+
+  assert.equal(execution_context.session_id, "session-turn-failure-test");
+  assert.deepEqual(execution_context.session_origin, origin);
+  assert.equal(execution_context.call_id, "call-1");
+});
 
 /** 通过 Downcity Model Protocol 写入一个完整文本 part。 */
 async function write_text(output, content_id, text) {

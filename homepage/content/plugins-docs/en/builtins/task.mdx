@@ -44,7 +44,7 @@ Use the `task` Plugin when automation should remain named, editable, and manuall
 
 ## SDK Assembly
 
-`TaskPlugin` accepts an optional timezone and host notification port. Every Task binds one execution Workspace; optional `session_id` only delivers the completed result to a Session. Agent tasks prefer that Session's model when configured and otherwise use the Agent model. By default, cron uses the current machine timezone. Direct SDK usage can omit `notifications` when UI unread state is not needed:
+`TaskPlugin` accepts an optional timezone and host notification port. Every Task binds one execution Workspace. When `create` is called from an Agent Session, the runtime automatically captures that Session's `session_id` and `origin.type` as the fixed delivery target; the model neither needs nor is allowed to provide Session routing in the action payload. Agent tasks prefer the delivery Session's model when configured and otherwise use the Agent model. By default, cron uses the current machine timezone. Direct SDK usage can omit `notifications` when UI unread state is not needed:
 
 ```ts
 import { TaskPlugin } from "@downcity/plugins/task";
@@ -78,7 +78,8 @@ The action names are `list`, `history`, `run_detail`, `create`, `run`, `delete`,
 - agent tasks read the effective runtime model from the Session port in PluginContext
 - each run creates an independent task Session while reusing the host Agent's complete Plugin capabilities
 - `workspace_id` is the Task's execution setting, and the scheduler registers it only in that Workspace
-- `session_id` is optional; when present the result is appended to that Session, otherwise it remains in run history
+- Session-scoped `create` automatically stores the current `(origin.type, session_id)` and appends completed results to that Session
+- Tasks created from CLI, HTTP, or host management surfaces without a Session context have no delivery target, so results remain in run history
 - task scheduler reload is triggered after create, update, delete, or status mutation
 - the running-task lock belongs to the plugin instance, so reloads still keep each task serial
 - the plugin can also accept lifecycle commands such as reload or reschedule

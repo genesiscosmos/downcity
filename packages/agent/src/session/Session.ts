@@ -194,6 +194,7 @@ export class Session implements AgentSession {
     });
     this.session_loop = new SessionLoop({
       session_id: this.id,
+      session_origin: this.origin,
       workspace_path: this.workspace_path,
       executor: this.executor,
       compact_history: async (input) => await this.compact_history(input),
@@ -830,6 +831,7 @@ export class Session implements AgentSession {
       turn_context?.step.plugin_execution_context() ||
       create_session_plugin_execution_context({
         session_id: this.id,
+        session_origin: this.origin,
         project_root: this.workspace_path,
         workspace_env: this.effective_workspace_env,
         agent_systems: this.effective_instruction_system_blocks.map(

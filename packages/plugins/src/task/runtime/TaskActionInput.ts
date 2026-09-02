@@ -6,7 +6,6 @@
  * - 参数校验尽量前置到输入层，避免进入执行层后才发现字段非法。
  */
 
-import { resolve_session_id } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import type { PluginActionCommandInput } from "@downcity/agent";
 import type { ShipTaskKind, ShipTaskStatus } from "@/task/types/Task.js";
@@ -68,10 +67,6 @@ function readTaskKindOrThrow(value?: string): ShipTaskKind | undefined {
   throw new Error(`Invalid task kind: ${value}`);
 }
 
-function resolveOptionalSessionId(input?: string): string | undefined {
-  return resolve_session_id({ session_id: input });
-}
-
 function mapTaskListCommandInput(
   opts: Record<string, JsonValue>,
 ): TaskListActionPayload {
@@ -87,7 +82,6 @@ function mapTaskCreateCommandInput(
   if (!title) throw new Error("Missing title");
   if (!description) throw new Error("Missing description");
 
-  const session_id = resolveOptionalSessionId(getStringOpt(opts, "session_id"));
   const kind = readTaskKindOrThrow(getStringOpt(opts, "kind"));
   const review = getBooleanLikeOpt(opts, "review");
   const status = readTaskStatusOrThrow(getStringOpt(opts, "status"));
@@ -101,7 +95,6 @@ function mapTaskCreateCommandInput(
     title,
     when: String(getStringOpt(opts, "when") || "@manual").trim() || "@manual",
     description,
-    ...(session_id ? { session_id } : {}),
     ...(getStringOpt(opts, "workspace_id") ? { workspace_id: getStringOpt(opts, "workspace_id") } : {}),
     ...(kind ? { kind } : {}),
     ...(typeof review === "boolean" ? { review } : {}),
@@ -150,8 +143,6 @@ function mapTaskUpdateCommandInput(params: {
     typeof getStringOpt(opts, "when") === "string" ||
     typeof getStringOpt(opts, "description") === "string" ||
     typeof getStringOpt(opts, "workspace_id") === "string" ||
-    typeof getStringOpt(opts, "session_id") === "string" ||
-    getBooleanOpt(opts, "clearSession") === true ||
     typeof kind === "string" ||
     typeof review === "boolean" ||
     getBooleanOpt(opts, "clearWhen") === true ||
@@ -177,10 +168,6 @@ function mapTaskUpdateCommandInput(params: {
     ...(typeof getStringOpt(opts, "workspace_id") === "string"
       ? { workspace_id: getStringOpt(opts, "workspace_id") }
       : {}),
-    ...(typeof getStringOpt(opts, "session_id") === "string"
-      ? { session_id: getStringOpt(opts, "session_id") }
-      : {}),
-    ...(getBooleanOpt(opts, "clearSession") ? { clearSession: true } : {}),
     ...(typeof kind === "string" ? { kind } : {}),
     ...(typeof review === "boolean" ? { review } : {}),
     ...(getBooleanOpt(opts, "clearWhen") ? { clearWhen: true } : {}),

@@ -5,9 +5,14 @@
  * scheduler 等非 Session 调用也可以提供自己的调用快照或完全缺省。
  */
 
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+
 export interface PluginExecutionContext {
   /** 当前调用所属的 Session 标识；非 Session 调用可以缺省。 */
   readonly session_id?: string;
+
+  /** 当前调用所属 Session 的完整来源元数据；非 Session 调用可以缺省。 */
+  readonly session_origin?: SessionOrigin;
 
   /** 当前调用所属的 Turn 标识。 */
   readonly turn_id?: string;

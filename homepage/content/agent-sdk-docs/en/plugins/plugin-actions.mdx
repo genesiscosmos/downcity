@@ -44,7 +44,7 @@ Every Action call receives two separate readonly inputs:
 - `context`: stable Agent and Workspace capabilities such as identity, files, Shell, logger, web services, sessions, and plugins
 - `execution`: per-call identity, cancellation, optional Session scope, and the effective Step snapshot
 
-`execution.call_id` matches the Tool Call ID for model tools. `execution.session` contains `session_id`, `turn_id`, and optional `interactions` for Session calls. `execution.snapshot` contains effective `workspace_env` and `agent_systems`. Direct CLI, HTTP, and scheduler calls receive a runtime-generated `call_id` and cancellation signal without a Session scope. Pass `execution.abort_signal` to network requests, polling, and other long-running operations.
+`execution.call_id` matches the Tool Call ID for model tools. For Session calls, `execution.session` contains `session_id`, the complete `origin`, `turn_id`, and optional `interactions`. `execution.snapshot` contains `session_origin`, effective `workspace_env`, and `agent_systems`. Direct CLI, HTTP, and scheduler calls receive a runtime-generated `call_id` and cancellation signal without a Session scope. Pass `execution.abort_signal` to network requests, polling, and other long-running operations.
 
 ## `command`
 

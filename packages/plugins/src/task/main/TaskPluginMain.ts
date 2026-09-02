@@ -79,7 +79,7 @@ async function read_agent_tasks(context: PluginMainContext, agent_id: string, wo
     kind: task.kind || "agent",
     review: Boolean(task.review),
     workspace_id: task.workspace_id,
-    ...(task.session_id ? { session_id: task.session_id } : {}),
+    ...(task.delivery_session ? { delivery_session: task.delivery_session } : {}),
     ...(task.lastRunTimestamp ? { last_run_at: task.lastRunTimestamp } : {}),
   }));
 }

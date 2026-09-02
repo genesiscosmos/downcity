@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 使用 City 持久化存储，覆盖 Desktop 相同的 Workspace Session 恢复条件。
  * - 手动触发 scheduler 注册的 one-shot 回调，避免测试依赖真实分钟边界。
- * - 最终结果必须作为 assistant 消息写入关联 Session，并发布 mutation。
+ * - Task 创建时从调用上下文自动捕获 Session 与 origin，最终结果按二元身份写回。
  */
 
 import assert from "node:assert/strict";
@@ -44,7 +44,7 @@ test("scheduler 只注册当前 Workspace 绑定的 Task", async () => {
   }
 });
 
-test("scheduled task appends its result to the linked Workspace Session", async () => {
+test("scheduled task appends its result to the Session captured from create context", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-task-scheduler-"));
   const workspace = new Workspace({
     id: "task-scheduler-workspace",
@@ -93,7 +93,13 @@ test("scheduled task appends its result to the linked Workspace Session", async 
   const entry = create_workspace_entry(agent, workspace);
 
   try {
-    const linked_session = await entry.sessions.create();
+    const linked_session = await entry.sessions.create({
+      origin: {
+        type: "group",
+        group_id: "delivery-group",
+        group_session_id: "delivery-group-session",
+      },
+    });
     const mutations = [];
     const unsubscribe = linked_session.subscribe((mutation) => {
       mutations.push(mutation);
@@ -105,13 +111,27 @@ test("scheduled task appends its result to the linked Workspace Session", async 
         title: "scheduled-session-result",
         description: "验证 scheduler 结果写回关联 Session",
         when: `time:${new Date(Date.now() - 1_000).toISOString()}`,
-        session_id: linked_session.id,
         kind: "agent",
         status: "enabled",
         body: "直接输出 SCHEDULED_TASK_RESULT。",
       },
+      execution_context: {
+        session_id: linked_session.id,
+        session_origin: linked_session.origin,
+        turn_id: "create-task-turn",
+      },
     });
     assert.equal(created.success, true);
+
+    const task_list = await entry.plugins.run_action({
+      plugin: "task",
+      action: "list",
+      payload: {},
+    });
+    assert.deepEqual(task_list.data.tasks[0].delivery_session, {
+      session_id: linked_session.id,
+      origin_type: "group",
+    });
 
     const triggered = await entry.plugins.run_action({
       plugin: "task",
@@ -127,7 +147,8 @@ test("scheduled task appends its result to the linked Workspace Session", async 
       new Set(task_sessions.items.map((item) => item.origin.role)),
       new Set(["executor", "user_simulator"]),
     );
-    assert.equal((await entry.sessions.list()).items.length, 1);
+    assert.equal((await entry.sessions.list()).items.length, 0);
+    assert.equal((await entry.sessions.list({ origin_type: "group" })).items.length, 1);
 
     const history = await entry.plugins.run_action({
       plugin: "task",

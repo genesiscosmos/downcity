@@ -13,6 +13,7 @@ import type {
   ShipTaskRunStatusV1,
   ShipTaskRunTriggerV1,
   ShipTaskStatus,
+  TaskDeliverySession,
 } from "./Task.js";
 
 export type TaskCreateRequest = {
@@ -24,8 +25,6 @@ export type TaskCreateRequest = {
   description: string;
   /** 任务唯一绑定的执行 Workspace。 */
   workspace_id?: string;
-  /** 可选的结果 Session 标识。 */
-  session_id?: string;
   /** 任务执行类型。 */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核。 */
@@ -66,10 +65,6 @@ export type TaskUpdateRequest = {
   description?: string;
   /** 新的执行 Workspace。 */
   workspace_id?: string;
-  /** 新的可选结果 Session。 */
-  session_id?: string;
-  /** 是否移除结果 Session。 */
-  clearSession?: boolean;
   /** 新任务执行类型。 */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核。 */
@@ -104,8 +99,8 @@ export type TaskListItemView = {
   running?: boolean;
   /** 任务唯一绑定的执行 Workspace。 */
   workspace_id: string;
-  /** 可选的结果 Session 标识。 */
-  session_id?: string;
+  /** 创建 Task 时由调用上下文自动捕获的结果交付 Session。 */
+  delivery_session?: TaskDeliverySession;
   /** 任务执行类型。 */
   kind?: ShipTaskKind;
   /** 是否启用 review 多轮复核。 */

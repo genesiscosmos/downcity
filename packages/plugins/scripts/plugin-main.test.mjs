@@ -148,7 +148,10 @@ async function activate_task_main() {
               kind: "agent",
               review: false,
               workspace_id: "workspace-b",
-              session_id: "daily-report",
+              delivery_session: {
+                session_id: "daily-report",
+                origin_type: "chat",
+              },
               lastRunTimestamp: "2026-08-31T10:00:00.000Z",
             }] : [],
           },
@@ -272,7 +275,10 @@ test("Task main 按 Agent 聚合所有启用 Task Plugin 的任务", async () =>
       kind: "agent",
       review: false,
       workspace_id: "workspace-b",
-      session_id: "daily-report",
+      delivery_session: {
+        session_id: "daily-report",
+        origin_type: "chat",
+      },
       last_run_at: "2026-08-31T10:00:00.000Z",
     }],
   }, {

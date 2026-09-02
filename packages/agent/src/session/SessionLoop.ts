@@ -51,6 +51,7 @@ const QUEUED_PROMPT_CANCELLED_MESSAGE =
  */
 export class SessionLoop {
   private readonly session_id: string;
+  private readonly session_origin: SessionLoopOptions["session_origin"];
   private readonly workspace_path: string;
   private readonly executor: SessionExecutor;
   private readonly compact_history_handler: SessionCompactHistory;
@@ -69,6 +70,7 @@ export class SessionLoop {
 
   constructor(options: SessionLoopOptions) {
     this.session_id = String(options.session_id || "").trim();
+    this.session_origin = options.session_origin;
     this.workspace_path = String(options.workspace_path || "").trim();
     this.executor = options.executor;
     this.compact_history_handler = options.compact_history;
@@ -553,6 +555,7 @@ export class SessionLoop {
     return create_session_turn_context({
       turn_id: active_turn.turn_id,
       session_id: this.session_id,
+      session_origin: this.session_origin,
       project_root: this.workspace_path,
       merge_step_input: async () => {
         const merged = await this.drain_queued_inputs(active_turn);

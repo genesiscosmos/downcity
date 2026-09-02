@@ -13,6 +13,7 @@ import { create_session_turn_context } from "../bin/session/runtime/SessionTurnC
 function create_turn_context(overrides = {}) {
   return create_session_turn_context({
     session_id: "executor-failure-test",
+    session_origin: { type: "chat" },
     turn_id: "executor-failure-turn",
     ...overrides,
   });

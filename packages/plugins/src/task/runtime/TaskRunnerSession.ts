@@ -15,6 +15,7 @@ import type {
   SessionPort,
 } from "@downcity/agent";
 import type { TaskSessionRuntimePort } from "@/task/runtime/TaskRunnerTypes.js";
+import type { TaskDeliverySession } from "@/task/types/Task.js";
 import { create_session_message_store, SessionMessages } from "@downcity/agent";
 
 /**
@@ -58,7 +59,7 @@ export async function createTaskSessionRuntimePort(params: {
   userSimulatorSessionId: string;
   task_id: string;
   execution_id: string;
-  sourceSessionId?: string;
+  delivery_session?: TaskDeliverySession;
 }): Promise<TaskSessionRuntimePort> {
   const { context, runDirAbs, runSessionId, userSimulatorSessionId } = params;
   const task_session = await context.sessions.create({
@@ -77,8 +78,11 @@ export async function createTaskSessionRuntimePort(params: {
       role: "user_simulator",
     },
   });
-  const source_session = params.sourceSessionId
-    ? await context.sessions.get(params.sourceSessionId)
+  const source_session = params.delivery_session
+    ? await context.sessions.get(
+        params.delivery_session.session_id,
+        params.delivery_session.origin_type,
+      )
     : undefined;
   if (source_session?.config.model) {
     await task_session.set(

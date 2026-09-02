@@ -34,8 +34,8 @@ export async function dispatchTaskRunCompletionToSession(params: {
   errorText: string;
   resultErrors: string[];
 }): Promise<void> {
-  const session_id = String(params.task.frontmatter.session_id || "").trim();
-  if (!session_id) return;
+  const delivery_session = params.task.frontmatter.delivery_session;
+  if (!delivery_session) return;
 
   const text = resolve_task_final_text({
     output_text: params.outputText,
@@ -45,12 +45,18 @@ export async function dispatchTaskRunCompletionToSession(params: {
   if (!text) return;
 
   try {
-    await params.context.sessions.get(session_id);
-    await params.context.sessions.runtime(session_id).append_assistant_message({ text });
+    await params.context.sessions.get(
+      delivery_session.session_id,
+      delivery_session.origin_type,
+    );
+    await params.context.sessions.runtime(
+      delivery_session.session_id,
+      delivery_session.origin_type,
+    ).append_assistant_message({ text });
   } catch (error) {
     params.context.logger.warn("[TASK] Task completion Session append failed", {
       taskId: params.task.taskId,
-      session_id,
+      delivery_session,
       executionId: params.executionId,
       error: String(error),
     });

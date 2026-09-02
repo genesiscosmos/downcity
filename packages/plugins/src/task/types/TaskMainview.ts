@@ -1,7 +1,7 @@
 /** Task Plugin 工作区与宿主 main 之间的 JSON 协议。 */
 
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "./TaskCommand.js";
-import type { ShipTaskKind, ShipTaskStatus } from "./Task.js";
+import type { ShipTaskKind, ShipTaskStatus, TaskDeliverySession } from "./Task.js";
 
 /** Task 工作区中的 Agent 摘要。 */
 export interface TaskMainviewAgent {
@@ -44,8 +44,8 @@ export interface TaskMainviewItem {
   /** Task 执行类型。 */
   readonly kind?: "agent" | "script";
 
-  /** Task 绑定的 Session ID。 */
-  readonly session_id?: string;
+  /** Task 创建时自动绑定的结果交付 Session。 */
+  readonly delivery_session?: TaskDeliverySession;
 
   /** Task 唯一绑定的执行 Workspace。 */
   readonly workspace_id: string;

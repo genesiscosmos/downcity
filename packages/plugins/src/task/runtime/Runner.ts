@@ -174,7 +174,7 @@ export async function runTaskNow(params: {
   if (taskKind === "script") {
     const scriptResult = await runScriptTaskBranch({
       context,
-      session_id: task.frontmatter.session_id || runSessionId,
+      session_id: runSessionId,
       scriptBody: task.body,
       runProgress,
     });
@@ -195,7 +195,7 @@ export async function runTaskNow(params: {
       userSimulatorSessionId,
       task_id: task.taskId,
       execution_id: executionId,
-      sourceSessionId: task.frontmatter.session_id,
+      delivery_session: task.frontmatter.delivery_session,
     });
     let lastRoundRuleErrors: string[] = [];
     let lastRoundDecision: UserSimulatorDecision | null = null;

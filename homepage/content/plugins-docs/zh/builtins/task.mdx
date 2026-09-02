@@ -44,7 +44,7 @@ city plugin action task run <agent_id> --input '{"title":"daily-summary","reason
 
 ## SDK 装配
 
-`TaskPlugin` 可以接收可选时区和宿主通知端口。每个 Task 必须绑定一个执行 Workspace；可选的 `session_id` 只用于把完成结果投递到指定 Session。agent task 在有结果 Session 时优先使用其模型，否则使用 Agent 默认模型。cron 默认采用当前运行机器的本机时区；直接使用 SDK 且不需要界面未读通知时可以省略 `notifications`：
+`TaskPlugin` 可以接收可选时区和宿主通知端口。每个 Task 必须绑定一个执行 Workspace。通过 Agent Session 调用 `create` 时，运行时会自动捕获该 Session 的 `session_id` 与 `origin.type` 作为固定交付目标；模型不需要也不能在 action payload 中填写 Session 路由。agent task 在有交付 Session 时优先使用其模型，否则使用 Agent 默认模型。cron 默认采用当前运行机器的本机时区；直接使用 SDK 且不需要界面未读通知时可以省略 `notifications`：
 
 ```ts
 import { TaskPlugin } from "@downcity/plugins/task";
@@ -78,7 +78,8 @@ action 名称是 `list`、`history`、`run_detail`、`create`、`run`、`delete`
 - agent task 通过 PluginContext 的 Session runtime port 读取有效模型实例
 - 每次执行会创建独立的 task Session，并复用宿主 Agent 的完整 Plugin 能力
 - `workspace_id` 是 Task 的执行配置，调度器只在对应 Workspace 注册它
-- `session_id` 可选；存在时结果会追加为关联 Session 的 assistant 消息，否则保留在执行历史
+- Session 内调用 `create` 会自动固化当前 `(origin.type, session_id)`，完成结果追加为该 Session 的 assistant 消息
+- CLI、HTTP 或宿主管理界面等无 Session 调用上下文创建的 Task 不绑定交付目标，结果保留在执行历史
 - create / update / delete / status 变更后会触发 scheduler reload
 - task 运行中锁归属于 plugin 实例，reload 时也会保持同一 task 串行执行
 - plugin 也支持 reload / reschedule 这类 lifecycle command

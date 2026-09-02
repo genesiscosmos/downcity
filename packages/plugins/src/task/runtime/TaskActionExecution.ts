@@ -7,6 +7,7 @@
  */
 
 import type { PluginContext } from "@downcity/agent";
+import type { PluginActionExecutionContext } from "@downcity/agent";
 import type { PluginExecutionContext } from "@downcity/agent";
 import type { PluginNotificationPublisher } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
@@ -165,6 +166,7 @@ export async function execute_task_run_detail_action(params: {
 export async function executeTaskCreateAction(params: {
   context: PluginContext;
   payload: TaskCreateRequest;
+  execution: PluginActionExecutionContext;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
@@ -174,6 +176,14 @@ export async function executeTaskCreateAction(params: {
       ...payload,
       workspace_id: payload.workspace_id || params.context.workspace_id,
     },
+    ...(params.execution.session
+      ? {
+          delivery_session: {
+            session_id: params.execution.session.session_id,
+            origin_type: params.execution.session.origin.type,
+          },
+        }
+      : {}),
   });
   if (!result.success) {
     return {

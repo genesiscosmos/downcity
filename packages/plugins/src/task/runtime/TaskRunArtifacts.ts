@@ -223,7 +223,12 @@ export async function writeTaskRunInputArtifact(
       `- when: \`${params.task.frontmatter.when}\``,
       `- status: \`${params.task.frontmatter.status}\``,
       `- workspace_id: \`${params.task.frontmatter.workspace_id}\``,
-      ...(params.task.frontmatter.session_id ? [`- linked_session_id: \`${params.task.frontmatter.session_id}\``] : []),
+      ...(params.task.frontmatter.delivery_session
+        ? [
+            `- delivery_session_id: \`${params.task.frontmatter.delivery_session.session_id}\``,
+            `- delivery_origin_type: \`${params.task.frontmatter.delivery_session.origin_type}\``,
+          ]
+        : []),
       `- kind: \`${params.taskKind}\``,
       ...(params.taskKind === "agent"
         ? [`- review: \`${String(params.reviewEnabled)}\``]
@@ -463,7 +468,9 @@ export async function writeTaskRunArtifacts(
     timestamp: params.timestamp,
     executionId: params.executionId,
     workspace_id: params.task.frontmatter.workspace_id,
-    ...(params.task.frontmatter.session_id ? { session_id: params.task.frontmatter.session_id } : {}),
+    ...(params.task.frontmatter.delivery_session
+      ? { delivery_session: params.task.frontmatter.delivery_session }
+      : {}),
     trigger: params.trigger,
     status: params.status,
     executionStatus: params.executionStatus,

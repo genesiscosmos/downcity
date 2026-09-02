@@ -7,7 +7,7 @@
  */
 
 import path from "node:path";
-import type { ShipTaskStatus } from "./types/Task.js";
+import type { ShipTaskStatus, TaskDeliverySession } from "./types/Task.js";
 import type { PluginContext } from "@downcity/agent";
 import type { PluginExecutionContext } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
@@ -122,7 +122,7 @@ export async function listTaskDefinitions(params: {
       when: task.when,
       status: task.status,
       workspace_id: task.workspace_id,
-      ...(task.session_id ? { session_id: task.session_id } : {}),
+      ...(task.delivery_session ? { delivery_session: task.delivery_session } : {}),
       kind: task.kind || "agent",
       ...(task.kind === "agent" ? { review: Boolean(task.review) } : {}),
       taskMdPath: task.taskMdPath,
@@ -177,6 +177,8 @@ export async function read_task_run(params: {
 export async function createTaskDefinition(params: {
   data_path: string;
   request: TaskCreateRequest;
+  /** 由 Plugin 调用上下文捕获的固定结果交付 Session。 */
+  delivery_session?: TaskDeliverySession;
 }): Promise<TaskCreateResponse> {
   const root = path.resolve(params.data_path);
   const req = params.request;
@@ -196,7 +198,6 @@ export async function createTaskDefinition(params: {
     };
   }
   const whenNormalized = normalizeTaskWhen(String(req.when || "@manual").trim() || "@manual");
-  const session_id = String(req.session_id || "").trim();
   const kind = normalizeTaskKind(req.kind);
 
   if (!title) return { success: false, error: "Missing title" };
@@ -235,7 +236,9 @@ export async function createTaskDefinition(params: {
         description,
         when: whenNormalized.value,
         workspace_id,
-        ...(session_id ? { session_id } : {}),
+        ...(params.delivery_session
+          ? { delivery_session: params.delivery_session }
+          : {}),
         kind,
         ...(kind === "agent" && req.review === true ? { review: true } : {}),
         status,
@@ -315,11 +318,6 @@ export async function updateTaskDefinition(params: {
       ? req.workspace_id.trim()
       : current.frontmatter.workspace_id;
     if (!workspace_id) return { success: false, error: "workspace_id cannot be empty" };
-    const session_id = req.clearSession
-      ? ""
-      : typeof req.session_id === "string"
-        ? req.session_id.trim()
-        : current.frontmatter.session_id || "";
     const kind = normalizeTaskKind(
       req.kind === undefined ? current.frontmatter.kind : req.kind,
     );
@@ -356,7 +354,9 @@ export async function updateTaskDefinition(params: {
         description,
         when: whenNormalized.value,
         workspace_id,
-        ...(session_id ? { session_id } : {}),
+        ...(current.frontmatter.delivery_session
+          ? { delivery_session: current.frontmatter.delivery_session }
+          : {}),
         kind,
         ...(kind === "agent" && review ? { review: true } : {}),
         status,

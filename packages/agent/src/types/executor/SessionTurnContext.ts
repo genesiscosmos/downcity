@@ -19,6 +19,7 @@ import type {
   AgentSessionActionRecord,
 } from "@/types/sdk/AgentSessionAction.js";
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /**
  * 创建一个 Session Turn 上下文所需的稳定输入。
@@ -28,6 +29,9 @@ import type { SessionInteractionPort } from "@/types/session/SessionInteraction.
 export interface SessionTurnContextInit {
   /** 当前执行所属的 Session 标识。 */
   session_id: string;
+
+  /** 当前执行所属 Session 的完整来源元数据。 */
+  session_origin: SessionOrigin;
 
   /** 当前执行所属的非空 Turn 标识。 */
   turn_id: string;
@@ -68,6 +72,9 @@ export interface SessionTurnContext {
   readonly session: {
     /** 当前执行所属的 Session 标识。 */
     readonly session_id: string;
+
+    /** 当前执行所属 Session 的完整来源元数据。 */
+    readonly origin: SessionOrigin;
 
     /** 当前执行所属的 Turn 标识。 */
     readonly turn_id: string;

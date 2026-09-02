@@ -9,7 +9,11 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { ShipTaskDefinitionV1, ShipTaskFrontmatterV1 } from "@/task/types/Task.js";
+import type {
+  ShipTaskDefinitionV1,
+  ShipTaskFrontmatterV1,
+  TaskDeliverySession,
+} from "@/task/types/Task.js";
 import { parseTaskMarkdown, buildTaskMarkdown } from "./Model.js";
 import {
   deriveTaskIdFromTitle,
@@ -33,7 +37,7 @@ export type TaskListItem = {
   when: string;
   status: string;
   workspace_id: string;
-  session_id?: string;
+  delivery_session?: TaskDeliverySession;
   kind?: "agent" | "script";
   review?: boolean;
   taskMdPath: string;
@@ -107,7 +111,9 @@ export async function listTasks(data_path: string): Promise<TaskListItem[]> {
       when: parsed.task.frontmatter.when,
       status: parsed.task.frontmatter.status,
       workspace_id: parsed.task.frontmatter.workspace_id,
-      ...(parsed.task.frontmatter.session_id ? { session_id: parsed.task.frontmatter.session_id } : {}),
+      ...(parsed.task.frontmatter.delivery_session
+        ? { delivery_session: parsed.task.frontmatter.delivery_session }
+        : {}),
       kind: parsed.task.frontmatter.kind || "agent",
       ...(parsed.task.frontmatter.kind === "agent"
         ? { review: Boolean(parsed.task.frontmatter.review) }

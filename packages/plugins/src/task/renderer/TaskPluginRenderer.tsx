@@ -385,7 +385,12 @@ function TaskDetails({ task, workspace_label, components }: {
       <Row label="触发" trailing={task.when} />
       <Row label="类型" trailing={task.kind || "agent"} />
       {task.kind !== "script" ? <Row label="多轮复核" trailing={task.review ? "启用" : "关闭"} /> : null}
-      {task.session_id ? <Row label="结果 Session" trailing={task.session_id} /> : null}
+      {task.delivery_session
+        ? <Row
+            label="结果 Session"
+            trailing={`${task.delivery_session.origin_type}/${task.delivery_session.session_id}`}
+          />
+        : null}
       {task.last_run_at ? <Row label="最近运行" trailing={task.last_run_at} /> : null}
     </Group>
     <CodeBlock>{task.body || task.description || "Task 没有正文"}</CodeBlock>

@@ -44,7 +44,7 @@ actions: {
 - `context`：稳定的 Agent 与 Workspace 能力，包括身份、文件、Shell、日志、Web、Sessions 和 Plugins
 - `execution`：单次调用的身份、取消信号、可选 Session 范围和当前 Step 快照
 
-模型 Tool 调用时，`execution.call_id` 等于对应 Tool Call ID；Session 身份和可选交互端口位于 `execution.session`；当前生效的 `workspace_env` 与 `agent_systems` 位于 `execution.snapshot`。CLI、HTTP 或 scheduler 直接调用时，运行时会自动生成 `call_id` 和取消信号，但没有 Session 范围。Action 应把 `execution.abort_signal` 传递给网络请求、轮询和长耗时任务。
+模型 Tool 调用时，`execution.call_id` 等于对应 Tool Call ID；Session 的 `session_id`、完整 `origin`、`turn_id` 和可选交互端口位于 `execution.session`；当前生效的 `session_origin`、`workspace_env` 与 `agent_systems` 位于 `execution.snapshot`。CLI、HTTP 或 scheduler 直接调用时，运行时会自动生成 `call_id` 和取消信号，但没有 Session 范围。Action 应把 `execution.abort_signal` 传递给网络请求、轮询和长耗时任务。
 
 ## `command`
 

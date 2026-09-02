@@ -22,6 +22,7 @@ import { z } from "zod";
 function create_turn_context(project_root) {
   return create_session_turn_context({
     session_id: "session_test",
+    session_origin: { type: "chat" },
     turn_id: "turn_test",
     project_root: project_root,
   });
@@ -296,6 +297,7 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
   const create_execution_options = (session_id) => {
     const turn_context = create_session_turn_context({
       session_id,
+      session_origin: { type: "chat" },
       turn_id: `turn_${session_id}`,
       project_root: process.cwd(),
       interactions: {
@@ -362,12 +364,22 @@ test("PluginRegistry keeps Session identity when no Interaction port is provided
     action: "inspect",
     execution_context: {
       session_id: "session_without_interactions",
+      session_origin: {
+        type: "group",
+        group_id: "group-1",
+        group_session_id: "group-session-1",
+      },
       turn_id: "turn_without_interactions",
     },
   });
 
   assert.equal(result.success, true);
   assert.equal(observed_execution.session.session_id, "session_without_interactions");
+  assert.deepEqual(observed_execution.session.origin, {
+    type: "group",
+    group_id: "group-1",
+    group_session_id: "group-session-1",
+  });
   assert.equal(observed_execution.session.turn_id, "turn_without_interactions");
   assert.equal(observed_execution.session.interactions, undefined);
 });

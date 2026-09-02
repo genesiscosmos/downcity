@@ -11,6 +11,7 @@ import type { PluginAction, PluginActionResult } from "@/types/plugin/PluginActi
 import type { PluginActionExecutionContext } from "@/types/plugin/PluginActionExecution.js";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import { normalize_session_origin } from "@/session/SessionOrigin.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 import { generate_id } from "@/utils/Id.js";
@@ -138,9 +139,15 @@ function create_action_execution_context(input: {
   const source = input.snapshot;
   const session_id = String(source?.session_id || "").trim();
   const turn_id = String(source?.turn_id || "").trim();
+  const session_origin = source?.session_origin
+    ? Object.freeze(normalize_session_origin(source.session_origin))
+    : undefined;
   const call_id = String(source?.call_id || "").trim() || `plugin:${generate_id()}`;
   const snapshot: PluginExecutionContext = Object.freeze({
     ...(session_id ? { session_id } : {}),
+    ...(session_origin
+      ? { session_origin }
+      : {}),
     ...(turn_id ? { turn_id } : {}),
     project_root: input.context.workspace_path,
     workspace_env: Object.freeze({
@@ -156,10 +163,11 @@ function create_action_execution_context(input: {
     call_id,
     abort_signal: input.abort_signal,
     snapshot,
-    ...(session_id && turn_id
+    ...(session_id && turn_id && session_origin
       ? {
           session: Object.freeze({
             session_id,
+            origin: session_origin,
             turn_id,
             ...(input.interactions
               ? { interactions: input.interactions }

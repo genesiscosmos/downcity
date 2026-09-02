@@ -37,7 +37,7 @@ Tasks are defined in the project and registered with the Task plugin at startup.
 - Background file processing
 - Scheduled notifications
 
-Each run creates an independent task Session while reusing the host Agent's capabilities. `session_id` is an optional result-delivery setting: when present, the completed result is appended to that Session; otherwise the result remains available in Task run history. If the task Agent needs to send a chat message, it calls the Chat plugin from the task Session.
+Each run creates an independent task Session while reusing the host Agent's capabilities. When `create` is called from an Agent Session, the runtime captures the current `session_id` and `origin.type` and appends the completed result back to that Session; the model does not provide Session routing. Tasks created from CLI, HTTP, or host management surfaces without a Session context keep their results in Task run history. If the task Agent needs to send a chat message, it calls the Chat plugin from the task Session.
 
 Continue with:
 

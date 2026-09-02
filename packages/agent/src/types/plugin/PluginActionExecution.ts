@@ -9,11 +9,14 @@
 
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /** 当前 Action 所属 Session 的执行范围。 */
 export interface PluginSessionExecutionScope {
   /** 当前 Session 标识。 */
   readonly session_id: string;
+  /** 当前 Session 的完整来源元数据。 */
+  readonly origin: SessionOrigin;
   /** 当前 Turn 标识。 */
   readonly turn_id: string;
   /** 当前 Session 的用户交互端口；当前入口未开放交互能力时为空。 */
