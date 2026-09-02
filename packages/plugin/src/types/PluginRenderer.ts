@@ -76,21 +76,6 @@ export interface PluginRendererPageProps {
   readonly children: ReactNode;
 }
 
-/** 向宿主 Sidebar Subbar 投放导航内容，并渲染 Mainview 内容区的标准布局属性。 */
-export interface PluginRendererMainviewSidebarProps {
-  /** Subbar 顶部的用户可见名称。 */
-  readonly label: ReactNode;
-
-  /** Subbar 中的导航项。 */
-  readonly sidebar: ReactNode;
-
-  /** 当前导航项对应的 Mainview 内容。 */
-  readonly children: ReactNode;
-}
-
-/** Sidebar Subbar 的导航项属性。 */
-export type PluginRendererMainviewSidebarItemProps = PluginRendererSidebarItemProps;
-
 /** Plugin Sidebar 根布局属性。 */
 export interface PluginRendererSidebarProps {
   /** Sidebar 内的全部导航内容。 */
@@ -501,10 +486,6 @@ export interface PluginRendererUiComponents {
   readonly ItemMenu: (props: PluginRendererItemMenuProps) => ReactNode;
   /** Mainview 页面根布局。 */
   readonly Page: (props: PluginRendererPageProps) => ReactNode;
-  /** Mainview 内部可折叠、可调整宽度的 Sidebar 布局。 */
-  readonly MainviewSidebar: (props: PluginRendererMainviewSidebarProps) => ReactNode;
-  /** Mainview 内部 Sidebar 的标准导航项。 */
-  readonly MainviewSidebarItem: (props: PluginRendererMainviewSidebarItemProps) => ReactNode;
   /** 带标题和表面的内容分区。 */
   readonly Section: (props: PluginRendererSectionProps) => ReactNode;
   /** 统一成组表面。 */

@@ -16,7 +16,7 @@ The Task plugin lets your Agent schedule and run background jobs. It is useful f
 
 ## Desktop workspace
 
-Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Plugin Sidebar groups every Task as `Agent → Task`. Selecting a Task opens an execution-history Subbar to the right of the primary Sidebar and defaults to the latest run. The Mainview shows final output, status, trigger, duration, validation, and failure details, and can return to the Task definition.
+Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Plugin Sidebar uses an `Agent → Task → runs` tree: clicking a Task opens its definition, while expanding it loads run history. The Mainview shows the Task definition, final output, status, trigger, duration, validation, and failure details.
 
 Desktop can create, edit, enable, pause, run, and delete Tasks directly. Workspace is not a page filter: each Task binds exactly one execution Workspace, used by both manual and scheduled runs. The history sidebar is independently scrollable, collapsible, and resizable. The workspace uses the selected Agent's Task runtime and existing run artifacts directly instead of storing a second copy.
 

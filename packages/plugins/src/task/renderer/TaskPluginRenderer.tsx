@@ -18,11 +18,15 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
     const [snapshot, set_snapshot] = useState<TaskMainviewSnapshot>();
     const [loaded_revision, set_loaded_revision] = useState(-1);
     const [expanded_agent_ids, set_expanded_agent_ids] = useState<Set<string>>(new Set());
+    const [expanded_task_keys, set_expanded_task_keys] = useState<Set<string>>(new Set());
+    const [history_by_task, set_history_by_task] = useState<Record<string, TaskRunHistoryItemView[]>>({});
+    const [loading_task_keys, set_loading_task_keys] = useState<Set<string>>(new Set());
     const [error, set_error] = useState("");
     const [busy_task_key, set_busy_task_key] = useState("");
     const auto_expanded_agent_id = useRef("");
     const agent_id = read_route(navigation.route.agent_id);
     const task_title = read_route(navigation.route.task_title);
+    const view = read_route(navigation.route.view);
 
     useEffect(() => {
       let disposed = false;
@@ -32,6 +36,7 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
           if (disposed) return;
           set_snapshot(next);
           set_loaded_revision(ui.revision);
+          set_history_by_task({});
           set_expanded_agent_ids((current) => new Set([...current].filter((current_agent_id) => next.agents.some((agent) => agent.agent_id === current_agent_id))));
         })
         .catch((reason) => { if (!disposed) set_error(to_error_message(reason)); });
@@ -51,6 +56,14 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
       auto_expanded_agent_id.current = agent_id;
       set_expanded_agent_ids((current) => current.has(agent_id) ? current : new Set(current).add(agent_id));
     }, [agent_id, snapshot]);
+
+    useEffect(() => {
+      if (!snapshot || !agent_id || !task_title) return;
+      const selected_task = snapshot.agents.find((agent) => agent.agent_id === agent_id)?.tasks.find((task) => task.title === task_title);
+      if (!selected_task) return;
+      const task_key = `${agent_id}:${task_title}`;
+      if (!expanded_task_keys.has(task_key)) void toggle_task(agent_id, selected_task);
+    }, [agent_id, snapshot, task_title]);
 
     const invoke_task_action = async (task: TaskMainviewItem, action: "run" | "status" | "delete", input?: Record<string, string>) => {
       set_busy_task_key(`${agent_id}:${task.title}`);
@@ -80,6 +93,21 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
       { action_id: "status", label: task.status === "enabled" ? "暂停" : "启用", disabled: Boolean(busy_task_key), on_select: () => invoke_task_action(task, "status", { status: task.status === "enabled" ? "paused" : "enabled" }) },
       { action_id: "delete", label: "删除", separator_before: true, destructive: true, disabled: Boolean(busy_task_key), on_select: () => remove_task(task) },
     ]} />;
+    const toggle_task = async (selected_agent_id: string, task: TaskMainviewItem) => {
+      const task_key = `${selected_agent_id}:${task.title}`;
+      const expanding = !expanded_task_keys.has(task_key);
+      set_expanded_task_keys((current) => toggle_key(current, task_key));
+      if (!expanding || history_by_task[task_key] || loading_task_keys.has(task_key)) return;
+      set_loading_task_keys((current) => new Set(current).add(task_key));
+      try {
+        const next = await plugin.invoke<TaskMainviewHistorySnapshot>("tasks.history", task_action_input(selected_agent_id, task));
+        set_history_by_task((current) => ({ ...current, [task_key]: next.runs }));
+      } catch (reason) {
+        set_error(to_error_message(reason));
+      } finally {
+        set_loading_task_keys((current) => { const next = new Set(current); next.delete(task_key); return next; });
+      }
+    };
 
     if (!snapshot) return <Sidebar>{error ? <Callout tone="danger">{error}</Callout> : <LoadingState label="正在读取 Tasks…" />}</Sidebar>;
     return <Sidebar>
@@ -88,10 +116,20 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
           const expanded = expanded_agent_ids.has(agent.agent_id);
           const agent_has_unread = notifications.some((notification) => read_route(notification.route.agent_id) === agent.agent_id);
           return <div key={agent.agent_id}>
-            <SidebarTreeItem depth={0} kind="branch" label={agent.name} trailing={<span className="flex items-center gap-1.5">{agent_has_unread ? <UnreadDot /> : null}<span>{agent.tasks.length}</span></span>} active={agent.agent_id === agent_id && !task_title} expanded={expanded} on_toggle={() => set_expanded_agent_ids((current) => toggle_key(current, agent.agent_id))} on_select={() => navigation.navigate(agent_route(agent.agent_id))} />
+            <SidebarTreeItem depth={0} kind="branch" label={<span className="flex min-w-0 items-center gap-1.5"><span className="truncate">{agent.name}</span>{agent_has_unread ? <UnreadDot /> : null}</span>} trailing={agent.tasks.length} active={agent.agent_id === agent_id && !task_title} expanded={expanded} on_toggle={() => set_expanded_agent_ids((current) => toggle_key(current, agent.agent_id))} on_select={() => navigation.navigate(agent_route(agent.agent_id))} />
             {expanded ? <div className="flex flex-col gap-0.5">{agent.tasks.map((task) => {
               const notification = find_task_notification(notifications, agent.agent_id, task.title);
-              return <SidebarTreeItem key={task.title} kind="leaf" depth={1} label={task.title} trailing={<span className="flex items-center gap-0.5">{notification ? <UnreadDot /> : null}{task_menu(task)}</span>} active={agent.agent_id === agent_id && task.title === task_title} on_select={() => navigation.navigate(notification?.route ?? task_route(agent.agent_id, task.title))} />;
+              const task_key = `${agent.agent_id}:${task.title}`;
+              const task_expanded = expanded_task_keys.has(task_key);
+              const runs = history_by_task[task_key] ?? [];
+              return <div key={task.title}>
+                <SidebarTreeItem kind="branch" depth={1} label={task.title} trailing={<span className="flex items-center gap-0.5">{notification ? <UnreadDot /> : null}{task_menu(task)}</span>} active={agent.agent_id === agent_id && task.title === task_title && view !== "run"} expanded={task_expanded} on_toggle={() => void toggle_task(agent.agent_id, task)} on_select={() => navigation.navigate(task_definition_route(agent.agent_id, task.title))} />
+                {task_expanded ? <div className="flex flex-col gap-0.5">
+                  {runs.map((run) => <SidebarTreeItem key={run.timestamp} kind="leaf" depth={2} label={format_run_time(run.started_at)} trailing={run.status === "running" ? "运行中" : undefined} active={agent.agent_id === agent_id && task.title === task_title && view === "run" && read_route(navigation.route.run_timestamp) === run.timestamp} on_select={() => navigation.navigate(task_run_route(agent.agent_id, task.title, run.timestamp))} />)}
+                  {loading_task_keys.has(task_key) ? <div className="py-1 pl-12 text-[10px] text-muted-foreground/55">正在读取…</div> : null}
+                  {!loading_task_keys.has(task_key) && runs.length === 0 ? <div className="py-1 pl-12 text-[10px] text-muted-foreground/55">暂无执行记录</div> : null}
+                </div> : null}
+              </div>;
             })}</div> : null}
             {expanded && agent.tasks.length === 0 ? <div style={{ paddingLeft: 24 }}><div className="flex min-h-8 items-center rounded-lg py-0.5 pl-2 pr-1 text-[10px] text-muted-foreground/50">没有 Task</div></div> : null}
           </div>;
@@ -103,7 +141,7 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
   },
 
   mainview: function TaskPluginMainview({ plugin, navigation, notifications, ui }) {
-    const { Button, Callout, CodeBlock, EmptyState, Group, ItemMenu, LoadingState, MainviewSidebar, MainviewSidebarItem, Markdown, Page, Row, Section, Status, Toolbar } = ui.components;
+    const { Button, Callout, CodeBlock, EmptyState, Group, ItemMenu, LoadingState, Markdown, Page, Row, Section, Status, Toolbar } = ui.components;
     const agent_id = read_route(navigation.route.agent_id);
     const task_title = read_route(navigation.route.task_title);
     const view = read_route(navigation.route.view);
@@ -292,17 +330,7 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
         })}</Group>}
     </Page>;
 
-    const history_sidebar = <>
-      <MainviewSidebarItem label="任务详情" description={task.when} active={view === "task" || view === "edit"} on_select={() => navigation.navigate(task_definition_route(agent.agent_id, task.title))} />
-      {visible_history.map((run) => {
-        const unread = Boolean(find_task_notification(notifications, agent.agent_id, task.title, run.timestamp));
-        return <MainviewSidebarItem key={run.timestamp} label={format_run_time(run.started_at)} description={`${run_status_label(run.status)} · ${trigger_label(run.trigger)}${run.duration_ms !== undefined ? ` · ${format_duration(run.duration_ms)}` : ""}`} trailing={run.status === "running" ? <Status tone="warning">运行中</Status> : unread ? <UnreadDot /> : undefined} active={view === "run" && run_timestamp === run.timestamp} on_select={() => navigation.navigate(task_run_route(agent.agent_id, task.title, run.timestamp))} />;
-      })}
-      {view === "run_pending" ? <MainviewSidebarItem label="正在启动…" description="等待执行记录" active disabled on_select={() => {}} /> : null}
-      {!history_loading && loaded_history_key === history_key && visible_history.length === 0 && view !== "run_pending" ? <div className="px-2 py-6 text-center text-[10px] text-muted-foreground/55">暂无执行记录</div> : null}
-      {(history_loading || loaded_history_key !== history_key) && visible_history.length === 0 ? <LoadingState label="正在读取执行记录…" /> : null}
-    </>;
-    return <MainviewSidebar label="执行记录" sidebar={history_sidebar}>
+    return <>
       {view === "run" ? <TaskRunDetails run={run_detail} loading={run_loading} error={run_error || history_error} components={{ Callout, EmptyState, Group, LoadingState, Markdown, Page, Row, Section, Status, Toolbar }} />
         : view === "run_pending" ? <Page><Toolbar title={task.title} description="Task 已受理" /><LoadingState label="正在等待执行记录…" /></Page>
           : <Page>
@@ -310,7 +338,7 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
             {error || history_error ? <Callout tone="danger">{error || history_error}</Callout> : null}
             <TaskDetails task={task} workspace_label={workspace_name(snapshot, task.workspace_id)} components={{ CodeBlock, Group, Row, Status }} />
           </Page>}
-    </MainviewSidebar>;
+    </>;
   },
 });
 

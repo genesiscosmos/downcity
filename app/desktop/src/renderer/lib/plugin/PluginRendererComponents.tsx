@@ -14,7 +14,6 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Markdown as MarkdownView } from "@/lib/markdown/Markdown";
 import { cn } from "@/lib/utils";
-import { SidebarSubbar } from "@/layouts/SidebarSubbar";
 
 /** 创建 Plugin UI Components 时需要的宿主上下文。 */
 interface PluginRendererUiComponentOptions {
@@ -68,31 +67,6 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
     Page: ({ children }) => options.surface === "mainview"
       ? <div className="sidebar-body-scroll h-full min-h-0 min-w-0 flex-1 overflow-y-auto bg-background"><div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-5 px-4 pb-10 pt-4 md:px-8 md:pt-6">{children}</div></div>
       : <div className="flex min-w-0 flex-col gap-5">{children}</div>,
-    MainviewSidebar: ({ label, sidebar, children }) => {
-      const collapsed_key = `downcity.plugin.${options.plugin_id}.mainview_sidebar_collapsed`;
-      const [collapsed, set_collapsed] = useState(() => localStorage.getItem(collapsed_key) === "true");
-      const toggle_collapsed = () => set_collapsed((current) => {
-        localStorage.setItem(collapsed_key, String(!current));
-        return !current;
-      });
-      return <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
-        <SidebarSubbar label={label} storage_key={`downcity.plugin.${options.plugin_id}.mainview_subbar`} collapsed={collapsed} toggle_collapsed={toggle_collapsed}>{sidebar}</SidebarSubbar>
-        <div className="relative flex min-h-0 min-w-0 flex-1">
-          {children}
-        </div>
-      </div>;
-    },
-    MainviewSidebarItem: ({ label, description, leading, trailing, active, disabled, on_select }) => <button
-      type="button"
-      aria-current={active ? "page" : undefined}
-      disabled={disabled}
-      onClick={on_select}
-      className={cn("group/item flex min-h-9 w-full items-center gap-1.5 rounded-lg px-2 py-1 text-left outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/30", active ? "bg-primary/[0.1] text-foreground hover:bg-primary/[0.12]" : "text-foreground/85 hover:bg-foreground/[0.07]", disabled && "opacity-45")}
-    >
-      {leading ? <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-3.5">{leading}</span> : null}
-      <span className="min-w-0 flex-1"><span className="block truncate text-xs leading-4">{label}</span>{description ? <span className="block truncate text-[10px] leading-4 text-muted-foreground/65">{description}</span> : null}</span>
-      {trailing ? <span className="flex shrink-0 items-center text-[10px] text-muted-foreground/65">{trailing}</span> : null}
-    </button>,
     Section: ({ title, description, action, surface = true, children }) => <section className="flex min-w-0 flex-col gap-2">
       {title || description || action ? <header className="flex min-w-0 items-start justify-between gap-4 px-2">
         <div className="flex min-w-0 flex-col gap-0.5">

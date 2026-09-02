@@ -65,11 +65,11 @@ interface GroupViewProps {
   /** 停止 Group 当前执行。 */
   stop_session(session_id: string): Promise<void>;
   /** Session Sidebar 是否折叠。 */
-  session_sidebar_collapsed: boolean;
+  session_sidebar_collapsed?: boolean;
   /** 切换 Session Sidebar。 */
-  toggle_session_sidebar(): void;
+  toggle_session_sidebar?(): void;
   /** Header 下方的 Session Sidebar。 */
-  session_sidebar: ReactNode;
+  session_sidebar?: ReactNode;
   /** Desktop 根状态控制器。 */
   controller: DesktopViewController;
 }

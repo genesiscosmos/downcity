@@ -57,11 +57,11 @@ interface SessionViewProps {
   /** 打开当前 Agent 信息侧栏。 */
   open_agent_info?(): void;
   /** Session Sidebar 是否折叠。 */
-  session_sidebar_collapsed: boolean;
+  session_sidebar_collapsed?: boolean;
   /** 切换 Session Sidebar。 */
-  toggle_session_sidebar(): void;
+  toggle_session_sidebar?(): void;
   /** Header 下方的 Session Sidebar。 */
-  session_sidebar: ReactNode;
+  session_sidebar?: ReactNode;
   /** 当前 Session 的 canonical 可见消息。 */
   messages: SessionMessage[];
   /** 当前 Session 实时运行态。 */

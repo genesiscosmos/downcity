@@ -23,8 +23,6 @@ export type {
   PluginConfigGateway,
   PluginMainviewComponent,
   PluginMainviewComponentProps,
-  PluginRendererMainviewSidebarItemProps,
-  PluginRendererMainviewSidebarProps,
   PluginRendererButtonProps,
   PluginRendererCalloutProps,
   PluginRendererCodeBlockProps,
