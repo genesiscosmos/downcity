@@ -6,7 +6,7 @@
  * - cron 调度执行器由宿主注入，task runtime 不依赖具体实现。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext, PluginNotificationPublisher } from "@downcity/agent";
 import {
   isTaskWhenManual,
   resolveTaskWhenCronExpression,
@@ -25,6 +25,8 @@ function formatTaskLogMessage(message: string): string {
 export async function registerTaskCronJobs(params: {
   context: PluginContext;
   engine: TaskCronEngine;
+  /** Task 完成后使用的可选宿主通知端口。 */
+  notifications?: PluginNotificationPublisher;
   /**
    * cron 表达式使用的 IANA 时区。
    */
@@ -93,6 +95,7 @@ export async function registerTaskCronJobs(params: {
                 context,
                 taskId,
                 data_path: context.data_path,
+                notifications: params.notifications,
                 trigger: { type: "cron" },
               });
 
@@ -179,6 +182,7 @@ export async function registerTaskCronJobs(params: {
               context,
               taskId,
               data_path: context.data_path,
+              notifications: params.notifications,
               trigger: { type: "time" },
             });
 

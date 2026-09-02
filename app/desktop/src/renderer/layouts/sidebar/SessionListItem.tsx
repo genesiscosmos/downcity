@@ -13,6 +13,8 @@ interface SessionListItemProps {
   session: DesktopSessionSummary;
   /** 是否选中。 */
   active: boolean;
+  /** 当前 Session 是否有未读完成通知。 */
+  unread: boolean;
   /** 进入 Session。 */
   on_select(): void;
   /** 修改标题。 */
@@ -60,17 +62,22 @@ export function SessionListRow({ title, active, on_select, leading, menu, reserv
 }
 
 /** 带完整 Agent Session 操作能力的标准行。 */
-export function SessionListItem({ session, active, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
+export function SessionListItem({ session, active, unread, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
+  const has_status = session.executing || unread;
   return <SessionListRow title={session.title || "新对话"} active={active} on_select={on_select} menu={
     <SessionActionsMenu session={session} on_rename={on_rename} on_archive={on_archive} on_remove={on_remove} trigger={
           <Button
             size="icon"
-            className={cn("group/menu", session.executing ? "opacity-100" : "opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100 data-[state=open]:opacity-100")}
+            className={cn("group/menu", has_status ? "opacity-100" : "opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100 data-[state=open]:opacity-100")}
             title="更多操作"
             aria-label="更多操作"
             onClick={(event) => event.stopPropagation()}
           >
-            {session.executing ? <TbLoader2 className="animate-spin text-primary" aria-label="正在回复。" /> : <TbDots />}
+            {session.executing
+              ? <TbLoader2 className="animate-spin text-primary" aria-label="正在回复。" />
+              : unread
+                ? <span className="size-1.5 rounded-full bg-blue-500" aria-label="有未读完成结果" />
+                : <TbDots />}
           </Button>
     } />
   } />;

@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { PluginJsonValue, PluginMainModule } from "@downcity/plugin";
+import type { PluginJsonValue, PluginMainModule, PluginNotificationInput, PluginNotificationTopicInput } from "@downcity/plugin";
 import {
   normalize_profile_id,
   verify_local_installed_plugin_integrity,
@@ -43,6 +43,14 @@ export class PluginController {
       /** 目标 action ID。 */ readonly action_id: string;
       /** 可选 action 输入。 */ readonly input?: PluginJsonValue;
     }) => Promise<PluginJsonValue>,
+    publish_notification: (
+      plugin_id: string,
+      input: PluginNotificationInput,
+    ) => Promise<void>,
+    dismiss_notification: (
+      plugin_id: string,
+      input: PluginNotificationTopicInput,
+    ) => Promise<void>,
   ) {
     this.main_runtime = new PluginMainRuntime(data, {
       resolve_main: async (plugin_id) => {
@@ -52,6 +60,8 @@ export class PluginController {
         return module ? { plugin_id, module } : null;
       },
       invoke_agent_plugin,
+      publish_notification,
+      dismiss_notification,
     });
   }
 

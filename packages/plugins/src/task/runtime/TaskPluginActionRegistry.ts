@@ -7,7 +7,7 @@
  */
 
 import type { Command } from "commander";
-import type { PluginActions } from "@downcity/agent";
+import type { PluginActions, PluginNotificationPublisher } from "@downcity/agent";
 import { create_action } from "@downcity/agent";
 import { z } from "zod";
 import type { TaskListActionPayload } from "@/task/types/TaskPluginTypes.js";
@@ -105,6 +105,8 @@ const TASK_STATUS_REQ_SCHEMA = z.object({
  * 创建 task plugin runtime 的 action 定义表。
  */
 export function createTaskPluginActions(params: {
+  /** Task 完成后使用的可选宿主通知端口。 */
+  notifications?: PluginNotificationPublisher;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }): PluginActions {
   return {
@@ -277,6 +279,7 @@ export function createTaskPluginActions(params: {
         return executeTaskRunAction({
           context: actionParams.context,
           payload: actionParams.input as TaskRunRequest,
+          notifications: params.notifications,
           execution_context: actionParams.execution.snapshot,
         });
       },
@@ -305,6 +308,7 @@ export function createTaskPluginActions(params: {
         return executeTaskDeleteAction({
           context: actionParams.context,
           payload: actionParams.input as TaskDeleteRequest,
+          notifications: params.notifications,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
       },

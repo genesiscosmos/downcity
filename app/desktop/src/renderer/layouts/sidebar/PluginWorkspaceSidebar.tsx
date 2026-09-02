@@ -7,6 +7,7 @@ import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopPluginDefinition } from "@common/types/DesktopApi";
 import { SidebarHeader } from "./SidebarHeader";
+import { plugin_renderer_notifications } from "@/lib/notification/notification_state";
 
 /** 加载并渲染指定 Plugin 的 Sidebar 插槽。 */
 export function PluginWorkspaceSidebar({ controller, plugin_id }: {
@@ -39,7 +40,7 @@ export function PluginWorkspaceSidebar({ controller, plugin_id }: {
   if (!plugin?.has_sidebar || !plugin.has_mainview) return <div className="px-3 py-8 text-center text-xs text-muted-foreground">Plugin 未提供功能界面</div>;
   return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
     <SidebarHeader title={plugin.title} />
-    {error ? <div className="mx-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="sidebar" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={controller.plugin_routes[plugin.plugin_id] ?? {}} navigate={navigate} revision={controller.plugin_revisions[plugin.plugin_id] ?? 0} invalidate={invalidate} />}
+    {error ? <div className="mx-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="sidebar" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={controller.plugin_routes[plugin.plugin_id] ?? {}} notifications={plugin_renderer_notifications(controller.notification_state, plugin.plugin_id)} navigate={navigate} revision={controller.plugin_revisions[plugin.plugin_id] ?? 0} invalidate={invalidate} />}
   </div>;
 }
 

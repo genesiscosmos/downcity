@@ -12,6 +12,7 @@ import { PluginSidebar } from "./sidebar/PluginSidebar";
 import { PluginWorkspaceSidebar } from "./sidebar/PluginWorkspaceSidebar";
 import { WorkspaceSidebar } from "./sidebar/WorkspaceSidebar";
 import { SidebarViewSwitcher } from "./sidebar/SidebarViewSwitcher";
+import { has_unread_plugin_notification } from "@/lib/notification/notification_state";
 
 /** 左侧导航面板属性。 */
 interface NavigationSidebarProps {
@@ -65,7 +66,7 @@ export function NavigationSidebar({ controller, open_create_agent, open_create_g
       </div>
     </div>
     <div className="flex min-h-0 flex-1 overflow-hidden">
-      <div className="flex min-h-0 w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} plugin_workspaces={plugin_workspaces} layout="left" /></div>
+      <div className="flex min-h-0 w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} plugin_workspaces={plugin_workspaces} unread_plugin_ids={plugin_workspaces.filter((plugin) => has_unread_plugin_notification(controller.notification_state, plugin.plugin_id)).map((plugin) => plugin.plugin_id)} layout="left" /></div>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={() => open_create_agent()} open_create_group={open_create_group} open_group_config={open_group_config} /> : null}
         {controller.sidebar_mode === "workspace" ? <WorkspaceSidebar controller={controller} open_create_workspace={open_create_workspace} /> : null}

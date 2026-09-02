@@ -14,6 +14,8 @@ export function define_plugin_renderer(
   return renderer;
 }
 
+export type { PluginRendererNotification } from "./types/PluginNotification.js";
+
 export type {
   PluginActionGateway,
   PluginConfigComponent,

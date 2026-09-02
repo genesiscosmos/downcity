@@ -20,6 +20,8 @@ Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Cat
 
 Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Workspace 不是页面筛选器，而是每个 Task 自身的执行配置；手动与定时执行始终使用该 Task 绑定的唯一 Workspace。执行记录 Sidebar 可折叠、调整宽度并独立滚动。这里直接使用所选 Agent 的 Task runtime 与既有 run 产物，不保存第二份任务状态。
 
+Task 成功或失败并完成执行记录持久化后，会通过统一 Notification 模块产生未读通知；跳过的执行不会通知。同一 Agent 的同一 Task 只保留最新未读 Run。Desktop 会在 Task 一级图标、Task 条目和对应 Run 旁显示蓝点，并同步系统应用图标角标；打开该 Run 后自动标记为已读。
+
 ## 定义任务
 
 任务在项目定义中，并在启动时向 Task 插件注册。它们可以通过以下方式触发：

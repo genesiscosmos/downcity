@@ -145,6 +145,14 @@ function create_main_context(
       warn: (message, data) => log("warn", message, data),
       error: (message, data) => log("error", message, data),
     },
+    notifications: {
+      async publish(input) {
+        await options.publish_notification(plugin_id, input);
+      },
+      async dismiss(input) {
+        await options.dismiss_notification(plugin_id, input);
+      },
+    },
     system: {
       async list_agents() {
         return data.agents.list().map((agent) => ({

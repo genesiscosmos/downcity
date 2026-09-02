@@ -109,7 +109,7 @@ export function create_builtin_plugin_registrations(): BuiltinPluginRegistration
         has_config: false,
       },
       main: TASK_PLUGIN_MAIN,
-      create_agent: () => new TaskPlugin(),
+      create_agent: (context) => new TaskPlugin({ notifications: context.notifications }),
     },
     {
       definition: {

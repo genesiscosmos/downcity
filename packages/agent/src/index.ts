@@ -239,6 +239,11 @@ export type {
 export type { PluginContext } from "./types/plugin/PluginContext.js";
 export type { AgentPluginContext } from "./types/plugin/AgentPluginContext.js";
 export type {
+  PluginNotificationInput,
+  PluginNotificationPublisher,
+  PluginNotificationTopicInput,
+} from "./types/plugin/PluginNotification.js";
+export type {
   PluginWebServices,
 } from "./types/plugin/PluginServices.js";
 export type { SessionPort } from "./types/session/SessionPort.js";

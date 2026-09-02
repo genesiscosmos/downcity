@@ -9,6 +9,7 @@ import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
 import { SessionListItem, SessionListRow } from "./sidebar/SessionListItem";
 import { SidebarSubbar } from "./SidebarSubbar";
+import { has_unread_session_notification } from "@/lib/notification/notification_state";
 
 /** Agent Session 内部侧边栏属性。 */
 interface AgentChatSessionSidebarProps {
@@ -29,7 +30,7 @@ export function AgentChatSessionSidebar({ agent, controller, collapsed, toggle_c
     .sort((left, right) => Number(right.session.executing) - Number(left.session.executing) || right.session.updated_at - left.session.updated_at);
   const workspace_id = controller.active_workspace_id || controller.workspaces[0]?.workspace_id;
   return <ChatSessionSidebarFrame collapsed={collapsed} toggle_collapsed={toggle_collapsed} title={agent.name} avatar={<AgentAvatar agent={agent} class_name="size-5 rounded-md" />} subject_active={controller.selection?.kind === "agent" && controller.selection.agent_id === agent.agent_id} select_subject={() => controller.select_agent(agent.agent_id)} create_session={() => { if (workspace_id) void controller.create_session(workspace_id, agent.agent_id); }} create_disabled={!workspace_id} create_active={controller.selection?.kind === "draft" && controller.selection.agent_id === agent.agent_id}>
-    {sessions.map(({ workspace_id: session_workspace_id, session }) => <SessionListItem key={`${session_workspace_id}:${session.session_id}`} session={session} active={controller.selection?.kind === "session" && controller.selection.agent_id === agent.agent_id && controller.selection.session_id === session.session_id} on_select={() => void controller.select_session(session_workspace_id, agent.agent_id, session.session_id, true)} on_rename={(title) => controller.rename_session(session_workspace_id, agent.agent_id, session.session_id, title)} on_archive={() => controller.archive_session(session_workspace_id, agent.agent_id, session.session_id)} on_remove={() => controller.remove_session(session_workspace_id, agent.agent_id, session.session_id)} />)}
+    {sessions.map(({ workspace_id: session_workspace_id, session }) => <SessionListItem key={`${session_workspace_id}:${session.session_id}`} session={session} active={controller.selection?.kind === "session" && controller.selection.agent_id === agent.agent_id && controller.selection.session_id === session.session_id} unread={has_unread_session_notification(controller.notification_state, session_workspace_id, agent.agent_id, session.session_id)} on_select={() => void controller.select_session(session_workspace_id, agent.agent_id, session.session_id, true)} on_rename={(title) => controller.rename_session(session_workspace_id, agent.agent_id, session.session_id, title)} on_archive={() => controller.archive_session(session_workspace_id, agent.agent_id, session.session_id)} on_remove={() => controller.remove_session(session_workspace_id, agent.agent_id, session.session_id)} />)}
   </ChatSessionSidebarFrame>;
 }
 

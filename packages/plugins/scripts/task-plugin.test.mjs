@@ -55,13 +55,19 @@ test("scheduled task appends its result to the linked Workspace Session", async 
     storage: new LocalStorageProvider(path.join(root_path, "city-data")),
     workspaces: [workspace],
   });
-  const task_plugin = new TaskPlugin();
+  const published_notifications = [];
+  const notifications = {
+    publish: async (input) => { published_notifications.push(input); },
+    dismiss: async () => {},
+  };
+  const task_plugin = new TaskPlugin({ notifications });
   const scheduled_definitions = [];
   task_plugin.actions.test_trigger_scheduler = create_action({
     description: "测试专用：注册并触发当前 Task scheduler。",
     execute: async ({ context }) => {
       await registerTaskCronJobs({
         context,
+        notifications,
         engine: {
           register: (definition) => scheduled_definitions.push(definition),
         },
@@ -136,6 +142,16 @@ test("scheduled task appends its result to the linked Workspace Session", async 
     assert.equal(run_detail.success, true);
     assert.equal(run_detail.data.run.output, "SCHEDULED_TASK_RESULT");
     assert.equal(run_detail.data.run.error_detail, "");
+    assert.deepEqual(published_notifications, [{
+      topic_key: "task:scheduled-session-result",
+      title: "scheduled-session-result 已完成",
+      route: {
+        agent_id: "task-scheduler-agent",
+        task_title: "scheduled-session-result",
+        view: "run",
+        run_timestamp: history.data.runs[0].timestamp,
+      },
+    }]);
 
     const messages = await linked_session.messages();
     const final_message = messages.items.at(-1);

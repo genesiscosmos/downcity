@@ -5,6 +5,7 @@
  */
 
 import type { RespondSessionInteractionInput, SessionApprovalMode, SessionInteractionRequest, SessionMessage, SessionMutation } from "@downcity/agent";
+import type { DesktopNotificationState, DesktopNotificationViewState } from "./DesktopNotification.js";
 
 /** Renderer 可见的 Agent 摘要。 */
 export interface DesktopAgentSummary {
@@ -810,6 +811,15 @@ export interface DesktopApi {
     open_external_url(url: string): Promise<void>;
     /** 使用系统默认应用打开绝对本地文件。 */
     open_local_file(file_path: string): Promise<void>;
+  };
+  /** Desktop 未读通知与当前观察目标能力。 */
+  notification: {
+    /** 读取当前完整未读通知状态。 */
+    get_state(): Promise<DesktopNotificationState>;
+    /** 报告当前 Renderer 是否正在实际查看一个通知目标。 */
+    set_view_state(state: DesktopNotificationViewState): Promise<void>;
+    /** 订阅未读通知状态变化。 */
+    subscribe(callback: (state: DesktopNotificationState) => void): () => void;
   };
   /** Agent 注册和运行能力。 */
   agent: {

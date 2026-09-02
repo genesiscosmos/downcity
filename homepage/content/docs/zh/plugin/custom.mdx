@@ -91,13 +91,18 @@ import type { AgentPluginModule } from "@downcity/agent";
 import { GithubPlugin } from "./plugin.js";
 
 const create_agent_plugin: AgentPluginModule<GithubPlugin>["default"] = (context) => {
-  return new GithubPlugin(context.profile as unknown as GithubPluginConfig);
+  return new GithubPlugin({
+    config: context.profile as unknown as GithubPluginConfig,
+    notifications: context.notifications,
+  });
 };
 
 export default create_agent_plugin;
 ```
 
 每次调用必须返回新的 Plugin 实例，实例 `name` 必须等于 `plugin.json.id`。factory 只是宿主装配适配器，不负责安装，也不替代 Agent Plugin 的 `start/stop` 生命周期。
+
+支持通知的宿主会提供可选的 `context.notifications`。Agent Plugin 可以把它传给自己的后台运行实例，在任务真正完成后调用 `publish()`；不支持通知的 CLI 或 SDK 宿主会省略该能力。通知只描述 `topic_key`、标题、正文和当前 Plugin 内的 JSON route，宿主会自动绑定 Plugin 与 Agent 身份。删除对应业务对象时可调用 `dismiss()` 清理该主题。不要从 Renderer 伪造后台完成通知。
 
 ## Main 入口
 
@@ -107,7 +112,7 @@ export default create_agent_plugin;
 import { define_plugin_main } from "@downcity/plugin";
 
 export default define_plugin_main({
-  activate({ plugin }) {
+  activate({ plugin, notifications }) {
     plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => {
@@ -125,11 +130,19 @@ export default define_plugin_main({
         return { saved: true };
       },
     });
+
+    void notifications.publish({
+      topic_key: "sync:repository",
+      title: "仓库同步完成",
+      route: { repository: "downcity", view: "activity" },
+    });
   },
 });
 ```
 
 一个 main 在宿主中只激活一次。当前 Profile 只在 action 调用时注入，所以同一个 main 可以安全服务多个 Profile。不要把 Profile 缓存在全局变量中。
+
+`notifications.publish()` 与 `notifications.dismiss()` 始终绑定当前 Plugin。宿主会把 `topic_key` 放入 Plugin 命名空间，并把 `route` 解释为当前 Plugin 工作区路由，因此 Plugin 不能代表其他 Plugin 或跳转到任意 Desktop 页面。相同 `topic_key` 只保留最新一条未读通知。
 
 需要实现类似 Skill 管理器的功能主页时，可以通过 `system.list_workspaces()` 读取宿主已经登记的 Workspace 摘要。Plugin main 是受信任本地 Node.js 代码；它负责验证 action 输入，并自行拥有文件、网络和长期资源的业务行为。
 
@@ -162,6 +175,8 @@ export default define_plugin_renderer({ config: function GithubConfig({ config, 
 Renderer bundle 必须把 `react` 与 `react/jsx-runtime` 保留为宿主外部依赖，并分别映射到 `downcity-plugin://runtime/react` 与 `downcity-plugin://runtime/react/jsx-runtime`。其他前端依赖应打包进同一个 `renderer.js`。
 
 Desktop 在宿主 React 树中加载 Renderer。Sidebar 与 Mainview 通过 `plugin.invoke()` 调用 Plugin 级动作，并通过 `navigation` 协同导航；Config 通过 `config.invoke()` 调用已经绑定当前 Profile 的配置动作。三个插槽都只获得所需 gateway、`ui.components`、Toast 和 Confirm，不会获得 Profile ID 或 Desktop controller。Renderer 属于受信任本地 UI 代码；只安装可信来源。
+
+Sidebar 与 Mainview 还会获得当前 Plugin 的只读 `notifications` 数组。每项包含 Plugin 本地 `topic_key`、文案、route 和产生时间，可用于在对应导航对象旁显示未读状态。Renderer 通过导航到通知的完整 route 触发宿主已读收口，但没有发布或修改通知的权限。
 
 需要树状 Sidebar 时使用 `SidebarTreeItem`：`depth` 表达层级，`kind` 区分 `branch` 与 `leaf`，父节点通过 `expanded` 与 `on_toggle` 管理展开，`on_select` 通过共享 `navigation` 更新 Mainview。省略 `leading` 时宿主会为分支和叶子节点提供统一默认图标；没有子项的分支可以省略 `on_toggle`，此时不会显示折叠按钮。需要类似 Chat Session 的第二层历史导航时，使用 `MainviewSidebar` 组合 `MainviewSidebarItem`；这些内容会进入一级 Sidebar 右侧的 Subbar，不占用 Mainview。宿主统一提供折叠、宽度调整、偏好保存和独立滚动，不要在 Plugin 中复制 Desktop 布局。行级操作使用 `ItemMenu`，Markdown 正文使用宿主安全的 `Markdown`。写操作完成后调用 `ui.invalidate()`，宿主会增加同一 Plugin 的 `ui.revision`，使 Sidebar 与 Mainview 重新读取快照；Plugin 不需要复制宿主样式或把刷新状态写入 route。
 

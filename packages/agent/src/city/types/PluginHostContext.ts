@@ -9,6 +9,7 @@
  */
 
 import type { JsonObject, Logger } from "@/index.js";
+import type { PluginNotificationPublisher } from "@/types/plugin/PluginNotification.js";
 
 /** City 可以为未来宿主能力增加的显式扩展集合。 */
 export type PluginHostExtensions = Readonly<Record<string, unknown>>;
@@ -26,6 +27,9 @@ export interface PluginHostContext {
 
   /** City 提供的宿主日志器。 */
   readonly logger: Logger;
+
+  /** 宿主可选提供的通知发布能力；不支持通知的宿主省略。 */
+  readonly notifications?: PluginNotificationPublisher;
 
   /** City 为未来宿主能力保留的显式扩展区。 */
   readonly extensions: PluginHostExtensions;

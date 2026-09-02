@@ -20,6 +20,8 @@ Task does not declare Config, so it needs no Profile. It remains visible in the 
 
 Desktop can create, edit, enable, pause, run, and delete Tasks directly. Workspace is not a page filter: each Task binds exactly one execution Workspace, used by both manual and scheduled runs. The history sidebar is independently scrollable, collapsible, and resizable. The workspace uses the selected Agent's Task runtime and existing run artifacts directly instead of storing a second copy.
 
+After a successful or failed Task persists its execution record, it publishes an unread item through the shared Notification module; skipped executions do not notify. Only the latest unread Run is retained for the same Task and Agent. Desktop shows a blue dot on the Task top-level icon, Task item, and matching Run, updates the system app badge, and marks the item read when that Run is opened.
+
 ## Defining a task
 
 Tasks are defined in the project and registered with the Task plugin at startup. They can be triggered by:

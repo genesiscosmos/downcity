@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
+import type { PluginRendererNotification } from "./PluginNotification.js";
 
 /** Plugin 业务 UI 调用 Plugin 级 main action 的最小网关。 */
 export interface PluginActionGateway {
@@ -570,6 +571,9 @@ export interface PluginSidebarComponentProps {
   /** 与 Mainview 共享且由宿主持有的路由。 */
   readonly navigation: PluginRendererNavigation;
 
+  /** 当前 Plugin 命名空间内的只读未读通知。 */
+  readonly notifications: readonly PluginRendererNotification[];
+
   /** 宿主提供的反馈能力和 UI 组件。 */
   readonly ui: PluginRendererUi;
 }
@@ -581,6 +585,9 @@ export interface PluginMainviewComponentProps {
 
   /** 与 Sidebar 共享且由宿主持有的路由。 */
   readonly navigation: PluginRendererNavigation;
+
+  /** 当前 Plugin 命名空间内的只读未读通知。 */
+  readonly notifications: readonly PluginRendererNotification[];
 
   /** 宿主提供的反馈能力和 UI 组件。 */
   readonly ui: PluginRendererUi;

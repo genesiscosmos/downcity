@@ -20,6 +20,7 @@ import {
   type SessionMutationUnsubscribe,
   type SessionMessage,
   type SessionMutation,
+  type PluginNotificationInput,
 } from "@downcity/agent";
 import { LocalStorageProvider } from "@downcity/workspace";
 import path from "node:path";
@@ -134,6 +135,10 @@ interface AgentControllerEvents {
   /** 广播 Group 共享消息。 */
   /** 广播 GroupSession 统一消息与状态事件。 */
   group_event(event: DesktopGroupEvent): void;
+  /** 发布一个 Agent Plugin 产生的宿主通知。 */
+  plugin_notification(plugin_id: string, agent_id: string, input: PluginNotificationInput): Promise<void>;
+  /** 清除一个 Agent Plugin 主题的未读通知。 */
+  plugin_notification_dismiss(plugin_id: string, topic_key: string): Promise<void>;
 }
 
 /** Electron main 内的 native Agent 生命周期控制器。 */
@@ -1024,6 +1029,16 @@ export class AgentController {
           plugin_id,
         ),
         logger: get_logger(),
+        notifications: {
+          publish: async (input) => await this.events.plugin_notification(plugin_id, config.agent_id, {
+            ...input,
+            topic_key: `agent:${config.agent_id}:${input.topic_key}`,
+          }),
+          dismiss: async (input) => await this.events.plugin_notification_dismiss(
+            plugin_id,
+            `agent:${config.agent_id}:${input.topic_key}`,
+          ),
+        },
         extensions: {},
       })),
       Promise.resolve(create_desktop_agent_tools()),

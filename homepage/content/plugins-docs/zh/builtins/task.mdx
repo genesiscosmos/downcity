@@ -31,6 +31,8 @@ description: task 定义、task actions，以及归属于 plugin 实例的 cron 
 
 Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。它自己的 Sidebar 按 `Agent → Task` 组织全部 Task；Mainview 可以新建、编辑、启停、立即运行和删除 Task。选中 Task 后，一级 Sidebar 右侧的 Subbar 按时间倒序展示全部 Run，并默认打开最新记录；Mainview 展示最终输出、状态、触发来源、耗时、结果校验与错误，也可以切回任务定义。Workspace 是 Task 自身的执行配置，不是页面级筛选。这里读取的是对应 Agent 的真实 Task runtime 和既有 run 产物，不复制第二份状态。
 
+Task Run 成功或失败且产物落盘后会产生未读通知；跳过执行不通知。同一 Agent 的同一 Task 聚合为最新一条未读，Desktop 在 Task 图标、Task 条目、对应 Run 和系统应用角标上同步提示，打开该 Run 后自动已读。
+
 CLI 通过统一 Plugin Action 命令调用 task：
 
 ```bash
@@ -42,7 +44,7 @@ city plugin action task run <agent_id> --input '{"title":"daily-summary","reason
 
 ## SDK 装配
 
-`TaskPlugin` 只需要可选时区配置。每个 Task 必须绑定一个执行 Workspace；可选的 `session_id` 只用于把完成结果投递到指定 Session。agent task 在有结果 Session 时优先使用其模型，否则使用 Agent 默认模型。cron 默认采用当前运行机器的本机时区：
+`TaskPlugin` 可以接收可选时区和宿主通知端口。每个 Task 必须绑定一个执行 Workspace；可选的 `session_id` 只用于把完成结果投递到指定 Session。agent task 在有结果 Session 时优先使用其模型，否则使用 Agent 默认模型。cron 默认采用当前运行机器的本机时区；直接使用 SDK 且不需要界面未读通知时可以省略 `notifications`：
 
 ```ts
 import { TaskPlugin } from "@downcity/plugins/task";

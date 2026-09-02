@@ -31,6 +31,7 @@ import type {
   DesktopUpdateAgentInput,
   DesktopWorkspaceSummary,
 } from "../../common/types/DesktopApi";
+import type { DesktopNotificationState } from "../../common/types/DesktopNotification";
 
 /** 设置主视图当前展示的分区。 */
 export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat";
@@ -51,6 +52,7 @@ export type NavigationTarget =
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
   | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** Session Chat。 */ kind: "session"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
+  | { /** 尚未持久化的 Group 空对话。 */ kind: "group_draft"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** 具体 GroupSession Chat。 */ kind: "group_session"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** GroupSession 标识。 */ session_id: string }
   | { /** Group 配置页。 */ kind: "group"; /** Group 标识。 */ group_id: string }
   | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
@@ -126,6 +128,8 @@ export interface DesktopWorkspaceGroupSession {
 
 /** Renderer 根状态控制器向视图公开的能力。 */
 export interface DesktopViewController {
+  /** Desktop 当前完整未读通知状态。 */
+  notification_state: DesktopNotificationState;
   /** 共享 Registry 中的全部 Agent。 */
   agents: DesktopAgentSummary[];
   /** 共享 Registry 中独立登记的全部 Workspace。 */
@@ -230,12 +234,12 @@ export interface DesktopViewController {
   remove_group(group_id: string): Promise<void>;
   /** 为 Group 打开指定共享 Session。 */
   open_group(group_id: string, session_id?: string): Promise<void>;
-  /** 为 Group 创建新的共享 Session 并打开。 */
+  /** 为 Group 打开尚未持久化的新对话。 */
   create_group_session(group_id: string, workspace_id?: string): Promise<void>;
   /** 删除 Group 的共享 Session。 */
   remove_group_session(group_id: string, session_id: string): Promise<void>;
   /** 向指定 GroupSession 发送文本。 */
-  send_group_message(group_id: string, session_id: string, text: string): Promise<string | undefined>;
+  send_group_message(group_id: string, workspace_id: string, session_id: string, text: string): Promise<string | undefined>;
   /** 停止 Group 当前执行。 */
   stop_group(group_id: string, session_id: string): Promise<void>;
   /** 响应 Group 成员交互。 */
@@ -362,9 +366,28 @@ export function get_draft_session_id(agent_id: string): string {
   return `draft:${agent_id}`;
 }
 
+/** 生成一个 Group 唯一的本地 Draft Chat 标识。 */
+export function get_group_draft_session_id(group_id: string): string {
+  return `group-draft:${group_id}`;
+}
+
+/** 生成不会与 Agent Session 冲突的 Group Chat 缓存键。 */
+export function get_group_chat_key(
+  workspace_id: string,
+  group_id: string,
+  session_id: string,
+): string {
+  return `${workspace_id}:group:${group_id}:${session_id}`;
+}
+
 /** 判断当前标识是否属于尚未持久化的 Draft Chat。 */
 export function is_draft_session_id(session_id: string): boolean {
   return session_id.startsWith("draft:");
+}
+
+/** 判断当前标识是否属于尚未持久化的 Group Draft Chat。 */
+export function is_group_draft_session_id(session_id: string): boolean {
+  return session_id.startsWith("group-draft:");
 }
 
 /** 判断运行态是否仍占用当前 Session 执行槽。 */

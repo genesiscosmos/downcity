@@ -104,7 +104,7 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
       : !definition ? <ui_components.LoadingState label="正在加载 Plugin…" />
         : props.slot === "config"
           ? Config ? <Config config={config} ui={ui} /> : <ui_components.EmptyState title="Plugin 未提供 config" size="compact" />
-          : Workspace ? <Workspace plugin={plugin} navigation={navigation} ui={ui} /> : <ui_components.EmptyState title={`Plugin 未提供 ${props.slot}`} size="compact" />}
+          : Workspace ? <Workspace plugin={plugin} navigation={navigation} notifications={props.notifications ?? []} ui={ui} /> : <ui_components.EmptyState title={`Plugin 未提供 ${props.slot}`} size="compact" />}
     {toast ? <div className="fixed bottom-5 left-1/2 z-40 max-w-xl -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl">{toast.message}</div> : null}
     <Dialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) close_confirmation(false); }}>
       <DialogContent size="sm"><DialogHeader><div><DialogTitle>{confirmation?.input.title}</DialogTitle>{confirmation?.input.description ? <DialogDescription>{confirmation.input.description}</DialogDescription> : null}</div></DialogHeader><DialogFooter><Button onClick={() => close_confirmation(false)}>取消</Button><Button variant={confirmation?.input.destructive ? "destructive" : "primary"} onClick={() => close_confirmation(true)}>{confirmation?.input.action || "确认"}</Button></DialogFooter></DialogContent>

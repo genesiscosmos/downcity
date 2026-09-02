@@ -8,7 +8,7 @@
  * - 把最终产物写入 run 目录的具体格式委托给 `TaskRunArtifacts.ts`。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext, PluginNotificationPublisher } from "@downcity/agent";
 import type {
   DialogueRoundRecord,
   UserSimulatorDecision,
@@ -42,6 +42,7 @@ import {
 } from "./TaskRunArtifacts.js";
 import { dispatchTaskRunCompletionToSession } from "./TaskRunSessionDispatch.js";
 import { runScriptTaskBranch } from "./TaskRunnerScript.js";
+import { publish_task_run_notification } from "./TaskRunNotification.js";
 
 const DEFAULT_MAX_DIALOGUE_ROUNDS = 3;
 const DEFAULT_SINGLE_ROUND = 1;
@@ -77,6 +78,8 @@ export async function runTaskNow(params: {
   trigger: ShipTaskRunTriggerV1;
   executionId?: string;
   data_path?: string;
+  /** Task 完成后使用的可选宿主通知端口。 */
+  notifications?: PluginNotificationPublisher;
   /** 发起该任务的 Session step 已提交生效的 env 快照。 */
   workspace_env?: Readonly<Record<string, string>>;
   /** 发起该任务的 Session step 已提交生效的 instruction 快照。 */
@@ -467,6 +470,15 @@ export async function runTaskNow(params: {
     runStatus: status,
     executionStatus,
     resultStatus,
+  });
+  await publish_task_run_notification({
+    context,
+    notifications: params.notifications,
+    task,
+    status,
+    timestamp,
+    error_text: errorText,
+    result_errors: resultErrors,
   });
   await dispatchTaskRunCompletionToSession({
     context,

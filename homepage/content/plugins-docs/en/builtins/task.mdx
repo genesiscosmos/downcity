@@ -31,6 +31,8 @@ Use `task` when you need:
 
 Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Sidebar groups every Task as `Agent → Task`, while the Mainview can create, edit, enable, pause, run, and delete Tasks. Selecting a Task opens an execution-history Subbar to the right of the primary Sidebar, sorted newest first and defaulting to the latest run. Workspace is a Task-level execution setting rather than a page filter. This workspace reads the selected Agent's real Task runtime and existing run artifacts instead of copying state.
 
+A successful or failed Task Run publishes an unread notification after its artifacts are persisted; skipped runs do not notify. Notifications aggregate to the latest unread Run for the same Task and Agent. Desktop reflects that state on the Task icon, Task item, matching Run, and system app badge, and marks it read when the Run is opened.
+
 The CLI invokes task through the shared Plugin Action command:
 
 ```bash
@@ -42,7 +44,7 @@ Use the `task` Plugin when automation should remain named, editable, and manuall
 
 ## SDK Assembly
 
-`TaskPlugin` only needs the optional timezone setting. Every Task binds one execution Workspace; optional `session_id` only delivers the completed result to a Session. Agent tasks prefer that Session's model when configured and otherwise use the Agent model. By default, cron uses the current machine timezone:
+`TaskPlugin` accepts an optional timezone and host notification port. Every Task binds one execution Workspace; optional `session_id` only delivers the completed result to a Session. Agent tasks prefer that Session's model when configured and otherwise use the Agent model. By default, cron uses the current machine timezone. Direct SDK usage can omit `notifications` when UI unread state is not needed:
 
 ```ts
 import { TaskPlugin } from "@downcity/plugins/task";

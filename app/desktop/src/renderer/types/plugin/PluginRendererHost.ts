@@ -4,6 +4,7 @@ import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 import type {
   PluginRendererConfirmInput,
   PluginRendererDefinition,
+  PluginRendererNotification,
   PluginRendererToastInput,
 } from "@downcity/plugin/react";
 
@@ -38,6 +39,8 @@ export interface PluginRendererHostProps {
   invoke_config?(action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
   /** Sidebar 与 Mainview 共享的宿主路由。 */
   readonly route?: PluginJsonObject;
+  /** 当前 Plugin 命名空间内的只读未读通知。 */
+  readonly notifications?: readonly PluginRendererNotification[];
   /** 替换 Sidebar 与 Mainview 共享的宿主路由。 */
   navigate?(route: PluginJsonObject): void;
   /** 当前 Plugin 功能界面的宿主刷新版本。 */

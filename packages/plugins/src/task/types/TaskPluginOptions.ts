@@ -6,6 +6,8 @@
  * - 只暴露用户能直接理解的时区配置，内部调度实现细节不进入 constructor。
  */
 
+import type { PluginNotificationPublisher } from "@downcity/agent";
+
 /**
  * TaskPlugin 构造参数。
  */
@@ -19,5 +21,13 @@ export interface TaskPluginOptions {
    * - `time:<ISO8601-with-timezone>` 一次性任务以 ISO 字符串自身的 offset 为准，这里的时区主要影响 cron 表达式。
    */
   timezone?: string;
+
+  /**
+   * 宿主注入的可选通知发布能力。
+   *
+   * Task 只在执行记录完成持久化后使用该端口发布完成或失败通知；未提供时不影响
+   * Task 执行、产物和 Session 投递。
+   */
+  notifications?: PluginNotificationPublisher;
 
 }

@@ -7,6 +7,15 @@ const desktop_api: DesktopApi = {
     open_external_url: (url) => ipcRenderer.invoke("system:open-external-url", url),
     open_local_file: (file_path) => ipcRenderer.invoke("system:open-local-file", file_path),
   },
+  notification: {
+    get_state: () => ipcRenderer.invoke("notification:get-state"),
+    set_view_state: (state) => ipcRenderer.invoke("notification:set-view-state", state),
+    subscribe: (callback) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
+      ipcRenderer.on("notification:state", handler);
+      return () => ipcRenderer.removeListener("notification:state", handler);
+    },
+  },
   agent: {
     list: (): Promise<DesktopAgentSummary[]> => ipcRenderer.invoke("agent:list"),
     get: (agent_id) => ipcRenderer.invoke("agent:get", agent_id),

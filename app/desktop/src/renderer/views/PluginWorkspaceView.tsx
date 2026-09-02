@@ -7,6 +7,7 @@ import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainView
 import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";
+import { plugin_renderer_notifications } from "@/lib/notification/notification_state";
 
 /** 渲染 Plugin Mainview，并与其一级 Sidebar 共享独立路由。 */
 export function PluginWorkspaceView({ plugin, controller }: {
@@ -35,7 +36,7 @@ export function PluginWorkspaceView({ plugin, controller }: {
   }), [invoke_plugin_action, plugin.plugin_id]);
   const navigate = useCallback((route: PluginJsonObject) => navigate_plugin(plugin.plugin_id, route), [navigate_plugin, plugin.plugin_id]);
   const invalidate = useCallback(() => invalidate_plugin(plugin.plugin_id), [invalidate_plugin, plugin.plugin_id]);
-  return <MainViewLayout><MainViewHeader title={plugin.title} /><MainViewBody><main className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-background">{error ? <div className="m-4 h-fit flex-1 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="mainview" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={controller.plugin_routes[plugin.plugin_id] ?? {}} navigate={navigate} revision={controller.plugin_revisions[plugin.plugin_id] ?? 0} invalidate={invalidate} />}</main></MainViewBody></MainViewLayout>;
+  return <MainViewLayout><MainViewHeader title={plugin.title} /><MainViewBody><main className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-background">{error ? <div className="m-4 h-fit flex-1 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="mainview" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={controller.plugin_routes[plugin.plugin_id] ?? {}} notifications={plugin_renderer_notifications(controller.notification_state, plugin.plugin_id)} navigate={navigate} revision={controller.plugin_revisions[plugin.plugin_id] ?? 0} invalidate={invalidate} />}</main></MainViewBody></MainViewLayout>;
 }
 
 /** 把未知加载失败转换为用户可见文本。 */

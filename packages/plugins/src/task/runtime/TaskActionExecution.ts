@@ -8,6 +8,7 @@
 
 import type { PluginContext } from "@downcity/agent";
 import type { PluginExecutionContext } from "@downcity/agent";
+import type { PluginNotificationPublisher } from "@downcity/agent";
 import type { JsonValue } from "@downcity/agent";
 import type {
   TaskCronRegisterResult,
@@ -33,6 +34,7 @@ import {
   setTaskStatus,
   updateTaskDefinition,
 } from "@/task/Action.js";
+import { deriveTaskIdFromTitle } from "@/task/runtime/Paths.js";
 
 const TASK_LOG_PREFIX = "[TASK]";
 
@@ -199,12 +201,14 @@ export async function executeTaskCreateAction(params: {
 export async function executeTaskRunAction(params: {
   context: PluginContext;
   payload: TaskRunRequest;
+  notifications?: PluginNotificationPublisher;
   execution_context?: PluginExecutionContext;
 }) {
   const result = await runTaskDefinition({
     context: params.context,
     data_path: params.context.data_path,
     request: params.payload,
+    notifications: params.notifications,
     execution_context: params.execution_context,
   });
   if (!result.success) {
@@ -225,6 +229,7 @@ export async function executeTaskRunAction(params: {
 export async function executeTaskDeleteAction(params: {
   context: PluginContext;
   payload: TaskDeleteRequest;
+  notifications?: PluginNotificationPublisher;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
@@ -238,6 +243,7 @@ export async function executeTaskDeleteAction(params: {
       error: result.error || "task delete failed",
     };
   }
+  await dismiss_task_notification(params.notifications, params.payload.title);
   const scheduler = await params.reloadSchedulerAfterMutation({
     context: params.context,
     action: "delete",
@@ -250,6 +256,16 @@ export async function executeTaskDeleteAction(params: {
       scheduler,
     },
   };
+}
+
+/** 删除 Task 时同步清除该业务对象仍未读取的完成通知。 */
+async function dismiss_task_notification(notifications: PluginNotificationPublisher | undefined, title: string): Promise<void> {
+  if (!notifications) return;
+  try {
+    await notifications.dismiss({ topic_key: `task:${deriveTaskIdFromTitle(title)}` });
+  } catch {
+    // 通知清理由宿主负责，失败不能改变已经完成的 Task 删除结果。
+  }
 }
 
 /**

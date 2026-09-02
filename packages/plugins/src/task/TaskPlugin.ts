@@ -79,6 +79,7 @@ export class TaskPlugin extends BasePlugin {
 
     this.actions = {
       ...createTaskPluginActions({
+        notifications: this.options.notifications,
         reloadSchedulerAfterMutation: async (params) =>
           this.reloadSchedulerAfterMutation(params),
       }),
@@ -131,6 +132,7 @@ export class TaskPlugin extends BasePlugin {
       const register_result = await registerTaskCronJobs({
         context,
         engine,
+        notifications: this.options.notifications,
         timezone: this.resolveTimezone(),
         runningTaskIds: running_task_ids,
       });

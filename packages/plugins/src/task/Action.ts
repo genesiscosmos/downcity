@@ -381,6 +381,7 @@ export async function runTaskDefinition(params: {
   context: PluginContext;
   data_path: string;
   request: TaskRunRequest;
+  notifications?: import("@downcity/agent").PluginNotificationPublisher;
   execution_context?: PluginExecutionContext;
 }): Promise<TaskRunResponse> {
   const root = path.resolve(params.data_path);
@@ -420,6 +421,7 @@ export async function runTaskDefinition(params: {
       taskId,
       trigger,
       executionId,
+      notifications: params.notifications,
       ...(params.execution_context?.workspace_env
         ? { workspace_env: { ...params.execution_context.workspace_env } }
         : {}),

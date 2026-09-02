@@ -19,6 +19,13 @@ export type {
 } from "./types/Json.js";
 
 export type {
+  PluginNotificationInput,
+  PluginNotificationPublisher,
+  PluginNotificationTopicInput,
+  PluginRendererNotification,
+} from "./types/PluginNotification.js";
+
+export type {
   PluginConfigMainAction,
   PluginConfigMainActionContext,
   PluginMainAction,

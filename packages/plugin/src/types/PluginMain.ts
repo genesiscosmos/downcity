@@ -6,6 +6,7 @@
  */
 
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
+import type { PluginNotificationPublisher } from "./PluginNotification.js";
 
 /** Plugin main 注册的一个 Sidebar/Mainview 业务动作。 */
 export interface PluginMainAction {
@@ -144,6 +145,9 @@ export interface PluginMainContext {
 
   /** Plugin 独享的结构化日志器。 */
   readonly logger: PluginMainLogger;
+
+  /** 已绑定当前 Plugin 身份的宿主通知发布能力。 */
+  readonly notifications: PluginNotificationPublisher;
 
   /** 明确授权的宿主系统辅助能力。 */
   readonly system: PluginMainSystem;

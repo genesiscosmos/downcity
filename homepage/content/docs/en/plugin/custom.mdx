@@ -91,13 +91,18 @@ import type { AgentPluginModule } from "@downcity/agent";
 import { GithubPlugin } from "./plugin.js";
 
 const create_agent_plugin: AgentPluginModule<GithubPlugin>["default"] = (context) => {
-  return new GithubPlugin(context.profile as unknown as GithubPluginConfig);
+  return new GithubPlugin({
+    config: context.profile as unknown as GithubPluginConfig,
+    notifications: context.notifications,
+  });
 };
 
 export default create_agent_plugin;
 ```
 
 Every call must return a new Plugin instance whose `name` equals `plugin.json.id`. The factory is a host assembly adapter, not an installer or a replacement for Agent Plugin `start/stop` lifecycle hooks.
+
+Hosts with notification support provide optional `context.notifications`. An Agent Plugin can pass it into its background runtime and call `publish()` only when the work truly completes; CLI or SDK hosts without notifications omit the capability. A notification contains only a `topic_key`, title, body, and JSON route within the current Plugin. The host binds Plugin and Agent identity automatically. Call `dismiss()` when the associated business object is deleted. Do not fabricate background completion notifications from the Renderer.
 
 ## Main entry
 
@@ -107,7 +112,7 @@ Every call must return a new Plugin instance whose `name` equals `plugin.json.id
 import { define_plugin_main } from "@downcity/plugin";
 
 export default define_plugin_main({
-  activate({ plugin }) {
+  activate({ plugin, notifications }) {
     plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => {
@@ -125,11 +130,19 @@ export default define_plugin_main({
         return { saved: true };
       },
     });
+
+    void notifications.publish({
+      topic_key: "sync:repository",
+      title: "Repository sync completed",
+      route: { repository: "downcity", view: "activity" },
+    });
   },
 });
 ```
 
 One main is activated once per host. The current Profile is injected only for an action call, so one main can safely serve multiple Profiles. Do not cache a Profile in global state.
+
+`notifications.publish()` and `notifications.dismiss()` are always bound to the current Plugin. The host namespaces `topic_key` and treats `route` as a route inside that Plugin workspace, so a Plugin cannot impersonate another Plugin or navigate to arbitrary Desktop pages. Only the latest unread notification for the same `topic_key` is retained.
 
 For functional pages such as a Skill manager, `system.list_workspaces()` returns summaries of Workspaces registered by the host. Plugin main is trusted local Node.js code; it must validate action inputs and own its file, network, and long-lived resource behavior.
 
@@ -162,6 +175,8 @@ export default define_plugin_renderer({ config: function GithubConfig({ config, 
 The Renderer bundle must leave `react` and `react/jsx-runtime` as host externals mapped to `downcity-plugin://runtime/react` and `downcity-plugin://runtime/react/jsx-runtime`. Bundle other frontend dependencies into the single `renderer.js` file.
 
 Desktop loads the Renderer in its host React tree. Sidebar and Mainview use `plugin.invoke()` for Plugin-level actions and coordinate through `navigation`; Config uses `config.invoke()` for actions bound to the selected Profile. Each slot receives only its required gateway, `ui.components`, Toast, and Confirm—never the Profile ID or Desktop controller. Renderer is trusted local UI code, so install only trusted sources.
+
+Sidebar and Mainview also receive a read-only `notifications` array scoped to the current Plugin. Each item includes the local `topic_key`, content, route, and creation time so navigation objects can render unread state. Navigating to the notification's exact route lets the host mark it read; the Renderer cannot publish or mutate notifications.
 
 Use `SidebarTreeItem` for a tree Sidebar: `depth` expresses hierarchy, `kind` distinguishes `branch` and `leaf`, parents own expansion through `expanded` and `on_toggle`, and `on_select` updates the Mainview through shared `navigation`. When `leading` is omitted, the host supplies consistent default icons for branches and leaves. A branch with no children can omit `on_toggle` and will not show a disclosure button. For a second history navigator like Chat Sessions, compose `MainviewSidebar` with `MainviewSidebarItem`; the content is placed in the Subbar to the right of the primary Sidebar instead of consuming Mainview space. The host owns collapsing, resizing, preference persistence, and independent scrolling, so the Plugin does not copy Desktop layout code. Use `ItemMenu` for row actions and the host-safe `Markdown` for Markdown content. After a mutation, call `ui.invalidate()`; the host increments `ui.revision` for that Plugin so Sidebar and Mainview reload their snapshots without copying host styles or putting refresh state in the route.
 

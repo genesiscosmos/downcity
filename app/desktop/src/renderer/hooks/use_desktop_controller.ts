@@ -30,6 +30,7 @@ import type {
   DesktopUserSummary,
   DesktopWorkspaceSummary,
 } from "../../common/types/DesktopApi";
+import type { DesktopNotificationState } from "../../common/types/DesktopNotification";
 import { apply_session_mutation, merge_session_snapshot } from "../lib/chat/session_mutation";
 import {
   desktop_navigation_storage_key,
@@ -41,7 +42,10 @@ import {
 import {
   get_session_key,
   get_draft_session_id,
+  get_group_chat_key,
+  get_group_draft_session_id,
   is_draft_session_id,
+  is_group_draft_session_id,
   is_chat_busy,
   type ChatSubmitMode,
   type CreateAgentFormValue,
@@ -54,6 +58,7 @@ import {
   type SettingsSection,
   type DesktopWorkspaceSession,
 } from "../types/DesktopView";
+import { notification_target_from_navigation } from "../lib/notification/notification_state";
 
 const default_settings: DesktopSettings = {
   show_reasoning: true,
@@ -74,6 +79,7 @@ const default_settings: DesktopSettings = {
 };
 const default_user: DesktopUserSummary = { authenticated: false, federation_url: "https://base.downcity.ai" };
 const active_workspace_storage_key = "downcity.active_workspace_id";
+const default_notification_state: DesktopNotificationState = { revision: 0, notifications: [], unread_count: 0 };
 
 /** 返回导航目标所属的主导航业务集合；设置页不属于任何业务集合。 */
 function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
@@ -124,6 +130,7 @@ function normalize_global_env_text(input: unknown): string {
 
 /** 管理 Renderer 根状态，并把异步 IPC 细节隔离在视图组件之外。 */
 export function use_desktop_controller(): DesktopViewController {
+  const [notification_state, set_notification_state] = useState<DesktopNotificationState>(default_notification_state);
   const [agents, set_agents] = useState<DesktopAgentSummary[]>([]);
   const [workspaces, set_workspaces] = useState<DesktopWorkspaceSummary[]>([]);
   const [groups, set_groups] = useState<DesktopGroupSummary[]>([]);
@@ -172,6 +179,7 @@ export function use_desktop_controller(): DesktopViewController {
   const deleted_session_keys_ref = useRef(new Set<string>());
   const processing_queue_ref = useRef(new Set<string>());
   const hydrated_navigation_keys_ref = useRef(new Set<string>());
+  const active_group_session_ids_ref = useRef(new Map<string, string>());
   const previous_selection_ref = useRef<NavigationTarget | null>(null);
   const selection_by_sidebar_mode_ref = useRef<Partial<Record<SidebarMode, NavigationTarget>>>({});
 
@@ -179,6 +187,42 @@ export function use_desktop_controller(): DesktopViewController {
   useEffect(() => { queue_ref.current = queued_messages_by_session; }, [queued_messages_by_session]);
   useEffect(() => { queue_paused_ref.current = queue_paused_by_session; }, [queue_paused_by_session]);
   useEffect(() => { history_ref.current = history_by_session; }, [history_by_session]);
+  useEffect(() => {
+    let active = true;
+    const commit_notification_state = (next: DesktopNotificationState) => {
+      if (!active) return;
+      set_notification_state((current) => next.revision >= current.revision ? next : current);
+    };
+    const unsubscribe = window.downcity.notification.subscribe(commit_notification_state);
+    void window.downcity.notification.get_state().then(commit_notification_state).catch((reason) => {
+      if (active) set_error(to_error_message(reason));
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  /** 向主进程报告当前实际可见的通知目标，由 Notification 统一完成已读收口。 */
+  useEffect(() => {
+    const report_view_state = () => {
+      const target = notification_target_from_navigation(selection, plugin_routes);
+      void window.downcity.notification.set_view_state({
+        ...(target ? { target } : {}),
+        visible: Boolean(target && document.visibilityState === "visible" && document.hasFocus()),
+      }).catch(() => undefined);
+    };
+    report_view_state();
+    document.addEventListener("visibilitychange", report_view_state);
+    window.addEventListener("focus", report_view_state);
+    window.addEventListener("blur", report_view_state);
+    return () => {
+      document.removeEventListener("visibilitychange", report_view_state);
+      window.removeEventListener("focus", report_view_state);
+      window.removeEventListener("blur", report_view_state);
+      void window.downcity.notification.set_view_state({ visible: false }).catch(() => undefined);
+    };
+  }, [plugin_routes, selection]);
   useEffect(() => {
     if (!selection) return;
     const target_mode = get_sidebar_mode_for_target(selection);
@@ -304,14 +348,14 @@ export function use_desktop_controller(): DesktopViewController {
 
   useEffect(() => {
     const unsubscribe = window.downcity.group.subscribe((event) => {
+      const active_session_id = active_group_session_ids_ref.current.get(event.group_id);
+      if (!active_session_id || active_session_id !== event.session_id) return;
       if (event.type === "interaction") {
         set_group_interactions_by_group((current) => ({ ...current, [event.group_id]: [...(current[event.group_id] ?? []).filter((item) => item.part.interaction_id !== event.request.interaction_id), { agent_id: event.agent_id, part: { part_id: `group-interaction:${event.request.interaction_id}`, sequence: 1, type: "interaction", interaction_id: event.request.interaction_id, interaction_type: event.request.type, status: "pending", request: event.request } }] }));
         return;
       }
       if (event.type === "status") {
-        const { group_id, session_id, members } = event;
-        const current_group = groups_by_id[group_id];
-        if (current_group?.active_session_id && current_group.active_session_id !== session_id) return;
+        const { group_id, members } = event;
         set_group_member_statuses_by_group((current) => ({ ...current, [group_id]: members.filter((status) => status.running) }));
         set_group_phase_by_group((current) => ({ ...current, [group_id]: event.phase }));
         if (event.phase === "dispatched" && event.dispatched_member_ids) {
@@ -324,9 +368,7 @@ export function use_desktop_controller(): DesktopViewController {
         }
         return;
       }
-      const { group_id, session_id, message } = event;
-      const current_group = groups_by_id[group_id];
-      if (current_group?.active_session_id && current_group.active_session_id !== session_id) return;
+      const { group_id, message } = event;
       set_group_messages_by_group((current) => ({
         ...current,
         [group_id]: [...(current[group_id] ?? []), message],
@@ -336,7 +378,7 @@ export function use_desktop_controller(): DesktopViewController {
         : current);
     });
     return unsubscribe;
-  }, [groups_by_id]);
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -1481,6 +1523,7 @@ export function use_desktop_controller(): DesktopViewController {
   }, []);
 
   return {
+    notification_state,
     agents,
     workspaces,
     groups,

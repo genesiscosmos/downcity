@@ -5,6 +5,8 @@ import type {
   PluginMainAction,
   PluginMainContext,
   PluginMainModule,
+  PluginNotificationInput,
+  PluginNotificationTopicInput,
 } from "@downcity/plugin";
 import type { PluginJsonValue } from "@downcity/plugin";
 
@@ -53,4 +55,16 @@ export interface PluginMainRuntimeOptions {
     /** 可选 action 输入。 */
     readonly input?: PluginJsonValue;
   }) => Promise<PluginJsonValue>;
+
+  /** 发布一条已绑定来源 Plugin 的宿主通知。 */
+  readonly publish_notification: (
+    plugin_id: string,
+    input: PluginNotificationInput,
+  ) => Promise<void>;
+
+  /** 清除当前 Plugin 命名空间内一个通知主题。 */
+  readonly dismiss_notification: (
+    plugin_id: string,
+    input: PluginNotificationTopicInput,
+  ) => Promise<void>;
 }

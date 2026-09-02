@@ -6,14 +6,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { define_plugin_renderer, type PluginRendererUiComponents } from "@downcity/plugin/react";
+import { define_plugin_renderer, type PluginRendererNotification, type PluginRendererUiComponents } from "@downcity/plugin/react";
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "@/task/types/TaskCommand.js";
 import type { TaskMainviewEditorDraft, TaskMainviewHistorySnapshot, TaskMainviewItem, TaskMainviewMutationResult, TaskMainviewRunDetailSnapshot, TaskMainviewSnapshot } from "@/task/types/TaskMainview.js";
 import { TaskEditor } from "@/task/renderer/TaskEditor.js";
 
 /** Task Plugin Renderer 定义。 */
 export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
-  sidebar: function TaskPluginSidebar({ plugin, navigation, ui }) {
+  sidebar: function TaskPluginSidebar({ plugin, navigation, notifications, ui }) {
     const { Callout, ItemMenu, LoadingState, Sidebar, SidebarSection, SidebarTreeItem } = ui.components;
     const [snapshot, set_snapshot] = useState<TaskMainviewSnapshot>();
     const [loaded_revision, set_loaded_revision] = useState(-1);
@@ -86,9 +86,13 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
       <SidebarSection label="Agents">
         {snapshot.agents.map((agent) => {
           const expanded = expanded_agent_ids.has(agent.agent_id);
+          const agent_has_unread = notifications.some((notification) => read_route(notification.route.agent_id) === agent.agent_id);
           return <div key={agent.agent_id}>
-            <SidebarTreeItem depth={0} kind="branch" label={agent.agent_id} trailing={agent.tasks.length} active={agent.agent_id === agent_id && !task_title} expanded={expanded} on_toggle={() => set_expanded_agent_ids((current) => toggle_key(current, agent.agent_id))} on_select={() => navigation.navigate(agent_route(agent.agent_id))} />
-            {expanded ? <div className="flex flex-col gap-0.5">{agent.tasks.map((task) => <SidebarTreeItem key={task.title} kind="leaf" depth={1} label={task.title} trailing={task_menu(task)} active={agent.agent_id === agent_id && task.title === task_title} on_select={() => navigation.navigate(task_route(agent.agent_id, task.title))} />)}</div> : null}
+            <SidebarTreeItem depth={0} kind="branch" label={agent.agent_id} trailing={<span className="flex items-center gap-1.5">{agent_has_unread ? <UnreadDot /> : null}<span>{agent.tasks.length}</span></span>} active={agent.agent_id === agent_id && !task_title} expanded={expanded} on_toggle={() => set_expanded_agent_ids((current) => toggle_key(current, agent.agent_id))} on_select={() => navigation.navigate(agent_route(agent.agent_id))} />
+            {expanded ? <div className="flex flex-col gap-0.5">{agent.tasks.map((task) => {
+              const notification = find_task_notification(notifications, agent.agent_id, task.title);
+              return <SidebarTreeItem key={task.title} kind="leaf" depth={1} label={task.title} trailing={<span className="flex items-center gap-0.5">{notification ? <UnreadDot /> : null}{task_menu(task)}</span>} active={agent.agent_id === agent_id && task.title === task_title} on_select={() => navigation.navigate(notification?.route ?? task_route(agent.agent_id, task.title))} />;
+            })}</div> : null}
             {expanded && agent.tasks.length === 0 ? <div style={{ paddingLeft: 24 }}><div className="flex min-h-8 items-center rounded-lg py-0.5 pl-2 pr-1 text-[10px] text-muted-foreground/50">没有 Task</div></div> : null}
           </div>;
         })}
@@ -98,7 +102,7 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
     </Sidebar>;
   },
 
-  mainview: function TaskPluginMainview({ plugin, navigation, ui }) {
+  mainview: function TaskPluginMainview({ plugin, navigation, notifications, ui }) {
     const { Button, Callout, CodeBlock, EmptyState, Group, ItemMenu, LoadingState, MainviewSidebar, MainviewSidebarItem, Markdown, Page, Row, Section, Status, Toolbar } = ui.components;
     const agent_id = read_route(navigation.route.agent_id);
     const task_title = read_route(navigation.route.task_title);
@@ -282,12 +286,18 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
       <Toolbar title={agent.agent_id} description={`${agent.tasks.length} Tasks`} actions={<Button variant="primary" disabled={!snapshot.workspaces.length} on_click={() => navigation.navigate(create_task_route(agent.agent_id))}>新建 Task</Button>} />
       {error ? <Callout tone="danger">{error}</Callout> : null}
       {!agent.tasks.length ? <EmptyState title="这个 Agent 还没有 Task" description="创建一个手动、定时或脚本 Task。" action={<Button variant="primary" disabled={!snapshot.workspaces.length} on_click={() => navigation.navigate(create_task_route(agent.agent_id))}>新建 Task</Button>} />
-        : <Group>{agent.tasks.map((item) => <Row key={item.title} label={item.title} description={`${item.description} · ${workspace_name(snapshot, item.workspace_id)}`} trailing={task_menu(item, true)} on_click={() => navigation.navigate(task_route(agent.agent_id, item.title))} />)}</Group>}
+        : <Group>{agent.tasks.map((item) => {
+          const notification = find_task_notification(notifications, agent.agent_id, item.title);
+          return <Row key={item.title} label={item.title} description={`${item.description} · ${workspace_name(snapshot, item.workspace_id)}`} trailing={<>{notification ? <UnreadDot /> : null}{task_menu(item, true)}</>} on_click={() => navigation.navigate(notification?.route ?? task_route(agent.agent_id, item.title))} />;
+        })}</Group>}
     </Page>;
 
     const history_sidebar = <>
       <MainviewSidebarItem label="任务详情" description={task.when} active={view === "task" || view === "edit"} on_select={() => navigation.navigate(task_definition_route(agent.agent_id, task.title))} />
-      {visible_history.map((run) => <MainviewSidebarItem key={run.timestamp} label={format_run_time(run.started_at)} description={`${run_status_label(run.status)} · ${trigger_label(run.trigger)}${run.duration_ms !== undefined ? ` · ${format_duration(run.duration_ms)}` : ""}`} trailing={run.status === "running" ? <Status tone="warning">运行中</Status> : undefined} active={view === "run" && run_timestamp === run.timestamp} on_select={() => navigation.navigate(task_run_route(agent.agent_id, task.title, run.timestamp))} />)}
+      {visible_history.map((run) => {
+        const unread = Boolean(find_task_notification(notifications, agent.agent_id, task.title, run.timestamp));
+        return <MainviewSidebarItem key={run.timestamp} label={format_run_time(run.started_at)} description={`${run_status_label(run.status)} · ${trigger_label(run.trigger)}${run.duration_ms !== undefined ? ` · ${format_duration(run.duration_ms)}` : ""}`} trailing={run.status === "running" ? <Status tone="warning">运行中</Status> : unread ? <UnreadDot /> : undefined} active={view === "run" && run_timestamp === run.timestamp} on_select={() => navigation.navigate(task_run_route(agent.agent_id, task.title, run.timestamp))} />;
+      })}
       {view === "run_pending" ? <MainviewSidebarItem label="正在启动…" description="等待执行记录" active disabled on_select={() => {}} /> : null}
       {!history_loading && loaded_history_key === history_key && visible_history.length === 0 && view !== "run_pending" ? <div className="px-2 py-6 text-center text-[10px] text-muted-foreground/55">暂无执行记录</div> : null}
       {(history_loading || loaded_history_key !== history_key) && visible_history.length === 0 ? <LoadingState label="正在读取执行记录…" /> : null}
@@ -376,6 +386,19 @@ function edit_task_route(agent_id: string, task_title: string) { return { agent_
 function pending_run_route(agent_id: string, task_title: string, run_started_at: number) { return { agent_id, task_title, view: "run_pending", run_started_at }; }
 /** 创建单次 Task Run 详情路由。 */
 function task_run_route(agent_id: string, task_title: string, run_timestamp: string) { return { agent_id, task_title, view: "run", run_timestamp }; }
+/** 查找一个 Task 或具体 Run 对应的未读通知。 */
+function find_task_notification(
+  notifications: readonly PluginRendererNotification[],
+  agent_id: string,
+  task_title: string,
+  run_timestamp?: string,
+): PluginRendererNotification | undefined {
+  return notifications.find((notification) => read_route(notification.route.agent_id) === agent_id
+    && read_route(notification.route.task_title) === task_title
+    && (run_timestamp === undefined || read_route(notification.route.run_timestamp) === run_timestamp));
+}
+/** Task 导航中统一使用的未读蓝点。 */
+function UnreadDot() { return <span aria-label="未读" className="inline-block size-1.5 shrink-0 rounded-full bg-blue-500" />; }
 /** 将未知失败转换为用户可见错误文本。 */
 function to_error_message(reason: unknown): string { return reason instanceof Error ? reason.message : String(reason); }
 /** 将执行状态转换为中文标签。 */

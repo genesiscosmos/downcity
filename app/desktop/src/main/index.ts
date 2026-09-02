@@ -12,6 +12,9 @@ import {
   register_plugin_renderer_scheme,
 } from "@/plugin/PluginRendererProtocol.js";
 import { DesktopGlobalEnvController } from "@/settings/DesktopGlobalEnvController.js";
+import { DesktopAppBadge } from "@/notification/DesktopAppBadge.js";
+import { DesktopNotificationCenter } from "@/notification/DesktopNotificationCenter.js";
+import { NotificationStore } from "@/notification/NotificationStore.js";
 import { read_city_host_state, request_city_host_shutdown } from "@downcity/agent/city";
 import type {
   DesktopChatInput,
@@ -20,18 +23,22 @@ import type {
   DesktopLoginStartInput,
   DesktopGroupEvent,
 } from "../common/types/DesktopApi.js";
+import type { DesktopNotificationState, DesktopNotificationViewState } from "../common/types/DesktopNotification.js";
 import type { RespondSessionInteractionInput, SessionApprovalMode } from "@downcity/agent";
 
 const current_directory = path.dirname(fileURLToPath(import.meta.url));
 const development_macos_icon_path = path.join(current_directory, "../../build/icon.iconset/icon_512x512@2x.png");
 const development_window_icon_path = path.join(current_directory, "../../build/icons/512x512.png");
 let agent_controller: AgentController | undefined;
+let notification_center: DesktopNotificationCenter | undefined;
 const local_data = create_desktop_local_data();
 const settings_controller = new DesktopSettingsController(local_data);
 const global_env_controller = new DesktopGlobalEnvController(local_data);
 const plugin_controller = new PluginController(
   local_data,
   async (input) => await require_agent_controller().invoke_plugin_action(input),
+  async (plugin_id, input) => require_notification_center().publish_plugin_notification(plugin_id, input),
+  async (plugin_id, input) => require_notification_center().dismiss_plugin_notification(plugin_id, input.topic_key),
 );
 let user_controller: DesktopUserController;
 let quitting = false;
@@ -39,7 +46,7 @@ let quitting = false;
 register_plugin_renderer_scheme();
 
 /** 向全部仍存活的 Renderer 广播一条安全事件。 */
-function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupEvent): void {
+function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupEvent | DesktopNotificationState): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.webContents.isDestroyed()) window.webContents.send(channel, payload);
   }
@@ -69,8 +76,12 @@ function create_window(): BrowserWindow {
   });
   if (process.env.ELECTRON_RENDERER_URL) window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else window.loadFile(path.join(current_directory, "../renderer/index.html"));
+  const view_id = window.webContents.id;
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.once("ready-to-show", () => window.show());
+  // 关键点（中文）：窗口失焦由主进程同步撤销可见目标，避免 Renderer IPC 到达前误判为已读。
+  window.on("blur", () => notification_center?.set_view_state(view_id, { visible: false }));
+  window.webContents.once("destroyed", () => notification_center?.remove_view(view_id));
   return window;
 }
 
@@ -78,6 +89,12 @@ function create_window(): BrowserWindow {
 function require_agent_controller(): AgentController {
   if (!agent_controller) throw new Error("Desktop Agent controller is not ready");
   return agent_controller;
+}
+
+/** 返回拥有通知状态和生产者生命周期的 Desktop Notification 门面。 */
+function require_notification_center(): DesktopNotificationCenter {
+  if (!notification_center) throw new Error("Desktop Notification center is not ready");
+  return notification_center;
 }
 
 ipcMain.handle("system:open-external-url", async (_event, value: string) => {
@@ -90,13 +107,25 @@ ipcMain.handle("system:open-local-file", async (_event, value: string) => {
   const error = await shell.openPath(path.normalize(value));
   if (error) throw new Error(error);
 });
+ipcMain.handle("notification:get-state", () => require_notification_center().get_state());
+ipcMain.handle("notification:set-view-state", (event, state: DesktopNotificationViewState) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  require_notification_center().set_view_state(event.sender.id, {
+    ...state,
+    visible: Boolean(state?.visible && window?.isVisible() && window.isFocused()),
+  });
+});
 
 ipcMain.handle("agent:list", () => require_agent_controller().list_agents());
 ipcMain.handle("agent:get", (_event, agent_id: string) => require_agent_controller().get_agent(agent_id));
 ipcMain.handle("agent:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateAgentInput) => require_agent_controller().create_agent(input));
 ipcMain.handle("agent:generate-draft", (_event, input: import("../common/types/DesktopApi.js").DesktopGenerateAgentDraftInput) => require_agent_controller().generate_agent_draft(input));
 ipcMain.handle("agent:update", (_event, agent_id: string, input: import("../common/types/DesktopApi.js").DesktopUpdateAgentInput) => require_agent_controller().update_agent(agent_id, input));
-ipcMain.handle("agent:remove", (_event, agent_id: string) => require_agent_controller().remove_agent(agent_id));
+ipcMain.handle("agent:remove", async (_event, agent_id: string) => {
+  const removed = await require_agent_controller().remove_agent(agent_id);
+  if (removed) require_notification_center().handle_agent_removed(agent_id);
+  return removed;
+});
 ipcMain.handle("agent:choose-avatar", async (_event, agent_id: string) => {
   const result = await dialog.showOpenDialog({
     properties: ["openFile"],
@@ -141,8 +170,15 @@ ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: s
 ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id));
 ipcMain.handle("chat:rewrite-session-message", (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput) => require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input));
 ipcMain.handle("chat:rename-session", (_event, agent_id: string, workspace_id: string, session_id: string, title: string) => require_agent_controller().rename_session(agent_id, workspace_id, session_id, title));
-ipcMain.handle("chat:archive-session", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().archive_session(agent_id, workspace_id, session_id));
-ipcMain.handle("chat:remove-session", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().remove_session(agent_id, workspace_id, session_id));
+ipcMain.handle("chat:archive-session", async (_event, agent_id: string, workspace_id: string, session_id: string) => {
+  await require_agent_controller().archive_session(agent_id, workspace_id, session_id);
+  require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id);
+});
+ipcMain.handle("chat:remove-session", async (_event, agent_id: string, workspace_id: string, session_id: string) => {
+  const removed = await require_agent_controller().remove_session(agent_id, workspace_id, session_id);
+  require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id);
+  return removed;
+});
 ipcMain.handle("chat:list-archived-sessions", (_event, agent_id: string, workspace_id: string) => require_agent_controller().list_archived_sessions(agent_id, workspace_id));
 ipcMain.handle("chat:get-snapshot", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_chat_snapshot(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:get-history", (_event, agent_id: string, workspace_id: string, session_id: string, before_sequence: number) => require_agent_controller().get_chat_history(agent_id, workspace_id, session_id, before_sequence));
@@ -234,10 +270,21 @@ app.whenReady().then(async () => {
   const current_settings = settings_controller.get();
   await apply_proxy_settings(current_settings.proxy_enabled, current_settings.proxy_url);
   await prepare_city_host();
+  const next_notification_center = new DesktopNotificationCenter(
+    new NotificationStore(local_data.settings),
+    new DesktopAppBadge(app),
+    { state_changed: (state) => broadcast("notification:state", state) },
+  );
+  notification_center = next_notification_center;
   const next_agent_controller = new AgentController(local_data, {
     mutation: (event) => broadcast("chat:mutation", event),
-    runtime: (event) => broadcast("chat:runtime", event),
+    runtime: (event) => {
+      next_notification_center.handle_session_runtime(event.runtime);
+      broadcast("chat:runtime", event);
+    },
     group_event: (event) => broadcast("group:event", event),
+    plugin_notification: async (plugin_id, agent_id, input) => next_notification_center.publish_agent_plugin_notification(plugin_id, agent_id, input),
+    plugin_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
   });
   agent_controller = next_agent_controller;
   user_controller = new DesktopUserController(local_data, () => next_agent_controller.has_active_sessions());
