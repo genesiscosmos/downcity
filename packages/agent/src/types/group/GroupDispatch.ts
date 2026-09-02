@@ -1,13 +1,14 @@
 /**
  * GroupSession 内部调度协议。
  *
- * 调度不是独立 Session，只是 GroupSession 根据共享消息和成员快照计算下一步响应图的
+ * 调度不是独立 Session，只是 GroupSession 根据共享消息和成员画像计算下一步阶段计划的
  * 内部运行过程。本模块描述该过程的输入、结果与持久化记录。
  */
 
-import type { Agent } from "@/agent/Agent.js";
 import type { GroupMessage } from "@/types/group/Group.js";
 import type {
+  DispatchGroupProfile,
+  DispatchMemberProfile,
   DispatchDecision,
   DispatchStrategy,
   DispatchTrigger,
@@ -59,14 +60,16 @@ export interface GroupDispatchRuntimeOptions {
 
 /** GroupSession 提交给调度策略的一次不可变输入快照。 */
 export interface GroupDispatchInput {
+  /** 当前 Group 的只读语义画像。 */
+  readonly group: DispatchGroupProfile;
   /** 本次调度由用户消息还是自动传播触发。 */
   readonly trigger: DispatchTrigger;
   /** 当前调度所围绕的 GroupMessage。 */
-  readonly message: GroupMessage;
+  readonly current_message: GroupMessage;
   /** 当前调度需要一起判断的新增 GroupMessage。 */
   readonly pending_messages: readonly GroupMessage[];
-  /** 当前 GroupSession 的完整共享消息快照。 */
-  readonly messages: readonly GroupMessage[];
-  /** 当前 Group 的成员快照。 */
-  readonly members: readonly Agent[];
+  /** 本批新增消息之前的最近 Group 对话。 */
+  readonly history: readonly GroupMessage[];
+  /** 当前 Group 成员的只读语义画像。 */
+  readonly members: readonly DispatchMemberProfile[];
 }

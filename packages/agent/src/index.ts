@@ -11,9 +11,11 @@
 export { Agent } from "./agent/Agent.js";
 export { Group } from "./group/Group.js";
 export type {
+  DispatchAssignment,
   DispatchDecision,
-  DispatchNode,
-  DispatchResponseMode,
+  DispatchGroupProfile,
+  DispatchMemberProfile,
+  DispatchStage,
   DispatchTrigger,
   DispatchStrategy,
   AiDispatchStrategyOptions,

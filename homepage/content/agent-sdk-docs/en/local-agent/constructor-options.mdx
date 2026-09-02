@@ -1,6 +1,6 @@
 ---
 title: Agent Constructor Options
-description: Detailed explanation of Workspace env, WorkspaceTools, and local Agent id, instruction, model, tools, and plugins
+description: Detailed explanation of Workspace env, WorkspaceTools, and local Agent identity, description, instruction, model, tools, and plugins
 ---
 
 # Agent Constructor Options
@@ -17,6 +17,8 @@ const workspace = new Workspace({
 
 const agent = new Agent({
   id,
+  name,
+  description,
   model,
   instruction,
   tools,
@@ -43,6 +45,21 @@ Recommended properties:
 - not changed casually
 
 That is because it directly controls the session storage partition.
+
+## `name` and `description`
+
+`name` is the user-visible Agent name and falls back to `id` when omitted or empty. `description` is a concise capability profile used by hosts for display and by Group dispatch when selecting members semantically.
+
+```ts
+const reviewer = new Agent({
+  id: "reviewer",
+  name: "Code Reviewer",
+  description: "Reviews code quality, test coverage, and delivery risks",
+  instruction: "Give concrete, actionable review suggestions.",
+});
+```
+
+`description` does not become a regular AgentSession system instruction and does not replace `instruction`: the former says what the Agent is suited for, while the latter controls how it works. Group dispatch sees only member `id/name/description`, not the complete `instruction`.
 
 ## `workspace` and `agent.sessions.create({ workspace })`
 

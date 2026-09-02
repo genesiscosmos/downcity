@@ -20,29 +20,58 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 
 ## Group 与 GroupSession
 
-`Group` 是具有集体主体性的协作主体，拥有自己的 `model` 和 `GroupSession` 集合。`Group.model` 专门用于理解群聊意图并选择投递成员；默认使用 AI 调度。调度由 GroupSession 自身拥有，负责根据当前对话和成员快照计算下一步响应图，并统一处理调度 Turn 排队、持久化和停止。AI 调度在同一 Turn 内通过强制的 `dispatch_group` tool call 提交最小投递计划；如果模型先返回普通文本或无效参数，调度策略会把协议错误交还模型纠正，仍未获得有效调用时才记录明确失败。系统不会自动切换到另一套调度规则；如需自定义行为，应显式提供 `dispatch_strategy`，并让异步策略响应输入中的 `abort_signal`。成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
+`Group` 是具有集体主体性的协作主体，拥有自己的 `model` 和 `GroupSession` 集合。`Group.model` 专门用于理解群聊意图并选择投递成员；默认使用 AI 调度。调度由 GroupSession 自身拥有，负责根据 Group 目标、当前对话和成员的 `id/name/description` 计算有限阶段计划，并统一处理调度 Turn 排队、持久化和停止。Agent 的 `description` 是供展示和语义选择使用的能力简介，不会替代决定 Agent 行为的 `instruction`。AI 调度在同一 Turn 内通过强制的 `dispatch_group` tool call 提交计划；如果模型先返回普通文本或无效参数，调度策略会把协议错误交还模型纠正，仍未获得有效调用时才记录明确失败。系统不会自动切换到另一套调度规则；如需自定义行为，应显式提供 `dispatch_strategy`，并让异步策略响应输入中的 `abort_signal`。成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin
 和工具调用复制进群聊历史。`GroupSession` 的 `prompt()` 只负责立即写入用户消息并启动异步调度；多个调用可以同时进入。GroupSession 只运行一个全局 auto dispatch，在当前成员执行完成后统一判断下一步；消息和 Group/成员运行态统一通过
 `subscribe()` 订阅。
 
-`dispatch_group` 的输入只有 `steps` 和 `next`：`steps` 是二维数组，外层阶段按顺序执行，同一阶段数组内的成员并行执行；`next` 为 `continue` 时才允许全局 auto dispatch 继续判断。例如：
+`dispatch_group` 提交 `reason`、`stages` 和 `next`。`stages` 按顺序执行，同一阶段的 `assignments` 并行执行；每个 assignment 都包含成员 ID 和该成员要直接完成的具体任务。例如：
 
 ```json
 {
-  "steps": [
-    ["architect"],
-    ["reviewer"]
+  "reason": "先形成方案，再基于方案做质量审查",
+  "stages": [
+    {
+      "assignments": [
+        { "member_id": "architect", "instruction": "设计实现方案并说明关键取舍" }
+      ]
+    },
+    {
+      "assignments": [
+        { "member_id": "reviewer", "instruction": "基于上一阶段方案识别风险并给出结论" }
+      ]
+    }
   ],
   "next": "stop"
 }
 ```
 
-同一个成员可以出现在不同阶段，例如 `[["architect"], ["developer"], ["architect"], ["reviewer"]]` 表示回复沿着 `architect -> developer -> architect -> reviewer` 继续传播；同一阶段内不要重复同一个成员。
+同一个成员可以出现在不同阶段，但同一阶段内不能重复。已知的连续步骤应一次放入多个 stages；`next: "continue"` 只用于下一步成员选择必须依赖本轮真实输出的场景。当前对话已经满足用户意图时使用空 `stages` 和 `next: "stop"`；所列 stages 执行后即可完成时也使用 `stop`。调度次数上限与重复路径检测只是异常熔断，不是正常停止条件。
 
-调度器是“是否发言”的唯一决策边界。成员一旦出现在 `steps` 中，就必须针对当前消息回复，不会在自己的 AgentSession 中再次判断是否需要发言。被选中的成员未生成有效文本时，GroupSession 会把它记录为执行失败；空 `steps` 才表示本轮不需要任何成员回复。
+调度器是“谁执行什么任务、何时停止”的唯一决策边界。成员一旦收到 assignment，就直接完成该任务，不会在自己的 AgentSession 中再次判断是否需要发言。被选中的成员未生成有效文本时，GroupSession 会把它记录为执行失败，并停止后续阶段。
+
+自定义 `DispatchStrategy` 接收 `group`、`trigger`、`current_message`、`history`、`pending_messages`、成员画像和 `abort_signal`。其中 `history` 已排除本批新增消息，成员画像只包含 `agent_id/name/description`，不会暴露完整 Agent：
 
 ```ts
-const lead = new Agent({ id: "lead", model });
-const reviewer = new Agent({ id: "reviewer", model });
+const dispatch_strategy: DispatchStrategy = {
+  decide_dispatch({ current_message, members }) {
+    return {
+      reason: `由 ${members[0].name} 处理当前请求`,
+      stages: [{
+        stage_id: `reply-${current_message.id}`,
+        assignments: [{
+          member_id: members[0].agent_id,
+          instruction: "直接完成用户当前请求",
+        }],
+      }],
+      terminal: true,
+    };
+  },
+};
+```
+
+```ts
+const lead = new Agent({ id: "lead", name: "负责人", description: "负责拆解目标并形成实现方案", model });
+const reviewer = new Agent({ id: "reviewer", name: "审查员", description: "负责审查质量与风险", model });
 city.agents.add(lead);
 city.agents.add(reviewer);
 

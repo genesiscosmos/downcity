@@ -40,6 +40,20 @@ export interface AgentOptions {
   id: string;
 
   /**
+   * 当前 Agent 的用户可见名称。
+   *
+   * 省略或传入空字符串时使用 `id`；Group 调度会使用该名称理解成员身份。
+   */
+  name?: string;
+
+  /**
+   * 当前 Agent 的一句话能力描述。
+   *
+   * 该字段用于展示和 Group 语义调度，不替代决定 Agent 行为的 `instruction`。
+   */
+  description?: string;
+
+  /**
    * 当前 agent 默认可用的工具集合。
    *
    * 关键点（中文）

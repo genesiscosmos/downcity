@@ -1,6 +1,6 @@
 ---
 title: Agent 构造参数
-description: 详细说明 Workspace env、WorkspaceTools 以及本地 Agent 的 id、instruction、model、tools 和 plugins 参数
+description: 详细说明 Workspace env、WorkspaceTools 以及本地 Agent 的身份、描述、instruction、model、tools 和 plugins 参数
 ---
 
 # Agent 构造参数
@@ -17,6 +17,8 @@ const workspace = new Workspace({
 
 const agent = new Agent({
   id,
+  name,
+  description,
   model,
   instruction,
   tools,
@@ -43,6 +45,21 @@ agent 的稳定标识。
 - 不要随便改
 
 因为它直接决定了 session 落盘目录分区。
+
+## `name` 与 `description`
+
+`name` 是 Agent 的用户可见名称；省略或传入空字符串时回退到 `id`。`description` 是一句话能力简介，供宿主展示，也供 Group 调度器根据语义选择成员。
+
+```ts
+const reviewer = new Agent({
+  id: "reviewer",
+  name: "代码审查员",
+  description: "负责审查代码质量、测试覆盖和交付风险",
+  instruction: "审查时给出具体、可执行的修改建议。",
+});
+```
+
+`description` 不会进入普通 AgentSession 的 system 指令，也不替代 `instruction`：前者描述“这个 Agent 适合做什么”，后者约束“这个 Agent 应该如何工作”。Group 调度只读取成员的 `id/name/description`，不会读取完整 `instruction`。
 
 ## `workspace` 与 `agent.sessions.create({ workspace })`
 

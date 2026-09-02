@@ -13,7 +13,12 @@ import type {
   GroupTurnRuntime,
   GroupSessionContract,
 } from "@/types/group/GroupSession.js";
-import type { DispatchDecision, DispatchNode, DispatchStrategy } from "@/types/group/DispatchStrategy.js";
+import type {
+  DispatchAssignment,
+  DispatchDecision,
+  DispatchStage,
+  DispatchStrategy,
+} from "@/types/group/DispatchStrategy.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
@@ -442,16 +447,26 @@ export class GroupSession implements GroupSessionContract {
     message: GroupMessage,
     pending_messages: readonly GroupMessage[],
   ): Promise<GroupDispatchResult> {
+    const pending_message_ids = new Set(pending_messages.map((item) => item.id));
     return await this.dispatch_runtime.decide({
+      group: {
+        group_id: this.group_id,
+        name: this.group_name,
+        ...(this.instruction ? { instruction: this.instruction } : {}),
+      },
       trigger,
-      message,
+      current_message: message,
       pending_messages,
-      messages: await this.messages(),
-      members: this.members,
+      history: this.messages_by_id.filter((item) => !pending_message_ids.has(item.id)),
+      members: this.members.map((member) => ({
+        agent_id: member.id,
+        name: member.name,
+        description: member.description,
+      })),
     });
   }
 
-  /** 执行当前响应图；节点依赖只影响投递顺序，不创建额外的调度循环。 */
+  /** 顺序执行有限阶段计划；任一阶段没有有效输出时不再执行后续阶段。 */
   private async run_dispatch_plan(
     decision: DispatchDecision,
     source_message: GroupMessage,
@@ -459,71 +474,45 @@ export class GroupSession implements GroupSessionContract {
     turn_id?: string,
     dispatch_id?: string,
   ): Promise<readonly GroupMessage[]> {
-    const node_promises = new Map<string, Promise<void>>();
-    const nodes_by_id = new Map(decision.nodes.map((node) => [node.node_id, node]));
-    const node_outputs = new Map<string, GroupMessage[]>();
-    const resolving_node_ids = new Set<string>();
-    const run_node = (node: DispatchNode): Promise<void> => {
-      const cached = node_promises.get(node.node_id);
-      if (cached) return cached;
-      if (resolving_node_ids.has(node.node_id)) {
-        return Promise.reject(new Error(`Dispatch graph contains a cycle at node "${node.node_id}"`));
-      }
-      resolving_node_ids.add(node.node_id);
-      const promise = (async () => {
-        try {
-          await Promise.all(node.depends_on_node_ids.map((node_id) => {
-            const dependency = nodes_by_id.get(node_id);
-            if (!dependency) return Promise.reject(new Error(`Dispatch node "${node.node_id}" depends on missing node "${node_id}"`));
-            return run_node(dependency);
-          }));
-          const dependency_messages = node.depends_on_node_ids.flatMap((node_id) => node_outputs.get(node_id) || []);
-          // 依赖表示真实的前置回复；任一前置节点没有有效输出时，下游不应
-          // 退化为重新消费 source_message，否则会形成虚假的串行链路。
-          const dependencies_ready = node.depends_on_node_ids.every((node_id) => (
-            (node_outputs.get(node_id) || []).length > 0
-          ));
-          if (!dependencies_ready) {
-            node_outputs.set(node.node_id, []);
-            return;
-          }
-          const current_message = dependency_messages.at(-1) || source_message;
-          const context_messages = [...base_messages, ...dependency_messages];
-          const outputs = await this.execute_dispatch_node(node, current_message, context_messages, turn_id, dispatch_id);
-          node_outputs.set(node.node_id, outputs);
-        } finally {
-          resolving_node_ids.delete(node.node_id);
-        }
-      })();
-      node_promises.set(node.node_id, promise);
-      return promise;
-    };
-    const promises = decision.nodes.map(run_node);
-    await Promise.all(promises);
-    const depended_node_ids = new Set(
-      decision.nodes.flatMap((node) => node.depends_on_node_ids),
-    );
-    // 只把叶子节点作为下一次 auto dispatch 的 frontier；中间节点的回复
-    // 已经被下游节点消费，不能再次被当作新的群聊发言重复投递。
-    return decision.nodes
-      .filter((node) => !depended_node_ids.has(node.node_id))
-      .flatMap((node) => node_outputs.get(node.node_id) || []);
+    const completed_outputs: GroupMessage[] = [];
+    let stage_outputs: readonly GroupMessage[] = [];
+    for (const [stage_index, stage] of decision.stages.entries()) {
+      const current_message = stage_index === 0
+        ? source_message
+        : stage_outputs.at(-1) || source_message;
+      stage_outputs = await this.execute_dispatch_stage(
+        stage,
+        current_message,
+        [...base_messages, ...completed_outputs],
+        turn_id,
+        dispatch_id,
+      );
+      if (stage_outputs.length === 0) return [];
+      completed_outputs.push(...stage_outputs);
+    }
+    // 只有最后阶段是下一轮语义判断的 frontier；此前阶段已经被后续成员消费。
+    return stage_outputs;
   }
 
-  private async execute_dispatch_node(
-    node: DispatchNode,
+  /** 并行执行一个阶段内的成员专属任务。 */
+  private async execute_dispatch_stage(
+    stage: DispatchStage,
     message: GroupMessage,
     context_messages: readonly GroupMessage[],
     turn_id?: string,
     dispatch_id?: string,
   ): Promise<GroupMessage[]> {
-    const selected_ids = node.response_mode === "single" ? node.member_ids.slice(0, 1) : node.member_ids;
-    const targets = [...new Set(selected_ids)]
-      .map((agent_id) => this.get_member(agent_id))
-      .filter((agent): agent is Agent => Boolean(agent));
-    const prepared_results = await Promise.all(targets.map(async (agent) => {
+    const targets = stage.assignments.map((assignment) => {
+      const agent = this.get_member(assignment.member_id);
+      if (!agent) throw new Error(`Dispatch selected unknown member "${assignment.member_id}"`);
+      return { agent, assignment };
+    });
+    const prepared_results = await Promise.all(targets.map(async ({ agent, assignment }) => {
       try {
-        return { agent, turn: await this.prepare_member_delivery(agent, message, context_messages, node.instruction) } as const;
+        return {
+          agent,
+          turn: await this.prepare_member_delivery(agent, message, context_messages, assignment),
+        } as const;
       } catch (error) {
         await this.append_member_failure(agent, message, error);
         return null;
@@ -536,7 +525,9 @@ export class GroupSession implements GroupSessionContract {
         dispatched_member_ids: prepared_deliveries.map(({ agent }) => agent.id),
       });
     }
-    const execution_results = Promise.all(prepared_deliveries.map(({ agent, turn }) => this.execute_member_delivery(agent, message, turn, turn_id, dispatch_id, node.node_id)));
+    const execution_results = Promise.all(prepared_deliveries.map(({ agent, turn }) => (
+      this.execute_member_delivery(agent, message, turn, turn_id, dispatch_id, stage.stage_id)
+    )));
     const execution = execution_results.then(() => undefined);
     this.active_member_deliveries.add(execution);
     try {
@@ -552,14 +543,14 @@ export class GroupSession implements GroupSessionContract {
     agent: Agent,
     message: GroupMessage,
     context_messages: readonly GroupMessage[],
-    dispatch_instruction: string,
+    assignment: DispatchAssignment,
   ): Promise<Awaited<ReturnType<AgentSession["prompt"]>>> {
     if (this.stop_requested || this.disposed) {
       throw new Error(`GroupSession "${this.id}" is stopping`);
     }
     const session = await this.ensure_member_session(agent);
     return await session.prompt({
-      query: this.build_member_context(agent, message, context_messages, dispatch_instruction),
+      query: this.build_member_context(agent, message, context_messages, assignment.instruction),
     });
   }
 
@@ -570,7 +561,7 @@ export class GroupSession implements GroupSessionContract {
     turn: Awaited<ReturnType<AgentSession["prompt"]>>,
     turn_id?: string,
     dispatch_id?: string,
-    dispatch_node_id?: string,
+    dispatch_stage_id?: string,
   ): Promise<GroupMessage | null> {
     this.set_member_running(agent.id, 1, turn_id);
     let running = true;
@@ -595,7 +586,7 @@ export class GroupSession implements GroupSessionContract {
         reply_to: message.id,
         ...(turn_id ? { turn_id } : {}),
         ...(dispatch_id ? { dispatch_id } : {}),
-        ...(dispatch_node_id ? { dispatch_node_id } : {}),
+        ...(dispatch_stage_id ? { dispatch_stage_id } : {}),
       });
       return reply;
     } catch (error) {
@@ -709,14 +700,21 @@ export class GroupSession implements GroupSessionContract {
       .map((item) => `${item.sender_type === "user" ? "User" : item.sender_id}: ${item.text}`)
       .join("\n");
     return [
+      `Group: ${this.group_name}`,
       this.instruction ? `Group objective: ${this.instruction}` : "",
-      `你是 Group ${this.group_name} 的成员 ${agent.id}。`,
-      "Group conversation:",
-      history,
-      `Current message from ${message.sender_type === "agent" ? message.sender_id : "user"}: ${message.text}`,
+      `Your identity: ${agent.name} (${agent.id})`,
+      `Your description: ${agent.description || "（未提供）"}`,
+      "Conversation:",
+      history || "（无）",
+      "Current message:",
+      `${message.sender_type === "agent" ? message.sender_id : "user"}: ${message.text}`,
+      "Assignment:",
       dispatch_instruction,
-      `你只能代表成员 ${agent.id} 自己发言。不得代替、指挥、裁定、总结或转述其他成员；不得假装自己是其他成员；不得创建队长、裁判或协调者。`,
-      "你已被 Group 调度选中，必须直接回复当前消息。",
+      "Response constraints:",
+      `- 只代表成员 ${agent.id} 自己发言。`,
+      "- 直接完成 Assignment，不判断或改写其他成员的任务。",
+      "- 不代替、指挥、裁定、总结或转述其他成员。",
+      "- 不创建队长、裁判、领导者或协调者角色。",
     ].filter(Boolean).join("\n");
   }
 

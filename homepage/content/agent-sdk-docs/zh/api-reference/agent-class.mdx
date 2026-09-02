@@ -5,12 +5,15 @@ description: 本地 Agent SDK 的核心公开接口
 
 # Agent 类
 
-`Agent` 是本地 SDK 中可跨项目复用的主体，拥有身份、指令、模型、自定义 Tool、Plugin 注册和
+`Agent` 是本地 SDK 中可跨项目复用的主体，拥有稳定 ID、可见名称、能力描述、指令、模型、自定义 Tool、Plugin 注册和
 当前进入的 Workspace 集合，但不拥有永久绑定的 Workspace 或全局 Session 集合。
 
 ## 公开 API
 
 - `new Agent(options)`
+- `agent.id`
+- `agent.name`
+- `agent.description`
 - `agent.sessions.create({ workspace })`
 - `agent.set_instruction(input)`
 - `agent.get_instructions()`
@@ -27,6 +30,8 @@ const session = await agent.sessions.create({ workspace });
 ## 构造参数
 
 - `id`：稳定 Agent 身份和私有数据分区键。
+- `name`：可选的用户可见名称；省略时使用 `id`。
+- `description`：可选的一句话能力简介，供展示与 Group 语义调度使用。
 - `tools`：该 Agent 创建的 Session 可使用的自定义 Tool。
 - `instruction`：Agent 级静态基础指令。
 - `model`：默认 `AgentModel`，本地 Session 可以覆盖。

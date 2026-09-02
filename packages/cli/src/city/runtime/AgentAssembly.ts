@@ -69,6 +69,8 @@ export async function create_cli_agent(input: {
   ]);
   return new Agent({
     id: input.config.agent_id,
+    name: input.config.name,
+    description: input.config.description,
     instruction: input.config.instruction,
     model,
     plugins,

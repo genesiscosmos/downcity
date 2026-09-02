@@ -4,9 +4,11 @@ export { GroupSession } from "./GroupSession.js";
 export { GroupSessions } from "./GroupSessions.js";
 export { AiDispatchStrategy } from "@/types/group/DispatchStrategy.js";
 export type {
+  DispatchAssignment,
   DispatchDecision,
-  DispatchNode,
-  DispatchResponseMode,
+  DispatchGroupProfile,
+  DispatchMemberProfile,
+  DispatchStage,
   DispatchTrigger,
   DispatchStrategy,
   AiDispatchStrategyOptions,

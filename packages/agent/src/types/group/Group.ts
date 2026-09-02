@@ -39,8 +39,8 @@ export interface GroupMessage {
   readonly turn_id?: string;
   /** 可选的自动调度运行标识；自动调度产生的消息使用此标识。 */
   readonly dispatch_id?: string;
-  /** 可选的响应图节点标识。 */
-  readonly dispatch_node_id?: string;
+  /** 可选的调度计划阶段标识。 */
+  readonly dispatch_stage_id?: string;
   /** 创建时间的 Unix 毫秒时间戳。 */
   readonly created_at: number;
 }
@@ -53,7 +53,7 @@ export interface GroupContract {
   readonly name: string;
   /** Group 的协作说明。 */
   readonly instruction?: string;
-  /** Group 用于理解群聊意图并生成成员投递图的模型；未提供时首次调度会失败。 */
+  /** Group 用于理解群聊意图并生成成员阶段计划的模型；未提供时首次调度会失败。 */
   readonly model?: AgentModel;
   /** Group 成员快照。 */
   readonly members: readonly Agent[];

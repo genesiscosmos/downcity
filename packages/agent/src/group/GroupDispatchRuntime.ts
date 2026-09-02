@@ -12,6 +12,10 @@ import type {
   GroupDispatchRuntimeOptions,
   GroupDispatchTurnRecord,
 } from "@/types/group/GroupDispatch.js";
+import type {
+  DispatchDecision,
+  DispatchMemberProfile,
+} from "@/types/group/DispatchStrategy.js";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 
 /** 主动停止 Group 调度时使用的内部错误。 */
@@ -64,7 +68,7 @@ export class GroupDispatchRuntime {
     const queued_turn: GroupDispatchTurnRecord = {
       dispatch_id: `group-dispatch-${nanoid(12)}`,
       trigger: input.trigger,
-      message_id: input.message.id,
+      message_id: input.current_message.id,
       pending_message_ids: input.pending_messages.map((message) => message.id),
       status: "queued",
       created_at,
@@ -115,13 +119,14 @@ export class GroupDispatchRuntime {
       updated_at: Date.now(),
     });
     try {
-      const decision = await this.dispatch_strategy.decide_dispatch({
+      const strategy_decision = await this.dispatch_strategy.decide_dispatch({
         ...input,
         abort_signal: abort_controller.signal,
       });
       if (this.stopping || this.disposed || abort_controller.signal.aborted) {
         throw new GroupDispatchStoppedError();
       }
+      const decision = normalize_dispatch_decision(strategy_decision, input.members);
       await store.append_dispatch_turn({
         ...queued_turn,
         status: "completed",
@@ -172,4 +177,57 @@ export class GroupDispatchRuntime {
     if (this.disposed) throw new Error("GroupDispatchRuntime is disposed");
     if (this.stopping) throw new Error("GroupDispatchRuntime is stopping");
   }
+}
+
+/** 在持久化和执行之前统一校验自定义策略与 AI 策略的调度结果。 */
+function normalize_dispatch_decision(
+  decision: DispatchDecision,
+  members: readonly DispatchMemberProfile[],
+): DispatchDecision {
+  if (typeof decision?.reason !== "string") throw new Error("Group dispatch requires a reason");
+  const reason = decision.reason.trim();
+  if (!reason) throw new Error("Group dispatch requires a non-empty reason");
+  if (!Array.isArray(decision.stages)) throw new Error("Group dispatch requires stages");
+  if (typeof decision.terminal !== "boolean") throw new Error("Group dispatch requires terminal");
+  if (decision.stages.length === 0 && !decision.terminal) {
+    throw new Error("Group dispatch cannot continue without any stage");
+  }
+  const valid_member_ids = new Set(members.map((member) => member.agent_id));
+  const stage_ids = new Set<string>();
+  const stages = decision.stages.map((stage) => {
+    if (typeof stage?.stage_id !== "string") {
+      throw new Error("Group dispatch requires a stage_id");
+    }
+    const stage_id = stage.stage_id.trim();
+    if (!stage_id) throw new Error("Group dispatch requires a non-empty stage_id");
+    if (stage_ids.has(stage_id)) throw new Error(`Group dispatch contains duplicate stage "${stage_id}"`);
+    stage_ids.add(stage_id);
+    if (!Array.isArray(stage.assignments) || stage.assignments.length === 0) {
+      throw new Error(`Group dispatch stage "${stage_id}" requires assignments`);
+    }
+    const selected_member_ids = new Set<string>();
+    const assignments = stage.assignments.map((assignment) => {
+      if (typeof assignment?.member_id !== "string") {
+        throw new Error(`Group dispatch stage "${stage_id}" requires assignment member_id`);
+      }
+      const member_id = assignment.member_id.trim();
+      if (!valid_member_ids.has(member_id)) {
+        throw new Error(`Group dispatch selected unknown member: ${member_id}`);
+      }
+      if (selected_member_ids.has(member_id)) {
+        throw new Error(`Group dispatch selected member more than once in stage "${stage_id}"`);
+      }
+      selected_member_ids.add(member_id);
+      if (typeof assignment.instruction !== "string") {
+        throw new Error(`Group dispatch assignment for "${member_id}" requires an instruction`);
+      }
+      const instruction = assignment.instruction.trim();
+      if (!instruction) {
+        throw new Error(`Group dispatch assignment for "${member_id}" requires an instruction`);
+      }
+      return { member_id, instruction };
+    });
+    return { stage_id, assignments };
+  });
+  return { reason, stages, terminal: decision.terminal };
 }

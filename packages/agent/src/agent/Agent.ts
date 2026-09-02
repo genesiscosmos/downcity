@@ -39,6 +39,12 @@ export class Agent {
   /** Agent 的全局稳定标识。 */
   readonly id: string;
 
+  /** Agent 的用户可见名称。 */
+  readonly name: string;
+
+  /** Agent 的一句话能力描述，供展示与 Group 调度使用。 */
+  readonly description: string;
+
   /** Agent 默认模型；Session 可以显式覆盖。 */
   readonly model?: AgentModel;
 
@@ -78,6 +84,8 @@ export class Agent {
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
+    this.name = String(options.name || "").trim() || this.id;
+    this.description = String(options.description || "").trim();
     initialize_agent_runtime(this);
     this.model = options.model;
     this.web = options.web;

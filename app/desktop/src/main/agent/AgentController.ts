@@ -1045,6 +1045,8 @@ export class AgentController {
     ]);
     return new Agent({
       id: config.agent_id,
+      name: config.name,
+      description: config.description,
       instruction: config.instruction,
       model,
       plugins,
