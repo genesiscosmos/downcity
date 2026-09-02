@@ -89,6 +89,7 @@ export class Session implements AgentSession {
   private readonly workspace_path: string;
   private readonly store: SessionDataStore;
   private readonly get_session_store: SessionOptions["get_session_store"];
+  private readonly register_forked_session: SessionOptions["register_forked_session"];
   private readonly tools: Record<string, Tool>;
   private readonly logger: SessionOptions["logger"];
   private readonly get_managed_plugin_system_blocks: SessionOptions["get_managed_plugin_system_blocks"];
@@ -129,6 +130,7 @@ export class Session implements AgentSession {
     this.workspace_path = String(options.workspace_path || "").trim();
     this.store = options.store;
     this.get_session_store = options.get_session_store;
+    this.register_forked_session = options.register_forked_session;
     this.tools = options.tools;
     this.logger = options.logger;
     this.get_workspace_env = options.get_workspace_env;
@@ -623,6 +625,7 @@ export class Session implements AgentSession {
       await forked.state.set_approval_mode(approval_mode);
       forked.shell_approval_adapter.set_effective_mode(approval_mode);
       await forked.session_messages.import_messages(fork_messages);
+      this.register_forked_session(forked);
       await this.emit_action_event({
         action_id,
         action_type: "history-fork",
@@ -717,6 +720,7 @@ export class Session implements AgentSession {
       origin: this.origin,
       store: this.get_session_store(session_id),
       get_session_store: this.get_session_store,
+      register_forked_session: this.register_forked_session,
       session_id: session_id,
       tools: this.tools,
       logger: this.logger,

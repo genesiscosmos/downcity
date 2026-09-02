@@ -404,6 +404,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       origin,
       store: context.store.session(resolved_session_id, origin, context.workspace_id),
       get_session_store: (session_id) => context.store.session(session_id, origin, context.workspace_id),
+      register_forked_session: (session) => this.register_forked_session(session),
       session_id: resolved_session_id,
       tools: context.tools,
       logger: context.logger,
@@ -419,6 +420,20 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     });
     this.sessions_by_id.set(cache_key, created);
     return created;
+  }
+
+  /** 接管 fork 产生的 Session，确保后续读取与执行使用同一运行时实例。 */
+  private register_forked_session(session: AgentManagedSession): void {
+    if (session.agent_id !== this.agent_id) {
+      throw new Error(`Cannot register Session "${session.id}" for another Agent`);
+    }
+    const cache_key = this.session_cache_key(session.id, session.origin.type);
+    const cached = this.sessions_by_id.get(cache_key);
+    if (cached && cached !== session) {
+      throw new Error(`Session "${session.id}" already has another runtime instance`);
+    }
+    this.sessions_by_id.set(cache_key, session);
+    this.on_session_routed?.(session.id, this);
   }
 
   /** 返回来源分区内唯一的 Session 运行时缓存键。 */

@@ -84,6 +84,15 @@ export interface SessionOptions {
   get_session_store: (session_id: string) => SessionDataStore;
 
   /**
+   * 将 fork 创建的子 Session 交回 AgentSessions 登记。
+   *
+   * 关键点（中文）
+   * - Session 只负责创建子实例，AgentSessions 仍是运行时实例的唯一所有者。
+   * - 登记后再通过 `sessions.get()` 读取时，必须返回同一实例。
+   */
+  register_forked_session: (session: AgentManagedSession) => void;
+
+  /**
    * 当前 session_id。
    */
   session_id: string;
