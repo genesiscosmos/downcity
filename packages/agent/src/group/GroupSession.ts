@@ -18,10 +18,10 @@ import type { WorkspaceBase } from "@downcity/workspace";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
 import {
-  GroupDispatchSession,
+  GroupDispatchRuntime,
   GroupDispatchStoppedError,
-} from "@/group/GroupDispatchSession.js";
-import type { GroupDispatchSessionResult } from "@/types/group/GroupDispatchSession.js";
+} from "@/group/GroupDispatchRuntime.js";
+import type { GroupDispatchResult } from "@/types/group/GroupDispatch.js";
 
 const max_auto_dispatch_count = 32;
 
@@ -52,7 +52,7 @@ export class GroupSession implements GroupSessionContract {
   private readonly group_name: string;
   private readonly instruction?: string;
   private readonly members: readonly Agent[];
-  private readonly dispatch_session: GroupDispatchSession;
+  private readonly dispatch_runtime: GroupDispatchRuntime;
   private readonly workspace?: WorkspaceBase;
   private readonly messages_by_id: GroupMessage[] = [];
   private readonly subscribers = new Set<GroupEventSubscriber>();
@@ -82,7 +82,7 @@ export class GroupSession implements GroupSessionContract {
     this.group_name = options.group_name;
     this.instruction = options.instruction;
     this.members = options.members;
-    this.dispatch_session = new GroupDispatchSession({
+    this.dispatch_runtime = new GroupDispatchRuntime({
       dispatch_strategy: options.dispatch_strategy,
     });
     this.workspace = options.workspace;
@@ -97,7 +97,7 @@ export class GroupSession implements GroupSessionContract {
     if (this.store === store) return this;
     this.store = store;
     await store.initialize();
-    await this.dispatch_session.initialize(store.dispatch_session);
+    await this.dispatch_runtime.initialize(store);
     const metadata = await store.read_metadata();
     if (metadata.group_id !== this.group_id) {
       throw new Error(`GroupSession "${this.id}" belongs to another Group`);
@@ -223,7 +223,7 @@ export class GroupSession implements GroupSessionContract {
     this.stop_requested = true;
     this.publish_status(undefined, "stopped");
     await Promise.allSettled([
-      this.dispatch_session.stop(),
+      this.dispatch_runtime.stop(),
       ...[...this.member_sessions.values()].map((session) => session.stop()),
     ]);
     await Promise.allSettled([...this.pending_deliveries]);
@@ -240,7 +240,7 @@ export class GroupSession implements GroupSessionContract {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     await this.stop();
-    await this.dispatch_session.dispose();
+    await this.dispatch_runtime.dispose();
     this.disposed = true;
     this.subscribers.clear();
     for (const unsubscribe of this.member_session_unsubscribes.values()) unsubscribe();
@@ -441,8 +441,8 @@ export class GroupSession implements GroupSessionContract {
     trigger: "user" | "auto",
     message: GroupMessage,
     pending_messages: readonly GroupMessage[],
-  ): Promise<GroupDispatchSessionResult> {
-    return await this.dispatch_session.decide({
+  ): Promise<GroupDispatchResult> {
+    return await this.dispatch_runtime.decide({
       trigger,
       message,
       pending_messages,

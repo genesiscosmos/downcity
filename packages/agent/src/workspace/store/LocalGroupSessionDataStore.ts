@@ -3,8 +3,10 @@
 import path from "node:path";
 import type { FileSystem } from "@downcity/workspace";
 import type { GroupMessage } from "@/types/group/Group.js";
-import type { GroupDispatchSessionDataStore } from "@/types/group/GroupDispatchSession.js";
-import { LocalGroupDispatchSessionDataStore } from "@/workspace/store/LocalGroupDispatchSessionDataStore.js";
+import type {
+  GroupDispatchTurnRecord,
+  GroupDispatchTurnStatus,
+} from "@/types/group/GroupDispatch.js";
 import type {
   GroupSessionDataStore,
   GroupSessionHistoryMeta,
@@ -14,13 +16,15 @@ import type {
 /** 单个 GroupSession 的本地文件存储。 */
 export class LocalGroupSessionDataStore implements GroupSessionDataStore {
   readonly session_id: string;
-  readonly dispatch_session: GroupDispatchSessionDataStore;
   private readonly files: FileSystem;
   private readonly group_id: string;
   private readonly session_root_path: string;
   private readonly metadata_file_path: string;
   private readonly messages_file_path: string;
   private readonly transaction_lock_path: string;
+  private readonly dispatch_root_path: string;
+  private readonly dispatch_turns_file_path: string;
+  private readonly dispatch_lock_path: string;
 
   constructor(options: {
     /** 当前 Group StorageScope 文件能力。 */
@@ -41,13 +45,12 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
       "sessions",
       encodeURIComponent(this.session_id),
     );
-    this.dispatch_session = new LocalGroupDispatchSessionDataStore({
-      files: this.files,
-      session_root_path: this.session_root_path,
-    });
     this.metadata_file_path = path.join(this.session_root_path, "meta.json");
     this.messages_file_path = path.join(this.session_root_path, "messages.jsonl");
     this.transaction_lock_path = path.join(this.session_root_path, ".lock");
+    this.dispatch_root_path = path.join(this.session_root_path, "dispatch");
+    this.dispatch_turns_file_path = path.join(this.dispatch_root_path, "turns.jsonl");
+    this.dispatch_lock_path = path.join(this.dispatch_root_path, ".lock");
   }
 
   /** 初始化当前 GroupSession 目录与 metadata。 */
@@ -173,6 +176,30 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     });
   }
 
+  /** 读取每个 dispatch_id 最后一次成功提交的调度状态。 */
+  async list_dispatch_turns(): Promise<GroupDispatchTurnRecord[]> {
+    if (!(await this.files.path_exists(this.dispatch_turns_file_path))) return [];
+    await this.files.ensure_directory(this.dispatch_root_path);
+    return await this.files.with_file_lock(this.dispatch_lock_path, async () => {
+      const records = await this.read_dispatch_records(true);
+      const turns_by_id = new Map<string, GroupDispatchTurnRecord>();
+      for (const record of records) {
+        turns_by_id.delete(record.dispatch_id);
+        turns_by_id.set(record.dispatch_id, record);
+      }
+      return [...turns_by_id.values()];
+    });
+  }
+
+  /** 向 GroupSession 私有调度日志追加一个完整状态快照。 */
+  async append_dispatch_turn(turn: GroupDispatchTurnRecord): Promise<void> {
+    assert_dispatch_turn(turn);
+    await this.files.ensure_directory(this.dispatch_root_path);
+    await this.files.with_file_lock(this.dispatch_lock_path, async () => {
+      await this.files.append_file(this.dispatch_turns_file_path, `${JSON.stringify(turn)}\n`);
+    });
+  }
+
   /** 校验消息日志并由真实消息重建可恢复的摘要字段。 */
   private async repair_metadata_unlocked(): Promise<void> {
     const messages = await this.read_messages(true);
@@ -215,6 +242,32 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     return messages;
   }
 
+  /** 读取调度状态日志；只允许修复进程中断产生的最后一条残缺记录。 */
+  private async read_dispatch_records(repair_tail: boolean): Promise<GroupDispatchTurnRecord[]> {
+    const content = (await this.files.read_file(this.dispatch_turns_file_path)).toString("utf8");
+    const lines = content.split("\n");
+    const records: GroupDispatchTurnRecord[] = [];
+    for (let line_index = 0; line_index < lines.length; line_index += 1) {
+      const line = lines[line_index];
+      if (!line.trim()) continue;
+      try {
+        const record = JSON.parse(line) as GroupDispatchTurnRecord;
+        assert_dispatch_turn(record);
+        records.push(record);
+      } catch (error) {
+        const is_tail = lines.slice(line_index + 1).every((item) => !item.trim());
+        if (!repair_tail || !is_tail) throw error;
+        const repaired = records.map((record) => JSON.stringify(record)).join("\n");
+        await this.files.write_file_atomically(
+          this.dispatch_turns_file_path,
+          repaired ? `${repaired}\n` : "",
+        );
+        break;
+      }
+    }
+    return records;
+  }
+
   private create_initial_metadata(): GroupSessionHistoryMeta {
     const created_at = Date.now();
     return {
@@ -225,6 +278,43 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
       updated_at: created_at,
       message_count: 0,
     };
+  }
+}
+
+const dispatch_turn_statuses = new Set<GroupDispatchTurnStatus>([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "stopped",
+]);
+
+/** 防止损坏的持久化记录进入 GroupSession 调度恢复流程。 */
+function assert_dispatch_turn(value: GroupDispatchTurnRecord): void {
+  if (!value || typeof value !== "object") throw new Error("Invalid Group dispatch turn record");
+  if (typeof value.dispatch_id !== "string" || !value.dispatch_id.trim()) {
+    throw new Error("Invalid Group dispatch turn id");
+  }
+  if (value.trigger !== "user" && value.trigger !== "auto") {
+    throw new Error(`Invalid Group dispatch trigger: ${String(value.trigger)}`);
+  }
+  if (typeof value.message_id !== "string" || !value.message_id.trim()) {
+    throw new Error(`Invalid Group dispatch message id: ${value.dispatch_id}`);
+  }
+  if (
+    !Array.isArray(value.pending_message_ids)
+    || value.pending_message_ids.some((item) => typeof item !== "string" || !item.trim())
+  ) {
+    throw new Error(`Invalid Group dispatch pending messages: ${value.dispatch_id}`);
+  }
+  if (!dispatch_turn_statuses.has(value.status)) {
+    throw new Error(`Invalid Group dispatch status: ${String(value.status)}`);
+  }
+  if (!Number.isFinite(value.created_at) || !Number.isFinite(value.updated_at)) {
+    throw new Error(`Invalid Group dispatch timestamps: ${value.dispatch_id}`);
+  }
+  if (value.status === "completed" && !value.decision) {
+    throw new Error(`Completed Group dispatch is missing its decision: ${value.dispatch_id}`);
   }
 }
 

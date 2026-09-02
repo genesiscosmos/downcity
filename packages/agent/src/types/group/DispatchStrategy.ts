@@ -54,7 +54,7 @@ export interface DispatchStrategy {
     readonly messages: readonly GroupMessage[];
     /** 当前 Group 成员快照。 */
     readonly members: readonly Agent[];
-    /** 当前 Dispatch Session Turn 的取消信号。 */
+    /** 当前 GroupSession 调度 Turn 的取消信号。 */
     readonly abort_signal: AbortSignal;
   }): Promise<DispatchDecision> | DispatchDecision;
 }

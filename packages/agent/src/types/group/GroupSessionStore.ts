@@ -1,7 +1,7 @@
 /** GroupSession 持久化协议：只描述 GroupSession 所需的底层数据能力。 */
 
 import type { GroupMessage } from "@/types/group/Group.js";
-import type { GroupDispatchSessionDataStore } from "@/types/group/GroupDispatchSession.js";
+import type { GroupDispatchTurnRecord } from "@/types/group/GroupDispatch.js";
 import type { FileSystem } from "@downcity/workspace";
 
 /** GroupSession 的持久化元数据。 */
@@ -46,8 +46,6 @@ export interface GroupSessionTurnCheckpoint {
 export interface GroupSessionDataStore {
   /** 当前 GroupSession 标识。 */
   readonly session_id: string;
-  /** 当前 GroupSession 独享的 Dispatch Session 持久化视图。 */
-  readonly dispatch_session: GroupDispatchSessionDataStore;
   /** 初始化当前 GroupSession 的存储布局。 */
   initialize(): Promise<void>;
   /** 读取完整共享消息历史。 */
@@ -60,6 +58,10 @@ export interface GroupSessionDataStore {
   write_metadata(metadata: GroupSessionHistoryMeta): Promise<void>;
   /** 在文件锁内合并更新当前 GroupSession metadata。 */
   update_metadata(patch: Partial<GroupSessionHistoryMeta>): Promise<GroupSessionHistoryMeta>;
+  /** 读取当前 GroupSession 中每个 dispatch_id 的最新调度 Turn 快照。 */
+  list_dispatch_turns(): Promise<GroupDispatchTurnRecord[]>;
+  /** 向当前 GroupSession 的调度审计日志追加一个 Turn 状态快照。 */
+  append_dispatch_turn(turn: GroupDispatchTurnRecord): Promise<void>;
 }
 
 /** Group 所拥有的全部 GroupSession 持久化入口。 */

@@ -1,20 +1,20 @@
 /**
- * GroupDispatchSession：单个 GroupSession 独享的持久化调度执行边界。
+ * GroupSession 私有调度运行器。
  *
- * 本对象统一拥有调度队列、当前模型取消信号和调度 Turn 状态。调度策略只负责决策，
- * 不再自行拥有跨 GroupSession 的运行状态或停止语义。
+ * 本模块只封装调度请求的串行执行、模型取消和 Turn 状态提交。共享消息、成员关系、
+ * 恢复检查点与整体生命周期仍由 GroupSession 统一拥有。
  */
 
 import { nanoid } from "nanoid";
 import type {
-  GroupDispatchSessionDataStore,
-  GroupDispatchSessionInput,
-  GroupDispatchSessionOptions,
-  GroupDispatchSessionResult,
+  GroupDispatchInput,
+  GroupDispatchResult,
+  GroupDispatchRuntimeOptions,
   GroupDispatchTurnRecord,
-} from "@/types/group/GroupDispatchSession.js";
+} from "@/types/group/GroupDispatch.js";
+import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 
-/** 主动停止 Dispatch Session 时使用的内部错误。 */
+/** 主动停止 Group 调度时使用的内部错误。 */
 export class GroupDispatchStoppedError extends Error {
   constructor() {
     super("Group dispatch stopped");
@@ -22,31 +22,31 @@ export class GroupDispatchStoppedError extends Error {
   }
 }
 
-/** GroupSession 私有的调度 Session。 */
-export class GroupDispatchSession {
-  private readonly dispatch_strategy: GroupDispatchSessionOptions["dispatch_strategy"];
-  private store?: GroupDispatchSessionDataStore;
+/** GroupSession 私有的调度运行机制，不构成独立 Session。 */
+export class GroupDispatchRuntime {
+  private readonly dispatch_strategy: GroupDispatchRuntimeOptions["dispatch_strategy"];
+  private store?: GroupSessionDataStore;
   private queue_tail: Promise<void> = Promise.resolve();
   private active_abort_controller?: AbortController;
   private stopping = false;
   private disposed = false;
 
-  constructor(options: GroupDispatchSessionOptions) {
+  constructor(options: GroupDispatchRuntimeOptions) {
     this.dispatch_strategy = options.dispatch_strategy;
   }
 
-  /** 绑定持久化视图，并把进程中断留下的运行态明确收口为 stopped。 */
-  async initialize(store: GroupDispatchSessionDataStore): Promise<this> {
+  /** 绑定 GroupSession Store，并把进程中断留下的运行态明确收口为 stopped。 */
+  async initialize(store: GroupSessionDataStore): Promise<this> {
     if (this.store && this.store !== store) {
-      throw new Error("GroupDispatchSession is already initialized with another Store");
+      throw new Error("GroupDispatchRuntime is already initialized with another Store");
     }
     if (this.store === store) return this;
     this.store = store;
-    const interrupted_turns = (await store.list_turns()).filter((turn) => (
+    const interrupted_turns = (await store.list_dispatch_turns()).filter((turn) => (
       turn.status === "queued" || turn.status === "running"
     ));
     for (const turn of interrupted_turns) {
-      await store.append_turn({
+      await store.append_dispatch_turn({
         ...turn,
         status: "stopped",
         error: "Group dispatch interrupted before recovery",
@@ -57,7 +57,7 @@ export class GroupDispatchSession {
   }
 
   /** 按提交顺序执行一次调度，并在返回前持久化最终决定。 */
-  decide(input: GroupDispatchSessionInput): Promise<GroupDispatchSessionResult> {
+  decide(input: GroupDispatchInput): Promise<GroupDispatchResult> {
     this.assert_available();
     const store = this.require_store();
     const created_at = Date.now();
@@ -70,7 +70,7 @@ export class GroupDispatchSession {
       created_at,
       updated_at: created_at,
     };
-    const persist_queued = store.append_turn(queued_turn);
+    const persist_queued = store.append_dispatch_turn(queued_turn);
     const operation = this.queue_tail.then(async () => {
       await persist_queued;
       return await this.execute_turn(input, queued_turn);
@@ -89,7 +89,7 @@ export class GroupDispatchSession {
     this.stopping = false;
   }
 
-  /** 永久释放当前 Dispatch Session。 */
+  /** 永久释放当前调度运行器。 */
   async dispose(): Promise<void> {
     if (this.disposed) return;
     await this.stop();
@@ -99,9 +99,9 @@ export class GroupDispatchSession {
 
   /** 执行队首调度 Turn，确保成功、失败和停止都形成持久化终态。 */
   private async execute_turn(
-    input: GroupDispatchSessionInput,
+    input: GroupDispatchInput,
     queued_turn: GroupDispatchTurnRecord,
-  ): Promise<GroupDispatchSessionResult> {
+  ): Promise<GroupDispatchResult> {
     const store = this.require_store();
     if (this.stopping || this.disposed) {
       await this.persist_terminal_turn(queued_turn, "stopped", "Group dispatch stopped");
@@ -109,7 +109,7 @@ export class GroupDispatchSession {
     }
     const abort_controller = new AbortController();
     this.active_abort_controller = abort_controller;
-    await store.append_turn({
+    await store.append_dispatch_turn({
       ...queued_turn,
       status: "running",
       updated_at: Date.now(),
@@ -122,7 +122,7 @@ export class GroupDispatchSession {
       if (this.stopping || this.disposed || abort_controller.signal.aborted) {
         throw new GroupDispatchStoppedError();
       }
-      await store.append_turn({
+      await store.append_dispatch_turn({
         ...queued_turn,
         status: "completed",
         decision,
@@ -155,7 +155,7 @@ export class GroupDispatchSession {
     status: "failed" | "stopped",
     error: string,
   ): Promise<void> {
-    await this.require_store().append_turn({
+    await this.require_store().append_dispatch_turn({
       ...turn,
       status,
       error,
@@ -163,13 +163,13 @@ export class GroupDispatchSession {
     });
   }
 
-  private require_store(): GroupDispatchSessionDataStore {
-    if (!this.store) throw new Error("GroupDispatchSession is not initialized");
+  private require_store(): GroupSessionDataStore {
+    if (!this.store) throw new Error("GroupDispatchRuntime is not initialized");
     return this.store;
   }
 
   private assert_available(): void {
-    if (this.disposed) throw new Error("GroupDispatchSession is disposed");
-    if (this.stopping) throw new Error("GroupDispatchSession is stopping");
+    if (this.disposed) throw new Error("GroupDispatchRuntime is disposed");
+    if (this.stopping) throw new Error("GroupDispatchRuntime is stopping");
   }
 }

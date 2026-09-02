@@ -460,7 +460,7 @@ test("GroupSession 使用 City Storage 持久化并可恢复", async () => {
   await fs.rm(root_path, { recursive: true, force: true });
 });
 
-test("GroupSession 持久化独享 Dispatch Session 的调度 Turn", async () => {
+test("GroupSession 持久化自己的调度 Turn", async () => {
   RecordingSession.created = [];
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-dispatch-session-"));
   const city = new City({ storage: new LocalStorageProvider(root_path) });
@@ -497,7 +497,7 @@ test("GroupSession 持久化独享 Dispatch Session 的调度 Turn", async () =>
   await fs.rm(root_path, { recursive: true, force: true });
 });
 
-test("GroupSession stop 会中断 Dispatch Session 且不记录失败消息", async () => {
+test("GroupSession stop 会中断当前调度且不记录失败消息", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-dispatch-stop-"));
   let dispatch_started = false;
   let dispatch_aborted = false;

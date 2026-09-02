@@ -1,8 +1,8 @@
 /**
- * Group Dispatch Session 领域类型。
+ * GroupSession 内部调度协议。
  *
- * Dispatch Session 只记录群聊调度 Turn，不复制 GroupMessage 正文；消息正文仍由
- * GroupSession 的消息日志作为唯一事实源，调度记录通过消息 ID 建立稳定引用。
+ * 调度不是独立 Session，只是 GroupSession 根据共享消息和成员快照计算下一步响应图的
+ * 内部运行过程。本模块描述该过程的输入、结果与持久化记录。
  */
 
 import type { Agent } from "@/agent/Agent.js";
@@ -13,7 +13,7 @@ import type {
   DispatchTrigger,
 } from "@/types/group/DispatchStrategy.js";
 
-/** Dispatch Session 中一次调度 Turn 的持久化状态。 */
+/** GroupSession 中一次调度 Turn 的持久化状态。 */
 export type GroupDispatchTurnStatus =
   | "queued"
   | "running"
@@ -21,7 +21,7 @@ export type GroupDispatchTurnStatus =
   | "failed"
   | "stopped";
 
-/** Dispatch Session 中一次调度 Turn 的完整持久化快照。 */
+/** GroupSession 中一次调度 Turn 的完整持久化快照。 */
 export interface GroupDispatchTurnRecord {
   /** 当前调度 Turn 的稳定标识。 */
   readonly dispatch_id: string;
@@ -43,30 +43,22 @@ export interface GroupDispatchTurnRecord {
   readonly updated_at: number;
 }
 
-/** Dispatch Session 持久化所需的最小数据能力。 */
-export interface GroupDispatchSessionDataStore {
-  /** 读取每个 dispatch_id 的最新调度 Turn 快照。 */
-  list_turns(): Promise<GroupDispatchTurnRecord[]>;
-  /** 以追加日志方式提交一个调度 Turn 的最新完整快照。 */
-  append_turn(turn: GroupDispatchTurnRecord): Promise<void>;
-}
-
-/** Dispatch Session 成功完成一次调度后的运行结果。 */
-export interface GroupDispatchSessionResult {
+/** GroupSession 完成一次调度后的内部运行结果。 */
+export interface GroupDispatchResult {
   /** 当前调度 Turn 的稳定标识。 */
   readonly dispatch_id: string;
   /** 已经校验并持久化的成员投递决定。 */
   readonly decision: DispatchDecision;
 }
 
-/** 创建 Group Dispatch Session 的运行依赖。 */
-export interface GroupDispatchSessionOptions {
+/** 创建 Group 调度运行器的内部依赖。 */
+export interface GroupDispatchRuntimeOptions {
   /** 当前 GroupSession 使用的消息调度策略。 */
   readonly dispatch_strategy: DispatchStrategy;
 }
 
-/** 向 Group Dispatch Session 提交一次调度判断的输入快照。 */
-export interface GroupDispatchSessionInput {
+/** GroupSession 提交给调度策略的一次不可变输入快照。 */
+export interface GroupDispatchInput {
   /** 本次调度由用户消息还是自动传播触发。 */
   readonly trigger: DispatchTrigger;
   /** 当前调度所围绕的 GroupMessage。 */
