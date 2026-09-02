@@ -82,7 +82,7 @@ export function createExecuteRouter(
       let session_id = session_ids_by_chat_key.get(chat_key);
       let session: AgentSession;
       if (session_id) {
-        session = await agentState.sessions.get(session_id, {
+        session = await agentState.sessions.get(session_id, "chat", {
           workspace: agentState.workspace,
         });
       } else {

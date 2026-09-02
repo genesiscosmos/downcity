@@ -103,8 +103,8 @@ class RemoteAgentSessions implements AgentSessions<RemoteAgentSession> {
   }
 
   /** 获取一个远程 session。 */
-  async get(session_id: string): Promise<RemoteAgentSession> {
-    const info = await this.transport.get_info(session_id);
+  async get(session_id: string, origin_type = "chat"): Promise<RemoteAgentSession> {
+    const info = await this.transport.get_info(session_id, origin_type);
     return new RemoteSession(this.transport, info);
   }
 

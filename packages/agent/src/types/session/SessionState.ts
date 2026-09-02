@@ -19,7 +19,7 @@ export interface SessionStateOptions {
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Session 的创建来源。 */
-  origin?: SessionOrigin;
+  origin: SessionOrigin;
   /** 当前 Session 独享的领域持久化视图。 */
   store: SessionDataStore;
   /** 当前 Session 的 canonical Message 入口。 */

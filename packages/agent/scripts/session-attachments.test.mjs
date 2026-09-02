@@ -19,6 +19,7 @@ async function create_harness() {
     storage_root_path: root_path,
     agent_id: "attachment-test-agent",
     session_id: "attachment-test-session",
+    origin: { type: "chat" },
   });
   const messages = new SessionMessages({
     session_id: "attachment-test-session",
@@ -49,7 +50,7 @@ test("Data URL 落盘后保留用户文件名并保存相对路径", async () =>
   const part = result.parts[0];
   assert.equal(part.type, "file");
   assert.equal(path.isAbsolute(part.url), true);
-  assert.match(part.url, /sessions\/attachment-test-session\/attachments\/att_/);
+  assert.match(part.url, /sessions\/chat\/attachment-test-session\/attachments\/att_/);
   assert.equal(part.url.endsWith(".png"), true);
   assert.equal(part.filename, "diagram.png");
   assert.equal(

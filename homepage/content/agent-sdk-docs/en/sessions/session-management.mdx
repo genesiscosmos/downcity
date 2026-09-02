@@ -14,16 +14,25 @@ const created = await agent.sessions.create({
   workspace,
 });
 
-const existing = await agent.sessions.get("session-id-from-list", { workspace });
+const task_session = await agent.sessions.create({
+  workspace,
+  origin: { type: "task", task_id: "daily-report" },
+});
+
+const existing = await agent.sessions.get("session-id-from-list", "chat", { workspace });
+const existing_task = await agent.sessions.get(task_session.id, "task", { workspace });
 ```
 
 `create()` always generates the Session ID internally. To reopen an existing Session, obtain its ID from
-`list()` or another persisted reference and pass it to `get(session_id, { workspace })`.
+`list()` or another persisted reference and pass it to `get(session_id, origin_type = "chat", { workspace })`.
+`origin.type` may be any non-empty string and may carry additional JSON metadata. `get()` reads only the
+requested partition and never scans other origins.
 
 ## List and search
 
 ```ts
 const page = await agent.sessions.list({
+  origin_type: "chat",
   limit: 30,
   query: "repo",
 });
@@ -37,20 +46,21 @@ if (page.has_more) {
     limit: 30,
     cursor: page.next_cursor,
     query: "repo",
+    origin_type: "chat",
   });
 }
 ```
 
-List items are lightweight summaries, not complete Messages. Common fields are `session_id`, `title`, `preview_text`, `message_count`, `model_label`, `updated_at`, and `executing`. `cursor` is opaque: return it to the SDK unchanged.
+`list()` defaults to the `chat` partition. Pass `origin_type` to list another partition. List items are lightweight summaries, not complete Messages. Common fields are `session_id`, `origin`, `title`, `preview_text`, `message_count`, `model_label`, `updated_at`, and `executing`. `cursor` is opaque: return it to the SDK unchanged.
 
 `query` is a lightweight contains filter for a session picker. It is not a full-text search language.
 
 ## Archive and clean up
 
 ```ts
-await agent.sessions.archive({ id: "repo-analysis" });
+await agent.sessions.archive({ id: "repo-analysis", origin_type: "task" });
 
-const archived_page = await agent.sessions.archived({ limit: 30 });
+const archived_page = await agent.sessions.archived({ origin_type: "task", limit: 30 });
 
 const removed = await agent.sessions.clean_archive();
 console.log(removed.removed_session_ids);
@@ -60,7 +70,7 @@ Archiving removes a Session from the active list without immediately destroying 
 
 `clean_archive()` permanently deletes every archived Session. Treat it as an explicit empty-trash action and require user confirmation in a UI.
 
-For local maintenance, `remove(session_id)` permanently deletes one active Session's Agent-owned data. `clear_messages(session_id)` clears only its messages. Plugin-owned data is not deleted implicitly; call the owning Plugin when a workflow also needs to remove domain data.
+For local maintenance, `remove(session_id, origin_type = "chat")` permanently deletes one active Session's Agent-owned data. `clear_messages(session_id, origin_type = "chat")` clears only its messages. Plugin-owned data is not deleted implicitly; call the owning Plugin when a workflow also needs to remove domain data.
 
 ## UI guidance
 

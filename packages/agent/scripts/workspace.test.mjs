@@ -147,7 +147,7 @@ test("恢复绑定 Workspace 的 Session 必须提供同一个 Workspace", async
       agent.sessions.get(session.id),
       /requires Workspace "restore-workspace"/u,
     );
-    assert.equal((await entry.sessions.get(session.id, { workspace })).id, session.id);
+    assert.equal((await entry.sessions.get(session.id, "chat", { workspace })).id, session.id);
   } finally {
     await agent.dispose();
   }

@@ -254,6 +254,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   const instruction_path = path.join(
     entry.data_path,
     "sessions",
+    "chat",
     session_id,
     "instruction.md",
   );
@@ -337,6 +338,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     const instruction_path = path.join(
       city.storage.open_scope(["agents", first_agent.id]).root_path,
       "sessions",
+      "chat",
       session_id,
       "instruction.md",
     );
@@ -363,6 +365,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
   try {
     const restored_session = await restarted_entry.sessions.get(
       session_id,
+      "chat",
       { workspace },
     );
     const restored_system = await restored_session.system();
@@ -379,6 +382,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
   const instruction_path = path.join(
     city.storage.open_scope(["agents", "instruction_restart_agent"]).root_path,
     "sessions",
+    "chat",
     session_id,
     "instruction.md",
   );
@@ -394,6 +398,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
   try {
     const fallback_session = await fallback_entry.sessions.get(
       session_id,
+      "chat",
       { workspace },
     );
     const fallback_system = await fallback_session.system();
@@ -446,7 +451,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
   city.agents.add(restarted_agent);
   const restarted_entry = create_workspace_entry(restarted_agent, workspace);
   try {
-    const session = await restarted_entry.sessions.get(session_id, {
+    const session = await restarted_entry.sessions.get(session_id, "chat", {
       workspace,
     });
     const system = await session.system();
@@ -818,6 +823,7 @@ test("restored Session rebinds the same model without emitting a configuration M
   try {
     const session = await restored_entry.sessions.get(
       session_id,
+      "chat",
       { workspace },
     );
     assert.deepEqual((await session.status()).security, {

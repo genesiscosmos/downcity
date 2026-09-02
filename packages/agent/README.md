@@ -33,8 +33,11 @@ CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`，再通过 `cit
   - React UI 组件与展示层
 
 Session ID 由 `agent.sessions.create()` 内部生成；创建接口不接受调用方指定的
-`session_id`。恢复已有 Session 时使用 `agent.sessions.get(session_id)`，如果该
-Session 创建时绑定了 Workspace，恢复时必须传入同一个 Workspace。
+`session_id`。Session 默认来源是 `{ type: "chat" }`，Group 使用 `group`，Task Plugin
+使用 `task`，其他创建方也可以在 `create({ origin })` 中声明任意非空的 `origin.type`
+及附加 JSON 元数据。恢复已有 Session 使用 `agent.sessions.get(session_id, origin_type = "chat")`；
+该调用只读取指定来源分区，不跨目录猜测。如果 Session 创建时绑定了 Workspace，恢复时还必须
+通过第三个参数传入同一个 Workspace，例如 `get(session_id, "task", { workspace })`。
 
 Group 是和 Agent 并列的可联系主体。Group 持有自己的模型，默认通过 AI 调度器识别消息意图、选择成员和生成当前最佳响应图；没有模型或模型调用失败时，GroupSession 会记录明确的调度失败，不会静默使用另一套规则。需要自定义行为时可显式提供 `dispatch_strategy`，异步策略应响应输入中的 `abort_signal`。普通群聊消息是否投递给一个或多个成员完全由 Group.model 决定。每个 GroupSession 拥有唯一的内部 Dispatch Session，调度 Turn 会排队并持久化；AI 调度在同一 Turn 内通过强制的 `dispatch_group` tool call 提交 `steps` 和 `next`，协议输出无效时会先要求模型纠正，再由 SDK 编译为内部执行图。
 
@@ -97,7 +100,7 @@ src/
   - `SessionMessages.ts` 是 canonical Message 唯一事实源
   - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
   - `messages/` 放 Assistant writer、Message codec 与 compaction；JSONL Store 位于 `workspace/store/`
-  - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create/get({ workspace })` 的单次执行输入
+  - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 的单次执行输入
 
 - `src/executor/`
   - 内部执行内核
@@ -140,7 +143,9 @@ src/
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑
 
-持久化规则：加入 City 后，AgentSession 使用 `agents/<agent_id>/sessions/<session_id>/`，
+持久化规则：加入 City 后，AgentSession 使用 `agents/<agent_id>/sessions/<origin_type>/<session_id>/`，
+归档后使用 `agents/<agent_id>/archived-sessions/<origin_type>/<session_id>/`；`origin_type`
+会被安全编码为单个目录段。普通聊天默认位于 `sessions/chat/`。
 GroupSession 使用 `groups/<group_id>/sessions/<group_session_id>/`；未加入 City 时两者均使用
 当前主体实例的内存 Storage。只有传入 Workspace 的 AgentSession 或 GroupSession 才会在
-`meta.json` 写入 `workspace_id`。
+`meta.json` 写入 `workspace_id`。AgentSession 的 `meta.json` 使用 v2，并始终保存完整且不可变的 `origin`。

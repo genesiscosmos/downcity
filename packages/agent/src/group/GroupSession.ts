@@ -141,14 +141,10 @@ export class GroupSession implements GroupSessionContract {
       const member = this.get_member(agent_id);
       if (!member) continue;
       try {
-        const session = await member.sessions.get(session_id, {
+        const session = await member.sessions.get(session_id, "group", {
           ...(this.workspace ? { workspace: this.workspace } : {}),
-          origin: {
-            type: "group",
-            group_id: this.group_id,
-            group_session_id: this.id,
-          },
         });
+        this.assert_member_session_origin(session);
         this.member_sessions.set(agent_id, session);
         this.member_session_ids.set(agent_id, session.id);
         this.subscribe_member_session(agent_id, session);
@@ -674,6 +670,19 @@ export class GroupSession implements GroupSessionContract {
       member_session_ids: Object.fromEntries(this.member_session_ids),
     });
     return session;
+  }
+
+  /** 校验恢复的成员 Session 确实属于当前 GroupSession。 */
+  private assert_member_session_origin(session: AgentSession): void {
+    if (
+      session.origin.type !== "group"
+      || session.origin.group_id !== this.group_id
+      || session.origin.group_session_id !== this.id
+    ) {
+      throw new Error(
+        `Agent Session "${session.id}" does not belong to GroupSession "${this.id}"`,
+      );
+    }
   }
 
   private subscribe_member_session(agent_id: string, session: AgentSession): void {

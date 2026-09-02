@@ -51,7 +51,7 @@ export interface AgentSessions<TSession extends AgentSessionActor = AgentSession
   create(input?: AgentCreateSessionInput): Promise<TSession>;
 
   /** 获取一个已存在的 session。 */
-  get(session_id: string): Promise<TSession>;
+  get(session_id: string, origin_type?: string): Promise<TSession>;
 
   /** 列出当前 agent 的 session 摘要页。 */
   list(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage>;
@@ -76,7 +76,7 @@ export interface AgentSessionActor {
   /** 当前 Session 创建时绑定的 Workspace ID；无 Workspace 时为空。 */
   readonly workspace_id?: string;
   /** 当前 Session 的创建来源。 */
-  readonly origin?: SessionOrigin;
+  readonly origin: SessionOrigin;
 
   /** 读取当前 session 详情。 */
   get_info(): Promise<AgentSessionInfo>;

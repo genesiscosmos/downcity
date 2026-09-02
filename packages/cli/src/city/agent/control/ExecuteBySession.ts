@@ -35,7 +35,7 @@ export async function executeBySessionId(params: {
     attachments: params.attachments,
   });
 
-  const session = await params.agentState.sessions.get(session_id, {
+  const session = await params.agentState.sessions.get(session_id, "chat", {
     workspace: params.agentState.workspace,
   });
   const turn = await session.prompt({

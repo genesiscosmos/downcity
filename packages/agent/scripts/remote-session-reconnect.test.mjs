@@ -14,14 +14,15 @@ import { RemoteSession } from "../bin/remote/RemoteSession.js";
 test("RemoteSession forwards set observability options to its transport", async () => {
   const calls = [];
   const transport = {
-    async set(session_id, input, options) {
-      calls.push({ session_id, input, options });
+    async set(session_id, origin_type, input, options) {
+      calls.push({ session_id, origin_type, input, options });
     },
   };
   const session = new RemoteSession(transport, {
     agent_id: "agent_test",
     session_id: "session_test",
     message_count: 0,
+    origin: { type: "task" },
   });
 
   await session.set(
@@ -31,6 +32,7 @@ test("RemoteSession forwards set observability options to its transport", async 
 
   assert.deepEqual(calls, [{
     session_id: "session_test",
+    origin_type: "task",
     input: { security: { approval_mode: "ask" } },
     options: { persist_action: false, publish_mutation: false },
   }]);
@@ -69,6 +71,7 @@ test("RemoteSession reconnects the event pump after transport close", async () =
     agent_id: "agent_test",
     session_id: "session_test",
     message_count: 0,
+    origin: { type: "task" },
   });
 
   const first_turn = await session.prompt({ query: "first" });
@@ -104,8 +107,8 @@ test("RemoteSession queues compact through its transport", async () => {
       input.on_ready();
       return { close: async () => {} };
     },
-    async compact(session_id) {
-      compacted_session_ids.push(session_id);
+    async compact(session_id, origin_type) {
+      compacted_session_ids.push(`${origin_type}:${session_id}`);
       return { id: "compact_test" };
     },
   };
@@ -113,11 +116,12 @@ test("RemoteSession queues compact through its transport", async () => {
     agent_id: "agent_test",
     session_id: "session_test",
     message_count: 0,
+    origin: { type: "task" },
   });
 
   const handle = await session.compact();
 
-  assert.deepEqual(compacted_session_ids, ["session_test"]);
+  assert.deepEqual(compacted_session_ids, ["task:session_test"]);
   assert.equal(handle.id, "compact_test");
   assert.equal(handle.result, null);
 
@@ -169,6 +173,7 @@ test("RemoteSession preserves an early compact finish until transport returns", 
     agent_id: "agent_test",
     session_id: "session_test",
     message_count: 0,
+    origin: { type: "task" },
   });
 
   const handle = await session.compact();

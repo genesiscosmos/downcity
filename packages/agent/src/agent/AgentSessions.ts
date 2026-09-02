@@ -35,6 +35,7 @@ import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.j
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import { normalize_session_origin, normalize_session_origin_type } from "@/session/SessionOrigin.js";
 
 type AgentSessionsOptions = {
   /**
@@ -117,12 +118,16 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return [...this.sessions_by_id.values()];
   }
 
-  /** 返回当前所有执行中的 Session 标识；可按 Workspace 限定。 */
-  list_executing_session_ids(workspace_id?: string): string[] {
+  /** 返回当前所有执行中的 Session 标识；可按 Workspace 与来源分区限定。 */
+  list_executing_session_ids(workspace_id?: string, origin_type?: string): string[] {
+    const resolved_origin_type = origin_type
+      ? normalize_session_origin_type(origin_type)
+      : undefined;
     return this.list_cached_sessions()
       .filter((session) =>
         session.is_executing()
         && (!workspace_id || session.workspace_id === workspace_id)
+        && (!resolved_origin_type || session.origin.type === resolved_origin_type)
       )
       .map((session) => session.id);
   }
@@ -187,12 +192,15 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * runtime 是执行层的内部投影，不负责创建 Session。需要创建时必须
    * 通过 `create()` 获取内部生成的 ID；需要恢复时必须先调用 `get()`。
    */
-  runtime(session_id: string): SessionPort {
+  runtime(session_id: string, origin_type = "chat"): SessionPort {
     const resolved_session_id = String(session_id || "").trim();
-    const session = this.sessions_by_id.get(resolved_session_id);
+    const resolved_origin_type = normalize_session_origin_type(origin_type);
+    const session = this.sessions_by_id.get(
+      this.session_cache_key(resolved_session_id, resolved_origin_type),
+    );
     if (!session) {
       throw new Error(
-        `Session "${resolved_session_id}" is not loaded; call sessions.get(session_id) first`,
+        `Session "${resolved_session_id}" is not loaded from origin "${resolved_origin_type}"; call sessions.get(session_id, origin_type) first`,
       );
     }
     return session.get_runtime_port();
@@ -202,11 +210,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 新建一个 session。
    */
   async create(
-    input?: AgentCreateSessionInput & { workspace?: WorkspaceBase; origin?: SessionOrigin },
+    input?: AgentCreateSessionInput & { workspace?: WorkspaceBase },
   ): Promise<AgentSession> {
+    const origin = normalize_session_origin(input?.origin);
     const session = this.get_or_create_session({
       workspace: input?.workspace,
-      origin: input?.origin,
+      origin,
     });
     this.on_session_routed?.(session.id, this);
     await session.initialize();
@@ -218,25 +227,31 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    */
   async get(
     session_id: string,
-    input?: { workspace?: WorkspaceBase; origin?: SessionOrigin },
+    origin_type = "chat",
+    input?: { workspace?: WorkspaceBase },
   ): Promise<AgentSession> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
       throw new Error("sessions.get requires a non-empty session_id");
     }
-    const store = this.resolve_session_context(input?.workspace).store;
+    const resolved_origin_type = normalize_session_origin_type(origin_type);
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin_type);
+    const context = this.resolve_session_context(input?.workspace);
+    const store = context.store;
     if (
-      !this.sessions_by_id.has(resolved_session_id) &&
-      !(await store.has_session(resolved_session_id))
+      !this.sessions_by_id.has(cache_key) &&
+      !(await store.has_session(resolved_session_id, resolved_origin_type))
     ) {
-      throw new Error(`Session "${resolved_session_id}" not found`);
+      throw new Error(
+        `Session "${resolved_session_id}" not found in origin "${resolved_origin_type}"`,
+      );
     }
     const persisted_metadata = await store
-      .session(resolved_session_id, input?.workspace?.id)
+      .session(resolved_session_id, { type: resolved_origin_type }, input?.workspace?.id)
       .read_metadata();
     const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
     const persisted_origin = persisted_metadata.origin;
-    const cached = this.sessions_by_id.get(resolved_session_id);
+    const cached = this.sessions_by_id.get(cache_key);
     const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
     if (persisted_workspace_id !== requested_workspace_id) {
       throw new Error(
@@ -250,13 +265,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         `Session "${resolved_session_id}" is already bound to Workspace "${cached.workspace_id || ""}"`,
       );
     }
-    if (input?.origin && JSON.stringify(persisted_origin || { type: "user" }) !== JSON.stringify(input.origin)) {
-      throw new Error(`Session "${resolved_session_id}" has a different origin`);
-    }
     const session = this.get_or_create_session({
       session_id: resolved_session_id,
       workspace: input?.workspace,
-      origin: input?.origin || persisted_origin,
+      origin: persisted_origin,
     });
     this.on_session_routed?.(resolved_session_id, this);
     await session.initialize();
@@ -270,36 +282,46 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 正在执行的 Session 会先停止，避免删除后继续写入。
    * - 该方法不处理任何 Plugin 自有数据。
    */
-  async remove(session_id: string): Promise<boolean> {
+  async remove(session_id: string, origin_type = "chat"): Promise<boolean> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
       throw new Error("sessions.remove requires a non-empty session_id");
     }
-    const cached = this.sessions_by_id.get(resolved_session_id);
+    const resolved_origin_type = normalize_session_origin_type(origin_type);
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin_type);
+    const cached = this.sessions_by_id.get(cache_key);
     if (cached?.is_executing()) {
       await cached.stop();
     }
     cached?.dispose_title_generation?.();
-    const existed = await this.resolve_session_context().store.remove_session(resolved_session_id);
-    this.sessions_by_id.delete(resolved_session_id);
+    const existed = await this.resolve_session_context().store.remove_session(
+      resolved_session_id,
+      resolved_origin_type,
+    );
+    this.sessions_by_id.delete(cache_key);
     return existed;
   }
 
   /**
    * 清空一个 Session 的消息目录。
    */
-  async clear_messages(session_id: string): Promise<boolean> {
+  async clear_messages(session_id: string, origin_type = "chat"): Promise<boolean> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
       throw new Error("sessions.clear_messages requires a non-empty session_id");
     }
-    const cached = this.sessions_by_id.get(resolved_session_id);
+    const resolved_origin_type = normalize_session_origin_type(origin_type);
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin_type);
+    const cached = this.sessions_by_id.get(cache_key);
     if (cached?.is_executing()) {
       throw new Error(`Session "${resolved_session_id}" is currently executing`);
     }
     cached?.dispose_title_generation?.();
-    const existed = await this.resolve_session_context().store.clear_session_messages(resolved_session_id);
-    this.sessions_by_id.delete(resolved_session_id);
+    const existed = await this.resolve_session_context().store.clear_session_messages(
+      resolved_session_id,
+      resolved_origin_type,
+    );
+    this.sessions_by_id.delete(cache_key);
     return existed;
   }
 
@@ -309,9 +331,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async list(
     input?: AgentListSessionsInput,
   ): Promise<AgentSessionSummaryPage> {
+    const origin_type = normalize_session_origin_type(input?.origin_type ?? "chat");
     return await this.resolve_session_context().store.list_sessions(
-      input,
-      new Set(this.list_executing_session_ids()),
+      { ...(input || {}), origin_type },
+      new Set(this.list_executing_session_ids(undefined, origin_type)),
     );
   }
 
@@ -325,15 +348,17 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (!session_id) {
       throw new Error("sessions.archive requires a non-empty id");
     }
+    const origin_type = normalize_session_origin_type(input.origin_type ?? "chat");
+    const cache_key = this.session_cache_key(session_id, origin_type);
 
-    const executing_session_ids = new Set(this.list_executing_session_ids());
-    if (executing_session_ids.has(session_id)) {
+    const cached = this.sessions_by_id.get(cache_key);
+    if (cached?.is_executing()) {
       throw new Error(`Session "${session_id}" is currently executing`);
     }
 
-    const result = await this.resolve_session_context().store.archive_session(session_id);
-    this.sessions_by_id.get(session_id)?.dispose_title_generation?.();
-    this.sessions_by_id.delete(session_id);
+    const result = await this.resolve_session_context().store.archive_session(session_id, origin_type);
+    cached?.dispose_title_generation?.();
+    this.sessions_by_id.delete(cache_key);
     return result;
   }
 
@@ -366,7 +391,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const resolved_session_id =
       String(input?.session_id || "").trim() ||
       `session-${Date.now()}-${nanoid(8)}`;
-    const cached = this.sessions_by_id.get(resolved_session_id);
+    const origin = normalize_session_origin(input?.origin);
+    const cache_key = this.session_cache_key(resolved_session_id, origin.type);
+    const cached = this.sessions_by_id.get(cache_key);
     if (cached) return cached;
 
     const context = this.resolve_session_context(input?.workspace);
@@ -374,9 +401,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       agent_id: this.agent_id,
       workspace_path: context.workspace_path,
       ...(context.workspace_id ? { workspace_id: context.workspace_id } : {}),
-      ...(input?.origin ? { origin: input.origin } : {}),
-      store: context.store.session(resolved_session_id, context.workspace_id),
-      get_session_store: (session_id) => context.store.session(session_id, context.workspace_id),
+      origin,
+      store: context.store.session(resolved_session_id, origin, context.workspace_id),
+      get_session_store: (session_id) => context.store.session(session_id, origin, context.workspace_id),
       session_id: resolved_session_id,
       tools: context.tools,
       logger: context.logger,
@@ -390,8 +417,13 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         await this.ensure_agent_ready();
       },
     });
-    this.sessions_by_id.set(resolved_session_id, created);
+    this.sessions_by_id.set(cache_key, created);
     return created;
+  }
+
+  /** 返回来源分区内唯一的 Session 运行时缓存键。 */
+  private session_cache_key(session_id: string, origin_type: string): string {
+    return `${origin_type}\u0000${session_id}`;
   }
 
   private load_instruction_system_blocks(workspace_path: string): AgentSessionSystemBlock[] {

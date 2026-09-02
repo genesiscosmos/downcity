@@ -15,20 +15,21 @@ import type {
   AgentSessionSummaryPage,
 } from "@/types/agent/SessionTypes.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /** 一个 Agent 所属全部 Session 的持久化入口。 */
 export interface SessionStore {
   /** 返回指定 Session 的稳定持久化视图。 */
-  session(session_id: string, workspace_id?: string): SessionDataStore;
+  session(session_id: string, origin: SessionOrigin, workspace_id?: string): SessionDataStore;
 
   /** 判断活动 Session 是否存在。 */
-  has_session(session_id: string): Promise<boolean>;
+  has_session(session_id: string, origin_type?: string): Promise<boolean>;
 
   /** 永久删除活动 Session 的全部领域数据。 */
-  remove_session(session_id: string): Promise<boolean>;
+  remove_session(session_id: string, origin_type?: string): Promise<boolean>;
 
   /** 清空活动 Session 的 Message 数据。 */
-  clear_session_messages(session_id: string): Promise<boolean>;
+  clear_session_messages(session_id: string, origin_type?: string): Promise<boolean>;
 
   /** 返回活动 Session 摘要页。 */
   list_sessions(
@@ -37,7 +38,7 @@ export interface SessionStore {
   ): Promise<AgentSessionSummaryPage>;
 
   /** 将活动 Session 原子迁入归档区。 */
-  archive_session(session_id: string): Promise<AgentArchiveSessionResult>;
+  archive_session(session_id: string, origin_type?: string): Promise<AgentArchiveSessionResult>;
 
   /** 返回已归档 Session 摘要页。 */
   list_archived_sessions(

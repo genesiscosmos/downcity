@@ -8,17 +8,17 @@
 
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
-export type SessionHistoryMetaV1 = {
+export type SessionHistoryMeta = {
   /** schema 版本。 */
-  v: 1;
+  v: 2;
   /** 当前元信息所属的 session_id。 */
   session_id: string;
   /** 当前 session 所属的 agent_id。 */
   agent_id: string;
   /** 当前 session 所属的 workspace_id。 */
   workspace_id?: string;
-  /** 当前 Session 的创建来源；未填写时视为用户直接创建。 */
-  origin?: SessionOrigin;
+  /** 当前 Session 的创建来源与物理存储分区。 */
+  origin: SessionOrigin;
   /** 当前 session 首次创建时间戳（ms）。 */
   created_at?: number;
   /** 当前 session 初始化时解析到的系统时区。 */

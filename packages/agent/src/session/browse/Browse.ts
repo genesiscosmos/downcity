@@ -15,17 +15,18 @@ import type {
   AgentSessionSummary,
   AgentSessionSummaryPage,
 } from "@/types/agent/SessionTypes.js";
-import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
+import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import { resolve_session_message_preview } from "@/session/preview/SessionMessagePreview.js";
 import {
-  get_workspace_archived_session_active_messages_path,
-  get_workspace_archived_session_meta_path,
-  get_workspace_archived_sessions_path,
-  get_workspace_session_active_messages_path,
-  get_workspace_session_meta_path,
-  get_workspace_sessions_path,
+  get_agent_archived_session_active_messages_path,
+  get_agent_archived_session_meta_path,
+  get_agent_archived_sessions_path,
+  get_agent_session_active_messages_path,
+  get_agent_session_meta_path,
+  get_agent_sessions_path,
 } from "@/workspace/store/LocalStorePaths.js";
 import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
+import { normalize_session_origin_type } from "@/session/SessionOrigin.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type { FileSystem } from "@downcity/workspace";
 
@@ -48,7 +49,7 @@ type SessionBrowseBaseInput = {
   /**
    * 当前 session 已读取到的 metadata。
    */
-  metadata: SessionHistoryMetaV1;
+  metadata: SessionHistoryMeta;
 
   /**
    * 当前 session 已读取到的完整消息。
@@ -209,7 +210,7 @@ export function build_session_info(
     ...(input.metadata.model_label
       ? { model_label: input.metadata.model_label }
       : {}),
-    ...(input.metadata.origin ? { origin: input.metadata.origin } : {}),
+    origin: input.metadata.origin,
     ...(typeof input.metadata.timezone === "string" && input.metadata.timezone.trim()
       ? { timezone: input.metadata.timezone.trim() }
       : {}),
@@ -226,7 +227,7 @@ export function build_session_info(
  */
 async function resolve_session_summary_metadata(input: {
   /** 当前 session metadata。 */
-  metadata: SessionHistoryMetaV1;
+  metadata: SessionHistoryMeta;
   /** 当前消息 JSONL 路径。 */
   messagesPath: string;
   /** 当前 metadata 路径。 */
@@ -235,7 +236,7 @@ async function resolve_session_summary_metadata(input: {
   refresh: boolean;
   /** 当前 Workspace 的统一文件能力。 */
   files: FileSystem;
-}): Promise<SessionHistoryMetaV1> {
+}): Promise<SessionHistoryMeta> {
   const storage_stats = await resolve_session_disk_stats(
     input.messagesPath,
     input.files,
@@ -261,7 +262,7 @@ async function resolve_session_summary_metadata(input: {
     : "";
   const { preview_text: _previous_preview, ...metadata_without_preview } = input.metadata;
   void _previous_preview;
-  const next_metadata: SessionHistoryMetaV1 = {
+  const next_metadata: SessionHistoryMeta = {
     ...metadata_without_preview,
     message_count: storage_stats.message_count,
     historyBytes: history_bytes,
@@ -355,7 +356,8 @@ export async function list_agent_session_summary_page(params: {
   const limit = normalizeLimit(params.input?.limit, 50, 500);
   const cursor = normalizeCursor(params.input?.cursor);
   const query = String(params.input?.query || "").trim().toLowerCase();
-  const sessionsRoot = get_workspace_sessions_path(params.project_root);
+  const origin_type = normalize_session_origin_type(params.input?.origin_type ?? "chat");
+  const sessionsRoot = get_agent_sessions_path(params.project_root, origin_type);
 
   if (!(await params.files.path_exists(sessionsRoot))) {
     return {
@@ -372,12 +374,14 @@ export async function list_agent_session_summary_page(params: {
     if (!entry.is_directory) continue;
     const session_id = decodeMaybe(entry.name);
     if (!session_id) continue;
-    const meta_path = get_workspace_session_meta_path(
+    const meta_path = get_agent_session_meta_path(
       params.project_root,
+      origin_type,
       session_id,
     );
-    const messages_path = get_workspace_session_active_messages_path(
+    const messages_path = get_agent_session_active_messages_path(
       params.project_root,
+      origin_type,
       session_id,
     );
     const persisted_metadata = await read_session_metadata_from_path({
@@ -385,6 +389,7 @@ export async function list_agent_session_summary_page(params: {
       session_id,
       agent_id: params.agent_id,
       workspace_id: params.workspace_id,
+      origin_type,
       files: params.files,
     }).catch(() => null);
     if (!persisted_metadata) continue;
@@ -411,7 +416,7 @@ export async function list_agent_session_summary_page(params: {
       ...(typeof info.created_at === "number" ? { created_at: info.created_at } : {}),
       ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
       ...(info.model_label ? { model_label: info.model_label } : {}),
-      ...(info.origin ? { origin: info.origin } : {}),
+      origin: info.origin,
       ...(info.executing ? { executing: true } : {}),
     };
 
@@ -456,7 +461,8 @@ export async function list_archived_agent_session_summary_page(params: {
   const limit = normalizeLimit(params.input?.limit, 50, 500);
   const cursor = normalizeCursor(params.input?.cursor);
   const query = String(params.input?.query || "").trim().toLowerCase();
-  const archivedRoot = get_workspace_archived_sessions_path(params.project_root);
+  const origin_type = normalize_session_origin_type(params.input?.origin_type ?? "chat");
+  const archivedRoot = get_agent_archived_sessions_path(params.project_root, origin_type);
 
   if (!(await params.files.path_exists(archivedRoot))) {
     return {
@@ -473,12 +479,14 @@ export async function list_archived_agent_session_summary_page(params: {
     if (!entry.is_directory) continue;
     const session_id = decodeMaybe(entry.name);
     if (!session_id) continue;
-    const meta_path = get_workspace_archived_session_meta_path(
+    const meta_path = get_agent_archived_session_meta_path(
       params.project_root,
+      origin_type,
       session_id,
     );
-    const messages_path = get_workspace_archived_session_active_messages_path(
+    const messages_path = get_agent_archived_session_active_messages_path(
       params.project_root,
+      origin_type,
       session_id,
     );
     const persisted_metadata = await read_session_metadata_from_path({
@@ -486,6 +494,7 @@ export async function list_archived_agent_session_summary_page(params: {
       session_id,
       agent_id: params.agent_id,
       workspace_id: params.workspace_id,
+      origin_type,
       files: params.files,
     }).catch(() => null);
     if (!persisted_metadata) continue;
@@ -513,6 +522,7 @@ export async function list_archived_agent_session_summary_page(params: {
       ...(typeof info.created_at === "number" ? { created_at: info.created_at } : {}),
       ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
       ...(info.model_label ? { model_label: info.model_label } : {}),
+      origin: info.origin,
     };
 
     if (query) {

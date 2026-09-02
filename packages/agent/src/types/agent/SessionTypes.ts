@@ -17,14 +17,20 @@ import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
  * `sessions.get(session_id)` 指定已有 ID。
  */
 export interface AgentCreateSessionInput {
-  /** 保持创建输入为无配置字段的协议对象。 */
-  readonly __create_session_input?: never;
+  /**
+   * 当前 Session 的创建来源。
+   *
+   * 省略时使用 `{ type: "chat" }`；其他调用方可以使用任意稳定的非空类型。
+   */
+  readonly origin?: SessionOrigin;
 }
 
 /**
  * Session 列表查询输入。
  */
 export interface AgentListSessionsInput {
+  /** 要查询的来源分区；省略时只查询 `chat`。 */
+  origin_type?: string;
   /**
    * 只返回绑定到指定 Workspace 的 Session。
    *
@@ -326,7 +332,7 @@ export interface AgentSessionSummary {
   /** 当前 session 绑定模型的可读标签。 */
   model_label?: string;
   /** 当前 Session 的创建来源。 */
-  origin?: SessionOrigin;
+  origin: SessionOrigin;
   /** 当前 session 是否处于执行中。 */
   executing?: boolean;
 }
@@ -391,12 +397,16 @@ export interface AgentArchiveSessionInput {
    * - 正在执行中的 session 不允许归档。
    */
   id: string;
+  /** Session 所在的来源分区；省略时使用 `chat`。 */
+  origin_type?: string;
 }
 
 /**
  * 列出已归档 session 的输入参数。
  */
 export interface AgentArchiveSessionsInput {
+  /** 要查询的来源分区；省略时只查询 `chat`。 */
+  origin_type?: string;
   /**
    * 只返回绑定到指定 Workspace 的归档 Session。
    *

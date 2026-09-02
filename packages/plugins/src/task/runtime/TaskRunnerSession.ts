@@ -56,11 +56,27 @@ export async function createTaskSessionRuntimePort(params: {
   runDirAbs: string;
   runSessionId: string;
   userSimulatorSessionId: string;
+  task_id: string;
+  execution_id: string;
   sourceSessionId?: string;
 }): Promise<TaskSessionRuntimePort> {
   const { context, runDirAbs, runSessionId, userSimulatorSessionId } = params;
-  const task_session = await context.sessions.create();
-  const user_simulator_session = await context.sessions.create();
+  const task_session = await context.sessions.create({
+    origin: {
+      type: "task",
+      task_id: params.task_id,
+      execution_id: params.execution_id,
+      role: "executor",
+    },
+  });
+  const user_simulator_session = await context.sessions.create({
+    origin: {
+      type: "task",
+      task_id: params.task_id,
+      execution_id: params.execution_id,
+      role: "user_simulator",
+    },
+  });
   const source_session = params.sourceSessionId
     ? await context.sessions.get(params.sourceSessionId)
     : undefined;
@@ -75,8 +91,8 @@ export async function createTaskSessionRuntimePort(params: {
     );
   }
   const sessions_by_alias = new Map<string, SessionPort>([
-    [runSessionId, context.sessions.runtime(task_session.id)],
-    [userSimulatorSessionId, context.sessions.runtime(user_simulator_session.id)],
+    [runSessionId, context.sessions.runtime(task_session.id, "task")],
+    [userSimulatorSessionId, context.sessions.runtime(user_simulator_session.id, "task")],
   ]);
   const messages_by_session_id = new Map<string, SessionMessages>();
   /**

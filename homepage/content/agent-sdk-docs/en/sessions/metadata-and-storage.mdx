@@ -10,7 +10,7 @@ provider is in-memory. Applications should read and write through the Session AP
 files as their own database.
 
 ```text
-~/.downcity/agents/<agent_id>/sessions/<session_id>/
+~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/
 ├── meta.json
 ├── instruction.md
 └── messages/
@@ -21,9 +21,11 @@ files as their own database.
         └── 000000000901-000000001500.jsonl
 ```
 
-`session_id` is unique within one Agent. `meta.json` always records `agent_id` and records `workspace_id`
-only when the Session was created with a Workspace. Different Agents may reuse the same `session_id`
-without sharing data, and the project directory never receives `.downcity`.
+A Session is identified by `(origin.type, session_id)`. The default origin is `chat`; `group`, `task`,
+or any other non-empty string selects another partition. The path layer safely encodes custom origin types
+as one directory segment. Metadata schema v2 always records `agent_id` and the complete immutable `origin`,
+and records `workspace_id` only when the Session was created with a Workspace. The same `session_id` may
+exist in different origin partitions without sharing data, and the project directory never receives `.downcity`.
 
 `instruction.md` is an optional complete system snapshot. A Session fixes its first generated system in memory by default. Local `session.snapshot()` creates or overwrites the file. `session.syncshot()` regenerates the in-memory system and also overwrites the file when it already exists. If the file is absent when restored, the Session regenerates from the Agent's current instruction and plugins; deleting the file restores that behavior.
 
@@ -124,6 +126,6 @@ When a Session starts or reopens, the SDK also checks the Assistant draft. Exist
 
 ## `meta.json`
 
-`meta.json` stores lightweight list and detail fields such as `session_id`, `agent_id`, title, model label, timestamps, message count, history bytes, and timezone. Runtime model instances are never persisted. The SDK updates these summaries as Session properties and Message state change.
+`meta.json` stores `v: 2`, `session_id`, `agent_id`, the complete `origin`, and lightweight list and detail fields such as title, model label, timestamps, message count, history bytes, and timezone. Runtime model instances are never persisted. The SDK updates these summaries as Session properties and Message state change; `origin` is fixed at creation time.
 
 Archiving a Session and Compact Segments are distinct. `archive()` moves the entire Session into archived sessions storage; Compact only closes an old Active prefix under the current Session's `segments/` directory.

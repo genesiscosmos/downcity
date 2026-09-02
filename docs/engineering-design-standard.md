@@ -222,7 +222,7 @@ Agent 持有：
 - 唯一 PluginRegistry。
 - Agent 自身长期运行状态。
 
-Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集合；Workspace 通过 `agent.sessions.create/get({ workspace })` 注入单个 Session。运行时可以存在内部装配对象，但它不拥有 Session，也不属于公开领域 API。
+Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集合；Workspace 通过 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 注入单个 Session。运行时可以存在内部装配对象，但它不拥有 Session，也不属于公开领域 API。
 
 加入 City 后，每个 Agent 的运行状态统一保存在：
 
@@ -230,7 +230,7 @@ Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集�
 ~/.downcity/agents/<agent_id>/
 ```
 
-该目录包含 Agent 的 Session、日志和 Schedule。Session 的物理目录是 `<agent_root>/sessions/<session_id>/`；只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。运行时 Plugin 的 `data_path` 指向当前 Plugin 的 Agent 级目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的 City 级 profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`。
+该目录包含 Agent 的 Session、日志和 Schedule。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。运行时 Plugin 的 `data_path` 指向当前 Plugin 的 Agent 级目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的 City 级 profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`。
 
 Agent 不负责：
 
@@ -320,7 +320,7 @@ Agent 通过 `agent.json` 选择具有 `agent` 能力的 Plugin；只有该 Plug
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 
-当 City 注入本地持久化 Storage 时，Agent 运行状态保存在 `~/.downcity/agents/<agent_id>/`。Session ID 在 Agent 内唯一，Session metadata 必须记录 `agent_id`，并在创建时传入 Workspace 或 Group 来源时分别记录 `workspace_id` 或 `origin`。City 默认使用 MemoryStorage，未注入持久化 Storage 时运行状态只存在于当前进程。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
+当 City 注入本地持久化 Storage 时，Agent 运行状态保存在 `~/.downcity/agents/<agent_id>/`。Session 以 `(origin.type, session_id)` 作为稳定身份，同一 Session ID 可以存在于不同来源分区；`get(session_id, origin_type = "chat")` 必须确定性读取目标分区，禁止跨来源扫描。Session metadata 使用 `v: 2`，必须记录不可变的完整 `origin` 与 `agent_id`，并在创建时传入 Workspace 时记录 `workspace_id`。Group 成员 Session 使用 `group` 来源，Task Plugin 使用 `task` 来源，其他创建方可以直接声明自己的任意非空来源类型，不增加通用 Plugin 包装层。City 默认使用 MemoryStorage，未注入持久化 Storage 时运行状态只存在于当前进程。项目目录中不得创建 `<project>/.downcity`，也不进行旧目录兼容读取或迁移。
 
 Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务行为负责。Plugin 的业务权限、账号、网络访问与语义校验由 Plugin 或宿主管理。
 

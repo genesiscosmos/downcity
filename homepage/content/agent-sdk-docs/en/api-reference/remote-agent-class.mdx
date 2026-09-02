@@ -18,9 +18,9 @@ description: The core public API of the remote Agent client
 `agent.sessions` returns an `AgentSessions` with the following methods:
 
 - `agent.sessions.create(input?)`
-- `agent.sessions.get(session_id)`
+- `agent.sessions.get(session_id, origin_type = "chat")`
 - `agent.sessions.list(input?)`
-- `agent.sessions.archive({ id })`
+- `agent.sessions.archive({ id, origin_type? })`
 - `agent.sessions.archived(input?)`
 - `agent.sessions.clean_archive()`
 

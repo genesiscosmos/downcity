@@ -148,6 +148,8 @@ function create_local_chat_sessions(
 ): AgentSessions<RemoteAgentSession> {
   const wrap = (session: AgentSession): RemoteAgentSession => ({
     id: session.id,
+    workspace_id: session.workspace_id,
+    origin: session.origin,
     get_info: async () => await session.get_info(),
     prompt: async (input) => await session.prompt(input),
     stop: async () => await session.stop(),
@@ -171,7 +173,11 @@ function create_local_chat_sessions(
   });
   return {
     create: async () => wrap(await sessions.create({ workspace })),
-    get: async (session_id) => wrap(await sessions.get(session_id, { workspace })),
+    get: async (session_id, origin_type) => wrap(await sessions.get(
+      session_id,
+      origin_type,
+      { workspace },
+    )),
     list: async (input) => await sessions.list(input),
     archive: async (input) => await sessions.archive(input),
     archived: async (input) => await sessions.archived(input),

@@ -43,8 +43,12 @@ Agent 配置不绑定 Workspace。每个 Session 可以使用一个 Workspace；
 
 ```text
 ~/.downcity/agents/<agent_id>/
-└── sessions/<session_id>/
+├── sessions/<origin_type>/<session_id>/
+└── archived-sessions/<origin_type>/<session_id>/
 ```
+
+默认来源分区是 `chat`。创建方可以指定任意非空 `origin.type`，恢复时通过
+`get(session_id, origin_type)` 明确读取同一个来源分区。
 
 `Agent` 在构造时启动 plugin 生命周期与后台任务，Session 执行会自动等待初始化完成；关闭时使用 `await agent.dispose()`。HTTP 与 RPC 由宿主 `City` 通过 `city.http()` 与 `city.rpc()` 提供。
 

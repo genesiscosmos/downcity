@@ -14,10 +14,9 @@ description: 运行时数据目录结构与用途
 ├── agents/<agent_id>/
 │   ├── agent.json
 │   ├── SOUL.md
-│   └── sessions/
-│       ├── <session_id>/
-│       ├── archived-sessions/
-│       └── logs/
+│   ├── sessions/<origin_type>/<session_id>/
+│   ├── archived-sessions/<origin_type>/<session_id>/
+│   └── logs/
 ├── plugins/<plugin_id>/
 │   └── config.toml
 ├── runtimes/city/
@@ -30,9 +29,10 @@ description: 运行时数据目录结构与用途
 
 每日 JSONL 日志：`<YYYY-MM-DD>.jsonl`。
 
-### `agents/<agent_id>/sessions/<session_id>/messages/`
+### `agents/<agent_id>/sessions/<origin_type>/<session_id>/messages/`
 
 会话消息事实源：`active.jsonl`、`assistant_message.json` 与按 sequence 命名的 `segments/*.jsonl`。
+默认来源分区是 `chat`；其他任意非空来源类型会被编码为安全的单个目录段。
 
 ### Agent Memory
 

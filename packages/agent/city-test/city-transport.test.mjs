@@ -120,6 +120,74 @@ test("CityHTTP Workspace 路由只返回当前 Workspace 的 Session", async () 
   }
 });
 
+test("CityHTTP 按任意 origin 类型确定性访问 Session", async () => {
+  const { city, agents, root } = await create_city();
+  const transport = new CityHTTP(city);
+  try {
+    const create_response = await transport.router().request(
+      "/agents/first_agent/workspaces/first/api/sdk/sessions",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          origin: {
+            type: "automation/daily",
+            schedule_id: "daily-report",
+          },
+        }),
+      },
+    );
+    assert.equal(create_response.status, 200);
+    const created = (await create_response.json()).session;
+    assert.deepEqual(created.origin, {
+      type: "automation/daily",
+      schedule_id: "daily-report",
+    });
+
+    const default_list = await transport.router().request(
+      "/agents/first_agent/workspaces/first/api/sdk/sessions",
+    );
+    assert.deepEqual((await default_list.json()).sessions, []);
+
+    const origin_query = "origin_type=automation%2Fdaily";
+    const origin_list = await transport.router().request(
+      `/agents/first_agent/workspaces/first/api/sdk/sessions?${origin_query}`,
+    );
+    assert.deepEqual(
+      (await origin_list.json()).sessions.map((item) => item.session_id),
+      [created.session_id],
+    );
+
+    const default_get = await transport.router().request(
+      `/agents/first_agent/workspaces/first/api/sdk/sessions/${created.session_id}`,
+    );
+    assert.equal(default_get.status, 500);
+    const origin_get = await transport.router().request(
+      `/agents/first_agent/workspaces/first/api/sdk/sessions/${created.session_id}?${origin_query}`,
+    );
+    assert.equal(origin_get.status, 200);
+    assert.equal((await origin_get.json()).session.origin.type, "automation/daily");
+
+    const archive_response = await transport.router().request(
+      `/agents/first_agent/workspaces/first/api/sdk/sessions/${created.session_id}/archive?${origin_query}`,
+      { method: "POST" },
+    );
+    assert.equal(archive_response.status, 200);
+    const archived_list = await transport.router().request(
+      `/agents/first_agent/workspaces/first/api/sdk/archived-sessions?${origin_query}`,
+    );
+    assert.deepEqual(
+      (await archived_list.json()).page.items.map((item) => item.session_id),
+      [created.session_id],
+    );
+  } finally {
+    await transport.close();
+    await city.close();
+    await Promise.all(agents.map((agent) => agent.dispose()));
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("CityHTTP concurrently creates only one Agent extension", async () => {
   const { city, agents, root } = await create_city();
   let extension_count = 0;

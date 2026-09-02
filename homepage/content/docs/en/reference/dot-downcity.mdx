@@ -14,10 +14,9 @@ description: Runtime data layout and what each folder is for
 ├── agents/<agent_id>/
 │   ├── agent.json
 │   ├── SOUL.md
-│   └── sessions/
-│       ├── <session_id>/
-│       ├── archived-sessions/
-│       └── logs/
+│   ├── sessions/<origin_type>/<session_id>/
+│   ├── archived-sessions/<origin_type>/<session_id>/
+│   └── logs/
 ├── plugins/<plugin_id>/
 │   └── config.toml
 ├── runtimes/city/
@@ -30,9 +29,10 @@ description: Runtime data layout and what each folder is for
 
 Daily JSONL logs: `<YYYY-MM-DD>.jsonl`.
 
-### `agents/<agent_id>/sessions/<session_id>/messages/`
+### `agents/<agent_id>/sessions/<origin_type>/<session_id>/messages/`
 
 Conversation source of truth: `active.jsonl`, `assistant_message.json`, and sequence-named `segments/*.jsonl`.
+The default origin partition is `chat`; custom non-empty origin types are encoded into one safe path segment.
 
 ### Agent Memory
 

@@ -18,9 +18,9 @@ description: 远程 Agent 客户端的核心公开接口
 `agent.sessions` 返回一个 `AgentSessions`，包含以下方法：
 
 - `agent.sessions.create(input?)`
-- `agent.sessions.get(session_id)`
+- `agent.sessions.get(session_id, origin_type = "chat")`
 - `agent.sessions.list(input?)`
-- `agent.sessions.archive({ id })`
+- `agent.sessions.archive({ id, origin_type? })`
 - `agent.sessions.archived(input?)`
 - `agent.sessions.clean_archive()`
 

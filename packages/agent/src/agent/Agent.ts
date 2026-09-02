@@ -116,12 +116,12 @@ export class Agent {
     const get_store = (): import("@/types/store/SessionStore.js").SessionStore =>
       get_agent_storage(this).sessions;
     const session_store = {
-      session: (session_id: string, workspace_id?: string) => get_store().session(session_id, workspace_id),
-      has_session: async (session_id: string) => await get_store().has_session(session_id),
-      remove_session: async (session_id: string) => await get_store().remove_session(session_id),
-      clear_session_messages: async (session_id: string) => await get_store().clear_session_messages(session_id),
+      session: (session_id, origin, workspace_id) => get_store().session(session_id, origin, workspace_id),
+      has_session: async (session_id, origin_type) => await get_store().has_session(session_id, origin_type),
+      remove_session: async (session_id, origin_type) => await get_store().remove_session(session_id, origin_type),
+      clear_session_messages: async (session_id, origin_type) => await get_store().clear_session_messages(session_id, origin_type),
       list_sessions: async (input: Parameters<import("@/types/store/SessionStore.js").SessionStore["list_sessions"]>[0], executing: ReadonlySet<string>) => await get_store().list_sessions(input, executing),
-      archive_session: async (session_id: string) => await get_store().archive_session(session_id),
+      archive_session: async (session_id, origin_type) => await get_store().archive_session(session_id, origin_type),
       list_archived_sessions: async (input?: Parameters<import("@/types/store/SessionStore.js").SessionStore["list_archived_sessions"]>[0]) => await get_store().list_archived_sessions(input),
       clean_archive: async () => await get_store().clean_archive(),
       dispose: async () => {},

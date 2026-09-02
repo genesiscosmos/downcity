@@ -121,6 +121,7 @@ export class RpcClient {
       method: "sdk.sessions.archive",
       params: {
         session_id: input.id,
+        origin_type: input.origin_type || "chat",
       },
     });
     return data.result;
@@ -156,11 +157,12 @@ export class RpcClient {
   /**
    * 获取远程 session 信息。
    */
-  async get_session(session_id: string): Promise<AgentSessionInfo> {
+  async get_session(session_id: string, origin_type: string): Promise<AgentSessionInfo> {
     const data = await this.request<{ session: AgentSessionInfo }>({
       method: "sdk.sessions.get",
       params: {
         session_id: session_id,
+        origin_type,
       },
     });
     return data.session;
@@ -171,12 +173,14 @@ export class RpcClient {
    */
   async prompt_session(params: {
     session_id: string;
+    origin_type: string;
     input: AgentSessionPromptInput;
   }): Promise<{ id: string }> {
     const data = await this.request<{ turn: { id: string } }>({
       method: "sdk.sessions.prompt",
       params: {
         session_id: params.session_id,
+        origin_type: params.origin_type,
         input: params.input,
       },
     });
@@ -186,11 +190,12 @@ export class RpcClient {
   /**
    * 停止远程 session 当前 turn。
    */
-  async stop_session(session_id: string): Promise<AgentSessionStopResult> {
+  async stop_session(session_id: string, origin_type: string): Promise<AgentSessionStopResult> {
     const data = await this.request<{ result: AgentSessionStopResult }>({
       method: "sdk.sessions.stop",
       params: {
         session_id: session_id,
+        origin_type,
       },
     });
     return data.result;
@@ -199,11 +204,12 @@ export class RpcClient {
   /**
    * 把一次显式历史压缩加入远程 Session 的有序输入队列。
    */
-  async compact_session(session_id: string): Promise<{ id: string }> {
+  async compact_session(session_id: string, origin_type: string): Promise<{ id: string }> {
     const data = await this.request<{ compact: { id: string } }>({
       method: "sdk.sessions.compact",
       params: {
         session_id: session_id,
+        origin_type,
       },
     });
     return data.compact;
@@ -214,12 +220,14 @@ export class RpcClient {
    */
   async get_session_messages(params: {
     session_id: string;
+    origin_type: string;
     input?: ListSessionMessagesInput;
   }): Promise<SessionMessagePage> {
     const data = await this.request<{ messages: SessionMessagePage }>({
       method: "sdk.sessions.messages",
       params: {
         session_id: params.session_id,
+        origin_type: params.origin_type,
         input: params.input,
       },
     });
@@ -229,50 +237,53 @@ export class RpcClient {
   /**
    * 读取 system snapshot。
    */
-  async get_session_system(session_id: string): Promise<AgentSessionSystemSnapshot> {
+  async get_session_system(session_id: string, origin_type: string): Promise<AgentSessionSystemSnapshot> {
     const data = await this.request<{ system: AgentSessionSystemSnapshot }>({
       method: "sdk.sessions.system",
       params: {
         session_id: session_id,
+        origin_type,
       },
     });
     return data.system;
   }
 
-  async get_session_interactions(session_id: string): Promise<SessionPendingInteraction[]> {
+  async get_session_interactions(session_id: string, origin_type: string): Promise<SessionPendingInteraction[]> {
     const data = await this.request<{ interactions: SessionPendingInteraction[] }>({
       method: "sdk.sessions.interactions",
-      params: { session_id: session_id },
+      params: { session_id: session_id, origin_type },
     });
     return data.interactions;
   }
 
-  async get_session_status(session_id: string): Promise<AgentSessionStatus> {
+  async get_session_status(session_id: string, origin_type: string): Promise<AgentSessionStatus> {
     const data = await this.request<{ status: AgentSessionStatus }>({
       method: "sdk.sessions.status",
-      params: { session_id: session_id },
+      params: { session_id: session_id, origin_type },
     });
     return data.status;
   }
 
   async set_session(
     session_id: string,
+    origin_type: string,
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
     await this.request<{ queued: true }>({
       method: "sdk.sessions.set",
-      params: { session_id: session_id, input, ...(options ? { options } : {}) },
+      params: { session_id: session_id, origin_type, input, ...(options ? { options } : {}) },
     });
   }
 
   async respond_session_interaction(
     session_id: string,
+    origin_type: string,
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
     const data = await this.request<{ result: SessionInteractionResult }>({
       method: "sdk.sessions.respond",
-      params: { session_id: session_id, input },
+      params: { session_id: session_id, origin_type, input },
     });
     return data.result;
   }
@@ -282,6 +293,7 @@ export class RpcClient {
    */
   async fork_session(params: {
     session_id: string;
+    origin_type: string;
     message_id?: string;
     include_message?: boolean;
   }): Promise<AgentSessionInfo> {
@@ -289,6 +301,7 @@ export class RpcClient {
       method: "sdk.sessions.fork",
       params: {
         session_id: params.session_id,
+        origin_type: params.origin_type,
         ...(params.message_id ? { message_id: params.message_id } : {}),
         ...(params.include_message === false ? { include_message: false } : {}),
       },
@@ -301,6 +314,7 @@ export class RpcClient {
    */
   async subscribe_session(params: {
     session_id: string;
+    origin_type: string;
     on_ready: () => void;
     on_event: (event: SessionMutation) => void;
     on_close: (error?: unknown) => void;
@@ -309,6 +323,7 @@ export class RpcClient {
       method: "sdk.sessions.subscribe",
       params: {
         session_id: params.session_id,
+        origin_type: params.origin_type,
       },
     });
     const subscription_id = String(data.subscription_id || "").trim();

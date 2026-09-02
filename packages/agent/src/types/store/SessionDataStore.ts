@@ -6,7 +6,7 @@
  * - Message、Metadata 与 Instruction 共享同一个 Session 生命周期边界。
  */
 
-import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
+import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import type {
   SessionAssistantMessage,
   SessionMessage,
@@ -18,6 +18,7 @@ import type {
   SessionSegmentSummary,
 } from "@/types/session/SessionSegment.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /** 在 Message Store 写事务中创建新消息所需的稳定状态。 */
 export interface SessionMessageCommitState {
@@ -86,6 +87,9 @@ export interface SessionDataStore {
   /** 当前 Session 的稳定标识。 */
   readonly session_id: string;
 
+  /** 当前 Session 的创建来源与物理存储分区。 */
+  readonly origin: SessionOrigin;
+
   /** 当前 Session 的 Message 持久化能力。 */
   readonly messages: SessionMessageStore;
 
@@ -93,10 +97,10 @@ export interface SessionDataStore {
   readonly attachments: SessionAttachmentStore;
 
   /** 读取 Session Metadata；不存在时返回规范化的初始值。 */
-  read_metadata(): Promise<SessionHistoryMetaV1>;
+  read_metadata(): Promise<SessionHistoryMeta>;
 
   /** 原子写入完整 Session Metadata。 */
-  write_metadata(metadata: SessionHistoryMetaV1): Promise<void>;
+  write_metadata(metadata: SessionHistoryMeta): Promise<void>;
 
   /** 判断 Session 是否存在显式固化的完整 system。 */
   has_instruction(): Promise<boolean>;

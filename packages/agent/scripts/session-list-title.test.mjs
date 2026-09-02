@@ -131,6 +131,7 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
   const messages_dir = path.join(
     entry.data_path,
     "sessions",
+    "chat",
     encodeURIComponent(session.id),
     "messages",
   );

@@ -1067,7 +1067,11 @@ export class AgentController {
   /** 读取 Session，并确保实时 mutation 只订阅一次。 */
   private async get_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
     const entry = await this.require_workspace_entry(agent_id, workspace_id);
-    const session = await this.require_native_agent(agent_id).sessions.get(session_id, { workspace: entry.workspace });
+    const session = await this.require_native_agent(agent_id).sessions.get(
+      session_id,
+      "chat",
+      { workspace: entry.workspace },
+    );
     this.observe_session(agent_id, workspace_id, session);
     return session;
   }

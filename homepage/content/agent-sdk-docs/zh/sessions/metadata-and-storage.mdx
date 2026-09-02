@@ -9,7 +9,7 @@ SDK Session 保存在 City 提供的 Agent 存储作用域中；没有 City 时�
 Session API 读写，不要把这些文件当作自己的数据库。
 
 ```text
-~/.downcity/agents/<agent_id>/sessions/<session_id>/
+~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/
 ├── meta.json
 ├── instruction.md
 └── messages/
@@ -20,9 +20,10 @@ Session API 读写，不要把这些文件当作自己的数据库。
         └── 000000000901-000000001500.jsonl
 ```
 
-`session_id` 在一个 Agent 内唯一。`meta.json` 总是记录 `agent_id`，只有创建 Session 时传入
-Workspace 才记录 `workspace_id`。不同 Agent 可以复用相同 `session_id` 而不会共享数据，项目目录
-不会创建 `.downcity`。
+Session 以 `(origin.type, session_id)` 作为身份。默认来源是 `chat`；`group`、`task` 或其他任意
+非空字符串会进入独立分区，自定义来源类型由路径层安全编码为单个目录段。`meta.json` v2 始终记录
+`agent_id` 和完整且不可变的 `origin`，只有创建 Session 时传入 Workspace 才记录 `workspace_id`。
+同一个 `session_id` 可以存在于不同来源分区而互不共享数据，项目目录不会创建 `.downcity`。
 
 `instruction.md` 是可选的完整 system 快照。Session 首次生成 system 后默认只在内存中固定；调用本地 `session.snapshot()` 会创建或覆盖该文件。`session.syncshot()` 会重新生成内存 system，并在文件已经存在时同步覆盖。恢复时若文件不存在，Session 会从 Agent 当前 instruction 和 plugin 重新生成；删除文件即可恢复这一行为。
 
@@ -123,6 +124,6 @@ Compact 先原子创建 Segment，再原子覆盖 Active。若进程在两步之
 
 ## `meta.json`
 
-`meta.json` 保存列表和详情所需的轻量属性，包括 `session_id`、`agent_id`、标题、模型标签、时间戳、消息数、历史字节数和时区。运行时模型实例不会持久化。Session 属性或消息状态变化时，SDK 会同步更新这些摘要字段。
+`meta.json` 保存 `v: 2`、`session_id`、`agent_id`、完整 `origin`，以及标题、模型标签、时间戳、消息数、历史字节数和时区等列表摘要。运行时模型实例不会持久化。Session 属性或消息状态变化时，SDK 会同步更新摘要字段；`origin` 在创建后不会改变。
 
 归档整个 Session 与 Compact Segment 是两件不同的事。`archive()` 会把整个 Session 移入 archived sessions 区域；Compact 只在当前 Session 的 `segments/` 中关闭旧 Active 前缀。

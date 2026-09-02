@@ -7,6 +7,7 @@
  */
 
 import type { FileSystem } from "@downcity/workspace";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /** LocalSessionStore 构造参数。 */
 export interface LocalSessionStoreOptions {
@@ -32,6 +33,8 @@ export interface LocalSessionDataStoreOptions {
   workspace_id?: string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
+  /** 当前 Session 的创建来源与物理存储分区。 */
+  origin: SessionOrigin;
 }
 
 /** JsonlSessionMessageStore 构造参数。 */

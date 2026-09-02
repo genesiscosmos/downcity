@@ -5,7 +5,6 @@
  */
 
 import type { WorkspaceBase } from "@downcity/workspace";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { AgentCreateSessionInput } from "@/types/agent/SessionTypes.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
@@ -23,8 +22,12 @@ import type {
 export interface AgentCreateSessionOptions extends AgentCreateSessionInput {
   /** 本次 Session 可选使用的 Workspace 资源；未传入时使用内存执行上下文。 */
   workspace?: WorkspaceBase;
-  /** 当前 Session 的创建来源；未填写时视为用户直接创建。 */
-  origin?: SessionOrigin;
+}
+
+/** 恢复 Agent Session 时使用的本地执行上下文。 */
+export interface AgentGetSessionOptions {
+  /** 当前 Session 使用的 Workspace；必须与持久化 Metadata 一致。 */
+  workspace?: WorkspaceBase;
 }
 
 /** Agent 公开的 Session 创建入口。 */
@@ -33,7 +36,11 @@ export interface AgentSessionCollection {
   create(options?: AgentCreateSessionOptions): Promise<AgentSession>;
 
   /** 在指定 Workspace 中恢复一个已经属于当前 Agent 的 Session。 */
-  get(session_id: string, options?: AgentCreateSessionOptions): Promise<AgentSession>;
+  get(
+    session_id: string,
+    origin_type?: string,
+    options?: AgentGetSessionOptions,
+  ): Promise<AgentSession>;
 
   /** 列出当前 Agent 的活动 Session。 */
   list(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage>;
@@ -48,14 +55,14 @@ export interface AgentSessionCollection {
   clean_archive(): Promise<AgentCleanArchiveResult>;
 
   /** 获取 Session runtime port。 */
-  runtime(session_id: string): SessionPort;
+  runtime(session_id: string, origin_type?: string): SessionPort;
 
   /** 返回当前 Agent 正在执行的 Session 标识。 */
   list_executing_session_ids(): string[];
 
   /** 永久删除 Session。 */
-  remove(session_id: string): Promise<boolean>;
+  remove(session_id: string, origin_type?: string): Promise<boolean>;
 
   /** 清空 Session 消息。 */
-  clear_messages(session_id: string): Promise<boolean>;
+  clear_messages(session_id: string, origin_type?: string): Promise<boolean>;
 }

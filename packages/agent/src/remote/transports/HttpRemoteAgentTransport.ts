@@ -68,6 +68,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return headers;
   }
 
+  /** 构建携带确定性来源分区的单 Session URL。 */
+  private session_url(session_id: string, origin_type: string, suffix = ""): string {
+    const query = new URLSearchParams({ origin_type });
+    return `${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}${suffix}?${query.toString()}`;
+  }
+
   async create_session(input?: AgentCreateSessionInput): Promise<AgentSessionInfo> {
     const payload = await read_http_json<{
       success?: boolean;
@@ -78,7 +84,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       headers: this.headers({
         "Content-Type": "application/json",
       }),
-      body: JSON.stringify({}),
+      body: JSON.stringify(input ?? {}),
     });
     if (!payload.success || !payload.session?.session_id) {
       throw new Error(String(payload.error || "Remote session create failed"));
@@ -86,12 +92,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.session;
   }
 
-  async get_info(session_id: string): Promise<AgentSessionInfo> {
+  async get_info(session_id: string, origin_type: string): Promise<AgentSessionInfo> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       session?: AgentSessionInfo;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}`, {
+    }>(this.session_url(session_id, origin_type), {
       headers: this.headers(),
     });
     if (!payload.success || !payload.session?.session_id) {
@@ -102,6 +108,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async prompt(
     session_id: string,
+    origin_type: string,
     input: AgentSessionPromptInput,
   ): Promise<{ id: string }> {
     const payload = await read_http_json<{
@@ -110,7 +117,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       turn?: {
         id?: string;
       };
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/prompt`, {
+    }>(this.session_url(session_id, origin_type, "/prompt"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
@@ -126,12 +133,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return { id };
   }
 
-  async stop(session_id: string): Promise<AgentSessionStopResult> {
+  async stop(session_id: string, origin_type: string): Promise<AgentSessionStopResult> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       result?: AgentSessionStopResult;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/stop`, {
+    }>(this.session_url(session_id, origin_type, "/stop"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
@@ -143,12 +150,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.result;
   }
 
-  async compact(session_id: string): Promise<{ id: string }> {
+  async compact(session_id: string, origin_type: string): Promise<{ id: string }> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       compact?: { id: string };
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/compact`, {
+    }>(this.session_url(session_id, origin_type, "/compact"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
@@ -162,6 +169,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async subscribe(params: {
     session_id: string;
+    origin_type: string;
     on_ready: () => void;
     on_event: (event: SessionMutation) => void;
     on_close: (error?: unknown) => void;
@@ -174,7 +182,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       reject_ready = reject;
     });
     const response = await fetch(
-      `${this.base_url}/api/sdk/sessions/${encodeURIComponent(params.session_id)}/events`,
+      this.session_url(params.session_id, params.origin_type, "/events"),
       {
         headers: this.headers(),
         signal: abort_controller.signal,
@@ -210,9 +218,10 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async messages(
     session_id: string,
+    origin_type: string,
     input?: ListSessionMessagesInput,
   ): Promise<SessionMessagePage> {
-    const query = new URLSearchParams();
+    const query = new URLSearchParams({ origin_type });
     if (input?.before_sequence !== undefined) {
       query.set("before_sequence", String(input.before_sequence));
     }
@@ -222,9 +231,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       error?: string;
       messages?: SessionMessagePage;
     }>(
-      `${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/messages${
-        query.size > 0 ? `?${query.toString()}` : ""
-      }`,
+      `${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/messages?${query.toString()}`,
       {
         headers: this.headers(),
       },
@@ -235,12 +242,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.messages;
   }
 
-  async system(session_id: string): Promise<AgentSessionSystemSnapshot> {
+  async system(session_id: string, origin_type: string): Promise<AgentSessionSystemSnapshot> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       system?: AgentSessionSystemSnapshot;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/system`, {
+    }>(this.session_url(session_id, origin_type, "/system"), {
       headers: this.headers(),
     });
     if (!payload.success || !payload.system || !Array.isArray(payload.system.blocks)) {
@@ -251,6 +258,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async fork(
     session_id: string,
+    origin_type: string,
     input?: AgentSessionForkInput | string,
   ): Promise<AgentSessionInfo> {
     const message_id =
@@ -262,7 +270,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       success?: boolean;
       error?: string;
       session?: AgentSessionInfo;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/fork`, {
+    }>(this.session_url(session_id, origin_type, "/fork"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
@@ -280,6 +288,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async list_sessions(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage> {
     const query = new URLSearchParams();
+    query.set("origin_type", input?.origin_type || "chat");
     if (input?.limit !== undefined) query.set("limit", String(input.limit));
     if (input?.cursor) query.set("cursor", input.cursor);
     if (input?.query) query.set("query", input.query);
@@ -288,7 +297,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       error?: string;
       page?: AgentSessionSummaryPage;
     }>(
-      `${this.base_url}/api/sdk/sessions${query.size > 0 ? `?${query.toString()}` : ""}`,
+      `${this.base_url}/api/sdk/sessions?${query.toString()}`,
       {
         headers: this.headers(),
       },
@@ -312,7 +321,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       session_id?: string;
       archived_at?: number;
     }>(
-      `${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/archive`,
+      this.session_url(session_id, input.origin_type || "chat", "/archive"),
       {
         method: "POST",
         headers: this.headers({
@@ -336,6 +345,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     input?: AgentArchiveSessionsInput,
   ): Promise<AgentArchiveSessionsResult> {
     const query = new URLSearchParams();
+    query.set("origin_type", input?.origin_type || "chat");
     if (input?.limit !== undefined) query.set("limit", String(input.limit));
     if (input?.cursor) query.set("cursor", input.cursor);
     if (input?.query) query.set("query", input.query);
@@ -344,7 +354,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       error?: string;
       page?: AgentArchiveSessionsResult;
     }>(
-      `${this.base_url}/api/sdk/archived-sessions${query.size > 0 ? `?${query.toString()}` : ""}`,
+      `${this.base_url}/api/sdk/archived-sessions?${query.toString()}`,
       {
         headers: this.headers(),
       },
@@ -397,12 +407,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload;
   }
 
-  async interactions(session_id: string): Promise<SessionPendingInteraction[]> {
+  async interactions(session_id: string, origin_type: string): Promise<SessionPendingInteraction[]> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       interactions?: SessionPendingInteraction[];
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/interactions`, {
+    }>(this.session_url(session_id, origin_type, "/interactions"), {
       headers: this.headers(),
     });
     if (!payload.success || !Array.isArray(payload.interactions)) {
@@ -411,12 +421,12 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload.interactions;
   }
 
-  async status(session_id: string): Promise<AgentSessionStatus> {
+  async status(session_id: string, origin_type: string): Promise<AgentSessionStatus> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
       status?: AgentSessionStatus;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/status`, {
+    }>(this.session_url(session_id, origin_type, "/status"), {
       headers: this.headers(),
     });
     if (!payload.success || !payload.status) {
@@ -427,6 +437,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async set(
     session_id: string,
+    origin_type: string,
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
@@ -434,7 +445,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       success?: boolean;
       error?: string;
       queued?: boolean;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/set`, {
+    }>(this.session_url(session_id, origin_type, "/set"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",
@@ -448,13 +459,14 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async respond(
     session_id: string,
+    origin_type: string,
     input: RespondSessionInteractionInput,
   ): Promise<SessionInteractionResult> {
     const payload = await read_http_json<{
       success?: boolean;
       result?: SessionInteractionResult;
       error?: string;
-    }>(`${this.base_url}/api/sdk/sessions/${encodeURIComponent(session_id)}/respond`, {
+    }>(this.session_url(session_id, origin_type, "/respond"), {
       method: "POST",
       headers: this.headers({
         "Content-Type": "application/json",

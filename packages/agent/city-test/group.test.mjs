@@ -85,7 +85,7 @@ test("Group broadcasts user messages and collects member replies", async () => {
     ["agent", "architect", "reply:architect"],
     ["agent", "reviewer", "reply:reviewer"],
   ]);
-  const architect_sessions = await architect.sessions.list();
+  const architect_sessions = await architect.sessions.list({ origin_type: "group" });
   assert.equal(architect_sessions.items.length, 1);
   assert.deepEqual(architect_sessions.items[0].origin, { type: "group", group_id: "delivery", group_session_id: group_session.id });
   await city.close();
@@ -403,7 +403,7 @@ test("Group 成员 Session 使用 Group 的共享 Workspace", async () => {
   await group_session.prompt({ query: "build" });
   await wait_for_group_idle(group_session);
   await new Promise((resolve) => setTimeout(resolve, 0));
-  const sessions = await agent.sessions.list({ workspace_id: "shared-project" });
+  const sessions = await agent.sessions.list({ workspace_id: "shared-project", origin_type: "group" });
   assert.equal(sessions.items.length, 1);
   assert.deepEqual(sessions.items[0].origin, { type: "group", group_id: "build-team", group_session_id: group_session.id });
   assert.equal((await group.sessions.list({ workspace_id: "shared-project" })).length, 1);

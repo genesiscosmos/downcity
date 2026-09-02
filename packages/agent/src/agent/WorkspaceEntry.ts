@@ -145,23 +145,27 @@ export class WorkspaceEntry {
 
     this.sessions = {
       create: async (input) => await this.agent.sessions.create({ ...(input || {}), workspace: this.workspace }),
-      get: async (session_id, input) => await this.agent.sessions.get(session_id, { ...(input || {}), workspace: this.workspace }),
+      get: async (session_id, origin_type, input) => await this.agent.sessions.get(
+        session_id,
+        origin_type,
+        { ...(input || {}), workspace: this.workspace },
+      ),
       list: async (input) => await this.agent.sessions.list({ ...(input || {}), workspace_id: this.workspace_id }),
       archive: async (input) => {
-        await this.agent.sessions.get(input.id, { workspace: this.workspace });
+        await this.agent.sessions.get(input.id, input.origin_type, { workspace: this.workspace });
         return await this.agent.sessions.archive(input);
       },
       archived: async (input) => await this.agent.sessions.archived({ ...(input || {}), workspace_id: this.workspace_id }),
       clean_archive: async () => await this.agent.sessions.clean_archive(),
-      runtime: (session_id) => this.agent.sessions.runtime(session_id),
+      runtime: (session_id, origin_type) => this.agent.sessions.runtime(session_id, origin_type),
       list_executing_session_ids: () => (this.agent.sessions as AgentSessions).list_executing_session_ids(this.workspace_id),
-      remove: async (session_id) => {
-        await this.agent.sessions.get(session_id, { workspace: this.workspace });
-        return await this.agent.sessions.remove(session_id);
+      remove: async (session_id, origin_type) => {
+        await this.agent.sessions.get(session_id, origin_type, { workspace: this.workspace });
+        return await this.agent.sessions.remove(session_id, origin_type);
       },
-      clear_messages: async (session_id) => {
-        await this.agent.sessions.get(session_id, { workspace: this.workspace });
-        return await this.agent.sessions.clear_messages(session_id);
+      clear_messages: async (session_id, origin_type) => {
+        await this.agent.sessions.get(session_id, origin_type, { workspace: this.workspace });
+        return await this.agent.sessions.clear_messages(session_id, origin_type);
       },
     };
 

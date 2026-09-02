@@ -121,6 +121,14 @@ test("scheduled task appends its result to the linked Workspace Session", async 
     unsubscribe();
     assert.equal(triggered.success, true);
 
+    const task_sessions = await entry.sessions.list({ origin_type: "task" });
+    assert.equal(task_sessions.items.length, 2);
+    assert.deepEqual(
+      new Set(task_sessions.items.map((item) => item.origin.role)),
+      new Set(["executor", "user_simulator"]),
+    );
+    assert.equal((await entry.sessions.list()).items.length, 1);
+
     const history = await entry.plugins.run_action({
       plugin: "task",
       action: "history",

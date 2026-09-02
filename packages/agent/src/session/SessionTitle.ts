@@ -12,7 +12,7 @@ import {
   build_text_model_messages,
   generate_model,
 } from "@executor/model/ModelGenerate.js";
-import type { SessionHistoryMetaV1 } from "@/executor/types/SessionHistoryMeta.js";
+import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
@@ -62,7 +62,7 @@ export interface EnsureSessionTitleParams {
   signal?: AbortSignal;
 
   /** 可选的标题提交入口，用于与其他 metadata mutation 串行化。 */
-  commit_title?: (title: string) => Promise<SessionHistoryMetaV1>;
+  commit_title?: (title: string) => Promise<SessionHistoryMeta>;
 }
 
 function truncateTitle(input: string, maxChars: number): string {
@@ -241,7 +241,7 @@ async function generateSessionTitle(input: {
  */
 export async function ensure_session_title(
   input: EnsureSessionTitleParams,
-): Promise<SessionHistoryMetaV1> {
+): Promise<SessionHistoryMeta> {
   const current = await input.store.read_metadata();
   if (current.title) return current;
 
@@ -275,7 +275,7 @@ export async function ensure_session_title(
   if (!generatedTitle) return current;
 
   if (input.commit_title) return await input.commit_title(generatedTitle);
-  const generatedMeta: SessionHistoryMetaV1 = {
+  const generatedMeta: SessionHistoryMeta = {
     ...(await input.store.read_metadata()),
     title: generatedTitle,
   };

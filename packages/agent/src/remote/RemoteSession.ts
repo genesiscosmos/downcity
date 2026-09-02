@@ -44,6 +44,7 @@ import type {
   RemoteSessionTransport,
   TransportSubscription,
 } from "@/remote/RemoteTransport.js";
+import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 type Deferred<T> = {
   /** 当前延迟 Promise。 */
@@ -75,6 +76,7 @@ export class RemoteSession implements RemoteAgentSession {
   readonly id: string;
   readonly agent_id: string;
   readonly config: AgentSessionConfigSnapshot;
+  readonly origin: SessionOrigin;
 
   private readonly transport: RemoteSessionTransport;
   private readonly event_hub: SessionEventHub;
@@ -91,6 +93,7 @@ export class RemoteSession implements RemoteAgentSession {
     this.transport = transport;
     this.id = info.session_id;
     this.agent_id = info.agent_id;
+    this.origin = info.origin;
     this.config = {
       ...(info.model_label ? { model_label: info.model_label } : {}),
     };
@@ -99,7 +102,7 @@ export class RemoteSession implements RemoteAgentSession {
 
   /** 读取当前远程 Session 详情。 */
   async get_info(): Promise<AgentSessionInfo> {
-    return await this.transport.get_info(this.id);
+    return await this.transport.get_info(this.id, this.origin.type);
   }
 
   /** 向当前远程 Session 追加 Prompt。 */
@@ -108,20 +111,20 @@ export class RemoteSession implements RemoteAgentSession {
       throw new Error("remote session.prompt requires a non-empty query");
     }
     await this.ensure_event_pump();
-    const turn = await this.transport.prompt(this.id, input);
+    const turn = await this.transport.prompt(this.id, this.origin.type, input);
     return create_turn_handle(this.ensure_turn_lifecycle(turn.id));
   }
 
   /** 停止当前远程 Session Turn。 */
   async stop(): Promise<AgentSessionStopResult> {
     await this.ensure_event_pump();
-    return await this.transport.stop(this.id);
+    return await this.transport.stop(this.id, this.origin.type);
   }
 
   /** 把一次显式历史压缩加入当前远程 Session 的有序输入队列。 */
   async compact(): Promise<AgentSessionCompactHandle> {
     await this.ensure_event_pump();
-    const compact = await this.transport.compact(this.id);
+    const compact = await this.transport.compact(this.id, this.origin.type);
     return create_compact_handle(this.ensure_compact_lifecycle(compact.id));
   }
 
@@ -141,22 +144,22 @@ export class RemoteSession implements RemoteAgentSession {
 
   /** 读取远程 Message 快照。 */
   async messages(input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
-    return await this.transport.messages(this.id, input);
+    return await this.transport.messages(this.id, this.origin.type, input);
   }
 
   /** 读取远程 Session 的 System 快照。 */
   async system(): Promise<AgentSessionSystemSnapshot> {
-    return await this.transport.system(this.id);
+    return await this.transport.system(this.id, this.origin.type);
   }
 
   /** 列出当前远程 Session 正在等待用户响应的 Interaction。 */
   async interactions(): Promise<SessionPendingInteraction[]> {
-    return await this.transport.interactions(this.id);
+    return await this.transport.interactions(this.id, this.origin.type);
   }
 
   /** 读取当前远程 Session 的运行与安全状态。 */
   async status(): Promise<AgentSessionStatus> {
-    return await this.transport.status(this.id);
+    return await this.transport.status(this.id, this.origin.type);
   }
 
   /** 更新当前远程 Session 的可序列化动态配置。 */
@@ -164,17 +167,20 @@ export class RemoteSession implements RemoteAgentSession {
     input: RemoteSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
-    await this.transport.set(this.id, input, options);
+    await this.transport.set(this.id, this.origin.type, input, options);
   }
 
   /** 提交当前远程 Session 的 Interaction 用户响应。 */
   async respond(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
-    return await this.transport.respond(this.id, input);
+    return await this.transport.respond(this.id, this.origin.type, input);
   }
 
   /** 从当前远程 Session 创建分支。 */
   async fork(input?: AgentSessionForkInput | string): Promise<RemoteAgentSession> {
-    return new RemoteSession(this.transport, await this.transport.fork(this.id, input));
+    return new RemoteSession(
+      this.transport,
+      await this.transport.fork(this.id, this.origin.type, input),
+    );
   }
 
   private async ensure_event_pump(): Promise<void> {
@@ -184,6 +190,7 @@ export class RemoteSession implements RemoteAgentSession {
       let resolved_ready = false;
       this.event_subscription = await this.transport.subscribe({
         session_id: this.id,
+        origin_type: this.origin.type,
         on_ready: () => {
           resolved_ready = true;
         },
