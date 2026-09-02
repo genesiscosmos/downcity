@@ -34,6 +34,7 @@ import {
   type ModelStepResult,
   type ModelStepToolCall,
 } from "@executor/model/ModelStepRunner.js";
+import { is_retryable_empty_model_stream_failure } from "@executor/model/ModelStreamFailure.js";
 import { CoreEngineMessageState } from "@executor/core-engine/CoreEngineMessageState.js";
 import {
   deep_compact_model_messages,
@@ -58,6 +59,8 @@ const TURN_STOPPED_MESSAGE = "Turn stopped";
 
 /** Provider context-length error 在当前 step 内最多压缩重试三次。 */
 const MAX_CONTEXT_ERROR_COMPACTION_RETRIES = 3;
+/** 无任何可见输出时，临时 Provider 流错误的最大自动重试次数。 */
+const MAX_EMPTY_STREAM_RETRIES = 2;
 
 interface CoreEngineRunnerOptions {
   /** 当前 Session 稳定标识。 */
@@ -181,6 +184,7 @@ export class CoreEngineRunner {
 
       let incomplete_response_recovery_count = 0;
       let context_error_compaction_retries = 0;
+      let empty_stream_retry_count = 0;
       let compact_pending = false;
       let compact_validation_pending = Boolean(
         persisted_compaction_summary_id &&
@@ -293,6 +297,19 @@ export class CoreEngineRunner {
           ) {
             await input.turn_context.output.assistant.abort_step();
           }
+          if (
+            is_retryable_empty_model_stream_failure(error) &&
+            empty_stream_retry_count < MAX_EMPTY_STREAM_RETRIES
+          ) {
+            empty_stream_retry_count += 1;
+            await this.logger.log("warn", "[agent] model_stream.retry", {
+              session_id,
+              retry_count: empty_stream_retry_count,
+              error_code: error.code,
+              error: error.message,
+            });
+            continue;
+          }
           const compact_error = this.should_compact_on_error(error)
             ? error
             : last_observed_stream_error;
@@ -328,6 +345,7 @@ export class CoreEngineRunner {
         }
 
         context_error_compaction_retries = 0;
+        empty_stream_retry_count = 0;
         const last_step = executed_steps[executed_steps.length - 1];
         if (!last_step) break;
 

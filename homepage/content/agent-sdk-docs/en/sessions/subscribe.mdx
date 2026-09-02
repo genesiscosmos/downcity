@@ -120,6 +120,8 @@ ready ----------------------------------------------> running
 
 `input-streaming` means the model is still producing tool arguments. During this phase, append `tool_input` Deltas to the Tool Part's `input_text`; the `ready` Part is the corrective snapshot after input completes and carries the parsed `input`. Key UI elements by `tool_call_id` or `part_id`; do not append a new item for every Delta.
 
+If the completed argument stream is not valid JSON, the same Part moves directly from `input-streaming` to `failed`, with `error` describing the parse failure; the Tool implementation is not executed. A structured `{ success: false }` Tool return also produces `failed`. Clients should render `state` and `error` instead of inferring success from output text.
+
 See [Tool approvals](/en/agent-sdk-docs/sessions/approvals) for approval handling.
 
 ## Lifecycle boundary

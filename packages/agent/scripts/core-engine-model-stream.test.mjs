@@ -85,3 +85,72 @@ test("Agent 拒绝不合法的 Downcity 模型流状态", async () => {
     }), /Invalid Downcity model stream/);
   }
 });
+
+test("模型生成无效工具输入时向下一 Step 返回 failed tool_result", async () => {
+  let executed = false;
+  const model = {
+    id: "invalid-tool-input-model",
+    async stream() {
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: "model_start", request_id: "request_1", model_id: "invalid-tool-input-model" });
+          controller.enqueue({ type: "tool_call_start", content_id: "tool_1", tool_call_id: "call_1", tool_name: "write" });
+          controller.enqueue({ type: "tool_call_delta", content_id: "tool_1", input_delta: "{\"content\":\"partial" });
+          controller.enqueue({
+            type: "tool_call_finish",
+            content_id: "tool_1",
+            input: {},
+            input_error: "Tool call arguments are invalid JSON: Unterminated string",
+          });
+          controller.enqueue({ type: "model_usage", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } });
+          controller.enqueue({ type: "model_finish", finish_reason: "tool_call" });
+          controller.close();
+        },
+      });
+    },
+  };
+
+  const result = await run_model_step({
+    model,
+    system: [],
+    messages: [{ role: "user", content: [{ type: "text", text: "write" }] }],
+    tools: { write: { execute: async () => { executed = true; } } },
+    abort_signal: new AbortController().signal,
+  });
+
+  assert.equal(executed, false);
+  assert.equal(result.step_result.tool_results[0].success, false);
+  const tool_message = result.step_result.response.messages[1];
+  assert.equal(tool_message.content[0].outcome, "failed");
+  assert.match(tool_message.content[0].content[0].value.error, /invalid JSON/);
+});
+
+test("Tool 返回 success false 时不会被标记为成功", async () => {
+  const model = {
+    id: "structured-tool-failure-model",
+    async stream() {
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: "model_start", request_id: "request_1", model_id: "structured-tool-failure-model" });
+          controller.enqueue({ type: "tool_call_start", content_id: "tool_1", tool_call_id: "call_1", tool_name: "shell" });
+          controller.enqueue({ type: "tool_call_finish", content_id: "tool_1", input: {} });
+          controller.enqueue({ type: "model_usage", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } });
+          controller.enqueue({ type: "model_finish", finish_reason: "tool_call" });
+          controller.close();
+        },
+      });
+    },
+  };
+
+  const result = await run_model_step({
+    model,
+    system: [],
+    messages: [{ role: "user", content: [{ type: "text", text: "run" }] }],
+    tools: { shell: { execute: async () => ({ success: false, exit_code: 1, error: "command failed" }) } },
+    abort_signal: new AbortController().signal,
+  });
+
+  assert.equal(result.step_result.tool_results[0].success, false);
+  assert.equal(result.assistant_parts[0].state, "failed");
+  assert.equal(result.step_result.response.messages[1].content[0].outcome, "failed");
+});

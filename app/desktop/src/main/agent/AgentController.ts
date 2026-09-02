@@ -22,7 +22,6 @@ import {
   type SessionMutation,
 } from "@downcity/agent";
 import { LocalStorageProvider } from "@downcity/workspace";
-import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
   create_city_host_instance_id,
@@ -87,7 +86,7 @@ import {
 import type { DesktopLocalData } from "./DesktopLocalData.js";
 import type { LocalPluginLoader } from "@downcity/local/product";
 import { resolve_local_agent_env } from "@downcity/local/product";
-import { generate_agent_avatar_svg, read_downcity_logo_svg } from "./GeneratedAgentAvatar.js";
+import { select_builtin_agent_avatar_path } from "./BuiltinAgentAvatar.js";
 import type { PluginJsonValue } from "@downcity/plugin";
 
 const session_model_settings_key = "desktop.session-models";
@@ -312,8 +311,8 @@ export class AgentController {
     let registered = false;
     try {
       config = this.data.agents.create(candidate);
-      // 关键点（中文）：创建时即生成独立头像，使 AI 与手动创建拥有一致、完整的身份结果。
-      this.data.agents.set_generated_avatar(config.agent_id, generate_agent_avatar_svg(randomUUID(), read_downcity_logo_svg()));
+      // 关键点（中文）：创建时即保存独立头像，后续扩充内置池不会改变既有 Agent 身份。
+      this.data.agents.set_avatar(config.agent_id, select_builtin_agent_avatar_path());
       this.city.agents.add(agent);
       registered = true;
     } catch (error) {
@@ -460,12 +459,13 @@ export class AgentController {
     return to_desktop_agent_summary(config, undefined);
   }
 
-  /** 生成并保存一份新的随机 Downcity Ghost 头像。 */
+  /** 从 Desktop 内置头像池随机选择并保存一张头像。 */
   async generate_avatar(agent_id: string): Promise<DesktopAgentSummary> {
     await this.ready_promise;
     const config = this.data.agents.get(agent_id);
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
-    this.data.agents.set_generated_avatar(config.agent_id, generate_agent_avatar_svg(randomUUID(), read_downcity_logo_svg()));
+    const current_avatar_url = this.data.agents.get_avatar_url(config.agent_id);
+    this.data.agents.set_avatar(config.agent_id, select_builtin_agent_avatar_path(current_avatar_url));
     return to_desktop_agent_summary(config, this.data.agents.get_avatar_url(config.agent_id));
   }
 

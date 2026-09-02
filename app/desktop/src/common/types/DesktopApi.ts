@@ -829,7 +829,7 @@ export interface DesktopApi {
     choose_avatar(agent_id: string): Promise<DesktopAgentSummary | null>;
     /** 删除 Agent 自定义头像。 */
     remove_avatar(agent_id: string): Promise<DesktopAgentSummary>;
-    /** 生成并保存一份新的随机 Downcity Ghost 头像。 */
+    /** 从 Desktop 内置头像池随机选择并保存一张头像。 */
     generate_avatar(agent_id: string): Promise<DesktopAgentSummary>;
     /** 让 Agent 进入指定 Workspace。 */
     connect(agent_id: string, workspace_id: string): Promise<DesktopAgentConnection>;

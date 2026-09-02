@@ -29,7 +29,7 @@ description: task 定义、task actions，以及归属于 plugin 实例的 cron 
 
 ## 用户怎么使用
 
-Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。它自己的 Sidebar 按 `Agent → Task` 组织全部 Task；Mainview 可以新建、编辑、启停、立即运行和删除 Task。选中 Task 后，内部执行记录 Sidebar 按时间倒序展示全部 Run，并默认打开最新记录；右侧展示最终输出、状态、触发来源、耗时、结果校验与错误，也可以切回任务定义。Workspace 是 Task 自身的执行配置，不是页面级筛选。这里读取的是对应 Agent 的真实 Task runtime 和既有 run 产物，不复制第二份状态。
+Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。它自己的 Sidebar 按 `Agent → Task` 组织全部 Task；Mainview 可以新建、编辑、启停、立即运行和删除 Task。选中 Task 后，一级 Sidebar 右侧的 Subbar 按时间倒序展示全部 Run，并默认打开最新记录；Mainview 展示最终输出、状态、触发来源、耗时、结果校验与错误，也可以切回任务定义。Workspace 是 Task 自身的执行配置，不是页面级筛选。这里读取的是对应 Agent 的真实 Task runtime 和既有 run 产物，不复制第二份状态。
 
 CLI 通过统一 Plugin Action 命令调用 task：
 

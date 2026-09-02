@@ -87,6 +87,9 @@ export class ModelStreamValidator {
     if (event.type === "tool_call_finish") {
       this.finish_content(event.content_id, "tool_call");
       require_json_value(event.input, "tool_call_finish.input");
+      if (event.input_error !== undefined) {
+        require_non_empty_string(event.input_error, "tool_call_finish.input_error");
+      }
       this.completed_tool_calls += 1;
       return;
     }

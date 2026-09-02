@@ -70,6 +70,8 @@ Application code must check `success`; waiting for promise fulfillment alone is 
 
 Read the structured Assistant Message through `messages()` and `subscribe()`; the Turn result does not duplicate it. If execution fails before output, the Session persists the user-visible failure as a canonical `error` Message.
 
+If a Tool throws, returns `{ success: false }`, or receives malformed JSON arguments from the model, the SDK marks that same Tool Part as `failed` and sends a failed Tool Result into the next model step. These failures do not end the Turn by themselves. A model Provider stream, canonical Message write, or other execution-infrastructure failure can end the Turn. A transient Provider failure is retried a limited number of times only when no visible output was produced; after partial output, the draft is preserved and the Turn fails explicitly to avoid duplicated text.
+
 ## Sending input while a Turn runs
 
 You can call `prompt()` again while a Session is running:

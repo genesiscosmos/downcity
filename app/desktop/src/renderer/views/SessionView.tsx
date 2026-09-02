@@ -30,10 +30,10 @@ import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
 import { should_show_assistant_actions } from "@/lib/chat/assistant/assistant_activity";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
+import { ChatTextSelectionQuote } from "@/lib/chat/ChatTextSelectionQuote";
 import { dispatch_chat_reference } from "@/lib/chat/editor/chatReferenceEvent";
 import { resolve_user_message_rewrite } from "@/lib/chat/user_message_rewrite";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
-import { SessionSidebarButton } from "@/layouts/MainViewLayout";
 import { cn } from "@/lib/utils";
 import { is_chat_busy, type ChatHistoryState, type ChatSubmitMode, type QueuedChatMessage } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRewriteAction, DesktopChatRewriteInput, DesktopChatRuntime, DesktopModelSummary, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
@@ -166,7 +166,7 @@ export function SessionView(props: SessionViewProps) {
     });
   };
 
-  return <ChatSurfaceLayout sidebar={props.session_sidebar} reserve_shell_control={props.session_sidebar_collapsed} header_actions={<SessionSidebarButton collapsed={props.session_sidebar_collapsed} toggle_collapsed={props.toggle_session_sidebar} />} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{session.title || "新对话"}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
+  return <ChatSurfaceLayout sidebar={props.session_sidebar} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{session.title || "新对话"}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
       {is_agent_typing(runtime?.status) ? <span className="mr-1 flex items-center gap-1 text-[10px] text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复</span> : null}
         {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
       </div>}
@@ -181,6 +181,7 @@ export function SessionView(props: SessionViewProps) {
             sticky_ref.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
           }}
         >
+          <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {props.history?.has_more ? <div className="flex justify-center py-1"><Button disabled={props.history.loading} onClick={() => void load_earlier()}><TbArrowUp />{props.history.loading ? "正在加载…" : "加载更早消息"}</Button></div> : null}
             {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} on_select={props.update_draft} /> : null}
@@ -354,7 +355,7 @@ function UserMessage({ message, fork_message, rewrite_message, is_last_message, 
               <Button variant="primary" disabled={submitting} onClick={confirm_editing}>{submitting ? <TbLoader2 className="animate-spin" /> : null}{submitting ? "正在发送" : "发送"}</Button>
             </div>
           </> : <>
-          {text ? <div className="text-[0.8125rem] leading-[1.34]"><ChatMarkdown class_name="user-message-markdown !h-auto !w-auto break-words" text={text} mode="static" /></div> : null}
+          {text ? <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className="text-[0.8125rem] leading-[1.34]"><ChatMarkdown class_name="user-message-markdown !h-auto !w-auto break-words" text={text} mode="static" /></div> : null}
           {message.parts.flatMap((part) => part.type === "file" ? [<a key={part.part_id} href={part.url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1.5 text-[0.75rem] text-foreground/80"><TbFile className="size-3.5 shrink-0" /><span className="truncate">{part.filename || "文件"}</span></a>] : [])}
           </>}
         </div>
@@ -401,7 +402,7 @@ function AssistantMessage({ message, agent, show_reasoning, respond_interaction,
     <div className="flex min-w-0 flex-1 flex-col gap-0 overflow-visible rounded-none pb-0 pt-0.5 text-sm text-foreground">
       <div className="mb-1 min-w-0 truncate text-xs font-medium text-foreground/85">{agent.name}</div>
       <div className="min-h-0 w-full">
-        <AssistantContent parts={message.parts} show_reasoning={show_reasoning} respond_interaction={respond_interaction} streaming={message.status === "streaming"} />
+        <AssistantContent message_id={message.message_id} parts={message.parts} show_reasoning={show_reasoning} respond_interaction={respond_interaction} streaming={message.status === "streaming"} />
       </div>
       {message.status === "streaming" ? <ActivityIndicator status="streaming" compact /> : show_actions ? <div className="assistant-message-menu-bar flex h-6 min-h-6 shrink-0 items-center">
         {text ? <div className="message-action-toolbar pointer-events-none flex h-5 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">

@@ -238,7 +238,7 @@ function create_event_stream(
           type: "model_error",
           error: {
             code: input_cancelled(error) ? "cancelled" : "provider_error",
-            message: error instanceof Error ? error.message : String(error),
+            message: normalize_stream_error_message(error),
             retryable: !input_cancelled(error),
           },
         });
@@ -314,10 +314,12 @@ class OpenAIStreamState {
     if (this.text_started) this.controller.enqueue({ type: "text_finish", content_id: "text_1" });
     for (const tool of this.tool_calls.values()) {
       if (!tool.started) throw new Error("OpenAI-compatible provider returned a tool call without a name");
+      const parsed_input = parse_tool_input(tool.input_text);
       this.controller.enqueue({
         type: "tool_call_finish",
         content_id: tool.content_id,
-        input: parse_tool_input(tool.input_text),
+        input: parsed_input.input,
+        ...(parsed_input.error ? { input_error: parsed_input.error } : {}),
       });
     }
     this.controller.enqueue({ type: "model_finish", finish_reason: this.finish_reason ?? "unknown" });
@@ -414,9 +416,17 @@ function read_finish_reason(value: unknown): ModelFinishReason | undefined {
 }
 
 /** 解析完整工具输入 JSON。 */
-function parse_tool_input(value: string): ModelJsonValue {
-  if (!value.trim()) return {};
-  return JSON.parse(value) as ModelJsonValue;
+function parse_tool_input(value: string): { input: ModelJsonValue; error?: string } {
+  if (!value.trim()) return { input: {} };
+  try {
+    return { input: JSON.parse(value) as ModelJsonValue };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      input: {},
+      error: `Tool call arguments are invalid JSON: ${message}`,
+    };
+  }
 }
 
 /** 创建不泄漏上游正文的边界错误。 */
@@ -437,6 +447,15 @@ async function create_upstream_error(response: Response): Promise<Error> {
 /** 判断异常是否来自取消。 */
 function input_cancelled(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+/** 将 Node fetch 的底层连接错误转换成可操作且不依赖运行时实现的说明。 */
+function normalize_stream_error_message(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.trim().toLowerCase() === "terminated") {
+    return "Model provider stream terminated before completion";
+  }
+  return message || "Model provider stream failed";
 }
 
 /** 将未知值安全收敛为普通对象。 */

@@ -51,7 +51,9 @@ export async function generate_model(
       tools.set(event.content_id, { tool_call_id: event.tool_call_id, tool_name: event.tool_name });
     } else if (event.type === "tool_call_finish") {
       const tool = tools.get(event.content_id);
-      if (tool) tool_calls.push({ type: "tool_call", ...tool, input: event.input });
+      if (tool && !event.input_error) {
+        tool_calls.push({ type: "tool_call", ...tool, input: event.input });
+      }
     } else if (event.type === "model_usage") usage = event.usage;
     else if (event.type === "model_finish") finish_reason = event.finish_reason;
   }

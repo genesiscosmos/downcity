@@ -38,7 +38,6 @@ import {
   MainViewLayout,
 } from "@/layouts/MainViewLayout";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
-import { SessionSidebarButton } from "@/layouts/MainViewLayout";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type {
@@ -330,7 +329,7 @@ export function AgentView({
                 void controller.generate_agent_avatar(agent.agent_id)
               }
             >
-              随机生成
+              随机头像
             </Button>
             <Button
               variant="primary"
@@ -349,13 +348,6 @@ export function AgentView({
     return (
       <ChatSurfaceLayout
         sidebar={sidebar}
-        reserve_shell_control={sidebar_collapsed}
-        header_actions={
-          <SessionSidebarButton
-            collapsed={sidebar_collapsed}
-            toggle_collapsed={toggle_sidebar}
-          />
-        }
         header_left={agent.name}
       >
         {content}

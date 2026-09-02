@@ -215,7 +215,8 @@ export class SessionAssistantMessageWriter {
   /** 在单写队列中应用标准模型事件。 */
   private async apply_model_event_serialized(event: ModelStreamEvent): Promise<void> {
     if (this.closed) throw new Error("Assistant Message writer is closed");
-    if (event.type === "model_error") throw new Error(event.error.message);
+    // model_error 由 Executor 的恢复策略消费；Writer 保留已经写入的草稿事实。
+    if (event.type === "model_error") return;
     if (event.type === "text_start" || event.type === "reasoning_start") {
       const type = event.type === "text_start" ? "text" : "reasoning";
       const part_id = `${type}:${generate_id()}`;
@@ -283,8 +284,9 @@ export class SessionAssistantMessageWriter {
       const tool = this.require_tool(tool_call_id);
       await this.upsert_tool(tool_call_id, {
         tool_name: tool.tool_name,
-        state: "ready",
+        state: event.input_error ? "failed" : "ready",
         input: event.input,
+        ...(event.input_error ? { error: event.input_error } : {}),
       });
     }
   }
@@ -435,9 +437,11 @@ export class SessionAssistantMessageWriter {
 
 /** 从 Tool 失败输出中提取稳定错误文本。 */
 function read_tool_error(output: unknown): string {
-  if (output && typeof output === "object" && "error" in output) {
-    const error = (output as { error?: unknown }).error;
-    if (typeof error === "string" && error.trim()) return error;
+  if (output && typeof output === "object") {
+    const result = output as { error?: unknown; message?: unknown; output?: unknown };
+    for (const candidate of [result.error, result.message, result.output]) {
+      if (typeof candidate === "string" && candidate.trim()) return candidate;
+    }
   }
   return "Tool execution failed";
 }

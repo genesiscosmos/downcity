@@ -133,7 +133,7 @@ example-plugin/
 - `agent` default-exports a factory that returns a new Plugin instance for each Agent.
 - `main` default-exports a management lifecycle object and registers Plugin-level and Profile configuration actions separately.
 - `renderer` default-exports a paired `sidebar + mainview` and/or an independent `config`; actual slots must match the static manifest flags and use host-injected `ui.components`.
-- When a Mainview needs an internal history navigator like Chat Sessions, use `MainviewSidebar` and `MainviewSidebarItem`; the host owns collapsing, resizing, preference persistence, and scrolling.
+- For a second-level history navigator like Chat Sessions, use `MainviewSidebar` and `MainviewSidebarItem`; the content enters the Subbar to the right of the primary Sidebar, while the host owns collapsing, resizing, preference persistence, and scrolling.
 - `readme` must point to a `.md` user document inside the Plugin root. Desktop safely renders that file in the Plugin Overview.
 
 At least one entry is required. There is no generic `entry`, `config.schema`, or host-generated form.

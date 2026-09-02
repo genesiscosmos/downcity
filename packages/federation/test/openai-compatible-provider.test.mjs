@@ -46,6 +46,37 @@ test("Provider Adapter maps ModelCall and arbitrarily split SSE into Downcity ev
   assert.equal(events.at(-1).finish_reason, "tool_call")
 })
 
+test("Provider Adapter returns malformed tool arguments as a failed tool input", async () => {
+  const encoder = new TextEncoder()
+  const payload = [
+    { choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "write", arguments: "{\"content\":\"partial" } }] }, finish_reason: "tool_calls" }] },
+    { choices: [], usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 } },
+  ].map((item) => `data: ${JSON.stringify(item)}\n\n`).join("") + "data: [DONE]\n\n"
+  const model = create_openai_compatible_model({
+    id: "local-model",
+    upstream_model: "vendor-model",
+    base_url: "https://provider.example/v1",
+    api_key: "secret",
+    fetch: async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(payload))
+        controller.close()
+      },
+    }), { status: 200 }),
+  })
+
+  const events = []
+  for await (const event of await model.stream({
+    messages: [{ role: "user", content: [{ type: "text", text: "write" }] }],
+    tools: [{ name: "write", description: "Write", input_schema: { type: "object" } }],
+  })) events.push(event)
+
+  const finish = events.find((event) => event.type === "tool_call_finish")
+  assert.deepEqual(finish.input, {})
+  assert.match(finish.input_error, /invalid JSON.*Unterminated/i)
+  assert.equal(events.at(-1).type, "model_finish")
+})
+
 test("Provider Adapter normalizes upstream HTTP errors without exposing the body", async () => {
   const model = create_openai_compatible_model({
     id: "local-model",

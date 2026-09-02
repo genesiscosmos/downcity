@@ -40,12 +40,12 @@ import {
 } from "./assistant_activity";
 
 /** 按 canonical 顺序渲染 Assistant 的全部用户可见内容。 */
-export function AssistantContent({ parts, show_reasoning, streaming, respond_interaction }: { /** Assistant 原始 parts。 */ parts: SessionAssistantMessagePart[]; /** 是否展示 Reasoning。 */ show_reasoning: boolean; /** 当前消息是否流式生成。 */ streaming: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
+export function AssistantContent({ message_id, parts, show_reasoning, streaming, respond_interaction }: { /** canonical Assistant 消息标识。 */ message_id: string; /** Assistant 原始 parts。 */ parts: SessionAssistantMessagePart[]; /** 是否展示 Reasoning。 */ show_reasoning: boolean; /** 当前消息是否流式生成。 */ streaming: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   const groups = group_assistant_content(parts);
   return <>{groups.map((group, index) => {
     if (group.type === "activity") return <ActivityBlock key={group.parts[0]?.part_id} parts={group.parts} show_reasoning={show_reasoning} streaming={streaming && index === groups.length - 1} respond_interaction={respond_interaction} />;
     const part = group.part;
-    if (part.type === "text") return part.text ? <div key={part.part_id} className="text-[0.8125rem] leading-[1.54] text-foreground/90"><ChatMarkdown class_name="min-h-[1.54em]" text={part.text} mode={streaming && part.state === "streaming" ? "streaming" : "static"} /></div> : null;
+    if (part.type === "text") return part.text ? <div key={part.part_id} data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="assistant" className="text-[0.8125rem] leading-[1.54] text-foreground/90"><ChatMarkdown class_name="min-h-[1.54em]" text={part.text} mode={streaming && part.state === "streaming" ? "streaming" : "static"} /></div> : null;
     if (part.type === "file") return <a key={part.part_id} href={part.url} className="assistant-resource-row" target="_blank" rel="noreferrer"><TbFile aria-hidden /><span>{part.filename || "文件"}</span></a>;
     // data 没有稳定的通用展示语义，由专用 feature 在未来接管。
     return null;

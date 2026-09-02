@@ -26,6 +26,7 @@ import type {
   SessionAssistantMessagePart,
   SessionAssistantToolPart,
 } from "@/types/session/SessionMessage.js";
+import { ModelStreamFailure } from "@/executor/model/ModelStreamFailure.js";
 
 /** 单个工具调用的执行事实。 */
 export interface ModelStepToolCall {
@@ -35,6 +36,8 @@ export interface ModelStepToolCall {
   tool_name: string;
   /** 已解析工具输入。 */
   input: ModelJsonValue;
+  /** 模型生成的工具输入无法解析时记录的错误。 */
+  input_error?: string;
 }
 
 /** 单个工具结果的执行事实。 */
@@ -162,7 +165,14 @@ class StepEventCollector {
 
   /** 消费单个标准模型事件。 */
   accept(event: ModelStreamEvent): void {
-    if (event.type === "model_error") throw new Error(event.error.message);
+    if (event.type === "model_error") {
+      throw new ModelStreamFailure(
+        event.error,
+        this.text.length > 0 ||
+          this.reasoning_by_id.size > 0 ||
+          this.tool_by_content_id.size > 0,
+      );
+    }
     if (event.type === "text_start") {
       this.text_by_id.set(event.content_id, "");
     } else if (event.type === "text_delta") {
@@ -213,6 +223,7 @@ class StepEventCollector {
       const tool = this.tool_by_content_id.get(event.content_id);
       if (tool) {
         tool.input = event.input;
+        if (event.input_error) tool.input_error = event.input_error;
         this.model_content.push({
           type: "tool_call",
           tool_call_id: tool.tool_call_id,
@@ -265,6 +276,14 @@ async function execute_tools(
 ): Promise<ModelStepToolResult[]> {
   const results: ModelStepToolResult[] = [];
   for (const call of calls) {
+    if (call.input_error) {
+      results.push({
+        ...call,
+        success: false,
+        output: { error: call.input_error },
+      });
+      continue;
+    }
     const tool = input.tools[call.tool_name];
     if (!tool || typeof tool.execute !== "function") {
       results.push({
@@ -292,7 +311,11 @@ async function execute_tools(
         abort_signal: input.abort_signal,
       };
       const output = await tool.execute(call.input, options);
-      results.push({ ...call, success: true, output });
+      results.push({
+        ...call,
+        success: !is_structured_tool_failure(output),
+        output,
+      });
     } catch (error) {
       results.push({
         ...call,
@@ -302,6 +325,12 @@ async function execute_tools(
     }
   }
   return results;
+}
+
+/** 识别 Tool 正常返回的结构化失败，避免把业务失败标记成执行成功。 */
+function is_structured_tool_failure(output: unknown): boolean {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return false;
+  return (output as { success?: unknown }).success === false;
 }
 
 /** 把 System 快照转换成标准 ModelMessage。 */
@@ -373,9 +402,11 @@ function append_tool_results(
 
 /** 从结构化工具失败结果中提取可展示错误文本。 */
 function read_tool_error(value: unknown): string {
-  if (value && typeof value === "object" && "error" in value) {
-    const error = (value as { error?: unknown }).error;
-    if (typeof error === "string" && error.trim()) return error;
+  if (value && typeof value === "object") {
+    const result = value as { error?: unknown; message?: unknown; output?: unknown };
+    for (const candidate of [result.error, result.message, result.output]) {
+      if (typeof candidate === "string" && candidate.trim()) return candidate;
+    }
   }
   return "Tool execution failed";
 }

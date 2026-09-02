@@ -5,21 +5,16 @@
  * 所有组件直接复用 Desktop 基础控件，因此主题、尺寸、焦点和禁用状态与宿主一致。
  */
 
-import { Fragment, useCallback, useState, type KeyboardEvent } from "react";
-import { motion } from "framer-motion";
-import { TbChevronDown, TbChevronRight, TbDots, TbLayoutSidebar, TbLayoutSidebarFilled, TbLoader2 } from "react-icons/tb";
+import { Fragment, useState, type KeyboardEvent } from "react";
+import { TbChevronDown, TbChevronRight, TbDots, TbLoader2 } from "react-icons/tb";
 import type { PluginRendererUiComponents } from "@downcity/plugin/react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
-import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Markdown as MarkdownView } from "@/lib/markdown/Markdown";
 import { cn } from "@/lib/utils";
-
-const mainview_sidebar_min_width = 220;
-const mainview_sidebar_max_width = 380;
-const mainview_sidebar_default_width = 272;
+import { SidebarSubbar } from "@/layouts/SidebarSubbar";
 
 /** 创建 Plugin UI Components 时需要的宿主上下文。 */
 interface PluginRendererUiComponentOptions {
@@ -74,35 +69,15 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
       ? <div className="sidebar-body-scroll h-full min-h-0 min-w-0 flex-1 overflow-y-auto bg-background"><div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-5 px-4 pb-10 pt-4 md:px-8 md:pt-6">{children}</div></div>
       : <div className="flex min-w-0 flex-col gap-5">{children}</div>,
     MainviewSidebar: ({ label, sidebar, children }) => {
-      const width_key = `downcity.plugin.${options.plugin_id}.mainview_sidebar_width`;
       const collapsed_key = `downcity.plugin.${options.plugin_id}.mainview_sidebar_collapsed`;
       const [collapsed, set_collapsed] = useState(() => localStorage.getItem(collapsed_key) === "true");
-      const [stored_width, set_stored_width] = useState(() => Number(localStorage.getItem(width_key)) || mainview_sidebar_default_width);
-      const handle_width_change = useCallback((width: number) => {
-        set_stored_width(width);
-        localStorage.setItem(width_key, String(width));
-      }, [width_key]);
-      const { current_width, is_resizing, handle_resize_start } = use_horizontal_resize({
-        stored_width,
-        min_width: mainview_sidebar_min_width,
-        max_width: mainview_sidebar_max_width,
-        default_width: mainview_sidebar_default_width,
-        on_width_change: handle_width_change,
-      });
       const toggle_collapsed = () => set_collapsed((current) => {
         localStorage.setItem(collapsed_key, String(!current));
         return !current;
       });
       return <div className="relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
-        <motion.aside initial={false} animate={{ width: collapsed ? 0 : current_width }} transition={{ duration: is_resizing ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }} className={cn("relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-muted/45", !collapsed && "border-r border-border/35")}>
-          {!collapsed ? <div className="flex h-full min-h-0 flex-col" style={{ width: current_width }}>
-            <div className="flex h-10 shrink-0 items-center gap-2 px-2"><span className="min-w-0 flex-1 truncate px-1 text-xs font-medium text-foreground/75">{label}</span><Button size="icon" actived title="折叠侧边栏" aria-label="折叠侧边栏" onClick={toggle_collapsed}><TbLayoutSidebarFilled /></Button></div>
-            <div className="sidebar-body-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2 pt-0">{sidebar}</div>
-          </div> : null}
-          {!collapsed ? <div onMouseDown={handle_resize_start} className="absolute right-0 top-0 z-10 -mr-[3px] h-full w-1.5 cursor-ew-resize" /> : null}
-        </motion.aside>
-        <div className={cn("relative flex min-h-0 min-w-0 flex-1", collapsed && "pl-8")}>
-          {collapsed ? <Button size="icon" className="absolute left-1 top-2 z-20" title="展开侧边栏" aria-label="展开侧边栏" onClick={toggle_collapsed}><TbLayoutSidebar /></Button> : null}
+        <SidebarSubbar label={label} storage_key={`downcity.plugin.${options.plugin_id}.mainview_subbar`} collapsed={collapsed} toggle_collapsed={toggle_collapsed}>{sidebar}</SidebarSubbar>
+        <div className="relative flex min-h-0 min-w-0 flex-1">
           {children}
         </div>
       </div>;

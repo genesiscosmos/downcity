@@ -146,6 +146,55 @@ test("新的持久化 Summary 只按 50% 水位验收一次", async () => {
   assert.equal(second.compact_required, undefined);
 });
 
+test("Provider 在输出前发生可重试流错误时自动重试", async () => {
+  let call_count = 0;
+  const model = {
+    id: "retryable-stream-model",
+    async stream() {
+      call_count += 1;
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            type: "model_start",
+            request_id: `request_${call_count}`,
+            model_id: "retryable-stream-model",
+          });
+          if (call_count === 1) {
+            controller.enqueue({
+              type: "model_error",
+              error: {
+                code: "transport_error",
+                message: "temporary disconnect",
+                retryable: true,
+              },
+            });
+          } else {
+            controller.enqueue({ type: "text_start", content_id: "text_1" });
+            controller.enqueue({ type: "text_delta", content_id: "text_1", delta: "done" });
+            controller.enqueue({ type: "text_finish", content_id: "text_1" });
+            controller.enqueue({
+              type: "model_usage",
+              usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+            });
+            controller.enqueue({ type: "model_finish", finish_reason: "stop" });
+          }
+          controller.close();
+        },
+      });
+    },
+  };
+  const messages = [{
+    role: "user",
+    content: [{ type: "text", text: "latest request" }],
+  }];
+
+  const result = await create_runner().execute(create_turn_input(model, messages));
+
+  assert.equal(call_count, 2);
+  assert.equal(result.success, true);
+  assert.equal(result.text, "done");
+});
+
 test("显式 compact 后在下一次 provider 调用前重载 canonical history", async () => {
   const provider_prompts = [];
   const compacted_messages = [{

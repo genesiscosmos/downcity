@@ -14,7 +14,7 @@ import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart } from "@downcity/agent";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
-import { MainViewBody, MainViewHeader, MainViewLayout, SessionSidebarButton } from "@/layouts/MainViewLayout";
+import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
@@ -74,7 +74,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 
   const group_agent = agents.find((agent) => group.members.some((member) => member.agent_id === agent.agent_id)) ?? agents[0] ?? { agent_id: "group", model_id: "", version: "" };
 
-  return <ChatSurfaceLayout sidebar={session_sidebar} reserve_shell_control={session_sidebar_collapsed} header_actions={<SessionSidebarButton collapsed={session_sidebar_collapsed} toggle_collapsed={toggle_session_sidebar} />} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{format_group_session_title(session)}</div>}>
+  return <ChatSurfaceLayout sidebar={session_sidebar} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{format_group_session_title(session)}</div>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
@@ -94,7 +94,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 /** Group 联系人主页面，只展示摘要和可进入的具体配置项。 */
 export function GroupConfigView({ group, agents, open_config, sidebar, sidebar_collapsed = false, toggle_sidebar }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** 打开具体配置项。 */ open_config(section: GroupEditorSection): void; /** Group Left Panel。 */ sidebar?: ReactNode; /** Group Left Panel 是否折叠。 */ sidebar_collapsed?: boolean; /** 切换 Group Left Panel。 */ toggle_sidebar?: () => void }) {
   const content = <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><SettingsMainContent><SettingsContainer><SettingSection title="Group" description="配置协作模型、目标与参与成员"><SettingGroup><SettingActionItem icon={<LLMModelIcon model_id={group.model_id} />} label="Model" description="用于理解意图并调度成员的模型" trailing={<><span className="max-w-48 truncate">{group.model_id || "未配置"}</span><TbChevronRight /></>} on_select={() => open_config("model")} /><SettingActionItem icon={<TbFileText />} label="协作目标" description="说明 Group 的职责和协作方式" trailing={<><span>{group.instruction ? `${group.instruction.length} 字符` : "未设置"}</span><TbChevronRight /></>} on_select={() => open_config("instruction")} /><SettingActionItem icon={<TbUsers />} label="成员" description="选择参与该 Group 的 Agent" trailing={<><span>{group.members.length} 个</span><TbChevronRight /></>} on_select={() => open_config("members")} /></SettingGroup></SettingSection></SettingsContainer></SettingsMainContent></div>;
-  if (sidebar && toggle_sidebar) return <ChatSurfaceLayout sidebar={sidebar} reserve_shell_control={sidebar_collapsed} header_actions={<SessionSidebarButton collapsed={sidebar_collapsed} toggle_collapsed={toggle_sidebar} />} header_left={group.name}>{content}</ChatSurfaceLayout>;
+  if (sidebar && toggle_sidebar) return <ChatSurfaceLayout sidebar={sidebar} header_left={group.name}>{content}</ChatSurfaceLayout>;
   return <MainViewLayout>
     <MainViewHeader title={<span className="flex min-w-0 items-center gap-2"><GroupAvatar group={group} agents={agents} /><span className="truncate">{group.name}</span></span>} />
     <MainViewBody>{content}</MainViewBody>

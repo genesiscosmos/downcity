@@ -8,8 +8,8 @@ files:
   - out/**/*
   - package.json
 extraResources:
-  - from: resources/downcity-logo.svg
-    to: downcity-logo.svg
+  - from: resources/agent-avatars
+    to: agent-avatars
 icon: build/icon.icns
 win:
   icon: build/icon.ico

@@ -75,19 +75,19 @@ export interface PluginRendererPageProps {
   readonly children: ReactNode;
 }
 
-/** Mainview 内部可折叠 Sidebar 与内容区的标准布局属性。 */
+/** 向宿主 Sidebar Subbar 投放导航内容，并渲染 Mainview 内容区的标准布局属性。 */
 export interface PluginRendererMainviewSidebarProps {
-  /** 内部 Sidebar 顶部的用户可见名称。 */
+  /** Subbar 顶部的用户可见名称。 */
   readonly label: ReactNode;
 
-  /** 内部 Sidebar 中的导航项。 */
+  /** Subbar 中的导航项。 */
   readonly sidebar: ReactNode;
 
   /** 当前导航项对应的 Mainview 内容。 */
   readonly children: ReactNode;
 }
 
-/** Mainview 内部 Sidebar 的导航项属性。 */
+/** Sidebar Subbar 的导航项属性。 */
 export type PluginRendererMainviewSidebarItemProps = PluginRendererSidebarItemProps;
 
 /** Plugin Sidebar 根布局属性。 */

@@ -35,7 +35,14 @@ export type ModelStreamEvent =
       tool_name: string;
     }
   | { type: "tool_call_delta"; content_id: string; input_delta: string }
-  | { type: "tool_call_finish"; content_id: string; input: ModelJsonValue }
+  | {
+      type: "tool_call_finish";
+      content_id: string;
+      /** 已解析的工具输入；输入无效时固定为空对象。 */
+      input: ModelJsonValue;
+      /** 模型生成的工具输入无法解析时返回的稳定错误说明。 */
+      input_error?: string;
+    }
   | { type: "model_usage"; usage: ModelUsage }
   | { type: "model_finish"; finish_reason: ModelFinishReason }
   | { type: "model_error"; error: ModelError };

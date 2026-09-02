@@ -163,7 +163,7 @@ Renderer bundle 必须把 `react` 与 `react/jsx-runtime` 保留为宿主外部�
 
 Desktop 在宿主 React 树中加载 Renderer。Sidebar 与 Mainview 通过 `plugin.invoke()` 调用 Plugin 级动作，并通过 `navigation` 协同导航；Config 通过 `config.invoke()` 调用已经绑定当前 Profile 的配置动作。三个插槽都只获得所需 gateway、`ui.components`、Toast 和 Confirm，不会获得 Profile ID 或 Desktop controller。Renderer 属于受信任本地 UI 代码；只安装可信来源。
 
-需要树状 Sidebar 时使用 `SidebarTreeItem`：`depth` 表达层级，`kind` 区分 `branch` 与 `leaf`，父节点通过 `expanded` 与 `on_toggle` 管理展开，`on_select` 通过共享 `navigation` 更新 Mainview。省略 `leading` 时宿主会为分支和叶子节点提供统一默认图标；没有子项的分支可以省略 `on_toggle`，此时不会显示折叠按钮。Mainview 内还需要类似 Chat Session 的第二层历史导航时，使用 `MainviewSidebar` 组合 `MainviewSidebarItem`；宿主统一提供折叠、宽度调整、偏好保存和独立滚动，不要在 Plugin 中复制 Desktop 布局。行级操作使用 `ItemMenu`，Markdown 正文使用宿主安全的 `Markdown`。写操作完成后调用 `ui.invalidate()`，宿主会增加同一 Plugin 的 `ui.revision`，使 Sidebar 与 Mainview 重新读取快照；Plugin 不需要复制宿主样式或把刷新状态写入 route。
+需要树状 Sidebar 时使用 `SidebarTreeItem`：`depth` 表达层级，`kind` 区分 `branch` 与 `leaf`，父节点通过 `expanded` 与 `on_toggle` 管理展开，`on_select` 通过共享 `navigation` 更新 Mainview。省略 `leading` 时宿主会为分支和叶子节点提供统一默认图标；没有子项的分支可以省略 `on_toggle`，此时不会显示折叠按钮。需要类似 Chat Session 的第二层历史导航时，使用 `MainviewSidebar` 组合 `MainviewSidebarItem`；这些内容会进入一级 Sidebar 右侧的 Subbar，不占用 Mainview。宿主统一提供折叠、宽度调整、偏好保存和独立滚动，不要在 Plugin 中复制 Desktop 布局。行级操作使用 `ItemMenu`，Markdown 正文使用宿主安全的 `Markdown`。写操作完成后调用 `ui.invalidate()`，宿主会增加同一 Plugin 的 `ui.revision`，使 Sidebar 与 Mainview 重新读取快照；Plugin 不需要复制宿主样式或把刷新状态写入 route。
 
 ## Profile 交互
 

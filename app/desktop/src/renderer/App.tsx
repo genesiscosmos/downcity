@@ -26,6 +26,7 @@ import { MainViewHeaderProvider } from "@/layouts/MainViewLayout";
 import { AgentChatSessionSidebar, GroupChatSessionSidebar } from "@/layouts/ChatSessionSidebar";
 import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
 import { resolve_desktop_link } from "@/lib/link/desktop_link";
+import { SidebarSubbarProvider } from "@/layouts/SidebarSubbar";
 
 /** 为 Registry 尚未完成同步的 Session 提供最小 Workspace 展示值。 */
 function create_missing_workspace(workspace_id: string): DesktopWorkspaceSummary {
@@ -163,7 +164,7 @@ export function App() {
         stop_session={(session_id) => controller.stop_group(group_selection.group_id, session_id)}
         session_sidebar_collapsed={chat_session_sidebar_collapsed}
         toggle_session_sidebar={toggle_chat_session_sidebar}
-        session_sidebar={<GroupChatSessionSidebar group={group} controller={controller} collapsed={chat_session_sidebar_collapsed} />}
+        session_sidebar={<GroupChatSessionSidebar group={group} controller={controller} collapsed={chat_session_sidebar_collapsed} toggle_collapsed={toggle_chat_session_sidebar} />}
       />;
     }
     if (controller.selection?.kind === "group") {
@@ -192,7 +193,7 @@ export function App() {
         session={{ session_id: draft_id, title: "新对话", preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }}
         session_sidebar_collapsed={chat_session_sidebar_collapsed}
         toggle_session_sidebar={toggle_chat_session_sidebar}
-        session_sidebar={<AgentChatSessionSidebar agent={selected_agent} controller={controller} collapsed={chat_session_sidebar_collapsed} />}
+        session_sidebar={<AgentChatSessionSidebar agent={selected_agent} controller={controller} collapsed={chat_session_sidebar_collapsed} toggle_collapsed={toggle_chat_session_sidebar} />}
         messages={[]}
         draft={controller.drafts_by_session[draft_key] ?? ""}
         draft_files={controller.draft_files_by_session[draft_key] ?? []}
@@ -244,7 +245,7 @@ export function App() {
         session={session}
       session_sidebar_collapsed={chat_session_sidebar_collapsed}
       toggle_session_sidebar={toggle_chat_session_sidebar}
-      session_sidebar={<AgentChatSessionSidebar agent={selected_agent} controller={controller} collapsed={chat_session_sidebar_collapsed} />}
+      session_sidebar={<AgentChatSessionSidebar agent={selected_agent} controller={controller} collapsed={chat_session_sidebar_collapsed} toggle_collapsed={toggle_chat_session_sidebar} />}
       messages={controller.messages_by_session[session_key] ?? []}
       runtime={controller.chat_runtime_by_session[session_key]}
       draft={controller.drafts_by_session[session_key] ?? ""}
@@ -286,7 +287,7 @@ export function App() {
 
   return <div className="fixed inset-0 flex h-full min-h-0 w-full overflow-hidden bg-muted">
     <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
-      {controller.selection?.kind === "settings"
+      <SidebarSubbarProvider shell_collapsed={sidebar_collapsed} sidebar={controller.selection?.kind === "settings"
         ? <SettingsSidebar controller={controller} collapsed={sidebar_collapsed} />
         : <NavigationSidebar
           controller={controller}
@@ -295,10 +296,11 @@ export function App() {
           open_create_workspace={() => set_create_workspace_dialog_open(true)}
           open_group_config={open_group_from_sidebar}
           collapsed={sidebar_collapsed}
-        />}
+        />}>
       <main className="main-view-shell relative flex h-full min-w-0 flex-1 bg-background">
         <MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available: false, baybar_open: false }}><div className="flex h-full min-w-0 flex-1 flex-col">{render_main_view()}</div></MainViewHeaderProvider>
       </main>
+      </SidebarSubbarProvider>
     </div>
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />
     {controller.error ? createPortal(<div className="fixed bottom-5 left-1/2 z-[60] flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div>, document.body) : null}
@@ -318,7 +320,7 @@ function WorkspaceMainView({ workspace, controller, sidebar_collapsed }: { /** �
 /** Agent MainView 独立拥有配置 BayBar 的状态与编辑分区。 */
 function AgentMainView({ agent, controller, sidebar_collapsed, session_sidebar_collapsed, toggle_session_sidebar, main_session }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** Session Sidebar 是否折叠。 */ session_sidebar_collapsed: boolean; /** 切换 Session Sidebar。 */ toggle_session_sidebar(): void; /** Agent 主对话。 */ main_session?: { workspace_id: string; session: DesktopSessionSummary } }) {
   const [section, set_section] = useState<AgentEditorSection>("model");
-  const sidebar = <AgentChatSessionSidebar agent={agent} controller={controller} collapsed={session_sidebar_collapsed} />;
+  const sidebar = <AgentChatSessionSidebar agent={agent} controller={controller} collapsed={session_sidebar_collapsed} toggle_collapsed={toggle_session_sidebar} />;
   return <MainViewBayBarFrame view_key={`agent:${agent.agent_id}`} sidebar_collapsed={sidebar_collapsed} title={section === "identity" ? "身份" : section === "model" ? "Model" : section === "soul" ? "SOUL.md" : "Plugins"} baybar_content={<AgentInfoSidebar agent={agent} plugins={controller.plugins} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
     {(open_baybar) => <AgentView sidebar={sidebar} sidebar_collapsed={session_sidebar_collapsed} toggle_sidebar={toggle_session_sidebar} agent={agent} workspaces={controller.workspaces} plugins={controller.plugins} main_session={main_session} controller={controller} open_main_session={() => controller.open_agent_chat(agent.agent_id)} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
   </MainViewBayBarFrame>;
@@ -327,7 +329,7 @@ function AgentMainView({ agent, controller, sidebar_collapsed, session_sidebar_c
 /** Group MainView 独立拥有配置 BayBar 的状态与编辑分区。 */
 function GroupMainView({ group, controller, sidebar_collapsed, session_sidebar_collapsed, toggle_session_sidebar }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** Session Sidebar 是否折叠。 */ session_sidebar_collapsed: boolean; /** 切换 Session Sidebar。 */ toggle_session_sidebar(): void }) {
   const [section, set_section] = useState<GroupEditorSection>("model");
-  const sidebar = <GroupChatSessionSidebar group={group} controller={controller} collapsed={session_sidebar_collapsed} />;
+  const sidebar = <GroupChatSessionSidebar group={group} controller={controller} collapsed={session_sidebar_collapsed} toggle_collapsed={toggle_session_sidebar} />;
   return <MainViewBayBarFrame view_key={`group:${group.group_id}`} sidebar_collapsed={sidebar_collapsed} title={section === "model" ? "Model" : section === "instruction" ? "协作目标" : "成员"} baybar_content={<GroupInfoSidebar group={group} agents={controller.agents} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
     {(open_baybar) => <GroupConfigView sidebar={sidebar} sidebar_collapsed={session_sidebar_collapsed} toggle_sidebar={toggle_session_sidebar} group={group} agents={controller.agents} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
   </MainViewBayBarFrame>;
