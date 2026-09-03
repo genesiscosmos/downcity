@@ -17,7 +17,7 @@ import { SessionEventHub } from "../bin/session/runtime/SessionEventHub.js";
 import { SessionLoop } from "../bin/session/SessionLoop.js";
 import { SessionQueue } from "../bin/session/SessionQueue.js";
 
-async function create_turn_harness(execute_turn, session_origin = { type: "chat" }) {
+async function create_turn_harness(execute_turn, session_origin = { type: "chat" }, workspace_snapshot) {
   const session_id = "session-turn-failure-test";
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-turn-failure-"));
   const messages = new SessionMessages({
@@ -56,6 +56,7 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
     queue: new SessionQueue(),
     interactions,
     shell_approval_gateway,
+    ...(workspace_snapshot ? { workspace_snapshot } : {}),
   });
 
   return { messages, turn };
@@ -174,6 +175,41 @@ test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
   await handle.finished;
 
   assert.equal(release_count, 1);
+});
+
+test("SessionLoop 把 Turn 首尾快照差异持久化到最后一条 Assistant 消息", async () => {
+  const snapshots = ["tree-before", "tree-after"];
+  const workspace_snapshot = {
+    capture: async () => snapshots.shift(),
+    diff: async (from_snapshot, to_snapshot) => {
+      assert.equal(from_snapshot, "tree-before");
+      assert.equal(to_snapshot, "tree-after");
+      return [{
+        file: "src/example.ts",
+        status: "modified",
+        additions: 2,
+        deletions: 1,
+        patch: "diff --git a/src/example.ts b/src/example.ts",
+      }];
+    },
+  };
+  const { messages, turn } = await create_turn_harness(async () => ({
+    success: true,
+    text: "done",
+    deferred_persisted_user_messages: [],
+  }), { type: "chat" }, workspace_snapshot);
+
+  const handle = await turn.prompt({ query: "修改文件" });
+  await handle.finished;
+  const page = await messages.list_messages();
+  const assistant = page.items.find((message) => message.type === "assistant");
+  const file_diff = assistant.parts.find((part) => part.type === "data");
+
+  assert.equal(assistant.status, "completed");
+  assert.equal(file_diff.data_type, "data-session-turn-file-diff");
+  assert.equal(file_diff.data.additions, 2);
+  assert.equal(file_diff.data.deletions, 1);
+  assert.equal(file_diff.data.files[0].file, "src/example.ts");
 });
 
 test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Error Message", async () => {

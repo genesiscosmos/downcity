@@ -18,3 +18,28 @@ const result = await turn.finished;
 
 Use `@downcity/agent` when a CLI, Desktop application, or Node process needs to own multiple
 Agent instances, restore local configuration, or expose HTTP/RPC transports.
+
+## Read file changes for each turn
+
+A Session bound to a Git Workspace creates isolated shadow Git snapshots before and after each
+turn, then persists that turn's file changes in the final Assistant Message. This does not modify
+the project's index, stash, branch, or commits. Changes made by shell commands, scripts, and file
+tools all use the same result. Conversation execution continues normally when the Workspace is not
+a Git repository or snapshots are unavailable.
+
+The `data-session-turn-file-diff` data part contains per-file status, line counts, and unified diff.
+Use the exported parser to read it safely:
+
+```ts
+import { read_session_turn_file_diff_data } from "@downcity/agent/session";
+
+const page = await session.messages();
+for (const message of page.items) {
+  if (message.type !== "assistant") continue;
+  for (const part of message.parts) {
+    if (part.type !== "data") continue;
+    const file_diff = read_session_turn_file_diff_data(part);
+    if (file_diff) console.log(file_diff.files, file_diff.additions, file_diff.deletions);
+  }
+}
+```

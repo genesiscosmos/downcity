@@ -77,6 +77,26 @@ test("step-start 和无展示 data 不切断连续 Tool 折叠组", () => {
   assert.equal(activity_groups[0].type === "group" ? activity_groups[0].parts.length : 0, 3);
 });
 
+test("Turn 文件改动 data 作为独立内容保留，未知 data 继续隐藏", () => {
+  const groups = group_assistant_content([
+    create_text_part("text", 1, "完成"),
+    {
+      part_id: "data-2",
+      sequence: 2,
+      type: "data",
+      data_type: "data-session-turn-file-diff",
+      data: {
+        files: [{ file: "src/a.ts", status: "modified", additions: 1, deletions: 0, patch: "+change" }],
+        additions: 1,
+        deletions: 0,
+      },
+    },
+    { part_id: "data-3", sequence: 3, type: "data", data_type: "data-unknown", data: {} },
+  ]);
+  assert.deepEqual(groups.map((group) => group.type), ["part", "part"]);
+  assert.equal(groups[1].type === "part" ? groups[1].part.type : "", "data");
+});
+
 test("连续 Reasoning、Tool 和 Interaction 保持在同一折叠组", () => {
   const parts = [
     create_text_part("reasoning", 1, "分析") as AssistantActivityPart,

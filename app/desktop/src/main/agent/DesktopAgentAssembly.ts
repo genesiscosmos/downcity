@@ -151,7 +151,15 @@ export async function list_desktop_agent_models(
       modalities: [...model.modalities],
       ...(typeof model.context_window === "number" ? { context_window: model.context_window } : {}),
       tags: [...(model.tags ?? [])],
-      ...(model.price ? { price: [...model.price] } : {}),
+      ...(model.pricing ? {
+        pricing: (Array.isArray(model.pricing) ? model.pricing : [model.pricing]).map((pricing) => ({
+          currency: pricing.currency,
+          unit: pricing.unit,
+          ...(typeof pricing.scale === "number" ? { scale: pricing.scale } : {}),
+          rates: { ...pricing.rates },
+          ...(pricing.dimensions ? { dimensions: { ...pricing.dimensions } } : {}),
+        })),
+      } : {}),
       ...(model.reasoning ? {
         reasoning: {
           efforts: model.reasoning.efforts.map((effort) => ({

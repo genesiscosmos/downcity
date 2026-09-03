@@ -582,6 +582,20 @@ export interface DesktopModelReasoning {
   default_effort?: string;
 }
 
+/** Federation 结构化模型价格在 Desktop IPC 边界的可序列化投影。 */
+export interface DesktopModelPricing {
+  /** ISO 4217 货币代码，例如 USD 或 CNY。 */
+  currency: string;
+  /** 计费对象，例如 token、request 或 image。 */
+  unit: string;
+  /** 每个价格对应的计费单位数量。 */
+  scale?: number;
+  /** 命名计费组件及其价格，例如 input、output。 */
+  rates: Record<string, number>;
+  /** 价格适用的条件维度，例如时段、分辨率或上下文档位。 */
+  dimensions?: Record<string, string>;
+}
+
 /** Federation 模型目录中的 Renderer 投影。 */
 export interface DesktopModelSummary {
   /** Federation 模型稳定标识。 */
@@ -596,8 +610,8 @@ export interface DesktopModelSummary {
   context_window?: number;
   /** Federation 提供的模型标签。 */
   tags: string[];
-  /** Federation 提供的价格说明列表；每项通常描述输入或输出 token 价格。 */
-  price?: string[];
+  /** Federation 提供的结构化价格方案。 */
+  pricing?: DesktopModelPricing[];
   /** 模型公开的推理强度档位；未提供时表示模型不支持可配置推理强度。 */
   reasoning?: DesktopModelReasoning;
 }

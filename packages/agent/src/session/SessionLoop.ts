@@ -33,6 +33,7 @@ import type {
   SessionInteractionPort,
 } from "@/types/session/SessionInteraction.js";
 import { SessionAssistantOutputAdapter } from "@/session/execution/SessionAssistantOutputAdapter.js";
+import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
 import { SessionCommand } from "@/session/SessionCommand.js";
 import type {
@@ -41,6 +42,8 @@ import type {
   SessionLoopOptions,
 } from "@/types/session/SessionLoop.js";
 import type { SessionCommandCompletion } from "@/types/session/SessionCommand.js";
+import type { SessionWorkspaceSnapshot } from "@/types/session/SessionTurnFileDiff.js";
+import { SESSION_TURN_FILE_DIFF_DATA_TYPE } from "@/session/messages/SessionTurnFileDiffData.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
@@ -62,6 +65,7 @@ export class SessionLoop {
   private readonly interactions:
     SessionInteractionLifecycle & SessionInteractionPort;
   private readonly shell_approval_gateway: ShellApprovalGateway;
+  private readonly workspace_snapshot?: SessionWorkspaceSnapshot;
   private readonly queue: SessionQueue;
   private pending_prompt_count = 0;
   private processing_promise: Promise<void> | null = null;
@@ -81,6 +85,7 @@ export class SessionLoop {
     this.queue = options.queue;
     this.interactions = options.interactions;
     this.shell_approval_gateway = options.shell_approval_gateway;
+    this.workspace_snapshot = options.workspace_snapshot;
     if (!this.session_id) {
       throw new Error("SessionLoop requires a non-empty session_id");
     }
@@ -504,10 +509,38 @@ export class SessionLoop {
           .join("\n")
           .trim();
     let result: SessionTurnExecutionResult;
-    result = await this.executor.execute({
-      query: executor_query,
-      turn_context,
-    });
+    const initial_snapshot = await this.capture_workspace_snapshot(input.active_turn.turn_id);
+    try {
+      result = await this.executor.execute({
+        query: executor_query,
+        turn_context,
+      });
+    } catch (error) {
+      await this.append_turn_file_diff(
+        input.active_turn.turn_id,
+        initial_snapshot,
+        assistant_output,
+      );
+      try {
+        await assistant_output.finish({
+          status: turn_context.lifecycle.abort_signal.aborted ? "stopped" : "failed",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } catch (finish_error) {
+        await this.log_snapshot_warning(
+          input.active_turn.turn_id,
+          "failed to close Assistant output after execution error",
+          finish_error,
+        );
+      }
+      throw error;
+    }
+
+    await this.append_turn_file_diff(
+      input.active_turn.turn_id,
+      initial_snapshot,
+      assistant_output,
+    );
 
     await assistant_output.finish({
       status: turn_context.lifecycle.abort_signal.aborted
@@ -542,6 +575,69 @@ export class SessionLoop {
       success: result.success,
       ...(result.error ? { error: result.error } : {}),
     };
+  }
+
+  /** 尽力捕获 Turn 开始快照；快照不可用不能阻止模型执行。 */
+  private async capture_workspace_snapshot(turn_id: string): Promise<string | undefined> {
+    if (!this.workspace_snapshot) return undefined;
+    try {
+      return await this.workspace_snapshot.capture();
+    } catch (error) {
+      await this.log_snapshot_warning(turn_id, "failed to capture initial Workspace snapshot", error);
+      return undefined;
+    }
+  }
+
+  /** 比较 Turn 首尾快照，并把非空差异写入 canonical Assistant data part。 */
+  private async append_turn_file_diff(
+    turn_id: string,
+    initial_snapshot: string | undefined,
+    assistant_output: SessionAssistantOutput,
+  ): Promise<void> {
+    if (!this.workspace_snapshot || !initial_snapshot) return;
+    try {
+      const final_snapshot = await this.workspace_snapshot.capture();
+      if (!final_snapshot) return;
+      const files = await this.workspace_snapshot.diff(initial_snapshot, final_snapshot);
+      if (files.length === 0) return;
+      const additions = files.reduce((total, file) => total + file.additions, 0);
+      const deletions = files.reduce((total, file) => total + file.deletions, 0);
+      await assistant_output.append_result_parts([{
+        type: "data",
+        data_type: SESSION_TURN_FILE_DIFF_DATA_TYPE,
+        data_id: `turn-file-diff:${turn_id}`,
+        data: {
+          files: files.map((file) => ({
+            file: file.file,
+            status: file.status,
+            additions: file.additions,
+            deletions: file.deletions,
+            patch: file.patch,
+          })),
+          additions,
+          deletions,
+        },
+      }]);
+    } catch (error) {
+      await this.log_snapshot_warning(turn_id, "failed to persist Workspace diff", error);
+    }
+  }
+
+  /** 快照属于辅助观测能力，日志失败同样不能改变 Turn 结果。 */
+  private async log_snapshot_warning(
+    turn_id: string,
+    message: string,
+    error: unknown,
+  ): Promise<void> {
+    try {
+      await this.logger.log("warn", `[agent] ${message}`, {
+        session_id: this.session_id,
+        turn_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } catch {
+      // 文件改动观测失败不影响 canonical 对话执行。
+    }
   }
 
   /** 在 Turn 创建时建立其唯一执行上下文和 Assistant 输出端口。 */

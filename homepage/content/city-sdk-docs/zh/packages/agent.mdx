@@ -18,6 +18,29 @@ const result = await turn.finished;
 CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配实例或暴露 HTTP/RPC 时，使用
 `@downcity/agent`。
 
+## 读取每轮文件改动
+
+绑定 Git Workspace 的 Session 会在每个 Turn 执行前后创建隔离的 shadow Git 快照，并把本轮
+文件改动写入最后一条 Assistant Message。该过程不会修改项目的 index、stash、branch 或 commit；
+Shell、脚本和文件工具产生的改动使用同一套结果。非 Git Workspace 或快照不可用时，对话仍会正常执行。
+
+文件改动使用 `data-session-turn-file-diff` data part 持久化，包含逐文件状态、增删行数和 unified diff。
+可以使用公开解析函数安全读取：
+
+```ts
+import { read_session_turn_file_diff_data } from "@downcity/agent/session";
+
+const page = await session.messages();
+for (const message of page.items) {
+  if (message.type !== "assistant") continue;
+  for (const part of message.parts) {
+    if (part.type !== "data") continue;
+    const file_diff = read_session_turn_file_diff_data(part);
+    if (file_diff) console.log(file_diff.files, file_diff.additions, file_diff.deletions);
+  }
+}
+```
+
 ## Group 与 GroupSession
 
 `Group` 是具有集体主体性的协作主体，拥有自己的 `model` 和 `GroupSession` 集合。`Group.model` 专门用于理解群聊意图并选择投递成员；默认使用 AI 调度。调度由 GroupSession 自身拥有，负责根据 Group 目标、当前对话和成员的 `id/name/description` 计算有限阶段计划，并统一处理调度 Turn 排队、持久化和停止。Agent 的 `description` 是供展示和语义选择使用的能力简介，不会替代决定 Agent 行为的 `instruction`。AI 调度在同一 Turn 内通过强制的 `dispatch_group` tool call 提交计划；如果模型先返回普通文本或无效参数，调度策略会把协议错误交还模型纠正，仍未获得有效调用时才记录明确失败。系统不会自动切换到另一套调度规则；如需自定义行为，应显式提供 `dispatch_strategy`，并让异步策略响应输入中的 `abort_signal`。成员执行仍使用成员 Agent 的 `AgentSession`，不会把私有上下文、Plugin

@@ -17,6 +17,7 @@ import { Agent } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { City } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/workspace";
+import { get_agent_session_instruction_path } from "../bin/workspace/store/LocalStorePaths.js";
 import {
   create_action,
   create_plugin,
@@ -335,12 +336,10 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     );
     await session.snapshot();
 
-    const instruction_path = path.join(
+    const instruction_path = get_agent_session_instruction_path(
       city.storage.open_scope(["agents", first_agent.id]).root_path,
-      "sessions",
       "chat",
       session_id,
-      "instruction.md",
     );
     const persisted_system = await fs.readFile(instruction_path, "utf8");
     assert.match(persisted_system, /instruction:old/);
@@ -379,12 +378,10 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     await restarted_agent.dispose();
   }
 
-  const instruction_path = path.join(
+  const instruction_path = get_agent_session_instruction_path(
     city.storage.open_scope(["agents", "instruction_restart_agent"]).root_path,
-    "sessions",
     "chat",
     session_id,
-    "instruction.md",
   );
   await fs.rm(instruction_path);
 

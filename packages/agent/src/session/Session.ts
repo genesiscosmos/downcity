@@ -74,6 +74,7 @@ import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type { SessionActionEventInput } from "@/types/session/SessionAction.js";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import { create_session_workspace_snapshot } from "@/session/snapshot/SessionWorkspaceSnapshot.js";
 
 /**
  * SDK 本地 Session。
@@ -205,6 +206,9 @@ export class Session implements AgentSession {
       interactions: this.session_interactions,
       shell_approval_gateway: this.shell_approval_adapter,
       queue: this.session_queue,
+      ...(this.workspace_id
+        ? { workspace_snapshot: create_session_workspace_snapshot(this.workspace_path) }
+        : {}),
     });
   }
 

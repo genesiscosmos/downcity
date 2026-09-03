@@ -153,6 +153,16 @@ export type {
   SessionUserMessagePart,
   SessionUserTextPart,
 } from "./types/session/SessionMessage.js";
+export type {
+  SessionTurnFileDiff,
+  SessionTurnFileDiffData,
+  SessionTurnFileDiffStatus,
+} from "./types/session/SessionTurnFileDiff.js";
+export {
+  is_session_turn_file_diff_data_part,
+  read_session_turn_file_diff_data,
+  SESSION_TURN_FILE_DIFF_DATA_TYPE,
+} from "./session/messages/SessionTurnFileDiffData.js";
 export { to_session_message_timeline_events } from "./session/browse/SessionMessageTimeline.js";
 export { SessionAssistantOutputAdapter } from "./session/execution/SessionAssistantOutputAdapter.js";
 export type {

@@ -22,6 +22,10 @@
       "import": "./bin/tools/index.js",
       "types": "./bin/tools/index.d.ts"
     },
+    "./session": {
+      "import": "./bin/session/index.js",
+      "types": "./bin/session/index.d.ts"
+    },
     "./internal": {
       "import": "./bin/internal/index.js",
       "types": "./bin/internal/index.d.ts"

@@ -5,6 +5,7 @@
  */
 
 import type { SessionAssistantMessagePart } from "@downcity/agent";
+import { is_session_turn_file_diff_data_part } from "@downcity/agent/session";
 
 /** Canonical 文本接口同时承载 text 与 reasoning，展示层将两者收窄为明确类型。 */
 type AssistantTextualPart = Extract<SessionAssistantMessagePart, { type: "text" | "reasoning" }>;
@@ -57,7 +58,7 @@ export function group_assistant_content(parts: SessionAssistantMessagePart[]): A
   const groups: AssistantContentGroup[] = [];
   for (const part of parts) {
     // 无展示语义的 part 不能切断连续 Tool 活动。
-    if (part.type === "data") continue;
+    if (part.type === "data" && !is_session_turn_file_diff_data_part(part)) continue;
     if (part.type === "text" && !part.text.trim()) continue;
     if (is_activity_part(part)) {
       const previous = groups[groups.length - 1];

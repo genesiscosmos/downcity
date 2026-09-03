@@ -7,6 +7,7 @@
 
 import { useEffect, useState, type FormEvent, type ComponentType } from "react";
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionAssistantMessagePart, SessionInteractionQuestion } from "@downcity/agent";
+import { read_session_turn_file_diff_data } from "@downcity/agent/session";
 import {
   TbBulb,
   TbCheck,
@@ -27,6 +28,7 @@ import {
 } from "react-icons/tb";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import { cn } from "@/lib/utils";
+import { TurnFileDiffCard } from "./TurnFileDiffCard";
 import {
   group_assistant_activities,
   group_assistant_content,
@@ -47,7 +49,11 @@ export function AssistantContent({ message_id, parts, show_reasoning, streaming,
     const part = group.part;
     if (part.type === "text") return part.text ? <div key={part.part_id} data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="assistant" className="text-[0.8125rem] leading-[1.54] text-foreground/90"><ChatMarkdown class_name="min-h-[1.54em]" text={part.text} mode={streaming && part.state === "streaming" ? "streaming" : "static"} /></div> : null;
     if (part.type === "file") return <a key={part.part_id} href={part.url} className="assistant-resource-row" target="_blank" rel="noreferrer"><TbFile aria-hidden /><span>{part.filename || "文件"}</span></a>;
-    // data 没有稳定的通用展示语义，由专用 feature 在未来接管。
+    if (part.type === "data") {
+      const file_diff = read_session_turn_file_diff_data(part);
+      return file_diff ? <TurnFileDiffCard key={part.part_id} data={file_diff} /> : null;
+    }
+    // 未注册的 data 没有稳定通用展示语义。
     return null;
   })}</>;
 }
