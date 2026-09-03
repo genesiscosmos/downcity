@@ -27,6 +27,11 @@ if (result.success) {
 ```ts
 const turn = await session.prompt({
   query: [
+    {
+      type: "context",
+      tag: "reference",
+      context: "此前引用的消息",
+    },
     { type: "text", text: "说明图片里的架构" },
     {
       type: "file",
@@ -39,6 +44,8 @@ const turn = await session.prompt({
 ```
 
 输入与持久化消息都使用 Downcity 自有的 `snake_case` 字段。`prompt()` 接收的 Part 尚未分配 `part_id`；进入 Session 后才成为 canonical User Part。
+
+`context` Part 会在 canonical Message 中保留结构化的 `tag` 与 `context`，进入模型上下文时才转换为 `<reference>此前引用的消息</reference>` 这样的 Text Content。标签名必须以小写字母开头，并且只能包含小写字母、数字、下划线和连字符；正文中的 XML 结构字符会被安全转义。它不属于普通用户正文，通常应和一个 `text` Part 一起使用。
 
 Data URL 附件不会直接写入 Session Message。Session 会先把 Data URL 解码并保存到 Agent 存储作用域的
 `sessions/<origin_type>/<session_id>/attachments/`，Message 保存该私有文件的绝对路径。模型执行前，Session 再从该路径

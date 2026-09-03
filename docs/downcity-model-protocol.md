@@ -742,6 +742,7 @@ streaming
 `SessionModelMessages` 是从 Session 历史进入模型上下文的唯一转换边界：
 
 - 过滤不应发送给模型的 Session Message 与 Part。
+- 将 User Context Part 的原始 `tag + context` 安全渲染为带标签的 `ModelTextContent`。
 - 注入附件。
 - 将本地文件读取并转为 `ModelFileContent`。
 - 忽略或修复策略必须显式测试，不能依赖第三方转换器的隐式容错。

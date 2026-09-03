@@ -48,6 +48,27 @@ An ordinary Tool Loop, Provider continuation, or recovery retry does not create 
 
 If a Turn fails before producing any Assistant content, the Session writes one `error` Message and does not fabricate an Assistant reply from the error text. If partial content already exists, that Assistant is retained with `status: "failed"`, followed by the structured `error` Message.
 
+## User Parts
+
+| `type` | Key fields | Meaning |
+| --- | --- | --- |
+| `text` | `text`, `state` | User-visible body; canonical state is always `done` |
+| `context` | `tag`, `context` | Semantically tagged model context; the canonical Message retains the raw structure |
+| `file` | `url`, `media_type`, `filename` | A file submitted by the user |
+| `data` | `data_type`, `data`, `data_id` | Persisted structured UI data that is not sent to the model automatically |
+
+Use `context` for supporting model context that should not be mixed into the ordinary user body. The Session does not persist pre-rendered markup. It converts the Part safely into Text Content only at the model boundary:
+
+```ts
+// Canonical User Part
+{ part_id: "user-context:1", type: "context", tag: "reference", context: "Earlier message" }
+
+// Corresponding Model Content
+{ type: "text", text: "<reference>Earlier message</reference>" }
+```
+
+`tag` must start with a lowercase letter and may contain only lowercase letters, numbers, underscores, and hyphens. XML structural characters in `context` are escaped at the model-mapping boundary so the body cannot close or inject a tag. Generic previews, titles, and user bubbles treat only `text` as the ordinary user body, so callers should normally provide a `text` Part as well.
+
 ## Assistant Parts
 
 | `type` | Key fields | Meaning |

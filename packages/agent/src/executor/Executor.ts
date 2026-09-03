@@ -24,6 +24,10 @@ import type { SessionToolExecutionContext } from "@/types/executor/SessionToolEx
 import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
 import { is_action_result } from "@/types/action/ActionResult.js";
 import { generate_id } from "@/utils/Id.js";
+import {
+  normalize_session_context_content,
+  normalize_session_context_tag,
+} from "@/session/messages/SessionUserContext.js";
 import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
@@ -399,6 +403,14 @@ export class Executor implements SessionExecutor {
                     type: "text" as const,
                     text: part.text,
                     state: "done" as const,
+                  };
+                }
+                if (part.type === "context") {
+                  return {
+                    part_id: `runtime-context:${index + 1}`,
+                    type: "context" as const,
+                    tag: normalize_session_context_tag(part.tag),
+                    context: normalize_session_context_content(part.context),
                   };
                 }
                 if (part.type === "file") {

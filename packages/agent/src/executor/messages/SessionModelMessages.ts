@@ -14,6 +14,7 @@ import type {
   ModelMessage,
 } from "@downcity/type";
 import { parse_chat_message_markup } from "@executor/messages/ChatMessageMarkup.js";
+import { render_session_user_context } from "@/session/messages/SessionUserContext.js";
 import type {
   SessionAssistantMessage,
   SessionAssistantToolPart,
@@ -68,6 +69,11 @@ async function convert_user_message(
   for (const part of message.parts) {
     if (part.type === "text" && part.text.trim()) {
       content.push({ type: "text", text: part.text });
+    } else if (part.type === "context") {
+      content.push({
+        type: "text",
+        text: render_session_user_context(part.tag, part.context),
+      });
     } else if (part.type === "file") {
       content.push(await convert_file_part(part, project_root));
     }

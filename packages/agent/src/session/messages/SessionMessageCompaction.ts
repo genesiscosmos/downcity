@@ -107,6 +107,13 @@ function to_compaction_part(
   part: SessionUserMessagePart | SessionAssistantMessagePart,
 ): Record<string, unknown> | null {
   if (part.type === "text") return { type: "text", text: part.text };
+  if (part.type === "context") {
+    return {
+      type: "context",
+      tag: part.tag,
+      context: part.context,
+    };
+  }
   if (part.type === "reasoning" || part.type === "interaction") return null;
   if (part.type === "file") {
     return {

@@ -48,6 +48,27 @@ Session 内只有一条按 `sequence` 排序的顶层 Message 序列。工具调
 
 Turn 在产生任何 Assistant 内容前失败时，只写入一条 `error` Message，不会用错误文本伪造 Assistant 回复。若失败前已经产生部分内容，该 Assistant 会以 `status: "failed"` 保留，随后再写入结构化 `error` Message。
 
+## User Part
+
+| `type` | 关键字段 | 说明 |
+| --- | --- | --- |
+| `text` | `text`, `state` | 用户可见正文；canonical 状态固定为 `done` |
+| `context` | `tag`, `context` | 带语义标签的模型上下文；canonical Message 保存原始结构 |
+| `file` | `url`, `media_type`, `filename` | 用户提交的文件 |
+| `data` | `data_type`, `data`, `data_id` | 可持久化的结构化 UI 数据，不会自动发送给模型 |
+
+`context` 用于向模型传入不应混入普通用户正文的补充语义。Session 不会提前保存拼接后的标签文本；进入模型上下文时才把它安全转换为 Text Content：
+
+```ts
+// canonical User Part
+{ part_id: "user-context:1", type: "context", tag: "reference", context: "此前消息" }
+
+// 对应的 Model Content
+{ type: "text", text: "<reference>此前消息</reference>" }
+```
+
+`tag` 必须以小写字母开头，且只能包含小写字母、数字、下划线和连字符。`context` 中的 XML 结构字符会在模型映射边界转义，避免正文提前闭合或注入标签。通用预览、标题和用户气泡只把 `text` 当作普通用户正文；调用方通常应同时提供一个 `text` Part。
+
 ## Assistant Part
 
 | `type` | 关键字段 | 说明 |

@@ -148,6 +148,7 @@ export type {
   SessionMessage,
   SessionMessagePage,
   SessionUserDataPart,
+  SessionUserContextPart,
   SessionUserFilePart,
   SessionUserMessage,
   SessionUserMessagePart,
@@ -239,6 +240,7 @@ export type {
   SessionPromptPart,
   SessionAssistantResultPart,
   SessionTextInputPart,
+  SessionContextInputPart,
   SessionFileInputPart,
   SessionDataInputPart,
 } from "./types/session/SessionContent.js";

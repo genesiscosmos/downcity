@@ -59,6 +59,18 @@ export interface SessionUserTextPart {
   state: "done";
 }
 
+/** User 带语义标签的模型上下文 part。 */
+export interface SessionUserContextPart {
+  /** User Message 内稳定的 part 标识。 */
+  part_id: string;
+  /** part 类型固定为 context。 */
+  type: "context";
+  /** 模型上下文使用的安全 XML 风格标签名。 */
+  tag: string;
+  /** 进入模型上下文时由标签包裹的原始内容。 */
+  context: string;
+}
+
 /** User 文件 part。 */
 export interface SessionUserFilePart {
   /** User Message 内稳定的 part 标识。 */
@@ -90,6 +102,7 @@ export interface SessionUserDataPart {
 /** User Message part。 */
 export type SessionUserMessagePart =
   | SessionUserTextPart
+  | SessionUserContextPart
   | SessionUserFilePart
   | SessionUserDataPart;
 

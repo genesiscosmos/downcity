@@ -14,7 +14,10 @@ import test from "node:test";
 import { LocalFileSystem } from "@downcity/workspace";
 import { SessionInteractions } from "../bin/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "../bin/session/execution/tools/SessionShellApprovalAdapter.js";
-import { SessionMessages } from "../bin/session/SessionMessages.js";
+import {
+  normalize_session_user_parts,
+  SessionMessages,
+} from "../bin/session/SessionMessages.js";
 import { compose_session_compaction } from "../bin/session/messages/SessionMessageCompaction.js";
 import { session_context_to_model_messages } from "../bin/executor/messages/SessionModelMessages.js";
 import { JsonlSessionMessageStore } from "../bin/workspace/store/JsonlSessionMessageStore.js";
@@ -127,6 +130,52 @@ function create_user_message(session_id, sequence) {
     }],
   };
 }
+
+test("User Context Part 保持 canonical 结构并安全映射到模型文本", async () => {
+  const parts = normalize_session_user_parts([{
+    type: "context",
+    tag: "quoted_message",
+    context: "A < B & C > D",
+  }]);
+  assert.deepEqual(parts, [{
+    part_id: "user-context:1",
+    type: "context",
+    tag: "quoted_message",
+    context: "A < B & C > D",
+  }]);
+
+  const model_messages = await session_context_to_model_messages({
+    summary: null,
+    messages: [{
+      message_id: "user-context-message",
+      session_id: "user-context-session",
+      turn_id: "user-context-turn",
+      sequence: 1,
+      revision: 1,
+      visibility: "visible",
+      created_at: 1,
+      updated_at: 1,
+      type: "user",
+      input_type: "prompt",
+      parts,
+    }],
+  });
+  assert.deepEqual(model_messages, [{
+    role: "user",
+    content: [{
+      type: "text",
+      text: "<quoted_message>A &lt; B &amp; C &gt; D</quoted_message>",
+    }],
+  }]);
+  assert.throws(
+    () => normalize_session_user_parts([{
+      type: "context",
+      tag: "quoted message",
+      context: "invalid tag",
+    }]),
+    /Session context tag must start with a lowercase letter/,
+  );
+});
 
 test("模型文本增量只更新草稿，完成后写入 active JSONL", async () => {
   const {
@@ -434,19 +483,30 @@ test("Compact 生成累计 Summary 并让模型只读取 Summary 与 Active", as
       message_id: `user-${String(sequence)}`,
       turn_id: `turn-${String(sequence)}`,
       input_type: "prompt",
-      parts: create_user_message(session_id, sequence).parts,
+      parts: sequence === 1
+        ? [{
+            part_id: "context-1",
+            type: "context",
+            tag: "reference",
+            context: "earlier context",
+          }]
+        : create_user_message(session_id, sequence).parts,
     });
   }
+  let summary_prompt = "";
   const model = new MockModelClient({
     modelId: "summary-model",
-    doGenerate: async () => ({
-      content: [{ type: "text", text: "summary checkpoint" }],
-      finishReason: { unified: "stop", raw: "stop" },
-      usage: {
-        inputTokens: { total: 1 },
-        outputTokens: { total: 1 },
-      },
-    }),
+    doGenerate: async (options) => {
+      summary_prompt = JSON.stringify(options.prompt);
+      return {
+        content: [{ type: "text", text: "summary checkpoint" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: {
+          inputTokens: { total: 1 },
+          outputTokens: { total: 1 },
+        },
+      };
+    },
   });
   const plan = await compose_session_compaction({
     session_id,
@@ -454,6 +514,9 @@ test("Compact 生成累计 Summary 并让模型只读取 Summary 与 Active", as
     model,
   });
   assert.equal(plan.through_sequence, 2);
+  assert.match(summary_prompt, /\\\"type\\\":\\\"context\\\"/);
+  assert.match(summary_prompt, /\\\"tag\\\":\\\"reference\\\"/);
+  assert.match(summary_prompt, /\\\"context\\\":\\\"earlier context\\\"/);
   await recorder.compact_active({
     through_sequence: plan.through_sequence,
     summary: plan.summary,

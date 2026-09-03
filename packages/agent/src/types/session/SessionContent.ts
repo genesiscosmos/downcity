@@ -15,6 +15,16 @@ export interface SessionTextInputPart {
   text: string;
 }
 
+/** Session 输入中带语义标签的模型上下文。 */
+export interface SessionContextInputPart {
+  /** 内容判别字段。 */
+  type: "context";
+  /** 模型上下文使用的安全 XML 风格标签名。 */
+  tag: string;
+  /** 进入模型上下文时由标签包裹的原始内容。 */
+  context: string;
+}
+
 /** Session 输入中的文件内容。 */
 export interface SessionFileInputPart {
   /** 内容判别字段。 */
@@ -42,6 +52,7 @@ export interface SessionDataInputPart {
 /** `session.prompt()` 接受的封闭内容集合。 */
 export type SessionPromptPart =
   | SessionTextInputPart
+  | SessionContextInputPart
   | SessionFileInputPart
   | SessionDataInputPart;
 

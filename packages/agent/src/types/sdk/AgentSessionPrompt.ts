@@ -13,7 +13,7 @@ import type { SessionPromptPart } from "@/types/session/SessionContent.js";
  *
  * 说明（中文）
  * - 这是 Downcity Session 输入边界，不依赖模型协议或第三方 SDK。
- * - 可直接用于 `session.prompt({ query: [...parts] })` 传入 text parts、file parts 等。
+ * - 可直接用于 `session.prompt({ query: [...parts] })` 传入 text、context、file 等 parts。
  */
 export type SessionUserMessagePart = SessionPromptPart;
 
@@ -24,6 +24,7 @@ export type SessionUserMessagePart = SessionPromptPart;
  * ```ts
  * session.prompt({
  *   query: [
+ *     { type: "context", tag: "reference", context: "此前引用的消息" },
  *     { type: "text", text: "请分析这个附件" },
  *     {
  *       type: "file",
@@ -49,7 +50,7 @@ export interface AgentSessionPromptInput {
    * 说明（中文）
    * - 支持两种格式：
    *   1. `string`：纯文本用户输入，Session 会将其包装为用户消息。
-   *   2. `SessionUserMessagePart[]`：Downcity Session user parts，可直接携带 text、file 等内容。
+   *   2. `SessionUserMessagePart[]`：Downcity Session user parts，可直接携带 text、context、file 等内容。
    * - 调用侧永远只传"新的用户输入"。
    * - 它是否并入当前 turn，还是排到下一 turn，由 Session 内部决定。
    */
@@ -61,7 +62,7 @@ export interface AgentSessionPromptInput {
  *
  * 说明（中文）
  * - `string`：trim 后为空即视为空。
- * - `SessionUserMessagePart[]`：数组为空或仅包含空文本时视为空。
+ * - `SessionUserMessagePart[]`：数组为空，或仅包含空文本和空 Context 时视为空。
  */
 export function is_agent_session_prompt_input_empty(input: AgentSessionPromptInput): boolean {
   const query = input.query;
@@ -72,9 +73,11 @@ export function is_agent_session_prompt_input_empty(input: AgentSessionPromptInp
     if (query.length === 0) {
       return true;
     }
-    // 如果所有 parts 都是空文本，也视为空
+    // 只有空文本与空 Context 的输入没有可执行语义。
     return query.every((part) => {
-      return part.type === "text" && part.text.trim() === "";
+      if (part.type === "text") return part.text.trim() === "";
+      if (part.type === "context") return part.context.trim() === "";
+      return false;
     });
   }
   return true;

@@ -44,6 +44,10 @@ import type {
 } from "@/types/session/SessionInteraction.js";
 import type { SessionActionEvent } from "@/types/session/SessionAction.js";
 import { persist_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
+import {
+  normalize_session_context_content,
+  normalize_session_context_tag,
+} from "@/session/messages/SessionUserContext.js";
 import type {
   AppendCompletedAssistantMessageInput,
   AppendExternalSessionAssistantMessageInput,
@@ -132,7 +136,7 @@ export class SessionMessages {
       updated_at: created_at,
       type: "user",
       input_type: input.input_type,
-      parts: structuredClone(input.parts),
+      parts: normalize_canonical_session_user_parts(input.parts),
     }));
     return message as SessionUserMessage;
   }
@@ -955,6 +959,14 @@ export function normalize_session_user_parts(
         state: "done",
       }];
     }
+    if (part.type === "context") {
+      return [{
+        part_id: `user-context:${index + 1}`,
+        type: "context",
+        tag: normalize_session_context_tag(part.tag),
+        context: normalize_session_context_content(part.context),
+      }];
+    }
     if (part.type === "file") {
       return [{
         part_id: `user-file:${index + 1}`,
@@ -971,6 +983,21 @@ export function normalize_session_user_parts(
       data: to_session_json_value(part.data),
       ...(part.data_id ? { data_id: part.data_id } : {}),
     }];
+  });
+}
+
+/** 校验直接写入的 canonical User Parts，并保留已有 Part identity。 */
+function normalize_canonical_session_user_parts(
+  parts: readonly SessionUserMessagePart[],
+): SessionUserMessagePart[] {
+  return parts.map((part) => {
+    const canonical = structuredClone(part);
+    if (canonical.type !== "context") return canonical;
+    return {
+      ...canonical,
+      tag: normalize_session_context_tag(canonical.tag),
+      context: normalize_session_context_content(canonical.context),
+    };
   });
 }
 

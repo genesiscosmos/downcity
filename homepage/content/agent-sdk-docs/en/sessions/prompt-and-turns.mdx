@@ -27,6 +27,11 @@ if (result.success) {
 ```ts
 const turn = await session.prompt({
   query: [
+    {
+      type: "context",
+      tag: "reference",
+      context: "An earlier quoted message",
+    },
     { type: "text", text: "Explain the architecture in this image" },
     {
       type: "file",
@@ -39,6 +44,8 @@ const turn = await session.prompt({
 ```
 
 Both input and persisted messages use Downcity's `snake_case` fields. Parts passed to `prompt()` do not have a `part_id`; they become canonical User Parts only after entering the Session.
+
+A `context` Part retains structured `tag` and `context` fields in the canonical Message. It becomes Text Content such as `<reference>An earlier quoted message</reference>` only when model context is assembled. A tag must start with a lowercase letter and may contain only lowercase letters, numbers, underscores, and hyphens; XML structural characters in the body are escaped safely. Context is not an ordinary user body, so provide a `text` Part alongside it in normal prompts.
 
 Data URL attachments are not written directly into Session Messages. The Session decodes each Data URL into the current Session's `.downcity/.../attachments/` directory and stores only a path relative to the Workspace root in the Message. Before model execution, the Session reads the attachment from that path and converts it into a model-consumable representation.
 
