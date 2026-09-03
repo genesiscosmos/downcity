@@ -768,6 +768,52 @@ export class PluginRegistry {
     return out;
   }
 
+  /** 在指定 Plugin execution snapshot 中运行既有 pipeline handlers。 */
+  private async pipeline_from_records<T>(
+    records: ReadonlyMap<string, PluginRuntimeRecord>,
+    context: PluginContext,
+    point_name: string,
+    value: T,
+  ): Promise<T> {
+    const key = String(point_name || "").trim();
+    if (!key) return value;
+    let current = value as JsonValue;
+    for (const record of records.values()) {
+      if (record.state !== "ready") continue;
+      const handlers = record.plugin.hooks?.pipeline?.[key] || [];
+      for (const handler of handlers) {
+        current = await handler({
+          context: this.plugin_context(context, record.plugin.name),
+          value: current,
+          plugin: record.plugin.name,
+        });
+      }
+    }
+    return current as T;
+  }
+
+  /** 在指定 Plugin execution snapshot 中运行既有 effect handlers。 */
+  private async effect_from_records<T>(
+    records: ReadonlyMap<string, PluginRuntimeRecord>,
+    context: PluginContext,
+    point_name: string,
+    value: T,
+  ): Promise<void> {
+    const key = String(point_name || "").trim();
+    if (!key) return;
+    for (const record of records.values()) {
+      if (record.state !== "ready") continue;
+      const handlers = record.plugin.hooks?.effect?.[key] || [];
+      for (const handler of handlers) {
+        await handler({
+          context: this.plugin_context(context, record.plugin.name),
+          value: value as JsonValue,
+          plugin: record.plugin.name,
+        });
+      }
+    }
+  }
+
   /**
    * 创建当前 configured registry 的 Session step 执行视图。
    */
@@ -779,6 +825,10 @@ export class PluginRegistry {
         await this.run_action_from_records(records, context, params),
       system_blocks: async (execution_context) =>
         await this.system_blocks_from_records(records, context, execution_context),
+      pipeline: async (point_name, value) =>
+        await this.pipeline_from_records(records, context, point_name, value),
+      effect: async (point_name, value) =>
+        await this.effect_from_records(records, context, point_name, value),
       acquire: () => this.acquire_execution_view(records, context),
     };
   }
@@ -813,6 +863,20 @@ export class PluginRegistry {
           leased_records,
           context,
           execution_context,
+        ),
+      pipeline: async (point_name, value) =>
+        await this.pipeline_from_records(
+          leased_records,
+          context,
+          point_name,
+          value,
+        ),
+      effect: async (point_name, value) =>
+        await this.effect_from_records(
+          leased_records,
+          context,
+          point_name,
+          value,
         ),
       release: async () => {
         if (released) return;

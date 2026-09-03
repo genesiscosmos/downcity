@@ -9,16 +9,31 @@
 export type HomeSdkFileKey = "agent" | "city" | "federation";
 
 /** SDK 世界地块使用的领域视觉语义。 */
-export type HomeSdkWorldCellTone = "workspace" | "plugin" | "city" | "embassy" | "federation" | "service";
+export type HomeSdkWorldCellTone =
+  | "workspace"
+  | "plugin"
+  | "city"
+  | "storage"
+  | "transport"
+  | "link"
+  | "federation"
+  | "service";
 
 /** SDK 世界地块内部承载的可见内容。 */
-export type HomeSdkWorldCellContent = "primary_agent" | "agent" | "user" | "none";
+export type HomeSdkWorldCellContent =
+  | "agent"
+  | "agent_workspace"
+  | "workspace"
+  | "storage"
+  | "transport"
+  | "user"
+  | "none";
 
 /** Plugin 地块用于区分真实内置能力的图标语义。 */
-export type HomeSdkWorldPluginKind = "skill" | "task" | "web" | "memory" | "image" | "sound";
+export type HomeSdkWorldPluginKind = "skill" | "task" | "web" | "memory";
 
 /** SDK 世界中用于强调代码所属领域的分组。 */
-export type HomeSdkWorldCellGroup = "agent" | "city" | "embassy" | "federation";
+export type HomeSdkWorldCellGroup = "agent" | "city" | "link" | "federation";
 
 /** SDK 世界中由连续地块共同形成的区域。 */
 export type HomeSdkWorldBoundaryKey = "origin_city" | "neighbor_city" | "third_city" | "federation";
@@ -35,8 +50,8 @@ export interface HomeSdkWorldCell {
   visible_step: number;
   /** 地块所属的代码领域，用于随文件切换调整视觉强调。 */
   group: HomeSdkWorldCellGroup;
-  /** 地块参与形成的 City 或 Federation 边界。 */
-  boundary_key: HomeSdkWorldBoundaryKey;
+  /** 地块参与形成的 City 或 Federation 边界；中立连接地块为空。 */
+  boundary_key: HomeSdkWorldBoundaryKey | null;
   /** 地块的地图色彩语义。 */
   tone: HomeSdkWorldCellTone;
   /** 地块内部绘制的 Agent 内容类型。 */
@@ -45,8 +60,8 @@ export interface HomeSdkWorldCell {
   label_key: keyof HomeSdkWorldLabels | null;
   /** 地块内 Agent 的身份色；无 Agent 时为空。 */
   agent_accent: string | null;
-  /** Embassy 入口的 City 身份色；普通地块为空。 */
-  portal_accent: string | null;
+  /** 连接地块继承的 City 身份色；普通地块不设置。 */
+  link_accent?: string;
   /** Plugin 地块展示的内置能力图标；非 Plugin 地块不设置。 */
   plugin_kind?: HomeSdkWorldPluginKind;
 }
@@ -71,7 +86,7 @@ export interface HomeSdkWorldAnnotation {
 
 /** SDK 世界地图组件的输入参数。 */
 export interface HomeSdkWorldMapProps {
-  /** 当前滚动叙事步骤，范围为 0 到 16。 */
+  /** 当前滚动叙事步骤，范围为 0 到 21。 */
   active_step: number;
   /** 当前代码文件，用于轻量强调地图中的对应领域。 */
   active_file: HomeSdkFileKey;
@@ -86,6 +101,10 @@ export interface HomeSdkWorldLabels {
   /** Agent 居民名称。 */ agent: string;
   /** Agent 能力扩展节点名称。 */ plugin: string;
   /** Workspace 地块名称。 */ workspace: string;
+  /** Group 主体名称。 */ group: string;
+  /** GroupSession 群聊上下文名称。 */ group_session: string;
+  /** City 持有的 Storage 名称。 */ storage: string;
+  /** City 对外 Transport 名称。 */ transport: string;
   /** 第一座城市名称。 */ city: string;
   /** 第二座城市名称。 */ neighbor_city: string;
   /** 第三座城市名称。 */ third_city: string;
@@ -96,10 +115,12 @@ export interface HomeSdkWorldLabels {
   /** Federation Account 节点名称。 */ account: string;
   /** Federation Payment 节点名称。 */ payment: string;
   /** Federation Credits 节点名称。 */ credits: string;
-  /** Federation Embassy 访问窗口名称。 */ embassy: string;
-  /** Session 对话气泡名称。 */ session: string;
+  /** Federation Env 节点名称。 */ env: string;
+  /** Federation Usage 节点名称。 */ usage: string;
+  /** City 与 Federation 之间的连接地块名称。 */ link: string;
   /** User 消息气泡名称。 */ user: string;
   /** User 发送给 Session 的实际请求文本。 */ user_prompt: string;
+  /** User 发送给 GroupSession 的实际请求文本。 */ group_prompt: string;
   /** Agent 通过 Session 返回的示例响应文本。 */ agent_reply: string;
 }
 

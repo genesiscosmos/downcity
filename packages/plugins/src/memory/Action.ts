@@ -16,20 +16,8 @@ import type {
   MemoryRecallInput,
   MemoryRememberInput,
   MemoryReviseInput,
-  MemoryScope,
 } from "@/memory/types/Memory.js";
-
-/** 从 PluginContext 构造当前 Runtime 的默认 Memory scope。 */
-export function create_memory_scope(
-  context: PluginContext,
-  session_id?: string,
-): MemoryScope {
-  return {
-    agent_id: context.agent_id,
-    workspace_id: context.workspace_path,
-    ...(session_id ? { session_id } : {}),
-  };
-}
+import type { MemoryAccessContext } from "@/memory/types/MemoryAccess.js";
 
 /** 从 canonical Session Message 提取可供 Provider 提炼的文本。 */
 function extract_session_message_line(message: SessionMessage): string {
@@ -66,37 +54,37 @@ export async function status_memory_action(
 
 /** search action，内部委托 Provider recall。 */
 export async function search_memory_action(
-  context: PluginContext,
   provider: MemoryProvider,
-  input: Omit<MemoryRecallInput, "scope">,
+  access: MemoryAccessContext,
+  input: Omit<MemoryRecallInput, "access">,
 ): Promise<PluginActionResult<JsonValue>> {
   return await run_provider_action(async () => await provider.recall({
     ...input,
-    scope: create_memory_scope(context),
+    access,
   }) as unknown as JsonValue);
 }
 
 /** read action。 */
 export async function read_memory_action(
-  context: PluginContext,
   provider: MemoryProvider,
-  input: Omit<MemoryReadInput, "scope">,
+  access: MemoryAccessContext,
+  input: Omit<MemoryReadInput, "access">,
 ): Promise<PluginActionResult<JsonValue>> {
   return await run_provider_action(async () => await provider.read({
     ...input,
-    scope: create_memory_scope(context),
+    access,
   }) as unknown as JsonValue);
 }
 
 /** remember action。 */
 export async function remember_memory_action(
-  context: PluginContext,
   provider: MemoryProvider,
-  input: Omit<MemoryRememberInput, "scope">,
+  access: MemoryAccessContext,
+  input: Omit<MemoryRememberInput, "access">,
 ): Promise<PluginActionResult<JsonValue>> {
   return await run_provider_action(async () => await provider.remember({
     ...input,
-    scope: create_memory_scope(context),
+    access,
   }) as unknown as JsonValue);
 }
 
@@ -104,6 +92,7 @@ export async function remember_memory_action(
 export async function digest_memory_action(
   context: PluginContext,
   provider: MemoryProvider,
+  access: MemoryAccessContext,
   input: {
     /** 需要提炼的 Session 标识。 */
     session_id: string;
@@ -129,7 +118,7 @@ export async function digest_memory_action(
     const transcript = lines.join("\n\n");
     return await provider.digest({
       session_id,
-      scope: create_memory_scope(context, session_id),
+      access: { ...access, session_id },
       transcript,
       message_count: lines.length,
     }) as unknown as JsonValue;
@@ -138,24 +127,24 @@ export async function digest_memory_action(
 
 /** revise action。 */
 export async function revise_memory_action(
-  context: PluginContext,
   provider: MemoryProvider,
-  input: Omit<MemoryReviseInput, "scope">,
+  access: MemoryAccessContext,
+  input: Omit<MemoryReviseInput, "access">,
 ): Promise<PluginActionResult<JsonValue>> {
   return await run_provider_action(async () => await provider.revise({
     ...input,
-    scope: create_memory_scope(context),
+    access,
   }) as unknown as JsonValue);
 }
 
 /** forget action。 */
 export async function forget_memory_action(
-  context: PluginContext,
   provider: MemoryProvider,
-  input: Omit<MemoryForgetInput, "scope">,
+  access: MemoryAccessContext,
+  input: Omit<MemoryForgetInput, "access">,
 ): Promise<PluginActionResult<JsonValue>> {
   return await run_provider_action(async () => await provider.forget({
     ...input,
-    scope: create_memory_scope(context),
+    access,
   }) as unknown as JsonValue);
 }

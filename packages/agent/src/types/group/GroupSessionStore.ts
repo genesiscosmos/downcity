@@ -14,6 +14,8 @@ export interface GroupSessionHistoryMeta {
   readonly group_id: string;
   /** 当前 GroupSession 绑定的 Workspace 标识；未绑定时为空。 */
   readonly workspace_id?: string;
+  /** 当前 GroupSession 持久化的用户可见标题。 */
+  readonly title?: string;
   /** 首次创建时间戳。 */
   readonly created_at: number;
   /** 最近更新时间戳。 */

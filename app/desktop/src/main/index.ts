@@ -152,6 +152,7 @@ ipcMain.handle("group:remove", (_event, group_id: string) => require_agent_contr
 ipcMain.handle("group:open", (_event, group_id: string, session_id?: string) => require_agent_controller().open_group(group_id, session_id));
 ipcMain.handle("group:list-sessions", (_event, group_id: string) => require_agent_controller().list_group_sessions(group_id));
 ipcMain.handle("group:create-session", (_event, group_id: string, workspace_id?: string) => require_agent_controller().create_group_session(group_id, workspace_id));
+ipcMain.handle("group:rename-session", (_event, group_id: string, session_id: string, title: string) => require_agent_controller().rename_group_session(group_id, session_id, title));
 ipcMain.handle("group:list-messages", (_event, group_id: string, session_id?: string) => require_agent_controller().list_group_messages(group_id, session_id));
 ipcMain.handle("group:send", (_event, group_id: string, session_id: string | undefined, input: import("../common/types/DesktopApi.js").DesktopGroupSendInput) => require_agent_controller().send_group_message(group_id, session_id, input));
 ipcMain.handle("group:stop", (_event, group_id: string, session_id?: string) => require_agent_controller().stop_group(group_id, session_id));

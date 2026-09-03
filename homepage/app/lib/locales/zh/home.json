@@ -57,11 +57,11 @@
   "quickstart": {
     "sectionLabel": "三套核心 SDK",
     "title": "从 Agent，到 City，再到 Federation。",
-    "description": "Agent 组合模型与 Plugin，在 Workspace 中工作；多名 Agent 组成独立的 City，并通过 Embassy 使用 Federation 提供的共享 Service。",
+    "description": "Agent 使用 Bureau 身份下的 CityModel 与 Plugin，通过 Session 绑定 Workspace；多个 Agent 在 City 中通过 Group 协作，并经由 Embassy 使用 Federation 提供的共享 Service。",
     "copyCode": "复制代码",
     "copiedCode": "已复制",
     "map": {
-      "ariaLabel": "从 Agent、Workspace 和 City 生长到 Federation Service 的领域地图",
+      "ariaLabel": "从 Agent、Workspace、Group 和 City 生长到 Federation Service 的领域地图",
       "labels": {
         "federation": "Federation",
         "database": "Database",
@@ -71,15 +71,21 @@
         "agent": "Agent",
         "plugin": "Plugin",
         "workspace": "Workspace",
+        "group": "Group",
+        "groupSession": "Group Session",
+        "storage": "Storage",
+        "transport": "HTTP / RPC",
         "service": "Service",
         "model": "AI Model",
         "account": "Accounts",
         "payment": "Payment",
         "credits": "Credits",
-        "embassy": "Embassy",
-        "session": "Session · Agent 对话",
+        "env": "Env",
+        "usage": "Usage",
+        "link": "连接",
         "user": "User",
         "userPrompt": "“总结当前仓库”",
+        "groupPrompt": "“评审当前实现并给出修改方案”",
         "agentReply": "“当前仓库总结已完成。”"
       }
     },
@@ -91,7 +97,7 @@
       },
       "city": {
         "title": "City SDK",
-        "description": "在一个运行边界内索引多个 Agent，并通过 HTTP / RPC transport 暴露它们。",
+        "description": "在一个运行边界内持有 Workspace、Storage、Agent 与 Group 生命周期，并通过 HTTP / RPC transport 暴露它们。",
         "docsLink": "查看 City SDK"
       },
       "embassy": {

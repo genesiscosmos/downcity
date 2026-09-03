@@ -90,6 +90,7 @@ const desktop_api: DesktopApi = {
     open: (group_id, session_id) => ipcRenderer.invoke("group:open", group_id, session_id),
     list_sessions: (group_id) => ipcRenderer.invoke("group:list-sessions", group_id),
     create_session: (group_id, workspace_id) => ipcRenderer.invoke("group:create-session", group_id, workspace_id),
+    rename_session: (group_id, session_id, title) => ipcRenderer.invoke("group:rename-session", group_id, session_id, title),
     list_messages: (group_id, session_id) => ipcRenderer.invoke("group:list-messages", group_id, session_id),
     send: (group_id, session_id, input) => ipcRenderer.invoke("group:send", group_id, session_id, input),
     stop: (group_id, session_id) => ipcRenderer.invoke("group:stop", group_id, session_id),

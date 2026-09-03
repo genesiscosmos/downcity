@@ -1,6 +1,6 @@
 /** Downcity Desktop 根应用壳，直接沿用 Duobox 的 Sidebar + MainView 结构。 */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 import { Button } from "@/components/ui/button";
@@ -147,13 +147,18 @@ export function App() {
       const group = controller.groups.find((item) => item.group_id === group_selection.group_id);
       const session_id = group_selection.kind === "group_draft" ? group_selection.draft_id : group_selection.session_id;
       const session = group_selection.kind === "group_draft"
-        ? { session_id, workspace_id: group_selection.workspace_id, created_at: 0, updated_at: 0, message_count: 0 }
+        ? { session_id, title: "新对话", workspace_id: group_selection.workspace_id, created_at: 0, updated_at: 0, message_count: 0 }
         : group?.sessions.find((item) => item.session_id === session_id);
       if (!group || !session) return <WelcomeView />;
       const group_chat_key = get_group_chat_key(group_selection.workspace_id, group_selection.group_id, session_id);
-      return <GroupView
+      return <GroupChatMainView group={group} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`group-chat:${group.group_id}:${session_id}`}>
+        {(open_group_info) => <GroupView
         group={group}
+        open_group_info={open_group_info}
         workspace_id={group_selection.workspace_id}
+        workspaces={controller.workspaces}
+        workspace_draft_mode={group_selection.kind === "group_draft"}
+        switch_workspace={(target_workspace_id) => group_selection.kind === "group_draft" ? controller.switch_group_draft_context(group.group_id, target_workspace_id) : controller.create_group_session(group.group_id, target_workspace_id)}
         session={session}
         agents={controller.agents}
         settings={controller.settings}
@@ -168,7 +173,9 @@ export function App() {
         update_draft={(input) => controller.update_group_draft(group_selection.workspace_id, group_selection.group_id, session_id, input)}
         send_message={(target_session_id, input) => controller.send_group_message(group_selection.group_id, group_selection.workspace_id, target_session_id, input)}
         stop_session={(target_session_id) => group_selection.kind === "group_session" ? controller.stop_group(group_selection.group_id, target_session_id) : Promise.resolve()}
-      />;
+        remove_session={group_selection.kind === "group_session" ? () => controller.remove_group_session(group_selection.group_id, group_selection.session_id) : undefined}
+      />}
+      </GroupChatMainView>;
     }
     if (controller.selection?.kind === "group") {
       const group_selection = controller.selection;
@@ -187,13 +194,18 @@ export function App() {
       const draft_id = controller.selection.draft_id;
       const workspace_id = controller.selection.workspace_id;
       const draft_key = get_session_key(workspace_id, selected_agent.agent_id, draft_id);
-      return <SessionView
+      return <AgentChatMainView agent={selected_agent} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`agent-draft:${selected_agent.agent_id}:${draft_id}`}>
+        {(open_agent_info) => <SessionView
+        chat_surface="agent"
+        open_agent_info={open_agent_info}
         workspace_id={workspace_id}
         agent={selected_agent}
         workspace={controller.workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? create_missing_workspace(workspace_id)}
         workspaces={controller.workspaces}
+        workspace_draft_mode
+        switch_workspace={(target_workspace_id) => controller.switch_draft_context(target_workspace_id, selected_agent.agent_id)}
         agents={controller.agents}
-        session={{ session_id: draft_id, title: "新对话", preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }}
+        session={{ session_id: draft_id, session_path: "", title: "新对话", preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }}
         messages={[]}
         draft_content={controller.draft_content_by_session[draft_key] ?? create_chat_composer()}
         queued_messages={[]}
@@ -219,7 +231,8 @@ export function App() {
         set_queue_paused={() => undefined}
         move_queued_message={() => undefined}
         load_earlier_history={async () => undefined}
-      />;
+      />}
+      </AgentChatMainView>;
     }
     if (controller.selection.kind !== "session") return <WelcomeView />;
     const selected_session_id = controller.selection.session_id;
@@ -231,12 +244,15 @@ export function App() {
       selected_agent.agent_id,
       session.session_id,
     );
-    return <SessionView
+    return <AgentChatMainView agent={selected_agent} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`agent-session:${selected_agent.agent_id}:${session.session_id}`}>
+      {(open_agent_info) => <SessionView
       chat_surface="agent"
+      open_agent_info={open_agent_info}
       workspace_id={workspace_id}
       agent={selected_agent}
       workspace={controller.workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? create_missing_workspace(workspace_id)}
       workspaces={controller.workspaces}
+      switch_workspace={(target_workspace_id) => controller.create_session(target_workspace_id, selected_agent.agent_id)}
         agents={controller.agents}
         session={session}
       messages={controller.messages_by_session[session_key] ?? []}
@@ -271,7 +287,8 @@ export function App() {
       set_queue_paused={(paused) => controller.set_queue_paused(workspace_id, selected_agent.agent_id, session.session_id, paused)}
       move_queued_message={(message_id, direction) => controller.move_queued_message(workspace_id, selected_agent.agent_id, session.session_id, message_id, direction)}
       load_earlier_history={() => controller.load_earlier_history(workspace_id, selected_agent.agent_id, session.session_id)}
-    />;
+    />}
+    </AgentChatMainView>;
   };
 
   return <div className="fixed inset-0 flex h-full min-h-0 w-full overflow-hidden bg-muted">
@@ -313,12 +330,30 @@ function AgentMainView({ agent, controller, sidebar_collapsed, main_session }: {
   </MainViewBayBarFrame>;
 }
 
+/** Agent Chat 独立持有完整 Agent 编辑 BayBar。 */
+function AgentChatMainView({ agent, controller, sidebar_collapsed, view_key, children }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** 当前 Chat 的稳定标识。 */ view_key: string; /** 渲染 Chat 并接收编辑入口。 */ children(open_agent_info: () => void): ReactNode }) {
+  const [section, set_section] = useState<AgentEditorSection>("identity");
+  const titles: Record<AgentEditorSection, string> = { identity: "身份", model: "Model", soul: "SOUL.md", plugins: "Plugins" };
+  const baybar_content = <div className="flex h-full min-h-0 flex-col"><nav className="flex shrink-0 gap-1 border-b border-border/45 p-2" aria-label="Agent 编辑分区">{(["identity", "model", "soul", "plugins"] as const).map((item) => <button key={item} type="button" onClick={() => set_section(item)} className={`rounded-md px-2 py-1 text-[0.6875rem] transition-colors duration-150 ${section === item ? "bg-interaction-selected text-foreground" : "text-muted-foreground hover:bg-interaction-hover hover:text-foreground"}`}>{titles[item]}</button>)}</nav><div className="min-h-0 flex-1 overflow-y-auto"><AgentInfoSidebar agent={agent} plugins={controller.plugins} controller={controller} section={section} embedded close_sidebar={() => undefined} /></div></div>;
+  return <MainViewBayBarFrame view_key={view_key} sidebar_collapsed={sidebar_collapsed} title={titles[section]} baybar_content={baybar_content}>
+    {children}
+  </MainViewBayBarFrame>;
+}
+
 /** Group MainView 独立拥有配置 BayBar 的状态与编辑分区。 */
 function GroupMainView({ group, controller, sidebar_collapsed }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
   const [section, set_section] = useState<GroupEditorSection>("model");
   return <MainViewBayBarFrame view_key={`group:${group.group_id}`} sidebar_collapsed={sidebar_collapsed} title={section === "model" ? "Model" : section === "instruction" ? "协作目标" : "成员"} baybar_content={<GroupInfoSidebar group={group} agents={controller.agents} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
     {(open_baybar) => <GroupConfigView group={group} agents={controller.agents} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
   </MainViewBayBarFrame>;
+}
+
+/** Group Chat 独立持有完整 Group 编辑 BayBar。 */
+function GroupChatMainView({ group, controller, sidebar_collapsed, view_key, children }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** Desktop 根控制器。 */ controller: ReturnType<typeof use_desktop_controller>; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** 当前 Chat 的稳定标识。 */ view_key: string; /** 渲染 Chat 并接收编辑入口。 */ children(open_group_info: () => void): ReactNode }) {
+  const [section, set_section] = useState<GroupEditorSection>("model");
+  const titles: Record<GroupEditorSection, string> = { model: "Model", instruction: "协作目标", members: "成员" };
+  const baybar_content = <div className="flex h-full min-h-0 flex-col"><nav className="flex shrink-0 gap-1 border-b border-border/45 p-2" aria-label="Group 编辑分区">{(["model", "instruction", "members"] as const).map((item) => <button key={item} type="button" onClick={() => set_section(item)} className={`rounded-md px-2 py-1 text-[0.6875rem] transition-colors duration-150 ${section === item ? "bg-interaction-selected text-foreground" : "text-muted-foreground hover:bg-interaction-hover hover:text-foreground"}`}>{titles[item]}</button>)}</nav><div className="min-h-0 flex-1 overflow-y-auto"><GroupInfoSidebar group={group} agents={controller.agents} controller={controller} section={section} embedded close_sidebar={() => undefined} /></div></div>;
+  return <MainViewBayBarFrame view_key={view_key} sidebar_collapsed={sidebar_collapsed} title={titles[section]} baybar_content={baybar_content}>{children}</MainViewBayBarFrame>;
 }
 
 /** Settings MainView 仅在 General 页面拥有自己的 Global Env BayBar。 */

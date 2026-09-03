@@ -145,7 +145,13 @@ export function create_builtin_plugin_registrations(): BuiltinPluginRegistration
         has_config: false,
       },
       create_agent(context) {
-        return new MemoryPlugin({ root_path: context.data_path });
+        const city_root_path = String(
+          context.extensions.city_memory_root_path || "",
+        ).trim();
+        return new MemoryPlugin({
+          agent_root_path: context.data_path,
+          ...(city_root_path ? { city_root_path } : {}),
+        });
       },
     },
     {

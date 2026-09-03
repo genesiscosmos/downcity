@@ -123,6 +123,7 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
       session_id: this.session_id,
       group_id: String(raw.group_id || this.group_id),
       ...(typeof raw.workspace_id === "string" && raw.workspace_id.trim() ? { workspace_id: raw.workspace_id.trim() } : {}),
+      ...(typeof raw.title === "string" && raw.title.trim() ? { title: raw.title.trim() } : {}),
       created_at: typeof raw.created_at === "number" ? raw.created_at : Date.now(),
       updated_at: typeof raw.updated_at === "number" ? raw.updated_at : 0,
       message_count: typeof raw.message_count === "number" ? raw.message_count : 0,

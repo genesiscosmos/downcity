@@ -8,6 +8,12 @@
  */
 
 import type { JsonObject, JsonValue } from "@downcity/agent";
+import type {
+  MemoryAccessContext,
+  MemoryOwner,
+  MemorySubject,
+  MemoryWriteTarget,
+} from "@/memory/types/MemoryAccess.js";
 
 /** 长期记忆的领域分类。 */
 export type MemoryType =
@@ -25,24 +31,6 @@ export type MemoryProviderState = "ready" | "degraded";
 export interface MemoryProviderInitializeInput {
   /** 当前 Agent 的稳定全局标识。 */
   agent_id: string;
-}
-
-/** Memory 数据的结构化作用域。 */
-export interface MemoryScope {
-  /** 当前记忆所属的 Agent 标识。 */
-  agent_id: string;
-
-  /** 当前记忆可选所属的 Workspace 标识或路径。 */
-  workspace_id?: string;
-
-  /** 当前记忆可选所属的 Session 标识。 */
-  session_id?: string;
-
-  /** 当前记忆可选所属的用户标识。 */
-  user_id?: string;
-
-  /** 当前记忆可选所属的组织标识。 */
-  organization_id?: string;
 }
 
 /** 一条记忆引用的原始证据。 */
@@ -65,8 +53,11 @@ export interface MemoryRecord {
   /** 当前记忆的领域分类。 */
   memory_type: MemoryType;
 
-  /** 当前记忆所属的结构化作用域。 */
-  scope: MemoryScope;
+  /** 维护当前记录与权限的唯一所有者。 */
+  owner: MemoryOwner;
+
+  /** 当前记录实际描述的用户、Workspace、Agent 或 City。 */
+  subject: MemorySubject;
 
   /** 当前记忆的完整可读内容。 */
   content: string;
@@ -115,6 +106,48 @@ export interface MemoryProviderCapabilities {
 
   /** Provider 是否支持生成受预算约束的稳定上下文。 */
   system_context: boolean;
+
+  /** Provider 是否支持持久化等待 Formation 的 canonical Turn Capture Job。 */
+  capture_turn: boolean;
+}
+
+/** Capture Job 中保存的一条最小 canonical 文本证据。 */
+export interface MemoryCaptureMessage {
+  /** canonical Session Message 的稳定标识。 */
+  message_id: string;
+
+  /** 当前证据的消息角色。 */
+  role: "user" | "assistant";
+
+  /** 从允许捕获的 canonical text parts 提取的原始文本。 */
+  text: string;
+}
+
+/** 持久化一个待 Formation Turn 的输入。 */
+export interface MemoryCaptureTurnInput {
+  /** 当前 Capture 使用的可信 Memory 访问上下文。 */
+  access: MemoryAccessContext;
+
+  /** 当前 Turn 所属 Session 的稳定标识。 */
+  session_id: string;
+
+  /** 当前 Turn 的稳定标识。 */
+  turn_id: string;
+
+  /** 通过本地预检的最小 canonical 文本证据。 */
+  messages: MemoryCaptureMessage[];
+}
+
+/** Capture Job 持久化结果。 */
+export interface MemoryCaptureTurnResult {
+  /** Provider 内稳定且可幂等重试的 Job 标识。 */
+  job_id: string;
+
+  /** 本次调用新建了 Job，或命中了已存在的相同 Turn Job。 */
+  mode: "created" | "existing";
+
+  /** Job 当前等待后续 Formation 的状态。 */
+  status: "pending";
 }
 
 /** Provider 状态查询结果。 */
@@ -140,8 +173,8 @@ export interface MemoryRecallInput {
   /** 需要检索的自然语言查询。 */
   query: string;
 
-  /** 当前召回请求使用的结构化作用域。 */
-  scope: MemoryScope;
+  /** 当前召回请求使用的可信访问上下文。 */
+  access: MemoryAccessContext;
 
   /** 可选最大返回条数。 */
   max_results?: number;
@@ -182,8 +215,8 @@ export interface MemoryReadInput {
   /** 需要读取的稳定记忆标识。 */
   memory_id: string;
 
-  /** 当前读取请求使用的结构化作用域。 */
-  scope: MemoryScope;
+  /** 当前读取请求使用的可信访问上下文。 */
+  access: MemoryAccessContext;
 
   /** 可选起始行号，使用 1-based 语义。 */
   from_line?: number;
@@ -206,8 +239,11 @@ export interface MemoryRememberInput {
   /** 需要长期保留的原始内容。 */
   content: string;
 
-  /** 当前写入请求使用的结构化作用域。 */
-  scope: MemoryScope;
+  /** 当前写入请求使用的可信访问上下文。 */
+  access: MemoryAccessContext;
+
+  /** 有限语义写入目标；Provider 负责解析真实 owner 与 subject。 */
+  target: MemoryWriteTarget;
 
   /** 可选的人类可读主题，用于帮助 Provider 组织内容。 */
   topic?: string;
@@ -239,8 +275,8 @@ export interface MemoryDigestInput {
   /** 需要提炼的 Session 标识。 */
   session_id: string;
 
-  /** 当前提炼请求使用的结构化作用域。 */
-  scope: MemoryScope;
+  /** 当前提炼请求使用的可信访问上下文。 */
+  access: MemoryAccessContext;
 
   /** 由 MemoryPlugin 从 canonical Session 提取的文本。 */
   transcript: string;
@@ -272,8 +308,8 @@ export interface MemoryReviseInput {
   /** 需要修订的稳定记忆标识。 */
   memory_id: string;
 
-  /** 当前修订请求使用的结构化作用域。 */
-  scope: MemoryScope;
+  /** 当前修订请求使用的可信访问上下文。 */
+  access: MemoryAccessContext;
 
   /** 描述目标变更的明确修订指令。 */
   instruction: string;
@@ -302,8 +338,8 @@ export interface MemoryForgetInput {
   /** 需要删除或失效的稳定记忆标识。 */
   memory_id: string;
 
-  /** 当前删除请求使用的结构化作用域。 */
-  scope: MemoryScope;
+  /** 当前删除请求使用的可信访问上下文。 */
+  access: MemoryAccessContext;
 }
 
 /** 删除或失效一条记忆的结果。 */
@@ -317,8 +353,8 @@ export interface MemoryForgetResult {
 
 /** Provider 生成稳定上下文时的预算输入。 */
 export interface MemorySystemContextInput {
-  /** 当前上下文请求使用的结构化作用域。 */
-  scope: MemoryScope;
+  /** 当前上下文请求使用的可信访问上下文。 */
+  access: MemoryAccessContext;
 
   /** 允许返回的最大记忆条数。 */
   max_items: number;
@@ -331,6 +367,9 @@ export interface MemorySystemContextInput {
 export interface MemorySystemContextItem {
   /** 当前稳定记忆标识。 */
   memory_id: string;
+
+  /** 当前 Core 内容描述的 Subject，用于生成独立命名 block。 */
+  subject: MemorySubject;
 
   /** 当前记忆的有界文本内容。 */
   content: string;
@@ -382,6 +421,9 @@ export interface MemoryProvider {
     input: MemorySystemContextInput,
   ): Promise<MemorySystemContextResult>;
 
+  /** 幂等持久化一个通过预检、等待 Formation 的 canonical Turn。 */
+  capture_turn(input: MemoryCaptureTurnInput): Promise<MemoryCaptureTurnResult>;
+
   /** 释放 Provider 持有的存储、索引和后台任务。 */
   dispose(): Promise<void>;
 }
@@ -392,8 +434,11 @@ export interface MemoryPluginProfile {
   provider?: "builtin";
   /** 当前启用的 Memory Storage。 */
   storage?: "file";
-  /** 可选的绝对存储目录。 */
-  root_path?: string;
+  /** 当前 Agent 的 MemoryPlugin 私有绝对数据目录。 */
+  agent_root_path?: string;
+
+  /** City 提供的 MemoryPlugin 专属共享绝对数据目录。 */
+  city_root_path?: string;
 }
 
 /** MemoryPlugin profile 的兼容名称别名。 */
@@ -401,10 +446,10 @@ export type MemoryPluginOptions = MemoryPluginProfile;
 
 /** Memory action 可以接受的公开 JSON payload 联合。 */
 export type MemoryActionPayload =
-  | Omit<MemoryRecallInput, "scope">
-  | Omit<MemoryReadInput, "scope">
-  | Omit<MemoryRememberInput, "scope">
-  | Omit<MemoryDigestInput, "scope" | "transcript" | "message_count">
-  | Omit<MemoryReviseInput, "scope">
-  | Omit<MemoryForgetInput, "scope">
+  | Omit<MemoryRecallInput, "access">
+  | Omit<MemoryReadInput, "access">
+  | Omit<MemoryRememberInput, "access">
+  | Omit<MemoryDigestInput, "access" | "transcript" | "message_count">
+  | Omit<MemoryReviseInput, "access">
+  | Omit<MemoryForgetInput, "access">
   | Record<string, JsonValue>;

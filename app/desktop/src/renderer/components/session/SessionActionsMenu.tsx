@@ -1,7 +1,7 @@
 /** Session 共享操作菜单，供 Sidebar 与 Chat 页头复用。 */
 
 import { useState, type FormEvent, type ReactElement } from "react";
-import { TbArchive, TbCopy, TbPencil, TbTrash } from "react-icons/tb";
+import { TbArchive, TbCopy, TbFolder, TbPencil, TbTrash } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
@@ -58,6 +58,7 @@ export function SessionActionsMenu({ session, trigger, on_rename, on_archive, on
         <DropdownMenuItem onClick={() => { set_title(session.title || ""); set_rename_open(true); }}><TbPencil /><span>重命名</span></DropdownMenuItem>
         <DropdownMenuItem onClick={() => void on_archive()}><TbArchive /><span>归档</span></DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => void navigator.clipboard.writeText(session.session_path)}><TbFolder /><span>复制路径</span></DropdownMenuItem>
         <DropdownMenuItem onClick={() => void navigator.clipboard.writeText(session.session_id)}><TbCopy /><span>复制 Session ID</span></DropdownMenuItem>
         <DropdownMenuItem className="text-destructive" onClick={() => set_remove_open(true)}><TbTrash /><span>删除</span></DropdownMenuItem>
       </DropdownMenuContent>

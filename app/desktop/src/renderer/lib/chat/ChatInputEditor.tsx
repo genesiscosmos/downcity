@@ -18,6 +18,7 @@ import { ChatAttachmentNode, ChatReferenceNode } from "./editor/ChatComposerNode
 import { ChatSlashMenu } from "./editor/ChatSlashMenu";
 import { count_chat_composer_atoms, has_chat_composer_atoms, is_chat_composer_empty, read_chat_composer_text, resolve_chat_input_command } from "./editor/chatComposerCodec";
 import { add_chat_reference_listener } from "./editor/chatReferenceEvent";
+import { add_chat_mention_listener } from "./editor/chatMentionEvent";
 
 /** ChatInput 属性。 */
 interface ChatInputEditorProps {
@@ -289,10 +290,17 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   }, [editor, props.draft_content, props.editor_key]);
 
   useEffect(() => add_chat_reference_listener((reference) => {
-    if (props_ref.current.group_mode) return;
     const current_editor = editor_ref.current;
     if (!current_editor) return;
     current_editor.chain().focus("end").insertContent({ type: "chatReference", attrs: { ...reference, preview_text: reference.text.replace(/\s+/g, " ").trim().slice(0, 80) } }).run();
+  }), []);
+
+  useEffect(() => add_chat_mention_listener((agent) => {
+    if (!props_ref.current.group_mode) return;
+    const current_editor = editor_ref.current;
+    if (!current_editor) return;
+    current_editor.chain().focus("end").insertContent(`@${agent.name} `).run();
+    set_member_query(undefined);
   }), []);
 
   const slash_commands = useMemo(() => {
@@ -354,7 +362,8 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
       <EditorContent editor={editor} className="chat-composer-content" />
     </div>
     <div className="flex items-center justify-between gap-2 px-1 pb-1">
-      {!props.group_mode && !props.client_mode ? <div className="flex min-w-0 items-center gap-1">
+      {!props.client_mode ? <div className="flex min-w-0 items-center gap-1">
+        {!props.group_mode ? <>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button size="icon" className="rounded-full" aria-label="添加内容" title="添加内容" disabled={submitting}><TbPlus className="size-4" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent side="top" sideOffset={4}>
@@ -364,6 +373,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
         </DropdownMenu>
         <ChatModelSelector agent={props.agent} configuration={props.configuration} models={props.models} models_loading={props.models_loading} set_model={props.set_model} set_reasoning_effort={props.set_reasoning_effort} />
         <ChatApprovalModeSelector configuration={props.configuration} set_approval_mode={props.set_approval_mode} />
+        </> : null}
       </div> : <div />}
       <Button type="button" onClick={() => void (show_stop ? props.stop_session() : submit_message("send"))} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={show_stop ? "停止生成" : busy ? "发送调整" : "发送消息"} title={show_stop ? "停止生成" : busy ? "发送调整；⌘/Ctrl + Shift + Enter 加入下一轮队列" : "发送消息"}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
     </div>

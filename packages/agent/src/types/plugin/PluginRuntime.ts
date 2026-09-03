@@ -186,6 +186,12 @@ export interface AgentPluginExecutionView {
   system_blocks(
     execution_context?: PluginExecutionContext,
   ): Promise<AgentSessionSystemBlock[]>;
+
+  /** 在当前 execution snapshot 中运行已有 Plugin pipeline point。 */
+  pipeline<T = JsonValue>(point_name: string, value: T): Promise<T>;
+
+  /** 在当前 execution snapshot 中运行已有 Plugin effect point。 */
+  effect<T = JsonValue>(point_name: string, value: T): Promise<void>;
 }
 
 /**

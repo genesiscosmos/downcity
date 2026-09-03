@@ -824,10 +824,7 @@ export class ImagePlugin extends BasePlugin {
                 : `image job ${current.status}`,
             ...(output.status === "succeeded" && output.result
               ? {
-                  messages: [{
-                    role: "assistant" as const,
-                    parts: output.result.parts,
-                  }],
+                  messages: [output.result],
                 }
               : {}),
           };

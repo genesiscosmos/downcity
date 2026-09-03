@@ -1,141 +1,68 @@
 ---
 title: memory Plugin
-description: Provider 可替换的 Agent 长期记忆、召回与治理能力
+description: 支持 City 跨 Agent 共享和 Agent 私有知识的长期记忆
 ---
 
 # `memory` Plugin
 
-`memory` 为 Agent 提供长期记忆能力。Plugin 负责统一 Action、作用域和上下文规则，实际的记忆形成、存储、召回、修订与删除由一个 `MemoryProvider` 完成。
+`memory` 为 Agent 提供长期记忆。所有存储、权限、召回和上下文组装逻辑都在 `MemoryPlugin` 内；City 只提供共享 Memory 根目录。
 
-它提供以下 Action：
+## Memory 范围
 
-- `status`
-- `search`
-- `read`
-- `remember`
-- `digest`
-- `revise`
-- `forget`
+| 范围 | 用途 | 可见性 |
+|---|---|---|
+| `current_user` | 用户资料和偏好 | 同一 City 中的同一认证用户跨 Agent 共享 |
+| `current_workspace` | 项目事实和决策 | 同一 Workspace 跨 Agent 共享 |
+| `agent` | Agent 私有经验和长期状态 | 仅当前 Agent |
 
-## Provider 与 Adapter
+User Memory 只使用 Embassy 返回的认证用户身份。没有认证身份时，`current_user` 写入会失败，不会退化到默认用户或 Agent Memory。
+
+## 上下文行为
+
+- Core Memory 作为独立命名的 `system` block，在 Session system snapshot 中冻结。
+- Dynamic Recall 每个 Turn 最多执行一次，放入当前 User Message 的模型输入副本。
+- Tool Loop 和上下文超限重试复用同一份 Recall。
+- Recall 不写回 canonical Session Messages，也不会获得 system instruction 权限。
+- 成功 Turn 的 canonical User/Assistant 文本会形成幂等 Capture Job；失败、停止、寒暄和明显敏感内容会被跳过。
+
+## Actions
+
+Plugin 提供：`status`、`search`、`read`、`remember`、`digest`、`revise` 和 `forget`。
+
+显式记忆必须选择有限语义目标：
+
+```json
+{
+  "content": "用户偏好简洁回答。",
+  "target": "current_user",
+  "topic": "user-preferences",
+  "memory_type": "preference"
+}
+```
+
+`remember` 返回完整逻辑 `memory_id`。后续 `read`、`revise` 和 `forget` 应原样使用该 ID，不要解析为物理路径。
+
+## 存储
+
+内建 City 装配使用两个独立根目录：
 
 ```text
-MemoryPlugin
-  -> MemoryProvider
-     -> BuiltinMemoryProvider
-        -> MemoryStorageAdapter
-           -> FileMemoryStorageAdapter
+~/.downcity/agents/<agent_id>/plugins/memory/  # Agent 私有 Memory
+~/.downcity/memory/                            # City 共享 Memory
 ```
 
-`MemoryPlugin` 不读取 Workspace 文件，也不规定 Memory 的物理位置。文件、SQLite、对象存储和远程 Memory 服务都属于 Provider 背后的实现。
+原始 `user_id`、`workspace_id` 和 `agent_id` 会编码成安全路径段。多个 Agent 可以指向同一个 City 根目录，但 User 与 Workspace 内容仍按 Subject 隔离。
 
-内建 Provider 当前使用 `FileMemoryStorageAdapter`。City 默认把它的数据放在：
-
-```text
-~/.downcity/agents/<agent_id>/memory/
-```
-
-这个目录是 File Adapter 的实现约定，不是 `@downcity/agent` 的协议。可以通过 Plugin 配置的绝对 `root_path` 覆盖。
-
-## City 配置
-
-启用内建 Provider 和 File Adapter：
-
-```bash
-downcity plugin enable memory <agent_id> \
-  --config '{"provider":"builtin","storage":"file"}'
-```
-
-使用自定义本地根目录：
-
-```bash
-downcity plugin config memory <agent_id> \
-  --set '{"provider":"builtin","storage":"file","root_path":"/absolute/path/to/memory"}'
-```
-
-配置和启用状态保存在 `~/.downcity/downcity.db`，Memory 内容由 Provider 自己管理。
-
-## SDK 使用
+直接使用 SDK 时可以显式装配：
 
 ```ts
-import {
-  BuiltinMemoryProvider,
-  FileMemoryStorageAdapter,
-  MemoryPlugin,
-} from "@downcity/plugins/memory";
-
 const memory = new MemoryPlugin({
-  provider: new BuiltinMemoryProvider({
-    storage: new FileMemoryStorageAdapter({
-      root_path: "/absolute/path/to/agent-memory",
-    }),
-  }),
-});
-
-const agent = new Agent({
-  id: "assistant",
-  workspace,
-  plugins: [memory],
+  agent_root_path: "/absolute/path/to/agent-memory",
+  city_root_path: "/absolute/path/to/city-memory",
 });
 ```
 
-SDK 调用方也可以直接实现 `MemoryProvider`，接入 Mem0、Hindsight、Graphiti 或自己的远程 Memory 服务。
-
-## Action 调用
-
-```ts
-await agent.plugins.run_action({
-  plugin: "memory",
-  action: "remember",
-  payload: {
-    content: "用户偏好简洁回答。",
-    topic: "user-preferences",
-    memory_type: "preference",
-  },
-});
-```
-
-查询与精确读取：
-
-```ts
-const recalled = await agent.plugins.run_action({
-  plugin: "memory",
-  action: "search",
-  payload: {
-    query: "用户回答风格偏好",
-    max_results: 5,
-  },
-});
-
-await agent.plugins.run_action({
-  plugin: "memory",
-  action: "read",
-  payload: {
-    memory_id: "wiki/user-preferences",
-  },
-});
-```
-
-`memory_id` 和 `citation` 都是 Provider 的逻辑标识，调用方不能将它们解释为物理文件路径。
-
-## CLI Action
-
-运行中的 Agent 可以通过统一 Plugin Action 命令调用：
-
-```bash
-downcity plugin action memory status <agent_id>
-downcity plugin action memory search <agent_id> --input '{"query":"project decision"}'
-downcity plugin action memory read <agent_id> --input '{"memory_id":"wiki/project-decisions"}'
-downcity plugin action memory forget <agent_id> --input '{"memory_id":"wiki/obsolete"}'
-```
-
-## 关键语义
-
-- Session 消息和 checkpoint 仍保存在 Workspace，不属于长期 Memory。
-- Memory Provider 是当前 Plugin 实例的唯一事实源。
-- Storage Adapter 只处理底层持久化，不定义召回和记忆形成语义。
-- Provider 返回结构化 Memory 和逻辑引用，不返回物理文件路径。
-- Memory 内容作为不可信历史数据进入上下文，不能获得 system instruction 权限。
+省略 `city_root_path` 时只启用 Agent Memory。
 
 ## 相关文档
 

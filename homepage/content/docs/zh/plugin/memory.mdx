@@ -1,31 +1,24 @@
 ---
 title: Memory 插件
-description: Memory 插件如何持久化会话历史和上下文
+description: Memory 插件如何共享长期知识并组装模型上下文
 ---
 
 # Memory 插件
 
-Memory 插件持久化 Agent 的会话历史和长期上下文。没有它，Agent 每次重启都会从零开始。
+Memory 插件管理跨 Session 的长期事实、偏好和经验。Session 自己保存完整对话；MemoryPlugin 不接管 Session Messages。
 
-## 功能
+## 记忆范围
 
-- 存储会话消息和对话线程
-- 为长期对话提供上下文检索
-- 支持不同的记忆后端（本地文件、数据库）
-- 支持跨会话的连续性
+- **User Memory** — 同一认证用户在 City 内跨 Agent 共享。
+- **Workspace Memory** — 同一 Workspace 在 City 内跨 Agent 共享。
+- **Agent Memory** — 当前 Agent 的私有经验和长期状态。
 
-## 记忆类型
+Core Memory 进入独立 system block；当前问题的 Dynamic Recall 只进入本轮 User Message 的模型输入副本，不修改原始消息。
 
-- **短期记忆** — 当前会话上下文
-- **长期记忆** — 跨会话持久化的事实和用户偏好
-- **工作记忆** — 当前任务的临时数据
-
-## 配置
-
-Memory 插件是否生效取决于 Agent 是否注册它。你可以通过 Agent 配置或插件构造参数配置存储后端。
+City 只向 MemoryPlugin 提供共享根路径。Memory 的生成、持久化、召回和隔离策略都由插件内部负责。
 
 继续阅读：
 
+- [完整 Memory Plugin 文档](/zh/plugins-docs/builtins/memory)
 - [Chat 插件](/zh/docs/plugin/chat)
 - [Task 插件](/zh/docs/plugin/task)
-- [Agent Plugins Docs](/zh/plugins-docs)

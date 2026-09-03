@@ -160,6 +160,8 @@ test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
       read: () => ({ plugins: [] }),
       run_action: async () => ({ success: true }),
       system_blocks: async () => [],
+      pipeline: async (_point_name, value) => value,
+      effect: async () => {},
       release: async () => {
         release_count += 1;
       },
@@ -175,6 +177,46 @@ test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
   await handle.finished;
 
   assert.equal(release_count, 1);
+});
+
+test("SessionLoop 在释放 Plugin lease 前触发 turn committed effect", async () => {
+  const effects = [];
+  let released = false;
+  const { turn } = await create_turn_harness(async (turn_context) => {
+    await turn_context.step.replace_plugins({
+      read: () => ({ plugins: [] }),
+      run_action: async () => ({ success: true }),
+      system_blocks: async () => [],
+      pipeline: async (_point_name, value) => value,
+      effect: async (point_name, value) => {
+        assert.equal(released, false);
+        effects.push({ point_name, value });
+      },
+      release: async () => {
+        released = true;
+      },
+    });
+    await turn_context.output.assistant.begin_step();
+    await write_text(turn_context.output.assistant, "text-committed", "完成");
+    await turn_context.output.assistant.finish_step([{ type: "text", text: "完成" }]);
+    return {
+      success: true,
+      text: "完成",
+      deferred_persisted_user_messages: [],
+    };
+  });
+
+  const handle = await turn.prompt({ query: "记录这轮" });
+  await handle.finished;
+
+  assert.equal(released, true);
+  assert.equal(effects.length, 1);
+  assert.equal(effects[0].point_name, "session.turn_committed");
+  assert.equal(effects[0].value.status, "completed");
+  assert.deepEqual(
+    effects[0].value.messages.map((message) => message.type),
+    ["user", "assistant"],
+  );
 });
 
 test("SessionLoop 把 Turn 首尾快照差异持久化到最后一条 Assistant 消息", async () => {

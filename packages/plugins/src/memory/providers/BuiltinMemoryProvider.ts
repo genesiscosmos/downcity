@@ -3,11 +3,11 @@
  *
  * 关键点（中文）
  * - Provider 负责 Memory 领域语义，底层 Storage Adapter 只负责文本持久化。
- * - memory_id、citation 与 scope 均为逻辑协议，不暴露 Adapter 的物理位置。
+ * - memory_id、citation 与 access 均为逻辑协议，不暴露 Adapter 的物理位置。
  * - 当前召回使用确定性文本扫描；以后可在 Provider 内替换索引而不改变 Plugin API。
  */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
   BuiltinMemoryDigestHandlerOutput,
   BuiltinMemoryProjectionDraft,
@@ -32,26 +32,37 @@ import type {
   MemoryRememberResult,
   MemoryReviseInput,
   MemoryReviseResult,
-  MemoryScope,
   MemorySourceReference,
   MemoryStatusResult,
   MemorySystemContextInput,
   MemorySystemContextItem,
   MemorySystemContextResult,
   MemoryType,
+  MemoryCaptureTurnInput,
+  MemoryCaptureTurnResult,
 } from "@/memory/types/Memory.js";
+import type { MemoryAccessContext, MemoryWriteTarget } from "@/memory/types/MemoryAccess.js";
 import type {
   MemoryStorageAdapter,
   MemoryStorageEntry,
 } from "@/memory/types/MemoryStorage.js";
+import {
+  resolve_readable_memory_address,
+  resolve_readable_memory_addresses,
+  resolve_writable_memory_address,
+  type MemorySubjectAddress,
+} from "@/memory/runtime/MemoryAddress.js";
+import {
+  chunk_memory_record,
+  score_memory_chunk,
+  tokenize_memory_query,
+} from "@/memory/runtime/MemoryRecall.js";
 
 const DEFAULT_MAX_RESULTS = 6;
 const DEFAULT_MIN_SCORE = 0.35;
 const DEFAULT_MAX_CONTEXT_CHARS = 4_000;
 const SNIPPET_MAX_CHARS = 700;
-const CHUNK_MAX_CHARS = 1_600;
-const CHUNK_OVERLAP_CHARS = 240;
-const INDEX_MEMORY_ID = "wiki/index";
+const INDEX_RELATIVE_MEMORY_ID = "wiki/index";
 
 /** Provider 内部解析出的 Markdown 元数据。 */
 interface BuiltinMemoryMetadata {
@@ -66,21 +77,6 @@ interface BuiltinMemoryMetadata {
 
   /** 当前记忆引用的证据集合。 */
   source_refs: MemorySourceReference[];
-}
-
-/** Provider 内部使用的有界文本片段。 */
-interface BuiltinMemoryChunk {
-  /** 当前片段所属记录。 */
-  memory: MemoryRecord;
-
-  /** 当前片段起始行号。 */
-  start_line: number;
-
-  /** 当前片段结束行号。 */
-  end_line: number;
-
-  /** 当前片段文本。 */
-  text: string;
 }
 
 /** 限制数值到给定闭区间。 */
@@ -100,11 +96,10 @@ function slugify(value: string): string {
   return text || "inbox";
 }
 
-/** 规范化 Provider 公开 memory_id。 */
-function normalize_memory_id(input: string): string {
+/** 规范化 Subject 内部的相对 memory_id。 */
+function normalize_relative_memory_id(input: string): string {
   const memory_id = String(input || "")
     .replace(/\\/g, "/")
-    .replace(/^memory:\/\/builtin\//, "")
     .replace(/^\/+/, "")
     .replace(/\.md$/i, "")
     .trim();
@@ -119,7 +114,34 @@ function normalize_memory_id(input: string): string {
   return segments.join("/");
 }
 
-/** 把公开 memory_id 映射为 Storage Adapter 内部 key。 */
+/** 规范化包含 owner/subject 前缀的完整公开 memory_id。 */
+function normalize_memory_id(input: string): string {
+  const memory_id = String(input || "")
+    .replace(/\\/g, "/")
+    .replace(/^memory:\/\/builtin\//, "")
+    .replace(/^\/+/, "")
+    .replace(/\.md$/i, "")
+    .trim();
+  if (!memory_id) throw new Error("memory_id is required");
+  const segments = memory_id.split("/");
+  if (segments.some((segment) => !/^[A-Za-z0-9][A-Za-z0-9_-]*$/u.test(segment))) {
+    throw new Error(`Invalid memory_id: ${input}`);
+  }
+  const relative_start = segments.findIndex((segment) => segment === "wiki" || segment === "evidence");
+  if (relative_start < 2) throw new Error(`Unsupported Builtin memory_id: ${input}`);
+  normalize_relative_memory_id(segments.slice(relative_start).join("/"));
+  return segments.join("/");
+}
+
+/** 在 Subject 地址下创建完整 memory_id。 */
+function create_subject_memory_id(
+  address: MemorySubjectAddress,
+  relative_memory_id: string,
+): string {
+  return `${address.prefix}/${normalize_relative_memory_id(relative_memory_id)}`;
+}
+
+/** 把完整公开 memory_id 映射为 Storage Router key。 */
 function memory_id_to_key(memory_id: string): string {
   return `${normalize_memory_id(memory_id)}.md`;
 }
@@ -238,104 +260,23 @@ function create_markdown_record(input: {
 /** 把 Storage 条目转换为领域记录。 */
 function storage_entry_to_record(
   entry: MemoryStorageEntry,
-  scope: MemoryScope,
+  access: MemoryAccessContext,
 ): MemoryRecord {
   const memory_id = key_to_memory_id(entry.key);
-  const is_evidence = memory_id.startsWith("evidence/");
+  const address = resolve_readable_memory_address(access, memory_id);
+  const is_evidence = memory_id.includes("/evidence/");
   const metadata = parse_metadata(entry.content, is_evidence ? "episode" : "document");
   return {
     memory_id,
     memory_type: metadata.memory_type,
-    scope: { agent_id: scope.agent_id },
+    owner: address.owner,
+    subject: address.subject,
     content: strip_frontmatter(entry.content),
     observed_at: metadata.observed_at,
     source_refs: metadata.source_refs,
     citation: create_citation(memory_id),
     ...(metadata.title ? { metadata: { title: metadata.title } } : {}),
   };
-}
-
-/** 把查询文本拆成有界 token。 */
-function tokenize_query(raw: string): string[] {
-  return String(raw || "")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_-]+/gu, " ")
-    .split(/\s+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 16);
-}
-
-/** 计算片段的确定性覆盖率和密度分数。 */
-function score_chunk(text: string, tokens: string[]): number {
-  if (tokens.length === 0) return 0;
-  const normalized = String(text || "").toLowerCase();
-  let matched_tokens = 0;
-  let total_hits = 0;
-  for (const token of tokens) {
-    let hits = 0;
-    let start_index = 0;
-    while (start_index < normalized.length) {
-      const found_index = normalized.indexOf(token, start_index);
-      if (found_index < 0) break;
-      hits += 1;
-      start_index = found_index + token.length;
-    }
-    if (hits > 0) {
-      matched_tokens += 1;
-      total_hits += Math.min(hits, 4);
-    }
-  }
-  if (matched_tokens === 0) return 0;
-  const coverage = matched_tokens / tokens.length;
-  const density = Math.min(total_hits, tokens.length * 3) / (tokens.length * 3);
-  return Number((coverage * 0.75 + density * 0.25).toFixed(4));
-}
-
-/** 把完整记录切分成带行号的有界片段。 */
-function chunk_memory(memory: MemoryRecord): BuiltinMemoryChunk[] {
-  const lines = memory.content.replace(/\r\n/g, "\n").split("\n");
-  const chunks: BuiltinMemoryChunk[] = [];
-  let bucket: Array<{ line: string; line_number: number }> = [];
-  let character_count = 0;
-
-  const flush = (): void => {
-    const text = bucket.map((item) => item.line).join("\n").trim();
-    if (!text || bucket.length === 0) return;
-    chunks.push({
-      memory,
-      start_line: bucket[0]?.line_number ?? 1,
-      end_line: bucket[bucket.length - 1]?.line_number ?? 1,
-      text,
-    });
-  };
-
-  const carry_overlap = (): void => {
-    let size = 0;
-    const next: Array<{ line: string; line_number: number }> = [];
-    for (let index = bucket.length - 1; index >= 0; index -= 1) {
-      const row = bucket[index];
-      if (!row) continue;
-      size += row.line.length + 1;
-      next.unshift(row);
-      if (size >= CHUNK_OVERLAP_CHARS) break;
-    }
-    bucket = next;
-    character_count = size;
-  };
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index] || "";
-    const row_size = line.length + 1;
-    if (bucket.length > 0 && character_count + row_size > CHUNK_MAX_CHARS) {
-      flush();
-      carry_overlap();
-    }
-    bucket.push({ line, line_number: index + 1 });
-    character_count += row_size;
-  }
-  flush();
-  return chunks;
 }
 
 /** 读取 handler 的 digest 输出。 */
@@ -378,6 +319,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     forget: true,
     digest: true,
     system_context: true,
+    capture_turn: true,
   });
 
   /** 当前 Provider 已创建的唯一低层存储 Adapter。 */
@@ -392,6 +334,9 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   /** 当前 Provider 可选使用的内容修订处理器。 */
   private readonly revise_handler: BuiltinMemoryProviderOptions["revise"];
 
+  /** 当前统一 Adapter 是否包含 City 共享 Store。 */
+  private readonly city_memory_available: boolean;
+
   /** 当前 Provider 已初始化的 Agent 运行身份。 */
   private runtime?: MemoryProviderInitializeInput;
 
@@ -405,6 +350,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     this.create_storage = options.create_storage;
     this.digest_handler = options.digest;
     this.revise_handler = options.revise;
+    this.city_memory_available = options.city_memory_available === true;
   }
 
   /** 初始化 Adapter 和默认索引投影。 */
@@ -420,13 +366,18 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     this.storage = storage;
     try {
       await storage.initialize();
-      if (!await storage.has(memory_id_to_key(INDEX_MEMORY_ID))) {
+      const address = resolve_writable_memory_address({
+        agent_id,
+        city_memory_available: false,
+      }, "agent");
+      const index_memory_id = create_subject_memory_id(address, INDEX_RELATIVE_MEMORY_ID);
+      if (!await storage.has(memory_id_to_key(index_memory_id))) {
         await this.write_projection({
-          memory_id: INDEX_MEMORY_ID,
+          memory_id: INDEX_RELATIVE_MEMORY_ID,
           title: "Memory Index",
           content: "Long-term memories are available through MemoryPlugin recall and read actions.",
           tags: ["memory", "index"],
-        }, [], "document");
+        }, [], "document", address);
       }
     } catch (error) {
       if (created_storage) {
@@ -440,23 +391,26 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   /** 返回 Provider 状态与可重建统计。 */
   async status(): Promise<MemoryStatusResult> {
-    this.require_runtime();
-    const [wiki_entries, evidence_entries] = await Promise.all([
-      this.active_storage.list("wiki"),
-      this.active_storage.list("evidence"),
+    const access = this.create_runtime_access();
+    const address = resolve_writable_memory_address(access, "agent");
+    const [wiki_entries, evidence_entries, capture_entries] = await Promise.all([
+      this.active_storage.list(`${address.prefix}/wiki`),
+      this.active_storage.list(`${address.prefix}/evidence`),
+      this.active_storage.list(`${address.prefix}/capture-jobs`),
     ]);
-    const scope = this.create_runtime_scope();
     const chunk_count = [...wiki_entries, ...evidence_entries]
-      .map((entry) => storage_entry_to_record(entry, scope))
-      .reduce((count, memory) => count + chunk_memory(memory).length, 0);
+      .map((entry) => storage_entry_to_record(entry, access))
+      .reduce((count, memory) => count + chunk_memory_record(memory).length, 0);
     return {
       provider: this.name,
       state: "ready",
       capabilities: this.capabilities,
       details: {
         storage_adapter: this.active_storage.name,
-        memories: wiki_entries.length,
+        agent_memories: wiki_entries.length,
+        city_memory_available: this.city_memory_available,
         evidence: evidence_entries.length,
+        pending_capture_jobs: capture_entries.length,
         chunks: chunk_count,
       },
     };
@@ -464,15 +418,18 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   /** 使用确定性扫描召回记忆，底层存储形态对调用方不可见。 */
   async recall(input: MemoryRecallInput): Promise<MemoryRecallResult> {
-    this.assert_scope(input.scope);
+    this.assert_access(input.access);
     const query = String(input.query || "").trim();
     if (!query) return { provider: this.name, items: [] };
-    const tokens = tokenize_query(query);
+    const tokens = tokenize_memory_query(query);
     if (tokens.length === 0) return { provider: this.name, items: [] };
-    const entries = [
-      ...await this.active_storage.list("wiki"),
-      ...(input.include_evidence ? await this.active_storage.list("evidence") : []),
-    ];
+    const addresses = resolve_readable_memory_addresses(input.access);
+    const entries = (await Promise.all(addresses.map(async (address) => [
+      ...await this.active_storage.list(`${address.prefix}/wiki`),
+      ...(input.include_evidence
+        ? await this.active_storage.list(`${address.prefix}/evidence`)
+        : []),
+    ]))).flat();
     const max_results = Math.floor(clamp_number(
       Number(input.max_results ?? DEFAULT_MAX_RESULTS),
       1,
@@ -484,10 +441,10 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       1,
     );
     const items = entries
-      .map((entry) => storage_entry_to_record(entry, this.create_runtime_scope()))
-      .flatMap((memory) => chunk_memory(memory))
+      .map((entry) => storage_entry_to_record(entry, input.access))
+      .flatMap((memory) => chunk_memory_record(memory))
       .map((chunk): MemoryRecallItem => {
-        const score = score_chunk(chunk.text, tokens);
+        const score = score_memory_chunk(chunk.text, tokens);
         const citation = create_citation(
           chunk.memory.memory_id,
           chunk.start_line,
@@ -512,14 +469,15 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   /** 按 memory_id 精确读取并应用可选行预算。 */
   async read(input: MemoryReadInput): Promise<MemoryReadResult> {
-    this.assert_scope(input.scope);
+    this.assert_access(input.access);
     const memory_id = normalize_memory_id(input.memory_id);
+    resolve_readable_memory_address(input.access, memory_id);
     const content = await this.active_storage.read(memory_id_to_key(memory_id));
     if (content === null) return { memory_id, memory: null };
     const base = storage_entry_to_record({
       key: memory_id_to_key(memory_id),
       content,
-    }, this.create_runtime_scope());
+    }, input.access);
     const from_line = input.from_line
       ? Math.max(1, Math.floor(input.from_line))
       : undefined;
@@ -543,12 +501,19 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   /** 保存原始证据并形成或更新长期记忆。 */
   async remember(input: MemoryRememberInput): Promise<MemoryRememberResult> {
-    this.assert_scope(input.scope);
+    this.assert_access(input.access);
+    const address = resolve_writable_memory_address(input.access, input.target);
     const content = String(input.content || "").trim();
     if (!content) throw new Error("Memory remember requires content");
-    const evidence_id = `evidence/manual/${new Date().toISOString().slice(0, 10)}/${randomUUID()}`;
-    await this.write_evidence(evidence_id, content, input.scope, input.source || "manual");
-    const memory_id = `wiki/${slugify(input.topic || "inbox")}`;
+    const evidence_id = create_subject_memory_id(
+      address,
+      `evidence/manual/${new Date().toISOString().slice(0, 10)}/${randomUUID()}`,
+    );
+    await this.write_evidence(evidence_id, content, address, input.source || "manual");
+    const memory_id = create_subject_memory_id(
+      address,
+      `wiki/${slugify(input.topic || "inbox")}`,
+    );
     const existing = await this.active_storage.read(memory_id_to_key(memory_id));
     const source_refs: MemorySourceReference[] = [{
       source_id: evidence_id,
@@ -563,12 +528,11 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         instruction: "Integrate the new evidence, deduplicate it, and keep the memory concise.",
         evidence: content,
       }), memory_id);
-      const target_memory_id = normalize_memory_id(revised.memory_id || memory_id);
-      await this.write_projection({
-        memory_id: target_memory_id,
+      const target_memory_id = await this.write_projection({
+        memory_id: revised.memory_id || memory_id,
         title: input.topic || "Memory Inbox",
         content: revised.content,
-      }, source_refs, input.memory_type || "fact");
+      }, source_refs, input.memory_type || "fact", address);
       return {
         memory_id: target_memory_id,
         evidence_id,
@@ -583,6 +547,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       content,
       source_refs,
       memory_type: input.memory_type || "fact",
+      address,
     });
     return {
       memory_id,
@@ -593,13 +558,17 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   /** 保存 Session 证据，并通过可选 handler 形成长期投影。 */
   async digest(input: MemoryDigestInput): Promise<MemoryDigestResult> {
-    this.assert_scope(input.scope);
+    this.assert_access(input.access);
+    const address = resolve_writable_memory_address(input.access, "agent");
     const session_id = String(input.session_id || "").trim();
     if (!session_id) throw new Error("Memory digest requires session_id");
     const transcript = String(input.transcript || "").trim();
     if (!transcript) throw new Error("Memory digest requires transcript content");
-    const evidence_id = `evidence/session/${slugify(session_id)}/${randomUUID()}`;
-    await this.write_evidence(evidence_id, transcript, input.scope, `session:${session_id}`);
+    const evidence_id = create_subject_memory_id(
+      address,
+      `evidence/session/${slugify(session_id)}/${randomUUID()}`,
+    );
+    await this.write_evidence(evidence_id, transcript, address, `session:${session_id}`);
     const source_refs: MemorySourceReference[] = [{
       source_id: evidence_id,
       source_type: "session",
@@ -607,7 +576,9 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     }];
 
     if (this.digest_handler) {
-      const index_content = await this.active_storage.read(memory_id_to_key(INDEX_MEMORY_ID));
+      const index_content = await this.active_storage.read(memory_id_to_key(
+        create_subject_memory_id(address, INDEX_RELATIVE_MEMORY_ID),
+      ));
       const output = normalize_digest_output(await this.digest_handler({
         source_text: transcript,
         source_id: evidence_id,
@@ -620,6 +591,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
           projection,
           source_refs,
           "episode",
+          address,
         );
         memory_ids.push(memory_id);
       }
@@ -632,13 +604,14 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       };
     }
 
-    const memory_id = "wiki/session-digests";
+    const memory_id = create_subject_memory_id(address, "wiki/session-digests");
     await this.append_projection({
       memory_id,
       title: "Session Digests",
       content: transcript,
       source_refs,
       memory_type: "episode",
+      address,
     });
     return {
       memory_ids: [memory_id],
@@ -650,8 +623,10 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   /** 修订既有记忆，并在无 handler 时使用可审计追加语义。 */
   async revise(input: MemoryReviseInput): Promise<MemoryReviseResult> {
-    this.assert_scope(input.scope);
+    this.assert_access(input.access);
     const memory_id = normalize_memory_id(input.memory_id);
+    const address = resolve_readable_memory_address(input.access, memory_id);
+    this.assert_address_writable(input.access, address);
     const instruction = String(input.instruction || "").trim();
     if (!instruction) throw new Error("Memory revise requires instruction");
     const evidence = String(input.evidence || "").trim();
@@ -659,14 +634,17 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     if (existing === null) throw new Error(`Memory not found: ${memory_id}`);
     const metadata = parse_metadata(existing, "document");
     const evidence_id = evidence
-      ? `evidence/manual/${new Date().toISOString().slice(0, 10)}/${randomUUID()}`
+      ? create_subject_memory_id(
+          address,
+          `evidence/manual/${new Date().toISOString().slice(0, 10)}/${randomUUID()}`,
+        )
       : undefined;
     const source_refs = [...metadata.source_refs];
     if (evidence_id) {
       await this.write_evidence(
         evidence_id,
         evidence,
-        input.scope,
+        address,
         `revision:${memory_id}`,
       );
       source_refs.push({
@@ -682,12 +660,11 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         instruction,
         evidence,
       }), memory_id);
-      const target_memory_id = normalize_memory_id(revised.memory_id || memory_id);
-      await this.write_projection({
-        memory_id: target_memory_id,
-        title: String(metadata.title || target_memory_id),
+      const target_memory_id = await this.write_projection({
+        memory_id: revised.memory_id || memory_id,
+        title: String(metadata.title || memory_id),
         content: revised.content,
-      }, source_refs, metadata.memory_type);
+      }, source_refs, metadata.memory_type, address);
       return {
         memory_id: target_memory_id,
         ...(evidence_id ? { evidence_id } : {}),
@@ -720,8 +697,10 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   /** 删除当前 Provider 中的指定记忆。 */
   async forget(input: MemoryForgetInput): Promise<MemoryForgetResult> {
-    this.assert_scope(input.scope);
+    this.assert_access(input.access);
     const memory_id = normalize_memory_id(input.memory_id);
+    const address = resolve_readable_memory_address(input.access, memory_id);
+    this.assert_address_writable(input.access, address);
     const key = memory_id_to_key(memory_id);
     const forgotten = await this.active_storage.has(key);
     await this.active_storage.delete(key);
@@ -732,39 +711,89 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   async system_context(
     input: MemorySystemContextInput,
   ): Promise<MemorySystemContextResult> {
-    this.assert_scope(input.scope);
+    this.assert_access(input.access);
     const max_items = Math.max(0, Math.floor(input.max_items));
     const max_chars = Math.max(0, Math.floor(input.max_chars || DEFAULT_MAX_CONTEXT_CHARS));
     if (max_items === 0 || max_chars === 0) return { items: [] };
-    const candidates = [
+    const relative_candidates = [
       "wiki/user-preferences",
       "wiki/project-overview",
       "wiki/rules",
-      INDEX_MEMORY_ID,
+      INDEX_RELATIVE_MEMORY_ID,
     ];
     const items: MemorySystemContextItem[] = [];
     let remaining_chars = max_chars;
-    for (const memory_id of candidates) {
-      const content = await this.active_storage.read(memory_id_to_key(memory_id));
-      if (!content) continue;
-      const stable_lines = strip_frontmatter(content)
-        .split("\n")
-        .map((line) => line.trim().replace(/^[-*]\s+/, ""))
-        .filter((line) => line && !line.startsWith("#"))
-        .slice(0, 3)
-        .join("\n");
-      if (!stable_lines) continue;
-      const bounded_content = stable_lines.slice(0, remaining_chars);
-      if (!bounded_content) break;
-      items.push({
-        memory_id,
-        content: bounded_content,
-        citation: create_citation(memory_id),
-      });
-      remaining_chars -= bounded_content.length;
+    for (const address of resolve_readable_memory_addresses(input.access)) {
+      for (const relative_memory_id of relative_candidates) {
+        const memory_id = create_subject_memory_id(address, relative_memory_id);
+        const content = await this.active_storage.read(memory_id_to_key(memory_id));
+        if (!content) continue;
+        const stable_lines = strip_frontmatter(content)
+          .split("\n")
+          .map((line) => line.trim().replace(/^[-*]\s+/, ""))
+          .filter((line) => line && !line.startsWith("#"))
+          .slice(0, 3)
+          .join("\n");
+        if (!stable_lines) continue;
+        const bounded_content = stable_lines.slice(0, remaining_chars);
+        if (!bounded_content) break;
+        items.push({
+          memory_id,
+          subject: address.subject,
+          content: bounded_content,
+          citation: create_citation(memory_id),
+        });
+        remaining_chars -= bounded_content.length;
+        if (items.length >= max_items || remaining_chars <= 0) break;
+      }
       if (items.length >= max_items || remaining_chars <= 0) break;
     }
     return { items };
+  }
+
+  /** 原子、幂等地保存等待后续 Formation 的最小 Turn Capture Job。 */
+  async capture_turn(
+    input: MemoryCaptureTurnInput,
+  ): Promise<MemoryCaptureTurnResult> {
+    this.assert_access(input.access);
+    const session_id = String(input.session_id || "").trim();
+    const turn_id = String(input.turn_id || "").trim();
+    if (!session_id || !turn_id) {
+      throw new Error("Memory capture_turn requires session_id and turn_id");
+    }
+    const messages = (Array.isArray(input.messages) ? input.messages : [])
+      .flatMap((message) => {
+        const message_id = String(message.message_id || "").trim();
+        const text = String(message.text || "").trim();
+        if (!message_id || !text) return [];
+        if (message.role !== "user" && message.role !== "assistant") return [];
+        return [{ message_id, role: message.role, text }];
+      });
+    if (messages.length === 0) {
+      throw new Error("Memory capture_turn requires canonical text messages");
+    }
+    const job_id = createHash("sha256")
+      .update(`${session_id}\u0000${turn_id}`)
+      .digest("hex");
+    const address = resolve_writable_memory_address(input.access, "agent");
+    const key = `${address.prefix}/capture-jobs/${job_id}.json`;
+    if (await this.active_storage.has(key)) {
+      return { job_id, mode: "existing", status: "pending" };
+    }
+    await this.active_storage.write(key, JSON.stringify({
+      schema_version: 1,
+      job_id,
+      status: "pending",
+      agent_id: this.require_runtime().agent_id,
+      workspace_id: input.access.workspace_id,
+      user_id: input.access.user_id,
+      city_id: input.access.city_id,
+      session_id,
+      turn_id,
+      messages,
+      created_at: new Date().toISOString(),
+    }, null, 2));
+    return { job_id, mode: "created", status: "pending" };
   }
 
   /** 释放底层 Adapter 并关闭当前绑定。 */
@@ -783,17 +812,41 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     return this.storage;
   }
 
-  /** 创建当前 Runtime 的最小 Agent scope。 */
-  private create_runtime_scope(): MemoryScope {
+  /** 创建当前 Runtime 的最小 Agent 访问上下文。 */
+  private create_runtime_access(): MemoryAccessContext {
     const runtime = this.require_runtime();
-    return { agent_id: runtime.agent_id };
+    return {
+      agent_id: runtime.agent_id,
+      city_memory_available: this.city_memory_available,
+    };
   }
 
-  /** 校验调用作用域属于当前已初始化 Agent。 */
-  private assert_scope(scope: MemoryScope): void {
+  /** 校验访问上下文属于当前 Provider，并且没有伪造 City 能力。 */
+  private assert_access(access: MemoryAccessContext): void {
     const runtime = this.require_runtime();
-    if (String(scope.agent_id || "").trim() !== runtime.agent_id) {
-      throw new Error("Memory scope agent_id does not match initialized Provider");
+    if (String(access.agent_id || "").trim() !== runtime.agent_id) {
+      throw new Error("Memory access agent_id does not match initialized Provider");
+    }
+    if (access.city_memory_available && !this.city_memory_available) {
+      throw new Error("Memory access cannot enable an unavailable City Store");
+    }
+  }
+
+  /** revise/forget 只允许当前 Agent、User 或 Workspace，拒绝直接修改 City Shared。 */
+  private assert_address_writable(
+    access: MemoryAccessContext,
+    address: MemorySubjectAddress,
+  ): void {
+    const targets: MemoryWriteTarget[] = ["agent", "current_user", "current_workspace"];
+    const writable = targets.some((target) => {
+      try {
+        return resolve_writable_memory_address(access, target).prefix === address.prefix;
+      } catch {
+        return false;
+      }
+    });
+    if (!writable) {
+      throw new Error(`Memory Subject is read-only in the current access context: ${address.prefix}`);
     }
   }
 
@@ -807,7 +860,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   private async write_evidence(
     evidence_id: string,
     content: string,
-    scope: MemoryScope,
+    address: MemorySubjectAddress,
     label: string,
   ): Promise<void> {
     const normalized_id = normalize_memory_id(evidence_id);
@@ -820,7 +873,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         source_type: label.startsWith("session:") ? "session" : "manual",
         label,
       }],
-      tags: ["memory", "evidence", scope.agent_id],
+      tags: ["memory", "evidence", address.subject.kind],
     }));
   }
 
@@ -829,11 +882,15 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     projection: BuiltinMemoryProjectionDraft,
     source_refs: MemorySourceReference[],
     memory_type: MemoryType,
+    address: MemorySubjectAddress,
   ): Promise<string> {
-    const memory_id = normalize_memory_id(
+    const requested_memory_id = String(
       projection.memory_id || `wiki/${slugify(projection.title || "inbox")}`,
-    );
-    if (!memory_id.startsWith("wiki/")) {
+    ).trim();
+    const memory_id = requested_memory_id.startsWith("wiki/")
+      ? create_subject_memory_id(address, requested_memory_id)
+      : normalize_memory_id(requested_memory_id);
+    if (!memory_id.startsWith(`${address.prefix}/wiki/`)) {
       throw new Error(`Builtin projection must use wiki memory_id: ${memory_id}`);
     }
     const content = String(projection.content || "").trim();
@@ -865,6 +922,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     content: string;
     source_refs: MemorySourceReference[];
     memory_type: MemoryType;
+    address: MemorySubjectAddress;
   }): Promise<void> {
     const memory_id = normalize_memory_id(input.memory_id);
     const key = memory_id_to_key(memory_id);
@@ -874,7 +932,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         memory_id,
         title: input.title,
         content: input.content,
-      }, input.source_refs, input.memory_type);
+      }, input.source_refs, input.memory_type, input.address);
       return;
     }
     const metadata = parse_metadata(existing, input.memory_type);

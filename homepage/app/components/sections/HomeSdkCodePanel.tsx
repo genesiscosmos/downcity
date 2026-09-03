@@ -20,7 +20,7 @@ const file_names: Record<HomeSdkFileKey, string> = {
 const file_first_step: Record<HomeSdkFileKey, number> = {
   agent: 0,
   city: 6,
-  federation: 9,
+  federation: 12,
 };
 
 const file_accent: Record<HomeSdkFileKey, { line: string; background: string }> = {
@@ -34,9 +34,11 @@ const plugin_accent = { line: "#4f9a98", background: "rgba(79, 154, 152, 0.2)" }
 /** 返回当前叙事步骤应该自动打开的代码文件。 */
 export function home_sdk_file_for_step(active_step: number): HomeSdkFileKey {
   if (active_step <= 5) return "agent";
-  if (active_step <= 8) return "city";
-  if (active_step >= 14) return "agent";
-  return "federation";
+  if (active_step <= 11) return "city";
+  if (active_step <= 17) return "federation";
+  if (active_step <= 19) return "city";
+  if (active_step === 20) return "agent";
+  return "city";
 }
 
 /** 生成与地图语义一致的渐进代码块。 */
@@ -45,32 +47,39 @@ function create_code_groups(locale: "zh" | "en") {
     agent: [
       { key: "agent-import", start_step: 0, order: 0, lines: ['import { Agent } from "@downcity/agent";'] },
       { key: "workspace-import", start_step: 2, order: 1, lines: ['import { Workspace } from "@downcity/workspace";'] },
-      { key: "plugin-import", start_step: 5, order: 2, lines: ['import { SkillPlugin } from "@downcity/plugins/skill";', 'import { TaskPlugin } from "@downcity/plugins/task";', 'import { WebPlugin } from "@downcity/plugins/web";', 'import { MemoryPlugin } from "@downcity/plugins/memory";', 'import { ImagePlugin } from "@downcity/plugins/image";', 'import { SoundPlugin } from "@downcity/plugins/sound";'] },
-      { key: "embassy-import", start_step: 14, order: 3, lines: ['import { Embassy } from "@downcity/federation";'] },
-      { key: "agent-create", start_step: 1, order: 10, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', "});"] },
+      { key: "model-import", start_step: 4, order: 2, lines: ['import { Embassy } from "@downcity/federation";'] },
+      { key: "plugin-import", start_step: 5, order: 3, lines: ['import { SkillPlugin } from "@downcity/plugins/skill";', 'import { TaskPlugin } from "@downcity/plugins/task";', 'import { WebPlugin } from "@downcity/plugins/web";', 'import { MemoryPlugin } from "@downcity/plugins/memory";'] },
+      { key: "agent-create", start_step: 1, order: 10, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "});"] },
       { key: "workspace-create", start_step: 2, order: 11, lines: ["", "const workspace = new Workspace({", '  id: "project",', "  path: process.cwd(),", "});"] },
-      { key: "city-create", start_step: 3, order: 12, lines: ["", "const city = new City({ workspaces: [workspace] });"] },
-      { key: "agent-bind-city", start_step: 4, order: 13, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', "});", "city.agents.add(agent);"] },
-      { key: "agent-with-plugins", start_step: 5, order: 10, replaces: "agent-create", highlight_from: 3, highlight_until: 11, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', "  plugins: [", "    new SkillPlugin(),", "    new TaskPlugin(),", "    new WebPlugin(),", "    new MemoryPlugin(),", "    new ImagePlugin(),", "    new SoundPlugin(),", "  ],", "});"] },
-      { key: "embassy-create", start_step: 14, order: 20, lines: ["", "const embassy = new Embassy({", '  federation_url,', "  user_token,", "});"] },
-      { key: "embassy-model", start_step: 14, order: 21, lines: ["", "const catalog = await embassy.user.ai.catalog();", 'const model = catalog.get("deepseek-v4-flash");'] },
-      { key: "session-create", start_step: 15, order: 30, lines: ["", "const session = await agent.sessions.create({", '  workspace: city.workspaces.get("project")!,', "});", "await session.set({ model });"] },
-      { key: "session-subscribe", start_step: 16, order: 31, lines: ["", "session.subscribe((mutation) => {", "  render_agent_message(mutation);", "});"] },
-      { key: "user-prompt", start_step: 15, order: 32, lines: [`await session.prompt({ query: "${locale === "zh" ? "总结当前仓库" : "Summarize this repository"}" });`] },
+      { key: "session-create", start_step: 3, order: 12, lines: ["", "const session = await agent.sessions.create({ workspace });"] },
+      { key: "model-resolve", start_step: 4, order: 13, lines: ["", `// ${locale === "zh" ? "User Token 已绑定登录时选择的 Bureau。" : "The User Token is bound to the Bureau selected at login."}`, "const embassy = new Embassy({", '  federation_url: "https://api.example.com",', "  user_token: process.env.FEDERATION_USER_TOKEN!,", "});", "const catalog = await embassy.user.ai.catalog();", 'const city_model = catalog.require("deepseek-chat");', "await session.set({ model: city_model });"] },
+      { key: "agent-with-plugins", start_step: 5, order: 10, replaces: "agent-create", highlight_from: 4, highlight_until: 10, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "  plugins: [", "    new SkillPlugin(),", "    new TaskPlugin(),", "    new WebPlugin(),", "    new MemoryPlugin(),", "  ],", "});"] },
+      { key: "user-prompt", start_step: 20, order: 20, lines: ["", `const turn = await session.prompt({ query: "${locale === "zh" ? "总结当前仓库" : "Summarize this repository"}" });`, "const result = await turn.finished;", "console.log(result.text);"] },
     ],
     city: [
-      { key: "city-import", start_step: 6, order: 0, lines: ['import { City } from "@downcity/agent";'] },
-      { key: "city-build", start_step: 6, order: 1, lines: ["", "const city = new City({ workspaces: [workspace] });"] },
-      { key: "city-research", start_step: 7, order: 2, lines: ["", "const shared_workspace = city.workspaces.get(\"project\");"] },
-      { key: "city-operations", start_step: 8, order: 3, lines: ["", "const reviewer = new Agent({ id: \"reviewer\" });", "city.agents.add(reviewer);"] },
+      { key: "city-import", start_step: 6, order: 0, lines: ['import { Agent, City, Group } from "@downcity/agent";', 'import { Embassy } from "@downcity/federation";', 'import { Workspace } from "@downcity/workspace";'] },
+      { key: "city-model", start_step: 6, order: 10, lines: ["", "const embassy = new Embassy({", '  federation_url: "https://api.example.com",', "  user_token: process.env.FEDERATION_USER_TOKEN!,", "});", "const catalog = await embassy.user.ai.catalog();", 'const city_model = catalog.require("deepseek-chat");'] },
+      { key: "city-workspace", start_step: 6, order: 11, lines: ["", "const workspace = new Workspace({", '  id: "project",', "  path: process.cwd(),", "});"] },
+      { key: "city-build", start_step: 6, order: 13, lines: ["", "const city = new City({ workspaces: [workspace] });"] },
+      { key: "city-agents", start_step: 7, order: 20, lines: ["", "const architect = new Agent({ id: \"architect\", model: city_model });", "const reviewer = new Agent({ id: \"reviewer\", model: city_model });", "city.agents.add(architect);", "city.agents.add(reviewer);"] },
+      { key: "city-group", start_step: 8, order: 30, lines: ["", "const group = new Group({", '  id: "delivery-team",', "  model: city_model,", "  members: [architect, reviewer],", "});", "city.groups.add(group);"] },
+      { key: "city-group-session", start_step: 9, order: 40, lines: ["", "const group_session = await group.sessions.create({ workspace });"] },
+      { key: "neighbor-city", start_step: 10, order: 41, lines: ["", `// ${locale === "zh" ? "同一套组合可以运行在另一座独立 City 中。" : "The same composition can run as another independent City."}`] },
+      { key: "third-city", start_step: 11, order: 42, lines: [`// ${locale === "zh" ? "每座 City 独立持有运行资源与生命周期。" : "Each City owns its own runtime resources and lifecycle."}`] },
+      { key: "connected-city", start_step: 18, order: 13, replaces: "city-build", lines: ["", "const city = new City({", "  embassy,", "  workspaces: [workspace],", "});"] },
+      { key: "embassy-service", start_step: 19, order: 43, lines: ["", "const catalog = await city.embassy!.user.ai.catalog();", 'const remote_model = catalog.get("deepseek-chat");'] },
+      { key: "group-prompt", start_step: 21, order: 50, lines: ["", "group_session.subscribe((event) => {", "  if (event.type === \"message\") console.log(event.message.text);", "});", `await group_session.prompt({ query: "${locale === "zh" ? "评审当前实现并给出修改方案" : "Review the implementation and propose changes"}" });`] },
     ],
     federation: [
-      { key: "federation-import", start_step: 9, order: 0, lines: ['import { AIService, Federation } from "@downcity/federation";', 'import { AccountsService, CreditsService, PaymentService } from "@downcity/services";', 'import { Database } from "@downcity/database-sqlite";'] },
-      { key: "federation-create", start_step: 9, order: 10, lines: ["", 'const database = new Database({ filename: "./data.sqlite" });', "const federation = new Federation({ database });"] },
-      { key: "model-service", start_step: 10, order: 11, lines: ["", "const ai = new AIService();", "ai.use(deepseek.model({", '  id: "deepseek-v4-flash",', '  upstream_model: "deepseek-chat",', '  name: "DeepSeek V4 Flash",', "}));", "federation.use(ai);"] },
-      { key: "account-service", start_step: 11, order: 12, lines: ["", "federation.use(new AccountsService());"] },
-      { key: "payment-service", start_step: 12, order: 13, lines: ["", "const payment = new PaymentService({ providers });", "federation.use(payment);"] },
-      { key: "credits-service", start_step: 13, order: 14, lines: ["", "federation.use(new CreditsService());"] },
+      { key: "federation-import", start_step: 12, order: 0, lines: ['import { AIService, Federation } from "@downcity/federation";', 'import { Database } from "@downcity/database-sqlite";'] },
+      { key: "services-import", start_step: 14, order: 1, lines: ['import { AccountsService, CreditsService, PaymentService, UsageService, stripePaymentProvider } from "@downcity/services";'] },
+      { key: "channel-import", start_step: 13, order: 2, lines: ['import { DeepSeekChannel } from "./deepseek_channel.js";'] },
+      { key: "federation-create", start_step: 12, order: 10, lines: ["", 'const database = new Database({ filename: "./federation.sqlite" });', "const federation = new Federation({ database });"] },
+      { key: "model-service", start_step: 13, order: 20, lines: ["", "const deepseek = new DeepSeekChannel();", "const ai = new AIService();", "ai.use(deepseek.model({", '  id: "deepseek-chat",', '  upstream_model: "deepseek-chat",', '  name: "DeepSeek Chat",', "}));", "federation.use(ai);"] },
+      { key: "account-service", start_step: 14, order: 21, lines: ["", "const accounts = new AccountsService();", "federation.use(accounts);"] },
+      { key: "credits-service", start_step: 15, order: 20, replaces: "model-service", lines: ["", "const deepseek = new DeepSeekChannel();", "const credits = new CreditsService();", "const ai = new AIService({ credits });", "ai.use(deepseek.model({", '  id: "deepseek-chat",', '  upstream_model: "deepseek-chat",', '  name: "DeepSeek Chat",', "}));", "federation.use(credits);", "federation.use(ai);"] },
+      { key: "usage-service", start_step: 16, order: 30, lines: ["", "federation.use(new UsageService({", "  ai_usage_reader: ai,", "  credits_usage_reader: credits,", "  account_usage_reader: accounts,", "}));"] },
+      { key: "payment-service", start_step: 17, order: 31, lines: ["", "federation.use(new PaymentService({", "  providers: [stripePaymentProvider()],", "  resolve_topup: ({ topup_amount_minor }) => ({", "    credits: topup_amount_minor * 10_000,", "  }),", "  on_paid: async (record) => {", "    await credits.topup({", '      card: { kind: "primary", user_id: record.user_id },', "      credits: record.credits,", '      source: "payment",', "      ref: record.payment_id,", "      idempotency_key: `payment:${record.payment_id}`,", "    });", "  },", "}));"] },
     ],
   } as const;
 }
@@ -107,7 +116,7 @@ export function HomeSdkCodePanel({ active_step, active_file, on_file_select, loc
         ? [visible_groups.at(-1)!.key]
         : [],
   );
-  const active_accent = active_file === "agent" && active_step >= 5 ? plugin_accent : file_accent[active_file];
+  const active_accent = active_file === "agent" && active_step === 5 ? plugin_accent : file_accent[active_file];
   const visible_code = visible_groups.flatMap((group) => group.lines).join("\n");
 
   useEffect(() => {

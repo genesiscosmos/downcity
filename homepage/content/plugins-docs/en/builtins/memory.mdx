@@ -1,141 +1,68 @@
 ---
 title: memory Plugin
-description: Provider-neutral long-term memory, recall, and governance for Agents
+description: Long-term memory with City-wide sharing and Agent-private knowledge
 ---
 
 # `memory` Plugin
 
-`memory` provides long-term memory for an Agent. The Plugin owns stable Actions, scope mapping, and context rules. One `MemoryProvider` owns memory formation, persistence, recall, revision, and deletion.
+`memory` gives Agents long-term memory. Storage, access control, recall, and context assembly all remain inside `MemoryPlugin`; City only supplies the shared Memory root.
 
-It exposes these Actions:
+## Memory scopes
 
-- `status`
-- `search`
-- `read`
-- `remember`
-- `digest`
-- `revise`
-- `forget`
+| Scope | Purpose | Visibility |
+|---|---|---|
+| `current_user` | User profile and preferences | Shared across Agents for the same authenticated City user |
+| `current_workspace` | Project facts and decisions | Shared across Agents using the same Workspace |
+| `agent` | Private Agent experience and long-running state | Current Agent only |
 
-## Providers and adapters
+User Memory only accepts an authenticated identity returned by Embassy. Without one, a `current_user` write fails instead of falling back to a default user or Agent Memory.
+
+## Context behavior
+
+- Core Memory is injected as separate named `system` blocks and frozen with the Session system snapshot.
+- Dynamic Recall runs at most once per Turn and is attached to the current User Message model-input copy.
+- Tool loops and context-limit retries reuse the same Recall result.
+- Recall never changes canonical Session Messages or gains system-instruction authority.
+- Canonical User/Assistant text from completed Turns creates an idempotent Capture Job; failed, stopped, trivial, and obviously sensitive Turns are skipped.
+
+## Actions
+
+The Plugin exposes `status`, `search`, `read`, `remember`, `digest`, `revise`, and `forget`.
+
+Explicit memory writes require a bounded semantic target:
+
+```json
+{
+  "content": "The user prefers concise answers.",
+  "target": "current_user",
+  "topic": "user-preferences",
+  "memory_type": "preference"
+}
+```
+
+`remember` returns a complete logical `memory_id`. Pass that ID unchanged to `read`, `revise`, or `forget`; do not interpret it as a physical path.
+
+## Storage
+
+The built-in City assembly uses two independent roots:
 
 ```text
-MemoryPlugin
-  -> MemoryProvider
-     -> BuiltinMemoryProvider
-        -> MemoryStorageAdapter
-           -> FileMemoryStorageAdapter
+~/.downcity/agents/<agent_id>/plugins/memory/  # Agent-private Memory
+~/.downcity/memory/                            # City-shared Memory
 ```
 
-`MemoryPlugin` does not read Workspace files and does not define a physical Memory location. Files, SQLite, object storage, and remote Memory services are implementations behind a Provider.
+Raw `user_id`, `workspace_id`, and `agent_id` values are encoded as safe path segments. Multiple Agents can use the same City root while User and Workspace subjects remain isolated.
 
-The built-in Provider currently uses `FileMemoryStorageAdapter`. With the default adapter, its data is stored here:
-
-```text
-~/.downcity/agents/<agent_id>/memory/
-```
-
-This is a File Adapter convention, not an `@downcity/agent` or `@downcity/agent` contract. Set an absolute `root_path` in the Plugin configuration to override it.
-
-## City configuration
-
-Enable the built-in Provider and File Adapter:
-
-```bash
-downcity plugin enable memory <agent_id> \
-  --config '{"provider":"builtin","storage":"file"}'
-```
-
-Use a custom local root:
-
-```bash
-downcity plugin config memory <agent_id> \
-  --set '{"provider":"builtin","storage":"file","root_path":"/absolute/path/to/memory"}'
-```
-
-Configuration and enabled state are stored in `~/.downcity/downcity.db`. Memory content is owned by the selected Provider.
-
-## SDK usage
+Direct SDK use can provide both roots explicitly:
 
 ```ts
-import {
-  BuiltinMemoryProvider,
-  FileMemoryStorageAdapter,
-  MemoryPlugin,
-} from "@downcity/plugins/memory";
-
 const memory = new MemoryPlugin({
-  provider: new BuiltinMemoryProvider({
-    storage: new FileMemoryStorageAdapter({
-      root_path: "/absolute/path/to/agent-memory",
-    }),
-  }),
-});
-
-const agent = new Agent({
-  id: "assistant",
-  workspace,
-  plugins: [memory],
+  agent_root_path: "/absolute/path/to/agent-memory",
+  city_root_path: "/absolute/path/to/city-memory",
 });
 ```
 
-SDK hosts can implement `MemoryProvider` directly to integrate Mem0, Hindsight, Graphiti, or a custom remote Memory service.
-
-## Action usage
-
-```ts
-await agent.plugins.run_action({
-  plugin: "memory",
-  action: "remember",
-  payload: {
-    content: "The user prefers concise answers.",
-    topic: "user-preferences",
-    memory_type: "preference",
-  },
-});
-```
-
-Recall and exact reads use logical identifiers:
-
-```ts
-const recalled = await agent.plugins.run_action({
-  plugin: "memory",
-  action: "search",
-  payload: {
-    query: "answer style preference",
-    max_results: 5,
-  },
-});
-
-await agent.plugins.run_action({
-  plugin: "memory",
-  action: "read",
-  payload: {
-    memory_id: "wiki/user-preferences",
-  },
-});
-```
-
-`memory_id` and `citation` are Provider-owned logical identifiers. Callers must not interpret them as physical file paths.
-
-## CLI Actions
-
-Use the unified Plugin Action command for a running Agent:
-
-```bash
-downcity plugin action memory status <agent_id>
-downcity plugin action memory search <agent_id> --input '{"query":"project decision"}'
-downcity plugin action memory read <agent_id> --input '{"memory_id":"wiki/project-decisions"}'
-downcity plugin action memory forget <agent_id> --input '{"memory_id":"wiki/obsolete"}'
-```
-
-## Key semantics
-
-- Session messages and checkpoints remain in the Workspace and are not long-term Memory.
-- The configured Memory Provider is the single source of truth for the Plugin instance.
-- A Storage Adapter only implements persistence primitives; it does not define recall or memory formation.
-- Providers return structured Memory and logical citations, never physical storage paths.
-- Recalled Memory is untrusted historical data and never gains system-instruction authority.
+Omit `city_root_path` to enable Agent Memory only.
 
 ## Related docs
 

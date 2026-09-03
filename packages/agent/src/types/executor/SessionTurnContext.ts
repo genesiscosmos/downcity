@@ -20,6 +20,7 @@ import type {
 } from "@/types/sdk/AgentSessionAction.js";
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
 
 /**
  * 创建一个 Session Turn 上下文所需的稳定输入。
@@ -106,6 +107,9 @@ export interface SessionTurnContext {
     /** 当前 Step 持有的 Plugin execution lease；仅供内核执行边界使用。 */
     readonly plugins?: AgentPluginExecutionLease;
 
+    /** 当前 Turn 首次解析后冻结的 Plugin 动态上下文。 */
+    readonly plugin_context_blocks: readonly SessionPluginContextBlock[];
+
     /** 原子提交当前 Step 使用的 env 与 instruction 快照。 */
     commit(input: {
       /** 即将在当前 Step 生效的 Workspace env。 */
@@ -117,6 +121,11 @@ export interface SessionTurnContext {
 
     /** 切换当前 Step 的 Plugin lease，并先释放前一个 lease。 */
     replace_plugins(plugins?: AgentPluginExecutionLease): Promise<void>;
+
+    /** 首次调用时解析并冻结动态上下文，后续 Step 与重试复用同一快照。 */
+    resolve_plugin_context_blocks(
+      resolver: () => Promise<readonly SessionPluginContextBlock[]>,
+    ): Promise<readonly SessionPluginContextBlock[]>;
 
     /** 释放当前 Step 持有的 Plugin lease。 */
     release(): Promise<void>;

@@ -698,10 +698,7 @@ export class SoundPlugin extends BasePlugin {
           return {
             success: true,
             message: "speech synthesized",
-            messages: [{
-              role: "assistant" as const,
-              parts: result.parts,
-            }],
+            messages: [result],
           };
         } catch (error) {
           const message = describe_error(error);

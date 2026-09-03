@@ -47,6 +47,13 @@ import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { create_session_compact_operation } from "@/session/runtime/SessionCompactOperation.js";
 import { run_session_history_compaction } from "@/session/runtime/SessionHistoryCompaction.js";
 import { create_session_plugin_execution_context } from "@/session/runtime/SessionTurnContext.js";
+import { SESSION_PLUGIN_POINTS } from "@/session/SessionPluginPoints.js";
+import type {
+  SessionPluginContextBlock,
+  SessionSystemContextHookValue,
+  SessionTurnContextHookValue,
+} from "@/types/session/SessionPluginHook.js";
+import type { JsonValue } from "@/types/common/Json.js";
 import { SessionState } from "@/session/SessionState.js";
 import { SessionLoop } from "@/session/SessionLoop.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
@@ -75,6 +82,49 @@ import type { SessionActionEventInput } from "@/types/session/SessionAction.js";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import { create_session_workspace_snapshot } from "@/session/snapshot/SessionWorkspaceSnapshot.js";
+
+/** 把 system pipeline 输出限制为 Plugin 命名内容块。 */
+function normalize_plugin_system_blocks(input: unknown): AgentSessionSystemBlock[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    const name = String(record.name || "").trim();
+    const content = String(record.content || "").trim();
+    if (!name || !content) return [];
+    return [{ source: "plugin" as const, name, content }];
+  });
+}
+
+/** 把 Turn pipeline 输出限制为低权限动态参考内容块。 */
+function normalize_plugin_context_blocks(input: unknown): SessionPluginContextBlock[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    const source_plugin = String(record.source_plugin || "").trim();
+    const name = String(record.name || "").trim();
+    const content = String(record.content || "").trim();
+    if (
+      !source_plugin ||
+      !name ||
+      !content ||
+      record.trust_level !== "reference"
+    ) return [];
+    const citations = Array.isArray(record.citations)
+      ? record.citations.map((citation) => String(citation || "").trim()).filter(Boolean)
+      : [];
+    const version = String(record.version || "").trim();
+    return [{
+      source_plugin,
+      name,
+      content,
+      trust_level: "reference" as const,
+      ...(citations.length > 0 ? { citations } : {}),
+      ...(version ? { version } : {}),
+    }];
+  });
+}
 
 /**
  * SDK 本地 Session。
@@ -842,10 +892,14 @@ export class Session implements AgentSession {
           (block) => block.content,
         ),
       });
+    const history = await this.session_messages.context_snapshot();
+    const plugin_runtime = refresh_system
+      ? this.get_agent_plugins()
+      : turn_context?.step.plugins || this.effective_agent_plugins;
     const plugin_system_blocks = this.system_snapshot_blocks && !refresh_system
       ? []
       : refresh_system
-        ? await this.get_agent_plugins().system_blocks(plugin_execution_context)
+        ? await plugin_runtime.system_blocks(plugin_execution_context)
         : turn_context?.step.plugins
           ? await turn_context.step.plugins.system_blocks(
               plugin_execution_context,
@@ -853,6 +907,51 @@ export class Session implements AgentSession {
           : await this.effective_agent_plugins.system_blocks(
               plugin_execution_context,
             );
+    const resolved_plugin_system_blocks = this.system_snapshot_blocks && !refresh_system
+      ? []
+      : await this.resolve_plugin_system_context(
+          plugin_runtime,
+          plugin_system_blocks,
+          turn_context?.session.turn_id,
+        );
+    const plugin_context_blocks = turn_context
+      ? await turn_context.step.resolve_plugin_context_blocks(async () => {
+          const plugins = turn_context.step.plugins;
+          if (!plugins) return [];
+          const value: SessionTurnContextHookValue = {
+            session_id: this.id,
+            turn_id: turn_context.session.turn_id,
+            user_messages: history.messages.flatMap((message) => {
+              if (
+                message.type !== "user" ||
+                message.turn_id !== turn_context.session.turn_id
+              ) return [];
+              return [{
+                message_id: message.message_id,
+                text: message.parts
+                  .filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join("\n"),
+              }];
+            }),
+            blocks: [],
+          };
+          try {
+            const output = await plugins.pipeline(
+              SESSION_PLUGIN_POINTS.turn_context,
+              value as unknown as JsonValue,
+            ) as unknown as SessionTurnContextHookValue;
+            return normalize_plugin_context_blocks(output?.blocks);
+          } catch (error) {
+            await this.log_plugin_hook_warning(
+              SESSION_PLUGIN_POINTS.turn_context,
+              error,
+              turn_context.session.turn_id,
+            );
+            return [];
+          }
+        })
+      : [];
     return {
       session: this.create_compose_identity(),
       state: {
@@ -868,9 +967,10 @@ export class Session implements AgentSession {
           this.system_snapshot_blocks && !refresh_system
             ? []
             : await this.get_managed_plugin_system_blocks(),
-        plugin_system_blocks,
+        plugin_system_blocks: resolved_plugin_system_blocks,
+        plugin_context_blocks,
       },
-      history: await this.session_messages.context_snapshot(),
+      history,
       turn: {
         ...(turn_context
           ? { turn_id: turn_context.session.turn_id }
@@ -878,6 +978,51 @@ export class Session implements AgentSession {
         retry_count,
       },
     };
+  }
+
+  /** 通过既有 pipeline point 解析 Plugin 追加的命名 system blocks。 */
+  private async resolve_plugin_system_context(
+    plugins: AgentPluginExecutionRuntime | NonNullable<SessionTurnContext["step"]["plugins"]>,
+    blocks: readonly AgentSessionSystemBlock[],
+    turn_id?: string,
+  ): Promise<AgentSessionSystemBlock[]> {
+    const value: SessionSystemContextHookValue = {
+      session_id: this.id,
+      ...(turn_id ? { turn_id } : {}),
+      blocks: blocks.map((block) => ({ ...block })),
+    };
+    try {
+      const output = await plugins.pipeline(
+        SESSION_PLUGIN_POINTS.system_context,
+        value as unknown as JsonValue,
+      ) as unknown as SessionSystemContextHookValue;
+      return normalize_plugin_system_blocks(output?.blocks);
+    } catch (error) {
+      await this.log_plugin_hook_warning(
+        SESSION_PLUGIN_POINTS.system_context,
+        error,
+        turn_id,
+      );
+      return value.blocks;
+    }
+  }
+
+  /** Plugin 上下文 Hook 失败只降级当前扩展内容，不阻断 Session。 */
+  private async log_plugin_hook_warning(
+    point_name: string,
+    error: unknown,
+    turn_id?: string,
+  ): Promise<void> {
+    try {
+      await this.logger.log("warn", "[agent] session plugin hook failed", {
+        session_id: this.id,
+        ...(turn_id ? { turn_id } : {}),
+        point_name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } catch {
+      // Plugin 扩展已经降级，日志失败不能反向阻断 Session。
+    }
   }
 
   /** 创建 Composer 共用的稳定 Session 身份快照。 */

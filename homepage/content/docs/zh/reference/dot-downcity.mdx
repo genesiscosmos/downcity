@@ -34,9 +34,9 @@ description: 运行时数据目录结构与用途
 会话消息事实源：`active.jsonl`、`assistant_message.json` 与按 sequence 命名的 `segments/*.jsonl`。
 默认来源分区是 `chat`；其他任意非空来源类型会被编码为安全的单个目录段。
 
-### Agent Memory
+### Memory
 
-长期 Memory 不属于 Workspace `.downcity/` 协议。Memory 内容由当前 Agent 启用的 `MemoryProvider` 管理；内建 File Adapter 默认使用 `~/.downcity/agents/<agent_id>/memory/`，其他 Provider 可以使用数据库或远程服务。
+长期 Memory 不属于 Workspace `.downcity/` 协议。Agent 私有内容位于 `agents/<agent_id>/plugins/memory/`；City 共享的 User/Workspace 内容位于 `memory/`，并由 `MemoryPlugin` 按 Subject 隔离。City 只提供共享根路径，不实现 Memory 数据逻辑。
 
 ### Plugin 运行数据
 

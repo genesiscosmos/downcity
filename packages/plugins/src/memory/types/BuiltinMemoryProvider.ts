@@ -7,6 +7,7 @@
  */
 
 import type { MemoryProviderInitializeInput } from "@/memory/types/Memory.js";
+import type { MemoryRecord } from "@/memory/types/Memory.js";
 import type { MemoryStorageAdapter } from "@/memory/types/MemoryStorage.js";
 
 /** Builtin Provider 待写入的长期记忆投影。 */
@@ -22,6 +23,21 @@ export interface BuiltinMemoryProjectionDraft {
 
   /** 可选的内容标签集合。 */
   tags?: string[];
+}
+
+/** Builtin Provider 内部使用的有界文本片段。 */
+export interface BuiltinMemoryChunk {
+  /** 当前片段所属记录。 */
+  memory: MemoryRecord;
+
+  /** 当前片段起始行号。 */
+  start_line: number;
+
+  /** 当前片段结束行号。 */
+  end_line: number;
+
+  /** 当前片段文本。 */
+  text: string;
 }
 
 /** Session 提炼处理器输入。 */
@@ -97,6 +113,9 @@ export interface BuiltinMemoryProviderOptions {
 
   /** 延迟创建 Agent 级 Storage Adapter 的工厂；不能与 storage 同时提供。 */
   create_storage?: BuiltinMemoryStorageFactory;
+
+  /** 当前统一 Adapter 是否同时路由 City 共享 Store。 */
+  city_memory_available?: boolean;
 
   /** 可选的 Session 提炼处理器。 */
   digest?: BuiltinMemoryDigestHandler;

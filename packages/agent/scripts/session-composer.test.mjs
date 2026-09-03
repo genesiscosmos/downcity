@@ -37,6 +37,7 @@ function create_input(model) {
       }],
       managed_plugin_system_blocks: [],
       plugin_system_blocks: [],
+      plugin_context_blocks: [],
     },
     history: {
       summary: null,
@@ -72,6 +73,24 @@ test("DefaultSessionComposer 从 canonical 快照组装 Step 输入", async () =
   assert.equal(step.messages[0].content[0].text, "hello");
   assert.equal(step.system_blocks[0].content, "Base instruction");
   assert.match(step.system.at(-1).content, /composer-session/);
+});
+
+test("DefaultSessionComposer 只把 Plugin Context 注入模型副本", async () => {
+  const model = new MockModelClient({ modelId: "composer-context-model" });
+  const input = create_input(model);
+  input.state.plugin_context_blocks = [{
+    source_plugin: "memory",
+    name: "recall",
+    content: "用户偏好使用中文。",
+    trust_level: "reference",
+  }];
+  const before = structuredClone(input.history);
+  const step = await new DefaultSessionComposer().compose(input);
+
+  assert.match(step.messages[0].content[0].text, /plugin-context/);
+  assert.match(step.messages[0].content[0].text, /用户偏好使用中文/);
+  assert.equal(step.messages[0].content[1].text, "hello");
+  assert.deepEqual(input.history, before);
 });
 
 test("Custom Composer 可以覆盖组装结果而不接触持久化", async () => {

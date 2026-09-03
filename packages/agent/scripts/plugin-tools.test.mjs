@@ -566,3 +566,35 @@ test("PluginRegistry delays lifecycle stop until the active execution lease is r
   assert.equal(lifecycle_active, false);
   assert.equal(stop_count, 1);
 });
+
+test("Plugin execution lease 复用既有 pipeline 与 effect hooks", async () => {
+  const effects = [];
+  const plugin = create_plugin({
+    name: "hook-plugin",
+    title: "Hook Plugin",
+    description: "Verifies generic execution hooks",
+    hooks: {
+      pipeline: {
+        "session.turn_context": [({ value }) => ({
+          ...value,
+          trace: [...(value.trace || []), "hook-plugin"],
+        })],
+      },
+      effect: {
+        "session.turn_committed": [({ value }) => {
+          effects.push(value);
+        }],
+      },
+    },
+  });
+  const registry = create_registry(plugin);
+  await registry.start_all();
+  const lease = registry.execution_view().acquire();
+
+  const output = await lease.pipeline("session.turn_context", { trace: [] });
+  await lease.effect("session.turn_committed", { turn_id: "turn-1" });
+
+  assert.deepEqual(output.trace, ["hook-plugin"]);
+  assert.deepEqual(effects, [{ turn_id: "turn-1" }]);
+  await lease.release();
+});

@@ -57,11 +57,11 @@
   "quickstart": {
     "sectionLabel": "Three core SDKs",
     "title": "From Agent to City to Federation.",
-    "description": "An Agent composes a model and Plugins, works inside a Workspace, joins other Agents in an independent City, and accesses shared Federation Services through Embassy.",
+    "description": "An Agent uses a Bureau-scoped CityModel and Plugins, binds a Workspace through its Session, collaborates through Groups inside a City, and accesses shared Federation Services through Embassy.",
     "copyCode": "Copy code",
     "copiedCode": "Copied",
     "map": {
-      "ariaLabel": "A domain map growing from Agent, Workspace, and City into Federation Services",
+      "ariaLabel": "A domain map growing from Agent, Workspace, Group, and City into Federation Services",
       "labels": {
         "federation": "Federation",
         "database": "Database",
@@ -71,15 +71,21 @@
         "agent": "Agent",
         "plugin": "Plugin",
         "workspace": "Workspace",
+        "group": "Group",
+        "groupSession": "Group Session",
+        "storage": "Storage",
+        "transport": "HTTP / RPC",
         "service": "Service",
         "model": "AI Model",
         "account": "Accounts",
         "payment": "Payment",
         "credits": "Credits",
-        "embassy": "Embassy",
-        "session": "Session · Agent conversation",
+        "env": "Env",
+        "usage": "Usage",
+        "link": "Link",
         "user": "User",
         "userPrompt": "“Summarize this repository”",
+        "groupPrompt": "“Review the implementation and propose changes”",
         "agentReply": "“Repository summary complete.”"
       }
     },
@@ -91,7 +97,7 @@
       },
       "city": {
         "title": "City SDK",
-        "description": "Index multiple Agents inside one runtime boundary and expose them through HTTP / RPC transports.",
+        "description": "Own Workspace, Storage, Agent and Group lifecycles inside one runtime boundary, then expose them through HTTP / RPC transports.",
         "docsLink": "Explore City SDK"
       },
       "embassy": {

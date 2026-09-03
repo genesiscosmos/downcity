@@ -63,7 +63,9 @@ export async function create_cli_agent(input: {
         plugin_id,
       ),
       logger: get_logger(),
-      extensions: {},
+      extensions: {
+        city_memory_root_path: path.join(root_path, "memory"),
+      },
     })),
     Promise.resolve(create_cli_agent_tools()),
   ]);

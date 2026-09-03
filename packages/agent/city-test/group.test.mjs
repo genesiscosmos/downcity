@@ -25,6 +25,21 @@ async function wait_for_group_idle(group_session, timeout_ms = 1000) {
   return await group_session.messages();
 }
 
+async function wait_for_group_title(group_session, timeout_ms = 1000) {
+  return await new Promise((resolve, reject) => {
+    const unsubscribe = group_session.subscribe((event) => {
+      if (event.type !== "title") return;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(event.title);
+    });
+    const timer = setTimeout(() => {
+      unsubscribe();
+      reject(new Error("Timed out waiting for GroupSession title"));
+    }, timeout_ms);
+  });
+}
+
 // 测试专用策略：生产代码不再提供隐式规则调度，行为测试显式注入最小策略。
 const test_dispatch_strategy = {
   decide_dispatch({ trigger, current_message, members }) {
@@ -64,6 +79,23 @@ function create_dispatch_tool_call(input, tool_call_id = "dispatch-call") {
     tool_name: "dispatch_group",
     input,
   };
+}
+
+// Group.model 同时服务调度与标题；调度测试只声明调度响应，标题请求由统一包装器处理。
+function create_dispatch_model(options) {
+  return new MockModelClient({
+    ...options,
+    doGenerate: async (call) => {
+      const dispatch_call = call.tools?.some((tool) => tool.name === "dispatch_group");
+      if (dispatch_call) return await options.doGenerate(call);
+      return {
+        content: [{ type: "text", text: "测试群聊标题" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        warnings: [],
+      };
+    },
+  });
 }
 
 class RecordingSession extends Session {
@@ -109,7 +141,7 @@ test("Group.model uses AI dispatch to select only the returned members", async (
   RecordingSession.created = [];
   let dispatch_calls = 0;
   const model_calls = [];
-  const dispatch_model = new MockModelClient({
+  const dispatch_model = create_dispatch_model({
     modelId: "group-dispatch-model",
     doGenerate: async (call) => {
       model_calls.push(call);
@@ -159,7 +191,7 @@ test("Group.model uses AI dispatch to select only the returned members", async (
 
 test("AI Dispatch 返回空阶段计划时直接结束当前调度", async () => {
   RecordingSession.created = [];
-  const dispatch_model = new MockModelClient({
+  const dispatch_model = create_dispatch_model({
     modelId: "empty-dispatch-model",
     doGenerate: async () => ({
       content: [create_dispatch_tool_call(create_dispatch_input([], "stop", "用户意图已经满足"))],
@@ -228,7 +260,7 @@ test("Group 没有 model 且未注入策略时记录调度失败", async () => {
 });
 
 test("AI Dispatch 失败时不切换到隐式规则策略", async () => {
-  const dispatch_model = new MockModelClient({
+  const dispatch_model = create_dispatch_model({
     modelId: "failing-dispatch-model",
     doGenerate: async () => { throw new Error("dispatch unavailable"); },
   });
@@ -248,7 +280,7 @@ test("AI Dispatch 失败时不切换到隐式规则策略", async () => {
 });
 
 test("AI Dispatch 未调用 dispatch_group 时记录协议错误", async () => {
-  const dispatch_model = new MockModelClient({
+  const dispatch_model = create_dispatch_model({
     modelId: "text-only-dispatch-model",
     doGenerate: async () => ({
       content: [{ type: "text", text: "我建议让 reviewer 回复。" }],
@@ -275,7 +307,7 @@ test("AI Dispatch 未调用 dispatch_group 时记录协议错误", async () => {
 test("AI Dispatch 在同一调度 Turn 内纠正未调用工具的响应", async () => {
   RecordingSession.created = [];
   let dispatch_calls = 0;
-  const dispatch_model = new MockModelClient({
+  const dispatch_model = create_dispatch_model({
     modelId: "recovering-dispatch-model",
     doGenerate: async (call) => {
       dispatch_calls += 1;
@@ -329,7 +361,7 @@ test("AI Dispatch 拒绝未知成员并允许跨阶段重复投递", async () =>
   for (const [index, { input, expected_agent_ids }] of inputs.entries()) {
     RecordingSession.created = [];
     let dispatch_calls = 0;
-    const dispatch_model = new MockModelClient({
+    const dispatch_model = create_dispatch_model({
       modelId: `invalid-dispatch-model-${index}`,
       doGenerate: async () => ({
         content: [create_dispatch_tool_call(expected_agent_ids.length > 0 && dispatch_calls++ > 0
@@ -384,6 +416,108 @@ test("GroupSession publishes messages and member runtime through one event strea
   assert.equal(status_events.slice(0, dispatch_index).some((event) => event.members[0].running), false);
   assert.equal(status_events.at(-1).phase, "idle");
   assert.equal(status_events.at(-1).members[0].running, false);
+  await city.close();
+});
+
+test("GroupSession 基于首条用户消息生成并持久化 canonical title", async () => {
+  RecordingSession.created = [];
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-group-title-"));
+  let title_calls = 0;
+  const title_model = new MockModelClient({
+    modelId: "group-title-model",
+    doGenerate: async (call) => {
+      title_calls += 1;
+      assert.equal(call.tools, undefined);
+      assert.match(call.messages[1].content[0].text, /请评审登录流程/);
+      return {
+        content: [{ type: "text", text: "登录流程评审" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        warnings: [],
+      };
+    },
+  });
+  const city = new City({ storage: new LocalStorageProvider(root_path) });
+  const agent = new Agent({ id: "title-agent", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({
+    id: "title-group",
+    model: title_model,
+    members: [agent],
+    dispatch_strategy: test_dispatch_strategy,
+  });
+  city.groups.add(group);
+  const group_session = await group.sessions.create();
+  const generated_title = wait_for_group_title(group_session);
+  await group_session.prompt({ query: "请评审登录流程" });
+  await wait_for_group_idle(group_session);
+  assert.equal(await generated_title, "登录流程评审");
+  assert.equal(title_calls, 1);
+  assert.deepEqual((await group.sessions.list()).map(({ title, preview_text }) => ({ title, preview_text })), [{
+    title: "登录流程评审",
+    preview_text: "reply:title-agent",
+  }]);
+
+  const renamed_title = wait_for_group_title(group_session);
+  assert.equal(await group_session.rename("  登录上线检查  "), "登录上线检查");
+  assert.equal(await renamed_title, "登录上线检查");
+  await group_session.prompt({ query: "继续评审" });
+  await wait_for_group_idle(group_session);
+  assert.equal(title_calls, 1);
+  await city.close();
+
+  const restored_city = new City({ storage: new LocalStorageProvider(root_path) });
+  const restored_agent = new Agent({ id: "title-agent", session_class: RecordingSession });
+  restored_city.agents.add(restored_agent);
+  const restored_group = new Group({ id: "title-group", members: [restored_agent], dispatch_strategy: test_dispatch_strategy });
+  restored_city.groups.add(restored_group);
+  assert.equal((await restored_group.sessions.list())[0].title, "登录上线检查");
+  await restored_city.close();
+  await fs.rm(root_path, { recursive: true, force: true });
+});
+
+test("GroupSession 标题生成失败后可重试且不会覆盖手动标题", async () => {
+  let title_calls = 0;
+  let resolve_generation;
+  const title_model = new MockModelClient({
+    modelId: "retry-title-model",
+    doGenerate: async () => {
+      title_calls += 1;
+      if (title_calls === 1) {
+        return {
+          content: [],
+          finishReason: { unified: "stop", raw: "stop" },
+          usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 },
+          warnings: [],
+        };
+      }
+      return await new Promise((resolve) => { resolve_generation = resolve; });
+    },
+  });
+  const city = new City();
+  const agent = new Agent({ id: "retry-title-agent", session_class: RecordingSession });
+  city.agents.add(agent);
+  const group = new Group({ id: "retry-title-group", model: title_model, members: [agent], dispatch_strategy: test_dispatch_strategy });
+  city.groups.add(group);
+  const group_session = await group.sessions.create();
+  await group_session.prompt({ query: "首次标题请求" });
+  await wait_for_group_idle(group_session);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal((await group.sessions.list())[0].title, undefined);
+
+  await group_session.prompt({ query: "触发标题重试" });
+  while (!resolve_generation) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(await group_session.rename("用户指定标题"), "用户指定标题");
+  resolve_generation({
+    content: [{ type: "text", text: "模型迟到标题" }],
+    finishReason: { unified: "stop", raw: "stop" },
+    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    warnings: [],
+  });
+  await wait_for_group_idle(group_session);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal((await group.sessions.list())[0].title, "用户指定标题");
+  assert.equal(title_calls, 2);
   await city.close();
 });
 

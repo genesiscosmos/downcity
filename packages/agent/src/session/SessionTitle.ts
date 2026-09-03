@@ -65,14 +65,14 @@ export interface EnsureSessionTitleParams {
   commit_title?: (title: string) => Promise<SessionHistoryMeta>;
 }
 
-function truncateTitle(input: string, maxChars: number): string {
+function truncate_title(input: string, max_chars: number): string {
   const title = String(input || "").replace(/\s+/g, " ").trim();
   if (!title) return "";
-  if (title.length <= maxChars) return title;
-  return title.slice(0, maxChars).trimEnd();
+  if (title.length <= max_chars) return title;
+  return title.slice(0, max_chars).trimEnd();
 }
 
-function resolveFirstUserText(messages: SessionMessage[]): string {
+function resolve_first_user_text(messages: SessionMessage[]): string {
   for (const message of messages) {
     if (message.type !== "user") continue;
     const text = extract_session_message_text(message);
@@ -81,23 +81,23 @@ function resolveFirstUserText(messages: SessionMessage[]): string {
   return "";
 }
 
-function normalizeGeneratedTitle(input: string): string | undefined {
-  const firstLine = String(input || "")
+function normalize_generated_title(input: string): string | undefined {
+  const first_line = String(input || "")
     .split("\n")
     .map((line) => line.trim())
     .find(Boolean);
   const title = normalize_session_title(
-    String(firstLine || "")
+    String(first_line || "")
       .replace(/^["'`“”‘’]+|["'`“”‘’]+$/g, "")
       .replace(/^标题[:：]\s*/i, "")
       .trim(),
   );
   return title
-    ? truncateTitle(title, GENERATED_SESSION_TITLE_MAX_CHARS)
+    ? truncate_title(title, GENERATED_SESSION_TITLE_MAX_CHARS)
     : undefined;
 }
 
-function summarizeTitleError(error: unknown): {
+function summarize_title_error(error: unknown): {
   /**
    * 错误对象名称。
    */
@@ -124,7 +124,7 @@ function summarizeTitleError(error: unknown): {
   };
 }
 
-async function logSessionTitleDiagnostic(input: {
+async function log_session_title_diagnostic(input: {
   /**
    * 当前 session 标识。
    */
@@ -161,7 +161,8 @@ async function logSessionTitleDiagnostic(input: {
   }
 }
 
-async function generateSessionTitle(input: {
+/** 根据首条用户消息生成规范化后的会话标题。 */
+export async function generate_session_title(input: {
   /**
    * 当前模型实例。
    */
@@ -180,7 +181,7 @@ async function generateSessionTitle(input: {
   /**
    * 首条用户消息文本。
    */
-  firstUserText: string;
+  first_user_text: string;
 
   /**
    * 当前 session 运行日志器。
@@ -198,37 +199,37 @@ async function generateSessionTitle(input: {
         "Generate a short conversation title from the first user message below.",
         "Requirements: 3 to 12 Chinese characters or 2 to 6 English words; no period; no prefix.",
         "",
-        input.firstUserText,
+        input.first_user_text,
         ].join("\n"),
       ),
     }, input.signal);
     const text = result.text;
-    const generatedTitle = normalizeGeneratedTitle(text);
-    if (!generatedTitle) {
-      await logSessionTitleDiagnostic({
+    const generated_title = normalize_generated_title(text);
+    if (!generated_title) {
+      await log_session_title_diagnostic({
         logger: input.logger,
         session_id: input.session_id,
         level: "warn",
         message: "[agent] session_title.empty",
         details: {
           model_label: input.model_label || null,
-          firstUserTextLength: input.firstUserText.length,
+          firstUserTextLength: input.first_user_text.length,
           rawTitleLength: String(text || "").length,
         },
       });
     }
-    return generatedTitle;
+    return generated_title;
   } catch (error) {
-    const effectiveError = error;
-    await logSessionTitleDiagnostic({
+    const effective_error = error;
+    await log_session_title_diagnostic({
       logger: input.logger,
       session_id: input.session_id,
       level: "warn",
       message: "[agent] session_title.generate_failed",
       details: {
         model_label: input.model_label || null,
-        firstUserTextLength: input.firstUserText.length,
-        ...summarizeTitleError(effectiveError),
+        firstUserTextLength: input.first_user_text.length,
+        ...summarize_title_error(effective_error),
       },
     });
     // 关键点（中文）：标题生成失败不能影响 session 主流程。
@@ -245,12 +246,12 @@ export async function ensure_session_title(
   const current = await input.store.read_metadata();
   if (current.title) return current;
 
-  const firstUserText = resolveFirstUserText(input.messages);
+  const first_user_text = resolve_first_user_text(input.messages);
   if (input.generate !== true) {
     return current;
   }
-  if (!input.model || !firstUserText) {
-    await logSessionTitleDiagnostic({
+  if (!input.model || !first_user_text) {
+    await log_session_title_diagnostic({
       logger: input.logger,
       session_id: input.session_id,
       level: "debug",
@@ -264,21 +265,21 @@ export async function ensure_session_title(
     return current;
   }
 
-  const generatedTitle = await generateSessionTitle({
+  const generated_title = await generate_session_title({
     model: input.model,
     session_id: input.session_id,
     model_label: input.model_label,
-    firstUserText,
+    first_user_text,
     logger: input.logger,
     signal: input.signal,
   });
-  if (!generatedTitle) return current;
+  if (!generated_title) return current;
 
-  if (input.commit_title) return await input.commit_title(generatedTitle);
-  const generatedMeta: SessionHistoryMeta = {
+  if (input.commit_title) return await input.commit_title(generated_title);
+  const generated_meta: SessionHistoryMeta = {
     ...(await input.store.read_metadata()),
-    title: generatedTitle,
+    title: generated_title,
   };
-  await input.store.write_metadata(generatedMeta);
-  return generatedMeta;
+  await input.store.write_metadata(generated_meta);
+  return generated_meta;
 }

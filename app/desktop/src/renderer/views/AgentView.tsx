@@ -6,7 +6,9 @@ import {
   TbComponents,
   TbFileText,
   TbMessageCircle,
+  TbPhoto,
   TbPlus,
+  TbRefresh,
   TbTrash,
   TbUser,
 } from "react-icons/tb";
@@ -168,6 +170,7 @@ export function AgentInfoSidebar({
   const content = editor_section ? (
     <AgentEditorPanel
       embedded
+      agent={agent}
       section={editor_section}
       definition={definition}
       plugins={plugins}
@@ -372,6 +375,7 @@ export function AgentView({
 
 /** Agent 页面右侧的分区编辑容器。 */
 function AgentEditorPanel({
+  agent,
   section,
   definition,
   plugins,
@@ -382,6 +386,7 @@ function AgentEditorPanel({
   close_editor,
   embedded = false,
 }: {
+  /** 当前 Agent 展示摘要。 */ agent: DesktopAgentSummary;
   /** 当前编辑分区。 */ section: AgentEditorSection;
   /** 当前未提交定义。 */ definition?: DesktopAgentDefinition;
   /** 可注册的全部 Plugin。 */ plugins: DesktopPluginSummary[];
@@ -406,7 +411,7 @@ function AgentEditorPanel({
           set_definition={set_definition}
         />
       ) : null}
-      {definition && section === "identity" ? <IdentityEditor definition={definition} set_definition={set_definition} /> : null}
+      {definition && section === "identity" ? <IdentityEditor agent={agent} controller={controller} definition={definition} set_definition={set_definition} /> : null}
       {definition && section === "soul" ? (
         <SoulEditor
           definition={definition}
@@ -456,9 +461,21 @@ function AgentEditorPanel({
   );
 }
 
-/** 编辑 Agent 的用户可见名称与简介。 */
-function IdentityEditor({ definition, set_definition }: { /** 当前 Agent 定义。 */ definition: DesktopAgentDefinition; /** 替换未提交定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
-  return <div className="flex flex-col gap-3 p-2"><label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">名称</span><input value={definition.name} className="h-9 rounded-lg border border-input bg-background px-3 text-sm" onChange={(event) => set_definition({ ...definition, name: event.target.value })} /></label><label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">简介</span><textarea value={definition.description} rows={5} className="resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-5" onChange={(event) => set_definition({ ...definition, description: event.target.value })} /></label></div>;
+/** 编辑 Agent 的头像、用户可见名称与简介。 */
+function IdentityEditor({ agent, controller, definition, set_definition }: { /** 当前 Agent 展示摘要。 */ agent: DesktopAgentSummary; /** Renderer 根控制器。 */ controller: DesktopViewController; /** 当前 Agent 定义。 */ definition: DesktopAgentDefinition; /** 替换未提交定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
+  return <div className="flex flex-col gap-5 p-3">
+    <div className="flex flex-col items-center gap-2.5 py-2">
+      <button type="button" onClick={() => void controller.choose_agent_avatar(definition.agent_id)} className="rounded-2xl transition-opacity duration-150 hover:opacity-80" title="选择头像图片">
+        <AgentAvatar agent={agent} class_name="size-16 rounded-2xl" icon_class_name="size-8" />
+      </button>
+      <div className="flex items-center gap-1">
+        <Button className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={() => void controller.generate_agent_avatar(definition.agent_id)}><TbRefresh />随机</Button>
+        <Button className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={() => void controller.choose_agent_avatar(definition.agent_id)}><TbPhoto />选择图片</Button>
+      </div>
+    </div>
+    <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">名称</span><input value={definition.name} className="h-9 rounded-lg border border-input bg-background px-3 text-sm" onChange={(event) => set_definition({ ...definition, name: event.target.value })} /></label>
+    <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">简介</span><textarea value={definition.description} rows={5} className="resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-5" onChange={(event) => set_definition({ ...definition, description: event.target.value })} /></label>
+  </div>;
 }
 
 /** 使用独立确认 Dialog 永久删除 Agent。 */

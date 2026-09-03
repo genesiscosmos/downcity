@@ -10,6 +10,7 @@ import type { RuntimeTool as Tool } from "@downcity/type";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionContextSnapshot, SessionSegmentSummary } from "@/types/session/SessionSegment.js";
+import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
 
 /** Composer 可读取的 Session 身份快照。 */
 export interface SessionComposeIdentity {
@@ -43,6 +44,8 @@ export interface SessionComposeState {
   managed_plugin_system_blocks: readonly AgentSessionSystemBlock[];
   /** 当前 Step 捕获的 Plugin system blocks。 */
   plugin_system_blocks: readonly AgentSessionSystemBlock[];
+  /** 当前 Turn 首次解析后复用、只进入模型输入副本的 Plugin 动态上下文。 */
+  plugin_context_blocks: readonly SessionPluginContextBlock[];
 }
 
 /** Composer 可读取的当前 Turn 快照。 */

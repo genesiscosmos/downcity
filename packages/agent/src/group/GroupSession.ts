@@ -20,6 +20,7 @@ import type {
   DispatchStrategy,
 } from "@/types/group/DispatchStrategy.js";
 import type { WorkspaceBase } from "@downcity/workspace";
+import type { AgentModel } from "@/agent/AgentModel.js";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
 import {
@@ -27,6 +28,9 @@ import {
   GroupDispatchStoppedError,
 } from "@/group/GroupDispatchRuntime.js";
 import type { GroupDispatchResult } from "@/types/group/GroupDispatch.js";
+import { normalize_session_title } from "@/session/storage/Metadata.js";
+import { generate_session_title } from "@/session/SessionTitle.js";
+import { SessionTitleTask } from "@/session/runtime/SessionTitleTask.js";
 
 const max_auto_dispatch_count = 32;
 
@@ -40,6 +44,8 @@ export interface GroupSessionOptions {
   readonly group_name: string;
   /** Group 协作说明。 */
   readonly instruction?: string;
+  /** GroupSession 用于生成标题的 Group 模型。 */
+  readonly model?: AgentModel;
   /** Group 成员。 */
   readonly members: readonly Agent[];
   /** Group 消息调度策略。 */
@@ -56,8 +62,10 @@ export class GroupSession implements GroupSessionContract {
 
   private readonly group_name: string;
   private readonly instruction?: string;
+  private readonly model?: AgentModel;
   private readonly members: readonly Agent[];
   private readonly dispatch_runtime: GroupDispatchRuntime;
+  private readonly title_task: SessionTitleTask;
   private readonly workspace?: WorkspaceBase;
   private readonly messages_by_id: GroupMessage[] = [];
   private readonly subscribers = new Set<GroupEventSubscriber>();
@@ -78,6 +86,7 @@ export class GroupSession implements GroupSessionContract {
   private auto_dispatch_requested = false;
   private stop_requested = false;
   private disposed = false;
+  private metadata_mutation_chain: Promise<void> = Promise.resolve();
 
   constructor(options: GroupSessionOptions) {
     this.id = String(options.id || "").trim();
@@ -86,10 +95,12 @@ export class GroupSession implements GroupSessionContract {
     if (!this.group_id) throw new Error("GroupSession requires a non-empty group_id");
     this.group_name = options.group_name;
     this.instruction = options.instruction;
+    this.model = options.model;
     this.members = options.members;
     this.dispatch_runtime = new GroupDispatchRuntime({
       dispatch_strategy: options.dispatch_strategy,
     });
+    this.title_task = new SessionTitleTask({ session_id: this.id });
     this.workspace = options.workspace;
     this.workspace_id = options.workspace?.id;
   }
@@ -192,7 +203,27 @@ export class GroupSession implements GroupSessionContract {
     await this.persist_dispatch_checkpoint();
     this.publish_status(turn_id, "dispatching", { message_id: message.id });
     this.start_user_dispatch(message, group_turn);
+    this.schedule_title_generation();
     return { turn_id, success: true, message_count: this.messages_by_id.length };
+  }
+
+  /** 修改当前 GroupSession 的 canonical 用户可见标题。 */
+  async rename(input: string): Promise<string> {
+    this.assert_available();
+    const title = normalize_session_title(input);
+    if (!title) throw new Error("group_session.rename requires a non-empty title");
+    if (!this.store) throw new Error(`GroupSession "${this.id}" is not initialized`);
+    this.title_task.dispose();
+    const updated_at = Date.now();
+    const changed = await this.run_metadata_mutation(async () => {
+      if (!this.store) return false;
+      const metadata = await this.store.read_metadata();
+      if (normalize_session_title(metadata.title) === title) return false;
+      await this.store.update_metadata({ title, updated_at });
+      return true;
+    });
+    if (changed) this.publish_event({ type: "title", title });
+    return title;
   }
 
   /** 读取共享消息快照。 */
@@ -246,6 +277,7 @@ export class GroupSession implements GroupSessionContract {
     if (this.disposed) return;
     await this.stop();
     await this.dispatch_runtime.dispose();
+    this.title_task.dispose();
     this.disposed = true;
     this.subscribers.clear();
     for (const unsubscribe of this.member_session_unsubscribes.values()) unsubscribe();
@@ -744,6 +776,43 @@ export class GroupSession implements GroupSessionContract {
     this.messages_by_id.push(message);
     for (const subscriber of this.subscribers) void subscriber({ type: "message", message });
     return message;
+  }
+
+  /** 基于首条用户消息异步生成标题，不阻塞 Group 调度主链路。 */
+  private schedule_title_generation(): void {
+    this.title_task.schedule(async (signal) => {
+      if (!this.store || !this.model) return;
+      const before_metadata = await this.store.read_metadata();
+      if (normalize_session_title(before_metadata.title)) return;
+      const first_user_message = this.messages_by_id.find((message) => message.sender_type === "user");
+      if (!first_user_message) return;
+      const title = await generate_session_title({
+        model: this.model,
+        session_id: this.id,
+        first_user_text: first_user_message.text,
+        signal,
+      });
+      if (!title || signal.aborted || !this.store) return;
+      const changed = await this.run_metadata_mutation(async () => {
+        if (!this.store || signal.aborted) return false;
+        const latest_metadata = await this.store.read_metadata();
+        const source_exists = this.messages_by_id.some((message) => message.id === first_user_message.id);
+        if (normalize_session_title(latest_metadata.title) || !source_exists || signal.aborted) return false;
+        await this.store.update_metadata({ title });
+        return true;
+      });
+      if (changed && !signal.aborted) this.publish_event({ type: "title", title });
+    });
+  }
+
+  /** 串行提交 GroupSession metadata，避免后台标题覆盖手动重命名。 */
+  private async run_metadata_mutation<T>(mutation: () => Promise<T>): Promise<T> {
+    const task = this.metadata_mutation_chain.then(mutation, mutation);
+    this.metadata_mutation_chain = task.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await task;
   }
 
   /** 持久化当前调度检查点；只记录可由消息事实安全恢复的状态。 */

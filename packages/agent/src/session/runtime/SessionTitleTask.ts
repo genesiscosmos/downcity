@@ -18,13 +18,13 @@ export interface SessionTitleTaskOptions {
   session_id: string;
 
   /** 用于记录后台任务失败的统一日志器。 */
-  logger: Logger;
+  logger?: Logger;
 }
 
 /** Session 标题后台任务协调器。 */
 export class SessionTitleTask {
   private readonly session_id: string;
-  private readonly logger: Logger;
+  private readonly logger?: Logger;
   private active_task: Promise<void> | null = null;
   private abort_controller: AbortController | null = null;
   private pending_runner: SessionTitleTaskRunner | null = null;
@@ -52,7 +52,7 @@ export class SessionTitleTask {
       .catch(async (error) => {
         if (abort_controller.signal.aborted) return;
         try {
-          await this.logger.log("warn", "[agent] session_title.task_failed", {
+          await this.logger?.log("warn", "[agent] session_title.task_failed", {
             session_id: this.session_id,
             error: error instanceof Error ? error.message : String(error),
           });

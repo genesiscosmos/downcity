@@ -68,6 +68,8 @@ test("SessionTurnContext 负责 Plugin lease 与只读投影生命周期", async
     read: () => ({ plugins: [] }),
     run_action: async () => ({ success: true }),
     system_blocks: async () => [],
+    pipeline: async (_point_name, value) => value,
+    effect: async () => {},
     release: async () => released.push(name),
   });
   const context = create_session_turn_context({
@@ -106,4 +108,33 @@ test("SessionTurnContext 负责 Plugin lease 与只读投影生命周期", async
   await context.lifecycle.dispose();
   await context.lifecycle.dispose();
   assert.deepEqual(released, ["first", "second"]);
+});
+
+test("SessionTurnContext 在整个 Turn 中只解析一次 Plugin Context", async () => {
+  const context = create_session_turn_context({
+    session_id: "session-context-test",
+    session_origin: { type: "chat" },
+    turn_id: "turn-context-test",
+  });
+  let resolve_count = 0;
+  const resolver = async () => {
+    resolve_count += 1;
+    return [{
+      source_plugin: "memory",
+      name: "recall",
+      content: "stable recall",
+      trust_level: "reference",
+      citations: ["memory:1"],
+    }];
+  };
+
+  const first = await context.step.resolve_plugin_context_blocks(resolver);
+  const second = await context.step.resolve_plugin_context_blocks(resolver);
+
+  assert.equal(resolve_count, 1);
+  assert.equal(first, second);
+  assert.equal(first, context.step.plugin_context_blocks);
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(Object.isFrozen(first[0]), true);
+  assert.equal(Object.isFrozen(first[0].citations), true);
 });

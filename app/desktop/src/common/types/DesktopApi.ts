@@ -78,6 +78,8 @@ export interface DesktopGroupSummary {
 export interface DesktopGroupSessionSummary {
   /** GroupSession 稳定标识。 */
   session_id: string;
+  /** GroupSession 的 canonical 用户可见标题。 */
+  title: string;
   /** 首次创建时间戳，单位为毫秒。 */
   created_at: number;
   /** 最近更新时间戳，单位为毫秒。 */
@@ -122,6 +124,15 @@ export type DesktopGroupEvent = {
   readonly type: "message";
   /** 新增的共享消息。 */
   readonly message: DesktopGroupMessage;
+} | {
+  /** 所属 Group 标识。 */
+  readonly group_id: string;
+  /** 所属 GroupSession 标识。 */
+  readonly session_id: string;
+  /** 事件类型。 */
+  readonly type: "title";
+  /** 当前 GroupSession 最新的 canonical 标题。 */
+  readonly title: string;
 } | {
   /** 所属 Group 标识。 */
   readonly group_id: string;
@@ -390,6 +401,8 @@ export type DesktopInvokePluginActionInput =
 export interface DesktopSessionSummary {
   /** Session 的稳定标识。 */
   session_id: string;
+  /** Session 在当前设备上的真实存储目录。 */
+  session_path: string;
   /** Session 的可见标题。 */
   title: string;
   /** 最近一条可见消息的摘要。 */
@@ -943,6 +956,8 @@ export interface DesktopApi {
     list_sessions(group_id: string): Promise<DesktopGroupSessionSummary[]>;
     /** 创建指定 Group 的新 GroupSession。 */
     create_session(group_id: string, workspace_id?: string): Promise<DesktopGroupSummary>;
+    /** 修改指定 GroupSession 的 canonical 标题。 */
+    rename_session(group_id: string, session_id: string, title: string): Promise<string>;
     /** 读取 Group 的共享消息。 */
     list_messages(group_id: string, session_id?: string): Promise<DesktopGroupMessage[]>;
     /** 向 Group 发言并驱动成员 Agent 执行。 */

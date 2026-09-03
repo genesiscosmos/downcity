@@ -8,7 +8,7 @@
  */
 
 import { nanoid } from "nanoid";
-import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
+import type { SessionMessage, SessionUserMessage } from "@/types/session/SessionMessage.js";
 import type { SessionActionEvent } from "@/types/session/SessionAction.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
@@ -44,6 +44,9 @@ import type {
 import type { SessionCommandCompletion } from "@/types/session/SessionCommand.js";
 import type { SessionWorkspaceSnapshot } from "@/types/session/SessionTurnFileDiff.js";
 import { SESSION_TURN_FILE_DIFF_DATA_TYPE } from "@/session/messages/SessionTurnFileDiffData.js";
+import { SESSION_PLUGIN_POINTS } from "@/session/SessionPluginPoints.js";
+import type { SessionTurnCommittedHookValue } from "@/types/session/SessionPluginHook.js";
+import type { JsonValue } from "@/types/common/Json.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
@@ -399,6 +402,10 @@ export class SessionLoop {
       text: final_result.text,
       ...(final_result.error ? { error: final_result.error } : {}),
     });
+    await this.notify_turn_committed(
+      active_turn,
+      stopped ? "stopped" : final_result.success ? "completed" : "failed",
+    );
     await this.dispose_turn_context(active_turn);
     active_turn.deferred_finished.resolve(final_result);
     if (this.active_turn === active_turn) this.active_turn = null;
@@ -445,6 +452,10 @@ export class SessionLoop {
       text: "",
       error: message,
     });
+    await this.notify_turn_committed(
+      active_turn,
+      stopped ? "stopped" : "failed",
+    );
     await this.dispose_turn_context(active_turn);
     active_turn.deferred_finished.resolve(final_result);
     if (this.active_turn === active_turn) this.active_turn = null;
@@ -714,6 +725,41 @@ export class SessionLoop {
         });
       } catch {
         // Context 已进入释放流程，日志失败不能阻止 Turn Handle 收口。
+      }
+    }
+  }
+
+  /** 在释放当前 lease 前触发现有 Plugin effect point。 */
+  private async notify_turn_committed(
+    active_turn: ActiveSessionTurnState,
+    status: SessionTurnCommittedHookValue["status"],
+  ): Promise<void> {
+    const plugins = active_turn.turn_context?.step.plugins;
+    if (!plugins) return;
+    try {
+      const messages = (await this.messages.list_history_messages())
+        .filter((message) => message.turn_id === active_turn.turn_id)
+        .map((message) => structuredClone(message));
+      const value: SessionTurnCommittedHookValue = {
+        session_id: this.session_id,
+        turn_id: active_turn.turn_id,
+        status,
+        messages: messages as SessionMessage[],
+      };
+      await plugins.effect(
+        SESSION_PLUGIN_POINTS.turn_committed,
+        value as unknown as JsonValue,
+      );
+    } catch (error) {
+      try {
+        await this.logger.log("warn", "[agent] session plugin effect failed", {
+          session_id: this.session_id,
+          turn_id: active_turn.turn_id,
+          point_name: SESSION_PLUGIN_POINTS.turn_committed,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } catch {
+        // Plugin effect 不改变已经确定的 Turn 结果。
       }
     }
   }

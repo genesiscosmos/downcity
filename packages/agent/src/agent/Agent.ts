@@ -114,10 +114,14 @@ export class Agent {
       read: () => ({ plugins: [] }),
       run_action: async () => ({ success: false, error: "Workspace is required" }),
       system_blocks: async () => [],
+      pipeline: async <T>(_point_name: string, value: T): Promise<T> => value,
+      effect: async () => {},
       acquire: () => ({
         read: () => ({ plugins: [] }),
         run_action: async () => ({ success: false, error: "Workspace is required" }),
         system_blocks: async () => [],
+        pipeline: async <T>(_point_name: string, value: T): Promise<T> => value,
+        effect: async () => {},
         release: async () => {},
       }),
     });

@@ -57,6 +57,7 @@ import {
   type DesktopWorkspaceSession,
 } from "../types/DesktopView";
 import { notification_target_from_navigation } from "../lib/notification/notification_state";
+import { update_group_session_title, update_group_session_title_index } from "../lib/group/group_session_projection";
 import { create_chat_composer, is_chat_composer_empty, read_chat_composer_text } from "../lib/chat/editor/chatComposerCodec";
 
 const default_settings: DesktopSettings = {
@@ -345,6 +346,14 @@ export function use_desktop_controller(): DesktopViewController {
 
   useEffect(() => {
     const unsubscribe = window.downcity.group.subscribe((event) => {
+      if (event.type === "title") {
+        set_groups((current) => current.map((group) => update_group_session_title(group, event.group_id, event.session_id, event.title)));
+        set_groups_by_id((current) => current[event.group_id]
+          ? { ...current, [event.group_id]: update_group_session_title(current[event.group_id], event.group_id, event.session_id, event.title) }
+          : current);
+        set_group_sessions_by_workspace((current) => update_group_session_title_index(current, event.group_id, event.session_id, event.title));
+        return;
+      }
       const active_session_id = active_group_session_ids_ref.current.get(event.group_id);
       if (!active_session_id || active_session_id !== event.session_id) return;
       if (event.type === "interaction") {
@@ -665,6 +674,30 @@ export function use_desktop_controller(): DesktopViewController {
       throw reason;
     }
   }, [open_group_draft]);
+
+  /** 将当前 Group 草稿移动到目标 Workspace，并保持它仍处于未持久化状态。 */
+  const switch_group_draft_context = useCallback(async (group_id: string, workspace_id: string) => {
+    if (selection?.kind !== "group_draft" || selection.group_id !== group_id || selection.workspace_id === workspace_id) return;
+    const source_key = get_group_chat_key(selection.workspace_id, group_id, selection.draft_id);
+    const target_key = get_group_chat_key(workspace_id, group_id, selection.draft_id);
+    set_draft_content_by_session((current) => move_draft_value(current, source_key, target_key, create_chat_composer()));
+    await open_group_draft(group_id, workspace_id);
+  }, [open_group_draft, selection]);
+
+  /** 修改 GroupSession 标题，并立即更新本地导航投影。 */
+  const rename_group_session = useCallback(async (group_id: string, session_id: string, title: string) => {
+    try {
+      const normalized_title = await window.downcity.group.rename_session(group_id, session_id, title);
+      set_groups((current) => current.map((group) => update_group_session_title(group, group_id, session_id, normalized_title)));
+      set_groups_by_id((current) => current[group_id]
+        ? { ...current, [group_id]: update_group_session_title(current[group_id], group_id, session_id, normalized_title) }
+        : current);
+      set_group_sessions_by_workspace((current) => update_group_session_title_index(current, group_id, session_id, normalized_title));
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, []);
 
   const remove_group_session = useCallback(async (group_id: string, session_id: string) => {
     set_error("");
@@ -1600,6 +1633,8 @@ export function use_desktop_controller(): DesktopViewController {
     remove_group,
     open_group,
     create_group_session,
+    switch_group_draft_context,
+    rename_group_session,
     remove_group_session,
     send_group_message,
     update_group_draft,

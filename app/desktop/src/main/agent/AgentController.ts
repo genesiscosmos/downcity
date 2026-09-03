@@ -607,6 +607,12 @@ export class AgentController {
     return await to_desktop_group_summary(group, this.require_group_config(group.id).model_id, await group.sessions.list(), session.id);
   }
 
+  /** 修改一个 GroupSession 的 canonical 用户可见标题。 */
+  async rename_group_session(group_id: string, session_id: string, title: string): Promise<string> {
+    await this.ready_promise;
+    return await (await this.require_group_session(this.require_group(group_id), session_id)).rename(title);
+  }
+
   async list_group_messages(group_id: string, session_id?: string): Promise<DesktopGroupMessage[]> {
     await this.ready_promise;
     const group = this.require_group(group_id);
@@ -659,7 +665,7 @@ export class AgentController {
   /** 列出一个 native Agent 在当前 Workspace 中的 Session。 */
   async list_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
     const page = await this.require_native_agent(agent_id).sessions.list({ workspace_id });
-    return page.items.map(to_desktop_session_summary);
+    return page.items.map((session) => to_desktop_session_summary(this.data.root_path, session));
   }
 
   /** 列出当前 Federation 中可用于 Agent 对话的模型。 */
@@ -675,7 +681,7 @@ export class AgentController {
       ?? (await this.require_workspace_entry(agent_id, workspace_id)).workspace;
     const session = await agent.sessions.create({ workspace });
     this.observe_session(agent_id, workspace_id, session);
-    return to_desktop_session_summary(await session.get_info());
+    return to_desktop_session_summary(this.data.root_path, await session.get_info());
   }
 
   /** 从 canonical Message 锚点创建分支 Session，并纳入 Desktop 实时投影。 */
@@ -686,7 +692,7 @@ export class AgentController {
     const source_title = String(source_info.title || "新会话").trim();
     await forked.rename(`${source_title}（分支）`);
     this.observe_session(agent_id, workspace_id, forked);
-    return to_desktop_session_summary(await forked.get_info());
+    return to_desktop_session_summary(this.data.root_path, await forked.get_info());
   }
 
   /** 从历史用户消息之前创建新 Session，并以修改后的文本启动新 Turn。 */
@@ -709,7 +715,7 @@ export class AgentController {
         await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
         this.release_session_projection(agent_id, workspace_id, session_id);
       }
-      return { session: to_desktop_session_summary(await forked.get_info()), turn_id: sent.turn_id };
+      return { session: to_desktop_session_summary(this.data.root_path, await forked.get_info()), turn_id: sent.turn_id };
     } catch (error) {
       await this.require_native_agent(agent_id).sessions.remove(forked.id).catch(() => false);
       this.release_session_projection(agent_id, workspace_id, forked.id);
@@ -744,7 +750,7 @@ export class AgentController {
   /** 列出一个 Agent 已归档的 Session。 */
   async list_archived_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
     const page = await this.require_native_agent(agent_id).sessions.archived({ workspace_id });
-    return page.items.map(to_desktop_session_summary);
+    return page.items.map((session) => to_desktop_session_summary(this.data.root_path, session, true));
   }
 
   /** 读取一个 native Session 的 canonical 消息和运行态。 */
@@ -1039,7 +1045,9 @@ export class AgentController {
             `agent:${config.agent_id}:${input.topic_key}`,
           ),
         },
-        extensions: {},
+        extensions: {
+          city_memory_root_path: path.join(this.data.root_path, "memory"),
+        },
       })),
       Promise.resolve(create_desktop_agent_tools()),
     ]);
@@ -1259,6 +1267,8 @@ export class AgentController {
     const unsubscribe = group_session.subscribe((event) => {
       this.events.group_event(event.type === "message"
         ? { group_id: group_session.group_id, session_id: group_session.id, type: "message", message: to_desktop_group_message(event.message) }
+        : event.type === "title"
+          ? { group_id: group_session.group_id, session_id: group_session.id, type: "title", title: event.title }
         : event.type === "interaction"
           ? { group_id: group_session.group_id, session_id: group_session.id, type: "interaction", agent_id: event.agent_id, request: event.request }
         : {
@@ -1418,6 +1428,7 @@ async function to_desktop_group_summary(
 function to_desktop_group_session_summary(summary: GroupSessionSummary): DesktopGroupSessionSummary {
   return {
     session_id: summary.id,
+    title: summary.title || "新对话",
     created_at: summary.created_at,
     updated_at: summary.updated_at,
     message_count: summary.message_count,
@@ -1442,9 +1453,10 @@ function to_desktop_group_message(message: import("@downcity/agent").GroupMessag
 }
 
 /** 把 SDK Session 摘要投影为 Desktop 导航模型。 */
-function to_desktop_session_summary(session: AgentSessionSummary): DesktopSessionSummary {
+function to_desktop_session_summary(root_path: string, session: AgentSessionSummary, archived = false): DesktopSessionSummary {
   return {
     session_id: session.session_id,
+    session_path: path.join(root_path, "agents", session.agent_id, archived ? "archived-sessions" : "sessions", session.origin.type, session.session_id),
     title: session.title || "新会话",
     preview_text: session.preview_text || "",
     created_at: session.created_at || 0,

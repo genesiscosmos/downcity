@@ -76,7 +76,7 @@ export function get_default_file_memory_root_path(
   if (!agent_id || !/^[a-z0-9_]+$/u.test(agent_id)) {
     throw new Error(`Invalid Memory agent_id: ${input.agent_id}`);
   }
-  return path.join(platform_root_path, "agents", agent_id, "memory");
+  return path.join(platform_root_path, "agents", agent_id, "plugins", "memory");
 }
 
 /** 基于本地文件的 Memory Storage Adapter。 */

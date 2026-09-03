@@ -18,13 +18,15 @@ import {
   MemoryPlugin,
   get_default_file_memory_root_path,
 } from "@downcity/plugins/memory";
+import { SESSION_PLUGIN_POINTS } from "@downcity/agent";
 
-/** 创建测试使用的最小 Agent scope。 */
-function create_scope(workspace_path, session_id) {
+/** 创建测试使用的最小 Agent 访问上下文。 */
+function create_access(workspace_id, session_id) {
   return {
     agent_id: "memory_test_agent",
-    workspace_id: workspace_path,
+    workspace_id,
     ...(session_id ? { session_id } : {}),
+    city_memory_available: false,
   };
 }
 
@@ -40,81 +42,93 @@ test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Worksp
   await provider.initialize({ agent_id: "memory_test_agent" });
 
   const remembered = await provider.remember({
-    scope: create_scope(workspace_path),
+    access: create_access("memory_test_workspace"),
+    target: "agent",
     content: "The user prefers concise answers.",
     topic: "user-preferences",
     memory_type: "preference",
     source: "explicit user statement",
   });
-  assert.equal(remembered.memory_id, "wiki/user-preferences");
+  assert.match(remembered.memory_id, /^agent\/id_[A-Za-z0-9_-]+\/wiki\/user-preferences$/);
   assert.equal(remembered.mode, "created");
-  assert.equal(await fs.stat(path.join(memory_root, "wiki", "user-preferences.md")).then(() => true), true);
+  assert.equal(await fs.stat(path.join(memory_root, `${remembered.memory_id}.md`)).then(() => true), true);
   assert.equal(await fs.access(path.join(workspace_path, ".downcity", "memory")).then(() => true).catch(() => false), false);
 
   const recalled = await provider.recall({
-    scope: create_scope(workspace_path),
+    access: create_access("memory_test_workspace"),
     query: "concise answers",
     min_score: 0.1,
   });
-  assert.equal(recalled.items[0]?.memory.memory_id, "wiki/user-preferences");
-  assert.deepEqual(recalled.items[0]?.memory.scope, { agent_id: "memory_test_agent" });
+  assert.equal(recalled.items[0]?.memory.memory_id, remembered.memory_id);
+  assert.deepEqual(recalled.items[0]?.memory.owner, {
+    kind: "agent",
+    agent_id: "memory_test_agent",
+  });
+  assert.deepEqual(recalled.items[0]?.memory.subject, {
+    kind: "agent",
+    agent_id: "memory_test_agent",
+  });
   assert.match(recalled.items[0]?.memory.citation || "", /^memory:\/\/builtin\//);
   assert.equal(JSON.stringify(recalled).includes(memory_root), false);
 
   const read = await provider.read({
-    scope: create_scope(workspace_path),
+    access: create_access("memory_test_workspace"),
     memory_id: remembered.memory_id,
   });
   assert.match(read.memory?.content || "", /concise answers/);
-  assert.deepEqual(read.memory?.scope, { agent_id: "memory_test_agent" });
+  assert.deepEqual(read.memory?.subject, {
+    kind: "agent",
+    agent_id: "memory_test_agent",
+  });
 
   await provider.remember({
-    scope: create_scope(workspace_path, "session-that-must-not-own-memory"),
+    access: create_access("memory_test_workspace", "session-that-must-not-own-memory"),
+    target: "agent",
     content: "The user also prefers structured results.",
     topic: "user-preferences",
     memory_type: "preference",
     source: "second explicit user statement",
   });
   const updated_read = await provider.read({
-    scope: create_scope(workspace_path),
+    access: create_access("memory_test_workspace"),
     memory_id: remembered.memory_id,
   });
   assert.equal(updated_read.memory?.source_refs.length, 2);
-  assert.deepEqual(updated_read.memory?.scope, { agent_id: "memory_test_agent" });
+  assert.equal(updated_read.memory?.subject.kind, "agent");
 
   await assert.rejects(provider.read({
-    scope: { agent_id: "another_agent" },
+    access: { agent_id: "another_agent", city_memory_available: false },
     memory_id: remembered.memory_id,
   }), /does not match initialized Provider/);
   await assert.rejects(provider.digest({
-    scope: create_scope(workspace_path, "empty-session"),
+    access: create_access("memory_test_workspace", "empty-session"),
     session_id: "empty-session",
     transcript: "",
     message_count: 0,
   }), /requires transcript content/);
 
   const revised = await provider.revise({
-    scope: create_scope(workspace_path),
+    access: create_access("memory_test_workspace"),
     memory_id: remembered.memory_id,
     instruction: "Add the latest preference.",
     evidence: "The user also prefers structured results.",
   });
   assert.equal(revised.mode, "appended");
-  assert.match(revised.evidence_id || "", /^evidence\/manual\//);
+  assert.match(revised.evidence_id || "", /\/evidence\/manual\//);
   const revised_read = await provider.read({
-    scope: create_scope(workspace_path),
+    access: create_access("memory_test_workspace"),
     memory_id: remembered.memory_id,
   });
   assert.match(revised_read.memory?.content || "", /structured results/);
   assert.equal(revised_read.memory?.source_refs.length, 3);
 
   const forgotten = await provider.forget({
-    scope: create_scope(workspace_path),
+    access: create_access("memory_test_workspace"),
     memory_id: remembered.memory_id,
   });
   assert.equal(forgotten.forgotten, true);
   assert.equal((await provider.read({
-    scope: create_scope(workspace_path),
+    access: create_access("memory_test_workspace"),
     memory_id: remembered.memory_id,
   })).memory, null);
   await provider.dispose();
@@ -140,15 +154,15 @@ test("File Adapter 拒绝目录穿越并由 Memory Plugin 定义默认路径", a
   const provider = new BuiltinMemoryProvider({ storage: adapter });
   await provider.initialize({ agent_id: "memory_test_agent" });
   await assert.rejects(provider.read({
-    scope: { agent_id: "memory_test_agent" },
-    memory_id: "wiki/invalid.name",
+    access: create_access("memory_test_workspace"),
+    memory_id: "agent/id_bWVtb3J5X3Rlc3RfYWdlbnQ/wiki/invalid.name",
   }), /Invalid memory_id/);
   assert.equal(
     get_default_file_memory_root_path({
       platform_root_path: "/platform-root",
       agent_id: "memory_test_agent",
     }),
-    path.join("/platform-root", "agents", "memory_test_agent", "memory"),
+    path.join("/platform-root", "agents", "memory_test_agent", "plugins", "memory"),
   );
   await provider.dispose();
 });
@@ -177,16 +191,19 @@ test("Builtin Provider 在 initialize 阶段按 Agent 延迟创建 Adapter", asy
 test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (context) => {
   const memory_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-plugin-"));
   context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
-  const plugin = new MemoryPlugin({ root_path: memory_root });
+  const plugin = new MemoryPlugin({ agent_root_path: memory_root });
   const plugin_context = {
     agent_id: "memory_test_agent",
+    workspace_id: "memory_test_workspace",
     workspace_path: "/workspace",
+    logger: { log: async () => {} },
   };
   await plugin.lifecycle.start(plugin_context);
   const result = await plugin.actions.remember.execute({
     context: plugin_context,
     input: {
       content: "Remember this",
+      target: "agent",
       topic: "test",
       memory_type: "fact",
     },
@@ -194,11 +211,275 @@ test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (co
     action_name: "remember",
   });
   assert.equal(result.success, true);
-  assert.equal(result.data.memory_id, "wiki/test");
+  assert.match(result.data.memory_id, /\/wiki\/test$/);
   assert.equal(
     await fs.access(path.join(memory_root, "wiki", "test.md")).then(() => true).catch(() => false),
     true,
   );
   assert.equal("files" in plugin_context, false);
   await plugin.lifecycle.stop(plugin_context);
+});
+
+test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Recall", async (context) => {
+  const memory_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-hooks-"));
+  context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
+  const plugin = new MemoryPlugin({ agent_root_path: memory_root });
+  const plugin_context = {
+    agent_id: "memory_test_agent",
+    workspace_id: "memory_test_workspace",
+    workspace_path: "/workspace",
+    logger: { log: async () => {} },
+  };
+  await plugin.lifecycle.start(plugin_context);
+  await plugin.actions.remember.execute({
+    context: plugin_context,
+    input: {
+      content: "The user prefers concise answers.",
+      target: "agent",
+      topic: "user-preferences",
+      memory_type: "preference",
+    },
+    plugin_name: "memory",
+    action_name: "remember",
+  });
+
+  const usage = await plugin.system(plugin_context);
+  assert.match(usage, /Memory actions usage|Preferred flow/);
+  assert.doesNotMatch(usage, /prefers concise answers/);
+
+  const system_hook = plugin.hooks.pipeline[SESSION_PLUGIN_POINTS.system_context][0];
+  const system_value = await system_hook({
+    context: plugin_context,
+    plugin: "memory",
+    value: { session_id: "session-1", blocks: [] },
+  });
+  assert.equal(system_value.blocks.length, 1);
+  assert.equal(system_value.blocks[0].name, "memory/core/agent");
+  assert.match(system_value.blocks[0].content, /prefers concise answers/);
+
+  const turn_hook = plugin.hooks.pipeline[SESSION_PLUGIN_POINTS.turn_context][0];
+  const turn_value = await turn_hook({
+    context: plugin_context,
+    plugin: "memory",
+    value: {
+      session_id: "session-1",
+      turn_id: "turn-1",
+      user_messages: [{ message_id: "user-1", text: "concise answers" }],
+      blocks: [],
+    },
+  });
+  assert.equal(turn_value.blocks.length, 1);
+  assert.equal(turn_value.blocks[0].name, "recall");
+  assert.equal(turn_value.blocks[0].trust_level, "reference");
+  assert.match(turn_value.blocks[0].content, /prefers concise answers/);
+
+  const committed_hook = plugin.hooks.effect[SESSION_PLUGIN_POINTS.turn_committed][0];
+  const canonical_messages = [{
+    message_id: "user-capture-1",
+    session_id: "session-1",
+    turn_id: "turn-1",
+    sequence: 1,
+    revision: 1,
+    visibility: "visible",
+    created_at: 1,
+    updated_at: 1,
+    type: "user",
+    input_type: "prompt",
+    parts: [{
+      part_id: "text-capture-1",
+      type: "text",
+      text: "以后回答请保持简洁。",
+      state: "done",
+    }],
+  }];
+  await committed_hook({
+    context: plugin_context,
+    plugin: "memory",
+    value: {
+      session_id: "session-1",
+      turn_id: "turn-1",
+      status: "completed",
+      messages: canonical_messages,
+    },
+  });
+  await committed_hook({
+    context: plugin_context,
+    plugin: "memory",
+    value: {
+      session_id: "session-1",
+      turn_id: "turn-1",
+      status: "completed",
+      messages: canonical_messages,
+    },
+  });
+  await committed_hook({
+    context: plugin_context,
+    plugin: "memory",
+    value: {
+      session_id: "session-1",
+      turn_id: "turn-failed",
+      status: "failed",
+      messages: canonical_messages,
+    },
+  });
+  await committed_hook({
+    context: plugin_context,
+    plugin: "memory",
+    value: {
+      session_id: "session-1",
+      turn_id: "turn-greeting",
+      status: "completed",
+      messages: canonical_messages.map((message) => ({
+        ...message,
+        turn_id: "turn-greeting",
+        parts: message.parts.map((part) => ({ ...part, text: "继续" })),
+      })),
+    },
+  });
+  await committed_hook({
+    context: plugin_context,
+    plugin: "memory",
+    value: {
+      session_id: "session-1",
+      turn_id: "turn-sensitive",
+      status: "completed",
+      messages: canonical_messages.map((message) => ({
+        ...message,
+        turn_id: "turn-sensitive",
+        parts: message.parts.map((part) => ({
+          ...part,
+          text: "api_key: sk-sensitive-example-token",
+        })),
+      })),
+    },
+  });
+  const capture_jobs = await fs.readdir(path.join(memory_root, "capture-jobs"));
+  assert.equal(capture_jobs.length, 1);
+  const capture_job = JSON.parse(await fs.readFile(
+    path.join(memory_root, "capture-jobs", capture_jobs[0]),
+    "utf8",
+  ));
+  assert.equal(capture_job.status, "pending");
+  assert.equal(capture_job.turn_id, "turn-1");
+  assert.equal(capture_job.messages[0].text, "以后回答请保持简洁。");
+
+  await plugin.lifecycle.stop(plugin_context);
+});
+
+test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async (context) => {
+  const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-city-"));
+  context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
+  const city_root = path.join(temporary_root, "city-memory");
+  const create_embassy = (user_id) => ({
+    user: {
+      current: async () => ({
+        user: { user_id, bureau_id: "city-1" },
+        profile: null,
+      }),
+    },
+  });
+  const create_context = (agent_id, user_id) => ({
+    agent_id,
+    workspace_id: "shared-workspace",
+    workspace_path: "/workspace",
+    embassy: create_embassy(user_id),
+    logger: { log: async () => {} },
+  });
+  const first_plugin = new MemoryPlugin({
+    agent_root_path: path.join(temporary_root, "agent-a"),
+    city_root_path: city_root,
+  });
+  const second_plugin = new MemoryPlugin({
+    agent_root_path: path.join(temporary_root, "agent-b"),
+    city_root_path: city_root,
+  });
+  const first_context = create_context("agent-a", "user/with unsafe path");
+  const second_context = create_context("agent-b", "user/with unsafe path");
+  await first_plugin.lifecycle.start(first_context);
+  await second_plugin.lifecycle.start(second_context);
+
+  const remembered = await first_plugin.actions.remember.execute({
+    context: first_context,
+    input: {
+      content: "The current user prefers concise answers.",
+      target: "current_user",
+      topic: "user-preferences",
+      memory_type: "preference",
+    },
+    plugin_name: "memory",
+    action_name: "remember",
+  });
+  assert.equal(remembered.success, true);
+  assert.match(remembered.data.memory_id, /^city\/users\/id_[A-Za-z0-9_-]+\/wiki\/user-preferences$/);
+  assert.equal(remembered.data.memory_id.includes("user/with unsafe path"), false);
+
+  const workspace_memory = await first_plugin.actions.remember.execute({
+    context: first_context,
+    input: {
+      content: "This Workspace always uses pnpm.",
+      target: "current_workspace",
+      topic: "project-overview",
+      memory_type: "decision",
+    },
+    plugin_name: "memory",
+    action_name: "remember",
+  });
+  assert.equal(workspace_memory.success, true);
+  assert.match(workspace_memory.data.memory_id, /^city\/workspaces\/id_[A-Za-z0-9_-]+\/wiki\/project-overview$/);
+
+  const system_hook = second_plugin.hooks.pipeline[SESSION_PLUGIN_POINTS.system_context][0];
+  const system_value = await system_hook({
+    context: second_context,
+    plugin: "memory",
+    value: { session_id: "session-b", blocks: [] },
+  });
+  assert.equal(system_value.blocks[0].name, "memory/core/user");
+  assert.match(system_value.blocks[0].content, /prefers concise answers/);
+  assert.equal(system_value.blocks[1].name, "memory/core/workspace");
+  assert.match(system_value.blocks[1].content, /always uses pnpm/);
+
+  const other_user_context = create_context("agent-b", "another-user");
+  const isolated_value = await system_hook({
+    context: other_user_context,
+    plugin: "memory",
+    value: { session_id: "session-other", blocks: [] },
+  });
+  assert.equal(
+    isolated_value.blocks.some((block) => block.content.includes("prefers concise answers")),
+    false,
+  );
+  assert.equal(
+    isolated_value.blocks.some((block) => block.content.includes("always uses pnpm")),
+    true,
+  );
+
+  const cross_user_read = await second_plugin.actions.read.execute({
+    context: other_user_context,
+    input: { memory_id: remembered.data.memory_id },
+    plugin_name: "memory",
+    action_name: "read",
+  });
+  assert.equal(cross_user_read.success, false);
+  assert.match(cross_user_read.error, /outside the current access context/);
+
+  const unauthenticated = await second_plugin.actions.remember.execute({
+    context: {
+      agent_id: "agent-b",
+      workspace_id: "shared-workspace",
+      workspace_path: "/workspace",
+      logger: { log: async () => {} },
+    },
+    input: {
+      content: "Must not be written to a fallback user.",
+      target: "current_user",
+      topic: "user-preferences",
+    },
+    plugin_name: "memory",
+    action_name: "remember",
+  });
+  assert.equal(unauthenticated.success, false);
+  assert.match(unauthenticated.error, /authenticated user/);
+
+  await first_plugin.lifecycle.stop(first_context);
+  await second_plugin.lifecycle.stop(second_context);
 });

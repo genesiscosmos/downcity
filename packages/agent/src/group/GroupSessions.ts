@@ -68,6 +68,7 @@ export class GroupSessions implements GroupSessionsContract {
       updated_at: item.updated_at,
       message_count: item.message_count,
       ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
+      ...(item.title ? { title: item.title } : {}),
       ...(item.preview_text ? { preview_text: item.preview_text } : {}),
     }));
   }
@@ -96,6 +97,7 @@ export class GroupSessions implements GroupSessionsContract {
       group_id: this.group.id,
       group_name: this.group.name,
       instruction: this.group.instruction,
+      model: this.group.model,
       members: this.group.members,
       dispatch_strategy: this.group.dispatch_strategy,
       ...(workspace ? { workspace } : {}),

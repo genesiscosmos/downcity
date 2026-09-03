@@ -34,9 +34,9 @@ Daily JSONL logs: `<YYYY-MM-DD>.jsonl`.
 Conversation source of truth: `active.jsonl`, `assistant_message.json`, and sequence-named `segments/*.jsonl`.
 The default origin partition is `chat`; custom non-empty origin types are encoded into one safe path segment.
 
-### Agent Memory
+### Memory
 
-Long-term Memory is not part of the Workspace `.downcity/` contract. Memory content is owned by the Agent's active `MemoryProvider`. The built-in File Adapter defaults to `~/.downcity/agents/<agent_id>/memory/`; other Providers can use databases or remote services.
+Long-term Memory is not part of the Workspace `.downcity/` contract. Agent-private content lives under `agents/<agent_id>/plugins/memory/`; City-shared User and Workspace content lives under `memory/` and is isolated by `MemoryPlugin` subjects. City only supplies the shared root and does not implement Memory data logic.
 
 ### Plugin runtime data
 

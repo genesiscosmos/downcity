@@ -15,6 +15,46 @@ import type {
   SessionComposeInput,
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
+import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
+import type { ModelMessage } from "@downcity/type";
+
+/** 把低权限 Plugin 内容渲染为与用户原文分离的模型参考区。 */
+function render_plugin_context_blocks(
+  blocks: readonly SessionPluginContextBlock[],
+): string {
+  return blocks.map((block) => [
+    `<plugin-context plugin="${escape_xml_attribute(block.source_plugin)}" name="${escape_xml_attribute(block.name)}" trust="reference">`,
+    block.content,
+    "</plugin-context>",
+  ].join("\n")).join("\n\n");
+}
+
+/** 转义模型上下文标签属性，避免 Plugin 名称破坏边界。 */
+function escape_xml_attribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+/** 只修改模型消息副本，把动态参考信息前置到当前最后一条 User Message。 */
+function inject_plugin_context(
+  messages: ModelMessage[],
+  blocks: readonly SessionPluginContextBlock[],
+): ModelMessage[] {
+  if (blocks.length === 0) return messages;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.role !== "user") continue;
+    messages[index] = {
+      ...message,
+      content: [{ type: "text", text: render_plugin_context_blocks(blocks) }, ...message.content],
+    };
+    break;
+  }
+  return messages;
+}
 
 /** 默认 Session 执行策略。 */
 export class DefaultSessionComposer implements SessionComposer {
@@ -39,16 +79,17 @@ export class DefaultSessionComposer implements SessionComposer {
       ],
     });
 
+    const messages = await session_context_to_model_messages(
+      input.history,
+      input.session.project_root,
+    );
     return {
       system: system_blocks.map((block) => ({
         role: "system" as const,
         content: block.content,
       })),
       system_blocks,
-      messages: await session_context_to_model_messages(
-        input.history,
-        input.session.project_root,
-      ),
+      messages: inject_plugin_context(messages, input.state.plugin_context_blocks),
       tools: { ...input.state.tools },
     };
   }

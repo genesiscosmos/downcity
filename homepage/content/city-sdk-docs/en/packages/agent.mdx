@@ -43,3 +43,30 @@ for (const message of page.items) {
   }
 }
 ```
+
+## Group and GroupSession
+
+`Group` is a collaborative subject with its own model, members, dispatch strategy, and
+`GroupSession` collection. A GroupSession persists shared messages and dispatch state under
+`groups/<group_id>/sessions/<group_session_id>/`.
+
+After the first user message is persisted, the GroupSession uses `Group.model` to generate a
+short title asynchronously. The title is canonical metadata stored in `meta.json`; it is separate
+from `preview_text`, which remains the latest-message preview. Later messages do not replace the
+title. Subscribe to `{ type: "title", title }` for live title changes, or call
+`group_session.rename(title)` to persist a manual title and prevent background generation from
+overwriting it.
+
+```ts
+const group_session = await group.sessions.create({ workspace });
+
+group_session.subscribe((event) => {
+  if (event.type === "title") console.log(event.title);
+});
+
+await group_session.prompt({ query: "Review the login flow" });
+await group_session.rename("Login flow review");
+
+const sessions = await group.sessions.list();
+console.log(sessions[0].title, sessions[0].preview_text);
+```

@@ -102,6 +102,15 @@ export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
 export type { SessionOrigin } from "./types/session/SessionOrigin.js";
+export { SESSION_PLUGIN_POINTS } from "./session/SessionPluginPoints.js";
+export type {
+  SessionCommittedTurnStatus,
+  SessionPluginContextBlock,
+  SessionPluginUserMessage,
+  SessionSystemContextHookValue,
+  SessionTurnCommittedHookValue,
+  SessionTurnContextHookValue,
+} from "./types/session/SessionPluginHook.js";
 export {
   infer_agent_model_label,
   normalize_agent_model,

@@ -150,4 +150,6 @@ src/
 会被安全编码为单个目录段。普通聊天默认位于 `sessions/chat/`。
 GroupSession 使用 `groups/<group_id>/sessions/<group_session_id>/`；未加入 City 时两者均使用
 当前主体实例的内存 Storage。只有传入 Workspace 的 AgentSession 或 GroupSession 才会在
-`meta.json` 写入 `workspace_id`。AgentSession 的 `meta.json` 使用 v2，并始终保存完整且不可变的 `origin`。
+`meta.json` 写入 `workspace_id`。GroupSession 使用 `Group.model` 根据首条用户消息异步生成并持久化
+`title`，`preview_text` 仍只保存最后一条消息摘要；`rename(title)` 可提交手动标题。AgentSession 的
+`meta.json` 使用 v2，并始终保存完整且不可变的 `origin`。

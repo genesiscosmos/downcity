@@ -27,11 +27,13 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { SessionActionsMenu } from "@/components/session/SessionActionsMenu";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { ChatMessageTimestamp } from "@/components/chat/ChatMessageTimestamp";
 import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
 import { should_show_assistant_actions } from "@/lib/chat/assistant/assistant_activity";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
 import { ChatTextSelectionQuote } from "@/lib/chat/ChatTextSelectionQuote";
+import { ChatWorkspaceSelector } from "@/lib/chat/ChatWorkspaceSelector";
 import { dispatch_chat_reference } from "@/lib/chat/editor/chatReferenceEvent";
 import { create_chat_composer } from "@/lib/chat/editor/chatComposerCodec";
 import { resolve_user_message_rewrite } from "@/lib/chat/user_message_rewrite";
@@ -52,6 +54,10 @@ interface SessionViewProps {
   workspace: DesktopWorkspaceSummary;
   /** 可切换的全部 Workspace。 */
   workspaces: DesktopWorkspaceSummary[];
+  /** 当前是否为尚未创建的 Session 草稿。 */
+  workspace_draft_mode?: boolean;
+  /** 在目标 Workspace 开启新对话。 */
+  switch_workspace(workspace_id: string): Promise<void> | void;
   /** 可切换的全部 Agent。 */
   agents: DesktopAgentSummary[];
   /** 当前 Session 摘要。 */
@@ -160,7 +166,8 @@ export function SessionView(props: SessionViewProps) {
     });
   };
 
-  return <ChatSurfaceLayout sidebar={props.session_sidebar} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{session.title || "新对话"}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
+  const workspace_tag = props.workspace_draft_mode ? <ChatWorkspaceSelector workspace_id={props.workspace_id} workspaces={props.workspaces} disabled={busy} switch_workspace={props.switch_workspace} /> : <StaticWorkspaceTag workspace={props.workspace} />;
+  return <ChatSurfaceLayout sidebar={props.session_sidebar} header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><button type="button" disabled={!props.open_agent_info} onClick={props.open_agent_info} className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-xs font-medium text-foreground transition-colors duration-150 enabled:hover:bg-interaction-hover" title={props.open_agent_info ? "编辑 Agent" : undefined}><AgentAvatar agent={props.agent} class_name="size-5 rounded-md" /><span className="truncate">{session.title || "新对话"}</span></button>{workspace_tag}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
       {is_agent_typing(runtime?.status) ? <span className="mr-1 flex items-center gap-1 text-[10px] text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复</span> : null}
         {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
       </div>}
@@ -179,7 +186,7 @@ export function SessionView(props: SessionViewProps) {
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {props.history?.has_more ? <div className="flex justify-center py-1"><Button disabled={props.history.loading} onClick={() => void load_earlier()}><TbArrowUp />{props.history.loading ? "正在加载…" : "加载更早消息"}</Button></div> : null}
             {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} on_select={(text) => props.update_draft(create_chat_composer(text))} /> : null}
-            {messages.map((message, index) => <MessageRenderer key={message.message_id} message={message} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction} fork_message={props.fork_message} rewrite_message={props.rewrite_message} is_last_message={index === messages.length - 1} can_use_history_actions={!busy} />)}
+            {messages.map((message, index) => message.type === "action" && action_belongs_to_assistant(messages, index) ? null : <MessageRenderer key={message.message_id} message={message} actions={message.type === "assistant" ? collect_adjacent_actions(messages, index) : []} agent={props.agent} open_agent_info={props.open_agent_info} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction} fork_message={props.fork_message} rewrite_message={props.rewrite_message} is_last_message={index === messages.length - 1} can_use_history_actions={!busy} />)}
             {busy && !has_streaming_assistant(messages) ? <ActivityIndicator agent={props.agent} status={runtime?.status} /> : null}
           </div>
         </div>
@@ -218,6 +225,11 @@ export function SessionView(props: SessionViewProps) {
   </ChatSurfaceLayout>;
 }
 
+/** 已创建 Session 的只读 Workspace 标签。 */
+function StaticWorkspaceTag({ workspace }: { /** 当前 Session 绑定的 Workspace。 */ workspace: DesktopWorkspaceSummary }) {
+  return <span className="inline-flex h-5 min-w-0 max-w-40 shrink-0 items-center gap-1 rounded-full bg-foreground/[0.045] px-2 text-[0.625rem] font-normal text-muted-foreground"><TbFolder className="size-3 shrink-0" /><span className="truncate">{workspace.name}</span></span>;
+}
+
 /** 顶部仅在 Agent 实际生成内容时显示输入状态。 */
 function is_agent_typing(status: DesktopChatRuntime["status"] | undefined): boolean {
   return status === "submitted" || status === "streaming";
@@ -225,28 +237,20 @@ function is_agent_typing(status: DesktopChatRuntime["status"] | undefined): bool
 
 /** 空会话提示。 */
 function EmptyPrompts({ surface = "workspace", agent, workspace, workspaces, agents, switch_context, on_select }: { /** 当前 Chat 表面。 */ surface?: "agent" | "workspace"; /** 当前联系人 Agent。 */ agent: DesktopAgentSummary; /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 可切换 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 可切换 Agent。 */ agents: DesktopAgentSummary[]; /** 切换新对话上下文。 */ switch_context(workspace_id: string, agent_id: string): void; /** 将预设提示放入输入框。 */ on_select(prompt: string): void }) {
-  const prompts = surface === "agent" ? agent_empty_prompts : empty_prompts;
   if (surface === "workspace") return <div className="flex min-h-[50vh] items-center justify-center px-4"><NewChatContextSelector workspace={workspace} workspaces={workspaces} agent={agent} agents={agents} switch_context={switch_context} /></div>;
-  return <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 px-4">
-    <p className="text-center text-sm text-muted-foreground">{surface === "agent" ? "和 Agent 开始对话" : "开始新的项目对话"}</p>
-    <div className="flex w-full max-w-80 flex-col gap-1">
-      {prompts.map(({ title, description, icon: Icon, prompt }) => <Button key={title} size="full" className="h-auto min-h-12 items-start gap-2 rounded-md px-2.5 py-2 text-left whitespace-normal text-foreground/75" onClick={() => on_select(prompt)}>
-        <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1"><span className="block text-[0.6875rem] font-medium leading-4">{title}</span><span className="mt-0.5 block text-[0.625rem] leading-3.5 text-muted-foreground">{description}</span></span>
-      </Button>)}
+  return <div className="flex min-h-[56vh] flex-col items-center justify-center px-4">
+    <div className="flex flex-col items-center gap-2.5">
+      <AgentAvatar agent={agent} class_name="size-14 rounded-2xl" icon_class_name="size-7" />
+      <div className="text-center text-sm font-medium text-foreground">{agent.name}</div>
+    </div>
+    <div className="mt-10">
+      <ChatWorkspaceSelector workspace_id={workspace.workspace_id} workspaces={workspaces} disabled={false} variant="field" switch_workspace={(workspace_id) => switch_context(workspace_id, agent.agent_id)} />
     </div>
   </div>;
 }
 
-const agent_empty_prompts = [
-  { title: "梳理想法", description: "帮我把一个想法整理清楚", icon: TbWriting, prompt: "帮我梳理一个想法" },
-  { title: "制定计划", description: "把目标拆成清晰的下一步", icon: TbRoute, prompt: "帮我制定一个执行计划" },
-  { title: "分析问题", description: "从不同角度分析一个问题", icon: TbSearch, prompt: "帮我分析一个问题" },
-  { title: "开始协作", description: "和我一起推进当前工作", icon: TbChecklist, prompt: "和我一起推进当前工作" },
-];
-
 /** 按 canonical 消息类型渲染。 */
-function MessageRenderer({ message, agent, show_reasoning, respond_interaction, fork_message, rewrite_message, is_last_message, can_use_history_actions }: { /** canonical 消息。 */ message: SessionMessage; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 是否是当前消息列表最后一条。 */ is_last_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
+function MessageRenderer({ message, actions, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, is_last_message, can_use_history_actions }: { /** canonical 消息。 */ message: SessionMessage; /** 紧邻当前 Assistant 的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 是否是当前消息列表最后一条。 */ is_last_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
   if (message.type === "error") return <div className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2 !m-0 !p-0">
     <div className="size-8 shrink-0 px-1" aria-hidden="true" />
     <div className="min-w-0 flex-1 px-1 pt-0.5 text-sm text-foreground">
@@ -256,19 +260,9 @@ function MessageRenderer({ message, agent, show_reasoning, respond_interaction, 
       </div>
     </div>
   </div>;
-  if (message.type === "action") return <div className="group is-assistant flex w-full flex-row-reverse items-end justify-end gap-2 !m-0 !p-0">
-    <div className="flex w-full flex-col gap-0 px-1 pt-0.5 pb-0 !overflow-visible !rounded-none text-sm text-foreground">
-      <div className="flex min-h-0 w-full items-center gap-3">
-        <span className="h-px min-w-4 flex-1 bg-border/60" aria-hidden />
-        <div className="min-w-0 max-w-[80%] text-center text-[0.8125rem] leading-[1.54] text-foreground/90">
-          <span>{message.title}</span>{message.description ? <span className="ml-1.5 text-muted-foreground">{message.description}</span> : null}
-        </div>
-        <span className="h-px min-w-4 flex-1 bg-border/60" aria-hidden />
-      </div>
-    </div>
-  </div>;
+  if (message.type === "action") return <AgentActionMessages actions={[message]} agent={agent} open_agent_info={open_agent_info} />;
   if (message.type === "user") return <UserMessage message={message} fork_message={fork_message} rewrite_message={rewrite_message} is_last_message={is_last_message} can_use_history_actions={can_use_history_actions} />;
-  return <AssistantMessage message={message} agent={agent} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} />;
+  return <AssistantMessage message={message} actions={actions} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} />;
 }
 
 /** 用户消息及其引用、分支操作。 */
@@ -350,9 +344,10 @@ function UserMessage({ message, fork_message, rewrite_message, is_last_message, 
           {message.parts.flatMap((part) => part.type === "file" ? [<a key={part.part_id} href={part.url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1.5 text-[0.75rem] text-foreground/80"><TbFile className="size-3.5 shrink-0" /><span className="truncate">{part.filename || "文件"}</span></a>] : [])}
           </>}
         </div>
-        {!editing ? <div className="flex h-5 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        {!editing ? <div className="flex h-5 items-center gap-1"><ChatMessageTimestamp created_at={message.created_at} class_name="mr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /><span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
           {text && rewrite_message ? <MessageActionButton title="编辑" disabled={!can_use_history_actions} on_click={start_editing}><TbPencil /></MessageActionButton> : null}
           <MessageActionButton title="创建分支" disabled={forking || !can_use_history_actions} on_click={() => void fork()}>{forking ? <TbLoader2 className="animate-spin" /> : <TbGitBranch />}</MessageActionButton>
+          </span>
         </div> : null}
       </div>
     </div>
@@ -370,7 +365,7 @@ function UserMessage({ message, fork_message, rewrite_message, is_last_message, 
 }
 
 /** Assistant 消息按 Duobox 规则展示内容、活动流和尾部操作栏。 */
-function AssistantMessage({ message, agent, show_reasoning, respond_interaction, fork_message }: { /** canonical Assistant 消息。 */ message: Extract<SessionMessage, { type: "assistant" }>; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void> }) {
+function AssistantMessage({ message, actions, agent, open_agent_info, show_reasoning, respond_interaction, fork_message }: { /** canonical Assistant 消息。 */ message: Extract<SessionMessage, { type: "assistant" }>; /** 归属于当前回复的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void> }) {
   const [copied, set_copied] = useState(false);
   const [forking, set_forking] = useState(false);
   const text = message.parts.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n");
@@ -387,14 +382,15 @@ function AssistantMessage({ message, agent, show_reasoning, respond_interaction,
     try { await fork_message(message.message_id); } finally { set_forking(false); }
   };
   return <div className="group is-assistant flex w-full items-start gap-2 py-2 !m-0 !p-0">
-    <div className="sticky top-2 z-10 shrink-0 px-1 pt-0.5">
+    <button type="button" disabled={!open_agent_info} onClick={open_agent_info} className="sticky top-2 z-10 shrink-0 rounded-md px-1 pt-0.5 transition-opacity duration-150 enabled:hover:opacity-75" title={open_agent_info ? "编辑 Agent" : undefined} aria-label={open_agent_info ? `编辑 ${agent.name}` : undefined}>
       <AgentAvatar agent={agent} class_name="size-7 rounded-md" />
-    </div>
+    </button>
     <div className="flex min-w-0 flex-1 flex-col gap-0 overflow-visible rounded-none pb-0 pt-0.5 text-sm text-foreground">
-      <div className="mb-1 min-w-0 truncate text-xs font-medium text-foreground/85">{agent.name}</div>
+      <div className="mb-1 flex min-w-0 items-center gap-2"><button type="button" disabled={!open_agent_info} onClick={open_agent_info} className="min-w-0 truncate text-xs font-medium text-foreground/85 transition-colors duration-150 enabled:hover:text-foreground enabled:hover:underline">{agent.name}</button><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></div>
       <div className="min-h-0 w-full">
         <AssistantContent message_id={message.message_id} parts={message.parts} show_reasoning={show_reasoning} respond_interaction={respond_interaction} streaming={message.status === "streaming"} />
       </div>
+      {actions.length > 0 ? <ActionMessageList actions={actions} /> : null}
       {message.status === "streaming" ? <ActivityIndicator status="streaming" compact /> : show_actions ? <div className="assistant-message-menu-bar flex h-6 min-h-6 shrink-0 items-center">
         {text ? <div className="message-action-toolbar pointer-events-none flex h-5 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
           <MessageActionButton title="复制" on_click={() => void copy_message()}>{copied ? <TbCheck /> : <TbCopy />}</MessageActionButton>
@@ -403,6 +399,30 @@ function AssistantMessage({ message, agent, show_reasoning, respond_interaction,
       </div> : null}
     </div>
   </div>;
+}
+
+/** 收集紧邻 Assistant 的动作消息，保持 canonical 消息列表不变。 */
+function collect_adjacent_actions(messages: SessionMessage[], assistant_index: number): Extract<SessionMessage, { type: "action" }>[] {
+  const actions: Extract<SessionMessage, { type: "action" }>[] = [];
+  for (let index = assistant_index + 1; messages[index]?.type === "action"; index += 1) actions.push(messages[index] as Extract<SessionMessage, { type: "action" }>);
+  return actions;
+}
+
+/** 判断动作是否属于它前方连续动作链对应的 Assistant。 */
+function action_belongs_to_assistant(messages: SessionMessage[], action_index: number): boolean {
+  let previous_index = action_index - 1;
+  while (messages[previous_index]?.type === "action") previous_index -= 1;
+  return messages[previous_index]?.type === "assistant";
+}
+
+/** 在 Agent 消息内部展示动作记录。 */
+function ActionMessageList({ actions }: { /** 按发生顺序排列的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[] }) {
+  return <div className="mt-1 flex flex-col gap-0.5 border-l border-border/50 pl-2">{actions.map((action) => <div key={action.message_id} className="flex min-w-0 items-baseline gap-1.5 text-[0.6875rem] leading-4 text-foreground/75"><span className="font-medium">{action.title}</span>{action.description ? <span className="min-w-0 truncate text-muted-foreground">{action.description}</span> : null}<ChatMessageTimestamp created_at={action.created_at} class_name="ml-auto opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></div>)}</div>;
+}
+
+/** 为没有前置回复的动作提供最小 Agent 消息容器。 */
+function AgentActionMessages({ actions, agent, open_agent_info }: { /** 待展示的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void }) {
+  return <div className="group is-assistant flex w-full items-start gap-2 py-2"><button type="button" disabled={!open_agent_info} onClick={open_agent_info} className="shrink-0 rounded-md px-1 transition-opacity duration-150 enabled:hover:opacity-75"><AgentAvatar agent={agent} class_name="size-7 rounded-md" /></button><div className="min-w-0 flex-1 px-1"><div className="mb-1 text-xs font-medium text-foreground/85">{agent.name}</div><ActionMessageList actions={actions} /></div></div>;
 }
 
 const message_action_button_class_name = "group/message-action flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-[1.65]";

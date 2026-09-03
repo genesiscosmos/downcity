@@ -20,6 +20,7 @@ export type GroupStatusPhase = "idle" | "dispatching" | "dispatched" | "executin
 /** GroupSession 的统一实时事件。 */
 export type GroupEvent =
   | { /** 事件类型。 */ readonly type: "message"; /** 新增的共享消息。 */ readonly message: GroupMessage }
+  | { /** 事件类型。 */ readonly type: "title"; /** 当前 GroupSession 最新的 canonical 标题。 */ readonly title: string }
   | { /** 事件类型。 */ readonly type: "interaction"; /** 发起交互的成员 Agent。 */ readonly agent_id: string; /** 成员 Session 的交互请求。 */ readonly request: SessionInteractionRequest }
   | { /** 事件类型。 */ readonly type: "status"; /** 当前群聊轮次。 */ readonly turn_id?: string; /** 当前轮次对应的消息标识。 */ readonly message_id?: string; /** 当前运行阶段。 */ readonly phase: GroupStatusPhase; /** Dispatch 完成后实际接受消息的成员标识。 */ readonly dispatched_member_ids?: readonly string[]; /** 成员运行态快照。 */ readonly members: readonly GroupMemberRuntime[] };
 
@@ -59,6 +60,8 @@ export interface GroupSessionSummary {
   readonly message_count: number;
   /** 当前 GroupSession 绑定的 Workspace 标识。 */
   readonly workspace_id?: string;
+  /** 当前 GroupSession 持久化的用户可见标题。 */
+  readonly title?: string;
   /** 最后一条消息的用户可见预览。 */
   readonly preview_text?: string;
 }
@@ -89,6 +92,8 @@ export interface GroupSessionContract {
   readonly group_id: string;
   /** 当前 GroupSession 绑定的 Workspace ID；未绑定时为空。 */
   readonly workspace_id?: string;
+  /** 修改当前 GroupSession 的 canonical 用户可见标题。 */
+  rename(title: string): Promise<string>;
   /** 立即追加用户消息并开始异步群聊调度。 */
   prompt(input: GroupPromptInput): Promise<GroupPromptResult>;
   /** 读取共享消息事实快照。 */

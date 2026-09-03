@@ -58,6 +58,7 @@ export function group_assistant_content(parts: SessionAssistantMessagePart[]): A
   const groups: AssistantContentGroup[] = [];
   for (const part of parts) {
     // 无展示语义的 part 不能切断连续 Tool 活动。
+    if ((part as { type: string }).type === "step-start") continue;
     if (part.type === "data" && !is_session_turn_file_diff_data_part(part)) continue;
     if (part.type === "text" && !part.text.trim()) continue;
     if (is_activity_part(part)) {
@@ -82,6 +83,7 @@ export function group_assistant_activities(parts: AssistantActivityPart[], show_
 /** Assistant 操作栏只在最后一个具有展示语义的 part 是非空文本时出现。 */
 export function should_show_assistant_actions(parts: SessionAssistantMessagePart[]): boolean {
   const visible = parts.filter((part) => {
+    if ((part as { type: string }).type === "step-start") return false;
     if (part.type === "data") return false;
     if (part.type === "text") return Boolean(part.text.trim());
     return true;

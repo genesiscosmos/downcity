@@ -1,8 +1,8 @@
 /**
  * 首页 Hero 下方的 SDK 世界滚动叙事。
  *
- * 区块把完整滚动距离离散为十七个领域步骤，并把同一个步骤同时传给地图与代码，
- * 让 Agent、City、Federation 的世界生长和公开 API 展示保持严格同步。
+ * 区块把完整滚动距离离散为二十二个领域步骤，并把同一个步骤同时传给地图与代码，
+ * 让 Agent、Workspace、Group、City 与 Federation 的世界生长和公开 API 展示保持严格同步。
  */
 
 import { useScroll, useMotionValueEvent } from "framer-motion";
@@ -13,7 +13,7 @@ import { HomeSdkCodePanel, home_sdk_file_for_step } from "@/components/sections/
 import { HomeSdkWorldMap } from "@/components/sections/HomeSdkWorldMap";
 import type { HomeSdkFileKey } from "@/types/home/HomeSdkWorld";
 
-const story_step_count = 17;
+const story_step_count = 22;
 
 /** 渲染从 Agent 连续生长到 Federation 的 SDK 世界。 */
 export function HomeQuickstartSection() {
@@ -45,6 +45,10 @@ export function HomeQuickstartSection() {
     agent: t("quickstart.map.labels.agent"),
     plugin: t("quickstart.map.labels.plugin"),
     workspace: t("quickstart.map.labels.workspace"),
+    group: t("quickstart.map.labels.group"),
+    group_session: t("quickstart.map.labels.groupSession"),
+    storage: t("quickstart.map.labels.storage"),
+    transport: t("quickstart.map.labels.transport"),
     city: t("quickstart.map.labels.city"),
     neighbor_city: t("quickstart.map.labels.neighborCity"),
     third_city: t("quickstart.map.labels.thirdCity"),
@@ -55,10 +59,12 @@ export function HomeQuickstartSection() {
     account: t("quickstart.map.labels.account"),
     payment: t("quickstart.map.labels.payment"),
     credits: t("quickstart.map.labels.credits"),
-    embassy: t("quickstart.map.labels.embassy"),
-    session: t("quickstart.map.labels.session"),
+    env: t("quickstart.map.labels.env"),
+    usage: t("quickstart.map.labels.usage"),
+    link: t("quickstart.map.labels.link"),
     user: t("quickstart.map.labels.user"),
     user_prompt: t("quickstart.map.labels.userPrompt"),
+    group_prompt: t("quickstart.map.labels.groupPrompt"),
     agent_reply: t("quickstart.map.labels.agentReply"),
   };
   const stage_labels = [
@@ -66,26 +72,28 @@ export function HomeQuickstartSection() {
     map_labels.agent,
     map_labels.workspace,
     `${map_labels.agent} · ${map_labels.workspace}`,
-    `${map_labels.agent} · ${map_labels.workspace}`,
+    map_labels.model,
     map_labels.plugin,
     map_labels.city,
+    map_labels.agent,
+    map_labels.group,
+    map_labels.group_session,
     map_labels.neighbor_city,
     map_labels.third_city,
-    map_labels.embassy,
-    map_labels.federation,
-    map_labels.service,
     map_labels.federation,
     map_labels.model,
     map_labels.account,
-    map_labels.payment,
     map_labels.credits,
-    map_labels.embassy,
-    `${map_labels.embassy} → ${map_labels.service}`,
-    map_labels.session,
+    `${map_labels.env} · ${map_labels.usage}`,
+    map_labels.payment,
+    map_labels.link,
+    `${map_labels.link} · ${map_labels.service}`,
+    `${map_labels.user} · ${map_labels.agent}`,
+    `${map_labels.group_session} · ${map_labels.agent}`,
   ] as const;
 
   return (
-    <section ref={section_ref} id="quickstart" data-active-step={active_step} className="relative h-[760svh] scroll-mt-16 border-t border-line bg-background">
+    <section ref={section_ref} id="quickstart" data-active-step={active_step} className="relative h-[900svh] scroll-mt-16 border-t border-line bg-background">
       <div className="sticky top-0 h-svh overflow-hidden">
         <div className="grid h-full min-h-0 grid-rows-[minmax(18rem,52svh)_minmax(0,1fr)] lg:grid-cols-2 lg:grid-rows-1">
           <div className="flex min-h-0 flex-col overflow-hidden border-b border-line lg:border-b-0 lg:border-r">

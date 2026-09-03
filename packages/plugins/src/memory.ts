@@ -10,8 +10,12 @@ export {
   FileMemoryStorageAdapter,
   get_default_file_memory_root_path,
 } from "./memory/adapters/FileMemoryStorageAdapter.js";
+export { MemoryStorageRouter } from "./memory/adapters/MemoryStorageRouter.js";
 export type {
   MemoryActionPayload,
+  MemoryCaptureMessage,
+  MemoryCaptureTurnInput,
+  MemoryCaptureTurnResult,
   MemoryDigestInput,
   MemoryDigestResult,
   MemoryForgetInput,
@@ -32,7 +36,6 @@ export type {
   MemoryRememberResult,
   MemoryReviseInput,
   MemoryReviseResult,
-  MemoryScope,
   MemorySourceReference,
   MemoryStatusResult,
   MemorySystemContextInput,
@@ -40,6 +43,12 @@ export type {
   MemorySystemContextResult,
   MemoryType,
 } from "./memory/types/Memory.js";
+export type {
+  MemoryAccessContext,
+  MemoryOwner,
+  MemorySubject,
+  MemoryWriteTarget,
+} from "./memory/types/MemoryAccess.js";
 export type {
   BuiltinMemoryDigestHandler,
   BuiltinMemoryDigestHandlerInput,

@@ -1,23 +1,28 @@
 /** 运行时 Group 共享消息视图，保持与 Agent Session Chat 一致的视觉结构。 */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { TbChevronDown, TbChevronRight, TbFileText, TbLoader2, TbUsers } from "react-icons/tb";
 import type { JSONContent } from "@tiptap/core";
+import { TbChevronDown, TbChevronRight, TbDots, TbEdit, TbFileText, TbFolder, TbLoader2, TbTrash, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { GroupAvatar } from "@/components/GroupAvatar";
+import { ChatMessageTimestamp } from "@/components/chat/ChatMessageTimestamp";
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { SettingActionItem, SettingGroup, SettingItem, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
 import { Switch } from "@/components/ui/switch";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
+import { ChatTextSelectionQuote } from "@/lib/chat/ChatTextSelectionQuote";
+import { ChatWorkspaceSelector } from "@/lib/chat/ChatWorkspaceSelector";
+import { dispatch_chat_mention } from "@/lib/chat/editor/chatMentionEvent";
 import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart } from "@downcity/agent";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
-import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
 import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
 import { is_group_draft_session_id } from "@/types/DesktopView";
@@ -28,6 +33,8 @@ export type GroupEditorSection = "model" | "instruction" | "members";
 interface GroupViewProps {
   /** 当前运行时 Group。 */
   group: DesktopGroupSummary;
+  /** 打开当前 Group 配置侧栏。 */
+  open_group_info(): void;
   /** 当前 Desktop 可用 Agent。 */
   agents: DesktopAgentSummary[];
   /** Desktop Chat 设置。 */
@@ -49,6 +56,12 @@ interface GroupViewProps {
   session: DesktopGroupSessionSummary;
   /** 当前 GroupSession 所属 Workspace。 */
   workspace_id: string;
+  /** Desktop 当前可选 Workspace。 */
+  workspaces: DesktopWorkspaceSummary[];
+  /** 当前是否为尚未创建的 Group Session 草稿。 */
+  workspace_draft_mode?: boolean;
+  /** 在目标 Workspace 开启新的 Group 对话。 */
+  switch_workspace(workspace_id: string): Promise<void> | void;
   /** 当前 Group Chat 的完整 Tiptap 草稿。 */
   draft_content: JSONContent;
   /** 更新当前 Group Chat 的完整 Tiptap 草稿。 */
@@ -57,6 +70,8 @@ interface GroupViewProps {
   send_message(session_id: string, input: JSONContent): Promise<string | undefined>;
   /** 停止 Group 当前执行。 */
   stop_session(session_id: string): Promise<void>;
+  /** 删除当前 Group Session；草稿态不提供。 */
+  remove_session?(): Promise<void>;
   /** Session Sidebar 是否折叠。 */
   session_sidebar_collapsed?: boolean;
   /** 切换 Session Sidebar。 */
@@ -68,7 +83,7 @@ interface GroupViewProps {
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, draft_content, update_draft, send_message, stop_session, session_sidebar_collapsed, toggle_session_sidebar, session_sidebar, controller }: GroupViewProps) {
+export function GroupView({ group, open_group_info, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, draft_content, update_draft, send_message, stop_session, remove_session, session_sidebar, controller }: GroupViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const container = scroll_ref.current;
@@ -77,9 +92,12 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
 
   const group_agent = agents.find((agent) => group.members.some((member) => member.agent_id === agent.agent_id)) ?? agents[0] ?? { agent_id: "group", model_id: "", version: "" };
 
-  return <ChatSurfaceLayout sidebar={session_sidebar} header_left={<div className="min-w-0 max-w-[min(100%,28rem)] truncate text-xs font-medium text-foreground">{format_group_session_title(session)}</div>}>
+  const workspace = workspaces.find((item) => item.workspace_id === workspace_id);
+  const workspace_tag = workspace_draft_mode ? <ChatWorkspaceSelector workspace_id={workspace_id} workspaces={workspaces} disabled={group_phase !== "idle"} switch_workspace={switch_workspace} /> : <span className="inline-flex h-5 min-w-0 max-w-40 shrink-0 items-center gap-1 rounded-full bg-foreground/[0.045] px-2 text-[0.625rem] font-normal text-muted-foreground"><TbFolder className="size-3 shrink-0" /><span className="truncate">{workspace?.name || workspace_id}</span></span>;
+  return <ChatSurfaceLayout sidebar={session_sidebar} header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><button type="button" onClick={open_group_info} className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-interaction-hover" title="编辑 Group"><GroupAvatar group={group} agents={agents} class_name="size-5" member_class_name="size-4" /><span className="truncate">{format_group_session_title(session)}</span></button>{workspace_tag}</div>} header_right={<DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_group_info}><TbEdit /><span>Group 配置</span></DropdownMenuItem>{remove_session ? <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm("确定删除当前 Group 对话吗？")) void remove_session(); }}><TbTrash /><span>删除对话</span></DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
+          <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {messages.length === 0 ? <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4"><TbUsers className="size-8 text-muted-foreground/50" /><p className="text-center text-sm text-muted-foreground">开始与 {group.name} 协作</p><p className="text-center text-xs text-muted-foreground/60">{group.members.length} 个 Agent 已加入</p></div> : null}
             {messages.map((message) => <GroupMessageRow key={message.message_id} message={message} agents={agents} read={read_message_ids.includes(message.message_id)} />)}
@@ -107,7 +125,7 @@ export function GroupConfigView({ group, agents, open_config, sidebar, sidebar_c
 /** 生成 GroupSession 的紧凑显示标题。 */
 function format_group_session_title(session: DesktopGroupSessionSummary): string {
   if (is_group_draft_session_id(session.session_id)) return "新对话";
-  return session.preview_text?.trim().slice(0, 36) || `Session ${session.session_id.slice(0, 8)}`;
+  return session.title?.trim() || "新对话";
 }
 
 /** 当前 Group 配置项的单一编辑器。 */
@@ -145,17 +163,12 @@ function GroupModelEditor({ group, models, models_loading, set_group }: { /** �
   return <SettingGroup>{text_models.map((model) => <SettingActionItem key={model.model_id} icon={<LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />} label={model.name} active={model.model_id === group.model_id} on_select={() => set_group({ ...group, model_id: model.model_id })} />)}</SettingGroup>;
 }
 
-function GroupAvatar({ group, agents }: { /** Group 摘要。 */ group: DesktopGroupSummary; /** Agent 列表。 */ agents: DesktopAgentSummary[] }) {
-  const member = agents.find((agent) => agent.agent_id === group.members[0]?.agent_id);
-  return member ? <AgentAvatar agent={member} class_name="size-8 rounded-lg" /> : <TbUsers className="size-8 rounded-lg bg-foreground/[0.06] p-1.5 text-muted-foreground" />;
-}
-
 /** 按 Agent Chat 的左右消息结构渲染 Group 共享消息。 */
 function GroupMessageRow({ message, agents, read }: { /** Group 共享消息。 */ message: DesktopGroupMessage; /** 可用 Agent 列表。 */ agents: DesktopAgentSummary[]; /** 用户消息是否已完成 Dispatch。 */ read: boolean }) {
-  if (message.author_type === "user") return <div className="group is-user flex w-full items-end justify-end gap-2 py-2"><div className="w-full flex justify-end"><div className="user-message-stack flex w-fit max-w-[min(80%,42rem)] min-w-0 flex-col items-end gap-0.5"><div className="ml-auto flex max-w-full flex-col gap-2 overflow-hidden rounded-2xl rounded-tr-none bg-muted-foreground/10 px-3 py-2 text-sm text-foreground"><div className="whitespace-pre-wrap break-words text-[0.8125rem] leading-[1.54]">{message.text}</div></div>{read ? <div className="px-1 text-[0.6875rem] text-muted-foreground">已读</div> : null}</div></div></div>;
-  if (message.author_type === "system") return <div className="flex w-full items-center gap-3 py-2"><span className="h-px min-w-4 flex-1 bg-border/60" /><span className="max-w-[80%] text-center text-[0.75rem] text-muted-foreground">{message.text}</span><span className="h-px min-w-4 flex-1 bg-border/60" /></div>;
+  if (message.author_type === "user") return <div className="group is-user flex w-full items-end justify-end gap-2 py-2"><div className="w-full flex justify-end"><div className="user-message-stack flex w-fit max-w-[min(80%,42rem)] min-w-0 flex-col items-end gap-0.5"><div className="ml-auto flex max-w-full flex-col gap-2 overflow-hidden rounded-2xl rounded-tr-none bg-muted-foreground/10 px-3 py-2 text-sm text-foreground"><div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className="whitespace-pre-wrap break-words text-[0.8125rem] leading-[1.54]">{message.text}</div></div><div className="flex items-center gap-1.5 px-1">{read ? <span className="text-[0.6875rem] text-muted-foreground">已读</span> : null}<ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></div></div></div></div>;
+  if (message.author_type === "system") return <div className="group flex w-full items-center gap-3 py-2"><span className="h-px min-w-4 flex-1 bg-border/60" /><span className="flex max-w-[80%] items-center gap-2 text-center text-[0.75rem] text-muted-foreground"><span>{message.text}</span><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></span><span className="h-px min-w-4 flex-1 bg-border/60" /></div>;
   const agent = agents.find((item) => item.agent_id === message.author_id);
-  return <div className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2"><div className="size-8 shrink-0"><AgentAvatar agent={agent ?? { agent_id: message.author_id || "Agent", model_id: "", version: "" }} class_name="size-8 rounded-md" /></div><div className="min-w-0 max-w-[min(80%,42rem)] px-1 pt-0.5 text-sm text-foreground"><div className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">{agent?.name || "Agent"}</div><div className="max-w-full overflow-hidden rounded-2xl rounded-tl-none bg-muted-foreground/10 px-3 py-2"><ChatMarkdown text={message.text} mode="static" class_name="text-[0.8125rem] leading-[1.54]" /></div></div></div>;
+  return <div className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2"><button type="button" disabled={!agent} onClick={() => { if (agent) dispatch_chat_mention(agent); }} className="size-8 shrink-0 rounded-md transition-opacity duration-150 enabled:hover:opacity-75" title={agent ? `@${agent.name}` : undefined} aria-label={agent ? `提及 ${agent.name}` : undefined}><AgentAvatar agent={agent ?? { agent_id: message.author_id || "Agent", model_id: "", version: "" }} class_name="size-8 rounded-md" /></button><div className="min-w-0 max-w-[min(80%,42rem)] px-1 pt-0.5 text-sm text-foreground"><div className="mb-1 flex items-center gap-2 text-[0.6875rem] font-medium text-muted-foreground"><span>{agent?.name || "Agent"}</span><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></div><div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="assistant" className="max-w-full overflow-hidden rounded-2xl rounded-tl-none bg-muted-foreground/10 px-3 py-2"><ChatMarkdown text={message.text} mode="static" class_name="text-[0.8125rem] leading-[1.54]" /></div></div></div>;
 }
 
 /** Group 成员正在生成消息时，直接在消息流中显示输入状态。 */

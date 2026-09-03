@@ -1,31 +1,24 @@
 ---
 title: Memory Plugin
-description: How the Memory plugin persists conversation history and context
+description: How the Memory plugin shares durable knowledge and assembles model context
 ---
 
 # Memory Plugin
 
-The Memory plugin persists conversation history and long-term context for your Agent. Without it, the Agent starts fresh on every restart.
+The Memory plugin manages durable facts, preferences, and experience across Sessions. Session remains the source of truth for complete conversations; MemoryPlugin does not own Session Messages.
 
-## What it does
+## Memory scopes
 
-- Stores session messages and conversation threads
-- Provides context retrieval for long-running conversations
-- Supports different memory backends (local file, database)
-- Enables cross-session continuity
+- **User Memory** — shared across Agents for the same authenticated City user.
+- **Workspace Memory** — shared across Agents using the same City Workspace.
+- **Agent Memory** — private experience and long-running state for one Agent.
 
-## Types of memory
+Core Memory enters separate system blocks. Dynamic Recall for the current request is attached only to the current Turn's User Message model-input copy and never changes the original message.
 
-- **Short-term** — the current session context
-- **Long-term** — persisted facts and user preferences across sessions
-- **Working memory** — temporary data for the current task
-
-## Configuration
-
-Whether the Memory plugin is active depends on whether the Agent registers it. You can configure storage backends through agent config or plugin constructor options.
+City only supplies a shared root to MemoryPlugin. Memory formation, persistence, recall, and isolation remain plugin responsibilities.
 
 Continue with:
 
+- [Full Memory Plugin docs](/en/plugins-docs/builtins/memory)
 - [Chat Plugin](/en/docs/plugin/chat)
 - [Task Plugin](/en/docs/plugin/task)
-- [Agent Plugins Docs](/en/plugins-docs)

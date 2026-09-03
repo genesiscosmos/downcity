@@ -17,6 +17,7 @@ import type { AgentPluginExecutionLease } from "@/types/plugin/PluginRuntime.js"
 import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import { normalize_session_origin } from "@/session/SessionOrigin.js";
+import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
 
 /** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */
 export interface CreateSessionPluginExecutionContextInput {
@@ -45,6 +46,10 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private workspace_env_snapshot?: Readonly<Record<string, string>>;
   private agent_systems_snapshot: readonly string[] = Object.freeze([]);
   private plugin_lease?: AgentPluginExecutionLease;
+  /** 整个 Turn 共享的 Plugin 动态上下文，不随 Step lease 切换而失效。 */
+  private plugin_context_blocks_snapshot: readonly SessionPluginContextBlock[] = Object.freeze([]);
+  /** 并发或重复解析时复用的唯一 Promise。 */
+  private plugin_context_blocks_promise?: Promise<readonly SessionPluginContextBlock[]>;
   private injected_user_messages: SessionUserMessage[] = [];
   private deferred_messages: SessionUserMessage[] = [];
   private pending_assistant_parts: SessionAssistantResultPart[] = [];
@@ -114,6 +119,9 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       get plugins() {
         return context.plugin_lease;
       },
+      get plugin_context_blocks() {
+        return context.plugin_context_blocks_snapshot;
+      },
       commit: (input) => {
         context.workspace_env_snapshot = Object.freeze({
           ...input.workspace_env,
@@ -127,6 +135,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
         context.plugin_lease = plugins;
         if (previous && previous !== plugins) await previous.release();
       },
+      resolve_plugin_context_blocks: async (resolver) =>
+        await context.resolve_plugin_context_blocks(resolver),
       release: async () => await context.release_plugins(),
       plugin_execution_context: (call_id?: string) =>
         context.create_plugin_execution_context(call_id),
@@ -170,6 +180,25 @@ class DefaultSessionTurnContext implements SessionTurnContext {
         await context.init.publish_action?.(event);
       },
     });
+  }
+
+  /** 每个 Turn 只执行一次 Plugin 动态上下文解析，并保存不可变快照。 */
+  private async resolve_plugin_context_blocks(
+    resolver: () => Promise<readonly SessionPluginContextBlock[]>,
+  ): Promise<readonly SessionPluginContextBlock[]> {
+    this.plugin_context_blocks_promise ??= (async () => {
+      const blocks = await resolver();
+      this.plugin_context_blocks_snapshot = Object.freeze(
+        (Array.isArray(blocks) ? blocks : []).map((block) => Object.freeze({
+          ...block,
+          ...(block.citations
+            ? { citations: Object.freeze([...block.citations]) as unknown as string[] }
+            : {}),
+        })),
+      );
+      return this.plugin_context_blocks_snapshot;
+    })();
+    return await this.plugin_context_blocks_promise;
   }
 
   /** 为 Plugin 生成不共享根对象引用的只读快照。 */

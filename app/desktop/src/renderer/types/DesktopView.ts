@@ -230,6 +230,10 @@ export interface DesktopViewController {
   open_group(group_id: string, session_id?: string): Promise<void>;
   /** 为 Group 打开尚未持久化的新对话。 */
   create_group_session(group_id: string, workspace_id?: string): Promise<void>;
+  /** 迁移当前 Group 草稿并切换 Workspace 上下文。 */
+  switch_group_draft_context(group_id: string, workspace_id: string): Promise<void>;
+  /** 修改 GroupSession 的 canonical 标题。 */
+  rename_group_session(group_id: string, session_id: string, title: string): Promise<void>;
   /** 删除 Group 的共享 Session。 */
   remove_group_session(group_id: string, session_id: string): Promise<void>;
   /** 向指定 GroupSession 发送 Tiptap Chat Input。 */

@@ -3,12 +3,12 @@
  *
  * 职责说明（中文）
  * - 对 Agent 暴露稳定的 Memory actions 与 system 使用约束。
- * - 把 Agent/Session 上下文映射为结构化 Memory scope。
+ * - 把可信 Agent/Session 上下文映射为结构化 Memory 访问上下文。
  * - 将记忆形成、存储、召回、修订和删除委托给唯一 MemoryProvider。
  *
  * 边界说明（中文）
- * - 不读取或拼接任何物理存储路径。
- * - 不依赖 Workspace FileSystem，也不规定 Markdown、SQLite 或远程服务。
+ * - 只接受宿主显式提供的 Agent/City Memory 根路径，不猜测 City 上级目录。
+ * - 不依赖 Workspace FileSystem；具体文件布局仍封装在 Provider/Adapter 内。
  * - Provider 生命周期跟随当前 Plugin 实例，由 Agent 统一启动和释放。
  */
 
@@ -19,9 +19,14 @@ import { BasePlugin, create_action } from "@downcity/agent";
 import type {
   JsonObject,
   JsonValue,
+  PluginHooks,
   PluginActions,
   PluginContext,
+  SessionSystemContextHookValue,
+  SessionTurnCommittedHookValue,
+  SessionTurnContextHookValue,
 } from "@downcity/agent";
+import { SESSION_PLUGIN_POINTS } from "@downcity/agent";
 import { z } from "zod";
 import {
   digest_memory_action,
@@ -32,14 +37,23 @@ import {
   search_memory_action,
   status_memory_action,
 } from "@/memory/Action.js";
-import { build_memory_plugin_system_text } from "@/memory/runtime/SystemProvider.js";
+import {
+  build_memory_core_system_content,
+  build_memory_plugin_system_text,
+  build_memory_recall_context_block,
+} from "@/memory/runtime/SystemProvider.js";
 import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
 import { FileMemoryStorageAdapter, get_default_file_memory_root_path } from "@/memory/adapters/FileMemoryStorageAdapter.js";
+import { MemoryStorageRouter } from "@/memory/adapters/MemoryStorageRouter.js";
+import { select_memory_capture_messages } from "@/memory/runtime/CapturePolicy.js";
+import { MemoryAccessResolver } from "@/memory/runtime/AccessResolver.js";
+import { encode_memory_id_segment } from "@/memory/runtime/MemoryAddress.js";
 import type {
   MemoryPluginOptions,
   MemoryProvider,
   MemoryType,
 } from "@/memory/types/Memory.js";
+import type { MemoryWriteTarget } from "@/memory/types/MemoryAccess.js";
 
 const memory_type_schema = z.enum([
   "fact",
@@ -48,6 +62,12 @@ const memory_type_schema = z.enum([
   "episode",
   "procedure",
   "document",
+]);
+
+const memory_write_target_schema = z.enum([
+  "current_user",
+  "current_workspace",
+  "agent",
 ]);
 
 /** 解析正整数 CLI 参数。 */
@@ -102,6 +122,13 @@ function read_optional_memory_type(body: JsonObject): MemoryType | undefined {
   return result.success ? result.data : undefined;
 }
 
+/** 读取必填 Memory 写入目标。 */
+function read_memory_write_target(body: JsonObject): MemoryWriteTarget {
+  const result = memory_write_target_schema.safeParse(body.target);
+  if (!result.success) throw new Error("Memory remember requires target");
+  return result.data;
+}
+
 /** Agent 长期记忆 Plugin。 */
 export class MemoryPlugin extends BasePlugin {
   /** Plugin 稳定名称。 */
@@ -110,25 +137,112 @@ export class MemoryPlugin extends BasePlugin {
   /** 当前 Plugin 唯一绑定的 Memory Provider。 */
   readonly provider: MemoryProvider;
 
+  /** 从可信 PluginContext 解析当前可读写 Memory 范围。 */
+  private readonly access_resolver: MemoryAccessResolver;
+
   constructor(profile: MemoryPluginOptions = {}) {
     super();
-    const root_path = profile.root_path?.trim();
-    if (root_path && !path.isAbsolute(root_path)) {
-      throw new Error("MemoryPlugin root_path must be absolute");
+    const agent_root_path = profile.agent_root_path?.trim();
+    const city_root_path = profile.city_root_path?.trim();
+    if (agent_root_path && !path.isAbsolute(agent_root_path)) {
+      throw new Error("MemoryPlugin agent_root_path must be absolute");
+    }
+    if (city_root_path && !path.isAbsolute(city_root_path)) {
+      throw new Error("MemoryPlugin city_root_path must be absolute");
     }
     this.provider = new BuiltinMemoryProvider({
-      create_storage: ({ agent_id }) => new FileMemoryStorageAdapter({
-        root_path: root_path || get_default_file_memory_root_path({
-          platform_root_path: process.env.DC_PLATFORM_ROOT || path.join(os.homedir(), ".downcity"),
-          agent_id,
+      city_memory_available: Boolean(city_root_path),
+      create_storage: ({ agent_id }) => new MemoryStorageRouter({
+        agent_segment: encode_memory_id_segment(agent_id),
+        agent_storage: new FileMemoryStorageAdapter({
+          root_path: agent_root_path || get_default_file_memory_root_path({
+            platform_root_path: process.env.DC_PLATFORM_ROOT || path.join(os.homedir(), ".downcity"),
+            agent_id,
+          }),
         }),
+        ...(city_root_path
+          ? { city_storage: new FileMemoryStorageAdapter({ root_path: city_root_path }) }
+          : {}),
       }),
+    });
+    this.access_resolver = new MemoryAccessResolver({
+      city_memory_available: Boolean(city_root_path),
     });
   }
 
-  /** 构建 provider-neutral Memory system 内容。 */
+  /** 构建不包含 Memory 数据的 Plugin 使用说明。 */
   async system(context: PluginContext): Promise<string> {
-    return await build_memory_plugin_system_text(context, this.provider);
+    void context;
+    return build_memory_plugin_system_text(this.provider);
+  }
+
+  /** 使用现有 Plugin HookRegistry 接入 Session 三个通用检查点。 */
+  readonly hooks: PluginHooks = {
+    pipeline: {
+      [SESSION_PLUGIN_POINTS.system_context]: [async ({ context, value, plugin }) => {
+        const input = value as unknown as SessionSystemContextHookValue;
+        const access = await this.access_resolver.resolve(context, input.session_id);
+        const core_blocks = await build_memory_core_system_content(this.provider, access);
+        if (core_blocks.length === 0) return value;
+        return {
+          ...input,
+          blocks: [
+            ...(Array.isArray(input.blocks) ? input.blocks : []),
+            ...core_blocks.map((block) => ({
+              source: "plugin" as const,
+              name: `${plugin}/${block.name}`,
+              content: block.content,
+            })),
+          ],
+        } as unknown as JsonValue;
+      }],
+      [SESSION_PLUGIN_POINTS.turn_context]: [async ({ context, value }) => {
+        const input = value as unknown as SessionTurnContextHookValue;
+        const access = await this.access_resolver.resolve(context, input.session_id);
+        const block = await build_memory_recall_context_block(
+          this.provider,
+          access,
+          (Array.isArray(input.user_messages) ? input.user_messages : [])
+            .map((message) => message.text),
+        );
+        if (!block) return value;
+        return {
+          ...input,
+          blocks: [...(Array.isArray(input.blocks) ? input.blocks : []), block],
+        } as unknown as JsonValue;
+      }],
+    },
+    effect: {
+      [SESSION_PLUGIN_POINTS.turn_committed]: [async ({ context, value }) => {
+        await this.capture_committed_turn(
+          context,
+          value as unknown as SessionTurnCommittedHookValue,
+        );
+      }],
+    },
+  };
+
+  /** 持久化通过预检的 Capture Job；后续 Formation 不在 Session effect 中执行。 */
+  private async capture_committed_turn(
+    context: PluginContext,
+    input: SessionTurnCommittedHookValue,
+  ): Promise<void> {
+    if (!this.provider.capabilities.capture_turn) return;
+    const messages = select_memory_capture_messages(input);
+    if (messages.length === 0) return;
+    const access = await this.access_resolver.resolve(context, input.session_id);
+    const result = await this.provider.capture_turn({
+      access,
+      session_id: input.session_id,
+      turn_id: input.turn_id,
+      messages,
+    });
+    await context.logger.log("debug", "[memory] capture job persisted", {
+      session_id: input.session_id,
+      turn_id: input.turn_id,
+      job_id: result.job_id,
+      mode: result.mode,
+    });
   }
 
   /** Provider 生命周期与当前 Agent Plugin 实例保持一致。 */
@@ -201,12 +315,16 @@ export class MemoryPlugin extends BasePlugin {
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
-        return await search_memory_action(context, this.provider, {
+        return await search_memory_action(
+          this.provider,
+          await this.access_resolver.resolve(context),
+          {
           query: read_string(body, "query"),
           max_results: read_optional_number(body, "max_results"),
           min_score: read_optional_number(body, "min_score"),
           include_evidence: read_optional_boolean(body, "include_evidence"),
-        });
+          },
+        );
       },
     }),
 
@@ -229,7 +347,10 @@ export class MemoryPlugin extends BasePlugin {
           },
         },
       },
-      examples: [{ title: "Read a memory", payload: { memory_id: "wiki/user-preferences" } }],
+      examples: [{
+        title: "Read a memory",
+        payload: { memory_id: "agent/id_YWdlbnQ/wiki/user-preferences" },
+      }],
       command: {
         description: "Read one exact memory.",
         configure(command: Command) {
@@ -248,11 +369,15 @@ export class MemoryPlugin extends BasePlugin {
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
-        return await read_memory_action(context, this.provider, {
+        return await read_memory_action(
+          this.provider,
+          await this.access_resolver.resolve(context),
+          {
           memory_id: read_string(body, "memory_id"),
           from_line: read_optional_number(body, "from_line"),
           line_count: read_optional_number(body, "line_count"),
-        });
+          },
+        );
       },
     }),
 
@@ -261,6 +386,7 @@ export class MemoryPlugin extends BasePlugin {
       input_schema: {
         zod: z.object({
           content: z.string(),
+          target: memory_write_target_schema,
           topic: z.string().optional(),
           memory_type: memory_type_schema.optional(),
           source: z.string().optional(),
@@ -268,9 +394,14 @@ export class MemoryPlugin extends BasePlugin {
         json_schema: {
           type: "object",
           additionalProperties: false,
-          required: ["content"],
+          required: ["content", "target"],
           properties: {
             content: { type: "string", description: "Content to remember." },
+            target: {
+              type: "string",
+              enum: ["current_user", "current_workspace", "agent"],
+              description: "Semantic owner/subject target resolved from trusted runtime identity.",
+            },
             topic: { type: "string", description: "Optional organization hint." },
             memory_type: {
               type: "string",
@@ -284,6 +415,7 @@ export class MemoryPlugin extends BasePlugin {
         title: "Remember a preference",
         payload: {
           content: "User prefers concise answers.",
+          target: "current_user",
           topic: "user-preferences",
           memory_type: "preference",
         },
@@ -293,6 +425,7 @@ export class MemoryPlugin extends BasePlugin {
         configure(command: Command) {
           command
             .requiredOption("--content <text>", "Content to remember.")
+            .requiredOption("--target <target>", "current_user, current_workspace, or agent.")
             .option("--topic <topic>", "Optional organization hint.")
             .option("--memory-type <type>", "Memory type.")
             .option("--source <source>", "Optional evidence label.");
@@ -300,6 +433,7 @@ export class MemoryPlugin extends BasePlugin {
         map_input({ opts }) {
           return {
             content: String(opts.content || ""),
+            target: String(opts.target || ""),
             ...(typeof opts.topic === "string" ? { topic: opts.topic } : {}),
             ...(typeof opts.memoryType === "string" ? { memory_type: opts.memoryType } : {}),
             ...(typeof opts.source === "string" ? { source: opts.source } : {}),
@@ -308,12 +442,17 @@ export class MemoryPlugin extends BasePlugin {
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
-        return await remember_memory_action(context, this.provider, {
+        return await remember_memory_action(
+          this.provider,
+          await this.access_resolver.resolve(context),
+          {
           content: read_string(body, "content"),
+          target: read_memory_write_target(body),
           topic: read_optional_string(body, "topic"),
           memory_type: read_optional_memory_type(body),
           source: read_optional_string(body, "source"),
-        });
+          },
+        );
       },
     }),
 
@@ -351,10 +490,15 @@ export class MemoryPlugin extends BasePlugin {
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
-        return await digest_memory_action(context, this.provider, {
+        return await digest_memory_action(
+          context,
+          this.provider,
+          await this.access_resolver.resolve(context),
+          {
           session_id: read_string(body, "session_id"),
           max_messages: read_optional_number(body, "max_messages"),
-        });
+          },
+        );
       },
     }),
 
@@ -380,7 +524,7 @@ export class MemoryPlugin extends BasePlugin {
       examples: [{
         title: "Revise a preference",
         payload: {
-          memory_id: "wiki/user-preferences",
+          memory_id: "agent/id_YWdlbnQ/wiki/user-preferences",
           instruction: "Replace the old preference with the latest one.",
         },
       }],
@@ -402,11 +546,15 @@ export class MemoryPlugin extends BasePlugin {
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
-        return await revise_memory_action(context, this.provider, {
+        return await revise_memory_action(
+          this.provider,
+          await this.access_resolver.resolve(context),
+          {
           memory_id: read_string(body, "memory_id"),
           instruction: read_string(body, "instruction"),
           evidence: read_optional_string(body, "evidence"),
-        });
+          },
+        );
       },
     }),
 
@@ -421,7 +569,10 @@ export class MemoryPlugin extends BasePlugin {
           properties: { memory_id: { type: "string" } },
         },
       },
-      examples: [{ title: "Forget a memory", payload: { memory_id: "wiki/obsolete" } }],
+      examples: [{
+        title: "Forget a memory",
+        payload: { memory_id: "agent/id_YWdlbnQ/wiki/obsolete" },
+      }],
       command: {
         description: "Delete or invalidate one memory.",
         configure(command: Command) {
@@ -433,9 +584,13 @@ export class MemoryPlugin extends BasePlugin {
       },
       execute: async ({ context, input }) => {
         const body = read_body_object(input);
-        return await forget_memory_action(context, this.provider, {
+        return await forget_memory_action(
+          this.provider,
+          await this.access_resolver.resolve(context),
+          {
           memory_id: read_string(body, "memory_id"),
-        });
+          },
+        );
       },
     }),
   };
