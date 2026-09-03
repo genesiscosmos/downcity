@@ -25,6 +25,7 @@ import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/views/Ag
 import { MainViewHeaderProvider } from "@/layouts/MainViewLayout";
 import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
 import { resolve_desktop_link } from "@/lib/link/desktop_link";
+import { TurnFileDiffReviewHost } from "@/lib/chat/assistant/TurnFileDiffCard";
 
 /** 为 Registry 尚未完成同步的 Session 提供最小 Workspace 展示值。 */
 function create_missing_workspace(workspace_id: string): DesktopWorkspaceSummary {
@@ -297,7 +298,7 @@ export function App() {
           collapsed={sidebar_collapsed}
         />}
       <main className="main-view-shell relative flex h-full min-w-0 flex-1 bg-background">
-        <MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available: false, baybar_open: false }}><div className="flex h-full min-w-0 flex-1 flex-col">{render_main_view()}</div></MainViewHeaderProvider>
+        <TurnFileDiffReviewHost><MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available: false, baybar_open: false }}><div className="flex h-full min-w-0 flex-1 flex-col">{render_main_view()}</div></MainViewHeaderProvider></TurnFileDiffReviewHost>
       </main>
     </div>
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />

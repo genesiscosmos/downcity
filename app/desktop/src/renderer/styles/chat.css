@@ -490,20 +490,38 @@ div[data-streamdown="table-wrapper"] > div:first-child {
 }
 
 .activity-tool-diff-line.is-removal {
-  color: color-mix(in srgb, var(--foreground) 42%, transparent);
+  color: rgb(185 28 28);
+  background: rgb(239 68 68 / 0.09);
 }
 
-.activity-tool-diff-line.is-addition {
-  color: color-mix(in srgb, var(--foreground) 82%, transparent);
+.activity-tool-diff-line.is-addition,
+.activity-tool-write-content.is-addition {
+  color: rgb(4 120 87);
+  background: rgb(16 185 129 / 0.09);
 }
 
 .activity-tool-diff-marker {
-  color: color-mix(in srgb, var(--foreground) 30%, transparent);
+  color: currentColor;
+  opacity: 0.72;
   user-select: none;
 }
 
 .activity-tool-diff-line.is-addition .activity-tool-diff-marker {
-  color: var(--primary);
+  color: currentColor;
+}
+
+.activity-tool-write-content.is-addition {
+  border-radius: 4px;
+  padding: 0.16rem 0.28rem;
+}
+
+.dark .activity-tool-diff-line.is-removal {
+  color: rgb(252 165 165);
+}
+
+.dark .activity-tool-diff-line.is-addition,
+.dark .activity-tool-write-content.is-addition {
+  color: rgb(110 231 183);
 }
 
 .activity-tool-input-caret {

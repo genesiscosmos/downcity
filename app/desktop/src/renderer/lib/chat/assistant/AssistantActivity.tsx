@@ -132,7 +132,7 @@ function FileChangePreview({ part, visual_kind }: { /** Tool part。 */ part: Ex
   const content = typeof input?.content === "string" ? input.content : part.input_text || "";
   const edits = Array.isArray(input?.edits) ? input.edits : [];
   return <div className="activity-tool-terminal has-change-preview"><div className={cn("activity-tool-change-preview", part.state === "input-streaming" && "is-streaming")}>
-    {visual_kind === "write" ? <pre className="activity-tool-write-content">{content}{part.state === "input-streaming" ? <span className="activity-tool-input-caret" aria-hidden /> : null}</pre> : <div className="activity-tool-edit-content">{edits.length ? edits.map((edit, index) => {
+    {visual_kind === "write" ? <pre className="activity-tool-write-content is-addition">{content}{part.state === "input-streaming" ? <span className="activity-tool-input-caret" aria-hidden /> : null}</pre> : <div className="activity-tool-edit-content">{edits.length ? edits.map((edit, index) => {
       const record = edit && typeof edit === "object" ? edit as Record<string, unknown> : {};
       const old_text = typeof record.old_text === "string" ? record.old_text : "";
       const new_text = typeof record.new_text === "string" ? record.new_text : "";
