@@ -2,15 +2,13 @@
 
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage } from "@downcity/agent";
 import type { PluginJsonObject } from "@downcity/plugin";
+import type { JSONContent } from "@tiptap/core";
 import type {
   DesktopAgentSummary,
   DesktopAgentDefinition,
   DesktopAccountResources,
   DesktopAccountSummary,
-  DesktopChatFileInput,
-  DesktopChatInput,
   DesktopChatRewriteInput,
-  DesktopChatReferenceInput,
   DesktopChatRuntime,
   DesktopCreateGroupInput,
   DesktopUpdateGroupInput,
@@ -86,7 +84,7 @@ export interface QueuedChatMessage {
   /** 队列项稳定标识。 */
   message_id: string;
   /** 待发送的完整用户输入。 */
-  input: DesktopChatInput;
+  input: JSONContent;
   /** 队列项创建时间戳。 */
   created_at: number;
   /** 当前队列项是否正在提交。 */
@@ -158,12 +156,8 @@ export interface DesktopViewController {
   messages_by_session: Record<string, SessionMessage[]>;
   /** 按 Session 组合键缓存的实时运行态。 */
   chat_runtime_by_session: Record<string, DesktopChatRuntime>;
-  /** 按 Session 组合键隔离的输入草稿。 */
-  drafts_by_session: Record<string, string>;
-  /** 按 Session 组合键隔离的附件草稿。 */
-  draft_files_by_session: Record<string, DesktopChatFileInput[]>;
-  /** 按 Session 组合键隔离的消息引用草稿。 */
-  draft_references_by_session: Record<string, DesktopChatReferenceInput[]>;
+  /** 按 Session 组合键隔离的完整 Tiptap 输入草稿。 */
+  draft_content_by_session: Record<string, JSONContent>;
   /** 按 Session 组合键隔离的待发送队列。 */
   queued_messages_by_session: Record<string, QueuedChatMessage[]>;
   /** 按 Session 组合键保存队列总暂停状态。 */
@@ -238,10 +232,10 @@ export interface DesktopViewController {
   create_group_session(group_id: string, workspace_id?: string): Promise<void>;
   /** 删除 Group 的共享 Session。 */
   remove_group_session(group_id: string, session_id: string): Promise<void>;
-  /** 向指定 GroupSession 发送文本。 */
-  send_group_message(group_id: string, workspace_id: string, session_id: string, text: string): Promise<string | undefined>;
-  /** 更新指定 Group Chat 的本地文本草稿。 */
-  update_group_draft(workspace_id: string, group_id: string, session_id: string, text: string): void;
+  /** 向指定 GroupSession 发送 Tiptap Chat Input。 */
+  send_group_message(group_id: string, workspace_id: string, session_id: string, input: JSONContent): Promise<string | undefined>;
+  /** 更新指定 Group Chat 的完整 Tiptap 草稿。 */
+  update_group_draft(workspace_id: string, group_id: string, session_id: string, input: JSONContent): void;
   /** 停止 Group 当前执行。 */
   stop_group(group_id: string, session_id: string): Promise<void>;
   /** 响应 Group 成员交互。 */
@@ -300,14 +294,10 @@ export interface DesktopViewController {
   update_workspace_name(workspace_id: string, name: string): Promise<void>;
   /** 写入 Workspace 根目录 README.md。 */
   write_workspace_readme(workspace_id: string, content: string): Promise<void>;
-  /** 修改 Session 输入草稿。 */
-  update_draft(workspace_id: string, agent_id: string, session_id: string, text: string): void;
-  /** 替换当前输入的附件草稿。 */
-  update_draft_files(workspace_id: string, agent_id: string, session_id: string, files: DesktopChatFileInput[]): void;
-  /** 替换当前输入的消息引用草稿。 */
-  update_draft_references(workspace_id: string, agent_id: string, session_id: string, references: DesktopChatReferenceInput[]): void;
+  /** 修改 Session 的完整 Tiptap 输入草稿。 */
+  update_draft(workspace_id: string, agent_id: string, session_id: string, input: JSONContent): void;
   /** 发送消息；send 立即提交，queue 等待当前 Turn 完成后提交。 */
-  send_message(workspace_id: string, agent_id: string, session_id: string, input: DesktopChatInput, mode?: ChatSubmitMode): Promise<void>;
+  send_message(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode?: ChatSubmitMode): Promise<void>;
   /** 请求当前 Session 历史上下文压缩。 */
   compact_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 刷新当前 Federation 模型目录。 */

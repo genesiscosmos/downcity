@@ -26,6 +26,7 @@ import { MainViewHeaderProvider } from "@/layouts/MainViewLayout";
 import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
 import { resolve_desktop_link } from "@/lib/link/desktop_link";
 import { TurnFileDiffReviewHost } from "@/lib/chat/assistant/TurnFileDiffCard";
+import { create_chat_composer } from "@/lib/chat/editor/chatComposerCodec";
 
 /** 为 Registry 尚未完成同步的 Session 提供最小 Workspace 展示值。 */
 function create_missing_workspace(workspace_id: string): DesktopWorkspaceSummary {
@@ -163,13 +164,9 @@ export function App() {
         interactions={controller.group_interactions_by_group[group_selection.group_id] ?? []}
         respond_interaction={(input) => group_selection.kind === "group_session" ? controller.respond_group_interaction(group_selection.group_id, group_selection.session_id, input) : Promise.resolve()}
         controller={controller}
-        draft={controller.drafts_by_session[group_chat_key] ?? ""}
-        draft_files={[]}
-        draft_references={[]}
-        update_draft={(text) => controller.update_group_draft(group_selection.workspace_id, group_selection.group_id, session_id, text)}
-        update_draft_files={() => undefined}
-        update_draft_references={() => undefined}
-        send_message={(target_session_id, text) => controller.send_group_message(group_selection.group_id, group_selection.workspace_id, target_session_id, text)}
+        draft_content={controller.draft_content_by_session[group_chat_key] ?? create_chat_composer()}
+        update_draft={(input) => controller.update_group_draft(group_selection.workspace_id, group_selection.group_id, session_id, input)}
+        send_message={(target_session_id, input) => controller.send_group_message(group_selection.group_id, group_selection.workspace_id, target_session_id, input)}
         stop_session={(target_session_id) => group_selection.kind === "group_session" ? controller.stop_group(group_selection.group_id, target_session_id) : Promise.resolve()}
       />;
     }
@@ -198,9 +195,7 @@ export function App() {
         agents={controller.agents}
         session={{ session_id: draft_id, title: "新对话", preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }}
         messages={[]}
-        draft={controller.drafts_by_session[draft_key] ?? ""}
-        draft_files={controller.draft_files_by_session[draft_key] ?? []}
-        draft_references={controller.draft_references_by_session[draft_key] ?? []}
+        draft_content={controller.draft_content_by_session[draft_key] ?? create_chat_composer()}
         queued_messages={[]}
         queue_paused={false}
         settings={controller.settings}
@@ -208,9 +203,7 @@ export function App() {
         models={controller.models}
         configuration={controller.configuration_by_session[draft_key] ?? { model_id: selected_agent.model_id, approval_mode: "ask" }}
         models_loading={controller.models_loading}
-        update_draft={(text) => controller.update_draft(workspace_id, selected_agent.agent_id, draft_id, text)}
-        update_draft_files={(files) => controller.update_draft_files(workspace_id, selected_agent.agent_id, draft_id, files)}
-        update_draft_references={(references) => controller.update_draft_references(workspace_id, selected_agent.agent_id, draft_id, references)}
+        update_draft={(input) => controller.update_draft(workspace_id, selected_agent.agent_id, draft_id, input)}
         send_message={(input, mode) => controller.send_message(workspace_id, selected_agent.agent_id, draft_id, input, mode)}
         refresh_models={controller.refresh_models}
         set_model={(model_id) => controller.set_session_model(workspace_id, selected_agent.agent_id, draft_id, model_id)}
@@ -248,9 +241,7 @@ export function App() {
         session={session}
       messages={controller.messages_by_session[session_key] ?? []}
       runtime={controller.chat_runtime_by_session[session_key]}
-      draft={controller.drafts_by_session[session_key] ?? ""}
-      draft_files={controller.draft_files_by_session[session_key] ?? []}
-      draft_references={controller.draft_references_by_session[session_key] ?? []}
+      draft_content={controller.draft_content_by_session[session_key] ?? create_chat_composer()}
       queued_messages={controller.queued_messages_by_session[session_key] ?? []}
       queue_paused={controller.queue_paused_by_session[session_key] ?? false}
       history={controller.history_by_session[session_key]}
@@ -262,9 +253,7 @@ export function App() {
       models={controller.models}
       configuration={controller.configuration_by_session[session_key]}
       models_loading={controller.models_loading}
-      update_draft={(text) => controller.update_draft(workspace_id, selected_agent.agent_id, session.session_id, text)}
-      update_draft_files={(files) => controller.update_draft_files(workspace_id, selected_agent.agent_id, session.session_id, files)}
-      update_draft_references={(references) => controller.update_draft_references(workspace_id, selected_agent.agent_id, session.session_id, references)}
+      update_draft={(input) => controller.update_draft(workspace_id, selected_agent.agent_id, session.session_id, input)}
       send_message={(input, mode) => controller.send_message(workspace_id, selected_agent.agent_id, session.session_id, input, mode)}
       compact_session={() => controller.compact_session(workspace_id, selected_agent.agent_id, session.session_id)}
       refresh_models={controller.refresh_models}

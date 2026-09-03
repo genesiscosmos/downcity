@@ -13,7 +13,6 @@ import {
   type AgentSession,
   type GroupSessionContract,
   type GroupSessionSummary,
-  type AgentSessionPromptInput,
   type AgentSessionSummary,
   type RespondSessionInteractionInput,
   type SessionApprovalMode,
@@ -42,7 +41,6 @@ import type {
   DesktopCreateAgentInput,
   DesktopGenerateAgentDraftInput,
   DesktopAgentDraft,
-  DesktopChatInput,
   DesktopChatRewriteInput,
   DesktopChatRewriteResult,
   DesktopChatMutationEvent,
@@ -71,6 +69,8 @@ import type {
   DesktopGroupSummary,
   DesktopGroupSessionSummary,
 } from "../../common/types/DesktopApi.js";
+import type { JSONContent } from "@tiptap/core";
+import { chat_input_to_session_query } from "./ChatInput.js";
 import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import {
   create_desktop_agent_model,
@@ -861,8 +861,8 @@ export class AgentController {
   }
 
   /** 向 Session 提交输入；后续执行结果通过实时事件广播。 */
-  async send_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult> {
-    const query = normalize_chat_input(input);
+  async send_message(agent_id: string, workspace_id: string, session_id: string, input: JSONContent): Promise<DesktopChatSendResult> {
+    const query = chat_input_to_session_query(input);
     const session = await this.get_execution_session(agent_id, workspace_id, session_id);
     this.update_runtime({ agent_id, workspace_id, session_id, status: "submitted", updated_at: Date.now() });
     try {
@@ -1462,38 +1462,4 @@ function get_session_key(agent_id: string, workspace_id: string, session_id: str
 /** 把未知失败统一转换为可序列化文本。 */
 function to_error_message(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
-}
-
-/** 校验 IPC Chat 输入并转换成 SDK 标准 User Message parts。 */
-function normalize_chat_input(input: DesktopChatInput): AgentSessionPromptInput["query"] {
-  const text = String(input?.text || "").trim();
-  const files = Array.isArray(input?.files) ? input.files : [];
-  const references = Array.isArray(input?.references) ? input.references.filter((reference) => String(reference?.message_id || "").trim() && String(reference?.text || "").trim()) : [];
-  if (!text && files.length === 0 && references.length === 0) throw new Error("message is required");
-  if (files.length === 0 && references.length === 0) return text;
-  const parts: Array<Record<string, unknown>> = [];
-  if (references.length > 0) {
-    parts.push({
-      type: "text",
-      text: references.map((reference) => `> 引用 ${reference.role === "user" ? "用户" : "Agent"} 消息：\n> ${String(reference.text).trim().replace(/\n/g, "\n> ")}`).join("\n\n"),
-    });
-    for (const reference of references) {
-      parts.push({
-        type: "data-reference",
-        data: { message_id: String(reference.message_id), role: reference.role, text: String(reference.text).trim() },
-      });
-    }
-  }
-  if (text) parts.push({ type: "text", text });
-  for (const file of files) {
-    const data_url = String(file?.data_url || "");
-    if (!data_url.startsWith("data:")) throw new Error("attachment must use a data URL");
-    parts.push({
-      type: "file",
-      media_type: String(file?.media_type || "application/octet-stream"),
-      url: data_url,
-      filename: String(file?.filename || "attachment"),
-    });
-  }
-  return parts as unknown as AgentSessionPromptInput["query"];
 }

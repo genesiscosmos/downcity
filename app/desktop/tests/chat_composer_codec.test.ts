@@ -1,27 +1,33 @@
-/** Chat Composer 文档与 Desktop 输入协议转换测试。 */
+/** Chat Composer Tiptap 文档工具测试。 */
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decode_chat_composer, encode_chat_composer } from "../src/renderer/lib/chat/editor/chatComposerCodec.ts";
+import { count_chat_composer_atoms, create_chat_composer, has_chat_composer_atoms, is_chat_composer_empty, read_chat_composer_text } from "../src/renderer/lib/chat/editor/chatComposerCodec.ts";
 
-test("保留正文、附件和结构化引用", () => {
-  const document = encode_chat_composer(
-    "第一行\n第二行",
-    [{ filename: "screen.png", media_type: "image/png", data_url: "data:image/png;base64,AA==" }],
-    [{ message_id: "message-1", role: "assistant", text: "被引用的回答" }],
-  );
-
-  assert.deepEqual(decode_chat_composer(document), {
-    text: "第一行\n第二行",
-    files: [{ filename: "screen.png", media_type: "image/png", data_url: "data:image/png;base64,AA==" }],
-    references: [{ message_id: "message-1", role: "assistant", text: "被引用的回答" }],
-  });
+test("创建并读取多行文本输入", () => {
+  const document = create_chat_composer("第一行\n第二行");
+  assert.equal(read_chat_composer_text(document), "第一行\n第二行");
+  assert.equal(is_chat_composer_empty(document), false);
 });
 
-test("空编辑文档转换为空输入", () => {
-  assert.deepEqual(decode_chat_composer({ type: "doc", content: [{ type: "paragraph" }] }), {
-    text: "",
-    files: [],
-    references: [],
-  });
+test("引用和附件保留在 Tiptap 文档中", () => {
+  const document = {
+    type: "doc",
+    content: [{
+      type: "paragraph",
+      content: [
+        { type: "chatReference", attrs: { message_id: "message-1", role: "assistant", text: "被引用的回答", preview_text: "被引用的回答" } },
+        { type: "chatAttachment", attrs: { attachment_id: "attachment-1", filename: "screen.png", media_type: "image/png", data_url: "data:image/png;base64,AA==" } },
+        { type: "text", text: "继续分析" },
+      ],
+    }],
+  };
+  assert.equal(read_chat_composer_text(document), "继续分析");
+  assert.equal(read_chat_composer_text(document, true), "> 被引用的回答\n\n继续分析");
+  assert.equal(has_chat_composer_atoms(document), true);
+  assert.equal(count_chat_composer_atoms(document), 2);
+});
+
+test("识别空编辑文档", () => {
+  assert.equal(is_chat_composer_empty(create_chat_composer()), true);
 });

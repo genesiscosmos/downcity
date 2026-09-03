@@ -1,6 +1,7 @@
 /** Downcity Desktop 的结构化 Chat Composer、附件、Slash 与发送控制器。 */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { JSONContent } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -10,14 +11,13 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { is_chat_busy, type ChatSubmitMode, type QueuedChatMessage } from "@/types/DesktopView";
 import type { ChatSlashCommand } from "@/types/ChatComposer";
-import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRuntime, DesktopGroupSessionSummary, DesktopGroupStatusPhase, DesktopModelSummary, DesktopSessionConfiguration, DesktopSettings } from "@common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopChatRuntime, DesktopGroupSessionSummary, DesktopGroupStatusPhase, DesktopModelSummary, DesktopSessionConfiguration, DesktopSettings } from "@common/types/DesktopApi";
 import { ChatApprovalModeSelector } from "./ChatApprovalModeSelector";
 import { ChatModelSelector } from "./ChatModelSelector";
 import { ChatAttachmentNode, ChatReferenceNode } from "./editor/ChatComposerNodes";
 import { ChatSlashMenu } from "./editor/ChatSlashMenu";
-import { decode_chat_composer, encode_chat_composer } from "./editor/chatComposerCodec";
+import { count_chat_composer_atoms, has_chat_composer_atoms, is_chat_composer_empty, read_chat_composer_text, resolve_chat_input_command } from "./editor/chatComposerCodec";
 import { add_chat_reference_listener } from "./editor/chatReferenceEvent";
-import { resolve_chat_input_command } from "./chat_input_command";
 
 /** ChatInput 属性。 */
 interface ChatInputEditorProps {
@@ -39,9 +39,7 @@ interface ChatInputEditorProps {
   workspace_id: string;
   /** 当前 Session 的稳定组合键。 */ editor_key: string;
   /** 当前 Agent。 */ agent: DesktopAgentSummary;
-  /** 当前输入文本。 */ draft: string;
-  /** 当前附件草稿。 */ draft_files: DesktopChatFileInput[];
-  /** 当前引用草稿。 */ draft_references: DesktopChatReferenceInput[];
+  /** 当前完整的 Tiptap 输入草稿。 */ draft_content: JSONContent;
   /** 当前 Session 运行态。 */ runtime?: DesktopChatRuntime;
   /** Group 当前运行阶段；仅群聊输入使用。 */ group_phase?: DesktopGroupStatusPhase;
   /** 当前输入队列。 */ queued_messages: QueuedChatMessage[];
@@ -50,10 +48,8 @@ interface ChatInputEditorProps {
   /** 可选 Federation 模型。 */ models: DesktopModelSummary[];
   /** 模型目录是否正在读取。 */ models_loading: boolean;
   /** Desktop 用户设置。 */ settings: DesktopSettings;
-  /** 更新文本草稿。 */ update_draft(text: string): void;
-  /** 更新附件草稿。 */ update_draft_files(files: DesktopChatFileInput[]): void;
-  /** 更新引用草稿。 */ update_draft_references(references: DesktopChatReferenceInput[]): void;
-  /** 按指定意图立即提交或加入下一轮队列。 */ send_message(input: DesktopChatInput, mode?: ChatSubmitMode): Promise<void>;
+  /** 更新完整的 Tiptap 输入草稿。 */ update_draft(input: JSONContent): void;
+  /** 按指定意图立即提交或加入下一轮队列。 */ send_message(input: JSONContent, mode?: ChatSubmitMode): Promise<void>;
   /** 执行当前 Session 的显式压缩命令。 */ compact_session?(): Promise<void>;
   /** 停止当前 Turn。 */ stop_session(): Promise<void>;
   /** 刷新模型目录。 */ refresh_models(): Promise<void>;
@@ -110,10 +106,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
 
   const sync_controlled_draft = useCallback((current_editor: Editor) => {
     if (syncing_ref.current) return;
-    const input = decode_chat_composer(current_editor.getJSON());
-    props_ref.current.update_draft(input.text);
-    props_ref.current.update_draft_files(input.files);
-    props_ref.current.update_draft_references(input.references);
+    props_ref.current.update_draft(current_editor.getJSON());
   }, []);
 
   const update_slash_query = useCallback((current_editor: Editor) => {
@@ -192,8 +185,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
       current_editor.commands.clearContent();
       current_editor.commands.focus();
     } catch {
-      const current_input = decode_chat_composer(current_editor.getJSON());
-      if (restore_command_on_failure && !current_input.text.trim() && current_input.files.length === 0 && current_input.references.length === 0) {
+      if (restore_command_on_failure && is_chat_composer_empty(current_editor.getJSON())) {
         current_editor.chain().focus().insertContent("/compact").run();
       }
     } finally {
@@ -205,13 +197,10 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   const submit_message = useCallback(async (mode: ChatSubmitMode = "send") => {
     const current_editor = editor_ref.current;
     if (!current_editor || submitting_ref.current) return;
-    const input = decode_chat_composer(current_editor.getJSON());
-    const submitted_input: DesktopChatInput = props_ref.current.group_mode || props_ref.current.client_mode
-      ? { text: input.text, files: [], references: [] }
-      : input;
-    if (!submitted_input.text.trim() && submitted_input.files.length === 0 && submitted_input.references.length === 0) return;
+    const input = current_editor.getJSON();
+    if (is_chat_composer_empty(input)) return;
     // 群聊没有 Agent 专属本地命令；斜杠文本应作为普通群聊消息交给调度器。
-    const command = props_ref.current.group_mode || props_ref.current.client_mode ? undefined : resolve_chat_input_command(submitted_input);
+    const command = props_ref.current.group_mode || props_ref.current.client_mode ? undefined : resolve_chat_input_command(input);
     if (command === "compact") {
       if (!props_ref.current.compact_session) return;
       await run_compact_command(false);
@@ -220,7 +209,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     set_submitting(true);
     submitting_ref.current = true;
     try {
-      await props_ref.current.send_message(submitted_input, mode);
+      await props_ref.current.send_message(input, mode);
       current_editor.commands.focus();
     } finally {
       submitting_ref.current = false;
@@ -231,7 +220,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [StarterKit.configure({ heading: false, codeBlock: false, blockquote: false }), Placeholder.configure({ placeholder: props.group_mode ? "输入消息，发送给 Group…" : props.client_mode ? "和 Agent 继续对话…" : props.surface === "agent" ? "和 Agent 继续对话…" : "输入消息，使用 / 打开命令…" }), ChatAttachmentNode, ChatReferenceNode],
-    content: encode_chat_composer(props.draft, props.draft_files, props.draft_references),
+    content: props.draft_content,
       editorProps: {
       attributes: { class: "chat-input-editor", "data-chat-input": "true", spellcheck: String(props.settings.spellcheck_enabled) },
       handlePaste: (_view, event) => {
@@ -284,21 +273,20 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
     onDestroy: () => { editor_ref.current = null; },
   }, []);
 
-  const current_input = editor ? decode_chat_composer(editor.getJSON()) : { text: props.draft, files: props.draft_files, references: props.draft_references };
-  const input_empty = !current_input.text.trim() && current_input.files.length === 0 && current_input.references.length === 0;
+  const current_input = editor?.getJSON() ?? props.draft_content;
+  const input_empty = is_chat_composer_empty(current_input);
   const show_stop = busy && input_empty && !submitting;
 
   useEffect(() => {
     if (!editor) return;
-    const current = decode_chat_composer(editor.getJSON());
-    if (current.text === props.draft && JSON.stringify(current.files) === JSON.stringify(props.draft_files) && JSON.stringify(current.references) === JSON.stringify(props.draft_references)) return;
+    if (JSON.stringify(editor.getJSON()) === JSON.stringify(props.draft_content)) return;
     syncing_ref.current = true;
-    editor.commands.setContent(encode_chat_composer(props.draft, props.draft_files, props.draft_references));
+    editor.commands.setContent(props.draft_content);
     syncing_ref.current = false;
     set_slash_query(undefined);
     set_file_query(undefined);
     set_member_query(undefined);
-  }, [editor, props.draft, props.draft_files, props.draft_references, props.editor_key]);
+  }, [editor, props.draft_content, props.editor_key]);
 
   useEffect(() => add_chat_reference_listener((reference) => {
     if (props_ref.current.group_mode) return;
@@ -397,12 +385,15 @@ function QueuedMessageList(props: Pick<ChatInputEditorProps, "queued_messages" |
     </div>
     <div className="flex flex-col divide-y divide-border/30">{props.queued_messages.map((message, index) => {
       const is_editing = editing?.message_id === message.message_id;
+      const text = read_chat_composer_text(message.input);
+      const atom_count = count_chat_composer_atoms(message.input);
+      const editable = !has_chat_composer_atoms(message.input);
       return <div key={message.message_id} className="flex min-h-7 items-center gap-0.5 px-2.5 py-1 text-[0.6875rem] text-muted-foreground">
         {message.sending ? <TbLoader2 className="size-3 shrink-0 animate-spin text-muted-foreground/65" /> : <TbCornerDownRight className="size-3 shrink-0 text-muted-foreground/45" />}
         {is_editing ? <><textarea autoFocus rows={1} value={editing.text} className="min-h-6 min-w-0 flex-1 resize-none rounded-sm border border-border/40 bg-background/50 px-1 py-0.5 text-[0.6875rem] text-foreground" onChange={(event) => set_editing({ message_id: message.message_id, text: event.target.value })} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); save_editing(); } else if (event.key === "Escape") { event.preventDefault(); set_editing(undefined); } }} /><Button className={action_class} title="保存" onClick={save_editing}><TbCheck /></Button><Button className={action_class} title="取消" onClick={() => set_editing(undefined)}><TbX /></Button></> : <>
-          <span className="min-w-0 flex-1 truncate px-1 py-0.5 text-foreground/70">{message.input.text || `${message.input.files.length + (message.input.references?.length ?? 0)} 个内容`}</span>
+          <span className="min-w-0 flex-1 truncate px-1 py-0.5 text-foreground/70">{text || `${atom_count} 个内容`}</span>
           {message.paused && !message.sending ? <span className="shrink-0 px-1 text-[0.625rem] text-muted-foreground/70">已暂停</span> : null}
-          <Button className={action_class} title="编辑" disabled={message.sending} onClick={() => set_editing({ message_id: message.message_id, text: message.input.text })}><TbPencil /></Button>
+          <Button className={action_class} title={editable ? "编辑" : "包含附件或引用的消息不能在队列中编辑"} disabled={message.sending || !editable} onClick={() => set_editing({ message_id: message.message_id, text })}><TbPencil /></Button>
           <Button className={action_class} title={message.paused ? "恢复此项" : "暂停此项"} disabled={message.sending} onClick={() => props.toggle_queued_message_paused(message.message_id)}>{message.paused ? <TbPlayerPlay /> : <TbPlayerPause />}</Button>
           <Button className={action_class} title="上移" disabled={index === 0 || message.sending} onClick={() => props.move_queued_message(message.message_id, "up")}><TbArrowUp /></Button>
           <Button className={action_class} title="下移" disabled={index === props.queued_messages.length - 1 || message.sending} onClick={() => props.move_queued_message(message.message_id, "down")}><TbArrowDown /></Button>

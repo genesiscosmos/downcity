@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage } from "@downcity/agent";
+import type { JSONContent } from "@tiptap/core";
 import {
   TbArrowUp,
   TbAlertTriangle,
@@ -32,11 +33,12 @@ import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
 import { ChatTextSelectionQuote } from "@/lib/chat/ChatTextSelectionQuote";
 import { dispatch_chat_reference } from "@/lib/chat/editor/chatReferenceEvent";
+import { create_chat_composer } from "@/lib/chat/editor/chatComposerCodec";
 import { resolve_user_message_rewrite } from "@/lib/chat/user_message_rewrite";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
 import { cn } from "@/lib/utils";
 import { is_chat_busy, type ChatHistoryState, type ChatSubmitMode, type QueuedChatMessage } from "@/types/DesktopView";
-import type { DesktopAgentSummary, DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopChatRewriteAction, DesktopChatRewriteInput, DesktopChatRuntime, DesktopModelSummary, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopChatRewriteAction, DesktopChatRewriteInput, DesktopChatRuntime, DesktopModelSummary, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Session Chat 主视图属性。 */
 interface SessionViewProps {
@@ -66,12 +68,8 @@ interface SessionViewProps {
   messages: SessionMessage[];
   /** 当前 Session 实时运行态。 */
   runtime?: DesktopChatRuntime;
-  /** 当前 Session 输入草稿。 */
-  draft: string;
-  /** 当前 Session 附件草稿。 */
-  draft_files: DesktopChatFileInput[];
-  /** 当前 Session 消息引用草稿。 */
-  draft_references: DesktopChatReferenceInput[];
+  /** 当前 Session 的完整 Tiptap 输入草稿。 */
+  draft_content: JSONContent;
   /** 当前 Session 待发送队列。 */
   queued_messages: QueuedChatMessage[];
   /** 当前 Session 的队列是否整体暂停。 */
@@ -94,14 +92,10 @@ interface SessionViewProps {
   configuration?: DesktopSessionConfiguration;
   /** 模型目录是否正在读取。 */
   models_loading: boolean;
-  /** 更新当前输入草稿。 */
-  update_draft(text: string): void;
-  /** 更新当前附件草稿。 */
-  update_draft_files(files: DesktopChatFileInput[]): void;
-  /** 更新当前消息引用草稿。 */
-  update_draft_references(references: DesktopChatReferenceInput[]): void;
+  /** 更新当前完整的 Tiptap 输入草稿。 */
+  update_draft(input: JSONContent): void;
   /** 按指定意图立即发送或加入下一轮队列。 */
-  send_message(input: DesktopChatInput, mode?: ChatSubmitMode): Promise<void>;
+  send_message(input: JSONContent, mode?: ChatSubmitMode): Promise<void>;
   /** 请求压缩当前 Session 历史上下文。 */
   compact_session?(): Promise<void>;
   /** 刷新模型目录。 */
@@ -184,7 +178,7 @@ export function SessionView(props: SessionViewProps) {
           <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
           <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {props.history?.has_more ? <div className="flex justify-center py-1"><Button disabled={props.history.loading} onClick={() => void load_earlier()}><TbArrowUp />{props.history.loading ? "正在加载…" : "加载更早消息"}</Button></div> : null}
-            {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} on_select={props.update_draft} /> : null}
+            {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} on_select={(text) => props.update_draft(create_chat_composer(text))} /> : null}
             {messages.map((message, index) => <MessageRenderer key={message.message_id} message={message} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction} fork_message={props.fork_message} rewrite_message={props.rewrite_message} is_last_message={index === messages.length - 1} can_use_history_actions={!busy} />)}
             {busy && !has_streaming_assistant(messages) ? <ActivityIndicator agent={props.agent} status={runtime?.status} /> : null}
           </div>
@@ -196,9 +190,7 @@ export function SessionView(props: SessionViewProps) {
               workspace_id={props.workspace_id}
               editor_key={session.session_id}
               agent={props.agent}
-              draft={props.draft}
-              draft_files={props.draft_files}
-              draft_references={props.draft_references}
+              draft_content={props.draft_content}
               runtime={props.runtime}
               queued_messages={props.queued_messages}
               queue_paused={props.queue_paused}
@@ -207,8 +199,6 @@ export function SessionView(props: SessionViewProps) {
               models_loading={props.models_loading}
               settings={props.settings}
               update_draft={props.update_draft}
-              update_draft_files={props.update_draft_files}
-              update_draft_references={props.update_draft_references}
               send_message={props.send_message}
               compact_session={can_compact ? props.compact_session : undefined}
               stop_session={props.stop_session}
@@ -355,6 +345,7 @@ function UserMessage({ message, fork_message, rewrite_message, is_last_message, 
               <Button variant="primary" disabled={submitting} onClick={confirm_editing}>{submitting ? <TbLoader2 className="animate-spin" /> : null}{submitting ? "正在发送" : "发送"}</Button>
             </div>
           </> : <>
+          {message.parts.flatMap((part) => part.type === "context" && part.tag === "reference" ? [<div key={part.part_id} className="max-w-full border-l-2 border-foreground/15 pl-2 text-[0.75rem] text-muted-foreground"><ChatMarkdown class_name="!h-auto !w-auto break-words" text={part.context} mode="static" /></div>] : [])}
           {text ? <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className="text-[0.8125rem] leading-[1.34]"><ChatMarkdown class_name="user-message-markdown !h-auto !w-auto break-words" text={text} mode="static" /></div> : null}
           {message.parts.flatMap((part) => part.type === "file" ? [<a key={part.part_id} href={part.url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1.5 text-[0.75rem] text-foreground/80"><TbFile className="size-3.5 shrink-0" /><span className="truncate">{part.filename || "文件"}</span></a>] : [])}
           </>}

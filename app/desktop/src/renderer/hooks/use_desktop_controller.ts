@@ -7,14 +7,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RespondSessionInteractionInput, SessionMutation } from "@downcity/agent";
+import type { JSONContent } from "@tiptap/core";
 import type {
   DesktopAgentSummary,
   DesktopAccountResources,
   DesktopAccountSummary,
-  DesktopChatFileInput,
-  DesktopChatInput,
   DesktopChatRewriteInput,
-  DesktopChatReferenceInput,
   DesktopChatRuntime,
   DesktopCreateGroupInput,
   DesktopUpdateGroupInput,
@@ -59,6 +57,7 @@ import {
   type DesktopWorkspaceSession,
 } from "../types/DesktopView";
 import { notification_target_from_navigation } from "../lib/notification/notification_state";
+import { create_chat_composer, is_chat_composer_empty, read_chat_composer_text } from "../lib/chat/editor/chatComposerCodec";
 
 const default_settings: DesktopSettings = {
   show_reasoning: true,
@@ -145,9 +144,7 @@ export function use_desktop_controller(): DesktopViewController {
   const [archived_sessions_by_workspace, set_archived_sessions_by_workspace] = useState<Record<string, DesktopWorkspaceSession[]>>({});
   const [messages_by_session, set_messages_by_session] = useState<DesktopViewController["messages_by_session"]>({});
   const [chat_runtime_by_session, set_chat_runtime_by_session] = useState<Record<string, DesktopChatRuntime>>({});
-  const [drafts_by_session, set_drafts_by_session] = useState<Record<string, string>>({});
-  const [draft_files_by_session, set_draft_files_by_session] = useState<Record<string, DesktopChatFileInput[]>>({});
-  const [draft_references_by_session, set_draft_references_by_session] = useState<Record<string, DesktopChatReferenceInput[]>>({});
+  const [draft_content_by_session, set_draft_content_by_session] = useState<Record<string, JSONContent>>({});
   const [queued_messages_by_session, set_queued_messages_by_session] = useState<Record<string, QueuedChatMessage[]>>({});
   const [queue_paused_by_session, set_queue_paused_by_session] = useState<Record<string, boolean>>({});
   const [history_by_session, set_history_by_session] = useState<Record<string, ChatHistoryState>>({});
@@ -697,13 +694,13 @@ export function use_desktop_controller(): DesktopViewController {
     }
   }, [open_group, open_group_draft, selection, settings.group_main_sessions]);
 
-  const send_group_message = useCallback(async (group_id: string, workspace_id: string, session_id: string, text: string) => {
-    const normalized_text = String(text || "").trim();
+  const send_group_message = useCallback(async (group_id: string, workspace_id: string, session_id: string, input: JSONContent) => {
+    const normalized_text = read_chat_composer_text(input, true);
     if (!normalized_text) return undefined;
     set_error("");
     const source_key = get_group_chat_key(workspace_id, group_id, session_id);
     let target_key = source_key;
-    set_drafts_by_session((current) => ({ ...current, [source_key]: "" }));
+    set_draft_content_by_session((current) => remove_session_value(current, source_key));
     // 调度器尚未选出成员前，不展示上一轮遗留的输入状态。
     set_group_member_statuses_by_group((current) => ({ ...current, [group_id]: [] }));
     try {
@@ -730,17 +727,17 @@ export function use_desktop_controller(): DesktopViewController {
       const result = await window.downcity.group.send(group_id, target_session_id, { text: normalized_text });
       return result.turn_id;
     } catch (reason) {
-      set_drafts_by_session((current) => ({ ...current, [target_key]: normalized_text }));
+      set_draft_content_by_session((current) => ({ ...current, [target_key]: input }));
       set_error(to_error_message(reason));
       return undefined;
     }
   }, []);
 
-  /** 按 Workspace、Group 和 Session 隔离更新群聊草稿。 */
-  const update_group_draft = useCallback((workspace_id: string, group_id: string, session_id: string, text: string) => {
-    set_drafts_by_session((current) => ({
+  /** 按 Workspace、Group 和 Session 隔离更新完整群聊草稿。 */
+  const update_group_draft = useCallback((workspace_id: string, group_id: string, session_id: string, input: JSONContent) => {
+    set_draft_content_by_session((current) => ({
       ...current,
-      [get_group_chat_key(workspace_id, group_id, session_id)]: text,
+      [get_group_chat_key(workspace_id, group_id, session_id)]: input,
     }));
   }, []);
 
@@ -790,9 +787,7 @@ export function use_desktop_controller(): DesktopViewController {
     const target_key = get_session_key(workspace_id, agent_id, draft_id);
     if (source_key === target_key) return;
 
-    set_drafts_by_session((current) => move_draft_value(current, source_key, target_key, ""));
-    set_draft_files_by_session((current) => move_draft_value(current, source_key, target_key, []));
-    set_draft_references_by_session((current) => move_draft_value(current, source_key, target_key, []));
+    set_draft_content_by_session((current) => move_draft_value(current, source_key, target_key, create_chat_composer()));
     set_configuration_by_session((current) => {
       const agent = agents.find((item) => item.agent_id === agent_id);
       return move_draft_value(current, source_key, target_key, {
@@ -1016,9 +1011,7 @@ export function use_desktop_controller(): DesktopViewController {
       history_ref.current = remove_session_value(history_ref.current, session_key);
       set_history_by_session(history_ref.current);
       set_configuration_by_session((current) => remove_session_value(current, session_key));
-      set_drafts_by_session((current) => remove_session_value(current, session_key));
-      set_draft_files_by_session((current) => remove_session_value(current, session_key));
-      set_draft_references_by_session((current) => remove_session_value(current, session_key));
+      set_draft_content_by_session((current) => remove_session_value(current, session_key));
       commit_queue(remove_session_value(queue_ref.current, session_key));
       processing_queue_ref.current.delete(session_key);
       mutation_batches_ref.current.delete(session_key);
@@ -1220,39 +1213,18 @@ export function use_desktop_controller(): DesktopViewController {
     set_workspaces((current) => current.map((item) => item.workspace_id === workspace_id ? workspace : item));
   }, []);
 
-  const update_draft = useCallback((workspace_id: string, agent_id: string, session_id: string, text: string) => {
-    set_drafts_by_session((current) => ({
+  const update_draft = useCallback((workspace_id: string, agent_id: string, session_id: string, input: JSONContent) => {
+    set_draft_content_by_session((current) => ({
       ...current,
-      [get_session_key(workspace_id, agent_id, session_id)]: text,
+      [get_session_key(workspace_id, agent_id, session_id)]: input,
     }));
   }, []);
 
-  const update_draft_files = useCallback((workspace_id: string, agent_id: string, session_id: string, files: DesktopChatFileInput[]) => {
-    set_draft_files_by_session((current) => ({
-      ...current,
-      [get_session_key(workspace_id, agent_id, session_id)]: files,
-    }));
-  }, []);
-
-  const update_draft_references = useCallback((workspace_id: string, agent_id: string, session_id: string, references: DesktopChatReferenceInput[]) => {
-    set_draft_references_by_session((current) => ({
-      ...current,
-      [get_session_key(workspace_id, agent_id, session_id)]: references,
-    }));
-  }, []);
-
-  const send_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: DesktopChatInput, mode: ChatSubmitMode = "send") => {
-    const normalized_input: DesktopChatInput = {
-      text: String(input.text || "").trim(),
-      files: Array.isArray(input.files) ? input.files : [],
-      references: Array.isArray(input.references) ? input.references : [],
-    };
-    if (!normalized_input.text && normalized_input.files.length === 0 && normalized_input.references.length === 0) return;
+  const send_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode = "send") => {
+    if (is_chat_composer_empty(input)) return;
     const session_key = get_session_key(workspace_id, agent_id, session_id);
     set_error("");
-    set_drafts_by_session((current) => ({ ...current, [session_key]: "" }));
-    set_draft_files_by_session((current) => ({ ...current, [session_key]: [] }));
-    set_draft_references_by_session((current) => ({ ...current, [session_key]: [] }));
+    set_draft_content_by_session((current) => remove_session_value(current, session_key));
     if (is_draft_session_id(session_id)) {
       try {
         const session = await window.downcity.chat.create_session(agent_id, workspace_id);
@@ -1275,12 +1247,10 @@ export function use_desktop_controller(): DesktopViewController {
           actual_configuration = await window.downcity.chat.set_approval_mode(agent_id, workspace_id, session.session_id, draft_configuration.approval_mode);
         }
         set_configuration_by_session((current) => ({ ...current, [actual_key]: actual_configuration }));
-        await window.downcity.chat.send(agent_id, workspace_id, session.session_id, normalized_input);
-        set_drafts_by_session((current) => ({ ...current, [actual_key]: "" }));
+        await window.downcity.chat.send(agent_id, workspace_id, session.session_id, input);
+        set_draft_content_by_session((current) => remove_session_value(current, actual_key));
       } catch (reason) {
-        set_drafts_by_session((current) => ({ ...current, [session_key]: normalized_input.text }));
-        set_draft_files_by_session((current) => ({ ...current, [session_key]: normalized_input.files }));
-        set_draft_references_by_session((current) => ({ ...current, [session_key]: normalized_input.references }));
+        set_draft_content_by_session((current) => ({ ...current, [session_key]: input }));
         set_error(to_error_message(reason));
         throw reason;
       }
@@ -1289,7 +1259,7 @@ export function use_desktop_controller(): DesktopViewController {
     if (mode === "queue" || is_chat_busy(chat_runtime_ref.current[session_key]) || (queue_ref.current[session_key]?.length ?? 0) > 0) {
       const queued: QueuedChatMessage = {
         message_id: crypto.randomUUID(),
-        input: normalized_input,
+        input,
         created_at: Date.now(),
         sending: false,
         paused: mode === "queue",
@@ -1299,11 +1269,9 @@ export function use_desktop_controller(): DesktopViewController {
       return;
     }
     try {
-      await window.downcity.chat.send(agent_id, workspace_id, session_id, normalized_input);
+      await window.downcity.chat.send(agent_id, workspace_id, session_id, input);
     } catch (reason) {
-      set_drafts_by_session((current) => ({ ...current, [session_key]: normalized_input.text }));
-      set_draft_files_by_session((current) => ({ ...current, [session_key]: normalized_input.files }));
-      set_draft_references_by_session((current) => ({ ...current, [session_key]: normalized_input.references }));
+      set_draft_content_by_session((current) => ({ ...current, [session_key]: input }));
       set_error(to_error_message(reason));
     }
   }, [agents, commit_queue, configuration_by_session, process_next_queue, settings.default_text_model_id]);
@@ -1449,7 +1417,7 @@ export function use_desktop_controller(): DesktopViewController {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
     commit_queue({
       ...queue_ref.current,
-      [session_key]: (queue_ref.current[session_key] ?? []).map((item) => item.message_id === message_id && !item.sending ? { ...item, input: { ...item.input, text: normalized_text } } : item),
+      [session_key]: (queue_ref.current[session_key] ?? []).map((item) => item.message_id === message_id && !item.sending ? { ...item, input: create_chat_composer(normalized_text) } : item),
     });
   }, [commit_queue]);
 
@@ -1594,9 +1562,7 @@ export function use_desktop_controller(): DesktopViewController {
     archived_sessions_by_workspace,
     messages_by_session,
     chat_runtime_by_session,
-    drafts_by_session,
-    draft_files_by_session,
-    draft_references_by_session,
+    draft_content_by_session,
     queued_messages_by_session,
     queue_paused_by_session,
     history_by_session,
@@ -1666,8 +1632,6 @@ export function use_desktop_controller(): DesktopViewController {
     update_workspace_name,
     write_workspace_readme,
     update_draft,
-    update_draft_files,
-    update_draft_references,
     send_message,
     compact_session,
     refresh_models,

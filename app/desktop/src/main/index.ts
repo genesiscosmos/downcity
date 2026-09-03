@@ -17,12 +17,12 @@ import { DesktopNotificationCenter } from "@/notification/DesktopNotificationCen
 import { NotificationStore } from "@/notification/NotificationStore.js";
 import { read_city_host_state, request_city_host_shutdown } from "@downcity/agent/city";
 import type {
-  DesktopChatInput,
   DesktopChatMutationEvent,
   DesktopChatRuntimeEvent,
   DesktopLoginStartInput,
   DesktopGroupEvent,
 } from "../common/types/DesktopApi.js";
+import type { JSONContent } from "@tiptap/core";
 import type { DesktopNotificationState, DesktopNotificationViewState } from "../common/types/DesktopNotification.js";
 import type { RespondSessionInteractionInput, SessionApprovalMode } from "@downcity/agent";
 
@@ -182,7 +182,7 @@ ipcMain.handle("chat:remove-session", async (_event, agent_id: string, workspace
 ipcMain.handle("chat:list-archived-sessions", (_event, agent_id: string, workspace_id: string) => require_agent_controller().list_archived_sessions(agent_id, workspace_id));
 ipcMain.handle("chat:get-snapshot", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_chat_snapshot(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:get-history", (_event, agent_id: string, workspace_id: string, session_id: string, before_sequence: number) => require_agent_controller().get_chat_history(agent_id, workspace_id, session_id, before_sequence));
-ipcMain.handle("chat:send", (_event, agent_id: string, workspace_id: string, session_id: string, input: DesktopChatInput) => require_agent_controller().send_message(agent_id, workspace_id, session_id, input));
+ipcMain.handle("chat:send", (_event, agent_id: string, workspace_id: string, session_id: string, input: JSONContent) => require_agent_controller().send_message(agent_id, workspace_id, session_id, input));
 ipcMain.handle("chat:compact-session", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().compact_session(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:stop", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().stop_session(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:respond", (_event, agent_id: string, workspace_id: string, session_id: string, input: RespondSessionInteractionInput) => require_agent_controller().respond_interaction(agent_id, workspace_id, session_id, input));

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { TbChevronDown, TbChevronRight, TbFileText, TbLoader2, TbUsers } from "react-icons/tb";
+import type { JSONContent } from "@tiptap/core";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -11,7 +12,7 @@ import { SettingActionItem, SettingGroup, SettingItem, SettingSection, SettingsC
 import { Switch } from "@/components/ui/switch";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
 import type { DesktopViewController } from "@/types/DesktopView";
-import type { DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput, DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
+import type { DesktopGroupStatusPhase, DesktopSettings } from "@common/types/DesktopApi";
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart } from "@downcity/agent";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
@@ -48,20 +49,12 @@ interface GroupViewProps {
   session: DesktopGroupSessionSummary;
   /** 当前 GroupSession 所属 Workspace。 */
   workspace_id: string;
-  /** 当前 Group Chat 的受控文本草稿。 */
-  draft: string;
-  /** 当前 Group Chat 的受控附件草稿。 */
-  draft_files: DesktopChatFileInput[];
-  /** 当前 Group Chat 的受控引用草稿。 */
-  draft_references: DesktopChatReferenceInput[];
-  /** 更新当前 Group Chat 的文本草稿。 */
-  update_draft(text: string): void;
-  /** 更新当前 Group Chat 的附件草稿。 */
-  update_draft_files(files: DesktopChatFileInput[]): void;
-  /** 更新当前 Group Chat 的引用草稿。 */
-  update_draft_references(references: DesktopChatReferenceInput[]): void;
-  /** 向当前 GroupSession 发送文本。 */
-  send_message(session_id: string, text: string): Promise<string | undefined>;
+  /** 当前 Group Chat 的完整 Tiptap 草稿。 */
+  draft_content: JSONContent;
+  /** 更新当前 Group Chat 的完整 Tiptap 草稿。 */
+  update_draft(input: JSONContent): void;
+  /** 向当前 GroupSession 发送 Tiptap Chat Input。 */
+  send_message(session_id: string, input: JSONContent): Promise<string | undefined>;
   /** 停止 Group 当前执行。 */
   stop_session(session_id: string): Promise<void>;
   /** Session Sidebar 是否折叠。 */
@@ -75,7 +68,7 @@ interface GroupViewProps {
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, draft, draft_files, draft_references, update_draft, update_draft_files, update_draft_references, send_message, stop_session, session_sidebar_collapsed, toggle_session_sidebar, session_sidebar, controller }: GroupViewProps) {
+export function GroupView({ group, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, draft_content, update_draft, send_message, stop_session, session_sidebar_collapsed, toggle_session_sidebar, session_sidebar, controller }: GroupViewProps) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const container = scroll_ref.current;
@@ -96,7 +89,7 @@ export function GroupView({ group, agents, settings, messages, member_statuses, 
               : []).map((agent_id) => <GroupTypingRow key={`typing:${agent_id}`} agent={agents.find((item) => item.agent_id === agent_id)} agent_id={agent_id} />)}
           </div>
         </div>
-        <ChatInputEditor group_mode group_members={agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id))} group_sessions={group.sessions} select_group_session={(session_id) => controller.open_group(group.group_id, session_id)} group_phase={group_phase} surface="agent" workspace_id={workspace_id} editor_key={session.session_id} agent={group_agent} draft={draft} draft_files={draft_files} draft_references={draft_references} queued_messages={[]} queue_paused={false} models={[]} models_loading={false} settings={settings} update_draft={update_draft} update_draft_files={update_draft_files} update_draft_references={update_draft_references} send_message={async (input: DesktopChatInput) => { await send_message(session.session_id, input.text); }} stop_session={() => stop_session(session.session_id)} refresh_models={async () => undefined} set_model={async () => undefined} set_reasoning_effort={async () => undefined} set_approval_mode={async () => undefined} remove_queued_message={() => undefined} send_queued_message={async () => undefined} update_queued_message={() => undefined} toggle_queued_message_paused={() => undefined} set_queue_paused={() => undefined} move_queued_message={() => undefined} />
+        <ChatInputEditor group_mode group_members={agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id))} group_sessions={group.sessions} select_group_session={(session_id) => controller.open_group(group.group_id, session_id)} group_phase={group_phase} surface="agent" workspace_id={workspace_id} editor_key={session.session_id} agent={group_agent} draft_content={draft_content} queued_messages={[]} queue_paused={false} models={[]} models_loading={false} settings={settings} update_draft={update_draft} send_message={async (input) => { await send_message(session.session_id, input); }} stop_session={() => stop_session(session.session_id)} refresh_models={async () => undefined} set_model={async () => undefined} set_reasoning_effort={async () => undefined} set_approval_mode={async () => undefined} remove_queued_message={() => undefined} send_queued_message={async () => undefined} update_queued_message={() => undefined} toggle_queued_message_paused={() => undefined} set_queue_paused={() => undefined} move_queued_message={() => undefined} />
       </div>
   </ChatSurfaceLayout>;
 }

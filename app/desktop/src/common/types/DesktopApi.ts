@@ -5,6 +5,7 @@
  */
 
 import type { RespondSessionInteractionInput, SessionApprovalMode, SessionInteractionRequest, SessionMessage, SessionMutation } from "@downcity/agent";
+import type { JSONContent } from "@tiptap/core";
 import type { DesktopNotificationState, DesktopNotificationViewState } from "./DesktopNotification.js";
 
 /** Renderer 可见的 Agent 摘要。 */
@@ -544,26 +545,6 @@ export interface DesktopWorkspaceTextFile {
   size: number;
 }
 
-/** Renderer 提交的一条 Session 消息引用。 */
-export interface DesktopChatReferenceInput {
-  /** 被引用 canonical 消息的稳定标识。 */
-  message_id: string;
-  /** 被引用消息在对话中的身份。 */
-  role: "user" | "assistant";
-  /** 提交时冻结的可读文本摘录。 */
-  text: string;
-}
-
-/** Renderer 到 Session 的一次完整用户输入。 */
-export interface DesktopChatInput {
-  /** 用户输入的纯文本；只有附件时允许为空。 */
-  text: string;
-  /** 当前消息携带的文件列表。 */
-  files: DesktopChatFileInput[];
-  /** 当前消息显式引用的历史消息。 */
-  references: DesktopChatReferenceInput[];
-}
-
 /** 模型支持的推理强度档位。 */
 export interface DesktopModelReasoningEffort {
   /** 档位唯一标识，同时也是请求参数使用的值。 */
@@ -922,7 +903,7 @@ export interface DesktopApi {
     /** 读取 Session 的一个更早历史 Segment。 */
     get_history(agent_id: string, workspace_id: string, session_id: string, before_sequence: number): Promise<DesktopChatHistoryPage>;
     /** 提交输入并在 Session 接受后返回。 */
-    send(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatInput): Promise<DesktopChatSendResult>;
+    send(agent_id: string, workspace_id: string, session_id: string, input: JSONContent): Promise<DesktopChatSendResult>;
     /** 将显式压缩命令加入 Session 的有序执行队列。 */
     compact_session(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
     /** 停止当前 Session Turn。 */

@@ -1,46 +1,89 @@
-/** Chat Composer JSON 与 Desktop 提交输入之间的无状态转换。 */
+/** Chat Composer Tiptap 文档的构造、读取与状态判断工具。 */
 
 import type { JSONContent } from "@tiptap/core";
-import type { DesktopChatFileInput, DesktopChatInput, DesktopChatReferenceInput } from "@common/types/DesktopApi";
-import type { ChatAttachmentNodeAttributes, ChatReferenceNodeAttributes } from "@/types/ChatComposer";
 
-/** 从编辑文档中提取可提交的正文、附件和引用。 */
-export function decode_chat_composer(document: JSONContent): DesktopChatInput {
-  const text_blocks: string[] = [];
-  const files: DesktopChatFileInput[] = [];
-  const references: DesktopChatReferenceInput[] = [];
-
-  const visit = (node: JSONContent) => {
-    if (node.type === "text" && node.text) text_blocks.push(node.text);
-    if (node.type === "hardBreak") text_blocks.push("\n");
-    if (node.type === "paragraph" && text_blocks.length > 0 && text_blocks[text_blocks.length - 1] !== "\n") text_blocks.push("\n");
-    if (node.type === "chatAttachment") {
-      const attributes = node.attrs as ChatAttachmentNodeAttributes;
-      files.push({ filename: attributes.filename, media_type: attributes.media_type, data_url: attributes.data_url });
-    }
-    if (node.type === "chatReference") {
-      const attributes = node.attrs as ChatReferenceNodeAttributes;
-      references.push({ message_id: attributes.message_id, role: attributes.role, text: attributes.text });
-    }
-    node.content?.forEach(visit);
+/** 创建一份可直接交给 Tiptap 的 Chat Input 文档。 */
+export function create_chat_composer(text = ""): JSONContent {
+  const lines = text.split("\n");
+  const content: JSONContent[] = [];
+  lines.forEach((line, index) => {
+    if (index > 0) content.push({ type: "hardBreak" });
+    if (line) content.push({ type: "text", text: line });
+  });
+  return {
+    type: "doc",
+    content: [{ type: "paragraph", ...(content.length > 0 ? { content } : {}) }],
   };
-  document.content?.forEach(visit);
-  return { text: text_blocks.join("").trim(), files, references };
 }
 
-/** 从受控草稿构造一份可恢复的编辑文档。 */
-export function encode_chat_composer(text: string, files: DesktopChatFileInput[], references: DesktopChatReferenceInput[]): JSONContent {
-  const inline_content: JSONContent[] = [];
-  for (const reference of references) {
-    inline_content.push({ type: "chatReference", attrs: { ...reference, preview_text: reference.text.replace(/\s+/g, " ").trim().slice(0, 80) } });
-  }
-  for (const file of files) {
-    inline_content.push({ type: "chatAttachment", attrs: { ...file, attachment_id: crypto.randomUUID() } });
-  }
-  const lines = text.split("\n");
-  lines.forEach((line, index) => {
-    if (index > 0) inline_content.push({ type: "hardBreak" });
-    if (line) inline_content.push({ type: "text", text: line });
+/** 判断 Chat Input 是否包含可提交的正文、附件或引用。 */
+export function is_chat_composer_empty(document: JSONContent | null | undefined): boolean {
+  if (!document) return true;
+  let has_content = false;
+  walk_chat_composer(document, (node) => {
+    if (node.type === "text" && String(node.text || "").trim()) has_content = true;
+    if (node.type === "chatAttachment" && String(node.attrs?.data_url || "").trim()) has_content = true;
+    if (node.type === "chatReference" && String(node.attrs?.text || "").trim()) has_content = true;
   });
-  return { type: "doc", content: [{ type: "paragraph", content: inline_content.length > 0 ? inline_content : undefined }] };
+  return !has_content;
+}
+
+/** 读取 Chat Input 中的可见文本；可选将引用节点投影成引用块。 */
+export function read_chat_composer_text(document: JSONContent, include_references = false): string {
+  let text = "";
+  const visit = (node: JSONContent) => {
+    if (node.type === "text") {
+      text += String(node.text || "");
+      return;
+    }
+    if (node.type === "hardBreak") {
+      text += "\n";
+      return;
+    }
+    if (node.type === "chatReference") {
+      if (!include_references) return;
+      const reference = String(node.attrs?.text || "").trim();
+      if (reference) {
+        if (text.trim() && !text.endsWith("\n")) text += "\n";
+        text += `${reference.split("\n").map((line) => `> ${line}`).join("\n")}\n\n`;
+      }
+      return;
+    }
+    if (node.type === "chatAttachment") return;
+    node.content?.forEach(visit);
+    if (node.type === "paragraph") text += "\n";
+  };
+  visit(document);
+  return text.trim();
+}
+
+/** 判断 Chat Input 是否包含附件或引用等结构化原子节点。 */
+export function has_chat_composer_atoms(document: JSONContent): boolean {
+  let has_atoms = false;
+  walk_chat_composer(document, (node) => {
+    if (node.type === "chatAttachment" || node.type === "chatReference") has_atoms = true;
+  });
+  return has_atoms;
+}
+
+/** 统计 Chat Input 中有效附件与引用节点的数量。 */
+export function count_chat_composer_atoms(document: JSONContent): number {
+  let count = 0;
+  walk_chat_composer(document, (node) => {
+    if (node.type === "chatAttachment" && String(node.attrs?.data_url || "").trim()) count += 1;
+    if (node.type === "chatReference" && String(node.attrs?.text || "").trim()) count += 1;
+  });
+  return count;
+}
+
+/** 识别只由纯文本构成、应由 Chat Input 本地处理的命令。 */
+export function resolve_chat_input_command(document: JSONContent): "compact" | undefined {
+  if (has_chat_composer_atoms(document)) return undefined;
+  return read_chat_composer_text(document) === "/compact" ? "compact" : undefined;
+}
+
+/** 深度遍历一份 Chat Composer 文档。 */
+function walk_chat_composer(document: JSONContent, visit: (node: JSONContent) => void): void {
+  visit(document);
+  document.content?.forEach((node) => walk_chat_composer(node, visit));
 }

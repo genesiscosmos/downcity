@@ -1,6 +1,6 @@
 /** Chat Composer 编辑文档、节点属性与 Slash 命令的 Renderer 类型。 */
 
-import type { DesktopChatFileInput, DesktopChatReferenceInput } from "@common/types/DesktopApi";
+import type { DesktopChatFileInput } from "@common/types/DesktopApi";
 
 /** 编辑器内一个附件原子节点的属性。 */
 export interface ChatAttachmentNodeAttributes extends DesktopChatFileInput {
@@ -9,10 +9,19 @@ export interface ChatAttachmentNodeAttributes extends DesktopChatFileInput {
 }
 
 /** 编辑器内一个引用原子节点的属性。 */
-export interface ChatReferenceNodeAttributes extends DesktopChatReferenceInput {
+export interface ChatReferenceNodeAttributes {
+  /** 被引用 canonical 消息的稳定标识。 */
+  message_id: string;
+  /** 被引用消息在对话中的身份。 */
+  role: "user" | "assistant";
+  /** 提交时冻结并写入 Session Context Part 的可读文本。 */
+  text: string;
   /** 引用胶囊展示的简短文本。 */
   preview_text: string;
 }
+
+/** 消息操作向 Chat Composer 插入引用时携带的内容。 */
+export type ChatReferenceInput = Omit<ChatReferenceNodeAttributes, "preview_text">;
 
 /** 可由 Slash 菜单执行的一条命令。 */
 export interface ChatSlashCommand {
