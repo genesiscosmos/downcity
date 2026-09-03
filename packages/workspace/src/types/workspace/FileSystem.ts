@@ -14,6 +14,7 @@ import type {
   SearchToolActionRequest,
   SearchToolActionResult,
 } from "@/types/workspace/SearchTool.js";
+import type { WorkspaceFileMutationObserver } from "@/types/workspace/WorkspaceFileMutation.js";
 
 /** Workspace 目录中的稳定条目摘要。 */
 export interface WorkspaceDirectoryEntry {
@@ -68,8 +69,11 @@ export interface FileSystem {
    */
   with_file_lock<T>(lock_path: string, action: () => Promise<T>): Promise<T>;
 
-  /** 执行一次受项目根目录限制的结构化文件操作。 */
-  run_file_action(request: FileToolActionRequest): Promise<FileToolActionResult>;
+  /** 执行一次受项目根目录限制的结构化文件操作，并可观察成功提交的修改事实。 */
+  run_file_action(
+    request: FileToolActionRequest,
+    observer?: WorkspaceFileMutationObserver,
+  ): Promise<FileToolActionResult>;
 
   /** 执行一次受项目根目录限制的结构化搜索操作。 */
   run_search_action(request: SearchToolActionRequest): Promise<SearchToolActionResult>;

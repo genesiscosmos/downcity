@@ -24,7 +24,7 @@ export function TurnFileDiffReviewHost({ children }: { /** Desktop 当前主视�
   return <TurnFileDiffReviewContext.Provider value={open_review}>
     <div className="flex h-full min-h-0 min-w-0 flex-1">
       <div className="flex h-full min-w-0 flex-1 flex-col">{children}</div>
-      <BayBar open={open} title="审核本轮改动" close_baybar={() => set_open(false)}>{review_data ? <TurnFileDiffReviewPanel data={review_data} /> : null}</BayBar>
+      <BayBar open={open} title="审核本轮文件编辑" close_baybar={() => set_open(false)}>{review_data ? <TurnFileDiffReviewPanel data={review_data} /> : null}</BayBar>
     </div>
   </TurnFileDiffReviewContext.Provider>;
 }

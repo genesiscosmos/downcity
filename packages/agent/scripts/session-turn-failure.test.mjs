@@ -17,7 +17,7 @@ import { SessionEventHub } from "../bin/session/runtime/SessionEventHub.js";
 import { SessionLoop } from "../bin/session/SessionLoop.js";
 import { SessionQueue } from "../bin/session/SessionQueue.js";
 
-async function create_turn_harness(execute_turn, session_origin = { type: "chat" }, workspace_snapshot) {
+async function create_turn_harness(execute_turn, session_origin = { type: "chat" }) {
   const session_id = "session-turn-failure-test";
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-turn-failure-"));
   const messages = new SessionMessages({
@@ -41,7 +41,7 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
     session_origin,
     workspace_path: root_path,
     executor: {
-      execute: async ({ turn_context }) => await execute_turn(turn_context),
+      execute: async ({ turn_context }) => await execute_turn(turn_context, root_path),
     },
     compact_history: async () => ({ compacted: false, reason: "nothing_to_compact" }),
     state: {
@@ -56,10 +56,9 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
     queue: new SessionQueue(),
     interactions,
     shell_approval_gateway,
-    ...(workspace_snapshot ? { workspace_snapshot } : {}),
   });
 
-  return { messages, turn };
+  return { messages, root_path, turn };
 }
 
 test("Plugin execution context 保留完整 Session origin", async () => {
@@ -219,27 +218,28 @@ test("SessionLoop 在释放 Plugin lease 前触发 turn committed effect", async
   );
 });
 
-test("SessionLoop 把 Turn 首尾快照差异持久化到最后一条 Assistant 消息", async () => {
-  const snapshots = ["tree-before", "tree-after"];
-  const workspace_snapshot = {
-    capture: async () => snapshots.shift(),
-    diff: async (from_snapshot, to_snapshot) => {
-      assert.equal(from_snapshot, "tree-before");
-      assert.equal(to_snapshot, "tree-after");
-      return [{
-        file: "src/example.ts",
-        status: "modified",
-        additions: 2,
-        deletions: 1,
-        patch: "diff --git a/src/example.ts b/src/example.ts",
-      }];
-    },
-  };
-  const { messages, turn } = await create_turn_harness(async () => ({
-    success: true,
-    text: "done",
-    deferred_persisted_user_messages: [],
-  }), { type: "chat" }, workspace_snapshot);
+test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async () => {
+  const { messages, turn } = await create_turn_harness(async (turn_context, root_path) => {
+    await fs.writeFile(path.join(root_path, "external.ts"), "external\n", "utf8");
+    turn_context.workspace_changes.record_file_mutations([{
+      file_path: path.join(root_path, "src/example.ts"),
+      before: {
+        exists: true,
+        sha256: "before",
+        content: "const value = 1;\n",
+      },
+      after: {
+        exists: true,
+        sha256: "after",
+        content: "const value = 2;\nconst next = 3;\n",
+      },
+    }]);
+    return {
+      success: true,
+      text: "done",
+      deferred_persisted_user_messages: [],
+    };
+  });
 
   const handle = await turn.prompt({ query: "修改文件" });
   await handle.finished;
@@ -252,6 +252,8 @@ test("SessionLoop 把 Turn 首尾快照差异持久化到最后一条 Assistant 
   assert.equal(file_diff.data.additions, 2);
   assert.equal(file_diff.data.deletions, 1);
   assert.equal(file_diff.data.files[0].file, "src/example.ts");
+  assert.match(file_diff.data.files[0].patch, /^diff --git a\/src\/example\.ts b\/src\/example\.ts/m);
+  assert.equal(file_diff.data.files.some((file) => file.file === "external.ts"), false);
 });
 
 test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Error Message", async () => {

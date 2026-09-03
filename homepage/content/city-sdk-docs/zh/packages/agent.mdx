@@ -20,11 +20,11 @@ CLI、Desktop 或 Node 进程需要持有多个 Agent、根据本地配置装配
 
 ## 读取每轮文件改动
 
-绑定 Git Workspace 的 Session 会在每个 Turn 执行前后创建隔离的 shadow Git 快照，并把本轮
-文件改动写入最后一条 Assistant Message。该过程不会修改项目的 index、stash、branch 或 commit；
-Shell、脚本和文件工具产生的改动使用同一套结果。非 Git Workspace 或快照不可用时，对话仍会正常执行。
+绑定 Workspace 的 Session 会把当前 Turn 通过内置结构化 `write`、`edit` 工具成功提交的文件编辑
+写入最后一条 Assistant Message。Diff 直接来自文件工具的原子修改事实，不扫描 Turn 首尾工作树，
+因此 Shell、脚本、外部编辑器和其他 Session 的修改不会进入该结果；非 Git Workspace 同样支持。
 
-文件改动使用 `data-session-turn-file-diff` data part 持久化，包含逐文件状态、增删行数和 unified diff。
+文件编辑使用 `data-session-turn-file-diff` data part 持久化，包含逐文件状态、增删行数和 unified diff。
 可以使用公开解析函数安全读取：
 
 ```ts

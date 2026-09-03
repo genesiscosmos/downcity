@@ -20,6 +20,10 @@ import type {
   WriteFileToolInput,
   WriteFileToolResult,
 } from "@/types/workspace/FileTool.js";
+import type {
+  WorkspaceFileMutationObserver,
+  WorkspaceFileMutationState,
+} from "@/types/workspace/WorkspaceFileMutation.js";
 import { resolve_file_tool_path } from "@/workspace/file/FilePathPolicy.js";
 import { FileToolRuntimeError, to_file_tool_failure } from "@/workspace/file/FileToolError.js";
 import {
@@ -42,6 +46,58 @@ const MAX_WRITE_BYTES = 1024 * 1024;
 const MAX_EDITS = 10;
 const MAX_OLD_TEXT_CHARS = 10_000;
 const MAX_NEW_TEXT_CHARS = 50_000;
+const MAX_MUTATION_TEXT_BYTES = 2 * 1024 * 1024;
+
+/** 构造不存在文件的稳定修改状态。 */
+function missing_file_state(): WorkspaceFileMutationState {
+  return Object.freeze({ exists: false });
+}
+
+/** 从已读取字节和既有内容哈希构造受大小约束的文件修改状态。 */
+function existing_file_state(
+  buffer: Buffer,
+  sha256 = create_file_sha256(buffer),
+): WorkspaceFileMutationState {
+  if (buffer.byteLength > MAX_MUTATION_TEXT_BYTES || is_binary_file(buffer)) {
+    return Object.freeze({ exists: true, sha256 });
+  }
+  return Object.freeze({
+    exists: true,
+    sha256,
+    content: decode_text_file(buffer).content,
+  });
+}
+
+/** 在不扩大 write 既有资源上限的前提下读取修改前状态。 */
+async function capture_existing_file_state(
+  file_path: string,
+): Promise<WorkspaceFileMutationState> {
+  const metadata = await lstat(file_path);
+  if (metadata.size > MAX_MUTATION_TEXT_BYTES) {
+    return Object.freeze({ exists: true });
+  }
+  return existing_file_state(await readFile(file_path));
+}
+
+/** 修改已经提交后通知观察器；观察失败不能把成功写入伪装为 Tool 失败。 */
+function publish_file_mutation(
+  observer: WorkspaceFileMutationObserver | undefined,
+  input: {
+    file_path: string;
+    before: WorkspaceFileMutationState;
+    after: WorkspaceFileMutationState;
+  },
+): void {
+  try {
+    observer?.on_file_mutation(Object.freeze({
+      file_path: input.file_path,
+      before: input.before,
+      after: input.after,
+    }));
+  } catch {
+    // 文件已经完成原子提交，辅助观测失败不能改变真实执行结果。
+  }
+}
 
 /** 判断文件是否存在。 */
 async function file_exists(file_path: string): Promise<boolean> {
@@ -78,13 +134,13 @@ function split_text_lines(content: string): string[] {
 
 /** 执行文件读取。 */
 async function read_file_action(
-  context: { readonly rootPath: string },
+  context: { readonly root_path: string },
   input: ReadFileToolInput,
 ): Promise<ReadFileToolResult> {
   let file_path = "";
   try {
     const resolved = await resolve_file_tool_path({
-      root_path: context.rootPath,
+      root_path: context.root_path,
       file_path: input.file_path,
       allow_missing: false,
     });
@@ -179,13 +235,16 @@ async function read_file_action(
 
 /** 执行文件写入。 */
 async function write_file_action(
-  context: { readonly rootPath: string },
+  context: {
+    readonly root_path: string;
+    readonly mutation_observer?: WorkspaceFileMutationObserver;
+  },
   input: WriteFileToolInput,
 ): Promise<WriteFileToolResult> {
   let file_path = "";
   try {
     const resolved = await resolve_file_tool_path({
-      root_path: context.rootPath,
+      root_path: context.root_path,
       file_path: input.file_path,
       allow_missing: true,
     });
@@ -207,6 +266,9 @@ async function write_file_action(
         file_path,
       });
     }
+    const before = existed
+      ? await capture_existing_file_state(file_path)
+      : missing_file_state();
     const mode = existed ? (await lstat(file_path)).mode & 0o7777 : undefined;
     await mkdir(path.dirname(file_path), { recursive: true });
     await write_file_atomically({
@@ -215,6 +277,12 @@ async function write_file_action(
       overwrite: existed,
       ...(typeof mode === "number" ? { mode } : {}),
     });
+    const sha256 = create_file_sha256(content);
+    publish_file_mutation(context.mutation_observer, {
+      file_path,
+      before,
+      after: existing_file_state(content, sha256),
+    });
     return {
       success: true,
       file_path,
@@ -222,7 +290,7 @@ async function write_file_action(
       lines_written: count_text_lines(normalized_content),
       overwritten: existed,
       timestamp: new Date().toISOString(),
-      sha256: create_file_sha256(content),
+      sha256,
     };
   } catch (error) {
     return to_file_tool_failure(error, file_path || undefined);
@@ -261,13 +329,16 @@ function resolve_line_number(content: string, position: number): number {
 
 /** 执行文件精确编辑。 */
 async function edit_file_action(
-  context: { readonly rootPath: string },
+  context: {
+    readonly root_path: string;
+    readonly mutation_observer?: WorkspaceFileMutationObserver;
+  },
   input: EditFileToolInput,
 ): Promise<EditFileToolResult> {
   let file_path = "";
   try {
     const resolved = await resolve_file_tool_path({
-      root_path: context.rootPath,
+      root_path: context.root_path,
       file_path: input.file_path,
       allow_missing: false,
     });
@@ -397,6 +468,12 @@ async function edit_file_action(
       overwrite: true,
       mode,
     });
+    const sha256 = create_file_sha256(next_buffer);
+    publish_file_mutation(context.mutation_observer, {
+      file_path,
+      before: existing_file_state(buffer, previous_sha256),
+      after: existing_file_state(next_buffer, sha256),
+    });
     return {
       success: true,
       file_path,
@@ -404,7 +481,7 @@ async function edit_file_action(
       details: matches.map((item) => item.detail),
       new_total_lines: count_text_lines(next_content),
       previous_sha256,
-      sha256: create_file_sha256(next_buffer),
+      sha256,
     };
   } catch (error) {
     return to_file_tool_failure(error, file_path || undefined);
@@ -413,7 +490,10 @@ async function edit_file_action(
 
 /** 执行一个文件 action。 */
 export async function run_file_action(
-  context: { readonly rootPath: string },
+  context: {
+    readonly root_path: string;
+    readonly mutation_observer?: WorkspaceFileMutationObserver;
+  },
   request: FileToolActionRequest,
 ): Promise<FileToolActionResult> {
   switch (request.action) {

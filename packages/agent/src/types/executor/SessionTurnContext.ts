@@ -7,7 +7,10 @@
  * - 可变状态只能通过行为方法更新，消费者不能直接操作内部数组、lease 或 callback。
  */
 
-import type { ShellApprovalGateway } from "@downcity/workspace";
+import type {
+  ShellApprovalGateway,
+  WorkspaceFileMutation,
+} from "@downcity/workspace";
 import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
 import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
@@ -168,6 +171,15 @@ export interface SessionTurnContext {
 
     /** 发布一条不进入 LLM 输入的 Session Action。 */
     publish_action(event: AgentSessionActionEvent): Promise<void>;
+  };
+
+  /** 当前 Turn 通过 Workspace 结构化文件工具产生的修改事实。 */
+  readonly workspace_changes: {
+    /** 记录 write/edit 已经成功提交的文件修改。 */
+    record_file_mutations(mutations: readonly WorkspaceFileMutation[]): void;
+
+    /** 返回当前 Turn 文件修改事实的不可变快照。 */
+    file_mutations(): readonly WorkspaceFileMutation[];
   };
 
   /** 当前 Session 执行面创建用户异步交互的端口。 */

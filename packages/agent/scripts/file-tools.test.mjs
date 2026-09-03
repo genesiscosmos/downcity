@@ -21,10 +21,16 @@ async function create_fixture(t) {
     await fs.rm(root_path, { recursive: true, force: true });
     await fs.rm(outside_path, { recursive: true, force: true });
   });
+  const workspace = new Workspace({
+    id: "test_workspace",
+    path: root_path,
+    data_root_path: path.join(root_path, "data"),
+  });
   return {
     root_path,
     outside_path,
-    tools: new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }).tools,
+    files: workspace.files,
+    tools: workspace.tools,
   };
 }
 
@@ -279,4 +285,52 @@ test("edit preserves UTF-16LE encoding and BOM", async (t) => {
   const next_buffer = await fs.readFile(file_path);
   assert.deepEqual([...next_buffer.subarray(0, 2)], [0xff, 0xfe]);
   assert.equal(next_buffer.subarray(2).toString("utf16le"), "world\r\n");
+});
+
+test("write/edit 只在成功提交后返回结构化文件修改事实", async (t) => {
+  const fixture = await create_fixture(t);
+  const written = await execute_action_tool(fixture.tools, "write", {
+    file_path: "tracked.txt",
+    content: "first\n",
+  });
+  assert.equal(written.workspace_file_mutations.length, 1);
+  assert.equal(written.workspace_file_mutations[0].before.exists, false);
+  assert.equal(written.workspace_file_mutations[0].after.content, "first\n");
+
+  const edited = await execute_action_tool(fixture.tools, "edit", {
+    file_path: "tracked.txt",
+    expected_sha256: written.output.sha256,
+    edits: [{ old_text: "first", new_text: "second" }],
+  });
+  assert.equal(edited.workspace_file_mutations.length, 1);
+  assert.equal(edited.workspace_file_mutations[0].before.content, "first\n");
+  assert.equal(edited.workspace_file_mutations[0].after.content, "second\n");
+
+  const rejected = await execute_action_tool(fixture.tools, "edit", {
+    file_path: "tracked.txt",
+    edits: [{ old_text: "missing", new_text: "ignored" }],
+  });
+  assert.equal(rejected.output.success, false);
+  assert.deepEqual(rejected.workspace_file_mutations, []);
+});
+
+test("修改观察失败不会把已提交的 write 伪装成 Tool 失败", async (t) => {
+  const fixture = await create_fixture(t);
+  const result = await fixture.files.run_file_action({
+    action: "write",
+    input: {
+      file_path: "observer-error.txt",
+      content: "written\n",
+    },
+  }, {
+    on_file_mutation: () => {
+      throw new Error("observer failed");
+    },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(
+    await fs.readFile(path.join(fixture.root_path, "observer-error.txt"), "utf8"),
+    "written\n",
+  );
 });

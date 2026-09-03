@@ -37,6 +37,7 @@ import {
 } from "node:fs/promises";
 import { write_file_atomically } from "@/workspace/file/FileAtomicWriter.js";
 import type { LocalFileSystemOptions } from "@/types/workspace/LocalFileSystem.js";
+import type { WorkspaceFileMutationObserver } from "@/types/workspace/WorkspaceFileMutation.js";
 
 const FILE_LOCK_STALE_MS = 120_000;
 const FILE_LOCK_TIMEOUT_MS = FILE_LOCK_STALE_MS * 2;
@@ -229,8 +230,12 @@ export class LocalFileSystem implements FileSystem {
   /** 执行一次结构化文件操作。 */
   async run_file_action(
     request: FileToolActionRequest,
+    observer?: WorkspaceFileMutationObserver,
   ): Promise<FileToolActionResult> {
-    return await run_file_action({ rootPath: this.root_path }, request);
+    return await run_file_action({
+      root_path: this.root_path,
+      ...(observer ? { mutation_observer: observer } : {}),
+    }, request);
   }
 
   /** 执行一次结构化搜索操作。 */

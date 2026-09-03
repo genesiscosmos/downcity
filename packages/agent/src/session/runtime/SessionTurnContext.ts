@@ -18,6 +18,7 @@ import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionConte
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import { normalize_session_origin } from "@/session/SessionOrigin.js";
 import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
+import type { WorkspaceFileMutation } from "@downcity/workspace";
 
 /** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */
 export interface CreateSessionPluginExecutionContextInput {
@@ -53,11 +54,13 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private injected_user_messages: SessionUserMessage[] = [];
   private deferred_messages: SessionUserMessage[] = [];
   private pending_assistant_parts: SessionAssistantResultPart[] = [];
+  private workspace_file_mutations: WorkspaceFileMutation[] = [];
 
   readonly lifecycle: SessionTurnContext["lifecycle"];
   readonly step: SessionTurnContext["step"];
   readonly input: SessionTurnContext["input"];
   readonly output: SessionTurnContext["output"];
+  readonly workspace_changes: SessionTurnContext["workspace_changes"];
 
   constructor(private readonly init: SessionTurnContextInit) {
     const session_id = String(init.session_id || "").trim();
@@ -179,6 +182,13 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       publish_action: async (event) => {
         await context.init.publish_action?.(event);
       },
+    });
+
+    this.workspace_changes = Object.freeze({
+      record_file_mutations: (mutations) => {
+        context.workspace_file_mutations.push(...mutations);
+      },
+      file_mutations: () => Object.freeze([...context.workspace_file_mutations]),
     });
   }
 

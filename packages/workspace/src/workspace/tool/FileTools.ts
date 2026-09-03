@@ -9,6 +9,7 @@
 import path from "node:path";
 import { define_runtime_tool } from "@downcity/type";
 import type { WorkspaceToolActionResult } from "@/types/workspace/WorkspaceToolResult.js";
+import type { WorkspaceFileMutation } from "@/types/workspace/WorkspaceFileMutation.js";
 import type {
   EditFileToolInput,
   EditFileToolResult,
@@ -64,11 +65,14 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
     execute: async (
       input: WriteFileToolInput,
     ): Promise<WorkspaceToolActionResult<WriteFileToolResult>> => {
+      const workspace_file_mutations: WorkspaceFileMutation[] = [];
       const output = await runner.run_file_action({
         action: "write",
         input,
+      }, {
+        on_file_mutation: (mutation) => workspace_file_mutations.push(mutation),
       }) as WriteFileToolResult;
-      return { output, messages: [] };
+      return { output, messages: [], workspace_file_mutations };
     },
   });
 
@@ -79,11 +83,14 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
     execute: async (
       input: EditFileToolInput,
     ): Promise<WorkspaceToolActionResult<EditFileToolResult>> => {
+      const workspace_file_mutations: WorkspaceFileMutation[] = [];
       const output = await runner.run_file_action({
         action: "edit",
         input,
+      }, {
+        on_file_mutation: (mutation) => workspace_file_mutations.push(mutation),
       }) as EditFileToolResult;
-      return { output, messages: [] };
+      return { output, messages: [], workspace_file_mutations };
     },
   });
 

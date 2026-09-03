@@ -21,11 +21,11 @@ Agent instances, restore local configuration, or expose HTTP/RPC transports.
 
 ## Read file changes for each turn
 
-A Session bound to a Git Workspace creates isolated shadow Git snapshots before and after each
-turn, then persists that turn's file changes in the final Assistant Message. This does not modify
-the project's index, stash, branch, or commits. Changes made by shell commands, scripts, and file
-tools all use the same result. Conversation execution continues normally when the Workspace is not
-a Git repository or snapshots are unavailable.
+A Session bound to a Workspace persists file edits successfully committed by the built-in
+structured `write` and `edit` tools in the final Assistant Message. The diff comes directly from
+each atomic file-tool mutation instead of scanning the worktree before and after a turn, so changes
+made by shell commands, scripts, external editors, or other Sessions are excluded. Git is not
+required.
 
 The `data-session-turn-file-diff` data part contains per-file status, line counts, and unified diff.
 Use the exported parser to read it safely:

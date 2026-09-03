@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.416",
+  "version": "1.1.417",
   "type": "module",
   "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",
@@ -45,6 +45,7 @@
     "@downcity/type": "workspace:*",
     "@downcity/federation": "workspace:^",
     "commander": "^15.0.0",
+    "diff": "^8.0.4",
     "dotenv": "^17.4.2",
     "execa": "^9.6.1",
     "fs-extra": "^11.3.5",

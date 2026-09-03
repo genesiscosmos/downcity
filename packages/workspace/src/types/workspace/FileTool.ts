@@ -8,6 +8,7 @@
  */
 
 import type { RuntimeTool } from "@downcity/type";
+import type { WorkspaceFileMutationObserver } from "@/types/workspace/WorkspaceFileMutation.js";
 
 /** 文件工具支持的结构化错误码。 */
 export type FileToolErrorCode =
@@ -203,7 +204,10 @@ export type FileToolActionResult =
 /** 文件工具运行器协议。 */
 export interface FileToolRunner {
   /** 执行一个独立文件 action。 */
-  run_file_action(request: FileToolActionRequest): Promise<FileToolActionResult>;
+  run_file_action(
+    request: FileToolActionRequest,
+    observer?: WorkspaceFileMutationObserver,
+  ): Promise<FileToolActionResult>;
 }
 
 /** `@downcity/workspace` 对模型暴露的文件工具集合。 */

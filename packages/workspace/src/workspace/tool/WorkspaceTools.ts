@@ -19,8 +19,8 @@ export function create_workspace_tools(
 ): WorkspaceTools {
   return {
     ...create_file_tools({
-      run_file_action: async (request) =>
-        await options.files.run_file_action(request),
+      run_file_action: async (request, observer) =>
+        await options.files.run_file_action(request, observer),
     }),
     ...create_search_tools({
       run_search_action: async (request) =>

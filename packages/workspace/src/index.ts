@@ -33,6 +33,11 @@ export type {
   WorkspaceToolActionResult,
 } from "./types/workspace/WorkspaceToolResult.js";
 export type {
+  WorkspaceFileMutation,
+  WorkspaceFileMutationObserver,
+  WorkspaceFileMutationState,
+} from "./types/workspace/WorkspaceFileMutation.js";
+export type {
   StorageScope,
   StorageProvider,
 } from "./types/storage/Storage.js";

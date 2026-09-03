@@ -42,8 +42,8 @@ import type {
   SessionLoopOptions,
 } from "@/types/session/SessionLoop.js";
 import type { SessionCommandCompletion } from "@/types/session/SessionCommand.js";
-import type { SessionWorkspaceSnapshot } from "@/types/session/SessionTurnFileDiff.js";
 import { SESSION_TURN_FILE_DIFF_DATA_TYPE } from "@/session/messages/SessionTurnFileDiffData.js";
+import { build_session_turn_file_diff } from "@/session/messages/SessionTurnFileDiffBuilder.js";
 import { SESSION_PLUGIN_POINTS } from "@/session/SessionPluginPoints.js";
 import type { SessionTurnCommittedHookValue } from "@/types/session/SessionPluginHook.js";
 import type { JsonValue } from "@/types/common/Json.js";
@@ -68,7 +68,6 @@ export class SessionLoop {
   private readonly interactions:
     SessionInteractionLifecycle & SessionInteractionPort;
   private readonly shell_approval_gateway: ShellApprovalGateway;
-  private readonly workspace_snapshot?: SessionWorkspaceSnapshot;
   private readonly queue: SessionQueue;
   private pending_prompt_count = 0;
   private processing_promise: Promise<void> | null = null;
@@ -88,7 +87,6 @@ export class SessionLoop {
     this.queue = options.queue;
     this.interactions = options.interactions;
     this.shell_approval_gateway = options.shell_approval_gateway;
-    this.workspace_snapshot = options.workspace_snapshot;
     if (!this.session_id) {
       throw new Error("SessionLoop requires a non-empty session_id");
     }
@@ -520,7 +518,6 @@ export class SessionLoop {
           .join("\n")
           .trim();
     let result: SessionTurnExecutionResult;
-    const initial_snapshot = await this.capture_workspace_snapshot(input.active_turn.turn_id);
     try {
       result = await this.executor.execute({
         query: executor_query,
@@ -529,7 +526,7 @@ export class SessionLoop {
     } catch (error) {
       await this.append_turn_file_diff(
         input.active_turn.turn_id,
-        initial_snapshot,
+        turn_context,
         assistant_output,
       );
       try {
@@ -538,7 +535,7 @@ export class SessionLoop {
           error: error instanceof Error ? error.message : String(error),
         });
       } catch (finish_error) {
-        await this.log_snapshot_warning(
+        await this.log_file_diff_warning(
           input.active_turn.turn_id,
           "failed to close Assistant output after execution error",
           finish_error,
@@ -549,7 +546,7 @@ export class SessionLoop {
 
     await this.append_turn_file_diff(
       input.active_turn.turn_id,
-      initial_snapshot,
+      turn_context,
       assistant_output,
     );
 
@@ -588,54 +585,41 @@ export class SessionLoop {
     };
   }
 
-  /** 尽力捕获 Turn 开始快照；快照不可用不能阻止模型执行。 */
-  private async capture_workspace_snapshot(turn_id: string): Promise<string | undefined> {
-    if (!this.workspace_snapshot) return undefined;
-    try {
-      return await this.workspace_snapshot.capture();
-    } catch (error) {
-      await this.log_snapshot_warning(turn_id, "failed to capture initial Workspace snapshot", error);
-      return undefined;
-    }
-  }
-
-  /** 比较 Turn 首尾快照，并把非空差异写入 canonical Assistant data part。 */
+  /** 把当前 Turn 成功的结构化文件修改写入 canonical Assistant data part。 */
   private async append_turn_file_diff(
     turn_id: string,
-    initial_snapshot: string | undefined,
+    turn_context: SessionTurnContext,
     assistant_output: SessionAssistantOutput,
   ): Promise<void> {
-    if (!this.workspace_snapshot || !initial_snapshot) return;
     try {
-      const final_snapshot = await this.workspace_snapshot.capture();
-      if (!final_snapshot) return;
-      const files = await this.workspace_snapshot.diff(initial_snapshot, final_snapshot);
-      if (files.length === 0) return;
-      const additions = files.reduce((total, file) => total + file.additions, 0);
-      const deletions = files.reduce((total, file) => total + file.deletions, 0);
+      const file_diff = build_session_turn_file_diff(
+        this.workspace_path,
+        turn_context.workspace_changes.file_mutations(),
+      );
+      if (!file_diff) return;
       await assistant_output.append_result_parts([{
         type: "data",
         data_type: SESSION_TURN_FILE_DIFF_DATA_TYPE,
         data_id: `turn-file-diff:${turn_id}`,
         data: {
-          files: files.map((file) => ({
+          files: file_diff.files.map((file) => ({
             file: file.file,
             status: file.status,
             additions: file.additions,
             deletions: file.deletions,
             patch: file.patch,
           })),
-          additions,
-          deletions,
+          additions: file_diff.additions,
+          deletions: file_diff.deletions,
         },
       }]);
     } catch (error) {
-      await this.log_snapshot_warning(turn_id, "failed to persist Workspace diff", error);
+      await this.log_file_diff_warning(turn_id, "failed to persist structured file edits", error);
     }
   }
 
-  /** 快照属于辅助观测能力，日志失败同样不能改变 Turn 结果。 */
-  private async log_snapshot_warning(
+  /** 文件修改展示属于辅助观测能力，失败不能改变 Turn 结果。 */
+  private async log_file_diff_warning(
     turn_id: string,
     message: string,
     error: unknown,
@@ -647,7 +631,7 @@ export class SessionLoop {
         error: error instanceof Error ? error.message : String(error),
       });
     } catch {
-      // 文件改动观测失败不影响 canonical 对话执行。
+      // 文件编辑观测失败不影响 canonical 对话执行。
     }
   }
 

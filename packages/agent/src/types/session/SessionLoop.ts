@@ -21,7 +21,6 @@ import type { SessionQueue } from "@/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
-import type { SessionWorkspaceSnapshot } from "@/types/session/SessionTurnFileDiff.js";
 
 /** Promise 延迟控制器。 */
 export interface SessionDeferred<T> {
@@ -73,6 +72,4 @@ export interface SessionLoopOptions {
   interactions: SessionInteractionLifecycle & SessionInteractionPort;
   /** Shell 高风险操作使用的协议适配器。 */
   shell_approval_gateway: ShellApprovalGateway;
-  /** 当前 Workspace 可选的 shadow snapshot 能力；非 Git 或无 Workspace 时省略。 */
-  workspace_snapshot?: SessionWorkspaceSnapshot;
 }
