@@ -1,0 +1,344 @@
+/** 验证本地数据库 Adapter 与产品 Repository 的职责边界。 */
+
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import {
+  LocalDatabase,
+  AgentRepository,
+  create_agent_id,
+  GroupRepository,
+  ensure_local_schema,
+  LocalSettingRepository,
+  PluginRepository,
+  resolve_local_agent_env,
+  WorkspaceRepository,
+} from "../../bin/local/index.js";
+
+/** 创建临时本地数据依赖。 */
+async function create_local_data() {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-local-data-"));
+  const database = new LocalDatabase({ filename: path.join(root_path, "downcity.db") });
+  return { root_path, database };
+}
+
+test("LocalDatabase 不会隐式创建产品业务表", async () => {
+  const { root_path, database } = await create_local_data();
+  try {
+    const before = database.query({
+      sql: "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;",
+    });
+    assert.deepEqual(before.rows, []);
+
+    ensure_local_schema(database);
+    const after = database.query({
+      sql: "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name;",
+    });
+    assert.equal(after.rows.some((row) => row.name === "managed_agents"), false);
+    assert.equal(after.rows.some((row) => row.name === "workspaces"), true);
+    assert.equal(after.rows.some((row) => row.name === "platform_settings"), true);
+    assert.equal((await fs.stat(path.join(root_path, "downcity.db"))).mode & 0o777, 0o600);
+  } finally {
+    database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async () => {
+  const { root_path, database } = await create_local_data();
+  try {
+    ensure_local_schema(database);
+    const workspaces = new WorkspaceRepository(database);
+    const settings = new LocalSettingRepository(database);
+    const agents = new AgentRepository(root_path);
+
+    const workspace = workspaces.ensure({ workspace_path: path.join(root_path, "project") });
+    const agent = agents.create({
+      agent_id: "Lucas Whitman",
+      name: "Lucas Whitman",
+      description: "负责协助维护项目。",
+      execution: { type: "api", model_id: "model-test" },
+      instruction: "You are Lucas.",
+      plugins: { chat: { profile: "lucas" }, task: {} },
+    });
+
+    assert.equal(agents.get("lucas_whitman")?.instruction, "You are Lucas.");
+    assert.equal(agent.name, "Lucas Whitman");
+    assert.equal(agent.description, "负责协助维护项目。");
+    await fs.writeFile(
+      path.join(root_path, "agents", "lucas_whitman", "avatar.png"),
+      Buffer.from("avatar-content"),
+    );
+    assert.equal(
+      agents.get_avatar_url("lucas_whitman"),
+      `data:image/png;base64,${Buffer.from("avatar-content").toString("base64")}`,
+    );
+    const avatar_source_path = path.join(root_path, "source.webp");
+    await fs.writeFile(avatar_source_path, Buffer.from("webp-avatar-content"));
+    agents.set_avatar("lucas_whitman", avatar_source_path);
+    assert.equal(await fs.readFile(path.join(root_path, "agents", "lucas_whitman", "avatar.webp"), "utf8"), "webp-avatar-content");
+    assert.equal(await fs.stat(path.join(root_path, "agents", "lucas_whitman", "avatar.png")).then(() => true, () => false), false);
+    agents.remove_avatar("lucas_whitman");
+    assert.equal(agents.get_avatar_url("lucas_whitman"), undefined);
+    agents.set_generated_avatar("lucas_whitman", "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>");
+    assert.equal(agents.get_avatar_url("lucas_whitman").startsWith("data:image/svg+xml;base64,"), true);
+    assert.equal(workspaces.get(workspace.workspace_id)?.workspace_path, workspace.workspace_path);
+    const updated_workspace = workspaces.update_name(workspace.workspace_id, "新名称");
+    assert.equal(updated_workspace.name, "新名称");
+    const workspace_row = database.query({
+      sql: "SELECT config_json FROM workspaces WHERE workspace_id = ?;",
+      params: [workspace.workspace_id],
+    }).rows[0];
+    assert.ok(workspace_row);
+    const workspace_config = JSON.parse(String(workspace_row.config_json));
+    assert.equal(workspace_config.workspace_id, workspace.workspace_id);
+    assert.equal(workspace_config.workspace_path, workspace.workspace_path);
+    settings.set("test.settings", { enabled: true, token: "plain-token" });
+    assert.deepEqual(settings.get("test.settings"), { enabled: true, token: "plain-token" });
+    const setting_row = database.query({
+      sql: "SELECT value_json FROM platform_settings WHERE key = ?;",
+      params: ["test.settings"],
+    }).rows[0];
+    assert.equal(setting_row.value_json, JSON.stringify({ enabled: true, token: "plain-token" }));
+    await assert.rejects(fs.access(path.join(root_path, "main", "model-db.key")));
+    assert.deepEqual(agents.list().map((item) => item.agent_id), ["lucas_whitman"]);
+    assert.equal(await fs.readFile(
+      path.join(root_path, "agents", "lucas_whitman", "SOUL.md"),
+      "utf8",
+    ), "You are Lucas.");
+    const agent_file = JSON.parse(await fs.readFile(
+      path.join(root_path, "agents", "lucas_whitman", "agent.json"),
+      "utf8",
+    ));
+    assert.equal(agent_file.schema_version, 2);
+    assert.deepEqual(agent_file.plugins, { chat: { profile: "lucas" }, task: {} });
+    assert.equal(
+      (await fs.stat(path.join(root_path, "agents", "lucas_whitman"))).mode & 0o777,
+      0o700,
+    );
+    assert.equal(
+      (await fs.stat(path.join(root_path, "agents", "lucas_whitman", "agent.json"))).mode & 0o777,
+      0o600,
+    );
+  } finally {
+    database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("create_agent_id 将中英文名称转换为可读稳定 ID", () => {
+  assert.equal(create_agent_id("研究助手"), "yan_jiu_zhu_shou");
+  assert.equal(create_agent_id("Downcity 研究助手"), "downcity_yan_jiu_zhu_shou");
+  assert.throws(() => create_agent_id("   "), /Agent name is required/u);
+});
+
+test("AgentRepository 删除 Agent 的完整用户级目录", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-remove-"));
+  try {
+    const agents = new AgentRepository(root_path);
+    agents.create({ agent_id: "removable", name: "可删除 Agent", description: "测试删除", instruction: "test" });
+    const agent_path = path.join(root_path, "agents", "removable");
+    await fs.mkdir(path.join(agent_path, "sessions", "session-one"), { recursive: true });
+    await fs.writeFile(path.join(agent_path, "sessions", "session-one", "meta.json"), "{}", "utf8");
+    agents.remove("removable");
+    await assert.rejects(fs.access(agent_path));
+    assert.equal(agents.get("removable"), null);
+  } finally {
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("GroupRepository 持久化并更新 Group 定义", async () => {
+  const { root_path, database } = await create_local_data();
+  try {
+    ensure_local_schema(database);
+    const groups = new GroupRepository(database);
+    const created = groups.create({ group_id: "delivery-team", name: "Delivery", model_id: "gpt-5", member_agent_ids: ["architect", "reviewer"] });
+    assert.equal(created.model_id, "gpt-5");
+    assert.equal(groups.get("delivery-team")?.name, "Delivery");
+    const updated = groups.update("delivery-team", { name: "Release", model_id: "gpt-5-mini", instruction: "Review releases", member_agent_ids: ["reviewer"] });
+    assert.deepEqual(updated.member_agent_ids, ["reviewer"]);
+    assert.equal(updated.model_id, "gpt-5-mini");
+    assert.equal(groups.list().length, 1);
+    assert.equal(groups.remove(created.group_id), true);
+    assert.equal(groups.get(created.group_id), null);
+  } finally {
+    database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("PluginRepository 按 Plugin ID 保存明文 TOML profile", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-config-"));
+  try {
+    const plugins = new PluginRepository(root_path);
+    plugins.save_profile("chat", "lucas", {
+      queue: { max_concurrency: 3 },
+      channels: [{
+        id: "telegram_main",
+        type: "telegram",
+        name: "Lucas Bot",
+        bot_token: "plain-token",
+      }],
+    });
+    assert.deepEqual(plugins.get_profile("chat", "lucas"), {
+      queue: { max_concurrency: 3 },
+      channels: [{
+        id: "telegram_main",
+        type: "telegram",
+        name: "Lucas Bot",
+        bot_token: "plain-token",
+      }],
+    });
+    const config_path = path.join(root_path, "plugins", "chat", "config.toml");
+    const content = await fs.readFile(config_path, "utf8");
+    assert.match(content, /plain-token/u);
+    assert.match(content, /\[profiles\.lucas\.queue\]/u);
+    assert.equal((await fs.stat(config_path)).mode & 0o777, 0o600);
+    assert.equal((await fs.stat(path.dirname(config_path))).mode & 0o777, 0o700);
+  } finally {
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("PluginRepository 从安装目录读取 Plugin README", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-readme-"));
+  try {
+    const plugins = new PluginRepository(root_path);
+    const plugin_path = path.join(root_path, "plugins", "example");
+    const readme_path = path.join(plugin_path, "docs", "plugin-guide.md");
+    await fs.mkdir(path.dirname(readme_path), { recursive: true });
+    await fs.writeFile(readme_path, "# Example\n\nPlugin guide.\n", "utf8");
+
+    assert.equal(
+      plugins.read_installed_readme("example", "docs/plugin-guide.md"),
+      "# Example\n\nPlugin guide.\n",
+    );
+    assert.throws(
+      () => plugins.read_installed_readme("example", "../outside.md"),
+      /README must stay inside the Plugin directory/u,
+    );
+  } finally {
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("LocalDatabase transaction 提交同步写入并回滚异步回调", async () => {
+  const { root_path, database } = await create_local_data();
+  try {
+    database.execute_script("CREATE TABLE values_test (value TEXT NOT NULL);");
+    database.transaction((transaction) => {
+      transaction.execute({ sql: "INSERT INTO values_test (value) VALUES (?);", params: ["sync"] });
+    });
+    assert.deepEqual(
+      database.query({ sql: "SELECT value FROM values_test ORDER BY value;" }).rows,
+      [{ value: "sync" }],
+    );
+
+    assert.throws(
+      () => database.transaction(async (transaction) => {
+        transaction.execute({ sql: "INSERT INTO values_test (value) VALUES (?);", params: ["async"] });
+      }),
+      /must be synchronous/u,
+    );
+    assert.deepEqual(
+      database.query({ sql: "SELECT value FROM values_test ORDER BY value;" }).rows,
+      [{ value: "sync" }],
+    );
+  } finally {
+    database.close();
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("Agent Env 优先级为 Global < Workspace < 显式进程 Env", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-env-priority-"));
+  const workspace_path = path.join(root_path, "workspace");
+  await fs.mkdir(workspace_path);
+  try {
+    await fs.writeFile(
+      path.join(root_path, ".env"),
+      "SHARED=global\nGLOBAL_ONLY=yes\nDOWNCITY_USER_TOKEN=global-token\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(workspace_path, ".env"),
+      "SHARED=workspace\nWORKSPACE_ONLY=yes\n",
+      "utf8",
+    );
+    const env = resolve_local_agent_env({
+      root_path,
+      workspace_path,
+      process_env: {
+        SHARED: "process",
+        PROCESS_ONLY: "yes",
+        DOWNCITY_USER_TOKEN: "process-token",
+      },
+    });
+    assert.equal(env.SHARED, "process");
+    assert.equal(env.GLOBAL_ONLY, "yes");
+    assert.equal(env.WORKSPACE_ONLY, "yes");
+    assert.equal(env.PROCESS_ONLY, "yes");
+    assert.equal(env.DOWNCITY_USER_TOKEN, "process-token");
+  } finally {
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("平台身份凭证不会从全局 Env 泄漏到 Agent Workspace", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-env-isolation-"));
+  const workspace_path = path.join(root_path, "workspace");
+  await fs.mkdir(workspace_path);
+  try {
+    await fs.writeFile(
+      path.join(root_path, ".env"),
+      [
+        "SAFE_VALUE=kept",
+        "DC_AUTH_TOKEN=auth-token",
+        "DC_AGENT_TOKEN=agent-token",
+        "DOWNCITY_FEDERATION_URL=https://federation.example.com",
+        "DOWNCITY_USER_TOKEN=user-token",
+        "DOWNCITY_CITY_URL=https://legacy.example.com",
+        "DOWNCITY_CITY_USER_TOKEN=legacy-user-token",
+        "CITY_URL=https://older.example.com",
+        "CITY_USER_TOKEN=older-user-token",
+      ].join("\n"),
+      "utf8",
+    );
+    const env = resolve_local_agent_env({
+      root_path,
+      workspace_path,
+      process_env: {},
+    });
+    assert.deepEqual(env, { SAFE_VALUE: "kept" });
+  } finally {
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});
+
+test("显式传入空环境时不读取宿主进程 Env", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-env-explicit-empty-"));
+  const workspace_path = path.join(root_path, "workspace");
+  await fs.mkdir(workspace_path);
+  const previous_value = process.env.DOWNCITY_TEST_HOST_ENV;
+  process.env.DOWNCITY_TEST_HOST_ENV = "host";
+  try {
+    await fs.writeFile(path.join(root_path, ".env"), "GLOBAL_ONLY=yes\n", "utf8");
+    await fs.writeFile(path.join(workspace_path, ".env"), "WORKSPACE_ONLY=yes\n", "utf8");
+    const env = resolve_local_agent_env({
+      root_path,
+      workspace_path,
+      process_env: {},
+    });
+    assert.deepEqual(env, {
+      GLOBAL_ONLY: "yes",
+      WORKSPACE_ONLY: "yes",
+    });
+  } finally {
+    if (previous_value === undefined) delete process.env.DOWNCITY_TEST_HOST_ENV;
+    else process.env.DOWNCITY_TEST_HOST_ENV = previous_value;
+    await fs.rm(root_path, { recursive: true, force: true });
+  }
+});

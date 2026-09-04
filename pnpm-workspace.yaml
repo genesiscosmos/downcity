@@ -1,11 +1,11 @@
 packages:
   - homepage
   - packages/agent
+  - packages/city
   - packages/plugin
   - packages/workspace
   - app/desktop
   - packages/workspace-cloudflare-computer
-  - packages/local
   - packages/federation
   - packages/services
   - packages/plugins

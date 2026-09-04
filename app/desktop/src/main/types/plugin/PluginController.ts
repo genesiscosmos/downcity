@@ -4,7 +4,7 @@ import type {
   LocalInstalledPluginDefinition,
   LocalPluginDefinition,
   LocalPluginRegistration,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 import type { DesktopPluginSource } from "../../../common/types/DesktopApi.js";
 
 /** 内置或第三方 Plugin 的统一解析结果。 */

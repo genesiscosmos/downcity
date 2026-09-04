@@ -4,7 +4,7 @@
  * 本模块拥有 Token 表的查询规则；底层数据库连接由 CLI 组合根注入。
  */
 
-import type { LocalDatabase } from "@downcity/local";
+import type { LocalDatabase } from "@downcity/city/local";
 import type { AgentTokenSummary } from "@/city/types/auth/AgentToken.js";
 
 /** Agent Token 内部持久化记录。 */

@@ -11,7 +11,7 @@ import { protocol } from "electron";
 import {
   verify_local_installed_plugin_integrity,
   type LocalInstalledPluginDefinition,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 import type { DesktopLocalData } from "../agent/DesktopLocalData.js";
 
 const plugin_renderer_scheme = "downcity-plugin";

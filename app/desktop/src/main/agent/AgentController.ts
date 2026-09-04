@@ -7,7 +7,6 @@
 
 import {
   Agent,
-  City,
   Group,
   type AgentSession,
   type GroupSessionContract,
@@ -18,8 +17,8 @@ import {
   type SessionMutationUnsubscribe,
   type SessionMessage,
   type SessionMutation,
-  type CityAgentPluginBinding,
 } from "@downcity/agent";
+import { City, type CityAgentPluginBinding } from "@downcity/city";
 import type { PluginNotificationInput } from "@downcity/plugin";
 import { clipboard, shell } from "electron";
 import { LocalStorageProvider } from "@downcity/workspace";
@@ -28,14 +27,14 @@ import {
   create_city_host_instance_id,
   register_city_host,
   unregister_city_host,
-} from "@downcity/agent/city";
+} from "@downcity/city";
 import { create_workspace_entry, get_workspace_entry } from "@downcity/agent/internal";
 import {
   type LocalAgentConfig,
   type LocalGroupConfig,
   type LocalWorkspaceConfig,
   create_agent_id,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 import type {
   DesktopAgentConnection,
   DesktopAgentSummary,
@@ -86,8 +85,8 @@ import {
   resolve_desktop_city_env,
 } from "./DesktopAgentAssembly.js";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
-import type { LocalPluginLoader } from "@downcity/local/product";
-import { resolve_local_agent_env } from "@downcity/local/product";
+import type { LocalPluginLoader } from "@downcity/city/local";
+import { resolve_local_agent_env } from "@downcity/city/local";
 import { select_builtin_agent_avatar_path } from "./BuiltinAgentAvatar.js";
 import type { PluginJsonValue } from "@downcity/plugin";
 

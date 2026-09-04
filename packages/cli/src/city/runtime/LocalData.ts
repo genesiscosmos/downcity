@@ -9,14 +9,14 @@ import {
   get_local_database_path,
   LocalDatabase,
   resolve_local_root_path,
-} from "@downcity/local";
+} from "@downcity/city/local";
 import {
   AgentRepository,
   ensure_local_schema,
   PluginRepository,
   LocalSettingRepository,
   WorkspaceRepository,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 import { AgentTokenRepository } from "@/city/runtime/auth/AgentTokenRepository.js";
 import { ensure_cli_local_schema } from "@/city/runtime/LocalCliSchema.js";
 

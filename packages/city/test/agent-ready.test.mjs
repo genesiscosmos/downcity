@@ -1,0 +1,303 @@
+/**
+ * @file 验证 session.prompt 会等待当前 Agent runtime ready。
+ *
+ * 关键点（中文）
+ * - 这里走编译后的公开 SDK，覆盖宿主真实入口。
+ * - plugin lifecycle 未完成前，session.prompt 不应进入模型执行。
+ */
+
+import test from "node:test";
+import { create_plugin_binding } from "./helpers/CityPluginTestBinding.mjs";
+import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs/promises";
+
+import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
+import { Agent } from "@downcity/agent";
+import { City } from "../bin/index.js";
+import { create_workspace_entry } from "@downcity/agent/host";
+import { Workspace } from "@downcity/workspace";
+import { create_plugin } from "@downcity/plugin";
+
+function create_deferred() {
+  let resolve;
+  const promise = new Promise((inner_resolve) => {
+    resolve = inner_resolve;
+  });
+  return {
+    promise,
+    resolve,
+  };
+}
+
+async function is_settled(promise) {
+  const marker = {};
+  const result = await Promise.race([
+    promise.then(
+      () => true,
+      () => true,
+    ),
+    new Promise((resolve) => setTimeout(() => resolve(marker), 0)),
+  ]);
+  return result !== marker;
+}
+
+function create_stream_text_result(text) {
+  return {
+    stream: new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          type: "stream-start",
+          warnings: [],
+        });
+        controller.enqueue({
+          type: "text-start",
+          id: "text_1",
+        });
+        controller.enqueue({
+          type: "text-delta",
+          id: "text_1",
+          delta: text,
+        });
+        controller.enqueue({
+          type: "text-end",
+          id: "text_1",
+        });
+        controller.enqueue({
+          type: "finish",
+          finishReason: {
+            unified: "stop",
+            raw: "stop",
+          },
+          usage: {
+            inputTokens: {
+              total: 0,
+              noCache: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+            },
+            outputTokens: {
+              total: 0,
+              text: 0,
+              reasoning: 0,
+            },
+          },
+        });
+        controller.close();
+      },
+    }),
+  };
+}
+
+test("session.prompt waits for agent runtime ready before model execution", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-agent-ready-"),
+  );
+  const lifecycle_ready = create_deferred();
+  let model_stream_calls = 0;
+
+  const blocking_plugin = create_plugin({
+    name: "blocking",
+    title: "Blocking",
+    description: "Blocks lifecycle start until the test releases it",
+    lifecycle: {
+      start: async () => {
+        await lifecycle_ready.promise;
+      },
+    },
+  });
+  const model = new MockModelClient({
+    modelId: "agent-ready-model",
+    doStream: async () => {
+      model_stream_calls += 1;
+      return create_stream_text_result("ready");
+    },
+    doGenerate: async () => ({
+      content: [
+        {
+          type: "text",
+          text: "Ready title",
+        },
+      ],
+      finishReason: {
+        unified: "stop",
+        raw: "stop",
+      },
+      usage: {
+        inputTokens: {
+          total: 0,
+          noCache: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+        },
+        outputTokens: {
+          total: 0,
+          text: 0,
+          reasoning: 0,
+        },
+      },
+      warnings: [],
+    }),
+  });
+  const agent = new Agent({ id: "ready_agent", model });
+  const workspace = new Workspace({ id: "ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent, { plugins: [create_plugin_binding(city, blocking_plugin)] });
+  const entry = create_workspace_entry(agent, workspace);
+
+  try {
+    const session = await entry.sessions.create({
+      session_id: "ready_session",
+    });
+    const prompt_promise = session.prompt({
+      query: "hello",
+    });
+
+    assert.equal(await is_settled(prompt_promise), false);
+    assert.equal(model_stream_calls, 0);
+
+    lifecycle_ready.resolve();
+    const turn = await prompt_promise;
+    const result = await turn.finished;
+
+    assert.equal(result.success, true);
+    assert.equal(model_stream_calls, 1);
+  } finally {
+    lifecycle_ready.resolve();
+    await city.close();
+  }
+});
+
+test("entry.plugins waits for lifecycle start before direct action execution", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-agent-plugin-ready-"),
+  );
+  const lifecycle_ready = create_deferred();
+  let lifecycle_started = false;
+  let action_calls = 0;
+  const plugin = create_plugin({
+    name: "direct-action",
+    title: "Direct Action",
+    description: "Waits for lifecycle before direct calls",
+    lifecycle: {
+      start: async () => {
+        await lifecycle_ready.promise;
+        lifecycle_started = true;
+      },
+    },
+    actions: {
+      status: {
+        description: "Read lifecycle status",
+        execute: async () => {
+          action_calls += 1;
+          return { success: true, data: { lifecycle_started } };
+        },
+      },
+    },
+  });
+  const agent = new Agent({ id: "plugin_ready_agent" });
+  const workspace = new Workspace({ id: "plugin_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent, { plugins: [create_plugin_binding(city, plugin)] });
+  const entry = create_workspace_entry(agent, workspace);
+
+  try {
+    const action_promise = entry.plugins.run_action({
+      plugin: "direct-action",
+      action: "status",
+    });
+    assert.equal(await is_settled(action_promise), false);
+    assert.equal(action_calls, 0);
+
+    lifecycle_ready.resolve();
+    const result = await action_promise;
+    assert.equal(result.success, true);
+    assert.equal(result.data.lifecycle_started, true);
+    assert.equal(action_calls, 1);
+  } finally {
+    lifecycle_ready.resolve();
+    await city.close();
+    await fs.rm(agent_path, { recursive: true, force: true });
+  }
+});
+
+test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失败", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-agent-ready-isolation-"),
+  );
+  let healthy_started = false;
+  const failing_plugin = create_plugin({
+    name: "failing",
+    lifecycle: {
+      start: async () => {
+        throw new Error("start failed");
+      },
+    },
+  });
+  const healthy_plugin = create_plugin({
+    name: "healthy",
+    lifecycle: {
+      start: async () => {
+        healthy_started = true;
+      },
+    },
+  });
+  const agent = new Agent({ id: "ready_isolation_agent" });
+  const workspace = new Workspace({ id: "isolation_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent, { plugins: [
+    create_plugin_binding(city, failing_plugin),
+    create_plugin_binding(city, healthy_plugin),
+  ] });
+  const entry = create_workspace_entry(agent, workspace);
+
+  try {
+    await entry.sessions.create({ session_id: "initial_barrier" });
+
+    assert.equal(healthy_started, true);
+    assert.equal(city.plugins.snapshots(agent.id).find((item) => item.name === "failing")?.status, "error");
+    assert.equal(city.plugins.snapshots(agent.id).find((item) => item.name === "healthy")?.status, "ready");
+  } finally {
+    await city.close();
+  }
+});
+
+test("Agent registers PluginRegistry tools and removes them with the last action plugin", async () => {
+  const agent_path = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-agent-state-plugin-tools-"),
+  );
+  const agent = new Agent({
+    id: "state_plugin_tools_agent",
+  });
+  const workspace = new Workspace({ id: "plugin_tools_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent);
+  const entry = create_workspace_entry(agent, workspace);
+  const action_plugin = create_plugin({
+    name: "dynamic_action",
+    actions: {
+      ping: {
+        description: "Return pong",
+        execute: async () => ({ success: true, data: { value: "pong" } }),
+      },
+    },
+  });
+
+  try {
+    assert.equal(entry.tools.plugin_read, undefined);
+    assert.equal(entry.tools.plugin_call, undefined);
+
+    await city.plugins.register(agent.id, create_plugin_binding(city, action_plugin));
+
+    assert.notEqual(entry.tools.plugin_read, undefined);
+    assert.notEqual(entry.tools.plugin_call, undefined);
+
+    await city.plugins.unregister(agent.id, "dynamic_action");
+
+    assert.equal(entry.tools.plugin_read, undefined);
+    assert.equal(entry.tools.plugin_call, undefined);
+  } finally {
+    await city.close();
+  }
+});

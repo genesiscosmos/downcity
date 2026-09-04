@@ -11,21 +11,21 @@ import {
   type LocalWorkspaceConfig,
   type PluginRepository,
   type LocalPluginRegistration,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 import {
   Agent,
   type AgentModel,
   type AgentOptions,
-  type CityAgentPluginBinding,
 } from "@downcity/agent";
+import type { CityAgentPluginBinding } from "@downcity/city";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/workspace";
 import {
   create_builtin_plugin_registrations,
 } from "@downcity/plugins";
 import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
-import { resolve_local_agent_env } from "@downcity/local/product";
-import { resolve_local_root_path } from "@downcity/local";
+import { resolve_local_agent_env } from "@downcity/city/local";
+import { resolve_local_root_path } from "@downcity/city/local";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
 
 /** 创建 CLI 与 Desktop 可共享语义的官方 Plugin 注册集合。 */

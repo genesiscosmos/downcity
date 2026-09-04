@@ -9,7 +9,6 @@
 
 import {
   Agent,
-  City,
   generate_id,
   type AgentSessions,
   type AgentSession,
@@ -20,6 +19,7 @@ import {
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
+import { City } from "@downcity/city";
 import { LocalStorageProvider, type WorkspaceBase } from "@downcity/workspace";
 import type { AgentModel } from "@downcity/agent";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";

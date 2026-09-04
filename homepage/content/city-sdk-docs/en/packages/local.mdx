@@ -1,21 +1,18 @@
 ---
-title: "@downcity/local"
-description: Manage local product configuration with a database adapter and explicit repositories.
+title: "@downcity/city/local"
+description: Use City's local database, paths, repositories, environment assembly, and Plugin loader.
 ---
 
-The `@downcity/local` root entry provides the SQLite adapter and path primitives shared
-by the CLI and Desktop. Agent, Workspace, and Plugin schemas, repositories, and loaders live in the
-explicit `@downcity/local/product` subpath.
+`@downcity/city/local` provides the local host capabilities shared by the CLI and Desktop:
+the SQLite adapter, paths, product schemas, repositories, environment assembly, and Plugin loader.
 
 ```ts
 import {
   LocalDatabase,
-} from "@downcity/local";
-import {
   AgentRepository,
   WorkspaceRepository,
   ensure_local_schema,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 
 const database = new LocalDatabase({ filename: database_path });
 ensure_local_schema(database);
@@ -25,6 +22,6 @@ const agents = new AgentRepository(root_path);
 ```
 
 The CLI and Desktop create these dependencies in their own composition roots, read configuration,
-and explicitly call `new Agent()`. `@downcity/local` never creates an Agent, Workspace, Model, or
-City, and City never queries or persists product data. Workspace and platform settings are stored as
-plaintext JSON, with `0600` permissions on the local database for user-level isolation.
+and explicitly call `new Agent()`. The local subpath does not create an Agent, Workspace, Model, or
+City. Workspace and platform settings are stored as plaintext JSON, with `0600` permissions on the
+local database for user-level isolation.

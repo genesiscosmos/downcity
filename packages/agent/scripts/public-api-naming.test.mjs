@@ -24,7 +24,6 @@ const public_declaration_files = [
   "remote/RemoteAgent.d.ts",
   "remote/RemoteSession.d.ts",
   "session/Session.d.ts",
-  "plugin/core/PluginRegistry.d.ts",
   "types/agent/AgentOptions.d.ts",
   "types/agent/SessionActor.d.ts",
   "types/agent/SessionTypes.d.ts",

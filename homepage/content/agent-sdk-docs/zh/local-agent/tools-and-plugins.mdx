@@ -46,7 +46,8 @@ Shell 额外提供 `shell_exec` 与 `shell_session`。文件和搜索 Tool 始�
 Agent 构造函数不接收 Plugin。先把 registration 交给 City，再为 Agent 声明所需 Plugin ID：
 
 ```ts
-import { Agent, City } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
 

@@ -8,7 +8,8 @@ description: Responsibilities and composition of City, Agent, Workspace, Session
 Downcity separates the execution subject, project resources, and extension runtime. `Agent` owns identity, instruction, model, custom Tools, and Sessions. `Workspace` owns project resources and Shell. `City` owns the Plugin catalog, shared instances, lifecycle, and Agent bindings.
 
 ```ts
-import { Agent, City } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Shell, Workspace } from "@downcity/workspace";
 
@@ -48,7 +49,7 @@ flowchart TD
 The dependency direction stays explicit:
 
 - `@downcity/workspace` does not depend on Agent or Session.
-- `@downcity/agent` depends on the Workspace protocol and interprets City Storage for Agent domain state.
+- `@downcity/agent` depends on the Workspace protocol and interprets host Storage for Agent domain state.
 - Hosts choose a platform Sandbox and compose Agent with Workspace.
 - Edge adapters use `@downcity/workspace/protocol` without loading Node.js local implementations.
 
@@ -170,7 +171,8 @@ City remains owned by its host.
 | Package | Owns | Does not own |
 | --- | --- | --- |
 | `@downcity/workspace` | Workspace protocol, local project resources, File/Search tools, Env, Shell | Agent identity, Plugin registry, Session semantics, model calls |
-| `@downcity/agent` | City, Agent, AgentSessions, Session, Store, Plugin runtime, model Tool Loop | Project resource implementation, platform Sandbox, local product repositories |
+| `@downcity/agent` | Agent, AgentSessions, Session, Store, host extension ports, model Tool Loop | City composition, Plugin lifecycle, project resource implementation, platform Sandbox |
+| `@downcity/city` | City, Plugin runtime, Hook scheduling, shared lifecycle, HTTP/RPC transports, local host data | Agent execution internals, concrete built-in Plugins |
 | Sandbox packages | Native process isolation for one platform | Workspace, Agent, Session, or Plugin business behavior |
 | `@downcity/agent` | Agent index and HTTP/RPC transports | Local configuration repository and Agent execution state |
 

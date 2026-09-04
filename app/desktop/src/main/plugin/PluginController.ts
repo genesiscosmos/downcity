@@ -11,7 +11,7 @@ import {
   normalize_profile_id,
   verify_local_installed_plugin_integrity,
   type LocalPluginDefinition,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 import type {
   DesktopCreatePluginProfileInput,
   DesktopInvokePluginActionInput,

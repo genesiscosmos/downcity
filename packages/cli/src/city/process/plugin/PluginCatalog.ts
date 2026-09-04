@@ -6,7 +6,7 @@ import {
 } from "@/city/process/registry/PluginRepository.js";
 import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
-import { verify_local_installed_plugin_integrity } from "@downcity/local/product";
+import { verify_local_installed_plugin_integrity } from "@downcity/city/local";
 import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 
 /** 列出全部内置与第三方 Plugin。 */

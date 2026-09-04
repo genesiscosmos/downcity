@@ -7,7 +7,6 @@
 import { Agent } from "@/agent/Agent.js";
 import { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
 import type { WorkspaceBase } from "@downcity/workspace";
-import type { City } from "../city/index.js";
 import type { Embassy } from "@downcity/federation";
 import type { StorageProvider, StorageScope } from "@downcity/workspace";
 import { MemoryStorageProvider } from "@downcity/workspace";
@@ -15,10 +14,10 @@ import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
 import { create_empty_session_extensions } from "@/types/session/SessionExtension.js";
 import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
-import type { AgentCityExtensionBinding } from "@/city/types/CityPlugin.js";
+import type { AgentHost, AgentHostExtensions } from "@/types/agent/AgentHost.js";
 
 interface AgentRuntimeState {
-  bound_city?: City;
+  host?: AgentHost;
   embassy?: Embassy;
   memory_session_started?: boolean;
   workspaces_by_id: Map<string, WorkspaceEntry>;
@@ -27,7 +26,7 @@ interface AgentRuntimeState {
   session_extensions?: (
     workspace?: WorkspaceBase,
   ) => SessionExtensionRuntime;
-  city_extensions?: AgentCityExtensionBinding;
+  host_extensions?: AgentHostExtensions;
 }
 
 const runtime_states = new WeakMap<Agent, AgentRuntimeState>();
@@ -47,18 +46,18 @@ function runtime_state(agent: Agent): AgentRuntimeState {
   return state;
 }
 
-export function attach_agent_city(agent: Agent, city: City): void {
+export function attach_agent_host(agent: Agent, host: AgentHost): void {
   const state = runtime_state(agent);
   if (state.memory_session_started) {
     throw new Error(
       `Agent "${agent.id}" already created Session data without City; join City before creating Sessions`,
     );
   }
-  if (state.bound_city && state.bound_city !== city) {
-    throw new Error(`Agent "${agent.id}" already belongs to another City`);
+  if (state.host && state.host !== host) {
+    throw new Error(`Agent "${agent.id}" already belongs to another host`);
   }
-  state.bound_city = city;
-  state.embassy = city.embassy;
+  state.host = host;
+  state.embassy = host.embassy;
 }
 
 /** 将 City 提供的底层 Storage 注入 Agent；该函数只在组合根调用。 */
@@ -85,22 +84,22 @@ export function attach_agent_session_extensions(
 }
 
 /** 由 City 注入完整的宿主扩展绑定。 */
-export function attach_agent_city_extensions(
+export function attach_agent_host_extensions(
   agent: Agent,
-  extensions: AgentCityExtensionBinding,
+  extensions: AgentHostExtensions,
 ): void {
   const state = runtime_state(agent);
-  state.city_extensions = extensions;
+  state.host_extensions = extensions;
 }
 
-/** 返回当前 Agent 的 City 宿主扩展；未绑定时为空。 */
-export function agent_city_extensions(agent: Agent): AgentCityExtensionBinding | undefined {
-  return runtime_state(agent).city_extensions;
+/** 返回当前 Agent 的宿主扩展；未绑定时为空。 */
+export function agent_host_extensions(agent: Agent): AgentHostExtensions | undefined {
+  return runtime_state(agent).host_extensions;
 }
 
 /** 等待 City 为 Agent 绑定的扩展完成初始生命周期。 */
 export async function ensure_agent_extensions_ready(agent: Agent): Promise<void> {
-  await runtime_state(agent).city_extensions?.ensure_ready();
+  await runtime_state(agent).host_extensions?.ensure_ready();
 }
 
 /** 返回当前 Agent 的 City 扩展运行时；未加入 City 时使用空实现。 */
@@ -115,21 +114,21 @@ export function resolve_agent_session_extensions(
 /** 标记 Agent 已经创建或恢复过无 City 的 Session。 */
 export function mark_agent_session_started(agent: Agent): void {
   const state = runtime_state(agent);
-  if (!state.bound_city) state.memory_session_started = true;
+  if (!state.host) state.memory_session_started = true;
 }
 
-export function detach_agent_city(agent: Agent, city: City): void {
+export function detach_agent_host(agent: Agent, host: AgentHost): void {
   const state = runtime_state(agent);
-  if (state.bound_city === city) {
-    state.bound_city = undefined;
+  if (state.host === host) {
+    state.host = undefined;
     state.embassy = undefined;
     state.session_extensions = undefined;
-    state.city_extensions = undefined;
+    state.host_extensions = undefined;
   }
 }
 
-export function agent_is_in_city(agent: Agent): boolean {
-  return Boolean(runtime_state(agent).bound_city);
+export function agent_has_host(agent: Agent): boolean {
+  return Boolean(runtime_state(agent).host);
 }
 
 /** 返回 City 注入的窄 Embassy 能力。 */
@@ -138,8 +137,8 @@ export function agent_embassy(agent: Agent): Embassy | undefined {
 }
 
 /** 由 Agent 释放自身时通知所属 City。 */
-export async function release_agent_from_city(agent: Agent): Promise<void> {
-  await runtime_state(agent).bound_city?.release_agent(agent);
+export async function release_agent_from_host(agent: Agent): Promise<void> {
+  await runtime_state(agent).host?.release_agent(agent);
 }
 
 /** 返回 Agent 解释出的业务存储作用域。 */
@@ -194,11 +193,11 @@ export function create_workspace_entry(agent: Agent, workspace: WorkspaceBase): 
   const state = runtime_state(agent);
   const workspace_id = String(workspace?.id || "").trim();
   if (!workspace_id) throw new Error("Agent sessions require a Workspace with a stable id");
-  const city = state.bound_city;
-  if (city && city.get_workspace(workspace_id) !== workspace) {
-    throw new Error(`Workspace "${workspace_id}" does not belong to the Agent City`);
+  const host = state.host;
+  if (host && host.get_workspace(workspace_id) !== workspace) {
+    throw new Error(`Workspace "${workspace_id}" does not belong to the Agent host`);
   }
-  if (!city) {
+  if (!host) {
     const owner = unbound_workspace_owners.get(workspace);
     if (owner && owner !== agent) {
       throw new Error(`Workspace "${workspace_id}" already bound to another scope`);
@@ -229,7 +228,7 @@ export function release_workspace_entry(agent: Agent, workspace_id: string, entr
   const state = runtime_state(agent);
   if (state.workspaces_by_id.get(workspace_id) === entry) {
     state.workspaces_by_id.delete(workspace_id);
-    if (!state.bound_city && unbound_workspace_owners.get(entry.workspace) === agent) {
+    if (!state.host && unbound_workspace_owners.get(entry.workspace) === agent) {
       unbound_workspace_owners.delete(entry.workspace);
     }
   }

@@ -9,7 +9,7 @@ import fs from "fs-extra";
 import {
   get_local_database_path,
   resolve_local_root_path,
-} from "@downcity/local";
+} from "@downcity/city/local";
 
 /** 删除当前 City 数据库文件，并返回实际删除的绝对路径。 */
 export async function reset_city_database(root_path_input?: string): Promise<string[]> {

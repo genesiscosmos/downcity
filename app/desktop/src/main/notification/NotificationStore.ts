@@ -1,6 +1,6 @@
 /** 使用 Desktop 平台设置仓储持久化当前未读通知集合。 */
 
-import type { LocalSettingRepository } from "@downcity/local/product";
+import type { LocalSettingRepository } from "@downcity/city/local";
 import type { DesktopNotification, DesktopNotificationScope, DesktopNotificationTarget } from "../../common/types/DesktopNotification.js";
 import type { DesktopNotificationStorage } from "../types/notification/Notification.js";
 import type { PluginJsonObject } from "@downcity/plugin";

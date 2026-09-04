@@ -29,7 +29,7 @@ import {
   list_workspace_entries,
   mark_agent_session_started,
   resolve_agent_session_extensions,
-  release_agent_from_city,
+  release_agent_from_host,
 } from "@/internal/AgentRuntime.js";
 
 /** SDK Agent 主体。 */
@@ -138,7 +138,7 @@ export class Agent {
       const entries = [...list_workspace_entries(this)];
       const results = await Promise.allSettled(entries.map(async (entry) => await entry.leave()));
       this.session_manager.dispose_title_generation();
-      results.push(...await Promise.allSettled([release_agent_from_city(this)]));
+      results.push(...await Promise.allSettled([release_agent_from_host(this)]));
       results.push(...await Promise.allSettled([dispose_agent_runtime(this)]));
       const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
       clear_agent_runtime(this);

@@ -46,7 +46,8 @@ Shell adds `shell_exec` and `shell_session`. File and search Tools remain restri
 The Agent constructor does not accept Plugins. Provide registrations to City, then declare the Plugin IDs required by an Agent:
 
 ```ts
-import { Agent, City } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
 

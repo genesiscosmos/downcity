@@ -1,36 +1,36 @@
 # @downcity/agent
 
-`@downcity/agent` 是 Downcity 的 Agent runtime 包。`Agent` 是主体，`City` 是承载多个 Agent、Workspace、Embassy 与 transport 的环境容器。
+`@downcity/agent` 是 Downcity 的单 Agent runtime 包。`Agent` 持有身份、模型、指令、Tool 与 Session，并可独立于 City 运行。
 
 它负责把一个 agent 项目目录装配成可执行运行时，包括：
 
 - 本地 SDK：`Agent`、`Group`、`Workspace`、`Session`、`RemoteAgent`
 - 内部执行内核：Session Composer、LLM/Tool Loop、增量输出
-- City Plugin runtime：catalog、共享实例、scope binding、hook 与 execution lease
-- 远程访问：`RemoteAgent`、HTTP/RPC transport
+- 宿主扩展端口：接收 City 提供的 Plugin Tool、Hook execution lease 与 Workspace 作用域
+- 远程访问：`RemoteAgent` 与 HTTP/RPC 客户端协议
 
-CLI 与 Desktop 负责读取产品配置并显式装配 `Agent` 与 Plugin 模块，再通过 `city.agents.add(agent, { plugins })` 将它们加入环境。City 持有 Plugin Registry、生命周期和 execution lease；Agent 只持有身份、模型、指令、Tool 与 Session，不保存 Plugin 实例。
+CLI 与 Desktop 通过 `@downcity/city` 读取宿主配置并显式装配 `Agent` 与 Plugin 模块，再通过 `city.agents.add(agent, { plugins })` 将它们加入环境。City 持有 Plugin Registry、生命周期和 execution lease；Agent 不保存 Plugin 实例。
 
 ## 包定位
 
 - 面向单个 Agent 项目的执行面
 - 对外通过 `@downcity/agent` 根入口暴露公共 API
-- 负责 session SDK、executor 内核、City plugin runtime、sandbox、SDK 本地 Agent
+- 负责 Session SDK、Executor 内核、宿主扩展端口与 SDK 本地 Agent
 - 不负责多 Agent registry、control plane daemon、console UI 聚合和平台级编排
 
 ## 与其他包的边界
 
 - `@downcity/agent`
-  - Agent 与 City runtime
-  - session SDK、executor 内核、City plugin runtime、sandbox
-  - City Workspace、Embassy、HTTP/RPC transport
+  - Agent、Group、Session 与 RemoteAgent
+  - Session SDK、Executor 内核和中性宿主扩展端口
+- `@downcity/city`
+  - City 组合根、Workspace/Embassy 装配与 HTTP/RPC transport
+  - Plugin Registry、Hook 调度、共享实例和生命周期
+  - `@downcity/city/local` 提供本地数据库、配置 Repository 与 Plugin Loader
 - `@downcity/plugin`
   - Plugin 作者协议、Context、Action、Hook、Lifecycle 与统一 City module
 - `downcity`
   - CLI City daemon 与平台控制面
-- `@downcity/local`
-  - CLI 与 Desktop 共用的本地数据库 Adapter、配置 Repository 与 Plugin Loader
-  - 不创建 Agent、Workspace、Model 或 City
 - `@downcity/ui`
   - React UI 组件与展示层
 
@@ -73,7 +73,7 @@ src/
 ├── agent/                 # Agent facade、状态、模型、环境与执行绑定
 ├── group/                 # Group 主体、GroupSession 和消息调度策略
 ├── executor/              # LLM/Tool Loop、执行恢复与内存上下文折叠
-├── plugin/                # Plugin registry、执行视图、工具桥接与生命周期
+├── plugin/                # Action schedule 与 Plugin 协议辅助
 ├── remote/                # RemoteAgent、RemoteSession 与 HTTP/RPC transport
 ├── session/               # Session facade、State、Turn、Queue、Messages 与 Composer
 ├── types/                 # agent / executor / session / plugin 等共享协议类型
@@ -112,8 +112,8 @@ src/
   - 不持有 History Store，不负责 Message 或 metadata 持久化
 
 - `src/plugin/`
-  - City 内部的 Plugin 执行 Registry、Hook 调度与工具桥接
-  - 具体内建 Plugin 实现位于 `@downcity/plugins`
+  - 只保留 Agent 公开的 Action schedule 与 Plugin 协议辅助
+  - Plugin Registry、Hook 调度与生命周期属于 `@downcity/city`
 
 - `src/remote/transports/` 放 HTTP、RPC transport 及其内部客户端；RPC Server 与 HTTP gateway 由上游宿主管理
 - Agent 与 Session 都持有宿主传入的 `AgentModel` 实例；`AgentModel` 可以是 AI SDK `LanguageModel` 或 City 返回的 `CityModel`
@@ -143,7 +143,7 @@ src/
 - `workspace` 承载项目资源、初始化和持久化能力，`platform` 只处理系统级路径
 - `Agent` facade 是实例级装配中心，持有 instruction、model、tools 与 sessions；env 由 Workspace 持有，Plugin 由 City 持有
 - `PluginContext` 由 City 为 Agent/Workspace 执行范围创建，只向 Plugin 投影稳定的受限能力
-- `session / executor / plugin` 是三大核心分层
+- `session / executor` 是 Agent 的核心执行分层，Plugin 通过宿主扩展端口进入 Session
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑
 

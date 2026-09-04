@@ -2,7 +2,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { get_local_env_path } from "@downcity/local";
+import { get_local_env_path } from "@downcity/city/local";
 import type { DesktopLocalData } from "../agent/DesktopLocalData.js";
 
 /** 原样读取和保存 `~/.downcity/.env`。 */

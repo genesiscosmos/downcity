@@ -40,7 +40,8 @@ Selecting “Create Group” opens a dedicated creation page. Describe the colla
 You only provide the visible Group name. Desktop derives the stable internal `group_id` from that name. The name, instructions, model, and members remain editable later without changing the stable ID. The Group avatar is composed from its member Agent avatars.
 
 ```ts
-import { Agent, City } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
 import { Shell } from "@downcity/workspace";

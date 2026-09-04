@@ -47,8 +47,8 @@ const HELP_ITEMS = [
   },
   {
     name: "build:city",
-    summary: "构建 @downcity/agent（包含 City）运行时包。",
-    detail: "先构建 Agent 所需依赖，再构建包含 City 与 transport 的 Agent runtime。",
+    summary: "构建 @downcity/city 运行时包。",
+    detail: "先构建 Agent 等运行时依赖，再构建 City、Plugin 生命周期、transport 与本地数据能力。",
   },
   {
     name: "build:cli",
@@ -64,12 +64,17 @@ const HELP_ITEMS = [
     name: "patch:build",
     summary: "按 package 执行 patch bump + build。",
     detail:
-      "支持 `npm run patch:build -- --workspace --agent --plugin --plugins --local --services --cli`、`--ui`、`--all`、`--no-bump`。",
+      "支持 `npm run patch:build -- --workspace --agent --city --plugin --plugins --services --cli`、`--ui`、`--all`、`--no-bump`。",
   },
   {
     name: "agent:patch:build",
     summary: "只对 @downcity/agent 执行 patch bump + build。",
     detail: "等价于 `npm run patch:build -- --agent`，依赖闭包和顺序从 package manifests 自动推导。",
+  },
+  {
+    name: "city:patch:build",
+    summary: "只对 @downcity/city 执行 patch bump + build。",
+    detail: "等价于 `npm run patch:build -- --city`，依赖闭包和顺序从 package manifests 自动推导。",
   },
   {
     name: "plugin:patch:build",

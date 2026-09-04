@@ -15,7 +15,7 @@ import { DesktopGlobalEnvController } from "@/settings/DesktopGlobalEnvControlle
 import { DesktopAppBadge } from "@/notification/DesktopAppBadge.js";
 import { DesktopNotificationCenter } from "@/notification/DesktopNotificationCenter.js";
 import { NotificationStore } from "@/notification/NotificationStore.js";
-import { read_city_host_state, request_city_host_shutdown } from "@downcity/agent/city";
+import { read_city_host_state, request_city_host_shutdown } from "@downcity/city";
 import type {
   DesktopChatMutationEvent,
   DesktopChatRuntimeEvent,

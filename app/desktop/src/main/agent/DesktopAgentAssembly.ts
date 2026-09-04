@@ -11,8 +11,8 @@ import {
   type LocalWorkspaceConfig,
   resolve_local_agent_env,
   resolve_local_global_env,
-} from "@downcity/local/product";
-import { resolve_local_root_path } from "@downcity/local";
+} from "@downcity/city/local";
+import { resolve_local_root_path } from "@downcity/city/local";
 import { type AgentModel, type AgentOptions } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/workspace";

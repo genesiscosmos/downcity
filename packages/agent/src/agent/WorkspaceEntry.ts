@@ -25,14 +25,14 @@ import {
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
 import {
-  agent_city_extensions,
-  agent_is_in_city,
+  agent_has_host,
+  agent_host_extensions,
   get_agent_storage,
   release_workspace_entry,
 } from "@/internal/AgentRuntime.js";
 import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
 import { create_empty_session_extensions } from "@/types/session/SessionExtension.js";
-import type { AgentCityExtensionBinding } from "@/city/types/CityPlugin.js";
+import type { AgentHostExtensions } from "@/types/agent/AgentHost.js";
 
 const RESERVED_PLUGIN_TOOL_NAMES = new Set(["plugin_read", "plugin_call"]);
 
@@ -86,7 +86,7 @@ export class WorkspaceEntry {
   private readonly unsubscribe_env: () => void;
   private readonly unsubscribe_plugins: () => void;
   private readonly storage: AgentStorage;
-  private readonly city_extensions?: AgentCityExtensionBinding;
+  private readonly host_extensions?: AgentHostExtensions;
   private leave_promise?: Promise<void>;
 
   constructor(options: WorkspaceEntryOptions) {
@@ -96,7 +96,7 @@ export class WorkspaceEntry {
     const storage: AgentStorage = get_agent_storage(this.agent);
     this.storage = storage;
     this.data_path = storage.root_path;
-    if (!agent_is_in_city(this.agent)) {
+    if (!agent_has_host(this.agent)) {
       this.workspace.shell?.bind({
         root_path: this.workspace.path,
         // 无 City 时内部状态仍在内存；Shell 的审批/临时文件必须落在真实项目根目录。
@@ -109,13 +109,13 @@ export class WorkspaceEntry {
       workspace_id: this.workspace_id,
     });
 
-    const city_extensions = agent_city_extensions(this.agent);
-    this.city_extensions = city_extensions;
-    void city_extensions?.ensure_workspace_ready(this.workspace, this.logger)
+    const host_extensions = agent_host_extensions(this.agent);
+    this.host_extensions = host_extensions;
+    void host_extensions?.ensure_workspace_ready(this.workspace, this.logger)
       .catch((error) => this.logger.error("City Plugin workspace startup failed", {
         error: error instanceof Error ? error.message : String(error),
       }));
-    this.plugins = city_extensions?.plugins(this.workspace, this.logger)
+    this.plugins = host_extensions?.plugins(this.workspace, this.logger)
       ?? create_empty_agent_plugins();
 
     this.tools = {};
@@ -124,7 +124,7 @@ export class WorkspaceEntry {
     register_tools(this.tools, this.workspace.tools, "WorkspaceTools");
     register_tools(
       this.tools,
-      city_extensions?.tools(this.workspace, this.logger) ?? {},
+      host_extensions?.tools(this.workspace, this.logger) ?? {},
       "CityPlugins",
     );
     register_tools(this.tools, this.agent.custom_tools, "AgentOptions.tools");
@@ -162,11 +162,11 @@ export class WorkspaceEntry {
         this.workspace_id,
       );
     });
-    this.unsubscribe_plugins = city_extensions?.subscribe((change) => {
+    this.unsubscribe_plugins = host_extensions?.subscribe((change) => {
       for (const tool_name of RESERVED_PLUGIN_TOOL_NAMES) delete this.tools[tool_name];
       register_tools(
         this.tools,
-        city_extensions.tools(this.workspace, this.logger),
+        host_extensions.tools(this.workspace, this.logger),
         "CityPlugins",
       );
       if (change.initial) return;
@@ -174,7 +174,7 @@ export class WorkspaceEntry {
       (this.agent.sessions as AgentSessions).broadcast_extensions({
         command_id: generate_id(),
         title: `City plugin ${change.plugin_name} ${verb}`,
-        extensions: city_extensions.execution_runtime(this.workspace, this.logger),
+        extensions: host_extensions.execution_runtime(this.workspace, this.logger),
         workspace_id: this.workspace_id,
       });
     }) ?? (() => {});
@@ -197,12 +197,12 @@ export class WorkspaceEntry {
 
   /** 列出当前 Agent 注册的 Plugin 状态。 */
   list_plugin_states(): PluginSnapshot[] {
-    return agent_city_extensions(this.agent)?.snapshots() ?? [];
+    return agent_host_extensions(this.agent)?.snapshots() ?? [];
   }
 
   /** 将 Plugin HTTP 路由绑定到当前 Workspace Context。 */
   register_plugin_http_routes(app: Hono): void {
-    agent_city_extensions(this.agent)?.register_http_routes(app, this.workspace, this.logger);
+    agent_host_extensions(this.agent)?.register_http_routes(app, this.workspace, this.logger);
   }
 
   /** 解析指定 Session 当前可见的完整 system messages。 */
@@ -229,8 +229,8 @@ export class WorkspaceEntry {
         async () => await (this.agent.sessions as AgentSessions).stop_executing_sessions(this.workspace_id),
         () => (this.agent.sessions as AgentSessions).dispose_title_generation(this.workspace_id),
         async () => await this.logger.save_all_logs(),
-        async () => await this.city_extensions?.release_workspace(this.workspace_id),
-        ...(agent_is_in_city(this.agent) ? [] : [async () => await this.workspace.dispose()]),
+        async () => await this.host_extensions?.release_workspace(this.workspace_id),
+        ...(agent_has_host(this.agent) ? [] : [async () => await this.workspace.dispose()]),
       ];
       for (const cleanup of cleanup_steps) {
         try {
@@ -270,7 +270,7 @@ export class WorkspaceEntry {
 
   /** 返回当前 Workspace 在 City 检查点上的最新扩展运行时。 */
   private get_extensions(): SessionExtensionRuntime {
-    return this.city_extensions?.execution_runtime(this.workspace, this.logger)
+    return this.host_extensions?.execution_runtime(this.workspace, this.logger)
       ?? create_empty_session_extensions();
   }
 }

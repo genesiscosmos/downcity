@@ -1,0 +1,53 @@
+{
+  "name": "@downcity/city",
+  "version": "0.1.1",
+  "type": "module",
+  "description": "Downcity City 组合根、Plugin 生命周期与 Agent transport 运行时",
+  "files": [
+    "bin"
+  ],
+  "main": "./bin/index.js",
+  "types": "./bin/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./bin/index.d.ts",
+      "import": "./bin/index.js"
+    },
+    "./local": {
+      "types": "./bin/local/index.d.ts",
+      "import": "./bin/local/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && node --test test/*.test.mjs test/local/*.test.mjs",
+    "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
+    "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@downcity/agent": "workspace:^",
+    "@downcity/federation": "workspace:^",
+    "@downcity/plugin": "workspace:^",
+    "@downcity/type": "workspace:*",
+    "@downcity/workspace": "workspace:^",
+    "dotenv": "^17.4.2",
+    "fs-extra": "^11.3.5",
+    "hono": "^4.12.23",
+    "pinyin-pro": "^3.27.0",
+    "smol-toml": "^1.7.1",
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^25.9.1",
+    "@types/ws": "^8.18.1",
+    "tsc-alias": "^1.8.17",
+    "typescript": "^6.0.3"
+  }
+}

@@ -8,7 +8,7 @@ import {
   get_local_database_path,
   LocalDatabase,
   resolve_local_root_path,
-} from "@downcity/local";
+} from "@downcity/city/local";
 import {
   AgentRepository,
   ensure_local_schema,
@@ -16,7 +16,7 @@ import {
   PluginRepository,
   LocalSettingRepository,
   WorkspaceRepository,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 
 /** Desktop main 使用的一组本地数据依赖。 */
 export interface DesktopLocalData {

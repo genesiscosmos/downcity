@@ -40,7 +40,8 @@ Agent 配置中的“删除 Agent”会永久删除该 Agent 的定义、头像�
 创建 Group 时只填写用户可见名称，内部 `group_id` 由 Desktop 根据名称自动生成。创建后可以修改名称、协作目标、模型与成员，但稳定 `group_id` 不会改变。Group 头像由成员 Agent 的头像组合展示。
 
 ```ts
-import { Agent, City } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
 import { Shell } from "@downcity/workspace";

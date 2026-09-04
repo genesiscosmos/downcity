@@ -1,6 +1,6 @@
 /** City 数据库重置命令。 */
 
-import { get_local_database_path, resolve_local_root_path } from "@downcity/local";
+import { get_local_database_path, resolve_local_root_path } from "@downcity/city/local";
 import { stop_daemon_process } from "@/city/process/daemon/Manager.js";
 import { reset_city_database } from "@/city/runtime/CityReset.js";
 import prompts from "@/city/tui/Prompts.js";

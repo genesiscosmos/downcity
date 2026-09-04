@@ -9,7 +9,7 @@ import {
   normalize_plugin_id as normalize_local_plugin_id,
   normalize_profile_id,
   type LocalInstalledPluginDefinition,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 import type { JsonObject } from "@downcity/agent";
 import { with_cli_local_data } from "@/city/runtime/LocalData.js";
 import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";

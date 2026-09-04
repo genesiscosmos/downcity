@@ -21,13 +21,13 @@ ALL_PACKAGES=(
   "workspace-cloudflare-computer"
   "federation"
   "agent"
+  "city"
   "database-d1"
   "database-sqlite"
   "database-postgresql"
   "services"
   "plugin"
   "plugins"
-  "local"
   "ui"
   "cli"
 )
@@ -40,9 +40,9 @@ usage() {
   echo "Package options:"
   echo "  --type --workspace --sandbox-macos --sandbox-linux"
   echo "  --sandbox-windows-mxc --sandbox-windows-srt"
-  echo "  --agent --workspace-cloudflare-computer --federation"
+  echo "  --agent --city --workspace-cloudflare-computer --federation"
   echo "  --database-d1 --database-sqlite --database-postgresql"
-  echo "  --services --plugin --plugins --local --ui --cli --all"
+  echo "  --services --plugin --plugins --ui --cli --all"
   echo ""
   echo "  --no-bump           只构建，不修改 package version"
   echo "  --no-global-install 不同步本机全局 Downcity CLI"
@@ -107,6 +107,7 @@ while [[ $# -gt 0 ]]; do
     --sandbox-windows-mxc) add_package "sandbox-windows-mxc" ;;
     --sandbox-windows-srt) add_package "sandbox-windows-srt" ;;
     --agent) add_package "agent" ;;
+    --city) add_package "city" ;;
     --workspace-cloudflare-computer) add_package "workspace-cloudflare-computer" ;;
     --federation) add_package "federation" ;;
     --database-d1) add_package "database-d1" ;;
@@ -115,7 +116,6 @@ while [[ $# -gt 0 ]]; do
     --services) add_package "services" ;;
     --plugin) add_package "plugin" ;;
     --plugins) add_package "plugins" ;;
-    --local) add_package "local" ;;
     --ui) add_package "ui" ;;
     --cli) add_package "cli" ;;
     --all) PACKAGES=("${ALL_PACKAGES[@]}") ;;

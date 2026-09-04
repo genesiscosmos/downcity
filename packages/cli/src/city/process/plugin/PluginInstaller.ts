@@ -9,7 +9,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "fs-extra";
 import { execa } from "execa";
-import { get_local_plugin_path } from "@downcity/local";
+import { get_local_plugin_path } from "@downcity/city/local";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 import {
   get_installed_plugin,

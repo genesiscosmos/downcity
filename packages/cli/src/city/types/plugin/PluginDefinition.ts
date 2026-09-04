@@ -3,7 +3,7 @@
 import type {
   LocalInstalledPluginDefinition,
   LocalPluginDefinition,
-} from "@downcity/local/product";
+} from "@downcity/city/local";
 
 /** Plugin 来源目录与安装目录共享的清单文件名。 */
 export const PLUGIN_DEFINITION_FILE_NAME = "plugin.json";
@@ -36,7 +36,7 @@ export interface PluginPackageDefinition extends Omit<
   main?: string;
 
   /** Renderer 入口及其静态 Sidebar、Mainview 与 Config 插槽。 */
-  renderer?: import("@downcity/local/product").LocalPluginRendererDefinition;
+  renderer?: import("@downcity/city/local").LocalPluginRendererDefinition;
 }
 
 /** 已安装 Plugin 的管理视图。 */

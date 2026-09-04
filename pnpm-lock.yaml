@@ -23,12 +23,12 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../../packages/agent
+      '@downcity/city':
+        specifier: workspace:^
+        version: link:../../packages/city
       '@downcity/federation':
         specifier: workspace:^
         version: link:../../packages/federation
-      '@downcity/local':
-        specifier: workspace:^
-        version: link:../../packages/local
       '@downcity/plugin':
         specifier: workspace:^
         version: link:../../packages/plugin
@@ -367,7 +367,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/cli:
+  packages/city:
     dependencies:
       '@downcity/agent':
         specifier: workspace:^
@@ -375,9 +375,64 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../federation
-      '@downcity/local':
+      '@downcity/plugin':
         specifier: workspace:^
-        version: link:../local
+        version: link:../plugin
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../type
+      '@downcity/workspace':
+        specifier: workspace:^
+        version: link:../workspace
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+      hono:
+        specifier: ^4.12.23
+        version: 4.12.23
+      pinyin-pro:
+        specifier: ^3.27.0
+        version: 3.29.3
+      smol-toml:
+        specifier: ^1.7.1
+        version: 1.7.1
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      tsc-alias:
+        specifier: ^1.8.17
+        version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/cli:
+    dependencies:
+      '@downcity/agent':
+        specifier: workspace:^
+        version: link:../agent
+      '@downcity/city':
+        specifier: workspace:^
+        version: link:../city
+      '@downcity/federation':
+        specifier: workspace:^
+        version: link:../federation
       '@downcity/plugin':
         specifier: workspace:^
         version: link:../plugin
@@ -596,43 +651,6 @@ importers:
         specifier: 8.0.14
         version: 8.0.14(@types/node@25.9.1)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.3)(yaml@2.9.0)
 
-  packages/local:
-    dependencies:
-      '@downcity/agent':
-        specifier: workspace:^
-        version: link:../agent
-      '@downcity/plugin':
-        specifier: workspace:^
-        version: link:../plugin
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../workspace
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-      pinyin-pro:
-        specifier: ^3.27.0
-        version: 3.29.3
-      smol-toml:
-        specifier: ^1.7.1
-        version: 1.7.1
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/plugin:
     dependencies:
       '@downcity/federation':
@@ -703,6 +721,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@downcity/city':
+        specifier: workspace:^
+        version: link:../city
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4

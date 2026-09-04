@@ -5,14 +5,15 @@
  * 与一个 RPC Server。Agent 不拥有独立端口。
  */
 
-import { Agent, City } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
 import { LocalStorageProvider } from "@downcity/workspace";
 import { create_workspace_entry } from "@downcity/agent/internal";
 import {
   create_city_host_instance_id,
   register_city_host,
   unregister_city_host,
-} from "@downcity/agent/city";
+} from "@downcity/city";
 import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";
 import { create_agent_http_gateway_app } from "@/city/agent/AgentHttpGateway.js";
