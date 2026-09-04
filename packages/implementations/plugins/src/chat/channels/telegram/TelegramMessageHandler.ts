@@ -8,9 +8,9 @@
  */
 
 import path from "path";
-import type { PluginLogger } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type {
   IncomingChatAccessParams,
   IncomingChatAccessResult,

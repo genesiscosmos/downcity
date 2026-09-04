@@ -7,7 +7,7 @@
  */
 
 import type { SessionMessages } from "@downcity/agent";
-import type { PluginSessionHandle } from "@downcity/plugin";
+import type { PluginSessionHandle } from "@downcity/city/plugin";
 import type {
   ShipTaskRunExecutionStatusV1,
   ShipTaskRunProgressPhaseV1,

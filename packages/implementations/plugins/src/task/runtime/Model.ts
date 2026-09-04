@@ -18,7 +18,7 @@ import type {
   ShipTaskStatus,
   TaskDeliverySession,
 } from "@/task/types/Task.js";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 
 /**
  * 必填 frontmatter 字段清单。

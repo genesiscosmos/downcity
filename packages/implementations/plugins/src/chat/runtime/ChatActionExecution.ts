@@ -8,9 +8,9 @@
  */
 
 import path from "node:path";
-import type { PluginJsonObject } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginExecutionContext } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginExecutionContext } from "@downcity/city/plugin";
 import type {
   ChatDeleteActionPayload,
   ChatHistoryActionPayload,

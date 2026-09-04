@@ -6,7 +6,7 @@
  * - 同时提供额外 metadata，便于 history / 调试链路查看。
  */
 
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { InboundReplyContext } from "@/chat/types/ReplyContext.js";
 
 function normalizeReplyValue(value: string | undefined): string | undefined {

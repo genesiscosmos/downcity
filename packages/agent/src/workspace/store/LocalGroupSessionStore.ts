@@ -1,7 +1,7 @@
 /** LocalGroupSessionStore：基于 City StorageScope 的 GroupSession 集合存储。 */
 
 import path from "node:path";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 import type {
   GroupSessionDataStore,
   GroupSessionHistoryMeta,

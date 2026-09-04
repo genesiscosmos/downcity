@@ -6,13 +6,13 @@
  */
 import { Agent } from "@/agent/Agent.js";
 import { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@downcity/type";
 import type { Embassy } from "@downcity/federation";
-import type { StorageProvider, StorageScope } from "@downcity/workspace";
-import { MemoryStorageProvider } from "@downcity/workspace";
+import type { StorageProvider, StorageScope } from "@downcity/type";
+import { AgentMemoryStorageProvider } from "@/internal/AgentMemoryStorage.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
-import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
-import { create_empty_session_extensions } from "@/types/session/SessionExtension.js";
+import type { SessionExtensionRuntime } from "@downcity/type/session";
+import { create_empty_session_extensions } from "@downcity/type/session";
 import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
 import type { AgentHost, AgentHostExtensions } from "@/types/agent/AgentHost.js";
 
@@ -24,7 +24,7 @@ interface AgentRuntimeState {
   storage_provider: StorageProvider;
   agent_storage?: AgentStorage;
   session_extensions?: (
-    workspace?: WorkspaceBase,
+    workspace?: WorkspaceRuntime,
   ) => SessionExtensionRuntime;
   host_extensions?: AgentHostExtensions;
 }
@@ -36,7 +36,7 @@ const unbound_workspace_owners = new WeakMap<object, Agent>();
 export function initialize_agent_runtime(agent: Agent): void {
   runtime_states.set(agent, {
     workspaces_by_id: new Map(),
-    storage_provider: new MemoryStorageProvider(),
+    storage_provider: new AgentMemoryStorageProvider(),
   });
 }
 
@@ -77,7 +77,7 @@ export function attach_agent_storage(agent: Agent, storage_provider: StorageProv
 /** 由 City 注入按 Workspace 创建 Session 扩展运行时的端口。 */
 export function attach_agent_session_extensions(
   agent: Agent,
-  resolve_extensions: (workspace?: WorkspaceBase) => SessionExtensionRuntime,
+  resolve_extensions: (workspace?: WorkspaceRuntime) => SessionExtensionRuntime,
 ): void {
   const state = runtime_state(agent);
   state.session_extensions = resolve_extensions;
@@ -105,7 +105,7 @@ export async function ensure_agent_extensions_ready(agent: Agent): Promise<void>
 /** 返回当前 Agent 的 City 扩展运行时；未加入 City 时使用空实现。 */
 export function resolve_agent_session_extensions(
   agent: Agent,
-  workspace?: WorkspaceBase,
+  workspace?: WorkspaceRuntime,
 ): SessionExtensionRuntime {
   return runtime_state(agent).session_extensions?.(workspace)
     ?? create_empty_session_extensions();
@@ -146,13 +146,13 @@ export function agent_storage_scope(agent: Agent): StorageScope {
   return runtime_state(agent).storage_provider.open_scope(["agents", agent.id]);
 }
 
-/** 返回指定 Agent Plugin 的底层数据作用域。 */
-export function plugin_storage_scope(agent: Agent, plugin_id: string): StorageScope {
+/** 返回指定 Agent Extension 的底层数据作用域。 */
+export function extension_storage_scope(agent: Agent, extension_id: string): StorageScope {
   return runtime_state(agent).storage_provider.open_scope([
     "agents",
     agent.id,
     "plugins",
-    plugin_id,
+    extension_id,
   ]);
 }
 
@@ -189,7 +189,7 @@ export function agent_storage(agent: Agent): AgentStorage | null {
   return runtime_state(agent).agent_storage ?? null;
 }
 
-export function create_workspace_entry(agent: Agent, workspace: WorkspaceBase): WorkspaceEntry {
+export function create_workspace_entry(agent: Agent, workspace: WorkspaceRuntime): WorkspaceEntry {
   const state = runtime_state(agent);
   const workspace_id = String(workspace?.id || "").trim();
   if (!workspace_id) throw new Error("Agent sessions require a Workspace with a stable id");

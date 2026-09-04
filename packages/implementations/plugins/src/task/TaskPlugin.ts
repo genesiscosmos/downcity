@@ -7,9 +7,9 @@
  * - 当前文件只保留实例骨架与 lifecycle，不再依赖旧的模块级单例。
  */
 
-import { BasePlugin, create_action } from "@downcity/plugin";
-import type { PluginActions } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
+import { BasePlugin, create_action } from "@downcity/city/plugin";
+import type { PluginActions } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type {
   TaskCronRegisterResult,
   TaskSchedulerReloadResult,

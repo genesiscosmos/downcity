@@ -7,7 +7,7 @@
  * - 对外只暴露 action 级入口，供 ChatPluginActions 装配使用。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 import type {
   ChatReconnectActionPayload,

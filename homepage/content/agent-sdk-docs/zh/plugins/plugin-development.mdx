@@ -1,17 +1,17 @@
 ---
 title: Plugin 开发指南
-description: 使用 @downcity/plugin 构建统一 City Plugin module。
+description: 使用 @downcity/city/plugin 构建统一 City Plugin module。
 ---
 
 # Plugin 开发指南
 
-Plugin 作者 API 位于 `@downcity/plugin`。一个 `CityPluginModule` 同时定义 main 生命周期和
+Plugin 作者 API 位于 `@downcity/city/plugin`。一个 `CityPluginModule` 同时定义 main 生命周期和
 Profile 执行实例 factory；Agent 包不再导出 Plugin 作者协议。
 
 ## 执行实例
 
 ```ts
-import { BasePlugin, create_action } from "@downcity/plugin";
+import { BasePlugin, create_action } from "@downcity/city/plugin";
 import { z } from "zod";
 
 class ExamplePlugin extends BasePlugin {
@@ -47,7 +47,7 @@ Workspace 用户文件使用 `context.workspace.files`；Plugin 私有状态使�
 ## 统一 City module
 
 ```ts
-import { define_city_plugin } from "@downcity/plugin";
+import { define_city_plugin } from "@downcity/city/plugin";
 
 export default define_city_plugin({
   activate(context) {

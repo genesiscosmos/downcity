@@ -8,8 +8,8 @@
  */
 
 import type { Command } from "commander";
-import type { PluginActions } from "@downcity/plugin";
-import { create_action } from "@downcity/plugin";
+import type { PluginActions } from "@downcity/city/plugin";
+import { create_action } from "@downcity/city/plugin";
 import { z } from "zod";
 import type {
   ChatDeleteActionPayload,
@@ -87,7 +87,7 @@ function attachCommandHelpText(command: Command, text: string): void {
  * 创建 chat plugin runtime 的 action 定义表。
  */
 export function createChatPluginActions(params: {
-  resolve_channel_state: (context: import("@downcity/plugin").PluginContext) => ChatChannelState;
+  resolve_channel_state: (context: import("@downcity/city/plugin").PluginContext) => ChatChannelState;
 }): PluginActions {
   return {
     status: create_action({

@@ -12,8 +12,8 @@ import type {
   PluginGuardHook,
   PluginPipelineHook,
   PluginResolveHook,
-} from "@downcity/agent/host";
-import type { PluginContext } from "@downcity/plugin";
+} from "@/types/plugin/PluginRuntime.js";
+import type { PluginContext } from "@/plugin/index.js";
 
 type PipelineRecord = {
   plugin_name: string;

@@ -1,11 +1,11 @@
 ---
 title: "@downcity/agent"
-description: "Agent、AgentSessions、Session、执行内核与 RemoteAgent。"
+description: "Agent、AgentSessions、Session 与执行内核。"
 ---
 
-`@downcity/agent` 提供 Agent、AgentSessions、Session、执行内核与 RemoteAgent。City 组合根由 `@downcity/city` 提供。
+`@downcity/agent` 提供 Agent、AgentSessions、Session 与执行内核。City 组合根和 RemoteAgent 由 `@downcity/city` 提供。
 Agent 不持有 Plugin；City 负责 Plugin catalog、共享实例与生命周期，Plugin 作者协议位于
-`@downcity/plugin`。Workspace 资源由 `@downcity/workspace` 提供。
+`@downcity/city/plugin`。Workspace 资源由 `@downcity/city` 提供。
 
 ```ts
 const city = new City({ workspaces: [workspace] });

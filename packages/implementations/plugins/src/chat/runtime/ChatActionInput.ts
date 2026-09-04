@@ -7,7 +7,7 @@
  * - `chat send` 的 frontmatter / <file> 协议也在这里完成标准化解析。
  */
 
-import type { PluginActionCommandInput } from "@downcity/plugin";
+import type { PluginActionCommandInput } from "@downcity/city/plugin";
 import type {
   ChatDeleteActionPayload,
   ChatHistoryActionPayload,

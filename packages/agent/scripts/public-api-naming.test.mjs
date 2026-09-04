@@ -21,27 +21,15 @@ const package_root = path.resolve(
 const public_declaration_files = [
   "agent/Agent.d.ts",
   "agent/AgentSessions.d.ts",
-  "remote/RemoteAgent.d.ts",
-  "remote/RemoteSession.d.ts",
   "session/Session.d.ts",
   "types/agent/AgentOptions.d.ts",
   "types/agent/SessionActor.d.ts",
   "types/agent/SessionTypes.d.ts",
-  "types/agent/RemoteAgentOptions.d.ts",
-  "types/agent/RemoteAgentPluginAction.d.ts",
   "types/sdk/AgentSessionPrompt.d.ts",
   "types/sdk/AgentSessionStop.d.ts",
   "types/sdk/AgentSessionTurn.d.ts",
   "types/session/SessionOptions.d.ts",
   "types/session/SessionPort.d.ts",
-  "types/plugin/PluginContext.d.ts",
-  "types/plugin/PluginRuntime.d.ts",
-  "types/plugin/PluginAction.d.ts",
-  "types/plugin/PluginCommand.d.ts",
-  "types/plugin/PluginHttp.d.ts",
-  "types/plugin/PluginExecutionContext.d.ts",
-  "plugin/types/ActionSchedule.d.ts",
-  "types/rpc/RpcProtocol.d.ts",
 ];
 
 /** 删除声明文件注释，避免示例文本参与标识符检查。 */

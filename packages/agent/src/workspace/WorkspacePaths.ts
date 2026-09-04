@@ -25,13 +25,3 @@ export function get_downcity_dir_path(data_path: string): string {
 export function get_logs_dir_path(cwd: string): string {
   return path.join(get_downcity_dir_path(cwd), "logs");
 }
-
-/**
- * Plugin Schedule JSONL 路径。
- *
- * 关键点（中文）
- * - 调度任务属于 Agent，因此放在 Agent 集中式内部数据目录。
- */
-export function get_downcity_schedule_db_path(cwd: string): string {
-  return path.join(get_downcity_dir_path(cwd), "schedule.jsonl");
-}

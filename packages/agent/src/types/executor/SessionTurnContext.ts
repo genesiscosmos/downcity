@@ -8,14 +8,14 @@
  */
 
 import type { RuntimeToolEffect } from "@downcity/type";
-import type { ShellApprovalGateway } from "@downcity/workspace";
+import type { ShellApprovalGateway } from "@downcity/type";
 import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
 import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type {
   SessionExtensionExecutionContext,
   SessionExtensionExecutionLease,
-} from "@/types/session/SessionExtension.js";
+} from "@downcity/type/session";
 import type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
@@ -23,7 +23,7 @@ import type {
 } from "@/types/sdk/AgentSessionAction.js";
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
-import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
+import type { SessionExtensionContextBlock } from "@/types/session/SessionExtensionHook.js";
 
 /**
  * 创建一个 Session Turn 上下文所需的稳定输入。
@@ -110,8 +110,8 @@ export interface SessionTurnContext {
     /** 当前 Step 持有的 City 扩展 execution lease。 */
     readonly extensions?: SessionExtensionExecutionLease;
 
-    /** 当前 Turn 首次解析后冻结的 Plugin 动态上下文。 */
-    readonly plugin_context_blocks: readonly SessionPluginContextBlock[];
+    /** 当前 Turn 首次解析后冻结的 Extension 动态上下文。 */
+    readonly extension_context_blocks: readonly SessionExtensionContextBlock[];
 
     /** 原子提交当前 Step 使用的 env 与 instruction 快照。 */
     commit(input: {
@@ -126,9 +126,9 @@ export interface SessionTurnContext {
     replace_extensions(extensions?: SessionExtensionExecutionLease): Promise<void>;
 
     /** 首次调用时解析并冻结动态上下文，后续 Step 与重试复用同一快照。 */
-    resolve_plugin_context_blocks(
-      resolver: () => Promise<readonly SessionPluginContextBlock[]>,
-    ): Promise<readonly SessionPluginContextBlock[]>;
+    resolve_extension_context_blocks(
+      resolver: () => Promise<readonly SessionExtensionContextBlock[]>,
+    ): Promise<readonly SessionExtensionContextBlock[]>;
 
     /** 释放当前 Step 持有的扩展 lease。 */
     release(): Promise<void>;

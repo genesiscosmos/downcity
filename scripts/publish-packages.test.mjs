@@ -93,9 +93,8 @@ test("指定 package 会自动补齐 scoped 运行时依赖并保持拓扑顺序
   assert.deepEqual(plan.map((item) => item.name), [
     "@downcity/type",
     "@downcity/federation",
-    "@downcity/workspace",
-    "@downcity/plugin",
     "@downcity/agent",
+    "@downcity/city",
     "@downcity/plugins",
   ]);
 });
@@ -108,7 +107,7 @@ test("CLI 发布计划包含 scoped 依赖和 CLI 本身", () => {
 
   assert.equal(plan.at(-1).name, "downcity");
   assert.ok(plan.some((item) => item.name === "@downcity/city"));
-  assert.ok(plan.some((item) => item.name === "@downcity/plugin"));
+  assert.ok(plan.some((item) => item.name === "@downcity/type"));
   assert.ok(plan.some((item) => item.name === "@downcity/plugins"));
 });
 

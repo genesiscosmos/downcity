@@ -1,12 +1,12 @@
 ---
 title: "@downcity/agent"
-description: "Agent, AgentSessions, Session, execution runtime, and RemoteAgent."
+description: "Agent, AgentSessions, Session, and execution runtime."
 ---
 
-`@downcity/agent` provides Agent, AgentSessions, Session, the execution runtime, RemoteAgent, and
+`@downcity/agent` provides Agent, AgentSessions, Session, and the execution runtime. `@downcity/city` provides RemoteAgent and
 City. Agents do not own Plugins. City owns the Plugin catalog, shared instances, and lifecycle;
-Plugin author contracts live in `@downcity/plugin`. Workspace resources come from
-`@downcity/workspace`.
+Plugin author contracts live in `@downcity/city/plugin`. Workspace resources come from
+`@downcity/city`.
 
 ```ts
 const city = new City({ workspaces: [workspace] });

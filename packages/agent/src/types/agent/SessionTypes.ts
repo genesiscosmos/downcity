@@ -9,6 +9,10 @@
 import type { AgentModel } from "@/agent/AgentModel.js";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type {
+  SessionSystemBlock,
+  SessionSystemBlockSource,
+} from "@downcity/type/session";
 
 /**
  * 新建 Session 的输入参数。
@@ -219,37 +223,12 @@ export interface AgentSessionTimelineEvent {
 /**
  * Session system block 来源类型。
  */
-export type AgentSessionSystemBlockSource =
-  | "core"
-  | "instruction"
-  | "plugin"
-  | "session";
+export type AgentSessionSystemBlockSource = SessionSystemBlockSource;
 
 /**
  * Session system prompt 的单个组成块。
  */
-export interface AgentSessionSystemBlock {
-  /** 当前 block 的来源层级。 */
-  source: AgentSessionSystemBlockSource;
-  /**
-   * 当前 block 在来源层级内的名称。
-   *
-   * 说明（中文）
-   * - `instruction` 通常使用 `agent`。
-   * - `plugin` 使用对应 plugin 名称。
-   * - `core` 使用 `default`。
-   * - `session` 使用当前 session 上下文名称。
-   */
-  name: string;
-  /**
-   * 已归一化后的 system 文本内容。
-   *
-   * 关键点（中文）
-   * - SDK 不对 instruction 做动态变量替换。
-   * - 动态上下文应由调用方放入 user message。
-   */
-  content: string;
-}
+export type AgentSessionSystemBlock = SessionSystemBlock;
 
 /**
  * 当前 session 的稳定上下文信息。
@@ -333,6 +312,8 @@ export interface AgentSessionSummary {
   model_label?: string;
   /** 当前 Session 的创建来源。 */
   origin: SessionOrigin;
+  /** 当前 Session 绑定的 Workspace ID；未绑定时为空。 */
+  workspace_id?: string;
   /** 当前 session 是否处于执行中。 */
   executing?: boolean;
 }

@@ -15,21 +15,21 @@ import type {
   SessionComposeInput,
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
-import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
+import type { SessionExtensionContextBlock } from "@/types/session/SessionExtensionHook.js";
 import type { ModelMessage } from "@downcity/type";
 
-/** 把低权限 Plugin 内容渲染为与用户原文分离的模型参考区。 */
-function render_plugin_context_blocks(
-  blocks: readonly SessionPluginContextBlock[],
+/** 把低权限 Extension 内容渲染为与用户原文分离的模型参考区。 */
+function render_extension_context_blocks(
+  blocks: readonly SessionExtensionContextBlock[],
 ): string {
   return blocks.map((block) => [
-    `<plugin-context plugin="${escape_xml_attribute(block.source_plugin)}" name="${escape_xml_attribute(block.name)}" trust="reference">`,
+    `<extension-context extension="${escape_xml_attribute(block.source_extension)}" name="${escape_xml_attribute(block.name)}" trust="reference">`,
     block.content,
-    "</plugin-context>",
+    "</extension-context>",
   ].join("\n")).join("\n\n");
 }
 
-/** 转义模型上下文标签属性，避免 Plugin 名称破坏边界。 */
+/** 转义模型上下文标签属性，避免 Extension 名称破坏边界。 */
 function escape_xml_attribute(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -39,9 +39,9 @@ function escape_xml_attribute(value: string): string {
 }
 
 /** 只修改模型消息副本，把动态参考信息前置到当前最后一条 User Message。 */
-function inject_plugin_context(
+function inject_extension_context(
   messages: ModelMessage[],
-  blocks: readonly SessionPluginContextBlock[],
+  blocks: readonly SessionExtensionContextBlock[],
 ): ModelMessage[] {
   if (blocks.length === 0) return messages;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -49,7 +49,7 @@ function inject_plugin_context(
     if (!message || message.role !== "user") continue;
     messages[index] = {
       ...message,
-      content: [{ type: "text", text: render_plugin_context_blocks(blocks) }, ...message.content],
+      content: [{ type: "text", text: render_extension_context_blocks(blocks) }, ...message.content],
     };
     break;
   }
@@ -71,11 +71,11 @@ export class DefaultSessionComposer implements SessionComposer {
       get_instruction_system_blocks: () => [
         ...input.state.instruction_system_blocks,
       ],
-      get_managed_plugin_system_blocks: async () => [
-        ...input.state.managed_plugin_system_blocks,
+      get_managed_extension_system_blocks: async () => [
+        ...input.state.managed_extension_system_blocks,
       ],
-      get_plugin_system_blocks: async () => [
-        ...input.state.plugin_system_blocks,
+      get_extension_system_blocks: async () => [
+        ...input.state.extension_system_blocks,
       ],
     });
 
@@ -89,7 +89,7 @@ export class DefaultSessionComposer implements SessionComposer {
         content: block.content,
       })),
       system_blocks,
-      messages: inject_plugin_context(messages, input.state.plugin_context_blocks),
+      messages: inject_extension_context(messages, input.state.extension_context_blocks),
       tools: { ...input.state.tools },
     };
   }

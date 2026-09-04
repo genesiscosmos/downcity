@@ -3,7 +3,7 @@
 import type {
   CityPluginRegistration,
   PluginJsonObject,
-} from "@downcity/plugin";
+} from "@/plugin/index.js";
 
 /** Plugin Renderer 入口及其静态 UI 插槽声明。 */
 export interface LocalPluginRendererDefinition {

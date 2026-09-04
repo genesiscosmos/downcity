@@ -6,7 +6,7 @@
  * - 支持入站（inbound）与出站（outbound）事件，便于完整回放对话链路。
  */
 
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 
 export type ChatHistoryIngressKind = "audit" | "exec";

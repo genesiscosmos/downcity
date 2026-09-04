@@ -6,7 +6,7 @@
  * - cron 调度执行器由宿主注入，task runtime 不依赖具体实现。
  */
 
-import type { PluginContext, PluginNotificationPublisher } from "@downcity/plugin";
+import type { PluginContext, PluginNotificationPublisher } from "@downcity/city/plugin";
 import {
   isTaskWhenManual,
   resolveTaskWhenCronExpression,

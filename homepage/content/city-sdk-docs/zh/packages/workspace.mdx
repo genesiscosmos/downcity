@@ -1,9 +1,10 @@
 ---
-title: "@downcity/workspace"
+title: "@downcity/city/workspace"
 description: "项目资源、文件工具、环境变量与 Shell。"
 ---
 
-`@downcity/workspace` 定义 Agent 执行任务时使用的资源边界。它拥有项目路径、rooted 文件
+`@downcity/city/workspace` 提供 Agent 执行任务时使用的 Workspace 实现；常用构造器也从
+`@downcity/city` 根入口导出。Workspace 拥有项目路径、rooted 文件
 能力、文件与搜索工具、环境变量和可选 Shell，但不拥有 Agent 身份、Plugin、Session、存储
 或模型调用。
 
@@ -56,5 +57,5 @@ City 提供不理解业务的底层 Storage Provider，默认实现是内存存�
 `StorageProvider` 不理解任何 Agent 领域语义。Agent runtime 解释 Session 数据，City Plugin
 runtime 解释 Plugin 数据；Workspace 不创建或拥有这份存储。项目 File/Search 工具始终限制在真实项目目录内。
 
-Edge Adapter 应从 `@downcity/workspace/protocol` 导入 `WorkspaceBase` 与协议类型，避免加载
+Edge Adapter 应从 `@downcity/type/workspace` 导入 `WorkspaceRuntime` 与协议类型，避免加载
 Node.js 文件系统、PTY 和本地 Shell 实现。

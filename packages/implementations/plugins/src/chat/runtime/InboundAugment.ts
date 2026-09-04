@@ -6,9 +6,9 @@
  * - 最终拼装顺序固定为：attachmentText -> pluginSections -> body_text。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatInboundAugmentInput } from "@/chat/types/ChatPlugin.js";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 
 function normalizeText(value: string | undefined): string | undefined {

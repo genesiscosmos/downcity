@@ -8,7 +8,7 @@
  * - 把最终产物写入 run 目录的具体格式委托给 `TaskRunArtifacts.ts`。
  */
 
-import type { PluginContext, PluginNotificationPublisher } from "@downcity/plugin";
+import type { PluginContext, PluginNotificationPublisher } from "@downcity/city/plugin";
 import type {
   DialogueRoundRecord,
   UserSimulatorDecision,

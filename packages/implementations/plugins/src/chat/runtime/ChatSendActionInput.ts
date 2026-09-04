@@ -8,8 +8,8 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
-import type { PluginActionCommandInput } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
+import type { PluginActionCommandInput } from "@downcity/city/plugin";
 import type { ChatSendActionPayload } from "@/chat/types/ChatPluginActionPayload.js";
 import {
   build_chat_message_text,

@@ -7,7 +7,7 @@
  * - Provider 负责记忆形成、存储、召回、修订与删除的完整语义。
  */
 
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import type {
   MemoryAccessContext,
   MemoryOwner,

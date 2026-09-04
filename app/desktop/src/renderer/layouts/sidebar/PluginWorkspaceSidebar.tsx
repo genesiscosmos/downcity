@@ -1,7 +1,7 @@
 /** 功能型 Plugin 在一级导航下拥有的专属 Sidebar 宿主。 */
 
 import { useCallback, useEffect, useState } from "react";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import { BUILTIN_PLUGIN_RENDERERS } from "@downcity/plugins/renderers";
 import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";
 import type { DesktopViewController } from "@/types/DesktopView";

@@ -6,7 +6,7 @@
  * - Plugin 只读取宿主构造时传入的 channel 配置，不负责修改或持久化。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";
 import type {
   ChatChannelName,

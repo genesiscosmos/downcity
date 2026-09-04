@@ -1,17 +1,17 @@
 ---
 title: Plugin Development
-description: Build a unified City Plugin module with @downcity/plugin.
+description: Build a unified City Plugin module with @downcity/city/plugin.
 ---
 
 # Plugin Development
 
-Plugin author APIs live in `@downcity/plugin`. One `CityPluginModule` defines both the main lifecycle
+Plugin author APIs live in `@downcity/city/plugin`. One `CityPluginModule` defines both the main lifecycle
 and the Profile execution-instance factory. The Agent package no longer exports author contracts.
 
 ## Execution instance
 
 ```ts
-import { BasePlugin, create_action } from "@downcity/plugin";
+import { BasePlugin, create_action } from "@downcity/city/plugin";
 import { z } from "zod";
 
 class ExamplePlugin extends BasePlugin {
@@ -48,7 +48,7 @@ Plugin does not need to resolve objects from IDs alone.
 ## Unified City module
 
 ```ts
-import { define_city_plugin } from "@downcity/plugin";
+import { define_city_plugin } from "@downcity/city/plugin";
 
 export default define_city_plugin({
   activate(context) {

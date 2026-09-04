@@ -8,8 +8,8 @@
  */
 
 import type { ActionResultMessage } from "@downcity/agent";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 
 /** ImagePlugin 使用的最小图片 AI 服务协议。 */
 export interface ImageAiService {

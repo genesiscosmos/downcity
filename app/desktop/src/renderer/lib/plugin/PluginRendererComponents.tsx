@@ -7,7 +7,7 @@
 
 import { Fragment, useState, type KeyboardEvent } from "react";
 import { TbChevronDown, TbChevronRight, TbDots, TbLoader2 } from "react-icons/tb";
-import type { PluginRendererUiComponents } from "@downcity/plugin/react";
+import type { PluginRendererUiComponents } from "@downcity/city/plugin/react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";

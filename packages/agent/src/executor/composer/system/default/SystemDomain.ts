@@ -2,22 +2,22 @@
  * SystemDomain：system 领域统一实现。
  *
  * 关键点（中文）
- * - 收敛 system 的资产加载、上下文档位判定、plugin prompt 收集、messages 组装。
+ * - 收敛 system 的资产加载、上下文档位判定、Extension prompt 收集、messages 组装。
  * - `DefaultSessionSystemComposer` 只做组件适配；核心逻辑统一在本文件。
  */
 
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import { transform_prompts_into_system_messages } from "@executor/composer/system/default/PromptRenderer.js";
-import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
+import type { SessionExtensionRuntime } from "@downcity/type/session";
 import { build_runtime_clock_system_prompt } from "@executor/composer/system/default/variables/VariableReplacer.js";
 import {
   CORE_SYSTEM_PROMPT,
   TASK_SYSTEM_PROMPT,
 } from "@executor/composer/system/default/SystemPromptAssets.js";
 
-const DEFAULT_DISABLED_MANAGED_PLUGIN_NAMES: string[] = [];
+const DEFAULT_DISABLED_EXTENSION_NAMES: string[] = [];
 
-function normalizeSystemText(input: string | null | undefined): string {
+function normalize_system_text(input: string | null | undefined): string {
   return String(input || "").trim();
 }
 
@@ -105,7 +105,7 @@ export function resolve_static_system_prompts(input: {
 type ResolvedSystemContextProfile = {
   mode: "chat" | "task";
   replace_default_core_prompt?: string;
-  disable_plugin_systems: string[];
+  disabled_extension_names: string[];
 };
 
 /**
@@ -120,8 +120,8 @@ export type SystemProfile = "chat" | "task";
  * 按显式 profile 解析 system 上下文档位。
  *
  * 关键点（中文）
- * - chat 模式：使用默认 core prompt 与全部 plugin system。
- * - task 模式：自动替换 task core prompt，并禁用 chat plugin system。
+ * - chat 模式：使用默认 core prompt 与全部 Extension system。
+ * - task 模式：自动替换 task core prompt，并禁用 chat Extension system。
  */
 export function resolve_system_context_profile(
   profile?: SystemProfile,
@@ -129,45 +129,45 @@ export function resolve_system_context_profile(
   if (profile !== "task") {
     return {
       mode: "chat",
-      disable_plugin_systems: [...DEFAULT_DISABLED_MANAGED_PLUGIN_NAMES],
+      disabled_extension_names: [...DEFAULT_DISABLED_EXTENSION_NAMES],
     };
   }
   return {
     mode: "task",
     replace_default_core_prompt: TASK_SYSTEM_PROMPT,
-    disable_plugin_systems: ["chat"],
+    disabled_extension_names: ["chat"],
   };
 }
 
 /**
- * 收集受 agent 托管的 plugin system 文本。
+ * 收集宿主 Extension 提供的 system 文本。
  *
  * 关键点（中文）
- * - core prompt 已包含 plugin 系统总规则；这里仅收集各 plugin 自己的 system prompt。
- * - 单个加载失败走 fail-open，不阻断主链路。
+ * - core prompt 已包含扩展系统总规则；这里只收集各 Extension 自己的 system prompt。
+ * - 单个 Extension 是否可用由宿主投影的运行时负责。
  */
-export async function load_managed_plugin_system_prompts(input: {
+export async function load_extension_system_prompts(input: {
   /**
    * 当前执行上下文。
    */
   extensions: SessionExtensionRuntime;
 
   /**
-   * 当前轮禁用的 plugin 名称集合。
+   * 当前轮禁用的 Extension 名称集合。
    */
-  disabled_plugin_names: string[];
+  disabled_extension_names: string[];
 }): Promise<string[]> {
   const out: string[] = [];
-  const disabled_plugin_names = new Set(
-    input.disabled_plugin_names
+  const disabled_extension_names = new Set(
+    input.disabled_extension_names
       .map((item) => String(item || "").trim())
       .filter(Boolean),
   );
 
   const blocks = await input.extensions.system_blocks();
   for (const block of blocks) {
-    if (disabled_plugin_names.has(block.name)) continue;
-    const text = normalizeSystemText(block.content);
+    if (disabled_extension_names.has(block.name)) continue;
+    const text = normalize_system_text(block.content);
     if (text) out.push(text);
   }
 
@@ -175,22 +175,10 @@ export async function load_managed_plugin_system_prompts(input: {
 }
 
 /**
- * 收集本地 plugin 的 system 文本。
- *
- * 关键点（中文）
- * - 本地 plugin 的 `plugin.system` 在语义上属于“增强注入”。
- * - 若 plugin 显式声明 availability 且当前 unavailable，则跳过其 system 注入。
- * - 单个 plugin 加载失败走 fail-open，不阻断主链路。
- */
-export async function load_local_plugin_system_prompts(): Promise<string[]> {
-  return [];
-}
-
-/**
  * 统一构建一次 Session 运行所需的 system messages。
  *
  * 关键点（中文）
- * - context/static/plugin 的组装逻辑统一收敛在 system 域。
+ * - context/static/extension 的组装逻辑统一收敛在 system 域。
  */
 export async function build_session_system_messages(input: {
   /**
@@ -219,14 +207,9 @@ export async function build_session_system_messages(input: {
   static_system_prompts: string[];
 
   /**
-   * 受 agent 托管的 plugin system 文本集合（main plugin + managed plugins）。
+   * 宿主 Extension 提供的 system 文本集合。
    */
-  managed_plugin_system_prompts: string[];
-
-  /**
-   * 本地 plugin system 文本集合。
-   */
-  local_plugin_system_prompts: string[];
+  extension_system_prompts: string[];
 }): Promise<SessionSystemMessage[]> {
   const runtimeClockText = build_runtime_clock_system_prompt({
     projectPath: input.project_root,
@@ -255,19 +238,9 @@ export async function build_session_system_messages(input: {
     },
   );
 
-  const managedPluginSystemMessages = await transform_prompts_into_system_messages(
-    Array.isArray(input.managed_plugin_system_prompts)
-      ? input.managed_plugin_system_prompts
-      : [],
-    {
-      projectPath: input.project_root,
-      variableMode: "stable",
-    },
-  );
-
-  const localPluginSystemMessages = await transform_prompts_into_system_messages(
-    Array.isArray(input.local_plugin_system_prompts)
-      ? input.local_plugin_system_prompts
+  const extension_system_messages = await transform_prompts_into_system_messages(
+    Array.isArray(input.extension_system_prompts)
+      ? input.extension_system_prompts
       : [],
     {
       projectPath: input.project_root,
@@ -277,15 +250,14 @@ export async function build_session_system_messages(input: {
 
   return [
     ...staticSystemMessages,
-    ...managedPluginSystemMessages,
-    ...localPluginSystemMessages,
+    ...extension_system_messages,
     ...runtimeRuleMessages,
     ...runtimeClockMessages,
   ];
 }
 
 /**
- * 统一解析一次 Session 运行所需的 system messages（含上下文档位判定与 plugin 收集）。
+ * 统一解析一次 Session 运行所需的 system messages（含上下文档位判定与 Extension 收集）。
  */
 export async function resolve_session_system_messages(input: {
   /**
@@ -321,10 +293,9 @@ export async function resolve_session_system_messages(input: {
     mode: profile.mode,
     replace_default_core_prompt: profile.replace_default_core_prompt,
     static_system_prompts: input.static_system_prompts,
-    managed_plugin_system_prompts: await load_managed_plugin_system_prompts({
+    extension_system_prompts: await load_extension_system_prompts({
       extensions: input.extensions,
-      disabled_plugin_names: profile.disable_plugin_systems,
+      disabled_extension_names: profile.disabled_extension_names,
     }),
-    local_plugin_system_prompts: await load_local_plugin_system_prompts(),
   });
 }

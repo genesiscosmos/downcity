@@ -7,7 +7,7 @@
 
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
-import { LocalStorageProvider } from "@downcity/workspace";
+import { LocalStorageProvider } from "@downcity/city";
 import { create_workspace_entry } from "@downcity/agent/internal";
 import {
   create_city_host_instance_id,
@@ -105,14 +105,31 @@ export class CliCityRuntime {
             model_id,
             (await city.enter_workspace(agent_id, workspace_id)).workspace.get_env(),
           ),
-        create_agent_extension: ({ agent, workspace, sdk_router }) => {
+        create_agent_extension: ({ agent, workspace, plugins, sdk_router }) => {
           const auth_service = new AuthService({
             agent_id: agent.id,
             repository: data.agent_tokens,
           });
+          const entry = create_workspace_entry(agent, workspace);
           return {
             router: create_agent_http_gateway_app({
-              get_context: () => create_workspace_entry(agent, workspace),
+              get_context: () => ({
+                agent,
+                workspace,
+                workspace_id: workspace.id,
+                data_path: entry.data_path,
+                sessions: entry.sessions,
+                plugins,
+                id: agent.id,
+                list_plugin_states: () => city.plugins.snapshots(agent.id),
+                resolve_system_messages: (input) => entry.resolve_system_messages(input),
+                register_plugin_http_routes: (app) => {
+                  city.plugins.register_http_routes(app, {
+                    agent_id: agent.id,
+                    workspace_id: workspace.id,
+                  });
+                },
+              }),
               sdk_router,
               auth_service,
             }),

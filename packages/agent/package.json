@@ -1,6 +1,6 @@
 {
   "name": "@downcity/agent",
-  "version": "1.1.420",
+  "version": "1.1.421",
   "type": "module",
   "description": "Downcity 单 Agent SDK 与执行运行时",
   "main": "./bin/index.js",
@@ -34,15 +34,13 @@
   "scripts": {
     "build": "node scripts/agent-compiler.mjs build",
     "dev": "node scripts/agent-compiler.mjs dev",
-    "test": "pnpm build && pnpm --filter '@downcity/sandbox-*' build && pnpm -C ../implementations/plugins build && node --test scripts/*.test.mjs",
+    "test": "pnpm build && node --test scripts/*.test.mjs",
     "test:executor-runtime": "pnpm build && node --test scripts/session-prompt-runtime.test.mjs",
     "typecheck": "node scripts/agent-compiler.mjs typecheck",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
   "dependencies": {
-    "@downcity/plugin": "workspace:^",
-    "@downcity/workspace": "workspace:^",
     "@downcity/type": "workspace:*",
     "@downcity/federation": "workspace:^",
     "commander": "^15.0.0",
@@ -59,9 +57,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@downcity/sandbox-linux": "workspace:^",
-    "@downcity/sandbox-macos": "workspace:^",
-    "@downcity/sandbox-windows-mxc": "workspace:^",
     "@types/fs-extra": "^11.0.4",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.1",

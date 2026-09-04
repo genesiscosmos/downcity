@@ -59,3 +59,7 @@ export {
   type RuntimeToolEffect,
   type RuntimeToolExecutionOptions,
 } from "./types/tool/index.js";
+
+export * from "./workspace.js";
+export * from "./shell.js";
+export * from "./session.js";

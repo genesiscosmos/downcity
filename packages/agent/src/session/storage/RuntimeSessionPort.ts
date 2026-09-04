@@ -1,8 +1,8 @@
 /**
- * SDK Session plugin runtime 端口构造器。
+ * SDK Session 宿主运行时端口构造器。
  *
  * 关键点（中文）
- * - 把 SDK 本地 session 适配成 runtime / plugin runtime 依赖的 `SessionPort`。
+ * - 把 SDK 本地 Session 适配成宿主运行时依赖的 `SessionPort`。
  * - SDK 公开面只保留 `prompt()` / `subscribe()`；runtime/service 若要 one-shot 等待结果，也统一委托给 `prompt()`。
  */
 
@@ -64,7 +64,7 @@ export interface CreateRuntimeSessionPortParams {
 }
 
 /**
- * 创建供 plugin runtime 使用的 session 端口。
+ * 创建供宿主运行时使用的 Session 端口。
  */
 export function create_runtime_session_port(
   params: CreateRuntimeSessionPortParams,

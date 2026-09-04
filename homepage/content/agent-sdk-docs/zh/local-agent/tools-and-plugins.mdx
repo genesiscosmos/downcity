@@ -29,7 +29,7 @@ Workspace 默认提供 `grep`、`find`、`read`、`write` 和 `edit`。需要命
 ```ts
 import { Agent } from "@downcity/agent";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-import { Shell, Workspace } from "@downcity/workspace";
+import { Shell, Workspace } from "@downcity/city";
 
 const agent = new Agent({ id: "repo-helper" });
 const workspace = new Workspace({
@@ -49,7 +49,7 @@ Agent 构造函数不接收 Plugin。先把 registration 交给 City，再为 Ag
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
-import { Workspace } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
 
 const workspace = new Workspace({
   id: "project",
@@ -111,7 +111,7 @@ await entry.plugins.guard("review.require_checked", enriched);
 
 ## PluginContext 直接通信
 
-Plugin 作者 API 从 `@downcity/plugin` 导入。Action、Hook、System 和 Availability 获得 `PluginContext`，其中包含受限的 `city`、`agent`、`workspace`、`session`、`turn`、`profile` 和 `storage` 句柄。
+Plugin 作者 API 从 `@downcity/city/plugin` 导入。Action、Hook、System 和 Availability 获得 `PluginContext`，其中包含受限的 `city`、`agent`、`workspace`、`session`、`turn`、`profile` 和 `storage` 句柄。
 
 `context.session` 与 `context.agent.sessions` 都是可直接调用的进程内对象，不需要只保存 `session_id` 再回查宿主。Workspace 文件使用 `context.workspace.files`；Plugin 私有文件使用 `context.storage.files`。
 

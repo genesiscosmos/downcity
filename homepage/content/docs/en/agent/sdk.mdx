@@ -11,8 +11,8 @@ Use `@downcity/agent` to create an Agent, manage Sessions, and execute model cal
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
-import { Workspace } from "@downcity/workspace";
-import { Shell } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
+import { Shell } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const workspace = new Workspace({
@@ -41,7 +41,7 @@ const result = await turn.finished;
 await agent.dispose();
 ```
 
-`Workspace` comes from `@downcity/workspace` and owns project files, search tools, Env, and an optional Shell. It does not own Agent identity, storage, Plugins, or Session semantics. `agent.sessions.create({ workspace })` creates the SessionStore inside the Agent scope supplied by City Storage.
+`Workspace` comes from `@downcity/city` and owns project files, search tools, Env, and an optional Shell. It does not own Agent identity, storage, Plugins, or Session semantics. `agent.sessions.create({ workspace })` creates the SessionStore inside the Agent scope supplied by City Storage.
 
 An Agent is not configured with a Workspace. Each Session may use a Workspace, and multiple Agents may operate on the same physical directory by creating separate Workspace instances. `agent.dispose()` releases Agent resources and the Sessions' Workspace resources.
 

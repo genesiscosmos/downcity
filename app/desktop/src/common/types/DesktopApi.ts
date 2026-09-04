@@ -371,7 +371,7 @@ export interface DesktopInvokePluginMainviewActionInput {
   action_id: string;
 
   /** Mainview 传给 action 的可选 JSON 输入。 */
-  input?: import("@downcity/plugin").PluginJsonValue;
+  input?: import("@downcity/city/plugin").PluginJsonValue;
 }
 
 /** Desktop 调用 Plugin Config action 的输入。 */
@@ -386,7 +386,7 @@ export interface DesktopInvokePluginConfigActionInput {
   action_id: string;
 
   /** Config 传给 action 的可选 JSON 输入。 */
-  input?: import("@downcity/plugin").PluginJsonValue;
+  input?: import("@downcity/city/plugin").PluginJsonValue;
 }
 
 /** Desktop Renderer 调用 Plugin main 的两个互斥动作范围。 */
@@ -410,6 +410,8 @@ export interface DesktopSessionSummary {
   updated_at: number;
   /** 当前已持久化消息数量。 */
   message_count: number;
+  /** Session 绑定的 Workspace ID；未绑定时为空。 */
+  workspace_id?: string;
   /** 当前 Session 是否仍在执行。 */
   executing: boolean;
 }
@@ -879,7 +881,7 @@ export interface DesktopApi {
     /** 删除未被 Agent 引用的 Profile。 */
     remove_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
     /** 按业务工作区或 Config 范围调用 Plugin main action。 */
-    invoke(plugin_id: string, input: DesktopInvokePluginActionInput): Promise<import("@downcity/plugin").PluginJsonValue>;
+    invoke(plugin_id: string, input: DesktopInvokePluginActionInput): Promise<import("@downcity/city/plugin").PluginJsonValue>;
   };
   /** Electron 原生文件选择能力。 */
   dialog: {
@@ -894,8 +896,10 @@ export interface DesktopApi {
     read_workspace_file(workspace_id: string, relative_path: string): Promise<DesktopChatFileInput>;
     /** 读取当前 Federation 中可用于 Agent 对话的模型目录。 */
     list_models(): Promise<DesktopModelSummary[]>;
-    /** 列出指定 Agent 的 Session。 */
-    list_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]>;
+    /** 列出指定 Agent 的 Session；可传入 Workspace 过滤，不传时返回全部。 */
+    list_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]>;
+    /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的摘要。 */
+    rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
     /** 创建新的 Session。 */
     create_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
     /** 从指定消息创建一个新的分支 Session。 */
@@ -908,8 +912,8 @@ export interface DesktopApi {
     archive_session(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
     /** 永久删除 Session。 */
     remove_session(agent_id: string, workspace_id: string, session_id: string): Promise<boolean>;
-    /** 列出指定 Agent 的已归档 Session。 */
-    list_archived_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]>;
+    /** 列出指定 Agent 的已归档 Session；可传入 Workspace 过滤，不传时返回全部。 */
+    list_archived_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]>;
     /** 读取 Session canonical 消息和当前运行态。 */
     get_snapshot(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatSnapshot>;
     /** 读取 Session 的一个更早历史 Segment。 */

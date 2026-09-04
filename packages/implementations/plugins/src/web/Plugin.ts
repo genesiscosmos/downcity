@@ -7,8 +7,8 @@
  * - 浏览器长期资源由 provider 拥有，并在 Plugin lifecycle.stop 时统一释放。
  */
 
-import { BasePlugin, create_action } from "@downcity/plugin";
-import type { PluginJsonObject, PluginActionResult } from "@downcity/plugin";
+import { BasePlugin, create_action } from "@downcity/city/plugin";
+import type { PluginJsonObject, PluginActionResult } from "@downcity/city/plugin";
 import { z } from "zod";
 import type {
   BrowserActInput,

@@ -14,10 +14,10 @@ import os from "node:os";
 import path from "node:path";
 
 import {
-  closeAllShellSessions,
-  createShellRuntimeState,
-  execShellCommand,
-} from "@downcity/workspace/shell/session/ShellActionRuntime.js";
+  close_all_shell_sessions,
+  create_shell_runtime_state,
+  exec_shell_command,
+} from "@downcity/city/shell";
 import { WindowsMxcSandbox } from "../bin/index.js";
 
 test("Windows MXC runs cmd and confines writes to the workspace", {
@@ -27,7 +27,7 @@ test("Windows MXC runs cmd and confines writes to the workspace", {
   const fixture_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-win-sandbox-"));
   const project_root = path.join(fixture_root, "project");
   const outside_path = path.join(fixture_root, "outside.txt");
-  const state = createShellRuntimeState();
+  const state = create_shell_runtime_state();
   await fs.mkdir(project_root, { recursive: true });
   try {
     const escaped_path = outside_path.replaceAll("%", "%%");
@@ -37,15 +37,15 @@ test("Windows MXC runs cmd and confines writes to the workspace", {
       "echo allowed>inside.txt",
       `echo denied>"${escaped_path}"`,
     ].join(" && ");
-    const execute_result = await execShellCommand(state, {
+    const execute_result = await exec_shell_command(state, {
       sandbox: new WindowsMxcSandbox(),
-      rootPath: project_root,
-      dataPath: fixture_root,
+      root_path: project_root,
+      data_path: fixture_root,
       env: { WINDOWS_TEST_VALUE: "downcity" },
     }, {
       cmd: command,
       sandbox: "safe",
-      timeoutMs: 120_000,
+      timeout_ms: 120_000,
     });
     assert.equal(execute_result.shell.status, "failed", execute_result.chunk.output);
     assert.match(execute_result.chunk.output, /downcity/i);
@@ -54,7 +54,7 @@ test("Windows MXC runs cmd and confines writes to the workspace", {
     assert.equal(execute_result.shell.sandboxBackend, "windows-mxc-dev");
     await assert.rejects(fs.access(outside_path));
   } finally {
-    await closeAllShellSessions(state, true);
+    await close_all_shell_sessions(state, true);
     await fs.rm(fixture_root, {
       recursive: true,
       force: true,

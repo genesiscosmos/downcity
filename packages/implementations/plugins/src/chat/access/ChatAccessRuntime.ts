@@ -6,7 +6,7 @@
  * - Channel Adapter、Plugin Action 和 CLI 共享同一个 Service 构造规则。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import { ChatAccessService } from "@/chat/access/ChatAccessService.js";
 import { resolveChannelAccount } from "@/chat/runtime/ChatChannelCore.js";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";

@@ -20,8 +20,8 @@ export interface BuildSessionSystemBlocksInput {
   timezone: string;
   /** 读取当前调用方传入的 Instruction System Block。 */
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
-  /** 读取当前显式注入的受托管 Plugin System Block。 */
-  get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
-  /** 读取当前显式注册 Plugin 的 System Block。 */
-  get_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
+  /** 读取当前显式注入的受托管 Extension System Block。 */
+  get_managed_extension_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
+  /** 读取当前 Session Extension 的 System Block。 */
+  get_extension_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
 }

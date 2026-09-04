@@ -10,9 +10,9 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { generate_id } from "@downcity/agent";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import { get_chat_history_path } from "@/chat/runtime/ChatStorage.js";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import type {
   ChatHistoryDirection,

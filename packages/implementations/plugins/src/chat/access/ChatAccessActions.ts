@@ -6,9 +6,9 @@
  * - CLI 可以直接复用 ChatAccessService，不依赖运行中 Agent。
  */
 
-import { create_action } from "@downcity/plugin";
-import type { PluginActions } from "@downcity/plugin";
-import type { PluginJsonValue } from "@downcity/plugin";
+import { create_action } from "@downcity/city/plugin";
+import type { PluginActions } from "@downcity/city/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 import { z } from "zod";
 import { create_chat_access_service } from "@/chat/access/ChatAccessRuntime.js";
 import { CHAT_ACCESS_ACTIONS } from "@/chat/types/ChatAccess.js";

@@ -12,9 +12,9 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent, RemoteAgent } from "@downcity/agent";
+import { Agent } from "@downcity/agent";
+import { RemoteAgent, Workspace } from "@downcity/city";
 import { create_workspace_entry } from "@downcity/agent/host";
-import { Workspace } from "../../workspace/bin/index.js";
 import { AgentRPC } from "../bin/city/transport/rpc/AgentRPC.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";

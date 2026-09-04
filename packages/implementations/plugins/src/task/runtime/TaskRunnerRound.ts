@@ -8,9 +8,9 @@
 
 import path from "node:path";
 import fs from "fs-extra";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { SessionTurnExecutionResult } from "@downcity/agent";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type {
   ChatSendOutputPick,
   ScriptExecutionResult,

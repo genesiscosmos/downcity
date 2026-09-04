@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import net from "node:net";
 import test from "node:test";
-import { RemoteAgent } from "@downcity/agent";
+import { RemoteAgent } from "@downcity/city";
 import { AgentHTTP } from "../bin/city/transport/http/AgentHTTP.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";

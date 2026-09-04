@@ -6,8 +6,8 @@
  * - 参数校验尽量前置到输入层，避免进入执行层后才发现字段非法。
  */
 
-import type { PluginJsonValue } from "@downcity/plugin";
-import type { PluginActionCommandInput } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
+import type { PluginActionCommandInput } from "@downcity/city/plugin";
 import type { ShipTaskKind, ShipTaskStatus } from "@/task/types/Task.js";
 import type {
   TaskCreateRequest,

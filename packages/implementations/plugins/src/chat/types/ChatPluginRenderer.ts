@@ -1,6 +1,6 @@
 /** Chat Plugin React Mainview 的内部组件属性类型。 */
 
-import type { PluginRendererUiComponents } from "@downcity/plugin/react";
+import type { PluginRendererUiComponents } from "@downcity/city/plugin/react";
 import type { ChatPluginPublicChannelConfig } from "./ChatPluginProfile.js";
 
 /** 单个 Chat Channel 编辑分组的属性。 */

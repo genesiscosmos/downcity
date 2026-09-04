@@ -1,0 +1,366 @@
+/**
+ * RemoteSession：统一 SessionMutation 协议的远程 Session 客户端。
+ *
+ * 事件泵只传输一种 Mutation；审批查询、模式和决策全部绑定当前 Session。
+ */
+
+import type {
+  AgentSessionConfigSnapshot,
+  AgentSessionSetOptions,
+  AgentSessionForkInput,
+  AgentSessionInfo,
+  AgentSessionStatus,
+  AgentSessionSystemSnapshot,
+  RemoteSessionSetInput,
+} from "@downcity/agent";
+import type { RemoteAgentSession } from "@downcity/agent";
+import type {
+  RespondSessionInteractionInput,
+  SessionInteractionResult,
+  SessionPendingInteraction,
+} from "@downcity/agent";
+import type {
+  SessionMutation,
+  SessionMutationSubscriber,
+  SessionMutationUnsubscribe,
+} from "@downcity/agent";
+import type {
+  ListSessionMessagesInput,
+  SessionMessagePage,
+} from "@downcity/agent";
+import { is_agent_session_prompt_input_empty } from "@downcity/agent";
+import type { AgentSessionPromptInput } from "@downcity/agent";
+import type { AgentSessionStopResult } from "@downcity/agent";
+import type {
+  AgentSessionCompactHandle,
+  AgentSessionCompactResult,
+} from "@downcity/agent";
+import type {
+  AgentSessionTurnHandle,
+  AgentSessionTurnResult,
+} from "@downcity/agent";
+import { SessionEventHub } from "@/remote/SessionEventHub.js";
+import type {
+  RemoteSessionTransport,
+  TransportSubscription,
+} from "@/remote/RemoteTransport.js";
+import type { SessionOrigin } from "@downcity/agent";
+
+type Deferred<T> = {
+  /** 当前延迟 Promise。 */
+  promise: Promise<T>;
+  /** 兑现当前 Promise。 */
+  resolve: (value: T) => void;
+};
+
+type RemoteTurnLifecycle = {
+  /** 当前 Turn 标识。 */
+  turn_id: string;
+  /** 当前 Turn 的最终结果；运行中为 null。 */
+  result: AgentSessionTurnResult | null;
+  /** 当前 Turn 完成 Promise 控制器。 */
+  deferred_finished: Deferred<AgentSessionTurnResult>;
+};
+
+type RemoteCompactLifecycle = {
+  /** 当前显式压缩请求标识。 */
+  compact_id: string;
+  /** 当前压缩请求的最终结果；运行中为 null。 */
+  result: AgentSessionCompactResult | null;
+  /** 当前压缩完成 Promise 控制器。 */
+  deferred_finished: Deferred<AgentSessionCompactResult>;
+};
+
+/** 远程 Session 客户端。 */
+export class RemoteSession implements RemoteAgentSession {
+  readonly id: string;
+  readonly agent_id: string;
+  readonly config: AgentSessionConfigSnapshot;
+  readonly origin: SessionOrigin;
+
+  private readonly transport: RemoteSessionTransport;
+  private readonly event_hub: SessionEventHub;
+  private readonly turns_by_id = new Map<string, RemoteTurnLifecycle>();
+  private readonly compacts_by_id = new Map<string, RemoteCompactLifecycle>();
+  private readonly completed_turn_ids: string[] = [];
+  private readonly completed_compact_ids: string[] = [];
+  private event_pump_connect_promise: Promise<void> | null = null;
+  private event_pump_running = false;
+  private event_subscriber_count = 0;
+  private event_subscription: TransportSubscription | null = null;
+
+  constructor(transport: RemoteSessionTransport, info: AgentSessionInfo) {
+    this.transport = transport;
+    this.id = info.session_id;
+    this.agent_id = info.agent_id;
+    this.origin = info.origin;
+    this.config = {
+      ...(info.model_label ? { model_label: info.model_label } : {}),
+    };
+    this.event_hub = new SessionEventHub();
+  }
+
+  /** 读取当前远程 Session 详情。 */
+  async get_info(): Promise<AgentSessionInfo> {
+    return await this.transport.get_info(this.id, this.origin.type);
+  }
+
+  /** 向当前远程 Session 追加 Prompt。 */
+  async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
+    if (is_agent_session_prompt_input_empty(input)) {
+      throw new Error("remote session.prompt requires a non-empty query");
+    }
+    await this.ensure_event_pump();
+    const turn = await this.transport.prompt(this.id, this.origin.type, input);
+    return create_turn_handle(this.ensure_turn_lifecycle(turn.id));
+  }
+
+  /** 停止当前远程 Session Turn。 */
+  async stop(): Promise<AgentSessionStopResult> {
+    await this.ensure_event_pump();
+    return await this.transport.stop(this.id, this.origin.type);
+  }
+
+  /** 把一次显式历史压缩加入当前远程 Session 的有序输入队列。 */
+  async compact(): Promise<AgentSessionCompactHandle> {
+    await this.ensure_event_pump();
+    const compact = await this.transport.compact(this.id, this.origin.type);
+    return create_compact_handle(this.ensure_compact_lifecycle(compact.id));
+  }
+
+  /** 订阅当前 Session 的全部未来 Mutation。 */
+  subscribe(subscriber: SessionMutationSubscriber): SessionMutationUnsubscribe {
+    this.event_subscriber_count += 1;
+    void this.ensure_event_pump().catch((error) => {
+      this.fail_pending_turns(error instanceof Error ? error.message : String(error));
+    });
+    const unsubscribe = this.event_hub.subscribe(subscriber);
+    return () => {
+      unsubscribe();
+      this.event_subscriber_count = Math.max(0, this.event_subscriber_count - 1);
+      void this.maybe_stop_event_pump();
+    };
+  }
+
+  /** 读取远程 Message 快照。 */
+  async messages(input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
+    return await this.transport.messages(this.id, this.origin.type, input);
+  }
+
+  /** 读取远程 Session 的 System 快照。 */
+  async system(): Promise<AgentSessionSystemSnapshot> {
+    return await this.transport.system(this.id, this.origin.type);
+  }
+
+  /** 列出当前远程 Session 正在等待用户响应的 Interaction。 */
+  async interactions(): Promise<SessionPendingInteraction[]> {
+    return await this.transport.interactions(this.id, this.origin.type);
+  }
+
+  /** 读取当前远程 Session 的运行与安全状态。 */
+  async status(): Promise<AgentSessionStatus> {
+    return await this.transport.status(this.id, this.origin.type);
+  }
+
+  /** 更新当前远程 Session 的可序列化动态配置。 */
+  async set(
+    input: RemoteSessionSetInput,
+    options?: AgentSessionSetOptions,
+  ): Promise<void> {
+    await this.transport.set(this.id, this.origin.type, input, options);
+  }
+
+  /** 提交当前远程 Session 的 Interaction 用户响应。 */
+  async respond(input: RespondSessionInteractionInput): Promise<SessionInteractionResult> {
+    return await this.transport.respond(this.id, this.origin.type, input);
+  }
+
+  /** 从当前远程 Session 创建分支。 */
+  async fork(input?: AgentSessionForkInput | string): Promise<RemoteAgentSession> {
+    return new RemoteSession(
+      this.transport,
+      await this.transport.fork(this.id, this.origin.type, input),
+    );
+  }
+
+  private async ensure_event_pump(): Promise<void> {
+    if (this.event_pump_connect_promise) return await this.event_pump_connect_promise;
+    if (this.event_pump_running) return;
+    this.event_pump_connect_promise = (async () => {
+      let resolved_ready = false;
+      this.event_subscription = await this.transport.subscribe({
+        session_id: this.id,
+        origin_type: this.origin.type,
+        on_ready: () => {
+          resolved_ready = true;
+        },
+        on_event: (mutation) => this.handle_mutation(mutation),
+        on_close: (error) => this.handle_event_pump_closed(error),
+      });
+      this.event_pump_running = true;
+      if (!resolved_ready) throw new Error("Remote session events connection closed before ready");
+    })();
+    try {
+      await this.event_pump_connect_promise;
+    } finally {
+      this.event_pump_connect_promise = null;
+    }
+  }
+
+  private handle_mutation(mutation: SessionMutation): void {
+    const turn_id = "turn_id" in mutation ? mutation.turn_id : undefined;
+    if (turn_id) this.ensure_turn_lifecycle(turn_id);
+    if (mutation.variant === "turn" && mutation.type === "finish") {
+      const lifecycle = this.ensure_turn_lifecycle(mutation.turn_id);
+      const result: AgentSessionTurnResult = {
+        turn_id: mutation.turn_id,
+        text: mutation.text || "",
+        success: mutation.status === "completed",
+        ...(mutation.error ? { error: mutation.error } : {}),
+      };
+      lifecycle.result = result;
+      lifecycle.deferred_finished.resolve(result);
+      this.remember_completed_turn(mutation.turn_id);
+      void this.maybe_stop_event_pump();
+    }
+    if (mutation.variant === "compact" && mutation.type === "finish") {
+      const lifecycle = this.ensure_compact_lifecycle(mutation.compact_id);
+      const result: AgentSessionCompactResult = {
+        compact_id: mutation.compact_id,
+        success: mutation.status === "completed",
+        compacted: mutation.compacted === true,
+        reason: mutation.reason || "compact_failed",
+        ...(mutation.error ? { error: mutation.error } : {}),
+      };
+      lifecycle.result = result;
+      lifecycle.deferred_finished.resolve(result);
+      this.remember_completed_compact(mutation.compact_id);
+      void this.maybe_stop_event_pump();
+    }
+    this.event_hub.publish(mutation);
+  }
+
+  private handle_event_pump_closed(error?: unknown): void {
+    this.event_subscription = null;
+    this.event_pump_running = false;
+    this.fail_pending_turns(
+      error instanceof Error ? error.message : String(error || "Remote session events connection closed"),
+    );
+  }
+
+  private ensure_turn_lifecycle(turn_id: string): RemoteTurnLifecycle {
+    const cached = this.turns_by_id.get(turn_id);
+    if (cached) return cached;
+    const created: RemoteTurnLifecycle = {
+      turn_id,
+      result: null,
+      deferred_finished: create_deferred<AgentSessionTurnResult>(),
+    };
+    this.turns_by_id.set(turn_id, created);
+    return created;
+  }
+
+  private fail_pending_turns(message: string): void {
+    for (const lifecycle of this.turns_by_id.values()) {
+      if (lifecycle.result) continue;
+      const result: AgentSessionTurnResult = {
+        turn_id: lifecycle.turn_id,
+        text: "",
+        success: false,
+        error: message,
+      };
+      lifecycle.result = result;
+      lifecycle.deferred_finished.resolve(result);
+      this.remember_completed_turn(lifecycle.turn_id);
+    }
+    for (const lifecycle of this.compacts_by_id.values()) {
+      if (lifecycle.result) continue;
+      const result: AgentSessionCompactResult = {
+        compact_id: lifecycle.compact_id,
+        success: false,
+        compacted: false,
+        reason: "compact_failed",
+        error: message,
+      };
+      lifecycle.result = result;
+      lifecycle.deferred_finished.resolve(result);
+      this.remember_completed_compact(lifecycle.compact_id);
+    }
+  }
+
+  private remember_completed_turn(turn_id: string): void {
+    this.completed_turn_ids.push(turn_id);
+    while (this.completed_turn_ids.length > 200) {
+      const oldest_turn_id = this.completed_turn_ids.shift();
+      if (oldest_turn_id) this.turns_by_id.delete(oldest_turn_id);
+    }
+  }
+
+  /** 有界保留已完成压缩，覆盖 finish Mutation 早于 transport 响应到达的竞态。 */
+  private remember_completed_compact(compact_id: string): void {
+    if (!this.completed_compact_ids.includes(compact_id)) {
+      this.completed_compact_ids.push(compact_id);
+    }
+    while (this.completed_compact_ids.length > 200) {
+      const oldest_compact_id = this.completed_compact_ids.shift();
+      if (oldest_compact_id) this.compacts_by_id.delete(oldest_compact_id);
+    }
+  }
+
+  private async maybe_stop_event_pump(): Promise<void> {
+    if (this.event_subscriber_count > 0) return;
+    if ([...this.turns_by_id.values()].some((item) => item.result === null)) return;
+    if ([...this.compacts_by_id.values()].some((item) => item.result === null)) return;
+    const current = this.event_subscription;
+    this.event_subscription = null;
+    this.event_pump_running = false;
+    if (!current) return;
+    await current.close().catch((error) => {
+      this.fail_pending_turns(error instanceof Error ? error.message : String(error));
+    });
+  }
+
+  private ensure_compact_lifecycle(
+    compact_id: string,
+  ): RemoteCompactLifecycle {
+    const cached = this.compacts_by_id.get(compact_id);
+    if (cached) return cached;
+    const created: RemoteCompactLifecycle = {
+      compact_id,
+      result: null,
+      deferred_finished: create_deferred<AgentSessionCompactResult>(),
+    };
+    this.compacts_by_id.set(compact_id, created);
+    return created;
+  }
+}
+
+function create_deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((inner_resolve) => {
+    resolve = inner_resolve;
+  });
+  return { promise, resolve };
+}
+
+function create_turn_handle(lifecycle: RemoteTurnLifecycle): AgentSessionTurnHandle {
+  return {
+    id: lifecycle.turn_id,
+    get result() {
+      return lifecycle.result;
+    },
+    finished: lifecycle.deferred_finished.promise,
+  };
+}
+
+function create_compact_handle(
+  lifecycle: RemoteCompactLifecycle,
+): AgentSessionCompactHandle {
+  return {
+    id: lifecycle.compact_id,
+    get result() {
+      return lifecycle.result;
+    },
+    finished: lifecycle.deferred_finished.promise,
+  };
+}

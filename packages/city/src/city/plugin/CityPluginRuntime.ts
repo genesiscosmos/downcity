@@ -6,10 +6,8 @@
  */
 
 import type { Hono } from "hono";
-import type { WorkspaceBase } from "@downcity/workspace";
-import type {
-  AgentPluginRuntime,
-} from "@downcity/agent/host";
+import type { WorkspaceRuntime } from "@/workspace/index.js";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import type {
   Plugin,
   PluginConfigMainAction,
@@ -21,7 +19,7 @@ import type {
   PluginMainContext,
   PluginProfile,
   PluginSnapshot,
-} from "@downcity/plugin";
+} from "@/plugin/index.js";
 import type { Agent } from "@downcity/agent";
 import { Logger } from "@downcity/agent/host";
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
@@ -41,7 +39,7 @@ import {
   agent_embassy,
   get_agent_storage,
   get_workspace_entry,
-  plugin_storage_scope,
+  extension_storage_scope,
 } from "@downcity/agent/host";
 
 /** 一个 Agent/Workspace 的稳定 Plugin Context 集合。 */
@@ -69,7 +67,7 @@ export class CityPluginRuntime {
   /** 正在停止的共享实例；同 key 新创建必须等待旧实例完全停止。 */
   private readonly shared_stop_promises = new Map<string, Promise<void>>();
   /** City Plugin catalog；main 与 execution factory 共享同一注册。 */
-  private readonly registrations = new Map<string, import("@downcity/plugin").CityPluginRegistration>();
+  private readonly registrations = new Map<string, import("@/plugin/index.js").CityPluginRegistration>();
   /** 已激活的 Plugin main。 */
   private readonly main_records = new Map<string, CityPluginMainRecord>();
   /** 并发 main 调用复用的激活流程。 */
@@ -88,10 +86,40 @@ export class CityPluginRuntime {
       unregister: async (agent_id, plugin_id) => await this.unregister(agent_id, plugin_id),
       snapshots: (agent_id) => this.snapshots(agent_id),
       get: (agent_id, plugin_id) => this.get(agent_id, plugin_id),
+      scope: (input) => this.scope(input.agent_id, input.workspace_id),
+      register_http_routes: (app, input) => {
+        this.register_http_routes(app, input.agent_id, input.workspace_id);
+      },
       invoke: async (plugin_id, action_id, input) =>
         await this.invoke_main(plugin_id, action_id, input),
       invoke_config: async (plugin_id, profile_id, action_id, input) =>
         await this.invoke_config(plugin_id, profile_id, action_id, input),
+    });
+  }
+
+  /** 返回一个 Agent/Workspace 的直接 Plugin 执行作用域。 */
+  private scope(agent_id_input: string, workspace_id_input: string): AgentPluginRuntime {
+    const agent_id = normalize_id(agent_id_input, "agent_id");
+    const record = this.records_by_agent.get(agent_id);
+    if (!record) throw new Error(`Agent is not registered in City Plugin Runtime: ${agent_id}`);
+    const entry = this.options.city.require_workspace(agent_id, workspace_id_input);
+    const context = this.workspace_context(record, entry.workspace, entry.get_logger());
+    return this.ready_contextual(record, context);
+  }
+
+  /** 将一个 Agent/Workspace 的 Plugin HTTP 路由注册到 City transport。 */
+  register_http_routes(app: Hono, agent_id_input: string, workspace_id_input: string): void {
+    const agent_id = normalize_id(agent_id_input, "agent_id");
+    const record = this.records_by_agent.get(agent_id);
+    if (!record) throw new Error(`Agent is not registered in City Plugin Runtime: ${agent_id}`);
+    const entry = this.options.city.require_workspace(agent_id, workspace_id_input);
+    const context = this.workspace_context(record, entry.workspace, entry.get_logger());
+    register_plugin_http_routes({
+      app,
+      get_context: (plugin_name) => record.registry.plugin_context(context, plugin_name),
+      plugins: record.registry.snapshots()
+        .map((snapshot) => record.registry.get(snapshot.name))
+        .filter((plugin): plugin is Plugin => plugin !== null),
     });
   }
 
@@ -139,10 +167,6 @@ export class CityPluginRuntime {
       release_workspace: async (workspace_id) => {
         await this.drop_workspace_contexts(agent.id, workspace_id);
       },
-      plugins: (workspace, logger) => {
-        const context = this.workspace_context(record, workspace, logger);
-        return this.ready_contextual(record, context);
-      },
       tools: (workspace, logger) => {
         const context = this.workspace_context(record, workspace, logger);
         return registry.tools(context);
@@ -152,19 +176,12 @@ export class CityPluginRuntime {
         return this.ready_execution_runtime(record, context);
       },
       subscribe: (subscriber) => registry.subscribe_change((change) => {
-        subscriber({ ...change, initial: initial_binding });
+          subscriber({
+            type: change.type,
+            extension_name: change.plugin_name,
+            initial: initial_binding,
+          });
       }),
-      snapshots: () => this.snapshots(agent.id),
-      register_http_routes: (app, workspace, logger) => {
-        const context = this.workspace_context(record, workspace, logger);
-        register_plugin_http_routes({
-          app,
-          get_context: (plugin_name) => registry.plugin_context(context, plugin_name),
-          plugins: registry.snapshots()
-            .map((snapshot) => registry.get(snapshot.name))
-            .filter((plugin): plugin is Plugin => plugin !== null),
-        });
-      },
     });
   }
 
@@ -456,7 +473,7 @@ export class CityPluginRuntime {
   /** 返回一个 Agent/Workspace 唯一的执行 Context。 */
   private workspace_context(
     record: CityAgentPluginRuntimeRecord,
-    workspace: WorkspaceBase,
+    workspace: WorkspaceRuntime,
     logger: Logger,
   ): PluginContext {
     const key = `${record.agent.id}\u0000${workspace.id}`;
@@ -504,7 +521,7 @@ export class CityPluginRuntime {
       if (cached) return cached;
       const shared = record.shared_by_plugin.get(plugin_id);
       if (!shared) throw new Error(`Plugin is not bound to Agent: ${record.agent.id}/${plugin_id}`);
-      const scope = plugin_storage_scope(record.agent, plugin_id);
+      const scope = extension_storage_scope(record.agent, plugin_id);
       const plugin_context = create_plugin_context({
         ...context_input,
         data_path: scope.root_path,
@@ -622,7 +639,7 @@ export class CityPluginRuntime {
   private ready_execution_runtime(
     record: CityAgentPluginRuntimeRecord,
     context: PluginContext,
-  ): import("@downcity/agent/host").SessionExtensionRuntime {
+  ): import("@downcity/type/session").SessionExtensionRuntime {
     const wait_ready = async () => {
       await record.ready;
       await this.ensure_workspace_bindings(record, context);
@@ -718,7 +735,7 @@ export class CityPluginRuntime {
   }
 
   /** 向 City 登记 Plugin 的统一 main 与 execution factory。 */
-  private provide(registration: import("@downcity/plugin").CityPluginRegistration): void {
+  private provide(registration: import("@/plugin/index.js").CityPluginRegistration): void {
     const plugin_id = normalize_id(registration?.id, "registration.id");
     const existing = this.registrations.get(plugin_id);
     if (existing && existing.module !== registration.module) {
@@ -730,7 +747,7 @@ export class CityPluginRuntime {
   /** 返回 City 已登记的 Plugin。 */
   private require_registration(
     plugin_id_input: string,
-  ): import("@downcity/plugin").CityPluginRegistration {
+  ): import("@/plugin/index.js").CityPluginRegistration {
     const plugin_id = normalize_id(plugin_id_input, "plugin_id");
     const registration = this.registrations.get(plugin_id);
     if (!registration) throw new Error(`Plugin is not provided by City: ${plugin_id}`);
@@ -805,7 +822,7 @@ export class CityPluginRuntime {
 
   /** 创建统一 main 模块使用的 City 受限上下文。 */
   private create_main_context(
-    registration: import("@downcity/plugin").CityPluginRegistration,
+    registration: import("@/plugin/index.js").CityPluginRegistration,
     plugin_actions: Map<string, PluginMainAction>,
     config_actions: Map<string, PluginConfigMainAction>,
   ): PluginMainContext {
@@ -837,8 +854,8 @@ export class CityPluginRuntime {
           workspace_path: workspace.path,
         })),
         invoke_agent_plugin: async (input) => {
-          const entry = await this.options.city.enter_workspace(input.agent_id, input.workspace_id);
-          return await entry.plugins.run_action({
+          await this.options.city.enter_workspace(input.agent_id, input.workspace_id);
+          return await this.scope(input.agent_id, input.workspace_id).run_action({
             plugin: input.plugin_id,
             action: input.action_id,
             ...(input.input !== undefined ? { payload: input.input } : {}),
@@ -940,7 +957,7 @@ function normalize_json_value(value: PluginJsonValue, label: string): PluginJson
 /** 保证同一 City key 不会被另一份模块或冲突配置静默复用。 */
 function assert_shared_registration(
   record: CitySharedPluginRecord,
-  registration: import("@downcity/plugin").CityPluginRegistration,
+  registration: import("@/plugin/index.js").CityPluginRegistration,
   profile: PluginProfile,
 ): void {
   if (record.module !== registration.module) {
@@ -952,7 +969,7 @@ function assert_shared_registration(
 }
 
 /** 为 JSON 配置生成与对象字段插入顺序无关的稳定文本。 */
-function stable_json(value: import("@downcity/plugin").PluginJsonValue): string {
+function stable_json(value: import("@/plugin/index.js").PluginJsonValue): string {
   if (Array.isArray(value)) return `[${value.map(stable_json).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.keys(value).sort().map((key) =>

@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { define_plugin_renderer, type PluginRendererNotification, type PluginRendererUiComponents } from "@downcity/plugin/react";
+import { define_plugin_renderer, type PluginRendererNotification, type PluginRendererUiComponents } from "@downcity/city/plugin/react";
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "@/task/types/TaskCommand.js";
 import type { TaskMainviewEditorDraft, TaskMainviewHistorySnapshot, TaskMainviewItem, TaskMainviewMutationResult, TaskMainviewRunDetailSnapshot, TaskMainviewSnapshot } from "@/task/types/TaskMainview.js";
 import { TaskEditor } from "@/task/renderer/TaskEditor.js";

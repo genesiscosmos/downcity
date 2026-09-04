@@ -5,7 +5,7 @@ import type {
   QqInboundAttachmentKind,
   QqRawInboundAttachment,
 } from "@/chat/types/QqVoice.js";
-import type { PluginLogger } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 
 /**
  * QQ 入站附件候选字段（宽松结构）。

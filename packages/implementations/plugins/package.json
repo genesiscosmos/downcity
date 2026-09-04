@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugins",
-  "version": "1.0.294",
+  "version": "1.0.295",
   "type": "module",
   "description": "Downcity 内建 plugin 集合包",
   "files": [
@@ -66,7 +66,7 @@
   },
   "dependencies": {
     "@downcity/agent": "workspace:^",
-    "@downcity/plugin": "workspace:^",
+    "@downcity/city": "workspace:^",
     "commander": "^15.0.0",
     "execa": "^9.6.1",
     "fs-extra": "^11.3.5",
@@ -80,7 +80,6 @@
     "react": "^19.0.0"
   },
   "devDependencies": {
-    "@downcity/city": "workspace:^",
     "@types/fs-extra": "^11.0.4",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.1",

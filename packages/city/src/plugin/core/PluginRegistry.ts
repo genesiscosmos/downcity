@@ -9,8 +9,8 @@
 
 import { to_plugin_view } from "@/plugin/core/PluginCatalog.js";
 import { HookRegistry } from "@/plugin/core/HookRegistry.js";
-import type { Plugin } from "@downcity/plugin";
-import type { PluginActionResult } from "@downcity/plugin";
+import type { Plugin } from "@/plugin/index.js";
+import type { PluginActionResult } from "@/plugin/index.js";
 import type {
   AgentPluginRuntime,
   AgentPluginExecutionLease,
@@ -19,15 +19,15 @@ import type {
   PluginActionReadView,
   PluginReadView,
   PluginView,
-} from "@downcity/agent/host";
+} from "@/types/plugin/PluginRuntime.js";
 import type { AgentSessionSystemBlock } from "@downcity/agent";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@/plugin/index.js";
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
-import type { PluginLifecycleContext } from "@downcity/plugin";
+import type { PluginLifecycleContext } from "@/plugin/index.js";
 import type { JsonValue } from "@downcity/agent";
-import type { PluginSnapshot } from "@downcity/plugin";
+import type { PluginSnapshot } from "@/plugin/index.js";
 import type { PluginRuntimeRecord } from "@/types/plugin/PluginRuntimeRecord.js";
-import type { PluginExecutionContext } from "@downcity/plugin";
+import type { PluginExecutionContext } from "@/plugin/index.js";
 import type { SessionInteractionPort } from "@downcity/agent";
 import { execute_plugin_action } from "@/plugin/core/PluginActionExecution.js";
 import type { RuntimeTool as Tool } from "@downcity/type";
@@ -771,7 +771,7 @@ export class PluginRegistry {
         ).trim();
         if (!text) continue;
         out.push({
-          source: "plugin",
+          source: "extension",
           name: plugin.name,
           content: text,
         });

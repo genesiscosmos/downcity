@@ -4,7 +4,7 @@
 >
 > 目的：把 Mastra 与 Prime Agent 的可借鉴能力，转换为符合 Downcity 当前架构、所有权和生命周期的优化计划。
 >
-> 范围：`packages/agent`、`packages/plugins`、`packages/agent` 及其用户文档。
+> 范围：`packages/agent`、`packages/city/src/plugins`、`packages/agent` 及其用户文档。
 >
 > 本文只描述当前代码可以证明的缺口和可落地的演进方向，不把外部项目的实现方式直接当作 Downcity 的目标架构。
 
@@ -267,7 +267,7 @@ Agent Turn/Tool Event
 | 交付项 | 所有者 | 依赖 | 对外影响 |
 | --- | --- | --- | --- |
 | Tool 审批统一 | `packages/agent` + `packages/shell` | 现有 Interaction | Agent API/行为变化 |
-| Memory Adapter 研究端口 | `packages/plugins` | 当前 MemoryPlugin | 先内部，冻结后需文档 |
+| Memory Adapter 研究端口 | `packages/city/src/plugins` | 当前 MemoryPlugin | 先内部，冻结后需文档 |
 | Evals | 新 `packages/evals` | Agent 公开事件和测试模型 | 新 package |
 | Provider fallback | `packages/agent` | AIService usage 结算 | City 行为变化 |
 | 子 Agent 句柄 | `packages/agent` | Remote transport/RPC | Agent/RPC 协议变化 |

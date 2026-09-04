@@ -6,7 +6,7 @@
  */
 
 import type { SessionStore } from "@/types/store/SessionStore.js";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 
 /** Agent 持有的 Session、日志与调度共享存储。 */
 export interface AgentStorage {

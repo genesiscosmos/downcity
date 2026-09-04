@@ -14,7 +14,7 @@ import {
 } from "../bin/plugin/tool/PluginToolRuntime.js";
 import { create_plugin_tools } from "../bin/plugin/tool/PluginTools.js";
 import { plugin_call_input_schema } from "../bin/plugin/tool/PluginToolSchemas.js";
-import { create_action, create_plugin } from "@downcity/plugin";
+import { create_action, create_plugin } from "@downcity/city/plugin";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
 import { create_session_turn_context } from "@downcity/agent";
 import { z } from "zod";

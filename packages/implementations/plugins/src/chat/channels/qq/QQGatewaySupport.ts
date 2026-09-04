@@ -7,7 +7,7 @@
  */
 
 import type { RawData } from "ws";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import type { QQGatewayPayload, QqGatewayRuntimeStatus } from "@/chat/channels/qq/types/QqChannel.js";
 import type {
   QqGatewayHeartbeatState,

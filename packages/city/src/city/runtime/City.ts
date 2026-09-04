@@ -23,9 +23,9 @@ import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
 import type { CityPlugins, CityAgentPluginOptions } from "@/city/types/CityPlugin.js";
 import { create_empty_session_extensions } from "@downcity/agent/host";
 import type { WorkspaceEntry } from "@downcity/agent/host";
-import type { WorkspaceBase } from "@downcity/workspace";
-import type { StorageProvider } from "@downcity/workspace";
-import { MemoryStorageProvider } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@/workspace/index.js";
+import type { StorageProvider } from "@/workspace/index.js";
+import { MemoryStorageProvider } from "@/workspace/index.js";
 import { CityHTTP } from "@/city/transport/http/CityHTTP.js";
 import { CityRPC } from "@/city/transport/rpc/CityRPC.js";
 import type {
@@ -63,7 +63,7 @@ export class City {
   readonly workspaces: CityWorkspaces;
 
   /** City 持有的 Workspace 资源，按稳定 ID 索引。 */
-  private readonly workspaces_by_id = new Map<string, WorkspaceBase>();
+  private readonly workspaces_by_id = new Map<string, WorkspaceRuntime>();
 
   /** City 绑定的 Embassy 服务入口。 */
   readonly embassy?: CityOptions["embassy"];
@@ -179,13 +179,13 @@ export class City {
 
   /** 返回 City 持有的 Workspace；不存在时返回 null。 */
   /** 内部 AgentCity 协议；用户应使用 `city.workspaces.get()`。 */
-  get_workspace(workspace_id_input: string): WorkspaceBase | null {
+  get_workspace(workspace_id_input: string): WorkspaceRuntime | null {
     const workspace_id = String(workspace_id_input || "").trim();
     return this.workspaces_by_id.get(workspace_id) ?? null;
   }
 
   /** 返回 City 持有的 Workspace 稳定快照。 */
-  private list_workspaces(): readonly WorkspaceBase[] {
+  private list_workspaces(): readonly WorkspaceRuntime[] {
     return [...this.workspaces_by_id.values()];
   }
 
@@ -414,7 +414,7 @@ export class City {
   }
 
   /** 把宿主按需解析出的 Workspace 纳入 City 资源索引。 */
-  private add_workspace(workspace: WorkspaceBase): WorkspaceBase {
+  private add_workspace(workspace: WorkspaceRuntime): WorkspaceRuntime {
     this.assert_active();
     const workspace_id = String(workspace?.id || "").trim();
     if (!workspace_id) throw new Error("City requires Workspace with a stable id");
@@ -429,7 +429,7 @@ export class City {
   }
 
   /** 释放并移除一个 Workspace；不存在时返回 null。 */
-  private async remove_workspace(workspace_id_input: string): Promise<WorkspaceBase | null> {
+  private async remove_workspace(workspace_id_input: string): Promise<WorkspaceRuntime | null> {
     const workspace_id = String(workspace_id_input || "").trim();
     const workspace = this.workspaces_by_id.get(workspace_id) ?? null;
     if (!workspace) return null;
@@ -439,7 +439,7 @@ export class City {
   }
 
   /** 将 City 的底层 Storage 绑定到 Workspace 的 Shell 运行目录。 */
-  private bind_workspace_shell(workspace: WorkspaceBase): void {
+  private bind_workspace_shell(workspace: WorkspaceRuntime): void {
     workspace.shell?.bind({
       root_path: workspace.path,
       data_path: this.storage.open_scope(["workspaces", workspace.id, "shell"]).root_path,

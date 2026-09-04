@@ -17,10 +17,12 @@ import type {
   PluginProfile,
   PluginProfileConfigStore,
   PluginSnapshot,
-} from "@downcity/plugin";
+} from "@/plugin/index.js";
 import type { Agent } from "@downcity/agent";
 import type { AgentHostExtensions, Logger } from "@downcity/agent/host";
 import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { Hono } from "hono";
 
 /** Agent 加入 City 时声明的一个 Plugin/Profile 绑定。 */
 export interface CityAgentPluginBinding {
@@ -39,6 +41,9 @@ export interface CityAgentPluginOptions {
 /** City 向单个 Agent 运行时投影的扩展能力。 */
 export type AgentCityExtensionBinding = AgentHostExtensions;
 
+/** City 为一个 Agent/Workspace 投影的 Plugin 执行作用域。 */
+export type CityPluginScope = AgentPluginRuntime;
+
 /** City 对外暴露的 Plugin 绑定入口。 */
 export interface CityPlugins {
   /** 向 City catalog 登记一个 Plugin；相同 ID 只能对应同一模块。 */
@@ -51,6 +56,23 @@ export interface CityPlugins {
   snapshots(agent_id: string): PluginSnapshot[];
   /** 获取指定 Agent 当前绑定的共享 Plugin 实例。 */
   get(agent_id: string, plugin_id: string): Plugin | null;
+  /** 返回指定 Agent/Workspace 的直接 Plugin 调用作用域。 */
+  scope(input: {
+    /** 当前 Plugin 调用所属的 Agent 稳定标识。 */
+    readonly agent_id: string;
+    /** 当前 Plugin 调用所属的 Workspace 稳定标识。 */
+    readonly workspace_id: string;
+  }): CityPluginScope;
+  /** 向指定应用注册一个 Agent/Workspace 下的 Plugin HTTP 路由。 */
+  register_http_routes(
+    app: Hono,
+    input: {
+      /** 当前 Plugin HTTP 请求所属的 Agent 稳定标识。 */
+      readonly agent_id: string;
+      /** 当前 Plugin HTTP 请求所属的 Workspace 稳定标识。 */
+      readonly workspace_id: string;
+    },
+  ): void;
   /** 调用 Plugin main 注册的业务 action。 */
   invoke(plugin_id: string, action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
   /** 在指定 Profile 配置范围调用 Plugin main config action。 */

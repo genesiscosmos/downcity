@@ -6,7 +6,7 @@
  * - 具体 action 的 payload 组装留在各 action input 模块中。
  */
 
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 
 /**
  * 判断 PluginJsonValue 是否为对象。

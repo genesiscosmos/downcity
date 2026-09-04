@@ -14,7 +14,7 @@ import {
   type PluginJsonValue,
   type PluginMainContext,
   type PluginMainWorkspace,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 import { listSkills, lookupSkill } from "@/skill/Action.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
 import type {

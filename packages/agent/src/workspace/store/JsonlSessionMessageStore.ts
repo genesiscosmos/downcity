@@ -19,7 +19,7 @@ import type {
   SessionMessageCommitState,
 } from "@/types/store/SessionDataStore.js";
 import type { JsonlSessionMessageStoreOptions } from "@/types/store/LocalStore.js";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 
 const SEGMENT_FILE_PATTERN = /^(\d+)-(\d+)\.jsonl$/;
 const SEQUENCE_FILE_WIDTH = 12;

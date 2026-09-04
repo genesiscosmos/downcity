@@ -11,7 +11,7 @@ import {
   type CityPluginModule,
   type CityPluginRegistration,
   type PluginMainModule,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 import { CHAT_PLUGIN_MAIN } from "@/chat/main/ChatPluginMain.js";
 import {
   IMAGE_PLUGIN_SETTINGS,
@@ -34,7 +34,7 @@ import { TaskPlugin } from "@/task.js";
 import { TASK_PLUGIN_MAIN } from "@/task/main/TaskPluginMain.js";
 import { WebPlugin, type WebPluginOptions } from "@/web.js";
 
-/** 官方 Plugin definition 与 @downcity/plugin 的统一注册协议一致。 */
+/** 官方 Plugin definition 与 @downcity/city/plugin 的统一注册协议一致。 */
 export type BuiltinPluginDefinition = Omit<CityPluginRegistration, "module">;
 
 /** 官方 Plugin 注册由 CityPluginRegistration 直接表达。 */

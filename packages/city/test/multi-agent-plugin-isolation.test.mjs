@@ -16,8 +16,8 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
 import { create_workspace_entry } from "@downcity/agent/host";
-import { Workspace } from "@downcity/workspace";
-import { create_action, create_plugin } from "@downcity/plugin";
+import { Workspace } from "@downcity/city";
+import { create_action, create_plugin } from "@downcity/city/plugin";
 import { CITY_MODEL_KIND } from "@downcity/type";
 
 /** 构造 AI SDK V3 usage。 */

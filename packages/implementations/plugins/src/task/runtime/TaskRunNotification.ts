@@ -8,7 +8,7 @@
 import type {
   PluginContext,
   PluginNotificationPublisher,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 import type { ShipTaskDefinitionV1, ShipTaskRunStatusV1 } from "@/task/types/Task.js";
 
 /** 发布一次 Task Run 完成或失败通知。 */

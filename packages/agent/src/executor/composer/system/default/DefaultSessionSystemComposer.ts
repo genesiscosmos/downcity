@@ -9,7 +9,7 @@
 import type {
   SessionSystemComposer,
 } from "@executor/composer/system/SessionSystemComposer.js";
-import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
+import type { SessionExtensionRuntime } from "@downcity/type/session";
 import type { SessionComposeInput } from "@/types/session/SessionComposer.js";
 import {
   resolve_session_system_messages,
@@ -28,7 +28,7 @@ type DefaultSessionSystemComposerOptions = {
   get_static_system_prompts: () => string[];
 
   /**
-   * 读取当前执行上下文（用于加载 plugin system 文本）。
+   * 读取当前执行上下文（用于加载 Extension system 文本）。
    */
   get_extensions: () => SessionExtensionRuntime;
 

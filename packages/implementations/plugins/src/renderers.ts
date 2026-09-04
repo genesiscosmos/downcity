@@ -1,6 +1,6 @@
 /** Downcity 官方 Plugin Mainview 的 Renderer 专用注册表。 */
 
-import type { PluginRendererDefinition } from "@downcity/plugin/react";
+import type { PluginRendererDefinition } from "@downcity/city/plugin/react";
 import { CHAT_PLUGIN_RENDERER } from "@/chat/renderer/ChatPluginRenderer.js";
 import { SKILL_PLUGIN_RENDERER } from "@/skill/renderer/SkillPluginRenderer.js";
 import { TASK_PLUGIN_RENDERER } from "@/task/renderer/TaskPluginRenderer.js";

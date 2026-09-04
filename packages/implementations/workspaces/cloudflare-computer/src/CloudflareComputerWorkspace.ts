@@ -2,12 +2,11 @@
  * Cloudflare Computer Workspace 适配器。
  *
  * 职责说明（中文）
- * - 将 Cloudflare Computer 的持久化虚拟文件系统接入 Downcity WorkspaceBase。
+ * - 将 Cloudflare Computer 的持久化虚拟文件系统接入 Downcity WorkspaceRuntime。
  * - 保持 Agent、Session、Store 和 WorkspaceTools 不感知 Cloudflare RPC 细节。
  * - Runtime 执行由调用方通过 Cloudflare Computer tools 配置；本适配器不伪造本地 Shell。
  */
 
-import { WorkspaceBase } from "@downcity/workspace/protocol";
 import { define_runtime_tool } from "@downcity/type";
 import type {
   FileSystem,
@@ -16,8 +15,9 @@ import type {
   WorkspaceEnvSubscriber,
   WorkspaceEnvUnsubscribe,
   WorkspaceShell,
+  WorkspaceRuntime,
   WorkspaceTools,
-} from "@downcity/workspace/protocol";
+} from "@downcity/type/workspace";
 import { z } from "zod";
 import type {
   CloudflareComputerFileApi,
@@ -26,11 +26,11 @@ import type {
 import type {
   FileToolActionRequest,
   FileToolActionResult,
-} from "@downcity/workspace/protocol";
+} from "@downcity/type/workspace";
 import type {
   SearchToolActionRequest,
   SearchToolActionResult,
-} from "@downcity/workspace/protocol";
+} from "@downcity/type/workspace";
 
 class CloudflareComputerFileSystem implements FileSystem {
   readonly root_path: string;
@@ -130,7 +130,7 @@ class CloudflareComputerFileSystem implements FileSystem {
 }
 
 /** 将 Cloudflare Computer 虚拟文件系统作为 Downcity Agent Workspace 使用。 */
-export class CloudflareComputerWorkspace extends WorkspaceBase {
+export class CloudflareComputerWorkspace implements WorkspaceRuntime {
   readonly id: string;
   readonly path: string;
   readonly files: FileSystem;
@@ -143,7 +143,6 @@ export class CloudflareComputerWorkspace extends WorkspaceBase {
   private readonly dispose_computer?: CloudflareComputerWorkspaceOptions["dispose"];
 
   constructor(options: CloudflareComputerWorkspaceOptions) {
-    super();
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("CloudflareComputerWorkspace requires a stable id");
     this.path = normalize_root_path(options.root_path || "/workspace");

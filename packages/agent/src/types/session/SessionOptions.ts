@@ -12,7 +12,7 @@ import type { AgentModel } from "@/agent/AgentModel.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
+import type { SessionExtensionRuntime } from "@downcity/type/session";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
@@ -28,7 +28,7 @@ export interface AgentManagedSession extends AgentSession {
   initialize(): Promise<this>;
 
   /**
-   * 返回供 plugin/runtime 使用的 session 端口。
+   * 返回供宿主运行时使用的 Session 端口。
    */
   get_runtime_port(): SessionPort;
 
@@ -137,10 +137,8 @@ export interface SessionOptions {
   /** 创建当前 City configured extension 的 Session Step 执行视图。 */
   get_extensions: () => SessionExtensionRuntime;
 
-  /**
-   * 读取当前 agent 显式注入的受托管 plugin system blocks。
-   */
-  get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
+  /** 读取当前 Agent 显式注入的受托管 Extension system blocks。 */
+  get_managed_extension_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
 
   /**
    * 在执行前确保当前 session 已完成宿主侧默认配置。

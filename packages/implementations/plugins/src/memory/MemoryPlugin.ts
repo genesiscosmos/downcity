@@ -14,20 +14,20 @@
 
 import type { Command } from "commander";
 import path from "node:path";
-import { BasePlugin, create_action } from "@downcity/plugin";
+import { BasePlugin, create_action } from "@downcity/city/plugin";
 import type {
   PluginJsonObject,
   PluginJsonValue,
   PluginHooks,
   PluginActions,
   PluginContext,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 import type {
   SessionSystemContextHookValue,
   SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
 } from "@downcity/agent";
-import { SESSION_PLUGIN_POINTS } from "@downcity/agent";
+import { SESSION_EXTENSION_POINTS } from "@downcity/agent";
 import { z } from "zod";
 import {
   digest_memory_action,
@@ -163,7 +163,7 @@ export class MemoryPlugin extends BasePlugin {
   /** 使用现有 Plugin HookRegistry 接入 Session 三个通用检查点。 */
   readonly hooks: PluginHooks = {
     pipeline: {
-      [SESSION_PLUGIN_POINTS.system_context]: [async ({ context, value, plugin }) => {
+      [SESSION_EXTENSION_POINTS.system_context]: [async ({ context, value, plugin }) => {
         const input = value as unknown as SessionSystemContextHookValue;
         const access = await this.access_resolver.resolve(context, input.session_id);
         const core_blocks = await build_memory_core_system_content(this.provider, access);
@@ -173,14 +173,14 @@ export class MemoryPlugin extends BasePlugin {
           blocks: [
             ...(Array.isArray(input.blocks) ? input.blocks : []),
             ...core_blocks.map((block) => ({
-              source: "plugin" as const,
+              source: "extension" as const,
               name: `${plugin}/${block.name}`,
               content: block.content,
             })),
           ],
         } as unknown as PluginJsonValue;
       }],
-      [SESSION_PLUGIN_POINTS.turn_context]: [async ({ context, value }) => {
+      [SESSION_EXTENSION_POINTS.turn_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionTurnContextHookValue;
         const access = await this.access_resolver.resolve(context, input.session_id);
         const block = await build_memory_recall_context_block(
@@ -197,7 +197,7 @@ export class MemoryPlugin extends BasePlugin {
       }],
     },
     effect: {
-      [SESSION_PLUGIN_POINTS.turn_committed]: [async ({ context, value }) => {
+      [SESSION_EXTENSION_POINTS.turn_committed]: [async ({ context, value }) => {
         await this.capture_committed_turn(
           context,
           value as unknown as SessionTurnCommittedHookValue,

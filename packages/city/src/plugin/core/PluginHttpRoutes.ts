@@ -7,8 +7,8 @@
  */
 
 import type { Hono } from "hono";
-import type { Plugin } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
+import type { Plugin } from "@/plugin/index.js";
+import type { PluginContext } from "@/plugin/index.js";
 import type { AuthRoutePolicy } from "@downcity/type";
 
 function dedupeAuthPolicies(policies: AuthRoutePolicy[]): AuthRoutePolicy[] {

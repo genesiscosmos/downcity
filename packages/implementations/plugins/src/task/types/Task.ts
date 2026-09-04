@@ -6,7 +6,7 @@
  * - 每次执行产出 run 目录用于审计
  */
 
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 
 export type ShipTaskStatus = "enabled" | "paused" | "disabled";
 export type ShipTaskKind = "agent" | "script";

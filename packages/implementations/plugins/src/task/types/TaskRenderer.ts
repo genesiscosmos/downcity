@@ -1,6 +1,6 @@
 /** Task Plugin Renderer 的组件边界类型。 */
 
-import type { PluginRendererUiComponents } from "@downcity/plugin/react";
+import type { PluginRendererUiComponents } from "@downcity/city/plugin/react";
 import type {
   TaskMainviewEditorDraft,
   TaskMainviewItem,

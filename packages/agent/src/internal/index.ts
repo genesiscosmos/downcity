@@ -15,7 +15,7 @@ export {
   agent_embassy,
   release_agent_from_host,
   agent_storage_scope,
-  plugin_storage_scope,
+  extension_storage_scope,
   get_agent_storage,
   agent_storage,
   create_workspace_entry,

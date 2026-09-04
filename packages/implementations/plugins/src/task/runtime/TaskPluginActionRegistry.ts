@@ -7,8 +7,8 @@
  */
 
 import type { Command } from "commander";
-import type { PluginActions, PluginNotificationPublisher } from "@downcity/plugin";
-import { create_action } from "@downcity/plugin";
+import type { PluginActions, PluginNotificationPublisher } from "@downcity/city/plugin";
+import { create_action } from "@downcity/city/plugin";
 import { z } from "zod";
 import type { TaskListActionPayload } from "@/task/types/TaskPluginTypes.js";
 import type {

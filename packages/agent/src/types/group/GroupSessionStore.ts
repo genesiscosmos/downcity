@@ -2,7 +2,7 @@
 
 import type { GroupMessage } from "@/types/group/Group.js";
 import type { GroupDispatchTurnRecord } from "@/types/group/GroupDispatch.js";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 
 /** GroupSession 的持久化元数据。 */
 export interface GroupSessionHistoryMeta {

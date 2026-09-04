@@ -7,7 +7,7 @@
  * - 这样 ChatPlugin 不再理解 Telegram、Feishu、QQ 的具体配置字段。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";

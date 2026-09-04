@@ -3,7 +3,7 @@
 import { nanoid } from "nanoid";
 import { GroupSession } from "@/group/GroupSession.js";
 import type { Group } from "@/group/Group.js";
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@downcity/type";
 import { get_group_session_store, mark_group_session_started } from "@/internal/GroupRuntime.js";
 import type {
   GroupSession as GroupSessionContract,
@@ -91,7 +91,7 @@ export class GroupSessions implements GroupSessionsContract {
     await get_group_session_store(this.group).dispose();
   }
 
-  private create_runtime_session(session_id: string, workspace?: WorkspaceBase): GroupSession {
+  private create_runtime_session(session_id: string, workspace?: WorkspaceRuntime): GroupSession {
     return new GroupSession({
       id: session_id,
       group_id: this.group.id,

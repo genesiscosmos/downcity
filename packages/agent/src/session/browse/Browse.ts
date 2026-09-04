@@ -28,7 +28,7 @@ import {
 import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
 import { normalize_session_origin_type } from "@/session/SessionOrigin.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 
 type SessionBrowseBaseInput = {
   /**
@@ -417,6 +417,7 @@ export async function list_agent_session_summary_page(params: {
       ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
       ...(info.model_label ? { model_label: info.model_label } : {}),
       origin: info.origin,
+      ...(persisted_metadata.workspace_id ? { workspace_id: persisted_metadata.workspace_id } : {}),
       ...(info.executing ? { executing: true } : {}),
     };
 
@@ -523,6 +524,7 @@ export async function list_archived_agent_session_summary_page(params: {
       ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
       ...(info.model_label ? { model_label: info.model_label } : {}),
       origin: info.origin,
+      ...(persisted_metadata.workspace_id ? { workspace_id: persisted_metadata.workspace_id } : {}),
     };
 
     if (query) {

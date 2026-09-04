@@ -1,9 +1,10 @@
 ---
-title: "@downcity/workspace"
+title: "@downcity/city/workspace"
 description: "Project resources, file tools, environment, and Shell."
 ---
 
-`@downcity/workspace` defines the resource boundary in which an Agent performs work. It owns the
+`@downcity/city/workspace` provides the Workspace implementation used by an Agent; common
+constructors are also exported from `@downcity/city`. A Workspace owns the
 project path, rooted file access, file and search tools, environment variables, and an optional Shell.
 It does not own Agent identity, Plugins, Sessions, storage, or model calls.
 
@@ -61,5 +62,5 @@ project directories:
 City Plugin runtime interprets Plugin data. Workspace does not own or create this storage. Project
 File/Search tools remain rooted at the real project path and cannot read this private state.
 
-Edge adapters should import `WorkspaceBase` and protocol types from `@downcity/workspace/protocol`
+Edge adapters should import `WorkspaceRuntime` and protocol types from `@downcity/type/workspace`
 so they do not load Node.js filesystem, PTY, or local Shell implementations.

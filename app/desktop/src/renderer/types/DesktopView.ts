@@ -1,7 +1,7 @@
 /** Downcity Desktop Renderer 的页面和交互状态类型。 */
 
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage } from "@downcity/agent";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { JSONContent } from "@tiptap/core";
 import type {
   DesktopAgentSummary,
@@ -264,6 +264,14 @@ export interface DesktopViewController {
   archive_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 永久删除一个 Session。 */
   remove_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
+  /** 当前等待用户选择 Workspace 的孤儿 Session 发送请求；无待处理目标时为空。 */
+  session_attach_request: { agent_id: string; session_id: string; workspace_id: string; pending_input?: JSONContent } | null;
+  /** 关闭孤儿 Session 的 Workspace 选择。 */
+  clear_session_attach_request(): void;
+  /** 把孤儿 Session 重新绑定到指定 Workspace，并进入该 Session。 */
+  rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string): Promise<void>;
+  /** 新建 Workspace 并立即绑定孤儿 Session，然后进入该 Session。 */
+  create_workspace_for_session(value: CreateWorkspaceFormValue, agent_id: string, session_id: string): Promise<void>;
   /** 读取并缓存一个 Workspace 的已归档 Session。 */
   load_archived_sessions(workspace_id: string): Promise<void>;
   /** 读取当前 Session 的一个更早历史 Segment。 */
@@ -302,8 +310,8 @@ export interface DesktopViewController {
   remove_workspace(workspace_id: string): Promise<void>;
   /** 修改 Session 的完整 Tiptap 输入草稿。 */
   update_draft(workspace_id: string, agent_id: string, session_id: string, input: JSONContent): void;
-  /** 发送消息；send 立即提交，queue 等待当前 Turn 完成后提交。 */
-  send_message(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode?: ChatSubmitMode): Promise<void>;
+  /** 发送消息；send 立即提交，queue 等待当前 Turn 完成后提交。绑定后补发时内部跳过孤儿检测。 */
+  send_message(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode?: ChatSubmitMode, skip_orphan_check?: boolean): Promise<void>;
   /** 请求当前 Session 历史上下文压缩。 */
   compact_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 刷新当前 Federation 模型目录。 */

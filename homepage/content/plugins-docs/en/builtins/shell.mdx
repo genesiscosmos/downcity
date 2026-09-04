@@ -5,12 +5,12 @@ description: Built-in shell tools, sandbox modes, and approval flow
 
 # Shell Built-In
 
-Shell is no longer a plugin. It is a built-in capability provided by `@downcity/workspace`, composed with an independent platform Sandbox Adapter, and mounted on an Agent.
+Shell is no longer a plugin. It is a built-in capability provided by `@downcity/city`, composed with an independent platform Sandbox Adapter, and mounted on an Agent.
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { Shell } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
+import { Shell } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({ id: "repo-helper" });
@@ -116,7 +116,7 @@ const current = await session.status();
 
 ## Semantics
 
-- Shell is owned by `@downcity/workspace`, not `@downcity/plugins`.
+- Shell is owned by `@downcity/city`, not `@downcity/plugins`.
 - Agent only mounts Shell tools; approvals and live Mutations belong to a specific Session.
 - Safe Sandbox commands can read and write the project and use the configured sandbox directory.
 - Host read-only directories can extend read access but never project-external write access.

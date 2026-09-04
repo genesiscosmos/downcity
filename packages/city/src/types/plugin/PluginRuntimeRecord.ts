@@ -4,7 +4,7 @@
  * 该类型只描述 City 拥有的可变运行状态，不进入 Agent 的公开领域模型。
  */
 
-import type { Plugin, PluginState } from "@downcity/plugin";
+import type { Plugin, PluginState } from "@/plugin/index.js";
 
 /** Plugin Registry 持有的可变生命周期记录。 */
 export interface PluginRuntimeRecord {

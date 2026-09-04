@@ -9,7 +9,7 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { PluginLogger } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 import type { QqInboundDedupeSnapshotV1 } from "@/chat/types/QqInboundDedupe.js";
 
 /**

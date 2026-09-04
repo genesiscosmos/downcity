@@ -2,7 +2,7 @@
  * Session Interaction 通用协议。
  *
  * Interaction 只定义可持久化的生命周期与通用信封；业务类型和 payload
- * 由 Tool、Plugin、Shell 或宿主应用动态定义，前端可以自由选择渲染方式。
+ * 由 Tool、Extension、Shell 或宿主应用动态定义，前端可以自由选择渲染方式。
  */
 
 import type { JsonValue } from "@/types/common/Json.js";
@@ -30,13 +30,13 @@ export type SessionInteractionSource =
       tool_name?: string;
     }
   | {
-      /** 来源为 Plugin。 */
-      type: "plugin";
-      /** 发起 Interaction 的 Plugin 名称。 */
-      plugin_name: string;
-      /** Plugin 关联的 Tool Call 标识。 */
+      /** 来源为 Extension。 */
+      type: "extension";
+      /** 发起 Interaction 的 Extension 名称。 */
+      extension_name: string;
+      /** Extension 关联的 Tool Call 标识。 */
       tool_call_id?: string;
-      /** Plugin 关联的 Tool 名称。 */
+      /** Extension 关联的 Tool 名称。 */
       tool_name?: string;
     }
   | {
@@ -62,7 +62,7 @@ export interface SessionInteractionRequest {
   interaction_id: string;
   /** 当前 Interaction 所属 Turn 标识。 */
   turn_id: string;
-  /** 动态业务类型；核心类型使用 question、approval 等，Plugin 使用命名空间。 */
+  /** 动态业务类型；核心类型使用 question、approval 等，Extension 使用命名空间。 */
   type: string;
   /** 当前 Interaction 的执行来源。 */
   source: SessionInteractionSource;

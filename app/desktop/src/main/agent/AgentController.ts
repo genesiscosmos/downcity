@@ -19,9 +19,9 @@ import {
   type SessionMutation,
 } from "@downcity/agent";
 import { City, type CityAgentPluginBinding } from "@downcity/city";
-import type { PluginNotificationInput } from "@downcity/plugin";
+import type { PluginNotificationInput } from "@downcity/city/plugin";
 import { clipboard, shell } from "electron";
-import { LocalStorageProvider } from "@downcity/workspace";
+import { LocalStorageProvider } from "@downcity/city";
 import path from "node:path";
 import {
   create_city_host_instance_id,
@@ -88,7 +88,7 @@ import type { DesktopLocalData } from "./DesktopLocalData.js";
 import type { LocalPluginLoader } from "@downcity/city/local";
 import { resolve_local_agent_env } from "@downcity/city/local";
 import { select_builtin_agent_avatar_path } from "./BuiltinAgentAvatar.js";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 
 const session_model_settings_key = "desktop.session-models";
 const session_reasoning_settings_key = "desktop.session-reasoning";
@@ -237,8 +237,12 @@ export class AgentController {
     /** 可选 action 输入。 */ readonly input?: PluginJsonValue;
   }): Promise<PluginJsonValue> {
     await this.ready_promise;
-    const entry = await this.require_workspace_entry(input.agent_id, input.workspace_id);
-    return await entry.plugins.run_action({
+    await this.require_workspace_entry(input.agent_id, input.workspace_id);
+    const plugins = this.city.plugins.scope({
+      agent_id: input.agent_id,
+      workspace_id: input.workspace_id,
+    });
+    return await plugins.run_action({
       plugin: input.plugin_id,
       action: input.action_id,
       ...(input.input !== undefined ? { payload: input.input } : {}),
@@ -782,10 +786,24 @@ export class AgentController {
     return await to_desktop_group_summary(group, this.require_group_config(group.id).model_id, summaries, next_session_id);
   }
 
-  /** 列出一个 native Agent 在当前 Workspace 中的 Session。 */
-  async list_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
-    const page = await this.require_native_agent(agent_id).sessions.list({ workspace_id });
+  /** 列出一个 native Agent 的 Session；Workspace 可选过滤，不传时返回全部。 */
+  async list_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]> {
+    const page = await this.require_native_agent(agent_id).sessions.list(
+      workspace_id ? { workspace_id } : undefined,
+    );
     return page.items.map((session) => to_desktop_session_summary(this.data.root_path, session));
+  }
+
+  /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的摘要。 */
+  async rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string): Promise<DesktopSessionSummary> {
+    await this.ready_promise;
+    const agent = this.require_native_agent(agent_id);
+    const config = this.data.workspaces.get(workspace_id);
+    if (!config) throw new Error(`Workspace is not registered: ${workspace_id}`);
+    const workspace = this.city.workspaces.get(workspace_id)
+      ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
+    const session = await agent.sessions.workspace(session_id, workspace);
+    return to_desktop_session_summary(this.data.root_path, await session.get_info());
   }
 
   /** 列出当前 Federation 中可用于 Agent 对话的模型。 */
@@ -867,9 +885,11 @@ export class AgentController {
     return removed;
   }
 
-  /** 列出一个 Agent 已归档的 Session。 */
-  async list_archived_sessions(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary[]> {
-    const page = await this.require_native_agent(agent_id).sessions.archived({ workspace_id });
+  /** 列出一个 Agent 已归档的 Session；Workspace 可选过滤，不传时返回全部。 */
+  async list_archived_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]> {
+    const page = await this.require_native_agent(agent_id).sessions.archived(
+      workspace_id ? { workspace_id } : undefined,
+    );
     return page.items.map((session) => to_desktop_session_summary(this.data.root_path, session, true));
   }
 
@@ -1189,20 +1209,48 @@ export class AgentController {
     });
   }
 
-  /** 读取 Session，并确保实时 mutation 只订阅一次。 */
+  /** 读取 Session，并确保实时 mutation 只订阅一次；孤儿 Session 仅允许只读恢复历史。 */
   private async get_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
-    const entry = await this.require_workspace_entry(agent_id, workspace_id);
-    const session = await this.require_native_agent(agent_id).sessions.get(
-      session_id,
-      "chat",
-      { workspace: entry.workspace },
-    );
-    this.observe_session(agent_id, workspace_id, session);
-    return session;
+    const config = this.data.workspaces.get(workspace_id);
+    if (config) {
+      const entry = await this.require_workspace_entry(agent_id, workspace_id);
+      const session = await this.require_native_agent(agent_id).sessions.get(
+        session_id,
+        "chat",
+        { workspace: entry.workspace },
+      );
+      this.observe_session(agent_id, workspace_id, session);
+      return session;
+    }
+    // 孤儿 Session：其 Workspace 已从 Registry 移除，不登记也不订阅实时事件，
+    // 只允许打开查看历史；发送前必须由用户重新绑定 Workspace。
+    return await this.get_orphan_session(agent_id, workspace_id, session_id);
   }
 
-  /** 读取即将执行模型调用的 Session，并在执行边界恢复其模型覆盖。 */
+  /** 恢复孤儿 Session 的只读实例；不写入 Registry，不产生任何副作用。 */
+  private async get_orphan_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
+    const agent = this.require_native_agent(agent_id);
+    const existing_entry = get_workspace_entry(agent, workspace_id);
+    if (existing_entry) {
+      return await agent.sessions.get(session_id, "chat", { workspace: existing_entry.workspace });
+    }
+    const orphan_config: LocalWorkspaceConfig = {
+      workspace_id,
+      workspace_path: path.join(this.data.root_path, "workspaces", "app"),
+      name: workspace_id,
+      created_at: "",
+      updated_at: "",
+    };
+    const workspace = this.city.workspaces.get(workspace_id)
+      ?? this.city.workspaces.add(await create_desktop_workspace(this.data, orphan_config));
+    return await agent.sessions.get(session_id, "chat", { workspace });
+  }
+
+  /** 读取即将执行模型调用的 Session；孤儿 Session 必须先绑定 Workspace 才能执行。 */
   private async get_execution_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
+    if (!this.data.workspaces.get(workspace_id)) {
+      throw new Error("关联 Workspace 未添加，请先选择 Workspace 后再发送");
+    }
     const session = await this.get_session(agent_id, workspace_id, session_id);
     await this.restore_session_model(agent_id, workspace_id, session);
     return session;
@@ -1577,6 +1625,7 @@ function to_desktop_session_summary(root_path: string, session: AgentSessionSumm
     created_at: session.created_at || 0,
     updated_at: session.updated_at || session.created_at || 0,
     message_count: session.message_count,
+    ...(session.workspace_id ? { workspace_id: session.workspace_id } : {}),
     executing: Boolean(session.executing),
   };
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
+import { AttachSessionWorkspaceDialog } from "@/components/AttachSessionWorkspaceDialog";
 import { Button } from "@/components/ui/button";
 import { use_desktop_controller } from "@/hooks/use_desktop_controller";
 import { NavigationSidebar } from "@/layouts/NavigationSidebar";
@@ -251,6 +252,7 @@ export function App() {
       workspace_id={workspace_id}
       agent={selected_agent}
       workspace={controller.workspaces.find((workspace) => workspace.workspace_id === workspace_id) ?? create_missing_workspace(workspace_id)}
+      workspace_missing={!controller.workspaces.some((workspace) => workspace.workspace_id === workspace_id)}
       workspaces={controller.workspaces}
       switch_workspace={(target_workspace_id) => controller.create_session(target_workspace_id, selected_agent.agent_id)}
         agents={controller.agents}
@@ -310,6 +312,7 @@ export function App() {
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />
     {controller.error ? createPortal(<div className="fixed bottom-5 left-1/2 z-[60] flex max-w-xl -translate-x-1/2 items-start gap-3 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl"><span className="min-w-0 flex-1 break-words">{controller.error}</span><Button onClick={controller.clear_error}>关闭</Button></div>, document.body) : null}
     <CreateWorkspaceDialog open={create_workspace_dialog_open} close_dialog={() => set_create_workspace_dialog_open(false)} create_workspace={controller.create_workspace} />
+    <AttachSessionWorkspaceDialog request={controller.session_attach_request} workspaces={controller.workspaces} close_dialog={controller.clear_session_attach_request} rebind_session_workspace={controller.rebind_session_workspace} create_workspace_for_session={controller.create_workspace_for_session} />
     {command_palette_open ? <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/25 pt-[18vh]" onMouseDown={() => set_command_palette_open(false)}><div className="w-[min(34rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-popover p-2 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); controller.open_settings("user"); }}>打开设置 <span className="ml-auto text-xs text-muted-foreground">⌘,</span></button><button type="button" className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { set_command_palette_open(false); set_sidebar_collapsed((value) => !value); }}>切换左侧边栏 <span className="ml-auto text-xs text-muted-foreground">⌘B</span></button></div></div> : null}
   </div>;
 }

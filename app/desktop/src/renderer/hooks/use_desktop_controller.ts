@@ -141,6 +141,7 @@ export function use_desktop_controller(): DesktopViewController {
   const [group_read_message_ids_by_group, set_group_read_message_ids_by_group] = useState<Record<string, string[]>>({});
   const [group_interactions_by_group, set_group_interactions_by_group] = useState<DesktopViewController["group_interactions_by_group"]>({});
   const [sessions_by_workspace, set_sessions_by_workspace] = useState<Record<string, DesktopWorkspaceSession[]>>({});
+  const [session_attach_request, set_session_attach_request] = useState<DesktopViewController["session_attach_request"]>(null);
   const [group_sessions_by_workspace, set_group_sessions_by_workspace] = useState<DesktopViewController["group_sessions_by_workspace"]>({});
   const [archived_sessions_by_workspace, set_archived_sessions_by_workspace] = useState<Record<string, DesktopWorkspaceSession[]>>({});
   const [messages_by_session, set_messages_by_session] = useState<DesktopViewController["messages_by_session"]>({});
@@ -156,7 +157,7 @@ export function use_desktop_controller(): DesktopViewController {
   const [selection, set_selection] = useState<NavigationTarget | null>(null);
   const [active_workspace_id, set_active_workspace_id] = useState("");
   const [sidebar_mode, set_sidebar_mode_state] = useState<SidebarMode>("chat");
-  const [plugin_routes, set_plugin_routes] = useState<Record<string, import("@downcity/plugin").PluginJsonObject>>({});
+  const [plugin_routes, set_plugin_routes] = useState<Record<string, import("@downcity/city/plugin").PluginJsonObject>>({});
   const [plugin_revisions, set_plugin_revisions] = useState<Record<string, number>>({});
   const [settings, set_settings] = useState<DesktopSettings>(default_settings);
   const [global_env, set_global_env] = useState("");
@@ -167,6 +168,9 @@ export function use_desktop_controller(): DesktopViewController {
   const [loading, set_loading] = useState(true);
 
   const chat_runtime_ref = useRef(chat_runtime_by_session);
+  const workspaces_ref = useRef(workspaces);
+  const session_attach_request_ref = useRef<DesktopViewController["session_attach_request"]>(null);
+  const send_message_ref = useRef<(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode, skip_orphan_check?: boolean) => Promise<void>>(async () => undefined);
   const queue_ref = useRef(queued_messages_by_session);
   const queue_paused_ref = useRef(queue_paused_by_session);
   const history_ref = useRef(history_by_session);
@@ -182,6 +186,8 @@ export function use_desktop_controller(): DesktopViewController {
   const selection_by_sidebar_mode_ref = useRef<Partial<Record<SidebarMode, NavigationTarget>>>({});
 
   useEffect(() => { chat_runtime_ref.current = chat_runtime_by_session; }, [chat_runtime_by_session]);
+  useEffect(() => { workspaces_ref.current = workspaces; }, [workspaces]);
+  useEffect(() => { session_attach_request_ref.current = session_attach_request; }, [session_attach_request]);
   useEffect(() => { queue_ref.current = queued_messages_by_session; }, [queued_messages_by_session]);
   useEffect(() => { queue_paused_ref.current = queue_paused_by_session; }, [queue_paused_by_session]);
   useEffect(() => { history_ref.current = history_by_session; }, [history_by_session]);
@@ -400,24 +406,26 @@ export function use_desktop_controller(): DesktopViewController {
     return () => media.removeEventListener("change", apply_appearance);
   }, [settings.appearance_mode, settings.color_theme, settings.ui_scale]);
 
-  /** 一次读取全部 Workspace 的 Session，Sidebar 展开状态不参与数据生命周期。 */
+  /** 一次读取全部 Agent 的 Session；按 Session 自身 Workspace 归属分组，不再依赖 Workspace 注册信息。 */
   useEffect(() => {
-    if (workspaces.length === 0 || agents.length === 0) return;
+    if (agents.length === 0) return;
     let cancelled = false;
-    void Promise.all(workspaces.map(async (workspace) => {
-      const entries = await Promise.all(agents.map(async (agent) => {
-        const sessions = await window.downcity.chat.list_sessions(agent.agent_id, workspace.workspace_id);
-        return sessions.map((session) => ({ agent_id: agent.agent_id, session }));
-      }));
-      return [workspace.workspace_id, entries.flat()] as const;
-    })).then((entries) => {
+    void Promise.all(agents.map(async (agent) => {
+      const sessions = await window.downcity.chat.list_sessions(agent.agent_id);
+      return sessions.map((session) => ({ agent_id: agent.agent_id, session }));
+    })).then((all_entries) => {
       if (cancelled) return;
-      set_sessions_by_workspace(Object.fromEntries(entries));
+      const grouped: Record<string, DesktopWorkspaceSession[]> = {};
+      for (const item of all_entries.flat()) {
+        const workspace_id = item.session.workspace_id || "";
+        (grouped[workspace_id] ??= []).push(item);
+      }
+      set_sessions_by_workspace(grouped);
     }).catch((reason) => {
       if (!cancelled) set_error(to_error_message(reason));
     });
     return () => { cancelled = true; };
-  }, [agents, workspaces]);
+  }, [agents]);
 
   useEffect(() => {
     const unsubscribe_mutation = window.downcity.chat.on_mutation(({ agent_id, workspace_id, session_id, mutation }) => {
@@ -488,7 +496,7 @@ export function use_desktop_controller(): DesktopViewController {
     set_selection({ kind: "plugin_workspace", plugin_id });
   }, [plugins]);
 
-  const navigate_plugin = useCallback((plugin_id: string, route: import("@downcity/plugin").PluginJsonObject) => {
+  const navigate_plugin = useCallback((plugin_id: string, route: import("@downcity/city/plugin").PluginJsonObject) => {
     set_plugin_routes((current) => ({ ...current, [plugin_id]: structuredClone(route) }));
   }, []);
 
@@ -833,7 +841,8 @@ export function use_desktop_controller(): DesktopViewController {
     set_selection({ kind: "draft", workspace_id, agent_id, draft_id });
   }, [agents, selection, settings.default_text_model_id]);
 
-  const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
+  /** 打开 Session 并读取快照；不检查 Workspace 归属，供 rebind 完成后直接进入。 */
+  const open_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
     if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key)) return;
     hydrated_navigation_keys_ref.current.add(`session:${session_key}`);
@@ -863,6 +872,13 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
     }
   }, []);
+
+  const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key)) return;
+    // 孤儿 Session 直接进入并只读查看历史；发送时才需要用户选择 Workspace 绑定。
+    await open_session(workspace_id, agent_id, session_id, preserve_sidebar);
+  }, [open_session]);
 
   /** 刷新恢复 Session 时，通过既有快照入口补齐消息、配置与运行态。 */
   useEffect(() => {
@@ -1068,6 +1084,50 @@ export function use_desktop_controller(): DesktopViewController {
       throw reason;
     }
   }, [commit_queue]);
+
+  const clear_session_attach_request = useCallback(() => {
+    set_session_attach_request(null);
+    session_attach_request_ref.current = null;
+  }, []);
+
+  /** 把孤儿 Session 重新绑定到用户选择的 Workspace，并进入该 Session。 */
+  const rebind_session_workspace = useCallback(async (agent_id: string, session_id: string, workspace_id: string) => {
+    set_error("");
+    const pending_input = session_attach_request_ref.current?.pending_input;
+    set_session_attach_request(null);
+    session_attach_request_ref.current = null;
+    try {
+      const session = await window.downcity.chat.rebind_session_workspace(agent_id, session_id, workspace_id);
+      // 从全部旧分组移除该 Session，再放入新 Workspace 分组。
+      set_sessions_by_workspace((current) => {
+        const next: Record<string, DesktopWorkspaceSession[]> = {};
+        for (const [key, entries] of Object.entries(current)) {
+          const remaining = entries.filter((item) => item.agent_id !== agent_id || item.session.session_id !== session_id);
+          if (remaining.length > 0) next[key] = remaining;
+        }
+        (next[workspace_id] ??= []).push({ agent_id, session });
+        return next;
+      });
+      // 用户是在发送消息时触发的绑定；绑定完成后自动补发待发消息。
+      if (pending_input) {
+        await send_message_ref.current(workspace_id, agent_id, session_id, pending_input, "send", true);
+      }
+    } catch (reason) {
+      set_error(to_error_message(reason));
+    }
+  }, [open_session]);
+
+  /** 新建 Workspace 并立即绑定孤儿 Session，然后进入该 Session。 */
+  const create_workspace_for_session = useCallback(async (value: CreateWorkspaceFormValue, agent_id: string, session_id: string) => {
+    set_error("");
+    try {
+      const workspace = await window.downcity.workspace.create(value);
+      set_workspaces((current) => [...current.filter((item) => item.workspace_id !== workspace.workspace_id), workspace]);
+      await rebind_session_workspace(agent_id, session_id, workspace.workspace_id);
+    } catch (reason) {
+      set_error(to_error_message(reason));
+    }
+  }, [rebind_session_workspace]);
 
   const load_archived_sessions = useCallback(async (workspace_id: string) => {
     try {
@@ -1310,7 +1370,7 @@ export function use_desktop_controller(): DesktopViewController {
     }));
   }, []);
 
-  const send_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode = "send") => {
+  const send_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode = "send", skip_orphan_check = false) => {
     if (is_chat_composer_empty(input)) return;
     const session_key = get_session_key(workspace_id, agent_id, session_id);
     set_error("");
@@ -1346,6 +1406,12 @@ export function use_desktop_controller(): DesktopViewController {
       }
       return;
     }
+    // 孤儿 Session 的 Workspace 已从 Registry 移除；发送前必须由用户显式选择 Workspace 绑定。
+    // 绑定完成后的补发由 rebind_session_workspace 内部调用，跳过本次检测。
+    if (!skip_orphan_check && !workspaces_ref.current.some((workspace) => workspace.workspace_id === workspace_id)) {
+      set_session_attach_request({ agent_id, session_id, workspace_id, pending_input: input });
+      return;
+    }
     if (mode === "queue" || is_chat_busy(chat_runtime_ref.current[session_key]) || (queue_ref.current[session_key]?.length ?? 0) > 0) {
       const queued: QueuedChatMessage = {
         message_id: crypto.randomUUID(),
@@ -1365,6 +1431,8 @@ export function use_desktop_controller(): DesktopViewController {
       set_error(to_error_message(reason));
     }
   }, [agents, commit_queue, configuration_by_session, process_next_queue, settings.default_text_model_id]);
+
+  useEffect(() => { send_message_ref.current = send_message; }, [send_message]);
 
   const compact_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
     if (is_draft_session_id(session_id)) return;
@@ -1707,6 +1775,10 @@ export function use_desktop_controller(): DesktopViewController {
     rename_session,
     archive_session,
     remove_session,
+    session_attach_request,
+    clear_session_attach_request,
+    rebind_session_workspace,
+    create_workspace_for_session,
     load_archived_sessions,
     load_earlier_history,
     create_agent,

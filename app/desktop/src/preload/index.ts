@@ -53,6 +53,7 @@ const desktop_api: DesktopApi = {
     read_workspace_file: (workspace_id, relative_path) => ipcRenderer.invoke("chat:read-workspace-file", workspace_id, relative_path),
     list_models: () => ipcRenderer.invoke("chat:list-models"),
     list_sessions: (agent_id, workspace_id) => ipcRenderer.invoke("chat:list-sessions", agent_id, workspace_id),
+    rebind_session_workspace: (agent_id, session_id, workspace_id) => ipcRenderer.invoke("chat:rebind-session-workspace", agent_id, session_id, workspace_id),
     create_session: (agent_id, workspace_id) => ipcRenderer.invoke("chat:create-session", agent_id, workspace_id),
     fork_session: (...args) => ipcRenderer.invoke("chat:fork-session", ...args),
     rewrite_session_message: (...args) => ipcRenderer.invoke("chat:rewrite-session-message", ...args),

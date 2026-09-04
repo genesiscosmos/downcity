@@ -79,6 +79,7 @@ export class CityRPC {
           const agent = this.city.agents.get(agent_id);
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);
           const sessions = workspace_entry.sessions;
+          const plugins = this.city.plugins.scope({ agent_id, workspace_id });
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
@@ -87,8 +88,8 @@ export class CityRPC {
               agent,
               workspace: workspace_entry.workspace,
               sessions,
-              plugins: workspace_entry.plugins,
-              list_plugin_states: () => workspace_entry.list_plugin_states(),
+              plugins,
+              list_plugin_states: () => this.city.plugins.snapshots(agent_id),
               resolve_system_messages: async (input) => await workspace_entry.resolve_system_messages(input),
             }),
             resolve_session_model: resolve_session_model

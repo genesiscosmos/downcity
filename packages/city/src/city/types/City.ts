@@ -8,12 +8,12 @@ import type { CityHttpRuntimeOptions } from "@/city/transport/types/CityHttpRunt
 import type { CityRpcRuntimeOptions } from "@/city/transport/types/CityRpcRuntime.js";
 import type { Agent } from "@downcity/agent";
 import type { Embassy } from "@downcity/federation";
-import type { WorkspaceBase } from "@downcity/workspace";
-import type { StorageProvider } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@/workspace/index.js";
+import type { StorageProvider } from "@/workspace/index.js";
 import type { Group } from "@downcity/agent";
 import type { CityAgentPluginOptions } from "@/city/types/CityPlugin.js";
 import type { CityPluginHost } from "@/city/types/CityPlugin.js";
-import type { CityPluginRegistration } from "@downcity/plugin";
+import type { CityPluginRegistration } from "@/plugin/index.js";
 
 /** City 的资源容器构造参数。 */
 export interface CityOptions {
@@ -24,7 +24,7 @@ export interface CityOptions {
   embassy?: Embassy;
 
   /** City 持有的 Workspace 资源集合；每个 Workspace ID 必须唯一。 */
-  workspaces?: readonly WorkspaceBase[];
+  workspaces?: readonly WorkspaceRuntime[];
 
   /** Plugin main 使用的平台配置、通知与系统能力。 */
   plugin_host?: CityPluginHost;
@@ -42,7 +42,7 @@ export interface CityRuntimeOptions {
   resolve_workspace?: (
     agent: Agent,
     workspace_id: string,
-  ) => WorkspaceBase | Promise<WorkspaceBase>;
+  ) => WorkspaceRuntime | Promise<WorkspaceRuntime>;
 
   /** HTTP transport 的模型解析和宿主扩展路由。 */
   http?: CityHttpRuntimeOptions;
@@ -81,13 +81,13 @@ export interface CityGroups {
 /** City 管理的 Workspace 集合。 */
 export interface CityWorkspaces {
   /** 添加一个 Workspace 并交由 City 管理；重复实例直接返回，重复 ID 的其他实例失败。 */
-  add(workspace: WorkspaceBase): WorkspaceBase;
+  add(workspace: WorkspaceRuntime): WorkspaceRuntime;
   /** 按稳定 ID 获取 Workspace；不存在时返回 null。 */
-  get(workspace_id: string): WorkspaceBase | null;
+  get(workspace_id: string): WorkspaceRuntime | null;
   /** 返回当前 City 管理的 Workspace 稳定快照。 */
-  list(): readonly WorkspaceBase[];
+  list(): readonly WorkspaceRuntime[];
   /** 释放并移除 Workspace；不存在时返回 null。 */
-  remove(workspace_id: string): Promise<WorkspaceBase | null>;
+  remove(workspace_id: string): Promise<WorkspaceRuntime | null>;
 }
 
 /** City 同时启动 HTTP 与 RPC transport 的监听参数。 */

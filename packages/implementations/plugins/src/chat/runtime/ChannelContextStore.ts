@@ -9,7 +9,7 @@
 
 import fs from "fs-extra";
 import { generate_id } from "@downcity/agent";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type {
   ChannelContextMetaFileV1,
   ChannelContextRouteV1,

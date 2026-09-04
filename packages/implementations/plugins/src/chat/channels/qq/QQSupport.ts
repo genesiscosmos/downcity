@@ -7,8 +7,8 @@
  */
 
 import { buildChatInboundText, augmentChatInboundInput } from "@/chat/runtime/InboundAugment.js";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { QQMessageData, QQReadyUser } from "@/chat/channels/qq/types/QqChannel.js";
 import type { QqIncomingAttachment } from "@/chat/types/QqVoice.js";
 import { resolveQqAttachmentLocalPath } from "./VoiceInput.js";

@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - 这是 agent 包核心运行时的稳定公开入口；可选 Tool 通过 `@downcity/agent/tools` 导出。
- * - 只导出 Agent、plugin 作者 API 与跨包协议类型。
- * - HTTP router、sandbox runner、内部 plugin runtime runner 等实现细节不从根入口暴露。
+ * - 只导出 Agent SDK 与必要的 Session 协议类型。
+ * - HTTP、RPC、Plugin、Workspace 与 Sandbox 实现不从根入口暴露。
  */
 
 // Agent 入口
@@ -60,19 +60,18 @@ export type {
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export { create_session_message_store } from "./workspace/store/SessionMessageStoreFactory.js";
 export type { AgentStorage } from "./types/agent/AgentStorage.js";
-export { RemoteAgent } from "./remote/RemoteAgent.js";
 export { Session } from "./session/Session.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
 export type { SessionOrigin } from "./types/session/SessionOrigin.js";
-export { SESSION_PLUGIN_POINTS } from "./session/SessionPluginPoints.js";
+export { SESSION_EXTENSION_POINTS } from "./session/SessionExtensionPoints.js";
 export type {
   SessionCommittedTurnStatus,
-  SessionPluginContextBlock,
-  SessionPluginUserMessage,
+  SessionExtensionContextBlock,
+  SessionExtensionUserMessage,
   SessionSystemContextHookValue,
   SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
-} from "./types/session/SessionPluginHook.js";
+} from "./types/session/SessionExtensionHook.js";
 export {
   infer_agent_model_label,
   normalize_agent_model,
@@ -195,11 +194,6 @@ export type {
   RemoteAgentSession,
 } from "./types/agent/SessionActor.js";
 export type { AgentManagedSession } from "./types/session/SessionOptions.js";
-export type { RemoteAgentOptions } from "./types/agent/RemoteAgentOptions.js";
-export type {
-  RemoteAgentPluginActionInput,
-  RemoteAgentPluginActionResult,
-} from "./types/agent/RemoteAgentPluginAction.js";
 export type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
@@ -207,6 +201,7 @@ export type {
   AgentSessionActionState,
 } from "./types/sdk/AgentSessionAction.js";
 export type { AgentSessionPromptInput } from "./types/sdk/AgentSessionPrompt.js";
+export { is_agent_session_prompt_input_empty } from "./types/sdk/AgentSessionPrompt.js";
 export type {
   SessionPromptPart,
   SessionAssistantResultPart,
@@ -279,9 +274,6 @@ export type {
 } from "./types/session/SessionAction.js";
 export type { SessionSystemMessage } from "./executor/types/SessionPrompts.js";
 export { transform_prompts_into_system_messages } from "./executor/composer/system/default/PromptRenderer.js";
-// Runtime plugin 调度集成
-export { ActionScheduleStore } from "./plugin/core/ActionScheduleStore.js";
-export { parse_action_schedule_run_at_ms_or_throw } from "./plugin/core/ActionScheduleTime.js";
 export {
   extract_session_message_text,
   extract_session_tool_calls,
@@ -311,39 +303,4 @@ export {
 // JSON 基础类型
 export type { JsonObject, JsonPrimitive, JsonValue } from "./types/common/Json.js";
 
-// Plugin 运行时控制面类型
-export type {
-  PluginActionMetadata,
-  PluginActionInvokeParams,
-  PluginActionInvokePort,
-  PluginActionInvokeResult,
-} from "./types/plugin/PluginAction.js";
-export type {
-  AgentPluginRuntime,
-  PluginAvailability,
-  PluginView,
-} from "./types/plugin/PluginRuntime.js";
-export type {
-  PluginActionResponse,
-  PluginCatalogResponse,
-  PluginAvailabilityResponse,
-  PluginAvailabilityView,
-} from "./plugin/types/PluginApi.js";
-
-// 主动型 plugin 与 CLI/control 协议类型
-export type { PluginState, PluginSnapshot } from "./types/plugin/PluginState.js";
-export type {
-  ActionScheduleJobRecord,
-  ActionScheduleJobStatus,
-  CreateActionScheduleJobInput,
-  PluginActionScheduleInput,
-} from "./plugin/types/ActionSchedule.js";
-export { list_plugin_states } from "./plugin/core/PluginStateController.js";
-
-// 跨包 RPC 与 session 标识协议
-export type {
-  RpcEventFrame,
-  RpcRequest,
-  RpcServerFrame,
-} from "./types/rpc/RpcProtocol.js";
 export { resolve_session_id } from "./executor/ids/resolveSessionId.js";

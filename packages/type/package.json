@@ -1,6 +1,6 @@
 {
   "name": "@downcity/type",
-  "version": "0.1.203",
+  "version": "0.1.204",
   "description": "Downcity shared protocol types for cross-package SDK boundaries.",
   "type": "module",
   "main": "./bin/index.js",
@@ -9,6 +9,18 @@
     ".": {
       "types": "./bin/index.d.ts",
       "import": "./bin/index.js"
+    },
+    "./workspace": {
+      "types": "./bin/workspace.d.ts",
+      "import": "./bin/workspace.js"
+    },
+    "./shell": {
+      "types": "./bin/shell.d.ts",
+      "import": "./bin/shell.js"
+    },
+    "./session": {
+      "types": "./bin/session.d.ts",
+      "import": "./bin/session.js"
     }
   },
   "types": "./bin/index.d.ts",
@@ -42,6 +54,7 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "typescript": "^6.0.3"
   }
 }

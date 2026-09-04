@@ -2,12 +2,11 @@
 
 `@downcity/agent` 是 Downcity 的单 Agent runtime 包。`Agent` 持有身份、模型、指令、Tool 与 Session，并可独立于 City 运行。
 
-它负责把一个 agent 项目目录装配成可执行运行时，包括：
+它负责把单个 Agent 装配成可执行运行时，包括：
 
-- 本地 SDK：`Agent`、`Group`、`Workspace`、`Session`、`RemoteAgent`
+- 本地 SDK：`Agent`、`Group`、`Session`
 - 内部执行内核：Session Composer、LLM/Tool Loop、增量输出
-- 宿主扩展端口：接收 City 提供的 Plugin Tool、Hook execution lease 与 Workspace 作用域
-- 远程访问：`RemoteAgent` 与 HTTP/RPC 客户端协议
+- 中立宿主扩展端口：接收 City 提供的 Tool、Hook execution lease 与 Workspace 协议
 
 CLI 与 Desktop 通过 `@downcity/city` 读取宿主配置并显式装配 `Agent` 与 Plugin 模块，再通过 `city.agents.add(agent, { plugins })` 将它们加入环境。City 持有 Plugin Registry、生命周期和 execution lease；Agent 不保存 Plugin 实例。
 
@@ -21,13 +20,13 @@ CLI 与 Desktop 通过 `@downcity/city` 读取宿主配置并显式装配 `Agent
 ## 与其他包的边界
 
 - `@downcity/agent`
-  - Agent、Group、Session 与 RemoteAgent
+  - Agent、Group、Session
   - Session SDK、Executor 内核和中性宿主扩展端口
 - `@downcity/city`
-  - City 组合根、Workspace/Embassy 装配与 HTTP/RPC transport
+  - City 组合根、Workspace/Embassy 装配、RemoteAgent 与 HTTP/RPC transport
   - Plugin Registry、Hook 调度、共享实例和生命周期
   - `@downcity/city/local` 提供本地数据库、配置 Repository 与 Plugin Loader
-- `@downcity/plugin`
+- `@downcity/city/plugin`
   - Plugin 作者协议、Context、Action、Hook、Lifecycle 与统一 City module
 - `downcity`
   - CLI City daemon 与平台控制面
@@ -73,12 +72,10 @@ src/
 ├── agent/                 # Agent facade、状态、模型、环境与执行绑定
 ├── group/                 # Group 主体、GroupSession 和消息调度策略
 ├── executor/              # LLM/Tool Loop、执行恢复与内存上下文折叠
-├── plugin/                # Action schedule 与 Plugin 协议辅助
-├── remote/                # RemoteAgent、RemoteSession 与 HTTP/RPC transport
 ├── session/               # Session facade、State、Turn、Queue、Messages 与 Composer
-├── types/                 # agent / executor / session / plugin 等共享协议类型
+├── types/                 # agent / executor / session 等包内类型
 ├── utils/                 # 日志、资源和通用辅助能力
-└── workspace/             # 项目文件、工具、初始化、路径与结构化存储
+└── workspace/             # Agent/Session 私有结构化存储
 ```
 
 ## 顶层目录职责
@@ -90,11 +87,8 @@ src/
   - `ExecutionBinding.ts` 负责 Agent 执行目标绑定
 
 - `src/workspace/`
-  - 统一承载项目根目录、文件系统、模型工具、初始化和结构化存储
   - `store/` 负责 AgentStorage、Session 和 JSONL Message 的本地持久化
-  - `WorkspaceEnv.ts` 负责 Workspace 环境变量装配
-  - `tool/WorkspaceTools.ts` 组合文件、搜索与可选 Shell 工具
-  - `WorkspacePaths.ts` 负责 AgentStorage 私有数据路径布局
+  - 不实现 Workspace 项目资源；Workspace 协议来自 `@downcity/type/workspace`
 
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
@@ -139,8 +133,8 @@ src/
 
 其中：
 
-- `agent` 承载本地 Agent 核心运行时，`remote` 承载独立的远程 SDK 客户端
-- `workspace` 承载项目资源、初始化和持久化能力，`platform` 只处理系统级路径
+- `agent` 承载本地 Agent 核心运行时
+- Workspace、Shell 与 Plugin 实现由 City 持有，Agent 只消费 `@downcity/type` 中的中立协议
 - `Agent` facade 是实例级装配中心，持有 instruction、model、tools 与 sessions；env 由 Workspace 持有，Plugin 由 City 持有
 - `PluginContext` 由 City 为 Agent/Workspace 执行范围创建，只向 Plugin 投影稳定的受限能力
 - `session / executor` 是 Agent 的核心执行分层，Plugin 通过宿主扩展端口进入 Session

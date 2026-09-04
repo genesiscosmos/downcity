@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
-import type { PluginLogger } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 import {
   guessMimeType,
   parseTelegramAttachments,

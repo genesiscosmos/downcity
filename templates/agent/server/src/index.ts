@@ -13,7 +13,7 @@ import {
   Agent,
   type SessionMessage,
 } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";

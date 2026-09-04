@@ -10,8 +10,8 @@
 import { create_workspace_entry } from "@downcity/agent/host";
 import type { Agent } from "@downcity/agent";
 import type { AgentSessionCollection } from "@downcity/agent/host";
-import type { WorkspaceBase } from "@downcity/workspace";
-import type { AgentPluginRuntime } from "@downcity/agent/host";
+import type { WorkspaceRuntime } from "@/workspace/index.js";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
   AgentRpcBinding,
@@ -28,7 +28,7 @@ const DEFAULT_RPC_PORT = 15314;
  */
 export class AgentRPC {
   private readonly agent: Agent;
-  private readonly workspace?: WorkspaceBase;
+  private readonly workspace?: WorkspaceRuntime;
   private readonly plugins?: AgentPluginRuntime;
   private readonly session_collection: AgentSessionCollection;
   private readonly runtime_options: AgentRpcRuntimeOptions;
@@ -40,8 +40,8 @@ export class AgentRPC {
   >;
 
   constructor(
-    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceBase; plugins: AgentPluginRuntime },
-    workspace_or_options?: WorkspaceBase | AgentRpcRuntimeOptions,
+    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceRuntime; plugins: AgentPluginRuntime },
+    workspace_or_options?: WorkspaceRuntime | AgentRpcRuntimeOptions,
     runtime_options: AgentRpcRuntimeOptions = {},
   ) {
     if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
@@ -49,11 +49,11 @@ export class AgentRPC {
       const entry = create_workspace_entry(agent, workspace_or_options);
       this.agent = agent;
       this.workspace = workspace_or_options;
-      this.plugins = entry.plugins;
+      this.plugins = undefined;
       this.session_collection = entry.sessions;
       this.runtime_options = runtime_options;
     } else {
-      const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceBase; plugins: AgentPluginRuntime };
+      const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceRuntime; plugins: AgentPluginRuntime };
       const agent = entry.agent;
       this.agent = agent;
       this.workspace = entry.workspace;

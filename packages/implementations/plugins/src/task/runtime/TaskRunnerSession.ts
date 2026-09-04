@@ -10,7 +10,7 @@
 
 import path from "node:path";
 import type { SessionAttachmentStore } from "@downcity/agent";
-import type { PluginContext, PluginSessionHandle } from "@downcity/plugin";
+import type { PluginContext, PluginSessionHandle } from "@downcity/city/plugin";
 import type { TaskSessionRuntimePort } from "@/task/types/TaskRunner.js";
 import type { TaskDeliverySession } from "@/task/types/Task.js";
 import { create_session_message_store, SessionMessages } from "@downcity/agent";

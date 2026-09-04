@@ -13,7 +13,6 @@ PACKAGES=()
 BUILD_PACKAGES=()
 ALL_PACKAGES=(
   "type"
-  "workspace"
   "sandbox-macos"
   "sandbox-linux"
   "sandbox-windows-mxc"
@@ -26,7 +25,6 @@ ALL_PACKAGES=(
   "database-sqlite"
   "database-postgresql"
   "services"
-  "plugin"
   "plugins"
   "ui"
   "cli"
@@ -38,11 +36,11 @@ usage() {
   echo "Usage: pnpm patch:build -- [packages] [--no-bump] [--no-global-install]"
   echo ""
   echo "Package options:"
-  echo "  --type --workspace --sandbox-macos --sandbox-linux"
+  echo "  --type --sandbox-macos --sandbox-linux"
   echo "  --sandbox-windows-mxc --sandbox-windows-srt"
   echo "  --agent --city --workspace-cloudflare-computer --federation"
   echo "  --database-d1 --database-sqlite --database-postgresql"
-  echo "  --services --plugin --plugins --ui --cli --all"
+  echo "  --services --plugins --ui --cli --all"
   echo ""
   echo "  --no-bump           只构建，不修改 package version"
   echo "  --no-global-install 不同步本机全局 Downcity CLI"
@@ -102,7 +100,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --) shift; continue ;;
     --type) add_package "type" ;;
-    --workspace) add_package "workspace" ;;
     --sandbox-macos) add_package "sandbox-macos" ;;
     --sandbox-linux) add_package "sandbox-linux" ;;
     --sandbox-windows-mxc) add_package "sandbox-windows-mxc" ;;
@@ -115,7 +112,6 @@ while [[ $# -gt 0 ]]; do
     --database-sqlite) add_package "database-sqlite" ;;
     --database-postgresql) add_package "database-postgresql" ;;
     --services) add_package "services" ;;
-    --plugin) add_package "plugin" ;;
     --plugins) add_package "plugins" ;;
     --ui) add_package "ui" ;;
     --cli) add_package "cli" ;;

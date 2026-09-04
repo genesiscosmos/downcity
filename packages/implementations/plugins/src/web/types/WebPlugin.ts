@@ -7,7 +7,7 @@
  * - 所有 action 返回值都保持 JSON 可序列化，避免把 Playwright 对象泄漏到 Agent 内核。
  */
 
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 
 /** WebPlugin 对外 action 名称。 */
 export const WEB_PLUGIN_ACTIONS = {

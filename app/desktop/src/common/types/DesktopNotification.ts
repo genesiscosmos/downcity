@@ -5,7 +5,7 @@
  * 产生通知，主进程负责持久化、聚合和已读生命周期。
  */
 
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 
 /** Agent Session 通知所指向的稳定业务对象。 */
 export interface DesktopAgentSessionNotificationTarget {

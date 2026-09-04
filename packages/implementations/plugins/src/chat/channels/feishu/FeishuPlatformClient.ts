@@ -7,7 +7,7 @@
  * - `FeishuBot` 只调用这里暴露的平台能力，不再直接持有底层 Feishu 连接细节。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type {
   FeishuConfig,
   FeishuDownloadedAttachment,

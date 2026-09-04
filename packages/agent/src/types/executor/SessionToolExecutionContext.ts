@@ -9,7 +9,7 @@
 
 import type {
   ShellExecutionContext,
-} from "@downcity/workspace/shell/types/ShellRuntime.js";
+} from "@downcity/type/shell";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { ToolActionExecutionContext } from "@/types/tools/ToolActionExecutionContext.js";
 

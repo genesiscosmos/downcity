@@ -75,7 +75,7 @@ test("内建 Plugin 注册使用随 package 发布的独立 README 资产", asyn
 });
 
 test("Renderer 子路径统一导出 React Surface registry", async () => {
-  const plugin_react = await import("@downcity/plugin/react");
+  const plugin_react = await import("@downcity/city/plugin/react");
   const renderers = await import("@downcity/plugins/renderers");
   assert.equal(typeof plugin_react.define_plugin_renderer, "function");
   assert.deepEqual(Object.keys(renderers.BUILTIN_PLUGIN_RENDERERS).sort(), [

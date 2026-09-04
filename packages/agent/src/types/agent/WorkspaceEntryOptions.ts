@@ -1,12 +1,12 @@
 /**
  * WorkspaceEntry 装配参数。
  *
- * WorkspaceEntry 只表达 Agent 已进入某个 Workspace，不拥有 Agent 身份或 Plugin
+ * WorkspaceEntry 只表达 Agent 已进入某个 Workspace，不拥有 Agent 身份或 Extension
  * 定义。Workspace 资源的生命周期在离开时由该作用域统一关闭。
  */
 
 import type { Agent } from "@/agent/Agent.js";
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@downcity/type";
 
 /** Agent 进入 Workspace 时使用的内部装配参数。 */
 export interface WorkspaceEntryOptions {
@@ -14,5 +14,5 @@ export interface WorkspaceEntryOptions {
   agent: Agent;
 
   /** 当前进入的项目资源容器。 */
-  workspace: WorkspaceBase;
+  workspace: WorkspaceRuntime;
 }

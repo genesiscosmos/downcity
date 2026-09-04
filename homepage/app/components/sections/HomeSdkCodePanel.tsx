@@ -46,7 +46,7 @@ function create_code_groups(locale: "zh" | "en") {
   return {
     agent: [
       { key: "agent-import", start_step: 0, order: 0, lines: ['import { Agent } from "@downcity/agent";', 'import { City } from "@downcity/city";'] },
-      { key: "workspace-import", start_step: 2, order: 1, lines: ['import { Workspace } from "@downcity/workspace";'] },
+      { key: "workspace-import", start_step: 2, order: 1, lines: ['import { Workspace } from "@downcity/city";'] },
       { key: "model-import", start_step: 4, order: 2, lines: ['import { Embassy } from "@downcity/federation";'] },
       { key: "plugin-import", start_step: 5, order: 3, lines: ['import { create_builtin_plugin_registrations } from "@downcity/plugins";'] },
       { key: "agent-create", start_step: 1, order: 10, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "});"] },
@@ -57,7 +57,7 @@ function create_code_groups(locale: "zh" | "en") {
       { key: "user-prompt", start_step: 20, order: 20, lines: ["", `const turn = await session.prompt({ query: "${locale === "zh" ? "总结当前仓库" : "Summarize this repository"}" });`, "const result = await turn.finished;", "console.log(result.text);"] },
     ],
     city: [
-      { key: "city-import", start_step: 6, order: 0, lines: ['import { Agent, Group } from "@downcity/agent";', 'import { City } from "@downcity/city";', 'import { Embassy } from "@downcity/federation";', 'import { Workspace } from "@downcity/workspace";'] },
+      { key: "city-import", start_step: 6, order: 0, lines: ['import { Agent, Group } from "@downcity/agent";', 'import { City } from "@downcity/city";', 'import { Embassy } from "@downcity/federation";', 'import { Workspace } from "@downcity/city";'] },
       { key: "city-model", start_step: 6, order: 10, lines: ["", "const embassy = new Embassy({", '  federation_url: "https://api.example.com",', "  user_token: process.env.FEDERATION_USER_TOKEN!,", "});", "const catalog = await embassy.user.ai.catalog();", 'const city_model = catalog.require("deepseek-chat");'] },
       { key: "city-workspace", start_step: 6, order: 11, lines: ["", "const workspace = new Workspace({", '  id: "project",', "  path: process.cwd(),", "});"] },
       { key: "city-build", start_step: 6, order: 13, lines: ["", "const city = new City({ workspaces: [workspace] });"] },

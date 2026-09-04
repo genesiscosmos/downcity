@@ -7,7 +7,7 @@
  * - 身份查询失败时降级为无 User Memory，不能猜测或使用默认用户。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { MemoryAccessContext } from "@/memory/types/MemoryAccess.js";
 
 /** 已认证 City 用户的最小缓存投影。 */

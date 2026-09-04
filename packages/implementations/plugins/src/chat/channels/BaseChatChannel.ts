@@ -14,8 +14,8 @@ import type {
   ChatDispatchSendActionParams,
   ChatDispatcher,
 } from "@/chat/types/ChatDispatcher.js";
-import type { PluginLogger } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import { resolveChatQueueStore } from "@/chat/runtime/ChatQueue.js";
 import { deleteChatSessionById } from "@/chat/runtime/ChatSessionDelete.js";
 import {

@@ -19,7 +19,7 @@ import type {
   DispatchStage,
   DispatchStrategy,
 } from "@/types/group/DispatchStrategy.js";
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@downcity/type";
 import type { AgentModel } from "@/agent/AgentModel.js";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
@@ -51,7 +51,7 @@ export interface GroupSessionOptions {
   /** Group 消息调度策略。 */
   readonly dispatch_strategy: DispatchStrategy;
   /** Group 为成员执行提供的共享 Workspace。 */
-  readonly workspace?: WorkspaceBase;
+  readonly workspace?: WorkspaceRuntime;
 }
 
 /** Group 的一个独立群聊上下文。 */
@@ -66,7 +66,7 @@ export class GroupSession implements GroupSessionContract {
   private readonly members: readonly Agent[];
   private readonly dispatch_runtime: GroupDispatchRuntime;
   private readonly title_task: SessionTitleTask;
-  private readonly workspace?: WorkspaceBase;
+  private readonly workspace?: WorkspaceRuntime;
   private readonly messages_by_id: GroupMessage[] = [];
   private readonly subscribers = new Set<GroupEventSubscriber>();
   private readonly member_sessions = new Map<string, AgentSession>();

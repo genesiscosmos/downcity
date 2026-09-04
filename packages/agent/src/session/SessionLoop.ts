@@ -27,7 +27,7 @@ import { create_session_turn_context } from "@/session/runtime/SessionTurnContex
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { SessionState } from "@/session/SessionState.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
-import type { ShellApprovalGateway } from "@downcity/workspace";
+import type { ShellApprovalGateway } from "@downcity/type";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
@@ -44,8 +44,8 @@ import type {
 import type { SessionCommandCompletion } from "@/types/session/SessionCommand.js";
 import { SESSION_TURN_FILE_DIFF_DATA_TYPE } from "@/session/messages/SessionTurnFileDiffData.js";
 import { build_session_turn_file_diff } from "@/session/messages/SessionTurnFileDiffBuilder.js";
-import { SESSION_PLUGIN_POINTS } from "@/session/SessionPluginPoints.js";
-import type { SessionTurnCommittedHookValue } from "@/types/session/SessionPluginHook.js";
+import { SESSION_EXTENSION_POINTS } from "@/session/SessionExtensionPoints.js";
+import type { SessionTurnCommittedHookValue } from "@/types/session/SessionExtensionHook.js";
 import type { JsonValue } from "@/types/common/Json.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
@@ -713,7 +713,7 @@ export class SessionLoop {
     }
   }
 
-  /** 在释放当前 lease 前触发现有 Plugin effect point。 */
+  /** 在释放当前 lease 前触发现有 Extension effect point。 */
   private async notify_turn_committed(
     active_turn: ActiveSessionTurnState,
     status: SessionTurnCommittedHookValue["status"],
@@ -731,19 +731,19 @@ export class SessionLoop {
         messages: messages as SessionMessage[],
       };
       await extensions.effect(
-        SESSION_PLUGIN_POINTS.turn_committed,
+        SESSION_EXTENSION_POINTS.turn_committed,
         value as unknown as JsonValue,
       );
     } catch (error) {
       try {
-        await this.logger.log("warn", "[agent] session plugin effect failed", {
+        await this.logger.log("warn", "[agent] session extension effect failed", {
           session_id: this.session_id,
           turn_id: active_turn.turn_id,
-          point_name: SESSION_PLUGIN_POINTS.turn_committed,
+          point_name: SESSION_EXTENSION_POINTS.turn_committed,
           error: error instanceof Error ? error.message : String(error),
         });
       } catch {
-        // Plugin effect 不改变已经确定的 Turn 结果。
+        // Extension effect 不改变已经确定的 Turn 结果。
       }
     }
   }

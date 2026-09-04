@@ -2,7 +2,7 @@
  * Session runtime 端口类型。
  *
  * 职责说明（中文）
- * - 定义 Plugin、transport 与 Agent 内部运行时访问单个 Session 的稳定协议。
+ * - 定义宿主 transport 与 Agent 内部运行时访问单个 Session 的稳定协议。
  * - 不暴露具体 Session class，也不包含 Session 集合管理能力。
  */
 

@@ -2,11 +2,11 @@
  * City PluginContext 工厂。
  *
  * 该模块只把 City、Agent、Workspace、Session 与 Plugin 私有资源投影为
- * @downcity/plugin 定义的受限句柄，不复制领域对象的可变状态。
+ * @downcity/city/plugin 定义的受限句柄，不复制领域对象的可变状态。
  */
 
 import type { Embassy } from "@downcity/federation";
-import type { FileSystem, WorkspaceShell } from "@downcity/workspace";
+import type { FileSystem, WorkspaceShell } from "@/workspace/index.js";
 import type {
   PluginContext,
   PluginJsonObject,
@@ -15,11 +15,10 @@ import type {
   PluginSessionHandle,
   PluginSessionMutation,
   PluginSessionOrigin,
-} from "@downcity/plugin";
-import type { AgentSessionCollection } from "@downcity/agent/host";
-import type { AgentPluginRuntime } from "@downcity/agent/host";
-import type { PluginExecutionContext } from "@downcity/plugin";
-import type { Logger } from "@downcity/agent/host";
+} from "@/plugin/index.js";
+import type { AgentSessionCollection, Logger } from "@downcity/agent/host";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { PluginExecutionContext } from "@/plugin/index.js";
 
 /** PluginContext 工厂输入。 */
 export interface CreatePluginContextInput {
@@ -72,11 +71,11 @@ export function create_plugin_context(input: CreatePluginContextInput): PluginCo
         get: (plugin_id: string) => input.get_plugins().get(plugin_id),
         snapshots: () => input.get_plugins().snapshots(),
         run_action: async (action_input) => await input.get_plugins().run_action(action_input),
-        pipeline: async <TValue extends import("@downcity/plugin").PluginJsonValue>(
+        pipeline: async <TValue extends import("@/plugin/index.js").PluginJsonValue>(
           point_name: string,
           value: TValue,
         ) => await input.get_plugins().pipeline(point_name, value) as TValue,
-        effect: async <TValue extends import("@downcity/plugin").PluginJsonValue>(
+        effect: async <TValue extends import("@/plugin/index.js").PluginJsonValue>(
           point_name: string,
           value: TValue,
         ) => await input.get_plugins().effect(point_name, value),
@@ -202,7 +201,7 @@ function create_session_collection(
       stop: async () => await runtime.stop() as unknown as PluginJsonObject,
       subscribe: (subscriber) => runtime.subscribe((mutation) =>
         subscriber(mutation as unknown as PluginSessionMutation)),
-      context: async () => await runtime.context() as unknown as import("@downcity/plugin").PluginSessionContextSnapshot,
+      context: async () => await runtime.context() as unknown as import("@/plugin/index.js").PluginSessionContextSnapshot,
       append_assistant_message: async (message_input) =>
         await runtime.append_assistant_message(message_input),
     });

@@ -17,7 +17,7 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { create_workspace_entry } from "@downcity/agent/host";
 import { City } from "../bin/index.js";
-import { LocalStorageProvider, Workspace } from "@downcity/workspace";
+import { LocalStorageProvider, Workspace } from "@downcity/city";
 
 function create_stream_text_result(text) {
   return {

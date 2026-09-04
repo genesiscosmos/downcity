@@ -39,7 +39,7 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
   const temp_dir = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-pack-"));
   const package_dir = path.join(temp_dir, "packages", "agent");
   const type_dir = path.join(temp_dir, "packages", "type");
-  const workspace_dir = path.join(temp_dir, "packages", "workspace");
+  const workspace_dir = path.join(temp_dir, "packages", "city");
 
   fs.mkdirSync(package_dir, { recursive: true });
   fs.mkdirSync(type_dir, { recursive: true });
@@ -51,7 +51,7 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
     version: "0.1.43",
   });
   write_json(path.join(workspace_dir, "package.json"), {
-    name: "@downcity/workspace",
+    name: "@downcity/city",
     version: "0.1.4",
   });
   write_json(path.join(package_dir, "package.json"), {
@@ -59,7 +59,7 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
     version: "1.1.118",
     dependencies: {
       "@downcity/type": "workspace:*",
-      "@downcity/workspace": "workspace:^",
+      "@downcity/city": "workspace:^",
       zod: "^4.4.3",
     },
   });
@@ -72,7 +72,7 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
 
   assert.deepEqual(read_json(manifest_path).dependencies, {
     "@downcity/type": "0.1.43",
-    "@downcity/workspace": "^0.1.4",
+    "@downcity/city": "^0.1.4",
     zod: "^4.4.3",
   });
 
@@ -82,7 +82,7 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
 
   assert.deepEqual(read_json(manifest_path).dependencies, {
     "@downcity/type": "workspace:*",
-    "@downcity/workspace": "workspace:^",
+    "@downcity/city": "workspace:^",
     zod: "^4.4.3",
   });
 });

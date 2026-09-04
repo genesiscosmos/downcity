@@ -6,8 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "@downcity/agent";
-import { Workspace } from "../../workspace/bin/index.js";
-import { City } from "../bin/index.js";
+import { City, Workspace } from "../bin/index.js";
 
 /** 创建临时运行时 Agent。 */
 async function create_agent(root, agent_id) {

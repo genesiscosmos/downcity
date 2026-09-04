@@ -8,7 +8,7 @@
 
 import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 import { restore_session_origin } from "@/session/SessionOrigin.js";
 
 function normalizeModelLabel(input: unknown): string | undefined {

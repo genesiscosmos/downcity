@@ -14,13 +14,12 @@ import {
   type AgentSession,
   type AgentSessionCollection,
   type AgentSessionSetOptions,
-  RemoteAgent,
   type RemoteSessionSetInput,
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import { City } from "@downcity/city";
-import { LocalStorageProvider, type WorkspaceBase } from "@downcity/workspace";
+import { City, LocalStorageProvider, RemoteAgent } from "@downcity/city";
+import type { WorkspaceRuntime } from "@downcity/type/workspace";
 import type { AgentModel } from "@downcity/agent";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
 import {
@@ -151,7 +150,7 @@ export async function createRemoteAgent(params: {
 /** 把本地 Session 的模型实例输入适配为 RemoteSession 的 model_id 输入。 */
 function create_local_chat_sessions(
   sessions: AgentSessionCollection,
-  workspace: WorkspaceBase,
+  workspace: WorkspaceRuntime,
   resolve_model: (model_id: string) => Promise<AgentModel>,
 ): AgentSessions<RemoteAgentSession> {
   const wrap = (session: AgentSession): RemoteAgentSession => ({

@@ -3,7 +3,7 @@
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { GroupMessage } from "@/types/group/Group.js";
 import type { Agent } from "@/agent/Agent.js";
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@downcity/type";
 import type { RespondSessionInteractionInput, SessionInteractionRequest } from "@/types/session/SessionInteraction.js";
 
 /** Group 成员运行态。 */
@@ -69,13 +69,13 @@ export interface GroupSessionSummary {
 /** GroupSession 的创建输入；第一阶段不允许调用方指定 session_id。 */
 export interface GroupSessionCreateInput {
   /** 当前群聊使用的 Workspace；省略时使用内存执行上下文。 */
-  readonly workspace?: WorkspaceBase;
+  readonly workspace?: WorkspaceRuntime;
 }
 
 /** 恢复 GroupSession 时的上下文输入。 */
 export interface GroupSessionGetInput {
   /** 当前群聊使用的 Workspace；必须与持久化 metadata 一致。 */
-  readonly workspace?: WorkspaceBase;
+  readonly workspace?: WorkspaceRuntime;
 }
 
 /** GroupSession 列表过滤条件。 */

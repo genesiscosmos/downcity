@@ -7,7 +7,7 @@ import type {
   DesktopNotificationState,
   DesktopNotificationTarget,
 } from "../../../common/types/DesktopNotification.js";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 
 /** NotificationController 的可替换运行依赖。 */
 export interface NotificationControllerOptions {

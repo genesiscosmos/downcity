@@ -18,7 +18,7 @@ import {
   WORKSPACE_FILE_MUTATION_EFFECT_TYPE,
   type WorkspaceFileMutation,
   type WorkspaceFileMutationState,
-} from "@downcity/workspace";
+} from "@downcity/type";
 import type {
   SessionTurnFileDiff,
   SessionTurnFileDiffData,

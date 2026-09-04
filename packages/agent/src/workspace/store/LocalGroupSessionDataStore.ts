@@ -1,7 +1,7 @@
 /** LocalGroupSessionDataStore：GroupSession 的 metadata 与消息 JSONL 存储。 */
 
 import path from "node:path";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 import type { GroupMessage } from "@/types/group/Group.js";
 import type {
   GroupDispatchTurnRecord,

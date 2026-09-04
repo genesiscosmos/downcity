@@ -64,7 +64,7 @@ const HELP_ITEMS = [
     name: "patch:build",
     summary: "按 package 执行 patch bump + build。",
     detail:
-      "支持 `npm run patch:build -- --workspace --agent --city --plugin --plugins --services --cli`、`--ui`、`--all`、`--no-bump`。",
+      "支持 `npm run patch:build -- --type --agent --city --plugins --services --cli`、`--ui`、`--all`、`--no-bump`。",
   },
   {
     name: "agent:patch:build",
@@ -75,11 +75,6 @@ const HELP_ITEMS = [
     name: "city:patch:build",
     summary: "只对 @downcity/city 执行 patch bump + build。",
     detail: "等价于 `npm run patch:build -- --city`，依赖闭包和顺序从 package manifests 自动推导。",
-  },
-  {
-    name: "plugin:patch:build",
-    summary: "只对 @downcity/plugin 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --plugin`。",
   },
   {
     name: "plugins:patch:build",

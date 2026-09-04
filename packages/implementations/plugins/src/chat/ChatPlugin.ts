@@ -8,10 +8,10 @@
  * - action 注册表已经拆到独立模块，当前文件只保留实例骨架。
  */
 
-import { BasePlugin } from "@downcity/plugin";
-import type { PluginActions } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginExecutionContext } from "@downcity/plugin";
+import { BasePlugin } from "@downcity/city/plugin";
+import type { PluginActions } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginExecutionContext } from "@downcity/city/plugin";
 import type {
   ChatChannelState,
   ChatWorkspaceRuntime,

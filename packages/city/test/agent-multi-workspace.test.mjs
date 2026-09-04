@@ -7,9 +7,9 @@ import path from "node:path";
 import test from "node:test";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
-import { create_plugin } from "@downcity/plugin";
+import { create_plugin } from "@downcity/city/plugin";
 import { create_workspace_entry, get_workspace_entry } from "@downcity/agent/host";
-import { Workspace } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
 import {
   create_plugin_binding,
   create_plugin_registration,
@@ -63,9 +63,11 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
   const second = create_workspace_entry(agent, second_workspace);
 
   try {
+    const first_plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: first_workspace.id });
+    const second_plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: second_workspace.id });
     const [first_result, second_result] = await Promise.all([
-      first.plugins.run_action({ plugin: "context_probe", action: "inspect" }),
-      second.plugins.run_action({ plugin: "context_probe", action: "inspect" }),
+      first_plugins.run_action({ plugin: "context_probe", action: "inspect" }),
+      second_plugins.run_action({ plugin: "context_probe", action: "inspect" }),
     ]);
     assert.equal(first_result.data.workspace_id, "sdk");
     assert.equal(second_result.data.workspace_id, "homepage");
@@ -132,7 +134,10 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
     const unsubscribe = linked_session.subscribe((mutation) => {
       mutations.push(mutation);
     });
-    const result = await entry.plugins.run_action({
+    const result = await city.plugins.scope({
+      agent_id: agent.id,
+      workspace_id: workspace.id,
+    }).run_action({
       plugin: "session_probe",
       action: "inspect",
       execution_context: {
@@ -204,9 +209,12 @@ test("Plugin runtime data is isolated by Agent and shared across Workspaces", as
   const third = create_workspace_entry(agent_b, third_workspace);
   try {
     await Promise.all([
-      first.plugins.run_action({ plugin: "data_probe", action: "inspect" }),
-      second.plugins.run_action({ plugin: "data_probe", action: "inspect" }),
-      third.plugins.run_action({ plugin: "data_probe", action: "inspect" }),
+      city.plugins.scope({ agent_id: agent_a.id, workspace_id: first_workspace.id })
+        .run_action({ plugin: "data_probe", action: "inspect" }),
+      city.plugins.scope({ agent_id: agent_a.id, workspace_id: second_workspace.id })
+        .run_action({ plugin: "data_probe", action: "inspect" }),
+      city.plugins.scope({ agent_id: agent_b.id, workspace_id: third_workspace.id })
+        .run_action({ plugin: "data_probe", action: "inspect" }),
     ]);
     const agent_a_paths = contexts.filter((item) => item.agent_id === "data_agent_a").map((item) => item.data_path);
     const agent_b_paths = contexts.filter((item) => item.agent_id === "data_agent_b").map((item) => item.data_path);
@@ -255,8 +263,10 @@ test("Plugin can ignore Workspace while still receiving its Context", async () =
   const first = create_workspace_entry(agent, first_workspace);
   const second = create_workspace_entry(agent, second_workspace);
   try {
-    assert.equal((await first.plugins.run_action({ plugin: "counter", action: "increment" })).data.value, 1);
-    assert.equal((await second.plugins.run_action({ plugin: "counter", action: "increment" })).data.value, 2);
+    assert.equal((await city.plugins.scope({ agent_id: agent.id, workspace_id: first_workspace.id })
+      .run_action({ plugin: "counter", action: "increment" })).data.value, 1);
+    assert.equal((await city.plugins.scope({ agent_id: agent.id, workspace_id: second_workspace.id })
+      .run_action({ plugin: "counter", action: "increment" })).data.value, 2);
   } finally {
     await city.close();
     await fs.rm(root, { recursive: true, force: true });

@@ -17,16 +17,16 @@ import {
   type SandboxPolicy as MxcSandboxPolicy,
 } from "@microsoft/mxc-sdk";
 import {
-  createPipeProcessHandle,
-  createPtyProcessHandle,
-} from "@downcity/workspace/shell/sandbox/ShellProcessHandle.js";
+  create_pipe_process_handle,
+  create_pty_process_handle,
+} from "@downcity/city/shell";
 import { inspect_windows_mxc_support } from "@/WindowsMxcSupport.js";
 import { read_windows_env_value } from "@/WindowsEnvironment.js";
 import { build_windows_cmd_command_line } from "@/WindowsMxcCommandLine.js";
 import type {
   SandboxSpawnRequest,
   SandboxSpawnResult,
-} from "@downcity/workspace/shell/types/Sandbox.js";
+} from "@downcity/type/shell";
 
 /** 构造 Windows Safe Sandbox 子进程环境变量。 */
 export function build_windows_mxc_env(
@@ -133,13 +133,13 @@ export async function spawn_windows_mxc(
 
   const env = build_windows_mxc_env(request);
   const child = request.terminal
-    ? createPtyProcessHandle(spawnSandboxFromConfig(config, {
+    ? create_pty_process_handle(spawnSandboxFromConfig(config, {
         ptyOptions: {
           cols: request.cols || 120,
           rows: request.rows || 40,
         },
       }, request.cwd, env))
-    : createPipeProcessHandle(spawnSandboxFromConfig(config, {
+    : create_pipe_process_handle(spawnSandboxFromConfig(config, {
         usePty: false,
       }, request.cwd, env));
 

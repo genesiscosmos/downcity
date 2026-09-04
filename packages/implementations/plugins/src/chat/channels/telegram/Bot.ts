@@ -22,8 +22,8 @@ import {
   type TelegramUpdate,
   type TelegramUser,
 } from "./Shared.js";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import {
   buildTelegramChatKey,

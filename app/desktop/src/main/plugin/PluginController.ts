@@ -6,7 +6,7 @@
  */
 
 import fs from "node:fs";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 import {
   normalize_profile_id,
   verify_local_installed_plugin_integrity,

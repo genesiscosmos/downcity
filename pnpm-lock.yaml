@@ -26,18 +26,12 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../../packages/federation
-      '@downcity/plugin':
-        specifier: workspace:^
-        version: link:../../packages/plugin
       '@downcity/plugins':
         specifier: workspace:^
         version: link:../../packages/implementations/plugins
       '@downcity/type':
         specifier: workspace:*
         version: link:../../packages/type
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../../packages/workspace
       '@earendil-works/pi-tui':
         specifier: ^0.74.2
         version: 0.74.2
@@ -145,15 +139,12 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../../packages/federation
-      '@downcity/plugin':
-        specifier: workspace:^
-        version: link:../../packages/plugin
       '@downcity/plugins':
         specifier: workspace:^
         version: link:../../packages/implementations/plugins
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../../packages/workspace
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../../packages/type
       '@tiptap/core':
         specifier: 3.29.2
         version: 3.29.2(@tiptap/pm@3.29.2)
@@ -440,15 +431,9 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../federation
-      '@downcity/plugin':
-        specifier: workspace:^
-        version: link:../plugin
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../workspace
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -486,15 +471,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@downcity/sandbox-linux':
-        specifier: workspace:^
-        version: link:../implementations/sandboxes/linux
-      '@downcity/sandbox-macos':
-        specifier: workspace:^
-        version: link:../implementations/sandboxes/macos
-      '@downcity/sandbox-windows-mxc':
-        specifier: workspace:^
-        version: link:../implementations/sandboxes/windows-mxc
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -525,24 +501,27 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../federation
-      '@downcity/plugin':
-        specifier: workspace:^
-        version: link:../plugin
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../workspace
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
+      globby:
+        specifier: ^11.1.0
+        version: 11.1.0
       hono:
         specifier: ^4.12.23
         version: 4.12.23
+      node-pty:
+        specifier: 1.2.0-beta.14
+        version: 1.2.0-beta.14
       pinyin-pro:
         specifier: ^3.27.0
         version: 3.29.3
@@ -562,9 +541,15 @@ importers:
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.15
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
       tsc-alias:
         specifier: ^1.8.17
         version: 1.8.17
@@ -656,9 +641,9 @@ importers:
       '@downcity/agent':
         specifier: workspace:^
         version: link:../../agent
-      '@downcity/plugin':
+      '@downcity/city':
         specifier: workspace:^
-        version: link:../../plugin
+        version: link:../../city
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -684,9 +669,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@downcity/city':
-        specifier: workspace:^
-        version: link:../../city
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -717,9 +699,12 @@ importers:
 
   packages/implementations/sandboxes/linux:
     dependencies:
-      '@downcity/workspace':
+      '@downcity/city':
         specifier: workspace:^
-        version: link:../../../workspace
+        version: link:../../../city
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../../../type
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
@@ -739,9 +724,12 @@ importers:
 
   packages/implementations/sandboxes/macos:
     dependencies:
-      '@downcity/workspace':
+      '@downcity/city':
         specifier: workspace:^
-        version: link:../../../workspace
+        version: link:../../../city
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../../../type
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
@@ -761,9 +749,12 @@ importers:
 
   packages/implementations/sandboxes/windows-mxc:
     dependencies:
-      '@downcity/workspace':
+      '@downcity/city':
         specifier: workspace:^
-        version: link:../../../workspace
+        version: link:../../../city
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../../../type
       '@microsoft/mxc-sdk':
         specifier: 0.7.0
         version: 0.7.0
@@ -789,9 +780,12 @@ importers:
       '@anthropic-ai/sandbox-runtime':
         specifier: 0.0.67
         version: 0.0.67
-      '@downcity/workspace':
+      '@downcity/city':
         specifier: workspace:^
-        version: link:../../../workspace
+        version: link:../../../city
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../../../type
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
@@ -857,9 +851,6 @@ importers:
       '@downcity/type':
         specifier: workspace:*
         version: link:../../../type
-      '@downcity/workspace':
-        specifier: workspace:*
-        version: link:../../../workspace
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -874,45 +865,11 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/plugin:
-    dependencies:
-      '@downcity/federation':
-        specifier: workspace:^
-        version: link:../federation
-      '@downcity/type':
-        specifier: workspace:*
-        version: link:../type
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../workspace
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
-      hono:
-        specifier: ^4.12.23
-        version: 4.12.23
-      react:
-        specifier: ^19.0.0
-        version: 19.2.6
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
+  packages/type:
     devDependencies:
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.15
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/type:
-    devDependencies:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -999,40 +956,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/workspace:
-    dependencies:
-      '@downcity/type':
-        specifier: workspace:*
-        version: link:../type
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-      globby:
-        specifier: ^11.1.0
-        version: 11.1.0
-      node-pty:
-        specifier: 1.2.0-beta.14
-        version: 1.2.0-beta.14
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   templates/agent: {}
 
   templates/agent/server:
@@ -1040,12 +963,12 @@ importers:
       '@downcity/agent':
         specifier: workspace:*
         version: link:../../../packages/agent
+      '@downcity/city':
+        specifier: workspace:*
+        version: link:../../../packages/city
       '@downcity/federation':
         specifier: workspace:*
         version: link:../../../packages/federation
-      '@downcity/workspace':
-        specifier: workspace:*
-        version: link:../../../packages/workspace
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.23)

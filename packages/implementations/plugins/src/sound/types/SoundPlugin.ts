@@ -8,7 +8,7 @@
  */
 
 import type { ActionResultMessage } from "@downcity/agent";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 
 /** SoundPlugin 使用的最小语音 AI 服务协议。 */
 export interface SoundAiService {

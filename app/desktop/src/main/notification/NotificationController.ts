@@ -21,7 +21,7 @@ import type {
   DesktopNotificationStorage,
   NotificationControllerOptions,
 } from "../types/notification/Notification.js";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 
 const default_options: NotificationControllerOptions = { create_id: () => randomUUID() };
 

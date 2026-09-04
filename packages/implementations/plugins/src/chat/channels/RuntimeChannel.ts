@@ -7,7 +7,7 @@
  * - 配置已由宿主解析为构造参数，channel 不访问其他外部 Store。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannel } from "@/chat/types/ChatPluginOptions.js";
 import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";

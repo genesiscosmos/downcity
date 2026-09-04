@@ -1,4 +1,4 @@
-import type { PluginLogger } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 import type { TelegramUpdate, TelegramUser } from "./Shared.js";
 
 /**

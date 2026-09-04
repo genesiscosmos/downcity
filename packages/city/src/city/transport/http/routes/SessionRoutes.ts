@@ -16,7 +16,7 @@ import type {
   RemoteSessionSetInput,
 } from "@downcity/agent";
 import type { AgentSessionCollection } from "@downcity/agent/host";
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type { RespondSessionInteractionInput } from "@downcity/agent";
 import type { AgentHttpRuntimeOptions } from "@/city/transport/types/AgentHttpRuntime.js";
@@ -33,7 +33,7 @@ const SDK_EVENTS_READY_FRAME = {
 export function register_sdk_session_routes(
   app: Hono,
   sessions: AgentSessionCollection,
-  workspace?: WorkspaceBase,
+  workspace?: WorkspaceRuntime,
   runtime_options: AgentHttpRuntimeOptions = {},
 ): void {
   const get_origin_type = (input: unknown): string => String(input || "chat").trim() || "chat";

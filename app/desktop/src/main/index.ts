@@ -160,7 +160,8 @@ ipcMain.handle("group:send", (_event, group_id: string, session_id: string | und
 ipcMain.handle("group:stop", (_event, group_id: string, session_id?: string) => require_agent_controller().stop_group(group_id, session_id));
 ipcMain.handle("group:respond-interaction", (_event, group_id: string, session_id: string, input: RespondSessionInteractionInput) => require_agent_controller().respond_group_interaction(group_id, session_id, input));
 ipcMain.handle("group:remove-session", (_event, group_id: string, session_id: string) => require_agent_controller().remove_group_session(group_id, session_id));
-ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
+ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id?: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
+ipcMain.handle("chat:rebind-session-workspace", (_event, agent_id: string, session_id: string, workspace_id: string) => require_agent_controller().rebind_session_workspace(agent_id, session_id, workspace_id));
 ipcMain.handle("chat:list-models", () => require_agent_controller().list_models());
 ipcMain.handle("chat:list-workspace-files", (_event, workspace_id: string) => require_agent_controller().list_workspace_files(workspace_id));
 ipcMain.handle("chat:read-workspace-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_file(workspace_id, relative_path));
@@ -182,7 +183,7 @@ ipcMain.handle("chat:remove-session", async (_event, agent_id: string, workspace
   require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id);
   return removed;
 });
-ipcMain.handle("chat:list-archived-sessions", (_event, agent_id: string, workspace_id: string) => require_agent_controller().list_archived_sessions(agent_id, workspace_id));
+ipcMain.handle("chat:list-archived-sessions", (_event, agent_id: string, workspace_id?: string) => require_agent_controller().list_archived_sessions(agent_id, workspace_id));
 ipcMain.handle("chat:get-snapshot", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_chat_snapshot(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:get-history", (_event, agent_id: string, workspace_id: string, session_id: string, before_sequence: number) => require_agent_controller().get_chat_history(agent_id, workspace_id, session_id, before_sequence));
 ipcMain.handle("chat:send", (_event, agent_id: string, workspace_id: string, session_id: string, input: JSONContent) => require_agent_controller().send_message(agent_id, workspace_id, session_id, input));

@@ -8,7 +8,7 @@
 
 import type { RuntimeTool as Tool } from "@downcity/type";
 import type { JsonObject } from "@downcity/agent";
-import type { AgentPluginRuntime } from "@downcity/agent/host";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { SessionTurnContext } from "@downcity/agent";
 
 /**

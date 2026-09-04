@@ -14,8 +14,8 @@ import {
   prepareChatEnqueue,
 } from "@/chat/runtime/EnqueueDispatch.js";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { IncomingChatMessage } from "./BaseChatChannel.js";
 import {
   appendInboundChannelHistory,

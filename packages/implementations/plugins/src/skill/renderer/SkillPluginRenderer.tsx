@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { define_plugin_renderer } from "@downcity/plugin/react";
+import { define_plugin_renderer } from "@downcity/city/plugin/react";
 import type {
   SkillMainviewItem,
   SkillMainviewMutationResult,

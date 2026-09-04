@@ -8,7 +8,7 @@
  */
 
 import type WebSocket from "ws";
-import type { PluginLogger } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 import type {
   QQGatewayPayload,
   QqDispatchHandler,

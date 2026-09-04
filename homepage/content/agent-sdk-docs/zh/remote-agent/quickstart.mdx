@@ -26,7 +26,7 @@ downcity on
 ```ts
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
-import { Workspace } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
 
 const workspace = new Workspace({ id: "project", path });
 const agent = new Agent({ id, model });
@@ -40,7 +40,7 @@ await city.rpc({ host: "127.0.0.1", port: 15314 });
 ### 连接 HTTP
 
 ```ts
-import { RemoteAgent } from "@downcity/agent";
+import { RemoteAgent } from "@downcity/city";
 
 const agent = new RemoteAgent({
   url: "http://127.0.0.1:5314/agents/assistant/workspaces/project",
@@ -57,7 +57,7 @@ const result = await turn.finished;
 ### 连接 RPC
 
 ```ts
-import { RemoteAgent } from "@downcity/agent";
+import { RemoteAgent } from "@downcity/city";
 
 const agent = new RemoteAgent({
   url: "rpc://127.0.0.1:15314/assistant/project",

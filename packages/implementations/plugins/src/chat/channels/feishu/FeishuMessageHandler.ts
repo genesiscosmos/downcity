@@ -8,13 +8,13 @@
  */
 
 import path from "path";
-import type { PluginLogger } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type {
   IncomingChatAccessParams,
   IncomingChatAccessResult,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { InboundReplyContext } from "@/chat/types/ReplyContext.js";
 import {
   buildReplyContextExtra,

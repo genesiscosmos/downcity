@@ -34,8 +34,23 @@ test("get_logger keeps concurrent workspace logs isolated", async () => {
   const root_b = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-logger-isolation-b-"),
   );
-  const logger_a = get_logger(root_a);
-  const logger_b = get_logger(root_b);
+  const create_files = (root_path) => ({
+    resolve_path: (...segments) => path.resolve(root_path, ...segments),
+    append_file: async (file_path, content) => {
+      await fs.mkdir(path.dirname(file_path), { recursive: true });
+      await fs.appendFile(file_path, content);
+    },
+  });
+  const logger_a = get_logger();
+  const logger_b = get_logger();
+  logger_a.bind_storage(create_files(root_a), root_a, {
+    agent_id: "logger-a",
+    workspace_id: "workspace-a",
+  });
+  logger_b.bind_storage(create_files(root_b), root_b, {
+    agent_id: "logger-b",
+    workspace_id: "workspace-b",
+  });
 
   assert.notEqual(logger_a, logger_b);
   await Promise.all([

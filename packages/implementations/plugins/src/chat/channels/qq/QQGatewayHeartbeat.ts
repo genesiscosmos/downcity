@@ -7,7 +7,7 @@
  */
 
 import WebSocket from "ws";
-import type { PluginLogger } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 import { OpCode } from "@/chat/channels/qq/types/QqChannel.js";
 import {
   getQqHeartbeatAckTimeoutMs,

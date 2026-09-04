@@ -32,7 +32,7 @@ import {
   list_archived_agent_session_summary_page,
   list_agent_session_summary_page,
 } from "@/session/browse/Browse.js";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import { normalize_session_origin, normalize_session_origin_type } from "@/session/SessionOrigin.js";

@@ -36,7 +36,7 @@ test("instruction blocks keep Downcity core after custom instruction", () => {
   assert.doesNotMatch(blocks[1].content, /\.downcity\/public/);
 });
 
-test("session system blocks are ordered as instruction, core, plugin, session", async () => {
+test("session system blocks are ordered as instruction, core, extension, session", async () => {
   const blocks = await build_session_system_blocks({
     agent_id: "agent-test",
     project_root: "/tmp/downcity-project",
@@ -48,10 +48,10 @@ test("session system blocks are ordered as instruction, core, plugin, session", 
         ["使用中文回复。"],
         "/tmp/downcity-project",
       ),
-    get_managed_plugin_system_blocks: async () => [],
-    get_plugin_system_blocks: async () => [
+    get_managed_extension_system_blocks: async () => [],
+    get_extension_system_blocks: async () => [
       {
-        source: "plugin",
+        source: "extension",
         name: "task",
         content: "# Task Plugin\n\n任务插件说明。",
       },
@@ -63,7 +63,7 @@ test("session system blocks are ordered as instruction, core, plugin, session", 
     [
       "instruction:agent",
       "core:default",
-      "plugin:task",
+      "extension:task",
       "session:context",
     ],
   );

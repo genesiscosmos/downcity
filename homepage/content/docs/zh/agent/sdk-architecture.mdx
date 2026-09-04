@@ -11,7 +11,7 @@ Downcity 将执行主体、项目资源与扩展运行时分开。`Agent` 拥有
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
-import { Shell, Workspace } from "@downcity/workspace";
+import { Shell, Workspace } from "@downcity/city";
 
 const agent = new Agent({ id, model, instruction });
 const workspace = new Workspace({ id: "project", path, shell });
@@ -48,10 +48,10 @@ flowchart TD
 
 依赖方向保持明确：
 
-- `@downcity/workspace` 不依赖 Agent 或 Session。
-- `@downcity/agent` 依赖 Workspace 协议，并负责解释宿主 Storage 中的 Agent 领域状态。
+- `@downcity/agent` 只依赖 `@downcity/type` 中的 Workspace、Shell 与 Session Extension 协议。
+- `@downcity/city` 依赖 Agent，并向 Agent 投影中立的宿主扩展能力；Agent 不反向依赖 City。
 - 宿主选择平台 Sandbox，并组合 Agent 与 Workspace。
-- Edge Adapter 使用 `@downcity/workspace/protocol`，不会加载 Node.js 本地实现。
+- Edge Adapter 使用 `@downcity/type/workspace`，不会加载 Node.js 本地实现。
 
 ## Agent 是主体
 
@@ -88,7 +88,7 @@ Workspace 不创建 SessionStore，不理解 Agent ID，不注册 Plugin，不�
 Shell 属于 Workspace，因为命令执行作用于 Workspace 资源。公开入口是：
 
 ```ts
-import { Shell, Workspace } from "@downcity/workspace";
+import { Shell, Workspace } from "@downcity/city";
 ```
 
 不再存在独立的 `@downcity/shell` 包。各平台 Sandbox 仍是独立安装的 package，由宿主注入 Shell。
@@ -161,10 +161,9 @@ Workspace 仍由宿主负责释放。
 
 | Package | 拥有 | 不拥有 |
 | --- | --- | --- |
-| `@downcity/workspace` | Workspace 协议、本地项目资源、File/Search、Env、Shell | Agent 身份、Plugin registry、Session 语义、模型调用 |
+| `@downcity/type` | Workspace、Shell、Session Extension 等中立协议 | 具体资源实现与生命周期 |
 | `@downcity/agent` | Agent、AgentSessions、Session、Store、宿主扩展端口、模型 Tool Loop | City 组合、Plugin 生命周期、项目资源实现、平台 Sandbox |
-| `@downcity/city` | City、Plugin runtime、Hook 调度、共享生命周期、HTTP/RPC transport、本地宿主数据 | Agent 执行内核、具体内建 Plugin |
+| `@downcity/city` | City、Workspace/Shell 实现、Plugin SDK/runtime、Hook 调度、RemoteAgent、HTTP/RPC transport、本地宿主数据 | Agent 执行内核、具体内建 Plugin |
 | Sandbox packages | 单个平台的原生进程隔离 | Workspace、Agent、Session 或 Plugin 业务 |
-| `@downcity/agent` | Agent 索引与 HTTP/RPC transport | 本地配置 Repository 与 Agent 执行状态 |
 
 继续阅读：[运行时架构](/zh/docs/agent/runtime-architecture)。

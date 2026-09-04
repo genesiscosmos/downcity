@@ -2,8 +2,6 @@ packages:
   - homepage
   - packages/agent
   - packages/city
-  - packages/plugin
-  - packages/workspace
   - app/desktop
   - packages/implementations/workspaces/*
   - packages/federation

@@ -6,8 +6,8 @@
  * - ChatQueueWorker 主类只保留“何时分发”的决策，不再承载具体发消息细节。
  */
 
-import type { PluginLogger } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import { parseDirectDispatchAssistantText } from "./DirectDispatchParser.js";
 import { sendActionByChatKey } from "./ChatkeySend.js";
 import { sendChatTextByChatKey } from "../Action.js";

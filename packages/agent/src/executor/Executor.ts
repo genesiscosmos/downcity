@@ -21,7 +21,7 @@ import type {
 } from "@/types/session/SessionExecution.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
-import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
+import type { SessionExtensionRuntime } from "@downcity/type/session";
 import { is_action_result } from "@/types/action/ActionResult.js";
 import { generate_id } from "@/utils/Id.js";
 import {

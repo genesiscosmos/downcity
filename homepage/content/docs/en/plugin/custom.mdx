@@ -88,7 +88,7 @@ The following entry protocol is only needed when CLI or Desktop must install, di
 `main` default-exports a `CityPluginModule`. It provides both the execution-instance factory and host main lifecycle; there is no separate `agent` entry. `plugin.action()` registers Profile-independent actions for Sidebar/Mainview, while `plugin.config_action()` registers Config actions:
 
 ```ts
-import { define_city_plugin } from "@downcity/plugin";
+import { define_city_plugin } from "@downcity/city/plugin";
 import { GithubPlugin } from "./plugin.js";
 
 export default define_city_plugin({
@@ -135,7 +135,7 @@ The Renderer has three fixed slots. `sidebar` and `mainview` form the Plugin wor
 
 ```tsx
 import { useEffect, useState } from "react";
-import { define_plugin_renderer } from "@downcity/plugin/react";
+import { define_plugin_renderer } from "@downcity/city/plugin/react";
 
 export default define_plugin_renderer({ config: function GithubConfig({ config, ui }) {
   const { Button, Group, Input, LoadingState, Page, Row, Toolbar } = ui.components;

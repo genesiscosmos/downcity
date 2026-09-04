@@ -14,7 +14,6 @@ import {
   RemoteAgent,
   Shell,
   Workspace,
-  WorkspaceBase,
 } from "../bin/index.js";
 
 test("City 根入口导出应用装配所需的稳定构造器", () => {
@@ -28,7 +27,6 @@ test("City 根入口导出应用装配所需的稳定构造器", () => {
     RemoteAgent,
     Shell,
     Workspace,
-    WorkspaceBase,
   ]) {
     assert.equal(typeof constructor, "function");
   }

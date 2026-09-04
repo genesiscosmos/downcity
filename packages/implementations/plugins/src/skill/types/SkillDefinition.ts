@@ -8,7 +8,7 @@
  */
 
 import type { SkillRootSource } from "@/skill/types/SkillRoot.js";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 
 /**
  * 可被 agent 发现与读取的 skill 定义。

@@ -1,0 +1,553 @@
+/**
+ * @file 验证 canonical SessionMessage 的流式写入、交互、恢复与分段压缩。
+ *
+ * 测试只使用 Downcity Model Protocol 与 canonical SessionMessage，不经过 UI Message
+ * 或 Executor Record 投影。
+ */
+
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+
+import { LocalFileSystem } from "@downcity/city";
+import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";
+import { SessionShellApprovalAdapter } from "../../agent/bin/session/execution/tools/SessionShellApprovalAdapter.js";
+import {
+  normalize_session_user_parts,
+  SessionMessages,
+} from "../../agent/bin/session/SessionMessages.js";
+import { compose_session_compaction } from "../../agent/bin/session/messages/SessionMessageCompaction.js";
+import { session_context_to_model_messages } from "../../agent/bin/executor/messages/SessionModelMessages.js";
+import { JsonlSessionMessageStore } from "../../agent/bin/workspace/store/JsonlSessionMessageStore.js";
+import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
+
+/** 可让下一次 Assistant 草稿更新失败的测试 Store。 */
+class FailingAssistantMessageStore extends JsonlSessionMessageStore {
+  next_assistant_error = null;
+
+  fail_next_assistant_write(message) {
+    this.next_assistant_error = new Error(message);
+  }
+
+  async write_assistant_message(message) {
+    const error = this.next_assistant_error;
+    if (error) {
+      this.next_assistant_error = null;
+      throw error;
+    }
+    await super.write_assistant_message(message);
+  }
+}
+
+/** 创建隔离的 canonical SessionMessages 测试环境。 */
+async function create_recorder(
+  session_id = "session-messages-test",
+  create_store = (options) => new JsonlSessionMessageStore(options),
+) {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-messages-"));
+  const file_path = path.join(root_path, "active.jsonl");
+  const assistant_message_file_path = path.join(root_path, "assistant_message.json");
+  const files = new LocalFileSystem(root_path);
+  const events = [];
+  const store = create_store({
+    files,
+    session_id,
+    file_path,
+    assistant_message_file_path,
+  });
+  const recorder = new SessionMessages({
+    session_id,
+    store,
+    publish: (mutation) => events.push(mutation),
+  });
+  await recorder.initialize();
+  return {
+    recorder,
+    store,
+    events,
+    files,
+    root_path,
+    file_path,
+    assistant_message_file_path,
+  };
+}
+
+/** 读取 active JSONL。 */
+async function read_jsonl(file_path) {
+  const raw = await fs.readFile(file_path, "utf8");
+  return raw.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+
+/** 写入一个完整的标准模型文本事件序列。 */
+async function write_text(writer, content_id, text) {
+  await writer.apply_model_event({ type: "text_start", content_id });
+  await writer.apply_model_event({ type: "text_delta", content_id, delta: text });
+  await writer.apply_model_event({ type: "text_finish", content_id });
+}
+
+/** 写入一个完整的标准模型工具调用事件序列。 */
+async function write_tool_call(writer, input) {
+  await writer.apply_model_event({
+    type: "tool_call_start",
+    content_id: input.content_id,
+    tool_call_id: input.tool_call_id,
+    tool_name: input.tool_name,
+  });
+  if (input.input_delta) {
+    await writer.apply_model_event({
+      type: "tool_call_delta",
+      content_id: input.content_id,
+      input_delta: input.input_delta,
+    });
+  }
+  await writer.apply_model_event({
+    type: "tool_call_finish",
+    content_id: input.content_id,
+    input: input.tool_input,
+  });
+}
+
+/** 创建一条测试 User Message。 */
+function create_user_message(session_id, sequence) {
+  return {
+    message_id: `user-${String(sequence)}`,
+    session_id,
+    turn_id: `turn-${String(sequence)}`,
+    sequence,
+    revision: 1,
+    visibility: "visible",
+    created_at: sequence,
+    updated_at: sequence,
+    type: "user",
+    input_type: "prompt",
+    parts: [{
+      part_id: `text-${String(sequence)}`,
+      type: "text",
+      text: `message ${String(sequence)}`,
+      state: "done",
+    }],
+  };
+}
+
+test("User Context Part 保持 canonical 结构并安全映射到模型文本", async () => {
+  const parts = normalize_session_user_parts([{
+    type: "context",
+    tag: "quoted_message",
+    context: "A < B & C > D",
+  }]);
+  assert.deepEqual(parts, [{
+    part_id: "user-context:1",
+    type: "context",
+    tag: "quoted_message",
+    context: "A < B & C > D",
+  }]);
+
+  const model_messages = await session_context_to_model_messages({
+    summary: null,
+    messages: [{
+      message_id: "user-context-message",
+      session_id: "user-context-session",
+      turn_id: "user-context-turn",
+      sequence: 1,
+      revision: 1,
+      visibility: "visible",
+      created_at: 1,
+      updated_at: 1,
+      type: "user",
+      input_type: "prompt",
+      parts,
+    }],
+  });
+  assert.deepEqual(model_messages, [{
+    role: "user",
+    content: [{
+      type: "text",
+      text: "<quoted_message>A &lt; B &amp; C &gt; D</quoted_message>",
+    }],
+  }]);
+  assert.throws(
+    () => normalize_session_user_parts([{
+      type: "context",
+      tag: "quoted message",
+      context: "invalid tag",
+    }]),
+    /Session context tag must start with a lowercase letter/,
+  );
+});
+
+test("模型文本增量只更新草稿，完成后写入 active JSONL", async () => {
+  const {
+    recorder,
+    events,
+    file_path,
+    assistant_message_file_path,
+  } = await create_recorder();
+  await recorder.append_user_message({
+    turn_id: "turn-1",
+    input_type: "prompt",
+    parts: [{ part_id: "user-text-1", type: "text", text: "你好", state: "done" }],
+  });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  await writer.apply_model_event({ type: "text_start", content_id: "text-1" });
+  await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "你" });
+  await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "好" });
+
+  const active_during_stream = await read_jsonl(file_path);
+  const draft = JSON.parse(await fs.readFile(assistant_message_file_path, "utf8"));
+  assert.deepEqual(active_during_stream.map((message) => message.type), ["user"]);
+  assert.equal(draft.parts[0].text, "你好");
+  assert.equal(draft.parts[0].state, "streaming");
+
+  await writer.apply_model_event({ type: "text_finish", content_id: "text-1" });
+  await writer.complete();
+
+  const active = await read_jsonl(file_path);
+  assert.deepEqual(active.map((message) => message.type), ["user", "assistant"]);
+  assert.equal(active[1].parts[0].text, "你好");
+  assert.equal(active[1].parts[0].state, "done");
+  assert.equal(
+    await fs.stat(assistant_message_file_path).then(() => true).catch(() => false),
+    false,
+  );
+  assert.equal(events.some((event) => event.variant === "delta"), true);
+});
+
+test("工具调用、审批、结果和后续文本保持 canonical 顺序", async () => {
+  const { recorder, file_path } = await create_recorder("tool-order-test");
+  const interactions = new SessionInteractions({
+    session_id: "tool-order-test",
+    messages: recorder,
+  });
+  const approval_adapter = new SessionShellApprovalAdapter({
+    session_id: "tool-order-test",
+    interactions,
+  });
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  await writer.begin_step();
+  await write_text(writer, "text-1", "before");
+  await write_tool_call(writer, {
+    content_id: "tool-1",
+    tool_call_id: "call-1",
+    tool_name: "shell_exec",
+    input_delta: '{"cmd":"pwd"}',
+    tool_input: { cmd: "pwd" },
+  });
+
+  const approval = await approval_adapter.request({
+    shell_id: "shell-1",
+    tool_call_id: "call-1",
+    tool_name: "shell_exec",
+    session_id: "tool-order-test",
+    turn_id: "turn-1",
+    command: "pwd",
+    cwd: "/workspace",
+    reason: "Inspect directory",
+    operation: "exec",
+    timeout_ms: 60_000,
+  });
+  await interactions.respond({
+    interaction_id: approval.approval_id,
+    response: {
+      type: "approval",
+      outcome: "resolved",
+      payload: { decision: "approved" },
+    },
+  });
+  assert.equal(await approval.decision, "approved");
+
+  await writer.apply_tool_result({
+    tool_call_id: "call-1",
+    tool_name: "shell_exec",
+    succeeded: true,
+    output: { count: 1 },
+  });
+  await write_text(writer, "text-2", "after");
+  await writer.finish_step([
+    { part_id: "text-1", sequence: 1, type: "text", text: "before", state: "done" },
+    {
+      part_id: "tool-1",
+      sequence: 2,
+      type: "tool",
+      tool_call_id: "call-1",
+      tool_name: "shell_exec",
+      state: "completed",
+      input: { cmd: "pwd" },
+      output: { count: 1 },
+    },
+    { part_id: "text-2", sequence: 3, type: "text", text: "after", state: "done" },
+  ]);
+  await writer.complete();
+
+  const assistant = (await read_jsonl(file_path))[0];
+  assert.deepEqual(
+    assistant.parts.map((part) => part.type),
+    ["text", "tool", "interaction", "text"],
+  );
+  assert.deepEqual(assistant.parts.map((part) => part.sequence), [1, 2, 3, 4]);
+  assert.equal(assistant.parts[1].state, "completed");
+  assert.deepEqual(assistant.parts[1].output, { count: 1 });
+});
+
+test("reasoning signature 经 canonical Message 保留到模型历史", async () => {
+  const { recorder } = await create_recorder("reasoning-signature-test");
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  await writer.begin_step();
+  await writer.apply_model_event({ type: "reasoning_start", content_id: "reasoning-1" });
+  await writer.apply_model_event({
+    type: "reasoning_delta",
+    content_id: "reasoning-1",
+    delta: "分析过程",
+  });
+  await writer.apply_model_event({
+    type: "reasoning_finish",
+    content_id: "reasoning-1",
+    signature: "opaque-signature",
+  });
+  await writer.finish_step([{
+    part_id: "reasoning-1",
+    sequence: 1,
+    type: "reasoning",
+    text: "分析过程",
+    state: "done",
+    reasoning_signature: "opaque-signature",
+  }]);
+  await writer.complete();
+
+  const snapshot = await recorder.context_snapshot();
+  const model_messages = await session_context_to_model_messages(snapshot);
+  assert.equal(snapshot.messages[0].parts[0].reasoning_signature, "opaque-signature");
+  assert.equal(model_messages[0].content[0].signature, "opaque-signature");
+});
+
+test("多个模型 Step 可复用 content_id 且追加到同一 Assistant Message", async () => {
+  const { recorder } = await create_recorder("reused-content-id-test");
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+
+  await writer.begin_step();
+  await write_text(writer, "text-1", "first");
+  await writer.finish_step([{
+    part_id: "first",
+    sequence: 1,
+    type: "text",
+    text: "first",
+    state: "done",
+  }]);
+
+  await writer.begin_step();
+  await write_text(writer, "text-1", "second");
+  await writer.finish_step([{
+    part_id: "second",
+    sequence: 1,
+    type: "text",
+    text: "second",
+    state: "done",
+  }]);
+  await writer.complete();
+
+  const assistant = recorder.get_message(writer.message_id);
+  assert.deepEqual(assistant.parts.map((part) => part.text), ["first", "second"]);
+  assert.deepEqual(assistant.parts.map((part) => part.sequence), [1, 2]);
+});
+
+test("工具执行等待对应标准流事件创建 canonical Part", async () => {
+  const { recorder } = await create_recorder("tool-gate-test");
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  await writer.begin_step();
+  let prepared = false;
+  const preparation = writer.prepare_tool_input({
+    tool_call_id: "call-1",
+    tool_name: "lookup",
+    input: { query: "downcity" },
+  }).then(() => {
+    prepared = true;
+  });
+  await Promise.resolve();
+  assert.equal(prepared, false);
+
+  await writer.apply_model_event({
+    type: "tool_call_start",
+    content_id: "tool-1",
+    tool_call_id: "call-1",
+    tool_name: "lookup",
+  });
+  await preparation;
+  assert.equal(prepared, true);
+  assert.equal(recorder.get_message(writer.message_id).parts[0].state, "ready");
+  await writer.abort_step();
+  await writer.fail("stopped");
+});
+
+test("Step 最终快照不能补造未经过模型事件的 Part", async () => {
+  const { recorder } = await create_recorder("snapshot-mismatch-test");
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  await writer.begin_step();
+  await write_text(writer, "text-1", "final");
+  await assert.rejects(writer.finish_step([
+    {
+      part_id: "tool-1",
+      sequence: 1,
+      type: "tool",
+      tool_call_id: "call-1",
+      tool_name: "lookup",
+      state: "completed",
+      input: {},
+      output: "ok",
+    },
+    { part_id: "text-1", sequence: 2, type: "text", text: "final", state: "done" },
+  ]), /snapshot mismatch/);
+  await writer.abort_step();
+  await writer.fail("invalid stream");
+});
+
+test("Tool Part 持久化失败时不释放工具执行等待", async () => {
+  const { recorder, store } = await create_recorder(
+    "tool-write-failure-test",
+    (options) => new FailingAssistantMessageStore(options),
+  );
+  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  await writer.begin_step();
+  store.fail_next_assistant_write("tool write failed");
+  await assert.rejects(writer.apply_model_event({
+    type: "tool_call_start",
+    content_id: "tool-1",
+    tool_call_id: "call-1",
+    tool_name: "lookup",
+  }), /tool write failed/);
+
+  const pending = writer.prepare_tool_input({
+    tool_call_id: "call-1",
+    tool_name: "lookup",
+    input: {},
+  });
+  await writer.abort_step();
+  await assert.rejects(pending, /aborted/);
+  await writer.fail("write failed");
+});
+
+test("重启时收口流式 Assistant 和运行中 Action", async () => {
+  const session_id = "restart-recovery-test";
+  const harness = await create_recorder(session_id);
+  const writer = await harness.recorder.open_assistant_message({ turn_id: "turn-1" });
+  await writer.begin_step();
+  await writer.apply_model_event({ type: "text_start", content_id: "text-1" });
+  await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "partial" });
+  await harness.recorder.open_action_message({
+    message_id: "action-1",
+    turn_id: "turn-1",
+    action_type: "test",
+    title: "Running action",
+  });
+
+  const restarted = new SessionMessages({
+    session_id,
+    store: new JsonlSessionMessageStore({
+      files: harness.files,
+      session_id,
+      file_path: harness.file_path,
+      assistant_message_file_path: harness.assistant_message_file_path,
+    }),
+    publish: () => {},
+  });
+  await restarted.initialize();
+  const page = await restarted.list_messages();
+  const assistant = page.items.find((message) => message.type === "assistant");
+  const action = page.items.find((message) => message.type === "action");
+  assert.equal(assistant.status, "stopped");
+  assert.equal(assistant.parts[0].text, "partial");
+  assert.equal(action.status, "failed");
+});
+
+test("Action 更新保留 identity 并只读取最新 revision", async () => {
+  const { recorder } = await create_recorder("action-revision-test");
+  const writer = await recorder.open_action_message({
+    message_id: "action-1",
+    turn_id: "turn-1",
+    action_type: "deploy",
+    title: "Deploying",
+  });
+  await writer.complete();
+  const page = await recorder.list_messages();
+  assert.equal(page.items.length, 1);
+  assert.equal(page.items[0].message_id, "action-1");
+  assert.equal(page.items[0].revision, 2);
+  assert.equal(page.items[0].status, "completed");
+});
+
+test("Compact 生成累计 Summary 并让模型只读取 Summary 与 Active", async () => {
+  const session_id = "compact-model-history-test";
+  const { recorder } = await create_recorder(session_id);
+  for (let sequence = 1; sequence <= 4; sequence += 1) {
+    await recorder.append_user_message({
+      message_id: `user-${String(sequence)}`,
+      turn_id: `turn-${String(sequence)}`,
+      input_type: "prompt",
+      parts: sequence === 1
+        ? [{
+            part_id: "context-1",
+            type: "context",
+            tag: "reference",
+            context: "earlier context",
+          }]
+        : create_user_message(session_id, sequence).parts,
+    });
+  }
+  let summary_prompt = "";
+  const model = new MockModelClient({
+    modelId: "summary-model",
+    doGenerate: async (options) => {
+      summary_prompt = JSON.stringify(options.prompt);
+      return {
+        content: [{ type: "text", text: "summary checkpoint" }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: {
+          inputTokens: { total: 1 },
+          outputTokens: { total: 1 },
+        },
+      };
+    },
+  });
+  const plan = await compose_session_compaction({
+    session_id,
+    snapshot: await recorder.context_snapshot(),
+    model,
+  });
+  assert.equal(plan.through_sequence, 2);
+  assert.match(summary_prompt, /\\\"type\\\":\\\"context\\\"/);
+  assert.match(summary_prompt, /\\\"tag\\\":\\\"reference\\\"/);
+  assert.match(summary_prompt, /\\\"context\\\":\\\"earlier context\\\"/);
+  await recorder.compact_active({
+    through_sequence: plan.through_sequence,
+    summary: plan.summary,
+  });
+
+  const snapshot = await recorder.context_snapshot();
+  const model_messages = await session_context_to_model_messages(snapshot);
+  assert.equal(snapshot.summary.text, "summary checkpoint");
+  assert.deepEqual(snapshot.messages.map((message) => message.sequence), [3, 4]);
+  assert.equal(model_messages[0].role, "assistant");
+  assert.equal(model_messages[0].content[0].text, "summary checkpoint");
+  assert.deepEqual(
+    model_messages.slice(1).map((message) => message.content[0].text),
+    ["message 3", "message 4"],
+  );
+});
+
+test("内部上下文读取不会被 500 条 UI 分页边界截断", async () => {
+  const session_id = "large-context-test";
+  const { recorder } = await create_recorder(session_id);
+  for (let sequence = 1; sequence <= 505; sequence += 1) {
+    await recorder.append_user_message({
+      message_id: `user-${String(sequence)}`,
+      turn_id: `turn-${String(sequence)}`,
+      input_type: "prompt",
+      parts: create_user_message(session_id, sequence).parts,
+    });
+  }
+  const snapshot = await recorder.context_snapshot();
+  const model_messages = await session_context_to_model_messages(snapshot);
+  assert.equal(snapshot.messages.length, 505);
+  assert.equal(model_messages.length, 505);
+  assert.equal(model_messages.at(-1).content[0].text, "message 505");
+});

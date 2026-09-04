@@ -7,7 +7,7 @@
  * - 字段命名尽量保持与 QQ 官方事件/接口原始字段一致，降低映射心智负担。
  */
 
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 
 /**
  * QQ 渠道配置。

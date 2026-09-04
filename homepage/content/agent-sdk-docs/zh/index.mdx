@@ -5,26 +5,29 @@ description: 使用 @downcity/agent 构建具备项目文件、受控命令、Pl
 
 # Agent SDK
 
-`@downcity/agent` 提供本地 `Agent` 与远程 `RemoteAgent`。两种模式都以 Session 为主要工作对象：Agent 负责组合能力，Session 负责承载一段持续对话及其执行状态。
+`@downcity/agent` 提供本地 `Agent` 执行运行时；`@downcity/city` 提供组合根、Workspace/Plugin
+资源、transport 与 `RemoteAgent`。两种客户端形态都以 Session 为主要工作对象：Agent 组合执行
+能力，Session 承载持续对话及其执行状态。
 
 ## 一分钟心智模型
 
 ```mermaid
 flowchart LR
-    Host["SDK 宿主"] --> Agent["Agent<br/>身份与 Plugin 注册表"]
+    Host["SDK 宿主"] --> City["City<br/>资源与 Plugin 生命周期"]
+    City --> Agent["Agent<br/>身份与执行"]
     Agent --> Workspace["agent.sessions.create({ workspace })<br/>Session 作用域"]
     Workspace --> Session["Session<br/>有状态执行容器"]
     Session --> Turn["Turn<br/>一次 prompt 执行"]
-    Agent --> Plugin["Plugin<br/>扩展能力"]
+    City --> Plugin["Plugin<br/>扩展能力"]
 ```
 
 | 对象 | 负责 | 不负责 |
 | --- | --- | --- |
 | `Workspace` | 项目文件、Env、Tools、Shell 与 Sandbox | Agent 身份、Plugin、Session 持久化 |
-| `Agent` | 模型、指令、PluginRegistry，并可进入多个 Workspace | HTTP/RPC transport |
+| `Agent` | 模型、指令、自定义 Tool 与 Session | Plugin 实例、Workspace 资源、HTTP/RPC transport |
 | `AgentSessions` | 当前 Agent 的全部 Session；每个 Session 可以接收一个 Workspace | Agent 身份与 Plugin 定义 |
 | `Session` | 对话状态、消息历史、执行顺序与审批 | 项目资源所有权 |
-| `PluginContext` | Agent 投影给 Plugin 的稳定能力 | 充当第二个 Agent |
+| `City` | Workspace 与 Plugin 资源、生命周期、Storage 和 transport | Session 执行语义 |
 | `SessionTurnContext` | 一个 Turn 的执行上下文与生命周期 | 保存长期 Agent 状态 |
 | `RemoteAgent` | 访问服务端 Agent 与 Session | 配置服务端模型 |
 
@@ -46,9 +49,9 @@ Shell 是本地 Agent 使用项目命令和进程的标准入口。SDK 不会自
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-import { Shell } from "@downcity/workspace";
+import { Shell } from "@downcity/city";
 
 const shell = new Shell({
   sandbox: new MacOsSeatbeltSandbox(),

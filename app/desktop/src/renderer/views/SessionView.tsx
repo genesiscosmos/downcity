@@ -52,6 +52,8 @@ interface SessionViewProps {
   agent: DesktopAgentSummary;
   /** Session 所属 Workspace。 */
   workspace: DesktopWorkspaceSummary;
+  /** 当前 Session 关联的 Workspace 已从 Registry 移除；仍可查看历史，发送前需重新绑定。 */
+  workspace_missing?: boolean;
   /** 可切换的全部 Workspace。 */
   workspaces: DesktopWorkspaceSummary[];
   /** 当前是否为尚未创建的 Session 草稿。 */
@@ -166,7 +168,9 @@ export function SessionView(props: SessionViewProps) {
     });
   };
 
-  const workspace_tag = props.workspace_draft_mode ? <ChatWorkspaceSelector workspace_id={props.workspace_id} workspaces={props.workspaces} disabled={busy} switch_workspace={props.switch_workspace} /> : <StaticWorkspaceTag workspace={props.workspace} />;
+  const workspace_tag = props.workspace_missing
+    ? <span className="inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 text-[0.625rem] font-normal text-amber-600 dark:text-amber-400"><TbAlertTriangle className="size-3 shrink-0" /><span className="truncate">关联 Workspace 未添加</span></span>
+    : props.workspace_draft_mode ? <ChatWorkspaceSelector workspace_id={props.workspace_id} workspaces={props.workspaces} disabled={busy} switch_workspace={props.switch_workspace} /> : <StaticWorkspaceTag workspace={props.workspace} />;
   return <ChatSurfaceLayout sidebar={props.session_sidebar} header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><button type="button" disabled={!props.open_agent_info} onClick={props.open_agent_info} className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-xs font-medium text-foreground transition-colors duration-150 enabled:hover:bg-interaction-hover" title={props.open_agent_info ? "编辑 Agent" : undefined}><AgentAvatar agent={props.agent} class_name="size-5 rounded-md" /><span className="truncate">{session.title || "新对话"}</span></button>{workspace_tag}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
       {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
       </div>}

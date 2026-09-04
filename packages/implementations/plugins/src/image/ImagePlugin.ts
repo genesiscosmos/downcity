@@ -10,13 +10,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { create_action } from "@downcity/plugin";
-import { BasePlugin } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
+import { create_action } from "@downcity/city/plugin";
+import { BasePlugin } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type {
   PluginJsonObject,
   PluginJsonValue,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 import type {
   ImagePluginInput,
   ImageAiService,

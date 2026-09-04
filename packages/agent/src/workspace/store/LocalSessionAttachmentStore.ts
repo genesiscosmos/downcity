@@ -6,7 +6,7 @@
 
 import path from "node:path";
 import { generate_id } from "@/utils/Id.js";
-import type { FileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 const DATA_URL_PATTERN = /^data:([^;,]+)?((?:;[^;,]+)*),(.*)$/s;

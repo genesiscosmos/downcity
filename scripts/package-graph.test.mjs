@@ -13,10 +13,10 @@ import {
 
 const workspace_root = path.resolve(import.meta.dirname, "..");
 
-test("Workspace 构建会自动补齐 Type", () => {
+test("City 构建会自动补齐 Type、Federation 与 Agent", () => {
   assert.deepEqual(
-    resolve_package_build_order(workspace_root, ["workspace"]),
-    ["type", "workspace"],
+    resolve_package_build_order(workspace_root, ["city"]),
+    ["type", "federation", "agent", "city"],
   );
 });
 
@@ -26,15 +26,13 @@ test("CLI 构建闭包完全来自 manifest 运行时依赖", () => {
     [
       "type",
       "federation",
-      "workspace",
-      "plugin",
+      "agent",
+      "city",
+      "plugins",
       "sandbox-linux",
       "sandbox-macos",
       "sandbox-windows-mxc",
       "sandbox-windows-srt",
-      "agent",
-      "city",
-      "plugins",
       "cli",
     ],
   );

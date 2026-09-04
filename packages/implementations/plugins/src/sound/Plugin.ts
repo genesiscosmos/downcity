@@ -10,9 +10,9 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { BasePlugin, create_action } from "@downcity/plugin";
+import { BasePlugin, create_action } from "@downcity/city/plugin";
 import { z } from "zod";
-import type { PluginContext, PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginContext, PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 import type {
   ChatInboundAugmentInput,

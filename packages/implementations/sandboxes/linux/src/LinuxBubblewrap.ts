@@ -10,14 +10,14 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import fs from "fs-extra";
 import {
-  createPipeProcessHandle,
-  spawnPtyProcessHandle,
-} from "@downcity/workspace/shell/sandbox/ShellProcessHandle.js";
+  create_pipe_process_handle,
+  spawn_pty_process_handle,
+} from "@downcity/city/shell";
 import type {
   SandboxSpawnRequest,
   SandboxSpawnResult,
-} from "@downcity/workspace/shell/types/Sandbox.js";
-import { build_shell_command_invocation } from "@downcity/workspace/shell/session/ShellCommandModel.js";
+} from "@downcity/type/shell";
+import { build_shell_command_invocation } from "@downcity/city/shell";
 
 const DEFAULT_PATH_VALUE =
   "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin";
@@ -145,14 +145,14 @@ export async function spawn_linux_bubblewrap(
   const args = build_linux_bubblewrap_args(request);
   const env = build_linux_sandbox_env(request);
   const child = request.terminal
-    ? spawnPtyProcessHandle({
+    ? spawn_pty_process_handle({
         command: "bwrap",
         args,
         cwd: request.cwd,
         env,
         terminal: { cols: request.cols, rows: request.rows },
       })
-    : createPipeProcessHandle(
+    : create_pipe_process_handle(
         spawn("bwrap", args, {
           cwd: request.cwd,
           stdio: "pipe",

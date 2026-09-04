@@ -7,14 +7,14 @@
 import { spawn } from "node:child_process";
 import fs from "fs-extra";
 import {
-  createPipeProcessHandle,
-  spawnPtyProcessHandle,
-} from "@downcity/workspace/shell/sandbox/ShellProcessHandle.js";
+  create_pipe_process_handle,
+  spawn_pty_process_handle,
+} from "@downcity/city/shell";
 import type {
   SandboxSpawnRequest,
   SandboxSpawnResult,
   ShellProcessHandle,
-} from "@downcity/workspace/shell/types/Sandbox.js";
+} from "@downcity/type/shell";
 import { WINDOWS_SRT_BACKEND } from "./WindowsSrtConstants.js";
 import { acquire_windows_srt_runtime } from "./WindowsSrtRuntime.js";
 import type { WindowsSrtSandboxOptions } from "./types/WindowsSrt.js";
@@ -37,14 +37,14 @@ export async function spawn_windows_srt(
   let child: ShellProcessHandle;
   try {
     child = request.terminal
-      ? spawnPtyProcessHandle({
+      ? spawn_pty_process_handle({
           command: descriptor.argv[0],
           args: descriptor.argv.slice(1),
           cwd: request.cwd,
           env: descriptor.env,
           terminal: { cols: request.cols, rows: request.rows },
         })
-      : createPipeProcessHandle(spawn(
+      : create_pipe_process_handle(spawn(
           descriptor.argv[0],
           descriptor.argv.slice(1),
           {
@@ -60,8 +60,8 @@ export async function spawn_windows_srt(
     throw error;
   }
 
-  child.onExit(descriptor.release);
-  child.onError(descriptor.release);
+  child.on_exit(descriptor.release);
+  child.on_error(descriptor.release);
   return {
     child,
     cwd: request.cwd,

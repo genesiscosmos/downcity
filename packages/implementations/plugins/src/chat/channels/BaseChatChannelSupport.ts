@@ -7,9 +7,9 @@
  */
 
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
-import type { PluginLogger } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import {
   resolveSessionIdByChatTarget,
   resolveOrCreateSessionIdByChatTarget,

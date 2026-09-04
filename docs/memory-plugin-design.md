@@ -491,7 +491,7 @@ Turn Context Hook 在每个用户 Turn 首次模型执行前执行：
 
 ```text
 pipeline("session.turn_context", value)
-  → value.blocks: SessionPluginContextBlock[]
+  → value.blocks: SessionExtensionContextBlock[]
 ```
 
 MemoryPlugin 在这里执行 Dynamic Recall；多用户 Session 还在这里加载当前用户 `USER.md`。

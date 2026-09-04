@@ -13,8 +13,8 @@ import { Hono } from "hono";
 import { create_workspace_entry } from "@downcity/agent/host";
 import type { Agent } from "@downcity/agent";
 import type { AgentSessionCollection } from "@downcity/agent/host";
-import type { WorkspaceBase } from "@downcity/workspace";
-import type { AgentPluginRuntime } from "@downcity/agent/host";
+import type { WorkspaceRuntime } from "@/workspace/index.js";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import { register_sdk_session_routes } from "@/city/transport/http/routes/SessionRoutes.js";
 import { register_runtime_routes } from "@/city/transport/http/routes/RuntimeRoutes.js";
 import { create_node_http_server } from "@/city/transport/http/NodeHttpAdapter.js";
@@ -44,7 +44,7 @@ export interface AgentHttpServerHandle {
  */
 export class AgentHTTP {
   private readonly agent: Agent;
-  private readonly workspace?: WorkspaceBase;
+  private readonly workspace?: WorkspaceRuntime;
   private readonly plugins?: AgentPluginRuntime;
   private readonly session_collection: AgentSessionCollection;
   private readonly runtime_options: AgentHttpRuntimeOptions;
@@ -52,8 +52,8 @@ export class AgentHTTP {
   private cached_server: AgentHttpServerHandle | null = null;
 
   constructor(
-    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceBase; plugins: AgentPluginRuntime },
-    workspace_or_options?: WorkspaceBase | AgentHttpRuntimeOptions,
+    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceRuntime; plugins: AgentPluginRuntime },
+    workspace_or_options?: WorkspaceRuntime | AgentHttpRuntimeOptions,
     runtime_options: AgentHttpRuntimeOptions = {},
   ) {
     if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
@@ -62,12 +62,12 @@ export class AgentHTTP {
       this.workspace = workspace_or_options;
       this.plugins = "agent" in agent_or_workspace
         ? agent_or_workspace.plugins
-        : create_workspace_entry(agent, workspace_or_options).plugins;
+        : undefined;
       this.session_collection = create_workspace_entry(agent, workspace_or_options).sessions;
       this.runtime_options = runtime_options;
       return;
     }
-      const entry = agent_or_workspace as { agent?: Agent; workspace?: WorkspaceBase; plugins?: AgentPluginRuntime };
+      const entry = agent_or_workspace as { agent?: Agent; workspace?: WorkspaceRuntime; plugins?: AgentPluginRuntime };
       this.agent = entry.agent || agent_or_workspace as Agent;
       this.workspace = entry.workspace;
       this.plugins = entry.plugins;

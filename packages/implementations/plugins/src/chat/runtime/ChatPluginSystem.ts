@@ -6,8 +6,8 @@
  * - 当前请求只注入当前 chat platform 的 prompt，避免平台规则串味。
  * - 该模块只负责 prompt 解析与拼装，不承担运行态控制职责。
  */
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginExecutionContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginExecutionContext } from "@downcity/city/plugin";
 import {
   buildCurrentChatEnvironmentPrompt,
   resolveCurrentChatEnvironmentPromptInput,

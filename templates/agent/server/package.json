@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@downcity/agent": "workspace:*",
+    "@downcity/city": "workspace:*",
     "@downcity/federation": "workspace:*",
-    "@downcity/workspace": "workspace:*",
     "@hono/node-server": "^2.0.4",
     "hono": "^4.12.23"
   },

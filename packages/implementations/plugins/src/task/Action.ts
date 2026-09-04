@@ -8,9 +8,9 @@
 
 import path from "node:path";
 import type { ShipTaskStatus, TaskDeliverySession } from "./types/Task.js";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginExecutionContext } from "@downcity/plugin";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginExecutionContext } from "@downcity/city/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 import {
   deriveTaskIdFromTitle,
   normalizeTaskId,
@@ -381,7 +381,7 @@ export async function runTaskDefinition(params: {
   context: PluginContext;
   data_path: string;
   request: TaskRunRequest;
-  notifications?: import("@downcity/plugin").PluginNotificationPublisher;
+  notifications?: import("@downcity/city/plugin").PluginNotificationPublisher;
   execution_context?: PluginExecutionContext;
 }): Promise<TaskRunResponse> {
   const root = path.resolve(params.data_path);

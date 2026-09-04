@@ -4,7 +4,7 @@
  * Session 归 Agent 所有；Workspace 只在创建时声明本次执行使用的资源环境。
  */
 
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@downcity/type";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { AgentCreateSessionInput } from "@/types/agent/SessionTypes.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
@@ -21,13 +21,13 @@ import type {
 /** 创建 Agent Session 的公开参数。 */
 export interface AgentCreateSessionOptions extends AgentCreateSessionInput {
   /** 本次 Session 可选使用的 Workspace 资源；未传入时使用内存执行上下文。 */
-  workspace?: WorkspaceBase;
+  workspace?: WorkspaceRuntime;
 }
 
 /** 恢复 Agent Session 时使用的本地执行上下文。 */
 export interface AgentGetSessionOptions {
   /** 当前 Session 使用的 Workspace；必须与持久化 Metadata 一致。 */
-  workspace?: WorkspaceBase;
+  workspace?: WorkspaceRuntime;
 }
 
 /** Agent 公开的 Session 创建入口。 */
@@ -53,6 +53,9 @@ export interface AgentSessionCollection {
 
   /** 清空已归档 Session。 */
   clean_archive(): Promise<AgentCleanArchiveResult>;
+
+  /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的 Session 实例。 */
+  workspace(session_id: string, workspace: WorkspaceRuntime): Promise<AgentSession>;
 
   /** 获取 Session runtime port。 */
   runtime(session_id: string, origin_type?: string): SessionPort;

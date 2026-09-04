@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-macos",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "type": "module",
   "description": "Downcity macOS Seatbelt sandbox adapter",
   "main": "./bin/index.js",
@@ -34,7 +34,8 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@downcity/workspace": "workspace:^",
+    "@downcity/city": "workspace:^",
+    "@downcity/type": "workspace:*",
     "fs-extra": "^11.3.5"
   },
   "devDependencies": {

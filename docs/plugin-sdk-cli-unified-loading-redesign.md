@@ -31,11 +31,11 @@ Plugin
 ```text
 Desktop / CLI ──→ @downcity/local ──→ @downcity/agent
        │                 │
-       └────────→ @downcity/plugin
+       └────────→ @downcity/city/plugin
 
 Plugin agent ──→ @downcity/agent
-Plugin main ───────────→ @downcity/plugin
-Plugin renderer ───────→ @downcity/plugin/react + react
+Plugin main ───────────→ @downcity/city/plugin
+Plugin renderer ───────→ @downcity/city/plugin/react + react
 ```
 
 City/宿主负责安装、Profile CRUD、Agent 引用、入口加载和生命周期。Agent 内核只运行已经创建好的 Plugin 实例。Plugin 自己负责产品功能、业务配置结构、校验、安全投影和 Renderer 交互。
@@ -83,7 +83,7 @@ factory 是宿主装配适配器，不是安装脚本或 Agent Plugin 生命周�
 ## 6. Plugin main
 
 ```ts
-import { define_plugin_main } from "@downcity/plugin";
+import { define_plugin_main } from "@downcity/city/plugin";
 
 export default define_plugin_main({
   activate({ plugin }) {

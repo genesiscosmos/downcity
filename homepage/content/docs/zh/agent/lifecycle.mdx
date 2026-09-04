@@ -11,8 +11,8 @@ description: Agent 的构造、就绪、执行与关闭
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { Shell } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
+import { Shell } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const shell = new Shell({ sandbox: new MacOsSeatbeltSandbox() });

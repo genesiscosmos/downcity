@@ -5,7 +5,7 @@
  * 范围与转发，Task runtime 仍是定义、调度、执行记录和 mutation 的唯一事实源。
  */
 
-import { define_plugin_main, type PluginJsonValue, type PluginMainContext } from "@downcity/plugin";
+import { define_plugin_main, type PluginJsonValue, type PluginMainContext } from "@downcity/city/plugin";
 import type { TaskListItemView, TaskRunDetailView, TaskRunHistoryItemView } from "@/task/types/TaskCommand.js";
 import type {
   TaskMainviewActionInput,

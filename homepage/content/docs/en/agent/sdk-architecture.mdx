@@ -11,7 +11,7 @@ Downcity separates the execution subject, project resources, and extension runti
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
-import { Shell, Workspace } from "@downcity/workspace";
+import { Shell, Workspace } from "@downcity/city";
 
 const agent = new Agent({ id, model, instruction });
 const workspace = new Workspace({ id: "project", path, shell });
@@ -48,10 +48,10 @@ flowchart TD
 
 The dependency direction stays explicit:
 
-- `@downcity/workspace` does not depend on Agent or Session.
-- `@downcity/agent` depends on the Workspace protocol and interprets host Storage for Agent domain state.
+- `@downcity/agent` depends only on neutral Workspace, Shell, and Session Extension protocols from `@downcity/type`.
+- `@downcity/city` depends on Agent and projects neutral host extensions into it; Agent does not depend back on City.
 - Hosts choose a platform Sandbox and compose Agent with Workspace.
-- Edge adapters use `@downcity/workspace/protocol` without loading Node.js local implementations.
+- Edge adapters use `@downcity/type/workspace` without loading Node.js local implementations.
 
 ## Agent is the subject
 
@@ -90,7 +90,7 @@ Shell belongs to Workspace because command execution operates on Workspace resou
 entry is:
 
 ```ts
-import { Shell, Workspace } from "@downcity/workspace";
+import { Shell, Workspace } from "@downcity/city";
 ```
 
 There is no separate `@downcity/shell` package. Platform Sandbox packages remain independently
@@ -170,10 +170,9 @@ City remains owned by its host.
 
 | Package | Owns | Does not own |
 | --- | --- | --- |
-| `@downcity/workspace` | Workspace protocol, local project resources, File/Search tools, Env, Shell | Agent identity, Plugin registry, Session semantics, model calls |
+| `@downcity/type` | Neutral Workspace, Shell, and Session Extension protocols | Concrete resources and lifecycle implementations |
 | `@downcity/agent` | Agent, AgentSessions, Session, Store, host extension ports, model Tool Loop | City composition, Plugin lifecycle, project resource implementation, platform Sandbox |
-| `@downcity/city` | City, Plugin runtime, Hook scheduling, shared lifecycle, HTTP/RPC transports, local host data | Agent execution internals, concrete built-in Plugins |
+| `@downcity/city` | City, Workspace/Shell implementations, Plugin SDK/runtime, Hook scheduling, RemoteAgent, HTTP/RPC transports, local host data | Agent execution internals, concrete built-in Plugins |
 | Sandbox packages | Native process isolation for one platform | Workspace, Agent, Session, or Plugin business behavior |
-| `@downcity/agent` | Agent index and HTTP/RPC transports | Local configuration repository and Agent execution state |
 
 Continue with [Runtime architecture](/en/docs/agent/runtime-architecture).

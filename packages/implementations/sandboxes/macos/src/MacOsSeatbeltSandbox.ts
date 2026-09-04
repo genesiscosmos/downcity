@@ -15,7 +15,7 @@ import type {
   SandboxSpawnResult,
   ShellSandboxAdapter,
   ShellSandboxHostInput,
-} from "@downcity/workspace/protocol";
+} from "@downcity/type/shell";
 import { spawn_macos_seatbelt } from "./MacOsSeatbelt.js";
 
 const exec_file = promisify(execFile);

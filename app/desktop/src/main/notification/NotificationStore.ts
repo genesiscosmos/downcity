@@ -3,7 +3,7 @@
 import type { LocalSettingRepository } from "@downcity/city/local";
 import type { DesktopNotification, DesktopNotificationScope, DesktopNotificationTarget } from "../../common/types/DesktopNotification.js";
 import type { DesktopNotificationStorage } from "../types/notification/Notification.js";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 
 const notification_settings_key = "desktop.notifications";
 

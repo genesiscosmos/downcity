@@ -19,21 +19,22 @@ test("当前 workspace 被解析为五个稳定发布层", () => {
 
   assert.deepEqual(graph.layers.map((layer) => layer.map((item) => item.name)), [
     ["@downcity/type", "@downcity/ui"],
-    ["@downcity/federation", "@downcity/workspace"],
+    ["@downcity/federation", "@downcity/workspace-cloudflare-computer"],
     [
+      "@downcity/agent",
       "@downcity/database-d1",
       "@downcity/database-postgresql",
       "@downcity/database-sqlite",
-      "@downcity/plugin",
+      "@downcity/services",
+    ],
+    ["@downcity/city"],
+    [
+      "@downcity/plugins",
       "@downcity/sandbox-linux",
       "@downcity/sandbox-macos",
       "@downcity/sandbox-windows-mxc",
       "@downcity/sandbox-windows-srt",
-      "@downcity/services",
-      "@downcity/workspace-cloudflare-computer",
     ],
-    ["@downcity/agent"],
-    ["@downcity/city", "@downcity/plugins"],
   ]);
 
   const outputs = create_workflow_outputs(graph);
@@ -44,9 +45,9 @@ test("当前 workspace 被解析为五个稳定发布层", () => {
   assert.equal(outputs.has_layer_2, "true");
   assert.equal(JSON.parse(outputs.layer_0_matrix).include.length, 2);
   assert.equal(JSON.parse(outputs.layer_1_matrix).include.length, 2);
-  assert.equal(JSON.parse(outputs.layer_2_matrix).include.length, 10);
+  assert.equal(JSON.parse(outputs.layer_2_matrix).include.length, 5);
   assert.equal(JSON.parse(outputs.layer_3_matrix).include.length, 1);
-  assert.equal(JSON.parse(outputs.layer_4_matrix).include.length, 2);
+  assert.equal(JSON.parse(outputs.layer_4_matrix).include.length, 5);
 });
 
 test("解析器拒绝循环运行时依赖", async () => {

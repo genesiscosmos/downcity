@@ -17,12 +17,12 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { create_workspace_entry } from "@downcity/agent/host";
 import { City } from "../bin/index.js";
-import { LocalStorageProvider, Workspace } from "@downcity/workspace";
+import { LocalStorageProvider, Workspace } from "@downcity/city";
 import { get_agent_session_instruction_path } from "../../agent/bin/workspace/store/LocalStorePaths.js";
 import {
   create_action,
   create_plugin,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 
 function create_deferred() {
   let resolve;
@@ -154,7 +154,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
       .map((message) => message.title);
     assert.deepEqual(completed_actions, [
       "Workspace environment updated",
-      "City plugin runtime-config unregistered",
+      "City extension runtime-config unregistered",
     ]);
 
     // 未显式 snapshot 的 Session 重新装载时使用 Agent 当前 instruction。

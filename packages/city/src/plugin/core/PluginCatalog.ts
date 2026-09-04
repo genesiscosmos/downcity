@@ -7,9 +7,9 @@
  * - Agent 的视角只有“传入的 plugin”，目录视图和可用性检查都从这些实例推导。
  */
 
-import type { Plugin } from "@downcity/plugin";
-import type { PluginAvailability, PluginView } from "@downcity/agent/host";
-import type { PluginContext } from "@downcity/plugin";
+import type { Plugin } from "@/plugin/index.js";
+import type { PluginAvailability, PluginView } from "@/types/plugin/PluginRuntime.js";
+import type { PluginContext } from "@/plugin/index.js";
 
 /**
  * 判断 plugin 是否声明了运行时生命周期。

@@ -156,7 +156,8 @@ export class CityHTTP {
       }
 
       const resolve_session_model = this.runtime_options.resolve_session_model;
-      const sdk_router = new AgentHTTP(agent, entry.workspace, {
+      const plugins = this.city.plugins.scope({ agent_id, workspace_id });
+      const sdk_router = new AgentHTTP({ agent, workspace: entry.workspace, plugins }, {
         resolve_session_model: resolve_session_model
           ? async (model_id) => await resolve_session_model(agent_id, workspace_id, model_id)
           : undefined,
@@ -164,7 +165,7 @@ export class CityHTTP {
       const extension = this.runtime_options.create_agent_extension?.({
         agent: entry.agent,
         workspace: entry.workspace,
-        plugins: entry.plugins,
+        plugins,
         sdk_router,
       });
       const router = extension?.router ?? sdk_router;

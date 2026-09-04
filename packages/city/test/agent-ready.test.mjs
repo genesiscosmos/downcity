@@ -17,8 +17,8 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
 import { create_workspace_entry } from "@downcity/agent/host";
-import { Workspace } from "@downcity/workspace";
-import { create_plugin } from "@downcity/plugin";
+import { Workspace } from "@downcity/city";
+import { create_plugin } from "@downcity/city/plugin";
 
 function create_deferred() {
   let resolve;
@@ -169,7 +169,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   }
 });
 
-test("entry.plugins waits for lifecycle start before direct action execution", async () => {
+test("city.plugins scope waits for lifecycle start before direct action execution", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-plugin-ready-"),
   );
@@ -200,10 +200,12 @@ test("entry.plugins waits for lifecycle start before direct action execution", a
   const workspace = new Workspace({ id: "plugin_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
   city.agents.add(agent, { plugins: [create_plugin_binding(city, plugin)] });
-  const entry = create_workspace_entry(agent, workspace);
-
+  create_workspace_entry(agent, workspace);
   try {
-    const action_promise = entry.plugins.run_action({
+    const action_promise = city.plugins.scope({
+      agent_id: agent.id,
+      workspace_id: workspace.id,
+    }).run_action({
       plugin: "direct-action",
       action: "status",
     });

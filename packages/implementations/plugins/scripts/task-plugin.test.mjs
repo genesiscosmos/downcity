@@ -14,9 +14,9 @@ import path from "node:path";
 import test from "node:test";
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
-import { create_action } from "@downcity/plugin";
+import { create_action } from "@downcity/city/plugin";
 import { create_workspace_entry } from "@downcity/agent/internal";
-import { LocalStorageProvider, Workspace } from "../../../workspace/bin/index.js";
+import { LocalStorageProvider, Workspace } from "@downcity/city";
 import { MockModelClient } from "../../../agent/scripts/ModelClientMock.mjs";
 import { TaskPlugin } from "../bin/task.js";
 import { createTaskDefinition } from "../bin/task/Action.js";
@@ -117,6 +117,10 @@ test("scheduled task appends its result to the Session captured from create cont
   city.plugins.provide(registration);
   city.agents.add(agent, { plugins: [{ plugin_id: registration.id }] });
   const entry = create_workspace_entry(agent, workspace);
+  const plugin_scope = city.plugins.scope({
+    agent_id: agent.id,
+    workspace_id: workspace.id,
+  });
 
   try {
     const linked_session = await entry.sessions.create({
@@ -130,7 +134,7 @@ test("scheduled task appends its result to the Session captured from create cont
     const unsubscribe = linked_session.subscribe((mutation) => {
       mutations.push(mutation);
     });
-    const created = await entry.plugins.run_action({
+    const created = await plugin_scope.run_action({
       plugin: "task",
       action: "create",
       payload: {
@@ -149,7 +153,7 @@ test("scheduled task appends its result to the Session captured from create cont
     });
     assert.equal(created.success, true);
 
-    const task_list = await entry.plugins.run_action({
+    const task_list = await plugin_scope.run_action({
       plugin: "task",
       action: "list",
       payload: {},
@@ -159,7 +163,7 @@ test("scheduled task appends its result to the Session captured from create cont
       origin_type: "group",
     });
 
-    const triggered = await entry.plugins.run_action({
+    const triggered = await plugin_scope.run_action({
       plugin: "task",
       action: "test_trigger_scheduler",
       payload: {},
@@ -176,7 +180,7 @@ test("scheduled task appends its result to the Session captured from create cont
     assert.equal((await entry.sessions.list()).items.length, 0);
     assert.equal((await entry.sessions.list({ origin_type: "group" })).items.length, 1);
 
-    const history = await entry.plugins.run_action({
+    const history = await plugin_scope.run_action({
       plugin: "task",
       action: "history",
       payload: { title: "scheduled-session-result" },
@@ -186,7 +190,7 @@ test("scheduled task appends its result to the Session captured from create cont
     assert.equal(history.data.runs[0].status, "success");
     assert.equal(history.data.runs[0].trigger, "time");
 
-    const run_detail = await entry.plugins.run_action({
+    const run_detail = await plugin_scope.run_action({
       plugin: "task",
       action: "run_detail",
       payload: {

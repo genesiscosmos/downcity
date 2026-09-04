@@ -6,9 +6,9 @@
  * - 仅服务 agent 执行生命周期，不覆盖手动 `chat send`。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatReplyDispatchInput, ChatReplyEffectInput } from "@/chat/types/ChatPlugin.js";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 import { resolveDispatchTargetByChatKey } from "@/chat/runtime/ChatkeySend.js";

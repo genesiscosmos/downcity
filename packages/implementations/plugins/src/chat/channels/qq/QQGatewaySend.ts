@@ -6,7 +6,7 @@
  * - `QQGatewayClient` 只保留发送入口与状态持有，不再直接展开长流程。
  */
 
-import type { PluginLogger } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 import type { QQSendMessageBody } from "@/chat/channels/qq/types/QqChannel.js";
 import {
   isRetryableQqSendFailure,

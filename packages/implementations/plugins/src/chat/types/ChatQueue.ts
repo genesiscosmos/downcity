@@ -6,7 +6,7 @@
  * - 供 services 与 process 统一复用
  */
 
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 
 export type ChatQueueItemKind = "exec" | "audit" | "control";
 

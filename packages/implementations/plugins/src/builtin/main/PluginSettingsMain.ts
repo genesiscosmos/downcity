@@ -5,7 +5,7 @@ import {
   type PluginJsonObject,
   type PluginJsonValue,
   type PluginMainModule,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 import type {
   PluginSettingField,
   PluginSettingsDefinition,

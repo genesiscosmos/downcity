@@ -24,10 +24,10 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 | 包 / 目录 | 作用 |
 | --- | --- |
 | `downcity` | 公共 CLI 聚合包：`city`/`downcity` 是管理 Agent、运行时与控制台的本机 City 容器；`fed`/`downfed` 是 Federation Server Manager。 |
-| `@downcity/workspace` | Workspace 资源、文件/搜索工具、环境变量、内建 Shell，以及 City 使用的底层 Storage Provider。 |
-| `@downcity/agent` | Agent runtime 与 City 容器，负责 Agent、AgentSessions、Session、Plugin SDK、多 Agent 所有权及 HTTP/RPC transport。 |
+| `@downcity/city` | 应用组合根，负责 Agent registry、Workspace/Shell 资源、Plugin SDK 与生命周期、RemoteAgent、Storage 和 HTTP/RPC transport。 |
+| `@downcity/agent` | 单 Agent 执行运行时，负责 Agent、Group、AgentSessions、Session、模型/工具循环与中立宿主扩展端口。 |
 | `@downcity/federation` | Federation 运行时与 Embassy SDK，负责 Service、鉴权、Env、Bureau、User 与 Admin 访问。 |
-| `@downcity/type` | 跨 package 共享协议类型，包含 City 返回的 City 模型描述等核心类型。 |
+| `@downcity/type` | 跨 package 的中立协议，包含 Workspace、Shell、Session Extension 与 City 模型类型。 |
 | `@downcity/services` | 公共服务集合，负责 accounts、balance、usage、payment 与 Stripe 支付闭环。 |
 | `@downcity/ui` | React + Tailwind UI SDK，提供 Console 与宿主应用可复用的界面组件。 |
 | `templates/*` | 面向开发者的 City 快捷示例，用于组装 Node 或 Edge 运行形态；官方私有部署实现不放在这个仓库。 |

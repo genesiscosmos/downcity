@@ -6,11 +6,11 @@
  * - task 定义变更后的 scheduler reload 通过回调注入，避免执行层依赖具体 service 实现。
  */
 
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginActionExecutionContext } from "@downcity/plugin";
-import type { PluginExecutionContext } from "@downcity/plugin";
-import type { PluginNotificationPublisher } from "@downcity/plugin";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginActionExecutionContext } from "@downcity/city/plugin";
+import type { PluginExecutionContext } from "@downcity/city/plugin";
+import type { PluginNotificationPublisher } from "@downcity/city/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 import type {
   TaskCronRegisterResult,
   TaskListActionPayload,

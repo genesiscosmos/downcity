@@ -64,6 +64,7 @@ export interface AgentSessions<TSession extends AgentSessionActor = AgentSession
 
   /** 永久清空已归档 session。 */
   clean_archive(): Promise<AgentCleanArchiveResult>;
+
 }
 
 /**
@@ -136,7 +137,7 @@ export interface AgentSession extends AgentSessionActor {
   /** 把当前 Session 首次生成后固定的完整 system 显式固化到 instruction.md。 */
   snapshot(): Promise<void>;
 
-  /** 使用 Agent 当前 instruction 与 plugin 显式重新生成 Session system。 */
+  /** 使用 Agent 当前 instruction 与 Extension 显式重新生成 Session system。 */
   syncshot(): Promise<void>;
 
   /** 从当前 session 创建一个分叉会话。 */

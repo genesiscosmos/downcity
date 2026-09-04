@@ -1,12 +1,12 @@
 /** 官方简单设置 Plugin 的统一 React Config 生成器。 */
 
 import { useCallback, useEffect, useState } from "react";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import {
   define_plugin_renderer,
   type PluginRendererDefinition,
   type PluginRendererUiComponents,
-} from "@downcity/plugin/react";
+} from "@downcity/city/plugin/react";
 import type { PluginSettingField, PluginSettingsDefinition } from "@/builtin/types/PluginSettings.js";
 
 /** 根据具体 Plugin 的字段声明创建使用宿主 UI Components 的 Config。 */

@@ -5,25 +5,28 @@ description: Build local or remote Agents with project files, sandboxed commands
 
 # Agent SDK
 
-`@downcity/agent` provides a local `Agent` and a remote `RemoteAgent`. Both are session-first: Agent composes capabilities, while Session owns a continuous conversation and its execution state.
+`@downcity/agent` provides the local `Agent` execution runtime. `@downcity/city` provides the
+composition root, Workspace/Plugin resources, transports, and `RemoteAgent`. Both client shapes are
+session-first: Agent composes execution capability, while Session owns a continuous conversation.
 
 ## One-minute mental model
 
 ```mermaid
 flowchart LR
-    Host["SDK host"] --> Agent["Agent<br/>identity and Plugin registry"]
+    Host["SDK host"] --> City["City<br/>resources and Plugin lifecycle"]
+    City --> Agent["Agent<br/>identity and execution"]
     Agent --> Session["agent.sessions.create({ workspace })<br/>Session"]
     Session --> Turn["Turn<br/>one prompt execution"]
-    Agent --> Plugin["Plugin<br/>extension capability"]
+    City --> Plugin["Plugin<br/>extension capability"]
 ```
 
 | Object | Owns | Does not own |
 | --- | --- | --- |
 | `Workspace` | Project files, env, Tools, Shell, and Sandbox | Agent identity, plugins, and Session persistence |
-| `Agent` | Model, instructions, PluginRegistry, and entry into multiple Workspaces | HTTP/RPC transports |
+| `Agent` | Model, instructions, custom Tools, and Sessions | Plugin instances, Workspace resources, HTTP/RPC transports |
 | `AgentSessions` | All Sessions owned by one Agent; each Session may receive a Workspace | Agent identity and Plugin definitions |
 | `Session` | Conversation state, message history, execution order, and approvals | Project resource ownership |
-| `PluginContext` | Stable Agent capabilities projected to a Plugin | A second Agent facade |
+| `City` | Workspace and Plugin resources, lifecycle, Storage, and transports | Session execution semantics |
 | `SessionTurnContext` | Execution context and lifecycle for one Turn | Long-lived Agent state |
 | `RemoteAgent` | Access to a server-side Agent and its Sessions | Server-side model configuration |
 
@@ -45,9 +48,9 @@ Shell is the standard entry for project commands and processes. The SDK does not
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-import { Shell } from "@downcity/workspace";
+import { Shell } from "@downcity/city";
 
 const shell = new Shell({
   sandbox: new MacOsSeatbeltSandbox(),

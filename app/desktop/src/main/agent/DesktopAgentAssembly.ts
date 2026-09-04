@@ -15,7 +15,7 @@ import {
 import { resolve_local_root_path } from "@downcity/city/local";
 import { type AgentModel, type AgentOptions } from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
-import { Shell, Workspace } from "@downcity/workspace";
+import { Shell, Workspace } from "@downcity/city";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
 import { Embassy, type EmbassyUser } from "@downcity/federation";
 import {

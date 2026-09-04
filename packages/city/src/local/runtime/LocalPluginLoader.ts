@@ -14,7 +14,7 @@ import type {
   CityPluginModule,
   CityPluginRegistration,
   PluginJsonObject,
-} from "@downcity/plugin";
+} from "@/plugin/index.js";
 import type { LocalAgentConfig } from "@/local/types/LocalConfig.js";
 import type {
   LocalInstalledPluginDefinition,

@@ -7,8 +7,8 @@
  * - 只有极少数非 turn 场景才允许显式补写 `session messages`
  */
 
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import { appendInboundChatHistory } from "./ChatHistoryStore.js";
 

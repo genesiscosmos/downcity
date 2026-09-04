@@ -14,8 +14,8 @@ import type {
   ChannelChatKeyParams,
   ChannelSendTextParams,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { ParsedFeishuAttachmentCommand } from "@/chat/types/FeishuAttachment.js";
 import type {

@@ -5,7 +5,7 @@
  * 由 Session 自己的消息通知机制向订阅者发布变化。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ShipTaskDefinitionV1 } from "@/task/types/Task.js";
 
 function resolve_task_final_text(params: {

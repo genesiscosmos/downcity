@@ -9,8 +9,7 @@
 import { get_logs_dir_path } from "@/workspace/WorkspacePaths.js";
 import { get_timestamp } from "@/utils/Time.js";
 import type { JsonObject } from "@/types/common/Json.js";
-import type { FileSystem } from "@downcity/workspace";
-import { LocalFileSystem } from "@downcity/workspace";
+import type { FileSystem } from "@downcity/type";
 
 type LogDetails = {
   [key: string]: JsonObject[keyof JsonObject] | undefined;
@@ -207,20 +206,6 @@ export class Logger {
     this.logLevel = logLevel;
   }
 
-  /**
-   * 绑定当前 logger 实例的 project_root。
-   *
-   * 关键点（中文）
-   * - 每个 Agent / workspace 持有独立 Logger，绑定只影响当前实例。
-   * - 落盘目录必须在实例初始化后明确指定。
-   * - 未绑定存储时，只打印到 console，不写入本地文件。
-   */
-  bind_project_root(project_root: string): void {
-    const root = String(project_root || "").trim();
-    this.workspace_files = root ? new LocalFileSystem(root) : null;
-    this.storage_root_path = root;
-  }
-
   /** 绑定 Agent 内部存储，避免日志写入项目目录。 */
   bind_storage(
     files: FileSystem,
@@ -386,12 +371,9 @@ export class Logger {
  *
  * 说明（中文）
  * - 每次调用都返回独立实例，避免不同 Agent / workspace 互相覆盖落盘目录。
- * - 提供 project_root 时绑定项目目录（独立 Logger 用法）；Session
- *   运行时应使用 `bind_storage` 将日志写入私有数据目录。
+ * - Logger 默认只写控制台；Session 运行时通过 `bind_storage` 将日志写入 Agent
+ *   私有数据目录，禁止把运行日志写进项目 Workspace。
  */
-export function get_logger(project_root?: string, log_level?: string): Logger {
-  const logger = new Logger(log_level);
-  const root = String(project_root || "").trim();
-  if (root) logger.bind_project_root(root);
-  return logger;
+export function get_logger(log_level?: string): Logger {
+  return new Logger(log_level);
 }

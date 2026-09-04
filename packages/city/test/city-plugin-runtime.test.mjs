@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
 import { create_workspace_entry } from "@downcity/agent/host";
-import { Workspace } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
 
 /** 创建可观察生命周期的 City Plugin 注册。 */
 function create_registration(observation) {

@@ -2,8 +2,8 @@
 
 import type { Group } from "@/group/Group.js";
 import type { GroupSessionStore } from "@/types/group/GroupSessionStore.js";
-import type { StorageProvider } from "@downcity/workspace";
-import { MemoryStorageProvider } from "@downcity/workspace";
+import type { StorageProvider } from "@downcity/type";
+import { AgentMemoryStorageProvider } from "@/internal/AgentMemoryStorage.js";
 import { LocalGroupSessionStore } from "@/workspace/store/LocalGroupSessionStore.js";
 
 interface GroupRuntimeState {
@@ -23,7 +23,7 @@ const runtime_states = new WeakMap<Group, GroupRuntimeState>();
 
 /** 初始化 Group 内部运行时，并默认使用内存 Storage。 */
 export function initialize_group_runtime(group: Group): void {
-  runtime_states.set(group, { storage_provider: new MemoryStorageProvider() });
+  runtime_states.set(group, { storage_provider: new AgentMemoryStorageProvider() });
 }
 
 /** 将 City 提供的 Storage 绑定到 Group。 */
@@ -49,7 +49,7 @@ export async function detach_group_storage(group: Group, owner?: object): Promis
   if (owner && state.owner && state.owner !== owner) return;
   await state.group_session_store?.dispose();
   state.group_session_store = undefined;
-  state.storage_provider = new MemoryStorageProvider();
+  state.storage_provider = new AgentMemoryStorageProvider();
   state.storage_attached = false;
   state.owner = undefined;
 }
@@ -70,7 +70,7 @@ export function get_group_session_store(group: Group): GroupSessionStore {
 /** 标记 Group 已经创建或恢复过一个 GroupSession。 */
 export function mark_group_session_started(group: Group): void {
   const state = require_group_runtime(group);
-  if (!state.storage_attached && state.storage_provider instanceof MemoryStorageProvider) {
+  if (!state.storage_attached && state.storage_provider instanceof AgentMemoryStorageProvider) {
     state.memory_session_started = true;
   }
 }

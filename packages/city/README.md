@@ -4,8 +4,7 @@
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { City } from "@downcity/city";
-import { Workspace } from "@downcity/workspace";
+import { City, Workspace } from "@downcity/city";
 
 const workspace = new Workspace({ id: "main", path: process.cwd() });
 const agent = new Agent({ id: "assistant" });

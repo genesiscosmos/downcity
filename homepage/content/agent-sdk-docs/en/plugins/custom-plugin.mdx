@@ -5,7 +5,7 @@ description: Build a custom Plugin with Actions, Hooks, System, Lifecycle, and a
 
 # Custom Plugin
 
-Custom Plugin contracts come from `@downcity/plugin`. Agent does not accept Plugin instances or
+Custom Plugin contracts come from `@downcity/city/plugin`. Agent does not accept Plugin instances or
 expose a Plugin Registry. City registers a module first, then binds an Agent by `plugin_id`/Profile.
 
 ```ts
@@ -13,7 +13,7 @@ import {
   BasePlugin,
   define_city_plugin,
   type PluginActions,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 
 class NotesPlugin extends BasePlugin {
   readonly name = "notes";

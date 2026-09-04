@@ -7,8 +7,8 @@
  * - turn 并入策略、history 落盘、assistant 收敛统一交给 Session
  */
 
-import type { PluginLogger } from "@downcity/plugin";
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type { ChatQueueItem } from "@/chat/types/ChatQueue.js";
 import type { AgentSessionTurnResult, SessionMutation } from "@downcity/agent";

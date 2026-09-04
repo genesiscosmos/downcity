@@ -8,7 +8,7 @@
 
 import fs from "fs-extra";
 import path from "path";
-import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/city/plugin";
 import type {
   FeishuDownloadedAttachment,
 } from "@/chat/channels/feishu/types/FeishuChannel.js";

@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.476",
+  "version": "1.1.477",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -32,9 +32,7 @@
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
-    "@downcity/plugin": "workspace:^",
     "@downcity/plugins": "workspace:^",
-    "@downcity/workspace": "workspace:^",
     "@downcity/type": "workspace:*",
     "@earendil-works/pi-tui": "^0.74.2",
     "@larksuiteoapi/node-sdk": "^1.66.0",

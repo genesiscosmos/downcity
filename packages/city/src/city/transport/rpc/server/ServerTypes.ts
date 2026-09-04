@@ -8,9 +8,9 @@
 
 import type { AgentSessionCollection } from "@downcity/agent/host";
 import type { Agent } from "@downcity/agent";
-import type { AgentPluginRuntime } from "@downcity/agent/host";
-import type { PluginSnapshot } from "@downcity/plugin";
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { PluginSnapshot } from "@/plugin/index.js";
+import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { SessionSystemMessage } from "@downcity/agent";
 import type { RpcEventFrame } from "@/city/transport/types/RpcProtocol.js";
 import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
@@ -67,7 +67,7 @@ export interface RpcAgentContext {
   /** 当前 Agent 实例。 */
   agent: Agent;
   /** 当前请求绑定的 Workspace。 */
-  workspace: WorkspaceBase;
+  workspace: WorkspaceRuntime;
   /** 当前 Agent 唯一的 Session 集合。 */
   sessions: AgentSessionCollection;
   /** 当前 Agent 在 Workspace 中可用的 Plugin 调用面。 */

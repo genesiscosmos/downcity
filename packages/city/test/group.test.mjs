@@ -5,7 +5,7 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { Agent, Group, Session } from "@downcity/agent";
 import { City } from "../bin/index.js";
-import { LocalStorageProvider, Workspace } from "@downcity/workspace";
+import { LocalStorageProvider, Workspace } from "@downcity/city";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 async function wait_for_group_idle(group_session, timeout_ms = 1000) {

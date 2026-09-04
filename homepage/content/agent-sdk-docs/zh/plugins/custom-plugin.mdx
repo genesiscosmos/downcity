@@ -5,7 +5,7 @@ description: 使用 Action、Hook、System、Lifecycle 与 City module 构建自
 
 # 自定义 Plugin
 
-自定义 Plugin 的公开协议来自 `@downcity/plugin`。Agent 不接收 Plugin 实例，也不暴露 Plugin
+自定义 Plugin 的公开协议来自 `@downcity/city/plugin`。Agent 不接收 Plugin 实例，也不暴露 Plugin
 Registry；City 先登记 module，再按 `plugin_id`/Profile 绑定 Agent。
 
 ```ts
@@ -13,7 +13,7 @@ import {
   BasePlugin,
   define_city_plugin,
   type PluginActions,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 
 class NotesPlugin extends BasePlugin {
   readonly name = "notes";

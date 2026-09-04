@@ -7,7 +7,7 @@
  * - 队列必须通过显式 Context 解析，不允许模块级共享状态。
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type {
   ChatQueueEnqueueParams,
   ChatQueueEnqueueResult,

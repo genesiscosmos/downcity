@@ -1,7 +1,7 @@
 /** 功能型 Plugin 的独立一级 Mainview。 */
 
 import { useCallback, useEffect, useState } from "react";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import { BUILTIN_PLUGIN_RENDERERS } from "@downcity/plugins/renderers";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
 import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";

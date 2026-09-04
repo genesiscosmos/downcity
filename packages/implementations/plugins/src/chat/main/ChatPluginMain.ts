@@ -4,7 +4,7 @@ import {
   define_plugin_main,
   type PluginJsonObject,
   type PluginJsonValue,
-} from "@downcity/plugin";
+} from "@downcity/city/plugin";
 import type { ChatPluginChannelConfig } from "@/chat/types/ChatPluginChannelConfig.js";
 import type { ChatPluginConfig } from "@/chat/types/ChatPluginConfig.js";
 import type {

@@ -5,12 +5,12 @@ description: 内建 shell tools、sandbox 模式与审批流程
 
 # Shell Built-In
 
-Shell 不再是 plugin。它是 `@downcity/workspace` 提供的内建能力，并组合一个独立平台 Sandbox Adapter 后挂到 Agent 上。
+Shell 不再是 plugin。它是 `@downcity/city` 提供的内建能力，并组合一个独立平台 Sandbox Adapter 后挂到 Agent 上。
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { Shell } from "@downcity/workspace";
+import { Workspace } from "@downcity/city";
+import { Shell } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const agent = new Agent({ id: "repo-helper" });
@@ -116,7 +116,7 @@ const current = await session.status();
 
 ## 关键语义
 
-- Shell 归属于 `@downcity/workspace`，不属于 `@downcity/plugins`。
+- Shell 归属于 `@downcity/city`，不属于 `@downcity/plugins`。
 - Agent 只挂载 Shell tools；工具审批和实时 Mutation 都归属具体 Session。
 - Safe Sandbox 命令可读写项目，并使用配置的 sandbox 目录。
 - 宿主只读目录只能扩展读取能力，不能扩展项目外写权限。

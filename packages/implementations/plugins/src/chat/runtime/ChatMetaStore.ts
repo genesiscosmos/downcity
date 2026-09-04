@@ -7,7 +7,7 @@
  * - 底层数据落在 Agent private runtime directory 数据目录的 `channel/meta.json`，由 ChannelContextStore 统一维护
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatMetaV1 } from "@/chat/types/ChatMeta.js";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import {

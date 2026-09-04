@@ -1,12 +1,12 @@
 /** Plugin Sidebar、Mainview 与 Config 的统一插槽宿主。 */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import type {
   PluginRendererConfirmInput,
   PluginRendererDefinition,
   PluginRendererUi,
-} from "@downcity/plugin/react";
+} from "@downcity/city/plugin/react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

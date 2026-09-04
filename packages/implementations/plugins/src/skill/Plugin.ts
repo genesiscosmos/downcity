@@ -8,12 +8,12 @@
  * - skills overview 文本通过 `plugin.system` 注入，不再依赖 plugin.system。
  */
 
-import { BasePlugin } from "@downcity/plugin";
-import { create_action } from "@downcity/plugin";
+import { BasePlugin } from "@downcity/city/plugin";
+import { create_action } from "@downcity/city/plugin";
 import { z } from "zod";
-import type { Plugin } from "@downcity/plugin";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
-import type { PluginActionResult } from "@downcity/plugin";
+import type { Plugin } from "@downcity/city/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
+import type { PluginActionResult } from "@downcity/city/plugin";
 import type {
   SkillPluginFindPayload,
   SkillPluginInstallPayload,

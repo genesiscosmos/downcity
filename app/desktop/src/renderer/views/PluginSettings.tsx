@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { TbPlus, TbTrash } from "react-icons/tb";
-import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/city/plugin";
 import { BUILTIN_PLUGIN_RENDERERS } from "@downcity/plugins/renderers";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";

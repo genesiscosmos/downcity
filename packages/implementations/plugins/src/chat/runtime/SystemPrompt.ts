@@ -7,8 +7,8 @@
  * - 统一从 request context + ChatMetaStore 读取当前 chat 元信息。
  */
 
-import type { PluginContext } from "@downcity/plugin";
-import type { PluginExecutionContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginExecutionContext } from "@downcity/city/plugin";
 import type { ChatEnvironmentPromptInput } from "@/chat/types/ChatPromptContext.js";
 import { readChatMetaBySessionId } from "@/chat/runtime/ChatMetaStore.js";
 

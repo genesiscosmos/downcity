@@ -88,7 +88,7 @@ city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
 `main` 默认导出 `CityPluginModule`。它同时提供执行实例 factory 和宿主 main 生命周期；不再存在独立 `agent` 入口。`plugin.action()` 注册供 Sidebar/Mainview 调用且不依赖 Profile 的业务动作；`plugin.config_action()` 注册 Config 动作：
 
 ```ts
-import { define_city_plugin } from "@downcity/plugin";
+import { define_city_plugin } from "@downcity/city/plugin";
 import { GithubPlugin } from "./plugin.js";
 
 export default define_city_plugin({
@@ -135,7 +135,7 @@ Renderer 入口可以声明三个固定插槽。`sidebar` 与 `mainview` 共同�
 
 ```tsx
 import { useEffect, useState } from "react";
-import { define_plugin_renderer } from "@downcity/plugin/react";
+import { define_plugin_renderer } from "@downcity/city/plugin/react";
 
 export default define_plugin_renderer({ config: function GithubConfig({ config, ui }) {
   const { Button, Group, Input, LoadingState, Page, Row, Toolbar } = ui.components;

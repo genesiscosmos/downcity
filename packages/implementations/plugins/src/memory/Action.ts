@@ -8,7 +8,7 @@
  */
 
 import type { SessionMessage } from "@downcity/agent";
-import type { PluginActionResult, PluginContext, PluginJsonValue } from "@downcity/plugin";
+import type { PluginActionResult, PluginContext, PluginJsonValue } from "@downcity/city/plugin";
 import type {
   MemoryForgetInput,
   MemoryProvider,

@@ -8,7 +8,7 @@
  * - 清理运行中 agent 与队列，避免残留任务继续执行
  */
 
-import type { PluginContext } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/city/plugin";
 import { resolveChatQueueStore } from "@/chat/runtime/ChatQueue.js";
 import { clean_chat_storage } from "@/chat/runtime/ChatStorage.js";
 

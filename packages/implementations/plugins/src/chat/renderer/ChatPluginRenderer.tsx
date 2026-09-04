@@ -1,8 +1,8 @@
 /** Chat Plugin 使用宿主 UI Components 的唯一 React Mainview。 */
 
 import { useCallback, useEffect, useState } from "react";
-import type { PluginJsonValue } from "@downcity/plugin";
-import { define_plugin_renderer } from "@downcity/plugin/react";
+import type { PluginJsonValue } from "@downcity/city/plugin";
+import { define_plugin_renderer } from "@downcity/city/plugin/react";
 import type {
   ChatPluginPublicChannelConfig,
   ChatPluginPublicProfile,

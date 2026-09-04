@@ -19,7 +19,7 @@ import {
 } from "@downcity/agent";
 import type { CityAgentPluginBinding } from "@downcity/city";
 import { AskQuestionsTool } from "@downcity/agent/tools";
-import { Shell, Workspace } from "@downcity/workspace";
+import { Shell, Workspace } from "@downcity/city";
 import {
   create_builtin_plugin_registrations,
 } from "@downcity/plugins";

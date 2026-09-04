@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 统一管理 session 缓存、创建、恢复、默认配置注入与列表查询。
- * - 该服务只负责 session 生命周期与查询，不负责 plugin / RPC 启停。
+ * - 该服务只负责 Session 生命周期与查询，不负责 Extension / RPC 启停。
  * - Session 对象创建细节集中在这里，避免 facade 和 lifecycle 重复依赖 Session 构造逻辑。
  */
 
@@ -31,9 +31,9 @@ import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { Session } from "@/session/Session.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
-import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
+import type { SessionExtensionRuntime } from "@downcity/type/session";
 import type { SessionStore } from "@/types/store/SessionStore.js";
-import type { WorkspaceBase } from "@downcity/workspace";
+import type { WorkspaceRuntime } from "@downcity/type";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import { normalize_session_origin, normalize_session_origin_type } from "@/session/SessionOrigin.js";
 
@@ -49,7 +49,7 @@ type AgentSessionsOptions = {
    * AgentSessions 是 Agent 唯一的 Session 集合；Workspace 相关能力不能
    * 固定在集合实例上，而应在创建或恢复单个 Session 时解析。
    */
-  resolve_session_context: (workspace?: WorkspaceBase) => {
+  resolve_session_context: (workspace?: WorkspaceRuntime) => {
     workspace_path: string;
     workspace_id?: string;
     logger: Logger;
@@ -168,7 +168,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /**
-   * 把 Plugin registry 修改广播到已有 Session 的统一输入队列。
+   * 把 Extension 配置修改广播到已有 Session 的统一输入队列。
    */
   broadcast_extensions(input: {
     command_id: string;
@@ -210,7 +210,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 新建一个 session。
    */
   async create(
-    input?: AgentCreateSessionInput & { workspace?: WorkspaceBase },
+    input?: AgentCreateSessionInput & { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
     const origin = normalize_session_origin(input?.origin);
     const session = this.get_or_create_session({
@@ -228,7 +228,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async get(
     session_id: string,
     origin_type = "chat",
-    input?: { workspace?: WorkspaceBase },
+    input?: { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
@@ -280,7 +280,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    *
    * 关键点（中文）
    * - 正在执行的 Session 会先停止，避免删除后继续写入。
-   * - 该方法不处理任何 Plugin 自有数据。
+   * - 该方法不处理任何 Extension 自有数据。
    */
   async remove(session_id: string, origin_type = "chat"): Promise<boolean> {
     const resolved_session_id = String(session_id || "").trim();
@@ -378,13 +378,56 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return await this.resolve_session_context().store.clean_archive();
   }
 
+  /**
+   * 把 Session 重新绑定到另一个 Workspace。
+   *
+   * 关键点（中文）
+   * - 只改写 meta.json 中的 workspace_id 并清掉运行时缓存；
+   * - 之后用新 Workspace 恢复时不再触发严格的 workspace 归属校验。
+   */
+  async workspace(
+    session_id: string,
+    workspace: WorkspaceRuntime,
+  ): Promise<AgentSession> {
+    const resolved_session_id = String(session_id || "").trim();
+    if (!resolved_session_id) {
+      throw new Error("sessions.workspace requires a non-empty session_id");
+    }
+    const resolved_origin_type = normalize_session_origin_type("chat");
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin_type);
+    const cached = this.sessions_by_id.get(cache_key);
+    if (cached?.is_executing()) {
+      throw new Error(`Session "${resolved_session_id}" is currently executing`);
+    }
+    const context = this.resolve_session_context(workspace);
+    if (!(await context.store.has_session(resolved_session_id, resolved_origin_type))) {
+      throw new Error(`Session "${resolved_session_id}" not found`);
+    }
+    const store = context.store.session(
+      resolved_session_id,
+      { type: resolved_origin_type },
+      context.workspace_id,
+    );
+    const metadata = await store.read_metadata();
+    if (metadata.agent_id !== this.agent_id) {
+      throw new Error(`Session "${resolved_session_id}" belongs to another Agent`);
+    }
+    await store.write_metadata({
+      ...metadata,
+      workspace_id: context.workspace_id,
+    });
+    this.sessions_by_id.delete(cache_key);
+    cached?.dispose_title_generation?.();
+    return await this.get(resolved_session_id, resolved_origin_type, { workspace });
+  }
+
   private get_or_create_session(input?: {
     /**
      * 可选指定 session id。
      */
     session_id?: string;
     /** 当前 Session 可选使用的 Workspace。 */
-    workspace?: WorkspaceBase;
+    workspace?: WorkspaceRuntime;
     /** 当前 Session 的创建来源。 */
     origin?: SessionOrigin;
   }): AgentManagedSession {
@@ -413,7 +456,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_workspace_env: () => context.get_workspace_env(),
       get_agent_model: () => this.get_agent_model(),
       get_extensions: () => context.get_extensions(),
-      get_managed_plugin_system_blocks: async () => [],
+      get_managed_extension_system_blocks: async () => [],
       ensure_configured: async (session) => {
         await this.ensure_agent_ready();
       },
