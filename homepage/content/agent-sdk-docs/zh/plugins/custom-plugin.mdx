@@ -1,129 +1,62 @@
 ---
 title: 自定义 Plugin
-description: 使用 config、actions、hooks、system text、availability、lifecycle 与可选 runtime HTTP routes 构建自定义 plugin
+description: 使用 Action、Hook、System、Lifecycle 与 City module 构建自定义 Plugin。
 ---
 
 # 自定义 Plugin
 
-如果你要加的东西主要是：
-
-- 一组 actions
-- 一组 hooks
-- 一层 system text
-- 一个生命周期拥有的 runtime 边界
-- 一组 runtime HTTP routes
-
-那自定义 plugin 通常就是合适的扩展点。
-
-## 当前公开入口
-
-`@downcity/agent` 已经公开了：
-
-- plugin 类型与契约
-- `BasePlugin` 基类
-- 本地 `Agent` 的 `plugins: [...]` 组装入口
-
-内建 plugin class 由 `@downcity/plugins` 导出。
-
-## 最小骨架
+自定义 Plugin 的公开协议来自 `@downcity/plugin`。Agent 不接收 Plugin 实例，也不暴露 Plugin
+Registry；City 先登记 module，再按 `plugin_id`/Profile 绑定 Agent。
 
 ```ts
-import { BasePlugin, type PluginActions } from "@downcity/agent";
-
-export class NotesPlugin extends BasePlugin {
-  readonly name = "notes";
-  readonly title = "Notes Helper";
-  readonly description = "Adds note-related actions and prompt guidance.";
-
-  readonly actions: PluginActions = {
-    status: {
-      execute: async ({ context }) => {
-        return {
-          success: true,
-          data: {
-            workspace_path: context.workspace_path,
-          },
-        };
-      },
-    },
-  };
-}
-```
-
-## 挂到本地 Agent 上
-
-```ts
-import { Agent, BasePlugin, type PluginActions } from "@downcity/agent";
+import {
+  BasePlugin,
+  define_city_plugin,
+  type PluginActions,
+} from "@downcity/plugin";
 
 class NotesPlugin extends BasePlugin {
   readonly name = "notes";
   readonly title = "Notes Helper";
-  readonly description = "Adds note-related actions and runtime guidance.";
+  readonly description = "Adds note-related actions.";
 
   readonly actions: PluginActions = {
     status: {
-      allowWhenDisabled: true,
       execute: async ({ context }) => ({
         success: true,
         data: {
-          workspace_path: context.workspace_path,
+          workspace_path: context.workspace.path,
+          storage_path: context.storage.path,
+          session_id: context.session?.id ?? null,
         },
       }),
     },
   };
 }
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new NotesPlugin()],
+const notes_module = define_city_plugin({
+  activate() {},
+  create: () => new NotesPlugin(),
 });
+
+const registration = {
+  id: "notes",
+  title: "Notes Helper",
+  description: "Adds note-related actions.",
+  readme: "/absolute/path/README.md",
+  has_config: false,
+  has_sidebar: false,
+  has_mainview: false,
+  module: notes_module,
+};
+
+const city = new City({ plugins: [registration], workspaces: [workspace] });
+city.agents.add(agent, { plugins: [{ plugin_id: "notes" }] });
 ```
 
-## 最重要的设计问题
+只实现领域真正需要的 Action、Hook、Resolve、System、Availability、HTTP 或 Lifecycle。
+共享 Profile 资源使用 `start/stop`，Agent/Workspace 作用域资源使用 `bind/unbind`；不要把长期资源
+偷偷放进 Hook。
 
-### 1. 你到底在扩展什么
-
-先明确你需要的是：
-
-- actions
-- hooks
-- resolve 点
-- system text
-- lifecycle
-- HTTP
-
-不要默认把每个字段都实现一遍。
-
-### 2. 哪些 action 需要在 disabled 时仍然可运行
-
-像这些 action：
-
-- `status`
-- `install`
-- `configure`
-
-通常需要 `allowWhenDisabled: true`。
-
-### 3. 运行态状态是否应该待在 lifecycle 内
-
-如果这段能力必须：
-
-- 跟随 plugin start/stop
-- 持有内存状态
-- 在重启后恢复
-
-那就应该把它建模在 plugin lifecycle 里，而不是偷偷塞进无关 hooks。
-
-## 一个实用规则
-
-在可能的情况下，让 plugin 逻辑尽量只依赖最小稳定的 plugin context，而不是默认假设能拿到所有 runtime singleton。
-
-## 如果你想看场景化示例
-
-- [NotesPlugin 场景](/zh/plugins-docs/examples/notes-plugin)
-- [ReviewGuardPlugin 场景](/zh/plugins-docs/examples/review-guard-plugin)
-- [MessageAugmentPlugin 场景](/zh/plugins-docs/examples/message-augment-plugin)
-- [RoleResolverPlugin 场景](/zh/plugins-docs/examples/role-resolver-plugin)
-- [SnapshotHttpPlugin 场景](/zh/plugins-docs/examples/snapshot-http-plugin)
-- [Plugin Runtime Composition](/zh/plugins-docs/examples/plugin-runtime-composition)
+完整的 module、manifest、Context 与测试说明见
+[Plugin 开发指南](/zh/agent-sdk-docs/plugins/plugin-development)。

@@ -6,7 +6,7 @@
  * - `QQGatewayClient` 只调用这些函数，不再内嵌大段重试细节。
  */
 
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 
 /**
  * 解析 QQ API 业务错误文本。
@@ -14,9 +14,9 @@ import type { JsonObject, JsonValue } from "@downcity/agent";
 export function resolveQqApiErrorText(responseText: string): string | null {
   if (!responseText) return null;
   try {
-    const parsed = JSON.parse(responseText) as JsonValue;
+    const parsed = JSON.parse(responseText) as PluginJsonValue;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const payload = parsed as JsonObject;
+    const payload = parsed as PluginJsonObject;
     const codeValue = payload.code ?? payload.errcode ?? payload.retcode;
     const code =
       typeof codeValue === "number"

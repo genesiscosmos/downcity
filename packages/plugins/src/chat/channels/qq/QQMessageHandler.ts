@@ -7,8 +7,8 @@
  * - `QQBot` 因此只保留渠道生命周期、dispatch 分流、发送与命令处理。
  */
 
-import type { Logger } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
 import type {
   ChannelChatKeyParams,
   IncomingChatAccessParams,
@@ -64,7 +64,7 @@ export interface QQMessageHandlerOptions {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 当前 bot 用户 ID。
    */

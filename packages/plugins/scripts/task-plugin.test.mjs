@@ -12,13 +12,41 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent, City, create_action } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_action } from "@downcity/plugin";
 import { create_workspace_entry } from "@downcity/agent/internal";
 import { LocalStorageProvider, Workspace } from "../../workspace/bin/index.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { TaskPlugin } from "../bin/task.js";
 import { createTaskDefinition } from "../bin/task/Action.js";
 import { registerTaskCronJobs } from "../bin/task/Scheduler.js";
+
+/** 创建 scheduler 单元测试所需的最小 PluginContext。 */
+function create_task_context(data_path, workspace_id = "workspace-a") {
+  return {
+    city: { plugins: {} },
+    agent: { id: "task-test-agent", name: "task-test-agent", description: "", instructions: [], sessions: {} },
+    workspace: { id: workspace_id, path: process.cwd(), files: {}, env: {} },
+    profile: { id: "default", config: {} },
+    storage: { path: data_path, files: {} },
+    logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
+    abort_signal: new AbortController().signal,
+  };
+}
+
+/** 把测试实例包装为 City 持有的统一 Plugin 注册。 */
+function create_task_registration(plugin) {
+  return {
+    id: "task",
+    title: "Task",
+    description: "Task test plugin",
+    readme: import.meta.filename,
+    has_config: false,
+    has_sidebar: false,
+    has_mainview: false,
+    module: { activate() {}, create: () => plugin },
+  };
+}
 
 test("scheduler 只注册当前 Workspace 绑定的 Task", async () => {
   const data_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-task-workspace-filter-"));
@@ -27,11 +55,7 @@ test("scheduler 只注册当前 Workspace 绑定的 Task", async () => {
     await createTaskDefinition({ data_path, request: { title: "workspace-b-task", description: "B", workspace_id: "workspace-b", when: "0 10 * * *", status: "enabled" } });
     const definitions = [];
     const result = await registerTaskCronJobs({
-      context: {
-        data_path,
-        workspace_id: "workspace-a",
-        logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
-      },
+      context: create_task_context(data_path),
       engine: { register: (definition) => definitions.push(definition) },
       timezone: "Asia/Shanghai",
       runningTaskIds: new Set(),
@@ -87,9 +111,10 @@ test("scheduled task appends its result to the Session captured from create cont
     model: new MockModelClient({
       generate: async () => ({ text: "SCHEDULED_TASK_RESULT" }),
     }),
-    plugins: [task_plugin],
   });
-  city.agents.add(agent);
+  const registration = create_task_registration(task_plugin);
+  city.plugins.provide(registration);
+  city.agents.add(agent, { plugins: [{ plugin_id: registration.id }] });
   const entry = create_workspace_entry(agent, workspace);
 
   try {

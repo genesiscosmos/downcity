@@ -7,7 +7,7 @@
  * - Provider 负责记忆形成、存储、召回、修订与删除的完整语义。
  */
 
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 import type {
   MemoryAccessContext,
   MemoryOwner,
@@ -26,12 +26,6 @@ export type MemoryType =
 
 /** Memory Provider 当前生命周期状态。 */
 export type MemoryProviderState = "ready" | "degraded";
-
-/** Memory Provider 初始化时可读取的 Agent 运行身份。 */
-export interface MemoryProviderInitializeInput {
-  /** 当前 Agent 的稳定全局标识。 */
-  agent_id: string;
-}
 
 /** 一条记忆引用的原始证据。 */
 export interface MemorySourceReference {
@@ -81,7 +75,7 @@ export interface MemoryRecord {
   citation?: string;
 
   /** Provider 可选返回的结构化扩展元数据。 */
-  metadata?: JsonObject;
+  metadata?: PluginJsonObject;
 }
 
 /** Memory Provider 能力声明。 */
@@ -162,7 +156,7 @@ export interface MemoryStatusResult {
   capabilities: MemoryProviderCapabilities;
 
   /** Provider 可选返回的结构化状态统计。 */
-  details?: JsonObject;
+  details?: PluginJsonObject;
 
   /** Provider 当前需要提示给调用方的非致命警告。 */
   warnings?: string[];
@@ -392,11 +386,11 @@ export interface MemoryProvider {
   /** Provider 支持的领域能力声明。 */
   readonly capabilities: MemoryProviderCapabilities;
 
-  /** 初始化当前 Agent 对应的 Provider 生命周期。 */
-  initialize(input: MemoryProviderInitializeInput): Promise<void>;
+  /** 初始化当前 City Plugin 实例持有的 Provider 生命周期。 */
+  initialize(): Promise<void>;
 
   /** 读取 Provider 当前状态与统计。 */
-  status(): Promise<MemoryStatusResult>;
+  status(access: MemoryAccessContext): Promise<MemoryStatusResult>;
 
   /** 按查询与作用域召回长期记忆。 */
   recall(input: MemoryRecallInput): Promise<MemoryRecallResult>;
@@ -434,14 +428,10 @@ export interface MemoryPluginProfile {
   provider?: "builtin";
   /** 当前启用的 Memory Storage。 */
   storage?: "file";
-  /** 当前 Agent 的 MemoryPlugin 私有绝对数据目录。 */
-  agent_root_path?: string;
-
-  /** City 提供的 MemoryPlugin 专属共享绝对数据目录。 */
-  city_root_path?: string;
+  /** City 为当前 Memory Plugin/Profile 分配的私有绝对数据目录。 */
+  storage_root_path?: string;
 }
-
-/** MemoryPlugin profile 的兼容名称别名。 */
+/** MemoryPlugin 的构造参数。 */
 export type MemoryPluginOptions = MemoryPluginProfile;
 
 /** Memory action 可以接受的公开 JSON payload 联合。 */
@@ -452,4 +442,4 @@ export type MemoryActionPayload =
   | Omit<MemoryDigestInput, "access" | "transcript" | "message_count">
   | Omit<MemoryReviseInput, "access">
   | Omit<MemoryForgetInput, "access">
-  | Record<string, JsonValue>;
+  | Record<string, PluginJsonValue>;

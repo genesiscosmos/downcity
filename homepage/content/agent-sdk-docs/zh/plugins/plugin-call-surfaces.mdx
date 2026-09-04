@@ -1,171 +1,66 @@
 ---
 title: Plugin 调用入口
-description: 区分 agent.plugins、context.plugins 与 plugin_call tool 的使用场景
+description: 区分 City 绑定面、Workspace 执行面、PluginContext 与 plugin_call Tool。
 ---
 
 # Plugin 调用入口
 
-Downcity 里有三个常见的 plugin 调用入口：
+Plugin 有四类调用面，分别服务不同角色：
 
-- `agent.plugins`
-- `context.plugins`
-- `plugin_call` tool
+| 入口 | 使用者 | 用途 |
+| --- | --- | --- |
+| `city.plugins` | 宿主应用 | 登记模块、管理 Agent/Profile 绑定、调用 main/config action |
+| `entry.plugins` | 宿主执行代码 | 在指定 Agent/Workspace 上调用 Action、Availability 或 Hook |
+| `context.city.plugins` | Plugin 代码 | 在当前作用域调用其他 Plugin Action、pipeline 或 effect |
+| `plugin_call` | Session 中的模型 | 调用当前 Agent 已绑定的 Plugin Action |
 
-它们最终都会进入当前 Agent 的 plugin registry，但使用者不同。
-
-```mermaid
-flowchart TD
-  A["PluginRegistry"] --> B["agent.plugins"]
-  A --> C["context.plugins"]
-  A --> D["plugin_call tool"]
-
-  B --> E["SDK / 应用代码调用 plugin"]
-  C --> F["plugin / runtime 内部调用 plugin"]
-  D --> G["模型在 session 中调用 plugin"]
-```
-
-## `agent.plugins`
-
-`agent.plugins` 是 SDK 用户在应用代码里调用 plugin 的入口。
+## City 绑定面
 
 ```ts
-const result = await agent.plugins.run_action({
+city.plugins.provide(registration);
+await city.plugins.register(agent.id, { plugin_id: "skill" });
+console.log(city.plugins.snapshots(agent.id));
+await city.plugins.unregister(agent.id, "skill");
+```
+
+`city.plugins.invoke()` 与 `invoke_config()` 调用 Plugin main 注册的宿主管理 Action，不是 Session
+执行 Action。
+
+## Workspace 执行面
+
+```ts
+const entry = await city.enter_workspace(agent.id, workspace.id);
+const result = await entry.plugins.run_action({
   plugin: "skill",
   action: "lookup",
-  payload: {
-    name: "frontend-design",
-  },
+  payload: { name: "frontend-design" },
 });
 ```
 
-适合这些场景：
+这个入口显式绑定 Agent 与 Workspace，因此 City 能创建正确的 `PluginContext`。
 
-- 服务端 API 需要主动触发一个 plugin action
-- 测试脚本需要调用 plugin
-- 应用代码需要读取 plugin 列表、可用性或运行结果
-
-常见调用：
+## PluginContext
 
 ```ts
-agent.plugins.list();
-agent.plugins.availability("skill");
-agent.plugins.run_action({ plugin: "skill", action: "list", payload: {} });
-agent.plugins.pipeline("chat.enrich_message", value);
-agent.plugins.guard("chat.authorize_message", value);
-agent.plugins.effect("audit.observe", value);
-agent.plugins.resolve("auth.resolve_role", value);
-```
-
-## `context.plugins`
-
-`context.plugins` 是 plugin 或 runtime 内部拿到的调用入口。
-
-例如 chat plugin 收到一条 Telegram 消息后，需要让授权 plugin 判断这个用户是否能继续执行。chat plugin 不应该直接 import 授权 plugin 的私有实现，而是通过当前运行上下文触发一个 guard 点：
-
-```ts
-await context.plugins.guard("chat.incoming_message", {
-  channel: "telegram",
-  userId: "123",
-  text: "帮我查一下项目状态",
+const result = await context.city.plugins.run_action({
+  plugin: "skill",
+  action: "list",
+  payload: {},
 });
+await context.city.plugins.effect("audit.observe", result.data ?? null);
 ```
 
-授权 plugin 可以注册这个 guard：
+`context.session`、`context.agent.sessions` 和 `context.workspace` 是直接可调用句柄；ID 只用于稳定
+身份和序列化。
 
-```ts
-hooks: {
-  guard: {
-    "chat.incoming_message": [
-      async ({ value, context }) => {
-        // 没权限时直接 throw，当前消息流就会被阻断。
-      },
-    ],
-  },
-}
-```
-
-这个流程是：
-
-```mermaid
-sequenceDiagram
-  participant Chat as Chat plugin
-  participant Plugins as context.plugins
-  participant Auth as Auth plugin guard
-  participant Session as Session
-
-  Chat->>Plugins: guard("chat.incoming_message", payload)
-  Plugins->>Auth: 执行已注册 guard
-  Auth-->>Plugins: 通过或抛错
-  Plugins-->>Chat: 返回结果
-  Chat->>Session: 通过后才进入 session 执行
-```
-
-适合这些场景：
-
-- 一个 plugin 触发其他 plugin 注册的 `pipeline`
-- 一个 plugin 触发其他 plugin 注册的 `guard`
-- 一个 plugin 触发审计、同步、观测类 `effect`
-- 一个 plugin 通过 `resolve` 获取唯一权威答案
-
-一句话：`context.plugins` 是 plugin 之间解耦协作的入口。
-
-## `plugin_call` tool
-
-`plugin_call` 是给模型使用的 tool。
-
-模型在 session 执行过程中可以调用：
+## 模型 Tool
 
 ```ts
 plugin_call({
   plugin: "skill",
   action: "lookup",
-  payload: {
-    name: "frontend-design",
-  },
+  payload: { name: "frontend-design" },
 });
 ```
 
-tool 内部会把这次调用转成：
-
-```ts
-agent.plugins.run_action({
-  plugin: "skill",
-  action: "lookup",
-  payload: {
-    name: "frontend-design",
-  },
-});
-```
-
-`plugin_call` 绑定当前 session 所属 Agent 的 plugin registry。多 Agent 宿主在同一进程里缓存或切换 Agent 时，某个 session 的 `plugin_call` 不会读到其他 Agent 的 registry。
-
-这个入口适合让模型在对话中主动使用已注册 plugin。
-
-例如用户问：
-
-```txt
-帮我读取 frontend-design skill
-```
-
-模型可以决定调用 `plugin_call`，读取 skill 内容后再继续回答。
-
-## 三者怎么选
-
-| 入口 | 谁使用 | 典型场景 |
-| --- | --- | --- |
-| `agent.plugins` | SDK / 应用代码 | 应用主动调用 plugin |
-| `context.plugins` | plugin / runtime 内部 | plugin 之间通过 hooks、resolve 或 action 协作 |
-| `plugin_call` | 模型 | 模型在 session 中主动调用 plugin action |
-
-如果你在写应用代码，优先看 `agent.plugins`。
-
-如果你在写 plugin 内部逻辑，使用 `context.plugins`。
-
-如果你希望模型自己在对话中触发 plugin action，使用 `plugin_call` tool。
-
-## 相关文档
-
-- [Plugin 总览](/zh/agent-sdk-docs/plugins/overview)
-- [Plugin Actions](/zh/agent-sdk-docs/plugins/plugin-actions)
-- [Plugin Hooks 和 Resolve](/zh/agent-sdk-docs/plugins/plugin-hooks)
-- [自定义 Plugin](/zh/agent-sdk-docs/plugins/custom-plugin)
+Tool 永远绑定当前 Session 的 Agent/Workspace execution lease，不会读到其他 Agent 的绑定。

@@ -29,7 +29,7 @@ description: 渠道 runtime、queue worker、chat 授权、chat system text 和 
 当你需要这些能力时，应该关注 `chat`：
 
 - Telegram、Feishu、QQ 这类 chat 渠道 runtime
-- 每个 agent/plugin 实例一条独立 queue worker
+- 每个 Chat Profile 共享实例一条 queue worker
 - 消息入站后的执行与消息出站发送
 - 入站用户授权、主体观测和角色解析
 
@@ -50,42 +50,34 @@ city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","
 
 ## SDK 装配
 
-本地嵌入 SDK 场景里，`ChatPlugin` 接收已经构造好的 channel 对象。SDK 宿主直接提供 ID、展示名称和运行凭据，不读取 City Profile：
+SDK 宿主通过 `CityPluginRegistration` 把 Chat 提供给 City，再用 Profile 配置渠道：
 
 ```ts
-import {
-  ChatPlugin,
-  FeishuChannel,
-  QqChannel,
-  TelegramChannel,
-} from "@downcity/plugins/chat";
-
-const plugin = new ChatPlugin({
-  channels: [
-    new TelegramChannel({
-      id: "telegram-sdk",
-      name: "SDK Telegram Bot",
-      bot_token: process.env.TELEGRAM_BOT_TOKEN,
-    }),
-    new FeishuChannel({
-      env: {
-        FEISHU_APP_ID: process.env.FEISHU_APP_ID,
-        FEISHU_APP_SECRET: process.env.FEISHU_APP_SECRET,
-        FEISHU_DOMAIN: process.env.FEISHU_DOMAIN,
+const registrations = create_builtin_plugin_registrations();
+const city = new City({ plugins: registrations, workspaces: [workspace] });
+city.agents.add(agent, {
+  plugins: [{
+    plugin_id: "chat",
+    profile: {
+      id: "primary",
+      config: {
+        owner_agent_id: agent.id,
+        owner_workspace_id: workspace.id,
+        channels: [{
+          type: "telegram",
+          id: "telegram-main",
+          name: "Main Bot",
+          bot_token: process.env.TELEGRAM_BOT_TOKEN ?? "",
+        }],
       },
-    }),
-    new QqChannel({
-      env: {
-        QQ_APP_ID: process.env.QQ_APP_ID,
-        QQ_APP_SECRET: process.env.QQ_APP_SECRET,
-        QQ_SANDBOX: process.env.QQ_SANDBOX,
-      },
-    }),
-  ],
+    },
+  }],
 });
+const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-Profile 只属于 City 控制面，不进入 `@downcity/agent`，也不作为 `ChatPlugin` 的 Store 依赖。Chat 自己的 main actions 负责 Profile 校验与凭据安全投影。
+Profile 属于 City 控制面，不进入 Agent。Chat main actions 负责 Profile 校验与凭据安全投影。
+同一 Profile 只有一组渠道连接和 queue；跨作用域绑定必须通过 Owner 字段显式选择路由。
 
 ## 飞书依赖
 
@@ -110,7 +102,7 @@ import { ChatPlugin, FeishuChannel } from "@downcity/plugins/chat";
 本地嵌入 SDK 场景里，可以按 plugin 名称调用会话 action：
 
 ```ts
-await agent.plugins.run_action({
+await entry.plugins.run_action({
   plugin: "chat",
   action: "send",
   payload: {
@@ -144,7 +136,7 @@ Chat 授权现在属于 `ChatPlugin` 自己，不需要额外挂一个独立授�
 SDK 调用示例：
 
 ```ts
-await agent.plugins.run_action({
+await entry.plugins.run_action({
   plugin: "chat",
   action: "authorization-set-user-role",
   payload: {
@@ -157,16 +149,16 @@ await agent.plugins.run_action({
 
 ## 关键运行语义
 
-- queue worker 的生命周期归属于 plugin 实例
-- 渠道 bot 状态也归属于 plugin 实例
+- 渠道连接与 queue worker 归属于 City 持有的 Chat Profile 共享实例
+- Agent/Workspace 路由在 `bind/unbind` scope 生命周期中建立和释放
 - 入站授权能力归属于 `ChatPlugin`，但仍通过通用 plugin hooks / resolves 调度
-- `Agent` 只负责装配，不直接持有 chat 领域长期状态
+- `Agent` 只声明 Chat/Profile 绑定，不持有 chat 领域长期状态
 
 ## 公开性说明
 
 `ChatPlugin` 从 `@downcity/plugins` 包根导出。
 
-所以它是少数“虽然偏 lifecycle，但本地嵌入 SDK 用户也可能直接理解和装配”的 built-in 之一。
+SDK 用户通过 City registration/Profile 装配它，不把 `ChatPlugin` 实例交给 Agent。
 
 ## 相关文档
 

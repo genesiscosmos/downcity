@@ -1,114 +1,68 @@
 ---
 title: Plugin Overview
-description: Understand how plugins are modeled in Downcity, how local and managed plugins differ, and how plugin capability is assembled
+description: Understand City Plugin ownership, capabilities, context, and Agent bindings.
 ---
 
 # Plugin Overview
 
-In current Downcity, plugin is the extension unit.
+A Plugin is Downcity's unified extension product. It may provide Actions, Hooks, Resolves, System
+content, Availability, HTTP routes, lifecycle, and optional Mainview or Config surfaces.
 
-That means:
+Plugins do not belong to Agents. City owns the catalog, main modules, shared
+`(plugin_id, profile_id)` instances, and their full lifecycle. An Agent stores only a binding to a
+Plugin/Profile. A Session captures a read-only Plugin view at execution checkpoints.
 
-- capability is exposed through plugins
-- runtime participation is exposed through plugins
-- long-lived managed runtime modules are also modeled as plugins
-
-If you want concrete built-in plugin manuals, continue with [Agent Plugins Docs](/en/plugins-docs).
-
-## One-sentence mental model
-
-A plugin is the unit that owns one capability boundary in Downcity.
-
-That plugin may be:
-
-- action-first
-- hook-oriented
-- system-oriented
-- lifecycle-owned
-- HTTP-exposing
-
-## Two important families
-
-### Local plugins
-
-These are usually attached directly inside one local SDK `Agent`.
-
-Typical examples:
-
-- `skill`
-- `web`
-- `sound`
-
-### Managed plugins
-
-These are runtime-owned plugins that participate in one target agent lifecycle.
-
-Typical examples:
-
-- `chat`
-- `task`
-- `memory`
-- `shell`
-
-`chat` owns the channel runtime, queue worker, and inbound authorization capability. ActionSchedule is managed by Agent itself, so it is not listed as a plugin.
-
-Managed plugins are the reason the old split runtime language is no longer the right model.
-
-## How plugins attach in the local SDK
+## SDK assembly
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { SkillPlugin } from "@downcity/plugins/skill";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new SkillPlugin()],
+const registrations = create_builtin_plugin_registrations();
+const city = new City({ workspaces: [workspace], plugins: registrations });
+const agent = new Agent({ id: "repo-helper", model });
+
+city.agents.add(agent, {
+  plugins: [
+    { plugin_id: "skill" },
+    { plugin_id: "memory" },
+  ],
 });
-
-const plugins = agent.plugins.list();
 ```
 
-The Web Plugin requires an explicit provider. See the [Web Plugin guide](/en/plugins-docs/builtins/web).
+The SDK does not enable every built-in Plugin automatically. `CityOptions.plugins` or
+`city.plugins.provide()` registers modules. `city.agents.add()` and `city.plugins.register()` create
+Agent/Profile bindings.
 
-Important points:
+## PluginContext
 
-- `plugins` is a registry owned by this specific `Agent`
-- the SDK does not auto-register every built-in plugin
-- you can use `agent.plugins.list()`, `availability()`, and `run_action()` directly
-- a Session collects plugin system text from plugins registered on that SDK `Agent` when its system is first generated, then keeps it fixed
+Actions, Hooks, System providers, and Availability checks use a scope-specific `PluginContext`. It
+provides restricted handles for:
 
-## What a plugin may contain
+- `city`: Embassy and cross-Plugin collaboration ports.
+- `agent`: identity, instructions, and Sessions.
+- `workspace`: files, Shell, environment, and stable ID.
+- `session` / `turn`: direct communication handles when the call belongs to a Session or Turn.
+- `profile`: the current shared-instance Profile snapshot.
+- `storage`: private storage for the current Agent/Plugin scope.
 
-A full plugin may include:
+Object handles support direct in-process communication; IDs provide stable identity and
+serialization. A Plugin does not need to receive only a `session_id` and resolve it through the host.
 
-- `actions`
-- `hooks`
-- `resolves`
-- `system`
-- `availability`
-- `http`
-- `lifecycle`
+## Profiles and shared instances
 
-Not every plugin needs all of them.
+One City creates one instance per `(plugin_id, profile_id)`. `start/stop` belong to that shared
+instance, while `bind/unbind` belong to an Agent/Workspace scope. One Memory instance can therefore
+serve multiple Agents while its logical addresses distinguish City, Agent, User, and Workspace data.
 
-## What “plugin enabled” means now
+One Chat Profile permits one channel connection set and one queue. Reusing it across scopes requires
+explicit `owner_agent_id` and `owner_workspace_id` values.
 
-There are multiple layers:
+## Recommended reading
 
-- agent-level: did this local SDK `Agent` register the plugin
-- runtime-level: is this registered plugin currently ready or in error
-- plugin-level: does `availability()` currently say it is usable
-- Profile-level: whether a City host selected a Plugin Profile for the Agent
-
-Do not collapse these into one idea.
-
-## Recommended reading order
-
-1. [Plugin Design Patterns](/en/agent-sdk-docs/plugins/design-patterns)
-2. [Plugin Lifecycle](/en/agent-sdk-docs/plugins/lifecycle)
-3. [Plugin Configuration](/en/agent-sdk-docs/plugins/configuration)
-4. [Plugin Actions](/en/agent-sdk-docs/plugins/plugin-actions)
-5. [Plugin Hooks](/en/agent-sdk-docs/plugins/plugin-hooks)
-6. [Agent Plugins Docs](/en/plugins-docs)
-7. [Custom Plugin](/en/agent-sdk-docs/plugins/custom-plugin)
+1. [Plugin Lifecycle](/en/agent-sdk-docs/plugins/lifecycle)
+2. [Plugin Actions](/en/agent-sdk-docs/plugins/plugin-actions)
+3. [Plugin Hooks](/en/agent-sdk-docs/plugins/plugin-hooks)
+4. [Plugin Configuration](/en/agent-sdk-docs/plugins/configuration)
+5. [Plugin Development](/en/agent-sdk-docs/plugins/plugin-development)
+6. [Built-in Plugin manuals](/en/plugins-docs)

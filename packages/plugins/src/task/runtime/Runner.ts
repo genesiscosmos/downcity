@@ -8,11 +8,11 @@
  * - 把最终产物写入 run 目录的具体格式委托给 `TaskRunArtifacts.ts`。
  */
 
-import type { PluginContext, PluginNotificationPublisher } from "@downcity/agent";
+import type { PluginContext, PluginNotificationPublisher } from "@downcity/plugin";
 import type {
   DialogueRoundRecord,
   UserSimulatorDecision,
-} from "@/task/runtime/TaskRunnerTypes.js";
+} from "@/task/types/TaskRunner.js";
 import type {
   ShipTaskKind,
   ShipTaskRunExecutionStatusV1,
@@ -102,7 +102,7 @@ export async function runTaskNow(params: {
   runDirRel: string;
 }> {
   const context = params.context;
-  const root = String(params.data_path || context.data_path || "").trim();
+  const root = String(params.data_path || context.storage.path || "").trim();
   if (!root) throw new Error("data_path is required");
 
   const startedAt = Date.now();
@@ -110,8 +110,8 @@ export async function runTaskNow(params: {
   const executionId = String(params.executionId || `${params.taskId}:${timestamp}`).trim();
 
   const task = await readTask({ taskId: params.taskId, data_path: root });
-  if (task.frontmatter.workspace_id !== context.workspace_id) {
-    throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${context.workspace_id}`);
+  if (task.frontmatter.workspace_id !== context.workspace.id) {
+    throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${context.workspace.id}`);
   }
   const runDirAbs = getTaskRunDir(root, task.taskId, timestamp);
   const { runDirRel } = await ensureRunDir({

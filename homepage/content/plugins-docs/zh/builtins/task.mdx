@@ -44,22 +44,22 @@ city plugin action task run <agent_id> --input '{"title":"daily-summary","reason
 
 ## SDK 装配
 
-`TaskPlugin` 可以接收可选时区和宿主通知端口。每个 Task 必须绑定一个执行 Workspace。通过 Agent Session 调用 `create` 时，运行时会自动捕获该 Session 的 `session_id` 与 `origin.type` 作为固定交付目标；模型不需要也不能在 action payload 中填写 Session 路由。agent task 在有交付 Session 时优先使用其模型，否则使用 Agent 默认模型。cron 默认采用当前运行机器的本机时区；直接使用 SDK 且不需要界面未读通知时可以省略 `notifications`：
+每个 Task 必须绑定一个执行 Workspace。通过 Agent Session 调用 `create` 时，运行时会自动捕获该 Session 的 `session_id` 与 `origin.type` 作为固定交付目标；模型不需要也不能在 action payload 中填写 Session 路由。Agent Task 在有交付 Session 时优先使用其模型，否则使用 Agent 默认模型。SDK 通过 City 登记内建 Task 并绑定 Agent：
 
 ```ts
-import { TaskPlugin } from "@downcity/plugins/task";
-
-const plugin = new TaskPlugin({
-  timezone: "Asia/Shanghai",
-});
+const registrations = create_builtin_plugin_registrations();
+const city = new City({ plugins: registrations, workspaces: [workspace] });
+city.agents.add(agent, { plugins: [{ plugin_id: "task" }] });
+const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-`timezone` 主要影响 cron 表达式。`time:<ISO8601-with-timezone>` 这种一次性任务以 ISO 字符串自身的时区 offset 为准。
+cron 默认采用当前运行机器的时区。自定义时区时，应提供自定义 registration factory 创建
+`TaskPlugin({ timezone })`。`time:<ISO8601-with-timezone>` 一次性任务以 ISO 字符串自身的 offset 为准。
 
 ## SDK action 用法
 
 ```ts
-await agent.plugins.run_action({
+await entry.plugins.run_action({
   plugin: "task",
   action: "run",
   payload: {
@@ -73,7 +73,7 @@ action 名称是 `list`、`history`、`run_detail`、`create`、`run`、`delete`
 
 ## 关键语义
 
-- 长期 cron runtime 归属于 plugin 实例
+- cron scheduler 在 City 的 Agent/Workspace `bind/unbind` 生命周期中启动和释放
 - cron 时区来自 constructor `timezone`，默认本机时区
 - agent task 通过 PluginContext 的 Session runtime port 读取有效模型实例
 - 每次执行会创建独立的 task Session，并复用宿主 Agent 的完整 Plugin 能力
@@ -82,11 +82,10 @@ action 名称是 `list`、`history`、`run_detail`、`create`、`run`、`delete`
 - CLI、HTTP 或宿主管理界面等无 Session 调用上下文创建的 Task 不绑定交付目标，结果保留在执行历史
 - create / update / delete / status 变更后会触发 scheduler reload
 - task 运行中锁归属于 plugin 实例，reload 时也会保持同一 task 串行执行
-- plugin 也支持 reload / reschedule 这类 lifecycle command
 
 ## 公开性说明
 
-`TaskPlugin` 从 `@downcity/plugins` 包根导出。它可以在 SDK 中直接装配；CLI 使用统一的 `city plugin action` 调用它。
+`TaskPlugin` 从 `@downcity/plugins` 包根导出，SDK 应在 City registration factory 中创建它；CLI 使用统一的 `city plugin action` 调用。
 
 ## 相关文档
 

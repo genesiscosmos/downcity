@@ -14,8 +14,10 @@ import type {
 import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
 import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
-import type { AgentPluginExecutionLease } from "@/types/plugin/PluginRuntime.js";
-import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import type {
+  SessionExtensionExecutionContext,
+  SessionExtensionExecutionLease,
+} from "@/types/session/SessionExtension.js";
 import type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
@@ -107,8 +109,8 @@ export interface SessionTurnContext {
     /** 当前 Step 已提交生效的 Agent instruction 快照。 */
     readonly agent_systems: readonly string[];
 
-    /** 当前 Step 持有的 Plugin execution lease；仅供内核执行边界使用。 */
-    readonly plugins?: AgentPluginExecutionLease;
+    /** 当前 Step 持有的 City 扩展 execution lease。 */
+    readonly extensions?: SessionExtensionExecutionLease;
 
     /** 当前 Turn 首次解析后冻结的 Plugin 动态上下文。 */
     readonly plugin_context_blocks: readonly SessionPluginContextBlock[];
@@ -122,19 +124,19 @@ export interface SessionTurnContext {
       agent_systems: readonly string[];
     }): void;
 
-    /** 切换当前 Step 的 Plugin lease，并先释放前一个 lease。 */
-    replace_plugins(plugins?: AgentPluginExecutionLease): Promise<void>;
+    /** 切换当前 Step 的扩展 lease，并先释放前一个 lease。 */
+    replace_extensions(extensions?: SessionExtensionExecutionLease): Promise<void>;
 
     /** 首次调用时解析并冻结动态上下文，后续 Step 与重试复用同一快照。 */
     resolve_plugin_context_blocks(
       resolver: () => Promise<readonly SessionPluginContextBlock[]>,
     ): Promise<readonly SessionPluginContextBlock[]>;
 
-    /** 释放当前 Step 持有的 Plugin lease。 */
+    /** 释放当前 Step 持有的扩展 lease。 */
     release(): Promise<void>;
 
-    /** 为 Plugin 生成只包含稳定、只读运行快照的新对象。 */
-    plugin_execution_context(call_id?: string): PluginExecutionContext;
+    /** 为 City 扩展生成只包含稳定、只读运行快照的新对象。 */
+    extension_execution_context(call_id?: string): SessionExtensionExecutionContext;
   };
 
   /** 当前运行的动态 User 输入及延迟持久化输入。 */

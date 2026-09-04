@@ -6,7 +6,6 @@
  * - digest/revise handler 只处理 Memory 领域数据，不读取物理路径。
  */
 
-import type { MemoryProviderInitializeInput } from "@/memory/types/Memory.js";
 import type { MemoryRecord } from "@/memory/types/Memory.js";
 import type { MemoryStorageAdapter } from "@/memory/types/MemoryStorage.js";
 
@@ -101,10 +100,8 @@ export type BuiltinMemoryReviseHandler = (
   input: BuiltinMemoryReviseHandlerInput,
 ) => Promise<BuiltinMemoryReviseHandlerOutput | string>;
 
-/** 根据当前 Agent 运行身份创建独占 Storage Adapter 的工厂。 */
-export type BuiltinMemoryStorageFactory = (
-  input: MemoryProviderInitializeInput,
-) => MemoryStorageAdapter | Promise<MemoryStorageAdapter>;
+/** 为当前 City Plugin 实例延迟创建独占 Storage Adapter 的工厂。 */
+export type BuiltinMemoryStorageFactory = () => MemoryStorageAdapter | Promise<MemoryStorageAdapter>;
 
 /** BuiltinMemoryProvider constructor 参数。 */
 export interface BuiltinMemoryProviderOptions {

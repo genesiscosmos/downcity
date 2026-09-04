@@ -5,18 +5,17 @@ description: Build, package, and configure an installable Downcity Plugin
 
 # Custom Plugin
 
-One directory defines one Plugin. The Plugin ID is its install directory, Agent reference key, and runtime identity. There is no separate Extension identity.
+One directory defines one Plugin. The Plugin ID is its install directory, City catalog key, and runtime identity. There is no separate Extension identity.
 
-## Three optional entries
+## Two optional entries
 
 ```text
 Plugin
-├── agent      creates Agent runtime instances
-├── main       provides host management logic and actions
+├── main       provides City instances, lifecycle, management logic, and actions
 └── renderer   declares a Sidebar + Mainview workspace and/or Config
 ```
 
-Each entry is optional, but at least one is required. A Plugin may provide only Agent capabilities, only a Sidebar + Mainview workspace, only Config, or the complete experience.
+Each entry is optional, but at least one is required. A Plugin may provide only City runtime capabilities, only a Sidebar + Mainview workspace, only Config, or the complete experience.
 
 Recommended development layout:
 
@@ -28,32 +27,35 @@ github-plugin/
 ├── assets/icon.svg
 ├── src/
 │   ├── plugin.ts
-│   ├── agent.ts
 │   ├── main.ts
 │   └── renderer.tsx
 └── dist/
-    ├── agent.js
     ├── main.js
     └── renderer.js
 ```
 
-All three entries use ESM. `agent.js` and `main.js` must be self-contained. `renderer.js` is a single-file browser bundle that default-exports a Renderer definition with an optional `sidebar + mainview` pair and an independent `config`. Downcity does not install dependencies or run build scripts.
+Both entries use ESM. `main.js` must be self-contained. `renderer.js` is a single-file browser bundle that default-exports a Renderer definition with an optional `sidebar + mainview` pair and an independent `config`. Downcity does not install dependencies or run build scripts.
 
 ## Direct SDK usage
 
-The Plugin class constructor belongs entirely to the author. SDK users can create an instance directly without `plugin.json` or a Profile:
+SDK users can construct a `CityPluginRegistration` directly without `plugin.json`:
 
 ```ts
-const github_plugin = new GithubPlugin({
-  api_url: "https://api.github.com",
-  token: process.env.GITHUB_TOKEN ?? "",
+const registration = {
+  id: "github",
+  title: "GitHub",
+  description: "GitHub integration",
+  readme: "/absolute/path/README.md",
+  has_config: false,
+  has_sidebar: false,
+  has_mainview: false,
+  module: github_module,
+};
+const city = new City({
+  plugins: [registration],
+  workspaces: [workspace],
 });
-
-const agent = new Agent({
-  id: "coding-pro",
-  model,
-  plugins: [github_plugin],
-});
+city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
 ```
 
 The following entry protocol is only needed when CLI or Desktop must install, discover, and manage the Plugin.
@@ -69,7 +71,6 @@ The following entry protocol is only needed when CLI or Desktop must install, di
   "description": "GitHub integration",
   "readme": "./README.md",
   "icon": "./assets/icon.svg",
-  "agent": "./dist/agent.js",
   "main": "./dist/main.js",
   "renderer": {
     "entry": "./dist/renderer.js",
@@ -82,36 +83,15 @@ The following entry protocol is only needed when CLI or Desktop must install, di
 
 `renderer.sidebar` and `renderer.mainview` must both be `true` or both be `false`; `renderer.config` is independent. The actual default export must exactly match these three static capabilities. `package.json` must declare `"type": "module"`. `readme` must point to a `.md` user document inside the Plugin root. Desktop safely renders that file in the Plugin Overview; its name and subdirectory are up to the author, and it should describe purpose, configuration, and required credentials. The icon may be an HTTP(S) URL or a file relative to the Plugin root and is used in Plugin navigation and the Overview.
 
-## Agent entry
+## Unified main entry
 
-`agent` default-exports a factory. The host calls it for each Agent with a snapshot of the selected Profile:
+`main` default-exports a `CityPluginModule`. It provides both the execution-instance factory and host main lifecycle; there is no separate `agent` entry. `plugin.action()` registers Profile-independent actions for Sidebar/Mainview, while `plugin.config_action()` registers Config actions:
 
 ```ts
-import type { AgentPluginModule } from "@downcity/agent";
+import { define_city_plugin } from "@downcity/plugin";
 import { GithubPlugin } from "./plugin.js";
 
-const create_agent_plugin: AgentPluginModule<GithubPlugin>["default"] = (context) => {
-  return new GithubPlugin({
-    config: context.profile as unknown as GithubPluginConfig,
-    notifications: context.notifications,
-  });
-};
-
-export default create_agent_plugin;
-```
-
-Every call must return a new Plugin instance whose `name` equals `plugin.json.id`. The factory is a host assembly adapter, not an installer or a replacement for Agent Plugin `start/stop` lifecycle hooks.
-
-Hosts with notification support provide optional `context.notifications`. An Agent Plugin can pass it into its background runtime and call `publish()` only when the work truly completes; CLI or SDK hosts without notifications omit the capability. A notification contains only a `topic_key`, title, body, and JSON route within the current Plugin. The host binds Plugin and Agent identity automatically. Call `dismiss()` when the associated business object is deleted. Do not fabricate background completion notifications from the Renderer.
-
-## Main entry
-
-`main` default-exports a lifecycle object. `plugin.action()` registers Profile-independent actions for Sidebar/Mainview, while `plugin.config_action()` registers Config actions and owns validation and credential protection:
-
-```ts
-import { define_plugin_main } from "@downcity/plugin";
-
-export default define_plugin_main({
+export default define_city_plugin({
   activate({ plugin, notifications }) {
     plugin.config_action({
       id: "profile.read",
@@ -137,10 +117,13 @@ export default define_plugin_main({
       route: { repository: "downcity", view: "activity" },
     });
   },
+  create({ profile }) {
+    return new GithubPlugin(profile.config);
+  },
 });
 ```
 
-One main is activated once per host. The current Profile is injected only for an action call, so one main can safely serve multiple Profiles. Do not cache a Profile in global state.
+One main is activated once per City, and one `(plugin_id, profile_id)` maps to one shared execution instance. The current Profile is injected into `create()` and config action calls; do not cache it in main-global state.
 
 `notifications.publish()` and `notifications.dismiss()` are always bound to the current Plugin. The host namespaces `topic_key` and treats `route` as a route inside that Plugin workspace, so a Plugin cannot impersonate another Plugin or navigate to arbitrary Desktop pages. Only the latest unread notification for the same `topic_key` is retained.
 

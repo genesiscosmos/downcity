@@ -10,9 +10,9 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { generate_id } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import { get_chat_history_path } from "@/chat/runtime/ChatStorage.js";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import type {
   ChatHistoryDirection,
@@ -35,7 +35,7 @@ function toOptionalFiniteNumber(value: number | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function toOptionalObject(value: JsonObject | undefined): JsonObject | undefined {
+function toOptionalObject(value: PluginJsonObject | undefined): PluginJsonObject | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   return value;
 }
@@ -51,7 +51,7 @@ function buildInboundEvent(params: {
   message_id?: string;
   actorId?: string;
   actorName?: string;
-  extra?: JsonObject;
+  extra?: PluginJsonObject;
 }): ChatHistoryInboundEventV1 {
   return {
     v: 1,
@@ -82,7 +82,7 @@ function buildOutboundEvent(params: {
   message_id?: string;
   actorId?: string;
   actorName?: string;
-  extra?: JsonObject;
+  extra?: PluginJsonObject;
 }): ChatHistoryOutboundEventV1 {
   return {
     v: 1,
@@ -143,9 +143,9 @@ export async function appendInboundChatHistory(params: {
   message_id?: string;
   actorId?: string;
   actorName?: string;
-  extra?: JsonObject;
+  extra?: PluginJsonObject;
 }): Promise<void> {
-  const rootPath = normalizeTrimmedString(params.context.data_path);
+  const rootPath = normalizeTrimmedString(params.context.storage.path);
   const session_id = normalizeTrimmedString(params.session_id);
   const chatId = normalizeTrimmedString(params.chatId);
   if (!rootPath || !session_id || !chatId) return;
@@ -164,7 +164,7 @@ export async function appendInboundChatHistory(params: {
     extra: toOptionalObject(params.extra),
   });
 
-  const file = get_chat_history_path(params.context.data_path, session_id);
+  const file = get_chat_history_path(params.context.storage.path, session_id);
   await fs.ensureDir(path.dirname(file));
   await fs.appendFile(file, JSON.stringify(event) + "\n", "utf8");
 }
@@ -187,9 +187,9 @@ export async function appendOutboundChatHistory(params: {
   message_id?: string;
   actorId?: string;
   actorName?: string;
-  extra?: JsonObject;
+  extra?: PluginJsonObject;
 }): Promise<void> {
-  const rootPath = normalizeTrimmedString(params.context.data_path);
+  const rootPath = normalizeTrimmedString(params.context.storage.path);
   const session_id = normalizeTrimmedString(params.session_id);
   const chatId = normalizeTrimmedString(params.chatId);
   if (!rootPath || !session_id || !chatId) return;
@@ -207,7 +207,7 @@ export async function appendOutboundChatHistory(params: {
     extra: toOptionalObject(params.extra),
   });
 
-  const file = get_chat_history_path(params.context.data_path, session_id);
+  const file = get_chat_history_path(params.context.storage.path, session_id);
   await fs.ensureDir(path.dirname(file));
   await fs.appendFile(file, JSON.stringify(event) + "\n", "utf8");
 }
@@ -227,9 +227,9 @@ export async function readChatHistory(params: {
   beforeTs?: number;
   afterTs?: number;
 }): Promise<{ historyPath: string; events: ChatHistoryEventV1[] }> {
-  const rootPath = normalizeTrimmedString(params.context.data_path);
+  const rootPath = normalizeTrimmedString(params.context.storage.path);
   const session_id = normalizeTrimmedString(params.session_id);
-  const historyPath = get_chat_history_path(params.context.data_path, session_id);
+  const historyPath = get_chat_history_path(params.context.storage.path, session_id);
   if (!rootPath || !session_id) {
     return {
       historyPath,

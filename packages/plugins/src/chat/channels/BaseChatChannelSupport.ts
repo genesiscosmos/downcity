@@ -7,9 +7,9 @@
  */
 
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
-import type { Logger } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 import {
   resolveSessionIdByChatTarget,
   resolveOrCreateSessionIdByChatTarget,
@@ -27,7 +27,7 @@ export type ChannelUserMessageMeta = {
   /**
    * 任意附加字段名。
    */
-  [key: string]: JsonValue | undefined;
+  [key: string]: PluginJsonValue | undefined;
 };
 
 /**
@@ -113,7 +113,7 @@ export interface ChannelInboundHistoryParams {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 当前渠道。
    */
@@ -157,7 +157,7 @@ export interface ChannelInboundHistoryParams {
   /**
    * 附加元信息。
    */
-  extra?: JsonObject;
+  extra?: PluginJsonObject;
 }
 
 /**
@@ -167,7 +167,7 @@ export interface ChannelToolOutboundHistoryParams extends ChannelSessionTargetPa
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 文本内容。
    */
@@ -181,8 +181,8 @@ export interface ChannelToolOutboundHistoryParams extends ChannelSessionTargetPa
 /**
  * 去除 meta 中的 undefined 字段。
  */
-export function stripUndefinedMeta(meta: ChannelUserMessageMeta): JsonObject {
-  const out: JsonObject = {};
+export function stripUndefinedMeta(meta: ChannelUserMessageMeta): PluginJsonObject {
+  const out: PluginJsonObject = {};
   for (const [key, value] of Object.entries(meta)) {
     if (value !== undefined) out[key] = value;
   }

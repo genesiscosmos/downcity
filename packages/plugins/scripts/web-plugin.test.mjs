@@ -23,20 +23,22 @@ test("WebPlugin 允许空配置并暴露稳定 actions", () => {
 test("search 与 open 从 PluginContext 读取宿主 Web 能力", async () => {
   const plugin = new WebPlugin();
   const context = {
-    web: {
-      async search(input) {
-        return {
-          provider: "mock-search",
-          items: [{ url: "https://example.com", title: input.query }],
-        };
-      },
-      async open(input) {
-        return {
-          provider: "mock-reader",
-          url: input.url,
-          title: "Example",
-          content: "Example content",
-        };
+    agent: {
+      web: {
+        async search(input) {
+          return {
+            provider: "mock-search",
+            items: [{ url: "https://example.com", title: input.query }],
+          };
+        },
+        async open(input) {
+          return {
+            provider: "mock-reader",
+            url: input.url,
+            title: "Example",
+            content: "Example content",
+          };
+        },
       },
     },
   };
@@ -57,11 +59,11 @@ test("search 与 open 从 PluginContext 读取宿主 Web 能力", async () => {
 test("缺少运行时能力或 CDP 配置时只让对应 action 失败", async () => {
   const plugin = new WebPlugin();
   const search_result = await plugin.actions.search.execute({
-    context: {},
+    context: { agent: {} },
     input: { query: "test" },
   });
   const browser_result = await plugin.actions.browser_create_session.execute({
-    context: {},
+    context: { agent: {} },
     input: { url: "https://example.com" },
   });
   assert.equal(search_result.success, false);

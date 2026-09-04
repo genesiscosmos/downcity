@@ -43,7 +43,7 @@ description: 详细说明 resolve 的唯一答案语义、失败规则，以及�
 ## 一个最小例子
 
 ```ts
-const role = await agent.plugins.resolve<{ userId: string }, string>(
+const role = await entry.plugins.resolve<{ userId: string }, string>(
   "auth.resolve_role",
   { userId: "owner" },
 );

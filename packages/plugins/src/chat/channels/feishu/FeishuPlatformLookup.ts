@@ -8,7 +8,7 @@
 
 import fs from "fs-extra";
 import path from "path";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type {
   FeishuDownloadedAttachment,
 } from "@/chat/channels/feishu/types/FeishuChannel.js";
@@ -35,11 +35,11 @@ export interface FeishuLookupDeps {
     /**
      * 记录 warn 日志。
      */
-    warn(message: string, data?: JsonObject): void;
+    warn(message: string, data?: PluginJsonObject): void;
     /**
      * 记录 debug 日志。
      */
-    debug(message: string, data?: JsonObject): void;
+    debug(message: string, data?: PluginJsonObject): void;
   };
   /**
    * Feishu SDK client。
@@ -71,7 +71,7 @@ function warnLookupOnce(
   deps: FeishuLookupDeps,
   warningKey: string,
   message: string,
-  details: JsonObject,
+  details: PluginJsonObject,
 ): void {
   const normalizedKey = String(warningKey || "").trim();
   if (normalizedKey) {

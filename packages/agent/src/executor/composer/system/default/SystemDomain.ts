@@ -8,7 +8,7 @@
 
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import { transform_prompts_into_system_messages } from "@executor/composer/system/default/PromptRenderer.js";
-import type { PluginContext } from "@/types/plugin/PluginContext.js";
+import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
 import { build_runtime_clock_system_prompt } from "@executor/composer/system/default/variables/VariableReplacer.js";
 import {
   CORE_SYSTEM_PROMPT,
@@ -150,7 +150,7 @@ export async function load_managed_plugin_system_prompts(input: {
   /**
    * 当前执行上下文。
    */
-  context: PluginContext;
+  extensions: SessionExtensionRuntime;
 
   /**
    * 当前轮禁用的 plugin 名称集合。
@@ -164,23 +164,11 @@ export async function load_managed_plugin_system_prompts(input: {
       .filter(Boolean),
   );
 
-  for (const snapshot of input.context.plugins.snapshots()) {
-    const plugin = input.context.plugins.get(snapshot.name);
-    if (!plugin) continue;
-    if (disabled_plugin_names.has(plugin.name)) continue;
-    if (typeof plugin.system !== "function") continue;
-    try {
-      if (input.context.plugins.status(plugin.name)?.status !== "ready") continue;
-      if (typeof plugin.availability === "function") {
-        const availability = await plugin.availability(input.context);
-        if (!availability.available) continue;
-      }
-      const text = normalizeSystemText(await plugin.system(input.context));
-      if (!text) continue;
-      out.push(text);
-    } catch {
-      // fail-open
-    }
+  const blocks = await input.extensions.system_blocks();
+  for (const block of blocks) {
+    if (disabled_plugin_names.has(block.name)) continue;
+    const text = normalizeSystemText(block.content);
+    if (text) out.push(text);
   }
 
   return out;
@@ -194,13 +182,7 @@ export async function load_managed_plugin_system_prompts(input: {
  * - 若 plugin 显式声明 availability 且当前 unavailable，则跳过其 system 注入。
  * - 单个 plugin 加载失败走 fail-open，不阻断主链路。
  */
-export async function load_local_plugin_system_prompts(input: {
-  /**
-   * 当前统一执行上下文。
-   */
-  context: PluginContext;
-}): Promise<string[]> {
-  void input;
+export async function load_local_plugin_system_prompts(): Promise<string[]> {
   return [];
 }
 
@@ -329,7 +311,7 @@ export async function resolve_session_system_messages(input: {
   /**
    * 当前执行上下文。
    */
-  context: PluginContext;
+  extensions: SessionExtensionRuntime;
 
 }): Promise<SessionSystemMessage[]> {
   const profile = resolve_system_context_profile(input.profile);
@@ -340,11 +322,9 @@ export async function resolve_session_system_messages(input: {
     replace_default_core_prompt: profile.replace_default_core_prompt,
     static_system_prompts: input.static_system_prompts,
     managed_plugin_system_prompts: await load_managed_plugin_system_prompts({
-      context: input.context,
+      extensions: input.extensions,
       disabled_plugin_names: profile.disable_plugin_systems,
     }),
-    local_plugin_system_prompts: await load_local_plugin_system_prompts({
-      context: input.context,
-    }),
+    local_plugin_system_prompts: await load_local_plugin_system_prompts(),
   });
 }

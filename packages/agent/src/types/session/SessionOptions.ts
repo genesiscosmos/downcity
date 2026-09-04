@@ -12,7 +12,7 @@ import type { AgentModel } from "@/agent/AgentModel.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
@@ -48,14 +48,14 @@ export interface AgentManagedSession extends AgentSession {
     env: Record<string, string>;
   }): void;
 
-  /** 把 Agent Plugin 执行视图加入当前 Session 的有序输入队列。 */
-  enqueue_agent_plugins(input: {
-    /** 当前 Plugin 修改的稳定标识。 */
+  /** 把 City 扩展执行视图加入当前 Session 的有序输入队列。 */
+  enqueue_extensions(input: {
+    /** 当前扩展修改的稳定标识。 */
     command_id: string;
-    /** 当前 Plugin 修改的用户可读标题。 */
+    /** 当前扩展修改的用户可读标题。 */
     title: string;
-    /** 下一 Session Step 使用的 Plugin 执行视图。 */
-    plugins: AgentPluginExecutionRuntime;
+    /** 下一 Session Step 使用的扩展执行视图。 */
+    extensions: SessionExtensionRuntime;
   }): void;
 }
 
@@ -134,8 +134,8 @@ export interface SessionOptions {
    */
   get_workspace_env: () => Record<string, string>;
 
-  /** 创建当前 Agent configured plugin 的 Session step 执行视图。 */
-  get_agent_plugins: () => AgentPluginExecutionRuntime;
+  /** 创建当前 City configured extension 的 Session Step 执行视图。 */
+  get_extensions: () => SessionExtensionRuntime;
 
   /**
    * 读取当前 agent 显式注入的受托管 plugin system blocks。

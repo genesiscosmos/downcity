@@ -1,50 +1,77 @@
 ---
-title: "@downcity/agent"
-description: Index Agent instances in memory and route HTTP/RPC requests by ID.
+title: "City"
+description: The runtime environment that owns Agents, Workspaces, Plugins, and transports.
 ---
 
-`@downcity/agent` is the runtime container shared by the CLI, Desktop, and custom Node hosts. It
-owns Workspaces, Embassy services, and optional HTTP/RPC transports. It never creates Agents,
-Sessions, or Plugins.
+`City` is the composition root shared by the CLI, Desktop, and custom Node hosts. Applications
+create Agents. City owns Workspaces, the Plugin catalog, shared `(plugin_id, profile_id)` instances,
+lifecycle, Storage, Embassy services, and optional HTTP/RPC transports. Sessions remain owned by an
+Agent's `AgentSessions` collection.
 
 ```bash
-pnpm add @downcity/agent @downcity/agent @downcity/workspace
+pnpm add @downcity/agent @downcity/plugins @downcity/workspace
 ```
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { City } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
 
-const workspace = new Workspace({
-  id: "project",
-  path: process.cwd(),
+const workspace = new Workspace({ id: "project", path: process.cwd() });
+const registrations = create_builtin_plugin_registrations();
+const city = new City({
+  embassy,
+  workspaces: [workspace],
+  plugins: registrations,
 });
-const city = new City({ embassy, workspaces: [workspace] });
-const agent = new Agent({ id: "lucas", model, plugins });
-city.agents.add(agent);
-const session = await agent.sessions.create({ workspace: city.workspaces.get("project")! });
+const agent = new Agent({ id: "lucas", model });
 
-const current_agent = city.agents.get("lucas");
+city.agents.add(agent, {
+  plugins: [
+    { plugin_id: "skill" },
+    { plugin_id: "task" },
+    { plugin_id: "memory" },
+  ],
+});
 
+const session = await agent.sessions.create({ workspace });
+await (await session.prompt({ query: "Summarize this project" })).finished;
 await city.close();
 ```
 
-## Ownership
+## Relationships and ownership
 
-- The application creates Agents and Plugins; `city.agents.add(agent)` binds an Agent to one City.
-- `City` owns Workspaces and Embassy services, and keeps Agent references only for routing and shutdown coordination.
-- Sessions are created by the Agent and select a City Workspace explicitly.
-- Each Agent owns its Plugin lifecycle and ActionSchedule.
-- The CLI daemon and Desktop window own independent City and Agent lifecycles.
+- `City` owns the Plugin catalog, shared instances, main modules, lifecycle, and execution leases.
+- `Agent` owns identity, model, instructions, custom tools, and `AgentSessions`; it only declares Plugin ID/Profile bindings.
+- `Session` belongs to an Agent and receives one Workspace execution context plus a City Plugin execution view.
+- `Workspace` owns project files, tools, environment, and an optional Shell. It does not own Agents, Sessions, or Plugins.
 
-## Host coordination
+An SDK host may also call `city.plugins.provide(registration)` and then bind it with
+`city.plugins.register(agent_id, { plugin_id, profile })`. One Plugin ID can map to only one module
+within a City. One `(plugin_id, profile_id)` creates one instance shared by every bound Agent.
 
-The CLI and Desktop use one host record when starting City. If the other host is already running,
-the new host asks for confirmation, requests a graceful shutdown, and waits for the existing process
-to release its transports. This protocol only coordinates City listener ownership. It adds no Agent
-started state and never modifies persisted Agent, Plugin, or Session data.
+## Plugin lifecycle
 
-Single-Agent execution, AgentSessions, Session, Plugin SDK, and RemoteAgent remain in
-`@downcity/agent`. Project resources and Shell belong to `@downcity/workspace`. Federation,
-Embassy, and Bureau belong to `@downcity/federation`.
+A Plugin main is activated once per Plugin ID and deactivated when City closes. Execution instances
+have four lifecycle checkpoints:
+
+1. City creates an instance and calls `start` when the first Agent references a Profile.
+2. City calls `bind(context)` when an Agent enters a Workspace.
+3. City calls `unbind(context)` when that scope leaves or the Plugin is unbound.
+4. City calls `stop` after the final Agent reference and active execution lease are released.
+
+Actions, System providers, Availability checks, and Hooks receive a `PluginContext`. It contains
+restricted `city`, `agent`, `workspace`, `session`, `turn`, `profile`, and `storage` handles. A Plugin
+can therefore communicate through the current Session or Agent handle instead of resolving only a
+`session_id`.
+
+Hooks remain scheduled by City's execution Registry. A Session captures an immutable execution
+lease at explicit checkpoints. New Steps stop seeing a dynamically unbound Plugin immediately,
+while an existing Step may finish before its lease triggers final cleanup.
+
+One Chat Profile owns one channel connection set and one queue. Reusing it across Agent/Workspace
+scopes requires explicit `owner_agent_id` and `owner_workspace_id` values. Without an owner, binding
+a second distinct scope fails.
+
+The CLI daemon and Desktop window own independent City lifecycles. Host coordination only controls
+listener ownership; it does not mutate persisted Agent, Plugin, or Session data.

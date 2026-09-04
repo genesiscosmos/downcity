@@ -7,7 +7,7 @@
  * - `TelegramBot` 只传入平台能力与队列写入能力，保持门面轻量。
  */
 
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import type { ChannelUserMessageMeta } from "@/chat/channels/BaseChatChannelSupport.js";
 import {
   getTelegramChatTitle,
@@ -62,7 +62,7 @@ export type TelegramPendingAuditWriter = (params: {
 export async function drainTelegramPendingUpdatesToHistory(params: {
   reason: TelegramPendingDrainReason;
   platform: TelegramPendingUpdatePlatform;
-  logger: Logger;
+  logger: PluginLogger;
   enqueueAuditMessage: TelegramPendingAuditWriter;
 }): Promise<void> {
   const drained = await params.platform.drainPendingUpdates({

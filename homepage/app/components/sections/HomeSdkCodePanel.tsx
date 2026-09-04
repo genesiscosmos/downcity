@@ -45,15 +45,15 @@ export function home_sdk_file_for_step(active_step: number): HomeSdkFileKey {
 function create_code_groups(locale: "zh" | "en") {
   return {
     agent: [
-      { key: "agent-import", start_step: 0, order: 0, lines: ['import { Agent } from "@downcity/agent";'] },
+      { key: "agent-import", start_step: 0, order: 0, lines: ['import { Agent, City } from "@downcity/agent";'] },
       { key: "workspace-import", start_step: 2, order: 1, lines: ['import { Workspace } from "@downcity/workspace";'] },
       { key: "model-import", start_step: 4, order: 2, lines: ['import { Embassy } from "@downcity/federation";'] },
-      { key: "plugin-import", start_step: 5, order: 3, lines: ['import { SkillPlugin } from "@downcity/plugins/skill";', 'import { TaskPlugin } from "@downcity/plugins/task";', 'import { WebPlugin } from "@downcity/plugins/web";', 'import { MemoryPlugin } from "@downcity/plugins/memory";'] },
+      { key: "plugin-import", start_step: 5, order: 3, lines: ['import { create_builtin_plugin_registrations } from "@downcity/plugins";'] },
       { key: "agent-create", start_step: 1, order: 10, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "});"] },
       { key: "workspace-create", start_step: 2, order: 11, lines: ["", "const workspace = new Workspace({", '  id: "project",', "  path: process.cwd(),", "});"] },
-      { key: "session-create", start_step: 3, order: 12, lines: ["", "const session = await agent.sessions.create({ workspace });"] },
-      { key: "model-resolve", start_step: 4, order: 13, lines: ["", `// ${locale === "zh" ? "User Token 已绑定登录时选择的 Bureau。" : "The User Token is bound to the Bureau selected at login."}`, "const embassy = new Embassy({", '  federation_url: "https://api.example.com",', "  user_token: process.env.FEDERATION_USER_TOKEN!,", "});", "const catalog = await embassy.user.ai.catalog();", 'const city_model = catalog.require("deepseek-chat");', "await session.set({ model: city_model });"] },
-      { key: "agent-with-plugins", start_step: 5, order: 10, replaces: "agent-create", highlight_from: 4, highlight_until: 10, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "  plugins: [", "    new SkillPlugin(),", "    new TaskPlugin(),", "    new WebPlugin(),", "    new MemoryPlugin(),", "  ],", "});"] },
+      { key: "session-create", start_step: 3, order: 13, lines: ["", "const session = await agent.sessions.create({ workspace });"] },
+      { key: "model-resolve", start_step: 4, order: 14, lines: ["", `// ${locale === "zh" ? "User Token 已绑定登录时选择的 Bureau。" : "The User Token is bound to the Bureau selected at login."}`, "const embassy = new Embassy({", '  federation_url: "https://api.example.com",', "  user_token: process.env.FEDERATION_USER_TOKEN!,", "});", "const catalog = await embassy.user.ai.catalog();", 'const city_model = catalog.require("deepseek-chat");', "await session.set({ model: city_model });"] },
+      { key: "agent-with-plugins", start_step: 5, order: 12, replaces: "agent-create", highlight_from: 4, highlight_until: 16, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "});", "const registrations = create_builtin_plugin_registrations();", "const city = new City({", "  workspaces: [workspace],", "  plugins: registrations,", "});", "city.agents.add(agent, {", "  plugins: [", '    { plugin_id: "skill" },', '    { plugin_id: "task" },', '    { plugin_id: "web" },', '    { plugin_id: "memory" },', "  ],", "});"] },
       { key: "user-prompt", start_step: 20, order: 20, lines: ["", `const turn = await session.prompt({ query: "${locale === "zh" ? "总结当前仓库" : "Summarize this repository"}" });`, "const result = await turn.finished;", "console.log(result.text);"] },
     ],
     city: [

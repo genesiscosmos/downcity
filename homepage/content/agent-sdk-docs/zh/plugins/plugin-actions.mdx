@@ -1,147 +1,45 @@
 ---
 title: Plugin Actions
-description: 说明 plugin action 的 command、api、execute 结构，以及执行上下文和协作式超时
+description: 定义结构化 Plugin Action 以及 Context、执行身份和取消语义。
 ---
 
 # Plugin Actions
 
-plugin action 是 plugin 最直接的显式能力入口。
-
-一个 action 主要由这些部分组成：
-
-- `allowWhenDisabled`
-- `command`
-- `api`
-- `execute`
-
-## 最核心的是 `execute`
-
-最小例子：
+Action 是 Plugin 的显式业务入口，由 `description`、可选输入 schema/command/api、超时和
+`execute` 组成。
 
 ```ts
-actions: {
-  status: {
-    execute: async ({ context }) => {
-      return {
-        success: true,
-        data: {
-          workspace_path: context.workspace_path,
-        },
-      };
+import { create_action } from "@downcity/plugin";
+import { z } from "zod";
+
+const status = create_action({
+  description: "Read the current execution scope.",
+  input_schema: { zod: z.object({}) },
+  timeout_ms: 30_000,
+  execute: async ({ context, execution }) => ({
+    success: true,
+    data: {
+      agent_id: context.agent.id,
+      workspace_id: context.workspace.id,
+      session_id: context.session?.id ?? null,
+      turn_id: context.turn?.id ?? null,
+      call_id: execution.call_id,
     },
-  },
-}
+  }),
+});
 ```
 
-`execute` 负责：
+每次调用有两个只读输入：
 
-- 接收结构化 payload
-- 执行业务逻辑
-- 返回 `success / data / error / message`
+- `context` 是 City 创建的作用域能力，包含受限 City、Agent、Workspace、Session、Turn、Profile 与 Storage 对象。
+- `execution` 是单次 Action 身份，包含 `call_id`、`abort_signal`、可选 Session scope 与 Step snapshot。
 
-每次 Action 调用都会收到两个职责分离的只读输入：
+Action 应把 `execution.abort_signal` 传给网络请求、轮询和长耗时任务。`timeout_ms` 只触发协作式
+取消，底层操作必须响应信号。返回值必须是可 JSON 序列化的 `PluginActionResult`。
 
-- `context`：稳定的 Agent 与 Workspace 能力，包括身份、文件、Shell、日志、Web、Sessions 和 Plugins
-- `execution`：单次调用的身份、取消信号、可选 Session 范围和当前 Step 快照
+`command` 只把 Commander 输入映射为 payload；`api` 只把 HTTP 请求映射为 payload。它们不创建
+第二套业务入口，最终都执行同一个 `execute`。
 
-模型 Tool 调用时，`execution.call_id` 等于对应 Tool Call ID；Session 的 `session_id`、完整 `origin`、`turn_id` 和可选交互端口位于 `execution.session`；当前生效的 `session_origin`、`workspace_env` 与 `agent_systems` 位于 `execution.snapshot`。CLI、HTTP 或 scheduler 直接调用时，运行时会自动生成 `call_id` 和取消信号，但没有 Session 范围。Action 应把 `execution.abort_signal` 传递给网络请求、轮询和长耗时任务。
-
-## `command`
-
-`command` 用于 CLI 输入映射。
-
-它适合定义：
-
-- 描述文本
-- commander 参数和选项
-- 从 CLI 输入到 payload 的映射
-
-## `api`
-
-`api` 用于 HTTP action 输入映射。
-
-它适合定义：
-
-- method
-- path
-- 从 HTTP 请求到 payload 的映射
-
-## `timeout_ms`
-
-Action 可以声明协作式超时：
-
-```ts
-actions: {
-  search: {
-    timeout_ms: 30_000,
-    execute: async ({ execution }) => {
-      const response = await fetch("https://example.com", {
-        signal: execution.abort_signal,
-      });
-      return { success: true, data: { status: response.status } };
-    },
-  },
-}
-```
-
-超时会触发 `execution.abort_signal`。这是协作式约束，Action 必须把信号传给底层操作；业务失败不会改变 Plugin 的生命周期状态。
-
-## `allowWhenDisabled`
-
-这是 plugin action 和普通运行态 action 一个很容易忽略的差异点。
-
-它表示：
-
-- 即使 plugin 当前处于 disabled，某个 action 仍然允许执行
-
-典型场景：
-
-- `status`
-- `install`
-- `configure`
-- `models`
-
-也就是那些“你正是因为 plugin 还没可用，所以更需要先执行”的 action。
-
-如果没有显式打开 `allowWhenDisabled`，disabled plugin 的普通 action 会被拦住。
-
-## action 的执行上下文是什么
-
-Plugin Action 会刻意分开稳定能力与单次调用状态：从 `context` 读取 Agent 与 Workspace 服务，从 `execution` 读取调用身份、取消、Session 交互和当前 Step 快照。Plugin 产品配置仍由上游在构造 Plugin 实例时传入。
-
-## 一个完整一些的例子
-
-```ts
-actions: {
-  use: {
-    allowWhenDisabled: true,
-    command: {
-      description: "切换默认 provider",
-      mapInput({ args }) {
-        return {
-          provider: String(args[0] || ""),
-        };
-      },
-    },
-    execute: async ({ input }) => {
-      const provider = String((input as { provider?: unknown }).provider || "").trim();
-      if (!provider) {
-        return {
-          success: false,
-          error: "provider is required",
-          message: "provider is required",
-        };
-      }
-      return {
-        success: true,
-        data: { provider },
-      };
-    },
-  },
-}
-```
-
-## 相关文档
-
-- [Plugin 配置](/zh/agent-sdk-docs/plugins/configuration)
-- [自定义 Plugin](/zh/agent-sdk-docs/plugins/custom-plugin)
+模型通过当前 Session 的 `plugin_call` Tool 调用 Action。Plugin 内部可以通过
+`context.city.plugins.run_action()` 调用当前 Agent 已绑定的其他 Plugin；应用代码则从
+`city.enter_workspace()` 返回的执行入口调用 `entry.plugins.run_action()`。

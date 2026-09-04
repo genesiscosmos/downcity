@@ -5,24 +5,23 @@ description: What a Downcity Plugin is and how it extends Agent capabilities
 
 # Plugin
 
-A **Plugin** is Downcity's single extension product unit. It may provide Agent runtime capabilities, host-side management logic, a Sidebar + Mainview workspace, and Config without introducing a separate Extension identity.
+A **Plugin** is Downcity's single extension product unit. City provides and owns it, projecting runtime capabilities into Agent/Session scopes while also supporting host management logic, a Sidebar + Mainview workspace, and Config.
 
 ```text
 Plugin
-├── agent      optional: Agent runtime capability
-├── main       optional: management logic and actions
+├── main       optional: City instances, lifecycle, management logic, and actions
 └── renderer   optional: Sidebar + Mainview and/or Config
 ```
 
 ## What a plugin does
 
 - Exposes tools the Agent can call during execution
-- Hooks into the Agent lifecycle (start, stop, session events)
+- Hooks into City Plugin lifecycle (`start`, `bind`, `unbind`, `stop`)
 - Manages its own state, connections, and background tasks
 - Provides a Profile-independent Sidebar + Mainview workspace and edits configuration in a separate Config on its Catalog detail page
-- Runs inside the Agent process boundary, not as a separate service
+- Runs inside the City process boundary, not as a separate service
 
-A Profile is only host-provided configuration space for a Plugin that declares Config; it is unrelated to the functional workspace. The Plugins Sidebar always shows the complete Catalog, and every Plugin opens a detail page with its description, README, and optional Config. Functional Plugins also appear on the top-level navigation rail; selecting one replaces the Sidebar with its own navigation and renders its Mainview. A Plugin without Config does not need a Profile. Business configuration never lives in `agent.json`.
+A Profile is City-provided configuration space for a Plugin and is unrelated to the functional workspace. One `(plugin_id, profile_id)` maps to one shared instance inside a City. Agent declares only a Plugin/Profile binding and owns neither the instance nor lifecycle.
 
 ## Built-in plugins
 
@@ -38,20 +37,17 @@ Downcity ships several built-in plugins that cover common agent needs:
 
 ## Writing a plugin
 
-In the SDK, a Plugin remains a regular TypeScript instance and can be passed directly to an Agent without the install protocol:
+In the SDK, provide a Plugin through `CityPluginRegistration`, then bind an Agent by ID without using the install protocol:
 
 ```ts
-const agent = new Agent({
-  id: "coding-pro",
-  model,
-  plugins: [new GithubPlugin({ token })],
-});
+const city = new City({ plugins: [github_registration], workspaces: [workspace] });
+city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
 ```
 
-Add a `plugin.json` with optional `agent`, `main`, and `renderer` entries only when the Plugin must be installed and managed by CLI or Desktop.
+Add a `plugin.json` with a unified `main` and optional `renderer` entry only when the Plugin must be installed and managed by CLI or Desktop.
 
 ## Where to learn more
 
 - [Agent Plugins Docs](/en/plugins-docs) — built-in plugin manuals and examples
 - [Agent SDK](/en/agent-sdk-docs) — how to register and use plugins programmatically
-- [Custom Plugin](/en/docs/plugin/custom) — the three-entry install protocol
+- [Custom Plugin](/en/docs/plugin/custom) — the unified main install protocol

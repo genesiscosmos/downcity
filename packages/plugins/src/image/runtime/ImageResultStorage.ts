@@ -117,11 +117,11 @@ async function persist_remote_image(input: {
     job_segment,
     filename,
   );
-  const absolute_path = input.context.data_files.resolve_path(...relative_path.split("/"));
-  if (!(await input.context.data_files.path_exists(absolute_path))) {
+  const absolute_path = input.context.storage.files.resolve_path(...relative_path.split("/"));
+  if (!(await input.context.storage.files.path_exists(absolute_path))) {
     const bytes = await read_response_bytes(response);
-    await input.context.data_files.ensure_directory(path.dirname(absolute_path));
-    await input.context.data_files.write_file_atomically(absolute_path, bytes);
+    await input.context.storage.files.ensure_directory(path.dirname(absolute_path));
+    await input.context.storage.files.write_file_atomically(absolute_path, bytes);
   } else {
     await response.body?.cancel();
   }

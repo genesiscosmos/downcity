@@ -7,18 +7,18 @@ description: Understand plugin registration state and runtime availability
 
 There are two facts that are easy to confuse:
 
-- registered
+- bound to the current Agent by City
 - `available`
 
-## Registered
+## Bound
 
 This means:
 
-- whether the plugin is currently registered on the Agent
+- whether City currently binds the Plugin to this Agent
 
-In snapshots, the legacy `enabled` field means "registered", not a project config switch.
+Providing a registration to the City catalog does not make it executable by every Agent. The Plugin appears in `entry.plugins` only after `city.agents.add(..., { plugins })` or `city.plugins.register(...)` binds it. In snapshots, `enabled` means "bound to this Agent", not a project config switch.
 
-A newly registered plugin remains `initializing` until lifecycle startup finishes. Actions, availability checks, system blocks, and hooks wait for that startup barrier before executing.
+A newly bound Plugin remains `initializing` until its shared instance finishes lifecycle startup. Actions, Availability checks, System blocks, and Hooks wait for that barrier before executing.
 
 If plugin lifecycle startup fails, the plugin state can become `error` for diagnostics. Ordinary action business failures do not mark the whole plugin as `error`; for example, a failed `skill.lookup` returns that action failure while the `skill` plugin remains callable.
 
@@ -43,7 +43,7 @@ For example:
 
 ## Why two layers exist
 
-Because "the Agent registered it" and "the dependency chain is actually ready" are different facts.
+Because "City bound it to this Agent" and "the dependency chain is actually ready" are different facts.
 
 That split lets UI describe:
 
@@ -57,7 +57,7 @@ That split lets UI describe:
 The control-plane catalog mainly answers:
 
 - does this plugin exist
-- can an Agent register it
+- can City bind it to an Agent
 
 It does not always have a full runtime context to perform deep checks.
 
@@ -77,13 +77,13 @@ It can combine:
 
 Chat authorization is now a built-in runtime capability of `ChatPlugin`; it is no longer registered as a separate plugin.
 
-That means it no longer appears as its own catalog entry. Whether chat authorization exists depends on whether the current agent has `ChatPlugin` registered.
+That means it no longer appears as its own catalog entry. Whether chat authorization exists depends on whether City has bound `ChatPlugin` to the current Agent.
 
 ## Safest mental model
 
 Remember it as:
 
-- registration is the switch
+- Agent binding is the execution switch
 - `available` is the health
 
 ## Related docs

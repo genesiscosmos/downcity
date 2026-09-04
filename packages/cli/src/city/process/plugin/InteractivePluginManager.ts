@@ -58,7 +58,7 @@ export async function run_interactive_agent_plugin_manager(agent_id: string): Pr
       name: "plugin_id",
       message: `Agent Plugins · ${agent_id}`,
       choices: [
-        ...catalog.filter((plugin) => plugin.has_agent).map((plugin) => {
+        ...catalog.filter((plugin) => plugin.has_main).map((plugin) => {
           const reference = get_agent_plugin_reference(agent_id, plugin.plugin_id);
           return {
             title: `${reference ? "●" : "○"} ${plugin.title}`,
@@ -85,7 +85,7 @@ async function run_interactive_plugin_actions(plugin: PluginCatalogItem): Promis
     subtitle: plugin.description,
     choices: [
       ...(plugin.has_config ? [{ title: "管理 Profile", description: "创建 Config 的命名配置空间", value: "profile" }] : []),
-      ...(plugin.has_agent
+      ...(plugin.has_main
         ? [{ title: "注册到 Agent", description: "选择 Agent 和 Profile", value: "agent" }]
         : []),
       ...(plugin.source === "installed"

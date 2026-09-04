@@ -14,8 +14,8 @@ import type {
   ChatDispatchSendActionParams,
   ChatDispatcher,
 } from "@/chat/types/ChatDispatcher.js";
-import type { Logger } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
 import { resolveChatQueueStore } from "@/chat/runtime/ChatQueue.js";
 import { deleteChatSessionById } from "@/chat/runtime/ChatSessionDelete.js";
 import {
@@ -132,7 +132,7 @@ export abstract class BaseChatChannel {
   protected readonly context: PluginContext;
   protected readonly rootPath: string;
   protected readonly dataPath: string;
-  protected readonly logger: Logger;
+  protected readonly logger: PluginLogger;
   private readonly access_notice_sent_at = new Map<string, number>();
 
   protected constructor(params: {
@@ -141,8 +141,8 @@ export abstract class BaseChatChannel {
   }) {
     this.channel = params.channel;
     this.context = params.context;
-    this.rootPath = params.context.workspace_path;
-    this.dataPath = params.context.data_path;
+    this.rootPath = params.context.workspace.path;
+    this.dataPath = params.context.storage.path;
     this.logger = params.context.logger;
 
     const dispatcher: ChatDispatcher = {
@@ -247,7 +247,7 @@ export abstract class BaseChatChannel {
   protected buildAccessBlockedText(params: {
     result: IncomingChatAccessResult;
   }): string {
-    const agent_id = String(this.context.agent_id || "agent").trim() || "agent";
+    const agent_id = String(this.context.agent.id || "agent").trim() || "agent";
     const displayed_agent_id = this.format_access_code(agent_id);
     if (params.result.reason === "identity_missing") {
       return "当前平台身份无法识别，请联系管理员检查 Chat 账号配置。";

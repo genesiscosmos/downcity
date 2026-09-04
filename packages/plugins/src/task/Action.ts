@@ -8,9 +8,9 @@
 
 import path from "node:path";
 import type { ShipTaskStatus, TaskDeliverySession } from "./types/Task.js";
-import type { PluginContext } from "@downcity/agent";
-import type { PluginExecutionContext } from "@downcity/agent";
-import type { JsonValue } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginExecutionContext } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/plugin";
 import {
   deriveTaskIdFromTitle,
   normalizeTaskId,
@@ -47,7 +47,7 @@ import type {
   TaskSetStatusResponse,
 } from "./types/TaskCommand.js";
 
-function resolveTaskStatus(input: JsonValue | undefined, fallback: ShipTaskStatus): ShipTaskStatus {
+function resolveTaskStatus(input: PluginJsonValue | undefined, fallback: ShipTaskStatus): ShipTaskStatus {
   const normalized = normalizeTaskStatus(input);
   return normalized || fallback;
 }
@@ -381,7 +381,7 @@ export async function runTaskDefinition(params: {
   context: PluginContext;
   data_path: string;
   request: TaskRunRequest;
-  notifications?: import("@downcity/agent").PluginNotificationPublisher;
+  notifications?: import("@downcity/plugin").PluginNotificationPublisher;
   execution_context?: PluginExecutionContext;
 }): Promise<TaskRunResponse> {
   const root = path.resolve(params.data_path);

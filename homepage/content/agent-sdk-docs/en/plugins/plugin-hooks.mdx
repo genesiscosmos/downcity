@@ -36,10 +36,10 @@ What actually happens is: host code explicitly calls a named point at a specific
 For example:
 
 ```ts
-const value = await agent.plugins.pipeline("chat.enrich_message", input);
-await agent.plugins.guard("review.require_checked", value);
-await agent.plugins.effect("audit.observe", value);
-const role = await agent.plugins.resolve("auth.resolve_role", {
+const value = await entry.plugins.pipeline("chat.enrich_message", input);
+await entry.plugins.guard("review.require_checked", value);
+await entry.plugins.effect("audit.observe", value);
+const role = await entry.plugins.resolve("auth.resolve_role", {
   userId: "owner",
 });
 ```
@@ -50,6 +50,10 @@ So the clean mental split is:
 - the host decides when that extension point executes
 
 If the host never calls that point, the hook never runs.
+
+Hooks are declared by Plugin instances and dispatched by the City-owned Registry for the current Agent/Workspace scope. A Session captures one execution lease at each checkpoint, so the call observes a stable Plugin set; concurrent unbinding waits for active leases to finish.
+
+Inside a Plugin, `context.city.plugins` exposes only `pipeline()`, `effect()`, and `run_action()` for collaboration. `guard` and `resolve` remain host-control and authority surfaces and are called from host execution entries such as `entry.plugins`.
 
 ## Why `resolve` deserves separate attention
 

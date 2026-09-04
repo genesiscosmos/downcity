@@ -8,7 +8,8 @@ description: 在 Node 应用中嵌入 Downcity Agent 运行时
 `@downcity/agent` 用于在同一进程中创建 Agent、管理 Session 并执行模型调用。完整 API 参考在 [Agent SDK 文档](/zh/agent-sdk-docs)。
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
 import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
@@ -24,8 +25,12 @@ const agent = new Agent({
   id: "repo-helper",
   model,
   tools: { search: search_tool },
-  plugins: [plugin],
 });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
+});
+city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
 
 // Session 在创建时选择 Workspace。
 const session = await agent.sessions.create({ workspace });
@@ -50,7 +55,7 @@ Agent 配置不绑定 Workspace。每个 Session 可以使用一个 Workspace；
 默认来源分区是 `chat`。创建方可以指定任意非空 `origin.type`，恢复时通过
 `get(session_id, origin_type)` 明确读取同一个来源分区。
 
-`Agent` 在构造时启动 plugin 生命周期与后台任务，Session 执行会自动等待初始化完成；关闭时使用 `await agent.dispose()`。HTTP 与 RPC 由宿主 `City` 通过 `city.http()` 与 `city.rpc()` 提供。
+City 在绑定时启动 Plugin 共享实例与后台任务，Session 执行会自动等待初始化完成。关闭整个宿主使用 `await city.close()`；只移除 Agent 使用 `city.agents.remove()`。HTTP 与 RPC 也由 City 统一提供。
 
 ## 流式消息
 

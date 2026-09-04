@@ -8,13 +8,13 @@
  */
 
 import path from "path";
-import type { Logger } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
 import type {
   IncomingChatAccessParams,
   IncomingChatAccessResult,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { InboundReplyContext } from "@/chat/types/ReplyContext.js";
 import {
   buildReplyContextExtra,
@@ -52,7 +52,7 @@ export interface FeishuMessageHandlerOptions {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 构建 chat_key。
    */
@@ -149,7 +149,7 @@ export interface FeishuMessageHandlerOptions {
     actorId?: string;
     actorName?: string;
     chatTitle?: string;
-    extra?: JsonObject;
+    extra?: PluginJsonObject;
   }): Promise<void>;
   /**
    * 发送错误消息。

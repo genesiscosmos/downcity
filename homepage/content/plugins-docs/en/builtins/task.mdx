@@ -44,22 +44,23 @@ Use the `task` Plugin when automation should remain named, editable, and manuall
 
 ## SDK Assembly
 
-`TaskPlugin` accepts an optional timezone and host notification port. Every Task binds one execution Workspace. When `create` is called from an Agent Session, the runtime automatically captures that Session's `session_id` and `origin.type` as the fixed delivery target; the model neither needs nor is allowed to provide Session routing in the action payload. Agent tasks prefer the delivery Session's model when configured and otherwise use the Agent model. By default, cron uses the current machine timezone. Direct SDK usage can omit `notifications` when UI unread state is not needed:
+Every Task binds one execution Workspace. When `create` is called from an Agent Session, the runtime automatically captures that Session's `session_id` and `origin.type` as the fixed delivery target; the model neither needs nor is allowed to provide Session routing in the action payload. Agent tasks prefer the delivery Session's model when configured and otherwise use the Agent model. An SDK registers the built-in Task module with City and binds an Agent:
 
 ```ts
-import { TaskPlugin } from "@downcity/plugins/task";
-
-const plugin = new TaskPlugin({
-  timezone: "Asia/Shanghai",
-});
+const registrations = create_builtin_plugin_registrations();
+const city = new City({ plugins: registrations, workspaces: [workspace] });
+city.agents.add(agent, { plugins: [{ plugin_id: "task" }] });
+const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-`timezone` mainly affects cron expressions. One-shot `time:<ISO8601-with-timezone>` tasks use the timezone offset embedded in the ISO string itself.
+Cron uses the current machine timezone by default. To customize it, provide a custom registration
+factory that creates `TaskPlugin({ timezone })`. One-shot `time:<ISO8601-with-timezone>` tasks use the
+offset embedded in the ISO string itself.
 
 ## SDK action use
 
 ```ts
-await agent.plugins.run_action({
+await entry.plugins.run_action({
   plugin: "task",
   action: "run",
   payload: {
@@ -73,7 +74,7 @@ The action names are `list`, `history`, `run_detail`, `create`, `run`, `delete`,
 
 ## Important semantics
 
-- long-lived cron runtime belongs to the plugin instance
+- the cron scheduler starts and stops with City's Agent/Workspace `bind/unbind` scope
 - cron timezone comes from constructor `timezone`, defaulting to the local machine timezone
 - agent tasks read the effective runtime model from the Session port in PluginContext
 - each run creates an independent task Session while reusing the host Agent's complete Plugin capabilities
@@ -82,11 +83,11 @@ The action names are `list`, `history`, `run_detail`, `create`, `run`, `delete`,
 - Tasks created from CLI, HTTP, or host management surfaces without a Session context have no delivery target, so results remain in run history
 - task scheduler reload is triggered after create, update, delete, or status mutation
 - the running-task lock belongs to the plugin instance, so reloads still keep each task serial
-- the plugin can also accept lifecycle commands such as reload or reschedule
 
 ## Public status
 
-`TaskPlugin` is exported from `@downcity/plugins`. It can be attached directly in SDK usage; the CLI invokes it through the shared `city plugin action` command.
+`TaskPlugin` is exported from `@downcity/plugins`. SDK code creates it inside a City registration
+factory; the CLI invokes it through the shared `city plugin action` command.
 
 ## Related docs
 

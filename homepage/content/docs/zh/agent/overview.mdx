@@ -5,14 +5,14 @@ description: Agent SDK 是什么，以及如何运行 Agent 工作
 
 # Agent
 
-**Agent SDK** (`@downcity/agent`) 是执行 Agent 工作的核心运行时。Agent 负责身份、模型、指令、Plugin 与唯一的 `AgentSessions` 集合；每个 Session 可以接收一个 Workspace，用于项目工具和环境。`City` 是宿主进程内 Agent 实例的生命周期容器。
+**Agent SDK** (`@downcity/agent`) 是执行 Agent 工作的核心运行时。Agent 负责身份、模型、指令、Tool 与唯一的 `AgentSessions` 集合；每个 Session 可以接收一个 Workspace。`City` 持有 Workspace、Plugin catalog、共享实例、Agent 绑定与 transport。
 
 ## Agent 做什么
 
 - 读取项目配置（构造参数或项目目录）
 - 维护会话和对话历史
 - 在执行过程中调用工具
-- 运行扩展其能力的插件
+- 使用 City 投影到当前作用域的 Plugin 能力
 - 绑定到模型进行推理
 
 ## 创建 Agent
@@ -27,7 +27,7 @@ AI 生成和 Agent 运行模型都默认选中 Desktop 设置中的系统默认�
 
 创建后可以在 Agent 配置中继续修改名称和简介。修改名称不会改变稳定 Agent ID，因此已有 Session、Group 引用和 Plugin 数据路径保持不变。
 
-Agent 配置中的“删除 Agent”会永久删除该 Agent 的定义、头像、Session、日志、Schedule 与 Agent 级 Plugin 数据。正在执行任务或仍属于 Group 的 Agent 不能删除，需要先结束执行或将它移出相关 Group。
+Agent 配置中的“删除 Agent”会永久删除该 Agent 的定义、头像、Session、日志、Schedule 与 Agent 作用域的 Plugin 数据。正在执行任务或仍属于 Group 的 Agent 不能删除，需要先结束执行或将它移出相关 Group。
 
 ## Desktop 完成提醒
 
@@ -40,7 +40,8 @@ Agent 配置中的“删除 Agent”会永久删除该 Agent 的定义、头像�
 创建 Group 时只填写用户可见名称，内部 `group_id` 由 Desktop 根据名称自动生成。创建后可以修改名称、协作目标、模型与成员，但稳定 `group_id` 不会改变。Group 头像由成员 Agent 的头像组合展示。
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
 import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
@@ -49,13 +50,17 @@ const agent = new Agent({
   id: "repo-helper",
   model: myModel,
   tools: { my_tool: myTool },
-  plugins: [myPlugin],
 });
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
   shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
 });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
+});
+city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
 ```
 
 ## 从历史消息创建 Session 分支
@@ -83,10 +88,10 @@ Desktop 会从用户级 Agent 目录读取头像。将图片放在对应 Agent I
 
 ## 关键概念
 
-- **City** — 持有一个或多个已经实例化的 Agent，并在宿主退出时统一释放。它不读取 Registry，也不决定 Agent 是否应当运行。
+- **City** — 持有 Workspace、Plugin catalog、Profile 共享实例、Agent 绑定与统一 transport。
 - **Session** — 一个执行线程。Agent 按需创建会话，并通过它们路由消息。
 - **Tool** — Agent 在执行过程中可调用的函数。直接传给构造函数。
-- **Plugin** — 扩展 Agent 能力的模块，如聊天、任务或记忆。也直接传给构造函数。
+- **Plugin** — 由 City 提供和维护，再按 Plugin/Profile 绑定到 Agent 的扩展能力。
 - **Model** — 推理后端。Agent 持有默认实例，Session 可设置自己的实例并优先使用。
 
 ## Agent 不做什么

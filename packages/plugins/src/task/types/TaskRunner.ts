@@ -3,11 +3,11 @@
  *
  * 关键点（中文）
  * - 这里集中声明 task runner 在拆分后跨模块共享的内部类型。
- * - 这些类型服务于 task 运行链路，统一归档到 `src/types/task/`。
+ * - 这些类型服务于 task 运行链路，统一归档到当前功能域的 `types/`。
  */
 
 import type { SessionMessages } from "@downcity/agent";
-import type { SessionPort } from "@downcity/agent";
+import type { PluginSessionHandle } from "@downcity/plugin";
 import type {
   ShipTaskRunExecutionStatusV1,
   ShipTaskRunProgressPhaseV1,
@@ -179,7 +179,7 @@ export type TaskSessionRuntimePort = {
    */
   get_messages(session_id: string): SessionMessages;
   /** 获取 task session 对应的宿主 Session runtime port。 */
-  get_session(session_id: string): SessionPort;
+  get_session(session_id: string): PluginSessionHandle;
 };
 
 /**

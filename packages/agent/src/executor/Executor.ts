@@ -22,7 +22,7 @@ import type {
 } from "@/types/session/SessionExecution.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
-import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
 import { is_action_result } from "@/types/action/ActionResult.js";
 import { generate_id } from "@/utils/Id.js";
 import {
@@ -70,8 +70,8 @@ type ExecutorOptions = {
    */
   logger: Logger;
 
-  /** 创建当前 Session effective Plugin 执行视图。 */
-  get_plugins?: () => AgentPluginExecutionRuntime;
+  /** 创建当前 Session effective City 扩展执行视图。 */
+  get_extensions?: () => SessionExtensionRuntime;
 };
 
 /**
@@ -88,7 +88,7 @@ export class Executor implements SessionExecutor {
   private readonly apply_system_snapshot?: ExecutorOptions["apply_system_snapshot"];
   private readonly compact_history: ExecutorOptions["compact_history"];
   private readonly get_model: ExecutorOptions["get_model"];
-  private readonly get_plugins: ExecutorOptions["get_plugins"];
+  private readonly get_extensions: ExecutorOptions["get_extensions"];
   private readonly logger: Logger;
   private readonly recovery_policy: ExecutorRecoveryPolicy;
   private readonly core_engine_runner: CoreEngineRunner;
@@ -107,7 +107,7 @@ export class Executor implements SessionExecutor {
     this.apply_system_snapshot = options.apply_system_snapshot;
     this.compact_history = options.compact_history;
     this.get_model = options.get_model;
-    this.get_plugins = options.get_plugins;
+    this.get_extensions = options.get_extensions;
     this.logger = options.logger;
     this.recovery_policy = new ExecutorRecoveryPolicy({
       session_id: this.session_id,
@@ -273,13 +273,13 @@ export class Executor implements SessionExecutor {
   private async compose_step(
     turn_context: SessionTurnContext | undefined,
     retry_count: number,
-    refresh_plugins: boolean,
+    refresh_extensions: boolean,
   ): Promise<{
     compose_input: SessionComposeInput;
     input: SessionStepInput;
     model: ModelClient;
   }> {
-    if (refresh_plugins && turn_context) await this.refresh_step_runtime(turn_context);
+    if (refresh_extensions && turn_context) await this.refresh_step_runtime(turn_context);
     const compose_input = await this.get_compose_input(
       turn_context,
       retry_count,
@@ -306,7 +306,8 @@ export class Executor implements SessionExecutor {
   private async refresh_step_runtime(
     turn_context: SessionTurnContext,
   ): Promise<void> {
-    await turn_context.step.replace_plugins(this.get_plugins?.().acquire());
+    const extensions = await this.get_extensions?.().acquire();
+    await turn_context.step.replace_extensions(extensions);
   }
 
   /**

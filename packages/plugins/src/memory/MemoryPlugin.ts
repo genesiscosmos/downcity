@@ -9,19 +9,20 @@
  * 边界说明（中文）
  * - 只接受宿主显式提供的 Agent/City Memory 根路径，不猜测 City 上级目录。
  * - 不依赖 Workspace FileSystem；具体文件布局仍封装在 Provider/Adapter 内。
- * - Provider 生命周期跟随当前 Plugin 实例，由 Agent 统一启动和释放。
+ * - Provider 生命周期跟随 City 持有的 Plugin/Profile 共享实例。
  */
 
 import type { Command } from "commander";
-import os from "node:os";
 import path from "node:path";
-import { BasePlugin, create_action } from "@downcity/agent";
+import { BasePlugin, create_action } from "@downcity/plugin";
 import type {
-  JsonObject,
-  JsonValue,
+  PluginJsonObject,
+  PluginJsonValue,
   PluginHooks,
   PluginActions,
   PluginContext,
+} from "@downcity/plugin";
+import type {
   SessionSystemContextHookValue,
   SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
@@ -43,11 +44,9 @@ import {
   build_memory_recall_context_block,
 } from "@/memory/runtime/SystemProvider.js";
 import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
-import { FileMemoryStorageAdapter, get_default_file_memory_root_path } from "@/memory/adapters/FileMemoryStorageAdapter.js";
-import { MemoryStorageRouter } from "@/memory/adapters/MemoryStorageRouter.js";
+import { FileMemoryStorageAdapter } from "@/memory/adapters/FileMemoryStorageAdapter.js";
 import { select_memory_capture_messages } from "@/memory/runtime/CapturePolicy.js";
 import { MemoryAccessResolver } from "@/memory/runtime/AccessResolver.js";
-import { encode_memory_id_segment } from "@/memory/runtime/MemoryAddress.js";
 import type {
   MemoryPluginOptions,
   MemoryProvider,
@@ -89,41 +88,41 @@ function parse_number(value: string): number {
 }
 
 /** 把 Action JSON 输入归一化为普通对象。 */
-function read_body_object(raw_body: JsonValue): JsonObject {
+function read_body_object(raw_body: PluginJsonValue): PluginJsonObject {
   return raw_body && typeof raw_body === "object" && !Array.isArray(raw_body)
-    ? raw_body as JsonObject
+    ? raw_body as PluginJsonObject
     : {};
 }
 
 /** 读取必填或可选字符串字段。 */
-function read_string(body: JsonObject, key: string): string {
+function read_string(body: PluginJsonObject, key: string): string {
   return typeof body[key] === "string" ? String(body[key]) : "";
 }
 
 /** 读取可选字符串字段。 */
-function read_optional_string(body: JsonObject, key: string): string | undefined {
+function read_optional_string(body: PluginJsonObject, key: string): string | undefined {
   const value = read_string(body, key).trim();
   return value || undefined;
 }
 
 /** 读取可选数值字段。 */
-function read_optional_number(body: JsonObject, key: string): number | undefined {
+function read_optional_number(body: PluginJsonObject, key: string): number | undefined {
   return typeof body[key] === "number" ? Number(body[key]) : undefined;
 }
 
 /** 读取可选布尔字段。 */
-function read_optional_boolean(body: JsonObject, key: string): boolean | undefined {
+function read_optional_boolean(body: PluginJsonObject, key: string): boolean | undefined {
   return typeof body[key] === "boolean" ? Boolean(body[key]) : undefined;
 }
 
 /** 读取可选 MemoryType 字段。 */
-function read_optional_memory_type(body: JsonObject): MemoryType | undefined {
+function read_optional_memory_type(body: PluginJsonObject): MemoryType | undefined {
   const result = memory_type_schema.safeParse(body.memory_type);
   return result.success ? result.data : undefined;
 }
 
 /** 读取必填 Memory 写入目标。 */
-function read_memory_write_target(body: JsonObject): MemoryWriteTarget {
+function read_memory_write_target(body: PluginJsonObject): MemoryWriteTarget {
   const result = memory_write_target_schema.safeParse(body.target);
   if (!result.success) throw new Error("Memory remember requires target");
   return result.data;
@@ -142,31 +141,16 @@ export class MemoryPlugin extends BasePlugin {
 
   constructor(profile: MemoryPluginOptions = {}) {
     super();
-    const agent_root_path = profile.agent_root_path?.trim();
-    const city_root_path = profile.city_root_path?.trim();
-    if (agent_root_path && !path.isAbsolute(agent_root_path)) {
-      throw new Error("MemoryPlugin agent_root_path must be absolute");
-    }
-    if (city_root_path && !path.isAbsolute(city_root_path)) {
-      throw new Error("MemoryPlugin city_root_path must be absolute");
+    const storage_root_path = profile.storage_root_path?.trim();
+    if (!storage_root_path || !path.isAbsolute(storage_root_path)) {
+      throw new Error("MemoryPlugin storage_root_path must be an absolute path");
     }
     this.provider = new BuiltinMemoryProvider({
-      city_memory_available: Boolean(city_root_path),
-      create_storage: ({ agent_id }) => new MemoryStorageRouter({
-        agent_segment: encode_memory_id_segment(agent_id),
-        agent_storage: new FileMemoryStorageAdapter({
-          root_path: agent_root_path || get_default_file_memory_root_path({
-            platform_root_path: process.env.DC_PLATFORM_ROOT || path.join(os.homedir(), ".downcity"),
-            agent_id,
-          }),
-        }),
-        ...(city_root_path
-          ? { city_storage: new FileMemoryStorageAdapter({ root_path: city_root_path }) }
-          : {}),
-      }),
+      city_memory_available: true,
+      storage: new FileMemoryStorageAdapter({ root_path: storage_root_path }),
     });
     this.access_resolver = new MemoryAccessResolver({
-      city_memory_available: Boolean(city_root_path),
+      city_memory_available: true,
     });
   }
 
@@ -194,7 +178,7 @@ export class MemoryPlugin extends BasePlugin {
               content: block.content,
             })),
           ],
-        } as unknown as JsonValue;
+        } as unknown as PluginJsonValue;
       }],
       [SESSION_PLUGIN_POINTS.turn_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionTurnContextHookValue;
@@ -209,7 +193,7 @@ export class MemoryPlugin extends BasePlugin {
         return {
           ...input,
           blocks: [...(Array.isArray(input.blocks) ? input.blocks : []), block],
-        } as unknown as JsonValue;
+        } as unknown as PluginJsonValue;
       }],
     },
     effect: {
@@ -245,12 +229,10 @@ export class MemoryPlugin extends BasePlugin {
     });
   }
 
-  /** Provider 生命周期与当前 Agent Plugin 实例保持一致。 */
+  /** Provider 生命周期与当前 City Plugin/Profile 共享实例保持一致。 */
   readonly lifecycle = {
-    start: async (context: PluginContext): Promise<void> => {
-      await this.provider.initialize({
-        agent_id: context.agent_id,
-      });
+    start: async (): Promise<void> => {
+      await this.provider.initialize();
     },
     stop: async (): Promise<void> => {
       await this.provider.dispose();
@@ -270,7 +252,10 @@ export class MemoryPlugin extends BasePlugin {
         description: "Inspect the active Memory Provider.",
         map_input: () => ({}),
       },
-      execute: async () => await status_memory_action(this.provider),
+      execute: async ({ context }) => await status_memory_action(
+        this.provider,
+        await this.access_resolver.resolve(context),
+      ),
     }),
 
     search: create_action({

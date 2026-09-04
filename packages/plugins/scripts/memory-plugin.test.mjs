@@ -21,12 +21,59 @@ import {
 import { SESSION_PLUGIN_POINTS } from "@downcity/agent";
 
 /** 创建测试使用的最小 Agent 访问上下文。 */
-function create_access(workspace_id, session_id) {
+function create_access(workspace_id, session_id, agent_id = "memory_test_agent") {
   return {
-    agent_id: "memory_test_agent",
+    agent_id,
     workspace_id,
     ...(session_id ? { session_id } : {}),
     city_memory_available: false,
+  };
+}
+
+/** 创建符合公开协议的最小 PluginContext。 */
+function create_plugin_context(agent_id = "memory_test_agent", user_id) {
+  const embassy = user_id ? {
+    user: {
+      current: async () => ({
+        user: { user_id, bureau_id: "city-1" },
+        profile: null,
+      }),
+    },
+  } : undefined;
+  return {
+    city: {
+      ...(embassy ? { embassy } : {}),
+      plugins: {
+        get: () => null,
+        snapshots: () => [],
+        run_action: async () => ({ success: false }),
+        pipeline: async (_point_name, value) => value,
+        effect: async () => {},
+      },
+    },
+    agent: {
+      id: agent_id,
+      name: agent_id,
+      description: "",
+      instructions: [],
+      sessions: {},
+    },
+    workspace: {
+      id: "shared-workspace",
+      path: "/workspace",
+      files: {},
+      env: {},
+    },
+    profile: { id: "default", config: {} },
+    storage: { path: "/memory", files: {} },
+    logger: {
+      log: async () => {},
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    },
+    abort_signal: new AbortController().signal,
   };
 }
 
@@ -39,7 +86,7 @@ test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Worksp
   const provider = new BuiltinMemoryProvider({
     storage: new FileMemoryStorageAdapter({ root_path: memory_root }),
   });
-  await provider.initialize({ agent_id: "memory_test_agent" });
+  await provider.initialize();
 
   const remembered = await provider.remember({
     access: create_access("memory_test_workspace"),
@@ -99,7 +146,7 @@ test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Worksp
   await assert.rejects(provider.read({
     access: { agent_id: "another_agent", city_memory_available: false },
     memory_id: remembered.memory_id,
-  }), /does not match initialized Provider/);
+  }), /outside the current access context/);
   await assert.rejects(provider.digest({
     access: create_access("memory_test_workspace", "empty-session"),
     session_id: "empty-session",
@@ -152,7 +199,7 @@ test("File Adapter 拒绝目录穿越并由 Memory Plugin 定义默认路径", a
     );
   }
   const provider = new BuiltinMemoryProvider({ storage: adapter });
-  await provider.initialize({ agent_id: "memory_test_agent" });
+  await provider.initialize();
   await assert.rejects(provider.read({
     access: create_access("memory_test_workspace"),
     memory_id: "agent/id_bWVtb3J5X3Rlc3RfYWdlbnQ/wiki/invalid.name",
@@ -167,38 +214,33 @@ test("File Adapter 拒绝目录穿越并由 Memory Plugin 定义默认路径", a
   await provider.dispose();
 });
 
-test("Builtin Provider 在 initialize 阶段按 Agent 延迟创建 Adapter", async (context) => {
+test("Builtin Provider 在 initialize 阶段延迟创建 City 共享 Adapter", async (context) => {
   const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-factory-"));
   context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
-  const initialized_agents = [];
+  let create_count = 0;
   const provider = new BuiltinMemoryProvider({
-    create_storage(input) {
-      initialized_agents.push(input.agent_id);
+    create_storage() {
+      create_count += 1;
       return new FileMemoryStorageAdapter({
-        root_path: path.join(temporary_root, input.agent_id),
+        root_path: path.join(temporary_root, `adapter-${create_count}`),
       });
     },
   });
-  assert.deepEqual(initialized_agents, []);
-  await provider.initialize({ agent_id: "memory_test_agent" });
-  assert.deepEqual(initialized_agents, ["memory_test_agent"]);
+  assert.equal(create_count, 0);
+  await provider.initialize();
+  assert.equal(create_count, 1);
   await provider.dispose();
-  await provider.initialize({ agent_id: "memory_test_agent" });
-  assert.deepEqual(initialized_agents, ["memory_test_agent", "memory_test_agent"]);
+  await provider.initialize();
+  assert.equal(create_count, 2);
   await provider.dispose();
 });
 
 test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (context) => {
   const memory_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-plugin-"));
   context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
-  const plugin = new MemoryPlugin({ agent_root_path: memory_root });
-  const plugin_context = {
-    agent_id: "memory_test_agent",
-    workspace_id: "memory_test_workspace",
-    workspace_path: "/workspace",
-    logger: { log: async () => {} },
-  };
-  await plugin.lifecycle.start(plugin_context);
+  const plugin = new MemoryPlugin({ storage_root_path: memory_root });
+  const plugin_context = create_plugin_context();
+  await plugin.lifecycle.start();
   const result = await plugin.actions.remember.execute({
     context: plugin_context,
     input: {
@@ -213,24 +255,19 @@ test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (co
   assert.equal(result.success, true);
   assert.match(result.data.memory_id, /\/wiki\/test$/);
   assert.equal(
-    await fs.access(path.join(memory_root, "wiki", "test.md")).then(() => true).catch(() => false),
+    await fs.access(path.join(memory_root, `${result.data.memory_id}.md`)).then(() => true).catch(() => false),
     true,
   );
   assert.equal("files" in plugin_context, false);
-  await plugin.lifecycle.stop(plugin_context);
+  await plugin.lifecycle.stop();
 });
 
 test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Recall", async (context) => {
   const memory_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-hooks-"));
   context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
-  const plugin = new MemoryPlugin({ agent_root_path: memory_root });
-  const plugin_context = {
-    agent_id: "memory_test_agent",
-    workspace_id: "memory_test_workspace",
-    workspace_path: "/workspace",
-    logger: { log: async () => {} },
-  };
-  await plugin.lifecycle.start(plugin_context);
+  const plugin = new MemoryPlugin({ storage_root_path: memory_root });
+  const plugin_context = create_plugin_context();
+  await plugin.lifecycle.start();
   await plugin.actions.remember.execute({
     context: plugin_context,
     input: {
@@ -353,52 +390,31 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
       })),
     },
   });
-  const capture_jobs = await fs.readdir(path.join(memory_root, "capture-jobs"));
+  const agent_prefix = result_memory_prefix("memory_test_agent");
+  const capture_root = path.join(memory_root, agent_prefix, "capture-jobs");
+  const capture_jobs = await fs.readdir(capture_root);
   assert.equal(capture_jobs.length, 1);
   const capture_job = JSON.parse(await fs.readFile(
-    path.join(memory_root, "capture-jobs", capture_jobs[0]),
+    path.join(capture_root, capture_jobs[0]),
     "utf8",
   ));
   assert.equal(capture_job.status, "pending");
   assert.equal(capture_job.turn_id, "turn-1");
   assert.equal(capture_job.messages[0].text, "以后回答请保持简洁。");
 
-  await plugin.lifecycle.stop(plugin_context);
+  await plugin.lifecycle.stop();
 });
 
 test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async (context) => {
   const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-city-"));
   context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
   const city_root = path.join(temporary_root, "city-memory");
-  const create_embassy = (user_id) => ({
-    user: {
-      current: async () => ({
-        user: { user_id, bureau_id: "city-1" },
-        profile: null,
-      }),
-    },
-  });
-  const create_context = (agent_id, user_id) => ({
-    agent_id,
-    workspace_id: "shared-workspace",
-    workspace_path: "/workspace",
-    embassy: create_embassy(user_id),
-    logger: { log: async () => {} },
-  });
-  const first_plugin = new MemoryPlugin({
-    agent_root_path: path.join(temporary_root, "agent-a"),
-    city_root_path: city_root,
-  });
-  const second_plugin = new MemoryPlugin({
-    agent_root_path: path.join(temporary_root, "agent-b"),
-    city_root_path: city_root,
-  });
-  const first_context = create_context("agent-a", "user/with unsafe path");
-  const second_context = create_context("agent-b", "user/with unsafe path");
-  await first_plugin.lifecycle.start(first_context);
-  await second_plugin.lifecycle.start(second_context);
+  const plugin = new MemoryPlugin({ storage_root_path: city_root });
+  const first_context = create_plugin_context("agent-a", "user/with unsafe path");
+  const second_context = create_plugin_context("agent-b", "user/with unsafe path");
+  await plugin.lifecycle.start();
 
-  const remembered = await first_plugin.actions.remember.execute({
+  const remembered = await plugin.actions.remember.execute({
     context: first_context,
     input: {
       content: "The current user prefers concise answers.",
@@ -413,7 +429,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   assert.match(remembered.data.memory_id, /^city\/users\/id_[A-Za-z0-9_-]+\/wiki\/user-preferences$/);
   assert.equal(remembered.data.memory_id.includes("user/with unsafe path"), false);
 
-  const workspace_memory = await first_plugin.actions.remember.execute({
+  const workspace_memory = await plugin.actions.remember.execute({
     context: first_context,
     input: {
       content: "This Workspace always uses pnpm.",
@@ -427,7 +443,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   assert.equal(workspace_memory.success, true);
   assert.match(workspace_memory.data.memory_id, /^city\/workspaces\/id_[A-Za-z0-9_-]+\/wiki\/project-overview$/);
 
-  const system_hook = second_plugin.hooks.pipeline[SESSION_PLUGIN_POINTS.system_context][0];
+  const system_hook = plugin.hooks.pipeline[SESSION_PLUGIN_POINTS.system_context][0];
   const system_value = await system_hook({
     context: second_context,
     plugin: "memory",
@@ -438,7 +454,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   assert.equal(system_value.blocks[1].name, "memory/core/workspace");
   assert.match(system_value.blocks[1].content, /always uses pnpm/);
 
-  const other_user_context = create_context("agent-b", "another-user");
+  const other_user_context = create_plugin_context("agent-b", "another-user");
   const isolated_value = await system_hook({
     context: other_user_context,
     plugin: "memory",
@@ -453,7 +469,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
     true,
   );
 
-  const cross_user_read = await second_plugin.actions.read.execute({
+  const cross_user_read = await plugin.actions.read.execute({
     context: other_user_context,
     input: { memory_id: remembered.data.memory_id },
     plugin_name: "memory",
@@ -462,13 +478,8 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   assert.equal(cross_user_read.success, false);
   assert.match(cross_user_read.error, /outside the current access context/);
 
-  const unauthenticated = await second_plugin.actions.remember.execute({
-    context: {
-      agent_id: "agent-b",
-      workspace_id: "shared-workspace",
-      workspace_path: "/workspace",
-      logger: { log: async () => {} },
-    },
+  const unauthenticated = await plugin.actions.remember.execute({
+    context: create_plugin_context("agent-b"),
     input: {
       content: "Must not be written to a fallback user.",
       target: "current_user",
@@ -480,6 +491,10 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   assert.equal(unauthenticated.success, false);
   assert.match(unauthenticated.error, /authenticated user/);
 
-  await first_plugin.lifecycle.stop(first_context);
-  await second_plugin.lifecycle.stop(second_context);
+  await plugin.lifecycle.stop();
 });
+
+/** 返回 Builtin Provider 对 Agent 数据使用的逻辑目录。 */
+function result_memory_prefix(agent_id) {
+  return `agent/id_${Buffer.from(agent_id, "utf8").toString("base64url")}`;
+}

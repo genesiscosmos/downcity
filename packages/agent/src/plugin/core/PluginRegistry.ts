@@ -1,9 +1,9 @@
 /**
- * Agent plugin runtime。
+ * City Plugin 的 Agent 执行 Registry。
  *
  * 关键点（中文）
- * - Plugin 只属于 Agent：注册即生效，卸载即不可见。
- * - 注册时自动启动 plugin lifecycle；卸载时自动停止 plugin lifecycle。
+ * - Registry 只持有 City 共享 Plugin 的 Agent 执行投影，不拥有共享实例。
+ * - City 传入的执行投影不包含 lifecycle；Registry 只管理 execution lease。
  * - action、system、hook、resolve 都统一以“已注册且 ready”为生效边界。
  */
 
@@ -12,7 +12,7 @@ import { HookRegistry } from "@/plugin/core/HookRegistry.js";
 import type { Plugin } from "@/types/plugin/PluginDefinition.js";
 import type { PluginActionResult } from "@/types/plugin/PluginAction.js";
 import type {
-  AgentPlugins,
+  AgentPluginRuntime,
   AgentPluginExecutionLease,
   AgentPluginExecutionRuntime,
   PluginAvailability,
@@ -23,6 +23,7 @@ import type {
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { PluginContext } from "@/types/plugin/PluginContext.js";
 import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
+import type { PluginLifecycleContext } from "@downcity/plugin";
 import type { JsonValue } from "@/types/common/Json.js";
 import type {
   PluginRuntimeRecord,
@@ -154,19 +155,19 @@ export class PluginRegistry {
   bind_workspace_context(
     context: PluginContext,
     factory: PluginContextFactory,
-  ): void {
-    this.workspace_context_factories.set(context.workspace_id, factory);
-  }
-
-  /** 解除当前 Workspace 的 Plugin Context 工厂。 */
-  unbind_workspace_context(context: PluginContext): void {
-    this.workspace_context_factories.delete(context.workspace_id);
+  ): () => void {
+    this.workspace_context_factories.set(context.workspace.id, factory);
+    return () => {
+      if (this.workspace_context_factories.get(context.workspace.id) === factory) {
+        this.workspace_context_factories.delete(context.workspace.id);
+      }
+    };
   }
 
   /** 返回指定 Plugin 的运行时 Context；未绑定工厂时回退到传入 Context。 */
   plugin_context(context: PluginContext, plugin_name: string): PluginContext {
     const key = normalize_plugin_name(plugin_name);
-    return this.workspace_context_factories.get(context.workspace_id)?.(key) || context;
+    return this.workspace_context_factories.get(context.workspace.id)?.(key) || context;
   }
 
   /**
@@ -187,12 +188,8 @@ export class PluginRegistry {
    * Registry 只保存 Agent 注册的 Plugin；Action、Hook、System 与 availability 在
    * 调用时显式使用这里捕获的 Workspace Context。
    */
-  contextual(context: PluginContext): AgentPlugins {
+  contextual(context: PluginContext): AgentPluginRuntime {
     return {
-      register: async (plugin) => await this.register(plugin),
-      unregister: async (plugin_name) => await this.unregister(plugin_name),
-      start_all: async () => await this.start_all(),
-      unregister_all: async () => await this.unregister_all(),
       has: (plugin_name) => this.has(plugin_name),
       get: (plugin_name) => this.get(plugin_name),
       status: (plugin_name) => this.status(plugin_name),
@@ -289,6 +286,21 @@ export class PluginRegistry {
     this.retire_record(record);
     this.publish_change({ type: "unregister", plugin_name: key });
     return true;
+  }
+
+  /**
+   * 从 configured registry 卸载指定 Plugin，并等待全部 execution lease 释放。
+   *
+   * City 在减少共享实例引用前必须使用该入口，避免共享 lifecycle 早于运行中的
+   * Session Step 停止。普通配置广播仍可使用非阻塞的 `unregister()`。
+   */
+  async unregister_and_wait(plugin_name: string): Promise<boolean> {
+    const key = normalize_plugin_name(plugin_name);
+    const record = this.records.get(key);
+    if (!record) return false;
+    const removed = await this.unregister(key);
+    await record.retirement_promise;
+    return removed;
   }
 
   /** 将 Plugin 配置变化发布给 Agent 等持有者。 */
@@ -412,7 +424,9 @@ export class PluginRegistry {
         return;
       }
       try {
-        await record.plugin.lifecycle?.start?.(this.agent_context);
+        await record.plugin.lifecycle?.start?.(
+          this.agent_context as unknown as PluginLifecycleContext,
+        );
         record.lifecycle_started = true;
         update_record_state(record, "ready");
       } catch (error) {
@@ -428,7 +442,9 @@ export class PluginRegistry {
       const errors: unknown[] = [];
       try {
         try {
-          await record.plugin.lifecycle?.stop?.(this.agent_context);
+          await record.plugin.lifecycle?.stop?.(
+            this.agent_context as unknown as PluginLifecycleContext,
+          );
         } catch (error) {
           errors.push(error);
         }

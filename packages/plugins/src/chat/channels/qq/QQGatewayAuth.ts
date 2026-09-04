@@ -6,7 +6,7 @@
  * - `QQGatewayClient` 只负责编排状态，不再直接内嵌所有 OpenAPI 请求细节。
  */
 
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { QqGatewayRuntimeStatus } from "@/chat/channels/qq/types/QqChannel.js";
 
@@ -31,7 +31,7 @@ export interface FetchQqAccessTokenParams {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 鉴权 API 基础地址。
    */
@@ -61,7 +61,7 @@ export interface FetchQqGatewayUrlParams {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * OpenAPI 基础地址。
    */

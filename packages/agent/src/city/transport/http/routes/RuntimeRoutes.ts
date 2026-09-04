@@ -8,13 +8,13 @@
  */
 
 import type { Hono } from "hono";
-import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { JsonValue } from "@/index.js";
 
 /**
  * 注册 RemoteAgent 顶层 runtime 路由。
  */
-export function register_runtime_routes(app: Hono, plugins: AgentPlugins): void {
+export function register_runtime_routes(app: Hono, plugins: AgentPluginRuntime): void {
   app.post("/api/plugins/action", async (c) => {
     try {
       const body = await c.req.json().catch(() => null) as {

@@ -86,10 +86,12 @@ export class CliCityRuntime {
     const plugin_loader = create_cli_plugin_loader({
       plugin_repository: data.plugins,
     });
+    const plugin_registrations = await plugin_loader.list_registrations();
     const { embassy } = await new EmbassySessionResolver().create_user_client();
     const city = new City({
       storage: new LocalStorageProvider(data.root_path),
       embassy,
+      plugins: plugin_registrations,
       runtime: {
       resolve_workspace: async (_agent, workspace_id) => {
         const workspace_config = data.workspaces.get(workspace_id);
@@ -136,11 +138,12 @@ export class CliCityRuntime {
     const agents: Agent[] = [];
     try {
       for (const config of data.agents.list()) {
-        agents.push(await create_cli_agent({
+        const registration = await create_cli_agent({
           config,
           plugin_loader,
-        }));
-        city.agents.add(agents[agents.length - 1]);
+        });
+        agents.push(registration.agent);
+        city.agents.add(registration.agent, { plugins: registration.plugins });
       }
     } catch (error) {
       await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));

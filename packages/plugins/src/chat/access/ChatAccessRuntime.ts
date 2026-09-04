@@ -6,7 +6,7 @@
  * - Channel Adapter、Plugin Action 和 CLI 共享同一个 Service 构造规则。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import { ChatAccessService } from "@/chat/access/ChatAccessService.js";
 import { resolveChannelAccount } from "@/chat/runtime/ChatChannelCore.js";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
@@ -28,7 +28,7 @@ export function resolve_chat_access_issuer_map(
 /** 创建当前 Agent 的 ChatAccessService。 */
 export function create_chat_access_service(context: PluginContext): ChatAccessService {
   return new ChatAccessService({
-    data_path: context.data_path,
+    data_path: context.storage.path,
   });
 }
 

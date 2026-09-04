@@ -55,13 +55,12 @@ export class PluginRepository {
       || !value.version
       || !value.description
       || !is_installed_readme_path(value.readme)
-      || (!value.agent && !value.main && !value.renderer)
+      || (!value.main && !value.renderer)
       || !value.source
       || !value.integrity
       || !value.installed_at
       || !value.updated_at
       || (value.icon !== undefined && typeof value.icon !== "string")
-      || (value.agent !== undefined && typeof value.agent !== "string")
       || (value.main !== undefined && typeof value.main !== "string")
       || (value.renderer !== undefined && !is_installed_renderer(value.renderer))
     ) {

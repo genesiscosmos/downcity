@@ -52,15 +52,25 @@ test("Telegram 授权命令使用代码格式并保留完整标识符", () => {
   try {
     const bot = new TelegramBot(
       {
-        agent_id: "lucas_whitman",
-        workspace_path: project_root,
-        data_path: project_root,
+        agent: {
+          id: "lucas_whitman",
+          name: "lucas_whitman",
+          description: "",
+          instructions: [],
+          sessions: {},
+        },
+        workspace: { id: "test", path: project_root, files: {}, env: {} },
+        storage: { path: project_root, files: {} },
         logger: {
+          async log() {},
           debug() {},
           info() {},
           warn() {},
           error() {},
         },
+        city: { plugins: {} },
+        profile: { id: "default", config: {} },
+        abort_signal: new AbortController().signal,
       },
       "test-token",
     );

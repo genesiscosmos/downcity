@@ -7,12 +7,11 @@
  * - turn 并入策略、history 落盘、assistant 收敛统一交给 Session
  */
 
-import type { Logger } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type { ChatQueueItem } from "@/chat/types/ChatQueue.js";
-import type { SessionMutation } from "@downcity/agent";
-import type { AgentSessionTurnResult } from "@downcity/agent";
+import type { AgentSessionTurnResult, SessionMutation } from "@downcity/agent";
 import { getChatSender } from "./ChatSendRegistry.js";
 import {
   buildChannelErrorText,
@@ -43,7 +42,7 @@ type TurnObservation = {
 };
 
 export class ChatQueueWorker {
-  private readonly logger: Logger;
+  private readonly logger: PluginLogger;
   private readonly context: PluginContext;
   private readonly config: ChatQueueWorkerConfig;
   private readonly queueStore: ChatQueueStorePort;
@@ -56,7 +55,7 @@ export class ChatQueueWorker {
   private stopped = false;
 
   constructor(params: {
-    logger: Logger;
+    logger: PluginLogger;
     context: PluginContext;
     queueStore: ChatQueueStorePort;
     config?: Partial<ChatQueueWorkerConfig>;
@@ -320,7 +319,7 @@ export class ChatQueueWorker {
     if (lane.unsubscribeSessionEvents) return;
     const session = this.requireContext(session_id);
     lane.unsubscribeSessionEvents = session.subscribe((event) => {
-      void this.handleLaneSessionEvent(lane, event);
+      void this.handleLaneSessionEvent(lane, event as unknown as SessionMutation);
     });
   }
 
@@ -457,6 +456,6 @@ export class ChatQueueWorker {
    * - 在使用点显式校验，避免隐藏依赖来源。
    */
   private requireContext(session_id: string) {
-    return this.context.sessions.runtime(session_id);
+    return this.context.agent.sessions.runtime(session_id);
   }
 }

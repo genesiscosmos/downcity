@@ -18,11 +18,10 @@ This kind of pre-chain value enrichment is a strong fit for `pipeline`.
 
 ```ts
 import {
-  Agent,
   BasePlugin,
-  type JsonObject,
+  type PluginJsonObject,
   type PluginHooks,
-} from "@downcity/agent";
+} from "@downcity/plugin";
 
 class MessageAugmentPlugin extends BasePlugin {
   readonly name = "message_augment";
@@ -33,7 +32,7 @@ class MessageAugmentPlugin extends BasePlugin {
     pipeline: {
       "chat.enrich_message": [
         async ({ value }) => {
-          const body = value as JsonObject;
+          const body = value as PluginJsonObject;
           return {
             ...body,
             source: body.source || "web",
@@ -45,13 +44,8 @@ class MessageAugmentPlugin extends BasePlugin {
   };
 }
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new MessageAugmentPlugin()],
-});
-
-const message = await agent.plugins.pipeline<JsonObject>("chat.enrich_message", {
+// City has registered message_augment and bound it to entry's Agent/Workspace.
+const message = await entry.plugins.pipeline<PluginJsonObject>("chat.enrich_message", {
   text: "Please summarize this page",
 });
 ```

@@ -8,7 +8,7 @@
  */
 
 import type { SkillRootSource } from "@/skill/types/SkillRoot.js";
-import type { JsonValue } from "@downcity/agent";
+import type { PluginJsonValue } from "@downcity/plugin";
 
 /**
  * 可被 agent 发现与读取的 skill 定义。
@@ -60,5 +60,5 @@ export interface SkillDefinition {
    * 说明（中文）
    * - 这里保留原始 JSON 结构，归一化工作交给上层调用方。
    */
-  allowedTools?: JsonValue;
+  allowedTools?: PluginJsonValue;
 }

@@ -12,11 +12,10 @@ import type { Embassy } from "@downcity/federation";
 import type { StorageProvider, StorageScope } from "@downcity/workspace";
 import { MemoryStorageProvider } from "@downcity/workspace";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
+import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
+import { create_empty_session_extensions } from "@/types/session/SessionExtension.js";
 import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
-import {
-  start_action_schedule_runtime,
-  type ActionScheduleRuntimeHandle,
-} from "@/plugin/core/ActionScheduleRuntime.js";
+import type { AgentCityExtensionBinding } from "@/city/types/CityPlugin.js";
 
 interface AgentRuntimeState {
   bound_city?: City;
@@ -25,8 +24,10 @@ interface AgentRuntimeState {
   workspaces_by_id: Map<string, WorkspaceEntry>;
   storage_provider: StorageProvider;
   agent_storage?: AgentStorage;
-  action_schedule?: ActionScheduleRuntimeHandle;
-  action_schedule_promise?: Promise<void>;
+  session_extensions?: (
+    workspace?: WorkspaceBase,
+  ) => SessionExtensionRuntime;
+  city_extensions?: AgentCityExtensionBinding;
 }
 
 const runtime_states = new WeakMap<Agent, AgentRuntimeState>();
@@ -74,6 +75,43 @@ export function attach_agent_storage(agent: Agent, storage_provider: StorageProv
   state.storage_provider = storage_provider;
 }
 
+/** 由 City 注入按 Workspace 创建 Session 扩展运行时的端口。 */
+export function attach_agent_session_extensions(
+  agent: Agent,
+  resolve_extensions: (workspace?: WorkspaceBase) => SessionExtensionRuntime,
+): void {
+  const state = runtime_state(agent);
+  state.session_extensions = resolve_extensions;
+}
+
+/** 由 City 注入完整的宿主扩展绑定。 */
+export function attach_agent_city_extensions(
+  agent: Agent,
+  extensions: AgentCityExtensionBinding,
+): void {
+  const state = runtime_state(agent);
+  state.city_extensions = extensions;
+}
+
+/** 返回当前 Agent 的 City 宿主扩展；未绑定时为空。 */
+export function agent_city_extensions(agent: Agent): AgentCityExtensionBinding | undefined {
+  return runtime_state(agent).city_extensions;
+}
+
+/** 等待 City 为 Agent 绑定的扩展完成初始生命周期。 */
+export async function ensure_agent_extensions_ready(agent: Agent): Promise<void> {
+  await runtime_state(agent).city_extensions?.ensure_ready();
+}
+
+/** 返回当前 Agent 的 City 扩展运行时；未加入 City 时使用空实现。 */
+export function resolve_agent_session_extensions(
+  agent: Agent,
+  workspace?: WorkspaceBase,
+): SessionExtensionRuntime {
+  return runtime_state(agent).session_extensions?.(workspace)
+    ?? create_empty_session_extensions();
+}
+
 /** 标记 Agent 已经创建或恢复过无 City 的 Session。 */
 export function mark_agent_session_started(agent: Agent): void {
   const state = runtime_state(agent);
@@ -85,6 +123,8 @@ export function detach_agent_city(agent: Agent, city: City): void {
   if (state.bound_city === city) {
     state.bound_city = undefined;
     state.embassy = undefined;
+    state.session_extensions = undefined;
+    state.city_extensions = undefined;
   }
 }
 
@@ -98,8 +138,8 @@ export function agent_embassy(agent: Agent): Embassy | undefined {
 }
 
 /** 由 Agent 释放自身时通知所属 City。 */
-export function release_agent_from_city(agent: Agent): void {
-  runtime_state(agent).bound_city?.release_agent(agent);
+export async function release_agent_from_city(agent: Agent): Promise<void> {
+  await runtime_state(agent).bound_city?.release_agent(agent);
 }
 
 /** 返回 Agent 解释出的业务存储作用域。 */
@@ -138,37 +178,9 @@ export function get_agent_storage(
   return storage;
 }
 
-/** 启动 Agent 唯一的 ActionSchedule 轮询器；重复调用共享同一个启动 Promise。 */
-export function ensure_agent_action_schedule(agent: Agent): void {
-  const state = runtime_state(agent);
-  if (state.action_schedule || state.action_schedule_promise) return;
-  const storage = state.agent_storage;
-  if (!storage) return;
-  state.action_schedule_promise = (async () => {
-    await agent.ensure_ready();
-    const handle = await start_action_schedule_runtime(
-      agent.id,
-      storage,
-      agent.get_logger(),
-      (workspace_id) => {
-        const state = runtime_state(agent);
-        if (workspace_id) return state.workspaces_by_id.get(workspace_id)?.get_context() || null;
-        return state.workspaces_by_id.values().next().value?.get_context() || null;
-      },
-    );
-    state.action_schedule = handle;
-  })().catch((error) => {
-    agent.get_logger().error(`ActionSchedule start failed: ${String(error)}`);
-  });
-}
-
 /** 停止 Agent 级后台资源并释放 Agent 级 Store。 */
 export async function dispose_agent_runtime(agent: Agent): Promise<void> {
   const state = runtime_state(agent);
-  await state.action_schedule_promise?.catch(() => undefined);
-  state.action_schedule?.stop();
-  state.action_schedule = undefined;
-  state.action_schedule_promise = undefined;
   await state.agent_storage?.sessions.dispose();
   state.agent_storage = undefined;
 }
@@ -202,7 +214,6 @@ export function create_workspace_entry(agent: Agent, workspace: WorkspaceBase): 
   }
   const entry = new WorkspaceEntry({ agent, workspace });
   state.workspaces_by_id.set(workspace_id, entry);
-  ensure_agent_action_schedule(agent);
   return entry;
 }
 

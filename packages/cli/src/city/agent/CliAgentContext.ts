@@ -7,7 +7,7 @@
 
 import type {
   Agent,
-  AgentPlugins,
+  AgentPluginRuntime,
   AgentSessionCollection,
   SessionSystemMessage,
 } from "@downcity/agent";
@@ -26,11 +26,11 @@ export interface CliAgentContext {
   /** 当前 Agent 的唯一 Session 集合。 */
   sessions: AgentSessionCollection;
   /** 当前 Workspace 下的 Plugin 调用面。 */
-  plugins: AgentPlugins;
+  plugins: AgentPluginRuntime;
   /** Agent 稳定标识。 */
   id: string;
   /** 读取当前 Plugin 状态。 */
-  list_plugin_states: () => ReturnType<AgentPlugins["snapshots"]>;
+  list_plugin_states: () => ReturnType<AgentPluginRuntime["snapshots"]>;
   /** 解析指定 Session 的 system messages。 */
   resolve_system_messages: (input: {
     /** 目标 Session ID。 */

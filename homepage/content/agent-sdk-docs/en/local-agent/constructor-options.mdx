@@ -235,40 +235,26 @@ Key points:
 - approvals belong to a specific Session; use `session.interactions()`, `session.respond(...)`, and `session.set({ security })`
 - file and search tools are always restricted to the Agent project root and have no unrestricted mode
 
-## `plugins`
+## Plugins are not Agent constructor options
 
-This accepts already-instantiated `BasePlugin` objects.
-
-For example:
+`AgentOptions` does not accept `plugins`. City first receives `CityPluginRegistration` objects, then binds an Agent by `plugin_id` and an optional Profile:
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { SkillPlugin } from "@downcity/plugins/skill";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new SkillPlugin()],
+const agent = new Agent({ id: "repo-helper", tools: {} });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
 });
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
+
+city.agents.add(agent, {
+  plugins: [{ plugin_id: "skill" }],
 });
 ```
 
-Web capabilities are opt-in and require an explicit provider; see the [Web Plugin guide](/en/plugins-docs/builtins/web).
-
-The SDK creates an independent plugin registry for the current `Agent`.
-
-Key points:
-
-- pass instances such as `new SkillPlugin()` rather than raw plugin definitions
-- it does not register every built-in plugin by default
-- it does not reuse the global plugin manager
-- duplicate plugin names throw immediately
-- `agent.plugins` and `PluginContext.plugins` use this registry
-- instantiate the exact plugin set the Agent needs and pass those instances in `plugins`
+City owns the Plugin catalog, Profile-shared instances, and lifecycle. Agent owns identity, model, instructions, Tools, and Sessions. Web capabilities still require an explicit Profile; see the [Web Plugin guide](/en/plugins-docs/builtins/web).
 
 ## `Session`
 

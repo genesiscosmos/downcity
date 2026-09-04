@@ -7,7 +7,8 @@
  * - TTS 结果直接使用 Downcity Session 消息，由 Agent 统一处理音频 file part。
  */
 
-import type { ActionResultMessage, JsonObject, JsonValue } from "@downcity/agent";
+import type { ActionResultMessage } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 
 /** SoundPlugin 使用的最小语音 AI 服务协议。 */
 export interface SoundAiService {
@@ -15,10 +16,10 @@ export interface SoundAiService {
   catalog(): Promise<{ all(): readonly unknown[] }>;
 
   /** 执行语音识别。 */
-  asr(input: JsonObject): Promise<unknown>;
+  asr(input: PluginJsonObject): Promise<unknown>;
 
   /** 执行语音合成。 */
-  tts(input: JsonObject): Promise<unknown>;
+  tts(input: PluginJsonObject): Promise<unknown>;
 }
 
 /**
@@ -41,7 +42,7 @@ export interface SoundPluginModel {
   /** FED 为模型提供的筛选标签。 */
   tags?: string[];
   /** FED 返回的 JSON 可序列化扩展元数据。 */
-  meta?: JsonObject;
+  meta?: PluginJsonObject;
 }
 
 /**
@@ -85,9 +86,9 @@ export interface SoundPluginAsrInput {
   /** 原始文件名，供 provider 推断音频格式。 */
   filename?: string;
   /** Provider 私有参数，例如 `{ openai: {...}, groq: {...} }`。 */
-  provider_options?: JsonObject;
+  provider_options?: PluginJsonObject;
   /** 允许 FED ASR action 接收其他 JSON 可序列化参数。 */
-  [key: string]: JsonValue | undefined;
+  [key: string]: PluginJsonValue | undefined;
 }
 
 /**
@@ -127,9 +128,9 @@ export interface SoundPluginTtsInput {
   /** 对语气、风格或发音方式的额外说明。 */
   instructions?: string;
   /** Provider 私有参数，例如 `{ openai: {...}, elevenlabs: {...} }`。 */
-  provider_options?: JsonObject;
+  provider_options?: PluginJsonObject;
   /** 允许 FED TTS action 接收其他 JSON 可序列化参数。 */
-  [key: string]: JsonValue | undefined;
+  [key: string]: PluginJsonValue | undefined;
 }
 
 /**

@@ -7,12 +7,9 @@
  * - 字段保持 JSON 可序列化，便于通过 Plugin Action 与 Tool 传递。
  */
 
-import type {
-  ActionResultMessage,
-  JsonObject,
-  JsonValue,
-} from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { ActionResultMessage } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
 
 /** ImagePlugin 使用的最小图片 AI 服务协议。 */
 export interface ImageAiService {
@@ -20,10 +17,10 @@ export interface ImageAiService {
   catalog(): Promise<{ all(): readonly unknown[] }>;
 
   /** 创建图片生成任务。 */
-  image_create(input: JsonObject): Promise<unknown>;
+  image_create(input: PluginJsonObject): Promise<unknown>;
 
   /** 查询图片生成任务。 */
-  image_result(input: JsonObject): Promise<unknown>;
+  image_result(input: PluginJsonObject): Promise<unknown>;
 }
 
 /**
@@ -106,9 +103,9 @@ export interface ImagePluginInput {
   /** 业务侧任务 ID，用于 provider 侧幂等、追踪和恢复。 */
   client_job_id?: string;
   /** Provider 私有参数，例如 `{ openai: {...}, gemini: {...}, luchi: {...} }`。 */
-  provider_options?: JsonObject;
+  provider_options?: PluginJsonObject;
   /** 允许外部 image 函数接收其他 JSON 可序列化参数。 */
-  [key: string]: JsonValue | ImagePluginContent[] | undefined;
+  [key: string]: PluginJsonValue | ImagePluginContent[] | undefined;
 }
 
 /**
@@ -143,9 +140,9 @@ export interface ImagePluginResolvedInput {
   /** 业务侧任务 ID，用于 provider 侧幂等、追踪和恢复。 */
   client_job_id?: string;
   /** Provider 私有参数，例如 `{ openai: {...}, gemini: {...}, luchi: {...} }`。 */
-  provider_options?: JsonObject;
+  provider_options?: PluginJsonObject;
   /** 允许外部 image 函数接收其他 JSON 可序列化参数。 */
-  [key: string]: JsonValue | ImagePluginResolvedMessage[] | undefined;
+  [key: string]: PluginJsonValue | ImagePluginResolvedMessage[] | undefined;
 }
 
 /**
@@ -263,7 +260,7 @@ export interface ImagePluginModel {
   /** 模型标签。 */
   tags?: string[];
   /** 模型元数据。 */
-  meta?: JsonObject;
+  meta?: PluginJsonObject;
 }
 
 /**

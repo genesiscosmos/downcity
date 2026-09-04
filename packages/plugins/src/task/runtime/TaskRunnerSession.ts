@@ -9,12 +9,9 @@
  */
 
 import path from "node:path";
-import type {
-  PluginContext,
-  SessionAttachmentStore,
-  SessionPort,
-} from "@downcity/agent";
-import type { TaskSessionRuntimePort } from "@/task/runtime/TaskRunnerTypes.js";
+import type { SessionAttachmentStore } from "@downcity/agent";
+import type { PluginContext, PluginSessionHandle } from "@downcity/plugin";
+import type { TaskSessionRuntimePort } from "@/task/types/TaskRunner.js";
 import type { TaskDeliverySession } from "@/task/types/Task.js";
 import { create_session_message_store, SessionMessages } from "@downcity/agent";
 
@@ -62,41 +59,33 @@ export async function createTaskSessionRuntimePort(params: {
   delivery_session?: TaskDeliverySession;
 }): Promise<TaskSessionRuntimePort> {
   const { context, runDirAbs, runSessionId, userSimulatorSessionId } = params;
-  const task_session = await context.sessions.create({
+  const inherit_model_from = params.delivery_session
+    ? {
+        session_id: params.delivery_session.session_id,
+        origin_type: params.delivery_session.origin_type,
+      }
+    : undefined;
+  const task_session = await context.agent.sessions.create({
     origin: {
       type: "task",
       task_id: params.task_id,
       execution_id: params.execution_id,
       role: "executor",
     },
+    ...(inherit_model_from ? { inherit_model_from } : {}),
   });
-  const user_simulator_session = await context.sessions.create({
+  const user_simulator_session = await context.agent.sessions.create({
     origin: {
       type: "task",
       task_id: params.task_id,
       execution_id: params.execution_id,
       role: "user_simulator",
     },
+    ...(inherit_model_from ? { inherit_model_from } : {}),
   });
-  const source_session = params.delivery_session
-    ? await context.sessions.get(
-        params.delivery_session.session_id,
-        params.delivery_session.origin_type,
-      )
-    : undefined;
-  if (source_session?.config.model) {
-    await task_session.set(
-      { model: source_session.config.model },
-      { persist_action: false, publish_mutation: false },
-    );
-    await user_simulator_session.set(
-      { model: source_session.config.model },
-      { persist_action: false, publish_mutation: false },
-    );
-  }
-  const sessions_by_alias = new Map<string, SessionPort>([
-    [runSessionId, context.sessions.runtime(task_session.id, "task")],
-    [userSimulatorSessionId, context.sessions.runtime(user_simulator_session.id, "task")],
+  const sessions_by_alias = new Map<string, PluginSessionHandle>([
+    [runSessionId, context.agent.sessions.runtime(task_session.id, "task")],
+    [userSimulatorSessionId, context.agent.sessions.runtime(user_simulator_session.id, "task")],
   ]);
   const messages_by_session_id = new Map<string, SessionMessages>();
   /**
@@ -128,7 +117,7 @@ export async function createTaskSessionRuntimePort(params: {
     const created = new SessionMessages({
       session_id: key,
       store: create_session_message_store({
-        files: context.data_files,
+        files: context.storage.files,
         session_id: key,
         file_path: path.join(messages_dir_path, "active.jsonl"),
         assistant_message_file_path: path.join(
@@ -147,7 +136,7 @@ export async function createTaskSessionRuntimePort(params: {
     get_messages(session_id: string): SessionMessages {
       return resolve_task_messages(session_id);
     },
-    get_session(session_id: string): SessionPort {
+    get_session(session_id: string): PluginSessionHandle {
       const key = String(session_id || "").trim();
       const session = sessions_by_alias.get(key);
       if (!session) throw new Error(`Task session "${key}" is not registered`);

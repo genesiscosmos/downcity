@@ -30,12 +30,12 @@ export async function run_due_action_schedule_jobs(params: {
         await params.store.mark_job_failed(job.id, error);
         params.logger.warn("[action-schedule] job failed", {
           job_id: job.id,
-          workspace_id: job.workspace_id,
+          ...(job.workspace_id ? { workspace_id: job.workspace_id } : {}),
           error,
         });
         continue;
       }
-      const result = await context.plugins.run_action({
+      const result = await context.city.plugins.run_action({
         plugin: job.plugin_name,
         action: job.action_name,
         payload: job.payload ?? undefined,

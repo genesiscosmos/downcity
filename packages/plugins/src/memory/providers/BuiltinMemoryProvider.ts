@@ -21,7 +21,6 @@ import type {
   MemoryForgetResult,
   MemoryProvider,
   MemoryProviderCapabilities,
-  MemoryProviderInitializeInput,
   MemoryReadInput,
   MemoryReadResult,
   MemoryRecallInput,
@@ -337,8 +336,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   /** 当前统一 Adapter 是否包含 City 共享 Store。 */
   private readonly city_memory_available: boolean;
 
-  /** 当前 Provider 已初始化的 Agent 运行身份。 */
-  private runtime?: MemoryProviderInitializeInput;
+  /** 当前 Provider 的共享存储是否已经初始化。 */
+  private initialized = false;
 
   constructor(options: BuiltinMemoryProviderOptions) {
     const has_storage = Boolean(options?.storage);
@@ -354,31 +353,14 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   }
 
   /** 初始化 Adapter 和默认索引投影。 */
-  async initialize(input: MemoryProviderInitializeInput): Promise<void> {
-    const agent_id = String(input.agent_id || "").trim();
-    if (!agent_id) throw new Error("BuiltinMemoryProvider requires agent_id");
-    if (this.runtime && this.runtime.agent_id !== agent_id) {
-      throw new Error("BuiltinMemoryProvider is already bound to another Agent");
-    }
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
     const created_storage = !this.storage;
-    const storage = this.storage ?? await this.create_storage?.({ agent_id });
+    const storage = this.storage ?? await this.create_storage?.();
     if (!storage) throw new Error("BuiltinMemoryProvider storage factory returned no Adapter");
     this.storage = storage;
     try {
       await storage.initialize();
-      const address = resolve_writable_memory_address({
-        agent_id,
-        city_memory_available: false,
-      }, "agent");
-      const index_memory_id = create_subject_memory_id(address, INDEX_RELATIVE_MEMORY_ID);
-      if (!await storage.has(memory_id_to_key(index_memory_id))) {
-        await this.write_projection({
-          memory_id: INDEX_RELATIVE_MEMORY_ID,
-          title: "Memory Index",
-          content: "Long-term memories are available through MemoryPlugin recall and read actions.",
-          tags: ["memory", "index"],
-        }, [], "document", address);
-      }
     } catch (error) {
       if (created_storage) {
         await storage.dispose().catch(() => undefined);
@@ -386,12 +368,13 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       }
       throw error;
     }
-    this.runtime = { agent_id };
+    this.initialized = true;
   }
 
   /** 返回 Provider 状态与可重建统计。 */
-  async status(): Promise<MemoryStatusResult> {
-    const access = this.create_runtime_access();
+  async status(access: MemoryAccessContext): Promise<MemoryStatusResult> {
+    this.assert_access(access);
+    await this.ensure_agent_index(access);
     const address = resolve_writable_memory_address(access, "agent");
     const [wiki_entries, evidence_entries, capture_entries] = await Promise.all([
       this.active_storage.list(`${address.prefix}/wiki`),
@@ -419,6 +402,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   /** 使用确定性扫描召回记忆，底层存储形态对调用方不可见。 */
   async recall(input: MemoryRecallInput): Promise<MemoryRecallResult> {
     this.assert_access(input.access);
+    await this.ensure_agent_index(input.access);
     const query = String(input.query || "").trim();
     if (!query) return { provider: this.name, items: [] };
     const tokens = tokenize_memory_query(query);
@@ -502,6 +486,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   /** 保存原始证据并形成或更新长期记忆。 */
   async remember(input: MemoryRememberInput): Promise<MemoryRememberResult> {
     this.assert_access(input.access);
+    await this.ensure_agent_index(input.access);
     const address = resolve_writable_memory_address(input.access, input.target);
     const content = String(input.content || "").trim();
     if (!content) throw new Error("Memory remember requires content");
@@ -559,6 +544,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   /** 保存 Session 证据，并通过可选 handler 形成长期投影。 */
   async digest(input: MemoryDigestInput): Promise<MemoryDigestResult> {
     this.assert_access(input.access);
+    await this.ensure_agent_index(input.access);
     const address = resolve_writable_memory_address(input.access, "agent");
     const session_id = String(input.session_id || "").trim();
     if (!session_id) throw new Error("Memory digest requires session_id");
@@ -712,6 +698,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     input: MemorySystemContextInput,
   ): Promise<MemorySystemContextResult> {
     this.assert_access(input.access);
+    await this.ensure_agent_index(input.access);
     const max_items = Math.max(0, Math.floor(input.max_items));
     const max_chars = Math.max(0, Math.floor(input.max_chars || DEFAULT_MAX_CONTEXT_CHARS));
     if (max_items === 0 || max_chars === 0) return { items: [] };
@@ -784,7 +771,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       schema_version: 1,
       job_id,
       status: "pending",
-      agent_id: this.require_runtime().agent_id,
+      agent_id: input.access.agent_id,
       workspace_id: input.access.workspace_id,
       user_id: input.access.user_id,
       city_id: input.access.city_id,
@@ -802,7 +789,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       await this.storage?.dispose();
     } finally {
       if (this.create_storage) this.storage = undefined;
-      this.runtime = undefined;
+      this.initialized = false;
     }
   }
 
@@ -812,21 +799,10 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     return this.storage;
   }
 
-  /** 创建当前 Runtime 的最小 Agent 访问上下文。 */
-  private create_runtime_access(): MemoryAccessContext {
-    const runtime = this.require_runtime();
-    return {
-      agent_id: runtime.agent_id,
-      city_memory_available: this.city_memory_available,
-    };
-  }
-
-  /** 校验访问上下文属于当前 Provider，并且没有伪造 City 能力。 */
+  /** 校验访问上下文完整，并且没有伪造 City 能力。 */
   private assert_access(access: MemoryAccessContext): void {
-    const runtime = this.require_runtime();
-    if (String(access.agent_id || "").trim() !== runtime.agent_id) {
-      throw new Error("Memory access agent_id does not match initialized Provider");
-    }
+    if (!this.initialized) throw new Error("BuiltinMemoryProvider is not initialized");
+    if (!String(access.agent_id || "").trim()) throw new Error("Memory access requires agent_id");
     if (access.city_memory_available && !this.city_memory_available) {
       throw new Error("Memory access cannot enable an unavailable City Store");
     }
@@ -850,10 +826,17 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     }
   }
 
-  /** 返回已初始化 Runtime，否则拒绝隐式回退。 */
-  private require_runtime(): MemoryProviderInitializeInput {
-    if (!this.runtime) throw new Error("BuiltinMemoryProvider is not initialized");
-    return this.runtime;
+  /** 为首次访问当前 Agent 的共享 Provider 创建稳定索引。 */
+  private async ensure_agent_index(access: MemoryAccessContext): Promise<void> {
+    const address = resolve_writable_memory_address(access, "agent");
+    const index_memory_id = create_subject_memory_id(address, INDEX_RELATIVE_MEMORY_ID);
+    if (await this.active_storage.has(memory_id_to_key(index_memory_id))) return;
+    await this.write_projection({
+      memory_id: INDEX_RELATIVE_MEMORY_ID,
+      title: "Memory Index",
+      content: "Long-term memories are available through MemoryPlugin recall and read actions.",
+      tags: ["memory", "index"],
+    }, [], "document", address);
   }
 
   /** 保存一条 Provider 内部证据记录。 */

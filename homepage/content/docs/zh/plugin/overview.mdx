@@ -5,24 +5,23 @@ description: 什么是 Downcity 插件，以及它如何扩展 Agent 能力
 
 # 插件
 
-**插件（Plugin）** 是 Downcity 唯一的扩展产品单元。它既可以向 Agent 提供运行能力，也可以带上自己的宿主管理逻辑、Sidebar + Mainview 业务工作区和 Config，而不需要额外的 Extension 概念。
+**插件（Plugin）** 是 Downcity 唯一的扩展产品单元。它由 City 提供和维护，可以向 Agent/Session 作用域投影运行能力，也可以带上宿主管理逻辑、Sidebar + Mainview 业务工作区和 Config。
 
 ```text
 Plugin
-├── agent      可选：Agent 运行能力
-├── main       可选：管理逻辑与 actions
+├── main       可选：City 运行实例、生命周期、管理逻辑与 actions
 └── renderer   可选：Sidebar + Mainview 和/或 Config
 ```
 
 ## 插件能做什么
 
 - 向 Agent 暴露可调用的工具
-- 接入 Agent 生命周期（启动、停止、会话事件）
+- 接入 City Plugin 生命周期（start、bind、unbind、stop）
 - 管理自己的状态、连接和后台任务
 - 提供不依赖 Profile 的 Sidebar + Mainview 工作区，并在 Catalog 详情的独立 Config 中管理配置
-- 在 Agent 进程边界内运行，不作为独立服务
+- 在 City 进程边界内运行，不作为独立服务
 
-Profile 只是宿主为声明 Config 的 Plugin 提供的配置隔离空间，与业务工作区无关。Plugins Sidebar 始终显示完整 Catalog，点击任意 Plugin 都能查看描述、README 和可选 Config。功能型 Plugin 还会出现在一级导航条；点击后左侧切换为它自己的 Sidebar，主区域显示 Mainview。没有 Config 的 Plugin 不需要 Profile。Agent 只保存 Plugin 启用状态和必要的 Profile 引用，不保存渠道、账号或 Token。
+Profile 是 City 为 Plugin 提供的配置隔离空间，与业务工作区无关。相同 `(plugin_id, profile_id)` 在一个 City 内共享实例；Agent 只声明 Plugin/Profile 绑定，不持有实例或生命周期。
 
 ## 内置插件
 
@@ -38,20 +37,17 @@ Downcity 内置了多个插件，覆盖常见的 Agent 需求：
 
 ## 编写插件
 
-SDK 中的 Plugin 仍然是普通 TypeScript 实例，可以直接传给 Agent，不需要经过安装协议：
+SDK 中通过 `CityPluginRegistration` 提供 Plugin，再按 ID 绑定 Agent，不需要经过安装协议：
 
 ```ts
-const agent = new Agent({
-  id: "coding-pro",
-  model,
-  plugins: [new GithubPlugin({ token })],
-});
+const city = new City({ plugins: [github_registration], workspaces: [workspace] });
+city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
 ```
 
-需要被 CLI 或 Desktop 安装和管理时，再通过 `plugin.json` 声明可选的 `agent`、`main` 与 `renderer` 入口。
+需要被 CLI 或 Desktop 安装和管理时，再通过 `plugin.json` 声明统一 `main` 与可选 `renderer` 入口。
 
 ## 继续阅读
 
 - [Agent Plugins Docs](/zh/plugins-docs) — 内置插件手册和示例
 - [Agent SDK](/zh/agent-sdk-docs) — 如何在代码中注册和使用插件
-- [自定义插件](/zh/docs/plugin/custom) — 可安装 Plugin 的三入口协议
+- [自定义插件](/zh/docs/plugin/custom) — 可安装 Plugin 的统一 main 协议

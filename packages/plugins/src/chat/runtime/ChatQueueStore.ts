@@ -7,7 +7,7 @@
  * - 队列必须通过显式 Context 解析，不允许模块级共享状态。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type {
   ChatQueueEnqueueParams,
   ChatQueueEnqueueResult,
@@ -159,7 +159,7 @@ export class ChatQueueStore implements ChatQueueStorePort {
  * - 缺少 Context 或对应 Workspace runtime 时立即失败，避免跨 Agent/Workspace 串队列。
  */
 export function resolveChatQueueStore(context: PluginContext): ChatQueueStorePort {
-  const chatService = context.plugins.get("chat") as
+  const chatService = context.city.plugins.get("chat") as
     | { queue_store?: (context: PluginContext) => ChatQueueStorePort }
     | undefined;
   if (!chatService?.queue_store) {

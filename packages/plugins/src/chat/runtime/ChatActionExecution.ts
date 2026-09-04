@@ -8,9 +8,9 @@
  */
 
 import path from "node:path";
-import type { JsonObject } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
-import type { PluginExecutionContext } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginExecutionContext } from "@downcity/plugin";
 import type {
   ChatDeleteActionPayload,
   ChatHistoryActionPayload,
@@ -55,7 +55,7 @@ export async function execute_chat_history_clear_action(params: {
       error: "Missing session_id",
     };
   }
-  const cleared = await clear_chat_history(params.context.data_path, session_id);
+  const cleared = await clear_chat_history(params.context.storage.path, session_id);
   return {
     success: true,
     data: {
@@ -65,11 +65,11 @@ export async function execute_chat_history_clear_action(params: {
   };
 }
 
-function toChatHistoryView(events: ChatHistoryEventV1[]): JsonObject[] {
+function toChatHistoryView(events: ChatHistoryEventV1[]): PluginJsonObject[] {
   return events.map((event) => ({
     ...event,
     isoTime: new Date(event.ts).toISOString(),
-  })) as JsonObject[];
+  })) as PluginJsonObject[];
 }
 
 /**
@@ -193,16 +193,16 @@ export async function executeChatInfoAction(params: {
   });
 
   const toPosixRelativePath = (absPath: string): string =>
-    path.relative(params.context.data_path, absPath).split(path.sep).join("/");
+    path.relative(params.context.storage.path, absPath).split(path.sep).join("/");
 
   const channelMetaPath = toPosixRelativePath(
-    get_chat_channel_meta_path(params.context.data_path),
+    get_chat_channel_meta_path(params.context.storage.path),
   );
   const chatDirPath = toPosixRelativePath(
-    get_chat_session_dir_path(params.context.data_path, session_id),
+    get_chat_session_dir_path(params.context.storage.path, session_id),
   );
   const historyPath = toPosixRelativePath(
-    get_chat_history_path(params.context.data_path, session_id),
+    get_chat_history_path(params.context.storage.path, session_id),
   );
 
   return {
@@ -259,7 +259,7 @@ export async function executeChatHistoryAction(params: {
     afterTs: payload.afterTs,
   });
   const historyPath = historyResult.historyPath
-    .replace(`${params.context.data_path}/`, "")
+    .replace(`${params.context.storage.path}/`, "")
     .split("\\")
     .join("/");
 

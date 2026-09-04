@@ -8,7 +8,7 @@
 
 import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import type { Agent } from "@/agent/Agent.js";
-import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
@@ -71,7 +71,7 @@ export interface RpcAgentContext {
   /** 当前 Agent 唯一的 Session 集合。 */
   sessions: AgentSessionCollection;
   /** 当前 Agent 在 Workspace 中可用的 Plugin 调用面。 */
-  plugins: AgentPlugins;
+  plugins: AgentPluginRuntime;
   /** 读取当前 Agent 的 Plugin 状态。 */
   list_plugin_states: () => PluginSnapshot[];
   /** 解析当前 Session 的 system messages。 */

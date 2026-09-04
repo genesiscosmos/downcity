@@ -1,102 +1,50 @@
 ---
 title: NotesPlugin Scenario
-description: Use a small but real NotesPlugin scenario to show how actions, config, and system text can work together
+description: Use a minimal NotesPlugin to combine an Action, System content, and City registration.
 ---
 
 # NotesPlugin Scenario
 
-## Scenario
-
-You want to add a project-notes capability to one agent:
-
-- inspect current notes config
-- save notes-folder behavior
-- inject a little system guidance about how notes should be used
-
-That is a very natural plugin use case.
-
-## Why this looks like a plugin
-
-Because what you want is:
-
-- explicit actions
-- one system augmentation block
-- one project-scoped config block
-
-not a long-lived background worker.
-
-## Example
-
 ```ts
 import {
-  Agent,
   BasePlugin,
-  type PluginContext,
+  define_city_plugin,
   type PluginActions,
-  type PluginConfigDefinition,
-} from "@downcity/agent";
+  type PluginContext,
+} from "@downcity/plugin";
 
 class NotesPlugin extends BasePlugin {
   readonly name = "notes";
   readonly title = "Project Notes";
-  readonly description = "Save and describe a project notes folder.";
-
-  readonly config = {
-    plugin: "notes",
-    scope: "project",
-    defaultValue: {
-      injectPrompt: true,
-      folder: ".notes",
-    },
-  } satisfies PluginConfigDefinition;
+  readonly description = "Describe the project notes folder.";
 
   system(context: PluginContext) {
-    return `Project notes folder: ${context.workspace_path}/.notes`;
+    return `Project notes folder: ${context.workspace.path}/.notes`;
   }
 
   readonly actions: PluginActions = {
     status: {
-      allowWhenDisabled: true,
-      execute: async ({ context }) => {
-        return {
-          success: true,
-          data: {
-            workspace_path: context.workspace_path,
-          },
-        };
-      },
+      execute: async ({ context }) => ({
+        success: true,
+        data: {
+          workspace_path: context.workspace.path,
+          storage_path: context.storage.path,
+        },
+      }),
     },
   };
 }
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new NotesPlugin()],
-});
-
-const status = await agent.plugins.run_action({
-  plugin: "notes",
-  action: "status",
+const notes_module = define_city_plugin({
+  activate() {},
+  create: () => new NotesPlugin(),
 });
 ```
 
-## What this scenario is good for
+The host places `notes_module` in a `CityPluginRegistration` and provides it to City. An Agent binds
+only `{ plugin_id: "notes" }`. After entering a Workspace, host code may call
+`entry.plugins.run_action()` explicitly. Sessions collect System content and Hooks from the same City
+execution view.
 
-- a plugin can already be useful with only `config + actions + system`
-- it does not need a worker or long-lived runtime state to be a valid plugin
-
-## How this lands in the local SDK
-
-This pattern now runs directly inside a local `Agent`.
-
-The most useful details are:
-
-- `status` declares `allowWhenDisabled: true`, so it can still support self-check style calls even if the plugin was explicitly disabled
-- `agent.plugins.run_action(...)` is the most direct explicit entry point
-- if you also implement `system()`, the local SDK session prompt path injects it when this plugin is registered on the Agent
-
-## Related docs
-
-- [Custom plugin](/en/agent-sdk-docs/plugins/custom-plugin)
-- [Plugin actions](/en/agent-sdk-docs/plugins/plugin-actions)
+This Plugin owns no long-lived resources, so it needs no Lifecycle. Use `context.workspace.files` for
+user project files and `context.storage.files` for private Plugin state.

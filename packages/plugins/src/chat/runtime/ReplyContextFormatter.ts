@@ -6,7 +6,7 @@
  * - 同时提供额外 metadata，便于 history / 调试链路查看。
  */
 
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { InboundReplyContext } from "@/chat/types/ReplyContext.js";
 
 function normalizeReplyValue(value: string | undefined): string | undefined {
@@ -66,7 +66,7 @@ export function buildReplyContextInstruction(params: {
  */
 export function buildReplyContextExtra(
   replyContext?: InboundReplyContext,
-): JsonObject | undefined {
+): PluginJsonObject | undefined {
   if (!replyContext) return undefined;
 
   const message_id = normalizeReplyValue(replyContext.message_id);

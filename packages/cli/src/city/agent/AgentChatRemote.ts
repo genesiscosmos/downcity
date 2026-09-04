@@ -9,6 +9,7 @@
 
 import {
   Agent,
+  City,
   generate_id,
   type AgentSessions,
   type AgentSession,
@@ -19,7 +20,7 @@ import {
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import type { WorkspaceBase } from "@downcity/workspace";
+import { LocalStorageProvider, type WorkspaceBase } from "@downcity/workspace";
 import type { AgentModel } from "@downcity/agent";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
 import {
@@ -109,11 +110,18 @@ export async function createRemoteAgent(params: {
       if (!config) throw new Error(`Agent not found: ${params.agent_id}`);
       const workspace_config = data.workspaces.get(target_config.workspace_id);
       if (!workspace_config) throw new Error(`Workspace not found: ${target_config.workspace_id}`);
-      agent = await create_cli_agent({
+      const registration = await create_cli_agent({
         config,
         plugin_loader,
       });
+      agent = registration.agent;
       const workspace = await create_cli_workspace(workspace_config, data.root_path);
+      const city = new City({
+        storage: new LocalStorageProvider(data.root_path),
+        workspaces: [workspace],
+        plugins: await plugin_loader.list_registrations(),
+      });
+      city.agents.add(agent, { plugins: registration.plugins });
       return {
         sessions: create_local_chat_sessions(
           agent.sessions,
@@ -121,7 +129,7 @@ export async function createRemoteAgent(params: {
           async (model_id) => await resolve_cli_agent_model(model_id, workspace.get_env()),
         ),
         close: async () => {
-          await agent!.dispose();
+          await city.close();
           data.database.close();
         },
       };

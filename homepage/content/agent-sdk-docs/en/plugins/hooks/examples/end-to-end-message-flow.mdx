@@ -18,13 +18,13 @@ You have one inbound message and want it to go through three steps:
 ## Host code
 
 ```ts
-const enriched = await agent.plugins.pipeline("chat.enrich_message", {
+const enriched = await entry.plugins.pipeline("chat.enrich_message", {
   text: "Please summarize this page",
 });
 
-await agent.plugins.guard("review.require_checked", enriched);
+await entry.plugins.guard("review.require_checked", enriched);
 
-await agent.plugins.effect("audit.observe", enriched);
+await entry.plugins.effect("audit.observe", enriched);
 ```
 
 ## The corresponding plugins

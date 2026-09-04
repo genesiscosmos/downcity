@@ -10,9 +10,9 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { BasePlugin, create_action } from "@downcity/agent";
+import { BasePlugin, create_action } from "@downcity/plugin";
 import { z } from "zod";
-import type { PluginContext, JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginContext, PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 import type {
   ChatInboundAugmentInput,
@@ -39,7 +39,7 @@ const DEFAULT_AUDIO_MEDIA_TYPE = "audio/mpeg";
 
 /** 从 City 注入的 Embassy 获取语音 AI 服务。 */
 function require_sound_ai(context: PluginContext): SoundAiService {
-  const service = context.embassy?.user.ai;
+  const service = context.city.embassy?.user.ai;
   if (!service) throw new Error("SoundPlugin requires a City Embassy user AI service");
   return {
     catalog: async () => await service.catalog(),
@@ -145,7 +145,7 @@ function escape_xml_attr(value: string): string {
  * 归一化模型筛选 action 的 payload。
  */
 function normalize_models_capability(
-  payload: JsonValue | undefined,
+  payload: PluginJsonValue | undefined,
 ): SoundPluginCapability | undefined {
   const record = to_record(payload ?? {});
   if (!record) {
@@ -162,7 +162,7 @@ function normalize_models_capability(
 /**
  * 归一化 ASR action payload。
  */
-function normalize_asr_payload(payload: JsonValue | undefined): SoundPluginAsrInput {
+function normalize_asr_payload(payload: PluginJsonValue | undefined): SoundPluginAsrInput {
   const record = to_record(payload ?? {});
   if (!record) {
     throw new TypeError("SoundPlugin.asr payload must be an object");
@@ -185,7 +185,7 @@ function normalize_asr_payload(payload: JsonValue | undefined): SoundPluginAsrIn
 /**
  * 归一化 TTS action payload。
  */
-function normalize_tts_payload(payload: JsonValue | undefined): SoundPluginTtsInput {
+function normalize_tts_payload(payload: PluginJsonValue | undefined): SoundPluginTtsInput {
   const record = to_record(payload ?? {});
   if (!record) {
     throw new TypeError("SoundPlugin.tts payload must be an object");
@@ -241,7 +241,7 @@ async function resolve_asr_input(
 ): Promise<SoundPluginAsrInput> {
   if (!input.audio_path) return input;
   const local = await local_audio_to_data_url({
-    root_path: context.workspace_path,
+    root_path: context.workspace.path,
     audio_path: input.audio_path,
     media_type: input.media_type,
   });
@@ -272,9 +272,9 @@ function resolve_model_id(
 /**
  * 归一化 JSON 对象。
  */
-function normalize_json_object(value: unknown): JsonObject | undefined {
+function normalize_json_object(value: unknown): PluginJsonObject | undefined {
   const record = to_record(value);
-  return record ? record as JsonObject : undefined;
+  return record ? record as PluginJsonObject : undefined;
 }
 
 /**
@@ -518,7 +518,7 @@ export class SoundPlugin extends BasePlugin {
       model,
     });
     return normalize_asr_result(
-      await require_sound_ai(context).asr(resolved_input as unknown as JsonObject) as unknown as SoundPluginAsrResult,
+      await require_sound_ai(context).asr(resolved_input as unknown as PluginJsonObject) as unknown as SoundPluginAsrResult,
     );
   }
 
@@ -544,8 +544,8 @@ export class SoundPlugin extends BasePlugin {
     /** 当前 Agent 上下文。 */
     context: PluginContext;
     /** chat 入站管道值。 */
-    value: JsonValue;
-  }): Promise<JsonValue> {
+    value: PluginJsonValue;
+  }): Promise<PluginJsonValue> {
     if (!this.auto_asr) return input.value;
     const inbound = input.value as unknown as ChatInboundAugmentInput;
     const voice_attachments = (Array.isArray(inbound.attachments) ? inbound.attachments : [])
@@ -563,7 +563,7 @@ export class SoundPlugin extends BasePlugin {
           ...(attachment.contentType ? { media_type: attachment.contentType } : {}),
           ...(attachment.fileName ? { filename: attachment.fileName } : {}),
         });
-        const src = to_display_src(input.context.workspace_path, attachment);
+        const src = to_display_src(input.context.workspace.path, attachment);
         voice_blocks.push(
           `<voice src="${escape_xml_attr(src)}">${escape_xml_text(result.text)}</voice>`,
         );
@@ -571,7 +571,7 @@ export class SoundPlugin extends BasePlugin {
         // 关键点（中文）：自动转写失败不阻塞 chat 主消息链路。
       }
     }
-    return append_voice_text(inbound, voice_blocks) as unknown as JsonValue;
+    return append_voice_text(inbound, voice_blocks) as unknown as PluginJsonValue;
   }
 
   /**
@@ -580,7 +580,7 @@ export class SoundPlugin extends BasePlugin {
   readonly hooks = {
     pipeline: {
       [CHAT_PLUGIN_POINTS.augmentInbound]: [
-        async ({ context, value }: { context: PluginContext; value: JsonValue }) =>
+        async ({ context, value }: { context: PluginContext; value: PluginJsonValue }) =>
           await this.auto_transcribe_inbound({ context, value }),
       ],
     },
@@ -610,7 +610,7 @@ export class SoundPlugin extends BasePlugin {
         { title: "ASR models", payload: { capability: "asr" } },
         { title: "TTS models", payload: { capability: "tts" } },
       ],
-      execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
+      execute: async ({ context, input }: { context: PluginContext; input: PluginJsonValue }) => {
         try {
           const capability = normalize_models_capability(input);
           const result = normalize_sound_models(
@@ -619,7 +619,7 @@ export class SoundPlugin extends BasePlugin {
           );
           return {
             success: true,
-            data: result as unknown as JsonObject,
+            data: result as unknown as PluginJsonObject,
             message: "sound models listed",
           };
         } catch (error) {
@@ -651,12 +651,12 @@ export class SoundPlugin extends BasePlugin {
         { title: "Local audio", payload: { model: "asr-model-id", audio_path: "./input.wav" } },
         { title: "Remote audio", payload: { model: "asr-model-id", url: "https://example.com/audio.mp3" } },
       ],
-      execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
+      execute: async ({ context, input }: { context: PluginContext; input: PluginJsonValue }) => {
         try {
           const result = await this.transcribe(context, normalize_asr_payload(input));
           return {
             success: true,
-            data: result as unknown as JsonObject,
+            data: result as unknown as PluginJsonObject,
             message: "audio transcribed",
           };
         } catch (error) {
@@ -692,7 +692,7 @@ export class SoundPlugin extends BasePlugin {
           payload: { model: "tts-model-id", text: "Welcome back", voice: "alloy", format: "mp3" },
         },
       ],
-      execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
+      execute: async ({ context, input }: { context: PluginContext; input: PluginJsonValue }) => {
         try {
           const result = await this.synthesize(context, normalize_tts_payload(input));
           return {

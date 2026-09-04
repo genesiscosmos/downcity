@@ -7,6 +7,13 @@
 
 import type { PluginMainModule } from "./types/PluginMain.js";
 
+export {
+  BasePlugin,
+  create_action,
+  create_plugin,
+  define_city_plugin,
+} from "./runtime.js";
+
 /** 保留 Plugin main 的精确类型并返回原对象。 */
 export function define_plugin_main(module: PluginMainModule): PluginMainModule {
   return module;
@@ -24,6 +31,71 @@ export type {
   PluginNotificationTopicInput,
   PluginRendererNotification,
 } from "./types/PluginNotification.js";
+
+export type {
+  PluginAgentHandle,
+  PluginCityHandle,
+  PluginCityPlugins,
+  PluginContext,
+  PluginLogger,
+  PluginLogDetails,
+  PluginLogLevel,
+  PluginProfile,
+  PluginSessionCollection,
+  PluginSessionContextSnapshot,
+  PluginSessionHandle,
+  PluginSessionMutation,
+  PluginSessionOrigin,
+  PluginSessionPromptPart,
+  PluginSessionTurnHandle,
+  PluginSessionTurnResult,
+  PluginStorage,
+  PluginTurnHandle,
+  PluginWebServices,
+  PluginWorkspaceHandle,
+} from "./types/PluginContext.js";
+
+export type {
+  AnyPluginActionResult,
+  CreatePluginActionOptions,
+  CreatePluginOptions,
+} from "./runtime.js";
+
+export type {
+  CityPluginMainContext,
+  CityPluginModule,
+  CityPluginRegistration,
+  Plugin,
+  PluginAction,
+  PluginActionApi,
+  PluginActionCommand,
+  PluginActionCommandInput,
+  PluginActionExample,
+  PluginActionExecutionContext,
+  PluginActionInputSchema,
+  PluginActionMessage,
+  PluginActionReadView,
+  PluginActionResult,
+  PluginActions,
+  PluginAvailability,
+  PluginEffectHook,
+  PluginExecutionContext,
+  PluginFactoryContext,
+  PluginGuardHook,
+  PluginHooks,
+  PluginHttpDefinition,
+  PluginHttpRegistration,
+  PluginLifecycle,
+  PluginLifecycleContext,
+  PluginPipelineHook,
+  PluginReadView,
+  PluginResolveHook,
+  PluginResolves,
+  PluginSessionExecutionScope,
+  PluginSnapshot,
+  PluginState,
+  PluginView,
+} from "./types/PluginRuntime.js";
 
 export type {
   PluginConfigMainAction,

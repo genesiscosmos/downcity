@@ -1,114 +1,64 @@
 ---
 title: Plugin 总览
-description: 理解 Downcity 里 plugin 的建模方式、本地 plugin 与托管 plugin 的区别，以及 plugin 能力如何组装
+description: 理解 City Plugin 的所有权、能力、上下文与 Agent 绑定。
 ---
 
 # Plugin 总览
 
-在当前 Downcity 里，plugin 就是能力扩展单元。
+Plugin 是 Downcity 的统一扩展产品单元，可以提供 Action、Hook、Resolve、System、Availability、
+HTTP Route、生命周期以及可选的 Mainview/Config。
 
-这意味着：
+Plugin 不属于 Agent。City 持有 catalog、main、`(plugin_id, profile_id)` 共享实例与完整生命周期；
+Agent 只保存“使用哪个 Plugin/Profile”的绑定；Session 在执行检查点取得只读 Plugin 视图。
 
-- 能力通过 plugin 暴露
-- 运行时参与点通过 plugin 暴露
-- 长生命周期的托管 runtime 模块，也统一建模成 plugin
-
-如果你想看具体 built-in plugin 手册，请继续阅读 [Agent Plugins Docs](/zh/plugins-docs)。
-
-## 一句话理解
-
-plugin 是 Downcity 里“一个能力边界”的统一承载单元。
-
-它可以是：
-
-- action-first
-- hook-oriented
-- system-oriented
-- lifecycle-owned
-- HTTP-exposing
-
-## 两类最重要的 plugin
-
-### 本地 plugin
-
-这类 plugin 通常直接挂到一个本地 SDK `Agent` 上。
-
-典型例子：
-
-- `skill`
-- `web`
-- `sound`
-
-### 托管 plugin
-
-这类 plugin 属于 runtime 管理对象，会跟随目标 agent lifecycle 参与运行。
-
-典型例子：
-
-- `chat`
-- `task`
-- `memory`
-- `shell`
-
-`chat` 同时承载渠道 runtime、queue worker 和入站授权能力。ActionSchedule 由 Agent 自身管理，因此不会作为 plugin 出现在列表里。
-
-正因为存在这类托管 plugin，旧的“分层对立”语言已经不再适合当前模型。
-
-## 在本地 SDK 里怎么接入 plugin
+## SDK 装配
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { SkillPlugin } from "@downcity/plugins/skill";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new SkillPlugin()],
+const registrations = create_builtin_plugin_registrations();
+const city = new City({ workspaces: [workspace], plugins: registrations });
+const agent = new Agent({ id: "repo-helper", model });
+
+city.agents.add(agent, {
+  plugins: [
+    { plugin_id: "skill" },
+    { plugin_id: "memory" },
+  ],
 });
-
-const plugins = agent.plugins.list();
 ```
 
-`WebPlugin` 必须显式注入 provider，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
+SDK 不会自动启用所有内建 Plugin。`CityOptions.plugins` 或 `city.plugins.provide()` 负责登记；
+`city.agents.add()` 与 `city.plugins.register()` 负责 Agent/Profile 绑定。
 
-关键点：
+## PluginContext
 
-- `plugins` 是当前这个 `Agent` 私有的 registry
-- SDK 不会自动注册所有 built-in plugin
-- 你可以直接使用 `agent.plugins.list()`、`availability()`、`run_action()`
-- Session 首次生成 system 时，只从这个 SDK `Agent` 当时已注册的 plugin 收集文本；之后固定
+Action、Hook、System 与 Availability 都使用当前作用域的 `PluginContext`。它提供受限的：
 
-## 一个 plugin 可能包含什么
+- `city`：Embassy 与 Plugin 间协作端口。
+- `agent`：身份、指令和 Session 集合。
+- `workspace`：文件、Shell、env 与稳定 ID。
+- `session` / `turn`：当前调用存在 Session/Turn 时的直接通信句柄。
+- `profile`：当前共享实例的 Profile 快照。
+- `storage`：当前 Agent/Plugin 私有存储。
 
-完整 plugin 可能包含：
+对象句柄用于进程内直接通信，ID 用于稳定身份和序列化；Plugin 不需要只拿 `session_id` 再绕回宿主查询。
 
-- `actions`
-- `hooks`
-- `resolves`
-- `system`
-- `availability`
-- `http`
-- `lifecycle`
+## Profile 与共享实例
 
-不是每个 plugin 都需要把这些全部实现。
+相同 `(plugin_id, profile_id)` 在一个 City 中只有一个实例。`start/stop` 属于该共享实例，
+`bind/unbind` 属于 Agent/Workspace scope。Memory 因此可以由一个 City 实例服务多个 Agent，并在
+逻辑地址中区分 City、Agent、User 和 Workspace 作用域。
 
-## 现在“plugin 启用”到底是什么意思
+同一个 Chat Profile 只允许一组渠道连接和队列；跨 scope 复用时必须配置
+`owner_agent_id` 和 `owner_workspace_id`。
 
-要分多层理解：
+## 推荐阅读
 
-- agent 级：这个本地 SDK `Agent` 有没有注册该 plugin
-- runtime 级：这个托管 plugin 当前是启动还是停止
-- plugin 自身级：`availability()` 当前是否判定可用
-- Profile 级：City 宿主是否为 Agent 选择了一个 Plugin Profile
-
-不要把它们混成一个概念。
-
-## 推荐阅读顺序
-
-1. [Plugin Design Patterns](/zh/agent-sdk-docs/plugins/design-patterns)
-2. [Plugin Lifecycle](/zh/agent-sdk-docs/plugins/lifecycle)
-3. [Plugin 配置](/zh/agent-sdk-docs/plugins/configuration)
-4. [Plugin Actions](/zh/agent-sdk-docs/plugins/plugin-actions)
-5. [Plugin Hooks](/zh/agent-sdk-docs/plugins/plugin-hooks)
-6. [Agent Plugins Docs](/zh/plugins-docs)
-7. [自定义 Plugin](/zh/agent-sdk-docs/plugins/custom-plugin)
+1. [Plugin Lifecycle](/zh/agent-sdk-docs/plugins/lifecycle)
+2. [Plugin Actions](/zh/agent-sdk-docs/plugins/plugin-actions)
+3. [Plugin Hooks](/zh/agent-sdk-docs/plugins/plugin-hooks)
+4. [Plugin 配置](/zh/agent-sdk-docs/plugins/configuration)
+5. [Plugin 开发指南](/zh/agent-sdk-docs/plugins/plugin-development)
+6. [内建 Plugin 手册](/zh/plugins-docs)

@@ -33,10 +33,10 @@ description: 说明 hook 和 resolve 到底是谁触发、在什么时候触发�
 ## 一个最小调用流
 
 ```ts
-const value1 = await agent.plugins.pipeline("chat.enrich_message", input);
-await agent.plugins.guard("review.require_checked", value1);
-await agent.plugins.effect("audit.observe", value1);
-const role = await agent.plugins.resolve("auth.resolve_role", {
+const value1 = await entry.plugins.pipeline("chat.enrich_message", input);
+await entry.plugins.guard("review.require_checked", value1);
+await entry.plugins.effect("audit.observe", value1);
+const role = await entry.plugins.resolve("auth.resolve_role", {
   userId: "owner",
 });
 ```

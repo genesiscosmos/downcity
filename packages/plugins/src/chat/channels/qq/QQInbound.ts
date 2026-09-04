@@ -7,7 +7,7 @@
  * - 具体“授权、入队、执行、回发”仍由 QQBot 负责编排。
  */
 
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { QqIncomingAttachment } from "@/chat/types/QqVoice.js";
 import type { QqActorIdentity, QQAuthor, QQMessageData } from "@/chat/channels/qq/types/QqChannel.js";
 import { extractQqIncomingAttachments } from "./VoiceInput.js";
@@ -21,18 +21,18 @@ export function resolveQqInboundChatTitle(params: {
   actorName?: string;
 }): string | undefined {
   const chatType = String(params.chatType || "").trim().toLowerCase();
-  const raw = params.data as unknown as JsonObject;
+  const raw = params.data as unknown as PluginJsonObject;
   const groupObj =
     raw.group && typeof raw.group === "object" && !Array.isArray(raw.group)
-      ? (raw.group as JsonObject)
+      ? (raw.group as PluginJsonObject)
       : null;
   const channelObj =
     raw.channel && typeof raw.channel === "object" && !Array.isArray(raw.channel)
-      ? (raw.channel as JsonObject)
+      ? (raw.channel as PluginJsonObject)
       : null;
   const guildObj =
     raw.guild && typeof raw.guild === "object" && !Array.isArray(raw.guild)
-      ? (raw.guild as JsonObject)
+      ? (raw.guild as PluginJsonObject)
       : null;
 
   const candidates = [

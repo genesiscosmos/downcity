@@ -6,7 +6,7 @@
  * - `QQGatewayClient` 只保留发送入口与状态持有，不再直接展开长流程。
  */
 
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import type { QQSendMessageBody } from "@/chat/channels/qq/types/QqChannel.js";
 import {
   isRetryableQqSendFailure,
@@ -35,7 +35,7 @@ export interface SendQqMessageWithRetryParams {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * OpenAPI 基础地址。
    */
@@ -141,7 +141,7 @@ async function postQqMessageOnce(params: {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 请求 URL。
    */

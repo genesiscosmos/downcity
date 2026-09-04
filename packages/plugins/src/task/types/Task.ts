@@ -6,7 +6,7 @@
  * - 每次执行产出 run 目录用于审计
  */
 
-import type { JsonValue } from "@downcity/agent";
+import type { PluginJsonValue } from "@downcity/plugin";
 
 export type ShipTaskStatus = "enabled" | "paused" | "disabled";
 export type ShipTaskKind = "agent" | "script";
@@ -14,7 +14,7 @@ export type ShipTaskKind = "agent" | "script";
 /** Task 完成结果的固定 Session 交付目标。 */
 export interface TaskDeliverySession {
   /** 保证该值对象可以安全进入 Plugin JSON 协议。 */
-  readonly [key: string]: JsonValue;
+  readonly [key: string]: PluginJsonValue;
 
   /** 目标 Agent Session 的稳定标识。 */
   readonly session_id: string;

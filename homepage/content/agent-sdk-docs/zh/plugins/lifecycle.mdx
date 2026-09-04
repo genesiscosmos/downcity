@@ -1,112 +1,70 @@
 ---
 title: Plugin Lifecycle
-description: 理解 Agent plugin 的注册、卸载，以及 lifecycle.start / lifecycle.stop 什么时候执行
+description: 理解 City 持有的 Plugin main、共享实例、Workspace scope 与 execution lease。
 ---
 
 # Plugin Lifecycle
 
-Plugin 只属于 Agent。
+Plugin 由 City 持有，Agent 只声明 `plugin_id` 与可选 Profile 绑定。City 内同一个
+`(plugin_id, profile_id)` 只创建一个实例，多 Agent 可以共享它。
 
-它的生命周期可以简化成两件事：
-
-- 注册：plugin 成功进入 `agent.plugins`
-- 卸载：plugin 成功从 `agent.plugins` 移除
-
-宿主直接调用 `agent.plugins` 时会立即看到新的 configured registry。已有 Session 的 plugin action 与 metadata 执行视图在下一个 Session step 检查点切换；execution lease 会保证旧 plugin lifecycle 持续到当前 step 及其工具调用结束。如果当前 Session turn 没有后续 step，则在下一个 Session turn 开始时切换。Session 的 system 在第一次生成后固定，不会随 plugin registry 变化；新 Session 才会从最新 registry 收集 plugin system。
-
-不再需要单独理解 start、stop、restart 或项目级 enabled 开关。
-
-## 注册就是启用
-
-Agent 构造时传入的 plugin 会自动注册：
+## 登记与绑定
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { WebPlugin } from "@downcity/plugins/web";
-
-const agent = new Agent({
-  id: "agent",
-  plugins: [new WebPlugin({ browser: "playwright", cdp_url: "http://127.0.0.1:9222" })],
-});
-const workspace = new Workspace({
-  id: "project",
-  path: process.cwd(),
+const city = new City({
+  workspaces: [workspace],
+  plugins: [registration],
 });
 
-const session = await agent.sessions.create({ workspace });
+city.agents.add(agent, {
+  plugins: [{ plugin_id: registration.id, profile }],
+});
 ```
 
-Agent 实例化之后，也可以继续注册 plugin：
+也可以动态修改绑定：
 
 ```ts
-await agent.plugins.register(new SkillPlugin());
+await city.plugins.register(agent.id, {
+  plugin_id: registration.id,
+  profile,
+});
+await city.plugins.unregister(agent.id, registration.id);
 ```
 
-同名 plugin 再次注册表示替换。Runtime 会先卸载旧实例，再注册新实例。
+`provide` 只登记模块；`register` 才让某个 Agent 使用一个 Profile。同一 City 中相同 Plugin ID
+只能对应同一模块，相同 Profile ID 的配置也必须一致。
 
-## 卸载就是停用
+## 四个执行生命周期节点
+
+- `start(context)`：首个 Agent 引用该 Plugin/Profile 时执行一次，适合 Profile 共享连接和缓存。
+- `bind(context)`：Agent 进入 Workspace 时执行，适合该执行作用域的 scheduler、queue 或路由。
+- `unbind(context)`：离开 Workspace、替换 Profile 或解绑 Plugin 时释放对应 scope。
+- `stop(context)`：最后一个 Agent 引用和活跃 execution lease 都释放后执行一次。
 
 ```ts
-await agent.plugins.unregister("skill");
+readonly lifecycle = {
+  start: async ({ profile, storage }) => {
+    await this.client.open(profile.config, storage);
+  },
+  bind: async (context) => {
+    await this.scheduler.start(context.agent.id, context.workspace.id);
+  },
+  unbind: async (context) => {
+    await this.scheduler.stop(context.agent.id, context.workspace.id);
+  },
+  stop: async () => {
+    await this.client.close();
+  },
+};
 ```
 
-卸载后：
+`start/stop` 接收 `PluginLifecycleContext`，其中 storage 属于共享 Profile。`bind/unbind` 接收完整
+`PluginContext`，其中 storage 属于当前 Agent/Plugin 执行范围。
 
-- `agent.plugins.get("skill")` 返回 `null`
-- `agent.plugins.run_action({ plugin: "skill", ... })` 会返回 unknown plugin
-- 这个 plugin 的 hooks、resolves 和 action 不会再参与后续运行；已有 Session 已固定的 system 不会被回溯删除
+## execution lease
 
-## lifecycle.start / lifecycle.stop
+Session 在 Step 检查点捕获不可变 Plugin 执行视图。解绑后，新 Step 立即不再看到该 Plugin；已经开始
+的 Step 可以继续完成。City 会等待最后一个 lease 释放，再停止共享实例，避免长连接或 Provider 被提前关闭。
 
-Plugin 仍然可以声明 lifecycle：
-
-- `lifecycle.start`
-- `lifecycle.stop`
-- `lifecycle.command`
-
-但它们不再是公开状态机。
-
-规则很简单：
-
-- `register(plugin)` 时自动调用 `plugin.lifecycle?.start(context)`
-- `unregister(name)` 会立即从 configured registry 移除 plugin；活跃 Session step 的 lease 释放后再调用 `plugin.lifecycle?.stop(context)`
-- `agent.dispose()` 时会卸载全部 plugin
-
-适合 lifecycle 的场景包括：
-
-- workers
-- poll loops
-- 长连接
-- 内存 runtime state
-- 可恢复的 runtime engines
-
-## 查看注册状态
-
-```ts
-agent.plugins.snapshots();
-agent.plugins.status("skill");
-agent.plugins.has("skill");
-```
-
-状态只保留：
-
-- `initializing`
-- `ready`
-- `error`
-
-Plugin 注册后先进入 `initializing`。首次 action、availability、system block 或 hook 执行会等待 lifecycle 启动完成；成功后进入 `ready`，启动失败则进入 `error`。
-
-未注册的 plugin 不需要状态，因为它已经不在 registry 里。
-
-## ActionSchedule
-
-ActionSchedule 不是 plugin。
-
-每个 Agent 持有一个本地 action 调度 loop。到期任务会调用 Agent 已注册 Plugin 的 action；只有 Session 执行时才选择 Workspace Context。
-
-## 相关文档
-
-- [Plugin Availability](/zh/agent-sdk-docs/plugins/plugin-availability)
-- [Plugin Design Patterns](/zh/agent-sdk-docs/plugins/design-patterns)
-- [Built-ins Overview](/zh/plugins-docs/builtins/overview)
+`city.close()` 会释放 Workspace scope、Agent 绑定、共享实例和 Plugin main。单个 `stop` 或
+`deactivate` 失败不会阻止其他 Plugin 清理，City 会在结束后汇总错误。

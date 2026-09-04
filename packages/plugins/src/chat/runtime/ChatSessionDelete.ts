@@ -8,7 +8,7 @@
  * - 清理运行中 agent 与队列，避免残留任务继续执行
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import { resolveChatQueueStore } from "@/chat/runtime/ChatQueue.js";
 import { clean_chat_storage } from "@/chat/runtime/ChatStorage.js";
 
@@ -52,10 +52,10 @@ export async function deleteChatSessionById(params: {
     resolveChatQueueStore(params.context).clear(session_id);
 
     const chat_result = await clean_chat_storage({
-      data_path: params.context.data_path,
+      data_path: params.context.storage.path,
       session_id: session_id,
     });
-    const removed_session_dir = await params.context.sessions.remove(session_id);
+    const removed_session_dir = await params.context.agent.sessions.remove(session_id);
 
     const deleted =
       chat_result.removed_route ||

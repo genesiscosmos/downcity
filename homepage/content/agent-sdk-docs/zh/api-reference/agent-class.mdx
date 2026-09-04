@@ -5,8 +5,7 @@ description: 本地 Agent SDK 的核心公开接口
 
 # Agent 类
 
-`Agent` 是本地 SDK 中可跨项目复用的主体，拥有稳定 ID、可见名称、能力描述、指令、模型、自定义 Tool、Plugin 注册和
-当前进入的 Workspace 集合，但不拥有永久绑定的 Workspace 或全局 Session 集合。
+`Agent` 是本地 SDK 中可跨项目复用的执行主体，拥有稳定 ID、可见名称、能力描述、指令、模型、自定义 Tool 和 Session 集合。它不持有 Plugin，也不永久绑定 Workspace。
 
 ## 公开 API
 
@@ -18,7 +17,6 @@ description: 本地 Agent SDK 的核心公开接口
 - `agent.set_instruction(input)`
 - `agent.get_instructions()`
 - `agent.get_logger()`
-- `agent.plugins`
 - `agent.dispose()`
 
 Session 由 Agent 创建，并在创建时显式选择 Workspace：
@@ -35,12 +33,9 @@ const session = await agent.sessions.create({ workspace });
 - `tools`：该 Agent 创建的 Session 可使用的自定义 Tool。
 - `instruction`：Agent 级静态基础指令。
 - `model`：默认 `AgentModel`，本地 Session 可以覆盖。
-- `plugins`：只在 Agent 注册一次的 Plugin 对象。
 - `session_class`：可选的本地自定义 Session 类。
 
 构造参数中没有 `workspace`。宿主独立创建 Workspace，并在 Agent 需要进入项目执行时调用
 `agent.sessions.create({ workspace })`。
 
-一个 Agent 可以在多个 Workspace 中创建 Session。Workspace 只在创建 Session 时传入，不会成为
-Agent 的公开对象。`agent.dispose()` 会释放 Agent 级 Plugin 与运行时资源；`@downcity/agent`
-创建的网络 transport 仍由宿主负责关闭。
+一个 Agent 可以在多个 Workspace 中创建 Session。Workspace 只在创建 Session 时传入，不会成为 Agent 的公开对象。Plugin 由 City 提供，并通过 `city.agents.add(agent, { plugins })` 或 `city.plugins.register()` 绑定；执行时从 `city.enter_workspace()` 返回的 `entry.plugins` 调用。`agent.dispose()` 会释放 Session 与当前 City 绑定；网络 transport 仍由宿主负责关闭。

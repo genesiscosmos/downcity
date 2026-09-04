@@ -290,6 +290,9 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../federation
+      '@downcity/plugin':
+        specifier: workspace:^
+        version: link:../plugin
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
@@ -632,9 +635,27 @@ importers:
 
   packages/plugin:
     dependencies:
+      '@downcity/federation':
+        specifier: workspace:^
+        version: link:../federation
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../type
+      '@downcity/workspace':
+        specifier: workspace:^
+        version: link:../workspace
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
+      hono:
+        specifier: ^4.12.23
+        version: 4.12.23
       react:
         specifier: ^19.0.0
         version: 19.2.6
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^25.9.1

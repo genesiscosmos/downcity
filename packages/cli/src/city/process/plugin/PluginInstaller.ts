@@ -82,7 +82,6 @@ export async function install_plugin(
       throw new Error(`Plugin ID conflicts with builtin Plugin: ${definition.id}`);
     }
     const declared_entries: Array<[label: string, relative_path: string]> = [];
-    if (definition.agent) declared_entries.push(["agent", definition.agent]);
     if (definition.main) declared_entries.push(["main", definition.main]);
     if (definition.renderer) declared_entries.push(["renderer", definition.renderer.entry]);
     const entry_paths = await Promise.all(declared_entries.map(async ([label, relative_path]) => [
@@ -116,7 +115,7 @@ export async function install_plugin(
     const integrity = await calculate_plugin_integrity(staging_dir, [
       PLUGIN_PACKAGE_FILE_NAME,
       definition.readme,
-      ...[definition.agent, definition.main, definition.renderer?.entry]
+      ...[definition.main, definition.renderer?.entry]
         .filter((item): item is string => Boolean(item)),
       ...(definition.icon && is_local_plugin_asset(definition.icon) ? [definition.icon] : []),
     ]);
@@ -185,7 +184,6 @@ export async function read_plugin_definition(
       "description",
       "readme",
       "icon",
-      "agent",
       "main",
       "renderer",
       "source",
@@ -211,11 +209,10 @@ export async function read_plugin_definition(
   if (!description) throw new Error(`Plugin description is required: ${id}`);
   const readme = normalize_plugin_readme(raw.readme, plugin_root, id);
   const icon = normalize_plugin_icon(raw.icon, id);
-  const agent = normalize_plugin_entry(raw.agent, plugin_root, "agent", [".js", ".mjs"]);
   const main = normalize_plugin_entry(raw.main, plugin_root, "main", [".js", ".mjs"]);
   const renderer = normalize_plugin_renderer(raw.renderer, plugin_root);
-  if (!agent && !main && !renderer) {
-    throw new Error(`Plugin must provide agent, main, or renderer: ${id}`);
+  if (!main && !renderer) {
+    throw new Error(`Plugin must provide main or renderer: ${id}`);
   }
   const title = typeof raw.title === "string" ? raw.title.trim() : "";
   return {
@@ -226,7 +223,6 @@ export async function read_plugin_definition(
     description,
     readme,
     ...(icon ? { icon } : {}),
-    ...(agent ? { agent } : {}),
     ...(main ? { main } : {}),
     ...(renderer ? { renderer } : {}),
   };

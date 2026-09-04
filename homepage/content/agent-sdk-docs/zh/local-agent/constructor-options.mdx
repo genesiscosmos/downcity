@@ -237,40 +237,26 @@ const workspace = new Workspace({
 - 审批归属具体 Session，使用 `session.interactions()`、`session.respond(...)` 和 `session.set({ security })`
 - 文件和搜索工具固定限制在 Agent 项目根目录内，不提供 unrestricted 模式
 
-## `plugins`
+## Plugin 不属于 Agent 构造参数
 
-这里接收的是已经实例化好的 `BasePlugin` 对象。
-
-例如：
+`AgentOptions` 不接收 `plugins`。City 先登记 `CityPluginRegistration`，再按 `plugin_id` 和可选 Profile 绑定 Agent：
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { SkillPlugin } from "@downcity/plugins/skill";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new SkillPlugin()],
+const agent = new Agent({ id: "repo-helper", tools: {} });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
 });
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
+
+city.agents.add(agent, {
+  plugins: [{ plugin_id: "skill" }],
 });
 ```
 
-联网能力是显式选择的，并且必须提供 provider，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
-
-SDK 会为当前 `Agent` 创建独立的 plugin registry。
-
-关键点：
-
-- 应该传 `new SkillPlugin()` 这类实例，而不是原始 plugin 定义对象
-- 它不会默认注册全部内建 plugin
-- 它不会复用全局 runtime 的 plugin manager
-- 同名 plugin 被重复注册时会直接报错
-- `agent.plugins` 与 `PluginContext.plugins` 会使用这份 registry
-- 按 Agent 的实际需要实例化对应 plugin，并将这些实例显式传入 `plugins`
+City 持有 Plugin catalog、Profile 共享实例与生命周期；Agent 只持有身份、模型、指令、Tools 和 Sessions。联网能力仍需显式配置 Profile，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
 
 ## `Session`
 

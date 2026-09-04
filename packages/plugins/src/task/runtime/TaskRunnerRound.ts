@@ -8,16 +8,16 @@
 
 import path from "node:path";
 import fs from "fs-extra";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type { SessionTurnExecutionResult } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type {
   ChatSendOutputPick,
   ScriptExecutionResult,
   TaskResultValidation,
   TaskSessionRuntimePort,
   UserSimulatorDecision,
-} from "@/task/runtime/TaskRunnerTypes.js";
+} from "@/task/types/TaskRunner.js";
 import { appendTaskRoundUserMessage } from "./TaskRunnerSession.js";
 
 function stripTaskSecretEnv(env: NodeJS.ProcessEnv): void {
@@ -28,15 +28,15 @@ function stripTaskSecretEnv(env: NodeJS.ProcessEnv): void {
 /**
  * 从文本中提取 JSON 对象（支持 ```json 代码块）。
  */
-export function tryExtractJsonObject(text: string): JsonObject | null {
+export function tryExtractJsonObject(text: string): PluginJsonObject | null {
   const raw = String(text ?? "").trim();
   if (!raw) return null;
 
-  const tryParse = (s: string): JsonObject | null => {
+  const tryParse = (s: string): PluginJsonObject | null => {
     try {
       const parsed = JSON.parse(s);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as JsonObject;
+        return parsed as PluginJsonObject;
       }
       return null;
     } catch {
@@ -271,7 +271,7 @@ export async function runScriptTask(params: {
     .replace(/[^a-zA-Z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "") || "task";
   const execution_dir = path.join(
-    params.context.data_path,
+    params.context.storage.path,
     "sandbox",
     "task-scripts",
     session_segment,
@@ -285,7 +285,7 @@ export async function runScriptTask(params: {
     DC_SESSION_ID: params.session_id,
   };
   stripTaskSecretEnv(childEnv);
-  const shell = params.context.shell;
+  const shell = params.context.workspace.shell;
   if (!shell) {
     throw new Error("Script task execution requires Agent to be configured with a Shell.");
   }
@@ -293,7 +293,7 @@ export async function runScriptTask(params: {
     execution_id: `task-script:${params.session_id}`,
     execution_dir,
     cmd: `sh "${scriptAbs.replace(/(["\\$`])/g, "\\$1")}"`,
-    cwd: params.context.workspace_path,
+    cwd: params.context.workspace.path,
     shell_path: "/bin/sh",
     login: false,
     base_env: childEnv,

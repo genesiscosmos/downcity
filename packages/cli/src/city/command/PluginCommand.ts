@@ -74,7 +74,6 @@ export function registerPluginsCommand(program: Command): void {
         title: "Plugin installed",
         summary: installed.id,
         facts: [
-          ...(installed.agent ? [{ label: "Agent", value: installed.agent }] : []),
           ...(installed.main ? [{ label: "Main", value: installed.main }] : []),
           ...(installed.renderer ? [{ label: "Renderer", value: installed.renderer.entry }] : []),
         ],
@@ -134,7 +133,7 @@ function register_agent_reference_commands(plugin: Command): void {
       const resolved_agent_id = await resolve_cli_agent_id(agent_id);
       const catalog = await resolve_plugin_catalog_item(plugin_id);
       if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
-      if (!catalog.has_agent) throw new Error(`Plugin does not provide Agent capability: ${plugin_id}`);
+      if (!catalog.has_main) throw new Error(`Plugin does not provide a City main: ${plugin_id}`);
       const reference = set_agent_plugin_reference({
         agent_id: resolved_agent_id,
         plugin_id,

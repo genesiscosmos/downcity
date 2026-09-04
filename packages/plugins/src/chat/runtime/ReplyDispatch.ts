@@ -6,9 +6,9 @@
  * - 仅服务 agent 执行生命周期，不覆盖手动 `chat send`。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type { ChatReplyDispatchInput, ChatReplyEffectInput } from "@/chat/types/ChatPlugin.js";
-import type { JsonValue } from "@downcity/agent";
+import type { PluginJsonValue } from "@downcity/plugin";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 import { resolveDispatchTargetByChatKey } from "@/chat/runtime/ChatkeySend.js";
@@ -30,9 +30,9 @@ export async function prepareChatReplyText(params: {
   };
   if (!input.text) return "";
 
-  const next = await params.context.plugins.pipeline<JsonValue>(
+  const next = await params.context.city.plugins.pipeline<PluginJsonValue>(
     CHAT_PLUGIN_POINTS.beforeReply,
-    input as unknown as JsonValue,
+    input as unknown as PluginJsonValue,
   );
   const record =
     next && typeof next === "object" && !Array.isArray(next)
@@ -48,9 +48,9 @@ export async function emitChatReplyEffect(params: {
   context: PluginContext;
   input: ChatReplyEffectInput;
 }): Promise<void> {
-  await params.context.plugins.effect(
+  await params.context.city.plugins.effect(
     CHAT_PLUGIN_POINTS.afterReply,
-    params.input as unknown as JsonValue,
+    params.input as unknown as PluginJsonValue,
   );
 }
 

@@ -15,5 +15,5 @@ import type { PluginSnapshot } from "@/types/plugin/PluginState.js";
 export function list_plugin_states(input?: {
   context?: PluginContext;
 }): PluginSnapshot[] {
-  return input?.context?.plugins.snapshots() || [];
+  return input?.context?.city.plugins.snapshots() || [];
 }

@@ -8,7 +8,7 @@
 export { ensure_local_schema } from "./database/LocalSchema.js";
 export {
   LocalPluginLoader,
-  load_local_agent_plugin_module,
+  load_local_city_plugin_module,
   verify_local_installed_plugin_integrity,
 } from "./runtime/LocalPluginLoader.js";
 export {

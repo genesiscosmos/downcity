@@ -7,7 +7,7 @@
  * - 身份查询失败时降级为无 User Memory，不能猜测或使用默认用户。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type { MemoryAccessContext } from "@/memory/types/MemoryAccess.js";
 
 /** 已认证 City 用户的最小缓存投影。 */
@@ -39,9 +39,9 @@ export class MemoryAccessResolver {
     context: PluginContext,
     session_id?: string,
   ): Promise<MemoryAccessContext> {
-    const agent_id = String(context.agent_id || "").trim();
+    const agent_id = String(context.agent.id || "").trim();
     if (!agent_id) throw new Error("Memory access requires agent_id");
-    const workspace_id = String(context.workspace_id || "").trim();
+    const workspace_id = String(context.workspace.id || "").trim();
     const normalized_session_id = String(session_id || "").trim();
     const user = this.city_memory_available
       ? await this.resolve_city_user(context)
@@ -59,7 +59,7 @@ export class MemoryAccessResolver {
   private async resolve_city_user(
     context: PluginContext,
   ): Promise<ResolvedCityUser | null> {
-    const embassy = context.embassy;
+    const embassy = context.city.embassy;
     if (!embassy) return null;
     const cache_key = embassy as object;
     const existing = this.user_promises.get(cache_key);

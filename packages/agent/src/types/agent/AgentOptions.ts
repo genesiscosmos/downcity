@@ -8,8 +8,6 @@
 
 import type { RuntimeTool as Tool } from "@downcity/type";
 import type { AgentModel } from "@/agent/AgentModel.js";
-import type { Plugin } from "@/types/plugin/PluginDefinition.js";
-import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
 import type {
   AgentManagedSession,
   SessionOptions,
@@ -80,20 +78,6 @@ export interface AgentOptions {
    * - Session 未显式设置模型时，执行自动回退到该实例。
    */
   model?: AgentModel;
-
-  /** 当前 Agent 持有的 Web 搜索与文档能力。 */
-  web?: PluginWebServices;
-
-  /**
-   * 当前 agent 显式持有的插件实例集合。
-   *
-   * 关键点（中文）
-   * - 这里接收已经创建好的 `Plugin` 对象，而不是 plugin class。
-   * - `Agent` 会在构造阶段按名称注册这些实例，并自动绑定到当前 runtime。
-   * - 同名 plugin 会直接报错，避免 action / hook / resolve 行为被静默覆盖。
-   * - SDK 不再自动注入任何 built-in plugin；需要的能力都应由宿主显式传入。
-   */
-  plugins?: Plugin[];
 
   /**
    * 当前 agent 使用的本地 Session 类。

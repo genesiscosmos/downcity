@@ -6,9 +6,9 @@
  * - 最终拼装顺序固定为：attachmentText -> pluginSections -> body_text。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type { ChatInboundAugmentInput } from "@/chat/types/ChatPlugin.js";
-import type { JsonValue } from "@downcity/agent";
+import type { PluginJsonValue } from "@downcity/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 
 function normalizeText(value: string | undefined): string | undefined {
@@ -40,9 +40,9 @@ export async function augmentChatInboundInput(params: {
     attachments: Array.isArray(params.input.attachments) ? params.input.attachments : [],
   };
 
-  return (params.context.plugins.pipeline<JsonValue>(
+  return (params.context.city.plugins.pipeline<PluginJsonValue>(
     CHAT_PLUGIN_POINTS.augmentInbound,
-    normalized as unknown as JsonValue,
+    normalized as unknown as PluginJsonValue,
   ) as unknown) as Promise<ChatInboundAugmentInput>;
 }
 

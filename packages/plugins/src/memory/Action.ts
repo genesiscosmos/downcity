@@ -7,8 +7,8 @@
  * - 所有 Provider 异常都转换为稳定 PluginActionResult，不伪造成功。
  */
 
-import type { PluginActionResult, PluginContext, SessionMessage } from "@downcity/agent";
-import type { JsonValue } from "@downcity/agent";
+import type { SessionMessage } from "@downcity/agent";
+import type { PluginActionResult, PluginContext, PluginJsonValue } from "@downcity/plugin";
 import type {
   MemoryForgetInput,
   MemoryProvider,
@@ -33,8 +33,8 @@ function extract_session_message_line(message: SessionMessage): string {
 
 /** 执行 Provider 调用并统一失败语义。 */
 async function run_provider_action(
-  action: () => Promise<JsonValue>,
-): Promise<PluginActionResult<JsonValue>> {
+  action: () => Promise<PluginJsonValue>,
+): Promise<PluginActionResult<PluginJsonValue>> {
   try {
     return { success: true, data: await action() };
   } catch (error) {
@@ -48,8 +48,9 @@ async function run_provider_action(
 /** status action。 */
 export async function status_memory_action(
   provider: MemoryProvider,
-): Promise<PluginActionResult<JsonValue>> {
-  return await run_provider_action(async () => await provider.status() as unknown as JsonValue);
+  access: MemoryAccessContext,
+): Promise<PluginActionResult<PluginJsonValue>> {
+  return await run_provider_action(async () => await provider.status(access) as unknown as PluginJsonValue);
 }
 
 /** search action，内部委托 Provider recall。 */
@@ -57,11 +58,11 @@ export async function search_memory_action(
   provider: MemoryProvider,
   access: MemoryAccessContext,
   input: Omit<MemoryRecallInput, "access">,
-): Promise<PluginActionResult<JsonValue>> {
+): Promise<PluginActionResult<PluginJsonValue>> {
   return await run_provider_action(async () => await provider.recall({
     ...input,
     access,
-  }) as unknown as JsonValue);
+  }) as unknown as PluginJsonValue);
 }
 
 /** read action。 */
@@ -69,11 +70,11 @@ export async function read_memory_action(
   provider: MemoryProvider,
   access: MemoryAccessContext,
   input: Omit<MemoryReadInput, "access">,
-): Promise<PluginActionResult<JsonValue>> {
+): Promise<PluginActionResult<PluginJsonValue>> {
   return await run_provider_action(async () => await provider.read({
     ...input,
     access,
-  }) as unknown as JsonValue);
+  }) as unknown as PluginJsonValue);
 }
 
 /** remember action。 */
@@ -81,11 +82,11 @@ export async function remember_memory_action(
   provider: MemoryProvider,
   access: MemoryAccessContext,
   input: Omit<MemoryRememberInput, "access">,
-): Promise<PluginActionResult<JsonValue>> {
+): Promise<PluginActionResult<PluginJsonValue>> {
   return await run_provider_action(async () => await provider.remember({
     ...input,
     access,
-  }) as unknown as JsonValue);
+  }) as unknown as PluginJsonValue);
 }
 
 /** digest action：Session 消息读取属于 Plugin 编排，长期记忆语义属于 Provider。 */
@@ -99,18 +100,18 @@ export async function digest_memory_action(
     /** 可选最大消息提取条数。 */
     max_messages?: number;
   },
-): Promise<PluginActionResult<JsonValue>> {
+): Promise<PluginActionResult<PluginJsonValue>> {
   return await run_provider_action(async () => {
     const session_id = String(input.session_id || "").trim();
     if (!session_id) throw new Error("session_id is required");
     const max_messages = Number.isFinite(input.max_messages)
       ? Math.max(1, Math.floor(input.max_messages as number))
       : 30;
-    const snapshot = await context.sessions.runtime(session_id).context();
+    const snapshot = await context.agent.sessions.runtime(session_id).context();
     const start_index = Math.max(0, snapshot.messages.length - max_messages);
     const lines = snapshot.messages
       .slice(start_index)
-      .map(extract_session_message_line)
+      .map((message) => extract_session_message_line(message as unknown as SessionMessage))
       .filter(Boolean);
     if (lines.length === 0) {
       throw new Error("Session has no user or assistant text to digest");
@@ -121,7 +122,7 @@ export async function digest_memory_action(
       access: { ...access, session_id },
       transcript,
       message_count: lines.length,
-    }) as unknown as JsonValue;
+    }) as unknown as PluginJsonValue;
   });
 }
 
@@ -130,11 +131,11 @@ export async function revise_memory_action(
   provider: MemoryProvider,
   access: MemoryAccessContext,
   input: Omit<MemoryReviseInput, "access">,
-): Promise<PluginActionResult<JsonValue>> {
+): Promise<PluginActionResult<PluginJsonValue>> {
   return await run_provider_action(async () => await provider.revise({
     ...input,
     access,
-  }) as unknown as JsonValue);
+  }) as unknown as PluginJsonValue);
 }
 
 /** forget action。 */
@@ -142,9 +143,9 @@ export async function forget_memory_action(
   provider: MemoryProvider,
   access: MemoryAccessContext,
   input: Omit<MemoryForgetInput, "access">,
-): Promise<PluginActionResult<JsonValue>> {
+): Promise<PluginActionResult<PluginJsonValue>> {
   return await run_provider_action(async () => await provider.forget({
     ...input,
     access,
-  }) as unknown as JsonValue);
+  }) as unknown as PluginJsonValue);
 }

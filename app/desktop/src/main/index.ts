@@ -34,12 +34,7 @@ let notification_center: DesktopNotificationCenter | undefined;
 const local_data = create_desktop_local_data();
 const settings_controller = new DesktopSettingsController(local_data);
 const global_env_controller = new DesktopGlobalEnvController(local_data);
-const plugin_controller = new PluginController(
-  local_data,
-  async (input) => await require_agent_controller().invoke_plugin_action(input),
-  async (plugin_id, input) => require_notification_center().publish_plugin_notification(plugin_id, input),
-  async (plugin_id, input) => require_notification_center().dismiss_plugin_notification(plugin_id, input.topic_key),
-);
+let plugin_controller: PluginController | undefined;
 let user_controller: DesktopUserController;
 let quitting = false;
 
@@ -95,6 +90,12 @@ function require_agent_controller(): AgentController {
 function require_notification_center(): DesktopNotificationCenter {
   if (!notification_center) throw new Error("Desktop Notification center is not ready");
   return notification_center;
+}
+
+/** 返回 City ready 后创建的 Plugin catalog 门面。 */
+function require_plugin_controller(): PluginController {
+  if (!plugin_controller) throw new Error("Desktop Plugin controller is not ready");
+  return plugin_controller;
 }
 
 ipcMain.handle("system:open-external-url", async (_event, value: string) => {
@@ -162,11 +163,11 @@ ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id: st
 ipcMain.handle("chat:list-models", () => require_agent_controller().list_models());
 ipcMain.handle("chat:list-workspace-files", (_event, workspace_id: string) => require_agent_controller().list_workspace_files(workspace_id));
 ipcMain.handle("chat:read-workspace-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_file(workspace_id, relative_path));
-ipcMain.handle("plugin:list", () => plugin_controller.list());
-ipcMain.handle("plugin:get", (_event, plugin_id: string) => plugin_controller.get(plugin_id));
-ipcMain.handle("plugin:create-profile", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopCreatePluginProfileInput) => plugin_controller.create_profile(plugin_id, input));
-ipcMain.handle("plugin:remove-profile", (_event, plugin_id: string, profile_id: string) => plugin_controller.remove_profile(plugin_id, profile_id));
-ipcMain.handle("plugin:invoke", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopInvokePluginActionInput) => plugin_controller.invoke(plugin_id, input));
+ipcMain.handle("plugin:list", () => require_plugin_controller().list());
+ipcMain.handle("plugin:get", (_event, plugin_id: string) => require_plugin_controller().get(plugin_id));
+ipcMain.handle("plugin:create-profile", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopCreatePluginProfileInput) => require_plugin_controller().create_profile(plugin_id, input));
+ipcMain.handle("plugin:remove-profile", (_event, plugin_id: string, profile_id: string) => require_plugin_controller().remove_profile(plugin_id, profile_id));
+ipcMain.handle("plugin:invoke", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopInvokePluginActionInput) => require_plugin_controller().invoke(plugin_id, input));
 ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: string) => require_agent_controller().create_session(agent_id, workspace_id));
 ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id));
 ipcMain.handle("chat:rewrite-session-message", (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput) => require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input));
@@ -286,8 +287,22 @@ app.whenReady().then(async () => {
     group_event: (event) => broadcast("group:event", event),
     plugin_notification: async (plugin_id, agent_id, input) => next_notification_center.publish_agent_plugin_notification(plugin_id, agent_id, input),
     plugin_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
+    plugin_main_notification: async (plugin_id, input) => next_notification_center.publish_plugin_notification(plugin_id, input),
+    plugin_main_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
   });
   agent_controller = next_agent_controller;
+  plugin_controller = new PluginController(
+    local_data,
+    async (plugin_id, action_id, input) =>
+      await next_agent_controller.invoke_plugin_main(plugin_id, action_id, input),
+    async (plugin_id, profile_id, action_id, input) =>
+      await next_agent_controller.invoke_plugin_config(
+        plugin_id,
+        profile_id,
+        action_id,
+        input,
+      ),
+  );
   user_controller = new DesktopUserController(local_data, () => next_agent_controller.has_active_sessions());
   await next_agent_controller.ready();
   configure_development_icon();
@@ -307,7 +322,6 @@ app.on("before-quit", (event) => {
   quitting = true;
   void Promise.allSettled([
     agent_controller?.dispose() ?? Promise.resolve(),
-    plugin_controller.dispose(),
   ]).finally(() => {
     local_data.database.close();
     app.quit();

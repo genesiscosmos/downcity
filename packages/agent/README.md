@@ -6,24 +6,26 @@
 
 - 本地 SDK：`Agent`、`Group`、`Workspace`、`Session`、`RemoteAgent`
 - 内部执行内核：Session Composer、LLM/Tool Loop、增量输出
-- Plugin 框架：registry、action、tool runtime 与执行生命周期
+- City Plugin runtime：catalog、共享实例、scope binding、hook 与 execution lease
 - 远程访问：`RemoteAgent`、HTTP/RPC transport
 
-CLI 与 Desktop 负责读取产品配置并显式装配 `Agent`，再通过 `city.agents.add(agent)` 将 Agent 加入环境。City 不创建 Agent，也不持有 Plugin 实例；City 只提供底层资源和 Storage，Plugin 通过执行 Context 使用被允许的能力。
+CLI 与 Desktop 负责读取产品配置并显式装配 `Agent` 与 Plugin 模块，再通过 `city.agents.add(agent, { plugins })` 将它们加入环境。City 持有 Plugin Registry、生命周期和 execution lease；Agent 只持有身份、模型、指令、Tool 与 Session，不保存 Plugin 实例。
 
 ## 包定位
 
 - 面向单个 Agent 项目的执行面
 - 对外通过 `@downcity/agent` 根入口暴露公共 API
-- 负责 session SDK、executor 内核、plugin runtime、sandbox、SDK 本地 Agent
+- 负责 session SDK、executor 内核、City plugin runtime、sandbox、SDK 本地 Agent
 - 不负责多 Agent registry、control plane daemon、console UI 聚合和平台级编排
 
 ## 与其他包的边界
 
 - `@downcity/agent`
   - Agent 与 City runtime
-  - session SDK、executor 内核、plugin 框架、sandbox
+  - session SDK、executor 内核、City plugin runtime、sandbox
   - City Workspace、Embassy、HTTP/RPC transport
+- `@downcity/plugin`
+  - Plugin 作者协议、Context、Action、Hook、Lifecycle 与统一 City module
 - `downcity`
   - CLI City daemon 与平台控制面
 - `@downcity/local`
@@ -109,7 +111,7 @@ src/
   - 不持有 History Store，不负责 Message 或 metadata 持久化
 
 - `src/plugin/`
-  - Agent 侧 Plugin registry、执行视图、生命周期与工具桥接
+  - City 内部的 Plugin 执行 Registry、Hook 调度与工具桥接
   - 具体内建 Plugin 实现位于 `@downcity/plugins`
 
 - `src/remote/transports/` 放 HTTP、RPC transport 及其内部客户端；RPC Server 与 HTTP gateway 由上游宿主管理
@@ -138,8 +140,8 @@ src/
 
 - `agent` 承载本地 Agent 核心运行时，`remote` 承载独立的远程 SDK 客户端
 - `workspace` 承载项目资源、初始化和持久化能力，`platform` 只处理系统级路径
-- `Agent` facade 是实例级装配中心，持有 instruction、model、tools、plugins 与 sessions；env 由 Workspace 持有
-- `PluginContext` 只在 Agent 内部向 Plugin 投影稳定能力，不向宿主暴露
+- `Agent` facade 是实例级装配中心，持有 instruction、model、tools 与 sessions；env 由 Workspace 持有，Plugin 由 City 持有
+- `PluginContext` 由 City 为 Agent/Workspace 执行范围创建，只向 Plugin 投影稳定的受限能力
 - `session / executor / plugin` 是三大核心分层
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑

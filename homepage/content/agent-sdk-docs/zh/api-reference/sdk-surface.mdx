@@ -12,7 +12,8 @@ description: 按日常使用、常用进阶和框架集成三个层级理解 Age
 大多数本地应用只需要：
 
 - `Workspace`：创建项目资源与安全边界，并接收 Shell。
-- `Agent`：组合模型、指令、Tools、Plugins，并通过 `enter()` 进入 Workspace。
+- `Agent`：组合身份、模型、指令、Tools 与 Sessions。
+- `City`：持有 Workspaces、Plugin catalog、共享实例与 Agent 绑定。
 - `agent.sessions.create({ workspace })` / `get()`：创建或恢复当前作用域的 Session。
 - `session.prompt()`：启动一次 Turn。
 - `turn.finished`：等待最终结果。
@@ -38,9 +39,9 @@ try {
 
 ### Agent 与 Workspace
 
-- Agent 构造时启动 Plugin runtime，Session 执行在内部等待初始化完成。
 - `agent.set_instruction()`：更新 Agent 静态指令。
-- `agent.plugins`：查询、控制或调用 Plugin。
+- `city.plugins`：提供 Plugin、管理 Agent 绑定并调用 main action。
+- `entry.plugins`：在 Agent/Workspace 执行作用域查询或调用 Plugin。
 - `workspace.get_env()` / `set_env()` / `patch_env()`：管理项目执行环境。
 - `agent.get_logger()` / `get_shell()`：宿主集成入口。
 
@@ -62,7 +63,7 @@ try {
 
 以下能力只在构建 Plugin、服务端或自定义运行时组件时使用：
 
-- `PluginContext`：Agent 投影给 Plugin 的稳定能力视图；宿主不应主动获取或持有它。
+- `PluginContext`：City 为当前 Agent/Workspace/Session/Turn 投影给 Plugin 的受限能力视图；宿主不应主动获取或持有它。
 - `SessionTurnContext`：一个 Turn 中统一管理身份、生命周期、Step、输入与输出协作的执行上下文；Plugin 只接收其只读投影 `PluginExecutionContext`。
 - `create_session_turn_context(...)`：自定义 Executor 或运行时组件创建上述 Turn Context 的标准工厂。
 - `AgentSession`、`SessionExecutor` 等接口：替换或扩展默认实现。
@@ -76,7 +77,8 @@ try {
 | --- | --- | --- |
 | 创建、获取、列出 Session | 支持 | 支持 |
 | `prompt()`、订阅、消息、停止、审批、fork | 支持 | 支持 |
-| 注入 Workspace、Shell、Tools、Plugins | 支持 | 不支持 |
+| 注入 Workspace、Shell、Tools | 支持 | 不支持 |
+| 由 City 绑定 Plugins | 支持 | 服务端负责 |
 | 设置 Agent 默认模型 | 支持 | 不支持 |
 | `session.set({ model })` | 支持 | 不支持 |
 | `session.set({ security })` / `session.status()` | 支持 | 支持 |
@@ -93,7 +95,7 @@ try {
 
 - Agent 不绑定单一 Workspace，同一个 Agent 可以进入多个 Workspace。
 - `AgentSessions` 持有 Agent 的 Session；每个 Session 独立接收 Workspace 与 Plugin 上下文。
-- `agent.dispose()` 会释放 Agent 级 Plugin runtime，以及 Session 使用的资源。
+- `agent.dispose()` 会释放 Session 使用的资源并解除当前 City 绑定；Plugin 共享实例和生命周期由 City 收口。
 - `RemoteAgent.close()` 只关闭客户端连接，不释放服务端 Agent。
 
 继续阅读：[Agent API](/zh/agent-sdk-docs/api-reference/agent-class)和[Session 总览](/zh/agent-sdk-docs/sessions/overview)。

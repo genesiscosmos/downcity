@@ -5,18 +5,17 @@ description: 编写、打包并配置可安装的 Downcity Plugin
 
 # 自定义插件
 
-一个目录只定义一个 Plugin。Plugin ID 同时是安装目录名、Agent 引用键和运行时身份，不需要再声明 Extension。
+一个目录只定义一个 Plugin。Plugin ID 同时是安装目录名、City catalog 键和运行时身份，不需要再声明 Extension。
 
-## 三个可选入口
+## 两个可选入口
 
 ```text
 Plugin
-├── agent      为 Agent 创建运行实例
-├── main       提供宿主管理逻辑与 actions
+├── main       提供 City 执行实例、生命周期、管理逻辑与 actions
 └── renderer   声明 Sidebar + Mainview 业务工作区和/或 Config
 ```
 
-三个入口都可选，但至少提供一个。一个 Plugin 可以只提供 Agent 能力、只提供 Sidebar + Mainview 业务工作区、只提供 Config，或同时提供完整体验。
+两个入口都可选，但至少提供一个。一个 Plugin 可以只提供 City 运行能力、只提供 Sidebar + Mainview 业务工作区、只提供 Config，或同时提供完整体验。
 
 推荐的开发目录：
 
@@ -28,32 +27,35 @@ github-plugin/
 ├── assets/icon.svg
 ├── src/
 │   ├── plugin.ts
-│   ├── agent.ts
 │   ├── main.ts
 │   └── renderer.tsx
 └── dist/
-    ├── agent.js
     ├── main.js
     └── renderer.js
 ```
 
-三个入口都使用 ESM。`agent.js` 与 `main.js` 必须自包含；`renderer.js` 是单文件浏览器 bundle，默认导出一个 Renderer 定义，其中可以声明成对的 `sidebar + mainview` 与独立的 `config`。Downcity 不安装依赖或运行构建脚本。
+两个入口都使用 ESM。`main.js` 必须自包含；`renderer.js` 是单文件浏览器 bundle，默认导出一个 Renderer 定义，其中可以声明成对的 `sidebar + mainview` 与独立的 `config`。Downcity 不安装依赖或运行构建脚本。
 
 ## 直接用于 SDK
 
-Plugin Class 的 constructor 完全由作者决定。SDK 用户可以直接创建实例，不经过 `plugin.json` 或 Profile：
+SDK 用户可以直接构造 `CityPluginRegistration`，不经过 `plugin.json`：
 
 ```ts
-const github_plugin = new GithubPlugin({
-  api_url: "https://api.github.com",
-  token: process.env.GITHUB_TOKEN ?? "",
+const registration = {
+  id: "github",
+  title: "GitHub",
+  description: "GitHub integration",
+  readme: "/absolute/path/README.md",
+  has_config: false,
+  has_sidebar: false,
+  has_mainview: false,
+  module: github_module,
+};
+const city = new City({
+  plugins: [registration],
+  workspaces: [workspace],
 });
-
-const agent = new Agent({
-  id: "coding-pro",
-  model,
-  plugins: [github_plugin],
-});
+city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
 ```
 
 只有需要被 CLI 或 Desktop 安装、发现和管理时，才需要下面的入口协议。
@@ -69,7 +71,6 @@ const agent = new Agent({
   "description": "GitHub 集成",
   "readme": "./README.md",
   "icon": "./assets/icon.svg",
-  "agent": "./dist/agent.js",
   "main": "./dist/main.js",
   "renderer": {
     "entry": "./dist/renderer.js",
@@ -82,36 +83,15 @@ const agent = new Agent({
 
 `renderer.sidebar` 与 `renderer.mainview` 必须同时为 `true` 或 `false`，`renderer.config` 可以独立声明；默认导出的实际组件必须与这三个静态能力完全一致。`package.json` 必须声明 `"type": "module"`。`readme` 必须声明 Plugin 根目录内的 `.md` 用户文档，Desktop 会在 Plugin Overview 中安全渲染它；文件名和子目录可自行组织，应写清用途、配置方式和必要凭据。图标可以是 HTTP(S) 地址或 Plugin 根目录内的相对文件，并会用于 Plugin 导航与 Overview。
 
-## Agent 入口
+## 统一 Main 入口
 
-`agent` 默认导出 factory。宿主为每个 Agent 调用一次并传入所选 Profile 的配置快照：
+`main` 默认导出 `CityPluginModule`。它同时提供执行实例 factory 和宿主 main 生命周期；不再存在独立 `agent` 入口。`plugin.action()` 注册供 Sidebar/Mainview 调用且不依赖 Profile 的业务动作；`plugin.config_action()` 注册 Config 动作：
 
 ```ts
-import type { AgentPluginModule } from "@downcity/agent";
+import { define_city_plugin } from "@downcity/plugin";
 import { GithubPlugin } from "./plugin.js";
 
-const create_agent_plugin: AgentPluginModule<GithubPlugin>["default"] = (context) => {
-  return new GithubPlugin({
-    config: context.profile as unknown as GithubPluginConfig,
-    notifications: context.notifications,
-  });
-};
-
-export default create_agent_plugin;
-```
-
-每次调用必须返回新的 Plugin 实例，实例 `name` 必须等于 `plugin.json.id`。factory 只是宿主装配适配器，不负责安装，也不替代 Agent Plugin 的 `start/stop` 生命周期。
-
-支持通知的宿主会提供可选的 `context.notifications`。Agent Plugin 可以把它传给自己的后台运行实例，在任务真正完成后调用 `publish()`；不支持通知的 CLI 或 SDK 宿主会省略该能力。通知只描述 `topic_key`、标题、正文和当前 Plugin 内的 JSON route，宿主会自动绑定 Plugin 与 Agent 身份。删除对应业务对象时可调用 `dismiss()` 清理该主题。不要从 Renderer 伪造后台完成通知。
-
-## Main 入口
-
-`main` 默认导出生命周期对象。`plugin.action()` 注册供 Sidebar/Mainview 调用且不依赖 Profile 的业务动作；`plugin.config_action()` 注册 Config 动作，并由 Plugin 自己完成配置校验和凭据保护：
-
-```ts
-import { define_plugin_main } from "@downcity/plugin";
-
-export default define_plugin_main({
+export default define_city_plugin({
   activate({ plugin, notifications }) {
     plugin.config_action({
       id: "profile.read",
@@ -137,10 +117,13 @@ export default define_plugin_main({
       route: { repository: "downcity", view: "activity" },
     });
   },
+  create({ profile }) {
+    return new GithubPlugin(profile.config);
+  },
 });
 ```
 
-一个 main 在宿主中只激活一次。当前 Profile 只在 action 调用时注入，所以同一个 main 可以安全服务多个 Profile。不要把 Profile 缓存在全局变量中。
+一个 main 在 City 中只激活一次；相同 `(plugin_id, profile_id)` 只创建一个共享执行实例。当前 Profile 在 `create()` 和 config action 调用时注入，不要把它缓存在 main 全局变量中。
 
 `notifications.publish()` 与 `notifications.dismiss()` 始终绑定当前 Plugin。宿主会把 `topic_key` 放入 Plugin 命名空间，并把 `route` 解释为当前 Plugin 工作区路由，因此 Plugin 不能代表其他 Plugin 或跳转到任意 Desktop 页面。相同 `topic_key` 只保留最新一条未读通知。
 

@@ -1,27 +1,20 @@
 ---
-title: Plugin Development Guide
-description: Build an Agent Plugin and optionally add installable main and Mainview entries
+title: Plugin Development
+description: Build a unified City Plugin module with @downcity/plugin.
 ---
 
-# Plugin Development Guide
+# Plugin Development
 
-A Plugin is an independent capability unit with its own actions, state, and lifecycle. The Plugin class belongs to the Agent SDK; an installable package is only an adapter for CLI/Desktop hosts.
+Plugin author APIs live in `@downcity/plugin`. One `CityPluginModule` defines both the main lifecycle
+and the Profile execution-instance factory. The Agent package no longer exports author contracts.
 
-## Design principles
-
-- The Plugin constructor belongs to the author and is not required to accept a Profile.
-- The Plugin creates and owns providers, clients, stores, queues, and long-lived resources.
-- Workspace capabilities come from runtime `PluginContext`; external services use narrow injected interfaces.
-- Configuration contains serializable values only. Connections, instances, callbacks, and host objects are runtime state.
-- Keep one clear domain per Plugin instead of expanding it through many composition switches.
-
-## Plugin class
+## Execution instance
 
 ```ts
-import { BasePlugin, create_action } from "@downcity/agent";
+import { BasePlugin, create_action } from "@downcity/plugin";
 import { z } from "zod";
 
-export class ExamplePlugin extends BasePlugin {
+class ExamplePlugin extends BasePlugin {
   readonly name = "example";
   readonly title = "Example";
   readonly description = "An example Plugin.";
@@ -32,13 +25,14 @@ export class ExamplePlugin extends BasePlugin {
 
   readonly actions = {
     status: create_action({
-      description: "Return the current Plugin status.",
-      input_schema: z.object({}),
+      description: "Return the current scope.",
+      input_schema: { zod: z.object({}) },
       execute: async ({ context, execution }) => ({
         success: true,
         data: {
-          agent_id: context.agent_id,
-          workspace_id: context.workspace_id,
+          agent_id: context.agent.id,
+          workspace_id: context.workspace.id,
+          session_id: context.session?.id ?? null,
           call_id: execution.call_id,
         },
       }),
@@ -47,67 +41,61 @@ export class ExamplePlugin extends BasePlugin {
 }
 ```
 
-An SDK host creates the instance directly:
+Use `context.workspace.files` for user Workspace files and `context.storage.files` for private Plugin
+state. `context.session` and `context.agent.sessions` are directly callable restricted handles; a
+Plugin does not need to resolve objects from IDs alone.
+
+## Unified City module
 
 ```ts
-const agent = new Agent({
-  id: "assistant",
-  plugins: [new ExamplePlugin(new ExampleClient())],
+import { define_city_plugin } from "@downcity/plugin";
+
+export default define_city_plugin({
+  activate(context) {
+    context.plugin.action({
+      id: "about",
+      run: () => ({ name: "example" }),
+    });
+  },
+  create({ profile }) {
+    return new ExamplePlugin(new ExampleClient(profile.config));
+  },
 });
 ```
 
-## Actions and runtime context
-
-Every action should have explicit input, a stable result, and cancellable execution:
+An SDK host places the module in a `CityPluginRegistration`, provides it to City, and binds Agents by
+ID:
 
 ```ts
-run: create_action({
-  input_schema: z.object({ value: z.string().min(1) }),
-  execute: async ({ input, execution }) => {
-    execution.abort_signal.throwIfAborted();
-    const result = await client.run(input.value, {
-      signal: execution.abort_signal,
-    });
-    return { success: true, data: result };
-  },
-})
-```
+const registration = {
+  id: "example",
+  title: "Example",
+  description: "An example Plugin.",
+  readme: "/absolute/path/README.md",
+  has_config: false,
+  has_sidebar: false,
+  has_mainview: false,
+  module: example_module,
+};
 
-Use `PluginContext.files` for the user Workspace and `data_files` or `data_path` for private Agent/Plugin data. Never write private databases, caches, or credentials into the user Workspace.
+const city = new City({ plugins: [registration], workspaces: [workspace] });
+city.agents.add(agent, { plugins: [{ plugin_id: "example" }] });
+```
 
 ## Lifecycle
 
-The Plugin must create and release its own long-lived resources:
-
-```ts
-readonly lifecycle = {
-  start: async (context: PluginContext) => {
-    await this.client.initialize({ agent_id: context.agent_id });
-  },
-  enter_workspace: async (context: PluginContext) => {
-    await this.client.select_workspace(context.workspace_path);
-  },
-  leave_workspace: async () => {
-    await this.client.clear_workspace();
-  },
-  stop: async () => {
-    await this.client.dispose();
-  },
-};
-```
-
-`stop` should be idempotent and release browsers, connections, timers, queues, and every other long-lived resource.
+`start/stop` belong to City's shared `(plugin_id, profile_id)` instance. `bind/unbind` belong to an
+Agent/Workspace scope. Put Profile clients, connections, and caches in `start/stop`; put schedulers,
+routes, or scope workers in `bind/unbind`. Every asynchronous Action should propagate
+`execution.abort_signal`.
 
 ## Installable package
-
-To support CLI/Desktop loading, declare three optional entries under one Plugin ID:
 
 ```text
 example-plugin/
 ├── plugin.json
 ├── package.json
 ├── README.md
-├── dist/agent.js
 ├── dist/main.js
 └── dist/renderer.js
 ```
@@ -119,7 +107,6 @@ example-plugin/
   "version": "1.0.0",
   "description": "A small example Plugin.",
   "readme": "./README.md",
-  "agent": "./dist/agent.js",
   "main": "./dist/main.js",
   "renderer": {
     "entry": "./dist/renderer.js",
@@ -130,49 +117,14 @@ example-plugin/
 }
 ```
 
-- `agent` default-exports a factory that returns a new Plugin instance for each Agent.
-- `main` default-exports a management lifecycle object and registers Plugin-level and Profile configuration actions separately.
-- `renderer` default-exports a paired `sidebar + mainview` and/or an independent `config`; actual slots must match the static manifest flags and use host-injected `ui.components`.
-- For history and other deeper navigation, use `SidebarTreeItem` with increasing `depth` values to keep the hierarchy inside the Plugin Sidebar.
-- `readme` must point to a `.md` user document inside the Plugin root. Desktop safely renders that file in the Plugin Overview.
-
-At least one entry is required. There is no generic `entry`, `config.schema`, or host-generated form.
-
-## Agent factory
-
-```ts
-import type { AgentPluginModule } from "@downcity/agent";
-
-const create_agent_plugin: AgentPluginModule<ExamplePlugin>["default"] = (context) => {
-  const config = parse_example_config(context.profile);
-  return new ExamplePlugin(new ExampleClient(config));
-};
-
-export default create_agent_plugin;
-```
-
-A Profile is only host-side configuration space. The SDK class does not need to know it came from TOML; the factory adapts a configuration snapshot to Plugin-owned constructor parameters.
-
-## Main and Renderer
-
-Plugin Sidebar/Mainview use `plugin.action()` and `plugin.invoke()`, coordinate through shared `navigation`, and do not depend on a Profile. Configuration uses `plugin.config_action()` and `config.invoke()`, with Settings binding the selected Profile. Only Plugins that declare Config have Profiles. The Plugin owns structure, defaults, validation, and Secret projection; the host owns Profile CRUD.
-
-See [Custom Plugin](/en/docs/plugin/custom) for a complete example and security boundary.
+`main` default-exports the `CityPluginModule`; there is no separate `agent` entry. A Renderer
+communicates only through the host action gateway and cannot access Node, Electron, Agent objects, or
+Profile files directly.
 
 ## Testing focus
 
-- Plugin action input, result, and cancellation.
-- Complete lifecycle resource cleanup.
-- Agent factory returns a new instance each time with `name` matching the Plugin ID.
-- main rejects invalid configuration and never leaks credentials to Mainview.
-- Renderer only uses the action gateway and host `ui`.
-
-## Release checklist
-
-1. `plugin.json` has the correct ID, version, `readme`, and at least one valid runtime entry.
-2. `agent/main` are self-contained ESM and `renderer` is a single-file React ESM bundle that shares the host React and JSX runtimes.
-3. The Agent factory creates a new instance for every call.
-4. Profiles contain no connections, instances, callbacks, or host objects.
-5. Long-lived resources are released and asynchronous actions respond to cancellation.
-6. Private data uses `data_files`; user data uses `files`.
-7. Renderer code never accesses Node, Electron, Agent, or configuration files directly, and does not ship a second design system.
+- Multiple Agents sharing one Profile create and `start` one instance.
+- Every Agent/Workspace scope runs exactly one `bind/unbind` pair.
+- `stop` waits for the final execution lease.
+- Concurrent main calls activate once, and shutdown fully deactivates it.
+- Action input, JSON results, and cancellation signals remain valid.

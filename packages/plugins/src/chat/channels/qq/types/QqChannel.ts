@@ -7,7 +7,7 @@
  * - 字段命名尽量保持与 QQ 官方事件/接口原始字段一致，降低映射心智负担。
  */
 
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 
 /**
  * QQ 渠道配置。
@@ -42,7 +42,7 @@ export interface QQGatewayPayload {
   /**
    * 事件主体数据。
    */
-  d?: JsonObject;
+  d?: PluginJsonObject;
   /**
    * 服务端序列号。
    */
@@ -440,7 +440,7 @@ export interface QqDispatchHandler {
   /**
    * 事件数据体。
    */
-  data: JsonObject;
+  data: PluginJsonObject;
 }
 
 /**

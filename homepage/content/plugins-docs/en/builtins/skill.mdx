@@ -22,16 +22,18 @@ Workspace selection is independent of the Desktop's current Workspace, and the M
 ## Registration
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { SkillPlugin } from "@downcity/plugins/skill";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 
-const agent = new Agent({
-  id: "skill-helper",
-  plugins: [new SkillPlugin()],
-});
+const registrations = create_builtin_plugin_registrations();
+const city = new City({ plugins: registrations, workspaces: [workspace] });
+const agent = new Agent({ id: "skill-helper" });
+city.agents.add(agent, { plugins: [{ plugin_id: "skill" }] });
+const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-By default, the plugin scans only `.agents/skills` in the current project.
+By default, the plugin scans only `.agents/skills` in the current project. To customize scan roots,
+provide a custom `CityPluginRegistration` factory instead of passing a `SkillPlugin` instance to Agent.
 
 Constructor options can extend the scan scope:
 
@@ -64,7 +66,7 @@ The Skill Plugin exposes four actions:
 List skills:
 
 ```ts
-const result = await agent.plugins.run_action({
+const result = await entry.plugins.run_action({
   plugin: "skill",
   action: "list",
   payload: {},
@@ -74,7 +76,7 @@ const result = await agent.plugins.run_action({
 Read a skill:
 
 ```ts
-const result = await agent.plugins.run_action({
+const result = await entry.plugins.run_action({
   plugin: "skill",
   action: "lookup",
   payload: {
@@ -100,7 +102,7 @@ plugin_call({
 Call `find` to get search instructions:
 
 ```ts
-const find_instructions = await agent.plugins.run_action({
+const find_instructions = await entry.plugins.run_action({
   plugin: "skill",
   action: "find",
   payload: {
@@ -112,7 +114,7 @@ const find_instructions = await agent.plugins.run_action({
 Call `install` to get installation instructions:
 
 ```ts
-const install_instructions = await agent.plugins.run_action({
+const install_instructions = await entry.plugins.run_action({
   plugin: "skill",
   action: "install",
   payload: {

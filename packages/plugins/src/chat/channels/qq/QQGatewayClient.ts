@@ -8,8 +8,8 @@
  */
 
 import WebSocket from "ws";
-import type { Logger } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type {
   QQEventCaptureConfig,
   QqDispatchHandler,
@@ -47,7 +47,7 @@ export interface QQGatewayClientOptions {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * QQ AppId。
    */
@@ -75,7 +75,7 @@ export interface QQGatewayClientOptions {
  */
 export class QQGatewayClient {
   private readonly rootPath: string;
-  private readonly logger: Logger;
+  private readonly logger: PluginLogger;
   private readonly appId: string;
   private readonly appSecret: string;
   private readonly useSandbox: boolean;

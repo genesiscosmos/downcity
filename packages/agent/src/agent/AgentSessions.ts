@@ -31,7 +31,7 @@ import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { Session } from "@/session/Session.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
-import type { AgentPluginExecutionRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
@@ -55,7 +55,7 @@ type AgentSessionsOptions = {
     logger: Logger;
     tools: Record<string, Tool>;
     get_workspace_env: () => Record<string, string>;
-    get_agent_plugins: () => AgentPluginExecutionRuntime;
+    get_extensions: () => SessionExtensionRuntime;
     store: SessionStore;
   };
 
@@ -170,18 +170,18 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /**
    * 把 Plugin registry 修改广播到已有 Session 的统一输入队列。
    */
-  broadcast_plugins(input: {
+  broadcast_extensions(input: {
     command_id: string;
     title: string;
-    plugins: AgentPluginExecutionRuntime;
+    extensions: SessionExtensionRuntime;
     workspace_id?: string;
   }): void {
     for (const session of this.sessions_by_id.values()) {
       if (input.workspace_id && session.workspace_id !== input.workspace_id) continue;
-      session.enqueue_agent_plugins({
+      session.enqueue_extensions({
         command_id: input.command_id,
         title: input.title,
-        plugins: input.plugins,
+        extensions: input.extensions,
       });
     }
   }
@@ -412,7 +412,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_instruction_system_blocks: () => this.load_instruction_system_blocks(context.workspace_path),
       get_workspace_env: () => context.get_workspace_env(),
       get_agent_model: () => this.get_agent_model(),
-      get_agent_plugins: () => context.get_agent_plugins(),
+      get_extensions: () => context.get_extensions(),
       get_managed_plugin_system_blocks: async () => [],
       ensure_configured: async (session) => {
         await this.ensure_agent_ready();

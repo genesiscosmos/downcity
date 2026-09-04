@@ -6,12 +6,12 @@
  * - service 通过这里暴露 queue 生命周期，不直接散落调用细节。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type {
   ChatEnqueueEffectInput,
   ChatEnqueuePipelineInput,
 } from "@/chat/types/ChatPlugin.js";
-import type { JsonValue } from "@downcity/agent";
+import type { PluginJsonValue } from "@downcity/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 
 function normalizeText(value: string): string {
@@ -29,9 +29,9 @@ export async function prepareChatEnqueue(params: {
     ...params.input,
     text: normalizeText(params.input.text),
   };
-  return (params.context.plugins.pipeline<JsonValue>(
+  return (params.context.city.plugins.pipeline<PluginJsonValue>(
     CHAT_PLUGIN_POINTS.beforeEnqueue,
-    normalized as unknown as JsonValue,
+    normalized as unknown as PluginJsonValue,
   ) as unknown) as Promise<ChatEnqueuePipelineInput>;
 }
 
@@ -42,8 +42,8 @@ export async function emitChatEnqueueEffect(params: {
   context: PluginContext;
   input: ChatEnqueueEffectInput;
 }): Promise<void> {
-  await params.context.plugins.effect(
+  await params.context.city.plugins.effect(
     CHAT_PLUGIN_POINTS.afterEnqueue,
-    params.input as unknown as JsonValue,
+    params.input as unknown as PluginJsonValue,
   );
 }

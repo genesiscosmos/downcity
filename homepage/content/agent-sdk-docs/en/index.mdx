@@ -81,7 +81,7 @@ Remember this primary path:
 Agent + Workspace + Shell → agent.sessions.create({ workspace }) → Session → prompt() → turn.finished → dispose()
 ```
 
-`agent.dispose()` releases Agent-level Plugin lifecycle and ActionSchedule resources, then releases every Session and Workspace resource it currently uses. The project directory never receives `.downcity`.
+`agent.dispose()` releases Session resources and the current City binding. City closes shared Plugin instances, lifecycle, and ActionSchedule resources. The project directory never receives `.downcity`.
 
 ## Model ownership
 

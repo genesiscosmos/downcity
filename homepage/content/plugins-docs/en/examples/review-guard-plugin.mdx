@@ -17,7 +17,7 @@ That is the most natural kind of `guard` scenario.
 ## Example
 
 ```ts
-import { Agent, BasePlugin, type PluginHooks } from "@downcity/agent";
+import { BasePlugin, type PluginHooks } from "@downcity/plugin";
 
 class ReviewGuardPlugin extends BasePlugin {
   readonly name = "review_guard";
@@ -38,13 +38,8 @@ class ReviewGuardPlugin extends BasePlugin {
   };
 }
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new ReviewGuardPlugin()],
-});
-
-await agent.plugins.guard("review.require_checked", {
+// City has registered review_guard and bound it to entry's Agent/Workspace.
+await entry.plugins.guard("review.require_checked", {
   reviewed: true,
 });
 ```

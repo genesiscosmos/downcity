@@ -14,8 +14,8 @@ import type {
   ChannelChatKeyParams,
   ChannelSendTextParams,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { PluginContext } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { ParsedFeishuAttachmentCommand } from "@/chat/types/FeishuAttachment.js";
 import type {
@@ -64,7 +64,7 @@ export class FeishuBot extends BaseChatChannel {
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
-    this.dedupeDir = get_feishu_dedupe_dir_path(context.data_path);
+    this.dedupeDir = get_feishu_dedupe_dir_path(context.storage.path);
     this.platform = new FeishuPlatformClient({
       context,
       config: {
@@ -117,7 +117,7 @@ export class FeishuBot extends BaseChatChannel {
     const file = path.join(this.dedupeDir, `${encodeURIComponent(threadId)}.json`);
     try {
       if (!(await fs.pathExists(file))) return new Set();
-      const data = (await fs.readJson(file)) as JsonObject;
+      const data = (await fs.readJson(file)) as PluginJsonObject;
       const ids = Array.isArray(data?.ids) ? data.ids : [];
       return new Set(ids.map((value) => String(value)));
     } catch {
@@ -314,7 +314,7 @@ Available commands:
     actorId?: string,
     actorName?: string,
     chatTitle?: string,
-    extra?: JsonObject,
+    extra?: PluginJsonObject,
   ): Promise<void> {
     try {
       const { chat_key } = await this.enqueueMessage({

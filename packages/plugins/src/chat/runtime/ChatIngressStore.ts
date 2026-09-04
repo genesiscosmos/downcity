@@ -7,8 +7,8 @@
  * - 只有极少数非 turn 场景才允许显式补写 `session messages`
  */
 
-import type { PluginContext } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 import { appendInboundChatHistory } from "./ChatHistoryStore.js";
 
@@ -19,7 +19,7 @@ import { appendInboundChatHistory } from "./ChatHistoryStore.js";
  * - `ingressKind=exec` 是模型上下文需要的最小语义标记
  * - 调用方原有 extra 保持透传
  */
-export function buildExecIngressExtra(extra?: JsonObject): JsonObject {
+export function buildExecIngressExtra(extra?: PluginJsonObject): PluginJsonObject {
   return {
     ...(extra && typeof extra === "object" ? extra : {}),
     ingressKind: "exec",
@@ -48,7 +48,7 @@ export async function appendExecIngress(params: {
   message_id?: string;
   actorId?: string;
   actorName?: string;
-  extra?: JsonObject;
+  extra?: PluginJsonObject;
 }): Promise<void> {
   const execExtra = buildExecIngressExtra(params.extra);
   await appendInboundChatHistory({

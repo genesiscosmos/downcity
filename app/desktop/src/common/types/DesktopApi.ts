@@ -335,10 +335,7 @@ export interface DesktopPluginSummary {
   profile_count: number;
   /** 当前 Plugin 可选择的 profile 标识。 */
   profile_ids: string[];
-  /** Plugin 是否能注册到 Agent。 */
-  has_agent: boolean;
-
-  /** Plugin 是否提供宿主 main。 */
+  /** Plugin 是否提供统一 City main，因此可以绑定到 Agent。 */
   has_main: boolean;
 
   /** Plugin 是否提供专属 Sidebar。 */

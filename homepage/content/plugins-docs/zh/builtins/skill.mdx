@@ -22,16 +22,18 @@ Workspace 选择不依赖 Desktop 当前工作区，也不在 Mainview 再提供
 ## 注册
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { SkillPlugin } from "@downcity/plugins/skill";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 
-const agent = new Agent({
-  id: "skill-helper",
-  plugins: [new SkillPlugin()],
-});
+const registrations = create_builtin_plugin_registrations();
+const city = new City({ plugins: registrations, workspaces: [workspace] });
+const agent = new Agent({ id: "skill-helper" });
+city.agents.add(agent, { plugins: [{ plugin_id: "skill" }] });
+const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-默认只扫描当前项目的 `.agents/skills`。
+默认只扫描当前项目的 `.agents/skills`。自定义扫描范围时，为 City 提供自定义
+`CityPluginRegistration` factory，而不是把 `SkillPlugin` 实例传给 Agent。
 
 可以通过构造参数扩展扫描范围：
 
@@ -64,7 +66,7 @@ Skill Plugin 提供四个 action：
 列出 Skill：
 
 ```ts
-const result = await agent.plugins.run_action({
+const result = await entry.plugins.run_action({
   plugin: "skill",
   action: "list",
   payload: {},
@@ -74,7 +76,7 @@ const result = await agent.plugins.run_action({
 读取 Skill：
 
 ```ts
-const result = await agent.plugins.run_action({
+const result = await entry.plugins.run_action({
   plugin: "skill",
   action: "lookup",
   payload: {
@@ -100,7 +102,7 @@ plugin_call({
 调用 `find` 获取查找提示：
 
 ```ts
-const find_instructions = await agent.plugins.run_action({
+const find_instructions = await entry.plugins.run_action({
   plugin: "skill",
   action: "find",
   payload: {
@@ -112,7 +114,7 @@ const find_instructions = await agent.plugins.run_action({
 调用 `install` 获取安装提示：
 
 ```ts
-const install_instructions = await agent.plugins.run_action({
+const install_instructions = await entry.plugins.run_action({
   plugin: "skill",
   action: "install",
   payload: {

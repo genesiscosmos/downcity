@@ -6,9 +6,9 @@
  * - CLI 可以直接复用 ChatAccessService，不依赖运行中 Agent。
  */
 
-import { create_action } from "@downcity/agent";
-import type { PluginActions } from "@downcity/agent";
-import type { JsonValue } from "@downcity/agent";
+import { create_action } from "@downcity/plugin";
+import type { PluginActions } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/plugin";
 import { z } from "zod";
 import { create_chat_access_service } from "@/chat/access/ChatAccessRuntime.js";
 import { CHAT_ACCESS_ACTIONS } from "@/chat/types/ChatAccess.js";
@@ -27,7 +27,7 @@ export function create_chat_access_actions(): PluginActions {
       },
       execute: async ({ context }) => ({
         success: true,
-        data: create_chat_access_service(context).snapshot() as unknown as JsonValue,
+        data: create_chat_access_service(context).snapshot() as unknown as PluginJsonValue,
       }),
     }),
     [CHAT_ACCESS_ACTIONS.approve]: create_action({
@@ -56,7 +56,7 @@ export function create_chat_access_actions(): PluginActions {
         };
         return {
           success: true,
-          data: create_chat_access_service(context).approve_request(body) as unknown as JsonValue,
+          data: create_chat_access_service(context).approve_request(body) as unknown as PluginJsonValue,
         };
       },
     }),
@@ -86,7 +86,7 @@ export function create_chat_access_actions(): PluginActions {
         };
         return {
           success: true,
-          data: create_chat_access_service(context).deny_request(body) as unknown as JsonValue,
+          data: create_chat_access_service(context).deny_request(body) as unknown as PluginJsonValue,
         };
       },
     }),
@@ -119,7 +119,7 @@ export function create_chat_access_actions(): PluginActions {
         };
         return {
           success: true,
-          data: create_chat_access_service(context).set_principal_effect(body) as unknown as JsonValue,
+          data: create_chat_access_service(context).set_principal_effect(body) as unknown as PluginJsonValue,
         };
       },
     }),

@@ -11,7 +11,7 @@ import { create_workspace_entry } from "@/internal/index.js";
 import type { Agent } from "@/agent/Agent.js";
 import type { AgentSessionCollection } from "@/types/agent/AgentSessionCollection.js";
 import type { WorkspaceBase } from "@downcity/workspace";
-import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
   AgentRpcBinding,
@@ -29,7 +29,7 @@ const DEFAULT_RPC_PORT = 15314;
 export class AgentRPC {
   private readonly agent: Agent;
   private readonly workspace?: WorkspaceBase;
-  private readonly plugins?: AgentPlugins;
+  private readonly plugins?: AgentPluginRuntime;
   private readonly session_collection: AgentSessionCollection;
   private readonly runtime_options: AgentRpcRuntimeOptions;
   /** 当前 Agent RPC Server 的唯一串行生命周期。 */
@@ -40,7 +40,7 @@ export class AgentRPC {
   >;
 
   constructor(
-    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceBase; plugins: AgentPlugins },
+    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceBase; plugins: AgentPluginRuntime },
     workspace_or_options?: WorkspaceBase | AgentRpcRuntimeOptions,
     runtime_options: AgentRpcRuntimeOptions = {},
   ) {
@@ -53,7 +53,7 @@ export class AgentRPC {
       this.session_collection = entry.sessions;
       this.runtime_options = runtime_options;
     } else {
-      const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceBase; plugins: AgentPlugins };
+      const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceBase; plugins: AgentPluginRuntime };
       const agent = entry.agent;
       this.agent = agent;
       this.workspace = entry.workspace;

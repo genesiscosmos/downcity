@@ -7,7 +7,7 @@
  * - 目标是让 chat platform 子模块共享同一套最小公共基元。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
@@ -26,7 +26,7 @@ export type ChatPluginRuntimeApi = {
 export function resolveChatPluginRuntimeApi(
   context: PluginContext,
 ): ChatPluginRuntimeApi | null {
-  const candidate = context.plugins.get("chat") as
+  const candidate = context.city.plugins.get("chat") as
     | ChatPluginRuntimeApi
     | undefined;
   return candidate || null;

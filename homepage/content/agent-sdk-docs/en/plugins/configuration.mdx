@@ -1,64 +1,54 @@
 ---
 title: Plugin Configuration
-description: Understand direct SDK assembly and City Profile boundaries
+description: Understand the boundary between the City catalog, Profile configuration, and Agent bindings.
 ---
 
 # Plugin Configuration
 
-The Agent SDK only runs already constructed Plugin instances. It does not read City install directories or Profiles:
-
-```ts
-await agent.plugins.register(new SkillPlugin());
-await agent.plugins.unregister("skill");
-```
-
-## SDK hosts
-
-An embedded host passes runtime configuration directly through Plugin constructors. Their shape belongs entirely to the Plugin author:
-
-```ts
-import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
-
-const chat_plugin = new ChatPlugin({
-  queue: { max_concurrency: 4 },
-  channels: [
-    new TelegramChannel({
-      id: "telegram_main",
-      name: "Main Bot",
-      bot_token: process.env.TELEGRAM_BOT_TOKEN ?? "",
-    }),
-  ],
-});
-
-await agent.plugins.register(chat_plugin);
-```
-
-The SDK host owns credential sources, configuration UI, and instance assembly. It does not need Profiles.
-
-## CLI / Desktop hosts
-
-A generic host cannot guess arbitrary Plugin constructors, so it uses the optional `agent` factory from an installable Plugin package:
+City registers Plugin modules, the host configures Profiles, and an Agent references only a Plugin
+ID/Profile ID:
 
 ```text
-Plugin Catalog
-→ user manages a Profile in Config on that Plugin's detail page
-→ Agent stores plugin_id → profile_id for a Plugin with Config
-→ host reads the Profile snapshot and calls the agent factory
-→ Agent Runtime Plugin
+Plugin catalog registration
+→ host reads and validates Profile configuration
+→ City creates one (plugin_id, profile_id) instance
+→ Agent binds to plugin_id/profile
+→ Session receives the current Workspace execution view
 ```
 
-A Profile is only named configuration space for a Plugin that declares Config; it is unrelated to the Sidebar/Mainview workspace. The host creates, selects, removes, and persists Profiles. Plugin-owned Config actions validate content and provide safe projections, while the `config` slot owns editing. A Plugin without Config needs no Profile, and the Agent stores only its enabled state. The host does not generate generic JSON Schema forms or put channels, accounts, or tokens in `agent.json`.
+An SDK may register modules when constructing City:
 
-## Recommended mental model
+```ts
+const city = new City({
+  plugins: [registration],
+  workspaces: [workspace],
+});
 
-- Agent SDK: accepts and runs Plugin objects.
-- SDK host: constructs Plugins directly and owns its configuration source.
-- CLI / Desktop: owns the Catalog, installation, Profiles, and Agent references.
-- Plugin: owns its business configuration, Config actions, and Config UI.
+city.agents.add(agent, {
+  plugins: [{
+    plugin_id: registration.id,
+    profile: { id: "team", config: { endpoint: "https://example.com" } },
+  }],
+});
+```
 
-## Related docs
+Modules and bindings may also be added dynamically:
 
-- [Plugin overview](/en/agent-sdk-docs/plugins/overview)
-- [Plugin availability](/en/agent-sdk-docs/plugins/plugin-availability)
-- [Plugin lifecycle](/en/agent-sdk-docs/plugins/lifecycle)
-- [Custom Plugin](/en/docs/plugin/custom)
+```ts
+city.plugins.provide(registration);
+await city.plugins.register(agent.id, {
+  plugin_id: registration.id,
+  profile,
+});
+```
+
+In CLI/Desktop hosts, `config.toml` is the Profile configuration source of truth. `agent.json` stores
+only references, never channels, accounts, endpoints, or tokens. A Plugin main registers Config
+actions, and City injects the current Profile's `get/set` store for each call.
+
+One `(plugin_id, profile_id)` must have one consistent configuration within a City. It maps to one
+shared instance and one set of long-lived resources. Plugins without Config use the `default`
+Profile. Runtime connections, callbacks, and client objects must not be stored in Profile values.
+
+A Chat Profile additionally requires one routing owner. Reuse across Agent/Workspace scopes must set
+`owner_agent_id` and `owner_workspace_id` explicitly.

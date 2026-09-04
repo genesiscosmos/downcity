@@ -7,7 +7,7 @@
  * - 这样 ChatPlugin 不再理解 Telegram、Feishu、QQ 的具体配置字段。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import type { ChatQueueWorkerConfig } from "@/chat/types/ChatQueueWorker.js";
 import type { ChatRuntimeAccount } from "@/chat/types/ChatRuntimeAccount.js";
@@ -38,6 +38,10 @@ export interface ChatChannel {
  * ChatPlugin 显式构造参数。
  */
 export interface ChatPluginOptions {
+  /** 当前 Profile 唯一接收入站消息的 Agent。 */
+  owner_agent_id?: string;
+  /** 当前 Profile 唯一承载渠道会话的 Workspace。 */
+  owner_workspace_id?: string;
   /**
    * Chat queue worker 运行配置。
    *

@@ -6,7 +6,7 @@
  * - 这里集中处理 script 执行、结果校验与进度更新，Runner 主链只消费归一化结果。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type {
   ShipTaskRunExecutionStatusV1,
   ShipTaskRunResultStatusV1,

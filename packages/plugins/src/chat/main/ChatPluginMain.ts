@@ -37,6 +37,8 @@ export const CHAT_PLUGIN_MAIN = define_plugin_main({
 /** 把完整配置转换为不包含凭据原文的 Mainview 投影。 */
 function to_public_profile(config: ChatPluginConfig): ChatPluginPublicProfile {
   return {
+    ...(config.owner_agent_id ? { owner_agent_id: config.owner_agent_id } : {}),
+    ...(config.owner_workspace_id ? { owner_workspace_id: config.owner_workspace_id } : {}),
     queue: { ...(config.queue ?? {}) },
     channels: (config.channels ?? []).map((channel) => ({
       id: channel.id,
@@ -76,9 +78,20 @@ function normalize_profile(
     return channel;
   });
   return {
+    ...read_optional_field(profile, "owner_agent_id"),
+    ...read_optional_field(profile, "owner_workspace_id"),
     ...(Object.keys(queue).length > 0 ? { queue } : {}),
     channels,
   };
+}
+
+/** 读取可选的非空字符串配置。 */
+function read_optional_field(
+  source: PluginJsonObject,
+  key: "owner_agent_id" | "owner_workspace_id",
+): Partial<Record<"owner_agent_id" | "owner_workspace_id", string>> {
+  const value = read_optional_string(source, key);
+  return value ? { [key]: value } : {};
 }
 
 /** 校验 Chat 队列配置。 */

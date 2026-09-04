@@ -10,13 +10,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { create_action } from "@downcity/agent";
-import { BasePlugin } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import { create_action } from "@downcity/plugin";
+import { BasePlugin } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
 import type {
-  JsonObject,
-  JsonValue,
-} from "@downcity/agent";
+  PluginJsonObject,
+  PluginJsonValue,
+} from "@downcity/plugin";
 import type {
   ImagePluginInput,
   ImageAiService,
@@ -54,7 +54,7 @@ const MAX_IMAGE_WAIT_MS = 10 * 60_000;
 
 /** 从 City 注入的 Embassy 获取图片 AI 服务。 */
 function require_image_ai(context: PluginContext): ImageAiService {
-  const service = context.embassy?.user.ai;
+  const service = context.city.embassy?.user.ai;
   if (!service) throw new Error("ImagePlugin requires a City Embassy user AI service");
   return {
     catalog: async () => await service.catalog(),
@@ -172,7 +172,7 @@ function to_record(value: unknown): Record<string, unknown> | null {
  * 归一化模型传入的图片生成 payload。
  */
 function normalize_image_payload(
-  payload: JsonValue | undefined,
+  payload: PluginJsonValue | undefined,
 ): ImagePluginInput {
   const record = to_record(payload ?? {});
   if (!record) {
@@ -266,7 +266,7 @@ async function normalize_image_content_part(
     };
   }
   const local = await local_image_to_data_url({
-    root_path: context.workspace_path,
+    root_path: context.workspace.path,
     image_url: url,
     media_type: part.media_type,
   });
@@ -368,7 +368,7 @@ async function apply_default_image_model(
  * 归一化图片任务查询 payload。
  */
 function normalize_image_result_payload(
-  payload: JsonValue | undefined,
+  payload: PluginJsonValue | undefined,
 ): ImagePluginJobResultInput {
   const record = to_record(payload ?? {});
   if (!record) {
@@ -420,10 +420,10 @@ function normalize_image_result(result: ImagePluginResult): ImagePluginResult {
 /**
  * 归一化模型元数据为 JSON 对象。
  */
-function normalize_json_object(value: unknown): JsonObject | undefined {
+function normalize_json_object(value: unknown): PluginJsonObject | undefined {
   const record = to_record(value);
   if (!record) return undefined;
-  return record as JsonObject;
+  return record as PluginJsonObject;
 }
 
 /**
@@ -634,7 +634,7 @@ export class ImagePlugin extends BasePlugin {
           const result = normalize_image_models(models);
           return {
             success: true,
-            data: result as unknown as JsonObject,
+            data: result as unknown as PluginJsonObject,
             message: "image models listed",
           };
         } catch (error) {
@@ -718,7 +718,7 @@ export class ImagePlugin extends BasePlugin {
           },
         },
       ],
-      execute: async ({ context, input }: { context: PluginContext; input: JsonValue }) => {
+      execute: async ({ context, input }: { context: PluginContext; input: PluginJsonValue }) => {
         try {
           const normalized_payload = normalize_image_payload(input);
           const normalized_input = await apply_default_image_model(
@@ -726,11 +726,11 @@ export class ImagePlugin extends BasePlugin {
             await normalize_image_create_input(context, normalized_payload),
             this.default_model,
           );
-          const created = await require_image_ai(context).image_create(normalized_input as unknown as JsonObject) as unknown as ImagePluginJobCreateResult;
+          const created = await require_image_ai(context).image_create(normalized_input as unknown as PluginJsonObject) as unknown as ImagePluginJobCreateResult;
           validate_created_job(created);
           return {
             success: true,
-            data: created as unknown as JsonObject,
+            data: created as unknown as PluginJsonObject,
             message: "image job created",
           };
         } catch (error) {
@@ -796,7 +796,7 @@ export class ImagePlugin extends BasePlugin {
           if (current.status === "failed") {
             return {
               success: false,
-              data: current as unknown as JsonObject,
+              data: current as unknown as PluginJsonObject,
               error: current.error ?? current.message ?? normalized_input.job_id,
               message: current.error ?? current.message ?? "image job failed",
             };
@@ -817,7 +817,7 @@ export class ImagePlugin extends BasePlugin {
             : "";
           return {
             success: true,
-            data: output as unknown as JsonObject,
+            data: output as unknown as PluginJsonObject,
             message:
               current.status === "succeeded"
                 ? `image generated${localization_warning}`

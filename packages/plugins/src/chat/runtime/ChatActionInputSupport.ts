@@ -6,12 +6,12 @@
  * - 具体 action 的 payload 组装留在各 action input 模块中。
  */
 
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 
 /**
- * 判断 JsonValue 是否为对象。
+ * 判断 PluginJsonValue 是否为对象。
  */
-export function isJsonObject(value: JsonValue): value is JsonObject {
+export function isJsonObject(value: PluginJsonValue): value is PluginJsonObject {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -19,7 +19,7 @@ export function isJsonObject(value: JsonValue): value is JsonObject {
  * 读取字符串 option。
  */
 export function getStringOpt(
-  opts: Record<string, JsonValue>,
+  opts: Record<string, PluginJsonValue>,
   key: string,
 ): string {
   return typeof opts[key] === "string" ? String(opts[key]).trim() : "";
@@ -29,7 +29,7 @@ export function getStringOpt(
  * 读取布尔 option。
  */
 export function getBooleanOpt(
-  opts: Record<string, JsonValue>,
+  opts: Record<string, PluginJsonValue>,
   key: string,
 ): boolean {
   return opts[key] === true;

@@ -74,7 +74,15 @@ test("chat.history_clear action 只清空事件历史", async () => {
     fs.writeFileSync(history_path, "{}\n");
     const plugin = new ChatPlugin({ channels: [] });
     const result = await plugin.actions.history_clear.execute({
-      context: { workspace_path: data_path, data_path },
+      context: {
+        city: { plugins: {} },
+        agent: { id: "chat-test-agent", name: "chat-test-agent", description: "", instructions: [], sessions: {} },
+        workspace: { id: "chat-test-workspace", path: data_path, files: {}, env: {} },
+        profile: { id: "default", config: {} },
+        storage: { path: data_path, files: {} },
+        logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
+        abort_signal: new AbortController().signal,
+      },
       input: { session_id: session_id },
       plugin_name: "chat",
       action_name: "history_clear",

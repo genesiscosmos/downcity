@@ -28,8 +28,8 @@ import type {
   ChannelChatKeyParams,
   ChannelSendTextParams,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { PluginContext } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { QQConfig, QQMessageData } from "@/chat/channels/qq/types/QqChannel.js";
 import { EventType } from "@/chat/channels/qq/types/QqChannel.js";
@@ -192,7 +192,7 @@ export class QQBot extends BaseChatChannel {
    */
   private async handleDispatch(
     eventType: string,
-    data: JsonObject,
+    data: PluginJsonObject,
   ): Promise<void> {
     this.logger.info(`收到事件: ${eventType}`);
 
@@ -229,7 +229,7 @@ export class QQBot extends BaseChatChannel {
   /**
    * 捕获 READY 事件中的机器人身份信息。
    */
-  private captureReadyIdentity(data: JsonObject): void {
+  private captureReadyIdentity(data: PluginJsonObject): void {
     const identity = extractQqReadyIdentity(data);
     this.botDisplayName = identity.botDisplayName;
     this.botUserId = identity.botUserId;

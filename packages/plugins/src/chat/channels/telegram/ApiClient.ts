@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
-import { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import {
   guessMimeType,
   parseTelegramAttachments,
@@ -39,13 +39,13 @@ export class TelegramApiClient {
   private readonly botToken: string;
   private readonly rootPath: string;
   private readonly dataPath: string;
-  private readonly logger: Logger;
+  private readonly logger: PluginLogger;
 
   constructor(opts: {
     botToken: string;
     project_root: string;
     data_path: string;
-    logger: Logger;
+    logger: PluginLogger;
   }) {
     this.botToken = opts.botToken;
     this.rootPath = opts.project_root;

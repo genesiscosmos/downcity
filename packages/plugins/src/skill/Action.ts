@@ -10,7 +10,7 @@ import fs from "fs-extra";
 import path from "node:path";
 import { discoverSkillsSync } from "@/skill/runtime/Discovery.js";
 import type { SkillDefinition } from "@/skill/types/SkillDefinition.js";
-import type { JsonValue } from "@downcity/agent";
+import type { PluginJsonValue } from "@downcity/plugin";
 import type {
   SkillListResponse,
   SkillLookupRequest,
@@ -19,7 +19,7 @@ import type {
 } from "@/skill/types/SkillCommand.js";
 import type { SkillPluginOptions } from "@/skill/types/SkillPlugin.js";
 
-function normalizeAllowedTools(input: JsonValue | undefined): string[] {
+function normalizeAllowedTools(input: PluginJsonValue | undefined): string[] {
   if (!Array.isArray(input)) return [];
   const values: string[] = [];
   for (const item of input) {

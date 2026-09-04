@@ -12,19 +12,16 @@ import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 /** 列出全部内置与第三方 Plugin。 */
 export function list_plugin_catalog(): PluginCatalogItem[] {
   const builtin_items = create_cli_builtin_plugin_registrations().map((registration) => {
-    const definition = registration.definition;
     return {
-      plugin_id: definition.id,
-      title: definition.title || definition.id,
-      description: definition.description,
+      plugin_id: registration.id,
+      title: registration.title || registration.id,
+      description: registration.description,
       source: "builtin" as const,
-      ...(definition.icon ? { icon: definition.icon } : {}),
-      has_agent: definition.has_agent,
-      has_main: definition.has_main,
-      has_sidebar: definition.has_sidebar,
-      has_mainview: definition.has_mainview,
-      has_config: definition.has_config,
-      profiles: list_plugin_profiles(definition.id),
+      has_main: true,
+      has_sidebar: registration.has_sidebar,
+      has_mainview: registration.has_mainview,
+      has_config: registration.has_config,
+      profiles: list_plugin_profiles(registration.id),
     };
   });
   const installed_items = list_installed_plugins().map((plugin) => ({
@@ -35,7 +32,6 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
     version: plugin.version,
     source: "installed" as const,
     source_label: plugin.source,
-    has_agent: Boolean(plugin.agent),
     has_main: Boolean(plugin.main),
     has_sidebar: plugin.renderer?.sidebar === true,
     has_mainview: plugin.renderer?.mainview === true,

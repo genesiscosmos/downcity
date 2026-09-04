@@ -13,15 +13,17 @@ import type {
   SessionTurnContext,
   SessionTurnContextInit,
 } from "@/types/executor/SessionTurnContext.js";
-import type { AgentPluginExecutionLease } from "@/types/plugin/PluginRuntime.js";
-import type { PluginExecutionContext } from "@/types/plugin/PluginExecutionContext.js";
+import type {
+  SessionExtensionExecutionContext,
+  SessionExtensionExecutionLease,
+} from "@/types/session/SessionExtension.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import { normalize_session_origin } from "@/session/SessionOrigin.js";
 import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
 import type { WorkspaceFileMutation } from "@downcity/workspace";
 
 /** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */
-export interface CreateSessionPluginExecutionContextInput {
+export interface CreateSessionExtensionExecutionContextInput {
   /** 当前 Session 标识。 */
   session_id: string;
   /** 当前 Session 的完整来源元数据。 */
@@ -46,7 +48,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private disposed = false;
   private workspace_env_snapshot?: Readonly<Record<string, string>>;
   private agent_systems_snapshot: readonly string[] = Object.freeze([]);
-  private plugin_lease?: AgentPluginExecutionLease;
+  private extension_lease?: SessionExtensionExecutionLease;
   /** 整个 Turn 共享的 Plugin 动态上下文，不随 Step lease 切换而失效。 */
   private plugin_context_blocks_snapshot: readonly SessionPluginContextBlock[] = Object.freeze([]);
   /** 并发或重复解析时复用的唯一 Promise。 */
@@ -119,8 +121,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       get agent_systems() {
         return context.agent_systems_snapshot;
       },
-      get plugins() {
-        return context.plugin_lease;
+      get extensions() {
+        return context.extension_lease;
       },
       get plugin_context_blocks() {
         return context.plugin_context_blocks_snapshot;
@@ -133,16 +135,16 @@ class DefaultSessionTurnContext implements SessionTurnContext {
           ...input.agent_systems,
         ]);
       },
-      replace_plugins: async (plugins) => {
-        const previous = context.plugin_lease;
-        context.plugin_lease = plugins;
-        if (previous && previous !== plugins) await previous.release();
+      replace_extensions: async (extensions) => {
+        const previous = context.extension_lease;
+        context.extension_lease = extensions;
+        if (previous && previous !== extensions) await previous.release();
       },
       resolve_plugin_context_blocks: async (resolver) =>
         await context.resolve_plugin_context_blocks(resolver),
-      release: async () => await context.release_plugins(),
-      plugin_execution_context: (call_id?: string) =>
-        context.create_plugin_execution_context(call_id),
+      release: async () => await context.release_extensions(),
+      extension_execution_context: (call_id?: string) =>
+        context.create_extension_execution_context(call_id),
     });
 
     this.input = Object.freeze({
@@ -211,8 +213,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     return await this.plugin_context_blocks_promise;
   }
 
-  /** 为 Plugin 生成不共享根对象引用的只读快照。 */
-  private create_plugin_execution_context(call_id?: string): PluginExecutionContext {
+  /** 为 City 扩展生成不共享根对象引用的只读快照。 */
+  private create_extension_execution_context(call_id?: string): SessionExtensionExecutionContext {
     const normalized_call_id = String(call_id || "").trim();
     return Object.freeze({
       session_id: this.session.session_id,
@@ -230,11 +232,11 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     });
   }
 
-  /** 释放当前 Step 捕获的 Plugin lease。 */
-  private async release_plugins(): Promise<void> {
-    const plugins = this.plugin_lease;
-    this.plugin_lease = undefined;
-    await plugins?.release();
+  /** 释放当前 Step 捕获的扩展 lease。 */
+  private async release_extensions(): Promise<void> {
+    const extensions = this.extension_lease;
+    this.extension_lease = undefined;
+    await extensions?.release();
   }
 
   /** 闭合当前运行拥有的全部资源。 */
@@ -245,7 +247,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       "abort",
       this.abort_from_upstream,
     );
-    await this.release_plugins();
+    await this.release_extensions();
   }
 }
 
@@ -257,9 +259,9 @@ export function create_session_turn_context(
 }
 
 /** 为非 Turn 的 system 查询创建 Plugin 可读取的 Session 快照。 */
-export function create_session_plugin_execution_context(
-  input: CreateSessionPluginExecutionContextInput,
-): PluginExecutionContext {
+export function create_session_extension_execution_context(
+  input: CreateSessionExtensionExecutionContextInput,
+): SessionExtensionExecutionContext {
   return Object.freeze({
     session_id: input.session_id,
     session_origin: Object.freeze(normalize_session_origin(input.session_origin)),

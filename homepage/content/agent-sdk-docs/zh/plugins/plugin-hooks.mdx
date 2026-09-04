@@ -36,10 +36,10 @@ plugin 里声明了 hook，不代表它会自动执行。
 例如：
 
 ```ts
-const value = await agent.plugins.pipeline("chat.enrich_message", input);
-await agent.plugins.guard("review.require_checked", value);
-await agent.plugins.effect("audit.observe", value);
-const role = await agent.plugins.resolve("auth.resolve_role", {
+const value = await entry.plugins.pipeline("chat.enrich_message", input);
+await entry.plugins.guard("review.require_checked", value);
+await entry.plugins.effect("audit.observe", value);
+const role = await entry.plugins.resolve("auth.resolve_role", {
   userId: "owner",
 });
 ```
@@ -50,6 +50,10 @@ const role = await agent.plugins.resolve("auth.resolve_role", {
 - 宿主调用是“扩展点执行”
 
 如果宿主从来不调用这个点，这个 hook 就永远不会跑。
+
+Hook 声明在 Plugin 实例上，由 City 持有的 Registry 按当前 Agent/Workspace 作用域调度。Session 在每个执行检查点捕获一次 execution lease，因此本次调用看到的是稳定的 Plugin 集合；并发解绑会等待活跃 lease 释放。
+
+Plugin 内部只能通过 `context.city.plugins.pipeline()`、`effect()` 和 `run_action()` 协作，不能主动触发 `guard` 或 `resolve`。后两者代表宿主控制流和唯一权威决策，只从 `entry.plugins` 等宿主执行面调用。
 
 ## 为什么 `resolve` 要单独看
 

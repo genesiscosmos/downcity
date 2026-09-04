@@ -12,7 +12,8 @@ The `@downcity/agent` root exports the complete extension surface, but ordinary 
 Most local applications need only:
 
 - `Workspace`: create the project resource and security boundary and receive Shell.
-- `Agent`: compose the model, instructions, Tools, plugins, and enter Workspaces.
+- `Agent`: compose identity, model, instructions, Tools, and Sessions.
+- `City`: own Workspaces, the Plugin catalog, shared instances, and Agent bindings.
 - `agent.sessions.create({ workspace })` / `get()`: create or restore a Session in the current scope.
 - `session.prompt()`: start one Turn.
 - `turn.finished`: await the final result.
@@ -38,9 +39,9 @@ The local SDK is session-first: Agent performs composition, while Session owns i
 
 ### Agent and Workspace
 
-- Agent construction starts Plugin runtime; Session execution waits for initialization internally.
 - `agent.set_instruction()`: update static Agent instructions.
-- `agent.plugins`: inspect, control, or call plugins.
+- `city.plugins`: provide Plugins, manage Agent bindings, and call main actions.
+- `entry.plugins`: inspect or call Plugins in an Agent/Workspace execution scope.
 - `workspace.get_env()` / `set_env()` / `patch_env()`: manage the project execution environment.
 - `agent.get_logger()` / `get_shell()`: host integration entry points.
 
@@ -62,7 +63,7 @@ For a live UI, load initial Session and Message snapshots before calling `subscr
 
 Use these capabilities only when building plugins, servers, or custom runtime components:
 
-- `PluginContext`: the stable capability view projected from Agent to a Plugin; hosts should not acquire or retain it.
+- `PluginContext`: the restricted City projection for the current Agent/Workspace/Session/Turn; hosts should not acquire or retain it.
 - `SessionTurnContext`: the execution context that coordinates identity, lifecycle, steps, input, and output for one Turn; plugins receive only its read-only `PluginExecutionContext` projection.
 - `create_session_turn_context(...)`: the standard factory used by custom executors or runtime components to create that Turn Context.
 - Interfaces such as `AgentSession` and `SessionExecutor`: replace or extend default implementations.
@@ -76,7 +77,8 @@ Network server implementations belong to `@downcity/agent`. Local `Agent` does n
 | --- | --- | --- |
 | Create, get, and list Sessions | Yes | Yes |
 | Prompt, subscribe, messages, stop, approvals, and fork | Yes | Yes |
-| Inject Workspace, Shell, Tools, and plugins | Yes | No |
+| Inject Workspace, Shell, and Tools | Yes | No |
+| Bind Plugins through City | Yes | Server-owned |
 | Set the Agent default model | Yes | No |
 | `session.set({ model })` | Yes | No |
 | `session.set({ security })` / `session.status()` | Yes | Yes |
@@ -93,7 +95,7 @@ one Agent → multiple `agent.sessions.create({ workspace })` Sessions → one a
 
 - Agent is not bound to one Workspace; one Agent can enter multiple Workspaces.
 - `AgentSessions` owns the Agent's Sessions. Each Session receives its own Workspace context and Plugin projection.
-- `agent.dispose()` releases Agent-level Plugin runtime and all resources used by its Sessions.
+- `agent.dispose()` releases Session resources and its current City binding; City closes shared Plugin instances and lifecycle.
 - `RemoteAgent.close()` closes only the client connection, not the server-side Agent.
 
 Continue with the [Agent API](/en/agent-sdk-docs/api-reference/agent-class) and [Sessions overview](/en/agent-sdk-docs/sessions/overview).

@@ -8,7 +8,8 @@ description: Embed the Downcity Agent runtime in a Node application
 Use `@downcity/agent` to create an Agent, manage Sessions, and execute model calls in the same process. See the [Agent SDK docs](/en/agent-sdk-docs) for the complete API.
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
 import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
@@ -24,8 +25,12 @@ const agent = new Agent({
   id: "repo-helper",
   model,
   tools: { search: search_tool },
-  plugins: [plugin],
 });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
+});
+city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
 
 // Session 在创建时选择 Workspace。
 const session = await agent.sessions.create({ workspace });
@@ -50,7 +55,7 @@ Local runtime state is centralized outside the project directory:
 `chat` is the default origin partition. Callers may attach any non-empty `origin.type` at creation and
 must pass the same type to `get(session_id, origin_type)` when restoring the Session.
 
-Construction starts plugin lifecycle and background work. Session execution waits for initialization automatically; use `await agent.dispose()` to release resources. HTTP and RPC are supplied by the containing `City` through `city.http()` and `city.rpc()`.
+City starts shared Plugin instances and background work when it binds them. Session execution waits for initialization automatically. Use `await city.close()` to close the host or `city.agents.remove()` to remove one Agent. City also supplies HTTP and RPC.
 
 ## Streaming messages
 

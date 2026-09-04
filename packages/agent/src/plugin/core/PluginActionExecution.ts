@@ -15,6 +15,7 @@ import { normalize_session_origin } from "@/session/SessionOrigin.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 import { generate_id } from "@/utils/Id.js";
+import { create_plugin_action_context } from "@/plugin/core/PluginContext.js";
 
 /** Action 超时写入 abort_signal.reason 的内部错误。 */
 class PluginActionTimeoutError extends Error {
@@ -149,12 +150,12 @@ function create_action_execution_context(input: {
       ? { session_origin }
       : {}),
     ...(turn_id ? { turn_id } : {}),
-    project_root: input.context.workspace_path,
+    project_root: input.context.workspace.path,
     workspace_env: Object.freeze({
-      ...(source?.workspace_env ?? input.context.workspace_env ?? {}),
+      ...(source?.workspace_env ?? input.context.workspace.env ?? {}),
     }),
     agent_systems: Object.freeze([
-      ...(source?.agent_systems ?? input.context.instructions ?? []),
+      ...(source?.agent_systems ?? input.context.agent.instructions ?? []),
     ]),
     abort_signal: input.abort_signal,
     call_id,
@@ -169,9 +170,6 @@ function create_action_execution_context(input: {
             session_id,
             origin: session_origin,
             turn_id,
-            ...(input.interactions
-              ? { interactions: input.interactions }
-              : {}),
           }),
         }
       : {}),
@@ -206,6 +204,11 @@ export async function execute_plugin_action(
     interactions: input.interactions,
     abort_signal: abort_scope.signal,
   });
+  const action_context = create_plugin_action_context(
+    input.context,
+    action_execution.snapshot,
+    action_execution.abort_signal,
+  );
 
   try {
     if (abort_scope.signal.aborted) {
@@ -215,7 +218,7 @@ export async function execute_plugin_action(
     }
     const result = await input.action.execute({
       execution: action_execution,
-      context: input.context,
+      context: action_context,
       input: parsed_payload.input,
       plugin_name: input.plugin_name,
       action_name: input.action_name,

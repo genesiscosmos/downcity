@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugin",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "type": "module",
   "description": "Downcity Plugin main runtime 与宿主 React Renderer 协议。",
   "main": "./bin/index.js",
@@ -29,6 +29,14 @@
     "version:patch": "node ../../scripts/bump-package-version.mjs ./package.json"
   },
   "license": "MIT",
+  "dependencies": {
+    "@downcity/federation": "workspace:^",
+    "@downcity/type": "workspace:*",
+    "@downcity/workspace": "workspace:^",
+    "commander": "^15.0.0",
+    "hono": "^4.12.23",
+    "zod": "^4.4.3"
+  },
   "peerDependencies": {
     "react": "^19.0.0"
   },

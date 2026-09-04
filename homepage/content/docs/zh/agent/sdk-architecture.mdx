@@ -5,16 +5,20 @@ description: City、Agent、Workspace、Session、Plugin 与 Shell 的职责和�
 
 # Agent SDK 架构
 
-Downcity 将 Agent 主体与它执行任务的项目分开。`Agent` 拥有身份、指令、模型、自定义 Tool
-和 Plugin 注册；`Workspace` 拥有项目资源与 Shell；调用 `agent.sessions.create({ workspace })` 后创建
-Session 执行边界。
+Downcity 将执行主体、项目资源与扩展运行时分开。`Agent` 拥有身份、指令、模型、自定义 Tool 和 Session；`Workspace` 拥有项目资源与 Shell；`City` 持有 Plugin catalog、共享实例、生命周期与 Agent 绑定。
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Shell, Workspace } from "@downcity/workspace";
 
-const agent = new Agent({ id, model, instruction, plugins });
+const agent = new Agent({ id, model, instruction });
 const workspace = new Workspace({ id: "project", path, shell });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
+});
+city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
 // Session 在创建时选择 Workspace。
 const session = await agent.sessions.create({ workspace });
 ```
@@ -23,15 +27,18 @@ const session = await agent.sessions.create({ workspace });
 
 ```mermaid
 flowchart TD
-    Host["宿主应用"] --> Agent["Agent<br/>身份、模型、指令、Plugin"]
-    Host --> Workspace["Workspace<br/>项目资源与 Shell"]
+    Host["宿主应用"] --> City["City<br/>资源与生命周期容器"]
+    City --> Agent["Agent<br/>身份、模型、指令、Session"]
+    City --> Workspace["Workspace<br/>项目资源与 Shell"]
+    City --> Plugins["Plugins<br/>catalog、Profile 共享实例、生命周期"]
     Agent --> Enter["agent.sessions.create({ workspace })"]
     Workspace --> Enter
     Enter --> Sessions["AgentSessions<br/>Session 集合"]
     Sessions --> Session["Session<br/>连续执行"]
     Session --> Tools["Workspace + Agent + Plugin Tools"]
-    Session --> Context["带 Workspace 上下文的 PluginContext"]
-    City["City<br/>Storage 与资源容器"] --> Storage["StorageProvider<br/>默认 Memory"]
+    Session --> Context["City 投影的 PluginContext"]
+    Plugins --> Context
+    City --> Storage["StorageProvider<br/>默认 Memory"]
     Session --> Storage
     Workspace --> Files["项目 File/Search"]
     Workspace --> Env["Workspace Env"]
@@ -54,17 +61,16 @@ const agent = new Agent({
   id: "repo-helper",
   model,
   instruction: "维护当前项目。",
-  plugins: [task_plugin],
   tools: { company_search: company_search_tool },
 });
+
+city.agents.add(agent, { plugins: [{ plugin_id: "task" }] });
 
 const frontend = await agent.sessions.create({ workspace: frontend_workspace });
 const backend = await agent.sessions.create({ workspace: backend_workspace });
 ```
 
-Plugin 只在 Agent 注册一次，不再划分单独的 Workspace Plugin。每次 Plugin Action 都会获得当前
-执行上下文；是否使用 `workspace_path`、`data_path`、文件、Shell，完全由 Plugin 自己决定。
-可选的 `enter_workspace` 与 `leave_workspace` 钩子只表达生命周期需要，不形成新的 Plugin 类型。
+Agent 不持有 Plugin。City 按 `(plugin_id, profile_id)` 持有共享实例，并把绑定后的能力投影到 Agent/Workspace execution entry。每次 Plugin Action 都获得当前 `PluginContext`，可以直接使用受限的 Agent、Workspace、Session 与 Turn 句柄。共享实例使用 `start/stop`，Agent/Workspace scope 使用 `bind/unbind`。
 
 ## Workspace 是资源边界
 
@@ -88,11 +94,11 @@ import { Shell, Workspace } from "@downcity/workspace";
 
 ## Session 是执行边界
 
-`agent.sessions.create({ workspace })` 组合两个主体，但不混合它们的所有权。Agent 与 Session 内部负责创建：
+`agent.sessions.create({ workspace })` 组合 Agent 与 Workspace，但不混合它们的所有权。Agent、Session 与 City 执行投影共同提供：
 
 - Workspace Tool、Agent 自定义 Tool 与 Plugin 桥接 Tool 组成的最终工具集合。
 - `AgentSessions` 与 Agent 领域的 `LocalSessionStore`。
-- 带当前 Workspace 的 Plugin Context 与生命周期。
+- 带当前 Agent/Workspace/Session/Turn 的 PluginContext 与 execution lease。
 - 日志、Plugin 调度任务和 Shell 绑定。
 
 不同来源的 Tool 同名时直接失败，不会静默覆盖。同一个 Agent 可以持有绑定不同 Workspace 的多个

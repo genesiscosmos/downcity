@@ -18,6 +18,7 @@ import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFac
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 import { z } from "zod";
+import { create_test_plugin_context } from "./helpers/CityPluginTestBinding.mjs";
 
 function create_turn_context(project_root) {
   return create_session_turn_context({
@@ -33,13 +34,15 @@ function create_registry(plugin) {
     agent_id: "plugin_tools_agent",
     instructions: [],
   }, [plugin]);
-  const context = {
+  const context = create_test_plugin_context({
     agent_id: "plugin_tools_agent",
     workspace_id: "plugin_tools_workspace",
     workspace_path: process.cwd(),
-  };
+  });
   return Object.assign(registry.contextual(context), {
     execution_view: () => registry.execution_view(context),
+    start_all: () => registry.start_all(),
+    unregister: (plugin_name) => registry.unregister(plugin_name),
   });
 }
 
@@ -279,7 +282,6 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
               owner,
               session_id: execution.session?.session_id,
               call_id: execution.call_id,
-              has_interactions: Boolean(execution.session?.interactions),
               context_keys: Object.keys(execution).sort(),
             },
             message: owner,
@@ -330,7 +332,6 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
   assert.equal(result_a.output.data.owner, "agent_a");
   assert.equal(result_a.output.data.session_id, "session_a");
   assert.equal(result_a.output.data.call_id, "call_session_a");
-  assert.equal(result_a.output.data.has_interactions, true);
   assert.deepEqual(result_a.output.data.context_keys, [
     "abort_signal",
     "call_id",
@@ -341,7 +342,6 @@ test("create_plugin_tools binds plugin_call to the current registry", async () =
   assert.equal(result_b.output.data.owner, "agent_b");
   assert.equal(result_b.output.data.session_id, "session_b");
   assert.equal(result_b.output.data.call_id, "call_session_b");
-  assert.equal(result_b.output.data.has_interactions, true);
 });
 
 test("PluginRegistry keeps Session identity when no Interaction port is provided", async () => {
@@ -407,8 +407,8 @@ test("PluginRegistry separates stable context from non-Session action execution"
   });
 
   assert.equal(result.success, true);
-  assert.equal(observed_context.agent_id, "plugin_tools_agent");
-  assert.equal(observed_context.workspace_id, "plugin_tools_workspace");
+  assert.equal(observed_context.agent.id, "plugin_tools_agent");
+  assert.equal(observed_context.workspace.id, "plugin_tools_workspace");
   assert.match(observed_execution.call_id, /^plugin:/);
   assert.equal(observed_execution.abort_signal.aborted, false);
   assert.equal(Object.isFrozen(observed_execution), true);

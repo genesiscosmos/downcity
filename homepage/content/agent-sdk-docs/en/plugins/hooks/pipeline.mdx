@@ -30,7 +30,7 @@ So `pipeline` is much closer to an assembly line than a fan-out event.
 ## Minimal example
 
 ```ts
-const next = await agent.plugins.pipeline("chat.enrich_message", {
+const next = await entry.plugins.pipeline("chat.enrich_message", {
   text: "Please summarize this page",
 });
 ```

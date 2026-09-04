@@ -1,4 +1,4 @@
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import type { TelegramUpdate, TelegramUser } from "./Shared.js";
 
 /**
@@ -16,7 +16,7 @@ import type { TelegramUpdate, TelegramUser } from "./Shared.js";
  * - 采用显式注入，避免 handler 反向依赖 server / core 单例
  */
 export type TelegramHandlerContext = {
-  logger: Logger;
+  logger: PluginLogger;
   sendMessage: (
     chatId: string,
     text: string,

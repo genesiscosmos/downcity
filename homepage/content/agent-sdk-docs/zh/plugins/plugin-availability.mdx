@@ -7,22 +7,22 @@ description: 说明注册状态和 availability 的区别，以及 runtime 可�
 
 Plugin 当前只需要区分两件事：
 
-- 是否已经注册到 `agent.plugins`
+- 是否已经由 City 绑定到当前 Agent，并投影到 `entry.plugins`
 - 当前环境是否满足 plugin 自己的 `availability()` 检查
 
-注册是可见性边界。没有注册的 plugin 对 Agent 来说不存在。
+绑定是执行可见性边界。只登记在 City catalog、但没有绑定到当前 Agent 的 Plugin，不会出现在该 Agent 的执行入口中。
 
-## 注册状态
+## 绑定状态
 
 ```ts
-agent.plugins.has("skill");
-agent.plugins.status("skill");
-agent.plugins.snapshots();
+entry.plugins.has("skill");
+entry.plugins.status("skill");
+entry.plugins.snapshots();
 ```
 
-Plugin 刚注册且 lifecycle 尚未完成时，状态是 `initializing`。action、availability、system block 和 hook 会等待这次初始化完成，不会在 lifecycle 启动前执行。
+Plugin 刚绑定且共享实例的 lifecycle 尚未完成时，状态是 `initializing`。Action、Availability、System 和 Hook 会等待初始化完成，不会在 `start` 前执行。
 
-如果 plugin 已注册且启动成功，状态是 `ready`。
+如果 Plugin 已绑定且启动成功，状态是 `ready`。
 
 如果 lifecycle 启动失败，状态可能是 `error`，用于诊断。普通 action 业务失败不会把整个 plugin 标成 `error`；例如 `skill.lookup` 查不到某个 skill 时，只返回这次 action 的失败结果，plugin 仍保持可继续调用。
 
@@ -42,17 +42,17 @@ Plugin 刚注册且 lifecycle 尚未完成时，状态是 `initializing`。actio
 - API key 没配置
 
 ```ts
-const availability = await agent.plugins.availability("skill");
+const availability = await entry.plugins.availability("skill");
 ```
 
-返回结果仍然包含 `enabled` 字段，但在新模型里它表示“plugin 是否已注册”，不是项目配置开关。
+返回结果仍然包含 `enabled` 字段，但它表示“Plugin 是否绑定到当前 Agent”，不是项目配置开关。
 
 ## 最稳的理解
 
 把它记成两句：
 
-- 注册 / 卸载决定 plugin 是否可见
-- `availability()` 决定已注册 plugin 当前环境是否可用
+- City 的 Agent 绑定 / 解绑决定 Plugin 是否在执行作用域中可见
+- `availability()` 决定已绑定 Plugin 在当前作用域是否可用
 
 ## 相关文档
 

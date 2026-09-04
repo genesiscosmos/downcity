@@ -8,8 +8,8 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { JsonObject, JsonValue } from "@downcity/agent";
-import type { PluginActionCommandInput } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginActionCommandInput } from "@downcity/plugin";
 import type { ChatSendActionPayload } from "@/chat/types/ChatPluginActionPayload.js";
 import {
   build_chat_message_text,
@@ -216,11 +216,11 @@ export async function mapChatSendCommandInput(
 /**
  * 解析 `chat send` 的 API 输入。
  */
-export function mapChatSendApiInput(body: JsonValue): ChatSendActionPayload {
+export function mapChatSendApiInput(body: PluginJsonValue): ChatSendActionPayload {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new Error("Invalid JSON body");
   }
-  const payload = body as JsonObject;
+  const payload = body as PluginJsonObject;
   const delayRaw = payload.delay_ms ?? payload.delay;
   const timeRaw = payload.send_at_ms ?? payload.sendAt ?? payload.time;
   const replyRaw = payload.reply_to_message ?? payload.reply;

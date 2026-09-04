@@ -19,10 +19,7 @@ export interface PluginCatalogItem {
   source: PluginCatalogSource;
   /** 第三方 Plugin 的规范化来源。 */
   source_label?: string;
-  /** Plugin 是否能注册到 Agent。 */
-  has_agent: boolean;
-
-  /** Plugin 是否提供宿主 main。 */
+  /** Plugin 是否提供统一 City main，因此可以绑定到 Agent。 */
   has_main: boolean;
 
   /** Plugin 是否提供专属 Sidebar。 */

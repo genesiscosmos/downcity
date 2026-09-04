@@ -1,102 +1,49 @@
 ---
 title: NotesPlugin 场景
-description: 用一个最小但有真实用途的 NotesPlugin 场景说明 actions、config 和 system 如何组合
+description: 用一个最小 NotesPlugin 说明 Action、System 与 City 注册如何组合。
 ---
 
 # NotesPlugin 场景
 
-## 场景
-
-你希望给某个 agent 增加一组“项目笔记”能力：
-
-- 查看当前 notes 配置
-- 保存 notes 目录配置
-- 给 agent 注入一段关于 notes 用法的 system 文本
-
-这就是很典型的 plugin 用例。
-
-## 为什么这里更像 plugin
-
-因为你要的是：
-
-- 一组显式 action
-- 一段 system 增强文本
-- 一块 project 级配置
-
-而不是一个长期运行 worker。
-
-## 示例
-
 ```ts
 import {
-  Agent,
   BasePlugin,
-  type PluginContext,
+  define_city_plugin,
   type PluginActions,
-  type PluginConfigDefinition,
-} from "@downcity/agent";
+  type PluginContext,
+} from "@downcity/plugin";
 
 class NotesPlugin extends BasePlugin {
   readonly name = "notes";
   readonly title = "Project Notes";
-  readonly description = "Save and describe a project notes folder.";
-
-  readonly config = {
-    plugin: "notes",
-    scope: "project",
-    defaultValue: {
-      injectPrompt: true,
-      folder: ".notes",
-    },
-  } satisfies PluginConfigDefinition;
+  readonly description = "Describe the project notes folder.";
 
   system(context: PluginContext) {
-    return `Project notes folder: ${context.workspace_path}/.notes`;
+    return `Project notes folder: ${context.workspace.path}/.notes`;
   }
 
   readonly actions: PluginActions = {
     status: {
-      allowWhenDisabled: true,
-      execute: async ({ context }) => {
-        return {
-          success: true,
-          data: {
-            workspace_path: context.workspace_path,
-          },
-        };
-      },
+      execute: async ({ context }) => ({
+        success: true,
+        data: {
+          workspace_path: context.workspace.path,
+          storage_path: context.storage.path,
+        },
+      }),
     },
   };
 }
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new NotesPlugin()],
-});
-
-const status = await agent.plugins.run_action({
-  plugin: "notes",
-  action: "status",
+const notes_module = define_city_plugin({
+  activate() {},
+  create: () => new NotesPlugin(),
 });
 ```
 
-## 这个场景最适合学什么
+宿主把 `notes_module` 放入 `CityPluginRegistration` 并交给 City；Agent 只绑定
+`{ plugin_id: "notes" }`。进入 Workspace 后，可以通过 `entry.plugins.run_action()` 显式调用；
+Session 会从同一 City execution view 收集 System 与 Hook。
 
-- plugin 可以只靠 `config + actions + system` 就成立
-- 不需要 worker，也不需要长期实例状态
-
-## 这个场景在本地 SDK 里怎么落地
-
-上面的写法现在已经可以直接在本地 `Agent` 里运行。
-
-这里最值得注意的是：
-
-- `status` 因为声明了 `allowWhenDisabled: true`，即使 plugin 被显式禁用也能用于自检
-- `agent.plugins.run_action(...)` 是最直接的显式调用入口
-- 如果你再实现 `system()`，当这个 plugin 注册到 Agent 上时，本地 SDK session 主路径会注入这段 system 文本
-
-## 相关文档
-
-- [自定义 Plugin](/zh/agent-sdk-docs/plugins/custom-plugin)
-- [Plugin Actions](/zh/agent-sdk-docs/plugins/plugin-actions)
+这个 Plugin 没有长期资源，因此不需要 Lifecycle。用户项目文件应使用
+`context.workspace.files`，Plugin 私有状态应使用 `context.storage.files`。

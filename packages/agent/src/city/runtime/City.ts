@@ -1,9 +1,9 @@
 /**
  * City：Workspace、Embassy 与统一 transport 的资源容器。
  *
- * City 不创建 Agent、Session 或 Plugin。应用创建 Agent 后通过
- * `city.agents.add(agent)` 加入当前容器；City 管理 Agent 集合、Workspace/Embassy
- * 资源与统一 transport。
+ * City 不创建 Agent 或 Session。应用创建 Agent 后通过 `city.agents.add(agent)` 加入
+ * 当前容器；City 持有 Plugin/Profile 实例与生命周期，并管理 Agent 集合、
+ * Workspace/Embassy 资源和统一 transport。
  */
 
 import { Agent } from "@/agent/Agent.js";
@@ -15,8 +15,13 @@ import {
   detach_group_storage,
   create_workspace_entry,
   detach_agent_city,
+  attach_agent_city_extensions,
+  attach_agent_session_extensions,
   get_workspace_entry,
 } from "@/internal/index.js";
+import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
+import type { CityPlugins, CityAgentPluginOptions } from "@/city/types/CityPlugin.js";
+import { create_empty_session_extensions } from "@/types/session/SessionExtension.js";
 import type { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
 import type { WorkspaceBase } from "@downcity/workspace";
 import type { StorageProvider } from "@downcity/workspace";
@@ -36,6 +41,12 @@ import type {
 export class City {
   /** City 持有的底层 Storage；默认是进程内存储。 */
   readonly storage: StorageProvider;
+
+  /** City 持有的 Plugin 查询入口。 */
+  readonly plugins: CityPlugins;
+
+  /** City 唯一的 Plugin 生命周期运行时。 */
+  private readonly plugin_runtime: CityPluginRuntime;
   /** 当前 City 引用的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
 
@@ -87,6 +98,14 @@ export class City {
   constructor(options: CityOptions = {}) {
     this.storage = options.storage || new MemoryStorageProvider();
     this.embassy = options.embassy;
+    this.plugin_runtime = new CityPluginRuntime({
+      city: this,
+      ...(options.plugin_host ? { host: options.plugin_host } : {}),
+    });
+    this.plugins = this.plugin_runtime.public_api;
+    for (const registration of options.plugins ?? []) {
+      this.plugins.provide(registration);
+    }
     for (const workspace of options.workspaces ?? []) {
       const workspace_id = String(workspace?.id || "").trim();
       if (!workspace_id) throw new Error("City requires Workspace with a stable id");
@@ -101,7 +120,7 @@ export class City {
     this.http_transport = new CityHTTP(this, runtime_options.http);
     this.rpc_transport = new CityRPC(this, runtime_options.rpc);
     this.agents = Object.freeze({
-      add: (agent) => this.add_agent(agent),
+      add: (agent, plugin_options) => this.add_agent(agent, plugin_options),
       get: (agent_id) => this.get_agent(agent_id),
       list: () => this.list_agents(),
       remove: async (agent_id) => await this.remove_agent(agent_id),
@@ -253,6 +272,7 @@ export class City {
     const removal = (async () => {
       try {
         await this.http_transport.detach_agent(agent_id);
+        await this.plugin_runtime.detach_agent(agent_id);
         const dependent_groups = [...this.groups_by_id.values()]
           .filter((group) => group.members.some((member) => member === agent));
         await Promise.allSettled(dependent_groups.map(async (group) => {
@@ -260,7 +280,6 @@ export class City {
           this.groups_by_id.delete(group.id);
         }));
         await agent.dispose();
-        this.release_agent(agent);
         return agent;
       } finally {
         this.removing_agent_ids.delete(agent_id);
@@ -334,6 +353,7 @@ export class City {
             await detach_group_storage(group, this);
           }),
         ));
+        results.push(...await Promise.allSettled([this.plugin_runtime.dispose()]));
         results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
         results.push(...await Promise.allSettled(
           [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
@@ -362,7 +382,7 @@ export class City {
   }
 
   /** 将已创建 Agent 加入集合并建立唯一 City 绑定。 */
-  private add_agent(agent: Agent): Agent {
+  private add_agent(agent: Agent, options: CityAgentPluginOptions = {}): Agent {
     this.assert_active();
     if (!agent?.id) throw new Error("City requires an Agent with a stable ID");
     if (this.agents_by_id.has(agent.id) || this.removing_agent_ids.has(agent.id)) {
@@ -370,17 +390,26 @@ export class City {
     }
     attach_agent_city(agent, this);
     attach_agent_storage(agent, this.storage);
+    const extensions = this.plugin_runtime.attach_agent(agent, options.plugins ?? []);
+    attach_agent_city_extensions(agent, extensions);
+    attach_agent_session_extensions(
+      agent,
+      (workspace) => workspace
+        ? extensions.execution_runtime(workspace, agent.get_logger())
+        : create_empty_session_extensions(),
+    );
     this.agents_by_id.set(agent.id, agent);
     return agent;
   }
 
   /** Agent 自行释放时清除 City 运行时引用。 */
-  release_agent(agent: { readonly id: string }): void {
+  async release_agent(agent: { readonly id: string }): Promise<void> {
     const current = this.agents_by_id.get(agent.id);
     if (!current || current !== agent) return;
+    await this.plugin_runtime.detach_agent(agent.id);
     detach_agent_city(current, this);
     this.agents_by_id.delete(agent.id);
-    void this.http_transport.detach_agent(agent.id).catch(() => undefined);
+    await this.http_transport.detach_agent(agent.id).catch(() => undefined);
   }
 
   /** 把宿主按需解析出的 Workspace 纳入 City 资源索引。 */

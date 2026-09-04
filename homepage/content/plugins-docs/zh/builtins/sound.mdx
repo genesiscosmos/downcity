@@ -9,16 +9,18 @@ description: 使用 FED 模型目录统一提供 ASR 语音识别、TTS 语音�
 
 `sound` 不下载或运行本地语音模型，也不依赖 Python、Whisper、Piper 等本地推理环境。本地音频文件只会被读取并转换成 data URL，然后发送给 FED。
 
-## 创建 plugin
+## Profile 配置
 
 ```ts
-import { SoundPlugin } from "@downcity/plugins/sound";
-import { Embassy } from "@downcity/federation";
-
-const sound = new SoundPlugin({
-  sound_ai: embassy.user.ai,
-  default_asr_model: "asr-model-id",
-  default_tts_model: "tts-model-id",
+await city.plugins.register(agent.id, {
+  plugin_id: "sound",
+  profile: {
+    id: "primary",
+    config: {
+      default_asr_model: "asr-model-id",
+      default_tts_model: "tts-model-id",
+    },
+  },
 });
 ```
 
@@ -98,11 +100,10 @@ TTS 返回 AI SDK `UIMessage`。音频使用 `file` part 表示，Agent 会统�
 可以分别配置默认 ASR 与 TTS 模型：
 
 ```ts
-new SoundPlugin({
-  sound_ai: embassy.user.ai,
+{
   default_asr_model: "asr-model-id",
   default_tts_model: "tts-model-id",
-});
+}
 ```
 
 未配置默认模型且 action 未传 `model` 时，调用会失败并提示先读取 `sound.models`，不会隐式选择模型。
@@ -112,11 +113,12 @@ new SoundPlugin({
 `auto_asr: true` 会在 chat 入站阶段自动转写 `voice` / `audio` 附件。自动路径无法交互选择模型，因此必须同时配置 `default_asr_model`：
 
 ```ts
-new SoundPlugin({
-  sound_ai: embassy.user.ai,
+{
   auto_asr: true,
   default_asr_model: "asr-model-id",
-});
+}
 ```
 
 转写文本会作为 `<voice src="...">...</voice>` 追加到用户正文。单个附件转写失败不会阻断 chat 主链路。
+
+Sound 的 AI 服务来自 `PluginContext.city.embassy.user.ai`，不放进 Profile，也不由 Agent 持有。

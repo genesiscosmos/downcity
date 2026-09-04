@@ -7,7 +7,7 @@
  * - 所有 action 返回值都保持 JSON 可序列化，避免把 Playwright 对象泄漏到 Agent 内核。
  */
 
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 
 /** WebPlugin 对外 action 名称。 */
 export const WEB_PLUGIN_ACTIONS = {
@@ -46,7 +46,7 @@ export interface WebSearchInput {
 }
 
 /** 单条搜索结果。 */
-export interface WebSearchItem extends JsonObject {
+export interface WebSearchItem extends PluginJsonObject {
   /** 结果页面的规范 URL。 */
   url: string;
   /** 页面标题。 */
@@ -58,7 +58,7 @@ export interface WebSearchItem extends JsonObject {
 }
 
 /** 搜索 action 返回值。 */
-export interface WebSearchResult extends JsonObject {
+export interface WebSearchResult extends PluginJsonObject {
   /** 实际使用的 provider 名称。 */
   provider: string;
   /** 搜索结果列表。 */
@@ -74,7 +74,7 @@ export interface WebOpenInput {
 }
 
 /** 已知 URL 打开返回值。 */
-export interface WebOpenResult extends JsonObject {
+export interface WebOpenResult extends PluginJsonObject {
   /** 实际使用的 provider 名称。 */
   provider: string;
   /** 最终读取到的 URL。 */
@@ -94,7 +94,7 @@ export interface BrowserCreateSessionInput {
 }
 
 /** 浏览器页面的可序列化观察结果。 */
-export interface BrowserObservation extends JsonObject {
+export interface BrowserObservation extends PluginJsonObject {
   /** 实际使用的 provider 名称。 */
   provider: string;
   /** 浏览器 session 标识。 */
@@ -193,7 +193,7 @@ export interface BrowserSemanticExtractInput {
 }
 
 /** 浏览器抽取返回值。 */
-export interface BrowserExtractResult extends JsonObject {
+export interface BrowserExtractResult extends PluginJsonObject {
   /** 实际使用的 provider 名称。 */
   provider: string;
   /** 浏览器 session 标识。 */

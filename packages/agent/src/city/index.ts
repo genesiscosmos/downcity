@@ -16,10 +16,11 @@ export type {
   CityWorkspaces,
 } from "./types/City.js";
 export type {
-  PluginHostContext,
-  PluginHostExtensions,
-  AgentPluginModule,
-} from "./types/PluginHostContext.js";
+  CityAgentPluginBinding,
+  CityAgentPluginOptions,
+  CityPluginHost,
+  CityPlugins,
+} from "./types/CityPlugin.js";
 export {
   create_city_host_instance_id,
   get_city_host_state_path,

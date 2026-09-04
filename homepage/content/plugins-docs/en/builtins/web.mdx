@@ -5,7 +5,7 @@ description: Structured web search, document reading, and Playwright/CDP browser
 
 # web Plugin
 
-`web` is a real web-capability plugin. Its constructor receives only a profile; the Plugin creates the selected browser provider internally. Search and document services are read from the Agent Plugin context.
+`web` is a real web-capability plugin. City creates a shared instance from a Profile, and the Plugin creates the selected browser provider internally. Search and document services are read from the current `PluginContext`.
 
 ## Playwright/CDP
 
@@ -69,7 +69,7 @@ Use search or HTTP reading first. Create a browser for dynamic rendering, logged
 ## Lifecycle and safety
 
 - `WebPlugin` accepts a profile and creates the selected browser provider internally.
-- The provider owns browser sessions and is disposed when the Agent or Plugin is disposed.
+- The provider owns browser sessions and is disposed when the final execution lease is released and City stops the shared instance.
 - `browser_act` exposes deterministic browser actions. Host approval is required for consequential actions such as submit, send, purchase, upload, or delete.
 - Playwright `Browser`, `Page`, and `Buffer` objects never cross the Plugin action boundary; results are JSON-serializable.
 - Skill installation, discovery, and `SKILL.md` loading remain responsibilities of `SkillPlugin`.

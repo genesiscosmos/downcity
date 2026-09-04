@@ -5,16 +5,20 @@ description: Responsibilities and composition of City, Agent, Workspace, Session
 
 # Agent SDK Architecture
 
-Downcity separates the Agent subject from the project in which it works. `Agent` owns identity,
-instruction, model, custom tools, and Plugin registration. `Workspace` owns project resources and
-Shell. Calling `agent.sessions.create({ workspace })` creates a Session execution boundary.
+Downcity separates the execution subject, project resources, and extension runtime. `Agent` owns identity, instruction, model, custom Tools, and Sessions. `Workspace` owns project resources and Shell. `City` owns the Plugin catalog, shared instances, lifecycle, and Agent bindings.
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Shell, Workspace } from "@downcity/workspace";
 
-const agent = new Agent({ id, model, instruction, plugins });
+const agent = new Agent({ id, model, instruction });
 const workspace = new Workspace({ id: "project", path, shell });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
+});
+city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
 // Session 在创建时选择 Workspace。
 const session = await agent.sessions.create({ workspace });
 ```
@@ -23,15 +27,18 @@ const session = await agent.sessions.create({ workspace });
 
 ```mermaid
 flowchart TD
-    Host["Host application"] --> Agent["Agent<br/>identity, model, instruction, plugins"]
-    Host --> Workspace["Workspace<br/>project resources and Shell"]
+    Host["Host application"] --> City["City<br/>resource and lifecycle container"]
+    City --> Agent["Agent<br/>identity, model, instruction, Sessions"]
+    City --> Workspace["Workspace<br/>project resources and Shell"]
+    City --> Plugins["Plugins<br/>catalog, Profile-shared instances, lifecycle"]
     Agent --> Enter["agent.sessions.create({ workspace })"]
     Workspace --> Enter
     Enter --> Sessions["AgentSessions<br/>Session collection"]
     Sessions --> Session["Session<br/>continuous execution"]
     Session --> Tools["Workspace + Agent + Plugin tools"]
-    Session --> Context["Workspace-aware PluginContext"]
-    City["City<br/>storage and resource container"] --> Storage["StorageProvider<br/>Memory by default"]
+    Session --> Context["City-projected PluginContext"]
+    Plugins --> Context
+    City --> Storage["StorageProvider<br/>Memory by default"]
     Session --> Storage
     Workspace --> Files["Project File/Search"]
     Workspace --> Env["Workspace Env"]
@@ -54,19 +61,16 @@ const agent = new Agent({
   id: "repo-helper",
   model,
   instruction: "Maintain the current project.",
-  plugins: [task_plugin],
   tools: { company_search: company_search_tool },
 });
+
+city.agents.add(agent, { plugins: [{ plugin_id: "task" }] });
 
 const frontend = await agent.sessions.create({ workspace: frontend_workspace });
 const backend = await agent.sessions.create({ workspace: backend_workspace });
 ```
 
-Plugins are registered once on Agent. There is no separate Workspace Plugin category. Every Plugin
-Action receives the current execution context; the Plugin decides whether it needs
-`workspace_path`, `data_path`, files, Shell, or no Workspace capability at all. Optional
-`enter_workspace` and `leave_workspace` hooks express lifecycle needs without creating a new Plugin
-type.
+Agent does not own Plugins. City owns one shared instance per `(plugin_id, profile_id)` and projects bound capabilities into an Agent/Workspace execution entry. Every Plugin Action receives the current `PluginContext` with directly callable restricted Agent, Workspace, Session, and Turn handles. Shared instances use `start/stop`; Agent/Workspace scopes use `bind/unbind`.
 
 ## Workspace is the resource boundary
 
@@ -93,11 +97,11 @@ installable and are injected into Shell.
 
 ## Session is the execution boundary
 
-`agent.sessions.create({ workspace })` combines the two subjects for one Session without merging their ownership. The Agent and Session internals create:
+`agent.sessions.create({ workspace })` combines Agent and Workspace for one Session without merging ownership. Agent, Session, and the City execution projection provide:
 
 - The final Tool set from Workspace tools, Agent custom tools, and Plugin bridge tools.
 - `AgentSessions` and the Agent domain `LocalSessionStore`.
-- Workspace-aware Plugin context and lifecycle.
+- Agent/Workspace/Session/Turn-aware PluginContext and an execution lease.
 - Logs, scheduled Plugin Actions, and Shell binding.
 
 Tool name conflicts fail during composition; no source silently overwrites another. The same Agent

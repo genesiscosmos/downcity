@@ -8,7 +8,7 @@
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import type { QQEventCaptureConfig, QQEventCaptureMode, QQGatewayPayload } from "@/chat/channels/qq/types/QqChannel.js";
 
 /**
@@ -46,7 +46,7 @@ export function getQqEventCaptureConfig(data_path: string): QQEventCaptureConfig
  */
 export async function captureQqWsPayload(params: {
   config: QQEventCaptureConfig;
-  logger: Logger;
+  logger: PluginLogger;
   payload: QQGatewayPayload;
 }): Promise<void> {
   if (!params.config.enabled) return;

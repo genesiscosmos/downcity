@@ -9,7 +9,7 @@
 import type {
   SessionSystemComposer,
 } from "@executor/composer/system/SessionSystemComposer.js";
-import type { PluginContext } from "@/types/plugin/PluginContext.js";
+import type { SessionExtensionRuntime } from "@/types/session/SessionExtension.js";
 import type { SessionComposeInput } from "@/types/session/SessionComposer.js";
 import {
   resolve_session_system_messages,
@@ -30,7 +30,7 @@ type DefaultSessionSystemComposerOptions = {
   /**
    * 读取当前执行上下文（用于加载 plugin system 文本）。
    */
-  get_context: () => PluginContext;
+  get_extensions: () => SessionExtensionRuntime;
 
   /**
    * system 档位（默认 chat）。
@@ -46,7 +46,7 @@ export class DefaultSessionSystemComposer implements SessionSystemComposer {
 
   private readonly project_root: string;
   private readonly get_static_system_prompts: DefaultSessionSystemComposerOptions["get_static_system_prompts"];
-  private readonly get_context: DefaultSessionSystemComposerOptions["get_context"];
+  private readonly get_extensions: DefaultSessionSystemComposerOptions["get_extensions"];
   private readonly profile: SystemProfile;
 
   constructor(options: DefaultSessionSystemComposerOptions) {
@@ -56,7 +56,7 @@ export class DefaultSessionSystemComposer implements SessionSystemComposer {
     }
     this.project_root = project_root;
     this.get_static_system_prompts = options.get_static_system_prompts;
-    this.get_context = options.get_context;
+    this.get_extensions = options.get_extensions;
     this.profile = options.profile === "task" ? "task" : "chat";
   }
 
@@ -70,7 +70,7 @@ export class DefaultSessionSystemComposer implements SessionSystemComposer {
       session_id,
       profile: this.profile,
       static_system_prompts: this.get_static_system_prompts(),
-      context: this.get_context(),
+      extensions: this.get_extensions(),
     });
   }
 }

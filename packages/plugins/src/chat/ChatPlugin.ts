@@ -8,10 +8,10 @@
  * - action 注册表已经拆到独立模块，当前文件只保留实例骨架。
  */
 
-import { BasePlugin } from "@downcity/agent";
-import type { PluginActions } from "@downcity/agent";
-import type { PluginContext, AgentPluginContext } from "@downcity/agent";
-import type { PluginExecutionContext } from "@downcity/agent";
+import { BasePlugin } from "@downcity/plugin";
+import type { PluginActions } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginExecutionContext } from "@downcity/plugin";
 import type {
   ChatChannelState,
   ChatWorkspaceRuntime,
@@ -55,11 +55,14 @@ export class ChatPlugin extends BasePlugin {
    */
   readonly name = "chat";
 
-  /** 各 Workspace 独立持有的渠道与队列运行态。 */
-  private readonly runtimes_by_workspace = new Map<string, ChatWorkspaceRuntime>();
+  /** 当前 Profile 唯一的渠道与队列运行态。 */
+  private runtime: ChatWorkspaceRuntime | null = null;
 
-  /** 各 Workspace 当前唯一的懒启动流程，避免 system/action 并发重复连接渠道。 */
-  private readonly starts_by_workspace = new Map<string, Promise<void>>();
+  /** 当前 Profile 渠道绑定的 Agent/Workspace 作用域。 */
+  private runtime_scope_key: string | null = null;
+
+  /** 当前 Profile 唯一的渠道启动流程。 */
+  private start_promise: Promise<void> | null = null;
 
   /**
    * 当前实例持有的显式 plugin 配置。
@@ -78,7 +81,6 @@ export class ChatPlugin extends BasePlugin {
     context: PluginContext,
     execution_context?: PluginExecutionContext,
   ): Promise<string> => {
-    await this.ensure_workspace_runtime(context);
     return await buildChatPluginSystem(context, execution_context);
   };
 
@@ -91,9 +93,17 @@ export class ChatPlugin extends BasePlugin {
    * 启动当前实例的 queue worker。
    */
   private async start_workspace_runtime(context: PluginContext): Promise<void> {
-    if (this.runtimes_by_workspace.has(context.workspace_id)) return;
-    const started = this.starts_by_workspace.get(context.workspace_id);
-    if (started) return await started;
+    if (!this.is_owner_scope(context)) return;
+    const scope_key = chat_scope_key(context);
+    if (this.runtime) {
+      if (this.runtime_scope_key !== scope_key) {
+        throw new Error(
+          "Chat Profile requires owner_agent_id and owner_workspace_id before it can bind multiple execution scopes",
+        );
+      }
+      return;
+    }
+    if (this.start_promise) return await this.start_promise;
     const start_promise = (async () => {
       const channel_state = createChatChannelState();
       const queue_store = new ChatQueueStore();
@@ -104,38 +114,28 @@ export class ChatPlugin extends BasePlugin {
         config: this.getQueueWorkerConfig(context),
       });
       worker.start();
-      this.runtimes_by_workspace.set(context.workspace_id, {
+      this.runtime = {
         channel_state,
         queue_store,
         queue_worker: worker,
-      });
+      };
+      this.runtime_scope_key = scope_key;
       try {
         await startChatChannels(channel_state, context);
       } catch (error) {
-        this.runtimes_by_workspace.delete(context.workspace_id);
+        this.runtime = null;
+        this.runtime_scope_key = null;
         worker.stop();
         await stopChatChannels(channel_state);
         throw error;
       }
     })();
-    this.starts_by_workspace.set(context.workspace_id, start_promise);
+    this.start_promise = start_promise;
     try {
       await start_promise;
     } finally {
-      if (this.starts_by_workspace.get(context.workspace_id) === start_promise) {
-        this.starts_by_workspace.delete(context.workspace_id);
-      }
+      if (this.start_promise === start_promise) this.start_promise = null;
     }
-  }
-
-  /** 按当前 Workspace Context 懒启动 chat 运行态。 */
-  private async ensure_workspace_runtime(context: PluginContext): Promise<ChatWorkspaceRuntime> {
-    const existing = this.runtimes_by_workspace.get(context.workspace_id);
-    if (existing) return existing;
-    await this.start_workspace_runtime(context);
-    const runtime = this.runtimes_by_workspace.get(context.workspace_id);
-    if (!runtime) throw new Error(`ChatPlugin failed to start Workspace runtime: ${context.workspace_id}`);
-    return runtime;
   }
 
   constructor(options?: ChatPluginOptions) {
@@ -151,50 +151,32 @@ export class ChatPlugin extends BasePlugin {
       ...create_chat_access_actions(),
     };
     this.lifecycle = {
-      start: async (_context: AgentPluginContext) => {},
-      stop: async (_context: AgentPluginContext) => {
-        await Promise.allSettled([...this.starts_by_workspace.values()]);
-        await Promise.all([...this.runtimes_by_workspace.values()].map(async (runtime) => {
-          runtime.queue_worker.stop();
-          await stopChatChannels(runtime.channel_state);
-        }));
-        this.runtimes_by_workspace.clear();
-        this.starts_by_workspace.clear();
+      start: async () => {},
+      bind: async (context) => {
+        await this.start_workspace_runtime(context);
+      },
+      unbind: async (context) => {
+        if (this.runtime_scope_key === chat_scope_key(context)) {
+          await this.stop_runtime();
+        }
+      },
+      stop: async () => {
+        await this.start_promise?.catch(() => undefined);
+        await this.stop_runtime();
       },
     };
   }
 
-  /** 读取当前 Workspace 的渠道状态。 */
-  private resolve_channel_state(context: PluginContext): ChatChannelState {
-    const runtime = this.runtimes_by_workspace.get(context.workspace_id);
-    if (!runtime) {
-      const channel_state = createChatChannelState();
-      const queue_store = new ChatQueueStore();
-      const worker = new ChatQueueWorker({
-        logger: context.logger,
-        context,
-        queueStore: queue_store,
-        config: this.getQueueWorkerConfig(context),
-      });
-      worker.start();
-      const created = { channel_state, queue_store, queue_worker: worker } satisfies ChatWorkspaceRuntime;
-      this.runtimes_by_workspace.set(context.workspace_id, created);
-      void startChatChannels(channel_state, context).catch((error) => {
-        context.logger.warn(`[chat] channel startup failed: ${String(error)}`);
-      });
-      return channel_state;
-    }
-    return runtime.channel_state;
+  /** 读取当前 Profile 的唯一渠道状态。 */
+  private resolve_channel_state(_context: PluginContext): ChatChannelState {
+    if (!this.runtime) throw new Error("Chat Profile channel runtime is not bound");
+    return this.runtime.channel_state;
   }
 
-  /** 向 chat 入队路径暴露当前 Workspace 的独立队列。 */
-  queue_store(context: PluginContext): ChatQueueStore {
-    const runtime = this.runtimes_by_workspace.get(context.workspace_id);
-    if (!runtime) {
-      this.resolve_channel_state(context);
-      return this.runtimes_by_workspace.get(context.workspace_id)!.queue_store;
-    }
-    return runtime.queue_store;
+  /** 向 chat 入队路径暴露当前 Profile 的唯一队列。 */
+  queue_store(_context: PluginContext): ChatQueueStore {
+    if (!this.runtime) throw new Error("Chat Profile queue runtime is not bound");
+    return this.runtime.queue_store;
   }
 
   /**
@@ -237,4 +219,28 @@ export class ChatPlugin extends BasePlugin {
   private getChannel(channel: ChatChannelName): ChatChannel | null {
     return this.channels.find((item) => item.name === channel) || null;
   }
+
+  /** 判断当前 Context 是否是 Profile 指定的唯一入站作用域。 */
+  private is_owner_scope(context: PluginContext): boolean {
+    const owner_agent_id = String(this.options.owner_agent_id || "").trim();
+    const owner_workspace_id = String(this.options.owner_workspace_id || "").trim();
+    if (owner_agent_id && owner_agent_id !== context.agent.id) return false;
+    if (owner_workspace_id && owner_workspace_id !== context.workspace.id) return false;
+    return true;
+  }
+
+  /** 停止当前 Profile 唯一的渠道与队列资源。 */
+  private async stop_runtime(): Promise<void> {
+    const runtime = this.runtime;
+    if (!runtime) return;
+    this.runtime = null;
+    this.runtime_scope_key = null;
+    runtime.queue_worker.stop();
+    await stopChatChannels(runtime.channel_state);
+  }
+}
+
+/** 返回 Chat Profile 中唯一的 Agent/Workspace 作用域键。 */
+function chat_scope_key(context: PluginContext): string {
+  return `${context.agent.id}\u0000${context.workspace.id}`;
 }

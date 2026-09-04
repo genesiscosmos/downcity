@@ -8,7 +8,7 @@
  */
 
 import type WebSocket from "ws";
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import type {
   QQGatewayPayload,
   QqDispatchHandler,
@@ -22,7 +22,7 @@ export interface HandleQqGatewayPayloadParams {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 当前 payload。
    */
@@ -76,7 +76,7 @@ export interface SendQqGatewayIdentifyParams {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 获取鉴权 token。
    */

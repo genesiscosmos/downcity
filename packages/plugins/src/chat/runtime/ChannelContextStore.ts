@@ -9,7 +9,7 @@
 
 import fs from "fs-extra";
 import { generate_id } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type {
   ChannelContextMetaFileV1,
   ChannelContextRouteV1,
@@ -169,11 +169,11 @@ export async function readChannelSessionRouteBySessionId(params: {
   context: PluginContext;
   session_id: string;
 }): Promise<ChannelContextRouteV1 | null> {
-  const rootPath = String(params.context.data_path || "").trim();
+  const rootPath = String(params.context.storage.path || "").trim();
   const session_id = toOptionalTrimmedString(params.session_id);
   if (!rootPath || !session_id) return null;
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
   });
   return normalizeRoute(file.routesBySessionId[session_id]);
 }
@@ -191,7 +191,7 @@ export async function listChannelSessionRoutes(params: {
   updated_at: number;
   routes: ChannelContextRouteV1[];
 }> {
-  const rootPath = String(params.context.data_path || "").trim();
+  const rootPath = String(params.context.storage.path || "").trim();
   if (!rootPath) {
     return {
       updated_at: Date.now(),
@@ -199,7 +199,7 @@ export async function listChannelSessionRoutes(params: {
     };
   }
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
   });
   const routes = Object.values(file.routesBySessionId)
     .map((route) => normalizeRoute(route))
@@ -218,12 +218,12 @@ export async function resolveChannelSessionIdByTarget(params: {
   context: PluginContext;
   target: ChannelContextTarget;
 }): Promise<string | null> {
-  const rootPath = String(params.context.data_path || "").trim();
+  const rootPath = String(params.context.storage.path || "").trim();
   if (!rootPath) return null;
   const targetKey = buildChannelTargetKey(params.target);
   if (!targetKey) return null;
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
   });
   const session_id = toOptionalTrimmedString(file.sessionIdByTargetKey[targetKey]);
   if (!session_id) return null;
@@ -237,7 +237,7 @@ export async function resolveOrCreateChannelSessionIdByTarget(params: {
   context: PluginContext;
   target: ChannelContextTarget;
 }): Promise<string | null> {
-  const rootPath = String(params.context.data_path || "").trim();
+  const rootPath = String(params.context.storage.path || "").trim();
   if (!rootPath) return null;
   const normalizedTarget = normalizeTarget(params.target);
   if (!normalizedTarget) return null;
@@ -245,7 +245,7 @@ export async function resolveOrCreateChannelSessionIdByTarget(params: {
   if (!targetKey) return null;
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
   });
   const existingSessionId = toOptionalTrimmedString(file.sessionIdByTargetKey[targetKey]);
   if (
@@ -271,8 +271,8 @@ export async function resolveOrCreateChannelSessionIdByTarget(params: {
   };
   file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.data_path),
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    dirPath: get_chat_channel_dir_path(params.context.storage.path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
     file,
   });
   return nextSessionId;
@@ -290,7 +290,7 @@ export async function upsertChannelSessionRouteBySessionId(params: {
   actorName?: string;
   chatTitle?: string;
 }): Promise<void> {
-  const rootPath = String(params.context.data_path || "").trim();
+  const rootPath = String(params.context.storage.path || "").trim();
   const session_id = toOptionalTrimmedString(params.session_id);
   const normalizedTarget = normalizeTarget(params.target);
   if (!rootPath || !session_id || !normalizedTarget) return;
@@ -298,7 +298,7 @@ export async function upsertChannelSessionRouteBySessionId(params: {
   if (!targetKey) return;
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
   });
   const prev = normalizeRoute(file.routesBySessionId[session_id]);
   const nextRoute: ChannelContextRouteV1 = {
@@ -337,8 +337,8 @@ export async function upsertChannelSessionRouteBySessionId(params: {
   file.sessionIdByTargetKey[targetKey] = session_id;
   file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.data_path),
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    dirPath: get_chat_channel_dir_path(params.context.storage.path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
     file,
   });
 }
@@ -357,7 +357,7 @@ export async function removeChannelSessionRouteBySessionId(params: {
   removed: boolean;
   route: ChannelContextRouteV1 | null;
 }> {
-  const rootPath = String(params.context.data_path || "").trim();
+  const rootPath = String(params.context.storage.path || "").trim();
   const session_id = toOptionalTrimmedString(params.session_id);
   if (!rootPath || !session_id) {
     return {
@@ -367,7 +367,7 @@ export async function removeChannelSessionRouteBySessionId(params: {
   }
 
   const file = await readMetaFile({
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
   });
   const route = normalizeRoute(file.routesBySessionId[session_id]);
   if (!route) {
@@ -388,8 +388,8 @@ export async function removeChannelSessionRouteBySessionId(params: {
 
   file.updated_at = Date.now();
   await writeMetaFile({
-    dirPath: get_chat_channel_dir_path(params.context.data_path),
-    filePath: get_chat_channel_meta_path(params.context.data_path),
+    dirPath: get_chat_channel_dir_path(params.context.storage.path),
+    filePath: get_chat_channel_meta_path(params.context.storage.path),
     file,
   });
   return {

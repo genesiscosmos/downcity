@@ -8,7 +8,7 @@
 
 import type { RuntimeTool as Tool } from "@downcity/type";
 import type { JsonObject } from "@/types/common/Json.js";
-import type { AgentPlugins } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 
 /**
@@ -66,7 +66,7 @@ export interface PluginReadToolResult {
 /** 创建当前 Agent 专属 Plugin Tools 的参数。 */
 export interface CreatePluginToolsOptions {
   /** 当前 Agent 自己的 Plugin 调用面；Tool 只能访问该 Registry。 */
-  plugins: AgentPlugins;
+  plugins: AgentPluginRuntime;
 }
 
 /** 当前 Agent 专属的 Plugin Tools。 */
@@ -81,7 +81,7 @@ export interface AgentPluginTools {
 /** 调用 plugin_call 运行时的显式依赖。 */
 export interface InvokePluginCallToolOptions {
   /** 当前 Agent 自己的 Plugin 调用面。 */
-  plugins: AgentPlugins;
+  plugins: AgentPluginRuntime;
 
   /** Executor 为当前 Tool Call 绑定的 Session Turn Context。 */
   turn_context: SessionTurnContext;
@@ -96,7 +96,7 @@ export interface InvokePluginCallToolOptions {
 /** 调用 plugin_read 运行时的显式依赖。 */
 export interface InvokePluginReadToolOptions {
   /** 当前 Agent 自己的 Plugin 调用面。 */
-  plugins: AgentPlugins;
+  plugins: AgentPluginRuntime;
 
   /** Executor 为当前 Tool Call 绑定的 Session Turn Context。 */
   turn_context: SessionTurnContext;

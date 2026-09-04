@@ -6,8 +6,8 @@
  * - 参数校验尽量前置到输入层，避免进入执行层后才发现字段非法。
  */
 
-import type { JsonValue } from "@downcity/agent";
-import type { PluginActionCommandInput } from "@downcity/agent";
+import type { PluginJsonValue } from "@downcity/plugin";
+import type { PluginActionCommandInput } from "@downcity/plugin";
 import type { ShipTaskKind, ShipTaskStatus } from "@/task/types/Task.js";
 import type {
   TaskCreateRequest,
@@ -18,7 +18,7 @@ import type {
 } from "@/task/types/TaskCommand.js";
 import type { TaskListActionPayload } from "@/task/types/TaskPluginTypes.js";
 
-function parseBooleanLike(value: JsonValue | undefined): boolean | undefined {
+function parseBooleanLike(value: PluginJsonValue | undefined): boolean | undefined {
   if (typeof value === "boolean") return value;
   if (typeof value !== "string") return undefined;
   const normalized = value.trim().toLowerCase();
@@ -29,7 +29,7 @@ function parseBooleanLike(value: JsonValue | undefined): boolean | undefined {
 }
 
 function getStringOpt(
-  opts: Record<string, JsonValue>,
+  opts: Record<string, PluginJsonValue>,
   key: string,
 ): string | undefined {
   const value = opts[key];
@@ -37,7 +37,7 @@ function getStringOpt(
 }
 
 function getBooleanOpt(
-  opts: Record<string, JsonValue>,
+  opts: Record<string, PluginJsonValue>,
   key: string,
 ): boolean | undefined {
   const value = opts[key];
@@ -45,7 +45,7 @@ function getBooleanOpt(
 }
 
 function getBooleanLikeOpt(
-  opts: Record<string, JsonValue>,
+  opts: Record<string, PluginJsonValue>,
   key: string,
 ): boolean | undefined {
   return parseBooleanLike(opts[key]);
@@ -68,14 +68,14 @@ function readTaskKindOrThrow(value?: string): ShipTaskKind | undefined {
 }
 
 function mapTaskListCommandInput(
-  opts: Record<string, JsonValue>,
+  opts: Record<string, PluginJsonValue>,
 ): TaskListActionPayload {
   const status = readTaskStatusOrThrow(getStringOpt(opts, "status"));
   return status ? { status } : {};
 }
 
 function mapTaskCreateCommandInput(
-  opts: Record<string, JsonValue>,
+  opts: Record<string, PluginJsonValue>,
 ): TaskCreateRequest {
   const title = String(getStringOpt(opts, "title") || "").trim();
   const description = String(getStringOpt(opts, "description") || "").trim();
@@ -108,7 +108,7 @@ function mapTaskCreateCommandInput(
 
 function mapTaskUpdateCommandInput(params: {
   title: string;
-  opts: Record<string, JsonValue>;
+  opts: Record<string, PluginJsonValue>;
 }): TaskUpdateRequest {
   const opts = params.opts;
   const kind = readTaskKindOrThrow(getStringOpt(opts, "kind"));

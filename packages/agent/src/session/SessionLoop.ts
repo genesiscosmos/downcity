@@ -718,8 +718,8 @@ export class SessionLoop {
     active_turn: ActiveSessionTurnState,
     status: SessionTurnCommittedHookValue["status"],
   ): Promise<void> {
-    const plugins = active_turn.turn_context?.step.plugins;
-    if (!plugins) return;
+    const extensions = active_turn.turn_context?.step.extensions;
+    if (!extensions) return;
     try {
       const messages = (await this.messages.list_history_messages())
         .filter((message) => message.turn_id === active_turn.turn_id)
@@ -730,7 +730,7 @@ export class SessionLoop {
         status,
         messages: messages as SessionMessage[],
       };
-      await plugins.effect(
+      await extensions.effect(
         SESSION_PLUGIN_POINTS.turn_committed,
         value as unknown as JsonValue,
       );

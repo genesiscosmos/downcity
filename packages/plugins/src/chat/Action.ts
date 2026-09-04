@@ -6,8 +6,8 @@
  * - Session 运行上下文由 action 入口显式传入
  */
 
-import type { PluginContext } from "@downcity/agent";
-import type { PluginExecutionContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginExecutionContext } from "@downcity/plugin";
 import {
   sendActionByChatKey,
   sendTextByChatKey,

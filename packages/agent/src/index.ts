@@ -57,11 +57,10 @@ export type {
   CityOptions,
   CityRuntimeOptions,
   CityWorkspaces,
-} from "./city/index.js";
-export type {
-  PluginHostContext,
-  PluginHostExtensions,
-  AgentPluginModule,
+  CityAgentPluginBinding,
+  CityAgentPluginOptions,
+  CityPluginHost,
+  CityPlugins,
 } from "./city/index.js";
 export {
   create_city_host_instance_id,
@@ -263,28 +262,7 @@ export type {
   AgentSessionCompactReason,
   AgentSessionCompactResult,
 } from "./types/sdk/AgentSessionCompact.js";
-export type { PluginContext } from "./types/plugin/PluginContext.js";
-export type { AgentPluginContext } from "./types/plugin/AgentPluginContext.js";
-export type {
-  PluginNotificationInput,
-  PluginNotificationPublisher,
-  PluginNotificationTopicInput,
-} from "./types/plugin/PluginNotification.js";
-export type {
-  PluginWebServices,
-} from "./types/plugin/PluginServices.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
-
-// Plugin 作者 API
-export { BasePlugin } from "./plugin/core/BasePlugin.js";
-export {
-  create_action,
-  create_plugin,
-} from "./plugin/core/PluginActionFactory.js";
-export type {
-  CreatePluginActionOptions,
-  CreatePluginOptions,
-} from "./plugin/core/PluginActionFactory.js";
 export type {
   ActionResult,
   ActionResultMessage,
@@ -327,8 +305,6 @@ export type {
   SessionTurnContextInit,
 } from "./types/executor/SessionTurnContext.js";
 export type { SessionToolExecutionContext } from "./types/executor/SessionToolExecutionContext.js";
-export type { PluginExecutionContext } from "./types/plugin/PluginExecutionContext.js";
-export type { PluginActionExecutionContext } from "./types/plugin/PluginActionExecution.js";
 export type {
   ToolActionExecutionContext,
   ToolSessionExecutionScope,
@@ -340,22 +316,6 @@ export type {
 } from "./types/session/SessionAction.js";
 export type { SessionSystemMessage } from "./executor/types/SessionPrompts.js";
 export { transform_prompts_into_system_messages } from "./executor/composer/system/default/PromptRenderer.js";
-// 通用 plugin 宿主工具
-export {
-  build_static_plugin_availability,
-  find_plugin_by_name,
-  has_plugin_lifecycle,
-  list_plugin_views,
-  list_plugins_with_lifecycle,
-  list_plugins_without_lifecycle,
-  resolve_plugin_availability,
-  to_plugin_view,
-} from "./plugin/core/PluginCatalog.js";
-export {
-  list_plugin_auth_policies,
-  register_plugin_http_routes,
-} from "./plugin/core/PluginHttpRoutes.js";
-
 // Runtime plugin 调度集成
 export { ActionScheduleStore } from "./plugin/core/ActionScheduleStore.js";
 export { parse_action_schedule_run_at_ms_or_throw } from "./plugin/core/ActionScheduleTime.js";
@@ -388,38 +348,18 @@ export {
 // JSON 基础类型
 export type { JsonObject, JsonPrimitive, JsonValue } from "./types/common/Json.js";
 
-// Plugin 作者与控制面类型
+// Plugin 运行时控制面类型
 export type {
-  PluginAction,
-  PluginActionApi,
-  PluginActionCommand,
-  PluginActionCommandInput,
-  PluginActionExample,
-  PluginActionInputSchema,
   PluginActionMetadata,
-  PluginActionResult,
-  PluginActions,
   PluginActionInvokeParams,
   PluginActionInvokePort,
   PluginActionInvokeResult,
 } from "./types/plugin/PluginAction.js";
-export type { Plugin } from "./types/plugin/PluginDefinition.js";
-export type { PluginLifecycle } from "./types/plugin/PluginCommand.js";
 export type {
-  AgentPlugins,
+  AgentPluginRuntime,
   PluginAvailability,
-  PluginEffectHook,
-  PluginGuardHook,
-  PluginHooks,
-  PluginPipelineHook,
-  PluginResolves,
-  PluginResolveHook,
   PluginView,
 } from "./types/plugin/PluginRuntime.js";
-export type {
-  PluginHttpDefinition,
-  PluginHttpRegistration,
-} from "./types/plugin/PluginHttp.js";
 export type {
   PluginActionResponse,
   PluginCatalogResponse,

@@ -24,7 +24,7 @@ import type {
 
 /** City 导出的全部内建 Plugin ID。 */
 export const BUILTIN_PLUGIN_IDS = Object.freeze(
-  create_cli_builtin_plugin_registrations().map((registration) => registration.definition.id),
+  create_cli_builtin_plugin_registrations().map((registration) => registration.id),
 );
 
 /** 规范化 Plugin 稳定 ID。 */

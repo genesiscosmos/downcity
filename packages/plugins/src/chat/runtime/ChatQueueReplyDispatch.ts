@@ -6,8 +6,8 @@
  * - ChatQueueWorker 主类只保留“何时分发”的决策，不再承载具体发消息细节。
  */
 
-import type { Logger } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
 import { parseDirectDispatchAssistantText } from "./DirectDispatchParser.js";
 import { sendActionByChatKey } from "./ChatkeySend.js";
 import { sendChatTextByChatKey } from "../Action.js";
@@ -21,7 +21,7 @@ import {
  * 把 assistant 纯文本直接投递到 chat。
  */
 export async function dispatchAssistantTextDirect(params: {
-  logger: Logger;
+  logger: PluginLogger;
   context: PluginContext;
   session_id: string;
   assistantText: string;
@@ -122,7 +122,7 @@ export async function dispatchAssistantTextDirect(params: {
  * 强制把文本回发到 channel。
  */
 export async function dispatchTextToChannel(params: {
-  logger: Logger;
+  logger: PluginLogger;
   context: PluginContext;
   session_id: string;
   text: string;

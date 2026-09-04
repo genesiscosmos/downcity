@@ -19,10 +19,9 @@ That makes it a classic `resolve` case.
 
 ```ts
 import {
-  Agent,
   BasePlugin,
   type PluginResolveHook,
-} from "@downcity/agent";
+} from "@downcity/plugin";
 
 class RoleResolverPlugin extends BasePlugin {
   readonly name = "role_resolver";
@@ -44,13 +43,8 @@ class RoleResolverPlugin extends BasePlugin {
   };
 }
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new RoleResolverPlugin()],
-});
-
-const role = await agent.plugins.resolve<{ userId: string }, string>(
+// City has registered role_resolver and bound it to entry's Agent/Workspace.
+const role = await entry.plugins.resolve<{ userId: string }, string>(
   "auth.resolve_role",
   { userId: "owner" },
 );

@@ -7,7 +7,7 @@
  * - `FeishuBot` 只调用这里暴露的平台能力，不再直接持有底层 Feishu 连接细节。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type {
   FeishuConfig,
   FeishuDownloadedAttachment,
@@ -79,8 +79,8 @@ export class FeishuPlatformClient {
 
   constructor(options: FeishuPlatformClientOptions) {
     this.context = options.context;
-    this.rootPath = options.context.workspace_path;
-    this.dataPath = options.context.data_path;
+    this.rootPath = options.context.workspace.path;
+    this.dataPath = options.context.storage.path;
     this.logger = options.context.logger;
     this.appId = options.config.appId;
     this.appSecret = options.config.appSecret;

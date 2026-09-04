@@ -5,7 +5,7 @@ description: Long-term memory with City-wide sharing and Agent-private knowledge
 
 # `memory` Plugin
 
-`memory` gives Agents long-term memory. Storage, access control, recall, and context assembly all remain inside `MemoryPlugin`; City only supplies the shared Memory root.
+`memory` gives multiple Agents long-term memory. City owns the shared Plugin instance and allocates its private storage root; access control, recall, and context assembly remain inside `MemoryPlugin`.
 
 ## Memory scopes
 
@@ -44,25 +44,23 @@ Explicit memory writes require a bounded semantic target:
 
 ## Storage
 
-The built-in City assembly uses two independent roots:
+The built-in City assembly allocates one root for a Memory Plugin/Profile. The Provider separates City, Agent, User, and Workspace logical scopes inside it:
 
 ```text
-~/.downcity/agents/<agent_id>/plugins/memory/  # Agent-private Memory
-~/.downcity/memory/                            # City-shared Memory
+<city-storage>/plugins/memory/<profile_id>/
 ```
 
 Raw `user_id`, `workspace_id`, and `agent_id` values are encoded as safe path segments. Multiple Agents can use the same City root while User and Workspace subjects remain isolated.
 
-Direct SDK use can provide both roots explicitly:
+A custom registration receives its storage path from City:
 
 ```ts
-const memory = new MemoryPlugin({
-  agent_root_path: "/absolute/path/to/agent-memory",
-  city_root_path: "/absolute/path/to/city-memory",
+create: ({ storage }) => new MemoryPlugin({
+  storage_root_path: storage.path,
 });
 ```
 
-Omit `city_root_path` to enable Agent Memory only.
+Do not derive Memory paths from Agent Session directories; physical layout belongs to City and the Provider.
 
 ## Related docs
 

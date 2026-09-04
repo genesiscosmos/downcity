@@ -7,7 +7,7 @@
  */
 
 import type { RawData } from "ws";
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 import type { QQGatewayPayload, QqGatewayRuntimeStatus } from "@/chat/channels/qq/types/QqChannel.js";
 import type {
   QqGatewayHeartbeatState,
@@ -140,15 +140,15 @@ export function parseQqGatewayPayload(rawData: RawData): QQGatewayPayload | null
         : typeof rawData === "string"
           ? rawData
           : Buffer.from(rawData).toString("utf-8");
-    const parsed = JSON.parse(text) as JsonValue;
+    const parsed = JSON.parse(text) as PluginJsonValue;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const obj = parsed as JsonObject;
+    const obj = parsed as PluginJsonObject;
     const op = typeof obj.op === "number" ? obj.op : Number(obj.op);
     if (!Number.isFinite(op)) return null;
     return {
       op,
       ...(obj.d && typeof obj.d === "object" && !Array.isArray(obj.d)
-        ? { d: obj.d as JsonObject }
+        ? { d: obj.d as PluginJsonObject }
         : {}),
       ...(typeof obj.s === "number" ? { s: obj.s } : {}),
       ...(typeof obj.t === "string" ? { t: obj.t } : {}),

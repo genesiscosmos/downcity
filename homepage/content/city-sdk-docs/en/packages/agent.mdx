@@ -1,11 +1,12 @@
 ---
 title: "@downcity/agent"
-description: "Single-Agent runtime, AgentSessions, Session, Plugin SDK, and RemoteAgent."
+description: "Agent, AgentSessions, Session, execution runtime, and RemoteAgent."
 ---
 
-`@downcity/agent` provides the single-Agent execution surface. It owns Agent, AgentSessions,
-Session, Plugin SDK, and RemoteAgent. Workspace resources are provided by
-`@downcity/workspace`; this package does not own a multi-Agent host or network server.
+`@downcity/agent` provides Agent, AgentSessions, Session, the execution runtime, RemoteAgent, and
+City. Agents do not own Plugins. City owns the Plugin catalog, shared instances, and lifecycle;
+Plugin author contracts live in `@downcity/plugin`. Workspace resources come from
+`@downcity/workspace`.
 
 ```ts
 const city = new City({ workspaces: [workspace] });
@@ -16,8 +17,8 @@ const turn = await session.prompt({ query: "Hello" });
 const result = await turn.finished;
 ```
 
-Use `@downcity/agent` when a CLI, Desktop application, or Node process needs to own multiple
-Agent instances, restore local configuration, or expose HTTP/RPC transports.
+Provide Plugin modules through `CityOptions.plugins` or `city.plugins.provide()` before use.
+`city.agents.add()` declares only `plugin_id` and an optional Profile binding.
 
 ## Read file changes for each turn
 

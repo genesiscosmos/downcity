@@ -7,7 +7,7 @@
  * - 本模块不处理配置持久化，也不负责 action 输入输出包装。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type { ChatChannelState } from "@/chat/types/ChatRuntime.js";
 import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 import { createTelegramBot } from "@/chat/channels/telegram/Bot.js";

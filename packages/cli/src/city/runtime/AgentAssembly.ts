@@ -5,7 +5,6 @@
  * 只接收已经创建完成的 Agent，不参与任何装配决策。
  */
 
-import path from "node:path";
 import {
   LocalPluginLoader,
   type LocalAgentConfig,
@@ -13,7 +12,12 @@ import {
   type PluginRepository,
   type LocalPluginRegistration,
 } from "@downcity/local/product";
-import { Agent, get_logger, type AgentModel, type AgentOptions } from "@downcity/agent";
+import {
+  Agent,
+  type AgentModel,
+  type AgentOptions,
+  type CityAgentPluginBinding,
+} from "@downcity/agent";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/workspace";
 import {
@@ -48,36 +52,24 @@ export async function create_cli_agent(input: {
   plugin_loader: LocalPluginLoader;
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
-}): Promise<Agent> {
-  const root_path = resolve_local_root_path(input.root_path);
+}): Promise<{ /** 已创建但尚未加入 City 的 Agent。 */ agent: Agent; /** 交由 City 解释的 Plugin 绑定。 */ plugins: CityAgentPluginBinding[] }> {
+  resolve_local_root_path(input.root_path);
   const [model, plugins, tools] = await Promise.all([
     Promise.resolve(create_cli_agent_model(input.config, process_environment())),
-    input.plugin_loader.create_plugins(input.config, ({ plugin_id, profile }) => ({
-      plugin_id,
-      profile,
-      data_path: path.join(
-        root_path,
-        "agents",
-        input.config.agent_id,
-        "plugins",
-        plugin_id,
-      ),
-      logger: get_logger(),
-      extensions: {
-        city_memory_root_path: path.join(root_path, "memory"),
-      },
-    })),
+    input.plugin_loader.create_bindings(input.config),
     Promise.resolve(create_cli_agent_tools()),
   ]);
-  return new Agent({
-    id: input.config.agent_id,
-    name: input.config.name,
-    description: input.config.description,
-    instruction: input.config.instruction,
-    model,
+  return {
+    agent: new Agent({
+      id: input.config.agent_id,
+      name: input.config.name,
+      description: input.config.description,
+      instruction: input.config.instruction,
+      model,
+      tools,
+    }),
     plugins,
-    tools,
-  });
+  };
 }
 
 /** 创建 CLI 当前 Agent 独享的 Workspace、Shell 与 Sandbox。 */

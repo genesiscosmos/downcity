@@ -17,19 +17,24 @@ import { SoundPlugin } from "../bin/index.js";
 
 function create_sound_plugin(options = {}) {
   const { list_models, asr, tts, ...profile } = options;
-  return new SoundPlugin({
-    ...profile,
-    sound_ai: {
-      catalog: async () => ({ all: () => (list_models ? list_models() : []) }),
-      asr,
-      tts,
-    },
-  });
+  const plugin = new SoundPlugin(profile);
+  plugin.test_sound_ai = {
+    catalog: async () => ({ all: () => (list_models ? list_models() : []) }),
+    asr,
+    tts,
+  };
+  return plugin;
 }
 
-function create_context(root_path) {
+function create_context(root_path, plugin) {
   return {
-    workspace_path: root_path,
+    city: { embassy: { user: { ai: plugin.test_sound_ai } }, plugins: {} },
+    agent: { id: "sound-test-agent", name: "sound-test-agent", description: "", instructions: [], sessions: {} },
+    workspace: { id: "sound-test-workspace", path: root_path, files: {}, env: {} },
+    profile: { id: "default", config: {} },
+    storage: { path: root_path, files: {} },
+    logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
+    abort_signal: new AbortController().signal,
   };
 }
 
@@ -68,7 +73,7 @@ test("sound.models 只返回 FED 中支持 ASR 或 TTS 的模型", async () => {
     asr: async () => ({ text: "ok" }),
     tts: async () => create_tts_message(),
   });
-  const context = create_context(process.cwd());
+  const context = create_context(process.cwd(), plugin);
 
   const all_result = await run_action(plugin, "models", context, {});
   assert.equal(all_result.success, true);
@@ -106,7 +111,7 @@ test("sound.asr 把本地音频转为 data URL 后直接调用 FED", async () =>
     const result = await run_action(
       plugin,
       "asr",
-      create_context(root_path),
+      create_context(root_path, plugin),
       { audio_path: "./voice.wav" },
     );
     assert.equal(result.success, true);
@@ -144,7 +149,7 @@ test("sound.tts 使用默认参数并返回 AI SDK UIMessage", async () => {
   const result = await run_action(
     plugin,
     "tts",
-    create_context(process.cwd()),
+    create_context(process.cwd(), plugin),
     { text: " 你好 " },
   );
   assert.equal(result.success, true);
@@ -156,10 +161,7 @@ test("sound.tts 使用默认参数并返回 AI SDK UIMessage", async () => {
     format: "mp3",
   });
   assert.equal("data" in result, false);
-  assert.deepEqual(result.messages, [{
-    role: "assistant",
-    parts: message.parts,
-  }]);
+  assert.deepEqual(result.messages, [message]);
 });
 
 test("sound action 不会隐式选择模型或接受非 UIMessage TTS 结果", async () => {
@@ -167,7 +169,7 @@ test("sound action 不会隐式选择模型或接受非 UIMessage TTS 结果", a
     asr: async () => ({ text: "ok" }),
     tts: async () => ({ url: "https://example.com/speech.mp3" }),
   });
-  const context = create_context(process.cwd());
+  const context = create_context(process.cwd(), plugin);
 
   const asr_result = await run_action(plugin, "asr", context, {
     url: "https://example.com/input.mp3",
@@ -180,7 +182,7 @@ test("sound action 不会隐式选择模型或接受非 UIMessage TTS 结果", a
     text: "hello",
   });
   assert.equal(tts_result.success, false);
-  assert.match(tts_result.error, /must return an AI SDK UIMessage/);
+  assert.match(tts_result.error, /must return a Downcity Session message/);
 });
 
 test("sound.asr 只接受一种音频来源", async () => {
@@ -188,7 +190,7 @@ test("sound.asr 只接受一种音频来源", async () => {
     asr: async () => ({ text: "ok" }),
     tts: async () => create_tts_message(),
   });
-  const result = await run_action(plugin, "asr", create_context(process.cwd()), {
+  const result = await run_action(plugin, "asr", create_context(process.cwd(), plugin), {
     model: "fed-asr",
     url: "https://example.com/input.mp3",
     data_url: "data:audio/mpeg;base64,dGVzdA==",
@@ -206,7 +208,7 @@ test("sound.tts 要求 UIMessage 包含音频 file part", async () => {
       parts: [{ type: "text", text: "not audio" }],
     }),
   });
-  const result = await run_action(plugin, "tts", create_context(process.cwd()), {
+  const result = await run_action(plugin, "tts", create_context(process.cwd(), plugin), {
     model: "fed-tts",
     text: "hello",
   });
@@ -239,7 +241,7 @@ test("auto_asr 把 chat 语音附件转写追加到正文", async () => {
   try {
     const hook = Object.values(plugin.hooks.pipeline)[0][0];
     const result = await hook({
-      context: create_context(root_path),
+      context: create_context(root_path, plugin),
       value: {
         channel: "telegram",
         chatId: "chat-1",

@@ -7,6 +7,9 @@ export {
   initialize_agent_runtime,
   attach_agent_city,
   attach_agent_storage,
+  attach_agent_city_extensions,
+  attach_agent_session_extensions,
+  ensure_agent_extensions_ready,
   detach_agent_city,
   agent_is_in_city,
   agent_embassy,
@@ -21,7 +24,6 @@ export {
   release_workspace_entry,
   clear_agent_runtime,
   dispose_agent_runtime,
-  ensure_agent_action_schedule,
 } from "@/internal/AgentRuntime.js";
 export {
   initialize_group_runtime,

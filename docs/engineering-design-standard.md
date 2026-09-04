@@ -47,7 +47,8 @@ Downcity 的工程目标不是追求最多的抽象、最强的限制或最通�
 每个能力都必须先用一句话说明它解决的真实问题。例如：
 
 - Workspace 回答“这个 Agent 可以使用哪些项目资源”。
-- Agent 回答“如何组织模型、工具、Plugin 和 Session”。
+- Agent 回答“一个主体如何组织身份、模型、指令、工具和 Session”。
+- City 回答“多个主体、Workspace、Plugin 与宿主资源如何被统一持有和释放”。
 - Session 回答“连续对话如何排队、执行、持久化和恢复”。
 - Shell 回答“命令和进程如何执行”。
 - Sandbox Adapter 回答“如何在当前操作系统落实进程隔离”。
@@ -112,7 +113,9 @@ Downcity 的工程目标不是追求最多的抽象、最强的限制或最通�
 ```text
 Workspace = ResourceId + Capabilities + Env + Shell?
 
-Agent = Identity + Model + Instruction + Plugins
+Agent = Identity + Model + Instruction + Tools + Sessions
+
+City = Agents + Workspaces + Plugins + Storage + Transports
 
 SessionContext = Workspace resources + tools + env + Plugin execution view
 
@@ -145,7 +148,7 @@ Shell = Command/Process Protocol + Sandbox Adapter
 
 - SessionMessages 是会话消息的 canonical source。
 - Workspace 持有 Workspace env，Agent 不复制另一份 env。
-- PluginRegistry 持有已注册 Plugin，Agent 只组合和暴露。
+- City Plugin Runtime 持有已注册 Plugin、生命周期与 execution lease，Agent 不复制 Plugin 状态。
 - SessionStore 基于 City 提供的 AgentStorage 私有 FileSystem 实现持久化，不写入项目目录。
 - 运行中状态通过事件或 getter 投影，不能在 Context 中复制后长期漂移。
 
@@ -219,7 +222,6 @@ Agent 持有：
 - 稳定身份。
 - 模型和 instruction。
 - Agent 级自定义工具。
-- 唯一 PluginRegistry。
 - Agent 自身长期运行状态。
 
 Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集合；Workspace 通过 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 注入单个 Session。运行时可以存在内部装配对象，但它不拥有 Session，也不属于公开领域 API。
@@ -230,7 +232,7 @@ Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集�
 ~/.downcity/agents/<agent_id>/
 ```
 
-该目录包含 Agent 的 Session、日志和 Schedule。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。运行时 Plugin 的 `data_path` 指向当前 Plugin 的 Agent 级目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的 City 级 profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`。
+该目录包含 Agent 的 Session、日志和 Schedule。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。执行期 `PluginContext.storage.path/files` 指向当前 Agent/Plugin 的私有目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的 City 级 profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`；Profile 共享实例的 lifecycle storage 由 City 另行分配。
 
 Agent 不负责：
 
@@ -238,6 +240,7 @@ Agent 不负责：
 - 管理全局 Agent registry。
 - 管理 daemon、HTTP/RPC Server 生命周期。
 - 持有 City 控制面配置。
+- 持有 Plugin 实例、Registry 或 Plugin 生命周期。
 - 暴露 Plugin 专用内部上下文给宿主。
 
 宿主依赖 Agent facade；PluginContext 只用于向 Plugin 投影最小且稳定的执行能力。
@@ -278,15 +281,14 @@ Workspace 是 GroupSession 的执行资源，随后由成员 AgentSession 使用
 
 ### 4.5 Plugin 是唯一扩展产品单元
 
-Plugin 可以独立提供三类可选能力：
+Plugin 可以独立提供两类可选能力：
 
-- `agent`：默认导出 Agent Plugin factory，为每个 Agent 创建独享的运行实例。
-- `main`：默认导出宿主管理生命周期对象，注册 Plugin 自己的管理 actions。
+- `main`：统一导出 City Plugin factory、生命周期与宿主管理 actions。
 - `renderer`：单文件 React ESM，默认导出三个固定插槽中的可选组合：成对出现的 `sidebar + mainview` 业务工作区，以及独立的 `config` 配置界面。
 
-三类能力属于同一个 Plugin ID，不再引入 Extension 身份或 contributions DSL。Sidebar + Mainview 与 Config 是语义固定、彼此分离的产品界面，不构成任意扩展点系统。SDK 用户也可以不经过安装协议，直接创建 Plugin 实例并传入 Agent。
+这些能力属于同一个 Plugin ID，不再引入 Agent Plugin 身份或 contributions DSL。Sidebar + Mainview 与 Config 是语义固定、彼此分离的产品界面，不构成任意扩展点系统。SDK 用户也可以不经过安装协议，直接把 Plugin 模块交给 City。
 
-Agent Plugin 实例可以提供：
+Plugin 执行实例可以提供：
 
 - Tool Action。
 - Hook。
@@ -294,11 +296,13 @@ Agent Plugin 实例可以提供：
 - Lifecycle。
 - HTTP Route 描述。
 
-Plugin 通过 PluginContext 使用 Agent 内核允许的能力。PluginContext 是内部能力投影，不是宿主控制面，也不是 Agent 全量状态容器。
+Plugin 通过 PluginContext 使用 City 允许的能力。PluginContext 提供受限的 City、Agent、Workspace、Session 与 Turn 句柄；ID 用于稳定身份和序列化，对象句柄用于进程内直接通信。PluginContext 不是宿主控制面，也不是 Agent 或 City 的全量状态容器。
 
-所有 Plugin 都由 Agent 注册。Action、Hook、System、Availability 调用始终获得当前 Workspace 与当前 Plugin 的 PluginContext；其中 `data_path/data_files` 固定指向 Agent/Plugin 运行时目录，Workspace 文件、Shell、env 等能力仍来自当前 Workspace。框架不定义 workspace plugin、scope 或 requirements。
+所有 Plugin 都必须先通过 `city.plugins.provide(registration)` 或 `CityOptions.plugins` 登记。Agent 配置与 `city.agents.add()` 只声明 `plugin_id`/Profile 绑定，City 解释绑定并向 Session 投影中性的 system、pipeline、effect 与 execution lease 端口。Action、Hook、System、Availability 调用始终获得当前执行范围与当前 Plugin 的 PluginContext；Plugin 私有存储由 City 分配，Workspace 文件、Shell、env 等能力来自当前 Workspace。
 
-Plugin 生命周期分为 Agent 级 `start/stop` 和可选的 Workspace 级 `enter_workspace/leave_workspace`。实现哪些钩子由 Plugin 自己决定，不构成 Plugin 分类。
+Plugin 生命周期由 City 启动和停止：`start/stop` 属于 `(plugin_id, profile_id)` 共享实例，`bind/unbind` 属于 Agent/Workspace 执行作用域。City 在首个引用建立时调用 `start`，进入 Workspace 时调用 `bind`，离开 Workspace 或解除绑定时调用 `unbind`，最后一个 Agent 引用和 execution lease 释放后调用 `stop`。一次 Session Step 捕获不可变 execution lease；解绑后新 Step 立即不可见，旧 Step 释放最后一个 lease 后才能停止相关资源。长期连接、Timer、Schedule 与后台 Worker 必须随对应生命周期闭合。
+
+同一个 Chat Profile 只允许一组渠道连接和队列。需要在多个 Agent/Workspace 中登记同一 Profile 时，必须通过 `owner_agent_id` 与 `owner_workspace_id` 显式指定唯一消费作用域；未指定 Owner 的 Profile 绑定到第二个不同作用域时必须失败，不能按启动顺序隐式选择。
 
 Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile。宿主的 Plugins 导航始终列出完整 Plugin Catalog；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用 main，不要求 Profile。Config 只在 Plugin Catalog 详情出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。业务能力仍必须通过 Plugin main action 暴露。
 
@@ -312,14 +316,14 @@ Plugin main 每个 Plugin 在宿主中只激活一次，不绑定某个 Profile�
 Plugin 以全局稳定 ID 为身份，定义与 City 级配置保存在 `~/.downcity/plugins/<plugin_id>/`：
 
 - `config.toml`：Plugin 自己拥有的明文 profile 配置，目录权限为 `0700`、文件权限为 `0600`。
-- `plugin.json`：仅第三方 Plugin 使用，是静态定义、必填 `readme` 路径、图标地址、可选 `agent`、`main`、`renderer` 入口与安装来源信息的唯一事实源。
+- `plugin.json`：仅第三方 Plugin 使用，是静态定义、必填 `readme` 路径、图标地址、可选 `main`、`renderer` 入口与安装来源信息的唯一事实源。
 - `package.json`：仅第三方 Plugin 使用，声明 `"type": "module"` 并建立明确的 ESM package 边界。
 - README：第三方 Plugin 通过 `plugin.json.readme` 声明 Plugin 根目录内的必需 `.md` 用户文档；内置 Plugin 使用 package 随附的 `<plugin_id>.readme.md` 独立资产。两者都由宿主读取文件，不在 TypeScript 定义中保存正文。
-- 单文件入口与本地图标：安装清单声明的 `agent`、`main`、`renderer` 文件，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。三个运行入口都必须是 `.js` 或 `.mjs`；Renderer bundle 必须保持 React 与 `react/jsx-runtime` 为宿主外部依赖。
+- 单文件入口与本地图标：安装清单声明的 `main`、`renderer` 文件，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。运行入口必须是 `.js` 或 `.mjs`；Renderer bundle 必须保持 React 与 `react/jsx-runtime` 为宿主外部依赖。
 
-`config.toml` 是所有 Agent 共享的 Plugin 配置源；Agent 只保存 profile 引用。Plugin 运行时状态、缓存和私有文件使用 `PluginContext.data_path`，由宿主按 Agent/Plugin 隔离，不按 Workspace 复制。
+`config.toml` 是所有 Agent 共享的 Plugin 配置源；Agent 只保存 profile 引用。执行期 Plugin 状态、缓存和私有文件使用 `PluginContext.storage.path/files`，由 City 按 Agent/Plugin 隔离，不按 Workspace 复制；共享 Profile 资源使用 `PluginLifecycleContext.storage`。
 
-Agent 通过 `agent.json` 选择具有 `agent` 能力的 Plugin；只有该 Plugin 声明 Config 时才额外保存 Profile 引用。Agent 不保存渠道、账号、端点或 Token。Profile 只是宿主在某个 Plugin 下提供的命名配置隔离空间，与 Plugin 的功能工作区无关；CRUD 由宿主统一提供，内容结构、校验、凭据投影和编辑 UI 由 Plugin main 与 Config 自己管理。Profile 值必须是 TOML 可表达的 JSON object。框架不定义 Binding、Resource 或 Installation 持久化领域，也不通过通用 Schema 猜测业务配置。内置 Plugin 由宿主注册；第三方 `agent` 入口默认导出 factory，每次为一个 Agent 创建新的 Plugin 实例，Plugin Class 的 constructor 参数完全由作者决定。
+Agent 通过 `agent.json` 选择 City 已登记的 Plugin；只有该 Plugin 声明 Config 时才额外保存 Profile 引用。Agent 不保存渠道、账号、端点或 Token。Profile 是 Plugin 下的命名配置与长期资源隔离空间；同一 Plugin/Profile 在一个 City 中只有一个运行实例和一组长期连接，多个 Agent 只建立绑定。CRUD 由宿主统一提供，内容结构、校验、凭据投影和编辑 UI 由 Plugin main 与 Config 自己管理。Profile 值必须是 TOML 可表达的 JSON object。内置 Plugin 由宿主登记；第三方 `main` 入口默认导出统一 City Plugin 模块。
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 
@@ -492,7 +496,7 @@ City 提供项目外的 Storage（默认 MemoryStorage）
   → MessageStore 定义消息提交与恢复语义
 ```
 
-Store 只能使用 City Storage，不能使用项目 FileSystem。项目 Tool 不能读取或修改 Session、instruction、日志和 Plugin 私有状态；需要内部持久化能力的 Plugin 使用 Agent 分配的 `data_path` 或 `data_files`。
+Store 只能使用 City Storage，不能使用项目 FileSystem。项目 Tool 不能读取或修改 Session、instruction、日志和 Plugin 私有状态；需要内部持久化能力的 Plugin 使用 City 分配的私有 `storage` 端口。
 
 ### 8.2 持久化必须服务于恢复
 
@@ -525,7 +529,7 @@ Store 只能使用 City Storage，不能使用项目 FileSystem。项目 Tool �
 
 - 模型 Provider 错误由 Executor/恢复策略处理。
 - Message 写入失败由 SessionMessages 暴露并阻止伪完成。
-- Plugin lifecycle 失败由 Agent 内部运行时隔离和记录。
+- Plugin lifecycle 失败由 City Plugin Runtime 隔离和记录。
 - Shell/Sandbox 启动失败由 Shell 返回明确错误，不能静默降级为 unrestricted。
 - daemon 身份不一致由 CLI 拒绝终止进程。
 

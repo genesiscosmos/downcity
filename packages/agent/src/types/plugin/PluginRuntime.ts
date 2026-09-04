@@ -88,24 +88,8 @@ export interface PluginAvailability {
   reasons: string[];
 }
 
-/**
- * 当前 Agent 可用的 plugin 调用面。
- */
-export interface AgentPlugins {
-  /** 注册或替换一个 plugin。 */
-  register(plugin: Plugin): Promise<PluginSnapshot>;
-  /**
-   * 从 configured registry 卸载一个 plugin。
-   *
-   * 关键点（中文）
-   * - 返回值表示 configured registry 是否发生删除。
-   * - 活跃 Session step 仍可使用已捕获的 execution lease，lifecycle.stop 在 lease 释放后执行。
-   */
-  unregister(plugin_name: string): Promise<boolean>;
-  /** 启动全部已挂载 plugin lifecycle。 */
-  start_all(): Promise<PluginSnapshot[]>;
-  /** 卸载全部 plugin，并等待所有 execution lease 释放后的 lifecycle.stop 完成。 */
-  unregister_all(): Promise<void>;
+/** 当前 Agent/Workspace 可用的只读 Plugin 调用面。 */
+export interface AgentPluginRuntime {
   /** 判断 plugin 是否已注册。 */
   has(plugin_name: string): boolean;
   /** 读取单个 plugin 定义。 */
@@ -154,6 +138,18 @@ export interface AgentPlugins {
     value: TInput,
   ): Promise<TOutput>;
 
+}
+
+/** City 内部 Registry 的变更能力；不会投影给 Workspace 或 PluginContext。 */
+export interface AgentPlugins extends AgentPluginRuntime {
+  /** 注册或替换一个 Plugin 执行投影。 */
+  register(plugin: Plugin): Promise<PluginSnapshot>;
+  /** 立即移除新执行可见性，并等待已有 lease 在内部退休。 */
+  unregister(plugin_name: string): Promise<boolean>;
+  /** 启动 Registry 构造期挂载的全部 Plugin。 */
+  start_all(): Promise<PluginSnapshot[]>;
+  /** 移除全部 Plugin，并等待已有 execution lease 释放。 */
+  unregister_all(): Promise<void>;
 }
 
 /**
@@ -222,77 +218,11 @@ export interface AgentPluginExecutionRuntime extends AgentPluginExecutionView {
   acquire(): AgentPluginExecutionLease;
 }
 
-/**
- * Plugin pipeline 处理器。
- */
-export type PluginPipelineHook<
-  TValue extends JsonValue = JsonValue,
-> = (params: {
-  /** 当前执行上下文。 */
-  context: PluginContext;
-  /** 当前值。 */
-  value: TValue;
-  /** 当前插件名称。 */
-  plugin: string;
-}) => Promise<TValue> | TValue;
-
-/**
- * Plugin guard 处理器。
- *
- * 关键点（中文）
- * - 不返回结果；若需阻断流程，直接抛错。
- */
-export type PluginGuardHook<TValue extends JsonValue = JsonValue> = (params: {
-  /** 当前执行上下文。 */
-  context: PluginContext;
-  /** 当前值。 */
-  value: TValue;
-  /** 当前插件名称。 */
-  plugin: string;
-}) => Promise<void> | void;
-
-/**
- * Plugin effect 处理器。
- */
-export type PluginEffectHook<TValue extends JsonValue = JsonValue> = (params: {
-  /** 当前执行上下文。 */
-  context: PluginContext;
-  /** 当前值。 */
-  value: TValue;
-  /** 当前插件名称。 */
-  plugin: string;
-}) => Promise<void> | void;
-
-/**
- * Plugin resolve 处理器。
- */
-export type PluginResolveHook<
-  TInput extends JsonValue = JsonValue,
-  TOutput extends JsonValue = JsonValue,
-> = (params: {
-  /** 当前执行上下文。 */
-  context: PluginContext;
-  /** 当前输入值。 */
-  value: TInput;
-  /** 当前插件名称。 */
-  plugin: string;
-}) => Promise<TOutput> | TOutput;
-
-/**
- * Plugin Hook 定义集合。
- */
-export interface PluginHooks {
-  /** pipeline 点映射。 */
-  pipeline?: Record<string, PluginPipelineHook<JsonValue>[]>;
-  /** guard 点映射。 */
-  guard?: Record<string, PluginGuardHook<JsonValue>[]>;
-  /** effect 点映射。 */
-  effect?: Record<string, PluginEffectHook<JsonValue>[]>;
-}
-
-/**
- * Plugin resolve 点集合。
- */
-export type PluginResolves = {
-  [point_name: string]: PluginResolveHook<JsonValue, JsonValue>;
-};
+export type {
+  PluginEffectHook,
+  PluginGuardHook,
+  PluginHooks,
+  PluginPipelineHook,
+  PluginResolveHook,
+  PluginResolves,
+} from "@downcity/plugin";

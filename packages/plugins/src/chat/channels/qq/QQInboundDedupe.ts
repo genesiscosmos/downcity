@@ -9,14 +9,14 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import type { QqInboundDedupeSnapshotV1 } from "@/chat/types/QqInboundDedupe.js";
 
 /**
  * QqInboundDedupeStore：QQ 入站消息去重存储器。
  */
 export class QqInboundDedupeStore {
-  private readonly logger: Logger;
+  private readonly logger: PluginLogger;
   private readonly filePath: string;
   private readonly maxEntries: number;
   private readonly ids: Set<string> = new Set();
@@ -24,7 +24,7 @@ export class QqInboundDedupeStore {
 
   constructor(params: {
     dataPath: string;
-    logger: Logger;
+    logger: PluginLogger;
     maxEntries?: number;
   }) {
     this.logger = params.logger;

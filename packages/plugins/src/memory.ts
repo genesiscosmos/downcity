@@ -24,7 +24,6 @@ export type {
   MemoryPluginProfile,
   MemoryProvider,
   MemoryProviderCapabilities,
-  MemoryProviderInitializeInput,
   MemoryProviderState,
   MemoryReadInput,
   MemoryReadResult,

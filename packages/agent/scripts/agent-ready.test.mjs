@@ -7,13 +7,14 @@
  */
 
 import test from "node:test";
+import { create_plugin_binding } from "./helpers/CityPluginTestBinding.mjs";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 
 import { MockModelClient } from "./ModelClientMock.mjs";
-import { Agent } from "../bin/index.js";
+import { Agent, City } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 import { create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
@@ -138,12 +139,11 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
       warnings: [],
     }),
   });
-  const agent = new Agent({
-    id: "ready_agent",
-    plugins: [blocking_plugin],
-    model,
-  });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const agent = new Agent({ id: "ready_agent", model });
+  const workspace = new Workspace({ id: "ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent, { plugins: [create_plugin_binding(city, blocking_plugin)] });
+  const entry = create_workspace_entry(agent, workspace);
 
   try {
     const session = await entry.sessions.create({
@@ -164,11 +164,11 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
     assert.equal(model_stream_calls, 1);
   } finally {
     lifecycle_ready.resolve();
-    await agent.dispose();
+    await city.close();
   }
 });
 
-test("agent.plugins waits for lifecycle start before direct action execution", async () => {
+test("entry.plugins waits for lifecycle start before direct action execution", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-plugin-ready-"),
   );
@@ -195,11 +195,11 @@ test("agent.plugins waits for lifecycle start before direct action execution", a
       },
     },
   });
-  const agent = new Agent({
-    id: "plugin_ready_agent",
-    plugins: [plugin],
-  });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "plugin_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const agent = new Agent({ id: "plugin_ready_agent" });
+  const workspace = new Workspace({ id: "plugin_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent, { plugins: [create_plugin_binding(city, plugin)] });
+  const entry = create_workspace_entry(agent, workspace);
 
   try {
     const action_promise = entry.plugins.run_action({
@@ -216,7 +216,7 @@ test("agent.plugins waits for lifecycle start before direct action execution", a
     assert.equal(action_calls, 1);
   } finally {
     lifecycle_ready.resolve();
-    await agent.dispose();
+    await city.close();
     await fs.rm(agent_path, { recursive: true, force: true });
   }
 });
@@ -242,20 +242,23 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失�
       },
     },
   });
-  const agent = new Agent({
-    id: "ready_isolation_agent",
-    plugins: [failing_plugin, healthy_plugin],
-  });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "isolation_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const agent = new Agent({ id: "ready_isolation_agent" });
+  const workspace = new Workspace({ id: "isolation_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent, { plugins: [
+    create_plugin_binding(city, failing_plugin),
+    create_plugin_binding(city, healthy_plugin),
+  ] });
+  const entry = create_workspace_entry(agent, workspace);
 
   try {
     await entry.sessions.create({ session_id: "initial_barrier" });
 
     assert.equal(healthy_started, true);
-    assert.equal(agent.plugins.status("failing")?.status, "error");
-    assert.equal(agent.plugins.status("healthy")?.status, "ready");
+    assert.equal(city.plugins.snapshots(agent.id).find((item) => item.name === "failing")?.status, "error");
+    assert.equal(city.plugins.snapshots(agent.id).find((item) => item.name === "healthy")?.status, "ready");
   } finally {
-    await agent.dispose();
+    await city.close();
   }
 });
 
@@ -266,7 +269,10 @@ test("Agent registers PluginRegistry tools and removes them with the last action
   const agent = new Agent({
     id: "state_plugin_tools_agent",
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "plugin_tools_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
+  const workspace = new Workspace({ id: "plugin_tools_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent);
+  const entry = create_workspace_entry(agent, workspace);
   const action_plugin = create_plugin({
     name: "dynamic_action",
     actions: {
@@ -281,16 +287,16 @@ test("Agent registers PluginRegistry tools and removes them with the last action
     assert.equal(entry.tools.plugin_read, undefined);
     assert.equal(entry.tools.plugin_call, undefined);
 
-    await agent.plugins.register(action_plugin);
+    await city.plugins.register(agent.id, create_plugin_binding(city, action_plugin));
 
     assert.notEqual(entry.tools.plugin_read, undefined);
     assert.notEqual(entry.tools.plugin_call, undefined);
 
-    await agent.plugins.unregister("dynamic_action");
+    await city.plugins.unregister(agent.id, "dynamic_action");
 
     assert.equal(entry.tools.plugin_read, undefined);
     assert.equal(entry.tools.plugin_call, undefined);
   } finally {
-    await agent.dispose();
+    await city.close();
   }
 });

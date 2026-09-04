@@ -44,6 +44,12 @@ export interface ChatPluginPublicChannelConfig {
 
 /** Mainview 可见的完整 Chat Profile。 */
 export interface ChatPluginPublicProfile {
+  /** 当前 Profile 唯一接收入站消息的 Agent。 */
+  owner_agent_id?: string;
+
+  /** 当前 Profile 唯一承载渠道会话的 Workspace。 */
+  owner_workspace_id?: string;
+
   /** Chat 队列行为。 */
   queue: ChatPluginPublicQueueConfig;
 

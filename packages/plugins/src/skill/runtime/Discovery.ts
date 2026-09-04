@@ -18,7 +18,7 @@ import type {
   SkillPluginIgnoreRule,
   SkillPluginOptions,
 } from "@/skill/types/SkillPlugin.js";
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 
 function matchesIgnoreRule(
   skill: SkillDefinition,
@@ -126,12 +126,12 @@ export function discoverSkillsSync(
       }
 
       const { frontMatterYaml } = parseFrontMatter(content);
-      let meta: JsonObject | null = null;
+      let meta: PluginJsonObject | null = null;
       if (frontMatterYaml && frontMatterYaml.trim()) {
         try {
-          const loaded = yaml.load(frontMatterYaml) as JsonValue;
+          const loaded = yaml.load(frontMatterYaml) as PluginJsonValue;
           if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) {
-            meta = loaded as JsonObject;
+            meta = loaded as PluginJsonObject;
           } else {
             meta = null;
           }

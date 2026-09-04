@@ -14,8 +14,8 @@ import {
   prepareChatEnqueue,
 } from "@/chat/runtime/EnqueueDispatch.js";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
-import type { PluginContext } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { IncomingChatMessage } from "./BaseChatChannel.js";
 import {
   appendInboundChannelHistory,
@@ -169,7 +169,7 @@ export async function enqueueAuditChannelMessage(
       : {}),
     extra:
       preparedAudit.extra && typeof preparedAudit.extra === "object"
-        ? (preparedAudit.extra as JsonObject)
+        ? (preparedAudit.extra as PluginJsonObject)
         : extra,
   });
   await emitChatEnqueueEffect({
@@ -191,7 +191,7 @@ export async function enqueueExecChannelMessage(
   const msg = params.message;
   const inboundExtra =
     msg.extra && typeof msg.extra === "object" ? stripUndefinedMeta(msg.extra) : {};
-  const mergedExtra: JsonObject = { ...inboundExtra };
+  const mergedExtra: PluginJsonObject = { ...inboundExtra };
 
   const chat_key = await resolveOrCreateChannelSessionId({
     context: params.context,
@@ -233,7 +233,7 @@ export async function enqueueExecChannelMessage(
   const queuedText = preparedExec.text;
   const queuedExtra =
     preparedExec.extra && typeof preparedExec.extra === "object"
-      ? (preparedExec.extra as JsonObject)
+      ? (preparedExec.extra as PluginJsonObject)
       : mergedExtra;
 
   await appendExecIngress({

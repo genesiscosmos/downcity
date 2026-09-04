@@ -6,7 +6,7 @@
  * - 只暴露用户能直接理解的时区配置，内部调度实现细节不进入 constructor。
  */
 
-import type { PluginNotificationPublisher } from "@downcity/agent";
+import type { PluginNotificationPublisher } from "@downcity/plugin";
 
 /**
  * TaskPlugin 构造参数。

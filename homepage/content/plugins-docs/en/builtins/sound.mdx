@@ -9,16 +9,18 @@ description: Use the FED model catalog to provide unified ASR, TTS, and automati
 
 `sound` does not download or run local speech models. It has no Python, Whisper, Piper, or other local inference dependency. A local audio file is only read and converted to a data URL before it is sent to FED.
 
-## Create the plugin
+## Profile configuration
 
 ```ts
-import { SoundPlugin } from "@downcity/plugins/sound";
-import { Embassy } from "@downcity/federation";
-
-const sound = new SoundPlugin({
-  sound_ai: embassy.user.ai,
-  default_asr_model: "asr-model-id",
-  default_tts_model: "tts-model-id",
+await city.plugins.register(agent.id, {
+  plugin_id: "sound",
+  profile: {
+    id: "primary",
+    config: {
+      default_asr_model: "asr-model-id",
+      default_tts_model: "tts-model-id",
+    },
+  },
 });
 ```
 
@@ -98,11 +100,10 @@ TTS returns an AI SDK `UIMessage`. Audio is represented by a `file` part, which 
 Configure separate ASR and TTS defaults when needed:
 
 ```ts
-new SoundPlugin({
-  sound_ai: embassy.user.ai,
+{
   default_asr_model: "asr-model-id",
   default_tts_model: "tts-model-id",
-});
+}
 ```
 
 If neither the action nor the plugin provides a model, the call fails with guidance to read `sound.models`. The plugin never picks a model implicitly.
@@ -112,11 +113,12 @@ If neither the action nor the plugin provides a model, the call fails with guida
 `auto_asr: true` transcribes inbound `voice` and `audio` chat attachments. This path cannot ask the user to choose a model, so `default_asr_model` is required:
 
 ```ts
-new SoundPlugin({
-  sound_ai: embassy.user.ai,
+{
   auto_asr: true,
   default_asr_model: "asr-model-id",
-});
+}
 ```
 
 The transcript is appended to user text as `<voice src="...">...</voice>`. A failed attachment transcription does not block the main chat flow.
+
+The AI service comes from `PluginContext.city.embassy.user.ai`; it does not belong in the Profile or Agent.

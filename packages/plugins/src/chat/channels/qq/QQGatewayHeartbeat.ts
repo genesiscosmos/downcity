@@ -7,7 +7,7 @@
  */
 
 import WebSocket from "ws";
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import { OpCode } from "@/chat/channels/qq/types/QqChannel.js";
 import {
   getQqHeartbeatAckTimeoutMs,
@@ -25,7 +25,7 @@ export interface SendQqGatewayHeartbeatParams {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 最近一次服务端序列号。
    */

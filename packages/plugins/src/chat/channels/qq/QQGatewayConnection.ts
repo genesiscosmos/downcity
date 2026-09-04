@@ -8,7 +8,7 @@
  */
 
 import WebSocket, { type RawData } from "ws";
-import type { Logger } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
 import type {
   QQEventCaptureConfig,
   QQGatewayPayload,
@@ -27,7 +27,7 @@ export interface ConnectQqGatewayWebSocketParams {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 原始事件捕获配置。
    */

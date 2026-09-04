@@ -45,7 +45,7 @@ That is why duplicate registration for the same `resolve` point throws immediate
 ## Minimal example
 
 ```ts
-const role = await agent.plugins.resolve<{ userId: string }, string>(
+const role = await entry.plugins.resolve<{ userId: string }, string>(
   "auth.resolve_role",
   { userId: "owner" },
 );

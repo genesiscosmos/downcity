@@ -8,9 +8,9 @@
  */
 
 import path from "path";
-import type { Logger } from "@downcity/agent";
-import type { PluginContext } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginLogger } from "@downcity/plugin";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type {
   IncomingChatAccessParams,
   IncomingChatAccessResult,
@@ -90,7 +90,7 @@ export type TelegramMessageExecutor = (params: {
   chatType?: NonNullable<TelegramUpdate["message"]>["chat"]["type"];
   messageThreadId?: number;
   receivedAt?: string;
-  extra?: JsonObject;
+  extra?: PluginJsonObject;
 }) => Promise<void>;
 
 /**
@@ -118,7 +118,7 @@ export interface TelegramMessageHandlerOptions {
   /**
    * 日志器。
    */
-  logger: Logger;
+  logger: PluginLogger;
   /**
    * 入站 ack reaction emoji。
    */

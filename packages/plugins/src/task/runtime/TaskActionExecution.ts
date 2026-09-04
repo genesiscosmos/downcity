@@ -6,11 +6,11 @@
  * - task 定义变更后的 scheduler reload 通过回调注入，避免执行层依赖具体 service 实现。
  */
 
-import type { PluginContext } from "@downcity/agent";
-import type { PluginActionExecutionContext } from "@downcity/agent";
-import type { PluginExecutionContext } from "@downcity/agent";
-import type { PluginNotificationPublisher } from "@downcity/agent";
-import type { JsonValue } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginActionExecutionContext } from "@downcity/plugin";
+import type { PluginExecutionContext } from "@downcity/plugin";
+import type { PluginNotificationPublisher } from "@downcity/plugin";
+import type { PluginJsonValue } from "@downcity/plugin";
 import type {
   TaskCronRegisterResult,
   TaskListActionPayload,
@@ -122,7 +122,7 @@ export async function executeTaskListAction(params: {
   return {
     success: true,
     data: await listTaskDefinitions({
-      data_path: params.context.data_path,
+      data_path: params.context.storage.path,
       ...(params.payload.status ? { status: params.payload.status } : {}),
     }),
   };
@@ -136,11 +136,11 @@ export async function execute_task_history_action(params: {
   readonly payload: TaskRunHistoryRequest;
 }) {
   const result = await list_task_run_history({
-    data_path: params.context.data_path,
+    data_path: params.context.storage.path,
     request: params.payload,
   });
   return result.success
-    ? { success: true, data: { runs: result.runs ?? [] } as unknown as JsonValue }
+    ? { success: true, data: { runs: result.runs ?? [] } as unknown as PluginJsonValue }
     : { success: false, error: result.error || "task history failed" };
 }
 
@@ -152,11 +152,11 @@ export async function execute_task_run_detail_action(params: {
   readonly payload: TaskRunDetailRequest;
 }) {
   const result = await read_task_run({
-    data_path: params.context.data_path,
+    data_path: params.context.storage.path,
     request: params.payload,
   });
   return result.success && result.run
-    ? { success: true, data: { run: result.run } as unknown as JsonValue }
+    ? { success: true, data: { run: result.run } as unknown as PluginJsonValue }
     : { success: false, error: result.error || "task run detail failed" };
 }
 
@@ -171,10 +171,10 @@ export async function executeTaskCreateAction(params: {
 }) {
   const payload = params.payload;
   const result = await createTaskDefinition({
-    data_path: params.context.data_path,
+    data_path: params.context.storage.path,
     request: {
       ...payload,
-      workspace_id: payload.workspace_id || params.context.workspace_id,
+      workspace_id: payload.workspace_id || params.context.workspace.id,
     },
     ...(params.execution.session
       ? {
@@ -216,7 +216,7 @@ export async function executeTaskRunAction(params: {
 }) {
   const result = await runTaskDefinition({
     context: params.context,
-    data_path: params.context.data_path,
+    data_path: params.context.storage.path,
     request: params.payload,
     notifications: params.notifications,
     execution_context: params.execution_context,
@@ -244,7 +244,7 @@ export async function executeTaskDeleteAction(params: {
 }) {
   const payload = params.payload;
   const result = await deleteTaskDefinition({
-    data_path: params.context.data_path,
+    data_path: params.context.storage.path,
     request: payload,
   });
   if (!result.success) {
@@ -288,7 +288,7 @@ export async function executeTaskUpdateAction(params: {
 }) {
   const payload = params.payload;
   const result = await updateTaskDefinition({
-    data_path: params.context.data_path,
+    data_path: params.context.storage.path,
     request: payload,
   });
   if (!result.success) {
@@ -321,7 +321,7 @@ export async function executeTaskStatusAction(params: {
 }) {
   const payload = params.payload;
   const result = await setTaskStatus({
-    data_path: params.context.data_path,
+    data_path: params.context.storage.path,
     request: payload,
   });
   if (!result.success) {

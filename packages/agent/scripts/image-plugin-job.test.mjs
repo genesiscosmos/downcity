@@ -15,6 +15,7 @@ import path from "node:path";
 
 import { ImagePlugin } from "../../plugins/bin/index.js";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
+import { create_test_plugin_context } from "./helpers/CityPluginTestBinding.mjs";
 
 let current_image_ai;
 
@@ -64,7 +65,7 @@ function create_files(workspace_path) {
 
 function create_context(workspace_path = process.cwd()) {
   const data_path = path.join(workspace_path, "agent-workspace-data");
-  return {
+  return create_test_plugin_context({
     agent_id: "image_test_agent",
     workspace_id: "image_test_workspace",
     workspace_path,
@@ -72,7 +73,7 @@ function create_context(workspace_path = process.cwd()) {
     files: create_files(workspace_path),
     data_files: create_files(data_path),
     embassy: { user: { ai: current_image_ai } },
-  };
+  });
 }
 
 function create_execution_context() {
@@ -245,10 +246,7 @@ test("ImagePlugin image_result returns final message when succeeded", async () =
   assert.equal(result.data.job_id, "img_1");
   assert.equal(result.data.status, "succeeded");
   assert.deepEqual(result.data.result, message);
-  assert.deepEqual(result.messages, [{
-    role: "assistant",
-    parts: message.parts,
-  }]);
+  assert.deepEqual(result.messages, [message]);
 });
 
 test("ImagePlugin image_result stores remote images locally", async (t) => {
@@ -563,10 +561,7 @@ test("ImagePlugin image_result polls until terminal when until_done=true", async
 
   assert.equal(result.success, true);
   assert.equal(result.data.status, "succeeded");
-  assert.deepEqual(result.messages, [{
-    role: "assistant",
-    parts: message.parts,
-  }]);
+  assert.deepEqual(result.messages, [message]);
   assert.ok(calls.length >= 3);
 });
 

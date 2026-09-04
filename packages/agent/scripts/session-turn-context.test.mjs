@@ -82,10 +82,10 @@ test("SessionTurnContext 负责 Plugin lease 与只读投影生命周期", async
     workspace_env: { REGION: "cn" },
     agent_systems: ["system"],
   });
-  await context.step.replace_plugins(create_lease("first"));
-  await context.step.replace_plugins(create_lease("second"));
+  await context.step.replace_extensions(create_lease("first"));
+  await context.step.replace_extensions(create_lease("second"));
 
-  const plugin_execution_context = context.step.plugin_execution_context("call-context-test");
+  const plugin_execution_context = context.step.extension_execution_context("call-context-test");
   assert.deepEqual(Object.keys(plugin_execution_context).sort(), [
     "abort_signal",
     "agent_systems",

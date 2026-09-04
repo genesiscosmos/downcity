@@ -1,40 +1,35 @@
 ---
-title: tools 和 plugins
-description: 如何给本地 Agent 注入工具与显式 plugin 实例
+title: Tools 和 Plugins
+description: 给 Agent 配置 Tool，并通过 City 提供和绑定 Plugin
 ---
 
-# tools 和 plugins
+# Tools 和 Plugins
 
-## tools
+Tool 与 Plugin 都能参与 Session 执行，但所有权不同：Agent 持有自定义 Tool；City 持有 Plugin catalog、Profile 共享实例与生命周期。
 
-本地 Agent 可以直接接收工具集合：
+## 自定义 Tools
+
+本地 Agent 直接接收自定义 Tool：
 
 ```ts
 const agent = new Agent({
   id: "repo-helper",
   tools: {
-    my_tool: myTool,
+    my_tool,
   },
-});
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
 });
 ```
 
-这些工具会在 session 执行时直接可用。
+这些 Tool 会与当前 Session 所选 Workspace 的 Tool 合并。名称冲突会直接报错，不会静默覆盖。
 
-如果你的应用需要一套长期稳定的默认工具集合，这种 agent 级注入方式通常最顺手。
+## Workspace 与 Shell
 
-## shell
-
-如果 Agent 需要拥有 shell 执行能力，使用 `@downcity/workspace`：
+Workspace 默认提供 `grep`、`find`、`read`、`write` 和 `edit`。需要命令执行时显式配置 Shell：
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { Shell, Workspace } from "@downcity/workspace";
 
 const agent = new Agent({ id: "repo-helper" });
 const workspace = new Workspace({
@@ -44,317 +39,89 @@ const workspace = new Workspace({
 });
 ```
 
-Workspace 默认生成由五个文件/搜索工具组成的 WorkspaceTools，Shell 额外加入两个命令工具。Session 会将它们与 Agent 自定义 Tool 合并：
+Shell 额外提供 `shell_exec` 与 `shell_session`。文件和搜索 Tool 始终受 Workspace 根目录约束；审批与异步问题归属于具体 Session，通过 `session.interactions()` 和 `session.respond(...)` 处理。
 
-- `shell_exec`：一次性非交互命令
-- `shell_session`：长任务和需要 stdin 的 PTY 交互式会话
-- `grep`：底层直接使用 ripgrep 的结构化项目内容搜索
-- `find`：使用 POSIX glob 模式发现项目文件
-- `read`：分页读取文本，并把图片或 PDF 注入模型输入
-- `write`：创建文件或显式原子覆盖完整文件
-- `edit`：通过唯一文本匹配原子编辑单个文件
+## City 提供 Plugins
 
-文件和搜索工具只允许访问 Workspace 根目录，即使没有 Shell 也可使用。通用 `unrestricted` 只属于 Shell；File/Search、Plugin 和自定义 Tool 不共享这个开关。项目外操作需要 Shell unrestricted 审批、用户显式附件或宿主注册的专用 Tool。`grep` 和 `find` 会遵守 ignore 文件，默认最多返回 200 项，并允许通过 `max_results` 提高到 2,000 项。
-
-`read` 读取 PNG、JPEG、GIF、WebP、BMP 或 PDF 时，结果会把 User File Part 注入下一个模型 Step。内部 Tool 对象不是 Agent 或 Workspace 的公开 API；Session 会在 `prompt()` 执行期间自动组合并调用这些工具。
-
-Unrestricted sandbox 请求归属发起工具调用的 Session：
+Agent 构造函数不接收 Plugin。先把 registration 交给 City，再为 Agent 声明所需 Plugin ID：
 
 ```ts
-const interactions = await session.interactions();
-await session.respond({
-  interaction_id: interactions[0].request.interaction_id,
-  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
-});
-```
-
-实时 UI 从 pending Interaction Part 读取完整请求；关联 Tool 同时处于 `waiting-user`，用户决定后调用 `session.respond(...)`。
-
-需要模型主动提问时，从独立工具入口显式注册：
-
-```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
-import { AskQuestionsTool } from "@downcity/agent/tools";
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {
-    ask_question: AskQuestionsTool,
-  },
-});
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
 });
-```
+const agent = new Agent({ id: "repo-helper", model });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
+});
 
-`ask_question` 由模型作为标准 Tool Call 调用，不是 Provider 私有消息类型。它支持
-`text`、`single_select` 和 `multi_select`，且每个问题都必须显式提供 `type`；用户回答后，
-答案作为 Tool Result 返回模型，模型在同一个 Turn 的下一 Step 继续执行。完整接入方式参见
-[用户异步交互](/zh/agent-sdk-docs/sessions/approvals)。
-
-所有暂停执行并等待外部决定的能力都使用同一个 Interaction 协议。核心字段是
-`type`、`payload` 和 `response_schema`，Plugin 可以使用命名空间 type，例如
-`plugin:deployment/confirm`。前端负责选择呈现方式；Web、CLI 和桌面端可以为同一个
-Interaction 使用不同 renderer。宿主应用始终通过 `session.interactions()` 读取 pending
-请求，并通过 `session.respond({ interaction_id, response })` 提交响应。
-
-## plugin 实例
-
-如果你希望本地 Agent 持有长期运行的 plugin 能力，比如 chat 渠道，可以显式传入 plugin 实例：
-
-```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
-
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
+city.agents.add(agent, {
   plugins: [
-    new ChatPlugin({
-      channels: [
-        new TelegramChannel({
-          env: {
-            TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
-          },
-        }),
-      ],
-    }),
-  ],
-});
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
-});
-```
-
-这类写法适合：
-
-- 你希望 SDK 自己启动 chat 渠道
-- 你需要把 plugin 生命周期和应用代码绑定在一起
-
-## plugins
-
-如果你需要让本地 Agent 持有一组 plugin，可以显式传入实例对象：
-
-```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { SkillPlugin } from "@downcity/plugins/skill";
-
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {},
-  plugins: [new SkillPlugin()],
-});
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
-});
-
-const plugins = agent.plugins.list();
-```
-
-只有在显式配置搜索、文档或浏览器 provider 后才注册 `WebPlugin`，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
-
-这些 plugin 会注册到当前 `Agent` 自己的 registry 里。
-
-这意味着：
-
-- plugin action 可以通过 `agent.plugins.run_action(...)` 调用
-- plugin hook 里拿到的 `context.plugins` 会指向同一份 registry
-- 同名 plugin 重复注册会直接报错
-- SDK 不会默认注册全部内建 plugin
-
-当前本地 SDK 会接通 plugin registry、`PluginContext.plugins`，并在 session prompt 中注入已注册 plugin 的 `system(context, execution_context)` 文本。
-
-`PluginContext` 不提供通用路径集合。Plugin 通过 `context.workspace_path` 确定项目边界，并在自己的模块内管理领域存储路径；需要操作 Agent Session 时使用 `context.sessions`，不要读取 Agent 的 Session 目录。
-
-`context.sessions` 引用 Agent 的 `AgentSessions`，不是第二个 Session 所有者。Plugin 需要同步运行时端口时使用 `context.sessions.runtime(session_id, origin_type = "chat")`；SDK 用户恢复已存在的公开 Session 时使用 `await agent.sessions.get(session_id, origin_type, { workspace })`。
-
-每个 `Agent` 都有独立的 plugin registry 和独立的 `plugin_read` / `plugin_call` tool 实例。即使同一个进程里同时创建多个 Agent，模型通过 `plugin_call` 触发 action 时，也只会访问当前 session 所属 Agent 的 registry。
-
-## plugin action metadata
-
-存在 action 时，PluginRegistry 提供两个 Tool，再由 Agent 注册到最终工具集合：
-
-- `plugin_read`：读取已注册 plugin 的 action、参数 schema 和示例
-- `plugin_call`：执行指定 plugin action
-
-如果模型不确定某个 action 怎么传参数，应该先调用 `plugin_read({ plugin, action })`，再调用 `plugin_call(...)`。`plugin_call` 在执行前会按 action 的 `input_schema` 校验 payload。
-
-WorkspaceTools、Plugin Tools 与 `AgentOptions.tools` 的名称不能重复；发现冲突时 Agent 构造或注册流程直接报错，不会静默覆盖已有 Tool。
-
-自定义 plugin 可以用 `create_plugin` / `create_action` 声明 action metadata：
-
-```ts
-import { Agent, create_action, create_plugin } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { z } from "zod";
-
-const demo_plugin = create_plugin({
-  name: "demo",
-  title: "Demo",
-  description: "Demo actions",
-  actions: {
-    echo: create_action({
-      description: "回显一段文本",
-      input_schema: {
-        zod: z.object({
-          text: z.string(),
-        }),
-        json_schema: {
-          type: "object",
-          required: ["text"],
-          properties: {
-            text: { type: "string" },
-          },
-        },
-      },
-      examples: [
-        {
-          title: "回显文本",
-          payload: { text: "hello" },
-        },
-      ],
-      execute: async ({ input, execution }) => ({
-        success: true,
-        data: {
-          text: input.text,
-          session_id: execution.session?.session_id,
-        },
-        message: "echoed",
-      }),
-    }),
-  },
-});
-
-const agent = new Agent({
-  id: "repo-helper",
-  plugins: [demo_plugin],
-});
-```
-
-`zod` schema 负责运行时校验；`json_schema` 和 `examples` 用于 `plugin_read` 返回给模型或 UI。每个 Action 都会收到稳定能力视图 `context` 和单次调用对象 `execution`。Session 身份与交互端口位于 `execution.session`，当前 Step 生效的 env 位于 `execution.snapshot.workspace_env`；CLI、HTTP 或 scheduler 直接调用时没有 `execution.session`。`context.workspace_env` 始终表示 Workspace 当前配置快照。
-
-Tool 与 Plugin Action 使用同一条 Session 结果链路：普通结果放在 `output`，需要进入对话的内容直接使用 `messages: [{ role, parts }]`。User Parts 在下一个 Step 生效，Assistant Parts 写入当前 Assistant Message。Session 不下载或改写文件；Action 应先保存文件，再返回指向该本地路径的 File Part。
-
-## ImagePlugin
-
-如果你希望 Agent 在对话过程中自己触发生图，可以把图片能力包装成 `ImagePlugin`：
-
-```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { ImagePlugin } from "@downcity/plugins/image";
-
-const agent = new Agent({
-  id: "creative-agent",
-  model,
-  plugins: [
-    new ImagePlugin({
-      image_ai: embassy.user.ai,
-      default_model: "image-model-id",
-    }),
+    { plugin_id: "skill" },
+    { plugin_id: "memory" },
   ],
 });
 ```
 
-如果默认图片模型需要由业务状态决定，也可以传函数：
+City 不会自动给每个 Agent 启用全部 Plugin。`CityOptions.plugins` 或 `city.plugins.provide()` 只登记 catalog；`city.agents.add()` 或 `city.plugins.register()` 才建立 Agent/Profile 绑定。
+
+相同 `(plugin_id, profile_id)` 在一个 City 内共享一个实例。`start/stop` 管理这个共享实例，`bind/unbind` 管理 Agent/Workspace scope。
+
+## Profile 配置
+
+需要配置的 Plugin 在绑定中传入 Profile。比如 Web、Image、Chat 的 provider、凭据或 Owner 路由都属于 Profile，不进入 Agent：
 
 ```ts
-new ImagePlugin({ image_ai: embassy.user.ai, default_model: "image-model-id" });
-```
-
-注册后，Agent 会自动获得内置的 `plugin_read` / `plugin_call` tool。模型可以先读取 action metadata：
-
-```ts
-await plugin_read({
-  plugin: "image",
-  action: "image_create",
-});
-```
-
-图片生成会消耗 provider 额度。Agent 应该先向用户确认具体要创建或编辑的图片请求，拿到明确确认后再调用 `image_create`。
-
-确认后再使用任务式 action：
-
-```ts
-const job = await plugin_call({
-  plugin: "image",
-  action: "image_create",
-  payload: {
-    prompt: "一张雨夜城市街角的电影感插画",
-    aspect_ratio: "16:9",
-  },
-});
-
-await plugin_call({
-  plugin: "image",
-  action: "image_result",
-  payload: {
-    job_id: job.data.job_id,
+await city.plugins.register(agent.id, {
+  plugin_id: "web",
+  profile: {
+    id: "primary",
+    config: {
+      browser: "playwright",
+      cdp_url: "http://127.0.0.1:9222",
+    },
   },
 });
 ```
 
-如果要传入参考图或改图，用 `content`：
+## 调用 Plugin
+
+宿主从 Agent/Workspace 执行入口调用 Action 或 Hook：
 
 ```ts
-const job = await plugin_call({
-  plugin: "image",
-  action: "image_create",
-  payload: {
-    content: [
-      { type: "text", text: "把这张图改成白色影棚背景" },
-      { type: "image", url: "./input.png" },
-    ],
-  },
+const entry = await city.enter_workspace(agent.id, workspace.id);
+
+const result = await entry.plugins.run_action({
+  plugin: "memory",
+  action: "search",
+  payload: { query: "项目约定" },
 });
+
+const enriched = await entry.plugins.pipeline("chat.enrich_message", input);
+await entry.plugins.guard("review.require_checked", enriched);
 ```
 
-`prompt` 和 `content` 是 ImagePlugin 面向 Agent 的两种公开输入格式。纯文本生图用 `prompt`；只要有参考图、改图或多段上下文，就用 `content`。如果两者同时出现，`content` 优先，`prompt` 不会继续传给下游。
+存在 Action 时，Session 会获得 `plugin_read` 和 `plugin_call` Tool。模型先读取 Action schema，再执行经过校验的 payload。Plugin 的 `system(context, execution_context)` 也会在 Session prompt 检查点注入。
 
-`content[].url` 可以是在线 URL、本地绝对路径，或相对 Agent 项目根目录的路径。本地图片会由 `ImagePlugin` 读取并转成 City 图片任务需要的 data URL，不需要模型自己传 base64。Agent 不应该传 `messages` 或 `data_url`。
+## PluginContext 直接通信
 
-`default_model` 是插件级默认图片模型，可以是字符串，也可以是同步或异步函数。Agent 调用 `image_create` 时如果没有传 `model`，`ImagePlugin` 会自动把 `default_model` 的字符串值或函数返回值补给下游的 `image_create(input)`；如果 payload 里显式传了 `model`，则以 payload 为准。没有配置 `default_model` 时，Agent 需要先确认模型 ID，可以调用 `models` 查看可用图片模型。
+Plugin 作者 API 从 `@downcity/plugin` 导入。Action、Hook、System 和 Availability 获得 `PluginContext`，其中包含受限的 `city`、`agent`、`workspace`、`session`、`turn`、`profile` 和 `storage` 句柄。
 
-`image_result` 默认只读取一次当前任务状态。如果返回 `queued` 或 `running`，保留 `job_id`，稍后继续调用 `image_result`。如果希望短任务在一次 tool 调用里等到终态，可以传 `until_done: true`，并按需设置 `max_wait_ms` / `poll_interval_ms`。如果返回 `succeeded`，ImagePlugin 会把远程 File Parts 下载到 `.downcity/image/results/<job_id>/`，在 `data` 中返回完整任务结果，并把本地化后的 File Parts 同时写入当前 Assistant Message。
+`context.session` 与 `context.agent.sessions` 都是可直接调用的进程内对象，不需要只保存 `session_id` 再回查宿主。Workspace 文件使用 `context.workspace.files`；Plugin 私有文件使用 `context.storage.files`。
 
-`ImagePlugin` 不直接绑定 City，也不关心 OpenAI、DeepSeek 等 provider 的具体协议。传入 `image_create` 和 `image_result` 任务函数后，插件只负责把两步式任务 action 暴露给 Agent；默认轮询节奏由产品、Agent 或调用方根据 `poll_after_ms` 决定，`until_done` 只是插件层的简单等待能力。
+## HTTP
 
-所谓“provider 输入解析”指的是：Agent 调用 `plugin_call` 时只传简单的 `prompt` 或 `content`；`ImagePlugin` 在内部把本地图片读成 data URL，并把 `content` 转成 `ImagePluginResolvedInput.messages` 后再交给 `image_create(input)`。这只是 ImagePlugin 到 City / provider adapter 的内部边界，不是给 Agent 使用的新协议。
-
-`image_result` 回调可以返回远程 URL 或本地路径。遇到远程 URL 时，ImagePlugin 会把成功下载的 Workspace 本地路径作为 File Part 的主 `url`；如果本地存储失败，则保留远程 URL，并通过 action message 报告错误。Session 会持久化处理后的 File Part，直接调用方也可以从 `data` 读取同一份结果。
-
-## plugin HTTP
-
-如果 Downcity 暴露 City HTTP 网关，已注册 plugin 的 `plugin.http.server.register(...)` 也会自动挂到同一个 HTTP app 上。
-
-也就是说：
-
-- 插件是否存在，由 `Agent` 构造参数里的 `plugins` 决定
-- 插件 HTTP 是否真正暴露，由 Downcity 是否发布 City HTTP 网关决定
-
-## 一个重要边界
-
-SDK 这里的 `plugins` 是“你主动交给 Agent 的实例集合”，不是全局 plugin manager 的镜像。
-
-所以不要把 SDK 模式想成“自动把项目里一切都搬进来”，它更强调显式装配。
-
-需要多种内建能力时，请从各自子路径导入并显式实例化，然后把实例数组传给 `plugins`。
-
-如果你要进一步理解：
-
-- plugin 应该怎么挂到本地 Agent 上
-
-继续看：
-
-- [Plugin 总览](/zh/agent-sdk-docs/plugins/overview)
-- [自定义 Plugin](/zh/agent-sdk-docs/plugins/custom-plugin)
+Plugin 可声明结构化 HTTP route。City 统一挂载、鉴权并注入请求对应的 PluginContext；Plugin 不创建独立服务器。
 
 ## 相关文档
 
-- [Shell 与沙箱](/zh/agent-sdk-docs/local-agent/shell-reference) — 配置命令执行、沙箱和审批
+- [Plugin 总览](/zh/agent-sdk-docs/plugins/overview)
+- [Plugin Lifecycle](/zh/agent-sdk-docs/plugins/lifecycle)
+- [Plugin Actions](/zh/agent-sdk-docs/plugins/plugin-actions)
+- [内建 Plugins](/zh/plugins-docs)
+- [用户异步交互](/zh/agent-sdk-docs/sessions/approvals)

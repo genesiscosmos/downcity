@@ -22,8 +22,8 @@ import {
   type TelegramUpdate,
   type TelegramUser,
 } from "./Shared.js";
-import type { PluginContext } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import {
   buildTelegramChatKey,
@@ -332,7 +332,7 @@ export class TelegramBot extends BaseChatChannel {
     chatType?: NonNullable<TelegramUpdate["message"]>["chat"]["type"],
     messageThreadId?: number,
     receivedAt?: string,
-    extra?: JsonObject,
+    extra?: PluginJsonObject,
   ): Promise<void> {
     try {
       const user_id = from?.id ? String(from.id) : undefined;

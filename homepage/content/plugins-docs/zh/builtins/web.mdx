@@ -5,7 +5,7 @@ description: 通过可替换 provider 提供结构化搜索、网页读取和 Pl
 
 # web Plugin
 
-`web` 是真实的联网能力插件。构造函数只接收 profile，Plugin 会在内部创建选中的浏览器 provider；搜索和文档能力从 Agent Plugin context 读取。
+`web` 是真实的联网能力插件。City 根据 Profile 创建共享实例，Plugin 在内部创建选中的浏览器 provider；搜索和文档能力从当前 `PluginContext` 读取。
 
 ## 使用 Playwright/CDP
 
@@ -90,7 +90,7 @@ Computer Use 可以使用 `ComputerUseBrowserProviderAdapter`，它会先取得�
 ## 生命周期与安全
 
 - `WebPlugin` 至少需要注入一种 provider；没有真实能力时不会被构造。
-- 浏览器 session 由 provider 持有，Agent 销毁或 Plugin 卸载时自动调用 `dispose()`。
+- 浏览器 session 由 provider 持有，最后一个 execution lease 释放且 City 停止共享实例时自动调用 `dispose()`。
 - `browser_act` 只提供确定性的浏览器动作；提交、发送、购买、上传、删除等副作用必须由宿主审批。
 - 不要把 Playwright `Browser`、`Page` 或 `Buffer` 直接返回给 Agent；Action 结果始终是 JSON 数据。
 - 安装 Skill、发现 Skill 和读取 `SKILL.md` 仍由 `SkillPlugin` 负责。

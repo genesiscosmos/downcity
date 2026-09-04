@@ -29,7 +29,7 @@ It owns:
 Use `chat` when you need:
 
 - Telegram, Feishu, or QQ chat channel runtime
-- one queue worker per agent/plugin instance
+- one queue worker per shared Chat Profile instance
 - chat delivery and inbound message execution
 - inbound user authorization, principal observation, and role resolution
 
@@ -50,42 +50,35 @@ city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","
 
 ## SDK Assembly
 
-In embedded SDK scenarios, `ChatPlugin` receives already constructed channel objects. The SDK host directly provides the ID, display name, and runtime credentials; it does not read City Profiles:
+An SDK host provides Chat to City through a `CityPluginRegistration` and configures channels in a Profile:
 
 ```ts
-import {
-  ChatPlugin,
-  FeishuChannel,
-  QqChannel,
-  TelegramChannel,
-} from "@downcity/plugins/chat";
-
-const plugin = new ChatPlugin({
-  channels: [
-    new TelegramChannel({
-      id: "telegram-sdk",
-      name: "SDK Telegram Bot",
-      bot_token: process.env.TELEGRAM_BOT_TOKEN,
-    }),
-    new FeishuChannel({
-      env: {
-        FEISHU_APP_ID: process.env.FEISHU_APP_ID,
-        FEISHU_APP_SECRET: process.env.FEISHU_APP_SECRET,
-        FEISHU_DOMAIN: process.env.FEISHU_DOMAIN,
+const registrations = create_builtin_plugin_registrations();
+const city = new City({ plugins: registrations, workspaces: [workspace] });
+city.agents.add(agent, {
+  plugins: [{
+    plugin_id: "chat",
+    profile: {
+      id: "primary",
+      config: {
+        owner_agent_id: agent.id,
+        owner_workspace_id: workspace.id,
+        channels: [{
+          type: "telegram",
+          id: "telegram-main",
+          name: "Main Bot",
+          bot_token: process.env.TELEGRAM_BOT_TOKEN ?? "",
+        }],
       },
-    }),
-    new QqChannel({
-      env: {
-        QQ_APP_ID: process.env.QQ_APP_ID,
-        QQ_APP_SECRET: process.env.QQ_APP_SECRET,
-        QQ_SANDBOX: process.env.QQ_SANDBOX,
-      },
-    }),
-  ],
+    },
+  }],
 });
+const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-Profiles belong to the City control plane. They do not enter `@downcity/agent` or become a Store dependency of `ChatPlugin`. Chat-owned main actions validate Profile content and provide a credential-safe projection.
+Profiles belong to the City control plane and do not enter Agent. Chat main actions validate Profile
+content and provide a credential-safe projection. One Profile owns one connection set and queue;
+cross-scope bindings must select routing explicitly through the owner fields.
 
 ## Feishu dependency
 
@@ -110,7 +103,7 @@ When Feishu is enabled without the SDK installed, the runtime error tells you wh
 In an embedded SDK scenario, call the visible chat actions by plugin name:
 
 ```ts
-await agent.plugins.run_action({
+await entry.plugins.run_action({
   plugin: "chat",
   action: "send",
   payload: {
@@ -144,7 +137,7 @@ Authorization actions also live under `chat`:
 SDK example:
 
 ```ts
-await agent.plugins.run_action({
+await entry.plugins.run_action({
   plugin: "chat",
   action: "authorization-set-user-role",
   payload: {
@@ -157,16 +150,17 @@ await agent.plugins.run_action({
 
 ## Important runtime semantics
 
-- queue worker lifecycle belongs to the plugin instance
-- channel bot state also belongs to the plugin instance
+- channel connections and the queue worker belong to City's shared Chat Profile instance
+- Agent/Workspace routing is established and released through `bind/unbind` scope lifecycle
 - inbound authorization belongs to `ChatPlugin`, while still being dispatched through generic plugin hooks / resolves
-- `Agent` only assembles it; it does not own chat domain state itself
+- `Agent` declares only the Chat/Profile binding and does not own chat domain state
 
 ## Public status
 
 `ChatPlugin` is exported from `@downcity/plugins`.
 
-That makes it one of the few lifecycle-oriented built-ins that SDK users may still directly understand and attach in local embedded scenarios.
+SDK users assemble it through City registration/Profile configuration, never by attaching a
+`ChatPlugin` instance to Agent.
 
 ## Related docs
 

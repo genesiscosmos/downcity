@@ -8,7 +8,7 @@
 import type {
   PluginContext,
   PluginNotificationPublisher,
-} from "@downcity/agent";
+} from "@downcity/plugin";
 import type { ShipTaskDefinitionV1, ShipTaskRunStatusV1 } from "@/task/types/Task.js";
 
 /** 发布一次 Task Run 完成或失败通知。 */
@@ -37,7 +37,7 @@ export async function publish_task_run_notification(params: {
       title: params.status === "success" ? `${title} 已完成` : `${title} 执行失败`,
       ...(params.status === "failure" && failure_body ? { body: failure_body } : {}),
       route: {
-        agent_id: params.context.agent_id,
+        agent_id: params.context.agent.id,
         task_title: title,
         view: "run",
         run_timestamp: params.timestamp,

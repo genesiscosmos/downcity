@@ -14,7 +14,7 @@ import type {
   ChatDispatchAction,
   ChatDispatchChannel,
 } from "@/chat/types/ChatDispatcher.js";
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import { readChatMetaBySessionId } from "./ChatMetaStore.js";
 
 /**

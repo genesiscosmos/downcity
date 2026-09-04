@@ -7,7 +7,7 @@
  * - `lookup` 行为为无状态：由 action 读取 SKILL.md 后通过协议注入 user message
  */
 
-import type { PluginExecutionContext } from "@downcity/agent";
+import type { PluginExecutionContext } from "@downcity/plugin";
 import { discoverSkillsSync } from "./Discovery.js";
 import { render_skills_prompt_section } from "./Prompt.js";
 import { setSessionAvailableSkills } from "./Store.js";

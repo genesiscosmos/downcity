@@ -5,7 +5,7 @@
  * 由 Session 自己的消息通知机制向订阅者发布变化。
  */
 
-import type { PluginContext } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
 import type { ShipTaskDefinitionV1 } from "@/task/types/Task.js";
 
 function resolve_task_final_text(params: {
@@ -45,11 +45,11 @@ export async function dispatchTaskRunCompletionToSession(params: {
   if (!text) return;
 
   try {
-    await params.context.sessions.get(
+    await params.context.agent.sessions.get(
       delivery_session.session_id,
       delivery_session.origin_type,
     );
-    await params.context.sessions.runtime(
+    await params.context.agent.sessions.runtime(
       delivery_session.session_id,
       delivery_session.origin_type,
     ).append_assistant_message({ text });

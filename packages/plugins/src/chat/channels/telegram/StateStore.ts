@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginJsonObject } from "@downcity/plugin";
 
 /**
  * Telegram 轮询模式的持久化状态存储。
@@ -30,7 +30,7 @@ export class TelegramStateStore {
   async loadLastUpdateId(): Promise<number | undefined> {
     try {
       if (!(await fs.pathExists(this.lastUpdateIdFile))) return undefined;
-      const data = (await fs.readJson(this.lastUpdateIdFile)) as JsonObject;
+      const data = (await fs.readJson(this.lastUpdateIdFile)) as PluginJsonObject;
       const value = Number(data?.lastUpdateId);
       if (Number.isFinite(value) && value > 0) return value;
       return undefined;

@@ -17,10 +17,10 @@ description: 从运行语义角度理解 pipeline、guard、effect、resolve 到
 例如：
 
 ```ts
-const next = await agent.plugins.pipeline("chat.enrich_message", value);
-await agent.plugins.guard("review.require_checked", next);
-await agent.plugins.effect("audit.observe", next);
-const role = await agent.plugins.resolve("auth.resolve_role", {
+const next = await entry.plugins.pipeline("chat.enrich_message", value);
+await entry.plugins.guard("review.require_checked", next);
+await entry.plugins.effect("audit.observe", next);
+const role = await entry.plugins.resolve("auth.resolve_role", {
   userId: "owner",
 });
 ```

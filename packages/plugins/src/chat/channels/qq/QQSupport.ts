@@ -7,8 +7,8 @@
  */
 
 import { buildChatInboundText, augmentChatInboundInput } from "@/chat/runtime/InboundAugment.js";
-import type { PluginContext } from "@downcity/agent";
-import type { JsonObject } from "@downcity/agent";
+import type { PluginContext } from "@downcity/plugin";
+import type { PluginJsonObject } from "@downcity/plugin";
 import type { QQMessageData, QQReadyUser } from "@/chat/channels/qq/types/QqChannel.js";
 import type { QqIncomingAttachment } from "@/chat/types/QqVoice.js";
 import { resolveQqAttachmentLocalPath } from "./VoiceInput.js";
@@ -90,7 +90,7 @@ export interface BuildQqInboundInstructionsParams {
 /**
  * 解析 READY 事件中的机器人身份信息。
  */
-export function extractQqReadyIdentity(data: JsonObject): QqReadyIdentity {
+export function extractQqReadyIdentity(data: PluginJsonObject): QqReadyIdentity {
   const readyUser =
     data.user && typeof data.user === "object" && !Array.isArray(data.user)
       ? (data.user as QQReadyUser)

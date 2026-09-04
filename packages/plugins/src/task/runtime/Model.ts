@@ -18,7 +18,7 @@ import type {
   ShipTaskStatus,
   TaskDeliverySession,
 } from "@/task/types/Task.js";
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
 
 /**
  * 必填 frontmatter 字段清单。
@@ -31,7 +31,7 @@ const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
   "status",
 ];
 
-type TaskRawValue = JsonValue | undefined;
+type TaskRawValue = PluginJsonValue | undefined;
 
 /** 校验并归一化 Task 的固定 Session 交付目标。 */
 function normalize_task_delivery_session(
@@ -233,11 +233,11 @@ export function parseTaskMarkdown(params: {
     return { ok: false, error: "Missing YAML frontmatter (--- ... ---) in task.md" };
   }
 
-  let meta: JsonObject | null = null;
+  let meta: PluginJsonObject | null = null;
   try {
-    const loaded = yaml.load(frontMatterYaml) as JsonValue;
+    const loaded = yaml.load(frontMatterYaml) as PluginJsonValue;
     if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) {
-      meta = loaded as JsonObject;
+      meta = loaded as PluginJsonObject;
     } else {
       meta = null;
     }

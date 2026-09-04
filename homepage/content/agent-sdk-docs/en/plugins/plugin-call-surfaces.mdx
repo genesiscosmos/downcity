@@ -1,171 +1,68 @@
 ---
 title: Plugin Call Surfaces
-description: Understand agent.plugins, context.plugins, and the plugin_call tool
+description: Distinguish City bindings, Workspace execution, PluginContext, and the plugin_call Tool.
 ---
 
 # Plugin Call Surfaces
 
-Downcity has three common plugin call surfaces:
+Plugins expose four call surfaces for different callers:
 
-- `agent.plugins`
-- `context.plugins`
-- `plugin_call` tool
+| Surface | Caller | Purpose |
+| --- | --- | --- |
+| `city.plugins` | Host application | Register modules, manage Agent/Profile bindings, invoke main/config actions |
+| `entry.plugins` | Host execution code | Call Actions, Availability, or Hooks in one Agent/Workspace scope |
+| `context.city.plugins` | Plugin code | Call another Plugin Action, pipeline, or effect in the current scope |
+| `plugin_call` | Model in a Session | Call a Plugin Action bound to the current Agent |
 
-They all end up in the current Agent plugin registry, but they are used by different callers.
-
-```mermaid
-flowchart TD
-  A["PluginRegistry"] --> B["agent.plugins"]
-  A --> C["context.plugins"]
-  A --> D["plugin_call tool"]
-
-  B --> E["SDK / application code calls plugins"]
-  C --> F["plugins / runtime code call plugins"]
-  D --> G["the model calls plugins during a session"]
-```
-
-## `agent.plugins`
-
-`agent.plugins` is the SDK-facing entry point for application code.
+## City binding surface
 
 ```ts
-const result = await agent.plugins.run_action({
+city.plugins.provide(registration);
+await city.plugins.register(agent.id, { plugin_id: "skill" });
+console.log(city.plugins.snapshots(agent.id));
+await city.plugins.unregister(agent.id, "skill");
+```
+
+`city.plugins.invoke()` and `invoke_config()` call host-management Actions registered by Plugin main;
+they are not Session execution Actions.
+
+## Workspace execution surface
+
+```ts
+const entry = await city.enter_workspace(agent.id, workspace.id);
+const result = await entry.plugins.run_action({
   plugin: "skill",
   action: "lookup",
-  payload: {
-    name: "frontend-design",
-  },
+  payload: { name: "frontend-design" },
 });
 ```
 
-Use it when:
+This surface explicitly binds an Agent and Workspace, allowing City to create the correct
+`PluginContext`.
 
-- a server API wants to trigger a plugin action
-- a test script needs to call a plugin
-- application code needs to list plugins, check availability, or read action results
-
-Common calls:
+## PluginContext
 
 ```ts
-agent.plugins.list();
-agent.plugins.availability("skill");
-agent.plugins.run_action({ plugin: "skill", action: "list", payload: {} });
-agent.plugins.pipeline("chat.enrich_message", value);
-agent.plugins.guard("chat.authorize_message", value);
-agent.plugins.effect("audit.observe", value);
-agent.plugins.resolve("auth.resolve_role", value);
-```
-
-## `context.plugins`
-
-`context.plugins` is the plugin/runtime-internal entry point.
-
-For example, after the chat plugin receives a Telegram message, it may need the authorization plugin to decide whether the sender is allowed to continue. The chat plugin should not import the authorization plugin's private implementation directly. Instead, it triggers a guard point through the current runtime context:
-
-```ts
-await context.plugins.guard("chat.incoming_message", {
-  channel: "telegram",
-  userId: "123",
-  text: "Check the project status",
+const result = await context.city.plugins.run_action({
+  plugin: "skill",
+  action: "list",
+  payload: {},
 });
+await context.city.plugins.effect("audit.observe", result.data ?? null);
 ```
 
-The authorization plugin can register that guard:
+`context.session`, `context.agent.sessions`, and `context.workspace` are directly callable handles.
+IDs are reserved for stable identity and serialization.
 
-```ts
-hooks: {
-  guard: {
-    "chat.incoming_message": [
-      async ({ value, context }) => {
-        // Throw when the sender is not allowed.
-      },
-    ],
-  },
-}
-```
-
-The flow looks like this:
-
-```mermaid
-sequenceDiagram
-  participant Chat as Chat plugin
-  participant Plugins as context.plugins
-  participant Auth as Auth plugin guard
-  participant Session as Session
-
-  Chat->>Plugins: guard("chat.incoming_message", payload)
-  Plugins->>Auth: run registered guard
-  Auth-->>Plugins: pass or throw
-  Plugins-->>Chat: return result
-  Chat->>Session: continue only after the guard passes
-```
-
-Use it when:
-
-- one plugin triggers a `pipeline` registered by another plugin
-- one plugin triggers a `guard` registered by another plugin
-- one plugin triggers audit, sync, or observation `effect` handlers
-- one plugin uses `resolve` to ask for one authoritative answer
-
-In one line: `context.plugins` is how plugins collaborate without depending on each other's private implementation.
-
-## `plugin_call` tool
-
-`plugin_call` is the tool-facing entry point for the model.
-
-During a session, the model can call:
+## Model Tool
 
 ```ts
 plugin_call({
   plugin: "skill",
   action: "lookup",
-  payload: {
-    name: "frontend-design",
-  },
+  payload: { name: "frontend-design" },
 });
 ```
 
-The tool turns that into:
-
-```ts
-agent.plugins.run_action({
-  plugin: "skill",
-  action: "lookup",
-  payload: {
-    name: "frontend-design",
-  },
-});
-```
-
-`plugin_call` is bound to the plugin registry of the Agent that owns the current session. In multi-Agent hosts that cache or switch Agents in one process, a session's `plugin_call` does not read another Agent's registry.
-
-Use this when you want the model to call registered plugin actions during a conversation.
-
-For example, if the user asks:
-
-```txt
-Read the frontend-design skill for me.
-```
-
-The model can decide to call `plugin_call`, read the skill content, and continue the answer.
-
-## Which One To Use
-
-| Surface | Caller | Typical use |
-| --- | --- | --- |
-| `agent.plugins` | SDK / application code | Application code calls plugins directly |
-| `context.plugins` | plugin / runtime internals | Plugins collaborate through hooks, resolve points, or actions |
-| `plugin_call` | model | The model calls plugin actions during a session |
-
-Use `agent.plugins` when you are writing application code.
-
-Use `context.plugins` when you are writing plugin internals.
-
-Use `plugin_call` when you want the model to trigger plugin actions during a session.
-
-## Related Docs
-
-- [Plugin overview](/en/agent-sdk-docs/plugins/overview)
-- [Plugin actions](/en/agent-sdk-docs/plugins/plugin-actions)
-- [Plugin hooks and resolve](/en/agent-sdk-docs/plugins/plugin-hooks)
-- [Custom plugin](/en/agent-sdk-docs/plugins/custom-plugin)
+The Tool is always bound to the current Session's Agent/Workspace execution lease and cannot observe
+another Agent's bindings.

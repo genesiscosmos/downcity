@@ -1,27 +1,20 @@
 ---
 title: Plugin 开发指南
-description: 开发 Agent Plugin，并按需添加可安装的 main 与 Mainview
+description: 使用 @downcity/plugin 构建统一 City Plugin module。
 ---
 
 # Plugin 开发指南
 
-Plugin 是一个独立能力单元，拥有自己的 actions、状态和生命周期。Plugin Class 属于 Agent SDK；可安装包只是 CLI/Desktop 的宿主适配层。
+Plugin 作者 API 位于 `@downcity/plugin`。一个 `CityPluginModule` 同时定义 main 生命周期和
+Profile 执行实例 factory；Agent 包不再导出 Plugin 作者协议。
 
-## 设计原则
-
-- Plugin constructor 由作者设计，不强制接收 Profile。
-- Plugin 自己创建并拥有 provider、client、store、queue 和长期资源。
-- Workspace 能力通过运行时 `PluginContext` 暴露，外部服务通过窄接口注入。
-- 配置只保存可序列化的值，连接、实例、回调和宿主对象属于运行态。
-- 一个 Plugin 只负责一个清晰领域，不通过大量组合开关扩张边界。
-
-## Plugin Class
+## 执行实例
 
 ```ts
-import { BasePlugin, create_action } from "@downcity/agent";
+import { BasePlugin, create_action } from "@downcity/plugin";
 import { z } from "zod";
 
-export class ExamplePlugin extends BasePlugin {
+class ExamplePlugin extends BasePlugin {
   readonly name = "example";
   readonly title = "Example";
   readonly description = "An example Plugin.";
@@ -32,13 +25,14 @@ export class ExamplePlugin extends BasePlugin {
 
   readonly actions = {
     status: create_action({
-      description: "Return the current Plugin status.",
-      input_schema: z.object({}),
+      description: "Return the current scope.",
+      input_schema: { zod: z.object({}) },
       execute: async ({ context, execution }) => ({
         success: true,
         data: {
-          agent_id: context.agent_id,
-          workspace_id: context.workspace_id,
+          agent_id: context.agent.id,
+          workspace_id: context.workspace.id,
+          session_id: context.session?.id ?? null,
           call_id: execution.call_id,
         },
       }),
@@ -47,67 +41,58 @@ export class ExamplePlugin extends BasePlugin {
 }
 ```
 
-SDK 宿主直接创建实例：
+Workspace 用户文件使用 `context.workspace.files`；Plugin 私有状态使用 `context.storage.files`。
+`context.session` 与 `context.agent.sessions` 是可直接调用的受限句柄，不需要只依赖 ID 回查对象。
+
+## 统一 City module
 
 ```ts
-const agent = new Agent({
-  id: "assistant",
-  plugins: [new ExamplePlugin(new ExampleClient())],
+import { define_city_plugin } from "@downcity/plugin";
+
+export default define_city_plugin({
+  activate(context) {
+    context.plugin.action({
+      id: "about",
+      run: () => ({ name: "example" }),
+    });
+  },
+  create({ profile }) {
+    return new ExamplePlugin(new ExampleClient(profile.config));
+  },
 });
 ```
 
-## Action 与运行上下文
-
-每个 action 都应有明确输入、稳定结果和可取消执行：
+SDK 宿主把该 module 放入 `CityPluginRegistration`，先交给 City，再按 ID 绑定 Agent：
 
 ```ts
-run: create_action({
-  input_schema: z.object({ value: z.string().min(1) }),
-  execute: async ({ input, execution }) => {
-    execution.abort_signal.throwIfAborted();
-    const result = await client.run(input.value, {
-      signal: execution.abort_signal,
-    });
-    return { success: true, data: result };
-  },
-})
-```
+const registration = {
+  id: "example",
+  title: "Example",
+  description: "An example Plugin.",
+  readme: "/absolute/path/README.md",
+  has_config: false,
+  has_sidebar: false,
+  has_mainview: false,
+  module: example_module,
+};
 
-`PluginContext.files` 面向用户 Workspace，`data_files` 和 `data_path` 面向当前 Agent/Plugin 的私有数据。不要把私有数据库、缓存或凭据写入用户 Workspace。
+const city = new City({ plugins: [registration], workspaces: [workspace] });
+city.agents.add(agent, { plugins: [{ plugin_id: "example" }] });
+```
 
 ## 生命周期
 
-长期资源必须由 Plugin 自己创建和释放：
-
-```ts
-readonly lifecycle = {
-  start: async (context: PluginContext) => {
-    await this.client.initialize({ agent_id: context.agent_id });
-  },
-  enter_workspace: async (context: PluginContext) => {
-    await this.client.select_workspace(context.workspace_path);
-  },
-  leave_workspace: async () => {
-    await this.client.clear_workspace();
-  },
-  stop: async () => {
-    await this.client.dispose();
-  },
-};
-```
-
-`stop` 应幂等，并释放浏览器、连接、定时器、队列等所有长期资源。
+`start/stop` 属于 City 的 `(plugin_id, profile_id)` 共享实例；`bind/unbind` 属于
+Agent/Workspace scope。Profile 级 client、连接与缓存放在 `start/stop`，scheduler、路由或
+scope worker 放在 `bind/unbind`。所有异步 Action 都应传递 `execution.abort_signal`。
 
 ## 可安装包
-
-需要让 CLI/Desktop 加载时，使用一个 Plugin ID 声明三个可选入口：
 
 ```text
 example-plugin/
 ├── plugin.json
 ├── package.json
 ├── README.md
-├── dist/agent.js
 ├── dist/main.js
 └── dist/renderer.js
 ```
@@ -119,7 +104,6 @@ example-plugin/
   "version": "1.0.0",
   "description": "A small example Plugin.",
   "readme": "./README.md",
-  "agent": "./dist/agent.js",
   "main": "./dist/main.js",
   "renderer": {
     "entry": "./dist/renderer.js",
@@ -130,49 +114,13 @@ example-plugin/
 }
 ```
 
-- `agent` 默认导出 factory，为每个 Agent 返回新的 Plugin 实例。
-- `main` 默认导出管理生命周期对象，并分别注册 Plugin 级和 Profile 配置 actions。
-- `renderer` 默认导出成对的 `sidebar + mainview` 和/或独立 `config`，实际插槽必须与清单中的静态声明一致，并使用宿主注入的 `ui.components`。
-- 需要历史记录等多级导航时，使用不同 `depth` 的 `SidebarTreeItem` 将它们组织在 Plugin Sidebar 内。
-- `readme` 必须指向 Plugin 根目录内的 `.md` 用户文档，由 Desktop 在 Plugin Overview 中安全渲染。
-
-至少声明一个入口。不存在通用 `entry`、`config.schema` 或宿主生成表单。
-
-## Agent factory
-
-```ts
-import type { AgentPluginModule } from "@downcity/agent";
-
-const create_agent_plugin: AgentPluginModule<ExamplePlugin>["default"] = (context) => {
-  const config = parse_example_config(context.profile);
-  return new ExamplePlugin(new ExampleClient(config));
-};
-
-export default create_agent_plugin;
-```
-
-Profile 只是宿主配置空间。SDK Class 不需要知道它来自 TOML；factory 负责把配置快照转换成 Plugin 自己的 constructor 参数。
-
-## Main 与 Renderer
-
-Plugin Sidebar/Mainview 使用 `plugin.action()` 与 `plugin.invoke()`，通过共享的 `navigation` 协同，不依赖 Profile；声明这两个插槽后，宿主会为 Plugin 增加一级导航入口。配置体验使用 `plugin.config_action()` 与 `config.invoke()`，由宿主在 Plugins Catalog 的详情页绑定当前 Profile。只有声明 Config 的 Plugin 才有 Profile；内容结构、默认值、校验和 Secret 投影全部由 Plugin 自己负责，宿主只提供 Profile CRUD。
-
-完整示例与安全边界见[自定义 Plugin](/zh/docs/plugin/custom)。
+`main` 默认导出 `CityPluginModule`，不再存在独立 `agent` 入口。Renderer 只通过宿主 action
+gateway 通信，不能直接访问 Node、Electron、Agent 或 Profile 文件。
 
 ## 测试重点
 
-- Plugin action 输入、结果与取消。
-- 生命周期资源是否完整释放。
-- Agent factory 是否每次返回新实例且 `name` 与 Plugin ID 一致。
-- main 是否拒绝非法配置，并且不会向 Mainview 泄漏凭据。
-- Renderer 是否只使用 action gateway 与宿主 `ui`。
-
-## 发布检查清单
-
-1. `plugin.json` 的 ID、版本、`readme` 和入口正确，至少有一个运行入口。
-2. `agent/main` 是自包含 ESM，`renderer` 是单文件 React ESM，React 与 JSX runtime 由宿主共享。
-3. Agent factory 每次创建新实例。
-4. Profile 不包含连接、实例、回调或宿主对象。
-5. 所有长期资源都能释放，异步 action 响应取消。
-6. 私有数据使用 `data_files`，用户文件使用 `files`。
-7. Renderer 不直接访问 Node、Electron、Agent 或配置文件，不自带第二套设计系统。
+- 相同 Profile 多 Agent 只创建和 `start` 一次。
+- 每个 Agent/Workspace scope 恰好 `bind/unbind` 一次。
+- 最后一个 execution lease 释放后才 `stop`。
+- main 并发调用只 `activate` 一次，关闭时完整 `deactivate`。
+- Action 输入、JSON 结果和取消信号正确。

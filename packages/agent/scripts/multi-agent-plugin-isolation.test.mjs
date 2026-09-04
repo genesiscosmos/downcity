@@ -6,13 +6,14 @@
  */
 
 import test from "node:test";
+import { create_plugin_registration } from "./helpers/CityPluginTestBinding.mjs";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { MockModelClient } from "./ModelClientMock.mjs";
 
-import { Agent } from "../bin/index.js";
+import { Agent, City } from "../bin/index.js";
 import { create_workspace_entry } from "../bin/internal/index.js";
 import { Workspace } from "@downcity/workspace";
 import { create_action, create_plugin } from "../bin/plugin/core/PluginActionFactory.js";
@@ -107,16 +108,17 @@ function create_test_model(model_id, model_requests) {
   });
 }
 
-/** 创建返回固定 owner 的 skill plugin。 */
-function create_owner_plugin(owner, executed_owners) {
+/** 创建通过动态 Context 返回当前 Agent ID 的共享 skill plugin。 */
+function create_owner_plugin(executed_owners) {
   return create_plugin({
     name: "skill",
-    title: `Skill ${owner}`,
+    title: "Shared Skill",
     description: "Return the owning Agent id",
     actions: {
       lookup: create_action({
         description: "Return registry owner",
-        execute: async () => {
+        execute: async ({ context }) => {
+          const owner = context.agent.id;
           executed_owners.push(owner);
           return {
             success: true,
@@ -136,18 +138,26 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
   const root_b = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-isolation-b-"));
   const agent_a = new Agent({
     id: "agent_a",
-    plugins: [create_owner_plugin("agent_a", executed_owners)],
     model: create_test_model("model_a", model_requests),
   });
   const agent_b = new Agent({
     id: "agent_b",
-    plugins: [create_owner_plugin("agent_b", executed_owners)],
     model: create_test_model("model_b", model_requests),
   });
-  const entry_a = create_workspace_entry(agent_a, new Workspace({ id: "workspace_a", path: root_a, data_root_path: path.join(root_a, "data") }));
-  const entry_b = create_workspace_entry(agent_b, new Workspace({ id: "workspace_b", path: root_b, data_root_path: path.join(root_b, "data") }));
+  const workspace_a = new Workspace({ id: "workspace_a", path: root_a, data_root_path: path.join(root_a, "data") });
+  const workspace_b = new Workspace({ id: "workspace_b", path: root_b, data_root_path: path.join(root_b, "data") });
+  const city = new City({ workspaces: [workspace_a, workspace_b] });
+  const registration = create_plugin_registration(create_owner_plugin(executed_owners));
+  city.plugins.provide(registration);
+  city.agents.add(agent_a, { plugins: [{ plugin_id: registration.id }] });
+  city.agents.add(agent_b, { plugins: [{ plugin_id: registration.id }] });
+  const entry_a = create_workspace_entry(agent_a, workspace_a);
+  const entry_b = create_workspace_entry(agent_b, workspace_b);
 
   try {
+    await Promise.all([agent_a.ensure_ready(), agent_b.ensure_ready()]);
+    assert.notEqual(entry_a.tools.plugin_call, undefined);
+    assert.notEqual(entry_b.tools.plugin_call, undefined);
     const session_a = await entry_a.sessions.create({ session_id: "session_a" });
     const session_b = await entry_b.sessions.create({ session_id: "session_b" });
     const [turn_a, turn_b] = await Promise.all([
@@ -165,6 +175,6 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
       assert.match(JSON.stringify(requests[1].prompt), new RegExp(owner));
     }
   } finally {
-    await Promise.all([agent_a.dispose(), agent_b.dispose()]);
+    await city.close();
   }
 });

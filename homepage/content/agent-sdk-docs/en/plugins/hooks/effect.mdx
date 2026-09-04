@@ -26,7 +26,7 @@ The point is to do something in response to the current step.
 ## Minimal example
 
 ```ts
-await agent.plugins.effect("audit.observe", {
+await entry.plugins.effect("audit.observe", {
   event: "incoming_message",
   session_id: "sess_001",
 });

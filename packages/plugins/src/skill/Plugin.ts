@@ -8,12 +8,12 @@
  * - skills overview 文本通过 `plugin.system` 注入，不再依赖 plugin.system。
  */
 
-import { BasePlugin } from "@downcity/agent";
-import { create_action } from "@downcity/agent";
+import { BasePlugin } from "@downcity/plugin";
+import { create_action } from "@downcity/plugin";
 import { z } from "zod";
-import type { Plugin } from "@downcity/agent";
-import type { JsonObject, JsonValue } from "@downcity/agent";
-import type { PluginActionResult } from "@downcity/agent";
+import type { Plugin } from "@downcity/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@downcity/plugin";
+import type { PluginActionResult } from "@downcity/plugin";
 import type {
   SkillPluginFindPayload,
   SkillPluginInstallPayload,
@@ -36,11 +36,11 @@ import { SKILL_PLUGIN_PROMPT } from "@/skill/SkillPromptAssets.js";
 /**
  * 读取 JSON object。
  */
-function readJsonObject(value: JsonValue): JsonObject {
+function readJsonObject(value: PluginJsonValue): PluginJsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("Invalid JSON body");
   }
-  return value as JsonObject;
+  return value as PluginJsonObject;
 }
 
 /**
@@ -63,7 +63,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
     async system(context, execution_context) {
       const dynamicText = String(
         await buildSkillsSystemText({
-          rootPath: context.workspace_path,
+          rootPath: context.workspace.path,
           options,
         }, execution_context),
       ).trim();
@@ -106,7 +106,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
             return { query };
           },
         },
-        execute(params): PluginActionResult<JsonObject> {
+        execute(params): PluginActionResult<PluginJsonObject> {
           const payload = params.input as SkillPluginFindPayload;
           return {
             success: true,
@@ -155,7 +155,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
             return { spec };
           },
         },
-        execute(params): PluginActionResult<JsonObject> {
+        execute(params): PluginActionResult<PluginJsonObject> {
           const payload = params.input as SkillPluginInstallPayload;
           return {
             success: true,
@@ -164,7 +164,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
               kind: "instructions",
               spec: payload.spec,
               prompt: render_skill_install_prompt(
-                params.context.workspace_path,
+                params.context.workspace.path,
                 options,
                 payload.spec,
               ),
@@ -196,10 +196,10 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
         api: {
           method: "GET",
         },
-        execute(params): PluginActionResult<JsonObject> {
+        execute(params): PluginActionResult<PluginJsonObject> {
           return {
             success: true,
-            data: listSkills(params.context.workspace_path, options) as unknown as JsonObject,
+            data: listSkills(params.context.workspace.path, options) as unknown as PluginJsonObject,
           };
         },
       }),
@@ -243,10 +243,10 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
             return { name };
           },
         },
-        async execute(params): Promise<PluginActionResult<JsonObject>> {
+        async execute(params): Promise<PluginActionResult<PluginJsonObject>> {
           const payload = params.input as SkillPluginLookupPayload;
           const result = await lookupSkill({
-            project_root: params.context.workspace_path,
+            project_root: params.context.workspace.path,
             request: {
               name: payload.name,
             },
@@ -289,7 +289,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
                 toolOutputMessage:
                   "skill lookup success; content injected as <skill> user message.",
               },
-            } as JsonObject,
+            } as PluginJsonObject,
           };
         },
       }),

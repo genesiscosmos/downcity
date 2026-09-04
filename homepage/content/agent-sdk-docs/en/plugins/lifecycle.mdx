@@ -1,124 +1,73 @@
 ---
 title: Plugin Lifecycle
-description: Understand Agent plugin registration, unregistration, and when lifecycle.start / lifecycle.stop run
+description: Understand City-owned Plugin mains, shared instances, Workspace scopes, and execution leases.
 ---
 
 # Plugin Lifecycle
 
-Plugins belong to an Agent.
+City owns Plugins. An Agent declares only a `plugin_id` and optional Profile binding. A City creates
+one instance for each `(plugin_id, profile_id)` and may share it across multiple Agents.
 
-The lifecycle can be simplified to two operations:
-
-- register: the plugin successfully enters `agent.plugins`
-- unregister: the plugin is successfully removed from `agent.plugins`
-
-Direct host calls through `agent.plugins` immediately observe the configured registry. Existing Sessions switch their plugin action and metadata execution view at the next Session step checkpoint. An execution lease keeps the old plugin lifecycle active until the current step and its tool calls finish. If the current Session turn has no later step, the queued view change is applied when the next Session turn starts. A Session fixes its system the first time it is generated, so registry changes do not alter it; newly created Sessions collect plugin system text from the latest registry.
-
-You no longer need a separate start, stop, restart, or project-level enabled switch.
-
-## Registration Is Enablement
-
-Plugins passed to the Agent constructor are registered automatically:
+## Provision and bind
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { WebPlugin } from "@downcity/plugins/web";
-
-const agent = new Agent({
-  id: "agent",
-  plugins: [new WebPlugin({ browser: "playwright", cdp_url: "http://127.0.0.1:9222" })],
-});
-const workspace = new Workspace({
-  id: "project",
-  path: process.cwd(),
+const city = new City({
+  workspaces: [workspace],
+  plugins: [registration],
 });
 
-const session = await agent.sessions.create({ workspace });
+city.agents.add(agent, {
+  plugins: [{ plugin_id: registration.id, profile }],
+});
 ```
 
-After the Agent is instantiated, you can register more plugins:
+Bindings may also change dynamically:
 
 ```ts
-await agent.plugins.register(new SkillPlugin());
+await city.plugins.register(agent.id, {
+  plugin_id: registration.id,
+  profile,
+});
+await city.plugins.unregister(agent.id, registration.id);
 ```
 
-Registering the same plugin name replaces the old instance. The runtime unregisters the old plugin before registering the new one.
+`provide` registers a module. `register` binds one Agent to one Profile. Within a City, one Plugin ID
+must always refer to the same module, and one Profile ID must have one consistent configuration.
 
-## Unregistration Is Disablement
+## Four execution lifecycle checkpoints
+
+- `start(context)` runs once when the first Agent references the Plugin/Profile. Use it for shared connections and caches.
+- `bind(context)` runs when an Agent enters a Workspace. Use it for scope-specific schedulers, queues, or routes.
+- `unbind(context)` releases that scope when it leaves, changes Profile, or unbinds the Plugin.
+- `stop(context)` runs once after the final Agent reference and active execution lease are released.
 
 ```ts
-await agent.plugins.unregister("skill");
+readonly lifecycle = {
+  start: async ({ profile, storage }) => {
+    await this.client.open(profile.config, storage);
+  },
+  bind: async (context) => {
+    await this.scheduler.start(context.agent.id, context.workspace.id);
+  },
+  unbind: async (context) => {
+    await this.scheduler.stop(context.agent.id, context.workspace.id);
+  },
+  stop: async () => {
+    await this.client.close();
+  },
+};
 ```
 
-After unregistering:
+`start/stop` receive `PluginLifecycleContext`, whose storage belongs to the shared Profile.
+`bind/unbind` receive the full `PluginContext`, whose storage belongs to the current Agent/Plugin
+execution scope.
 
-- `agent.plugins.get("skill")` returns `null`
-- `agent.plugins.run_action({ plugin: "skill", ... })` returns unknown plugin
-- that plugin's hooks, resolves, and actions no longer participate in future runs; system text already fixed by existing Sessions is not removed retroactively
+## Execution leases
 
-## lifecycle.start / lifecycle.stop
+A Session captures an immutable Plugin execution view at a Step checkpoint. New Steps stop seeing an
+unbound Plugin immediately, while an existing Step may finish. City waits for the final lease before
+stopping the shared instance, preventing premature shutdown of connections or providers.
 
-Plugins can still declare lifecycle hooks:
-
-- `lifecycle.start`
-- `lifecycle.stop`
-- `lifecycle.command`
-
-But they are no longer a public state machine.
-
-The rules are:
-
-- `register(plugin)` automatically calls `plugin.lifecycle?.start(context)`
-- `unregister(name)` removes the plugin from the configured registry immediately; `plugin.lifecycle?.stop(context)` runs after active Session step leases release
-- `agent.dispose()` unregisters all plugins
-
-Lifecycle is useful for:
-
-- workers
-- poll loops
-- long-lived connections
-- in-memory runtime state
-- recoverable runtime engines
-
-## Lifecycle command vs action
-
-Use `lifecycle.command` when the plugin needs a runtime-control command such as:
-
-- reload
-- reschedule
-- restart
-
-Use `actions` when the plugin is exposing normal capability work.
-
-`task` is a good example of a plugin that has both.
-
-## Inspecting Registration State
-
-```ts
-agent.plugins.snapshots();
-agent.plugins.status("skill");
-agent.plugins.has("skill");
-```
-
-States are intentionally small:
-
-- `initializing`
-- `ready`
-- `error`
-
-A registered plugin starts in `initializing`. Its first action, availability check, system block, or hook waits for lifecycle startup to finish. Successful startup changes the state to `ready`; startup failure changes it to `error`.
-
-An unregistered plugin does not need a state because it is no longer in the registry.
-
-## ActionSchedule
-
-ActionSchedule is not a plugin.
-
-Each Agent owns one local scheduling loop. Due jobs call actions on the Agent's currently registered plugins; a Workspace context is selected only when a Session executes the job.
-
-## Related docs
-
-- [Plugin Availability](/en/agent-sdk-docs/plugins/plugin-availability)
-- [Plugin Design Patterns](/en/agent-sdk-docs/plugins/design-patterns)
-- [Built-ins Overview](/en/plugins-docs/builtins/overview)
+`city.close()` releases Workspace scopes, Agent bindings, shared instances, and Plugin mains. A
+single `stop` or `deactivate` failure does not prevent other Plugins from cleaning up; City reports an
+aggregate error after cleanup finishes.

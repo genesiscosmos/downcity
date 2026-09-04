@@ -1,38 +1,35 @@
 ---
-title: tools and plugins
-description: How to inject tools and explicit plugin instances into a local Agent
+title: Tools and Plugins
+description: Configure Agent Tools and provide and bind Plugins through City
 ---
 
-# tools and plugins
+# Tools and Plugins
 
-## tools
+Tools and Plugins both participate in Session execution, but ownership differs: Agent owns custom Tools; City owns the Plugin catalog, Profile-shared instances, and lifecycle.
 
-Local Agents can receive an explicit tool set:
+## Custom Tools
+
+A local Agent directly receives custom Tools:
 
 ```ts
 const agent = new Agent({
   id: "repo-helper",
   tools: {
-    my_tool: myTool,
+    my_tool,
   },
-});
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
 });
 ```
 
-These tools are available during session execution.
+They are merged with the Tools of the Workspace selected by the Session. Name conflicts throw instead of silently replacing a Tool.
 
-## shell
+## Workspace and Shell
 
-Use `@downcity/workspace` when the Agent should own shell execution tools:
+Workspace provides `grep`, `find`, `read`, `write`, and `edit`. Configure Shell explicitly when command execution is required:
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { Shell } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { Shell, Workspace } from "@downcity/workspace";
 
 const agent = new Agent({ id: "repo-helper" });
 const workspace = new Workspace({
@@ -42,275 +39,89 @@ const workspace = new Workspace({
 });
 ```
 
-Workspace creates WorkspaceTools from five file/search tools by default, and Shell contributes two command tools. The Session combines them with Agent custom Tools:
+Shell adds `shell_exec` and `shell_session`. File and search Tools remain restricted to the Workspace root. Approvals and asynchronous questions belong to a specific Session and use `session.interactions()` and `session.respond(...)`.
 
-- `shell_exec`: one-shot non-interactive commands
-- `shell_session`: long-running or stdin-driven interactive PTY sessions
-- `grep`: structured project-content search powered directly by ripgrep
-- `find`: project file discovery with POSIX glob patterns
-- `read`: paginated text reads and image or PDF attachments
-- `write`: file creation or explicit atomic full-file replacement
-- `edit`: atomic exact-text edits within one file
+## City provides Plugins
 
-File and search tools can only access the Workspace root and remain available without Shell. Generic `unrestricted` belongs only to Shell; File/Search, Plugin, and custom tools do not share that switch. Outside-project access requires Shell unrestricted approval, an explicit user attachment, or a dedicated host tool. `grep` and `find` respect ignore files, return at most 200 results by default, and accept `max_results` up to 2,000.
-
-When `read` opens a PNG, JPEG, GIF, WebP, BMP, or PDF, the result includes a User File Part for the next model step. The internal Tool object is not a public Agent or Workspace API; the Session assembles and invokes these tools during `prompt()`.
-
-Unrestricted sandbox requests belong to the Session that started the tool call:
+The Agent constructor does not accept Plugins. Provide registrations to City, then declare the Plugin IDs required by an Agent:
 
 ```ts
-const interactions = await session.interactions();
-await session.respond({
-  interaction_id: interactions[0].request.interaction_id,
-  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
-});
-```
-
-A live UI reads the complete request from a pending Interaction Part while the related Tool is `waiting-user`, then calls `session.respond(...)` after the user decides.
-
-Explicitly register the standalone tool when the model needs to ask questions:
-
-```ts
-import { Agent } from "@downcity/agent";
+import { Agent, City } from "@downcity/agent";
+import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/workspace";
-import { AskQuestionsTool } from "@downcity/agent/tools";
 
-const agent = new Agent({
-  id: "repo-helper",
-  tools: {
-    ask_question: AskQuestionsTool,
-  },
-});
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
 });
-```
-
-The model invokes `ask_question` as a standard Tool Call, not as a provider-specific message type.
-It supports `text`, `single_select`, and `multi_select`; every question must explicitly provide
-its `type`. Once the user responds, the answers become the Tool Result and the model continues in
-the next Step of the same Turn. See
-[Asynchronous User Interactions](/en/agent-sdk-docs/sessions/approvals) for the complete host flow.
-
-## plugins
-
-Local Agents can also receive explicit plugin instances:
-
-```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { SkillPlugin } from "@downcity/plugins/skill";
-
-const agent = new Agent({
-  id: "repo-helper",
-  plugins: [new SkillPlugin()],
-});
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
-});
-```
-
-Add `WebPlugin` only when a search, document, or browser provider is configured. See the [Web Plugin guide](/en/plugins-docs/builtins/web).
-
-Registered plugin actions can be called through `agent.plugins.run_action(...)`, and plugin `system(context, execution_context)` text is injected into session prompts.
-
-`PluginContext` does not expose a generic path bundle. A plugin uses `context.workspace_path` as the project boundary and owns its domain storage paths inside the plugin. Operations on Agent Sessions go through `context.sessions`, not the Agent's Session directories.
-
-`context.sessions` references the Agent's `AgentSessions`; it is not a second Session owner. Plugins use `context.sessions.runtime(session_id, origin_type = "chat")` for the synchronous runtime port. SDK callers restore an existing public Session with `await agent.sessions.get(session_id, origin_type, { workspace })`.
-
-Each `Agent` has its own plugin registry and its own `plugin_read` / `plugin_call` tool instances. If one process creates and caches multiple Agents, a session's `plugin_call` only reaches the registry for the Agent that owns that session.
-
-## plugin action metadata
-
-When actions exist, PluginRegistry provides two tools and Agent registers them in its final tool collection:
-
-- `plugin_read`: reads registered plugin actions, input schemas, and examples
-- `plugin_call`: executes a plugin action
-
-When the model is unsure how to call an action, it should call `plugin_read({ plugin, action })` first, then call `plugin_call(...)`. `plugin_call` validates payloads against the action `input_schema` before execution.
-
-WorkspaceTools, Plugin Tools, and `AgentOptions.tools` cannot reuse a name. Agent throws on a conflict instead of silently overriding an existing tool.
-
-Custom plugins can declare action metadata with `create_plugin` / `create_action`:
-
-```ts
-import { Agent, create_action, create_plugin } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { z } from "zod";
-
-const demo_plugin = create_plugin({
-  name: "demo",
-  title: "Demo",
-  description: "Demo actions",
-  actions: {
-    echo: create_action({
-      description: "Echo text",
-      input_schema: {
-        zod: z.object({
-          text: z.string(),
-        }),
-        json_schema: {
-          type: "object",
-          required: ["text"],
-          properties: {
-            text: { type: "string" },
-          },
-        },
-      },
-      examples: [
-        {
-          title: "Echo text",
-          payload: { text: "hello" },
-        },
-      ],
-      execute: async ({ input, execution }) => ({
-        success: true,
-        data: {
-          text: input.text,
-          session_id: execution.session?.session_id,
-        },
-        message: "echoed",
-      }),
-    }),
-  },
+const agent = new Agent({ id: "repo-helper", model });
+const city = new City({
+  workspaces: [workspace],
+  plugins: create_builtin_plugin_registrations(),
 });
 
-const agent = new Agent({
-  id: "repo-helper",
-  plugins: [demo_plugin],
-});
-```
-
-The `zod` schema handles runtime validation. `json_schema` and `examples` are returned by `plugin_read` for the model or UI. Every Action receives a stable `context` capability view and a per-call `execution` object. Session identity and interactions are available through `execution.session`; the effective Step env is available through `execution.snapshot.workspace_env`. Direct CLI, HTTP, or scheduler calls have no `execution.session`. `context.workspace_env` remains the current Workspace configuration snapshot.
-
-Tools and Plugin Actions share one Session result path: put the ordinary result in `output`, and return content that belongs in the conversation as `messages: [{ role, parts }]`. User Parts become available in the next Step; Assistant Parts are written to the current Assistant Message. Session does not download or rewrite files. An Action must save a file first and return a File Part pointing to that local path.
-
-## ChatPlugin
-
-Use `ChatPlugin` when you want the SDK runtime to own long-lived chat channels:
-
-```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { ChatPlugin, TelegramChannel } from "@downcity/plugins/chat";
-
-const agent = new Agent({
-  id: "repo-helper",
+city.agents.add(agent, {
   plugins: [
-    new ChatPlugin({
-      channels: [
-        new TelegramChannel({
-          env: {
-            TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
-          },
-        }),
-      ],
-    }),
+    { plugin_id: "skill" },
+    { plugin_id: "memory" },
   ],
 });
 ```
 
-Each channel object owns its own env and credential parsing, so `ChatPlugin` only manages lifecycle, queue, and actions.
+City does not enable every Plugin for every Agent. `CityOptions.plugins` or `city.plugins.provide()` only populate the catalog; `city.agents.add()` or `city.plugins.register()` creates an Agent/Profile binding.
 
-## ImagePlugin
+One `(plugin_id, profile_id)` identifies one shared instance inside a City. `start/stop` manages that instance, while `bind/unbind` manages each Agent/Workspace scope.
 
-Use `ImagePlugin` when you want an Agent to generate images during a conversation:
+## Profile configuration
 
-```ts
-import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/workspace";
-import { ImagePlugin } from "@downcity/plugins/image";
-
-const agent = new Agent({
-  id: "creative-agent",
-  model,
-  plugins: [
-    new ImagePlugin({
-      image_ai: embassy.user.ai,
-      default_model: "image-model-id",
-    }),
-  ],
-});
-```
-
-When the default image model depends on application state, pass a function:
+Pass a Profile when a Plugin requires configuration. Provider settings, credentials, and Owner routing for Web, Image, or Chat belong to the Profile, not the Agent:
 
 ```ts
-new ImagePlugin({ image_ai: embassy.user.ai, default_model: "image-model-id" });
-```
-
-After registration, the Agent automatically gets the built-in `plugin_read` / `plugin_call` tools. The model can inspect action metadata first:
-
-```ts
-await plugin_read({
-  plugin: "image",
-  action: "image_create",
-});
-```
-
-Image creation consumes provider quota. The Agent should ask the user to explicitly confirm the exact image creation or edit request before calling `image_create`.
-
-After confirmation, it can use the job-style actions directly:
-
-```ts
-const job = await plugin_call({
-  plugin: "image",
-  action: "image_create",
-  payload: {
-    prompt: "A cinematic illustration of a rainy city corner at night",
-    aspect_ratio: "16:9",
-  },
-});
-
-await plugin_call({
-  plugin: "image",
-  action: "image_result",
-  payload: {
-    job_id: job.data.job_id,
+await city.plugins.register(agent.id, {
+  plugin_id: "web",
+  profile: {
+    id: "primary",
+    config: {
+      browser: "playwright",
+      cdp_url: "http://127.0.0.1:9222",
+    },
   },
 });
 ```
 
-For reference images or image edits, use `content`:
+## Calling Plugins
+
+Host code calls Actions and Hooks through an Agent/Workspace execution entry:
 
 ```ts
-const job = await plugin_call({
-  plugin: "image",
-  action: "image_create",
-  payload: {
-    content: [
-      { type: "text", text: "Change this image to a white studio background" },
-      { type: "image", url: "./input.png" },
-    ],
-  },
+const entry = await city.enter_workspace(agent.id, workspace.id);
+
+const result = await entry.plugins.run_action({
+  plugin: "memory",
+  action: "search",
+  payload: { query: "project conventions" },
 });
+
+const enriched = await entry.plugins.pipeline("chat.enrich_message", input);
+await entry.plugins.guard("review.require_checked", enriched);
 ```
 
-`prompt` and `content` are the two public input formats exposed to the Agent. Use `prompt` for text-only image generation. Use `content` whenever the request includes reference images, image edits, or multiple context parts. If both are present, `content` wins and `prompt` is not forwarded downstream.
+When Actions exist, Session receives the `plugin_read` and `plugin_call` Tools. The model can inspect an Action schema before sending a validated payload. Plugin `system(context, execution_context)` text is injected at Session prompt checkpoints.
 
-`content[].url` can be an online URL, a local absolute path, or a path relative to the Agent project root. Local images are read by `ImagePlugin` and converted into the data URL format required by the City image job, so the model does not need to pass base64. The Agent should not pass `messages` or `data_url`.
+## Direct communication through PluginContext
 
-`default_model` is the plugin-level default image model. It can be a string, or a sync/async function. When the Agent calls `image_create` without a `model`, `ImagePlugin` injects the string value or function return value before calling the downstream `image_create(input)`. If the payload explicitly includes `model`, that payload value wins. Without `default_model`, call `models` first when the Agent needs to inspect available image model IDs.
+Plugin author APIs come from `@downcity/plugin`. Action, Hook, System, and Availability receive a `PluginContext` with restricted `city`, `agent`, `workspace`, `session`, `turn`, `profile`, and `storage` handles.
 
-`image_result` reads the current job state once by default. If it returns `queued` or `running`, keep the `job_id` and call `image_result` again later. For short jobs, pass `until_done: true` to wait for a terminal state in one tool call, with optional `max_wait_ms` / `poll_interval_ms`. If it returns `succeeded`, ImagePlugin downloads remote File Parts into `.downcity/image/results/<job_id>/`, returns the complete job result in `data`, and copies the localized File Parts into the current Assistant Message.
+`context.session` and `context.agent.sessions` are directly callable in-process objects; a Plugin does not need to retain only `session_id` and query the host again. Use `context.workspace.files` for Workspace files and `context.storage.files` for private Plugin files.
 
-`ImagePlugin` is provider-agnostic. It does not know about City, OpenAI, or DeepSeek directly. Pass `image_create` and `image_result` job functions, and the plugin exposes the two-step job actions to the Agent; by default the product, Agent, or caller decides when to poll again based on `poll_after_ms`, while `until_done` is only a simple plugin-level wait helper.
+## HTTP
 
-“Resolved provider input” means this: the Agent only passes simple `prompt` or `content`; `ImagePlugin` reads local files into data URLs and converts `content` into `ImagePluginResolvedInput.messages` before calling `image_create(input)`. This is the internal boundary from ImagePlugin to City / provider adapters, not a third Agent-facing payload format.
-
-The `image_result` callback may return a remote URL or a local path. For a remote URL, ImagePlugin uses the downloaded Workspace path as the File Part's primary `url`. If local storage fails, it retains the remote URL and reports the failure through the action message. Session persists the resulting File Part, while direct callers can read the same result from `data`.
-
-## plugin HTTP
-
-If Downcity exposes the City HTTP gateway, registered plugins with `plugin.http.server.register(...)` are also mounted onto the same HTTP app automatically.
-
-So:
-
-- plugin existence comes from the `plugins` array you pass into `Agent`
-- plugin HTTP exposure happens when Downcity publishes the City HTTP gateway
+A Plugin may declare structured HTTP routes. City mounts and authenticates them and injects the request-specific PluginContext. Plugins do not create independent servers.
 
 ## See also
 
-- [Shell & Sandbox](/en/agent-sdk-docs/local-agent/shell-reference) — Configure shell execution, sandboxing, and approvals
+- [Plugin overview](/en/agent-sdk-docs/plugins/overview)
+- [Plugin lifecycle](/en/agent-sdk-docs/plugins/lifecycle)
+- [Plugin actions](/en/agent-sdk-docs/plugins/plugin-actions)
+- [Built-in Plugins](/en/plugins-docs)
+- [Asynchronous user interactions](/en/agent-sdk-docs/sessions/approvals)

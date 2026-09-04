@@ -7,8 +7,8 @@
  * - 浏览器长期资源由 provider 拥有，并在 Plugin lifecycle.stop 时统一释放。
  */
 
-import { BasePlugin, create_action } from "@downcity/agent";
-import type { JsonObject, PluginActionResult } from "@downcity/agent";
+import { BasePlugin, create_action } from "@downcity/plugin";
+import type { PluginJsonObject, PluginActionResult } from "@downcity/plugin";
 import { z } from "zod";
 import type {
   BrowserActInput,
@@ -53,7 +53,7 @@ const BROWSER_ACTION_SCHEMA = z.discriminatedUnion("type", [
 ]);
 
 /** 把异常转换为 action 的稳定失败结果。 */
-function failure_result(error: unknown): PluginActionResult<JsonObject> {
+function failure_result(error: unknown): PluginActionResult<PluginJsonObject> {
   const message = error instanceof Error ? error.message : String(error);
   return { success: false, error: message, message };
 }
@@ -90,7 +90,7 @@ export class WebPlugin extends BasePlugin {
       : undefined;
   }
 
-  /** Agent 释放或卸载 plugin 时关闭全部浏览器资源。 */
+  /** City 停止或卸载 Plugin/Profile 实例时关闭全部浏览器资源。 */
   readonly lifecycle = {
     stop: async () => {
       await this.browser_provider?.dispose();
@@ -121,11 +121,11 @@ export class WebPlugin extends BasePlugin {
       }),
       examples: [{ title: "Search official sources", payload: { query: "Playwright CDP documentation", limit: 5 } }],
       execute: async ({ context, input }) => {
-        if (!context.web) {
+        if (!context.agent.web) {
           return failure_result("WebPlugin search provider is not configured");
         }
         try {
-          const result = await context.web.search(input as JsonObject);
+          const result = await context.agent.web.search(input as PluginJsonObject);
           return { success: true, data: result, message: "web search completed" };
         } catch (error) {
           return failure_result(error);
@@ -138,11 +138,11 @@ export class WebPlugin extends BasePlugin {
       input_schema: z.object({ url: URL_SCHEMA, max_chars: MAX_CHARS_SCHEMA }),
       examples: [{ title: "Read official documentation", payload: { url: "https://playwright.dev/docs/api/class-playwright" } }],
       execute: async ({ context, input }) => {
-        if (!context.web) {
+        if (!context.agent.web) {
           return failure_result("WebPlugin document provider is not configured");
         }
         try {
-          const result = await context.web.open(input as JsonObject);
+          const result = await context.agent.web.open(input as PluginJsonObject);
           return { success: true, data: result, message: "web document opened" };
         } catch (error) {
           return failure_result(error);
