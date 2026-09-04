@@ -168,8 +168,7 @@ export function SessionView(props: SessionViewProps) {
 
   const workspace_tag = props.workspace_draft_mode ? <ChatWorkspaceSelector workspace_id={props.workspace_id} workspaces={props.workspaces} disabled={busy} switch_workspace={props.switch_workspace} /> : <StaticWorkspaceTag workspace={props.workspace} />;
   return <ChatSurfaceLayout sidebar={props.session_sidebar} header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><button type="button" disabled={!props.open_agent_info} onClick={props.open_agent_info} className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-xs font-medium text-foreground transition-colors duration-150 enabled:hover:bg-interaction-hover" title={props.open_agent_info ? "编辑 Agent" : undefined}><AgentAvatar agent={props.agent} class_name="size-5 rounded-md" /><span className="truncate">{session.title || "新对话"}</span></button>{workspace_tag}</div>} header_right={<div className="flex shrink-0 items-center gap-1">
-      {is_agent_typing(runtime?.status) ? <span className="mr-1 flex items-center gap-1 text-[10px] text-primary"><span className="thinking-dots-icon is-highlighted" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <span key={index} className="thinking-dot" />)}</span>正在回复</span> : null}
-        {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
+      {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title="对话操作" aria-label="对话操作"><TbDots className="size-4" /></button>} /> : null}
       </div>}
     >
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
@@ -228,11 +227,6 @@ export function SessionView(props: SessionViewProps) {
 /** 已创建 Session 的只读 Workspace 标签。 */
 function StaticWorkspaceTag({ workspace }: { /** 当前 Session 绑定的 Workspace。 */ workspace: DesktopWorkspaceSummary }) {
   return <span className="inline-flex h-5 min-w-0 max-w-40 shrink-0 items-center gap-1 rounded-full bg-foreground/[0.045] px-2 text-[0.625rem] font-normal text-muted-foreground"><TbFolder className="size-3 shrink-0" /><span className="truncate">{workspace.name}</span></span>;
-}
-
-/** 顶部仅在 Agent 实际生成内容时显示输入状态。 */
-function is_agent_typing(status: DesktopChatRuntime["status"] | undefined): boolean {
-  return status === "submitted" || status === "streaming";
 }
 
 /** 空会话提示。 */

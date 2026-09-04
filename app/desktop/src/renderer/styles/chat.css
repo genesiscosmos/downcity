@@ -91,41 +91,99 @@
   word-break: break-word;
 }
 
+/* 代码块：极简。无边框、无阴影、无语言栏，只有极淡背景 + hover 复制的按钮。 */
 .chat-markdown :where(pre),
 .chat-markdown [data-streamdown="code-block"] {
   --vc-chat-code-foreground: var(--foreground);
-  --vc-chat-code-background: color-mix(in srgb, var(--primary) 14%, var(--background));
+  --vc-chat-code-background: color-mix(in srgb, var(--muted) 55%, var(--background));
+  position: relative;
   max-width: 100%;
-  margin: 0.35rem 0 !important;
+  margin: 0.5rem 0 !important;
   padding: 0 !important;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent) !important;
-  border-radius: 8px !important;
+  border: 0 !important;
+  border-radius: 0.5rem !important;
   background: var(--vc-chat-code-background) !important;
   box-shadow: none;
 }
 
+/* 语言栏不参与布局：整体折叠到右上角，仅容纳复制按钮。 */
 .chat-markdown [data-streamdown="code-block-header"] {
-  min-height: 1.65rem;
-  padding: 0.2rem 0.5rem 0.2rem 0.7rem !important;
-  color: color-mix(in srgb, var(--foreground) 58%, transparent) !important;
-  background: var(--vc-chat-code-background) !important;
-  font-size: 0.625rem !important;
-  font-weight: 500;
-  line-height: 1.2 !important;
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  z-index: 2;
+  display: block;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  pointer-events: none;
 }
 
+/* 隐藏语言标签。 */
+.chat-markdown [data-streamdown="code-block-header"] > span:first-child {
+  display: none !important;
+}
+
+/* 操作容器无内边距。 */
+.chat-markdown [data-streamdown="code-block-header"] > div {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* 下载按钮隐藏，仅保留复制。 */
+.chat-markdown [data-streamdown="code-block-download-button"] {
+  display: none !important;
+}
+
+/* 复制按钮：小圆角，默认隐藏，悬停代码块时淡入。 */
+.chat-markdown [data-streamdown="code-block-copy-button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0.375rem;
+  color: var(--muted-foreground) !important;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.chat-markdown [data-streamdown="code-block"]:hover [data-streamdown="code-block-copy-button"],
+.chat-markdown [data-streamdown="code-block"]:focus-within [data-streamdown="code-block-copy-button"],
+.chat-markdown [data-streamdown="code-block-copy-button"]:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.chat-markdown [data-streamdown="code-block-copy-button"]:hover {
+  color: var(--foreground) !important;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+/* 正文：透明背景、无边框、无行号。 */
 .chat-markdown [data-streamdown="code-block-body"] {
   max-width: 100%;
   margin: 0 !important;
   overflow-x: auto;
-  padding: 0.28rem 0.78rem 0.46rem !important;
-  border-top: 0 !important;
+  padding: 0.75rem !important;
+  border: 0 !important;
   color: var(--vc-chat-code-foreground) !important;
-  background: var(--vc-chat-code-background) !important;
+  background: transparent !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.76rem !important;
-  line-height: 1.62 !important;
+  font-size: 0.75rem !important;
+  line-height: 1.6 !important;
   scrollbar-width: thin;
 }
 
@@ -133,11 +191,21 @@
 .chat-markdown [data-streamdown="code-block-body"] code > span,
 .chat-markdown [data-streamdown="code-block-body"] code > span > span {
   padding: 0 !important;
+  border: 0 !important;
   background: transparent !important;
   font-weight: 400 !important;
 }
 
-/* Streamdown/Shiki 同时输出明暗两套 token；Desktop 暗色模式必须显式切换到 dark token。 */
+/* 去掉 Streamdown 自带的行号计数器。 */
+.chat-markdown [data-streamdown="code-block-body"] code > span::before {
+  content: none !important;
+}
+
+.chat-markdown [data-streamdown="code-block-body"] code > span {
+  counter-increment: none !important;
+}
+
+/* 恢复 Streamdown/Shiki 明暗双 token 语法高亮：浅色用行内 light token，暗色显式切换到 dark token。 */
 .dark .chat-markdown [data-streamdown="code-block"] .shiki span {
   color: var(--shiki-dark, var(--foreground)) !important;
   font-style: var(--shiki-dark-font-style, normal) !important;

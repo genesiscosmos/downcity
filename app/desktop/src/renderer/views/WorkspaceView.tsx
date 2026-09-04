@@ -1,22 +1,24 @@
 /** Workspace 身份、说明与本地资源位置的独立信息页。 */
 
-import { useState } from "react";
-import { TbCheck, TbChevronRight, TbCopy, TbExternalLink, TbFileDescription, TbFolder, TbTag } from "react-icons/tb";
+import { useEffect, useState } from "react";
+import { TbCheck, TbCopy, TbDots, TbExternalLink, TbFolder, TbPencil } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
-import { SettingActionItem, SettingGroup, SettingItem, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
+import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
+import { Markdown } from "@/lib/markdown/Markdown";
+import type { DesktopViewController } from "@/types/DesktopView";
 import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Workspace 主视图属性。 */
 interface WorkspaceViewProps {
   /** 当前打开的 Workspace。 */
   workspace: DesktopWorkspaceSummary;
-  /** 在当前 MainView 的右侧边栏打开字段编辑器。 */
+  /** 在当前 MainView 的右侧边栏打开指定配置分区。 */
   open_editor(field: WorkspaceEditorField): void;
 }
-
-/** Workspace 右侧边栏支持编辑的字段。 */
-export type WorkspaceEditorField = "name" | "description";
+/** Workspace 配置侧栏支持的分区。 */
+export type WorkspaceEditorField = "identity" | "readme";
 
 /** 展示 Workspace 自身信息，不投影 Agent 或 Session。 */
 export function WorkspaceView({ workspace, open_editor }: WorkspaceViewProps) {
@@ -28,45 +30,111 @@ export function WorkspaceView({ workspace, open_editor }: WorkspaceViewProps) {
   };
   return <MainViewLayout>
     <MainViewHeader title="Workspace" />
-    <MainViewBody><div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-background"><SettingsMainContent><SettingsContainer>
-      <header className="min-w-0 px-2 py-1"><h1 className="truncate text-xl font-semibold tracking-tight text-foreground">{workspace.name}</h1><p className="mt-1 max-w-2xl whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{workspace.readme || "还没有 README.md。"}</p></header>
-      <SettingSection title="Workspace" description="管理工作空间自身的信息"><SettingGroup><SettingActionItem icon={<TbTag />} label="名称" description="Workspace 的显示名称" trailing={<><span className="max-w-48 truncate">{workspace.name}</span><TbChevronRight /></>} on_select={() => open_editor("name")} /><SettingActionItem icon={<TbFileDescription />} label="Description" description="编辑 Workspace 根目录的 README.md" trailing={<><span className="max-w-48 truncate">{workspace.readme || "未设置"}</span><TbChevronRight /></>} on_select={() => open_editor("description")} /></SettingGroup></SettingSection>
-      <SettingSection title="本地资源" description="Workspace 当前关联的本地目录"><SettingGroup><SettingItem leading={<TbFolder />} label="路径" description={workspace.workspace_path}><div className="flex items-center gap-1"><Button size="icon" title={copied ? "已复制" : "复制路径"} aria-label={copied ? "已复制路径" : "复制路径"} onClick={() => void copy_path()}>{copied ? <TbCheck /> : <TbCopy />}</Button><Button size="icon" title="在 Finder 中打开" aria-label="在 Finder 中打开" onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbExternalLink /></Button></div></SettingItem></SettingGroup></SettingSection>
-      <SettingSection title="详情"><SettingGroup><SettingItem label="Workspace ID"><MetadataValue value={workspace.workspace_id} /></SettingItem><SettingItem label="创建时间"><MetadataValue value={format_time(workspace.created_at)} /></SettingItem><SettingItem label="更新时间"><MetadataValue value={format_time(workspace.updated_at)} /></SettingItem></SettingGroup></SettingSection>
-    </SettingsContainer></SettingsMainContent></div></MainViewBody>
+    <MainViewBody><div className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-background"><main className="mx-auto w-full max-w-4xl px-8 pb-12 pt-10">
+      <header className="min-w-0 px-1">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground"><TbFolder className="size-4" /><span>Workspace</span></div>
+        <div className="mt-3 flex min-w-0 items-center gap-2"><h1 className="min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight text-foreground">{workspace.name}</h1><div className="ml-auto flex shrink-0 items-center gap-1.5"><Button size="icon" className="size-6" title="编辑 Workspace 配置" aria-label="编辑 Workspace 配置" onClick={() => open_editor("identity")}><TbPencil /></Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="size-6" title="更多操作" aria-label="更多操作"><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4}><DropdownMenuItem onClick={() => void copy_path()}><TbCopy /><span>{copied ? "已复制" : "复制路径"}</span></DropdownMenuItem><DropdownMenuItem onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbExternalLink /><span>在 Finder 中打开</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div>
+        <div className="mt-2 min-w-0"><p className="truncate font-mono text-[11px] text-muted-foreground/70" title={workspace.workspace_path}>{workspace.workspace_path}</p></div>
+      </header>
+      <section className="mt-8" aria-labelledby="workspace-readme-title"><div className="mb-2 px-1"><h2 id="workspace-readme-title" className="text-xs text-muted-foreground">README.md</h2></div><article className="min-h-32 rounded-xl bg-surface-subtle px-6 py-5">{workspace.readme ? <Markdown text={workspace.readme} mode="static" class_name="workspace-document-markdown !h-auto" /> : <div className="flex min-h-24 items-center justify-center text-xs text-muted-foreground/65">还没有 README.md</div>}</article></section>
+    </main></div></MainViewBody>
   </MainViewLayout>;
 }
 
-/** Settings 行尾的只读 Workspace 元数据。 */
-function MetadataValue({ value }: { /** 要展示的元数据。 */ value: string }) { return <span className="max-w-80 truncate font-mono text-xs text-muted-foreground" title={value}>{value}</span>; }
+/** Workspace 信息侧栏属性。 */
+interface WorkspaceInfoSidebarProps {
+  /** 当前 Workspace。 */
+  workspace: DesktopWorkspaceSummary;
+  /** Renderer 根控制器。 */
+  controller: DesktopViewController;
+  /** 关闭信息侧栏。 */
+  close_sidebar(): void;
+  /** 当前配置分区。 */
+  section?: WorkspaceEditorField;
+  /** 是否折叠侧栏。 */
+  collapsed?: boolean;
+  /** 是否嵌入 BayBar。 */
+  embedded?: boolean;
+}
 
-/** 在右侧面板中编辑一个独立的 Workspace 字段。 */
-export function WorkspaceIdentityEditor({ field, workspace, update_workspace_name, write_workspace_readme }: { /** 当前编辑字段。 */ field: WorkspaceEditorField; /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 保存 Workspace 名称。 */ update_workspace_name(workspace_id: string, name: string): Promise<void>; /** 写入 Workspace README.md。 */ write_workspace_readme(workspace_id: string, content: string): Promise<void> }) {
-  const initial_value = field === "name" ? workspace.name : workspace.readme;
-  const [value, set_value] = useState(initial_value);
+/** Workspace 配置分区的用户可见标题。 */
+const workspace_section_titles: Record<WorkspaceEditorField, string> = {
+  identity: "基本信息",
+  readme: "README.md",
+};
+
+/** 与 Agent 配置一致的分区编辑侧栏，承载基本信息与 README 编辑。 */
+export function WorkspaceInfoSidebar({ workspace, controller, close_sidebar, section, collapsed = false, embedded = false }: WorkspaceInfoSidebarProps) {
+  const [editor_section, set_editor_section] = useState<WorkspaceEditorField>(section || "identity");
+  useEffect(() => {
+    if (section) set_editor_section(section);
+  }, [section]);
+  const content = <WorkspaceEditorPanel embedded workspace={workspace} controller={controller} section={editor_section} close_editor={close_sidebar} />;
+  if (embedded) return content;
+  return <DetailEditorSidebar title={`${workspace.name} / ${workspace_section_titles[editor_section]}`} storage_key="downcity.workspace_config_width" default_width={400} max_width={560} on_close={close_sidebar} collapsed={collapsed} show_close={false}>{content}</DetailEditorSidebar>;
+}
+
+/** Workspace 右侧的分区编辑容器。 */
+function WorkspaceEditorPanel({ workspace, controller, section, close_editor, embedded = false }: {
+  /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary;
+  /** Renderer 根控制器。 */ controller: DesktopViewController;
+  /** 当前编辑分区。 */ section: WorkspaceEditorField;
+  /** 收起右侧容器。 */ close_editor(): void;
+  /** 是否嵌入已有信息侧栏。 */ embedded?: boolean;
+}) {
+  const content = <>
+    {section === "identity" ? <WorkspaceIdentityEditor workspace={workspace} update_workspace_name={controller.update_workspace_name} /> : null}
+    {section === "readme" ? <WorkspaceReadmeEditor workspace={workspace} write_workspace_readme={controller.write_workspace_readme} /> : null}
+  </>;
+  if (embedded) return <div className="h-full min-h-0 w-full p-2">{content}</div>;
+  return <DetailEditorSidebar title={workspace_section_titles[section]} storage_key="downcity.workspace_editor_width" default_width={400} max_width={560} on_close={close_editor}>{content}</DetailEditorSidebar>;
+}
+
+/** 编辑 Workspace 的显示名称。 */
+function WorkspaceIdentityEditor({ workspace, update_workspace_name }: {
+  /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary;
+  /** 保存 Workspace 名称。 */ update_workspace_name(workspace_id: string, name: string): Promise<void>;
+}) {
+  const [value, set_value] = useState(workspace.name);
   const [submitting, set_submitting] = useState(false);
   const [form_error, set_form_error] = useState("");
-  const dirty = value !== initial_value;
+  const dirty = value !== workspace.name;
   const submit = async () => {
     const normalized_value = value.trim();
-    if (field === "name" && !normalized_value) return set_form_error("名称不能为空");
+    if (!normalized_value) return set_form_error("名称不能为空");
     set_submitting(true);
     set_form_error("");
     try {
-      if (field === "name") {
-        await update_workspace_name(workspace.workspace_id, normalized_value);
-        set_value(normalized_value);
-      } else {
-        await write_workspace_readme(workspace.workspace_id, value);
-      }
+      await update_workspace_name(workspace.workspace_id, normalized_value);
+      set_value(normalized_value);
     } catch (reason) {
       set_form_error(reason instanceof Error ? reason.message : String(reason));
     } finally {
       set_submitting(false);
     }
   };
-  return <div className="flex h-full min-h-0 flex-col gap-2 p-3">{field === "name" ? <input autoFocus value={value} onChange={(event) => set_value(event.target.value)} aria-label="Workspace 名称" className="h-9 w-full rounded-md border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:border-foreground/25 focus:ring-2 focus:ring-ring/20" /> : <textarea autoFocus value={value} onChange={(event) => set_value(event.target.value)} aria-label="Workspace README" placeholder="README.md" className="min-h-0 flex-1 resize-none bg-transparent font-mono text-xs leading-6 text-foreground outline-none placeholder:text-muted-foreground/55" />}{form_error ? <p className="text-xs text-destructive" role="status">{form_error}</p> : null}<div className="mt-auto flex justify-end pt-1"><Button variant="primary" disabled={submitting || !dirty || (field === "name" && !value.trim())} onClick={() => void submit()}>{submitting ? "保存中…" : "保存"}</Button></div></div>;
+  return <div className="flex h-full min-h-0 flex-col gap-2 p-3"><label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">名称</span><input autoFocus value={value} onChange={(event) => set_value(event.target.value)} aria-label="Workspace 名称" className="h-9 rounded-lg border border-input bg-background px-3 text-[13px] text-foreground outline-none focus:border-foreground/25 focus:ring-2 focus:ring-ring/20" /></label>{form_error ? <p className="text-xs text-destructive" role="status">{form_error}</p> : null}<div className="mt-auto flex justify-end pt-1"><Button variant="primary" disabled={submitting || !dirty || !value.trim()} onClick={() => void submit()}>{submitting ? "保存中…" : "保存"}</Button></div></div>;
 }
 
-/** 将 ISO 时间格式化为当前系统区域时间。 */
-function format_time(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString(); }
+/** 编辑 Workspace 根目录的 README.md。 */
+function WorkspaceReadmeEditor({ workspace, write_workspace_readme }: {
+  /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary;
+  /** 写入 Workspace README.md。 */ write_workspace_readme(workspace_id: string, content: string): Promise<void>;
+}) {
+  const [value, set_value] = useState(workspace.readme);
+  const [submitting, set_submitting] = useState(false);
+  const [form_error, set_form_error] = useState("");
+  const dirty = value !== workspace.readme;
+  const submit = async () => {
+    set_submitting(true);
+    set_form_error("");
+    try {
+      await write_workspace_readme(workspace.workspace_id, value);
+    } catch (reason) {
+      set_form_error(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      set_submitting(false);
+    }
+  };
+  return <div className="flex h-full min-h-0 flex-col gap-2 p-3"><textarea autoFocus value={value} onChange={(event) => set_value(event.target.value)} aria-label="Workspace README" placeholder="README.md" className="min-h-0 flex-1 resize-none bg-transparent font-mono text-xs leading-6 text-foreground outline-none placeholder:text-muted-foreground/55" />{form_error ? <p className="text-xs text-destructive" role="status">{form_error}</p> : null}<div className="mt-auto flex justify-end pt-1"><Button variant="primary" disabled={submitting || !dirty} onClick={() => void submit()}>{submitting ? "保存中…" : "保存"}</Button></div></div>;
+}

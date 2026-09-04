@@ -21,7 +21,7 @@ interface CreateAgentViewProps {
 /** 用户在同一页面中选择 AI 起草或手动配置 Agent。 */
 export function CreateAgentView({ models, models_loading, default_model_id, plugins, create_agent }: CreateAgentViewProps) {
   const text_models = useMemo(() => models.filter((model) => model.modalities.some((modality) => ["text", "stream", "openai"].includes(modality))), [models]);
-  const available_plugins = useMemo(() => plugins.filter((plugin) => plugin.has_agent), [plugins]);
+  const available_plugins = useMemo(() => plugins.filter((plugin) => plugin.has_main), [plugins]);
   const initial_model_id = text_models.some((model) => model.model_id === default_model_id) ? default_model_id : text_models[0]?.model_id || "";
   const [editing, set_editing] = useState(false);
   const [prompt, set_prompt] = useState("");

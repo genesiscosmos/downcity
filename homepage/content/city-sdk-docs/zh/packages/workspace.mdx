@@ -24,7 +24,7 @@ const workspace = new Workspace({
 });
 
 const city = new City({ workspaces: [workspace] });
-const agent = new Agent({ id: "repo-helper", model, plugins });
+const agent = new Agent({ id: "repo-helper", model });
 city.agents.add(agent);
 const session = await agent.sessions.create({ workspace });
 ```
@@ -32,12 +32,12 @@ const session = await agent.sessions.create({ workspace });
 ## 所有权
 
 - `Workspace` 拥有项目资源与可选 Shell。
-- `Agent` 拥有身份、指令、模型、自定义工具和 Plugin 注册。
+- `Agent` 拥有身份、指令、模型、自定义工具和 Session；`City` 拥有 Plugin。
 - `AgentSessions` 拥有 Session。Workspace 只是 Session 可以使用的一种资源。
 - Shell 是 Workspace 能力，不再存在独立的 `@downcity/shell` 包。
 
 一个 Agent 可以在多个 Workspace 资源中创建 Session。Workspace 可以登记在 City 内，也可以由
-宿主在 City 外管理；Agent 私有的 Session 与 Plugin 数据始终隔离。
+宿主在 City 外管理；Agent 私有 Session 与 City 分配的 Agent/Plugin 执行数据始终隔离。
 
 结构化 `write`、`edit` 工具会在文件原子提交后，通过 `WorkspaceToolActionResult.effects` 报告
 `workspace.file_mutation`。Effect 不会作为 Tool output 发送给模型；Agent Session 只在当前 Turn
@@ -54,8 +54,8 @@ City 提供不理解业务的底层 Storage Provider，默认实现是内存存�
 └── plugins/
 ```
 
-`StorageProvider` 不理解任何 Agent 领域语义。Agent 负责解释 Agent、Session 和 Plugin 的数据
-结构；Workspace 不创建或拥有这份存储。项目 File/Search 工具始终限制在真实项目目录内。
+`StorageProvider` 不理解任何 Agent 领域语义。Agent runtime 解释 Session 数据，City Plugin
+runtime 解释 Plugin 数据；Workspace 不创建或拥有这份存储。项目 File/Search 工具始终限制在真实项目目录内。
 
 Edge Adapter 应从 `@downcity/workspace/protocol` 导入 `WorkspaceBase` 与协议类型，避免加载
 Node.js 文件系统、PTY 和本地 Shell 实现。

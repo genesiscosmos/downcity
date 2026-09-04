@@ -54,6 +54,11 @@ export function has_unread_agent_notification(state: DesktopNotificationState, a
   return state.notifications.some((notification) => notification.target.kind === "agent_session" && notification.target.agent_id === agent_id);
 }
 
+/** 判断 Chat 一级导航是否存在任意 Session 未读通知。 */
+export function has_unread_chat_notification(state: DesktopNotificationState): boolean {
+  return state.notifications.some((notification) => notification.target.kind === "agent_session");
+}
+
 /** 判断一个 Plugin 是否存在任意未读通知。 */
 export function has_unread_plugin_notification(state: DesktopNotificationState, plugin_id: string): boolean {
   return state.notifications.some((notification) => notification.target.kind === "plugin" && notification.target.plugin_id === plugin_id);

@@ -24,7 +24,7 @@ const workspace = new Workspace({
 });
 
 const city = new City({ workspaces: [workspace] });
-const agent = new Agent({ id: "repo-helper", model, plugins });
+const agent = new Agent({ id: "repo-helper", model });
 city.agents.add(agent);
 const session = await agent.sessions.create({ workspace });
 ```
@@ -32,12 +32,13 @@ const session = await agent.sessions.create({ workspace });
 ## Ownership
 
 - `Workspace` owns project resources and the optional Shell.
-- `Agent` owns identity, instruction, model, custom tools, and Plugin registration.
+- `Agent` owns identity, instruction, model, custom tools, and Sessions; `City` owns Plugins.
 - `AgentSessions` owns Sessions. A Workspace is only a resource that a Session may use.
 - Shell is a Workspace capability. There is no separate `@downcity/shell` package.
 
 An Agent can create Sessions with multiple Workspace resources. A Workspace may be registered in a
-City or managed by the host outside City; Agent-private Session and Plugin data remain isolated.
+City or managed by the host outside City. Agent-private Sessions and City-allocated Agent/Plugin
+execution data remain isolated.
 
 After an atomic file commit, the structured `write` and `edit` tools report a
 `workspace.file_mutation` through `WorkspaceToolActionResult.effects`. Effects are not sent to the
@@ -57,9 +58,9 @@ project directories:
 └── plugins/
 ```
 
-`StorageProvider` is intentionally domain-neutral. Agent code interprets the provider for Agent,
-Session, and Plugin data. Workspace does not own or create this storage. Project File/Search tools
-remain rooted at the real project path and cannot read this private state.
+`StorageProvider` is intentionally domain-neutral. Agent runtime interprets Session data, while the
+City Plugin runtime interprets Plugin data. Workspace does not own or create this storage. Project
+File/Search tools remain rooted at the real project path and cannot read this private state.
 
 Edge adapters should import `WorkspaceBase` and protocol types from `@downcity/workspace/protocol`
 so they do not load Node.js filesystem, PTY, or local Shell implementations.

@@ -124,8 +124,20 @@ export function AgentInfoSidebar({
     }
   };
   useEffect(() => {
-    if (!definition && !loading_definition) void load_definition();
-  }, [agent.agent_id, section]);
+    let disposed = false;
+    set_definition(undefined);
+    set_definition_dirty(false);
+    set_editor_error("");
+    set_loading_definition(true);
+    void controller.get_agent(agent.agent_id).then((next_definition) => {
+      if (!disposed) set_definition(next_definition);
+    }).catch((reason) => {
+      if (!disposed) set_editor_error(reason instanceof Error ? reason.message : String(reason));
+    }).finally(() => {
+      if (!disposed) set_loading_definition(false);
+    });
+    return () => { disposed = true; };
+  }, [agent.agent_id, controller.get_agent]);
   const update_definition = (value: DesktopAgentDefinition) => {
     definition_version_ref.current += 1;
     set_definition(value);
@@ -635,7 +647,7 @@ function PluginEditor({
     <>
       <SettingGroup>
         {plugins
-          .filter((plugin) => plugin.has_agent)
+          .filter((plugin) => plugin.has_main)
           .map((plugin) => {
             const reference = definition.plugins[plugin.plugin_id];
             const profile_options = [
@@ -682,7 +694,7 @@ function PluginEditor({
               </SettingItem>
             );
           })}
-        {plugins.every((plugin) => !plugin.has_agent) ? (
+        {plugins.every((plugin) => !plugin.has_main) ? (
           <div className="py-8 text-center text-xs text-muted-foreground">
             暂无可用 Plugin
           </div>

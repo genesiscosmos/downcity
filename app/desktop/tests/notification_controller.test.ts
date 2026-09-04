@@ -9,6 +9,7 @@ import { SessionTurnNotificationProducer } from "../src/main/notification/Sessio
 import { PluginNotificationProducer } from "../src/main/notification/PluginNotificationProducer.ts";
 import {
   has_unread_agent_notification,
+  has_unread_chat_notification,
   has_unread_plugin_notification,
   has_unread_session_notification,
   notification_target_from_navigation,
@@ -125,10 +126,24 @@ test("Renderer 按 Agent 聚合并按 Session 精确查询未读通知", () => {
   const state = fixture.controller.get_state();
 
   assert.equal(has_unread_agent_notification(state, "writer"), true);
+  assert.equal(has_unread_chat_notification(state), true);
   assert.equal(has_unread_session_notification(state, "workspace", "writer", "session"), true);
   assert.equal(has_unread_session_notification(state, "workspace", "writer", "other"), false);
   assert.deepEqual(notification_target_from_navigation({ kind: "session", workspace_id: "workspace", agent_id: "writer", session_id: "session" }), target);
   assert.equal(notification_target_from_navigation({ kind: "agent", agent_id: "writer" }), undefined);
+});
+
+test("Chat 一级导航只汇总 Session 未读通知", () => {
+  const fixture = create_fixture();
+  const producer = new PluginNotificationProducer(fixture.controller);
+  producer.publish("task", { topic_key: "global", title: "Plugin 完成", route: {} });
+
+  assert.equal(has_unread_chat_notification(fixture.controller.get_state()), false);
+  fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session:writer", target, scopes: agent_scope, title: "Session 完成", created_at: 1 });
+  assert.equal(has_unread_chat_notification(fixture.controller.get_state()), true);
+
+  fixture.controller.mark_target_read(target);
+  assert.equal(has_unread_chat_notification(fixture.controller.get_state()), false);
 });
 
 test("Plugin 发布由宿主绑定身份并按本地 topic 聚合", () => {

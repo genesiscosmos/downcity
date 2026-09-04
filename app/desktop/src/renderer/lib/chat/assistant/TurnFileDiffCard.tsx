@@ -35,18 +35,16 @@ export function TurnFileDiffCard({ data }: { /** 当前 Turn 的 canonical 文�
   const open_review = useContext(TurnFileDiffReviewContext);
   const hidden_count = Math.max(0, data.files.length - DEFAULT_VISIBLE_FILE_COUNT);
   const visible_files = show_all ? data.files : data.files.slice(0, DEFAULT_VISIBLE_FILE_COUNT);
-  return <section className="mt-2 overflow-hidden rounded-xl border border-border-subtle bg-foreground/[0.012] text-[0.6875rem] text-foreground/80">
-    <div className="flex min-h-11 items-center gap-2 border-b border-border/45 px-3">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.045] text-muted-foreground"><TbFileDiff className="size-4" aria-hidden /></span>
-      <div className="min-w-0 flex-1">
-        <div className="font-medium text-foreground/90">已编辑 {data.files.length} 个文件</div>
-        <DiffStats additions={data.additions} deletions={data.deletions} />
-      </div>
-      {open_review ? <button type="button" onClick={() => open_review(data)} className="h-7 rounded-lg border border-border-subtle bg-background px-2.5 text-[0.6875rem] font-medium text-foreground/80 transition-colors hover:bg-interaction-hover hover:text-foreground">审核</button> : null}
+  return <section className="mt-2 overflow-hidden rounded-xl bg-surface-subtle text-[0.6875rem] text-foreground/80">
+    <div className="flex min-h-11 items-center gap-2 px-3.5">
+      <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4"><TbFileDiff aria-hidden /></span>
+      <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">已编辑 {data.files.length} 个文件</div>
+      <DiffStats additions={data.additions} deletions={data.deletions} compact />
+      {open_review ? <button type="button" onClick={() => open_review(data)} className="ml-1 flex h-6 shrink-0 items-center rounded-md px-2 text-[0.6875rem] font-medium text-foreground/70 transition-colors hover:bg-interaction-hover hover:text-foreground">审核</button> : null}
     </div>
-    <div className="px-2 py-1.5">
+    <div className="divide-y divide-border/45 border-t border-border/45">
       {visible_files.map((file) => <FilePatch key={file.file} file={file} variant="inline" />)}
-      {hidden_count > 0 ? <button type="button" onClick={() => set_show_all((current) => !current)} className="flex h-7 items-center gap-1 px-1 text-[0.6875rem] font-medium text-foreground/75 transition-colors hover:text-foreground">{show_all ? <><span>收起文件</span><TbChevronUp className="size-3.5" /></> : <><span>再显示 {hidden_count} 个文件</span><TbChevronDown className="size-3.5" /></>}</button> : null}
+      {hidden_count > 0 ? <button type="button" onClick={() => set_show_all((current) => !current)} className="flex h-9 w-full cursor-pointer items-center gap-1.5 px-3.5 text-left text-[0.6875rem] font-medium text-foreground/75 transition-colors hover:bg-interaction-hover hover:text-foreground">{show_all ? <TbChevronUp className="size-3.5 shrink-0 text-muted-foreground" /> : <TbChevronDown className="size-3.5 shrink-0 text-muted-foreground" />}<span>{show_all ? "收起文件" : `再显示 ${hidden_count} 个文件`}</span></button> : null}
     </div>
   </section>;
 }
@@ -71,14 +69,14 @@ function TurnFileDiffReviewPanel({ data }: { /** 当前 Turn 的 canonical 文�
 function FilePatch({ file, variant, default_open = false }: { /** 单个文件差异。 */ file: SessionTurnFileDiff; /** 当前位于消息卡片或审核侧栏。 */ variant: "inline" | "review"; /** 初始是否展开。 */ default_open?: boolean }) {
   const [open, set_open] = useState(default_open);
   const lines = file.patch ? file.patch.split("\n") : ["二进制文件已更改"];
-  return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={cn("group/file shrink-0 overflow-hidden", variant === "review" ? "rounded-xl border border-border-subtle bg-background" : "rounded-lg")}>
-    <summary className={cn("flex min-h-8 cursor-pointer list-none items-center gap-2 px-2 outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover [&::-webkit-details-marker]:hidden", variant === "review" && "min-h-9 bg-foreground/[0.025] px-3")}>
+  return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={cn("group/file shrink-0 overflow-hidden", variant === "review" && "overflow-hidden rounded-lg border border-border-subtle bg-background")}>
+    <summary className={cn("flex min-h-9 cursor-pointer list-none items-center gap-2.5 px-3 py-1.5 outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover [&::-webkit-details-marker]:hidden", variant === "review" && "bg-foreground/[0.025]")}>
       <TbChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/file:rotate-90" aria-hidden />
       <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] font-medium text-foreground/80" title={file.file}>{file.file}</span>
       <DiffStats additions={file.additions} deletions={file.deletions} compact />
     </summary>
-    <div className={cn("overflow-x-auto border-t border-border/45 bg-foreground/[0.012] py-1 font-mono text-[0.6875rem] leading-[1.55]", variant === "inline" && "mb-1 max-h-80 rounded-b-lg")}>
-      {lines.map((line, index) => <div key={`${index}:${line}`} className={diff_line_class_name(line)}><span className="block min-w-max px-3 whitespace-pre">{line || " "}</span></div>)}
+    <div className={cn("overflow-x-auto border-t border-border/45 py-1 font-mono text-[0.6875rem] leading-[1.55]", variant === "inline" && "max-h-80")}>
+      {lines.map((line, index) => <div key={`${index}:${line}`} className={diff_line_class_name(line)}><span className="block min-w-max px-3.5 whitespace-pre">{line || " "}</span></div>)}
     </div>
   </details>;
 }
