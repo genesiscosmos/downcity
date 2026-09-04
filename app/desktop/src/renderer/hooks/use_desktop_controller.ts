@@ -1246,6 +1246,63 @@ export function use_desktop_controller(): DesktopViewController {
     set_workspaces((current) => current.map((item) => item.workspace_id === workspace_id ? workspace : item));
   }, []);
 
+  const remove_workspace = useCallback(async (workspace_id: string) => {
+    set_error("");
+    const normalized_workspace_id = String(workspace_id || "").trim();
+    try {
+      const removed = await window.downcity.workspace.remove(normalized_workspace_id);
+      if (!removed) return;
+      set_workspaces((current) => {
+        const next = current.filter((item) => item.workspace_id !== normalized_workspace_id);
+        const next_workspace = next[0];
+        set_selection((selection) => {
+          const targets_removed_workspace = (selection?.kind === "workspace" || selection?.kind === "workspace_file") && selection.workspace_id === normalized_workspace_id;
+          if (!targets_removed_workspace) return selection;
+          return next_workspace ? { kind: "workspace", workspace_id: next_workspace.workspace_id } : null;
+        });
+        return next;
+      });
+      const remove_workspace_key = <Value>(current: Record<string, Value>): Record<string, Value> => {
+        const next = { ...current };
+        delete next[normalized_workspace_id];
+        return next;
+      };
+      const remove_prefixed_key = <Value>(current: Record<string, Value>): Record<string, Value> =>
+        Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${normalized_workspace_id}:`)));
+      set_sessions_by_workspace((current) => remove_workspace_key(current));
+      set_archived_sessions_by_workspace((current) => remove_workspace_key(current));
+      set_group_sessions_by_workspace((current) => remove_workspace_key(current));
+      set_messages_by_session((current) => remove_prefixed_key(current));
+      chat_runtime_ref.current = remove_prefixed_key(chat_runtime_ref.current);
+      set_chat_runtime_by_session(chat_runtime_ref.current);
+      history_ref.current = remove_prefixed_key(history_ref.current);
+      set_history_by_session(history_ref.current);
+      set_configuration_by_session((current) => remove_prefixed_key(current));
+      set_draft_content_by_session((current) => remove_prefixed_key(current));
+      commit_queue(remove_prefixed_key(queue_ref.current));
+      set_queue_paused_by_session((current) => remove_prefixed_key(current));
+      for (const key of [...snapshot_request_ref.current.keys()]) if (key.startsWith(`${normalized_workspace_id}:`)) snapshot_request_ref.current.delete(key);
+      for (const key of [...deleting_session_keys_ref.current]) if (key.startsWith(`${normalized_workspace_id}:`)) deleting_session_keys_ref.current.delete(key);
+      for (const key of [...deleted_session_keys_ref.current]) if (key.startsWith(`${normalized_workspace_id}:`)) deleted_session_keys_ref.current.delete(key);
+      for (const key of [...processing_queue_ref.current]) if (key.startsWith(`${normalized_workspace_id}:`)) processing_queue_ref.current.delete(key);
+      for (const key of [...mutation_batches_ref.current.keys()]) if (key.startsWith(`${normalized_workspace_id}:`)) mutation_batches_ref.current.delete(key);
+      for (const key of [...hydrated_navigation_keys_ref.current]) if (key.startsWith(`${normalized_workspace_id}:`)) hydrated_navigation_keys_ref.current.delete(key);
+      if (active_workspace_id === normalized_workspace_id) {
+        const next_workspace = workspaces.find((item) => item.workspace_id !== normalized_workspace_id);
+        if (next_workspace) {
+          set_active_workspace_id(next_workspace.workspace_id);
+          localStorage.setItem(active_workspace_storage_key, next_workspace.workspace_id);
+        } else {
+          set_active_workspace_id("");
+          localStorage.removeItem(active_workspace_storage_key);
+        }
+      }
+    } catch (reason) {
+      set_error(to_error_message(reason));
+      throw reason;
+    }
+  }, [active_workspace_id, commit_queue, workspaces]);
+
   const update_draft = useCallback((workspace_id: string, agent_id: string, session_id: string, input: JSONContent) => {
     set_draft_content_by_session((current) => ({
       ...current,
@@ -1666,6 +1723,7 @@ export function use_desktop_controller(): DesktopViewController {
     create_workspace,
     update_workspace_name,
     write_workspace_readme,
+    remove_workspace,
     update_draft,
     send_message,
     compact_session,

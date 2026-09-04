@@ -347,6 +347,49 @@ export class AgentController {
     return await to_desktop_workspace_summary(this.data.workspaces.update_name(workspace_id, name));
   }
 
+  /** 从 Registry 移除 Workspace；不删除磁盘目录，仅释放运行资源。 */
+  async remove_workspace(workspace_id: string): Promise<boolean> {
+    await this.ready_promise;
+    const normalized_workspace_id = String(workspace_id || "").trim();
+    const existed = this.data.workspaces.remove(normalized_workspace_id);
+    // 让所有已进入该 Workspace 的 Agent 离开并释放执行资源。
+    for (const agent of this.city.agents.list()) {
+      const entry = get_workspace_entry(agent, normalized_workspace_id);
+      if (entry) await entry.leave();
+    }
+    // 清理该 Workspace 下全部 Session 的订阅与运行态。
+    for (const [session_key, unsubscribe] of [...this.session_unsubscribes]) {
+      if (session_key.split(":")[1] === normalized_workspace_id) {
+        unsubscribe();
+        this.session_unsubscribes.delete(session_key);
+        this.runtimes.delete(session_key);
+        this.restored_session_models.delete(session_key);
+      }
+    }
+    // 清理该 Workspace 的 Session 模型与推理覆盖设置。
+    const model_ids = this.read_session_model_ids();
+    let model_ids_dirty = false;
+    for (const session_key of Object.keys(model_ids)) {
+      if (session_key.split(":")[1] === normalized_workspace_id) {
+        delete model_ids[session_key];
+        model_ids_dirty = true;
+      }
+    }
+    if (model_ids_dirty) this.data.settings.set(session_model_settings_key, model_ids);
+    const reasoning = this.read_session_reasoning_efforts();
+    let reasoning_dirty = false;
+    for (const session_key of Object.keys(reasoning)) {
+      if (session_key.split(":")[1] === normalized_workspace_id) {
+        delete reasoning[session_key];
+        reasoning_dirty = true;
+      }
+    }
+    if (reasoning_dirty) this.data.settings.set(session_reasoning_settings_key, reasoning);
+    // 释放 City 持有的 Workspace 资源（shell 与 sandbox）。
+    await this.city.workspaces.remove(normalized_workspace_id);
+    return existed;
+  }
+
   /** 将 Workspace 说明写入项目根目录 README.md。 */
   async write_workspace_readme(workspace_id: string, content: string): Promise<DesktopWorkspaceSummary> {
     await this.ready_promise;

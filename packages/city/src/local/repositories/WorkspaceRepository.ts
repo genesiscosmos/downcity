@@ -108,6 +108,11 @@ export class WorkspaceRepository {
     return row ? this.decode(row) : null;
   }
 
+  /** 从 Registry 移除 Workspace；不会删除磁盘目录。 */
+  remove(workspace_id_input: string): boolean {
+    return this.database.prepare("DELETE FROM workspaces WHERE workspace_id = ?;").run(normalize_workspace_id(workspace_id_input)).changes > 0;
+  }
+
   /** 读取 Workspace 明文 JSON 数据库行。 */
   private decode(row: WorkspaceRow): LocalWorkspaceConfig {
     const raw = JSON.parse(row.config_json) as Record<string, unknown>;

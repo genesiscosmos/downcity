@@ -298,6 +298,8 @@ export interface DesktopViewController {
   update_workspace_name(workspace_id: string, name: string): Promise<void>;
   /** 写入 Workspace 根目录 README.md。 */
   write_workspace_readme(workspace_id: string, content: string): Promise<void>;
+  /** 从 Registry 移除 Workspace；不删除磁盘目录。 */
+  remove_workspace(workspace_id: string): Promise<void>;
   /** 修改 Session 的完整 Tiptap 输入草稿。 */
   update_draft(workspace_id: string, agent_id: string, session_id: string, input: JSONContent): void;
   /** 发送消息；send 立即提交，queue 等待当前 Turn 完成后提交。 */

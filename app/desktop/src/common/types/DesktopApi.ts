@@ -859,6 +859,8 @@ export interface DesktopApi {
     create(input: DesktopCreateWorkspaceInput): Promise<DesktopWorkspaceSummary>;
     /** 更新 Workspace 的 Registry 显示名称。 */
     update_name(workspace_id: string, name: string): Promise<DesktopWorkspaceSummary>;
+    /** 从 Registry 移除 Workspace；不删除磁盘目录。 */
+    remove(workspace_id: string): Promise<boolean>;
     /** 将内容写入 Workspace 根目录 README.md。 */
     write_readme(workspace_id: string, content: string): Promise<DesktopWorkspaceSummary>;
     /** 列出 Workspace 指定目录的直接子节点。 */

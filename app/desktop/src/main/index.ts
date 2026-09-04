@@ -141,6 +141,7 @@ ipcMain.handle("workspace:list", () => require_agent_controller().list_workspace
 ipcMain.handle("workspace:get-default", () => require_agent_controller().get_default_workspace());
 ipcMain.handle("workspace:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateWorkspaceInput) => require_agent_controller().create_workspace(input));
 ipcMain.handle("workspace:update-name", (_event, workspace_id: string, name: string) => require_agent_controller().update_workspace_name(workspace_id, name));
+ipcMain.handle("workspace:remove", (_event, workspace_id: string) => require_agent_controller().remove_workspace(workspace_id));
 ipcMain.handle("workspace:write-readme", (_event, workspace_id: string, content: string) => require_agent_controller().write_workspace_readme(workspace_id, content));
 ipcMain.handle("workspace:list-entries", (_event, workspace_id: string, relative_path?: string) => require_agent_controller().list_workspace_entries(workspace_id, relative_path));
 ipcMain.handle("workspace:read-text-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_text_file(workspace_id, relative_path));

@@ -50,6 +50,13 @@ SDK 也可以先调用 `city.plugins.provide(registration)` 动态登记模块�
 `city.plugins.register(agent_id, { plugin_id, profile })` 建立绑定。相同 Plugin ID 在一个 City
 中只能对应同一模块；相同 `(plugin_id, profile_id)` 只创建一个实例，多 Agent 共享该实例。
 
+## Workspace 管理
+
+`city.workspaces.add(workspace)` 将 Workspace 交给 City 持有；`get()` 与 `list()` 提供稳定查询。
+不再使用某个 Workspace 时，调用 `await city.workspaces.remove(workspace_id)`。City 会先释放该
+Workspace 的 Shell、Sandbox 等运行资源，再将其移出当前 City；不存在时返回 `null`。这个操作
+只管理运行时对象，不会删除项目目录。
+
 ## Plugin 生命周期
 
 Plugin main 每个 Plugin ID 只 `activate` 一次，City 关闭时 `deactivate`。执行实例有四个节点：

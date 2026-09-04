@@ -135,6 +135,7 @@ export class City {
       add: (workspace) => this.add_workspace(workspace),
       get: (workspace_id) => this.get_workspace(workspace_id),
       list: () => this.list_workspaces(),
+      remove: async (workspace_id) => await this.remove_workspace(workspace_id),
     });
   }
 
@@ -424,6 +425,16 @@ export class City {
     if (existing) return existing;
     this.bind_workspace_shell(workspace);
     this.workspaces_by_id.set(workspace_id, workspace);
+    return workspace;
+  }
+
+  /** 释放并移除一个 Workspace；不存在时返回 null。 */
+  private async remove_workspace(workspace_id_input: string): Promise<WorkspaceBase | null> {
+    const workspace_id = String(workspace_id_input || "").trim();
+    const workspace = this.workspaces_by_id.get(workspace_id) ?? null;
+    if (!workspace) return null;
+    await workspace.dispose();
+    this.workspaces_by_id.delete(workspace_id);
     return workspace;
   }
 

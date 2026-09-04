@@ -86,6 +86,8 @@ export interface CityWorkspaces {
   get(workspace_id: string): WorkspaceBase | null;
   /** 返回当前 City 管理的 Workspace 稳定快照。 */
   list(): readonly WorkspaceBase[];
+  /** 释放并移除 Workspace；不存在时返回 null。 */
+  remove(workspace_id: string): Promise<WorkspaceBase | null>;
 }
 
 /** City 同时启动 HTTP 与 RPC transport 的监听参数。 */

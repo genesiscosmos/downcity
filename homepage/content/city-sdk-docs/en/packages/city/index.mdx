@@ -51,6 +51,14 @@ An SDK host may also call `city.plugins.provide(registration)` and then bind it 
 `city.plugins.register(agent_id, { plugin_id, profile })`. One Plugin ID can map to only one module
 within a City. One `(plugin_id, profile_id)` creates one instance shared by every bound Agent.
 
+## Workspace management
+
+`city.workspaces.add(workspace)` transfers runtime ownership to City, while `get()` and `list()`
+provide stable lookup surfaces. When a Workspace is no longer needed, call
+`await city.workspaces.remove(workspace_id)`. City disposes its Shell, Sandbox, and other runtime
+resources before removing it from the current City, and returns `null` when it does not exist. This
+only manages the runtime object; it never deletes the project directory.
+
 ## Plugin lifecycle
 
 A Plugin main is activated once per Plugin ID and deactivated when City closes. Execution instances
