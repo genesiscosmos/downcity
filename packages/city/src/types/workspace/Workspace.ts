@@ -23,6 +23,9 @@ export interface WorkspaceOptions {
   /** Workspace 绑定的本地项目目录；构造时会解析为真实绝对路径。 */
   path: string;
 
+  /** Workspace 的用户可见名称；未提供时回退到 id。 */
+  name?: string;
+
   /** Workspace 内可选的受控命令执行能力。 */
   shell?: WorkspaceShell;
 

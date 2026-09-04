@@ -604,7 +604,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_group_phase_by_group((current) => { const next = { ...current }; delete next[group_id]; return next; });
       set_group_read_message_ids_by_group((current) => { const next = { ...current }; delete next[group_id]; return next; });
       active_group_session_ids_ref.current.delete(group_id);
-      if ((selection?.kind === "group_session" || selection?.kind === "group_draft") && selection.group_id === group_id) set_selection(null);
+      if ((selection?.kind === "group" || selection?.kind === "group_session" || selection?.kind === "group_draft") && selection.group_id === group_id) set_selection(null);
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
@@ -998,9 +998,28 @@ export function use_desktop_controller(): DesktopViewController {
     }
   }, [select_session]);
 
+  /** 丢弃一个 Session 在 Renderer 中的全部投影状态，并屏蔽其后续迟到事件。 */
+  const discard_session_render_state = useCallback((source_key: string) => {
+    set_messages_by_session((current) => remove_session_value(current, source_key));
+    chat_runtime_ref.current = remove_session_value(chat_runtime_ref.current, source_key);
+    set_chat_runtime_by_session(chat_runtime_ref.current);
+    set_file_diff_by_session((current) => remove_session_value(current, source_key));
+    history_ref.current = remove_session_value(history_ref.current, source_key);
+    set_history_by_session(history_ref.current);
+    set_configuration_by_session((current) => remove_session_value(current, source_key));
+    set_draft_content_by_session((current) => remove_session_value(current, source_key));
+    commit_queue(remove_session_value(queue_ref.current, source_key));
+    processing_queue_ref.current.delete(source_key);
+    mutation_batches_ref.current.delete(source_key);
+    snapshot_request_ref.current.delete(source_key);
+    // 标记为已删除：后续迟到的 mutation / runtime 事件都会被 on_mutation / on_runtime 忽略。
+    deleted_session_keys_ref.current.add(source_key);
+  }, [commit_queue]);
+
   /** 重写历史用户消息，并将承载新 Turn 的 Session 设为当前会话。 */
   const rewrite_session_message = useCallback(async (workspace_id: string, agent_id: string, session_id: string, input: DesktopChatRewriteInput) => {
     set_error("");
+    const source_key = get_session_key(workspace_id, agent_id, session_id);
     try {
       const result = await window.downcity.chat.rewrite_session_message(agent_id, workspace_id, session_id, input);
       set_sessions_by_workspace((current) => ({
@@ -1014,12 +1033,19 @@ export function use_desktop_controller(): DesktopViewController {
           }),
         ],
       }));
+      const result_key = get_session_key(workspace_id, agent_id, result.session.session_id);
+      // 关键点（中文）：旧 Session 已被归档/分支替代，必须丢弃其渲染投影并屏蔽迟到事件，
+      // 否则上一轮 turn 的残留 mutation 会重新污染新 Session 的消息列表。
+      if (result_key !== source_key) {
+        deleted_session_keys_ref.current.add(source_key);
+        discard_session_render_state(source_key);
+      }
       await select_session(workspace_id, agent_id, result.session.session_id);
     } catch (reason) {
       set_error(to_error_message(reason));
       throw reason;
     }
-  }, [select_session]);
+  }, [discard_session_render_state, select_session]);
 
   const rename_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, title: string) => {
     try {

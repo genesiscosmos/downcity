@@ -19,6 +19,9 @@ export interface WorkspaceRuntime {
   /** Workspace 的稳定业务标识，不随物理路径移动而变化。 */
   readonly id: string;
 
+  /** Workspace 的用户可见名称；未提供时由实现回退到 id。 */
+  readonly name?: string;
+
   /** Workspace 的稳定逻辑根路径；远程实现可以使用虚拟路径。 */
   readonly path: string;
 

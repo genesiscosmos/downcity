@@ -39,6 +39,9 @@ export class Workspace implements WorkspaceRuntime {
   /** Workspace 的稳定标识。 */
   readonly id: string;
 
+  /** Workspace 的用户可见名称；未提供时回退到 id。 */
+  readonly name: string;
+
   /** 已解析且不可变的项目根目录。 */
   readonly path: string;
 
@@ -63,6 +66,7 @@ export class Workspace implements WorkspaceRuntime {
   constructor(options: WorkspaceOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Workspace requires a non-empty id");
+    this.name = String(options.name || "").trim() || this.id;
     this.path = resolve_workspace_path(options.path);
     this.files = new LocalFileSystem(this.path);
     this.env = resolve_workspace_env(this.path, options.env);

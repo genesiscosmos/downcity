@@ -326,7 +326,9 @@ export class AgentController {
     await this.ready_promise;
     const workspace_path = path.join(this.data.root_path, "workspaces", "app");
     await mkdir(workspace_path, { recursive: true });
-    return await to_desktop_workspace_summary(this.data.workspaces.ensure({ workspace_path, name: "app" }));
+    const config = this.data.workspaces.ensure({ workspace_path, name: "app" });
+    await this.register_workspace_in_city(config);
+    return await to_desktop_workspace_summary(config);
   }
 
   /** 独立登记 Workspace，不隐式创建 Agent 或 Session。 */
@@ -336,10 +338,12 @@ export class AgentController {
     await this.ready_promise;
     const normalized_path = String(input.workspace_path || "").trim();
     if (!normalized_path) throw new Error("workspace_path is required");
-    return await to_desktop_workspace_summary(this.data.workspaces.ensure({
+    const config = this.data.workspaces.ensure({
       workspace_path: normalized_path,
       name: String(input.name || "").trim(),
-    }));
+    });
+    await this.register_workspace_in_city(config);
+    return await to_desktop_workspace_summary(config);
   }
 
   /** 更新 Workspace Registry 中的显示名称。 */
@@ -1132,6 +1136,12 @@ export class AgentController {
   private async initialize_agents(): Promise<void> {
     const initialized_agents: Agent[] = [];
     try {
+      // 关键点（中文）：登记即存在。启动时把 Registry 中登记的 Workspace 全部
+      // 预载进 City 索引，使 Plugin main（如 Skills）能稳定列出全部 Workspace，
+      // 而不是只显示当前已被 Agent 进入过的实例。
+      for (const config of this.data.workspaces.list()) {
+        await this.register_workspace_in_city(config);
+      }
       for (const registration of await this.plugin_loader.list_registrations()) {
         this.city.plugins.provide(registration);
       }
@@ -1162,6 +1172,12 @@ export class AgentController {
       }));
       throw error;
     }
+  }
+
+  /** 把 Registry 中的 Workspace 登记进 City 索引；已存在时直接返回。 */
+  private async register_workspace_in_city(config: LocalWorkspaceConfig): Promise<void> {
+    if (this.city.workspaces.get(config.workspace_id)) return;
+    this.city.workspaces.add(await create_desktop_workspace(this.data, config));
   }
 
   /** 确保 Desktop catalog 中的 Plugin 已由 City 持有。 */
@@ -1234,16 +1250,23 @@ export class AgentController {
     if (existing_entry) {
       return await agent.sessions.get(session_id, "chat", { workspace: existing_entry.workspace });
     }
+    return await agent.sessions.get(session_id, "chat", { workspace: await this.get_orphan_workspace(workspace_id) });
+  }
+
+  /** 为已移除登记的孤儿 Workspace 创建内存实例；使用默认目录，并纳入 City 索引以通过宿主校验。 */
+  private async get_orphan_workspace(workspace_id: string) {
+    const existing = this.city.workspaces.get(workspace_id);
+    if (existing) return existing;
+    const workspace_path = path.join(this.data.root_path, "workspaces", "app");
+    await mkdir(workspace_path, { recursive: true });
     const orphan_config: LocalWorkspaceConfig = {
       workspace_id,
-      workspace_path: path.join(this.data.root_path, "workspaces", "app"),
+      workspace_path,
       name: workspace_id,
       created_at: "",
       updated_at: "",
     };
-    const workspace = this.city.workspaces.get(workspace_id)
-      ?? this.city.workspaces.add(await create_desktop_workspace(this.data, orphan_config));
-    return await agent.sessions.get(session_id, "chat", { workspace });
+    return this.city.workspaces.add(await create_desktop_workspace(this.data, orphan_config));
   }
 
   /** 读取即将执行模型调用的 Session；孤儿 Session 必须先绑定 Workspace 才能执行。 */
@@ -1487,10 +1510,10 @@ export class AgentController {
     if (!session_id) this.active_group_session_ids.delete(group_id);
   }
 
-  /** 解析 GroupSession 所需的 Workspace 资源。 */
+  /** 解析 GroupSession 所需的 Workspace 资源；登记缺失时回退到孤儿实例，避免点击已移除 Workspace 的 Group 直接报错。 */
   private async require_group_workspace(workspace_id: string) {
     const config = this.data.workspaces.get(workspace_id);
-    if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
+    if (!config) return await this.get_orphan_workspace(workspace_id);
     return this.city.workspaces.get(workspace_id)
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
   }

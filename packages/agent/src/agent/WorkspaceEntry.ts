@@ -2,8 +2,8 @@
  * Workspace 执行上下文的内部组合对象。
  *
  * 关键点（中文）
- * - City 是 Extension 生命周期的唯一拥有者。
- * - 当前对象只组合 Workspace Tool、宿主扩展、日志与 Session 执行上下文。
+ * - City 是 Plugin 生命周期的唯一拥有者。
+ * - 当前对象只组合 Workspace Tool、City Plugin、日志与 Session 执行上下文。
  * - Session 的所有权属于 Agent.sessions；本对象只提供内部执行上下文。
  * - 它不是公开领域对象，也不是 AgentWorkspace。
  */
@@ -22,14 +22,14 @@ import {
   type SystemProfile,
 } from "@/executor/composer/system/default/SystemDomain.js";
 import {
-  agent_has_host,
-  agent_host_extensions,
+  agent_has_resource_container,
+  agent_runtime_binding,
   get_agent_storage,
   release_workspace_entry,
 } from "@/internal/AgentRuntime.js";
-import type { SessionExtensionRuntime } from "@downcity/type/session";
-import { create_empty_session_extensions } from "@downcity/type/session";
-import type { AgentHostExtensions } from "@/types/agent/AgentHost.js";
+import type { SessionHooks } from "@/session/SessionHooks.js";
+import { EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
+import type { AgentRuntimeBinding } from "@/types/agent/AgentRuntimeBinding.js";
 
 /** 注册 Tool Set，并拒绝不同来源静默覆盖。 */
 function register_tools(
@@ -65,11 +65,11 @@ export class WorkspaceEntry {
 
   private readonly logger: Logger;
   private readonly unsubscribe_env: () => void;
-  private readonly unsubscribe_extensions: () => void;
+  private readonly unsubscribe_plugins: () => void;
   private readonly storage: AgentStorage;
-  private readonly host_extensions?: AgentHostExtensions;
-  /** 当前宿主 Extension 注入的 Tool 名称，用于配置变化时精确替换。 */
-  private readonly extension_tool_names = new Set<string>();
+  private readonly runtime_binding?: AgentRuntimeBinding;
+  /** 当前 City Plugin 注入的 Tool 名称，用于配置变化时精确替换。 */
+  private readonly plugin_tool_names = new Set<string>();
   private leave_promise?: Promise<void>;
 
   constructor(options: WorkspaceEntryOptions) {
@@ -79,7 +79,7 @@ export class WorkspaceEntry {
     const storage: AgentStorage = get_agent_storage(this.agent);
     this.storage = storage;
     this.data_path = storage.root_path;
-    if (!agent_has_host(this.agent)) {
+    if (!agent_has_resource_container(this.agent)) {
       this.workspace.shell?.bind({
         root_path: this.workspace.path,
         // 无 City 时内部状态仍在内存；Shell 的审批/临时文件必须落在真实项目根目录。
@@ -92,16 +92,16 @@ export class WorkspaceEntry {
       workspace_id: this.workspace_id,
     });
 
-    const host_extensions = agent_host_extensions(this.agent);
-    this.host_extensions = host_extensions;
-    void host_extensions?.ensure_workspace_ready(this.workspace, this.logger)
-      .catch((error) => this.logger.error("City Extension workspace startup failed", {
+    const runtime_binding = agent_runtime_binding(this.agent);
+    this.runtime_binding = runtime_binding;
+    void runtime_binding?.connect_workspace(this.workspace, this.logger)
+      .catch((error) => this.logger.error("City Plugin workspace startup failed", {
         error: error instanceof Error ? error.message : String(error),
       }));
 
     this.tools = {};
     register_tools(this.tools, this.workspace.tools, "WorkspaceTools");
-    this.replace_extension_tools();
+    this.replace_plugin_tools();
     register_tools(this.tools, this.agent.custom_tools, "AgentOptions.tools");
 
     this.sessions = {
@@ -138,14 +138,14 @@ export class WorkspaceEntry {
         this.workspace_id,
       );
     });
-    this.unsubscribe_extensions = host_extensions?.subscribe((change) => {
-      this.replace_extension_tools();
+    this.unsubscribe_plugins = runtime_binding?.subscribe_plugins((change) => {
+      this.replace_plugin_tools();
       if (change.initial) return;
-      const verb = change.type === "register" ? "registered" : "unregistered";
-      (this.agent.sessions as AgentSessions).broadcast_extensions({
+      const verb = change.type === "add" ? "added" : "removed";
+      (this.agent.sessions as AgentSessions).broadcast_hooks({
         command_id: generate_id(),
-        title: `City extension ${change.extension_name} ${verb}`,
-        extensions: host_extensions.execution_runtime(this.workspace, this.logger),
+        title: `City Plugin ${change.plugin_id} ${verb}`,
+        hooks: runtime_binding.hooks(this.workspace, this.logger),
         workspace_id: this.workspace_id,
       });
     }) ?? (() => {});
@@ -176,7 +176,7 @@ export class WorkspaceEntry {
       session_id: input.session_id,
       profile: input.profile || "chat",
       static_system_prompts: [...this.agent.get_instructions()],
-      extensions: this.get_extensions(),
+      hooks: this.get_hooks(),
     });
   }
 
@@ -186,12 +186,12 @@ export class WorkspaceEntry {
       const errors: unknown[] = [];
       const cleanup_steps: Array<() => void | Promise<void>> = [
         () => this.unsubscribe_env(),
-        () => this.unsubscribe_extensions(),
+        () => this.unsubscribe_plugins(),
         async () => await (this.agent.sessions as AgentSessions).stop_executing_sessions(this.workspace_id),
         () => (this.agent.sessions as AgentSessions).dispose_title_generation(this.workspace_id),
         async () => await this.logger.save_all_logs(),
-        async () => await this.host_extensions?.release_workspace(this.workspace_id),
-        ...(agent_has_host(this.agent) ? [] : [async () => await this.workspace.dispose()]),
+        async () => await this.runtime_binding?.disconnect_workspace(this.workspace_id),
+        ...(agent_has_resource_container(this.agent) ? [] : [async () => await this.workspace.dispose()]),
       ];
       for (const cleanup of cleanup_steps) {
         try {
@@ -215,7 +215,7 @@ export class WorkspaceEntry {
     logger: Logger;
     tools: Record<string, Tool>;
     get_workspace_env: () => Record<string, string>;
-    get_extensions: () => SessionExtensionRuntime;
+    get_hooks: () => SessionHooks;
     store: AgentStorage["sessions"];
   } {
     return {
@@ -224,23 +224,23 @@ export class WorkspaceEntry {
       logger: this.logger,
       tools: this.tools,
       get_workspace_env: () => this.workspace.get_env(),
-      get_extensions: () => this.get_extensions(),
+      get_hooks: () => this.get_hooks(),
       store: this.storage.sessions,
     };
   }
 
   /** 返回当前 Workspace 在 City 检查点上的最新扩展运行时。 */
-  private get_extensions(): SessionExtensionRuntime {
-    return this.host_extensions?.execution_runtime(this.workspace, this.logger)
-      ?? create_empty_session_extensions();
+  private get_hooks(): SessionHooks {
+    return this.runtime_binding?.hooks(this.workspace, this.logger)
+      ?? EMPTY_SESSION_HOOKS;
   }
 
-  /** 原子替换宿主 Extension 注入的 Tool 集合。 */
-  private replace_extension_tools(): void {
-    for (const tool_name of this.extension_tool_names) delete this.tools[tool_name];
-    this.extension_tool_names.clear();
-    const extension_tools = this.host_extensions?.tools(this.workspace, this.logger) ?? {};
-    register_tools(this.tools, extension_tools, "HostExtensions");
-    for (const tool_name of Object.keys(extension_tools)) this.extension_tool_names.add(tool_name);
+  /** 原子替换 City Plugin 注入的 Tool 集合。 */
+  private replace_plugin_tools(): void {
+    for (const tool_name of this.plugin_tool_names) delete this.tools[tool_name];
+    this.plugin_tool_names.clear();
+    const plugin_tools = this.runtime_binding?.tools(this.workspace, this.logger) ?? {};
+    register_tools(this.tools, plugin_tools, "CityPlugins");
+    for (const tool_name of Object.keys(plugin_tools)) this.plugin_tool_names.add(tool_name);
   }
 }

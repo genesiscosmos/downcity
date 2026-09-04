@@ -80,6 +80,7 @@ export async function create_cli_workspace(
   const root_path = resolve_local_root_path(root_path_input);
   return new Workspace({
     id: config.workspace_id,
+    name: config.name,
     path: config.workspace_path,
     env: resolve_local_agent_env({
       root_path,
