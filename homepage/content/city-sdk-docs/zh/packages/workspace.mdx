@@ -39,6 +39,10 @@ const session = await agent.sessions.create({ workspace });
 一个 Agent 可以在多个 Workspace 资源中创建 Session。Workspace 可以登记在 City 内，也可以由
 宿主在 City 外管理；Agent 私有的 Session 与 Plugin 数据始终隔离。
 
+结构化 `write`、`edit` 工具会在文件原子提交后，通过 `WorkspaceToolActionResult.effects` 报告
+`workspace.file_mutation`。Effect 不会作为 Tool output 发送给模型；Agent Session 只在当前 Turn
+中按顺序收集，并在收口时将文件修改投影为 Assistant data part。Shell 与外部编辑不会产生该 Effect。
+
 ## 存储
 
 City 提供不理解业务的底层 Storage Provider，默认实现是内存存储；需要持久化时由宿主注入本地

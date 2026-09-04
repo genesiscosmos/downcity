@@ -11,7 +11,10 @@ import test from "node:test";
 import { SessionInteractions } from "../bin/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "../bin/session/execution/tools/SessionShellApprovalAdapter.js";
 import { JsonlSessionMessageStore } from "../bin/workspace/store/JsonlSessionMessageStore.js";
-import { LocalFileSystem } from "@downcity/workspace";
+import {
+  create_workspace_file_mutation_effect,
+  LocalFileSystem,
+} from "@downcity/workspace";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 import { SessionEventHub } from "../bin/session/runtime/SessionEventHub.js";
 import { SessionLoop } from "../bin/session/SessionLoop.js";
@@ -221,7 +224,7 @@ test("SessionLoop 在释放 Plugin lease 前触发 turn committed effect", async
 test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async () => {
   const { messages, turn } = await create_turn_harness(async (turn_context, root_path) => {
     await fs.writeFile(path.join(root_path, "external.ts"), "external\n", "utf8");
-    turn_context.workspace_changes.record_file_mutations([{
+    turn_context.effects.append([create_workspace_file_mutation_effect({
       file_path: path.join(root_path, "src/example.ts"),
       before: {
         exists: true,
@@ -233,7 +236,7 @@ test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async
         sha256: "after",
         content: "const value = 2;\nconst next = 3;\n",
       },
-    }]);
+    })]);
     return {
       success: true,
       text: "done",

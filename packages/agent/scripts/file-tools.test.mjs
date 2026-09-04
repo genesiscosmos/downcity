@@ -293,25 +293,27 @@ test("write/edit 只在成功提交后返回结构化文件修改事实", async 
     file_path: "tracked.txt",
     content: "first\n",
   });
-  assert.equal(written.workspace_file_mutations.length, 1);
-  assert.equal(written.workspace_file_mutations[0].before.exists, false);
-  assert.equal(written.workspace_file_mutations[0].after.content, "first\n");
+  assert.equal(written.effects.length, 1);
+  assert.equal(written.effects[0].type, "workspace.file_mutation");
+  assert.equal(written.effects[0].data.before.exists, false);
+  assert.equal(written.effects[0].data.after.content, "first\n");
 
   const edited = await execute_action_tool(fixture.tools, "edit", {
     file_path: "tracked.txt",
     expected_sha256: written.output.sha256,
     edits: [{ old_text: "first", new_text: "second" }],
   });
-  assert.equal(edited.workspace_file_mutations.length, 1);
-  assert.equal(edited.workspace_file_mutations[0].before.content, "first\n");
-  assert.equal(edited.workspace_file_mutations[0].after.content, "second\n");
+  assert.equal(edited.effects.length, 1);
+  assert.equal(edited.effects[0].type, "workspace.file_mutation");
+  assert.equal(edited.effects[0].data.before.content, "first\n");
+  assert.equal(edited.effects[0].data.after.content, "second\n");
 
   const rejected = await execute_action_tool(fixture.tools, "edit", {
     file_path: "tracked.txt",
     edits: [{ old_text: "missing", new_text: "ignored" }],
   });
   assert.equal(rejected.output.success, false);
-  assert.deepEqual(rejected.workspace_file_mutations, []);
+  assert.deepEqual(rejected.effects, []);
 });
 
 test("修改观察失败不会把已提交的 write 伪装成 Tool 失败", async (t) => {

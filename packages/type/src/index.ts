@@ -56,5 +56,6 @@ export type {
 export {
   define_runtime_tool,
   type RuntimeTool,
+  type RuntimeToolEffect,
   type RuntimeToolExecutionOptions,
 } from "./types/tool/index.js";

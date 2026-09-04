@@ -30,8 +30,13 @@ export type {
 } from "./types/workspace/WorkspaceToolResult.js";
 export type {
   WorkspaceFileMutation,
+  WorkspaceFileMutationEffect,
   WorkspaceFileMutationObserver,
   WorkspaceFileMutationState,
+} from "./types/workspace/WorkspaceFileMutation.js";
+export {
+  create_workspace_file_mutation_effect,
+  WORKSPACE_FILE_MUTATION_EFFECT_TYPE,
 } from "./types/workspace/WorkspaceFileMutation.js";
 export type {
   StorageScope,

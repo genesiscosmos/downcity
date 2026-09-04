@@ -19,7 +19,10 @@ import { create_workspace_entry } from "../bin/internal/index.js";
 import {
   build_session_turn_file_diff,
 } from "../bin/session/messages/SessionTurnFileDiffBuilder.js";
-import { Workspace } from "@downcity/workspace";
+import {
+  create_workspace_file_mutation_effect,
+  Workspace,
+} from "@downcity/workspace";
 
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 };
 
@@ -47,11 +50,19 @@ function text_state(content) {
   };
 }
 
+/** 使用 Workspace 公开协议把文件修改事实投影为 Tool effect。 */
+function build_file_diff(workspace_path, mutations) {
+  return build_session_turn_file_diff(
+    workspace_path,
+    mutations.map(create_workspace_file_mutation_effect),
+  );
+}
+
 test("同一 Turn 的连续 write/edit 聚合为文件最终 Diff", () => {
   const workspace_path = path.resolve("/workspace/session-a");
   const initial_content = "first\n";
   const final_content = "second\nthird\n";
-  const file_diff = build_session_turn_file_diff(workspace_path, [
+  const file_diff = build_file_diff(workspace_path, [
     {
       file_path: path.join(workspace_path, "src/example.ts"),
       before: { exists: false },
@@ -76,12 +87,12 @@ test("同一 Turn 的连续 write/edit 聚合为文件最终 Diff", () => {
 
 test("两个 Session 只消费各自 TurnContext 持有的修改事实", () => {
   const workspace_path = path.resolve("/workspace/shared");
-  const session_a_diff = build_session_turn_file_diff(workspace_path, [{
+  const session_a_diff = build_file_diff(workspace_path, [{
     file_path: path.join(workspace_path, "session-a.txt"),
     before: { exists: false },
     after: text_state("from a\n"),
   }]);
-  const session_b_diff = build_session_turn_file_diff(workspace_path, [{
+  const session_b_diff = build_file_diff(workspace_path, [{
     file_path: path.join(workspace_path, "session-b.txt"),
     before: { exists: false },
     after: text_state("from b\n"),
@@ -93,13 +104,21 @@ test("两个 Session 只消费各自 TurnContext 持有的修改事实", () => {
 
 test("Shell 或外部写入没有结构化修改事实时不产生 Diff", () => {
   const workspace_path = path.resolve("/workspace/external");
-  assert.equal(build_session_turn_file_diff(workspace_path, []), undefined);
+  assert.equal(build_file_diff(workspace_path, []), undefined);
+});
+
+test("非 Workspace 文件修改的 Turn effect 不产生 Diff", () => {
+  const workspace_path = path.resolve("/workspace/other-effect");
+  assert.equal(build_session_turn_file_diff(workspace_path, [{
+    type: "example.completed",
+    data: { value: true },
+  }]), undefined);
 });
 
 test("外部写入打断同一文件的状态链时忽略该文件", () => {
   const workspace_path = path.resolve("/workspace/conflict");
   const file_path = path.join(workspace_path, "shared.txt");
-  const file_diff = build_session_turn_file_diff(workspace_path, [
+  const file_diff = build_file_diff(workspace_path, [
     {
       file_path,
       before: text_state("base\n"),
@@ -117,7 +136,7 @@ test("外部写入打断同一文件的状态链时忽略该文件", () => {
 
 test("Workspace 范围外的修改事实不会进入当前 Session Diff", () => {
   const workspace_path = path.resolve("/workspace/current");
-  const file_diff = build_session_turn_file_diff(workspace_path, [{
+  const file_diff = build_file_diff(workspace_path, [{
     file_path: path.resolve("/workspace/other/outside.txt"),
     before: { exists: false },
     after: text_state("outside\n"),
@@ -127,7 +146,7 @@ test("Workspace 范围外的修改事实不会进入当前 Session Diff", () => 
 });
 
 test("相对路径修改事实不会按进程 cwd 猜测归属", () => {
-  const file_diff = build_session_turn_file_diff(process.cwd(), [{
+  const file_diff = build_file_diff(process.cwd(), [{
     file_path: "relative.txt",
     before: { exists: false },
     after: text_state("relative\n"),

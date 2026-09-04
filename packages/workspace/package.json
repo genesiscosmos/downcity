@@ -1,6 +1,6 @@
 {
   "name": "@downcity/workspace",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "type": "module",
   "description": "Downcity Workspace 资源边界、文件工具与内置 Shell runtime",
   "main": "./bin/index.js",

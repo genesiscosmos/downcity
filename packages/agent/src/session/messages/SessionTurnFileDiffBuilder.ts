@@ -2,7 +2,7 @@
  * Session Turn 结构化文件修改的 Diff 构建器。
  *
  * 关键点（中文）
- * - 唯一输入是 Workspace write/edit 成功提交时产生的修改事实。
+ * - 从当前 Turn 的通用 Tool effects 中只选择 Workspace 文件修改事实。
  * - 不读取 Turn 结束时的实时工作树，因此 Shell 和外部进程不会被反向归属。
  * - 同一文件的修改状态无法连续证明时直接忽略，避免把外部插入的内容伪装成本轮修改。
  */
@@ -13,7 +13,12 @@ import {
   formatPatch,
   structuredPatch,
 } from "diff";
-import type { WorkspaceFileMutation, WorkspaceFileMutationState } from "@downcity/workspace";
+import type { RuntimeToolEffect } from "@downcity/type";
+import {
+  WORKSPACE_FILE_MUTATION_EFFECT_TYPE,
+  type WorkspaceFileMutation,
+  type WorkspaceFileMutationState,
+} from "@downcity/workspace";
 import type {
   SessionTurnFileDiff,
   SessionTurnFileDiffData,
@@ -31,11 +36,15 @@ interface CollectedFileMutation {
   conflicted: boolean;
 }
 
-/** 把当前 Turn 的结构化文件修改事实收敛为可持久化 Diff。 */
+/** 把当前 Turn effects 中的结构化文件修改收敛为可持久化 Diff。 */
 export function build_session_turn_file_diff(
   workspace_path: string,
-  mutations: readonly WorkspaceFileMutation[],
+  effects: readonly RuntimeToolEffect[],
 ): SessionTurnFileDiffData | undefined {
+  const mutations = effects.flatMap((effect) => {
+    const mutation = read_workspace_file_mutation_effect(effect);
+    return mutation ? [mutation] : [];
+  });
   const files_by_path = collect_file_mutations(workspace_path, mutations);
   const files = [...files_by_path.values()]
     .filter((entry) => !entry.conflicted && !same_file_state(entry.before, entry.after))
@@ -49,6 +58,29 @@ export function build_session_turn_file_diff(
   };
 }
 
+/** 从通用 Tool effect 中读取经过最小运行时校验的 Workspace 文件修改。 */
+function read_workspace_file_mutation_effect(
+  input: unknown,
+): WorkspaceFileMutation | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const effect = input as Record<string, unknown>;
+  if (effect.type !== WORKSPACE_FILE_MUTATION_EFFECT_TYPE) return undefined;
+  if (!effect.data || typeof effect.data !== "object" || Array.isArray(effect.data)) {
+    return undefined;
+  }
+  const mutation = effect.data as Record<string, unknown>;
+  if (
+    typeof mutation.file_path !== "string" ||
+    !is_file_state(mutation.before) ||
+    !is_file_state(mutation.after)
+  ) return undefined;
+  return {
+    file_path: mutation.file_path,
+    before: mutation.before,
+    after: mutation.after,
+  };
+}
+
 /** 按文件聚合连续的结构化修改；无法证明连续时标记冲突。 */
 function collect_file_mutations(
   workspace_path: string,
@@ -58,7 +90,7 @@ function collect_file_mutations(
   const files_by_path = new Map<string, CollectedFileMutation>();
   for (const mutation of mutations) {
     const file = resolve_workspace_file(workspace_root, mutation.file_path);
-    if (!file || !is_file_state(mutation.before) || !is_file_state(mutation.after)) continue;
+    if (!file) continue;
     const existing = files_by_path.get(file);
     if (!existing) {
       files_by_path.set(file, {

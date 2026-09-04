@@ -7,3 +7,4 @@ export {
   type RuntimeTool,
   type RuntimeToolExecutionOptions,
 } from "./RuntimeTool.js";
+export type { RuntimeToolEffect } from "./RuntimeToolEffect.js";

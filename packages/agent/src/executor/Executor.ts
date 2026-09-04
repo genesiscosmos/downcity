@@ -12,7 +12,6 @@ import type {
   RuntimeTool as Tool,
   RuntimeToolExecutionOptions as ToolExecutionOptions,
 } from "@downcity/type";
-import type { WorkspaceToolActionResult } from "@downcity/workspace";
 import { CoreEngineRunner } from "@executor/core-engine/CoreEngineRunner.js";
 import { ExecutorRecoveryPolicy } from "@executor/services/ExecutorRecoveryPolicy.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -381,13 +380,8 @@ export class Executor implements SessionExecutor {
             context: execution_context,
           });
           if (!is_action_result(output)) return output;
-          const workspace_file_mutations = (
-            output as Partial<WorkspaceToolActionResult>
-          ).workspace_file_mutations;
-          if (Array.isArray(workspace_file_mutations)) {
-            turn_context.workspace_changes.record_file_mutations(
-              workspace_file_mutations,
-            );
+          if (Array.isArray(output.effects)) {
+            turn_context.effects.append(output.effects);
           }
           for (const message of output.messages) {
             if (message.role === "assistant") {

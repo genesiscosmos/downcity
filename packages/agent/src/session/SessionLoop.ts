@@ -594,7 +594,7 @@ export class SessionLoop {
     try {
       const file_diff = build_session_turn_file_diff(
         this.workspace_path,
-        turn_context.workspace_changes.file_mutations(),
+        turn_context.effects.snapshot(),
       );
       if (!file_diff) return;
       await assistant_output.append_result_parts([{

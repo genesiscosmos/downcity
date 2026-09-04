@@ -7,6 +7,7 @@
  * - Plugin 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
  */
 
+import type { RuntimeToolEffect } from "@downcity/type";
 import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
 import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
 import type {
@@ -20,7 +21,6 @@ import type {
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import { normalize_session_origin } from "@/session/SessionOrigin.js";
 import type { SessionPluginContextBlock } from "@/types/session/SessionPluginHook.js";
-import type { WorkspaceFileMutation } from "@downcity/workspace";
 
 /** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */
 export interface CreateSessionExtensionExecutionContextInput {
@@ -56,13 +56,13 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private injected_user_messages: SessionUserMessage[] = [];
   private deferred_messages: SessionUserMessage[] = [];
   private pending_assistant_parts: SessionAssistantResultPart[] = [];
-  private workspace_file_mutations: WorkspaceFileMutation[] = [];
+  private turn_effects: RuntimeToolEffect[] = [];
 
   readonly lifecycle: SessionTurnContext["lifecycle"];
   readonly step: SessionTurnContext["step"];
   readonly input: SessionTurnContext["input"];
   readonly output: SessionTurnContext["output"];
-  readonly workspace_changes: SessionTurnContext["workspace_changes"];
+  readonly effects: SessionTurnContext["effects"];
 
   constructor(private readonly init: SessionTurnContextInit) {
     const session_id = String(init.session_id || "").trim();
@@ -186,11 +186,11 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       },
     });
 
-    this.workspace_changes = Object.freeze({
-      record_file_mutations: (mutations) => {
-        context.workspace_file_mutations.push(...mutations);
+    this.effects = Object.freeze({
+      append: (effects) => {
+        context.turn_effects.push(...effects);
       },
-      file_mutations: () => Object.freeze([...context.workspace_file_mutations]),
+      snapshot: () => Object.freeze([...context.turn_effects]),
     });
   }
 

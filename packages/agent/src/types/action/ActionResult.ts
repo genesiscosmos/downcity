@@ -4,9 +4,11 @@
  * 关键点（中文）
  * - `output` 是标准 Tool Result，原样交给模型执行器和 canonical Tool Part。
  * - `messages` 是执行后写入 Session 的真实 User / Assistant Message 内容。
+ * - `effects` 是当前 Turn 只追加收集、并在收口检查点解释的已发生副作用。
  * - Message Parts 复用 Downcity Session UI 协议，不再建立文件、图片或 Plugin 专用桥接。
  */
 
+import type { RuntimeToolEffect } from "@downcity/type";
 import type {
   SessionAssistantResultPart,
   SessionPromptPart,
@@ -34,6 +36,9 @@ export interface ActionResult<TOutput = unknown> {
 
   /** 执行产生的真实 Session 消息；没有附加消息时传入空数组。 */
   messages: ActionResultMessage[];
+
+  /** 已经发生且需要由当前 Turn 收集的副作用；不会发送给模型或直接持久化。 */
+  effects?: readonly RuntimeToolEffect[];
 }
 
 /** 判断未知 Tool 输出是否使用统一 ActionResult 协议。 */

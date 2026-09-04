@@ -5,7 +5,7 @@
  * 约定兼容的 `output/messages` 形状，便于 Workspace Tool 被任意 Agent 消费。
  */
 
-import type { WorkspaceFileMutation } from "@/types/workspace/WorkspaceFileMutation.js";
+import type { RuntimeToolEffect } from "@downcity/type";
 
 /** Workspace Tool 产生的文本消息内容。 */
 export interface WorkspaceToolTextPart {
@@ -47,6 +47,6 @@ export interface WorkspaceToolActionResult<TOutput = unknown> {
   /** 工具执行产生的附加模型消息。 */
   messages: WorkspaceToolActionMessage[];
 
-  /** 成功的结构化 write/edit 产生的文件修改事实；不会作为 Tool output 发送给模型。 */
-  workspace_file_mutations?: readonly WorkspaceFileMutation[];
+  /** 已经发生且需要由当前 Turn 收集的副作用；不会作为 Tool output 发送给模型。 */
+  effects?: readonly RuntimeToolEffect[];
 }

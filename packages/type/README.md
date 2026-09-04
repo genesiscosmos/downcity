@@ -9,4 +9,4 @@
 - `CityModelDescriptor`：City 模型目录返回的公开模型信息。
 - `CityModel`：User City 返回的可执行 City 模型，可被支持 City model 的 SDK 直接消费。
 - `isCityModel()`：判断一个值是否实现 City model 协议。
-
+- `RuntimeToolEffect`：Tool 向宿主报告已经发生、需要在当前 Turn 内收集的结构化副作用。

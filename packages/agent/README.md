@@ -102,7 +102,8 @@ src/
   - `SessionLoop.ts` 管理输入队列和 Turn 生命周期
   - `SessionMessages.ts` 是 canonical Message 唯一事实源
   - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
-  - `messages/` 放 Assistant writer、Message codec、结构化文件编辑 Diff 与 compaction；JSONL Store 位于 `workspace/store/`
+  - `SessionTurnContext.effects` 只负责按发生顺序收集当前 Turn 的 Tool 副作用，不解释具体业务
+  - `messages/` 放 Assistant writer、Message codec、Tool effect 投影、结构化文件编辑 Diff 与 compaction；JSONL Store 位于 `workspace/store/`
   - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 的单次执行输入
 
 - `src/executor/`

@@ -39,6 +39,12 @@ const session = await agent.sessions.create({ workspace });
 An Agent can create Sessions with multiple Workspace resources. A Workspace may be registered in a
 City or managed by the host outside City; Agent-private Session and Plugin data remain isolated.
 
+After an atomic file commit, the structured `write` and `edit` tools report a
+`workspace.file_mutation` through `WorkspaceToolActionResult.effects`. Effects are not sent to the
+model as Tool output. The Agent Session collects them only for the current Turn and projects file
+mutations into an Assistant data part when the Turn closes. Shell and external edits do not produce
+this effect.
+
 ## Storage
 
 City provides a domain-neutral Storage Provider. The default is in-memory; a host can inject a local

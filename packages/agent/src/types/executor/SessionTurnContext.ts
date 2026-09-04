@@ -7,10 +7,8 @@
  * - 可变状态只能通过行为方法更新，消费者不能直接操作内部数组、lease 或 callback。
  */
 
-import type {
-  ShellApprovalGateway,
-  WorkspaceFileMutation,
-} from "@downcity/workspace";
+import type { RuntimeToolEffect } from "@downcity/type";
+import type { ShellApprovalGateway } from "@downcity/workspace";
 import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
 import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
@@ -175,13 +173,13 @@ export interface SessionTurnContext {
     publish_action(event: AgentSessionActionEvent): Promise<void>;
   };
 
-  /** 当前 Turn 通过 Workspace 结构化文件工具产生的修改事实。 */
-  readonly workspace_changes: {
-    /** 记录 write/edit 已经成功提交的文件修改。 */
-    record_file_mutations(mutations: readonly WorkspaceFileMutation[]): void;
+  /** 当前 Turn 已经发生、等待在收口检查点投影的 Tool 副作用。 */
+  readonly effects: {
+    /** 按实际发生顺序追加 Tool 副作用。 */
+    append(effects: readonly RuntimeToolEffect[]): void;
 
-    /** 返回当前 Turn 文件修改事实的不可变快照。 */
-    file_mutations(): readonly WorkspaceFileMutation[];
+    /** 返回当前 Turn 已收集副作用的不可变快照。 */
+    snapshot(): readonly RuntimeToolEffect[];
   };
 
   /** 当前 Session 执行面创建用户异步交互的端口。 */

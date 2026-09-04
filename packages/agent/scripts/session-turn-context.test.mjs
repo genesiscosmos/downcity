@@ -62,6 +62,30 @@ test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async (
   assert.equal(context.output.take_assistant_parts().length, 0);
 });
 
+test("SessionTurnContext 只按顺序收集当前 Turn 的 Tool effects", () => {
+  const context = create_session_turn_context({
+    session_id: "session-context-test",
+    session_origin: { type: "chat" },
+    turn_id: "turn-context-test",
+  });
+  context.effects.append([{
+    type: "example.first",
+    data: { value: 1 },
+  }]);
+  const first_snapshot = context.effects.snapshot();
+  context.effects.append([{
+    type: "example.second",
+    data: { value: 2 },
+  }]);
+
+  assert.equal(Object.isFrozen(first_snapshot), true);
+  assert.deepEqual(first_snapshot.map((effect) => effect.type), ["example.first"]);
+  assert.deepEqual(
+    context.effects.snapshot().map((effect) => effect.type),
+    ["example.first", "example.second"],
+  );
+});
+
 test("SessionTurnContext 负责 Plugin lease 与只读投影生命周期", async () => {
   const released = [];
   const create_lease = (name) => ({
