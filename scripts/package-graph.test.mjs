@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import test from "node:test";
 
-import { resolve_package_build_order } from "./package-graph.mjs";
+import {
+  resolve_package_build_order,
+  resolve_package_path,
+} from "./package-graph.mjs";
 
 const workspace_root = path.resolve(import.meta.dirname, "..");
 
@@ -35,4 +38,10 @@ test("CLI 构建闭包完全来自 manifest 运行时依赖", () => {
       "cli",
     ],
   );
+});
+
+test("分组 package 与应用 package 都按 manifest 身份解析真实目录", () => {
+  assert.equal(resolve_package_path(workspace_root, "database-d1"), "packages/database/d1");
+  assert.equal(resolve_package_path(workspace_root, "sandbox-macos"), "packages/sandbox/macos");
+  assert.equal(resolve_package_path(workspace_root, "cli"), "app/cli");
 });

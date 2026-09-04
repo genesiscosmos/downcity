@@ -191,13 +191,24 @@ console.log(result.text);
 
 ```text
 downcity/
+├── app/
+│   ├── cli/
+│   ├── desktop/
+│   ├── fedman/
+│   └── ios/
 ├── packages/
 │   ├── agent/
 │   ├── city/
-│   ├── cli/
+│   ├── database/
+│   ├── federation/
+│   ├── plugin/
+│   ├── plugins/
+│   ├── sandbox/
 │   ├── services/
 │   ├── type/
-│   └── ui/
+│   ├── ui/
+│   ├── workspace/
+│   └── workspace-adapters/
 ├── templates/
 │   ├── agent/
 │   ├── edgefed/
@@ -218,7 +229,7 @@ The `templates/*` projects are convenient developer starters and showcases. The 
 - Agent SDK docs: [downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK docs: [downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
 - Chinese overview: [README.zh-CN.md](./README.zh-CN.md)
-- Package docs: [packages/agent/README.md](./packages/agent/README.md), [packages/type/README.md](./packages/type/README.md), [packages/services/README.md](./packages/services/README.md), [packages/cli/README.md](./packages/cli/README.md), [packages/ui/README.md](./packages/ui/README.md)
+- Package docs: [packages/agent/README.md](./packages/agent/README.md), [packages/type/README.md](./packages/type/README.md), [packages/services/README.md](./packages/services/README.md), [app/cli/README.md](./app/cli/README.md), [packages/ui/README.md](./packages/ui/README.md)
 
 ## Local Development
 

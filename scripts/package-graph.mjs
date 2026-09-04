@@ -20,6 +20,14 @@ const runtime_dependency_fields = [
   "peerDependencies",
 ];
 
+/** 递归发现 package 时必须跳过的依赖与构建产物目录。 */
+const ignored_directory_names = new Set([
+  ".git",
+  "bin",
+  "dist",
+  "node_modules",
+]);
+
 /** 读取 manifest 中的 Downcity 运行时依赖名称。 */
 export function read_downcity_runtime_dependencies(manifest) {
   const dependencies = new Set();
@@ -77,6 +85,14 @@ export function resolve_package_build_order(workspace_root, target_keys) {
     .map((item) => item.key);
 }
 
+/** 根据稳定 package key 解析当前 workspace 中的真实目录。 */
+export function resolve_package_path(workspace_root, target_key) {
+  const manifest = read_workspace_manifests(workspace_root, true)
+    .find((item) => item.key === target_key && !item.private);
+  if (!manifest) throw new Error(`未找到 package: ${target_key}`);
+  return manifest.path;
+}
+
 /** 生成 GitHub Actions output；空层也输出稳定的空 matrix。 */
 export function create_workflow_outputs(graph) {
   const outputs = {
@@ -95,24 +111,34 @@ export function create_workflow_outputs(graph) {
 
 /** 读取 workspace package manifests。 */
 function read_workspace_manifests(workspace_root, include_cli) {
-  const package_paths = [];
-  const packages_directory = path.join(workspace_root, "packages");
-  if (existsSync(packages_directory)) {
-    for (const entry of readdirSync(packages_directory, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const manifest_path = path.join("packages", entry.name, "package.json");
-      if (existsSync(path.join(workspace_root, manifest_path))) package_paths.push(manifest_path);
-    }
-  }
-  if (include_cli && existsSync(path.join(workspace_root, "packages/cli/package.json"))) {
-    if (!package_paths.includes("packages/cli/package.json")) {
-      package_paths.push("packages/cli/package.json");
-    }
+  const package_paths = find_package_manifests(workspace_root, "packages");
+  const cli_manifest_path = "app/cli/package.json";
+  if (include_cli && existsSync(path.join(workspace_root, cli_manifest_path))) {
+    package_paths.push(cli_manifest_path);
   }
 
   return package_paths
     .map((manifest_path) => read_manifest(workspace_root, manifest_path))
     .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/** 在分组目录中递归发现最外层 package manifest。 */
+function find_package_manifests(workspace_root, relative_directory) {
+  const absolute_directory = path.join(workspace_root, relative_directory);
+  if (!existsSync(absolute_directory)) return [];
+
+  const manifest_paths = [];
+  for (const entry of readdirSync(absolute_directory, { withFileTypes: true })) {
+    if (!entry.isDirectory() || ignored_directory_names.has(entry.name)) continue;
+    const child_directory = path.join(relative_directory, entry.name);
+    const manifest_path = path.join(child_directory, "package.json");
+    if (existsSync(path.join(workspace_root, manifest_path))) {
+      manifest_paths.push(manifest_path);
+      continue;
+    }
+    manifest_paths.push(...find_package_manifests(workspace_root, child_directory));
+  }
+  return manifest_paths;
 }
 
 /** 读取并规范化单个 workspace manifest。 */
@@ -123,12 +149,19 @@ function read_manifest(workspace_root, manifest_path) {
   }
   return {
     name: manifest.name,
-    key: path.basename(path.dirname(manifest_path)),
+    key: resolve_package_key(manifest.name, manifest_path),
     path: path.dirname(manifest_path).replaceAll("\\", "/"),
     version: manifest.version,
     private: manifest.private === true,
     downcity_dependencies: read_downcity_runtime_dependencies(manifest),
   };
+}
+
+/** 从发布身份生成不受物理目录影响的构建 key。 */
+function resolve_package_key(package_name, manifest_path) {
+  if (package_name === "downcity") return "cli";
+  if (package_name.startsWith("@downcity/")) return package_name.slice("@downcity/".length);
+  return path.basename(path.dirname(manifest_path));
 }
 
 /** 按 manifest 运行时依赖解析稳定拓扑层。 */

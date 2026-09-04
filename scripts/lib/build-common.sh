@@ -23,7 +23,7 @@ sync_downcity_workspace_package_globally() {
   local target_link
   local target_dir
 
-  source_dir="$workspace_root/packages/$package_name"
+  source_dir="$workspace_root/$(node "$workspace_root/scripts/resolve-package-path.mjs" "$package_name")"
   target_link="$package_dir/node_modules/@downcity/$package_name"
   if [[ ! -d "$source_dir" || ! -e "$target_link" ]]; then
     return 0
@@ -116,15 +116,15 @@ install_downcity_cli_globally() {
   global_modules="$npm_prefix/lib/node_modules"
   global_bin="$npm_prefix/bin"
   package_dir="$global_modules/downcity"
-  source_dir="$workspace_root/packages/cli"
+  source_dir="$workspace_root/app/cli"
   legacy_command="stu""dio"
 
   if [[ ! -f "$source_dir/bin/downcity.js" || ! -f "$source_dir/bin/downfed.js" ]]; then
-    echo "Missing Downcity CLI build output. Run packages/cli build first." >&2
+    echo "Missing Downcity CLI build output. Run app/cli build first." >&2
     return 1
   fi
 
-  # 关键点（中文）：本地开发时 `npm link` 会让全局 downcity 指向 workspace 的 packages/cli。
+  # 关键点（中文）：本地开发时 `npm link` 会让全局 downcity 指向 workspace 的 app/cli。
   # 这种情况下 source_dir 与 package_dir 是同一个真实目录，不能执行增量同步里的 rm/cp，
   # 否则会把 workspace 自己的 bin / README / package.json 删掉。
   if [[ -e "$package_dir" ]]; then
@@ -145,7 +145,7 @@ install_downcity_cli_globally() {
 
   mkdir -p "$global_modules" "$global_bin" "$package_dir"
 
-  # 关键点（中文）：日常 patch build 已经构建好了 packages/cli，不需要再 `pnpm deploy`
+  # 关键点（中文）：日常 patch build 已经构建好了 app/cli，不需要再 `pnpm deploy`
   # 联网解析依赖。只更新 CLI 代码，并复用全局安装中已有的 node_modules。
   if [[ -d "$package_dir/node_modules" ]]; then
     rm -rf \

@@ -9,7 +9,7 @@ Thanks for helping improve Downcity. This repository is a TypeScript monorepo fo
 - `packages/services`: accounts, balance, usage, billing, and payment services.
 - `packages/type`: shared protocol types.
 - `packages/ui`: React UI SDK.
-- `packages/cli`: public command-line packages.
+- `app/cli`: public command-line application and npm package.
 - `templates/*`: deployable City compositions.
 - `homepage`: public website and user-facing docs.
 

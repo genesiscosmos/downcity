@@ -32,7 +32,8 @@ import path from "node:path";
 import { resolve_publish_layers } from "../.github/scripts/resolve-publish-matrix.mjs";
 
 const workspace_root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const cli_package = read_package_manifest("packages/cli");
+const cli_package_path = "app/cli";
+const cli_package = read_package_manifest(cli_package_path);
 const exec_file = promisify(execFile);
 const registry_url = "https://registry.npmjs.org/";
 const registry_auth_key = "//registry.npmjs.org/:_authToken";
@@ -128,7 +129,7 @@ function build_publish_plan(graph, selected_scoped_names, include_cli) {
   const packages = flatten_layers(graph);
   const scoped_names = new Set(selected_scoped_names);
   if (include_cli) {
-    for (const dependency_name of read_downcity_dependencies("packages/cli")) {
+    for (const dependency_name of read_downcity_dependencies(cli_package_path)) {
       for (const package_name of resolve_scoped_selection(graph, [dependency_name])) {
         scoped_names.add(package_name);
       }
@@ -138,7 +139,7 @@ function build_publish_plan(graph, selected_scoped_names, include_cli) {
   if (include_cli) {
     plan.push({
       name: cli_package.name,
-      path: "packages/cli",
+      path: cli_package_path,
       version: cli_package.version,
     });
   }
@@ -365,7 +366,7 @@ async function choose_targets(readline, graph) {
 
   if (choice === "1") return { targets: packages.map((item) => item.name), include_cli: true };
   if (choice === "2") {
-    return { targets: [...read_downcity_dependencies("packages/cli")], include_cli: true };
+    return { targets: [...read_downcity_dependencies(cli_package_path)], include_cli: true };
   }
   if (choice !== "3") throw new Error("无效选择");
 
@@ -434,7 +435,7 @@ async function main() {
       run_command("pnpm", ["patch:build", "--", ...flags]);
       for (const item of plan) {
         const manifest = item.name === cli_package.name
-          ? read_package_manifest("packages/cli")
+          ? read_package_manifest(cli_package_path)
           : read_package_manifest(item.path);
         item.version = manifest.version;
       }

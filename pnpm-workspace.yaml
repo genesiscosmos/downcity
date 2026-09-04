@@ -5,21 +5,16 @@ packages:
   - packages/plugin
   - packages/workspace
   - app/desktop
-  - packages/workspace-cloudflare-computer
+  - packages/workspace-adapters/*
   - packages/federation
   - packages/services
   - packages/plugins
-  - packages/sandbox-macos
-  - packages/sandbox-linux
-  - packages/sandbox-windows-mxc
-  - packages/sandbox-windows-srt
+  - packages/sandbox/*
   - packages/type
-  - packages/cli
-  - packages/fedman
+  - app/cli
+  - app/fedman
   - packages/ui
-  - packages/database-d1
-  - packages/database-sqlite
-  - packages/database-postgresql
+  - packages/database/*
   - templates/*
   - templates/agent/*
   - examples/*

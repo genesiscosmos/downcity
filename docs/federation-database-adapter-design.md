@@ -797,28 +797,29 @@ packages/
         DatabaseTransaction.ts
         DatabaseError.ts
 
-  database-d1/
-    src/
-      Database.ts
-      D1Transaction.ts
-      D1TransactionTableApi.ts
-      types/
-    test/
+  database/
+    d1/
+      src/
+        Database.ts
+        D1Transaction.ts
+        D1TransactionTableApi.ts
+        types/
+      test/
 
-  database-sqlite/
-    src/
-      Database.ts
-      SQLiteCoordinator.ts
-      SQLiteTransaction.ts
-      types/
-    test/
+    sqlite/
+      src/
+        Database.ts
+        SQLiteCoordinator.ts
+        SQLiteTransaction.ts
+        types/
+      test/
 
-  database-postgresql/
-    src/
-      Database.ts
-      PostgreSQLTransaction.ts
-      types/
-    test/
+    postgresql/
+      src/
+        Database.ts
+        PostgreSQLTransaction.ts
+        types/
+      test/
 ```
 
 基类只维护公共行为。任何具体数据库实现达到模块体积限制前必须在 Adapter Package 内拆分。

@@ -79,14 +79,15 @@ normalize_selected_packages() {
 
 run_build() {
   local package_name="$1"
+  local package_path
   echo ""
+  package_path="$(node "$ROOT_DIR/scripts/resolve-package-path.mjs" "$package_name")"
   if [[ "$package_name" == "cli" ]]; then
     echo "--- Downcity CLI ---"
-    run_project_build "$ROOT_DIR/packages/cli"
-    return 0
+  else
+    echo "--- @downcity/$package_name ---"
   fi
-  echo "--- @downcity/$package_name ---"
-  run_project_build "$ROOT_DIR/packages/$package_name"
+  run_project_build "$ROOT_DIR/$package_path"
 }
 
 should_sync_global_cli() {
@@ -140,11 +141,8 @@ done < <(node "$ROOT_DIR/scripts/resolve-package-build-order.mjs" "${PACKAGES[@]
 if $BUMP; then
   echo "==> patch bump: ${PACKAGES[*]}"
   for package_name in "${PACKAGES[@]}"; do
-    if [[ "$package_name" == "cli" ]]; then
-      node "$ROOT_DIR/scripts/bump-package-version.mjs" "$ROOT_DIR/packages/cli/package.json"
-    else
-      node "$ROOT_DIR/scripts/bump-package-version.mjs" "$ROOT_DIR/packages/$package_name/package.json"
-    fi
+    package_path="$(node "$ROOT_DIR/scripts/resolve-package-path.mjs" "$package_name")"
+    node "$ROOT_DIR/scripts/bump-package-version.mjs" "$ROOT_DIR/$package_path/package.json"
   done
 else
   echo "==> patch bump skipped"

@@ -191,16 +191,29 @@ console.log(result.text);
 
 ```text
 downcity/
+├── app/
+│   ├── cli/
+│   ├── desktop/
+│   ├── fedman/
+│   └── ios/
 ├── packages/
 │   ├── agent/
 │   ├── city/
-│   ├── cli/
+│   ├── database/
+│   ├── federation/
+│   ├── plugin/
+│   ├── plugins/
+│   ├── sandbox/
 │   ├── services/
 │   ├── type/
-│   └── ui/
+│   ├── ui/
+│   ├── workspace/
+│   └── workspace-adapters/
 ├── templates/
-│   ├── edge/
-│   └── node/
+│   ├── agent/
+│   ├── edgefed/
+│   ├── localfed/
+│   └── ui/
 ├── homepage/
 ├── scripts/
 ├── package.json
@@ -215,7 +228,7 @@ downcity/
 - City SDK 文档：[downcity.ai/city-sdk-docs](https://downcity.ai/city-sdk-docs)
 - Agent SDK 文档：[downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK 文档：[downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
-- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/services/README.md](./packages/services/README.md)、[packages/cli/README.md](./packages/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
+- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/services/README.md](./packages/services/README.md)、[app/cli/README.md](./app/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
 
 ## 本地开发
 

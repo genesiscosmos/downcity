@@ -32,7 +32,7 @@ Chat Access 数据按 Agent 隔离，保存在 Agent 项目的 .downcity/chat/ac
 packages/plugins/src/auth/
 packages/plugins/src/chat/runtime/ChatAuthorizationRuntime.ts
 packages/plugins/src/chat/channels/BaseChatChannel.ts
-packages/cli/src/city/command/ChatAuthCommand.ts
+app/cli/src/city/command/ChatAuthCommand.ts
 ```
 
 数据保存在：
@@ -1118,7 +1118,7 @@ packages/plugins/src/chat/types/ChatAccess.ts
 重写：
 
 ```text
-packages/cli/src/city/command/ChatAuthCommand.ts
+app/cli/src/city/command/ChatAuthCommand.ts
 ```
 
 目标命名：
