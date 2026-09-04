@@ -9,12 +9,12 @@ packages:
   - packages/federation
   - packages/services
   - packages/plugins
-  - packages/sandbox/*
+  - packages/sandboxes/*
   - packages/type
   - app/cli
   - app/fedman
   - packages/ui
-  - packages/database/*
+  - packages/databases/*
   - templates/*
   - templates/agent/*
   - examples/*

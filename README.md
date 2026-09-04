@@ -199,11 +199,11 @@ downcity/
 ├── packages/
 │   ├── agent/
 │   ├── city/
-│   ├── database/
+│   ├── databases/
 │   ├── federation/
 │   ├── plugin/
 │   ├── plugins/
-│   ├── sandbox/
+│   ├── sandboxes/
 │   ├── services/
 │   ├── type/
 │   ├── ui/

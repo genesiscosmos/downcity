@@ -19,9 +19,9 @@ import {
 
 const federation_extension_manifests = [
   "packages/services/package.json",
-  "packages/database/d1/package.json",
-  "packages/database/postgresql/package.json",
-  "packages/database/sqlite/package.json",
+  "packages/databases/d1/package.json",
+  "packages/databases/postgresql/package.json",
+  "packages/databases/sqlite/package.json",
 ];
 
 /** 读取用于守护运行时所有权边界的 package manifest。 */

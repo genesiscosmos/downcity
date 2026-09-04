@@ -120,16 +120,16 @@ importers:
     optionalDependencies:
       '@downcity/sandbox-linux':
         specifier: workspace:^
-        version: link:../../packages/sandbox/linux
+        version: link:../../packages/sandboxes/linux
       '@downcity/sandbox-macos':
         specifier: workspace:^
-        version: link:../../packages/sandbox/macos
+        version: link:../../packages/sandboxes/macos
       '@downcity/sandbox-windows-mxc':
         specifier: workspace:^
-        version: link:../../packages/sandbox/windows-mxc
+        version: link:../../packages/sandboxes/windows-mxc
       '@downcity/sandbox-windows-srt':
         specifier: workspace:^
-        version: link:../../packages/sandbox/windows-srt
+        version: link:../../packages/sandboxes/windows-srt
 
   app/desktop:
     dependencies:
@@ -233,16 +233,16 @@ importers:
     optionalDependencies:
       '@downcity/sandbox-linux':
         specifier: workspace:^
-        version: link:../../packages/sandbox/linux
+        version: link:../../packages/sandboxes/linux
       '@downcity/sandbox-macos':
         specifier: workspace:^
-        version: link:../../packages/sandbox/macos
+        version: link:../../packages/sandboxes/macos
       '@downcity/sandbox-windows-mxc':
         specifier: workspace:^
-        version: link:../../packages/sandbox/windows-mxc
+        version: link:../../packages/sandboxes/windows-mxc
       '@downcity/sandbox-windows-srt':
         specifier: workspace:^
-        version: link:../../packages/sandbox/windows-srt
+        version: link:../../packages/sandboxes/windows-srt
 
   app/fedman:
     dependencies:
@@ -488,13 +488,13 @@ importers:
     devDependencies:
       '@downcity/sandbox-linux':
         specifier: workspace:^
-        version: link:../sandbox/linux
+        version: link:../sandboxes/linux
       '@downcity/sandbox-macos':
         specifier: workspace:^
-        version: link:../sandbox/macos
+        version: link:../sandboxes/macos
       '@downcity/sandbox-windows-mxc':
         specifier: workspace:^
-        version: link:../sandbox/windows-mxc
+        version: link:../sandboxes/windows-mxc
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -572,7 +572,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/database/d1:
+  packages/databases/d1:
     dependencies:
       drizzle-orm:
         specifier: ^0.45.2
@@ -591,7 +591,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/database/postgresql:
+  packages/databases/postgresql:
     dependencies:
       drizzle-orm:
         specifier: ^0.45.2
@@ -607,7 +607,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/database/sqlite:
+  packages/databases/sqlite:
     dependencies:
       better-sqlite3:
         specifier: ^12.10.0
@@ -752,7 +752,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/sandbox/linux:
+  packages/sandboxes/linux:
     dependencies:
       '@downcity/workspace':
         specifier: workspace:^
@@ -774,7 +774,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/sandbox/macos:
+  packages/sandboxes/macos:
     dependencies:
       '@downcity/workspace':
         specifier: workspace:^
@@ -796,7 +796,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/sandbox/windows-mxc:
+  packages/sandboxes/windows-mxc:
     dependencies:
       '@downcity/workspace':
         specifier: workspace:^
@@ -821,7 +821,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/sandbox/windows-srt:
+  packages/sandboxes/windows-srt:
     dependencies:
       '@anthropic-ai/sandbox-runtime':
         specifier: 0.0.67
@@ -863,10 +863,10 @@ importers:
     devDependencies:
       '@downcity/database-d1':
         specifier: workspace:*
-        version: link:../database/d1
+        version: link:../databases/d1
       '@downcity/database-sqlite':
         specifier: workspace:*
-        version: link:../database/sqlite
+        version: link:../databases/sqlite
       '@downcity/federation':
         specifier: workspace:*
         version: link:../federation
@@ -1098,7 +1098,7 @@ importers:
     dependencies:
       '@downcity/database-d1':
         specifier: workspace:*
-        version: link:../../packages/database/d1
+        version: link:../../packages/databases/d1
       '@downcity/federation':
         specifier: workspace:*
         version: link:../../packages/federation
@@ -1117,7 +1117,7 @@ importers:
     dependencies:
       '@downcity/database-sqlite':
         specifier: workspace:*
-        version: link:../../packages/database/sqlite
+        version: link:../../packages/databases/sqlite
       '@downcity/federation':
         specifier: workspace:*
         version: link:../../packages/federation

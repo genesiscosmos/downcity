@@ -797,7 +797,7 @@ packages/
         DatabaseTransaction.ts
         DatabaseError.ts
 
-  database/
+  databases/
     d1/
       src/
         Database.ts
