@@ -1,12 +1,32 @@
 /**
  * @downcity/city — City 组合根、Plugin 生命周期与 HTTP/RPC transport。
  *
- * City 维护多 Agent 运行时引用并提供可选 HTTP/RPC transport。
- * Agent 与 Session 执行能力由 `@downcity/agent` 提供，Workspace 资源由
- * `@downcity/workspace` 提供。
+ * City 维护多 Agent 运行时引用并提供可选 HTTP/RPC transport。根入口额外导出
+ * 应用装配常用的 Agent、Workspace、Shell 与 Storage 构造器；完整专业 API 仍由
+ * `@downcity/agent`、`@downcity/workspace` 和 `@downcity/plugin` 提供。
  */
 
 export { City } from "./city/runtime/City.js";
+export { Agent, Group, RemoteAgent } from "@downcity/agent";
+export type {
+  AgentOptions,
+  GroupOptions,
+  RemoteAgentOptions,
+} from "@downcity/agent";
+export {
+  LocalFileSystem,
+  LocalStorageProvider,
+  MemoryStorageProvider,
+  Shell,
+  Workspace,
+  WorkspaceBase,
+} from "@downcity/workspace";
+export type {
+  LocalFileSystemOptions,
+  ShellOptions,
+  StorageProvider,
+  WorkspaceOptions,
+} from "@downcity/workspace";
 export type {
   CityAgents,
   CityGroups,

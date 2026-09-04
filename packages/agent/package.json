@@ -34,7 +34,7 @@
   "scripts": {
     "build": "node scripts/agent-compiler.mjs build",
     "dev": "node scripts/agent-compiler.mjs dev",
-    "test": "pnpm build && pnpm --filter '@downcity/sandbox-*' build && pnpm -C ../plugins build && node --test scripts/*.test.mjs",
+    "test": "pnpm build && pnpm --filter '@downcity/sandbox-*' build && pnpm -C ../implementations/plugins build && node --test scripts/*.test.mjs",
     "test:executor-runtime": "pnpm build && node --test scripts/session-prompt-runtime.test.mjs",
     "typecheck": "node scripts/agent-compiler.mjs typecheck",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",

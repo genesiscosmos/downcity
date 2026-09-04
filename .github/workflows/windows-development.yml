@@ -9,12 +9,12 @@ on:
       - "packages/federation/**"
       - "app/cli/**"
       - "app/fedman/**"
-      - "packages/plugins/**"
-      - "packages/sandboxes/linux/**"
-      - "packages/sandboxes/macos/**"
+      - "packages/implementations/plugins/**"
+      - "packages/implementations/sandboxes/linux/**"
+      - "packages/implementations/sandboxes/macos/**"
       - "packages/workspace/**"
-      - "packages/sandboxes/windows-mxc/**"
-      - "packages/sandboxes/windows-srt/**"
+      - "packages/implementations/sandboxes/windows-mxc/**"
+      - "packages/implementations/sandboxes/windows-srt/**"
       - "packages/type/**"
       - "packages/ui/**"
       - "scripts/clean-package.mjs"
@@ -29,12 +29,12 @@ on:
       - "packages/federation/**"
       - "app/cli/**"
       - "app/fedman/**"
-      - "packages/plugins/**"
-      - "packages/sandboxes/linux/**"
-      - "packages/sandboxes/macos/**"
+      - "packages/implementations/plugins/**"
+      - "packages/implementations/sandboxes/linux/**"
+      - "packages/implementations/sandboxes/macos/**"
       - "packages/workspace/**"
-      - "packages/sandboxes/windows-mxc/**"
-      - "packages/sandboxes/windows-srt/**"
+      - "packages/implementations/sandboxes/windows-mxc/**"
+      - "packages/implementations/sandboxes/windows-srt/**"
       - "packages/type/**"
       - "packages/ui/**"
       - "scripts/clean-package.mjs"
@@ -70,35 +70,35 @@ jobs:
         run: pnpm -r --filter "downcity..." build
 
       - name: Verify Windows command and sandbox adapter models
-        run: node --test packages/workspace/scripts/shell-command-model.test.mjs packages/sandboxes/windows-mxc/scripts/windows-mxc-command-line.test.mjs packages/sandboxes/windows-mxc/scripts/windows-mxc-policy.test.mjs packages/sandboxes/windows-mxc/scripts/windows-mxc-support.test.mjs packages/sandboxes/windows-srt/scripts/windows-srt-policy.test.mjs packages/sandboxes/windows-srt/scripts/windows-srt-environment.test.mjs app/cli/scripts/env-file.test.mjs app/cli/scripts/windows-platform.test.mjs
+        run: node --test packages/workspace/scripts/shell-command-model.test.mjs packages/implementations/sandboxes/windows-mxc/scripts/windows-mxc-command-line.test.mjs packages/implementations/sandboxes/windows-mxc/scripts/windows-mxc-policy.test.mjs packages/implementations/sandboxes/windows-mxc/scripts/windows-mxc-support.test.mjs packages/implementations/sandboxes/windows-srt/scripts/windows-srt-policy.test.mjs packages/implementations/sandboxes/windows-srt/scripts/windows-srt-environment.test.mjs app/cli/scripts/env-file.test.mjs app/cli/scripts/windows-platform.test.mjs
 
       - name: Verify CLI platform storage
         working-directory: app/cli
         run: node --test scripts/config-storage.test.mjs
 
       - name: Verify native MXC isolation
-        run: node --test packages/sandboxes/windows-mxc/scripts/windows-mxc.integration.test.mjs
+        run: node --test packages/implementations/sandboxes/windows-mxc/scripts/windows-mxc.integration.test.mjs
 
       - name: Install native SRT isolation
-        run: node packages/sandboxes/windows-srt/bin/cli.js setup
+        run: node packages/implementations/sandboxes/windows-srt/bin/cli.js setup
 
       - name: Verify native SRT isolation
         env:
           DC_WINDOWS_SRT_INTEGRATION: "1"
-        run: node --test packages/sandboxes/windows-srt/scripts/windows-srt.integration.test.mjs
+        run: node --test packages/implementations/sandboxes/windows-srt/scripts/windows-srt.integration.test.mjs
 
       - name: Remove native SRT isolation
         if: always()
-        run: node packages/sandboxes/windows-srt/bin/cli.js remove
+        run: node packages/implementations/sandboxes/windows-srt/bin/cli.js remove
 
       - name: Typecheck affected packages
         shell: pwsh
         run: |
           pnpm -C packages/workspace typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          pnpm -C packages/sandboxes/windows-mxc typecheck
+          pnpm -C packages/implementations/sandboxes/windows-mxc typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          pnpm -C packages/sandboxes/windows-srt typecheck
+          pnpm -C packages/implementations/sandboxes/windows-srt typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           pnpm -C packages/agent typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

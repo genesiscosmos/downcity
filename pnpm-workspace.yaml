@@ -5,16 +5,16 @@ packages:
   - packages/plugin
   - packages/workspace
   - app/desktop
-  - packages/workspace-adapters/*
+  - packages/implementations/workspaces/*
   - packages/federation
-  - packages/services
-  - packages/plugins
-  - packages/sandboxes/*
+  - packages/implementations/services
+  - packages/implementations/plugins
+  - packages/implementations/sandboxes/*
   - packages/type
   - app/cli
   - app/fedman
   - packages/ui
-  - packages/databases/*
+  - packages/implementations/databases/*
   - templates/*
   - templates/agent/*
   - examples/*

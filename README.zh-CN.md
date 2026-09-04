@@ -135,9 +135,8 @@ downcity agent chat <agent_id>
 ### 本地 Agent
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Shell, Workspace } from "@downcity/city";
 import { create_openai_compatible_model } from "@downcity/federation";
-import { Shell, Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const model = create_openai_compatible_model({
@@ -172,7 +171,7 @@ console.log(result.text);
 ### 远程 Agent
 
 ```ts
-import { RemoteAgent } from "@downcity/agent";
+import { RemoteAgent } from "@downcity/city";
 
 const agent = new RemoteAgent({
   baseUrl: "http://127.0.0.1:15314",
@@ -199,16 +198,17 @@ downcity/
 ├── packages/
 │   ├── agent/
 │   ├── city/
-│   ├── database/
 │   ├── federation/
+│   ├── implementations/
+│   │   ├── databases/
+│   │   ├── plugins/
+│   │   ├── sandboxes/
+│   │   ├── services/
+│   │   └── workspaces/
 │   ├── plugin/
-│   ├── plugins/
-│   ├── sandbox/
-│   ├── services/
 │   ├── type/
 │   ├── ui/
-│   ├── workspace/
-│   └── workspace-adapters/
+│   └── workspace/
 ├── templates/
 │   ├── agent/
 │   ├── edgefed/
@@ -228,7 +228,7 @@ downcity/
 - City SDK 文档：[downcity.ai/city-sdk-docs](https://downcity.ai/city-sdk-docs)
 - Agent SDK 文档：[downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK 文档：[downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
-- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/services/README.md](./packages/services/README.md)、[app/cli/README.md](./app/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
+- 包文档：[packages/agent/README.md](./packages/agent/README.md)、[packages/type/README.md](./packages/type/README.md)、[packages/implementations/services/README.md](./packages/implementations/services/README.md)、[app/cli/README.md](./app/cli/README.md)、[packages/ui/README.md](./packages/ui/README.md)
 
 ## 本地开发
 

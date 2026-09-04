@@ -29,9 +29,9 @@ Chat Access 数据按 Agent 隔离，保存在 Agent 项目的 .downcity/chat/ac
 当前 Chat 用户授权由以下模块实现：
 
 ```text
-packages/plugins/src/auth/
-packages/plugins/src/chat/runtime/ChatAuthorizationRuntime.ts
-packages/plugins/src/chat/channels/BaseChatChannel.ts
+packages/implementations/plugins/src/auth/
+packages/implementations/plugins/src/chat/runtime/ChatAuthorizationRuntime.ts
+packages/implementations/plugins/src/chat/channels/BaseChatChannel.ts
 app/cli/src/city/command/ChatAuthCommand.ts
 ```
 
@@ -547,7 +547,7 @@ grant_revoked
 所有新类型统一放在：
 
 ```text
-packages/plugins/src/chat/types/
+packages/implementations/plugins/src/chat/types/
 ```
 
 建议类型：
@@ -593,7 +593,7 @@ export interface ChatAccessDecision {
 建议目录：
 
 ```text
-packages/plugins/src/chat/access/
+packages/implementations/plugins/src/chat/access/
   ChatAccessService.ts
   ChatAccessStore.ts
   ChatAccessSchema.ts
@@ -1093,15 +1093,15 @@ chat.authorization.manage.roles
 删除：
 
 ```text
-packages/plugins/src/auth/
-packages/plugins/src/chat/runtime/ChatAuthorizationRuntime.ts
+packages/implementations/plugins/src/auth/
+packages/implementations/plugins/src/chat/runtime/ChatAuthorizationRuntime.ts
 ```
 
 新增：
 
 ```text
-packages/plugins/src/chat/access/
-packages/plugins/src/chat/types/ChatAccess.ts
+packages/implementations/plugins/src/chat/access/
+packages/implementations/plugins/src/chat/types/ChatAccess.ts
 ```
 
 修改：

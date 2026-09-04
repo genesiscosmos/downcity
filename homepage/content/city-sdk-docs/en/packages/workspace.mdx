@@ -8,12 +8,11 @@ project path, rooted file access, file and search tools, environment variables, 
 It does not own Agent identity, Plugins, Sessions, storage, or model calls.
 
 ```bash
-pnpm add @downcity/workspace @downcity/agent
+pnpm add @downcity/city @downcity/sandbox-macos
 ```
 
 ```ts
-import { Agent } from "@downcity/agent";
-import { Shell, Workspace } from "@downcity/workspace";
+import { Agent, City, Shell, Workspace } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const workspace = new Workspace({

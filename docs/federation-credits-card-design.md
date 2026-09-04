@@ -1114,7 +1114,7 @@ Redeem Code 是额度分发入口，不属于 Credits Card 内核。本阶段不
 ## 18. 模块结构
 
 ```text
-packages/services/src/credits/
+packages/implementations/services/src/credits/
   service.ts
   routes.ts
   schema.ts

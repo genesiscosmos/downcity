@@ -48,7 +48,7 @@
     }
   },
   "scripts": {
-    "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "build": "node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test:chat-access": "pnpm build && node --test scripts/chat-access.test.mjs",
@@ -61,8 +61,8 @@
     "test:sound": "pnpm build && node --test scripts/sound-plugin.test.mjs",
     "test:task": "pnpm build && node --test scripts/task-plugin.test.mjs",
     "test:web": "pnpm build && node --test scripts/web-plugin.test.mjs && node --experimental-test-module-mocks --test scripts/playwright-browser-provider.test.mjs",
-    "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
-    "postpack": "node ../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
+    "prepack": "npm run build && node ../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
+    "postpack": "node ../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
   "dependencies": {
     "@downcity/agent": "workspace:^",

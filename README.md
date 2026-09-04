@@ -135,9 +135,8 @@ downcity agent chat <agent_id>
 ### Local agent
 
 ```ts
-import { Agent } from "@downcity/agent";
+import { Agent, Shell, Workspace } from "@downcity/city";
 import { create_openai_compatible_model } from "@downcity/federation";
-import { Shell, Workspace } from "@downcity/workspace";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const model = create_openai_compatible_model({
@@ -172,7 +171,7 @@ console.log(result.text);
 ### Remote agent
 
 ```ts
-import { RemoteAgent } from "@downcity/agent";
+import { RemoteAgent } from "@downcity/city";
 
 const agent = new RemoteAgent({
   baseUrl: "http://127.0.0.1:15314",
@@ -199,16 +198,17 @@ downcity/
 ├── packages/
 │   ├── agent/
 │   ├── city/
-│   ├── databases/
 │   ├── federation/
+│   ├── implementations/
+│   │   ├── databases/
+│   │   ├── plugins/
+│   │   ├── sandboxes/
+│   │   ├── services/
+│   │   └── workspaces/
 │   ├── plugin/
-│   ├── plugins/
-│   ├── sandboxes/
-│   ├── services/
 │   ├── type/
 │   ├── ui/
-│   ├── workspace/
-│   └── workspace-adapters/
+│   └── workspace/
 ├── templates/
 │   ├── agent/
 │   ├── edgefed/
@@ -229,7 +229,7 @@ The `templates/*` projects are convenient developer starters and showcases. The 
 - Agent SDK docs: [downcity.ai/agent-sdk-docs](https://downcity.ai/agent-sdk-docs)
 - UI SDK docs: [downcity.ai/ui-sdk-docs](https://downcity.ai/ui-sdk-docs)
 - Chinese overview: [README.zh-CN.md](./README.zh-CN.md)
-- Package docs: [packages/agent/README.md](./packages/agent/README.md), [packages/type/README.md](./packages/type/README.md), [packages/services/README.md](./packages/services/README.md), [app/cli/README.md](./app/cli/README.md), [packages/ui/README.md](./packages/ui/README.md)
+- Package docs: [packages/agent/README.md](./packages/agent/README.md), [packages/type/README.md](./packages/type/README.md), [packages/implementations/services/README.md](./packages/implementations/services/README.md), [app/cli/README.md](./app/cli/README.md), [packages/ui/README.md](./packages/ui/README.md)
 
 ## Local Development
 

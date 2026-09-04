@@ -17,7 +17,7 @@
       "@downcity/agent/tools": ["../../packages/agent/bin/tools/index.d.ts"],
       "@downcity/federation": ["../../packages/federation/bin/index.d.ts"],
       "@downcity/city/local": ["../../packages/city/bin/local/index.d.ts"],
-      "@downcity/plugins": ["../../packages/plugins/bin/index.d.ts"]
+      "@downcity/plugins": ["../../packages/implementations/plugins/bin/index.d.ts"]
     }
   },
   "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/common/**/*.ts", "electron.vite.config.ts"]

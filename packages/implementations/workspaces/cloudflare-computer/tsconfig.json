@@ -1,5 +1,5 @@
 {
-  "extends": "../../agent/tsconfig.json",
+  "extends": "../../../agent/tsconfig.json",
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "bin",

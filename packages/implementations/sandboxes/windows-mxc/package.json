@@ -1,15 +1,15 @@
 {
-  "name": "@downcity/sandbox-linux",
+  "name": "@downcity/sandbox-windows-mxc",
   "version": "0.1.38",
   "type": "module",
-  "description": "Downcity Linux Bubblewrap sandbox adapter",
+  "description": "Downcity experimental Microsoft MXC Windows sandbox adapter",
   "main": "./bin/index.js",
   "types": "./bin/index.d.ts",
   "files": [
     "bin"
   ],
   "os": [
-    "linux"
+    "win32"
   ],
   "publishConfig": {
     "access": "public"
@@ -25,16 +25,17 @@
     }
   },
   "scripts": {
-    "build": "node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "build": "node ../../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test scripts/*.test.mjs",
-    "prepack": "npm run build && node ../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
-    "postpack": "node ../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json",
-    "version:patch": "node ../../../scripts/bump-package-version.mjs ./package.json"
+    "prepack": "npm run build && node ../../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
+    "postpack": "node ../../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json",
+    "version:patch": "node ../../../../scripts/bump-package-version.mjs ./package.json"
   },
   "license": "MIT",
   "dependencies": {
     "@downcity/workspace": "workspace:^",
+    "@microsoft/mxc-sdk": "0.7.0",
     "fs-extra": "^11.3.5"
   },
   "devDependencies": {

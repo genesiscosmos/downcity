@@ -742,7 +742,7 @@ Service schema 初始化还必须保留 unique index、普通 index、check 和 
 ## 19. 代码结构建议
 
 ```text
-packages/services/src/organizations/
+packages/implementations/services/src/organizations/
 ├── index.ts
 ├── service.ts
 ├── routes.ts

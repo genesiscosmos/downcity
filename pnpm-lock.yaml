@@ -31,7 +31,7 @@ importers:
         version: link:../../packages/plugin
       '@downcity/plugins':
         specifier: workspace:^
-        version: link:../../packages/plugins
+        version: link:../../packages/implementations/plugins
       '@downcity/type':
         specifier: workspace:*
         version: link:../../packages/type
@@ -120,16 +120,16 @@ importers:
     optionalDependencies:
       '@downcity/sandbox-linux':
         specifier: workspace:^
-        version: link:../../packages/sandboxes/linux
+        version: link:../../packages/implementations/sandboxes/linux
       '@downcity/sandbox-macos':
         specifier: workspace:^
-        version: link:../../packages/sandboxes/macos
+        version: link:../../packages/implementations/sandboxes/macos
       '@downcity/sandbox-windows-mxc':
         specifier: workspace:^
-        version: link:../../packages/sandboxes/windows-mxc
+        version: link:../../packages/implementations/sandboxes/windows-mxc
       '@downcity/sandbox-windows-srt':
         specifier: workspace:^
-        version: link:../../packages/sandboxes/windows-srt
+        version: link:../../packages/implementations/sandboxes/windows-srt
 
   app/desktop:
     dependencies:
@@ -150,7 +150,7 @@ importers:
         version: link:../../packages/plugin
       '@downcity/plugins':
         specifier: workspace:^
-        version: link:../../packages/plugins
+        version: link:../../packages/implementations/plugins
       '@downcity/workspace':
         specifier: workspace:^
         version: link:../../packages/workspace
@@ -233,16 +233,16 @@ importers:
     optionalDependencies:
       '@downcity/sandbox-linux':
         specifier: workspace:^
-        version: link:../../packages/sandboxes/linux
+        version: link:../../packages/implementations/sandboxes/linux
       '@downcity/sandbox-macos':
         specifier: workspace:^
-        version: link:../../packages/sandboxes/macos
+        version: link:../../packages/implementations/sandboxes/macos
       '@downcity/sandbox-windows-mxc':
         specifier: workspace:^
-        version: link:../../packages/sandboxes/windows-mxc
+        version: link:../../packages/implementations/sandboxes/windows-mxc
       '@downcity/sandbox-windows-srt':
         specifier: workspace:^
-        version: link:../../packages/sandboxes/windows-srt
+        version: link:../../packages/implementations/sandboxes/windows-srt
 
   app/fedman:
     dependencies:
@@ -488,13 +488,13 @@ importers:
     devDependencies:
       '@downcity/sandbox-linux':
         specifier: workspace:^
-        version: link:../sandboxes/linux
+        version: link:../implementations/sandboxes/linux
       '@downcity/sandbox-macos':
         specifier: workspace:^
-        version: link:../sandboxes/macos
+        version: link:../implementations/sandboxes/macos
       '@downcity/sandbox-windows-mxc':
         specifier: workspace:^
-        version: link:../sandboxes/windows-mxc
+        version: link:../implementations/sandboxes/windows-mxc
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -572,60 +572,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/databases/d1:
-    dependencies:
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
-    devDependencies:
-      '@cloudflare/workers-types':
-        specifier: ^4.20260530.1
-        version: 4.20260530.1
-      '@downcity/federation':
-        specifier: workspace:*
-        version: link:../../federation
-      miniflare:
-        specifier: ^4.20260526.0
-        version: 4.20260526.0
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/databases/postgresql:
-    dependencies:
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-    devDependencies:
-      '@downcity/federation':
-        specifier: workspace:*
-        version: link:../../federation
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/databases/sqlite:
-    dependencies:
-      better-sqlite3:
-        specifier: ^12.10.0
-        version: 12.10.0
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
-    devDependencies:
-      '@downcity/federation':
-        specifier: workspace:*
-        version: link:../../federation
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   packages/federation:
     dependencies:
       '@downcity/type':
@@ -647,6 +593,283 @@ importers:
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/databases/d1:
+    dependencies:
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20260530.1
+        version: 4.20260530.1
+      '@downcity/federation':
+        specifier: workspace:*
+        version: link:../../../federation
+      miniflare:
+        specifier: ^4.20260526.0
+        version: 4.20260526.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/databases/postgresql:
+    dependencies:
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+    devDependencies:
+      '@downcity/federation':
+        specifier: workspace:*
+        version: link:../../../federation
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/databases/sqlite:
+    dependencies:
+      better-sqlite3:
+        specifier: ^12.10.0
+        version: 12.10.0
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
+    devDependencies:
+      '@downcity/federation':
+        specifier: workspace:*
+        version: link:../../../federation
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/plugins:
+    dependencies:
+      '@downcity/agent':
+        specifier: workspace:^
+        version: link:../../agent
+      '@downcity/plugin':
+        specifier: workspace:^
+        version: link:../../plugin
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
+      execa:
+        specifier: ^9.6.1
+        version: 9.6.1
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
+      node-cron:
+        specifier: ^4.2.1
+        version: 4.2.1
+      playwright-core:
+        specifier: ^1.62.1
+        version: 1.62.1
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@downcity/city':
+        specifier: workspace:^
+        version: link:../../city
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      '@types/node-cron':
+        specifier: ^3.0.11
+        version: 3.0.11
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.15
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      react:
+        specifier: ^19.2.6
+        version: 19.2.6
+      tsc-alias:
+        specifier: ^1.8.17
+        version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/sandboxes/linux:
+    dependencies:
+      '@downcity/workspace':
+        specifier: workspace:^
+        version: link:../../../workspace
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsc-alias:
+        specifier: ^1.8.17
+        version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/sandboxes/macos:
+    dependencies:
+      '@downcity/workspace':
+        specifier: workspace:^
+        version: link:../../../workspace
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsc-alias:
+        specifier: ^1.8.17
+        version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/sandboxes/windows-mxc:
+    dependencies:
+      '@downcity/workspace':
+        specifier: workspace:^
+        version: link:../../../workspace
+      '@microsoft/mxc-sdk':
+        specifier: 0.7.0
+        version: 0.7.0
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsc-alias:
+        specifier: ^1.8.17
+        version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/sandboxes/windows-srt:
+    dependencies:
+      '@anthropic-ai/sandbox-runtime':
+        specifier: 0.0.67
+        version: 0.0.67
+      '@downcity/workspace':
+        specifier: workspace:^
+        version: link:../../../workspace
+      fs-extra:
+        specifier: ^11.3.5
+        version: 11.3.5
+    devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsc-alias:
+        specifier: ^1.8.17
+        version: 1.8.17
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/services:
+    dependencies:
+      '@waffo/pancake-ts':
+        specifier: ^0.11.0
+        version: 0.11.0
+      better-auth:
+        specifier: ^1.6.12
+        version: 1.6.12(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      dodopayments:
+        specifier: ^2.36.0
+        version: 2.36.0
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
+    devDependencies:
+      '@downcity/database-d1':
+        specifier: workspace:*
+        version: link:../databases/d1
+      '@downcity/database-sqlite':
+        specifier: workspace:*
+        version: link:../databases/sqlite
+      '@downcity/federation':
+        specifier: workspace:*
+        version: link:../../federation
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      better-sqlite3:
+        specifier: ^12.10.0
+        version: 12.10.0
+      miniflare:
+        specifier: ^4.20260526.0
+        version: 4.20260526.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/implementations/workspaces/cloudflare-computer:
+    dependencies:
+      '@cloudflare/computer':
+        specifier: 0.1.0-alpha.1
+        version: 0.1.0-alpha.1(ai@6.0.246(zod@4.4.3))(zod@4.4.3)
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../../../type
+      '@downcity/workspace':
+        specifier: workspace:*
+        version: link:../../../workspace
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^25.9.1
+        version: 25.9.1
+      tsc-alias:
+        specifier: ^1.8.16
+        version: 1.8.17
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -684,204 +907,6 @@ importers:
       tsc-alias:
         specifier: ^1.8.17
         version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/plugins:
-    dependencies:
-      '@downcity/agent':
-        specifier: workspace:^
-        version: link:../agent
-      '@downcity/plugin':
-        specifier: workspace:^
-        version: link:../plugin
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
-      execa:
-        specifier: ^9.6.1
-        version: 9.6.1
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-      js-yaml:
-        specifier: ^4.1.1
-        version: 4.1.1
-      node-cron:
-        specifier: ^4.2.1
-        version: 4.2.1
-      playwright-core:
-        specifier: ^1.62.1
-        version: 1.62.1
-      ws:
-        specifier: ^8.21.0
-        version: 8.21.0
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@downcity/city':
-        specifier: workspace:^
-        version: link:../city
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      '@types/node-cron':
-        specifier: ^3.0.11
-        version: 3.0.11
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.15
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
-      react:
-        specifier: ^19.2.6
-        version: 19.2.6
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/sandboxes/linux:
-    dependencies:
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../../workspace
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/sandboxes/macos:
-    dependencies:
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../../workspace
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/sandboxes/windows-mxc:
-    dependencies:
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../../workspace
-      '@microsoft/mxc-sdk':
-        specifier: 0.7.0
-        version: 0.7.0
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/sandboxes/windows-srt:
-    dependencies:
-      '@anthropic-ai/sandbox-runtime':
-        specifier: 0.0.67
-        version: 0.0.67
-      '@downcity/workspace':
-        specifier: workspace:^
-        version: link:../../workspace
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/services:
-    dependencies:
-      '@waffo/pancake-ts':
-        specifier: ^0.11.0
-        version: 0.11.0
-      better-auth:
-        specifier: ^1.6.12
-        version: 1.6.12(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(better-sqlite3@12.10.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      dodopayments:
-        specifier: ^2.36.0
-        version: 2.36.0
-      drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(@cloudflare/workers-types@4.20260530.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.10.0)(bun-types@1.4.0)(kysely@0.29.2)(postgres@3.4.9)(sql.js@1.14.1)
-    devDependencies:
-      '@downcity/database-d1':
-        specifier: workspace:*
-        version: link:../databases/d1
-      '@downcity/database-sqlite':
-        specifier: workspace:*
-        version: link:../databases/sqlite
-      '@downcity/federation':
-        specifier: workspace:*
-        version: link:../federation
-      '@types/better-sqlite3':
-        specifier: ^7.6.13
-        version: 7.6.13
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      better-sqlite3:
-        specifier: ^12.10.0
-        version: 12.10.0
-      miniflare:
-        specifier: ^4.20260526.0
-        version: 4.20260526.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1008,31 +1033,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/workspace-adapters/cloudflare-computer:
-    dependencies:
-      '@cloudflare/computer':
-        specifier: 0.1.0-alpha.1
-        version: 0.1.0-alpha.1(ai@6.0.246(zod@4.4.3))(zod@4.4.3)
-      '@downcity/type':
-        specifier: workspace:*
-        version: link:../../type
-      '@downcity/workspace':
-        specifier: workspace:*
-        version: link:../../workspace
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.16
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
   templates/agent: {}
 
   templates/agent/server:
@@ -1098,7 +1098,7 @@ importers:
     dependencies:
       '@downcity/database-d1':
         specifier: workspace:*
-        version: link:../../packages/databases/d1
+        version: link:../../packages/implementations/databases/d1
       '@downcity/federation':
         specifier: workspace:*
         version: link:../../packages/federation
@@ -1117,13 +1117,13 @@ importers:
     dependencies:
       '@downcity/database-sqlite':
         specifier: workspace:*
-        version: link:../../packages/databases/sqlite
+        version: link:../../packages/implementations/databases/sqlite
       '@downcity/federation':
         specifier: workspace:*
         version: link:../../packages/federation
       '@downcity/services':
         specifier: workspace:*
-        version: link:../../packages/services
+        version: link:../../packages/implementations/services
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.23)

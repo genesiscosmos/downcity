@@ -13,7 +13,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { ImagePlugin } from "../../plugins/bin/index.js";
+import { ImagePlugin } from "../../implementations/plugins/bin/index.js";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
 import { create_test_plugin_context } from "./helpers/CityPluginTestBinding.mjs";
 

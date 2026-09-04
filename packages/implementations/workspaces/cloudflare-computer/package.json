@@ -15,7 +15,7 @@
     }
   },
   "scripts": {
-    "build": "node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "build": "node ../../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test scripts/*.test.mjs"
   },

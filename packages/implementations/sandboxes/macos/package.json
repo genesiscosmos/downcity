@@ -1,18 +1,15 @@
 {
-  "name": "@downcity/sandbox-windows-srt",
-  "version": "0.1.37",
+  "name": "@downcity/sandbox-macos",
+  "version": "0.1.38",
   "type": "module",
-  "description": "Downcity Anthropic Sandbox Runtime adapter for native Windows",
+  "description": "Downcity macOS Seatbelt sandbox adapter",
   "main": "./bin/index.js",
   "types": "./bin/index.d.ts",
-  "bin": {
-    "downcity-sandbox-windows-srt": "./bin/cli.js"
-  },
   "files": [
     "bin"
   ],
   "os": [
-    "win32"
+    "darwin"
   ],
   "publishConfig": {
     "access": "public"
@@ -28,16 +25,15 @@
     }
   },
   "scripts": {
-    "build": "node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "build": "node ../../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test scripts/*.test.mjs",
-    "prepack": "npm run build && node ../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
-    "postpack": "node ../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json",
-    "version:patch": "node ../../../scripts/bump-package-version.mjs ./package.json"
+    "prepack": "npm run build && node ../../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
+    "postpack": "node ../../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json",
+    "version:patch": "node ../../../../scripts/bump-package-version.mjs ./package.json"
   },
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sandbox-runtime": "0.0.67",
     "@downcity/workspace": "workspace:^",
     "fs-extra": "^11.3.5"
   },
