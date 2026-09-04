@@ -64,6 +64,9 @@ export interface SessionTurnContextInit {
   /** 当前 Session 拥有的 unrestricted Shell 审批网关。 */
   shell_approval_gateway?: ShellApprovalGateway;
 
+  /** 当前 Turn effects 追加后触发的实时观测回调，宿主可据此广播文件改动摘要。 */
+  on_effects_changed?: (effects: readonly RuntimeToolEffect[]) => void;
+
   /** 把辅助 Action 持久化并发布为 Session 事件的回调。 */
   publish_action?: AgentSessionActionCallback;
 }

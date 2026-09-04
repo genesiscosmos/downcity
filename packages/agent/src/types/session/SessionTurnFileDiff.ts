@@ -31,3 +31,13 @@ export interface SessionTurnFileDiffData {
   /** 全部变化文件的删除行数总和。 */
   deletions: number;
 }
+
+/** 当前 Turn 文件改动的最小实时摘要，用于 Thinking 状态行的轻量展示。 */
+export interface SessionTurnFileDiffSummary {
+  /** 当前 Turn 已发生结构化修改的文件数。 */
+  files_count: number;
+  /** 当前 Turn 已新增的文本行数总和。 */
+  additions: number;
+  /** 当前 Turn 已删除的文本行数总和。 */
+  deletions: number;
+}

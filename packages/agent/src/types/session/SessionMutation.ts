@@ -107,6 +107,20 @@ export type SessionTurnMutation = SessionMutationBase & {
   error?: string;
 };
 
+/** 当前 Turn 文件改动实时摘要 Mutation，Thinking 状态行据此展示已修改文件数。 */
+export type SessionTurnFileDiffMutation = SessionMutationBase & {
+  /** Mutation 层级固定为 file_diff。 */
+  variant: "file_diff";
+  /** 当前摘要所属 Turn 标识。 */
+  turn_id: string;
+  /** 当前 Turn 已发生结构化修改的文件数。 */
+  files_count: number;
+  /** 当前 Turn 已新增的文本行数总和。 */
+  additions: number;
+  /** 当前 Turn 已删除的文本行数总和。 */
+  deletions: number;
+};
+
 /** 显式 Session 压缩请求的生命周期 Mutation。 */
 export type SessionCompactMutation = SessionMutationBase & {
   /** Mutation 层级固定为 compact。 */
@@ -156,6 +170,7 @@ export type SessionMutation =
   | SessionPartMutation
   | SessionDeltaMutation
   | SessionTurnMutation
+  | SessionTurnFileDiffMutation
   | SessionCompactMutation
   | SessionStateMutation;
 
@@ -177,6 +192,7 @@ export function is_session_mutation(input: unknown): input is SessionMutation {
     candidate.variant === "part" ||
     candidate.variant === "delta" ||
     candidate.variant === "turn" ||
+    candidate.variant === "file_diff" ||
     candidate.variant === "compact" ||
     candidate.variant === "session"
   );

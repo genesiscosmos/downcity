@@ -43,7 +43,10 @@ import type {
 } from "@/types/session/SessionLoop.js";
 import type { SessionCommandCompletion } from "@/types/session/SessionCommand.js";
 import { SESSION_TURN_FILE_DIFF_DATA_TYPE } from "@/session/messages/SessionTurnFileDiffData.js";
-import { build_session_turn_file_diff } from "@/session/messages/SessionTurnFileDiffBuilder.js";
+import {
+  build_session_turn_file_diff,
+  build_session_turn_file_diff_summary,
+} from "@/session/messages/SessionTurnFileDiffBuilder.js";
 import { SESSION_EXTENSION_POINTS } from "@/session/SessionExtensionPoints.js";
 import type { SessionTurnCommittedHookValue } from "@/types/session/SessionExtensionHook.js";
 import type { JsonValue } from "@/types/common/Json.js";
@@ -662,6 +665,32 @@ export class SessionLoop {
       assistant_output,
       shell_approval_gateway: this.shell_approval_gateway,
       interactions: this.interactions,
+      on_effects_changed: (effects) => {
+        // Thinking 状态行的文件改动是辅助观测，失败不影响 Turn 结果。
+        try {
+          const summary = build_session_turn_file_diff_summary(
+            this.workspace_path,
+            effects,
+          );
+          if (summary.files_count === 0) return;
+          this.events.publish({
+            mutation_id: nanoid(),
+            variant: "file_diff",
+            session_id: this.session_id,
+            turn_id: active_turn.turn_id,
+            created_at: Date.now(),
+            files_count: summary.files_count,
+            additions: summary.additions,
+            deletions: summary.deletions,
+          });
+        } catch (error) {
+          void this.log_file_diff_warning(
+            active_turn.turn_id,
+            "failed to publish live file edit summary",
+            error,
+          );
+        }
+      },
       publish_action: async (event) => {
         await this.persist_action_event(event);
       },

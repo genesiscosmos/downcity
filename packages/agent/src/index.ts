@@ -128,6 +128,7 @@ export type {
   SessionTurnFileDiff,
   SessionTurnFileDiffData,
   SessionTurnFileDiffStatus,
+  SessionTurnFileDiffSummary,
 } from "./types/session/SessionTurnFileDiff.js";
 export {
   is_session_turn_file_diff_data_part,
@@ -157,6 +158,7 @@ export type {
   SessionPartMutation,
   SessionStateMutation,
   SessionTitleMutation,
+  SessionTurnFileDiffMutation,
   SessionTurnMutation,
 } from "./types/session/SessionMutation.js";
 export type {

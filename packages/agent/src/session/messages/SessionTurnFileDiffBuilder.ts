@@ -23,6 +23,7 @@ import type {
   SessionTurnFileDiff,
   SessionTurnFileDiffData,
   SessionTurnFileDiffStatus,
+  SessionTurnFileDiffSummary,
 } from "@/types/session/SessionTurnFileDiff.js";
 
 interface CollectedFileMutation {
@@ -41,21 +42,42 @@ export function build_session_turn_file_diff(
   workspace_path: string,
   effects: readonly RuntimeToolEffect[],
 ): SessionTurnFileDiffData | undefined {
-  const mutations = effects.flatMap((effect) => {
-    const mutation = read_workspace_file_mutation_effect(effect);
-    return mutation ? [mutation] : [];
-  });
-  const files_by_path = collect_file_mutations(workspace_path, mutations);
-  const files = [...files_by_path.values()]
-    .filter((entry) => !entry.conflicted && !same_file_state(entry.before, entry.after))
-    .map(create_file_diff)
-    .sort((left, right) => left.file.localeCompare(right.file));
+  const files = collect_session_turn_file_diffs(workspace_path, effects);
   if (files.length === 0) return undefined;
   return {
     files,
     additions: files.reduce((total, file) => total + file.additions, 0),
     deletions: files.reduce((total, file) => total + file.deletions, 0),
   };
+}
+
+/** 从当前 Turn effects 收敛只含统计的实时摘要，供 Thinking 状态行轻量展示。 */
+export function build_session_turn_file_diff_summary(
+  workspace_path: string,
+  effects: readonly RuntimeToolEffect[],
+): SessionTurnFileDiffSummary {
+  const files = collect_session_turn_file_diffs(workspace_path, effects);
+  return {
+    files_count: files.length,
+    additions: files.reduce((total, file) => total + file.additions, 0),
+    deletions: files.reduce((total, file) => total + file.deletions, 0),
+  };
+}
+
+/** 把 effects 收敛为稳定排序的文件 Diff 列表；空列表表示当前没有结构化修改。 */
+function collect_session_turn_file_diffs(
+  workspace_path: string,
+  effects: readonly RuntimeToolEffect[],
+): SessionTurnFileDiff[] {
+  const mutations = effects.flatMap((effect) => {
+    const mutation = read_workspace_file_mutation_effect(effect);
+    return mutation ? [mutation] : [];
+  });
+  const files_by_path = collect_file_mutations(workspace_path, mutations);
+  return [...files_by_path.values()]
+    .filter((entry) => !entry.conflicted && !same_file_state(entry.before, entry.after))
+    .map(create_file_diff)
+    .sort((left, right) => left.file.localeCompare(right.file));
 }
 
 /** 从通用 Tool effect 中读取经过最小运行时校验的 Workspace 文件修改。 */

@@ -259,6 +259,7 @@ export function App() {
         session={session}
       messages={controller.messages_by_session[session_key] ?? []}
       runtime={controller.chat_runtime_by_session[session_key]}
+      file_diff_by_session={controller.file_diff_by_session[session_key]}
       draft_content={controller.draft_content_by_session[session_key] ?? create_chat_composer()}
       queued_messages={controller.queued_messages_by_session[session_key] ?? []}
       queue_paused={controller.queue_paused_by_session[session_key] ?? false}

@@ -188,7 +188,9 @@ class DefaultSessionTurnContext implements SessionTurnContext {
 
     this.effects = Object.freeze({
       append: (effects) => {
+        if (effects.length === 0) return;
         context.turn_effects.push(...effects);
+        init.on_effects_changed?.(Object.freeze([...context.turn_effects]));
       },
       snapshot: () => Object.freeze([...context.turn_effects]),
     });

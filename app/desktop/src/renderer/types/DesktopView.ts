@@ -1,6 +1,6 @@
 /** Downcity Desktop Renderer 的页面和交互状态类型。 */
 
-import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { JSONContent } from "@tiptap/core";
 import type {
@@ -156,6 +156,8 @@ export interface DesktopViewController {
   messages_by_session: Record<string, SessionMessage[]>;
   /** 按 Session 组合键缓存的实时运行态。 */
   chat_runtime_by_session: Record<string, DesktopChatRuntime>;
+  /** 按 Session 组合键缓存的最新实时文件改动摘要。 */
+  file_diff_by_session: Record<string, SessionTurnFileDiffSummary>;
   /** 按 Session 组合键隔离的完整 Tiptap 输入草稿。 */
   draft_content_by_session: Record<string, JSONContent>;
   /** 按 Session 组合键隔离的待发送队列。 */

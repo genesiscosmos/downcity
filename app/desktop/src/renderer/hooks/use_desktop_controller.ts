@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RespondSessionInteractionInput, SessionMutation } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionMutation, SessionTurnFileDiffSummary } from "@downcity/agent";
 import type { JSONContent } from "@tiptap/core";
 import type {
   DesktopAgentSummary,
@@ -146,6 +146,7 @@ export function use_desktop_controller(): DesktopViewController {
   const [archived_sessions_by_workspace, set_archived_sessions_by_workspace] = useState<Record<string, DesktopWorkspaceSession[]>>({});
   const [messages_by_session, set_messages_by_session] = useState<DesktopViewController["messages_by_session"]>({});
   const [chat_runtime_by_session, set_chat_runtime_by_session] = useState<Record<string, DesktopChatRuntime>>({});
+  const [file_diff_by_session, set_file_diff_by_session] = useState<Record<string, SessionTurnFileDiffSummary>>({});
   const [draft_content_by_session, set_draft_content_by_session] = useState<Record<string, JSONContent>>({});
   const [queued_messages_by_session, set_queued_messages_by_session] = useState<Record<string, QueuedChatMessage[]>>({});
   const [queue_paused_by_session, set_queue_paused_by_session] = useState<Record<string, boolean>>({});
@@ -431,6 +432,15 @@ export function use_desktop_controller(): DesktopViewController {
     const unsubscribe_mutation = window.downcity.chat.on_mutation(({ agent_id, workspace_id, session_id, mutation }) => {
       const session_key = get_session_key(workspace_id, agent_id, session_id);
       if (deleted_session_keys_ref.current.has(session_key)) return;
+      // 实时文件改动摘要不参与消息投影，直接更新独立状态，避免污染 mutation 批次。
+      if (mutation.variant === "file_diff") {
+        set_file_diff_by_session((current) => ({ ...current, [session_key]: {
+          files_count: mutation.files_count,
+          additions: mutation.additions,
+          deletions: mutation.deletions,
+        } }));
+        return;
+      }
       const batch = mutation_batches_ref.current.get(session_key) ?? [];
       batch.push(mutation);
       mutation_batches_ref.current.set(session_key, batch);
@@ -1057,6 +1067,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_messages_by_session((current) => remove_session_value(current, session_key));
       chat_runtime_ref.current = remove_session_value(chat_runtime_ref.current, session_key);
       set_chat_runtime_by_session(chat_runtime_ref.current);
+      set_file_diff_by_session((current) => remove_session_value(current, session_key));
       history_ref.current = remove_session_value(history_ref.current, session_key);
       set_history_by_session(history_ref.current);
       set_configuration_by_session((current) => remove_session_value(current, session_key));
@@ -1335,6 +1346,7 @@ export function use_desktop_controller(): DesktopViewController {
       set_messages_by_session((current) => remove_prefixed_key(current));
       chat_runtime_ref.current = remove_prefixed_key(chat_runtime_ref.current);
       set_chat_runtime_by_session(chat_runtime_ref.current);
+      set_file_diff_by_session((current) => remove_prefixed_key(current));
       history_ref.current = remove_prefixed_key(history_ref.current);
       set_history_by_session(history_ref.current);
       set_configuration_by_session((current) => remove_prefixed_key(current));
@@ -1720,6 +1732,7 @@ export function use_desktop_controller(): DesktopViewController {
     archived_sessions_by_workspace,
     messages_by_session,
     chat_runtime_by_session,
+    file_diff_by_session,
     draft_content_by_session,
     queued_messages_by_session,
     queue_paused_by_session,
