@@ -2,11 +2,11 @@
  * 统一日志实现（控制台 + JSONL 落盘）。
  *
  * 关键点（中文）
- * - 支持按项目根目录动态绑定日志目录。
+ * - 支持按 Agent 或其他宿主 StorageScope 动态绑定日志目录。
  * - 结构化字段写入 JSONL，便于后续检索与审计。
  */
 
-import { get_logs_dir_path } from "@/workspace/WorkspacePaths.js";
+import path from "node:path";
 import { get_timestamp } from "@/utils/Time.js";
 import type { JsonObject } from "@/types/common/Json.js";
 import type { FileSystem } from "@downcity/type";
@@ -195,9 +195,9 @@ export interface LogEntry {
 export class Logger {
   private logs: LogEntry[] = [];
   private logLevel: string = "info";
-  private writeChain: Promise<void> = Promise.resolve();
+  private write_chain: Promise<void> = Promise.resolve();
   private readonly maxInMemoryEntries = 2000;
-  private workspace_files: FileSystem | null = null;
+  private storage_files: FileSystem | null = null;
   private storage_root_path = "";
   private agent_id = "";
   private workspace_id = "";
@@ -217,7 +217,7 @@ export class Logger {
       workspace_id: string;
     },
   ): void {
-    this.workspace_files = files;
+    this.storage_files = files;
     this.storage_root_path = String(storage_root_path || "").trim();
     this.agent_id = String(owner?.agent_id || "").trim();
     this.workspace_id = String(owner?.workspace_id || "").trim();
@@ -292,11 +292,11 @@ export class Logger {
     }
     this.printLog(entry);
 
-    this.writeChain = this.writeChain
+    this.write_chain = this.write_chain
       .catch(() => {})
-      .then(() => this.saveToFile(entry))
+      .then(() => this.save_to_file(entry))
       .catch(() => {});
-    await this.writeChain;
+    await this.write_chain;
   }
 
   private printLog(entry: LogEntry): void {
@@ -328,17 +328,17 @@ export class Logger {
 
   /**
    * 落盘算法（中文）
-   * - 日志按自然日分片：`<workspace-data>/logs/YYYY-MM-DD.jsonl`。
+   * - 日志按自然日分片：`<storage-root>/logs/YYYY-MM-DD.jsonl`。
    * - 每条日志一行 JSON，便于 grep / 流式消费。
    */
-  private async saveToFile(entry: LogEntry): Promise<void> {
-    if (!this.workspace_files) return;
-    const logsDir = get_logs_dir_path(this.storage_root_path);
+  private async save_to_file(entry: LogEntry): Promise<void> {
+    if (!this.storage_files) return;
+    const logs_dir = path.join(path.resolve(this.storage_root_path), "logs");
     const date = String(entry.timestamp || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
-    const logFile = this.workspace_files.resolve_path(logsDir, `${date}.jsonl`);
+    const log_file = this.storage_files.resolve_path(logs_dir, `${date}.jsonl`);
 
-    const logLine = JSON.stringify(entry) + "\n";
-    await this.workspace_files.append_file(logFile, logLine);
+    const log_line = JSON.stringify(entry) + "\n";
+    await this.storage_files.append_file(log_file, log_line);
   }
 
   private generate_id(): string {
@@ -346,7 +346,7 @@ export class Logger {
   }
 
   async save_all_logs(): Promise<void> {
-    await this.writeChain.catch(() => {});
+    await this.write_chain.catch(() => {});
   }
 
   get_logs(): LogEntry[] {

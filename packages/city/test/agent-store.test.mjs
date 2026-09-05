@@ -10,7 +10,7 @@ import test from "node:test";
 import { Agent } from "../../agent/bin/index.js";
 import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Workspace, LocalStorageProvider } from "@downcity/city";
-import { LocalSessionStore } from "../../agent/bin/workspace/store/LocalSessionStore.js";
+import { LocalSessionStore } from "../../agent/bin/session/storage/LocalSessionStore.js";
 
 /** 由 Agent 领域在 City 提供的 Agent 作用域上创建 SessionStore。 */
 function create_agent_storage(storage, agent_id, workspace_id = "test_workspace") {

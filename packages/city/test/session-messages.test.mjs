@@ -20,7 +20,7 @@ import {
 } from "../../agent/bin/session/SessionMessages.js";
 import { compose_session_compaction } from "../../agent/bin/session/messages/SessionMessageCompaction.js";
 import { session_context_to_model_messages } from "../../agent/bin/executor/messages/SessionModelMessages.js";
-import { JsonlSessionMessageStore } from "../../agent/bin/workspace/store/JsonlSessionMessageStore.js";
+import { JsonlSessionMessageStore } from "../../agent/bin/session/storage/JsonlSessionMessageStore.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 /** 可让下一次 Assistant 草稿更新失败的测试 Store。 */

@@ -1,5 +1,5 @@
 /**
- * 本地 Workspace Store 实现的构造类型。
+ * Agent 本地 Session Store 实现的构造类型。
  *
  * 关键点（中文）
  * - 本地 Store 接收 AgentStorage 创建的私有 FileSystem 与存储根目录。

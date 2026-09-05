@@ -21,7 +21,7 @@ import { Agent } from "@downcity/agent";
 import { create_workspace_entry } from "@downcity/agent/internal";
 import { City } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/city";
-import { get_agent_session_instruction_path } from "../../agent/bin/workspace/store/LocalStorePaths.js";
+import { get_agent_session_instruction_path } from "../../agent/bin/session/storage/LocalStorePaths.js";
 import {
   create_action,
 } from "@downcity/city/plugin";

@@ -1,12 +1,12 @@
 /**
- * Workspace Session Message Store 工厂。
+ * Agent Session Message Store 工厂。
  *
  * 关键点（中文）
  * - 跨 package 调用方只依赖 SessionMessageStore contract，不依赖 JSONL 实现类。
  * - 物理格式由 @downcity/agent 内部选择，后续替换实现不会扩散到宿主 Plugin。
  */
 
-import { JsonlSessionMessageStore } from "@/workspace/store/JsonlSessionMessageStore.js";
+import { JsonlSessionMessageStore } from "@/session/storage/JsonlSessionMessageStore.js";
 import type { JsonlSessionMessageStoreOptions } from "@/types/store/LocalStore.js";
 import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
 

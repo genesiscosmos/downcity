@@ -12,7 +12,7 @@ import { AgentMemoryStorageProvider } from "@/internal/AgentMemoryStorage.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionHooks } from "@/session/SessionHooks.js";
 import { EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
-import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
+import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
 import type { AgentRuntimeBinding } from "@/types/agent/AgentRuntimeBinding.js";
 
 interface AgentRuntimeState {

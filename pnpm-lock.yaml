@@ -428,45 +428,21 @@ importers:
 
   packages/agent:
     dependencies:
-      '@downcity/federation':
-        specifier: workspace:^
-        version: link:../federation
       '@downcity/type':
         specifier: workspace:*
         version: link:../type
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
       diff:
         specifier: ^8.0.4
         version: 8.0.4
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      execa:
-        specifier: ^9.6.1
-        version: 9.6.1
       fs-extra:
         specifier: ^11.3.5
         version: 11.3.5
-      globby:
-        specifier: ^11.1.0
-        version: 11.1.0
-      hono:
-        specifier: ^4.12.23
-        version: 4.12.23
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
       nanoid:
         specifier: ^5.1.11
         version: 5.1.11
-      node-cron:
-        specifier: ^4.2.1
-        version: 4.2.1
-      ws:
-        specifier: ^8.21.0
-        version: 8.21.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -480,12 +456,6 @@ importers:
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
-      '@types/node-cron':
-        specifier: ^3.0.11
-        version: 3.0.11
-      '@types/ws':
-        specifier: ^8.18.1
-        version: 8.18.1
       tsc-alias:
         specifier: ^1.8.17
         version: 1.8.17

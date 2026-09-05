@@ -9,8 +9,7 @@
     "rootDir": "src",
     "paths": {
       "@/*": ["./src/*"],
-      "@executor/*": ["./src/executor/*"],
-      "@downcity/federation": ["../federation/bin/index.d.ts"]
+      "@executor/*": ["./src/executor/*"]
     },
     "strict": true,
     "noImplicitAny": false,

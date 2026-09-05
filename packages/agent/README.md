@@ -72,10 +72,14 @@ src/
 ├── agent/                 # Agent facade、状态、模型、环境与执行绑定
 ├── group/                 # Group 主体、GroupSession 和消息调度策略
 ├── executor/              # LLM/Tool Loop、执行恢复与内存上下文折叠
-├── session/               # Session facade、State、Turn、Queue、Messages 与 Composer
+├── host/                  # Agent 宿主端口
+├── internal/              # Agent 与 Group 的内部运行时装配
+├── plugin/                # Agent 使用的 Plugin 执行协议辅助
+├── remote/                # 远程 Agent 与 Session 客户端协议
+├── session/               # Session facade、执行编排、消息与持久化
+├── tools/                 # Agent 内置 Tool
 ├── types/                 # agent / executor / session 等包内类型
-├── utils/                 # 日志、资源和通用辅助能力
-└── workspace/             # Agent/Session 私有结构化存储
+└── utils/                 # 日志、资源和通用辅助能力
 ```
 
 ## 顶层目录职责
@@ -86,10 +90,6 @@ src/
   - `AgentSessions.ts` 负责 Session 集合生命周期
   - `ExecutionBinding.ts` 负责 Agent 执行目标绑定
 
-- `src/workspace/`
-  - `store/` 负责 AgentStorage、Session 和 JSONL Message 的本地持久化
-  - 不实现 Workspace 项目资源；Workspace 协议来自 `@downcity/type/workspace`
-
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
   - `SessionState.ts` 管理配置与 metadata
@@ -97,8 +97,12 @@ src/
   - `SessionMessages.ts` 是 canonical Message 唯一事实源
   - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
   - `SessionTurnContext.effects` 只负责按发生顺序收集当前 Turn 的 Tool 副作用，不解释具体业务
-  - `messages/` 放 Assistant writer、Message codec、Tool effect 投影、结构化文件编辑 Diff 与 compaction；JSONL Store 位于 `workspace/store/`
+  - `messages/` 放 Assistant writer、Message codec、Tool effect 投影、结构化文件编辑 Diff 与 compaction
+  - `storage/` 负责 Session、附件和 JSONL Message 的本地持久化；只使用 AgentStorage，不访问项目 Workspace
   - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 的单次执行输入
+
+- `src/group/`
+  - `storage/` 负责 GroupSession 的 metadata、共享消息和调度记录持久化
 
 - `src/executor/`
   - 内部执行内核

@@ -18,7 +18,7 @@ import type {
 } from "@/types/agent/SessionTypes.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-import { LocalSessionDataStore } from "@/workspace/store/LocalSessionDataStore.js";
+import { LocalSessionDataStore } from "@/session/storage/LocalSessionDataStore.js";
 import {
   get_agent_archived_session_meta_path,
   get_agent_archived_session_origins_path,
@@ -27,7 +27,7 @@ import {
   get_agent_session_messages_path,
   get_agent_session_meta_path,
   get_agent_session_path,
-} from "@/workspace/store/LocalStorePaths.js";
+} from "@/session/storage/LocalStorePaths.js";
 import {
   list_archived_agent_session_summary_page,
   list_agent_session_summary_page,

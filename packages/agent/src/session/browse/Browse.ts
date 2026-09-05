@@ -24,7 +24,7 @@ import {
   get_agent_session_active_messages_path,
   get_agent_session_meta_path,
   get_agent_sessions_path,
-} from "@/workspace/store/LocalStorePaths.js";
+} from "@/session/storage/LocalStorePaths.js";
 import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
 import { normalize_session_origin_type } from "@/session/SessionOrigin.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";

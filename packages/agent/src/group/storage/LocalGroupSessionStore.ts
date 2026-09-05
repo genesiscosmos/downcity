@@ -8,7 +8,7 @@ import type {
   GroupSessionStore,
   GroupSessionStoreOptions,
 } from "@/types/group/GroupSessionStore.js";
-import { LocalGroupSessionDataStore } from "@/workspace/store/LocalGroupSessionDataStore.js";
+import { LocalGroupSessionDataStore } from "@/group/storage/LocalGroupSessionDataStore.js";
 
 /** GroupSession 的底层文件 Store。 */
 export class LocalGroupSessionStore implements GroupSessionStore {

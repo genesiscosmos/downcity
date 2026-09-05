@@ -7,20 +7,20 @@
  */
 
 import { isDeepStrictEqual } from "node:util";
-import { JsonlSessionMessageStore } from "@/workspace/store/JsonlSessionMessageStore.js";
+import { JsonlSessionMessageStore } from "@/session/storage/JsonlSessionMessageStore.js";
 import {
   get_agent_session_instruction_path,
   get_agent_session_meta_path,
   get_agent_session_assistant_message_path,
   get_agent_session_active_messages_path,
   get_agent_session_attachments_path,
-} from "@/workspace/store/LocalStorePaths.js";
+} from "@/session/storage/LocalStorePaths.js";
 import { normalize_session_metadata } from "@/session/storage/Metadata.js";
 import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { FileSystem } from "@downcity/type";
 import type { LocalSessionDataStoreOptions } from "@/types/store/LocalStore.js";
-import { LocalSessionAttachmentStore } from "@/workspace/store/LocalSessionAttachmentStore.js";
+import { LocalSessionAttachmentStore } from "@/session/storage/LocalSessionAttachmentStore.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 
 /** 本地 Session Store。 */
@@ -170,7 +170,7 @@ export class LocalSessionDataStore implements SessionDataStore {
     await this.files.write_file_atomically(instruction_path, instruction);
   }
 
-  /** 返回当前 Session instruction.md 的 Workspace 路径。 */
+  /** 返回当前 Session instruction.md 的 Agent Storage 路径。 */
   private instruction_path(): string {
     return get_agent_session_instruction_path(
       this.storage_root_path,
@@ -179,7 +179,7 @@ export class LocalSessionDataStore implements SessionDataStore {
     );
   }
 
-  /** 返回当前 Session meta.json 的 Workspace 路径。 */
+  /** 返回当前 Session meta.json 的 Agent Storage 路径。 */
   private metadata_path(): string {
     return get_agent_session_meta_path(
       this.storage_root_path,

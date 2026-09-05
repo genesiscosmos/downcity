@@ -10,7 +10,7 @@ import test from "node:test";
 
 import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "../../agent/bin/session/execution/tools/SessionShellApprovalAdapter.js";
-import { JsonlSessionMessageStore } from "../../agent/bin/workspace/store/JsonlSessionMessageStore.js";
+import { JsonlSessionMessageStore } from "../../agent/bin/session/storage/JsonlSessionMessageStore.js";
 import {
   create_workspace_file_mutation_effect,
 } from "@downcity/type/workspace";

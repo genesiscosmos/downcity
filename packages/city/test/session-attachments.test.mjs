@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { LocalFileSystem } from "@downcity/city";
-import { LocalSessionDataStore } from "../../agent/bin/workspace/store/LocalSessionDataStore.js";
+import { LocalSessionDataStore } from "../../agent/bin/session/storage/LocalSessionDataStore.js";
 import { SessionMessages } from "../../agent/bin/session/SessionMessages.js";
 
 async function create_harness() {

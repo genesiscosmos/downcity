@@ -4,7 +4,7 @@ import type { Group } from "@/group/Group.js";
 import type { GroupSessionStore } from "@/types/group/GroupSessionStore.js";
 import type { StorageProvider } from "@downcity/type";
 import { AgentMemoryStorageProvider } from "@/internal/AgentMemoryStorage.js";
-import { LocalGroupSessionStore } from "@/workspace/store/LocalGroupSessionStore.js";
+import { LocalGroupSessionStore } from "@/group/storage/LocalGroupSessionStore.js";
 
 interface GroupRuntimeState {
   /** Group 当前绑定的底层 Storage Provider。 */

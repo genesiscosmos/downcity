@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { JsonlSessionMessageStore } from "../../agent/bin/workspace/store/JsonlSessionMessageStore.js";
+import { JsonlSessionMessageStore } from "../../agent/bin/session/storage/JsonlSessionMessageStore.js";
 import { LocalFileSystem } from "@downcity/city";
 import { SessionMessages } from "../../agent/bin/session/SessionMessages.js";
 import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";

@@ -2,7 +2,7 @@
  * SDK Session 元数据辅助。
  *
  * 关键点（中文）
- * - 统一负责 Workspace `sessions/<session_id>/meta.json` 的规范化读取。
+ * - 统一负责 Agent Storage 内 `sessions/<origin_type>/<session_id>/meta.json` 的规范化读取。
  * - 仅处理轻量配置摘要与索引信息，不负责消息 JSONL 的读写。
  */
 
@@ -81,7 +81,7 @@ export async function read_session_metadata_from_path(input: {
   workspace_id?: string;
   /** 当前读取目录对应的来源类型。 */
   origin_type: string;
-  /** 当前 Workspace 的统一文件能力。 */
+  /** 当前 Agent 私有 Storage 的文件能力。 */
   files: FileSystem;
 }): Promise<SessionHistoryMeta> {
   const raw = JSON.parse(

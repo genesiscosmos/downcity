@@ -1,5 +1,5 @@
 /**
- * Workspace 内 Session 附件的本地实现。
+ * Agent 私有 Storage 内 Session 附件的本地实现。
  *
  * Data URL 在这里解码为文件；Message 层保存 Agent 私有目录中的绝对路径。
  */
@@ -23,7 +23,7 @@ const MEDIA_TYPE_EXTENSIONS: Record<string, string> = {
 };
 
 export interface LocalSessionAttachmentStoreOptions {
-  /** Workspace 文件能力。 */
+  /** 当前 Agent 私有 Storage 的文件能力。 */
   files: FileSystem;
   /** 当前 Session 附件目录的绝对路径。 */
   attachments_dir_path: string;
