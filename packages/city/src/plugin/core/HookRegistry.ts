@@ -12,7 +12,7 @@ import type {
   PluginGuardHook,
   PluginPipelineHook,
   PluginResolveHook,
-} from "@/types/plugin/PluginRuntime.js";
+} from "@/plugin/types/PluginExecutionRuntime.js";
 import type { PluginContext } from "@/plugin/index.js";
 
 type PipelineRecord = {

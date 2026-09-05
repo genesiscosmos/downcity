@@ -64,7 +64,7 @@ city.agents.add(agent);
 const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-Profiles belong to the City control plane and do not enter Agent. Chat main actions validate Profile
+Profiles belong to the City control plane and do not enter Agent. Config Actions registered by Chat during `start()` validate Profile
 content and provide a credential-safe projection. The unique ChatPlugin instance manages channels
 and queues according to each `PluginContext` Agent/Workspace scope and configuration.
 

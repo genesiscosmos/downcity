@@ -7,7 +7,7 @@
  */
 
 import type { JsonValue } from "@downcity/agent";
-import type { PluginActionResult } from "@/types/plugin/PluginAction.js";
+import type { PluginActionResult } from "@/plugin/index.js";
 
 /**
  * RemoteAgent 远程 plugin action 调用输入。

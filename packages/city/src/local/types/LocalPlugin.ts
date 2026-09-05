@@ -1,10 +1,9 @@
-/** 本地文件型 Plugin 定义、统一 main 注册与 Profile 配置协议。 */
+/** 本地文件型 Plugin 定义、统一实例注册与 Profile 配置协议。 */
 
 import type {
   CityPluginRegistration,
   PluginDefinition,
   PluginJsonObject,
-  PluginMainModule,
 } from "@/plugin/index.js";
 
 /** Plugin Renderer 入口及其静态 UI 插槽声明。 */
@@ -43,14 +42,6 @@ export interface LocalPluginDefinition {
 
 /** 内置与第三方 Plugin 共享的 City 注册协议。 */
 export type LocalPluginRegistration = CityPluginRegistration;
-
-/** 第三方 ESM 入口导出的无工厂 Plugin 模块。 */
-export interface LocalPluginModule {
-  /** City 持有的唯一 Plugin 实例。 */
-  readonly plugin: PluginDefinition;
-  /** 可选的宿主管理与 Renderer main 能力。 */
-  readonly main?: PluginMainModule;
-}
 
 /** plugins/<plugin_id>/plugin.json 中的第三方 Plugin 定义。 */
 export interface LocalInstalledPluginDefinition extends Omit<

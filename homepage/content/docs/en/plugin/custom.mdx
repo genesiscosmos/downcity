@@ -83,20 +83,21 @@ The following entry protocol is only needed when CLI or Desktop must install, di
 
 `renderer.sidebar` and `renderer.mainview` must both be `true` or both be `false`; `renderer.config` is independent. The actual default export must exactly match these three static capabilities. `package.json` must declare `"type": "module"`. `readme` must point to a `.md` user document inside the Plugin root. Desktop safely renders that file in the Plugin Overview; its name and subdirectory are up to the author, and it should describe purpose, configuration, and required credentials. The icon may be an HTTP(S) URL or a file relative to the Plugin root and is used in Plugin navigation and the Overview.
 
-## Unified main entry
+## Unified Plugin entry
 
-`main` default-exports a Plugin instance, or `{ plugin, main }` when it also provides a host main
-lifecycle. There is no separate `agent` entry. `plugin.action()` registers Sidebar/Mainview actions,
-while `plugin.config_action()` registers Config actions:
+The `main` file default-exports one Plugin instance. There is no separate `agent` entry or second
+main lifecycle. During `start()`, `plugin.action()` registers Sidebar/Mainview Actions and
+`plugin.config_action()` registers Config Actions:
 
 ```ts
-import { define_plugin_main } from "@downcity/city/plugin";
-import { GithubPlugin } from "./plugin.js";
+import { Plugin, type PluginStartContext } from "@downcity/city/plugin";
 
-export default {
-  plugin: new GithubPlugin(),
-  main: define_plugin_main({
-    activate({ plugin, notifications }) {
+class GithubPlugin extends Plugin {
+  readonly name = "github";
+  readonly title = "GitHub";
+  readonly description = "GitHub integration";
+
+  start({ plugin, notifications }: PluginStartContext) {
     plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => {
@@ -120,18 +121,19 @@ export default {
       title: "Repository sync completed",
       route: { repository: "downcity", view: "activity" },
     });
-    },
-  }),
-};
+  }
+}
+
+export default new GithubPlugin();
 ```
 
-One main is activated once per City, and one Plugin ID maps to one instance. City injects the selected
+One Plugin ID maps to one instance and one lifecycle per City. City injects the selected
 Profile store into Config actions, while the execution instance reads current Agent configuration
 from `PluginContext.config`.
 
 `notifications.publish()` and `notifications.dismiss()` are always bound to the current Plugin. The host namespaces `topic_key` and treats `route` as a route inside that Plugin workspace, so a Plugin cannot impersonate another Plugin or navigate to arbitrary Desktop pages. Only the latest unread notification for the same `topic_key` is retained.
 
-For functional pages such as a Skill manager, `system.list_workspaces()` returns summaries of Workspaces registered by the host. Plugin main is trusted local Node.js code; it must validate action inputs and own its file, network, and long-lived resource behavior.
+For functional pages such as a Skill manager, `system.list_workspaces()` returns summaries of Workspaces registered by the host. A Plugin is trusted local Node.js code; it must validate action inputs and own its file, network, and long-lived resource behavior.
 
 ## Renderer entry
 

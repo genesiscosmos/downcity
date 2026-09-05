@@ -33,7 +33,7 @@ await city.close();
 
 ## 关系与所有权
 
-- `City` 持有 Plugin catalog、唯一实例、main、生命周期和 Hook 作用域。
+- `City` 持有 Plugin catalog、唯一实例、生命周期和 Hook 作用域。
 - `Agent` 持有身份、模型、指令、自定义工具和 `AgentSessions`，不持有 Plugin。
 - `Session` 归 Agent 所有，在创建时取得一个 Workspace 执行上下文和 City Plugin 执行视图。
 - `Workspace` 只持有项目文件、工具、env 与可选 Shell，不拥有 Agent、Session 或 Plugin。
@@ -50,7 +50,7 @@ Workspace 的 Shell、Sandbox 等运行资源，再将其移出当前 City；不
 
 ## Plugin 生命周期
 
-Plugin main 每个 Plugin ID 只 `activate` 一次，City 关闭时 `deactivate`。执行实例有四个节点：
+一个 Plugin 实例只有一套由 City 管理的生命周期，并在 `start` 中注册可选宿主管理 action：
 
 1. Plugin 加入 City 时调用 `start`。
 2. Agent 进入 Workspace 时调用 `connect(context)`。

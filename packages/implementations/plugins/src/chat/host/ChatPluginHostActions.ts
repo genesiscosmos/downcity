@@ -1,9 +1,9 @@
-/** Chat Plugin Profile 的 main actions 与凭据边界。 */
+/** Chat Plugin Profile 的宿主 actions 与凭据边界。 */
 
 import {
-  define_plugin_main,
   type PluginJsonObject,
   type PluginJsonValue,
+  type PluginStartContext,
 } from "@downcity/city/plugin";
 import type { ChatPluginChannelConfig } from "@/chat/types/ChatPluginChannelConfig.js";
 import type { ChatPluginConfig } from "@/chat/types/ChatPluginConfig.js";
@@ -13,26 +13,24 @@ import type {
   ChatPluginPublicQueueConfig,
 } from "@/chat/types/ChatPluginProfile.js";
 
-/** Chat Plugin 的宿主管理入口。 */
-export const CHAT_PLUGIN_MAIN = define_plugin_main({
-  activate({ plugin }) {
-    plugin.config_action({
-      id: "profile.read",
-      run: async (_input, context) => to_public_profile(
-        await context.config.get() as unknown as ChatPluginConfig,
-      ) as unknown as PluginJsonValue,
-    });
-    plugin.config_action({
-      id: "profile.save",
-      run: async (input, context) => {
-        const current = await context.config.get() as unknown as ChatPluginConfig;
-        const config = normalize_profile(input, current);
-        await context.config.set(config as unknown as PluginJsonObject);
-        return to_public_profile(config) as unknown as PluginJsonValue;
-      },
-    });
-  },
-});
+/** 注册 Chat Plugin 的 Profile 配置 actions。 */
+export function register_chat_plugin_host_actions({ plugin }: PluginStartContext): void {
+  plugin.config_action({
+    id: "profile.read",
+    run: async (_input, context) => to_public_profile(
+      await context.config.get() as unknown as ChatPluginConfig,
+    ) as unknown as PluginJsonValue,
+  });
+  plugin.config_action({
+    id: "profile.save",
+    run: async (input, context) => {
+      const current = await context.config.get() as unknown as ChatPluginConfig;
+      const config = normalize_profile(input, current);
+      await context.config.set(config as unknown as PluginJsonObject);
+      return to_public_profile(config) as unknown as PluginJsonValue;
+    },
+  });
+}
 
 /** 把完整配置转换为不包含凭据原文的 Mainview 投影。 */
 function to_public_profile(config: ChatPluginConfig): ChatPluginPublicProfile {

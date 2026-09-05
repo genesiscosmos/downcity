@@ -8,7 +8,7 @@
  */
 
 import type { Hono } from "hono";
-import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
 import type { JsonValue } from "@downcity/agent";
 
 /**

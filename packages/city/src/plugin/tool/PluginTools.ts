@@ -16,7 +16,7 @@ import type {
   CreatePluginToolsOptions,
   PluginCallInput,
   PluginReadInput,
-} from "@/types/plugin/PluginTool.js";
+} from "@/plugin/types/PluginTool.js";
 import {
   invoke_plugin_call_tool,
   invoke_plugin_read_tool,

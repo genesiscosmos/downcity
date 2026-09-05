@@ -33,10 +33,7 @@ function create_turn_context(project_root) {
 }
 
 function create_registry(plugin) {
-  const registry = new PluginRegistry({
-    agent_id: "plugin_tools_agent",
-    instructions: [],
-  }, [plugin]);
+  const registry = new PluginRegistry([plugin]);
   const context = create_test_plugin_context({
     agent_id: "plugin_tools_agent",
     workspace_id: "plugin_tools_workspace",
@@ -44,8 +41,8 @@ function create_registry(plugin) {
   });
   return Object.assign(registry.contextual(context), {
     execution_view: () => registry.execution_view(context),
-    start_all: () => registry.start_all(),
     unregister: (plugin_name) => registry.unregister(plugin_name),
+    unregister_and_wait: (plugin_name) => registry.unregister_and_wait(plugin_name),
   });
 }
 
@@ -522,56 +519,49 @@ test("PluginRegistry keeps plugin ready after action business failure", async ()
   assert.equal(registry.status("skill").status, "ready");
 });
 
-test("PluginRegistry delays lifecycle stop until the active execution lease is released", async () => {
-  let lifecycle_active = false;
-  let stop_count = 0;
+test("PluginRegistry waits for the active execution lease before completing removal", async () => {
   const plugin = create_plugin({
     name: "leased-plugin",
     title: "Leased Plugin",
     description: "Keeps runtime resources alive for an active Session step",
-    lifecycle: {
-      start: async () => {
-        lifecycle_active = true;
-      },
-      stop: async () => {
-        lifecycle_active = false;
-        stop_count += 1;
-      },
-    },
     actions: {
       status: create_action({
-        description: "Read lifecycle state",
+        description: "Read captured execution state",
         execute: async () => ({
-          success: lifecycle_active,
-          data: { lifecycle_active },
+          success: true,
+          data: { captured: true },
         }),
       }),
     },
   });
   const registry = create_registry(plugin);
-  await registry.start_all();
   const lease = registry.execution_view().acquire();
+  let removal_finished = false;
+  const removal = registry.unregister_and_wait("leased-plugin").then((removed) => {
+    removal_finished = true;
+    return removed;
+  });
+  await Promise.resolve();
 
-  assert.equal(await registry.unregister("leased-plugin"), true);
   assert.equal(registry.has("leased-plugin"), false);
-  assert.equal(lifecycle_active, true);
-  assert.equal(stop_count, 0);
+  assert.equal(removal_finished, false);
 
   const result = await lease.run_action({
     plugin: "leased-plugin",
     action: "status",
   });
   assert.equal(result.success, true);
-  assert.equal(result.data.lifecycle_active, true);
+  assert.equal(result.data.captured, true);
 
   await lease.release();
   await lease.release();
-  assert.equal(lifecycle_active, false);
-  assert.equal(stop_count, 1);
+  assert.equal(await removal, true);
+  assert.equal(removal_finished, true);
 });
 
-test("Plugin execution lease 复用既有 pipeline 与 effect hooks", async () => {
+test("Plugin execution lease 复用既有 availability、hook 与 resolve", async () => {
   const effects = [];
+  const guards = [];
   const plugin = create_plugin({
     name: "hook-plugin",
     title: "Hook Plugin",
@@ -588,16 +578,30 @@ test("Plugin execution lease 复用既有 pipeline 与 effect hooks", async () =
           effects.push(value);
         }],
       },
+      guard: {
+        "session.before_commit": [({ value }) => {
+          guards.push(value);
+        }],
+      },
     },
+    resolves: {
+      "session.owner": ({ value }) => ({ ...value, plugin: "hook-plugin" }),
+    },
+    availability: async () => ({ enabled: true, available: true, reasons: [] }),
   });
   const registry = create_registry(plugin);
-  await registry.start_all();
   const lease = registry.execution_view().acquire();
 
   const output = await lease.pipeline("session.turn_context", { trace: [] });
+  await lease.guard("session.before_commit", { turn_id: "turn-1" });
   await lease.effect("session.turn_committed", { turn_id: "turn-1" });
+  const resolved = await lease.resolve("session.owner", { owner: "agent" });
+  const availability = await lease.availability("hook-plugin");
 
   assert.deepEqual(output.trace, ["hook-plugin"]);
+  assert.deepEqual(guards, [{ turn_id: "turn-1" }]);
   assert.deepEqual(effects, [{ turn_id: "turn-1" }]);
+  assert.deepEqual(resolved, { owner: "agent", plugin: "hook-plugin" });
+  assert.deepEqual(availability, { enabled: true, available: true, reasons: [] });
   await lease.release();
 });

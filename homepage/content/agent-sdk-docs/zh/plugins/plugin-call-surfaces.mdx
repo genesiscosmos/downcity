@@ -9,7 +9,7 @@ Plugin 有四类调用面，分别服务不同角色：
 
 | 入口 | 使用者 | 用途 |
 | --- | --- | --- |
-| `city.plugins` | 宿主应用 | 添加或移除唯一实例、调用 main/config action |
+| `city.plugins` | 宿主应用 | 添加或移除唯一实例、调用 host/config action |
 | `entry.plugins` | 宿主执行代码 | 在指定 Agent/Workspace 上调用 Action、Availability 或 Hook |
 | `context.city.plugins` | Plugin 代码 | 在当前作用域调用其他 Plugin Action、pipeline 或 effect |
 | `plugin_call` | Session 中的模型 | 调用 City 提供的 Plugin Action |
@@ -22,7 +22,7 @@ console.log(city.plugins.snapshots());
 await city.plugins.remove("skill");
 ```
 
-`city.plugins.invoke()` 与 `invoke_config()` 调用 Plugin main 注册的宿主管理 Action，不是 Session
+`city.plugins.invoke()` 与 `invoke_config()` 调用 Plugin 在 `start()` 中注册的宿主管理 Action，不是 Session
 执行 Action。
 
 ## Workspace 执行面

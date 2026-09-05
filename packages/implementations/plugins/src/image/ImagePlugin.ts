@@ -12,7 +12,7 @@ import path from "node:path";
 import { z } from "zod";
 import { create_action } from "@downcity/city/plugin";
 import { Plugin } from "@downcity/city/plugin";
-import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginContext, PluginStartContext } from "@downcity/city/plugin";
 import type {
   PluginJsonObject,
   PluginJsonValue,
@@ -33,6 +33,8 @@ import type {
   ImagePluginResult,
 } from "@/image/types/ImagePlugin.js";
 import { localize_image_result } from "@/image/runtime/ImageResultStorage.js";
+import { IMAGE_PLUGIN_SETTINGS } from "@/builtin/PluginSettingsDefinitions.js";
+import { register_plugin_settings_actions } from "@/builtin/host/PluginSettingsActions.js";
 
 const DEFAULT_IMAGE_PLUGIN_NAME = "image";
 const DEFAULT_IMAGE_PLUGIN_TITLE = "Image";
@@ -530,6 +532,11 @@ export class ImagePlugin extends Plugin {
       options.description || DEFAULT_IMAGE_PLUGIN_DESCRIPTION,
     ).trim();
     this.default_model = normalize_default_image_model(options.default_model);
+  }
+
+  /** 注册 Image Plugin 的 Profile 配置 actions。 */
+  start(context: PluginStartContext): void {
+    register_plugin_settings_actions(context, IMAGE_PLUGIN_SETTINGS);
   }
 
   /**

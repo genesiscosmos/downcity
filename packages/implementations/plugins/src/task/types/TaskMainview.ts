@@ -1,4 +1,4 @@
-/** Task Plugin 工作区与宿主 main 之间的 JSON 协议。 */
+/** Task Plugin Mainview 与宿主 action 之间的 JSON 协议。 */
 
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "./TaskCommand.js";
 import type { ShipTaskKind, ShipTaskStatus, TaskDeliverySession } from "./Task.js";

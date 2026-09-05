@@ -12,7 +12,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { Plugin, create_action } from "@downcity/city/plugin";
 import { z } from "zod";
-import type { PluginContext, PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
+import type {
+  PluginContext,
+  PluginJsonObject,
+  PluginJsonValue,
+  PluginStartContext,
+} from "@downcity/city/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 import type {
   ChatInboundAugmentInput,
@@ -30,6 +35,8 @@ import type {
   SoundPluginTtsInput,
   SoundPluginTtsResult,
 } from "@/sound/types/SoundPlugin.js";
+import { SOUND_PLUGIN_SETTINGS } from "@/builtin/PluginSettingsDefinitions.js";
+import { register_plugin_settings_actions } from "@/builtin/host/PluginSettingsActions.js";
 
 const DEFAULT_SOUND_PLUGIN_NAME = "sound";
 const DEFAULT_SOUND_PLUGIN_TITLE = "Sound";
@@ -472,6 +479,11 @@ export class SoundPlugin extends Plugin {
     this.language = normalize_optional_string(options.language);
     this.voice = normalize_optional_string(options.voice);
     this.format = normalize_optional_string(options.format);
+  }
+
+  /** 注册 Sound Plugin 的 Profile 配置 actions。 */
+  start(context: PluginStartContext): void {
+    register_plugin_settings_actions(context, SOUND_PLUGIN_SETTINGS);
   }
 
   /**

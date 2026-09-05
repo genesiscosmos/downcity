@@ -30,7 +30,7 @@ import {
 export class PluginController {
   constructor(
     private readonly data: DesktopLocalData,
-    private readonly invoke_main: (
+    private readonly invoke_host_action: (
       plugin_id: string,
       action_id: string,
       input?: PluginJsonValue,
@@ -123,10 +123,10 @@ export class PluginController {
     return await this.get(plugin_id);
   }
 
-  /** 按业务工作区或 Config 范围调用 Plugin main action。 */
+  /** 按业务工作区或 Config 范围调用 Plugin 宿主管理 action。 */
   async invoke(plugin_id: string, input: DesktopInvokePluginActionInput) {
     if (input.surface === "mainview") {
-      return await this.invoke_main(
+      return await this.invoke_host_action(
         plugin_id,
         input.action_id,
         input.input,
@@ -143,7 +143,7 @@ export class PluginController {
   /** 解析内置或第三方 Plugin，不执行运行入口。 */
   private async resolve_plugin(plugin_id: string): Promise<ResolvedDesktopPlugin> {
     const registration = create_desktop_builtin_plugin_registrations(this.data)
-      .find((item) => item.id === plugin_id);
+      .find((item) => item.plugin.name === plugin_id);
     if (registration) {
       return { definition: to_builtin_definition(registration), source: "builtin", registration };
     }
@@ -194,9 +194,9 @@ function to_builtin_definition(
   registration: NonNullable<ResolvedDesktopPlugin["registration"]>,
 ): LocalPluginDefinition {
   return {
-    id: registration.id,
-    title: registration.title,
-    description: registration.description,
+    id: registration.plugin.name,
+    title: registration.plugin.title || registration.plugin.name,
+    description: registration.plugin.description,
     readme: registration.readme,
     has_main: true,
     has_sidebar: registration.has_sidebar,

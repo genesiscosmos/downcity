@@ -29,7 +29,7 @@ city.agents.add(agent);
 ```
 
 CLI and Desktop may keep `config.toml` as the Profile source of truth, but Agent stores neither
-Plugin instances nor binding relationships. Plugin main registers Config actions, and City injects
+Plugin instances nor binding relationships. A Plugin registers Config actions during `start()`, and City injects
 the selected Profile's `get/set` store when invoking one. Runtime Actions, Hooks, and lifecycle
 `connect` read `context.config` projected for the current Agent.
 

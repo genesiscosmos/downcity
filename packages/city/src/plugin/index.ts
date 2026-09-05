@@ -1,21 +1,14 @@
 /**
  * @downcity/city/plugin 主入口。
  *
- * 该入口只定义 Plugin main 与宿主之间的最小协议，不包含 City、Agent 或 Electron
- * 实现。Plugin 包可以直接默认导出 `define_plugin_main(...)` 的结果。
+ * 该入口只定义 Plugin 与 City 之间的最小协议，不包含 Agent 或 Electron 实现。
+ * Plugin 包直接导出一个实例，由 City 统一管理完整生命周期。
  */
-
-import type { PluginMainModule } from "./types/PluginMain.js";
 
 export {
   Plugin,
   create_action,
 } from "./runtime.js";
-
-/** 保留 Plugin main 的精确类型并返回原对象。 */
-export function define_plugin_main(module: PluginMainModule): PluginMainModule {
-  return module;
-}
 
 export type {
   PluginJsonObject,
@@ -58,7 +51,6 @@ export type {
 } from "./runtime.js";
 
 export type {
-  CityPluginMainContext,
   CityPluginRegistration,
   PluginDefinition,
   PluginAction,
@@ -79,8 +71,6 @@ export type {
   PluginHooks,
   PluginHttpDefinition,
   PluginHttpRegistration,
-  PluginLifecycle,
-  PluginLifecycleContext,
   PluginPipelineHook,
   PluginReadView,
   PluginResolveHook,
@@ -92,18 +82,24 @@ export type {
 } from "./types/PluginRuntime.js";
 
 export type {
-  PluginConfigMainAction,
-  PluginConfigMainActionContext,
-  PluginMainAction,
-  PluginMainAgent,
-  PluginMainContext,
-  PluginMainLogger,
-  PluginMainModule,
-  PluginMainSelf,
-  PluginMainSystem,
-  PluginMainWorkspace,
+  PluginConfigAction,
+  PluginConfigActionContext,
+  PluginHostAction,
+  PluginHostAgent,
+  PluginHostSystem,
+  PluginHostWorkspace,
   PluginProfileConfigStore,
-} from "./types/PluginMain.js";
+  PluginSelf,
+  PluginStartContext,
+} from "./types/PluginHost.js";
+
+export type {
+  AgentPluginExecutionLease,
+  AgentPluginExecutionRuntime,
+  AgentPluginExecutionView,
+  AgentPluginRuntime,
+  AgentPlugins,
+} from "./types/PluginExecutionRuntime.js";
 
 export { ActionScheduleStore } from "./schedule/ActionScheduleStore.js";
 export { parse_action_schedule_run_at_ms_or_throw } from "./schedule/ActionScheduleTime.js";

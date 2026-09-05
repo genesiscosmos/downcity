@@ -1,5 +1,5 @@
 /**
- * PluginRegistry 变化订阅类型。
+ * PluginRegistry 变化订阅协议。
  *
  * 关键点（中文）
  * - Agent 订阅 Registry 变化后同步 Plugin Tools 与 Session execution view。

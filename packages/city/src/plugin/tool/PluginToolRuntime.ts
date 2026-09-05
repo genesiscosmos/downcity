@@ -16,7 +16,7 @@ import type {
   InvokePluginReadToolOptions,
   PluginReadInput,
   PluginReadToolResult,
-} from "@/types/plugin/PluginTool.js";
+} from "@/plugin/types/PluginTool.js";
 
 /** 判断值是否为普通 JSON 对象。 */
 function to_json_object(value: unknown): JsonObject | null {

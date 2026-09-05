@@ -13,7 +13,7 @@ import { Hono } from "hono";
 import { create_workspace_entry } from "@downcity/agent/internal";
 import type { Agent, AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
-import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
 import { register_sdk_session_routes } from "@/city/transport/http/routes/SessionRoutes.js";
 import { register_runtime_routes } from "@/city/transport/http/routes/RuntimeRoutes.js";
 import { create_node_http_server } from "@/city/transport/http/NodeHttpAdapter.js";

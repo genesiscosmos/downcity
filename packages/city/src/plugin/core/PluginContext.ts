@@ -17,7 +17,7 @@ import type {
   PluginSessionOrigin,
 } from "@/plugin/index.js";
 import type { AgentSessionCollection, Logger } from "@downcity/agent";
-import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
 import type { PluginExecutionContext } from "@/plugin/index.js";
 
 /** PluginContext 工厂输入。 */

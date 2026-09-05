@@ -21,7 +21,7 @@ import type {
   PluginHooks,
   PluginActions,
   PluginContext,
-  PluginLifecycleContext,
+  PluginStartContext,
 } from "@downcity/city/plugin";
 import type {
   SessionSystemContextHookValue,
@@ -134,6 +134,13 @@ export class MemoryPlugin extends Plugin {
   /** Plugin 稳定名称。 */
   readonly name = "memory";
 
+  /** Plugin 用户可见标题。 */
+  readonly title = "Memory";
+
+  /** Plugin 用户可见说明。 */
+  readonly description =
+    "Provides provider-neutral long-term memory, recall, revision, and deletion.";
+
   /** 当前 City 生命周期内唯一的 Memory Provider。 */
   private provider_instance?: MemoryProvider;
 
@@ -233,17 +240,17 @@ export class MemoryPlugin extends Plugin {
     });
   }
 
-  /** Provider 生命周期与当前 City MemoryPlugin 唯一实例保持一致。 */
-  readonly lifecycle = {
-    start: async (context: PluginLifecycleContext): Promise<void> => {
-      this.provider_instance ??= create_memory_provider(context.storage.path);
-      await this.provider.initialize();
-    },
-    stop: async (): Promise<void> => {
-      await this.provider_instance?.dispose();
-      this.provider_instance = undefined;
-    },
-  };
+  /** 启动当前 City 唯一的 Memory Provider。 */
+  async start(context: PluginStartContext): Promise<void> {
+    this.provider_instance ??= create_memory_provider(context.storage.path);
+    await this.provider.initialize();
+  }
+
+  /** 释放当前 City 唯一的 Memory Provider。 */
+  async stop(): Promise<void> {
+    await this.provider_instance?.dispose();
+    this.provider_instance = undefined;
+  }
 
   /** Memory 对 Agent 暴露的稳定 Action 集合。 */
   readonly actions: PluginActions = {

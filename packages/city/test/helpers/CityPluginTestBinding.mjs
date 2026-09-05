@@ -7,9 +7,6 @@
 /** 把一个测试 Plugin 实例包装成 City 可解释的统一注册。 */
 export function create_plugin_registration(plugin) {
   return {
-    id: plugin.name,
-    title: plugin.title || plugin.name,
-    description: plugin.description || "Test Plugin",
     readme: import.meta.filename,
     has_config: false,
     has_sidebar: false,
@@ -20,11 +17,12 @@ export function create_plugin_registration(plugin) {
 
 /** 用类语义创建无隐藏生命周期的测试 Plugin。 */
 export function create_test_plugin(definition) {
+  const { lifecycle, ...plugin } = definition;
   return Object.assign({
     title: definition.name,
     description: "Test Plugin",
     actions: {},
-  }, definition);
+  }, plugin, lifecycle || {});
 }
 
 /** 向 City 登记测试 Plugin。 */

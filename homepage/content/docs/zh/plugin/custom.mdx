@@ -83,20 +83,21 @@ city.agents.add(agent);
 
 `renderer.sidebar` 与 `renderer.mainview` 必须同时为 `true` 或 `false`，`renderer.config` 可以独立声明；默认导出的实际组件必须与这三个静态能力完全一致。`package.json` 必须声明 `"type": "module"`。`readme` 必须声明 Plugin 根目录内的 `.md` 用户文档，Desktop 会在 Plugin Overview 中安全渲染它；文件名和子目录可自行组织，应写清用途、配置方式和必要凭据。图标可以是 HTTP(S) 地址或 Plugin 根目录内的相对文件，并会用于 Plugin 导航与 Overview。
 
-## 统一 Main 入口
+## 统一 Plugin 入口
 
-`main` 默认导出 Plugin 实例，或导出 `{ plugin, main }` 以同时提供宿主 main 生命周期；不再存在
-独立 `agent` 入口。`plugin.action()` 注册 Sidebar/Mainview 动作，`plugin.config_action()` 注册
-Config 动作：
+`main` 文件默认导出唯一 Plugin 实例；不再存在独立 `agent` 入口或第二个 main 生命周期。
+Plugin 在 `start()` 中通过 `plugin.action()` 注册 Sidebar/Mainview 动作，通过
+`plugin.config_action()` 注册 Config 动作：
 
 ```ts
-import { define_plugin_main } from "@downcity/city/plugin";
-import { GithubPlugin } from "./plugin.js";
+import { Plugin, type PluginStartContext } from "@downcity/city/plugin";
 
-export default {
-  plugin: new GithubPlugin(),
-  main: define_plugin_main({
-    activate({ plugin, notifications }) {
+class GithubPlugin extends Plugin {
+  readonly name = "github";
+  readonly title = "GitHub";
+  readonly description = "GitHub 集成";
+
+  start({ plugin, notifications }: PluginStartContext) {
     plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => {
@@ -120,17 +121,18 @@ export default {
       title: "仓库同步完成",
       route: { repository: "downcity", view: "activity" },
     });
-    },
-  }),
-};
+  }
+}
+
+export default new GithubPlugin();
 ```
 
-一个 main 在 City 中只激活一次；一个 Plugin ID 只对应一个实例。Config action 调用时由 City
+一个 Plugin ID 在 City 中只对应一个实例和一套生命周期。Config action 调用时由 City
 注入指定 Profile store，执行实例按 `PluginContext.config` 读取当前 Agent 配置。
 
 `notifications.publish()` 与 `notifications.dismiss()` 始终绑定当前 Plugin。宿主会把 `topic_key` 放入 Plugin 命名空间，并把 `route` 解释为当前 Plugin 工作区路由，因此 Plugin 不能代表其他 Plugin 或跳转到任意 Desktop 页面。相同 `topic_key` 只保留最新一条未读通知。
 
-需要实现类似 Skill 管理器的功能主页时，可以通过 `system.list_workspaces()` 读取宿主已经登记的 Workspace 摘要。Plugin main 是受信任本地 Node.js 代码；它负责验证 action 输入，并自行拥有文件、网络和长期资源的业务行为。
+需要实现类似 Skill 管理器的功能主页时，可以通过 `system.list_workspaces()` 读取宿主已经登记的 Workspace 摘要。Plugin 是受信任本地 Node.js 代码；它负责验证 action 输入，并自行拥有文件、网络和长期资源的业务行为。
 
 ## Renderer 入口
 

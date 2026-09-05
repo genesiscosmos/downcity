@@ -367,7 +367,7 @@ export interface DesktopInvokePluginMainviewActionInput {
   /** 明确标识调用来自 Plugin 业务工作区。 */
   surface: "mainview";
 
-  /** Plugin main 注册的稳定 action ID。 */
+  /** Plugin 注册的稳定宿主 action ID。 */
   action_id: string;
 
   /** Mainview 传给 action 的可选 JSON 输入。 */
@@ -382,14 +382,14 @@ export interface DesktopInvokePluginConfigActionInput {
   /** 当前配置界面绑定的 Profile ID。 */
   profile_id: string;
 
-  /** Plugin main 注册的稳定 action ID。 */
+  /** Plugin 注册的稳定宿主 action ID。 */
   action_id: string;
 
   /** Config 传给 action 的可选 JSON 输入。 */
   input?: import("@downcity/city/plugin").PluginJsonValue;
 }
 
-/** Desktop Renderer 调用 Plugin main 的两个互斥动作范围。 */
+/** Desktop Renderer 调用 Plugin 宿主能力的两个互斥动作范围。 */
 export type DesktopInvokePluginActionInput =
   | DesktopInvokePluginMainviewActionInput
   | DesktopInvokePluginConfigActionInput;
@@ -880,7 +880,7 @@ export interface DesktopApi {
     create_profile(plugin_id: string, input: DesktopCreatePluginProfileInput): Promise<DesktopPluginDefinition>;
     /** 删除未被 Agent 引用的 Profile。 */
     remove_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
-    /** 按业务工作区或 Config 范围调用 Plugin main action。 */
+    /** 按业务工作区或 Config 范围调用 Plugin 宿主 action。 */
     invoke(plugin_id: string, input: DesktopInvokePluginActionInput): Promise<import("@downcity/city/plugin").PluginJsonValue>;
   };
   /** Electron 原生文件选择能力。 */

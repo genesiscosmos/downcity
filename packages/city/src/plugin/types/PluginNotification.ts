@@ -1,5 +1,5 @@
 /**
- * Plugin main 发布通知与 Plugin Renderer 读取未读状态的宿主协议。
+ * Plugin 发布通知与 Plugin Renderer 读取未读状态的宿主协议。
  *
  * Plugin 只持有当前 Plugin 命名空间内的能力，不接触宿主通知存储、系统角标或
  * 其他 Plugin 的通知。
@@ -7,7 +7,7 @@
 
 import type { PluginJsonObject } from "./Json.js";
 
-/** Plugin main 发布的一条宿主通知。 */
+/** Plugin 发布的一条宿主通知。 */
 export interface PluginNotificationInput {
   /** Plugin 内稳定的聚合键；同一键的新通知替换旧的未读通知。 */
   readonly topic_key: string;
@@ -28,7 +28,7 @@ export interface PluginNotificationTopicInput {
   readonly topic_key: string;
 }
 
-/** 宿主注入给 Plugin main 的通知发布能力。 */
+/** 宿主注入给 Plugin 的通知发布能力。 */
 export interface PluginNotificationPublisher {
   /** 发布一条由当前 Plugin 拥有的通知。 */
   publish(input: PluginNotificationInput): Promise<void>;

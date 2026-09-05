@@ -34,7 +34,7 @@ await city.close();
 
 ## Relationships and ownership
 
-- `City` owns the Plugin catalog, unique instances, main modules, lifecycle, and Hook scopes.
+- `City` owns the Plugin catalog, unique instances, lifecycle, and Hook scopes.
 - `Agent` owns identity, model, instructions, custom tools, and `AgentSessions`; it does not own Plugins.
 - `Session` belongs to an Agent and receives one Workspace execution context plus a City Plugin execution view.
 - `Workspace` owns project files, tools, environment, and an optional Shell. It does not own Agents, Sessions, or Plugins.
@@ -52,8 +52,8 @@ only manages the runtime object; it never deletes the project directory.
 
 ## Plugin lifecycle
 
-A Plugin main is activated once per Plugin ID and deactivated when City closes. Execution instances
-have four lifecycle checkpoints:
+A Plugin instance has one City-owned lifecycle and may register host-management Actions during
+`start`. It has four lifecycle checkpoints:
 
 1. City calls `start` when the Plugin is added.
 2. City calls `connect(context)` when an Agent enters a Workspace.

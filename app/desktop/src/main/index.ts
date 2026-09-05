@@ -289,8 +289,8 @@ app.whenReady().then(async () => {
     group_event: (event) => broadcast("group:event", event),
     plugin_notification: async (plugin_id, agent_id, input) => next_notification_center.publish_agent_plugin_notification(plugin_id, agent_id, input),
     plugin_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
-    plugin_main_notification: async (plugin_id, input) => next_notification_center.publish_plugin_notification(plugin_id, input),
-    plugin_main_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
+    plugin_host_notification: async (plugin_id, input) => next_notification_center.publish_plugin_notification(plugin_id, input),
+    plugin_host_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
   });
   agent_controller = next_agent_controller;
   plugin_controller = new PluginController(

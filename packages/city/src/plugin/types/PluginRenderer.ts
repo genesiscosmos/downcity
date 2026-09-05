@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
 import type { PluginRendererNotification } from "./PluginNotification.js";
 
-/** Plugin 业务 UI 调用 Plugin 级 main action 的最小网关。 */
+/** Plugin 业务 UI 调用 Plugin 级宿主 action 的最小网关。 */
 export interface PluginActionGateway {
-  /** 调用当前 Plugin main 中的稳定业务 action。 */
+  /** 调用当前 Plugin 注册的稳定宿主管理 action。 */
   invoke<Result = PluginJsonValue>(
     action_id: string,
     input?: PluginJsonValue,

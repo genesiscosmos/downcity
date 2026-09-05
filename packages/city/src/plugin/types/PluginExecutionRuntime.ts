@@ -1,94 +1,18 @@
-/**
- * Plugin runtime 类型。
- *
- * 关键点（中文）
- * - 这里描述 Agent runtime 如何查看、调用、检查 plugin。
- * - setup/usage UI 协议与 action 输入适配不放在这里。
- */
+/** Plugin 在 Agent/Workspace 范围内的执行协议。 */
 
 import type {
   PluginDefinition,
-  PluginActionExample,
   PluginActionResult,
+  PluginAvailability,
   PluginContext,
   PluginExecutionContext,
   PluginJsonValue as JsonValue,
+  PluginReadView,
   PluginSnapshot,
+  PluginView,
 } from "@/plugin/index.js";
 import type { SessionInteractionPort } from "@downcity/agent";
 import type { SessionSystemBlock } from "@downcity/type/session";
-
-/**
- * Plugin 概览视图。
- */
-export interface PluginView {
-  /** Plugin 稳定名称。 */
-  name: string;
-  /** Plugin 面向用户界面的展示标题。 */
-  title: string;
-  /** Plugin 面向人类的用途说明。 */
-  description: string;
-  /** Plugin Action 名称列表。 */
-  actions: string[];
-  /** Plugin pipeline 点名称列表。 */
-  pipelines: string[];
-  /** Plugin guard 点名称列表。 */
-  guards: string[];
-  /** Plugin effect 点名称列表。 */
-  effects: string[];
-  /** Plugin resolve 点名称列表。 */
-  resolves: string[];
-  /** 是否声明了 system 注入。 */
-  has_system: boolean;
-  /** 是否声明了 availability 检查。 */
-  has_availability: boolean;
-}
-
-/**
- * Plugin Action 读取视图。
- */
-export interface PluginActionReadView {
-  /** Action 名称。 */
-  name: string;
-  /** Action 用途说明。 */
-  description: string;
-  /** 是否声明输入 schema。 */
-  has_input_schema: boolean;
-  /** JSON Schema 形式的输入说明。 */
-  input_schema?: JsonValue;
-  /** Action 调用示例。 */
-  examples?: PluginActionExample[];
-  /** 是否声明 CLI command。 */
-  has_command: boolean;
-  /** 是否声明 HTTP API。 */
-  has_api: boolean;
-}
-
-/**
- * Plugin 读取视图。
- */
-export interface PluginReadView {
-  /** Plugin 稳定名称。 */
-  name: string;
-  /** Plugin 展示标题。 */
-  title: string;
-  /** Plugin 用途说明。 */
-  description: string;
-  /** Action 列表或指定 action。 */
-  actions: PluginActionReadView[];
-}
-
-/**
- * Plugin 可用性结果。
- */
-export interface PluginAvailability {
-  /** Plugin 是否已注册。 */
-  enabled: boolean;
-  /** Plugin 当前环境是否可用。 */
-  available: boolean;
-  /** 不可用原因列表。 */
-  reasons: string[];
-}
 
 /** 当前 Agent/Workspace 可用的只读 Plugin 调用面。 */
 export interface AgentPluginRuntime {
@@ -148,8 +72,6 @@ export interface AgentPlugins extends AgentPluginRuntime {
   register(plugin: PluginDefinition): Promise<PluginSnapshot>;
   /** 立即移除新执行可见性，并等待已有 lease 在内部退休。 */
   unregister(plugin_name: string): Promise<boolean>;
-  /** 启动 Registry 构造期挂载的全部 Plugin。 */
-  start_all(): Promise<PluginSnapshot[]>;
   /** 移除全部 Plugin，并等待已有 execution lease 释放。 */
   unregister_all(): Promise<void>;
 }
@@ -165,6 +87,9 @@ export interface AgentPluginExecutionView {
     /** Action 名称（可选）。 */
     action?: string;
   }): PluginReadView | { plugins: PluginView[] };
+
+  /** 检查当前视图中指定 Plugin 的可用性。 */
+  availability(plugin_name: string): Promise<PluginAvailability>;
 
   /** 运行当前视图中捕获的 plugin action。 */
   run_action(params: {
@@ -188,8 +113,17 @@ export interface AgentPluginExecutionView {
   /** 在当前 execution snapshot 中运行已有 Plugin pipeline point。 */
   pipeline<T = JsonValue>(point_name: string, value: T): Promise<T>;
 
+  /** 在当前 execution snapshot 中运行已有 Plugin guard point。 */
+  guard<T = JsonValue>(point_name: string, value: T): Promise<void>;
+
   /** 在当前 execution snapshot 中运行已有 Plugin effect point。 */
   effect<T = JsonValue>(point_name: string, value: T): Promise<void>;
+
+  /** 在当前 execution snapshot 中运行唯一的 Plugin resolve point。 */
+  resolve<TInput = JsonValue, TOutput = JsonValue>(
+    point_name: string,
+    value: TInput,
+  ): Promise<TOutput>;
 }
 
 /**
@@ -197,11 +131,11 @@ export interface AgentPluginExecutionView {
  */
 export interface AgentPluginExecutionLease extends AgentPluginExecutionView {
   /**
-   * 释放当前 step 对捕获 Plugin lifecycle 的占用。
+   * 释放当前 step 对捕获 Plugin 实例的占用。
    *
    * 关键点（中文）
-   * - 必须幂等，重复释放不会重复停止 lifecycle。
-   * - 若 Plugin 已从 configured registry 移除，最后一个 lease 释放时完成延迟 stop。
+   * - 必须幂等，重复释放不会重复减少引用。
+   * - 若 Plugin 已从 Registry 移除，最后一个 lease 释放时完成退休等待。
    */
   release(): Promise<void>;
 }
@@ -215,7 +149,7 @@ export interface AgentPluginExecutionRuntime extends AgentPluginExecutionView {
    *
    * 关键点（中文）
    * - lease 只捕获创建 runtime 时存在的 Plugin records。
-   * - 已退休或 lifecycle 未就绪的 Plugin 不会进入新 lease。
+   * - 已退休的 Plugin 不会进入新 lease。
    */
   acquire(): AgentPluginExecutionLease;
 }

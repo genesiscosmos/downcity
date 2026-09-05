@@ -33,7 +33,7 @@ import type { AgentSessionStopResult } from "@downcity/agent";
 import type {
   PluginActionResult,
 } from "@/plugin/index.js";
-import type { PluginAvailability, PluginView } from "@/types/plugin/PluginRuntime.js";
+import type { PluginAvailability, PluginView } from "@/plugin/index.js";
 import type { PluginSnapshot } from "@/plugin/index.js";
 import type { SessionMutation } from "@downcity/agent";
 import type {

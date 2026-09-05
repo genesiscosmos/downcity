@@ -10,7 +10,7 @@
 
 import { Plugin } from "@downcity/city/plugin";
 import type { PluginActions } from "@downcity/city/plugin";
-import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginContext, PluginStartContext } from "@downcity/city/plugin";
 import type { PluginExecutionContext } from "@downcity/city/plugin";
 import type {
   ChatChannelState,
@@ -39,6 +39,7 @@ import { create_chat_access_actions } from "./access/ChatAccessActions.js";
 import { ChatQueueWorker } from "./runtime/ChatQueueWorker.js";
 import { buildChatPluginSystem } from "./runtime/ChatPluginSystem.js";
 import { ChatQueueStore } from "./runtime/ChatQueueStore.js";
+import { register_chat_plugin_host_actions } from "@/chat/host/ChatPluginHostActions.js";
 
 function createDefaultChannels(): ChatChannel[] {
   return [
@@ -56,6 +57,12 @@ export class ChatPlugin extends Plugin {
    * plugin 名称。
    */
   readonly name = "chat";
+
+  /** Plugin 用户可见标题。 */
+  readonly title = "Chat";
+
+  /** Plugin 用户可见说明。 */
+  readonly description = "Connects Agents to Telegram, Feishu, and QQ channels.";
 
   /** 按 Agent/Workspace 作用域隔离的渠道与队列运行态。 */
   private readonly runtimes_by_scope = new Map<string, {
@@ -150,21 +157,29 @@ export class ChatPlugin extends Plugin {
       }),
       ...create_chat_access_actions(),
     };
-    this.lifecycle = {
-      start: async () => {},
-      connect: async (context) => {
-        await this.start_workspace_runtime(context);
-      },
-      disconnect: async (context) => {
-        await this.stop_runtime(chat_scope_key(context));
-      },
-      stop: async () => {
-        await Promise.allSettled([...this.starts_by_scope.values()]);
-        await Promise.all([...this.runtimes_by_scope.keys()].map(async (scope_key) => {
-          await this.stop_runtime(scope_key);
-        }));
-      },
-    };
+  }
+
+  /** 注册宿主配置 actions。 */
+  start(context: PluginStartContext): void {
+    register_chat_plugin_host_actions(context);
+  }
+
+  /** 建立当前 Agent/Workspace 的 Chat runtime。 */
+  async connect(context: PluginContext): Promise<void> {
+    await this.start_workspace_runtime(context);
+  }
+
+  /** 释放当前 Agent/Workspace 的 Chat runtime。 */
+  async disconnect(context: PluginContext): Promise<void> {
+    await this.stop_runtime(chat_scope_key(context));
+  }
+
+  /** 释放当前 Plugin 实例持有的全部 Chat runtime。 */
+  async stop(): Promise<void> {
+    await Promise.allSettled([...this.starts_by_scope.values()]);
+    await Promise.all([...this.runtimes_by_scope.keys()].map(async (scope_key) => {
+      await this.stop_runtime(scope_key);
+    }));
   }
 
   /** 读取当前 Profile 的唯一渠道状态。 */

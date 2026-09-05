@@ -9,9 +9,9 @@ import type { Hono } from "hono";
 import type { Context as HonoContext } from "hono";
 import type { z } from "zod";
 import type { AuthRoutePolicy } from "@downcity/type";
-import type { PluginContext, PluginLogger, PluginStorage } from "./PluginContext.js";
+import type { PluginContext } from "./PluginContext.js";
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
-import type { PluginMainContext, PluginMainModule } from "./PluginMain.js";
+import type { PluginStartContext } from "./PluginHost.js";
 
 /** Action 可以追加到 Session 的一条消息。 */
 export type PluginActionMessage =
@@ -216,25 +216,6 @@ export interface PluginAvailability {
   /** 不可用原因。 */ readonly reasons: string[];
 }
 
-/** PluginDefinition 生命周期上下文。 */
-export interface PluginLifecycleContext {
-  /** 当前 PluginDefinition ID。 */ readonly plugin_id: string;
-  /** 当前 PluginDefinition 在 City 中唯一的私有存储。 */ readonly storage: PluginStorage;
-  /** PluginDefinition 独享日志端口。 */ readonly logger: PluginLogger;
-}
-
-/** PluginDefinition 生命周期。 */
-export interface PluginLifecycle {
-  /** Plugin 加入 City 时启动全局长期资源；每个 City 只执行一次。 */
-  readonly start?: (context: PluginLifecycleContext) => void | Promise<void>;
-  /** 首次形成 Agent/Workspace 调用作用域时建立局部资源。 */
-  readonly connect?: (context: PluginContext) => void | Promise<void>;
-  /** Agent/Workspace 调用作用域释放时清理局部资源。 */
-  readonly disconnect?: (context: PluginContext) => void | Promise<void>;
-  /** Plugin 离开 City 且已有调用收口后停止全局长期资源。 */
-  readonly stop?: (context: PluginLifecycleContext) => void | Promise<void>;
-}
-
 /** PluginDefinition 向 City HTTP transport 声明的一组路由。 */
 export interface PluginHttpRegistration {
   /** 当前路由组要求的鉴权策略。 */
@@ -266,7 +247,14 @@ export interface PluginDefinition {
   /** PluginDefinition Resolve 点集合。 */ readonly resolves?: PluginResolves;
   /** 构建当前执行范围的 system 文本。 */
   readonly system?: (context: PluginContext, execution_context?: PluginExecutionContext) => string | Promise<string>;
-  /** PluginDefinition 生命周期。 */ readonly lifecycle?: PluginLifecycle;
+  /** Plugin 加入 City 时注册宿主动作并启动全局长期资源；每个 City 只执行一次。 */
+  readonly start?: (context: PluginStartContext) => void | Promise<void>;
+  /** 首次形成 Agent/Workspace 调用作用域时建立局部资源。 */
+  readonly connect?: (context: PluginContext) => void | Promise<void>;
+  /** Agent/Workspace 调用作用域释放时清理局部资源。 */
+  readonly disconnect?: (context: PluginContext) => void | Promise<void>;
+  /** Plugin 离开 City 且已有调用收口后停止全局长期资源。 */
+  readonly stop?: (context: PluginStartContext) => void | Promise<void>;
   /** 检查当前动态上下文的可用性。 */
   readonly availability?: (context: PluginContext) => PluginAvailability | Promise<PluginAvailability>;
   /** PluginDefinition 的可选 HTTP 路由声明。 */
@@ -275,15 +263,11 @@ export interface PluginDefinition {
 
 /** City 可注册的 PluginDefinition 静态定义与入口。 */
 export interface CityPluginRegistration {
-  /** PluginDefinition 稳定 ID。 */ readonly id: string;
-  /** PluginDefinition 用户可见标题。 */ readonly title: string;
-  /** PluginDefinition 用途说明。 */ readonly description: string;
   /** 用户文档绝对路径。 */ readonly readme: string;
   /** 是否提供设置界面。 */ readonly has_config: boolean;
   /** 是否提供 Sidebar。 */ readonly has_sidebar: boolean;
   /** 是否提供 Mainview。 */ readonly has_mainview: boolean;
   /** City 持有的唯一 PluginDefinition 实例。 */ readonly plugin: PluginDefinition;
-  /** 可选的宿主管理与 Renderer main 能力。 */ readonly main?: PluginMainModule;
 }
 
 /** PluginDefinition 当前运行状态。 */
@@ -332,6 +316,3 @@ export interface PluginReadView {
   /** PluginDefinition 描述。 */ readonly description: string;
   /** Action 元数据。 */ readonly actions: PluginActionReadView[];
 }
-
-/** 统一入口模块激活时获得的 Main 上下文。 */
-export type CityPluginMainContext = PluginMainContext;

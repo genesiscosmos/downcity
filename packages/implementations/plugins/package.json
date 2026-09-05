@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugins",
-  "version": "1.0.296",
+  "version": "1.0.297",
   "type": "module",
   "description": "Downcity 内建 plugin 集合包",
   "files": [
@@ -53,7 +53,7 @@
     "typecheck": "tsc --noEmit",
     "test:chat-access": "pnpm build && node --test scripts/chat-access.test.mjs",
     "test:chat-config": "pnpm build && node --test scripts/chat-channel-config.test.mjs",
-    "test:plugin-main": "pnpm build && node --test scripts/plugin-main.test.mjs",
+    "test:plugin-host": "pnpm build && node --test scripts/plugin-host-actions.test.mjs",
     "test:chat-storage": "pnpm build && node --test scripts/chat-storage.test.mjs",
     "test:exports": "pnpm build && node --test scripts/plugin-subpaths.test.mjs",
     "test:memory": "pnpm build && node --test scripts/memory-plugin.test.mjs",

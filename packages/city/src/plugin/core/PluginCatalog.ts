@@ -8,29 +8,8 @@
  */
 
 import type { PluginDefinition } from "@/plugin/index.js";
-import type { PluginAvailability, PluginView } from "@/types/plugin/PluginRuntime.js";
+import type { PluginAvailability, PluginView } from "@/plugin/index.js";
 import type { PluginContext } from "@/plugin/index.js";
-
-/**
- * 判断 plugin 是否声明了运行时生命周期。
- */
-export function has_plugin_lifecycle(plugin: PluginDefinition): boolean {
-  return Boolean(plugin.lifecycle);
-}
-
-/**
- * 过滤出声明了运行时生命周期的 plugin。
- */
-export function list_plugins_with_lifecycle<T extends PluginDefinition>(plugins: Iterable<T>): T[] {
-  return [...plugins].filter((plugin) => has_plugin_lifecycle(plugin));
-}
-
-/**
- * 过滤出没有运行时生命周期、可直接执行 action 的 plugin。
- */
-export function list_plugins_without_lifecycle<T extends PluginDefinition>(plugins: Iterable<T>): T[] {
-  return [...plugins].filter((plugin) => !has_plugin_lifecycle(plugin));
-}
 
 /**
  * 按名称查找 plugin。

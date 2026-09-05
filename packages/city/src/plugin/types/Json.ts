@@ -1,7 +1,7 @@
 /**
  * Plugin 协议使用的 JSON 数据类型。
  *
- * Mainview 与 main action 之间只允许传递 JSON 数据，避免把宿主对象、函数或资源
+ * Mainview 与宿主 action 之间只允许传递 JSON 数据，避免把宿主对象、函数或资源
  * 句柄泄漏进 Renderer 边界。
  */
 

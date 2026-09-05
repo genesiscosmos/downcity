@@ -1,18 +1,18 @@
-/** Plugin main 的 Config action 与凭据边界测试。 */
+/** Plugin 单实例宿主 actions 与凭据边界测试。 */
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { CHAT_PLUGIN_MAIN } from "../bin/chat/main/ChatPluginMain.js";
-import { SKILL_PLUGIN_MAIN } from "../bin/skill/main/SkillPluginMain.js";
-import { TASK_PLUGIN_MAIN } from "../bin/task/main/TaskPluginMain.js";
+import { ChatPlugin } from "@downcity/plugins/chat";
+import { SkillPlugin } from "@downcity/plugins/skill";
+import { TaskPlugin } from "@downcity/plugins/task";
 
-/** 激活 main 并返回按 ID 注册的 action。 */
-async function activate_chat_main() {
+/** 启动 Chat Plugin 并返回按 ID 注册的配置 action。 */
+async function start_chat_plugin() {
   const actions = new Map();
-  await CHAT_PLUGIN_MAIN.activate({
+  await new ChatPlugin().start({
     plugin: {
       id: "chat",
       action() {},
@@ -38,10 +38,10 @@ async function activate_chat_main() {
   return actions;
 }
 
-/** 激活 Skill main，并注入测试 Workspace。 */
-async function activate_skill_main(workspace_path) {
+/** 启动 Skill Plugin，并注入测试 Workspace。 */
+async function start_skill_plugin(workspace_path) {
   const actions = new Map();
-  await SKILL_PLUGIN_MAIN.activate({
+  await new SkillPlugin().start({
     plugin: {
       id: "skill",
       action(action) { actions.set(action.id, action); },
@@ -67,11 +67,11 @@ async function activate_skill_main(workspace_path) {
   return actions;
 }
 
-/** 激活 Task main，并记录对 Agent Plugin runtime 的调用。 */
-async function activate_task_main() {
+/** 启动 Task Plugin，并记录对 Agent Plugin runtime 的调用。 */
+async function start_task_plugin() {
   const actions = new Map();
   const invocations = [];
-  await TASK_PLUGIN_MAIN.activate({
+  await new TaskPlugin().start({
     plugin: {
       id: "task",
       action(action) { actions.set(action.id, action); },
@@ -183,8 +183,8 @@ function create_config_context(initial_config) {
   };
 }
 
-test("Chat main 读取 Profile 时不泄漏 Channel 凭据", async () => {
-  const actions = await activate_chat_main();
+test("Chat Plugin 读取 Profile 时不泄漏 Channel 凭据", async () => {
+  const actions = await start_chat_plugin();
   const store = create_config_context({
     channels: [
       { id: "telegram_main", type: "telegram", name: "Main", bot_token: "telegram-secret" },
@@ -199,8 +199,8 @@ test("Chat main 读取 Profile 时不泄漏 Channel 凭据", async () => {
   assert.deepEqual(profile.channels.map((channel) => channel.secret_configured), [true, true]);
 });
 
-test("Chat main 保存时为空的凭据输入会保留已有凭据", async () => {
-  const actions = await activate_chat_main();
+test("Chat Plugin 保存时为空的凭据输入会保留已有凭据", async () => {
+  const actions = await start_chat_plugin();
   const store = create_config_context({
     channels: [
       { id: "telegram_main", type: "telegram", name: "Old", bot_token: "kept-secret" },
@@ -223,8 +223,8 @@ test("Chat main 保存时为空的凭据输入会保留已有凭据", async () =
   assert.equal("bot_token" in result.channels[0], false);
 });
 
-test("Chat main 拒绝没有凭据的新 Channel", async () => {
-  const actions = await activate_chat_main();
+test("Chat Plugin 拒绝没有凭据的新 Channel", async () => {
+  const actions = await start_chat_plugin();
   const store = create_config_context({ channels: [] });
 
   await assert.rejects(
@@ -236,13 +236,13 @@ test("Chat main 拒绝没有凭据的新 Channel", async () => {
   );
 });
 
-test("Skill main 不需要 Profile 即可浏览和读取 Workspace Skill", async () => {
+test("Skill Plugin 不需要 Profile 即可浏览和读取 Workspace Skill", async () => {
   const workspace_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-skill-main-"));
   const skill_path = path.join(workspace_path, ".agents", "skills", "demo");
   fs.mkdirSync(skill_path, { recursive: true });
   fs.writeFileSync(path.join(skill_path, "SKILL.md"), "---\nname: Demo\ndescription: Example\n---\n\n# Demo\n");
   try {
-    const actions = await activate_skill_main(workspace_path);
+    const actions = await start_skill_plugin(workspace_path);
     const snapshot = await actions.get("skills.list").run();
     assert.deepEqual(snapshot.workspaces[0].skills.map((skill) => skill.id), ["demo"]);
 
@@ -258,8 +258,8 @@ test("Skill main 不需要 Profile 即可浏览和读取 Workspace Skill", async
   }
 });
 
-test("Task main 按 Agent 聚合所有启用 Task Plugin 的任务", async () => {
-  const { actions, invocations } = await activate_task_main();
+test("Task Plugin 按 Agent 聚合所有启用 Task Plugin 的任务", async () => {
+  const { actions, invocations } = await start_task_plugin();
 
   const snapshot = await actions.get("tasks.snapshot").run();
 
@@ -305,8 +305,8 @@ test("Task main 按 Agent 聚合所有启用 Task Plugin 的任务", async () =>
   }]);
 });
 
-test("Task main 使用 Task 自身 Workspace 完成管理操作", async () => {
-  const { actions, invocations } = await activate_task_main();
+test("Task Plugin 使用 Task 自身 Workspace 完成管理操作", async () => {
+  const { actions, invocations } = await start_task_plugin();
 
   await actions.get("tasks.create").run({
     agent_id: "task-agent",
@@ -344,8 +344,8 @@ test("Task main 使用 Task 自身 Workspace 完成管理操作", async () => {
   ]);
 });
 
-test("Task main 通过所选 Agent runtime 读取执行记录与详情", async () => {
-  const { actions, invocations } = await activate_task_main();
+test("Task Plugin 通过所选 Agent runtime 读取执行记录与详情", async () => {
+  const { actions, invocations } = await start_task_plugin();
   const context = {
     agent_id: "task-agent",
     workspace_id: "workspace-b",

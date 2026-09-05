@@ -9,25 +9,23 @@ import type { Hono } from "hono";
 import type { Agent } from "@downcity/agent";
 import type {
   CityPluginRegistration,
-  Plugin,
   PluginDefinition,
-  PluginConfigMainAction,
+  PluginConfigAction,
   PluginContext,
+  PluginHostAction,
   PluginJsonObject,
   PluginJsonValue,
-  PluginLifecycleContext,
-  PluginMainAction,
-  PluginMainContext,
   PluginNotificationPublisher,
   PluginProfileConfigStore,
   PluginSnapshot,
+  PluginStartContext,
 } from "@/plugin/index.js";
 import type { Logger, SessionHooks } from "@downcity/agent";
 import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
-import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
 
 /** City 构造期接受的单个 Plugin 输入。 */
-export type CityPluginInput = Plugin | CityPluginRegistration;
+export type CityPluginInput = PluginDefinition | CityPluginRegistration;
 
 /** City 构造期接受的 Plugin 集合。 */
 export type CityPluginCollection =
@@ -104,10 +102,10 @@ export interface CityPlugins {
     },
   ): void;
 
-  /** 调用 Plugin main 注册的业务 action。 */
+  /** 调用 Plugin 在 start 阶段注册的宿主管理 action。 */
   invoke(plugin_id: string, action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
 
-  /** 在指定配置 Profile 上调用 Plugin main config action。 */
+  /** 在指定配置 Profile 上调用 Plugin 注册的配置 action。 */
   invoke_config(
     plugin_id: string,
     profile_id: string,
@@ -116,7 +114,7 @@ export interface CityPlugins {
   ): Promise<PluginJsonValue>;
 }
 
-/** City Plugin main 需要宿主提供的平台能力。 */
+/** City Plugin 启动阶段需要宿主提供的平台能力。 */
 export interface CityPluginHost {
   /** 解析当前 Agent 使用的 Plugin 配置；未配置时返回空对象。 */
   runtime_config?(plugin_id: string, agent_id: string): PluginJsonObject;
@@ -136,7 +134,7 @@ export interface CityPluginHost {
 export interface CityPluginRuntimeOptions {
   /** 当前 City 实例。 */
   readonly city: import("@/city/runtime/City.js").City;
-  /** City 可选的平台 main 能力。 */
+  /** City 可选的平台宿主能力。 */
   readonly host?: CityPluginHost;
 }
 
@@ -144,20 +142,22 @@ export interface CityPluginRuntimeOptions {
 export interface CityPluginRecord {
   /** Plugin 稳定 ID。 */
   readonly plugin_id: string;
-  /** Plugin 注册元数据与可选 main。 */
+  /** Plugin 注册元数据。 */
   readonly registration: CityPluginRegistration;
   /** City 持有的唯一 Plugin 实例。 */
   readonly plugin: PluginDefinition;
-  /** 不暴露 lifecycle 的执行投影。 */
-  readonly execution_plugin: PluginDefinition;
   /** Plugin 私有日志器。 */
   readonly logger: Logger;
-  /** Plugin 全局生命周期上下文。 */
-  readonly lifecycle_context: PluginLifecycleContext;
+  /** Plugin 全局生命周期与宿主动作使用的稳定上下文。 */
+  readonly start_context: PluginStartContext;
+  /** Sidebar/Mainview 业务 action。 */
+  readonly host_actions: Map<string, PluginHostAction>;
+  /** Profile config action。 */
+  readonly config_actions: Map<string, PluginConfigAction>;
   /** Plugin 启动完成的唯一 Promise。 */
   ready: Promise<void>;
-  /** lifecycle.start 是否已经成功。 */
-  lifecycle_started: boolean;
+  /** Plugin start 是否已经成功。 */
+  started: boolean;
   /** Plugin 当前可观察状态。 */
   state: "initializing" | "ready" | "error";
   /** Plugin 加入 City 的时间戳。 */
@@ -178,18 +178,6 @@ export interface CityAgentPluginRuntimeRecord {
   ready: Promise<void>;
   /** 动态 Plugin 修改串行链。 */
   mutation_chain: Promise<void>;
-}
-
-/** City 内一个已激活的 Plugin main。 */
-export interface CityPluginMainRecord {
-  /** 当前 Plugin 注册。 */
-  readonly registration: CityPluginRegistration;
-  /** main 激活时使用的稳定上下文。 */
-  readonly context: PluginMainContext;
-  /** mainview 业务 action。 */
-  readonly plugin_actions: Map<string, PluginMainAction>;
-  /** Profile config action。 */
-  readonly config_actions: Map<string, PluginConfigMainAction>;
 }
 
 /** 一个 Agent/Workspace 的 Plugin Context 集合。 */

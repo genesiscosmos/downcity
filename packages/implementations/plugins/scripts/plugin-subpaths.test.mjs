@@ -56,7 +56,7 @@ test("已删除的 Contact 与 Workboard Plugin 不再公开", async () => {
   await assert.rejects(() => import("@downcity/plugins/workboard"), /Package subpath/u);
   assert.deepEqual(
     plugin_module.create_builtin_plugin_registrations()
-      .map((registration) => registration.id)
+      .map((registration) => registration.plugin.name)
       .filter((plugin_id) => ["contact", "workboard"].includes(plugin_id)),
     [],
   );
@@ -68,7 +68,7 @@ test("内建 Plugin 注册使用随 package 发布的独立 README 资产", asyn
   for (const registration of registrations) {
     assert.equal(
       path.basename(registration.readme),
-      `${registration.id}.readme.md`,
+      `${registration.plugin.name}.readme.md`,
     );
     assert.match(await fs.readFile(registration.readme, "utf8"), /^# /u);
   }

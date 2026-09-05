@@ -18,16 +18,22 @@ Plugin 的所有权属于 City。`city.plugins.add(new MyPlugin())` 时登记一
 ```ts
 class SchedulerPlugin extends Plugin {
   readonly name = "scheduler";
-  readonly lifecycle = {
-    start: async ({ storage }) => this.scheduler.open(storage),
-    connect: async (context) => this.scheduler.connect(context.agent.id, context.workspace.id),
-    disconnect: async (context) => this.scheduler.disconnect(context.agent.id, context.workspace.id),
-    stop: async () => this.scheduler.close(),
-  };
+  async start({ storage }: PluginStartContext) {
+    await this.scheduler.open(storage);
+  }
+  async connect(context: PluginContext) {
+    await this.scheduler.connect(context.agent.id, context.workspace.id);
+  }
+  async disconnect(context: PluginContext) {
+    await this.scheduler.disconnect(context.agent.id, context.workspace.id);
+  }
+  async stop() {
+    await this.scheduler.close();
+  }
 }
 ```
 
-`start/stop` 使用 `PluginLifecycleContext.storage`；Action、Hook 与 `connect/disconnect` 使用
+`start/stop` 使用同一个 `PluginStartContext`；Action、Hook 与 `connect/disconnect` 使用
 包含 `agent`、`workspace`、可选 `session/turn` 的 `PluginContext`。City 为每个 Agent/Plugin 分配
 私有 Storage，Plugin 实例本身不会按 Agent 复制。
 

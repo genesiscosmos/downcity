@@ -7,7 +7,7 @@
 
 import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 import type { Agent } from "@downcity/agent";
-import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { Hono } from "hono";
 

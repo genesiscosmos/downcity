@@ -1,7 +1,7 @@
 /**
  * Skill Plugin 的宿主管理 actions。
  *
- * Mainview 通过这些 Plugin 级动作浏览、读取、发现、安装和删除 Skill。它不依赖 Agent
+ * 宿主界面通过这些 Plugin 级动作浏览、读取、发现、安装和删除 Skill。它不依赖 Agent
  * 实例或 Profile；Workspace 列表由宿主作为只读能力注入。
  */
 
@@ -10,10 +10,9 @@ import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
 import {
-  define_plugin_main,
   type PluginJsonValue,
-  type PluginMainContext,
-  type PluginMainWorkspace,
+  type PluginHostWorkspace,
+  type PluginStartContext,
 } from "@downcity/city/plugin";
 import { listSkills, lookupSkill } from "@/skill/Action.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
@@ -30,10 +29,9 @@ import type {
   SkillMainviewSnapshot,
 } from "@/skill/types/SkillMainview.js";
 
-/** Skill Plugin 的宿主管理入口。 */
-export const SKILL_PLUGIN_MAIN = define_plugin_main({
-  activate(context) {
-    context.plugin.action({
+/** 注册 Skill Plugin 的宿主管理 actions。 */
+export function register_skill_plugin_host_actions(context: PluginStartContext): void {
+  context.plugin.action({
       id: "skills.list",
       run: async () => as_json(await create_snapshot(context)),
     });
@@ -52,12 +50,11 @@ export const SKILL_PLUGIN_MAIN = define_plugin_main({
     context.plugin.action({
       id: "skills.remove",
       run: async (input) => as_json(await remove_skill(context, read_remove_input(input))),
-    });
-  },
-});
+  });
+}
 
 /** 创建所有 Workspace 与个人 Skill 的稳定快照。 */
-async function create_snapshot(context: PluginMainContext): Promise<SkillMainviewSnapshot> {
+async function create_snapshot(context: PluginStartContext): Promise<SkillMainviewSnapshot> {
   const workspaces = await context.system.list_workspaces();
   return {
     success: true,
@@ -90,7 +87,7 @@ function to_mainview_item(
 
 /** 在重新发现后读取一个 Skill，避免信任 Renderer 传入的本地路径。 */
 async function read_skill(
-  context: PluginMainContext,
+  context: PluginStartContext,
   input: SkillMainviewReadInput,
 ) {
   const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
@@ -114,7 +111,7 @@ async function find_skills(query: string): Promise<SkillMainviewSearchResult> {
 
 /** 使用官方 skills CLI 安装并返回刷新后的快照。 */
 async function install_skill(
-  context: PluginMainContext,
+  context: PluginStartContext,
   input: SkillMainviewInstallInput,
 ): Promise<SkillMainviewMutationResult> {
   const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
@@ -130,7 +127,7 @@ async function install_skill(
 
 /** 删除重新发现得到的精确 Skill 目录。 */
 async function remove_skill(
-  context: PluginMainContext,
+  context: PluginStartContext,
   input: SkillMainviewRemoveInput,
 ): Promise<SkillMainviewMutationResult> {
   const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
@@ -150,10 +147,10 @@ async function remove_skill(
 
 /** 解析 Workspace 范围，并拒绝不存在或缺少 ID 的输入。 */
 async function resolve_workspace(
-  context: PluginMainContext,
+  context: PluginStartContext,
   scope: SkillMainviewScope,
   workspace_id?: string,
-): Promise<PluginMainWorkspace | undefined> {
+): Promise<PluginHostWorkspace | undefined> {
   if (scope === "home") return undefined;
   const id = String(workspace_id || "").trim();
   if (!id) throw new Error("workspace_id is required for workspace skills");

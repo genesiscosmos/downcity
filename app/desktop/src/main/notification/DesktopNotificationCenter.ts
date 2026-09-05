@@ -59,7 +59,7 @@ export class DesktopNotificationCenter {
     this.session_turn_producer.handle_runtime(runtime);
   }
 
-  /** 发布 Desktop Plugin main 产生的通知。 */
+  /** 发布 Desktop City Plugin 产生的宿主通知。 */
   publish_plugin_notification(plugin_id: string, input: DesktopPluginNotificationInput): void {
     this.plugin_producer.publish(plugin_id, input);
   }

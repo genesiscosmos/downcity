@@ -70,8 +70,6 @@ export abstract class Plugin implements PluginDefinition {
   readonly description: string = "";
   /** Plugin Action。 */
   readonly actions: PluginActions = {};
-  /** 由 City 持有的 Plugin 生命周期。 */
-  lifecycle?: PluginDefinition["lifecycle"];
 }
 
 /** Action 执行器常用返回类型别名。 */

@@ -30,7 +30,7 @@ export interface CityOptions {
   /** City 启动时注册的 Group；成员 Agent 必须已经在当前 City 中。 */
   groups?: readonly Group[] | Readonly<Record<string, Group>>;
 
-  /** Plugin main 使用的平台配置、通知与系统能力。 */
+  /** Plugin 启动阶段使用的平台配置、通知与系统能力。 */
   plugin_host?: CityPluginHost;
 
   /** City 启动时登记的 Plugin catalog。 */

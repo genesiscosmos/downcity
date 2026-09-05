@@ -2,7 +2,7 @@
  * Skill Plugin 的功能工作区。
  *
  * Sidebar 以所有 Workspace 和个人目录为树根，只负责展开与业务选择；Mainview 根据共享
- * route 在集合、详情和发现页面之间互斥切换。文件与网络操作全部交给宿主 main action。
+ * route 在集合、详情和发现页面之间互斥切换。文件与网络操作全部交给宿主 action。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

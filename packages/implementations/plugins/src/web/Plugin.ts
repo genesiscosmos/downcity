@@ -23,6 +23,8 @@ import type {
 } from "@/web/types/WebPlugin.js";
 import { WEB_PLUGIN_ACTIONS } from "@/web/types/WebPlugin.js";
 import { PlaywrightBrowserProvider } from "@/web/providers/PlaywrightBrowserProvider.js";
+import { WEB_PLUGIN_SETTINGS } from "@/builtin/PluginSettingsDefinitions.js";
+import { register_plugin_settings_actions } from "@/builtin/host/PluginSettingsActions.js";
 
 const URL_SCHEMA = z.string().url();
 const SESSION_ID_SCHEMA = z.string().trim().min(1);
@@ -84,20 +86,27 @@ export class WebPlugin extends Plugin {
     this.options = { ...options };
   }
 
-  /** City 释放作用域或停止 Plugin 时关闭对应浏览器资源。 */
-  readonly lifecycle = {
-    connect: async (context: import("@downcity/city/plugin").PluginContext) => {
-      this.ensure_browser_provider(context);
-    },
-    disconnect: async (context: import("@downcity/city/plugin").PluginContext) => {
-      await this.dispose_browser_provider(web_scope_key(context));
-    },
-    stop: async () => {
-      await Promise.all([...this.browser_providers.keys()].map(async (scope_key) => {
-        await this.dispose_browser_provider(scope_key);
-      }));
-    },
-  };
+  /** 注册 Web Plugin 的 Profile 配置 actions。 */
+  start(context: import("@downcity/city/plugin").PluginStartContext): void {
+    register_plugin_settings_actions(context, WEB_PLUGIN_SETTINGS);
+  }
+
+  /** 建立当前 Agent/Workspace 的浏览器资源。 */
+  connect(context: import("@downcity/city/plugin").PluginContext): void {
+    this.ensure_browser_provider(context);
+  }
+
+  /** 释放当前 Agent/Workspace 的浏览器资源。 */
+  async disconnect(context: import("@downcity/city/plugin").PluginContext): Promise<void> {
+    await this.dispose_browser_provider(web_scope_key(context));
+  }
+
+  /** 释放当前 Plugin 实例持有的全部浏览器资源。 */
+  async stop(): Promise<void> {
+    await Promise.all([...this.browser_providers.keys()].map(async (scope_key) => {
+      await this.dispose_browser_provider(scope_key);
+    }));
+  }
 
   /** 返回当前作用域配置的浏览器 provider。 */
   private ensure_browser_provider(

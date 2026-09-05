@@ -1,34 +1,30 @@
-/** 官方简单设置 Plugin 的 main action 实现。 */
+/** 官方简单设置 Plugin 的宿主配置 action 实现。 */
 
 import {
-  define_plugin_main,
   type PluginJsonObject,
   type PluginJsonValue,
-  type PluginMainModule,
+  type PluginStartContext,
 } from "@downcity/city/plugin";
 import type {
   PluginSettingField,
   PluginSettingsDefinition,
 } from "@/builtin/types/PluginSettings.js";
 
-/** 为一个字段集合创建 Profile 读取和保存 action。 */
-export function create_plugin_settings_main(
+/** 为一个字段集合注册 Profile 读取和保存 action。 */
+export function register_plugin_settings_actions(
+  context: PluginStartContext,
   definition: PluginSettingsDefinition,
-): PluginMainModule {
-  return define_plugin_main({
-    activate({ plugin }) {
-      plugin.config_action({
-        id: "profile.read",
-        run: async (_input, context) => await context.config.get(),
-      });
-      plugin.config_action({
-        id: "profile.save",
-        run: async (input, context) => {
-          const config = normalize_settings(input, definition.fields);
-          await context.config.set(config);
-          return config;
-        },
-      });
+): void {
+  context.plugin.config_action({
+    id: "profile.read",
+    run: async (_input, action_context) => await action_context.config.get(),
+  });
+  context.plugin.config_action({
+    id: "profile.save",
+    run: async (input, action_context) => {
+      const config = normalize_settings(input, definition.fields);
+      await action_context.config.set(config);
+      return config;
     },
   });
 }

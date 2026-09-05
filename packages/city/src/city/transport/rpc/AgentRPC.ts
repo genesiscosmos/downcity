@@ -10,7 +10,7 @@
 import { create_workspace_entry } from "@downcity/agent/internal";
 import type { Agent, AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
-import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
   AgentRpcBinding,

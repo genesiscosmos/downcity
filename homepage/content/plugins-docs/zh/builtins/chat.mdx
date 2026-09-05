@@ -63,7 +63,7 @@ city.agents.add(agent);
 const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-Profile 属于 City 控制面，不进入 Agent。Chat main actions 负责 Profile 校验与凭据安全投影；
+Profile 属于 City 控制面，不进入 Agent。Chat Plugin 在 `start()` 中注册的配置 actions 负责 Profile 校验与凭据安全投影；
 ChatPlugin 唯一实例根据每个 `PluginContext` 的 Agent/Workspace 和配置管理对应渠道与 queue。
 
 ## 飞书依赖

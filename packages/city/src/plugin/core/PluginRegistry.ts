@@ -3,30 +3,30 @@
  *
  * 关键点（中文）
  * - Registry 只持有 City Plugin 唯一实例的 Agent 执行投影，不拥有实例。
- * - City 传入的执行投影不包含 lifecycle；Registry 只管理 execution lease。
+ * - Registry 不启动或停止 Plugin，只管理执行索引与 execution lease。
  * - action、system、hook、resolve 都统一以“已注册且 ready”为生效边界。
  */
 
 import { to_plugin_view } from "@/plugin/core/PluginCatalog.js";
 import { HookRegistry } from "@/plugin/core/HookRegistry.js";
-import type { PluginDefinition } from "@/plugin/index.js";
-import type { PluginActionResult } from "@/plugin/index.js";
+import type {
+  PluginActionReadView,
+  PluginActionResult,
+  PluginAvailability,
+  PluginDefinition,
+  PluginReadView,
+  PluginView,
+} from "@/plugin/index.js";
 import type {
   AgentPluginRuntime,
   AgentPluginExecutionLease,
   AgentPluginExecutionRuntime,
-  PluginAvailability,
-  PluginActionReadView,
-  PluginReadView,
-  PluginView,
-} from "@/types/plugin/PluginRuntime.js";
+} from "@/plugin/types/PluginExecutionRuntime.js";
 import type { AgentSessionSystemBlock } from "@downcity/agent";
 import type { PluginContext } from "@/plugin/index.js";
-import type { AgentPluginContext } from "@/types/plugin/AgentPluginContext.js";
-import type { PluginLifecycleContext } from "@/plugin/index.js";
 import type { JsonValue } from "@downcity/agent";
 import type { PluginSnapshot } from "@/plugin/index.js";
-import type { PluginRuntimeRecord } from "@/types/plugin/PluginRuntimeRecord.js";
+import type { PluginRuntimeRecord } from "@/plugin/types/PluginRuntimeRecord.js";
 import type { PluginExecutionContext } from "@/plugin/index.js";
 import type { SessionInteractionPort } from "@downcity/agent";
 import { execute_plugin_action } from "@/plugin/core/PluginActionExecution.js";
@@ -36,7 +36,7 @@ import type {
   PluginRegistryChange,
   PluginRegistrySubscriber,
   PluginRegistryUnsubscribe,
-} from "@/types/plugin/PluginRegistry.js";
+} from "@/plugin/types/PluginRegistry.js";
 
 function now_ms(): number {
   return Date.now();
@@ -55,56 +55,22 @@ function create_record(plugin: PluginDefinition): PluginRuntimeRecord {
   const current_time = now_ms();
   return {
     plugin,
-    state: "initializing",
     registered_at: current_time,
-    updated_at: current_time,
-    chain: Promise.resolve(),
-    lifecycle_started: false,
     active_execution_leases: 0,
     retired: false,
-    retirement_started: false,
   };
 }
 
 function to_plugin_snapshot(record: PluginRuntimeRecord): PluginSnapshot {
   const plugin = record.plugin;
-  const last_error = String(record.last_error || "").trim();
   return {
     name: plugin.name,
     title: String(plugin.title || plugin.name || "").trim(),
     description: String(plugin.description || "").trim(),
-    status: record.state,
+    status: "ready",
     registered_at: record.registered_at,
-    updated_at: record.updated_at,
-    ...(last_error ? { last_error } : {}),
+    updated_at: record.registered_at,
   };
-}
-
-function update_record_state(
-  record: PluginRuntimeRecord,
-  state: PluginRuntimeRecord["state"],
-  error?: string,
-): void {
-  record.state = state;
-  record.updated_at = now_ms();
-  const normalized_error = String(error || "").trim();
-  if (normalized_error) {
-    record.last_error = normalized_error;
-  } else {
-    delete record.last_error;
-  }
-}
-
-async function run_serial(
-  record: PluginRuntimeRecord,
-  step: () => Promise<void> | void,
-): Promise<void> {
-  const next = record.chain.then(() => Promise.resolve(step()));
-  record.chain = next.then(
-    () => undefined,
-    () => undefined,
-  );
-  await next;
 }
 
 /**
@@ -115,27 +81,20 @@ export class PluginRegistry {
 
   private readonly records = new Map<string, PluginRuntimeRecord>();
 
-  /** 当前 Registry 所属 Agent 的生命周期上下文。 */
-  private readonly agent_context: AgentPluginContext;
-
   /** Agent 当前已进入 Workspace 的 Plugin Context 工厂。 */
   private readonly workspace_context_factories = new Map<string, PluginContextFactory>();
-
-  /** 初始 Plugin lifecycle 的唯一启动流程。 */
-  private initial_start_promise?: Promise<PluginSnapshot[]>;
 
   private readonly retired_records = new Set<PluginRuntimeRecord>();
 
   /** Plugin 配置变化订阅器。 */
   private readonly change_subscribers = new Set<PluginRegistrySubscriber>();
 
-  constructor(agent_context: AgentPluginContext, plugins: PluginDefinition[] = []) {
-    this.agent_context = agent_context;
+  constructor(plugins: PluginDefinition[] = []) {
     this.hookRegistry = new HookRegistry({
       is_plugin_ready: (plugin_name) => this.is_ready(plugin_name),
     });
     for (const plugin of plugins) {
-      this.mount(plugin);
+      this.register_sync(plugin);
     }
   }
 
@@ -215,8 +174,8 @@ export class PluginRegistry {
    * 注册单个 plugin。
    *
    * 说明（中文）
-   * - 同名注册表示替换：先卸载旧实例，再注册并启动新实例。
-   * - 如果新实例启动失败，会自动回滚为未注册状态并抛错。
+   * - 同名注册表示替换：旧执行视图立即退休，新执行视图立即生效。
+   * - Plugin 生命周期已经由 City 完成，Registry 不执行任何生命周期回调。
    */
   async register(plugin: PluginDefinition): Promise<PluginSnapshot> {
     const key = normalize_plugin_name(plugin.name);
@@ -227,30 +186,11 @@ export class PluginRegistry {
       await this.unregister(key);
     }
 
-    const record = create_record(plugin);
-    this.records.set(key, record);
-    this.register_hooks(plugin);
-
-    try {
-      await this.start_record(record);
-      this.publish_change({ type: "register", plugin_name: key });
-      return to_plugin_snapshot(record);
-    } catch (error) {
-      this.unregister_hooks(key);
-      this.records.delete(key);
-      await this.stop_record(record).catch(() => undefined);
-      throw error;
-    }
+    return this.register_sync(plugin);
   }
 
-  /**
-   * 同步挂载 plugin 元信息。
-   *
-   * 说明（中文）
-   * - 仅供 Agent 构造期使用，避免构造函数里 await。
-   * - 后续 `start_all()` 会统一启动这些初始 plugin。
-   */
-  mount(plugin: PluginDefinition): PluginSnapshot {
+  /** 同步注册一个已经由 City 启动的 Plugin 执行实例。 */
+  private register_sync(plugin: PluginDefinition): PluginSnapshot {
     const key = normalize_plugin_name(plugin.name);
     if (!key) {
       throw new Error("Plugin name is required");
@@ -262,6 +202,7 @@ export class PluginRegistry {
     const record = create_record(plugin);
     this.records.set(key, record);
     this.register_hooks(plugin);
+    this.publish_change({ type: "register", plugin_name: key });
     return to_plugin_snapshot(record);
   }
 
@@ -270,7 +211,7 @@ export class PluginRegistry {
    *
    * 关键点（中文）
    * - configured registry、hooks 与直接调用入口立即移除。
-   * - lifecycle.stop 等当前活跃 Session step 的 execution lease 全部释放后执行。
+   * - 当前活跃 Session step 继续使用已捕获的执行记录。
    * - 该方法返回配置修改结果，不等待仍在运行的 step 结束。
    */
   async unregister(plugin_name: string): Promise<boolean> {
@@ -289,8 +230,8 @@ export class PluginRegistry {
   /**
    * 从 configured registry 卸载指定 Plugin，并等待全部 execution lease 释放。
    *
-   * City 在移除 Plugin 实例前必须使用该入口，避免 lifecycle 早于运行中的
-   * Session Step 停止。
+   * City 在停止 Plugin 实例前必须使用该入口，避免实例早于运行中的
+   * Session Step 被释放。
    */
   async unregister_and_wait(plugin_name: string): Promise<boolean> {
     const key = normalize_plugin_name(plugin_name);
@@ -313,32 +254,6 @@ export class PluginRegistry {
   }
 
   /**
-   * 启动全部已挂载 plugin。
-   */
-  async start_all(): Promise<PluginSnapshot[]> {
-    this.initial_start_promise ??= this.start_initial_records();
-    return await this.initial_start_promise;
-  }
-
-  /** 串行启动构造期挂载的 Plugin，并隔离单个 lifecycle 失败。 */
-  private async start_initial_records(): Promise<PluginSnapshot[]> {
-    const initial_records = [...this.records.values()];
-    for (const record of initial_records) {
-      try {
-        await this.start_record(record);
-      } catch {
-        // 关键点（中文）：单个 Plugin 启动失败只影响自身，不能阻断其他 Plugin 与 Agent ready。
-      }
-    }
-    return initial_records.map(to_plugin_snapshot);
-  }
-
-  /** 确保任何异步 Plugin 执行都发生在初始 lifecycle 启动完成后。 */
-  private async ensure_initial_started(): Promise<void> {
-    await this.start_all();
-  }
-
-  /**
    * 卸载全部 plugin。
    */
   async unregister_all(): Promise<void> {
@@ -355,8 +270,7 @@ export class PluginRegistry {
    * 判断 plugin 是否已注册且 ready。
    */
   is_ready(plugin_name: string): boolean {
-    const record = this.records.get(normalize_plugin_name(plugin_name));
-    return Boolean(record && record.state === "ready");
+    return this.records.has(normalize_plugin_name(plugin_name));
   }
 
   /**
@@ -409,53 +323,6 @@ export class PluginRegistry {
     this.hookRegistry.unregister_plugin(plugin_name);
   }
 
-  private async start_record(
-    record: PluginRuntimeRecord,
-  ): Promise<void> {
-    if (record.lifecycle_started) {
-      update_record_state(record, "ready");
-      return;
-    }
-    await run_serial(record, async () => {
-      if (record.lifecycle_started) {
-        update_record_state(record, "ready");
-        return;
-      }
-      try {
-        await record.plugin.lifecycle?.start?.(
-          this.agent_context as unknown as PluginLifecycleContext,
-        );
-        record.lifecycle_started = true;
-        update_record_state(record, "ready");
-      } catch (error) {
-        update_record_state(record, "error", String(error));
-        throw error;
-      }
-    });
-  }
-
-  private async stop_record(record: PluginRuntimeRecord): Promise<void> {
-    await run_serial(record, async () => {
-      if (!record.lifecycle_started) return;
-      const errors: unknown[] = [];
-      try {
-        try {
-          await record.plugin.lifecycle?.stop?.(
-            this.agent_context as unknown as PluginLifecycleContext,
-          );
-        } catch (error) {
-          errors.push(error);
-        }
-      } finally {
-        record.lifecycle_started = false;
-        record.updated_at = now_ms();
-      }
-      if (errors.length > 0) {
-        throw new AggregateError(errors, `Plugin cleanup failed: ${record.plugin.name}`);
-      }
-    });
-  }
-
   /**
    * 运行 pipeline 点。
    */
@@ -464,7 +331,6 @@ export class PluginRegistry {
     point_name: string,
     value: T,
   ): Promise<T> {
-    await this.ensure_initial_started();
     return this.hookRegistry.pipelineValue(
       context,
       point_name,
@@ -481,7 +347,6 @@ export class PluginRegistry {
     point_name: string,
     value: T,
   ): Promise<void> {
-    await this.ensure_initial_started();
     return this.hookRegistry.guardValue(
       context,
       point_name,
@@ -498,7 +363,6 @@ export class PluginRegistry {
     point_name: string,
     value: T,
   ): Promise<void> {
-    await this.ensure_initial_started();
     return this.hookRegistry.effectValue(
       context,
       point_name,
@@ -515,7 +379,6 @@ export class PluginRegistry {
     point_name: string,
     value: TInput,
   ): Promise<TOutput> {
-    await this.ensure_initial_started();
     return this.hookRegistry.resolveValue<TInput, TOutput>(
       context,
       point_name,
@@ -621,22 +484,22 @@ export class PluginRegistry {
     context: PluginContext,
     plugin_name: string,
   ): Promise<PluginAvailability> {
-    await this.ensure_initial_started();
+    return await this.availability_from_records(this.records, context, plugin_name);
+  }
+
+  /** 从指定执行记录视图检查 Plugin 可用性。 */
+  private async availability_from_records(
+    records: ReadonlyMap<string, PluginRuntimeRecord>,
+    context: PluginContext,
+    plugin_name: string,
+  ): Promise<PluginAvailability> {
     const key = normalize_plugin_name(plugin_name);
-    const record = this.records.get(key);
+    const record = records.get(key);
     if (!record) {
       return {
         enabled: false,
         available: false,
         reasons: [`Unknown plugin: ${plugin_name}`],
-      };
-    }
-
-    if (record.state !== "ready") {
-      return {
-        enabled: true,
-        available: false,
-        reasons: [record.last_error || `Plugin "${record.plugin.name}" is not ready`],
       };
     }
 
@@ -662,7 +525,6 @@ export class PluginRegistry {
     execution_context?: PluginExecutionContext;
     interactions?: SessionInteractionPort;
   }): Promise<PluginActionResult<JsonValue>> {
-    await this.ensure_initial_started();
     return await this.run_action_from_records(this.records, params.context, params);
   }
 
@@ -699,14 +561,6 @@ export class PluginRegistry {
       };
     }
 
-    if (record.state !== "ready") {
-      return {
-        success: false,
-        error: `Plugin "${record.plugin.name}" is not ready`,
-        message: `Plugin "${record.plugin.name}" is not ready`,
-      };
-    }
-
     const action = record.plugin.actions?.[action_name];
     if (!action) {
       return {
@@ -736,7 +590,6 @@ export class PluginRegistry {
     context: PluginContext,
     execution_context?: PluginExecutionContext,
   ): Promise<AgentSessionSystemBlock[]> {
-    await this.ensure_initial_started();
     return await this.system_blocks_from_records(
       this.records,
       context,
@@ -755,7 +608,6 @@ export class PluginRegistry {
     const out: AgentSessionSystemBlock[] = [];
     for (const record of records.values()) {
       const plugin = record.plugin;
-      if (record.state !== "ready") continue;
       if (typeof plugin.system !== "function") continue;
       try {
         if (typeof plugin.availability === "function") {
@@ -793,7 +645,6 @@ export class PluginRegistry {
     if (!key) return value;
     let current = value as JsonValue;
     for (const record of records.values()) {
-      if (record.state !== "ready") continue;
       const handlers = record.plugin.hooks?.pipeline?.[key] || [];
       for (const handler of handlers) {
         current = await handler({
@@ -816,7 +667,6 @@ export class PluginRegistry {
     const key = String(point_name || "").trim();
     if (!key) return;
     for (const record of records.values()) {
-      if (record.state !== "ready") continue;
       const handlers = record.plugin.hooks?.effect?.[key] || [];
       for (const handler of handlers) {
         await handler({
@@ -828,6 +678,48 @@ export class PluginRegistry {
     }
   }
 
+  /** 在指定 Plugin execution snapshot 中运行既有 guard handlers。 */
+  private async guard_from_records<T>(
+    records: ReadonlyMap<string, PluginRuntimeRecord>,
+    context: PluginContext,
+    point_name: string,
+    value: T,
+  ): Promise<void> {
+    const key = String(point_name || "").trim();
+    if (!key) return;
+    for (const record of records.values()) {
+      const handlers = record.plugin.hooks?.guard?.[key] || [];
+      for (const handler of handlers) {
+        await handler({
+          context: this.plugin_context(context, record.plugin.name),
+          value: value as JsonValue,
+          plugin: record.plugin.name,
+        });
+      }
+    }
+  }
+
+  /** 在指定 Plugin execution snapshot 中运行唯一的 resolve handler。 */
+  private async resolve_from_records<TInput, TOutput>(
+    records: ReadonlyMap<string, PluginRuntimeRecord>,
+    context: PluginContext,
+    point_name: string,
+    value: TInput,
+  ): Promise<TOutput> {
+    const key = String(point_name || "").trim();
+    if (!key) throw new Error("Resolve point name is required");
+    for (const record of records.values()) {
+      const handler = record.plugin.resolves?.[key];
+      if (!handler) continue;
+      return await handler({
+        context: this.plugin_context(context, record.plugin.name),
+        value: value as JsonValue,
+        plugin: record.plugin.name,
+      }) as TOutput;
+    }
+    throw new Error(`No plugin resolver registered for point: ${key}`);
+  }
+
   /**
    * 创建当前 configured registry 的 Session step 执行视图。
    */
@@ -835,14 +727,20 @@ export class PluginRegistry {
     const records = new Map(this.records);
     return {
       read: (params) => this.read_from_records(records, params),
+      availability: async (plugin_name) =>
+        await this.availability_from_records(records, context, plugin_name),
       run_action: async (params) =>
         await this.run_action_from_records(records, context, params),
       system_blocks: async (execution_context) =>
         await this.system_blocks_from_records(records, context, execution_context),
       pipeline: async (point_name, value) =>
         await this.pipeline_from_records(records, context, point_name, value),
+      guard: async (point_name, value) =>
+        await this.guard_from_records(records, context, point_name, value),
       effect: async (point_name, value) =>
         await this.effect_from_records(records, context, point_name, value),
+      resolve: async (point_name, value) =>
+        await this.resolve_from_records(records, context, point_name, value),
       acquire: () => this.acquire_execution_view(records, context),
     };
   }
@@ -856,11 +754,7 @@ export class PluginRegistry {
   ): AgentPluginExecutionLease {
     const leased_records = new Map<string, PluginRuntimeRecord>();
     for (const [name, record] of records) {
-      if (
-        record.retired ||
-        record.state !== "ready" ||
-        !record.lifecycle_started
-      ) {
+      if (record.retired) {
         continue;
       }
       record.active_execution_leases += 1;
@@ -870,6 +764,8 @@ export class PluginRegistry {
     let released = false;
     return {
       read: (params) => this.read_from_records(leased_records, params),
+      availability: async (plugin_name) =>
+        await this.availability_from_records(leased_records, context, plugin_name),
       run_action: async (params) =>
         await this.run_action_from_records(leased_records, context, params),
       system_blocks: async (execution_context) =>
@@ -885,8 +781,22 @@ export class PluginRegistry {
           point_name,
           value,
         ),
+      guard: async (point_name, value) =>
+        await this.guard_from_records(
+          leased_records,
+          context,
+          point_name,
+          value,
+        ),
       effect: async (point_name, value) =>
         await this.effect_from_records(
+          leased_records,
+          context,
+          point_name,
+          value,
+        ),
+      resolve: async (point_name, value) =>
+        await this.resolve_from_records(
           leased_records,
           context,
           point_name,
@@ -926,41 +836,11 @@ export class PluginRegistry {
     this.try_finalize_retired_record(record);
   }
 
-  /**
-   * 在最后一个 execution lease 释放后停止退休 Plugin。
-   */
+  /** 在最后一个 execution lease 释放后完成退休等待。 */
   private try_finalize_retired_record(record: PluginRuntimeRecord): void {
-    if (
-      !record.retired ||
-      record.retirement_started ||
-      record.active_execution_leases > 0
-    ) {
-      return;
-    }
-    record.retirement_started = true;
-    void (async () => {
-      const logger = this.agent_context.logger;
-      try {
-        await this.stop_record(record);
-      } catch (error) {
-        update_record_state(record, "error", String(error));
-        try {
-          await logger?.log(
-            "error",
-            "[plugin] lifecycle.stop failed after execution release",
-            {
-              plugin: record.plugin.name,
-              error: String(error),
-            },
-          );
-        } catch {
-          // 退休清理不能因日志失败再次中断。
-        }
-      } finally {
-        this.retired_records.delete(record);
-        record.resolve_retirement?.();
-        delete record.resolve_retirement;
-      }
-    })();
+    if (!record.retired || record.active_execution_leases > 0) return;
+    this.retired_records.delete(record);
+    record.resolve_retirement?.();
+    delete record.resolve_retirement;
   }
 }

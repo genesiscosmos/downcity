@@ -78,14 +78,14 @@ test("ChatPlugin 唯一实例为多个 Agent/Workspace 隔离运行态", async (
   const first = create_context(plugin, "agent-a", "workspace-a");
   const second = create_context(plugin, "agent-b", "workspace-b");
 
-  await plugin.lifecycle.connect(first);
+  await plugin.connect(first);
   const queue_store = plugin.queue_store(first);
-  await plugin.lifecycle.connect(second);
+  await plugin.connect(second);
   assert.notEqual(plugin.queue_store(second), queue_store);
-  await plugin.lifecycle.disconnect(first);
+  await plugin.disconnect(first);
   assert.throws(() => plugin.queue_store(first), /not bound/);
   assert.ok(plugin.queue_store(second));
-  await plugin.lifecycle.disconnect(second);
+  await plugin.disconnect(second);
 });
 
 test("Chat 配置使用显式 Owner 忽略其他 Agent 作用域", async () => {
@@ -97,9 +97,9 @@ test("Chat 配置使用显式 Owner 忽略其他 Agent 作用域", async () => {
   const other = create_context(plugin, "agent-other", "workspace-other");
   const owner = create_context(plugin, "agent-owner", "workspace-owner");
 
-  await plugin.lifecycle.connect(other);
+  await plugin.connect(other);
   assert.throws(() => plugin.queue_store(other), /not bound/);
-  await plugin.lifecycle.connect(owner);
+  await plugin.connect(owner);
   assert.ok(plugin.queue_store(owner));
-  await plugin.lifecycle.stop();
+  await plugin.stop();
 });

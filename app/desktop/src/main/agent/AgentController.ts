@@ -139,10 +139,10 @@ interface AgentControllerEvents {
   plugin_notification(plugin_id: string, agent_id: string, input: PluginNotificationInput): Promise<void>;
   /** 清除一个 Agent Plugin 主题的未读通知。 */
   plugin_notification_dismiss(plugin_id: string, topic_key: string): Promise<void>;
-  /** 发布一个 Plugin main 产生的宿主通知。 */
-  plugin_main_notification(plugin_id: string, input: PluginNotificationInput): Promise<void>;
-  /** 清除一个 Plugin main 通知主题。 */
-  plugin_main_notification_dismiss(plugin_id: string, topic_key: string): Promise<void>;
+  /** 发布一个 City Plugin 产生的宿主通知。 */
+  plugin_host_notification(plugin_id: string, input: PluginNotificationInput): Promise<void>;
+  /** 清除一个 City Plugin 宿主通知主题。 */
+  plugin_host_notification_dismiss(plugin_id: string, topic_key: string): Promise<void>;
 }
 
 /** Electron main 内的 native Agent 生命周期控制器。 */
@@ -198,14 +198,14 @@ export class AgentController {
               await this.events.plugin_notification(plugin_id, agent_id, input);
               return;
             }
-            await this.events.plugin_main_notification(plugin_id, input);
+            await this.events.plugin_host_notification(plugin_id, input);
           },
           dismiss: async (input) => {
             if (agent_id) {
               await this.events.plugin_notification_dismiss(plugin_id, input.topic_key);
               return;
             }
-            await this.events.plugin_main_notification_dismiss(plugin_id, input.topic_key);
+            await this.events.plugin_host_notification_dismiss(plugin_id, input.topic_key);
           },
         }),
         open_external: async (url) => {
@@ -256,7 +256,7 @@ export class AgentController {
     }) as unknown as PluginJsonValue;
   }
 
-  /** 通过 City 调用 Plugin mainview action。 */
+  /** 通过 City 调用 Plugin 宿主 action。 */
   async invoke_plugin_main(
     plugin_id: string,
     action_id: string,
@@ -1142,7 +1142,7 @@ export class AgentController {
     const initialized_agents: Agent[] = [];
     try {
       // 关键点（中文）：登记即存在。启动时把 Registry 中登记的 Workspace 全部
-      // 预载进 City 索引，使 Plugin main（如 Skills）能稳定列出全部 Workspace，
+      // 预载进 City 索引，使 Plugin 宿主能力（如 Skills）能稳定列出全部 Workspace，
       // 而不是只显示当前已被 Agent 进入过的实例。
       for (const config of this.data.workspaces.list()) {
         await this.register_workspace_in_city(config);
@@ -1187,7 +1187,7 @@ export class AgentController {
   /** 确保 Desktop catalog 中的 Plugin 已由 City 持有。 */
   private async provide_plugin(plugin_id: string): Promise<void> {
     const registration = await this.plugin_loader.load_plugin_registration(plugin_id);
-    if (!registration) throw new Error(`Plugin does not provide main capability: ${plugin_id}`);
+    if (!registration) throw new Error(`Plugin does not provide a City runtime: ${plugin_id}`);
     this.city.plugins.add(registration);
   }
 

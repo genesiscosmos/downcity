@@ -8,7 +8,7 @@
 
 import type { AgentSessionCollection } from "@downcity/agent";
 import type { Agent } from "@downcity/agent";
-import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
+import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
 import type { PluginSnapshot } from "@/plugin/index.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { SessionSystemMessage } from "@downcity/agent";

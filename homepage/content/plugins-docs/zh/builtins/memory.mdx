@@ -53,7 +53,7 @@ Workspace 逻辑作用域隔离：
 
 原始 `user_id`、`workspace_id` 和 `agent_id` 会编码成安全路径段。多个 Agent 可以指向同一个 City 根目录，但 User 与 Workspace 内容仍按 Subject 隔离。
 
-直接构造即可；`MemoryPlugin.lifecycle.start()` 从 City 的 `PluginLifecycleContext.storage` 初始化
+直接构造即可；`MemoryPlugin.start()` 从 City 的 `PluginStartContext.storage` 初始化
 Provider：
 
 ```ts

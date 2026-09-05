@@ -13,11 +13,9 @@ import type {
   CityPluginRegistration,
   PluginDefinition,
   PluginJsonObject,
-  PluginMainModule,
 } from "@/plugin/index.js";
 import type {
   LocalInstalledPluginDefinition,
-  LocalPluginModule,
   LocalPluginRegistration,
 } from "@/local/types/LocalPlugin.js";
 import type { LocalPluginLoaderOptions } from "@/local/types/LocalRuntime.js";
@@ -33,7 +31,7 @@ export class LocalPluginLoader {
 
   /** 按稳定 ID 加载一个内置或第三方 City Plugin 注册。 */
   async load_plugin_registration(plugin_id: string): Promise<CityPluginRegistration | null> {
-    const builtin = this.builtin_registrations.find((item) => item.id === plugin_id);
+    const builtin = this.builtin_registrations.find((item) => item.plugin.name === plugin_id);
     if (builtin) return builtin;
     return await this.load_installed_registration(plugin_id);
   }
@@ -65,58 +63,41 @@ export class LocalPluginLoader {
       fs.realpath(expected_main),
     ]);
     if (!real_entry.startsWith(`${real_root}${path.sep}`)) {
-      throw new Error(`Installed Plugin main entry is invalid: ${plugin_id}`);
+      throw new Error(`Installed Plugin entry is invalid: ${plugin_id}`);
     }
-    const module = await load_local_city_plugin_module(real_entry, definition.integrity);
-    if (module.plugin.name !== definition.id) {
+    const plugin = await load_local_city_plugin(real_entry, definition.integrity);
+    if (plugin.name !== definition.id) {
       throw new Error(`Installed Plugin ID does not match its instance: ${definition.id}`);
     }
     return {
-      id: definition.id,
-      title: definition.title || definition.id,
-      description: definition.description,
       readme: resolve_plugin_path(plugin_root, definition.readme),
       has_config: definition.renderer?.config === true,
       has_sidebar: definition.renderer?.sidebar === true,
       has_mainview: definition.renderer?.mainview === true,
-      plugin: module.plugin,
-      ...(module.main ? { main: module.main } : {}),
+      plugin,
     };
   }
 }
 
 /**
- * 加载并校验第三方统一 City Plugin main。
+ * 加载并校验第三方统一 City Plugin 入口。
  *
  * cache_key 随安装制品变化，避免进程内更新后命中 Node ESM 旧缓存。
  */
-export async function load_local_city_plugin_module(
+export async function load_local_city_plugin(
   main_path: string,
   cache_key: string,
-): Promise<LocalPluginModule> {
+): Promise<PluginDefinition> {
   const module_url = pathToFileURL(main_path);
   module_url.searchParams.set("integrity", cache_key);
   const loaded = await import(module_url.href) as { default?: unknown };
-  return normalize_local_plugin_module(loaded.default);
+  return normalize_local_plugin(loaded.default);
 }
 
-/** 把第三方默认导出的 Plugin 实例或注册对象归一化为无工厂模块。 */
-function normalize_local_plugin_module(value: unknown): LocalPluginModule {
-  if (is_plugin_definition(value)) return { plugin: value };
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Plugin main must default export a Plugin instance or registration");
-  }
-  const registration = value as { plugin?: unknown; main?: unknown };
-  if (!is_plugin_definition(registration.plugin)) {
-    throw new Error("Plugin registration must provide one Plugin instance");
-  }
-  if (registration.main !== undefined && !is_plugin_main(registration.main)) {
-    throw new Error("Plugin registration main is invalid");
-  }
-  return {
-    plugin: registration.plugin,
-    ...(registration.main ? { main: registration.main } : {}),
-  };
+/** 校验第三方入口默认导出的唯一 Plugin 实例。 */
+function normalize_local_plugin(value: unknown): PluginDefinition {
+  if (is_plugin_definition(value)) return value;
+  throw new Error("Plugin entry must default export one Plugin instance");
 }
 
 /** 判断未知值是否满足 Plugin 最小定义。 */
@@ -124,14 +105,6 @@ function is_plugin_definition(value: unknown): value is PluginDefinition {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const plugin = value as Partial<PluginDefinition>;
   return typeof plugin.name === "string" && plugin.name.trim().length > 0;
-}
-
-/** 判断未知值是否满足 Plugin main 生命周期。 */
-function is_plugin_main(value: unknown): value is PluginMainModule {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const main = value as Partial<PluginMainModule>;
-  return typeof main.activate === "function"
-    && (main.deactivate === undefined || typeof main.deactivate === "function");
 }
 
 /** 校验安装制品完整性，防止已安装入口或运行资源被静默替换。 */

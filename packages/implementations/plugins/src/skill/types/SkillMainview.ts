@@ -1,5 +1,5 @@
 /**
- * Skill Plugin Mainview 与宿主 main 之间的 JSON 协议。
+ * Skill Plugin Mainview 与宿主 action 之间的 JSON 协议。
  *
  * 该协议只描述用户管理 Skill 所需的稳定数据，不暴露 Agent 运行实例或宿主 Repository。
  */

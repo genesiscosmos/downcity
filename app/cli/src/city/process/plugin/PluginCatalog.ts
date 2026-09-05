@@ -13,15 +13,15 @@ import type { PluginCatalogItem } from "@/city/types/plugin/PluginCatalog.js";
 export function list_plugin_catalog(): PluginCatalogItem[] {
   const builtin_items = create_cli_builtin_plugin_registrations().map((registration) => {
     return {
-      plugin_id: registration.id,
-      title: registration.title || registration.id,
-      description: registration.description,
+      plugin_id: registration.plugin.name,
+      title: registration.plugin.title || registration.plugin.name,
+      description: registration.plugin.description,
       source: "builtin" as const,
       has_main: true,
       has_sidebar: registration.has_sidebar,
       has_mainview: registration.has_mainview,
       has_config: registration.has_config,
-      profiles: list_plugin_profiles(registration.id),
+      profiles: list_plugin_profiles(registration.plugin.name),
     };
   });
   const installed_items = list_installed_plugins().map((plugin) => ({

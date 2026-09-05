@@ -13,7 +13,7 @@ one instance for each Plugin ID and shares it across multiple Agents.
 ```ts
 const city = new City({
   workspaces: [workspace],
-  plugins: [registration],
+  plugins: [plugin],
 });
 
 city.agents.add(agent);
@@ -37,23 +37,24 @@ from the current `PluginContext`.
 - `stop(context)` runs when the Plugin is removed or City closes.
 
 ```ts
-readonly lifecycle = {
-  start: async ({ profile, storage }) => {
-    await this.client.open(profile.config, storage);
-  },
-  connect: async (context) => {
+class SchedulerPlugin extends Plugin {
+  readonly name = "scheduler";
+  async start({ storage }: PluginStartContext) {
+    await this.client.open(storage);
+  }
+  async connect(context: PluginContext) {
     await this.scheduler.start(context.agent.id, context.workspace.id);
-  },
-  disconnect: async (context) => {
+  }
+  async disconnect(context: PluginContext) {
     await this.scheduler.stop(context.agent.id, context.workspace.id);
-  },
-  stop: async () => {
+  }
+  async stop() {
     await this.client.close();
-  },
-};
+  }
+}
 ```
 
-`start/stop` receive `PluginLifecycleContext`, whose storage belongs to City.
+`start/stop` receive the same `PluginStartContext`, whose storage belongs to City.
 `connect/disconnect` receive the full `PluginContext`, whose storage belongs to the current Agent/Plugin
 execution scope.
 
@@ -63,6 +64,6 @@ A Session captures an immutable Plugin execution view at a Step checkpoint. New 
 removed Plugin immediately, while an existing Step may finish. City waits for the final lease before
 stopping the shared instance, preventing premature shutdown of connections or providers.
 
-`city.close()` releases Workspace scopes, Agents, Plugin instances, and Plugin mains. A
-single `stop` or `deactivate` failure does not prevent other Plugins from cleaning up; City reports an
+`city.close()` releases Workspace scopes, Agents, and Plugin instances. A single `stop` failure
+does not prevent other Plugins from cleaning up; City reports an
 aggregate error after cleanup finishes.

@@ -77,6 +77,24 @@ function create_plugin_context(agent_id = "memory_test_agent", user_id) {
   };
 }
 
+/** 创建 MemoryPlugin 启动测试使用的最小 City 上下文。 */
+function create_start_context(storage_path) {
+  return {
+    storage: { path: storage_path, files: {} },
+    plugin: { id: "memory", action() {}, config_action() {} },
+    logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
+    notifications: { publish: async () => {}, dismiss: async () => {} },
+    system: {
+      list_agents: async () => [],
+      list_workspaces: async () => [],
+      invoke_agent_plugin: async () => ({}),
+      open_external: async () => {},
+      show_item_in_folder: async () => {},
+      write_clipboard_text: async () => {},
+    },
+  };
+}
+
 test("Builtin Provider 把 Memory 数据写入独立 Adapter 根而不是 Workspace", async (context) => {
   const temporary_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-"));
   context.after(async () => await fs.rm(temporary_root, { recursive: true, force: true }));
@@ -240,7 +258,7 @@ test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (co
   context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
   const plugin = new MemoryPlugin({ storage_root_path: memory_root });
   const plugin_context = create_plugin_context();
-  await plugin.lifecycle.start();
+  await plugin.start(create_start_context(memory_root));
   const result = await plugin.actions.remember.execute({
     context: plugin_context,
     input: {
@@ -259,7 +277,7 @@ test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (co
     true,
   );
   assert.equal("files" in plugin_context, false);
-  await plugin.lifecycle.stop();
+  await plugin.stop();
 });
 
 test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Recall", async (context) => {
@@ -267,7 +285,7 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
   context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
   const plugin = new MemoryPlugin({ storage_root_path: memory_root });
   const plugin_context = create_plugin_context();
-  await plugin.lifecycle.start();
+  await plugin.start(create_start_context(memory_root));
   await plugin.actions.remember.execute({
     context: plugin_context,
     input: {
@@ -402,7 +420,7 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
   assert.equal(capture_job.turn_id, "turn-1");
   assert.equal(capture_job.messages[0].text, "以后回答请保持简洁。");
 
-  await plugin.lifecycle.stop();
+  await plugin.stop();
 });
 
 test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async (context) => {
@@ -412,7 +430,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   const plugin = new MemoryPlugin({ storage_root_path: city_root });
   const first_context = create_plugin_context("agent-a", "user/with unsafe path");
   const second_context = create_plugin_context("agent-b", "user/with unsafe path");
-  await plugin.lifecycle.start();
+  await plugin.start(create_start_context(city_root));
 
   const remembered = await plugin.actions.remember.execute({
     context: first_context,
@@ -491,7 +509,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   assert.equal(unauthenticated.success, false);
   assert.match(unauthenticated.error, /authenticated user/);
 
-  await plugin.lifecycle.stop();
+  await plugin.stop();
 });
 
 /** 返回 Builtin Provider 对 Agent 数据使用的逻辑目录。 */
