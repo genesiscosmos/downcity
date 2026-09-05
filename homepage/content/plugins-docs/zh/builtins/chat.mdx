@@ -29,13 +29,14 @@ description: 渠道 runtime、queue worker、chat 授权、chat system text 和 
 当你需要这些能力时，应该关注 `chat`：
 
 - Telegram、Feishu、QQ 这类 chat 渠道 runtime
-- 每个 Chat Profile 共享实例一条 queue worker
+- 一个 ChatPlugin 实例按 Agent/Workspace scope 管理 queue worker
 - 消息入站后的执行与消息出站发送
 - 入站用户授权、主体观测和角色解析
 
 ## 用户怎么使用
 
-Chat 在自己的 Config 中管理队列和渠道。先在 Desktop 的 Plugins Catalog 中打开 Chat 详情，创建或选择 Profile，再让 Agent 引用它：
+Chat 在自己的 Config 中管理队列和渠道。先在 Desktop 的 Plugins Catalog 中打开 Chat 详情，
+创建或选择 Profile，再把它作为目标 Agent 的运行配置：
 
 ```bash
 # 在 Desktop 的 Plugins Catalog / Chat 中配置 primary
@@ -50,34 +51,20 @@ city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","
 
 ## SDK 装配
 
-SDK 宿主通过 `CityPluginRegistration` 把 Chat 提供给 City，再用 Profile 配置渠道：
+SDK 宿主把 Chat 实例提供给 City，并由 `plugin_host.runtime_config` 按 Agent 投影渠道配置：
 
 ```ts
-const registrations = create_builtin_plugin_registrations();
-const city = new City({ plugins: registrations, workspaces: [workspace] });
-city.agents.add(agent, {
-  plugins: [{
-    plugin_id: "chat",
-    profile: {
-      id: "primary",
-      config: {
-        owner_agent_id: agent.id,
-        owner_workspace_id: workspace.id,
-        channels: [{
-          type: "telegram",
-          id: "telegram-main",
-          name: "Main Bot",
-          bot_token: process.env.TELEGRAM_BOT_TOKEN ?? "",
-        }],
-      },
-    },
-  }],
+const city = new City({
+  plugins: create_builtin_plugin_registrations(),
+  workspaces: [workspace],
+  plugin_host,
 });
+city.agents.add(agent);
 const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-Profile 属于 City 控制面，不进入 Agent。Chat main actions 负责 Profile 校验与凭据安全投影。
-同一 Profile 只有一组渠道连接和 queue；跨作用域绑定必须通过 Owner 字段显式选择路由。
+Profile 属于 City 控制面，不进入 Agent。Chat main actions 负责 Profile 校验与凭据安全投影；
+ChatPlugin 唯一实例根据每个 `PluginContext` 的 Agent/Workspace 和配置管理对应渠道与 queue。
 
 ## 飞书依赖
 
@@ -149,16 +136,16 @@ await entry.plugins.run_action({
 
 ## 关键运行语义
 
-- 渠道连接与 queue worker 归属于 City 持有的 Chat Profile 共享实例
-- Agent/Workspace 路由在 `bind/unbind` scope 生命周期中建立和释放
+- 渠道连接与 queue worker 归属于 City 持有的 ChatPlugin 唯一实例，并按 Context 隔离
+- Agent/Workspace 路由在 `connect/disconnect` scope 生命周期中建立和释放
 - 入站授权能力归属于 `ChatPlugin`，但仍通过通用 plugin hooks / resolves 调度
-- `Agent` 只声明 Chat/Profile 绑定，不持有 chat 领域长期状态
+- `Agent` 不持有 ChatPlugin 或 chat 领域长期状态
 
 ## 公开性说明
 
 `ChatPlugin` 从 `@downcity/plugins` 包根导出。
 
-SDK 用户通过 City registration/Profile 装配它，不把 `ChatPlugin` 实例交给 Agent。
+SDK 用户把 `ChatPlugin` 实例交给 City，不把它交给 Agent。
 
 ## 相关文档
 

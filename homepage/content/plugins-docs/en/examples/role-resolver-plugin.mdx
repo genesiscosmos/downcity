@@ -19,11 +19,11 @@ That makes it a classic `resolve` case.
 
 ```ts
 import {
-  BasePlugin,
+  Plugin,
   type PluginResolveHook,
 } from "@downcity/city/plugin";
 
-class RoleResolverPlugin extends BasePlugin {
+class RoleResolverPlugin extends Plugin {
   readonly name = "role_resolver";
   readonly title = "Role Resolver";
   readonly description = "Resolves one final role for a user.";

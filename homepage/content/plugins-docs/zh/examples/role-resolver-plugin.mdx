@@ -19,11 +19,11 @@ description: 用一个 resolve 场景说明为什么某些点必须只有一个�
 
 ```ts
 import {
-  BasePlugin,
+  Plugin,
   type PluginResolveHook,
 } from "@downcity/city/plugin";
 
-class RoleResolverPlugin extends BasePlugin {
+class RoleResolverPlugin extends Plugin {
   readonly name = "role_resolver";
   readonly title = "Role Resolver";
   readonly description = "Resolves one final role for a user.";

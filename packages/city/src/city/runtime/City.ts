@@ -2,27 +2,22 @@
  * City：Workspace、Embassy 与统一 transport 的资源容器。
  *
  * City 不创建 Agent 或 Session。应用创建 Agent 后通过 `city.agents.add(agent)` 加入
- * 当前容器；City 持有 Plugin/Profile 实例与生命周期，并管理 Agent 集合、
+ * 当前容器；City 持有 Plugin 唯一实例、配置投影与生命周期，并管理 Agent 集合、
  * Workspace/Embassy 资源和统一 transport。
  */
 
-import { Agent } from "@downcity/agent";
-import { Group } from "@downcity/agent";
+import { Agent, Group } from "@downcity/agent";
 import {
-  attach_agent_host,
-  attach_agent_storage,
   attach_group_storage,
-  detach_group_storage,
+  bind_agent_runtime,
   create_workspace_entry,
-  detach_agent_host,
-  attach_agent_host_extensions,
-  attach_agent_session_extensions,
+  detach_group_storage,
   get_workspace_entry,
-} from "@downcity/agent/host";
+  unbind_agent_runtime,
+} from "@downcity/agent/internal";
 import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
-import type { CityPlugins, CityAgentPluginOptions } from "@/city/types/CityPlugin.js";
-import { create_empty_session_extensions } from "@downcity/agent/host";
-import type { WorkspaceEntry } from "@downcity/agent/host";
+import type { CityPlugins } from "@/city/types/CityPlugin.js";
+import type { WorkspaceEntry } from "@downcity/agent/internal";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
 import { MemoryStorageProvider } from "@/workspace/index.js";
@@ -103,10 +98,10 @@ export class City {
       ...(options.plugin_host ? { host: options.plugin_host } : {}),
     });
     this.plugins = this.plugin_runtime.public_api;
-    for (const registration of options.plugins ?? []) {
-      this.plugins.provide(registration);
+    for (const plugin of collection_values(options.plugins)) {
+      this.plugins.add(plugin);
     }
-    for (const workspace of options.workspaces ?? []) {
+    for (const workspace of collection_values(options.workspaces)) {
       const workspace_id = String(workspace?.id || "").trim();
       if (!workspace_id) throw new Error("City requires Workspace with a stable id");
       if (this.workspaces_by_id.has(workspace_id)) {
@@ -120,7 +115,7 @@ export class City {
     this.http_transport = new CityHTTP(this, runtime_options.http);
     this.rpc_transport = new CityRPC(this, runtime_options.rpc);
     this.agents = Object.freeze({
-      add: (agent, plugin_options) => this.add_agent(agent, plugin_options),
+      add: (agent) => this.add_agent(agent),
       get: (agent_id) => this.get_agent(agent_id),
       list: () => this.list_agents(),
       remove: async (agent_id) => await this.remove_agent(agent_id),
@@ -137,6 +132,12 @@ export class City {
       list: () => this.list_workspaces(),
       remove: async (workspace_id) => await this.remove_workspace(workspace_id),
     });
+    for (const agent of collection_values(options.agents)) {
+      this.add_agent(agent);
+    }
+    for (const group of collection_values(options.groups)) {
+      this.add_group(group);
+    }
   }
 
   /** 按稳定 ID 获取 City 管理的 Group。 */
@@ -337,7 +338,7 @@ export class City {
     });
   }
 
-  /** 幂等关闭 transport，并按依赖顺序释放绑定 Agent 与 City Workspace。 */
+  /** 幂等关闭 City，并按依赖方向释放入口、主体、Plugin、Workspace 与 Storage。 */
   async close(): Promise<void> {
     if (this.city_status === "closed") return;
     if (!this.close_promise) {
@@ -354,8 +355,10 @@ export class City {
             await detach_group_storage(group, this);
           }),
         ));
-        results.push(...await Promise.allSettled([this.plugin_runtime.dispose()]));
         results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
+        // Agent dispose 会先停止 Session 并释放 Hook scope，再由 Plugin Runtime
+        // disconnect Workspace Context；因此 Plugin 实例必须在 Agent 之后 stop。
+        results.push(...await Promise.allSettled([this.plugin_runtime.dispose()]));
         results.push(...await Promise.allSettled(
           [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
         ));
@@ -383,22 +386,29 @@ export class City {
   }
 
   /** 将已创建 Agent 加入集合并建立唯一 City 绑定。 */
-  private add_agent(agent: Agent, options: CityAgentPluginOptions = {}): Agent {
+  private add_agent(agent: Agent): Agent {
     this.assert_active();
     if (!agent?.id) throw new Error("City requires an Agent with a stable ID");
     if (this.agents_by_id.has(agent.id) || this.removing_agent_ids.has(agent.id)) {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
-    attach_agent_host(agent, this);
-    attach_agent_storage(agent, this.storage);
-    const extensions = this.plugin_runtime.attach_agent(agent, options.plugins ?? []);
-    attach_agent_host_extensions(agent, extensions);
-    attach_agent_session_extensions(
-      agent,
-      (workspace) => workspace
-        ? extensions.execution_runtime(workspace, agent.get_logger())
-        : create_empty_session_extensions(),
-    );
+    const plugins = this.plugin_runtime.attach_agent(agent);
+    bind_agent_runtime(agent, {
+      owner: this,
+      storage: this.storage,
+      get_workspace: (workspace_id) => this.get_workspace(workspace_id),
+      ensure_ready: async () => await plugins.ensure_ready(),
+      connect_workspace: async (workspace, logger) => {
+        await plugins.connect_workspace(workspace, logger);
+      },
+      disconnect_workspace: async (workspace_id) => {
+        await plugins.disconnect_workspace(workspace_id);
+      },
+      tools: (workspace, logger) => plugins.tools(workspace, logger),
+      hooks: (workspace, logger) => plugins.hooks(workspace, logger),
+      subscribe_plugins: (subscriber) => plugins.subscribe(subscriber),
+      release_agent: async (current) => await this.release_agent(current),
+    });
     this.agents_by_id.set(agent.id, agent);
     return agent;
   }
@@ -408,7 +418,7 @@ export class City {
     const current = this.agents_by_id.get(agent.id);
     if (!current || current !== agent) return;
     await this.plugin_runtime.detach_agent(agent.id);
-    detach_agent_host(current, this);
+    unbind_agent_runtime(current, this);
     this.agents_by_id.delete(agent.id);
     await this.http_transport.detach_agent(agent.id).catch(() => undefined);
   }
@@ -462,4 +472,14 @@ export class City {
     );
     return result;
   }
+}
+
+/** 把构造期对象或数组集合归一化为稳定值序列。 */
+function collection_values<TValue>(
+  collection: readonly TValue[] | Readonly<Record<string, TValue>> | undefined,
+): readonly TValue[] {
+  if (!collection) return [];
+  return Array.isArray(collection)
+    ? collection
+    : Object.values(collection);
 }

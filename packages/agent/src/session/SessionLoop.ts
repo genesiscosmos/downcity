@@ -47,8 +47,8 @@ import {
   build_session_turn_file_diff,
   build_session_turn_file_diff_summary,
 } from "@/session/messages/SessionTurnFileDiffBuilder.js";
-import { SESSION_EXTENSION_POINTS } from "@/session/SessionExtensionPoints.js";
-import type { SessionTurnCommittedHookValue } from "@/types/session/SessionExtensionHook.js";
+import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
+import type { SessionTurnCommittedHookValue } from "@/types/session/SessionHook.js";
 import type { JsonValue } from "@/types/common/Json.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
@@ -742,12 +742,12 @@ export class SessionLoop {
     }
   }
 
-  /** 在释放当前 lease 前触发现有 Extension effect point。 */
+  /** 在释放当前 lease 前触发现有 Plugin effect point。 */
   private async notify_turn_committed(
     active_turn: ActiveSessionTurnState,
     status: SessionTurnCommittedHookValue["status"],
   ): Promise<void> {
-    const extensions = active_turn.turn_context?.step.extensions;
+    const extensions = active_turn.turn_context?.step.hooks;
     if (!extensions) return;
     try {
       const messages = (await this.messages.list_history_messages())
@@ -760,19 +760,19 @@ export class SessionLoop {
         messages: messages as SessionMessage[],
       };
       await extensions.effect(
-        SESSION_EXTENSION_POINTS.turn_committed,
+        SESSION_HOOK_POINTS.turn_committed,
         value as unknown as JsonValue,
       );
     } catch (error) {
       try {
-        await this.logger.log("warn", "[agent] session extension effect failed", {
+        await this.logger.log("warn", "[agent] session plugin effect failed", {
           session_id: this.session_id,
           turn_id: active_turn.turn_id,
-          point_name: SESSION_EXTENSION_POINTS.turn_committed,
+          point_name: SESSION_HOOK_POINTS.turn_committed,
           error: error instanceof Error ? error.message : String(error),
         });
       } catch {
-        // Extension effect 不改变已经确定的 Turn 结果。
+        // Plugin effect 不改变已经确定的 Turn 结果。
       }
     }
   }

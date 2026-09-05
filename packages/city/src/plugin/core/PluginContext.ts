@@ -16,7 +16,7 @@ import type {
   PluginSessionMutation,
   PluginSessionOrigin,
 } from "@/plugin/index.js";
-import type { AgentSessionCollection, Logger } from "@downcity/agent/host";
+import type { AgentSessionCollection, Logger } from "@downcity/agent";
 import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { PluginExecutionContext } from "@/plugin/index.js";
 
@@ -38,6 +38,8 @@ export interface CreatePluginContextInput {
   readonly files: FileSystem;
   /** 当前 Plugin 私有数据文件端口。 */
   readonly data_files: FileSystem;
+  /** 延迟读取当前 Plugin 在该 Agent 作用域下的业务配置。 */
+  readonly get_config?: () => PluginJsonObject;
   /** 当前 Workspace 可选 Shell。 */
   readonly shell?: WorkspaceShell;
   /** 当前执行范围日志器。 */
@@ -48,16 +50,12 @@ export interface CreatePluginContextInput {
   readonly notifications?: PluginNotificationPublisher;
   /** 延迟读取当前 Workspace 绑定的 Session 集合。 */
   readonly get_sessions: () => AgentSessionCollection;
-  /** 延迟读取当前 Agent 绑定的 Plugin 执行面。 */
+  /** 延迟读取 City 提供给当前 Agent 的 Plugin 执行面。 */
   readonly get_plugins: () => AgentPluginRuntime;
   /** 延迟读取 Workspace env。 */
   readonly get_workspace_env: () => Readonly<Record<string, string>>;
   /** 延迟读取 Agent instruction。 */
   readonly get_instructions: () => readonly string[];
-  /** 当前 Plugin Profile ID。 */
-  readonly profile_id?: string;
-  /** 当前 Plugin Profile 配置快照。 */
-  readonly profile_config?: PluginJsonObject;
 }
 
 /** 创建一个不复制动态领域状态的 PluginContext。 */
@@ -99,14 +97,13 @@ export function create_plugin_context(input: CreatePluginContextInput): PluginCo
         return input.get_workspace_env();
       },
     }),
-    profile: Object.freeze({
-      id: String(input.profile_id || "default").trim() || "default",
-      config: Object.freeze({ ...(input.profile_config ?? {}) }),
-    }),
     storage: Object.freeze({
       path: input.data_path,
       files: input.data_files,
     }),
+    get config() {
+      return Object.freeze({ ...(input.get_config?.() ?? {}) });
+    },
     logger: input.logger,
     ...(input.notifications ? { notifications: input.notifications } : {}),
     abort_signal: abort_controller.signal,

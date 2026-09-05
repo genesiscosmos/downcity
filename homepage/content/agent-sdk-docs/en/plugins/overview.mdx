@@ -1,6 +1,6 @@
 ---
 title: Plugin Overview
-description: Understand City Plugin ownership, capabilities, context, and Agent bindings.
+description: Understand City Plugin ownership, capabilities, context, and Session Hooks.
 ---
 
 # Plugin Overview
@@ -8,9 +8,9 @@ description: Understand City Plugin ownership, capabilities, context, and Agent 
 A Plugin is Downcity's unified extension product. It may provide Actions, Hooks, Resolves, System
 content, Availability, HTTP routes, lifecycle, and optional Mainview or Config surfaces.
 
-Plugins do not belong to Agents. City owns the catalog, main modules, shared
-`(plugin_id, profile_id)` instances, and their full lifecycle. An Agent stores only a binding to a
-Plugin/Profile. A Session captures a read-only Plugin view at execution checkpoints.
+Plugins do not belong to Agents. City owns the catalog, main modules, one instance per Plugin ID,
+and the complete lifecycle. Every registered Plugin is exposed to every Agent. A Session captures a
+stable Hook view at execution checkpoints.
 
 ## SDK assembly
 
@@ -23,17 +23,11 @@ const registrations = create_builtin_plugin_registrations();
 const city = new City({ workspaces: [workspace], plugins: registrations });
 const agent = new Agent({ id: "repo-helper", model });
 
-city.agents.add(agent, {
-  plugins: [
-    { plugin_id: "skill" },
-    { plugin_id: "memory" },
-  ],
-});
+city.agents.add(agent);
 ```
 
-The SDK does not enable every built-in Plugin automatically. `CityOptions.plugins` or
-`city.plugins.provide()` registers modules. `city.agents.add()` and `city.plugins.register()` create
-Agent/Profile bindings.
+`CityOptions.plugins` or `city.plugins.add()` registers Plugins. `city.agents.add()` only registers
+the Agent.
 
 ## PluginContext
 
@@ -44,20 +38,17 @@ provides restricted handles for:
 - `agent`: identity, instructions, and Sessions.
 - `workspace`: files, Shell, environment, and stable ID.
 - `session` / `turn`: direct communication handles when the call belongs to a Session or Turn.
-- `profile`: the current shared-instance Profile snapshot.
+- `config`: read-only configuration projected for the current Agent/Plugin scope.
 - `storage`: private storage for the current Agent/Plugin scope.
 
 Object handles support direct in-process communication; IDs provide stable identity and
 serialization. A Plugin does not need to receive only a `session_id` and resolve it through the host.
 
-## Profiles and shared instances
+## Unique instances and configuration projection
 
-One City creates one instance per `(plugin_id, profile_id)`. `start/stop` belong to that shared
-instance, while `bind/unbind` belong to an Agent/Workspace scope. One Memory instance can therefore
-serve multiple Agents while its logical addresses distinguish City, Agent, User, and Workspace data.
-
-One Chat Profile permits one channel connection set and one queue. Reusing it across scopes requires
-explicit `owner_agent_id` and `owner_workspace_id` values.
+One City creates one instance per Plugin ID. `start/stop` belong to that City instance, while
+`connect/disconnect` belong to an Agent/Workspace scope. A host may still store Profiles, but they
+only project `context.config`; they do not create more Plugin instances.
 
 ## Recommended reading
 

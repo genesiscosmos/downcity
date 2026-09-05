@@ -1,51 +1,36 @@
 ---
 title: Plugin 配置
-description: 理解 City catalog、Profile 配置与 Agent 绑定的边界。
+description: 理解 Plugin 唯一实例、宿主 Profile 与 Agent 配置投影的边界。
 ---
 
 # Plugin 配置
 
-Plugin 模块由 City 登记，Profile 由宿主配置，Agent 只引用 Plugin ID/Profile ID：
+配置不决定 Plugin 所有权或实例数量：
 
 ```text
-Plugin catalog registration
-→ 宿主读取并校验 Profile 配置
-→ City 创建唯一 (plugin_id, profile_id) 实例
-→ Agent 建立 plugin_id/profile 绑定
-→ Session 取得当前 Workspace 的执行视图
+宿主保存 Plugin Profile
+→ City 持有一个 Plugin 实例
+→ plugin_host.runtime_config(plugin_id, agent_id) 投影配置
+→ Plugin 从当前 PluginContext.config 读取
 ```
-
-SDK 可以在 City 构造时登记：
 
 ```ts
 const city = new City({
-  plugins: [registration],
+  plugins: [web_plugin],
   workspaces: [workspace],
+  plugin_host: {
+    runtime_config: (plugin_id, agent_id) => load_runtime_config(plugin_id, agent_id),
+    profile_config: (plugin_id, profile_id) => open_profile_store(plugin_id, profile_id),
+    notifications: (plugin_id, agent_id) => open_notifications(plugin_id, agent_id),
+  },
 });
 
-city.agents.add(agent, {
-  plugins: [{
-    plugin_id: registration.id,
-    profile: { id: "team", config: { endpoint: "https://example.com" } },
-  }],
-});
+city.agents.add(agent);
 ```
 
-也可以动态登记和绑定：
+CLI/Desktop 的 `config.toml` 可以继续作为 Profile 配置事实源，但 Agent 不保存 Plugin 实例或
+绑定关系。Config action 由 Plugin main 注册，City 调用时注入指定 Profile 的 `get/set` store；
+执行期 Action、Hook 与 Lifecycle `connect` 则读取当前 Agent 投影得到的 `context.config`。
 
-```ts
-city.plugins.provide(registration);
-await city.plugins.register(agent.id, {
-  plugin_id: registration.id,
-  profile,
-});
-```
-
-CLI/Desktop 的 `config.toml` 是 Profile 配置事实源，`agent.json` 只保存引用，不保存渠道、账号、
-端点或 Token。Config action 由 Plugin main 注册，City 在调用时注入当前 Profile 的 `get/set` store。
-
-相同 `(plugin_id, profile_id)` 的配置在一个 City 中必须一致；它对应一个共享实例与一组长期资源。
-不提供 Config 的 Plugin 使用 `default` Profile。运行态连接、回调和客户端对象不能写入 Profile。
-
-Chat Profile 额外要求唯一路由：跨 Agent/Workspace 复用时必须显式配置 `owner_agent_id` 与
-`owner_workspace_id`。
+运行态连接、回调和客户端对象不能写入 Profile。City 级长期资源属于 `start/stop`，
+Agent/Workspace 级资源属于 `connect/disconnect`。

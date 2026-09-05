@@ -6,7 +6,7 @@
  * - `RpcServer.ts` 负责网络层，handler 把协议方法转成 Agent 操作。
  */
 
-import type { AgentSessionCollection } from "@downcity/agent/host";
+import type { AgentSessionCollection } from "@downcity/agent";
 import type { Agent } from "@downcity/agent";
 import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import type { PluginSnapshot } from "@/plugin/index.js";

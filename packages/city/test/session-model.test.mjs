@@ -14,7 +14,7 @@ import path from "node:path";
 import test from "node:test";
 import { Agent } from "@downcity/agent";
 import { RemoteAgent, Workspace } from "@downcity/city";
-import { create_workspace_entry } from "@downcity/agent/host";
+import { create_workspace_entry } from "@downcity/agent/internal";
 import { AgentRPC } from "../bin/city/transport/rpc/AgentRPC.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";

@@ -5,7 +5,8 @@ description: City、Agent、Workspace、Session、Plugin 与 Shell 的职责和�
 
 # Agent SDK 架构
 
-Downcity 将执行主体、项目资源与扩展运行时分开。`Agent` 拥有身份、指令、模型、自定义 Tool 和 Session；`Workspace` 拥有项目资源与 Shell；`City` 持有 Plugin catalog、共享实例、生命周期与 Agent 绑定。
+Downcity 将执行主体、项目资源与扩展运行时分开。`Agent` 拥有身份、指令、模型、自定义 Tool 和
+Session；`Workspace` 拥有项目资源与 Shell；`City` 持有 Plugin 唯一实例、生命周期与 Agent 集合。
 
 ```ts
 import { Agent } from "@downcity/agent";
@@ -19,7 +20,7 @@ const city = new City({
   workspaces: [workspace],
   plugins: create_builtin_plugin_registrations(),
 });
-city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
+city.agents.add(agent);
 // Session 在创建时选择 Workspace。
 const session = await agent.sessions.create({ workspace });
 ```
@@ -31,7 +32,7 @@ flowchart TD
     Host["宿主应用"] --> City["City<br/>资源与生命周期容器"]
     City --> Agent["Agent<br/>身份、模型、指令、Session"]
     City --> Workspace["Workspace<br/>项目资源与 Shell"]
-    City --> Plugins["Plugins<br/>catalog、Profile 共享实例、生命周期"]
+    City --> Plugins["Plugins<br/>唯一实例、配置投影、生命周期"]
     Agent --> Enter["agent.sessions.create({ workspace })"]
     Workspace --> Enter
     Enter --> Sessions["AgentSessions<br/>Session 集合"]
@@ -48,8 +49,8 @@ flowchart TD
 
 依赖方向保持明确：
 
-- `@downcity/agent` 只依赖 `@downcity/type` 中的 Workspace、Shell 与 Session Extension 协议。
-- `@downcity/city` 依赖 Agent，并向 Agent 投影中立的宿主扩展能力；Agent 不反向依赖 City。
+- `@downcity/agent` 只依赖 `@downcity/type` 中的中立资源协议。
+- `@downcity/city` 依赖 Agent，并通过 Agent 内部绑定注入 Workspace、Tool 与 SessionHooks；Agent 不反向依赖 City。
 - 宿主选择平台 Sandbox，并组合 Agent 与 Workspace。
 - Edge Adapter 使用 `@downcity/type/workspace`，不会加载 Node.js 本地实现。
 
@@ -65,13 +66,16 @@ const agent = new Agent({
   tools: { company_search: company_search_tool },
 });
 
-city.agents.add(agent, { plugins: [{ plugin_id: "task" }] });
+city.agents.add(agent);
 
 const frontend = await agent.sessions.create({ workspace: frontend_workspace });
 const backend = await agent.sessions.create({ workspace: backend_workspace });
 ```
 
-Agent 不持有 Plugin。City 按 `(plugin_id, profile_id)` 持有共享实例，并把绑定后的能力投影到 Agent/Workspace execution entry。每次 Plugin Action 都获得当前 `PluginContext`，可以直接使用受限的 Agent、Workspace、Session 与 Turn 句柄。共享实例使用 `start/stop`，Agent/Workspace scope 使用 `bind/unbind`。
+Agent 不持有 Plugin。City 按 Plugin ID 持有唯一实例，并把全部能力投影到 Agent/Workspace
+execution entry。每次 Plugin Action 都获得当前 `PluginContext`，可以直接使用受限的 Agent、
+Workspace、Session 与 Turn 句柄。City 实例使用 `start/stop`，Agent/Workspace scope 使用
+`connect/disconnect`。
 
 ## Workspace 是资源边界
 
@@ -161,8 +165,8 @@ Workspace 仍由宿主负责释放。
 
 | Package | 拥有 | 不拥有 |
 | --- | --- | --- |
-| `@downcity/type` | Workspace、Shell、Session Extension 等中立协议 | 具体资源实现与生命周期 |
-| `@downcity/agent` | Agent、AgentSessions、Session、Store、宿主扩展端口、模型 Tool Loop | City 组合、Plugin 生命周期、项目资源实现、平台 Sandbox |
+| `@downcity/type` | 跨 package 的中立资源协议 | 具体资源实现与生命周期 |
+| `@downcity/agent` | Agent、AgentSessions、Session、Store、SessionHooks、模型 Tool Loop | City 组合、Plugin 生命周期、项目资源实现、平台 Sandbox |
 | `@downcity/city` | City、Workspace/Shell 实现、Plugin SDK/runtime、Hook 调度、RemoteAgent、HTTP/RPC transport、本地宿主数据 | Agent 执行内核、具体内建 Plugin |
 | Sandbox packages | 单个平台的原生进程隔离 | Workspace、Agent、Session 或 Plugin 业务 |
 

@@ -8,10 +8,10 @@
  * - skills overview 文本通过 `plugin.system` 注入，不再依赖 plugin.system。
  */
 
-import { BasePlugin } from "@downcity/city/plugin";
+import { Plugin } from "@downcity/city/plugin";
 import { create_action } from "@downcity/city/plugin";
 import { z } from "zod";
-import type { Plugin } from "@downcity/city/plugin";
+import type { PluginDefinition } from "@downcity/city/plugin";
 import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import type { PluginActionResult } from "@downcity/city/plugin";
 import type {
@@ -54,7 +54,7 @@ function sanitizeXmlAttr(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
-function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
+function createSkillPluginDefinition(options: SkillPluginOptions): PluginDefinition {
   return {
     name: "skill",
     title: "Skills",
@@ -300,7 +300,7 @@ function createSkillPluginDefinition(options: SkillPluginOptions): Plugin {
 /**
  * SkillPlugin：技能发现、读取与扫描感知的 system 注入。
  */
-export class SkillPlugin extends BasePlugin {
+export class SkillPlugin extends Plugin {
   readonly name = "skill";
 
   constructor(options: SkillPluginOptions = {}) {

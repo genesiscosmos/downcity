@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 统一管理 session 缓存、创建、恢复、默认配置注入与列表查询。
- * - 该服务只负责 Session 生命周期与查询，不负责 Extension / RPC 启停。
+ * - 该服务只负责 Session 生命周期与查询，不负责 Plugin / RPC 启停。
  * - Session 对象创建细节集中在这里，避免 facade 和 lifecycle 重复依赖 Session 构造逻辑。
  */
 
@@ -168,7 +168,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /**
-   * 把 Extension 配置修改广播到已有 Session 的统一输入队列。
+   * 把 Plugin 配置修改广播到已有 Session 的统一输入队列。
    */
   broadcast_hooks(input: {
     command_id: string;
@@ -280,7 +280,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    *
    * 关键点（中文）
    * - 正在执行的 Session 会先停止，避免删除后继续写入。
-   * - 该方法不处理任何 Extension 自有数据。
+   * - 该方法不处理任何 Plugin 自有数据。
    */
   async remove(session_id: string, origin_type = "chat"): Promise<boolean> {
     const resolved_session_id = String(session_id || "").trim();
@@ -456,7 +456,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_workspace_env: () => context.get_workspace_env(),
       get_agent_model: () => this.get_agent_model(),
       get_hooks: () => context.get_hooks(),
-      get_managed_extension_system_blocks: async () => [],
+      get_managed_plugin_system_blocks: async () => [],
       ensure_configured: async (session) => {
         await this.ensure_agent_ready();
       },

@@ -257,7 +257,8 @@ city.agents.add(agent, {
 });
 ```
 
-City 持有 Plugin catalog、Profile 共享实例与生命周期；Agent 只持有身份、模型、指令、Tools 和 Sessions。联网能力仍需显式配置 Profile，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
+City 持有 Plugin 唯一实例、配置投影与生命周期；Agent 只持有身份、模型、指令、Tools 和 Sessions。
+联网能力仍需由宿主配置，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
 
 ## `Session`
 

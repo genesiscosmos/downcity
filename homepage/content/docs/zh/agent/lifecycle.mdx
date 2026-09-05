@@ -5,14 +5,13 @@ description: Agent 的构造、就绪、执行与关闭
 
 # Agent 生命周期
 
-`new Agent(options)` 完成装配后会立即创建并启动 Plugin lifecycle 与 ActionSchedule。不存在 `agent.start()` 或 `agent.stop()`；由宿主负责调用 `agent.dispose()` 释放资源。
+`new Agent(options)` 只创建 Agent 身份、模型、指令、自定义 Tool、Session 集合与 ActionSchedule。Plugin 不属于 Agent；City 注册 Agent 后，把自己持有的 Plugin 能力投影到 Agent 的执行入口。
 
 同一个 Agent ID 在同一物理 Workspace 中只能运行一个活动 runtime。ActionSchedule 是本地调度器，不负责协调重复启动的 Agent 进程。
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/city";
-import { Shell } from "@downcity/city";
+import { City, Shell, Workspace } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const shell = new Shell({ sandbox: new MacOsSeatbeltSandbox() });
@@ -25,14 +24,15 @@ const workspace = new Workspace({
   path: process.cwd(),
   shell,
 });
+const city = new City({ agents: [agent], workspaces: [workspace] });
 
 const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "开始" });
 await turn.finished;
 
-await agent.dispose();
+await city.close();
 ```
 
-Session 会在执行前自动等待 Agent 初始化完成。`dispose()` 会关闭 plugin lifecycle、ActionSchedule 和 Shell 等 Agent 自有运行时资源；HTTP/RPC transport 由所属 City 管理并关闭。
+Session 会在执行前自动等待 Agent 的 City 执行绑定就绪。`agent.dispose()` 只释放 Agent 自身的 Session、ActionSchedule 与执行绑定；`city.close()` 会先停止 Agent Session，再断开 Plugin 的 Agent/Workspace 作用域，随后停止 City 持有的唯一 Plugin 实例，并关闭 Workspace、Shell 与 Transport。
 
 继续阅读：[Agent SDK](/zh/agent-sdk-docs)。

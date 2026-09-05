@@ -7,13 +7,12 @@ description: Use a minimal NotesPlugin to combine an Action, System content, and
 
 ```ts
 import {
-  BasePlugin,
-  define_city_plugin,
+  Plugin,
   type PluginActions,
   type PluginContext,
 } from "@downcity/city/plugin";
 
-class NotesPlugin extends BasePlugin {
+class NotesPlugin extends Plugin {
   readonly name = "notes";
   readonly title = "Project Notes";
   readonly description = "Describe the project notes folder.";
@@ -35,14 +34,11 @@ class NotesPlugin extends BasePlugin {
   };
 }
 
-const notes_module = define_city_plugin({
-  activate() {},
-  create: () => new NotesPlugin(),
-});
+const notes_plugin = new NotesPlugin();
 ```
 
-The host places `notes_module` in a `CityPluginRegistration` and provides it to City. An Agent binds
-only `{ plugin_id: "notes" }`. After entering a Workspace, host code may call
+The host provides `notes_plugin` to City, which exposes it to every Agent. After entering a
+Workspace, host code may call
 `entry.plugins.run_action()` explicitly. Sessions collect System content and Hooks from the same City
 execution view.
 

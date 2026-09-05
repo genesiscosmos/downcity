@@ -5,17 +5,15 @@
  */
 export {
   initialize_agent_runtime,
-  attach_agent_host,
-  attach_agent_storage,
-  attach_agent_host_extensions,
-  attach_agent_session_extensions,
-  ensure_agent_extensions_ready,
-  detach_agent_host,
-  agent_has_host,
-  agent_embassy,
-  release_agent_from_host,
+  bind_agent_runtime,
+  unbind_agent_runtime,
+  agent_runtime_binding,
+  ensure_agent_runtime_ready,
+  agent_has_resource_container,
+  release_agent_from_container,
+  resolve_agent_session_hooks,
   agent_storage_scope,
-  extension_storage_scope,
+  plugin_storage_scope,
   get_agent_storage,
   agent_storage,
   create_workspace_entry,
@@ -26,7 +24,10 @@ export {
   dispose_agent_runtime,
 } from "@/internal/AgentRuntime.js";
 export { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
-export type { AgentHost, AgentHostExtensions } from "@/types/agent/AgentHost.js";
+export type { AgentRuntimeBinding } from "@/types/agent/AgentRuntimeBinding.js";
+export { SessionHooks, SessionHookScope, EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
+export type { SessionHookContext, SessionHookHandlers } from "@/types/session/SessionHook.js";
+export { normalize_session_origin } from "@/session/SessionOrigin.js";
 export {
   initialize_group_runtime,
   attach_group_storage,

@@ -10,7 +10,7 @@ import type { RuntimeTool as Tool } from "@downcity/type";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionContextSnapshot, SessionSegmentSummary } from "@/types/session/SessionSegment.js";
-import type { SessionExtensionContextBlock } from "@/types/session/SessionExtensionHook.js";
+import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
 
 /** Composer 可读取的 Session 身份快照。 */
 export interface SessionComposeIdentity {
@@ -40,12 +40,12 @@ export interface SessionComposeState {
   tools: Readonly<Record<string, Tool>>;
   /** 当前 Step 生效的 instruction system blocks。 */
   instruction_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 当前 Session 由宿主注入的受托管 Extension system blocks。 */
-  managed_extension_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 当前 Step 捕获的 Extension system blocks。 */
-  extension_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 当前 Turn 首次解析后复用、只进入模型输入副本的 Extension 动态上下文。 */
-  extension_context_blocks: readonly SessionExtensionContextBlock[];
+  /** 当前 Session 由宿主注入的受托管 Plugin system blocks。 */
+  managed_plugin_system_blocks: readonly AgentSessionSystemBlock[];
+  /** 当前 Step 捕获的 Plugin system blocks。 */
+  plugin_system_blocks: readonly AgentSessionSystemBlock[];
+  /** 当前 Turn 首次解析后复用、只进入模型输入副本的 Plugin 动态上下文。 */
+  plugin_context_blocks: readonly SessionHookContextBlock[];
 }
 
 /** Composer 可读取的当前 Turn 快照。 */

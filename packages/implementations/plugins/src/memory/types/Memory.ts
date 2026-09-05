@@ -428,7 +428,7 @@ export interface MemoryPluginProfile {
   provider?: "builtin";
   /** 当前启用的 Memory Storage。 */
   storage?: "file";
-  /** City 为当前 Memory Plugin/Profile 分配的私有绝对数据目录。 */
+  /** City 为当前 MemoryPlugin 唯一实例分配的私有绝对数据目录。 */
   storage_root_path?: string;
 }
 /** MemoryPlugin 的构造参数。 */

@@ -1,5 +1,5 @@
 /**
- * City Plugin 执行模块的轻量创建辅助函数。
+ * City Plugin 类与 Action 类型辅助。
  *
  * 这些函数只保留输入的精确类型，不创建隐藏容器或额外生命周期。
  */
@@ -7,8 +7,7 @@
 import type { z } from "zod";
 import type { PluginJsonValue } from "./types/Json.js";
 import type {
-  CityPluginModule,
-  Plugin,
+  PluginDefinition,
   PluginAction,
   PluginActionInputSchema,
   PluginActionResult,
@@ -26,12 +25,6 @@ export type CreatePluginActionOptions<TInput extends PluginJsonValue, TResult ex
     /** Zod schema 或完整 schema 定义。 */
     readonly input_schema?: z.ZodTypeAny | PluginActionInputSchema<TInput>;
   };
-
-/** 创建 Plugin 执行模块时接受的完整定义。 */
-export type CreatePluginOptions<TActions extends PluginActions> = Omit<Plugin, "actions"> & {
-  /** 保留具体 Action key 和输入类型的 Action 集合。 */
-  readonly actions?: TActions;
-};
 
 /** 归一化 Action 输入 schema。 */
 function normalize_input_schema<TInput extends PluginJsonValue>(
@@ -67,28 +60,8 @@ export function create_action(
   };
 }
 
-/** 保留 Plugin 执行模块的精确 Action 类型。 */
-export function create_plugin<TActions extends PluginActions>(
-  plugin: CreatePluginOptions<TActions>,
-): Plugin & { readonly actions: TActions } {
-  const name = String(plugin.name || "").trim();
-  if (!name) throw new Error("create_plugin requires a non-empty name");
-  return {
-    ...plugin,
-    name,
-    title: String(plugin.title || name).trim(),
-    description: String(plugin.description || "").trim(),
-    actions: plugin.actions ?? ({} as TActions),
-  };
-}
-
-/** 保留统一 City Plugin 入口模块的精确类型。 */
-export function define_city_plugin(module: CityPluginModule): CityPluginModule {
-  return module;
-}
-
-/** BasePlugin：需要 class 状态时使用的最小执行模块基类。 */
-export abstract class BasePlugin implements Plugin {
+/** City 持有的 Plugin 基类；一个 City 中每个 ID 只存在一个实例。 */
+export abstract class Plugin implements PluginDefinition {
   /** Plugin 稳定 ID。 */
   abstract readonly name: string;
   /** Plugin 用户可见标题。 */
@@ -98,7 +71,7 @@ export abstract class BasePlugin implements Plugin {
   /** Plugin Action。 */
   readonly actions: PluginActions = {};
   /** 由 City 持有的 Plugin 生命周期。 */
-  lifecycle?: Plugin["lifecycle"];
+  lifecycle?: PluginDefinition["lifecycle"];
 }
 
 /** Action 执行器常用返回类型别名。 */

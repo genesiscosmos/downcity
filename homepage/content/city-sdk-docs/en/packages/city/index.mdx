@@ -4,7 +4,7 @@ description: The runtime environment that owns Agents, Workspaces, Plugins, and 
 ---
 
 `City` is the composition root shared by the CLI, Desktop, and custom Node hosts. Applications
-create Agents. City owns Workspaces, the Plugin catalog, shared `(plugin_id, profile_id)` instances,
+create Agents. City owns Workspaces, one instance per Plugin ID,
 lifecycle, Storage, Embassy services, and optional HTTP/RPC transports. Sessions remain owned by an
 Agent's `AgentSessions` collection.
 
@@ -25,13 +25,7 @@ const city = new City({
 });
 const agent = new Agent({ id: "lucas", model });
 
-city.agents.add(agent, {
-  plugins: [
-    { plugin_id: "skill" },
-    { plugin_id: "task" },
-    { plugin_id: "memory" },
-  ],
-});
+city.agents.add(agent);
 
 const session = await agent.sessions.create({ workspace });
 await (await session.prompt({ query: "Summarize this project" })).finished;
@@ -40,14 +34,13 @@ await city.close();
 
 ## Relationships and ownership
 
-- `City` owns the Plugin catalog, shared instances, main modules, lifecycle, and execution leases.
-- `Agent` owns identity, model, instructions, custom tools, and `AgentSessions`; it only declares Plugin ID/Profile bindings.
+- `City` owns the Plugin catalog, unique instances, main modules, lifecycle, and Hook scopes.
+- `Agent` owns identity, model, instructions, custom tools, and `AgentSessions`; it does not own Plugins.
 - `Session` belongs to an Agent and receives one Workspace execution context plus a City Plugin execution view.
 - `Workspace` owns project files, tools, environment, and an optional Shell. It does not own Agents, Sessions, or Plugins.
 
-An SDK host may also call `city.plugins.provide(registration)` and then bind it with
-`city.plugins.register(agent_id, { plugin_id, profile })`. One Plugin ID can map to only one module
-within a City. One `(plugin_id, profile_id)` creates one instance shared by every bound Agent.
+An SDK host may call `city.plugins.add(plugin)` and `city.plugins.remove(plugin_id)` dynamically.
+One Plugin ID maps to one instance within a City, shared automatically by every registered Agent.
 
 ## Workspace management
 
@@ -62,23 +55,19 @@ only manages the runtime object; it never deletes the project directory.
 A Plugin main is activated once per Plugin ID and deactivated when City closes. Execution instances
 have four lifecycle checkpoints:
 
-1. City creates an instance and calls `start` when the first Agent references a Profile.
-2. City calls `bind(context)` when an Agent enters a Workspace.
-3. City calls `unbind(context)` when that scope leaves or the Plugin is unbound.
-4. City calls `stop` after the final Agent reference and active execution lease are released.
+1. City calls `start` when the Plugin is added.
+2. City calls `connect(context)` when an Agent enters a Workspace.
+3. City calls `disconnect(context)` when that scope leaves or the Agent is removed.
+4. City calls `stop` when the Plugin is removed or City closes.
 
 Actions, System providers, Availability checks, and Hooks receive a `PluginContext`. It contains
-restricted `city`, `agent`, `workspace`, `session`, `turn`, `profile`, and `storage` handles. A Plugin
+restricted `city`, `agent`, `workspace`, `session`, `turn`, `config`, and `storage` handles. A Plugin
 can therefore communicate through the current Session or Agent handle instead of resolving only a
 `session_id`.
 
-Hooks remain scheduled by City's execution Registry. A Session captures an immutable execution
-lease at explicit checkpoints. New Steps stop seeing a dynamically unbound Plugin immediately,
-while an existing Step may finish before its lease triggers final cleanup.
-
-One Chat Profile owns one channel connection set and one queue. Reusing it across Agent/Workspace
-scopes requires explicit `owner_agent_id` and `owner_workspace_id` values. Without an owner, binding
-a second distinct scope fails.
+Hooks remain scheduled by City's execution Registry. A Session captures an immutable Hook scope at
+explicit checkpoints. New Steps stop seeing a dynamically removed Plugin immediately, while an
+existing Step may finish before its scope triggers final cleanup.
 
 The CLI daemon and Desktop window own independent City lifecycles. Host coordination only controls
 listener ownership; it does not mutate persisted Agent, Plugin, or Session data.

@@ -6,25 +6,25 @@
 
 - 本地 SDK：`Agent`、`Group`、`Session`
 - 内部执行内核：Session Composer、LLM/Tool Loop、增量输出
-- 中立宿主扩展端口：接收 City 提供的 Tool、Hook execution lease 与 Workspace 协议
+- 中立宿主执行端口：接收 City 提供的 Tool、SessionHooks 与 Workspace 协议
 
-CLI 与 Desktop 通过 `@downcity/city` 读取宿主配置并显式装配 `Agent` 与 Plugin 模块，再通过 `city.agents.add(agent, { plugins })` 将它们加入环境。City 持有 Plugin Registry、生命周期和 execution lease；Agent 不保存 Plugin 实例。
+CLI 与 Desktop 通过 `@downcity/city` 读取宿主配置并显式装配 `Agent`，再将 City 级 Plugin 注册到 `City`。调用 `city.agents.add(agent)` 后，City 中全部 Plugin 自动对该 Agent 可用；Agent 不保存 Plugin 实例。Plugin 的实例、配置投影、Hook scope 与生命周期均由 City 持有。
 
 ## 包定位
 
 - 面向单个 Agent 项目的执行面
 - 对外通过 `@downcity/agent` 根入口暴露公共 API
-- 负责 Session SDK、Executor 内核、宿主扩展端口与 SDK 本地 Agent
+- 负责 Session SDK、Executor 内核、中性执行端口与 SDK 本地 Agent
 - 不负责多 Agent registry、control plane daemon、console UI 聚合和平台级编排
 
 ## 与其他包的边界
 
 - `@downcity/agent`
   - Agent、Group、Session
-  - Session SDK、Executor 内核和中性宿主扩展端口
+  - Session SDK、Executor 内核和中性执行端口
 - `@downcity/city`
   - City 组合根、Workspace/Embassy 装配、RemoteAgent 与 HTTP/RPC transport
-  - Plugin Registry、Hook 调度、共享实例和生命周期
+  - Plugin Registry、Hook 调度、唯一实例和生命周期
   - `@downcity/city/local` 提供本地数据库、配置 Repository 与 Plugin Loader
 - `@downcity/city/plugin`
   - Plugin 作者协议、Context、Action、Hook、Lifecycle 与统一 City module
@@ -137,7 +137,7 @@ src/
 - Workspace、Shell 与 Plugin 实现由 City 持有，Agent 只消费 `@downcity/type` 中的中立协议
 - `Agent` facade 是实例级装配中心，持有 instruction、model、tools 与 sessions；env 由 Workspace 持有，Plugin 由 City 持有
 - `PluginContext` 由 City 为 Agent/Workspace 执行范围创建，只向 Plugin 投影稳定的受限能力
-- `session / executor` 是 Agent 的核心执行分层，Plugin 通过宿主扩展端口进入 Session
+- `session / executor` 是 Agent 的核心执行分层，Plugin 通过 `SessionHooks` 进入 Session
 - `SessionMessages` 是 Message 唯一事实源，Executor 不持有 Store
 - `types / utils` 提供横向公共支撑
 

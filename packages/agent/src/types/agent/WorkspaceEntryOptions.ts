@@ -1,7 +1,7 @@
 /**
  * WorkspaceEntry 装配参数。
  *
- * WorkspaceEntry 只表达 Agent 已进入某个 Workspace，不拥有 Agent 身份或 Extension
+ * WorkspaceEntry 只表达 Agent 已进入某个 Workspace，不拥有 Agent 身份或 Plugin
  * 定义。Workspace 资源的生命周期在离开时由该作用域统一关闭。
  */
 

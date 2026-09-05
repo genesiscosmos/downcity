@@ -5,7 +5,8 @@ description: Understand the Agent SDK public surface in everyday, advanced, and 
 
 # SDK Surface
 
-The `@downcity/agent` root exports the complete extension surface, but ordinary applications do not need every export. Start with the everyday core, then enter the Session, Plugin, or transport integration layer only when required.
+`@downcity/agent` exports Agent and Session execution APIs. Workspace, Plugin, and transport ownership
+belongs to `@downcity/city`.
 
 ## Layer 1: everyday core
 
@@ -13,7 +14,7 @@ Most local applications need only:
 
 - `Workspace`: create the project resource and security boundary and receive Shell.
 - `Agent`: compose identity, model, instructions, Tools, and Sessions.
-- `City`: own Workspaces, the Plugin catalog, shared instances, and Agent bindings.
+- `City`: own Workspaces, unique Plugin instances, Agent/Group collections, and transports.
 - `agent.sessions.create({ workspace })` / `get()`: create or restore a Session in the current scope.
 - `session.prompt()`: start one Turn.
 - `turn.finished`: await the final result.
@@ -40,7 +41,7 @@ The local SDK is session-first: Agent performs composition, while Session owns i
 ### Agent and Workspace
 
 - `agent.set_instruction()`: update static Agent instructions.
-- `city.plugins`: provide Plugins, manage Agent bindings, and call main actions.
+- `city.plugins`: add or remove Plugin instances and call main actions.
 - `entry.plugins`: inspect or call Plugins in an Agent/Workspace execution scope.
 - `workspace.get_env()` / `set_env()` / `patch_env()`: manage the project execution environment.
 - `agent.get_logger()` / `get_shell()`: host integration entry points.
@@ -63,7 +64,7 @@ For a live UI, load initial Session and Message snapshots before calling `subscr
 
 Use these capabilities only when building plugins, servers, or custom runtime components:
 
-- `PluginContext`: the restricted City projection for the current Agent/Workspace/Session/Turn; hosts should not acquire or retain it.
+- `PluginContext`: the restricted City projection for the current Agent/Workspace/Session/Turn, exported by `@downcity/city/plugin`.
 - `SessionTurnContext`: the execution context that coordinates identity, lifecycle, steps, input, and output for one Turn; plugins receive only its read-only `PluginExecutionContext` projection.
 - `create_session_turn_context(...)`: the standard factory used by custom executors or runtime components to create that Turn Context.
 - Interfaces such as `AgentSession` and `SessionExecutor`: replace or extend default implementations.

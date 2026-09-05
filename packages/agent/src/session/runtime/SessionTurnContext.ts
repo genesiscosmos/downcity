@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - Session 创建并拥有上下文，Executor 和 Tool 通过领域分区协作。
- * - 所有可变数组、Extension lease 与取消监听都封装在本模块内。
- * - Extension 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
+ * - 所有可变数组、Plugin lease 与取消监听都封装在本模块内。
+ * - Plugin 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
  */
 
 import type { RuntimeToolEffect } from "@downcity/type";
@@ -14,16 +14,14 @@ import type {
   SessionTurnContext,
   SessionTurnContextInit,
 } from "@/types/executor/SessionTurnContext.js";
-import type {
-  SessionExtensionExecutionContext,
-  SessionExtensionExecutionLease,
-} from "@downcity/type/session";
+import type { SessionHookContext } from "@/types/session/SessionHook.js";
+import type { SessionHookScope } from "@/session/SessionHooks.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import { normalize_session_origin } from "@/session/SessionOrigin.js";
-import type { SessionExtensionContextBlock } from "@/types/session/SessionExtensionHook.js";
+import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
 
-/** 非 Turn 查询创建 Extension 只读快照所需的稳定 Session 状态。 */
-export interface CreateSessionExtensionExecutionContextInput {
+/** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */
+export interface CreateSessionHookContextInput {
   /** 当前 Session 标识。 */
   session_id: string;
   /** 当前 Session 的完整来源元数据。 */
@@ -48,11 +46,11 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private disposed = false;
   private workspace_env_snapshot?: Readonly<Record<string, string>>;
   private agent_systems_snapshot: readonly string[] = Object.freeze([]);
-  private extension_lease?: SessionExtensionExecutionLease;
-  /** 整个 Turn 共享的 Extension 动态上下文，不随 Step lease 切换而失效。 */
-  private extension_context_blocks_snapshot: readonly SessionExtensionContextBlock[] = Object.freeze([]);
+  private hook_scope?: SessionHookScope;
+  /** 整个 Turn 共享的 Plugin 动态上下文，不随 Step lease 切换而失效。 */
+  private plugin_context_blocks_snapshot: readonly SessionHookContextBlock[] = Object.freeze([]);
   /** 并发或重复解析时复用的唯一 Promise。 */
-  private extension_context_blocks_promise?: Promise<readonly SessionExtensionContextBlock[]>;
+  private plugin_context_blocks_promise?: Promise<readonly SessionHookContextBlock[]>;
   private injected_user_messages: SessionUserMessage[] = [];
   private deferred_messages: SessionUserMessage[] = [];
   private pending_assistant_parts: SessionAssistantResultPart[] = [];
@@ -121,11 +119,11 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       get agent_systems() {
         return context.agent_systems_snapshot;
       },
-      get extensions() {
-        return context.extension_lease;
+      get hooks() {
+        return context.hook_scope;
       },
-      get extension_context_blocks() {
-        return context.extension_context_blocks_snapshot;
+      get plugin_context_blocks() {
+        return context.plugin_context_blocks_snapshot;
       },
       commit: (input) => {
         context.workspace_env_snapshot = Object.freeze({
@@ -135,16 +133,16 @@ class DefaultSessionTurnContext implements SessionTurnContext {
           ...input.agent_systems,
         ]);
       },
-      replace_extensions: async (extensions) => {
-        const previous = context.extension_lease;
-        context.extension_lease = extensions;
-        if (previous && previous !== extensions) await previous.release();
+      replace_hooks: async (hooks) => {
+        const previous = context.hook_scope;
+        context.hook_scope = hooks;
+        if (previous && previous !== hooks) await previous.close();
       },
-      resolve_extension_context_blocks: async (resolver) =>
-        await context.resolve_extension_context_blocks(resolver),
+      resolve_plugin_context_blocks: async (resolver) =>
+        await context.resolve_plugin_context_blocks(resolver),
       release: async () => await context.release_extensions(),
-      extension_execution_context: (call_id?: string) =>
-        context.create_extension_execution_context(call_id),
+      hook_context: (call_id?: string) =>
+        context.create_hook_context(call_id),
     });
 
     this.input = Object.freeze({
@@ -196,13 +194,13 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     });
   }
 
-  /** 每个 Turn 只执行一次 Extension 动态上下文解析，并保存不可变快照。 */
-  private async resolve_extension_context_blocks(
-    resolver: () => Promise<readonly SessionExtensionContextBlock[]>,
-  ): Promise<readonly SessionExtensionContextBlock[]> {
-    this.extension_context_blocks_promise ??= (async () => {
+  /** 每个 Turn 只执行一次 Plugin 动态上下文解析，并保存不可变快照。 */
+  private async resolve_plugin_context_blocks(
+    resolver: () => Promise<readonly SessionHookContextBlock[]>,
+  ): Promise<readonly SessionHookContextBlock[]> {
+    this.plugin_context_blocks_promise ??= (async () => {
       const blocks = await resolver();
-      this.extension_context_blocks_snapshot = Object.freeze(
+      this.plugin_context_blocks_snapshot = Object.freeze(
         (Array.isArray(blocks) ? blocks : []).map((block) => Object.freeze({
           ...block,
           ...(block.citations
@@ -210,13 +208,13 @@ class DefaultSessionTurnContext implements SessionTurnContext {
             : {}),
         })),
       );
-      return this.extension_context_blocks_snapshot;
+      return this.plugin_context_blocks_snapshot;
     })();
-    return await this.extension_context_blocks_promise;
+    return await this.plugin_context_blocks_promise;
   }
 
   /** 为 City 扩展生成不共享根对象引用的只读快照。 */
-  private create_extension_execution_context(call_id?: string): SessionExtensionExecutionContext {
+  private create_hook_context(call_id?: string): SessionHookContext {
     const normalized_call_id = String(call_id || "").trim();
     return Object.freeze({
       session_id: this.session.session_id,
@@ -234,11 +232,11 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     });
   }
 
-  /** 释放当前 Step 捕获的扩展 lease。 */
+  /** 释放当前 Step 捕获的 Plugin Hook 作用域。 */
   private async release_extensions(): Promise<void> {
-    const extensions = this.extension_lease;
-    this.extension_lease = undefined;
-    await extensions?.release();
+    const extensions = this.hook_scope;
+    this.hook_scope = undefined;
+    await extensions?.close();
   }
 
   /** 闭合当前运行拥有的全部资源。 */
@@ -260,10 +258,10 @@ export function create_session_turn_context(
   return new DefaultSessionTurnContext(init);
 }
 
-/** 为非 Turn 的 system 查询创建 Extension 可读取的 Session 快照。 */
-export function create_session_extension_execution_context(
-  input: CreateSessionExtensionExecutionContextInput,
-): SessionExtensionExecutionContext {
+/** 为非 Turn 的 system 查询创建 Plugin 可读取的 Session 快照。 */
+export function create_session_hook_context(
+  input: CreateSessionHookContextInput,
+): SessionHookContext {
   return Object.freeze({
     session_id: input.session_id,
     session_origin: Object.freeze(normalize_session_origin(input.session_origin)),

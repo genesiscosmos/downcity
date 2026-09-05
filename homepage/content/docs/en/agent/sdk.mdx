@@ -31,7 +31,7 @@ const city = new City({
   workspaces: [workspace],
   plugins: create_builtin_plugin_registrations(),
 });
-city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
+city.agents.add(agent);
 
 // Session 在创建时选择 Workspace。
 const session = await agent.sessions.create({ workspace });

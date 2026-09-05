@@ -1,92 +1,25 @@
 ---
 title: Plugin Availability
-description: Understand plugin registration state and runtime availability
+description: Understand City registration state and runtime availability.
 ---
 
 # Plugin Availability
 
-There are two facts that are easy to confuse:
+Two facts matter:
 
-- bound to the current Agent by City
-- `available`
+- whether the Plugin is registered in City and therefore projected to every Agent;
+- whether the current Agent/Workspace satisfies the Plugin's `availability()` check.
 
-## Bound
+```ts
+const plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id });
+plugins.has("skill");
+plugins.status("skill");
+await plugins.availability("skill");
+```
 
-This means:
+A newly added Plugin is `initializing` until `start` completes, then becomes `ready`. A failed start
+produces `error`. An ordinary Action business failure does not change the Plugin's global state.
 
-- whether City currently binds the Plugin to this Agent
-
-Providing a registration to the City catalog does not make it executable by every Agent. The Plugin appears in `entry.plugins` only after `city.agents.add(..., { plugins })` or `city.plugins.register(...)` binds it. In snapshots, `enabled` means "bound to this Agent", not a project config switch.
-
-A newly bound Plugin remains `initializing` until its shared instance finishes lifecycle startup. Actions, Availability checks, System blocks, and Hooks wait for that barrier before executing.
-
-If plugin lifecycle startup fails, the plugin state can become `error` for diagnostics. Ordinary action business failures do not mark the whole plugin as `error`; for example, a failed `skill.lookup` returns that action failure while the `skill` plugin remains callable.
-
-## `available`
-
-This means:
-
-- whether the plugin can actually work right now in the current context
-
-Think of it as runtime readiness or health.
-
-A plugin can absolutely be:
-
-- registered
-- but `available = false`
-
-For example:
-
-- a provider is not installed yet
-- Python dependencies are missing
-- a required model was not downloaded
-
-## Why two layers exist
-
-Because "City bound it to this Agent" and "the dependency chain is actually ready" are different facts.
-
-That split lets UI describe:
-
-- registration state
-- health state
-
-## Static catalog vs runtime availability
-
-### Static catalog
-
-The control-plane catalog mainly answers:
-
-- does this plugin exist
-- can City bind it to an Agent
-
-It does not always have a full runtime context to perform deep checks.
-
-### Runtime availability
-
-Runtime availability is closer to:
-
-- can this plugin really work right now
-
-It can combine:
-
-- current config
-- dependency inspection
-- plugin-specific availability logic
-
-## How to think about chat authorization now
-
-Chat authorization is now a built-in runtime capability of `ChatPlugin`; it is no longer registered as a separate plugin.
-
-That means it no longer appears as its own catalog entry. Whether chat authorization exists depends on whether City has bound `ChatPlugin` to the current Agent.
-
-## Safest mental model
-
-Remember it as:
-
-- Agent binding is the execution switch
-- `available` is the health
-
-## Related docs
-
-- [Plugin configuration](/en/agent-sdk-docs/plugins/configuration)
-- [Built-in plugins today](/en/agent-sdk-docs/plugins/built-in-plugins)
+`availability()` only answers whether the Plugin can work in the current Context—for example whether
+a provider, dependency, model, or credential is ready. It does not bind Plugins to Agents; all City
+Plugins are always visible to all City Agents.

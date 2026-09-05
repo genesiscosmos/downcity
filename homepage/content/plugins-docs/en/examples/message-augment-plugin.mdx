@@ -18,12 +18,12 @@ This kind of pre-chain value enrichment is a strong fit for `pipeline`.
 
 ```ts
 import {
-  BasePlugin,
+  Plugin,
   type PluginJsonObject,
   type PluginHooks,
 } from "@downcity/city/plugin";
 
-class MessageAugmentPlugin extends BasePlugin {
+class MessageAugmentPlugin extends Plugin {
   readonly name = "message_augment";
   readonly title = "Message Augment";
   readonly description = "Adds extra fields to inbound message payloads.";

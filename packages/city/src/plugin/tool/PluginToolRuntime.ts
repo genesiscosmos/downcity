@@ -48,14 +48,11 @@ export async function invoke_plugin_call_tool(
 
   try {
     const turn_context = params.turn_context;
-    const plugins = turn_context.step.extensions
-      ? turn_context.step.extensions as unknown as import("@/types/plugin/PluginRuntime.js").AgentPluginExecutionView
-      : params.plugins;
-    const result = await plugins.run_action({
+    const result = await params.plugins.run_action({
       plugin,
       action,
       payload,
-      execution_context: turn_context.step.extension_execution_context(params.call_id),
+      execution_context: turn_context.step.hook_context(params.call_id),
       ...(turn_context.interactions
         ? { interactions: turn_context.interactions }
         : {}),
@@ -100,10 +97,7 @@ export async function invoke_plugin_read_tool(
 ): Promise<ActionResult<PluginReadToolResult>> {
   const input: PluginReadInput = params.input;
   try {
-    const plugins = params.turn_context.step.extensions
-      ? params.turn_context.step.extensions as unknown as import("@/types/plugin/PluginRuntime.js").AgentPluginExecutionView
-      : params.plugins;
-    const data = plugins.read({
+    const data = params.plugins.read({
       plugin: typeof input.plugin === "string" ? input.plugin : undefined,
       action: typeof input.action === "string" ? input.action : undefined,
     });

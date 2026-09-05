@@ -4,7 +4,7 @@ description: 持有 Agent、Workspace、Plugin 与 transport 的运行环境。
 ---
 
 `City` 是 CLI、Desktop 和自定义 Node 宿主共用的组合根。应用创建 Agent；City 持有
-Workspace、Plugin catalog、`(plugin_id, profile_id)` 共享实例、生命周期、Storage、Embassy
+Workspace、Plugin 唯一实例、生命周期、Storage、Embassy
 以及可选 HTTP/RPC transport。Session 始终由 Agent 的 `AgentSessions` 持有。
 
 ```bash
@@ -24,13 +24,7 @@ const city = new City({
 });
 const agent = new Agent({ id: "lucas", model });
 
-city.agents.add(agent, {
-  plugins: [
-    { plugin_id: "skill" },
-    { plugin_id: "task" },
-    { plugin_id: "memory" },
-  ],
-});
+city.agents.add(agent);
 
 const session = await agent.sessions.create({ workspace });
 await (await session.prompt({ query: "总结当前项目" })).finished;
@@ -39,14 +33,13 @@ await city.close();
 
 ## 关系与所有权
 
-- `City` 持有 Plugin catalog、共享实例、main、生命周期和 execution lease。
-- `Agent` 持有身份、模型、指令、自定义工具和 `AgentSessions`，只声明 Plugin ID/Profile 绑定。
+- `City` 持有 Plugin catalog、唯一实例、main、生命周期和 Hook 作用域。
+- `Agent` 持有身份、模型、指令、自定义工具和 `AgentSessions`，不持有 Plugin。
 - `Session` 归 Agent 所有，在创建时取得一个 Workspace 执行上下文和 City Plugin 执行视图。
 - `Workspace` 只持有项目文件、工具、env 与可选 Shell，不拥有 Agent、Session 或 Plugin。
 
-SDK 也可以先调用 `city.plugins.provide(registration)` 动态登记模块，再用
-`city.plugins.register(agent_id, { plugin_id, profile })` 建立绑定。相同 Plugin ID 在一个 City
-中只能对应同一模块；相同 `(plugin_id, profile_id)` 只创建一个实例，多 Agent 共享该实例。
+SDK 也可以调用 `city.plugins.add(plugin)` 动态添加实例，或调用 `city.plugins.remove(plugin_id)`
+移除。相同 Plugin ID 在一个 City 中只能对应一个实例；全部已注册 Agent 自动共享该实例。
 
 ## Workspace 管理
 
@@ -59,20 +52,17 @@ Workspace 的 Shell、Sandbox 等运行资源，再将其移出当前 City；不
 
 Plugin main 每个 Plugin ID 只 `activate` 一次，City 关闭时 `deactivate`。执行实例有四个节点：
 
-1. 首个 Agent 引用某 Profile 时创建实例并调用 `start`。
-2. Agent 进入 Workspace 时调用 `bind(context)`。
-3. 离开 Workspace 或解除绑定时调用 `unbind(context)`。
-4. 最后一个 Agent 引用与正在执行的 lease 都释放后调用 `stop`。
+1. Plugin 加入 City 时调用 `start`。
+2. Agent 进入 Workspace 时调用 `connect(context)`。
+3. 离开 Workspace或移除 Agent 时调用 `disconnect(context)`。
+4. Plugin 移除或 City 关闭时调用 `stop`。
 
 Action、System、Availability 与 Hook 调用都会收到 `PluginContext`。它包含受限的
-`city`、`agent`、`workspace`、`session`、`turn`、`profile` 和 `storage` 对象，因此 Plugin
+`city`、`agent`、`workspace`、`session`、`turn`、`config` 和 `storage` 对象，因此 Plugin
 可以直接调用当前 Session 或 Agent 的受限能力，不需要只靠 `session_id` 重新查找。
 
-Hook 仍由 City 的执行 Registry 调度。Session 在明确检查点捕获不可变 execution lease；动态解绑
-后新 Step 立即看不到 Plugin，已经开始的 Step 可以完成，并在释放 lease 后触发最终清理。
-
-同一个 Chat Profile 只运行一组渠道连接和队列。跨 Agent/Workspace 复用时必须在 Profile 中显式
-配置 `owner_agent_id` 与 `owner_workspace_id`；未配置 Owner 时，第二个不同作用域的绑定会失败。
+Hook 仍由 City 的执行 Registry 调度。Session 在明确检查点捕获不可变 Hook 作用域；动态移除后
+新 Step 立即看不到 Plugin，已经开始的 Step 可以完成，并在释放作用域后触发最终清理。
 
 CLI daemon 与 Desktop 窗口分别拥有独立的 City 生命周期。宿主协调协议只协调监听权，不修改
 Agent、Plugin 或 Session 的持久化数据。

@@ -28,7 +28,7 @@ export interface PluginNotificationTopicInput {
   readonly topic_key: string;
 }
 
-/** 宿主注入给 Agent Plugin factory 的通知发布能力。 */
+/** 宿主注入给 City Plugin 实例的通知发布能力。 */
 export interface PluginNotificationPublisher {
   /** 发布一条由当前 Plugin 拥有的通知。 */
   publish(input: PluginNotificationInput): Promise<void>;

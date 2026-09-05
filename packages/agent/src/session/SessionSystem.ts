@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 面向 `Agent` SDK 的本地会话执行场景。
- * - 注入调用方显式传入的静态 instruction 与 Extension system blocks。
+ * - 注入调用方显式传入的静态 instruction 与 Plugin system blocks。
  * - SDK 不在 system 中注入动态变量；动态上下文应由调用方放入 user message。
  */
 
@@ -25,7 +25,7 @@ function normalize_system_blocks(
       if (
         source !== "core" &&
         source !== "instruction" &&
-        source !== "extension" &&
+        source !== "plugin" &&
         source !== "session"
       ) {
         return null;
@@ -101,8 +101,8 @@ export async function build_session_system_blocks(
   }
   return [
     ...normalize_system_blocks(input.get_instruction_system_blocks()),
-    ...normalize_system_blocks(await input.get_managed_extension_system_blocks()),
-    ...normalize_system_blocks(await input.get_extension_system_blocks()),
+    ...normalize_system_blocks(await input.get_managed_plugin_system_blocks()),
+    ...normalize_system_blocks(await input.get_plugin_system_blocks()),
     // session block 放在最后，尽量保留前缀 system blocks 的跨 session 缓存命中。
     create_session_system_block(
       create_session_info({

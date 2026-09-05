@@ -11,7 +11,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { create_action } from "@downcity/city/plugin";
-import { BasePlugin } from "@downcity/city/plugin";
+import { Plugin } from "@downcity/city/plugin";
 import type { PluginContext } from "@downcity/city/plugin";
 import type {
   PluginJsonObject,
@@ -500,7 +500,7 @@ function validate_job_result(value: ImagePluginJobResult): void {
 /**
  * Agent 图片生成插件。
  */
-export class ImagePlugin extends BasePlugin {
+export class ImagePlugin extends Plugin {
   /**
    * 当前 plugin 稳定名称。
    */
@@ -518,7 +518,7 @@ export class ImagePlugin extends BasePlugin {
 
   private readonly default_model?: ImagePluginDefaultModel;
 
-  constructor(options: ImagePluginOptions) {
+  constructor(options: ImagePluginOptions = {}) {
     super();
     const name = String(options.name || DEFAULT_IMAGE_PLUGIN_NAME).trim();
     if (!name) {
@@ -724,7 +724,11 @@ export class ImagePlugin extends BasePlugin {
           const normalized_input = await apply_default_image_model(
             context,
             await normalize_image_create_input(context, normalized_payload),
-            this.default_model,
+            this.default_model ?? normalize_default_image_model_value(
+              typeof context.config.default_model === "string"
+                ? context.config.default_model
+                : undefined,
+            ),
           );
           const created = await require_image_ai(context).image_create(normalized_input as unknown as PluginJsonObject) as unknown as ImagePluginJobCreateResult;
           validate_created_job(created);

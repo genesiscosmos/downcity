@@ -16,12 +16,13 @@ Plugin
 ## 插件能做什么
 
 - 向 Agent 暴露可调用的工具
-- 接入 City Plugin 生命周期（start、bind、unbind、stop）
+- 接入 City Plugin 生命周期（start、connect、disconnect、stop）
 - 管理自己的状态、连接和后台任务
 - 提供不依赖 Profile 的 Sidebar + Mainview 工作区，并在 Catalog 详情的独立 Config 中管理配置
 - 在 City 进程边界内运行，不作为独立服务
 
-Profile 是 City 为 Plugin 提供的配置隔离空间，与业务工作区无关。相同 `(plugin_id, profile_id)` 在一个 City 内共享实例；Agent 只声明 Plugin/Profile 绑定，不持有实例或生命周期。
+Profile 是宿主为 Plugin 提供的命名配置空间，与业务工作区无关。一个 City 中每个 Plugin ID
+只有一个实例；配置按当前 Agent 投影到 `PluginContext.config`，Agent 不持有实例或生命周期。
 
 ## 内置插件
 
@@ -37,11 +38,11 @@ Downcity 内置了多个插件，覆盖常见的 Agent 需求：
 
 ## 编写插件
 
-SDK 中通过 `CityPluginRegistration` 提供 Plugin，再按 ID 绑定 Agent，不需要经过安装协议：
+SDK 中可以直接向 City 提供 Plugin 实例，不需要经过安装协议：
 
 ```ts
-const city = new City({ plugins: [github_registration], workspaces: [workspace] });
-city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
+const city = new City({ plugins: [github_plugin], workspaces: [workspace] });
+city.agents.add(agent);
 ```
 
 需要被 CLI 或 Desktop 安装和管理时，再通过 `plugin.json` 声明统一 `main` 与可选 `renderer` 入口。

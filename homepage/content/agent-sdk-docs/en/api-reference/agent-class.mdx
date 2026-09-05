@@ -38,4 +38,8 @@ const session = await agent.sessions.create({ workspace });
 There is no `workspace` constructor option. The host creates Workspace independently and selects it
 when creating a Session.
 
-One Agent may create Sessions in multiple Workspaces. The Workspace is supplied to each Session and does not become an Agent-owned public object. City provides Plugins and binds them through `city.agents.add(agent, { plugins })` or `city.plugins.register()`; callers use the `entry.plugins` surface returned by `city.enter_workspace()`. `agent.dispose()` releases Sessions and the current City binding. Network transports remain owned by the host.
+One Agent may create Sessions in multiple Workspaces. The Workspace is supplied to each Session and
+does not become an Agent-owned public object. City provides Plugins, and every City Plugin is
+automatically available to every City Agent. Callers use the `entry.plugins` surface returned by
+`city.enter_workspace()`. `agent.dispose()` releases Sessions and the current City binding. Network
+transports remain owned by the host.

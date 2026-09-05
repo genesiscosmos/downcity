@@ -93,6 +93,25 @@ export class CliCityRuntime {
       storage: new LocalStorageProvider(data.root_path),
       embassy,
       plugins: plugin_registrations,
+      plugin_host: {
+        runtime_config: (plugin_id, agent_id) => {
+          const reference = data.agents.get(agent_id)?.plugins[plugin_id];
+          if (!reference) return {};
+          return structuredClone(
+            data.plugins.get_profile(plugin_id, reference.profile || "default") ?? {},
+          );
+        },
+        profile_config: (plugin_id, profile_id) => ({
+          get: async () => structuredClone(data.plugins.get_profile(plugin_id, profile_id) ?? {}),
+          set: async (config) => {
+            data.plugins.save_profile(plugin_id, profile_id, structuredClone(config));
+          },
+        }),
+        notifications: () => ({
+          publish: async () => {},
+          dismiss: async () => {},
+        }),
+      },
       runtime: {
       resolve_workspace: async (_agent, workspace_id) => {
         const workspace_config = data.workspaces.get(workspace_id);
@@ -121,7 +140,7 @@ export class CliCityRuntime {
                 sessions: entry.sessions,
                 plugins,
                 id: agent.id,
-                list_plugin_states: () => city.plugins.snapshots(agent.id),
+                list_plugin_states: () => city.plugins.snapshots(),
                 resolve_system_messages: (input) => entry.resolve_system_messages(input),
                 register_plugin_http_routes: (app) => {
                   city.plugins.register_http_routes(app, {
@@ -156,12 +175,11 @@ export class CliCityRuntime {
     const agents: Agent[] = [];
     try {
       for (const config of data.agents.list()) {
-        const registration = await create_cli_agent({
+        const agent = await create_cli_agent({
           config,
-          plugin_loader,
         });
-        agents.push(registration.agent);
-        city.agents.add(registration.agent, { plugins: registration.plugins });
+        agents.push(agent);
+        city.agents.add(agent);
       }
     } catch (error) {
       await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));

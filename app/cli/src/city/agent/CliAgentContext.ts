@@ -10,8 +10,11 @@ import type {
   AgentSessionCollection,
   SessionSystemMessage,
 } from "@downcity/agent";
-import type { CityPluginScope } from "@downcity/city";
+import type { City } from "@downcity/city";
 import type { WorkspaceRuntime } from "@downcity/type/workspace";
+
+/** City 为一个 Agent/Workspace 投影的 Plugin 调用面。 */
+type CityPluginScope = ReturnType<City["plugins"]["scope"]>;
 
 /** CLI 单 Agent 控制面所需的最小执行能力。 */
 export interface CliAgentContext {

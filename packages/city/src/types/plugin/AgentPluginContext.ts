@@ -7,7 +7,7 @@
  * - Plugin 是否需要 Agent 级生命周期，由 Plugin 自己是否实现 start/stop 决定。
  */
 
-import type { Logger } from "@downcity/agent/host";
+import type { Logger } from "@downcity/agent";
 import type { PluginWebServices } from "@/types/plugin/PluginServices.js";
 import type { Embassy } from "@downcity/federation";
 

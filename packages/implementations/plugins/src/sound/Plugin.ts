@@ -10,7 +10,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { BasePlugin, create_action } from "@downcity/city/plugin";
+import { Plugin, create_action } from "@downcity/city/plugin";
 import { z } from "zod";
 import type { PluginContext, PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
@@ -435,7 +435,7 @@ function append_voice_text(
 /**
  * Agent 统一语音插件。
  */
-export class SoundPlugin extends BasePlugin {
+export class SoundPlugin extends Plugin {
   /** 当前 plugin 稳定名称。 */
   readonly name: string;
 
@@ -451,8 +451,12 @@ export class SoundPlugin extends BasePlugin {
   private readonly language?: string;
   private readonly voice?: string;
   private readonly format?: string;
-  constructor(options: SoundPluginOptions) {
+  /** 构造时显式提供的配置；其优先级高于 City 作用域配置。 */
+  private readonly options: SoundPluginOptions;
+
+  constructor(options: SoundPluginOptions = {}) {
     super();
+    this.options = { ...options };
     const name = normalize_optional_string(options.name) ?? DEFAULT_SOUND_PLUGIN_NAME;
     const default_asr_model = normalize_optional_string(options.default_asr_model);
     if (options.auto_asr === true && !default_asr_model) {
@@ -473,13 +477,14 @@ export class SoundPlugin extends BasePlugin {
   /**
    * SoundPlugin 给 Agent 的使用说明。
    */
-  system(_context: PluginContext): string {
+  system(context: PluginContext): string {
+    const options = this.resolve_options(context);
     return [
       "# Sound Plugin",
       "",
       "Use this plugin for speech recognition (ASR) and text-to-speech (TTS).",
       "Do not call TTS for ordinary text replies unless the user explicitly requests audio.",
-      this.auto_asr
+      options.auto_asr
         ? "Inbound voice/audio chat attachments are automatically transcribed into `<voice src=\"...\">...</voice>` blocks."
         : "Automatic inbound transcription is disabled; call `asr` explicitly when needed.",
       "",
@@ -511,9 +516,10 @@ export class SoundPlugin extends BasePlugin {
     context: PluginContext,
     input: SoundPluginAsrInput,
   ): Promise<SoundPluginAsrResult> {
-    const model = resolve_model_id("asr", input.model, this.default_asr_model);
+    const options = this.resolve_options(context);
+    const model = resolve_model_id("asr", input.model, options.default_asr_model);
     const resolved_input = await resolve_asr_input(context, {
-      ...(this.language ? { language: this.language } : {}),
+      ...(options.language ? { language: options.language } : {}),
       ...input,
       model,
     });
@@ -526,11 +532,12 @@ export class SoundPlugin extends BasePlugin {
    * 执行一次 TTS 合成。
    */
   private async synthesize(context: PluginContext, input: SoundPluginTtsInput): Promise<SoundPluginTtsResult> {
-    const model = resolve_model_id("tts", input.model, this.default_tts_model);
+    const options = this.resolve_options(context);
+    const model = resolve_model_id("tts", input.model, options.default_tts_model);
     const result = await require_sound_ai(context).tts({
-      ...(this.language ? { language: this.language } : {}),
-      ...(this.voice ? { voice: this.voice } : {}),
-      ...(this.format ? { format: this.format } : {}),
+      ...(options.language ? { language: options.language } : {}),
+      ...(options.voice ? { voice: options.voice } : {}),
+      ...(options.format ? { format: options.format } : {}),
       ...input,
       model,
     });
@@ -546,7 +553,7 @@ export class SoundPlugin extends BasePlugin {
     /** chat 入站管道值。 */
     value: PluginJsonValue;
   }): Promise<PluginJsonValue> {
-    if (!this.auto_asr) return input.value;
+    if (!this.resolve_options(input.context).auto_asr) return input.value;
     const inbound = input.value as unknown as ChatInboundAugmentInput;
     const voice_attachments = (Array.isArray(inbound.attachments) ? inbound.attachments : [])
       .filter((item) =>
@@ -572,6 +579,38 @@ export class SoundPlugin extends BasePlugin {
       }
     }
     return append_voice_text(inbound, voice_blocks) as unknown as PluginJsonValue;
+  }
+
+  /** 解析当前 Agent/Plugin 作用域的有效配置。 */
+  private resolve_options(context: PluginContext): {
+    /** 默认 ASR 模型。 */ default_asr_model?: string;
+    /** 默认 TTS 模型。 */ default_tts_model?: string;
+    /** 是否自动转写。 */ auto_asr: boolean;
+    /** 默认语言。 */ language?: string;
+    /** 默认音色。 */ voice?: string;
+    /** 默认格式。 */ format?: string;
+  } {
+    const config = { ...context.config, ...this.options } as SoundPluginOptions;
+    const default_asr_model = normalize_optional_string(config.default_asr_model);
+    if (config.auto_asr === true && !default_asr_model) {
+      throw new TypeError("SoundPlugin auto_asr requires default_asr_model");
+    }
+    return {
+      ...(default_asr_model ? { default_asr_model } : {}),
+      ...(normalize_optional_string(config.default_tts_model)
+        ? { default_tts_model: normalize_optional_string(config.default_tts_model) }
+        : {}),
+      auto_asr: config.auto_asr === true,
+      ...(normalize_optional_string(config.language)
+        ? { language: normalize_optional_string(config.language) }
+        : {}),
+      ...(normalize_optional_string(config.voice)
+        ? { voice: normalize_optional_string(config.voice) }
+        : {}),
+      ...(normalize_optional_string(config.format)
+        ? { format: normalize_optional_string(config.format) }
+        : {}),
+    };
   }
 
   /**

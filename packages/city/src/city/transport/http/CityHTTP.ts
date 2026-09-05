@@ -17,7 +17,7 @@ import type {
   AgentHttpBinding,
   AgentHttpListenOptions,
 } from "@/city/transport/types/AgentHttpBinding.js";
-import { get_workspace_entry } from "@downcity/agent/host";
+import { get_workspace_entry } from "@downcity/agent/internal";
 
 /** 在单一 HTTP 端口暴露 City 的多 Agent transport。 */
 export class CityHTTP {

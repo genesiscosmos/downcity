@@ -8,10 +8,8 @@
 import type { PluginMainModule } from "./types/PluginMain.js";
 
 export {
-  BasePlugin,
+  Plugin,
   create_action,
-  create_plugin,
-  define_city_plugin,
 } from "./runtime.js";
 
 /** 保留 Plugin main 的精确类型并返回原对象。 */
@@ -40,7 +38,6 @@ export type {
   PluginLogger,
   PluginLogDetails,
   PluginLogLevel,
-  PluginProfile,
   PluginSessionCollection,
   PluginSessionContextSnapshot,
   PluginSessionHandle,
@@ -58,14 +55,12 @@ export type {
 export type {
   AnyPluginActionResult,
   CreatePluginActionOptions,
-  CreatePluginOptions,
 } from "./runtime.js";
 
 export type {
   CityPluginMainContext,
-  CityPluginModule,
   CityPluginRegistration,
-  Plugin,
+  PluginDefinition,
   PluginAction,
   PluginActionApi,
   PluginActionCommand,
@@ -80,7 +75,6 @@ export type {
   PluginAvailability,
   PluginEffectHook,
   PluginExecutionContext,
-  PluginFactoryContext,
   PluginGuardHook,
   PluginHooks,
   PluginHttpDefinition,

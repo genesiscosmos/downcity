@@ -9,7 +9,7 @@
 import type {
   SessionSystemComposer,
 } from "@executor/composer/system/SessionSystemComposer.js";
-import type { SessionExtensionRuntime } from "@downcity/type/session";
+import type { SessionHooks } from "@/session/SessionHooks.js";
 import type { SessionComposeInput } from "@/types/session/SessionComposer.js";
 import {
   resolve_session_system_messages,
@@ -28,9 +28,9 @@ type DefaultSessionSystemComposerOptions = {
   get_static_system_prompts: () => string[];
 
   /**
-   * 读取当前执行上下文（用于加载 Extension system 文本）。
+   * 读取当前执行上下文（用于加载 Plugin system 文本）。
    */
-  get_extensions: () => SessionExtensionRuntime;
+  get_hooks: () => SessionHooks;
 
   /**
    * system 档位（默认 chat）。
@@ -46,7 +46,7 @@ export class DefaultSessionSystemComposer implements SessionSystemComposer {
 
   private readonly project_root: string;
   private readonly get_static_system_prompts: DefaultSessionSystemComposerOptions["get_static_system_prompts"];
-  private readonly get_extensions: DefaultSessionSystemComposerOptions["get_extensions"];
+  private readonly get_hooks: DefaultSessionSystemComposerOptions["get_hooks"];
   private readonly profile: SystemProfile;
 
   constructor(options: DefaultSessionSystemComposerOptions) {
@@ -56,7 +56,7 @@ export class DefaultSessionSystemComposer implements SessionSystemComposer {
     }
     this.project_root = project_root;
     this.get_static_system_prompts = options.get_static_system_prompts;
-    this.get_extensions = options.get_extensions;
+    this.get_hooks = options.get_hooks;
     this.profile = options.profile === "task" ? "task" : "chat";
   }
 
@@ -70,7 +70,7 @@ export class DefaultSessionSystemComposer implements SessionSystemComposer {
       session_id,
       profile: this.profile,
       static_system_prompts: this.get_static_system_prompts(),
-      extensions: this.get_extensions(),
+      hooks: this.get_hooks(),
     });
   }
 }

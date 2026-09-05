@@ -18,12 +18,12 @@ description: 用一个 pipeline 场景说明 plugin 如何对输入值做链式�
 
 ```ts
 import {
-  BasePlugin,
+  Plugin,
   type PluginJsonObject,
   type PluginHooks,
 } from "@downcity/city/plugin";
 
-class MessageAugmentPlugin extends BasePlugin {
+class MessageAugmentPlugin extends Plugin {
   readonly name = "message_augment";
   readonly title = "Message Augment";
   readonly description = "Adds extra fields to inbound message payloads.";

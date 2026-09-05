@@ -1,5 +1,5 @@
 /**
- * @file 验证 Plugin Tool 的 ActionResult 转换与 Agent 绑定。
+ * @file 验证 Plugin Tool 的 ActionResult 转换与 Session 执行上下文。
  *
  * 关键点（中文）
  * - Plugin Action 自己产生本地 File Part，Tool 运行时不处理文件。
@@ -14,11 +14,14 @@ import {
 } from "../bin/plugin/tool/PluginToolRuntime.js";
 import { create_plugin_tools } from "../bin/plugin/tool/PluginTools.js";
 import { plugin_call_input_schema } from "../bin/plugin/tool/PluginToolSchemas.js";
-import { create_action, create_plugin } from "@downcity/city/plugin";
+import { create_action } from "@downcity/city/plugin";
 import { PluginRegistry } from "../bin/plugin/core/PluginRegistry.js";
 import { create_session_turn_context } from "@downcity/agent";
 import { z } from "zod";
-import { create_test_plugin_context } from "./helpers/CityPluginTestBinding.mjs";
+import {
+  create_test_plugin as create_plugin,
+  create_test_plugin_context,
+} from "./helpers/CityPluginTestBinding.mjs";
 
 function create_turn_context(project_root) {
   return create_session_turn_context({

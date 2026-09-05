@@ -22,9 +22,9 @@ That is a clean `effect` use case.
 ## Example
 
 ```ts
-import { BasePlugin, type PluginHooks } from "@downcity/city/plugin";
+import { Plugin, type PluginHooks } from "@downcity/city/plugin";
 
-class AuditEffectPlugin extends BasePlugin {
+class AuditEffectPlugin extends Plugin {
   readonly name = "audit_effect";
   readonly title = "Audit Effect";
   readonly description = "Writes one audit line for every observed event.";

@@ -7,7 +7,7 @@
  */
 
 import type {
-  Plugin,
+  PluginDefinition,
   PluginActionExample,
   PluginActionResult,
   PluginContext,
@@ -95,7 +95,7 @@ export interface AgentPluginRuntime {
   /** 判断 plugin 是否已注册。 */
   has(plugin_name: string): boolean;
   /** 读取单个 plugin 定义。 */
-  get(plugin_name: string): Plugin | null;
+  get(plugin_name: string): PluginDefinition | null;
   /** 读取单个 plugin 注册快照。 */
   status(plugin_name: string): PluginSnapshot | null;
   /** 列出全部已注册 plugin 快照。 */
@@ -145,7 +145,7 @@ export interface AgentPluginRuntime {
 /** City 内部 Registry 的变更能力；不会投影给 Workspace 或 PluginContext。 */
 export interface AgentPlugins extends AgentPluginRuntime {
   /** 注册或替换一个 Plugin 执行投影。 */
-  register(plugin: Plugin): Promise<PluginSnapshot>;
+  register(plugin: PluginDefinition): Promise<PluginSnapshot>;
   /** 立即移除新执行可见性，并等待已有 lease 在内部退休。 */
   unregister(plugin_name: string): Promise<boolean>;
   /** 启动 Registry 构造期挂载的全部 Plugin。 */

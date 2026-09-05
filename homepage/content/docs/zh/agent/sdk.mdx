@@ -31,7 +31,7 @@ const city = new City({
   workspaces: [workspace],
   plugins: create_builtin_plugin_registrations(),
 });
-city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
+city.agents.add(agent);
 
 // Session 在创建时选择 Workspace。
 const session = await agent.sessions.create({ workspace });
@@ -56,7 +56,8 @@ Agent 配置不绑定 Workspace。每个 Session 可以使用一个 Workspace；
 默认来源分区是 `chat`。创建方可以指定任意非空 `origin.type`，恢复时通过
 `get(session_id, origin_type)` 明确读取同一个来源分区。
 
-City 在绑定时启动 Plugin 共享实例与后台任务，Session 执行会自动等待初始化完成。关闭整个宿主使用 `await city.close()`；只移除 Agent 使用 `city.agents.remove()`。HTTP 与 RPC 也由 City 统一提供。
+City 在添加 Plugin 时启动唯一实例与后台任务，Session 执行会自动等待初始化完成。关闭整个宿主
+使用 `await city.close()`；只移除 Agent 使用 `city.agents.remove()`。HTTP 与 RPC 也由 City 统一提供。
 
 ## 流式消息
 

@@ -44,20 +44,21 @@ Plugin 提供：`status`、`search`、`read`、`remember`、`digest`、`revise` 
 
 ## 存储
 
-内建 City 装配为 Memory Plugin/Profile 分配一个根目录，Provider 在内部按 City、Agent、User 与 Workspace 逻辑作用域隔离：
+City 为 MemoryPlugin 唯一实例分配一个生命周期根目录，Provider 在内部按 City、Agent、User 与
+Workspace 逻辑作用域隔离：
 
 ```text
-<city-storage>/plugins/memory/<profile_id>/
+<city-storage>/plugins/memory/
 ```
 
 原始 `user_id`、`workspace_id` 和 `agent_id` 会编码成安全路径段。多个 Agent 可以指向同一个 City 根目录，但 User 与 Workspace 内容仍按 Subject 隔离。
 
-直接构造自定义 registration 时，由 City factory 传入存储路径：
+直接构造即可；`MemoryPlugin.lifecycle.start()` 从 City 的 `PluginLifecycleContext.storage` 初始化
+Provider：
 
 ```ts
-create: ({ storage }) => new MemoryPlugin({
-  storage_root_path: storage.path,
-});
+const memory_plugin = new MemoryPlugin();
+const city = new City({ plugins: [memory_plugin] });
 ```
 
 不要从 Agent Session 目录推导 Memory 路径；物理布局属于 City 与 Provider。

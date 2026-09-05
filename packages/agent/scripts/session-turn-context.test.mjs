@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 动态输入和输出只能通过领域行为读写。
- * - Step 切换和 Context dispose 都会闭合 Extension lease。
+ * - Step 切换和 Context dispose 都会闭合 Plugin Hook 作用域。
  * - Plugin 只获得独立的只读快照，不能访问根上下文能力。
  */
 
@@ -86,15 +86,13 @@ test("SessionTurnContext 只按顺序收集当前 Turn 的 Tool effects", () => 
   );
 });
 
-test("SessionTurnContext 负责 Extension lease 与只读投影生命周期", async () => {
+test("SessionTurnContext 负责 Plugin Hook 作用域与只读投影生命周期", async () => {
   const released = [];
-  const create_lease = (name) => ({
-    read: () => ({ plugins: [] }),
-    run_action: async () => ({ success: true }),
+  const create_scope = (name) => ({
     system_blocks: async () => [],
     pipeline: async (_point_name, value) => value,
     effect: async () => {},
-    release: async () => released.push(name),
+    close: async () => released.push(name),
   });
   const context = create_session_turn_context({
     session_id: "session-context-test",
@@ -106,10 +104,10 @@ test("SessionTurnContext 负责 Extension lease 与只读投影生命周期", as
     workspace_env: { REGION: "cn" },
     agent_systems: ["system"],
   });
-  await context.step.replace_extensions(create_lease("first"));
-  await context.step.replace_extensions(create_lease("second"));
+  await context.step.replace_hooks(create_scope("first"));
+  await context.step.replace_hooks(create_scope("second"));
 
-  const plugin_execution_context = context.step.extension_execution_context("call-context-test");
+  const plugin_execution_context = context.step.hook_context("call-context-test");
   assert.deepEqual(Object.keys(plugin_execution_context).sort(), [
     "abort_signal",
     "agent_systems",
@@ -134,7 +132,7 @@ test("SessionTurnContext 负责 Extension lease 与只读投影生命周期", as
   assert.deepEqual(released, ["first", "second"]);
 });
 
-test("SessionTurnContext 在整个 Turn 中只解析一次 Extension Context", async () => {
+test("SessionTurnContext 在整个 Turn 中只解析一次 Plugin Context", async () => {
   const context = create_session_turn_context({
     session_id: "session-context-test",
     session_origin: { type: "chat" },
@@ -144,7 +142,7 @@ test("SessionTurnContext 在整个 Turn 中只解析一次 Extension Context", a
   const resolver = async () => {
     resolve_count += 1;
     return [{
-      source_extension: "memory",
+      source_plugin: "memory",
       name: "recall",
       content: "stable recall",
       trust_level: "reference",
@@ -152,12 +150,12 @@ test("SessionTurnContext 在整个 Turn 中只解析一次 Extension Context", a
     }];
   };
 
-  const first = await context.step.resolve_extension_context_blocks(resolver);
-  const second = await context.step.resolve_extension_context_blocks(resolver);
+  const first = await context.step.resolve_plugin_context_blocks(resolver);
+  const second = await context.step.resolve_plugin_context_blocks(resolver);
 
   assert.equal(resolve_count, 1);
   assert.equal(first, second);
-  assert.equal(first, context.step.extension_context_blocks);
+  assert.equal(first, context.step.plugin_context_blocks);
   assert.equal(Object.isFrozen(first), true);
   assert.equal(Object.isFrozen(first[0]), true);
   assert.equal(Object.isFrozen(first[0].citations), true);

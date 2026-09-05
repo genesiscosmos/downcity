@@ -1,32 +1,23 @@
 ---
 title: Plugin 开发指南
-description: 使用 @downcity/city/plugin 构建统一 City Plugin module。
+description: 使用 @downcity/city/plugin 构建由 City 提供的统一 Plugin。
 ---
 
 # Plugin 开发指南
 
-Plugin 作者 API 位于 `@downcity/city/plugin`。一个 `CityPluginModule` 同时定义 main 生命周期和
-Profile 执行实例 factory；Agent 包不再导出 Plugin 作者协议。
-
-## 执行实例
+Plugin 作者 API 位于 `@downcity/city/plugin`。Plugin 是一个长期实例，不使用按 Agent 创建实例的
+工厂函数；需要区分执行范围时读取 `PluginContext`。
 
 ```ts
-import { BasePlugin, create_action } from "@downcity/city/plugin";
-import { z } from "zod";
+import { Plugin, create_action } from "@downcity/city/plugin";
 
-class ExamplePlugin extends BasePlugin {
+export default class ExamplePlugin extends Plugin {
   readonly name = "example";
   readonly title = "Example";
   readonly description = "An example Plugin.";
-
-  constructor(private readonly client: ExampleClient) {
-    super();
-  }
-
   readonly actions = {
     status: create_action({
       description: "Return the current scope.",
-      input_schema: { zod: z.object({}) },
       execute: async ({ context, execution }) => ({
         success: true,
         data: {
@@ -41,86 +32,19 @@ class ExamplePlugin extends BasePlugin {
 }
 ```
 
-Workspace 用户文件使用 `context.workspace.files`；Plugin 私有状态使用 `context.storage.files`。
-`context.session` 与 `context.agent.sessions` 是可直接调用的受限句柄，不需要只依赖 ID 回查对象。
+Workspace 文件使用 `context.workspace.files`；Plugin 私有状态使用 `context.storage.files`；
+`context.session` 可以直接 `prompt()`、`stop()`、`context()` 或订阅变化。需要调用其他 Plugin
+时使用 `context.city.plugins`。
 
-## 统一 City module
-
-```ts
-import { define_city_plugin } from "@downcity/city/plugin";
-
-export default define_city_plugin({
-  activate(context) {
-    context.plugin.action({
-      id: "about",
-      run: () => ({ name: "example" }),
-    });
-  },
-  create({ profile }) {
-    return new ExamplePlugin(new ExampleClient(profile.config));
-  },
-});
-```
-
-SDK 宿主把该 module 放入 `CityPluginRegistration`，先交给 City，再按 ID 绑定 Agent：
+宿主可以直接把实例交给 City：
 
 ```ts
-const registration = {
-  id: "example",
-  title: "Example",
-  description: "An example Plugin.",
-  readme: "/absolute/path/README.md",
-  has_config: false,
-  has_sidebar: false,
-  has_mainview: false,
-  module: example_module,
-};
-
-const city = new City({ plugins: [registration], workspaces: [workspace] });
-city.agents.add(agent, { plugins: [{ plugin_id: "example" }] });
+const city = new City({ plugins: [new ExamplePlugin()], workspaces: [workspace] });
+city.agents.add(agent);
 ```
 
-## 生命周期
+可安装 Plugin 的 `main` 默认导出实例或 `{ plugin, main }`，不再提供 `module.create()`。Renderer
+只通过宿主 action gateway 通信，不能访问 Node、Electron 或 Agent 全量对象。
 
-`start/stop` 属于 City 的 `(plugin_id, profile_id)` 共享实例；`bind/unbind` 属于
-Agent/Workspace scope。Profile 级 client、连接与缓存放在 `start/stop`，scheduler、路由或
-scope worker 放在 `bind/unbind`。所有异步 Action 都应传递 `execution.abort_signal`。
-
-## 可安装包
-
-```text
-example-plugin/
-├── plugin.json
-├── package.json
-├── README.md
-├── dist/main.js
-└── dist/renderer.js
-```
-
-```json
-{
-  "schema_version": 1,
-  "id": "example",
-  "version": "1.0.0",
-  "description": "A small example Plugin.",
-  "readme": "./README.md",
-  "main": "./dist/main.js",
-  "renderer": {
-    "entry": "./dist/renderer.js",
-    "sidebar": true,
-    "mainview": true,
-    "config": false
-  }
-}
-```
-
-`main` 默认导出 `CityPluginModule`，不再存在独立 `agent` 入口。Renderer 只通过宿主 action
-gateway 通信，不能直接访问 Node、Electron、Agent 或 Profile 文件。
-
-## 测试重点
-
-- 相同 Profile 多 Agent 只创建和 `start` 一次。
-- 每个 Agent/Workspace scope 恰好 `bind/unbind` 一次。
-- 最后一个 execution lease 释放后才 `stop`。
-- main 并发调用只 `activate` 一次，关闭时完整 `deactivate`。
-- Action 输入、JSON 结果和取消信号正确。
+测试时重点验证：City 内实例唯一、`start/stop` 各一次、每个 Agent/Workspace 的
+`connect/disconnect` 成对执行，以及 Hook 作用域在 Step 结束后释放。

@@ -1,6 +1,6 @@
 ---
 title: Plugin Call Surfaces
-description: Distinguish City bindings, Workspace execution, PluginContext, and the plugin_call Tool.
+description: Distinguish City management, Workspace execution, PluginContext, and the plugin_call Tool.
 ---
 
 # Plugin Call Surfaces
@@ -9,18 +9,17 @@ Plugins expose four call surfaces for different callers:
 
 | Surface | Caller | Purpose |
 | --- | --- | --- |
-| `city.plugins` | Host application | Register modules, manage Agent/Profile bindings, invoke main/config actions |
+| `city.plugins` | Host application | Add or remove unique instances and invoke main/config actions |
 | `entry.plugins` | Host execution code | Call Actions, Availability, or Hooks in one Agent/Workspace scope |
 | `context.city.plugins` | Plugin code | Call another Plugin Action, pipeline, or effect in the current scope |
-| `plugin_call` | Model in a Session | Call a Plugin Action bound to the current Agent |
+| `plugin_call` | Model in a Session | Call a Plugin Action provided by City |
 
-## City binding surface
+## City management surface
 
 ```ts
-city.plugins.provide(registration);
-await city.plugins.register(agent.id, { plugin_id: "skill" });
-console.log(city.plugins.snapshots(agent.id));
-await city.plugins.unregister(agent.id, "skill");
+city.plugins.add(skill_plugin);
+console.log(city.plugins.snapshots());
+await city.plugins.remove("skill");
 ```
 
 `city.plugins.invoke()` and `invoke_config()` call host-management Actions registered by Plugin main;

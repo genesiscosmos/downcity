@@ -23,13 +23,13 @@ import {
   clear_agent_runtime,
   create_workspace_entry,
   dispose_agent_runtime,
-  ensure_agent_extensions_ready,
+  ensure_agent_runtime_ready,
   get_agent_storage,
   initialize_agent_runtime,
   list_workspace_entries,
   mark_agent_session_started,
-  resolve_agent_session_extensions,
-  release_agent_from_host,
+  resolve_agent_session_hooks,
+  release_agent_from_container,
 } from "@/internal/AgentRuntime.js";
 
 /** SDK Agent 主体。 */
@@ -107,7 +107,7 @@ export class Agent {
           logger: this.logger,
           tools: this.custom_tools,
           get_workspace_env: () => ({}),
-          get_extensions: () => resolve_agent_session_extensions(this),
+          get_hooks: () => resolve_agent_session_hooks(this),
           store: session_store,
         };
         return create_workspace_entry(this, workspace).get_session_context();
@@ -138,7 +138,7 @@ export class Agent {
       const entries = [...list_workspace_entries(this)];
       const results = await Promise.allSettled(entries.map(async (entry) => await entry.leave()));
       this.session_manager.dispose_title_generation();
-      results.push(...await Promise.allSettled([release_agent_from_host(this)]));
+      results.push(...await Promise.allSettled([release_agent_from_container(this)]));
       results.push(...await Promise.allSettled([dispose_agent_runtime(this)]));
       const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
       clear_agent_runtime(this);
@@ -149,7 +149,7 @@ export class Agent {
 
   /** 等待 Agent 自身运行时 ready，供内部运行时使用。 */
   async ensure_ready(): Promise<void> {
-    await ensure_agent_extensions_ready(this);
+    await ensure_agent_runtime_ready(this);
   }
 
 }

@@ -5,8 +5,7 @@
  * `rpc://host:port/<agent_id>/<workspace_id>` 自动解析并附加字段。
  */
 
-import type { AgentSessions } from "@downcity/agent";
-import type { AgentSessionCollection } from "@downcity/agent/host";
+import type { AgentSessions, AgentSessionCollection } from "@downcity/agent";
 import type { City } from "@/city/runtime/City.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
@@ -89,7 +88,7 @@ export class CityRPC {
               workspace: workspace_entry.workspace,
               sessions,
               plugins,
-              list_plugin_states: () => this.city.plugins.snapshots(agent_id),
+              list_plugin_states: () => this.city.plugins.snapshots(),
               resolve_system_messages: async (input) => await workspace_entry.resolve_system_messages(input),
             }),
             resolve_session_model: resolve_session_model

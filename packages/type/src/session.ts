@@ -1,13 +1,4 @@
-/** @downcity/type/session：Session Extension 与 system block 中立协议入口。 */
-
-export {
-  create_empty_session_extensions,
-  type SessionExtensionExecutionContext,
-  type SessionExtensionExecutionLease,
-  type SessionExtensionExecutionView,
-  type SessionExtensionOrigin,
-  type SessionExtensionRuntime,
-} from "./types/session/SessionExtension.js";
+/** @downcity/type/session：Session system block 中立数据协议入口。 */
 export type {
   SessionSystemBlock,
   SessionSystemBlockSource,

@@ -145,9 +145,9 @@ Mutation 包括完整 Message、Assistant Part、文本/推理增量、Turn 状�
 
 ## Plugin runtime
 
-Plugin 属于 Agent，不属于 Workspace。它可以提供 Action、System、Hook、Resolve Point、Lifecycle 和 HTTP 注入定义。
+Plugin 属于 City，不属于 Agent 或 Workspace。City 按 Plugin ID 持有唯一实例，并向每个 Agent/Workspace 执行入口投影 Action、System、Hook、Resolve Point 与 HTTP 路由。
 
-PluginRegistry 的变化同样在 Session 检查点生效。单个 Plugin 启动失败只隔离自身，不阻断其他 Plugin；Agent 关闭时停止 ActionSchedule 并卸载 Plugin。
+PluginRegistry 的投影变化在 Session 检查点生效。单个 Plugin 启动失败只隔离自身，不阻断其他 Plugin。Agent 关闭时停止 Session 与 ActionSchedule；Plugin 的 `connect/disconnect/start/stop` 生命周期由 City 收口。
 
 ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件存放在 Agent 的存储作用域中，Agent 重启时会把遗留的 running 状态恢复为 pending。它不是分布式调度系统，也不提供跨机器选主。
 
@@ -183,16 +183,18 @@ Node.js 已经统一文件、路径、网络、JSON、Timer、AbortController �
 
 ```mermaid
 flowchart LR
-    Construct["new Agent"] --> Plugins["启动 Plugin lifecycle"]
-    Plugins --> Schedule["启动 ActionSchedule"]
-    Schedule --> Barrier["内部初始化屏障"]
-    Barrier --> Running["执行 Session"]
-    Running --> Dispose["agent.dispose()"]
-    Dispose --> Sessions["释放 AgentSessions"]
-    Sessions --> Workspace["Workspace.dispose()"]
-    Workspace --> Shell["关闭进程与 Sandbox"]
+    Agent["new Agent"] --> Register["City 注册 Agent"]
+    Plugin["City 注册 Plugin"] --> Start["Plugin start"]
+    Register --> Scope["连接 Agent/Workspace Scope"]
+    Start --> Scope
+    Scope --> Running["执行 Session"]
+    Running --> Close["city.close()"]
+    Close --> Sessions["停止 Agent Sessions"]
+    Sessions --> Disconnect["Plugin disconnect"]
+    Disconnect --> Stop["Plugin stop"]
+    Stop --> Workspace["释放 Workspace / Shell"]
 ```
 
-Session 执行前会等待 Agent 的内部初始化屏障。`dispose()` 会释放 Agent、Plugin、Schedule、Workspace 和 Shell 资源，但不会关闭由 `@downcity/agent` 创建的 HTTP/RPC transport。
+Session 执行前会等待 Agent 的 City 执行绑定就绪。`agent.dispose()` 不停止 City Plugin 实例；`city.close()` 统一关闭 Transport、Agent、Plugin、Workspace 与 Shell，并保证活跃 Hook/Action lease 先收口。
 
 继续阅读：[Agent 生命周期](/zh/docs/agent/lifecycle)。

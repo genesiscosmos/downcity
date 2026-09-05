@@ -2,13 +2,13 @@
  * SystemDomain：system 领域统一实现。
  *
  * 关键点（中文）
- * - 收敛 system 的资产加载、上下文档位判定、Extension prompt 收集、messages 组装。
+ * - 收敛 system 的资产加载、上下文档位判定、Plugin prompt 收集、messages 组装。
  * - `DefaultSessionSystemComposer` 只做组件适配；核心逻辑统一在本文件。
  */
 
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import { transform_prompts_into_system_messages } from "@executor/composer/system/default/PromptRenderer.js";
-import type { SessionExtensionRuntime } from "@downcity/type/session";
+import type { SessionHooks } from "@/session/SessionHooks.js";
 import { build_runtime_clock_system_prompt } from "@executor/composer/system/default/variables/VariableReplacer.js";
 import {
   CORE_SYSTEM_PROMPT,
@@ -105,7 +105,7 @@ export function resolve_static_system_prompts(input: {
 type ResolvedSystemContextProfile = {
   mode: "chat" | "task";
   replace_default_core_prompt?: string;
-  disabled_extension_names: string[];
+  disabled_plugin_names: string[];
 };
 
 /**
@@ -120,8 +120,8 @@ export type SystemProfile = "chat" | "task";
  * 按显式 profile 解析 system 上下文档位。
  *
  * 关键点（中文）
- * - chat 模式：使用默认 core prompt 与全部 Extension system。
- * - task 模式：自动替换 task core prompt，并禁用 chat Extension system。
+ * - chat 模式：使用默认 core prompt 与全部 Plugin system。
+ * - task 模式：自动替换 task core prompt，并禁用 chat Plugin system。
  */
 export function resolve_system_context_profile(
   profile?: SystemProfile,
@@ -129,44 +129,44 @@ export function resolve_system_context_profile(
   if (profile !== "task") {
     return {
       mode: "chat",
-      disabled_extension_names: [...DEFAULT_DISABLED_EXTENSION_NAMES],
+      disabled_plugin_names: [...DEFAULT_DISABLED_EXTENSION_NAMES],
     };
   }
   return {
     mode: "task",
     replace_default_core_prompt: TASK_SYSTEM_PROMPT,
-    disabled_extension_names: ["chat"],
+    disabled_plugin_names: ["chat"],
   };
 }
 
 /**
- * 收集宿主 Extension 提供的 system 文本。
+ * 收集宿主 Plugin 提供的 system 文本。
  *
  * 关键点（中文）
- * - core prompt 已包含扩展系统总规则；这里只收集各 Extension 自己的 system prompt。
- * - 单个 Extension 是否可用由宿主投影的运行时负责。
+ * - core prompt 已包含扩展系统总规则；这里只收集各 Plugin 自己的 system prompt。
+ * - 单个 Plugin 是否可用由宿主投影的运行时负责。
  */
-export async function load_extension_system_prompts(input: {
+export async function load_plugin_system_prompts(input: {
   /**
    * 当前执行上下文。
    */
-  extensions: SessionExtensionRuntime;
+  hooks: SessionHooks;
 
   /**
-   * 当前轮禁用的 Extension 名称集合。
+   * 当前轮禁用的 Plugin 名称集合。
    */
-  disabled_extension_names: string[];
+  disabled_plugin_names: string[];
 }): Promise<string[]> {
   const out: string[] = [];
-  const disabled_extension_names = new Set(
-    input.disabled_extension_names
+  const disabled_plugin_names = new Set(
+    input.disabled_plugin_names
       .map((item) => String(item || "").trim())
       .filter(Boolean),
   );
 
-  const blocks = await input.extensions.system_blocks();
+  const blocks = await input.hooks.system_blocks();
   for (const block of blocks) {
-    if (disabled_extension_names.has(block.name)) continue;
+    if (disabled_plugin_names.has(block.name)) continue;
     const text = normalize_system_text(block.content);
     if (text) out.push(text);
   }
@@ -207,9 +207,9 @@ export async function build_session_system_messages(input: {
   static_system_prompts: string[];
 
   /**
-   * 宿主 Extension 提供的 system 文本集合。
+   * 宿主 Plugin 提供的 system 文本集合。
    */
-  extension_system_prompts: string[];
+  plugin_system_prompts: string[];
 }): Promise<SessionSystemMessage[]> {
   const runtimeClockText = build_runtime_clock_system_prompt({
     projectPath: input.project_root,
@@ -238,9 +238,9 @@ export async function build_session_system_messages(input: {
     },
   );
 
-  const extension_system_messages = await transform_prompts_into_system_messages(
-    Array.isArray(input.extension_system_prompts)
-      ? input.extension_system_prompts
+  const plugin_system_messages = await transform_prompts_into_system_messages(
+    Array.isArray(input.plugin_system_prompts)
+      ? input.plugin_system_prompts
       : [],
     {
       projectPath: input.project_root,
@@ -250,14 +250,14 @@ export async function build_session_system_messages(input: {
 
   return [
     ...staticSystemMessages,
-    ...extension_system_messages,
+    ...plugin_system_messages,
     ...runtimeRuleMessages,
     ...runtimeClockMessages,
   ];
 }
 
 /**
- * 统一解析一次 Session 运行所需的 system messages（含上下文档位判定与 Extension 收集）。
+ * 统一解析一次 Session 运行所需的 system messages（含上下文档位判定与 Plugin 收集）。
  */
 export async function resolve_session_system_messages(input: {
   /**
@@ -283,7 +283,7 @@ export async function resolve_session_system_messages(input: {
   /**
    * 当前执行上下文。
    */
-  extensions: SessionExtensionRuntime;
+  hooks: SessionHooks;
 
 }): Promise<SessionSystemMessage[]> {
   const profile = resolve_system_context_profile(input.profile);
@@ -293,9 +293,9 @@ export async function resolve_session_system_messages(input: {
     mode: profile.mode,
     replace_default_core_prompt: profile.replace_default_core_prompt,
     static_system_prompts: input.static_system_prompts,
-    extension_system_prompts: await load_extension_system_prompts({
-      extensions: input.extensions,
-      disabled_extension_names: profile.disabled_extension_names,
+    plugin_system_prompts: await load_plugin_system_prompts({
+      hooks: input.hooks,
+      disabled_plugin_names: profile.disabled_plugin_names,
     }),
   });
 }

@@ -35,9 +35,9 @@ function create_input(model) {
         name: "agent",
         content: "Base instruction",
       }],
-      managed_extension_system_blocks: [],
-      extension_system_blocks: [],
-      extension_context_blocks: [],
+      managed_plugin_system_blocks: [],
+      plugin_system_blocks: [],
+      plugin_context_blocks: [],
     },
     history: {
       summary: null,
@@ -75,11 +75,11 @@ test("DefaultSessionComposer 从 canonical 快照组装 Step 输入", async () =
   assert.match(step.system.at(-1).content, /composer-session/);
 });
 
-test("DefaultSessionComposer 只把 Extension Context 注入模型副本", async () => {
+test("DefaultSessionComposer 只把 Plugin Context 注入模型副本", async () => {
   const model = new MockModelClient({ modelId: "composer-context-model" });
   const input = create_input(model);
-  input.state.extension_context_blocks = [{
-    source_extension: "memory",
+  input.state.plugin_context_blocks = [{
+    source_plugin: "memory",
     name: "recall",
     content: "用户偏好使用中文。",
     trust_level: "reference",

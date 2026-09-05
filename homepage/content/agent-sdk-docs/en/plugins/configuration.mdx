@@ -1,54 +1,37 @@
 ---
 title: Plugin Configuration
-description: Understand the boundary between the City catalog, Profile configuration, and Agent bindings.
+description: Understand the boundary between unique Plugin instances, host Profiles, and Agent configuration projection.
 ---
 
 # Plugin Configuration
 
-City registers Plugin modules, the host configures Profiles, and an Agent references only a Plugin
-ID/Profile ID:
+Configuration does not determine Plugin ownership or instance count:
 
 ```text
-Plugin catalog registration
-→ host reads and validates Profile configuration
-→ City creates one (plugin_id, profile_id) instance
-→ Agent binds to plugin_id/profile
-→ Session receives the current Workspace execution view
+host stores Plugin Profiles
+→ City owns one Plugin instance
+→ plugin_host.runtime_config(plugin_id, agent_id) projects configuration
+→ Plugin reads the current PluginContext.config
 ```
-
-An SDK may register modules when constructing City:
 
 ```ts
 const city = new City({
-  plugins: [registration],
+  plugins: [web_plugin],
   workspaces: [workspace],
+  plugin_host: {
+    runtime_config: (plugin_id, agent_id) => load_runtime_config(plugin_id, agent_id),
+    profile_config: (plugin_id, profile_id) => open_profile_store(plugin_id, profile_id),
+    notifications: (plugin_id, agent_id) => open_notifications(plugin_id, agent_id),
+  },
 });
 
-city.agents.add(agent, {
-  plugins: [{
-    plugin_id: registration.id,
-    profile: { id: "team", config: { endpoint: "https://example.com" } },
-  }],
-});
+city.agents.add(agent);
 ```
 
-Modules and bindings may also be added dynamically:
+CLI and Desktop may keep `config.toml` as the Profile source of truth, but Agent stores neither
+Plugin instances nor binding relationships. Plugin main registers Config actions, and City injects
+the selected Profile's `get/set` store when invoking one. Runtime Actions, Hooks, and lifecycle
+`connect` read `context.config` projected for the current Agent.
 
-```ts
-city.plugins.provide(registration);
-await city.plugins.register(agent.id, {
-  plugin_id: registration.id,
-  profile,
-});
-```
-
-In CLI/Desktop hosts, `config.toml` is the Profile configuration source of truth. `agent.json` stores
-only references, never channels, accounts, endpoints, or tokens. A Plugin main registers Config
-actions, and City injects the current Profile's `get/set` store for each call.
-
-One `(plugin_id, profile_id)` must have one consistent configuration within a City. It maps to one
-shared instance and one set of long-lived resources. Plugins without Config use the `default`
-Profile. Runtime connections, callbacks, and client objects must not be stored in Profile values.
-
-A Chat Profile additionally requires one routing owner. Reuse across Agent/Workspace scopes must set
-`owner_agent_id` and `owner_workspace_id` explicitly.
+Do not store live connections, callbacks, or clients in a Profile. City-level resources belong to
+`start/stop`; Agent/Workspace resources belong to `connect/disconnect`.

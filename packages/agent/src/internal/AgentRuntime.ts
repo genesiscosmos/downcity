@@ -7,26 +7,20 @@
 import { Agent } from "@/agent/Agent.js";
 import { WorkspaceEntry } from "@/agent/WorkspaceEntry.js";
 import type { WorkspaceRuntime } from "@downcity/type";
-import type { Embassy } from "@downcity/federation";
 import type { StorageProvider, StorageScope } from "@downcity/type";
 import { AgentMemoryStorageProvider } from "@/internal/AgentMemoryStorage.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
-import type { SessionExtensionRuntime } from "@downcity/type/session";
-import { create_empty_session_extensions } from "@downcity/type/session";
+import type { SessionHooks } from "@/session/SessionHooks.js";
+import { EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
 import { LocalSessionStore } from "@/workspace/store/LocalSessionStore.js";
-import type { AgentHost, AgentHostExtensions } from "@/types/agent/AgentHost.js";
+import type { AgentRuntimeBinding } from "@/types/agent/AgentRuntimeBinding.js";
 
 interface AgentRuntimeState {
-  host?: AgentHost;
-  embassy?: Embassy;
+  binding?: AgentRuntimeBinding;
   memory_session_started?: boolean;
   workspaces_by_id: Map<string, WorkspaceEntry>;
   storage_provider: StorageProvider;
   agent_storage?: AgentStorage;
-  session_extensions?: (
-    workspace?: WorkspaceRuntime,
-  ) => SessionExtensionRuntime;
-  host_extensions?: AgentHostExtensions;
 }
 
 const runtime_states = new WeakMap<Agent, AgentRuntimeState>();
@@ -46,99 +40,65 @@ function runtime_state(agent: Agent): AgentRuntimeState {
   return state;
 }
 
-export function attach_agent_host(agent: Agent, host: AgentHost): void {
+/** 把资源容器提供的运行能力一次性绑定到 Agent。 */
+export function bind_agent_runtime(agent: Agent, binding: AgentRuntimeBinding): void {
   const state = runtime_state(agent);
   if (state.memory_session_started) {
     throw new Error(
       `Agent "${agent.id}" already created Session data without City; join City before creating Sessions`,
     );
   }
-  if (state.host && state.host !== host) {
-    throw new Error(`Agent "${agent.id}" already belongs to another host`);
-  }
-  state.host = host;
-  state.embassy = host.embassy;
-}
-
-/** 将 City 提供的底层 Storage 注入 Agent；该函数只在组合根调用。 */
-export function attach_agent_storage(agent: Agent, storage_provider: StorageProvider): void {
-  const state = runtime_state(agent);
-  if (state.memory_session_started) {
-    throw new Error(
-      `Agent "${agent.id}" already created Session data without City; join City before creating Sessions`,
-    );
+  if (state.binding && state.binding.owner !== binding.owner) {
+    throw new Error(`Agent "${agent.id}" already belongs to another resource container`);
   }
   if (state.agent_storage) {
     throw new Error(`Agent "${agent.id}" storage is already initialized`);
   }
-  state.storage_provider = storage_provider;
+  state.binding = binding;
+  state.storage_provider = binding.storage;
 }
 
-/** 由 City 注入按 Workspace 创建 Session 扩展运行时的端口。 */
-export function attach_agent_session_extensions(
-  agent: Agent,
-  resolve_extensions: (workspace?: WorkspaceRuntime) => SessionExtensionRuntime,
-): void {
-  const state = runtime_state(agent);
-  state.session_extensions = resolve_extensions;
+/** 返回当前 Agent 的资源绑定；未加入 City 时为空。 */
+export function agent_runtime_binding(agent: Agent): AgentRuntimeBinding | undefined {
+  return runtime_state(agent).binding;
 }
 
-/** 由 City 注入完整的宿主扩展绑定。 */
-export function attach_agent_host_extensions(
-  agent: Agent,
-  extensions: AgentHostExtensions,
-): void {
-  const state = runtime_state(agent);
-  state.host_extensions = extensions;
+/** 等待 City 为 Agent 提供的资源完成初始化。 */
+export async function ensure_agent_runtime_ready(agent: Agent): Promise<void> {
+  await runtime_state(agent).binding?.ensure_ready();
 }
 
-/** 返回当前 Agent 的宿主扩展；未绑定时为空。 */
-export function agent_host_extensions(agent: Agent): AgentHostExtensions | undefined {
-  return runtime_state(agent).host_extensions;
-}
-
-/** 等待 City 为 Agent 绑定的扩展完成初始生命周期。 */
-export async function ensure_agent_extensions_ready(agent: Agent): Promise<void> {
-  await runtime_state(agent).host_extensions?.ensure_ready();
-}
-
-/** 返回当前 Agent 的 City 扩展运行时；未加入 City 时使用空实现。 */
-export function resolve_agent_session_extensions(
+/** 返回当前 Agent/Workspace 的 Session Hooks；独立 Agent 使用空实现。 */
+export function resolve_agent_session_hooks(
   agent: Agent,
   workspace?: WorkspaceRuntime,
-): SessionExtensionRuntime {
-  return runtime_state(agent).session_extensions?.(workspace)
-    ?? create_empty_session_extensions();
+): SessionHooks {
+  const binding = runtime_state(agent).binding;
+  if (!binding || !workspace) return EMPTY_SESSION_HOOKS;
+  return binding.hooks(workspace, agent.get_logger());
 }
 
 /** 标记 Agent 已经创建或恢复过无 City 的 Session。 */
 export function mark_agent_session_started(agent: Agent): void {
   const state = runtime_state(agent);
-  if (!state.host) state.memory_session_started = true;
+  if (!state.binding) state.memory_session_started = true;
 }
 
-export function detach_agent_host(agent: Agent, host: AgentHost): void {
+/** 解除指定资源容器与 Agent 的绑定。 */
+export function unbind_agent_runtime(agent: Agent, owner: object): void {
   const state = runtime_state(agent);
-  if (state.host === host) {
-    state.host = undefined;
-    state.embassy = undefined;
-    state.session_extensions = undefined;
-    state.host_extensions = undefined;
+  if (state.binding?.owner === owner) {
+    state.binding = undefined;
   }
 }
 
-export function agent_has_host(agent: Agent): boolean {
-  return Boolean(runtime_state(agent).host);
+export function agent_has_resource_container(agent: Agent): boolean {
+  return Boolean(runtime_state(agent).binding);
 }
 
-/** 返回 City 注入的窄 Embassy 能力。 */
-export function agent_embassy(agent: Agent): Embassy | undefined {
-  return runtime_state(agent).embassy;
-}
-
-/** 由 Agent 释放自身时通知所属 City。 */
-export async function release_agent_from_host(agent: Agent): Promise<void> {
-  await runtime_state(agent).host?.release_agent(agent);
+/** 由 Agent 释放自身时通知所属资源容器。 */
+export async function release_agent_from_container(agent: Agent): Promise<void> {
+  await runtime_state(agent).binding?.release_agent(agent);
 }
 
 /** 返回 Agent 解释出的业务存储作用域。 */
@@ -146,13 +106,13 @@ export function agent_storage_scope(agent: Agent): StorageScope {
   return runtime_state(agent).storage_provider.open_scope(["agents", agent.id]);
 }
 
-/** 返回指定 Agent Extension 的底层数据作用域。 */
-export function extension_storage_scope(agent: Agent, extension_id: string): StorageScope {
+/** 返回指定 Agent Plugin 的私有数据作用域。 */
+export function plugin_storage_scope(agent: Agent, plugin_id: string): StorageScope {
   return runtime_state(agent).storage_provider.open_scope([
     "agents",
     agent.id,
     "plugins",
-    extension_id,
+    plugin_id,
   ]);
 }
 
@@ -193,11 +153,11 @@ export function create_workspace_entry(agent: Agent, workspace: WorkspaceRuntime
   const state = runtime_state(agent);
   const workspace_id = String(workspace?.id || "").trim();
   if (!workspace_id) throw new Error("Agent sessions require a Workspace with a stable id");
-  const host = state.host;
-  if (host && host.get_workspace(workspace_id) !== workspace) {
-    throw new Error(`Workspace "${workspace_id}" does not belong to the Agent host`);
+  const binding = state.binding;
+  if (binding && binding.get_workspace(workspace_id) !== workspace) {
+    throw new Error(`Workspace "${workspace_id}" does not belong to the Agent resource container`);
   }
-  if (!host) {
+  if (!binding) {
     const owner = unbound_workspace_owners.get(workspace);
     if (owner && owner !== agent) {
       throw new Error(`Workspace "${workspace_id}" already bound to another scope`);
@@ -228,7 +188,7 @@ export function release_workspace_entry(agent: Agent, workspace_id: string, entr
   const state = runtime_state(agent);
   if (state.workspaces_by_id.get(workspace_id) === entry) {
     state.workspaces_by_id.delete(workspace_id);
-    if (!state.host && unbound_workspace_owners.get(entry.workspace) === agent) {
+    if (!state.binding && unbound_workspace_owners.get(entry.workspace) === agent) {
       unbound_workspace_owners.delete(entry.workspace);
     }
   }

@@ -29,13 +29,14 @@ It owns:
 Use `chat` when you need:
 
 - Telegram, Feishu, or QQ chat channel runtime
-- one queue worker per shared Chat Profile instance
+- one ChatPlugin instance managing queue workers by Agent/Workspace scope
 - chat delivery and inbound message execution
 - inbound user authorization, principal observation, and role resolution
 
 ## How users use it
 
-Chat manages queues and channels in its own Config. Open Chat in the Desktop Plugins Catalog, create or select a Profile, then let an Agent reference it:
+Chat manages queues and channels in its own Config. Open Chat in the Desktop Plugins Catalog, create
+or select a Profile, then use it as runtime configuration for the target Agent:
 
 ```bash
 # Configure primary under Desktop Plugins Catalog / Chat
@@ -50,35 +51,22 @@ city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","
 
 ## SDK Assembly
 
-An SDK host provides Chat to City through a `CityPluginRegistration` and configures channels in a Profile:
+An SDK host provides the Chat instance to City and projects per-Agent channel configuration through
+`plugin_host.runtime_config`:
 
 ```ts
-const registrations = create_builtin_plugin_registrations();
-const city = new City({ plugins: registrations, workspaces: [workspace] });
-city.agents.add(agent, {
-  plugins: [{
-    plugin_id: "chat",
-    profile: {
-      id: "primary",
-      config: {
-        owner_agent_id: agent.id,
-        owner_workspace_id: workspace.id,
-        channels: [{
-          type: "telegram",
-          id: "telegram-main",
-          name: "Main Bot",
-          bot_token: process.env.TELEGRAM_BOT_TOKEN ?? "",
-        }],
-      },
-    },
-  }],
+const city = new City({
+  plugins: create_builtin_plugin_registrations(),
+  workspaces: [workspace],
+  plugin_host,
 });
+city.agents.add(agent);
 const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
 Profiles belong to the City control plane and do not enter Agent. Chat main actions validate Profile
-content and provide a credential-safe projection. One Profile owns one connection set and queue;
-cross-scope bindings must select routing explicitly through the owner fields.
+content and provide a credential-safe projection. The unique ChatPlugin instance manages channels
+and queues according to each `PluginContext` Agent/Workspace scope and configuration.
 
 ## Feishu dependency
 
@@ -150,17 +138,16 @@ await entry.plugins.run_action({
 
 ## Important runtime semantics
 
-- channel connections and the queue worker belong to City's shared Chat Profile instance
-- Agent/Workspace routing is established and released through `bind/unbind` scope lifecycle
+- channel connections and queue workers belong to City's unique ChatPlugin instance and are isolated by Context
+- Agent/Workspace routing is established and released through `connect/disconnect` scope lifecycle
 - inbound authorization belongs to `ChatPlugin`, while still being dispatched through generic plugin hooks / resolves
-- `Agent` declares only the Chat/Profile binding and does not own chat domain state
+- `Agent` does not own ChatPlugin or chat domain state
 
 ## Public status
 
 `ChatPlugin` is exported from `@downcity/plugins`.
 
-SDK users assemble it through City registration/Profile configuration, never by attaching a
-`ChatPlugin` instance to Agent.
+SDK users provide it to City, never to Agent.
 
 ## Related docs
 

@@ -1,70 +1,36 @@
 ---
-title: Plugin Lifecycle
-description: 理解 City 持有的 Plugin main、共享实例、Workspace scope 与 execution lease。
+title: Plugin 生命周期
+description: 理解 City 持有的 Plugin 实例、Workspace 作用域与 Hook 作用域。
 ---
 
-# Plugin Lifecycle
+# Plugin 生命周期
 
-Plugin 由 City 持有，Agent 只声明 `plugin_id` 与可选 Profile 绑定。City 内同一个
-`(plugin_id, profile_id)` 只创建一个实例，多 Agent 可以共享它。
+Plugin 的所有权属于 City。`city.plugins.add(new MyPlugin())` 时登记一个唯一实例；同一 Plugin ID
+不能在 City 中重复注册。
 
-## 登记与绑定
+## 四个生命周期节点
 
-```ts
-const city = new City({
-  workspaces: [workspace],
-  plugins: [registration],
-});
-
-city.agents.add(agent, {
-  plugins: [{ plugin_id: registration.id, profile }],
-});
-```
-
-也可以动态修改绑定：
+- `start(context)`：Plugin 加入 City 时执行一次，适合初始化 City 级连接、Provider 与缓存。
+- `connect(context)`：Agent 首次进入 Workspace 时执行一次，适合创建 Agent/Workspace 作用域资源。
+- `disconnect(context)`：Agent 离开 Workspace 或从 City 移除时执行，释放对应作用域资源。
+- `stop(context)`：Plugin 被移除或 City 关闭时执行一次，释放 City 级资源。
 
 ```ts
-await city.plugins.register(agent.id, {
-  plugin_id: registration.id,
-  profile,
-});
-await city.plugins.unregister(agent.id, registration.id);
+class SchedulerPlugin extends Plugin {
+  readonly name = "scheduler";
+  readonly lifecycle = {
+    start: async ({ storage }) => this.scheduler.open(storage),
+    connect: async (context) => this.scheduler.connect(context.agent.id, context.workspace.id),
+    disconnect: async (context) => this.scheduler.disconnect(context.agent.id, context.workspace.id),
+    stop: async () => this.scheduler.close(),
+  };
+}
 ```
 
-`provide` 只登记模块；`register` 才让某个 Agent 使用一个 Profile。同一 City 中相同 Plugin ID
-只能对应同一模块，相同 Profile ID 的配置也必须一致。
+`start/stop` 使用 `PluginLifecycleContext.storage`；Action、Hook 与 `connect/disconnect` 使用
+包含 `agent`、`workspace`、可选 `session/turn` 的 `PluginContext`。City 为每个 Agent/Plugin 分配
+私有 Storage，Plugin 实例本身不会按 Agent 复制。
 
-## 四个执行生命周期节点
-
-- `start(context)`：首个 Agent 引用该 Plugin/Profile 时执行一次，适合 Profile 共享连接和缓存。
-- `bind(context)`：Agent 进入 Workspace 时执行，适合该执行作用域的 scheduler、queue 或路由。
-- `unbind(context)`：离开 Workspace、替换 Profile 或解绑 Plugin 时释放对应 scope。
-- `stop(context)`：最后一个 Agent 引用和活跃 execution lease 都释放后执行一次。
-
-```ts
-readonly lifecycle = {
-  start: async ({ profile, storage }) => {
-    await this.client.open(profile.config, storage);
-  },
-  bind: async (context) => {
-    await this.scheduler.start(context.agent.id, context.workspace.id);
-  },
-  unbind: async (context) => {
-    await this.scheduler.stop(context.agent.id, context.workspace.id);
-  },
-  stop: async () => {
-    await this.client.close();
-  },
-};
-```
-
-`start/stop` 接收 `PluginLifecycleContext`，其中 storage 属于共享 Profile。`bind/unbind` 接收完整
-`PluginContext`，其中 storage 属于当前 Agent/Plugin 执行范围。
-
-## execution lease
-
-Session 在 Step 检查点捕获不可变 Plugin 执行视图。解绑后，新 Step 立即不再看到该 Plugin；已经开始
-的 Step 可以继续完成。City 会等待最后一个 lease 释放，再停止共享实例，避免长连接或 Provider 被提前关闭。
-
-`city.close()` 会释放 Workspace scope、Agent 绑定、共享实例和 Plugin main。单个 `stop` 或
-`deactivate` 失败不会阻止其他 Plugin 清理，City 会在结束后汇总错误。
+Session 在每个 Step 打开稳定的 Hook 作用域。Plugin 被移除后，新 Step 立即不可见；已经开始的
+Step 会在作用域关闭后再释放资源。`city.close()` 会依次关闭 Agent Workspace 作用域、Plugin
+实例和 transport，并汇总释放错误。

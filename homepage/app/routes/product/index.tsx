@@ -43,7 +43,7 @@ const page_content = {
       {
         id: "agent-sdk",
         title: "Agent SDK",
-        desc: "把本地 Agent、RemoteAgent、Session 与宿主扩展端口组合进你的应用流程。",
+        desc: "把本地 Agent、RemoteAgent、Session 与 City 资源组合进你的应用流程。",
         source: "packages/agent/",
       },
       {

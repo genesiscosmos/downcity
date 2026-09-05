@@ -49,13 +49,13 @@ const registration = {
   has_config: false,
   has_sidebar: false,
   has_mainview: false,
-  module: github_module,
+  plugin: new GithubPlugin(),
 };
 const city = new City({
   plugins: [registration],
   workspaces: [workspace],
 });
-city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
+city.agents.add(agent);
 ```
 
 只有需要被 CLI 或 Desktop 安装、发现和管理时，才需要下面的入口协议。
@@ -85,14 +85,18 @@ city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
 
 ## 统一 Main 入口
 
-`main` 默认导出 `CityPluginModule`。它同时提供执行实例 factory 和宿主 main 生命周期；不再存在独立 `agent` 入口。`plugin.action()` 注册供 Sidebar/Mainview 调用且不依赖 Profile 的业务动作；`plugin.config_action()` 注册 Config 动作：
+`main` 默认导出 Plugin 实例，或导出 `{ plugin, main }` 以同时提供宿主 main 生命周期；不再存在
+独立 `agent` 入口。`plugin.action()` 注册 Sidebar/Mainview 动作，`plugin.config_action()` 注册
+Config 动作：
 
 ```ts
-import { define_city_plugin } from "@downcity/city/plugin";
+import { define_plugin_main } from "@downcity/city/plugin";
 import { GithubPlugin } from "./plugin.js";
 
-export default define_city_plugin({
-  activate({ plugin, notifications }) {
+export default {
+  plugin: new GithubPlugin(),
+  main: define_plugin_main({
+    activate({ plugin, notifications }) {
     plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => {
@@ -116,14 +120,13 @@ export default define_city_plugin({
       title: "仓库同步完成",
       route: { repository: "downcity", view: "activity" },
     });
-  },
-  create({ profile }) {
-    return new GithubPlugin(profile.config);
-  },
-});
+    },
+  }),
+};
 ```
 
-一个 main 在 City 中只激活一次；相同 `(plugin_id, profile_id)` 只创建一个共享执行实例。当前 Profile 在 `create()` 和 config action 调用时注入，不要把它缓存在 main 全局变量中。
+一个 main 在 City 中只激活一次；一个 Plugin ID 只对应一个实例。Config action 调用时由 City
+注入指定 Profile store，执行实例按 `PluginContext.config` 读取当前 Agent 配置。
 
 `notifications.publish()` 与 `notifications.dismiss()` 始终绑定当前 Plugin。宿主会把 `topic_key` 放入 Plugin 命名空间，并把 `route` 解释为当前 Plugin 工作区路由，因此 Plugin 不能代表其他 Plugin 或跳转到任意 Desktop 页面。相同 `topic_key` 只保留最新一条未读通知。
 

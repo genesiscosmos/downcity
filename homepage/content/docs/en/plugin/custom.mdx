@@ -49,13 +49,13 @@ const registration = {
   has_config: false,
   has_sidebar: false,
   has_mainview: false,
-  module: github_module,
+  plugin: new GithubPlugin(),
 };
 const city = new City({
   plugins: [registration],
   workspaces: [workspace],
 });
-city.agents.add(agent, { plugins: [{ plugin_id: "github" }] });
+city.agents.add(agent);
 ```
 
 The following entry protocol is only needed when CLI or Desktop must install, discover, and manage the Plugin.
@@ -85,14 +85,18 @@ The following entry protocol is only needed when CLI or Desktop must install, di
 
 ## Unified main entry
 
-`main` default-exports a `CityPluginModule`. It provides both the execution-instance factory and host main lifecycle; there is no separate `agent` entry. `plugin.action()` registers Profile-independent actions for Sidebar/Mainview, while `plugin.config_action()` registers Config actions:
+`main` default-exports a Plugin instance, or `{ plugin, main }` when it also provides a host main
+lifecycle. There is no separate `agent` entry. `plugin.action()` registers Sidebar/Mainview actions,
+while `plugin.config_action()` registers Config actions:
 
 ```ts
-import { define_city_plugin } from "@downcity/city/plugin";
+import { define_plugin_main } from "@downcity/city/plugin";
 import { GithubPlugin } from "./plugin.js";
 
-export default define_city_plugin({
-  activate({ plugin, notifications }) {
+export default {
+  plugin: new GithubPlugin(),
+  main: define_plugin_main({
+    activate({ plugin, notifications }) {
     plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => {
@@ -116,14 +120,14 @@ export default define_city_plugin({
       title: "Repository sync completed",
       route: { repository: "downcity", view: "activity" },
     });
-  },
-  create({ profile }) {
-    return new GithubPlugin(profile.config);
-  },
-});
+    },
+  }),
+};
 ```
 
-One main is activated once per City, and one `(plugin_id, profile_id)` maps to one shared execution instance. The current Profile is injected into `create()` and config action calls; do not cache it in main-global state.
+One main is activated once per City, and one Plugin ID maps to one instance. City injects the selected
+Profile store into Config actions, while the execution instance reads current Agent configuration
+from `PluginContext.config`.
 
 `notifications.publish()` and `notifications.dismiss()` are always bound to the current Plugin. The host namespaces `topic_key` and treats `route` as a route inside that Plugin workspace, so a Plugin cannot impersonate another Plugin or navigate to arbitrary Desktop pages. Only the latest unread notification for the same `topic_key` is retained.
 

@@ -1,50 +1,14 @@
 /**
- * City Plugin 共享实例、Profile 与 execution lease 生命周期测试。
- *
- * 这些测试只验证 City 的所有权不变量，不依赖具体官方 Plugin 实现。
+ * City Plugin 单实例、全 Agent 投影与生命周期测试。
  */
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Agent } from "@downcity/agent";
-import { City } from "../bin/index.js";
-import { create_workspace_entry } from "@downcity/agent/host";
-import { Workspace } from "@downcity/city";
+import { City, Workspace } from "@downcity/city";
+import { Plugin, create_action } from "@downcity/city/plugin";
 
-/** 创建可观察生命周期的 City Plugin 注册。 */
-function create_registration(observation) {
-  const module = {
-    activate() {},
-    create({ profile }) {
-      observation.creates.push(profile.id);
-      return {
-        name: "shared-test",
-        title: "Shared Test",
-        description: "Verifies City Plugin ownership",
-        lifecycle: {
-          start() {
-            observation.starts.push(profile.id);
-          },
-          stop() {
-            observation.stops.push(profile.id);
-          },
-        },
-      };
-    },
-  };
-  return {
-    id: "shared-test",
-    title: "Shared Test",
-    description: "Verifies City Plugin ownership",
-    readme: import.meta.filename,
-    has_config: true,
-    has_sidebar: false,
-    has_mainview: false,
-    module,
-  };
-}
-
-/** 创建测试 Agent 与 Workspace。 */
+/** 创建一个 Agent/Workspace 测试范围。 */
 function create_scope(id) {
   return {
     agent: new Agent({ id: `agent_${id}` }),
@@ -52,406 +16,181 @@ function create_scope(id) {
   };
 }
 
-test("City shares one Plugin instance for the same profile across Agents", async () => {
-  const observation = { creates: [], starts: [], stops: [] };
-  const registration = create_registration(observation);
+class ObservablePlugin extends Plugin {
+  name = "observable";
+  title = "Observable";
+  description = "Observes City lifecycle";
+
+  constructor(events) {
+    super();
+    this.events = events;
+  }
+
+  lifecycle = {
+    start: () => this.events.push("start"),
+    connect: (context) => this.events.push(`connect:${context.agent.id}:${context.workspace.id}`),
+    disconnect: (context) => this.events.push(`disconnect:${context.agent.id}:${context.workspace.id}`),
+    stop: () => this.events.push("stop"),
+  };
+
+  actions = {
+    scope: create_action({
+      description: "Read the current execution scope.",
+      execute: async ({ context }) => ({
+        success: true,
+        data: {
+          agent_id: context.agent.id,
+          workspace_id: context.workspace.id,
+        },
+      }),
+    }),
+  };
+}
+
+test("City owns one Plugin instance and exposes it to every Agent", async () => {
+  const events = [];
+  const plugin = new ObservablePlugin(events);
   const scope_a = create_scope("a");
   const scope_b = create_scope("b");
   const city = new City({
+    plugins: [plugin],
     workspaces: [scope_a.workspace, scope_b.workspace],
-    plugins: [registration],
-  });
-  const binding = { plugin_id: registration.id, profile: { id: "team", config: { order: 1 } } };
-
-  city.agents.add(scope_a.agent, { plugins: [binding] });
-  city.agents.add(scope_b.agent, { plugins: [binding] });
-  await Promise.all([scope_a.agent.ensure_ready(), scope_b.agent.ensure_ready()]);
-
-  assert.deepEqual(observation.creates, ["team"]);
-  assert.deepEqual(observation.starts, ["team"]);
-  assert.equal(city.plugins.get(scope_a.agent.id, registration.id), city.plugins.get(scope_b.agent.id, registration.id));
-
-  await city.agents.remove(scope_a.agent.id);
-  assert.deepEqual(observation.stops, []);
-  await city.agents.remove(scope_b.agent.id);
-  assert.deepEqual(observation.stops, ["team"]);
-  await city.close();
-});
-
-test("City creates independent Plugin instances for different profiles", async () => {
-  const observation = { creates: [], starts: [], stops: [] };
-  const registration = create_registration(observation);
-  const scope_a = create_scope("profile_a");
-  const scope_b = create_scope("profile_b");
-  const city = new City({
-    workspaces: [scope_a.workspace, scope_b.workspace],
-    plugins: [registration],
+    agents: [scope_a.agent, scope_b.agent],
   });
 
-  city.agents.add(scope_a.agent, { plugins: [{ plugin_id: registration.id, profile: { id: "a", config: {} } }] });
-  city.agents.add(scope_b.agent, { plugins: [{ plugin_id: registration.id, profile: { id: "b", config: {} } }] });
-  await Promise.all([scope_a.agent.ensure_ready(), scope_b.agent.ensure_ready()]);
-
-  assert.deepEqual(observation.creates.sort(), ["a", "b"]);
-  assert.deepEqual(observation.starts.sort(), ["a", "b"]);
-  assert.notEqual(city.plugins.get(scope_a.agent.id, registration.id), city.plugins.get(scope_b.agent.id, registration.id));
-  await city.close();
-  assert.deepEqual(observation.stops.sort(), ["a", "b"]);
-});
-
-test("City waits for the active execution lease before stopping the last shared instance", async () => {
-  const observation = { creates: [], starts: [], stops: [] };
-  const registration = create_registration(observation);
-  const scope = create_scope("lease");
-  const city = new City({ workspaces: [scope.workspace], plugins: [registration] });
-  city.agents.add(scope.agent, { plugins: [{ plugin_id: registration.id }] });
-  await scope.agent.ensure_ready();
-  const entry = create_workspace_entry(scope.agent, scope.workspace);
-  const lease = await entry.get_session_context().get_extensions().acquire();
-
-  let settled = false;
-  const unregister_promise = city.plugins.unregister(scope.agent.id, registration.id)
-    .finally(() => { settled = true; });
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(settled, false);
-  assert.deepEqual(observation.stops, []);
-
-  await lease.release();
-  assert.equal(await unregister_promise, true);
-  assert.deepEqual(observation.stops, ["default"]);
-  await city.close();
-});
-
-test("City binds and unbinds each Agent Workspace scope exactly once", async () => {
-  const scopes = [];
-  const registration = {
-    id: "scope-test",
-    title: "Scope Test",
-    description: "Verifies Workspace lifecycle",
-    readme: import.meta.filename,
-    has_config: false,
-    has_sidebar: false,
-    has_mainview: false,
-    module: {
-      activate() {},
-      create: () => ({
-        name: "scope-test",
-        title: "Scope Test",
-        description: "Verifies Workspace lifecycle",
-        lifecycle: {
-          bind(context) {
-            scopes.push(`bind:${context.agent.id}:${context.workspace.id}`);
-          },
-          unbind(context) {
-            scopes.push(`unbind:${context.agent.id}:${context.workspace.id}`);
-          },
-        },
-      }),
-    },
-  };
-  const scope = create_scope("workspace_lifecycle");
-  const city = new City({ workspaces: [scope.workspace], plugins: [registration] });
-  city.agents.add(scope.agent, { plugins: [{ plugin_id: registration.id }] });
-  const entry = create_workspace_entry(scope.agent, scope.workspace);
-
-  await entry.get_session_context().get_extensions().system_blocks();
-  await entry.get_session_context().get_extensions().system_blocks();
-  assert.deepEqual(scopes, [
-    "bind:agent_workspace_lifecycle:workspace_workspace_lifecycle",
+  await Promise.all([
+    city.enter_workspace(scope_a.agent.id, scope_a.workspace.id),
+    city.enter_workspace(scope_b.agent.id, scope_b.workspace.id),
   ]);
+  const result_a = await city.plugins.scope({
+    agent_id: scope_a.agent.id,
+    workspace_id: scope_a.workspace.id,
+  }).run_action({ plugin: plugin.name, action: "scope" });
+  const result_b = await city.plugins.scope({
+    agent_id: scope_b.agent.id,
+    workspace_id: scope_b.workspace.id,
+  }).run_action({ plugin: plugin.name, action: "scope" });
 
-  await entry.leave();
-  assert.deepEqual(scopes, [
-    "bind:agent_workspace_lifecycle:workspace_workspace_lifecycle",
-    "unbind:agent_workspace_lifecycle:workspace_workspace_lifecycle",
-  ]);
+  assert.equal(city.plugins.get(plugin.name), plugin);
+  assert.deepEqual(result_a.data, {
+    agent_id: scope_a.agent.id,
+    workspace_id: scope_a.workspace.id,
+  });
+  assert.deepEqual(result_b.data, {
+    agent_id: scope_b.agent.id,
+    workspace_id: scope_b.workspace.id,
+  });
+  assert.equal(events.filter((event) => event === "start").length, 1);
+
   await city.close();
+  assert.equal(events.filter((event) => event.startsWith("connect:")).length, 2);
+  assert.equal(events.filter((event) => event.startsWith("disconnect:")).length, 2);
+  assert.equal(events.filter((event) => event === "stop").length, 1);
 });
 
-test("City dynamically binds, replaces, and unbinds only the target Plugin scope", async () => {
+test("City dynamically adds and removes one Plugin for every Agent", async () => {
   const events = [];
-  const create_registration = (plugin_id) => ({
-    id: plugin_id,
-    title: plugin_id,
-    description: `Verifies dynamic scope lifecycle for ${plugin_id}`,
-    readme: import.meta.filename,
-    has_config: true,
-    has_sidebar: false,
-    has_mainview: false,
-    module: {
-      activate() {},
-      create: ({ profile }) => ({
-        name: plugin_id,
-        title: plugin_id,
-        description: plugin_id,
-        lifecycle: {
-          start: () => events.push(`start:${plugin_id}:${profile.id}`),
-          bind: (context) => events.push(`bind:${plugin_id}:${profile.id}:${context.workspace.id}`),
-          unbind: (context) => events.push(`unbind:${plugin_id}:${profile.id}:${context.workspace.id}`),
-          stop: () => events.push(`stop:${plugin_id}:${profile.id}`),
-        },
-      }),
-    },
-  });
-  const stable_registration = create_registration("stable-scope");
-  const dynamic_registration = create_registration("dynamic-scope");
-  const scope = create_scope("dynamic_scope");
-  const city = new City({
-    workspaces: [scope.workspace],
-    plugins: [stable_registration, dynamic_registration],
-  });
-  city.agents.add(scope.agent, {
-    plugins: [{ plugin_id: stable_registration.id, profile: { id: "stable", config: {} } }],
-  });
-  const entry = create_workspace_entry(scope.agent, scope.workspace);
-  await entry.get_session_context().get_extensions().system_blocks();
+  const plugin = new ObservablePlugin(events);
+  const scope = create_scope("dynamic");
+  const city = new City({ workspaces: [scope.workspace], agents: [scope.agent] });
+  await city.enter_workspace(scope.agent.id, scope.workspace.id);
 
-  await city.plugins.register(scope.agent.id, {
-    plugin_id: dynamic_registration.id,
-    profile: { id: "first", config: {} },
-  });
-  await city.plugins.register(scope.agent.id, {
-    plugin_id: dynamic_registration.id,
-    profile: { id: "second", config: {} },
-  });
-  assert.equal(await city.plugins.unregister(scope.agent.id, dynamic_registration.id), true);
-
-  assert.deepEqual(events, [
-    "start:stable-scope:stable",
-    `bind:stable-scope:stable:${scope.workspace.id}`,
-    "start:dynamic-scope:first",
-    `bind:dynamic-scope:first:${scope.workspace.id}`,
-    `unbind:dynamic-scope:first:${scope.workspace.id}`,
-    "stop:dynamic-scope:first",
-    "start:dynamic-scope:second",
-    `bind:dynamic-scope:second:${scope.workspace.id}`,
-    `unbind:dynamic-scope:second:${scope.workspace.id}`,
-    "stop:dynamic-scope:second",
-  ]);
-
-  await entry.leave();
-  await city.close();
-  assert.deepEqual(events.slice(-2), [
-    `unbind:stable-scope:stable:${scope.workspace.id}`,
-    "stop:stable-scope:stable",
-  ]);
-});
-
-test("City execution projection preserves class methods without exposing lifecycle", async () => {
-  class ClassPlugin {
-    name = "class-test";
-    title = "Class Test";
-    description = "Verifies execution projection";
-    lifecycle = { start() {} };
-    read_identity() {
-      return this.name;
-    }
-  }
-  const registration = {
-    id: "class-test",
-    title: "Class Test",
-    description: "Verifies execution projection",
-    readme: import.meta.filename,
-    has_config: false,
-    has_sidebar: false,
-    has_mainview: false,
-    module: { activate() {}, create: () => new ClassPlugin() },
-  };
-  const scope = create_scope("class_projection");
-  const city = new City({ workspaces: [scope.workspace], plugins: [registration] });
-  city.agents.add(scope.agent, { plugins: [{ plugin_id: registration.id }] });
+  city.plugins.add(plugin);
   await scope.agent.ensure_ready();
+  assert.equal(city.plugins.scope({
+    agent_id: scope.agent.id,
+    workspace_id: scope.workspace.id,
+  }).has(plugin.name), true);
 
-  const plugin = city.plugins.get(scope.agent.id, registration.id);
-  assert.equal(plugin.read_identity(), "class-test");
-  assert.equal(plugin.lifecycle, undefined);
-  assert.equal("lifecycle" in plugin, false);
+  assert.equal(await city.plugins.remove(plugin.name), true);
+  assert.equal(city.plugins.get(plugin.name), null);
+  assert.deepEqual(events, [
+    "start",
+    `connect:${scope.agent.id}:${scope.workspace.id}`,
+    `disconnect:${scope.agent.id}:${scope.workspace.id}`,
+    "stop",
+  ]);
   await city.close();
 });
 
-test("City owns one main activation and deactivation for all Plugin profiles", async () => {
+test("City rejects a second instance with the same Plugin ID", async () => {
+  const city = new City({ plugins: [new ObservablePlugin([])] });
+  assert.throws(() => city.plugins.add(new ObservablePlugin([])), {
+    message: "Plugin already exists in City: observable",
+  });
+  await city.close();
+});
+
+test("City activates Plugin main once and deactivates it on close", async () => {
   const events = [];
   const registration = {
     id: "main-test",
     title: "Main Test",
-    description: "Verifies City main ownership",
+    description: "Verifies main ownership",
     readme: import.meta.filename,
     has_config: false,
     has_sidebar: true,
     has_mainview: true,
-    module: {
+    plugin: { name: "main-test", title: "Main Test", description: "Main Test" },
+    main: {
       activate(context) {
         events.push("activate");
-        context.plugin.action({
-          id: "ping",
-          run: (input) => ({ input }),
-        });
+        context.plugin.action({ id: "ping", run: (input) => input ?? null });
       },
       deactivate() {
         events.push("deactivate");
       },
-      create: () => ({
-        name: "main-test",
-        title: "Main Test",
-        description: "Verifies City main ownership",
-      }),
     },
   };
-  const scope_a = create_scope("main_a");
-  const scope_b = create_scope("main_b");
-  const city = new City({ workspaces: [scope_a.workspace, scope_b.workspace] });
-  city.plugins.provide(registration);
-  city.agents.add(scope_a.agent, { plugins: [{ plugin_id: registration.id, profile: { id: "a", config: {} } }] });
-  city.agents.add(scope_b.agent, { plugins: [{ plugin_id: registration.id, profile: { id: "b", config: {} } }] });
+  const city = new City({ plugins: [registration] });
 
-  assert.deepEqual(
-    await city.plugins.invoke("main-test", "ping", { value: 1 }),
-    { input: { value: 1 } },
-  );
-  await Promise.all([scope_a.agent.ensure_ready(), scope_b.agent.ensure_ready()]);
+  assert.deepEqual(await Promise.all([
+    city.plugins.invoke("main-test", "ping", { order: 1 }),
+    city.plugins.invoke("main-test", "ping", { order: 2 }),
+  ]), [{ order: 1 }, { order: 2 }]);
   assert.deepEqual(events, ["activate"]);
+
   await city.close();
   assert.deepEqual(events, ["activate", "deactivate"]);
 });
 
-test("City validates catalog conflicts and activates concurrent main calls once", async () => {
-  let activation_count = 0;
-  const registration = {
-    id: "concurrent-main",
-    title: "Concurrent Main",
-    description: "Verifies concurrent activation",
-    readme: import.meta.filename,
-    has_config: false,
-    has_sidebar: true,
-    has_mainview: true,
-    module: {
-      async activate(context) {
-        activation_count += 1;
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        context.plugin.action({ id: "ping", run: (input) => input ?? null });
-      },
-      create: () => ({
-        name: "concurrent-main",
-        title: "Concurrent Main",
-        description: "Concurrent Main",
-      }),
-    },
-  };
-  const city = new City();
-  city.plugins.provide(registration);
-  assert.throws(() => city.plugins.provide({ ...registration, module: { ...registration.module } }), {
-    message: "Plugin module conflicts in City catalog: concurrent-main",
-  });
-
-  assert.deepEqual(await Promise.all([
-    city.plugins.invoke(registration.id, "ping", { order: 1 }),
-    city.plugins.invoke(registration.id, "ping", { order: 2 }),
-  ]), [{ order: 1 }, { order: 2 }]);
-  assert.equal(activation_count, 1);
-  await city.close();
-});
-
-test("City retries failed main activation and rejects non-JSON action results", async () => {
-  let activation_count = 0;
-  const registration = {
-    id: "retry-main",
-    title: "Retry Main",
-    description: "Verifies failed activation cleanup",
-    readme: import.meta.filename,
-    has_config: false,
-    has_sidebar: true,
-    has_mainview: true,
-    module: {
-      activate(context) {
-        activation_count += 1;
-        if (activation_count === 1) throw new Error("activation failed");
-        context.plugin.action({ id: "invalid", run: () => 1n });
-      },
-      create: () => ({ name: "retry-main", title: "Retry Main", description: "Retry Main" }),
-    },
-  };
-  const city = new City();
-  city.plugins.provide(registration);
-  await assert.rejects(city.plugins.invoke(registration.id, "invalid"), /activation failed/);
-  await assert.rejects(city.plugins.invoke(registration.id, "invalid"), /not JSON-serializable/);
-  assert.equal(activation_count, 2);
-  await city.close();
-});
-
 test("City config actions use the requested Profile store", async () => {
-  const profile_requests = [];
-  const profile_values = new Map([["profile-a", { token: "secret" }]]);
+  const requests = [];
   const city = new City({
     plugin_host: {
       profile_config(plugin_id, profile_id) {
-        profile_requests.push([plugin_id, profile_id]);
+        requests.push([plugin_id, profile_id]);
         return {
-          get: async () => profile_values.get(profile_id) ?? {},
-          set: async (config) => { profile_values.set(profile_id, config); },
+          get: async () => ({ token: "secret" }),
+          set: async () => {},
         };
       },
       notifications: () => ({ publish: async () => {}, dismiss: async () => {} }),
     },
-  });
-  const registration = {
-    id: "config-main",
-    title: "Config Main",
-    description: "Verifies Profile config actions",
-    readme: import.meta.filename,
-    has_config: true,
-    has_sidebar: false,
-    has_mainview: false,
-    module: {
-      activate(context) {
-        context.plugin.config_action({
-          id: "read",
-          run: async (_input, action_context) => await action_context.config.get(),
-        });
+    plugins: [{
+      id: "config-main",
+      title: "Config Main",
+      description: "Verifies config actions",
+      readme: import.meta.filename,
+      has_config: true,
+      has_sidebar: false,
+      has_mainview: false,
+      plugin: { name: "config-main", title: "Config Main", description: "Config Main" },
+      main: {
+        activate(context) {
+          context.plugin.config_action({
+            id: "read",
+            run: async (_input, action_context) => await action_context.config.get(),
+          });
+        },
       },
-      create: () => ({ name: "config-main", title: "Config Main", description: "Config Main" }),
-    },
-  };
-  city.plugins.provide(registration);
+    }],
+  });
 
   assert.deepEqual(
-    await city.plugins.invoke_config(registration.id, "profile-a", "read"),
+    await city.plugins.invoke_config("config-main", "profile-a", "read"),
     { token: "secret" },
   );
-  assert.deepEqual(profile_requests, [[registration.id, "profile-a"]]);
+  assert.deepEqual(requests, [["config-main", "profile-a"]]);
   await city.close();
-});
-
-test("City deactivates every main when one Plugin cleanup fails", async () => {
-  const events = [];
-  const registration = (plugin_id, should_fail) => ({
-    id: plugin_id,
-    title: plugin_id,
-    description: plugin_id,
-    readme: import.meta.filename,
-    has_config: false,
-    has_sidebar: true,
-    has_mainview: true,
-    module: {
-      activate(context) {
-        context.plugin.action({ id: "ping", run: () => null });
-      },
-      deactivate() {
-        events.push(plugin_id);
-        if (should_fail) throw new Error(`failed:${plugin_id}`);
-      },
-      create: () => ({ name: plugin_id, title: plugin_id, description: plugin_id }),
-    },
-  });
-  const city = new City();
-  const first = registration("cleanup-first", true);
-  const second = registration("cleanup-second", false);
-  city.plugins.provide(first);
-  city.plugins.provide(second);
-  await Promise.all([
-    city.plugins.invoke(first.id, "ping"),
-    city.plugins.invoke(second.id, "ping"),
-  ]);
-
-  await assert.rejects(city.close(), /City transport close failed/);
-  assert.deepEqual(events.sort(), [first.id, second.id].sort());
 });

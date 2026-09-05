@@ -15,7 +15,7 @@ import fs from "node:fs/promises";
 
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
-import { create_workspace_entry } from "@downcity/agent/host";
+import { create_workspace_entry } from "@downcity/agent/internal";
 import { City } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/city";
 

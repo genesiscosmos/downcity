@@ -6,7 +6,10 @@
  */
 
 import test from "node:test";
-import { create_plugin_registration } from "./helpers/CityPluginTestBinding.mjs";
+import {
+  create_plugin_registration,
+  create_test_plugin as create_plugin,
+} from "./helpers/CityPluginTestBinding.mjs";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
@@ -15,9 +18,9 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
-import { create_workspace_entry } from "@downcity/agent/host";
+import { create_workspace_entry } from "@downcity/agent/internal";
 import { Workspace } from "@downcity/city";
-import { create_action, create_plugin } from "@downcity/city/plugin";
+import { create_action } from "@downcity/city/plugin";
 import { CITY_MODEL_KIND } from "@downcity/type";
 
 /** 构造 AI SDK V3 usage。 */
@@ -149,9 +152,9 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
   const workspace_b = new Workspace({ id: "workspace_b", path: root_b, data_root_path: path.join(root_b, "data") });
   const city = new City({ workspaces: [workspace_a, workspace_b] });
   const registration = create_plugin_registration(create_owner_plugin(executed_owners));
-  city.plugins.provide(registration);
-  city.agents.add(agent_a, { plugins: [{ plugin_id: registration.id }] });
-  city.agents.add(agent_b, { plugins: [{ plugin_id: registration.id }] });
+  city.plugins.add(registration);
+  city.agents.add(agent_a);
+  city.agents.add(agent_b);
   const entry_a = create_workspace_entry(agent_a, workspace_a);
   const entry_b = create_workspace_entry(agent_b, workspace_b);
 

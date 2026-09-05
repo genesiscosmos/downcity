@@ -1,60 +1,34 @@
 /**
  * 本地 City Plugin Loader。
  *
- * Loader 只解析内置或第三方统一 main 注册，并把 Agent 配置转换为声明式绑定；
- * Plugin 实例创建、共享、生命周期与 execution lease 全部由 City 完成。
+ * Loader 只解析内置或第三方统一注册。Plugin 实例不由 Loader 创建；同一个入口
+ * 导出的实例直接交给 City，由 City 统一持有生命周期。
  */
 
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import fs from "fs-extra";
-import type { CityAgentPluginBinding } from "@/city/types/CityPlugin.js";
 import type {
-  CityPluginModule,
   CityPluginRegistration,
+  PluginDefinition,
   PluginJsonObject,
+  PluginMainModule,
 } from "@/plugin/index.js";
-import type { LocalAgentConfig } from "@/local/types/LocalConfig.js";
 import type {
   LocalInstalledPluginDefinition,
+  LocalPluginModule,
   LocalPluginRegistration,
 } from "@/local/types/LocalPlugin.js";
 import type { LocalPluginLoaderOptions } from "@/local/types/LocalRuntime.js";
 
-/** 根据本地文件协议解析 City Plugin 注册与 Agent 绑定。 */
+/** 根据本地文件协议解析 City Plugin 注册与宿主配置。 */
 export class LocalPluginLoader {
   /** 当前宿主注入的内置 Plugin 注册。 */
   private readonly builtin_registrations: readonly LocalPluginRegistration[];
 
   constructor(private readonly options: LocalPluginLoaderOptions) {
     this.builtin_registrations = [...(options.plugin_registrations ?? [])];
-  }
-
-  /** 根据 Agent 定义创建不包含 Plugin 实例的 City 绑定。 */
-  async create_bindings(config: LocalAgentConfig): Promise<CityAgentPluginBinding[]> {
-    const bindings: CityAgentPluginBinding[] = [];
-    for (const [plugin_id, reference] of Object.entries(config.plugins)) {
-      const registration = await this.load_plugin_registration(plugin_id);
-      if (!registration) throw new Error(`Plugin not found: ${plugin_id}`);
-      if (reference.profile && !registration.has_config) {
-        throw new Error(`Plugin does not provide Config: ${plugin_id}`);
-      }
-      const profile_config = reference.profile
-        ? this.options.plugin_repository.get_profile(plugin_id, reference.profile)
-        : {};
-      if (!profile_config) {
-        throw new Error(`Plugin profile not found: ${plugin_id}/${reference.profile}`);
-      }
-      bindings.push({
-        plugin_id,
-        profile: {
-          id: reference.profile || "default",
-          config: profile_config,
-        },
-      });
-    }
-    return bindings;
   }
 
   /** 按稳定 ID 加载一个内置或第三方 City Plugin 注册。 */
@@ -94,6 +68,9 @@ export class LocalPluginLoader {
       throw new Error(`Installed Plugin main entry is invalid: ${plugin_id}`);
     }
     const module = await load_local_city_plugin_module(real_entry, definition.integrity);
+    if (module.plugin.name !== definition.id) {
+      throw new Error(`Installed Plugin ID does not match its instance: ${definition.id}`);
+    }
     return {
       id: definition.id,
       title: definition.title || definition.id,
@@ -102,7 +79,8 @@ export class LocalPluginLoader {
       has_config: definition.renderer?.config === true,
       has_sidebar: definition.renderer?.sidebar === true,
       has_mainview: definition.renderer?.mainview === true,
-      module,
+      plugin: module.plugin,
+      ...(module.main ? { main: module.main } : {}),
     };
   }
 }
@@ -115,23 +93,45 @@ export class LocalPluginLoader {
 export async function load_local_city_plugin_module(
   main_path: string,
   cache_key: string,
-): Promise<CityPluginModule> {
+): Promise<LocalPluginModule> {
   const module_url = pathToFileURL(main_path);
   module_url.searchParams.set("integrity", cache_key);
   const loaded = await import(module_url.href) as { default?: unknown };
-  if (!is_city_plugin_module(loaded.default)) {
-    throw new Error("Plugin main must default export a CityPluginModule");
-  }
-  return loaded.default;
+  return normalize_local_plugin_module(loaded.default);
 }
 
-/** 判断未知默认导出是否包含统一 main 与执行 factory。 */
-function is_city_plugin_module(value: unknown): value is CityPluginModule {
+/** 把第三方默认导出的 Plugin 实例或注册对象归一化为无工厂模块。 */
+function normalize_local_plugin_module(value: unknown): LocalPluginModule {
+  if (is_plugin_definition(value)) return { plugin: value };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Plugin main must default export a Plugin instance or registration");
+  }
+  const registration = value as { plugin?: unknown; main?: unknown };
+  if (!is_plugin_definition(registration.plugin)) {
+    throw new Error("Plugin registration must provide one Plugin instance");
+  }
+  if (registration.main !== undefined && !is_plugin_main(registration.main)) {
+    throw new Error("Plugin registration main is invalid");
+  }
+  return {
+    plugin: registration.plugin,
+    ...(registration.main ? { main: registration.main } : {}),
+  };
+}
+
+/** 判断未知值是否满足 Plugin 最小定义。 */
+function is_plugin_definition(value: unknown): value is PluginDefinition {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const module = value as Partial<CityPluginModule>;
-  return typeof module.activate === "function"
-    && typeof module.create === "function"
-    && (module.deactivate === undefined || typeof module.deactivate === "function");
+  const plugin = value as Partial<PluginDefinition>;
+  return typeof plugin.name === "string" && plugin.name.trim().length > 0;
+}
+
+/** 判断未知值是否满足 Plugin main 生命周期。 */
+function is_plugin_main(value: unknown): value is PluginMainModule {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const main = value as Partial<PluginMainModule>;
+  return typeof main.activate === "function"
+    && (main.deactivate === undefined || typeof main.deactivate === "function");
 }
 
 /** 校验安装制品完整性，防止已安装入口或运行资源被静默替换。 */

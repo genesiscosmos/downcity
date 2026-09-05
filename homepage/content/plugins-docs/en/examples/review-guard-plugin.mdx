@@ -17,9 +17,9 @@ That is the most natural kind of `guard` scenario.
 ## Example
 
 ```ts
-import { BasePlugin, type PluginHooks } from "@downcity/city/plugin";
+import { Plugin, type PluginHooks } from "@downcity/city/plugin";
 
-class ReviewGuardPlugin extends BasePlugin {
+class ReviewGuardPlugin extends Plugin {
   readonly name = "review_guard";
   readonly title = "Review Guard";
   readonly description = "Blocks requests that were not reviewed.";

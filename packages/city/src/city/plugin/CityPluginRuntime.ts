@@ -137,7 +137,11 @@ export class CityPluginRuntime {
       [...this.agents_by_id.values()].map(async (agent_record) => {
         await this.enqueue_agent_mutation(agent_record, async () => {
           await agent_record.registry.unregister_and_wait(plugin_id);
-          await this.drop_workspace_plugin_contexts(agent_record.agent.id, plugin_id);
+          await this.drop_workspace_plugin_contexts(
+            agent_record.agent.id,
+            plugin_id,
+            record,
+          );
         });
       }),
     );
@@ -367,7 +371,7 @@ export class CityPluginRuntime {
       data_path: storage.root_path,
       files: workspace.files,
       data_files: storage.files,
-      config: {},
+      get_config: () => ({}),
       ...(workspace.shell ? { shell: workspace.shell } : {}),
       logger,
       embassy: this.options.city.embassy,
@@ -382,11 +386,13 @@ export class CityPluginRuntime {
     } satisfies Parameters<typeof create_plugin_context>[0];
     const context = create_plugin_context(context_input);
     const contexts_by_plugin = new Map<string, PluginContext>();
+    const records_by_plugin = new Map<string, CityPluginRecord>();
     const connection_promises = new Map<string, Promise<void>>();
     let release_registry_context = () => {};
     const workspace_record: CityPluginWorkspaceContext = {
       context,
       contexts_by_plugin,
+      records_by_plugin,
       connection_promises,
       release_registry_context: () => release_registry_context(),
     };
@@ -403,12 +409,13 @@ export class CityPluginRuntime {
         ...context_input,
         data_path: plugin_storage.root_path,
         data_files: plugin_storage.files,
-        config: this.options.host?.runtime_config?.(plugin_id, record.agent.id) ?? {},
+        get_config: () => this.options.host?.runtime_config?.(plugin_id, record.agent.id) ?? {},
         ...(this.options.host
           ? { notifications: this.options.host.notifications(plugin_id, record.agent.id) }
           : {}),
       });
       contexts_by_plugin.set(plugin_id, plugin_context);
+      records_by_plugin.set(plugin_id, plugin_record);
       const connection = plugin_record.ready.then(async () => {
         await plugin_record.plugin.lifecycle?.connect?.(plugin_context);
       });
@@ -463,7 +470,10 @@ export class CityPluginRuntime {
       for (const [plugin_id, context] of workspace_record.contexts_by_plugin) {
         try {
           await workspace_record.connection_promises.get(plugin_id);
-          await this.plugins_by_id.get(plugin_id)?.plugin.lifecycle?.disconnect?.(context);
+          // Context 释放可能发生在 Plugin 已从 City 移除之后；此处必须使用
+          // Context 创建时捕获的 Plugin 记录，不能再次从当前注册表查找。
+          const plugin_record = workspace_record.records_by_plugin.get(plugin_id);
+          await plugin_record?.plugin.lifecycle?.disconnect?.(context);
         } catch (error) {
           errors.push(error);
         }
@@ -475,7 +485,11 @@ export class CityPluginRuntime {
   }
 
   /** 释放指定 Plugin 在一个 Agent 全部 Workspace 下的 Context。 */
-  private async drop_workspace_plugin_contexts(agent_id: string, plugin_id: string): Promise<void> {
+  private async drop_workspace_plugin_contexts(
+    agent_id: string,
+    plugin_id: string,
+    plugin_record: CityPluginRecord,
+  ): Promise<void> {
     const prefix = `${agent_id}\u0000`;
     const errors: unknown[] = [];
     for (const [key, workspace_record] of this.workspace_contexts) {
@@ -483,11 +497,12 @@ export class CityPluginRuntime {
       const context = workspace_record.contexts_by_plugin.get(plugin_id);
       if (!context) continue;
       workspace_record.contexts_by_plugin.delete(plugin_id);
+      workspace_record.records_by_plugin.delete(plugin_id);
       const connection = workspace_record.connection_promises.get(plugin_id);
       workspace_record.connection_promises.delete(plugin_id);
       try {
         await connection;
-        await this.plugins_by_id.get(plugin_id)?.plugin.lifecycle?.disconnect?.(context);
+        await plugin_record.plugin.lifecycle?.disconnect?.(context);
       } catch (error) {
         errors.push(error);
       }

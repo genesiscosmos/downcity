@@ -46,13 +46,13 @@ import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { create_session_compact_operation } from "@/session/runtime/SessionCompactOperation.js";
 import { run_session_history_compaction } from "@/session/runtime/SessionHistoryCompaction.js";
-import { create_session_extension_execution_context } from "@/session/runtime/SessionTurnContext.js";
-import { SESSION_EXTENSION_POINTS } from "@/session/SessionExtensionPoints.js";
+import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
+import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
 import type {
-  SessionExtensionContextBlock,
+  SessionHookContextBlock,
   SessionSystemContextHookValue,
   SessionTurnContextHookValue,
-} from "@/types/session/SessionExtensionHook.js";
+} from "@/types/session/SessionHook.js";
 import type { JsonValue } from "@/types/common/Json.js";
 import { SessionState } from "@/session/SessionState.js";
 import { SessionLoop } from "@/session/SessionLoop.js";
@@ -60,7 +60,7 @@ import { SessionQueue } from "@/session/SessionQueue.js";
 import { SessionCommand } from "@/session/SessionCommand.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
-import type { SessionExtensionRuntime } from "@downcity/type/session";
+import type { SessionHooks } from "@/session/SessionHooks.js";
 import { SessionInteractions } from "@/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "@/session/execution/tools/SessionShellApprovalAdapter.js";
 import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
@@ -82,8 +82,8 @@ import type { SessionActionEventInput } from "@/types/session/SessionAction.js";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 
-/** 把 system pipeline 输出限制为 Extension 命名内容块。 */
-function normalize_extension_system_blocks(input: unknown): AgentSessionSystemBlock[] {
+/** 把 system pipeline 输出限制为 Plugin 命名内容块。 */
+function normalize_plugin_system_blocks(input: unknown): AgentSessionSystemBlock[] {
   if (!Array.isArray(input)) return [];
   return input.flatMap((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
@@ -91,21 +91,21 @@ function normalize_extension_system_blocks(input: unknown): AgentSessionSystemBl
     const name = String(record.name || "").trim();
     const content = String(record.content || "").trim();
     if (!name || !content) return [];
-    return [{ source: "extension" as const, name, content }];
+    return [{ source: "plugin" as const, name, content }];
   });
 }
 
 /** 把 Turn pipeline 输出限制为低权限动态参考内容块。 */
-function normalize_extension_context_blocks(input: unknown): SessionExtensionContextBlock[] {
+function normalize_plugin_context_blocks(input: unknown): SessionHookContextBlock[] {
   if (!Array.isArray(input)) return [];
   return input.flatMap((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const record = item as Record<string, unknown>;
-    const source_extension = String(record.source_extension || "").trim();
+    const source_plugin = String(record.source_plugin || "").trim();
     const name = String(record.name || "").trim();
     const content = String(record.content || "").trim();
     if (
-      !source_extension ||
+      !source_plugin ||
       !name ||
       !content ||
       record.trust_level !== "reference"
@@ -115,7 +115,7 @@ function normalize_extension_context_blocks(input: unknown): SessionExtensionCon
       : [];
     const version = String(record.version || "").trim();
     return [{
-      source_extension,
+      source_plugin,
       name,
       content,
       trust_level: "reference" as const,
@@ -142,7 +142,7 @@ export class Session implements AgentSession {
   private readonly register_forked_session: SessionOptions["register_forked_session"];
   private readonly tools: Record<string, Tool>;
   private readonly logger: SessionOptions["logger"];
-  private readonly get_managed_extension_system_blocks: SessionOptions["get_managed_extension_system_blocks"];
+  private readonly get_managed_plugin_system_blocks: SessionOptions["get_managed_plugin_system_blocks"];
   private readonly ensure_configured_hook?: SessionOptions["ensure_configured"];
   private readonly composer: SessionComposer;
   private readonly session_messages: SessionMessages;
@@ -153,7 +153,7 @@ export class Session implements AgentSession {
   private readonly local_state: SessionLocalState;
   private readonly get_workspace_env: SessionOptions["get_workspace_env"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
-  private readonly get_extensions: SessionOptions["get_extensions"];
+  private readonly get_hooks: SessionOptions["get_hooks"];
   private readonly get_instruction_system_blocks:
     SessionOptions["get_instruction_system_blocks"];
   private effective_instruction_system_blocks: AgentSessionSystemBlock[];
@@ -161,7 +161,7 @@ export class Session implements AgentSession {
   private initialize_promise: Promise<void> | null = null;
   private instruction_initialize_promise: Promise<void> | null = null;
   private effective_workspace_env: Record<string, string>;
-  private effective_extensions: SessionExtensionRuntime;
+  private effective_hooks: SessionHooks;
   /** 当前 Session 首次生成后固定的完整 system snapshot。 */
   private system_snapshot_blocks: AgentSessionSystemBlock[] | null = null;
   /** 串行化 snapshot / syncshot 对 system 与 instruction.md 的修改。 */
@@ -185,14 +185,14 @@ export class Session implements AgentSession {
     this.logger = options.logger;
     this.get_workspace_env = options.get_workspace_env;
     this.get_agent_model = options.get_agent_model;
-    this.get_extensions = options.get_extensions;
+    this.get_hooks = options.get_hooks;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
     this.effective_instruction_system_blocks = options
       .instruction_system_blocks
       .map((block) => ({ ...block }));
     this.effective_workspace_env = { ...options.get_workspace_env() };
-    this.effective_extensions = options.get_extensions();
-    this.get_managed_extension_system_blocks = options.get_managed_extension_system_blocks;
+    this.effective_hooks = options.get_hooks();
+    this.get_managed_plugin_system_blocks = options.get_managed_plugin_system_blocks;
     this.ensure_configured_hook = options.ensure_configured;
     this.composer = options.composer || new DefaultSessionComposer();
     if (!this.id) {
@@ -282,7 +282,7 @@ export class Session implements AgentSession {
    * 把当前 Session 首次生成后固定的完整 system 显式固化到 instruction.md。
    *
    * 关键点（中文）
-   * - 包含 instruction、SDK core、Extension system 与 Session context。
+   * - 包含 instruction、SDK core、Plugin system 与 Session context。
    * - 多个 system block 按原顺序合并为一个 Markdown 文档。
    */
   async snapshot(): Promise<void> {
@@ -293,10 +293,10 @@ export class Session implements AgentSession {
   }
 
   /**
-   * 使用 Agent 当前 instruction 与 Extension 重新生成一次完整 system。
+   * 使用 Agent 当前 instruction 与 Plugin 重新生成一次完整 system。
    *
    * 关键点（中文）
-   * - 只替换内存 snapshot，不改变 Extension execution view。
+   * - 只替换内存 snapshot，不改变 Plugin execution view。
    * - instruction.md 已存在时同步覆盖；不存在时不自动创建。
    * - 当前已经发出的 provider 请求不受影响，后续 step 使用新 snapshot。
    */
@@ -490,17 +490,17 @@ export class Session implements AgentSession {
   }
 
   /** 把 City 扩展执行视图加入当前 Session 的有序输入队列。 */
-  enqueue_extensions(input: {
+  enqueue_hooks(input: {
     /** 当前扩展修改的稳定标识。 */
     command_id: string;
     /** 当前扩展修改的用户可读标题。 */
     title: string;
     /** 下一 Session Step 使用的扩展执行视图。 */
-    extensions: SessionExtensionRuntime;
+    hooks: SessionHooks;
   }): void {
     this.enqueue_command({
       execute: async () => {
-        this.effective_extensions = input.extensions;
+        this.effective_hooks = input.hooks;
       },
       completion: {
         type: "action",
@@ -780,8 +780,8 @@ export class Session implements AgentSession {
       ),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_workspace_env: this.get_workspace_env,
-      get_extensions: this.get_extensions,
-      get_managed_extension_system_blocks: this.get_managed_extension_system_blocks,
+      get_hooks: this.get_hooks,
+      get_managed_plugin_system_blocks: this.get_managed_plugin_system_blocks,
       ensure_configured: this.ensure_configured_hook,
       get_agent_model: this.get_agent_model,
       composer: this.composer,
@@ -857,7 +857,7 @@ export class Session implements AgentSession {
       compact_history: async (input) => await this.compact_history(input),
       get_model: () => this.get_model(),
       logger: this.logger,
-      get_extensions: () => this.effective_extensions,
+      get_hooks: () => this.effective_hooks,
       apply_system_snapshot: (input) => this.apply_system_snapshot(input),
     });
   }
@@ -871,15 +871,15 @@ export class Session implements AgentSession {
     const instruction_system_blocks = refresh_system
       ? this.get_instruction_system_blocks().map((block) => ({ ...block }))
       : this.effective_instruction_system_blocks.map((block) => ({ ...block }));
-    // 关键点（中文）：Extension system 本身参与 Compose，必须先让它看到当前检查点
+    // 关键点（中文）：Plugin system 本身参与 Compose，必须先让它看到当前检查点
     // 已确定的 env 与 instruction；Executor 会在 Compose 返回后提交最终 Step 快照。
     turn_context?.step.commit({
       workspace_env: this.effective_workspace_env,
       agent_systems: instruction_system_blocks.map((block) => block.content),
     });
-    const extension_execution_context =
-      turn_context?.step.extension_execution_context() ||
-      create_session_extension_execution_context({
+    const hook_context =
+      turn_context?.step.hook_context() ||
+      create_session_hook_context({
         session_id: this.id,
         session_origin: this.origin,
         project_root: this.workspace_path,
@@ -889,31 +889,31 @@ export class Session implements AgentSession {
         ),
       });
     const history = await this.session_messages.context_snapshot();
-    const extension_runtime = refresh_system
-      ? this.get_extensions()
-      : turn_context?.step.extensions || this.effective_extensions;
-    const extension_system_blocks = this.system_snapshot_blocks && !refresh_system
+    const plugin_runtime = refresh_system
+      ? this.get_hooks()
+      : turn_context?.step.hooks || this.effective_hooks;
+    const plugin_system_blocks = this.system_snapshot_blocks && !refresh_system
       ? []
       : refresh_system
-        ? await extension_runtime.system_blocks(extension_execution_context)
-        : turn_context?.step.extensions
-          ? await turn_context.step.extensions.system_blocks(
-              extension_execution_context,
+        ? await plugin_runtime.system_blocks(hook_context)
+        : turn_context?.step.hooks
+          ? await turn_context.step.hooks.system_blocks(
+              hook_context,
             )
-          : await this.effective_extensions.system_blocks(
-              extension_execution_context,
+          : await this.effective_hooks.system_blocks(
+              hook_context,
             );
-    const resolved_extension_system_blocks = this.system_snapshot_blocks && !refresh_system
+    const resolved_plugin_system_blocks = this.system_snapshot_blocks && !refresh_system
       ? []
-      : await this.resolve_extension_system_context(
-          extension_runtime,
-          extension_system_blocks,
+      : await this.resolve_plugin_system_context(
+          plugin_runtime,
+          plugin_system_blocks,
           turn_context?.session.turn_id,
         );
-    const extension_context_blocks = turn_context
-      ? await turn_context.step.resolve_extension_context_blocks(async () => {
-          const extensions = turn_context.step.extensions;
-          if (!extensions) return [];
+    const plugin_context_blocks = turn_context
+      ? await turn_context.step.resolve_plugin_context_blocks(async () => {
+          const hooks = turn_context.step.hooks;
+          if (!hooks) return [];
           const value: SessionTurnContextHookValue = {
             session_id: this.id,
             turn_id: turn_context.session.turn_id,
@@ -933,14 +933,14 @@ export class Session implements AgentSession {
             blocks: [],
           };
           try {
-            const output = await extensions.pipeline(
-              SESSION_EXTENSION_POINTS.turn_context,
+            const output = await hooks.pipeline(
+              SESSION_HOOK_POINTS.turn_context,
               value as unknown as JsonValue,
             ) as unknown as SessionTurnContextHookValue;
-            return normalize_extension_context_blocks(output?.blocks);
+            return normalize_plugin_context_blocks(output?.blocks);
           } catch (error) {
-            await this.log_extension_hook_warning(
-              SESSION_EXTENSION_POINTS.turn_context,
+            await this.log_plugin_hook_warning(
+              SESSION_HOOK_POINTS.turn_context,
               error,
               turn_context.session.turn_id,
             );
@@ -959,12 +959,12 @@ export class Session implements AgentSession {
         ),
         tools: Object.freeze({ ...this.tools }),
         instruction_system_blocks,
-        managed_extension_system_blocks:
+        managed_plugin_system_blocks:
           this.system_snapshot_blocks && !refresh_system
             ? []
-            : await this.get_managed_extension_system_blocks(),
-        extension_system_blocks: resolved_extension_system_blocks,
-        extension_context_blocks,
+            : await this.get_managed_plugin_system_blocks(),
+        plugin_system_blocks: resolved_plugin_system_blocks,
+        plugin_context_blocks,
       },
       history,
       turn: {
@@ -976,9 +976,9 @@ export class Session implements AgentSession {
     };
   }
 
-  /** 通过既有 pipeline point 解析 Extension 追加的命名 system blocks。 */
-  private async resolve_extension_system_context(
-    extensions: SessionExtensionRuntime | NonNullable<SessionTurnContext["step"]["extensions"]>,
+  /** 通过既有 pipeline point 解析 Plugin 追加的命名 system blocks。 */
+  private async resolve_plugin_system_context(
+    hooks: SessionHooks | NonNullable<SessionTurnContext["step"]["hooks"]>,
     blocks: readonly AgentSessionSystemBlock[],
     turn_id?: string,
   ): Promise<AgentSessionSystemBlock[]> {
@@ -988,14 +988,14 @@ export class Session implements AgentSession {
       blocks: blocks.map((block) => ({ ...block })),
     };
     try {
-      const output = await extensions.pipeline(
-        SESSION_EXTENSION_POINTS.system_context,
+      const output = await hooks.pipeline(
+        SESSION_HOOK_POINTS.system_context,
         value as unknown as JsonValue,
       ) as unknown as SessionSystemContextHookValue;
-      return normalize_extension_system_blocks(output?.blocks);
+      return normalize_plugin_system_blocks(output?.blocks);
     } catch (error) {
-      await this.log_extension_hook_warning(
-        SESSION_EXTENSION_POINTS.system_context,
+      await this.log_plugin_hook_warning(
+        SESSION_HOOK_POINTS.system_context,
         error,
         turn_id,
       );
@@ -1003,21 +1003,21 @@ export class Session implements AgentSession {
     }
   }
 
-  /** Extension 上下文 Hook 失败只降级当前扩展内容，不阻断 Session。 */
-  private async log_extension_hook_warning(
+  /** Plugin 上下文 Hook 失败只降级当前扩展内容，不阻断 Session。 */
+  private async log_plugin_hook_warning(
     point_name: string,
     error: unknown,
     turn_id?: string,
   ): Promise<void> {
     try {
-      await this.logger.log("warn", "[agent] session extension hook failed", {
+      await this.logger.log("warn", "[agent] session plugin hook failed", {
         session_id: this.id,
         ...(turn_id ? { turn_id } : {}),
         point_name,
         error: error instanceof Error ? error.message : String(error),
       });
     } catch {
-      // Extension 已经降级，日志失败不能反向阻断 Session。
+      // Plugin 已经降级，日志失败不能反向阻断 Session。
     }
   }
 

@@ -5,16 +5,16 @@ description: Build a unified City Plugin module with @downcity/city/plugin.
 
 # Plugin Development
 
-Plugin author APIs live in `@downcity/city/plugin`. One `CityPluginModule` defines both the main lifecycle
-and the Profile execution-instance factory. The Agent package no longer exports author contracts.
+Plugin author APIs live in `@downcity/city/plugin`. A Plugin is a long-lived instance owned by City;
+do not create one instance per Agent.
 
 ## Execution instance
 
 ```ts
-import { BasePlugin, create_action } from "@downcity/city/plugin";
+import { Plugin, create_action } from "@downcity/city/plugin";
 import { z } from "zod";
 
-class ExamplePlugin extends BasePlugin {
+class ExamplePlugin extends Plugin {
   readonly name = "example";
   readonly title = "Example";
   readonly description = "An example Plugin.";
@@ -48,45 +48,21 @@ Plugin does not need to resolve objects from IDs alone.
 ## Unified City module
 
 ```ts
-import { define_city_plugin } from "@downcity/city/plugin";
-
-export default define_city_plugin({
-  activate(context) {
-    context.plugin.action({
-      id: "about",
-      run: () => ({ name: "example" }),
-    });
-  },
-  create({ profile }) {
-    return new ExamplePlugin(new ExampleClient(profile.config));
-  },
-});
+export default new ExamplePlugin();
 ```
 
-An SDK host places the module in a `CityPluginRegistration`, provides it to City, and binds Agents by
-ID:
+An SDK host places the instance in City and adds Agents:
 
 ```ts
-const registration = {
-  id: "example",
-  title: "Example",
-  description: "An example Plugin.",
-  readme: "/absolute/path/README.md",
-  has_config: false,
-  has_sidebar: false,
-  has_mainview: false,
-  module: example_module,
-};
-
-const city = new City({ plugins: [registration], workspaces: [workspace] });
-city.agents.add(agent, { plugins: [{ plugin_id: "example" }] });
+const city = new City({ plugins: [new ExamplePlugin()], workspaces: [workspace] });
+city.agents.add(agent);
 ```
 
 ## Lifecycle
 
-`start/stop` belong to City's shared `(plugin_id, profile_id)` instance. `bind/unbind` belong to an
-Agent/Workspace scope. Put Profile clients, connections, and caches in `start/stop`; put schedulers,
-routes, or scope workers in `bind/unbind`. Every asynchronous Action should propagate
+`start/stop` belong to City's Plugin instance. `connect/disconnect` belong to an Agent/Workspace scope.
+Put City clients, connections, and caches in `start/stop`; put schedulers, routes, or scope workers in
+`connect/disconnect`. Every asynchronous Action should propagate
 `execution.abort_signal`.
 
 ## Installable package
@@ -117,14 +93,14 @@ example-plugin/
 }
 ```
 
-`main` default-exports the `CityPluginModule`; there is no separate `agent` entry. A Renderer
+`main` default-exports a Plugin instance or `{ plugin, main }`; there is no separate `agent` entry. A Renderer
 communicates only through the host action gateway and cannot access Node, Electron, Agent objects, or
 Profile files directly.
 
 ## Testing focus
 
 - Multiple Agents sharing one Profile create and `start` one instance.
-- Every Agent/Workspace scope runs exactly one `bind/unbind` pair.
+- Every Agent/Workspace scope runs exactly one `connect/disconnect` pair.
 - `stop` waits for the final execution lease.
 - Concurrent main calls activate once, and shutdown fully deactivates it.
 - Action input, JSON results, and cancellation signals remain valid.

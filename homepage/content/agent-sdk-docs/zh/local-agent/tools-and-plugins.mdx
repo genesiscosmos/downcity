@@ -5,7 +5,8 @@ description: 给 Agent 配置 Tool，并通过 City 提供和绑定 Plugin
 
 # Tools 和 Plugins
 
-Tool 与 Plugin 都能参与 Session 执行，但所有权不同：Agent 持有自定义 Tool；City 持有 Plugin catalog、Profile 共享实例与生命周期。
+Tool 与 Plugin 都能参与 Session 执行，但所有权不同：Agent 持有自定义 Tool；City 持有 Plugin
+唯一实例、配置投影与生命周期。
 
 ## 自定义 Tools
 
@@ -61,31 +62,24 @@ const city = new City({
   plugins: create_builtin_plugin_registrations(),
 });
 
-city.agents.add(agent, {
-  plugins: [
-    { plugin_id: "skill" },
-    { plugin_id: "memory" },
-  ],
-});
+city.agents.add(agent);
 ```
 
-City 不会自动给每个 Agent 启用全部 Plugin。`CityOptions.plugins` 或 `city.plugins.provide()` 只登记 catalog；`city.agents.add()` 或 `city.plugins.register()` 才建立 Agent/Profile 绑定。
+City 会把全部已注册 Plugin 自动提供给全部 Agent。运行中的 City 可通过
+`city.plugins.add()` 与 `city.plugins.remove()` 动态修改 Plugin 集合。
 
-相同 `(plugin_id, profile_id)` 在一个 City 内共享一个实例。`start/stop` 管理这个共享实例，`bind/unbind` 管理 Agent/Workspace scope。
+一个 City 中每个 Plugin ID 只有一个实例。`start/stop` 管理 City 级实例，
+`connect/disconnect` 管理 Agent/Workspace scope。
 
 ## Profile 配置
 
-需要配置的 Plugin 在绑定中传入 Profile。比如 Web、Image、Chat 的 provider、凭据或 Owner 路由都属于 Profile，不进入 Agent：
+需要配置的 Plugin 由宿主保存 Profile，并通过 City 的 `plugin_host.runtime_config` 按当前 Agent
+投影配置；配置不进入 Agent，也不决定 Plugin 实例数量：
 
 ```ts
-await city.plugins.register(agent.id, {
-  plugin_id: "web",
-  profile: {
-    id: "primary",
-    config: {
-      browser: "playwright",
-      cdp_url: "http://127.0.0.1:9222",
-    },
+const city = new City({
+  plugin_host: {
+    runtime_config: (plugin_id, agent_id) => load_config(plugin_id, agent_id),
   },
 });
 ```

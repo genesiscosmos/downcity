@@ -2,7 +2,7 @@
  * 普通 Tool 一次调用获得的最小执行上下文。
  *
  * 该类型只暴露业务 Tool 需要的调用身份、取消、Workspace 快照和可选
- * Session Interaction，不暴露 SessionTurnContext、消息写入器或 Extension lease。
+ * Session Interaction，不暴露 SessionTurnContext、消息写入器或 Plugin lease。
  */
 
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";

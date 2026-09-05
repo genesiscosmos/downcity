@@ -5,7 +5,6 @@ export type {
   PluginCityHandle,
   PluginCityPlugins,
   PluginContext,
-  PluginProfile,
   PluginSessionCollection,
   PluginSessionHandle,
   PluginStorage,

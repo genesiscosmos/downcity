@@ -1,61 +1,24 @@
 ---
 title: Plugin Availability
-description: 说明注册状态和 availability 的区别，以及 runtime 可用性如何判断
+description: 说明 City 注册状态和运行时 availability 的区别。
 ---
 
 # Plugin Availability
 
-Plugin 当前只需要区分两件事：
+Plugin 当前需要区分两个事实：
 
-- 是否已经由 City 绑定到当前 Agent，并投影到 `entry.plugins`
-- 当前环境是否满足 plugin 自己的 `availability()` 检查
-
-绑定是执行可见性边界。只登记在 City catalog、但没有绑定到当前 Agent 的 Plugin，不会出现在该 Agent 的执行入口中。
-
-## 绑定状态
+- 是否已经注册到 City，并因此投影到全部 Agent。
+- 当前 Agent/Workspace 环境是否满足 Plugin 自己的 `availability()` 检查。
 
 ```ts
-entry.plugins.has("skill");
-entry.plugins.status("skill");
-entry.plugins.snapshots();
+const plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id });
+plugins.has("skill");
+plugins.status("skill");
+await plugins.availability("skill");
 ```
 
-Plugin 刚绑定且共享实例的 lifecycle 尚未完成时，状态是 `initializing`。Action、Availability、System 和 Hook 会等待初始化完成，不会在 `start` 前执行。
+Plugin 加入 City 且 `start` 尚未完成时为 `initializing`；启动成功后为 `ready`；启动失败时为
+`error`。普通 Action 的业务失败不会改变整个 Plugin 的状态。
 
-如果 Plugin 已绑定且启动成功，状态是 `ready`。
-
-如果 lifecycle 启动失败，状态可能是 `error`，用于诊断。普通 action 业务失败不会把整个 plugin 标成 `error`；例如 `skill.lookup` 查不到某个 skill 时，只返回这次 action 的失败结果，plugin 仍保持可继续调用。
-
-## `availability()`
-
-`availability()` 不再表达开关。
-
-它只回答：
-
-> 在当前 Agent 上下文里，这个 plugin 现在能不能真正工作？
-
-例如：
-
-- provider 还没安装
-- Python 依赖没准备好
-- 模型没下载好
-- API key 没配置
-
-```ts
-const availability = await entry.plugins.availability("skill");
-```
-
-返回结果仍然包含 `enabled` 字段，但它表示“Plugin 是否绑定到当前 Agent”，不是项目配置开关。
-
-## 最稳的理解
-
-把它记成两句：
-
-- City 的 Agent 绑定 / 解绑决定 Plugin 是否在执行作用域中可见
-- `availability()` 决定已绑定 Plugin 在当前作用域是否可用
-
-## 相关文档
-
-- [Plugin 配置](/zh/agent-sdk-docs/plugins/configuration)
-- [Plugin Lifecycle](/zh/agent-sdk-docs/plugins/lifecycle)
-- [当前有哪些内建 Plugin](/zh/agent-sdk-docs/plugins/built-in-plugins)
+`availability()` 只回答当前 Context 中是否真正可用，例如 Provider、依赖、模型或凭据是否就绪。
+它不控制 Agent 是否绑定 Plugin；City 中的全部 Plugin 始终对全部 Agent 可见。

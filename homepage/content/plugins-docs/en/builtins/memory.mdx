@@ -44,20 +44,21 @@ Explicit memory writes require a bounded semantic target:
 
 ## Storage
 
-The built-in City assembly allocates one root for a Memory Plugin/Profile. The Provider separates City, Agent, User, and Workspace logical scopes inside it:
+City allocates one lifecycle root for the unique MemoryPlugin instance. The Provider separates City,
+Agent, User, and Workspace logical scopes inside it:
 
 ```text
-<city-storage>/plugins/memory/<profile_id>/
+<city-storage>/plugins/memory/
 ```
 
 Raw `user_id`, `workspace_id`, and `agent_id` values are encoded as safe path segments. Multiple Agents can use the same City root while User and Workspace subjects remain isolated.
 
-A custom registration receives its storage path from City:
+Construct the instance directly. `MemoryPlugin.lifecycle.start()` initializes its Provider from
+City's `PluginLifecycleContext.storage`:
 
 ```ts
-create: ({ storage }) => new MemoryPlugin({
-  storage_root_path: storage.path,
-});
+const memory_plugin = new MemoryPlugin();
+const city = new City({ plugins: [memory_plugin] });
 ```
 
 Do not derive Memory paths from Agent Session directories; physical layout belongs to City and the Provider.

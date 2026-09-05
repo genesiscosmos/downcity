@@ -59,11 +59,19 @@ test("search 与 open 从 PluginContext 读取宿主 Web 能力", async () => {
 test("缺少运行时能力或 CDP 配置时只让对应 action 失败", async () => {
   const plugin = new WebPlugin();
   const search_result = await plugin.actions.search.execute({
-    context: { agent: {} },
+    context: {
+      agent: { id: "web-test-agent" },
+      workspace: { id: "web-test-workspace" },
+      config: {},
+    },
     input: { query: "test" },
   });
   const browser_result = await plugin.actions.browser_create_session.execute({
-    context: { agent: {} },
+    context: {
+      agent: { id: "web-test-agent" },
+      workspace: { id: "web-test-workspace" },
+      config: {},
+    },
     input: { url: "https://example.com" },
   });
   assert.equal(search_result.success, false);

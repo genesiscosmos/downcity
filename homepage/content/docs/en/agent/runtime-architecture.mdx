@@ -145,9 +145,9 @@ Mutations cover complete Messages, Assistant Parts, text/reasoning deltas, Turn 
 
 ## Plugin runtime
 
-Plugins belong to Agent, not Workspace. They may contribute Actions, System text, Hooks, Resolve Points, Lifecycle behavior, and HTTP injection definitions.
+Plugins belong to City, not Agent or Workspace. City owns one instance per Plugin ID and projects its Actions, System text, Hooks, Resolve Points, and HTTP routes into every Agent/Workspace execution entry.
 
-PluginRegistry changes take effect at Session checkpoints. A Plugin startup failure isolates that Plugin without blocking others. Agent disposal stops ActionSchedule and unloads Plugins.
+PluginRegistry projection changes take effect at Session checkpoints. A Plugin startup failure isolates that Plugin without blocking others. Agent disposal stops Sessions and ActionSchedule; City closes the Plugin `connect/disconnect/start/stop` lifecycle.
 
 ActionSchedule is a local delayed Plugin Action scheduler owned by the Agent. Events are stored in the Agent's storage scope; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
 
@@ -183,16 +183,18 @@ When Downcity is installed on macOS, core packages contain portable TypeScript/J
 
 ```mermaid
 flowchart LR
-    Construct["new Agent"] --> Plugins["start Plugin lifecycle"]
-    Plugins --> Schedule["start ActionSchedule"]
-    Schedule --> Barrier["internal initialization barrier"]
-    Barrier --> Running["execute Sessions"]
-    Running --> Dispose["agent.dispose()"]
-    Dispose --> Sessions["release AgentSessions"]
-    Sessions --> Workspace["Workspace.dispose()"]
-    Workspace --> Shell["close processes and Sandbox"]
+    Agent["new Agent"] --> Register["City registers Agent"]
+    Plugin["City registers Plugin"] --> Start["Plugin start"]
+    Register --> Scope["connect Agent/Workspace scope"]
+    Start --> Scope
+    Scope --> Running["execute Sessions"]
+    Running --> Close["city.close()"]
+    Close --> Sessions["stop Agent Sessions"]
+    Sessions --> Disconnect["Plugin disconnect"]
+    Disconnect --> Stop["Plugin stop"]
+    Stop --> Workspace["release Workspace / Shell"]
 ```
 
-Sessions wait on the internal initialization barrier before execution. `dispose()` releases Agent, Plugin, Schedule, Workspace, and Shell resources, but it does not close HTTP/RPC transports created by `@downcity/agent`.
+Sessions wait for the Agent's City execution binding before execution. `agent.dispose()` does not stop City Plugin instances. `city.close()` closes Transports, Agents, Plugins, Workspaces, and Shells after active Hook/Action leases finish.
 
 Continue with [Agent Lifecycle](/en/docs/agent/lifecycle).

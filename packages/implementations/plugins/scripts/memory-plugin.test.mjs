@@ -18,7 +18,7 @@ import {
   MemoryPlugin,
   get_default_file_memory_root_path,
 } from "@downcity/plugins/memory";
-import { SESSION_EXTENSION_POINTS } from "@downcity/agent";
+import { SESSION_HOOK_POINTS } from "@downcity/agent";
 
 /** 创建测试使用的最小 Agent 访问上下文。 */
 function create_access(workspace_id, session_id, agent_id = "memory_test_agent") {
@@ -284,7 +284,7 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
   assert.match(usage, /Memory actions usage|Preferred flow/);
   assert.doesNotMatch(usage, /prefers concise answers/);
 
-  const system_hook = plugin.hooks.pipeline[SESSION_EXTENSION_POINTS.system_context][0];
+  const system_hook = plugin.hooks.pipeline[SESSION_HOOK_POINTS.system_context][0];
   const system_value = await system_hook({
     context: plugin_context,
     plugin: "memory",
@@ -294,7 +294,7 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
   assert.equal(system_value.blocks[0].name, "memory/core/agent");
   assert.match(system_value.blocks[0].content, /prefers concise answers/);
 
-  const turn_hook = plugin.hooks.pipeline[SESSION_EXTENSION_POINTS.turn_context][0];
+  const turn_hook = plugin.hooks.pipeline[SESSION_HOOK_POINTS.turn_context][0];
   const turn_value = await turn_hook({
     context: plugin_context,
     plugin: "memory",
@@ -310,7 +310,7 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
   assert.equal(turn_value.blocks[0].trust_level, "reference");
   assert.match(turn_value.blocks[0].content, /prefers concise answers/);
 
-  const committed_hook = plugin.hooks.effect[SESSION_EXTENSION_POINTS.turn_committed][0];
+  const committed_hook = plugin.hooks.effect[SESSION_HOOK_POINTS.turn_committed][0];
   const canonical_messages = [{
     message_id: "user-capture-1",
     session_id: "session-1",
@@ -443,7 +443,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   assert.equal(workspace_memory.success, true);
   assert.match(workspace_memory.data.memory_id, /^city\/workspaces\/id_[A-Za-z0-9_-]+\/wiki\/project-overview$/);
 
-  const system_hook = plugin.hooks.pipeline[SESSION_EXTENSION_POINTS.system_context][0];
+  const system_hook = plugin.hooks.pipeline[SESSION_HOOK_POINTS.system_context][0];
   const system_value = await system_hook({
     context: second_context,
     plugin: "memory",

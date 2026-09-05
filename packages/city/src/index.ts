@@ -36,10 +36,10 @@ export type {
   CityWorkspaces,
 } from "./city/types/City.js";
 export type {
-  CityAgentPluginBinding,
-  CityAgentPluginOptions,
+  CityAgentPlugins,
+  CityPluginCollection,
   CityPluginHost,
-  CityPluginScope,
+  CityPluginInput,
   CityPlugins,
 } from "./city/types/CityPlugin.js";
 export {

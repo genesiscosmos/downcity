@@ -30,7 +30,8 @@ Each SDK-facing built-in has an isolated package subpath:
 | `task` | `@downcity/plugins/task` |
 | `web` | `@downcity/plugins/web` |
 
-There is no default built-in collection factory. Import and instantiate the exact plugins required by each Agent.
+Use `create_builtin_plugin_registrations()` for the default collection, or import and instantiate
+only the Plugins required by a City. Selection happens at City level, not per Agent.
 
 ## Two groups matter
 

@@ -9,19 +9,13 @@ description: Use the FED model catalog to provide unified ASR, TTS, and automati
 
 `sound` does not download or run local speech models. It has no Python, Whisper, Piper, or other local inference dependency. A local audio file is only read and converted to a data URL before it is sent to FED.
 
-## Profile configuration
+## Configuration
 
 ```ts
-await city.plugins.register(agent.id, {
-  plugin_id: "sound",
-  profile: {
-    id: "primary",
-    config: {
-      default_asr_model: "asr-model-id",
-      default_tts_model: "tts-model-id",
-    },
-  },
-});
+{
+  default_asr_model: "asr-model-id",
+  default_tts_model: "tts-model-id",
+}
 ```
 
 ## Actions
@@ -121,4 +115,5 @@ If neither the action nor the plugin provides a model, the call fails with guida
 
 The transcript is appended to user text as `<voice src="...">...</voice>`. A failed attachment transcription does not block the main chat flow.
 
-The AI service comes from `PluginContext.city.embassy.user.ai`; it does not belong in the Profile or Agent.
+City projects Sound configuration into `PluginContext.config` for the current Agent. The AI service
+comes from `PluginContext.city.embassy.user.ai`; it does not belong to Agent.

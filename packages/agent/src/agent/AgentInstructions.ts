@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 这里只处理静态 instruction 与默认 core prompt。
  * - instruction 永远在 core 前面；core 不会被调用方 instruction 替代。
- * - 不读取 Session、Extension 或 runtime 状态，保持为纯函数。
+ * - 不读取 Session、Plugin 或 runtime 状态，保持为纯函数。
  */
 
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";

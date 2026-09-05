@@ -7,12 +7,12 @@ import path from "node:path";
 import test from "node:test";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
-import { create_plugin } from "@downcity/city/plugin";
-import { create_workspace_entry, get_workspace_entry } from "@downcity/agent/host";
+import { create_workspace_entry, get_workspace_entry } from "@downcity/agent/internal";
 import { Workspace } from "@downcity/city";
 import {
-  create_plugin_binding,
+  add_test_plugin,
   create_plugin_registration,
+  create_test_plugin as create_plugin,
 } from "./helpers/CityPluginTestBinding.mjs";
 
 test("one Agent enters multiple Workspaces with contextual Plugin execution", async () => {
@@ -24,8 +24,8 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     title: "Context Probe",
     description: "Records the current Workspace Context.",
     lifecycle: {
-      start: ({ profile }) => lifecycle_events.push(`start:${profile.id}`),
-      stop: ({ profile }) => lifecycle_events.push(`stop:${profile.id}`),
+      start: () => lifecycle_events.push("start"),
+      stop: () => lifecycle_events.push("stop"),
     },
     actions: {
       inspect: {
@@ -58,7 +58,8 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [first_workspace, second_workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, plugin)] });
+  add_test_plugin(city, plugin);
+  city.agents.add(agent);
   const first = create_workspace_entry(agent, first_workspace);
   const second = create_workspace_entry(agent, second_workspace);
 
@@ -74,7 +75,7 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     assert.deepEqual(new Set(contexts.map((item) => item.workspace_id)), new Set(["sdk", "homepage"]));
     assert.equal(contexts[0].data_path, contexts[1].data_path);
     assert.match(contexts[0].data_path, /\/memory\/agents\/coder\/plugins\/context_probe$/u);
-    assert.equal(lifecycle_events.filter((item) => item === "start:default").length, 1);
+    assert.equal(lifecycle_events.filter((item) => item === "start").length, 1);
 
     await first.leave();
     assert.equal(get_workspace_entry(agent, "sdk"), null);
@@ -124,7 +125,8 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, plugin)] });
+  add_test_plugin(city, plugin);
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
 
   try {
@@ -201,9 +203,9 @@ test("Plugin runtime data is isolated by Agent and shared across Workspaces", as
   const third_workspace = new Workspace({ id: "three", path: path.join(root, "three"), data_root_path: path.join(root, "data") });
   const city = new City({ workspaces: [first_workspace, second_workspace, third_workspace] });
   const registration = create_plugin_registration(plugin);
-  city.plugins.provide(registration);
-  city.agents.add(agent_a, { plugins: [{ plugin_id: registration.id }] });
-  city.agents.add(agent_b, { plugins: [{ plugin_id: registration.id }] });
+  city.plugins.add(registration);
+  city.agents.add(agent_a);
+  city.agents.add(agent_b);
   const first = create_workspace_entry(agent_a, first_workspace);
   const second = create_workspace_entry(agent_a, second_workspace);
   const third = create_workspace_entry(agent_b, third_workspace);
@@ -259,7 +261,8 @@ test("Plugin can ignore Workspace while still receiving its Context", async () =
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [first_workspace, second_workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, plugin)] });
+  add_test_plugin(city, plugin);
+  city.agents.add(agent);
   const first = create_workspace_entry(agent, first_workspace);
   const second = create_workspace_entry(agent, second_workspace);
   try {
@@ -298,10 +301,9 @@ test("Workspace cleanup continues after one Plugin leave failure", async () => {
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [
-    create_plugin_binding(city, failing_plugin),
-    create_plugin_binding(city, healthy_plugin),
-  ] });
+  add_test_plugin(city, failing_plugin);
+  add_test_plugin(city, healthy_plugin);
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
 
   try {

@@ -15,7 +15,7 @@ import type {
   AgentArchiveSessionsInput,
   RemoteSessionSetInput,
 } from "@downcity/agent";
-import type { AgentSessionCollection } from "@downcity/agent/host";
+import type { AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type { RespondSessionInteractionInput } from "@downcity/agent";

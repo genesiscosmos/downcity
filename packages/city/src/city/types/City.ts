@@ -11,9 +11,7 @@ import type { Embassy } from "@downcity/federation";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
 import type { Group } from "@downcity/agent";
-import type { CityAgentPluginOptions } from "@/city/types/CityPlugin.js";
-import type { CityPluginHost } from "@/city/types/CityPlugin.js";
-import type { CityPluginRegistration } from "@/plugin/index.js";
+import type { CityPluginCollection, CityPluginHost } from "@/city/types/CityPlugin.js";
 
 /** City 的资源容器构造参数。 */
 export interface CityOptions {
@@ -24,13 +22,19 @@ export interface CityOptions {
   embassy?: Embassy;
 
   /** City 持有的 Workspace 资源集合；每个 Workspace ID 必须唯一。 */
-  workspaces?: readonly WorkspaceRuntime[];
+  workspaces?: readonly WorkspaceRuntime[] | Readonly<Record<string, WorkspaceRuntime>>;
+
+  /** City 启动时注册的 Agent；对象键只用于调用方组织代码，Agent ID 仍是唯一身份。 */
+  agents?: readonly Agent[] | Readonly<Record<string, Agent>>;
+
+  /** City 启动时注册的 Group；成员 Agent 必须已经在当前 City 中。 */
+  groups?: readonly Group[] | Readonly<Record<string, Group>>;
 
   /** Plugin main 使用的平台配置、通知与系统能力。 */
   plugin_host?: CityPluginHost;
 
   /** City 启动时登记的 Plugin catalog。 */
-  plugins?: readonly CityPluginRegistration[];
+  plugins?: CityPluginCollection;
 
   /** HTTP/RPC transport 与宿主扩展配置；仅供宿主装配层使用。 */
   runtime?: CityRuntimeOptions;
@@ -57,7 +61,7 @@ export interface CityAgents {
    * 添加一个已经实例化的 Agent，并建立它与当前 City 的资源绑定。
    * 重复 Agent ID 或已属于其他 City 时必须失败。
    */
-  add(agent: Agent, options?: CityAgentPluginOptions): Agent;
+  add(agent: Agent): Agent;
   /** 按稳定 ID 获取 Agent；不存在或正在移除时返回 null。 */
   get(agent_id: string): Agent | null;
   /** 返回当前 City 管理的 Agent 稳定快照。 */

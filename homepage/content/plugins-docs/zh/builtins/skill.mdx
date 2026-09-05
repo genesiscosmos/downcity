@@ -29,12 +29,12 @@ import { create_builtin_plugin_registrations } from "@downcity/plugins";
 const registrations = create_builtin_plugin_registrations();
 const city = new City({ plugins: registrations, workspaces: [workspace] });
 const agent = new Agent({ id: "skill-helper" });
-city.agents.add(agent, { plugins: [{ plugin_id: "skill" }] });
+city.agents.add(agent);
 const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-默认只扫描当前项目的 `.agents/skills`。自定义扫描范围时，为 City 提供自定义
-`CityPluginRegistration` factory，而不是把 `SkillPlugin` 实例传给 Agent。
+默认只扫描当前项目的 `.agents/skills`。自定义扫描范围时，构造 `SkillPlugin` 实例并交给 City，
+不要把它交给 Agent。
 
 可以通过构造参数扩展扫描范围：
 

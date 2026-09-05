@@ -1,14 +1,14 @@
 ---
 title: Plugin Lifecycle
-description: Understand City-owned Plugin mains, shared instances, Workspace scopes, and execution leases.
+description: Understand City-owned Plugin instances, Workspace scopes, and Hook scopes.
 ---
 
 # Plugin Lifecycle
 
-City owns Plugins. An Agent declares only a `plugin_id` and optional Profile binding. A City creates
-one instance for each `(plugin_id, profile_id)` and may share it across multiple Agents.
+City owns Plugins. An Agent only joins the City; it does not declare Plugin bindings. A City creates
+one instance for each Plugin ID and shares it across multiple Agents.
 
-## Provision and bind
+## Registration
 
 ```ts
 const city = new City({
@@ -16,40 +16,35 @@ const city = new City({
   plugins: [registration],
 });
 
-city.agents.add(agent, {
-  plugins: [{ plugin_id: registration.id, profile }],
-});
+city.agents.add(agent);
 ```
 
-Bindings may also change dynamically:
+Plugins may also change dynamically:
 
 ```ts
-await city.plugins.register(agent.id, {
-  plugin_id: registration.id,
-  profile,
-});
-await city.plugins.unregister(agent.id, registration.id);
+city.plugins.add(new ExamplePlugin());
+await city.plugins.remove("example");
 ```
 
-`provide` registers a module. `register` binds one Agent to one Profile. Within a City, one Plugin ID
-must always refer to the same module, and one Profile ID must have one consistent configuration.
+Within a City, one Plugin ID always refers to one instance. Agent-specific configuration is resolved
+from the current `PluginContext`.
 
 ## Four execution lifecycle checkpoints
 
-- `start(context)` runs once when the first Agent references the Plugin/Profile. Use it for shared connections and caches.
-- `bind(context)` runs when an Agent enters a Workspace. Use it for scope-specific schedulers, queues, or routes.
-- `unbind(context)` releases that scope when it leaves, changes Profile, or unbinds the Plugin.
-- `stop(context)` runs once after the final Agent reference and active execution lease are released.
+- `start(context)` runs once when the Plugin enters City. Use it for shared connections and caches.
+- `connect(context)` runs when an Agent enters a Workspace. Use it for scope-specific schedulers, queues, or routes.
+- `disconnect(context)` releases that scope when it leaves the Workspace.
+- `stop(context)` runs when the Plugin is removed or City closes.
 
 ```ts
 readonly lifecycle = {
   start: async ({ profile, storage }) => {
     await this.client.open(profile.config, storage);
   },
-  bind: async (context) => {
+  connect: async (context) => {
     await this.scheduler.start(context.agent.id, context.workspace.id);
   },
-  unbind: async (context) => {
+  disconnect: async (context) => {
     await this.scheduler.stop(context.agent.id, context.workspace.id);
   },
   stop: async () => {
@@ -58,16 +53,16 @@ readonly lifecycle = {
 };
 ```
 
-`start/stop` receive `PluginLifecycleContext`, whose storage belongs to the shared Profile.
-`bind/unbind` receive the full `PluginContext`, whose storage belongs to the current Agent/Plugin
+`start/stop` receive `PluginLifecycleContext`, whose storage belongs to City.
+`connect/disconnect` receive the full `PluginContext`, whose storage belongs to the current Agent/Plugin
 execution scope.
 
 ## Execution leases
 
-A Session captures an immutable Plugin execution view at a Step checkpoint. New Steps stop seeing an
-unbound Plugin immediately, while an existing Step may finish. City waits for the final lease before
+A Session captures an immutable Plugin execution view at a Step checkpoint. New Steps stop seeing a
+removed Plugin immediately, while an existing Step may finish. City waits for the final lease before
 stopping the shared instance, preventing premature shutdown of connections or providers.
 
-`city.close()` releases Workspace scopes, Agent bindings, shared instances, and Plugin mains. A
+`city.close()` releases Workspace scopes, Agents, Plugin instances, and Plugin mains. A
 single `stop` or `deactivate` failure does not prevent other Plugins from cleaning up; City reports an
 aggregate error after cleanup finishes.

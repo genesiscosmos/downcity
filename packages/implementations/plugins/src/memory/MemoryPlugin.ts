@@ -9,25 +9,26 @@
  * 边界说明（中文）
  * - 只接受宿主显式提供的 Agent/City Memory 根路径，不猜测 City 上级目录。
  * - 不依赖 Workspace FileSystem；具体文件布局仍封装在 Provider/Adapter 内。
- * - Provider 生命周期跟随 City 持有的 Plugin/Profile 共享实例。
+ * - Provider 生命周期跟随 City 持有的 MemoryPlugin 唯一实例。
  */
 
 import type { Command } from "commander";
 import path from "node:path";
-import { BasePlugin, create_action } from "@downcity/city/plugin";
+import { Plugin, create_action } from "@downcity/city/plugin";
 import type {
   PluginJsonObject,
   PluginJsonValue,
   PluginHooks,
   PluginActions,
   PluginContext,
+  PluginLifecycleContext,
 } from "@downcity/city/plugin";
 import type {
   SessionSystemContextHookValue,
   SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
 } from "@downcity/agent";
-import { SESSION_EXTENSION_POINTS } from "@downcity/agent";
+import { SESSION_HOOK_POINTS } from "@downcity/agent";
 import { z } from "zod";
 import {
   digest_memory_action,
@@ -129,12 +130,12 @@ function read_memory_write_target(body: PluginJsonObject): MemoryWriteTarget {
 }
 
 /** Agent 长期记忆 Plugin。 */
-export class MemoryPlugin extends BasePlugin {
+export class MemoryPlugin extends Plugin {
   /** Plugin 稳定名称。 */
   readonly name = "memory";
 
-  /** 当前 Plugin 唯一绑定的 Memory Provider。 */
-  readonly provider: MemoryProvider;
+  /** 当前 City 生命周期内唯一的 Memory Provider。 */
+  private provider_instance?: MemoryProvider;
 
   /** 从可信 PluginContext 解析当前可读写 Memory 范围。 */
   private readonly access_resolver: MemoryAccessResolver;
@@ -142,16 +143,19 @@ export class MemoryPlugin extends BasePlugin {
   constructor(profile: MemoryPluginOptions = {}) {
     super();
     const storage_root_path = profile.storage_root_path?.trim();
-    if (!storage_root_path || !path.isAbsolute(storage_root_path)) {
+    if (storage_root_path && !path.isAbsolute(storage_root_path)) {
       throw new Error("MemoryPlugin storage_root_path must be an absolute path");
     }
-    this.provider = new BuiltinMemoryProvider({
-      city_memory_available: true,
-      storage: new FileMemoryStorageAdapter({ root_path: storage_root_path }),
-    });
+    if (storage_root_path) this.provider_instance = create_memory_provider(storage_root_path);
     this.access_resolver = new MemoryAccessResolver({
       city_memory_available: true,
     });
+  }
+
+  /** 返回已经由 City 启动的唯一 Memory Provider。 */
+  get provider(): MemoryProvider {
+    if (!this.provider_instance) throw new Error("MemoryPlugin is not started by City");
+    return this.provider_instance;
   }
 
   /** 构建不包含 Memory 数据的 Plugin 使用说明。 */
@@ -163,7 +167,7 @@ export class MemoryPlugin extends BasePlugin {
   /** 使用现有 Plugin HookRegistry 接入 Session 三个通用检查点。 */
   readonly hooks: PluginHooks = {
     pipeline: {
-      [SESSION_EXTENSION_POINTS.system_context]: [async ({ context, value, plugin }) => {
+      [SESSION_HOOK_POINTS.system_context]: [async ({ context, value, plugin }) => {
         const input = value as unknown as SessionSystemContextHookValue;
         const access = await this.access_resolver.resolve(context, input.session_id);
         const core_blocks = await build_memory_core_system_content(this.provider, access);
@@ -173,14 +177,14 @@ export class MemoryPlugin extends BasePlugin {
           blocks: [
             ...(Array.isArray(input.blocks) ? input.blocks : []),
             ...core_blocks.map((block) => ({
-              source: "extension" as const,
+              source: "plugin" as const,
               name: `${plugin}/${block.name}`,
               content: block.content,
             })),
           ],
         } as unknown as PluginJsonValue;
       }],
-      [SESSION_EXTENSION_POINTS.turn_context]: [async ({ context, value }) => {
+      [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionTurnContextHookValue;
         const access = await this.access_resolver.resolve(context, input.session_id);
         const block = await build_memory_recall_context_block(
@@ -197,7 +201,7 @@ export class MemoryPlugin extends BasePlugin {
       }],
     },
     effect: {
-      [SESSION_EXTENSION_POINTS.turn_committed]: [async ({ context, value }) => {
+      [SESSION_HOOK_POINTS.turn_committed]: [async ({ context, value }) => {
         await this.capture_committed_turn(
           context,
           value as unknown as SessionTurnCommittedHookValue,
@@ -229,13 +233,15 @@ export class MemoryPlugin extends BasePlugin {
     });
   }
 
-  /** Provider 生命周期与当前 City Plugin/Profile 共享实例保持一致。 */
+  /** Provider 生命周期与当前 City MemoryPlugin 唯一实例保持一致。 */
   readonly lifecycle = {
-    start: async (): Promise<void> => {
+    start: async (context: PluginLifecycleContext): Promise<void> => {
+      this.provider_instance ??= create_memory_provider(context.storage.path);
       await this.provider.initialize();
     },
     stop: async (): Promise<void> => {
-      await this.provider.dispose();
+      await this.provider_instance?.dispose();
+      this.provider_instance = undefined;
     },
   };
 
@@ -579,4 +585,12 @@ export class MemoryPlugin extends BasePlugin {
       },
     }),
   };
+}
+
+/** 使用 City 分配的生命周期存储创建内建 Memory Provider。 */
+function create_memory_provider(storage_root_path: string): MemoryProvider {
+  return new BuiltinMemoryProvider({
+    city_memory_available: true,
+    storage: new FileMemoryStorageAdapter({ root_path: storage_root_path }),
+  });
 }

@@ -179,14 +179,6 @@ export interface PluginTurnHandle {
   readonly abort_signal: AbortSignal;
 }
 
-/** City 为当前 Plugin 绑定的 Profile。 */
-export interface PluginProfile {
-  /** Profile 稳定标识；无配置 Plugin 使用 `default`。 */
-  readonly id: string;
-  /** Profile 的只读配置快照。 */
-  readonly config: PluginJsonObject;
-}
-
 /** City 为当前 Plugin 提供的私有存储。 */
 export interface PluginStorage {
   /** 当前作用域的绝对根路径。 */
@@ -197,11 +189,11 @@ export interface PluginStorage {
 
 /** Plugin 可调用的 City Plugin 端口。 */
 export interface PluginCityPlugins {
-  /** 读取当前 Agent 绑定的指定 Plugin 定义。 */
+  /** 读取 City 提供给当前 Agent 的指定 Plugin 定义。 */
   get(plugin_id: string): unknown | null;
-  /** 列出当前 Agent 绑定的 Plugin 生命周期快照。 */
+  /** 列出 City 提供给当前 Agent 的 Plugin 生命周期快照。 */
   snapshots(): PluginSnapshot[];
-  /** 调用当前 Agent 绑定的 Plugin Action。 */
+  /** 调用 City 提供给当前 Agent 的 Plugin Action。 */
   run_action(input: {
     /** Plugin ID。 */ readonly plugin: string;
     /** Action ID。 */ readonly action: string;
@@ -233,10 +225,10 @@ export interface PluginContext {
   readonly session?: PluginSessionHandle;
   /** 当前调用所属 Turn；非 Turn 调用时为空。 */
   readonly turn?: PluginTurnHandle;
-  /** 当前 Agent 为此 Plugin 选择的 Profile。 */
-  readonly profile: PluginProfile;
   /** 当前 Plugin 在当前 Agent 范围内的私有存储。 */
   readonly storage: PluginStorage;
+  /** City 为当前 Agent/Plugin 作用域解析出的只读业务配置。 */
+  readonly config: PluginJsonObject;
   /** 当前执行范围的结构化日志器。 */
   readonly logger: PluginLogger;
   /** 当前 Plugin 的通知发布端口。 */

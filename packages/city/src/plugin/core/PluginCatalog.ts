@@ -7,35 +7,35 @@
  * - Agent 的视角只有“传入的 plugin”，目录视图和可用性检查都从这些实例推导。
  */
 
-import type { Plugin } from "@/plugin/index.js";
+import type { PluginDefinition } from "@/plugin/index.js";
 import type { PluginAvailability, PluginView } from "@/types/plugin/PluginRuntime.js";
 import type { PluginContext } from "@/plugin/index.js";
 
 /**
  * 判断 plugin 是否声明了运行时生命周期。
  */
-export function has_plugin_lifecycle(plugin: Plugin): boolean {
+export function has_plugin_lifecycle(plugin: PluginDefinition): boolean {
   return Boolean(plugin.lifecycle);
 }
 
 /**
  * 过滤出声明了运行时生命周期的 plugin。
  */
-export function list_plugins_with_lifecycle<T extends Plugin>(plugins: Iterable<T>): T[] {
+export function list_plugins_with_lifecycle<T extends PluginDefinition>(plugins: Iterable<T>): T[] {
   return [...plugins].filter((plugin) => has_plugin_lifecycle(plugin));
 }
 
 /**
  * 过滤出没有运行时生命周期、可直接执行 action 的 plugin。
  */
-export function list_plugins_without_lifecycle<T extends Plugin>(plugins: Iterable<T>): T[] {
+export function list_plugins_without_lifecycle<T extends PluginDefinition>(plugins: Iterable<T>): T[] {
   return [...plugins].filter((plugin) => !has_plugin_lifecycle(plugin));
 }
 
 /**
  * 按名称查找 plugin。
  */
-export function find_plugin_by_name<T extends Plugin>(
+export function find_plugin_by_name<T extends PluginDefinition>(
   plugins: Iterable<T>,
   plugin_name: string,
 ): T | null {
@@ -47,7 +47,7 @@ export function find_plugin_by_name<T extends Plugin>(
 /**
  * 将 plugin 定义转换为目录视图。
  */
-export function to_plugin_view(plugin: Plugin): PluginView {
+export function to_plugin_view(plugin: PluginDefinition): PluginView {
   return {
     name: plugin.name,
     title: String(plugin.title || plugin.name || "").trim(),
@@ -75,7 +75,7 @@ export function to_plugin_view(plugin: Plugin): PluginView {
 /**
  * 列出 plugin 目录视图。
  */
-export function list_plugin_views(plugins: Iterable<Plugin>): PluginView[] {
+export function list_plugin_views(plugins: Iterable<PluginDefinition>): PluginView[] {
   return [...plugins]
     .map((plugin) => to_plugin_view(plugin))
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -89,7 +89,7 @@ export function list_plugin_views(plugins: Iterable<Plugin>): PluginView[] {
  * - 未传 context 时只返回静态目录说明，适合 Console 或 CLI 的目录回退展示。
  */
 export async function resolve_plugin_availability(params: {
-  plugins: Iterable<Plugin>;
+  plugins: Iterable<PluginDefinition>;
   plugin_name: string;
   context?: PluginContext;
   agentError?: string;
@@ -129,7 +129,7 @@ export async function resolve_plugin_availability(params: {
  * 同步构建静态 plugin 可用性视图。
  */
 export function build_static_plugin_availability(params: {
-  plugins: Iterable<Plugin>;
+  plugins: Iterable<PluginDefinition>;
   plugin_name: string;
   agentError?: string;
 }): PluginAvailability {

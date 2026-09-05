@@ -2,14 +2,14 @@
  * City Plugin 的 Agent 执行 Registry。
  *
  * 关键点（中文）
- * - Registry 只持有 City 共享 Plugin 的 Agent 执行投影，不拥有共享实例。
+ * - Registry 只持有 City Plugin 唯一实例的 Agent 执行投影，不拥有实例。
  * - City 传入的执行投影不包含 lifecycle；Registry 只管理 execution lease。
  * - action、system、hook、resolve 都统一以“已注册且 ready”为生效边界。
  */
 
 import { to_plugin_view } from "@/plugin/core/PluginCatalog.js";
 import { HookRegistry } from "@/plugin/core/HookRegistry.js";
-import type { Plugin } from "@/plugin/index.js";
+import type { PluginDefinition } from "@/plugin/index.js";
 import type { PluginActionResult } from "@/plugin/index.js";
 import type {
   AgentPluginRuntime,
@@ -51,7 +51,7 @@ type PluginContextFactory = (
   plugin_name: string,
 ) => PluginContext;
 
-function create_record(plugin: Plugin): PluginRuntimeRecord {
+function create_record(plugin: PluginDefinition): PluginRuntimeRecord {
   const current_time = now_ms();
   return {
     plugin,
@@ -129,7 +129,7 @@ export class PluginRegistry {
   /** Plugin 配置变化订阅器。 */
   private readonly change_subscribers = new Set<PluginRegistrySubscriber>();
 
-  constructor(agent_context: AgentPluginContext, plugins: Plugin[] = []) {
+  constructor(agent_context: AgentPluginContext, plugins: PluginDefinition[] = []) {
     this.agent_context = agent_context;
     this.hookRegistry = new HookRegistry({
       is_plugin_ready: (plugin_name) => this.is_ready(plugin_name),
@@ -218,7 +218,7 @@ export class PluginRegistry {
    * - 同名注册表示替换：先卸载旧实例，再注册并启动新实例。
    * - 如果新实例启动失败，会自动回滚为未注册状态并抛错。
    */
-  async register(plugin: Plugin): Promise<PluginSnapshot> {
+  async register(plugin: PluginDefinition): Promise<PluginSnapshot> {
     const key = normalize_plugin_name(plugin.name);
     if (!key) {
       throw new Error("Plugin name is required");
@@ -250,7 +250,7 @@ export class PluginRegistry {
    * - 仅供 Agent 构造期使用，避免构造函数里 await。
    * - 后续 `start_all()` 会统一启动这些初始 plugin。
    */
-  mount(plugin: Plugin): PluginSnapshot {
+  mount(plugin: PluginDefinition): PluginSnapshot {
     const key = normalize_plugin_name(plugin.name);
     if (!key) {
       throw new Error("Plugin name is required");
@@ -289,8 +289,8 @@ export class PluginRegistry {
   /**
    * 从 configured registry 卸载指定 Plugin，并等待全部 execution lease 释放。
    *
-   * City 在减少共享实例引用前必须使用该入口，避免共享 lifecycle 早于运行中的
-   * Session Step 停止。普通配置广播仍可使用非阻塞的 `unregister()`。
+   * City 在移除 Plugin 实例前必须使用该入口，避免 lifecycle 早于运行中的
+   * Session Step 停止。
    */
   async unregister_and_wait(plugin_name: string): Promise<boolean> {
     const key = normalize_plugin_name(plugin_name);
@@ -374,7 +374,7 @@ export class PluginRegistry {
     return this.records.has(normalize_plugin_name(plugin_name));
   }
 
-  private register_hooks(plugin: Plugin): void {
+  private register_hooks(plugin: PluginDefinition): void {
     const key = normalize_plugin_name(plugin.name);
     for (const [hookName, handlers] of Object.entries(
       plugin.hooks?.pipeline || {},
@@ -527,7 +527,7 @@ export class PluginRegistry {
   /**
    * 获取单个 plugin 定义。
    */
-  get(plugin_name: string): Plugin | null {
+  get(plugin_name: string): PluginDefinition | null {
     return this.records.get(normalize_plugin_name(plugin_name))?.plugin || null;
   }
 
@@ -554,7 +554,7 @@ export class PluginRegistry {
    */
   private readAction(
     action_name: string,
-    action: NonNullable<Plugin["actions"]>[string],
+    action: NonNullable<PluginDefinition["actions"]>[string],
   ): PluginActionReadView {
     return {
       name: action_name,
@@ -771,7 +771,7 @@ export class PluginRegistry {
         ).trim();
         if (!text) continue;
         out.push({
-          source: "extension",
+          source: "plugin",
           name: plugin.name,
           content: text,
         });

@@ -4,7 +4,7 @@ description: "Agent, AgentSessions, Session, and execution runtime."
 ---
 
 `@downcity/agent` provides Agent, AgentSessions, Session, and the execution runtime. `@downcity/city` provides RemoteAgent and
-City. Agents do not own Plugins. City owns the Plugin catalog, shared instances, and lifecycle;
+City. Agents do not own Plugins. City owns unique Plugin instances, configuration projection, and lifecycle;
 Plugin author contracts live in `@downcity/city/plugin`. Workspace resources come from
 `@downcity/city`.
 
@@ -17,8 +17,8 @@ const turn = await session.prompt({ query: "Hello" });
 const result = await turn.finished;
 ```
 
-Provide Plugin modules through `CityOptions.plugins` or `city.plugins.provide()` before use.
-`city.agents.add()` declares only `plugin_id` and an optional Profile binding.
+Provide Plugin instances through `CityOptions.plugins` or `city.plugins.add()` before use.
+`city.agents.add()` only registers an Agent; every City Plugin becomes available automatically.
 
 ## Read file changes for each turn
 

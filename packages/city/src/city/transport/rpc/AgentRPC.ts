@@ -7,9 +7,8 @@
  * - 仅提供 `listen()` / `close()` / `binding()` 三个方法，端口、host 由调用方决定。
  */
 
-import { create_workspace_entry } from "@downcity/agent/host";
-import type { Agent } from "@downcity/agent";
-import type { AgentSessionCollection } from "@downcity/agent/host";
+import { create_workspace_entry } from "@downcity/agent/internal";
+import type { Agent, AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";

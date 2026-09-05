@@ -18,7 +18,7 @@ import {
   type SessionMessage,
   type SessionMutation,
 } from "@downcity/agent";
-import { City, type CityAgentPluginBinding } from "@downcity/city";
+import { City } from "@downcity/city";
 import type { PluginNotificationInput } from "@downcity/city/plugin";
 import { clipboard, shell } from "electron";
 import { LocalStorageProvider } from "@downcity/city";
@@ -177,6 +177,13 @@ export class AgentController {
       embassy: create_desktop_embassy(data, process.env),
       storage: new LocalStorageProvider(data.root_path),
       plugin_host: {
+        runtime_config: (plugin_id, agent_id) => {
+          const reference = this.data.agents.get(agent_id)?.plugins[plugin_id];
+          if (!reference) return {};
+          return structuredClone(
+            this.data.plugins.get_profile(plugin_id, reference.profile || "default") ?? {},
+          );
+        },
         profile_config: (plugin_id, profile_id) => ({
           get: async () => structuredClone(
             this.data.plugins.get_profile(plugin_id, profile_id) ?? {},
@@ -434,15 +441,14 @@ export class AgentController {
       created_at: current_time,
       updated_at: current_time,
     };
-    const registration = await this.create_native_agent(candidate);
-    const agent = registration.agent;
+    const agent = await this.create_native_agent(candidate);
     let config: LocalAgentConfig | null = null;
     let registered = false;
     try {
       config = this.data.agents.create(candidate);
       // 关键点（中文）：创建时即保存独立头像，后续扩充内置池不会改变既有 Agent 身份。
       this.data.agents.set_avatar(config.agent_id, select_builtin_agent_avatar_path());
-      this.city.agents.add(agent, { plugins: registration.plugins });
+      this.city.agents.add(agent);
       registered = true;
     } catch (error) {
       if (registered) await this.city.agents.remove(agent.id).catch(() => null);
@@ -510,8 +516,7 @@ export class AgentController {
       })),
       updated_at: new Date().toISOString(),
     };
-    const replacement_registration = await this.create_native_agent(candidate);
-    const replacement = replacement_registration.agent;
+    const replacement = await this.create_native_agent(candidate);
     let saved = false;
     let previous_agent: Agent | null = null;
     try {
@@ -519,12 +524,12 @@ export class AgentController {
       saved = true;
       previous_agent = this.city.agents.get(current.agent_id);
       if (previous_agent) await this.city.agents.remove(previous_agent.id);
-      this.city.agents.add(replacement, { plugins: replacement_registration.plugins });
+      this.city.agents.add(replacement);
     } catch (error) {
       await this.city.agents.remove(replacement.id).catch(() => null);
       if (previous_agent) {
         const restored = await this.create_native_agent(current);
-        this.city.agents.add(restored.agent, { plugins: restored.plugins });
+        this.city.agents.add(restored);
       }
       if (saved) this.data.agents.save(current);
       await replacement.dispose().catch(() => undefined);
@@ -1143,12 +1148,11 @@ export class AgentController {
         await this.register_workspace_in_city(config);
       }
       for (const registration of await this.plugin_loader.list_registrations()) {
-        this.city.plugins.provide(registration);
+        this.city.plugins.add(registration);
       }
       for (const config of this.data.agents.list()) {
-        const registration = await this.create_native_agent(config);
-        const agent = registration.agent;
-        this.city.agents.add(agent, { plugins: registration.plugins });
+        const agent = await this.create_native_agent(config);
+        this.city.agents.add(agent);
         try {
           initialized_agents.push(agent);
         } catch (error) {
@@ -1184,33 +1188,23 @@ export class AgentController {
   private async provide_plugin(plugin_id: string): Promise<void> {
     const registration = await this.plugin_loader.load_plugin_registration(plugin_id);
     if (!registration) throw new Error(`Plugin does not provide main capability: ${plugin_id}`);
-    this.city.plugins.provide(registration);
+    this.city.plugins.add(registration);
   }
 
   /** 显式装配一个 Desktop native Agent。 */
-  private async create_native_agent(config: LocalAgentConfig): Promise<{
-    /** 已创建但尚未加入 City 的 Agent。 */
-    agent: Agent;
-    /** 由 City 持有生命周期的 Plugin 执行模块。 */
-    plugins: CityAgentPluginBinding[];
-  }> {
-    const [model, plugins, tools] = await Promise.all([
+  private async create_native_agent(config: LocalAgentConfig): Promise<Agent> {
+    const [model, tools] = await Promise.all([
       Promise.resolve(create_desktop_agent_model(this.data, config, resolve_desktop_city_env(this.data))),
-      this.plugin_loader.create_bindings(config),
       Promise.resolve(create_desktop_agent_tools()),
     ]);
-    await Promise.all(plugins.map(async ({ plugin_id }) => await this.provide_plugin(plugin_id)));
-    return {
-      agent: new Agent({
-        id: config.agent_id,
-        name: config.name,
-        description: config.description,
-        instruction: config.instruction,
-        model,
-        tools,
-      }),
-      plugins,
-    };
+    return new Agent({
+      id: config.agent_id,
+      name: config.name,
+      description: config.description,
+      instruction: config.instruction,
+      model,
+      tools,
+    });
   }
 
   /** 根据本地 Group 定义创建运行时 Group。 */

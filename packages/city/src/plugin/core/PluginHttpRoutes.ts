@@ -7,7 +7,7 @@
  */
 
 import type { Hono } from "hono";
-import type { Plugin } from "@/plugin/index.js";
+import type { PluginDefinition } from "@/plugin/index.js";
 import type { PluginContext } from "@/plugin/index.js";
 import type { AuthRoutePolicy } from "@downcity/type";
 
@@ -23,7 +23,7 @@ function dedupeAuthPolicies(policies: AuthRoutePolicy[]): AuthRoutePolicy[] {
 /**
  * 收集全部 plugin HTTP 鉴权策略。
  */
-export function list_plugin_auth_policies(plugins: Iterable<Plugin>): AuthRoutePolicy[] {
+export function list_plugin_auth_policies(plugins: Iterable<PluginDefinition>): AuthRoutePolicy[] {
   return dedupeAuthPolicies(
     [...plugins].flatMap((plugin) => plugin.http?.server?.auth_policies || []),
   );
@@ -35,7 +35,7 @@ export function list_plugin_auth_policies(plugins: Iterable<Plugin>): AuthRouteP
 export function register_plugin_http_routes(params: {
   app: Hono;
   get_context: (plugin_name: string) => PluginContext;
-  plugins: Iterable<Plugin>;
+  plugins: Iterable<PluginDefinition>;
 }): void {
   for (const plugin of params.plugins) {
     plugin.http?.server?.register({

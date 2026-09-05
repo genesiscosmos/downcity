@@ -5,7 +5,8 @@ description: Configure Agent Tools and provide and bind Plugins through City
 
 # Tools and Plugins
 
-Tools and Plugins both participate in Session execution, but ownership differs: Agent owns custom Tools; City owns the Plugin catalog, Profile-shared instances, and lifecycle.
+Tools and Plugins both participate in Session execution, but ownership differs: Agent owns custom
+Tools; City owns unique Plugin instances, configuration projection, and lifecycle.
 
 ## Custom Tools
 
@@ -61,31 +62,24 @@ const city = new City({
   plugins: create_builtin_plugin_registrations(),
 });
 
-city.agents.add(agent, {
-  plugins: [
-    { plugin_id: "skill" },
-    { plugin_id: "memory" },
-  ],
-});
+city.agents.add(agent);
 ```
 
-City does not enable every Plugin for every Agent. `CityOptions.plugins` or `city.plugins.provide()` only populate the catalog; `city.agents.add()` or `city.plugins.register()` creates an Agent/Profile binding.
+City automatically exposes every registered Plugin to every Agent. A running City can update the
+collection through `city.plugins.add()` and `city.plugins.remove()`.
 
-One `(plugin_id, profile_id)` identifies one shared instance inside a City. `start/stop` manages that instance, while `bind/unbind` manages each Agent/Workspace scope.
+Each Plugin ID identifies one instance inside a City. `start/stop` manages that City instance, while
+`connect/disconnect` manages each Agent/Workspace scope.
 
 ## Profile configuration
 
-Pass a Profile when a Plugin requires configuration. Provider settings, credentials, and Owner routing for Web, Image, or Chat belong to the Profile, not the Agent:
+The host stores Profiles and projects configuration for the current Agent through
+`plugin_host.runtime_config`. Configuration does not enter Agent or determine instance count:
 
 ```ts
-await city.plugins.register(agent.id, {
-  plugin_id: "web",
-  profile: {
-    id: "primary",
-    config: {
-      browser: "playwright",
-      cdp_url: "http://127.0.0.1:9222",
-    },
+const city = new City({
+  plugin_host: {
+    runtime_config: (plugin_id, agent_id) => load_config(plugin_id, agent_id),
   },
 });
 ```

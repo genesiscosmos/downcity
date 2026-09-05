@@ -85,9 +85,9 @@ A third-party source directory defines exactly one Plugin. Its `plugin.json` dec
 
 Only a Plugin that declares Config uses named Profiles in `plugins/<plugin_id>/config.toml`. Desktop creates, selects, and removes Profiles on that Plugin's Catalog detail page; the Plugin's own Config UI and Config actions own the actual configuration. CLI `config --set` only replaces a complete JSON object explicitly. It does not generate a generic form or print credential values. A Plugin without Config is enabled without a Profile; for a Config Plugin, only an explicit `--profile` selects named configuration.
 
-The Agent's `agent.json` stores only the Plugin ID and optional profile reference. Removing that entry disables the Plugin. A profile or third-party Plugin cannot be removed while an Agent still references it.
+The Agent's `agent.json` stores only a Plugin ID and optional profile reference used to select the configuration City projects into that Agent's `PluginContext.config`. `enable`, `disable`, and `enabled` manage this configuration reference. Removing it leaves the City Plugin available with an empty configuration. A profile or third-party Plugin cannot be removed while Agent configuration still references it.
 
-After changing enable, disable, or profile configuration, run `city restart` to apply the new assembly to a running CLI City.
+After changing enable, disable, or profile configuration, run `city restart` to apply the new configuration projection to a running CLI City.
 
 The CLI, Agent `plugin_call`, HTTP, and scheduled jobs all invoke Plugin Actions. There is no `plugin command`, and Chat is not a top-level CLI special case.
 

@@ -13,7 +13,7 @@ description: 按日常使用、常用进阶和框架集成三个层级理解 Age
 
 - `Workspace`：创建项目资源与安全边界，并接收 Shell。
 - `Agent`：组合身份、模型、指令、Tools 与 Sessions。
-- `City`：持有 Workspaces、Plugin catalog、共享实例与 Agent 绑定。
+- `City`：持有 Workspaces、Plugin 唯一实例、Agent/Group 集合与 transport。
 - `agent.sessions.create({ workspace })` / `get()`：创建或恢复当前作用域的 Session。
 - `session.prompt()`：启动一次 Turn。
 - `turn.finished`：等待最终结果。
@@ -40,7 +40,7 @@ try {
 ### Agent 与 Workspace
 
 - `agent.set_instruction()`：更新 Agent 静态指令。
-- `city.plugins`：提供 Plugin、管理 Agent 绑定并调用 main action。
+- `city.plugins`：添加或移除 Plugin 实例并调用 main action。
 - `entry.plugins`：在 Agent/Workspace 执行作用域查询或调用 Plugin。
 - `workspace.get_env()` / `set_env()` / `patch_env()`：管理项目执行环境。
 - `agent.get_logger()` / `get_shell()`：宿主集成入口。
@@ -95,7 +95,7 @@ try {
 
 - Agent 不绑定单一 Workspace，同一个 Agent 可以进入多个 Workspace。
 - `AgentSessions` 持有 Agent 的 Session；每个 Session 独立接收 Workspace 与 Plugin 上下文。
-- `agent.dispose()` 会释放 Session 使用的资源并解除当前 City 绑定；Plugin 共享实例和生命周期由 City 收口。
+- `agent.dispose()` 会释放 Session 使用的资源并解除当前 City 绑定；Plugin 唯一实例和生命周期由 City 收口。
 - `RemoteAgent.close()` 只关闭客户端连接，不释放服务端 Agent。
 
 继续阅读：[Agent API](/zh/agent-sdk-docs/api-reference/agent-class)和[Session 总览](/zh/agent-sdk-docs/sessions/overview)。

@@ -7,7 +7,10 @@
  */
 
 import test from "node:test";
-import { create_plugin_binding } from "./helpers/CityPluginTestBinding.mjs";
+import {
+  add_test_plugin,
+  create_test_plugin as create_plugin,
+} from "./helpers/CityPluginTestBinding.mjs";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
@@ -16,9 +19,8 @@ import fs from "node:fs/promises";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
-import { create_workspace_entry } from "@downcity/agent/host";
+import { create_workspace_entry } from "@downcity/agent/internal";
 import { Workspace } from "@downcity/city";
-import { create_plugin } from "@downcity/city/plugin";
 
 function create_deferred() {
   let resolve;
@@ -143,7 +145,8 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   const agent = new Agent({ id: "ready_agent", model });
   const workspace = new Workspace({ id: "ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, blocking_plugin)] });
+  add_test_plugin(city, blocking_plugin);
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
 
   try {
@@ -199,7 +202,8 @@ test("city.plugins scope waits for lifecycle start before direct action executio
   const agent = new Agent({ id: "plugin_ready_agent" });
   const workspace = new Workspace({ id: "plugin_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, plugin)] });
+  add_test_plugin(city, plugin);
+  city.agents.add(agent);
   create_workspace_entry(agent, workspace);
   try {
     const action_promise = city.plugins.scope({
@@ -248,10 +252,9 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失�
   const agent = new Agent({ id: "ready_isolation_agent" });
   const workspace = new Workspace({ id: "isolation_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [
-    create_plugin_binding(city, failing_plugin),
-    create_plugin_binding(city, healthy_plugin),
-  ] });
+  add_test_plugin(city, failing_plugin);
+  add_test_plugin(city, healthy_plugin);
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
 
   try {
@@ -290,12 +293,13 @@ test("Agent registers PluginRegistry tools and removes them with the last action
     assert.equal(entry.tools.plugin_read, undefined);
     assert.equal(entry.tools.plugin_call, undefined);
 
-    await city.plugins.register(agent.id, create_plugin_binding(city, action_plugin));
+    add_test_plugin(city, action_plugin);
+    await agent.ensure_ready();
 
     assert.notEqual(entry.tools.plugin_read, undefined);
     assert.notEqual(entry.tools.plugin_call, undefined);
 
-    await city.plugins.unregister(agent.id, "dynamic_action");
+    await city.plugins.remove("dynamic_action");
 
     assert.equal(entry.tools.plugin_read, undefined);
     assert.equal(entry.tools.plugin_call, undefined);

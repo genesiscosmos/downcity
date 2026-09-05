@@ -14,35 +14,25 @@ export function create_plugin_registration(plugin) {
     has_config: false,
     has_sidebar: false,
     has_mainview: false,
-    module: {
-      activate() {},
-      create: () => plugin,
-    },
+    plugin,
   };
 }
 
-/** 每个测试 City 中按 Plugin ID 复用的可替换 factory。 */
-const registrations_by_city = new WeakMap();
-
-/** 向 City 登记测试 Plugin，并创建使用 default Profile 的 Agent 绑定。 */
-export function create_plugin_binding(city, plugin) {
-  let registrations = registrations_by_city.get(city);
-  if (!registrations) {
-    registrations = new Map();
-    registrations_by_city.set(city, registrations);
-  }
-  let record = registrations.get(plugin.name);
-  if (!record) {
-    record = { plugin };
-    const registration = create_plugin_registration(plugin);
-    registration.module.create = () => record.plugin;
-    registrations.set(plugin.name, record);
-    city.plugins.provide(registration);
-  } else {
-    record.plugin = plugin;
-  }
-  return { plugin_id: plugin.name };
+/** 用类语义创建无隐藏生命周期的测试 Plugin。 */
+export function create_test_plugin(definition) {
+  return Object.assign({
+    title: definition.name,
+    description: "Test Plugin",
+    actions: {},
+  }, definition);
 }
+
+/** 向 City 登记测试 Plugin。 */
+export function add_test_plugin(city, plugin) {
+  city.plugins.add(create_plugin_registration(plugin));
+  return plugin;
+}
+
 
 /** 创建内部 Registry 单元测试使用的完整 PluginContext。 */
 export function create_test_plugin_context(options = {}) {
@@ -91,7 +81,7 @@ export function create_test_plugin_context(options = {}) {
       files: options.files || {},
       env: {},
     },
-    profile: { id: "default", config: {} },
+    config: {},
     storage: { path: data_path, files: options.data_files || {} },
     logger: {
       log: async () => {},

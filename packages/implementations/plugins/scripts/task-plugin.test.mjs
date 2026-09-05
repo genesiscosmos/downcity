@@ -28,7 +28,7 @@ function create_task_context(data_path, workspace_id = "workspace-a") {
     city: { plugins: {} },
     agent: { id: "task-test-agent", name: "task-test-agent", description: "", instructions: [], sessions: {} },
     workspace: { id: workspace_id, path: process.cwd(), files: {}, env: {} },
-    profile: { id: "default", config: {} },
+    config: {},
     storage: { path: data_path, files: {} },
     logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
     abort_signal: new AbortController().signal,
@@ -45,7 +45,7 @@ function create_task_registration(plugin) {
     has_config: false,
     has_sidebar: false,
     has_mainview: false,
-    module: { activate() {}, create: () => plugin },
+    plugin,
   };
 }
 
@@ -114,8 +114,8 @@ test("scheduled task appends its result to the Session captured from create cont
     }),
   });
   const registration = create_task_registration(task_plugin);
-  city.plugins.provide(registration);
-  city.agents.add(agent, { plugins: [{ plugin_id: registration.id }] });
+  city.plugins.add(registration);
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
   const plugin_scope = city.plugins.scope({
     agent_id: agent.id,

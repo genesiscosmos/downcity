@@ -4,7 +4,7 @@ description: "Agent、AgentSessions、Session 与执行内核。"
 ---
 
 `@downcity/agent` 提供 Agent、AgentSessions、Session 与执行内核。City 组合根和 RemoteAgent 由 `@downcity/city` 提供。
-Agent 不持有 Plugin；City 负责 Plugin catalog、共享实例与生命周期，Plugin 作者协议位于
+Agent 不持有 Plugin；City 负责 Plugin 唯一实例、配置投影与生命周期，Plugin 作者协议位于
 `@downcity/city/plugin`。Workspace 资源由 `@downcity/city` 提供。
 
 ```ts
@@ -16,8 +16,8 @@ const turn = await session.prompt({ query: "你好" });
 const result = await turn.finished;
 ```
 
-使用 Plugin 前应先通过 `CityOptions.plugins` 或 `city.plugins.provide()` 向 City 登记模块；
-`city.agents.add()` 只声明 `plugin_id` 与可选 Profile 绑定。
+使用 Plugin 前应先通过 `CityOptions.plugins` 或 `city.plugins.add()` 向 City 添加实例；
+`city.agents.add()` 只登记 Agent，City 的全部 Plugin 会自动对它可用。
 
 ## 读取每轮文件改动
 

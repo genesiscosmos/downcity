@@ -1,62 +1,44 @@
 ---
 title: 自定义 Plugin
-description: 使用 Action、Hook、System、Lifecycle 与 City module 构建自定义 Plugin。
+description: 使用 Action、Hook、System、Lifecycle 与 City 构建自定义 Plugin。
 ---
 
 # 自定义 Plugin
 
-自定义 Plugin 的公开协议来自 `@downcity/city/plugin`。Agent 不接收 Plugin 实例，也不暴露 Plugin
-Registry；City 先登记 module，再按 `plugin_id`/Profile 绑定 Agent。
+Plugin 是 City 提供给 Agent 的能力。一个 City 中每个 Plugin ID 只有一个实例，所有已注册 Agent
+自动获得全部 Plugin；Agent 不保存 Plugin，也不需要绑定 Profile。
 
 ```ts
-import {
-  BasePlugin,
-  define_city_plugin,
-  type PluginActions,
-} from "@downcity/city/plugin";
+import { City, Workspace } from "@downcity/city";
+import { Plugin, create_action } from "@downcity/city/plugin";
 
-class NotesPlugin extends BasePlugin {
+class NotesPlugin extends Plugin {
   readonly name = "notes";
   readonly title = "Notes Helper";
   readonly description = "Adds note-related actions.";
-
-  readonly actions: PluginActions = {
-    status: {
+  readonly actions = {
+    status: create_action({
+      description: "Read current execution scope.",
       execute: async ({ context }) => ({
         success: true,
         data: {
-          workspace_path: context.workspace.path,
-          storage_path: context.storage.path,
+          agent_id: context.agent.id,
+          workspace_id: context.workspace.id,
           session_id: context.session?.id ?? null,
         },
       }),
-    },
+    }),
   };
 }
 
-const notes_module = define_city_plugin({
-  activate() {},
-  create: () => new NotesPlugin(),
-});
-
-const registration = {
-  id: "notes",
-  title: "Notes Helper",
-  description: "Adds note-related actions.",
-  readme: "/absolute/path/README.md",
-  has_config: false,
-  has_sidebar: false,
-  has_mainview: false,
-  module: notes_module,
-};
-
-const city = new City({ plugins: [registration], workspaces: [workspace] });
-city.agents.add(agent, { plugins: [{ plugin_id: "notes" }] });
+const workspace = new Workspace({ id: "project", path: process.cwd() });
+const city = new City({ workspaces: [workspace], plugins: [new NotesPlugin()] });
+city.agents.add(agent);
 ```
 
-只实现领域真正需要的 Action、Hook、Resolve、System、Availability、HTTP 或 Lifecycle。
-共享 Profile 资源使用 `start/stop`，Agent/Workspace 作用域资源使用 `bind/unbind`；不要把长期资源
-偷偷放进 Hook。
+Action、Hook、System、Resolve、Availability、HTTP 与 Lifecycle 都通过 `PluginContext` 工作。
+`context.agent`、`context.workspace`、`context.session` 和 `context.turn` 是受限的直接句柄；
+运行数据写入 `context.storage`，不需要只依赖 ID 回查对象。
 
 完整的 module、manifest、Context 与测试说明见
 [Plugin 开发指南](/zh/agent-sdk-docs/plugins/plugin-development)。

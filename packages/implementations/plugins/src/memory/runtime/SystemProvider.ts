@@ -7,7 +7,7 @@
  * - Dynamic Recall 通过 `session.turn_context` pipeline 进入 User 模型副本。
  */
 
-import type { SessionExtensionContextBlock } from "@downcity/agent";
+import type { SessionHookContextBlock } from "@downcity/agent";
 import type {
   MemoryProvider,
   MemoryRecallItem,
@@ -81,7 +81,7 @@ export async function build_memory_recall_context_block(
   provider: MemoryProvider,
   access: MemoryAccessContext,
   user_texts: readonly string[],
-): Promise<SessionExtensionContextBlock | null> {
+): Promise<SessionHookContextBlock | null> {
   if (!provider.capabilities.recall) return null;
   const query = user_texts.map((text) => String(text || "").trim()).filter(Boolean).join("\n");
   if (!should_recall_memory(query)) return null;
@@ -93,7 +93,7 @@ export async function build_memory_recall_context_block(
   });
   if (recalled.items.length === 0) return null;
   return {
-    source_extension: "memory",
+    source_plugin: "memory",
     name: "recall",
     content: render_recall_items(recalled.items),
     trust_level: "reference",

@@ -5,14 +5,13 @@ description: Construct, ready, execute, and dispose an Agent
 
 # Agent Lifecycle
 
-`new Agent(options)` creates and starts the Plugin lifecycle and ActionSchedule during construction. There is no `agent.start()` or `agent.stop()`; the host calls `agent.dispose()` to release resources.
+`new Agent(options)` creates only the Agent identity, model, instructions, custom Tools, Session collection, and ActionSchedule. Plugins do not belong to Agent. After City registers the Agent, it projects City-owned Plugin capabilities into the Agent execution entry.
 
 Run only one active runtime for the same Agent ID in the same physical Workspace. ActionSchedule is a local scheduler and does not coordinate duplicate Agent processes.
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/city";
-import { Shell } from "@downcity/city";
+import { City, Shell, Workspace } from "@downcity/city";
 import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
 
 const shell = new Shell({ sandbox: new MacOsSeatbeltSandbox() });
@@ -25,14 +24,15 @@ const workspace = new Workspace({
   path: process.cwd(),
   shell,
 });
+const city = new City({ agents: [agent], workspaces: [workspace] });
 
 const session = await agent.sessions.create({ workspace });
 const turn = await session.prompt({ query: "Start" });
 await turn.finished;
 
-await agent.dispose();
+await city.close();
 ```
 
-Sessions wait for Agent initialization before execution. `dispose()` stops plugin lifecycle, ActionSchedule, and Shell resources; the containing `City` owns and closes its HTTP/RPC transports.
+Sessions wait until the Agent's City execution binding is ready. `agent.dispose()` releases only Agent-owned Sessions, ActionSchedule, and execution bindings. `city.close()` first stops Agent Sessions, disconnects Plugin Agent/Workspace scopes, then stops the single City-owned Plugin instances and closes Workspaces, Shells, and Transports.
 
 Continue with the [Agent SDK docs](/en/agent-sdk-docs).

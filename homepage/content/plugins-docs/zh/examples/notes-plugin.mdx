@@ -7,13 +7,12 @@ description: 用一个最小 NotesPlugin 说明 Action、System 与 City 注册�
 
 ```ts
 import {
-  BasePlugin,
-  define_city_plugin,
+  Plugin,
   type PluginActions,
   type PluginContext,
 } from "@downcity/city/plugin";
 
-class NotesPlugin extends BasePlugin {
+class NotesPlugin extends Plugin {
   readonly name = "notes";
   readonly title = "Project Notes";
   readonly description = "Describe the project notes folder.";
@@ -35,14 +34,11 @@ class NotesPlugin extends BasePlugin {
   };
 }
 
-const notes_module = define_city_plugin({
-  activate() {},
-  create: () => new NotesPlugin(),
-});
+const notes_plugin = new NotesPlugin();
 ```
 
-宿主把 `notes_module` 放入 `CityPluginRegistration` 并交给 City；Agent 只绑定
-`{ plugin_id: "notes" }`。进入 Workspace 后，可以通过 `entry.plugins.run_action()` 显式调用；
+宿主把 `notes_plugin` 交给 City；全部 Agent 自动获得它。进入 Workspace 后，可以通过
+`entry.plugins.run_action()` 显式调用；
 Session 会从同一 City execution view 收集 System 与 Hook。
 
 这个 Plugin 没有长期资源，因此不需要 Lifecycle。用户项目文件应使用

@@ -30,7 +30,8 @@ description: Downcity 当前全部内建插件的完整地图，包括公开 SDK
 | `task` | `@downcity/plugins/task` |
 | `web` | `@downcity/plugins/web` |
 
-包不再提供默认内建集合工厂。每个 Agent 应按实际需要导入并实例化对应 plugin。
+可以使用 `create_builtin_plugin_registrations()` 创建默认集合，也可以按 City 的实际需要导入并
+实例化指定 Plugin。选择发生在 City，不发生在单个 Agent。
 
 ## 这里有两个重要分组
 

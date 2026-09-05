@@ -109,18 +109,16 @@ export async function createRemoteAgent(params: {
       if (!config) throw new Error(`Agent not found: ${params.agent_id}`);
       const workspace_config = data.workspaces.get(target_config.workspace_id);
       if (!workspace_config) throw new Error(`Workspace not found: ${target_config.workspace_id}`);
-      const registration = await create_cli_agent({
+      agent = await create_cli_agent({
         config,
-        plugin_loader,
       });
-      agent = registration.agent;
       const workspace = await create_cli_workspace(workspace_config, data.root_path);
       const city = new City({
         storage: new LocalStorageProvider(data.root_path),
         workspaces: [workspace],
         plugins: await plugin_loader.list_registrations(),
       });
-      city.agents.add(agent, { plugins: registration.plugins });
+      city.agents.add(agent);
       return {
         sessions: create_local_chat_sessions(
           agent.sessions,

@@ -10,9 +10,8 @@
 
 import http from "node:http";
 import { Hono } from "hono";
-import { create_workspace_entry } from "@downcity/agent/host";
-import type { Agent } from "@downcity/agent";
-import type { AgentSessionCollection } from "@downcity/agent/host";
+import { create_workspace_entry } from "@downcity/agent/internal";
+import type { Agent, AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPluginRuntime } from "@/types/plugin/PluginRuntime.js";
 import { register_sdk_session_routes } from "@/city/transport/http/routes/SessionRoutes.js";

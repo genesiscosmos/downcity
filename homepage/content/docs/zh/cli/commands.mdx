@@ -84,9 +84,9 @@ city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}
 
 只有声明 Config 的 Plugin 才使用 `plugins/<plugin_id>/config.toml` 中的命名 Profile。Desktop 在 Plugins Catalog 的对应详情页统一创建、选择和删除 Profile，具体配置由 Plugin 自己的 Config UI 与 Config actions 管理。CLI 的 `config --set` 仅用于显式替换完整 JSON，不生成通用表单，也不会输出凭据原文。没有 Config 的 Plugin 启用时不选择 Profile；有 Config 时只有明确传入 `--profile` 才使用命名 Profile。
 
-Agent 的 `agent.json` 只保存 Plugin ID 和可选 profile 引用，移除该条目即禁用 Plugin。仍被 Agent 引用的 profile 或第三方 Plugin 不能删除。
+Agent 的 `agent.json` 只保存 Plugin ID 和可选 profile 引用，用于选择 City 投影到该 Agent 的 `PluginContext.config`。`enable/disable/enabled` 管理的是这条配置引用；移除引用后 Plugin 仍由 City 提供，但收到空配置。仍被 Agent 配置引用的 profile 或第三方 Plugin 不能删除。
 
-修改 enable、disable 或 profile 配置后，运行中的 CLI City 需要执行 `city restart`，新的装配才会生效。
+修改 enable、disable 或 profile 配置后，运行中的 CLI City 需要执行 `city restart`，新的配置投影才会生效。
 
 CLI、Agent `plugin_call`、HTTP 与定时任务统一调用 Plugin Action。不存在 `plugin command`，Chat 也不再是顶层命令特例。
 

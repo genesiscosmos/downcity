@@ -12,7 +12,7 @@ import type { AgentModel } from "@/agent/AgentModel.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionExtensionRuntime } from "@downcity/type/session";
+import type { SessionHooks } from "@/session/SessionHooks.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
@@ -49,13 +49,13 @@ export interface AgentManagedSession extends AgentSession {
   }): void;
 
   /** 把 City 扩展执行视图加入当前 Session 的有序输入队列。 */
-  enqueue_extensions(input: {
+  enqueue_hooks(input: {
     /** 当前扩展修改的稳定标识。 */
     command_id: string;
     /** 当前扩展修改的用户可读标题。 */
     title: string;
     /** 下一 Session Step 使用的扩展执行视图。 */
-    extensions: SessionExtensionRuntime;
+    hooks: SessionHooks;
   }): void;
 }
 
@@ -135,10 +135,10 @@ export interface SessionOptions {
   get_workspace_env: () => Record<string, string>;
 
   /** 创建当前 City configured extension 的 Session Step 执行视图。 */
-  get_extensions: () => SessionExtensionRuntime;
+  get_hooks: () => SessionHooks;
 
-  /** 读取当前 Agent 显式注入的受托管 Extension system blocks。 */
-  get_managed_extension_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
+  /** 读取当前 Agent 显式注入的受托管 Plugin system blocks。 */
+  get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
 
   /**
    * 在执行前确保当前 session 已完成宿主侧默认配置。

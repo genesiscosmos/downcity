@@ -85,7 +85,8 @@ try {
 Agent + Workspace + Shell → agent.sessions.create({ workspace }) → Session → prompt() → turn.finished → dispose()
 ```
 
-`agent.dispose()` 会释放 Session 使用的资源并解除当前 City 绑定；City 负责收口 Plugin 共享实例、lifecycle 与 ActionSchedule。项目目录不会创建 `.downcity`。
+`agent.dispose()` 会释放 Session 使用的资源并解除当前 City 绑定；City 负责收口 Plugin 唯一实例、
+lifecycle 与 ActionSchedule。项目目录不会创建 `.downcity`。
 
 ## 模型归属
 

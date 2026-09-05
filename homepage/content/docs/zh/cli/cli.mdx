@@ -5,7 +5,7 @@ description: 如何使用 CLI 管理 Agent 项目
 
 # Agent CLI
 
-`city` CLI 是 Agent SDK 的本地宿主。它从全局 DB 读取 Agent 配置，将模型和 Plugin 传给 Agent SDK，并由唯一 CLI City 管理长期运行生命周期。
+`city` CLI 是本地 City 宿主。它读取 Agent 与 Plugin 配置，分别创建 Agent、Workspace 和唯一 Plugin 实例，再由 City 统一管理组合关系与长期运行生命周期。
 
 ## 项目初始化
 

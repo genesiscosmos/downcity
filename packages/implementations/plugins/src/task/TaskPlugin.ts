@@ -7,7 +7,7 @@
  * - 当前文件只保留实例骨架与 lifecycle，不再依赖旧的模块级单例。
  */
 
-import { BasePlugin, create_action } from "@downcity/city/plugin";
+import { Plugin, create_action } from "@downcity/city/plugin";
 import type { PluginActions } from "@downcity/city/plugin";
 import type { PluginContext } from "@downcity/city/plugin";
 import type {
@@ -36,7 +36,7 @@ function formatTaskLogMessage(message: string): string {
 /**
  * task plugin 类实现。
  */
-export class TaskPlugin extends BasePlugin {
+export class TaskPlugin extends Plugin {
   /**
    * 当前 plugin 名称。
    */
@@ -105,10 +105,10 @@ export class TaskPlugin extends BasePlugin {
 
     this.lifecycle = {
       start: async () => {},
-      bind: async (context) => {
+      connect: async (context) => {
         await this.start_cron_runtime(context);
       },
-      unbind: async (context) => {
+      disconnect: async (context) => {
         await this.stop_cron_runtime(task_scope_key(context));
       },
       stop: async () => {

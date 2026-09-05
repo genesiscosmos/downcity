@@ -5,7 +5,9 @@ description: What the Agent SDK is and how it runs agent work
 
 # Agent
 
-The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent owns identity, model, instructions, Tools, and one `AgentSessions` collection. Each Session may receive a Workspace. `City` owns Workspaces, the Plugin catalog, shared instances, Agent bindings, and transports.
+The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent owns
+identity, model, instructions, Tools, and one `AgentSessions` collection. Each Session may receive a
+Workspace. `City` owns Workspaces, unique Plugin instances, Agent/Group collections, and transports.
 
 ## What an Agent does
 
@@ -61,15 +63,15 @@ const city = new City({
   workspaces: [workspace],
   plugins: create_builtin_plugin_registrations(),
 });
-city.agents.add(agent, { plugins: [{ plugin_id: "memory" }] });
+city.agents.add(agent);
 ```
 
 ## Key concepts
 
-- **City** — owns Workspaces, the Plugin catalog, Profile-shared instances, Agent bindings, and unified transports.
+- **City** — owns Workspaces, unique Plugin instances, Agent/Group collections, and unified transports.
 - **Session** — one execution thread. The Agent creates sessions on demand and routes messages through them.
 - **Tool** — a function the Agent can call during execution. Passed directly to the constructor.
-- **Plugin** — an extension capability provided and owned by City, then bound to an Agent by Plugin/Profile.
+- **Plugin** — an extension capability provided and owned by City, then projected to every Agent.
 - **Model** — the inference backend. The Agent holds the default instance, and a Session can override it with its own instance.
 
 ## What an Agent is not responsible for

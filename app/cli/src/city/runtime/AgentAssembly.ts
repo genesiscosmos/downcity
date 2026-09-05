@@ -17,7 +17,6 @@ import {
   type AgentModel,
   type AgentOptions,
 } from "@downcity/agent";
-import type { CityAgentPluginBinding } from "@downcity/city";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/city";
 import {
@@ -48,28 +47,22 @@ export function create_cli_plugin_loader(input: {
 export async function create_cli_agent(input: {
   /** Agent 的持久化配置。 */
   config: LocalAgentConfig;
-  /** 当前产品实例创建的 Plugin Loader。 */
-  plugin_loader: LocalPluginLoader;
   /** 可选的 Downcity 用户级数据根目录。 */
   root_path?: string;
-}): Promise<{ /** 已创建但尚未加入 City 的 Agent。 */ agent: Agent; /** 交由 City 解释的 Plugin 绑定。 */ plugins: CityAgentPluginBinding[] }> {
+}): Promise<Agent> {
   resolve_local_root_path(input.root_path);
-  const [model, plugins, tools] = await Promise.all([
+  const [model, tools] = await Promise.all([
     Promise.resolve(create_cli_agent_model(input.config, process_environment())),
-    input.plugin_loader.create_bindings(input.config),
     Promise.resolve(create_cli_agent_tools()),
   ]);
-  return {
-    agent: new Agent({
-      id: input.config.agent_id,
-      name: input.config.name,
-      description: input.config.description,
-      instruction: input.config.instruction,
-      model,
-      tools,
-    }),
-    plugins,
-  };
+  return new Agent({
+    id: input.config.agent_id,
+    name: input.config.name,
+    description: input.config.description,
+    instruction: input.config.instruction,
+    model,
+    tools,
+  });
 }
 
 /** 创建 CLI 当前 Agent 独享的 Workspace、Shell 与 Sandbox。 */

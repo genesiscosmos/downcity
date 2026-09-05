@@ -72,7 +72,7 @@ test("Plugin execution context 保留完整 Session origin", async () => {
   };
   let execution_context;
   const { turn } = await create_turn_harness(async (turn_context) => {
-    execution_context = turn_context.step.extension_execution_context("call-1");
+    execution_context = turn_context.step.hook_context("call-1");
     return {
       success: true,
       text: "done",
@@ -158,13 +158,11 @@ test("SessionLoop 只在 canonical 用户消息写入后返回 prompt 句柄", a
 test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
   let release_count = 0;
   const { turn } = await create_turn_harness(async (turn_context) => {
-    await turn_context.step.replace_extensions({
-      read: () => ({ plugins: [] }),
-      run_action: async () => ({ success: true }),
+    await turn_context.step.replace_hooks({
       system_blocks: async () => [],
       pipeline: async (_point_name, value) => value,
       effect: async () => {},
-      release: async () => {
+      close: async () => {
         release_count += 1;
       },
     });
@@ -181,20 +179,18 @@ test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
   assert.equal(release_count, 1);
 });
 
-test("SessionLoop 在释放 Extension lease 前触发 turn committed effect", async () => {
+test("SessionLoop 在释放 Plugin Hook 作用域前触发 turn committed effect", async () => {
   const effects = [];
   let released = false;
   const { turn } = await create_turn_harness(async (turn_context) => {
-    await turn_context.step.replace_extensions({
-      read: () => ({ plugins: [] }),
-      run_action: async () => ({ success: true }),
+    await turn_context.step.replace_hooks({
       system_blocks: async () => [],
       pipeline: async (_point_name, value) => value,
       effect: async (point_name, value) => {
         assert.equal(released, false);
         effects.push({ point_name, value });
       },
-      release: async () => {
+      close: async () => {
         released = true;
       },
     });

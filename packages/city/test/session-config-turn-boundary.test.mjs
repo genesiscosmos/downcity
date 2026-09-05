@@ -8,20 +8,22 @@
  */
 
 import test from "node:test";
-import { create_plugin_binding } from "./helpers/CityPluginTestBinding.mjs";
+import {
+  add_test_plugin,
+  create_test_plugin as create_plugin,
+} from "./helpers/CityPluginTestBinding.mjs";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
-import { create_workspace_entry } from "@downcity/agent/host";
+import { create_workspace_entry } from "@downcity/agent/internal";
 import { City } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/city";
 import { get_agent_session_instruction_path } from "../../agent/bin/workspace/store/LocalStorePaths.js";
 import {
   create_action,
-  create_plugin,
 } from "@downcity/city/plugin";
 
 function create_deferred() {
@@ -115,7 +117,8 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     instruction: ["instruction:old"],
   });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, runtime_plugin)] });
+  add_test_plugin(city, runtime_plugin);
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
 
   try {
@@ -127,7 +130,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
 
     agent.set_instruction(["instruction:new"]);
     workspace.patch_env({ TURN_ENV: "new" });
-    const unregister_promise = city.plugins.unregister(agent.id, "runtime-config");
+    const unregister_promise = city.plugins.remove("runtime-config");
     const steer_turn_promise = session.prompt({ query: "steer" });
 
     assert.equal(plugin_stop_count, 0);
@@ -154,7 +157,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
       .map((message) => message.title);
     assert.deepEqual(completed_actions, [
       "Workspace environment updated",
-      "City extension runtime-config unregistered",
+      "City Plugin runtime-config removed",
     ]);
 
     // 未显式 snapshot 的 Session 重新装载时使用 Agent 当前 instruction。
@@ -207,7 +210,8 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
     });
     const existing_before = await existing_session.system();
 
-    await city.plugins.register(agent.id, create_plugin_binding(city, runtime_plugin));
+    add_test_plugin(city, runtime_plugin);
+    await agent.ensure_ready();
     const existing_after_register = await existing_session.system();
     assert.deepEqual(existing_after_register, existing_before);
 
@@ -220,7 +224,7 @@ test("Plugin registry changes do not rewrite an existing Session system", async 
       /plugin-system:registered/,
     );
 
-    await city.plugins.unregister(agent.id, "runtime-system");
+    await city.plugins.remove("runtime-system");
     const registered_after_unregister = await registered_session.system();
     assert.deepEqual(registered_after_unregister, registered_before);
 
@@ -258,7 +262,8 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   });
   const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, create_system_plugin("plugin-system:initial"))] });
+  add_test_plugin(city, create_system_plugin("plugin-system:initial"));
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
   const instruction_path = path.join(
     entry.data_path,
@@ -277,7 +282,9 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
     assert.match(initial_text, /plugin-system:initial/);
 
     agent.set_instruction(["instruction:refreshed"]);
-    await city.plugins.register(agent.id, create_plugin_binding(city, create_system_plugin("plugin-system:refreshed")));
+    await city.plugins.remove("syncshot-system");
+    add_test_plugin(city, create_system_plugin("plugin-system:refreshed"));
+    await agent.ensure_ready();
     await session.syncshot();
 
     const refreshed_text = (await session.system()).blocks
@@ -290,7 +297,9 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
 
     await session.snapshot();
     agent.set_instruction(["instruction:latest"]);
-    await city.plugins.register(agent.id, create_plugin_binding(city, create_system_plugin("plugin-system:latest")));
+    await city.plugins.remove("syncshot-system");
+    add_test_plugin(city, create_system_plugin("plugin-system:latest"));
+    await agent.ensure_ready();
     await Promise.all([session.snapshot(), session.syncshot()]);
 
     const latest_system = await session.system();
@@ -324,12 +333,13 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     model,
     instruction: ["instruction:old"],
   });
-  city.agents.add(first_agent, { plugins: [create_plugin_binding(city, create_plugin({
+  add_test_plugin(city, create_plugin({
     name: "snapshot-system",
     title: "Snapshot System",
     description: "Provides system text persisted by session.snapshot()",
     system: () => "plugin-system:persisted",
-  }))] });
+  }));
+  city.agents.add(first_agent);
   const first_entry = create_workspace_entry(first_agent, workspace);
   let session_id;
 
@@ -515,7 +525,8 @@ test("running session model changes apply with steer at the next Session step", 
   });
   const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, runtime_plugin)] });
+  add_test_plugin(city, runtime_plugin);
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
 
   try {
@@ -619,7 +630,8 @@ test("running session approval mode changes stay queued until the next Session s
   });
   const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  city.agents.add(agent, { plugins: [create_plugin_binding(city, runtime_plugin)] });
+  add_test_plugin(city, runtime_plugin);
+  city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
 
   try {
