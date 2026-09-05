@@ -68,8 +68,8 @@ test("City owns one Plugin instance and exposes it to every Agent", async () => 
   });
 
   await Promise.all([
-    city.enter_workspace(scope_a.agent.id, scope_a.workspace.id),
-    city.enter_workspace(scope_b.agent.id, scope_b.workspace.id),
+    scope_a.agent.sessions.create({ workspace: scope_a.workspace }),
+    scope_b.agent.sessions.create({ workspace: scope_b.workspace }),
   ]);
   const result_a = await city.plugins.scope({
     agent_id: scope_a.agent.id,
@@ -102,7 +102,7 @@ test("City dynamically adds and removes one Plugin for every Agent", async () =>
   const plugin = new ObservablePlugin(events);
   const scope = create_scope("dynamic");
   const city = new City({ workspaces: [scope.workspace], agents: [scope.agent] });
-  await city.enter_workspace(scope.agent.id, scope.workspace.id);
+  await scope.agent.sessions.create({ workspace: scope.workspace });
 
   await city.plugins.add(plugin);
   await scope.agent.ensure_ready();
@@ -151,7 +151,7 @@ test("City waits for Agent Plugin execution before disconnecting its Workspace",
     workspaces: [scope.workspace],
     agents: [scope.agent],
   });
-  await city.enter_workspace(scope.agent.id, scope.workspace.id);
+  await scope.agent.sessions.create({ workspace: scope.workspace });
 
   const action = city.plugins.scope({
     agent_id: scope.agent.id,
@@ -199,7 +199,7 @@ test("City waits for a direct Plugin hook before disconnecting and stopping it",
     workspaces: [scope.workspace],
     agents: [scope.agent],
   });
-  await city.enter_workspace(scope.agent.id, scope.workspace.id);
+  await scope.agent.sessions.create({ workspace: scope.workspace });
   const runtime = city.plugins.scope({
     agent_id: scope.agent.id,
     workspace_id: scope.workspace.id,
@@ -224,7 +224,7 @@ test("City waits for a direct Plugin hook before disconnecting and stopping it",
 
 test("City rejects a second instance with the same Plugin ID", async () => {
   const city = new City({ plugins: [new ObservablePlugin([])] });
-  assert.throws(() => city.plugins.add(new ObservablePlugin([])), {
+  await assert.rejects(city.plugins.add(new ObservablePlugin([])), {
     message: "Plugin already exists in City: observable",
   });
   await city.close();
@@ -239,15 +239,56 @@ test("City Plugin add exposes asynchronous startup failure", async () => {
   };
 
   await assert.rejects(city.plugins.add(plugin), /plugin-start-failed/u);
-  assert.deepEqual(city.plugins.snapshots().map((snapshot) => ({
-    name: snapshot.name,
-    status: snapshot.status,
-    last_error: snapshot.last_error,
-  })), [{
-    name: "broken-start",
-    status: "error",
-    last_error: "plugin-start-failed",
-  }]);
+  assert.equal(city.plugins.get(plugin.name), null);
+  assert.deepEqual(city.plugins.snapshots(), []);
+  await city.close();
+});
+
+test("City rolls back every Agent scope when dynamic Plugin connect fails", async () => {
+  const events = [];
+  const plugin = new ObservablePlugin(events);
+  plugin.name = "transactional";
+  const scope_a = create_scope("transaction_a");
+  const scope_b = create_scope("transaction_b");
+  plugin.connect = (context) => {
+    events.push(`connect:${context.agent.id}:${context.workspace.id}`);
+    if (context.agent.id === scope_b.agent.id) {
+      throw new Error("connect-b-failed");
+    }
+  };
+  const city = new City({
+    workspaces: [scope_a.workspace, scope_b.workspace],
+    agents: [scope_a.agent, scope_b.agent],
+  });
+  await Promise.all([
+    scope_a.agent.sessions.create({ workspace: scope_a.workspace }),
+    scope_b.agent.sessions.create({ workspace: scope_b.workspace }),
+  ]);
+
+  await assert.rejects(city.plugins.add(plugin), /connect-b-failed/u);
+
+  assert.equal(city.plugins.get(plugin.name), null);
+  assert.deepEqual(city.plugins.snapshots(), []);
+  assert.equal(city.plugins.scope({
+    agent_id: scope_a.agent.id,
+    workspace_id: scope_a.workspace.id,
+  }).has(plugin.name), false);
+  assert.equal(city.plugins.scope({
+    agent_id: scope_b.agent.id,
+    workspace_id: scope_b.workspace.id,
+  }).has(plugin.name), false);
+  assert.equal(
+    events.filter((event) => event === `disconnect:${scope_a.agent.id}:${scope_a.workspace.id}`).length,
+    1,
+  );
+  assert.equal(events.filter((event) => event === "stop").length, 1);
+  await Promise.all([scope_a.agent.ensure_ready(), scope_b.agent.ensure_ready()]);
+
+  plugin.connect = (context) => {
+    events.push(`reconnect:${context.agent.id}:${context.workspace.id}`);
+  };
+  await city.plugins.add(plugin);
+  assert.equal(city.plugins.get(plugin.name), plugin);
   await city.close();
 });
 

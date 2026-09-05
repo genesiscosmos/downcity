@@ -11,8 +11,6 @@ import test from "node:test";
 import { Agent } from "@downcity/agent";
 import { LocalStorageProvider, RemoteAgent, Workspace } from "@downcity/city";
 import { City } from "../bin/index.js";
-import { CityHTTP } from "../bin/city/transport/http/CityHTTP.js";
-import { CityRPC } from "../bin/city/transport/rpc/CityRPC.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
 
@@ -28,7 +26,7 @@ async function reserve_port() {
   return port;
 }
 
-async function create_city() {
+async function create_city(runtime = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-transport-"));
   await Promise.all([
     fs.mkdir(path.join(root, "first")),
@@ -45,18 +43,24 @@ async function create_city() {
   const city = new City({
     storage: new LocalStorageProvider(path.join(root, "city-data")),
     workspaces: [first_workspace, second_workspace],
+    runtime,
   });
   const first_agent = new Agent({ id: "first_agent" });
   const second_agent = new Agent({ id: "second_agent" });
   city.agents.add(first_agent);
   city.agents.add(second_agent);
   const agents = [first_agent, second_agent];
-  return { city, agents, root };
+  return {
+    city,
+    agents,
+    root,
+    transport: city.http_transport,
+    rpc_transport: city.rpc_transport,
+  };
 }
 
 test("CityHTTP mounts each Agent below its stable ID", async () => {
-  const { city, agents, root } = await create_city();
-  const transport = new CityHTTP(city);
+  const { city, agents, root, transport } = await create_city();
   try {
     const first_create = await transport.router().request(
       "/agents/first_agent/workspaces/first/api/sdk/sessions",
@@ -90,8 +94,7 @@ test("CityHTTP mounts each Agent below its stable ID", async () => {
 });
 
 test("CityHTTP Workspace 路由只返回当前 Workspace 的 Session", async () => {
-  const { city, agents, root } = await create_city();
-  const transport = new CityHTTP(city);
+  const { city, agents, root, transport } = await create_city();
   try {
     const first_create = await transport.router().request(
       "/agents/first_agent/workspaces/first/api/sdk/sessions",
@@ -121,8 +124,7 @@ test("CityHTTP Workspace 路由只返回当前 Workspace 的 Session", async () 
 });
 
 test("CityHTTP 按任意 origin 类型确定性访问 Session", async () => {
-  const { city, agents, root } = await create_city();
-  const transport = new CityHTTP(city);
+  const { city, agents, root, transport } = await create_city();
   try {
     const create_response = await transport.router().request(
       "/agents/first_agent/workspaces/first/api/sdk/sessions",
@@ -189,18 +191,19 @@ test("CityHTTP 按任意 origin 类型确定性访问 Session", async () => {
 });
 
 test("CityHTTP concurrently creates only one Agent extension", async () => {
-  const { city, agents, root } = await create_city();
   let extension_count = 0;
   let dispose_count = 0;
-  const transport = new CityHTTP(city, {
-    create_agent_extension: ({ sdk_router }) => {
-      extension_count += 1;
-      return {
-        router: sdk_router,
-        dispose: () => {
-          dispose_count += 1;
-        },
-      };
+  const { city, agents, root, transport } = await create_city({
+    http: {
+      create_agent_extension: ({ sdk_router }) => {
+        extension_count += 1;
+        return {
+          router: sdk_router,
+          dispose: () => {
+            dispose_count += 1;
+          },
+        };
+      },
     },
   });
   try {
@@ -219,16 +222,17 @@ test("CityHTTP concurrently creates only one Agent extension", async () => {
 });
 
 test("CityHTTP does not recreate an Agent removed while router resolution is queued", async () => {
-  const { city, agents, root } = await create_city();
   let release_dispose;
   let extension_count = 0;
   const dispose_gate = new Promise((resolve) => {
     release_dispose = resolve;
   });
-  const transport = new CityHTTP(city, {
-    create_agent_extension: ({ sdk_router }) => {
-      extension_count += 1;
-      return { router: sdk_router, dispose: async () => await dispose_gate };
+  const { city, agents, root, transport } = await create_city({
+    http: {
+      create_agent_extension: ({ sdk_router }) => {
+        extension_count += 1;
+        return { router: sdk_router, dispose: async () => await dispose_gate };
+      },
     },
   });
   try {
@@ -256,16 +260,17 @@ test("CityHTTP does not recreate an Agent removed while router resolution is que
 });
 
 test("CityHTTP retries an extension disposer after a failed close", async () => {
-  const { city, agents, root } = await create_city();
   let dispose_count = 0;
-  const transport = new CityHTTP(city, {
-    create_agent_extension: ({ sdk_router }) => ({
-      router: sdk_router,
-      dispose: () => {
-        dispose_count += 1;
-        if (dispose_count === 1) throw new Error("dispose failed");
-      },
-    }),
+  const { city, agents, root, transport } = await create_city({
+    http: {
+      create_agent_extension: ({ sdk_router }) => ({
+        router: sdk_router,
+        dispose: () => {
+          dispose_count += 1;
+          if (dispose_count === 1) throw new Error("dispose failed");
+        },
+      }),
+    },
   });
   try {
     assert.equal(
@@ -284,8 +289,7 @@ test("CityHTTP retries an extension disposer after a failed close", async () => 
 });
 
 test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
-  const { city, agents, root } = await create_city();
-  const transport = new CityHTTP(city);
+  const { city, agents, root, transport } = await create_city();
   try {
     transport.router();
     await fs.mkdir(path.join(root, "third"));
@@ -326,8 +330,7 @@ test("CityHTTP 动态识别运行中新增和删除的 Agent", async () => {
 test("CityRPC routes RemoteAgent by rpc URL Agent ID", {
   skip: !network_tests_enabled,
 }, async () => {
-  const { city, agents, root } = await create_city();
-  const transport = new CityRPC(city);
+  const { city, agents, root, rpc_transport: transport } = await create_city();
   const port = await reserve_port();
   const first = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/first_agent/first` });
   const second = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/second_agent/second` });

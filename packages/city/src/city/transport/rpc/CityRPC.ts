@@ -6,7 +6,6 @@
  */
 
 import type { AgentSessions, AgentSessionCollection } from "@downcity/agent";
-import type { City } from "@/city/runtime/City.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
   AgentRpcBinding,
@@ -14,13 +13,20 @@ import type {
 } from "@/city/transport/types/AgentRpcBinding.js";
 import type { CityRpcRuntimeOptions } from "@/city/transport/types/CityRpcRuntime.js";
 import { SerializedTransport } from "@/city/transport/SerializedTransport.js";
+import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
+
+/** CityRPC 实际使用的 City 内部访问能力。 */
+type CityRpcAccess = Pick<
+  CityRuntimeAccess,
+  "get_agent" | "list_agents" | "enter_workspace" | "plugin_scope" | "plugin_snapshots"
+>;
 
 const DEFAULT_RPC_HOST = "127.0.0.1";
 const DEFAULT_RPC_PORT = 15314;
 
 /** 在单一 RPC 端口暴露 City 的多 Agent transport。 */
 export class CityRPC {
-  private readonly city: City;
+  private readonly runtime_access: CityRpcAccess;
   private readonly runtime_options: CityRpcRuntimeOptions;
   /** 当前 City RPC Server 的唯一串行生命周期。 */
   private readonly lifecycle: SerializedTransport<
@@ -29,8 +35,8 @@ export class CityRPC {
     AgentRpcBinding
   >;
 
-  constructor(city: City, runtime_options: CityRpcRuntimeOptions = {}) {
-    this.city = city;
+  constructor(runtime_access: CityRpcAccess, runtime_options: CityRpcRuntimeOptions = {}) {
+    this.runtime_access = runtime_access;
     this.runtime_options = runtime_options;
     this.lifecycle = new SerializedTransport({
       start: async (options) => await this.start_server(options),
@@ -65,7 +71,7 @@ export class CityRPC {
             return {
               sessions: unavailable_sessions,
               get_city_status: () => ({
-                agent_ids: this.city.agents.list().map((agent) => agent.id),
+                agent_ids: this.runtime_access.list_agents().map((agent) => agent.id),
               }),
               shutdown_city: this.runtime_options.shutdown,
             };
@@ -74,11 +80,11 @@ export class CityRPC {
           if (!agent_id) throw new Error("CityRPC request requires agent_id");
           const workspace_id = String(request.workspace_id || "").trim();
           if (!workspace_id) throw new Error("CityRPC request requires workspace_id");
-          const workspace_entry = await this.city.enter_workspace(agent_id, workspace_id);
-          const agent = this.city.agents.get(agent_id);
+          const workspace_entry = await this.runtime_access.enter_workspace(agent_id, workspace_id);
+          const agent = this.runtime_access.get_agent(agent_id);
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);
           const sessions = workspace_entry.sessions;
-          const plugins = this.city.plugins.scope({ agent_id, workspace_id });
+          const plugins = this.runtime_access.plugin_scope(agent_id, workspace_id);
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
@@ -88,18 +94,21 @@ export class CityRPC {
               workspace: workspace_entry.workspace,
               sessions,
               plugins,
-              list_plugin_states: () => this.city.plugins.snapshots(),
+              list_plugin_states: () => this.runtime_access.plugin_snapshots(),
               resolve_system_messages: async (input) => await workspace_entry.resolve_system_messages(input),
             }),
             resolve_session_model: resolve_session_model
-              ? async (model_id) => await resolve_session_model(
-                  agent_id,
-                  workspace_id,
+              ? async (model_id) => await resolve_session_model({
+                  agent,
+                  workspace: workspace_entry.workspace,
                   model_id,
-                )
+                })
               : undefined,
             reload_workspace_env: reload_workspace_env
-              ? async () => await reload_workspace_env(agent_id, workspace_id)
+              ? async () => await reload_workspace_env({
+                  agent,
+                  workspace: workspace_entry.workspace,
+                })
               : undefined,
             shutdown_city: this.runtime_options.shutdown,
           };

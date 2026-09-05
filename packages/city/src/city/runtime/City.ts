@@ -32,6 +32,7 @@ import type {
   CityRuntimeOptions,
   CityWorkspaces,
 } from "@/city/types/City.js";
+import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 
 /** Agent 实例索引与 transport 宿主。 */
 export class City {
@@ -43,6 +44,9 @@ export class City {
 
   /** City 唯一的 Plugin 生命周期运行时。 */
   private readonly plugin_runtime: CityPluginRuntime;
+
+  /** 仅供包内运行时组件使用的 City 事实源访问面。 */
+  private readonly runtime_access: CityRuntimeAccess;
   /** 当前 City 引用的 Agent，按稳定 ID 索引。 */
   private readonly agents_by_id = new Map<string, Agent>();
 
@@ -103,8 +107,23 @@ export class City {
   constructor(options: CityOptions = {}) {
     this.storage = options.storage || new MemoryStorageProvider();
     this.embassy = options.embassy;
+    this.runtime_access = Object.freeze({
+      get_agent: (agent_id) => this.get_agent(agent_id),
+      list_agents: () => this.list_agents(),
+      get_workspace: (workspace_id) => this.get_workspace(workspace_id),
+      list_workspaces: () => this.list_workspaces(),
+      require_workspace: (agent_id, workspace_id) =>
+        this.require_workspace(agent_id, workspace_id),
+      enter_workspace: async (agent_id, workspace_id) =>
+        await this.enter_workspace(agent_id, workspace_id),
+      plugin_scope: (agent_id, workspace_id) =>
+        this.plugin_runtime.public_api.scope({ agent_id, workspace_id }),
+      plugin_snapshots: () => this.plugin_runtime.public_api.snapshots(),
+    });
     this.plugin_runtime = new CityPluginRuntime({
-      city: this,
+      storage: this.storage,
+      ...(this.embassy ? { embassy: this.embassy } : {}),
+      runtime_access: this.runtime_access,
       ...(options.plugin_host ? { host: options.plugin_host } : {}),
     });
     this.plugins = this.plugin_runtime.public_api;
@@ -124,8 +143,8 @@ export class City {
     }
     const runtime_options = options.runtime ?? {};
     this.resolve_workspace = runtime_options.resolve_workspace;
-    this.http_transport = new CityHTTP(this, runtime_options.http);
-    this.rpc_transport = new CityRPC(this, runtime_options.rpc);
+    this.http_transport = new CityHTTP(this.runtime_access, runtime_options.http);
+    this.rpc_transport = new CityRPC(this.runtime_access, runtime_options.rpc);
     this.agents = Object.freeze({
       add: (agent) => this.add_agent(agent),
       get: (agent_id) => this.get_agent(agent_id),
@@ -188,9 +207,8 @@ export class City {
     return group;
   }
 
-  /** 返回 City 持有的 Workspace；不存在时返回 null。 */
-  /** 内部 AgentCity 协议；用户应使用 `city.workspaces.get()`。 */
-  get_workspace(workspace_id_input: string): WorkspaceRuntime | null {
+  /** 返回 City 持有的 Workspace；用户查询应使用 `city.workspaces.get()`。 */
+  private get_workspace(workspace_id_input: string): WorkspaceRuntime | null {
     const workspace_id = String(workspace_id_input || "").trim();
     if (this.removing_workspace_ids.has(workspace_id)) return null;
     return this.workspaces_by_id.get(workspace_id) ?? null;
@@ -226,7 +244,7 @@ export class City {
   }
 
   /** 按 Agent ID 与 Workspace ID 返回 transport 所需的明确执行作用域。 */
-  require_workspace(agent_id_input: string, workspace_id_input: string): WorkspaceEntry {
+  private require_workspace(agent_id_input: string, workspace_id_input: string): WorkspaceEntry {
     const agent = this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
     if (!workspace_id) throw new Error("City request requires workspace_id");
@@ -240,7 +258,7 @@ export class City {
   }
 
   /** 按需解析并进入 Workspace；相同目标的并发请求共享一次创建流程。 */
-  async enter_workspace(
+  private async enter_workspace(
     agent_id_input: string,
     workspace_id_input: string,
   ): Promise<WorkspaceEntry> {
@@ -458,7 +476,7 @@ export class City {
   }
 
   /** Agent 自行释放时清除 City 运行时引用。 */
-  async release_agent(agent: { readonly id: string }): Promise<void> {
+  private async release_agent(agent: { readonly id: string }): Promise<void> {
     const current = this.agents_by_id.get(agent.id);
     if (!current || current !== agent) return;
     const errors: unknown[] = [];

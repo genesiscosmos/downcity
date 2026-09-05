@@ -261,7 +261,7 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失�
     await entry.sessions.create({ session_id: "initial_barrier" });
 
     assert.equal(healthy_started, true);
-    assert.equal(city.plugins.snapshots(agent.id).find((item) => item.name === "failing")?.status, "error");
+    assert.equal(city.plugins.snapshots().find((item) => item.name === "failing"), undefined);
     assert.equal(city.plugins.snapshots(agent.id).find((item) => item.name === "healthy")?.status, "ready");
   } finally {
     await city.close();

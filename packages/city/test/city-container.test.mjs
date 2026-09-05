@@ -70,9 +70,9 @@ test("City 删除 Workspace 前释放全部 Agent 执行作用域", async () => 
     assert.equal(await city.workspaces.remove(workspace.id), workspace);
     assert.equal(city.workspaces.get(workspace.id), null);
     assert.equal(get_workspace_entry(agent, workspace.id), null);
-    assert.throws(
-      () => city.require_workspace(agent.id, workspace.id),
-      /Workspace not found in City/u,
+    await assert.rejects(
+      agent.sessions.create({ workspace }),
+      /does not belong to the Agent resource container/u,
     );
   } finally {
     await city.close();
@@ -103,8 +103,8 @@ test("City 删除 Workspace 期间拒绝返回旧执行作用域", async () => {
     const removal = city.workspaces.remove(workspace.id);
     try {
       await assert.rejects(
-        city.enter_workspace(agent.id, workspace.id),
-        /Workspace is being removed from City/u,
+        agent.sessions.create({ workspace }),
+        /does not belong to the Agent resource container/u,
       );
     } finally {
       finish_leave();

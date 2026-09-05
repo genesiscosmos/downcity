@@ -6,7 +6,6 @@
  */
 
 import { Hono, type Context } from "hono";
-import type { City } from "@/city/runtime/City.js";
 import {
   AgentHTTP,
   create_agent_http_server_handle,
@@ -18,10 +17,18 @@ import type {
   AgentHttpListenOptions,
 } from "@/city/transport/types/AgentHttpBinding.js";
 import { get_workspace_entry } from "@downcity/agent/internal";
+import type { WorkspaceEntry } from "@downcity/agent/internal";
+import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
+
+/** CityHTTP 实际使用的 City 内部访问能力。 */
+type CityHttpAccess = Pick<
+  CityRuntimeAccess,
+  "get_agent" | "list_agents" | "enter_workspace" | "plugin_scope"
+>;
 
 /** 在单一 HTTP 端口暴露 City 的多 Agent transport。 */
 export class CityHTTP {
-  private readonly city: City;
+  private readonly runtime_access: CityHttpAccess;
   private readonly runtime_options: CityHttpRuntimeOptions;
   private readonly routers_by_workspace = new Map<string, { entry: object; router: Hono }>();
   private readonly extension_disposers = new Map<string, () => void | Promise<void>>();
@@ -30,8 +37,8 @@ export class CityHTTP {
   private cached_router: Hono | null = null;
   private cached_server: AgentHttpServerHandle | null = null;
 
-  constructor(city: City, runtime_options: CityHttpRuntimeOptions = {}) {
-    this.city = city;
+  constructor(runtime_access: CityHttpAccess, runtime_options: CityHttpRuntimeOptions = {}) {
+    this.runtime_access = runtime_access;
     this.runtime_options = runtime_options;
   }
 
@@ -46,7 +53,7 @@ export class CityHTTP {
       success: true,
       status: "ok",
       pid: process.pid,
-      agent_ids: this.city.agents.list().map((agent) => agent.id),
+      agent_ids: this.runtime_access.list_agents().map((agent) => agent.id),
     }));
     this.cached_router = root;
     return root;
@@ -115,9 +122,9 @@ export class CityHTTP {
   private async dispatch_workspace(context: Context): Promise<Response> {
     const agent_id = decodeURIComponent(String(context.req.param("agent_id") || "")).trim();
     const workspace_id = decodeURIComponent(String(context.req.param("workspace_id") || "")).trim();
-    const agent = this.city.agents.get(agent_id);
+    const agent = this.runtime_access.get_agent(agent_id);
     if (!agent) return context.json({ success: false, error: `Agent not found: ${agent_id}` }, 404);
-    const entry = await this.city.enter_workspace(agent_id, workspace_id)
+    const entry = await this.runtime_access.enter_workspace(agent_id, workspace_id)
       .catch(() => null);
     if (!entry) return context.json({
       success: false,
@@ -137,12 +144,12 @@ export class CityHTTP {
   private async resolve_workspace_router(
     agent_id: string,
     workspace_id: string,
-    entry: ReturnType<City["require_workspace"]>,
+    entry: WorkspaceEntry,
   ): Promise<Hono | null> {
     const route_key = `${agent_id}/${workspace_id}`;
     return await this.enqueue_agent_operation(route_key, async () => {
       // Agent 可能在请求排队期间被 City 删除，装配前必须重新确认所有权。
-      const agent = this.city.agents.get(agent_id);
+      const agent = this.runtime_access.get_agent(agent_id);
       if (!agent || get_workspace_entry(agent, workspace_id) !== entry) return null;
       const cached = this.routers_by_workspace.get(route_key);
       if (cached && cached.entry === entry) return cached.router;
@@ -156,10 +163,14 @@ export class CityHTTP {
       }
 
       const resolve_session_model = this.runtime_options.resolve_session_model;
-      const plugins = this.city.plugins.scope({ agent_id, workspace_id });
+      const plugins = this.runtime_access.plugin_scope(agent_id, workspace_id);
       const sdk_router = new AgentHTTP({ agent, workspace: entry.workspace, plugins }, {
         resolve_session_model: resolve_session_model
-          ? async (model_id) => await resolve_session_model(agent_id, workspace_id, model_id)
+          ? async (model_id) => await resolve_session_model({
+              agent,
+              workspace: entry.workspace,
+              model_id,
+            })
           : undefined,
       }).router();
       const extension = this.runtime_options.create_agent_extension?.({

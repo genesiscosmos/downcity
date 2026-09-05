@@ -119,10 +119,10 @@ export class CliCityRuntime {
         return await create_cli_workspace(workspace_config, data.root_path);
       },
       http: {
-        resolve_session_model: async (agent_id, workspace_id, model_id) =>
+        resolve_session_model: async ({ workspace, model_id }) =>
           await resolve_cli_agent_model(
             model_id,
-            (await city.enter_workspace(agent_id, workspace_id)).workspace.get_env(),
+            workspace.get_env(),
           ),
         create_agent_extension: ({ agent, workspace, plugins, sdk_router }) => {
           const auth_service = new AuthService({
@@ -158,15 +158,14 @@ export class CliCityRuntime {
       },
       rpc: {
         shutdown: () => { process.kill(process.pid, "SIGTERM"); },
-        resolve_session_model: async (agent_id, workspace_id, model_id) =>
+        resolve_session_model: async ({ workspace, model_id }) =>
           await resolve_cli_agent_model(
             model_id,
-            (await city.enter_workspace(agent_id, workspace_id)).workspace.get_env(),
+            workspace.get_env(),
           ),
-        reload_workspace_env: async (agent_id, workspace_id) => {
-          const entry = await city.enter_workspace(agent_id, workspace_id);
-          const env = reload_cli_workspace_env(entry.workspace.path, data.root_path);
-          entry.workspace.set_env(env);
+        reload_workspace_env: async ({ workspace }) => {
+          const env = reload_cli_workspace_env(workspace.path, data.root_path);
+          workspace.set_env(env);
           return env;
         },
       },

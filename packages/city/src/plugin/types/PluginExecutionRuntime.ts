@@ -66,16 +66,6 @@ export interface AgentPluginRuntime {
 
 }
 
-/** City 内部 Registry 的变更能力；不会投影给 Workspace 或 PluginContext。 */
-export interface AgentPlugins extends AgentPluginRuntime {
-  /** 注册或替换一个 Plugin 执行投影。 */
-  register(plugin: PluginDefinition): Promise<PluginSnapshot>;
-  /** 立即移除新执行可见性，并等待已有 lease 在内部退休。 */
-  unregister(plugin_name: string): Promise<boolean>;
-  /** 移除全部 Plugin，并等待已有 execution lease 释放。 */
-  unregister_all(): Promise<void>;
-}
-
 /**
  * Plugin execution view 的只读调用能力。
  */

@@ -6,22 +6,15 @@
  */
 
 import type { Hono } from "hono";
-import type { Agent } from "@downcity/agent";
 import type {
   CityPluginRegistration,
   PluginDefinition,
-  PluginConfigAction,
-  PluginContext,
-  PluginHostAction,
   PluginJsonObject,
   PluginJsonValue,
   PluginNotificationPublisher,
   PluginProfileConfigStore,
   PluginSnapshot,
-  PluginStartContext,
 } from "@/plugin/index.js";
-import type { Logger, SessionHooks } from "@downcity/agent";
-import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
 
 /** City 构造期接受的单个 Plugin 输入。 */
@@ -31,43 +24,6 @@ export type CityPluginInput = PluginDefinition | CityPluginRegistration;
 export type CityPluginCollection =
   | readonly CityPluginInput[]
   | Readonly<Record<string, CityPluginInput>>;
-
-/** City 为 Agent 投影的 Plugin 能力。 */
-export interface CityAgentPlugins {
-  /** 等待当前 City Plugin 完成初始化。 */
-  ensure_ready(): Promise<void>;
-
-  /** 建立一个 Agent/Workspace Plugin Context。 */
-  connect_workspace(
-    workspace: import("@/workspace/index.js").WorkspaceRuntime,
-    logger: Logger,
-  ): Promise<void>;
-
-  /** 释放一个 Agent/Workspace Plugin Context。 */
-  disconnect_workspace(workspace_id: string): Promise<void>;
-
-  /** 返回当前 Agent/Workspace 可用的模型 Tool。 */
-  tools(
-    workspace: import("@/workspace/index.js").WorkspaceRuntime,
-    logger: Logger,
-  ): Record<string, import("@downcity/type").RuntimeTool>;
-
-  /** 返回当前 Agent/Workspace 的 Session Hooks。 */
-  hooks(
-    workspace: import("@/workspace/index.js").WorkspaceRuntime,
-    logger: Logger,
-  ): SessionHooks;
-
-  /** 订阅 City Plugin 集合变化。 */
-  subscribe(subscriber: (change: {
-    /** Plugin 变化类型。 */
-    readonly type: "add" | "remove";
-    /** Plugin 稳定 ID。 */
-    readonly plugin_id: string;
-    /** 是否属于 Agent 加入 City 时的初始装配。 */
-    readonly initial: boolean;
-  }) => void): () => void;
-}
 
 /** City 对外暴露的 Plugin 集合。 */
 export interface CityPlugins {
@@ -130,68 +86,4 @@ export interface CityPluginHost {
   show_item_in_folder?(path: string): Promise<void>;
   /** 写入平台剪贴板文本。 */
   write_clipboard_text?(text: string): Promise<void>;
-}
-
-/** City Plugin Runtime 创建参数。 */
-export interface CityPluginRuntimeOptions {
-  /** 当前 City 实例。 */
-  readonly city: import("@/city/runtime/City.js").City;
-  /** City 可选的平台宿主能力。 */
-  readonly host?: CityPluginHost;
-}
-
-/** City 内唯一 Plugin 实例的生命周期记录。 */
-export interface CityPluginRecord {
-  /** Plugin 稳定 ID。 */
-  readonly plugin_id: string;
-  /** Plugin 注册元数据。 */
-  readonly registration: CityPluginRegistration;
-  /** City 持有的唯一 Plugin 实例。 */
-  readonly plugin: PluginDefinition;
-  /** Plugin 私有日志器。 */
-  readonly logger: Logger;
-  /** Plugin 全局生命周期与宿主动作使用的稳定上下文。 */
-  readonly start_context: PluginStartContext;
-  /** Sidebar/Mainview 业务 action。 */
-  readonly host_actions: Map<string, PluginHostAction>;
-  /** Profile config action。 */
-  readonly config_actions: Map<string, PluginConfigAction>;
-  /** Plugin 启动完成的唯一 Promise。 */
-  ready: Promise<void>;
-  /** Plugin start 是否已经成功。 */
-  started: boolean;
-  /** Plugin 当前可观察状态。 */
-  state: "initializing" | "ready" | "error";
-  /** Plugin 加入 City 的时间戳。 */
-  readonly registered_at: number;
-  /** Plugin 状态最近更新时间戳。 */
-  updated_at: number;
-  /** Plugin 最近一次启动错误。 */
-  last_error?: string;
-}
-
-/** City 内一个 Agent 的 Plugin 执行索引。 */
-export interface CityAgentPluginRuntimeRecord {
-  /** 当前 Agent 实例。 */
-  readonly agent: Agent;
-  /** 当前 Agent 的执行 Registry。 */
-  readonly registry: PluginRegistry;
-  /** 初始与动态 Plugin 装配串行链。 */
-  ready: Promise<void>;
-  /** 动态 Plugin 修改串行链。 */
-  mutation_chain: Promise<void>;
-}
-
-/** 一个 Agent/Workspace 的 Plugin Context 集合。 */
-export interface CityPluginWorkspaceContext {
-  /** Registry 默认使用的 Workspace Context。 */
-  readonly context: PluginContext;
-  /** 各 Plugin 私有存储对应的 Context。 */
-  readonly contexts_by_plugin: Map<string, PluginContext>;
-  /** Context 创建时捕获的 Plugin 记录，保证移除竞态下仍可执行 disconnect。 */
-  readonly records_by_plugin: Map<string, CityPluginRecord>;
-  /** 各 Plugin 作用域唯一的 connect 流程。 */
-  readonly connection_promises: Map<string, Promise<void>>;
-  /** 仅在当前工厂仍生效时解除 Registry Context。 */
-  readonly release_registry_context: () => void;
 }

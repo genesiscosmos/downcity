@@ -98,7 +98,6 @@ export type {
   AgentPluginExecutionRuntime,
   AgentPluginExecutionView,
   AgentPluginRuntime,
-  AgentPlugins,
 } from "./types/PluginExecutionRuntime.js";
 
 export { ActionScheduleStore } from "./schedule/ActionScheduleStore.js";
