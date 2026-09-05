@@ -41,6 +41,7 @@ function create_registry(plugin) {
   });
   return Object.assign(registry.contextual(context), {
     execution_view: () => registry.execution_view(context),
+    register: (next_plugin) => registry.register(next_plugin),
     unregister: (plugin_name) => registry.unregister(plugin_name),
     unregister_and_wait: (plugin_name) => registry.unregister_and_wait(plugin_name),
   });
@@ -604,4 +605,31 @@ test("Plugin execution lease 复用既有 availability、hook 与 resolve", asyn
   assert.deepEqual(resolved, { owner: "agent", plugin: "hook-plugin" });
   assert.deepEqual(availability, { enabled: true, available: true, reasons: [] });
   await lease.release();
+});
+
+test("PluginRegistry 保持 resolve 点的唯一注册约束", async () => {
+  const first = create_plugin({
+    name: "first-resolver",
+    title: "First Resolver",
+    description: "Owns one resolve point",
+    resolves: {
+      owner: ({ value }) => value,
+    },
+  });
+  const second = create_plugin({
+    name: "second-resolver",
+    title: "Second Resolver",
+    description: "Competes for the same resolve point",
+    resolves: {
+      owner: ({ value }) => value,
+    },
+  });
+  const registry = create_registry(first);
+
+  await assert.rejects(registry.register(second), {
+    message: "Resolve point already registered: owner",
+  });
+  assert.equal(await registry.unregister_and_wait(first.name), true);
+  await registry.register(second);
+  assert.equal(registry.has(second.name), true);
 });

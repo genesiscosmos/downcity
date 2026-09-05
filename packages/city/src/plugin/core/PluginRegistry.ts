@@ -8,7 +8,6 @@
  */
 
 import { to_plugin_view } from "@/plugin/core/PluginCatalog.js";
-import { HookRegistry } from "@/plugin/core/HookRegistry.js";
 import type {
   PluginActionReadView,
   PluginActionResult,
@@ -77,8 +76,6 @@ function to_plugin_snapshot(record: PluginRuntimeRecord): PluginSnapshot {
  * PluginRegistry：Agent plugin 注册、卸载与调用实现。
  */
 export class PluginRegistry {
-  private readonly hookRegistry: HookRegistry;
-
   private readonly records = new Map<string, PluginRuntimeRecord>();
 
   /** Agent 当前已进入 Workspace 的 Plugin Context 工厂。 */
@@ -90,9 +87,6 @@ export class PluginRegistry {
   private readonly change_subscribers = new Set<PluginRegistrySubscriber>();
 
   constructor(plugins: PluginDefinition[] = []) {
-    this.hookRegistry = new HookRegistry({
-      is_plugin_ready: (plugin_name) => this.is_ready(plugin_name),
-    });
     for (const plugin of plugins) {
       this.register_sync(plugin);
     }
@@ -198,10 +192,10 @@ export class PluginRegistry {
     if (this.records.has(key)) {
       throw new Error(`Plugin already registered: ${key}`);
     }
+    this.assert_resolve_points_available(plugin);
 
     const record = create_record(plugin);
     this.records.set(key, record);
-    this.register_hooks(plugin);
     this.publish_change({ type: "register", plugin_name: key });
     return to_plugin_snapshot(record);
   }
@@ -220,7 +214,6 @@ export class PluginRegistry {
     const record = this.records.get(key);
     if (!record) return false;
 
-    this.unregister_hooks(key);
     this.records.delete(key);
     this.retire_record(record);
     this.publish_change({ type: "unregister", plugin_name: key });
@@ -288,39 +281,14 @@ export class PluginRegistry {
     return this.records.has(normalize_plugin_name(plugin_name));
   }
 
-  private register_hooks(plugin: PluginDefinition): void {
-    const key = normalize_plugin_name(plugin.name);
-    for (const [hookName, handlers] of Object.entries(
-      plugin.hooks?.pipeline || {},
-    )) {
-      for (const handler of handlers) {
-        this.hookRegistry.pipeline(hookName, key, handler);
-      }
+  /** 校验 resolve 点仍满足单点单处理器约束。 */
+  private assert_resolve_points_available(plugin: PluginDefinition): void {
+    for (const point_name of Object.keys(plugin.resolves || {})) {
+      const conflict = [...this.records.values()].some(
+        (record) => Boolean(record.plugin.resolves?.[point_name]),
+      );
+      if (conflict) throw new Error(`Resolve point already registered: ${point_name}`);
     }
-
-    for (const [hookName, handlers] of Object.entries(
-      plugin.hooks?.guard || {},
-    )) {
-      for (const handler of handlers) {
-        this.hookRegistry.guard(hookName, key, handler);
-      }
-    }
-
-    for (const [hookName, handlers] of Object.entries(
-      plugin.hooks?.effect || {},
-    )) {
-      for (const handler of handlers) {
-        this.hookRegistry.effect(hookName, key, handler);
-      }
-    }
-
-    for (const [point_name, handler] of Object.entries(plugin.resolves || {})) {
-      this.hookRegistry.resolve(point_name, key, handler);
-    }
-  }
-
-  private unregister_hooks(plugin_name: string): void {
-    this.hookRegistry.unregister_plugin(plugin_name);
   }
 
   /**
@@ -331,12 +299,7 @@ export class PluginRegistry {
     point_name: string,
     value: T,
   ): Promise<T> {
-    return this.hookRegistry.pipelineValue(
-      context,
-      point_name,
-      value,
-      (plugin_name) => this.plugin_context(context, plugin_name),
-    );
+    return await this.pipeline_from_records(this.records, context, point_name, value);
   }
 
   /**
@@ -347,12 +310,7 @@ export class PluginRegistry {
     point_name: string,
     value: T,
   ): Promise<void> {
-    return this.hookRegistry.guardValue(
-      context,
-      point_name,
-      value,
-      (plugin_name) => this.plugin_context(context, plugin_name),
-    );
+    await this.guard_from_records(this.records, context, point_name, value);
   }
 
   /**
@@ -363,12 +321,7 @@ export class PluginRegistry {
     point_name: string,
     value: T,
   ): Promise<void> {
-    return this.hookRegistry.effectValue(
-      context,
-      point_name,
-      value,
-      (plugin_name) => this.plugin_context(context, plugin_name),
-    );
+    await this.effect_from_records(this.records, context, point_name, value);
   }
 
   /**
@@ -379,11 +332,11 @@ export class PluginRegistry {
     point_name: string,
     value: TInput,
   ): Promise<TOutput> {
-    return this.hookRegistry.resolveValue<TInput, TOutput>(
+    return await this.resolve_from_records<TInput, TOutput>(
+      this.records,
       context,
       point_name,
       value,
-      (plugin_name) => this.plugin_context(context, plugin_name),
     );
   }
 
