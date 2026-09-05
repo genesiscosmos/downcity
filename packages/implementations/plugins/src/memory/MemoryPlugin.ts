@@ -21,7 +21,7 @@ import type {
   PluginHooks,
   PluginActions,
   PluginContext,
-  PluginStartContext,
+  PluginLifecycleContext,
 } from "@downcity/city/plugin";
 import type {
   SessionSystemContextHookValue,
@@ -241,13 +241,13 @@ export class MemoryPlugin extends Plugin {
   }
 
   /** 启动当前 City 唯一的 Memory Provider。 */
-  async start(context: PluginStartContext): Promise<void> {
+  async initialize(context: PluginLifecycleContext): Promise<void> {
     this.provider_instance ??= create_memory_provider(context.storage.path);
     await this.provider.initialize();
   }
 
   /** 释放当前 City 唯一的 Memory Provider。 */
-  async stop(): Promise<void> {
+  async dispose(): Promise<void> {
     await this.provider_instance?.dispose();
     this.provider_instance = undefined;
   }

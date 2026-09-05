@@ -68,8 +68,8 @@ city.agents.add(agent);
 City 会把全部已注册 Plugin 自动提供给全部 Agent。运行中的 City 可通过
 `city.plugins.add()` 与 `city.plugins.remove()` 动态修改 Plugin 集合。
 
-一个 City 中每个 Plugin ID 只有一个实例。`start/stop` 管理 City 级实例，
-`connect/disconnect` 管理 Agent/Workspace scope。
+一个 City 中每个 Plugin ID 只有一个实例，并且只有 City 级 `initialize/dispose` 生命周期。
+Agent 与 Workspace 只提供每次调用的上下文，不拥有 Plugin 生命周期。
 
 ## Profile 配置
 

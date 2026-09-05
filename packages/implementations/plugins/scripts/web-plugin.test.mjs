@@ -78,7 +78,7 @@ test("缺少运行时能力或 CDP 配置时只让对应 action 失败", async (
   assert.match(search_result.error, /not configured/u);
   assert.equal(browser_result.success, false);
   assert.match(browser_result.error, /not configured/u);
-  await plugin.stop();
+  await plugin.dispose();
 });
 
 test("WebPlugin 只接受公开的浏览器 provider 枚举", () => {

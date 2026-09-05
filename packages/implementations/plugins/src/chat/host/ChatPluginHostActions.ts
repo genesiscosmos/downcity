@@ -3,7 +3,7 @@
 import {
   type PluginJsonObject,
   type PluginJsonValue,
-  type PluginStartContext,
+  type PluginLifecycleContext,
 } from "@downcity/city/plugin";
 import type { ChatPluginChannelConfig } from "@/chat/types/ChatPluginChannelConfig.js";
 import type { ChatPluginConfig } from "@/chat/types/ChatPluginConfig.js";
@@ -14,7 +14,7 @@ import type {
 } from "@/chat/types/ChatPluginProfile.js";
 
 /** 注册 Chat Plugin 的 Profile 配置 actions。 */
-export function register_chat_plugin_host_actions({ plugin }: PluginStartContext): void {
+export function register_chat_plugin_host_actions({ plugin }: PluginLifecycleContext): void {
   plugin.config_action({
     id: "profile.read",
     run: async (_input, context) => to_public_profile(

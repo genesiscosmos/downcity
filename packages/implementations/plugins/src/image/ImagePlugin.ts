@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { create_action } from "@downcity/city/plugin";
 import { Plugin } from "@downcity/city/plugin";
-import type { PluginContext, PluginStartContext } from "@downcity/city/plugin";
+import type { PluginContext, PluginLifecycleContext } from "@downcity/city/plugin";
 import type {
   PluginJsonObject,
   PluginJsonValue,
@@ -165,7 +165,7 @@ export class ImagePlugin extends Plugin {
   }
 
   /** 注册 Image Plugin 的 Profile 配置 actions。 */
-  start(context: PluginStartContext): void {
+  initialize(context: PluginLifecycleContext): void {
     register_plugin_settings_actions(context, IMAGE_PLUGIN_SETTINGS);
   }
 

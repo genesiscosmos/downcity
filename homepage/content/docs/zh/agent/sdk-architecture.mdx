@@ -74,8 +74,8 @@ const backend = await agent.sessions.create({ workspace: backend_workspace });
 
 Agent 不持有 Plugin。City 按 Plugin ID 持有唯一实例，并把全部能力投影到 Agent/Workspace
 execution entry。每次 Plugin Action 都获得当前 `PluginContext`，可以直接使用受限的 Agent、
-Workspace、Session 与 Turn 句柄。City 实例使用 `start/stop`，Agent/Workspace scope 使用
-`connect/disconnect`。
+Workspace、Session 与 Turn 句柄。Plugin 只有 City 级 `initialize/dispose` 生命周期；
+Agent/Workspace 只定义当前调用范围。
 
 ## Workspace 是资源边界
 

@@ -16,7 +16,7 @@ import type {
   PluginContext,
   PluginJsonObject,
   PluginJsonValue,
-  PluginStartContext,
+  PluginLifecycleContext,
 } from "@downcity/city/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
 import type {
@@ -482,7 +482,7 @@ export class SoundPlugin extends Plugin {
   }
 
   /** 注册 Sound Plugin 的 Profile 配置 actions。 */
-  start(context: PluginStartContext): void {
+  initialize(context: PluginLifecycleContext): void {
     register_plugin_settings_actions(context, SOUND_PLUGIN_SETTINGS);
   }
 

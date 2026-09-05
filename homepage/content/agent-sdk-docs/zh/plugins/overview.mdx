@@ -42,9 +42,9 @@ Action、Hook、System 与 Availability 都使用当前作用域的 `PluginConte
 
 ## 唯一实例与配置投影
 
-一个 City 中每个 Plugin ID 只有一个实例。`start/stop` 属于 City 实例，`connect/disconnect`
-属于 Agent/Workspace scope。宿主仍可保存 Profile，但它只用于按 Agent 投影 `context.config`，
-不会创建额外 Plugin 实例。Memory 和 Chat 等 Plugin 必须在同一实例内按 Context 隔离作用域。
+一个 City 中每个 Plugin ID 只有一个实例和一套 `initialize/dispose` 生命周期。Agent/Workspace
+只属于每次调用的 Context。宿主仍可保存 Profile，但它只用于按 Agent 投影 `context.config`，
+不会创建额外 Plugin 实例。Memory 和 Chat 等 Plugin 按自己的真实领域所有权隔离长期资源。
 
 ## 推荐阅读
 

@@ -90,8 +90,10 @@ export type {
   PluginHostWorkspace,
   PluginProfileConfigStore,
   PluginSelf,
-  PluginStartContext,
+  PluginLifecycleContext,
 } from "./types/PluginHost.js";
+
+export type { PluginContextFactory } from "./types/PluginContextFactory.js";
 
 export type {
   AgentPluginExecutionLease,

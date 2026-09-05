@@ -91,9 +91,9 @@ City(Workspace) → Agent(city) → Agent Session(Workspace) → Turn
 - Agent 绑定一个 City；每个 Session 显式选择 City 中的 Workspace。
 - Workspace 只描述项目资源边界；AgentSessions 承载当前 Agent 的 Session，运行状态位于 Agent 存储作用域。
 - 多个 Agent 可以指向同一目录，但应使用不同的 `agent.id` 和独立的 Agent 存储作用域。
-- `new Agent(...)` 后，Plugin lifecycle 与 ActionSchedule 会立即开始启动。
+- Plugin 在加入 City 后初始化；ActionSchedule 是 Agent 自己的运行资源。
 - Session 执行会自动等待 Agent runtime 就绪，调用方不管理独立的启动状态。
-- `agent.dispose()` 释放 Agent 的 Session 与 Plugin；`city.close()` 释放共享 Workspace、Shell 和 Sandbox。
+- `agent.dispose()` 释放 Agent 的 Session；`city.close()` 释放 Plugin、共享 Workspace、Shell 和 Sandbox。
 - HTTP/RPC transport 不属于 Agent；需要网络服务时使用 `@downcity/agent`。
 
 ## 模型如何解析

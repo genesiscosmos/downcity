@@ -24,12 +24,6 @@ export interface AgentRuntimeBinding {
   /** 等待当前 Agent 可使用的全部 City 能力完成初始化。 */
   readonly ensure_ready: () => Promise<void>;
 
-  /** 建立当前 Agent/Workspace 的 Plugin 调用上下文。 */
-  readonly connect_workspace: (workspace: WorkspaceRuntime, logger: Logger) => Promise<void>;
-
-  /** 释放当前 Agent/Workspace 的 Plugin 调用上下文。 */
-  readonly disconnect_workspace: (workspace_id: string) => Promise<void>;
-
   /** 返回当前 Agent/Workspace 可用的 Plugin Tool。 */
   readonly tools: (workspace: WorkspaceRuntime, logger: Logger) => Record<string, RuntimeTool>;
 
@@ -42,7 +36,7 @@ export interface AgentRuntimeBinding {
     readonly type: "add" | "remove";
     /** Plugin 稳定 ID。 */
     readonly plugin_id: string;
-    /** 是否属于 Agent 加入 City 时的初始装配。 */
+    /** 是否属于 Agent 绑定时已经提交、但仍在初始化的 Plugin。 */
     readonly initial: boolean;
   }) => void) => () => void;
 

@@ -73,7 +73,7 @@ action 名称是 `list`、`history`、`run_detail`、`create`、`run`、`delete`
 
 ## 关键语义
 
-- cron scheduler 在 City 的 Agent/Workspace `connect/disconnect` 生命周期中启动和释放
+- cron scheduler 在 Task 首次参与对应执行范围时惰性启动，并由 TaskPlugin 的 City 生命周期统一释放
 - cron 时区来自 constructor `timezone`，默认本机时区
 - agent task 通过 PluginContext 的 Session runtime port 读取有效模型实例
 - 每次执行会创建独立的 task Session，并复用宿主 Agent 的完整 Plugin 能力

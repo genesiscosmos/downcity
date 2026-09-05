@@ -11,7 +11,7 @@ import type { z } from "zod";
 import type { AuthRoutePolicy } from "@downcity/type";
 import type { PluginContext } from "./PluginContext.js";
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
-import type { PluginStartContext } from "./PluginHost.js";
+import type { PluginLifecycleContext } from "./PluginHost.js";
 
 /** Action 可以追加到 Session 的一条消息。 */
 export type PluginActionMessage =
@@ -247,14 +247,10 @@ export interface PluginDefinition {
   /** PluginDefinition Resolve 点集合。 */ readonly resolves?: PluginResolves;
   /** 构建当前执行范围的 system 文本。 */
   readonly system?: (context: PluginContext, execution_context?: PluginExecutionContext) => string | Promise<string>;
-  /** Plugin 加入 City 时注册宿主动作并启动全局长期资源；每个 City 只执行一次。 */
-  readonly start?: (context: PluginStartContext) => void | Promise<void>;
-  /** 首次形成 Agent/Workspace 调用作用域时建立局部资源。 */
-  readonly connect?: (context: PluginContext) => void | Promise<void>;
-  /** Agent/Workspace 调用作用域释放时清理局部资源。 */
-  readonly disconnect?: (context: PluginContext) => void | Promise<void>;
-  /** Plugin 离开 City 且已有调用收口后停止全局长期资源。 */
-  readonly stop?: (context: PluginStartContext) => void | Promise<void>;
+  /** Plugin 加入 City 时初始化自身拥有的长期资源；每个 City 只执行一次。 */
+  readonly initialize?: (context: PluginLifecycleContext) => void | Promise<void>;
+  /** Plugin 离开 City且已有调用收口后释放自身拥有的长期资源。 */
+  readonly dispose?: (context: PluginLifecycleContext) => void | Promise<void>;
   /** 检查当前动态上下文的可用性。 */
   readonly availability?: (context: PluginContext) => PluginAvailability | Promise<PluginAvailability>;
   /** PluginDefinition 的可选 HTTP 路由声明。 */

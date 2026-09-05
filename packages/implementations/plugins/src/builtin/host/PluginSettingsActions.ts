@@ -3,7 +3,7 @@
 import {
   type PluginJsonObject,
   type PluginJsonValue,
-  type PluginStartContext,
+  type PluginLifecycleContext,
 } from "@downcity/city/plugin";
 import type {
   PluginSettingField,
@@ -12,7 +12,7 @@ import type {
 
 /** 为一个字段集合注册 Profile 读取和保存 action。 */
 export function register_plugin_settings_actions(
-  context: PluginStartContext,
+  context: PluginLifecycleContext,
   definition: PluginSettingsDefinition,
 ): void {
   context.plugin.config_action({

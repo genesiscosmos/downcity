@@ -9,6 +9,7 @@
 import test from "node:test";
 import {
   add_test_plugin,
+  create_plugin_registration,
   create_test_plugin as create_plugin,
 } from "./helpers/CityPluginTestBinding.mjs";
 import assert from "node:assert/strict";
@@ -102,9 +103,9 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   const blocking_plugin = create_plugin({
     name: "blocking",
     title: "Blocking",
-    description: "Blocks lifecycle start until the test releases it",
+    description: "Blocks lifecycle initialization until the test releases it",
     lifecycle: {
-      start: async () => {
+      initialize: async () => {
         await lifecycle_ready.promise;
       },
     },
@@ -172,7 +173,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   }
 });
 
-test("city.plugins scope waits for lifecycle start before direct action execution", async () => {
+test("city.plugins scope waits for lifecycle initialization before direct action execution", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-plugin-ready-"),
   );
@@ -184,7 +185,7 @@ test("city.plugins scope waits for lifecycle start before direct action executio
     title: "Direct Action",
     description: "Waits for lifecycle before direct calls",
     lifecycle: {
-      start: async () => {
+      initialize: async () => {
         await lifecycle_ready.promise;
         lifecycle_started = true;
       },
@@ -228,7 +229,7 @@ test("city.plugins scope waits for lifecycle start before direct action executio
   }
 });
 
-test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失败", async () => {
+test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 初始化失败", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-ready-isolation-"),
   );
@@ -236,7 +237,7 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失�
   const failing_plugin = create_plugin({
     name: "failing",
     lifecycle: {
-      start: async () => {
+      initialize: async () => {
         throw new Error("start failed");
       },
     },
@@ -244,7 +245,7 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 启动失�
   const healthy_plugin = create_plugin({
     name: "healthy",
     lifecycle: {
-      start: async () => {
+      initialize: async () => {
         healthy_started = true;
       },
     },
@@ -304,6 +305,43 @@ test("Agent registers PluginRegistry tools and removes them with the last action
     assert.equal(entry.tools.plugin_read, undefined);
     assert.equal(entry.tools.plugin_call, undefined);
   } finally {
+    await city.close();
+  }
+});
+
+test("初始化中的 City Plugin 发布后会刷新已创建 Workspace 的 tools", async () => {
+  const lifecycle_ready = create_deferred();
+  const agent = new Agent({ id: "pending_plugin_tools_agent" });
+  const workspace = new Workspace({
+    id: "pending_plugin_tools_workspace",
+    path: process.cwd(),
+  });
+  const plugin = create_plugin({
+    name: "pending_action",
+    lifecycle: {
+      initialize: async () => await lifecycle_ready.promise,
+    },
+    actions: {
+      ping: {
+        description: "Return pong after initialization",
+        execute: async () => ({ success: true, data: { value: "pong" } }),
+      },
+    },
+  });
+  const city = new City({
+    plugins: [create_plugin_registration(plugin)],
+    workspaces: [workspace],
+    agents: [agent],
+  });
+  const entry = create_workspace_entry(agent, workspace);
+
+  try {
+    assert.equal(entry.tools.plugin_call, undefined);
+    lifecycle_ready.resolve();
+    await agent.ensure_ready();
+    assert.notEqual(entry.tools.plugin_call, undefined);
+  } finally {
+    lifecycle_ready.resolve();
     await city.close();
   }
 });

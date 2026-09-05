@@ -2,9 +2,9 @@
  * WebPlugin：provider-neutral 的联网与浏览器能力边界。
  *
  * 关键点（中文）
- * - 同一个 Plugin 实例根据 Agent/Workspace Context 管理隔离的浏览器 provider。
+ * - 浏览器 provider 在 Action 首次使用时按 Agent 配置惰性创建。
  * - 搜索、文档读取与浏览器 session 是三个独立能力。
- * - 浏览器长期资源由 provider 拥有，并在 Plugin lifecycle.stop 时统一释放。
+ * - 浏览器长期资源由 provider 拥有，并在 Plugin dispose 时统一释放。
  */
 
 import { Plugin, create_action } from "@downcity/city/plugin";
@@ -75,7 +75,7 @@ export class WebPlugin extends Plugin {
   /** 构造时显式配置；其优先级高于 City 作用域配置。 */
   private readonly options: WebPluginOptions;
 
-  /** 按 Agent/Workspace 作用域持有的浏览器 provider。 */
+  /** 按 Agent 配置作用域持有的浏览器 provider。 */
   private readonly browser_providers = new Map<string, BrowserProvider>();
 
   constructor(options: WebPluginOptions = {}) {
@@ -87,22 +87,12 @@ export class WebPlugin extends Plugin {
   }
 
   /** 注册 Web Plugin 的 Profile 配置 actions。 */
-  start(context: import("@downcity/city/plugin").PluginStartContext): void {
+  initialize(context: import("@downcity/city/plugin").PluginLifecycleContext): void {
     register_plugin_settings_actions(context, WEB_PLUGIN_SETTINGS);
   }
 
-  /** 建立当前 Agent/Workspace 的浏览器资源。 */
-  connect(context: import("@downcity/city/plugin").PluginContext): void {
-    this.ensure_browser_provider(context);
-  }
-
-  /** 释放当前 Agent/Workspace 的浏览器资源。 */
-  async disconnect(context: import("@downcity/city/plugin").PluginContext): Promise<void> {
-    await this.dispose_browser_provider(web_scope_key(context));
-  }
-
   /** 释放当前 Plugin 实例持有的全部浏览器资源。 */
-  async stop(): Promise<void> {
+  async dispose(): Promise<void> {
     await Promise.all([...this.browser_providers.keys()].map(async (scope_key) => {
       await this.dispose_browser_provider(scope_key);
     }));
@@ -112,7 +102,7 @@ export class WebPlugin extends Plugin {
   private ensure_browser_provider(
     context: import("@downcity/city/plugin").PluginContext,
   ): BrowserProvider | undefined {
-    const scope_key = web_scope_key(context);
+    const scope_key = web_provider_key(context);
     const existing = this.browser_providers.get(scope_key);
     if (existing) return existing;
     const options = { ...context.config, ...this.options } as WebPluginOptions;
@@ -365,7 +355,7 @@ export class WebPlugin extends Plugin {
   } as unknown as Plugin["actions"];
 }
 
-/** 返回浏览器资源的 Agent/Workspace 隔离键。 */
-function web_scope_key(context: import("@downcity/city/plugin").PluginContext): string {
-  return `${context.agent.id}\u0000${context.workspace.id}`;
+/** 返回浏览器资源的 Agent 配置隔离键。 */
+function web_provider_key(context: import("@downcity/city/plugin").PluginContext): string {
+  return context.agent.id;
 }

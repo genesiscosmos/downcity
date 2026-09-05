@@ -130,7 +130,7 @@ export class City {
     for (const plugin of collection_values(options.plugins)) {
       // 构造函数不能等待异步 lifecycle；Agent ready、Plugin 调用与 snapshot
       // 会继续使用同一个受控 ready Promise。
-      void this.plugins.add(plugin);
+      void this.plugins.add(plugin).catch(() => undefined);
     }
     for (const workspace of collection_values(options.workspaces)) {
       const workspace_id = String(workspace?.id || "").trim();
@@ -315,11 +315,6 @@ export class City {
         } catch (error) {
           errors.push(error);
         }
-        try {
-          await this.plugin_runtime.detach_agent(agent_id);
-        } catch (error) {
-          errors.push(error);
-        }
         const dependent_groups = [...this.groups_by_id.values()]
           .filter((group) => group.members.some((member) => member === agent));
         const group_results = await Promise.allSettled(
@@ -397,8 +392,9 @@ export class City {
   async close(): Promise<void> {
     if (this.city_status === "closed") return;
     if (!this.close_promise) {
+      this.city_status = "closing";
+      this.plugin_runtime.begin_shutdown();
       const close_operation = this.enqueue_transport_operation(async () => {
-        this.city_status = "closing";
         const results: PromiseSettledResult<unknown>[] = [];
         results.push(...await Promise.allSettled([
           this.http_transport.close(),
@@ -412,8 +408,8 @@ export class City {
           [...this.groups_by_id.values()].map(async (group) => await this.release_group(group)),
         ));
         results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
-        // Agent dispose 会先停止 Session 并释放 Hook scope，再由 Plugin Runtime
-        // disconnect Workspace Context；因此 Plugin 实例必须在 Agent 之后 stop。
+        // Agent dispose 会先停止 Session 并释放 Hook execution lease；因此 Plugin
+        // Runtime 必须在 Agent 之后释放 City 级实例。
         results.push(...await Promise.allSettled([this.plugin_runtime.dispose()]));
         results.push(...await Promise.allSettled(
           [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
@@ -454,12 +450,6 @@ export class City {
       storage: this.storage,
       get_workspace: (workspace_id) => this.get_workspace(workspace_id),
       ensure_ready: async () => await plugins.ensure_ready(),
-      connect_workspace: async (workspace, logger) => {
-        await plugins.connect_workspace(workspace, logger);
-      },
-      disconnect_workspace: async (workspace_id) => {
-        await plugins.disconnect_workspace(workspace_id);
-      },
       tools: (workspace, logger) => plugins.tools(workspace, logger),
       hooks: (workspace, logger) => plugins.hooks(workspace, logger),
       subscribe_plugins: (subscriber) => plugins.subscribe(subscriber),
@@ -480,11 +470,6 @@ export class City {
     const current = this.agents_by_id.get(agent.id);
     if (!current || current !== agent) return;
     const errors: unknown[] = [];
-    try {
-      await this.plugin_runtime.detach_agent(agent.id);
-    } catch (error) {
-      errors.push(error);
-    }
     unbind_agent_runtime(current, this);
     this.agents_by_id.delete(agent.id);
     try {

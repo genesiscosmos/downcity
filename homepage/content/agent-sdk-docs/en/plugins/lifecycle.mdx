@@ -1,69 +1,50 @@
 ---
 title: Plugin Lifecycle
-description: Understand City-owned Plugin instances, Workspace scopes, and Hook scopes.
+description: Understand City-owned Plugin instances, dynamic call contexts, and execution leases.
 ---
 
 # Plugin Lifecycle
 
-City owns Plugins. An Agent only joins the City; it does not declare Plugin bindings. A City creates
-one instance for each Plugin ID and shares it across multiple Agents.
+City owns Plugins. `city.plugins.add(new MyPlugin())` registers one unique instance. A Plugin ID cannot
+be registered twice in one City, and Agents do not store Plugin instances or Registries.
 
-## Registration
+## Two lifecycle checkpoints
 
-```ts
-const city = new City({
-  workspaces: [workspace],
-  plugins: [plugin],
-});
-
-city.agents.add(agent);
-```
-
-Plugins may also change dynamically:
+- `initialize(context)` runs once when the Plugin enters City. Register host Actions and initialize resources owned by the Plugin here.
+- `dispose(context)` runs once when the Plugin is removed or City closes. Release those resources here.
 
 ```ts
-city.plugins.add(new ExamplePlugin());
-await city.plugins.remove("example");
-```
+class ProviderPlugin extends Plugin {
+  readonly name = "provider";
 
-Within a City, one Plugin ID always refers to one instance. Agent-specific configuration is resolved
-from the current `PluginContext`.
-
-## Four execution lifecycle checkpoints
-
-- `start(context)` runs once when the Plugin enters City. Use it for shared connections and caches.
-- `connect(context)` runs when an Agent enters a Workspace. Use it for scope-specific schedulers, queues, or routes.
-- `disconnect(context)` releases that scope when it leaves the Workspace.
-- `stop(context)` runs when the Plugin is removed or City closes.
-
-```ts
-class SchedulerPlugin extends Plugin {
-  readonly name = "scheduler";
-  async start({ storage }: PluginStartContext) {
-    await this.client.open(storage);
+  async initialize({ storage }: PluginLifecycleContext) {
+    await this.provider.open(storage.path);
   }
-  async connect(context: PluginContext) {
-    await this.scheduler.start(context.agent.id, context.workspace.id);
-  }
-  async disconnect(context: PluginContext) {
-    await this.scheduler.stop(context.agent.id, context.workspace.id);
-  }
-  async stop() {
-    await this.client.close();
+
+  async dispose() {
+    await this.provider.close();
   }
 }
 ```
 
-`start/stop` receive the same `PluginStartContext`, whose storage belongs to City.
-`connect/disconnect` receive the full `PluginContext`, whose storage belongs to the current Agent/Plugin
-execution scope.
+Both methods receive the same stable `PluginLifecycleContext`. Agent, Session, and Workspace entry or
+removal do not trigger Plugin lifecycle callbacks. There is no generic `connect/disconnect` protocol.
+
+## Call context
+
+City freshly projects a `PluginContext` for every Action, Hook, System, and Availability call. Its
+`agent`, `workspace`, and optional `session/turn` handles can be used directly. Workspace is the project
+resource for the current call; it is not a Plugin lifecycle boundary or a default resource-isolation key.
+
+Long-lived connections, timers, schedulers, and workers must follow their actual domain ownership. A
+browser Provider may be created lazily from Agent configuration, a chat channel may be keyed by account
+or Profile, and a scheduler may follow task definitions. `dispose` must ultimately close every resource.
 
 ## Execution leases
 
-A Session captures an immutable Plugin execution view at a Step checkpoint. New Steps stop seeing a
-removed Plugin immediately, while an existing Step may finish. City waits for the final lease before
-stopping the shared instance, preventing premature shutdown of connections or providers.
+A Session captures an immutable Plugin execution view at each Step checkpoint. New Steps stop seeing a
+removed Plugin immediately. An existing Step may finish with its captured instance, and City calls
+`dispose` only after the final execution lease is released.
 
-`city.close()` releases Workspace scopes, Agents, and Plugin instances. A single `stop` failure
-does not prevent other Plugins from cleaning up; City reports an
-aggregate error after cleanup finishes.
+`city.close()` stops Sessions before releasing Plugins and Workspaces, and aggregates cleanup errors. A
+single Plugin `dispose` failure does not prevent other Plugins from cleaning up.

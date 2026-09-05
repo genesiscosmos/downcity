@@ -1,8 +1,8 @@
 /**
- * Plugin 启动阶段可使用的 City 宿主能力。
+ * Plugin 生命周期可使用的 City 宿主能力。
  *
- * Plugin 由 City 持有一个实例，并在 `start` 中注册管理动作、初始化全局资源；
- * `stop` 使用同一个稳定上下文完成释放。这里不再声明第二套 main 生命周期。
+ * Plugin 由 City 持有一个实例，并在 `initialize` 中注册管理动作、初始化全局资源；
+ * `dispose` 使用同一个稳定上下文完成释放。这里不再声明第二套 main 生命周期。
  */
 
 import type {
@@ -112,8 +112,8 @@ export interface PluginSelf {
   config_action(action: PluginConfigAction): void;
 }
 
-/** Plugin 加入 City 时获得的唯一稳定启动上下文。 */
-export interface PluginStartContext {
+/** Plugin 加入 City 后在完整 City 生命周期内持有的稳定上下文。 */
+export interface PluginLifecycleContext {
   /** 当前 Plugin 的自身能力。 */
   readonly plugin: PluginSelf;
   /** 当前 Plugin 在 City 中唯一的私有存储。 */

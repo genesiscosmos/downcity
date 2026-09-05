@@ -53,8 +53,8 @@ Agent, User, and Workspace logical scopes inside it:
 
 Raw `user_id`, `workspace_id`, and `agent_id` values are encoded as safe path segments. Multiple Agents can use the same City root while User and Workspace subjects remain isolated.
 
-Construct the instance directly. `MemoryPlugin.start()` initializes its Provider from
-City's `PluginStartContext.storage`:
+Construct the instance directly. `MemoryPlugin.initialize()` initializes its Provider from
+City's `PluginLifecycleContext.storage`:
 
 ```ts
 const memory_plugin = new MemoryPlugin();

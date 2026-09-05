@@ -46,5 +46,5 @@ city.agents.add(agent);
 可安装 Plugin 的 `main` 默认导出实例或 `{ plugin, main }`，不再提供 `module.create()`。Renderer
 只通过宿主 action gateway 通信，不能访问 Node、Electron 或 Agent 全量对象。
 
-测试时重点验证：City 内实例唯一、`start/stop` 各一次、每个 Agent/Workspace 的
-`connect/disconnect` 成对执行，以及 Hook 作用域在 Step 结束后释放。
+测试时重点验证：City 内实例唯一、`initialize/dispose` 各一次、每次调用获得正确且独立的
+`PluginContext`，以及 Hook 作用域在 Step 结束后释放。

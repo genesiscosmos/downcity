@@ -2,17 +2,17 @@
  * PluginRegistry 变化订阅协议。
  *
  * 关键点（中文）
- * - Agent 订阅 Registry 变化后同步 Plugin Tools 与 Session execution view。
+ * - Agent 执行网关订阅 City 唯一 Registry 的变化后同步 Plugin Tools。
  * - PluginRegistry 不直接修改 Agent 持有的工具集合。
  */
 
 /** PluginRegistry 的单次配置变化。 */
 export interface PluginRegistryChange {
   /** 当前修改是注册还是卸载。 */
-  type: "register" | "unregister";
+  readonly type: "register" | "unregister";
 
   /** 当前发生修改的 Plugin 稳定名称。 */
-  plugin_name: string;
+  readonly plugin_name: string;
 }
 
 /** PluginRegistry 变化监听器。 */

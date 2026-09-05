@@ -60,10 +60,9 @@ city.agents.add(agent);
 
 ## Lifecycle
 
-`start/stop` belong to City's Plugin instance. `connect/disconnect` belong to an Agent/Workspace scope.
-Put City clients, connections, and caches in `start/stop`; put schedulers, routes, or scope workers in
-`connect/disconnect`. Every asynchronous Action should propagate
-`execution.abort_signal`.
+`initialize/dispose` belong to City's unique Plugin instance. Agent and Workspace are dynamic call
+context, not lifecycle boundaries. Key long-lived resources by their actual domain owner and close
+all of them in `dispose`. Every asynchronous Action should propagate `execution.abort_signal`.
 
 ## Installable package
 
@@ -99,8 +98,8 @@ Profile files directly.
 
 ## Testing focus
 
-- Multiple Agents sharing one Profile create and `start` one instance.
-- Every Agent/Workspace scope runs exactly one `connect/disconnect` pair.
-- `stop` waits for the final execution lease.
+- Multiple Agents sharing one Profile initialize one instance.
+- Repeated calls receive fresh Context objects with the correct Agent and Workspace.
+- `dispose` waits for the final execution lease.
 - Concurrent main calls activate once, and shutdown fully deactivates it.
 - Action input, JSON results, and cancellation signals remain valid.

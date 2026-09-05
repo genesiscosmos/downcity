@@ -24,8 +24,8 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     title: "Context Probe",
     description: "Records the current Workspace Context.",
     lifecycle: {
-      start: () => lifecycle_events.push("start"),
-      stop: () => lifecycle_events.push("stop"),
+      initialize: () => lifecycle_events.push("initialize"),
+      dispose: () => lifecycle_events.push("dispose"),
     },
     actions: {
       inspect: {
@@ -75,7 +75,7 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     assert.deepEqual(new Set(contexts.map((item) => item.workspace_id)), new Set(["sdk", "homepage"]));
     assert.equal(contexts[0].data_path, contexts[1].data_path);
     assert.match(contexts[0].data_path, /\/memory\/agents\/coder\/plugins\/context_probe$/u);
-    assert.equal(lifecycle_events.filter((item) => item === "start").length, 1);
+    assert.equal(lifecycle_events.filter((item) => item === "initialize").length, 1);
 
     await first.leave();
     assert.equal(get_workspace_entry(agent, "sdk"), null);
@@ -276,24 +276,9 @@ test("Plugin can ignore Workspace while still receiving its Context", async () =
   }
 });
 
-test("Workspace cleanup continues after one Plugin leave failure", async () => {
+test("Workspace cleanup is independent from Plugin lifecycle", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-cleanup-"));
-  const lifecycle_events = [];
-  const failing_plugin = create_plugin({
-    name: "failing_cleanup",
-    lifecycle: {
-      leave_workspace: ({ workspace_id }) => {
-        lifecycle_events.push(`failing:${workspace_id}`);
-        throw new Error("cleanup failed");
-      },
-    },
-  });
-  const healthy_plugin = create_plugin({
-    name: "healthy_cleanup",
-    lifecycle: {
-      leave_workspace: ({ workspace_id }) => lifecycle_events.push(`healthy:${workspace_id}`),
-    },
-  });
+  const plugin = create_plugin({ name: "cleanup_observer" });
   const agent = new Agent({ id: "cleanup_agent" });
   const workspace = new Workspace({
     id: "cleanup",
@@ -301,8 +286,7 @@ test("Workspace cleanup continues after one Plugin leave failure", async () => {
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [workspace] });
-  add_test_plugin(city, failing_plugin);
-  add_test_plugin(city, healthy_plugin);
+  add_test_plugin(city, plugin);
   city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
 

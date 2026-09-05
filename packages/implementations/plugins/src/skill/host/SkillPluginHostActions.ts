@@ -12,7 +12,7 @@ import { execa } from "execa";
 import {
   type PluginJsonValue,
   type PluginHostWorkspace,
-  type PluginStartContext,
+  type PluginLifecycleContext,
 } from "@downcity/city/plugin";
 import { listSkills, lookupSkill } from "@/skill/Action.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
@@ -30,7 +30,7 @@ import type {
 } from "@/skill/types/SkillMainview.js";
 
 /** 注册 Skill Plugin 的宿主管理 actions。 */
-export function register_skill_plugin_host_actions(context: PluginStartContext): void {
+export function register_skill_plugin_host_actions(context: PluginLifecycleContext): void {
   context.plugin.action({
       id: "skills.list",
       run: async () => as_json(await create_snapshot(context)),
@@ -54,7 +54,7 @@ export function register_skill_plugin_host_actions(context: PluginStartContext):
 }
 
 /** 创建所有 Workspace 与个人 Skill 的稳定快照。 */
-async function create_snapshot(context: PluginStartContext): Promise<SkillMainviewSnapshot> {
+async function create_snapshot(context: PluginLifecycleContext): Promise<SkillMainviewSnapshot> {
   const workspaces = await context.system.list_workspaces();
   return {
     success: true,
@@ -87,7 +87,7 @@ function to_mainview_item(
 
 /** 在重新发现后读取一个 Skill，避免信任 Renderer 传入的本地路径。 */
 async function read_skill(
-  context: PluginStartContext,
+  context: PluginLifecycleContext,
   input: SkillMainviewReadInput,
 ) {
   const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
@@ -111,7 +111,7 @@ async function find_skills(query: string): Promise<SkillMainviewSearchResult> {
 
 /** 使用官方 skills CLI 安装并返回刷新后的快照。 */
 async function install_skill(
-  context: PluginStartContext,
+  context: PluginLifecycleContext,
   input: SkillMainviewInstallInput,
 ): Promise<SkillMainviewMutationResult> {
   const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
@@ -127,7 +127,7 @@ async function install_skill(
 
 /** 删除重新发现得到的精确 Skill 目录。 */
 async function remove_skill(
-  context: PluginStartContext,
+  context: PluginLifecycleContext,
   input: SkillMainviewRemoveInput,
 ): Promise<SkillMainviewMutationResult> {
   const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
@@ -147,7 +147,7 @@ async function remove_skill(
 
 /** 解析 Workspace 范围，并拒绝不存在或缺少 ID 的输入。 */
 async function resolve_workspace(
-  context: PluginStartContext,
+  context: PluginLifecycleContext,
   scope: SkillMainviewScope,
   workspace_id?: string,
 ): Promise<PluginHostWorkspace | undefined> {

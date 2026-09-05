@@ -1,21 +1,20 @@
 /**
  * City Plugin 包内运行时类型。
  *
- * 这些类型描述 City 内部的生命周期记录与 Agent 绑定投影，不属于用户公开 API。
+ * 这些类型只描述 City 唯一 Registry、Plugin 生命周期记录与 Agent 执行网关，
+ * 不属于用户公开 API。
  */
 
 import type { Agent, Logger, SessionHooks } from "@downcity/agent";
 import type { RuntimeTool } from "@downcity/type";
 import type { Embassy } from "@downcity/federation";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
-import type { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import type {
   CityPluginRegistration,
   PluginConfigAction,
-  PluginContext,
   PluginDefinition,
   PluginHostAction,
-  PluginStartContext,
+  PluginLifecycleContext,
 } from "@/plugin/index.js";
 import type { CityPluginHost } from "@/city/types/CityPlugin.js";
 import type { StorageProvider, WorkspaceRuntime } from "@/workspace/index.js";
@@ -26,7 +25,7 @@ export interface CityPluginRuntimeOptions {
   readonly storage: StorageProvider;
   /** City 为 Plugin Context 提供的 Federation Embassy。 */
   readonly embassy?: Embassy;
-  /** Plugin Runtime 所需的 City 内部作用域访问能力。 */
+  /** Plugin Runtime 所需的 City 内部事实源访问能力。 */
   readonly runtime_access: Pick<
     CityRuntimeAccess,
     "list_agents" | "list_workspaces" | "require_workspace" | "enter_workspace"
@@ -45,71 +44,47 @@ export interface CityPluginRecord {
   readonly plugin: PluginDefinition;
   /** Plugin 私有日志器。 */
   readonly logger: Logger;
-  /** Plugin 全局生命周期与宿主动作使用的稳定上下文。 */
-  readonly start_context: PluginStartContext;
+  /** Plugin 初始化与释放共享的 City 级稳定上下文。 */
+  readonly lifecycle_context: PluginLifecycleContext;
   /** Sidebar/Mainview 业务 action。 */
   readonly host_actions: Map<string, PluginHostAction>;
   /** Profile config action。 */
   readonly config_actions: Map<string, PluginConfigAction>;
-  /** Plugin 启动完成的唯一 Promise。 */
+  /** Plugin 初始化完成的唯一 Promise。 */
   ready: Promise<void>;
-  /** Plugin start 是否已经成功。 */
-  started: boolean;
+  /** 当前仍在执行的宿主管理 action 数量。 */
+  active_host_calls: number;
+  /** 存在宿主管理 action 时等待全部调用收口的 Promise。 */
+  host_calls_idle?: Promise<void>;
+  /** 最后一个宿主管理 action 收口时兑现等待 Promise。 */
+  resolve_host_calls_idle?: () => void;
+  /** Plugin 是否已经进入需要释放的生命周期。 */
+  lifecycle_active: boolean;
   /** Plugin 当前可观察状态。 */
   state: "initializing" | "ready" | "error";
   /** Plugin 加入 City 的时间戳。 */
   readonly registered_at: number;
   /** Plugin 状态最近更新时间戳。 */
   updated_at: number;
-  /** Plugin 最近一次启动错误。 */
+  /** Plugin 最近一次初始化错误。 */
   last_error?: string;
 }
 
-/** City 内一个 Agent 的 Plugin 执行索引。 */
-export interface CityAgentPluginRuntimeRecord {
-  /** 当前 Agent 实例。 */
-  readonly agent: Agent;
-  /** 当前 Agent 的执行 Registry。 */
-  readonly registry: PluginRegistry;
-  /** 初始与动态 Plugin 装配完成后的稳定屏障。 */
-  ready: Promise<void>;
-  /** 动态 Plugin 修改串行链。 */
-  mutation_chain: Promise<void>;
-}
-
-/** City 绑定到一个 Agent 的 Plugin 能力投影。 */
+/** City 绑定到一个 Agent 的无状态 Plugin 能力网关。 */
 export interface CityAgentPluginBinding {
-  /** 等待当前 City Plugin 集合进入稳定状态。 */
+  /** 等待 City 当前已提交的 Plugin 生命周期操作完成。 */
   ensure_ready(): Promise<void>;
-  /** 建立一个 Agent/Workspace Plugin Context。 */
-  connect_workspace(workspace: WorkspaceRuntime, logger: Logger): Promise<void>;
-  /** 释放一个 Agent/Workspace Plugin Context。 */
-  disconnect_workspace(workspace_id: string): Promise<void>;
   /** 返回当前 Agent/Workspace 可用的模型 Tool。 */
   tools(workspace: WorkspaceRuntime, logger: Logger): Record<string, RuntimeTool>;
   /** 返回当前 Agent/Workspace 的 Session Hooks。 */
   hooks(workspace: WorkspaceRuntime, logger: Logger): SessionHooks;
-  /** 订阅 City Plugin 集合变化。 */
+  /** 订阅 City 唯一 Plugin Registry 的变化。 */
   subscribe(subscriber: (change: {
     /** Plugin 变化类型。 */
     readonly type: "add" | "remove";
     /** Plugin 稳定 ID。 */
     readonly plugin_id: string;
-    /** 是否属于 Agent 加入 City 时的初始装配。 */
+    /** 是否属于 Agent 绑定时已经提交、但仍在初始化的 Plugin。 */
     readonly initial: boolean;
   }) => void): () => void;
-}
-
-/** 一个 Agent/Workspace 的 Plugin Context 集合。 */
-export interface CityPluginWorkspaceContext {
-  /** Registry 默认使用的 Workspace Context。 */
-  readonly context: PluginContext;
-  /** 各 Plugin 私有存储对应的 Context。 */
-  readonly contexts_by_plugin: Map<string, PluginContext>;
-  /** Context 创建时捕获的 Plugin 记录，保证移除竞态下仍可执行 disconnect。 */
-  readonly records_by_plugin: Map<string, CityPluginRecord>;
-  /** 各 Plugin 作用域唯一的 connect 流程。 */
-  readonly connection_promises: Map<string, Promise<void>>;
-  /** 仅在当前工厂仍生效时解除 Registry Context。 */
-  readonly release_registry_context: () => void;
 }

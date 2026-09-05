@@ -138,8 +138,8 @@ await entry.plugins.run_action({
 
 ## Important runtime semantics
 
-- channel connections and queue workers belong to City's unique ChatPlugin instance and are isolated by Context
-- Agent/Workspace routing is established and released through `connect/disconnect` scope lifecycle
+- channel connections and queue workers belong to City's unique ChatPlugin instance and are created lazily on first relevant call
+- Agent/Workspace only supplies message-routing context and does not define ChatPlugin lifecycle
 - inbound authorization belongs to `ChatPlugin`, while still being dispatched through generic plugin hooks / resolves
 - `Agent` does not own ChatPlugin or chat domain state
 

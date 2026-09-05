@@ -1,16 +1,15 @@
 /**
- * City Plugin 单实例运行时。
+ * City 唯一 Plugin Registry 与生命周期运行时。
  *
- * 一个 City 中每个 Plugin ID 只持有一个实例。City 负责实例生命周期，并把全部
- * Plugin 自动投影给每个 Agent；Agent 与 Session 只消费 Tool 和 SessionHooks。
+ * 一个 City 中每个 Plugin ID 只有一个实例和一套 initialize/dispose 生命周期。
+ * Agent 不保存 Registry，Workspace 也不形成 Plugin 生命周期；City 只在具体调用时
+ * 根据 Agent、Workspace 与目标 Plugin 即时投影 PluginContext。
  */
 
 import type { Hono } from "hono";
-import type { Agent } from "@downcity/agent";
+import type { Agent, Logger } from "@downcity/agent";
 import { get_logger, SessionHooks } from "@downcity/agent";
-import type { Logger } from "@downcity/agent";
 import {
-  get_agent_storage,
   get_workspace_entry,
   plugin_storage_scope,
 } from "@downcity/agent/internal";
@@ -21,24 +20,19 @@ import type {
 } from "@/plugin/types/PluginExecutionRuntime.js";
 import type {
   CityPluginRegistration,
-  PluginDefinition,
   PluginConfigAction,
-  PluginContext,
+  PluginContextFactory,
+  PluginDefinition,
   PluginHostAction,
   PluginJsonValue,
-  PluginStartContext,
+  PluginLifecycleContext,
   PluginSnapshot,
 } from "@/plugin/index.js";
-import type {
-  CityPluginInput,
-  CityPlugins,
-} from "@/city/types/CityPlugin.js";
+import type { CityPluginInput, CityPlugins } from "@/city/types/CityPlugin.js";
 import type {
   CityAgentPluginBinding,
-  CityAgentPluginRuntimeRecord,
   CityPluginRecord,
   CityPluginRuntimeOptions,
-  CityPluginWorkspaceContext,
 } from "@/city/types/CityPluginRuntime.js";
 import { PluginRegistry } from "@/plugin/core/PluginRegistry.js";
 import { create_plugin_context } from "@/plugin/core/PluginContext.js";
@@ -49,17 +43,23 @@ export class CityPluginRuntime {
   /** City 当前持有的唯一 Plugin 实例。 */
   private readonly plugins_by_id = new Map<string, CityPluginRecord>();
 
-  /** 按 Agent ID 索引的执行视图。 */
-  private readonly agents_by_id = new Map<string, CityAgentPluginRuntimeRecord>();
-
-  /** 按 Agent/Workspace 索引的动态 Context。 */
-  private readonly workspace_contexts = new Map<string, CityPluginWorkspaceContext>();
-
-  /** 正在解除的 Agent Plugin 视图。 */
-  private readonly detach_promises = new Map<string, Promise<void>>();
+  /** 所有 Agent 共享的唯一执行 Registry。 */
+  private readonly registry = new PluginRegistry();
 
   /** 按 Plugin ID 串行化动态添加与移除，避免同一实例生命周期交叉。 */
   private readonly plugin_lifecycle_chains = new Map<string, Promise<void>>();
+
+  /** 新执行等待的 Plugin 初始化完成屏障。 */
+  private lifecycle_stability: Promise<void> = Promise.resolve();
+
+  /** City 关闭前需要等待的全部生命周期操作完成屏障。 */
+  private lifecycle_settlement: Promise<void> = Promise.resolve();
+
+  /** Plugin Runtime 自身的关闭状态，用于拒绝关闭期间的新执行。 */
+  private runtime_status: "active" | "disposing" | "disposed" = "active";
+
+  /** 并发关闭调用共享的唯一释放流程。 */
+  private dispose_promise?: Promise<void>;
 
   /** City 向应用提供的 Plugin 集合入口。 */
   readonly public_api: CityPlugins;
@@ -83,14 +83,17 @@ export class CityPluginRuntime {
 
   /** 向 City 添加一个唯一 Plugin 实例。 */
   private add(input: CityPluginInput): Promise<void> {
+    this.assert_active();
     const registration = normalize_registration(input);
     const plugin_id = normalize_id(registration.plugin.name, "plugin.name");
-    return this.enqueue_plugin_lifecycle(plugin_id, async () => {
+    const operation = this.enqueue_plugin_lifecycle(plugin_id, async () => {
       await this.add_plugin(plugin_id, registration);
     });
+    this.track_lifecycle(operation);
+    return operation;
   }
 
-  /** 在同一 Plugin 生命周期事务中完成启动和全部 Agent 作用域装配。 */
+  /** 初始化 Plugin，并在成功后原子发布到 City 唯一 Registry。 */
   private async add_plugin(
     plugin_id: string,
     registration: CityPluginRegistration,
@@ -106,7 +109,7 @@ export class CityPluginRuntime {
     logger.bind_storage(scope.files, scope.root_path);
     const host_actions = new Map<string, PluginHostAction>();
     const config_actions = new Map<string, PluginConfigAction>();
-    const start_context = this.create_start_context(
+    const lifecycle_context = this.create_lifecycle_context(
       plugin_id,
       Object.freeze({ path: scope.root_path, files: scope.files }),
       logger,
@@ -114,131 +117,90 @@ export class CityPluginRuntime {
       config_actions,
     );
     const current_time = Date.now();
-    const record = {
+    const record: CityPluginRecord = {
       plugin_id,
       registration,
       plugin: registration.plugin,
       logger,
-      start_context,
+      lifecycle_context,
       host_actions,
       config_actions,
       ready: Promise.resolve(),
-      started: false,
+      active_host_calls: 0,
+      lifecycle_active: true,
       state: "initializing",
       registered_at: current_time,
       updated_at: current_time,
-    } as CityPluginRecord;
+    };
     this.plugins_by_id.set(plugin_id, record);
-    record.ready = this.start_plugin(record);
-    // 构造期允许宿主暂不等待返回值，但生命周期失败不能形成进程级
-    // unhandled rejection；事务本身仍会把原始错误返回给显式调用方。
+    record.ready = this.initialize_plugin(record);
     void record.ready.catch(() => undefined);
-
-    const agent_records = [...this.agents_by_id.values()];
-    let release_stability: () => void = () => {};
-    const stability = new Promise<void>((resolve) => {
-      release_stability = resolve;
-    });
-    for (const agent_record of agent_records) {
-      agent_record.ready = Promise.all([agent_record.ready, stability]).then(() => undefined);
-    }
 
     try {
       await record.ready;
-      const attachments = agent_records.map((agent_record) =>
-        this.enqueue_agent_mutation(agent_record, async () => {
-          await this.attach_plugin(agent_record, record);
-        })
-      );
-      await Promise.all(attachments);
-      release_stability();
+      await this.registry.register(record.plugin);
     } catch (error) {
-      const rollback_errors = await this.rollback_plugin_add(record, agent_records);
-      release_stability();
-      if (rollback_errors.length > 0) {
+      if (this.plugins_by_id.get(plugin_id) === record) {
+        this.plugins_by_id.delete(plugin_id);
+      }
+      await this.registry.unregister_and_wait(plugin_id);
+      try {
+        await this.dispose_plugin(record);
+      } catch (dispose_error) {
         throw new AggregateError(
-          [error, ...rollback_errors],
-          `City Plugin add rollback failed: ${plugin_id}`,
+          [error, dispose_error],
+          `City Plugin initialization cleanup failed: ${plugin_id}`,
         );
       }
       throw error;
     }
   }
 
-  /** 从 City 移除 Plugin，并等待全部正在执行的 Scope 收口。 */
+  /** 从 City 立即隐藏 Plugin，等待既有 execution lease 后再释放实例。 */
   private remove(plugin_id_input: string): Promise<boolean> {
+    this.assert_active();
     const plugin_id = normalize_id(plugin_id_input, "plugin_id");
-    return this.enqueue_plugin_lifecycle(plugin_id, async () =>
-      await this.remove_plugin(plugin_id)
-    );
+    const operation = this.enqueue_plugin_lifecycle(plugin_id, async () => {
+      const record = this.plugins_by_id.get(plugin_id);
+      if (!record) return false;
+      this.plugins_by_id.delete(plugin_id);
+      const errors: unknown[] = [];
+      try {
+        await this.registry.unregister_and_wait(plugin_id);
+      } catch (error) {
+        errors.push(error);
+      }
+      await this.wait_record_idle(record);
+      try {
+        await this.dispose_plugin(record);
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length > 0) {
+        throw new AggregateError(errors, `City Plugin removal failed: ${plugin_id}`);
+      }
+      return true;
+    });
+    this.track_lifecycle(operation, false);
+    return operation;
   }
 
-  /** 在同一 Plugin 生命周期事务中完成执行视图、Context 和实例释放。 */
-  private async remove_plugin(plugin_id: string): Promise<boolean> {
-    const record = this.plugins_by_id.get(plugin_id);
-    if (!record) return false;
-    this.plugins_by_id.delete(plugin_id);
-
-    const results = await Promise.allSettled(
-      [...this.agents_by_id.values()].map(async (agent_record) => {
-        await this.enqueue_agent_mutation(agent_record, async () => {
-          await agent_record.registry.unregister_and_wait(plugin_id);
-          await this.drop_workspace_plugin_contexts(
-            agent_record.agent.id,
-            plugin_id,
-            record,
-          );
-        });
-      }),
-    );
-    const errors = results.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : [],
-    );
-    try {
-      await this.stop_plugin(record);
-    } catch (error) {
-      errors.push(error);
+  /** 把一次生命周期操作加入 City 稳定性屏障，失败不会污染其他 Plugin。 */
+  private track_lifecycle(
+    operation: Promise<unknown>,
+    blocks_execution = true,
+  ): void {
+    const settled = operation.then(() => undefined, () => undefined);
+    this.lifecycle_settlement = Promise.all([
+      this.lifecycle_settlement,
+      settled,
+    ]).then(() => undefined);
+    if (blocks_execution) {
+      this.lifecycle_stability = Promise.all([
+        this.lifecycle_stability,
+        settled,
+      ]).then(() => undefined);
     }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, `City Plugin removal failed: ${plugin_id}`);
-    }
-    return true;
-  }
-
-  /** 回滚添加失败的 Plugin，不把失败状态残留给 City 或 Agent。 */
-  private async rollback_plugin_add(
-    record: CityPluginRecord,
-    attached_agent_records: readonly CityAgentPluginRuntimeRecord[],
-  ): Promise<unknown[]> {
-    if (this.plugins_by_id.get(record.plugin_id) === record) {
-      this.plugins_by_id.delete(record.plugin_id);
-    }
-    const agent_records = new Set([
-      ...attached_agent_records,
-      ...this.agents_by_id.values(),
-    ]);
-    const results = await Promise.allSettled(
-      [...agent_records].map(async (agent_record) => {
-        await this.enqueue_agent_mutation(agent_record, async () => {
-          await agent_record.registry.unregister_and_wait(record.plugin_id);
-          await this.drop_workspace_plugin_contexts(
-            agent_record.agent.id,
-            record.plugin_id,
-            record,
-            true,
-          );
-        });
-      }),
-    );
-    const errors = results.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : [],
-    );
-    try {
-      await this.stop_plugin(record);
-    } catch (error) {
-      errors.push(error);
-    }
-    return errors;
   }
 
   /** 按 Plugin ID 串行执行一次完整生命周期修改。 */
@@ -247,8 +209,6 @@ export class CityPluginRuntime {
     operation: () => Promise<TResult>,
   ): Promise<TResult> {
     const previous = this.plugin_lifecycle_chains.get(plugin_id);
-    // 空闲 ID 立即进入 operation，使构造期 Plugin 在同一同步调用栈内可被查询；
-    // 已有生命周期时才排队，保证同 ID 的 add/remove 不交叉。
     const result = previous ? previous.then(operation, operation) : operation();
     const settled = result.then(() => undefined, () => undefined);
     this.plugin_lifecycle_chains.set(plugin_id, settled);
@@ -280,42 +240,23 @@ export class CityPluginRuntime {
     return this.plugins_by_id.get(String(plugin_id_input || "").trim())?.plugin ?? null;
   }
 
-  /** 为新加入 City 的 Agent 创建包含全部 Plugin 的执行视图。 */
+  /** 为 Agent 创建只捕获主体引用的无状态执行网关。 */
   attach_agent(agent: Agent): CityAgentPluginBinding {
-    if (this.agents_by_id.has(agent.id)) {
-      throw new Error(`City Plugin Runtime already contains Agent: ${agent.id}`);
-    }
-    const registry = new PluginRegistry();
-    const record: CityAgentPluginRuntimeRecord = {
-      agent,
-      registry,
-      ready: Promise.resolve(),
-      mutation_chain: Promise.resolve(),
-    };
-    let initial = true;
-    record.ready = this.attach_all_plugins(record).finally(() => {
-      initial = false;
-    });
-    this.agents_by_id.set(agent.id, record);
-
+    const initial_plugin_records = new Set(this.plugins_by_id.values());
     return Object.freeze({
-      ensure_ready: async () => await record.ready,
-      connect_workspace: async (workspace, logger) => {
-        const context = this.workspace_context(record, workspace, logger);
-        await this.ensure_workspace_connections(record, context);
-      },
-      disconnect_workspace: async (workspace_id) => {
-        await this.drop_workspace_contexts(agent.id, workspace_id);
-      },
+      ensure_ready: async () => await this.lifecycle_stability,
       tools: (workspace, logger) => {
-        const context = this.workspace_context(record, workspace, logger);
-        return registry.tools(context);
+        const context_factory = this.context_factory(agent, workspace, logger);
+        const runtime = this.ready_contextual(context_factory);
+        return this.registry.tools(context_factory, runtime);
       },
-      hooks: (workspace, logger) => {
-        const context = this.workspace_context(record, workspace, logger);
-        return this.session_hooks(record, context);
-      },
-      subscribe: (subscriber) => registry.subscribe_change((change) => {
+      hooks: (workspace, logger) =>
+        this.session_hooks(this.context_factory(agent, workspace, logger)),
+      subscribe: (subscriber) => this.registry.subscribe_change((change) => {
+        const record = this.plugins_by_id.get(change.plugin_name);
+        const initial = change.type === "register"
+          && record !== undefined
+          && initial_plugin_records.delete(record);
         subscriber({
           type: change.type === "register" ? "add" : "remove",
           plugin_id: change.plugin_name,
@@ -325,292 +266,121 @@ export class CityPluginRuntime {
     });
   }
 
-  /** 释放指定 Agent 的 Plugin 执行视图，但不停止 City Plugin 实例。 */
-  async detach_agent(agent_id_input: string): Promise<void> {
-    const agent_id = normalize_id(agent_id_input, "agent_id");
-    const current = this.detach_promises.get(agent_id);
-    if (current) return await current;
-    const record = this.agents_by_id.get(agent_id);
-    if (!record) return;
-    this.agents_by_id.delete(agent_id);
-    const operation = (async () => {
-      await record.ready.catch(() => undefined);
-      await record.registry.unregister_all();
-      await this.drop_workspace_contexts(agent_id);
-    })();
-    this.detach_promises.set(agent_id, operation);
-    try {
-      await operation;
-    } finally {
-      this.detach_promises.delete(agent_id);
+  /** City 开始关闭时立即封闭新的 Plugin 生命周期操作与直接执行。 */
+  begin_shutdown(): void {
+    if (this.runtime_status === "active") {
+      this.runtime_status = "disposing";
     }
   }
 
-  /** 关闭全部 Agent 视图与 City Plugin 实例。 */
+  /** 关闭唯一 Registry，并按注册逆序释放全部 Plugin 实例。 */
   async dispose(): Promise<void> {
-    const results = await Promise.allSettled(
-      [...this.agents_by_id.keys()].map(async (agent_id) => await this.detach_agent(agent_id)),
-    );
-    const errors = results.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : [],
-    );
-    for (const record of [...this.plugins_by_id.values()].reverse()) {
+    if (this.runtime_status === "disposed") return;
+    if (!this.dispose_promise) {
+      this.begin_shutdown();
+      this.dispose_promise = this.dispose_runtime().finally(() => {
+        this.runtime_status = "disposed";
+      });
+    }
+    await this.dispose_promise;
+  }
+
+  /** 执行唯一一次 Plugin Registry 与实例释放流程。 */
+  private async dispose_runtime(): Promise<void> {
+    await this.lifecycle_settlement;
+    const records = [...this.plugins_by_id.values()].reverse();
+    this.plugins_by_id.clear();
+    const errors: unknown[] = [];
+    try {
+      await this.registry.unregister_all();
+    } catch (error) {
+      errors.push(error);
+    }
+    for (const record of records) {
       try {
-        await this.stop_plugin(record);
+        await this.wait_record_idle(record);
+        await this.dispose_plugin(record);
       } catch (error) {
         errors.push(error);
       }
     }
-    this.plugins_by_id.clear();
     if (errors.length > 0) {
       throw new AggregateError(errors, "City Plugin Runtime shutdown failed");
     }
   }
 
-  /** 启动一个 City Plugin 实例。 */
-  private async start_plugin(record: CityPluginRecord): Promise<void> {
+  /** 初始化一个 City Plugin 实例。 */
+  private async initialize_plugin(record: CityPluginRecord): Promise<void> {
     try {
-      await record.plugin.start?.(record.start_context);
-      record.started = true;
+      await record.plugin.initialize?.(record.lifecycle_context);
       record.state = "ready";
       record.updated_at = Date.now();
     } catch (error) {
       record.state = "error";
       record.last_error = error instanceof Error ? error.message : String(error);
       record.updated_at = Date.now();
-      try {
-        await record.plugin.stop?.(record.start_context);
-      } catch (stop_error) {
-        throw new AggregateError(
-          [error, stop_error],
-          `City Plugin startup cleanup failed: ${record.plugin_id}`,
-        );
-      }
       throw error;
     }
   }
 
-  /** 停止一个 City Plugin 实例。 */
-  private async stop_plugin(record: CityPluginRecord): Promise<void> {
+  /** 幂等释放一个 City Plugin 实例。 */
+  private async dispose_plugin(record: CityPluginRecord): Promise<void> {
     await record.ready.catch(() => undefined);
-    if (!record.started) return;
+    if (!record.lifecycle_active) return;
+    record.lifecycle_active = false;
     try {
-      await record.plugin.stop?.(record.start_context);
+      await record.plugin.dispose?.(record.lifecycle_context);
     } finally {
-      record.started = false;
       record.updated_at = Date.now();
     }
   }
 
-  /** 把 City 当前全部 Plugin 投影到一个 Agent。 */
-  private async attach_all_plugins(record: CityAgentPluginRuntimeRecord): Promise<void> {
-    for (const plugin_record of this.plugins_by_id.values()) {
-      try {
-        await this.attach_plugin(record, plugin_record);
-      } catch (error) {
-        record.agent.get_logger().error("City Plugin startup failed", {
-          plugin_id: plugin_record.plugin_id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-  }
-
-  /** 把单个 City Plugin 投影到一个 Agent。 */
-  private async attach_plugin(
-    agent_record: CityAgentPluginRuntimeRecord,
-    plugin_record: CityPluginRecord,
-  ): Promise<void> {
-    await plugin_record.ready;
-    await agent_record.registry.register(plugin_record.plugin);
-    await this.ensure_plugin_workspace_connections(agent_record, plugin_record.plugin_id);
-  }
-
-  /** 串行执行一个 Agent 的 Plugin 集合修改。 */
-  private enqueue_agent_mutation<TResult>(
-    record: CityAgentPluginRuntimeRecord,
-    operation: () => Promise<TResult>,
-  ): Promise<TResult> {
-    const result = record.mutation_chain.then(operation, operation);
-    record.mutation_chain = result.then(() => undefined, () => undefined);
-    return result;
-  }
-
-  /** 返回一个 Agent/Workspace 的 Plugin Context。 */
-  private workspace_context(
-    record: CityAgentPluginRuntimeRecord,
+  /** 为一次 Plugin 调用创建动态上下文工厂，不缓存 Workspace 或 Plugin Context。 */
+  private context_factory(
+    agent: Agent,
     workspace: WorkspaceRuntime,
     logger: Logger,
-  ): PluginContext {
-    const key = workspace_key(record.agent.id, workspace.id);
-    const existing = this.workspace_contexts.get(key);
-    if (existing) return existing.context;
-
-    const storage = get_agent_storage(record.agent);
+  ): PluginContextFactory {
     let contextual_plugins: AgentPluginRuntime | undefined;
-    const context_input = {
-      agent_id: record.agent.id,
-      agent_name: record.agent.name,
-      agent_description: record.agent.description,
-      workspace_id: workspace.id,
-      workspace_path: workspace.path,
-      data_path: storage.root_path,
-      files: workspace.files,
-      data_files: storage.files,
-      get_config: () => ({}),
-      ...(workspace.shell ? { shell: workspace.shell } : {}),
-      logger,
-      embassy: this.options.embassy,
-      get_workspace_env: () => workspace.get_env(),
-      get_instructions: () => record.agent.get_instructions(),
-      get_plugins: () => {
-        if (!contextual_plugins) throw new Error("City Plugin Context is not initialized");
-        return contextual_plugins;
-      },
-      get_sessions: () => get_workspace_entry(record.agent, workspace.id)?.sessions
-        ?? record.agent.sessions,
-    } satisfies Parameters<typeof create_plugin_context>[0];
-    const context = create_plugin_context(context_input);
-    const contexts_by_plugin = new Map<string, PluginContext>();
-    const records_by_plugin = new Map<string, CityPluginRecord>();
-    const connection_promises = new Map<string, Promise<void>>();
-    let release_registry_context = () => {};
-    const workspace_record: CityPluginWorkspaceContext = {
-      context,
-      contexts_by_plugin,
-      records_by_plugin,
-      connection_promises,
-      release_registry_context: () => release_registry_context(),
-    };
-    this.workspace_contexts.set(key, workspace_record);
-
-    release_registry_context = record.registry.bind_workspace_context(context, (plugin_name) => {
-      const plugin_id = normalize_id(plugin_name, "plugin_id");
-      const cached = contexts_by_plugin.get(plugin_id);
-      if (cached) return cached;
-      const plugin_record = this.plugins_by_id.get(plugin_id);
-      if (!plugin_record) throw new Error(`Plugin is not available in City: ${plugin_id}`);
-      const plugin_storage = plugin_storage_scope(record.agent, plugin_id);
-      const plugin_context = create_plugin_context({
-        ...context_input,
+    const context_factory: PluginContextFactory = (plugin_id_input) => {
+      const plugin_id = normalize_id(plugin_id_input, "plugin_id");
+      const plugin_storage = plugin_storage_scope(agent, plugin_id);
+      return create_plugin_context({
+        agent_id: agent.id,
+        agent_name: agent.name,
+        agent_description: agent.description,
+        workspace_id: workspace.id,
+        workspace_path: workspace.path,
         data_path: plugin_storage.root_path,
+        files: workspace.files,
         data_files: plugin_storage.files,
-        get_config: () => this.options.host?.runtime_config?.(plugin_id, record.agent.id) ?? {},
+        get_config: () => this.options.host?.runtime_config?.(plugin_id, agent.id) ?? {},
+        ...(workspace.shell ? { shell: workspace.shell } : {}),
+        logger,
+        embassy: this.options.embassy,
         ...(this.options.host
-          ? { notifications: this.options.host.notifications(plugin_id, record.agent.id) }
+          ? { notifications: this.options.host.notifications(plugin_id, agent.id) }
           : {}),
+        get_workspace_env: () => workspace.get_env(),
+        get_instructions: () => agent.get_instructions(),
+        get_plugins: () => {
+          contextual_plugins ??= this.ready_contextual(context_factory);
+          return contextual_plugins;
+        },
+        get_sessions: () => get_workspace_entry(agent, workspace.id)?.sessions
+          ?? agent.sessions,
       });
-      contexts_by_plugin.set(plugin_id, plugin_context);
-      records_by_plugin.set(plugin_id, plugin_record);
-      const connection = plugin_record.ready.then(async () => {
-        await plugin_record.plugin.connect?.(plugin_context);
-      });
-      connection_promises.set(plugin_id, connection);
-      return plugin_context;
-    });
-    contextual_plugins = this.ready_contextual(record, context);
-    return context;
+    };
+    return context_factory;
   }
 
-  /** 确保 Workspace 已连接当前 Agent 可见的全部 Plugin。 */
-  private async ensure_workspace_connections(
-    record: CityAgentPluginRuntimeRecord,
-    context: PluginContext,
-  ): Promise<void> {
-    await record.ready;
-    const workspace_record = this.workspace_contexts.get(
-      workspace_key(record.agent.id, context.workspace.id),
-    );
-    if (!workspace_record) return;
-    for (const snapshot of record.registry.snapshots()) {
-      record.registry.plugin_context(context, snapshot.name);
-    }
-    await Promise.all(workspace_record.connection_promises.values());
-  }
-
-  /** 确保动态添加的 Plugin 连接一个 Agent 当前全部 Workspace。 */
-  private async ensure_plugin_workspace_connections(
-    record: CityAgentPluginRuntimeRecord,
-    plugin_id: string,
-  ): Promise<void> {
-    const prefix = `${record.agent.id}\u0000`;
-    const connections: Promise<void>[] = [];
-    for (const [key, workspace_record] of this.workspace_contexts) {
-      if (!key.startsWith(prefix)) continue;
-      record.registry.plugin_context(workspace_record.context, plugin_id);
-      const connection = workspace_record.connection_promises.get(plugin_id);
-      if (connection) connections.push(connection);
-    }
-    await Promise.all(connections);
-  }
-
-  /** 释放一个 Agent 的全部或指定 Workspace Context。 */
-  private async drop_workspace_contexts(agent_id: string, workspace_id?: string): Promise<void> {
-    const prefix = `${agent_id}\u0000`;
-    const errors: unknown[] = [];
-    for (const [key, workspace_record] of this.workspace_contexts) {
-      if (!key.startsWith(prefix)) continue;
-      if (workspace_id && key !== workspace_key(agent_id, workspace_id)) continue;
-      this.workspace_contexts.delete(key);
-      workspace_record.release_registry_context();
-      for (const [plugin_id, context] of workspace_record.contexts_by_plugin) {
-        try {
-          await workspace_record.connection_promises.get(plugin_id);
-          // Context 释放可能发生在 Plugin 已从 City 移除之后；此处必须使用
-          // Context 创建时捕获的 Plugin 记录，不能再次从当前注册表查找。
-          const plugin_record = workspace_record.records_by_plugin.get(plugin_id);
-          await plugin_record?.plugin.disconnect?.(context);
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-    }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, `City Plugin workspace cleanup failed: ${agent_id}`);
-    }
-  }
-
-  /** 释放指定 Plugin 在一个 Agent 全部 Workspace 下的 Context。 */
-  private async drop_workspace_plugin_contexts(
-    agent_id: string,
-    plugin_id: string,
-    plugin_record: CityPluginRecord,
-    ignore_connection_error = false,
-  ): Promise<void> {
-    const prefix = `${agent_id}\u0000`;
-    const errors: unknown[] = [];
-    for (const [key, workspace_record] of this.workspace_contexts) {
-      if (!key.startsWith(prefix)) continue;
-      const context = workspace_record.contexts_by_plugin.get(plugin_id);
-      if (!context) continue;
-      workspace_record.contexts_by_plugin.delete(plugin_id);
-      workspace_record.records_by_plugin.delete(plugin_id);
-      const connection = workspace_record.connection_promises.get(plugin_id);
-      workspace_record.connection_promises.delete(plugin_id);
-      try {
-        await connection;
-      } catch (error) {
-        if (!ignore_connection_error) errors.push(error);
-        continue;
-      }
-      try {
-        await plugin_record.plugin.disconnect?.(context);
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, `City Plugin cleanup failed: ${agent_id}/${plugin_id}`);
-    }
-  }
-
-  /** 在当前执行快照上运行操作，并始终释放其 Plugin lease。 */
+  /** 在当前 Registry 快照上运行操作，并始终释放 execution lease。 */
   private async with_execution_lease<TResult>(
-    record: CityAgentPluginRuntimeRecord,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     operation: (lease: AgentPluginExecutionLease) => Promise<TResult>,
   ): Promise<TResult> {
-    const lease = record.registry.execution_view(context).acquire();
+    this.assert_active();
+    const lease = this.registry.execution_view(context_factory).acquire();
     try {
       return await operation(lease);
     } finally {
@@ -618,16 +388,10 @@ export class CityPluginRuntime {
     }
   }
 
-  /** 创建等待 Agent 与 Workspace ready 的直接 Plugin 调用面。 */
-  private ready_contextual(
-    record: CityAgentPluginRuntimeRecord,
-    context: PluginContext,
-  ): AgentPluginRuntime {
-    const runtime = record.registry.contextual(context);
-    const wait_ready = async () => {
-      await record.ready;
-      await this.ensure_workspace_connections(record, context);
-    };
+  /** 创建等待 City 生命周期稳定后再执行的 Plugin 调用面。 */
+  private ready_contextual(context_factory: PluginContextFactory): AgentPluginRuntime {
+    const runtime = this.registry.contextual(context_factory);
+    const wait_ready = async () => await this.lifecycle_stability;
     return Object.freeze({
       has: (plugin_name) => runtime.has(plugin_name),
       get: (plugin_name) => runtime.get(plugin_name),
@@ -638,99 +402,84 @@ export class CityPluginRuntime {
       availability: async (plugin_name) => {
         await wait_ready();
         return await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.availability(plugin_name),
         );
       },
       run_action: async (params) => {
         await wait_ready();
         return await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.run_action(params),
         );
       },
-      system_blocks: async (hook_context) => {
+      system_blocks: async (execution_context) => {
         await wait_ready();
         return await this.with_execution_lease(
-          record,
-          context,
-          async (lease) => await lease.system_blocks(hook_context),
+          context_factory,
+          async (lease) => await lease.system_blocks(execution_context),
         );
       },
       pipeline: async <TValue>(point_name: string, value: TValue) => {
         await wait_ready();
         return await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.pipeline(point_name, value),
         );
       },
       guard: async <TValue>(point_name: string, value: TValue) => {
         await wait_ready();
         await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.guard(point_name, value),
         );
       },
       effect: async <TValue>(point_name: string, value: TValue) => {
         await wait_ready();
         await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.effect(point_name, value),
         );
       },
       resolve: async <TInput, TOutput>(point_name: string, value: TInput) => {
         await wait_ready();
         return await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.resolve<TInput, TOutput>(point_name, value),
         );
       },
     });
   }
 
-  /** 创建 Agent/Workspace 对应的具体 SessionHooks。 */
-  private session_hooks(
-    record: CityAgentPluginRuntimeRecord,
-    context: PluginContext,
-  ): SessionHooks {
-    const wait_ready = async () => {
-      await record.ready;
-      await this.ensure_workspace_connections(record, context);
-    };
+  /** 创建 Agent/Workspace 对应的 Session Hook 集合。 */
+  private session_hooks(context_factory: PluginContextFactory): SessionHooks {
+    const wait_ready = async () => await this.lifecycle_stability;
     return new SessionHooks({
       system_blocks: async (hook_context) => {
         await wait_ready();
         return await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.system_blocks(hook_context),
         );
       },
       pipeline: async <TValue>(point_name: string, value: TValue) => {
         await wait_ready();
         return await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.pipeline(point_name, value),
         );
       },
       effect: async <TValue>(point_name: string, value: TValue) => {
         await wait_ready();
         await this.with_execution_lease(
-          record,
-          context,
+          context_factory,
           async (lease) => await lease.effect(point_name, value),
         );
       },
       open: async () => {
         await wait_ready();
-        const lease = record.registry.execution_view(context).acquire();
+        this.assert_active();
+        const lease = this.registry.execution_view(context_factory).acquire();
         return {
           system_blocks: async (hook_context) => await lease.system_blocks(hook_context),
           pipeline: async <TValue>(point_name: string, value: TValue) =>
@@ -746,11 +495,10 @@ export class CityPluginRuntime {
   /** 返回一个 Agent/Workspace 的直接 Plugin 执行面。 */
   private scope(agent_id_input: string, workspace_id_input: string): AgentPluginRuntime {
     const agent_id = normalize_id(agent_id_input, "agent_id");
-    const record = this.agents_by_id.get(agent_id);
-    if (!record) throw new Error(`Agent is not registered in City: ${agent_id}`);
     const entry = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
-    const context = this.workspace_context(record, entry.workspace, entry.get_logger());
-    return this.ready_contextual(record, context);
+    return this.ready_contextual(
+      this.context_factory(entry.agent, entry.workspace, entry.get_logger()),
+    );
   }
 
   /** 注册当前 Agent/Workspace 下全部 Plugin HTTP 路由。 */
@@ -760,15 +508,17 @@ export class CityPluginRuntime {
     workspace_id_input: string,
   ): void {
     const agent_id = normalize_id(agent_id_input, "agent_id");
-    const record = this.agents_by_id.get(agent_id);
-    if (!record) throw new Error(`Agent is not registered in City: ${agent_id}`);
     const entry = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
-    const context = this.workspace_context(record, entry.workspace, entry.get_logger());
+    const context_factory = this.context_factory(
+      entry.agent,
+      entry.workspace,
+      entry.get_logger(),
+    );
     register_plugin_http_routes({
       app,
-      get_context: (plugin_name) => record.registry.plugin_context(context, plugin_name),
-      plugins: record.registry.snapshots()
-        .map((snapshot) => record.registry.get(snapshot.name))
+      get_context: context_factory,
+      plugins: this.registry.snapshots()
+        .map((snapshot) => this.registry.get(snapshot.name))
         .filter((plugin): plugin is PluginDefinition => plugin !== null),
     });
   }
@@ -790,10 +540,11 @@ export class CityPluginRuntime {
   ): Promise<PluginJsonValue> {
     const plugin_id = normalize_id(plugin_id_input, "plugin_id");
     const action_id = normalize_id(action_id_input, "action_id");
-    const record = await this.require_ready_record(plugin_id);
-    const action = record.host_actions.get(action_id);
-    if (!action) throw new Error(`Plugin host action not found: ${plugin_id}/${action_id}`);
-    return normalize_json_value(await action.run(input), `${plugin_id}/${action_id} result`);
+    return await this.with_record_execution(plugin_id, async (record) => {
+      const action = record.host_actions.get(action_id);
+      if (!action) throw new Error(`Plugin host action not found: ${plugin_id}/${action_id}`);
+      return normalize_json_value(await action.run(input), `${plugin_id}/${action_id} result`);
+    });
   }
 
   /** 调用 Plugin Profile config action。 */
@@ -806,25 +557,65 @@ export class CityPluginRuntime {
     const plugin_id = normalize_id(plugin_id_input, "plugin_id");
     const profile_id = normalize_id(profile_id_input, "profile_id");
     const action_id = normalize_id(action_id_input, "action_id");
-    const record = await this.require_ready_record(plugin_id);
-    const action = record.config_actions.get(action_id);
-    if (!action) throw new Error(`Plugin config action not found: ${plugin_id}/${action_id}`);
-    const config = this.options.host?.profile_config(plugin_id, profile_id);
-    if (!config) throw new Error("City Plugin config actions require a profile host");
-    return normalize_json_value(
-      await action.run(input, { config }),
-      `${plugin_id}/${action_id} result`,
-    );
+    return await this.with_record_execution(plugin_id, async (record) => {
+      const action = record.config_actions.get(action_id);
+      if (!action) throw new Error(`Plugin config action not found: ${plugin_id}/${action_id}`);
+      const config = this.options.host?.profile_config(plugin_id, profile_id);
+      if (!config) throw new Error("City Plugin config actions require a profile host");
+      return normalize_json_value(
+        await action.run(input, { config }),
+        `${plugin_id}/${action_id} result`,
+      );
+    });
   }
 
-  /** 创建 Plugin start/stop 使用的稳定 City 受限上下文。 */
-  private create_start_context(
+  /** 在 Plugin 仍属于 City 时持有一次宿主管理调用租约。 */
+  private async with_record_execution<TResult>(
     plugin_id: string,
-    storage: PluginStartContext["storage"],
+    operation: (record: CityPluginRecord) => Promise<TResult>,
+  ): Promise<TResult> {
+    const record = await this.require_ready_record(plugin_id);
+    this.assert_active();
+    if (this.plugins_by_id.get(plugin_id) !== record) {
+      throw new Error(`Plugin is not registered in City: ${plugin_id}`);
+    }
+    record.active_host_calls += 1;
+    try {
+      return await operation(record);
+    } finally {
+      record.active_host_calls = Math.max(0, record.active_host_calls - 1);
+      if (record.active_host_calls === 0) {
+        record.resolve_host_calls_idle?.();
+        delete record.resolve_host_calls_idle;
+        delete record.host_calls_idle;
+      }
+    }
+  }
+
+  /** 等待 Plugin 已经开始的宿主管理调用全部收口。 */
+  private async wait_record_idle(record: CityPluginRecord): Promise<void> {
+    if (record.active_host_calls === 0) return;
+    record.host_calls_idle ??= new Promise<void>((resolve) => {
+      record.resolve_host_calls_idle = resolve;
+    });
+    await record.host_calls_idle;
+  }
+
+  /** 拒绝 Runtime 关闭后新增生命周期操作或执行。 */
+  private assert_active(): void {
+    if (this.runtime_status !== "active") {
+      throw new Error(`City Plugin Runtime is ${this.runtime_status}`);
+    }
+  }
+
+  /** 创建 initialize/dispose 共享的稳定 City 级上下文。 */
+  private create_lifecycle_context(
+    plugin_id: string,
+    storage: PluginLifecycleContext["storage"],
     logger: Logger,
     host_actions: Map<string, PluginHostAction>,
     config_actions: Map<string, PluginConfigAction>,
-  ): PluginStartContext {
+  ): PluginLifecycleContext {
     const notifications = this.options.host?.notifications(plugin_id) ?? {
       publish: async () => {},
       dismiss: async () => {},
@@ -844,7 +635,7 @@ export class CityPluginRuntime {
         list_agents: async () => this.options.runtime_access.list_agents().map((agent) => ({
           agent_id: agent.id,
           name: agent.name,
-          plugin_ids: this.snapshots().map((snapshot) => snapshot.name),
+          plugin_ids: this.registry.snapshots().map((snapshot) => snapshot.name),
         })),
         list_workspaces: async () => this.options.runtime_access.list_workspaces().map((workspace) => ({
           workspace_id: workspace.id,
@@ -890,11 +681,6 @@ function normalize_registration(input: CityPluginInput): CityPluginRegistration 
     has_mainview: false,
     plugin: input,
   };
-}
-
-/** 创建 Agent/Workspace Context 的稳定键。 */
-function workspace_key(agent_id: string, workspace_id: string): string {
-  return `${agent_id}\u0000${workspace_id}`;
 }
 
 /** 注册宿主 action，并保证两个 surface 之间 ID 唯一。 */

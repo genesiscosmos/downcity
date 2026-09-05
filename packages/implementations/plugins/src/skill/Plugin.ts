@@ -12,7 +12,7 @@ import { Plugin } from "@downcity/city/plugin";
 import { create_action } from "@downcity/city/plugin";
 import { z } from "zod";
 import type { PluginDefinition } from "@downcity/city/plugin";
-import type { PluginJsonObject, PluginJsonValue, PluginStartContext } from "@downcity/city/plugin";
+import type { PluginJsonObject, PluginJsonValue, PluginLifecycleContext } from "@downcity/city/plugin";
 import type { PluginActionResult } from "@downcity/city/plugin";
 import type {
   SkillPluginFindPayload,
@@ -311,7 +311,7 @@ export class SkillPlugin extends Plugin {
   }
 
   /** 注册 Skill Plugin 的宿主管理 actions。 */
-  start(context: PluginStartContext): void {
+  initialize(context: PluginLifecycleContext): void {
     register_skill_plugin_host_actions(context);
   }
 }

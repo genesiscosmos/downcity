@@ -1,8 +1,8 @@
 /**
  * City Plugin 所有权与运行时协议。
  *
- * 一个 City 中每个 Plugin ID 只对应一个实例。City 负责实例的启动、作用域连接、
- * 执行快照和停止；所有已注册 Agent 自动获得 City 的全部 Plugin。
+ * 一个 City 中每个 Plugin ID 只对应一个实例。City 负责实例的生命周期与执行快照；
+ * 所有已注册 Agent 自动获得 City 的全部 Plugin。
  */
 
 import type { Hono } from "hono";
@@ -28,7 +28,7 @@ export type CityPluginCollection =
 /** City 对外暴露的 Plugin 集合。 */
 export interface CityPlugins {
   /**
-   * 向 City 添加唯一 Plugin 实例或带 UI 元数据的注册项，并等待启动及已有作用域连接。
+   * 向 City 添加唯一 Plugin 实例或带 UI 元数据的注册项，并等待初始化完成。
    */
   add(input: CityPluginInput): Promise<void>;
 
@@ -60,7 +60,7 @@ export interface CityPlugins {
     },
   ): void;
 
-  /** 调用 Plugin 在 start 阶段注册的宿主管理 action。 */
+  /** 调用 Plugin 在 initialize 阶段注册的宿主管理 action。 */
   invoke(plugin_id: string, action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
 
   /** 在指定配置 Profile 上调用 Plugin 注册的配置 action。 */
@@ -72,7 +72,7 @@ export interface CityPlugins {
   ): Promise<PluginJsonValue>;
 }
 
-/** City Plugin 启动阶段需要宿主提供的平台能力。 */
+/** City Plugin 生命周期需要宿主提供的平台能力。 */
 export interface CityPluginHost {
   /** 解析当前 Agent 使用的 Plugin 配置；未配置时返回空对象。 */
   runtime_config?(plugin_id: string, agent_id: string): PluginJsonObject;

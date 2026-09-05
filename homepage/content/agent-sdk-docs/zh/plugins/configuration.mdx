@@ -29,8 +29,8 @@ city.agents.add(agent);
 ```
 
 CLI/Desktop 的 `config.toml` 可以继续作为 Profile 配置事实源，但 Agent 不保存 Plugin 实例或
-绑定关系。Config action 由 Plugin 在 `start()` 中注册，City 调用时注入指定 Profile 的 `get/set` store；
-执行期 Action、Hook 与 Lifecycle `connect` 则读取当前 Agent 投影得到的 `context.config`。
+绑定关系。Config action 由 Plugin 在 `initialize()` 中注册，City 调用时注入指定 Profile 的 `get/set` store；
+执行期 Action、Hook、System 与 Availability 读取当前 Agent 投影得到的 `context.config`。
 
-运行态连接、回调和客户端对象不能写入 Profile。City 级长期资源属于 `start/stop`，
-Agent/Workspace 级资源属于 `connect/disconnect`。
+运行态连接、回调和客户端对象不能写入 Profile。长期资源属于 Plugin，并应按实际账号、Profile
+或其他领域身份建立索引，最终由 `dispose` 统一释放。

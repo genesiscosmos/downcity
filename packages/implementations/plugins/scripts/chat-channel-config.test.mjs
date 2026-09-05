@@ -73,19 +73,20 @@ test("ChatPlugin 消费 City 按 Agent 投影的渠道配置", () => {
   });
 });
 
-test("ChatPlugin 唯一实例为多个 Agent/Workspace 隔离运行态", async () => {
+test("ChatPlugin 按调用上下文惰性创建隔离运行态并由 City 生命周期统一释放", async () => {
   const plugin = new ChatPlugin({ channels: [] });
   const first = create_context(plugin, "agent-a", "workspace-a");
   const second = create_context(plugin, "agent-b", "workspace-b");
 
-  await plugin.connect(first);
+  await plugin.system(first);
   const queue_store = plugin.queue_store(first);
-  await plugin.connect(second);
+  await plugin.system(second);
   assert.notEqual(plugin.queue_store(second), queue_store);
-  await plugin.disconnect(first);
-  assert.throws(() => plugin.queue_store(first), /not bound/);
+  assert.equal(plugin.queue_store(first), queue_store);
   assert.ok(plugin.queue_store(second));
-  await plugin.disconnect(second);
+  await plugin.dispose();
+  assert.throws(() => plugin.queue_store(first), /not bound/);
+  assert.throws(() => plugin.queue_store(second), /not bound/);
 });
 
 test("Chat 配置使用显式 Owner 忽略其他 Agent 作用域", async () => {
@@ -97,9 +98,9 @@ test("Chat 配置使用显式 Owner 忽略其他 Agent 作用域", async () => {
   const other = create_context(plugin, "agent-other", "workspace-other");
   const owner = create_context(plugin, "agent-owner", "workspace-owner");
 
-  await plugin.connect(other);
+  await plugin.system(other);
   assert.throws(() => plugin.queue_store(other), /not bound/);
-  await plugin.connect(owner);
+  await plugin.system(owner);
   assert.ok(plugin.queue_store(owner));
-  await plugin.stop();
+  await plugin.dispose();
 });

@@ -86,18 +86,18 @@ city.agents.add(agent);
 ## 统一 Plugin 入口
 
 `main` 文件默认导出唯一 Plugin 实例；不再存在独立 `agent` 入口或第二个 main 生命周期。
-Plugin 在 `start()` 中通过 `plugin.action()` 注册 Sidebar/Mainview 动作，通过
+Plugin 在 `initialize()` 中通过 `plugin.action()` 注册 Sidebar/Mainview 动作，通过
 `plugin.config_action()` 注册 Config 动作：
 
 ```ts
-import { Plugin, type PluginStartContext } from "@downcity/city/plugin";
+import { Plugin, type PluginLifecycleContext } from "@downcity/city/plugin";
 
 class GithubPlugin extends Plugin {
   readonly name = "github";
   readonly title = "GitHub";
   readonly description = "GitHub 集成";
 
-  start({ plugin, notifications }: PluginStartContext) {
+  initialize({ plugin, notifications }: PluginLifecycleContext) {
     plugin.config_action({
       id: "profile.read",
       run: async (_input, context) => {

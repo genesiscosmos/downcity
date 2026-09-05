@@ -68,8 +68,8 @@ city.agents.add(agent);
 City automatically exposes every registered Plugin to every Agent. A running City can update the
 collection through `city.plugins.add()` and `city.plugins.remove()`.
 
-Each Plugin ID identifies one instance inside a City. `start/stop` manages that City instance, while
-`connect/disconnect` manages each Agent/Workspace scope.
+Each Plugin ID identifies one instance inside a City with a City-level `initialize/dispose` lifecycle.
+Agents and Workspaces provide call context; they do not own Plugin lifecycle.
 
 ## Profile configuration
 

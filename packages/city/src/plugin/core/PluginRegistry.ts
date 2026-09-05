@@ -22,7 +22,7 @@ import type {
   AgentPluginExecutionRuntime,
 } from "@/plugin/types/PluginExecutionRuntime.js";
 import type { AgentSessionSystemBlock } from "@downcity/agent";
-import type { PluginContext } from "@/plugin/index.js";
+import type { PluginContextFactory } from "@/plugin/types/PluginContextFactory.js";
 import type { JsonValue } from "@downcity/agent";
 import type { PluginSnapshot } from "@/plugin/index.js";
 import type { PluginRuntimeRecord } from "@/plugin/types/PluginRuntimeRecord.js";
@@ -44,11 +44,6 @@ function now_ms(): number {
 function normalize_plugin_name(plugin_name: string): string {
   return String(plugin_name || "").trim();
 }
-
-/** 为当前 Workspace 的指定 Plugin 创建专属运行时 Context。 */
-type PluginContextFactory = (
-  plugin_name: string,
-) => PluginContext;
 
 function create_record(plugin: PluginDefinition): PluginRuntimeRecord {
   const current_time = now_ms();
@@ -73,13 +68,10 @@ function to_plugin_snapshot(record: PluginRuntimeRecord): PluginSnapshot {
 }
 
 /**
- * PluginRegistry：Agent plugin 注册、卸载与调用实现。
+ * PluginRegistry：City 唯一 Plugin 注册、卸载与调用实现。
  */
 export class PluginRegistry {
   private readonly records = new Map<string, PluginRuntimeRecord>();
-
-  /** Agent 当前已进入 Workspace 的 Plugin Context 工厂。 */
-  private readonly workspace_context_factories = new Map<string, PluginContextFactory>();
 
   private readonly retired_records = new Set<PluginRuntimeRecord>();
 
@@ -102,25 +94,6 @@ export class PluginRegistry {
     };
   }
 
-  /** 绑定当前 Workspace 的 Plugin Context 工厂。 */
-  bind_workspace_context(
-    context: PluginContext,
-    factory: PluginContextFactory,
-  ): () => void {
-    this.workspace_context_factories.set(context.workspace.id, factory);
-    return () => {
-      if (this.workspace_context_factories.get(context.workspace.id) === factory) {
-        this.workspace_context_factories.delete(context.workspace.id);
-      }
-    };
-  }
-
-  /** 返回指定 Plugin 的运行时 Context；未绑定工厂时回退到传入 Context。 */
-  plugin_context(context: PluginContext, plugin_name: string): PluginContext {
-    const key = normalize_plugin_name(plugin_name);
-    return this.workspace_context_factories.get(context.workspace.id)?.(key) || context;
-  }
-
   /**
    * 返回当前 Registry 向 Agent 提供的 Plugin Tools。
    *
@@ -128,18 +101,21 @@ export class PluginRegistry {
    * - 没有任何 Action 时不暴露空壳 Tool。
    * - Tool 闭包绑定当前 Registry，动态 Plugin 变化无需重建 bridge。
    */
-  tools(context: PluginContext): Record<string, Tool> {
+  tools(
+    context_factory: PluginContextFactory,
+    runtime: AgentPluginRuntime = this.contextual(context_factory),
+  ): Record<string, Tool> {
     if (!this.list().some((plugin) => plugin.actions.length > 0)) return {};
-    return { ...create_plugin_tools({ plugins: this.contextual(context) }) };
+    return { ...create_plugin_tools({ plugins: runtime }) };
   }
 
   /**
-   * 创建绑定当前 Session Workspace 上下文的 Plugin 调用面。
+   * 创建绑定当前 Agent/Workspace 执行范围的 Plugin 调用面。
    *
-   * Registry 只保存 Agent 注册的 Plugin；Action、Hook、System 与 availability 在
-   * 调用时显式使用这里捕获的 Workspace Context。
+   * Registry 保存 City 已发布的唯一 Plugin 集合；Action、Hook、System 与 availability
+   * 在每次调用时使用 Context 工厂创建目标 Plugin 的动态上下文。
    */
-  contextual(context: PluginContext): AgentPluginRuntime {
+  contextual(context_factory: PluginContextFactory): AgentPluginRuntime {
     return {
       has: (plugin_name) => this.has(plugin_name),
       get: (plugin_name) => this.get(plugin_name),
@@ -148,19 +124,19 @@ export class PluginRegistry {
       list: () => this.list(),
       read: (params) => this.read(params),
       availability: async (plugin_name) =>
-        await this.availability(context, plugin_name),
+        await this.availability(context_factory, plugin_name),
       run_action: async (params) =>
-        await this.run_action({ context, ...params }),
+        await this.run_action({ context_factory, ...params }),
       system_blocks: async (execution_context) =>
-        await this.system_blocks(context, execution_context),
+        await this.system_blocks(context_factory, execution_context),
       pipeline: async (point_name, value) =>
-        await this.pipeline(context, point_name, value),
+        await this.pipeline(context_factory, point_name, value),
       guard: async (point_name, value) =>
-        await this.guard(context, point_name, value),
+        await this.guard(context_factory, point_name, value),
       effect: async (point_name, value) =>
-        await this.effect(context, point_name, value),
+        await this.effect(context_factory, point_name, value),
       resolve: async (point_name, value) =>
-        await this.resolve(context, point_name, value),
+        await this.resolve(context_factory, point_name, value),
     };
   }
 
@@ -295,46 +271,46 @@ export class PluginRegistry {
    * 运行 pipeline 点。
    */
   async pipeline<T = JsonValue>(
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     point_name: string,
     value: T,
   ): Promise<T> {
-    return await this.pipeline_from_records(this.records, context, point_name, value);
+    return await this.pipeline_from_records(this.records, context_factory, point_name, value);
   }
 
   /**
    * 运行 guard 点。
    */
   async guard<T = JsonValue>(
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     point_name: string,
     value: T,
   ): Promise<void> {
-    await this.guard_from_records(this.records, context, point_name, value);
+    await this.guard_from_records(this.records, context_factory, point_name, value);
   }
 
   /**
    * 运行 effect 点。
    */
   async effect<T = JsonValue>(
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     point_name: string,
     value: T,
   ): Promise<void> {
-    await this.effect_from_records(this.records, context, point_name, value);
+    await this.effect_from_records(this.records, context_factory, point_name, value);
   }
 
   /**
    * 运行 resolve 点。
    */
   async resolve<TInput = JsonValue, TOutput = JsonValue>(
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     point_name: string,
     value: TInput,
   ): Promise<TOutput> {
     return await this.resolve_from_records<TInput, TOutput>(
       this.records,
-      context,
+      context_factory,
       point_name,
       value,
     );
@@ -434,16 +410,16 @@ export class PluginRegistry {
    * 检查 plugin 可用性。
    */
   async availability(
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     plugin_name: string,
   ): Promise<PluginAvailability> {
-    return await this.availability_from_records(this.records, context, plugin_name);
+    return await this.availability_from_records(this.records, context_factory, plugin_name);
   }
 
   /** 从指定执行记录视图检查 Plugin 可用性。 */
   private async availability_from_records(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     plugin_name: string,
   ): Promise<PluginAvailability> {
     const key = normalize_plugin_name(plugin_name);
@@ -457,7 +433,7 @@ export class PluginRegistry {
     }
 
     if (record.plugin.availability) {
-      return await record.plugin.availability(this.plugin_context(context, key));
+      return await record.plugin.availability(context_factory(key));
     }
 
     return {
@@ -471,14 +447,14 @@ export class PluginRegistry {
    * 运行 plugin action。
    */
   async run_action(params: {
-    context: PluginContext;
+    context_factory: PluginContextFactory;
     plugin: string;
     action: string;
     payload?: JsonValue;
     execution_context?: PluginExecutionContext;
     interactions?: SessionInteractionPort;
   }): Promise<PluginActionResult<JsonValue>> {
-    return await this.run_action_from_records(this.records, params.context, params);
+    return await this.run_action_from_records(this.records, params.context_factory, params);
   }
 
   /**
@@ -486,7 +462,7 @@ export class PluginRegistry {
    */
   private async run_action_from_records(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     params: {
       plugin: string;
       action: string;
@@ -524,7 +500,7 @@ export class PluginRegistry {
     }
 
     return await execute_plugin_action({
-      context: this.plugin_context(context, record.plugin.name),
+      context: context_factory(record.plugin.name),
       plugin_name: record.plugin.name,
       action_name,
       action,
@@ -540,12 +516,12 @@ export class PluginRegistry {
    * 读取当前生效的 plugin system blocks。
    */
   async system_blocks(
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     execution_context?: PluginExecutionContext,
   ): Promise<AgentSessionSystemBlock[]> {
     return await this.system_blocks_from_records(
       this.records,
-      context,
+      context_factory,
       execution_context,
     );
   }
@@ -555,7 +531,7 @@ export class PluginRegistry {
    */
   private async system_blocks_from_records(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     execution_context?: PluginExecutionContext,
   ): Promise<AgentSessionSystemBlock[]> {
     const out: AgentSessionSystemBlock[] = [];
@@ -564,13 +540,13 @@ export class PluginRegistry {
       if (typeof plugin.system !== "function") continue;
       try {
         if (typeof plugin.availability === "function") {
-          const plugin_context = this.plugin_context(context, plugin.name);
+          const plugin_context = context_factory(plugin.name);
           const availability = await plugin.availability(plugin_context);
           if (!availability.available) continue;
         }
         const text = String(
           await plugin.system(
-            this.plugin_context(context, plugin.name),
+            context_factory(plugin.name),
             execution_context,
           ),
         ).trim();
@@ -590,7 +566,7 @@ export class PluginRegistry {
   /** 在指定 Plugin execution snapshot 中运行既有 pipeline handlers。 */
   private async pipeline_from_records<T>(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     point_name: string,
     value: T,
   ): Promise<T> {
@@ -601,7 +577,7 @@ export class PluginRegistry {
       const handlers = record.plugin.hooks?.pipeline?.[key] || [];
       for (const handler of handlers) {
         current = await handler({
-          context: this.plugin_context(context, record.plugin.name),
+          context: context_factory(record.plugin.name),
           value: current,
           plugin: record.plugin.name,
         });
@@ -613,7 +589,7 @@ export class PluginRegistry {
   /** 在指定 Plugin execution snapshot 中运行既有 effect handlers。 */
   private async effect_from_records<T>(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     point_name: string,
     value: T,
   ): Promise<void> {
@@ -623,7 +599,7 @@ export class PluginRegistry {
       const handlers = record.plugin.hooks?.effect?.[key] || [];
       for (const handler of handlers) {
         await handler({
-          context: this.plugin_context(context, record.plugin.name),
+          context: context_factory(record.plugin.name),
           value: value as JsonValue,
           plugin: record.plugin.name,
         });
@@ -634,7 +610,7 @@ export class PluginRegistry {
   /** 在指定 Plugin execution snapshot 中运行既有 guard handlers。 */
   private async guard_from_records<T>(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     point_name: string,
     value: T,
   ): Promise<void> {
@@ -644,7 +620,7 @@ export class PluginRegistry {
       const handlers = record.plugin.hooks?.guard?.[key] || [];
       for (const handler of handlers) {
         await handler({
-          context: this.plugin_context(context, record.plugin.name),
+          context: context_factory(record.plugin.name),
           value: value as JsonValue,
           plugin: record.plugin.name,
         });
@@ -655,7 +631,7 @@ export class PluginRegistry {
   /** 在指定 Plugin execution snapshot 中运行唯一的 resolve handler。 */
   private async resolve_from_records<TInput, TOutput>(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
     point_name: string,
     value: TInput,
   ): Promise<TOutput> {
@@ -665,7 +641,7 @@ export class PluginRegistry {
       const handler = record.plugin.resolves?.[key];
       if (!handler) continue;
       return await handler({
-        context: this.plugin_context(context, record.plugin.name),
+        context: context_factory(record.plugin.name),
         value: value as JsonValue,
         plugin: record.plugin.name,
       }) as TOutput;
@@ -676,25 +652,25 @@ export class PluginRegistry {
   /**
    * 创建当前 configured registry 的 Session step 执行视图。
    */
-  execution_view(context: PluginContext): AgentPluginExecutionRuntime {
+  execution_view(context_factory: PluginContextFactory): AgentPluginExecutionRuntime {
     const records = new Map(this.records);
     return {
       read: (params) => this.read_from_records(records, params),
       availability: async (plugin_name) =>
-        await this.availability_from_records(records, context, plugin_name),
+        await this.availability_from_records(records, context_factory, plugin_name),
       run_action: async (params) =>
-        await this.run_action_from_records(records, context, params),
+        await this.run_action_from_records(records, context_factory, params),
       system_blocks: async (execution_context) =>
-        await this.system_blocks_from_records(records, context, execution_context),
+        await this.system_blocks_from_records(records, context_factory, execution_context),
       pipeline: async (point_name, value) =>
-        await this.pipeline_from_records(records, context, point_name, value),
+        await this.pipeline_from_records(records, context_factory, point_name, value),
       guard: async (point_name, value) =>
-        await this.guard_from_records(records, context, point_name, value),
+        await this.guard_from_records(records, context_factory, point_name, value),
       effect: async (point_name, value) =>
-        await this.effect_from_records(records, context, point_name, value),
+        await this.effect_from_records(records, context_factory, point_name, value),
       resolve: async (point_name, value) =>
-        await this.resolve_from_records(records, context, point_name, value),
-      acquire: () => this.acquire_execution_view(records, context),
+        await this.resolve_from_records(records, context_factory, point_name, value),
+      acquire: () => this.acquire_execution_view(records, context_factory),
     };
   }
 
@@ -703,7 +679,7 @@ export class PluginRegistry {
    */
   private acquire_execution_view(
     records: ReadonlyMap<string, PluginRuntimeRecord>,
-    context: PluginContext,
+    context_factory: PluginContextFactory,
   ): AgentPluginExecutionLease {
     const leased_records = new Map<string, PluginRuntimeRecord>();
     for (const [name, record] of records) {
@@ -718,40 +694,40 @@ export class PluginRegistry {
     return {
       read: (params) => this.read_from_records(leased_records, params),
       availability: async (plugin_name) =>
-        await this.availability_from_records(leased_records, context, plugin_name),
+        await this.availability_from_records(leased_records, context_factory, plugin_name),
       run_action: async (params) =>
-        await this.run_action_from_records(leased_records, context, params),
+        await this.run_action_from_records(leased_records, context_factory, params),
       system_blocks: async (execution_context) =>
         await this.system_blocks_from_records(
           leased_records,
-          context,
+          context_factory,
           execution_context,
         ),
       pipeline: async (point_name, value) =>
         await this.pipeline_from_records(
           leased_records,
-          context,
+          context_factory,
           point_name,
           value,
         ),
       guard: async (point_name, value) =>
         await this.guard_from_records(
           leased_records,
-          context,
+          context_factory,
           point_name,
           value,
         ),
       effect: async (point_name, value) =>
         await this.effect_from_records(
           leased_records,
-          context,
+          context_factory,
           point_name,
           value,
         ),
       resolve: async (point_name, value) =>
         await this.resolve_from_records(
           leased_records,
-          context,
+          context_factory,
           point_name,
           value,
         ),

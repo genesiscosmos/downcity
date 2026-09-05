@@ -136,8 +136,8 @@ await entry.plugins.run_action({
 
 ## 关键运行语义
 
-- 渠道连接与 queue worker 归属于 City 持有的 ChatPlugin 唯一实例，并按 Context 隔离
-- Agent/Workspace 路由在 `connect/disconnect` scope 生命周期中建立和释放
+- 渠道连接与 queue worker 归属于 City 持有的 ChatPlugin 唯一实例，并在首次相关调用时惰性创建
+- Agent/Workspace 只提供消息路由上下文，不构成 ChatPlugin 生命周期
 - 入站授权能力归属于 `ChatPlugin`，但仍通过通用 plugin hooks / resolves 调度
 - `Agent` 不持有 ChatPlugin 或 chat 领域长期状态
 

@@ -300,14 +300,14 @@ Plugin 通过 PluginContext 使用 City 允许的能力。PluginContext 提供�
 
 所有 Plugin 都必须先通过 `city.plugins.add(plugin)`、`city.plugins.add(registration)` 或 `CityOptions.plugins` 登记。City 中每个 Plugin ID 只对应一个实例，所有已注册 Plugin 自动提供给所有 Agent；`city.agents.add(agent)` 不再接收 Plugin 绑定参数。Agent 配置中的 Profile 仅作为宿主配置存储，City 在创建 Agent/Workspace Context 时动态投影配置。Action、Hook、System、Availability 调用始终获得当前执行范围与当前 Plugin 的 PluginContext；Plugin 私有存储由 City 按 Agent/Plugin 分配，Workspace 文件、Shell、env 等能力来自当前 Workspace。
 
-Plugin 生命周期完全归 City：`start/stop` 对每个 City Plugin 实例各执行一次，`connect/disconnect` 对每个 Agent/Workspace 作用域执行。City 在 Plugin 加入时调用 `start`，首次进入 Workspace 时调用 `connect`，离开 Workspace 或从 City 移除 Agent 时调用 `disconnect`，移除 Plugin 或关闭 City 时调用 `stop`。一次 Session Step 捕获不可变 Hook scope；Plugin 被移除后，新 Step 立即不可见，旧 Step 释放 scope 后才能停止相关资源。长期连接、Timer、Schedule 与后台 Worker 必须随对应生命周期闭合。
+Plugin 生命周期完全归 City，只有 `initialize/dispose` 两个节点。City 在 Plugin 加入时调用一次 `initialize`，移除 Plugin 或关闭 City 时调用一次 `dispose`。Agent 加入或离开 City、Session 创建或结束、Workspace 进入或离开都不会触发 Plugin 生命周期。一次 Session Step 捕获不可变 Hook scope；Plugin 被移除后，新 Step 立即不可见，City 等待旧 Step 释放 execution lease 后才调用 `dispose`。长期连接、Timer、Schedule 与后台 Worker 必须由具体 Plugin 按自己的领域所有权创建和释放，不能套用通用的 Workspace connect 协议。
 
 Plugin 实例在 City 内按 Plugin ID 唯一；同一个实例可以同时服务多个 Agent/Workspace，必须通过
-`PluginContext.agent`、`PluginContext.workspace` 和 `PluginContext.session` 区分执行范围。需要隔离的
+`PluginContext.agent`、`PluginContext.workspace` 和 `PluginContext.session` 区分当前调用范围。需要隔离的
 运行数据写入 City 为当前 Agent/Plugin 分配的私有 Storage；City 级连接、缓存和后台 Worker 写入
-`PluginStartContext.storage`，不能复制出按 Agent 的 Plugin 实例。
+`PluginLifecycleContext.storage`，不能复制出按 Agent 的 Plugin 实例。PluginContext 在每次 Action、Hook、System 或 Availability 调用时即时投影，不按 Agent/Workspace 长期缓存；Workspace 只是调用资源，不是 Plugin 生命周期边界。
 
-Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main 对象。Plugin 在 `start(PluginStartContext)` 中注册宿主管理 action 与 Config action，并在同一方法中初始化 City 级长期资源；`stop` 负责统一释放。宿主的 Plugins 导航始终列出完整 Plugin Catalog；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用宿主管理 action，不要求 Profile。Config 只在 Plugin Catalog 详情出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。
+Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main 对象。Plugin 在 `initialize(PluginLifecycleContext)` 中注册宿主管理 action 与 Config action，并初始化自己拥有的 City 级长期资源；`dispose` 负责统一释放。宿主的 Plugins 导航始终列出完整 Plugin Catalog；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用宿主管理 action，不要求 Profile。Config 只在 Plugin Catalog 详情出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。
 
 ### 4.6 Agent 定义的本地事实源
 
@@ -326,10 +326,10 @@ Plugin 以全局稳定 ID 为身份，定义与 City 级配置保存在 `~/.down
 
 `config.toml` 是宿主维护的 Plugin 配置源；City 在创建 `PluginContext` 时按当前 Agent 动态投影配置。
 执行期 Plugin 状态、缓存和私有文件使用 `PluginContext.storage.path/files`，由 City 按 Agent/Plugin
-隔离，不按 Workspace 复制；共享 City 资源使用 `PluginStartContext.storage`。Plugin 实例与
+隔离，不按 Workspace 复制；共享 City 资源使用 `PluginLifecycleContext.storage`。Plugin 实例与
 生命周期始终由 City 持有，Agent 仅通过 Session 消费其 Tool、System 与 Hook。
 
-本地宿主可以在 `agent.json` 中保存 `Plugin ID → Profile ID` 引用，但该引用只负责让 City 在创建 `PluginContext.config` 时选择配置，不控制 Plugin 是否提供给 Agent，也不创建 Agent/Plugin 绑定；不存在引用时仍提供该 Plugin，并投影空配置。Agent 不保存渠道、账号、端点或 Token。Profile 只是 Plugin 下的命名配置值，不是实例或生命周期边界；一个 City 中始终只有一个对应 Plugin 实例，Plugin 需要按 Agent/Workspace 隔离长期资源时必须使用当前 Context 建立内部索引。CRUD 由宿主统一提供，内容结构、校验、凭据投影和编辑 UI 由 Plugin 与 Config 自己管理。Profile 值必须是 TOML 可表达的 JSON object。内置 Plugin 由宿主登记；第三方 `main` 入口必须默认导出唯一的 City Plugin 实例。
+本地宿主可以在 `agent.json` 中保存 `Plugin ID → Profile ID` 引用，但该引用只负责让 City 在创建 `PluginContext.config` 时选择配置，不控制 Plugin 是否提供给 Agent，也不创建 Agent/Plugin 绑定；不存在引用时仍提供该 Plugin，并投影空配置。Agent 不保存渠道、账号、端点或 Token。Profile 只是 Plugin 下的命名配置值，不是实例或生命周期边界；一个 City 中始终只有一个对应 Plugin 实例。长期资源的隔离键必须来自该 Plugin 的真实领域所有权，例如账号、Profile 或 Agent 配置，不能因为调用包含 Workspace 就默认按 Workspace 创建资源。CRUD 由宿主统一提供，内容结构、校验、凭据投影和编辑 UI 由 Plugin 与 Config 自己管理。Profile 值必须是 TOML 可表达的 JSON object。内置 Plugin 由宿主登记；第三方 `main` 入口必须默认导出唯一的 City Plugin 实例。
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 

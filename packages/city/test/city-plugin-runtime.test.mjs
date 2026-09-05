@@ -26,20 +26,12 @@ class ObservablePlugin extends Plugin {
     this.events = events;
   }
 
-  start() {
-    this.events.push("start");
+  initialize() {
+    this.events.push("initialize");
   }
 
-  connect(context) {
-    this.events.push(`connect:${context.agent.id}:${context.workspace.id}`);
-  }
-
-  disconnect(context) {
-    this.events.push(`disconnect:${context.agent.id}:${context.workspace.id}`);
-  }
-
-  stop() {
-    this.events.push("stop");
+  dispose() {
+    this.events.push("dispose");
   }
 
   actions = {
@@ -89,12 +81,10 @@ test("City owns one Plugin instance and exposes it to every Agent", async () => 
     agent_id: scope_b.agent.id,
     workspace_id: scope_b.workspace.id,
   });
-  assert.equal(events.filter((event) => event === "start").length, 1);
+  assert.equal(events.filter((event) => event === "initialize").length, 1);
 
   await city.close();
-  assert.equal(events.filter((event) => event.startsWith("connect:")).length, 2);
-  assert.equal(events.filter((event) => event.startsWith("disconnect:")).length, 2);
-  assert.equal(events.filter((event) => event === "stop").length, 1);
+  assert.equal(events.filter((event) => event === "dispose").length, 1);
 });
 
 test("City dynamically adds and removes one Plugin for every Agent", async () => {
@@ -113,16 +103,51 @@ test("City dynamically adds and removes one Plugin for every Agent", async () =>
 
   assert.equal(await city.plugins.remove(plugin.name), true);
   assert.equal(city.plugins.get(plugin.name), null);
-  assert.deepEqual(events, [
-    "start",
-    `connect:${scope.agent.id}:${scope.workspace.id}`,
-    `disconnect:${scope.agent.id}:${scope.workspace.id}`,
-    "stop",
-  ]);
+  assert.deepEqual(events, ["initialize", "dispose"]);
   await city.close();
 });
 
-test("City waits for Agent Plugin execution before disconnecting its Workspace", async () => {
+test("City creates a fresh PluginContext for every call", async () => {
+  const contexts = [];
+  const plugin = new ObservablePlugin([]);
+  plugin.name = "fresh-context";
+  plugin.actions = {
+    inspect: create_action({
+      execute: ({ context }) => {
+        contexts.push(context);
+        return {
+          success: true,
+          data: {
+            agent_id: context.agent.id,
+            workspace_id: context.workspace.id,
+          },
+        };
+      },
+    }),
+  };
+  const scope = create_scope("fresh-context");
+  const city = new City({
+    plugins: [plugin],
+    workspaces: [scope.workspace],
+    agents: [scope.agent],
+  });
+  await scope.agent.sessions.create({ workspace: scope.workspace });
+  const runtime = city.plugins.scope({
+    agent_id: scope.agent.id,
+    workspace_id: scope.workspace.id,
+  });
+
+  await runtime.run_action({ plugin: plugin.name, action: "inspect" });
+  await runtime.run_action({ plugin: plugin.name, action: "inspect" });
+
+  assert.equal(contexts.length, 2);
+  assert.notEqual(contexts[0], contexts[1]);
+  assert.equal(contexts[0].agent.id, scope.agent.id);
+  assert.equal(contexts[1].workspace.id, scope.workspace.id);
+  await city.close();
+});
+
+test("Agent removal does not own or dispose the City Plugin", async () => {
   const events = [];
   let release_action;
   const action_released = new Promise((resolve) => {
@@ -161,17 +186,15 @@ test("City waits for Agent Plugin execution before disconnecting its Workspace",
   const removal = city.agents.remove(scope.agent.id);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(events.some((event) => event.startsWith("disconnect:")), false);
+  assert.deepEqual(events, ["initialize", "action:start"]);
   release_action();
   await Promise.all([action, removal]);
-  assert.deepEqual(events.slice(-2), [
-    "action:finish",
-    `disconnect:${scope.agent.id}:${scope.workspace.id}`,
-  ]);
+  assert.deepEqual(events, ["initialize", "action:start", "action:finish"]);
   await city.close();
+  assert.deepEqual(events.at(-1), "dispose");
 });
 
-test("City waits for a direct Plugin hook before disconnecting and stopping it", async () => {
+test("City waits for a direct Plugin hook before disposing it", async () => {
   const events = [];
   let release_hook;
   const hook_released = new Promise((resolve) => {
@@ -210,15 +233,10 @@ test("City waits for a direct Plugin hook before disconnecting and stopping it",
   const removal = city.plugins.remove(plugin.name);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(events.some((event) => event.startsWith("disconnect:")), false);
-  assert.equal(events.includes("stop"), false);
+  assert.equal(events.includes("dispose"), false);
   release_hook();
   await Promise.all([hook, removal]);
-  assert.deepEqual(events.slice(-3), [
-    "hook:finish",
-    `disconnect:${scope.agent.id}:${scope.workspace.id}`,
-    "stop",
-  ]);
+  assert.deepEqual(events.slice(-2), ["hook:finish", "dispose"]);
   await city.close();
 });
 
@@ -230,31 +248,29 @@ test("City rejects a second instance with the same Plugin ID", async () => {
   await city.close();
 });
 
-test("City Plugin add exposes asynchronous startup failure", async () => {
+test("City Plugin add exposes asynchronous initialization failure", async () => {
   const city = new City();
   const plugin = new ObservablePlugin([]);
-  plugin.name = "broken-start";
-  plugin.start = async () => {
-    throw new Error("plugin-start-failed");
+  plugin.name = "broken-initialize";
+  plugin.initialize = async () => {
+    throw new Error("plugin-initialize-failed");
   };
 
-  await assert.rejects(city.plugins.add(plugin), /plugin-start-failed/u);
+  await assert.rejects(city.plugins.add(plugin), /plugin-initialize-failed/u);
   assert.equal(city.plugins.get(plugin.name), null);
   assert.deepEqual(city.plugins.snapshots(), []);
   await city.close();
 });
 
-test("City rolls back every Agent scope when dynamic Plugin connect fails", async () => {
+test("City never publishes a Plugin whose initialization fails", async () => {
   const events = [];
   const plugin = new ObservablePlugin(events);
   plugin.name = "transactional";
   const scope_a = create_scope("transaction_a");
   const scope_b = create_scope("transaction_b");
-  plugin.connect = (context) => {
-    events.push(`connect:${context.agent.id}:${context.workspace.id}`);
-    if (context.agent.id === scope_b.agent.id) {
-      throw new Error("connect-b-failed");
-    }
+  plugin.initialize = () => {
+    events.push("initialize:failed");
+    throw new Error("initialize-failed");
   };
   const city = new City({
     workspaces: [scope_a.workspace, scope_b.workspace],
@@ -265,7 +281,7 @@ test("City rolls back every Agent scope when dynamic Plugin connect fails", asyn
     scope_b.agent.sessions.create({ workspace: scope_b.workspace }),
   ]);
 
-  await assert.rejects(city.plugins.add(plugin), /connect-b-failed/u);
+  await assert.rejects(city.plugins.add(plugin), /initialize-failed/u);
 
   assert.equal(city.plugins.get(plugin.name), null);
   assert.deepEqual(city.plugins.snapshots(), []);
@@ -277,22 +293,18 @@ test("City rolls back every Agent scope when dynamic Plugin connect fails", asyn
     agent_id: scope_b.agent.id,
     workspace_id: scope_b.workspace.id,
   }).has(plugin.name), false);
-  assert.equal(
-    events.filter((event) => event === `disconnect:${scope_a.agent.id}:${scope_a.workspace.id}`).length,
-    1,
-  );
-  assert.equal(events.filter((event) => event === "stop").length, 1);
+  assert.deepEqual(events, ["initialize:failed", "dispose"]);
   await Promise.all([scope_a.agent.ensure_ready(), scope_b.agent.ensure_ready()]);
 
-  plugin.connect = (context) => {
-    events.push(`reconnect:${context.agent.id}:${context.workspace.id}`);
+  plugin.initialize = () => {
+    events.push("initialize:retry");
   };
   await city.plugins.add(plugin);
   assert.equal(city.plugins.get(plugin.name), plugin);
   await city.close();
 });
 
-test("City starts one Plugin instance and stops it on close", async () => {
+test("City initializes one Plugin instance and disposes it on close", async () => {
   const events = [];
   const registration = {
     readme: import.meta.filename,
@@ -303,12 +315,12 @@ test("City starts one Plugin instance and stops it on close", async () => {
       name: "main-test",
       title: "Main Test",
       description: "Verifies Plugin ownership",
-      start(context) {
-        events.push("start");
+      initialize(context) {
+        events.push("initialize");
         context.plugin.action({ id: "ping", run: (input) => input ?? null });
       },
-      stop() {
-        events.push("stop");
+      dispose() {
+        events.push("dispose");
       },
     },
   };
@@ -318,10 +330,76 @@ test("City starts one Plugin instance and stops it on close", async () => {
     city.plugins.invoke("main-test", "ping", { order: 1 }),
     city.plugins.invoke("main-test", "ping", { order: 2 }),
   ]), [{ order: 1 }, { order: 2 }]);
-  assert.deepEqual(events, ["start"]);
+  assert.deepEqual(events, ["initialize"]);
 
   await city.close();
-  assert.deepEqual(events, ["start", "stop"]);
+  assert.deepEqual(events, ["initialize", "dispose"]);
+});
+
+test("City waits for an active Plugin host action before disposal", async () => {
+  const events = [];
+  let release_action;
+  const action_released = new Promise((resolve) => {
+    release_action = resolve;
+  });
+  let mark_action_started;
+  const action_started = new Promise((resolve) => {
+    mark_action_started = resolve;
+  });
+  const city = new City({
+    plugins: [{
+      readme: import.meta.filename,
+      has_config: false,
+      has_sidebar: true,
+      has_mainview: false,
+      plugin: {
+        name: "host-lease",
+        title: "Host Lease",
+        description: "Verifies host action lifecycle leases",
+        initialize(context) {
+          context.plugin.action({
+            id: "wait",
+            run: async () => {
+              events.push("action:start");
+              mark_action_started();
+              await action_released;
+              events.push("action:finish");
+              return null;
+            },
+          });
+        },
+        dispose() {
+          events.push("dispose");
+        },
+      },
+    }],
+  });
+
+  const invocation = city.plugins.invoke("host-lease", "wait");
+  await action_started;
+  const removal = city.plugins.remove("host-lease");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(events, ["action:start"]);
+
+  release_action();
+  await Promise.all([invocation, removal]);
+  assert.deepEqual(events, ["action:start", "action:finish", "dispose"]);
+  await city.close();
+});
+
+test("City close immediately rejects new Plugin operations", async () => {
+  const city = new City();
+  const closing = city.close();
+
+  assert.throws(
+    () => city.plugins.add(new ObservablePlugin([])),
+    /City Plugin Runtime is disposing/u,
+  );
+  await assert.rejects(
+    city.plugins.remove("observable"),
+    /City Plugin Runtime is disposing/u,
+  );
+  await closing;
 });
 
 test("City config actions use the requested Profile store", async () => {
@@ -346,7 +424,7 @@ test("City config actions use the requested Profile store", async () => {
         name: "config-main",
         title: "Config Main",
         description: "Verifies config actions",
-        start(context) {
+        initialize(context) {
           context.plugin.config_action({
             id: "read",
             run: async (_input, action_context) => await action_context.config.get(),

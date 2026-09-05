@@ -12,7 +12,7 @@ import { TaskPlugin } from "@downcity/plugins/task";
 /** 启动 Chat Plugin 并返回按 ID 注册的配置 action。 */
 async function start_chat_plugin() {
   const actions = new Map();
-  await new ChatPlugin().start({
+  await new ChatPlugin().initialize({
     plugin: {
       id: "chat",
       action() {},
@@ -41,7 +41,7 @@ async function start_chat_plugin() {
 /** 启动 Skill Plugin，并注入测试 Workspace。 */
 async function start_skill_plugin(workspace_path) {
   const actions = new Map();
-  await new SkillPlugin().start({
+  await new SkillPlugin().initialize({
     plugin: {
       id: "skill",
       action(action) { actions.set(action.id, action); },
@@ -71,7 +71,7 @@ async function start_skill_plugin(workspace_path) {
 async function start_task_plugin() {
   const actions = new Map();
   const invocations = [];
-  await new TaskPlugin().start({
+  await new TaskPlugin().initialize({
     plugin: {
       id: "task",
       action(action) { actions.set(action.id, action); },

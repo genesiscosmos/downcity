@@ -5,7 +5,7 @@
  * 范围与转发，Task runtime 仍是定义、调度、执行记录和 mutation 的唯一事实源。
  */
 
-import type { PluginJsonValue, PluginStartContext } from "@downcity/city/plugin";
+import type { PluginJsonValue, PluginLifecycleContext } from "@downcity/city/plugin";
 import type { TaskListItemView, TaskRunDetailView, TaskRunHistoryItemView } from "@/task/types/TaskCommand.js";
 import type {
   TaskMainviewActionInput,
@@ -22,20 +22,20 @@ import type {
 } from "@/task/types/TaskMainview.js";
 
 /** 注册 Task Plugin 的宿主管理 actions。 */
-export function register_task_plugin_host_actions(context: PluginStartContext): void {
+export function register_task_plugin_host_actions(context: PluginLifecycleContext): void {
   register_read_actions(context);
   register_mutation_actions(context);
 }
 
 /** 注册 Task 工作区的只读 actions。 */
-function register_read_actions(context: PluginStartContext): void {
+function register_read_actions(context: PluginLifecycleContext): void {
   context.plugin.action({ id: "tasks.snapshot", run: async () => as_json(await create_snapshot(context)) });
   context.plugin.action({ id: "tasks.history", run: async (input) => as_json(await read_history(context, read_history_input(input))) });
   context.plugin.action({ id: "tasks.run_detail", run: async (input) => as_json(await read_run_detail(context, read_run_detail_input(input))) });
 }
 
 /** 注册 Task 工作区的管理 actions。 */
-function register_mutation_actions(context: PluginStartContext): void {
+function register_mutation_actions(context: PluginLifecycleContext): void {
   context.plugin.action({ id: "tasks.create", run: async (input) => as_json(await create_task(context, read_create_input(input))) });
   context.plugin.action({ id: "tasks.update", run: async (input) => as_json(await update_task(context, read_update_input(input))) });
   context.plugin.action({ id: "tasks.status", run: async (input) => as_json(await set_task_status(context, read_status_input(input))) });
@@ -44,7 +44,7 @@ function register_mutation_actions(context: PluginStartContext): void {
 }
 
 /** 读取全部启用 Task Plugin 的 Agent 与 Agent 级 Task。 */
-async function create_snapshot(context: PluginStartContext): Promise<TaskMainviewSnapshot> {
+async function create_snapshot(context: PluginLifecycleContext): Promise<TaskMainviewSnapshot> {
   const [agents, workspaces] = await Promise.all([context.system.list_agents(), context.system.list_workspaces()]);
   const task_agents = agents.filter((agent) => agent.plugin_ids.includes("task"));
   const transport_workspace_id = workspaces[0]?.workspace_id;
@@ -60,7 +60,7 @@ async function create_snapshot(context: PluginStartContext): Promise<TaskMainvie
 }
 
 /** 从 Agent Plugin runtime 读取一个 Agent 的 Task 投影。 */
-async function read_agent_tasks(context: PluginStartContext, agent_id: string, workspace_id: string): Promise<TaskMainviewItem[]> {
+async function read_agent_tasks(context: PluginLifecycleContext, agent_id: string, workspace_id: string): Promise<TaskMainviewItem[]> {
   const data = await invoke_task_action<{ tasks?: TaskListItemView[] }>(context, {
     agent_id,
     workspace_id,
@@ -83,7 +83,7 @@ async function read_agent_tasks(context: PluginStartContext, agent_id: string, w
 }
 
 /** 读取一个 Task 的执行记录列表。 */
-async function read_history(context: PluginStartContext, input: TaskMainviewHistoryInput): Promise<TaskMainviewHistorySnapshot> {
+async function read_history(context: PluginLifecycleContext, input: TaskMainviewHistoryInput): Promise<TaskMainviewHistorySnapshot> {
   await assert_task_context(context, input);
   const data = await invoke_task_action<{ runs?: TaskRunHistoryItemView[] }>(context, {
     ...input,
@@ -95,7 +95,7 @@ async function read_history(context: PluginStartContext, input: TaskMainviewHist
 }
 
 /** 读取一条 Task 执行详情。 */
-async function read_run_detail(context: PluginStartContext, input: TaskMainviewRunDetailInput): Promise<TaskMainviewRunDetailSnapshot> {
+async function read_run_detail(context: PluginLifecycleContext, input: TaskMainviewRunDetailInput): Promise<TaskMainviewRunDetailSnapshot> {
   await assert_task_context(context, input);
   const data = await invoke_task_action<{ run?: TaskRunDetailView }>(context, {
     ...input,
@@ -108,7 +108,7 @@ async function read_run_detail(context: PluginStartContext, input: TaskMainviewR
 }
 
 /** 创建一个绑定 Workspace 的 Task。 */
-async function create_task(context: PluginStartContext, input: TaskMainviewCreateInput): Promise<TaskMainviewMutationResult> {
+async function create_task(context: PluginLifecycleContext, input: TaskMainviewCreateInput): Promise<TaskMainviewMutationResult> {
   await assert_task_context(context, input);
   await invoke_task_action(context, {
     ...input,
@@ -129,7 +129,7 @@ async function create_task(context: PluginStartContext, input: TaskMainviewCreat
 }
 
 /** 原子更新一个 Task 定义。 */
-async function update_task(context: PluginStartContext, input: TaskMainviewUpdateInput): Promise<TaskMainviewMutationResult> {
+async function update_task(context: PluginLifecycleContext, input: TaskMainviewUpdateInput): Promise<TaskMainviewMutationResult> {
   await assert_task_context(context, input);
   await invoke_task_action(context, {
     ...input,
@@ -151,26 +151,26 @@ async function update_task(context: PluginStartContext, input: TaskMainviewUpdat
 }
 
 /** 修改 Task 启停状态。 */
-async function set_task_status(context: PluginStartContext, input: TaskMainviewStatusInput): Promise<TaskMainviewMutationResult> {
+async function set_task_status(context: PluginLifecycleContext, input: TaskMainviewStatusInput): Promise<TaskMainviewMutationResult> {
   await invoke_existing_task_action(context, input, "status", { title: input.task_title, status: input.status });
   return { task_title: input.task_title };
 }
 
 /** 异步受理一次手动 Task 执行。 */
-async function run_task(context: PluginStartContext, input: TaskMainviewActionInput): Promise<TaskMainviewMutationResult> {
+async function run_task(context: PluginLifecycleContext, input: TaskMainviewActionInput): Promise<TaskMainviewMutationResult> {
   await invoke_existing_task_action(context, input, "run", { title: input.task_title });
   return { task_title: input.task_title };
 }
 
 /** 删除 Task 定义及其全部执行记录。 */
-async function delete_task(context: PluginStartContext, input: TaskMainviewActionInput): Promise<TaskMainviewMutationResult> {
+async function delete_task(context: PluginLifecycleContext, input: TaskMainviewActionInput): Promise<TaskMainviewMutationResult> {
   await invoke_existing_task_action(context, input, "delete", { title: input.task_title });
   return { task_title: input.task_title };
 }
 
 /** 调用一个已有 Task 的 mutation action。 */
 async function invoke_existing_task_action(
-  context: PluginStartContext,
+  context: PluginLifecycleContext,
   input: TaskMainviewActionInput,
   action_id: "status" | "run" | "delete",
   action_input: PluginJsonValue,
@@ -186,7 +186,7 @@ async function invoke_existing_task_action(
 
 /** 统一调用 Agent Task runtime，并保留业务失败语义。 */
 async function invoke_task_action<Data = Record<string, never>>(
-  context: PluginStartContext,
+  context: PluginLifecycleContext,
   input: {
     readonly agent_id: string;
     readonly workspace_id: string;
@@ -207,7 +207,7 @@ async function invoke_task_action<Data = Record<string, never>>(
 }
 
 /** 验证 Agent 与 Workspace 仍属于当前宿主管理范围。 */
-async function assert_task_context(context: PluginStartContext, input: { readonly agent_id: string; readonly workspace_id: string }): Promise<void> {
+async function assert_task_context(context: PluginLifecycleContext, input: { readonly agent_id: string; readonly workspace_id: string }): Promise<void> {
   const [agents, workspaces] = await Promise.all([context.system.list_agents(), context.system.list_workspaces()]);
   if (!agents.some((agent) => agent.agent_id === input.agent_id && agent.plugin_ids.includes("task"))) {
     throw new Error(`Agent 未启用 Task Plugin: ${input.agent_id}`);

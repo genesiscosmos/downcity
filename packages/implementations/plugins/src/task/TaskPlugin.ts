@@ -9,7 +9,7 @@
 
 import { Plugin, create_action } from "@downcity/city/plugin";
 import type { PluginActions } from "@downcity/city/plugin";
-import type { PluginContext, PluginStartContext } from "@downcity/city/plugin";
+import type { PluginContext, PluginLifecycleContext } from "@downcity/city/plugin";
 import type {
   TaskCronRegisterResult,
   TaskSchedulerReloadResult,
@@ -53,7 +53,7 @@ export class TaskPlugin extends Plugin {
    * task plugin 的 system 文本提供器。
    */
   readonly system = async (context: PluginContext): Promise<string> => {
-    void context;
+    await this.start_cron_runtime(context);
     return TASK_PLUGIN_PROMPT;
   };
 
@@ -113,22 +113,12 @@ export class TaskPlugin extends Plugin {
   }
 
   /** 注册宿主管理 actions。 */
-  start(context: PluginStartContext): void {
+  initialize(context: PluginLifecycleContext): void {
     register_task_plugin_host_actions(context);
   }
 
-  /** 建立当前 Agent/Workspace 的 Task runtime。 */
-  async connect(context: PluginContext): Promise<void> {
-    await this.start_cron_runtime(context);
-  }
-
-  /** 释放当前 Agent/Workspace 的 Task runtime。 */
-  async disconnect(context: PluginContext): Promise<void> {
-    await this.stop_cron_runtime(task_scope_key(context));
-  }
-
   /** 释放当前 Plugin 实例持有的全部 Task runtime。 */
-  async stop(): Promise<void> {
+  async dispose(): Promise<void> {
     await Promise.allSettled([...this.starts_by_workspace.values()]);
     await Promise.all([...this.runtimes_by_workspace.keys()].map(async (scope_key) => {
       await this.stop_cron_runtime(scope_key);

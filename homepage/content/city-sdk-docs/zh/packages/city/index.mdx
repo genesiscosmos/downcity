@@ -50,18 +50,19 @@ Workspace 的 Shell、Sandbox 等运行资源，再将其移出当前 City；不
 
 ## Plugin 生命周期
 
-一个 Plugin 实例只有一套由 City 管理的生命周期，并在 `start` 中注册可选宿主管理 action：
+一个 Plugin 实例只有一套由 City 管理的生命周期，并在 `initialize` 中注册可选宿主管理 action：
 
-1. Plugin 加入 City 时调用 `start`。
-2. Agent 进入 Workspace 时调用 `connect(context)`。
-3. 离开 Workspace或移除 Agent 时调用 `disconnect(context)`。
-4. Plugin 移除或 City 关闭时调用 `stop`。
+1. Plugin 加入 City 时调用一次 `initialize`。
+2. Plugin 移除或 City 关闭时调用一次 `dispose`。
 
-Action、System、Availability 与 Hook 调用都会收到 `PluginContext`。它包含受限的
+Agent、Session 和 Workspace 的进入或离开都不触发 Plugin 生命周期。长期连接、Timer、调度器和
+后台 Worker 由具体 Plugin 按自己的账号、Profile、任务定义等领域所有权管理。
+
+Action、System、Availability 与 Hook 每次调用都会获得即时创建的 `PluginContext`。它包含受限的
 `city`、`agent`、`workspace`、`session`、`turn`、`config` 和 `storage` 对象，因此 Plugin
 可以直接调用当前 Session 或 Agent 的受限能力，不需要只靠 `session_id` 重新查找。
 
-Hook 仍由 City 的执行 Registry 调度。Session 在明确检查点捕获不可变 Hook 作用域；动态移除后
+Hook 仍由 City 唯一的执行 Registry 调度。Session 在明确检查点捕获不可变 Hook 作用域；动态移除后
 新 Step 立即看不到 Plugin，已经开始的 Step 可以完成，并在释放作用域后触发最终清理。
 
 CLI daemon 与 Desktop 窗口分别拥有独立的 City 生命周期。宿主协调协议只协调监听权，不修改

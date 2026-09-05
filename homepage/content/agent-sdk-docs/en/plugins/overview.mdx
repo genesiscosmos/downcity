@@ -46,9 +46,9 @@ serialization. A Plugin does not need to receive only a `session_id` and resolve
 
 ## Unique instances and configuration projection
 
-One City creates one instance per Plugin ID. `start/stop` belong to that City instance, while
-`connect/disconnect` belong to an Agent/Workspace scope. A host may still store Profiles, but they
-only project `context.config`; they do not create more Plugin instances.
+One City creates one instance per Plugin ID with one `initialize/dispose` lifecycle. Agent and
+Workspace belong only to each call Context. A host may still store Profiles, but they only project
+`context.config`; they do not create more Plugin instances.
 
 ## Recommended reading
 

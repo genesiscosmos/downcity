@@ -94,11 +94,6 @@ export class WorkspaceEntry {
 
     const runtime_binding = agent_runtime_binding(this.agent);
     this.runtime_binding = runtime_binding;
-    void runtime_binding?.connect_workspace(this.workspace, this.logger)
-      .catch((error) => this.logger.error("City Plugin workspace startup failed", {
-        error: error instanceof Error ? error.message : String(error),
-      }));
-
     this.tools = {};
     register_tools(this.tools, this.workspace.tools, "WorkspaceTools");
     this.replace_plugin_tools();
@@ -190,7 +185,6 @@ export class WorkspaceEntry {
         async () => await (this.agent.sessions as AgentSessions).stop_executing_sessions(this.workspace_id),
         () => (this.agent.sessions as AgentSessions).dispose_title_generation(this.workspace_id),
         async () => await this.logger.save_all_logs(),
-        async () => await this.runtime_binding?.disconnect_workspace(this.workspace_id),
         ...(agent_has_resource_container(this.agent) ? [] : [async () => await this.workspace.dispose()]),
       ];
       for (const cleanup of cleanup_steps) {

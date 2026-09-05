@@ -1,42 +1,49 @@
 ---
 title: Plugin 生命周期
-description: 理解 City 持有的 Plugin 实例、Workspace 作用域与 Hook 作用域。
+description: 理解 City 持有的 Plugin 实例、动态调用上下文与执行租约。
 ---
 
 # Plugin 生命周期
 
-Plugin 的所有权属于 City。`city.plugins.add(new MyPlugin())` 时登记一个唯一实例；同一 Plugin ID
-不能在 City 中重复注册。
+Plugin 的所有权属于 City。`city.plugins.add(new MyPlugin())` 登记一个唯一实例；同一 Plugin ID
+不能在一个 City 中重复注册，Agent 也不保存 Plugin 实例或 Registry。
 
-## 四个生命周期节点
+## 两个生命周期节点
 
-- `start(context)`：Plugin 加入 City 时执行一次，适合初始化 City 级连接、Provider 与缓存。
-- `connect(context)`：Agent 首次进入 Workspace 时执行一次，适合创建 Agent/Workspace 作用域资源。
-- `disconnect(context)`：Agent 离开 Workspace 或从 City 移除时执行，释放对应作用域资源。
-- `stop(context)`：Plugin 被移除或 City 关闭时执行一次，释放 City 级资源。
+- `initialize(context)`：Plugin 加入 City 时执行一次，用于注册宿主 Action，并初始化 Plugin 自己拥有的长期资源。
+- `dispose(context)`：Plugin 被移除或 City 关闭时执行一次，用于释放这些长期资源。
 
 ```ts
-class SchedulerPlugin extends Plugin {
-  readonly name = "scheduler";
-  async start({ storage }: PluginStartContext) {
-    await this.scheduler.open(storage);
+class ProviderPlugin extends Plugin {
+  readonly name = "provider";
+
+  async initialize({ storage }: PluginLifecycleContext) {
+    await this.provider.open(storage.path);
   }
-  async connect(context: PluginContext) {
-    await this.scheduler.connect(context.agent.id, context.workspace.id);
-  }
-  async disconnect(context: PluginContext) {
-    await this.scheduler.disconnect(context.agent.id, context.workspace.id);
-  }
-  async stop() {
-    await this.scheduler.close();
+
+  async dispose() {
+    await this.provider.close();
   }
 }
 ```
 
-`start/stop` 使用同一个 `PluginStartContext`；Action、Hook 与 `connect/disconnect` 使用
-包含 `agent`、`workspace`、可选 `session/turn` 的 `PluginContext`。City 为每个 Agent/Plugin 分配
-私有 Storage，Plugin 实例本身不会按 Agent 复制。
+两个节点使用同一个稳定的 `PluginLifecycleContext`。Agent 加入或离开 City、Session 创建或结束、
+Workspace 进入或离开都不会触发 Plugin 生命周期，也不存在通用的 `connect/disconnect`。
 
-Session 在每个 Step 打开稳定的 Hook 作用域。Plugin 被移除后，新 Step 立即不可见；已经开始的
-Step 会在作用域关闭后再释放资源。`city.close()` 会依次关闭 Agent Workspace 作用域、Plugin
-实例和 transport，并汇总释放错误。
+## 调用上下文
+
+Action、Hook、System 和 Availability 每次调用都会获得 City 即时投影的 `PluginContext`。其中的
+`agent`、`workspace`、可选 `session/turn` 都是当前调用可以直接使用的受限对象；Workspace 是本次
+调用的项目资源，不是 Plugin 的生命周期或默认资源隔离键。
+
+需要长期连接、Timer、调度器或后台 Worker 时，Plugin 应按真实领域所有权管理它们。例如浏览器
+Provider 可以在首次 Action 时按 Agent 配置惰性创建，聊天渠道可以按账号或 Profile 管理，任务调度器
+可以按任务定义管理。所有这些资源最终都必须由 `dispose` 收口。
+
+## 执行租约
+
+Session 在每个 Step 捕获不可变的 Plugin 执行视图。Plugin 被移除后，新 Step 立即不可见；已开始的
+Step 可以继续使用捕获的实例，City 会等最后一个 execution lease 释放后再调用 `dispose`。
+
+`city.close()` 会先停止 Session，再释放 Plugin 和 Workspace，并汇总释放错误。一个 Plugin 的
+`dispose` 失败不会阻止其他 Plugin 清理。

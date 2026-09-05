@@ -94,7 +94,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     title: "Runtime Config",
     description: "Provides a system block for turn-boundary tests",
     lifecycle: {
-      stop: async () => {
+      dispose: async () => {
         plugin_stop_count += 1;
       },
     },

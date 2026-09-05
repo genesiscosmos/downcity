@@ -91,7 +91,7 @@ function create_execution_context() {
 
 function create_registry(plugin, workspace_path = process.cwd()) {
   const registry = new PluginRegistry([plugin]);
-  return registry.contextual(create_context(workspace_path));
+  return registry.contextual(() => create_context(workspace_path));
 }
 
 test("ImagePlugin exposes only job-style image actions", async () => {

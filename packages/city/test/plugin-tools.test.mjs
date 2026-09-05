@@ -34,13 +34,13 @@ function create_turn_context(project_root) {
 
 function create_registry(plugin) {
   const registry = new PluginRegistry([plugin]);
-  const context = create_test_plugin_context({
+  const context_factory = () => create_test_plugin_context({
     agent_id: "plugin_tools_agent",
     workspace_id: "plugin_tools_workspace",
     workspace_path: process.cwd(),
   });
-  return Object.assign(registry.contextual(context), {
-    execution_view: () => registry.execution_view(context),
+  return Object.assign(registry.contextual(context_factory), {
+    execution_view: () => registry.execution_view(context_factory),
     register: (next_plugin) => registry.register(next_plugin),
     unregister: (plugin_name) => registry.unregister(plugin_name),
     unregister_and_wait: (plugin_name) => registry.unregister_and_wait(plugin_name),

@@ -75,8 +75,8 @@ const backend = await agent.sessions.create({ workspace: backend_workspace });
 
 Agent does not own Plugins. City owns one instance per Plugin ID and projects every Plugin into an
 Agent/Workspace execution entry. Every Plugin Action receives the current `PluginContext` with
-directly callable restricted Agent, Workspace, Session, and Turn handles. City instances use
-`start/stop`; Agent/Workspace scopes use `connect/disconnect`.
+directly callable restricted Agent, Workspace, Session, and Turn handles. Plugins use one City-level
+`initialize/dispose` lifecycle; Agent/Workspace only defines the current call scope.
 
 ## Workspace is the resource boundary
 

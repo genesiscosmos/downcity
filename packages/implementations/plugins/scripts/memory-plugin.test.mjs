@@ -77,7 +77,7 @@ function create_plugin_context(agent_id = "memory_test_agent", user_id) {
   };
 }
 
-/** 创建 MemoryPlugin 启动测试使用的最小 City 上下文。 */
+/** 创建 MemoryPlugin 生命周期测试使用的最小 City 上下文。 */
 function create_start_context(storage_path) {
   return {
     storage: { path: storage_path, files: {} },
@@ -258,7 +258,7 @@ test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (co
   context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
   const plugin = new MemoryPlugin({ storage_root_path: memory_root });
   const plugin_context = create_plugin_context();
-  await plugin.start(create_start_context(memory_root));
+  await plugin.initialize(create_start_context(memory_root));
   const result = await plugin.actions.remember.execute({
     context: plugin_context,
     input: {
@@ -277,7 +277,7 @@ test("MemoryPlugin 使用显式运行时目录并公开完整 Action", async (co
     true,
   );
   assert.equal("files" in plugin_context, false);
-  await plugin.stop();
+  await plugin.dispose();
 });
 
 test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Recall", async (context) => {
@@ -285,7 +285,7 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
   context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
   const plugin = new MemoryPlugin({ storage_root_path: memory_root });
   const plugin_context = create_plugin_context();
-  await plugin.start(create_start_context(memory_root));
+  await plugin.initialize(create_start_context(memory_root));
   await plugin.actions.remember.execute({
     context: plugin_context,
     input: {
@@ -420,7 +420,7 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
   assert.equal(capture_job.turn_id, "turn-1");
   assert.equal(capture_job.messages[0].text, "以后回答请保持简洁。");
 
-  await plugin.stop();
+  await plugin.dispose();
 });
 
 test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async (context) => {
@@ -430,7 +430,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   const plugin = new MemoryPlugin({ storage_root_path: city_root });
   const first_context = create_plugin_context("agent-a", "user/with unsafe path");
   const second_context = create_plugin_context("agent-b", "user/with unsafe path");
-  await plugin.start(create_start_context(city_root));
+  await plugin.initialize(create_start_context(city_root));
 
   const remembered = await plugin.actions.remember.execute({
     context: first_context,
@@ -509,7 +509,7 @@ test("City User Memory 在两个 Agent 间共享并按可信用户隔离", async
   assert.equal(unauthenticated.success, false);
   assert.match(unauthenticated.error, /authenticated user/);
 
-  await plugin.stop();
+  await plugin.dispose();
 });
 
 /** 返回 Builtin Provider 对 Agent 数据使用的逻辑目录。 */

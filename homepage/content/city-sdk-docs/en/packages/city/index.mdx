@@ -53,14 +53,16 @@ only manages the runtime object; it never deletes the project directory.
 ## Plugin lifecycle
 
 A Plugin instance has one City-owned lifecycle and may register host-management Actions during
-`start`. It has four lifecycle checkpoints:
+`initialize`. It has two lifecycle checkpoints:
 
-1. City calls `start` when the Plugin is added.
-2. City calls `connect(context)` when an Agent enters a Workspace.
-3. City calls `disconnect(context)` when that scope leaves or the Agent is removed.
-4. City calls `stop` when the Plugin is removed or City closes.
+1. City calls `initialize` once when the Plugin is added.
+2. City calls `dispose` once when the Plugin is removed or City closes.
 
-Actions, System providers, Availability checks, and Hooks receive a `PluginContext`. It contains
+Agent, Session, and Workspace entry or removal do not trigger Plugin lifecycle callbacks. Each Plugin
+owns its long-lived connections, timers, schedulers, and workers according to its actual domain key,
+such as an account, Profile, or task definition.
+
+Each Action, System provider, Availability check, and Hook call receives a freshly projected `PluginContext`. It contains
 restricted `city`, `agent`, `workspace`, `session`, `turn`, `config`, and `storage` handles. A Plugin
 can therefore communicate through the current Session or Agent handle instead of resolving only a
 `session_id`.

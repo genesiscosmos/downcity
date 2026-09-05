@@ -29,9 +29,9 @@ city.agents.add(agent);
 ```
 
 CLI and Desktop may keep `config.toml` as the Profile source of truth, but Agent stores neither
-Plugin instances nor binding relationships. A Plugin registers Config actions during `start()`, and City injects
-the selected Profile's `get/set` store when invoking one. Runtime Actions, Hooks, and lifecycle
-`connect` read `context.config` projected for the current Agent.
+Plugin instances nor binding relationships. A Plugin registers Config actions during `initialize()`, and City injects
+the selected Profile's `get/set` store when invoking one. Runtime Actions, Hooks, System providers,
+and Availability checks read `context.config` projected for the current Agent.
 
-Do not store live connections, callbacks, or clients in a Profile. City-level resources belong to
-`start/stop`; Agent/Workspace resources belong to `connect/disconnect`.
+Do not store live connections, callbacks, or clients in a Profile. The Plugin indexes long-lived
+resources by their actual account, Profile, or other domain identity and releases all of them in `dispose`.

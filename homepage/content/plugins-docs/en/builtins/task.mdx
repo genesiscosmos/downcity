@@ -74,7 +74,7 @@ The action names are `list`, `history`, `run_detail`, `create`, `run`, `delete`,
 
 ## Important semantics
 
-- the cron scheduler starts and stops with City's Agent/Workspace `connect/disconnect` scope
+- the cron scheduler starts lazily when Task first participates in an execution scope and is released by TaskPlugin's City lifecycle
 - cron timezone comes from constructor `timezone`, defaulting to the local machine timezone
 - agent tasks read the effective runtime model from the Session port in PluginContext
 - each run creates an independent task Session while reusing the host Agent's complete Plugin capabilities
