@@ -6,7 +6,11 @@
  * - digest/revise handler 只处理 Memory 领域数据，不读取物理路径。
  */
 
-import type { MemoryRecord } from "@/memory/types/Memory.js";
+import type {
+  MemoryRecord,
+  MemorySourceReference,
+  MemoryType,
+} from "@/memory/types/Memory.js";
 import type { MemoryStorageAdapter } from "@/memory/types/MemoryStorage.js";
 
 /** Builtin Provider 待写入的长期记忆投影。 */
@@ -37,6 +41,21 @@ export interface BuiltinMemoryChunk {
 
   /** 当前片段文本。 */
   text: string;
+}
+
+/** Builtin Memory Markdown 文档解析后的稳定元数据。 */
+export interface BuiltinMemoryMetadata {
+  /** 文档的人类可读标题；旧记录未声明标题时省略。 */
+  title?: string;
+
+  /** 文档承载的记忆类型，用于恢复为领域记录。 */
+  memory_type: MemoryType;
+
+  /** 文档内容最初形成或最近被明确保留的 ISO 时间。 */
+  observed_at: string;
+
+  /** 支撑当前文档内容的可审计证据引用集合。 */
+  source_refs: MemorySourceReference[];
 }
 
 /** Session 提炼处理器输入。 */
