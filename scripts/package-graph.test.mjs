@@ -16,7 +16,7 @@ const workspace_root = path.resolve(import.meta.dirname, "..");
 test("City 构建会自动补齐 Type、Federation 与 Agent", () => {
   assert.deepEqual(
     resolve_package_build_order(workspace_root, ["city"]),
-    ["type", "federation", "agent", "city"],
+    ["type", "agent", "federation", "city"],
   );
 });
 
@@ -25,8 +25,8 @@ test("CLI 构建闭包完全来自 manifest 运行时依赖", () => {
     resolve_package_build_order(workspace_root, ["cli"]),
     [
       "type",
-      "federation",
       "agent",
+      "federation",
       "city",
       "plugins",
       "sandbox-linux",

@@ -104,7 +104,7 @@ test("City dynamically adds and removes one Plugin for every Agent", async () =>
   const city = new City({ workspaces: [scope.workspace], agents: [scope.agent] });
   await city.enter_workspace(scope.agent.id, scope.workspace.id);
 
-  city.plugins.add(plugin);
+  await city.plugins.add(plugin);
   await scope.agent.ensure_ready();
   assert.equal(city.plugins.scope({
     agent_id: scope.agent.id,
@@ -227,6 +227,27 @@ test("City rejects a second instance with the same Plugin ID", async () => {
   assert.throws(() => city.plugins.add(new ObservablePlugin([])), {
     message: "Plugin already exists in City: observable",
   });
+  await city.close();
+});
+
+test("City Plugin add exposes asynchronous startup failure", async () => {
+  const city = new City();
+  const plugin = new ObservablePlugin([]);
+  plugin.name = "broken-start";
+  plugin.start = async () => {
+    throw new Error("plugin-start-failed");
+  };
+
+  await assert.rejects(city.plugins.add(plugin), /plugin-start-failed/u);
+  assert.deepEqual(city.plugins.snapshots().map((snapshot) => ({
+    name: snapshot.name,
+    status: snapshot.status,
+    last_error: snapshot.last_error,
+  })), [{
+    name: "broken-start",
+    status: "error",
+    last_error: "plugin-start-failed",
+  }]);
   await city.close();
 });
 

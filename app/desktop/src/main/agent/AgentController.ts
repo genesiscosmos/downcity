@@ -1148,7 +1148,7 @@ export class AgentController {
         await this.register_workspace_in_city(config);
       }
       for (const registration of await this.plugin_loader.list_registrations()) {
-        this.city.plugins.add(registration);
+        await this.city.plugins.add(registration);
       }
       for (const config of this.data.agents.list()) {
         const agent = await this.create_native_agent(config);
@@ -1188,7 +1188,7 @@ export class AgentController {
   private async provide_plugin(plugin_id: string): Promise<void> {
     const registration = await this.plugin_loader.load_plugin_registration(plugin_id);
     if (!registration) throw new Error(`Plugin does not provide a City runtime: ${plugin_id}`);
-    this.city.plugins.add(registration);
+    await this.city.plugins.add(registration);
   }
 
   /** 显式装配一个 Desktop native Agent。 */

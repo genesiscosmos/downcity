@@ -71,8 +71,10 @@ export interface CityAgentPlugins {
 
 /** City 对外暴露的 Plugin 集合。 */
 export interface CityPlugins {
-  /** 向 City 添加唯一 Plugin 实例或带 UI 元数据的注册项。 */
-  add(input: CityPluginInput): void;
+  /**
+   * 向 City 添加唯一 Plugin 实例或带 UI 元数据的注册项，并等待启动及已有作用域连接。
+   */
+  add(input: CityPluginInput): Promise<void>;
 
   /** 从 City 移除 Plugin，并等待正在执行的 Hook/Action 收口。 */
   remove(plugin_id: string): Promise<boolean>;

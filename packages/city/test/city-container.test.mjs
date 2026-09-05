@@ -5,7 +5,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { Agent } from "@downcity/agent";
+import { Agent, Group } from "@downcity/agent";
+import {
+  attach_group_storage,
+  detach_group_storage,
+  get_workspace_entry,
+} from "@downcity/agent/internal";
 import { City, Workspace } from "../bin/index.js";
 
 /** 创建临时运行时 Agent。 */
@@ -37,6 +42,7 @@ test("Agent 绑定 City 后可使用 City Workspace 并拒绝重复 ID", async (
 
 test("Agent 创建无 City Session 后不能再切换到 City 存储", async () => {
   const agent = new Agent({ id: "memory-first-agent" });
+  const replacement = new Agent({ id: "memory-first-agent" });
   const city = new City();
   try {
     await agent.sessions.create();
@@ -44,9 +50,86 @@ test("Agent 创建无 City Session 后不能再切换到 City 存储", async () 
       () => city.agents.add(agent),
       /already created Session data without City/u,
     );
+    assert.equal(city.agents.add(replacement), replacement);
+    assert.equal(city.agents.get(replacement.id), replacement);
   } finally {
     await agent.dispose();
     await city.close();
+  }
+});
+
+test("City 删除 Workspace 前释放全部 Agent 执行作用域", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-remove-"));
+  const workspace = await create_agent(root, "workspace-remove");
+  const agent = new Agent({ id: "workspace-remove" });
+  const city = new City({ agents: [agent], workspaces: [workspace] });
+  try {
+    await agent.sessions.create({ workspace });
+    assert.ok(get_workspace_entry(agent, workspace.id));
+
+    assert.equal(await city.workspaces.remove(workspace.id), workspace);
+    assert.equal(city.workspaces.get(workspace.id), null);
+    assert.equal(get_workspace_entry(agent, workspace.id), null);
+    assert.throws(
+      () => city.require_workspace(agent.id, workspace.id),
+      /Workspace not found in City/u,
+    );
+  } finally {
+    await city.close();
+    await agent.dispose();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("City 删除 Workspace 期间拒绝返回旧执行作用域", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-removing-"));
+  const workspace = await create_agent(root, "workspace-removing");
+  const agent = new Agent({ id: "workspace-removing" });
+  const city = new City({ agents: [agent], workspaces: [workspace] });
+  try {
+    await agent.sessions.create({ workspace });
+    const entry = get_workspace_entry(agent, workspace.id);
+    assert.ok(entry);
+    let finish_leave;
+    const leave_finished = new Promise((resolve) => {
+      finish_leave = resolve;
+    });
+    const original_leave = entry.leave.bind(entry);
+    entry.leave = async () => {
+      await leave_finished;
+      await original_leave();
+    };
+
+    const removal = city.workspaces.remove(workspace.id);
+    try {
+      await assert.rejects(
+        city.enter_workspace(agent.id, workspace.id),
+        /Workspace is being removed from City/u,
+      );
+    } finally {
+      finish_leave();
+    }
+    await removal;
+  } finally {
+    await city.close();
+    await agent.dispose();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("City 连带删除 Agent Group 时解除 Group Storage 所有权", async () => {
+  const agent = new Agent({ id: "group-owner-agent" });
+  const group = new Group({ id: "group-owner", members: [agent] });
+  const city = new City({ agents: [agent], groups: [group] });
+  const next_city = new City();
+  try {
+    assert.equal(await city.agents.remove(agent.id), agent);
+    assert.equal(city.groups.get(group.id), null);
+    assert.doesNotThrow(() => attach_group_storage(group, next_city.storage, next_city));
+    await detach_group_storage(group, next_city);
+  } finally {
+    await city.close();
+    await next_city.close();
   }
 });
 

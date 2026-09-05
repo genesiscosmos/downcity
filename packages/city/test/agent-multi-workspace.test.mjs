@@ -203,7 +203,7 @@ test("Plugin runtime data is isolated by Agent and shared across Workspaces", as
   const third_workspace = new Workspace({ id: "three", path: path.join(root, "three"), data_root_path: path.join(root, "data") });
   const city = new City({ workspaces: [first_workspace, second_workspace, third_workspace] });
   const registration = create_plugin_registration(plugin);
-  city.plugins.add(registration);
+  await city.plugins.add(registration);
   city.agents.add(agent_a);
   city.agents.add(agent_b);
   const first = create_workspace_entry(agent_a, first_workspace);

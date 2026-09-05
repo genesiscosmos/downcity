@@ -152,7 +152,7 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
   const workspace_b = new Workspace({ id: "workspace_b", path: root_b, data_root_path: path.join(root_b, "data") });
   const city = new City({ workspaces: [workspace_a, workspace_b] });
   const registration = create_plugin_registration(create_owner_plugin(executed_owners));
-  city.plugins.add(registration);
+  await city.plugins.add(registration);
   city.agents.add(agent_a);
   city.agents.add(agent_b);
   const entry_a = create_workspace_entry(agent_a, workspace_a);

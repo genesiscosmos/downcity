@@ -92,8 +92,8 @@ test("指定 package 会自动补齐 scoped 运行时依赖并保持拓扑顺序
 
   assert.deepEqual(plan.map((item) => item.name), [
     "@downcity/type",
-    "@downcity/federation",
     "@downcity/agent",
+    "@downcity/federation",
     "@downcity/city",
     "@downcity/plugins",
   ]);

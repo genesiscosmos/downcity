@@ -77,12 +77,12 @@ export class CityPluginRuntime {
   }
 
   /** 向 City 添加一个唯一 Plugin 实例。 */
-  private add(input: CityPluginInput): void {
+  private add(input: CityPluginInput): Promise<void> {
     const registration = normalize_registration(input);
     const plugin_id = normalize_id(registration.plugin.name, "plugin.name");
     const existing = this.plugins_by_id.get(plugin_id);
     if (existing) {
-      if (existing.plugin === registration.plugin) return;
+      if (existing.plugin === registration.plugin) return existing.ready;
       throw new Error(`Plugin already exists in City: ${plugin_id}`);
     }
 
@@ -115,12 +115,20 @@ export class CityPluginRuntime {
     } as CityPluginRecord;
     this.plugins_by_id.set(plugin_id, record);
     record.ready = this.start_plugin(record);
+    // 构造期允许宿主暂不等待返回值，但启动失败仍保留在 ready 与 snapshot 中，
+    // 并且不能形成进程级 unhandled rejection。
+    void record.ready.catch(() => undefined);
 
+    const attachments: Promise<void>[] = [];
     for (const agent_record of this.agents_by_id.values()) {
       agent_record.ready = this.enqueue_agent_mutation(agent_record, async () => {
         await this.attach_plugin(agent_record, record);
       });
+      attachments.push(agent_record.ready);
     }
+    const completion = Promise.all([record.ready, ...attachments]).then(() => undefined);
+    void completion.catch(() => undefined);
+    return completion;
   }
 
   /** 从 City 移除 Plugin，并等待全部正在执行的 Scope 收口。 */

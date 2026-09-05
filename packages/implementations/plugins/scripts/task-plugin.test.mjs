@@ -114,7 +114,7 @@ test("scheduled task appends its result to the Session captured from create cont
     }),
   });
   const registration = create_task_registration(task_plugin);
-  city.plugins.add(registration);
+  await city.plugins.add(registration);
   city.agents.add(agent);
   const entry = create_workspace_entry(agent, workspace);
   const plugin_scope = city.plugins.scope({
