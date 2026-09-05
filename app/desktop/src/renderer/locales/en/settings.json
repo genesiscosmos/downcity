@@ -1,4 +1,5 @@
 {
+  "login_errors": { "input_unsupported": "This Desktop version does not support sign-in methods that require additional input", "failed": "Sign-in failed", "timeout": "Sign-in authorization timed out. Try again." },
   "title": "Settings",
   "sections": { "account": "Account", "models": "Models", "general": "General", "appearance": "Appearance", "chat": "Chat" },
   "language": { "title": "Language", "description": "Choose the language used by the Desktop interface.", "english": "English", "chinese": "简体中文" },

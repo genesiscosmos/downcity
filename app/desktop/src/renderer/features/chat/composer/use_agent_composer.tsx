@@ -7,9 +7,11 @@ import { ChatModelSelector } from "./ChatModelSelector";
 import { ChatApprovalModeSelector } from "./ChatApprovalModeSelector";
 import type { AgentComposerProps, RichTextEditorProps } from "@/types/ChatComponents";
 import type { ChatSlashCommand } from "@/types/ChatComposer";
+import { use_translation } from "@/locales/i18n";
 
 /** 绑定模型和草稿；消息列表不参与输入区域的订阅。 */
 export function use_agent_composer({ selection, stores, actions }: AgentComposerProps): RichTextEditorProps {
+  const translate = use_translation("chat");
   const { workspace_id, agent_id } = selection;
   const session_id = selection.kind === "draft" ? selection.draft_id : selection.session_id;
   const session_key = get_session_key(workspace_id, agent_id, session_id);
@@ -29,14 +31,14 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
   const set_reasoning_effort = (effort?: string) => actions.set_session_reasoning_effort(workspace_id, agent_id, session_id, effort);
   const set_approval_mode = (mode: "ask" | "always-allow") => actions.set_session_approval_mode(workspace_id, agent_id, session_id, mode);
   const commands: ChatSlashCommand[] = [
-    ...models.map(model => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: `切换到 ${model.model_id}`, keywords: ["model", "模型", model.model_id], run: () => set_model(model.model_id) })),
-    ...(["ask", "always-allow"] as const).map(mode => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: mode === "ask" ? "执行前询问" : "自动允许", keywords: ["approval", "权限"], run: () => set_approval_mode(mode) })),
+    ...models.map(model => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: translate("commands.switch_model", { model: model.model_id }), keywords: ["model", model.model_id], run: () => set_model(model.model_id) })),
+    ...(["ask", "always-allow"] as const).map(mode => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: translate(mode === "ask" ? "commands.ask_before_run" : "commands.allow_automatically"), keywords: ["approval"], run: () => set_approval_mode(mode) })),
   ];
   const effective_configuration = configuration ?? { model_id: default_model_id || agent?.model_id || "", approval_mode: "ask" as const };
   return {
     editor_key: session_key,
     draft_content: draft ?? empty_chat_content,
-    placeholder: "和 Agent 继续对话…",
+    placeholder: translate("composer.placeholder"),
     busy: false,
     spellcheck_enabled,
     send_message_on_enter,

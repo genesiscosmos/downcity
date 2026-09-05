@@ -89,7 +89,7 @@ function ModelPreview({ model }: { /** 当前模型目录信息。 */ model: Des
         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-surface-subtle p-2.5 text-[11px]">
           <ModelDetail label={translate("model.context")} value={model.context_window ? format_context_window(model.context_window) : translate("model.not_provided")} />
           <ModelDetail label={translate("model.capabilities")} value={model.modalities.join(" / ") || translate("model.not_provided")} />
-          <ModelDetail label={translate("model.reasoning")} value={reasoning_label ? reasoning_label.replace(/^推理：/, "") : translate("model.not_supported")} />
+          <ModelDetail label={translate("model.reasoning")} value={reasoning_label || translate("model.not_supported")} />
           <ModelDetail label={translate("model.default_effort")} value={default_effort?.name || common_translate("state.automatic")} />
         </dl>
         <div className="mt-3 flex items-center gap-2 text-[11px]">

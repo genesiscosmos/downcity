@@ -66,6 +66,7 @@ export function AgentInfoSidebar({
   collapsed = false,
   embedded = false,
 }: AgentInfoSidebarProps) {
+  const translate_resources = use_translation("resources");
   const [editor_section, set_editor_section] = useState<
     AgentEditorSection | undefined
   >(section || "model");
@@ -141,7 +142,7 @@ export function AgentInfoSidebar({
     return () => window.clearTimeout(timeout_id);
   }, [agent.agent_id, controller.actions, definition, definition_dirty]);
   const titles: Record<AgentEditorSection, string> = {
-    identity: "身份",
+    identity: translate_resources("agent_details.identity"),
     model: "Model",
     soul: "SOUL.md",
     plugins: "Plugins",
@@ -190,6 +191,8 @@ export function AgentView({
   sidebar_collapsed = false,
   toggle_sidebar,
 }: AgentViewProps) {
+  const translate_resources = use_translation("resources");
+  const translate_common = use_translation();
   const [avatar_dialog_open, set_avatar_dialog_open] = useState(false);
   const bound_plugins = plugins.filter((plugin) =>
     plugin.agent_ids.includes(agent.agent_id),
@@ -215,25 +218,25 @@ export function AgentView({
                 {agent.name}
               </span>
               <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                配置头像
+                {translate_resources("agent_details.choose_avatar")}
                 <TbChevronRight className="size-3.5" />
               </span>
             </span>
           </button>
           <SettingSection
             title="Agent"
-            description="配置 Agent 的默认能力与行为"
+            description={translate_resources("agent_details.agent_description")}
           >
             <SettingGroup>
-              <SettingActionItem icon={<TbUser />} label="身份" description={agent.description || "配置名称和简介"} trailing={<TbChevronRight />} on_select={() => open_config("identity")} />
+              <SettingActionItem icon={<TbUser />} label={translate_resources("agent_details.identity")} description={agent.description || translate_resources("agent_details.identity_description")} trailing={<TbChevronRight />} on_select={() => open_config("identity")} />
               <SettingActionItem
                 icon={<LLMModelIcon model_id={agent.model_id} />}
                 label="Model"
-                description="Agent 默认使用的文本模型"
+                description={translate_resources("agent_details.model_description")}
                 trailing={
                   <>
                     <span className="max-w-48 truncate">
-                      {agent.model_id || "未配置"}
+                      {agent.model_id || translate_common("state.not_configured")}
                     </span>
                     <TbChevronRight />
                   </>
@@ -243,17 +246,17 @@ export function AgentView({
               <SettingActionItem
                 icon={<TbFileText />}
                 label="SOUL.md"
-                description="定义 Agent 的身份、目标和行为方式"
+                description={translate_resources("agent_details.soul_description")}
                 trailing={<TbChevronRight />}
                 on_select={() => open_config("soul")}
               />
               <SettingActionItem
                 icon={<TbComponents />}
                 label="Plugins"
-                description="启用工具、渠道与外部能力"
+                description={translate_resources("agent_details.plugins_description")}
                 trailing={
                   <>
-                    <span>{bound_plugins.length} 个</span>
+                    <span>{translate_resources("agent_details.plugins_count", { count: bound_plugins.length })}</span>
                     <TbChevronRight />
                   </>
                 }
@@ -261,16 +264,16 @@ export function AgentView({
               />
             </SettingGroup>
           </SettingSection>
-          <SettingSection title="危险操作" description="永久删除这个 Agent 及其数据"><DeleteAgentButton agent={agent} controller={controller} /></SettingSection>
-          <SettingSection title="主对话" description="进入该 Agent 的持续对话">
+          <SettingSection title={translate_resources("agent_details.danger")} description={translate_resources("agent_details.danger_description")}><DeleteAgentButton agent={agent} controller={controller} /></SettingSection>
+          <SettingSection title={translate_resources("agent_details.main_chat")} description={translate_resources("agent_details.main_chat_description")}>
             {recent_sessions.length > 0 ? (
               <SettingGroup>
                 {recent_sessions.map((session) => (
                   <SettingActionItem
                     key={session.session_id}
                     icon={<TbMessageCircle />}
-                    label={session.title || "主对话"}
-                    description={`${session.message_count} 条消息`}
+                    label={session.title || translate_resources("agent_details.main_chat")}
+                    description={translate_resources("agent_details.messages", { count: session.message_count })}
                     trailing={<TbChevronRight />}
                     on_select={() => void open_main_session()}
                   />
@@ -282,7 +285,7 @@ export function AgentView({
                 onClick={() => void open_main_session()}
               >
                 <TbMessageCircle />
-                开始主对话
+                {translate_resources("agent_details.start_main_chat")}
               </Button>
             )}
           </SettingSection>
@@ -291,9 +294,9 @@ export function AgentView({
       <Dialog open={avatar_dialog_open} onOpenChange={set_avatar_dialog_open}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>配置头像</DialogTitle>
+            <DialogTitle>{translate_resources("agent_details.avatar_title")}</DialogTitle>
             <DialogDescription>
-              设置 {agent.name} 在 Chat 和 Group 中显示的头像。
+              {translate_resources("agent_details.avatar_description", { name: agent.name })}
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
@@ -311,7 +314,7 @@ export function AgentView({
                 void controller.actions.generate_agent_avatar(agent.agent_id)
               }
             >
-              随机头像
+              {translate_resources("agent_details.random")}
             </Button>
             <Button
               variant="primary"
@@ -319,7 +322,7 @@ export function AgentView({
                 void controller.actions.choose_agent_avatar(agent.agent_id)
               }
             >
-              选择图片
+              {translate_resources("agent_details.choose_image")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -376,11 +379,13 @@ function AgentEditorPanel({
   /** 收起右侧容器。 */ close_editor(): void;
   /** 是否嵌入已有信息侧栏。 */ embedded?: boolean;
 }) {
+  const translate_resources = use_translation("resources");
+  const translate_common = use_translation();
   const content = (
     <>
       {loading && !definition ? (
         <div className="py-10 text-center text-xs text-muted-foreground">
-          加载中…
+          {translate_common("state.loading")}
         </div>
       ) : null}
       {definition && section === "model" ? (
@@ -422,7 +427,7 @@ function AgentEditorPanel({
       </div>
     );
   const titles: Record<AgentEditorSection, string> = {
-    identity: "身份",
+    identity: translate_resources("agent_details.identity"),
     model: "Model",
     soul: "SOUL.md",
     plugins: "Plugins",
@@ -486,6 +491,7 @@ function ModelEditor({
   /** Renderer 稳定控制器。 */ controller: DesktopController;
   /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void;
 }) {
+  const translate = use_translation("chat");
   const models = use_desktop_selector(controller.stores.catalog, (state) => state.models);
   const models_loading = use_desktop_selector(controller.stores.catalog, (state) => state.models_loading);
   const text_models = models.filter((model) =>
@@ -496,13 +502,13 @@ function ModelEditor({
   if (models_loading && text_models.length === 0)
     return (
       <div className="py-8 text-center text-xs text-muted-foreground">
-        模型加载中…
+        {translate("model.loading")}
       </div>
     );
   if (text_models.length === 0)
     return (
       <div className="py-8 text-center text-xs text-muted-foreground">
-        暂无文本模型
+        {translate("model.empty")}
       </div>
     );
   return (
@@ -542,6 +548,7 @@ function SoulEditor({
   /** Renderer 稳定控制器。 */ controller: DesktopController;
   /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void;
 }) {
+  const translate_resources = use_translation("resources");
   const editor_ref = useRef<HTMLDivElement>(null);
   const spellcheck_enabled = use_desktop_selector(controller.stores.settings, (state) => state.settings.spellcheck_enabled);
   useEffect(() => {
@@ -555,11 +562,11 @@ function SoulEditor({
       contentEditable
       suppressContentEditableWarning
       role="textbox"
-      aria-label="SOUL.md 内容"
+      aria-label={translate_resources("agent_details.soul_label")}
       aria-multiline="true"
       autoFocus
       spellCheck={spellcheck_enabled}
-      data-placeholder="开始编辑 SOUL.md…"
+      data-placeholder={translate_resources("agent_details.soul_placeholder")}
       className="h-full min-h-full w-full overflow-y-auto bg-transparent p-3 font-mono text-xs leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground/50 empty:before:content-[attr(data-placeholder)]"
       onInput={(event) =>
         set_definition({
@@ -583,6 +590,7 @@ function PluginEditor({
   /** Desktop 稳定控制器。 */ controller: DesktopController;
   /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void;
 }) {
+  const translate_resources = use_translation("resources");
   const [missing_profile_plugin, set_missing_profile_plugin] =
     useState<DesktopPluginSummary>();
   const [missing_profile_dialog_open, set_missing_profile_dialog_open] =
@@ -625,7 +633,7 @@ function PluginEditor({
           .map((plugin) => {
             const reference = definition.plugins[plugin.plugin_id];
             const profile_options = [
-              { value: "", label: "空配置" },
+              { value: "", label: translate_resources("agent_details.empty_config") },
               ...plugin.profile_ids.map((profile_id) => ({
                 value: profile_id,
                 label: profile_id,
@@ -662,7 +670,7 @@ function PluginEditor({
                   <Switch
                     checked={Boolean(reference)}
                     onCheckedChange={(enabled) => set_plugin(plugin, enabled)}
-                    aria-label={`${plugin.title} 启用状态`}
+                    aria-label={translate_resources("agent_details.plugin_state", { name: plugin.title })}
                   />
                 </div>
               </SettingItem>

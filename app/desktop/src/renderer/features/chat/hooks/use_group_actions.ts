@@ -13,6 +13,7 @@ import type { use_chat_stream_store } from "@/features/chat/state/use_chat_strea
 import type { use_composer_store } from "@/features/chat/state/use_composer_store";
 import type { use_navigation_store } from "@/features/navigation/state/use_navigation_store";
 import type { use_settings_store } from "@/features/settings/state/use_settings_store";
+import { translate } from "@/locales/i18n";
 import { to_error_message } from "@/features/settings/state/use_settings_store";
 
 const active_workspace_storage_key = "downcity.active_workspace_id";
@@ -68,7 +69,7 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
       if (!target_session_id) return await open_group_draft(group_id, undefined, request_id);
       const group = await window.downcity.group.open(group_id, target_session_id);
       const active_session = group.sessions.find((item) => item.session_id === group.active_session_id);
-      if (!active_session?.workspace_id || !group.active_session_id) throw new Error("GroupSession 必须绑定 Workspace");
+      if (!active_session?.workspace_id || !group.active_session_id) throw new Error(translate("chat:errors.group_workspace_required"));
       const messages = await window.downcity.group.list_messages(group_id, group.active_session_id);
       if (group_navigation_request_ref.current !== request_id || navigation.state_ref.current.selection !== initial_selection) return;
       catalog.upsert_group(group);
@@ -116,7 +117,9 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
   const remove_group_session = useCallback(async (group_id: string, session_id: string) => {
     settings.set_error("");
     try {
+      const removed_session = catalog.state_ref.current.groups_by_id[group_id]?.sessions.find((item) => item.session_id === session_id);
       const group = await window.downcity.group.remove_session(group_id, session_id);
+      if (removed_session?.workspace_id) composer.remove_draft(get_group_chat_key(removed_session.workspace_id, group_id, session_id));
       catalog.upsert_group(group); chat_stream.reset_group_chat(group_id);
       const next_session = group.sessions.find((item) => item.session_id === group.active_session_id);
       if (settings.state_ref.current.settings.group_main_sessions[group_id]?.session_id === session_id) {
@@ -130,7 +133,7 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
         else await open_group_draft(group_id, selection.workspace_id);
       }
     } catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
-  }, [catalog, chat_stream, navigation, open_group, open_group_draft, settings]);
+  }, [catalog, chat_stream, composer, navigation, open_group, open_group_draft, settings]);
   const send_group_message = useCallback(async (group_id: string, workspace_id: string, session_id: string, input: JSONContent) => {
     const normalized_text = read_chat_composer_text(input, true);
     if (!normalized_text) return undefined;
@@ -143,7 +146,7 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
       if (is_group_draft_session_id(session_id)) {
         const group = await window.downcity.group.create_session(group_id, workspace_id);
         const created_session = group.sessions.find((item) => item.session_id === group.active_session_id);
-        if (!group.active_session_id || created_session?.workspace_id !== workspace_id) throw new Error("无法创建当前 Workspace 的 GroupSession");
+        if (!group.active_session_id || created_session?.workspace_id !== workspace_id) throw new Error(translate("chat:errors.group_session_create_failed"));
         target_session_id = group.active_session_id;
         target_key = get_group_chat_key(workspace_id, group_id, target_session_id);
         active_group_session_ids_ref.current.set(group_id, target_session_id);

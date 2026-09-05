@@ -15,16 +15,18 @@ import { GroupComposer } from "@/features/chat/composer/GroupComposer";
 
 import { GroupChatMainView } from "@/features/group/components/GroupChatDetails";
 import { empty_items } from "@/features/chat/lib/chat_view_defaults";
+import { use_translation } from "@/locales/i18n";
 
 /** Group Chat 路由只订阅其直接依赖的 Group、Agent、Workspace 与 Chat 设置。 */
 export function GroupChatRouteMainView({ selection, controller, sidebar_collapsed }: { /** Group Chat 导航目标。 */ selection: Extract<NavigationTarget, { kind: "group_session" | "group_draft" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const translate = use_translation("chat");
   const group = use_desktop_selector(controller.stores.catalog, (state) => state.groups_by_id[selection.group_id]);
   const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
   const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
   const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
   const session_id = selection.kind === "group_draft" ? selection.draft_id : selection.session_id;
   const session = selection.kind === "group_draft"
-    ? { session_id, title: "新对话", workspace_id: selection.workspace_id, created_at: 0, updated_at: 0, message_count: 0 }
+    ? { session_id, title: translate("conversation.new"), workspace_id: selection.workspace_id, created_at: 0, updated_at: 0, message_count: 0 }
     : group?.sessions.find((item) => item.session_id === session_id);
   if (!group || !session) return <WelcomeView />;
   return <GroupChatMainView group={group} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`group-chat:${group.group_id}:${session_id}`}>

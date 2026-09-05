@@ -1,4 +1,5 @@
 {
+  "login_errors": { "input_unsupported": "当前 Desktop 暂不支持需要输入信息的登录方式", "failed": "登录失败", "timeout": "登录授权已超时，请重试" },
   "title": "设置",
   "sections": { "account": "账户", "models": "模型", "general": "通用", "appearance": "外观", "chat": "聊天" },
   "language": { "title": "语言", "description": "选择 Desktop 界面使用的语言。", "english": "English", "chinese": "简体中文" },

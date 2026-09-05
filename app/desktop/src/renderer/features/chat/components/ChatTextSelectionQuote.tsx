@@ -9,6 +9,7 @@ import { useEffect, useState, type RefObject } from "react";
 import { TbQuote } from "react-icons/tb";
 import type { ChatTextSelection } from "@/types/ChatTextSelection";
 import { dispatch_chat_reference } from "@/features/chat/composer/editor/chatReferenceEvent";
+import { use_translation } from "@/locales/i18n";
 
 /** 可被引用的消息正文节点携带的稳定元数据。 */
 interface SelectableMessageSurface {
@@ -20,6 +21,7 @@ interface SelectableMessageSurface {
 
 /** 在当前 Session 消息区内展示选区引用按钮。 */
 export function ChatTextSelectionQuote({ container_ref, session_id }: { /** 消息滚动容器。 */ container_ref: RefObject<HTMLDivElement | null>; /** 当前 Session 标识，用于切换会话时清理临时选区。 */ session_id: string }) {
+  const translate = use_translation("chat");
   const [selected, set_selected] = useState<ChatTextSelection>();
 
   useEffect(() => {
@@ -56,11 +58,11 @@ export function ChatTextSelectionQuote({ container_ref, session_id }: { /** 消�
     type="button"
     className="fixed z-50 inline-flex h-7 -translate-x-1/2 -translate-y-full items-center gap-1 rounded-md border border-border-subtle bg-popover px-2 text-[0.6875rem] font-medium text-foreground shadow-md transition-colors hover:bg-muted"
     style={{ left: selected.viewport_x, top: selected.viewport_y }}
-    aria-label="引用选中文本到输入框"
-    title="引用到输入框"
+    aria-label={translate("message.quote")}
+    title={translate("message.quote")}
     onPointerDown={(event) => event.preventDefault()}
     onClick={insert_reference}
-  ><TbQuote className="size-3" /><span>引用</span></button>;
+  ><TbQuote className="size-3" /><span>{translate("message.quote")}</span></button>;
 }
 
 /** 从浏览器 Selection 中读取一段属于同一消息正文的有效文本。 */

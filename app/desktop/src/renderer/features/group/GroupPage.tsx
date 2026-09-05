@@ -10,6 +10,7 @@ import { WelcomeView } from "@/app/WelcomeView";
 
 import { MainViewBayBarFrame } from "@/layouts/BayBar";
 import { GroupConfigView, GroupInfoSidebar, type GroupEditorSection } from "@/features/group/GroupView";
+import { use_translation } from "@/locales/i18n";
 
 /** Group 配置路由只订阅当前 Group。 */
 export function GroupRouteMainView({ selection, controller, sidebar_collapsed }: { /** Group 配置导航目标。 */ selection: Extract<NavigationTarget, { kind: "group" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
@@ -19,9 +20,10 @@ export function GroupRouteMainView({ selection, controller, sidebar_collapsed }:
 
 /** Group MainView 独立拥有配置 BayBar 的状态与编辑分区。 */
 export function GroupMainView({ group, controller, sidebar_collapsed }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const translate = use_translation("resources");
   const [section, set_section] = useState<GroupEditorSection>("model");
   const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
-  return <MainViewBayBarFrame view_key={`group:${group.group_id}`} sidebar_collapsed={sidebar_collapsed} title={section === "model" ? "Model" : section === "instruction" ? "协作目标" : "成员"} baybar_content={<GroupInfoSidebar group={group} agents={agents} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
+  return <MainViewBayBarFrame view_key={`group:${group.group_id}`} sidebar_collapsed={sidebar_collapsed} title={section === "model" ? "Model" : section === "instruction" ? translate("group_details.goal") : translate("group_details.members")} baybar_content={<GroupInfoSidebar group={group} agents={agents} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
     {(open_baybar) => <GroupConfigView group={group} agents={agents} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
   </MainViewBayBarFrame>;
 }

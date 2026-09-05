@@ -9,12 +9,14 @@ import { cn } from "@/lib/utils";
 import { PluginConfigPanel } from "@/views/PluginSettings";
 import type { DesktopActions } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";
+import { use_translation } from "@/locales/i18n";
 
 /** 所有 Plugin 都展示说明；只有声明 Config 时才展示 Profile 配置。 */
 export function PluginView({ plugin, controller }: {
   /** 当前 Plugin。 */ readonly plugin: DesktopPluginSummary;
   /** Renderer 稳定操作集合。 */ readonly controller: DesktopActions;
 }) {
+  const translate = use_translation("plugin");
   const [definition, set_definition] = useState<DesktopPluginDefinition>();
   const [error, set_error] = useState("");
   const get_plugin = controller.get_plugin;
@@ -31,7 +33,7 @@ export function PluginView({ plugin, controller }: {
       <div className="mx-auto flex min-h-full w-full max-w-[90rem] flex-col gap-5 px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
         <PluginOverview plugin={definition ?? plugin} />
         {error ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-        {plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} set_definition={set_definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-sm text-foreground">无需配置</div><div className="mt-1 text-xs text-muted-foreground">此 Plugin 没有声明 Config，也不需要 Profile。</div></section>}
+        {plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} set_definition={set_definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-sm text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
       </div>
     </main></MainViewBody>
   </MainViewLayout>;

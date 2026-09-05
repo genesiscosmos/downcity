@@ -4,9 +4,11 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
 import { TbFile, TbPhoto, TbQuote, TbX } from "react-icons/tb";
 import type { ChatAttachmentNodeAttributes, ChatReferenceNodeAttributes } from "@/types/ChatComposer";
+import { use_translation } from "@/locales/i18n";
 
 /** 编辑器内附件的紧凑预览。 */
 function ChatAttachmentView({ node, deleteNode }: NodeViewProps) {
+  const translate = use_translation("chat");
   const attributes = node.attrs as ChatAttachmentNodeAttributes;
   const image = attributes.media_type.startsWith("image/");
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
@@ -15,13 +17,14 @@ function ChatAttachmentView({ node, deleteNode }: NodeViewProps) {
         {image ? <span className="inline-flex size-4 shrink-0 overflow-hidden rounded bg-foreground/[0.08] transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><img src={attributes.data_url} alt="" className="size-full object-cover" draggable={false} /></span> : <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/75 transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><TbFile className="size-3" /></span>}
         <span className="min-w-0 truncate leading-4">{attributes.filename}</span>
       </span>
-      <button type="button" className="absolute left-1 top-1/2 inline-flex size-3.5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground/70 opacity-0 transition-all hover:bg-foreground/[0.06] hover:text-foreground focus-visible:opacity-100 group-hover/chat-attachment:opacity-100 group-focus-within/chat-attachment:opacity-100" title="移除附件" onClick={deleteNode}><TbX className="size-2.5" /></button>
+      <button type="button" className="absolute left-1 top-1/2 inline-flex size-3.5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground/70 opacity-0 transition-all hover:bg-foreground/[0.06] hover:text-foreground focus-visible:opacity-100 group-hover/chat-attachment:opacity-100 group-focus-within/chat-attachment:opacity-100" title={translate("composer.remove_attachment")} onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>
   </NodeViewWrapper>;
 }
 
 /** 编辑器内消息引用的紧凑预览。 */
 function ChatReferenceView({ node, deleteNode }: NodeViewProps) {
+  const translate = use_translation("chat");
   const attributes = node.attrs as ChatReferenceNodeAttributes;
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
     <span contentEditable={false} className="group/chat-ref relative inline-flex max-w-[16rem] items-center rounded-lg bg-foreground/[0.09] align-middle text-[0.6875rem] text-foreground/88 shadow-none [box-shadow:none] [filter:none]">
@@ -29,7 +32,7 @@ function ChatReferenceView({ node, deleteNode }: NodeViewProps) {
         <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-md text-muted-foreground/75 transition-opacity group-hover/chat-ref:opacity-0 group-focus-within/chat-ref:opacity-0"><TbQuote className="size-3" /></span>
         <span className="min-w-0 truncate font-medium leading-4">{attributes.preview_text}</span>
       </span>
-      <button type="button" className="absolute left-1.5 top-1/2 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-all hover:bg-foreground/[0.06] hover:text-foreground focus-visible:opacity-100 group-hover/chat-ref:opacity-100 group-focus-within/chat-ref:opacity-100" title="移除引用" onClick={deleteNode}><TbX className="size-2.5" /></button>
+      <button type="button" className="absolute left-1.5 top-1/2 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-all hover:bg-foreground/[0.06] hover:text-foreground focus-visible:opacity-100 group-hover/chat-ref:opacity-100 group-focus-within/chat-ref:opacity-100" title={translate("composer.remove_reference")} onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>
   </NodeViewWrapper>;
 }

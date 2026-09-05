@@ -13,6 +13,7 @@ import type { use_navigation_store } from "@/features/navigation/state/use_navig
 import type { use_session_store } from "@/features/chat/state/use_session_store";
 import type { use_settings_store } from "@/features/settings/state/use_settings_store";
 import { normalize_global_env_text, to_error_message } from "@/features/settings/state/use_settings_store";
+import { translate } from "@/locales/i18n";
 
 const active_workspace_storage_key = "downcity.active_workspace_id";
 
@@ -168,16 +169,16 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
     try {
       const started = await window.downcity.user.start_login({ federation_url, provider_id });
       pending_login_id = started.status === "done" ? "" : started.login_id;
-      if (started.status === "input_required") throw new Error("当前 Desktop 暂不支持需要输入信息的登录方式");
+      if (started.status === "input_required") throw new Error(translate("settings:login_errors.input_unsupported"));
       if (started.status !== "done") {
         let completed = false;
         for (let attempt = 0; attempt < 180; attempt += 1) {
           const result = await window.downcity.user.get_login_result(started.login_id);
-          if (result.status === "error") throw new Error(result.error || "登录失败");
+          if (result.status === "error") throw new Error(result.error || translate("settings:login_errors.failed"));
           if (result.status === "done") { pending_login_id = ""; completed = true; break; }
           await new Promise((resolve) => setTimeout(resolve, 1_000));
         }
-        if (!completed) throw new Error("登录授权已超时，请重试");
+        if (!completed) throw new Error(translate("settings:login_errors.timeout"));
       }
       settings.set_user(await window.downcity.user.current());
       settings.set_accounts(await window.downcity.user.list_accounts());
