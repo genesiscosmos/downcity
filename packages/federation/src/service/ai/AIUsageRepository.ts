@@ -26,6 +26,7 @@ import type {
   UserDailyUsageQuery,
   UserRecentAIUsageQuery,
 } from "../../types/AIUsage.js";
+import type { AISettlementJobRecord } from "../../types/AISettlementRuntime.js";
 import {
   create_usage_date_formatter,
   create_usage_utc_envelope,
@@ -35,34 +36,6 @@ import {
 
 const LEASE_DURATION_MS = 60_000;
 const MAX_RETRY_DELAY_MS = 60 * 60 * 1000;
-
-/** AI 结算任务数据库行。 */
-interface AISettlementJobRow extends Record<string, unknown> {
-  /** 结算任务与 AI 执行共享的稳定 ID。 */
-  usage_id: string;
-  /** 当前结算状态。 */
-  status: AISettlementStatus;
-  /** 安全结算负载 JSON。 */
-  payload_json: string;
-  /** 已执行次数。 */
-  attempt_count: number;
-  /** 下一次允许领取的时间。 */
-  next_attempt_at: string;
-  /** 当前租约令牌。 */
-  lease_token: string;
-  /** 当前租约到期时间。 */
-  lease_expires_at: string;
-  /** 最近一次稳定错误码。 */
-  last_error_code: string;
-  /** 最近一次不含敏感信息的错误消息。 */
-  last_error_message: string;
-  /** 创建时间。 */
-  created_at: string;
-  /** 更新时间。 */
-  updated_at: string;
-  /** 完成时间；未完成时为空字符串。 */
-  completed_at: string;
-}
 
 /** 单次结算处理结果。 */
 export interface AISettlementProcessResult {
@@ -77,7 +50,7 @@ export class AIUsageRepository {
   constructor(
     private readonly database: ServiceDatabaseContext,
     private readonly usage_records: CityTableApi<AIUsageRecord>,
-    private readonly settlement_jobs: CityTableApi<AISettlementJobRow>,
+    private readonly settlement_jobs: CityTableApi<AISettlementJobRecord>,
     private readonly credits?: AICreditsBridge,
   ) {}
 
@@ -374,7 +347,7 @@ export class AIUsageRepository {
 
   /** 使用 compare-and-set 领取任务租约。 */
   private async claim_job(
-    job: AISettlementJobRow,
+    job: AISettlementJobRecord,
     lease_token: string,
     now: Date,
   ): Promise<boolean> {
