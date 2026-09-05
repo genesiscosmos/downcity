@@ -58,8 +58,6 @@ interface GroupViewProps {
   member_statuses: DesktopGroupMemberRuntime[];
   /** 当前 GroupSession 的运行阶段。 */
   group_phase: DesktopGroupStatusPhase;
-  /** 已完成 Dispatch 的用户消息标识。 */
-  read_message_ids: string[];
   /** 当前待响应的成员交互。 */
   interactions: { agent_id: string; part: SessionAssistantInteractionPart }[];
   /** 响应成员交互。 */
@@ -96,12 +94,11 @@ interface GroupViewProps {
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, open_group_info, agents, settings, message_projection, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, draft_content, update_draft, send_message, stop_session, remove_session, session_sidebar, controller }: GroupViewProps) {
+export function GroupView({ group, open_group_info, agents, settings, message_projection, member_statuses, group_phase, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, draft_content, update_draft, send_message, stop_session, remove_session, session_sidebar, controller }: GroupViewProps) {
   const { scroll_ref, content_ref, handle_scroll } = use_chat_scroll(session.session_id, settings.auto_scroll);
 
   const group_members = useMemo(() => agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id)), [agents, group.members]);
   const agents_by_id = useMemo(() => new Map(agents.map((agent) => [agent.agent_id, agent])), [agents]);
-  const read_message_id_set = useMemo(() => new Set(read_message_ids), [read_message_ids]);
   const running_agent_ids = useMemo(() => group_phase === "executing" ? member_statuses.filter((status) => status.running).map((status) => status.agent_id) : empty_chat_items, [group_phase, member_statuses]);
   const group_agent = group_members[0] ?? agents[0] ?? missing_group_agent;
   const select_group_session = useCallback((session_id: string) => controller.actions.open_group(group.group_id, session_id), [controller.actions, group.group_id]);
@@ -116,7 +113,7 @@ export function GroupView({ group, open_group_info, agents, settings, message_pr
           <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
           <div ref={content_ref} className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {!message_projection?.message_count ? <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4"><TbUsers className="size-8 text-muted-foreground/50" /><p className="text-center text-sm text-muted-foreground">开始与 {group.name} 协作</p><p className="text-center text-xs text-muted-foreground/60">{group.members.length} 个 Agent 已加入</p></div> : null}
-            {message_projection?.segments.map((segment) => <GroupMessageSegmentRows key={segment.segment_id} segment={segment} agents_by_id={agents_by_id} read_message_ids={read_message_id_set} />)}
+            {message_projection?.segments.map((segment) => <GroupMessageSegmentRows key={segment.segment_id} segment={segment} agents_by_id={agents_by_id} />)}
             {interactions.map(({ agent_id, part }) => <GroupInteractionRow key={part.interaction_id} agent={agents_by_id.get(agent_id)} agent_id={agent_id} part={part} respond_interaction={respond_interaction} />)}
             {running_agent_ids.map((agent_id) => <GroupTypingRow key={`typing:${agent_id}`} agent={agents_by_id.get(agent_id)} agent_id={agent_id} />)}
           </div>
@@ -127,11 +124,10 @@ export function GroupView({ group, open_group_info, agents, settings, message_pr
 }
 
 /** 只在当前固定分段或其渲染依赖变化时协调其中的 Group 消息。 */
-const GroupMessageSegmentRows = memo(function GroupMessageSegmentRows({ segment, agents_by_id, read_message_ids }: { /** 稳定 Group 消息分段。 */ segment: GroupMessageSegment; /** Agent 标识索引。 */ agents_by_id: Map<string, DesktopAgentSummary>; /** 已完成 Dispatch 的消息标识。 */ read_message_ids: ReadonlySet<string> }) {
-  return <>{segment.messages.map((message) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id}><GroupMessageRow message={message} agent={message.author_id ? agents_by_id.get(message.author_id) : undefined} read={read_message_ids.has(message.message_id)} /></ChatMessageViewportRow>)}</>;
+const GroupMessageSegmentRows = memo(function GroupMessageSegmentRows({ segment, agents_by_id }: { /** 稳定 Group 消息分段。 */ segment: GroupMessageSegment; /** Agent 标识索引。 */ agents_by_id: Map<string, DesktopAgentSummary> }) {
+  return <>{segment.messages.map((message) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id}><GroupMessageRow message={message} agent={message.author_id ? agents_by_id.get(message.author_id) : undefined} read={segment.read_message_ids.has(message.message_id)} /></ChatMessageViewportRow>)}</>;
 }, (previous, next) => previous.segment === next.segment
-  && previous.agents_by_id === next.agents_by_id
-  && previous.read_message_ids === next.read_message_ids);
+  && previous.agents_by_id === next.agents_by_id);
 
 /** Group 联系人主页面，只展示摘要和可进入的具体配置项。 */
 export function GroupConfigView({ group, agents, open_config, sidebar, sidebar_collapsed = false, toggle_sidebar }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** 打开具体配置项。 */ open_config(section: GroupEditorSection): void; /** Group Left Panel。 */ sidebar?: ReactNode; /** Group Left Panel 是否折叠。 */ sidebar_collapsed?: boolean; /** 切换 Group Left Panel。 */ toggle_sidebar?: () => void }) {

@@ -216,8 +216,6 @@ export interface ChatStreamState {
   group_member_statuses_by_group: Record<string, DesktopGroupMemberRuntime[]>;
   /** 按 Group 标识缓存的当前运行阶段。 */
   group_phase_by_group: Record<string, DesktopGroupStatusPhase>;
-  /** 按 Group 标识缓存已完成 Dispatch 的消息标识。 */
-  group_read_message_ids_by_group: Record<string, string[]>;
   /** 按 Group 标识缓存待响应的成员交互。 */
   group_interactions_by_group: Record<string, GroupInteraction[]>;
 }

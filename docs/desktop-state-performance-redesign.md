@@ -55,12 +55,12 @@
 | `use_navigation_store` | selection, sidebar_mode, active_workspace_id, plugin_routes, plugin_revisions | 导航切换 |
 | `use_catalog_store` | agents, workspaces, groups, plugins, models, models_loading | 低频（列表刷新） |
 | `use_session_store` | sessions_by_workspace, archived_sessions_by_workspace, group_sessions_by_workspace | 中频（Session 增删改） |
-| `use_chat_stream_store` | messages_by_session, chat_runtime_by_session, file_diff_by_session, configuration_by_session, history_by_session + **group_message_projection_by_group, group_member_statuses_by_group, group_phase_by_group, group_read_message_ids_by_group, group_interactions_by_group** | **高频（runtime / mutation / 群聊流式）** |
+| `use_chat_stream_store` | messages_by_session, chat_runtime_by_session, file_diff_by_session, configuration_by_session, history_by_session + **group_message_projection_by_group（含分段已读状态）, group_member_statuses_by_group, group_phase_by_group, group_interactions_by_group** | **高频（runtime / mutation / 群聊流式）** |
 | `use_composer_store` | draft_content_by_session, queued_messages_by_session, queue_paused_by_session | 中频（输入、队列） |
 | `use_settings_store` | settings, global_env, user, accounts, account_resources, error, loading | 低频 |
 | `use_notification_store` | notification_state | 通知变更 |
 
-Group 的 message / member_status / phase / read_ids / interactions 归入 `use_chat_stream_store`（群聊也是流式高频）。
+Group 的 message / member_status / phase / interactions 归入 `use_chat_stream_store`（群聊也是流式高频）；read_ids 由消息投影持有，已读事件只替换命中的分段，先于消息到达时暂存到投影等待收口。
 
 ### 3.2 核心机制：useSyncExternalStore + 选择器
 

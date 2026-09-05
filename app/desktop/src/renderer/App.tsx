@@ -426,7 +426,6 @@ function GroupChatSurface({ selection, group, session, open_group_info, workspac
   const message_projection = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_message_projection_by_group[group_id]);
   const member_statuses = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_member_statuses_by_group[group_id]);
   const group_phase = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_phase_by_group[group_id]);
-  const read_message_ids = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_read_message_ids_by_group[group_id]);
   const interactions = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_interactions_by_group[group_id]);
   const draft_content = use_desktop_selector(controller.stores.composer, (state) => state.draft_content_by_session[chat_key]);
   const switch_workspace = useCallback((target_workspace_id: string) => selection.kind === "group_draft" ? controller.actions.switch_group_draft_context(group_id, target_workspace_id) : controller.actions.create_group_session(group_id, target_workspace_id), [controller.actions, group_id, selection.kind]);
@@ -448,7 +447,6 @@ function GroupChatSurface({ selection, group, session, open_group_info, workspac
     message_projection={selection.kind === "group_draft" ? undefined : message_projection}
     member_statuses={member_statuses ?? empty_items}
     group_phase={group_phase ?? "idle"}
-    read_message_ids={read_message_ids ?? empty_items}
     interactions={interactions ?? empty_items}
     respond_interaction={respond_interaction}
     controller={controller}

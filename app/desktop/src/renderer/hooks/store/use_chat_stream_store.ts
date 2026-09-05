@@ -31,6 +31,7 @@ import {
   append_group_messages_projection,
   create_empty_group_message_projection,
   create_group_message_projection,
+  mark_group_message_read,
 } from "@/lib/group/group_message_projection";
 import { remove_record_prefixes } from "@/lib/store/record_projection";
 import { use_store } from "./store_types";
@@ -45,7 +46,6 @@ const initial_chat_stream_state: ChatStreamState = {
   group_message_projection_by_group: {},
   group_member_statuses_by_group: {},
   group_phase_by_group: {},
-  group_read_message_ids_by_group: {},
   group_interactions_by_group: {},
 };
 
@@ -353,13 +353,14 @@ export function use_chat_stream_store() {
   /** 追加一个已完成 Dispatch 的消息标识（去重）。 */
   const add_group_read_id = useCallback((group_id: string, message_id: string) => {
     const current = state_ref.current;
-    const read_ids = current.group_read_message_ids_by_group[group_id] ?? [];
-    if (read_ids.includes(message_id)) return;
+    const current_projection = current.group_message_projection_by_group[group_id] ?? create_empty_group_message_projection();
+    const next_projection = mark_group_message_read(current_projection, message_id);
+    if (next_projection === current_projection) return;
     commit({
       ...current,
-      group_read_message_ids_by_group: {
-        ...current.group_read_message_ids_by_group,
-        [group_id]: [...read_ids, message_id],
+      group_message_projection_by_group: {
+        ...current.group_message_projection_by_group,
+        [group_id]: next_projection,
       },
     });
   }, [commit]);
@@ -409,7 +410,6 @@ export function use_chat_stream_store() {
       },
       group_member_statuses_by_group: { ...current.group_member_statuses_by_group, [group_id]: [] },
       group_phase_by_group: { ...current.group_phase_by_group, [group_id]: "idle" },
-      group_read_message_ids_by_group: { ...current.group_read_message_ids_by_group, [group_id]: [] },
       group_interactions_by_group: { ...current.group_interactions_by_group, [group_id]: [] },
     });
   }, [commit]);
@@ -423,7 +423,6 @@ export function use_chat_stream_store() {
       group_message_projection_by_group: remove_key(current.group_message_projection_by_group, group_id),
       group_member_statuses_by_group: remove_key(current.group_member_statuses_by_group, group_id),
       group_phase_by_group: remove_key(current.group_phase_by_group, group_id),
-      group_read_message_ids_by_group: remove_key(current.group_read_message_ids_by_group, group_id),
       group_interactions_by_group: remove_key(current.group_interactions_by_group, group_id),
     });
   }, [commit]);

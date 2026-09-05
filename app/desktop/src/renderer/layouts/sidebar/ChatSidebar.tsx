@@ -54,6 +54,7 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
   const selected_group_id = selection && "group_id" in selection ? selection.group_id : "";
   const selected_agent = agents.find((agent) => agent.agent_id === selected_agent_id);
   const selected_group = groups.find((group) => group.group_id === selected_group_id);
+  const selected_group_sessions = selected_group?.sessions;
   // 订阅当前选中 Agent 的 Session 列表（原始数组，引用稳定；只有该 Workspace 的列表变化才重渲染）。
   const agent_session_entries = use_desktop_selector(
     controller.stores.session,
@@ -69,6 +70,10 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
       .map((entry) => ({ workspace_id, session: entry.session }))
       .sort((left, right) => Number(right.session.executing) - Number(left.session.executing) || right.session.updated_at - left.session.updated_at);
   }, [active_workspace_id, agent_session_entries, selected_agent]);
+  const group_sessions = useMemo(
+    () => selected_group_sessions ? [...selected_group_sessions].sort((left, right) => right.updated_at - left.updated_at) : [],
+    [selected_group_sessions],
+  );
   const toggle_sessions = () => set_sessions_collapsed((current) => {
     localStorage.setItem("downcity.chat_sessions_collapsed", String(!current));
     return !current;
@@ -126,7 +131,7 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
       </div>
       {!sessions_collapsed ? <div className="sidebar-body-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1.5 pb-1.5">
         {selected_agent ? agent_sessions.map(({ workspace_id: session_workspace_id, session }) => <SessionListItem key={`${session_workspace_id}:${session.session_id}`} session={session} active={selection?.kind === "session" && selection.session_id === session.session_id} unread={has_unread_session_notification(notification_state, session_workspace_id, selected_agent.agent_id, session.session_id)} on_select={() => void controller.actions.select_session(session_workspace_id, selected_agent.agent_id, session.session_id, true)} on_rename={(title) => controller.actions.rename_session(session_workspace_id, selected_agent.agent_id, session.session_id, title)} on_archive={() => controller.actions.archive_session(session_workspace_id, selected_agent.agent_id, session.session_id)} on_remove={() => controller.actions.remove_session(session_workspace_id, selected_agent.agent_id, session.session_id)} />) : null}
-        {selected_group ? [...selected_group.sessions].sort((left, right) => right.updated_at - left.updated_at).map((session) => <SessionListRow key={session.session_id} title={session.title || "新对话"} active={selection?.kind === "group_session" && selection.session_id === session.session_id} on_select={() => void controller.actions.open_group(selected_group.group_id, session.session_id)} menu={<GroupSessionActionsMenu session={session} on_rename={(title) => controller.actions.rename_group_session(selected_group.group_id, session.session_id, title)} on_remove={() => controller.actions.remove_group_session(selected_group.group_id, session.session_id)} />} />) : null}
+        {selected_group ? group_sessions.map((session) => <SessionListRow key={session.session_id} title={session.title || "新对话"} active={selection?.kind === "group_session" && selection.session_id === session.session_id} on_select={() => void controller.actions.open_group(selected_group.group_id, session.session_id)} menu={<GroupSessionActionsMenu session={session} on_rename={(title) => controller.actions.rename_group_session(selected_group.group_id, session.session_id, title)} on_remove={() => controller.actions.remove_group_session(selected_group.group_id, session.session_id)} />} />) : null}
         {(selected_agent && agent_sessions.length === 0) || (selected_group && selected_group.sessions.length === 0) ? <div className="px-2 py-5 text-center text-[10px] text-muted-foreground/55">暂无对话</div> : null}
       </div> : null}
     </section> : null}

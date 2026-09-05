@@ -6,8 +6,10 @@ import type { DesktopGroupMessage } from "../src/common/types/DesktopApi.ts";
 import {
   append_group_message_projection,
   append_group_messages_projection,
+  create_empty_group_message_projection,
   create_group_message_projection,
   group_message_segment_size,
+  mark_group_message_read,
 } from "../src/renderer/lib/group/group_message_projection.ts";
 
 function create_message(index: number): DesktopGroupMessage {
@@ -66,4 +68,23 @@ test("Group snapshot 与实时批次交叠时按 message_id 去重", () => {
   assert.equal(updated.message_count, 3);
   assert.deepEqual(updated.segments[0].messages.map((message) => message.message_id), ["message-0", "message-1", "message-2"]);
   assert.equal(append_group_messages_projection(updated, [create_message(2)]), updated);
+});
+
+test("Group 已读事件只替换命中的消息分段", () => {
+  const projection = create_group_message_projection(Array.from({ length: 64 }, (_, index) => create_message(index)));
+  const updated = mark_group_message_read(projection, "message-40");
+
+  assert.equal(updated.segments[0], projection.segments[0]);
+  assert.notEqual(updated.segments[1], projection.segments[1]);
+  assert.equal(updated.segments[1].read_message_ids.has("message-40"), true);
+  assert.equal(mark_group_message_read(updated, "message-40"), updated);
+});
+
+test("Group 已读事件早于消息时在追加阶段收口", () => {
+  const pending = mark_group_message_read(create_empty_group_message_projection(), "message-0");
+  const updated = append_group_message_projection(pending, create_message(0));
+
+  assert.equal(pending.pending_read_message_ids.has("message-0"), true);
+  assert.equal(updated.pending_read_message_ids.size, 0);
+  assert.equal(updated.segments[0].read_message_ids.has("message-0"), true);
 });
