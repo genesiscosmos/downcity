@@ -242,6 +242,25 @@ export interface SessionInteractionHandle {
   result: Promise<SessionInteractionResult>;
 }
 
+/** 把 pending Interaction 标记为超时的输入。 */
+export interface SessionExpireInteractionInput {
+  /** 目标终态固定为 expired。 */
+  status: "expired";
+}
+
+/** 因 Session 生命周期变化取消 pending Interaction 的输入。 */
+export interface SessionCancelInteractionInput {
+  /** 目标终态固定为 cancelled。 */
+  status: "cancelled";
+  /** Interaction 被取消的稳定生命周期原因。 */
+  reason: "turn_stopped" | "session_disposed" | "runtime_interrupted";
+}
+
+/** 内部关闭 pending Interaction 时允许提交的终态输入。 */
+export type SessionInteractionCloseInput =
+  | SessionExpireInteractionInput
+  | SessionCancelInteractionInput;
+
 /** 执行面请求用户异步参与的最小端口。 */
 export interface SessionInteractionPort {
   /** 创建并持久化一次 Interaction，返回等待终态结果的句柄。 */

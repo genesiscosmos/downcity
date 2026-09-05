@@ -90,6 +90,16 @@ export interface OpenSessionActionMessageInput {
   publish_mutation?: boolean;
 }
 
+/** 完成 Action Message 时允许覆盖的内容。 */
+export interface CompleteSessionActionMessageInput {
+  /** 完成时覆盖的可选标题。 */
+  title?: string;
+  /** 完成时覆盖的可选描述。 */
+  description?: string;
+  /** 完成时写入的可选结构化数据。 */
+  data?: JsonObject;
+}
+
 /** Error Message 创建参数。 */
 export interface AppendSessionErrorMessageInput {
   /** 当前错误影响 Session 还是单个 Turn。 */

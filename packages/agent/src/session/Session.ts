@@ -24,7 +24,6 @@ import type {
   AgentSessionStatus,
   AgentSessionSetInput,
   AgentSessionSetOptions,
-  AgentSessionSystemBlock,
   AgentSessionSystemSnapshot,
 } from "@/types/agent/SessionTypes.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
@@ -46,14 +45,6 @@ import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { create_session_compact_operation } from "@/session/runtime/SessionCompactOperation.js";
 import { run_session_history_compaction } from "@/session/runtime/SessionHistoryCompaction.js";
-import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
-import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
-import type {
-  SessionHookContextBlock,
-  SessionSystemContextHookValue,
-  SessionTurnContextHookValue,
-} from "@/types/session/SessionHook.js";
-import type { JsonValue } from "@/types/common/Json.js";
 import { SessionState } from "@/session/SessionState.js";
 import { SessionLoop } from "@/session/SessionLoop.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
@@ -66,13 +57,9 @@ import { SessionShellApprovalAdapter } from "@/session/execution/tools/SessionSh
 import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
 import type {
   SessionComposer,
-  SessionComposeIdentity,
   SessionCompactionPlan,
-  SessionComposeInput,
-  SessionStepInput,
 } from "@/types/session/SessionComposer.js";
 import type { SessionCompactHistory } from "@/types/session/SessionExecution.js";
-import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
@@ -81,49 +68,7 @@ import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type { SessionActionEventInput } from "@/types/session/SessionAction.js";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-
-/** 把 system pipeline 输出限制为 Plugin 命名内容块。 */
-function normalize_plugin_system_blocks(input: unknown): AgentSessionSystemBlock[] {
-  if (!Array.isArray(input)) return [];
-  return input.flatMap((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-    const record = item as Record<string, unknown>;
-    const name = String(record.name || "").trim();
-    const content = String(record.content || "").trim();
-    if (!name || !content) return [];
-    return [{ source: "plugin" as const, name, content }];
-  });
-}
-
-/** 把 Turn pipeline 输出限制为低权限动态参考内容块。 */
-function normalize_plugin_context_blocks(input: unknown): SessionHookContextBlock[] {
-  if (!Array.isArray(input)) return [];
-  return input.flatMap((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-    const record = item as Record<string, unknown>;
-    const source_plugin = String(record.source_plugin || "").trim();
-    const name = String(record.name || "").trim();
-    const content = String(record.content || "").trim();
-    if (
-      !source_plugin ||
-      !name ||
-      !content ||
-      record.trust_level !== "reference"
-    ) return [];
-    const citations = Array.isArray(record.citations)
-      ? record.citations.map((citation) => String(citation || "").trim()).filter(Boolean)
-      : [];
-    const version = String(record.version || "").trim();
-    return [{
-      source_plugin,
-      name,
-      content,
-      trust_level: "reference" as const,
-      ...(citations.length > 0 ? { citations } : {}),
-      ...(version ? { version } : {}),
-    }];
-  });
-}
+import { SessionComposition } from "@/session/SessionComposition.js";
 
 /**
  * SDK 本地 Session。
@@ -156,16 +101,10 @@ export class Session implements AgentSession {
   private readonly get_hooks: SessionOptions["get_hooks"];
   private readonly get_instruction_system_blocks:
     SessionOptions["get_instruction_system_blocks"];
-  private effective_instruction_system_blocks: AgentSessionSystemBlock[];
   /** 当前 Session 的一次性初始化任务，避免缓存实例被重复恢复运行时状态。 */
   private initialize_promise: Promise<void> | null = null;
-  private instruction_initialize_promise: Promise<void> | null = null;
-  private effective_workspace_env: Record<string, string>;
-  private effective_hooks: SessionHooks;
-  /** 当前 Session 首次生成后固定的完整 system snapshot。 */
-  private system_snapshot_blocks: AgentSessionSystemBlock[] | null = null;
-  /** 串行化 snapshot / syncshot 对 system 与 instruction.md 的修改。 */
-  private system_mutation_chain: Promise<void> = Promise.resolve();
+  /** 当前 Session 的 system snapshot 与 Step 组装边界。 */
+  private readonly session_composition: SessionComposition;
   private readonly state: SessionState;
   /** 当前 Session 独享的 Command FIFO。 */
   private readonly session_queue = new SessionQueue();
@@ -187,11 +126,6 @@ export class Session implements AgentSession {
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
-    this.effective_instruction_system_blocks = options
-      .instruction_system_blocks
-      .map((block) => ({ ...block }));
-    this.effective_workspace_env = { ...options.get_workspace_env() };
-    this.effective_hooks = options.get_hooks();
     this.get_managed_plugin_system_blocks = options.get_managed_plugin_system_blocks;
     this.ensure_configured_hook = options.ensure_configured;
     this.composer = options.composer || new DefaultSessionComposer();
@@ -223,6 +157,27 @@ export class Session implements AgentSession {
       interactions: this.session_interactions,
     });
     this.local_state = this.create_local_state();
+    this.session_composition = new SessionComposition({
+      agent_id: this.agent_id,
+      session_id: this.id,
+      session_origin: this.origin,
+      workspace_path: this.workspace_path,
+      store: this.store,
+      messages: this.session_messages,
+      composer: this.composer,
+      tools: this.tools,
+      instruction_system_blocks: options.instruction_system_blocks,
+      get_instruction_system_blocks: this.get_instruction_system_blocks,
+      get_hooks: this.get_hooks,
+      get_managed_plugin_system_blocks: this.get_managed_plugin_system_blocks,
+      get_model: () => this.get_model(),
+      get_model_context_window: () => this.get_model_context_window(),
+      get_created_at: () => this.local_state.created_at,
+      get_timezone: () => this.local_state.timezone,
+      logger: this.logger,
+      workspace_env: options.get_workspace_env(),
+      hooks: options.get_hooks(),
+    });
     this.executor = this.create_executor();
     this.state = new SessionState({
       agent_id: this.agent_id,
@@ -265,7 +220,7 @@ export class Session implements AgentSession {
     if (!this.initialize_promise) {
       this.initialize_promise = (async () => {
         await Promise.all([
-          this.initialize_instruction(),
+          this.session_composition.initialize(),
           this.session_messages.initialize(),
           this.state.initialize(),
         ]);
@@ -286,10 +241,7 @@ export class Session implements AgentSession {
    * - 多个 system block 按原顺序合并为一个 Markdown 文档。
    */
   async snapshot(): Promise<void> {
-    await this.run_system_mutation(async () => {
-      const system_snapshot = await this.system();
-      await this.write_system_snapshot(system_snapshot.blocks);
-    });
+    await this.session_composition.snapshot();
   }
 
   /**
@@ -301,21 +253,7 @@ export class Session implements AgentSession {
    * - 当前已经发出的 provider 请求不受影响，后续 step 使用新 snapshot。
    */
   async syncshot(): Promise<void> {
-    await this.run_system_mutation(async () => {
-      await this.initialize_instruction();
-      const should_persist = await this.store.has_instruction();
-      const composed = await this.composer.compose(
-        await this.create_compose_input(undefined, 0, true),
-      );
-      const next_blocks = resolve_composed_system_blocks(composed);
-
-      if (should_persist) {
-        await this.write_system_snapshot(next_blocks);
-      }
-      this.effective_instruction_system_blocks =
-        this.get_instruction_system_blocks().map((block) => ({ ...block }));
-      this.system_snapshot_blocks = next_blocks;
-    });
+    await this.session_composition.syncshot();
   }
 
   /**
@@ -413,7 +351,7 @@ export class Session implements AgentSession {
    * 追加一条新的 Session prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
-    await this.initialize_instruction();
+    await this.session_composition.initialize();
     return await this.session_loop.prompt(input);
   }
 
@@ -479,7 +417,7 @@ export class Session implements AgentSession {
   }): void {
     this.enqueue_command({
       execute: async () => {
-        this.effective_workspace_env = { ...input.env };
+        this.session_composition.set_workspace_env(input.env);
       },
       completion: {
         type: "action",
@@ -500,7 +438,7 @@ export class Session implements AgentSession {
   }): void {
     this.enqueue_command({
       execute: async () => {
-        this.effective_hooks = input.hooks;
+        this.session_composition.set_hooks(input.hooks);
       },
       completion: {
         type: "action",
@@ -619,20 +557,7 @@ export class Session implements AgentSession {
    * 读取当前 session 生效的 system 快照。
    */
   async system(): Promise<AgentSessionSystemSnapshot> {
-    await this.initialize_instruction();
-    const composed = await this.compose_for_view();
-    const blocks = resolve_composed_system_blocks(composed);
-    return {
-      session_id: this.id,
-      session: {
-        agent_id: this.agent_id,
-        session_id: this.id,
-        project_root: this.workspace_path,
-        created_at: new Date(this.state.get_created_at()).toISOString(),
-        timezone: this.state.get_timezone(),
-      },
-      blocks,
-    };
+    return await this.session_composition.read();
   }
 
   /**
@@ -759,7 +684,7 @@ export class Session implements AgentSession {
    * 在执行前确保 session 已完成初始化与宿主装配。
    */
   async ensure_ready_for_execution(): Promise<void> {
-    await this.initialize_instruction();
+    await this.session_composition.initialize();
     await this.state.ensure_ready_for_execution();
   }
 
@@ -775,9 +700,7 @@ export class Session implements AgentSession {
       session_id: session_id,
       tools: this.tools,
       logger: this.logger,
-      instruction_system_blocks: this.effective_instruction_system_blocks.map(
-        (block) => ({ ...block }),
-      ),
+      instruction_system_blocks: this.session_composition.instruction_blocks(),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_workspace_env: this.get_workspace_env,
       get_hooks: this.get_hooks,
@@ -802,39 +725,6 @@ export class Session implements AgentSession {
     return new session_class(options) as this;
   }
 
-  /** 恢复显式固化的完整 system snapshot；文件不存在时等待首次生成。 */
-  private async initialize_instruction(): Promise<void> {
-    if (!this.instruction_initialize_promise) {
-      this.instruction_initialize_promise = (async () => {
-        const persisted_instruction = await this.store.read_instruction();
-        if (persisted_instruction === null) return;
-
-        const instruction = persisted_instruction.trim();
-        this.system_snapshot_blocks = instruction
-          ? [{
-              source: "instruction" as const,
-              name: "snapshot",
-              content: instruction,
-            }]
-          : [];
-        const stable_system_blocks = this.effective_instruction_system_blocks
-          .filter((block) => block.source !== "instruction")
-          .map((block) => ({ ...block }));
-        this.effective_instruction_system_blocks = [
-          ...(instruction
-            ? [{
-                source: "instruction" as const,
-                name: "agent",
-                content: instruction,
-              }]
-            : []),
-          ...stable_system_blocks,
-        ];
-      })();
-    }
-    await this.instruction_initialize_promise;
-  }
-
   private create_local_state(): SessionLocalState {
     return {
       session_config: {},
@@ -853,183 +743,16 @@ export class Session implements AgentSession {
       session_id: this.id,
       composer: this.composer,
       get_compose_input: async (turn_context, retry_count) =>
-        await this.create_compose_input(turn_context, retry_count),
+        await this.session_composition.create_compose_input(
+          turn_context,
+          retry_count,
+        ),
       compact_history: async (input) => await this.compact_history(input),
       get_model: () => this.get_model(),
       logger: this.logger,
-      get_hooks: () => this.effective_hooks,
-      apply_system_snapshot: (input) => this.apply_system_snapshot(input),
+      get_hooks: () => this.session_composition.get_effective_hooks(),
+      apply_system_snapshot: (input) => this.session_composition.apply_snapshot(input),
     });
-  }
-
-  /** 为 Composer 创建当前 Step 的只读 Session 快照。 */
-  private async create_compose_input(
-    turn_context: SessionTurnContext | undefined,
-    retry_count: number,
-    refresh_system = false,
-  ): Promise<SessionComposeInput> {
-    const instruction_system_blocks = refresh_system
-      ? this.get_instruction_system_blocks().map((block) => ({ ...block }))
-      : this.effective_instruction_system_blocks.map((block) => ({ ...block }));
-    // 关键点（中文）：Plugin system 本身参与 Compose，必须先让它看到当前检查点
-    // 已确定的 env 与 instruction；Executor 会在 Compose 返回后提交最终 Step 快照。
-    turn_context?.step.commit({
-      workspace_env: this.effective_workspace_env,
-      agent_systems: instruction_system_blocks.map((block) => block.content),
-    });
-    const hook_context =
-      turn_context?.step.hook_context() ||
-      create_session_hook_context({
-        session_id: this.id,
-        session_origin: this.origin,
-        project_root: this.workspace_path,
-        workspace_env: this.effective_workspace_env,
-        agent_systems: this.effective_instruction_system_blocks.map(
-          (block) => block.content,
-        ),
-      });
-    const history = await this.session_messages.context_snapshot();
-    const plugin_runtime = refresh_system
-      ? this.get_hooks()
-      : turn_context?.step.hooks || this.effective_hooks;
-    const plugin_system_blocks = this.system_snapshot_blocks && !refresh_system
-      ? []
-      : refresh_system
-        ? await plugin_runtime.system_blocks(hook_context)
-        : turn_context?.step.hooks
-          ? await turn_context.step.hooks.system_blocks(
-              hook_context,
-            )
-          : await this.effective_hooks.system_blocks(
-              hook_context,
-            );
-    const resolved_plugin_system_blocks = this.system_snapshot_blocks && !refresh_system
-      ? []
-      : await this.resolve_plugin_system_context(
-          plugin_runtime,
-          plugin_system_blocks,
-          turn_context?.session.turn_id,
-        );
-    const plugin_context_blocks = turn_context
-      ? await turn_context.step.resolve_plugin_context_blocks(async () => {
-          const hooks = turn_context.step.hooks;
-          if (!hooks) return [];
-          const value: SessionTurnContextHookValue = {
-            session_id: this.id,
-            turn_id: turn_context.session.turn_id,
-            user_messages: history.messages.flatMap((message) => {
-              if (
-                message.type !== "user" ||
-                message.turn_id !== turn_context.session.turn_id
-              ) return [];
-              return [{
-                message_id: message.message_id,
-                text: message.parts
-                  .filter((part) => part.type === "text")
-                  .map((part) => part.text)
-                  .join("\n"),
-              }];
-            }),
-            blocks: [],
-          };
-          try {
-            const output = await hooks.pipeline(
-              SESSION_HOOK_POINTS.turn_context,
-              value as unknown as JsonValue,
-            ) as unknown as SessionTurnContextHookValue;
-            return normalize_plugin_context_blocks(output?.blocks);
-          } catch (error) {
-            await this.log_plugin_hook_warning(
-              SESSION_HOOK_POINTS.turn_context,
-              error,
-              turn_context.session.turn_id,
-            );
-            return [];
-          }
-        })
-      : [];
-    return {
-      session: this.create_compose_identity(),
-      state: {
-        model: this.get_model(),
-        model_context_window: this.get_model_context_window(),
-        env: Object.freeze({ ...this.effective_workspace_env }),
-        systems: Object.freeze(
-          instruction_system_blocks.map((block) => block.content),
-        ),
-        tools: Object.freeze({ ...this.tools }),
-        instruction_system_blocks,
-        managed_plugin_system_blocks:
-          this.system_snapshot_blocks && !refresh_system
-            ? []
-            : await this.get_managed_plugin_system_blocks(),
-        plugin_system_blocks: resolved_plugin_system_blocks,
-        plugin_context_blocks,
-      },
-      history,
-      turn: {
-        ...(turn_context
-          ? { turn_id: turn_context.session.turn_id }
-          : {}),
-        retry_count,
-      },
-    };
-  }
-
-  /** 通过既有 pipeline point 解析 Plugin 追加的命名 system blocks。 */
-  private async resolve_plugin_system_context(
-    hooks: SessionHooks | NonNullable<SessionTurnContext["step"]["hooks"]>,
-    blocks: readonly AgentSessionSystemBlock[],
-    turn_id?: string,
-  ): Promise<AgentSessionSystemBlock[]> {
-    const value: SessionSystemContextHookValue = {
-      session_id: this.id,
-      ...(turn_id ? { turn_id } : {}),
-      blocks: blocks.map((block) => ({ ...block })),
-    };
-    try {
-      const output = await hooks.pipeline(
-        SESSION_HOOK_POINTS.system_context,
-        value as unknown as JsonValue,
-      ) as unknown as SessionSystemContextHookValue;
-      return normalize_plugin_system_blocks(output?.blocks);
-    } catch (error) {
-      await this.log_plugin_hook_warning(
-        SESSION_HOOK_POINTS.system_context,
-        error,
-        turn_id,
-      );
-      return value.blocks;
-    }
-  }
-
-  /** Plugin 上下文 Hook 失败只降级当前扩展内容，不阻断 Session。 */
-  private async log_plugin_hook_warning(
-    point_name: string,
-    error: unknown,
-    turn_id?: string,
-  ): Promise<void> {
-    try {
-      await this.logger.log("warn", "[agent] session plugin hook failed", {
-        session_id: this.id,
-        ...(turn_id ? { turn_id } : {}),
-        point_name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    } catch {
-      // Plugin 已经降级，日志失败不能反向阻断 Session。
-    }
-  }
-
-  /** 创建 Composer 共用的稳定 Session 身份快照。 */
-  private create_compose_identity(): SessionComposeIdentity {
-    return {
-      agent_id: this.agent_id,
-      session_id: this.id,
-      project_root: this.workspace_path,
-      created_at: this.local_state.created_at,
-      timezone: this.local_state.timezone,
-    };
   }
 
   /** 生成并提交 canonical 历史压缩；该职责不进入 Executor。 */
@@ -1039,7 +762,7 @@ export class Session implements AgentSession {
     return await run_session_history_compaction({
       turn_id: input.turn_id,
       create_plan: async () => await this.composer.compact({
-        session: this.create_compose_identity(),
+        session: this.session_composition.compose_identity(),
         model: this.get_model(),
         history: await this.session_messages.context_snapshot(),
       }),
@@ -1054,48 +777,6 @@ export class Session implements AgentSession {
         });
       },
     });
-  }
-
-  /** 使用统一 Composer 生成只读 system/history 查询结果。 */
-  private async compose_for_view(): Promise<SessionStepInput> {
-    const composed = await this.composer.compose(
-      await this.create_compose_input(undefined, 0),
-    );
-    return this.apply_system_snapshot(composed);
-  }
-
-  /** 固定或应用当前 Session 的 system snapshot。 */
-  private apply_system_snapshot(input: SessionStepInput): SessionStepInput {
-    if (!this.system_snapshot_blocks) {
-      this.system_snapshot_blocks = resolve_composed_system_blocks(input);
-    }
-
-    return {
-      ...input,
-      system: this.system_snapshot_blocks.map((block) => ({
-        role: "system" as const,
-        content: block.content,
-      })),
-      system_blocks: this.system_snapshot_blocks.map((block) => ({ ...block })),
-    };
-  }
-
-  /** 串行执行一次 Session system 修改。 */
-  private async run_system_mutation(
-    operation: () => Promise<void>,
-  ): Promise<void> {
-    const next = this.system_mutation_chain.then(operation, operation);
-    this.system_mutation_chain = next.catch(() => undefined);
-    await next;
-  }
-
-  /** 把指定完整 system blocks 原子写入 instruction.md。 */
-  private async write_system_snapshot(
-    blocks: readonly AgentSessionSystemBlock[],
-  ): Promise<void> {
-    await this.store.write_instruction(
-      blocks.map((block) => block.content).join("\n\n"),
-    );
   }
 
   /** 提交 Composer 生成的 Segment 压缩计划。 */
@@ -1187,35 +868,4 @@ export class Session implements AgentSession {
     await this.state.touch_metadata();
   }
 
-}
-
-/** 把自定义 Composer 的 system content 转为可展示文本。 */
-function stringify_system_content(content: unknown): string {
-  if (typeof content === "string") return content.trim();
-  if (content === null || content === undefined) return "";
-  try {
-    return JSON.stringify(content);
-  } catch {
-    return String(content || "").trim();
-  }
-}
-
-/** 以实际模型输入为准，保留仍与其一致的 system block 来源信息。 */
-function resolve_composed_system_blocks(
-  composed: SessionStepInput,
-): AgentSessionSystemBlock[] {
-  const declared_blocks = composed.system_blocks || [];
-  return composed.system.flatMap((message, index) => {
-    const content = stringify_system_content(message.content);
-    if (!content) return [];
-    const declared = declared_blocks[index];
-    if (declared && declared.content.trim() === content) {
-      return [{ ...declared, content }];
-    }
-    return [{
-      source: "session" as const,
-      name: `custom_system:${index + 1}`,
-      content,
-    }];
-  });
 }

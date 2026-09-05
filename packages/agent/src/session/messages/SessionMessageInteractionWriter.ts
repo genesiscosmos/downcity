@@ -13,6 +13,7 @@ import type {
   SessionMessage,
 } from "@/types/session/SessionMessage.js";
 import type {
+  SessionInteractionCloseInput,
   SessionInteractionRequest,
   SessionInteractionResponse,
 } from "@/types/session/SessionInteraction.js";
@@ -169,12 +170,7 @@ export class SessionMessageInteractionWriter {
   /** 原子结束未响应 Interaction，并把关联 Tool 标记为失败。 */
   async close(
     interaction_id: string,
-    input:
-      | { status: "expired" }
-      | {
-          status: "cancelled";
-          reason: "turn_stopped" | "session_disposed" | "runtime_interrupted";
-        },
+    input: SessionInteractionCloseInput,
   ): Promise<SessionAssistantInteractionPart> {
     const { message_id } = this.require_pending_interaction(interaction_id);
     await this.options.enqueue_assistant_write(message_id, async () => {
