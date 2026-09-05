@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionMessage } from "@downcity/agent";
-import { project_session_message_segments, session_message_segment_size } from "../src/renderer/lib/chat/session_message_projection.ts";
+import { project_session_message_segments, session_message_segment_size } from "../src/renderer/features/chat/lib/session_message_projection.ts";
 
 function create_user_message(sequence: number): Extract<SessionMessage, { type: "user" }> {
   return {

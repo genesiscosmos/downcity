@@ -5,6 +5,7 @@ import { TbLoader2 } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { use_translation } from "@/locales/i18n";
 import type { DesktopModelSummary } from "@common/types/DesktopApi";
 import { LLMModelIcon } from "./LLMModelIcon";
 
@@ -35,17 +36,21 @@ export function ModelSelector({
   current_model_id,
   models,
   loading = false,
-  empty_text = "暂无可用模型",
-  trigger_label = "未配置",
+  empty_text,
+  trigger_label,
   on_select_model,
   align = "start",
   side = "bottom",
   class_name,
 }: ModelSelectorProps) {
+  const translate_common = use_translation("common");
+  const translate_chat = use_translation("chat");
   const [open, set_open] = useState(false);
   const sorted_models = useMemo(() => [...models].sort((left, right) => left.name.localeCompare(right.name)), [models]);
   const current_model = sorted_models.find((model) => model.model_id === current_model_id);
-  const display_label = loading ? "加载中" : current_model?.name || current_model_id || trigger_label;
+  const resolved_empty_text = empty_text || translate_chat("model.empty");
+  const resolved_trigger_label = trigger_label || translate_common("state.not_configured");
+  const display_label = loading ? translate_common("state.loading") : current_model?.name || current_model_id || resolved_trigger_label;
 
   const select_model = (model_id: string) => {
     set_open(false);
@@ -68,7 +73,7 @@ export function ModelSelector({
       <PopoverContent align={align} side={side} className="max-h-[80vh] w-80 max-w-[calc(100vw-1rem)] [&>div]:p-0">
         <div className="flex max-h-[80vh] flex-col">
           <div className="flex-1 overflow-auto px-1 pb-0.5 pt-1">
-            {sorted_models.length === 0 ? <div className="py-4 text-center text-xs text-muted-foreground">{empty_text}</div> : <div className="space-y-0.5">
+            {sorted_models.length === 0 ? <div className="py-4 text-center text-xs text-muted-foreground">{resolved_empty_text}</div> : <div className="space-y-0.5">
               {sorted_models.map((model) => {
                 const active = model.model_id === current_model_id;
                 return <Button key={model.model_id} size="full" className={cn("rounded-floating-item text-foreground/90 hover:bg-foreground/[0.06]", active && "bg-foreground/10 text-foreground hover:bg-foreground/10")} onClick={() => select_model(model.model_id)}>

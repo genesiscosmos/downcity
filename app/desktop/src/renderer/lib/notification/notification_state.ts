@@ -1,10 +1,6 @@
 /** Desktop Notification 在 Renderer 中的只读查询与导航目标投影。 */
 
-import type {
-  DesktopAgentSessionNotificationTarget,
-  DesktopNotificationTarget,
-  DesktopNotificationState,
-} from "../../../common/types/DesktopNotification";
+import type { DesktopAgentSessionNotificationTarget, DesktopNotificationTarget, DesktopNotificationState } from "../../../common/types/DesktopNotification";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { PluginRendererNotification } from "@downcity/city/plugin/react";
 import type { NavigationTarget } from "../../types/DesktopView";

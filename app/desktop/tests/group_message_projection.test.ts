@@ -10,7 +10,7 @@ import {
   create_group_message_projection,
   group_message_segment_size,
   mark_group_message_read,
-} from "../src/renderer/lib/group/group_message_projection.ts";
+} from "../src/renderer/features/chat/lib/group/group_message_projection.ts";
 
 function create_message(index: number): DesktopGroupMessage {
   return {

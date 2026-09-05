@@ -1,6 +1,5 @@
 /** 基于 Base UI、与 Duobox 一致的表单选择器。 */
 
-import * as React from "react";
 import { Select as BaseSelect } from "@base-ui/react/select";
 import { TbCheck, TbChevronDown } from "react-icons/tb";
 import { cn } from "@/lib/utils";

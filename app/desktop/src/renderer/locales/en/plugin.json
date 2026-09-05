@@ -1,0 +1,3 @@
+{
+  "catalog": "Plugins", "empty": "No Plugins", "loading": "Loading Plugin…", "missing_config": "This Plugin does not provide configuration.", "missing_slot": "This Plugin does not provide {{slot}}.", "cancel": "Cancel", "confirm": "Confirm"
+}

@@ -1,14 +1,7 @@
 /** Desktop 账户用量的日期补齐、周期汇总与图表聚合规则。 */
 
 import type { DesktopUsageDay } from "@common/types/DesktopApi";
-import type {
-  UsageHeatmap,
-  UsageHeatmapDay,
-  UsageHeatmapMetric,
-  UsagePeriod,
-  UsagePeriodSummary,
-  UsageTrendPoint,
-} from "@/types/DesktopUsage";
+import type { UsageHeatmap, UsageHeatmapDay, UsageHeatmapMetric, UsagePeriod, UsagePeriodSummary, UsageTrendPoint } from "@/types/DesktopUsage";
 
 const empty_usage: Omit<DesktopUsageDay, "date"> = {
   credits_used: 0,

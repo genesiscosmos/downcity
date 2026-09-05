@@ -6,6 +6,7 @@ import { normalize_settings } from "../src/main/settings/DesktopSettingsControll
 
 test("缺失设置使用稳定默认值", () => {
   assert.deepEqual(normalize_settings(), {
+    language: "en",
     show_reasoning: true,
     auto_scroll: true,
     default_agent_id: "",
@@ -26,15 +27,23 @@ test("缺失设置使用稳定默认值", () => {
 
 test("外观枚举与缩放被限制在公开范围内", () => {
   const settings = normalize_settings({
+    language: "invalid" as never,
     appearance_mode: "invalid" as never,
     color_theme: "invalid" as never,
     ui_scale: 9,
     default_agent_id: "  writer  ",
     proxy_url: "  http://127.0.0.1:7890  ",
   });
+  assert.equal(settings.language, "en");
   assert.equal(settings.appearance_mode, "system");
   assert.equal(settings.color_theme, "duobox");
   assert.equal(settings.ui_scale, 1.2);
   assert.equal(settings.default_agent_id, "writer");
   assert.equal(settings.proxy_url, "http://127.0.0.1:7890");
+});
+
+test("界面语言只接受 Desktop 支持的值", () => {
+  assert.equal(normalize_settings({ language: "zh" }).language, "zh");
+  assert.equal(normalize_settings({ language: "en" }).language, "en");
+  assert.equal(normalize_settings({ language: "fr" as never }).language, "en");
 });

@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { format_credits_as_usd } from "@/lib/usage/usage_format";
 import type { UsageHeatmap as UsageHeatmapData } from "@/types/DesktopUsage";
+import { format_number, get_intl_locale } from "@/locales/format";
+import { use_desktop_language, use_translation } from "@/locales/i18n";
 
 const level_classes = [
   "bg-foreground/[0.055]",
@@ -29,15 +31,18 @@ function date_value(date: string): Date {
 
 /** 展示最近一年的 Credits 活动强度。 */
 export function UsageHeatmap({ heatmap, credits_used, credits_per_usd }: UsageHeatmapProps) {
-  const date_formatter = useMemo(() => new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }), []);
-  const month_formatter = useMemo(() => new Intl.DateTimeFormat(undefined, { month: "short" }), []);
+  const language = use_desktop_language();
+  const translate = use_translation("settings");
+  const locale = get_intl_locale(language);
+  const date_formatter = useMemo(() => new Intl.DateTimeFormat(locale, { dateStyle: "medium" }), [locale]);
+  const month_formatter = useMemo(() => new Intl.DateTimeFormat(locale, { month: "short" }), [locale]);
   const format_amount = (credits: number) => format_credits_as_usd(credits, credits_per_usd);
   const format_activity = (day: UsageHeatmapData["weeks"][number]["days"][number]) => heatmap.metric === "credits"
-    ? `Credits ${format_amount(day.credits_used)}`
-    : `AI 调用 ${day.execution_count} 次，Tokens ${day.total_tokens.toLocaleString()}`;
+    ? translate("usage.credits_activity", { amount: format_amount(day.credits_used) })
+    : translate("usage.ai_activity", { count: day.execution_count, tokens: format_number(day.total_tokens, language) });
   const activity_label = heatmap.metric === "credits"
-    ? `最近一年使用 ${format_amount(credits_used)}`
-    : `最近一年 AI 调用 ${heatmap.weeks.flatMap((week) => week.days).reduce((total, day) => total + (day.in_range ? day.execution_count : 0), 0)} 次`;
+    ? translate("usage.year_credits", { amount: format_amount(credits_used) })
+    : translate("usage.year_calls", { count: heatmap.weeks.flatMap((week) => week.days).reduce((total, day) => total + (day.in_range ? day.execution_count : 0), 0) });
 
   return <div role="img" aria-label={activity_label}>
     <div className="min-w-0 overflow-x-clip pb-1">
@@ -59,9 +64,9 @@ export function UsageHeatmap({ heatmap, credits_used, credits_per_usd }: UsageHe
       </div>
     </div>
     <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground/65">
-      <span>少</span>
+      <span>{translate("usage.less")}</span>
       {level_classes.map((class_name, index) => <span key={index} aria-hidden="true" className={cn("size-2.5 rounded-[3px]", class_name)} />)}
-      <span>多</span>
+      <span>{translate("usage.more")}</span>
     </div>
   </div>;
 }

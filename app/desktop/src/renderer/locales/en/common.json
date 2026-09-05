@@ -1,0 +1,7 @@
+{
+  "actions": { "add": "Add", "back": "Back", "cancel": "Cancel", "close": "Close", "confirm": "Confirm", "copy": "Copy", "create": "Create", "delete": "Delete", "edit": "Edit", "more": "More actions", "refresh": "Refresh", "remove": "Remove", "retry": "Retry", "save": "Save", "saving": "Saving…" },
+  "state": { "automatic": "Automatic", "configured": "Configured", "creating": "Creating…", "disabled": "Disabled", "empty": "None", "enabled": "Enabled", "loading": "Loading…", "not_configured": "Not configured", "paused": "Paused", "running": "Running", "unavailable": "Unavailable", "unread": "Unread" },
+  "command_palette": { "open_settings": "Open settings", "toggle_sidebar": "Toggle sidebar" },
+  "welcome": "Select an Agent to get started with Downcity",
+  "dialog": { "close": "Close" }
+}

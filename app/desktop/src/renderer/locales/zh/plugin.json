@@ -1,0 +1,3 @@
+{
+  "catalog": "Plugins", "empty": "暂无 Plugin", "loading": "正在加载 Plugin…", "missing_config": "Plugin 未提供 config。", "missing_slot": "Plugin 未提供 {{slot}}。", "cancel": "取消", "confirm": "确认"
+}

@@ -4,6 +4,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { TbMenu2 } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { use_translation } from "@/locales/i18n";
 import { SHELL_PANEL_TRANSITION } from "./shellMotion";
 
 /** MainView Header 需要的 Shell 级控制能力。 */
@@ -52,7 +53,9 @@ export function MainViewHeader({ title, left_actions, left_inset = 0, right_acti
 
 /** Chat Header 中的 Session Sidebar 开关。 */
 export function SessionSidebarButton({ collapsed, toggle_collapsed }: { /** Session Sidebar 是否折叠。 */ collapsed: boolean; /** 切换 Session Sidebar。 */ toggle_collapsed(): void }) {
-  return <Button size="icon" actived={!collapsed} onClick={toggle_collapsed} title={collapsed ? "展开 Left Panel" : "折叠 Left Panel"} aria-label={collapsed ? "展开 Left Panel" : "折叠 Left Panel"}><TbMenu2 /></Button>;
+  const translate_navigation = use_translation("navigation");
+  const label = translate_navigation(collapsed ? "panels.expand_left" : "panels.collapse_left");
+  return <Button size="icon" actived={!collapsed} onClick={toggle_collapsed} title={label} aria-label={label}><TbMenu2 /></Button>;
 }
 
 /** 主视图的可增长内容区域。 */

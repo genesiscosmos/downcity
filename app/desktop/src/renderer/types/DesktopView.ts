@@ -3,31 +3,7 @@
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { JSONContent } from "@tiptap/core";
-import type {
-  DesktopAgentSummary,
-  DesktopAgentDefinition,
-  DesktopAccountResources,
-  DesktopAccountSummary,
-  DesktopChatRewriteInput,
-  DesktopChatRuntime,
-  DesktopCreateGroupInput,
-  DesktopUpdateGroupInput,
-  DesktopGroupMemberRuntime,
-  DesktopGroupStatusPhase,
-  DesktopGroupSummary,
-  DesktopGroupSessionSummary,
-  DesktopModelSummary,
-  DesktopPluginSummary,
-  DesktopPluginDefinition,
-  DesktopCreatePluginProfileInput,
-  DesktopInvokePluginActionInput,
-  DesktopSessionConfiguration,
-  DesktopSessionSummary,
-  DesktopSettings,
-  DesktopUserSummary,
-  DesktopUpdateAgentInput,
-  DesktopWorkspaceSummary,
-} from "../../common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopAgentDefinition, DesktopAccountResources, DesktopAccountSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopCreateGroupInput, DesktopUpdateGroupInput, DesktopGroupMemberRuntime, DesktopGroupStatusPhase, DesktopGroupSummary, DesktopModelSummary, DesktopPluginSummary, DesktopPluginDefinition, DesktopCreatePluginProfileInput, DesktopInvokePluginActionInput, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopUserSummary, DesktopUpdateAgentInput, DesktopWorkspaceSummary } from "../../common/types/DesktopApi";
 import type { DesktopNotificationState } from "../../common/types/DesktopNotification";
 import type { GroupMessageProjection } from "./GroupProjection";
 
@@ -114,16 +90,6 @@ export interface DesktopWorkspaceSession {
   session: DesktopSessionSummary;
 }
 
-/** Workspace 导航树中的一条 GroupSession。 */
-export interface DesktopWorkspaceGroupSession {
-  /** Group 标识。 */
-  group_id: string;
-  /** Group 摘要，用于展示名称和成员。 */
-  group: DesktopGroupSummary;
-  /** GroupSession 摘要。 */
-  session: DesktopGroupSessionSummary;
-}
-
 /** 等待用户为孤儿 Session 选择 Workspace 的请求。 */
 export interface SessionAttachRequest {
   /** Session 所属 Agent。 */
@@ -180,8 +146,6 @@ export interface CatalogStoreState {
 export interface SessionStoreState {
   /** 按 Workspace 标识缓存的 Agent Session 导航数据。 */
   sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
-  /** 按 Workspace 标识缓存的 GroupSession 导航数据。 */
-  group_sessions_by_workspace: Record<string, DesktopWorkspaceGroupSession[]>;
   /** 按 Workspace 标识缓存的已归档 Agent Session。 */
   archived_sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
   /** 当前等待用户选择 Workspace 的孤儿 Session 请求。 */

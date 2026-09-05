@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import type { CreateWorkspaceFormValue } from "@/types/DesktopView";
+import { use_translation } from "@/locales/i18n";
 
 /** 孤儿 Session Workspace 绑定 Dialog 属性。 */
 interface AttachSessionWorkspaceDialogProps {
@@ -23,6 +24,8 @@ interface AttachSessionWorkspaceDialogProps {
 
 /** 弹出让用户选择 Workspace 绑定孤儿 Session 的 Dialog。 */
 export function AttachSessionWorkspaceDialog({ request, workspaces, close_dialog, rebind_session_workspace, create_workspace_for_session }: AttachSessionWorkspaceDialogProps) {
+  const translate = use_translation("resources");
+  const common_translate = use_translation();
   const [selected_workspace_id, set_selected_workspace_id] = useState("");
   const [submitting, set_submitting] = useState(false);
   const [form_error, set_form_error] = useState("");
@@ -47,7 +50,7 @@ export function AttachSessionWorkspaceDialog({ request, workspaces, close_dialog
 
   const submit_rebind = async () => {
     if (!selected_workspace_id) {
-      set_form_error("请选择一个 Workspace");
+      set_form_error(translate("workspace.selection_required"));
       return;
     }
     set_submitting(true);
@@ -86,22 +89,22 @@ export function AttachSessionWorkspaceDialog({ request, workspaces, close_dialog
   return <Dialog open={Boolean(request)} onOpenChange={(next_open) => { if (!next_open && !submitting) close_dialog(); }} onOpenChangeComplete={(next_open) => { if (!next_open) { set_creating(false); set_form_error(""); } }}><DialogContent>
     {creating ? (
       <form onSubmit={(event) => void submit_create(event)}>
-        <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbPlus className="size-4.5" /></div><div><DialogTitle>创建 Workspace</DialogTitle><DialogDescription>为孤儿 Session 新建一个本地目录作为执行环境。</DialogDescription></div></DialogHeader>
+        <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbPlus className="size-4.5" /></div><div><DialogTitle>{translate("workspace.create_for_session")}</DialogTitle><DialogDescription>{translate("workspace.create_for_session_description")}</DialogDescription></div></DialogHeader>
         <DialogBody className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground/75">目录</span><div className="flex gap-1"><input value={create_path} readOnly placeholder="选择一个本地目录" className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /><Button type="button" size="icon" className="size-8" title="选择目录" onClick={() => void choose_directory()}><TbFolderOpen /></Button></div></label>
-          <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground/75">名称</span><input value={create_name} placeholder="默认使用目录名称" className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" onChange={(event) => { set_create_name_edited(true); set_create_name(event.target.value); }} /></label>
+          <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground/75">{translate("workspace.path")}</span><div className="flex gap-1"><input value={create_path} readOnly placeholder={translate("workspace.path_placeholder")} className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /><Button type="button" size="icon" className="size-8" title={translate("workspace.choose_path")} onClick={() => void choose_directory()}><TbFolderOpen /></Button></div></label>
+          <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground/75">{translate("workspace.name")}</span><input value={create_name} placeholder={translate("workspace.name_placeholder")} className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" onChange={(event) => { set_create_name_edited(true); set_create_name(event.target.value); }} /></label>
           {form_error ? <div className="text-[0.6875rem] text-destructive">{form_error}</div> : null}
         </DialogBody>
-        <DialogFooter><Button type="button" disabled={submitting} onClick={() => { set_creating(false); set_form_error(""); }}>返回</Button><Button type="submit" variant="primary" disabled={submitting || !create_path}>{submitting ? "创建中…" : "创建并绑定"}</Button></DialogFooter>
+        <DialogFooter><Button type="button" disabled={submitting} onClick={() => { set_creating(false); set_form_error(""); }}>{common_translate("actions.back")}</Button><Button type="submit" variant="primary" disabled={submitting || !create_path}>{submitting ? common_translate("state.creating") : translate("workspace.create_and_attach")}</Button></DialogFooter>
       </form>
     ) : (
       <>
-        <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbFolder className="size-4.5" /></div><div><DialogTitle>选择 Workspace</DialogTitle><DialogDescription>这个对话原所属 Workspace 已不在列表中，请选择一个 Workspace 继续。</DialogDescription></div></DialogHeader>
+        <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbFolder className="size-4.5" /></div><div><DialogTitle>{translate("workspace.select")}</DialogTitle><DialogDescription>{translate("workspace.select_description")}</DialogDescription></div></DialogHeader>
         <DialogBody className="flex flex-col gap-2">
-          {workspaces.length > 0 ? workspaces.map((workspace) => <button key={workspace.workspace_id} type="button" onClick={() => set_selected_workspace_id(workspace.workspace_id)} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${selected_workspace_id === workspace.workspace_id ? "border-primary bg-primary/[0.08]" : "border-input hover:bg-foreground/[0.05]"}`}><TbFolder className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{workspace.name}</span><span className="truncate text-[0.625rem] text-muted-foreground/60">{workspace.workspace_path}</span></button>) : <div className="px-2 py-5 text-center text-[10px] text-muted-foreground/55">暂无 Workspace，请新建一个</div>}
+          {workspaces.length > 0 ? workspaces.map((workspace) => <button key={workspace.workspace_id} type="button" onClick={() => set_selected_workspace_id(workspace.workspace_id)} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${selected_workspace_id === workspace.workspace_id ? "border-primary bg-primary/[0.08]" : "border-input hover:bg-foreground/[0.05]"}`}><TbFolder className="size-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{workspace.name}</span><span className="truncate text-[0.625rem] text-muted-foreground/60">{workspace.workspace_path}</span></button>) : <div className="px-2 py-5 text-center text-[10px] text-muted-foreground/55">{translate("workspace.empty_for_session")}</div>}
           {form_error ? <div className="text-[0.6875rem] text-destructive">{form_error}</div> : null}
         </DialogBody>
-        <DialogFooter><Button type="button" disabled={submitting} onClick={close_dialog}>取消</Button><Button variant="primary" disabled={submitting || !selected_workspace_id} onClick={() => void submit_rebind()}>{submitting ? "绑定中…" : "绑定并打开"}</Button><Button type="button" disabled={submitting} onClick={() => { set_creating(true); set_form_error(""); }}><TbPlus /><span>新建</span></Button></DialogFooter>
+        <DialogFooter><Button type="button" disabled={submitting} onClick={close_dialog}>{common_translate("actions.cancel")}</Button><Button variant="primary" disabled={submitting || !selected_workspace_id} onClick={() => void submit_rebind()}>{submitting ? translate("workspace.attaching") : translate("workspace.attach_and_open")}</Button><Button type="button" disabled={submitting} onClick={() => { set_creating(true); set_form_error(""); }}><TbPlus /><span>{translate("workspace.new")}</span></Button></DialogFooter>
       </>
     )}
   </DialogContent></Dialog>;

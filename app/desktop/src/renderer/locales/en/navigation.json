@@ -1,0 +1,8 @@
+{
+  "views": { "chat": "Chat", "workspaces": "Workspace", "plugins": "Plugins", "settings": "Settings" },
+  "view_switcher": "Sidebar views",
+  "unread": "Unread notifications",
+  "account": { "user": "Downcity user", "settings_login": "Settings and sign in" },
+  "panels": { "collapse_left": "Collapse left panel", "expand_left": "Expand left panel", "close_right": "Close right panel", "recent_empty": "No recent Sessions" },
+  "sidebar": { "collapse": "Collapse sidebar", "expand": "Expand sidebar", "new_chat": "New conversation", "new_group": "Create Group", "new_agent": "Create Agent", "new_workspace": "New Workspace", "add_chat_subject": "Add chat contact", "recent": "Recent", "contacts": "Contacts", "groups": "Groups", "no_subjects": "No chat contacts yet", "no_sessions": "No conversations yet", "sessions_for": "Conversations with {{name}}", "resize_sessions": "Resize conversation list", "agent_actions": "Agent actions", "group_actions": "Group actions", "agent_settings": "Agent settings", "group_settings": "Group settings", "replying": "Replying", "no_description": "No description", "members": "{{count}} members", "no_workspaces": "No workspaces yet", "deleting": "Deleting…", "permanent_delete": "Delete permanently", "delete_agent_title": "Permanently delete {{name}}?", "delete_agent_description": "This cannot be undone. Sessions, logs, schedules, avatars, and Plugin data will be deleted.", "delete_group_title": "Delete Group “{{name}}”?", "delete_group_description": "This cannot be undone. Members and shared conversations will be deleted.", "delete_active_group_description": "The current Group will be closed first. This cannot be undone; members and shared conversations will be deleted." }
+}

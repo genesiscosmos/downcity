@@ -5,6 +5,7 @@ import { TbFolder, TbFolderOpen } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { CreateWorkspaceFormValue } from "@/types/DesktopView";
+import { use_translation } from "@/locales/i18n";
 
 /** 创建 Workspace 对话框属性。 */
 interface CreateWorkspaceDialogProps {
@@ -18,6 +19,8 @@ interface CreateWorkspaceDialogProps {
 
 /** 选择本地目录并独立登记 Workspace。 */
 export function CreateWorkspaceDialog({ open, close_dialog, create_workspace }: CreateWorkspaceDialogProps) {
+  const translate = use_translation("resources");
+  const common_translate = use_translation();
   const [workspace_path, set_workspace_path] = useState("");
   const [name, set_name] = useState("");
   const [submitting, set_submitting] = useState(false);
@@ -44,7 +47,7 @@ export function CreateWorkspaceDialog({ open, close_dialog, create_workspace }: 
   const submit_form = async (event: FormEvent) => {
     event.preventDefault();
     if (!workspace_path.trim()) {
-      set_form_error("请选择 Workspace 目录");
+      set_form_error(translate("workspace.path_required"));
       return;
     }
     set_submitting(true);
@@ -61,13 +64,13 @@ export function CreateWorkspaceDialog({ open, close_dialog, create_workspace }: 
 
   return <Dialog open={open} onOpenChange={(next_open) => { if (!next_open && !submitting) close_dialog(); }} onOpenChangeComplete={(next_open) => { if (!next_open) reset_form(); }}><DialogContent>
     <form onSubmit={(event) => void submit_form(event)}>
-      <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbFolder className="size-4.5" /></div><div><DialogTitle>添加 Workspace</DialogTitle><DialogDescription>登记一个独立的工作空间及其本地资源目录。</DialogDescription></div></DialogHeader>
+      <DialogHeader className="flex items-start gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><TbFolder className="size-4.5" /></div><div><DialogTitle>{translate("workspace.create")}</DialogTitle><DialogDescription>{translate("workspace.create_description")}</DialogDescription></div></DialogHeader>
       <DialogBody className="flex flex-col gap-3">
-        <Field label="目录"><div className="flex gap-1"><input value={workspace_path} readOnly placeholder="选择一个本地目录" className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /><Button type="button" size="icon" className="size-8" title="选择目录" onClick={() => void choose_directory()}><TbFolderOpen /></Button></div></Field>
-        <Field label="名称"><input value={name} placeholder="默认使用目录名称" className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" onChange={(event) => { name_edited.current = true; set_name(event.target.value); }} /></Field>
+        <Field label={translate("workspace.path")}><div className="flex gap-1"><input value={workspace_path} readOnly placeholder={translate("workspace.path_placeholder")} className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /><Button type="button" size="icon" className="size-8" title={translate("workspace.choose_path")} onClick={() => void choose_directory()}><TbFolderOpen /></Button></div></Field>
+        <Field label={translate("workspace.name")}><input value={name} placeholder={translate("workspace.name_placeholder")} className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" onChange={(event) => { name_edited.current = true; set_name(event.target.value); }} /></Field>
         {form_error ? <div className="text-[0.6875rem] text-destructive">{form_error}</div> : null}
       </DialogBody>
-      <DialogFooter><Button type="button" disabled={submitting} onClick={close_dialog}>取消</Button><Button type="submit" variant="primary" disabled={submitting || !workspace_path}>{submitting ? "添加中…" : "添加 Workspace"}</Button></DialogFooter>
+      <DialogFooter><Button type="button" disabled={submitting} onClick={close_dialog}>{common_translate("actions.cancel")}</Button><Button type="submit" variant="primary" disabled={submitting || !workspace_path}>{submitting ? translate("workspace.adding") : translate("workspace.create")}</Button></DialogFooter>
     </form>
   </DialogContent></Dialog>;
 }

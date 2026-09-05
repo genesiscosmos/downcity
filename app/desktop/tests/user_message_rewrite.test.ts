@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolve_user_message_rewrite } from "../src/renderer/lib/chat/user_message_rewrite.ts";
+import { resolve_user_message_rewrite } from "../src/renderer/features/chat/lib/user_message_rewrite.ts";
 
 test("最后一条消息直接替换当前 Session", () => {
   assert.equal(resolve_user_message_rewrite(true), "rollback");

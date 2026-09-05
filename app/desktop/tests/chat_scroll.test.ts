@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { is_chat_scroll_sticky, resolve_chat_anchor_scroll_top } from "../src/renderer/lib/chat/chat_scroll.ts";
+import { is_chat_scroll_sticky, resolve_chat_anchor_scroll_top } from "../src/renderer/features/chat/lib/chat_scroll.ts";
 
 test("距离底部小于阈值时保持自动跟随", () => {
   assert.equal(is_chat_scroll_sticky({ scroll_height: 1000, scroll_top: 521, client_height: 400 }), true);

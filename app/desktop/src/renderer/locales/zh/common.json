@@ -1,0 +1,7 @@
+{
+  "actions": { "add": "添加", "back": "返回", "cancel": "取消", "close": "关闭", "confirm": "确认", "copy": "复制", "create": "创建", "delete": "删除", "edit": "编辑", "more": "更多操作", "refresh": "刷新", "remove": "移除", "retry": "重试", "save": "保存", "saving": "保存中…" },
+  "state": { "automatic": "自动", "configured": "已配置", "creating": "创建中…", "disabled": "禁用", "empty": "无", "enabled": "启用", "loading": "加载中…", "not_configured": "未配置", "paused": "已暂停", "running": "运行中", "unavailable": "不可用", "unread": "未读" },
+  "command_palette": { "open_settings": "打开设置", "toggle_sidebar": "切换左侧边栏" },
+  "welcome": "选择一个 Agent 开始使用 Downcity",
+  "dialog": { "close": "关闭" }
+}

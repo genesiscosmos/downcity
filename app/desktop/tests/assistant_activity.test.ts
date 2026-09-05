@@ -12,7 +12,7 @@ import {
   should_force_open_tool,
   should_show_assistant_actions,
   type AssistantActivityPart,
-} from "../src/renderer/lib/chat/assistant/assistant_activity.ts";
+} from "../src/renderer/features/chat/lib/assistant/assistant_activity.ts";
 
 /** 创建测试用 Assistant 文本或 Reasoning part。 */
 function create_text_part(type: "text" | "reasoning", sequence: number, text: string): SessionAssistantMessagePart {
@@ -150,10 +150,10 @@ test("Tool 名称映射为稳定视觉语义与详情", () => {
 
 test("Tool 生命周期映射为运行、完成、等待与失败文案", () => {
   const tool = create_tool_part("read", 1);
-  assert.equal(resolve_tool_presentation({ ...tool, state: "running" }).state_label, "正在读取");
-  assert.equal(resolve_tool_presentation({ ...tool, state: "completed" }).state_label, "已读取");
-  assert.equal(resolve_tool_presentation({ ...tool, state: "waiting-user" }).state_label, "等待确认");
-  assert.equal(resolve_tool_presentation({ ...tool, state: "failed" }).state_label, "读取失败");
+  assert.equal(resolve_tool_presentation({ ...tool, state: "running" }).state_key, "activity.read.running");
+  assert.equal(resolve_tool_presentation({ ...tool, state: "completed" }).state_key, "activity.read.completed");
+  assert.equal(resolve_tool_presentation({ ...tool, state: "waiting-user" }).state_key, "activity.waiting_confirmation");
+  assert.equal(resolve_tool_presentation({ ...tool, state: "failed" }).state_key, "activity.read.failed");
 });
 
 test("只有流式写入和编辑工具强制展开详情", () => {

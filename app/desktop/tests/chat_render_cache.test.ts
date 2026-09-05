@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { project_chat_render_cache, touch_chat_render_cache } from "../src/renderer/lib/chat/chat_render_cache.ts";
+import { project_chat_render_cache, touch_chat_render_cache } from "../src/renderer/features/chat/lib/chat_render_cache.ts";
 
 test("访问 Session 时将它移动到最近顺序首位且不保留重复项", () => {
   const current = ["second", "first"];

@@ -6,6 +6,7 @@ import { TbX } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import { SHELL_PANEL_TRANSITION } from "@/layouts/shellMotion";
+import { use_translation } from "@/locales/i18n";
 
 /** 详情编辑侧栏属性。 */
 interface DetailEditorSidebarProps {
@@ -35,6 +36,7 @@ interface DetailEditorSidebarProps {
 
 /** 统一的详情编辑侧栏外壳。 */
 export function DetailEditorSidebar({ title, storage_key, default_width, min_width = 360, max_width = 600, on_close, children, footer, collapsed = false, show_close = true, embedded = false }: DetailEditorSidebarProps) {
+  const translate_common = use_translation("common");
   const [stored_width, set_stored_width] = use_local_storage_width(storage_key, default_width);
   const { current_width, is_resizing, handle_resize_start } = use_horizontal_resize({
     stored_width,
@@ -49,7 +51,7 @@ export function DetailEditorSidebar({ title, storage_key, default_width, min_wid
   return <motion.aside initial={false} animate={{ width: visible_width }} transition={{ ...SHELL_PANEL_TRANSITION, duration: is_resizing ? 0 : SHELL_PANEL_TRANSITION.duration }} className="relative flex h-full min-h-0 flex-none overflow-hidden bg-muted">
     <div className="absolute inset-y-0 right-0 flex h-full flex-col border-l border-border/45 bg-muted" style={{ width: current_width, visibility: collapsed ? "hidden" : "visible" }}>
       <div onMouseDown={handle_resize_start} className="absolute -left-[3px] top-0 z-10 h-full w-1.5 cursor-ew-resize" />
-      <div className="header-drag-region flex h-10 shrink-0 items-center gap-2 px-2">{show_close ? <Button size="icon" title="关闭" aria-label="关闭" onClick={on_close}><TbX /></Button> : null}<h2 className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{title}</h2></div>
+      <div className="header-drag-region flex h-10 shrink-0 items-center gap-2 px-2">{show_close ? <Button size="icon" title={translate_common("actions.close")} aria-label={translate_common("actions.close")} onClick={on_close}><TbX /></Button> : null}<h2 className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{title}</h2></div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">{children}</div>
       {footer ? <div className="shrink-0 p-3">{footer}</div> : null}
     </div>

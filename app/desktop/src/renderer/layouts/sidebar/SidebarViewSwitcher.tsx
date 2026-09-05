@@ -3,10 +3,11 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { Tooltip } from "@base-ui/react/tooltip";
 import { TbComponents, TbFolder, TbMessageCircle } from "react-icons/tb";
-import { PluginIcon } from "@/lib/plugin/PluginIcon";
+import { PluginIcon } from "@/features/plugin/lib/PluginIcon";
 import type { DesktopPluginSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
 import type { SidebarMode } from "@/types/DesktopView";
+import { use_translation } from "@/locales/i18n";
 
 /** Sidebar 集合切换器属性。 */
 interface SidebarViewSwitcherProps {
@@ -22,14 +23,9 @@ interface SidebarViewSwitcherProps {
   layout?: "top" | "left";
 }
 
-const core_items = [
-  { mode: "chat", label: "Chat", icon: TbMessageCircle },
-  { mode: "workspace", label: "Workspace", icon: TbFolder },
-  { mode: "plugins", label: "Plugins", icon: TbComponents },
-] as const;
-
 /** 对齐 Duobox 顶部横向胶囊式集合切换器。 */
 export function SidebarViewSwitcher({ active_mode, on_change, plugin_workspaces, unread_modes = [], layout = "top" }: SidebarViewSwitcherProps) {
+  const translate = use_translation("navigation");
   const group_ref = useRef<HTMLDivElement>(null);
   const indicator_ref = useRef<HTMLSpanElement>(null);
   const update_indicator = useCallback(() => {
@@ -54,6 +50,11 @@ export function SidebarViewSwitcher({ active_mode, on_change, plugin_workspaces,
   }, [active_mode, layout, update_indicator]);
 
   const vertical = layout === "left";
+  const core_items = [
+    { mode: "chat", label: translate("views.chat"), icon: TbMessageCircle },
+    { mode: "workspace", label: translate("views.workspaces"), icon: TbFolder },
+    { mode: "plugins", label: translate("views.plugins"), icon: TbComponents },
+  ] as const;
   const items = [
     ...core_items.map((item) => {
       const Icon = item.icon;
@@ -65,12 +66,12 @@ export function SidebarViewSwitcher({ active_mode, on_change, plugin_workspaces,
       icon: <PluginIcon plugin_id={plugin.plugin_id} icon_url={plugin.icon_url} />,
     })),
   ];
-  return <div ref={group_ref} role="group" aria-label="侧边栏视图" className={cn("relative isolate flex shrink-0", vertical ? "scrollbar-none min-h-0 w-8 flex-1 flex-col gap-1 overflow-y-auto" : "h-8 w-fit items-center rounded-full bg-surface-subtle p-1")}>
+  return <div ref={group_ref} role="group" aria-label={translate("view_switcher")} className={cn("relative isolate flex shrink-0", vertical ? "scrollbar-none min-h-0 w-8 flex-1 flex-col gap-1 overflow-y-auto" : "h-8 w-fit items-center rounded-full bg-surface-subtle p-1")}>
     {!vertical ? <span ref={indicator_ref} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-control-hover opacity-0 transition-[width,height,transform,opacity] duration-200 ease-out motion-reduce:transition-none" /> : null}
     {items.map((item) => {
       const active = item.mode === active_mode;
       const unread = unread_modes.includes(item.mode);
-      const button = <button key={item.mode} type="button" aria-pressed={active} aria-label={item.label} title={vertical ? item.label : undefined} data-sidebar-view={item.mode} className={cn("group/toggle relative z-10 inline-flex shrink-0 items-center justify-center bg-transparent text-[11px] leading-none whitespace-nowrap text-muted-foreground outline-none transition-[background-color,color,box-shadow] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0", vertical ? "h-8 w-8 rounded-lg [&_svg]:size-4" : "h-6 gap-1 rounded-full px-1.5", active && "text-foreground", vertical && active && "bg-interaction-selected hover:bg-interaction-active", !vertical && active && "hover:bg-interaction-active")} onClick={() => on_change(item.mode)}>{item.icon}{!vertical ? <span className="truncate">{item.label}</span> : null}{unread ? <span aria-label="有未读通知" className={cn("absolute size-1.5 rounded-full bg-blue-500 ring-2 ring-muted", vertical ? "right-0.5 top-0.5" : "right-0.5 top-0.5")} /> : null}</button>;
+      const button = <button key={item.mode} type="button" aria-pressed={active} aria-label={item.label} title={vertical ? item.label : undefined} data-sidebar-view={item.mode} className={cn("group/toggle relative z-10 inline-flex shrink-0 items-center justify-center bg-transparent text-[11px] leading-none whitespace-nowrap text-muted-foreground outline-none transition-[background-color,color,box-shadow] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0", vertical ? "h-8 w-8 rounded-lg [&_svg]:size-4" : "h-6 gap-1 rounded-full px-1.5", active && "text-foreground", vertical && active && "bg-interaction-selected hover:bg-interaction-active", !vertical && active && "hover:bg-interaction-active")} onClick={() => on_change(item.mode)}>{item.icon}{!vertical ? <span className="truncate">{item.label}</span> : null}{unread ? <span aria-label={translate("unread")} className={cn("absolute size-1.5 rounded-full bg-blue-500 ring-2 ring-muted", vertical ? "right-0.5 top-0.5" : "right-0.5 top-0.5")} /> : null}</button>;
       if (!vertical) return button;
       return <Tooltip.Root key={item.mode}><Tooltip.Trigger delay={300} render={button} /><Tooltip.Portal><Tooltip.Positioner side="right" sideOffset={8} className="z-50"><Tooltip.Popup className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground shadow-lg outline-none">{item.label}</Tooltip.Popup></Tooltip.Positioner></Tooltip.Portal></Tooltip.Root>;
     })}

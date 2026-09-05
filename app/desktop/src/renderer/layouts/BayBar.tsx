@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { TbX } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
+import { use_translation } from "@/locales/i18n";
 import { SHELL_PANEL_TRANSITION } from "./shellMotion";
 import { MainViewHeaderProvider } from "./MainViewLayout";
 
@@ -54,7 +55,8 @@ export function MainViewBayBarFrame({ view_key, sidebar_collapsed, title, baybar
 
 /** 渲染只有单一关闭操作的右侧编辑栏。 */
 export function BayBar({ open, title, children, close_baybar }: BayBarProps) {
+  const translate_navigation = use_translation("navigation");
   const [stored_width, set_stored_width] = useState(() => Number(localStorage.getItem("downcity.baybar_width")) || BAYBAR_DEFAULT_WIDTH);
   const { current_width, is_resizing, handle_resize_start } = use_horizontal_resize({ stored_width, min_width: BAYBAR_MIN_WIDTH, max_width: BAYBAR_MAX_WIDTH, default_width: BAYBAR_DEFAULT_WIDTH, resize_edge: "left", on_width_change: (width) => { set_stored_width(width); localStorage.setItem("downcity.baybar_width", String(width)); } });
-  return <motion.aside initial={false} animate={{ width: open ? current_width : 0 }} transition={is_resizing ? { duration: 0 } : SHELL_PANEL_TRANSITION} className="relative flex h-full min-h-0 flex-none overflow-hidden bg-muted"><div className="relative flex h-full min-h-0 flex-col border-l border-border/45 bg-muted" style={{ width: current_width }}><div onMouseDown={handle_resize_start} className="absolute -left-[3px] top-0 z-10 h-full w-1.5 cursor-ew-resize" /><header className="header-drag-region flex h-10 shrink-0 items-center gap-2 px-2"><h2 className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{title}</h2><Button size="icon" onClick={close_baybar} title="关闭右侧边栏" aria-label="关闭右侧边栏"><TbX /></Button></header><div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto">{children}</div></div></motion.aside>;
+  return <motion.aside initial={false} animate={{ width: open ? current_width : 0 }} transition={is_resizing ? { duration: 0 } : SHELL_PANEL_TRANSITION} className="relative flex h-full min-h-0 flex-none overflow-hidden bg-muted"><div className="relative flex h-full min-h-0 flex-col border-l border-border/45 bg-muted" style={{ width: current_width }}><div onMouseDown={handle_resize_start} className="absolute -left-[3px] top-0 z-10 h-full w-1.5 cursor-ew-resize" /><header className="header-drag-region flex h-10 shrink-0 items-center gap-2 px-2"><h2 className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{title}</h2><Button size="icon" onClick={close_baybar} title={translate_navigation("panels.close_right")} aria-label={translate_navigation("panels.close_right")}><TbX /></Button></header><div className="relative min-h-0 min-w-0 flex-1 overflow-y-auto">{children}</div></div></motion.aside>;
 }

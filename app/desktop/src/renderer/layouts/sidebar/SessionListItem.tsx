@@ -2,10 +2,11 @@
 
 import { memo, type ReactNode } from "react";
 import { TbDots, TbLoader2 } from "react-icons/tb";
-import { SessionActionsMenu } from "@/components/session/SessionActionsMenu";
+import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DesktopSessionSummary } from "@common/types/DesktopApi";
+import { use_translation } from "@/locales/i18n";
 
 /** Session 导航项属性。 */
 interface SessionListItemProps {
@@ -63,20 +64,22 @@ export const SessionListRow = memo(function SessionListRow({ title, active, on_s
 
 /** 带完整 Agent Session 操作能力的标准行。 */
 export const SessionListItem = memo(function SessionListItem({ session, active, unread, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
+  const translate_common = use_translation("common");
+  const translate_chat = use_translation("chat");
   const has_status = session.executing || unread;
-  return <SessionListRow title={session.title || "新对话"} active={active} on_select={on_select} menu={
+  return <SessionListRow title={session.title || translate_chat("conversation.new")} active={active} on_select={on_select} menu={
     <SessionActionsMenu session={session} on_rename={on_rename} on_archive={on_archive} on_remove={on_remove} trigger={
           <Button
             size="icon"
             className={cn("group/menu", has_status ? "opacity-100" : "opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100 data-[state=open]:opacity-100")}
-            title="更多操作"
-            aria-label="更多操作"
+            title={translate_common("actions.more")}
+            aria-label={translate_common("actions.more")}
             onClick={(event) => event.stopPropagation()}
           >
             {session.executing
-              ? <TbLoader2 className="animate-spin text-primary" aria-label="正在回复。" />
+              ? <TbLoader2 className="animate-spin text-primary" aria-label={translate_chat("conversation.responding")} />
               : unread
-                ? <span className="size-1.5 rounded-full bg-blue-500" aria-label="有未读完成结果" />
+                ? <span className="size-1.5 rounded-full bg-blue-500" aria-label={translate_chat("conversation.unread_result")} />
                 : <TbDots />}
           </Button>
     } />

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { count_chat_composer_atoms, create_chat_composer, has_chat_composer_atoms, is_chat_composer_empty, read_chat_composer_text } from "../src/renderer/lib/chat/editor/chatComposerCodec.ts";
+import { count_chat_composer_atoms, create_chat_composer, has_chat_composer_atoms, is_chat_composer_empty, read_chat_composer_text } from "../src/renderer/features/chat/composer/editor/chatComposerCodec.ts";
 
 test("创建并读取多行文本输入", () => {
   const document = create_chat_composer("第一行\n第二行");

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { create_chat_composer, resolve_chat_input_command } from "../src/renderer/lib/chat/editor/chatComposerCodec.ts";
+import { create_chat_composer, resolve_chat_input_command } from "../src/renderer/features/chat/composer/editor/chatComposerCodec.ts";
 
 test("精确 compact 文本被识别为本地命令", () => {
   assert.equal(resolve_chat_input_command(create_chat_composer("  /compact\n")), "compact");

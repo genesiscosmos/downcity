@@ -1,11 +1,6 @@
 /** Desktop 可恢复导航状态的校验上下文类型。 */
 
-import type {
-  DesktopAgentSummary,
-  DesktopGroupSummary,
-  DesktopPluginSummary,
-  DesktopWorkspaceSummary,
-} from "@common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopGroupSummary, DesktopPluginSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import type { DesktopWorkspaceSession, NavigationTarget } from "./DesktopView";
 
 /** 校验持久化导航目标时使用的 Desktop 目录快照。 */

@@ -9,7 +9,7 @@ import {
   apply_session_mutations,
   create_session_message_index,
   merge_session_snapshot,
-} from "../src/renderer/lib/chat/session_mutation.ts";
+} from "../src/renderer/features/chat/lib/session_mutation.ts";
 
 const assistant_message: SessionAssistantMessage = {
   message_id: "assistant-1",

@@ -5,6 +5,7 @@ import type { DesktopLocalData } from "../agent/DesktopLocalData.js";
 
 const settings_key = "desktop.settings";
 const default_settings: DesktopSettings = {
+  language: "en",
   show_reasoning: true,
   auto_scroll: true,
   default_agent_id: "",
@@ -24,6 +25,7 @@ const default_settings: DesktopSettings = {
 
 const appearance_modes = new Set<DesktopSettings["appearance_mode"]>(["light", "dark", "system"]);
 const color_themes = new Set<DesktopSettings["color_theme"]>(["duobox", "dim", "forest", "graph", "haze", "mono", "ocean", "sunset", "vercel"]);
+const languages = new Set<DesktopSettings["language"]>(["en", "zh"]);
 
 /** 读取、校验并持久化 Desktop 用户级偏好。 */
 export class DesktopSettingsController {
@@ -53,6 +55,9 @@ export class DesktopSettingsController {
 export function normalize_settings(input?: Partial<DesktopSettings> | null): DesktopSettings {
   const ui_scale = Number(input?.ui_scale);
   return {
+    language: languages.has(input?.language as DesktopSettings["language"])
+      ? input!.language as DesktopSettings["language"]
+      : default_settings.language,
     show_reasoning: typeof input?.show_reasoning === "boolean" ? input.show_reasoning : default_settings.show_reasoning,
     auto_scroll: typeof input?.auto_scroll === "boolean" ? input.auto_scroll : default_settings.auto_scroll,
     default_agent_id: typeof input?.default_agent_id === "string" ? input.default_agent_id.trim() : "",

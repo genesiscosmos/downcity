@@ -4,6 +4,8 @@ import { useId, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { format_credits_as_usd } from "@/lib/usage/usage_format";
 import type { UsagePeriod, UsageTrendPoint } from "@/types/DesktopUsage";
+import { get_intl_locale } from "@/locales/format";
+import { use_desktop_language, use_translation } from "@/locales/i18n";
 
 const width = 680;
 const height = 190;
@@ -37,17 +39,20 @@ function line_path(points: UsageChartPoint[]): string {
 
 /** 展示可通过指针或键盘检查数据点的 Credits 趋势。 */
 export function UsageLineChart({ series, period, credits_per_usd }: UsageLineChartProps) {
+  const language = use_desktop_language();
+  const translate = use_translation("settings");
+  const locale = get_intl_locale(language);
   const [active_index, set_active_index] = useState<number | null>(null);
   const gradient_id = `usage-area-${useId().replace(/:/gu, "")}`;
-  const date_formatter = useMemo(() => new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }), []);
-  const month_formatter = useMemo(() => new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short" }), []);
+  const date_formatter = useMemo(() => new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }), [locale]);
+  const month_formatter = useMemo(() => new Intl.DateTimeFormat(locale, { year: "numeric", month: "short" }), [locale]);
   const format_amount = (credits: number) => format_credits_as_usd(credits, credits_per_usd);
   const format_range = (point: UsageTrendPoint) => {
     if (period === "day") return date_formatter.format(date_value(point.start_date));
     if (period === "month") return month_formatter.format(date_value(point.start_date));
     return `${date_formatter.format(date_value(point.start_date))} - ${date_formatter.format(date_value(point.end_date))}`;
   };
-  const period_label = period === "day" ? "日" : period === "week" ? "周" : "月";
+  const period_label = translate(`usage.${period}`);
   const maximum = Math.max(0, ...series.map((point) => point.credits_used));
   const plot_width = width - padding.left - padding.right;
   const plot_height = height - padding.top - padding.bottom;
@@ -68,7 +73,7 @@ export function UsageLineChart({ series, period, credits_per_usd }: UsageLineCha
       <p className="text-[10px] text-muted-foreground">{format_range(active_point)}</p>
       <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">{format_amount(active_point.credits_used)}</p>
     </div> : null}
-    <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full overflow-visible" role="img" aria-label={`按${period_label}统计的 Credits 趋势`}>
+    <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full overflow-visible" role="img" aria-label={translate("usage.trend_label", { period: period_label })}>
       <defs><linearGradient id={gradient_id} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--chart-2)" stopOpacity="0.24" /><stop offset="100%" stopColor="var(--chart-2)" stopOpacity="0" /></linearGradient></defs>
       {[0, 0.5, 1].map((ratio) => {
         const y = padding.top + ratio * plot_height;

@@ -6,7 +6,7 @@ import { TbSettings, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import type { DesktopController } from "@/types/DesktopView";
-import { use_desktop_selector } from "@/hooks/use_desktop_controller";
+import { use_desktop_selector } from "@/app/use_desktop";
 import { SHELL_PANEL_TRANSITION, SHELL_SIDEBAR_DEFAULT_WIDTH, SHELL_SIDEBAR_MAX_WIDTH, SHELL_SIDEBAR_MIN_WIDTH } from "./shellMotion";
 import { ChatSidebar } from "./sidebar/ChatSidebar";
 import { PluginSidebar } from "./sidebar/PluginSidebar";
@@ -14,6 +14,7 @@ import { PluginWorkspaceSidebar } from "./sidebar/PluginWorkspaceSidebar";
 import { WorkspaceSidebar } from "./sidebar/WorkspaceSidebar";
 import { SidebarViewSwitcher } from "./sidebar/SidebarViewSwitcher";
 import { has_unread_chat_notification, has_unread_plugin_notification } from "@/lib/notification/notification_state";
+import { use_translation } from "@/locales/i18n";
 
 /** 左侧导航面板属性。 */
 interface NavigationSidebarProps {
@@ -56,6 +57,7 @@ export function SidebarContainer({ children, collapsed = false }: { /** Sidebar 
 
 /** Agent 与 Session 的 Duobox 导航视图。 */
 export const NavigationSidebar = memo(function NavigationSidebar({ controller, open_create_agent, open_create_group, open_create_workspace, open_group_config, collapsed = false }: NavigationSidebarProps) {
+  const translate = use_translation("navigation");
   const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
   const sidebar_mode = use_desktop_selector(controller.stores.navigation, (state) => state.sidebar_mode);
   const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
@@ -86,6 +88,6 @@ export const NavigationSidebar = memo(function NavigationSidebar({ controller, o
         {workspace_plugin_id ? <PluginWorkspaceSidebar controller={controller} plugin_id={workspace_plugin_id} notification_state={notification_state} /> : null}
       </div>
     </div>
-    <div className="shrink-0 space-y-0.5 px-2 pb-2"><Button size="sidebar" className="rounded-floating-item text-muted-foreground" actived={selection?.kind === "settings"} onClick={() => controller.actions.open_settings("user")}>{user.avatar_url ? <span className="size-5 shrink-0 overflow-hidden rounded-full"><img src={user.avatar_url} alt="" className="size-full object-cover" /></span> : user.authenticated ? <TbUser /> : <TbSettings />}<span className="min-w-0 flex-1 truncate text-left">{user.display_name || user.email || (user.authenticated ? "Downcity 用户" : "设置与登录")}</span><span className={`size-1.5 rounded-full ${user.authenticated ? "bg-emerald-500" : "bg-muted-foreground/25"}`} /></Button></div>
+    <div className="shrink-0 space-y-0.5 px-2 pb-2"><Button size="sidebar" className="rounded-floating-item text-muted-foreground" actived={selection?.kind === "settings"} onClick={() => controller.actions.open_settings("user")}>{user.avatar_url ? <span className="size-5 shrink-0 overflow-hidden rounded-full"><img src={user.avatar_url} alt="" className="size-full object-cover" /></span> : user.authenticated ? <TbUser /> : <TbSettings />}<span className="min-w-0 flex-1 truncate text-left">{user.display_name || user.email || (user.authenticated ? translate("account.user") : translate("account.settings_login"))}</span><span className={`size-1.5 rounded-full ${user.authenticated ? "bg-emerald-500" : "bg-muted-foreground/25"}`} /></Button></div>
   </SidebarContainer>;
 });

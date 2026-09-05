@@ -7,6 +7,9 @@
 import type { RespondSessionInteractionInput, SessionApprovalMode, SessionInteractionRequest, SessionMessage, SessionMutation } from "@downcity/agent";
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopNotificationState, DesktopNotificationViewState } from "./DesktopNotification.js";
+import type { DesktopLanguage } from "./DesktopLanguage.js";
+
+export type { DesktopLanguage } from "./DesktopLanguage.js";
 
 /** Renderer 可见的 Agent 摘要。 */
 export interface DesktopAgentSummary {
@@ -619,6 +622,14 @@ export interface DesktopSessionConfiguration {
   approval_mode: SessionApprovalMode;
 }
 
+/** 带初始配置创建 Session 后返回的完整结果。 */
+export interface DesktopCreateSessionResult {
+  /** 已持久化并开始由 Desktop 观察的 Session 摘要。 */
+  session: DesktopSessionSummary;
+  /** 主进程实际应用到新 Session 的模型、推理强度与审批配置。 */
+  configuration: DesktopSessionConfiguration;
+}
+
 /** Desktop 外观模式。 */
 export type DesktopAppearanceMode = "light" | "dark" | "system";
 
@@ -627,6 +638,8 @@ export type DesktopColorTheme = "duobox" | "dim" | "forest" | "graph" | "haze" |
 
 /** Desktop 用户级偏好设置。 */
 export interface DesktopSettings {
+  /** Desktop 宿主界面当前使用的语言。 */
+  language: DesktopLanguage;
   /** 是否展示模型推理内容。 */
   show_reasoning: boolean;
   /** 流式输出时是否自动跟随到底部。 */
@@ -900,8 +913,8 @@ export interface DesktopApi {
     list_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]>;
     /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的摘要。 */
     rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
-    /** 创建新的 Session。 */
-    create_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
+    /** 使用完整初始配置创建新的 Session。 */
+    create_session(agent_id: string, workspace_id: string, configuration: DesktopSessionConfiguration): Promise<DesktopCreateSessionResult>;
     /** 从指定消息创建一个新的分支 Session。 */
     fork_session(agent_id: string, workspace_id: string, session_id: string, message_id: string): Promise<DesktopSessionSummary>;
     /** 从历史用户消息之前创建 Session 并发送修改后的文本。 */

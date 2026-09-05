@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import { BUILTIN_PLUGIN_RENDERERS } from "@downcity/plugins/renderers";
-import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";
+import { PluginRendererHost } from "@/features/plugin/lib/PluginRendererHost";
 import { memo } from "react";
 import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopPluginDefinition } from "@common/types/DesktopApi";
 import type { DesktopNotificationState } from "@common/types/DesktopNotification";
 import { SidebarHeader } from "./SidebarHeader";
 import { plugin_renderer_notifications } from "@/lib/notification/notification_state";
-import { use_desktop_selector } from "@/hooks/use_desktop_controller";
+import { use_desktop_selector } from "@/app/use_desktop";
 
 const empty_plugin_route: PluginJsonObject = {};
 

@@ -2,8 +2,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { get_group_chat_key } from "../src/renderer/lib/chat/chat_cache_key.ts";
-import { get_sidebar_mode_for_navigation, is_restorable_navigation_target, parse_navigation_target, resolve_navigation_target } from "../src/renderer/lib/navigation/desktop_navigation_state.ts";
+import { get_group_chat_key } from "../src/renderer/features/chat/lib/chat_cache_key.ts";
+import { get_sidebar_mode_for_navigation, is_restorable_navigation_target, parse_navigation_target, resolve_navigation_target } from "../src/renderer/features/navigation/lib/desktop_navigation_state.ts";
 import type { DesktopNavigationCatalog } from "../src/renderer/types/DesktopNavigation.ts";
 import { get_group_draft_session_id, is_group_draft_session_id } from "../src/renderer/types/DesktopView.ts";
 

@@ -1,12 +1,7 @@
 /** Plugin React 插槽宿主的 Renderer 内部类型。 */
 
 import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
-import type {
-  PluginRendererConfirmInput,
-  PluginRendererDefinition,
-  PluginRendererNotification,
-  PluginRendererToastInput,
-} from "@downcity/city/plugin/react";
+import type { PluginRendererConfirmInput, PluginRendererDefinition, PluginRendererNotification, PluginRendererToastInput } from "@downcity/city/plugin/react";
 
 /** Plugin Renderer 当前承载的独立 UI 插槽。 */
 export type PluginRendererSlot = "sidebar" | "mainview" | "config";

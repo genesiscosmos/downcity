@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolve_desktop_link } from "../src/renderer/lib/link/desktop_link.ts";
+import { resolve_desktop_link } from "../src/renderer/features/navigation/lib/desktop_link.ts";
 
 const workspaces = [{ workspace_id: "project", workspace_path: "/Users/test/project", name: "Project" }];
 

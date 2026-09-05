@@ -2,11 +2,7 @@
 
 import { forwardRef, type HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
-import {
-  menu_item_base_class_name,
-  menu_item_highlighted_class_name,
-  menu_item_interaction_class_name,
-} from "./menu-styles";
+import { menu_item_base_class_name, menu_item_highlighted_class_name, menu_item_interaction_class_name } from "./menu-styles";
 
 /** 菜单项视觉外壳属性。 */
 interface MenuItemShellProps extends HTMLAttributes<HTMLDivElement> {

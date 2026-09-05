@@ -5,6 +5,7 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { TbX } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { translate } from "@/locales/i18n";
 
 const Dialog = BaseDialog.Root;
 const DialogTrigger = BaseDialog.Trigger;
@@ -44,7 +45,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       {...props}
     >
       {children}
-      {!hide_close ? <BaseDialog.Close render={<Button size="icon" className="absolute right-3 top-3" aria-label="关闭"><TbX /></Button>} /> : null}
+      {!hide_close ? <BaseDialog.Close render={<Button size="icon" className="absolute right-3 top-3" aria-label={translate("common:dialog.close")}><TbX /></Button>} /> : null}
     </BaseDialog.Popup>
   </BaseDialog.Portal>,
 );

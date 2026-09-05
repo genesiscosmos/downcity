@@ -6,7 +6,7 @@ import type { PluginJsonValue } from "@downcity/city/plugin";
 import { BUILTIN_PLUGIN_RENDERERS } from "@downcity/plugins/renderers";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";
+import { PluginRendererHost } from "@/features/plugin/lib/PluginRendererHost";
 import { cn } from "@/lib/utils";
 import type { DesktopActions } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";

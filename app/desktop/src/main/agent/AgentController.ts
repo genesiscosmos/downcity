@@ -49,6 +49,7 @@ import type {
   DesktopChatRuntimeEvent,
   DesktopChatSendResult,
   DesktopChatSnapshot,
+  DesktopCreateSessionResult,
   DesktopAgentDefinition,
   DesktopUpdateAgentInput,
   DesktopModelSummary,
@@ -821,14 +822,33 @@ export class AgentController {
     return await list_desktop_agent_models(this.data, resolve_desktop_city_env(this.data));
   }
 
-  /** 在当前 Workspace 创建新的 Session。 */
-  async create_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary> {
+  /** 在当前 Workspace 创建 Session，并在返回前原子应用完整初始配置。 */
+  async create_session(agent_id: string, workspace_id: string, configuration: DesktopSessionConfiguration): Promise<DesktopCreateSessionResult> {
     const agent = this.require_native_agent(agent_id);
     const workspace = this.city.workspaces.get(workspace_id)
       ?? (await this.require_workspace_entry(agent_id, workspace_id)).workspace;
     const session = await agent.sessions.create({ workspace });
     this.observe_session(agent_id, workspace_id, session);
-    return to_desktop_session_summary(this.data.root_path, await session.get_info());
+    try {
+      let actual_configuration = await this.read_session_configuration(workspace_id, session);
+      if (configuration.model_id && configuration.model_id !== actual_configuration.model_id) {
+        actual_configuration = await this.set_model(agent_id, workspace_id, session.id, configuration.model_id);
+      }
+      if (configuration.reasoning_effort !== undefined && configuration.reasoning_effort !== actual_configuration.reasoning_effort) {
+        actual_configuration = await this.set_reasoning_effort(agent_id, workspace_id, session.id, configuration.reasoning_effort);
+      }
+      if (configuration.approval_mode !== actual_configuration.approval_mode) {
+        actual_configuration = await this.set_approval_mode(agent_id, workspace_id, session.id, configuration.approval_mode);
+      }
+      return {
+        session: to_desktop_session_summary(this.data.root_path, await session.get_info()),
+        configuration: actual_configuration,
+      };
+    } catch (reason) {
+      await agent.sessions.remove(session.id).catch(() => undefined);
+      this.release_session_projection(agent_id, workspace_id, session.id);
+      throw reason;
+    }
   }
 
   /** 从 canonical Message 锚点创建分支 Session，并纳入 Desktop 实时投影。 */

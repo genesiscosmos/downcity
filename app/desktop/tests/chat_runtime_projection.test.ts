@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DesktopChatRuntime } from "../src/common/types/DesktopApi.ts";
-import { collect_executing_agent_ids, project_executing_agent_ids } from "../src/renderer/lib/chat/chat_runtime_projection.ts";
+import { collect_executing_agent_ids, project_executing_agent_ids } from "../src/renderer/features/chat/lib/chat_runtime_projection.ts";
 
 function create_runtime(session_id: string, status: DesktopChatRuntime["status"], agent_id = "builder"): DesktopChatRuntime {
   return { agent_id, workspace_id: "workspace", session_id, status, updated_at: 1 };
