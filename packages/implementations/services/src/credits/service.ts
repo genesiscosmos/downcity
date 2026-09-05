@@ -7,11 +7,7 @@
 
 import {
   InstallableService,
-  create_usage_date_formatter,
-  create_usage_utc_envelope,
-  format_usage_local_date,
   httpError,
-  read_usage_integer,
   type ServiceDatabaseContext,
   type ServiceInstallContext,
   type AdminUsageQuery,
@@ -51,6 +47,10 @@ import type {
   CreditsTransactionQuery,
 } from "./types/Transaction.js";
 import type { CreditsRawCommand } from "./types/RawDatabase.js";
+import type {
+  CreditsCardAllocation,
+  CreditsTransactionRequest,
+} from "./types/Runtime.js";
 import {
   parse_ephemeral_card,
   parse_primary_card,
@@ -70,42 +70,27 @@ import {
 } from "./utils.js";
 import type {
   AdminCreditsUsageResult,
-  CreditsDailyUsageBucket,
   CreditsDailyUsageResult,
 } from "./types/Usage.js";
 import { register_credits_routes } from "./routes.js";
-
-interface CardAllocation {
-  /** Card 类型。 */
-  card_kind: "primary" | "ephemeral";
-  /** Primary 使用 user_id，Ephemeral 使用 card_id。 */
-  card_id: string;
-  /** Card 所属用户 ID。 */
-  user_id: string;
-  /** 本次从 Card 扣除的正数额度。 */
-  credits: number;
-}
-
-interface TransactionRequest {
-  /** Transaction 类型。 */
-  kind: CreditsTransactionKind;
-  /** 用户 ID。 */
-  user_id: string;
-  /** 正数总额度。 */
-  credits: number;
-  /** 幂等键。 */
-  idempotency_key: string;
-  /** 标准化请求 JSON。 */
-  request_json: string;
-  /** 业务来源。 */
-  source: string;
-  /** 外部引用。 */
-  ref: string;
-  /** 说明。 */
-  note: string;
-  /** 审计信息。 */
-  metadata_json: string;
-}
+import {
+  apply_transaction_command,
+  cleanup_pending_transaction_commands,
+  clear_marker_command,
+  clear_markers_command,
+  delete_expired_cards_command,
+  insert_entry_from_card_command,
+  insert_ephemeral_allocation_entries_command,
+  insert_transaction_command,
+  rollback_card_command,
+  rollback_ephemeral_allocations_command,
+  update_card_command,
+  update_ephemeral_allocations_command,
+} from "./transaction-commands.js";
+import {
+  aggregate_admin_charges,
+  aggregate_user_daily_charges,
+} from "./usage-reader.js";
 
 /** Credits 服务实例。 */
 export class CreditsService extends InstallableService {
@@ -231,8 +216,8 @@ export class CreditsService extends InstallableService {
     const card_id = random_id("card");
     const now = new Date().toISOString();
     await raw_atomic(this.resolve_raw(), [
-      this.delete_expired_cards_command(user_id, now),
-      this.insert_transaction_command(transaction_id, request, now),
+      delete_expired_cards_command(user_id, now),
+      insert_transaction_command(transaction_id, request, now),
       {
         sql: [
           `INSERT INTO ${EPHEMERAL_CARD_TABLE}`,
@@ -264,14 +249,14 @@ export class CreditsService extends InstallableService {
           MAX_USER_CREDITS - credits,
         ],
       },
-      this.insert_entry_from_card_command(transaction_id, 0, "ephemeral", card_id, credits, now),
-      this.apply_transaction_command(transaction_id, credits, 1, now),
+      insert_entry_from_card_command(transaction_id, 0, "ephemeral", card_id, credits, now),
+      apply_transaction_command(transaction_id, credits, 1, now),
       {
         sql: `DELETE FROM ${EPHEMERAL_CARD_TABLE} WHERE card_id = ? AND transaction_marker = ? AND EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
         params: [card_id, transaction_id, transaction_id],
       },
-      ...this.cleanup_pending_transaction_commands(transaction_id),
-      this.clear_marker_command("ephemeral", card_id, transaction_id),
+      ...cleanup_pending_transaction_commands(transaction_id),
+      clear_marker_command("ephemeral", card_id, transaction_id),
     ]);
     const transaction = await this.read_idempotent_transaction(request);
     if (!transaction) {
@@ -311,13 +296,13 @@ export class CreditsService extends InstallableService {
     const transaction_id = await this.create_transaction_id(request.kind, request.idempotency_key);
     const now = new Date().toISOString();
     await raw_atomic(this.resolve_raw(), [
-      this.insert_transaction_command(transaction_id, request, now),
-      this.update_card_command(transaction_id, card.kind, card.card_id, card.user_id, credits, "topup", now),
-      this.insert_entry_from_card_command(transaction_id, 0, card.kind, card.card_id, credits, now),
-      this.apply_transaction_command(transaction_id, credits, 1, now),
-      this.rollback_card_command(transaction_id, card.kind, card.card_id, credits, "topup", now),
-      ...this.cleanup_pending_transaction_commands(transaction_id),
-      this.clear_marker_command(card.kind, card.card_id, transaction_id),
+      insert_transaction_command(transaction_id, request, now),
+      update_card_command(transaction_id, card.kind, card.card_id, card.user_id, credits, "topup", now),
+      insert_entry_from_card_command(transaction_id, 0, card.kind, card.card_id, credits, now),
+      apply_transaction_command(transaction_id, credits, 1, now),
+      rollback_card_command(transaction_id, card.kind, card.card_id, credits, "topup", now),
+      ...cleanup_pending_transaction_commands(transaction_id),
+      clear_marker_command(card.kind, card.card_id, transaction_id),
     ]);
     const transaction = await this.read_idempotent_transaction(request);
     if (!transaction) {
@@ -358,18 +343,18 @@ export class CreditsService extends InstallableService {
       : await this.allocate_cards(user_id, credits);
     const transaction_id = await this.create_transaction_id(request.kind, request.idempotency_key);
     const now = new Date().toISOString();
-    const commands: CreditsRawCommand[] = [this.insert_transaction_command(transaction_id, request, now)];
+    const commands: CreditsRawCommand[] = [insert_transaction_command(transaction_id, request, now)];
     const ephemeral_allocations = allocations.filter((allocation) => allocation.card_kind === "ephemeral");
     const primary_allocation = allocations.find((allocation) => allocation.card_kind === "primary");
     if (ephemeral_allocations.length > 0) {
       commands.push(
-        this.update_ephemeral_allocations_command(transaction_id, ephemeral_allocations, now),
-        this.insert_ephemeral_allocation_entries_command(transaction_id, ephemeral_allocations, now),
+        update_ephemeral_allocations_command(transaction_id, ephemeral_allocations, now),
+        insert_ephemeral_allocation_entries_command(transaction_id, ephemeral_allocations, now),
       );
     }
     if (primary_allocation) {
       commands.push(
-        this.update_card_command(
+        update_card_command(
           transaction_id,
           "primary",
           primary_allocation.card_id,
@@ -378,7 +363,7 @@ export class CreditsService extends InstallableService {
           "charge",
           now,
         ),
-        this.insert_entry_from_card_command(
+        insert_entry_from_card_command(
           transaction_id,
           ephemeral_allocations.length,
           "primary",
@@ -388,12 +373,12 @@ export class CreditsService extends InstallableService {
         ),
       );
     }
-    commands.push(this.apply_transaction_command(transaction_id, -credits, allocations.length, now));
+    commands.push(apply_transaction_command(transaction_id, -credits, allocations.length, now));
     if (ephemeral_allocations.length > 0) {
-      commands.push(this.rollback_ephemeral_allocations_command(transaction_id, ephemeral_allocations, now));
+      commands.push(rollback_ephemeral_allocations_command(transaction_id, ephemeral_allocations, now));
     }
     if (primary_allocation) {
-      commands.push(this.rollback_card_command(
+      commands.push(rollback_card_command(
         transaction_id,
         "primary",
         primary_allocation.card_id,
@@ -402,9 +387,13 @@ export class CreditsService extends InstallableService {
         now,
       ));
     }
-    commands.push(...this.cleanup_pending_transaction_commands(transaction_id));
-    if (ephemeral_allocations.length > 0) commands.push(this.clear_markers_command("ephemeral", transaction_id));
-    if (primary_allocation) commands.push(this.clear_marker_command("primary", primary_allocation.card_id, transaction_id));
+    commands.push(...cleanup_pending_transaction_commands(transaction_id));
+    if (ephemeral_allocations.length > 0) {
+      commands.push(clear_markers_command("ephemeral", transaction_id));
+    }
+    if (primary_allocation) {
+      commands.push(clear_marker_command("primary", primary_allocation.card_id, transaction_id));
+    }
     await raw_atomic(this.resolve_raw(), commands);
     const transaction = await this.read_idempotent_transaction(request);
     if (!transaction) {
@@ -417,65 +406,12 @@ export class CreditsService extends InstallableService {
 
   /** 按用户、当地日期范围与 IANA 时区聚合已入账 Credits 消费。 */
   async aggregate_user_daily_charges(input: UserDailyUsageQuery): Promise<CreditsDailyUsageResult> {
-    const database = this.resolve_raw();
-    const envelope = create_usage_utc_envelope(input.from, input.to);
-    const rows = await raw_all<{ credits: unknown; applied_at: string }>(database, [
-      `SELECT credits, applied_at FROM ${TRANSACTION_TABLE}`,
-      "WHERE user_id = ? AND kind = 'charge' AND status = 'applied' AND credits > 0",
-      "AND applied_at >= ? AND applied_at < ? ORDER BY applied_at ASC",
-    ].join(" "), [input.user_id, envelope.from_utc, envelope.to_utc_exclusive]);
-    const first = await raw_first<{ applied_at: string }>(database, [
-      `SELECT applied_at FROM ${TRANSACTION_TABLE}`,
-      "WHERE user_id = ? AND kind = 'charge' AND status = 'applied' AND credits > 0",
-      "ORDER BY applied_at ASC LIMIT 1",
-    ].join(" "), [input.user_id]);
-    const formatter = create_usage_date_formatter(input.timezone);
-    const by_date = new Map<string, CreditsDailyUsageBucket>();
-    for (const row of rows) {
-      const date = format_usage_local_date(formatter, row.applied_at);
-      if (date < input.from || date > input.to) continue;
-      const bucket = by_date.get(date) ?? { date, used: 0, charge_count: 0 };
-      bucket.used += read_usage_integer(row.credits);
-      bucket.charge_count += 1;
-      by_date.set(date, bucket);
-    }
-    return {
-      data_available_from: first
-        ? format_usage_local_date(formatter, first.applied_at)
-        : null,
-      days: [...by_date.values()].sort((left, right) => left.date.localeCompare(right.date)),
-    };
+    return await aggregate_user_daily_charges(this.resolve_raw(), input);
   }
 
   /** 按日期范围聚合 Federation 全部用户的已入账 Credits 消费。 */
   async aggregate_admin_charges(input: AdminUsageQuery): Promise<AdminCreditsUsageResult> {
-    const database = this.resolve_raw();
-    const envelope = create_usage_utc_envelope(input.from, input.to);
-    const rows = await raw_all<{ user_id: string; credits: unknown; applied_at: string }>(database, [
-      `SELECT user_id, credits, applied_at FROM ${TRANSACTION_TABLE}`,
-      "WHERE kind = 'charge' AND status = 'applied' AND credits > 0",
-      "AND applied_at >= ? AND applied_at < ? ORDER BY applied_at ASC",
-    ].join(" "), [envelope.from_utc, envelope.to_utc_exclusive]);
-    const formatter = create_usage_date_formatter(input.timezone);
-    const users = new Map<string, { user_id: string; credits_used: number; charge_count: number }>();
-    const days = new Map<string, CreditsDailyUsageBucket>();
-    for (const row of rows) {
-      const date = format_usage_local_date(formatter, row.applied_at);
-      if (date < input.from || date > input.to) continue;
-      const credits = read_usage_integer(row.credits);
-      const user = users.get(row.user_id) ?? { user_id: row.user_id, credits_used: 0, charge_count: 0 };
-      user.credits_used += credits;
-      user.charge_count += 1;
-      users.set(row.user_id, user);
-      const day = days.get(date) ?? { date, used: 0, charge_count: 0 };
-      day.used += credits;
-      day.charge_count += 1;
-      days.set(date, day);
-    }
-    return {
-      users: [...users.values()].sort((left, right) => right.credits_used - left.credits_used || left.user_id.localeCompare(right.user_id)),
-      days: [...days.values()].sort((left, right) => left.date.localeCompare(right.date)),
-    };
+    return await aggregate_admin_charges(this.resolve_raw(), input);
   }
 
   /** 按条件查询 Transactions。 */
@@ -636,20 +572,24 @@ export class CreditsService extends InstallableService {
     return { kind: "ephemeral", card_id: card.card_id, user_id: card.user_id, credits: card.credits };
   }
 
-  private async allocate_selected_card(user_id: string, reference: CreditsCardReference, credits: number): Promise<CardAllocation[]> {
+  private async allocate_selected_card(
+    user_id: string,
+    reference: CreditsCardReference,
+    credits: number,
+  ): Promise<CreditsCardAllocation[]> {
     const card = await this.resolve_card(reference);
     if (card.user_id !== user_id) throw httpError(403, "card does not belong to user");
     if (card.credits < credits) throw httpError(402, "insufficient credits on selected card");
     return [{ card_kind: card.kind, card_id: card.card_id, user_id, credits }];
   }
 
-  private async allocate_cards(user_id: string, credits: number): Promise<CardAllocation[]> {
+  private async allocate_cards(user_id: string, credits: number): Promise<CreditsCardAllocation[]> {
     const [ephemeral, primary] = await Promise.all([
       this.list_ephemeral_cards({ user_id, include_history: false, limit: MAX_ACTIVE_EPHEMERAL_CARDS }),
       this.get_primary_card(user_id),
     ]);
     let remaining = credits;
-    const allocations: CardAllocation[] = [];
+    const allocations: CreditsCardAllocation[] = [];
     for (const card of ephemeral) {
       if (remaining <= 0) break;
       const amount = Math.min(card.credits, remaining);
@@ -702,7 +642,7 @@ export class CreditsService extends InstallableService {
       metadata?: Record<string, unknown>;
       request: Record<string, unknown>;
     },
-  ): TransactionRequest {
+  ): CreditsTransactionRequest {
     const source = read_required_text(input.source, "source");
     const ref = read_text(input.ref);
     const note = read_text(input.note);
@@ -726,7 +666,9 @@ export class CreditsService extends InstallableService {
     };
   }
 
-  private async read_idempotent_transaction(request: TransactionRequest): Promise<CreditsTransaction | undefined> {
+  private async read_idempotent_transaction(
+    request: CreditsTransactionRequest,
+  ): Promise<CreditsTransaction | undefined> {
     return await this.read_idempotent_transaction_by_key(request.kind, request.idempotency_key, request.request_json);
   }
 
@@ -760,245 +702,10 @@ export class CreditsService extends InstallableService {
     return await this.get_ephemeral_card(String(entry.card_id));
   }
 
-  private insert_transaction_command(transaction_id: string, request: TransactionRequest, now: string): CreditsRawCommand {
-    return {
-      sql: [
-        `INSERT OR IGNORE INTO ${TRANSACTION_TABLE}`,
-        "(transaction_id, kind, user_id, credits, status, idempotency_key, request_json, source, ref, note, metadata_json, created_at, applied_at)",
-        "VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, '')",
-      ].join(" "),
-      params: [transaction_id, request.kind, request.user_id, request.credits, request.idempotency_key, request.request_json, request.source, request.ref, request.note, request.metadata_json, now],
-    };
-  }
-
-  private update_card_command(
-    transaction_id: string,
-    kind: "primary" | "ephemeral",
-    card_id: string,
-    user_id: string,
-    credits: number,
-    operation: "topup" | "charge",
-    now: string,
-  ): CreditsRawCommand {
-    const table = kind === "primary" ? PRIMARY_CARD_TABLE : EPHEMERAL_CARD_TABLE;
-    const key = kind === "primary" ? "user_id" : "card_id";
-    const delta = operation === "topup" ? credits : -credits;
-    const sufficient = operation === "charge" ? "AND credits >= ?" : "";
-    const unexpired = kind === "ephemeral" ? "AND expires_at > ?" : "";
-    const within_card_limit = operation === "topup" && kind === "ephemeral"
-      ? `AND (credits > 0 OR (SELECT COUNT(*) FROM ${EPHEMERAL_CARD_TABLE} WHERE user_id = ? AND expires_at > ? AND credits > 0) < ?)`
-      : "";
-    const within_user_limit = operation === "topup"
-      ? [
-          `AND COALESCE((SELECT credits FROM ${PRIMARY_CARD_TABLE} WHERE user_id = ?), 0)`,
-          `+ COALESCE((SELECT SUM(credits) FROM ${EPHEMERAL_CARD_TABLE} WHERE user_id = ? AND expires_at > ?), 0) <= ?`,
-        ].join(" ")
-      : "";
-    const params: unknown[] = [delta, transaction_id, now, card_id];
-    if (operation === "charge") params.push(credits);
-    if (kind === "ephemeral") params.push(now);
-    if (operation === "topup" && kind === "ephemeral") {
-      params.push(user_id, now, MAX_ACTIVE_EPHEMERAL_CARDS);
-    }
-    if (operation === "topup") params.push(user_id, user_id, now, MAX_USER_CREDITS - credits);
-    params.push(transaction_id);
-    return {
-      sql: [
-        `UPDATE ${table} SET credits = credits + ?, transaction_marker = ?, updated_at = ?`,
-        `WHERE ${key} = ? ${sufficient} ${unexpired} ${within_card_limit} ${within_user_limit}`,
-        `AND EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
-      ].join(" "),
-      params,
-    };
-  }
-
-  private insert_entry_from_card_command(
-    transaction_id: string,
-    index: number,
-    kind: "primary" | "ephemeral",
-    card_id: string,
-    delta: number,
-    now: string,
-  ): CreditsRawCommand {
-    const table = kind === "primary" ? PRIMARY_CARD_TABLE : EPHEMERAL_CARD_TABLE;
-    const key = kind === "primary" ? "user_id" : "card_id";
-    const user_column = "user_id";
-    return {
-      sql: [
-        `INSERT INTO ${TRANSACTION_ENTRY_TABLE}`,
-        "(entry_id, transaction_id, user_id, card_kind, card_id, credits_delta, credits_after, created_at)",
-        `SELECT ?, ?, ${user_column}, ?, ?, ?, credits, ? FROM ${table}`,
-        `WHERE ${key} = ? AND transaction_marker = ?`,
-        `AND EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
-      ].join(" "),
-      params: [`cte_${transaction_id}_${index}`, transaction_id, kind, card_id, delta, now, card_id, transaction_id, transaction_id],
-    };
-  }
-
-  /** 使用一条 SQL 原子扣除本次涉及的全部 Ephemeral Cards。 */
-  private update_ephemeral_allocations_command(
-    transaction_id: string,
-    allocations: CardAllocation[],
-    now: string,
-  ): CreditsRawCommand {
-    const allocations_json = this.serialize_ephemeral_allocations(allocations);
-    return {
-      sql: [
-        "WITH allocations AS (",
-        "SELECT json_extract(value, '$.card_id') AS card_id,",
-        "CAST(json_extract(value, '$.credits') AS INTEGER) AS credits FROM json_each(?)",
-        ")",
-        `UPDATE ${EPHEMERAL_CARD_TABLE} SET`,
-        `credits = credits - (SELECT credits FROM allocations WHERE allocations.card_id = ${EPHEMERAL_CARD_TABLE}.card_id),`,
-        "transaction_marker = ?, updated_at = ?",
-        "WHERE card_id IN (SELECT card_id FROM allocations)",
-        "AND expires_at > ?",
-        `AND credits >= (SELECT credits FROM allocations WHERE allocations.card_id = ${EPHEMERAL_CARD_TABLE}.card_id)`,
-        `AND EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
-      ].join(" "),
-      params: [allocations_json, transaction_id, now, now, transaction_id],
-    };
-  }
-
-  /** 使用一条 INSERT SELECT 为全部 Ephemeral Card 扣费创建不可变 Entries。 */
-  private insert_ephemeral_allocation_entries_command(
-    transaction_id: string,
-    allocations: CardAllocation[],
-    now: string,
-  ): CreditsRawCommand {
-    const allocations_json = this.serialize_ephemeral_allocations(allocations);
-    return {
-      sql: [
-        "WITH allocations AS (",
-        "SELECT json_extract(value, '$.card_id') AS card_id,",
-        "CAST(json_extract(value, '$.credits') AS INTEGER) AS credits,",
-        "CAST(json_extract(value, '$.entry_index') AS INTEGER) AS entry_index FROM json_each(?)",
-        ")",
-        `INSERT INTO ${TRANSACTION_ENTRY_TABLE}`,
-        "(entry_id, transaction_id, user_id, card_kind, card_id, credits_delta, credits_after, created_at)",
-        "SELECT ? || allocations.entry_index, ?, cards.user_id, 'ephemeral', cards.card_id,",
-        "-allocations.credits, cards.credits, ?",
-        `FROM ${EPHEMERAL_CARD_TABLE} AS cards JOIN allocations ON allocations.card_id = cards.card_id`,
-        "WHERE cards.transaction_marker = ?",
-        `AND EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
-      ].join(" "),
-      params: [allocations_json, `cte_${transaction_id}_`, transaction_id, now, transaction_id, transaction_id],
-    };
-  }
-
-  /** Transaction 未能完整应用时，一次性恢复全部已修改的 Ephemeral Cards。 */
-  private rollback_ephemeral_allocations_command(
-    transaction_id: string,
-    allocations: CardAllocation[],
-    now: string,
-  ): CreditsRawCommand {
-    const allocations_json = this.serialize_ephemeral_allocations(allocations);
-    return {
-      sql: [
-        "WITH allocations AS (",
-        "SELECT json_extract(value, '$.card_id') AS card_id,",
-        "CAST(json_extract(value, '$.credits') AS INTEGER) AS credits FROM json_each(?)",
-        ")",
-        `UPDATE ${EPHEMERAL_CARD_TABLE} SET`,
-        `credits = credits + (SELECT credits FROM allocations WHERE allocations.card_id = ${EPHEMERAL_CARD_TABLE}.card_id),`,
-        "updated_at = ?",
-        "WHERE card_id IN (SELECT card_id FROM allocations) AND transaction_marker = ?",
-        `AND EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
-      ].join(" "),
-      params: [allocations_json, now, transaction_id, transaction_id],
-    };
-  }
-
-  /** 将 Ephemeral Card 分配转换为单个 JSON SQL 参数，避免 D1 变量数量膨胀。 */
-  private serialize_ephemeral_allocations(allocations: CardAllocation[]): string {
-    return stable_stringify(allocations.map((allocation, entry_index) => ({
-      card_id: allocation.card_id,
-      credits: allocation.credits,
-      entry_index,
-    })));
-  }
-
-  private apply_transaction_command(transaction_id: string, expected_delta: number, entry_count: number, now: string): CreditsRawCommand {
-    return {
-      sql: [
-        `UPDATE ${TRANSACTION_TABLE} SET status = 'applied', applied_at = ?`,
-        "WHERE transaction_id = ? AND status = 'pending'",
-        `AND (SELECT COUNT(*) FROM ${TRANSACTION_ENTRY_TABLE} WHERE transaction_id = ?) = ?`,
-        `AND (SELECT COALESCE(SUM(credits_delta), 0) FROM ${TRANSACTION_ENTRY_TABLE} WHERE transaction_id = ?) = ?`,
-      ].join(" "),
-      params: [now, transaction_id, transaction_id, entry_count, transaction_id, expected_delta],
-    };
-  }
-
-  private rollback_card_command(
-    transaction_id: string,
-    kind: "primary" | "ephemeral",
-    card_id: string,
-    credits: number,
-    operation: "topup" | "charge",
-    now: string,
-  ): CreditsRawCommand {
-    const table = kind === "primary" ? PRIMARY_CARD_TABLE : EPHEMERAL_CARD_TABLE;
-    const key = kind === "primary" ? "user_id" : "card_id";
-    const rollback_delta = operation === "topup" ? -credits : credits;
-    return {
-      sql: [
-        `UPDATE ${table} SET credits = credits + ?, updated_at = ?`,
-        `WHERE ${key} = ? AND transaction_marker = ?`,
-        `AND EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
-      ].join(" "),
-      params: [rollback_delta, now, card_id, transaction_id, transaction_id],
-    };
-  }
-
-  private cleanup_pending_transaction_commands(transaction_id: string): CreditsRawCommand[] {
-    return [
-      {
-        sql: `DELETE FROM ${TRANSACTION_ENTRY_TABLE} WHERE transaction_id = ? AND EXISTS (SELECT 1 FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending')`,
-        params: [transaction_id, transaction_id],
-      },
-      {
-        sql: `DELETE FROM ${TRANSACTION_TABLE} WHERE transaction_id = ? AND status = 'pending'`,
-        params: [transaction_id],
-      },
-    ];
-  }
-
-  private clear_marker_command(kind: "primary" | "ephemeral", card_id: string, transaction_id: string): CreditsRawCommand {
-    const table = kind === "primary" ? PRIMARY_CARD_TABLE : EPHEMERAL_CARD_TABLE;
-    const key = kind === "primary" ? "user_id" : "card_id";
-    return {
-      sql: `UPDATE ${table} SET transaction_marker = '' WHERE ${key} = ? AND transaction_marker = ?`,
-      params: [card_id, transaction_id],
-    };
-  }
-
-  /** 清理一种 Card 上属于指定 Transaction 的全部内部标记。 */
-  private clear_markers_command(kind: "primary" | "ephemeral", transaction_id: string): CreditsRawCommand {
-    const table = kind === "primary" ? PRIMARY_CARD_TABLE : EPHEMERAL_CARD_TABLE;
-    return {
-      sql: `UPDATE ${table} SET transaction_marker = '' WHERE transaction_marker = ?`,
-      params: [transaction_id],
-    };
-  }
-
   /** 删除指定用户或全局已经过期的 Ephemeral Cards。 */
   private async cleanup_expired_cards(user_id?: string): Promise<void> {
     const now = new Date().toISOString();
-    await raw_atomic(this.resolve_raw(), [this.delete_expired_cards_command(user_id, now)]);
-  }
-
-  /** 构造过期 Card 清理命令，供业务事务复用。 */
-  private delete_expired_cards_command(user_id: string | undefined, now: string): CreditsRawCommand {
-    return user_id
-      ? {
-          sql: `DELETE FROM ${EPHEMERAL_CARD_TABLE} WHERE user_id = ? AND expires_at <= ?`,
-          params: [user_id, now],
-        }
-      : {
-          sql: `DELETE FROM ${EPHEMERAL_CARD_TABLE} WHERE expires_at <= ?`,
-          params: [now],
-        };
+    await raw_atomic(this.resolve_raw(), [delete_expired_cards_command(user_id, now)]);
   }
 
   /** 统计一个用户当前有效且仍有余额的 Ephemeral Cards。 */
