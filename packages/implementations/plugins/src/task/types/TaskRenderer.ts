@@ -3,6 +3,7 @@
 import type { PluginRendererUiComponents } from "@downcity/city/plugin/react";
 import type {
   TaskMainviewEditorDraft,
+  TaskMainviewAgent,
   TaskMainviewItem,
   TaskMainviewWorkspace,
 } from "./TaskMainview.js";
@@ -13,6 +14,8 @@ export interface TaskEditorProps {
   readonly mode: "create" | "edit";
   /** 编辑模式下的既有 Task；创建模式不提供。 */
   readonly task?: TaskMainviewItem;
+  /** 当前可绑定的全部 Agent。 */
+  readonly agents: readonly TaskMainviewAgent[];
   /** 当前可绑定的全部 Workspace。 */
   readonly workspaces: readonly TaskMainviewWorkspace[];
   /** 表单提交或取消期间是否禁止继续操作。 */

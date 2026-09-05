@@ -63,6 +63,8 @@ export type TaskUpdateRequest = {
   clearWhen?: boolean;
   /** 新任务描述。 */
   description?: string;
+  /** 新的执行 Agent；宿主管理界面可用它重新绑定执行目标。 */
+  agent_id?: string;
   /** 新的执行 Workspace。 */
   workspace_id?: string;
   /** 新任务执行类型。 */

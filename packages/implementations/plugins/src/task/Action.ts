@@ -329,6 +329,10 @@ export async function updateTaskDefinition(params: {
       ? req.workspace_id.trim()
       : current.frontmatter.workspace_id;
     if (!workspace_id) return { success: false, error: "workspace_id cannot be empty" };
+    const agent_id = typeof req.agent_id === "string"
+      ? req.agent_id.trim()
+      : current.frontmatter.agent_id;
+    if (!agent_id) return { success: false, error: "agent_id cannot be empty" };
     const kind = normalizeTaskKind(
       req.kind === undefined ? current.frontmatter.kind : req.kind,
     );
@@ -364,7 +368,7 @@ export async function updateTaskDefinition(params: {
         title: nextTitle,
         description,
         when: whenNormalized.value,
-        agent_id: current.frontmatter.agent_id,
+        agent_id,
         workspace_id,
         ...(current.frontmatter.delivery_session
           ? { delivery_session: current.frontmatter.delivery_session }

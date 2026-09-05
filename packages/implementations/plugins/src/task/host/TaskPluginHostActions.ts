@@ -47,7 +47,7 @@ export function register_task_plugin_host_actions(
   context.plugin.action({ id: "tasks.delete", run: async (input) => as_json(await delete_task(context, runtime, read_action_input(input))) });
 }
 
-/** 读取 City 中的 Agent/Workspace 与统一 Task 投影。 */
+/** 读取 TaskPlugin 统一 Task 列表与可选执行目标。 */
 async function create_snapshot(
   context: PluginLifecycleContext,
   runtime: TaskPluginHostRuntime,
@@ -59,23 +59,22 @@ async function create_snapshot(
   ]);
   const task_agents = agents.filter((agent) => agent.plugin_ids.includes("task"));
   return {
+    tasks: task_result.tasks.map((task) => ({
+      title: task.title,
+      description: task.description,
+      ...(task.body ? { body: task.body } : {}),
+      when: task.when,
+      status: task.status,
+      kind: task.kind || "agent",
+      review: Boolean(task.review),
+      agent_id: task.agent_id,
+      workspace_id: task.workspace_id,
+      ...(task.delivery_session ? { delivery_session: task.delivery_session } : {}),
+      ...(task.lastRunTimestamp ? { last_run_at: task.lastRunTimestamp } : {}),
+    })),
     agents: task_agents.map((agent) => ({
       agent_id: agent.agent_id,
       name: agent.name,
-      tasks: task_result.tasks
-        .filter((task) => task.agent_id === agent.agent_id)
-        .map((task) => ({
-          title: task.title,
-          description: task.description,
-          ...(task.body ? { body: task.body } : {}),
-          when: task.when,
-          status: task.status,
-          kind: task.kind || "agent",
-          review: Boolean(task.review),
-          workspace_id: task.workspace_id,
-          ...(task.delivery_session ? { delivery_session: task.delivery_session } : {}),
-          ...(task.lastRunTimestamp ? { last_run_at: task.lastRunTimestamp } : {}),
-        })),
     })),
     workspaces: workspaces.map((workspace) => ({
       workspace_id: workspace.workspace_id,
@@ -89,7 +88,7 @@ async function read_history(
   runtime: TaskPluginHostRuntime,
   input: TaskMainviewHistoryInput,
 ): Promise<TaskMainviewHistorySnapshot> {
-  await assert_existing_task(runtime.storage, input);
+  await read_existing_task(runtime.storage, input.task_title);
   const result = await list_task_run_history({
     storage: runtime.storage,
     request: { title: input.task_title },
@@ -103,7 +102,7 @@ async function read_run_detail(
   runtime: TaskPluginHostRuntime,
   input: TaskMainviewRunDetailInput,
 ): Promise<TaskMainviewRunDetailSnapshot> {
-  await assert_existing_task(runtime.storage, input);
+  await read_existing_task(runtime.storage, input.task_title);
   const result = await read_task_run({
     storage: runtime.storage,
     request: { title: input.task_title, timestamp: input.timestamp },
@@ -147,17 +146,14 @@ async function update_task(
   input: TaskMainviewUpdateInput,
 ): Promise<TaskMainviewMutationResult> {
   await assert_execution_target(context, input.agent_id, input.workspace_id);
-  await assert_existing_task(runtime.storage, {
-    agent_id: input.agent_id,
-    workspace_id: undefined,
-    task_title: input.current_title,
-  });
+  await read_existing_task(runtime.storage, input.current_title);
   const result = await updateTaskDefinition({
     storage: runtime.storage,
     request: {
       title: input.current_title,
       titleNext: input.title,
       description: input.description,
+      agent_id: input.agent_id,
       workspace_id: input.workspace_id,
       when: input.when,
       kind: input.kind,
@@ -177,8 +173,14 @@ async function set_task_status(
   runtime: TaskPluginHostRuntime,
   input: TaskMainviewStatusInput,
 ): Promise<TaskMainviewMutationResult> {
-  await assert_execution_target(context, input.agent_id, input.workspace_id);
-  await assert_existing_task(runtime.storage, input);
+  const task = await read_existing_task(runtime.storage, input.task_title);
+  if (input.status === "enabled") {
+    await assert_execution_target(
+      context,
+      task.frontmatter.agent_id,
+      task.frontmatter.workspace_id,
+    );
+  }
   const result = await setTaskStatus({
     storage: runtime.storage,
     request: { title: input.task_title, status: input.status },
@@ -194,9 +196,19 @@ async function run_task(
   runtime: TaskPluginHostRuntime,
   input: TaskMainviewActionInput,
 ): Promise<TaskMainviewMutationResult> {
-  await assert_execution_target(context, input.agent_id, input.workspace_id);
-  await assert_existing_task(runtime.storage, input);
-  const result = await invoke_task_action(context, input, "run", { title: input.task_title });
+  const task = await read_existing_task(runtime.storage, input.task_title);
+  await assert_execution_target(
+    context,
+    task.frontmatter.agent_id,
+    task.frontmatter.workspace_id,
+  );
+  const result = await invoke_task_action(
+    context,
+    task.frontmatter.agent_id,
+    task.frontmatter.workspace_id,
+    "run",
+    { title: input.task_title },
+  );
   if (!result.success) throw new Error(result.error || `运行 ${input.task_title} 失败`);
   return { task_title: input.task_title };
 }
@@ -207,8 +219,7 @@ async function delete_task(
   runtime: TaskPluginHostRuntime,
   input: TaskMainviewActionInput,
 ): Promise<TaskMainviewMutationResult> {
-  await assert_execution_target(context, input.agent_id, input.workspace_id);
-  await assert_existing_task(runtime.storage, input);
+  await read_existing_task(runtime.storage, input.task_title);
   const result = await deleteTaskDefinition({
     storage: runtime.storage,
     request: { title: input.task_title },
@@ -239,13 +250,14 @@ async function dismiss_task_notification(
 /** 调用当前 City 中指定 Agent/Workspace 的 Task action。 */
 async function invoke_task_action(
   context: PluginLifecycleContext,
-  input: TaskMainviewActionInput,
+  agent_id: string,
+  workspace_id: string,
   action_id: string,
   action_input: PluginJsonValue,
 ): Promise<{ success?: boolean; error?: string }> {
   return await context.system.invoke_agent_plugin({
-    agent_id: input.agent_id,
-    workspace_id: input.workspace_id,
+    agent_id,
+    workspace_id,
     plugin_id: "task",
     action_id,
     input: action_input,
@@ -270,26 +282,13 @@ async function assert_execution_target(
   }
 }
 
-/** 验证选择的 Task 确实绑定到请求中的 Agent/Workspace。 */
-async function assert_existing_task(
+/** 从统一 Store 读取目标 Task，供所有宿主管理入口共享。 */
+async function read_existing_task(
   storage: PluginLifecycleContext["storage"],
-  input: {
-    /** Task 应绑定的 Agent ID。 */
-    readonly agent_id: string;
-    /** Task 应绑定的 Workspace ID；更新执行目标时允许省略。 */
-    readonly workspace_id?: string;
-    /** Task 的唯一标题。 */
-    readonly task_title: string;
-  },
-): Promise<void> {
-  const task_id = await resolveTaskIdByTitle({ storage, title: input.task_title });
-  const task = await readTask({ storage, taskId: task_id });
-  if (task.frontmatter.agent_id !== input.agent_id) {
-    throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${input.agent_id}`);
-  }
-  if (input.workspace_id && task.frontmatter.workspace_id !== input.workspace_id) {
-    throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${input.workspace_id}`);
-  }
+  task_title: string,
+) {
+  const task_id = await resolveTaskIdByTitle({ storage, title: task_title });
+  return await readTask({ storage, taskId: task_id });
 }
 
 /** 读取执行记录列表 action 输入。 */
@@ -299,15 +298,13 @@ function read_history_input(input: PluginJsonValue | undefined): TaskMainviewHis
 
 /** 读取执行详情 action 输入。 */
 function read_run_detail_input(input: PluginJsonValue | undefined): TaskMainviewRunDetailInput {
-  return { ...read_action_input(input), timestamp: read_required_string(read_input_object(input).timestamp, "timestamp") };
+  return { ...read_history_input(input), timestamp: read_required_string(read_input_object(input).timestamp, "timestamp") };
 }
 
 /** 读取已有 Task 操作输入。 */
 function read_action_input(input: PluginJsonValue | undefined): TaskMainviewActionInput {
   const value = read_input_object(input);
   return {
-    agent_id: read_required_string(value.agent_id, "agent_id"),
-    workspace_id: read_required_string(value.workspace_id, "workspace_id"),
     task_title: read_required_string(value.task_title, "task_title"),
   };
 }

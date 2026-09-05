@@ -3,16 +3,13 @@
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "./TaskCommand.js";
 import type { ShipTaskKind, ShipTaskStatus, TaskDeliverySession } from "./Task.js";
 
-/** Task 工作区中的 Agent 摘要。 */
+/** Task 编辑器可选择的执行 Agent 摘要。 */
 export interface TaskMainviewAgent {
   /** Agent 的稳定 ID。 */
   readonly agent_id: string;
 
   /** Agent 的用户可见名称。 */
   readonly name: string;
-
-  /** 当前 Agent 拥有的全部 Task。 */
-  readonly tasks: TaskMainviewItem[];
 }
 
 /** Task 工作区中的 Workspace 摘要。 */
@@ -47,6 +44,9 @@ export interface TaskMainviewItem {
   /** Task 创建时自动绑定的结果交付 Session。 */
   readonly delivery_session?: TaskDeliverySession;
 
+  /** Task 唯一绑定的执行 Agent。 */
+  readonly agent_id: string;
+
   /** Task 唯一绑定的执行 Workspace。 */
   readonly workspace_id: string;
 
@@ -59,7 +59,10 @@ export interface TaskMainviewItem {
 
 /** Task 工作区一次读取返回的完整快照。 */
 export interface TaskMainviewSnapshot {
-  /** 当前可管理的 Agent，以及各 Agent 在所选 Workspace 下的 Task。 */
+  /** TaskPlugin 统一 Store 中的全部 Task。 */
+  readonly tasks: TaskMainviewItem[];
+
+  /** 当前可绑定为执行目标的 Agent。 */
   readonly agents: TaskMainviewAgent[];
 
   /** 当前可提供执行上下文的 Workspace。 */
@@ -68,12 +71,6 @@ export interface TaskMainviewSnapshot {
 
 /** Task Mainview 读取执行记录列表的输入。 */
 export interface TaskMainviewHistoryInput {
-  /** 拥有目标 Task 的 Agent ID。 */
-  readonly agent_id: string;
-
-  /** Task 本次执行使用的 Workspace ID。 */
-  readonly workspace_id: string;
-
   /** 目标 Task 的唯一标题。 */
   readonly task_title: string;
 }
@@ -126,10 +123,6 @@ export interface TaskMainviewUpdateInput extends TaskMainviewCreateInput {
 
 /** Task Mainview 对已有 Task 执行单一操作的输入。 */
 export interface TaskMainviewActionInput {
-  /** Task 所属 Agent。 */
-  readonly agent_id: string;
-  /** Task 唯一绑定的执行 Workspace。 */
-  readonly workspace_id: string;
   /** 目标 Task 的唯一标题。 */
   readonly task_title: string;
 }
@@ -148,6 +141,8 @@ export interface TaskMainviewMutationResult {
 
 /** Task 创建或编辑表单中的完整可变草稿。 */
 export interface TaskMainviewEditorDraft {
+  /** Task 唯一绑定的执行 Agent。 */
+  readonly agent_id: string;
   /** Task 唯一绑定的执行 Workspace。 */
   readonly workspace_id: string;
   /** Task 的唯一标题。 */

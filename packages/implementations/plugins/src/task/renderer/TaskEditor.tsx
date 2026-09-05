@@ -8,6 +8,7 @@ import type { TaskEditorProps } from "@/task/types/TaskRenderer.js";
 export function TaskEditor({
   mode,
   task,
+  agents,
   workspaces,
   busy,
   error,
@@ -17,18 +18,27 @@ export function TaskEditor({
 }: TaskEditorProps) {
   const { Button, Callout, Field, Input, Page, Select, Stack, Switch, Textarea, Toolbar } = components;
   const creating = mode === "create";
-  const [draft, set_draft] = useState<TaskMainviewEditorDraft>(() => create_draft(task, workspaces[0]?.workspace_id ?? ""));
+  const [draft, set_draft] = useState<TaskMainviewEditorDraft>(() => create_draft(
+    task,
+    agents[0]?.agent_id ?? "",
+    workspaces[0]?.workspace_id ?? "",
+  ));
   const can_submit = Boolean(
     draft.title.trim()
     && draft.description.trim()
     && draft.when.trim()
-    && draft.workspace_id
+    && agents.some((agent) => agent.agent_id === draft.agent_id)
+    && workspaces.some((workspace) => workspace.workspace_id === draft.workspace_id)
     && !busy,
   );
 
   useEffect(() => {
-    set_draft(create_draft(task, workspaces[0]?.workspace_id ?? ""));
-  }, [mode, task?.title, workspaces]);
+    set_draft(create_draft(
+      task,
+      agents[0]?.agent_id ?? "",
+      workspaces[0]?.workspace_id ?? "",
+    ));
+  }, [agents, mode, task?.title, workspaces]);
 
   const update_draft = <Key extends keyof TaskMainviewEditorDraft>(
     key: Key,
@@ -43,12 +53,15 @@ export function TaskEditor({
     />
     {error ? <Callout tone="danger">{error}</Callout> : null}
     <Stack>
-      <div className="grid min-w-0 gap-4 md:grid-cols-2">
+      <div className="grid min-w-0 gap-4 md:grid-cols-3">
         <Field label="名称" description={mode === "edit" ? "Task 名称创建后保持稳定。" : "在当前 City 的 Task Store 中唯一。"}>
           <Input fill value={draft.title} disabled={mode === "edit" || busy} placeholder="例如：daily-report" on_value_change={(value) => update_draft("title", value)} />
         </Field>
+        <Field label="执行 Agent" description="Task 触发时使用这个 Agent。">
+          <Select fill value={draft.agent_id} disabled={busy} options={agent_options(agents, draft.agent_id)} on_value_change={(value) => update_draft("agent_id", value)} />
+        </Field>
         <Field label="执行 Workspace" description="手动与定时执行都使用这个 Workspace。">
-          <Select fill value={draft.workspace_id} disabled={busy} options={workspaces.map((workspace) => ({ value: workspace.workspace_id, label: workspace.name }))} on_value_change={(value) => update_draft("workspace_id", value)} />
+          <Select fill value={draft.workspace_id} disabled={busy} options={workspace_options(workspaces, draft.workspace_id)} on_value_change={(value) => update_draft("workspace_id", value)} />
         </Field>
       </div>
       <Field label="说明" description="说明 Task 的用途，便于列表识别。">
@@ -78,8 +91,13 @@ export function TaskEditor({
 }
 
 /** 从既有 Task 或默认值创建独立表单草稿。 */
-function create_draft(task: TaskEditorProps["task"], default_workspace_id: string): TaskMainviewEditorDraft {
+function create_draft(
+  task: TaskEditorProps["task"],
+  default_agent_id: string,
+  default_workspace_id: string,
+): TaskMainviewEditorDraft {
   return {
+    agent_id: task?.agent_id ?? default_agent_id,
     workspace_id: task?.workspace_id ?? default_workspace_id,
     title: task?.title ?? "",
     description: task?.description ?? "",
@@ -89,6 +107,22 @@ function create_draft(task: TaskEditorProps["task"], default_workspace_id: strin
     status: task?.status === "enabled" || task?.status === "disabled" ? task.status : "paused",
     body: task?.body ?? "",
   };
+}
+
+/** 创建 Agent 选项，并保留已经失效的当前值以明确提示用户重新绑定。 */
+function agent_options(agents: TaskEditorProps["agents"], current_agent_id: string) {
+  const options = agents.map((agent) => ({ value: agent.agent_id, label: agent.name }));
+  return options.some((option) => option.value === current_agent_id) || !current_agent_id
+    ? options
+    : [{ value: current_agent_id, label: `${current_agent_id}（不可用）` }, ...options];
+}
+
+/** 创建 Workspace 选项，并保留已经失效的当前值以明确提示用户重新绑定。 */
+function workspace_options(workspaces: TaskEditorProps["workspaces"], current_workspace_id: string) {
+  const options = workspaces.map((workspace) => ({ value: workspace.workspace_id, label: workspace.name }));
+  return options.some((option) => option.value === current_workspace_id) || !current_workspace_id
+    ? options
+    : [{ value: current_workspace_id, label: `${current_workspace_id}（不可用）` }, ...options];
 }
 
 /** 在提交边界统一清理可持久化字符串。 */

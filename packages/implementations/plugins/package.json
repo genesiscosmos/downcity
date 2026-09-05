@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugins",
-  "version": "1.0.299",
+  "version": "1.0.300",
   "type": "module",
   "description": "Downcity 内建 plugin 集合包",
   "files": [

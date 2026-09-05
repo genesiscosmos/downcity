@@ -16,11 +16,11 @@ The Task plugin lets your Agent schedule and run background jobs. It is useful f
 
 ## Desktop workspace
 
-Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Plugin Sidebar uses an `Agent → Task → runs` tree: clicking a Task opens its definition, while expanding it loads run history. The Mainview shows the Task definition, final output, status, trigger, duration, validation, and failure details.
+Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Plugin Sidebar uses a `Task → runs` tree: clicking a Task opens its definition, while expanding it loads run history. The Mainview shows the Task definition, final output, status, trigger, duration, validation, and failure details.
 
-Desktop can create, edit, enable, pause, run, and delete Tasks directly. Workspace is not a page filter: each Task stores one `agent_id` and one `workspace_id` as its execution target. Definitions, scheduler state, and run artifacts are read from TaskPlugin's unified City lifecycle storage instead of an Agent-specific copy.
+Desktop can create, edit, enable, pause, run, and delete Tasks directly. Tasks are not grouped by Agent or Workspace: each Task stores one rebindable `agent_id` and one `workspace_id` as execution targets, and the UI only shows their display names. A Task remains visible, editable, and removable when either target disappears. Definitions, scheduler state, and run artifacts are read from TaskPlugin's unified City lifecycle storage instead of an Agent-specific copy.
 
-After a successful or failed Task persists its execution record, it publishes an unread item through the shared Notification module; skipped executions do not notify. Only the latest unread Run is retained for the same Task and Agent. Desktop shows a blue dot on the Task top-level icon, Task item, and matching Run, updates the system app badge, and marks the item read when that Run is opened.
+After a successful or failed Task persists its execution record, it publishes an unread item through the shared Notification module; skipped executions do not notify. Only the latest unread Run is retained for the same Task. Desktop shows a blue dot on the Task top-level icon, Task item, and matching Run, updates the system app badge, and marks the item read when that Run is opened.
 
 ## Defining a task
 

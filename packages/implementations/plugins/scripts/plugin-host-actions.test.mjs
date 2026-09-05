@@ -134,14 +134,14 @@ async function start_task_plugin(options = {}) {
     },
     system: {
       async list_agents() {
-        return [
+        return options.agents || [
           { agent_id: "task-agent", name: "Task Agent", plugin_ids: ["task", "skill"] },
           { agent_id: "empty-task-agent", name: "Empty Task Agent", plugin_ids: ["task"] },
           { agent_id: "chat-agent", name: "Chat Agent", plugin_ids: ["chat"] },
         ];
       },
       async list_workspaces() {
-        return [
+        return options.workspaces || [
           { workspace_id: "workspace-a", name: "Workspace A", workspace_path: "/workspace-a" },
           { workspace_id: "workspace-b", name: "Workspace B", workspace_path: "/workspace-b" },
         ];
@@ -258,14 +258,11 @@ test("Skill Plugin 不需要 Profile 即可浏览和读取 Workspace Skill", asy
   }
 });
 
-test("Task Plugin 按 Agent 聚合所有启用 Task Plugin 的任务", async () => {
+test("Task Plugin 返回统一 Task 列表和可选执行目标", async () => {
   const { actions, invocations, cleanup } = await start_task_plugin();
   try {
     const snapshot = await actions.get("tasks.snapshot").run();
-    assert.deepEqual(snapshot.agents, [{
-    agent_id: "task-agent",
-    name: "Task Agent",
-    tasks: [{
+    assert.deepEqual(snapshot.tasks, [{
       title: "daily-report",
       description: "生成日报",
       body: "汇总今天的进展",
@@ -273,18 +270,18 @@ test("Task Plugin 按 Agent 聚合所有启用 Task Plugin 的任务", async () 
       status: "enabled",
       kind: "agent",
       review: false,
+      agent_id: "task-agent",
       workspace_id: "workspace-b",
       delivery_session: {
         session_id: "daily-report",
         origin_type: "chat",
       },
       last_run_at: "20260901-080000-000",
-    }],
-  }, {
-    agent_id: "empty-task-agent",
-    name: "Empty Task Agent",
-    tasks: [],
-  }]);
+    }]);
+    assert.deepEqual(snapshot.agents, [
+      { agent_id: "task-agent", name: "Task Agent" },
+      { agent_id: "empty-task-agent", name: "Empty Task Agent" },
+    ]);
     assert.deepEqual(snapshot.workspaces, [
     { workspace_id: "workspace-a", name: "Workspace A" },
     { workspace_id: "workspace-b", name: "Workspace B" },
@@ -314,7 +311,7 @@ test("Task Plugin 使用 Task 自身 Workspace 完成管理操作", async () => 
     body: "汇总本周进展",
   });
   await actions.get("tasks.update").run({
-    agent_id: "task-agent",
+    agent_id: "empty-task-agent",
     workspace_id: "workspace-a",
     current_title: "weekly-review",
     title: "weekly-review",
@@ -325,11 +322,11 @@ test("Task Plugin 使用 Task 自身 Workspace 完成管理操作", async () => 
     status: "enabled",
     body: "输出更新后的周报",
   });
-  await actions.get("tasks.status").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review", status: "paused" });
-  await actions.get("tasks.run").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review" });
-    await actions.get("tasks.delete").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review" });
-    assert.deepEqual(invocations.map((invocation) => ({ workspace_id: invocation.workspace_id, action_id: invocation.action_id, input: invocation.input })), [
-      { workspace_id: "workspace-a", action_id: "run", input: { title: "weekly-review" } },
+  await actions.get("tasks.status").run({ task_title: "weekly-review", status: "paused" });
+  await actions.get("tasks.run").run({ task_title: "weekly-review" });
+    await actions.get("tasks.delete").run({ task_title: "weekly-review" });
+    assert.deepEqual(invocations.map((invocation) => ({ agent_id: invocation.agent_id, workspace_id: invocation.workspace_id, action_id: invocation.action_id, input: invocation.input })), [
+      { agent_id: "empty-task-agent", workspace_id: "workspace-a", action_id: "run", input: { title: "weekly-review" } },
     ]);
   } finally {
     await cleanup();
@@ -339,8 +336,6 @@ test("Task Plugin 使用 Task 自身 Workspace 完成管理操作", async () => 
 test("Task Plugin 直接从统一 Store 读取执行记录与详情", async () => {
   const { actions, invocations, cleanup } = await start_task_plugin();
   const context = {
-    agent_id: "task-agent",
-    workspace_id: "workspace-b",
     task_title: "daily-report",
   };
 
@@ -353,6 +348,22 @@ test("Task Plugin 直接从统一 Store 读取执行记录与详情", async () =
     });
     assert.equal(detail.run.output, "日报正文");
     assert.deepEqual(invocations, []);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("Task Plugin 保留目标失效的 Task 并允许宿主删除", async () => {
+  const { actions, cleanup } = await start_task_plugin({
+    agents: [{ agent_id: "another-agent", name: "Another Agent", plugin_ids: ["task"] }],
+    workspaces: [{ workspace_id: "workspace-a", name: "Workspace A", workspace_path: "/workspace-a" }],
+  });
+  try {
+    const snapshot = await actions.get("tasks.snapshot").run();
+    assert.equal(snapshot.tasks[0].agent_id, "task-agent");
+    assert.equal(snapshot.tasks[0].workspace_id, "workspace-b");
+    await actions.get("tasks.delete").run({ task_title: "daily-report" });
+    assert.deepEqual((await actions.get("tasks.snapshot").run()).tasks, []);
   } finally {
     await cleanup();
   }

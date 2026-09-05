@@ -29,9 +29,9 @@ Use `task` when you need:
 
 ## How users use it
 
-Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Sidebar uses an `Agent → Task → runs` tree: clicking a Task opens its definition, while expanding it loads runs. The Mainview can create, edit, enable, pause, run, and delete Tasks and display run details. Task definitions and Runs share TaskPlugin's City lifecycle storage; `agent_id` and `workspace_id` are execution targets rather than storage partitions.
+Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Sidebar uses a `Task → runs` tree: clicking a Task opens its definition, while expanding it loads runs. The Mainview can create, edit, enable, pause, run, and delete Tasks and display run details. Tasks are not grouped by Agent or Workspace. Task definitions and Runs share TaskPlugin's City lifecycle storage; `agent_id` and `workspace_id` are rebindable execution targets rather than storage partitions. A Task remains visible, editable, and removable when either target disappears.
 
-A successful or failed Task Run publishes an unread notification after its artifacts are persisted; skipped runs do not notify. Notifications aggregate to the latest unread Run for the same Task and Agent. Desktop reflects that state on the Task icon, Task item, matching Run, and system app badge, and marks it read when the Run is opened.
+A successful or failed Task Run publishes an unread notification after its artifacts are persisted; skipped runs do not notify. Notifications aggregate to the latest unread Run for the same Task. Desktop reflects that state on the Task icon, Task item, matching Run, and system app badge, and marks it read when the Run is opened.
 
 The CLI invokes task through the shared Plugin Action command:
 
