@@ -44,7 +44,7 @@ export function TaskEditor({
     {error ? <Callout tone="danger">{error}</Callout> : null}
     <Stack>
       <div className="grid min-w-0 gap-4 md:grid-cols-2">
-        <Field label="名称" description={mode === "edit" ? "Task 名称创建后保持稳定。" : "在当前 Agent 下唯一。"}>
+        <Field label="名称" description={mode === "edit" ? "Task 名称创建后保持稳定。" : "在当前 City 的 Task Store 中唯一。"}>
           <Input fill value={draft.title} disabled={mode === "edit" || busy} placeholder="例如：daily-report" on_value_change={(value) => update_draft("title", value)} />
         </Field>
         <Field label="执行 Workspace" description="手动与定时执行都使用这个 Workspace。">

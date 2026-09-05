@@ -6,7 +6,7 @@
  * - 这些逻辑与主执行流程正交，拆出后可让 Runner 主链更清晰。
  */
 
-import fs from "fs-extra";
+import type { PluginStorage } from "@downcity/city/plugin";
 import type {
   ShipTaskKind,
   ShipTaskRunProgressEventV1,
@@ -49,6 +49,8 @@ export function serializeDebugSnapshot(value: unknown, maxChars = 40_000): strin
  * 持续写入运行进度快照（run-progress.json）。
  */
 export function createRunProgressWriter(params: {
+  /** TaskPlugin 生命周期级统一存储。 */
+  storage: PluginStorage;
   progressJsonPath: string;
   taskId: string;
   timestamp: string;
@@ -87,7 +89,10 @@ export function createRunProgressWriter(params: {
       events: [...events],
     };
     try {
-      await fs.writeJson(params.progressJsonPath, payload, { spaces: 2 });
+      await params.storage.files.write_file_atomically(
+        params.progressJsonPath,
+        `${JSON.stringify(payload, null, 2)}\n`,
+      );
     } catch {
       // ignore
     }

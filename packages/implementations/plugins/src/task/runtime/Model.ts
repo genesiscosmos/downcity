@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - `task.md` 使用 YAML frontmatter + markdown 正文
- * - frontmatter 必须包含：title/when/description/workspace_id/status
+ * - frontmatter 必须包含：title/when/description/agent_id/workspace_id/status
  * - `when` 统一承载触发语义：`@manual` / cron / `time:<ISO8601-with-timezone>`
  */
 
@@ -27,6 +27,7 @@ const REQUIRED_FIELDS: Array<keyof ShipTaskFrontmatterV1> = [
   "title",
   "when",
   "description",
+  "agent_id",
   "workspace_id",
   "status",
 ];
@@ -298,6 +299,7 @@ export function parseTaskMarkdown(params: {
     title: rawTitle,
     when: whenNormalized.value,
     description: String(meta.description).trim(),
+    agent_id: String(meta.agent_id).trim(),
     workspace_id: String(meta.workspace_id).trim(),
     ...(delivery_session.value
       ? { delivery_session: delivery_session.value }
@@ -350,6 +352,7 @@ export function buildTaskMarkdown(params: {
     title: String(frontmatter.title || "").trim(),
     when: whenNormalized.value,
     description: String(frontmatter.description || "").trim(),
+    agent_id: String(frontmatter.agent_id || "").trim(),
     workspace_id: String(frontmatter.workspace_id || "").trim(),
     ...(delivery_session.value
       ? { delivery_session: delivery_session.value }

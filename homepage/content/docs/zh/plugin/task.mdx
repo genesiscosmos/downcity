@@ -10,21 +10,21 @@ Task 插件让 Agent 能够调度和运行后台任务。它适用于定期数�
 ## 功能
 
 - 在特定时间或间隔调度任务
-- 在 Agent 重启后持久化任务状态
-- 处理重试和失败恢复
-- 提供延迟任务队列
+- 在 City 级 Plugin Store 中统一保存 Task 定义与执行产物
+- 在 TaskPlugin initialize 时恢复已启用的调度
+- 阻止同一 Task 重叠执行
 
 ## Desktop 工作区
 
 Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。Plugin Sidebar 使用 `Agent → Task → 执行记录` 三级树；点击 Task 查看任务详情，展开 Task 时才读取执行记录。Mainview 用于查看任务定义、最终输出、执行状态、触发来源、耗时、结果校验和错误信息。
 
-Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Workspace 不是页面筛选器，而是每个 Task 自身的执行配置；手动与定时执行始终使用该 Task 绑定的唯一 Workspace。这里直接使用所选 Agent 的 Task runtime 与既有 run 产物，不保存第二份任务状态。
+Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Workspace 不是页面筛选器；每个 Task 显式保存一个 `agent_id` 和一个 `workspace_id` 作为执行目标。定义、调度状态和 run 产物都从 TaskPlugin 统一的 City 生命周期存储读取，不再保存 Agent 级副本。
 
 Task 成功或失败并完成执行记录持久化后，会通过统一 Notification 模块产生未读通知；跳过的执行不会通知。同一 Agent 的同一 Task 只保留最新未读 Run。Desktop 会在 Task 一级图标、Task 条目和对应 Run 旁显示蓝点，并同步系统应用图标角标；打开该 Run 后自动标记为已读。
 
 ## 定义任务
 
-任务在项目定义中，并在启动时向 Task 插件注册。它们可以通过以下方式触发：
+每个 Task 只在 TaskPlugin 生命周期存储中定义一次。TaskPlugin initialize 时恢复已启用的定义，并且只在触发执行时进入 Task 声明的 Agent/Workspace 上下文。触发方式包括：
 
 - Cron 表达式
 - 一次性调度

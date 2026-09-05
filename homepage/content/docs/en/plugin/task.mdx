@@ -10,21 +10,21 @@ The Task plugin lets your Agent schedule and run background jobs. It is useful f
 ## What it does
 
 - Schedules tasks to run at specific times or intervals
-- Persists task state across Agent restarts
-- Handles retries and failure recovery
-- Provides a task queue for deferred work
+- Persists Task definitions and run artifacts in one City-level Plugin store
+- Restores enabled schedules when TaskPlugin initializes
+- Prevents overlapping runs of the same Task
 
 ## Desktop workspace
 
 Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Plugin Sidebar uses an `Agent → Task → runs` tree: clicking a Task opens its definition, while expanding it loads run history. The Mainview shows the Task definition, final output, status, trigger, duration, validation, and failure details.
 
-Desktop can create, edit, enable, pause, run, and delete Tasks directly. Workspace is not a page filter: each Task binds exactly one execution Workspace, used by both manual and scheduled runs. The history sidebar is independently scrollable, collapsible, and resizable. The workspace uses the selected Agent's Task runtime and existing run artifacts directly instead of storing a second copy.
+Desktop can create, edit, enable, pause, run, and delete Tasks directly. Workspace is not a page filter: each Task stores one `agent_id` and one `workspace_id` as its execution target. Definitions, scheduler state, and run artifacts are read from TaskPlugin's unified City lifecycle storage instead of an Agent-specific copy.
 
 After a successful or failed Task persists its execution record, it publishes an unread item through the shared Notification module; skipped executions do not notify. Only the latest unread Run is retained for the same Task and Agent. Desktop shows a blue dot on the Task top-level icon, Task item, and matching Run, updates the system app badge, and marks the item read when that Run is opened.
 
 ## Defining a task
 
-Tasks are defined in the project and registered with the Task plugin at startup. They can be triggered by:
+Each Task is defined once in TaskPlugin lifecycle storage. TaskPlugin restores enabled definitions at initialization and enters the declared Agent/Workspace context only when a run is triggered by:
 
 - Cron expressions
 - One-shot scheduling

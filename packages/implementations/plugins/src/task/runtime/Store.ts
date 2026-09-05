@@ -1,19 +1,17 @@
 /**
- * Task storage (disk-backed).
+ * TaskPlugin 生命周期级统一存储。
  *
- * 关键点（中文）
- * - Task 的“唯一来源”是 Agent 私有目录中的 `task/<taskId>/task.md`
- * - list/read/write 都只围绕 markdown 文件与目录结构，不引入数据库
- * - 运行产物目录：Agent 私有目录中的 `task/<taskId>/<timestamp>/...`
+ * Task 定义和运行记录共享 `tasks/<task_id>/` 聚合目录。所有读写都通过 City
+ * 提供的 PluginStorage 文件端口完成，因此本地与内存 Storage 保持同一语义。
  */
 
-import fs from "fs-extra";
 import path from "node:path";
+import type { PluginStorage } from "@downcity/city/plugin";
 import type {
   ShipTaskDefinitionV1,
   ShipTaskFrontmatterV1,
-  TaskDeliverySession,
 } from "@/task/types/Task.js";
+import type { TaskListItem } from "@/task/types/TaskPluginTypes.js";
 import { parseTaskMarkdown, buildTaskMarkdown } from "./Model.js";
 import {
   deriveTaskIdFromTitle,
@@ -26,90 +24,45 @@ import {
   normalizeTaskId,
 } from "./Paths.js";
 
-/**
- * Task 列表项（面向 UI/CLI 展示）。
- */
-export type TaskListItem = {
-  taskId: string;
-  title: string;
-  description: string;
-  body?: string;
-  when: string;
-  status: string;
-  workspace_id: string;
-  delivery_session?: TaskDeliverySession;
-  kind?: "agent" | "script";
-  review?: boolean;
-  taskMdPath: string;
-  lastRunTimestamp?: string;
-};
-
-/**
- * 列出全部任务。
- *
- * 算法（中文）
- * - 遍历 Agent 的 `task/*` 目录并解析每个 `task.md`。
- * - 通过子目录时间戳推断 `lastRunTimestamp`。
- */
-export async function listTasks(data_path: string): Promise<TaskListItem[]> {
-  const root = String(data_path || "").trim();
-  if (!root) return [];
-
-  const dir = getTaskRootDir(root);
-  await fs.ensureDir(dir);
-
-  let entries: Array<import("node:fs").Dirent> = [];
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
-    entries = [];
-  }
-
+/** 列出统一 Store 中全部合法 Task 定义。 */
+export async function listTasks(storage: PluginStorage): Promise<TaskListItem[]> {
+  const root = require_storage_root(storage);
+  const directory_path = getTaskRootDir(root);
+  await storage.files.ensure_directory(directory_path);
+  const entries = await storage.files.read_directory(directory_path).catch(() => []);
   const items: TaskListItem[] = [];
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const taskId = String(entry.name || "").trim();
-    if (!taskId || taskId.startsWith(".")) continue;
-    if (!isValidTaskId(taskId)) continue;
-
-    const taskMdPath = getTaskMdPath(root, taskId);
-    let raw = "";
-    try {
-      raw = await fs.readFile(taskMdPath, "utf-8");
-    } catch {
-      continue;
-    }
-
+    const task_id = String(entry.name || "").trim();
+    if (!entry.is_directory || !task_id || task_id.startsWith(".") || !isValidTaskId(task_id)) continue;
+    const task_md_path = getTaskMdPath(root, task_id);
+    const markdown = await storage.files.read_file(task_md_path)
+      .then((value) => value.toString("utf-8"))
+      .catch(() => "");
+    if (!markdown) continue;
     const parsed = parseTaskMarkdown({
-      taskId,
-      markdown: raw,
-      taskMdPath,
+      taskId: task_id,
+      markdown,
+      taskMdPath: task_md_path,
       data_path: root,
     });
     if (!parsed.ok) continue;
 
-    // last run: pick latest timestamp dir (lexicographic works for our timestamp format)
-    let lastRunTimestamp: string | undefined;
-    try {
-      const taskDir = getTaskDir(root, taskId);
-      const child = await fs.readdir(taskDir, { withFileTypes: true });
-      const ts = child
-        .filter((d) => d.isDirectory() && is_task_run_timestamp(d.name))
-        .map((d) => d.name)
+    const task_directory = getTaskDir(root, task_id);
+    const last_run_timestamp = await storage.files.read_directory(task_directory)
+      .then((children) => children
+        .filter((child) => child.is_directory && is_task_run_timestamp(child.name))
+        .map((child) => child.name)
         .sort()
-        .at(-1);
-      if (ts) lastRunTimestamp = ts;
-    } catch {
-      // ignore
-    }
-
+        .at(-1))
+      .catch(() => undefined);
     items.push({
-      taskId,
+      taskId: task_id,
       title: parsed.task.frontmatter.title,
       description: parsed.task.frontmatter.description,
       ...(parsed.task.body ? { body: parsed.task.body } : {}),
       when: parsed.task.frontmatter.when,
       status: parsed.task.frontmatter.status,
+      agent_id: parsed.task.frontmatter.agent_id,
       workspace_id: parsed.task.frontmatter.workspace_id,
       ...(parsed.task.frontmatter.delivery_session
         ? { delivery_session: parsed.task.frontmatter.delivery_session }
@@ -119,134 +72,126 @@ export async function listTasks(data_path: string): Promise<TaskListItem[]> {
         ? { review: Boolean(parsed.task.frontmatter.review) }
         : {}),
       taskMdPath: parsed.task.taskMdPath,
-      ...(lastRunTimestamp ? { lastRunTimestamp } : {}),
+      ...(last_run_timestamp ? { lastRunTimestamp: last_run_timestamp } : {}),
     });
   }
-
-  items.sort((a, b) => a.taskId.localeCompare(b.taskId));
-  return items;
+  return items.sort((left, right) => left.taskId.localeCompare(right.taskId));
 }
 
-/**
- * 根据 title 解析 taskId。
- *
- * 关键点（中文）
- * - 对外只暴露 title，因此运行/状态/删除链路需要先定位真实目录键。
- * - 若磁盘中存在同 title 多定义，会拒绝并提示冲突。
- */
+/** 根据 City 级唯一 title 解析稳定 task_id。 */
 export async function resolveTaskIdByTitle(params: {
-  data_path: string;
-  title: string;
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
+  /** Task 的用户可见唯一标题。 */
+  readonly title: string;
 }): Promise<string> {
-  const root = String(params.data_path || "").trim();
-  if (!root) throw new Error("data_path is required");
   const title = String(params.title || "").trim();
   if (!title) throw new Error("title is required");
-
-  const tasks = await listTasks(root);
-  const matched = tasks.filter((item) => String(item.title || "").trim() === title);
+  const matched = (await listTasks(params.storage)).filter((item) => item.title === title);
   if (matched.length === 1) return matched[0].taskId;
-  if (matched.length > 1) {
-    throw new Error(`Duplicated task title found: "${title}". Please keep title unique.`);
-  }
+  if (matched.length > 1) throw new Error(`Duplicated task title found: "${title}".`);
   return deriveTaskIdFromTitle(title);
 }
 
-/**
- * 读取单个任务定义。
- */
-export async function readTask(params: { taskId: string; data_path: string }): Promise<ShipTaskDefinitionV1> {
-  const root = String(params.data_path || "").trim();
-  if (!root) throw new Error("data_path is required");
-  const taskId = normalizeTaskId(params.taskId);
-
-  const taskMdPath = getTaskMdPath(root, taskId);
-  const raw = await fs.readFile(taskMdPath, "utf-8");
+/** 读取单个 Task 定义。 */
+export async function readTask(params: {
+  /** Task 的稳定目录 ID。 */
+  readonly taskId: string;
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
+}): Promise<ShipTaskDefinitionV1> {
+  const root = require_storage_root(params.storage);
+  const task_id = normalizeTaskId(params.taskId);
+  const task_md_path = getTaskMdPath(root, task_id);
+  const markdown = (await params.storage.files.read_file(task_md_path)).toString("utf-8");
   const parsed = parseTaskMarkdown({
-    taskId,
-    markdown: raw,
-    taskMdPath,
+    taskId: task_id,
+    markdown,
+    taskMdPath: task_md_path,
     data_path: root,
   });
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.task;
 }
 
-/**
- * 删除单个任务目录（包含 task.md 与历史 run 产物）。
- */
+/** 删除单个 Task 聚合目录，包括定义与全部运行历史。 */
 export async function deleteTask(params: {
-  taskId: string;
-  data_path: string;
+  /** Task 的稳定目录 ID。 */
+  readonly taskId: string;
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
 }): Promise<{ taskId: string; taskDirPath: string }> {
-  const root = String(params.data_path || "").trim();
-  if (!root) throw new Error("data_path is required");
-  const taskId = normalizeTaskId(params.taskId);
-
-  const taskMdPath = getTaskMdPath(root, taskId);
-  const exists = await fs.pathExists(taskMdPath);
-  if (!exists) {
-    throw new Error(`Task not found: ${taskId}`);
+  const root = require_storage_root(params.storage);
+  const task_id = normalizeTaskId(params.taskId);
+  const task_md_path = getTaskMdPath(root, task_id);
+  if (!await params.storage.files.path_exists(task_md_path)) {
+    throw new Error(`Task not found: ${task_id}`);
   }
-
-  const taskDir = getTaskDir(root, taskId);
-  await fs.remove(taskDir);
+  const task_directory = getTaskDir(root, task_id);
+  await params.storage.files.remove_path(task_directory);
   return {
-    taskId,
-    taskDirPath: path.relative(root, taskDir).split(path.sep).join("/"),
+    taskId: task_id,
+    taskDirPath: relative_storage_path(root, task_directory),
   };
 }
 
-/**
- * 写入任务定义（创建或覆盖 task.md）。
- *
- * 关键点（中文）
- * - 默认禁止覆盖，需显式 `overwrite=true`。
- */
+/** 原子创建或覆盖一个 Task 定义。 */
 export async function writeTask(params: {
-  taskId: string;
-  frontmatter: ShipTaskFrontmatterV1;
-  body: string;
-  data_path: string;
-  overwrite?: boolean;
+  /** Task 的稳定目录 ID。 */
+  readonly taskId: string;
+  /** 要持久化的完整 Task 元数据。 */
+  readonly frontmatter: ShipTaskFrontmatterV1;
+  /** 要持久化的完整 Task 正文。 */
+  readonly body: string;
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
+  /** 是否允许覆盖已经存在的定义。 */
+  readonly overwrite?: boolean;
 }): Promise<{ taskId: string; taskMdPath: string }> {
-  const root = String(params.data_path || "").trim();
-  if (!root) throw new Error("data_path is required");
-  const taskId = normalizeTaskId(params.taskId);
-
-  const dir = getTaskDir(root, taskId);
-  const mdPath = getTaskMdPath(root, taskId);
-  await fs.ensureDir(dir);
-
-  const exists = await fs.pathExists(mdPath);
-  if (exists && !params.overwrite) {
-    throw new Error(`task.md already exists: ${path.relative(root, mdPath)}`);
+  const root = require_storage_root(params.storage);
+  const task_id = normalizeTaskId(params.taskId);
+  const task_directory = getTaskDir(root, task_id);
+  const task_md_path = getTaskMdPath(root, task_id);
+  await params.storage.files.ensure_directory(task_directory);
+  if (await params.storage.files.path_exists(task_md_path) && !params.overwrite) {
+    throw new Error(`task.md already exists: ${relative_storage_path(root, task_md_path)}`);
   }
-
-  const content = buildTaskMarkdown({
-    frontmatter: params.frontmatter,
-    body: params.body,
-  });
-  await fs.writeFile(mdPath, content, "utf-8");
-
-  return { taskId, taskMdPath: path.relative(root, mdPath).split(path.sep).join("/") };
+  await params.storage.files.write_file_atomically(
+    task_md_path,
+    buildTaskMarkdown({ frontmatter: params.frontmatter, body: params.body }),
+  );
+  return {
+    taskId: task_id,
+    taskMdPath: relative_storage_path(root, task_md_path),
+  };
 }
 
-/**
- * 确保 run 目录存在并返回绝对/相对路径。
- */
+/** 确保 Task run 目录存在并返回稳定绝对/相对路径。 */
 export async function ensureRunDir(params: {
-  taskId: string;
-  timestamp: string;
-  data_path: string;
+  /** Task 的稳定目录 ID。 */
+  readonly taskId: string;
+  /** 当前 run 使用的 UTC 时间戳目录名。 */
+  readonly timestamp: string;
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
 }): Promise<{ runDir: string; runDirRel: string }> {
-  const root = String(params.data_path || "").trim();
-  if (!root) throw new Error("data_path is required");
-  const taskId = normalizeTaskId(params.taskId);
-  const runDir = getTaskRunDir(root, taskId, params.timestamp);
-  await fs.ensureDir(runDir);
+  const root = require_storage_root(params.storage);
+  const run_directory = getTaskRunDir(root, normalizeTaskId(params.taskId), params.timestamp);
+  await params.storage.files.ensure_directory(run_directory);
   return {
-    runDir,
-    runDirRel: path.relative(root, runDir).split(path.sep).join("/"),
+    runDir: run_directory,
+    runDirRel: relative_storage_path(root, run_directory),
   };
+}
+
+/** 校验并返回 PluginStorage 根路径。 */
+function require_storage_root(storage: PluginStorage): string {
+  const root = String(storage.path || "").trim();
+  if (!root) throw new Error("Task storage path is required");
+  return root;
+}
+
+/** 生成使用正斜杠的 PluginStorage 相对路径。 */
+function relative_storage_path(root: string, target: string): string {
+  return path.relative(root, target).split(path.sep).join("/");
 }

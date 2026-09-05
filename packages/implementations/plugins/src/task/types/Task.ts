@@ -30,6 +30,8 @@ export type ShipTaskFrontmatterV1 = {
   when: string;
   /** 任务描述（给执行器的意图说明） */
   description: string;
+  /** 任务唯一绑定的执行 Agent。 */
+  agent_id: string;
   /** 任务唯一绑定的执行 Workspace。 */
   workspace_id: string;
   /** 创建 Task 时由调用上下文自动捕获的结果交付 Session。 */
@@ -144,6 +146,8 @@ export type ShipTaskRunMetaV1 = {
   timestamp: string;
   /** 本次执行唯一 ID */
   executionId: string;
+  /** 本次执行使用的 Agent ID。 */
+  agent_id: string;
   /** 本次执行使用的 Workspace ID。 */
   workspace_id: string;
   /** 本次运行使用的固定结果交付 Session。 */

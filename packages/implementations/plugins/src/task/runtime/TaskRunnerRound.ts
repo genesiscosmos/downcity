@@ -6,8 +6,6 @@
  * - 这些逻辑可独立演进，不必与 run 目录产物写入混在一起。
  */
 
-import path from "node:path";
-import fs from "fs-extra";
 import type { PluginContext } from "@downcity/city/plugin";
 import type { SessionTurnExecutionResult } from "@downcity/agent";
 import type { PluginJsonObject } from "@downcity/city/plugin";
@@ -267,19 +265,6 @@ export async function runScriptTask(params: {
   const body = String(params.scriptBody || "");
   if (!body.trim()) throw new Error("script task body cannot be empty");
 
-  const session_segment = String(params.session_id || "task")
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "task";
-  const execution_dir = path.join(
-    params.context.storage.path,
-    "sandbox",
-    "task-scripts",
-    session_segment,
-  );
-  await fs.ensureDir(execution_dir);
-  const scriptAbs = path.join(execution_dir, "task-script.sh");
-  await fs.writeFile(scriptAbs, body.endsWith("\n") ? body : `${body}\n`, "utf-8");
-
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     DC_SESSION_ID: params.session_id,
@@ -291,8 +276,8 @@ export async function runScriptTask(params: {
   }
   const execResult = await shell.run_safe_command({
     execution_id: `task-script:${params.session_id}`,
-    execution_dir,
-    cmd: `sh "${scriptAbs.replace(/(["\\$`])/g, "\\$1")}"`,
+    execution_dir: params.context.workspace.path,
+    cmd: body,
     cwd: params.context.workspace.path,
     shell_path: "/bin/sh",
     login: false,

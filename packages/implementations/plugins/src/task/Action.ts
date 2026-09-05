@@ -6,11 +6,11 @@
  * - CLI 与 Server 共用同一份参数归一化/校验逻辑
  */
 
-import path from "node:path";
 import type { ShipTaskStatus, TaskDeliverySession } from "./types/Task.js";
 import type { PluginContext } from "@downcity/city/plugin";
 import type { PluginExecutionContext } from "@downcity/city/plugin";
 import type { PluginJsonValue } from "@downcity/city/plugin";
+import type { PluginStorage } from "@downcity/city/plugin";
 import {
   deriveTaskIdFromTitle,
   normalizeTaskId,
@@ -46,6 +46,7 @@ import type {
   TaskSetStatusRequest,
   TaskSetStatusResponse,
 } from "./types/TaskCommand.js";
+import type { TaskExecutionCoordinator } from "./runtime/TaskExecutionCoordinator.js";
 
 function resolveTaskStatus(input: PluginJsonValue | undefined, fallback: ShipTaskStatus): ShipTaskStatus {
   const normalized = normalizeTaskStatus(input);
@@ -92,7 +93,7 @@ function buildDefaultTaskBody(): string {
     "# 注意事项",
     "",
     "- 当前是独立 task 上下文，不要假设仍处在原始聊天回合里。",
-    "- 任务运行记录由系统保存在当前 Agent 的私有目录；需要交付给用户的文件应明确写入项目目录。",
+    "- 任务运行记录由 Task Plugin 统一保存；需要交付给用户的文件应明确写入项目目录。",
     "- 任务完成结果写入关联 Session 的 assistant 消息，不会替 Agent 调用 chat plugin。",
     "",
   ].join("\n");
@@ -100,16 +101,18 @@ function buildDefaultTaskBody(): string {
 
 
 export async function listTaskDefinitions(params: {
-  data_path: string;
+  storage: PluginStorage;
+  /** 只返回指定执行 Agent 的 Task；省略时返回 City 中全部 Task。 */
+  agent_id?: string;
   status?: ShipTaskStatus;
 }): Promise<TaskListResponse> {
-  const root = path.resolve(params.data_path);
   const normalizedStatus = normalizeTaskStatus(params.status);
 
-  const tasks = await listTasks(root);
-  const filtered = normalizedStatus
-    ? tasks.filter((task) => String(task.status).toLowerCase() === normalizedStatus)
-    : tasks;
+  const tasks = await listTasks(params.storage);
+  const agent_id = String(params.agent_id || "").trim();
+  const filtered = tasks.filter((task) =>
+    (!agent_id || task.agent_id === agent_id)
+    && (!normalizedStatus || String(task.status).toLowerCase() === normalizedStatus));
 
   return {
     success: true,
@@ -121,6 +124,7 @@ export async function listTaskDefinitions(params: {
         : {}),
       when: task.when,
       status: task.status,
+      agent_id: task.agent_id,
       workspace_id: task.workspace_id,
       ...(task.delivery_session ? { delivery_session: task.delivery_session } : {}),
       kind: task.kind || "agent",
@@ -133,18 +137,17 @@ export async function listTaskDefinitions(params: {
 
 /** 读取一个 Task 的全部执行记录。 */
 export async function list_task_run_history(params: {
-  /** Agent Plugin 的私有数据根目录。 */
-  readonly data_path: string;
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
   /** 执行记录查询输入。 */
   readonly request: TaskRunHistoryRequest;
 }): Promise<TaskRunHistoryResponse> {
-  const root = path.resolve(params.data_path);
   const title = String(params.request.title || "").trim();
   if (!title) return { success: false, error: "Missing title" };
   try {
-    const task_id = await resolveTaskIdByTitle({ data_path: root, title });
-    await readTask({ taskId: task_id, data_path: root });
-    return { success: true, runs: await list_task_runs({ data_path: root, task_id }) };
+    const task_id = await resolveTaskIdByTitle({ storage: params.storage, title });
+    await readTask({ taskId: task_id, storage: params.storage });
+    return { success: true, runs: await list_task_runs({ storage: params.storage, task_id }) };
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -152,22 +155,21 @@ export async function list_task_run_history(params: {
 
 /** 读取一条 Task 执行记录及其用户可见产物。 */
 export async function read_task_run(params: {
-  /** Agent Plugin 的私有数据根目录。 */
-  readonly data_path: string;
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
   /** 执行详情查询输入。 */
   readonly request: TaskRunDetailRequest;
 }): Promise<TaskRunDetailResponse> {
-  const root = path.resolve(params.data_path);
   const title = String(params.request.title || "").trim();
   const timestamp = String(params.request.timestamp || "").trim();
   if (!title) return { success: false, error: "Missing title" };
   if (!timestamp) return { success: false, error: "Missing timestamp" };
   try {
-    const task_id = await resolveTaskIdByTitle({ data_path: root, title });
-    await readTask({ taskId: task_id, data_path: root });
+    const task_id = await resolveTaskIdByTitle({ storage: params.storage, title });
+    await readTask({ taskId: task_id, storage: params.storage });
     return {
       success: true,
-      run: await read_task_run_detail({ data_path: root, task_id, timestamp }),
+      run: await read_task_run_detail({ storage: params.storage, task_id, timestamp }),
     };
   } catch (error) {
     return { success: false, error: String(error) };
@@ -175,16 +177,18 @@ export async function read_task_run(params: {
 }
 
 export async function createTaskDefinition(params: {
-  data_path: string;
+  storage: PluginStorage;
+  /** 新 Task 唯一绑定的执行 Agent。 */
+  agent_id: string;
   request: TaskCreateRequest;
   /** 由 Plugin 调用上下文捕获的固定结果交付 Session。 */
   delivery_session?: TaskDeliverySession;
 }): Promise<TaskCreateResponse> {
-  const root = path.resolve(params.data_path);
   const req = params.request;
 
   const title = String(req.title || "").trim();
   const description = String(req.description || "").trim();
+  const agent_id = String(params.agent_id || "").trim();
   const workspace_id = String(req.workspace_id || "").trim();
   let taskIdFromName = "";
   let taskId = "";
@@ -202,6 +206,7 @@ export async function createTaskDefinition(params: {
 
   if (!title) return { success: false, error: "Missing title" };
   if (!description) return { success: false, error: "Missing description" };
+  if (!agent_id) return { success: false, error: "Missing agent_id" };
   if (!workspace_id) return { success: false, error: "Missing workspace_id" };
   if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
 
@@ -213,8 +218,14 @@ export async function createTaskDefinition(params: {
         ? ""
         : buildDefaultTaskBody();
   // 关键点（中文）：`title` 是唯一键，create 去重只按 title 精确匹配。
-  const existingTasks = await listTasks(root);
+  const existingTasks = await listTasks(params.storage);
   const duplicated = existingTasks.find((item) => String(item.title || "").trim() === title);
+  if (duplicated && duplicated.agent_id !== agent_id) {
+    return {
+      success: false,
+      error: `Task title already belongs to another Agent: ${duplicated.agent_id}`,
+    };
+  }
   if (duplicated && !req.overwrite) {
     return {
       success: true,
@@ -229,12 +240,13 @@ export async function createTaskDefinition(params: {
   try {
     const written = await writeTask({
       taskId: targetTaskId,
-      data_path: root,
+      storage: params.storage,
       overwrite: Boolean(req.overwrite) || Boolean(duplicated),
       frontmatter: {
         title,
         description,
         when: whenNormalized.value,
+        agent_id,
         workspace_id,
         ...(params.delivery_session
           ? { delivery_session: params.delivery_session }
@@ -260,15 +272,14 @@ export async function createTaskDefinition(params: {
 }
 
 export async function updateTaskDefinition(params: {
-  data_path: string;
+  storage: PluginStorage;
   request: TaskUpdateRequest;
 }): Promise<TaskUpdateResponse> {
-  const root = path.resolve(params.data_path);
   const req = params.request;
   const title = String(req.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ data_path: root, title });
+    taskId = await resolveTaskIdByTitle({ storage: params.storage, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -283,7 +294,7 @@ export async function updateTaskDefinition(params: {
 
   try {
     const current = await readTask({
-      data_path: root,
+      storage: params.storage,
       taskId,
     });
 
@@ -346,13 +357,14 @@ export async function updateTaskDefinition(params: {
         : current.body;
 
     const written = await writeTask({
-      data_path: root,
+      storage: params.storage,
       taskId,
       overwrite: true,
       frontmatter: {
         title: nextTitle,
         description,
         when: whenNormalized.value,
+        agent_id: current.frontmatter.agent_id,
         workspace_id,
         ...(current.frontmatter.delivery_session
           ? { delivery_session: current.frontmatter.delivery_session }
@@ -379,62 +391,68 @@ export async function updateTaskDefinition(params: {
 
 export async function runTaskDefinition(params: {
   context: PluginContext;
-  data_path: string;
+  storage: PluginStorage;
   request: TaskRunRequest;
+  executions: TaskExecutionCoordinator;
   notifications?: import("@downcity/city/plugin").PluginNotificationPublisher;
   execution_context?: PluginExecutionContext;
 }): Promise<TaskRunResponse> {
-  const root = path.resolve(params.data_path);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ data_path: root, title });
+    taskId = await resolveTaskIdByTitle({ storage: params.storage, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
   const reason = typeof params.request.reason === "string" ? params.request.reason.trim() : "";
-  const trigger = {
-    type: "manual" as const,
-    ...(reason ? { reason } : {}),
-  };
+  const trigger = params.request.scheduler_trigger
+    ? { type: params.request.scheduler_trigger }
+    : { type: "manual" as const, ...(reason ? { reason } : {}) };
 
   try {
     // 关键点（中文）：run 改为“异步受理”，先做存在性校验，再后台执行。
-    await readTask({
+    const task = await readTask({
       taskId,
-      data_path: root,
+      storage: params.storage,
     });
+    if (task.frontmatter.agent_id !== params.context.agent.id) {
+      throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${params.context.agent.id}`);
+    }
+    if (task.frontmatter.workspace_id !== params.context.workspace.id) {
+      throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${params.context.workspace.id}`);
+    }
 
     params.context.logger.info(
-      formatTaskLogMessage("Manual task run accepted"),
+      formatTaskLogMessage("Task run accepted"),
       {
         taskId,
-        via: "manual",
+        via: trigger.type,
         ...(reason ? { reason } : {}),
       },
     );
 
     const executionId = `${taskId}:${Date.now()}`;
-    void runTaskNow({
-      context: params.context,
-      data_path: root,
-      taskId,
-      trigger,
-      executionId,
-      notifications: params.notifications,
-      ...(params.execution_context?.workspace_env
-        ? { workspace_env: { ...params.execution_context.workspace_env } }
-        : {}),
-      ...(params.execution_context?.agent_systems
-        ? { agent_systems: [...params.execution_context.agent_systems] }
-        : {}),
-    })
+    const accepted = params.executions.start(taskId, async () => {
+      await runTaskNow({
+        context: params.context,
+        storage: params.storage,
+        taskId,
+        trigger,
+        executionId,
+        notifications: params.notifications,
+        ...(params.execution_context?.workspace_env
+          ? { workspace_env: { ...params.execution_context.workspace_env } }
+          : {}),
+        ...(params.execution_context?.agent_systems
+          ? { agent_systems: [...params.execution_context.agent_systems] }
+          : {}),
+      })
       .then((result) => {
         params.context.logger.info(
-          formatTaskLogMessage("Manual task run finished"),
+          formatTaskLogMessage("Task run finished"),
           {
             taskId,
-            via: "manual",
+            via: trigger.type,
             status: result.status,
             executionStatus: result.executionStatus,
             resultStatus: result.resultStatus,
@@ -451,14 +469,24 @@ export async function runTaskDefinition(params: {
       })
       .catch((error) => {
         params.context.logger.error(
-          formatTaskLogMessage("Manual task run failed"),
+          formatTaskLogMessage("Task run failed"),
           {
             taskId,
-            via: "manual",
+            via: trigger.type,
             error: String(error),
           },
         );
       });
+    });
+
+    if (!accepted) {
+      return {
+        success: true,
+        accepted: false,
+        message: "The task is already running.",
+        title,
+      };
+    }
 
     return {
       success: true,
@@ -477,14 +505,13 @@ export async function runTaskDefinition(params: {
 }
 
 export async function setTaskStatus(params: {
-  data_path: string;
+  storage: PluginStorage;
   request: TaskSetStatusRequest;
 }): Promise<TaskSetStatusResponse> {
-  const root = path.resolve(params.data_path);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ data_path: root, title });
+    taskId = await resolveTaskIdByTitle({ storage: params.storage, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -499,12 +526,12 @@ export async function setTaskStatus(params: {
 
   try {
     const task = await readTask({
-      data_path: root,
+      storage: params.storage,
       taskId,
     });
 
     await writeTask({
-      data_path: root,
+      storage: params.storage,
       taskId,
       overwrite: true,
       frontmatter: {
@@ -528,21 +555,20 @@ export async function setTaskStatus(params: {
 }
 
 export async function deleteTaskDefinition(params: {
-  data_path: string;
+  storage: PluginStorage;
   request: TaskDeleteRequest;
 }): Promise<TaskDeleteResponse> {
-  const root = path.resolve(params.data_path);
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ data_path: root, title });
+    taskId = await resolveTaskIdByTitle({ storage: params.storage, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
 
   try {
     const deleted = await deleteTask({
-      data_path: root,
+      storage: params.storage,
       taskId,
     });
     return {

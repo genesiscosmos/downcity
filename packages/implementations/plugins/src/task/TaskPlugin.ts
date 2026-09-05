@@ -1,46 +1,31 @@
 /**
- * TaskPlugin：task plugin 的类实例实现。
+ * TaskPlugin：City 级 Task 定义、执行与 schedule 的唯一所有者。
  *
- * 关键点（中文）
- * - task 的长期运行态（cron engine）归属于 TaskPlugin 实例。
- * - task 的 prompt、action input、action execution 都已拆到独立模块。
- * - 当前文件只保留实例骨架与 lifecycle，不再依赖旧的模块级单例。
+ * 一个 City 中只有一个 TaskPlugin 实例、一份统一 Task Store 和一个 scheduler。
+ * Agent 与 Workspace 只作为 Task 定义中的执行目标，在触发瞬间进入对应动态上下文。
  */
 
 import { Plugin, create_action } from "@downcity/city/plugin";
-import type { PluginActions } from "@downcity/city/plugin";
-import type { PluginContext, PluginLifecycleContext } from "@downcity/city/plugin";
 import type {
-  TaskCronRegisterResult,
-  TaskSchedulerReloadResult,
-} from "@/task/types/TaskPluginTypes.js";
+  PluginActions,
+  PluginContext,
+  PluginLifecycleContext,
+  PluginStorage,
+} from "@downcity/city/plugin";
 import type { TaskPluginOptions } from "@/task/types/TaskPluginOptions.js";
-import { TaskCronTriggerEngine } from "@/task/runtime/CronTrigger.js";
-import { registerTaskCronJobs } from "@/task/Scheduler.js";
-import {
-  createTaskPluginActions,
-} from "@/task/runtime/TaskPluginActions.js";
+import type { TaskSchedulerReloadResult } from "@/task/types/TaskPluginTypes.js";
+import { createTaskPluginActions } from "@/task/runtime/TaskPluginActions.js";
 import {
   reloadTaskSchedulerAfterMutation,
 } from "@/task/runtime/TaskActionExecution.js";
 import { TASK_PLUGIN_PROMPT } from "@/task/runtime/TaskPluginSystem.js";
-import { resolve_runtime_timezone } from "@downcity/agent";
-import type { TaskWorkspaceRuntime } from "@/task/types/TaskWorkspaceRuntime.js";
+import { TaskExecutionCoordinator } from "@/task/runtime/TaskExecutionCoordinator.js";
+import { TaskSchedulerCoordinator, resolve_task_timezone } from "@/task/Scheduler.js";
 import { register_task_plugin_host_actions } from "@/task/host/TaskPluginHostActions.js";
 
-const TASK_LOG_PREFIX = "[TASK]";
-
-function formatTaskLogMessage(message: string): string {
-  return `${TASK_LOG_PREFIX} ${message}`;
-}
-
-/**
- * task plugin 类实现。
- */
+/** task plugin 类实现。 */
 export class TaskPlugin extends Plugin {
-  /**
-   * 当前 plugin 名称。
-   */
+  /** 当前 Plugin 稳定 ID。 */
   readonly name = "task";
 
   /** Plugin 用户可见标题。 */
@@ -49,205 +34,126 @@ export class TaskPlugin extends Plugin {
   /** Plugin 用户可见说明。 */
   readonly description = "Manages reusable tasks and their trigger runtime.";
 
-  /**
-   * task plugin 的 system 文本提供器。
-   */
-  readonly system = async (context: PluginContext): Promise<string> => {
-    await this.start_cron_runtime(context);
-    return TASK_PLUGIN_PROMPT;
-  };
+  /** Task system 文本不承担 scheduler 启动副作用。 */
+  readonly system = async (_context: PluginContext): Promise<string> => TASK_PLUGIN_PROMPT;
 
-  /**
-   * task plugin 的 action 定义表。
-   */
+  /** Task Agent actions。 */
   readonly actions: PluginActions;
 
-  /**
-   * 当前实例持有的显式配置。
-   */
-  public readonly options: TaskPluginOptions;
+  /** 当前实例持有的显式配置。 */
+  readonly options: TaskPluginOptions;
 
-  /**
-   * 当前实例持有的 cron engine。
-   *
-   * 关键点（中文）
-   * - 这是 per-plugin-instance 的长期运行态。
-   * - 不再复用 module-global 单例。
-   */
-  private readonly runtimes_by_workspace = new Map<string, TaskWorkspaceRuntime>();
+  /** 手动触发与 scheduler 共享的实例级执行协调器。 */
+  private readonly executions = new TaskExecutionCoordinator();
 
-  /** 各 Workspace 当前唯一的 cron 启动流程。 */
-  private readonly starts_by_workspace = new Map<string, Promise<TaskCronRegisterResult | null>>();
+  /** Plugin initialize 后唯一的稳定生命周期上下文。 */
+  private lifecycle_context?: PluginLifecycleContext;
+
+  /** Plugin initialize 后唯一的 scheduler。 */
+  private scheduler?: TaskSchedulerCoordinator;
 
   constructor(options?: TaskPluginOptions) {
     super();
     this.options = options || {};
-
     this.actions = {
       ...createTaskPluginActions({
-        notifications: this.options.notifications,
+        resolve_notifications: () => this.require_lifecycle_context().notifications,
+        resolve_storage: () => this.require_storage(),
+        executions: this.executions,
         reloadSchedulerAfterMutation: async (params) =>
-          this.reloadSchedulerAfterMutation(params),
+          await this.reload_scheduler_after_mutation(params),
       }),
       reload: create_action({
         description: "Reload the task scheduler from persisted tasks.",
         execute: async ({ context }) => {
-          const result = await this.restart_cron_runtime(context);
-          context.logger.info(
-            formatTaskLogMessage(
-              `Task cron trigger reloaded (tasks=${result.tasksFound}, jobs=${result.jobsScheduled})`,
-            ),
-          );
+          const result = await this.require_scheduler().reload();
+          context.logger.info("[TASK] Task scheduler reloaded", result);
           return {
             success: true,
             message: "task scheduler reloaded",
-            data: {
-              tasks_found: result.tasksFound,
-              jobs_scheduled: result.jobsScheduled,
-            },
+            data: result,
           };
         },
       }),
     };
-
   }
 
-  /** 注册宿主管理 actions。 */
-  initialize(context: PluginLifecycleContext): void {
-    register_task_plugin_host_actions(context);
+  /** 注册宿主管理 actions，并从统一 Store 恢复 schedule。 */
+  async initialize(context: PluginLifecycleContext): Promise<void> {
+    this.lifecycle_context = context;
+    const scheduler = new TaskSchedulerCoordinator(
+      context,
+      resolve_task_timezone(this.options.timezone),
+    );
+    this.scheduler = scheduler;
+    register_task_plugin_host_actions(context, {
+      storage: context.storage,
+      reconcile: async (task_id) => await this.reconcile(task_id),
+    });
+    await scheduler.initialize();
   }
 
-  /** 释放当前 Plugin 实例持有的全部 Task runtime。 */
+  /** 停止新增定时触发，并等待已经受理的 Task 执行收口。 */
   async dispose(): Promise<void> {
-    await Promise.allSettled([...this.starts_by_workspace.values()]);
-    await Promise.all([...this.runtimes_by_workspace.keys()].map(async (scope_key) => {
-      await this.stop_cron_runtime(scope_key);
-    }));
-    this.starts_by_workspace.clear();
+    const scheduler = this.scheduler;
+    this.scheduler = undefined;
+    if (scheduler) await scheduler.dispose();
+    await this.executions.settle();
+    this.lifecycle_context = undefined;
   }
 
-  /**
-   * 启动当前实例的 cron runtime。
-   */
-  async start_cron_runtime(
-    context: PluginContext,
-  ): Promise<TaskCronRegisterResult | null> {
-    const scope_key = task_scope_key(context);
-    if (this.runtimes_by_workspace.has(scope_key)) return null;
-    const started = this.starts_by_workspace.get(scope_key);
-    if (started) return await started;
-
-    const start_promise = (async () => {
-      const engine = new TaskCronTriggerEngine();
-      const running_task_ids = new Set<string>();
-      const register_result = await registerTaskCronJobs({
-        context,
-        engine,
-        notifications: this.options.notifications,
-        timezone: this.resolveTimezone(),
-        runningTaskIds: running_task_ids,
-      });
-      await engine.start();
-      this.runtimes_by_workspace.set(scope_key, {
-        context,
-        cron_engine: engine,
-        running_task_ids,
-      });
-      return register_result;
-    })();
-    this.starts_by_workspace.set(scope_key, start_promise);
+  /** 在定义 mutation 后增量更新一个 Task 的 schedule。 */
+  private async reconcile(task_id: string): Promise<TaskSchedulerReloadResult> {
     try {
-      return await start_promise;
-    } finally {
-      if (this.starts_by_workspace.get(scope_key) === start_promise) {
-        this.starts_by_workspace.delete(scope_key);
-      }
+      const result = await this.require_scheduler().reconcile(task_id);
+      return {
+        reloaded: true,
+        tasks_found: result.tasks_found,
+        jobs_scheduled: result.jobs_scheduled,
+      };
+    } catch (error) {
+      const reason = String(error);
+      this.lifecycle_context?.logger.warn("[TASK] Task scheduler reconcile failed", {
+        task_id,
+        error: reason,
+      });
+      return { reloaded: false, error: reason };
     }
   }
 
-  /**
-   * 停止当前实例的 cron runtime。
-   */
-  async stop_cron_runtime(scope_key: string): Promise<boolean> {
-    const runtime = this.runtimes_by_workspace.get(scope_key);
-    if (!runtime) return false;
-    this.runtimes_by_workspace.delete(scope_key);
-    await runtime.cron_engine.stop();
-    return true;
-  }
-
-  /**
-   * 重启当前实例的 cron runtime。
-   */
-  async restart_cron_runtime(
-    context: PluginContext,
-  ): Promise<TaskCronRegisterResult> {
-    await this.stop_cron_runtime(task_scope_key(context));
-    const started = await this.start_cron_runtime(context);
-    return (
-      started || {
-        tasksFound: 0,
-        jobsScheduled: 0,
-      }
-    );
-  }
-
-  /**
-   * 任务定义变更后重载 scheduler。
-   */
-  private async reloadSchedulerAfterMutation(params: {
-    context: PluginContext;
-    action: "create" | "update" | "delete" | "status";
-    title: string;
+  /** 把 Agent action mutation 映射到实例级 scheduler。 */
+  private async reload_scheduler_after_mutation(params: {
+    /** 当前动态 Agent/Workspace 调用上下文。 */
+    readonly context: PluginContext;
+    /** 已提交的 mutation 类型。 */
+    readonly action: "create" | "update" | "delete" | "status";
+    /** 当前 Task 用户可见标题。 */
+    readonly title: string;
+    /** 当前 Task 稳定 ID。 */
+    readonly task_id: string;
   }): Promise<TaskSchedulerReloadResult> {
     return await reloadTaskSchedulerAfterMutation({
-      context: params.context,
-      action: params.action,
-      title: params.title,
-      reloadScheduler: async (context) => this.restart_all_cron_runtimes(context),
+      ...params,
+      reloadScheduler: async (task_id) => await this.require_scheduler().reconcile(task_id),
     });
   }
 
-  /**
-   * Task 定义变化后重启所有已激活 Workspace 的调度资源。
-   *
-   * Task 可以在更新时切换执行 Workspace，因此必须同时移除旧 Workspace 的注册项，
-   * 并为新 Workspace 建立注册项。当前 action 的 Workspace 即使此前未激活也会纳入重载。
-   */
-  private async restart_all_cron_runtimes(
-    context: PluginContext,
-  ): Promise<TaskCronRegisterResult> {
-    const contexts_by_workspace = new Map<string, PluginContext>(
-      [...this.runtimes_by_workspace.values()].map((runtime) => [
-        runtime.context.workspace.id,
-        runtime.context,
-      ]),
-    );
-    contexts_by_workspace.set(context.workspace.id, context);
-
-    const results = await Promise.all(
-      [...contexts_by_workspace.values()].map(async (workspace_context) =>
-        this.restart_cron_runtime(workspace_context)
-      ),
-    );
-    return results.reduce<TaskCronRegisterResult>(
-      (total, result) => ({
-        tasksFound: total.tasksFound + result.tasksFound,
-        jobsScheduled: total.jobsScheduled + result.jobsScheduled,
-      }),
-      { tasksFound: 0, jobsScheduled: 0 },
-    );
+  /** 返回 initialize 后可用的 TaskPlugin 生命周期存储。 */
+  private require_storage(): PluginStorage {
+    return this.require_lifecycle_context().storage;
   }
 
-  /**
-   * 解析当前 task cron 使用的时区。
-   */
-  private resolveTimezone(): string {
-    return String(this.options.timezone || "").trim() || resolve_runtime_timezone();
+  /** 返回 initialize 后可用的稳定生命周期上下文。 */
+  private require_lifecycle_context(): PluginLifecycleContext {
+    const context = this.lifecycle_context;
+    if (!context) throw new Error("TaskPlugin is not initialized");
+    return context;
   }
-}
 
-/** 返回共享 TaskPlugin 内唯一的 Agent/Workspace 作用域键。 */
-function task_scope_key(context: PluginContext): string {
-  return `${context.agent.id}\u0000${context.workspace.id}`;
+  /** 返回 initialize 后可用的唯一 scheduler。 */
+  private require_scheduler(): TaskSchedulerCoordinator {
+    const scheduler = this.scheduler;
+    if (!scheduler) throw new Error("TaskPlugin scheduler is not initialized");
+    return scheduler;
+  }
 }

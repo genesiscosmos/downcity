@@ -10,7 +10,7 @@
 
 import path from "node:path";
 import type { SessionAttachmentStore } from "@downcity/agent";
-import type { PluginContext, PluginSessionHandle } from "@downcity/city/plugin";
+import type { PluginContext, PluginSessionHandle, PluginStorage } from "@downcity/city/plugin";
 import type { TaskSessionRuntimePort } from "@/task/types/TaskRunner.js";
 import type { TaskDeliverySession } from "@/task/types/Task.js";
 import { create_session_message_store, SessionMessages } from "@downcity/agent";
@@ -51,6 +51,8 @@ export async function appendTaskRoundUserMessage(params: {
  */
 export async function createTaskSessionRuntimePort(params: {
   context: PluginContext;
+  /** Task 运行记录所属的 TaskPlugin 生命周期级存储。 */
+  storage: PluginStorage;
   runDirAbs: string;
   runSessionId: string;
   userSimulatorSessionId: string;
@@ -117,7 +119,7 @@ export async function createTaskSessionRuntimePort(params: {
     const created = new SessionMessages({
       session_id: key,
       store: create_session_message_store({
-        files: context.storage.files,
+        files: params.storage.files,
         session_id: key,
         file_path: path.join(messages_dir_path, "active.jsonl"),
         assistant_message_file_path: path.join(

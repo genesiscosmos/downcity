@@ -232,7 +232,7 @@ Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集�
 ~/.downcity/agents/<agent_id>/
 ```
 
-该目录包含 Agent 的 Session、日志和 Schedule。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。执行期 `PluginContext.storage.path/files` 指向当前 Agent/Plugin 的私有目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的宿主 Profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`；Plugin 唯一实例的 lifecycle storage 由 City 另行分配。
+该目录包含 Agent 的 Session 与日志。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。执行期 `PluginContext.storage.path/files` 指向当前 Agent/Plugin 的私有目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的宿主 Profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`；Plugin 唯一实例的 lifecycle storage 由 City 另行分配。
 
 Agent 不负责：
 
@@ -306,6 +306,11 @@ Plugin 实例在 City 内按 Plugin ID 唯一；同一个实例可以同时服�
 `PluginContext.agent`、`PluginContext.workspace` 和 `PluginContext.session` 区分当前调用范围。需要隔离的
 运行数据写入 City 为当前 Agent/Plugin 分配的私有 Storage；City 级连接、缓存和后台 Worker 写入
 `PluginLifecycleContext.storage`，不能复制出按 Agent 的 Plugin 实例。PluginContext 在每次 Action、Hook、System 或 Availability 调用时即时投影，不按 Agent/Workspace 长期缓存；Workspace 只是调用资源，不是 Plugin 生命周期边界。
+
+Task 定义、调度注册与执行记录由 TaskPlugin 统一拥有，使用 `PluginLifecycleContext.storage` 中的
+`tasks/<task_id>/` 作为唯一事实源。Task 显式保存 `agent_id` 与 `workspace_id` 作为执行目标；scheduler
+在 Plugin initialize 时恢复全部启用定义，并只在触发瞬间进入对应 Agent/Workspace 上下文。Task 不写入
+Agent Plugin 私有目录，Agent Session 仍保存在 Agent 自己的 Session Store 中。
 
 Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main 对象。Plugin 在 `initialize(PluginLifecycleContext)` 中注册宿主管理 action 与 Config action，并初始化自己拥有的 City 级长期资源；`dispose` 负责统一释放。宿主的 Plugins 导航始终列出完整 Plugin Catalog；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用宿主管理 action，不要求 Profile。Config 只在 Plugin Catalog 详情出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。
 

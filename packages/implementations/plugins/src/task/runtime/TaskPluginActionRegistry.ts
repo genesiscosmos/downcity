@@ -7,7 +7,7 @@
  */
 
 import type { Command } from "commander";
-import type { PluginActions, PluginNotificationPublisher } from "@downcity/city/plugin";
+import type { PluginActions, PluginNotificationPublisher, PluginStorage } from "@downcity/city/plugin";
 import { create_action } from "@downcity/city/plugin";
 import { z } from "zod";
 import type { TaskListActionPayload } from "@/task/types/TaskPluginTypes.js";
@@ -41,6 +41,7 @@ import {
   mapTaskStatusCommandPayload,
   mapTaskUpdateCommandPayload,
 } from "./TaskActionInput.js";
+import type { TaskExecutionCoordinator } from "./TaskExecutionCoordinator.js";
 
 const TASK_STATUS_SCHEMA = z.enum(["enabled", "paused", "disabled"]);
 const TASK_KIND_SCHEMA = z.enum(["agent", "script"]);
@@ -78,6 +79,7 @@ const TASK_UPDATE_SCHEMA = z.object({
 const TASK_RUN_SCHEMA = z.object({
   title: z.string(),
   reason: z.string().optional(),
+  scheduler_trigger: z.enum(["cron", "time"]).optional(),
 });
 
 const TASK_HISTORY_SCHEMA = z.object({
@@ -102,8 +104,12 @@ const TASK_STATUS_REQ_SCHEMA = z.object({
  * 创建 task plugin runtime 的 action 定义表。
  */
 export function createTaskPluginActions(params: {
-  /** Task 完成后使用的可选宿主通知端口。 */
-  notifications?: PluginNotificationPublisher;
+  /** 读取 TaskPlugin initialize 后由 City 绑定的通知端口。 */
+  resolve_notifications: () => PluginNotificationPublisher;
+  /** 读取 TaskPlugin 生命周期级统一存储。 */
+  resolve_storage: () => PluginStorage;
+  /** TaskPlugin 实例级执行协调器。 */
+  executions: TaskExecutionCoordinator;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }): PluginActions {
   return {
@@ -139,6 +145,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskListAction({
           context: actionParams.context,
+          storage: params.resolve_storage(),
           payload: actionParams.input as TaskListActionPayload,
         });
       },
@@ -158,6 +165,7 @@ export function createTaskPluginActions(params: {
       examples: [{ title: "Read execution history", payload: { title: "daily-report" } }],
       execute: async (action_params) => execute_task_history_action({
         context: action_params.context,
+        storage: params.resolve_storage(),
         payload: action_params.input as unknown as TaskRunHistoryRequest,
       }),
     }),
@@ -177,6 +185,7 @@ export function createTaskPluginActions(params: {
       examples: [{ title: "Read one execution", payload: { title: "daily-report", timestamp: "20260901-080000-000" } }],
       execute: async (action_params) => execute_task_run_detail_action({
         context: action_params.context,
+        storage: params.resolve_storage(),
         payload: action_params.input as unknown as TaskRunDetailRequest,
       }),
     }),
@@ -239,6 +248,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskCreateAction({
           context: actionParams.context,
+          storage: params.resolve_storage(),
           payload: actionParams.input as TaskCreateRequest,
           execution: actionParams.execution,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
@@ -271,8 +281,10 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskRunAction({
           context: actionParams.context,
+          storage: params.resolve_storage(),
           payload: actionParams.input as TaskRunRequest,
-          notifications: params.notifications,
+          executions: params.executions,
+          notifications: params.resolve_notifications(),
           execution_context: actionParams.execution.snapshot,
         });
       },
@@ -300,8 +312,9 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskDeleteAction({
           context: actionParams.context,
+          storage: params.resolve_storage(),
           payload: actionParams.input as TaskDeleteRequest,
-          notifications: params.notifications,
+          notifications: params.resolve_notifications(),
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
       },
@@ -360,6 +373,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskUpdateAction({
           context: actionParams.context,
+          storage: params.resolve_storage(),
           payload: actionParams.input as TaskUpdateRequest,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
@@ -391,6 +405,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskStatusAction({
           context: actionParams.context,
+          storage: params.resolve_storage(),
           payload: actionParams.input as TaskSetStatusRequest,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
@@ -417,6 +432,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskStatusAction({
           context: actionParams.context,
+          storage: params.resolve_storage(),
           payload: actionParams.input as TaskSetStatusRequest,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
@@ -443,6 +459,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskStatusAction({
           context: actionParams.context,
+          storage: params.resolve_storage(),
           payload: actionParams.input as TaskSetStatusRequest,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });

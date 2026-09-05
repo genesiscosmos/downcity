@@ -8,6 +8,8 @@ import test from "node:test";
 import { ChatPlugin } from "@downcity/plugins/chat";
 import { SkillPlugin } from "@downcity/plugins/skill";
 import { TaskPlugin } from "@downcity/plugins/task";
+import { createTaskDefinition } from "../bin/task/Action.js";
+import { LocalStorageProvider } from "@downcity/city";
 
 /** 启动 Chat Plugin 并返回按 ID 注册的配置 action。 */
 async function start_chat_plugin() {
@@ -68,20 +70,67 @@ async function start_skill_plugin(workspace_path) {
 }
 
 /** 启动 Task Plugin，并记录对 Agent Plugin runtime 的调用。 */
-async function start_task_plugin() {
+async function start_task_plugin(options = {}) {
   const actions = new Map();
   const invocations = [];
-  await new TaskPlugin().initialize({
+  const data_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-task-host-actions-"));
+  const task_scope = new LocalStorageProvider(data_path).open_scope(["plugins", "task"]);
+  const storage = { path: task_scope.root_path, files: task_scope.files };
+  await createTaskDefinition({
+    storage,
+    agent_id: "task-agent",
+    request: {
+      title: "daily-report",
+      description: "生成日报",
+      body: "汇总今天的进展",
+      when: "@manual",
+      status: "enabled",
+      kind: "agent",
+      review: false,
+      workspace_id: "workspace-b",
+    },
+    delivery_session: {
+      session_id: "daily-report",
+      origin_type: "chat",
+    },
+  });
+  const run_path = path.join(storage.path, "tasks", "daily-report", "20260901-080000-000");
+  fs.mkdirSync(run_path, { recursive: true });
+  fs.writeFileSync(path.join(run_path, "output.md"), "# Task Output\n日报正文\n");
+  fs.writeFileSync(path.join(run_path, "run.json"), JSON.stringify({
+    v: 1,
+    taskId: "daily-report",
+    timestamp: "20260901-080000-000",
+    executionId: "daily-report:1",
+    agent_id: "task-agent",
+    workspace_id: "workspace-b",
+    trigger: { type: "manual" },
+    status: "success",
+    executionStatus: "success",
+    resultStatus: "valid",
+    dialogueRounds: 1,
+    userSimulatorSatisfied: true,
+    startedAt: 1_788_246_000_000,
+    endedAt: 1_788_246_001_000,
+  }));
+  const plugin = new TaskPlugin();
+  await plugin.initialize({
     plugin: {
       id: "task",
       action(action) { actions.set(action.id, action); },
       config_action() {},
     },
     logger: {
+      log: async () => {},
       debug() {},
       info() {},
       warn() {},
       error() {},
+    },
+    storage,
+    notifications: {
+      publish: async () => {},
+      dismiss: options.dismiss_notification || (async () => {}),
     },
     system: {
       async list_agents() {
@@ -99,70 +148,21 @@ async function start_task_plugin() {
       },
       async invoke_agent_plugin(input) {
         invocations.push(input);
-        if (input.action_id === "history") {
-          return {
-            success: true,
-            data: {
-              runs: [{
-                timestamp: "20260901-080000-000",
-                execution_id: "daily-report:1",
-                status: "success",
-                trigger: "manual",
-                started_at: 1_788_246_000_000,
-                updated_at: 1_788_246_001_000,
-                ended_at: 1_788_246_001_000,
-                duration_ms: 1000,
-              }],
-            },
-          };
-        }
-        if (input.action_id === "run_detail") {
-          return {
-            success: true,
-            data: {
-              run: {
-                timestamp: "20260901-080000-000",
-                execution_id: "daily-report:1",
-                status: "success",
-                trigger: "manual",
-                started_at: 1_788_246_000_000,
-                updated_at: 1_788_246_001_000,
-                ended_at: 1_788_246_001_000,
-                duration_ms: 1000,
-                output: "日报正文",
-                error_detail: "",
-                result_errors: [],
-              },
-            },
-          };
-        }
-        return {
-          success: true,
-          data: {
-            tasks: input.agent_id === "task-agent" ? [{
-              title: "daily-report",
-              description: "生成日报",
-              body: "汇总今天的进展",
-              when: "0 18 * * *",
-              status: "enabled",
-              kind: "agent",
-              review: false,
-              workspace_id: "workspace-b",
-              delivery_session: {
-                session_id: "daily-report",
-                origin_type: "chat",
-              },
-              lastRunTimestamp: "2026-08-31T10:00:00.000Z",
-            }] : [],
-          },
-        };
+        return { success: true, data: { accepted: true } };
       },
       async open_external() {},
       async show_item_in_folder() {},
       async write_clipboard_text() {},
     },
   });
-  return { actions, invocations };
+  return {
+    actions,
+    invocations,
+    cleanup: async () => {
+      await plugin.dispose();
+      fs.rmSync(data_path, { recursive: true, force: true });
+    },
+  };
 }
 
 /** 创建可观察完整替换结果的 Profile 配置上下文。 */
@@ -259,18 +259,17 @@ test("Skill Plugin 不需要 Profile 即可浏览和读取 Workspace Skill", asy
 });
 
 test("Task Plugin 按 Agent 聚合所有启用 Task Plugin 的任务", async () => {
-  const { actions, invocations } = await start_task_plugin();
-
-  const snapshot = await actions.get("tasks.snapshot").run();
-
-  assert.deepEqual(snapshot.agents, [{
+  const { actions, invocations, cleanup } = await start_task_plugin();
+  try {
+    const snapshot = await actions.get("tasks.snapshot").run();
+    assert.deepEqual(snapshot.agents, [{
     agent_id: "task-agent",
     name: "Task Agent",
     tasks: [{
       title: "daily-report",
       description: "生成日报",
       body: "汇总今天的进展",
-      when: "0 18 * * *",
+      when: "@manual",
       status: "enabled",
       kind: "agent",
       review: false,
@@ -279,36 +278,31 @@ test("Task Plugin 按 Agent 聚合所有启用 Task Plugin 的任务", async () 
         session_id: "daily-report",
         origin_type: "chat",
       },
-      last_run_at: "2026-08-31T10:00:00.000Z",
+      last_run_at: "20260901-080000-000",
     }],
   }, {
     agent_id: "empty-task-agent",
     name: "Empty Task Agent",
     tasks: [],
   }]);
-  assert.deepEqual(snapshot.workspaces, [
+    assert.deepEqual(snapshot.workspaces, [
     { workspace_id: "workspace-a", name: "Workspace A" },
     { workspace_id: "workspace-b", name: "Workspace B" },
   ]);
-  assert.deepEqual(invocations, [{
-    agent_id: "task-agent",
-    workspace_id: "workspace-a",
-    plugin_id: "task",
-    action_id: "list",
-    input: {},
-  }, {
-    agent_id: "empty-task-agent",
-    workspace_id: "workspace-a",
-    plugin_id: "task",
-    action_id: "list",
-    input: {},
-  }]);
+    assert.deepEqual(invocations, []);
+  } finally {
+    await cleanup();
+  }
 });
 
 test("Task Plugin 使用 Task 自身 Workspace 完成管理操作", async () => {
-  const { actions, invocations } = await start_task_plugin();
-
-  await actions.get("tasks.create").run({
+  const { actions, invocations, cleanup } = await start_task_plugin({
+    dismiss_notification: async () => {
+      throw new Error("notification unavailable");
+    },
+  });
+  try {
+    await actions.get("tasks.create").run({
     agent_id: "task-agent",
     workspace_id: "workspace-b",
     title: "weekly-review",
@@ -333,44 +327,33 @@ test("Task Plugin 使用 Task 自身 Workspace 完成管理操作", async () => 
   });
   await actions.get("tasks.status").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review", status: "paused" });
   await actions.get("tasks.run").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review" });
-  await actions.get("tasks.delete").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review" });
-
-  assert.deepEqual(invocations.map((invocation) => ({ workspace_id: invocation.workspace_id, action_id: invocation.action_id, input: invocation.input })), [
-    { workspace_id: "workspace-b", action_id: "create", input: { title: "weekly-review", description: "生成周报", workspace_id: "workspace-b", when: "@manual", kind: "agent", review: true, status: "paused", body: "汇总本周进展" } },
-    { workspace_id: "workspace-a", action_id: "update", input: { title: "weekly-review", titleNext: "weekly-review", description: "更新周报", workspace_id: "workspace-a", when: "0 18 * * 5", kind: "agent", review: false, status: "enabled", body: "输出更新后的周报" } },
-    { workspace_id: "workspace-a", action_id: "status", input: { title: "weekly-review", status: "paused" } },
-    { workspace_id: "workspace-a", action_id: "run", input: { title: "weekly-review" } },
-    { workspace_id: "workspace-a", action_id: "delete", input: { title: "weekly-review" } },
-  ]);
+    await actions.get("tasks.delete").run({ agent_id: "task-agent", workspace_id: "workspace-a", task_title: "weekly-review" });
+    assert.deepEqual(invocations.map((invocation) => ({ workspace_id: invocation.workspace_id, action_id: invocation.action_id, input: invocation.input })), [
+      { workspace_id: "workspace-a", action_id: "run", input: { title: "weekly-review" } },
+    ]);
+  } finally {
+    await cleanup();
+  }
 });
 
-test("Task Plugin 通过所选 Agent runtime 读取执行记录与详情", async () => {
-  const { actions, invocations } = await start_task_plugin();
+test("Task Plugin 直接从统一 Store 读取执行记录与详情", async () => {
+  const { actions, invocations, cleanup } = await start_task_plugin();
   const context = {
     agent_id: "task-agent",
     workspace_id: "workspace-b",
     task_title: "daily-report",
   };
 
-  const history = await actions.get("tasks.history").run(context);
-  assert.equal(history.runs[0].status, "success");
-
-  const detail = await actions.get("tasks.run_detail").run({
-    ...context,
-    timestamp: "20260901-080000-000",
-  });
-  assert.equal(detail.run.output, "日报正文");
-  assert.deepEqual(invocations, [{
-    agent_id: "task-agent",
-    workspace_id: "workspace-b",
-    plugin_id: "task",
-    action_id: "history",
-    input: { title: "daily-report" },
-  }, {
-    agent_id: "task-agent",
-    workspace_id: "workspace-b",
-    plugin_id: "task",
-    action_id: "run_detail",
-    input: { title: "daily-report", timestamp: "20260901-080000-000" },
-  }]);
+  try {
+    const history = await actions.get("tasks.history").run(context);
+    assert.equal(history.runs[0].status, "success");
+    const detail = await actions.get("tasks.run_detail").run({
+      ...context,
+      timestamp: "20260901-080000-000",
+    });
+    assert.equal(detail.run.output, "日报正文");
+    assert.deepEqual(invocations, []);
+  } finally {
+    await cleanup();
+  }
 });

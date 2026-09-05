@@ -1,12 +1,12 @@
 /**
  * Task Run 只读存储投影。
  *
- * 该模块只把现有 run 目录中的 `run.json`、`run-progress.json`、`output.md` 与
- * `error.md` 投影为稳定的历史记录协议，不创建第二份索引或持久化状态。
+ * 从统一 Task 聚合目录中的完成元数据、进度快照和用户可见产物生成稳定协议，
+ * 不创建第二份索引或事实源。
  */
 
-import fs from "fs-extra";
 import path from "node:path";
+import type { PluginStorage } from "@downcity/city/plugin";
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "@/task/types/TaskCommand.js";
 import type {
   ShipTaskRunExecutionStatusV1,
@@ -20,26 +20,20 @@ const MAX_ARTIFACT_BYTES = 512 * 1024;
 
 /** 列出一个 Task 的全部运行记录，并按最新时间倒序排列。 */
 export async function list_task_runs(params: {
-  /** Agent Plugin 的私有数据根目录。 */
-  readonly data_path: string;
-  /** Task 的稳定目录标识。 */
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
+  /** Task 的稳定目录 ID。 */
   readonly task_id: string;
 }): Promise<TaskRunHistoryItemView[]> {
-  const task_dir = getTaskDir(params.data_path, params.task_id);
-  let entries: Array<import("node:fs").Dirent> = [];
-  try {
-    entries = await fs.readdir(task_dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
+  const task_directory = getTaskDir(params.storage.path, params.task_id);
+  const entries = await params.storage.files.read_directory(task_directory).catch(() => []);
   const timestamps = entries
-    .filter((entry) => entry.isDirectory() && is_task_run_timestamp(entry.name))
+    .filter((entry) => entry.is_directory && is_task_run_timestamp(entry.name))
     .map((entry) => entry.name)
     .sort()
     .reverse();
   const runs = await Promise.all(timestamps.map((timestamp) => read_task_run_summary({
-    data_path: params.data_path,
-    task_id: params.task_id,
+    ...params,
     timestamp,
   })));
   return runs.filter((run): run is TaskRunHistoryItemView => Boolean(run));
@@ -47,20 +41,20 @@ export async function list_task_runs(params: {
 
 /** 读取一条 Task Run 的摘要与用户可见产物。 */
 export async function read_task_run_detail(params: {
-  /** Agent Plugin 的私有数据根目录。 */
-  readonly data_path: string;
-  /** Task 的稳定目录标识。 */
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
+  /** Task 的稳定目录 ID。 */
   readonly task_id: string;
-  /** Run 目录使用的稳定时间戳。 */
+  /** Run 目录使用的稳定 UTC 时间戳。 */
   readonly timestamp: string;
 }): Promise<TaskRunDetailView> {
   const summary = await read_task_run_summary(params);
   if (!summary) throw new Error(`Task run not found: ${params.timestamp}`);
-  const run_dir = getTaskRunDir(params.data_path, params.task_id, params.timestamp);
-  const meta = await read_json_object(path.join(run_dir, "run.json"));
+  const run_directory = getTaskRunDir(params.storage.path, params.task_id, params.timestamp);
+  const meta = await read_json_object(params.storage, path.join(run_directory, "run.json"));
   const [output, error_detail] = await Promise.all([
-    read_artifact(path.join(run_dir, "output.md"), "# Task Output"),
-    read_artifact(path.join(run_dir, "error.md"), "# Task Error"),
+    read_artifact(params.storage, path.join(run_directory, "output.md"), "# Task Output"),
+    read_artifact(params.storage, path.join(run_directory, "error.md"), "# Task Error"),
   ]);
   return {
     ...summary,
@@ -73,24 +67,24 @@ export async function read_task_run_detail(params: {
 
 /** 从完成元数据或运行进度生成一条历史摘要。 */
 async function read_task_run_summary(params: {
-  /** Agent Plugin 的私有数据根目录。 */
-  readonly data_path: string;
-  /** Task 的稳定目录标识。 */
+  /** TaskPlugin 生命周期级统一存储。 */
+  readonly storage: PluginStorage;
+  /** Task 的稳定目录 ID。 */
   readonly task_id: string;
-  /** Run 目录使用的稳定时间戳。 */
+  /** Run 目录使用的稳定 UTC 时间戳。 */
   readonly timestamp: string;
 }): Promise<TaskRunHistoryItemView | undefined> {
-  const run_dir = getTaskRunDir(params.data_path, params.task_id, params.timestamp);
+  const run_directory = getTaskRunDir(params.storage.path, params.task_id, params.timestamp);
   const [meta, progress] = await Promise.all([
-    read_json_object(path.join(run_dir, "run.json")),
-    read_json_object(path.join(run_dir, "run-progress.json")),
+    read_json_object(params.storage, path.join(run_directory, "run.json")),
+    read_json_object(params.storage, path.join(run_directory, "run-progress.json")),
   ]);
   if (meta) return completed_summary(params.timestamp, meta);
   if (progress) return progress_summary(params.timestamp, progress);
   return undefined;
 }
 
-/** 将已完成的 `run.json` 投影为稳定摘要。 */
+/** 将已完成的 run.json 投影为稳定摘要。 */
 function completed_summary(timestamp: string, meta: Record<string, unknown>): TaskRunHistoryItemView | undefined {
   const started_at = read_number(meta.startedAt);
   const ended_at = read_number(meta.endedAt);
@@ -116,7 +110,7 @@ function completed_summary(timestamp: string, meta: Record<string, unknown>): Ta
   };
 }
 
-/** 将尚未完成或异常中断的 `run-progress.json` 投影为稳定摘要。 */
+/** 将尚未完成或异常中断的 run-progress.json 投影为稳定摘要。 */
 function progress_summary(timestamp: string, progress: Record<string, unknown>): TaskRunHistoryItemView | undefined {
   const started_at = read_number(progress.startedAt);
   const updated_at = read_number(progress.updated_at);
@@ -151,24 +145,38 @@ function progress_summary(timestamp: string, progress: Record<string, unknown>):
 }
 
 /** 安全读取一个 JSON object；损坏文件由调用方按缺失记录处理。 */
-async function read_json_object(file_path: string): Promise<Record<string, unknown> | undefined> {
+async function read_json_object(
+  storage: PluginStorage,
+  file_path: string,
+): Promise<Record<string, unknown> | undefined> {
   try {
-    const value: unknown = await fs.readJson(file_path);
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+    const value: unknown = JSON.parse((await storage.files.read_file(file_path)).toString("utf-8"));
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : undefined;
   } catch {
     return undefined;
   }
 }
 
 /** 读取有限大小的用户可见产物，避免单次 JSON action 无界膨胀。 */
-async function read_artifact(file_path: string, heading: string): Promise<string> {
+async function read_artifact(
+  storage: PluginStorage,
+  file_path: string,
+  heading: string,
+): Promise<string> {
   try {
-    const raw_content = await fs.readFile(file_path, "utf-8");
+    const bytes = await storage.files.read_file(file_path);
+    const bounded = bytes.byteLength <= MAX_ARTIFACT_BYTES
+      ? bytes
+      : bytes.subarray(0, MAX_ARTIFACT_BYTES);
+    const raw_content = bounded.toString("utf-8");
     const content = raw_content.startsWith(`${heading}\n`)
       ? raw_content.slice(heading.length).trimStart().trimEnd()
       : raw_content;
-    if (Buffer.byteLength(content, "utf-8") <= MAX_ARTIFACT_BYTES) return content;
-    return `${Buffer.from(content, "utf-8").subarray(0, MAX_ARTIFACT_BYTES).toString("utf-8")}\n\n[内容过长，已截断]`;
+    return bytes.byteLength <= MAX_ARTIFACT_BYTES
+      ? content
+      : `${content}\n\n[内容过长，已截断]`;
   } catch {
     return "";
   }
@@ -203,7 +211,9 @@ function read_result_status(value: unknown): ShipTaskRunResultStatusV1 | undefin
 function read_trigger(value: unknown): ShipTaskRunTriggerV1["type"] | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const trigger_type = (value as Record<string, unknown>).type;
-  return trigger_type === "manual" || trigger_type === "cron" || trigger_type === "time" ? trigger_type : undefined;
+  return trigger_type === "manual" || trigger_type === "cron" || trigger_type === "time"
+    ? trigger_type
+    : undefined;
 }
 
 /** 读取字符串数组并丢弃损坏成员。 */

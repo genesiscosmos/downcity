@@ -2,9 +2,9 @@
  * Task System paths and identifiers.
  *
  * 约定（中文）
- * - task root: `<Agent data>/task/`
- * - definition: `<Agent data>/task/<taskId>/task.md`
- * - run dir: `<Agent data>/task/<taskId>/<timestamp>/`
+ * - task root: `<TaskPlugin lifecycle storage>/tasks/`
+ * - definition: `<TaskPlugin lifecycle storage>/tasks/<taskId>/task.md`
+ * - run dir: `<TaskPlugin lifecycle storage>/tasks/<taskId>/<timestamp>/`
  *
  * 同时定义 task run 的逻辑标识格式，用于把调试消息映射到 run 目录：
  * - `task-run:<taskId>:<timestamp>`
@@ -60,7 +60,7 @@ export function normalizeTaskId(input: string): string {
 }
 
 export function getTaskRootDir(data_path: string): string {
-  return path.join(String(data_path || "").trim(), "task");
+  return path.join(String(data_path || "").trim(), "tasks");
 }
 
 export function getTaskDir(data_path: string, taskId: string): string {

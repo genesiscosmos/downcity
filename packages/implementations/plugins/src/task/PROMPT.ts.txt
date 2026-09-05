@@ -4,7 +4,7 @@ You can use the `task` plugin to manage task definitions, execution, scheduling,
 
 ## Task Model
 
-Each task is defined in the current Agent private runtime directory private `task/<title>/task.md` and contains:
+Each task is stored once by TaskPlugin under its City lifecycle storage at `tasks/<title>/task.md` and contains:
 - frontmatter for structured fields
 - body for the task instructions
 
@@ -12,12 +12,13 @@ Core frontmatter fields:
 - `title`: unique task identifier
 - `description`: task description
 - `when`: trigger condition, supporting `@manual`, cron, or `time:<ISO8601-with-timezone>`
+- `agent_id`: the Agent used for every manual or scheduled execution; it is captured from the create context
 - `workspace_id`: the Workspace used for every manual or scheduled execution; create defaults it to the current action Workspace
 - `delivery_session`: a system-managed result Session captured from the `create` action context; it is not an action input
 - `status`: `enabled|paused|disabled`
 - `kind`: `agent|script`, defaulting to `agent`
 
-Each execution creates a private run record managed by Downcity under the current Agent private runtime directory.
+Each execution creates its run record beside the Task definition in TaskPlugin lifecycle storage.
 
 Common artifacts:
 - `input.md`
@@ -64,7 +65,8 @@ Common artifacts:
 
 ## Key Constraints
 
-- `title` is unique. `create` deduplicates only by exact `title`.
+- `title` is unique across the current City TaskPlugin store. `create` deduplicates only by exact `title`.
+- Agent actions only list and manage Tasks whose persisted `agent_id` matches the current Agent.
 - After `when=time:...` triggers, the task is automatically set to `paused` and falls back to `when=@manual`.
 - `workspace_id` belongs to the Task rather than the current Session. Use `update` to move a Task to another execution Workspace.
 - `create` automatically captures the current calling Session as `delivery_session`; never ask for, infer, or send Session routing fields in an action payload.

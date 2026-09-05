@@ -6,8 +6,8 @@
  * - Runner 只保留执行编排；产物格式与 markdown 结构统一收敛在这里。
  */
 
-import fs from "fs-extra";
 import path from "node:path";
+import type { PluginStorage } from "@downcity/city/plugin";
 import type { DialogueRoundRecord } from "@/task/types/TaskRunner.js";
 import type {
   ShipTaskDefinitionV1,
@@ -62,6 +62,8 @@ export interface TaskRunFilePaths {
  * task 输入快照写入参数。
  */
 export interface WriteTaskRunInputArtifactParams {
+  /** TaskPlugin 生命周期级统一存储。 */
+  storage: PluginStorage;
   /**
    * 当前任务定义。
    */
@@ -92,6 +94,8 @@ export interface WriteTaskRunInputArtifactParams {
  * task 最终产物写入参数。
  */
 export interface WriteTaskRunArtifactsParams {
+  /** TaskPlugin 生命周期级统一存储。 */
+  storage: PluginStorage;
   /**
    * 当前任务定义。
    */
@@ -212,7 +216,7 @@ export function createTaskRunFilePaths(runDirAbs: string): TaskRunFilePaths {
 export async function writeTaskRunInputArtifact(
   params: WriteTaskRunInputArtifactParams,
 ): Promise<void> {
-  await fs.writeFile(
+  await params.storage.files.write_file_atomically(
     params.inputMdPath,
     [
       `# Task Input`,
@@ -222,6 +226,7 @@ export async function writeTaskRunInputArtifact(
       `- title: ${params.task.frontmatter.title}`,
       `- when: \`${params.task.frontmatter.when}\``,
       `- status: \`${params.task.frontmatter.status}\``,
+      `- agent_id: \`${params.task.frontmatter.agent_id}\``,
       `- workspace_id: \`${params.task.frontmatter.workspace_id}\``,
       ...(params.task.frontmatter.delivery_session
         ? [
@@ -240,7 +245,6 @@ export async function writeTaskRunInputArtifact(
       params.task.body ? params.task.body : "_(empty body)_",
       ``,
     ].join("\n"),
-    "utf-8",
   );
 }
 
@@ -423,43 +427,35 @@ function buildResultLines(params: WriteTaskRunArtifactsParams): string[] {
 export async function writeTaskRunArtifacts(
   params: WriteTaskRunArtifactsParams,
 ): Promise<void> {
-  await fs.writeFile(
+  await params.storage.files.write_file_atomically(
     params.filePaths.outputMdPath,
     [`# Task Output`, ``, params.outputText ? params.outputText : "_(empty output)_", ``].join(
       "\n",
     ),
-    "utf-8",
   );
 
   if (params.status === "failure") {
-    await fs.writeFile(
+    await params.storage.files.write_file_atomically(
       params.filePaths.errorMdPath,
       [`# Task Error`, ``, params.errorText || "Unknown error", ``].join("\n"),
-      "utf-8",
     );
   } else {
-    try {
-      await fs.remove(params.filePaths.errorMdPath);
-    } catch {
-      // ignore
-    }
+    await params.storage.files.remove_path(params.filePaths.errorMdPath).catch(() => undefined);
   }
 
-  await fs.writeJson(
+  await params.storage.files.write_file_atomically(
     params.filePaths.dialogueJsonPath,
-    {
+    `${JSON.stringify({
       v: 1,
       taskId: params.task.taskId,
       timestamp: params.timestamp,
       maxDialogueRounds: params.maxDialogueRounds,
       rounds: params.dialogueRecords,
-    },
-    { spaces: 2 },
+    }, null, 2)}\n`,
   );
-  await fs.writeFile(
+  await params.storage.files.write_file_atomically(
     params.filePaths.dialogueMdPath,
     buildDialogueLines(params).join("\n"),
-    "utf-8",
   );
 
   const meta: ShipTaskRunMetaV1 = {
@@ -467,6 +463,7 @@ export async function writeTaskRunArtifacts(
     taskId: params.task.taskId,
     timestamp: params.timestamp,
     executionId: params.executionId,
+    agent_id: params.task.frontmatter.agent_id,
     workspace_id: params.task.frontmatter.workspace_id,
     ...(params.task.frontmatter.delivery_session
       ? { delivery_session: params.task.frontmatter.delivery_session }
@@ -493,10 +490,12 @@ export async function writeTaskRunArtifacts(
       ? { error: summarizeText(params.errorText, 800) }
       : {}),
   };
-  await fs.writeJson(params.filePaths.metaJsonPath, meta, { spaces: 2 });
-  await fs.writeFile(
+  await params.storage.files.write_file_atomically(
+    params.filePaths.metaJsonPath,
+    `${JSON.stringify(meta, null, 2)}\n`,
+  );
+  await params.storage.files.write_file_atomically(
     params.filePaths.resultMdPath,
     buildResultLines(params).join("\n"),
-    "utf-8",
   );
 }

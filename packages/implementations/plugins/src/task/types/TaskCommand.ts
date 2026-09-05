@@ -97,6 +97,8 @@ export type TaskListItemView = {
   status: string;
   /** 当前是否正在执行。 */
   running?: boolean;
+  /** 任务唯一绑定的执行 Agent。 */
+  agent_id: string;
   /** 任务唯一绑定的执行 Workspace。 */
   workspace_id: string;
   /** 创建 Task 时由调用上下文自动捕获的结果交付 Session。 */
@@ -213,8 +215,16 @@ export interface TaskRunDetailResponse {
 }
 
 export type TaskRunRequest = {
+  /** 要执行的 Task 唯一标题。 */
   title: string;
+  /** 手动执行原因；scheduler 触发时通常省略。 */
   reason?: string;
+  /**
+   * TaskPlugin scheduler 注入的内部触发来源。
+   *
+   * 该字段不进入 Agent 可见 JSON Schema；普通调用省略时固定视为 manual。
+   */
+  scheduler_trigger?: "cron" | "time";
 };
 
 export type TaskRunResponse = {

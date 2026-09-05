@@ -8,7 +8,7 @@
  * - 把最终产物写入 run 目录的具体格式委托给 `TaskRunArtifacts.ts`。
  */
 
-import type { PluginContext, PluginNotificationPublisher } from "@downcity/city/plugin";
+import type { PluginContext, PluginNotificationPublisher, PluginStorage } from "@downcity/city/plugin";
 import type {
   DialogueRoundRecord,
   UserSimulatorDecision,
@@ -74,10 +74,11 @@ function buildTaskExecutionFailureText(params: {
  */
 export async function runTaskNow(params: {
   context: PluginContext;
+  /** TaskPlugin 生命周期级统一存储。 */
+  storage: PluginStorage;
   taskId: string;
   trigger: ShipTaskRunTriggerV1;
   executionId?: string;
-  data_path?: string;
   /** Task 完成后使用的可选宿主通知端口。 */
   notifications?: PluginNotificationPublisher;
   /** 发起该任务的 Session step 已提交生效的 env 快照。 */
@@ -102,14 +103,17 @@ export async function runTaskNow(params: {
   runDirRel: string;
 }> {
   const context = params.context;
-  const root = String(params.data_path || context.storage.path || "").trim();
-  if (!root) throw new Error("data_path is required");
+  const root = String(params.storage.path || "").trim();
+  if (!root) throw new Error("Task storage path is required");
 
   const startedAt = Date.now();
   const timestamp = formatTaskRunTimestamp(new Date(startedAt));
   const executionId = String(params.executionId || `${params.taskId}:${timestamp}`).trim();
 
-  const task = await readTask({ taskId: params.taskId, data_path: root });
+  const task = await readTask({ taskId: params.taskId, storage: params.storage });
+  if (task.frontmatter.agent_id !== context.agent.id) {
+    throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${context.agent.id}`);
+  }
   if (task.frontmatter.workspace_id !== context.workspace.id) {
     throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${context.workspace.id}`);
   }
@@ -117,7 +121,7 @@ export async function runTaskNow(params: {
   const { runDirRel } = await ensureRunDir({
     taskId: task.taskId,
     timestamp,
-    data_path: root,
+    storage: params.storage,
   });
   const filePaths = createTaskRunFilePaths(runDirAbs);
 
@@ -130,6 +134,7 @@ export async function runTaskNow(params: {
         : DEFAULT_SINGLE_ROUND
       : DEFAULT_SINGLE_ROUND;
   const runProgress = createRunProgressWriter({
+    storage: params.storage,
     progressJsonPath: filePaths.progressJsonPath,
     taskId: task.taskId,
     timestamp,
@@ -140,6 +145,7 @@ export async function runTaskNow(params: {
   });
 
   await writeTaskRunInputArtifact({
+    storage: params.storage,
     task,
     executionId,
     taskKind,
@@ -190,6 +196,7 @@ export async function runTaskNow(params: {
   } else {
     const taskSessionRuntime = await createTaskSessionRuntimePort({
       context,
+      storage: params.storage,
       runDirAbs,
       runSessionId,
       userSimulatorSessionId,
@@ -434,6 +441,7 @@ export async function runTaskNow(params: {
   const endedAt = Date.now();
 
   await writeTaskRunArtifacts({
+    storage: params.storage,
     task,
     executionId,
     timestamp,

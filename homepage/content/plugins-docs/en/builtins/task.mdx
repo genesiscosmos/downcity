@@ -29,7 +29,7 @@ Use `task` when you need:
 
 ## How users use it
 
-Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Sidebar uses an `Agent → Task → runs` tree: clicking a Task opens its definition, while expanding it loads runs. The Mainview can create, edit, enable, pause, run, and delete Tasks and display run details. Workspace is a Task-level execution setting rather than a page filter. This workspace reads the selected Agent's real Task runtime and existing run artifacts instead of copying state.
+Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Sidebar uses an `Agent → Task → runs` tree: clicking a Task opens its definition, while expanding it loads runs. The Mainview can create, edit, enable, pause, run, and delete Tasks and display run details. Task definitions and Runs share TaskPlugin's City lifecycle storage; `agent_id` and `workspace_id` are execution targets rather than storage partitions.
 
 A successful or failed Task Run publishes an unread notification after its artifacts are persisted; skipped runs do not notify. Notifications aggregate to the latest unread Run for the same Task and Agent. Desktop reflects that state on the Task icon, Task item, matching Run, and system app badge, and marks it read when the Run is opened.
 
@@ -74,14 +74,14 @@ The action names are `list`, `history`, `run_detail`, `create`, `run`, `delete`,
 
 ## Important semantics
 
-- the cron scheduler starts lazily when Task first participates in an execution scope and is released by TaskPlugin's City lifecycle
+- the cron scheduler restores the unified Store during TaskPlugin initialize and is released by TaskPlugin's City lifecycle
 - cron timezone comes from constructor `timezone`, defaulting to the local machine timezone
 - agent tasks read the effective runtime model from the Session port in PluginContext
 - each run creates an independent task Session while reusing the host Agent's complete Plugin capabilities
-- `workspace_id` is the Task's execution setting, and the scheduler registers it only in that Workspace
+- `agent_id` and `workspace_id` are Task execution settings; the matching execution context is entered only when a trigger fires
 - Session-scoped `create` automatically stores the current `(origin.type, session_id)` and appends completed results to that Session
 - Tasks created from CLI, HTTP, or host management surfaces without a Session context have no delivery target, so results remain in run history
-- task scheduler reload is triggered after create, update, delete, or status mutation
+- create, update, delete, and status commits reconcile the scheduler incrementally by `task_id`
 - the running-task lock belongs to the plugin instance, so reloads still keep each task serial
 
 ## Public status
