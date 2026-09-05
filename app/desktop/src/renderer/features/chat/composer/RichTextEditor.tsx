@@ -16,6 +16,7 @@ import type { RichTextEditorProps } from "@/types/ChatComponents";
 import { ChatAttachmentNode, ChatReferenceNode } from "@/features/chat/composer/editor/ChatComposerNodes";
 import { ChatSlashMenu } from "@/features/chat/composer/editor/ChatSlashMenu";
 import { is_chat_composer_empty, resolve_chat_input_command } from "@/features/chat/composer/editor/chatComposerCodec";
+import { should_restore_editor_draft } from "@/features/chat/composer/editor/draftSync";
 import { add_chat_reference_listener } from "@/features/chat/composer/editor/chatReferenceEvent";
 import { add_chat_mention_listener } from "@/features/chat/composer/editor/chatMentionEvent";
 import { translate, use_translation } from "@/locales/i18n";
@@ -58,6 +59,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
   const draft_sync_timeout_ref = useRef<number | null>(null);
   const pending_draft_sync_ref = useRef<PendingDraftSync | undefined>(undefined);
   const locally_published_draft_ref = useRef<JSONContent | undefined>(undefined);
+  const loaded_editor_key_ref = useRef(props.editor_key);
   const props_ref = useRef(props);
   props_ref.current = props;
   const [submitting, set_submitting] = useState(false);
@@ -267,11 +269,13 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
 
   useEffect(() => {
     if (!editor) return;
-    if (props.draft_content === locally_published_draft_ref.current) return;
+    if (!should_restore_editor_draft(loaded_editor_key_ref.current, props.editor_key, props.draft_content, locally_published_draft_ref.current)) return;
     discard_pending_draft();
     syncing_ref.current = true;
     editor.commands.setContent(props.draft_content);
     syncing_ref.current = false;
+    loaded_editor_key_ref.current = props.editor_key;
+    locally_published_draft_ref.current = undefined;
     set_input_empty(is_chat_composer_empty(props.draft_content));
     set_slash_query(undefined);
     set_file_query(undefined);
