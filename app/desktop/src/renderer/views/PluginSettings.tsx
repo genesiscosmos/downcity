@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";
 import { cn } from "@/lib/utils";
-import type { DesktopViewController } from "@/types/DesktopView";
+import type { DesktopActions } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";
 
 /** 为一个声明 Config 的 Plugin 管理 Profile 并渲染配置正文。 */
 export function PluginConfigPanel({ controller, plugin, definition, set_definition }: {
-  /** Renderer 根控制器。 */ readonly controller: DesktopViewController;
+  /** Renderer 稳定操作集合。 */ readonly controller: DesktopActions;
   /** 当前 Plugin。 */ readonly plugin: DesktopPluginSummary;
   /** 已加载的完整 Plugin 定义。 */ readonly definition?: DesktopPluginDefinition;
   /** 更新详情页持有的 Plugin 定义。 */ readonly set_definition: (definition: DesktopPluginDefinition) => void;

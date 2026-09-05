@@ -6,7 +6,7 @@
  */
 
 import type { DesktopGroupSummary } from "@common/types/DesktopApi";
-import type { DesktopViewController } from "@/types/DesktopView";
+import type { DesktopWorkspaceGroupSession } from "@/types/DesktopView";
 
 /** 更新一个 Group 中指定 GroupSession 的 canonical 标题。 */
 export function update_group_session_title(
@@ -26,11 +26,11 @@ export function update_group_session_title(
 
 /** 更新按 Workspace 建立的 GroupSession 导航投影。 */
 export function update_group_session_title_index(
-  current: DesktopViewController["group_sessions_by_workspace"],
+  current: Record<string, DesktopWorkspaceGroupSession[]>,
   group_id: string,
   session_id: string,
   title: string,
-): DesktopViewController["group_sessions_by_workspace"] {
+): Record<string, DesktopWorkspaceGroupSession[]> {
   return Object.fromEntries(Object.entries(current).map(([workspace_id, entries]) => [
     workspace_id,
     entries.map((entry) => entry.group_id === group_id

@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { update_group_session_title, update_group_session_title_index } from "../src/renderer/lib/group/group_session_projection.ts";
+import { same_group_member_statuses } from "../src/renderer/lib/group/group_runtime_projection.ts";
 import type { DesktopGroupSummary } from "../src/common/types/DesktopApi.ts";
 import type { DesktopViewController } from "../src/renderer/types/DesktopView.ts";
 
@@ -35,4 +36,12 @@ test("非当前 GroupSession 的 title 事件也会同步到 Workspace 索引", 
   assert.equal(updated["workspace-a"][0].group.sessions[1].title, "后台生成标题");
   assert.equal(updated["workspace-b"][0].session.title, "后台生成标题");
   assert.equal(updated["workspace-b"][0].session.preview_text, "另一条回复");
+});
+
+test("Group 成员运行态只在有序字段实际变化时失效", () => {
+  const current = [{ agent_id: "builder", running: true }, { agent_id: "reviewer", running: false }];
+  assert.equal(same_group_member_statuses(current, current), true);
+  assert.equal(same_group_member_statuses(current, current.map((status) => ({ ...status }))), true);
+  assert.equal(same_group_member_statuses(current, [...current].reverse()), false);
+  assert.equal(same_group_member_statuses(current, [{ ...current[0], running: false }, current[1]]), false);
 });

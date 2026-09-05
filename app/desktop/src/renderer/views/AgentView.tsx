@@ -41,7 +41,8 @@ import {
 } from "@/layouts/MainViewLayout";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import type { DesktopViewController } from "@/types/DesktopView";
+import { use_desktop_selector } from "@/hooks/use_desktop_controller";
+import type { DesktopController } from "@/types/DesktopView";
 import type {
   DesktopAgentDefinition,
   DesktopAgentSummary,
@@ -62,7 +63,7 @@ interface AgentViewProps {
     workspace_id: string;
     session: DesktopSessionSummary;
   };
-  /** Renderer 根控制器。 */ controller: DesktopViewController;
+  /** Renderer 稳定控制器。 */ controller: DesktopController;
   /** 打开主 Session 对话。 */ open_main_session(): Promise<void>;
   /** 打开 Agent 信息编辑面板。 */ open_config(
     section: AgentEditorSection,
@@ -78,7 +79,7 @@ interface AgentInfoSidebarProps {
   /** 当前可用 Plugin。 */
   plugins: DesktopPluginSummary[];
   /** Renderer 根控制器。 */
-  controller: DesktopViewController;
+  controller: DesktopController;
   /** 关闭信息侧栏。 */
   close_sidebar(): void;
   /** 当前配置分区。 */
@@ -114,7 +115,7 @@ export function AgentInfoSidebar({
     set_loading_definition(true);
     set_editor_error("");
     try {
-      set_definition(await controller.get_agent(agent.agent_id));
+      set_definition(await controller.actions.get_agent(agent.agent_id));
     } catch (reason) {
       set_editor_error(
         reason instanceof Error ? reason.message : String(reason),
@@ -129,7 +130,7 @@ export function AgentInfoSidebar({
     set_definition_dirty(false);
     set_editor_error("");
     set_loading_definition(true);
-    void controller.get_agent(agent.agent_id).then((next_definition) => {
+    void controller.actions.get_agent(agent.agent_id).then((next_definition) => {
       if (!disposed) set_definition(next_definition);
     }).catch((reason) => {
       if (!disposed) set_editor_error(reason instanceof Error ? reason.message : String(reason));
@@ -137,7 +138,7 @@ export function AgentInfoSidebar({
       if (!disposed) set_loading_definition(false);
     });
     return () => { disposed = true; };
-  }, [agent.agent_id, controller.get_agent]);
+  }, [agent.agent_id, controller.actions]);
   const update_definition = (value: DesktopAgentDefinition) => {
     definition_version_ref.current += 1;
     set_definition(value);
@@ -153,7 +154,7 @@ export function AgentInfoSidebar({
           reference.profile ? { profile: reference.profile.trim() } : {},
         ]),
       );
-      void controller
+      void controller.actions
         .update_agent(agent.agent_id, {
           name: definition.name,
           description: definition.description,
@@ -172,7 +173,7 @@ export function AgentInfoSidebar({
         );
     }, 500);
     return () => window.clearTimeout(timeout_id);
-  }, [agent.agent_id, controller.update_agent, definition, definition_dirty]);
+  }, [agent.agent_id, controller.actions, definition, definition_dirty]);
   const titles: Record<AgentEditorSection, string> = {
     identity: "身份",
     model: "Model",
@@ -341,7 +342,7 @@ export function AgentView({
           <DialogFooter>
             <Button
               onClick={() =>
-                void controller.generate_agent_avatar(agent.agent_id)
+                void controller.actions.generate_agent_avatar(agent.agent_id)
               }
             >
               随机头像
@@ -349,7 +350,7 @@ export function AgentView({
             <Button
               variant="primary"
               onClick={() =>
-                void controller.choose_agent_avatar(agent.agent_id)
+                void controller.actions.choose_agent_avatar(agent.agent_id)
               }
             >
               选择图片
@@ -402,7 +403,7 @@ function AgentEditorPanel({
   /** 当前编辑分区。 */ section: AgentEditorSection;
   /** 当前未提交定义。 */ definition?: DesktopAgentDefinition;
   /** 可注册的全部 Plugin。 */ plugins: DesktopPluginSummary[];
-  /** Renderer 根控制器。 */ controller: DesktopViewController;
+  /** Renderer 稳定控制器。 */ controller: DesktopController;
   /** 是否正在读取定义。 */ loading: boolean;
   /** 当前编辑错误。 */ error: string;
   /** 替换未提交定义。 */ set_definition(value: DesktopAgentDefinition): void;
@@ -474,15 +475,15 @@ function AgentEditorPanel({
 }
 
 /** 编辑 Agent 的头像、用户可见名称与简介。 */
-function IdentityEditor({ agent, controller, definition, set_definition }: { /** 当前 Agent 展示摘要。 */ agent: DesktopAgentSummary; /** Renderer 根控制器。 */ controller: DesktopViewController; /** 当前 Agent 定义。 */ definition: DesktopAgentDefinition; /** 替换未提交定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
+function IdentityEditor({ agent, controller, definition, set_definition }: { /** 当前 Agent 展示摘要。 */ agent: DesktopAgentSummary; /** Renderer 稳定控制器。 */ controller: DesktopController; /** 当前 Agent 定义。 */ definition: DesktopAgentDefinition; /** 替换未提交定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
   return <div className="flex flex-col gap-5 p-3">
     <div className="flex flex-col items-center gap-2.5 py-2">
-      <button type="button" onClick={() => void controller.choose_agent_avatar(definition.agent_id)} className="rounded-2xl transition-opacity duration-150 hover:opacity-80" title="选择头像图片">
+      <button type="button" onClick={() => void controller.actions.choose_agent_avatar(definition.agent_id)} className="rounded-2xl transition-opacity duration-150 hover:opacity-80" title="选择头像图片">
         <AgentAvatar agent={agent} class_name="size-16 rounded-2xl" icon_class_name="size-8" />
       </button>
       <div className="flex items-center gap-1">
-        <Button className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={() => void controller.generate_agent_avatar(definition.agent_id)}><TbRefresh />随机</Button>
-        <Button className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={() => void controller.choose_agent_avatar(definition.agent_id)}><TbPhoto />选择图片</Button>
+        <Button className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={() => void controller.actions.generate_agent_avatar(definition.agent_id)}><TbRefresh />随机</Button>
+        <Button className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={() => void controller.actions.choose_agent_avatar(definition.agent_id)}><TbPhoto />选择图片</Button>
       </div>
     </div>
     <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">名称</span><input value={definition.name} className="h-9 rounded-lg border border-input bg-background px-3 text-sm" onChange={(event) => set_definition({ ...definition, name: event.target.value })} /></label>
@@ -491,14 +492,14 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
 }
 
 /** 使用独立确认 Dialog 永久删除 Agent。 */
-function DeleteAgentButton({ agent, controller }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Renderer 根控制器。 */ controller: DesktopViewController }) {
+function DeleteAgentButton({ agent, controller }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Renderer 稳定控制器。 */ controller: DesktopController }) {
   const [open, set_open] = useState(false);
   const [removing, set_removing] = useState(false);
   const [error, set_error] = useState("");
   const remove_agent = async () => {
     set_removing(true);
     set_error("");
-    try { await controller.remove_agent(agent.agent_id); set_open(false); }
+    try { await controller.actions.remove_agent(agent.agent_id); set_open(false); }
     catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); }
     finally { set_removing(false); }
   };
@@ -512,15 +513,17 @@ function ModelEditor({
   set_definition,
 }: {
   /** 未提交定义。 */ definition: DesktopAgentDefinition;
-  /** Renderer 根控制器。 */ controller: DesktopViewController;
+  /** Renderer 稳定控制器。 */ controller: DesktopController;
   /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void;
 }) {
-  const text_models = controller.models.filter((model) =>
+  const models = use_desktop_selector(controller.stores.catalog, (state) => state.models);
+  const models_loading = use_desktop_selector(controller.stores.catalog, (state) => state.models_loading);
+  const text_models = models.filter((model) =>
     model.modalities.some((modality) =>
       ["text", "stream", "openai"].includes(modality),
     ),
   );
-  if (controller.models_loading && text_models.length === 0)
+  if (models_loading && text_models.length === 0)
     return (
       <div className="py-8 text-center text-xs text-muted-foreground">
         模型加载中…
@@ -566,10 +569,11 @@ function SoulEditor({
   set_definition,
 }: {
   /** 未提交定义。 */ definition: DesktopAgentDefinition;
-  /** Renderer 根控制器。 */ controller: DesktopViewController;
+  /** Renderer 稳定控制器。 */ controller: DesktopController;
   /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void;
 }) {
   const editor_ref = useRef<HTMLDivElement>(null);
+  const spellcheck_enabled = use_desktop_selector(controller.stores.settings, (state) => state.settings.spellcheck_enabled);
   useEffect(() => {
     const editor = editor_ref.current;
     if (editor && editor.innerText !== definition.instruction)
@@ -584,7 +588,7 @@ function SoulEditor({
       aria-label="SOUL.md 内容"
       aria-multiline="true"
       autoFocus
-      spellCheck={controller.settings.spellcheck_enabled}
+      spellCheck={spellcheck_enabled}
       data-placeholder="开始编辑 SOUL.md…"
       className="h-full min-h-full w-full overflow-y-auto bg-transparent p-3 font-mono text-xs leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground/50 empty:before:content-[attr(data-placeholder)]"
       onInput={(event) =>
@@ -606,7 +610,7 @@ function PluginEditor({
 }: {
   /** 未提交定义。 */ definition: DesktopAgentDefinition;
   /** 可用 Plugin。 */ plugins: DesktopPluginSummary[];
-  /** Desktop 根控制器。 */ controller: DesktopViewController;
+  /** Desktop 稳定控制器。 */ controller: DesktopController;
   /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void;
 }) {
   const [missing_profile_plugin, set_missing_profile_plugin] =
@@ -624,7 +628,7 @@ function PluginEditor({
     const plugin_id = pending_profile_plugin_id;
     set_missing_profile_plugin(undefined);
     set_pending_profile_plugin_id(undefined);
-    if (plugin_id) controller.select_plugin(plugin_id);
+    if (plugin_id) controller.actions.select_plugin(plugin_id);
   };
   const set_plugin = (plugin: DesktopPluginSummary, enabled: boolean) => {
     const next_plugins = { ...definition.plugins };

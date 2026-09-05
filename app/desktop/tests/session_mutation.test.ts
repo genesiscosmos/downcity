@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionAssistantMessage, SessionMutation, SessionUserMessage } from "@downcity/agent";
-import { apply_session_mutation, merge_session_snapshot } from "../src/renderer/lib/chat/session_mutation.ts";
+import { apply_session_mutation, apply_session_mutations, merge_session_snapshot } from "../src/renderer/lib/chat/session_mutation.ts";
 
 const assistant_message: SessionAssistantMessage = {
   message_id: "assistant-1",
@@ -87,4 +87,54 @@ test("用户消息与 assistant delta 通过同一 mutation 流连续投影", ()
   assert.deepEqual(updated.map((message) => message.message_id), ["user-1", "assistant-1"]);
   assert.equal(updated[1].type === "assistant" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好");
   assert.equal(updated[1].type === "assistant" ? updated[1].status : "", "streaming");
+});
+
+test("同一帧的多个 delta 只生成一次最终消息投影", () => {
+  const mutations: SessionMutation[] = [
+    {
+      mutation_id: "mutation-batch-1",
+      session_id: "session-1",
+      created_at: 2,
+      variant: "delta",
+      type: "text",
+      message_id: "assistant-1",
+      turn_id: "turn-1",
+      revision: 2,
+      part_id: "text-1",
+      delta: "好",
+    },
+    {
+      mutation_id: "mutation-batch-2",
+      session_id: "session-1",
+      created_at: 3,
+      variant: "delta",
+      type: "text",
+      message_id: "assistant-1",
+      turn_id: "turn-1",
+      revision: 3,
+      part_id: "text-1",
+      delta: "！",
+    },
+  ];
+  const updated = apply_session_mutations([user_message, assistant_message], mutations);
+  assert.equal(updated[0], user_message);
+  assert.equal(updated[1].revision, 3);
+  assert.equal(updated[1].type === "assistant" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好！");
+});
+
+test("批量投影在全部 mutation 无效时保留消息数组引用", () => {
+  const messages = [assistant_message];
+  const unchanged = apply_session_mutations(messages, [{
+    mutation_id: "mutation-invalid",
+    session_id: "session-1",
+    created_at: 2,
+    variant: "delta",
+    type: "text",
+    message_id: "missing-message",
+    turn_id: "turn-1",
+    revision: 2,
+    part_id: "text-1",
+    delta: "无效",
+  }]);
+  assert.equal(unchanged, messages);
 });

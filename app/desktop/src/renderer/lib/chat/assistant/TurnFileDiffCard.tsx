@@ -4,23 +4,51 @@
  * 数据只来自 canonical Assistant data part；组件不访问 Git，也不根据 Tool 日志推断改动。
  */
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { SessionTurnFileDiff, SessionTurnFileDiffData } from "@downcity/agent/session";
-import { TbChevronDown, TbChevronRight, TbChevronUp, TbFileDiff } from "react-icons/tb";
+import { TbCheck, TbChevronDown, TbChevronRight, TbChevronUp, TbDots, TbExternalLink, TbFileDiff, TbLink } from "react-icons/tb";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { BayBar } from "@/layouts/BayBar";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_VISIBLE_FILE_COUNT = 3;
 const TurnFileDiffReviewContext = createContext<((data: SessionTurnFileDiffData) => void) | null>(null);
+/** diff 文件项的打开动作与链接上下文。 */
+interface TurnFileOpenAction {
+  /** 在主视图 Workspace 中打开指定相对路径文件。 */
+  open_file(relative_path: string): void;
+  /** Workspace 绝对路径；用于构造可粘贴的 file 链接。 */
+  workspace_path?: string;
+}
+const TurnFileOpenContext = createContext<TurnFileOpenAction | null>(null);
+
+/** 在消息区域为 diff 文件项注入“在主视图 Workspace 中打开”动作与链接上下文。 */
+export function TurnFileOpenProvider({ open_file, workspace_path, children }: { /** 打开指定相对路径文件；不提供时不渲染文件操作。 */ open_file?: (relative_path: string) => void; /** Workspace 绝对路径；用于复制文件链接。 */ workspace_path?: string; /** 消息渲染内容。 */ children: ReactNode }) {
+  const value = useMemo<TurnFileOpenAction | null>(() => open_file ? { open_file, workspace_path } : null, [open_file, workspace_path]);
+  return <TurnFileOpenContext.Provider value={value}>{children}</TurnFileOpenContext.Provider>;
+}
+
+/** 读取 diff 文件项的打开动作；未注入时为空。 */
+function use_turn_file_open(): TurnFileOpenAction | undefined {
+  return useContext(TurnFileOpenContext) ?? undefined;
+}
+
+/** 构造可在输入框粘贴并解析回 Workspace 文件的 file 链接。 */
+function build_file_link(workspace_path: string | undefined, relative_path: string): string {
+  if (!workspace_path) return relative_path;
+  const root = workspace_path.replace(/\\/g, "/").replace(/\/+$/, "");
+  const absolute_path = root.startsWith("/") ? `${root}/${relative_path}` : `/${root}/${relative_path}`;
+  return `file://${encodeURI(absolute_path)}`;
+}
 
 /** 在应用主视图中统一持有本轮 Diff 审核侧栏。 */
 export function TurnFileDiffReviewHost({ children }: { /** Desktop 当前主视图。 */ children: ReactNode }) {
   const [review_data, set_review_data] = useState<SessionTurnFileDiffData>();
   const [open, set_open] = useState(false);
-  const open_review = (data: SessionTurnFileDiffData) => {
+  const open_review = useCallback((data: SessionTurnFileDiffData) => {
     set_review_data(data);
     set_open(true);
-  };
+  }, []);
   return <TurnFileDiffReviewContext.Provider value={open_review}>
     <div className="flex h-full min-h-0 min-w-0 flex-1">
       <div className="flex h-full min-w-0 flex-1 flex-col">{children}</div>
@@ -68,11 +96,23 @@ function TurnFileDiffReviewPanel({ data }: { /** 当前 Turn 的 canonical 文�
 /** 展示一个可折叠文件 patch，并按 diff 行语义着色。 */
 function FilePatch({ file, variant, default_open = false }: { /** 单个文件差异。 */ file: SessionTurnFileDiff; /** 当前位于消息卡片或审核侧栏。 */ variant: "inline" | "review"; /** 初始是否展开。 */ default_open?: boolean }) {
   const [open, set_open] = useState(default_open);
+  const [copied, set_copied] = useState(false);
+  const open_action = use_turn_file_open();
   const lines = file.patch ? file.patch.split("\n") : ["二进制文件已更改"];
+  const copy_link = async () => {
+    if (!open_action) return;
+    await navigator.clipboard.writeText(build_file_link(open_action.workspace_path, file.file));
+    set_copied(true);
+    window.setTimeout(() => set_copied(false), 1200);
+  };
   return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={cn("group/file shrink-0 overflow-hidden", variant === "review" && "overflow-hidden rounded-lg border border-border-subtle bg-background")}>
     <summary className={cn("flex min-h-9 cursor-pointer list-none items-center gap-2.5 px-3 py-1.5 outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover [&::-webkit-details-marker]:hidden", variant === "review" && "bg-foreground/[0.025]")}>
       <TbChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/file:rotate-90" aria-hidden />
       <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] font-medium text-foreground/80" title={file.file}>{file.file}</span>
+      {open_action ? <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/file:opacity-100 focus-within:opacity-100">
+        <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); open_action.open_file(file.file); }} className="flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-[1.65]" title="在主视图 Workspace 中打开" aria-label={`在主视图 Workspace 中打开 ${file.file}`}><TbExternalLink aria-hidden /></button>
+        <DropdownMenu><DropdownMenuTrigger asChild><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); }} className="flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-[1.65]" title="更多操作" aria-label={`${file.file} 更多操作`}>{copied ? <TbCheck aria-hidden /> : <TbDots aria-hidden />}</button></DropdownMenuTrigger><DropdownMenuContent align="end" side="top" sideOffset={4}><DropdownMenuItem onClick={() => void copy_link()}><TbLink className="size-3.5" /><span>{copied ? "已复制" : "复制链接"}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+      </span> : null}
       <DiffStats additions={file.additions} deletions={file.deletions} compact />
     </summary>
     <div className={cn("overflow-x-auto border-t border-border/45 py-1 font-mono text-[0.6875rem] leading-[1.55]", variant === "inline" && "max-h-80")}>

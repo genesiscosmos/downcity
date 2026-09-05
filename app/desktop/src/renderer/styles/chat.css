@@ -1,5 +1,11 @@
 /* Duobox Chat 的消息、Markdown、Tool 活动与输入状态样式。 */
 
+/* 保留消息 DOM、查找和文本选择语义，仅跳过离屏静态行的布局与绘制。 */
+.chat-message-viewport-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
 .chat-markdown {
   color: var(--foreground);
   font-size: 0.8125rem;

@@ -1,6 +1,6 @@
 /** Chat MainView 内统一的 Session 导航项与操作菜单。 */
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { TbDots, TbLoader2 } from "react-icons/tb";
 import { SessionActionsMenu } from "@/components/session/SessionActionsMenu";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ interface SessionListRowProps {
 }
 
 /** 统一 Session 行的尺寸、状态、键盘交互与右侧操作区域。 */
-export function SessionListRow({ title, active, on_select, leading, menu, reserve_menu_space = true }: SessionListRowProps) {
+export const SessionListRow = memo(function SessionListRow({ title, active, on_select, leading, menu, reserve_menu_space = true }: SessionListRowProps) {
   return (
     <div
       role={on_select ? "button" : undefined}
@@ -59,10 +59,10 @@ export function SessionListRow({ title, active, on_select, leading, menu, reserv
       {menu || reserve_menu_space ? <span className="flex size-6 shrink-0 items-center justify-center">{menu}</span> : null}
     </div>
   );
-}
+});
 
 /** 带完整 Agent Session 操作能力的标准行。 */
-export function SessionListItem({ session, active, unread, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
+export const SessionListItem = memo(function SessionListItem({ session, active, unread, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
   const has_status = session.executing || unread;
   return <SessionListRow title={session.title || "新对话"} active={active} on_select={on_select} menu={
     <SessionActionsMenu session={session} on_rename={on_rename} on_archive={on_archive} on_remove={on_remove} trigger={
@@ -81,4 +81,4 @@ export function SessionListItem({ session, active, unread, on_select, on_rename,
           </Button>
     } />
   } />;
-}
+});

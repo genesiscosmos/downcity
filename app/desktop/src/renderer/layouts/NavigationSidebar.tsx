@@ -1,11 +1,12 @@
 /** Downcity Desktop 的可切换业务 Sidebar。 */
 
-import { useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { TbSettings, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
-import type { DesktopViewController } from "@/types/DesktopView";
+import type { DesktopController } from "@/types/DesktopView";
+import { use_desktop_selector } from "@/hooks/use_desktop_controller";
 import { SHELL_PANEL_TRANSITION, SHELL_SIDEBAR_DEFAULT_WIDTH, SHELL_SIDEBAR_MAX_WIDTH, SHELL_SIDEBAR_MIN_WIDTH } from "./shellMotion";
 import { ChatSidebar } from "./sidebar/ChatSidebar";
 import { PluginSidebar } from "./sidebar/PluginSidebar";
@@ -17,7 +18,7 @@ import { has_unread_chat_notification, has_unread_plugin_notification } from "@/
 /** 左侧导航面板属性。 */
 interface NavigationSidebarProps {
   /** Renderer 根状态与操作入口。 */
-  controller: DesktopViewController;
+  controller: DesktopController;
   /** 打开创建 Agent 表单。 */
   open_create_agent(workspace_id?: string): void;
   /** 打开创建 Group 页面。 */
@@ -54,16 +55,21 @@ export function SidebarContainer({ children, collapsed = false }: { /** Sidebar 
 }
 
 /** Agent 与 Session 的 Duobox 导航视图。 */
-export function NavigationSidebar({ controller, open_create_agent, open_create_group, open_create_workspace, open_group_config, collapsed = false }: NavigationSidebarProps) {
-  const plugin_workspaces = controller.plugins.filter((plugin) => plugin.has_sidebar && plugin.has_mainview);
-  const unread_modes = [
-    ...(has_unread_chat_notification(controller.notification_state) ? ["chat" as const] : []),
+export const NavigationSidebar = memo(function NavigationSidebar({ controller, open_create_agent, open_create_group, open_create_workspace, open_group_config, collapsed = false }: NavigationSidebarProps) {
+  const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
+  const sidebar_mode = use_desktop_selector(controller.stores.navigation, (state) => state.sidebar_mode);
+  const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
+  const user = use_desktop_selector(controller.stores.settings, (state) => state.user);
+  const notification_state = use_desktop_selector(controller.stores.notification, (state) => state);
+  const plugin_workspaces = useMemo(() => plugins.filter((plugin) => plugin.has_sidebar && plugin.has_mainview), [plugins]);
+  const unread_modes = useMemo(() => [
+    ...(has_unread_chat_notification(notification_state) ? ["chat" as const] : []),
     ...plugin_workspaces
-      .filter((plugin) => has_unread_plugin_notification(controller.notification_state, plugin.plugin_id))
+      .filter((plugin) => has_unread_plugin_notification(notification_state, plugin.plugin_id))
       .map((plugin) => `plugin:${plugin.plugin_id}` as const),
-  ];
-  const workspace_plugin_id = controller.sidebar_mode.startsWith("plugin:")
-    ? controller.sidebar_mode.slice("plugin:".length)
+  ], [notification_state, plugin_workspaces]);
+  const workspace_plugin_id = sidebar_mode.startsWith("plugin:")
+    ? sidebar_mode.slice("plugin:".length)
     : undefined;
   return <SidebarContainer collapsed={collapsed}>
     <div className="relative flex h-10 shrink-0 items-center">
@@ -72,14 +78,14 @@ export function NavigationSidebar({ controller, open_create_agent, open_create_g
       </div>
     </div>
     <div className="flex min-h-0 flex-1 overflow-hidden">
-      <div className="flex min-h-0 w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={controller.sidebar_mode} on_change={controller.set_sidebar_mode} plugin_workspaces={plugin_workspaces} unread_modes={unread_modes} layout="left" /></div>
+      <div className="flex min-h-0 w-10 shrink-0 flex-col items-center pl-2"><SidebarViewSwitcher active_mode={sidebar_mode} on_change={controller.actions.set_sidebar_mode} plugin_workspaces={plugin_workspaces} unread_modes={unread_modes} layout="left" /></div>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {controller.sidebar_mode === "chat" ? <ChatSidebar controller={controller} open_create_agent={() => open_create_agent()} open_create_group={open_create_group} open_group_config={open_group_config} /> : null}
-        {controller.sidebar_mode === "workspace" ? <WorkspaceSidebar controller={controller} open_create_workspace={open_create_workspace} /> : null}
-        {controller.sidebar_mode === "plugins" ? <PluginSidebar controller={controller} /> : null}
-        {workspace_plugin_id ? <PluginWorkspaceSidebar controller={controller} plugin_id={workspace_plugin_id} /> : null}
+        {sidebar_mode === "chat" ? <ChatSidebar controller={controller} notification_state={notification_state} open_create_agent={() => open_create_agent()} open_create_group={open_create_group} open_group_config={open_group_config} /> : null}
+        {sidebar_mode === "workspace" ? <WorkspaceSidebar controller={controller} open_create_workspace={open_create_workspace} /> : null}
+        {sidebar_mode === "plugins" ? <PluginSidebar controller={controller} /> : null}
+        {workspace_plugin_id ? <PluginWorkspaceSidebar controller={controller} plugin_id={workspace_plugin_id} notification_state={notification_state} /> : null}
       </div>
     </div>
-    <div className="shrink-0 space-y-0.5 px-2 pb-2"><Button size="sidebar" className="rounded-floating-item text-muted-foreground" actived={controller.selection?.kind === "settings"} onClick={() => controller.open_settings("user")}>{controller.user.avatar_url ? <span className="size-5 shrink-0 overflow-hidden rounded-full"><img src={controller.user.avatar_url} alt="" className="size-full object-cover" /></span> : controller.user.authenticated ? <TbUser /> : <TbSettings />}<span className="min-w-0 flex-1 truncate text-left">{controller.user.display_name || controller.user.email || (controller.user.authenticated ? "Downcity 用户" : "设置与登录")}</span><span className={`size-1.5 rounded-full ${controller.user.authenticated ? "bg-emerald-500" : "bg-muted-foreground/25"}`} /></Button></div>
+    <div className="shrink-0 space-y-0.5 px-2 pb-2"><Button size="sidebar" className="rounded-floating-item text-muted-foreground" actived={selection?.kind === "settings"} onClick={() => controller.actions.open_settings("user")}>{user.avatar_url ? <span className="size-5 shrink-0 overflow-hidden rounded-full"><img src={user.avatar_url} alt="" className="size-full object-cover" /></span> : user.authenticated ? <TbUser /> : <TbSettings />}<span className="min-w-0 flex-1 truncate text-left">{user.display_name || user.email || (user.authenticated ? "Downcity 用户" : "设置与登录")}</span><span className={`size-1.5 rounded-full ${user.authenticated ? "bg-emerald-500" : "bg-muted-foreground/25"}`} /></Button></div>
   </SidebarContainer>;
-}
+});

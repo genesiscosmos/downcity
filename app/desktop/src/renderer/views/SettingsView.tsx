@@ -1,7 +1,7 @@
 /** Downcity Desktop 设置与 Federation 用户视图。 */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { TbArrowLeft, TbArrowRight, TbBrandGithub, TbBrandGoogle, TbBrandWechat, TbCheck, TbChevronDown, TbChevronRight, TbCode, TbCoin, TbCopy, TbCpu, TbCurrencyDollar, TbExternalLink, TbInfoCircle, TbLoader2, TbLogin2, TbLogout, TbMail, TbPlugConnected, TbPlus, TbRefresh, TbRotate, TbSwitchHorizontal, TbTicket, TbUser } from "react-icons/tb";
+import { TbArrowLeft, TbArrowRight, TbBrandGithub, TbBrandGoogle, TbBrandWechat, TbCheck, TbChevronDown, TbChevronRight, TbCode, TbCoin, TbCopy, TbCurrencyDollar, TbExternalLink, TbInfoCircle, TbLoader2, TbLogin2, TbLogout, TbMail, TbPlugConnected, TbPlus, TbRefresh, TbRotate, TbSwitchHorizontal, TbTicket, TbUser } from "react-icons/tb";
 import type { IconType } from "react-icons";
 import { LLMModelIcon } from "@/components/model";
 import { ModelPricingChart } from "@/components/model/ModelPricingChart";
@@ -19,13 +19,15 @@ import { build_usage_heatmap, build_usage_trend, current_date_key, sum_heatmap_c
 import { build_model_pricing } from "@/lib/model/model_pricing";
 import { format_model_reasoning, get_default_model_reasoning } from "@/lib/model/model_reasoning";
 import { cn } from "@/lib/utils";
-import type { DesktopViewController, SettingsSection } from "@/types/DesktopView";
+import { use_desktop_selector } from "@/hooks/use_desktop_controller";
+import type { DesktopController, SettingsSection } from "@/types/DesktopView";
 import type { UsagePeriod } from "@/types/DesktopUsage";
+import type { DesktopAccountResources, DesktopLoginProvider, DesktopModelSummary } from "@common/types/DesktopApi";
 
 /** 设置主视图属性。 */
 interface SettingsViewProps {
   /** Renderer 根控制器。 */
-  controller: DesktopViewController;
+  controller: DesktopController;
   /** 当前设置分区。 */
   section: SettingsSection;
   /** 打开 Global Env BayBar 编辑器。 */
@@ -53,11 +55,11 @@ export function SettingsView({ controller, section, open_global_env }: SettingsV
 }
 
 /** 按 Duobox AccountSettings 结构展示账户资料、余额、账户切换与用量。 */
-function UserSettingsExact({ controller }: { controller: DesktopViewController }) {
+function UserSettingsExact({ controller }: { controller: DesktopController }) {
   const [accounts_expanded, set_accounts_expanded] = useState(false);
   const [adding_account, set_adding_account] = useState(false);
-  const resources = controller.account_resources;
-  const account = controller.user;
+  const resources = use_desktop_selector(controller.stores.settings, (state) => state.account_resources);
+  const account = use_desktop_selector(controller.stores.settings, (state) => state.user);
   const name = account.display_name || account.email || account.user_id || "暂无账户";
   const copy_user_id = async () => { if (account.user_id) await navigator.clipboard?.writeText(account.user_id); };
   return <SettingsContainer>
@@ -66,7 +68,7 @@ function UserSettingsExact({ controller }: { controller: DesktopViewController }
       <SettingSection title="Credits"><div className="overflow-hidden divide-y divide-divider rounded-lg bg-surface-subtle"><CreditsRow name="Primary Credits" amount={resources?.credits ? format_credits(resources.credits.available_credits) : "—"} action={<div className="flex items-center gap-1"><Button disabled={!resources?.credits}><TbTicket />兑换</Button><Button variant="primary" disabled={!resources?.credits}><TbCoin />充值</Button></div>} />{resources?.credits?.cards.filter((card) => card.kind === "ephemeral").map((card) => <CreditsRow key={card.card_id} name={card.name} description={card.expires_at ? `有效期至 ${format_date(card.expires_at)}` : undefined} status={card.status === "active" ? undefined : card.status === "depleted" ? "已用尽" : "已过期"} urgent={card.status === "active" && Boolean(card.expires_at && new Date(card.expires_at).getTime() - Date.now() < 7 * 86400000)} amount={format_credits(card.credits)} />)}</div></SettingSection>
       <UsagePanelExact resources={resources} />
       <SettingSection title="账户详情"><SettingGroup><AccountDetailRow label="Federation" value={account.federation_url} /><AccountDetailRow label="用户 ID" value={account.user_id || "—"} /><AccountDetailRow label="最近使用" value={account.user_id ? "当前账户" : "—"} /></SettingGroup></SettingSection>
-      <SettingSection><SettingGroup><SettingActionItemExact label="切换账户" icon={<TbSwitchHorizontal />} trailing={<TbChevronDown className={cn("transition-transform", !accounts_expanded && "-rotate-90")} />} expanded={accounts_expanded} disabled={false} onClick={() => set_accounts_expanded((current) => !current)} />{accounts_expanded ? <div className="p-2"><AccountSwitchListExact controller={controller} on_add={() => set_adding_account(true)} /></div> : null}<SettingActionItemExact label="退出账户" icon={<TbLogout />} destructive onClick={() => void controller.logout()} /></SettingGroup></SettingSection>
+      <SettingSection><SettingGroup><SettingActionItemExact label="切换账户" icon={<TbSwitchHorizontal />} trailing={<TbChevronDown className={cn("transition-transform", !accounts_expanded && "-rotate-90")} />} expanded={accounts_expanded} disabled={false} onClick={() => set_accounts_expanded((current) => !current)} />{accounts_expanded ? <div className="p-2"><AccountSwitchListExact controller={controller} on_add={() => set_adding_account(true)} /></div> : null}<SettingActionItemExact label="退出账户" icon={<TbLogout />} destructive onClick={() => void controller.actions.logout()} /></SettingGroup></SettingSection>
       {adding_account ? <SettingSection title="添加账户"><AccountLoginPanel controller={controller} on_completed={() => set_adding_account(false)} /></SettingSection> : null}
     </>}
   </SettingsContainer>;
@@ -81,12 +83,12 @@ const provider_icons: Record<string, IconType> = {
 };
 
 /** 按 Federation 动态 Provider 执行浏览器授权登录。 */
-function AccountLoginPanel({ controller, on_completed }: { controller: DesktopViewController; on_completed?: () => void }) {
-  const list_login_providers = controller.list_login_providers;
+function AccountLoginPanel({ controller, on_completed }: { controller: DesktopController; on_completed?: () => void }) {
+  const list_login_providers = controller.actions.list_login_providers;
   const [step, set_step] = useState<"providers" | "federation">("providers");
   const [federation_url, set_federation_url] = useState(default_federation_url);
   const [federation_input, set_federation_input] = useState("");
-  const [providers, set_providers] = useState<Awaited<ReturnType<DesktopViewController["list_login_providers"]>>>([]);
+  const [providers, set_providers] = useState<DesktopLoginProvider[]>([]);
   const [loading, set_loading] = useState(true);
   const [starting_provider_id, set_starting_provider_id] = useState("");
   const [error, set_error] = useState("");
@@ -125,7 +127,7 @@ function AccountLoginPanel({ controller, on_completed }: { controller: DesktopVi
     set_starting_provider_id(provider_id);
     set_error("");
     try {
-      await controller.login(federation_url, provider_id);
+      await controller.actions.login(federation_url, provider_id);
       on_completed?.();
     } catch (reason) {
       set_error(reason instanceof Error ? reason.message : String(reason));
@@ -164,9 +166,9 @@ function normalize_login_url(value: string): string {
 function CreditsRow({ name, description, status, urgent, amount, action }: { name: string; description?: string; status?: string; urgent?: boolean; amount: string; action?: ReactNode }) { return <div className="px-3.5 py-3"><div className="flex min-h-8 items-center gap-3"><TbCurrencyDollar className="size-4 shrink-0 text-muted-foreground/65" /><div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-2"><p className="truncate text-[13px] text-foreground/90">{name}</p>{status ? <span className="shrink-0 text-[10px] text-destructive">{status}</span> : null}</div>{description ? <p className={cn("mt-0.5 truncate text-[11px]", urgent ? "text-destructive" : "text-muted-foreground/65")}>{description}</p> : null}</div><p className="shrink-0 text-lg font-semibold tracking-tight text-foreground tabular-nums">{amount}</p></div>{action ? <div className="mt-2 flex justify-end">{action}</div> : null}</div>; }
 function AccountDetailRow({ label, value }: { label: string; value: ReactNode }) { return <div className="flex min-h-12 items-center gap-4 px-3.5 py-2.5"><span className="w-28 shrink-0 text-xs text-muted-foreground">{label}</span><span className="min-w-0 flex-1 truncate text-right text-xs text-foreground/85">{value}</span></div>; }
 function SettingActionItemExact({ label, icon, trailing, destructive, expanded, disabled, onClick }: { label: string; icon: ReactNode; trailing?: ReactNode; destructive?: boolean; expanded?: boolean; disabled?: boolean; onClick(): void }) { return <button type="button" disabled={disabled} aria-expanded={expanded} onClick={onClick} className={cn("flex min-h-12 w-full items-center gap-3 px-3.5 py-2.5 text-left text-xs outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover disabled:pointer-events-none disabled:opacity-50", destructive && "text-destructive")}><span className="flex size-5 items-center justify-center">{icon}</span><span className="min-w-0 flex-1">{label}</span>{trailing}</button>; }
-function AccountSwitchListExact({ controller, on_add }: { controller: DesktopViewController; on_add(): void }) { return <div className="flex min-h-0 flex-col gap-3">{controller.accounts.length > 0 ? <div className="overflow-hidden divide-y divide-divider rounded-lg bg-surface-subtle">{controller.accounts.map((account) => { const label = account.display_name || account.email || account.user_id || account.federation_url; return <button key={account.account_id} type="button" disabled={account.active} className="flex min-h-12 w-full items-center gap-3 px-3.5 py-2 text-left text-xs outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover disabled:opacity-100" onClick={() => void controller.switch_account(account.account_id)}><span className="flex size-7 shrink-0 overflow-hidden rounded-full bg-surface-subtle">{account.avatar_url ? <img src={account.avatar_url} alt={label} className="size-full object-cover" /> : <span className="flex size-full items-center justify-center text-[9px] font-medium text-muted-foreground">{label.slice(0, 1).toUpperCase()}</span>}</span><span className="min-w-0 flex-1"><span className="block truncate text-[13px] text-foreground/90">{label}</span><span className="block truncate text-[11px] text-muted-foreground/70">{account.email || account.user_id || account.federation_url}</span></span>{account.active ? <TbCheck className="size-4 shrink-0 text-foreground/70" /> : null}</button>; })}</div> : <div className="rounded-lg bg-surface-subtle px-4 py-8 text-center text-xs text-muted-foreground">暂无已保存账户</div>}<Button size="sidebar" onClick={on_add}><TbPlus />添加账户</Button></div>; }
+function AccountSwitchListExact({ controller, on_add }: { controller: DesktopController; on_add(): void }) { const accounts = use_desktop_selector(controller.stores.settings, (state) => state.accounts); return <div className="flex min-h-0 flex-col gap-3">{accounts.length > 0 ? <div className="overflow-hidden divide-y divide-divider rounded-lg bg-surface-subtle">{accounts.map((account) => { const label = account.display_name || account.email || account.user_id || account.federation_url; return <button key={account.account_id} type="button" disabled={account.active} className="flex min-h-12 w-full items-center gap-3 px-3.5 py-2 text-left text-xs outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover disabled:opacity-100" onClick={() => void controller.actions.switch_account(account.account_id)}><span className="flex size-7 shrink-0 overflow-hidden rounded-full bg-surface-subtle">{account.avatar_url ? <img src={account.avatar_url} alt={label} className="size-full object-cover" /> : <span className="flex size-full items-center justify-center text-[9px] font-medium text-muted-foreground">{label.slice(0, 1).toUpperCase()}</span>}</span><span className="min-w-0 flex-1"><span className="block truncate text-[13px] text-foreground/90">{label}</span><span className="block truncate text-[11px] text-muted-foreground/70">{account.email || account.user_id || account.federation_url}</span></span>{account.active ? <TbCheck className="size-4 shrink-0 text-foreground/70" /> : null}</button>; })}</div> : <div className="rounded-lg bg-surface-subtle px-4 py-8 text-center text-xs text-muted-foreground">暂无已保存账户</div>}<Button size="sidebar" onClick={on_add}><TbPlus />添加账户</Button></div>; }
 const usage_period_options = [{ value: "day", label: "日" }, { value: "week", label: "周" }, { value: "month", label: "月" }] as const;
-function UsagePanelExact({ resources }: { resources?: DesktopViewController["account_resources"] }) {
+function UsagePanelExact({ resources }: { resources?: DesktopAccountResources }) {
   const [period, set_period] = useState<UsagePeriod>("day");
   const all_days = resources?.usage_days ?? [];
   const end_date = current_date_key();
@@ -191,46 +193,53 @@ function UsagePanelExact({ resources }: { resources?: DesktopViewController["acc
 function UsageMetric({ label, value }: { label: string; value: string }) { return <div className="min-w-0 px-3.5 py-3.5"><p className="truncate text-[10px] text-muted-foreground/70">{label}</p><p className="mt-1 truncate text-xl font-semibold tracking-tight tabular-nums text-foreground">{value}</p></div>; }
 
 /** 按 Duobox ModelsSettings 结构展示默认模型与可折叠模型列表。 */
-function ModelSettingsExact({ controller }: { controller: DesktopViewController }) {
-  const [selected_model, set_selected_model] = useState<DesktopViewController["models"][number]>();
+function ModelSettingsExact({ controller }: { controller: DesktopController }) {
+  const models = use_desktop_selector(controller.stores.catalog, (state) => state.models);
+  const models_loading = use_desktop_selector(controller.stores.catalog, (state) => state.models_loading);
+  const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
+  const user = use_desktop_selector(controller.stores.settings, (state) => state.user);
+  const loading = use_desktop_selector(controller.stores.settings, (state) => state.loading);
+  const [selected_model, set_selected_model] = useState<DesktopModelSummary>();
   const [model_dialog_open, set_model_dialog_open] = useState(false);
   const [pricing_expanded, set_pricing_expanded] = useState(false);
   const [image_pricing_expanded, set_image_pricing_expanded] = useState(false);
-  const text_models = controller.models.filter(is_text_model);
-  const image_models = controller.models.filter(is_image_model);
+  const text_models = useMemo(() => models.filter(is_text_model), [models]);
+  const image_models = useMemo(() => models.filter(is_image_model), [models]);
   const pricing = useMemo(() => build_model_pricing(text_models), [text_models]);
   const image_pricing = useMemo(() => build_model_pricing(image_models), [image_models]);
-  const default_text = text_models.find((model) => model.model_id === controller.settings.default_text_model_id) ?? text_models[0];
-  const default_image = image_models.find((model) => model.model_id === controller.settings.default_image_model_id) ?? image_models[0];
-  return <SettingsContainer>{!controller.user.authenticated ? <SettingSection title="模型"><SettingGroup><div className="flex items-center justify-between gap-4 rounded-md p-2"><div className="min-w-0"><div className="text-sm text-foreground/90">登录后管理模型</div><div className="mt-0.5 text-xs text-muted-foreground">登录 Federation 后才能读取文本和生图模型。</div></div><Button onClick={() => controller.open_settings("user")} disabled={controller.loading}><TbLogin2 />登录</Button></div></SettingGroup></SettingSection> : <>
-    <SettingSection title="文本模型" action={<Button title="刷新模型" aria-label="刷新模型" disabled={controller.models_loading} onClick={() => void controller.refresh_models()}>{controller.models_loading ? <TbLoader2 className="animate-spin" /> : <TbRefresh />}刷新</Button>}><SettingGroup><CollapsibleModelGroup title={default_text?.name || "暂无文本模型"} count={text_models.length} model={default_text} models={text_models} active_model_id={controller.settings.default_text_model_id} on_select={(model_id) => void controller.update_settings({ default_text_model_id: model_id })} empty_text="暂无文本模型" on_info={(model) => { set_selected_model(model); set_model_dialog_open(true); }} /><button type="button" className="flex min-h-11 w-full items-center gap-2 border-t border-divider px-3.5 py-2.5 text-left text-xs text-foreground/85 hover:bg-interaction-hover" aria-expanded={pricing_expanded} onClick={() => set_pricing_expanded((current) => !current)}><TbChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", pricing_expanded && "rotate-90")} /><span className="min-w-0 flex-1">价格对比</span><span className="text-[10px] text-muted-foreground/70">USD / 1M tokens · {pricing.length}</span></button>{pricing_expanded ? <div className="border-t border-divider px-3.5 py-4">{pricing.length ? <ModelPricingChart data={pricing} /> : <div className="py-5 text-center text-xs text-muted-foreground/70">暂无可比较的模型价格</div>}</div> : null}</SettingGroup></SettingSection>
-    <SettingSection title="生图模型"><SettingGroup><CollapsibleModelGroup title={default_image?.name || "暂无生图模型"} count={image_models.length} model={default_image} models={image_models} active_model_id={controller.settings.default_image_model_id} on_select={(model_id) => void controller.update_settings({ default_image_model_id: model_id })} empty_text="暂无生图模型" on_info={(model) => { set_selected_model(model); set_model_dialog_open(true); }} /><ModelPricingDisclosure data={image_pricing} expanded={image_pricing_expanded} on_expanded_change={set_image_pricing_expanded} /></SettingGroup></SettingSection>
+  const default_text = text_models.find((model) => model.model_id === settings.default_text_model_id) ?? text_models[0];
+  const default_image = image_models.find((model) => model.model_id === settings.default_image_model_id) ?? image_models[0];
+  return <SettingsContainer>{!user.authenticated ? <SettingSection title="模型"><SettingGroup><div className="flex items-center justify-between gap-4 rounded-md p-2"><div className="min-w-0"><div className="text-sm text-foreground/90">登录后管理模型</div><div className="mt-0.5 text-xs text-muted-foreground">登录 Federation 后才能读取文本和生图模型。</div></div><Button onClick={() => controller.actions.open_settings("user")} disabled={loading}><TbLogin2 />登录</Button></div></SettingGroup></SettingSection> : <>
+    <SettingSection title="文本模型" action={<Button title="刷新模型" aria-label="刷新模型" disabled={models_loading} onClick={() => void controller.actions.refresh_models()}>{models_loading ? <TbLoader2 className="animate-spin" /> : <TbRefresh />}刷新</Button>}><SettingGroup><CollapsibleModelGroup title={default_text?.name || "暂无文本模型"} count={text_models.length} model={default_text} models={text_models} active_model_id={settings.default_text_model_id} on_select={(model_id) => void controller.actions.update_settings({ default_text_model_id: model_id })} empty_text="暂无文本模型" on_info={(model) => { set_selected_model(model); set_model_dialog_open(true); }} /><button type="button" className="flex min-h-11 w-full items-center gap-2 border-t border-divider px-3.5 py-2.5 text-left text-xs text-foreground/85 hover:bg-interaction-hover" aria-expanded={pricing_expanded} onClick={() => set_pricing_expanded((current) => !current)}><TbChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", pricing_expanded && "rotate-90")} /><span className="min-w-0 flex-1">价格对比</span><span className="text-[10px] text-muted-foreground/70">USD / 1M tokens · {pricing.length}</span></button>{pricing_expanded ? <div className="border-t border-divider px-3.5 py-4">{pricing.length ? <ModelPricingChart data={pricing} /> : <div className="py-5 text-center text-xs text-muted-foreground/70">暂无可比较的模型价格</div>}</div> : null}</SettingGroup></SettingSection>
+    <SettingSection title="生图模型"><SettingGroup><CollapsibleModelGroup title={default_image?.name || "暂无生图模型"} count={image_models.length} model={default_image} models={image_models} active_model_id={settings.default_image_model_id} on_select={(model_id) => void controller.actions.update_settings({ default_image_model_id: model_id })} empty_text="暂无生图模型" on_info={(model) => { set_selected_model(model); set_model_dialog_open(true); }} /><ModelPricingDisclosure data={image_pricing} expanded={image_pricing_expanded} on_expanded_change={set_image_pricing_expanded} /></SettingGroup></SettingSection>
     <Dialog open={model_dialog_open} onOpenChange={set_model_dialog_open} onOpenChangeComplete={(open) => { if (!open) set_selected_model(undefined); }}><DialogContent><ModelDetailsDialog model={selected_model} /></DialogContent></Dialog>
   </>}</SettingsContainer>;
 }
-function CollapsibleModelGroup({ title, count, model, models, active_model_id, on_select, empty_text, on_info }: { title: string; count: number; model?: DesktopViewController["models"][number]; models: DesktopViewController["models"]; active_model_id: string; on_select(model_id: string): void; empty_text: string; on_info(model: DesktopViewController["models"][number]): void }) { const [expanded, set_expanded] = useState(false); return <div className="overflow-hidden"><button type="button" className="flex min-h-12 w-full items-center gap-2 px-3.5 py-2.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover" onClick={() => set_expanded((current) => !current)}><TbChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")} />{model ? <LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" /> : null}<span className="min-w-0 flex-1 truncate text-xs text-foreground/90">{title}</span><span className="text-[10px] tabular-nums text-muted-foreground/70">{count}</span></button>{expanded ? <div className="divide-y divide-divider border-t border-divider">{models.length ? models.map((item) => <ModelRowExact key={item.model_id} model={item} active={item.model_id === active_model_id || (!active_model_id && item.model_id === model?.model_id)} on_select={() => on_select(item.model_id)} on_info={() => on_info(item)} />) : <div className="flex min-h-16 items-center justify-center px-3 py-3 text-center text-xs text-muted-foreground/70">{empty_text}</div>}</div> : null}</div>; }
-function ModelRowExact({ model, active, on_select, on_info }: { model: DesktopViewController["models"][number]; active: boolean; on_select(): void; on_info(): void }) { const reasoning_label = format_model_reasoning(model); return <div className={cn("group flex min-h-10 w-full items-center gap-2 px-3.5 py-1 transition-colors hover:bg-interaction-hover", active && "bg-interaction-selected hover:bg-interaction-active")}><button type="button" onClick={on_select} aria-pressed={active} className="flex min-h-8 min-w-0 flex-1 items-center gap-2 text-left"><LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-foreground/90">{model.name}</span>{reasoning_label ? <span className="block truncate text-[10px] text-muted-foreground/70">{reasoning_label}</span> : null}</span></button><div className="flex shrink-0 items-center gap-1">{model.context_window ? <span className="rounded bg-foreground/[0.04] px-1.5 text-[10px] leading-4 text-muted-foreground/75 tabular-nums">{format_context_window(model.context_window)}</span> : null}<button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-interaction-hover hover:text-foreground" aria-label={`查看 ${model.name} 详情`} title="查看模型详情" onClick={on_info}><TbInfoCircle className="size-3.5" /></button><TbCheck className={cn("size-4 text-foreground transition-opacity", active ? "opacity-100" : "opacity-0")} aria-hidden="true" /></div></div>; }
-function ModelDetailsDialog({ model }: { model?: DesktopViewController["models"][number] }) { if (!model) return null; const pricing = build_model_pricing([model])[0]; const reasoning_label = format_model_reasoning(model); const default_effort = get_default_model_reasoning(model); return <><DialogHeader><DialogTitle>{model.name}</DialogTitle><DialogDescription>{model.description || model.model_id}</DialogDescription></DialogHeader><DialogBody className="flex flex-col gap-3"><div className="grid grid-cols-2 gap-2 text-xs"><DetailRow label="模型 ID" value={model.model_id} /><DetailRow label="上下文窗口" value={model.context_window ? format_context_window(model.context_window) : "未提供"} /><DetailRow label="能力" value={model.modalities.join(" / ") || "未提供"} /><DetailRow label="推理强度" value={reasoning_label || "不支持可配置推理"} />{default_effort ? <DetailRow label="默认档位" value={default_effort.name} /> : null}<DetailRow label="价格单位" value="USD / 1M tokens" /></div><div className="rounded-lg bg-muted/45 px-3 py-2.5 text-xs"><div className="mb-2 text-muted-foreground">价格</div>{pricing ? <div className="grid grid-cols-2 gap-2"><DetailRow label="输入" value={`$${format_usd(pricing.input_usd_per_1m)}`} /><DetailRow label="输出" value={`$${format_usd(pricing.output_usd_per_1m)}`} /></div> : <div className="text-muted-foreground">暂无可解析的输入/输出价格</div>}</div></DialogBody></>; }
+function CollapsibleModelGroup({ title, count, model, models, active_model_id, on_select, empty_text, on_info }: { title: string; count: number; model?: DesktopModelSummary; models: DesktopModelSummary[]; active_model_id: string; on_select(model_id: string): void; empty_text: string; on_info(model: DesktopModelSummary): void }) { const [expanded, set_expanded] = useState(false); return <div className="overflow-hidden"><button type="button" className="flex min-h-12 w-full items-center gap-2 px-3.5 py-2.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover" onClick={() => set_expanded((current) => !current)}><TbChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-90")} />{model ? <LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" /> : null}<span className="min-w-0 flex-1 truncate text-xs text-foreground/90">{title}</span><span className="text-[10px] tabular-nums text-muted-foreground/70">{count}</span></button>{expanded ? <div className="divide-y divide-divider border-t border-divider">{models.length ? models.map((item) => <ModelRowExact key={item.model_id} model={item} active={item.model_id === active_model_id || (!active_model_id && item.model_id === model?.model_id)} on_select={() => on_select(item.model_id)} on_info={() => on_info(item)} />) : <div className="flex min-h-16 items-center justify-center px-3 py-3 text-center text-xs text-muted-foreground/70">{empty_text}</div>}</div> : null}</div>; }
+function ModelRowExact({ model, active, on_select, on_info }: { model: DesktopModelSummary; active: boolean; on_select(): void; on_info(): void }) { const reasoning_label = format_model_reasoning(model); return <div className={cn("group flex min-h-10 w-full items-center gap-2 px-3.5 py-1 transition-colors hover:bg-interaction-hover", active && "bg-interaction-selected hover:bg-interaction-active")}><button type="button" onClick={on_select} aria-pressed={active} className="flex min-h-8 min-w-0 flex-1 items-center gap-2 text-left"><LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-foreground/90">{model.name}</span>{reasoning_label ? <span className="block truncate text-[10px] text-muted-foreground/70">{reasoning_label}</span> : null}</span></button><div className="flex shrink-0 items-center gap-1">{model.context_window ? <span className="rounded bg-foreground/[0.04] px-1.5 text-[10px] leading-4 text-muted-foreground/75 tabular-nums">{format_context_window(model.context_window)}</span> : null}<button type="button" className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-interaction-hover hover:text-foreground" aria-label={`查看 ${model.name} 详情`} title="查看模型详情" onClick={on_info}><TbInfoCircle className="size-3.5" /></button><TbCheck className={cn("size-4 text-foreground transition-opacity", active ? "opacity-100" : "opacity-0")} aria-hidden="true" /></div></div>; }
+function ModelDetailsDialog({ model }: { model?: DesktopModelSummary }) { if (!model) return null; const pricing = build_model_pricing([model])[0]; const reasoning_label = format_model_reasoning(model); const default_effort = get_default_model_reasoning(model); return <><DialogHeader><DialogTitle>{model.name}</DialogTitle><DialogDescription>{model.description || model.model_id}</DialogDescription></DialogHeader><DialogBody className="flex flex-col gap-3"><div className="grid grid-cols-2 gap-2 text-xs"><DetailRow label="模型 ID" value={model.model_id} /><DetailRow label="上下文窗口" value={model.context_window ? format_context_window(model.context_window) : "未提供"} /><DetailRow label="能力" value={model.modalities.join(" / ") || "未提供"} /><DetailRow label="推理强度" value={reasoning_label || "不支持可配置推理"} />{default_effort ? <DetailRow label="默认档位" value={default_effort.name} /> : null}<DetailRow label="价格单位" value="USD / 1M tokens" /></div><div className="rounded-lg bg-muted/45 px-3 py-2.5 text-xs"><div className="mb-2 text-muted-foreground">价格</div>{pricing ? <div className="grid grid-cols-2 gap-2"><DetailRow label="输入" value={`$${format_usd(pricing.input_usd_per_1m)}`} /><DetailRow label="输出" value={`$${format_usd(pricing.output_usd_per_1m)}`} /></div> : <div className="text-muted-foreground">暂无可解析的输入/输出价格</div>}</div></DialogBody></>; }
 function ModelPricingDisclosure({ data, expanded, on_expanded_change }: { data: ReturnType<typeof build_model_pricing>; expanded: boolean; on_expanded_change(expanded: boolean): void }) { return <><button type="button" className="flex min-h-11 w-full items-center gap-2 border-t border-divider px-3.5 py-2.5 text-left text-xs text-foreground/85 hover:bg-interaction-hover" aria-expanded={expanded} onClick={() => on_expanded_change(!expanded)}><TbChevronRight className={cn("size-3.5 text-muted-foreground transition-transform", expanded && "rotate-90")} /><span className="min-w-0 flex-1">价格对比</span><span className="text-[10px] text-muted-foreground/70">USD / 1M tokens · {data.length}</span></button>{expanded ? <div className="border-t border-divider px-3.5 py-4">{data.length ? <ModelPricingChart data={data} /> : <div className="py-5 text-center text-xs text-muted-foreground/70">暂无可比较的模型价格</div>}</div> : null}</>; }
 function DetailRow({ label, value }: { label: string; value: string }) { return <div className="min-w-0"><div className="text-[10px] text-muted-foreground">{label}</div><div className="mt-0.5 truncate text-foreground/85" title={value}>{value}</div></div>; }
 
 /** 通用设置。 */
-function GeneralSettings({ controller, open_global_env }: { /** Renderer 根控制器。 */ controller: DesktopViewController; /** 打开 Global Env 编辑器。 */ open_global_env(): void }) {
+function GeneralSettings({ controller, open_global_env }: { /** Renderer 稳定控制器。 */ controller: DesktopController; /** 打开 Global Env 编辑器。 */ open_global_env(): void }) {
+  const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
+  const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
   return <SettingsContainer>
     <SettingsHeader title="通用" description="Desktop 启动和默认导航偏好。" />
     <SettingSection title="启动">
       <SettingGroup>
         <SettingRow label="默认 Agent" description="启动时优先打开该 Agent。">
-          <SettingSelect value={controller.settings.default_agent_id} label={controller.agents.find((agent) => agent.agent_id === controller.settings.default_agent_id)?.name || "列表中的第一个"} options={[{ value: "", label: "列表中的第一个" }, ...controller.agents.map((agent) => ({ value: agent.agent_id, label: agent.name }))]} on_change={(value) => void controller.update_settings({ default_agent_id: value })} />
+          <SettingSelect value={settings.default_agent_id} label={agents.find((agent) => agent.agent_id === settings.default_agent_id)?.name || "列表中的第一个"} options={[{ value: "", label: "列表中的第一个" }, ...agents.map((agent) => ({ value: agent.agent_id, label: agent.name }))]} on_change={(value) => void controller.actions.update_settings({ default_agent_id: value })} />
         </SettingRow>
-        <SettingRow label="启动时打开空对话" description="进入默认 Agent 后直接显示尚未创建的空对话。"><SettingSwitch checked={controller.settings.open_empty_chat_on_start} label="启动时打开空对话" on_change={(checked) => void controller.update_settings({ open_empty_chat_on_start: checked })} /></SettingRow>
+        <SettingRow label="启动时打开空对话" description="进入默认 Agent 后直接显示尚未创建的空对话。"><SettingSwitch checked={settings.open_empty_chat_on_start} label="启动时打开空对话" on_change={(checked) => void controller.actions.update_settings({ open_empty_chat_on_start: checked })} /></SettingRow>
       </SettingGroup>
     </SettingSection>
     <SettingSection title="网络代理" description="应用于 Desktop 发起的 Federation 与网页请求。">
       <SettingGroup>
-        <SettingRow label="启用代理" description="使用 HTTP、HTTPS 或 SOCKS 代理。"><SettingSwitch checked={controller.settings.proxy_enabled} label="启用代理" on_change={(checked) => void controller.update_settings({ proxy_enabled: checked })} /></SettingRow>
+        <SettingRow label="启用代理" description="使用 HTTP、HTTPS 或 SOCKS 代理。"><SettingSwitch checked={settings.proxy_enabled} label="启用代理" on_change={(checked) => void controller.actions.update_settings({ proxy_enabled: checked })} /></SettingRow>
         <SettingRow label="代理地址" description="例如 http://127.0.0.1:7890。">
-          <input className="h-8 w-56 rounded-md bg-background px-2 text-xs ring-1 ring-border focus:ring-foreground/20" defaultValue={controller.settings.proxy_url} placeholder="http://127.0.0.1:7890" onBlur={(event) => void controller.update_settings({ proxy_url: event.target.value })} />
+          <input className="h-8 w-56 rounded-md bg-background px-2 text-xs ring-1 ring-border focus:ring-foreground/20" defaultValue={settings.proxy_url} placeholder="http://127.0.0.1:7890" onBlur={(event) => void controller.actions.update_settings({ proxy_url: event.target.value })} />
         </SettingRow>
       </SettingGroup>
     </SettingSection>
@@ -249,27 +258,28 @@ const theme_options = [
 ] as const;
 
 /** Desktop 外观设置。 */
-function AppearanceSettings({ controller }: { /** Renderer 根控制器。 */ controller: DesktopViewController }) {
+function AppearanceSettings({ controller }: { /** Renderer 稳定控制器。 */ controller: DesktopController }) {
+  const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
   return <SettingsContainer>
     <SettingsHeader title="外观" description="控制 Desktop 的明暗模式、颜色主题与界面缩放。" />
     <SettingSection title="全局">
       <SettingGroup>
         <SettingRow label="外观模式" description="跟随系统或固定使用明亮、深色模式。">
           <SegmentedControl
-            value={controller.settings.appearance_mode}
+            value={settings.appearance_mode}
             aria_label="外观模式"
             options={[{ value: "light", label: "明亮" }, { value: "dark", label: "深色" }, { value: "system", label: "系统" }]}
-            on_value_change={(appearance_mode) => void controller.update_settings({ appearance_mode })}
+            on_value_change={(appearance_mode) => void controller.actions.update_settings({ appearance_mode })}
           />
         </SettingRow>
         <SettingRow label="颜色主题" description="选择 Duobox 提供的界面配色。">
-          <SettingSelect value={controller.settings.color_theme} label={theme_options.find(([value]) => value === controller.settings.color_theme)?.[1] || "Duobox"} options={theme_options.map(([value, label]) => ({ value, label }))} on_change={(value) => void controller.update_settings({ color_theme: value as typeof controller.settings.color_theme })} />
+          <SettingSelect value={settings.color_theme} label={theme_options.find(([value]) => value === settings.color_theme)?.[1] || "Duobox"} options={theme_options.map(([value, label]) => ({ value, label }))} on_change={(value) => void controller.actions.update_settings({ color_theme: value as typeof settings.color_theme })} />
         </SettingRow>
         <SettingRow label="界面缩放" description="同时调整导航、对话和设置的显示密度。">
           <div className="flex items-center gap-2">
-            <Slider value={controller.settings.ui_scale} min={0.85} max={1.2} step={0.05} aria-label="界面缩放" on_value_change={(ui_scale) => void controller.update_settings({ ui_scale })} />
-            <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{Math.round(controller.settings.ui_scale * 100)}%</span>
-            <Button size="icon" title="恢复默认缩放" onClick={() => void controller.update_settings({ ui_scale: 1 })}><TbRotate /></Button>
+            <Slider value={settings.ui_scale} min={0.85} max={1.2} step={0.05} aria-label="界面缩放" on_value_change={(ui_scale) => void controller.actions.update_settings({ ui_scale })} />
+            <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{Math.round(settings.ui_scale * 100)}%</span>
+            <Button size="icon" title="恢复默认缩放" onClick={() => void controller.actions.update_settings({ ui_scale: 1 })}><TbRotate /></Button>
           </div>
         </SettingRow>
       </SettingGroup>
@@ -277,45 +287,21 @@ function AppearanceSettings({ controller }: { /** Renderer 根控制器。 */ co
   </SettingsContainer>;
 }
 
-/** Federation 模型目录设置。 */
-function ModelSettings({ controller }: { /** Renderer 根控制器。 */ controller: DesktopViewController }) {
-  const text_models = controller.models.filter(is_text_model);
-  const image_models = controller.models.filter(is_image_model);
-  return <SettingsContainer>
-    <SettingsHeader title="模型" description="管理文本与生图模型，并选择新对话的默认模型。" />
-    <SettingSection title="文本模型" description="用于 Agent 对话和 Chat 输入框。">
-      <SettingGroup>
-        <ModelToolbar count={text_models.length} controller={controller} />
-        <DefaultModelRow label="默认文本模型" value={controller.settings.default_text_model_id} models={text_models} on_change={(value) => void controller.update_settings({ default_text_model_id: value })} />
-        {text_models.map((model) => <div key={model.model_id} className="flex min-h-14 items-center gap-3 px-3.5 py-2.5">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/[0.055]"><TbCpu /></span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-[13px]">{model.name}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{model.model_id}{model.context_window ? ` · ${Math.round(model.context_window / 1000)}K context` : ""}</span></span>
-          <span className="max-w-48 truncate text-[10px] text-muted-foreground/70">{model.modalities.join(" / ")}</span>
-        </div>)}
-        {!controller.models_loading && text_models.length === 0 ? <div className="px-4 py-10 text-center text-xs text-muted-foreground">{controller.user.authenticated ? "Federation 暂无可用文本模型" : "登录 Federation 后读取模型"}</div> : null}
-      </SettingGroup>
-    </SettingSection>
-    <SettingSection title="生图模型" description="用于图像生成能力；没有生图模型时不会显示此分组。"><SettingGroup><DefaultModelRow label="默认生图模型" value={controller.settings.default_image_model_id} models={image_models} on_change={(value) => void controller.update_settings({ default_image_model_id: value })} />{image_models.map((model) => <div key={model.model_id} className="flex min-h-14 items-center gap-3 px-3.5 py-2.5"><span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/[0.055]"><TbCpu /></span><span className="min-w-0 flex-1"><span className="block truncate text-[13px]">{model.name}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{model.model_id}</span></span></div>)}{!controller.models_loading && image_models.length === 0 ? <div className="px-4 py-8 text-center text-xs text-muted-foreground">暂无生图模型</div> : null}</SettingGroup></SettingSection>
-  </SettingsContainer>;
-}
-
-function ModelToolbar({ count, controller }: { count: number; controller: DesktopViewController }) { return <div className="flex min-h-12 items-center justify-between px-3.5 py-2.5"><span className="text-xs text-muted-foreground">{count} 个模型</span><Button disabled={controller.models_loading || !controller.user.authenticated} onClick={() => void controller.refresh_models()}>{controller.models_loading ? <TbLoader2 className="animate-spin" /> : <TbRefresh />}刷新</Button></div>; }
-function DefaultModelRow({ label, value, models, on_change }: { label: string; value: string; models: DesktopViewController["models"]; on_change(value: string): void }) { return <div className="flex min-h-12 items-center justify-between gap-4 border-b border-border/45 px-3.5 py-2.5"><span className="text-xs text-muted-foreground">{label}</span><SettingSelect value={value} label={models.find((model) => model.model_id === value)?.name || "自动选择"} options={[{ value: "", label: "自动选择" }, ...models.map((model) => ({ value: model.model_id, label: model.name }))]} on_change={on_change} /></div>; }
-
 /** Chat 展示设置。 */
-function ChatSettings({ controller }: { /** Renderer 根控制器。 */ controller: DesktopViewController }) {
+function ChatSettings({ controller }: { /** Renderer 稳定控制器。 */ controller: DesktopController }) {
+  const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
   return <SettingsContainer>
     <SettingsHeader title="对话" description="控制实时消息的展示和滚动行为。" />
     <SettingSection title="消息">
       <SettingGroup>
-        <SettingRow label="显示思考过程" description="在 Assistant 消息中展示可折叠的 reasoning 内容。"><SettingSwitch checked={controller.settings.show_reasoning} label="显示思考过程" on_change={(checked) => void controller.update_settings({ show_reasoning: checked })} /></SettingRow>
-        <SettingRow label="自动跟随输出" description="位于对话底部时跟随流式消息滚动。"><SettingSwitch checked={controller.settings.auto_scroll} label="自动跟随输出" on_change={(checked) => void controller.update_settings({ auto_scroll: checked })} /></SettingRow>
+        <SettingRow label="显示思考过程" description="在 Assistant 消息中展示可折叠的 reasoning 内容。"><SettingSwitch checked={settings.show_reasoning} label="显示思考过程" on_change={(checked) => void controller.actions.update_settings({ show_reasoning: checked })} /></SettingRow>
+        <SettingRow label="自动跟随输出" description="位于对话底部时跟随流式消息滚动。"><SettingSwitch checked={settings.auto_scroll} label="自动跟随输出" on_change={(checked) => void controller.actions.update_settings({ auto_scroll: checked })} /></SettingRow>
       </SettingGroup>
     </SettingSection>
     <SettingSection title="输入">
       <SettingGroup>
-        <SettingRow label="Enter 发送消息" description="关闭后使用 Command/Ctrl + Enter 发送。"><SettingSwitch checked={controller.settings.send_message_on_enter} label="Enter 发送消息" on_change={(checked) => void controller.update_settings({ send_message_on_enter: checked })} /></SettingRow>
-        <SettingRow label="系统拼写检查" description="在 Chat 输入框中显示操作系统拼写提示。"><SettingSwitch checked={controller.settings.spellcheck_enabled} label="系统拼写检查" on_change={(checked) => void controller.update_settings({ spellcheck_enabled: checked })} /></SettingRow>
+        <SettingRow label="Enter 发送消息" description="关闭后使用 Command/Ctrl + Enter 发送。"><SettingSwitch checked={settings.send_message_on_enter} label="Enter 发送消息" on_change={(checked) => void controller.actions.update_settings({ send_message_on_enter: checked })} /></SettingRow>
+        <SettingRow label="系统拼写检查" description="在 Chat 输入框中显示操作系统拼写提示。"><SettingSwitch checked={settings.spellcheck_enabled} label="系统拼写检查" on_change={(checked) => void controller.actions.update_settings({ spellcheck_enabled: checked })} /></SettingRow>
       </SettingGroup>
     </SettingSection>
   </SettingsContainer>;

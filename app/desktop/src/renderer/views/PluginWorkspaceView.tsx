@@ -5,21 +5,24 @@ import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
 import { BUILTIN_PLUGIN_RENDERERS } from "@downcity/plugins/renderers";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
 import { PluginRendererHost } from "@/lib/plugin/PluginRendererHost";
-import type { DesktopViewController } from "@/types/DesktopView";
+import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";
 import { plugin_renderer_notifications } from "@/lib/notification/notification_state";
+import { use_desktop_selector } from "@/hooks/use_desktop_controller";
+
+const empty_plugin_route: PluginJsonObject = {};
 
 /** 渲染 Plugin Mainview，并与其一级 Sidebar 共享独立路由。 */
 export function PluginWorkspaceView({ plugin, controller }: {
   /** 当前功能型 Plugin。 */ readonly plugin: DesktopPluginSummary;
-  /** Renderer 根控制器。 */ readonly controller: DesktopViewController;
+  /** Renderer 稳定控制器。 */ readonly controller: DesktopController;
 }) {
+  const route = use_desktop_selector(controller.stores.navigation, (state) => state.plugin_routes[plugin.plugin_id]);
+  const revision = use_desktop_selector(controller.stores.navigation, (state) => state.plugin_revisions[plugin.plugin_id] ?? 0);
+  const notification_state = use_desktop_selector(controller.stores.notification, (state) => state);
   const [definition, set_definition] = useState<DesktopPluginDefinition>();
   const [error, set_error] = useState("");
-  const get_plugin = controller.get_plugin;
-  const invoke_plugin_action = controller.invoke_plugin_action;
-  const navigate_plugin = controller.navigate_plugin;
-  const invalidate_plugin = controller.invalidate_plugin;
+  const { get_plugin, invoke_plugin_action, navigate_plugin, invalidate_plugin } = controller.actions;
   useEffect(() => {
     let disposed = false;
     set_definition(undefined);
@@ -36,7 +39,7 @@ export function PluginWorkspaceView({ plugin, controller }: {
   }), [invoke_plugin_action, plugin.plugin_id]);
   const navigate = useCallback((route: PluginJsonObject) => navigate_plugin(plugin.plugin_id, route), [navigate_plugin, plugin.plugin_id]);
   const invalidate = useCallback(() => invalidate_plugin(plugin.plugin_id), [invalidate_plugin, plugin.plugin_id]);
-  return <MainViewLayout><MainViewHeader title={plugin.title} /><MainViewBody><main className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-background">{error ? <div className="m-4 h-fit flex-1 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="mainview" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={controller.plugin_routes[plugin.plugin_id] ?? {}} notifications={plugin_renderer_notifications(controller.notification_state, plugin.plugin_id)} navigate={navigate} revision={controller.plugin_revisions[plugin.plugin_id] ?? 0} invalidate={invalidate} />}</main></MainViewBody></MainViewLayout>;
+  return <MainViewLayout><MainViewHeader title={plugin.title} /><MainViewBody><main className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-background">{error ? <div className="m-4 h-fit flex-1 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="mainview" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={route ?? empty_plugin_route} notifications={plugin_renderer_notifications(notification_state, plugin.plugin_id)} navigate={navigate} revision={revision} invalidate={invalidate} />}</main></MainViewBody></MainViewLayout>;
 }
 
 /** 把未知加载失败转换为用户可见文本。 */

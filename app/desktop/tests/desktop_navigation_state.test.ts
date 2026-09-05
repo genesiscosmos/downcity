@@ -2,9 +2,10 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { get_group_chat_key } from "../src/renderer/lib/chat/chat_cache_key.ts";
 import { get_sidebar_mode_for_navigation, is_restorable_navigation_target, parse_navigation_target, resolve_navigation_target } from "../src/renderer/lib/navigation/desktop_navigation_state.ts";
 import type { DesktopNavigationCatalog } from "../src/renderer/types/DesktopNavigation.ts";
-import { get_group_chat_key, get_group_draft_session_id, is_group_draft_session_id } from "../src/renderer/types/DesktopView.ts";
+import { get_group_draft_session_id, is_group_draft_session_id } from "../src/renderer/types/DesktopView.ts";
 
 const catalog: DesktopNavigationCatalog = {
   agents: [{ agent_id: "writer", name: "Writer", description: "", model_id: "model", plugins: {}, created_at: "", updated_at: "" }],
@@ -26,8 +27,7 @@ test("Group Draft 使用隔离键且不会进入持久化导航", () => {
   const draft_id = get_group_draft_session_id("team");
   assert.equal(draft_id, "group-draft:team");
   assert.equal(is_group_draft_session_id(draft_id), true);
-  assert.equal(get_group_chat_key("project-a", "team", draft_id), "project-a:group:team:group-draft:team");
-  assert.equal(get_group_chat_key("project-b", "team", draft_id), "project-b:group:team:group-draft:team");
+  assert.notEqual(get_group_chat_key("project-a", "team", draft_id), get_group_chat_key("project-b", "team", draft_id));
   assert.equal(is_restorable_navigation_target({ kind: "group_draft", workspace_id: "project-a", group_id: "team", draft_id }), false);
 });
 

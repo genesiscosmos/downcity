@@ -1,6 +1,6 @@
 /** Downcity Desktop 的结构化 Chat Composer、附件、Slash 与发送控制器。 */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
@@ -78,7 +78,7 @@ interface FileQuery { query: string; from: number; to: number; }
 interface MemberQuery { query: string; from: number; to: number; }
 
 /** 支持结构化草稿、多媒体节点、Slash 命令和消息引用的输入表面。 */
-export function ChatInputEditor(props: ChatInputEditorProps) {
+export const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputEditorProps) {
   const file_input_ref = useRef<HTMLInputElement>(null);
   const image_input_ref = useRef<HTMLInputElement>(null);
   const editor_ref = useRef<Editor | null>(null);
@@ -378,7 +378,7 @@ export function ChatInputEditor(props: ChatInputEditorProps) {
       <Button type="button" onClick={() => void (show_stop ? props.stop_session() : submit_message("send"))} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={show_stop ? "停止生成" : busy ? "发送调整" : "发送消息"} title={show_stop ? "停止生成" : busy ? "发送调整；⌘/Ctrl + Shift + Enter 加入下一轮队列" : "发送消息"}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
     </div>
   </div>);
-}
+});
 
 /** 输入框上方的待发送队列。 */
 function QueuedMessageList(props: Pick<ChatInputEditorProps, "queued_messages" | "queue_paused" | "remove_queued_message" | "send_queued_message" | "update_queued_message" | "toggle_queued_message_paused" | "set_queue_paused" | "move_queued_message">) {

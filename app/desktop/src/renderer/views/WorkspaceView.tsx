@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
 import { Markdown } from "@/lib/markdown/Markdown";
-import type { DesktopViewController } from "@/types/DesktopView";
+import type { DesktopActions } from "@/types/DesktopView";
 import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Workspace 主视图属性。 */
@@ -45,8 +45,8 @@ export function WorkspaceView({ workspace, open_editor }: WorkspaceViewProps) {
 interface WorkspaceInfoSidebarProps {
   /** 当前 Workspace。 */
   workspace: DesktopWorkspaceSummary;
-  /** Renderer 根控制器。 */
-  controller: DesktopViewController;
+  /** Renderer 稳定操作集合。 */
+  controller: DesktopActions;
   /** 关闭信息侧栏。 */
   close_sidebar(): void;
   /** 当前配置分区。 */
@@ -77,7 +77,7 @@ export function WorkspaceInfoSidebar({ workspace, controller, close_sidebar, sec
 /** Workspace 右侧的分区编辑容器。 */
 function WorkspaceEditorPanel({ workspace, controller, section, close_editor, embedded = false }: {
   /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary;
-  /** Renderer 根控制器。 */ controller: DesktopViewController;
+  /** Renderer 稳定操作集合。 */ controller: DesktopActions;
   /** 当前编辑分区。 */ section: WorkspaceEditorField;
   /** 收起右侧容器。 */ close_editor(): void;
   /** 是否嵌入已有信息侧栏。 */ embedded?: boolean;

@@ -1,6 +1,7 @@
 /** Renderer 对 canonical Session mutation 的纯函数投影。 */
 
 import type { SessionMessage, SessionMutation } from "@downcity/agent";
+import type { AssistantMutationDraft } from "@/types/SessionProjection";
 
 /**
  * 把一条 mutation 合并进当前可见消息。
@@ -12,48 +13,89 @@ export function apply_session_mutation(
   messages: SessionMessage[],
   mutation: SessionMutation,
 ): SessionMessage[] {
-  if (mutation.variant === "message") {
-    if (mutation.message.visibility !== "visible") return messages;
-    const current_index = messages.findIndex((message) => message.message_id === mutation.message_id);
-    if (current_index >= 0 && messages[current_index].revision > mutation.revision) return messages;
-    const next_messages = [...messages];
-    if (current_index >= 0) next_messages[current_index] = mutation.message;
-    else next_messages.push(mutation.message);
-    return next_messages.sort((left, right) => left.sequence - right.sequence);
-  }
+  return apply_session_mutations(messages, [mutation]);
+}
 
-  if (mutation.variant !== "part" && mutation.variant !== "delta") return messages;
-  const message_index = messages.findIndex((message) => message.message_id === mutation.message_id);
-  const current = messages[message_index];
-  if (!current || current.type !== "assistant" || current.revision > mutation.revision) return messages;
+/**
+ * 在一次批处理中合并多条 Session mutation。
+ *
+ * 消息索引、外层数组和每条 Assistant 的 parts 都只创建一次；处理完成后再发布
+ * 一份不可变快照，避免流式 delta 在同一帧内反复扫描并复制完整会话。
+ */
+export function apply_session_mutations(
+  messages: SessionMessage[],
+  mutations: SessionMutation[],
+): SessionMessage[] {
+  if (mutations.length === 0) return messages;
+  const messages_by_id = new Map(messages.map((message) => [message.message_id, message]));
+  const assistant_drafts = new Map<string, AssistantMutationDraft>();
+  let changed = false;
 
-  const parts = [...current.parts];
-  if (mutation.variant === "part") {
-    const part_index = parts.findIndex((part) => part.part_id === mutation.part_id);
-    if (part_index >= 0) parts[part_index] = mutation.part;
-    else parts.push(mutation.part);
-    parts.sort((left, right) => left.sequence - right.sequence);
-  } else {
-    const part_index = parts.findIndex((part) => part.part_id === mutation.part_id);
-    const target = parts[part_index];
-    if (!target) return messages;
-    if (mutation.type === "tool_input" && target.type === "tool" && target.tool_call_id === mutation.tool_call_id) {
-      parts[part_index] = { ...target, input_text: `${target.input_text ?? ""}${mutation.delta}` };
-    } else if ((mutation.type === "text" || mutation.type === "reasoning") && target.type === mutation.type) {
-      parts[part_index] = { ...target, text: target.text + mutation.delta };
-    } else {
-      return messages;
+  for (const mutation of mutations) {
+    if (mutation.variant === "message") {
+      if (mutation.message.visibility !== "visible") continue;
+      const current = messages_by_id.get(mutation.message_id);
+      if (current && current.revision > mutation.revision) continue;
+      messages_by_id.set(mutation.message_id, mutation.message);
+      assistant_drafts.delete(mutation.message_id);
+      changed = true;
+      continue;
     }
+
+    if (mutation.variant !== "part" && mutation.variant !== "delta") continue;
+    const current = messages_by_id.get(mutation.message_id);
+    if (!current || current.type !== "assistant" || current.revision > mutation.revision) continue;
+    let draft = assistant_drafts.get(mutation.message_id);
+    if (!draft || draft.message !== current) {
+      const parts = [...current.parts];
+      draft = {
+        message: { ...current, parts },
+        parts,
+        part_indexes: new Map(parts.map((part, index) => [part.part_id, index])),
+      };
+      assistant_drafts.set(mutation.message_id, draft);
+    }
+
+    if (mutation.variant === "part") {
+      const part_index = draft.part_indexes.get(mutation.part_id);
+      if (part_index === undefined) {
+        draft.part_indexes.set(mutation.part.part_id, draft.parts.length);
+        draft.parts.push(mutation.part);
+      } else {
+        const previous_part_id = draft.parts[part_index]?.part_id;
+        if (previous_part_id && previous_part_id !== mutation.part.part_id) draft.part_indexes.delete(previous_part_id);
+        draft.parts[part_index] = mutation.part;
+        draft.part_indexes.set(mutation.part.part_id, part_index);
+      }
+    } else {
+      const part_index = draft.part_indexes.get(mutation.part_id);
+      if (part_index === undefined) continue;
+      const target = draft.parts[part_index];
+      if (mutation.type === "tool_input" && target.type === "tool" && target.tool_call_id === mutation.tool_call_id) {
+        draft.parts[part_index] = { ...target, input_text: `${target.input_text ?? ""}${mutation.delta}` };
+      } else if ((mutation.type === "text" || mutation.type === "reasoning") && target.type === mutation.type) {
+        draft.parts[part_index] = { ...target, text: target.text + mutation.delta };
+      } else {
+        continue;
+      }
+    }
+
+    draft.message = {
+      ...draft.message,
+      revision: mutation.revision,
+      updated_at: mutation.created_at,
+      parts: draft.parts,
+    };
+    messages_by_id.set(mutation.message_id, draft.message);
+    changed = true;
   }
 
-  const next_messages = [...messages];
-  next_messages[message_index] = {
-    ...current,
-    revision: mutation.revision,
-    updated_at: mutation.created_at,
-    parts,
-  };
-  return next_messages;
+  if (!changed) return messages;
+  for (const [message_id, draft] of assistant_drafts) {
+    draft.parts.sort((left, right) => left.sequence - right.sequence);
+    messages_by_id.set(message_id, { ...draft.message, parts: draft.parts });
+  }
+  return [...messages_by_id.values()].sort((left, right) => left.sequence - right.sequence);
 }
 
 /**

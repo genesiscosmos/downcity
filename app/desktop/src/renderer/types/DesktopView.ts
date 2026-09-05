@@ -124,10 +124,42 @@ export interface DesktopWorkspaceGroupSession {
   session: DesktopGroupSessionSummary;
 }
 
-/** Renderer 根状态控制器向视图公开的能力。 */
-export interface DesktopViewController {
-  /** Desktop 当前完整未读通知状态。 */
-  notification_state: DesktopNotificationState;
+/** 等待用户为孤儿 Session 选择 Workspace 的请求。 */
+export interface SessionAttachRequest {
+  /** Session 所属 Agent。 */
+  agent_id: string;
+  /** 等待绑定的 Session。 */
+  session_id: string;
+  /** 原始但已失效的 Workspace 标识。 */
+  workspace_id: string;
+  /** 完成绑定后需要继续发送的输入。 */
+  pending_input?: JSONContent;
+}
+
+/** 可被 useSyncExternalStore 消费的稳定 store 句柄（结构类型，避免与实现文件循环依赖）。 */
+interface StoreHandle<State> {
+  /** 订阅 store 变化；返回取消订阅函数。 */
+  subscribe(listener: () => void): () => void;
+  /** 返回当前不可变快照；未变化时引用必须稳定。 */
+  get_snapshot(): State;
+}
+
+/** 导航领域的完整不可变快照。 */
+export interface NavigationStoreState {
+  /** 当前主视图导航目标。 */
+  selection: NavigationTarget | null;
+  /** 主导航侧边栏当前模式。 */
+  sidebar_mode: SidebarMode;
+  /** 当前主视图使用的 Workspace 上下文。 */
+  active_workspace_id: string;
+  /** 各功能型 Plugin 的 Sidebar 与 Mainview 共享路由。 */
+  plugin_routes: Record<string, PluginJsonObject>;
+  /** 各功能型 Plugin 的快照刷新版本。 */
+  plugin_revisions: Record<string, number>;
+}
+
+/** Catalog 领域的完整不可变快照。 */
+export interface CatalogStoreState {
   /** 共享 Registry 中的全部 Agent。 */
   agents: DesktopAgentSummary[];
   /** 共享 Registry 中独立登记的全部 Workspace。 */
@@ -136,6 +168,48 @@ export interface DesktopViewController {
   groups: DesktopGroupSummary[];
   /** 按 Group 标识缓存的运行时 Group。 */
   groups_by_id: Record<string, DesktopGroupSummary>;
+  /** Desktop 当前可用的官方与第三方 Plugin。 */
+  plugins: DesktopPluginSummary[];
+  /** 当前 Federation 中可用于对话的模型。 */
+  models: DesktopModelSummary[];
+  /** 模型目录是否正在读取。 */
+  models_loading: boolean;
+}
+
+/** Session 导航索引领域的完整不可变快照。 */
+export interface SessionStoreState {
+  /** 按 Workspace 标识缓存的 Agent Session 导航数据。 */
+  sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
+  /** 按 Workspace 标识缓存的 GroupSession 导航数据。 */
+  group_sessions_by_workspace: Record<string, DesktopWorkspaceGroupSession[]>;
+  /** 按 Workspace 标识缓存的已归档 Agent Session。 */
+  archived_sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
+  /** 当前等待用户选择 Workspace 的孤儿 Session 请求。 */
+  session_attach_request: SessionAttachRequest | null;
+}
+
+/** Group 中等待成员响应的交互项。 */
+export interface GroupInteraction {
+  /** 发起交互的成员 Agent 标识。 */
+  agent_id: string;
+  /** 交互内容。 */
+  part: SessionAssistantInteractionPart;
+}
+
+/** Chat 流式领域的完整不可变快照。 */
+export interface ChatStreamState {
+  /** 按 Session 组合键缓存的 canonical 可见消息。 */
+  messages_by_session: Record<string, SessionMessage[]>;
+  /** 按 Session 组合键缓存的实时运行态。 */
+  chat_runtime_by_session: Record<string, DesktopChatRuntime>;
+  /** 按 Session 组合键缓存的最新实时文件改动摘要。 */
+  file_diff_by_session: Record<string, SessionTurnFileDiffSummary>;
+  /** 按 Session 组合键缓存的模型与审批配置。 */
+  configuration_by_session: Record<string, DesktopSessionConfiguration>;
+  /** 按 Session 组合键保存的历史分页状态。 */
+  history_by_session: Record<string, ChatHistoryState>;
+  /** 当前正在执行的 Agent 标识集合。 */
+  executing_agent_ids: Set<string>;
   /** 按 Group 标识缓存的共享消息。 */
   group_messages_by_group: Record<string, DesktopGroupMessage[]>;
   /** 按 Group 标识缓存的成员运行态。 */
@@ -145,45 +219,21 @@ export interface DesktopViewController {
   /** 按 Group 标识缓存已完成 Dispatch 的消息标识。 */
   group_read_message_ids_by_group: Record<string, string[]>;
   /** 按 Group 标识缓存待响应的成员交互。 */
-  group_interactions_by_group: Record<string, { agent_id: string; part: SessionAssistantInteractionPart }[]>;
-  /** 按 Workspace 标识缓存的 Session 导航数据。 */
-  sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
-  /** 按 Workspace 标识缓存的 GroupSession 导航数据。 */
-  group_sessions_by_workspace: Record<string, DesktopWorkspaceGroupSession[]>;
-  /** 按 Workspace 标识缓存的已归档 Session。 */
-  archived_sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
-  /** 按 Agent 与 Session 组合键缓存的 canonical 消息。 */
-  messages_by_session: Record<string, SessionMessage[]>;
-  /** 按 Session 组合键缓存的实时运行态。 */
-  chat_runtime_by_session: Record<string, DesktopChatRuntime>;
-  /** 按 Session 组合键缓存的最新实时文件改动摘要。 */
-  file_diff_by_session: Record<string, SessionTurnFileDiffSummary>;
+  group_interactions_by_group: Record<string, GroupInteraction[]>;
+}
+
+/** 输入编排领域的完整不可变快照。 */
+export interface ComposerStoreState {
   /** 按 Session 组合键隔离的完整 Tiptap 输入草稿。 */
   draft_content_by_session: Record<string, JSONContent>;
   /** 按 Session 组合键隔离的待发送队列。 */
   queued_messages_by_session: Record<string, QueuedChatMessage[]>;
   /** 按 Session 组合键保存队列总暂停状态。 */
   queue_paused_by_session: Record<string, boolean>;
-  /** 按 Session 组合键保存的历史分页状态。 */
-  history_by_session: Record<string, ChatHistoryState>;
-  /** 当前 Federation 中可用于对话的模型。 */
-  models: DesktopModelSummary[];
-  /** Desktop 当前可用的官方与第三方 Plugin。 */
-  plugins: DesktopPluginSummary[];
-  /** 按 Session 组合键缓存的模型与审批配置。 */
-  configuration_by_session: Record<string, DesktopSessionConfiguration>;
-  /** 模型目录是否正在读取。 */
-  models_loading: boolean;
-  /** 当前主视图导航目标。 */
-  selection: NavigationTarget | null;
-  /** 当前主视图使用的 Workspace 上下文，不控制 Sidebar 展开状态。 */
-  active_workspace_id: string;
-  /** 主导航侧边栏当前模式。 */
-  sidebar_mode: SidebarMode;
-  /** 各功能型 Plugin 的 Sidebar 与 Mainview 共享路由。 */
-  plugin_routes: Record<string, PluginJsonObject>;
-  /** 各功能型 Plugin 用于同步 Sidebar 与 Mainview 快照的刷新版本。 */
-  plugin_revisions: Record<string, number>;
+}
+
+/** 用户与偏好设置领域的完整不可变快照。 */
+export interface SettingsStoreState {
   /** Desktop 用户级偏好。 */
   settings: DesktopSettings;
   /** 当前 Global Env 快照。 */
@@ -198,6 +248,28 @@ export interface DesktopViewController {
   error: string;
   /** Registry 首次加载是否仍在进行。 */
   loading: boolean;
+}
+
+/** 组合层暴露的 7 个领域 store 句柄集合。 */
+export interface DesktopStores {
+  /** 导航领域 store（selection / sidebar_mode / active_workspace / plugin routes）。 */
+  navigation: StoreHandle<NavigationStoreState>;
+  /** Catalog 领域 store（agents / workspaces / groups / plugins / models）。 */
+  catalog: StoreHandle<CatalogStoreState>;
+  /** Session 导航索引领域 store。 */
+  session: StoreHandle<SessionStoreState>;
+  /** Chat 流式领域 store（高频）。 */
+  chat_stream: StoreHandle<ChatStreamState>;
+  /** 输入编排领域 store。 */
+  composer: StoreHandle<ComposerStoreState>;
+  /** 用户与偏好设置领域 store。 */
+  settings: StoreHandle<SettingsStoreState>;
+  /** Desktop 通知领域 store。 */
+  notification: StoreHandle<DesktopNotificationState>;
+}
+
+/** Renderer 对视图公开的稳定操作集合。 */
+export interface DesktopActions {
   /** 选择 Agent 管理页。 */
   select_agent(agent_id: string): void;
   /** 打开 Agent 固定 Workspace 与持久化 Session 对话。 */
@@ -266,8 +338,6 @@ export interface DesktopViewController {
   archive_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 永久删除一个 Session。 */
   remove_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
-  /** 当前等待用户选择 Workspace 的孤儿 Session 发送请求；无待处理目标时为空。 */
-  session_attach_request: { agent_id: string; session_id: string; workspace_id: string; pending_input?: JSONContent } | null;
   /** 关闭孤儿 Session 的 Workspace 选择。 */
   clear_session_attach_request(): void;
   /** 把孤儿 Session 重新绑定到指定 Workspace，并进入该 Session。 */
@@ -360,13 +430,12 @@ export interface DesktopViewController {
   clear_error(): void;
 }
 
-/** 生成不会因不同 Workspace 或 Agent 下同名 Session 冲突的缓存键。 */
-export function get_session_key(
-  workspace_id: string,
-  agent_id: string,
-  session_id: string,
-): string {
-  return `${workspace_id}:${agent_id}:${session_id}`;
+/** Renderer 组件使用的稳定控制器，只暴露状态句柄与操作能力。 */
+export interface DesktopController {
+  /** 各领域独立的外置状态句柄。 */
+  stores: DesktopStores;
+  /** 不随状态快照变化的操作集合。 */
+  actions: DesktopActions;
 }
 
 /** 生成一个 Agent 唯一的本地 Draft Chat 标识。 */
@@ -377,15 +446,6 @@ export function get_draft_session_id(agent_id: string): string {
 /** 生成一个 Group 唯一的本地 Draft Chat 标识。 */
 export function get_group_draft_session_id(group_id: string): string {
   return `group-draft:${group_id}`;
-}
-
-/** 生成不会与 Agent Session 冲突的 Group Chat 缓存键。 */
-export function get_group_chat_key(
-  workspace_id: string,
-  group_id: string,
-  session_id: string,
-): string {
-  return `${workspace_id}:group:${group_id}:${session_id}`;
 }
 
 /** 判断当前标识是否属于尚未持久化的 Draft Chat。 */

@@ -1,6 +1,6 @@
 /** Downcity Session Chat 主视图，交互语义与 Duobox ChatCore 保持一致。 */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import type { JSONContent } from "@tiptap/core";
 import {
@@ -29,17 +29,22 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { ChatMessageTimestamp } from "@/components/chat/ChatMessageTimestamp";
 import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
+import { TurnFileOpenProvider } from "@/lib/chat/assistant/TurnFileDiffCard";
 import { should_show_assistant_actions } from "@/lib/chat/assistant/assistant_activity";
 import { ChatMarkdown } from "@/lib/chat/ChatMarkdown";
+import { ChatMessageViewportRow } from "@/lib/chat/ChatMessageViewportRow";
 import { ChatInputEditor } from "@/lib/chat/ChatInputEditor";
 import { ChatTextSelectionQuote } from "@/lib/chat/ChatTextSelectionQuote";
 import { ChatWorkspaceSelector } from "@/lib/chat/ChatWorkspaceSelector";
+import { use_chat_scroll } from "@/lib/chat/use_chat_scroll";
+import { project_session_message_segments } from "@/lib/chat/session_message_projection";
 import { dispatch_chat_reference } from "@/lib/chat/editor/chatReferenceEvent";
 import { create_chat_composer } from "@/lib/chat/editor/chatComposerCodec";
 import { resolve_user_message_rewrite } from "@/lib/chat/user_message_rewrite";
 import { ChatSurfaceLayout } from "@/layouts/ChatSurfaceLayout";
 import { cn } from "@/lib/utils";
 import { is_chat_busy, type ChatHistoryState, type ChatSubmitMode, type QueuedChatMessage } from "@/types/DesktopView";
+import type { SessionActionMessage, SessionMessageProjection, SessionMessageSegment } from "@/types/SessionProjection";
 import type { DesktopAgentSummary, DesktopChatRewriteAction, DesktopChatRewriteInput, DesktopChatRuntime, DesktopModelSummary, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Session Chat 主视图属性。 */
@@ -78,6 +83,8 @@ interface SessionViewProps {
   runtime?: DesktopChatRuntime;
   /** 当前 Session 最新实时文件改动摘要。 */
   file_diff_by_session?: SessionTurnFileDiffSummary;
+  /** 在主视图的 Workspace 中打开指定相对路径文件。 */
+  open_workspace_file?(workspace_id: string, relative_path: string): void;
   /** 当前 Session 的完整 Tiptap 输入草稿。 */
   draft_content: JSONContent;
   /** 当前 Session 待发送队列。 */
@@ -150,25 +157,21 @@ const empty_prompts = [
 /** Session 对话主视图。 */
 export function SessionView(props: SessionViewProps) {
   const { session, messages, runtime, settings } = props;
-  const scroll_ref = useRef<HTMLDivElement | null>(null);
-  const sticky_ref = useRef(true);
+  const { scroll_ref, content_ref, handle_scroll, preserve_prepend_position } = use_chat_scroll(session.session_id, settings.auto_scroll);
   const busy = is_chat_busy(runtime);
-  const can_compact = Boolean(props.compact_session && messages.some((message) => message.type === "user" || message.type === "assistant"));
+  const message_projection_ref = useRef<SessionMessageProjection | undefined>(undefined);
+  const projection_session_id_ref = useRef(session.session_id);
+  const message_projection = useMemo(() => {
+    const previous = projection_session_id_ref.current === session.session_id ? message_projection_ref.current : undefined;
+    const next = project_session_message_segments(messages, previous);
+    projection_session_id_ref.current = session.session_id;
+    message_projection_ref.current = next;
+    return next;
+  }, [messages, session.session_id]);
+  const can_compact = Boolean(props.compact_session && message_projection.has_conversation_message);
+  const open_workspace_file = useCallback((relative_path: string) => props.open_workspace_file?.(props.workspace_id, relative_path), [props.open_workspace_file, props.workspace_id]);
 
-  useEffect(() => {
-    const container = scroll_ref.current;
-    if (!container || !settings.auto_scroll || !sticky_ref.current) return;
-    container.scrollTop = container.scrollHeight;
-  }, [messages, runtime?.status, settings.auto_scroll]);
-
-  const load_earlier = async () => {
-    const container = scroll_ref.current;
-    const previous_height = container?.scrollHeight ?? 0;
-    await props.load_earlier_history();
-    requestAnimationFrame(() => {
-      if (container) container.scrollTop += container.scrollHeight - previous_height;
-    });
-  };
+  const load_earlier = () => preserve_prepend_position(props.load_earlier_history);
 
   const workspace_tag = props.workspace_missing
     ? <span className="inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 text-[0.625rem] font-normal text-amber-600 dark:text-amber-400"><TbAlertTriangle className="size-3 shrink-0" /><span className="truncate">关联 Workspace 未添加</span></span>
@@ -182,17 +185,14 @@ export function SessionView(props: SessionViewProps) {
           ref={scroll_ref}
           className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
           role="log"
-          onScroll={(event) => {
-            const element = event.currentTarget;
-            sticky_ref.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-          }}
+          onScroll={handle_scroll}
         >
           <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
-          <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
+          <div ref={content_ref} className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {props.history?.has_more ? <div className="flex justify-center py-1"><Button disabled={props.history.loading} onClick={() => void load_earlier()}><TbArrowUp />{props.history.loading ? "正在加载…" : "加载更早消息"}</Button></div> : null}
             {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} on_select={(text) => props.update_draft(create_chat_composer(text))} /> : null}
-            {messages.map((message, index) => message.type === "action" && action_belongs_to_assistant(messages, index) ? null : <MessageRenderer key={message.message_id} message={message} actions={message.type === "assistant" ? collect_adjacent_actions(messages, index) : []} agent={props.agent} open_agent_info={props.open_agent_info} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction} fork_message={props.fork_message} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} is_last_message={index === messages.length - 1} can_use_history_actions={!busy} />)}
-            {busy && !has_streaming_assistant(messages) ? <ActivityIndicator agent={props.agent} status={runtime?.status} file_diff={props.file_diff_by_session} /> : null}
+            <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}>{message_projection.segments.map((segment) => <MessageSegment key={segment.segment_id} segment={segment} agent={props.agent} open_agent_info={props.open_agent_info} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction} fork_message={props.fork_message} rewrite_message={props.rewrite_message} file_diff={segment.has_streaming_message ? props.file_diff_by_session : undefined} can_use_history_actions={!busy} />)}</TurnFileOpenProvider>
+            {busy && !message_projection.has_streaming_message ? <ActivityIndicator agent={props.agent} status={runtime?.status} file_diff={props.file_diff_by_session} /> : null}
           </div>
         </div>
 
@@ -250,7 +250,7 @@ function EmptyPrompts({ surface = "workspace", agent, workspace, workspaces, age
 }
 
 /** 按 canonical 消息类型渲染。 */
-function MessageRenderer({ message, actions, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, is_last_message, can_use_history_actions }: { /** canonical 消息。 */ message: SessionMessage; /** 紧邻当前 Assistant 的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前 Session 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 是否是当前消息列表最后一条。 */ is_last_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
+const MessageRenderer = memo(function MessageRenderer({ message, actions, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, is_last_message, can_use_history_actions }: { /** canonical 消息。 */ message: SessionMessage; /** 紧邻当前 Assistant 的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前 Session 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 是否是当前消息列表最后一条。 */ is_last_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
   if (message.type === "error") return <div className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2 !m-0 !p-0">
     <div className="size-8 shrink-0 px-1" aria-hidden="true" />
     <div className="min-w-0 flex-1 px-1 pt-0.5 text-sm text-foreground">
@@ -263,7 +263,30 @@ function MessageRenderer({ message, actions, agent, open_agent_info, show_reason
   if (message.type === "action") return <AgentActionMessages actions={[message]} agent={agent} open_agent_info={open_agent_info} />;
   if (message.type === "user") return <UserMessage message={message} fork_message={fork_message} rewrite_message={rewrite_message} is_last_message={is_last_message} can_use_history_actions={can_use_history_actions} />;
   return <AssistantMessage message={message} actions={actions} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} file_diff={file_diff} />;
-}
+}, (previous, next) => previous.message === next.message
+  && previous.agent === next.agent
+  && previous.open_agent_info === next.open_agent_info
+  && previous.show_reasoning === next.show_reasoning
+  && previous.respond_interaction === next.respond_interaction
+  && previous.fork_message === next.fork_message
+  && previous.rewrite_message === next.rewrite_message
+  && previous.file_diff === next.file_diff
+  && previous.is_last_message === next.is_last_message
+  && previous.can_use_history_actions === next.can_use_history_actions
+  && same_action_messages(previous.actions, next.actions));
+
+/** 只在分段内容或消息交互依赖变化时进入该分段的消息级协调。 */
+const MessageSegment = memo(function MessageSegment({ segment, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, can_use_history_actions }: { /** 稳定的消息渲染分段。 */ segment: SessionMessageSegment; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前流式消息的文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
+  return <>{segment.rows.map(({ message, actions, is_last_message }) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id} active={message.type === "assistant" && message.status === "streaming"}><MessageRenderer message={message} actions={actions} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} rewrite_message={rewrite_message} file_diff={message.type === "assistant" && message.status === "streaming" ? file_diff : undefined} is_last_message={is_last_message} can_use_history_actions={can_use_history_actions} /></ChatMessageViewportRow>)}</>;
+}, (previous, next) => previous.segment === next.segment
+  && previous.agent === next.agent
+  && previous.open_agent_info === next.open_agent_info
+  && previous.show_reasoning === next.show_reasoning
+  && previous.respond_interaction === next.respond_interaction
+  && previous.fork_message === next.fork_message
+  && previous.rewrite_message === next.rewrite_message
+  && previous.can_use_history_actions === next.can_use_history_actions
+  && (!next.segment.has_streaming_message || previous.file_diff === next.file_diff));
 
 /** 用户消息及其引用、分支操作。 */
 function UserMessage({ message, fork_message, rewrite_message, is_last_message, can_use_history_actions }: { /** canonical 用户消息。 */ message: Extract<SessionMessage, { type: "user" }>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 是否是消息列表最后一条。 */ is_last_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
@@ -401,18 +424,9 @@ function AssistantMessage({ message, actions, agent, open_agent_info, show_reaso
   </div>;
 }
 
-/** 收集紧邻 Assistant 的动作消息，保持 canonical 消息列表不变。 */
-function collect_adjacent_actions(messages: SessionMessage[], assistant_index: number): Extract<SessionMessage, { type: "action" }>[] {
-  const actions: Extract<SessionMessage, { type: "action" }>[] = [];
-  for (let index = assistant_index + 1; messages[index]?.type === "action"; index += 1) actions.push(messages[index] as Extract<SessionMessage, { type: "action" }>);
-  return actions;
-}
-
-/** 判断动作是否属于它前方连续动作链对应的 Assistant。 */
-function action_belongs_to_assistant(messages: SessionMessage[], action_index: number): boolean {
-  let previous_index = action_index - 1;
-  while (messages[previous_index]?.type === "action") previous_index -= 1;
-  return messages[previous_index]?.type === "assistant";
+/** 比较 Action 链的成员引用，允许投影数组重建后复用历史消息行。 */
+function same_action_messages(left: SessionActionMessage[], right: SessionActionMessage[]): boolean {
+  return left.length === right.length && left.every((action, index) => action === right[index]);
 }
 
 /** 在 Agent 消息内部展示动作记录。 */
@@ -452,9 +466,4 @@ function ActivityIndicator({ agent, status, compact = false, file_diff }: { /** 
       <div className="assistant-message-menu-bar flex items-center">{status_content}</div>
     </div>
   </div>;
-}
-
-/** 判断当前已有 streaming assistant。 */
-function has_streaming_assistant(messages: SessionMessage[]): boolean {
-  return messages.some((message) => message.type === "assistant" && message.status === "streaming");
 }

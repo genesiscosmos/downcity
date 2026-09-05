@@ -7,13 +7,13 @@ import { Markdown } from "@/lib/markdown/Markdown";
 import { PluginIcon } from "@/lib/plugin/PluginIcon";
 import { cn } from "@/lib/utils";
 import { PluginConfigPanel } from "@/views/PluginSettings";
-import type { DesktopViewController } from "@/types/DesktopView";
+import type { DesktopActions } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";
 
 /** 所有 Plugin 都展示说明；只有声明 Config 时才展示 Profile 配置。 */
 export function PluginView({ plugin, controller }: {
   /** 当前 Plugin。 */ readonly plugin: DesktopPluginSummary;
-  /** Renderer 根控制器。 */ readonly controller: DesktopViewController;
+  /** Renderer 稳定操作集合。 */ readonly controller: DesktopActions;
 }) {
   const [definition, set_definition] = useState<DesktopPluginDefinition>();
   const [error, set_error] = useState("");
