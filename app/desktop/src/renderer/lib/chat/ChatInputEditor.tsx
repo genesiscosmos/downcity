@@ -77,6 +77,17 @@ interface FileQuery { query: string; from: number; to: number; }
 /** Group 成员 @ 查询在编辑器中的范围。 */
 interface MemberQuery { query: string; from: number; to: number; }
 
+/** 一次等待写入 composer store 的本地草稿。 */
+interface PendingDraftSync {
+  /** Tiptap 当前完整 JSON 文档。 */
+  draft: JSONContent;
+  /** 草稿生成时对应的 Session 写入函数，避免切换 Session 后写错目标。 */
+  update_draft(input: JSONContent): void;
+}
+
+/** 用户停止输入后同步草稿到领域 store 的等待时间。 */
+const draft_sync_delay_ms = 300;
+
 /** 支持结构化草稿、多媒体节点、Slash 命令和消息引用的输入表面。 */
 export const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputEditorProps) {
   const file_input_ref = useRef<HTMLInputElement>(null);
@@ -88,9 +99,13 @@ export const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputEdi
   const file_query_ref = useRef<FileQuery | undefined>(undefined);
   const member_query_ref = useRef<MemberQuery | undefined>(undefined);
   const member_candidates_ref = useRef<DesktopAgentSummary[]>([]);
+  const draft_sync_timeout_ref = useRef<number | null>(null);
+  const pending_draft_sync_ref = useRef<PendingDraftSync | undefined>(undefined);
+  const locally_published_draft_ref = useRef<JSONContent | undefined>(undefined);
   const props_ref = useRef(props);
   props_ref.current = props;
   const [submitting, set_submitting] = useState(false);
+  const [input_empty, set_input_empty] = useState(() => is_chat_composer_empty(props.draft_content));
   const [attachment_error, set_attachment_error] = useState("");
   const [slash_query, set_slash_query] = useState<SlashQuery>();
   const [file_query, set_file_query] = useState<FileQuery>();
@@ -105,10 +120,33 @@ export const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputEdi
       ? props.client_executing === true
     : is_chat_busy(props.runtime);
 
-  const sync_controlled_draft = useCallback((current_editor: Editor) => {
-    if (syncing_ref.current) return;
-    props_ref.current.update_draft(current_editor.getJSON());
+  /** 立即写回最后一份本地草稿，并清理等待中的计时器。 */
+  const flush_pending_draft = useCallback(() => {
+    if (draft_sync_timeout_ref.current !== null) window.clearTimeout(draft_sync_timeout_ref.current);
+    draft_sync_timeout_ref.current = null;
+    const pending_sync = pending_draft_sync_ref.current;
+    pending_draft_sync_ref.current = undefined;
+    if (!pending_sync) return;
+    locally_published_draft_ref.current = pending_sync.draft;
+    pending_sync.update_draft(pending_sync.draft);
   }, []);
+
+  /** 放弃已由发送流程接管的本地草稿，避免迟到计时器把它重新写回。 */
+  const discard_pending_draft = useCallback(() => {
+    if (draft_sync_timeout_ref.current !== null) window.clearTimeout(draft_sync_timeout_ref.current);
+    draft_sync_timeout_ref.current = null;
+    pending_draft_sync_ref.current = undefined;
+  }, []);
+
+  /** 在输入空闲后把 Tiptap 文档同步到 composer store。 */
+  const schedule_draft_sync = useCallback((current_editor: Editor) => {
+    if (syncing_ref.current) return;
+    const draft = current_editor.getJSON();
+    set_input_empty(is_chat_composer_empty(draft));
+    pending_draft_sync_ref.current = { draft, update_draft: props_ref.current.update_draft };
+    if (draft_sync_timeout_ref.current !== null) window.clearTimeout(draft_sync_timeout_ref.current);
+    draft_sync_timeout_ref.current = window.setTimeout(flush_pending_draft, draft_sync_delay_ms);
+  }, [flush_pending_draft]);
 
   const update_slash_query = useCallback((current_editor: Editor) => {
     const { $from } = current_editor.state.selection;
@@ -210,13 +248,14 @@ export const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputEdi
     set_submitting(true);
     submitting_ref.current = true;
     try {
+      discard_pending_draft();
       await props_ref.current.send_message(input, mode);
       current_editor.commands.focus();
     } finally {
       submitting_ref.current = false;
       set_submitting(false);
     }
-  }, [run_compact_command]);
+  }, [discard_pending_draft, run_compact_command]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -269,25 +308,29 @@ export const ChatInputEditor = memo(function ChatInputEditor(props: ChatInputEdi
       },
     },
     onCreate: ({ editor: current_editor }) => { editor_ref.current = current_editor; },
-    onUpdate: ({ editor: current_editor }) => { sync_controlled_draft(current_editor); update_slash_query(current_editor); update_file_query(current_editor); update_member_query(current_editor); },
+    onUpdate: ({ editor: current_editor }) => { schedule_draft_sync(current_editor); update_slash_query(current_editor); update_file_query(current_editor); update_member_query(current_editor); },
     onSelectionUpdate: ({ editor: current_editor }) => { update_slash_query(current_editor); update_file_query(current_editor); update_member_query(current_editor); },
-    onDestroy: () => { editor_ref.current = null; },
+    onBlur: () => { flush_pending_draft(); },
+    onDestroy: () => { flush_pending_draft(); editor_ref.current = null; },
   }, []);
 
-  const current_input = editor?.getJSON() ?? props.draft_content;
-  const input_empty = is_chat_composer_empty(current_input);
   const show_stop = busy && input_empty && !submitting;
 
   useEffect(() => {
     if (!editor) return;
-    if (JSON.stringify(editor.getJSON()) === JSON.stringify(props.draft_content)) return;
+    if (props.draft_content === locally_published_draft_ref.current) return;
+    discard_pending_draft();
     syncing_ref.current = true;
     editor.commands.setContent(props.draft_content);
     syncing_ref.current = false;
+    set_input_empty(is_chat_composer_empty(props.draft_content));
     set_slash_query(undefined);
     set_file_query(undefined);
     set_member_query(undefined);
-  }, [editor, props.draft_content, props.editor_key]);
+  }, [discard_pending_draft, editor, props.draft_content, props.editor_key]);
+
+  /** Session 切换或组件卸载前强制保存最后一次尚未同步的输入。 */
+  useEffect(() => () => { flush_pending_draft(); }, [flush_pending_draft, props.editor_key]);
 
   useEffect(() => add_chat_reference_listener((reference) => {
     const current_editor = editor_ref.current;

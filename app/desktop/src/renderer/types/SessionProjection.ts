@@ -18,6 +18,22 @@ export interface AssistantMutationDraft {
   part_indexes: Map<string, number>;
 }
 
+/** 与一份 canonical 消息数组引用严格对应的 message_id 位置索引。 */
+export interface SessionMessageIndex {
+  /** 创建该索引时对应的不可变消息数组，用于拒绝复用过期索引。 */
+  source_messages: SessionMessage[];
+  /** 每个可见 message_id 在 source_messages 中的位置。 */
+  positions_by_id: Map<string, number>;
+}
+
+/** 一批 mutation 的消息数组与持久索引投影结果。 */
+export interface IndexedSessionMutationResult {
+  /** 合并 mutation 后按 sequence 排列的 canonical 可见消息。 */
+  messages: SessionMessage[];
+  /** 与 messages 新引用严格对应、可供下一批 mutation 复用的位置索引。 */
+  message_index: SessionMessageIndex;
+}
+
 /** 一条完成 Action 归属计算的 Session 消息渲染投影。 */
 export interface SessionMessageRow {
   /** 当前需要渲染的 canonical 消息。 */

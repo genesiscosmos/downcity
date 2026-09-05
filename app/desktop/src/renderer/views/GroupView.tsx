@@ -29,6 +29,7 @@ import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessag
 import { cn } from "@/lib/utils";
 import { AssistantContent } from "@/lib/chat/assistant/AssistantActivity";
 import { is_group_draft_session_id } from "@/types/DesktopView";
+import type { GroupMessageProjection, GroupMessageSegment } from "@/types/GroupProjection";
 
 /** Group 定义侧栏可以编辑的分区。 */
 export type GroupEditorSection = "model" | "instruction" | "members";
@@ -51,8 +52,8 @@ interface GroupViewProps {
   agents: DesktopAgentSummary[];
   /** Desktop Chat 设置。 */
   settings: DesktopSettings;
-  /** 当前共享消息。 */
-  messages: DesktopGroupMessage[];
+  /** 当前共享消息的持久分段投影。 */
+  message_projection?: GroupMessageProjection;
   /** 当前 GroupSession 的成员运行态。 */
   member_statuses: DesktopGroupMemberRuntime[];
   /** 当前 GroupSession 的运行阶段。 */
@@ -95,7 +96,7 @@ interface GroupViewProps {
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, open_group_info, agents, settings, messages, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, draft_content, update_draft, send_message, stop_session, remove_session, session_sidebar, controller }: GroupViewProps) {
+export function GroupView({ group, open_group_info, agents, settings, message_projection, member_statuses, group_phase, read_message_ids, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, draft_content, update_draft, send_message, stop_session, remove_session, session_sidebar, controller }: GroupViewProps) {
   const { scroll_ref, content_ref, handle_scroll } = use_chat_scroll(session.session_id, settings.auto_scroll);
 
   const group_members = useMemo(() => agents.filter((agent) => group.members.some((member) => member.agent_id === agent.agent_id)), [agents, group.members]);
@@ -114,8 +115,8 @@ export function GroupView({ group, open_group_info, agents, settings, messages, 
         <div ref={scroll_ref} onScroll={handle_scroll} className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
           <div ref={content_ref} className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
-            {messages.length === 0 ? <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4"><TbUsers className="size-8 text-muted-foreground/50" /><p className="text-center text-sm text-muted-foreground">开始与 {group.name} 协作</p><p className="text-center text-xs text-muted-foreground/60">{group.members.length} 个 Agent 已加入</p></div> : null}
-            {messages.map((message) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id}><GroupMessageRow message={message} agent={message.author_id ? agents_by_id.get(message.author_id) : undefined} read={read_message_id_set.has(message.message_id)} /></ChatMessageViewportRow>)}
+            {!message_projection?.message_count ? <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 px-4"><TbUsers className="size-8 text-muted-foreground/50" /><p className="text-center text-sm text-muted-foreground">开始与 {group.name} 协作</p><p className="text-center text-xs text-muted-foreground/60">{group.members.length} 个 Agent 已加入</p></div> : null}
+            {message_projection?.segments.map((segment) => <GroupMessageSegmentRows key={segment.segment_id} segment={segment} agents_by_id={agents_by_id} read_message_ids={read_message_id_set} />)}
             {interactions.map(({ agent_id, part }) => <GroupInteractionRow key={part.interaction_id} agent={agents_by_id.get(agent_id)} agent_id={agent_id} part={part} respond_interaction={respond_interaction} />)}
             {running_agent_ids.map((agent_id) => <GroupTypingRow key={`typing:${agent_id}`} agent={agents_by_id.get(agent_id)} agent_id={agent_id} />)}
           </div>
@@ -124,6 +125,13 @@ export function GroupView({ group, open_group_info, agents, settings, messages, 
       </div>
   </ChatSurfaceLayout>;
 }
+
+/** 只在当前固定分段或其渲染依赖变化时协调其中的 Group 消息。 */
+const GroupMessageSegmentRows = memo(function GroupMessageSegmentRows({ segment, agents_by_id, read_message_ids }: { /** 稳定 Group 消息分段。 */ segment: GroupMessageSegment; /** Agent 标识索引。 */ agents_by_id: Map<string, DesktopAgentSummary>; /** 已完成 Dispatch 的消息标识。 */ read_message_ids: ReadonlySet<string> }) {
+  return <>{segment.messages.map((message) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id}><GroupMessageRow message={message} agent={message.author_id ? agents_by_id.get(message.author_id) : undefined} read={read_message_ids.has(message.message_id)} /></ChatMessageViewportRow>)}</>;
+}, (previous, next) => previous.segment === next.segment
+  && previous.agents_by_id === next.agents_by_id
+  && previous.read_message_ids === next.read_message_ids);
 
 /** Group 联系人主页面，只展示摘要和可进入的具体配置项。 */
 export function GroupConfigView({ group, agents, open_config, sidebar, sidebar_collapsed = false, toggle_sidebar }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** 打开具体配置项。 */ open_config(section: GroupEditorSection): void; /** Group Left Panel。 */ sidebar?: ReactNode; /** Group Left Panel 是否折叠。 */ sidebar_collapsed?: boolean; /** 切换 Group Left Panel。 */ toggle_sidebar?: () => void }) {

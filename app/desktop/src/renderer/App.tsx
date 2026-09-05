@@ -151,72 +151,116 @@ export function App() {
   </div>;
 }
 
-/** 业务主视图订阅自己需要的 Catalog、Session 与设置切片，不把变化传播到应用壳。 */
+/** 业务主视图只负责路由，不订阅任何领域数据。 */
 function DesktopMainView({ selection, controller, sidebar_collapsed }: { /** 当前导航目标。 */ selection: NavigationTarget | null; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
-  const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
-  const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
-  const groups = use_desktop_selector(controller.stores.catalog, (state) => state.groups);
-  const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
+  if (selection?.kind === "create_agent") return <CreateAgentMainView controller={controller} />;
+  if (selection?.kind === "create_group") return <CreateGroupMainView controller={controller} />;
+  if (selection?.kind === "settings") return <SettingsMainView key={`settings:${selection.section}`} controller={controller} section={selection.section} sidebar_collapsed={sidebar_collapsed} />;
+  if (selection?.kind === "plugin" || selection?.kind === "plugin_workspace") return <PluginRouteMainView selection={selection} controller={controller} />;
+  if (selection?.kind === "workspace" || selection?.kind === "workspace_file") return <WorkspaceRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
+  if (selection?.kind === "group_session" || selection?.kind === "group_draft") return <GroupChatRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
+  if (selection?.kind === "group") return <GroupRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
+  if (selection?.kind === "agent") return <AgentRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
+  if (selection?.kind === "draft") return <AgentDraftRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
+  if (selection?.kind === "session") return <AgentSessionRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
+  return <WelcomeView />;
+}
+
+/** Agent 创建页只订阅表单初始化需要的目录切片。 */
+function CreateAgentMainView({ controller }: { /** Desktop 稳定控制器。 */ controller: DesktopController }) {
   const models = use_desktop_selector(controller.stores.catalog, (state) => state.models);
   const models_loading = use_desktop_selector(controller.stores.catalog, (state) => state.models_loading);
-  const sessions_by_workspace = use_desktop_selector(controller.stores.session, (state) => state.sessions_by_workspace);
-  const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
-  const selected_agent = selection?.kind === "agent" || selection?.kind === "session" || selection?.kind === "draft"
-    ? agents.find((agent) => agent.agent_id === selection.agent_id)
-    : undefined;
+  const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
+  const default_model_id = use_desktop_selector(controller.stores.settings, (state) => state.settings.default_text_model_id);
+  return <CreateAgentView models={models} models_loading={models_loading} default_model_id={default_model_id} plugins={plugins} create_agent={controller.actions.create_agent} />;
+}
 
-  if (selection?.kind === "create_agent") return <CreateAgentView models={models} models_loading={models_loading} default_model_id={settings.default_text_model_id} plugins={plugins} create_agent={controller.actions.create_agent} />;
-  if (selection?.kind === "create_group") return <CreateGroupView agents={agents} models={models} models_loading={models_loading} default_model_id={settings.default_text_model_id} create_group={controller.actions.create_group} />;
-  if (selection?.kind === "settings") return <SettingsMainView key={`settings:${selection.section}`} controller={controller} section={selection.section} sidebar_collapsed={sidebar_collapsed} />;
-  if (selection?.kind === "plugin") {
-    const plugin = plugins.find((item) => item.plugin_id === selection.plugin_id);
-    return plugin ? <PluginView plugin={plugin} controller={controller.actions} /> : <WelcomeView />;
-  }
-  if (selection?.kind === "plugin_workspace") {
-    const plugin = plugins.find((item) => item.plugin_id === selection.plugin_id);
-    return plugin?.has_sidebar && plugin.has_mainview ? <PluginWorkspaceView plugin={plugin} controller={controller} /> : <WelcomeView />;
-  }
-  if (selection?.kind === "workspace") {
-    const workspace = workspaces.find((item) => item.workspace_id === selection.workspace_id);
-    return workspace ? <WorkspaceMainView workspace={workspace} controller={controller} sidebar_collapsed={sidebar_collapsed} /> : <WelcomeView />;
-  }
-  if (selection?.kind === "workspace_file") {
-    const workspace = workspaces.find((item) => item.workspace_id === selection.workspace_id);
-    return workspace ? <WorkspaceFileView workspace={workspace} relative_path={selection.relative_path} /> : <WelcomeView />;
-  }
-  if (selection?.kind === "group_session" || selection?.kind === "group_draft") {
-    const group = groups.find((item) => item.group_id === selection.group_id);
-    const session_id = selection.kind === "group_draft" ? selection.draft_id : selection.session_id;
-    const session = selection.kind === "group_draft"
-      ? { session_id, title: "新对话", workspace_id: selection.workspace_id, created_at: 0, updated_at: 0, message_count: 0 }
-      : group?.sessions.find((item) => item.session_id === session_id);
-    if (!group || !session) return <WelcomeView />;
-    return <GroupChatMainView group={group} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`group-chat:${group.group_id}:${session_id}`}>
-      {(open_group_info) => <GroupChatSurface selection={selection} group={group} session={session} open_group_info={open_group_info} workspaces={workspaces} agents={agents} settings={settings} controller={controller} />}
-    </GroupChatMainView>;
-  }
-  if (selection?.kind === "group") {
-    const group = groups.find((item) => item.group_id === selection.group_id);
-    return group ? <GroupMainView key={`group:${group.group_id}`} group={group} controller={controller} sidebar_collapsed={sidebar_collapsed} /> : <WelcomeView />;
-  }
-  if (!selection || !selected_agent) return <WelcomeView />;
-  if (selection.kind === "agent") {
-    const main_context = settings.agent_main_sessions[selected_agent.agent_id];
-    const main_session = main_context
-      ? (sessions_by_workspace[main_context.workspace_id] ?? []).find((item) => item.agent_id === selected_agent.agent_id && item.session.session_id === main_context.session_id)
-      : undefined;
-    return <AgentMainView key={`agent:${selected_agent.agent_id}`} agent={selected_agent} controller={controller} sidebar_collapsed={sidebar_collapsed} main_session={main_session ? { workspace_id: main_context!.workspace_id, session: main_session.session } : undefined} />;
-  }
-  if (selection.kind === "draft") {
-    return <AgentChatMainView agent={selected_agent} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`agent-draft:${selected_agent.agent_id}:${selection.draft_id}`}>
-      {(open_agent_info) => <AgentDraftChatSurface selection={selection} agent={selected_agent} open_agent_info={open_agent_info} workspaces={workspaces} agents={agents} settings={settings} models={models} models_loading={models_loading} controller={controller} />}
-    </AgentChatMainView>;
-  }
-  if (selection.kind !== "session") return <WelcomeView />;
-  const session = (sessions_by_workspace[selection.workspace_id] ?? []).find((item) => item.agent_id === selected_agent.agent_id && item.session.session_id === selection.session_id)?.session;
-  if (!session) return <WelcomeView />;
-  return <AgentChatMainView agent={selected_agent} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`agent-session:${selected_agent.agent_id}:${session.session_id}`}>
-    {(open_agent_info) => <AgentSessionChatSurface selection={selection} agent={selected_agent} session={session} open_agent_info={open_agent_info} workspaces={workspaces} agents={agents} settings={settings} models={models} models_loading={models_loading} controller={controller} />}
+/** Group 创建页只订阅 Agent 与模型目录。 */
+function CreateGroupMainView({ controller }: { /** Desktop 稳定控制器。 */ controller: DesktopController }) {
+  const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
+  const models = use_desktop_selector(controller.stores.catalog, (state) => state.models);
+  const models_loading = use_desktop_selector(controller.stores.catalog, (state) => state.models_loading);
+  const default_model_id = use_desktop_selector(controller.stores.settings, (state) => state.settings.default_text_model_id);
+  return <CreateGroupView agents={agents} models={models} models_loading={models_loading} default_model_id={default_model_id} create_group={controller.actions.create_group} />;
+}
+
+/** Plugin 路由只订阅当前 Plugin 引用。 */
+function PluginRouteMainView({ selection, controller }: { /** Plugin 导航目标。 */ selection: Extract<NavigationTarget, { kind: "plugin" | "plugin_workspace" }>; /** Desktop 稳定控制器。 */ controller: DesktopController }) {
+  const plugin = use_desktop_selector(controller.stores.catalog, (state) => state.plugins.find((item) => item.plugin_id === selection.plugin_id));
+  if (!plugin) return <WelcomeView />;
+  return selection.kind === "plugin"
+    ? <PluginView plugin={plugin} controller={controller.actions} />
+    : plugin.has_sidebar && plugin.has_mainview ? <PluginWorkspaceView plugin={plugin} controller={controller} /> : <WelcomeView />;
+}
+
+/** Workspace 路由只订阅当前 Workspace 引用。 */
+function WorkspaceRouteMainView({ selection, controller, sidebar_collapsed }: { /** Workspace 导航目标。 */ selection: Extract<NavigationTarget, { kind: "workspace" | "workspace_file" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const workspace = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces.find((item) => item.workspace_id === selection.workspace_id));
+  if (!workspace) return <WelcomeView />;
+  return selection.kind === "workspace"
+    ? <WorkspaceMainView workspace={workspace} controller={controller} sidebar_collapsed={sidebar_collapsed} />
+    : <WorkspaceFileView workspace={workspace} relative_path={selection.relative_path} />;
+}
+
+/** Group Chat 路由只订阅其直接依赖的 Group、Agent、Workspace 与 Chat 设置。 */
+function GroupChatRouteMainView({ selection, controller, sidebar_collapsed }: { /** Group Chat 导航目标。 */ selection: Extract<NavigationTarget, { kind: "group_session" | "group_draft" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const group = use_desktop_selector(controller.stores.catalog, (state) => state.groups_by_id[selection.group_id]);
+  const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
+  const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
+  const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
+  const session_id = selection.kind === "group_draft" ? selection.draft_id : selection.session_id;
+  const session = selection.kind === "group_draft"
+    ? { session_id, title: "新对话", workspace_id: selection.workspace_id, created_at: 0, updated_at: 0, message_count: 0 }
+    : group?.sessions.find((item) => item.session_id === session_id);
+  if (!group || !session) return <WelcomeView />;
+  return <GroupChatMainView group={group} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`group-chat:${group.group_id}:${session_id}`}>
+    {(open_group_info) => <GroupChatSurface selection={selection} group={group} session={session} open_group_info={open_group_info} workspaces={workspaces} agents={agents} settings={settings} controller={controller} />}
+  </GroupChatMainView>;
+}
+
+/** Group 配置路由只订阅当前 Group。 */
+function GroupRouteMainView({ selection, controller, sidebar_collapsed }: { /** Group 配置导航目标。 */ selection: Extract<NavigationTarget, { kind: "group" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const group = use_desktop_selector(controller.stores.catalog, (state) => state.groups_by_id[selection.group_id]);
+  return group ? <GroupMainView key={`group:${group.group_id}`} group={group} controller={controller} sidebar_collapsed={sidebar_collapsed} /> : <WelcomeView />;
+}
+
+/** Agent 配置路由只订阅当前 Agent 与其主 Session 索引。 */
+function AgentRouteMainView({ selection, controller, sidebar_collapsed }: { /** Agent 配置导航目标。 */ selection: Extract<NavigationTarget, { kind: "agent" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const agent = use_desktop_selector(controller.stores.catalog, (state) => state.agents.find((item) => item.agent_id === selection.agent_id));
+  const main_context = use_desktop_selector(controller.stores.settings, (state) => state.settings.agent_main_sessions[selection.agent_id]);
+  const main_session = use_desktop_selector(controller.stores.session, (state) => main_context
+    ? (state.sessions_by_workspace[main_context.workspace_id] ?? []).find((item) => item.agent_id === selection.agent_id && item.session.session_id === main_context.session_id)
+    : undefined);
+  if (!agent) return <WelcomeView />;
+  return <AgentMainView key={`agent:${agent.agent_id}`} agent={agent} controller={controller} sidebar_collapsed={sidebar_collapsed} main_session={main_context && main_session ? { workspace_id: main_context.workspace_id, session: main_session.session } : undefined} />;
+}
+
+/** Agent Draft 路由订阅 Chat Surface 所需的最小目录集合。 */
+function AgentDraftRouteMainView({ selection, controller, sidebar_collapsed }: { /** Agent Draft 导航目标。 */ selection: Extract<NavigationTarget, { kind: "draft" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
+  const agent = agents.find((item) => item.agent_id === selection.agent_id);
+  const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
+  const models = use_desktop_selector(controller.stores.catalog, (state) => state.models);
+  const models_loading = use_desktop_selector(controller.stores.catalog, (state) => state.models_loading);
+  const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
+  if (!agent) return <WelcomeView />;
+  return <AgentChatMainView agent={agent} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`agent-draft:${agent.agent_id}:${selection.draft_id}`}>
+    {(open_agent_info) => <AgentDraftChatSurface selection={selection} agent={agent} open_agent_info={open_agent_info} workspaces={workspaces} agents={agents} settings={settings} models={models} models_loading={models_loading} controller={controller} />}
+  </AgentChatMainView>;
+}
+
+/** Agent Session 路由只订阅当前 Session 及 Chat Surface 依赖。 */
+function AgentSessionRouteMainView({ selection, controller, sidebar_collapsed }: { /** Agent Session 导航目标。 */ selection: Extract<NavigationTarget, { kind: "session" }>; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
+  const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
+  const agent = agents.find((item) => item.agent_id === selection.agent_id);
+  const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
+  const models = use_desktop_selector(controller.stores.catalog, (state) => state.models);
+  const models_loading = use_desktop_selector(controller.stores.catalog, (state) => state.models_loading);
+  const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
+  const session = use_desktop_selector(controller.stores.session, (state) => (state.sessions_by_workspace[selection.workspace_id] ?? []).find((item) => item.agent_id === selection.agent_id && item.session.session_id === selection.session_id)?.session);
+  if (!agent || !session) return <WelcomeView />;
+  return <AgentChatMainView agent={agent} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`agent-session:${agent.agent_id}:${session.session_id}`}>
+    {(open_agent_info) => <AgentSessionChatSurface selection={selection} agent={agent} session={session} open_agent_info={open_agent_info} workspaces={workspaces} agents={agents} settings={settings} models={models} models_loading={models_loading} controller={controller} />}
   </AgentChatMainView>;
 }
 
@@ -379,7 +423,7 @@ function GroupChatSurface({ selection, group, session, open_group_info, workspac
   const group_id = selection.group_id;
   const workspace_id = selection.workspace_id;
   const chat_key = get_group_chat_key(workspace_id, group_id, session_id);
-  const messages = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_messages_by_group[group_id]);
+  const message_projection = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_message_projection_by_group[group_id]);
   const member_statuses = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_member_statuses_by_group[group_id]);
   const group_phase = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_phase_by_group[group_id]);
   const read_message_ids = use_desktop_selector(controller.stores.chat_stream, (state) => state.group_read_message_ids_by_group[group_id]);
@@ -401,7 +445,7 @@ function GroupChatSurface({ selection, group, session, open_group_info, workspac
     session={session}
     agents={agents}
     settings={settings}
-    messages={selection.kind === "group_draft" ? empty_items : messages ?? empty_items}
+    message_projection={selection.kind === "group_draft" ? undefined : message_projection}
     member_statuses={member_statuses ?? empty_items}
     group_phase={group_phase ?? "idle"}
     read_message_ids={read_message_ids ?? empty_items}

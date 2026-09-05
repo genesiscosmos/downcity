@@ -16,11 +16,22 @@ import type {
   DesktopSessionConfiguration,
 } from "@common/types/DesktopApi";
 import type { ChatHistoryState, ChatStreamState, GroupInteraction } from "@/types/DesktopView";
-import { apply_session_mutations, merge_session_snapshot } from "@/lib/chat/session_mutation";
+import type { SessionMessageIndex } from "@/types/SessionProjection";
+import type { GroupMessageProjection } from "@/types/GroupProjection";
+import {
+  apply_indexed_session_mutations,
+  create_session_message_index,
+  merge_session_snapshot,
+} from "@/lib/chat/session_mutation";
 import { collect_executing_agent_ids, project_executing_agent_ids } from "@/lib/chat/chat_runtime_projection";
 import { get_workspace_chat_key_prefixes } from "@/lib/chat/chat_cache_key";
 import { project_chat_render_cache, recent_chat_render_cache_limit, touch_chat_render_cache } from "@/lib/chat/chat_render_cache";
 import { same_group_member_statuses } from "@/lib/group/group_runtime_projection";
+import {
+  append_group_messages_projection,
+  create_empty_group_message_projection,
+  create_group_message_projection,
+} from "@/lib/group/group_message_projection";
 import { remove_record_prefixes } from "@/lib/store/record_projection";
 import { use_store } from "./store_types";
 
@@ -31,7 +42,7 @@ const initial_chat_stream_state: ChatStreamState = {
   configuration_by_session: {},
   history_by_session: {},
   executing_agent_ids: new Set(),
-  group_messages_by_group: {},
+  group_message_projection_by_group: {},
   group_member_statuses_by_group: {},
   group_phase_by_group: {},
   group_read_message_ids_by_group: {},
@@ -51,9 +62,12 @@ export function use_chat_stream_store() {
   const { store, state_ref, commit } = use_store<ChatStreamState>(initial_chat_stream_state);
   const mutation_batches_ref = useRef(new Map<string, SessionMutation[]>());
   const mutation_frame_ref = useRef<number | null>(null);
+  const group_message_batches_ref = useRef(new Map<string, DesktopGroupMessage[]>());
+  const group_message_frame_ref = useRef<number | null>(null);
   const hydrated_render_cache_keys_ref = useRef(new Set<string>());
   const pending_snapshot_counts_ref = useRef(new Map<string, number>());
   const recent_render_cache_keys_ref = useRef<readonly string[]>([]);
+  const message_indexes_ref = useRef(new Map<string, SessionMessageIndex>());
 
   /** 判断指定 Session 是否已有完整快照，或正在等待快照期间允许接收实时增量。 */
   const can_receive_render_event = useCallback((session_key: string) => {
@@ -72,6 +86,7 @@ export function use_chat_stream_store() {
     for (const session_key of keys) {
       hydrated_render_cache_keys_ref.current.delete(session_key);
       mutation_batches_ref.current.delete(session_key);
+      message_indexes_ref.current.delete(session_key);
     }
     recent_render_cache_keys_ref.current = recent_render_cache_keys_ref.current.filter((key) => !keys.has(key));
     if (
@@ -137,9 +152,11 @@ export function use_chat_stream_store() {
       let changed = false;
       for (const [key, mutations] of batches) {
         const current_messages = next_messages[key] ?? [];
-        const updated_messages = apply_session_mutations(current_messages, mutations);
-        if (updated_messages === current_messages) continue;
-        next_messages[key] = updated_messages;
+        const current_index = message_indexes_ref.current.get(key) ?? create_session_message_index(current_messages);
+        const result = apply_indexed_session_mutations(current_messages, current_index, mutations);
+        message_indexes_ref.current.set(key, result.message_index);
+        if (result.messages === current_messages) continue;
+        next_messages[key] = result.messages;
         changed = true;
       }
       if (!changed) return;
@@ -147,23 +164,35 @@ export function use_chat_stream_store() {
     });
   }, [can_receive_render_event, commit]);
 
-  /** 卸载时取消尚未执行的批处理。 */
+  /** 卸载时取消尚未执行的 Session mutation 与 Group 消息批处理。 */
   const cancel_pending_mutations = useCallback(() => {
     if (mutation_frame_ref.current !== null) cancelAnimationFrame(mutation_frame_ref.current);
+    if (group_message_frame_ref.current !== null) cancelAnimationFrame(group_message_frame_ref.current);
     mutation_frame_ref.current = null;
+    group_message_frame_ref.current = null;
     mutation_batches_ref.current = new Map();
+    group_message_batches_ref.current = new Map();
   }, []);
 
   /** 将快照消息合并进指定 Session（snapshot merge 语义）。 */
   const merge_messages = useCallback((session_key: string, messages: SessionMessage[]) => {
     const current = state_ref.current;
+    const current_messages = current.messages_by_session[session_key] ?? [];
+    const merged_messages = merge_session_snapshot(current_messages, messages);
     hydrated_render_cache_keys_ref.current.add(session_key);
     recent_render_cache_keys_ref.current = touch_chat_render_cache(recent_render_cache_keys_ref.current, session_key);
+    if (merged_messages === current_messages) {
+      if (!message_indexes_ref.current.has(session_key)) {
+        message_indexes_ref.current.set(session_key, create_session_message_index(merged_messages));
+      }
+      return;
+    }
+    message_indexes_ref.current.set(session_key, create_session_message_index(merged_messages));
     commit({
       ...current,
       messages_by_session: {
         ...current.messages_by_session,
-        [session_key]: merge_session_snapshot(current.messages_by_session[session_key] ?? [], messages),
+        [session_key]: merged_messages,
       },
     });
   }, [commit]);
@@ -264,22 +293,37 @@ export function use_chat_stream_store() {
   /** 替换 Group 的共享消息缓存。 */
   const set_group_messages = useCallback((group_id: string, messages: DesktopGroupMessage[]) => {
     const current = state_ref.current;
-    if (Object.is(current.group_messages_by_group[group_id], messages)) return;
     commit({
       ...current,
-      group_messages_by_group: { ...current.group_messages_by_group, [group_id]: messages },
+      group_message_projection_by_group: {
+        ...current.group_message_projection_by_group,
+        [group_id]: create_group_message_projection(messages),
+      },
     });
   }, [commit]);
 
   /** 追加一条 Group 共享消息。 */
   const append_group_message = useCallback((group_id: string, message: DesktopGroupMessage) => {
-    const current = state_ref.current;
-    commit({
-      ...current,
-      group_messages_by_group: {
-        ...current.group_messages_by_group,
-        [group_id]: [...(current.group_messages_by_group[group_id] ?? []), message],
-      },
+    const batch = group_message_batches_ref.current.get(group_id) ?? [];
+    batch.push(message);
+    group_message_batches_ref.current.set(group_id, batch);
+    if (group_message_frame_ref.current !== null) return;
+    group_message_frame_ref.current = requestAnimationFrame(() => {
+      const batches = group_message_batches_ref.current;
+      group_message_batches_ref.current = new Map();
+      group_message_frame_ref.current = null;
+      const current = state_ref.current;
+      let next_projections = current.group_message_projection_by_group;
+      for (const [target_group_id, messages] of batches) {
+        const current_projection = next_projections[target_group_id] ?? create_empty_group_message_projection();
+        const next_projection = append_group_messages_projection(current_projection, messages);
+        if (next_projection === current_projection) continue;
+        if (next_projections === current.group_message_projection_by_group) next_projections = { ...next_projections };
+        next_projections[target_group_id] = next_projection;
+      }
+      if (next_projections !== current.group_message_projection_by_group) {
+        commit({ ...current, group_message_projection_by_group: next_projections });
+      }
     });
   }, [commit]);
 
@@ -354,10 +398,15 @@ export function use_chat_stream_store() {
 
   /** 清空 Group 的一次性运行上下文（切换 GroupSession / 新建时调用）。 */
   const reset_group_chat = useCallback((group_id: string) => {
+    group_message_batches_ref.current.delete(group_id);
     const current = state_ref.current;
+    const empty_projection: GroupMessageProjection = create_empty_group_message_projection();
     commit({
       ...current,
-      group_messages_by_group: { ...current.group_messages_by_group, [group_id]: [] },
+      group_message_projection_by_group: {
+        ...current.group_message_projection_by_group,
+        [group_id]: empty_projection,
+      },
       group_member_statuses_by_group: { ...current.group_member_statuses_by_group, [group_id]: [] },
       group_phase_by_group: { ...current.group_phase_by_group, [group_id]: "idle" },
       group_read_message_ids_by_group: { ...current.group_read_message_ids_by_group, [group_id]: [] },
@@ -367,10 +416,11 @@ export function use_chat_stream_store() {
 
   /** 移除 Group 在 Chat 流式领域的全部缓存。 */
   const remove_group = useCallback((group_id: string) => {
+    group_message_batches_ref.current.delete(group_id);
     const current = state_ref.current;
     commit({
       ...current,
-      group_messages_by_group: remove_key(current.group_messages_by_group, group_id),
+      group_message_projection_by_group: remove_key(current.group_message_projection_by_group, group_id),
       group_member_statuses_by_group: remove_key(current.group_member_statuses_by_group, group_id),
       group_phase_by_group: remove_key(current.group_phase_by_group, group_id),
       group_read_message_ids_by_group: remove_key(current.group_read_message_ids_by_group, group_id),
@@ -396,6 +446,9 @@ export function use_chat_stream_store() {
     }
     for (const key of mutation_batches_ref.current.keys()) {
       if (matches_workspace(key)) mutation_batches_ref.current.delete(key);
+    }
+    for (const key of message_indexes_ref.current.keys()) {
+      if (matches_workspace(key)) message_indexes_ref.current.delete(key);
     }
     recent_render_cache_keys_ref.current = recent_render_cache_keys_ref.current.filter((key) => !matches_workspace(key));
     if (

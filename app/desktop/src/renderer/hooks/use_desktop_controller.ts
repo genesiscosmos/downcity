@@ -93,6 +93,7 @@ export function use_desktop_controller(): DesktopController {
 
   // 组合层只保留跨请求控制引用；领域状态直接同步读取各 store 的 state_ref。
   const snapshot_request_ref = useRef(new Map<string, number>());
+  const session_snapshot_loads_ref = useRef(new Map<string, Promise<void>>());
   const deleting_session_keys_ref = useRef(new Set<string>());
   const deleted_session_keys_ref = useRef(new Set<string>());
   const processing_queue_ref = useRef(new Set<string>());
@@ -270,8 +271,6 @@ export function use_desktop_controller(): DesktopController {
         return;
       }
       chat_stream.append_group_message(event.group_id, event.message);
-      const group = catalog.state_ref.current.groups_by_id[event.group_id];
-      if (group) catalog.upsert_group({ ...group, message_count: group.message_count + 1 });
     });
     return unsubscribe;
   }, [catalog, chat_stream, session]);
@@ -325,6 +324,52 @@ export function use_desktop_controller(): DesktopController {
     deleted_session_keys_ref.current.add(source_key);
   }, [chat_stream, composer]);
 
+  /**
+   * 读取并提交一个 Session 的 canonical 快照。
+   *
+   * 同一 Session 同时收到窗口 focus 与 visibilitychange 时复用同一个 Promise，避免
+   * 重复 IPC；request_id 继续负责删除等跨生命周期操作的迟到响应屏蔽。
+   */
+  const load_session_snapshot = useCallback((workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
+    const session_key = get_session_key(workspace_id, agent_id, session_id);
+    if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key)) return Promise.resolve();
+    const pending_load = session_snapshot_loads_ref.current.get(session_key);
+    if (pending_load) return pending_load;
+
+    const request_id = (snapshot_request_ref.current.get(session_key) ?? 0) + 1;
+    snapshot_request_ref.current.set(session_key, request_id);
+    chat_stream.begin_session_snapshot(session_key);
+    const loading = (async () => {
+      let snapshot_succeeded = false;
+      try {
+        const [snapshot, configuration] = await Promise.all([
+          window.downcity.chat.get_snapshot(agent_id, workspace_id, session_id),
+          window.downcity.chat.get_configuration(agent_id, workspace_id, session_id),
+        ]);
+        if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || snapshot_request_ref.current.get(session_key) !== request_id) return;
+        chat_stream.merge_messages(session_key, snapshot.messages);
+        chat_stream.set_history(session_key, { loading: false, has_more: snapshot.has_more, next_before_sequence: snapshot.next_before_sequence });
+        const current_runtime = chat_stream.state_ref.current.chat_runtime_by_session[session_key];
+        const next_runtime = current_runtime && current_runtime.updated_at > snapshot.runtime.updated_at ? current_runtime : snapshot.runtime;
+        chat_stream.set_runtime(session_key, next_runtime);
+        chat_stream.set_configuration(session_key, configuration);
+        snapshot_succeeded = true;
+      } catch (reason) {
+        if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || snapshot_request_ref.current.get(session_key) !== request_id) return;
+        settings.set_error(to_error_message(reason));
+      } finally {
+        chat_stream.finish_session_snapshot(session_key, snapshot_succeeded);
+        chat_stream.trim_render_cache(get_active_session_cache_key(navigation.state_ref.current.selection));
+      }
+    })();
+    session_snapshot_loads_ref.current.set(session_key, loading);
+    return loading.finally(() => {
+      if (session_snapshot_loads_ref.current.get(session_key) === loading) {
+        session_snapshot_loads_ref.current.delete(session_key);
+      }
+    });
+  }, [chat_stream, navigation, settings]);
+
   /** 打开 Session 并读取快照；不检查 Workspace 归属，供 rebind 完成后直接进入。 */
   const open_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
@@ -334,32 +379,8 @@ export function use_desktop_controller(): DesktopController {
     if (!preserve_sidebar) navigation.set_sidebar_mode("chat");
     navigation.set_active_workspace_id(workspace_id);
     navigation.set_selection({ kind: "session", workspace_id, agent_id, session_id });
-    const request_id = (snapshot_request_ref.current.get(session_key) ?? 0) + 1;
-    snapshot_request_ref.current.set(session_key, request_id);
-    chat_stream.begin_session_snapshot(session_key);
-    let snapshot_succeeded = false;
-    try {
-      const [snapshot, configuration] = await Promise.all([
-        window.downcity.chat.get_snapshot(agent_id, workspace_id, session_id),
-        window.downcity.chat.get_configuration(agent_id, workspace_id, session_id),
-      ]);
-      if (snapshot_request_ref.current.get(session_key) !== request_id) return;
-      chat_stream.merge_messages(session_key, snapshot.messages);
-      const history_state = { loading: false, has_more: snapshot.has_more, next_before_sequence: snapshot.next_before_sequence };
-      chat_stream.set_history(session_key, history_state);
-      const current_runtime = chat_stream.state_ref.current.chat_runtime_by_session[session_key];
-      const next_runtime = current_runtime && current_runtime.updated_at > snapshot.runtime.updated_at ? current_runtime : snapshot.runtime;
-      chat_stream.set_runtime(session_key, next_runtime);
-      chat_stream.set_configuration(session_key, configuration);
-      snapshot_succeeded = true;
-    } catch (reason) {
-      if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || snapshot_request_ref.current.get(session_key) !== request_id) return;
-      settings.set_error(to_error_message(reason));
-    } finally {
-      chat_stream.finish_session_snapshot(session_key, snapshot_succeeded);
-      chat_stream.trim_render_cache(get_active_session_cache_key(navigation.state_ref.current.selection));
-    }
-  }, [chat_stream, navigation, settings]);
+    await load_session_snapshot(workspace_id, agent_id, session_id);
+  }, [load_session_snapshot, navigation, settings]);
 
   const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
@@ -392,35 +413,9 @@ export function use_desktop_controller(): DesktopController {
   }, [chat_stream, navigation.state_ref, navigation.store]);
 
   /** 刷新当前 Agent Session 的 canonical 快照，恢复窗口切换期间错过的 mutation。 */
-  const refresh_session_snapshot = useCallback(async (workspace_id: string, agent_id: string, session_id: string): Promise<void> => {
-    const session_key = get_session_key(workspace_id, agent_id, session_id);
-    if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key)) return;
-    const request_id = (snapshot_request_ref.current.get(session_key) ?? 0) + 1;
-    snapshot_request_ref.current.set(session_key, request_id);
-    chat_stream.begin_session_snapshot(session_key);
-    let snapshot_succeeded = false;
-    try {
-      const [snapshot, configuration] = await Promise.all([
-        window.downcity.chat.get_snapshot(agent_id, workspace_id, session_id),
-        window.downcity.chat.get_configuration(agent_id, workspace_id, session_id),
-      ]);
-      if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || snapshot_request_ref.current.get(session_key) !== request_id) return;
-      chat_stream.merge_messages(session_key, snapshot.messages);
-      const history_state = { loading: false, has_more: snapshot.has_more, next_before_sequence: snapshot.next_before_sequence };
-      chat_stream.set_history(session_key, history_state);
-      const current_runtime = chat_stream.state_ref.current.chat_runtime_by_session[session_key];
-      const next_runtime = current_runtime && current_runtime.updated_at > snapshot.runtime.updated_at ? current_runtime : snapshot.runtime;
-      chat_stream.set_runtime(session_key, next_runtime);
-      chat_stream.set_configuration(session_key, configuration);
-      snapshot_succeeded = true;
-    } catch (reason) {
-      if (deleting_session_keys_ref.current.has(session_key) || deleted_session_keys_ref.current.has(session_key) || snapshot_request_ref.current.get(session_key) !== request_id) return;
-      settings.set_error(to_error_message(reason));
-    } finally {
-      chat_stream.finish_session_snapshot(session_key, snapshot_succeeded);
-      chat_stream.trim_render_cache(get_active_session_cache_key(navigation.state_ref.current.selection));
-    }
-  }, [chat_stream, navigation, settings]);
+  const refresh_session_snapshot = useCallback((workspace_id: string, agent_id: string, session_id: string): Promise<void> => (
+    load_session_snapshot(workspace_id, agent_id, session_id)
+  ), [load_session_snapshot]);
 
   /** 窗口重新可见或获得焦点时同步当前 Session，避免漏掉后台期间的交互事件。 */
   useEffect(() => {

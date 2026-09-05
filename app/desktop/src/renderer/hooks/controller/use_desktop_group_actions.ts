@@ -1,6 +1,6 @@
 /** Desktop Group 导航、会话与消息编排。 */
 
-import { useCallback, useEffect, useMemo, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
 import type { RespondSessionInteractionInput } from "@downcity/agent";
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopCreateGroupInput, DesktopUpdateGroupInput } from "@common/types/DesktopApi";
@@ -33,6 +33,7 @@ interface DesktopGroupDependencies {
 /** 创建 Group 领域的稳定操作集合。 */
 export function use_desktop_group_actions(dependencies: DesktopGroupDependencies) {
   const { catalog, chat_stream, composer, navigation, session, settings, active_group_session_ids_ref, hydrated_navigation_keys_ref } = dependencies;
+  const group_navigation_request_ref = useRef(0);
   const resolve_chat_workspace = useCallback(async (preferred_workspace_id?: string) => {
     const current_workspaces = catalog.state_ref.current.workspaces;
     const target_workspace = current_workspaces.find((workspace) => workspace.workspace_id === preferred_workspace_id)
@@ -42,8 +43,13 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
     if (!current_workspaces.some((workspace) => workspace.workspace_id === target_workspace.workspace_id)) catalog.add_workspace(target_workspace);
     return target_workspace;
   }, [catalog, navigation]);
-  const open_group_draft = useCallback(async (group_id: string, workspace_id?: string) => {
+  const open_group_draft = useCallback(async (group_id: string, workspace_id?: string, parent_request_id?: number) => {
+    const request_id = parent_request_id ?? group_navigation_request_ref.current + 1;
+    const initial_selection = navigation.state_ref.current.selection;
+    if (parent_request_id === undefined) group_navigation_request_ref.current = request_id;
+    else if (group_navigation_request_ref.current !== parent_request_id) return;
     const workspace = await resolve_chat_workspace(workspace_id);
+    if (group_navigation_request_ref.current !== request_id || navigation.state_ref.current.selection !== initial_selection) return;
     const draft_id = get_group_draft_session_id(group_id);
     active_group_session_ids_ref.current.delete(group_id);
     navigation.set_sidebar_mode("chat");
@@ -53,25 +59,32 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
     navigation.set_selection({ kind: "group_draft", group_id, workspace_id: workspace.workspace_id, draft_id });
   }, [active_group_session_ids_ref, chat_stream, navigation, resolve_chat_workspace]);
   const open_group = useCallback(async (group_id: string, session_id?: string) => {
+    const request_id = group_navigation_request_ref.current + 1;
+    const initial_selection = navigation.state_ref.current.selection;
+    group_navigation_request_ref.current = request_id;
     settings.set_error("");
-    if (session_id) hydrated_navigation_keys_ref.current.add(`group:${group_id}:${session_id}`);
     try {
       const summaries = await window.downcity.group.list_sessions(group_id);
+      if (group_navigation_request_ref.current !== request_id || navigation.state_ref.current.selection !== initial_selection) return;
       const target_session_id = session_id ?? summaries.slice().sort((left, right) => right.updated_at - left.updated_at)[0]?.session_id;
-      if (!target_session_id) return await open_group_draft(group_id);
+      if (!target_session_id) return await open_group_draft(group_id, undefined, request_id);
       const group = await window.downcity.group.open(group_id, target_session_id);
-      catalog.upsert_group(group);
-      session.replace_group_sessions(group);
       const active_session = group.sessions.find((item) => item.session_id === group.active_session_id);
       if (!active_session?.workspace_id || !group.active_session_id) throw new Error("GroupSession 必须绑定 Workspace");
-      active_group_session_ids_ref.current.set(group_id, group.active_session_id);
       const messages = await window.downcity.group.list_messages(group_id, group.active_session_id);
+      if (group_navigation_request_ref.current !== request_id || navigation.state_ref.current.selection !== initial_selection) return;
+      catalog.upsert_group(group);
+      session.replace_group_sessions(group);
+      active_group_session_ids_ref.current.set(group_id, group.active_session_id);
       chat_stream.reset_group_chat(group_id);
       chat_stream.set_group_messages(group_id, messages);
       navigation.set_active_workspace_id(active_session.workspace_id);
       localStorage.setItem(active_workspace_storage_key, active_session.workspace_id);
+      hydrated_navigation_keys_ref.current.add(`group:${group_id}:${group.active_session_id}`);
       navigation.set_selection({ kind: "group_session", group_id, workspace_id: active_session.workspace_id, session_id: group.active_session_id });
-    } catch (reason) { settings.set_error(to_error_message(reason)); }
+    } catch (reason) {
+      if (group_navigation_request_ref.current === request_id) settings.set_error(to_error_message(reason));
+    }
   }, [active_group_session_ids_ref, catalog, chat_stream, hydrated_navigation_keys_ref, navigation, open_group_draft, session, settings]);
   useEffect(() => {
     const hydrate_group_session = () => {

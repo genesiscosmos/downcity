@@ -1,6 +1,6 @@
 # Desktop 状态管理与性能重构设计方案
 
-> 状态：**已实施（领域 store、稳定选择器、消息分段与渲染缓存生命周期完成）**
+> 状态：**已实施（领域 store、路由级订阅、持久消息索引、双 Chat 分段与渲染缓存生命周期完成）**
 > 目标版本：`@downcity/desktop` 0.1.0（React 19.2.6）
 > 关联代码：`app/desktop/src/renderer/`
 
@@ -55,7 +55,7 @@
 | `use_navigation_store` | selection, sidebar_mode, active_workspace_id, plugin_routes, plugin_revisions | 导航切换 |
 | `use_catalog_store` | agents, workspaces, groups, plugins, models, models_loading | 低频（列表刷新） |
 | `use_session_store` | sessions_by_workspace, archived_sessions_by_workspace, group_sessions_by_workspace | 中频（Session 增删改） |
-| `use_chat_stream_store` | messages_by_session, chat_runtime_by_session, file_diff_by_session, configuration_by_session, history_by_session + **group_messages_by_group, group_member_statuses_by_group, group_phase_by_group, group_read_message_ids_by_group, group_interactions_by_group** | **高频（runtime / mutation / 群聊流式）** |
+| `use_chat_stream_store` | messages_by_session, chat_runtime_by_session, file_diff_by_session, configuration_by_session, history_by_session + **group_message_projection_by_group, group_member_statuses_by_group, group_phase_by_group, group_read_message_ids_by_group, group_interactions_by_group** | **高频（runtime / mutation / 群聊流式）** |
 | `use_composer_store` | draft_content_by_session, queued_messages_by_session, queue_paused_by_session | 中频（输入、队列） |
 | `use_settings_store` | settings, global_env, user, accounts, account_resources, error, loading | 低频 |
 | `use_notification_store` | notification_state | 通知变更 |
@@ -184,8 +184,9 @@ export function use_chat_stream_store() {
 1. **runtime 更新只改受影响条目**：不再重建整个 `sessions_by_workspace` map；
    `executing_agent_ids` 直接基于 canonical runtime 的 `agent_id` 聚合，不解析 Session 组合键。
    同一 Agent 的一个 Session 结束时，只要仍有其它运行中 Session 就保留执行标记；Sidebar 使用 `Set.has()` 判断。
-2. **mutation 批处理保留**：rAF 批处理继续，但只更新 `chat_stream_store` 内的 `messages_by_session`，
-   不会触发 catalog / navigation 重渲染。
+2. **mutation 批处理保留**：rAF 批处理继续，但只更新 `chat_stream_store` 内的 `messages_by_session`。
+   每个 Session 持有与消息数组引用绑定的 `message_id -> index`，已有消息的流式更新不再逐帧全量建表和排序；
+   新消息才按 `sequence` 二分插入并重建位置索引。
 3. **Session 列表派生缓存**：`ChatSidebar` 用 `useMemo` 缓存 agent_sessions 排序结果，
    依赖 `[agents, sessions_by_workspace]`（或对应 selector），避免每次渲染全量计算。
 
@@ -313,7 +314,7 @@ const running = use_desktop_selector(controller.stores.chat_stream, (state) => s
 | `hooks/store/use_navigation_store.ts` | selection / sidebar_mode / active_workspace_id / plugin_routes / plugin_revisions + 全部导航 action；迁移 selection 记忆、localStorage 持久化、notification view state 上报 |
 | `hooks/store/use_catalog_store.ts` | agents / workspaces / groups / groups_by_id / plugins / models / models_loading + 对应 CRUD action（不含跨 store 副作用，见 9.2） |
 | `hooks/store/use_session_store.ts` | sessions_by_workspace / archived_sessions_by_workspace / group_sessions_by_workspace + 索引更新 action；迁移 `index/merge/replace/remove_group_sessions` |
-| `hooks/store/use_chat_stream_store.ts` | messages / runtime / file_diff / configuration / history / **executing_agent_ids** / group 流式 5 字段 + 对应 setter；迁移 mutation rAF 批处理、runtime 订阅、group.subscribe |
+| `hooks/store/use_chat_stream_store.ts` | messages / runtime / file_diff / configuration / history / **executing_agent_ids** / Group 持久消息分段与流式字段 + 对应 setter；迁移 mutation rAF 批处理、runtime 订阅、group.subscribe |
 | `hooks/store/use_composer_store.ts` | drafts / queued_messages / queue_paused + 草稿与队列 action；迁移 queue_ref / process_next_queue（busy 判断由组合层注入） |
 | `hooks/store/use_settings_store.ts` | settings / global_env / user / accounts / account_resources / error / loading + 设置/登录 action；迁移外观副作用 |
 
@@ -328,7 +329,7 @@ const running = use_desktop_selector(controller.stores.chat_stream, (state) => s
 | 文件 | 改动 |
 |---|---|
 | `types/DesktopView.ts` | 删除 `DesktopViewController` 扁平兼容层，保留 `DesktopController`（`stores` + `actions`），并统一定义各领域 store state 类型 |
-| `App.tsx` | 改用 `actions` + `use_desktop_selector`；Session / Group 高频 selector 下沉到对应 Chat Surface，根壳只订阅导航目标；业务主视图、错误与 Session 绑定弹窗各自持有 selector；全局 keydown/link 监听依赖稳定 actions |
+| `App.tsx` | 改用 `actions` + `use_desktop_selector`；Session / Group 高频 selector 下沉到对应 Chat Surface，根壳只订阅导航目标；`DesktopMainView` 只做路由分派，各路由组件仅订阅当前业务对象；全局 keydown/link 监听依赖稳定 actions |
 | `layouts/NavigationSidebar.tsx` | `React.memo`；组件内部订阅 selection / sidebar_mode / notification_state / user / plugins，仅接收稳定 actions 与本地 UI props |
 | `layouts/SettingsSidebar.tsx` | `React.memo`；props 收紧为 selection + open_settings / close_settings |
 | `layouts/sidebar/ChatSidebar.tsx` | `React.memo`；`agent_sessions` 排序用 `useMemo`；`AgentSubject.running` 改用 `executing_agent_ids.has(agent_id)`；AgentSubject / GroupSubject 各自 memo |
@@ -348,7 +349,10 @@ const running = use_desktop_selector(controller.stores.chat_stream, (state) => s
 
 ### 9.5 热路径纯函数
 
-`lib/chat/session_mutation.ts` 新增批量投影：同一 rAF 批次只建立一次消息索引、每个被修改的 Assistant 只复制一次 parts，并在批次末尾生成一次不可变消息数组。导航、通知、Tiptap 编解码等其余纯函数保持原有职责。
+`lib/chat/session_mutation.ts` 新增持久索引批量投影：`use_chat_stream_store` 跨 rAF 批次复用消息位置索引，
+每个被修改的 Assistant 只复制一次 parts，并在批次末尾生成一次不可变消息数组。索引随 snapshot、LRU 淘汰、
+Session 删除与 Workspace 清理同步重建或释放。`lib/group/group_message_projection.ts` 直接持有固定 32 条消息分段，
+单条追加只复制末尾分段，不复制完整历史消息数组。
 
 ### 9.6 改动顺序（建议）
 
@@ -371,15 +375,20 @@ const running = use_desktop_selector(controller.stores.chat_stream, (state) => s
 - [x] 同一 Agent 多个 Session 并行执行时，任一 Session 结束不会误清除 Agent 运行标记
 - [x] Workspace 清理在没有缓存命中时不发布 chat / composer / session 快照
 - [x] App 根壳只订阅导航目标，通知、业务状态与弹窗状态在独立消费边界失效
+- [x] `DesktopMainView` 不订阅领域数据，Group 高频更新不会使 Agent / Workspace / Plugin 主视图失效
+- [x] Session mutation 跨动画帧复用持久位置索引，只有结构变化才重建索引
+- [x] Group 消息在 store 中按 32 条持久分段，追加只替换尾部分段
+- [x] GroupSession 快速切换时，过期异步请求不能回写活动会话、消息或导航
 - [x] `AgentSidebar.tsx` 确认无引用后删除，`NavigationSidebar` 无死 import
-- [x] Web/Node typecheck、93 个 Desktop 测试与生产构建通过
+- [x] Web/Node typecheck、Desktop 全量测试与生产构建通过
 
 ## 十一、长会话视口渲染与滚动所有权
 
 ### 11.1 产品意图与实现边界
 
 长会话优化的目标是在不破坏消息查找、文本选择、流式输出和历史前插位置的前提下，减少离屏 Markdown 的布局与绘制成本。
-Session 与 Group 的消息仍由各自 canonical 消息数组持有，视口层不复制消息，也不成为第二事实源。
+Session 消息由 canonical 消息数组持有；Group 消息由 store 内的持久分段持有。视口层只消费对应投影，
+不复制消息，也不成为第二事实源。
 
 当前阶段不引入完整虚拟列表。消息包含 Markdown、代码块、公式和图表，真实高度会在渲染后变化；直接卸载离屏 DOM
 会额外引入高度测量、选区恢复和滚动锚点生命周期。Renderer 先使用 Chromium 原生 `content-visibility: auto`：
@@ -416,6 +425,32 @@ React 协调层按 canonical `sequence` 的固定 32 区间建立稳定 Segment�
 - [x] 滚动判定与锚点补偿具有独立纯函数测试
 - [x] 五千条消息尾部更新只替换尾部分段，其余历史分段引用全部复用
 
+## 十三、路由订阅与 Group 请求生命周期
+
+### 13.1 路由级失效边界
+
+`DesktopMainView` 只依据导航目标选择路由组件，本身不订阅 Catalog、Session 或 Settings。每种路由在独立组件内
+选择自己的最小数据集，例如 Agent Session 不订阅 Group 与 Plugin，Group 配置只订阅当前 `groups_by_id[group_id]`。
+因此 Group 的消息计数与 Session 摘要变化不会再使正在显示的 Agent Chat 被动重渲染。
+
+### 13.2 GroupSession 请求所有权
+
+Group 导航编排持有单调递增的请求版本。一次打开操作先读取 Session 列表、Group 快照和消息快照，确认仍是最新请求后，
+再提交 Catalog、Session 索引、活动 Session、消息分段与导航。后发的 Group Session 或 Draft 导航会立即使旧请求失效；
+旧请求的响应和错误都不会覆盖当前页面。请求同时记录发起时的导航快照，因此用户转去 Agent、Workspace 或 Plugin 等
+任意其它页面后，即使没有发起新的 Group 请求，原 Group 响应也不能把页面拉回。
+
+### 13.3 验收标准
+
+- [x] 快速切换两个 GroupSession 时只允许最后一个请求提交
+- [x] 切换到 Group Draft 会使尚未完成的 GroupSession 请求失效
+- [x] 切换到任意非 Group 页面会使尚未完成的 GroupSession 请求失效
+- [x] Group 消息追加不复制完整消息历史
+- [x] 同一动画帧的多条 Group 消息只发布一次 store 快照
+- [x] snapshot 与实时消息交叠时按 `message_id` 去重
+- [x] Group 消息事件不再逐条改写低频 Catalog 摘要
+- [x] 未变化的 Group 历史分段通过 `React.memo` 跳过元素创建与 reconciliation
+
 ## 十二、Session 渲染缓存生命周期
 
 ### 12.1 所有权与容量
@@ -440,6 +475,8 @@ LRU 只淘汰以下可重建状态：
 - 已淘汰 Session 的后台 mutation 不创建残缺缓存。
 - 全部并发 snapshot 均失败时，原子删除请求期间形成的残缺消息、历史和文件改动状态。
 - 重新打开已淘汰 Session 时重新读取 canonical snapshot。
+- 相同 Session 的并发聚焦刷新复用同一个 single-flight Promise，不重复请求消息与配置。
+- 相同 revision 的快照优先复用 Renderer 现有消息对象；全部消息未变化时继续复用消息数组与位置索引。
 
 ### 12.3 缓存键
 
@@ -453,3 +490,28 @@ Agent Session 与 Group Chat 使用独立类型标签和长度前缀字段编码
 - [x] 淘汰消息、历史与文件改动时只发布一次 store 快照
 - [x] 后台 runtime 与队列处理不依赖消息渲染缓存
 - [x] 组合键分隔符、Unicode、Agent/Group 命名空间和 Workspace 清理均有纯函数测试
+- [x] `focus` 与 `visibilitychange` 同时触发时不重复读取同一 Session
+- [x] 未变化快照不使历史消息 Segment 与 Markdown 渲染缓存失效
+
+## 十四、Chat 输入草稿同步
+
+### 14.1 编辑所有权
+
+Tiptap Editor 是输入过程中的实时状态所有者。键盘输入先只更新编辑器自身与输入框内的局部状态，不再逐键把完整 JSON
+写入 composer store。用户停止输入 300ms 后，最新文档作为可恢复草稿同步一次；失焦、Session 切换或组件卸载前强制 flush。
+
+每份待同步草稿同时保存生成时对应的 `update_draft`，即使切换 Session 发生在 effect cleanup 之前，也只会写回原 Session。
+发送开始时丢弃等待中的计时器，由发送/失败恢复流程接管该份输入，防止迟到同步把已发送内容重新写回。
+
+### 14.2 外部状态回写
+
+编辑器记录最近一次主动发布的 JSON 引用。composer store 回传同一对象时直接确认，不再执行两次 `JSON.stringify` 或
+`setContent`；发送成功清空、发送失败恢复、切换 Session 等真正的外部变化仍通过 `setContent` 明确应用。
+
+### 14.3 验收标准
+
+- [x] 普通连续输入不再逐键发布 composer store 快照
+- [x] 发送按钮的空内容状态由编辑器局部更新，不依赖父级重渲染
+- [x] 失焦、Session 切换和卸载前不会丢失等待同步的草稿
+- [x] 发送后不会被迟到的草稿计时器恢复旧内容
+- [x] 本地草稿回传不再序列化并重设完整 Tiptap 文档

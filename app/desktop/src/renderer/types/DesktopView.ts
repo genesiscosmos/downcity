@@ -12,7 +12,6 @@ import type {
   DesktopChatRuntime,
   DesktopCreateGroupInput,
   DesktopUpdateGroupInput,
-  DesktopGroupMessage,
   DesktopGroupMemberRuntime,
   DesktopGroupStatusPhase,
   DesktopGroupSummary,
@@ -30,6 +29,7 @@ import type {
   DesktopWorkspaceSummary,
 } from "../../common/types/DesktopApi";
 import type { DesktopNotificationState } from "../../common/types/DesktopNotification";
+import type { GroupMessageProjection } from "./GroupProjection";
 
 /** 设置主视图当前展示的分区。 */
 export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat";
@@ -210,8 +210,8 @@ export interface ChatStreamState {
   history_by_session: Record<string, ChatHistoryState>;
   /** 当前正在执行的 Agent 标识集合。 */
   executing_agent_ids: Set<string>;
-  /** 按 Group 标识缓存的共享消息。 */
-  group_messages_by_group: Record<string, DesktopGroupMessage[]>;
+  /** 按 Group 标识缓存的持久共享消息分段。 */
+  group_message_projection_by_group: Record<string, GroupMessageProjection>;
   /** 按 Group 标识缓存的成员运行态。 */
   group_member_statuses_by_group: Record<string, DesktopGroupMemberRuntime[]>;
   /** 按 Group 标识缓存的当前运行阶段。 */
