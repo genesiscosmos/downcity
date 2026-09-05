@@ -7,8 +7,6 @@
  * - 成功结果中的远程图片会写入 Workspace，并同时保留本地引用与在线来源地址。
  */
 
-import fs from "node:fs/promises";
-import path from "node:path";
 import { z } from "zod";
 import { create_action } from "@downcity/city/plugin";
 import { Plugin } from "@downcity/city/plugin";
@@ -18,20 +16,29 @@ import type {
   PluginJsonValue,
 } from "@downcity/city/plugin";
 import type {
-  ImagePluginInput,
   ImageAiService,
   ImagePluginJobCreateResult,
   ImagePluginJobResult,
   ImagePluginJobResultInput,
-  ImagePluginContent,
   ImagePluginDefaultModel,
   ImagePluginModel,
-  ImagePluginModelsResult,
   ImagePluginOptions,
-  ImagePluginResolvedContent,
-  ImagePluginResolvedInput,
-  ImagePluginResult,
 } from "@/image/types/ImagePlugin.js";
+import {
+  apply_default_image_model,
+  normalize_default_image_model,
+  normalize_default_image_model_value,
+  normalize_image_create_input,
+  normalize_image_payload,
+} from "@/image/runtime/ImageInputRuntime.js";
+import {
+  describe_error,
+  normalize_image_models,
+  normalize_image_result,
+  normalize_image_result_payload,
+  validate_created_job,
+  validate_job_result,
+} from "@/image/runtime/ImageProtocol.js";
 import { localize_image_result } from "@/image/runtime/ImageResultStorage.js";
 import { IMAGE_PLUGIN_SETTINGS } from "@/builtin/PluginSettingsDefinitions.js";
 import { register_plugin_settings_actions } from "@/builtin/host/PluginSettingsActions.js";
@@ -40,8 +47,6 @@ const DEFAULT_IMAGE_PLUGIN_NAME = "image";
 const DEFAULT_IMAGE_PLUGIN_TITLE = "Image";
 const DEFAULT_IMAGE_PLUGIN_DESCRIPTION =
   "Generate images and return them as assistant file parts.";
-const HTTP_URL_RE = /^https?:\/\//i;
-const DEFAULT_IMAGE_MEDIA_TYPE = "image/png";
 /**
  * `image_result` 阻塞等待时的默认参数。
  *
@@ -88,44 +93,6 @@ function clamp_wait_ms(value: number): number {
   return Math.floor(value);
 }
 
-/**
- * 把异常完整描述为字符串，保留 `error.cause` 链上的诊断信息。
- *
- * 关键点（中文）
- * - Node fetch 抛出的 `TypeError: fetch failed` 把真正的根因放在 `error.cause`；
- *   `String(error)` 只会拿到 message，会让上层只看到一个干瘪的 "fetch failed"。
- * - 这里递归读取 cause 链，并取每一层的 `code` + `message`，方便在 agent 输出里直接定位问题。
- */
-function describe_error(error: unknown): string {
-  if (!(error instanceof Error)) return String(error);
-  const parts: string[] = [error.message || error.name || "Error"];
-  let current: unknown = (error as { cause?: unknown }).cause;
-  let depth = 0;
-  while (current && depth < 3) {
-    if (current instanceof Error) {
-      const code = (current as { code?: unknown }).code;
-      const code_text = typeof code === "string" && code ? `[${code}] ` : "";
-      parts.push(`${code_text}${current.message || current.name}`.trim());
-      current = (current as { cause?: unknown }).cause;
-    } else {
-      parts.push(String(current));
-      break;
-    }
-    depth += 1;
-  }
-  return parts.filter(Boolean).join(" :: ");
-}
-
-const IMAGE_MEDIA_TYPES: Record<string, string> = {
-  ".apng": "image/apng",
-  ".avif": "image/avif",
-  ".gif": "image/gif",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-};
-
 const IMAGE_TEXT_CONTENT_SCHEMA = z.object({
   type: z.literal("text"),
   text: z.string(),
@@ -161,343 +128,6 @@ const IMAGE_RESULT_INPUT_SCHEMA = z.object({
   max_wait_ms: z.number().optional(),
   poll_interval_ms: z.number().optional(),
 }).passthrough();
-
-/**
- * 判断值是否为普通对象。
- */
-function to_record(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-/**
- * 归一化模型传入的图片生成 payload。
- */
-function normalize_image_payload(
-  payload: PluginJsonValue | undefined,
-): ImagePluginInput {
-  const record = to_record(payload ?? {});
-  if (!record) {
-    throw new TypeError("ImagePlugin image payload must be an object");
-  }
-  return { ...record } as ImagePluginInput;
-}
-
-/**
- * 归一化默认图片模型配置。
- */
-function normalize_default_image_model_value(value: string | null | undefined): string | undefined {
-  const model = String(value ?? "").trim();
-  return model ? model : undefined;
-}
-
-/**
- * 归一化默认图片模型配置入口。
- */
-function normalize_default_image_model(
-  value: ImagePluginDefaultModel | undefined,
-): ImagePluginDefaultModel | undefined {
-  if (typeof value === "function") return value;
-  return normalize_default_image_model_value(value);
-}
-
-/**
- * 根据文件扩展名推断图片 MIME 类型。
- */
-function infer_image_media_type(file_path: string, fallback?: string): string {
-  if (fallback && fallback.trim()) return fallback.trim();
-  const ext = path.extname(file_path).toLowerCase();
-  return IMAGE_MEDIA_TYPES[ext] ?? DEFAULT_IMAGE_MEDIA_TYPE;
-}
-
-/**
- * 解析图片本地路径。
- */
-function resolve_image_file_path(root_path: string, image_url: string): string {
-  const raw = image_url.trim();
-  if (!raw) throw new TypeError("ImagePlugin image content url is required");
-  return path.isAbsolute(raw) ? raw : path.resolve(root_path, raw);
-}
-
-/**
- * 把本地图片读取为 data URL。
- */
-async function local_image_to_data_url(input: {
-  /**
-   * 当前 Agent 项目根目录。
-   */
-  root_path: string;
-  /**
-   * 本地绝对路径或相对路径。
-   */
-  image_url: string;
-  /**
-   * 可选 MIME 类型。
-   */
-  media_type?: string;
-}): Promise<{ data_url: string; media_type: string }> {
-  const file_path = resolve_image_file_path(input.root_path, input.image_url);
-  const media_type = infer_image_media_type(file_path, input.media_type);
-  const bytes = await fs.readFile(file_path);
-  return {
-    data_url: `${media_type.includes("/") ? `data:${media_type};base64,` : "data:image/png;base64,"}${bytes.toString("base64")}`,
-    media_type,
-  };
-}
-
-/**
- * 归一化单个图片内容片段。
- */
-async function normalize_image_content_part(
-  context: PluginContext,
-  part: ImagePluginContent,
-): Promise<ImagePluginResolvedContent> {
-  if (part.type === "text") return part;
-  const url = String(part.url || "").trim();
-  if (!url) throw new TypeError("ImagePlugin image content url is required");
-  if (url.startsWith("data:")) {
-    throw new TypeError(
-      "ImagePlugin content image url does not accept data URLs; pass an online URL or a local file path",
-    );
-  }
-  if (HTTP_URL_RE.test(url)) {
-    return {
-      type: "image",
-      url,
-      ...(part.media_type ? { media_type: part.media_type } : {}),
-    };
-  }
-  const local = await local_image_to_data_url({
-    root_path: context.workspace.path,
-    image_url: url,
-    media_type: part.media_type,
-  });
-  return {
-    type: "image",
-    data_url: local.data_url,
-    media_type: local.media_type,
-  };
-}
-
-/**
- * 拒绝旧版或内部协议字段，避免 Agent 继续依赖兼容层。
- */
-function assert_public_image_create_input(input: ImagePluginInput): void {
-  const record = input as Record<string, unknown>;
-  if ("messages" in record) {
-    throw new TypeError("ImagePlugin image_create uses prompt or content; messages is not supported");
-  }
-  const content = record.content;
-  if (!Array.isArray(content)) return;
-  for (const part of content) {
-    const part_record = to_record(part);
-    if (part_record && "data_url" in part_record) {
-      throw new TypeError(
-        "ImagePlugin content image uses url only; data_url is not supported",
-      );
-    }
-  }
-}
-
-/**
- * 复制公开输入中的通用字段，剥离 Agent 不应传给下游的公开 content。
- */
-function copy_resolved_image_input(input: ImagePluginInput): ImagePluginResolvedInput {
-  const { content: _content, messages: _messages, ...rest } = input as ImagePluginInput & {
-    /** 旧版字段，显式丢弃。 */
-    messages?: unknown;
-  };
-  return rest as ImagePluginResolvedInput;
-}
-
-/**
- * 把 Agent 友好的公开输入转成 City 图片任务使用的输入。
- */
-async function normalize_image_create_input(
-  context: PluginContext,
-  input: ImagePluginInput,
-): Promise<ImagePluginResolvedInput> {
-  assert_public_image_create_input(input);
-  if (!Array.isArray(input.content)) return copy_resolved_image_input(input);
-  const content = await Promise.all(
-    input.content.map((part) => normalize_image_content_part(context, part)),
-  );
-  const { prompt: _prompt, ...rest } = copy_resolved_image_input(input);
-  return {
-    ...rest,
-    messages: [
-      {
-        role: "user",
-        content,
-      },
-    ],
-  };
-}
-
-/**
- * 为图片创建输入解析并补齐插件级默认模型。
- */
-async function apply_default_image_model(
-  context: PluginContext,
-  input: ImagePluginResolvedInput,
-  default_model: ImagePluginDefaultModel | undefined,
-): Promise<ImagePluginResolvedInput> {
-  const model = typeof input.model === "string" ? input.model.trim() : "";
-  if (model) {
-    return {
-      ...input,
-      model,
-    };
-  }
-  if (!default_model) return input;
-  const resolved_model =
-    typeof default_model === "function"
-      ? normalize_default_image_model_value(
-          await default_model({
-            context,
-            input,
-          }),
-        )
-      : normalize_default_image_model_value(default_model);
-  if (!resolved_model) return input;
-  return {
-    ...input,
-    model: resolved_model,
-  };
-}
-
-/**
- * 归一化图片任务查询 payload。
- */
-function normalize_image_result_payload(
-  payload: PluginJsonValue | undefined,
-): ImagePluginJobResultInput {
-  const record = to_record(payload ?? {});
-  if (!record) {
-    throw new TypeError("ImagePlugin.image_result payload must be an object");
-  }
-  const job_id = typeof record.job_id === "string" ? record.job_id.trim() : "";
-  if (!job_id) {
-    throw new TypeError("ImagePlugin.image_result payload must include job_id");
-  }
-  const until_done = record.until_done === true;
-  const max_wait_ms =
-    typeof record.max_wait_ms === "number" && Number.isFinite(record.max_wait_ms)
-      ? Math.max(0, Math.floor(record.max_wait_ms as number))
-      : undefined;
-  const poll_interval_ms =
-    typeof record.poll_interval_ms === "number" &&
-    Number.isFinite(record.poll_interval_ms)
-      ? Math.max(0, Math.floor(record.poll_interval_ms as number))
-      : undefined;
-  return {
-    ...record,
-    job_id,
-    ...(until_done ? { until_done: true } : {}),
-    ...(max_wait_ms !== undefined ? { max_wait_ms } : {}),
-    ...(poll_interval_ms !== undefined ? { poll_interval_ms } : {}),
-  } as ImagePluginJobResultInput;
-}
-
-/**
- * 校验 image 函数返回的 Downcity Session 消息。
- *
- * 本函数只校验 provider / City 返回的 Session 消息结构；
- * 远程资源下载由 action 成功分支中的 ImageResultStorage 统一处理。
- */
-function normalize_image_result(result: ImagePluginResult): ImagePluginResult {
-  const record = to_record(result);
-  if (!record || !Array.isArray(record.parts)) {
-    throw new TypeError("ImagePlugin image provider must return a Downcity Session message");
-  }
-  for (const part of record.parts) {
-    const part_record = to_record(part);
-    if (part_record?.type !== "file") continue;
-    const url = String(part_record.url || "").trim();
-    if (!url) throw new TypeError("ImagePlugin result file parts must include a url");
-  }
-  return result;
-}
-
-/**
- * 归一化模型元数据为 JSON 对象。
- */
-function normalize_json_object(value: unknown): PluginJsonObject | undefined {
-  const record = to_record(value);
-  if (!record) return undefined;
-  return record as PluginJsonObject;
-}
-
-/**
- * 归一化图片模型信息，确保 action 返回纯 JSON。
- */
-function normalize_image_model(value: ImagePluginModel): ImagePluginModel | null {
-  const record = to_record(value);
-  if (!record) return null;
-  const id = typeof record.id === "string" ? record.id.trim() : "";
-  if (!id) return null;
-  const modalities = Array.isArray(record.modalities)
-    ? record.modalities
-        .map((item) => String(item || "").trim())
-        .filter(Boolean)
-    : [];
-  if (!modalities.includes("image")) return null;
-  const tags = Array.isArray(record.tags)
-    ? record.tags.map((item) => String(item || "").trim()).filter(Boolean)
-    : undefined;
-  const meta = normalize_json_object(record.meta);
-  return {
-    id,
-    name: typeof record.name === "string" && record.name.trim()
-      ? record.name.trim()
-      : id,
-    ...(typeof record.description === "string"
-      ? { description: record.description }
-      : {}),
-    modalities,
-    ...(tags && tags.length > 0 ? { tags } : {}),
-    ...(meta ? { meta } : {}),
-  };
-}
-
-/**
- * 归一化模型列表结果。
- */
-function normalize_image_models(values: ImagePluginModel[]): ImagePluginModelsResult {
-  const items = values
-    .map((item) => normalize_image_model(item))
-    .filter((item): item is ImagePluginModel => item !== null);
-  return { items };
-}
-
-/**
- * 校验任务创建结果。
- */
-function validate_created_job(value: ImagePluginJobCreateResult): void {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    typeof value.job_id !== "string" ||
-    !value.job_id.trim()
-  ) {
-    throw new TypeError("ImagePlugin image_create must return a job_id");
-  }
-}
-
-/**
- * 校验任务查询结果。
- */
-function validate_job_result(value: ImagePluginJobResult): void {
-  const status = value?.status;
-  if (
-    status !== "queued" &&
-    status !== "running" &&
-    status !== "succeeded" &&
-    status !== "failed"
-  ) {
-    throw new TypeError("ImagePlugin image_result must return a valid job status");
-  }
-}
 
 /**
  * Agent 图片生成插件。
