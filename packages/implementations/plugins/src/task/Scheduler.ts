@@ -14,7 +14,7 @@ import {
   resolveTaskWhenOneShotMs,
 } from "./runtime/Model.js";
 import { TaskCronTriggerEngine } from "./runtime/CronTrigger.js";
-import { listTasks, readTask } from "./runtime/Store.js";
+import { inspect_task_definitions, readTask } from "./runtime/Store.js";
 import type { TaskDefinitionRepository } from "./runtime/TaskDefinitionRepository.js";
 import type { ShipTaskDefinitionV1, ShipTaskRunTriggerV1 } from "./types/Task.js";
 import type {
@@ -63,19 +63,31 @@ export class TaskSchedulerCoordinator {
 
   /** 从唯一事实源完整重建 schedule。 */
   async reload(): Promise<TaskCronRegisterResult> {
-    let result: TaskCronRegisterResult = { tasks_found: 0, jobs_scheduled: 0 };
+    let result: TaskCronRegisterResult = {
+      tasks_found: 0,
+      jobs_scheduled: 0,
+      tasks_invalid: 0,
+    };
     await this.enqueue(async () => {
       this.assert_active();
       for (const task_id of [...this.scheduled_task_ids]) this.unregister(task_id);
-      const tasks = await listTasks(this.definitions.storage);
-      for (const item of tasks) {
+      const inspection = await inspect_task_definitions(this.definitions.storage);
+      for (const issue of inspection.issues) {
+        this.context.logger.error(`${TASK_LOG_PREFIX} Task definition is unavailable`, {
+          task_id: issue.task_id,
+          task_md_path: issue.task_md_path,
+          error: issue.error,
+        });
+      }
+      for (const item of inspection.tasks) {
         const task = await readTask({
           taskId: item.taskId,
           storage: this.definitions.storage,
         });
         result.jobs_scheduled += this.register(task);
       }
-      result.tasks_found = tasks.length;
+      result.tasks_found = inspection.tasks.length;
+      result.tasks_invalid = inspection.issues.length;
     });
     return result;
   }
@@ -100,7 +112,11 @@ export class TaskSchedulerCoordinator {
         if (!is_missing_task_error(error)) throw error;
       }
     });
-    return { tasks_found: task_found ? 1 : 0, jobs_scheduled };
+    return {
+      tasks_found: task_found ? 1 : 0,
+      jobs_scheduled,
+      tasks_invalid: 0,
+    };
   }
 
   /** 停止全部 timer，并等待已经提交的 scheduler mutation 收口。 */

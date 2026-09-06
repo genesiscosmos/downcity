@@ -3,6 +3,7 @@
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "./TaskCommand.js";
 import type { ShipTaskKind, ShipTaskStatus, TaskDeliverySession } from "./Task.js";
 import type { TaskSchedulerReloadResult } from "./TaskPluginTypes.js";
+import type { TaskDefinitionIssue } from "./TaskPluginTypes.js";
 
 /** Task 编辑器可选择的执行 Agent 摘要。 */
 export interface TaskMainviewAgent {
@@ -68,6 +69,24 @@ export interface TaskMainviewSnapshot {
 
   /** 当前可提供执行上下文的 Workspace。 */
   readonly workspaces: TaskMainviewWorkspace[];
+
+  /** 无法读取或解析、因此不会进入调度与执行路径的 Task 定义。 */
+  readonly issues: TaskDefinitionIssue[];
+}
+
+/** 删除一条损坏 Task 聚合目录的宿主输入。 */
+export interface TaskMainviewInvalidDeleteInput {
+  /** 要删除的损坏 Task 稳定目录 ID。 */
+  readonly task_id: string;
+}
+
+/** 删除一条损坏 Task 后的宿主结果。 */
+export interface TaskMainviewInvalidDeleteResult {
+  /** 已删除的 Task 稳定目录 ID。 */
+  readonly task_id: string;
+
+  /** 删除定义后的 scheduler 同步结果。 */
+  readonly scheduler: TaskSchedulerReloadResult;
 }
 
 /** Task Mainview 读取执行记录列表的输入。 */

@@ -32,8 +32,9 @@ export function PluginView({ plugin, controller }: {
     <MainViewBody><main className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto bg-background">
       <div className="mx-auto flex min-h-full w-full max-w-[90rem] flex-col gap-5 px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
         <PluginOverview plugin={definition ?? plugin} />
+        {plugin.runtime_status === "error" ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"><div className="font-medium">{translate("runtime.unavailable")}</div><div className="mt-1 break-words">{plugin.runtime_error || translate("runtime.initialize_failed")}</div></div> : null}
         {error ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-        {plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} set_definition={set_definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-sm text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
+        {plugin.runtime_status === "error" ? null : plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} set_definition={set_definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-sm text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
       </div>
     </main></MainViewBody>
   </MainViewLayout>;
@@ -50,6 +51,6 @@ function PluginOverview({ plugin }: {
       <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-foreground">{plugin.title}</div><div className="mt-1 text-[10px] text-muted-foreground">{plugin.description}</div></div>
       {plugin.readme ? <button type="button" aria-expanded={expanded} onClick={() => set_expanded((current) => !current)} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-interaction-hover"><TbChevronDown className={cn("size-4 transition-transform", !expanded && "-rotate-90")} /></button> : null}
     </div>
-    {expanded && plugin.readme ? <div className="border-t border-divider px-4 py-4"><Markdown text={plugin.readme} mode="static" class_name="plugin-readme !h-auto" /></div> : null}
+    {expanded && plugin.readme ? <div className="max-w-[52rem] border-t border-divider px-4 py-4 text-xs leading-[1.65] text-muted-foreground"><Markdown text={plugin.readme} mode="static" /></div> : null}
   </section>;
 }

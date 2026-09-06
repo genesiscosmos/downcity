@@ -11,7 +11,11 @@ import type {
   ShipTaskDefinitionV1,
   ShipTaskFrontmatterV1,
 } from "@/task/types/Task.js";
-import type { TaskListItem } from "@/task/types/TaskPluginTypes.js";
+import type {
+  TaskDefinitionIssue,
+  TaskListItem,
+  TaskStoreInspection,
+} from "@/task/types/TaskPluginTypes.js";
 import { parseTaskMarkdown, buildTaskMarkdown } from "./Model.js";
 import {
   deriveTaskIdFromTitle,
@@ -26,11 +30,23 @@ import {
 
 /** 列出统一 Store 中全部合法 Task 定义。 */
 export async function listTasks(storage: PluginStorage): Promise<TaskListItem[]> {
+  const inspection = await inspect_task_definitions(storage);
+  if (inspection.issues.length > 0) {
+    throw new Error(inspection.issues.map((issue) => issue.error).join("\n"));
+  }
+  return inspection.tasks;
+}
+
+/** 扫描全部 Task 聚合目录，同时保留有效定义和可观察的定义错误。 */
+export async function inspect_task_definitions(
+  storage: PluginStorage,
+): Promise<TaskStoreInspection> {
   const root = require_storage_root(storage);
   const directory_path = getTaskRootDir(root);
   await storage.files.ensure_directory(directory_path);
   const entries = await storage.files.read_directory(directory_path);
   const items: TaskListItem[] = [];
+  const issues: TaskDefinitionIssue[] = [];
   for (const entry of entries) {
     const task_id = String(entry.name || "").trim();
     if (!entry.is_directory || !task_id || task_id.startsWith(".") || !isValidTaskId(task_id)) continue;
@@ -39,7 +55,12 @@ export async function listTasks(storage: PluginStorage): Promise<TaskListItem[]>
     try {
       markdown = (await storage.files.read_file(task_md_path)).toString("utf-8");
     } catch (error) {
-      throw new Error(`Task definition cannot be read: ${task_id}`, { cause: error });
+      issues.push({
+        task_id,
+        task_md_path: relative_storage_path(root, task_md_path),
+        error: `Task definition cannot be read: ${task_id}: ${to_error_message(error)}`,
+      });
+      continue;
     }
     const parsed = parseTaskMarkdown({
       taskId: task_id,
@@ -48,7 +69,12 @@ export async function listTasks(storage: PluginStorage): Promise<TaskListItem[]>
       data_path: root,
     });
     if (!parsed.ok) {
-      throw new Error(`Task definition is invalid: ${task_id}: ${parsed.error}`);
+      issues.push({
+        task_id,
+        task_md_path: relative_storage_path(root, task_md_path),
+        error: `Task definition is invalid: ${task_id}: ${parsed.error}`,
+      });
+      continue;
     }
 
     const task_directory = getTaskDir(root, task_id);
@@ -79,7 +105,10 @@ export async function listTasks(storage: PluginStorage): Promise<TaskListItem[]>
       ...(last_run_timestamp ? { lastRunTimestamp: last_run_timestamp } : {}),
     });
   }
-  return items.sort((left, right) => left.taskId.localeCompare(right.taskId));
+  return {
+    tasks: items.sort((left, right) => left.taskId.localeCompare(right.taskId)),
+    issues: issues.sort((left, right) => left.task_id.localeCompare(right.task_id)),
+  };
 }
 
 /** 根据 City 级唯一 title 解析稳定 task_id。 */
@@ -91,7 +120,8 @@ export async function resolveTaskIdByTitle(params: {
 }): Promise<string> {
   const title = String(params.title || "").trim();
   if (!title) throw new Error("title is required");
-  const matched = (await listTasks(params.storage)).filter((item) => item.title === title);
+  const matched = (await inspect_task_definitions(params.storage)).tasks
+    .filter((item) => item.title === title);
   if (matched.length === 1) return matched[0].taskId;
   if (matched.length > 1) throw new Error(`Duplicated task title found: "${title}".`);
   return deriveTaskIdFromTitle(title);
@@ -127,11 +157,10 @@ export async function deleteTask(params: {
 }): Promise<{ taskId: string; taskDirPath: string }> {
   const root = require_storage_root(params.storage);
   const task_id = normalizeTaskId(params.taskId);
-  const task_md_path = getTaskMdPath(root, task_id);
-  if (!await params.storage.files.path_exists(task_md_path)) {
+  const task_directory = getTaskDir(root, task_id);
+  if (!await params.storage.files.path_exists(task_directory)) {
     throw new Error(`Task not found: ${task_id}`);
   }
-  const task_directory = getTaskDir(root, task_id);
   await params.storage.files.remove_path(task_directory);
   return {
     taskId: task_id,
@@ -198,4 +227,9 @@ function require_storage_root(storage: PluginStorage): string {
 /** 生成使用正斜杠的 PluginStorage 相对路径。 */
 function relative_storage_path(root: string, target: string): string {
   return path.relative(root, target).split(path.sep).join("/");
+}
+
+/** 把底层文件错误转换为可观察文本。 */
+function to_error_message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

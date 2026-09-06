@@ -170,6 +170,7 @@ async function start_task_plugin(options = {}) {
     plugin,
     actions,
     invocations,
+    storage,
     cleanup: async () => {
       await plugin.dispose();
       fs.rmSync(data_path, { recursive: true, force: true });
@@ -378,6 +379,31 @@ test("Task Plugin 保留目标失效的 Task 并允许宿主删除", async () =>
     assert.equal(snapshot.tasks[0].workspace_id, "workspace-b");
     await actions.get("tasks.delete").run({ task_title: "daily-report" });
     assert.deepEqual((await actions.get("tasks.snapshot").run()).tasks, []);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("Task Plugin 暴露并允许删除损坏定义", async () => {
+  const { actions, storage, cleanup } = await start_task_plugin();
+  const invalid_task_path = path.join(storage.path, "tasks", "broken-task");
+  try {
+    fs.mkdirSync(invalid_task_path, { recursive: true });
+    fs.writeFileSync(path.join(invalid_task_path, "task.md"), "invalid task definition");
+
+    const snapshot = await actions.get("tasks.snapshot").run();
+    assert.equal(snapshot.tasks.some((task) => task.title === "daily-report"), true);
+    assert.deepEqual(snapshot.issues.map((issue) => issue.task_id), ["broken-task"]);
+    const healthy_result = await actions.get("tasks.status").run({
+      task_title: "daily-report",
+      status: "paused",
+    });
+    assert.equal(healthy_result.task_title, "daily-report");
+
+    const result = await actions.get("tasks.invalid.delete").run({ task_id: "broken-task" });
+    assert.equal(result.task_id, "broken-task");
+    assert.equal(result.scheduler.reloaded, true);
+    assert.deepEqual((await actions.get("tasks.snapshot").run()).issues, []);
   } finally {
     await cleanup();
   }

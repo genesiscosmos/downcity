@@ -349,6 +349,12 @@ export interface DesktopPluginSummary {
 
   /** Plugin 是否提供设置中心 Config。 */
   has_config: boolean;
+
+  /** City 中 Plugin main 的当前生命周期状态；纯 Renderer Plugin 不提供。 */
+  runtime_status?: "initializing" | "ready" | "error";
+
+  /** Plugin main 初始化失败时供用户定位问题的错误文本。 */
+  runtime_error?: string;
 }
 
 /** Renderer 可读取和编辑的完整 Plugin 定义。 */

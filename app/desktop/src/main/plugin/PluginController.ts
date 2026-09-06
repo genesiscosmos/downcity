@@ -6,7 +6,7 @@
  */
 
 import fs from "node:fs";
-import type { PluginJsonValue } from "@downcity/city/plugin";
+import type { PluginJsonValue, PluginSnapshot } from "@downcity/city/plugin";
 import {
   normalize_profile_id,
   verify_local_installed_plugin_integrity,
@@ -41,6 +41,7 @@ export class PluginController {
       action_id: string,
       input?: PluginJsonValue,
     ) => Promise<PluginJsonValue>,
+    private readonly list_runtime_states: () => readonly PluginSnapshot[],
   ) {}
 
   /** 列出统一 Plugin catalog。 */
@@ -171,6 +172,8 @@ export class PluginController {
     const agent_ids = this.data.agents.list()
       .filter((agent) => Boolean(agent.plugins[plugin.definition.id]))
       .map((agent) => agent.agent_id);
+    const runtime_state = this.list_runtime_states()
+      .find((snapshot) => snapshot.name === plugin.definition.id);
     return {
       plugin_id: plugin.definition.id,
       title: plugin.definition.title || plugin.definition.id,
@@ -185,6 +188,19 @@ export class PluginController {
       has_sidebar: plugin.definition.has_sidebar,
       has_mainview: plugin.definition.has_mainview,
       has_config: plugin.definition.has_config,
+      ...(runtime_state
+        ? {
+            runtime_status: runtime_state.status,
+            ...(runtime_state.last_error
+              ? { runtime_error: runtime_state.last_error }
+              : {}),
+          }
+        : plugin.definition.has_main
+          ? {
+              runtime_status: "error" as const,
+              runtime_error: `Plugin runtime is not registered: ${plugin.definition.id}`,
+            }
+          : {}),
     };
   }
 }

@@ -23,7 +23,7 @@ import {
 import { TaskSchedulerCoordinator } from "../bin/task/Scheduler.js";
 import { TaskDefinitionRepository } from "../bin/task/runtime/TaskDefinitionRepository.js";
 import { TaskExecutionCoordinator } from "../bin/task/runtime/TaskExecutionCoordinator.js";
-import { listTasks, readTask } from "../bin/task/runtime/Store.js";
+import { inspect_task_definitions, listTasks, readTask } from "../bin/task/runtime/Store.js";
 
 /** 把测试实例包装为 City 持有的统一 Plugin 注册。 */
 function create_task_registration(plugin) {
@@ -129,6 +129,7 @@ test("scheduler 从统一 Store 注册全部 Agent/Workspace 的 Task", async ()
     assert.deepEqual(await scheduler.initialize(), {
       tasks_found: 2,
       jobs_scheduled: 2,
+      tasks_invalid: 0,
     });
     assert.deepEqual([...definitions.keys()].sort(), [
       "task:workspace-a-task",
@@ -335,10 +336,25 @@ test("TaskPlugin scheduler 释放失败时仍等待运行并清空生命周期�
   assert.equal(plugin.definitions, undefined);
 });
 
-test("合法 Task 目录缺少或损坏 task.md 时列表明确失败", async () => {
+test("损坏 Task 会明确报告，但不会阻止其他 Task 恢复调度", async () => {
   const data_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-task-corrupt-"));
   const storage = create_plugin_storage(new LocalStorageProvider(data_path));
+  const definitions_repository = new TaskDefinitionRepository(
+    storage,
+    new TaskExecutionCoordinator(),
+  );
   try {
+    await createTaskDefinition({
+      definitions: definitions_repository,
+      agent_id: "agent-a",
+      request: {
+        title: "healthy-definition",
+        description: "验证有效定义仍会恢复",
+        workspace_id: "workspace-a",
+        when: "0 9 * * *",
+        status: "enabled",
+      },
+    });
     const missing_directory = path.join(storage.path, "tasks", "missing-definition");
     await fs.mkdir(missing_directory, { recursive: true });
     await assert.rejects(
@@ -351,6 +367,31 @@ test("合法 Task 目录缺少或损坏 task.md 时列表明确失败", async ()
       () => listTasks(storage),
       /Task definition is invalid: missing-definition/u,
     );
+
+    const inspection = await inspect_task_definitions(storage);
+    assert.deepEqual(inspection.tasks.map((task) => task.taskId), ["healthy-definition"]);
+    assert.equal(inspection.issues.length, 1);
+    assert.equal(inspection.issues[0].task_id, "missing-definition");
+
+    const registered = new Map();
+    const scheduler = new TaskSchedulerCoordinator(
+      create_lifecycle_context(storage, []),
+      "Asia/Shanghai",
+      definitions_repository,
+      {
+        register: (definition) => registered.set(definition.id, definition),
+        unregister: (id) => registered.delete(id),
+        start: async () => {},
+        stop: async () => registered.clear(),
+      },
+    );
+    assert.deepEqual(await scheduler.initialize(), {
+      tasks_found: 1,
+      jobs_scheduled: 1,
+      tasks_invalid: 1,
+    });
+    assert.deepEqual([...registered.keys()], ["task:healthy-definition"]);
+    await scheduler.dispose();
   } finally {
     await fs.rm(data_path, { recursive: true, force: true });
   }

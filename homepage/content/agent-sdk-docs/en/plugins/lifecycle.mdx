@@ -30,6 +30,12 @@ class ProviderPlugin extends Plugin {
 Both methods receive the same stable `PluginLifecycleContext`. Agent, Session, and Workspace entry or
 removal do not trigger Plugin lifecycle callbacks. There is no generic `connect/disconnect` protocol.
 
+`city.plugins.add()` explicitly rejects when initialization fails. The failed instance never enters the
+execution Registry and cannot contribute Actions, Hooks, or System content. City retains an observable
+`status: "error"` snapshot with `last_error` in `city.plugins.snapshots()`. A host should isolate that
+Plugin and continue starting other subjects instead of treating an optional Plugin as an application-wide
+startup dependency. A successful retry for the same Plugin ID replaces the error snapshot with `ready`.
+
 ## Call context
 
 City freshly projects a `PluginContext` for every Action, Hook, System, and Availability call. Its

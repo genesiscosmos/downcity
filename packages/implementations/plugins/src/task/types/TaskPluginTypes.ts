@@ -6,7 +6,7 @@
  * - 跨模块复用的 task plugin runtime 类型统一收敛在 `plugins/task/types/`。
  */
 
-import type { PluginStorage } from "@downcity/city/plugin";
+import type { PluginJsonObject, PluginStorage } from "@downcity/city/plugin";
 import type { ShipTaskStatus, TaskDeliverySession } from "@/task/types/Task.js";
 import type { TaskDefinitionRepository } from "@/task/runtime/TaskDefinitionRepository.js";
 
@@ -32,6 +32,10 @@ export type TaskCronRegisterResult = {
    * 本次成功注册到 cron engine 的作业数量。
    */
   jobs_scheduled: number;
+  /**
+   * 本次扫描到但无法读取或解析的任务定义数量。
+   */
+  tasks_invalid: number;
 };
 
 /**
@@ -50,6 +54,10 @@ export type TaskSchedulerReloadResult = {
    * 成功重载时注册成功的 cron 作业数量。
    */
   jobs_scheduled?: number;
+  /**
+   * 成功完成扫描但定义无效的任务数量。
+   */
+  tasks_invalid?: number;
   /**
    * 重载失败时的错误文本。
    */
@@ -84,6 +92,24 @@ export interface TaskListItem {
   readonly taskMdPath: string;
   /** 最近一次 run 使用的时间戳目录名。 */
   readonly lastRunTimestamp?: string;
+}
+
+/** Task Store 中一条无法读取或解析的 canonical 定义。 */
+export interface TaskDefinitionIssue extends PluginJsonObject {
+  /** Task 聚合目录使用的稳定 ID。 */
+  readonly task_id: string;
+  /** task.md 相对 PluginStorage 根目录的路径。 */
+  readonly task_md_path: string;
+  /** 定义无法使用的明确原因。 */
+  readonly error: string;
+}
+
+/** Task Store 一次完整扫描的有效定义与损坏定义结果。 */
+export interface TaskStoreInspection {
+  /** 可以安全读取和执行的 Task 定义。 */
+  readonly tasks: TaskListItem[];
+  /** 必须向宿主暴露、但不能进入执行路径的损坏定义。 */
+  readonly issues: TaskDefinitionIssue[];
 }
 
 /** Task scheduler 调用 Agent action 后需要读取的最小结果。 */

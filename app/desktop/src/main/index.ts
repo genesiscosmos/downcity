@@ -304,6 +304,7 @@ app.whenReady().then(async () => {
         action_id,
         input,
       ),
+    () => next_agent_controller.list_plugin_states(),
   );
   user_controller = new DesktopUserController(local_data, () => next_agent_controller.has_active_sessions());
   await next_agent_controller.ready();

@@ -9,20 +9,26 @@ import type { PluginJsonValue, PluginLifecycleContext } from "@downcity/city/plu
 import {
   createTaskDefinition,
   deleteTaskDefinition,
-  listTaskDefinitions,
   list_task_run_history,
   read_task_run,
   setTaskStatus,
   updateTaskDefinition,
 } from "@/task/Action.js";
 import { deriveTaskIdFromTitle } from "@/task/runtime/Paths.js";
-import { readTask, resolveTaskIdByTitle } from "@/task/runtime/Store.js";
+import {
+  deleteTask,
+  inspect_task_definitions,
+  readTask,
+  resolveTaskIdByTitle,
+} from "@/task/runtime/Store.js";
 import type { TaskRunDetailView } from "@/task/types/TaskCommand.js";
 import type {
   TaskMainviewActionInput,
   TaskMainviewCreateInput,
   TaskMainviewHistoryInput,
   TaskMainviewHistorySnapshot,
+  TaskMainviewInvalidDeleteInput,
+  TaskMainviewInvalidDeleteResult,
   TaskMainviewMutationResult,
   TaskMainviewRunDetailInput,
   TaskMainviewRunDetailSnapshot,
@@ -45,6 +51,7 @@ export function register_task_plugin_host_actions(
   context.plugin.action({ id: "tasks.status", run: async (input) => as_json(await set_task_status(context, runtime, read_status_input(input))) });
   context.plugin.action({ id: "tasks.run", run: async (input) => as_json(await run_task(context, runtime, read_action_input(input))) });
   context.plugin.action({ id: "tasks.delete", run: async (input) => as_json(await delete_task(context, runtime, read_action_input(input))) });
+  context.plugin.action({ id: "tasks.invalid.delete", run: async (input) => as_json(await delete_invalid_task(context, runtime, read_invalid_delete_input(input))) });
 }
 
 /** 读取 TaskPlugin 统一 Task 列表与可选执行目标。 */
@@ -52,14 +59,14 @@ async function create_snapshot(
   context: PluginLifecycleContext,
   runtime: TaskPluginHostRuntime,
 ): Promise<TaskMainviewSnapshot> {
-  const [agents, workspaces, task_result] = await Promise.all([
+  const [agents, workspaces, inspection] = await Promise.all([
     context.system.list_agents(),
     context.system.list_workspaces(),
-    listTaskDefinitions({ storage: runtime.storage }),
+    inspect_task_definitions(runtime.storage),
   ]);
   const task_agents = agents.filter((agent) => agent.plugin_ids.includes("task"));
   return {
-    tasks: task_result.tasks.map((task) => ({
+    tasks: inspection.tasks.map((task) => ({
       title: task.title,
       description: task.description,
       ...(task.body ? { body: task.body } : {}),
@@ -80,6 +87,7 @@ async function create_snapshot(
       workspace_id: workspace.workspace_id,
       name: workspace.name,
     })),
+    issues: inspection.issues,
   };
 }
 
@@ -230,6 +238,23 @@ async function delete_task(
   return { task_title: input.task_title, scheduler };
 }
 
+/** 删除一条无法解析的 Task 聚合目录，并同步移除其 scheduler 注册。 */
+async function delete_invalid_task(
+  context: PluginLifecycleContext,
+  runtime: TaskPluginHostRuntime,
+  input: TaskMainviewInvalidDeleteInput,
+): Promise<TaskMainviewInvalidDeleteResult> {
+  await runtime.definitions.mutate(async (storage) => {
+    if (runtime.definitions.is_running(input.task_id)) {
+      throw new Error(`Task is running and cannot be deleted: ${input.task_id}`);
+    }
+    await deleteTask({ storage, taskId: input.task_id });
+  });
+  const scheduler = await runtime.reconcile(input.task_id);
+  await dismiss_task_notification(context, input.task_id);
+  return { task_id: input.task_id, scheduler };
+}
+
 /** 删除 Task 后尽力清理未读通知，通知故障不改变已提交的定义变更。 */
 async function dismiss_task_notification(
   context: PluginLifecycleContext,
@@ -307,6 +332,15 @@ function read_action_input(input: PluginJsonValue | undefined): TaskMainviewActi
   return {
     task_title: read_required_string(value.task_title, "task_title"),
   };
+}
+
+/** 校验损坏 Task 删除输入。 */
+function read_invalid_delete_input(
+  input: PluginJsonValue | undefined,
+): TaskMainviewInvalidDeleteInput {
+  const value = read_input_object(input);
+  const task_id = read_required_string(value.task_id, "task_id");
+  return { task_id };
 }
 
 /** 读取创建 Task 输入。 */

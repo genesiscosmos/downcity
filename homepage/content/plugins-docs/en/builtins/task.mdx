@@ -33,7 +33,7 @@ Task does not declare Config, so it needs no Profile. It remains visible in the 
 
 A successful or failed Task Run publishes an unread notification after its artifacts are persisted; skipped runs do not notify. Notifications aggregate to the latest unread Run for the same Task. Desktop reflects that state on the Task icon, Task item, matching Run, and system app badge, and marks it read when the Run is opened.
 
-When a definition commits but incremental scheduler synchronization fails, the host action returns the synchronization failure and Desktop reports that the Task was saved but scheduler synchronization failed. A missing or unparseable canonical `task.md` fails visibly instead of making a damaged definition appear absent.
+When a definition commits but incremental scheduler synchronization fails, the host action returns the synchronization failure and Desktop reports that the Task was saved but scheduler synchronization failed. A missing or unparseable canonical `task.md` is exposed as an error item and is not scheduled. It does not appear absent or prevent other Tasks from recovering, and Desktop can delete it.
 
 The CLI invokes task through the shared Plugin Action command:
 

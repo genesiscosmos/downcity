@@ -33,7 +33,7 @@ Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Cat
 
 Task Run 成功或失败且产物落盘后会产生未读通知；跳过执行不通知。同一 Task 聚合为最新一条未读，Desktop 在 Task 图标、Task 条目、对应 Run 和系统应用角标上同步提示，打开该 Run 后自动已读。
 
-定义已经提交但 scheduler 增量同步失败时，宿主 action 会返回同步失败详情，Desktop 会提示“Task 已保存，但调度器同步失败”。canonical `task.md` 缺失或无法解析时，TaskPlugin 会明确失败，不会把损坏定义伪装成不存在。
+定义已经提交但 scheduler 增量同步失败时，宿主 action 会返回同步失败详情，Desktop 会提示“Task 已保存，但调度器同步失败”。canonical `task.md` 缺失或无法解析时，TaskPlugin 会把它作为错误项暴露并停止该 Task 的调度，不会把损坏定义伪装成不存在，也不会阻止其他 Task 恢复；Desktop 可以删除错误项。
 
 CLI 通过统一 Plugin Action 命令调用 task：
 

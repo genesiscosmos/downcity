@@ -43,6 +43,9 @@ export class CityPluginRuntime {
   /** City 当前持有的唯一 Plugin 实例。 */
   private readonly plugins_by_id = new Map<string, CityPluginRecord>();
 
+  /** 初始化失败后保留的不可执行 Plugin 状态；成功重试或显式移除时清除。 */
+  private readonly failed_plugin_snapshots = new Map<string, PluginSnapshot>();
+
   /** 所有 Agent 共享的唯一执行 Registry。 */
   private readonly registry = new PluginRegistry();
 
@@ -103,6 +106,7 @@ export class CityPluginRuntime {
       if (existing.plugin === registration.plugin) return await existing.ready;
       throw new Error(`Plugin already exists in City: ${plugin_id}`);
     }
+    this.failed_plugin_snapshots.delete(plugin_id);
 
     const scope = this.options.storage.open_scope(["plugins", plugin_id]);
     const logger = get_logger();
@@ -144,15 +148,21 @@ export class CityPluginRuntime {
         this.plugins_by_id.delete(plugin_id);
       }
       await this.registry.unregister_and_wait(plugin_id);
+      let lifecycle_error = error;
       try {
         await this.dispose_plugin(record);
       } catch (dispose_error) {
-        throw new AggregateError(
+        lifecycle_error = new AggregateError(
           [error, dispose_error],
           `City Plugin initialization cleanup failed: ${plugin_id}`,
         );
       }
-      throw error;
+      this.failed_plugin_snapshots.set(plugin_id, {
+        ...to_plugin_snapshot(record),
+        status: "error",
+        last_error: to_error_message(lifecycle_error),
+      });
+      throw lifecycle_error;
     }
   }
 
@@ -162,8 +172,9 @@ export class CityPluginRuntime {
     const plugin_id = normalize_id(plugin_id_input, "plugin_id");
     const operation = this.enqueue_plugin_lifecycle(plugin_id, async () => {
       const record = this.plugins_by_id.get(plugin_id);
-      if (!record) return false;
+      if (!record) return this.failed_plugin_snapshots.delete(plugin_id);
       this.plugins_by_id.delete(plugin_id);
+      this.failed_plugin_snapshots.delete(plugin_id);
       const errors: unknown[] = [];
       try {
         await this.registry.unregister_and_wait(plugin_id);
@@ -222,16 +233,10 @@ export class CityPluginRuntime {
 
   /** 返回 City 当前全部 Plugin 快照。 */
   private snapshots(): PluginSnapshot[] {
-    return [...this.plugins_by_id.values()]
-      .map((record) => ({
-        name: record.plugin_id,
-        title: record.plugin.title,
-        description: record.plugin.description,
-        status: record.state,
-        registered_at: record.registered_at,
-        updated_at: record.updated_at,
-        ...(record.last_error ? { last_error: record.last_error } : {}),
-      }))
+    return [
+      ...[...this.plugins_by_id.values()].map(to_plugin_snapshot),
+      ...this.failed_plugin_snapshots.values(),
+    ]
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
@@ -290,6 +295,7 @@ export class CityPluginRuntime {
     await this.lifecycle_settlement;
     const records = [...this.plugins_by_id.values()].reverse();
     this.plugins_by_id.clear();
+    this.failed_plugin_snapshots.clear();
     const errors: unknown[] = [];
     try {
       await this.registry.unregister_all();
@@ -527,7 +533,13 @@ export class CityPluginRuntime {
   private async require_ready_record(plugin_id_input: string): Promise<CityPluginRecord> {
     const plugin_id = normalize_id(plugin_id_input, "plugin_id");
     const record = this.plugins_by_id.get(plugin_id);
-    if (!record) throw new Error(`Plugin is not registered in City: ${plugin_id}`);
+    if (!record) {
+      const failed = this.failed_plugin_snapshots.get(plugin_id);
+      if (failed) {
+        throw new Error(`Plugin is unavailable in City: ${plugin_id}: ${failed.last_error || "initialization failed"}`);
+      }
+      throw new Error(`Plugin is not registered in City: ${plugin_id}`);
+    }
     await record.ready;
     return record;
   }
@@ -680,6 +692,28 @@ export class CityPluginRuntime {
       }),
     });
   }
+}
+
+/** 把 City 内部生命周期记录投影为稳定公开快照。 */
+function to_plugin_snapshot(record: CityPluginRecord): PluginSnapshot {
+  return {
+    name: record.plugin_id,
+    title: record.plugin.title,
+    description: record.plugin.description,
+    status: record.state,
+    registered_at: record.registered_at,
+    updated_at: record.updated_at,
+    ...(record.last_error ? { last_error: record.last_error } : {}),
+  };
+}
+
+/** 把未知生命周期失败转换为宿主可展示的稳定文本。 */
+function to_error_message(error: unknown): string {
+  if (error instanceof AggregateError) {
+    return error.errors.map(to_error_message).filter(Boolean).join("; ")
+      || error.message;
+  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 /** 把 Plugin 或完整注册项归一化为 City 注册项。 */

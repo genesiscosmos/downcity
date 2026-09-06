@@ -30,6 +30,11 @@ class ProviderPlugin extends Plugin {
 两个节点使用同一个稳定的 `PluginLifecycleContext`。Agent 加入或离开 City、Session 创建或结束、
 Workspace 进入或离开都不会触发 Plugin 生命周期，也不存在通用的 `connect/disconnect`。
 
+`city.plugins.add()` 会明确返回初始化失败。失败实例不会进入执行 Registry，因此不能贡献 Action、Hook
+或 System；City 同时在 `city.plugins.snapshots()` 中保留 `status: "error"` 和 `last_error`。
+宿主应隔离单个 Plugin 的失败并继续启动其他主体，而不是把可选 Plugin 当成整个应用的启动条件。成功重试
+同一 Plugin ID 后，错误快照会被新的 `ready` 状态替换。
+
 ## 调用上下文
 
 Action、Hook、System 和 Availability 每次调用都会获得 City 即时投影的 `PluginContext`。其中的

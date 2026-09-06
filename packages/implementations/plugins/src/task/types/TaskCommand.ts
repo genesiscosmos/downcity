@@ -15,6 +15,7 @@ import type {
   ShipTaskStatus,
   TaskDeliverySession,
 } from "./Task.js";
+import type { TaskDefinitionIssue } from "./TaskPluginTypes.js";
 
 export type TaskCreateRequest = {
   /** 任务名称。 */
@@ -116,8 +117,12 @@ export type TaskListItemView = {
 };
 
 export type TaskListResponse = {
+  /** Task 列表读取是否完成。 */
   success: true;
+  /** 当前调用范围内可以正常使用的 Task。 */
   tasks: TaskListItemView[];
+  /** Store 中无法读取或解析、因此不会进入执行路径的定义。 */
+  issues: TaskDefinitionIssue[];
 };
 
 /** 读取一个 Task 全部执行记录的输入。 */

@@ -258,7 +258,19 @@ test("City Plugin add exposes asynchronous initialization failure", async () => 
 
   await assert.rejects(city.plugins.add(plugin), /plugin-initialize-failed/u);
   assert.equal(city.plugins.get(plugin.name), null);
-  assert.deepEqual(city.plugins.snapshots(), []);
+  assert.deepEqual(city.plugins.snapshots().map(({ name, status, last_error }) => ({
+    name,
+    status,
+    last_error,
+  })), [{
+    name: plugin.name,
+    status: "error",
+    last_error: "plugin-initialize-failed",
+  }]);
+  await assert.rejects(
+    city.plugins.invoke(plugin.name, "missing"),
+    /Plugin is unavailable in City: broken-initialize: plugin-initialize-failed/u,
+  );
   await city.close();
 });
 
@@ -284,7 +296,7 @@ test("City never publishes a Plugin whose initialization fails", async () => {
   await assert.rejects(city.plugins.add(plugin), /initialize-failed/u);
 
   assert.equal(city.plugins.get(plugin.name), null);
-  assert.deepEqual(city.plugins.snapshots(), []);
+  assert.equal(city.plugins.snapshots()[0]?.status, "error");
   assert.equal(city.plugins.scope({
     agent_id: scope_a.agent.id,
     workspace_id: scope_a.workspace.id,
@@ -301,6 +313,7 @@ test("City never publishes a Plugin whose initialization fails", async () => {
   };
   await city.plugins.add(plugin);
   assert.equal(city.plugins.get(plugin.name), plugin);
+  assert.equal(city.plugins.snapshots()[0]?.status, "ready");
   await city.close();
 });
 

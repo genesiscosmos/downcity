@@ -22,7 +22,7 @@ import {
 } from "./runtime/Model.js";
 import {
   deleteTask,
-  listTasks,
+  inspect_task_definitions,
   readTask,
   resolveTaskIdByTitle,
   writeTask,
@@ -110,14 +110,15 @@ export async function listTaskDefinitions(params: {
 }): Promise<TaskListResponse> {
   const normalizedStatus = normalizeTaskStatus(params.status);
 
-  const tasks = await listTasks(params.storage);
+  const inspection = await inspect_task_definitions(params.storage);
   const agent_id = String(params.agent_id || "").trim();
-  const filtered = tasks.filter((task) =>
+  const filtered = inspection.tasks.filter((task) =>
     (!agent_id || task.agent_id === agent_id)
     && (!normalizedStatus || String(task.status).toLowerCase() === normalizedStatus));
 
   return {
     success: true,
+    issues: inspection.issues,
     tasks: filtered.map((task) => ({
       title: task.title,
       description: task.description,
@@ -222,7 +223,15 @@ export async function createTaskDefinition(params: {
   try {
     return await params.definitions.mutate(async (storage) => {
       // 关键点（中文）：title 去重判断与最终写入属于同一个定义事务。
-      const existing_tasks = await listTasks(storage);
+      const inspection = await inspect_task_definitions(storage);
+      const conflicting_issue = inspection.issues.find((issue) => issue.task_id === taskId);
+      if (conflicting_issue) {
+        return {
+          success: false,
+          error: `Task definition must be repaired or deleted before reuse: ${taskId}`,
+        };
+      }
+      const existing_tasks = inspection.tasks;
       const duplicated = existing_tasks.find(
         (item) => String(item.title || "").trim() === title,
       );

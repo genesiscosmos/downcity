@@ -8,7 +8,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { define_plugin_renderer, type PluginRendererNotification, type PluginRendererToastInput, type PluginRendererUiComponents } from "@downcity/city/plugin/react";
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "@/task/types/TaskCommand.js";
-import type { TaskMainviewEditorDraft, TaskMainviewHistorySnapshot, TaskMainviewItem, TaskMainviewMutationResult, TaskMainviewRunDetailSnapshot, TaskMainviewSnapshot } from "@/task/types/TaskMainview.js";
+import type { TaskMainviewEditorDraft, TaskMainviewHistorySnapshot, TaskMainviewInvalidDeleteResult, TaskMainviewItem, TaskMainviewMutationResult, TaskMainviewRunDetailSnapshot, TaskMainviewSnapshot } from "@/task/types/TaskMainview.js";
+import type { TaskSchedulerReloadResult } from "@/task/types/TaskPluginTypes.js";
 import { TaskEditor } from "@/task/renderer/TaskEditor.js";
 
 /** Task Plugin Renderer 定义。 */
@@ -118,6 +119,7 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
         })}
         {!snapshot.tasks.length ? <div className="px-2 py-1 text-[10px] text-muted-foreground/55">还没有 Task</div> : null}
       </SidebarSection>
+      {snapshot.issues.length > 0 ? <Callout tone="warning">{snapshot.issues.length} 个 Task 定义损坏，已停止调度；请在 Task 主页面处理。</Callout> : null}
       {error ? <Callout tone="danger">{error}</Callout> : null}
     </Sidebar>;
   },
@@ -273,6 +275,23 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
         notify_task_mutation(result, "Task 已删除", ui.toast);
       } catch {}
     };
+    const remove_invalid_task = async (task_id: string) => {
+      const confirmed = await ui.confirm({ title: `删除损坏的 Task ${task_id}？`, description: "Task 定义及其全部执行记录都会被永久删除。", action: "删除", destructive: true });
+      if (!confirmed) return;
+      set_busy(true);
+      set_error("");
+      try {
+        const result = await plugin.invoke<TaskMainviewInvalidDeleteResult>("tasks.invalid.delete", { task_id });
+        ui.invalidate();
+        notify_scheduler_result(result.scheduler, "损坏的 Task 已删除", ui.toast);
+      } catch (reason) {
+        const message = to_error_message(reason);
+        set_error(message);
+        ui.toast({ type: "error", message });
+      } finally {
+        set_busy(false);
+      }
+    };
     const task_menu = (selected_task: TaskMainviewItem, reveal_on_hover = false) => <ItemMenu label={`${selected_task.title} 操作`} reveal_on_hover={reveal_on_hover} actions={[
       { action_id: "run", label: "立即运行", disabled: busy || !snapshot || !execution_target_available(snapshot, selected_task), on_select: () => run_task(selected_task) },
       { action_id: "edit", label: "编辑", disabled: busy, on_select: () => navigation.navigate(edit_task_route(selected_task.title)) },
@@ -294,6 +313,10 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
     if (!task) return <Page>
       <Toolbar title="Tasks" description={`${snapshot.tasks.length} Tasks`} actions={<Button variant="primary" disabled={!snapshot.agents.length || !snapshot.workspaces.length} on_click={() => navigation.navigate(create_task_route())}>新建 Task</Button>} />
       {error ? <Callout tone="danger">{error}</Callout> : null}
+      {snapshot.issues.length > 0 ? <>
+        <Callout tone="warning">以下 Task 定义无法读取或解析，因此不会被调度。修复对应 task.md，或者删除损坏的 Task。</Callout>
+        <Group>{snapshot.issues.map((issue) => <Row key={issue.task_id} label={issue.task_id} description={`${issue.error} · ${issue.task_md_path}`} trailing={<ItemMenu label={`${issue.task_id} 操作`} actions={[{ action_id: "delete", label: "删除", destructive: true, disabled: busy, on_select: () => remove_invalid_task(issue.task_id) }]} />} />)}</Group>
+      </> : null}
       {!snapshot.tasks.length ? <EmptyState title="还没有 Task" description="创建一个手动、定时或脚本 Task。" action={<Button variant="primary" disabled={!snapshot.agents.length || !snapshot.workspaces.length} on_click={() => navigation.navigate(create_task_route())}>新建 Task</Button>} />
         : <Group>{snapshot.tasks.map((item) => {
           const notification = find_task_notification(notifications, item);
@@ -336,6 +359,15 @@ function notify_task_mutation(
     return;
   }
   toast({ type: "success", message: success_message });
+}
+
+/** 根据独立 scheduler 结果提示定义操作是否完整生效。 */
+function notify_scheduler_result(
+  scheduler: TaskSchedulerReloadResult,
+  success_message: string,
+  toast: (input: PluginRendererToastInput) => void,
+): void {
+  notify_task_mutation({ task_title: "", scheduler }, success_message, toast);
 }
 
 /** 展示一次 Task Run 的状态、最终输出与失败信息。 */

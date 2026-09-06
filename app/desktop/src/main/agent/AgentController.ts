@@ -19,7 +19,7 @@ import {
   type SessionMutation,
 } from "@downcity/agent";
 import { City } from "@downcity/city";
-import type { PluginNotificationInput } from "@downcity/city/plugin";
+import type { PluginNotificationInput, PluginSnapshot } from "@downcity/city/plugin";
 import { clipboard, shell } from "electron";
 import { LocalStorageProvider } from "@downcity/city";
 import path from "node:path";
@@ -90,6 +90,7 @@ import type { LocalPluginLoader } from "@downcity/city/local";
 import { resolve_local_agent_env } from "@downcity/city/local";
 import { select_builtin_agent_avatar_path } from "./BuiltinAgentAvatar.js";
 import type { PluginJsonValue } from "@downcity/city/plugin";
+import { initialize_desktop_plugins } from "../plugin/PluginInitialization.js";
 
 const session_model_settings_key = "desktop.session-models";
 const session_reasoning_settings_key = "desktop.session-reasoning";
@@ -234,6 +235,11 @@ export class AgentController {
   /** 等待 Desktop City 完成 Agent 装配与宿主登记。 */
   async ready(): Promise<void> {
     await this.ready_promise;
+  }
+
+  /** 返回 City 持有的 Plugin 生命周期状态，包括不可执行的初始化失败记录。 */
+  list_plugin_states(): PluginSnapshot[] {
+    return this.city.plugins.snapshots();
   }
 
   /** 在指定 Agent 与 Workspace 上调用已注册的 Agent Plugin action。 */
@@ -1167,9 +1173,17 @@ export class AgentController {
       for (const config of this.data.workspaces.list()) {
         await this.register_workspace_in_city(config);
       }
-      for (const registration of await this.plugin_loader.list_registrations()) {
-        await this.city.plugins.add(registration);
-      }
+      const plugin_registrations = await this.plugin_loader.list_registrations();
+      await initialize_desktop_plugins({
+        registrations: plugin_registrations,
+        add: async (registration) => await this.city.plugins.add(registration),
+        report_failure: (plugin_id, error) => {
+          console.error(
+            `Downcity Desktop Plugin initialize failed: ${plugin_id}`,
+            to_error_message(error),
+          );
+        },
+      });
       for (const config of this.data.agents.list()) {
         const agent = await this.create_native_agent(config);
         this.city.agents.add(agent);

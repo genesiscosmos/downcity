@@ -96,12 +96,14 @@ export async function reloadTaskSchedulerAfterMutation(params: {
         title: params.title,
         tasks_found: result.tasks_found,
         jobs_scheduled: result.jobs_scheduled,
+        tasks_invalid: result.tasks_invalid,
       },
     );
     return {
       reloaded: true,
       tasks_found: result.tasks_found,
       jobs_scheduled: result.jobs_scheduled,
+      tasks_invalid: result.tasks_invalid,
     };
   } catch (error) {
     const reason = String(error);
