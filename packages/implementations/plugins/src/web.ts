@@ -25,7 +25,7 @@ export type {
   WebOpenResult,
   WebPluginActionName,
   WebPluginOptions,
-  WebPluginProfile,
+  WebPluginConfig,
   WebSearchInput,
   WebSearchItem,
   WebSearchResult,

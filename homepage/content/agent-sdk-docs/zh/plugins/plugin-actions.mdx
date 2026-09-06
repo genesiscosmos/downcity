@@ -31,7 +31,7 @@ const status = create_action({
 
 每次调用有两个只读输入：
 
-- `context` 是 City 创建的作用域能力，包含受限 City、Agent、Workspace、Session、Turn、Profile 与 Storage 对象。
+- `context` 是 City 创建的作用域能力，包含受限 City、Agent、Workspace、Session、Turn、Config 与 Storage 对象。
 - `execution` 是单次 Action 身份，包含 `call_id`、`abort_signal`、可选 Session scope 与 Step snapshot。
 
 Action 应把 `execution.abort_signal` 传给网络请求、轮询和长耗时任务。`timeout_ms` 只触发协作式
@@ -41,5 +41,5 @@ Action 应把 `execution.abort_signal` 传给网络请求、轮询和长耗时�
 第二套业务入口，最终都执行同一个 `execute`。
 
 模型通过当前 Session 的 `plugin_call` Tool 调用 Action。Plugin 内部可以通过
-`context.city.plugins.run_action()` 调用当前 Agent 已绑定的其他 Plugin；应用代码则从
+`context.city.plugins.run_action()` 调用 City 中的其他 Plugin；应用代码则从
 `city.enter_workspace()` 返回的执行入口调用 `entry.plugins.run_action()`。

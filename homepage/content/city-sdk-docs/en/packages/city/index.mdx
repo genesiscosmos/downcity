@@ -60,7 +60,7 @@ A Plugin instance has one City-owned lifecycle and may register host-management 
 
 Agent, Session, and Workspace entry or removal do not trigger Plugin lifecycle callbacks. Each Plugin
 owns its long-lived connections, timers, schedulers, and workers according to its actual domain key,
-such as an account, Profile, or task definition.
+such as an account, Agent, or task definition.
 
 Each Action, System provider, Availability check, and Hook call receives a freshly projected `PluginContext`. It contains
 restricted `city`, `agent`, `workspace`, `session`, `turn`, `config`, and `storage` handles. A Plugin

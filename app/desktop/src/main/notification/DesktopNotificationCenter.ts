@@ -64,7 +64,7 @@ export class DesktopNotificationCenter {
     this.plugin_producer.publish(plugin_id, input);
   }
 
-  /** 发布 Agent Plugin 产生并由宿主绑定 Agent 身份的通知。 */
+  /** 发布 Plugin 在当前执行范围产生并由宿主绑定 Agent 身份的通知。 */
   publish_agent_plugin_notification(
     plugin_id: string,
     agent_id: string,
@@ -83,7 +83,7 @@ export class DesktopNotificationCenter {
     this.controller.mark_target_read({ kind: "agent_session", agent_id, workspace_id, session_id });
   }
 
-  /** Agent 删除后清理其 Session 和 Agent Plugin 产生的全部通知。 */
+  /** Agent 删除后清理其 Session 和 Plugin 执行范围产生的全部通知。 */
   handle_agent_removed(agent_id: string): void {
     this.controller.mark_scope_read({ kind: "agent", agent_id });
   }

@@ -43,8 +43,8 @@ City freshly projects a `PluginContext` for every Action, Hook, System, and Avai
 resource for the current call; it is not a Plugin lifecycle boundary or a default resource-isolation key.
 
 Long-lived connections, timers, schedulers, and workers must follow their actual domain ownership. A
-browser Provider may be created lazily from Agent configuration, a chat channel may be keyed by account
-or Profile, and a scheduler may follow task definitions. `dispose` must ultimately close every resource.
+browser Provider may be created lazily for an Agent, a chat channel may be keyed by account, and a
+scheduler may follow task definitions. `dispose` must ultimately close every resource.
 
 ## Execution leases
 

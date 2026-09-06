@@ -42,7 +42,7 @@ Action、Hook、System 和 Availability 每次调用都会获得 City 即时投�
 调用的项目资源，不是 Plugin 的生命周期或默认资源隔离键。
 
 需要长期连接、Timer、调度器或后台 Worker 时，Plugin 应按真实领域所有权管理它们。例如浏览器
-Provider 可以在首次 Action 时按 Agent 配置惰性创建，聊天渠道可以按账号或 Profile 管理，任务调度器
+Provider 可以在首次 Action 时按 Agent 惰性创建，聊天渠道可以按账号管理，任务调度器
 可以按任务定义管理。所有这些资源最终都必须由 `dispose` 收口。
 
 ## 执行租约

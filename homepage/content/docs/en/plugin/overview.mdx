@@ -18,12 +18,13 @@ Plugin
 - Exposes tools the Agent can call during execution
 - Hooks into City Plugin lifecycle (`initialize`, `dispose`)
 - Manages its own state, connections, and background tasks
-- Provides a Profile-independent Sidebar + Mainview workspace and edits configuration in a separate Config on its Catalog detail page
+- Provides a Sidebar + Mainview workspace and edits configuration in a separate Config on its Catalog detail page
 - Runs inside the City process boundary, not as a separate service
 
-A Profile is host-provided named configuration for a Plugin and is unrelated to the functional
-workspace. Each Plugin ID maps to one instance inside a City. Configuration is projected into
-`PluginContext.config` for the current Agent; Agent owns neither the instance nor lifecycle.
+Each Plugin ID maps to one instance and one configuration inside a City. The host persists Config and
+projects an immutable `PluginContext.config` snapshot for each execution. Agents own neither Plugins,
+configuration, nor lifecycle. Plugins model multiple accounts in their own Config instead of using a
+generic named-configuration layer.
 
 ## Built-in plugins
 

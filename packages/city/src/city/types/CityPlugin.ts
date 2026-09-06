@@ -12,7 +12,7 @@ import type {
   PluginJsonObject,
   PluginJsonValue,
   PluginNotificationPublisher,
-  PluginProfileConfigStore,
+  PluginConfigStore,
   PluginSnapshot,
 } from "@/plugin/index.js";
 import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
@@ -63,10 +63,9 @@ export interface CityPlugins {
   /** 调用 Plugin 在 initialize 阶段注册的宿主管理 action。 */
   invoke(plugin_id: string, action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
 
-  /** 在指定配置 Profile 上调用 Plugin 注册的配置 action。 */
+  /** 调用 Plugin 注册的配置 action。 */
   invoke_config(
     plugin_id: string,
-    profile_id: string,
     action_id: string,
     input?: PluginJsonValue,
   ): Promise<PluginJsonValue>;
@@ -74,10 +73,8 @@ export interface CityPlugins {
 
 /** City Plugin 生命周期需要宿主提供的平台能力。 */
 export interface CityPluginHost {
-  /** 解析当前 Agent 使用的 Plugin 配置；未配置时返回空对象。 */
-  runtime_config?(plugin_id: string, agent_id: string): PluginJsonObject;
-  /** 返回指定 Plugin 配置 Profile 的存储端口。 */
-  profile_config(plugin_id: string, profile_id: string): PluginProfileConfigStore;
+  /** 返回指定 Plugin 的唯一配置存储端口。 */
+  config?(plugin_id: string): PluginConfigStore;
   /** 返回绑定当前 Plugin 身份的通知发布端口。 */
   notifications(plugin_id: string, agent_id?: string): PluginNotificationPublisher;
   /** 使用系统默认应用打开 HTTP(S) URL。 */

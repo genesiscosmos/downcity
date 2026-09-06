@@ -99,17 +99,17 @@ class GithubPlugin extends Plugin {
 
   initialize({ plugin, notifications }: PluginLifecycleContext) {
     plugin.config_action({
-      id: "profile.read",
+      id: "config.read",
       run: async (_input, context) => {
-        const config = await context.config.get();
+        const config = context.config.get();
         return { api_url: config.api_url, token_configured: Boolean(config.token) };
       },
     });
 
     plugin.config_action({
-      id: "profile.save",
+      id: "config.save",
       run: async (input, context) => {
-        const current = await context.config.get();
+        const current = context.config.get();
         const config = validate_and_restore_secret(input, current);
         await context.config.set(config);
         return { saved: true };
@@ -127,9 +127,9 @@ class GithubPlugin extends Plugin {
 export default new GithubPlugin();
 ```
 
-One Plugin ID maps to one instance and one lifecycle per City. City injects the selected
-Profile store into Config actions, while the execution instance reads current Agent configuration
-from `PluginContext.config`.
+One Plugin ID maps to one instance, one lifecycle, and one configuration per City. City injects the
+unique Config store into Config actions, while the execution instance reads its current snapshot from
+`PluginContext.config`.
 
 `notifications.publish()` and `notifications.dismiss()` are always bound to the current Plugin. The host namespaces `topic_key` and treats `route` as a route inside that Plugin workspace, so a Plugin cannot impersonate another Plugin or navigate to arbitrary Desktop pages. Only the latest unread notification for the same `topic_key` is retained.
 
@@ -139,7 +139,7 @@ For functional pages such as a Skill manager, `system.list_workspaces()` returns
 
 ## Renderer entry
 
-The Renderer has three fixed slots. `sidebar` and `mainview` form the Plugin workspace, must be declared together, share a host-owned JSON route, and cause the host to add a dynamic top-level navigation entry. `config` is independent from the workspace and appears only on the Plugin Catalog detail page for the selected Profile. All slots share one bundle and host-provided UI Components:
+The Renderer has three fixed slots. `sidebar` and `mainview` form the Plugin workspace, must be declared together, share a host-owned JSON route, and cause the host to add a dynamic top-level navigation entry. `config` is independent from the workspace and appears only on the Plugin Catalog detail page. All slots share one bundle and host-provided UI Components:
 
 ```tsx
 import { useEffect, useState } from "react";
@@ -147,17 +147,17 @@ import { define_plugin_renderer } from "@downcity/city/plugin/react";
 
 export default define_plugin_renderer({ config: function GithubConfig({ config, ui }) {
   const { Button, Group, Input, LoadingState, Page, Row, Toolbar } = ui.components;
-  const [profile, set_profile] = useState<{ api_url: string }>();
+  const [config_state, set_config_state] = useState<{ api_url: string }>();
 
   useEffect(() => {
-    void config.invoke<{ api_url: string }>("profile.read").then(set_profile);
+    void config.invoke<{ api_url: string }>("config.read").then(set_config_state);
   }, [config]);
 
-  if (!profile) return <LoadingState label="Reading Profile…" />;
+  if (!config_state) return <LoadingState label="Reading Config…" />;
   return <Page>
-    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void config.invoke("profile.save", profile).then(() => ui.toast({ type: "success", message: "Saved" }))}>Save</Button>} />
+    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void config.invoke("config.save", config_state).then(() => ui.toast({ type: "success", message: "Saved" }))}>Save</Button>} />
     <Group>
-      <Row label="API URL" trailing={<Input value={profile.api_url} on_value_change={(api_url) => set_profile({ ...profile, api_url })} />} />
+      <Row label="API URL" trailing={<Input value={config_state.api_url} on_value_change={(api_url) => set_config_state({ ...config_state, api_url })} />} />
     </Group>
   </Page>;
 } });
@@ -165,31 +165,30 @@ export default define_plugin_renderer({ config: function GithubConfig({ config, 
 
 The Renderer bundle must leave `react` and `react/jsx-runtime` as host externals mapped to `downcity-plugin://runtime/react` and `downcity-plugin://runtime/react/jsx-runtime`. Bundle other frontend dependencies into the single `renderer.js` file.
 
-Desktop loads the Renderer in its host React tree. Sidebar and Mainview use `plugin.invoke()` for Plugin-level actions and coordinate through `navigation`; Config uses `config.invoke()` for actions bound to the selected Profile. Each slot receives only its required gateway, `ui.components`, Toast, and Confirm—never the Profile ID or Desktop controller. Renderer is trusted local UI code, so install only trusted sources.
+Desktop loads the Renderer in its host React tree. Sidebar and Mainview use `plugin.invoke()` for Plugin-level actions and coordinate through `navigation`; Config uses `config.invoke()` for the current Plugin's Config actions. Each slot receives only its required gateway, `ui.components`, Toast, and Confirm—never the Desktop controller. Renderer is trusted local UI code, so install only trusted sources.
 
 Sidebar and Mainview also receive a read-only `notifications` array scoped to the current Plugin. Each item includes the local `topic_key`, content, route, and creation time so navigation objects can render unread state. Navigating to the notification's exact route lets the host mark it read; the Renderer cannot publish or mutate notifications.
 
 Use `SidebarTreeItem` for a tree Sidebar: `depth` expresses hierarchy, `kind` distinguishes `branch` and `leaf`, parents own expansion through `expanded` and `on_toggle`, and `on_select` updates the Mainview through shared `navigation`. When `leading` is omitted, the host supplies consistent default icons for branches and leaves. A branch with no children can omit `on_toggle` and will not show a disclosure button. History and other deeper navigation should remain in this tree instead of consuming Mainview space. Use `ItemMenu` for row actions and the host-safe `Markdown` for Markdown content. After a mutation, call `ui.invalidate()`; the host increments `ui.revision` for that Plugin so Sidebar and Mainview reload their snapshots without copying host styles or putting refresh state in the route.
 
-## Profile interaction
+## Config interaction
 
 ```text
 Open the Plugins Catalog and select a Plugin
-→ create or select a Profile for a Plugin that declares Config
-→ configure it in Config
-→ enable the Plugin for an Agent; select a Profile when Config exists
+→ edit the Plugin's unique configuration in Config
+→ save and let the Plugin refresh affected long-lived resources
 ```
 
-A Profile is only host-provided configuration space for a Plugin that declares Config; it is unrelated to Sidebar/Mainview. The host creates, selects, removes, and persists it, but does not interpret fields or generate a form from JSON Schema. Structure, validation, defaults, and Secret behavior belong to the Plugin. A Plugin without Config does not need a Profile.
+Each Plugin ID has one Config, independent from Sidebar/Mainview. The host only persists it and does not interpret fields or generate a form from JSON Schema. Structure, validation, defaults, Secret behavior, and resource refresh after save belong to the Plugin.
 
-Configuration is stored under `~/.downcity/plugins/<plugin_id>/config.toml` with directory mode `0700` and file mode `0600`. The current store uses TOML, so values must be a TOML-compatible JSON object. `agent.json` stores only the Profile reference, and multiple Agents may explicitly share one Profile.
+Configuration is stored under `~/.downcity/plugins/<plugin_id>/config.toml` with directory mode `0700` and file mode `0600`. The current store uses TOML, so values must be a TOML-compatible JSON object. `agent.json` stores no Plugin references; City automatically provides every Plugin and the same configuration to every Agent.
 
 ## Install
 
 ```bash
 city plugin install ./github-plugin
-# Create and configure production on the GitHub detail page in Desktop Plugins
-city plugin enable github my-agent --profile production
+# Configure GitHub on its detail page in Desktop Plugins
+city plugin config github --set '{"api_url":"https://api.github.com"}'
 city plugin update github
 city plugin uninstall github
 ```

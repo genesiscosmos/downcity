@@ -106,7 +106,7 @@ export function agent_storage_scope(agent: Agent): StorageScope {
   return runtime_state(agent).storage_provider.open_scope(["agents", agent.id]);
 }
 
-/** 返回指定 Agent Plugin 的私有数据作用域。 */
+/** 返回指定 Agent 与 Plugin 组合的私有数据作用域。 */
 export function plugin_storage_scope(agent: Agent, plugin_id: string): StorageScope {
   return runtime_state(agent).storage_provider.open_scope([
     "agents",

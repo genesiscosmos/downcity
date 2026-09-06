@@ -11,7 +11,7 @@ import type { DesktopActions } from "@/types/DesktopView";
 import type { DesktopPluginDefinition, DesktopPluginSummary } from "@common/types/DesktopApi";
 import { use_translation } from "@/locales/i18n";
 
-/** 所有 Plugin 都展示说明；只有声明 Config 时才展示 Profile 配置。 */
+/** 所有 Plugin 都展示说明；只有声明 Config 时才展示唯一配置。 */
 export function PluginView({ plugin, controller }: {
   /** 当前 Plugin。 */ readonly plugin: DesktopPluginSummary;
   /** Renderer 稳定操作集合。 */ readonly controller: DesktopActions;
@@ -34,7 +34,7 @@ export function PluginView({ plugin, controller }: {
         <PluginOverview plugin={definition ?? plugin} />
         {plugin.runtime_status === "error" ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"><div className="font-medium">{translate("runtime.unavailable")}</div><div className="mt-1 break-words">{plugin.runtime_error || translate("runtime.initialize_failed")}</div></div> : null}
         {error ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-        {plugin.runtime_status === "error" ? null : plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} set_definition={set_definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-sm text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
+        {plugin.runtime_status === "error" ? null : plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-sm text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
       </div>
     </main></MainViewBody>
   </MainViewLayout>;

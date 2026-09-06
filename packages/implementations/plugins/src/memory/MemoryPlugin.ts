@@ -147,9 +147,9 @@ export class MemoryPlugin extends Plugin {
   /** 从可信 PluginContext 解析当前可读写 Memory 范围。 */
   private readonly access_resolver: MemoryAccessResolver;
 
-  constructor(profile: MemoryPluginOptions = {}) {
+  constructor(options: MemoryPluginOptions = {}) {
     super();
-    const storage_root_path = profile.storage_root_path?.trim();
+    const storage_root_path = options.storage_root_path?.trim();
     if (storage_root_path && !path.isAbsolute(storage_root_path)) {
       throw new Error("MemoryPlugin storage_root_path must be an absolute path");
     }

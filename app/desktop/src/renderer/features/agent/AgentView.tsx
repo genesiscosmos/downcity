@@ -1,30 +1,27 @@
 /** Agent 身份、配置索引与 MainView 定义编辑内容。 */
 
 import { useEffect, useRef, useState } from "react";
-import { TbChevronRight, TbComponents, TbFileText, TbMessageCircle, TbPhoto, TbPlus, TbRefresh, TbTrash, TbUser } from "react-icons/tb";
+import { TbChevronRight, TbFileText, TbMessageCircle, TbPhoto, TbRefresh, TbTrash, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { SettingActionItem, SettingGroup, SettingItem, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
+import { SettingActionItem, SettingGroup, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
 import type { DesktopController } from "@/types/DesktopView";
-import type { DesktopAgentDefinition, DesktopAgentSummary, DesktopPluginSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
+import type { DesktopAgentDefinition, DesktopAgentSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Agent 页面可以编辑的定义分区。 */
-export type AgentEditorSection = "identity" | "model" | "soul" | "plugins";
+export type AgentEditorSection = "identity" | "model" | "soul";
 
 /** Agent 管理页属性。 */
 interface AgentViewProps {
   /** 当前 Agent。 */ agent: DesktopAgentSummary;
   /** 全部 Workspace。 */ workspaces: DesktopWorkspaceSummary[];
-  /** 当前可用 Plugin。 */ plugins: DesktopPluginSummary[];
   /** 当前 Agent 的主 Session。 */ main_session?: {
     workspace_id: string;
     session: DesktopSessionSummary;
@@ -42,8 +39,6 @@ interface AgentViewProps {
 interface AgentInfoSidebarProps {
   /** 当前 Agent。 */
   agent: DesktopAgentSummary;
-  /** 当前可用 Plugin。 */
-  plugins: DesktopPluginSummary[];
   /** Renderer 根控制器。 */
   controller: DesktopController;
   /** 关闭信息侧栏。 */
@@ -59,7 +54,6 @@ interface AgentInfoSidebarProps {
 /** 当前 Agent 配置项的单一编辑器。 */
 export function AgentInfoSidebar({
   agent,
-  plugins,
   controller,
   close_sidebar,
   section,
@@ -115,19 +109,12 @@ export function AgentInfoSidebar({
     if (!definition_dirty || !definition) return;
     const version = definition_version_ref.current;
     const timeout_id = window.setTimeout(() => {
-      const plugins_input = Object.fromEntries(
-        Object.entries(definition.plugins).map(([plugin_id, reference]) => [
-          plugin_id,
-          reference.profile ? { profile: reference.profile.trim() } : {},
-        ]),
-      );
       void controller.actions
         .update_agent(agent.agent_id, {
           name: definition.name,
           description: definition.description,
           model_id: definition.model_id,
           instruction: definition.instruction,
-          plugins: plugins_input,
         })
         .then(() => {
           if (definition_version_ref.current === version)
@@ -145,7 +132,6 @@ export function AgentInfoSidebar({
     identity: translate_resources("agent_details.identity"),
     model: "Model",
     soul: "SOUL.md",
-    plugins: "Plugins",
   };
   const content = editor_section ? (
     <AgentEditorPanel
@@ -153,7 +139,6 @@ export function AgentInfoSidebar({
       agent={agent}
       section={editor_section}
       definition={definition}
-      plugins={plugins}
       controller={controller}
       loading={loading_definition}
       error={editor_error}
@@ -182,7 +167,6 @@ export function AgentInfoSidebar({
 export function AgentView({
   agent,
   workspaces,
-  plugins,
   main_session,
   controller,
   open_main_session,
@@ -194,9 +178,6 @@ export function AgentView({
   const translate_resources = use_translation("resources");
   const translate_common = use_translation();
   const [avatar_dialog_open, set_avatar_dialog_open] = useState(false);
-  const bound_plugins = plugins.filter((plugin) =>
-    plugin.agent_ids.includes(agent.agent_id),
-  );
   const recent_sessions = main_session ? [main_session.session] : [];
 
   const content = (
@@ -249,18 +230,6 @@ export function AgentView({
                 description={translate_resources("agent_details.soul_description")}
                 trailing={<TbChevronRight />}
                 on_select={() => open_config("soul")}
-              />
-              <SettingActionItem
-                icon={<TbComponents />}
-                label="Plugins"
-                description={translate_resources("agent_details.plugins_description")}
-                trailing={
-                  <>
-                    <span>{translate_resources("agent_details.plugins_count", { count: bound_plugins.length })}</span>
-                    <TbChevronRight />
-                  </>
-                }
-                on_select={() => open_config("plugins")}
               />
             </SettingGroup>
           </SettingSection>
@@ -360,7 +329,6 @@ function AgentEditorPanel({
   agent,
   section,
   definition,
-  plugins,
   controller,
   loading,
   error,
@@ -371,7 +339,6 @@ function AgentEditorPanel({
   /** 当前 Agent 展示摘要。 */ agent: DesktopAgentSummary;
   /** 当前编辑分区。 */ section: AgentEditorSection;
   /** 当前未提交定义。 */ definition?: DesktopAgentDefinition;
-  /** 可注册的全部 Plugin。 */ plugins: DesktopPluginSummary[];
   /** Renderer 稳定控制器。 */ controller: DesktopController;
   /** 是否正在读取定义。 */ loading: boolean;
   /** 当前编辑错误。 */ error: string;
@@ -403,14 +370,6 @@ function AgentEditorPanel({
           set_definition={set_definition}
         />
       ) : null}
-      {definition && section === "plugins" ? (
-        <PluginEditor
-          definition={definition}
-          plugins={plugins}
-          controller={controller}
-          set_definition={set_definition}
-        />
-      ) : null}
       {error ? (
         <div className="mt-3 text-[0.6875rem] leading-4 text-destructive">
           {error}
@@ -430,7 +389,6 @@ function AgentEditorPanel({
     identity: translate_resources("agent_details.identity"),
     model: "Model",
     soul: "SOUL.md",
-    plugins: "Plugins",
   };
   return (
     <DetailEditorSidebar
@@ -575,151 +533,5 @@ function SoulEditor({
         })
       }
     />
-  );
-}
-
-/** Plugin 注册与 profile 编辑器。 */
-function PluginEditor({
-  definition,
-  plugins,
-  controller,
-  set_definition,
-}: {
-  /** 未提交定义。 */ definition: DesktopAgentDefinition;
-  /** 可用 Plugin。 */ plugins: DesktopPluginSummary[];
-  /** Desktop 稳定控制器。 */ controller: DesktopController;
-  /** 替换定义。 */ set_definition(value: DesktopAgentDefinition): void;
-}) {
-  const translate_resources = use_translation("resources");
-  const [missing_profile_plugin, set_missing_profile_plugin] =
-    useState<DesktopPluginSummary>();
-  const [missing_profile_dialog_open, set_missing_profile_dialog_open] =
-    useState(false);
-  const [pending_profile_plugin_id, set_pending_profile_plugin_id] =
-    useState<string>();
-  const open_missing_profile_dialog = (plugin: DesktopPluginSummary) => {
-    set_missing_profile_plugin(plugin);
-    set_missing_profile_dialog_open(true);
-  };
-  const complete_missing_profile_dialog = (open: boolean) => {
-    if (open) return;
-    const plugin_id = pending_profile_plugin_id;
-    set_missing_profile_plugin(undefined);
-    set_pending_profile_plugin_id(undefined);
-    if (plugin_id) controller.actions.select_plugin(plugin_id);
-  };
-  const set_plugin = (plugin: DesktopPluginSummary, enabled: boolean) => {
-    const next_plugins = { ...definition.plugins };
-    if (!enabled) {
-      delete next_plugins[plugin.plugin_id];
-    } else {
-      next_plugins[plugin.plugin_id] = {};
-    }
-    set_definition({ ...definition, plugins: next_plugins });
-  };
-  const set_profile = (plugin_id: string, profile: string) =>
-    set_definition({
-      ...definition,
-      plugins: {
-        ...definition.plugins,
-        [plugin_id]: profile ? { profile } : {},
-      },
-    });
-  return (
-    <>
-      <SettingGroup>
-        {plugins
-          .filter((plugin) => plugin.has_main)
-          .map((plugin) => {
-            const reference = definition.plugins[plugin.plugin_id];
-            const profile_options = [
-              { value: "", label: translate_resources("agent_details.empty_config") },
-              ...plugin.profile_ids.map((profile_id) => ({
-                value: profile_id,
-                label: profile_id,
-              })),
-            ];
-            return (
-              <SettingItem
-                key={plugin.plugin_id}
-                label={plugin.title}
-                leading={<TbComponents />}
-              >
-                <div className="flex items-center gap-2">
-                  {reference && plugin.has_config ? (
-                    plugin.profile_ids.length > 0 ? (
-                      <Select
-                        value={reference.profile || ""}
-                        options={profile_options}
-                        on_value_change={(profile) =>
-                          set_profile(plugin.plugin_id, profile)
-                        }
-                        className="min-w-28 max-w-44 rounded-full"
-                        align="end"
-                      />
-                    ) : (
-                      <Button
-                        className="rounded-full"
-                        onClick={() => open_missing_profile_dialog(plugin)}
-                      >
-                        <TbPlus />
-                        Profile
-                      </Button>
-                    )
-                  ) : null}
-                  <Switch
-                    checked={Boolean(reference)}
-                    onCheckedChange={(enabled) => set_plugin(plugin, enabled)}
-                    aria-label={translate_resources("agent_details.plugin_state", { name: plugin.title })}
-                  />
-                </div>
-              </SettingItem>
-            );
-          })}
-        {plugins.every((plugin) => !plugin.has_main) ? (
-          <div className="py-8 text-center text-xs text-muted-foreground">
-            暂无可用 Plugin
-          </div>
-        ) : null}
-      </SettingGroup>
-      <Dialog
-        open={missing_profile_dialog_open}
-        onOpenChange={set_missing_profile_dialog_open}
-        onOpenChangeComplete={complete_missing_profile_dialog}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              为 {missing_profile_plugin?.title} 添加配置
-            </DialogTitle>
-            <DialogDescription>
-              创建一个命名 Profile 后，Agent 可以显式选择它。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <div className="rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
-              创建完成后返回当前 Agent 页面，再展开 Plugin 选择刚刚创建的
-              Profile。
-            </div>
-          </DialogBody>
-          <DialogFooter>
-            <Button onClick={() => set_missing_profile_dialog_open(false)}>
-              取消
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                set_pending_profile_plugin_id(
-                  missing_profile_plugin?.plugin_id,
-                );
-                set_missing_profile_dialog_open(false);
-              }}
-            >
-              去创建配置
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
   );
 }

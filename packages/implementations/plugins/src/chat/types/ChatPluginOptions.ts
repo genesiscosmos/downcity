@@ -38,9 +38,9 @@ export interface ChatChannel {
  * ChatPlugin 显式构造参数。
  */
 export interface ChatPluginOptions {
-  /** 当前 Profile 唯一接收入站消息的 Agent。 */
+  /** 当前配置唯一接收入站消息的 Agent。 */
   owner_agent_id?: string;
-  /** 当前 Profile 唯一承载渠道会话的 Workspace。 */
+  /** 当前配置唯一承载渠道会话的 Workspace。 */
   owner_workspace_id?: string;
   /**
    * Chat queue worker 运行配置。

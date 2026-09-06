@@ -31,7 +31,7 @@ const status = create_action({
 
 Each call receives two read-only inputs:
 
-- `context` is the City-created scope capability with restricted City, Agent, Workspace, Session, Turn, Profile, and Storage handles.
+- `context` is the City-created scope capability with restricted City, Agent, Workspace, Session, Turn, Config, and Storage handles.
 - `execution` is the call identity with `call_id`, `abort_signal`, optional Session scope, and Step snapshot.
 
 Actions should pass `execution.abort_signal` to network requests, polling, and long-running work.
@@ -42,5 +42,5 @@ The returned `PluginActionResult` must be JSON-serializable.
 second business implementation; both end at the same `execute` function.
 
 Models call Actions through the current Session's `plugin_call` Tool. Plugin code may use
-`context.city.plugins.run_action()` for another Plugin bound to the current Agent. Application code
+`context.city.plugins.run_action()` for another Plugin registered in City. Application code
 calls `entry.plugins.run_action()` on the execution entry returned by `city.enter_workspace()`.

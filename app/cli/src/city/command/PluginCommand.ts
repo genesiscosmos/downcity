@@ -1,28 +1,18 @@
 /**
  * `downcity plugin` 命令树。
  *
- * Plugin 以稳定 ID 管理，profile 保存于 Plugin 自己的 `config.toml`，Agent 只在
- * `agent.json` 中引用 Plugin 与可选 profile。
+ * Plugin 以稳定 ID 管理，唯一配置保存于 Plugin 自己的 `config.toml`。
  */
 
 import type { Command } from "commander";
 import type { JsonObject, JsonValue } from "@downcity/agent";
-import {
-  resolve_cli_agent_id,
-  resolve_cli_agent_target,
-} from "@/city/agent/AgentSelection.js";
+import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 import { callServer } from "@/city/process/daemon/Client.js";
 import {
-  get_agent_plugin_reference,
   get_installed_plugin,
-  get_plugin_profile,
-  list_agent_plugin_references,
-  list_plugin_profiles,
-  remove_agent_plugin_reference,
+  get_plugin_config,
   remove_installed_plugin,
-  remove_plugin_profile,
-  save_plugin_profile,
-  set_agent_plugin_reference,
+  save_plugin_config,
 } from "@/city/process/registry/PluginRepository.js";
 import { install_plugin, update_plugin } from "@/city/process/plugin/PluginInstaller.js";
 import {
@@ -56,7 +46,7 @@ export async function runInteractivePluginManager(): Promise<void> {
 export function registerPluginsCommand(program: Command): void {
   const plugin = program
     .command("plugin")
-    .description(t({ zh: "管理 Plugin、profile 与 Agent 引用", en: "manage Plugins, profiles, and Agent references" }))
+    .description(t({ zh: "管理 City Plugin 与配置", en: "manage City Plugins and configuration" }))
     .helpOption("--help", helpText())
     .action(() => plugin.outputHelp());
 
@@ -115,114 +105,30 @@ export function registerPluginsCommand(program: Command): void {
       });
     });
 
-  register_agent_reference_commands(plugin);
-  register_profile_commands(plugin);
+  register_config_command(plugin);
   register_action_command(plugin);
 }
 
-/** 注册 Agent Plugin 引用命令。 */
-function register_agent_reference_commands(plugin: Command): void {
-  plugin.command("enable <plugin_id> [agent_id]")
-    .option("--profile <profile>", t({ zh: "选择 Plugin profile", en: "select a Plugin profile" }))
-    .helpOption("--help", helpText())
-    .action(async (
-      plugin_id: string,
-      agent_id: string | undefined,
-      options: { profile?: string },
-    ) => {
-      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      const catalog = await resolve_plugin_catalog_item(plugin_id);
-      if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
-      if (!catalog.has_main) throw new Error(`Plugin does not provide a City main: ${plugin_id}`);
-      const reference = set_agent_plugin_reference({
-        agent_id: resolved_agent_id,
-        plugin_id,
-        ...(options.profile ? { profile: options.profile } : {}),
-      });
-      emitCliBlock({
-        tone: "success",
-        title: "Plugin enabled",
-        summary: `${reference.plugin_id} · ${reference.agent_id}`,
-        ...(reference.profile ? { facts: [{ label: "Profile", value: reference.profile }] } : {}),
-        note: "新的 Plugin 装配会在下次 City 装配 Agent 时生效。",
-      });
-    });
-
-  plugin.command("disable <plugin_id> [agent_id]")
-    .helpOption("--help", helpText())
-    .action(async (plugin_id: string, agent_id: string | undefined) => {
-      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      if (!get_agent_plugin_reference(resolved_agent_id, plugin_id)) {
-        throw new Error(`Plugin is not registered by Agent: ${plugin_id}`);
-      }
-      remove_agent_plugin_reference(resolved_agent_id, plugin_id);
-      emitCliBlock({
-        tone: "success",
-        title: "Plugin disabled",
-        summary: `${plugin_id} · ${resolved_agent_id}`,
-      });
-    });
-
-  plugin.command("enabled [agent_id]")
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action(async (agent_id: string | undefined, options: { json?: boolean }) => {
-      const resolved_agent_id = await resolve_cli_agent_id(agent_id);
-      const references = list_agent_plugin_references(resolved_agent_id);
-      printResult({
-        type: "block",
-        asJson: options.json === true,
-        success: true,
-        title: "agent plugins",
-        data: { agent_id: resolved_agent_id, plugins: references },
-      });
-    });
-}
-
-/** 注册 Plugin profile 命令。 */
-function register_profile_commands(plugin: Command): void {
-  plugin.command("profiles <plugin_id>")
-    .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
-    .helpOption("--help", helpText())
-    .action((plugin_id: string, options: { json?: boolean }) => {
-      const profiles = list_plugin_profiles(plugin_id);
-      printResult({
-        type: "block",
-        asJson: options.json === true,
-        success: true,
-        title: "plugin profiles",
-        data: { plugin_id, profiles },
-      });
-    });
-
-  plugin.command("config <plugin_id> [profile]")
-    .option("--set <json>", t({ zh: "替换完整 profile JSON", en: "replace the complete profile JSON" }))
-    .option("--remove", t({ zh: "删除该 profile", en: "remove this profile" }))
+/** 注册 Plugin 唯一配置命令。 */
+function register_config_command(plugin: Command): void {
+  plugin.command("config <plugin_id>")
+    .option("--set <json>", t({ zh: "替换完整 Plugin 配置 JSON", en: "replace the complete Plugin config JSON" }))
     .option("--json", t({ zh: "以 JSON 输出", en: "output as JSON" }))
     .helpOption("--help", helpText())
     .action(async (
       plugin_id: string,
-      profile_input: string | undefined,
-      options: { set?: string; remove?: boolean; json?: boolean },
+      options: { set?: string; json?: boolean },
     ) => {
-      const profile = String(profile_input || "default").trim();
       const catalog = await resolve_plugin_catalog_item(plugin_id);
       if (!catalog) throw new Error(`Plugin not found: ${plugin_id}`);
       if (!catalog.has_config) throw new Error(`Plugin does not provide Config: ${plugin_id}`);
-      if (options.remove) {
-        remove_plugin_profile(plugin_id, profile);
-        emitCliBlock({ tone: "success", title: "Plugin profile removed", summary: `${plugin_id}/${profile}` });
-        return;
-      }
-      const existing = get_plugin_profile(plugin_id, profile);
       if (options.set) {
-        const config = parse_json_object(options.set, "profile");
-        const saved = await save_plugin_profile(plugin_id, profile, config);
-        print_profile_status(plugin_id, profile, saved, options.json === true);
+        const config = parse_json_object(options.set, "config");
+        const saved = await save_plugin_config(plugin_id, config);
+        print_config_status(plugin_id, saved, options.json === true);
         return;
       }
-      if (!existing) throw new Error(`Plugin profile not found: ${plugin_id}/${profile}`);
-      print_profile_status(plugin_id, profile, existing, options.json === true);
+      print_config_status(plugin_id, get_plugin_config(plugin_id), options.json === true);
     });
 }
 
@@ -300,16 +206,15 @@ async function print_plugin_list(as_json: boolean): Promise<void> {
       facts: [
         { label: "Description", value: item.description },
         { label: "Source", value: item.source },
-        { label: "Profiles", value: item.profiles.join(", ") || "none" },
+        { label: "Config", value: item.has_config ? "supported" : "none" },
       ],
     })),
   });
 }
 
-/** 输出 Profile 状态，不把 Plugin 私有配置或凭据写到终端。 */
-function print_profile_status(
+/** 输出配置状态，不把 Plugin 私有配置或凭据写到终端。 */
+function print_config_status(
   plugin_id: string,
-  profile: string,
   config: JsonObject,
   as_json: boolean,
 ): void {
@@ -317,10 +222,9 @@ function print_profile_status(
     type: "block",
     asJson: as_json,
     success: true,
-    title: "plugin profile",
+    title: "plugin config",
     data: {
       plugin_id,
-      profile,
       configured: Object.keys(config).length > 0,
       fields: Object.keys(config).sort(),
     },

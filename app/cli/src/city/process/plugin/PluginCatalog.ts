@@ -1,9 +1,6 @@
 /** City 全局 Plugin Catalog。 */
 
-import {
-  list_installed_plugins,
-  list_plugin_profiles,
-} from "@/city/process/registry/PluginRepository.js";
+import { list_installed_plugins } from "@/city/process/registry/PluginRepository.js";
 import { create_cli_builtin_plugin_registrations } from "@/city/runtime/AgentAssembly.js";
 import { create_cli_local_data } from "@/city/runtime/LocalData.js";
 import { verify_local_installed_plugin_integrity } from "@downcity/city/local";
@@ -21,7 +18,6 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
       has_sidebar: registration.has_sidebar,
       has_mainview: registration.has_mainview,
       has_config: registration.has_config,
-      profiles: list_plugin_profiles(registration.plugin.name),
     };
   });
   const installed_items = list_installed_plugins().map((plugin) => ({
@@ -36,7 +32,6 @@ export function list_plugin_catalog(): PluginCatalogItem[] {
     has_sidebar: plugin.renderer?.sidebar === true,
     has_mainview: plugin.renderer?.mainview === true,
     has_config: plugin.renderer?.config === true,
-    profiles: list_plugin_profiles(plugin.id),
   }));
   return [...builtin_items, ...installed_items]
     .sort((left, right) => left.plugin_id.localeCompare(right.plugin_id));

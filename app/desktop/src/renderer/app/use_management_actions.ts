@@ -56,7 +56,6 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
     try {
       const agent = await window.downcity.agent.update(agent_id, input);
       catalog.set_agents(catalog.state_ref.current.agents.map((item) => item.agent_id === agent.agent_id ? agent : item));
-      catalog.set_plugins(await window.downcity.plugin.list());
     } catch (reason) {
       settings.set_error(to_error_message(reason));
       throw reason;
@@ -74,7 +73,6 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
         navigation.set_selection(next_agents[0] ? { kind: "agent", agent_id: next_agents[0].agent_id } : null);
       }
       session.remove_agent_sessions(agent_id);
-      catalog.set_plugins(await window.downcity.plugin.list());
       const current_settings = settings.state_ref.current.settings;
       settings.set_settings(await window.downcity.settings.update({
         default_agent_id: current_settings.default_agent_id === agent_id ? "" : current_settings.default_agent_id,
@@ -105,28 +103,11 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
   const generate_agent_avatar = useCallback((agent_id: string) => update_agent_avatar(agent_id, "generate"), [update_agent_avatar]);
 
   const get_plugin = useCallback(async (plugin_id: string) => await window.downcity.plugin.get(plugin_id), []);
-  const create_plugin_profile = useCallback(async (plugin_id: string, input: Parameters<typeof window.downcity.plugin.create_profile>[1]) => {
-    settings.set_error("");
-    try {
-      const definition = await window.downcity.plugin.create_profile(plugin_id, input);
-      catalog.set_plugins(await window.downcity.plugin.list());
-      return definition;
-    } catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
-  }, [catalog, settings]);
   const invoke_plugin_action = useCallback(async (plugin_id: string, input: Parameters<typeof window.downcity.plugin.invoke>[1]) => {
     settings.set_error("");
     try { return await window.downcity.plugin.invoke(plugin_id, input); }
     catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
   }, [settings]);
-  const remove_plugin_profile = useCallback(async (plugin_id: string, profile_id: string) => {
-    settings.set_error("");
-    try {
-      const definition = await window.downcity.plugin.remove_profile(plugin_id, profile_id);
-      catalog.set_plugins(await window.downcity.plugin.list());
-      return definition;
-    } catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
-  }, [catalog, settings]);
-
   const create_workspace = useCallback(async (value: CreateWorkspaceFormValue) => {
     settings.set_error("");
     const workspace = await window.downcity.workspace.create(value);
@@ -218,9 +199,9 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
 
   return useMemo(() => ({
     refresh_models, create_agent, get_agent, update_agent, remove_agent, choose_agent_avatar,
-    remove_agent_avatar, generate_agent_avatar, get_plugin, create_plugin_profile,
-    invoke_plugin_action, remove_plugin_profile, create_workspace, update_workspace_name,
+    remove_agent_avatar, generate_agent_avatar, get_plugin,
+    invoke_plugin_action, create_workspace, update_workspace_name,
     write_workspace_readme, update_settings, list_global_env, update_global_env,
     list_login_providers, login, logout, switch_account, remove_account,
-  }), [choose_agent_avatar, create_agent, create_plugin_profile, create_workspace, generate_agent_avatar, get_agent, get_plugin, invoke_plugin_action, list_global_env, list_login_providers, login, logout, refresh_models, remove_account, remove_agent, remove_agent_avatar, remove_plugin_profile, switch_account, update_agent, update_global_env, update_settings, update_workspace_name, write_workspace_readme]);
+  }), [choose_agent_avatar, create_agent, create_workspace, generate_agent_avatar, get_agent, get_plugin, invoke_plugin_action, list_global_env, list_login_providers, login, logout, refresh_models, remove_account, remove_agent, remove_agent_avatar, switch_account, update_agent, update_global_env, update_settings, update_workspace_name, write_workspace_readme]);
 }

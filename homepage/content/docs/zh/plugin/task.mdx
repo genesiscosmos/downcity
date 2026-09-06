@@ -16,7 +16,7 @@ Task 插件让 Agent 能够调度和运行后台任务。它适用于定期数�
 
 ## Desktop 工作区
 
-Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。Plugin Sidebar 使用 `Task → 执行记录` 两级树；点击 Task 查看任务详情，展开 Task 时才读取执行记录。Mainview 用于查看任务定义、最终输出、执行状态、触发来源、耗时、结果校验和错误信息。
+Task 不声明 Config。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。Plugin Sidebar 使用 `Task → 执行记录` 两级树；点击 Task 查看任务详情，展开 Task 时才读取执行记录。Mainview 用于查看任务定义、最终输出、执行状态、触发来源、耗时、结果校验和错误信息。
 
 Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Task 不按 Agent 或 Workspace 分组；每个 Task 显式保存一个 `agent_id` 和一个 `workspace_id` 作为可重新绑定的执行目标，界面只展示对应名称。目标失效后 Task 仍然可见、可编辑和可删除；Task 正在运行时会拒绝删除，避免同时移除其执行产物。定义、调度状态和 run 产物都从 TaskPlugin 统一的 City 生命周期存储读取，不再保存 Agent 级副本。
 

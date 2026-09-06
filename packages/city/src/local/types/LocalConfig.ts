@@ -2,12 +2,6 @@
 
 import type { JsonObject } from "@downcity/agent";
 
-/** Agent 对一个 Plugin 的持久化引用。 */
-export interface LocalAgentPluginReference {
-  /** Plugin 配置目录中显式选用的 profile；未填写时使用空配置。 */
-  profile?: string;
-}
-
 /** 本地 Workspace 的持久化配置。 */
 export interface LocalWorkspaceConfig {
   /** Workspace 的全局稳定 ID。 */
@@ -56,8 +50,6 @@ export interface LocalAgentConfig {
   llm?: JsonObject;
   /** 从 `SOUL.md` 读取的 Agent 主体指令。 */
   instruction: string;
-  /** 以 Plugin ID 为键的已注册 Plugin 引用。 */
-  plugins: Readonly<Record<string, LocalAgentPluginReference>>;
   /** 首次注册时间，使用 ISO 8601 字符串。 */
   created_at: string;
   /** 最近更新时间，使用 ISO 8601 字符串。 */

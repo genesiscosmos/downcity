@@ -56,7 +56,7 @@ Workspace 的 Shell、Sandbox 等运行资源，再将其移出当前 City；不
 2. Plugin 移除或 City 关闭时调用一次 `dispose`。
 
 Agent、Session 和 Workspace 的进入或离开都不触发 Plugin 生命周期。长期连接、Timer、调度器和
-后台 Worker 由具体 Plugin 按自己的账号、Profile、任务定义等领域所有权管理。
+后台 Worker 由具体 Plugin 按自己的账号、Agent、任务定义等领域所有权管理。
 
 Action、System、Availability 与 Hook 每次调用都会获得即时创建的 `PluginContext`。它包含受限的
 `city`、`agent`、`workspace`、`session`、`turn`、`config` 和 `storage` 对象，因此 Plugin

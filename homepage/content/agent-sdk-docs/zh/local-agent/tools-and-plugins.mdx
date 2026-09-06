@@ -1,6 +1,6 @@
 ---
 title: Tools 和 Plugins
-description: 给 Agent 配置 Tool，并通过 City 提供和绑定 Plugin
+description: 给 Agent 配置 Tool，并通过 City 提供 Plugin
 ---
 
 # Tools 和 Plugins
@@ -44,7 +44,7 @@ Shell 额外提供 `shell_exec` 与 `shell_session`。文件和搜索 Tool 始�
 
 ## City 提供 Plugins
 
-Agent 构造函数不接收 Plugin。先把 registration 交给 City，再为 Agent 声明所需 Plugin ID：
+Agent 构造函数不接收 Plugin。把 registration 交给 City 后，所有 Agent 会自动获得它：
 
 ```ts
 import { Agent } from "@downcity/agent";
@@ -71,18 +71,20 @@ City 会把全部已注册 Plugin 自动提供给全部 Agent。运行中的 Cit
 一个 City 中每个 Plugin ID 只有一个实例，并且只有 City 级 `initialize/dispose` 生命周期。
 Agent 与 Workspace 只提供每次调用的上下文，不拥有 Plugin 生命周期。
 
-## Profile 配置
+## City 级配置
 
-需要配置的 Plugin 由宿主保存 Profile，并通过 City 的 `plugin_host.runtime_config` 按当前 Agent
-投影配置；配置不进入 Agent，也不决定 Plugin 实例数量：
+需要配置的 Plugin 由宿主提供唯一 Config store。配置不进入 Agent，也不决定 Plugin 实例数量：
 
 ```ts
 const city = new City({
   plugin_host: {
-    runtime_config: (plugin_id, agent_id) => load_config(plugin_id, agent_id),
+    config: (plugin_id) => open_plugin_config_store(plugin_id),
   },
 });
 ```
+
+每个 Plugin ID 在一个 City 中只有一份配置。多账号结构和选择规则由 Plugin 自己表达，City
+不提供通用命名配置层。配置保存后，Plugin 负责刷新受影响的长期资源。
 
 ## 调用 Plugin
 
@@ -105,7 +107,7 @@ await entry.plugins.guard("review.require_checked", enriched);
 
 ## PluginContext 直接通信
 
-Plugin 作者 API 从 `@downcity/city/plugin` 导入。Action、Hook、System 和 Availability 获得 `PluginContext`，其中包含受限的 `city`、`agent`、`workspace`、`session`、`turn`、`profile` 和 `storage` 句柄。
+Plugin 作者 API 从 `@downcity/city/plugin` 导入。Action、Hook、System 和 Availability 获得 `PluginContext`，其中包含受限的 `city`、`agent`、`workspace`、`session`、`turn`、`config` 和 `storage` 句柄。
 
 `context.session` 与 `context.agent.sessions` 都是可直接调用的进程内对象，不需要只保存 `session_id` 再回查宿主。Workspace 文件使用 `context.workspace.files`；Plugin 私有文件使用 `context.storage.files`。
 

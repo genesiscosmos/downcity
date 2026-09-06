@@ -1,8 +1,8 @@
-/** Chat Plugin profile 中的渠道配置类型。 */
+/** Chat Plugin 唯一配置中的渠道配置类型。 */
 
 /** Telegram Bot 渠道配置。 */
 export interface TelegramPluginChannelConfig {
-  /** profile 内稳定渠道 ID。 */
+  /** Config 内稳定渠道 ID。 */
   id: string;
   /** 渠道判别字段。 */
   type: "telegram";
@@ -18,7 +18,7 @@ export interface TelegramPluginChannelConfig {
 
 /** Feishu / Lark Bot 渠道配置。 */
 export interface FeishuPluginChannelConfig {
-  /** profile 内稳定渠道 ID。 */
+  /** Config 内稳定渠道 ID。 */
   id: string;
   /** 渠道判别字段。 */
   type: "feishu";
@@ -38,7 +38,7 @@ export interface FeishuPluginChannelConfig {
 
 /** QQ Bot 渠道配置。 */
 export interface QqPluginChannelConfig {
-  /** profile 内稳定渠道 ID。 */
+  /** Config 内稳定渠道 ID。 */
   id: string;
   /** 渠道判别字段。 */
   type: "qq";
@@ -56,7 +56,7 @@ export interface QqPluginChannelConfig {
   bot_user_id?: string;
 }
 
-/** Chat Plugin profile 支持的完整渠道配置。 */
+/** Chat Plugin Config 支持的完整渠道配置。 */
 export type ChatPluginChannelConfig =
   | TelegramPluginChannelConfig
   | FeishuPluginChannelConfig

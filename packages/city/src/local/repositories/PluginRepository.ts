@@ -1,5 +1,5 @@
 /**
- * 文件型 Plugin 定义与 profile 仓储。
+ * 文件型 Plugin 定义与唯一配置仓储。
  *
  * 每个 Plugin 使用自己的稳定 ID 目录。第三方描述保存在 `plugin.json`，全部用户配置
  * 以明文 TOML 保存在 `config.toml`；数据库不保存 Plugin 的任何副本。
@@ -23,7 +23,7 @@ import type {
 const PLUGIN_FILE_NAME = "plugin.json";
 const CONFIG_FILE_NAME = "config.toml";
 
-/** 读取和写入用户级 Plugin 定义与配置。 */
+/** 读取和写入用户级 Plugin 定义与唯一配置。 */
 export class PluginRepository {
   /** Downcity 用户级数据根目录。 */
   readonly root_path: string;
@@ -90,62 +90,37 @@ export class PluginRepository {
     return fs.readFileSync(real_readme, "utf8");
   }
 
-  /** 删除整个第三方 Plugin；调用方必须先完成 Agent 引用检查。 */
+  /** 删除整个第三方 Plugin 目录。 */
   remove_installed(plugin_id_input: string): void {
     const plugin_id = normalize_plugin_id(plugin_id_input);
     fs.removeSync(get_local_plugin_path(this.root_path, plugin_id));
   }
 
-  /** 读取 Plugin 的全部 profile；配置文件不存在时返回空集合。 */
-  read_config(plugin_id_input: string): LocalPluginConfig {
+  /** 读取 Plugin 的唯一配置；配置文件不存在时返回空对象。 */
+  get_config(plugin_id_input: string): JsonObject {
     const plugin_id = normalize_plugin_id(plugin_id_input);
     const file_path = this.config_file_path(plugin_id);
-    if (!fs.pathExistsSync(file_path)) return { schema_version: 1, profiles: {} };
-    const raw = parse(fs.readFileSync(file_path, "utf8")) as Record<string, unknown>;
-    if (raw.schema_version !== 1 || !is_plain_object(raw.profiles)) {
+    if (!fs.pathExistsSync(file_path)) return {};
+    const raw = parse(fs.readFileSync(file_path, "utf8")) as Partial<LocalPluginConfig>;
+    if (raw.schema_version !== 2 || !is_plain_object(raw.config)) {
       throw new Error(`Invalid Plugin config: ${plugin_id}`);
     }
-    return {
-      schema_version: 1,
-      profiles: normalize_profiles(raw.profiles),
-    };
+    assert_toml_value(raw.config, plugin_id);
+    return structuredClone(raw.config) as JsonObject;
   }
 
-  /** 读取指定 profile。 */
-  get_profile(plugin_id_input: string, profile_input: string): JsonObject | null {
-    const profile = normalize_profile_id(profile_input);
-    const config = this.read_config(plugin_id_input);
-    return config.profiles[profile]
-      ? structuredClone(config.profiles[profile])
-      : null;
-  }
-
-  /** 新建或替换指定 profile。 */
-  save_profile(
+  /** 原子替换 Plugin 的唯一配置。 */
+  set_config(
     plugin_id_input: string,
-    profile_input: string,
     value: JsonObject,
   ): JsonObject {
     const plugin_id = normalize_plugin_id(plugin_id_input);
-    const profile = normalize_profile_id(profile_input);
-    assert_toml_value(value, `${plugin_id}.${profile}`);
-    const current = this.read_config(plugin_id);
-    const profiles = {
-      ...current.profiles,
-      [profile]: structuredClone(value),
-    };
-    this.write_config(plugin_id, { schema_version: 1, profiles });
+    assert_toml_value(value, plugin_id);
+    this.write_config(plugin_id, {
+      schema_version: 2,
+      config: structuredClone(value),
+    });
     return structuredClone(value);
-  }
-
-  /** 删除指定 profile；调用方必须先完成 Agent 引用检查。 */
-  remove_profile(plugin_id_input: string, profile_input: string): void {
-    const plugin_id = normalize_plugin_id(plugin_id_input);
-    const profile = normalize_profile_id(profile_input);
-    const current = this.read_config(plugin_id);
-    const profiles = { ...current.profiles };
-    delete profiles[profile];
-    this.write_config(plugin_id, { schema_version: 1, profiles });
   }
 
   /** 返回 Plugin 稳定目录。 */
@@ -155,12 +130,9 @@ export class PluginRepository {
 
   /** 原子写入规范化 TOML。 */
   private write_config(plugin_id: string, config: LocalPluginConfig): void {
-    const ordered_profiles = Object.fromEntries(
-      Object.entries(config.profiles).sort(([left], [right]) => left.localeCompare(right)),
-    );
     this.write_atomic(
       this.config_file_path(plugin_id),
-      stringify({ schema_version: 1, profiles: ordered_profiles }),
+      stringify({ schema_version: 2, config: config.config }),
     );
   }
 
@@ -183,26 +155,7 @@ export class PluginRepository {
   }
 }
 
-/** 规范化 Plugin profile ID。 */
-export function normalize_profile_id(input: string): string {
-  const profile = String(input || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(profile)) {
-    throw new Error(`Invalid Plugin profile: ${input}`);
-  }
-  return profile;
-}
-
-/** 把 TOML table 收窄为 Plugin profile 表。 */
-function normalize_profiles(input: Record<string, unknown>): Record<string, JsonObject> {
-  return Object.fromEntries(Object.entries(input).map(([profile_id, value]) => {
-    const profile = normalize_profile_id(profile_id);
-    if (!is_plain_object(value)) throw new Error(`Invalid Plugin profile: ${profile}`);
-    assert_toml_value(value, profile);
-    return [profile, structuredClone(value) as JsonObject];
-  }));
-}
-
-/** Plugin profile 只允许可无损映射到 TOML 的 JSON 值。 */
+/** Plugin 配置只允许可无损映射到 TOML 的 JSON 值。 */
 function assert_toml_value(value: unknown, path_label: string): asserts value is JsonValue {
   if (value === null || value === undefined || typeof value === "bigint") {
     throw new Error(`Plugin config value is not TOML-compatible: ${path_label}`);

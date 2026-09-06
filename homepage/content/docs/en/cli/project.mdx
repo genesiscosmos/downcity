@@ -35,7 +35,7 @@ The user-level configuration layout is:
 └── downcity.db
 ```
 
-`downcity.db` stores Workspace IDs and paths, tokens, and platform state. It does not store Agent definitions, Plugin profiles, or Agent-to-Workspace bindings. CLI and Desktop read the same files and database.
+`downcity.db` stores Workspace IDs and paths, tokens, and platform state. It does not store Agent definitions, Plugin configuration, or Agent-to-Workspace bindings. CLI and Desktop read the same files and database.
 
 `agent_id` and `workspace_id` are independent global identities. A Session receives a Workspace only for a concrete execution. CLI City daemon state lives in `~/.downcity/runtimes/city/`; Sessions live under `~/.downcity/agents/<agent_id>/sessions/`. A Session's `meta.json` records `workspace_id` only when a Workspace was supplied.
 

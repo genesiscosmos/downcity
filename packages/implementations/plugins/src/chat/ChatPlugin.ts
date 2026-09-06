@@ -64,14 +64,14 @@ export class ChatPlugin extends Plugin {
   /** Plugin 用户可见说明。 */
   readonly description = "Connects Agents to Telegram, Feishu, and QQ channels.";
 
-  /** 按 Agent Profile 隔离的渠道与队列运行态。 */
-  private readonly runtimes_by_agent = new Map<string, {
-    /** 当前作用域的 Chat runtime。 */ readonly runtime: ChatWorkspaceRuntime;
-    /** 当前作用域解析出的渠道实例。 */ readonly channels: ChatChannel[];
-  }>();
+  /** 当前 City 配置对应的唯一渠道与队列运行态。 */
+  private runtime?: {
+    /** Chat 渠道与队列运行对象。 */ readonly value: ChatWorkspaceRuntime;
+    /** 按当前配置解析出的渠道实例。 */ readonly channels: ChatChannel[];
+  };
 
-  /** 各 Agent Profile 唯一的渠道启动流程。 */
-  private readonly starts_by_agent = new Map<string, Promise<void>>();
+  /** 唯一 Chat runtime 正在进行的启动流程。 */
+  private start_promise?: Promise<void>;
 
   /**
    * 当前实例持有的显式 plugin 配置。
@@ -104,10 +104,8 @@ export class ChatPlugin extends Plugin {
    */
   private async start_workspace_runtime(context: PluginContext): Promise<void> {
     if (!this.is_owner_scope(context)) return;
-    const runtime_key = chat_runtime_key(context);
-    if (this.runtimes_by_agent.has(runtime_key)) return;
-    const current_start = this.starts_by_agent.get(runtime_key);
-    if (current_start) return await current_start;
+    if (this.runtime) return;
+    if (this.start_promise) return await this.start_promise;
     const start_promise = (async () => {
       const channel_state = createChatChannelState();
       const queue_store = new ChatQueueStore();
@@ -118,31 +116,28 @@ export class ChatPlugin extends Plugin {
         config: this.getQueueWorkerConfig(context),
       });
       worker.start();
-      const runtime = {
-        channel_state,
-        queue_store,
-        queue_worker: worker,
+      this.runtime = {
+        value: {
+          channel_state,
+          queue_store,
+          queue_worker: worker,
+        },
+        channels: this.create_configured_channels(context),
       };
-      this.runtimes_by_agent.set(runtime_key, {
-        runtime,
-        channels: this.resolve_channels(context),
-      });
       try {
         await startChatChannels(channel_state, context);
       } catch (error) {
-        this.runtimes_by_agent.delete(runtime_key);
+        this.runtime = undefined;
         worker.stop();
         await stopChatChannels(channel_state);
         throw error;
       }
     })();
-    this.starts_by_agent.set(runtime_key, start_promise);
+    this.start_promise = start_promise;
     try {
       await start_promise;
     } finally {
-      if (this.starts_by_agent.get(runtime_key) === start_promise) {
-        this.starts_by_agent.delete(runtime_key);
-      }
+      if (this.start_promise === start_promise) this.start_promise = undefined;
     }
   }
 
@@ -162,15 +157,12 @@ export class ChatPlugin extends Plugin {
 
   /** 注册宿主配置 actions。 */
   initialize(context: PluginLifecycleContext): void {
-    register_chat_plugin_host_actions(context);
+    register_chat_plugin_host_actions(context, async () => await this.stop_runtime());
   }
 
   /** 释放当前 Plugin 实例持有的全部 Chat runtime。 */
   async dispose(): Promise<void> {
-    await Promise.allSettled([...this.starts_by_agent.values()]);
-    await Promise.all([...this.runtimes_by_agent.keys()].map(async (runtime_key) => {
-      await this.stop_runtime(runtime_key);
-    }));
+    await this.stop_runtime();
   }
 
   /** 让依赖实时渠道的 Chat Action 在执行前惰性确保领域运行时存在。 */
@@ -190,18 +182,16 @@ export class ChatPlugin extends Plugin {
     ]));
   }
 
-  /** 读取当前 Profile 的唯一渠道状态。 */
-  private resolve_channel_state(context: PluginContext): ChatChannelState {
-    const runtime = this.runtimes_by_agent.get(chat_runtime_key(context))?.runtime;
-    if (!runtime) throw new Error("Chat channel runtime is not bound to this context");
-    return runtime.channel_state;
+  /** 读取当前 City 配置的唯一渠道状态。 */
+  private resolve_channel_state(_context: PluginContext): ChatChannelState {
+    if (!this.runtime) throw new Error("Chat channel runtime is not active");
+    return this.runtime.value.channel_state;
   }
 
-  /** 向 chat 入队路径暴露当前 Profile 的唯一队列。 */
-  queue_store(context: PluginContext): ChatQueueStore {
-    const runtime = this.runtimes_by_agent.get(chat_runtime_key(context))?.runtime;
-    if (!runtime) throw new Error("Chat queue runtime is not bound to this context");
-    return runtime.queue_store;
+  /** 向 Chat 入队路径暴露当前 City 配置的唯一队列。 */
+  queue_store(_context: PluginContext): ChatQueueStore {
+    if (!this.runtime) throw new Error("Chat queue runtime is not active");
+    return this.runtime.value.queue_store;
   }
 
   /**
@@ -244,7 +234,7 @@ export class ChatPlugin extends Plugin {
     return this.resolve_channels(context).find((item) => item.name === channel) || null;
   }
 
-  /** 判断当前 Context 是否是 Profile 指定的唯一入站作用域。 */
+  /** 判断当前 Context 是否是配置指定的唯一入站作用域。 */
   private is_owner_scope(context: PluginContext): boolean {
     const config = this.resolve_config(context);
     const owner_agent_id = String(config.owner_agent_id || this.options.owner_agent_id || "").trim();
@@ -254,35 +244,35 @@ export class ChatPlugin extends Plugin {
     return true;
   }
 
-  /** 停止当前 Profile 唯一的渠道与队列资源。 */
-  private async stop_runtime(runtime_key: string): Promise<void> {
-    const runtime = this.runtimes_by_agent.get(runtime_key)?.runtime;
+  /** 停止当前配置创建的唯一渠道与队列资源。 */
+  private async stop_runtime(): Promise<void> {
+    await this.start_promise?.catch(() => undefined);
+    const runtime = this.runtime?.value;
     if (!runtime) return;
-    this.runtimes_by_agent.delete(runtime_key);
+    this.runtime = undefined;
     runtime.queue_worker.stop();
     await stopChatChannels(runtime.channel_state);
   }
 
-  /** 解析当前 Agent 对应的序列化 Chat 配置。 */
+  /** 解析 City 持有的序列化 Chat 配置。 */
   private resolve_config(context: PluginContext): ChatPluginConfig {
     return (context.config ?? {}) as unknown as ChatPluginConfig;
   }
 
-  /** 返回当前作用域的渠道实例；连接前按配置即时创建。 */
+  /** 返回当前配置的渠道实例。 */
   private resolve_channels(context: PluginContext): ChatChannel[] {
-    const runtime_channels = this.runtimes_by_agent.get(chat_runtime_key(context))?.channels;
-    if (runtime_channels) return runtime_channels;
+    if (this.runtime) return this.runtime.channels;
+    return this.create_configured_channels(context);
+  }
+
+  /** 按当前配置创建渠道实例。 */
+  private create_configured_channels(context: PluginContext): ChatChannel[] {
     if (Array.isArray(this.options.channels)) return this.channels;
     return create_configured_channels(this.resolve_config(context).channels ?? []);
   }
 }
 
-/** 返回 Chat Profile 的 Agent 级运行时键。 */
-function chat_runtime_key(context: PluginContext): string {
-  return context.agent.id;
-}
-
-/** 把 Profile 的 JSON 渠道配置转换为当前作用域的运行对象。 */
+/** 把 JSON 渠道配置转换为当前作用域的运行对象。 */
 function create_configured_channels(configs: ChatPluginChannelConfig[]): ChatChannel[] {
   const channel_types = new Set<string>();
   return configs.map((config) => {

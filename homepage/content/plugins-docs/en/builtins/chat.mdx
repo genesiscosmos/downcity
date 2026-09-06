@@ -29,18 +29,17 @@ It owns:
 Use `chat` when you need:
 
 - Telegram, Feishu, or QQ chat channel runtime
-- one ChatPlugin instance managing queue workers by Agent/Workspace scope
+- one ChatPlugin instance managing the unique channel and queue runtime
 - chat delivery and inbound message execution
 - inbound user authorization, principal observation, and role resolution
 
 ## How users use it
 
-Chat manages queues and channels in its own Config. Open Chat in the Desktop Plugins Catalog, create
-or select a Profile, then use it as runtime configuration for the target Agent:
+Chat manages its inbound target, queues, and channels in one Config. Open Chat in the Desktop Plugins
+Catalog to configure it. City automatically provides Chat capabilities to every Agent:
 
 ```bash
-# Configure primary under Desktop Plugins Catalog / Chat
-city plugin enable chat <agent_id> --profile primary
+city plugin config chat --set '{"owner_agent_id":"assistant","owner_workspace_id":"project","channels":[]}'
 ```
 
 Use the generic Plugin Action command when you need to invoke a Chat Action from the terminal:
@@ -51,22 +50,26 @@ city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","
 
 ## SDK Assembly
 
-An SDK host provides the Chat instance to City and projects per-Agent channel configuration through
-`plugin_host.runtime_config`:
+An SDK host provides the Chat instance to City and exposes its unique Config store through
+`plugin_host.config`:
 
 ```ts
 const city = new City({
   plugins: create_builtin_plugin_registrations(),
   workspaces: [workspace],
-  plugin_host,
+  plugin_host: {
+    config: (plugin_id) => open_plugin_config_store(plugin_id),
+    notifications: (plugin_id, agent_id) => open_notifications(plugin_id, agent_id),
+  },
 });
 city.agents.add(agent);
 const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
-Profiles belong to the City control plane and do not enter Agent. Config Actions registered by Chat during `start()` validate Profile
-content and provide a credential-safe projection. The unique ChatPlugin instance manages channels
-and queues according to each `PluginContext` Agent/Workspace scope and configuration.
+Chat registers `config.read` and `config.save` during `initialize()` to validate the complete Config
+and return a credential-safe projection. `owner_agent_id` and `owner_workspace_id` select the inbound
+message target. The unique ChatPlugin instance owns one channel and queue runtime, stops the old runtime
+after Config is saved, and rebuilds it lazily on the next use.
 
 ## Feishu dependency
 

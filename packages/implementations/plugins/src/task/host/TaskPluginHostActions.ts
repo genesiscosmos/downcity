@@ -64,7 +64,6 @@ async function create_snapshot(
     context.system.list_workspaces(),
     inspect_task_definitions(runtime.storage),
   ]);
-  const task_agents = agents.filter((agent) => agent.plugin_ids.includes("task"));
   return {
     tasks: inspection.tasks.map((task) => ({
       title: task.title,
@@ -79,7 +78,7 @@ async function create_snapshot(
       ...(task.delivery_session ? { delivery_session: task.delivery_session } : {}),
       ...(task.lastRunTimestamp ? { last_run_at: task.lastRunTimestamp } : {}),
     })),
-    agents: task_agents.map((agent) => ({
+    agents: agents.map((agent) => ({
       agent_id: agent.agent_id,
       name: agent.name,
     })),
@@ -299,8 +298,8 @@ async function assert_execution_target(
     context.system.list_agents(),
     context.system.list_workspaces(),
   ]);
-  if (!agents.some((agent) => agent.agent_id === agent_id && agent.plugin_ids.includes("task"))) {
-    throw new Error(`Agent 未启用 Task Plugin: ${agent_id}`);
+  if (!agents.some((agent) => agent.agent_id === agent_id)) {
+    throw new Error(`Agent 不存在: ${agent_id}`);
   }
   if (!workspaces.some((workspace) => workspace.workspace_id === workspace_id)) {
     throw new Error(`Workspace 不存在: ${workspace_id}`);

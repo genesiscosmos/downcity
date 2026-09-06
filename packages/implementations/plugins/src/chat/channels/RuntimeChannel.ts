@@ -38,7 +38,7 @@ export interface BaseChatChannelOptions {
    */
   env?: ChatChannelEnv;
   /**
-   * Plugin profile 或 SDK 调用方提供的稳定 ID。
+   * Plugin Config 或 SDK 调用方提供的稳定 ID。
    */
   id?: string;
   /**

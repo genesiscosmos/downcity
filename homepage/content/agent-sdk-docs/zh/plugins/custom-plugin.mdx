@@ -6,7 +6,7 @@ description: 使用 Action、Hook、System、Lifecycle 与 City 构建自定义 
 # 自定义 Plugin
 
 Plugin 是 City 提供给 Agent 的能力。一个 City 中每个 Plugin ID 只有一个实例，所有已注册 Agent
-自动获得全部 Plugin；Agent 不保存 Plugin，也不需要绑定 Profile。
+自动获得全部 Plugin；Agent 不保存 Plugin，也不维护 Plugin 配置引用。
 
 ```ts
 import { City, Workspace } from "@downcity/city";

@@ -48,7 +48,7 @@ export interface CityPluginRecord {
   readonly lifecycle_context: PluginLifecycleContext;
   /** Sidebar/Mainview 业务 action。 */
   readonly host_actions: Map<string, PluginHostAction>;
-  /** Profile config action。 */
+  /** Plugin 唯一配置 action。 */
   readonly config_actions: Map<string, PluginConfigAction>;
   /** Plugin 初始化完成的唯一 Promise。 */
   ready: Promise<void>;

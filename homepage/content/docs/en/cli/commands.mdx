@@ -64,7 +64,7 @@ city agent token delete <token_id> [agent_id]
 
 ## Plugins
 
-`city plugin list` shows each Plugin title, stable ID, purpose, source, and saved profiles.
+`city plugin list` shows each Plugin title, stable ID, purpose, source, and whether it provides Config.
 
 ```bash
 city plugin list
@@ -72,22 +72,21 @@ city plugin install <local-directory|git-url|github:owner/repo#ref>
 city plugin update <plugin_id>
 city plugin uninstall <plugin_id>
 city plugin inspect <plugin_id>
-city plugin profiles <plugin_id>
-city plugin config <plugin_id> [profile] --set '{"key":"value"}'
-city plugin config <plugin_id> [profile] --remove
-city plugin enable <plugin_id> [agent_id] --profile <profile>
-city plugin disable <plugin_id> [agent_id]
-city plugin enabled [agent_id]
+city plugin config <plugin_id>
+city plugin config <plugin_id> --set '{"key":"value"}'
 city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
 A third-party source directory defines exactly one Plugin. Its `plugin.json` declares `schema_version: 1`, a globally unique `id`, a version, a required relative `readme` path to a `.md` file, and optional `main` and `renderer` entries. `main` is a self-contained unified City Plugin ESM. The `renderer` object declares a single-file ESM entry and static `sidebar`, `mainview`, and `config` capabilities; Sidebar and Mainview must be paired. At least one of the two runtime entries is required. `package.json` must declare `"type": "module"`. The installed directory keeps only declared artifacts, documentation, an optional icon, and local `config.toml`. Installation never runs dependencies, build scripts, or any third-party entry.
 
-Only a Plugin that declares Config uses named Profiles in `plugins/<plugin_id>/config.toml`. Desktop creates, selects, and removes Profiles on that Plugin's Catalog detail page; the Plugin's own Config UI and Config actions own the actual configuration. CLI `config --set` only replaces a complete JSON object explicitly. It does not generate a generic form or print credential values. A Plugin without Config is enabled without a Profile; for a Config Plugin, only an explicit `--profile` selects named configuration.
+A Plugin that declares Config stores one configuration in `plugins/<plugin_id>/config.toml`. The Plugin
+owns its structure, validation, Secret projection, and Config UI. CLI `config --set` only replaces a
+complete JSON object explicitly; it does not generate a generic form or print credential values. Without
+`--set`, it reports only whether Config exists and its field names.
 
-The Agent's `agent.json` stores only a Plugin ID and optional profile reference used to select the configuration City projects into that Agent's `PluginContext.config`. `enable`, `disable`, and `enabled` manage this configuration reference. Removing it leaves the City Plugin available with an empty configuration. A profile or third-party Plugin cannot be removed while Agent configuration still references it.
-
-After changing enable, disable, or profile configuration, run `city restart` to apply the new configuration projection to a running CLI City.
+City automatically provides every registered Plugin to every Agent; `agent.json` stores neither Plugin
+references nor configuration. A Plugin models its own account collection and selection rules when it
+needs multiple accounts. After Config is saved, the Plugin refreshes affected long-lived resources.
 
 The CLI, Agent `plugin_call`, HTTP, and scheduled jobs all invoke Plugin Actions. There is no `plugin command`, and Chat is not a top-level CLI special case.
 

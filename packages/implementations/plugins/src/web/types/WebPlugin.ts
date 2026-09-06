@@ -236,8 +236,8 @@ export interface BrowserProvider {
   dispose(): Promise<void>;
 }
 
-/** WebPlugin profile。 */
-export interface WebPluginProfile {
+/** WebPlugin 配置。 */
+export interface WebPluginConfig {
   /** 浏览器实现类型。 */
   browser?: "playwright";
   /** 浏览器 CDP 地址。 */
@@ -250,5 +250,5 @@ export interface WebPluginProfile {
   max_observation_chars?: number;
 }
 
-/** WebPlugin profile 的兼容名称别名。 */
-export type WebPluginOptions = WebPluginProfile;
+/** WebPlugin 的显式构造参数。 */
+export type WebPluginOptions = WebPluginConfig;

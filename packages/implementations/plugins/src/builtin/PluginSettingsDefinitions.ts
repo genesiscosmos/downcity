@@ -2,7 +2,7 @@
 
 import type { PluginSettingsDefinition } from "@/builtin/types/PluginSettings.js";
 
-/** Web Plugin Profile 设置。 */
+/** Web Plugin 设置。 */
 export const WEB_PLUGIN_SETTINGS: PluginSettingsDefinition = {
   title: "Web",
   description: "配置浏览器连接与页面观察默认值。未填写 CDP 地址时仍可使用搜索和文档读取。",
@@ -21,7 +21,7 @@ export const WEB_PLUGIN_SETTINGS: PluginSettingsDefinition = {
   ],
 };
 
-/** Image Plugin Profile 设置。 */
+/** Image Plugin 设置。 */
 export const IMAGE_PLUGIN_SETTINGS: PluginSettingsDefinition = {
   title: "Image",
   description: "选择图像生成请求没有显式指定模型时使用的默认模型。",
@@ -30,7 +30,7 @@ export const IMAGE_PLUGIN_SETTINGS: PluginSettingsDefinition = {
   ],
 };
 
-/** Sound Plugin Profile 设置。 */
+/** Sound Plugin 设置。 */
 export const SOUND_PLUGIN_SETTINGS: PluginSettingsDefinition = {
   title: "Sound",
   description: "配置语音识别和语音合成的默认行为。",

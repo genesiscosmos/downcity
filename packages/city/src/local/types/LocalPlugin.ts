@@ -1,4 +1,4 @@
-/** 本地文件型 Plugin 定义、统一实例注册与 Profile 配置协议。 */
+/** 本地文件型 Plugin 定义、统一实例注册与唯一配置协议。 */
 
 import type {
   CityPluginRegistration,
@@ -68,10 +68,10 @@ export interface LocalInstalledPluginDefinition extends Omit<
   updated_at: string;
 }
 
-/** config.toml 的标准管理视图。 */
+/** config.toml 的标准持久化结构。 */
 export interface LocalPluginConfig {
   /** 配置协议版本。 */
-  schema_version: 1;
-  /** 按稳定名称保存的全部 Plugin Profile。 */
-  profiles: Record<string, PluginJsonObject>;
+  schema_version: 2;
+  /** 当前 Plugin 拥有的唯一配置。 */
+  config: PluginJsonObject;
 }

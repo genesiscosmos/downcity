@@ -200,7 +200,7 @@ test("结构化目标键不会因业务 ID 包含分隔符而碰撞", () => {
   assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["second"]);
 });
 
-test("Agent 生命周期结束会清理 Session 与 Agent Plugin 通知", () => {
+test("Agent 生命周期结束会清理 Session 与 Plugin 执行范围通知", () => {
   const fixture = create_fixture();
   const producer = new PluginNotificationProducer(fixture.controller);
   fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session", target, scopes: agent_scope, title: "session", created_at: 1 });

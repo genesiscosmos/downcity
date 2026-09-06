@@ -117,6 +117,18 @@ export async function createRemoteAgent(params: {
         storage: new LocalStorageProvider(data.root_path),
         workspaces: [workspace],
         plugins: await plugin_loader.list_registrations(),
+        plugin_host: {
+          config: (plugin_id) => ({
+            get: () => structuredClone(data.plugins.get_config(plugin_id)),
+            set: async (config) => {
+              data.plugins.set_config(plugin_id, structuredClone(config));
+            },
+          }),
+          notifications: () => ({
+            publish: async () => {},
+            dismiss: async () => {},
+          }),
+        },
       });
       city.agents.add(agent);
       return {

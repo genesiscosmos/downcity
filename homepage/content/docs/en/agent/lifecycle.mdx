@@ -33,6 +33,6 @@ await turn.finished;
 await city.close();
 ```
 
-Sessions wait until the Agent's City execution binding is ready. `agent.dispose()` releases only Agent-owned Sessions, ActionSchedule, and execution bindings. `city.close()` first stops Agent Sessions, disconnects Plugin Agent/Workspace scopes, then stops the single City-owned Plugin instances and closes Workspaces, Shells, and Transports.
+Sessions wait until the Agent's City execution binding is ready. `agent.dispose()` releases only Agent-owned Sessions, ActionSchedule, and execution bindings. `city.close()` first stops Agent Sessions, then stops the single City-owned Plugin instances and closes Workspaces, Shells, and Transports.
 
 Continue with the [Agent SDK docs](/en/agent-sdk-docs).

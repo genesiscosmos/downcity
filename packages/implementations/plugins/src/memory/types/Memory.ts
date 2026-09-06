@@ -422,8 +422,8 @@ export interface MemoryProvider {
   dispose(): Promise<void>;
 }
 
-/** MemoryPlugin profile。 */
-export interface MemoryPluginProfile {
+/** MemoryPlugin 的显式构造参数。 */
+export interface MemoryPluginOptions {
   /** 当前启用的 Memory Provider。 */
   provider?: "builtin";
   /** 当前启用的 Memory Storage。 */
@@ -431,8 +431,6 @@ export interface MemoryPluginProfile {
   /** City 为当前 MemoryPlugin 唯一实例分配的私有绝对数据目录。 */
   storage_root_path?: string;
 }
-/** MemoryPlugin 的构造参数。 */
-export type MemoryPluginOptions = MemoryPluginProfile;
 
 /** Memory action 可以接受的公开 JSON payload 联合。 */
 export type MemoryActionPayload =

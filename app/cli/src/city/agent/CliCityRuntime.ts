@@ -94,17 +94,10 @@ export class CliCityRuntime {
       embassy,
       plugins: plugin_registrations,
       plugin_host: {
-        runtime_config: (plugin_id, agent_id) => {
-          const reference = data.agents.get(agent_id)?.plugins[plugin_id];
-          if (!reference) return {};
-          return structuredClone(
-            data.plugins.get_profile(plugin_id, reference.profile || "default") ?? {},
-          );
-        },
-        profile_config: (plugin_id, profile_id) => ({
-          get: async () => structuredClone(data.plugins.get_profile(plugin_id, profile_id) ?? {}),
+        config: (plugin_id) => ({
+          get: () => structuredClone(data.plugins.get_config(plugin_id)),
           set: async (config) => {
-            data.plugins.save_profile(plugin_id, profile_id, structuredClone(config));
+            data.plugins.set_config(plugin_id, structuredClone(config));
           },
         }),
         notifications: () => ({

@@ -21,29 +21,29 @@ export interface PluginHostAction {
     PluginJsonValue | Promise<PluginJsonValue>;
 }
 
-/** Plugin 注册的一个 Profile 配置动作。 */
+/** Plugin 注册的一个配置动作。 */
 export interface PluginConfigAction {
   /** Plugin 内稳定且唯一的动作 ID。 */
   readonly id: string;
-  /** 在当前 Profile 配置范围内执行动作。 */
+  /** 在当前 Plugin 配置范围内执行动作。 */
   readonly run: (
     input: PluginJsonValue | undefined,
     context: PluginConfigActionContext,
   ) => PluginJsonValue | Promise<PluginJsonValue>;
 }
 
-/** 当前 Plugin/Profile 范围内的配置存储。 */
-export interface PluginProfileConfigStore {
-  /** 读取当前 Profile 的完整配置快照。 */
-  get(): Promise<PluginJsonObject>;
-  /** 原子替换当前 Profile 的完整配置。 */
+/** 当前 Plugin 唯一配置的存储端口。 */
+export interface PluginConfigStore {
+  /** 同步读取当前 Plugin 的完整配置快照。 */
+  get(): PluginJsonObject;
+  /** 原子替换当前 Plugin 的完整配置。 */
   set(config: PluginJsonObject): Promise<void>;
 }
 
 /** 每次配置动作调用获得的动态上下文。 */
 export interface PluginConfigActionContext {
-  /** 已绑定当前 Plugin 和 Profile 的配置存储。 */
-  readonly config: PluginProfileConfigStore;
+  /** 已绑定当前 Plugin 身份的唯一配置存储。 */
+  readonly config: PluginConfigStore;
 }
 
 /** 宿主登记且允许 Plugin 感知的 Workspace。 */
@@ -62,13 +62,11 @@ export interface PluginHostAgent {
   readonly agent_id: string;
   /** Agent 的用户可见名称。 */
   readonly name: string;
-  /** Agent 当前可用的 Plugin ID。 */
-  readonly plugin_ids: string[];
 }
 
 /** Plugin 可使用的宿主系统能力。 */
 export interface PluginHostSystem {
-  /** 列出宿主当前登记的 Agent 及其 Plugin。 */
+  /** 列出宿主当前登记的 Agent。 */
   list_agents(): Promise<PluginHostAgent[]>;
   /** 列出宿主当前登记的 Workspace。 */
   list_workspaces(): Promise<PluginHostWorkspace[]>;

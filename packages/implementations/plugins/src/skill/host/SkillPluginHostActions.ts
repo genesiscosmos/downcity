@@ -2,7 +2,7 @@
  * Skill Plugin 的宿主管理 actions。
  *
  * 宿主界面通过这些 Plugin 级动作浏览、读取、发现、安装和删除 Skill。它不依赖 Agent
- * 实例或 Profile；Workspace 列表由宿主作为只读能力注入。
+ * 实例或 Config；Workspace 列表由宿主作为只读能力注入。
  */
 
 import fs from "fs-extra";

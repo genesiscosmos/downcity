@@ -61,7 +61,6 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
       description: "负责协助维护项目。",
       execution: { type: "api", model_id: "model-test" },
       instruction: "You are Lucas.",
-      plugins: { chat: { profile: "lucas" }, task: {} },
     });
 
     assert.equal(agents.get("lucas_whitman")?.instruction, "You are Lucas.");
@@ -113,7 +112,7 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
       "utf8",
     ));
     assert.equal(agent_file.schema_version, 2);
-    assert.deepEqual(agent_file.plugins, { chat: { profile: "lucas" }, task: {} });
+    assert.equal("plugins" in agent_file, false);
     assert.equal(
       (await fs.stat(path.join(root_path, "agents", "lucas_whitman"))).mode & 0o777,
       0o700,
@@ -170,11 +169,11 @@ test("GroupRepository 持久化并更新 Group 定义", async () => {
   }
 });
 
-test("PluginRepository 按 Plugin ID 保存明文 TOML profile", async () => {
+test("PluginRepository 按 Plugin ID 保存唯一明文 TOML 配置", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-config-"));
   try {
     const plugins = new PluginRepository(root_path);
-    plugins.save_profile("chat", "lucas", {
+    plugins.set_config("chat", {
       queue: { max_concurrency: 3 },
       channels: [{
         id: "telegram_main",
@@ -183,7 +182,7 @@ test("PluginRepository 按 Plugin ID 保存明文 TOML profile", async () => {
         bot_token: "plain-token",
       }],
     });
-    assert.deepEqual(plugins.get_profile("chat", "lucas"), {
+    assert.deepEqual(plugins.get_config("chat"), {
       queue: { max_concurrency: 3 },
       channels: [{
         id: "telegram_main",
@@ -195,7 +194,7 @@ test("PluginRepository 按 Plugin ID 保存明文 TOML profile", async () => {
     const config_path = path.join(root_path, "plugins", "chat", "config.toml");
     const content = await fs.readFile(config_path, "utf8");
     assert.match(content, /plain-token/u);
-    assert.match(content, /\[profiles\.lucas\.queue\]/u);
+    assert.match(content, /\[config\.queue\]/u);
     assert.equal((await fs.stat(config_path)).mode & 0o777, 0o600);
     assert.equal((await fs.stat(path.dirname(config_path))).mode & 0o777, 0o700);
   } finally {

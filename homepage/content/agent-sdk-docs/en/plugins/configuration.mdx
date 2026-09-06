@@ -1,16 +1,16 @@
 ---
 title: Plugin Configuration
-description: Understand the boundary between unique Plugin instances, host Profiles, and Agent configuration projection.
+description: Understand the boundary between unique Plugin instances, City-level configuration, and execution context.
 ---
 
 # Plugin Configuration
 
-Configuration does not determine Plugin ownership or instance count:
+Each Plugin ID has exactly one host configuration inside a City:
 
 ```text
-host stores Plugin Profiles
+host stores Plugin Config
 → City owns one Plugin instance
-→ plugin_host.runtime_config(plugin_id, agent_id) projects configuration
+→ City projects a configuration snapshot for each execution
 → Plugin reads the current PluginContext.config
 ```
 
@@ -19,8 +19,7 @@ const city = new City({
   plugins: [web_plugin],
   workspaces: [workspace],
   plugin_host: {
-    runtime_config: (plugin_id, agent_id) => load_runtime_config(plugin_id, agent_id),
-    profile_config: (plugin_id, profile_id) => open_profile_store(plugin_id, profile_id),
+    config: (plugin_id) => open_plugin_config_store(plugin_id),
     notifications: (plugin_id, agent_id) => open_notifications(plugin_id, agent_id),
   },
 });
@@ -28,10 +27,15 @@ const city = new City({
 city.agents.add(agent);
 ```
 
-CLI and Desktop may keep `config.toml` as the Profile source of truth, but Agent stores neither
-Plugin instances nor binding relationships. A Plugin registers Config actions during `initialize()`, and City injects
-the selected Profile's `get/set` store when invoking one. Runtime Actions, Hooks, System providers,
-and Availability checks read `context.config` projected for the current Agent.
+`PluginConfigStore.get()` synchronously returns the complete current snapshot, while `set(config)`
+atomically replaces it. Agents store neither Plugin references nor configuration; every Agent sees the
+same Plugin configuration. A Plugin that needs multiple accounts or tenants models them inside its own
+Config instead of relying on a generic City named-configuration layer.
 
-Do not store live connections, callbacks, or clients in a Profile. The Plugin indexes long-lived
-resources by their actual account, Profile, or other domain identity and releases all of them in `dispose`.
+A Plugin registers Config actions during `initialize()`. City injects the Plugin's unique `get/set`
+store when `city.plugins.invoke_config()` calls one. Actions, Hooks, System providers, and Availability
+checks read an immutable snapshot from the current `PluginContext.config`.
+
+After a Config save, the Plugin should release or refresh affected long-lived resources. Never store
+connections, callbacks, or client objects in Config. The Plugin still owns them by an actual domain key,
+such as an account or Agent, and ultimately releases them in `dispose()`.

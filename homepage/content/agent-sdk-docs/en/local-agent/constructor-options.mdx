@@ -237,7 +237,7 @@ Key points:
 
 ## Plugins are not Agent constructor options
 
-`AgentOptions` does not accept `plugins`. City first receives `CityPluginRegistration` objects, then binds an Agent by `plugin_id` and an optional Profile:
+`AgentOptions` does not accept `plugins`. After City receives `CityPluginRegistration` objects, every registered Agent automatically receives every Plugin:
 
 ```ts
 import { Agent } from "@downcity/agent";
@@ -250,9 +250,7 @@ const city = new City({
   plugins: create_builtin_plugin_registrations(),
 });
 
-city.agents.add(agent, {
-  plugins: [{ plugin_id: "skill" }],
-});
+city.agents.add(agent);
 ```
 
 City owns unique Plugin instances, configuration projection, and lifecycle. Agent owns identity,

@@ -88,7 +88,7 @@ export type {
   PluginHostAgent,
   PluginHostSystem,
   PluginHostWorkspace,
-  PluginProfileConfigStore,
+  PluginConfigStore,
   PluginSelf,
   PluginLifecycleContext,
 } from "./types/PluginHost.js";

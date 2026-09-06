@@ -79,8 +79,8 @@ export class CityPluginRuntime {
       },
       invoke: async (plugin_id, action_id, input) =>
         await this.invoke_host_action(plugin_id, action_id, input),
-      invoke_config: async (plugin_id, profile_id, action_id, input) =>
-        await this.invoke_config(plugin_id, profile_id, action_id, input),
+      invoke_config: async (plugin_id, action_id, input) =>
+        await this.invoke_config(plugin_id, action_id, input),
     });
   }
 
@@ -360,7 +360,7 @@ export class CityPluginRuntime {
         data_path: plugin_storage.root_path,
         files: workspace.files,
         data_files: plugin_storage.files,
-        get_config: () => this.options.host?.runtime_config?.(plugin_id, agent.id) ?? {},
+        get_config: () => this.options.host?.config?.(plugin_id).get() ?? {},
         ...(workspace.shell ? { shell: workspace.shell } : {}),
         logger,
         embassy: this.options.embassy,
@@ -559,21 +559,19 @@ export class CityPluginRuntime {
     });
   }
 
-  /** 调用 Plugin Profile config action。 */
+  /** 调用 Plugin 的唯一 Config action。 */
   private async invoke_config(
     plugin_id_input: string,
-    profile_id_input: string,
     action_id_input: string,
     input?: PluginJsonValue,
   ): Promise<PluginJsonValue> {
     const plugin_id = normalize_id(plugin_id_input, "plugin_id");
-    const profile_id = normalize_id(profile_id_input, "profile_id");
     const action_id = normalize_id(action_id_input, "action_id");
     return await this.with_record_execution(plugin_id, async (record) => {
       const action = record.config_actions.get(action_id);
       if (!action) throw new Error(`Plugin config action not found: ${plugin_id}/${action_id}`);
-      const config = this.options.host?.profile_config(plugin_id, profile_id);
-      if (!config) throw new Error("City Plugin config actions require a profile host");
+      const config = this.options.host?.config?.(plugin_id);
+      if (!config) throw new Error("City Plugin config actions require a config host");
       return normalize_json_value(
         await action.run(input, { config }),
         `${plugin_id}/${action_id} result`,
@@ -647,7 +645,6 @@ export class CityPluginRuntime {
         list_agents: async () => this.options.runtime_access.list_agents().map((agent) => ({
           agent_id: agent.id,
           name: agent.name,
-          plugin_ids: this.registry.snapshots().map((snapshot) => snapshot.name),
         })),
         list_workspaces: async () => this.options.runtime_access.list_workspaces().map((workspace) => ({
           workspace_id: workspace.id,

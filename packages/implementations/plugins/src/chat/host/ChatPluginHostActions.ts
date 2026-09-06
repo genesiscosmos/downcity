@@ -1,4 +1,4 @@
-/** Chat Plugin Profile 的宿主 actions 与凭据边界。 */
+/** Chat Plugin 唯一配置的宿主 actions 与凭据边界。 */
 
 import {
   type PluginJsonObject,
@@ -9,31 +9,35 @@ import type { ChatPluginChannelConfig } from "@/chat/types/ChatPluginChannelConf
 import type { ChatPluginConfig } from "@/chat/types/ChatPluginConfig.js";
 import type {
   ChatPluginPublicChannelConfig,
-  ChatPluginPublicProfile,
+  ChatPluginPublicConfig,
   ChatPluginPublicQueueConfig,
-} from "@/chat/types/ChatPluginProfile.js";
+} from "@/chat/types/ChatPluginPublicConfig.js";
 
-/** 注册 Chat Plugin 的 Profile 配置 actions。 */
-export function register_chat_plugin_host_actions({ plugin }: PluginLifecycleContext): void {
+/** 注册 Chat Plugin 的唯一配置 actions。 */
+export function register_chat_plugin_host_actions(
+  { plugin }: PluginLifecycleContext,
+  after_save: () => Promise<void> | void,
+): void {
   plugin.config_action({
-    id: "profile.read",
-    run: async (_input, context) => to_public_profile(
-      await context.config.get() as unknown as ChatPluginConfig,
+    id: "config.read",
+    run: async (_input, context) => to_public_config(
+      context.config.get() as unknown as ChatPluginConfig,
     ) as unknown as PluginJsonValue,
   });
   plugin.config_action({
-    id: "profile.save",
+    id: "config.save",
     run: async (input, context) => {
-      const current = await context.config.get() as unknown as ChatPluginConfig;
-      const config = normalize_profile(input, current);
+      const current = context.config.get() as unknown as ChatPluginConfig;
+      const config = normalize_config(input, current);
       await context.config.set(config as unknown as PluginJsonObject);
-      return to_public_profile(config) as unknown as PluginJsonValue;
+      await after_save();
+      return to_public_config(config) as unknown as PluginJsonValue;
     },
   });
 }
 
 /** 把完整配置转换为不包含凭据原文的 Mainview 投影。 */
-function to_public_profile(config: ChatPluginConfig): ChatPluginPublicProfile {
+function to_public_config(config: ChatPluginConfig): ChatPluginPublicConfig {
   return {
     ...(config.owner_agent_id ? { owner_agent_id: config.owner_agent_id } : {}),
     ...(config.owner_workspace_id ? { owner_workspace_id: config.owner_workspace_id } : {}),
@@ -53,13 +57,13 @@ function to_public_profile(config: ChatPluginConfig): ChatPluginPublicProfile {
 }
 
 /** 校验 Mainview 草稿并补回未重新填写的已有凭据。 */
-function normalize_profile(
+function normalize_config(
   input: PluginJsonValue | undefined,
   current: ChatPluginConfig,
 ): ChatPluginConfig {
-  const profile = as_record(input, "Chat Profile");
-  const queue = normalize_queue(profile.queue);
-  const channel_values = profile.channels;
+  const source = as_record(input, "Chat config");
+  const queue = normalize_queue(source.queue);
+  const channel_values = source.channels;
   if (!Array.isArray(channel_values)) throw new Error("Chat channels must be an array");
   const channel_types = new Set<string>();
   const channel_ids = new Set<string>();
@@ -75,21 +79,17 @@ function normalize_profile(
     channel_ids.add(channel.id);
     return channel;
   });
+  const owner_agent_id = read_optional_string(source, "owner_agent_id");
+  const owner_workspace_id = read_optional_string(source, "owner_workspace_id");
+  if (channels.length > 0 && (!owner_agent_id || !owner_workspace_id)) {
+    throw new Error("Chat config requires owner_agent_id and owner_workspace_id when channels are configured");
+  }
   return {
-    ...read_optional_field(profile, "owner_agent_id"),
-    ...read_optional_field(profile, "owner_workspace_id"),
+    ...(owner_agent_id ? { owner_agent_id } : {}),
+    ...(owner_workspace_id ? { owner_workspace_id } : {}),
     ...(Object.keys(queue).length > 0 ? { queue } : {}),
     channels,
   };
-}
-
-/** 读取可选的非空字符串配置。 */
-function read_optional_field(
-  source: PluginJsonObject,
-  key: "owner_agent_id" | "owner_workspace_id",
-): Partial<Record<"owner_agent_id" | "owner_workspace_id", string>> {
-  const value = read_optional_string(source, key);
-  return value ? { [key]: value } : {};
 }
 
 /** 校验 Chat 队列配置。 */
@@ -147,7 +147,7 @@ function read_integer(
   const value = source[key];
   if (value === undefined || value === null || value === "") return {};
   if (typeof value !== "number" || !Number.isInteger(value) || value < minimum || value > maximum) {
-    throw new Error(`Invalid Chat Profile field: ${key}`);
+    throw new Error(`Invalid Chat config field: ${key}`);
   }
   return { [key]: value };
 }
@@ -163,7 +163,7 @@ function as_record(value: PluginJsonValue | undefined, label: string): PluginJso
 /** 读取并规范化必填字符串。 */
 function read_required_string(source: PluginJsonObject, key: string): string {
   const value = read_optional_string(source, key);
-  if (!value) throw new Error(`Chat Profile field is required: ${key}`);
+  if (!value) throw new Error(`Chat config field is required: ${key}`);
   return value;
 }
 

@@ -6,7 +6,7 @@
  * - 通过交互式问题收集 Agent 身份与默认模型
  *
  * 设计要点
- * - Plugin 配置统一通过 Agent Plugin 管理器完成，创建流程不识别具体 Plugin
+ * - Plugin 由 City 统一持有，Agent 创建流程不识别具体 Plugin
  * - 避免写入无意义的默认值：能省则省，保持配置简洁
  */
 

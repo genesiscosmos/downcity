@@ -24,7 +24,7 @@ export function create_plugin_settings_renderer(
       set_loading(true);
       set_error("");
       try {
-        set_draft(await config.invoke<PluginJsonObject>("profile.read"));
+        set_draft(await config.invoke<PluginJsonObject>("config.read"));
       } catch (reason) {
         set_error(to_error_message(reason));
       } finally {
@@ -48,9 +48,9 @@ export function create_plugin_settings_renderer(
       set_saving(true);
       set_error("");
       try {
-        const saved = await config.invoke<PluginJsonObject>("profile.save", draft);
+        const saved = await config.invoke<PluginJsonObject>("config.save", draft);
         set_draft(saved);
-        ui.toast({ type: "success", message: "Profile 已保存" });
+        ui.toast({ type: "success", message: "配置已保存" });
       } catch (reason) {
         const message = to_error_message(reason);
         set_error(message);
@@ -60,7 +60,7 @@ export function create_plugin_settings_renderer(
       }
     };
 
-    if (loading && !draft) return <LoadingState label="正在读取 Profile…" />;
+    if (loading && !draft) return <LoadingState label="正在读取配置…" />;
 
     return <Page>
       <Toolbar

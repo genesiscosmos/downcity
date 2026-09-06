@@ -18,11 +18,12 @@ Plugin
 - 向 Agent 暴露可调用的工具
 - 接入 City Plugin 生命周期（initialize、dispose）
 - 管理自己的状态、连接和后台任务
-- 提供不依赖 Profile 的 Sidebar + Mainview 工作区，并在 Catalog 详情的独立 Config 中管理配置
+- 提供 Sidebar + Mainview 工作区，并在 Catalog 详情的独立 Config 中管理配置
 - 在 City 进程边界内运行，不作为独立服务
 
-Profile 是宿主为 Plugin 提供的命名配置空间，与业务工作区无关。一个 City 中每个 Plugin ID
-只有一个实例；配置按当前 Agent 投影到 `PluginContext.config`，Agent 不持有实例或生命周期。
+一个 City 中每个 Plugin ID 只有一个实例和一份配置。配置由宿主持久化，并在每次执行时作为
+`PluginContext.config` 快照提供给 Plugin；Agent 不持有 Plugin、配置或生命周期。多账号由
+Plugin 自己的配置结构表达，不存在通用命名配置层。
 
 ## 内置插件
 

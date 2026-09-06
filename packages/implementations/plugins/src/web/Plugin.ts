@@ -2,7 +2,7 @@
  * WebPlugin：provider-neutral 的联网与浏览器能力边界。
  *
  * 关键点（中文）
- * - 浏览器 provider 在 Action 首次使用时按 Agent 配置惰性创建。
+ * - 浏览器 provider 在 Action 首次使用时按执行作用域惰性创建。
  * - 搜索、文档读取与浏览器 session 是三个独立能力。
  * - 浏览器长期资源由 provider 拥有，并在 Plugin dispose 时统一释放。
  */
@@ -75,7 +75,7 @@ export class WebPlugin extends Plugin {
   /** 构造时显式配置；其优先级高于 City 作用域配置。 */
   private readonly options: WebPluginOptions;
 
-  /** 按 Agent 配置作用域持有的浏览器 provider。 */
+  /** 按 Agent 执行作用域持有的浏览器 provider。 */
   private readonly browser_providers = new Map<string, BrowserProvider>();
 
   constructor(options: WebPluginOptions = {}) {
@@ -86,13 +86,20 @@ export class WebPlugin extends Plugin {
     this.options = { ...options };
   }
 
-  /** 注册 Web Plugin 的 Profile 配置 actions。 */
+  /** 注册 Web Plugin 的唯一配置 actions。 */
   initialize(context: import("@downcity/city/plugin").PluginLifecycleContext): void {
-    register_plugin_settings_actions(context, WEB_PLUGIN_SETTINGS);
+    register_plugin_settings_actions(context, WEB_PLUGIN_SETTINGS, {
+      after_save: async () => await this.dispose_all_browser_providers(),
+    });
   }
 
   /** 释放当前 Plugin 实例持有的全部浏览器资源。 */
   async dispose(): Promise<void> {
+    await this.dispose_all_browser_providers();
+  }
+
+  /** 关闭全部按旧配置创建的浏览器 provider。 */
+  private async dispose_all_browser_providers(): Promise<void> {
     await Promise.all([...this.browser_providers.keys()].map(async (scope_key) => {
       await this.dispose_browser_provider(scope_key);
     }));

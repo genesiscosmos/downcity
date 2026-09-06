@@ -147,6 +147,57 @@ test("City creates a fresh PluginContext for every call", async () => {
   await city.close();
 });
 
+test("PluginContext captures one deeply immutable Config snapshot per call", async () => {
+  let current_config = { nested: { value: "before" } };
+  const observed_values = [];
+  const plugin = new ObservablePlugin([]);
+  plugin.name = "config-snapshot";
+  plugin.availability = async (context) => {
+    const first_config = context.config;
+    current_config = { nested: { value: "after" } };
+    const second_config = context.config;
+    observed_values.push({
+      same_reference: first_config === second_config,
+      value: first_config.nested.value,
+      nested_frozen: Object.isFrozen(first_config.nested),
+    });
+    assert.throws(() => {
+      first_config.nested.value = "mutated";
+    }, TypeError);
+    return { enabled: true, available: true, reasons: [] };
+  };
+  const scope = create_scope("config-snapshot");
+  const city = new City({
+    plugins: [plugin],
+    workspaces: [scope.workspace],
+    agents: [scope.agent],
+    plugin_host: {
+      config: () => ({
+        get: () => current_config,
+        set: async (config) => {
+          current_config = config;
+        },
+      }),
+      notifications: () => ({ publish: async () => {}, dismiss: async () => {} }),
+    },
+  });
+  await scope.agent.sessions.create({ workspace: scope.workspace });
+  const runtime = city.plugins.scope({
+    agent_id: scope.agent.id,
+    workspace_id: scope.workspace.id,
+  });
+
+  await runtime.availability(plugin.name);
+
+  assert.deepEqual(observed_values, [{
+    same_reference: true,
+    value: "before",
+    nested_frozen: true,
+  }]);
+  assert.deepEqual(current_config, { nested: { value: "after" } });
+  await city.close();
+});
+
 test("Agent removal does not own or dispose the City Plugin", async () => {
   const events = [];
   let release_action;
@@ -415,14 +466,14 @@ test("City close immediately rejects new Plugin operations", async () => {
   await closing;
 });
 
-test("City config actions use the requested Profile store", async () => {
+test("City config actions use the Plugin-owned config store", async () => {
   const requests = [];
   const city = new City({
     plugin_host: {
-      profile_config(plugin_id, profile_id) {
-        requests.push([plugin_id, profile_id]);
+      config(plugin_id) {
+        requests.push(plugin_id);
         return {
-          get: async () => ({ token: "secret" }),
+          get: () => ({ token: "secret" }),
           set: async () => {},
         };
       },
@@ -448,9 +499,9 @@ test("City config actions use the requested Profile store", async () => {
   });
 
   assert.deepEqual(
-    await city.plugins.invoke_config("config-main", "profile-a", "read"),
+    await city.plugins.invoke_config("config-main", "read"),
     { token: "secret" },
   );
-  assert.deepEqual(requests, [["config-main", "profile-a"]]);
+  assert.deepEqual(requests, ["config-main"]);
   await city.close();
 });

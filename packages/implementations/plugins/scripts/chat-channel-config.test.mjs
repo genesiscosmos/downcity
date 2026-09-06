@@ -31,7 +31,7 @@ function create_context(plugin, agent_id, workspace_id, config = {}) {
   };
 }
 
-test("ChatPlugin 配置只来自 constructor", () => {
+test("ChatPlugin 显式构造参数可以提供 SDK 配置", () => {
   const telegram = create_channel("telegram");
   const queue = { max_concurrency: 7, merge_debounce_ms: 123 };
   const plugin = new ChatPlugin({ queue, channels: [telegram] });
@@ -49,7 +49,7 @@ test("ChatPlugin 不提供配置修改 action", () => {
   assert.equal("configure" in plugin.actions, false);
 });
 
-test("ChatPlugin 消费 City 按 Agent 投影的渠道配置", () => {
+test("ChatPlugin 消费 City 提供的唯一渠道配置", () => {
   const plugin = new ChatPlugin();
   const context = create_context(plugin, "agent", "workspace", {
     channels: [{
@@ -73,7 +73,7 @@ test("ChatPlugin 消费 City 按 Agent 投影的渠道配置", () => {
   });
 });
 
-test("ChatPlugin 按调用上下文惰性创建隔离运行态并由 City 生命周期统一释放", async () => {
+test("ChatPlugin 在不同调用上下文共享唯一运行态并由 City 生命周期统一释放", async () => {
   const plugin = new ChatPlugin({ channels: [] });
   const first = create_context(plugin, "agent-a", "workspace-a");
   const second = create_context(plugin, "agent-b", "workspace-b");
@@ -81,15 +81,14 @@ test("ChatPlugin 按调用上下文惰性创建隔离运行态并由 City 生命
   await plugin.system(first);
   const queue_store = plugin.queue_store(first);
   await plugin.system(second);
-  assert.notEqual(plugin.queue_store(second), queue_store);
+  assert.equal(plugin.queue_store(second), queue_store);
   assert.equal(plugin.queue_store(first), queue_store);
-  assert.ok(plugin.queue_store(second));
   await plugin.dispose();
-  assert.throws(() => plugin.queue_store(first), /not bound/);
-  assert.throws(() => plugin.queue_store(second), /not bound/);
+  assert.throws(() => plugin.queue_store(first), /not active/);
+  assert.throws(() => plugin.queue_store(second), /not active/);
 });
 
-test("Chat 配置使用显式 Owner 忽略其他 Agent 作用域", async () => {
+test("Chat 配置使用显式 Owner 决定唯一运行态的启动作用域", async () => {
   const plugin = new ChatPlugin({
     owner_agent_id: "agent-owner",
     owner_workspace_id: "workspace-owner",
@@ -99,8 +98,9 @@ test("Chat 配置使用显式 Owner 忽略其他 Agent 作用域", async () => {
   const owner = create_context(plugin, "agent-owner", "workspace-owner");
 
   await plugin.system(other);
-  assert.throws(() => plugin.queue_store(other), /not bound/);
+  assert.throws(() => plugin.queue_store(other), /not active/);
   await plugin.system(owner);
   assert.ok(plugin.queue_store(owner));
+  assert.equal(plugin.queue_store(other), plugin.queue_store(owner));
   await plugin.dispose();
 });

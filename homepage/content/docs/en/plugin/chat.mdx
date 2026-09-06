@@ -17,29 +17,32 @@ The Chat plugin connects your Agent to messaging channels like Telegram, Feishu,
 
 ## Configuration
 
-Chat owns complete named profiles in `~/.downcity/plugins/chat/config.toml`. A profile contains queue behavior and the channels used by an Agent:
+Chat owns one City-level configuration in `~/.downcity/plugins/chat/config.toml`. It contains the inbound target, queue behavior, and channels:
 
 ```toml
-schema_version = 1
+schema_version = 2
 
-[profiles.primary.queue]
+[config]
+owner_agent_id = "assistant"
+owner_workspace_id = "project"
+
+[config.queue]
 max_concurrency = 4
 
-[[profiles.primary.channels]]
+[[config.channels]]
 id = "telegram_primary"
 type = "telegram"
 name = "Primary Bot"
 bot_token = "123456:token"
 ```
 
-```bash
-# Create primary on the Chat Plugin page in Desktop and configure it in the Mainview
-city plugin enable chat <agent_id> --profile primary
-```
+Open Chat Config in the Desktop Plugins Catalog to edit it. City automatically provides Chat
+capabilities to every Agent. `owner_agent_id` and `owner_workspace_id` only select the execution target
+for inbound channel messages; they are not Plugin bindings.
 
 ## Channel credentials
 
-Channel credentials are plaintext in `config.toml`, protected by user-only directory and file permissions (`0700` and `0600`). Chat Config reads and saves configuration through Chat-owned Config actions. Reads never return plaintext `bot_token` or `app_secret` values, and leaving a credential blank preserves the saved value. Each Agent selects one Profile in its own `agent.json`; Profiles can be shared intentionally.
+Channel credentials are plaintext in `config.toml`, protected by user-only directory and file permissions (`0700` and `0600`). Chat Config reads and saves configuration through Chat-owned Config actions. Reads never return plaintext `bot_token` or `app_secret` values, and leaving a credential blank preserves the saved value. After a save, Chat stops the old channels and queue and rebuilds them lazily on the next use.
 
 ## Chat Access
 
@@ -50,7 +53,7 @@ city plugin action chat access-snapshot <agent_id> --input '{}' --token <token>
 city plugin action chat access-approve <agent_id> --input '{"request_id":"<request_id>"}' --token <token>
 ```
 
-Identity combines the channel ID from the selected profile and the platform user ID. Approval applies only to the target Agent; it is neither a City-global permission nor propagated to other Plugins.
+Identity combines the channel ID from the unique configuration and the platform user ID. Approval applies only to the target Agent; it is neither a City-global permission nor propagated to other Plugins.
 
 ## Supported channels
 

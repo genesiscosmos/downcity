@@ -35,16 +35,16 @@ Action、Hook、System 与 Availability 都使用当前作用域的 `PluginConte
 - `agent`：身份、指令和 Session 集合。
 - `workspace`：文件、Shell、env 与稳定 ID。
 - `session` / `turn`：当前调用存在 Session/Turn 时的直接通信句柄。
-- `config`：City 为当前 Agent/Plugin 作用域投影的只读配置。
+- `config`：City 为当前 Plugin 投影的只读配置快照。
 - `storage`：当前 Agent/Plugin 私有存储。
 
 对象句柄用于进程内直接通信，ID 用于稳定身份和序列化；Plugin 不需要只拿 `session_id` 再绕回宿主查询。
 
-## 唯一实例与配置投影
+## 唯一实例与唯一配置
 
 一个 City 中每个 Plugin ID 只有一个实例和一套 `initialize/dispose` 生命周期。Agent/Workspace
-只属于每次调用的 Context。宿主仍可保存 Profile，但它只用于按 Agent 投影 `context.config`，
-不会创建额外 Plugin 实例。Memory 和 Chat 等 Plugin 按自己的真实领域所有权隔离长期资源。
+只属于每次调用的 Context。每个 Plugin ID 也只有一份 City 级配置，所有 Agent 获得相同的
+`context.config` 快照。Memory 和 Chat 等 Plugin 按自己的真实领域所有权隔离长期资源。
 
 ## 推荐阅读
 

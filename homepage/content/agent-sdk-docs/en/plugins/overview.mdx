@@ -38,17 +38,17 @@ provides restricted handles for:
 - `agent`: identity, instructions, and Sessions.
 - `workspace`: files, Shell, environment, and stable ID.
 - `session` / `turn`: direct communication handles when the call belongs to a Session or Turn.
-- `config`: read-only configuration projected for the current Agent/Plugin scope.
+- `config`: a read-only snapshot of the current Plugin's City-level configuration.
 - `storage`: private storage for the current Agent/Plugin scope.
 
 Object handles support direct in-process communication; IDs provide stable identity and
 serialization. A Plugin does not need to receive only a `session_id` and resolve it through the host.
 
-## Unique instances and configuration projection
+## Unique instances and configuration
 
 One City creates one instance per Plugin ID with one `initialize/dispose` lifecycle. Agent and
-Workspace belong only to each call Context. A host may still store Profiles, but they only project
-`context.config`; they do not create more Plugin instances.
+Workspace belong only to each call Context. Each Plugin ID also has one City-level configuration, and
+every Agent receives the same `context.config` snapshot.
 
 ## Recommended reading
 

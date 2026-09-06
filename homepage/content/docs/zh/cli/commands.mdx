@@ -63,7 +63,7 @@ city agent token delete <token_id> [agent_id]
 
 ## Plugin
 
-`city plugin list` 会展示每个 Plugin 的标题、稳定 ID、用途、来源和已保存 profile。
+`city plugin list` 会展示每个 Plugin 的标题、稳定 ID、用途、来源和是否提供 Config。
 
 ```bash
 city plugin list
@@ -71,22 +71,19 @@ city plugin install <local-directory|git-url|github:owner/repo#ref>
 city plugin update <plugin_id>
 city plugin uninstall <plugin_id>
 city plugin inspect <plugin_id>
-city plugin profiles <plugin_id>
-city plugin config <plugin_id> [profile] --set '{"key":"value"}'
-city plugin config <plugin_id> [profile] --remove
-city plugin enable <plugin_id> [agent_id] --profile <profile>
-city plugin disable <plugin_id> [agent_id]
-city plugin enabled [agent_id]
+city plugin config <plugin_id>
+city plugin config <plugin_id> --set '{"key":"value"}'
 city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
 一个第三方来源目录只定义一个 Plugin。`plugin.json` 声明 `schema_version: 1`、全局唯一 `id`、版本、必填的 `.md` `readme` 相对路径，以及可选的 `main`、`renderer`。`main` 是自包含的统一 City Plugin ESM；`renderer` 对象声明单文件 ESM 入口以及 `sidebar`、`mainview`、`config` 三项静态能力，Sidebar 与 Mainview 必须成对出现。两个运行入口至少提供一个。`package.json` 必须声明 `"type": "module"`。安装目录只保留声明制品、文档、可选图标与本地 `config.toml`；安装过程不会执行依赖安装、构建脚本或任何第三方入口。
 
-只有声明 Config 的 Plugin 才使用 `plugins/<plugin_id>/config.toml` 中的命名 Profile。Desktop 在 Plugins Catalog 的对应详情页统一创建、选择和删除 Profile，具体配置由 Plugin 自己的 Config UI 与 Config actions 管理。CLI 的 `config --set` 仅用于显式替换完整 JSON，不生成通用表单，也不会输出凭据原文。没有 Config 的 Plugin 启用时不选择 Profile；有 Config 时只有明确传入 `--profile` 才使用命名 Profile。
+声明 Config 的 Plugin 在 `plugins/<plugin_id>/config.toml` 中保存唯一配置。具体结构、校验、Secret
+投影和 Config UI 都由 Plugin 自己管理。CLI 的 `config --set` 仅用于显式替换完整 JSON，不生成
+通用表单，也不会输出凭据原文；无 `--set` 时只显示是否已配置和字段名。
 
-Agent 的 `agent.json` 只保存 Plugin ID 和可选 profile 引用，用于选择 City 投影到该 Agent 的 `PluginContext.config`。`enable/disable/enabled` 管理的是这条配置引用；移除引用后 Plugin 仍由 City 提供，但收到空配置。仍被 Agent 配置引用的 profile 或第三方 Plugin 不能删除。
-
-修改 enable、disable 或 profile 配置后，运行中的 CLI City 需要执行 `city restart`，新的配置投影才会生效。
+City 自动把全部已注册 Plugin 提供给全部 Agent；`agent.json` 不保存 Plugin 引用或配置。需要多账号
+时，由 Plugin 在自己的配置结构中表达账号集合和选择规则。配置保存后，Plugin 负责刷新受影响的长期资源。
 
 CLI、Agent `plugin_call`、HTTP 与定时任务统一调用 Plugin Action。不存在 `plugin command`，Chat 也不再是顶层命令特例。
 

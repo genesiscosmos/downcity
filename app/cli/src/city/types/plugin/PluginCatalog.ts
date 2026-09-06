@@ -3,7 +3,7 @@
 /** Plugin 的本地来源。 */
 export type PluginCatalogSource = "builtin" | "installed";
 
-/** 一个可注册到 Agent 的 Plugin。 */
+/** City 当前可用的一个 Plugin。 */
 export interface PluginCatalogItem {
   /** Plugin 的全局稳定 ID。 */
   plugin_id: string;
@@ -19,7 +19,7 @@ export interface PluginCatalogItem {
   source: PluginCatalogSource;
   /** 第三方 Plugin 的规范化来源。 */
   source_label?: string;
-  /** Plugin 是否提供统一 City main，因此可以绑定到 Agent。 */
+  /** Plugin 是否提供统一 City 运行入口。 */
   has_main: boolean;
 
   /** Plugin 是否提供专属 Sidebar。 */
@@ -30,6 +30,4 @@ export interface PluginCatalogItem {
 
   /** Plugin 是否提供设置中心 Config。 */
   has_config: boolean;
-  /** 当前已保存的 profile ID。 */
-  profiles: string[];
 }

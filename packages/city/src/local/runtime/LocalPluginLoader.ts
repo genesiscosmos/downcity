@@ -12,7 +12,6 @@ import fs from "fs-extra";
 import type {
   CityPluginRegistration,
   PluginDefinition,
-  PluginJsonObject,
 } from "@/plugin/index.js";
 import type {
   LocalInstalledPluginDefinition,
@@ -146,6 +145,3 @@ function resolve_plugin_path(root_path: string, relative_path: string): string {
   }
   return resolved;
 }
-
-/** 保留 Plugin Profile 的 JSON object 类型约束。 */
-export type LocalPluginProfile = PluginJsonObject;

@@ -29,8 +29,8 @@ export function AgentMainView({ agent, controller, sidebar_collapsed, main_sessi
   const translate = use_translation("resources");
   const [section, set_section] = useState<AgentEditorSection>("model");
   const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
-  const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
-  return <MainViewBayBarFrame view_key={`agent:${agent.agent_id}`} sidebar_collapsed={sidebar_collapsed} title={section === "identity" ? translate("agent_details.identity") : section === "model" ? "Model" : section === "soul" ? "SOUL.md" : "Plugins"} baybar_content={<AgentInfoSidebar agent={agent} plugins={plugins} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
-    {(open_baybar) => <AgentView agent={agent} workspaces={workspaces} plugins={plugins} main_session={main_session} controller={controller} open_main_session={() => controller.actions.open_agent_chat(agent.agent_id)} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
+  const titles: Record<AgentEditorSection, string> = { identity: translate("agent_details.identity"), model: "Model", soul: "SOUL.md" };
+  return <MainViewBayBarFrame view_key={`agent:${agent.agent_id}`} sidebar_collapsed={sidebar_collapsed} title={titles[section]} baybar_content={<AgentInfoSidebar agent={agent} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
+    {(open_baybar) => <AgentView agent={agent} workspaces={workspaces} main_session={main_session} controller={controller} open_main_session={() => controller.actions.open_agent_chat(agent.agent_id)} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
   </MainViewBayBarFrame>;
 }

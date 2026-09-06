@@ -38,10 +38,10 @@ Unapproved group messages are silent by default, but their pending requests appe
 Each Agent stores its own data at:
 
 ```text
-<agent_project>/.downcity/chat/access.db
+~/.downcity/agents/<agent_id>/plugins/chat/access.db
 ```
 
-The Chat Access database contains principals, requests, allow/deny grants, and audit events. It does not contain bot tokens, app secrets, or message bodies. Chat channel credentials belong to the selected plaintext profile in `~/.downcity/plugins/chat/config.toml`; CLI and Desktop redact fields marked `writeOnly` when displaying configuration.
+The Chat Access database contains principals, requests, allow/deny grants, and audit events. It does not contain bot tokens, app secrets, or message bodies. Chat channel credentials belong to the unique plaintext configuration in `~/.downcity/plugins/chat/config.toml`; the Chat Config UI never returns their plaintext values when reading configuration.
 
 ## Difference from City Auth
 

@@ -239,7 +239,7 @@ const workspace = new Workspace({
 
 ## Plugin 不属于 Agent 构造参数
 
-`AgentOptions` 不接收 `plugins`。City 先登记 `CityPluginRegistration`，再按 `plugin_id` 和可选 Profile 绑定 Agent：
+`AgentOptions` 不接收 `plugins`。City 登记 `CityPluginRegistration` 后，自动把全部 Plugin 提供给全部 Agent：
 
 ```ts
 import { Agent } from "@downcity/agent";
@@ -252,9 +252,7 @@ const city = new City({
   plugins: create_builtin_plugin_registrations(),
 });
 
-city.agents.add(agent, {
-  plugins: [{ plugin_id: "skill" }],
-});
+city.agents.add(agent);
 ```
 
 City 持有 Plugin 唯一实例、配置投影与生命周期；Agent 只持有身份、模型、指令、Tools 和 Sessions。

@@ -9,7 +9,6 @@
 import { formatAgentConfigPanelDescription, loadAgentSummaries } from "@/city/agent/AgentManagerHelpers.js";
 import { configure_agent_model } from "@/city/agent/AgentModel.js";
 import { run_interactive_env_manager } from "@/city/env/InteractiveEnvManager.js";
-import { run_interactive_agent_plugin_manager } from "@/city/process/plugin/InteractivePluginManager.js";
 import { t } from "@/shared/CliLocale.js";
 import { ManagedTuiRuntime } from "@/shared/tui/ManagedTuiRuntime.js";
 
@@ -33,11 +32,6 @@ export async function run_agent_configuration(agent_id: string): Promise<void> {
             hint: t({ zh: "选择 Agent 的默认对话模型", en: "Choose the Agent default chat model" }),
           },
           {
-            label: "Plugins",
-            value: "configure_plugins",
-            hint: t({ zh: "启用、禁用和配置 Agent Plugin", en: "Enable, disable, and configure Agent Plugins" }),
-          },
-          {
             label: "Workspace Env",
             value: "configure_env",
             hint: t({ zh: "编辑当前 Workspace 的环境变量", en: "Edit environment variables for this Workspace" }),
@@ -52,7 +46,6 @@ export async function run_agent_configuration(agent_id: string): Promise<void> {
 
     if (!action || action === "back") return;
     if (action === "configure_model") await configure_agent_model(agent_id);
-    if (action === "configure_plugins") await run_interactive_agent_plugin_manager(agent_id);
     if (action === "configure_env") await run_interactive_env_manager(agent_id);
   }
 }

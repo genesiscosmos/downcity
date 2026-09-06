@@ -35,7 +35,7 @@ my-project/
 └── downcity.db
 ```
 
-`downcity.db` 保存 Workspace ID 与路径、Token 和平台状态，不保存 Agent 定义、Plugin profile 或 Agent-Workspace 绑定。CLI 与 Desktop 读取同一套文件与数据库。
+`downcity.db` 保存 Workspace ID 与路径、Token 和平台状态，不保存 Agent 定义、Plugin 配置或 Agent-Workspace 绑定。CLI 与 Desktop 读取同一套文件与数据库。
 
 `agent_id` 与 `workspace_id` 是彼此独立的全局身份。Session 只在一次具体执行时接收 Workspace。CLI City 的 daemon 状态记录在 `~/.downcity/runtimes/city/`；Session 保存在 `~/.downcity/agents/<agent_id>/sessions/` 下。只有传入 Workspace 时，Session 的 `meta.json` 才记录 `workspace_id`。
 

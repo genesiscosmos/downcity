@@ -5,7 +5,7 @@ export type PluginSettingFieldType = "string" | "number" | "boolean" | "select";
 
 /** 一个由具体 Plugin 声明的设置字段。 */
 export interface PluginSettingField {
-  /** Profile 配置中的稳定字段名。 */
+  /** Plugin 配置中的稳定字段名。 */
   readonly key: string;
 
   /** Config 展示名称。 */

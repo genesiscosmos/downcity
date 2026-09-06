@@ -28,9 +28,9 @@ export interface PluginRendererHostProps {
   readonly builtin_renderer?: PluginRendererDefinition;
   /** 第三方 Plugin 的受控 ESM URL。 */
   readonly renderer_url?: string;
-  /** 调用不绑定 Profile 的业务 action。 */
+  /** 调用当前 Plugin 的业务 action。 */
   invoke_mainview(action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
-  /** 调用已经绑定当前 Profile 的 Config action。 */
+  /** 调用当前 Plugin 的唯一 Config action。 */
   invoke_config?(action_id: string, input?: PluginJsonValue): Promise<PluginJsonValue>;
   /** Sidebar 与 Mainview 共享的宿主路由。 */
   readonly route?: PluginJsonObject;

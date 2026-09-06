@@ -4,7 +4,7 @@
  * 设计边界（中文）：
  * - Plugin 获得可直接调用的受限 Agent、Session 与 Workspace 句柄，而不是自行用 ID 回查对象。
  * - ID 只承担稳定身份、日志和序列化用途；对象句柄承担进程内通信。
- * - Profile 与 Storage 均由 City 按当前 Plugin 绑定，Plugin 不能越过自身命名空间。
+ * - Config 与 Storage 均由 City 按当前 Plugin 绑定，Plugin 不能越过自身命名空间。
  */
 
 import type { Embassy } from "@downcity/federation";

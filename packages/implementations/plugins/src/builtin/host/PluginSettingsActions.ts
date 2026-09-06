@@ -10,20 +10,28 @@ import type {
   PluginSettingsDefinition,
 } from "@/builtin/types/PluginSettings.js";
 
-/** 为一个字段集合注册 Profile 读取和保存 action。 */
+/** 简单设置 action 保存后的可选资源同步策略。 */
+interface PluginSettingsActionOptions {
+  /** 配置持久化完成后刷新 Plugin 自己拥有的长期资源。 */
+  after_save?(): Promise<void> | void;
+}
+
+/** 为一个字段集合注册唯一配置的读取和保存 action。 */
 export function register_plugin_settings_actions(
   context: PluginLifecycleContext,
   definition: PluginSettingsDefinition,
+  options: PluginSettingsActionOptions = {},
 ): void {
   context.plugin.config_action({
-    id: "profile.read",
-    run: async (_input, action_context) => await action_context.config.get(),
+    id: "config.read",
+    run: async (_input, action_context) => action_context.config.get(),
   });
   context.plugin.config_action({
-    id: "profile.save",
+    id: "config.save",
     run: async (input, action_context) => {
       const config = normalize_settings(input, definition.fields);
       await action_context.config.set(config);
+      await options.after_save?.();
       return config;
     },
   });
@@ -35,7 +43,7 @@ function normalize_settings(
   fields: readonly PluginSettingField[],
 ): PluginJsonObject {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("Plugin Profile config must be an object");
+    throw new Error("Plugin config must be an object");
   }
   const source = input as PluginJsonObject;
   const result: PluginJsonObject = {};
@@ -67,5 +75,5 @@ function normalize_settings(
 
 /** 创建稳定的字段校验错误。 */
 function invalid_field(key: string): Error {
-  return new Error(`Invalid Plugin Profile field: ${key}`);
+  return new Error(`Invalid Plugin config field: ${key}`);
 }

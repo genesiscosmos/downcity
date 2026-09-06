@@ -33,6 +33,6 @@ await turn.finished;
 await city.close();
 ```
 
-Session 会在执行前自动等待 Agent 的 City 执行绑定就绪。`agent.dispose()` 只释放 Agent 自身的 Session、ActionSchedule 与执行绑定；`city.close()` 会先停止 Agent Session，再断开 Plugin 的 Agent/Workspace 作用域，随后停止 City 持有的唯一 Plugin 实例，并关闭 Workspace、Shell 与 Transport。
+Session 会在执行前自动等待 Agent 的 City 执行绑定就绪。`agent.dispose()` 只释放 Agent 自身的 Session、ActionSchedule 与执行绑定；`city.close()` 会先停止 Agent Session，随后停止 City 持有的唯一 Plugin 实例，并关闭 Workspace、Shell 与 Transport。
 
 继续阅读：[Agent SDK](/zh/agent-sdk-docs)。

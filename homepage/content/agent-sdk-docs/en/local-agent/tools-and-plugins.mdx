@@ -1,6 +1,6 @@
 ---
 title: Tools and Plugins
-description: Configure Agent Tools and provide and bind Plugins through City
+description: Configure Agent Tools and provide Plugins through City
 ---
 
 # Tools and Plugins
@@ -44,7 +44,7 @@ Shell adds `shell_exec` and `shell_session`. File and search Tools remain restri
 
 ## City provides Plugins
 
-The Agent constructor does not accept Plugins. Provide registrations to City, then declare the Plugin IDs required by an Agent:
+The Agent constructor does not accept Plugins. Once registrations are provided to City, every Agent receives them automatically:
 
 ```ts
 import { Agent } from "@downcity/agent";
@@ -71,18 +71,22 @@ collection through `city.plugins.add()` and `city.plugins.remove()`.
 Each Plugin ID identifies one instance inside a City with a City-level `initialize/dispose` lifecycle.
 Agents and Workspaces provide call context; they do not own Plugin lifecycle.
 
-## Profile configuration
+## City-level configuration
 
-The host stores Profiles and projects configuration for the current Agent through
-`plugin_host.runtime_config`. Configuration does not enter Agent or determine instance count:
+The host provides one Config store for each Plugin. Configuration does not enter Agent or determine
+instance count:
 
 ```ts
 const city = new City({
   plugin_host: {
-    runtime_config: (plugin_id, agent_id) => load_config(plugin_id, agent_id),
+    config: (plugin_id) => open_plugin_config_store(plugin_id),
   },
 });
 ```
+
+Each Plugin ID has one configuration inside a City. A Plugin models its own account collection and
+selection rules when needed; City does not provide a generic named-configuration layer. After saving Config, the Plugin
+refreshes any affected long-lived resources.
 
 ## Calling Plugins
 
@@ -105,7 +109,7 @@ When Actions exist, Session receives the `plugin_read` and `plugin_call` Tools. 
 
 ## Direct communication through PluginContext
 
-Plugin author APIs come from `@downcity/city/plugin`. Action, Hook, System, and Availability receive a `PluginContext` with restricted `city`, `agent`, `workspace`, `session`, `turn`, `profile`, and `storage` handles.
+Plugin author APIs come from `@downcity/city/plugin`. Action, Hook, System, and Availability receive a `PluginContext` with restricted `city`, `agent`, `workspace`, `session`, `turn`, `config`, and `storage` handles.
 
 `context.session` and `context.agent.sessions` are directly callable in-process objects; a Plugin does not need to retain only `session_id` and query the host again. Use `context.workspace.files` for Workspace files and `context.storage.files` for private Plugin files.
 

@@ -232,7 +232,7 @@ Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集�
 ~/.downcity/agents/<agent_id>/
 ```
 
-该目录包含 Agent 的 Session 与日志。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。执行期 `PluginContext.storage.path/files` 指向当前 Agent/Plugin 的私有目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的宿主 Profile 配置不进入运行时目录，仍保存在 `~/.downcity/plugins/<plugin_id>/config.toml`；Plugin 唯一实例的 lifecycle storage 由 City 另行分配。
+该目录包含 Agent 的 Session 与日志。Session 按来源存放在 `<agent_root>/sessions/<origin_type>/<session_id>/`，归档后进入 `<agent_root>/archived-sessions/<origin_type>/<session_id>/`；来源类型是任意非空字符串，默认值为 `chat`，路径层会对它做安全、可逆的单目录段编码。只有创建或恢复时传入 Workspace，Session 的 `meta.json` 才记录 `workspace_id`。执行期 `PluginContext.storage.path/files` 指向当前 Agent/Plugin 的私有目录 `~/.downcity/agents/<agent_id>/plugins/<plugin_id>/`，Workspace 路径始终只指向真实项目。Plugin 的唯一宿主配置不进入运行时目录，保存在 `~/.downcity/plugins/<plugin_id>/config.toml`；Plugin 唯一实例的 lifecycle storage 由 City 另行分配。
 
 Agent 不负责：
 
@@ -298,7 +298,7 @@ Plugin 执行实例可以提供：
 
 Plugin 通过 PluginContext 使用 City 允许的能力。PluginContext 提供受限的 City、Agent、Workspace、Session 与 Turn 句柄；ID 用于稳定身份和序列化，对象句柄用于进程内直接通信。PluginContext 不是宿主控制面，也不是 Agent 或 City 的全量状态容器。
 
-所有 Plugin 都必须先通过 `city.plugins.add(plugin)`、`city.plugins.add(registration)` 或 `CityOptions.plugins` 登记。City 中每个 Plugin ID 只对应一个实例，所有已注册 Plugin 自动提供给所有 Agent；`city.agents.add(agent)` 不再接收 Plugin 绑定参数。Agent 配置中的 Profile 仅作为宿主配置存储，City 在创建 Agent/Workspace Context 时动态投影配置。Action、Hook、System、Availability 调用始终获得当前执行范围与当前 Plugin 的 PluginContext；Plugin 私有存储由 City 按 Agent/Plugin 分配，Workspace 文件、Shell、env 等能力来自当前 Workspace。
+所有 Plugin 都必须先通过 `city.plugins.add(plugin)`、`city.plugins.add(registration)` 或 `CityOptions.plugins` 登记。City 中每个 Plugin ID 只对应一个实例，所有已注册 Plugin 自动提供给所有 Agent；`city.agents.add(agent)` 不接收 Plugin 绑定参数。每个 Plugin 只有一份 City 级宿主配置，City 在创建 Agent/Workspace Context 时把同一配置快照投影为 `PluginContext.config`。Action、Hook、System、Availability 调用始终获得当前执行范围与当前 Plugin 的 PluginContext；Plugin 私有存储由 City 按 Agent/Plugin 分配，Workspace 文件、Shell、env 等能力来自当前 Workspace。
 
 Plugin 生命周期完全归 City，只有 `initialize/dispose` 两个节点。City 在 Plugin 加入时调用一次 `initialize`，移除 Plugin 或关闭 City 时调用一次 `dispose`。Agent 加入或离开 City、Session 创建或结束、Workspace 进入或离开都不会触发 Plugin 生命周期。一次 Session Step 捕获不可变 Hook scope；Plugin 被移除后，新 Step 立即不可见，City 等待旧 Step 释放 execution lease 后才调用 `dispose`。长期连接、Timer、Schedule 与后台 Worker 必须由具体 Plugin 按自己的领域所有权创建和释放，不能套用通用的 Workspace connect 协议。
 
@@ -310,7 +310,7 @@ Plugin 实例在 City 内按 Plugin ID 唯一；同一个实例可以同时服�
 Task 定义、调度注册与执行记录由 TaskPlugin 统一拥有，使用 `PluginLifecycleContext.storage` 中的
 `tasks/<task_id>/` 作为唯一事实源。Task 显式保存 `agent_id` 与 `workspace_id` 作为执行目标；scheduler
 在 Plugin initialize 时恢复全部启用定义，并只在触发瞬间进入对应 Agent/Workspace 上下文。Task 不写入
-Agent Plugin 私有目录，Agent Session 仍保存在 Agent 自己的 Session Store 中。TaskPlugin 必须以实例级
+Agent/Plugin 私有目录，Agent Session 仍保存在 Agent 自己的 Session Store 中。TaskPlugin 必须以实例级
 事务入口串行提交定义变更；运行受理与删除检查共享同一个边界，运行中的 Task 不允许删除。Session 内创建
 Task 时，交付目标固定记录原始 `agent_id`、`workspace_id`、`origin_type` 与 `session_id`；重新绑定执行目标
 不能改变结果交付目标，跨 Agent/Workspace 投递由 City 使用明确身份定位原始 Session。one-shot 完成只能
@@ -319,7 +319,7 @@ Task 时，交付目标固定记录原始 `agent_id`、`workspace_id`、`origin_
 scheduler 同步失败时必须分别报告两个事实。释放 scheduler、timer 与已受理执行时，单项失败不能中断其他
 资源收口，最终统一聚合错误。
 
-Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main 对象。Plugin 在 `initialize(PluginLifecycleContext)` 中注册宿主管理 action 与 Config action，并初始化自己拥有的 City 级长期资源；`dispose` 负责统一释放。初始化失败的 Plugin 不能进入执行 Registry，但 City 必须保留不可执行的错误快照；显式 `add()` 继续返回失败，由宿主隔离该 Plugin 并继续启动其他主体。宿主的 Plugins 导航始终列出完整 Plugin Catalog，并展示失败 Plugin 的状态和错误；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用宿主管理 action，不要求 Profile。Config 只在 Plugin Catalog 详情出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。
+Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main 对象。Plugin 在 `initialize(PluginLifecycleContext)` 中注册宿主管理 action 与 Config action，并初始化自己拥有的 City 级长期资源；`dispose` 负责统一释放。初始化失败的 Plugin 不能进入执行 Registry，但 City 必须保留不可执行的错误快照；显式 `add()` 继续返回失败，由宿主隔离该 Plugin 并继续启动其他主体。宿主的 Plugins 导航始终列出完整 Plugin Catalog，并展示失败 Plugin 的状态和错误；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用宿主管理 action。Config 只在 Plugin Catalog 详情出现，使用独立 gateway；City 在 Config action 调用时注入该 Plugin 的唯一配置存储。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Node 或 Electron 对象。
 
 ### 4.6 Agent 定义的本地事实源
 
@@ -330,18 +330,18 @@ Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main �
 
 Plugin 以全局稳定 ID 为身份，定义与 City 级配置保存在 `~/.downcity/plugins/<plugin_id>/`：
 
-- `config.toml`：Plugin 自己拥有的明文 profile 配置，目录权限为 `0700`、文件权限为 `0600`。
+- `config.toml`：Plugin 自己拥有的唯一明文配置，目录权限为 `0700`、文件权限为 `0600`。
 - `plugin.json`：仅第三方 Plugin 使用，是静态定义、必填 `readme` 路径、图标地址、可选 `main`、`renderer` 入口与安装来源信息的唯一事实源。
 - `package.json`：仅第三方 Plugin 使用，声明 `"type": "module"` 并建立明确的 ESM package 边界。
 - README：第三方 Plugin 通过 `plugin.json.readme` 声明 Plugin 根目录内的必需 `.md` 用户文档；内置 Plugin 使用 package 随附的 `<plugin_id>.readme.md` 独立资产。两者都由宿主读取文件，不在 TypeScript 定义中保存正文。
 - 单文件入口与本地图标：安装清单声明的 `main`、`renderer` 文件，以及 `icon` 指向的 Plugin 根目录内相对资源；源码、TypeScript 配置和构建工具配置不进入 Plugin ID 目录。运行入口必须是 `.js` 或 `.mjs`；Renderer bundle 必须保持 React 与 `react/jsx-runtime` 为宿主外部依赖。
 
-`config.toml` 是宿主维护的 Plugin 配置源；City 在创建 `PluginContext` 时按当前 Agent 动态投影配置。
+`config.toml` 是宿主维护的 Plugin 唯一配置源；City 在创建 `PluginContext` 时动态投影配置快照。
 执行期 Plugin 状态、缓存和私有文件使用 `PluginContext.storage.path/files`，由 City 按 Agent/Plugin
 隔离，不按 Workspace 复制；共享 City 资源使用 `PluginLifecycleContext.storage`。Plugin 实例与
 生命周期始终由 City 持有，Agent 仅通过 Session 消费其 Tool、System 与 Hook。
 
-本地宿主可以在 `agent.json` 中保存 `Plugin ID → Profile ID` 引用，但该引用只负责让 City 在创建 `PluginContext.config` 时选择配置，不控制 Plugin 是否提供给 Agent，也不创建 Agent/Plugin 绑定；不存在引用时仍提供该 Plugin，并投影空配置。Agent 不保存渠道、账号、端点或 Token。Profile 只是 Plugin 下的命名配置值，不是实例或生命周期边界；一个 City 中始终只有一个对应 Plugin 实例。长期资源的隔离键必须来自该 Plugin 的真实领域所有权，例如账号、Profile 或 Agent 配置，不能因为调用包含 Workspace 就默认按 Workspace 创建资源。CRUD 由宿主统一提供，内容结构、校验、凭据投影和编辑 UI 由 Plugin 与 Config 自己管理。Profile 值必须是 TOML 可表达的 JSON object。内置 Plugin 由宿主登记；第三方 `main` 入口必须默认导出唯一的 City Plugin 实例。
+`agent.json` 不保存 Plugin 引用或配置；Plugin 是否可用只由 City Registry 决定。Agent 不保存渠道、账号、端点或 Token。一个 City 中每个 Plugin ID 始终只有一个实例和一份宿主配置。需要多账号或多租户时，由具体 Plugin 在自己的配置结构中声明账号集合与选择规则，City 不提供通用命名 Profile。长期资源的隔离键必须来自该 Plugin 的真实领域所有权，例如账号、Agent 或全局连接，不能因为调用包含 Workspace 就默认按 Workspace 创建资源。配置内容结构、校验、凭据投影、编辑 UI 和保存后的资源刷新都由 Plugin 自己管理；配置值必须是 TOML 可表达的 JSON object。内置 Plugin 由宿主登记；第三方 `main` 入口必须默认导出唯一的 City Plugin 实例。
 
 `downcity.db` 继续保存 Workspace 索引、平台设置和 Token，不保存 Agent 或 Plugin 配置，也不保存 Agent-Workspace 绑定。Workspace 与平台设置以明文 JSON 保存，本地隔离依赖数据库文件权限。
 

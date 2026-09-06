@@ -167,8 +167,6 @@ ipcMain.handle("chat:list-workspace-files", (_event, workspace_id: string) => re
 ipcMain.handle("chat:read-workspace-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_file(workspace_id, relative_path));
 ipcMain.handle("plugin:list", () => require_plugin_controller().list());
 ipcMain.handle("plugin:get", (_event, plugin_id: string) => require_plugin_controller().get(plugin_id));
-ipcMain.handle("plugin:create-profile", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopCreatePluginProfileInput) => require_plugin_controller().create_profile(plugin_id, input));
-ipcMain.handle("plugin:remove-profile", (_event, plugin_id: string, profile_id: string) => require_plugin_controller().remove_profile(plugin_id, profile_id));
 ipcMain.handle("plugin:invoke", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopInvokePluginActionInput) => require_plugin_controller().invoke(plugin_id, input));
 ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: string, configuration: import("../common/types/DesktopApi.js").DesktopSessionConfiguration) => require_agent_controller().create_session(agent_id, workspace_id, configuration));
 ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id));
@@ -297,10 +295,9 @@ app.whenReady().then(async () => {
     local_data,
     async (plugin_id, action_id, input) =>
       await next_agent_controller.invoke_plugin_main(plugin_id, action_id, input),
-    async (plugin_id, profile_id, action_id, input) =>
+    async (plugin_id, action_id, input) =>
       await next_agent_controller.invoke_plugin_config(
         plugin_id,
-        profile_id,
         action_id,
         input,
       ),

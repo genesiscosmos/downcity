@@ -32,7 +32,7 @@ export function create_cli_builtin_plugin_registrations(): LocalPluginRegistrati
   return create_builtin_plugin_registrations();
 }
 
-/** 创建 CLI 读取本地 Plugin 定义与 profile 的 Loader。 */
+/** 创建 CLI 读取本地 Plugin 定义与入口的 Loader。 */
 export function create_cli_plugin_loader(input: {
   /** 当前 CLI 进程读取 Plugin 数据使用的仓储。 */
   plugin_repository: PluginRepository;

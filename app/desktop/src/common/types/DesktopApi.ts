@@ -253,8 +253,6 @@ export interface DesktopCreateAgentInput {
   instruction: string;
   /** Agent 使用的默认模型标识。 */
   model_id: string;
-  /** Agent 初始启用的 Plugin 引用。 */
-  plugins: Record<string, DesktopAgentPluginReference>;
 }
 
 /** 使用 AI 生成 Agent 草稿的输入。 */
@@ -263,8 +261,6 @@ export interface DesktopGenerateAgentDraftInput {
   prompt: string;
   /** 执行草稿生成的系统默认模型标识。 */
   model_id: string;
-  /** 当前可供 AI 推荐的 Plugin 摘要。 */
-  plugins: Array<{ /** Plugin 稳定标识。 */ plugin_id: string; /** Plugin 用户可见名称。 */ title: string; /** Plugin 能力说明。 */ description: string }>;
 }
 
 /** AI 生成但尚未持久化的 Agent 草稿。 */
@@ -275,14 +271,6 @@ export interface DesktopAgentDraft {
   description: string;
   /** AI 建议写入 SOUL.md 的主体指令。 */
   instruction: string;
-  /** AI 推荐启用的 Plugin 标识。 */
-  plugin_ids: string[];
-}
-
-/** Agent 定义中的一个 Plugin 引用。 */
-export interface DesktopAgentPluginReference {
-  /** Plugin 使用的已保存 profile；不需要配置的 Plugin 不设置此字段。 */
-  profile?: string;
 }
 
 /** Renderer 可编辑的完整 Agent 定义。 */
@@ -297,8 +285,6 @@ export interface DesktopAgentDefinition {
   model_id: string;
   /** 从 SOUL.md 读取的 Agent 主体指令。 */
   instruction: string;
-  /** 以 Plugin ID 为键的已注册 Plugin 引用。 */
-  plugins: Record<string, DesktopAgentPluginReference>;
 }
 
 /** Desktop 更新 Agent 定义的输入。 */
@@ -311,8 +297,6 @@ export interface DesktopUpdateAgentInput {
   model_id: string;
   /** 写入 SOUL.md 的 Agent 主体指令。 */
   instruction: string;
-  /** 保存到 agent.json 的 Plugin 引用。 */
-  plugins: Record<string, DesktopAgentPluginReference>;
 }
 
 /** Renderer 可见的 Plugin 来源。 */
@@ -332,13 +316,7 @@ export interface DesktopPluginSummary {
   icon_url?: string;
   /** Plugin 来自官方内置集合或第三方安装。 */
   source: DesktopPluginSource;
-  /** 当前绑定该 Plugin 的全部 Agent ID。 */
-  agent_ids: string[];
-  /** 当前 Plugin 已保存的 profile 数量。 */
-  profile_count: number;
-  /** 当前 Plugin 可选择的 profile 标识。 */
-  profile_ids: string[];
-  /** Plugin 是否提供统一 City main，因此可以绑定到 Agent。 */
+  /** Plugin 是否提供由 City 持有的运行实例。 */
   has_main: boolean;
 
   /** Plugin 是否提供专属 Sidebar。 */
@@ -365,12 +343,6 @@ export interface DesktopPluginDefinition extends DesktopPluginSummary {
   renderer_url?: string;
 }
 
-/** Desktop 创建 Plugin Profile 的输入。 */
-export interface DesktopCreatePluginProfileInput {
-  /** Profile 的稳定标识。 */
-  profile_id: string;
-}
-
 /** Desktop 调用 Plugin Mainview action 的输入。 */
 export interface DesktopInvokePluginMainviewActionInput {
   /** 明确标识调用来自 Plugin 业务工作区。 */
@@ -387,9 +359,6 @@ export interface DesktopInvokePluginMainviewActionInput {
 export interface DesktopInvokePluginConfigActionInput {
   /** 明确标识调用来自设置中心的 Config 界面。 */
   surface: "config";
-
-  /** 当前配置界面绑定的 Profile ID。 */
-  profile_id: string;
 
   /** Plugin 注册的稳定宿主 action ID。 */
   action_id: string;
@@ -891,14 +860,10 @@ export interface DesktopApi {
   };
   /** 本地 Plugin catalog 能力。 */
   plugin: {
-    /** 列出官方与第三方 Plugin，并附带当前 Agent 绑定。 */
+    /** 列出官方与第三方 Plugin。 */
     list(): Promise<DesktopPluginSummary[]>;
-    /** 读取 Plugin manifest 与全部 Profile。 */
+    /** 读取 Plugin manifest 与 Renderer 定义。 */
     get(plugin_id: string): Promise<DesktopPluginDefinition>;
-    /** 创建一个空 Profile，具体配置由 Plugin Mainview 写入。 */
-    create_profile(plugin_id: string, input: DesktopCreatePluginProfileInput): Promise<DesktopPluginDefinition>;
-    /** 删除未被 Agent 引用的 Profile。 */
-    remove_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
     /** 按业务工作区或 Config 范围调用 Plugin 宿主 action。 */
     invoke(plugin_id: string, input: DesktopInvokePluginActionInput): Promise<import("@downcity/city/plugin").PluginJsonValue>;
   };

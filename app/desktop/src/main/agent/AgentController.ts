@@ -97,8 +97,8 @@ const session_reasoning_settings_key = "desktop.session-reasoning";
 const workspace_preview_max_bytes = 2 * 1024 * 1024;
 const hidden_workspace_entry_names = new Set([".git", ".DS_Store", "node_modules", "dist", "build", "out"]);
 
-/** 解析并约束模型返回的 Agent 草稿，避免未安装 Plugin 进入创建流程。 */
-function parse_agent_draft(text: string, available_plugin_ids: ReadonlySet<string>): DesktopAgentDraft {
+/** 解析并约束模型返回的 Agent 草稿。 */
+function parse_agent_draft(text: string): DesktopAgentDraft {
   const json_text = text.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
   let value: Record<string, unknown>;
   try {
@@ -110,10 +110,7 @@ function parse_agent_draft(text: string, available_plugin_ids: ReadonlySet<strin
   const description = typeof value.description === "string" ? value.description.trim() : "";
   const instruction = typeof value.instruction === "string" ? value.instruction.trim() : "";
   if (!name || !description || !instruction) throw new Error("AI 生成的 Agent 配置不完整，请重新生成");
-  const plugin_ids = Array.isArray(value.plugin_ids)
-    ? [...new Set(value.plugin_ids.filter((plugin_id): plugin_id is string => typeof plugin_id === "string" && available_plugin_ids.has(plugin_id)))]
-    : [];
-  return { name, description, instruction, plugin_ids };
+  return { name, description, instruction };
 }
 
 /** 解析并约束模型返回的 Group 草稿，避免不存在的 Agent 成为成员。 */
@@ -137,9 +134,9 @@ interface AgentControllerEvents {
   /** 广播 Group 共享消息。 */
   /** 广播 GroupSession 统一消息与状态事件。 */
   group_event(event: DesktopGroupEvent): void;
-  /** 发布一个 Agent Plugin 产生的宿主通知。 */
+  /** 发布一个 Plugin 在 Agent 执行范围内产生的宿主通知。 */
   plugin_notification(plugin_id: string, agent_id: string, input: PluginNotificationInput): Promise<void>;
-  /** 清除一个 Agent Plugin 主题的未读通知。 */
+  /** 清除一个 Plugin 在 Agent 执行范围内产生的未读通知。 */
   plugin_notification_dismiss(plugin_id: string, topic_key: string): Promise<void>;
   /** 发布一个 City Plugin 产生的宿主通知。 */
   plugin_host_notification(plugin_id: string, input: PluginNotificationInput): Promise<void>;
@@ -150,7 +147,7 @@ interface AgentControllerEvents {
 /** Electron main 内的 native Agent 生命周期控制器。 */
 export class AgentController {
   /** Desktop 与 CLI 共用的本地数据库和产品 Repository。 */
-  /** Desktop 读取本地 Plugin 定义与 profile 的 Loader。 */
+  /** Desktop 读取本地 Plugin 定义与运行入口的 Loader。 */
   private readonly plugin_loader: LocalPluginLoader;
   /** Desktop 进程内的 Agent 索引与 transport 转发器。 */
   private readonly city: City;
@@ -179,19 +176,10 @@ export class AgentController {
       embassy: create_desktop_embassy(data, process.env),
       storage: new LocalStorageProvider(data.root_path),
       plugin_host: {
-        runtime_config: (plugin_id, agent_id) => {
-          const reference = this.data.agents.get(agent_id)?.plugins[plugin_id];
-          if (!reference) return {};
-          return structuredClone(
-            this.data.plugins.get_profile(plugin_id, reference.profile || "default") ?? {},
-          );
-        },
-        profile_config: (plugin_id, profile_id) => ({
-          get: async () => structuredClone(
-            this.data.plugins.get_profile(plugin_id, profile_id) ?? {},
-          ),
+        config: (plugin_id) => ({
+          get: () => structuredClone(this.data.plugins.get_config(plugin_id)),
           set: async (config) => {
-            this.data.plugins.save_profile(plugin_id, profile_id, structuredClone(config));
+            this.data.plugins.set_config(plugin_id, structuredClone(config));
           },
         }),
         notifications: (plugin_id, agent_id) => ({
@@ -242,7 +230,7 @@ export class AgentController {
     return this.city.plugins.snapshots();
   }
 
-  /** 在指定 Agent 与 Workspace 上调用已注册的 Agent Plugin action。 */
+  /** 在指定 Agent 与 Workspace 上调用已注册的 Plugin action。 */
   async invoke_plugin_action(input: {
     /** 目标 Agent ID。 */ readonly agent_id: string;
     /** 执行上下文 Workspace ID。 */ readonly workspace_id: string;
@@ -274,19 +262,15 @@ export class AgentController {
     return await this.city.plugins.invoke(plugin_id, action_id, input);
   }
 
-  /** 通过 City 调用 Plugin Profile config action。 */
+  /** 通过 City 调用 Plugin 的唯一 Config action。 */
   async invoke_plugin_config(
     plugin_id: string,
-    profile_id: string,
     action_id: string,
     input?: PluginJsonValue,
   ): Promise<PluginJsonValue> {
     await this.ready_promise;
-    if (!this.data.plugins.get_profile(plugin_id, profile_id)) {
-      throw new Error(`Plugin Profile not found: ${plugin_id}/${profile_id}`);
-    }
     await this.provide_plugin(plugin_id);
-    return await this.city.plugins.invoke_config(plugin_id, profile_id, action_id, input);
+    return await this.city.plugins.invoke_config(plugin_id, action_id, input);
   }
 
   /** 重新加载当前 City 已持有的全部 Workspace Global Env。 */
@@ -325,7 +309,6 @@ export class AgentController {
       description: config.description,
       model_id: typeof config.execution?.model_id === "string" ? config.execution.model_id : "",
       instruction: config.instruction,
-      plugins: Object.fromEntries(Object.entries(config.plugins).map(([plugin_id, reference]) => [plugin_id, reference.profile ? { profile: reference.profile } : {}])),
     };
   }
 
@@ -441,10 +424,6 @@ export class AgentController {
       version: "1.0.0",
       execution: { type: "api", model_id: normalized_model_id },
       instruction: String(input.instruction || "").trim(),
-      plugins: Object.fromEntries(Object.entries(input.plugins || {}).map(([plugin_id, reference]) => {
-        const profile = String(reference.profile || "").trim();
-        return [plugin_id, profile ? { profile } : {}];
-      })),
       created_at: current_time,
       updated_at: current_time,
     };
@@ -480,21 +459,16 @@ export class AgentController {
     const prompt = String(input.prompt || "").trim();
     if (!prompt) throw new Error("请描述想创建的角色");
     const model = await resolve_desktop_agent_model(this.data, input.model_id, resolve_desktop_city_env(this.data));
-    const plugin_catalog = input.plugins.map((plugin) => ({
-      plugin_id: String(plugin.plugin_id || "").trim(),
-      title: String(plugin.title || "").trim(),
-      description: String(plugin.description || "").trim(),
-    })).filter((plugin) => plugin.plugin_id);
     const response = await model.stream({ messages: [
-      { role: "system", content: [{ type: "text", text: "你负责设计一名 AI Agent。只输出一个 JSON 对象，不使用 Markdown。字段必须是 name、description、instruction、plugin_ids。name 简短自然；description 是一句对外介绍；instruction 使用中文，清晰定义角色、目标、工作原则和输出要求；plugin_ids 只能取自用户提供的列表，没有必要时为空数组。" }] },
-      { role: "user", content: [{ type: "text", text: `角色描述：\n${prompt}\n\n可用 Plugins：\n${JSON.stringify(plugin_catalog)}` }] },
+      { role: "system", content: [{ type: "text", text: "你负责设计一名 AI Agent。只输出一个 JSON 对象，不使用 Markdown。字段必须是 name、description、instruction。name 简短自然；description 是一句对外介绍；instruction 使用中文，清晰定义角色、目标、工作原则和输出要求。" }] },
+      { role: "user", content: [{ type: "text", text: `角色描述：\n${prompt}` }] },
     ] });
     let text = "";
     for await (const event of response) {
       if (event.type === "model_error") throw new Error(event.error.message);
       if (event.type === "text_delta") text += event.delta;
     }
-    return parse_agent_draft(text, new Set(plugin_catalog.map((plugin) => plugin.plugin_id)));
+    return parse_agent_draft(text);
   }
 
   /** 保存 Agent 定义，并以同一稳定 ID 替换进程内实例。 */
@@ -517,10 +491,6 @@ export class AgentController {
       description: String(input.description || "").trim(),
       execution: { ...current.execution, type: "api", model_id },
       instruction: String(input.instruction || ""),
-      plugins: Object.fromEntries(Object.entries(input.plugins || {}).map(([plugin_id, reference]) => {
-        const profile = String(reference.profile || "").trim();
-        return [plugin_id, profile ? { profile } : {}];
-      })),
       updated_at: new Date().toISOString(),
     };
     const replacement = await this.create_native_agent(candidate);

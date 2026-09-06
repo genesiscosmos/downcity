@@ -481,7 +481,7 @@ export class SoundPlugin extends Plugin {
     this.format = normalize_optional_string(options.format);
   }
 
-  /** 注册 Sound Plugin 的 Profile 配置 actions。 */
+  /** 注册 Sound Plugin 的唯一配置 actions。 */
   initialize(context: PluginLifecycleContext): void {
     register_plugin_settings_actions(context, SOUND_PLUGIN_SETTINGS);
   }

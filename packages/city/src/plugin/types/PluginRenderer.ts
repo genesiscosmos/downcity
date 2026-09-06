@@ -13,9 +13,9 @@ export interface PluginActionGateway {
   ): Promise<Result>;
 }
 
-/** Plugin Config 调用当前 Profile 配置 action 的最小网关。 */
+/** Plugin Config 调用当前 Plugin 唯一配置 action 的最小网关。 */
 export interface PluginConfigGateway {
-  /** 调用已经绑定当前 Profile 的稳定 Config action。 */
+  /** 调用当前 Plugin 的稳定 Config action。 */
   invoke<Result = PluginJsonValue>(
     action_id: string,
     input?: PluginJsonValue,
@@ -546,7 +546,7 @@ export interface PluginRendererUi {
 
 /** Plugin Sidebar 接收的属性。 */
 export interface PluginSidebarComponentProps {
-  /** 已绑定当前 Plugin 且不依赖 Profile 的业务 action 网关。 */
+  /** 已绑定当前 Plugin 的业务 action 网关。 */
   readonly plugin: PluginActionGateway;
 
   /** 与 Mainview 共享且由宿主持有的路由。 */
@@ -561,7 +561,7 @@ export interface PluginSidebarComponentProps {
 
 /** Plugin Mainview 接收的属性。 */
 export interface PluginMainviewComponentProps {
-  /** 已绑定当前 Plugin 且不依赖 Profile 的业务 action 网关。 */
+  /** 已绑定当前 Plugin 的业务 action 网关。 */
   readonly plugin: PluginActionGateway;
 
   /** 与 Sidebar 共享且由宿主持有的路由。 */
@@ -576,7 +576,7 @@ export interface PluginMainviewComponentProps {
 
 /** Plugin Config 接收的属性。 */
 export interface PluginConfigComponentProps {
-  /** 已绑定当前 Plugin/Profile 身份的 Config action 网关。 */
+  /** 已绑定当前 Plugin 身份的 Config action 网关。 */
   readonly config: PluginConfigGateway;
 
   /** 宿主提供的反馈能力和 UI 组件。 */
@@ -593,7 +593,7 @@ export type PluginMainviewComponent = (
   props: PluginMainviewComponentProps,
 ) => ReactNode;
 
-/** Plugin 自己拥有且绑定 Profile 的 Config 组件。 */
+/** Plugin 自己拥有的 Config 组件。 */
 export type PluginConfigComponent = (
   props: PluginConfigComponentProps,
 ) => ReactNode;
@@ -606,6 +606,6 @@ export interface PluginRendererDefinition {
   /** Plugin 工作区右侧的业务主界面；必须与 Sidebar 同时声明。 */
   readonly mainview?: PluginMainviewComponent;
 
-  /** 设置中心内由宿主绑定当前 Profile 的独立配置界面。 */
+  /** 设置中心内由宿主绑定当前 Plugin 的独立配置界面。 */
   readonly config?: PluginConfigComponent;
 }

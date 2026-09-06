@@ -164,7 +164,7 @@ export class ImagePlugin extends Plugin {
     this.default_model = normalize_default_image_model(options.default_model);
   }
 
-  /** 注册 Image Plugin 的 Profile 配置 actions。 */
+  /** 注册 Image Plugin 的唯一配置 actions。 */
   initialize(context: PluginLifecycleContext): void {
     register_plugin_settings_actions(context, IMAGE_PLUGIN_SETTINGS);
   }

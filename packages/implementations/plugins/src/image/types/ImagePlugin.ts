@@ -154,7 +154,7 @@ export type ImagePluginResult = ActionResultMessage;
  * 图片结果本地存储输入。
  */
 export interface ImagePluginResultStorageInput {
-  /** 当前 Agent Plugin Context，用于访问 Workspace 文件能力。 */
+  /** 当前 Plugin 执行 Context，用于访问 Workspace 文件能力。 */
   context: PluginContext;
   /** 当前图片任务 ID，用于划分稳定的本地结果目录。 */
   job_id: string;

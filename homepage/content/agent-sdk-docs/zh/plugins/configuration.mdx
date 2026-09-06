@@ -1,16 +1,16 @@
 ---
 title: Plugin 配置
-description: 理解 Plugin 唯一实例、宿主 Profile 与 Agent 配置投影的边界。
+description: 理解 Plugin 唯一实例、City 级配置与执行上下文的边界。
 ---
 
 # Plugin 配置
 
-配置不决定 Plugin 所有权或实例数量：
+一个 City 中，每个 Plugin ID 只有一份宿主配置：
 
 ```text
-宿主保存 Plugin Profile
+宿主保存 Plugin Config
 → City 持有一个 Plugin 实例
-→ plugin_host.runtime_config(plugin_id, agent_id) 投影配置
+→ City 在每次执行时投影配置快照
 → Plugin 从当前 PluginContext.config 读取
 ```
 
@@ -19,8 +19,7 @@ const city = new City({
   plugins: [web_plugin],
   workspaces: [workspace],
   plugin_host: {
-    runtime_config: (plugin_id, agent_id) => load_runtime_config(plugin_id, agent_id),
-    profile_config: (plugin_id, profile_id) => open_profile_store(plugin_id, profile_id),
+    config: (plugin_id) => open_plugin_config_store(plugin_id),
     notifications: (plugin_id, agent_id) => open_notifications(plugin_id, agent_id),
   },
 });
@@ -28,9 +27,13 @@ const city = new City({
 city.agents.add(agent);
 ```
 
-CLI/Desktop 的 `config.toml` 可以继续作为 Profile 配置事实源，但 Agent 不保存 Plugin 实例或
-绑定关系。Config action 由 Plugin 在 `initialize()` 中注册，City 调用时注入指定 Profile 的 `get/set` store；
-执行期 Action、Hook、System 与 Availability 读取当前 Agent 投影得到的 `context.config`。
+`PluginConfigStore.get()` 同步返回当前完整配置快照，`set(config)` 原子替换完整配置。Agent
+不保存 Plugin 引用或配置；同一份配置会提供给所有 Agent。多账号或多租户结构由具体 Plugin
+在自己的 Config 中定义，City 不提供通用命名配置层。
 
-运行态连接、回调和客户端对象不能写入 Profile。长期资源属于 Plugin，并应按实际账号、Profile
-或其他领域身份建立索引，最终由 `dispose` 统一释放。
+Config action 由 Plugin 在 `initialize()` 中注册。City 调用 `city.plugins.invoke_config()` 时注入
+该 Plugin 唯一的 `get/set` store；Action、Hook、System 与 Availability 则从当前调用的
+`PluginContext.config` 读取不可变快照。
+
+配置保存后，Plugin 应主动释放或刷新受配置影响的长期资源。连接、回调和客户端对象不能写入
+Config；它们仍由 Plugin 按账号、Agent 或其他真实领域身份管理，并最终由 `dispose()` 统一释放。

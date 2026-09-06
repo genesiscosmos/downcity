@@ -10,6 +10,7 @@ import type { FileSystem, WorkspaceShell } from "@/workspace/index.js";
 import type {
   PluginContext,
   PluginJsonObject,
+  PluginJsonValue,
   PluginNotificationPublisher,
   PluginSessionCollection,
   PluginSessionHandle,
@@ -38,7 +39,7 @@ export interface CreatePluginContextInput {
   readonly files: FileSystem;
   /** 当前 Plugin 私有数据文件端口。 */
   readonly data_files: FileSystem;
-  /** 延迟读取当前 Plugin 在该 Agent 作用域下的业务配置。 */
+  /** 读取当前 Plugin 的 City 级业务配置。 */
   readonly get_config?: () => PluginJsonObject;
   /** 当前 Workspace 可选 Shell。 */
   readonly shell?: WorkspaceShell;
@@ -62,6 +63,9 @@ export interface CreatePluginContextInput {
 export function create_plugin_context(input: CreatePluginContextInput): PluginContext {
   const abort_controller = new AbortController();
   const sessions = create_session_collection(input.get_sessions);
+  // 配置只在 Context 创建检查点读取一次，确保同一次 Action、Hook、System 或
+  // Availability 调用不会因并发保存而观察到中途变化。
+  const config = freeze_json_object(input.get_config?.() ?? {});
   return Object.freeze({
     city: Object.freeze({
       ...(input.embassy ? { embassy: input.embassy } : {}),
@@ -101,13 +105,29 @@ export function create_plugin_context(input: CreatePluginContextInput): PluginCo
       path: input.data_path,
       files: input.data_files,
     }),
-    get config() {
-      return Object.freeze({ ...(input.get_config?.() ?? {}) });
-    },
+    config,
     logger: input.logger,
     ...(input.notifications ? { notifications: input.notifications } : {}),
     abort_signal: abort_controller.signal,
   });
+}
+
+/** 深拷贝并冻结 Plugin 配置，避免调用方修改当前执行快照。 */
+function freeze_json_object(input: PluginJsonObject): PluginJsonObject {
+  return freeze_json_value(structuredClone(input)) as PluginJsonObject;
+}
+
+/** 递归冻结一个 JSON 值。 */
+function freeze_json_value(input: PluginJsonValue): PluginJsonValue {
+  if (Array.isArray(input)) {
+    return Object.freeze(input.map((value) => freeze_json_value(value))) as PluginJsonValue[];
+  }
+  if (input !== null && typeof input === "object") {
+    return Object.freeze(Object.fromEntries(
+      Object.entries(input).map(([key, value]) => [key, freeze_json_value(value)]),
+    )) as PluginJsonObject;
+  }
+  return input;
 }
 
 /** 为一次 Action 调用投影直接可通信的 Session 与 Turn 句柄。 */

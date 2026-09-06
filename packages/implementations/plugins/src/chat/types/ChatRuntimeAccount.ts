@@ -11,7 +11,7 @@ import type { ChatChannelName } from "@/chat/types/ChannelStatus.js";
 
 /** 一个 Channel 启动所需的完整运行时账号快照。 */
 export interface ChatRuntimeAccount {
-  /** Plugin profile 或 SDK 调用方提供的稳定 Channel ID。 */
+  /** Plugin Config 或 SDK 调用方提供的稳定 Channel ID。 */
   id: string;
 
   /** 账号对应的 Chat Channel 类型。 */

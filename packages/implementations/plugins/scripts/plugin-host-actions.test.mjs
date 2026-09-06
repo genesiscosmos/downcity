@@ -73,7 +73,7 @@ async function start_skill_plugin(workspace_path) {
   return actions;
 }
 
-/** 启动 Task Plugin，并记录对 Agent Plugin runtime 的调用。 */
+/** 启动 Task Plugin，并记录对指定 Agent 执行范围的调用。 */
 async function start_task_plugin(options = {}) {
   const actions = new Map();
   const invocations = [];
@@ -145,9 +145,9 @@ async function start_task_plugin(options = {}) {
     system: {
       async list_agents() {
         return options.agents || [
-          { agent_id: "task-agent", name: "Task Agent", plugin_ids: ["task", "skill"] },
-          { agent_id: "empty-task-agent", name: "Empty Task Agent", plugin_ids: ["task"] },
-          { agent_id: "chat-agent", name: "Chat Agent", plugin_ids: ["chat"] },
+          { agent_id: "task-agent", name: "Task Agent" },
+          { agent_id: "empty-task-agent", name: "Empty Task Agent" },
+          { agent_id: "chat-agent", name: "Chat Agent" },
         ];
       },
       async list_workspaces() {
@@ -178,13 +178,13 @@ async function start_task_plugin(options = {}) {
   };
 }
 
-/** 创建可观察完整替换结果的 Profile 配置上下文。 */
+/** 创建可观察完整替换结果的唯一配置上下文。 */
 function create_config_context(initial_config) {
   let config = structuredClone(initial_config);
   return {
     context: {
       config: {
-        async get() {
+        get() {
           return structuredClone(config);
         },
         async set(next) {
@@ -196,7 +196,7 @@ function create_config_context(initial_config) {
   };
 }
 
-test("Chat Plugin 读取 Profile 时不泄漏 Channel 凭据", async () => {
+test("Chat Plugin 读取配置时不泄漏 Channel 凭据", async () => {
   const actions = await start_chat_plugin();
   const store = create_config_context({
     channels: [
@@ -205,11 +205,11 @@ test("Chat Plugin 读取 Profile 时不泄漏 Channel 凭据", async () => {
     ],
   });
 
-  const profile = await actions.get("profile.read").run(undefined, store.context);
+  const config = await actions.get("config.read").run(undefined, store.context);
 
-  assert.equal(JSON.stringify(profile).includes("telegram-secret"), false);
-  assert.equal(JSON.stringify(profile).includes("feishu-secret"), false);
-  assert.deepEqual(profile.channels.map((channel) => channel.secret_configured), [true, true]);
+  assert.equal(JSON.stringify(config).includes("telegram-secret"), false);
+  assert.equal(JSON.stringify(config).includes("feishu-secret"), false);
+  assert.deepEqual(config.channels.map((channel) => channel.secret_configured), [true, true]);
 });
 
 test("Chat Plugin 保存时为空的凭据输入会保留已有凭据", async () => {
@@ -220,7 +220,9 @@ test("Chat Plugin 保存时为空的凭据输入会保留已有凭据", async ()
     ],
   });
 
-  const result = await actions.get("profile.save").run({
+  const result = await actions.get("config.save").run({
+    owner_agent_id: "task-agent",
+    owner_workspace_id: "workspace-b",
     queue: { max_concurrency: 4 },
     channels: [{
       id: "telegram_main",
@@ -241,7 +243,7 @@ test("Chat Plugin 拒绝没有凭据的新 Channel", async () => {
   const store = create_config_context({ channels: [] });
 
   await assert.rejects(
-    () => actions.get("profile.save").run({
+    () => actions.get("config.save").run({
       queue: {},
       channels: [{ id: "telegram_new", type: "telegram", name: "New" }],
     }, store.context),
@@ -249,7 +251,7 @@ test("Chat Plugin 拒绝没有凭据的新 Channel", async () => {
   );
 });
 
-test("Skill Plugin 不需要 Profile 即可浏览和读取 Workspace Skill", async () => {
+test("Skill Plugin 不需要配置即可浏览和读取 Workspace Skill", async () => {
   const workspace_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-skill-main-"));
   const skill_path = path.join(workspace_path, ".agents", "skills", "demo");
   fs.mkdirSync(skill_path, { recursive: true });
@@ -296,6 +298,7 @@ test("Task Plugin 返回统一 Task 列表和可选执行目标", async () => {
     assert.deepEqual(snapshot.agents, [
       { agent_id: "task-agent", name: "Task Agent" },
       { agent_id: "empty-task-agent", name: "Empty Task Agent" },
+      { agent_id: "chat-agent", name: "Chat Agent" },
     ]);
     assert.deepEqual(snapshot.workspaces, [
     { workspace_id: "workspace-a", name: "Workspace A" },
@@ -370,7 +373,7 @@ test("Task Plugin 直接从统一 Store 读取执行记录与详情", async () =
 
 test("Task Plugin 保留目标失效的 Task 并允许宿主删除", async () => {
   const { actions, cleanup } = await start_task_plugin({
-    agents: [{ agent_id: "another-agent", name: "Another Agent", plugin_ids: ["task"] }],
+    agents: [{ agent_id: "another-agent", name: "Another Agent" }],
     workspaces: [{ workspace_id: "workspace-a", name: "Workspace A", workspace_path: "/workspace-a" }],
   });
   try {

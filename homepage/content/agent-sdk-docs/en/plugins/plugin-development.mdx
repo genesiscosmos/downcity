@@ -94,11 +94,11 @@ example-plugin/
 
 `main` default-exports a Plugin instance or `{ plugin, main }`; there is no separate `agent` entry. A Renderer
 communicates only through the host action gateway and cannot access Node, Electron, Agent objects, or
-Profile files directly.
+Plugin Config files directly.
 
 ## Testing focus
 
-- Multiple Agents sharing one Profile initialize one instance.
+- Multiple Agents using one City Plugin initialize one instance and read the same configuration.
 - Repeated calls receive fresh Context objects with the correct Agent and Workspace.
 - `dispose` waits for the final execution lease.
 - Concurrent main calls activate once, and shutdown fully deactivates it.

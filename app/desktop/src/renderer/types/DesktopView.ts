@@ -3,7 +3,7 @@
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { JSONContent } from "@tiptap/core";
-import type { DesktopAgentSummary, DesktopAgentDefinition, DesktopAccountResources, DesktopAccountSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopCreateGroupInput, DesktopUpdateGroupInput, DesktopGroupMemberRuntime, DesktopGroupStatusPhase, DesktopGroupSummary, DesktopModelSummary, DesktopPluginSummary, DesktopPluginDefinition, DesktopCreatePluginProfileInput, DesktopInvokePluginActionInput, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopUserSummary, DesktopUpdateAgentInput, DesktopWorkspaceSummary } from "../../common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopAgentDefinition, DesktopAccountResources, DesktopAccountSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopCreateGroupInput, DesktopUpdateGroupInput, DesktopGroupMemberRuntime, DesktopGroupStatusPhase, DesktopGroupSummary, DesktopModelSummary, DesktopPluginSummary, DesktopPluginDefinition, DesktopInvokePluginActionInput, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopUserSummary, DesktopUpdateAgentInput, DesktopWorkspaceSummary } from "../../common/types/DesktopApi";
 import type { DesktopNotificationState } from "../../common/types/DesktopNotification";
 import type { GroupMessageProjection } from "./GroupProjection";
 
@@ -43,8 +43,6 @@ export interface CreateAgentFormValue {
   instruction: string;
   /** Agent 使用的 City AIService 模型标识。 */
   model_id: string;
-  /** 初始启用的 Plugin 引用。 */
-  plugins: Record<string, import("@common/types/DesktopApi").DesktopAgentPluginReference>;
 }
 
 /** 创建 Workspace 表单的可序列化值。 */
@@ -326,13 +324,9 @@ export interface DesktopActions {
   remove_agent_avatar(agent_id: string): Promise<void>;
   /** 从 Desktop 内置头像池随机选择并保存一张头像。 */
   generate_agent_avatar(agent_id: string): Promise<void>;
-  /** 读取 Plugin manifest 与全部 Profile。 */
+  /** 读取 Plugin manifest 与 Renderer 定义。 */
   get_plugin(plugin_id: string): Promise<DesktopPluginDefinition>;
-  /** 创建 Plugin Profile 并刷新 catalog。 */
-  create_plugin_profile(plugin_id: string, input: DesktopCreatePluginProfileInput): Promise<DesktopPluginDefinition>;
-  /** 删除 Plugin Profile 并刷新 catalog。 */
-  remove_plugin_profile(plugin_id: string, profile_id: string): Promise<DesktopPluginDefinition>;
-  /** 调用当前 Plugin/Profile 范围内的 main action。 */
+  /** 调用当前 Plugin 的宿主管理 action。 */
   invoke_plugin_action(plugin_id: string, input: DesktopInvokePluginActionInput): ReturnType<Window["downcity"]["plugin"]["invoke"]>;
   /** 独立登记并打开 Workspace。 */
   create_workspace(value: CreateWorkspaceFormValue): Promise<void>;

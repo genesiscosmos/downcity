@@ -99,17 +99,17 @@ class GithubPlugin extends Plugin {
 
   initialize({ plugin, notifications }: PluginLifecycleContext) {
     plugin.config_action({
-      id: "profile.read",
+      id: "config.read",
       run: async (_input, context) => {
-        const config = await context.config.get();
+        const config = context.config.get();
         return { api_url: config.api_url, token_configured: Boolean(config.token) };
       },
     });
 
     plugin.config_action({
-      id: "profile.save",
+      id: "config.save",
       run: async (input, context) => {
-        const current = await context.config.get();
+        const current = context.config.get();
         const config = validate_and_restore_secret(input, current);
         await context.config.set(config);
         return { saved: true };
@@ -127,8 +127,8 @@ class GithubPlugin extends Plugin {
 export default new GithubPlugin();
 ```
 
-一个 Plugin ID 在 City 中只对应一个实例和一套生命周期。Config action 调用时由 City
-注入指定 Profile store，执行实例按 `PluginContext.config` 读取当前 Agent 配置。
+一个 Plugin ID 在 City 中只对应一个实例、一套生命周期和一份配置。Config action 调用时由 City
+注入唯一 Config store，执行实例从 `PluginContext.config` 读取该配置的当前快照。
 
 `notifications.publish()` 与 `notifications.dismiss()` 始终绑定当前 Plugin。宿主会把 `topic_key` 放入 Plugin 命名空间，并把 `route` 解释为当前 Plugin 工作区路由，因此 Plugin 不能代表其他 Plugin 或跳转到任意 Desktop 页面。相同 `topic_key` 只保留最新一条未读通知。
 
@@ -138,7 +138,7 @@ export default new GithubPlugin();
 
 ## Renderer 入口
 
-Renderer 入口可以声明三个固定插槽。`sidebar` 与 `mainview` 共同构成 Plugin 工作区，必须成对出现，并共享宿主持有的 JSON route；宿主会为它动态增加一级导航入口。`config` 与功能工作区无关，只在 Plugin Catalog 详情中按当前 Profile 渲染。三者共用一个 bundle 和宿主 UI Components：
+Renderer 入口可以声明三个固定插槽。`sidebar` 与 `mainview` 共同构成 Plugin 工作区，必须成对出现，并共享宿主持有的 JSON route；宿主会为它动态增加一级导航入口。`config` 与功能工作区无关，只在 Plugin Catalog 详情中渲染。三者共用一个 bundle 和宿主 UI Components：
 
 ```tsx
 import { useEffect, useState } from "react";
@@ -146,17 +146,17 @@ import { define_plugin_renderer } from "@downcity/city/plugin/react";
 
 export default define_plugin_renderer({ config: function GithubConfig({ config, ui }) {
   const { Button, Group, Input, LoadingState, Page, Row, Toolbar } = ui.components;
-  const [profile, set_profile] = useState<{ api_url: string }>();
+  const [config_state, set_config_state] = useState<{ api_url: string }>();
 
   useEffect(() => {
-    void config.invoke<{ api_url: string }>("profile.read").then(set_profile);
+    void config.invoke<{ api_url: string }>("config.read").then(set_config_state);
   }, [config]);
 
-  if (!profile) return <LoadingState label="正在读取 Profile…" />;
+  if (!config_state) return <LoadingState label="正在读取配置…" />;
   return <Page>
-    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void config.invoke("profile.save", profile).then(() => ui.toast({ type: "success", message: "已保存" }))}>保存</Button>} />
+    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void config.invoke("config.save", config_state).then(() => ui.toast({ type: "success", message: "已保存" }))}>保存</Button>} />
     <Group>
-      <Row label="API URL" trailing={<Input value={profile.api_url} on_value_change={(api_url) => set_profile({ ...profile, api_url })} />} />
+      <Row label="API URL" trailing={<Input value={config_state.api_url} on_value_change={(api_url) => set_config_state({ ...config_state, api_url })} />} />
     </Group>
   </Page>;
 } });
@@ -164,31 +164,30 @@ export default define_plugin_renderer({ config: function GithubConfig({ config, 
 
 Renderer bundle 必须把 `react` 与 `react/jsx-runtime` 保留为宿主外部依赖，并分别映射到 `downcity-plugin://runtime/react` 与 `downcity-plugin://runtime/react/jsx-runtime`。其他前端依赖应打包进同一个 `renderer.js`。
 
-Desktop 在宿主 React 树中加载 Renderer。Sidebar 与 Mainview 通过 `plugin.invoke()` 调用 Plugin 级动作，并通过 `navigation` 协同导航；Config 通过 `config.invoke()` 调用已经绑定当前 Profile 的配置动作。三个插槽都只获得所需 gateway、`ui.components`、Toast 和 Confirm，不会获得 Profile ID 或 Desktop controller。Renderer 属于受信任本地 UI 代码；只安装可信来源。
+Desktop 在宿主 React 树中加载 Renderer。Sidebar 与 Mainview 通过 `plugin.invoke()` 调用 Plugin 级动作，并通过 `navigation` 协同导航；Config 通过 `config.invoke()` 调用当前 Plugin 的配置动作。三个插槽都只获得所需 gateway、`ui.components`、Toast 和 Confirm，不会获得 Desktop controller。Renderer 属于受信任本地 UI 代码；只安装可信来源。
 
 Sidebar 与 Mainview 还会获得当前 Plugin 的只读 `notifications` 数组。每项包含 Plugin 本地 `topic_key`、文案、route 和产生时间，可用于在对应导航对象旁显示未读状态。Renderer 通过导航到通知的完整 route 触发宿主已读收口，但没有发布或修改通知的权限。
 
 需要树状 Sidebar 时使用 `SidebarTreeItem`：`depth` 表达层级，`kind` 区分 `branch` 与 `leaf`，父节点通过 `expanded` 与 `on_toggle` 管理展开，`on_select` 通过共享 `navigation` 更新 Mainview。省略 `leading` 时宿主会为分支和叶子节点提供统一默认图标；没有子项的分支可以省略 `on_toggle`，此时不会显示折叠按钮。历史记录等多级导航也应继续放在 Plugin Sidebar 的树中，不占用 Mainview。行级操作使用 `ItemMenu`，Markdown 正文使用宿主安全的 `Markdown`。写操作完成后调用 `ui.invalidate()`，宿主会增加同一 Plugin 的 `ui.revision`，使 Sidebar 与 Mainview 重新读取快照；Plugin 不需要复制宿主样式或把刷新状态写入 route。
 
-## Profile 交互
+## Config 交互
 
 ```text
 进入 Plugins Catalog 并选择 Plugin
-→ 为声明 Config 的 Plugin 创建或选择 Profile
-→ 在 Config 中配置
-→ Agent 启用 Plugin；有 Config 时选择 Profile
+→ 在 Config 中编辑 Plugin 的唯一配置
+→ 保存后由 Plugin 刷新受影响的长期资源
 ```
 
-Profile 只是声明 Config 的 Plugin 所使用的宿主配置空间，与 Sidebar/Mainview 无关。宿主统一负责创建、选择、删除和持久化，不解释字段，也不根据 JSON Schema 生成表单。内容结构、校验、默认值和 Secret 行为都属于 Plugin。没有 Config 的 Plugin 不需要 Profile。
+每个 Plugin ID 只有一份 Config，与 Sidebar/Mainview 无关。宿主只负责持久化，不解释字段，也不根据 JSON Schema 生成表单。内容结构、校验、默认值、Secret 行为和保存后的资源刷新都属于 Plugin。
 
-配置保存在 `~/.downcity/plugins/<plugin_id>/config.toml`，目录权限为 `0700`，文件权限为 `0600`。当前存储使用 TOML，因此配置必须是 TOML 可表达的 JSON object。Agent 的 `agent.json` 只保存 Profile 引用；多个 Agent 可以显式复用同一 Profile。
+配置保存在 `~/.downcity/plugins/<plugin_id>/config.toml`，目录权限为 `0700`，文件权限为 `0600`。当前存储使用 TOML，因此配置必须是 TOML 可表达的 JSON object。Agent 的 `agent.json` 不保存 Plugin 引用；City 自动把全部 Plugin 和同一份配置提供给所有 Agent。
 
 ## 安装
 
 ```bash
 city plugin install ./github-plugin
-# 在 Desktop Plugins Catalog 的 GitHub 详情中创建并配置 production
-city plugin enable github my-agent --profile production
+# 在 Desktop Plugins Catalog 的 GitHub 详情中配置
+city plugin config github --set '{"api_url":"https://api.github.com"}'
 city plugin update github
 city plugin uninstall github
 ```

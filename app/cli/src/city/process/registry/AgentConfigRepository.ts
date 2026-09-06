@@ -79,7 +79,6 @@ export function update_agent_config(input: UpdateAgentConfigInput): AgentConfig 
 /** 保存完整 Agent 配置。 */
 export function save_agent_config(input: AgentConfig): AgentConfig {
   return with_cli_local_data((data) => {
-    const previous = data.agents.get(input.agent_id);
     const saved = to_agent_config(data.agents.save({
       agent_id: input.agent_id,
       name: input.name,
@@ -88,8 +87,7 @@ export function save_agent_config(input: AgentConfig): AgentConfig {
       ...(input.execution ? { execution: input.execution as unknown as JsonObject } : {}),
       ...(input.llm ? { llm: input.llm as unknown as JsonObject } : {}),
       instruction: input.instruction,
-      plugins: previous?.plugins ?? {},
-      created_at: previous?.created_at ?? input.created_at,
+      created_at: data.agents.get(input.agent_id)?.created_at ?? input.created_at,
       updated_at: input.updated_at,
     }));
     return saved;
