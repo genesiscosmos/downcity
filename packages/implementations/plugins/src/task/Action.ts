@@ -47,6 +47,8 @@ import type {
   TaskSetStatusResponse,
 } from "./types/TaskCommand.js";
 import type { TaskExecutionCoordinator } from "./runtime/TaskExecutionCoordinator.js";
+import type { TaskDefinitionRepository } from "./runtime/TaskDefinitionRepository.js";
+import type { TaskCompletionDeliveryPort } from "./types/TaskRunner.js";
 
 function resolveTaskStatus(input: PluginJsonValue | undefined, fallback: ShipTaskStatus): ShipTaskStatus {
   const normalized = normalizeTaskStatus(input);
@@ -177,7 +179,7 @@ export async function read_task_run(params: {
 }
 
 export async function createTaskDefinition(params: {
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   /** 新 Task 唯一绑定的执行 Agent。 */
   agent_id: string;
   request: TaskCreateRequest;
@@ -217,52 +219,54 @@ export async function createTaskDefinition(params: {
       : kind === "script"
         ? ""
         : buildDefaultTaskBody();
-  // 关键点（中文）：`title` 是唯一键，create 去重只按 title 精确匹配。
-  const existingTasks = await listTasks(params.storage);
-  const duplicated = existingTasks.find((item) => String(item.title || "").trim() === title);
-  if (duplicated && duplicated.agent_id !== agent_id) {
-    return {
-      success: false,
-      error: `Task title already belongs to another Agent: ${duplicated.agent_id}`,
-    };
-  }
-  if (duplicated && !req.overwrite) {
-    return {
-      success: true,
-      title: duplicated.title,
-      taskMdPath: duplicated.taskMdPath,
-      reusedExisting: true,
-      message: "Task title already exists; reused existing task.",
-    };
-  }
-  const targetTaskId = duplicated ? duplicated.taskId : taskId;
-
   try {
-    const written = await writeTask({
-      taskId: targetTaskId,
-      storage: params.storage,
-      overwrite: Boolean(req.overwrite) || Boolean(duplicated),
-      frontmatter: {
+    return await params.definitions.mutate(async (storage) => {
+      // 关键点（中文）：title 去重判断与最终写入属于同一个定义事务。
+      const existing_tasks = await listTasks(storage);
+      const duplicated = existing_tasks.find(
+        (item) => String(item.title || "").trim() === title,
+      );
+      if (duplicated && duplicated.agent_id !== agent_id) {
+        return {
+          success: false,
+          error: `Task title already belongs to another Agent: ${duplicated.agent_id}`,
+        };
+      }
+      if (duplicated && !req.overwrite) {
+        return {
+          success: true,
+          title: duplicated.title,
+          taskMdPath: duplicated.taskMdPath,
+          reusedExisting: true,
+          message: "Task title already exists; reused existing task.",
+        };
+      }
+      const target_task_id = duplicated ? duplicated.taskId : taskId;
+      const written = await writeTask({
+        taskId: target_task_id,
+        storage,
+        overwrite: Boolean(req.overwrite) || Boolean(duplicated),
+        frontmatter: {
+          title,
+          description,
+          when: whenNormalized.value,
+          agent_id,
+          workspace_id,
+          ...(params.delivery_session
+            ? { delivery_session: params.delivery_session }
+            : {}),
+          kind,
+          ...(kind === "agent" && req.review === true ? { review: true } : {}),
+          status,
+        },
+        body,
+      });
+      return {
+        success: true,
         title,
-        description,
-        when: whenNormalized.value,
-        agent_id,
-        workspace_id,
-        ...(params.delivery_session
-          ? { delivery_session: params.delivery_session }
-          : {}),
-        kind,
-        ...(kind === "agent" && req.review === true ? { review: true } : {}),
-        status,
-      },
-      body,
+        taskMdPath: written.taskMdPath,
+      };
     });
-
-    return {
-      success: true,
-      title,
-      taskMdPath: written.taskMdPath,
-    };
   } catch (error) {
     return {
       success: false,
@@ -272,17 +276,13 @@ export async function createTaskDefinition(params: {
 }
 
 export async function updateTaskDefinition(params: {
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   request: TaskUpdateRequest;
+  /** 仅允许修改该执行 Agent 当前持有的 Task；宿主管理入口省略。 */
+  expected_agent_id?: string;
 }): Promise<TaskUpdateResponse> {
   const req = params.request;
   const title = String(req.title || "").trim();
-  let taskId = "";
-  try {
-    taskId = await resolveTaskIdByTitle({ storage: params.storage, title });
-  } catch (error) {
-    return { success: false, error: String(error) };
-  }
 
   // 关键点（中文）：API 层也做一次互斥校验，避免非 CLI 调用写入歧义状态。
   if (req.body !== undefined && req.clearBody) {
@@ -293,98 +293,104 @@ export async function updateTaskDefinition(params: {
   }
 
   try {
-    const current = await readTask({
-      storage: params.storage,
-      taskId,
-    });
+    return await params.definitions.mutate(async (storage) => {
+      const task_id = await resolveTaskIdByTitle({ storage, title });
+      const current = await readTask({ storage, taskId: task_id });
+      if (
+        params.expected_agent_id
+        && current.frontmatter.agent_id !== params.expected_agent_id
+      ) {
+        throw new Error(`Task belongs to another Agent: ${current.frontmatter.agent_id}`);
+      }
 
-    const nextTitle =
-      typeof req.titleNext === "string"
-        ? req.titleNext.trim()
-        : current.frontmatter.title;
-    if (!nextTitle) return { success: false, error: "title cannot be empty" };
-    const nextTaskId = normalizeTaskId(deriveTaskIdFromTitle(nextTitle));
-    if (nextTaskId !== taskId) {
+      const nextTitle =
+        typeof req.titleNext === "string"
+          ? req.titleNext.trim()
+          : current.frontmatter.title;
+      if (!nextTitle) return { success: false, error: "title cannot be empty" };
+      const nextTaskId = normalizeTaskId(deriveTaskIdFromTitle(nextTitle));
+      if (nextTaskId !== task_id) {
+        return {
+          success: false,
+          error: `title cannot change task identity. Expected "${task_id}", got "${nextTaskId}".`,
+        };
+      }
+
+      const description =
+        typeof req.description === "string"
+          ? req.description.trim()
+          : current.frontmatter.description;
+      if (!description) return { success: false, error: "description cannot be empty" };
+
+      const whenInput = req.clearWhen
+        ? "@manual"
+        : typeof req.when === "string"
+          ? req.when.trim()
+          : current.frontmatter.when;
+      const whenNormalized = normalizeTaskWhen(whenInput);
+      if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
+
+      const workspace_id = typeof req.workspace_id === "string"
+        ? req.workspace_id.trim()
+        : current.frontmatter.workspace_id;
+      if (!workspace_id) return { success: false, error: "workspace_id cannot be empty" };
+      const agent_id = typeof req.agent_id === "string"
+        ? req.agent_id.trim()
+        : current.frontmatter.agent_id;
+      if (!agent_id) return { success: false, error: "agent_id cannot be empty" };
+      const kind = normalizeTaskKind(
+        req.kind === undefined ? current.frontmatter.kind : req.kind,
+      );
+      const review =
+        kind === "agent"
+          ? req.review === undefined
+            ? Boolean(current.frontmatter.review)
+            : req.review === true
+          : false;
+
+      const status =
+        req.status === undefined
+          ? current.frontmatter.status
+          : normalizeTaskStatus(req.status);
+      if (!status) {
+        return {
+          success: false,
+          error: `Invalid status: ${String(req.status)}`,
+        };
+      }
+
+      const body = req.clearBody
+        ? ""
+        : typeof req.body === "string"
+          ? req.body.trim()
+          : current.body;
+
+      const written = await writeTask({
+        storage,
+        taskId: task_id,
+        overwrite: true,
+        frontmatter: {
+          title: nextTitle,
+          description,
+          when: whenNormalized.value,
+          agent_id,
+          workspace_id,
+          ...(current.frontmatter.delivery_session
+            ? { delivery_session: current.frontmatter.delivery_session }
+            : {}),
+          kind,
+          ...(kind === "agent" && review ? { review: true } : {}),
+          status,
+        },
+        body,
+      });
+
       return {
-        success: false,
-        error: `title cannot change task identity. Expected "${taskId}", got "${nextTaskId}".`,
-      };
-    }
-
-    const description =
-      typeof req.description === "string"
-        ? req.description.trim()
-        : current.frontmatter.description;
-    if (!description) return { success: false, error: "description cannot be empty" };
-
-    const whenInput = req.clearWhen
-      ? "@manual"
-      : typeof req.when === "string"
-        ? req.when.trim()
-        : current.frontmatter.when;
-    const whenNormalized = normalizeTaskWhen(whenInput);
-    if (!whenNormalized.ok) return { success: false, error: whenNormalized.error };
-
-    const workspace_id = typeof req.workspace_id === "string"
-      ? req.workspace_id.trim()
-      : current.frontmatter.workspace_id;
-    if (!workspace_id) return { success: false, error: "workspace_id cannot be empty" };
-    const agent_id = typeof req.agent_id === "string"
-      ? req.agent_id.trim()
-      : current.frontmatter.agent_id;
-    if (!agent_id) return { success: false, error: "agent_id cannot be empty" };
-    const kind = normalizeTaskKind(
-      req.kind === undefined ? current.frontmatter.kind : req.kind,
-    );
-    const review =
-      kind === "agent"
-        ? req.review === undefined
-          ? Boolean(current.frontmatter.review)
-          : req.review === true
-        : false;
-
-    const status =
-      req.status === undefined
-        ? current.frontmatter.status
-        : normalizeTaskStatus(req.status);
-    if (!status) {
-      return {
-        success: false,
-        error: `Invalid status: ${String(req.status)}`,
-      };
-    }
-
-    const body = req.clearBody
-      ? ""
-      : typeof req.body === "string"
-        ? req.body.trim()
-        : current.body;
-
-    const written = await writeTask({
-      storage: params.storage,
-      taskId,
-      overwrite: true,
-      frontmatter: {
+        success: true,
         title: nextTitle,
-        description,
-        when: whenNormalized.value,
-        agent_id,
-        workspace_id,
-        ...(current.frontmatter.delivery_session
-          ? { delivery_session: current.frontmatter.delivery_session }
-          : {}),
-        kind,
-        ...(kind === "agent" && review ? { review: true } : {}),
-        status,
-      },
-      body,
+        taskMdPath: written.taskMdPath,
+      };
     });
-
-    return {
-      success: true,
-      title: nextTitle,
-      taskMdPath: written.taskMdPath,
-    };
   } catch (error) {
     return {
       success: false,
@@ -395,16 +401,17 @@ export async function updateTaskDefinition(params: {
 
 export async function runTaskDefinition(params: {
   context: PluginContext;
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   request: TaskRunRequest;
   executions: TaskExecutionCoordinator;
   notifications?: import("@downcity/city/plugin").PluginNotificationPublisher;
   execution_context?: PluginExecutionContext;
+  delivery: TaskCompletionDeliveryPort;
 }): Promise<TaskRunResponse> {
   const title = String(params.request.title || "").trim();
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitle({ storage: params.storage, title });
+    taskId = await resolveTaskIdByTitle({ storage: params.definitions.storage, title });
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -415,71 +422,61 @@ export async function runTaskDefinition(params: {
 
   try {
     // 关键点（中文）：run 改为“异步受理”，先做存在性校验，再后台执行。
-    const task = await readTask({
-      taskId,
-      storage: params.storage,
-    });
-    if (task.frontmatter.agent_id !== params.context.agent.id) {
-      throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${params.context.agent.id}`);
-    }
-    if (task.frontmatter.workspace_id !== params.context.workspace.id) {
-      throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${params.context.workspace.id}`);
-    }
-
-    params.context.logger.info(
-      formatTaskLogMessage("Task run accepted"),
-      {
-        taskId,
-        via: trigger.type,
-        ...(reason ? { reason } : {}),
-      },
-    );
-
     const executionId = `${taskId}:${Date.now()}`;
-    const accepted = params.executions.start(taskId, async () => {
-      await runTaskNow({
-        context: params.context,
-        storage: params.storage,
-        taskId,
-        trigger,
-        executionId,
-        notifications: params.notifications,
-        ...(params.execution_context?.workspace_env
-          ? { workspace_env: { ...params.execution_context.workspace_env } }
-          : {}),
-        ...(params.execution_context?.agent_systems
-          ? { agent_systems: [...params.execution_context.agent_systems] }
-          : {}),
-      })
-      .then((result) => {
-        params.context.logger.info(
-          formatTaskLogMessage("Task run finished"),
-          {
-            taskId,
-            via: trigger.type,
-            status: result.status,
-            executionStatus: result.executionStatus,
-            resultStatus: result.resultStatus,
-            ...(result.resultErrors.length > 0
-              ? { resultErrors: result.resultErrors }
-              : {}),
-            dialogueRounds: result.dialogueRounds,
-            userSimulatorSatisfied: result.userSimulatorSatisfied,
-            executionId: result.executionId,
-            timestamp: result.timestamp,
-            runDir: result.runDirRel,
-          },
-        );
-      })
-      .catch((error) => {
-        params.context.logger.error(
-          formatTaskLogMessage("Task run failed"),
-          {
-            taskId,
-            via: trigger.type,
-            error: String(error),
-          },
-        );
+    const accepted = await params.definitions.mutate(async (storage) => {
+      const task = await readTask({ taskId, storage });
+      if (task.frontmatter.agent_id !== params.context.agent.id) {
+        throw new Error(`Task Agent mismatch: expected ${task.frontmatter.agent_id}, got ${params.context.agent.id}`);
+      }
+      if (task.frontmatter.workspace_id !== params.context.workspace.id) {
+        throw new Error(`Task Workspace mismatch: expected ${task.frontmatter.workspace_id}, got ${params.context.workspace.id}`);
+      }
+      return params.executions.start(taskId, async () => {
+        await runTaskNow({
+          context: params.context,
+          storage,
+          taskId,
+          trigger,
+          executionId,
+          notifications: params.notifications,
+          delivery: params.delivery,
+          ...(params.execution_context?.workspace_env
+            ? { workspace_env: { ...params.execution_context.workspace_env } }
+            : {}),
+          ...(params.execution_context?.agent_systems
+            ? { agent_systems: [...params.execution_context.agent_systems] }
+            : {}),
+        })
+        .then((result) => {
+          params.context.logger.info(
+            formatTaskLogMessage("Task run finished"),
+            {
+              taskId,
+              via: trigger.type,
+              status: result.status,
+              executionStatus: result.executionStatus,
+              resultStatus: result.resultStatus,
+              ...(result.resultErrors.length > 0
+                ? { resultErrors: result.resultErrors }
+                : {}),
+              dialogueRounds: result.dialogueRounds,
+              userSimulatorSatisfied: result.userSimulatorSatisfied,
+              executionId: result.executionId,
+              timestamp: result.timestamp,
+              runDir: result.runDirRel,
+            },
+          );
+        })
+        .catch((error) => {
+          params.context.logger.error(
+            formatTaskLogMessage("Task run failed"),
+            {
+              taskId,
+              via: trigger.type,
+              error: String(error),
+            },
+          );
+        });
       });
     });
 
@@ -491,6 +488,15 @@ export async function runTaskDefinition(params: {
         title,
       };
     }
+
+    params.context.logger.info(
+      formatTaskLogMessage("Task run accepted"),
+      {
+        taskId,
+        via: trigger.type,
+        ...(reason ? { reason } : {}),
+      },
+    );
 
     return {
       success: true,
@@ -509,16 +515,12 @@ export async function runTaskDefinition(params: {
 }
 
 export async function setTaskStatus(params: {
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   request: TaskSetStatusRequest;
+  /** 仅允许修改该执行 Agent 当前持有的 Task；宿主管理入口省略。 */
+  expected_agent_id?: string;
 }): Promise<TaskSetStatusResponse> {
   const title = String(params.request.title || "").trim();
-  let taskId = "";
-  try {
-    taskId = await resolveTaskIdByTitle({ storage: params.storage, title });
-  } catch (error) {
-    return { success: false, error: String(error) };
-  }
   const status = normalizeTaskStatus(params.request.status);
 
   if (!status) {
@@ -529,27 +531,33 @@ export async function setTaskStatus(params: {
   }
 
   try {
-    const task = await readTask({
-      storage: params.storage,
-      taskId,
-    });
+    return await params.definitions.mutate(async (storage) => {
+      const task_id = await resolveTaskIdByTitle({ storage, title });
+      const task = await readTask({ storage, taskId: task_id });
+      if (
+        params.expected_agent_id
+        && task.frontmatter.agent_id !== params.expected_agent_id
+      ) {
+        throw new Error(`Task belongs to another Agent: ${task.frontmatter.agent_id}`);
+      }
 
-    await writeTask({
-      storage: params.storage,
-      taskId,
-      overwrite: true,
-      frontmatter: {
-        ...task.frontmatter,
+      await writeTask({
+        storage,
+        taskId: task_id,
+        overwrite: true,
+        frontmatter: {
+          ...task.frontmatter,
+          status,
+        },
+        body: task.body,
+      });
+
+      return {
+        success: true,
+        title: task.frontmatter.title,
         status,
-      },
-      body: task.body,
+      };
     });
-
-    return {
-      success: true,
-      title: task.frontmatter.title,
-      status,
-    };
   } catch (error) {
     return {
       success: false,
@@ -559,27 +567,36 @@ export async function setTaskStatus(params: {
 }
 
 export async function deleteTaskDefinition(params: {
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   request: TaskDeleteRequest;
+  /** 仅允许删除该执行 Agent 当前持有的 Task；宿主管理入口省略。 */
+  expected_agent_id?: string;
 }): Promise<TaskDeleteResponse> {
   const title = String(params.request.title || "").trim();
-  let taskId = "";
-  try {
-    taskId = await resolveTaskIdByTitle({ storage: params.storage, title });
-  } catch (error) {
-    return { success: false, error: String(error) };
-  }
 
   try {
-    const deleted = await deleteTask({
-      storage: params.storage,
-      taskId,
+    return await params.definitions.mutate(async (storage) => {
+      const task_id = await resolveTaskIdByTitle({ storage, title });
+      const task = await readTask({ storage, taskId: task_id });
+      if (
+        params.expected_agent_id
+        && task.frontmatter.agent_id !== params.expected_agent_id
+      ) {
+        throw new Error(`Task belongs to another Agent: ${task.frontmatter.agent_id}`);
+      }
+      if (params.definitions.is_running(task_id)) {
+        throw new Error(`Task is running and cannot be deleted: ${title}`);
+      }
+      const deleted = await deleteTask({
+        storage,
+        taskId: task_id,
+      });
+      return {
+        success: true,
+        title,
+        taskDirPath: deleted.taskDirPath,
+      };
     });
-    return {
-      success: true,
-      title,
-      taskDirPath: deleted.taskDirPath,
-    };
   } catch (error) {
     return {
       success: false,

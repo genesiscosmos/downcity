@@ -20,6 +20,7 @@ import {
 } from "@/task/runtime/TaskActionExecution.js";
 import { TASK_PLUGIN_PROMPT } from "@/task/runtime/TaskPluginSystem.js";
 import { TaskExecutionCoordinator } from "@/task/runtime/TaskExecutionCoordinator.js";
+import { TaskDefinitionRepository } from "@/task/runtime/TaskDefinitionRepository.js";
 import { TaskSchedulerCoordinator, resolve_task_timezone } from "@/task/Scheduler.js";
 import { register_task_plugin_host_actions } from "@/task/host/TaskPluginHostActions.js";
 
@@ -46,6 +47,9 @@ export class TaskPlugin extends Plugin {
   /** 手动触发与 scheduler 共享的实例级执行协调器。 */
   private readonly executions = new TaskExecutionCoordinator();
 
+  /** initialize 后由 Agent action、宿主 action 与 Scheduler 共享的定义事务入口。 */
+  private definitions?: TaskDefinitionRepository;
+
   /** Plugin initialize 后唯一的稳定生命周期上下文。 */
   private lifecycle_context?: PluginLifecycleContext;
 
@@ -59,7 +63,16 @@ export class TaskPlugin extends Plugin {
       ...createTaskPluginActions({
         resolve_notifications: () => this.require_lifecycle_context().notifications,
         resolve_storage: () => this.require_storage(),
+        resolve_definitions: () => this.require_definitions(),
         executions: this.executions,
+        resolve_delivery: () => ({
+          deliver: async ({ delivery_session, text }) => {
+            await this.require_lifecycle_context().system.append_agent_session_assistant_message({
+              ...delivery_session,
+              text,
+            });
+          },
+        }),
         reloadSchedulerAfterMutation: async (params) =>
           await this.reload_scheduler_after_mutation(params),
       }),
@@ -81,13 +94,17 @@ export class TaskPlugin extends Plugin {
   /** 注册宿主管理 actions，并从统一 Store 恢复 schedule。 */
   async initialize(context: PluginLifecycleContext): Promise<void> {
     this.lifecycle_context = context;
+    const definitions = new TaskDefinitionRepository(context.storage, this.executions);
+    this.definitions = definitions;
     const scheduler = new TaskSchedulerCoordinator(
       context,
       resolve_task_timezone(this.options.timezone),
+      definitions,
     );
     this.scheduler = scheduler;
     register_task_plugin_host_actions(context, {
       storage: context.storage,
+      definitions,
       reconcile: async (task_id) => await this.reconcile(task_id),
     });
     await scheduler.initialize();
@@ -99,6 +116,7 @@ export class TaskPlugin extends Plugin {
     this.scheduler = undefined;
     if (scheduler) await scheduler.dispose();
     await this.executions.settle();
+    this.definitions = undefined;
     this.lifecycle_context = undefined;
   }
 
@@ -141,6 +159,13 @@ export class TaskPlugin extends Plugin {
   /** 返回 initialize 后可用的 TaskPlugin 生命周期存储。 */
   private require_storage(): PluginStorage {
     return this.require_lifecycle_context().storage;
+  }
+
+  /** 返回 initialize 后可用的唯一 Task 定义事务入口。 */
+  private require_definitions(): TaskDefinitionRepository {
+    const definitions = this.definitions;
+    if (!definitions) throw new Error("TaskPlugin definitions are not initialized");
+    return definitions;
   }
 
   /** 返回 initialize 后可用的稳定生命周期上下文。 */

@@ -650,6 +650,17 @@ export class CityPluginRuntime {
             ...(input.input !== undefined ? { payload: input.input } : {}),
           }) as unknown as PluginJsonValue;
         },
+        append_agent_session_assistant_message: async (input) => {
+          const entry = await this.options.runtime_access.enter_workspace(
+            input.agent_id,
+            input.workspace_id,
+          );
+          await entry.sessions.get(input.session_id, input.origin_type);
+          await entry.sessions.runtime(
+            input.session_id,
+            input.origin_type,
+          ).append_assistant_message({ text: input.text });
+        },
         open_external: async ({ url }) => {
           if (!this.options.host?.open_external) throw new Error("City does not provide open_external");
           await this.options.host.open_external(url);

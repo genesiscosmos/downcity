@@ -8,6 +8,7 @@
 
 import type { PluginStorage } from "@downcity/city/plugin";
 import type { ShipTaskStatus, TaskDeliverySession } from "@/task/types/Task.js";
+import type { TaskDefinitionRepository } from "@/task/runtime/TaskDefinitionRepository.js";
 
 /**
  * `task.list` action 的输入载荷。
@@ -102,6 +103,8 @@ export interface ScheduledTaskActionResult {
 export interface TaskPluginHostRuntime {
   /** TaskPlugin 生命周期级统一存储。 */
   readonly storage: PluginStorage;
+  /** TaskPlugin 唯一的定义事务入口。 */
+  readonly definitions: TaskDefinitionRepository;
   /** 在 Task 定义提交后更新其 scheduler 注册。 */
   readonly reconcile: (task_id: string) => Promise<TaskSchedulerReloadResult>;
 }

@@ -11,6 +11,7 @@
 import type { PluginContext, PluginNotificationPublisher, PluginStorage } from "@downcity/city/plugin";
 import type {
   DialogueRoundRecord,
+  TaskCompletionDeliveryPort,
   UserSimulatorDecision,
 } from "@/task/types/TaskRunner.js";
 import type {
@@ -81,6 +82,8 @@ export async function runTaskNow(params: {
   executionId?: string;
   /** Task 完成后使用的可选宿主通知端口。 */
   notifications?: PluginNotificationPublisher;
+  /** Task 完成结果的 City 级跨 Agent Session 交付端口。 */
+  delivery: TaskCompletionDeliveryPort;
   /** 发起该任务的 Session step 已提交生效的 env 快照。 */
   workspace_env?: Readonly<Record<string, string>>;
   /** 发起该任务的 Session step 已提交生效的 instruction 快照。 */
@@ -492,6 +495,7 @@ export async function runTaskNow(params: {
   });
   await dispatchTaskRunCompletionToSession({
     context,
+    delivery: params.delivery,
     task,
     executionId,
     outputText,

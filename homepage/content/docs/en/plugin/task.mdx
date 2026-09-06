@@ -18,7 +18,7 @@ The Task plugin lets your Agent schedule and run background jobs. It is useful f
 
 Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Plugin Sidebar uses a `Task → runs` tree: clicking a Task opens its definition, while expanding it loads run history. The Mainview shows the Task definition, final output, status, trigger, duration, validation, and failure details.
 
-Desktop can create, edit, enable, pause, run, and delete Tasks directly. Tasks are not grouped by Agent or Workspace: each Task stores one rebindable `agent_id` and one `workspace_id` as execution targets, and the UI only shows their display names. A Task remains visible, editable, and removable when either target disappears. Definitions, scheduler state, and run artifacts are read from TaskPlugin's unified City lifecycle storage instead of an Agent-specific copy.
+Desktop can create, edit, enable, pause, run, and delete Tasks directly. Tasks are not grouped by Agent or Workspace: each Task stores one rebindable `agent_id` and one `workspace_id` as execution targets, and the UI only shows their display names. A Task remains visible, editable, and removable when either target disappears. Deletion is rejected while the Task is running so its run artifacts cannot be removed concurrently. Definitions, scheduler state, and run artifacts are read from TaskPlugin's unified City lifecycle storage instead of an Agent-specific copy.
 
 After a successful or failed Task persists its execution record, it publishes an unread item through the shared Notification module; skipped executions do not notify. Only the latest unread Run is retained for the same Task. Desktop shows a blue dot on the Task top-level icon, Task item, and matching Run, updates the system app badge, and marks the item read when that Run is opened.
 
@@ -37,7 +37,7 @@ Each Task is defined once in TaskPlugin lifecycle storage. TaskPlugin restores e
 - Background file processing
 - Scheduled notifications
 
-Each run creates an independent task Session while reusing the host Agent's capabilities. When `create` is called from an Agent Session, the runtime captures the current `session_id` and `origin.type` and appends the completed result back to that Session; the model does not provide Session routing. Tasks created from CLI, HTTP, or host management surfaces without a Session context keep their results in Task run history. If the task Agent needs to send a chat message, it calls the Chat plugin from the task Session.
+Each run creates an independent task Session while reusing the execution Agent's capabilities. When `create` is called from an Agent Session, the runtime fixes the current Agent, Workspace, `session_id`, and `origin.type` as the delivery target. Rebinding the execution Agent or Workspace later changes only the execution target; City still appends the completed result to the original Session. The task Session inherits the source model only while execution and delivery still use the same Agent and Workspace. The model does not provide Session routing. Tasks created from CLI, HTTP, or host management surfaces without a Session context keep their results in Task run history. If the task Agent needs to send a chat message, it calls the Chat plugin from the task Session.
 
 Continue with:
 

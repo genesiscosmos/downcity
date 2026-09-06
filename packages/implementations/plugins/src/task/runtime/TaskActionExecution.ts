@@ -39,6 +39,8 @@ import {
 import { deriveTaskIdFromTitle } from "@/task/runtime/Paths.js";
 import { readTask, resolveTaskIdByTitle } from "@/task/runtime/Store.js";
 import type { TaskExecutionCoordinator } from "@/task/runtime/TaskExecutionCoordinator.js";
+import type { TaskDefinitionRepository } from "@/task/runtime/TaskDefinitionRepository.js";
+import type { TaskCompletionDeliveryPort } from "@/task/types/TaskRunner.js";
 
 const TASK_LOG_PREFIX = "[TASK]";
 
@@ -179,14 +181,14 @@ export async function execute_task_run_detail_action(params: {
  */
 export async function executeTaskCreateAction(params: {
   context: PluginContext;
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   payload: TaskCreateRequest;
   execution: PluginActionExecutionContext;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
   const result = await createTaskDefinition({
-    storage: params.storage,
+    definitions: params.definitions,
     agent_id: params.context.agent.id,
     request: {
       ...payload,
@@ -195,6 +197,8 @@ export async function executeTaskCreateAction(params: {
     ...(params.execution.session
       ? {
           delivery_session: {
+            agent_id: params.context.agent.id,
+            workspace_id: params.context.workspace.id,
             session_id: params.execution.session.session_id,
             origin_type: params.execution.session.origin.type,
           },
@@ -227,19 +231,21 @@ export async function executeTaskCreateAction(params: {
  */
 export async function executeTaskRunAction(params: {
   context: PluginContext;
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   payload: TaskRunRequest;
   executions: TaskExecutionCoordinator;
   notifications?: PluginNotificationPublisher;
   execution_context?: PluginExecutionContext;
+  delivery: TaskCompletionDeliveryPort;
 }) {
   const result = await runTaskDefinition({
     context: params.context,
-    storage: params.storage,
+    definitions: params.definitions,
     request: params.payload,
     executions: params.executions,
     notifications: params.notifications,
     execution_context: params.execution_context,
+    delivery: params.delivery,
   });
   if (!result.success) {
     return {
@@ -258,16 +264,16 @@ export async function executeTaskRunAction(params: {
  */
 export async function executeTaskDeleteAction(params: {
   context: PluginContext;
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   payload: TaskDeleteRequest;
   notifications?: PluginNotificationPublisher;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
-  await assert_task_agent(params.storage, payload.title, params.context.agent.id);
   const result = await deleteTaskDefinition({
-    storage: params.storage,
+    definitions: params.definitions,
     request: payload,
+    expected_agent_id: params.context.agent.id,
   });
   if (!result.success) {
     return {
@@ -306,15 +312,15 @@ async function dismiss_task_notification(notifications: PluginNotificationPublis
  */
 export async function executeTaskUpdateAction(params: {
   context: PluginContext;
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   payload: TaskUpdateRequest;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
-  await assert_task_agent(params.storage, payload.title, params.context.agent.id);
   const result = await updateTaskDefinition({
-    storage: params.storage,
+    definitions: params.definitions,
     request: payload,
+    expected_agent_id: params.context.agent.id,
   });
   if (!result.success) {
     return {
@@ -342,15 +348,15 @@ export async function executeTaskUpdateAction(params: {
  */
 export async function executeTaskStatusAction(params: {
   context: PluginContext;
-  storage: PluginStorage;
+  definitions: TaskDefinitionRepository;
   payload: TaskSetStatusRequest;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
-  await assert_task_agent(params.storage, payload.title, params.context.agent.id);
   const result = await setTaskStatus({
-    storage: params.storage,
+    definitions: params.definitions,
     request: payload,
+    expected_agent_id: params.context.agent.id,
   });
   if (!result.success) {
     return {

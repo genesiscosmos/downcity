@@ -85,6 +85,19 @@ export interface PluginHostSystem {
     /** 传递给 action 的可选 JSON 输入。 */
     readonly input?: PluginJsonValue;
   }): Promise<PluginJsonValue>;
+  /** 向指定 Agent 持有的既有 Session 追加一条外部 Assistant 消息。 */
+  append_agent_session_assistant_message(input: {
+    /** 持有目标 Session 的 Agent 稳定 ID。 */
+    readonly agent_id: string;
+    /** 目标 Session 创建时绑定的 Workspace 稳定 ID。 */
+    readonly workspace_id: string;
+    /** 目标 Session 的稳定 ID。 */
+    readonly session_id: string;
+    /** 目标 Session 的来源分区。 */
+    readonly origin_type: string;
+    /** 要追加的纯文本消息。 */
+    readonly text: string;
+  }): Promise<void>;
   /** 使用系统默认应用打开 HTTP 或 HTTPS 地址。 */
   open_external(input: {
     /** 要打开的绝对 URL。 */

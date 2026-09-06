@@ -231,6 +231,8 @@ export async function writeTaskRunInputArtifact(
       ...(params.task.frontmatter.delivery_session
         ? [
             `- delivery_session_id: \`${params.task.frontmatter.delivery_session.session_id}\``,
+            `- delivery_agent_id: \`${params.task.frontmatter.delivery_session.agent_id}\``,
+            `- delivery_workspace_id: \`${params.task.frontmatter.delivery_session.workspace_id}\``,
             `- delivery_origin_type: \`${params.task.frontmatter.delivery_session.origin_type}\``,
           ]
         : []),

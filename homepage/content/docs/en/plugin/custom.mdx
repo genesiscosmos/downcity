@@ -133,6 +133,8 @@ from `PluginContext.config`.
 
 `notifications.publish()` and `notifications.dismiss()` are always bound to the current Plugin. The host namespaces `topic_key` and treats `route` as a route inside that Plugin workspace, so a Plugin cannot impersonate another Plugin or navigate to arbitrary Desktop pages. Only the latest unread notification for the same `topic_key` is retained.
 
+`PluginLifecycleContext.system` exposes only explicitly authorized City host capabilities. To append a background result to an existing Session, call `append_agent_session_assistant_message({ agent_id, workspace_id, session_id, origin_type, text })`. All four identity fields must come from an explicit persisted target; a Plugin must not scan for or guess a Session.
+
 For functional pages such as a Skill manager, `system.list_workspaces()` returns summaries of Workspaces registered by the host. A Plugin is trusted local Node.js code; it must validate action inputs and own its file, network, and long-lived resource behavior.
 
 ## Renderer entry

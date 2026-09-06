@@ -42,15 +42,17 @@ function normalize_task_delivery_session(
   if (typeof input !== "object" || Array.isArray(input)) {
     return { ok: false, error: "Invalid delivery_session: expected an object" };
   }
+  const agent_id = String(input.agent_id || "").trim();
+  const workspace_id = String(input.workspace_id || "").trim();
   const session_id = String(input.session_id || "").trim();
   const origin_type = String(input.origin_type || "").trim();
-  if (!session_id || !origin_type) {
+  if (!agent_id || !workspace_id || !session_id || !origin_type) {
     return {
       ok: false,
-      error: "Invalid delivery_session: session_id and origin_type are required",
+      error: "Invalid delivery_session: agent_id, workspace_id, session_id and origin_type are required",
     };
   }
-  return { ok: true, value: { session_id, origin_type } };
+  return { ok: true, value: { agent_id, workspace_id, session_id, origin_type } };
 }
 
 function normalizeTaskReview(input: TaskRawValue): boolean | null {

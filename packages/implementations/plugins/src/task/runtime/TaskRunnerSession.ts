@@ -61,7 +61,9 @@ export async function createTaskSessionRuntimePort(params: {
   delivery_session?: TaskDeliverySession;
 }): Promise<TaskSessionRuntimePort> {
   const { context, runDirAbs, runSessionId, userSimulatorSessionId } = params;
-  const inherit_model_from = params.delivery_session
+  // 交付 Session 可能属于另一个 Agent；只有同 Agent Session 才能继承模型配置。
+  const inherit_model_from = params.delivery_session?.agent_id === context.agent.id
+    && params.delivery_session.workspace_id === context.workspace.id
     ? {
         session_id: params.delivery_session.session_id,
         origin_type: params.delivery_session.origin_type,

@@ -121,7 +121,7 @@ async function create_task(
 ): Promise<TaskMainviewMutationResult> {
   await assert_execution_target(context, input.agent_id, input.workspace_id);
   const result = await createTaskDefinition({
-    storage: runtime.storage,
+    definitions: runtime.definitions,
     agent_id: input.agent_id,
     request: {
       title: input.title,
@@ -148,7 +148,7 @@ async function update_task(
   await assert_execution_target(context, input.agent_id, input.workspace_id);
   await read_existing_task(runtime.storage, input.current_title);
   const result = await updateTaskDefinition({
-    storage: runtime.storage,
+    definitions: runtime.definitions,
     request: {
       title: input.current_title,
       titleNext: input.title,
@@ -182,7 +182,7 @@ async function set_task_status(
     );
   }
   const result = await setTaskStatus({
-    storage: runtime.storage,
+    definitions: runtime.definitions,
     request: { title: input.task_title, status: input.status },
   });
   if (!result.success) throw new Error(result.error || `修改 ${input.task_title} 状态失败`);
@@ -221,7 +221,7 @@ async function delete_task(
 ): Promise<TaskMainviewMutationResult> {
   await read_existing_task(runtime.storage, input.task_title);
   const result = await deleteTaskDefinition({
-    storage: runtime.storage,
+    definitions: runtime.definitions,
     request: { title: input.task_title },
   });
   if (!result.success) throw new Error(result.error || `删除 ${input.task_title} 失败`);

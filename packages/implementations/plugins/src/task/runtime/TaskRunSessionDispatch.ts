@@ -7,6 +7,7 @@
 
 import type { PluginContext } from "@downcity/city/plugin";
 import type { ShipTaskDefinitionV1 } from "@/task/types/Task.js";
+import type { TaskCompletionDeliveryPort } from "@/task/types/TaskRunner.js";
 
 function resolve_task_final_text(params: {
   output_text: string;
@@ -28,6 +29,7 @@ function resolve_task_final_text(params: {
 /** 将 task 最终结果追加为关联 Session 的 assistant 消息。 */
 export async function dispatchTaskRunCompletionToSession(params: {
   context: PluginContext;
+  delivery: TaskCompletionDeliveryPort;
   task: ShipTaskDefinitionV1;
   executionId: string;
   outputText: string;
@@ -45,14 +47,7 @@ export async function dispatchTaskRunCompletionToSession(params: {
   if (!text) return;
 
   try {
-    await params.context.agent.sessions.get(
-      delivery_session.session_id,
-      delivery_session.origin_type,
-    );
-    await params.context.agent.sessions.runtime(
-      delivery_session.session_id,
-      delivery_session.origin_type,
-    ).append_assistant_message({ text });
+    await params.delivery.deliver({ delivery_session, text });
   } catch (error) {
     params.context.logger.warn("[TASK] Task completion Session append failed", {
       taskId: params.task.taskId,

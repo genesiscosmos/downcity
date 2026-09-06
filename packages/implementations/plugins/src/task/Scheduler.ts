@@ -14,7 +14,8 @@ import {
   resolveTaskWhenOneShotMs,
 } from "./runtime/Model.js";
 import { TaskCronTriggerEngine } from "./runtime/CronTrigger.js";
-import { listTasks, readTask, writeTask } from "./runtime/Store.js";
+import { listTasks, readTask } from "./runtime/Store.js";
+import type { TaskDefinitionRepository } from "./runtime/TaskDefinitionRepository.js";
 import type { ShipTaskDefinitionV1, ShipTaskRunTriggerV1 } from "./types/Task.js";
 import type {
   ScheduledTaskActionResult,
@@ -43,6 +44,8 @@ export class TaskSchedulerCoordinator {
     private readonly context: PluginLifecycleContext,
     /** cron 表达式使用的 IANA 时区。 */
     private readonly timezone: string,
+    /** TaskPlugin 唯一的定义事务入口。 */
+    private readonly definitions: TaskDefinitionRepository,
     /** 当前 Plugin 实例唯一的 timer engine；测试可以注入确定性实现。 */
     private readonly engine: TaskCronEngine = new TaskCronTriggerEngine(),
   ) {}
@@ -64,11 +67,11 @@ export class TaskSchedulerCoordinator {
     await this.enqueue(async () => {
       this.assert_active();
       for (const task_id of [...this.scheduled_task_ids]) this.unregister(task_id);
-      const tasks = await listTasks(this.context.storage);
+      const tasks = await listTasks(this.definitions.storage);
       for (const item of tasks) {
         const task = await readTask({
           taskId: item.taskId,
-          storage: this.context.storage,
+          storage: this.definitions.storage,
         });
         result.jobs_scheduled += this.register(task);
       }
@@ -89,7 +92,7 @@ export class TaskSchedulerCoordinator {
       try {
         const task = await readTask({
           taskId: task_id,
-          storage: this.context.storage,
+          storage: this.definitions.storage,
         });
         task_found = true;
         jobs_scheduled = this.register(task);
@@ -153,7 +156,7 @@ export class TaskSchedulerCoordinator {
   /** 在触发瞬间复查定义，并进入其声明的 Agent/Workspace 执行范围。 */
   private async execute(task_id: string, trigger: ShipTaskRunTriggerV1): Promise<void> {
     try {
-      const task = await readTask({ taskId: task_id, storage: this.context.storage });
+      const task = await readTask({ taskId: task_id, storage: this.definitions.storage });
       if (task.frontmatter.status !== "enabled") return;
       if (!trigger_matches(task, trigger)) return;
 
@@ -180,18 +183,11 @@ export class TaskSchedulerCoordinator {
 
       // 一次性任务只在执行真正被受理后停用；目标资源缺失时保留 enabled 以便后续重试。
       if (trigger.type === "time") {
-        await writeTask({
-          storage: this.context.storage,
-          taskId: task.taskId,
-          overwrite: true,
-          frontmatter: {
-            ...task.frontmatter,
-            when: "@manual",
-            status: "paused",
-          },
-          body: task.body,
+        const committed = await this.definitions.complete_one_shot({
+          task_id: task.taskId,
+          expected_when: task.frontmatter.when,
         });
-        if (!this.disposed) await this.reconcile(task.taskId);
+        if (committed && !this.disposed) await this.reconcile(task.taskId);
       }
     } catch (error) {
       this.context.logger.error(`${TASK_LOG_PREFIX} Scheduled task trigger failed`, {

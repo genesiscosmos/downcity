@@ -304,7 +304,14 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
             <Toolbar title={task.title} description={task.description} actions={<><Button disabled={busy} on_click={() => navigation.navigate(edit_task_route(task.title))}>编辑</Button><Button variant="primary" disabled={busy || !execution_target_available(snapshot, task)} on_click={() => void run_task(task)}>{busy ? "处理中…" : "立即运行"}</Button>{task_management_menu(task)}</>} />
             {error || history_error ? <Callout tone="danger">{error || history_error}</Callout> : null}
             {!execution_target_available(snapshot, task) ? <Callout tone="warning">执行目标已失效，请编辑 Task 并重新选择 Agent 或 Workspace。</Callout> : null}
-            <TaskDetails task={task} agent_label={agent_name(snapshot, task.agent_id)} workspace_label={workspace_name(snapshot, task.workspace_id)} components={{ CodeBlock, Group, Row, Status }} />
+            <TaskDetails
+              task={task}
+              agent_label={agent_name(snapshot, task.agent_id)}
+              workspace_label={workspace_name(snapshot, task.workspace_id)}
+              delivery_agent_label={task.delivery_session ? agent_name(snapshot, task.delivery_session.agent_id) : ""}
+              delivery_workspace_label={task.delivery_session ? workspace_name(snapshot, task.delivery_session.workspace_id) : ""}
+              components={{ CodeBlock, Group, Row, Status }}
+            />
           </Page>}
     </>;
   },
@@ -340,10 +347,12 @@ function TaskRunDetails({ run, loading, error, components }: {
 }
 
 /** 展示一个 Task 的只读定义详情。 */
-function TaskDetails({ task, agent_label, workspace_label, components }: {
+function TaskDetails({ task, agent_label, workspace_label, delivery_agent_label, delivery_workspace_label, components }: {
   /** 当前 Task。 */ readonly task: TaskMainviewItem;
   /** 当前 Task 执行 Agent 的用户可见名称。 */ readonly agent_label: string;
   /** 当前 Task 执行 Workspace 的用户可见名称。 */ readonly workspace_label: string;
+  /** 当前 Task 固定交付 Agent 的用户可见名称。 */ readonly delivery_agent_label: string;
+  /** 当前 Task 固定交付 Workspace 的用户可见名称。 */ readonly delivery_workspace_label: string;
   /** Task 详情使用的宿主组件。 */ readonly components: Pick<PluginRendererUiComponents, "CodeBlock" | "Group" | "Row" | "Status">;
 }) {
   const { CodeBlock, Group, Row, Status } = components;
@@ -358,7 +367,7 @@ function TaskDetails({ task, agent_label, workspace_label, components }: {
       {task.delivery_session
         ? <Row
             label="结果 Session"
-            trailing={`${task.delivery_session.origin_type}/${task.delivery_session.session_id}`}
+            trailing={`${delivery_agent_label} · ${delivery_workspace_label} · ${task.delivery_session.origin_type}/${task.delivery_session.session_id}`}
           />
         : null}
       {task.last_run_at ? <Row label="最近运行" trailing={task.last_run_at} /> : null}

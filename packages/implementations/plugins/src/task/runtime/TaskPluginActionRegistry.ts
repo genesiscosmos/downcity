@@ -42,6 +42,8 @@ import {
   mapTaskUpdateCommandPayload,
 } from "./TaskActionInput.js";
 import type { TaskExecutionCoordinator } from "./TaskExecutionCoordinator.js";
+import type { TaskDefinitionRepository } from "./TaskDefinitionRepository.js";
+import type { TaskCompletionDeliveryPort } from "@/task/types/TaskRunner.js";
 
 const TASK_STATUS_SCHEMA = z.enum(["enabled", "paused", "disabled"]);
 const TASK_KIND_SCHEMA = z.enum(["agent", "script"]);
@@ -108,8 +110,12 @@ export function createTaskPluginActions(params: {
   resolve_notifications: () => PluginNotificationPublisher;
   /** 读取 TaskPlugin 生命周期级统一存储。 */
   resolve_storage: () => PluginStorage;
+  /** 读取 TaskPlugin 唯一的定义事务入口。 */
+  resolve_definitions: () => TaskDefinitionRepository;
   /** TaskPlugin 实例级执行协调器。 */
   executions: TaskExecutionCoordinator;
+  /** 读取 City 提供的跨 Agent Session 交付端口。 */
+  resolve_delivery: () => TaskCompletionDeliveryPort;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }): PluginActions {
   return {
@@ -248,7 +254,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskCreateAction({
           context: actionParams.context,
-          storage: params.resolve_storage(),
+          definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskCreateRequest,
           execution: actionParams.execution,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
@@ -281,11 +287,12 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskRunAction({
           context: actionParams.context,
-          storage: params.resolve_storage(),
+          definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskRunRequest,
           executions: params.executions,
           notifications: params.resolve_notifications(),
           execution_context: actionParams.execution.snapshot,
+          delivery: params.resolve_delivery(),
         });
       },
     }),
@@ -312,7 +319,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskDeleteAction({
           context: actionParams.context,
-          storage: params.resolve_storage(),
+          definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskDeleteRequest,
           notifications: params.resolve_notifications(),
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
@@ -373,7 +380,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskUpdateAction({
           context: actionParams.context,
-          storage: params.resolve_storage(),
+          definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskUpdateRequest,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
@@ -405,7 +412,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskStatusAction({
           context: actionParams.context,
-          storage: params.resolve_storage(),
+          definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskSetStatusRequest,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
@@ -432,7 +439,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskStatusAction({
           context: actionParams.context,
-          storage: params.resolve_storage(),
+          definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskSetStatusRequest,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
@@ -459,7 +466,7 @@ export function createTaskPluginActions(params: {
       execute: async (actionParams) => {
         return executeTaskStatusAction({
           context: actionParams.context,
-          storage: params.resolve_storage(),
+          definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskSetStatusRequest,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });

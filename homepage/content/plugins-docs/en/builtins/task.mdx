@@ -29,7 +29,7 @@ Use `task` when you need:
 
 ## How users use it
 
-Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Sidebar uses a `Task → runs` tree: clicking a Task opens its definition, while expanding it loads runs. The Mainview can create, edit, enable, pause, run, and delete Tasks and display run details. Tasks are not grouped by Agent or Workspace. Task definitions and Runs share TaskPlugin's City lifecycle storage; `agent_id` and `workspace_id` are rebindable execution targets rather than storage partitions. A Task remains visible, editable, and removable when either target disappears.
+Task does not declare Config, so it needs no Profile. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Its Sidebar uses a `Task → runs` tree: clicking a Task opens its definition, while expanding it loads runs. The Mainview can create, edit, enable, pause, run, and delete Tasks and display run details. Tasks are not grouped by Agent or Workspace. Task definitions and Runs share TaskPlugin's City lifecycle storage; `agent_id` and `workspace_id` are rebindable execution targets rather than storage partitions. A Task remains visible, editable, and removable when either target disappears; deletion is rejected while it is running.
 
 A successful or failed Task Run publishes an unread notification after its artifacts are persisted; skipped runs do not notify. Notifications aggregate to the latest unread Run for the same Task. Desktop reflects that state on the Task icon, Task item, matching Run, and system app badge, and marks it read when the Run is opened.
 
@@ -44,7 +44,7 @@ Use the `task` Plugin when automation should remain named, editable, and manuall
 
 ## SDK Assembly
 
-Every Task binds one execution Workspace. When `create` is called from an Agent Session, the runtime automatically captures that Session's `session_id` and `origin.type` as the fixed delivery target; the model neither needs nor is allowed to provide Session routing in the action payload. Agent tasks prefer the delivery Session's model when configured and otherwise use the Agent model. An SDK registers the built-in Task module with City and binds an Agent:
+Every Task binds one execution Workspace. When `create` is called from an Agent Session, the runtime automatically captures the current Agent, Workspace, `session_id`, and `origin.type` as the fixed delivery target; the model neither needs nor is allowed to provide Session routing in the action payload. Rebinding an Agent or Workspace changes only the execution target, while City continues to deliver results to the original Session. An Agent Task inherits the delivery Session model only when execution and delivery still use the same Agent and Workspace; otherwise it uses the execution Agent model. An SDK registers the built-in Task module with City and binds an Agent:
 
 ```ts
 const registrations = create_builtin_plugin_registrations();
@@ -79,10 +79,12 @@ The action names are `list`, `history`, `run_detail`, `create`, `run`, `delete`,
 - agent tasks read the effective runtime model from the Session port in PluginContext
 - each run creates an independent task Session while reusing the host Agent's complete Plugin capabilities
 - `agent_id` and `workspace_id` are Task execution settings; the matching execution context is entered only when a trigger fires
-- Session-scoped `create` automatically stores the current `(origin.type, session_id)` and appends completed results to that Session
+- Session-scoped `create` automatically stores the current `(agent_id, workspace_id, origin.type, session_id)` and appends completed results to that Session
 - Tasks created from CLI, HTTP, or host management surfaces without a Session context have no delivery target, so results remain in run history
 - create, update, delete, and status commits reconcile the scheduler incrementally by `task_id`
+- all definition mutations commit serially per TaskPlugin instance; one-shot completion conditionally updates the latest definition
 - the running-task lock belongs to the plugin instance, so reloads still keep each task serial
+- a running Task cannot be deleted
 
 ## Public status
 

@@ -16,6 +16,12 @@ export interface TaskDeliverySession {
   /** 保证该值对象可以安全进入 Plugin JSON 协议。 */
   readonly [key: string]: PluginJsonValue;
 
+  /** 持有目标 Session 的 Agent 稳定标识。 */
+  readonly agent_id: string;
+
+  /** 目标 Session 创建时绑定的 Workspace 稳定标识。 */
+  readonly workspace_id: string;
+
   /** 目标 Agent Session 的稳定标识。 */
   readonly session_id: string;
 

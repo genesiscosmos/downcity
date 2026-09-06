@@ -14,7 +14,19 @@ import type {
   ShipTaskRunProgressStatusV1,
   ShipTaskRunResultStatusV1,
   ShipTaskRunStatusV1,
+  TaskDeliverySession,
 } from "@/task/types/Task.js";
+
+/** Task 完成后向固定 Session 交付正文的宿主端口。 */
+export interface TaskCompletionDeliveryPort {
+  /** 向明确的 Agent/Session 交付一条最终正文。 */
+  deliver(params: {
+    /** 固定的 Agent 与 Session 交付目标。 */
+    readonly delivery_session: TaskDeliverySession;
+    /** 要追加到目标 Session 的最终正文。 */
+    readonly text: string;
+  }): Promise<void>;
+}
 
 /**
  * run-progress.json 的当前快照状态。

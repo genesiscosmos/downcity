@@ -18,7 +18,7 @@ Task 插件让 Agent 能够调度和运行后台任务。它适用于定期数�
 
 Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。Plugin Sidebar 使用 `Task → 执行记录` 两级树；点击 Task 查看任务详情，展开 Task 时才读取执行记录。Mainview 用于查看任务定义、最终输出、执行状态、触发来源、耗时、结果校验和错误信息。
 
-Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Task 不按 Agent 或 Workspace 分组；每个 Task 显式保存一个 `agent_id` 和一个 `workspace_id` 作为可重新绑定的执行目标，界面只展示对应名称。目标失效后 Task 仍然可见、可编辑和可删除。定义、调度状态和 run 产物都从 TaskPlugin 统一的 City 生命周期存储读取，不再保存 Agent 级副本。
+Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Task 不按 Agent 或 Workspace 分组；每个 Task 显式保存一个 `agent_id` 和一个 `workspace_id` 作为可重新绑定的执行目标，界面只展示对应名称。目标失效后 Task 仍然可见、可编辑和可删除；Task 正在运行时会拒绝删除，避免同时移除其执行产物。定义、调度状态和 run 产物都从 TaskPlugin 统一的 City 生命周期存储读取，不再保存 Agent 级副本。
 
 Task 成功或失败并完成执行记录持久化后，会通过统一 Notification 模块产生未读通知；跳过的执行不会通知。同一 Task 只保留最新未读 Run。Desktop 会在 Task 一级图标、Task 条目和对应 Run 旁显示蓝点，并同步系统应用图标角标；打开该 Run 后自动标记为已读。
 
@@ -37,7 +37,7 @@ Task 成功或失败并完成执行记录持久化后，会通过统一 Notifica
 - 后台文件处理
 - 定时通知
 
-任务执行时会创建独立的 task Session，并复用宿主 Agent 的能力。从 Agent Session 调用 `create` 时，运行时会直接捕获当前 `session_id` 与 `origin.type`，Task 完成后把结果作为 assistant 消息追加回该 Session；模型无需也不能填写 Session 路由。通过 CLI、HTTP 或宿主管理界面等无 Session 上下文入口创建的 Task 不绑定交付目标，结果保留在执行历史。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Chat 插件。
+任务执行时会创建独立的 task Session，并复用执行 Agent 的能力。从 Agent Session 调用 `create` 时，运行时会同时固化当前 Agent、Workspace、`session_id` 与 `origin.type` 作为交付目标。此后重新绑定执行 Agent 或 Workspace 只会改变执行目标，完成结果仍由 City 追加回原始 Session；只有执行目标与交付目标仍属于同一 Agent/Workspace 时，task Session 才继承原 Session 的模型。模型无需也不能填写 Session 路由。通过 CLI、HTTP 或宿主管理界面等无 Session 上下文入口创建的 Task 不绑定交付目标，结果保留在执行历史。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Chat 插件。
 
 继续阅读：
 

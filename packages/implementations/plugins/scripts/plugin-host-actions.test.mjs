@@ -9,6 +9,8 @@ import { ChatPlugin } from "@downcity/plugins/chat";
 import { SkillPlugin } from "@downcity/plugins/skill";
 import { TaskPlugin } from "@downcity/plugins/task";
 import { createTaskDefinition } from "../bin/task/Action.js";
+import { TaskDefinitionRepository } from "../bin/task/runtime/TaskDefinitionRepository.js";
+import { TaskExecutionCoordinator } from "../bin/task/runtime/TaskExecutionCoordinator.js";
 import { LocalStorageProvider } from "@downcity/city";
 
 /** 启动 Chat Plugin 并返回按 ID 注册的配置 action。 */
@@ -32,6 +34,7 @@ async function start_chat_plugin() {
       async list_agents() { return []; },
       async list_workspaces() { return []; },
       async invoke_agent_plugin() { return {}; },
+      async append_agent_session_assistant_message() {},
       async open_external() {},
       async show_item_in_folder() {},
       async write_clipboard_text() {},
@@ -61,6 +64,7 @@ async function start_skill_plugin(workspace_path) {
         return [{ workspace_id: "test", name: "Test", workspace_path }];
       },
       async invoke_agent_plugin() { return {}; },
+      async append_agent_session_assistant_message() {},
       async open_external() {},
       async show_item_in_folder() {},
       async write_clipboard_text() {},
@@ -76,8 +80,12 @@ async function start_task_plugin(options = {}) {
   const data_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-task-host-actions-"));
   const task_scope = new LocalStorageProvider(data_path).open_scope(["plugins", "task"]);
   const storage = { path: task_scope.root_path, files: task_scope.files };
-  await createTaskDefinition({
+  const definitions_repository = new TaskDefinitionRepository(
     storage,
+    new TaskExecutionCoordinator(),
+  );
+  await createTaskDefinition({
+    definitions: definitions_repository,
     agent_id: "task-agent",
     request: {
       title: "daily-report",
@@ -90,6 +98,8 @@ async function start_task_plugin(options = {}) {
       workspace_id: "workspace-b",
     },
     delivery_session: {
+      agent_id: "task-agent",
+      workspace_id: "workspace-b",
       session_id: "daily-report",
       origin_type: "chat",
     },
@@ -150,6 +160,7 @@ async function start_task_plugin(options = {}) {
         invocations.push(input);
         return { success: true, data: { accepted: true } };
       },
+      async append_agent_session_assistant_message() {},
       async open_external() {},
       async show_item_in_folder() {},
       async write_clipboard_text() {},
@@ -273,6 +284,8 @@ test("Task Plugin 返回统一 Task 列表和可选执行目标", async () => {
       agent_id: "task-agent",
       workspace_id: "workspace-b",
       delivery_session: {
+        agent_id: "task-agent",
+        workspace_id: "workspace-b",
         session_id: "daily-report",
         origin_type: "chat",
       },

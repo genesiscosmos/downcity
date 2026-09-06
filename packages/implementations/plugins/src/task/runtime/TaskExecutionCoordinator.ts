@@ -20,7 +20,9 @@ export class TaskExecutionCoordinator {
     if (!task_id) throw new Error("task_id is required");
     if (this.executions_by_task_id.has(task_id)) return false;
 
-    const execution = operation()
+    // 关键点（中文）：先登记 Promise，再在微任务中启动业务，消除同步重入窗口。
+    const execution = Promise.resolve()
+      .then(operation)
       .catch(() => undefined)
       .finally(() => {
         if (this.executions_by_task_id.get(task_id) === execution) {
