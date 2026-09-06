@@ -277,6 +277,10 @@ div[data-streamdown="table-wrapper"] > div:first-child {
   margin: 0;
 }
 
+.user-message-reference-markdown.chat-markdown :where(p) {
+  margin: 0;
+}
+
 .user-message-markdown.chat-markdown {
   font-size: inherit;
   line-height: inherit;
@@ -288,7 +292,20 @@ div[data-streamdown="table-wrapper"] > div:first-child {
 }
 
 .user-message-markdown.chat-markdown [data-streamdown="list-item"] {
+  padding-left: 0.1rem;
   line-height: 1.34 !important;
+}
+
+.user-message-markdown.chat-markdown [data-streamdown="list-item"] + [data-streamdown="list-item"] {
+  margin-top: 0.1rem !important;
+}
+
+.user-message-markdown.chat-markdown [data-streamdown="unordered-list"] [data-streamdown="unordered-list"] {
+  list-style-type: circle;
+}
+
+.user-message-markdown.chat-markdown [data-streamdown="unordered-list"] [data-streamdown="unordered-list"] [data-streamdown="unordered-list"] {
+  list-style-type: square;
 }
 
 .reasoning-activity-content {

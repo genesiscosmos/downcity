@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
-import { TbArrowUp, TbAlertTriangle, TbChecklist, TbCheck, TbChevronDown, TbCopy, TbDots, TbFile, TbFolder, TbGitBranch, TbLoader2, TbMessageReply, TbPencil, TbRoute, TbSearch, TbWriting } from "react-icons/tb";
+import { TbArrowUp, TbAlertTriangle, TbChecklist, TbCheck, TbChevronDown, TbCopy, TbDots, TbFolder, TbGitBranch, TbLoader2, TbMessageReply, TbPencil, TbRoute, TbSearch, TbWriting } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
@@ -15,6 +15,7 @@ import { should_show_assistant_actions } from "@/features/chat/lib/assistant/ass
 import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
 import { ChatMessageViewportRow } from "@/features/chat/components/ChatMessageViewportRow";
 import { ChatTextSelectionQuote } from "@/features/chat/components/ChatTextSelectionQuote";
+import { UserMessageContent } from "@/features/chat/components/UserMessageContent";
 import { ChatWorkspaceSelector } from "@/features/chat/components/ChatWorkspaceSelector";
 import { use_chat_scroll } from "@/features/chat/lib/use_chat_scroll";
 import { project_session_message_segments } from "@/features/chat/lib/session_message_projection";
@@ -277,9 +278,7 @@ function UserMessage({ message, fork_message, rewrite_message, is_last_message, 
               <Button variant="primary" disabled={submitting} onClick={confirm_editing}>{submitting ? <TbLoader2 className="animate-spin" /> : null}{translate_chat(submitting ? "composer.sending" : "composer.send")}</Button>
             </div>
           </> : <>
-          {message.parts.flatMap((part) => part.type === "context" && part.tag === "reference" ? [<div key={part.part_id} className="max-w-full border-l-2 border-foreground/15 pl-2 text-[0.75rem] text-muted-foreground"><ChatMarkdown class_name="!h-auto !w-auto break-words" text={part.context} mode="static" /></div>] : [])}
-          {text ? <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className="text-[0.8125rem] leading-[1.34]"><ChatMarkdown class_name="user-message-markdown !h-auto !w-auto break-words" text={text} mode="static" /></div> : null}
-          {message.parts.flatMap((part) => part.type === "file" ? [<a key={part.part_id} href={part.url} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1.5 text-[0.75rem] text-foreground/80"><TbFile className="size-3.5 shrink-0" /><span className="truncate">{part.filename || translate_chat("activity.file")}</span></a>] : [])}
+          <UserMessageContent message_id={message.message_id} parts={message.parts} />
           </>}
         </div>
         {!editing ? <div className="flex h-5 items-center gap-1"><ChatMessageTimestamp created_at={message.created_at} class_name="mr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /><span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

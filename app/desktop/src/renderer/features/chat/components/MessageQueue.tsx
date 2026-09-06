@@ -16,7 +16,7 @@ import { ChatApprovalModeSelector } from "@/features/chat/composer/ChatApprovalM
 import { ChatModelSelector } from "@/features/chat/composer/ChatModelSelector";
 import { ChatAttachmentNode, ChatReferenceNode } from "@/features/chat/composer/editor/ChatComposerNodes";
 import { ChatSlashMenu } from "@/features/chat/composer/editor/ChatSlashMenu";
-import { count_chat_composer_atoms, has_chat_composer_atoms, is_chat_composer_empty, read_chat_composer_text, resolve_chat_input_command } from "@/features/chat/composer/editor/chatComposerCodec";
+import { count_chat_composer_atoms, has_chat_composer_atoms, has_chat_composer_rich_formatting, is_chat_composer_empty, read_chat_composer_visible_text, resolve_chat_input_command } from "@/features/chat/composer/editor/chatComposerCodec";
 import { add_chat_reference_listener } from "@/features/chat/composer/editor/chatReferenceEvent";
 import { add_chat_mention_listener } from "@/features/chat/composer/editor/chatMentionEvent";
 
@@ -39,9 +39,9 @@ export function MessageQueue(props: MessageQueueProps) {
     </div>
     <div className="flex flex-col divide-y divide-border/30">{props.queued_messages.map((message, index) => {
       const is_editing = editing?.message_id === message.message_id;
-      const text = read_chat_composer_text(message.input);
+      const text = read_chat_composer_visible_text(message.input);
       const atom_count = count_chat_composer_atoms(message.input);
-      const editable = !has_chat_composer_atoms(message.input);
+      const editable = !has_chat_composer_atoms(message.input) && !has_chat_composer_rich_formatting(message.input);
       return <div key={message.message_id} className="flex min-h-7 items-center gap-0.5 px-2.5 py-1 text-[0.6875rem] text-muted-foreground">
         {message.sending ? <TbLoader2 className="size-3 shrink-0 animate-spin text-muted-foreground/65" /> : <TbCornerDownRight className="size-3 shrink-0 text-muted-foreground/45" />}
         {is_editing ? <><textarea autoFocus rows={1} value={editing.text} className="min-h-6 min-w-0 flex-1 resize-none rounded-sm border border-border/40 bg-background/50 px-1 py-0.5 text-[0.6875rem] text-foreground" onChange={(event) => set_editing({ message_id: message.message_id, text: event.target.value })} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); save_editing(); } else if (event.key === "Escape") { event.preventDefault(); set_editing(undefined); } }} /><Button className={action_class} title={translate("queue.save")} onClick={save_editing}><TbCheck /></Button><Button className={action_class} title={translate("queue.cancel")} onClick={() => set_editing(undefined)}><TbX /></Button></> : <>

@@ -1,6 +1,7 @@
 /** Chat Composer Tiptap 文档的构造、读取与状态判断工具。 */
 
 import type { JSONContent } from "@tiptap/core";
+import { project_chat_composer } from "../../../../../common/chat/chatComposerProjection.ts";
 
 /** 创建一份可直接交给 Tiptap 的 Chat Input 文档。 */
 export function create_chat_composer(text = ""): JSONContent {
@@ -30,6 +31,17 @@ export function is_chat_composer_empty(document: JSONContent | null | undefined)
 
 /** 读取 Chat Input 中的可见文本；可选将引用节点投影成引用块。 */
 export function read_chat_composer_text(document: JSONContent, include_references = false): string {
+  return project_chat_composer(document).flatMap((part) => {
+    if (part.type === "text") return [part.text];
+    if (part.type === "context" && include_references) {
+      return [part.context.split("\n").map((line) => `> ${line}`).join("\n")];
+    }
+    return [];
+  }).join("\n\n").trim();
+}
+
+/** 读取编辑器中直接可见的纯文本，供不解析 Markdown 的队列摘要与纯文本编辑使用。 */
+export function read_chat_composer_visible_text(document: JSONContent): string {
   let text = "";
   const visit = (node: JSONContent) => {
     if (node.type === "text") {
@@ -40,16 +52,7 @@ export function read_chat_composer_text(document: JSONContent, include_reference
       text += "\n";
       return;
     }
-    if (node.type === "chatReference") {
-      if (!include_references) return;
-      const reference = String(node.attrs?.text || "").trim();
-      if (reference) {
-        if (text.trim() && !text.endsWith("\n")) text += "\n";
-        text += `${reference.split("\n").map((line) => `> ${line}`).join("\n")}\n\n`;
-      }
-      return;
-    }
-    if (node.type === "chatAttachment") return;
+    if (node.type === "chatAttachment" || node.type === "chatReference") return;
     node.content?.forEach(visit);
     if (node.type === "paragraph") text += "\n";
   };
@@ -64,6 +67,15 @@ export function has_chat_composer_atoms(document: JSONContent): boolean {
     if (node.type === "chatAttachment" || node.type === "chatReference") has_atoms = true;
   });
   return has_atoms;
+}
+
+/** 判断文档是否包含 textarea 无法无损往返的 marks 或列表结构。 */
+export function has_chat_composer_rich_formatting(document: JSONContent): boolean {
+  let has_formatting = false;
+  walk_chat_composer(document, (node) => {
+    if ((node.marks?.length || 0) > 0 || node.type === "bulletList" || node.type === "orderedList") has_formatting = true;
+  });
+  return has_formatting;
 }
 
 /** 统计 Chat Input 中有效附件与引用节点的数量。 */

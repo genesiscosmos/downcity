@@ -214,7 +214,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit.configure({ heading: false, codeBlock: false, blockquote: false }), Placeholder.configure({ placeholder: props.placeholder }), ChatAttachmentNode, ChatReferenceNode],
+    extensions: [StarterKit.configure({ heading: false, codeBlock: false, blockquote: false, horizontalRule: false }), Placeholder.configure({ placeholder: props.placeholder }), ChatAttachmentNode, ChatReferenceNode],
     content: props.draft_content,
       editorProps: {
       attributes: { class: "chat-input-editor", "data-chat-input": "true", spellcheck: String(props.spellcheck_enabled) },
