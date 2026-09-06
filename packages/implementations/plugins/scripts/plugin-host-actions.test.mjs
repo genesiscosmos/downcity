@@ -167,6 +167,7 @@ async function start_task_plugin(options = {}) {
     },
   });
   return {
+    plugin,
     actions,
     invocations,
     cleanup: async () => {
@@ -377,6 +378,34 @@ test("Task Plugin 保留目标失效的 Task 并允许宿主删除", async () =>
     assert.equal(snapshot.tasks[0].workspace_id, "workspace-b");
     await actions.get("tasks.delete").run({ task_title: "daily-report" });
     assert.deepEqual((await actions.get("tasks.snapshot").run()).tasks, []);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("Task Host mutation 明确返回定义已提交但 scheduler 同步失败", async () => {
+  const { plugin, actions, cleanup } = await start_task_plugin();
+  try {
+    await plugin.scheduler.dispose();
+    const result = await actions.get("tasks.create").run({
+      agent_id: "task-agent",
+      workspace_id: "workspace-a",
+      title: "scheduler-failed-task",
+      description: "验证 scheduler 同步失败反馈",
+      when: "@manual",
+      kind: "agent",
+      review: false,
+      status: "enabled",
+      body: "输出结果",
+    });
+    assert.equal(result.task_title, "scheduler-failed-task");
+    assert.equal(result.scheduler.reloaded, false);
+    assert.match(result.scheduler.error, /disposed/u);
+    assert.equal(
+      (await actions.get("tasks.snapshot").run()).tasks
+        .some((task) => task.title === "scheduler-failed-task"),
+      true,
+    );
   } finally {
     await cleanup();
   }

@@ -33,6 +33,8 @@ Task does not declare Config, so it needs no Profile. It remains visible in the 
 
 A successful or failed Task Run publishes an unread notification after its artifacts are persisted; skipped runs do not notify. Notifications aggregate to the latest unread Run for the same Task. Desktop reflects that state on the Task icon, Task item, matching Run, and system app badge, and marks it read when the Run is opened.
 
+When a definition commits but incremental scheduler synchronization fails, the host action returns the synchronization failure and Desktop reports that the Task was saved but scheduler synchronization failed. A missing or unparseable canonical `task.md` fails visibly instead of making a damaged definition appear absent.
+
 The CLI invokes task through the shared Plugin Action command:
 
 ```bash
@@ -85,6 +87,7 @@ The action names are `list`, `history`, `run_detail`, `create`, `run`, `delete`,
 - all definition mutations commit serially per TaskPlugin instance; one-shot completion conditionally updates the latest definition
 - the running-task lock belongs to the plugin instance, so reloads still keep each task serial
 - a running Task cannot be deleted
+- scheduler or timer disposal failures do not skip settlement of other runs and lifecycle resources; final failures are aggregated
 
 ## Public status
 

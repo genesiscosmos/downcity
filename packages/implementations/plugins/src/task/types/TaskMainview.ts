@@ -2,6 +2,7 @@
 
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "./TaskCommand.js";
 import type { ShipTaskKind, ShipTaskStatus, TaskDeliverySession } from "./Task.js";
+import type { TaskSchedulerReloadResult } from "./TaskPluginTypes.js";
 
 /** Task 编辑器可选择的执行 Agent 摘要。 */
 export interface TaskMainviewAgent {
@@ -137,6 +138,9 @@ export interface TaskMainviewStatusInput extends TaskMainviewActionInput {
 export interface TaskMainviewMutationResult {
   /** 操作完成后的 Task 标题。 */
   readonly task_title: string;
+
+  /** 定义变更后的 scheduler 同步结果；立即运行不返回该字段。 */
+  readonly scheduler?: TaskSchedulerReloadResult;
 }
 
 /** Task 创建或编辑表单中的完整可变草稿。 */

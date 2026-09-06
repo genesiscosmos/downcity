@@ -23,7 +23,7 @@ import {
 import { TaskSchedulerCoordinator } from "../bin/task/Scheduler.js";
 import { TaskDefinitionRepository } from "../bin/task/runtime/TaskDefinitionRepository.js";
 import { TaskExecutionCoordinator } from "../bin/task/runtime/TaskExecutionCoordinator.js";
-import { readTask } from "../bin/task/runtime/Store.js";
+import { listTasks, readTask } from "../bin/task/runtime/Store.js";
 
 /** 把测试实例包装为 City 持有的统一 Plugin 注册。 */
 function create_task_registration(plugin) {
@@ -206,6 +206,154 @@ test("scheduler dispose 会等待已进入的触发回调", async () => {
   release_invocation();
   await Promise.all([triggering, disposing]);
   assert.equal(disposed, true);
+});
+
+test("scheduler dispose 会在配置变更收口后停止 engine", async () => {
+  const storage = create_plugin_storage(new MemoryStorageProvider());
+  const definitions_repository = new TaskDefinitionRepository(
+    storage,
+    new TaskExecutionCoordinator(),
+  );
+  const lifecycle_events = [];
+  let release_operation;
+  const operation_released = new Promise((resolve) => {
+    release_operation = resolve;
+  });
+  const scheduler = new TaskSchedulerCoordinator(
+    create_lifecycle_context(storage, []),
+    "Asia/Shanghai",
+    definitions_repository,
+    {
+      register: () => {},
+      unregister: () => {},
+      start: async () => {},
+      stop: async () => { lifecycle_events.push("stop"); },
+    },
+  );
+  scheduler.operation_chain = operation_released.then(() => {
+    lifecycle_events.push("operation");
+  });
+
+  const disposing = scheduler.dispose();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(lifecycle_events, []);
+
+  release_operation();
+  await disposing;
+  assert.deepEqual(lifecycle_events, ["operation", "stop"]);
+});
+
+test("scheduler stop 失败时仍等待已进入的触发并聚合错误", async () => {
+  const storage = create_plugin_storage(new MemoryStorageProvider());
+  const definitions_repository = new TaskDefinitionRepository(
+    storage,
+    new TaskExecutionCoordinator(),
+  );
+  let mark_invocation_started;
+  const invocation_started = new Promise((resolve) => {
+    mark_invocation_started = resolve;
+  });
+  let release_invocation;
+  const invocation_released = new Promise((resolve) => {
+    release_invocation = resolve;
+  });
+  const context = create_lifecycle_context(storage, []);
+  context.system.invoke_agent_plugin = async () => {
+    mark_invocation_started();
+    await invocation_released;
+    return { success: true, data: { accepted: true } };
+  };
+  await createTaskDefinition({
+    definitions: definitions_repository,
+    agent_id: "agent-a",
+    request: {
+      title: "dispose-error",
+      description: "验证失败释放",
+      workspace_id: "workspace-a",
+      when: "0 9 * * *",
+      status: "enabled",
+    },
+  });
+  const registered = new Map();
+  const scheduler = new TaskSchedulerCoordinator(
+    context,
+    "Asia/Shanghai",
+    definitions_repository,
+    {
+      register: (definition) => registered.set(definition.id, definition),
+      unregister: (id) => registered.delete(id),
+      start: async () => {},
+      stop: async () => { throw new Error("engine stop failed"); },
+    },
+  );
+  await scheduler.initialize();
+  const triggering = registered.get("task:dispose-error").execute();
+  await invocation_started;
+  let disposal_finished = false;
+  const disposing = scheduler.dispose()
+    .then(() => undefined)
+    .catch((error) => error)
+    .finally(() => { disposal_finished = true; });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(disposal_finished, false);
+
+  release_invocation();
+  const error = await disposing;
+  await triggering;
+  assert.equal(error instanceof AggregateError, true);
+  assert.match(String(error.errors[0]), /engine stop failed/u);
+});
+
+test("TaskPlugin scheduler 释放失败时仍等待运行并清空生命周期引用", async () => {
+  const plugin = new TaskPlugin();
+  let release_execution;
+  const execution_released = new Promise((resolve) => {
+    release_execution = resolve;
+  });
+  plugin.scheduler = {
+    dispose: async () => { throw new Error("scheduler dispose failed"); },
+  };
+  plugin.lifecycle_context = { marker: true };
+  plugin.definitions = { marker: true };
+  assert.equal(
+    plugin.executions.start("dispose-running-task", async () => await execution_released),
+    true,
+  );
+  let disposal_finished = false;
+  const disposing = plugin.dispose()
+    .then(() => undefined)
+    .catch((error) => error)
+    .finally(() => { disposal_finished = true; });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(disposal_finished, false);
+
+  release_execution();
+  const error = await disposing;
+  assert.equal(error instanceof AggregateError, true);
+  assert.match(String(error.errors[0]), /scheduler dispose failed/u);
+  assert.equal(plugin.lifecycle_context, undefined);
+  assert.equal(plugin.definitions, undefined);
+});
+
+test("合法 Task 目录缺少或损坏 task.md 时列表明确失败", async () => {
+  const data_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-task-corrupt-"));
+  const storage = create_plugin_storage(new LocalStorageProvider(data_path));
+  try {
+    const missing_directory = path.join(storage.path, "tasks", "missing-definition");
+    await fs.mkdir(missing_directory, { recursive: true });
+    await assert.rejects(
+      () => listTasks(storage),
+      /Task definition cannot be read: missing-definition/u,
+    );
+
+    await fs.writeFile(path.join(missing_directory, "task.md"), "not valid task markdown");
+    await assert.rejects(
+      () => listTasks(storage),
+      /Task definition is invalid: missing-definition/u,
+    );
+  } finally {
+    await fs.rm(data_path, { recursive: true, force: true });
+  }
 });
 
 test("并发创建相同标题时只有第一个定义可以提交", async () => {

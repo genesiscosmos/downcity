@@ -29,23 +29,27 @@ export async function listTasks(storage: PluginStorage): Promise<TaskListItem[]>
   const root = require_storage_root(storage);
   const directory_path = getTaskRootDir(root);
   await storage.files.ensure_directory(directory_path);
-  const entries = await storage.files.read_directory(directory_path).catch(() => []);
+  const entries = await storage.files.read_directory(directory_path);
   const items: TaskListItem[] = [];
   for (const entry of entries) {
     const task_id = String(entry.name || "").trim();
     if (!entry.is_directory || !task_id || task_id.startsWith(".") || !isValidTaskId(task_id)) continue;
     const task_md_path = getTaskMdPath(root, task_id);
-    const markdown = await storage.files.read_file(task_md_path)
-      .then((value) => value.toString("utf-8"))
-      .catch(() => "");
-    if (!markdown) continue;
+    let markdown = "";
+    try {
+      markdown = (await storage.files.read_file(task_md_path)).toString("utf-8");
+    } catch (error) {
+      throw new Error(`Task definition cannot be read: ${task_id}`, { cause: error });
+    }
     const parsed = parseTaskMarkdown({
       taskId: task_id,
       markdown,
       taskMdPath: task_md_path,
       data_path: root,
     });
-    if (!parsed.ok) continue;
+    if (!parsed.ok) {
+      throw new Error(`Task definition is invalid: ${task_id}: ${parsed.error}`);
+    }
 
     const task_directory = getTaskDir(root, task_id);
     const last_run_timestamp = await storage.files.read_directory(task_directory)

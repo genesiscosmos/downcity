@@ -107,10 +107,23 @@ export class TaskSchedulerCoordinator {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    await this.engine.stop();
-    await this.operation_chain;
-    await Promise.allSettled([...this.trigger_executions]);
+    const errors: unknown[] = [];
+    collect_rejected_reasons(
+      await Promise.allSettled([this.operation_chain]),
+      errors,
+    );
+    collect_rejected_reasons(
+      await Promise.allSettled([Promise.resolve().then(async () => await this.engine.stop())]),
+      errors,
+    );
+    collect_rejected_reasons(
+      await Promise.allSettled([...this.trigger_executions]),
+      errors,
+    );
     this.scheduled_task_ids.clear();
+    if (errors.length > 0) {
+      throw new AggregateError(errors, "Task scheduler disposal failed");
+    }
   }
 
   /** 根据最新 Task 定义登记 cron 或 one-shot schedule。 */
@@ -215,6 +228,16 @@ export class TaskSchedulerCoordinator {
   /** scheduler dispose 后禁止新的配置变更。 */
   private assert_active(): void {
     if (this.disposed) throw new Error("Task scheduler is disposed");
+  }
+}
+
+/** 把一个生命周期阶段的全部失败追加到统一错误集合。 */
+function collect_rejected_reasons(
+  results: PromiseSettledResult<unknown>[],
+  errors: unknown[],
+): void {
+  for (const result of results) {
+    if (result.status === "rejected") errors.push(result.reason);
   }
 }
 

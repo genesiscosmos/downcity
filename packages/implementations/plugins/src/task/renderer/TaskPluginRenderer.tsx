@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { define_plugin_renderer, type PluginRendererNotification, type PluginRendererUiComponents } from "@downcity/city/plugin/react";
+import { define_plugin_renderer, type PluginRendererNotification, type PluginRendererToastInput, type PluginRendererUiComponents } from "@downcity/city/plugin/react";
 import type { TaskRunDetailView, TaskRunHistoryItemView } from "@/task/types/TaskCommand.js";
 import type { TaskMainviewEditorDraft, TaskMainviewHistorySnapshot, TaskMainviewItem, TaskMainviewMutationResult, TaskMainviewRunDetailSnapshot, TaskMainviewSnapshot } from "@/task/types/TaskMainview.js";
 import { TaskEditor } from "@/task/renderer/TaskEditor.js";
@@ -56,11 +56,15 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
       set_busy_task_key(task.title);
       set_error("");
       try {
-        await plugin.invoke<TaskMainviewMutationResult>(`tasks.${action}`, { ...task_action_input(task), ...input });
+        const result = await plugin.invoke<TaskMainviewMutationResult>(`tasks.${action}`, { ...task_action_input(task), ...input });
         if (action === "delete") navigation.navigate(tasks_route());
         else if (action === "run") navigation.navigate(pending_run_route(task.title, Date.now()));
         ui.invalidate();
-        ui.toast({ type: "success", message: action === "run" ? "Task 已开始运行" : action === "delete" ? "Task 已删除" : "Task 状态已更新" });
+        notify_task_mutation(
+          result,
+          action === "run" ? "Task 已开始运行" : action === "delete" ? "Task 已删除" : "Task 状态已更新",
+          ui.toast,
+        );
       } catch (reason) {
         const message = to_error_message(reason);
         set_error(message);
@@ -237,10 +241,10 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
 
     const save_task = async (draft: TaskMainviewEditorDraft) => {
       try {
-        await invoke_mutation(task ? "update" : "create", { ...(task ? { current_title: task.title } : {}), ...draft });
+        const result = await invoke_mutation(task ? "update" : "create", { ...(task ? { current_title: task.title } : {}), ...draft });
         navigation.navigate(task_definition_route(draft.title));
         ui.invalidate();
-        ui.toast({ type: "success", message: task ? "Task 已更新" : "Task 已创建" });
+        notify_task_mutation(result, task ? "Task 已更新" : "Task 已创建", ui.toast);
       } catch {}
     };
     const run_task = async (selected_task: TaskMainviewItem) => {
@@ -254,19 +258,19 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
     };
     const set_status = async (selected_task: TaskMainviewItem) => {
       try {
-        await invoke_mutation("status", { ...task_action_input(selected_task), status: selected_task.status === "enabled" ? "paused" : "enabled" });
+        const result = await invoke_mutation("status", { ...task_action_input(selected_task), status: selected_task.status === "enabled" ? "paused" : "enabled" });
         ui.invalidate();
-        ui.toast({ type: "success", message: selected_task.status === "enabled" ? "Task 已暂停" : "Task 已启用" });
+        notify_task_mutation(result, selected_task.status === "enabled" ? "Task 已暂停" : "Task 已启用", ui.toast);
       } catch {}
     };
     const remove_task = async (selected_task: TaskMainviewItem) => {
       const confirmed = await ui.confirm({ title: `删除 ${selected_task.title}？`, description: "Task 定义及其全部执行记录都会被永久删除。", action: "删除", destructive: true });
       if (!confirmed) return;
       try {
-        await invoke_mutation("delete", task_action_input(selected_task));
+        const result = await invoke_mutation("delete", task_action_input(selected_task));
         navigation.navigate(tasks_route());
         ui.invalidate();
-        ui.toast({ type: "success", message: "Task 已删除" });
+        notify_task_mutation(result, "Task 已删除", ui.toast);
       } catch {}
     };
     const task_menu = (selected_task: TaskMainviewItem, reveal_on_hover = false) => <ItemMenu label={`${selected_task.title} 操作`} reveal_on_hover={reveal_on_hover} actions={[
@@ -316,6 +320,23 @@ export const TASK_PLUGIN_RENDERER = define_plugin_renderer({
     </>;
   },
 });
+
+/** 根据 scheduler 同步结果区分完整成功与已提交但需要关注的变更。 */
+function notify_task_mutation(
+  result: TaskMainviewMutationResult,
+  success_message: string,
+  toast: (input: PluginRendererToastInput) => void,
+): void {
+  if (result.scheduler && !result.scheduler.reloaded) {
+    toast({
+      type: "info",
+      message: `${success_message}，但调度器同步失败`,
+      description: result.scheduler.error || "请重载 Task 调度器后再确认自动触发状态。",
+    });
+    return;
+  }
+  toast({ type: "success", message: success_message });
+}
 
 /** 展示一次 Task Run 的状态、最终输出与失败信息。 */
 function TaskRunDetails({ run, loading, error, components }: {

@@ -135,8 +135,8 @@ async function create_task(
     },
   });
   if (!result.success) throw new Error(result.error || `创建 ${input.title} 失败`);
-  await runtime.reconcile(deriveTaskIdFromTitle(input.title));
-  return { task_title: input.title };
+  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.title));
+  return { task_title: input.title, scheduler };
 }
 
 /** 原子更新一个 Task 定义，并按 task_id 更新 scheduler。 */
@@ -163,8 +163,8 @@ async function update_task(
     },
   });
   if (!result.success) throw new Error(result.error || `更新 ${input.current_title} 失败`);
-  await runtime.reconcile(deriveTaskIdFromTitle(input.current_title));
-  return { task_title: input.title };
+  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.current_title));
+  return { task_title: input.title, scheduler };
 }
 
 /** 修改 Task 启停状态。 */
@@ -186,8 +186,8 @@ async function set_task_status(
     request: { title: input.task_title, status: input.status },
   });
   if (!result.success) throw new Error(result.error || `修改 ${input.task_title} 状态失败`);
-  await runtime.reconcile(deriveTaskIdFromTitle(input.task_title));
-  return { task_title: input.task_title };
+  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.task_title));
+  return { task_title: input.task_title, scheduler };
 }
 
 /** 进入 Task 自己声明的执行范围，并异步受理一次手动执行。 */
@@ -225,9 +225,9 @@ async function delete_task(
     request: { title: input.task_title },
   });
   if (!result.success) throw new Error(result.error || `删除 ${input.task_title} 失败`);
-  await runtime.reconcile(deriveTaskIdFromTitle(input.task_title));
+  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.task_title));
   await dismiss_task_notification(context, input.task_title);
-  return { task_title: input.task_title };
+  return { task_title: input.task_title, scheduler };
 }
 
 /** 删除 Task 后尽力清理未读通知，通知故障不改变已提交的定义变更。 */

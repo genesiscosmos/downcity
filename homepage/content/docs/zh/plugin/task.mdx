@@ -20,6 +20,8 @@ Task 不声明 Config，因此不需要 Profile。它仍会出现在 Plugins Cat
 
 Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Task 不按 Agent 或 Workspace 分组；每个 Task 显式保存一个 `agent_id` 和一个 `workspace_id` 作为可重新绑定的执行目标，界面只展示对应名称。目标失效后 Task 仍然可见、可编辑和可删除；Task 正在运行时会拒绝删除，避免同时移除其执行产物。定义、调度状态和 run 产物都从 TaskPlugin 统一的 City 生命周期存储读取，不再保存 Agent 级副本。
 
+定义写入成功但 scheduler 同步失败时，Desktop 会明确提示“Task 已保存，但调度器同步失败”；已经提交的定义不会回滚，也不会显示为完整成功。此时应修复故障后重载 Task scheduler。合法 Task 目录中的 `task.md` 缺失或损坏会直接报错，不会被静默隐藏成“没有 Task”。
+
 Task 成功或失败并完成执行记录持久化后，会通过统一 Notification 模块产生未读通知；跳过的执行不会通知。同一 Task 只保留最新未读 Run。Desktop 会在 Task 一级图标、Task 条目和对应 Run 旁显示蓝点，并同步系统应用图标角标；打开该 Run 后自动标记为已读。
 
 ## 定义任务

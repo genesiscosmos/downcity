@@ -314,7 +314,9 @@ Agent Plugin 私有目录，Agent Session 仍保存在 Agent 自己的 Session S
 事务入口串行提交定义变更；运行受理与删除检查共享同一个边界，运行中的 Task 不允许删除。Session 内创建
 Task 时，交付目标固定记录原始 `agent_id`、`workspace_id`、`origin_type` 与 `session_id`；重新绑定执行目标
 不能改变结果交付目标，跨 Agent/Workspace 投递由 City 使用明确身份定位原始 Session。one-shot 完成只能
-对最新且仍匹配本次触发条件的定义做条件更新，不能把触发前的完整快照写回。
+对最新且仍匹配本次触发条件的定义做条件更新，不能把触发前的完整快照写回。canonical `task.md` 的读取
+或解析错误必须直接失败，不能被投影成 Task 不存在；定义已提交但 scheduler 同步失败时必须分别报告两个
+事实。释放 scheduler、timer 与已受理执行时，单项失败不能中断其他资源收口，最终统一聚合错误。
 
 Plugin 只有一个实例和一套 City 生命周期，不再存在独立 main 对象。Plugin 在 `initialize(PluginLifecycleContext)` 中注册宿主管理 action 与 Config action，并初始化自己拥有的 City 级长期资源；`dispose` 负责统一释放。宿主的 Plugins 导航始终列出完整 Plugin Catalog；点击任意 Plugin 都进入描述、README 与可选 Config 详情。声明 Sidebar + Mainview 的功能型 Plugin 另外动态贡献一级导航入口，点击后左侧切换为 Plugin Sidebar，主区域渲染 Plugin Mainview，两者共享宿主持有的 JSON route，并通过 Plugin 级 action gateway 调用宿主管理 action，不要求 Profile。Config 只在 Plugin Catalog 详情出现，使用独立 gateway，宿主仅在 Config action 调用时绑定 Profile ID 并注入当前配置存储。没有 Config 的 Plugin 不创建、不选择 Profile。Renderer 是受信任本地 UI 代码，由宿主提供 React runtime、主题与 `ui.components`，但不注入 Desktop controller、Profile ID、Node 或 Electron 对象。
 

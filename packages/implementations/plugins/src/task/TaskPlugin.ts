@@ -114,10 +114,23 @@ export class TaskPlugin extends Plugin {
   async dispose(): Promise<void> {
     const scheduler = this.scheduler;
     this.scheduler = undefined;
-    if (scheduler) await scheduler.dispose();
-    await this.executions.settle();
-    this.definitions = undefined;
-    this.lifecycle_context = undefined;
+    const errors: unknown[] = [];
+    try {
+      if (scheduler) await scheduler.dispose();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await this.executions.settle();
+    } catch (error) {
+      errors.push(error);
+    } finally {
+      this.definitions = undefined;
+      this.lifecycle_context = undefined;
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, "TaskPlugin disposal failed");
+    }
   }
 
   /** 在定义 mutation 后增量更新一个 Task 的 schedule。 */
