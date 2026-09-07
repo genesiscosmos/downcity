@@ -2,7 +2,7 @@
 
 import { AiDispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { DispatchStrategy } from "@/types/group/DispatchStrategy.js";
-import type { AgentModel } from "@/agent/AgentModel.js";
+import type { ModelClient } from "@downcity/type";
 import type { GroupContract, GroupOptions } from "@/types/group/Group.js";
 import type { Agent } from "@/agent/Agent.js";
 import { GroupSessions } from "@/group/GroupSessions.js";
@@ -13,7 +13,7 @@ export class Group implements GroupContract {
   readonly id: string;
   readonly name: string;
   readonly instruction?: string;
-  readonly model?: AgentModel;
+  readonly model?: ModelClient;
   readonly members: readonly Agent[];
   readonly dispatch_strategy: DispatchStrategy;
   readonly sessions: GroupSessions;

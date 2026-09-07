@@ -115,8 +115,8 @@ src/
   - Plugin Registry、Hook 调度与生命周期属于 `@downcity/city`
 
 - `src/remote/transports/` 放 HTTP、RPC transport 及其内部客户端；RPC Server 与 HTTP gateway 由上游宿主管理
-- Agent 与 Session 都持有宿主传入的 `AgentModel` 实例；`AgentModel` 可以是 AI SDK `LanguageModel` 或 City 返回的 `CityModel`
-- Session 可通过 `session.set({ model })` 覆盖，执行时固定按 Session 模型、Agent 模型的顺序解析，并在 LLM 调用边界转换为 `LanguageModel`
+- Agent、Session 与 Group 统一持有宿主传入的 `ModelClient`；City 返回的 `CityModel` 在该协议上额外提供目录与展示元数据
+- Session 可通过 `session.set({ model })` 覆盖，执行时固定按 Session 模型、Agent 模型的顺序解析，并直接通过统一的 `ModelClient` 协议调用
 
 - `src/types/`
   - 跨模块、跨包共享协议类型

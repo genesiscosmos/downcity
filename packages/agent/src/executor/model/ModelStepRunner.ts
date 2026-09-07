@@ -6,7 +6,6 @@
  */
 
 import {
-  ModelStreamValidator,
   type ModelCall,
   type ModelClient,
   type ModelContent,
@@ -26,11 +25,7 @@ import type {
   SessionAssistantMessagePart,
   SessionAssistantToolPart,
 } from "@/types/session/SessionMessage.js";
-import {
-  ModelStreamFailure,
-  normalize_model_invocation_failure,
-  normalize_model_protocol_failure,
-} from "@/executor/model/ModelStreamFailure.js";
+import { consume_model_stream } from "@/executor/model/ModelStreamConsumer.js";
 
 /** 单个工具调用的执行事实。 */
 export interface ModelStepToolCall {
@@ -100,55 +95,16 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
     tools: convert_tools(input.tools),
   };
   const collector = new StepEventCollector();
-  const validator = new ModelStreamValidator();
-  let stream: ReadableStream<ModelStreamEvent>;
-  try {
-    stream = await input.model.stream(call, input.abort_signal);
-  } catch (error) {
-    throw normalize_model_invocation_failure(error, false, input.abort_signal);
-  }
-  const reader = stream.getReader();
-  let stream_complete = false;
-  try {
-    while (true) {
-      let result: Awaited<ReturnType<typeof reader.read>>;
-      try {
-        result = await reader.read();
-      } catch (error) {
-        throw normalize_model_invocation_failure(
-          error,
-          collector.has_partial_output(),
-          input.abort_signal,
-        );
-      }
-      if (result.done) {
-        stream_complete = true;
-        break;
-      }
-      const event = result.value;
-      try {
-        validator.accept(event);
-      } catch (error) {
-        throw normalize_model_protocol_failure(
-          error,
-          collector.has_partial_output(),
-        );
-      }
+  await consume_model_stream(
+    input.model,
+    call,
+    input.abort_signal,
+    () => collector.has_partial_output(),
+    async (event) => {
       await input.assistant_output?.write_model_event(event);
       collector.accept(event);
-    }
-  } finally {
-    if (!stream_complete) await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
-  try {
-    validator.finish();
-  } catch (error) {
-    throw normalize_model_protocol_failure(
-      error,
-      collector.has_partial_output(),
-    );
-  }
+    },
+  );
   const collected = collector.finish();
   const tool_results = await execute_tools(
     collected.tool_calls,
@@ -217,12 +173,6 @@ class StepEventCollector {
 
   /** 消费单个标准模型事件。 */
   accept(event: ModelStreamEvent): void {
-    if (event.type === "model_error") {
-      throw new ModelStreamFailure(
-        event.error,
-        this.has_partial_output(),
-      );
-    }
     if (event.type === "text_start") {
       this.text_by_id.set(event.content_id, "");
     } else if (event.type === "text_delta") {

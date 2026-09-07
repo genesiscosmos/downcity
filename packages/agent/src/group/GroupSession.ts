@@ -19,8 +19,7 @@ import type {
   DispatchStage,
   DispatchStrategy,
 } from "@/types/group/DispatchStrategy.js";
-import type { WorkspaceRuntime } from "@downcity/type";
-import type { AgentModel } from "@/agent/AgentModel.js";
+import type { ModelClient, WorkspaceRuntime } from "@downcity/type";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
 import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
 import {
@@ -45,7 +44,7 @@ export interface GroupSessionOptions {
   /** Group 协作说明。 */
   readonly instruction?: string;
   /** GroupSession 用于生成标题的 Group 模型。 */
-  readonly model?: AgentModel;
+  readonly model?: ModelClient;
   /** Group 成员。 */
   readonly members: readonly Agent[];
   /** Group 消息调度策略。 */
@@ -62,7 +61,7 @@ export class GroupSession implements GroupSessionContract {
 
   private readonly group_name: string;
   private readonly instruction?: string;
-  private readonly model?: AgentModel;
+  private readonly model?: ModelClient;
   private readonly members: readonly Agent[];
   private readonly dispatch_runtime: GroupDispatchRuntime;
   private readonly title_task: SessionTitleTask;

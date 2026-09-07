@@ -6,7 +6,6 @@
  */
 
 import type { GroupMessage } from "@/types/group/Group.js";
-import type { AgentModel } from "@/agent/AgentModel.js";
 import type {
   ModelClient,
   ModelContent,
@@ -89,7 +88,7 @@ export interface DispatchStrategy {
 /** AI 调度策略的构造参数。 */
 export interface AiDispatchStrategyOptions {
   /** Group 用于理解群聊意图并生成阶段计划的模型。 */
-  readonly model?: AgentModel;
+  readonly model?: ModelClient;
 }
 
 /** AI 调度工具的最小输入协议；阶段串行，阶段内 assignment 并行。 */

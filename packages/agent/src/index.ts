@@ -75,12 +75,6 @@ export type {
   SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
 } from "./types/session/SessionHook.js";
-export {
-  infer_agent_model_label,
-  normalize_agent_model,
-  read_agent_model_context_window,
-} from "./agent/AgentModel.js";
-export type { AgentModel } from "./agent/AgentModel.js";
 export type {
   AgentArchiveSessionInput,
   AgentArchiveSessionsInput,

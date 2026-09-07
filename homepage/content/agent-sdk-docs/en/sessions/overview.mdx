@@ -128,9 +128,9 @@ should update their navigation projection from that Mutation instead of storing 
 
 | Context | Configure a model |
 | --- | --- |
-| Local `AgentSession` | `session.set({ model })`; accepts an `AgentModel` instance |
+| Local `AgentSession` | `session.set({ model })`; accepts a `ModelClient` instance |
 | `RemoteAgentSession` | `session.set({ security })`; does not accept model instances |
-| Downcity Agent project | CLI resolves `execution.modelId` and passes an `AgentModel` instance to the Agent |
+| Downcity Agent project | CLI resolves `execution.modelId` and passes a `ModelClient` instance to the Agent |
 
 Remote clients do not participate in model selection. IDs, defaults, and recovery belong to the server host.
 

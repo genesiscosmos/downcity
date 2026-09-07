@@ -8,8 +8,7 @@
  */
 
 import { nanoid } from "nanoid";
-import type { RuntimeTool as Tool } from "@downcity/type";
-import type { AgentModel } from "@/agent/AgentModel.js";
+import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type {
   AgentCreateSessionInput,
@@ -80,7 +79,7 @@ type AgentSessionsOptions = {
   session_class?: AgentSessionConstructor;
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
-  get_agent_model: () => AgentModel | undefined;
+  get_agent_model: () => ModelClient | undefined;
 
   /** Session 创建或恢复后的内部路由登记回调。 */
   on_session_routed?: (session_id: string, sessions: AgentSessions) => void;

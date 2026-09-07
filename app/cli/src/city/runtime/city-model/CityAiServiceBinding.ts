@@ -8,8 +8,7 @@
  */
 
 import { Embassy } from "@downcity/federation";
-import type { AgentModel } from "@downcity/agent";
-import type { CityModelDescriptor } from "@downcity/type";
+import type { CityModelDescriptor, ModelClient } from "@downcity/type";
 import { EmbassySessionResolver } from "@/city/shared/EmbassySessionResolver.js";
 
 const embassy_session_resolver = new EmbassySessionResolver();
@@ -122,7 +121,7 @@ export async function assertCityAiModelReady(
 /**
  * 创建 Agent 可直接使用的 City 模型。
  */
-export async function createCityAiAgentModel(input: {
+export async function create_city_ai_model_client(input: {
   /**
    * 目标 City AIService model id。
    */
@@ -132,7 +131,7 @@ export async function createCityAiAgentModel(input: {
    * 宿主环境变量。
    */
   env?: NodeJS.ProcessEnv;
-}): Promise<AgentModel> {
+}): Promise<ModelClient> {
   const modelId = String(input.modelId || "").trim();
   if (!modelId) throw new Error("modelId cannot be empty");
   const { embassy_user } = await embassy_session_resolver.create_user_client({

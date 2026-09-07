@@ -76,9 +76,9 @@ function create_mock_title_model(title_text) {
 function create_failing_title_model() {
   return new MockModelClient({
     modelId: "mock-session-title-failing-model",
-    doStream: async () => {
-      throw new Error("mock title generation failed");
-    },
+    doGenerate: async () => ({
+      content: [{ type: "error", error: "mock title generation failed" }],
+    }),
   });
 }
 

@@ -9,17 +9,11 @@ import type {
   ModelClient,
   ModelFinishReason,
   ModelMessage,
-  ModelStreamEvent,
   ModelToolCallContent,
   ModelUsage,
 } from "@downcity/type";
-import { ModelStreamValidator } from "@downcity/type";
-import {
-  ModelStreamFailure,
-  normalize_model_invocation_failure,
-  normalize_model_protocol_failure,
-} from "@executor/model/ModelStreamFailure.js";
 import { execute_model_request } from "@executor/model/ModelRequestRunner.js";
+import { consume_model_stream } from "@executor/model/ModelStreamConsumer.js";
 import type {
   ModelRequestFailureReporter,
   ModelRequestKind,
@@ -68,43 +62,18 @@ async function generate_model_once(
   call: ModelCall,
   signal?: AbortSignal,
 ): Promise<ModelGenerateResult> {
-  const text_by_id = new Map<string, string>();
   const tools = new Map<string, { tool_call_id: string; tool_name: string }>();
   const tool_calls: ModelToolCallContent[] = [];
   let text = "";
   let has_partial_output = false;
   let finish_reason: ModelFinishReason | undefined;
   let usage: ModelUsage | undefined;
-  const validator = new ModelStreamValidator();
-  let stream: ReadableStream<ModelStreamEvent>;
-  try {
-    stream = await model.stream(call, signal);
-  } catch (error) {
-    throw normalize_model_invocation_failure(error, false, signal);
-  }
-  const reader = stream.getReader();
-  let stream_complete = false;
-  try {
-    while (true) {
-      let result: Awaited<ReturnType<typeof reader.read>>;
-      try {
-        result = await reader.read();
-      } catch (error) {
-        throw normalize_model_invocation_failure(error, has_partial_output, signal);
-      }
-      if (result.done) {
-        stream_complete = true;
-        break;
-      }
-      const event = result.value;
-      try {
-        validator.accept(event);
-      } catch (error) {
-        throw normalize_model_protocol_failure(error, has_partial_output);
-      }
-      if (event.type === "model_error") {
-        throw new ModelStreamFailure(event.error, has_partial_output);
-      }
+  await consume_model_stream(
+    model,
+    call,
+    signal,
+    () => has_partial_output,
+    (event) => {
       if (
         event.type === "text_delta" ||
         event.type === "reasoning_start" ||
@@ -114,9 +83,7 @@ async function generate_model_once(
       ) {
         has_partial_output = true;
       }
-      if (event.type === "text_start") text_by_id.set(event.content_id, "");
-      else if (event.type === "text_delta") {
-        text_by_id.set(event.content_id, (text_by_id.get(event.content_id) ?? "") + event.delta);
+      if (event.type === "text_delta") {
         text += event.delta;
       } else if (event.type === "tool_call_start") {
         tools.set(event.content_id, { tool_call_id: event.tool_call_id, tool_name: event.tool_name });
@@ -127,16 +94,8 @@ async function generate_model_once(
         }
       } else if (event.type === "model_usage") usage = event.usage;
       else if (event.type === "model_finish") finish_reason = event.finish_reason;
-    }
-  } finally {
-    if (!stream_complete) await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
-  try {
-    validator.finish();
-  } catch (error) {
-    throw normalize_model_protocol_failure(error, has_partial_output);
-  }
+    },
+  );
   if (!finish_reason) throw new Error("Model stream ended without model_finish");
   return { text, tool_calls, finish_reason, ...(usage ? { usage } : {}) };
 }

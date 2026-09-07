@@ -121,9 +121,9 @@ canonical Action Message；Message 提交成功后才发布对应 Mutation。完
 
 | 场景 | 配置模型 |
 | --- | --- |
-| 本地 `AgentSession` | `session.set({ model })`，接收 `AgentModel` 实例 |
+| 本地 `AgentSession` | `session.set({ model })`，接收 `ModelClient` 实例 |
 | `RemoteAgentSession` | `session.set({ security })`；不接受模型实例 |
-| Downcity Agent 项目 | CLI 解析 `execution.modelId`，在构造 Agent 时传入 `AgentModel` 实例 |
+| Downcity Agent 项目 | CLI 解析 `execution.modelId`，在构造 Agent 时传入 `ModelClient` 实例 |
 
 远程客户端不参与模型选择；模型 ID、默认值和恢复策略都属于服务端宿主。
 

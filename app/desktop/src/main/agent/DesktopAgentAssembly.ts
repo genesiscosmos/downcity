@@ -13,7 +13,8 @@ import {
   resolve_local_global_env,
 } from "@downcity/city/local";
 import { resolve_local_root_path } from "@downcity/city/local";
-import { type AgentModel, type AgentOptions } from "@downcity/agent";
+import type { AgentOptions } from "@downcity/agent";
+import type { ModelClient } from "@downcity/type";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/city";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
@@ -88,12 +89,12 @@ export function create_desktop_agent_model(
   data: DesktopLocalData,
   config: LocalAgentConfig,
   env: Readonly<Record<string, string>>,
-): AgentModel | undefined {
+): ModelClient | undefined {
   const model_id = typeof config.execution?.model_id === "string"
     ? config.execution.model_id.trim()
     : "";
   return model_id
-    ? new LazyDesktopAgentModel(
+    ? new LazyDesktopModelClient(
       model_id,
       async () => await resolve_desktop_agent_model(data, model_id, env),
     )
@@ -105,10 +106,10 @@ export function create_desktop_group_model(
   data: DesktopLocalData,
   model_id_input: string,
   env: Readonly<Record<string, string>>,
-): AgentModel | undefined {
+): ModelClient | undefined {
   const model_id = String(model_id_input || "").trim();
   return model_id
-    ? new LazyDesktopAgentModel(
+    ? new LazyDesktopModelClient(
       model_id,
       async () => await resolve_desktop_agent_model(data, model_id, env),
     )
@@ -120,7 +121,7 @@ export async function resolve_desktop_agent_model(
   data: DesktopLocalData,
   model_id_input: string,
   env: Readonly<Record<string, string | undefined>>,
-): Promise<AgentModel> {
+): Promise<ModelClient> {
   const model_id = String(model_id_input || "").trim();
   if (!model_id) throw new Error("model_id is required");
   const catalog = await create_embassy_user(data, env).ai.catalog();
@@ -132,10 +133,10 @@ export async function resolve_desktop_agent_model(
 }
 
 /** 为 City 模型绑定 Desktop 当前 Session 选择的推理档位。 */
-export function configure_desktop_agent_model(model: AgentModel, reasoning_effort?: string): AgentModel {
+export function configure_desktop_agent_model(model: ModelClient, reasoning_effort?: string): ModelClient {
   const effort = reasoning_effort?.trim();
   if (!effort) return model;
-  return new DesktopReasoningAgentModel(model, effort);
+  return new DesktopReasoningModelClient(model, effort);
 }
 
 /** 列出当前 Federation 中可见的全部模型；Renderer 按能力分组。 */
@@ -182,21 +183,21 @@ export function create_desktop_agent_tools(): NonNullable<AgentOptions["tools"]>
 }
 
 /** 首次模型调用时解析并缓存 Desktop Federation 模型。 */
-class LazyDesktopAgentModel implements AgentModel {
+class LazyDesktopModelClient implements ModelClient {
   readonly id: string;
 
   constructor(
     model_id: string,
-    private readonly resolve_model: () => Promise<AgentModel>,
+    private readonly resolve_model: () => Promise<ModelClient>,
   ) {
     this.id = model_id;
   }
 
-  async stream(call: Parameters<AgentModel["stream"]>[0], signal?: AbortSignal) {
+  async stream(call: Parameters<ModelClient["stream"]>[0], signal?: AbortSignal) {
     return await (await this.model()).stream(call, signal);
   }
 
-  private async model(): Promise<AgentModel> {
+  private async model(): Promise<ModelClient> {
     const model = await this.resolve_model();
     if (!model || typeof model.stream !== "function") {
       throw new Error(`Resolved model does not implement ModelClient: ${this.id}`);
@@ -207,14 +208,14 @@ class LazyDesktopAgentModel implements AgentModel {
 }
 
 /** 在不改变 Federation 模型对象的前提下绑定 reasoning。 */
-class DesktopReasoningAgentModel implements AgentModel {
+class DesktopReasoningModelClient implements ModelClient {
   readonly id: string;
 
-  constructor(private readonly model: AgentModel, private readonly reasoning_effort: string) {
+  constructor(private readonly model: ModelClient, private readonly reasoning_effort: string) {
     this.id = model.id;
   }
 
-  async stream(call: Parameters<AgentModel["stream"]>[0], signal?: AbortSignal) {
+  async stream(call: Parameters<ModelClient["stream"]>[0], signal?: AbortSignal) {
     return await this.model.stream({
       ...call,
       reasoning: { enabled: true, effort: this.reasoning_effort },

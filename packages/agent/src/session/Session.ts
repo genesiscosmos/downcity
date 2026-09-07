@@ -8,14 +8,11 @@
  */
 
 import { Executor } from "@executor/Executor.js";
-import type { ModelClient } from "@downcity/type";
-import type { RuntimeTool as Tool } from "@downcity/type";
+import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
 import {
-  infer_agent_model_label,
-  normalize_agent_model,
-  read_agent_model_context_window,
-  type AgentModel,
-} from "@/agent/AgentModel.js";
+  read_model_context_window,
+  read_model_label,
+} from "@/agent/ModelMetadata.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import type {
   AgentSessionConfigSnapshot,
@@ -532,7 +529,7 @@ export class Session implements AgentSession {
         });
     const model_label = String(
       metadata_with_title.model_label ||
-      infer_agent_model_label(this.get_selected_model()) ||
+      read_model_label(this.get_selected_model()) ||
       "",
     ).trim();
     return build_session_info({
@@ -841,12 +838,11 @@ export class Session implements AgentSession {
    * 解析顺序固定为 Session 覆盖模型，其次回退到 Agent 模型。
    */
   get_model(): ModelClient | undefined {
-    const model = this.get_selected_model();
-    return model ? normalize_agent_model(model) : undefined;
+    return this.get_selected_model();
   }
 
-  /** 按 Session 优先、Agent 兜底规则读取当前配置的 AgentModel。 */
-  private get_selected_model(): AgentModel | undefined {
+  /** 按 Session 优先、Agent 兜底规则读取当前配置的 ModelClient。 */
+  private get_selected_model(): ModelClient | undefined {
     return (
       this.local_state.effective_session_config.model ||
       this.local_state.session_config.model ||
@@ -859,7 +855,7 @@ export class Session implements AgentSession {
     return (
       this.local_state.effective_session_config.model_context_window ||
       this.local_state.session_config.model_context_window ||
-      read_agent_model_context_window(this.get_selected_model())
+      read_model_context_window(this.get_selected_model())
     );
   }
 

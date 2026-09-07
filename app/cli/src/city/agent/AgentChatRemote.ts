@@ -19,8 +19,8 @@ import {
   type RemoteAgentSession,
 } from "@downcity/agent";
 import { City, LocalStorageProvider, RemoteAgent } from "@downcity/city";
+import type { ModelClient } from "@downcity/type";
 import type { WorkspaceRuntime } from "@downcity/type/workspace";
-import type { AgentModel } from "@downcity/agent";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
 import {
   is_process_alive,
@@ -161,7 +161,7 @@ export async function createRemoteAgent(params: {
 function create_local_chat_sessions(
   sessions: AgentSessionCollection,
   workspace: WorkspaceRuntime,
-  resolve_model: (model_id: string) => Promise<AgentModel>,
+  resolve_model: (model_id: string) => Promise<ModelClient>,
 ): AgentSessions<RemoteAgentSession> {
   const wrap = (session: AgentSession): RemoteAgentSession => ({
     id: session.id,

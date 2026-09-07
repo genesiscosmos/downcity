@@ -14,15 +14,15 @@ import {
 } from "@downcity/city/local";
 import {
   Agent,
-  type AgentModel,
   type AgentOptions,
 } from "@downcity/agent";
+import type { ModelClient } from "@downcity/type";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/city";
 import {
   create_builtin_plugin_registrations,
 } from "@downcity/plugins";
-import { createCityAiAgentModel } from "@/city/runtime/city-model/CityAiServiceBinding.js";
+import { create_city_ai_model_client } from "@/city/runtime/city-model/CityAiServiceBinding.js";
 import { resolve_local_agent_env } from "@downcity/city/local";
 import { resolve_local_root_path } from "@downcity/city/local";
 import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
@@ -97,10 +97,10 @@ function process_environment(): Record<string, string> {
 export function create_cli_agent_model(
   config: LocalAgentConfig,
   env: Readonly<Record<string, string>>,
-): AgentModel | undefined {
+): ModelClient | undefined {
   const model_id = read_model_id(config.execution);
   return model_id
-    ? new LazyCliAgentModel(model_id, async () => await resolve_cli_agent_model(model_id, env))
+    ? new LazyCliModelClient(model_id, async () => await resolve_cli_agent_model(model_id, env))
     : undefined;
 }
 
@@ -108,10 +108,10 @@ export function create_cli_agent_model(
 export async function resolve_cli_agent_model(
   model_id_input: string,
   env: Readonly<Record<string, string>>,
-): Promise<AgentModel> {
+): Promise<ModelClient> {
   const model_id = String(model_id_input || "").trim();
   if (!model_id) throw new Error("model_id is required");
-  return await createCityAiAgentModel({ modelId: model_id, env: { ...env } });
+  return await create_city_ai_model_client({ modelId: model_id, env: { ...env } });
 }
 
 /** 创建 CLI 默认交互 Tool。 */
@@ -134,22 +134,22 @@ export function reload_cli_workspace_env(
 }
 
 /** 首次模型调用时解析并缓存真实 Federation 模型。 */
-class LazyCliAgentModel implements AgentModel {
+class LazyCliModelClient implements ModelClient {
   readonly id: string;
-  private model_promise?: Promise<AgentModel>;
+  private model_promise?: Promise<ModelClient>;
 
   constructor(
     model_id: string,
-    private readonly resolve_model: () => Promise<AgentModel>,
+    private readonly resolve_model: () => Promise<ModelClient>,
   ) {
     this.id = model_id;
   }
 
-  async stream(call: Parameters<AgentModel["stream"]>[0], signal?: AbortSignal) {
+  async stream(call: Parameters<ModelClient["stream"]>[0], signal?: AbortSignal) {
     return await (await this.model()).stream(call, signal);
   }
 
-  private async model(): Promise<AgentModel> {
+  private async model(): Promise<ModelClient> {
     this.model_promise ??= this.resolve_model().then((model) => {
       if (!model || typeof model.stream !== "function") {
         throw new Error(`Resolved model does not implement ModelClient: ${this.id}`);

@@ -7,8 +7,7 @@
  * - Composer 仍然是 Session 级能力，不向 Agent 的执行策略层泄漏。
  */
 
-import type { RuntimeTool as Tool } from "@downcity/type";
-import type { AgentModel } from "@/agent/AgentModel.js";
+import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
@@ -146,7 +145,7 @@ export interface SessionOptions {
   ensure_configured?: (session: AgentManagedSession) => Promise<void>;
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
-  get_agent_model: () => AgentModel | undefined;
+  get_agent_model: () => ModelClient | undefined;
 
   /** 当前 Session 使用的统一执行策略；省略时使用默认 Composer。 */
   composer?: SessionComposer;

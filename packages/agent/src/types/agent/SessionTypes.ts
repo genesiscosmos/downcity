@@ -6,7 +6,7 @@
  * - session actor 方法接口拆到 `SessionActor.ts`。
  */
 
-import type { AgentModel } from "@/agent/AgentModel.js";
+import type { ModelClient } from "@downcity/type";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import type {
@@ -82,7 +82,7 @@ export interface AgentSessionSetInput {
    * - SDK 只接受宿主已经解析完成的运行时模型实例。
    * - 模型选择、ID 与持久化全部由宿主负责。
    */
-  model?: AgentModel;
+  model?: ModelClient;
 
   /**
    * 当前 Session 的安全策略。
@@ -129,7 +129,7 @@ export interface RemoteSessionSetInput {
    *
    * 关键点（中文）
    * - 远程边界只传递稳定、可序列化的模型 ID。
-   * - 服务端宿主负责把模型 ID 解析为运行时 AgentModel。
+   * - 服务端宿主负责把模型 ID 解析为运行时 ModelClient。
    */
   model_id?: string;
 
@@ -162,7 +162,7 @@ export interface AgentSessionStatus {
  */
 export interface AgentSessionConfigSnapshot {
   /** 当前 session 绑定的默认模型实例。 */
-  model?: AgentModel;
+  model?: ModelClient;
   /** 当前模型的轻量可读标签。 */
   model_label?: string;
   /** 当前模型支持的总上下文窗口长度，单位为 token。 */

@@ -8,9 +8,9 @@
  */
 
 import {
-  infer_agent_model_label,
-  read_agent_model_context_window,
-} from "@/agent/AgentModel.js";
+  read_model_context_window,
+  read_model_label,
+} from "@/agent/ModelMetadata.js";
 import {
   normalize_session_title,
   resolve_system_timezone,
@@ -19,7 +19,7 @@ import { ensure_session_title } from "@/session/SessionTitle.js";
 import type {
   AgentSessionConfigSnapshot,
 } from "@/types/agent/SessionTypes.js";
-import type { AgentModel } from "@/agent/AgentModel.js";
+import type { ModelClient } from "@downcity/type";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -171,14 +171,14 @@ export class SessionState {
   /**
    * 写入当前 session 配置。
    */
-  async set_model(model: AgentModel): Promise<SessionModelSetResult> {
-    const next_model_label = infer_agent_model_label(model);
+  async set_model(model: ModelClient): Promise<SessionModelSetResult> {
+    const next_model_label = read_model_label(model);
     const changed = next_model_label !== this.state.session_config.model_label;
     const next_config: AgentSessionConfigSnapshot = {
       ...this.state.session_config,
       model,
       model_label: next_model_label,
-      model_context_window: read_agent_model_context_window(model),
+      model_context_window: read_model_context_window(model),
     };
     if (changed) {
       await this.run_metadata_mutation(async () => {

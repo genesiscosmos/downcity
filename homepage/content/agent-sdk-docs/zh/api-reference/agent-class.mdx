@@ -32,7 +32,7 @@ const session = await agent.sessions.create({ workspace });
 - `description`：可选的一句话能力简介，供展示与 Group 语义调度使用。
 - `tools`：该 Agent 创建的 Session 可使用的自定义 Tool。
 - `instruction`：Agent 级静态基础指令。
-- `model`：默认 `AgentModel`，本地 Session 可以覆盖。
+- `model`：默认 `ModelClient`，本地 Session 可以覆盖。
 - `session_class`：可选的本地自定义 Session 类。
 
 构造参数中没有 `workspace`。宿主独立创建 Workspace，并在 Agent 需要进入项目执行时调用

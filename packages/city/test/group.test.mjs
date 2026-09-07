@@ -263,7 +263,9 @@ test("Group 没有 model 且未注入策略时记录调度失败", async () => {
 test("AI Dispatch 失败时不切换到隐式规则策略", async () => {
   const dispatch_model = create_dispatch_model({
     modelId: "failing-dispatch-model",
-    doGenerate: async () => { throw new Error("dispatch unavailable"); },
+    doGenerate: async () => ({
+      content: [{ type: "error", error: "dispatch unavailable" }],
+    }),
   });
   const city = new City();
   const agent = new Agent({ id: "failing-dispatch-agent", session_class: RecordingSession });

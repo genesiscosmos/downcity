@@ -1,7 +1,7 @@
 /** Group 的公开领域类型：Group 是持续存在的群聊主体。 */
 
 import type { Agent } from "@/agent/Agent.js";
-import type { AgentModel } from "@/agent/AgentModel.js";
+import type { ModelClient } from "@downcity/type";
 import type { DispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { GroupSessions } from "@/types/group/GroupSession.js";
 
@@ -14,7 +14,7 @@ export interface GroupOptions {
   /** Group 的可选协作说明。 */
   readonly instruction?: string;
   /** Group 用于理解群聊意图并选择投递成员的模型。 */
-  readonly model?: AgentModel;
+  readonly model?: ModelClient;
   /** Group 成员列表。 */
   readonly members: readonly Agent[];
   /** Group 的消息调度策略；省略时使用 Group.model 驱动的 AI 调度。 */
@@ -54,7 +54,7 @@ export interface GroupContract {
   /** Group 的协作说明。 */
   readonly instruction?: string;
   /** Group 用于理解群聊意图并生成成员阶段计划的模型；未提供时首次调度会失败。 */
-  readonly model?: AgentModel;
+  readonly model?: ModelClient;
   /** Group 成员快照。 */
   readonly members: readonly Agent[];
   /** Group 使用的消息调度策略。 */

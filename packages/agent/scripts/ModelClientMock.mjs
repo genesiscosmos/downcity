@@ -81,6 +81,17 @@ function generate_result_stream(model_id, result = {}) {
           tool_name: part.tool_name,
         });
         controller.enqueue({ type: "tool_call_finish", content_id, input: part.input });
+      } else if (part.type === "error") {
+        controller.enqueue({
+          type: "model_error",
+          error: {
+            code: "provider_error",
+            message: String(part.error || "Provider error"),
+            retryable: false,
+          },
+        });
+        controller.close();
+        return;
       }
     }
     controller.enqueue({ type: "model_usage", usage: normalize_usage(result.usage) });

@@ -7,8 +7,7 @@
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建时提供执行资源。
  */
 
-import type { RuntimeTool as Tool } from "@downcity/type";
-import type { AgentModel } from "@/agent/AgentModel.js";
+import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
 import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import type {
   AgentOptions,
@@ -44,7 +43,7 @@ export class Agent {
   readonly description: string;
 
   /** Agent 默认模型；Session 可以显式覆盖。 */
-  readonly model?: AgentModel;
+  readonly model?: ModelClient;
 
   /** Agent 面向用户的 Session 创建入口。 */
   readonly sessions: AgentSessionCollection;

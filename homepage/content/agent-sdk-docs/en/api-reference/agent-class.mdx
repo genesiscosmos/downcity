@@ -32,7 +32,7 @@ const session = await agent.sessions.create({ workspace });
 - `description`: optional concise capability profile used for display and semantic Group dispatch.
 - `tools`: custom Tools available to Sessions created by this Agent.
 - `instruction`: static Agent-level base instruction.
-- `model`: default `AgentModel`; a local Session may override it.
+- `model`: default `ModelClient`; a local Session may override it.
 - `session_class`: optional custom local Session class.
 
 There is no `workspace` constructor option. The host creates Workspace independently and selects it
