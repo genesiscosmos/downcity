@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Markdown } from "@/components/markdown/Markdown";
+import { SidebarContent } from "@/layouts/sidebar/SidebarPanel";
 import { cn } from "@/lib/utils";
 
 /** 创建 Plugin UI Components 时需要的宿主上下文。 */
@@ -27,7 +28,7 @@ interface PluginRendererUiComponentOptions {
 /** 创建稳定的宿主 Plugin UI Components 集合。 */
 export function create_plugin_renderer_ui_components(options: PluginRendererUiComponentOptions): PluginRendererUiComponents {
   return {
-    Sidebar: ({ children }) => <div data-sidebar-scrollable="true" className="sidebar-body-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-2">{children}</div>,
+    Sidebar: ({ children }) => <SidebarContent class_name="flex flex-col">{children}</SidebarContent>,
     SidebarSection: ({ label, children }) => <section className="mb-4 min-w-0">
       {label ? <h3 className="px-2 pb-1.5 pt-1 text-[0.625rem] font-medium uppercase tracking-[0.08em] text-muted-foreground/65">{label}</h3> : null}
       <div className="space-y-0.5">{children}</div>

@@ -47,11 +47,11 @@ export const DesktopSidebar = memo(function DesktopSidebar({ controller, open_cr
     : undefined;
   return <SidebarFrame collapsed={collapsed}>
     <SidebarRail active_mode={settings_active ? undefined : sidebar_mode} on_change={controller.actions.set_sidebar_mode} plugin_workspaces={plugin_workspaces} unread_modes={unread_modes} settings_active={settings_active} open_settings={() => controller.actions.open_settings("user")} />
-    {settings_active ? <SettingsSidebarPanel controller={controller} /> : <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+    {settings_active ? <SettingsSidebarPanel controller={controller} /> : <>
       {sidebar_mode === "chat" ? <ChatSidebar controller={controller} notification_state={notification_state} open_create_agent={() => open_create_agent()} open_create_group={open_create_group} open_group_config={open_group_config} /> : null}
       {sidebar_mode === "workspace" ? <WorkspaceSidebar controller={controller} open_create_workspace={open_create_workspace} /> : null}
       {sidebar_mode === "plugins" ? <PluginSidebar controller={controller} /> : null}
       {workspace_plugin_id ? <PluginWorkspaceSidebar controller={controller} plugin_id={workspace_plugin_id} notification_state={notification_state} /> : null}
-    </div>}
+    </>}
   </SidebarFrame>;
 });

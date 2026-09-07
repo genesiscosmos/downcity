@@ -9,6 +9,7 @@ import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopPluginDefinition } from "@common/types/DesktopApi";
 import type { DesktopNotificationState } from "@common/types/DesktopNotification";
 import { SidebarHeader } from "./SidebarHeader";
+import { SidebarContent, SidebarPanel } from "./SidebarPanel";
 import { plugin_renderer_notifications } from "@/lib/notification/notification_state";
 import { use_desktop_selector } from "@/app/use_desktop";
 
@@ -43,11 +44,11 @@ export const PluginWorkspaceSidebar = memo(function PluginWorkspaceSidebar({ con
   }), [invoke_plugin_action, plugin_id]);
   const navigate = useCallback((route: PluginJsonObject) => navigate_plugin(plugin_id, route), [navigate_plugin, plugin_id]);
   const invalidate = useCallback(() => invalidate_plugin(plugin_id), [invalidate_plugin, plugin_id]);
-  if (!plugin?.has_sidebar || !plugin.has_mainview) return <div className="px-3 py-8 text-center text-xs text-muted-foreground">Plugin 未提供功能界面</div>;
-  return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+  if (!plugin?.has_sidebar || !plugin.has_mainview) return <SidebarPanel><SidebarContent class_name="px-3 py-8 text-center text-xs text-muted-foreground">Plugin 未提供功能界面</SidebarContent></SidebarPanel>;
+  return <SidebarPanel>
     <SidebarHeader title={plugin.title} />
-    {error ? <div className="mx-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="sidebar" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={route ?? empty_plugin_route} notifications={plugin_renderer_notifications(notification_state, plugin.plugin_id)} navigate={navigate} revision={revision} invalidate={invalidate} />}
-  </div>;
+    {error ? <SidebarContent><div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div></SidebarContent> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="sidebar" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={route ?? empty_plugin_route} notifications={plugin_renderer_notifications(notification_state, plugin.plugin_id)} navigate={navigate} revision={revision} invalidate={invalidate} />}
+  </SidebarPanel>;
 });
 
 /** 把未知加载失败转换为用户可见文本。 */

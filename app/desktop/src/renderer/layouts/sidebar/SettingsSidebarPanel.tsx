@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
 import type { DesktopController, SettingsSection } from "@/types/DesktopView";
+import { SidebarContent, SidebarPanel } from "./SidebarPanel";
 
 /** 设置 Panel 属性。 */
 interface SettingsSidebarPanelProps {
@@ -31,20 +32,20 @@ export const SettingsSidebarPanel = memo(function SettingsSidebarPanel({ control
     ] },
   ];
 
-  return <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+  return <SidebarPanel>
     <div className="shrink-0 px-2 pb-2">
       <Button size="sidebar" className="justify-start text-foreground/80" onClick={controller.actions.close_settings}>
         <TbArrowLeft />
         <span>{common_translate("actions.back")}</span>
       </Button>
     </div>
-    <div className="sidebar-body-scroll flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2 py-1">
+    <SidebarContent class_name="flex flex-col gap-2.5 py-1">
       {settings_groups.map((group) => <div key={group.label} className="flex min-w-0 flex-col gap-0.5">
         <div className="px-2.5 pb-1 text-[10px] text-muted-foreground/65">{group.label}</div>
         <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-subtle p-1.5">
           {group.items.map(({ section, label, icon: Icon }) => <Button key={section} size="sidebar" className="px-2.5 text-foreground/80" actived={active_section === section} onClick={() => controller.actions.open_settings(section)}><Icon /><span className="min-w-0 truncate">{label}</span></Button>)}
         </div>
       </div>)}
-    </div>
-  </div>;
+    </SidebarContent>
+  </SidebarPanel>;
 });

@@ -7,6 +7,7 @@ import type { DesktopController } from "@/types/DesktopView";
 import { use_desktop_selector } from "@/app/use_desktop";
 import type { DesktopPluginSummary } from "@common/types/DesktopApi";
 import { SidebarHeader } from "./SidebarHeader";
+import { SidebarContent, SidebarPanel } from "./SidebarPanel";
 import { use_translation } from "@/locales/i18n";
 
 /** 始终列出全部 Plugin；点击后打开描述与配置详情。 */
@@ -15,13 +16,13 @@ export const PluginSidebar = memo(function PluginSidebar({ controller }: { /** �
   const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
   const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
   const selected_plugin_id = selection?.kind === "plugin" ? selection.plugin_id : "";
-  return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+  return <SidebarPanel>
     <SidebarHeader title={translate("catalog")} />
-    <div className="sidebar-body-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+    <SidebarContent>
       <div className="space-y-0.5">{plugins.map((plugin) => <PluginListItem key={plugin.plugin_id} plugin={plugin} active={plugin.plugin_id === selected_plugin_id} select_plugin={controller.actions.select_plugin} />)}</div>
       {!plugins.length ? <div className="px-3 py-8 text-center text-xs text-muted-foreground">{translate("empty")}</div> : null}
-    </div>
-  </div>;
+    </SidebarContent>
+  </SidebarPanel>;
 });
 
 /** Plugin Catalog 中的紧凑条目。 */
