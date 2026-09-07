@@ -11,6 +11,7 @@ import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionContextSnapshot, SessionSegmentSummary } from "@/types/session/SessionSegment.js";
 import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
+import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
 
 /** Composer 可读取的 Session 身份快照。 */
 export interface SessionComposeIdentity {
@@ -88,6 +89,8 @@ export interface SessionCompactionInput {
   model?: ModelClient;
   /** 当前 Session 的累计 Summary 与 Active Message 快照。 */
   history: Readonly<SessionContextSnapshot>;
+  /** 可选的模型请求逐次失败通知入口。 */
+  on_model_request_failure?: ModelRequestFailureReporter;
 }
 
 /** Composer 生成、等待 SessionMessages 提交的压缩计划。 */

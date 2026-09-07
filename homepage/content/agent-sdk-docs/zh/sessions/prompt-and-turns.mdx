@@ -81,7 +81,9 @@ const result = await turn.finished;
 
 结构化 Assistant Message 通过 `messages()` 与 `subscribe()` 读取，不在 Turn Result 中复制。模型或运行时在输出前失败时，用户可见错误通过 canonical `error` Message 持久化。
 
-Tool 抛出异常、返回 `{ success: false }`，或者模型生成的 Tool 参数不是完整 JSON 时，SDK 会把同一个 Tool Part 标记为 `failed`，并把 failed Tool Result 交回下一次模型 Step。它们不会直接使 Turn 失败。只有模型 Provider 流、canonical Message 写入或其他执行基础设施失败才会结束 Turn；无任何可见输出的临时 Provider 流错误会进行有限自动重试，已经产生部分输出时则保留草稿并明确返回失败，避免重试造成正文重复。
+Tool 抛出异常、返回 `{ success: false }`，或者模型生成的 Tool 参数不是完整 JSON 时，SDK 会把同一个 Tool Part 标记为 `failed`，并把 failed Tool Result 交回下一次模型 Step。它们不会直接使 Turn 失败。只有模型 Provider 流、canonical Message 写入或其他执行基础设施失败才会结束 Turn；无任何可见输出的临时 Provider 流错误会自动重试 5 次，连同首次调用最多请求 6 次。已经产生部分输出时则保留草稿并明确返回失败，避免重试造成正文重复。
+
+每次模型请求失败都会实时发布 `warning / model_request` Mutation。`request_kind` 区分 Turn、标题和历史压缩请求；`attempt` 和 `max_attempts` 表示当前与最大调用次数，`will_retry` 表示失败后是否继续重试。主 Turn Warning 带 `turn_id`，后台 Session 请求允许不带。最终一次失败的 `will_retry` 为 `false`；用户主动停止产生的 `cancelled` 不会作为 Warning 发布。
 
 OpenAI-compatible Provider 的 SSE 连接如果在事件中间结束，会返回可重试的 `transport_error`；完整但不是合法 JSON 的 SSE 事件会返回不可重试的 `provider_error`。对外错误只包含稳定说明，底层 JSON 解析异常不会作为用户文案暴露。
 

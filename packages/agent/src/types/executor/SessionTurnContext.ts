@@ -22,6 +22,7 @@ import type {
 import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
 import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
 import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
+import type { ModelRequestFailureNotice } from "@/types/executor/ModelRequest.js";
 
 /**
  * 创建一个 Session Turn 上下文所需的稳定输入。
@@ -67,6 +68,9 @@ export interface SessionTurnContextInit {
 
   /** 把辅助 Action 持久化并发布为 Session 事件的回调。 */
   publish_action?: AgentSessionActionCallback;
+
+  /** 把内部模型请求失败交给 Session 边界投影。 */
+  report_model_request_failure?: (notice: ModelRequestFailureNotice) => void;
 }
 
 /**

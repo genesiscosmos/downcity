@@ -18,6 +18,7 @@ import { normalize_session_title } from "@/session/storage/Metadata.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
+import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
 
 const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
 
@@ -60,6 +61,9 @@ export interface EnsureSessionTitleParams {
 
   /** 可选的标题请求取消信号。 */
   signal?: AbortSignal;
+
+  /** 可选的模型请求逐次失败通知入口。 */
+  on_model_request_failure?: ModelRequestFailureReporter;
 
   /** 可选的标题提交入口，用于与其他 metadata mutation 串行化。 */
   commit_title?: (title: string) => Promise<SessionHistoryMeta>;
@@ -190,6 +194,9 @@ export async function generate_session_title(input: {
 
   /** 标题请求取消信号。 */
   signal?: AbortSignal;
+
+  /** 可选的模型请求逐次失败通知入口。 */
+  on_model_request_failure?: ModelRequestFailureReporter;
 }): Promise<string | undefined> {
   try {
     const result = await generate_model(input.model, {
@@ -202,7 +209,11 @@ export async function generate_session_title(input: {
         input.first_user_text,
         ].join("\n"),
       ),
-    }, input.signal);
+    }, {
+      request_kind: "session_title",
+      signal: input.signal,
+      on_failure: input.on_model_request_failure,
+    });
     const text = result.text;
     const generated_title = normalize_generated_title(text);
     if (!generated_title) {
@@ -272,6 +283,7 @@ export async function ensure_session_title(
     first_user_text,
     logger: input.logger,
     signal: input.signal,
+    on_model_request_failure: input.on_model_request_failure,
   });
   if (!generated_title) return current;
 

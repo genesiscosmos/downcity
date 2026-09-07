@@ -18,7 +18,7 @@ unsubscribe();
 
 订阅回调可以是异步函数。单个订阅者抛错或 reject 不会回滚已持久化状态，也不会阻塞其他订阅者。
 
-## 六类 Mutation
+## 八类 Mutation
 
 所有 Mutation 都有 `mutation_id`、`session_id` 与 `created_at`。
 
@@ -28,8 +28,10 @@ unsubscribe();
 | `part` | `text | reasoning | tool | interaction | file | data` | Assistant Part 的完整快照 | 是 |
 | `delta` | `text | reasoning | tool_input` | 新增的原始文本或 Tool 输入片段 | 是 |
 | `turn` | `start | finish` | Turn 执行生命周期 | 否 |
+| `file_diff` | — | 当前 Turn 的文件改动实时摘要 | 否 |
 | `compact` | `start | finish` | 显式 Compact Command 生命周期 | 否 |
 | `session` | `title | config` | Session 自身属性变化 | 否 |
+| `warning` | `model_request` | 模型请求失败与重试进度 | 否 |
 
 `message`、`part` 和 `delta` 都在对应完整 Message 或 Assistant 草稿持久化成功后才发布。Mutation envelope 本身不写入 `active.jsonl` 或 Segment。
 
@@ -107,6 +109,8 @@ session.subscribe((mutation) => {
 `turn.finish` 的状态为 `completed`、`failed` 或 `stopped`。它和 `turn.finished` 共同描述同一最终结果：前者适合订阅 UI，后者适合控制流。
 
 `compact.finish` 与 `compact_handle.finished` 使用同一最终结果语义：Mutation 适合更新 UI，Handle 适合业务控制流。
+
+模型调用失败时，`warning / model_request` 会携带 `request_kind`、`code`、`message`、`retryable`、`attempt`、`max_attempts` 与 `will_retry`。主 Turn 请求还携带 `turn_id`，后台标题与历史压缩请求允许不带。它是实时诊断，不写入 Message 历史；`retryable` 表示 Provider 的错误分类，`will_retry: false` 表示本次失败不会再自动重试。
 
 ## 工具 Part 的状态机
 

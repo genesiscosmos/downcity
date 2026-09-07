@@ -26,7 +26,11 @@ import type {
   SessionAssistantMessagePart,
   SessionAssistantToolPart,
 } from "@/types/session/SessionMessage.js";
-import { ModelStreamFailure } from "@/executor/model/ModelStreamFailure.js";
+import {
+  ModelStreamFailure,
+  normalize_model_invocation_failure,
+  normalize_model_protocol_failure,
+} from "@/executor/model/ModelStreamFailure.js";
 
 /** 单个工具调用的执行事实。 */
 export interface ModelStepToolCall {
@@ -95,15 +99,56 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
     messages: [...convert_system_messages(input.system), ...input.messages],
     tools: convert_tools(input.tools),
   };
-  const stream = await input.model.stream(call, input.abort_signal);
   const collector = new StepEventCollector();
   const validator = new ModelStreamValidator();
-  for await (const event of stream) {
-    validator.accept(event);
-    await input.assistant_output?.write_model_event(event);
-    collector.accept(event);
+  let stream: ReadableStream<ModelStreamEvent>;
+  try {
+    stream = await input.model.stream(call, input.abort_signal);
+  } catch (error) {
+    throw normalize_model_invocation_failure(error, false, input.abort_signal);
   }
-  validator.finish();
+  const reader = stream.getReader();
+  let stream_complete = false;
+  try {
+    while (true) {
+      let result: Awaited<ReturnType<typeof reader.read>>;
+      try {
+        result = await reader.read();
+      } catch (error) {
+        throw normalize_model_invocation_failure(
+          error,
+          collector.has_partial_output(),
+          input.abort_signal,
+        );
+      }
+      if (result.done) {
+        stream_complete = true;
+        break;
+      }
+      const event = result.value;
+      try {
+        validator.accept(event);
+      } catch (error) {
+        throw normalize_model_protocol_failure(
+          error,
+          collector.has_partial_output(),
+        );
+      }
+      await input.assistant_output?.write_model_event(event);
+      collector.accept(event);
+    }
+  } finally {
+    if (!stream_complete) await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+  try {
+    validator.finish();
+  } catch (error) {
+    throw normalize_model_protocol_failure(
+      error,
+      collector.has_partial_output(),
+    );
+  }
   const collected = collector.finish();
   const tool_results = await execute_tools(
     collected.tool_calls,
@@ -163,14 +208,19 @@ class StepEventCollector {
   private finish_reason?: ModelFinishReason;
   private text = "";
 
+  /** 当前调用是否已经产生不可安全重复的模型输出。 */
+  has_partial_output(): boolean {
+    return this.text.length > 0 ||
+      this.reasoning_by_id.size > 0 ||
+      this.tool_by_content_id.size > 0;
+  }
+
   /** 消费单个标准模型事件。 */
   accept(event: ModelStreamEvent): void {
     if (event.type === "model_error") {
       throw new ModelStreamFailure(
         event.error,
-        this.text.length > 0 ||
-          this.reasoning_by_id.size > 0 ||
-          this.tool_by_content_id.size > 0,
+        this.has_partial_output(),
       );
     }
     if (event.type === "text_start") {

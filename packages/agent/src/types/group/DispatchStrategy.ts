@@ -161,7 +161,10 @@ export class AiDispatchStrategy implements DispatchStrategy {
           tool_choice: { type: "tool", tool_name: "dispatch_group" },
           max_output_tokens: 1_200,
           reasoning: { enabled: false },
-        }, input.abort_signal);
+        }, {
+          request_kind: "group_dispatch",
+          signal: input.abort_signal,
+        });
         const dispatch_call = result.tool_calls.length === 1 && result.tool_calls[0]?.tool_name === "dispatch_group"
           ? result.tool_calls[0]
           : undefined;

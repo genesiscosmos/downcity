@@ -182,6 +182,9 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       publish_action: async (event) => {
         await context.init.publish_action?.(event);
       },
+      report_model_request_failure: (notice) => {
+        context.init.report_model_request_failure?.(notice);
+      },
     });
 
     this.effects = Object.freeze({

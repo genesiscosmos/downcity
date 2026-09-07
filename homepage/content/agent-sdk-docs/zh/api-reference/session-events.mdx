@@ -19,14 +19,16 @@ if (mutation.variant === "delta" && mutation.type === "text") {
 }
 ```
 
-六种 variant 的职责是：
+八种 variant 的职责是：
 
 - `message`：完整顶层 Message 快照
 - `part`：完整 Assistant Part 快照，例如 Tool 状态
 - `delta`：text / reasoning / tool_input 新增片段
 - `turn`：Turn 的 `start` / `finish` 生命周期
+- `file_diff`：当前 Turn 的文件改动实时摘要
 - `compact`：显式压缩的 `start` / `finish` 生命周期
 - `session`：Session 自身状态变化，例如 `title`
+- `warning`：不写入历史的运行期警告，例如模型请求失败与重试
 
 Interaction Part 进入 `pending` 后携带完整请求；关联 Tool 同时进入 `waiting-user`。订阅保持为纯数据通道，用户决定通过 Session 命令 API 提交：
 

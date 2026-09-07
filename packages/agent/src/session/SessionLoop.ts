@@ -50,6 +50,7 @@ import {
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
 import type { SessionTurnCommittedHookValue } from "@/types/session/SessionHook.js";
 import type { JsonValue } from "@/types/common/Json.js";
+import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
@@ -693,6 +694,13 @@ export class SessionLoop {
       },
       publish_action: async (event) => {
         await this.persist_action_event(event);
+      },
+      report_model_request_failure: (notice) => {
+        this.events.publish(create_session_model_request_warning({
+          session_id: this.session_id,
+          turn_id: active_turn.turn_id,
+          notice,
+        }));
       },
     });
   }

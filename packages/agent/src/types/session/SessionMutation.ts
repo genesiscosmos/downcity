@@ -6,6 +6,8 @@
 
 import type { SessionAssistantMessagePart, SessionMessage } from "@/types/session/SessionMessage.js";
 import type { AgentSessionCompactReason } from "@/types/sdk/AgentSessionCompact.js";
+import type { ModelErrorCode } from "@downcity/type";
+import type { ModelRequestKind } from "@/types/executor/ModelRequest.js";
 
 /** 所有 Session Mutation 的公共字段。 */
 export interface SessionMutationBase {
@@ -164,6 +166,32 @@ export type SessionConfigMutation = SessionMutationBase & {
 /** Session 自身属性变化 Mutation。 */
 export type SessionStateMutation = SessionTitleMutation | SessionConfigMutation;
 
+/** 模型请求失败 Warning Mutation。 */
+export type SessionModelRequestWarningMutation = SessionMutationBase & {
+  /** Mutation 层级固定为 warning。 */
+  variant: "warning";
+  /** 当前 Warning 类型固定为模型请求失败。 */
+  type: "model_request";
+  /** 当前模型请求用途。 */
+  request_kind: ModelRequestKind;
+  /** 当前 Warning 所属 Turn 标识；后台 Session 请求允许为空。 */
+  turn_id?: string;
+  /** Downcity 稳定模型错误码。 */
+  code: ModelErrorCode;
+  /** 可安全展示给 Session 使用者的失败说明。 */
+  message: string;
+  /** Provider 是否声明该错误允许安全重试。 */
+  retryable: boolean;
+  /** 当前失败是本次请求的第几次调用，从 1 开始。 */
+  attempt: number;
+  /** 包含首次调用与自动重试在内的最大调用次数。 */
+  max_attempts: number;
+  /** 当前失败后是否还会自动重试。 */
+  will_retry: boolean;
+  /** Provider 返回的可选请求标识。 */
+  provider_request_id?: string;
+};
+
 /** Session 对外唯一实时 Mutation 联合类型。 */
 export type SessionMutation =
   | SessionMessageMutation
@@ -172,7 +200,8 @@ export type SessionMutation =
   | SessionTurnMutation
   | SessionTurnFileDiffMutation
   | SessionCompactMutation
-  | SessionStateMutation;
+  | SessionStateMutation
+  | SessionModelRequestWarningMutation;
 
 /** Session Mutation 订阅回调。 */
 export type SessionMutationSubscriber = (
@@ -194,6 +223,7 @@ export function is_session_mutation(input: unknown): input is SessionMutation {
     candidate.variant === "turn" ||
     candidate.variant === "file_diff" ||
     candidate.variant === "compact" ||
-    candidate.variant === "session"
+    candidate.variant === "session" ||
+    candidate.variant === "warning"
   );
 }

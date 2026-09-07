@@ -9,8 +9,9 @@
 - `Session` 拥有输入队列并创建 Command；`SessionLoop` 负责消费、Turn Handle 与 Assistant Message 收口。
 - `SessionTurnContext` 从 Turn 创建起唯一拥有取消信号、Step 快照和执行期资源。
 - `SessionComposer` 根据只读 Session 快照组装 system、messages 和 tools。
-- `Executor` 管理单次模型执行、上下文超限重试和 Step Plugin Lease；它只对外提供 `execute()`。
-- `CoreEngineRunner` 执行 Downcity 模型流、Tool Loop、续写和内存上下文折叠。
+- `Executor` 管理一次 Turn 的输入装配、上下文超限恢复和 Step Plugin Lease；它只对外提供 `execute()`。
+- `ModelRequestRunner` 唯一拥有普通模型请求的五次重试、退避和逐次失败通知。
+- `CoreEngineRunner` 执行 Tool Loop、续写和内存上下文折叠，不维护普通请求重试状态。
 - `SessionMessages` 是 Message 唯一事实源；Executor 不写文件、不持有 Store。
 
 ## 执行关系
@@ -23,9 +24,12 @@ flowchart LR
     Composer --> Input["system + messages + tools"]
     Executor --> Engine["CoreEngineRunner"]
     Input --> Engine
-    Engine --> Model["ModelClient"]
+    Engine --> Request["ModelRequestRunner"]
+    Request --> Step["ModelStepRunner"]
+    Step --> Model["ModelClient"]
     Engine --> Tools["Tools / Plugins"]
-    Model -->|"ModelStreamEvent"| Engine
+    Model -->|"ModelStreamEvent"| Step
+    Step --> Request
     Engine -->|"ModelStreamEvent / Tool Result"| Context
     Context --> Messages["SessionMessages"]
 ```

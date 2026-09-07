@@ -33,6 +33,34 @@ export class ModelStreamFailure extends Error {
   }
 }
 
+/** 把 ModelClient 直接抛出的调用异常归一为可恢复的模型传输失败。 */
+export function normalize_model_invocation_failure(
+  error: unknown,
+  has_partial_output: boolean,
+  abort_signal?: AbortSignal,
+): ModelStreamFailure {
+  if (error instanceof ModelStreamFailure) return error;
+  const cancelled = abort_signal?.aborted === true;
+  return new ModelStreamFailure({
+    code: cancelled ? "cancelled" : "transport_error",
+    message: error instanceof Error ? error.message : String(error),
+    retryable: !cancelled,
+  }, has_partial_output);
+}
+
+/** 把不合法的模型协议流归一为不可重试的 Provider 失败。 */
+export function normalize_model_protocol_failure(
+  error: unknown,
+  has_partial_output: boolean,
+): ModelStreamFailure {
+  if (error instanceof ModelStreamFailure) return error;
+  return new ModelStreamFailure({
+    code: "provider_error",
+    message: error instanceof Error ? error.message : String(error),
+    retryable: false,
+  }, has_partial_output);
+}
+
 /** 判断未知错误是否为可安全自动重试的无输出模型流失败。 */
 export function is_retryable_empty_model_stream_failure(
   error: unknown,

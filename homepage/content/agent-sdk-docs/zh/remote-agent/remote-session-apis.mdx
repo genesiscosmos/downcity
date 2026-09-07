@@ -50,7 +50,7 @@ const unsubscribe = session.subscribe((event) => {
 unsubscribe();
 ```
 
-订阅会收到 `message | part | delta | turn | compact | session` 六类 Mutation。用户参与请求表现为 pending Interaction Part，关联 Tool 同时进入 `waiting-user`；通过 `session.respond(...)` 提交结构化响应。
+订阅会收到 `message | part | delta | turn | file_diff | compact | session | warning` 八类 Mutation。用户参与请求表现为 pending Interaction Part，关联 Tool 同时进入 `waiting-user`；模型调用失败会产生 `warning / model_request`。通过 `session.respond(...)` 提交结构化响应。
 
 ## 显式压缩
 

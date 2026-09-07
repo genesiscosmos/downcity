@@ -9,6 +9,7 @@
  */
 
 import type { ModelClient } from "@downcity/type";
+import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
 import {
   build_text_model_messages,
   generate_model,
@@ -44,6 +45,8 @@ export async function compose_session_compaction(input: {
   snapshot: Readonly<SessionContextSnapshot>;
   /** 生成累计 Summary 使用的模型。 */
   model: ModelClient;
+  /** 可选的模型请求逐次失败通知入口。 */
+  on_model_request_failure?: ModelRequestFailureReporter;
 }): Promise<SessionCompactionPlan | null> {
   const context_messages = input.snapshot.messages.filter(
     (message) => message.type === "user" || message.type === "assistant",
@@ -71,6 +74,9 @@ export async function compose_session_compaction(input: {
   const result = await generate_model(input.model, {
     messages: build_text_model_messages(SESSION_COMPACTION_SYSTEM_PROMPT, prompt),
     max_output_tokens: SUMMARY_MAX_OUTPUT_TOKENS,
+  }, {
+    request_kind: "history_compaction",
+    on_failure: input.on_model_request_failure,
   });
   const summary = String(result.text || "").trim();
   if (!summary) {

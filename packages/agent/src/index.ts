@@ -151,10 +151,14 @@ export {
   is_session_mutation,
 } from "./types/session/SessionMutation.js";
 export type {
+  ModelRequestKind,
+} from "./types/executor/ModelRequest.js";
+export type {
   SessionCompactMutation,
   SessionConfigMutation,
   SessionDeltaMutation,
   SessionMessageMutation,
+  SessionModelRequestWarningMutation,
   SessionMutation,
   SessionMutationSubscriber,
   SessionMutationUnsubscribe,

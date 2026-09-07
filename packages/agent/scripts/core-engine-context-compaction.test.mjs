@@ -63,7 +63,7 @@ function create_context_error_runner() {
   });
 }
 
-function create_turn_input(model, messages, context_window = 100) {
+function create_turn_input(model, messages, context_window = 100, warnings = []) {
   return {
     execute_input: {
       query: "latest request",
@@ -76,6 +76,7 @@ function create_turn_input(model, messages, context_window = 100) {
       session_id: "compact-runner-session",
       session_origin: { type: "chat" },
       turn_id: "compact-runner-turn",
+      report_model_request_failure: (warning) => warnings.push(warning),
     }),
     resolve_step_inputs: async () => ({
       model,
@@ -149,6 +150,7 @@ test("新的持久化 Summary 只按 50% 水位验收一次", async () => {
 
 test("Provider 在输出前发生可重试流错误时自动重试", async () => {
   let call_count = 0;
+  const warnings = [];
   const model = {
     id: "retryable-stream-model",
     async stream() {
@@ -189,11 +191,70 @@ test("Provider 在输出前发生可重试流错误时自动重试", async () =>
     content: [{ type: "text", text: "latest request" }],
   }];
 
-  const result = await create_runner().execute(create_turn_input(model, messages));
+  const result = await create_runner().execute(
+    create_turn_input(model, messages, 100, warnings),
+  );
 
   assert.equal(call_count, 2);
   assert.equal(result.success, true);
   assert.equal(result.text, "done");
+  assert.deepEqual(warnings, [{
+    request_kind: "turn",
+    code: "transport_error",
+    message: "temporary disconnect",
+    retryable: true,
+    attempt: 1,
+    max_attempts: 6,
+    will_retry: true,
+  }]);
+});
+
+test("Provider 不可重试失败会立即发送最终模型 Warning", async () => {
+  const warnings = [];
+  const model = {
+    id: "rejected-model",
+    async stream() {
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            type: "model_start",
+            request_id: "request_rejected",
+            model_id: "rejected-model",
+          });
+          controller.enqueue({
+            type: "model_error",
+            error: {
+              code: "authentication_failed",
+              message: "invalid model credential",
+              retryable: false,
+              provider_request_id: "provider_request_1",
+            },
+          });
+          controller.close();
+        },
+      });
+    },
+  };
+  const messages = [{
+    role: "user",
+    content: [{ type: "text", text: "latest request" }],
+  }];
+
+  const result = await create_runner().execute(
+    create_turn_input(model, messages, 100, warnings),
+  );
+
+  assert.equal(result.success, false);
+  assert.deepEqual(warnings, [{
+    request_kind: "turn",
+    code: "authentication_failed",
+    message: "invalid model credential",
+    retryable: false,
+    attempt: 1,
+    max_attempts: 1,
+    will_retry: false,
+    provider_request_id: "provider_request_1",
+  }]);
 });
 
 test("显式 compact 后在下一次 provider 调用前重载 canonical history", async () => {

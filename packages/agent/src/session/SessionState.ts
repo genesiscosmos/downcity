@@ -29,6 +29,7 @@ import type { SessionMessage } from "@/types/session/SessionMessage.js";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
+import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 
 /** Session 模型配置写入结果。 */
 export interface SessionModelSetResult {
@@ -305,6 +306,12 @@ export class SessionState {
         logger: this.logger,
         generate: true,
         signal,
+        on_model_request_failure: (notice) => {
+          this.publish_event(create_session_model_request_warning({
+            session_id: this.session_id,
+            notice,
+          }));
+        },
         commit_title: async (title) => await this.run_metadata_mutation(async () => {
           const latest_metadata = await this.store.read_metadata();
           if (signal.aborted) return latest_metadata;

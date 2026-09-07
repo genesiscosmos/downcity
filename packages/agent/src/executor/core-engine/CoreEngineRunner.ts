@@ -34,7 +34,7 @@ import {
   type ModelStepResult,
   type ModelStepToolCall,
 } from "@executor/model/ModelStepRunner.js";
-import { is_retryable_empty_model_stream_failure } from "@executor/model/ModelStreamFailure.js";
+import { execute_model_request } from "@executor/model/ModelRequestRunner.js";
 import { CoreEngineMessageState } from "@executor/core-engine/CoreEngineMessageState.js";
 import {
   deep_compact_model_messages,
@@ -59,10 +59,6 @@ const TURN_STOPPED_MESSAGE = "Turn stopped";
 
 /** Provider context-length error 在当前 step 内最多压缩重试三次。 */
 const MAX_CONTEXT_ERROR_COMPACTION_RETRIES = 3;
-/** 无任何可见输出时，临时 Provider 流错误的最大自动重试次数。 */
-const MAX_EMPTY_STREAM_RETRIES = 2;
-/** 无输出流错误的重试退避，避免立即重复冲击同一 Provider。 */
-const EMPTY_STREAM_RETRY_DELAYS_MS = [300, 1_000] as const;
 
 interface CoreEngineRunnerOptions {
   /** 当前 Session 稳定标识。 */
@@ -186,7 +182,6 @@ export class CoreEngineRunner {
 
       let incomplete_response_recovery_count = 0;
       let context_error_compaction_retries = 0;
-      let empty_stream_retry_count = 0;
       let compact_pending = false;
       let compact_validation_pending = Boolean(
         persisted_compaction_summary_id &&
@@ -243,27 +238,59 @@ export class CoreEngineRunner {
         last_observed_stream_error = undefined;
         let step_assistant_parts: SessionAssistantMessagePart[];
         let executed_steps: ModelStepResult[];
-        let canonical_step_started = false;
-        let canonical_step_finished = false;
         try {
-          if (input.turn_context.output.assistant) {
-            await input.turn_context.output.assistant.begin_step();
-            canonical_step_started = true;
-          }
-          const result = await run_model_step({
-            model: step_inputs.model,
-            system,
-            messages: message_state.model_messages,
-            tools,
+          const result = await execute_model_request({
+            request_kind: "turn",
             abort_signal: input.turn_context.lifecycle.abort_signal,
-            ...(input.turn_context.output.assistant
-              ? { assistant_output: input.turn_context.output.assistant }
-              : {}),
-            approve_tool: async (call, tool) => await resolve_tool_approval({
-              call,
-              tool,
-              turn_context: input.turn_context,
-            }),
+            should_retry: (error) => !this.should_compact_on_error(error),
+            on_failure: async (notice, error) => {
+              const is_compact_error = this.should_compact_on_error(error);
+              const can_compact = is_compact_error &&
+                context_error_compaction_retries <
+                  MAX_CONTEXT_ERROR_COMPACTION_RETRIES;
+              input.turn_context.output.report_model_request_failure({
+                ...notice,
+                ...(is_compact_error
+                  ? {
+                      attempt: context_error_compaction_retries + 1,
+                      max_attempts: MAX_CONTEXT_ERROR_COMPACTION_RETRIES + 1,
+                      will_retry: can_compact,
+                    }
+                  : {}),
+              });
+              if (notice.will_retry) {
+                await this.logger.log("warn", "[agent] model_stream.retry", {
+                  session_id,
+                  retry_count: notice.attempt,
+                  error_code: notice.code,
+                  error: notice.message,
+                  provider_request_id: notice.provider_request_id ?? null,
+                });
+              }
+            },
+            execute_attempt: async () => {
+              await input.turn_context.output.assistant?.begin_step();
+              try {
+                return await run_model_step({
+                  model: step_inputs.model,
+                  system,
+                  messages: message_state.model_messages,
+                  tools,
+                  abort_signal: input.turn_context.lifecycle.abort_signal,
+                  ...(input.turn_context.output.assistant
+                    ? { assistant_output: input.turn_context.output.assistant }
+                    : {}),
+                  approve_tool: async (call, tool) => await resolve_tool_approval({
+                    call,
+                    tool,
+                    turn_context: input.turn_context,
+                  }),
+                });
+              } catch (error) {
+                await input.turn_context.output.assistant?.abort_step();
+                throw error;
+              }
+            },
           });
           step_assistant_parts = result.assistant_parts;
           await on_step_finish(result.step_result);
@@ -284,47 +311,21 @@ export class CoreEngineRunner {
               action_parts_to_canonical(action_assistant_parts),
             );
           }
-          canonical_step_finished = true;
-
           final_assistant_parts = merge_assistant_parts(
             final_assistant_parts,
             step_assistant_parts,
           );
           executed_steps = [result.step_result];
         } catch (error) {
-          if (
-            canonical_step_started &&
-            !canonical_step_finished &&
-            input.turn_context.output.assistant
-          ) {
-            await input.turn_context.output.assistant.abort_step();
-          }
-          if (
-            is_retryable_empty_model_stream_failure(error) &&
-            empty_stream_retry_count < MAX_EMPTY_STREAM_RETRIES
-          ) {
-            empty_stream_retry_count += 1;
-            await this.logger.log("warn", "[agent] model_stream.retry", {
-              session_id,
-              retry_count: empty_stream_retry_count,
-              error_code: error.code,
-              error: error.message,
-              provider_request_id: error.provider_request_id ?? null,
-            });
-            await wait_for_stream_retry(
-              EMPTY_STREAM_RETRY_DELAYS_MS[empty_stream_retry_count - 1] ?? 1_000,
-              input.turn_context.lifecycle.abort_signal,
-            );
-            continue;
-          }
           const compact_error = this.should_compact_on_error(error)
             ? error
             : last_observed_stream_error;
-          if (
-            this.should_compact_on_error(compact_error) &&
+          const is_compact_error = this.should_compact_on_error(compact_error);
+          const can_retry_after_compaction =
+            is_compact_error &&
             context_error_compaction_retries <
-              MAX_CONTEXT_ERROR_COMPACTION_RETRIES
-          ) {
+              MAX_CONTEXT_ERROR_COMPACTION_RETRIES;
+          if (can_retry_after_compaction) {
             context_error_compaction_retries += 1;
             const previous_message_count = message_state.model_messages.length;
             message_state.replace_model_messages(
@@ -352,7 +353,6 @@ export class CoreEngineRunner {
         }
 
         context_error_compaction_retries = 0;
-        empty_stream_retry_count = 0;
         const last_step = executed_steps[executed_steps.length - 1];
         if (!last_step) break;
 
@@ -556,25 +556,6 @@ export class CoreEngineRunner {
       };
     }
   }
-}
-
-/** 等待下一次模型流重试，并在 Turn 停止时立即结束等待。 */
-async function wait_for_stream_retry(
-  delay_ms: number,
-  abort_signal: AbortSignal,
-): Promise<void> {
-  if (abort_signal.aborted) throw abort_signal.reason;
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      abort_signal.removeEventListener("abort", on_abort);
-      resolve();
-    }, delay_ms);
-    const on_abort = (): void => {
-      clearTimeout(timer);
-      reject(abort_signal.reason);
-    };
-    abort_signal.addEventListener("abort", on_abort, { once: true });
-  });
 }
 
 /** 在工具执行前接入 Session canonical Interaction 生命周期。 */

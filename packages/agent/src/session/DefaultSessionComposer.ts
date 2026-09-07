@@ -103,6 +103,7 @@ export class DefaultSessionComposer implements SessionComposer {
       session_id: input.session.session_id,
       snapshot: input.history,
       model: input.model,
+      on_model_request_failure: input.on_model_request_failure,
     });
   }
 

@@ -70,6 +70,7 @@ import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import { SessionComposition } from "@/session/SessionComposition.js";
 import { relocate_fork_message_files } from "@/session/messages/SessionForkMessageFiles.js";
+import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 
 /**
  * SDK 本地 Session。
@@ -767,6 +768,13 @@ export class Session implements AgentSession {
         session: this.session_composition.compose_identity(),
         model: this.get_model(),
         history: await this.session_messages.context_snapshot(),
+        on_model_request_failure: (notice) => {
+          this.events.publish(create_session_model_request_warning({
+            session_id: this.id,
+            turn_id: input.turn_id,
+            notice,
+          }));
+        },
       }),
       commit_plan: async (plan) => {
         await this.commit_compaction_plan(plan, input.turn_id);

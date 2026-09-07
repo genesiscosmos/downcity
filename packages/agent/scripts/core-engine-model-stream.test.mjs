@@ -6,6 +6,98 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { run_model_step } from "../bin/executor/model/ModelStepRunner.js";
+import { generate_model } from "../bin/executor/model/ModelGenerate.js";
+import { create_session_model_request_warning } from "../bin/session/runtime/SessionModelRequestWarning.js";
+import { is_session_mutation } from "../bin/types/session/SessionMutation.js";
+import {
+  MAX_MODEL_REQUEST_ATTEMPTS,
+  MAX_MODEL_REQUEST_RETRIES,
+} from "../bin/executor/model/ModelRequestRunner.js";
+
+test("Agent 模型请求最多自动重试五次", () => {
+  assert.equal(MAX_MODEL_REQUEST_RETRIES, 5);
+  assert.equal(MAX_MODEL_REQUEST_ATTEMPTS, 6);
+});
+
+test("Session 边界把内部模型失败投影为 Warning Mutation", () => {
+  const warning = create_session_model_request_warning({
+    session_id: "session_1",
+    notice: {
+      request_kind: "session_title",
+      code: "provider_timeout",
+      message: "temporary timeout",
+      retryable: true,
+      attempt: 1,
+      max_attempts: 6,
+      will_retry: true,
+    },
+  });
+
+  assert.equal(is_session_mutation(warning), true);
+  assert.equal(warning.variant, "warning");
+  assert.equal(warning.type, "model_request");
+  assert.equal(warning.request_kind, "session_title");
+  assert.equal(warning.turn_id, undefined);
+});
+
+test("非交互模型请求复用统一重试策略", async () => {
+  let call_count = 0;
+  const failures = [];
+  const model = {
+    id: "generated-content-model",
+    async stream() {
+      call_count += 1;
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            type: "model_start",
+            request_id: `request_${call_count}`,
+            model_id: "generated-content-model",
+          });
+          if (call_count === 1) {
+            controller.enqueue({
+              type: "model_error",
+              error: {
+                code: "provider_timeout",
+                message: "temporary timeout",
+                retryable: true,
+              },
+            });
+          } else {
+            controller.enqueue({ type: "text_start", content_id: "text_1" });
+            controller.enqueue({ type: "text_delta", content_id: "text_1", delta: "done" });
+            controller.enqueue({ type: "text_finish", content_id: "text_1" });
+            controller.enqueue({
+              type: "model_usage",
+              usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+            });
+            controller.enqueue({ type: "model_finish", finish_reason: "stop" });
+          }
+          controller.close();
+        },
+      });
+    },
+  };
+
+  const result = await generate_model(model, {
+    messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+  }, {
+    request_kind: "session_title",
+    on_failure: (notice) => failures.push(notice),
+  });
+
+  assert.equal(call_count, 2);
+  assert.equal(result.text, "done");
+  assert.deepEqual(failures, [{
+    request_kind: "session_title",
+    code: "provider_timeout",
+    message: "temporary timeout",
+    retryable: true,
+    attempt: 1,
+    max_attempts: 6,
+    will_retry: true,
+  }]);
+});
 
 test("模型事件写入 canonical Session 失败时拒绝继续完成 turn", async () => {
   const abort_controller = new AbortController();

@@ -18,7 +18,7 @@ unsubscribe();
 
 The callback may be async. A thrown error or rejection from one subscriber does not roll back persisted state or block other subscribers.
 
-## Six Mutation variants
+## Eight Mutation variants
 
 Every Mutation has `mutation_id`, `session_id`, and `created_at`.
 
@@ -28,8 +28,10 @@ Every Mutation has `mutation_id`, `session_id`, and `created_at`.
 | `part` | `text | reasoning | tool | interaction | file | data` | Complete Assistant Part snapshot | Yes |
 | `delta` | `text | reasoning | tool_input` | New raw text or Tool input fragment | Yes |
 | `turn` | `start | finish` | Turn execution lifecycle | No |
+| `file_diff` | — | Live file-change summary for the current Turn | No |
 | `compact` | `start | finish` | Explicit Compact Command lifecycle | No |
 | `session` | `title | config` | Session property change | No |
+| `warning` | `model_request` | Model request failure and retry progress | No |
 
 `message`, `part`, and `delta` are published only after the corresponding complete Message or Assistant draft is persisted. The Mutation envelope itself is never written to `active.jsonl` or a Segment.
 
@@ -107,6 +109,8 @@ session.subscribe((mutation) => {
 `turn.finish` has `completed`, `failed`, or `stopped` status. It and `turn.finished` describe the same final execution: the former is for subscription-driven UI, the latter for control flow.
 
 `compact.finish` and `compact_handle.finished` use the same final-result semantics: the Mutation is for UI updates, while the Handle is for application control flow.
+
+On a failed model call, `warning / model_request` carries `request_kind`, `code`, `message`, `retryable`, `attempt`, `max_attempts`, and `will_retry`. Main Turn requests also include `turn_id`; background title and history-compaction requests may omit it. It is a live diagnostic and is not persisted as Message history. `retryable` reflects the Provider error classification; `will_retry: false` means no further automatic retry follows this failure.
 
 ## Tool Part state machine
 

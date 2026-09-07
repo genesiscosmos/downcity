@@ -56,12 +56,29 @@ function create_execution_input(model, turn_context) {
 }
 
 test("CoreEngine Provider 失败时只返回结构化错误", async () => {
-  const model = new MockModelClient({
-    modelId: "failing-model",
-    doStream: async () => {
-      throw new Error("quota exceeded");
+  const model = {
+    id: "failing-model",
+    async stream() {
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            type: "model_start",
+            request_id: "request_1",
+            model_id: "failing-model",
+          });
+          controller.enqueue({
+            type: "model_error",
+            error: {
+              code: "permission_denied",
+              message: "quota exceeded",
+              retryable: false,
+            },
+          });
+          controller.close();
+        },
+      });
     },
-  });
+  };
   const runner = new CoreEngineRunner({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
