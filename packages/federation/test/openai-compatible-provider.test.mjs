@@ -172,6 +172,9 @@ test("Provider Adapter forwards cancellation to the upstream request", async () 
 
 test("Provider Adapter reports missing usage as a model_error terminal event", async () => {
   const encoder = new TextEncoder()
+  const original_console_error = console.error
+  const error_logs = []
+  console.error = (...values) => error_logs.push(values)
   const model = create_openai_compatible_model({
     id: "local-model",
     upstream_model: "vendor-model",
@@ -187,9 +190,21 @@ test("Provider Adapter reports missing usage as a model_error terminal event", a
     }), { status: 200 }),
   })
   const events = []
-  for await (const event of await model.stream({
-    messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
-  })) events.push(event)
+  try {
+    for await (const event of await model.stream({
+      messages: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+    })) events.push(event)
+  } finally {
+    console.error = original_console_error
+  }
   assert.equal(events.at(-1).type, "model_error")
   assert.match(events.at(-1).error.message, /did not return usage/)
+  assert.equal(error_logs.length, 1)
+  assert.equal(error_logs[0][0], "[OpenAICompatibleModelAdapter] provider did not return usage")
+  const diagnostics = JSON.parse(error_logs[0][1])
+  assert.equal(diagnostics.model_id, "local-model")
+  assert.deepEqual(diagnostics.response_events, [
+    JSON.stringify({ choices: [{ delta: { content: "done" }, finish_reason: "stop" }] }),
+    "[DONE]",
+  ])
 })

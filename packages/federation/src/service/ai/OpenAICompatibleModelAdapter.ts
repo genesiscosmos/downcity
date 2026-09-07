@@ -213,6 +213,7 @@ function create_event_stream(
   return new ReadableStream<ModelStreamEvent>({
     async start(controller) {
       const state = new OpenAIStreamState(controller);
+      const response_events: string[] = [];
       controller.enqueue({ type: "model_start", ...identity });
       let buffer = "";
       try {
@@ -223,6 +224,7 @@ function create_event_stream(
           const parsed = consume_sse_events(buffer);
           buffer = parsed.rest;
           for (const data of parsed.data) {
+            response_events.push(data);
             if (data === "[DONE]") continue;
             state.accept(parse_sse_data(data));
           }
@@ -230,6 +232,7 @@ function create_event_stream(
         buffer += decoder.decode();
         const final_events = consume_sse_events(buffer);
         for (const data of final_events.data) {
+          response_events.push(data);
           if (data !== "[DONE]") state.accept(parse_sse_data(data));
         }
         if (final_events.rest.trim()) {
@@ -238,7 +241,7 @@ function create_event_stream(
             "Model provider stream ended with an incomplete SSE event",
           );
         }
-        state.finish();
+        state.finish(identity.request_id, identity.model_id, response_events);
         controller.close();
       } catch (error) {
         const error_code = classify_stream_error(error);
@@ -337,10 +340,16 @@ class OpenAIStreamState {
   }
 
   /** 收口全部内容块和模型执行。 */
-  finish(): void {
+  finish(request_id: string, model_id: string, response_events: readonly string[]): void {
     if (this.finished) return;
     this.finished = true;
-    if (!this.usage_received) throw new Error("OpenAI-compatible provider did not return usage");
+    if (!this.usage_received) {
+      console.error(
+        "[OpenAICompatibleModelAdapter] provider did not return usage",
+        JSON.stringify({ request_id, model_id, response_events }),
+      );
+      throw new Error("OpenAI-compatible provider did not return usage");
+    }
     if (this.reasoning_started) {
       this.controller.enqueue({ type: "reasoning_finish", content_id: "reasoning_1" });
     }
