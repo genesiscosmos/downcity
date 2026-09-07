@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Markdown as MarkdownView } from "@/components/markdown/Markdown";
+import { Markdown } from "@/components/markdown/Markdown";
 import { cn } from "@/lib/utils";
 
 /** 创建 Plugin UI Components 时需要的宿主上下文。 */
@@ -152,7 +152,7 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
       </button>)}
     </div>,
     CodeBlock: ({ children }) => <pre className="max-h-[32rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-subtle px-4 py-3 font-mono text-[11px] leading-5 text-foreground/85">{children}</pre>,
-    Markdown: ({ text }) => <MarkdownView text={text} mode="static" class_name="!h-auto text-[13px]" />,
+    Markdown: ({ text }) => <div className="text-[13px] leading-[1.6]"><Markdown text={text} mode="static" /></div>,
     Button: ({ children, on_click, disabled, variant = "default", size = "default", title, aria_label }) => <Button variant={variant} size={size} disabled={disabled} onClick={on_click} title={title} aria-label={aria_label}>{children}</Button>,
     Input: ({ value, on_value_change, placeholder, disabled, type = "text", minimum, maximum, fill = false }) => <input
       value={value}

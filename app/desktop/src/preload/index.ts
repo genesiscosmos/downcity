@@ -6,6 +6,7 @@ const desktop_api: DesktopApi = {
   system: {
     open_external_url: (url) => ipcRenderer.invoke("system:open-external-url", url),
     open_local_file: (file_path) => ipcRenderer.invoke("system:open-local-file", file_path),
+    open_in_vscode: (file_path) => ipcRenderer.invoke("system:open-in-vscode", file_path),
   },
   notification: {
     get_state: () => ipcRenderer.invoke("notification:get-state"),

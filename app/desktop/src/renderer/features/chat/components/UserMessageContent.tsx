@@ -2,7 +2,7 @@
 
 import type { SessionUserMessagePart } from "@downcity/agent";
 import { TbFile } from "react-icons/tb";
-import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
+import { Markdown } from "@/components/markdown/Markdown";
 import { use_translation } from "@/locales/i18n";
 
 /** 用户消息的有序内容展示。 */
@@ -15,9 +15,9 @@ export function UserMessageContent({ message_id, parts }: { /** canonical 用户
       data-chat-message-id={message_id}
       data-chat-message-role="user"
       className="text-[0.8125rem] leading-[1.34]"
-    ><ChatMarkdown class_name="user-message-markdown !h-auto !w-auto break-words" text={part.text} mode="static" /></div> : null;
+    ><Markdown text={part.text} mode="static" /></div> : null;
     if (part.type === "context" && part.tag === "reference") return <div key={part.part_id} className="max-w-full border-l-2 border-foreground/15 pl-2 text-[0.75rem] text-muted-foreground">
-      <ChatMarkdown class_name="user-message-reference-markdown !h-auto !w-auto break-words" text={part.context} mode="static" />
+      <Markdown text={part.context} mode="static" />
     </div>;
     if (part.type === "file") {
       const image = part.media_type.startsWith("image/");

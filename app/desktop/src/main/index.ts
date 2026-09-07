@@ -108,6 +108,12 @@ ipcMain.handle("system:open-local-file", async (_event, value: string) => {
   const error = await shell.openPath(path.normalize(value));
   if (error) throw new Error(error);
 });
+ipcMain.handle("system:open-in-vscode", async (_event, value: string) => {
+  if (!path.isAbsolute(value)) throw new Error("VS Code 只能打开绝对本地路径");
+  const normalized = path.normalize(value).replace(/\\/g, "/");
+  const encoded_path = normalized.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+  await shell.openExternal(`vscode://file/${encoded_path}`);
+});
 ipcMain.handle("notification:get-state", () => require_notification_center().get_state());
 ipcMain.handle("notification:set-view-state", (event, state: DesktopNotificationViewState) => {
   const window = BrowserWindow.fromWebContents(event.sender);

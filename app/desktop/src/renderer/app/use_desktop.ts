@@ -90,6 +90,7 @@ export function use_desktop_controller(): DesktopController {
       window.downcity.settings.get(),
       window.downcity.settings.list_env(),
       window.downcity.plugin.list(),
+      composer.hydrate_composer(),
     ]).then(async ([next_agents, next_workspaces, next_groups, next_settings, next_env, next_plugins]) => {
       catalog.replace_catalog({
         agents: next_agents,
@@ -161,7 +162,7 @@ export function use_desktop_controller(): DesktopController {
         }
       })
       .catch((reason) => settings.set_user({ ...settings.state_ref.current.user, error: to_error_message(reason) }));
-  }, [catalog, navigation, session, settings]);
+  }, [catalog, composer, navigation, session, settings]);
 
   // ---- 队列发送循环 ----
   const commit_queue = useCallback((next: Record<string, QueuedChatMessage[]>) => {

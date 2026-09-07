@@ -4,20 +4,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 
 import { use_desktop_controller, use_desktop_selector } from "@/app/use_desktop";
-import { NavigationSidebar } from "@/layouts/NavigationSidebar";
-import { SettingsSidebar } from "@/layouts/SettingsSidebar";
+import { DesktopSidebar } from "@/layouts/DesktopSidebar";
 
 import type { DesktopController } from "@/types/DesktopView";
 
 import { MainViewHeaderProvider } from "@/layouts/MainViewLayout";
 import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
 import { resolve_desktop_link } from "@/features/navigation/lib/desktop_link";
+import { resolve_sidebar_shortcut_mode } from "@/features/navigation/lib/sidebar_shortcut";
 import { TurnFileDiffReviewHost } from "@/features/chat/components/messages/TurnFileDiffCard";
 
 import { DesktopMainView } from "@/app/DesktopRouter";
 import { DesktopErrorHost } from "@/app/DesktopOverlays";
 import { SessionAttachHost } from "@/app/DesktopOverlays";
 import { DesktopLanguageSync } from "@/locales/DesktopLanguageSync";
+import { DesktopAppearanceSync } from "@/features/settings/DesktopAppearanceSync";
 import { use_translation } from "@/locales/i18n";
 
 /** Desktop 根组件。 */
@@ -54,6 +55,14 @@ export function DesktopShell() {
         event.preventDefault();
         stable_controller.actions.open_settings("user");
         return;
+      }
+      if (modifier && !event.altKey && !event.shiftKey) {
+        const sidebar_mode = resolve_sidebar_shortcut_mode(event.key, stable_controller.stores.catalog.get_snapshot().plugins);
+        if (sidebar_mode) {
+          event.preventDefault();
+          stable_controller.actions.set_sidebar_mode(sidebar_mode);
+          return;
+        }
       }
       const navigation = stable_controller.stores.navigation.get_snapshot();
       if (event.key === "Escape" && navigation.selection?.kind === "settings") {
@@ -110,18 +119,17 @@ export function DesktopShell() {
   }, [stable_controller]);
 
   return <div className="fixed inset-0 flex h-full min-h-0 w-full overflow-hidden bg-muted">
+    <DesktopAppearanceSync controller={stable_controller} />
     <DesktopLanguageSync controller={stable_controller} />
     <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
-      {current_selection?.kind === "settings"
-        ? <SettingsSidebar controller={stable_controller} collapsed={sidebar_collapsed} />
-        : <NavigationSidebar
-          controller={stable_controller}
-          open_create_agent={controller.actions.open_create_agent}
-          open_create_group={controller.actions.open_create_group}
-          open_create_workspace={open_create_workspace}
-          open_group_config={open_group_from_sidebar}
-          collapsed={sidebar_collapsed}
-        />}
+      <DesktopSidebar
+        controller={stable_controller}
+        open_create_agent={controller.actions.open_create_agent}
+        open_create_group={controller.actions.open_create_group}
+        open_create_workspace={open_create_workspace}
+        open_group_config={open_group_from_sidebar}
+        collapsed={sidebar_collapsed}
+      />
       <main className="main-view-shell relative flex h-full min-w-0 flex-1 bg-background">
         <TurnFileDiffReviewHost><MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available: false, baybar_open: false }}><div className="flex h-full min-w-0 flex-1 flex-col"><DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} /></div></MainViewHeaderProvider></TurnFileDiffReviewHost>
       </main>

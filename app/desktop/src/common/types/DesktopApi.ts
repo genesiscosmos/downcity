@@ -810,6 +810,8 @@ export interface DesktopApi {
     open_external_url(url: string): Promise<void>;
     /** 使用系统默认应用打开绝对本地文件。 */
     open_local_file(file_path: string): Promise<void>;
+    /** 使用 Visual Studio Code 打开绝对本地路径。 */
+    open_in_vscode(file_path: string): Promise<void>;
   };
   /** Desktop 未读通知与当前观察目标能力。 */
   notification: {

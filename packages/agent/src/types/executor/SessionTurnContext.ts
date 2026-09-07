@@ -60,7 +60,7 @@ export interface SessionTurnContextInit {
   /** 当前 Session 执行面创建用户异步交互的端口。 */
   interactions?: SessionInteractionPort;
 
-  /** 当前 Session 拥有的 unrestricted Shell 审批网关。 */
+  /** 当前 Session 提供的 host Shell 审批网关。 */
   shell_approval_gateway?: ShellApprovalGateway;
 
   /** 当前 Turn effects 追加后触发的实时观测回调，宿主可据此广播文件改动摘要。 */
@@ -176,6 +176,11 @@ export interface SessionTurnContext {
 
     /** 发布一条不进入 LLM 输入的 Session Action。 */
     publish_action(event: AgentSessionActionEvent): Promise<void>;
+
+    /** 把当前 Turn 的内部模型请求失败交给 Session 边界。 */
+    report_model_request_failure(
+      notice: ModelRequestFailureNotice,
+    ): void;
   };
 
   /** 当前 Turn 已经发生、等待在收口检查点投影的 Tool 副作用。 */
@@ -192,7 +197,7 @@ export interface SessionTurnContext {
 
   /** 当前运行可使用的 Shell 协作能力。 */
   readonly shell: {
-    /** 当前 Session 拥有的 unrestricted 审批网关。 */
+    /** 当前 Session 提供的 host 执行审批网关。 */
     readonly approval_gateway?: ShellApprovalGateway;
   };
 }

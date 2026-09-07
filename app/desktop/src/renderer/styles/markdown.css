@@ -1,0 +1,304 @@
+/* Desktop 唯一的 Markdown 语义排版；字号、行高和宽度由业务容器继承。 */
+
+.markdown {
+  min-width: 0;
+  max-width: 100%;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  overflow-wrap: anywhere;
+}
+
+.markdown > :first-child { margin-top: 0 !important; }
+.markdown > :last-child { margin-bottom: 0 !important; }
+
+.markdown :where(p) {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0.35em 0;
+}
+
+.markdown :where(h1, h2, h3, h4, h5, h6) {
+  margin: 1.1em 0 0.42em;
+  color: var(--foreground);
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.markdown :where(h1) { font-size: 1.55em; }
+.markdown :where(h2) { font-size: 1.3em; }
+.markdown :where(h3) { font-size: 1.15em; }
+.markdown :where(h4, h5, h6) { font-size: 1em; }
+.markdown :where(strong) { color: var(--foreground); font-weight: 650; }
+
+.markdown :where(ins) {
+  text-decoration-line: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 0.14em;
+}
+
+.markdown :where(ul, ol),
+.markdown [data-streamdown="unordered-list"],
+.markdown [data-streamdown="ordered-list"] {
+  margin: 0.4em 0 !important;
+  padding-left: 1.4em !important;
+  list-style-position: outside;
+}
+
+.markdown :where(ul),
+.markdown [data-streamdown="unordered-list"] {
+  list-style-type: disc;
+}
+
+.markdown :where(ol),
+.markdown [data-streamdown="ordered-list"] {
+  list-style-type: decimal;
+}
+
+.markdown :where(ul ul),
+.markdown [data-streamdown="unordered-list"] [data-streamdown="unordered-list"] {
+  list-style-type: circle;
+}
+
+.markdown :where(ul ul ul),
+.markdown [data-streamdown="unordered-list"] [data-streamdown="unordered-list"] [data-streamdown="unordered-list"] {
+  list-style-type: square;
+}
+
+.markdown :where(li),
+.markdown [data-streamdown="list-item"] {
+  display: list-item;
+  margin: 0 !important;
+  padding-left: 0.1em;
+  line-height: inherit !important;
+}
+
+.markdown :where(li + li),
+.markdown [data-streamdown="list-item"] + [data-streamdown="list-item"] {
+  margin-top: 0.1em !important;
+}
+
+.markdown :where(li > p) { margin: 0; }
+
+.markdown :where(a) {
+  color: var(--primary);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  text-underline-offset: 0.18em;
+  overflow-wrap: anywhere;
+}
+
+.markdown :where(a:hover) { text-decoration-color: var(--primary); }
+
+.markdown :where(blockquote) {
+  margin: 0.7em 0;
+  padding: 0.18em 0 0.18em 0.7em;
+  border-left: 2px solid color-mix(in srgb, var(--foreground) 24%, transparent);
+  color: var(--muted-foreground);
+}
+
+.markdown :where(blockquote p) { margin: 0.25em 0; }
+
+.markdown code:not(pre code) {
+  display: inline;
+  max-width: 100%;
+  padding: 0.125em 0.3em;
+  border-radius: 0.3em;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 10%, transparent) !important;
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  white-space: break-spaces;
+  word-break: break-word;
+}
+
+.markdown :where(pre),
+.markdown [data-streamdown="code-block"] {
+  --markdown-code-foreground: var(--foreground);
+  --markdown-code-background: color-mix(in srgb, var(--muted) 42%, var(--background));
+  position: relative;
+  max-width: 100%;
+  margin: 0.7em 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent) !important;
+  border-radius: 0.5em !important;
+  background: var(--markdown-code-background) !important;
+  box-shadow: none;
+}
+
+/* 代码块统一只保留右上角复制操作。 */
+.markdown [data-streamdown="code-block-header"] {
+  position: absolute;
+  top: 0.375em;
+  right: 0.375em;
+  z-index: 2;
+  display: block;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  pointer-events: none;
+}
+
+.markdown [data-streamdown="code-block-header"] > span:first-child,
+.markdown [data-streamdown="code-block-download-button"] {
+  display: none !important;
+}
+
+.markdown [data-streamdown="code-block-header"] > div {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.markdown [data-streamdown="code-block-copy-button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0.375rem;
+  color: var(--muted-foreground) !important;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.markdown [data-streamdown="code-block"]:hover [data-streamdown="code-block-copy-button"],
+.markdown [data-streamdown="code-block"]:focus-within [data-streamdown="code-block-copy-button"],
+.markdown [data-streamdown="code-block-copy-button"]:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.markdown [data-streamdown="code-block-copy-button"]:hover {
+  color: var(--foreground) !important;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.markdown [data-streamdown="code-block-body"] {
+  max-width: 100%;
+  margin: 0 !important;
+  overflow-x: auto;
+  padding: 0.8em !important;
+  border: 0 !important;
+  color: var(--markdown-code-foreground) !important;
+  background: transparent !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em !important;
+  line-height: 1.6 !important;
+  scrollbar-width: thin;
+}
+
+.markdown [data-streamdown="code-block-body"] code,
+.markdown [data-streamdown="code-block-body"] code > span,
+.markdown [data-streamdown="code-block-body"] code > span > span {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  font-weight: 400 !important;
+}
+
+.markdown [data-streamdown="code-block-body"] code > span::before {
+  content: none !important;
+}
+
+.markdown [data-streamdown="code-block-body"] code > span {
+  counter-increment: none !important;
+}
+
+.dark .markdown [data-streamdown="code-block"] .shiki span {
+  color: var(--shiki-dark, var(--foreground)) !important;
+  font-style: var(--shiki-dark-font-style, normal) !important;
+  font-weight: var(--shiki-dark-font-weight, 400) !important;
+  text-decoration: var(--shiki-dark-text-decoration, none) !important;
+}
+
+.dark .markdown [data-streamdown="code-block-body"],
+.dark .markdown [data-streamdown="code-block-body"] code,
+.dark .markdown [data-streamdown="code-block-body"] code > span,
+.dark .markdown [data-streamdown="code-block-body"] code > span > span {
+  color: var(--shiki-dark, var(--foreground)) !important;
+}
+
+.markdown div[data-streamdown="table-wrapper"] {
+  max-width: 100%;
+  margin: 1em 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.625em;
+  background: transparent;
+}
+
+.markdown div[data-streamdown="table-wrapper"] > div {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 0;
+  scrollbar-width: thin;
+}
+
+.markdown div[data-streamdown="table-wrapper"] table {
+  width: max-content !important;
+  min-width: 100%;
+  margin: 0 !important;
+  border: 0 !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  font-size: 0.92em !important;
+  line-height: 1.5;
+  background: transparent;
+}
+
+.markdown [data-streamdown="table-header"],
+.markdown [data-streamdown="table-body"],
+.markdown [data-streamdown="table-row"] {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.markdown [data-streamdown="table-header-cell"],
+.markdown [data-streamdown="table-cell"] {
+  padding: 0.48em 0.65em !important;
+  text-align: left;
+  vertical-align: top;
+  border: 0 !important;
+}
+
+.markdown [data-streamdown="table-header-cell"] {
+  color: color-mix(in srgb, var(--foreground) 72%, transparent) !important;
+  background: var(--surface-subtle) !important;
+  font-weight: 600 !important;
+  white-space: nowrap;
+}
+
+.markdown [data-streamdown="table-cell"] {
+  transition: background-color 120ms ease;
+}
+
+.markdown [data-streamdown="table-row"]:hover > [data-streamdown="table-cell"] {
+  background: var(--interaction-hover) !important;
+}
+
+.markdown :where(img) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.8em 0;
+}
+
+.markdown :where(hr) {
+  margin: 1em 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}

@@ -9,7 +9,7 @@ import { useEffect, useState, type FormEvent, type ComponentType } from "react";
 import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionAssistantMessagePart, SessionInteractionQuestion } from "@downcity/agent";
 import { read_session_turn_file_diff_data } from "@downcity/agent/session";
 import { TbBulb, TbCheck, TbChevronLeft, TbChevronRight, TbFile, TbFilePencil, TbFilePlus, TbFileSearch, TbLoader2, TbMessageQuestion, TbPuzzle, TbSearch, TbSend, TbTerminal2, TbTextScan2, TbX } from "react-icons/tb";
-import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
+import { Markdown } from "@/components/markdown/Markdown";
 import { cn } from "@/lib/utils";
 import { translate, use_translation } from "@/locales/i18n";
 import { TurnFileDiffCard } from "@/features/chat/components/messages/TurnFileDiffCard";
@@ -22,7 +22,7 @@ export function AssistantContent({ message_id, parts, show_reasoning, streaming,
   return <>{groups.map((group, index) => {
     if (group.type === "activity") return <ActivityBlock key={group.parts[0]?.part_id} parts={group.parts} show_reasoning={show_reasoning} streaming={streaming && index === groups.length - 1} respond_interaction={respond_interaction} />;
     const part = group.part;
-    if (part.type === "text") return part.text ? <div key={part.part_id} data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="assistant" className="text-[0.8125rem] leading-[1.54] text-foreground/90"><ChatMarkdown class_name="min-h-[1.54em]" text={part.text} mode={streaming && part.state === "streaming" ? "streaming" : "static"} /></div> : null;
+    if (part.type === "text") return part.text ? <div key={part.part_id} data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="assistant" className="min-h-[1.54em] text-[0.8125rem] leading-[1.54] text-foreground/90"><Markdown text={part.text} mode={streaming && part.state === "streaming" ? "streaming" : "static"} /></div> : null;
     if (part.type === "file") return <a key={part.part_id} href={part.url} className="assistant-resource-row" target="_blank" rel="noreferrer"><TbFile aria-hidden /><span>{part.filename || translate_chat("activity.file")}</span></a>;
     if (part.type === "data") {
       const file_diff = read_session_turn_file_diff_data(part);

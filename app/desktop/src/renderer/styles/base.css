@@ -4,9 +4,8 @@
 @import "./theme/themes.css";
 @import "./semantic-colors.css";
 @import "./tokens.css";
+@import "./markdown.css";
 @import "./chat.css";
-@import "./document-markdown.css";
-@import "./plugin.css";
 
 @layer base {
   * {
@@ -159,10 +158,14 @@ a,
   margin: 0;
 }
 
+.chat-input-editor > p + p {
+  margin-top: 0.35em;
+}
+
 .chat-input-editor ul,
 .chat-input-editor ol {
-  margin: 0.2rem 0;
-  padding-left: 1.35rem;
+  margin: 0.4em 0;
+  padding-left: 1.4em;
   list-style-position: outside;
 }
 

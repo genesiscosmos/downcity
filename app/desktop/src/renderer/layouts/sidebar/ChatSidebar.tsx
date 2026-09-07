@@ -1,7 +1,7 @@
 /** 仅负责选择 Agent 与 Group 聊天主体的全局 Chat Sidebar。 */
 
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { TbChevronDown, TbChevronUp, TbDots, TbEdit, TbGhost3, TbLoader2, TbPlus, TbTrash, TbUsers } from "react-icons/tb";
+import { memo, useState, type ReactNode } from "react";
+import { TbDots, TbEdit, TbGhost3, TbLoader2, TbPlus, TbTrash, TbUsers } from "react-icons/tb";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { GroupAvatar } from "@/components/GroupAvatar";
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,10 @@ import type { DesktopAgentSummary, DesktopGroupSummary } from "@common/types/Des
 import type { DesktopModelSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import type { DesktopNotificationState } from "@common/types/DesktopNotification";
 import { SidebarHeader } from "./SidebarHeader";
-import { has_unread_agent_notification, has_unread_session_notification } from "@/lib/notification/notification_state";
-import { SessionListItem, SessionListRow } from "./SessionListItem";
-import { GroupSessionActionsMenu } from "@/features/chat/components/GroupSessionActionsMenu";
+import { has_unread_agent_notification } from "@/lib/notification/notification_state";
+import { ChatSessionPanel } from "./ChatSessionPanel";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
-import { select_agent_sessions } from "@/features/chat/lib/session_list_projection";
 
 /** Chat Sidebar 属性。 */
 interface ChatSidebarProps {
@@ -37,12 +35,6 @@ interface ChatSidebarProps {
 /** 展示可进入聊天工作区的 Agent 与 Group。 */
 export const ChatSidebar = memo(function ChatSidebar({ controller, notification_state, open_create_agent, open_create_group, open_group_config }: ChatSidebarProps) {
   const translate = use_translation("navigation");
-  const [sessions_collapsed, set_sessions_collapsed] = useState(() => localStorage.getItem("downcity.chat_sessions_collapsed") === "true");
-  const [sessions_height, set_sessions_height] = useState(() => Number(localStorage.getItem("downcity.chat_sessions_height")) || 240);
-  const [resizing_sessions, set_resizing_sessions] = useState(false);
-  const sidebar_ref = useRef<HTMLDivElement | null>(null);
-  const resize_start_y_ref = useRef(0);
-  const resize_start_height_ref = useRef(0);
   const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
   const active_workspace_id = use_desktop_selector(controller.stores.navigation, (state) => state.active_workspace_id);
   const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
@@ -54,78 +46,16 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
   const selected_group_id = selection && "group_id" in selection ? selection.group_id : "";
   const selected_agent = agents.find((agent) => agent.agent_id === selected_agent_id);
   const selected_group = groups.find((group) => group.group_id === selected_group_id);
-  const selected_group_sessions = selected_group?.sessions;
-  // Agent 的 Session 归 Agent 所有；Workspace 只是单次执行上下文，因此列表跨 Workspace 投影。
-  const sessions_by_workspace = use_desktop_selector(controller.stores.session, (state) => state.sessions_by_workspace);
-  const agent_sessions = useMemo(
-    () => select_agent_sessions(sessions_by_workspace, selected_agent?.agent_id ?? ""),
-    [selected_agent?.agent_id, sessions_by_workspace],
-  );
-  const group_sessions = useMemo(
-    () => selected_group_sessions ? [...selected_group_sessions].sort((left, right) => right.updated_at - left.updated_at) : [],
-    [selected_group_sessions],
-  );
-  const toggle_sessions = () => set_sessions_collapsed((current) => {
-    localStorage.setItem("downcity.chat_sessions_collapsed", String(!current));
-    return !current;
-  });
   const workspace_id = active_workspace_id || workspaces[0]?.workspace_id;
 
-  const start_sessions_resize = (event: React.MouseEvent) => {
-    if (event.button !== 0 || sessions_collapsed) return;
-    event.preventDefault();
-    resize_start_y_ref.current = event.clientY;
-    resize_start_height_ref.current = sessions_height;
-    set_resizing_sessions(true);
-  };
-
-  useEffect(() => {
-    if (!resizing_sessions) return;
-    const previous_cursor = document.body.style.cursor;
-    const previous_user_select = document.body.style.userSelect;
-    document.body.style.cursor = "ns-resize";
-    document.body.style.userSelect = "none";
-    const handle_mouse_move = (event: MouseEvent) => {
-      const sidebar_height = sidebar_ref.current?.clientHeight ?? window.innerHeight;
-      const next_height = resize_start_height_ref.current + resize_start_y_ref.current - event.clientY;
-      set_sessions_height(Math.max(120, Math.min(sidebar_height - 160, next_height)));
-    };
-    const handle_mouse_up = () => {
-      set_resizing_sessions(false);
-      set_sessions_height((current) => {
-        localStorage.setItem("downcity.chat_sessions_height", String(current));
-        return current;
-      });
-    };
-    window.addEventListener("mousemove", handle_mouse_move);
-    window.addEventListener("mouseup", handle_mouse_up);
-    return () => {
-      window.removeEventListener("mousemove", handle_mouse_move);
-      window.removeEventListener("mouseup", handle_mouse_up);
-      document.body.style.cursor = previous_cursor;
-      document.body.style.userSelect = previous_user_select;
-    };
-  }, [resizing_sessions]);
-
-  return <div ref={sidebar_ref} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+  return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
     <SidebarHeader title={translate("views.chat")} actions={<DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("sidebar.add_chat_subject")} aria-label={translate("sidebar.add_chat_subject")}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_create_agent}><TbGhost3 /><span>{translate("sidebar.new_agent")}</span></DropdownMenuItem><DropdownMenuItem onClick={open_create_group}><TbUsers /><span>{translate("sidebar.new_group")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>} />
     <div data-sidebar-scrollable="true" className="sidebar-body-scroll min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-2">
       {agents.map((agent) => <AgentSubject key={agent.agent_id} agent={agent} controller={controller} selection={selection} active_workspace_id={active_workspace_id} workspaces={workspaces} models={models} notification_state={notification_state} />)}
       {groups.map((group) => <GroupSubject key={group.group_id} group={group} controller={controller} selection={selection} active_workspace_id={active_workspace_id} workspaces={workspaces} agents={agents} open_group_config={open_group_config} />)}
       {!loading && agents.length === 0 && groups.length === 0 ? <div className="flex flex-col items-center px-4 py-10 text-center"><TbGhost3 className="mb-2 size-5 text-muted-foreground" /><div className="text-xs text-foreground">{translate("sidebar.no_subjects")}</div><Button className="mt-3" variant="primary" onClick={open_create_agent}>{translate("sidebar.new_agent")}</Button></div> : null}
     </div>
-    {selected_agent || selected_group ? <section aria-label={translate("sidebar.sessions_for", { name: selected_agent?.name ?? selected_group?.name })} className="relative mx-2 mb-2 flex shrink-0 flex-col overflow-hidden rounded-xl bg-surface-subtle" style={sessions_collapsed ? undefined : { height: sessions_height }}>
-      {!sessions_collapsed ? <div role="separator" aria-orientation="horizontal" aria-label={translate("sidebar.resize_sessions")} onMouseDown={start_sessions_resize} className="group absolute -top-1.5 left-0 z-10 flex h-3 w-full cursor-ns-resize items-center justify-center"><span className="h-px w-8 rounded-full bg-transparent transition-colors group-hover:bg-muted-foreground/25" /></div> : null}
-      <div className="flex h-9 shrink-0 items-center gap-2 px-2">
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30" aria-expanded={!sessions_collapsed} onClick={toggle_sessions}>{sessions_collapsed ? <TbChevronUp className="size-3.5" /> : <TbChevronDown className="size-3.5" />}<span className="truncate">{translate("sidebar.sessions_for", { name: selected_agent?.name ?? selected_group?.name })}</span></button>
-        <Button size="icon" title={translate("sidebar.new_chat")} aria-label={translate("sidebar.new_chat")} disabled={!workspace_id} onClick={() => { if (!workspace_id) return; if (selected_agent) void controller.actions.create_session(workspace_id, selected_agent.agent_id); else if (selected_group) void controller.actions.create_group_session(selected_group.group_id, workspace_id); }}><TbPlus /></Button>
-      </div>
-      {!sessions_collapsed ? <div className="sidebar-body-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto px-1.5 pb-1.5">
-        {selected_agent ? agent_sessions.map(({ workspace_id: session_workspace_id, session }) => <SessionListItem key={`${session_workspace_id}:${session.session_id}`} session={session} active={selection?.kind === "session" && selection.session_id === session.session_id} unread={has_unread_session_notification(notification_state, session_workspace_id, selected_agent.agent_id, session.session_id)} on_select={() => void controller.actions.select_session(session_workspace_id, selected_agent.agent_id, session.session_id, true)} on_rename={(title) => controller.actions.rename_session(session_workspace_id, selected_agent.agent_id, session.session_id, title)} on_archive={() => controller.actions.archive_session(session_workspace_id, selected_agent.agent_id, session.session_id)} on_remove={() => controller.actions.remove_session(session_workspace_id, selected_agent.agent_id, session.session_id)} />) : null}
-        {selected_group ? group_sessions.map((session) => <SessionListRow key={session.session_id} title={session.title || translate("sidebar.new_chat")} active={selection?.kind === "group_session" && selection.session_id === session.session_id} on_select={() => void controller.actions.open_group(selected_group.group_id, session.session_id)} menu={<GroupSessionActionsMenu session={session} on_rename={(title) => controller.actions.rename_group_session(selected_group.group_id, session.session_id, title)} on_remove={() => controller.actions.remove_group_session(selected_group.group_id, session.session_id)} />} />) : null}
-        {(selected_agent && agent_sessions.length === 0) || (selected_group && selected_group.sessions.length === 0) ? <div className="px-2 py-5 text-center text-[10px] text-muted-foreground/55">{translate("sidebar.no_sessions")}</div> : null}
-      </div> : null}
-    </section> : null}
+    <ChatSessionPanel controller={controller} notification_state={notification_state} selection={selection} selected_agent={selected_agent} selected_group={selected_group} workspace_id={workspace_id} />
   </div>;
 });
 

@@ -11,6 +11,7 @@ const viewport_row_selector = "[data-chat-viewport-row]";
 export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
   const scroll_ref = useRef<HTMLDivElement | null>(null);
   const content_ref = useRef<HTMLDivElement | null>(null);
+  const bottom_ref = useRef<HTMLDivElement | null>(null);
   const sticky_ref = useRef(true);
   const preserving_ref = useRef(false);
   const auto_scroll_ref = useRef(auto_scroll);
@@ -20,16 +21,25 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
   auto_scroll_ref.current = auto_scroll;
   surface_id_ref.current = surface_id;
 
+  /** 立即将专用底部锚点对齐到视口底部。 */
+  const align_bottom_anchor = useCallback(() => {
+    const container = scroll_ref.current;
+    const bottom = bottom_ref.current;
+    if (!container || !bottom || preserving_ref.current) return;
+    bottom.scrollIntoView({ block: "end" });
+    sticky_ref.current = true;
+  }, []);
+
+  /** 仅在用户仍位于底部且启用了自动跟随时响应内容增长。 */
   const schedule_scroll_to_bottom = useCallback(() => {
     if (!auto_scroll_ref.current || !sticky_ref.current || preserving_ref.current) return;
     if (follow_frame_ref.current !== undefined) window.cancelAnimationFrame(follow_frame_ref.current);
+    const target_surface_id = surface_id_ref.current;
     follow_frame_ref.current = window.requestAnimationFrame(() => {
       follow_frame_ref.current = undefined;
-      const container = scroll_ref.current;
-      if (!container || !auto_scroll_ref.current || !sticky_ref.current || preserving_ref.current) return;
-      container.scrollTop = container.scrollHeight;
+      if (surface_id_ref.current === target_surface_id) align_bottom_anchor();
     });
-  }, []);
+  }, [align_bottom_anchor]);
 
   useLayoutEffect(() => {
     if (follow_frame_ref.current !== undefined) window.cancelAnimationFrame(follow_frame_ref.current);
@@ -38,8 +48,8 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     anchor_frame_ref.current = undefined;
     sticky_ref.current = true;
     preserving_ref.current = false;
-    schedule_scroll_to_bottom();
-  }, [schedule_scroll_to_bottom, surface_id]);
+    align_bottom_anchor();
+  }, [align_bottom_anchor, surface_id]);
 
   useEffect(() => {
     if (auto_scroll) schedule_scroll_to_bottom();
@@ -91,7 +101,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     });
   }, []);
 
-  return { scroll_ref, content_ref, handle_scroll, preserve_prepend_position };
+  return { scroll_ref, content_ref, bottom_ref, handle_scroll, preserve_prepend_position };
 }
 
 /** 捕获当前首个可见消息行，避免历史前插依赖整体内容高度。 */
