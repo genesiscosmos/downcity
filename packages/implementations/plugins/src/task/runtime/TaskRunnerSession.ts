@@ -97,8 +97,12 @@ export async function createTaskSessionRuntimePort(params: {
    * 显式提供适配器，避免把 Task 的临时 run 目录错误地当成普通 Session 附件目录。
    */
   const attachment_store: SessionAttachmentStore = {
+    owns_local_file: () => false,
     persist_data_url: async () => {
       throw new Error("Task session runtime does not support Data URL attachments");
+    },
+    copy_local_file: async () => {
+      throw new Error("Task session runtime does not support local Session attachments");
     },
   };
 

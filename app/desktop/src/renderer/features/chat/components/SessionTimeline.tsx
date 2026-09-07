@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
+import type { JSONContent } from "@tiptap/core";
 import { TbArrowUp, TbAlertTriangle, TbChecklist, TbCheck, TbChevronDown, TbCopy, TbDots, TbFolder, TbGitBranch, TbLoader2, TbMessageReply, TbPencil, TbRoute, TbSearch, TbWriting } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,11 +17,13 @@ import { ChatMarkdown } from "@/features/chat/components/ChatMarkdown";
 import { ChatMessageViewportRow } from "@/features/chat/components/ChatMessageViewportRow";
 import { ChatTextSelectionQuote } from "@/features/chat/components/ChatTextSelectionQuote";
 import { UserMessageContent } from "@/features/chat/components/UserMessageContent";
+import { UserMessageRewriteEditor } from "@/features/chat/components/UserMessageRewriteEditor";
 import { ChatWorkspaceSelector } from "@/features/chat/components/ChatWorkspaceSelector";
 import { use_chat_scroll } from "@/features/chat/lib/use_chat_scroll";
 import { project_session_message_segments } from "@/features/chat/lib/session_message_projection";
 import { dispatch_chat_reference } from "@/features/chat/composer/editor/chatReferenceEvent";
 import { resolve_user_message_rewrite } from "@/features/chat/lib/user_message_rewrite";
+import { create_chat_composer_from_user_parts } from "@/features/chat/composer/editor/chatSessionMessageCodec";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { cn } from "@/lib/utils";
 import { translate, use_translation } from "@/locales/i18n";
@@ -88,6 +91,8 @@ interface SessionViewProps {
   fork_message?(message_id: string): Promise<void>;
   /** 重写指定历史用户消息。 */
   rewrite_message?(input: DesktopChatRewriteInput): Promise<void>;
+  /** 当前 Session 没有待发送队列，可以执行替换事务。 */
+  can_replace_session?: boolean;
   /** 读取一个更早历史 Segment。 */
   load_earlier_history?(): Promise<void>;
 }
@@ -134,7 +139,7 @@ export function SessionView(props: SessionViewProps) {
           <div ref={content_ref} className="mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {props.history?.has_more && props.load_earlier_history ? <div className="flex justify-center py-1"><Button disabled={props.history.loading} onClick={() => void load_earlier()}><TbArrowUp />{translate_chat(props.history.loading ? "message.loading_earlier" : "message.load_earlier")}</Button></div> : null}
             {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} on_select={props.select_prompt} /> : null}
-            <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}>{message_projection.segments.map((segment) => <MessageSegment key={segment.segment_id} segment={segment} agent={props.agent} open_agent_info={props.open_agent_info} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={segment.has_streaming_message ? props.file_diff_by_session : undefined} can_use_history_actions={!busy} />)}</TurnFileOpenProvider>
+            <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}>{message_projection.segments.map((segment) => <MessageSegment key={segment.segment_id} segment={segment} agent={props.agent} open_agent_info={props.open_agent_info} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={segment.has_streaming_message ? props.file_diff_by_session : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} send_message_on_enter={settings.send_message_on_enter} />)}</TurnFileOpenProvider>
             {busy && !message_projection.has_streaming_message ? <ActivityIndicator agent={props.agent} status={runtime?.status} file_diff={props.file_diff_by_session} /> : null}
           </div>
         </div>
@@ -164,7 +169,7 @@ function EmptyPrompts({ surface = "workspace", agent, workspace, workspaces, age
 }
 
 /** 按 canonical 消息类型渲染。 */
-const MessageRenderer = memo(function MessageRenderer({ message, actions, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, is_last_message, can_use_history_actions }: { /** canonical 消息。 */ message: SessionMessage; /** 紧邻当前 Assistant 的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前 Session 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 是否是当前消息列表最后一条。 */ is_last_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
+const MessageRenderer = memo(function MessageRenderer({ message, actions, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, has_later_visible_message, can_use_history_actions, can_replace_session, send_message_on_enter }: { /** canonical 消息。 */ message: SessionMessage; /** 紧邻当前 Assistant 的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前 Session 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前消息之后是否仍有可见内容。 */ has_later_visible_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean; /** 当前 Session 是否允许被替换。 */ can_replace_session: boolean; /** Enter 是否直接提交编辑。 */ send_message_on_enter: boolean }) {
   if (message.type === "error") return <div className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2 !m-0 !p-0">
     <div className="size-8 shrink-0 px-1" aria-hidden="true" />
     <div className="min-w-0 flex-1 px-1 pt-0.5 text-sm text-foreground">
@@ -175,7 +180,7 @@ const MessageRenderer = memo(function MessageRenderer({ message, actions, agent,
     </div>
   </div>;
   if (message.type === "action") return <AgentActionMessages actions={[message]} agent={agent} open_agent_info={open_agent_info} />;
-  if (message.type === "user") return <UserMessage message={message} fork_message={fork_message} rewrite_message={rewrite_message} is_last_message={is_last_message} can_use_history_actions={can_use_history_actions} />;
+  if (message.type === "user") return <UserMessage message={message} fork_message={fork_message} rewrite_message={rewrite_message} has_later_visible_message={has_later_visible_message} can_use_history_actions={can_use_history_actions} can_replace_session={can_replace_session} send_message_on_enter={send_message_on_enter} />;
   return <AssistantMessage message={message} actions={actions} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} file_diff={file_diff} />;
 }, (previous, next) => previous.message === next.message
   && previous.agent === next.agent
@@ -185,13 +190,15 @@ const MessageRenderer = memo(function MessageRenderer({ message, actions, agent,
   && previous.fork_message === next.fork_message
   && previous.rewrite_message === next.rewrite_message
   && previous.file_diff === next.file_diff
-  && previous.is_last_message === next.is_last_message
+  && previous.has_later_visible_message === next.has_later_visible_message
   && previous.can_use_history_actions === next.can_use_history_actions
+  && previous.can_replace_session === next.can_replace_session
+  && previous.send_message_on_enter === next.send_message_on_enter
   && same_action_messages(previous.actions, next.actions));
 
 /** 只在分段内容或消息交互依赖变化时进入该分段的消息级协调。 */
-const MessageSegment = memo(function MessageSegment({ segment, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, can_use_history_actions }: { /** 稳定的消息渲染分段。 */ segment: SessionMessageSegment; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前流式消息的文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
-  return <>{segment.rows.map(({ message, actions, is_last_message }) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id} active={message.type === "assistant" && message.status === "streaming"}><MessageRenderer message={message} actions={actions} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} rewrite_message={rewrite_message} file_diff={message.type === "assistant" && message.status === "streaming" ? file_diff : undefined} is_last_message={is_last_message} can_use_history_actions={can_use_history_actions} /></ChatMessageViewportRow>)}</>;
+const MessageSegment = memo(function MessageSegment({ segment, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, can_use_history_actions, can_replace_session, send_message_on_enter }: { /** 稳定的消息渲染分段。 */ segment: SessionMessageSegment; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前流式消息的文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean; /** 当前 Session 是否允许被替换。 */ can_replace_session: boolean; /** Enter 是否直接提交编辑。 */ send_message_on_enter: boolean }) {
+  return <>{segment.rows.map(({ message, actions, has_later_visible_message }) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id} active={message.type === "assistant" && message.status === "streaming"}><MessageRenderer message={message} actions={actions} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} rewrite_message={rewrite_message} file_diff={message.type === "assistant" && message.status === "streaming" ? file_diff : undefined} has_later_visible_message={has_later_visible_message} can_use_history_actions={can_use_history_actions} can_replace_session={can_replace_session} send_message_on_enter={send_message_on_enter} /></ChatMessageViewportRow>)}</>;
 }, (previous, next) => previous.segment === next.segment
   && previous.agent === next.agent
   && previous.open_agent_info === next.open_agent_info
@@ -200,16 +207,18 @@ const MessageSegment = memo(function MessageSegment({ segment, agent, open_agent
   && previous.fork_message === next.fork_message
   && previous.rewrite_message === next.rewrite_message
   && previous.can_use_history_actions === next.can_use_history_actions
+  && previous.can_replace_session === next.can_replace_session
+  && previous.send_message_on_enter === next.send_message_on_enter
   && (!next.segment.has_streaming_message || previous.file_diff === next.file_diff));
 
 /** 用户消息及其引用、分支操作。 */
-function UserMessage({ message, fork_message, rewrite_message, is_last_message, can_use_history_actions }: { /** canonical 用户消息。 */ message: Extract<SessionMessage, { type: "user" }>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 是否是消息列表最后一条。 */ is_last_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean }) {
+function UserMessage({ message, fork_message, rewrite_message, has_later_visible_message, can_use_history_actions, can_replace_session, send_message_on_enter }: { /** canonical 用户消息。 */ message: Extract<SessionMessage, { type: "user" }>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前消息之后是否仍有可见内容。 */ has_later_visible_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean; /** 当前 Session 是否允许被替换。 */ can_replace_session: boolean; /** Enter 是否直接提交编辑。 */ send_message_on_enter: boolean }) {
   const translate_common = use_translation("common");
   const translate_chat = use_translation("chat");
+  const initial_document = useMemo(() => create_chat_composer_from_user_parts(message.parts), [message.parts]);
   const [forking, set_forking] = useState(false);
-  const text = message.parts.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n");
   const [editing, set_editing] = useState(false);
-  const [edit_text, set_edit_text] = useState(text);
+  const [pending_document, set_pending_document] = useState<JSONContent | null>(null);
   const [submitting, set_submitting] = useState(false);
   const [rewrite_error, set_rewrite_error] = useState("");
   const [choice_open, set_choice_open] = useState(false);
@@ -219,27 +228,26 @@ function UserMessage({ message, fork_message, rewrite_message, is_last_message, 
     try { await fork_message(message.message_id); } finally { set_forking(false); }
   };
   const start_editing = () => {
-    set_edit_text(text);
+    set_pending_document(null);
     set_rewrite_error("");
     set_editing(true);
   };
   const cancel_editing = () => {
-    set_edit_text(text);
+    set_pending_document(null);
     set_rewrite_error("");
     set_editing(false);
   };
-  const submit_rewrite = async (action: DesktopChatRewriteAction) => {
-    const normalized_text = edit_text.trim();
-    if (!normalized_text) {
-      set_rewrite_error(translate_chat("message.empty_edit"));
+  const submit_rewrite = async (action: DesktopChatRewriteAction, document = pending_document) => {
+    if (!document || !rewrite_message || submitting) return;
+    if (action === "replace" && !can_replace_session) {
+      set_rewrite_error(translate_chat("message.replace_blocked_queue"));
       return;
     }
-    if (!rewrite_message || submitting) return;
     set_choice_open(false);
     set_rewrite_error("");
     set_submitting(true);
     try {
-      await rewrite_message({ message_id: message.message_id, text: normalized_text, action });
+      await rewrite_message({ message_id: message.message_id, document, action });
       set_editing(false);
     } catch (reason) {
       set_rewrite_error(reason instanceof Error ? reason.message : translate_chat("message.send_failed"));
@@ -247,42 +255,22 @@ function UserMessage({ message, fork_message, rewrite_message, is_last_message, 
       set_submitting(false);
     }
   };
-  const confirm_editing = () => {
-    if (!edit_text.trim()) {
-      set_rewrite_error(translate_chat("message.empty_edit"));
-      return;
-    }
-    if (resolve_user_message_rewrite(is_last_message) === "rollback") void submit_rewrite("rollback");
+  const confirm_editing = (document: JSONContent) => {
+    set_pending_document(document);
+    set_rewrite_error("");
+    if (resolve_user_message_rewrite(has_later_visible_message, can_replace_session) === "replace") void submit_rewrite("replace", document);
     else set_choice_open(true);
   };
   return <div className="group is-user flex w-full items-end justify-end gap-2 py-2">
     <div className="w-full flex justify-end">
       <div className={cn("user-message-stack flex w-full min-w-0 flex-col items-end gap-0.5", editing ? "max-w-[42rem]" : "max-w-[min(80%,42rem)]")}>
         <div className={cn("ml-auto flex max-w-full flex-col gap-2 overflow-hidden rounded-2xl rounded-tr-none bg-muted-foreground/10 text-sm text-foreground", editing ? "w-full p-2" : "w-fit px-3 py-2")}>
-          {editing ? <>
-            <textarea
-              autoFocus
-              value={edit_text}
-              disabled={submitting}
-              rows={Math.min(8, Math.max(2, edit_text.split("\n").length))}
-              className="min-h-16 max-h-52 w-full resize-y bg-transparent px-1 py-0.5 text-[0.8125rem] leading-[1.4] text-foreground outline-none placeholder:text-muted-foreground"
-              onChange={(event) => { set_edit_text(event.target.value); if (rewrite_error) set_rewrite_error(""); }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape" && !submitting) cancel_editing();
-                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); confirm_editing(); }
-              }}
-            />
-            {rewrite_error ? <p className="px-1 text-right text-[0.6875rem] leading-4 text-destructive">{rewrite_error}</p> : null}
-            <div className="flex justify-end gap-2">
-              <Button disabled={submitting} onClick={cancel_editing}>{translate_common("actions.cancel")}</Button>
-              <Button variant="primary" disabled={submitting} onClick={confirm_editing}>{submitting ? <TbLoader2 className="animate-spin" /> : null}{translate_chat(submitting ? "composer.sending" : "composer.send")}</Button>
-            </div>
-          </> : <>
+          {editing ? <UserMessageRewriteEditor initial_document={initial_document} submitting={submitting} error={rewrite_error} send_message_on_enter={send_message_on_enter} cancel={cancel_editing} submit={confirm_editing} /> : <>
           <UserMessageContent message_id={message.message_id} parts={message.parts} />
           </>}
         </div>
         {!editing ? <div className="flex h-5 items-center gap-1"><ChatMessageTimestamp created_at={message.created_at} class_name="mr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /><span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-          {text && rewrite_message ? <MessageActionButton title={translate_chat("message.edit")} disabled={!can_use_history_actions} on_click={start_editing}><TbPencil /></MessageActionButton> : null}
+          {message.parts.length > 0 && rewrite_message ? <MessageActionButton title={translate_chat("message.edit")} disabled={!can_use_history_actions} on_click={start_editing}><TbPencil /></MessageActionButton> : null}
           <MessageActionButton title={translate_chat("message.fork")} disabled={forking || !can_use_history_actions} on_click={() => void fork()}>{forking ? <TbLoader2 className="animate-spin" /> : <TbGitBranch />}</MessageActionButton>
           </span>
         </div> : null}
@@ -293,7 +281,7 @@ function UserMessage({ message, fork_message, rewrite_message, is_last_message, 
         <DialogHeader><div><DialogTitle>{translate_chat("message.rewrite_title")}</DialogTitle><DialogDescription>{translate_chat("message.rewrite_description")}</DialogDescription></div></DialogHeader>
         <DialogBody className="gap-2">
           <button type="button" disabled={submitting} onClick={() => void submit_rewrite("fork")} className="flex w-full items-start gap-3 rounded-md border border-border-subtle px-3 py-3 text-left hover:bg-foreground/[0.04]"><TbGitBranch className="mt-0.5 size-4 shrink-0" /><span><span className="block text-xs font-medium">{translate_chat("message.fork_title")}</span><span className="mt-0.5 block text-[0.6875rem] leading-4 text-muted-foreground">{translate_chat("message.fork_description")}</span></span></button>
-          <button type="button" disabled={submitting} onClick={() => void submit_rewrite("rollback")} className="flex w-full items-start gap-3 rounded-md border border-border-subtle px-3 py-3 text-left hover:bg-foreground/[0.04]"><TbRoute className="mt-0.5 size-4 shrink-0" /><span><span className="block text-xs font-medium">{translate_chat("message.rollback_title")}</span><span className="mt-0.5 block text-[0.6875rem] leading-4 text-muted-foreground">{translate_chat("message.rollback_description")}</span></span></button>
+          <button type="button" disabled={submitting || !can_replace_session} onClick={() => void submit_rewrite("replace")} className="flex w-full items-start gap-3 rounded-md border border-border-subtle px-3 py-3 text-left enabled:hover:bg-foreground/[0.04] disabled:opacity-50"><TbRoute className="mt-0.5 size-4 shrink-0" /><span><span className="block text-xs font-medium">{translate_chat("message.replace_title")}</span><span className="mt-0.5 block text-[0.6875rem] leading-4 text-muted-foreground">{translate_chat(can_replace_session ? "message.replace_description" : "message.replace_blocked_queue")}</span></span></button>
         </DialogBody>
         <DialogFooter><Button disabled={submitting} onClick={() => set_choice_open(false)}>{translate_common("actions.cancel")}</Button></DialogFooter>
       </DialogContent>

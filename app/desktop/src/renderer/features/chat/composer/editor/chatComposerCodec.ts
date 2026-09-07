@@ -25,6 +25,7 @@ export function is_chat_composer_empty(document: JSONContent | null | undefined)
     if (node.type === "text" && String(node.text || "").trim()) has_content = true;
     if (node.type === "chatAttachment" && String(node.attrs?.data_url || "").trim()) has_content = true;
     if (node.type === "chatReference" && String(node.attrs?.text || "").trim()) has_content = true;
+    if (node.type === "chatData" && String(node.attrs?.data_type || "").trim()) has_content = true;
   });
   return !has_content;
 }
@@ -52,7 +53,7 @@ export function read_chat_composer_visible_text(document: JSONContent): string {
       text += "\n";
       return;
     }
-    if (node.type === "chatAttachment" || node.type === "chatReference") return;
+    if (node.type === "chatAttachment" || node.type === "chatReference" || node.type === "chatData") return;
     node.content?.forEach(visit);
     if (node.type === "paragraph") text += "\n";
   };
@@ -64,7 +65,7 @@ export function read_chat_composer_visible_text(document: JSONContent): string {
 export function has_chat_composer_atoms(document: JSONContent): boolean {
   let has_atoms = false;
   walk_chat_composer(document, (node) => {
-    if (node.type === "chatAttachment" || node.type === "chatReference") has_atoms = true;
+    if (node.type === "chatAttachment" || node.type === "chatReference" || node.type === "chatData") has_atoms = true;
   });
   return has_atoms;
 }
@@ -84,6 +85,7 @@ export function count_chat_composer_atoms(document: JSONContent): number {
   walk_chat_composer(document, (node) => {
     if (node.type === "chatAttachment" && String(node.attrs?.data_url || "").trim()) count += 1;
     if (node.type === "chatReference" && String(node.attrs?.text || "").trim()) count += 1;
+    if (node.type === "chatData" && String(node.attrs?.data_type || "").trim()) count += 1;
   });
   return count;
 }

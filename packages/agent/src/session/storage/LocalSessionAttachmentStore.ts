@@ -1,7 +1,8 @@
 /**
  * Agent 私有 Storage 内 Session 附件的本地实现。
  *
- * Data URL 在这里解码为文件；Message 层保存 Agent 私有目录中的绝对路径。
+ * Data URL 在这里解码为文件；fork 来源附件在同一 Agent Storage 内复制；
+ * Message 层保存 Agent 私有目录中的绝对路径。
  */
 
 import path from "node:path";
@@ -39,6 +40,12 @@ export class LocalSessionAttachmentStore implements SessionAttachmentStore {
     this.attachments_dir_path = path.resolve(options.attachments_dir_path);
   }
 
+  owns_local_file(url: string): boolean {
+    const candidate = path.resolve(String(url || ""));
+    const relative = path.relative(this.attachments_dir_path, candidate);
+    return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+  }
+
   async persist_data_url(input: {
     data_url: string;
     media_type: string;
@@ -50,6 +57,20 @@ export class LocalSessionAttachmentStore implements SessionAttachmentStore {
     const absolute_path = path.join(this.attachments_dir_path, attachment_name);
     await this.files.ensure_directory(this.attachments_dir_path);
     await this.files.write_file_atomically(absolute_path, parsed.bytes);
+    return absolute_path;
+  }
+
+  async copy_local_file(input: {
+    source_url: string;
+    media_type: string;
+    filename?: string;
+  }): Promise<string> {
+    const extension = resolve_extension(input.media_type, input.filename);
+    const attachment_name = `att_${generate_id()}${extension}`;
+    const absolute_path = path.join(this.attachments_dir_path, attachment_name);
+    const bytes = await this.files.read_file(input.source_url);
+    await this.files.ensure_directory(this.attachments_dir_path);
+    await this.files.write_file_atomically(absolute_path, bytes);
     return absolute_path;
   }
 }

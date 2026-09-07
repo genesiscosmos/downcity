@@ -49,6 +49,22 @@ export interface RichTextEditorProps {
   queue?: ReactNode;
 }
 
+/** 历史用户消息富文本编辑器的交互契约。 */
+export interface UserMessageRewriteEditorProps {
+  /** 从 canonical User Message 恢复出的初始文档。 */
+  initial_document: JSONContent;
+  /** 是否正在向 Main 提交 rewrite 事务。 */
+  submitting: boolean;
+  /** 当前提交失败的用户可见原因。 */
+  error: string;
+  /** Enter 是否直接提交；关闭时使用系统修饰键加 Enter。 */
+  send_message_on_enter: boolean;
+  /** 放弃本次编辑。 */
+  cancel(): void;
+  /** 提交编辑器当前完整文档。 */
+  submit(document: JSONContent): void;
+}
+
 /** 待发送队列的展示与操作契约。 */
 export interface MessageQueueProps {
   /** 当前会话按发送顺序排列的待发送消息。 */

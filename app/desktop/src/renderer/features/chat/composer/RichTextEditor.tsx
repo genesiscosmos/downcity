@@ -2,9 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { JSONContent } from "@tiptap/core";
-import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import { TbArrowUp, TbLoader2, TbPaperclip, TbPhoto, TbPlus, TbSquare } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/AgentAvatar";
@@ -13,7 +11,7 @@ import type { ChatSubmitMode } from "@/types/DesktopView";
 import type { ChatSlashCommand } from "@/types/ChatComposer";
 import type { DesktopAgentSummary } from "@common/types/DesktopApi";
 import type { RichTextEditorProps } from "@/types/ChatComponents";
-import { ChatAttachmentNode, ChatReferenceNode } from "@/features/chat/composer/editor/ChatComposerNodes";
+import { create_chat_composer_extensions } from "@/features/chat/composer/editor/chatComposerExtensions";
 import { ChatSlashMenu } from "@/features/chat/composer/editor/ChatSlashMenu";
 import { is_chat_composer_empty, resolve_chat_input_command } from "@/features/chat/composer/editor/chatComposerCodec";
 import { should_restore_editor_draft } from "@/features/chat/composer/editor/draftSync";
@@ -214,7 +212,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
 
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit.configure({ heading: false, codeBlock: false, blockquote: false, horizontalRule: false }), Placeholder.configure({ placeholder: props.placeholder }), ChatAttachmentNode, ChatReferenceNode],
+    extensions: create_chat_composer_extensions(props.placeholder),
     content: props.draft_content,
       editorProps: {
       attributes: { class: "chat-input-editor", "data-chat-input": "true", spellcheck: String(props.spellcheck_enabled) },

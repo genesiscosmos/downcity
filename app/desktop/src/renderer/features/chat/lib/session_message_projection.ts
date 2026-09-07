@@ -21,6 +21,12 @@ export function project_session_message_segments(
   const segments_by_id = new Map<number, SessionMessageRow[]>();
   let has_streaming_message = false;
   let has_conversation_message = false;
+  let last_visible_message_index = -1;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].visibility !== "visible") continue;
+    last_visible_message_index = index;
+    break;
+  }
 
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
@@ -37,10 +43,10 @@ export function project_session_message_segments(
         actions.push(messages[next_index] as SessionActionMessage);
         next_index += 1;
       }
-      rows.push({ message, actions, is_last_message: index === messages.length - 1 });
+      rows.push({ message, actions, has_later_visible_message: index < last_visible_message_index });
       index = next_index - 1;
     } else {
-      rows.push({ message, actions: empty_action_messages, is_last_message: index === messages.length - 1 });
+      rows.push({ message, actions: empty_action_messages, has_later_visible_message: index < last_visible_message_index });
     }
     segments_by_id.set(segment_id, rows);
   }
@@ -77,7 +83,7 @@ function same_message_rows(left: SessionMessageRow[], right: SessionMessageRow[]
   return left.length === right.length && left.every((row, index) => {
     const candidate = right[index];
     return row.message === candidate.message
-      && row.is_last_message === candidate.is_last_message
+      && row.has_later_visible_message === candidate.has_later_visible_message
       && same_action_messages(row.actions, candidate.actions);
   });
 }

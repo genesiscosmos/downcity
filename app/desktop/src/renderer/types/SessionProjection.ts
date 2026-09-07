@@ -40,8 +40,8 @@ export interface SessionMessageRow {
   message: SessionMessage;
   /** 紧邻并归属于当前 Assistant 的 canonical Action 消息。 */
   actions: SessionActionMessage[];
-  /** 当前消息是否位于 canonical 消息列表末尾。 */
-  is_last_message: boolean;
+  /** 当前消息之后是否仍有可见 canonical 内容。 */
+  has_later_visible_message: boolean;
 }
 
 /** 一组具有稳定 sequence 区间的 Session 消息渲染行。 */

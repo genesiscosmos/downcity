@@ -172,6 +172,9 @@ importers:
       i18next:
         specifier: ^25.5.2
         version: 25.10.10(typescript@5.9.3)
+      marked:
+        specifier: ^16.4.2
+        version: 16.4.2
       mermaid:
         specifier: ^11.15.0
         version: 11.15.0

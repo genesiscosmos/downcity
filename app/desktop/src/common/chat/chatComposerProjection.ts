@@ -6,7 +6,8 @@
  */
 
 import type { JSONContent } from "@tiptap/core";
-import type { ChatComposerContextPart, ChatComposerFilePart, ChatComposerPart } from "../types/ChatComposer";
+import type { JsonValue } from "@downcity/agent";
+import type { ChatComposerContextPart, ChatComposerDataPart, ChatComposerFilePart, ChatComposerPart, ChatComposerProjectionOptions } from "../types/ChatComposer";
 
 /** 引用节点进入 Session Context 时使用的稳定语义标签。 */
 const CHAT_REFERENCE_CONTEXT_TAG = "reference" as const;
@@ -31,8 +32,8 @@ class ChatComposerProjectionWriter {
     this.pending_text += text;
   }
 
-  /** 在原始位置提交一个引用或附件。 */
-  append_atom(part: ChatComposerContextPart | ChatComposerFilePart): void {
+  /** 在原始位置提交一个引用、附件或结构化数据。 */
+  append_atom(part: ChatComposerContextPart | ChatComposerFilePart | ChatComposerDataPart): void {
     this.flush_text();
     this.parts.push(part);
   }
@@ -56,39 +57,39 @@ class ChatComposerProjectionWriter {
 }
 
 /** 把完整 Tiptap Chat Composer 文档投影成有序内容。 */
-export function project_chat_composer(document: JSONContent): ChatComposerPart[] {
+export function project_chat_composer(document: JSONContent, options: ChatComposerProjectionOptions = {}): ChatComposerPart[] {
   if (!document || document.type !== "doc" || !Array.isArray(document.content)) {
     throw new Error("chat input must be a Tiptap document");
   }
   const writer = new ChatComposerProjectionWriter();
-  write_blocks(document.content, writer);
+  write_blocks(document.content, writer, options);
   return writer.finish();
 }
 
 /** 按 Markdown 块边界序列化一组顶层节点。 */
-function write_blocks(nodes: JSONContent[], writer: ChatComposerProjectionWriter): void {
+function write_blocks(nodes: JSONContent[], writer: ChatComposerProjectionWriter, options: ChatComposerProjectionOptions): void {
   nodes.forEach((node, index) => {
     if (index > 0) writer.append_structure("\n\n");
-    write_block(node, writer);
+    write_block(node, writer, options);
   });
 }
 
 /** 序列化一个受 Chat Composer 支持的块节点。 */
-function write_block(node: JSONContent, writer: ChatComposerProjectionWriter): void {
+function write_block(node: JSONContent, writer: ChatComposerProjectionWriter, options: ChatComposerProjectionOptions): void {
   if (node.type === "paragraph") {
-    write_inline_nodes(node.content || [], writer, "");
+    write_inline_nodes(node.content || [], writer, "", options);
     return;
   }
   if (node.type === "bulletList" || node.type === "orderedList") {
-    write_list(node, writer, "");
+    write_list(node, writer, "", options);
     return;
   }
   // 未声明为用户格式的容器只投影其内容，不凭空引入新 Markdown 语义。
-  node.content?.forEach((child) => write_block(child, writer));
+  node.content?.forEach((child) => write_block(child, writer, options));
 }
 
 /** 序列化段落中的文本、硬换行与结构化原子节点。 */
-function write_inline_nodes(nodes: JSONContent[], writer: ChatComposerProjectionWriter, line_prefix: string): void {
+function write_inline_nodes(nodes: JSONContent[], writer: ChatComposerProjectionWriter, line_prefix: string, options: ChatComposerProjectionOptions): void {
   nodes.forEach((node) => {
     if (node.type === "text") {
       writer.append_content(serialize_marked_text(node));
@@ -100,12 +101,16 @@ function write_inline_nodes(nodes: JSONContent[], writer: ChatComposerProjection
     }
     if (node.type === "chatReference") {
       const context = String(node.attrs?.text || "");
-      if (context.trim()) writer.append_atom({ type: "context", tag: CHAT_REFERENCE_CONTEXT_TAG, context });
+      const tag = String(node.attrs?.tag || CHAT_REFERENCE_CONTEXT_TAG).trim();
+      if (!/^[a-z][a-z0-9_-]*$/iu.test(tag)) throw new Error("context tag is invalid");
+      if (context.trim()) writer.append_atom({ type: "context", tag, context });
       return;
     }
     if (node.type === "chatAttachment") {
       const url = String(node.attrs?.data_url || "");
-      if (!url.startsWith("data:")) throw new Error("attachment must use a data URL");
+      if (!url.startsWith("data:") && !options.allowed_attachment_urls?.has(url)) {
+        throw new Error("attachment must use a data URL or an existing canonical URL");
+      }
       writer.append_atom({
         type: "file",
         media_type: String(node.attrs?.media_type || "application/octet-stream"),
@@ -114,36 +119,47 @@ function write_inline_nodes(nodes: JSONContent[], writer: ChatComposerProjection
       });
       return;
     }
-    node.content && write_inline_nodes(node.content, writer, line_prefix);
+    if (node.type === "chatData") {
+      const data_type = String(node.attrs?.data_type || "").trim();
+      if (!data_type) throw new Error("data type is required");
+      writer.append_atom({
+        type: "data",
+        data_type,
+        data: node.attrs?.data as JsonValue,
+        ...(String(node.attrs?.data_id || "").trim() ? { data_id: String(node.attrs?.data_id).trim() } : {}),
+      });
+      return;
+    }
+    node.content && write_inline_nodes(node.content, writer, line_prefix, options);
   });
 }
 
 /** 序列化有序或无序列表，并保持嵌套层级。 */
-function write_list(node: JSONContent, writer: ChatComposerProjectionWriter, indent: string): void {
+function write_list(node: JSONContent, writer: ChatComposerProjectionWriter, indent: string, options: ChatComposerProjectionOptions): void {
   const ordered = node.type === "orderedList";
   const start = Number.isInteger(node.attrs?.start) ? Number(node.attrs?.start) : 1;
   (node.content || []).forEach((item, index) => {
     if (index > 0) writer.append_structure("\n");
     const marker = ordered ? `${start + index}. ` : "- ";
     writer.append_structure(`${indent}${marker}`);
-    write_list_item(item, writer, `${indent}${" ".repeat(marker.length)}`);
+    write_list_item(item, writer, `${indent}${" ".repeat(marker.length)}`, options);
   });
 }
 
 /** 序列化一个列表项中的段落和子列表。 */
-function write_list_item(node: JSONContent, writer: ChatComposerProjectionWriter, continuation_indent: string): void {
+function write_list_item(node: JSONContent, writer: ChatComposerProjectionWriter, continuation_indent: string, options: ChatComposerProjectionOptions): void {
   (node.content || []).forEach((child, index) => {
     if (child.type === "paragraph") {
       if (index > 0) writer.append_structure(`\n\n${continuation_indent}`);
-      write_inline_nodes(child.content || [], writer, continuation_indent);
+      write_inline_nodes(child.content || [], writer, continuation_indent, options);
       return;
     }
     if (child.type === "bulletList" || child.type === "orderedList") {
       writer.append_structure("\n");
-      write_list(child, writer, continuation_indent);
+      write_list(child, writer, continuation_indent, options);
       return;
     }
-    child.content?.forEach((nested) => write_block(nested, writer));
+    child.content?.forEach((nested) => write_block(nested, writer, options));
   });
 }
 
@@ -163,7 +179,7 @@ function serialize_marked_text(node: JSONContent): string {
       if (mark.type === "bold") output = `**${output}**`;
       else if (mark.type === "italic") output = `*${output}*`;
       else if (mark.type === "strike") output = `~~${output}~~`;
-      else if (mark.type === "underline") output = `<u>${output}</u>`;
+      else if (mark.type === "underline") output = `<ins>${output}</ins>`;
       else if (mark.type === "link") output = `[${output}](${escape_link_destination(String(mark.attrs?.href || ""))})`;
     });
   }

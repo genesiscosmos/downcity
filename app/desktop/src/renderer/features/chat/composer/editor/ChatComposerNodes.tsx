@@ -2,8 +2,8 @@
 
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
-import { TbFile, TbPhoto, TbQuote, TbX } from "react-icons/tb";
-import type { ChatAttachmentNodeAttributes, ChatReferenceNodeAttributes } from "@/types/ChatComposer";
+import { TbBraces, TbFile, TbPhoto, TbQuote, TbX } from "react-icons/tb";
+import type { ChatAttachmentNodeAttributes, ChatDataNodeAttributes, ChatReferenceNodeAttributes } from "@/types/ChatComposer";
 import { use_translation } from "@/locales/i18n";
 
 /** 编辑器内附件的紧凑预览。 */
@@ -37,6 +37,17 @@ function ChatReferenceView({ node, deleteNode }: NodeViewProps) {
   </NodeViewWrapper>;
 }
 
+/** 编辑器内结构化数据 part 的紧凑预览。 */
+function ChatDataView({ node, deleteNode }: NodeViewProps) {
+  const attributes = node.attrs as ChatDataNodeAttributes;
+  return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
+    <span contentEditable={false} className="group/chat-data relative inline-flex max-w-[16rem] items-center rounded-md bg-foreground/[0.08] align-middle text-[0.6875rem] font-medium text-foreground/88">
+      <span className="inline-flex min-w-0 items-center gap-1 px-1.5 py-0.5"><TbBraces className="size-3 text-muted-foreground/75" /><span className="truncate">{attributes.data_type}</span></span>
+      <button type="button" className="mr-1 inline-flex size-3.5 items-center justify-center rounded text-muted-foreground/70 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/chat-data:opacity-100" onClick={deleteNode}><TbX className="size-2.5" /></button>
+    </span>
+  </NodeViewWrapper>;
+}
+
 /** 文件或图片附件节点。 */
 export const ChatAttachmentNode = Node.create({
   name: "chatAttachment",
@@ -57,10 +68,23 @@ export const ChatReferenceNode = Node.create({
   inline: true,
   atom: true,
   selectable: true,
-  addAttributes: () => ({ message_id: { default: "" }, role: { default: "assistant" }, text: { default: "" }, preview_text: { default: "" } }),
+  addAttributes: () => ({ message_id: { default: "" }, role: { default: "assistant" }, tag: { default: "reference" }, text: { default: "" }, preview_text: { default: "" } }),
   parseHTML: () => [{ tag: "span[data-chat-reference]" }],
   renderHTML: ({ HTMLAttributes }) => ["span", mergeAttributes(HTMLAttributes, { "data-chat-reference": "" })],
   addNodeView: () => ReactNodeViewRenderer(ChatReferenceView),
+});
+
+/** 需要在历史消息重写时保持顺序的结构化数据节点。 */
+export const ChatDataNode = Node.create({
+  name: "chatData",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes: () => ({ data_type: { default: "" }, data: { default: null }, data_id: { default: "" } }),
+  parseHTML: () => [{ tag: "span[data-chat-data]" }],
+  renderHTML: ({ HTMLAttributes }) => ["span", mergeAttributes(HTMLAttributes, { "data-chat-data": "" })],
+  addNodeView: () => ReactNodeViewRenderer(ChatDataView),
 });
 
 /** 根据附件类型返回菜单使用的图标。 */

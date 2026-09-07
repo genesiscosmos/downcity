@@ -469,14 +469,14 @@ export interface DesktopChatSendResult {
 }
 
 /** 历史用户消息重写方式。 */
-export type DesktopChatRewriteAction = "rollback" | "fork";
+export type DesktopChatRewriteAction = "replace" | "fork";
 
 /** Renderer 提交的一次历史用户消息重写。 */
 export interface DesktopChatRewriteInput {
   /** 被替换的 canonical 用户消息标识。 */
   message_id: string;
-  /** 修改后的非空文本。 */
-  text: string;
+  /** 使用 Chat Composer schema 表达的完整修改后消息。 */
+  document: JSONContent;
   /** 创建独立分支，或用新 Session 替代并归档当前 Session。 */
   action: DesktopChatRewriteAction;
 }
@@ -487,6 +487,10 @@ export interface DesktopChatRewriteResult {
   session: DesktopSessionSummary;
   /** 修改后的消息已启动的 Turn 标识。 */
   turn_id: string;
+  /** 源 Session 在事务完成后被保留还是归档。 */
+  source_disposition: "preserved" | "archived";
+  /** 新 Turn 已接受但源 Session 未能归档时的可恢复提示。 */
+  warning?: string;
 }
 
 /** Renderer 可提交的一份文件输入。 */

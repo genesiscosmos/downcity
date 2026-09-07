@@ -39,6 +39,7 @@ export function AgentSessionChatSurface({ selection, agent, session, open_agent_
   const runtime = use_desktop_selector(controller.stores.chat_stream, (state) => state.chat_runtime_by_session[session_key]);
   const file_diff = use_desktop_selector(controller.stores.chat_stream, (state) => state.file_diff_by_session[session_key]);
   const history = use_desktop_selector(controller.stores.chat_stream, (state) => state.history_by_session[session_key]);
+  const has_queued_messages = use_desktop_selector(controller.stores.composer, (state) => (state.queued_messages_by_session[session_key]?.length ?? 0) > 0);
   const switch_workspace = useCallback((target_workspace_id: string) => controller.actions.create_session(target_workspace_id, agent_id), [agent_id, controller.actions]);
   const rename_session = useCallback((title: string) => controller.actions.rename_session(workspace_id, agent_id, session_id, title), [agent_id, controller.actions, session_id, workspace_id]);
   const archive_session = useCallback(() => controller.actions.archive_session(workspace_id, agent_id, session_id), [agent_id, controller.actions, session_id, workspace_id]);
@@ -74,6 +75,7 @@ export function AgentSessionChatSurface({ selection, agent, session, open_agent_
     respond_interaction={respond_interaction}
     fork_message={fork_message}
     rewrite_message={rewrite_message}
+    can_replace_session={!has_queued_messages}
     load_earlier_history={load_earlier_history}
   />;
 }

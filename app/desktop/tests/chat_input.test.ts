@@ -56,7 +56,7 @@ test("把支持的文本 marks 稳定序列化为 Markdown", () => {
     }],
   }), [{
     type: "text",
-    text: "普通 \\*符号\\* 和 **粗体**、*斜体*、~~删除~~、`` const value = `x` ``、<u>下划线</u>、[链接](https://example.com/a\\(b\\))",
+    text: "普通 \\*符号\\* 和 **粗体**、*斜体*、~~删除~~、`` const value = `x` ``、<ins>下划线</ins>、[链接](https://example.com/a\\(b\\))",
   }]);
 });
 
@@ -117,7 +117,18 @@ test("拒绝空输入和无效附件", () => {
   assert.throws(() => chat_input_to_session_query({
     type: "doc",
     content: [{ type: "paragraph", content: [{ type: "chatAttachment", attrs: { data_url: "/tmp/image.png" } }] }],
-  }), /attachment must use a data URL/);
+  }), /attachment must use a data URL or an existing canonical URL/);
+});
+
+test("只在显式 allowlist 中复用历史 canonical 附件", () => {
+  const document = {
+    type: "doc",
+    content: [{ type: "paragraph", content: [{ type: "chatAttachment", attrs: { filename: "old.png", media_type: "image/png", data_url: "file:///canonical/old.png" } }] }],
+  };
+  assert.throws(() => chat_input_to_session_query(document), /existing canonical URL/);
+  assert.deepEqual(chat_input_to_session_query(document, { allowed_attachment_urls: new Set(["file:///canonical/old.png"]) }), [
+    { type: "file", filename: "old.png", media_type: "image/png", url: "file:///canonical/old.png" },
+  ]);
 });
 
 test("单独的 Markdown marker 仍被视为用户正文", () => {

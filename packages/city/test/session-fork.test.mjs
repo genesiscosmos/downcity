@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import { Agent } from "../../agent/bin/index.js";
 import { create_workspace_entry } from "../../agent/bin/internal/index.js";
-import { Workspace } from "@downcity/city";
+import { City, LocalStorageProvider, Workspace } from "@downcity/city";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 async function create_session(t) {
@@ -17,10 +17,16 @@ async function create_session(t) {
     generate: async () => ({ text: "fork reply" }),
   });
   const agent = new Agent({ id: "fork_test_agent", model });
-  t.after(async () => await agent.dispose());
   const workspace = new Workspace({ id: "fork_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
+  const city = new City({
+    storage: new LocalStorageProvider(path.join(root_path, "city-data")),
+    agents: [agent],
+    workspaces: [workspace],
+  });
+  t.after(async () => await city.close());
   const entry = create_workspace_entry(agent, workspace);
   return {
+    root_path,
     entry,
     session: await entry.sessions.create({ session_id: "source" }),
   };
@@ -65,4 +71,39 @@ test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (
     turn_mutations.some((mutation) => mutation.type === "finish" && mutation.status === "completed"),
     true,
   );
+});
+
+test("Fork 将源 Session 持有的附件复制到自己的生命周期", async (t) => {
+  const { root_path, entry, session } = await create_session(t);
+  const workspace_file = path.join(root_path, "workspace.txt");
+  await fs.writeFile(workspace_file, "workspace");
+  const turn = await session.prompt({
+    query: [{
+      type: "file",
+      media_type: "text/plain",
+      url: "data:text/plain;base64,aGVsbG8=",
+      filename: "hello.txt",
+    }, {
+      type: "file",
+      media_type: "text/plain",
+      url: workspace_file,
+      filename: "workspace.txt",
+    }],
+  });
+  await turn.finished;
+  const source_message = (await session.messages()).items.find((message) => message.type === "user");
+  const source_file = source_message?.type === "user" ? source_message.parts.find((part) => part.type === "file") : undefined;
+  assert.ok(source_file);
+
+  const forked = await session.fork();
+  const forked_message = (await forked.messages()).items.find((message) => message.type === "user");
+  const forked_file = forked_message?.type === "user" ? forked_message.parts.find((part) => part.type === "file") : undefined;
+  assert.ok(forked_file);
+  assert.notEqual(forked_file.url, source_file.url);
+  assert.equal(await fs.readFile(forked_file.url, "utf8"), "hello");
+  const forked_workspace_file = forked_message?.type === "user" ? forked_message.parts.find((part) => part.type === "file" && part.filename === "workspace.txt") : undefined;
+  assert.equal(forked_workspace_file?.url, workspace_file);
+
+  await entry.sessions.archive({ id: session.id });
+  assert.equal(await fs.readFile(forked_file.url, "utf8"), "hello");
 });

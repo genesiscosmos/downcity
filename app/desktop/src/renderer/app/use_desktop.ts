@@ -31,6 +31,7 @@ import { use_desktop_navigation_actions } from "@/features/navigation/use_naviga
 import { update_group_session_title } from "@/features/chat/lib/group/group_session_projection";
 import { create_chat_composer, is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
 import { group_agent_sessions_by_workspace } from "@/features/chat/lib/session_list_projection";
+import { translate } from "@/locales/i18n";
 
 const active_workspace_storage_key = "downcity.active_workspace_id";
 
@@ -436,20 +437,26 @@ export function use_desktop_controller(): DesktopController {
     settings.set_error("");
     const source_key = get_session_key(workspace_id, agent_id, session_id);
     try {
+      if (input.action === "replace" && (composer.state_ref.current.queued_messages_by_session[source_key]?.length ?? 0) > 0) {
+        throw new Error(translate("chat:message.replace_blocked_queue"));
+      }
       const result = await window.downcity.chat.rewrite_session_message(agent_id, workspace_id, session_id, input);
       session.prepend_session(workspace_id, agent_id, result.session);
       const result_key = get_session_key(workspace_id, agent_id, result.session.session_id);
-      if (result_key !== source_key) {
-        // 重写返回新 Session 后，旧会话的迟到事件不能再进入 Renderer。
+      if (result.source_disposition === "archived") {
+        // replace 事务显式转移草稿所有权；队列在提交前已被拒绝，不能静默迁移或删除。
+        composer.move_draft(source_key, result_key);
+        session.remove_session(workspace_id, agent_id, session_id);
         chat_lifecycle.discard_session(source_key);
         discard_session_render_state(source_key);
       }
+      if (result.warning) settings.set_error(result.warning);
       await select_session(workspace_id, agent_id, result.session.session_id);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
       throw reason;
     }
-  }, [chat_lifecycle, discard_session_render_state, select_session, session, settings]);
+  }, [chat_lifecycle, composer, discard_session_render_state, select_session, session, settings]);
 
   const rename_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, title: string) => {
     try {

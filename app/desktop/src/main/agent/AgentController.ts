@@ -9,6 +9,7 @@ import {
   Agent,
   Group,
   type AgentSession,
+  type AgentSessionPromptInput,
   type GroupSessionContract,
   type GroupSessionSummary,
   type AgentSessionSummary,
@@ -165,6 +166,8 @@ export class AgentController {
   private readonly runtimes = new Map<string, DesktopChatRuntime>();
   /** 当前进程已经按持久化 ID 恢复的 Session 模型。 */
   private readonly restored_session_models = new Map<string, string>();
+  /** 正在以历史消息替换会话的源 Session，防止并发提交破坏事务锚点。 */
+  private readonly rewriting_session_keys = new Set<string>();
   /** Desktop 首次访问前完成的本地 Agent 装配。 */
   private readonly ready_promise: Promise<void>;
 
@@ -833,37 +836,109 @@ export class AgentController {
     const source_info = await source.get_info();
     const forked = await source.fork({ message_id });
     const source_title = String(source_info.title || "新会话").trim();
-    await forked.rename(`${source_title}（分支）`);
-    this.observe_session(agent_id, workspace_id, forked);
-    return to_desktop_session_summary(this.data.root_path, await forked.get_info());
+    try {
+      await forked.rename(`${source_title}（分支）`);
+      this.copy_session_configuration_projection(agent_id, workspace_id, session_id, forked.id);
+      this.observe_session(agent_id, workspace_id, forked);
+      return to_desktop_session_summary(this.data.root_path, await forked.get_info());
+    } catch (reason) {
+      await this.require_native_agent(agent_id).sessions.remove(forked.id).catch(() => false);
+      this.release_session_projection(agent_id, workspace_id, forked.id);
+      throw reason;
+    }
   }
 
-  /** 从历史用户消息之前创建新 Session，并以修改后的文本启动新 Turn。 */
+  /** 从历史用户消息之前创建新 Session，并以完整修改后输入启动新 Turn。 */
   async rewrite_session_message(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput): Promise<DesktopChatRewriteResult> {
+    const source_key = get_session_key(agent_id, workspace_id, session_id);
+    if (this.rewriting_session_keys.has(source_key)) throw new Error("Session 正在重写历史消息");
+    this.rewriting_session_keys.add(source_key);
+    try {
+      return await this.perform_session_message_rewrite(agent_id, workspace_id, session_id, input);
+    } finally {
+      this.rewriting_session_keys.delete(source_key);
+    }
+  }
+
+  /** 在已取得源 Session rewrite 互斥权后执行完整替换事务。 */
+  private async perform_session_message_rewrite(agent_id: string, workspace_id: string, session_id: string, input: DesktopChatRewriteInput): Promise<DesktopChatRewriteResult> {
     const source = await this.get_session(agent_id, workspace_id, session_id);
     if ((await source.status()).state === "running") throw new Error("Session 正在执行，不能编辑历史消息");
     const message_id = String(input.message_id || "").trim();
-    const text = String(input.text || "").trim();
     if (!message_id) throw new Error("message_id is required");
-    if (!text) throw new Error("编辑后的消息不能为空");
-    if (input.action !== "fork" && input.action !== "rollback") throw new Error("不支持的历史消息重写方式");
+    if (input.action !== "fork" && input.action !== "replace") throw new Error("不支持的历史消息重写方式");
+    const target_message = await this.find_session_message(source, message_id);
+    if (target_message?.type !== "user" || target_message.visibility !== "visible") {
+      throw new Error("只能重写当前 Session 中可见的用户消息");
+    }
+    const allowed_attachment_urls = new Set(target_message.parts.flatMap((part) => part.type === "file" ? [part.url] : []));
+    const query = chat_input_to_session_query(input.document, { allowed_attachment_urls });
     const source_info = await source.get_info();
     const forked = await source.fork({ message_id, include_message: false });
     const source_title = String(source_info.title || "新对话").trim();
+    let prepared_session: DesktopSessionSummary;
     try {
       await forked.rename(input.action === "fork" ? `${source_title}（分支）` : source_title);
+      this.copy_session_configuration_projection(agent_id, workspace_id, session_id, forked.id);
       this.observe_session(agent_id, workspace_id, forked);
-      const sent = await this.send_message(agent_id, workspace_id, forked.id, { text, files: [], references: [] });
-      if (input.action === "rollback") {
-        await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
-        this.release_session_projection(agent_id, workspace_id, session_id);
-      }
-      return { session: to_desktop_session_summary(this.data.root_path, await forked.get_info()), turn_id: sent.turn_id };
+      prepared_session = to_desktop_session_summary(this.data.root_path, await forked.get_info());
     } catch (error) {
       await this.require_native_agent(agent_id).sessions.remove(forked.id).catch(() => false);
       this.release_session_projection(agent_id, workspace_id, forked.id);
       throw error;
     }
+    let sent: DesktopChatSendResult;
+    try {
+      sent = await this.submit_session_query(agent_id, workspace_id, forked.id, query);
+    } catch (error) {
+      await this.require_native_agent(agent_id).sessions.remove(forked.id).catch(() => false);
+      this.release_session_projection(agent_id, workspace_id, forked.id);
+      throw error;
+    }
+    const session = await forked.get_info()
+      .then((info) => to_desktop_session_summary(this.data.root_path, info))
+      .catch(() => ({ ...prepared_session, updated_at: Date.now(), message_count: prepared_session.message_count + 1, executing: true }));
+    if (input.action === "fork") return { session, turn_id: sent.turn_id, source_disposition: "preserved" };
+    try {
+      // 归档是新 Turn 已被接受后的最终提交点；失败时保留两个 Session，不删除正在执行的新 Turn。
+      await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
+      this.release_session_projection(agent_id, workspace_id, session_id);
+      return { session, turn_id: sent.turn_id, source_disposition: "archived" };
+    } catch (reason) {
+      await forked.rename(`${source_title}（分支）`).catch(() => undefined);
+      return {
+        session: { ...session, title: `${source_title}（分支）` },
+        turn_id: sent.turn_id,
+        source_disposition: "preserved",
+        warning: `修改后的消息已在新分支发送，但原对话归档失败：${to_error_message(reason)}`,
+      };
+    }
+  }
+
+  /** 跨 active 与历史 Segment 定位 rewrite 锚点，避免只相信 Renderer 入口。 */
+  private async find_session_message(session: AgentSession, message_id: string): Promise<SessionMessage | undefined> {
+    let page = await session.messages();
+    const visited_boundaries = new Set<number>();
+    while (true) {
+      const message = page.items.find((item) => item.message_id === message_id);
+      if (message) return message;
+      const boundary = page.next_before_sequence;
+      if (!page.has_more || boundary === undefined || visited_boundaries.has(boundary)) return undefined;
+      visited_boundaries.add(boundary);
+      page = await session.messages({ before_sequence: boundary });
+    }
+  }
+
+  /** 将 Desktop 按 Session 保存的模型配置覆盖复制到 forked Session。 */
+  private copy_session_configuration_projection(agent_id: string, workspace_id: string, source_session_id: string, target_session_id: string): void {
+    const source_key = get_session_key(agent_id, workspace_id, source_session_id);
+    const model_id = this.read_session_model_ids()[source_key];
+    if (model_id) {
+      this.persist_session_model_id(agent_id, workspace_id, target_session_id, model_id);
+      this.restored_session_models.set(get_session_key(agent_id, workspace_id, target_session_id), model_id);
+    }
+    const reasoning_effort = this.read_session_reasoning_efforts()[source_key];
+    if (reasoning_effort) this.persist_session_reasoning_effort(agent_id, workspace_id, target_session_id, reasoning_effort);
   }
 
   /** 更新 Session 的 canonical 标题。 */
@@ -879,12 +954,14 @@ export class AgentController {
   /** 归档 Session，并释放 Desktop 对它的进程内投影。 */
   async archive_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
     void workspace_id;
+    this.assert_session_not_rewriting(agent_id, workspace_id, session_id);
     await this.require_native_agent(agent_id).sessions.archive({ id: session_id });
     this.release_session_projection(agent_id, workspace_id, session_id);
   }
 
   /** 永久删除 Session，并释放 Desktop 对它的进程内投影。 */
   async remove_session(agent_id: string, workspace_id: string, session_id: string): Promise<boolean> {
+    this.assert_session_not_rewriting(agent_id, workspace_id, session_id);
     const removed = await this.require_native_agent(agent_id).sessions.remove(session_id);
     this.release_session_projection(agent_id, workspace_id, session_id);
     return removed;
@@ -1013,7 +1090,13 @@ export class AgentController {
 
   /** 向 Session 提交输入；后续执行结果通过实时事件广播。 */
   async send_message(agent_id: string, workspace_id: string, session_id: string, input: JSONContent): Promise<DesktopChatSendResult> {
+    this.assert_session_not_rewriting(agent_id, workspace_id, session_id);
     const query = chat_input_to_session_query(input);
+    return await this.submit_session_query(agent_id, workspace_id, session_id, query);
+  }
+
+  /** 提交已经完成边界转换的 canonical query，并统一维护 Desktop 运行态。 */
+  private async submit_session_query(agent_id: string, workspace_id: string, session_id: string, query: AgentSessionPromptInput["query"]): Promise<DesktopChatSendResult> {
     const session = await this.get_execution_session(agent_id, workspace_id, session_id);
     this.update_runtime({ agent_id, workspace_id, session_id, status: "submitted", updated_at: Date.now() });
     try {
@@ -1040,6 +1123,13 @@ export class AgentController {
         updated_at: Date.now(),
       });
       throw reason;
+    }
+  }
+
+  /** 拒绝在 rewrite 提交点期间改变源 Session。 */
+  private assert_session_not_rewriting(agent_id: string, workspace_id: string, session_id: string): void {
+    if (this.rewriting_session_keys.has(get_session_key(agent_id, workspace_id, session_id))) {
+      throw new Error("Session 正在重写历史消息，请稍后再试");
     }
   }
 

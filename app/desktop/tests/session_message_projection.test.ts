@@ -97,3 +97,11 @@ test("投影同时汇总流式状态与可压缩消息状态", () => {
   assert.equal(projection.has_conversation_message, true);
   assert.equal(project_session_message_segments([]).has_conversation_message, false);
 });
+
+test("末尾语义基于后续可见消息而不是用户消息类型", () => {
+  const user = create_user_message(1);
+  const action = create_action_message(2);
+  const projection = project_session_message_segments([user, action]);
+  assert.equal(projection.segments[0].rows[0].has_later_visible_message, true);
+  assert.equal(projection.segments[0].rows[1].has_later_visible_message, false);
+});

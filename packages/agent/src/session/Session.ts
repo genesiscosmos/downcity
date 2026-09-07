@@ -69,6 +69,7 @@ import type { SessionActionEventInput } from "@/types/session/SessionAction.js";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import { SessionComposition } from "@/session/SessionComposition.js";
+import { relocate_fork_message_files } from "@/session/messages/SessionForkMessageFiles.js";
 
 /**
  * SDK 本地 Session。
@@ -600,7 +601,8 @@ export class Session implements AgentSession {
       const approval_mode = this.state.get_approval_mode();
       await forked.state.set_approval_mode(approval_mode);
       forked.shell_approval_adapter.set_effective_mode(approval_mode);
-      await forked.session_messages.import_messages(fork_messages);
+      const relocated_messages = await relocate_fork_message_files(fork_messages, this.store.attachments, forked.store.attachments);
+      await forked.session_messages.import_messages(relocated_messages);
       this.register_forked_session(forked);
       await this.emit_action_event({
         action_id,

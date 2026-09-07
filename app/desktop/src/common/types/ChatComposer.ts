@@ -1,5 +1,7 @@
 /** Desktop Chat Composer 跨进程内容投影类型。 */
 
+import type { JsonValue } from "@downcity/agent";
+
 /** Chat Composer 投影出的 Markdown 正文。 */
 export interface ChatComposerTextPart {
   /** 内容判别字段。 */
@@ -8,13 +10,13 @@ export interface ChatComposerTextPart {
   text: string;
 }
 
-/** Chat Composer 投影出的消息引用上下文。 */
+/** Chat Composer 投影出的模型上下文。 */
 export interface ChatComposerContextPart {
   /** 内容判别字段。 */
   type: "context";
-  /** 引用进入 Session Context 时使用的稳定语义标签。 */
-  tag: "reference";
-  /** 被引用消息的原始正文。 */
+  /** Context 进入 Session 时使用的稳定语义标签。 */
+  tag: string;
+  /** 进入模型上下文的原始内容。 */
   context: string;
 }
 
@@ -24,14 +26,33 @@ export interface ChatComposerFilePart {
   type: "file";
   /** 附件的 IANA MIME 类型。 */
   media_type: string;
-  /** 可跨进程传输的附件 Data URL。 */
+  /** 可跨进程传输的附件 URL；新上传文件使用 Data URL。 */
   url: string;
   /** 用户可见的原始文件名。 */
   filename: string;
+}
+
+/** Chat Composer 投影出的结构化数据。 */
+export interface ChatComposerDataPart {
+  /** 内容判别字段。 */
+  type: "data";
+  /** 结构化数据的业务类型。 */
+  data_type: string;
+  /** 可跨进程传输的结构化值。 */
+  data: JsonValue;
+  /** 可选稳定数据标识。 */
+  data_id?: string;
 }
 
 /** Tiptap 文档按原始内容顺序投影出的封闭内容集合。 */
 export type ChatComposerPart =
   | ChatComposerTextPart
   | ChatComposerContextPart
-  | ChatComposerFilePart;
+  | ChatComposerFilePart
+  | ChatComposerDataPart;
+
+/** Composer 文档向 Session 内容投影时使用的边界约束。 */
+export interface ChatComposerProjectionOptions {
+  /** 除新上传 Data URL 外，允许复用的 canonical 附件地址。 */
+  allowed_attachment_urls?: ReadonlySet<string>;
+}

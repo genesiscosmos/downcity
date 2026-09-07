@@ -1,9 +1,9 @@
 /** 用户消息编辑提交方式的纯逻辑判断。 */
 
 /**
- * 最后一条消息可以直接替换当前 Session；历史消息必须先让用户选择
- * 保留分支或删除后续消息。
+ * 消息之后没有内容且当前 Session 可替换时直接继续；否则必须让用户明确
+ * 选择保留分支或替换当前对话。
  */
-export function resolve_user_message_rewrite(is_last_message: boolean): "rollback" | "choose" {
-  return is_last_message ? "rollback" : "choose";
+export function resolve_user_message_rewrite(has_later_visible_message: boolean, can_replace_session: boolean): "replace" | "choose" {
+  return !has_later_visible_message && can_replace_session ? "replace" : "choose";
 }

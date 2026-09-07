@@ -1,7 +1,8 @@
 /**
  * Session 附件持久化能力。
  *
- * Session Message 只保存附件引用，附件内容由该 Store 在 Session 生命周期内持有。
+ * Session Message 只保存附件引用，附件内容由该 Store 在 Session 生命周期内持有；
+ * Session fork 通过 Store 能力复制源 Session 自己拥有的本地附件。
  *
  * 数据边界（中文）：
  * - 输入边界：`session.prompt()` 接收 `type: "file"`、`media_type` 和 Data URL。
@@ -12,8 +13,11 @@
  * 因此，Data URL 不会直接进入 JSONL Message；Session Message 是附件路径的唯一引用。
  */
 
-/** 可持久化的 Data URL 附件。 */
+/** Session 附件持久化与 fork 复制能力。 */
 export interface SessionAttachmentStore {
+  /** 判断 canonical URL 是否由当前 Session Attachment Store 持有。 */
+  owns_local_file(url: string): boolean;
+
   /**
    * 保存 Data URL，并返回 Agent 私有目录中的稳定绝对路径。
    * 调用成功后，返回路径对应的附件文件必须已经完整落盘。
@@ -24,6 +28,19 @@ export interface SessionAttachmentStore {
     /** 调用侧声明的 MIME 类型。 */
     media_type: string;
     /** 可选的原始文件名，仅用于推导扩展名。 */
+    filename?: string;
+  }): Promise<string>;
+
+  /**
+   * 将同一 Agent Storage 中另一个 Session 持有的本地附件复制到当前 Store。
+   * 调用方必须已经确认源路径属于可导入的 canonical Session Message。
+   */
+  copy_local_file(input: {
+    /** 源 Session canonical Message 保存的本地绝对路径。 */
+    source_url: string;
+    /** 文件的 IANA MIME 类型。 */
+    media_type: string;
+    /** 可选原始文件名，仅用于推导扩展名。 */
     filename?: string;
   }): Promise<string>;
 }

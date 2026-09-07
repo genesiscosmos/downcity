@@ -8,10 +8,11 @@
 import type { AgentSessionPromptInput, SessionPromptPart } from "@downcity/agent";
 import type { JSONContent } from "@tiptap/core";
 import { project_chat_composer } from "../../common/chat/chatComposerProjection.ts";
+import type { ChatComposerProjectionOptions } from "../../common/types/ChatComposer.ts";
 
 /** 把一份 Tiptap Chat Input 转换成 SDK Session Prompt parts。 */
-export function chat_input_to_session_query(input: JSONContent): AgentSessionPromptInput["query"] {
-  const parts: SessionPromptPart[] = project_chat_composer(input);
+export function chat_input_to_session_query(input: JSONContent, options?: ChatComposerProjectionOptions): AgentSessionPromptInput["query"] {
+  const parts: SessionPromptPart[] = project_chat_composer(input, options);
   if (parts.length === 0) throw new Error("message is required");
   return parts;
 }

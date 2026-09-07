@@ -49,6 +49,8 @@ A `context` Part retains structured `tag` and `context` fields in the canonical 
 
 Data URL attachments are not written directly into Session Messages. The Session decodes each Data URL into the current Session's `.downcity/.../attachments/` directory and stores only a path relative to the Workspace root in the Message. Before model execution, the Session reads the attachment from that path and converts it into a model-consumable representation.
 
+When a Session fork is created, local attachments owned by the source Session are copied into the new Session's attachment directory. The fork therefore keeps its historical attachments when the source Session is later archived or removed.
+
 For remote Sessions, Data URLs are stored on the server. A local path supplied by a remote client only works when the server can access it; prefer a Data URL or a URL accessible by the server.
 
 ## Turn handles
