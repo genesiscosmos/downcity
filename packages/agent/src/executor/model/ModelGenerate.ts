@@ -9,6 +9,7 @@ import type {
   ModelClient,
   ModelFinishReason,
   ModelMessage,
+  ModelRequestKind,
   ModelToolCallContent,
   ModelUsage,
 } from "@downcity/type";
@@ -16,7 +17,6 @@ import { execute_model_request } from "@executor/model/ModelRequestRunner.js";
 import { consume_model_stream } from "@executor/model/ModelStreamConsumer.js";
 import type {
   ModelRequestFailureReporter,
-  ModelRequestKind,
 } from "@/types/executor/ModelRequest.js";
 
 /** 单次非交互模型生成结果。 */

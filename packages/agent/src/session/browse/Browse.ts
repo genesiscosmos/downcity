@@ -26,8 +26,8 @@ import {
   get_agent_sessions_path,
 } from "@/session/storage/LocalStorePaths.js";
 import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
-import { normalize_session_origin_type } from "@/session/SessionOrigin.js";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import { normalize_session_origin_type } from "@downcity/type";
+import type { SessionMessage } from "@downcity/type";
 import type { FileSystem } from "@downcity/type";
 
 type SessionBrowseBaseInput = {

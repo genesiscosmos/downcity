@@ -7,7 +7,7 @@
 
 import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { SessionHooks } from "@/session/SessionHooks.js";
@@ -30,14 +30,16 @@ export interface SessionCompositionOptions {
   messages: SessionMessages;
   /** 当前 Session 使用的统一 Composer。 */
   composer: SessionComposer;
-  /** 当前 Session 可以暴露给模型的 Tool 集合。 */
-  tools: Record<string, Tool>;
+  /** 在每个 Step 检查点读取当前可用 Tool 集合。 */
+  get_tools: () => Record<string, Tool>;
   /** 当前 Session 创建时捕获的 instruction system blocks。 */
   instruction_system_blocks: AgentSessionSystemBlock[];
   /** 显式 syncshot 时读取 Agent 最新 instruction system blocks。 */
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
   /** 显式 syncshot 时读取当前配置的 Hook 执行视图。 */
   get_hooks: () => SessionHooks;
+  /** 在每个 Step 检查点读取 Workspace env。 */
+  get_workspace_env: () => Record<string, string>;
   /** 读取宿主显式注入的受托管 Plugin system blocks。 */
   get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
   /** 读取当前 Session 实际使用的模型。 */
@@ -50,8 +52,4 @@ export interface SessionCompositionOptions {
   get_timezone: () => string;
   /** 记录 Plugin Hook 降级等可观察事件。 */
   logger: Logger;
-  /** 当前 Session 创建时捕获的 Workspace env。 */
-  workspace_env: Record<string, string>;
-  /** 当前 Session 创建时捕获的 Hook 执行视图。 */
-  hooks: SessionHooks;
 }

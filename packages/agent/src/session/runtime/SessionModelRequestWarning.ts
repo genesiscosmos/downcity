@@ -4,8 +4,8 @@
  * 本模块是内部模型请求失败与公开 Session Mutation 之间的唯一转换边界。
  */
 
-import type { ModelRequestFailureNotice } from "@/types/executor/ModelRequest.js";
-import type { SessionModelRequestWarningMutation } from "@/types/session/SessionMutation.js";
+import type { ModelRequestFailureNotice } from "@downcity/type";
+import type { SessionModelRequestWarningMutation } from "@downcity/type";
 import { generate_id } from "@/utils/Id.js";
 
 /** 构造公开 Session 模型请求 Warning Mutation。 */

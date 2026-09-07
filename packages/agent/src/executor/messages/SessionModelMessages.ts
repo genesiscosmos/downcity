@@ -21,7 +21,7 @@ import type {
   SessionMessage,
   SessionUserFilePart,
   SessionUserMessage,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import type { SessionContextSnapshot } from "@/types/session/SessionSegment.js";
 
 /** 把完整 Session 上下文快照转换为模型消息。 */

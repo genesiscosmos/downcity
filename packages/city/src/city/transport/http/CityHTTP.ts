@@ -16,9 +16,8 @@ import type {
   AgentHttpBinding,
   AgentHttpListenOptions,
 } from "@/city/transport/types/AgentHttpBinding.js";
-import { get_workspace_entry } from "@downcity/agent/internal";
-import type { WorkspaceEntry } from "@downcity/agent/internal";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
+import type { WorkspaceRuntime } from "@/workspace/index.js";
 
 /** CityHTTP 实际使用的 City 内部访问能力。 */
 type CityHttpAccess = Pick<
@@ -30,7 +29,7 @@ type CityHttpAccess = Pick<
 export class CityHTTP {
   private readonly runtime_access: CityHttpAccess;
   private readonly runtime_options: CityHttpRuntimeOptions;
-  private readonly routers_by_workspace = new Map<string, { entry: object; router: Hono }>();
+  private readonly routers_by_workspace = new Map<string, { workspace: WorkspaceRuntime; router: Hono }>();
   private readonly extension_disposers = new Map<string, () => void | Promise<void>>();
   /** 每个 Agent 路由装配与释放的独立串行链。 */
   private readonly agent_operation_chains = new Map<string, Promise<void>>();
@@ -106,7 +105,7 @@ export class CityHTTP {
     await Promise.all([...route_keys].map(async (route_key) => await this.detach_route(route_key)));
   }
 
-  /** 释放一个 WorkspaceEntry 路由对应的宿主扩展。 */
+  /** 释放一个 Agent/Workspace 路由对应的宿主扩展。 */
   private async detach_route(route_key: string): Promise<void> {
     await this.enqueue_agent_operation(route_key, async () => {
       const dispose = this.extension_disposers.get(route_key);
@@ -124,13 +123,13 @@ export class CityHTTP {
     const workspace_id = decodeURIComponent(String(context.req.param("workspace_id") || "")).trim();
     const agent = this.runtime_access.get_agent(agent_id);
     if (!agent) return context.json({ success: false, error: `Agent not found: ${agent_id}` }, 404);
-    const entry = await this.runtime_access.enter_workspace(agent_id, workspace_id)
+    const workspace = await this.runtime_access.enter_workspace(agent_id, workspace_id)
       .catch(() => null);
-    if (!entry) return context.json({
+    if (!workspace) return context.json({
       success: false,
       error: `Workspace not found: ${workspace_id}`,
     }, 404);
-    const router = await this.resolve_workspace_router(agent_id, workspace_id, entry);
+    const router = await this.resolve_workspace_router(agent_id, workspace_id, workspace);
     if (!router) {
       return context.json({ success: false, error: `Agent not found: ${agent_id}` }, 404);
     }
@@ -144,15 +143,18 @@ export class CityHTTP {
   private async resolve_workspace_router(
     agent_id: string,
     workspace_id: string,
-    entry: WorkspaceEntry,
+    workspace: WorkspaceRuntime,
   ): Promise<Hono | null> {
     const route_key = `${agent_id}/${workspace_id}`;
     return await this.enqueue_agent_operation(route_key, async () => {
       // Agent 可能在请求排队期间被 City 删除，装配前必须重新确认所有权。
       const agent = this.runtime_access.get_agent(agent_id);
-      if (!agent || get_workspace_entry(agent, workspace_id) !== entry) return null;
+      if (!agent) return null;
+      const current_workspace = await this.runtime_access.enter_workspace(agent_id, workspace_id)
+        .catch(() => null);
+      if (current_workspace !== workspace) return null;
       const cached = this.routers_by_workspace.get(route_key);
-      if (cached && cached.entry === entry) return cached.router;
+      if (cached && cached.workspace === workspace) return cached.router;
       if (cached) {
         const dispose = this.extension_disposers.get(route_key);
         if (dispose) await dispose();
@@ -164,23 +166,23 @@ export class CityHTTP {
 
       const resolve_session_model = this.runtime_options.resolve_session_model;
       const plugins = this.runtime_access.plugin_scope(agent_id, workspace_id);
-      const sdk_router = new AgentHTTP({ agent, workspace: entry.workspace, plugins }, {
+      const sdk_router = new AgentHTTP({ agent, workspace, plugins }, {
         resolve_session_model: resolve_session_model
           ? async (model_id) => await resolve_session_model({
               agent,
-              workspace: entry.workspace,
+              workspace,
               model_id,
             })
           : undefined,
       }).router();
       const extension = this.runtime_options.create_agent_extension?.({
-        agent: entry.agent,
-        workspace: entry.workspace,
+        agent,
+        workspace,
         plugins,
         sdk_router,
       });
       const router = extension?.router ?? sdk_router;
-      this.routers_by_workspace.set(route_key, { entry, router });
+      this.routers_by_workspace.set(route_key, { workspace, router });
       if (extension?.dispose) this.extension_disposers.set(route_key, extension.dispose);
       return router;
     });

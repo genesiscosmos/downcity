@@ -1,5 +1,5 @@
 /**
- * Session Turn 文件改动的 canonical 数据类型。
+ * Session Turn 文件改动的跨包 canonical 数据类型。
  *
  * 这些类型描述一个 Turn 通过 Workspace 结构化 write/edit 工具成功提交的文件修改。
  * 数据作为 Assistant data part 持久化，因此历史恢复、远程传输和不同宿主共享同一事实源。

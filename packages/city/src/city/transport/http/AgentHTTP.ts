@@ -10,7 +10,6 @@
 
 import http from "node:http";
 import { Hono } from "hono";
-import { create_workspace_entry } from "@downcity/agent/internal";
 import type { Agent, AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
@@ -39,7 +38,7 @@ export interface AgentHttpServerHandle {
 }
 
 /**
- * 把一个 `WorkspaceEntry` 暴露为最小 SDK HTTP 面。
+ * 把一个 Agent 的 Session 能力暴露为最小 SDK HTTP 面。
  */
 export class AgentHTTP {
   private readonly agent: Agent;
@@ -62,7 +61,7 @@ export class AgentHTTP {
       this.plugins = "agent" in agent_or_workspace
         ? agent_or_workspace.plugins
         : undefined;
-      this.session_collection = create_workspace_entry(agent, workspace_or_options).sessions;
+      this.session_collection = agent.sessions;
       this.runtime_options = runtime_options;
       return;
     }
@@ -70,9 +69,7 @@ export class AgentHTTP {
       this.agent = entry.agent || agent_or_workspace as Agent;
       this.workspace = entry.workspace;
       this.plugins = entry.plugins;
-      this.session_collection = this.workspace
-        ? create_workspace_entry(this.agent, this.workspace).sessions
-        : this.agent.sessions;
+      this.session_collection = this.agent.sessions;
     this.runtime_options = (workspace_or_options as AgentHttpRuntimeOptions | undefined) ?? {};
   }
 

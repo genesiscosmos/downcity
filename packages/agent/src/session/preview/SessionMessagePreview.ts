@@ -10,7 +10,7 @@ import {
   extract_session_message_text,
   resolve_session_assistant_visible_text,
 } from "@/session/messages/SessionMessageText.js";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import type { SessionMessage } from "@downcity/type";
 
 function extract_assistant_tool_summary(message: Extract<SessionMessage, { type: "assistant" }>): string {
   const tool_names = new Set<string>();

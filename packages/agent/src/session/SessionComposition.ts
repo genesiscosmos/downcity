@@ -2,12 +2,12 @@
  * Session system 快照与模型输入组装边界。
  *
  * 关键点（中文）
- * - 拥有 Session 创建后固定的 system snapshot，以及检查点生效的 env/hook 视图。
+ * - 拥有 Session 创建后固定的 system snapshot；env、Tool 与 Hook 在 Step 检查点读取。
  * - Composer 只读取本对象生成的不可变输入，不接触 Session 持久化编排。
  * - Plugin Hook 失败只降级对应扩展内容，不改变 canonical Message。
  */
 
-import type { JsonValue } from "@/types/common/Json.js";
+import type { JsonValue } from "@downcity/type";
 import type {
   AgentSessionSystemBlock,
   AgentSessionSystemSnapshot,
@@ -32,8 +32,6 @@ import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
 export class SessionComposition {
   private readonly options: SessionCompositionOptions;
   private effective_instruction_blocks: AgentSessionSystemBlock[];
-  private effective_workspace_env: Record<string, string>;
-  private effective_hooks: SessionHooks;
   /** 当前 Session 首次生成后固定的完整 system snapshot。 */
   private snapshot_blocks: AgentSessionSystemBlock[] | null = null;
   /** 当前 Session instruction 的一次性恢复任务。 */
@@ -46,8 +44,6 @@ export class SessionComposition {
     this.effective_instruction_blocks = options.instruction_system_blocks.map(
       (block) => ({ ...block }),
     );
-    this.effective_workspace_env = { ...options.workspace_env };
-    this.effective_hooks = options.hooks;
   }
 
   /** 恢复显式固化的完整 system snapshot。 */
@@ -125,21 +121,6 @@ export class SessionComposition {
     };
   }
 
-  /** 在 Session Command 检查点提交下一 Step 使用的 Workspace env。 */
-  set_workspace_env(env: Record<string, string>): void {
-    this.effective_workspace_env = { ...env };
-  }
-
-  /** 在 Session Command 检查点提交下一 Step 使用的 Hook 视图。 */
-  set_hooks(hooks: SessionHooks): void {
-    this.effective_hooks = hooks;
-  }
-
-  /** 返回当前检查点生效的 Hook 视图。 */
-  get_effective_hooks(): SessionHooks {
-    return this.effective_hooks;
-  }
-
   /** 返回当前 Session 捕获的 instruction blocks 副本。 */
   instruction_blocks(): AgentSessionSystemBlock[] {
     return this.effective_instruction_blocks.map((block) => ({ ...block }));
@@ -165,9 +146,10 @@ export class SessionComposition {
     const instruction_system_blocks = refresh_system
       ? this.options.get_instruction_system_blocks().map((block) => ({ ...block }))
       : this.instruction_blocks();
+    const workspace_env = Object.freeze({ ...this.options.get_workspace_env() });
     // Plugin system 参与 Compose，必须先看到当前检查点已确定的 env 与 instruction。
     turn_context?.step.commit({
-      workspace_env: this.effective_workspace_env,
+      workspace_env,
       agent_systems: instruction_system_blocks.map((block) => block.content),
     });
     const hook_context =
@@ -176,7 +158,7 @@ export class SessionComposition {
         session_id: this.options.session_id,
         session_origin: this.options.session_origin,
         project_root: this.options.workspace_path,
-        workspace_env: this.effective_workspace_env,
+        workspace_env,
         agent_systems: this.effective_instruction_blocks.map(
           (block) => block.content,
         ),
@@ -184,14 +166,14 @@ export class SessionComposition {
     const history = await this.options.messages.context_snapshot();
     const plugin_runtime = refresh_system
       ? this.options.get_hooks()
-      : turn_context?.step.hooks || this.effective_hooks;
+      : turn_context?.step.hooks || this.options.get_hooks();
     const plugin_system_blocks = this.snapshot_blocks && !refresh_system
       ? []
       : refresh_system
         ? await plugin_runtime.system_blocks(hook_context)
         : turn_context?.step.hooks
           ? await turn_context.step.hooks.system_blocks(hook_context)
-          : await this.effective_hooks.system_blocks(hook_context);
+          : await plugin_runtime.system_blocks(hook_context);
     const resolved_plugin_system_blocks = this.snapshot_blocks && !refresh_system
       ? []
       : await this.resolve_plugin_system_context(
@@ -242,11 +224,11 @@ export class SessionComposition {
       state: {
         model: this.options.get_model(),
         model_context_window: this.options.get_model_context_window(),
-        env: Object.freeze({ ...this.effective_workspace_env }),
+        env: workspace_env,
         systems: Object.freeze(
           instruction_system_blocks.map((block) => block.content),
         ),
-        tools: Object.freeze({ ...this.options.tools }),
+        tools: Object.freeze({ ...this.options.get_tools() }),
         instruction_system_blocks,
         managed_plugin_system_blocks:
           this.snapshot_blocks && !refresh_system

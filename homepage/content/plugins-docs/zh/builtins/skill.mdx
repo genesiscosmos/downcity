@@ -30,7 +30,6 @@ const registrations = create_builtin_plugin_registrations();
 const city = new City({ plugins: registrations, workspaces: [workspace] });
 const agent = new Agent({ id: "skill-helper" });
 city.agents.add(agent);
-const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
 默认只扫描当前项目的 `.agents/skills`。自定义扫描范围时，构造 `SkillPlugin` 实例并交给 City，
@@ -67,7 +66,7 @@ Skill Plugin 提供四个 action：
 列出 Skill：
 
 ```ts
-const result = await entry.plugins.run_action({
+const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "skill",
   action: "list",
   payload: {},
@@ -77,7 +76,7 @@ const result = await entry.plugins.run_action({
 读取 Skill：
 
 ```ts
-const result = await entry.plugins.run_action({
+const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "skill",
   action: "lookup",
   payload: {
@@ -103,7 +102,7 @@ plugin_call({
 调用 `find` 获取查找提示：
 
 ```ts
-const find_instructions = await entry.plugins.run_action({
+const find_instructions = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "skill",
   action: "find",
   payload: {
@@ -115,7 +114,7 @@ const find_instructions = await entry.plugins.run_action({
 调用 `install` 获取安装提示：
 
 ```ts
-const install_instructions = await entry.plugins.run_action({
+const install_instructions = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "skill",
   action: "install",
   payload: {

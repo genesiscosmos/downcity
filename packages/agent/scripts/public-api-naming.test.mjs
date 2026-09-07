@@ -67,13 +67,13 @@ test("Agent SDK root exports do not expose camelCase functions", () => {
   assert.deepEqual([...new Set(camel_function_exports)], []);
 });
 
-test("Agent internal module exports use snake_case function names", () => {
+test("Agent non-root module exports use snake_case function names", () => {
   const source_root = path.join(package_root, "src");
   const failures = [];
   const camel_export_pattern =
     /^export\s+(?:async\s+)?function\s+([a-z][A-Za-z0-9_]*[A-Z][A-Za-z0-9_]*)\b/gm;
 
-  /** 递归扫描 Agent 源码，覆盖未从根入口暴露的内部模块 API。 */
+  /** 递归扫描 Agent 源码，覆盖未从根入口暴露的模块 API。 */
   function visit(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const absolute_path = path.join(directory, entry.name);

@@ -9,12 +9,12 @@ import type { ModelStreamEvent } from "@downcity/type";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import { SessionToolPartGate } from "@/session/messages/SessionToolPartGate.js";
-import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
+import type { SessionAssistantResultPart } from "@downcity/type";
 import type {
   SessionAssistantMessage,
   SessionAssistantMessagePart,
   SessionAssistantToolPart,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import type {
   SessionToolExecutionResult,
   SessionToolInputReady,

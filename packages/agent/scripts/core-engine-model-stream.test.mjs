@@ -8,7 +8,7 @@ import test from "node:test";
 import { run_model_step } from "../bin/executor/model/ModelStepRunner.js";
 import { generate_model } from "../bin/executor/model/ModelGenerate.js";
 import { create_session_model_request_warning } from "../bin/session/runtime/SessionModelRequestWarning.js";
-import { is_session_mutation } from "../bin/types/session/SessionMutation.js";
+import { is_session_mutation } from "@downcity/type";
 import {
   MAX_MODEL_REQUEST_ATTEMPTS,
   MAX_MODEL_REQUEST_RETRIES,

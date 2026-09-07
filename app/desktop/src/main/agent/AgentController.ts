@@ -29,7 +29,6 @@ import {
   register_city_host,
   unregister_city_host,
 } from "@downcity/city";
-import { create_workspace_entry, get_workspace_entry } from "@downcity/agent/internal";
 import {
   type LocalAgentConfig,
   type LocalGroupConfig,
@@ -242,7 +241,7 @@ export class AgentController {
     /** 可选 action 输入。 */ readonly input?: PluginJsonValue;
   }): Promise<PluginJsonValue> {
     await this.ready_promise;
-    await this.require_workspace_entry(input.agent_id, input.workspace_id);
+    await this.require_workspace(input.agent_id, input.workspace_id);
     const plugins = this.city.plugins.scope({
       agent_id: input.agent_id,
       workspace_id: input.workspace_id,
@@ -360,11 +359,6 @@ export class AgentController {
     await this.ready_promise;
     const normalized_workspace_id = String(workspace_id || "").trim();
     const existed = this.data.workspaces.remove(normalized_workspace_id);
-    // 让所有已进入该 Workspace 的 Agent 离开并释放执行资源。
-    for (const agent of this.city.agents.list()) {
-      const entry = get_workspace_entry(agent, normalized_workspace_id);
-      if (entry) await entry.leave();
-    }
     // 清理该 Workspace 下全部 Session 的订阅与运行态。
     for (const [session_key, unsubscribe] of [...this.session_unsubscribes]) {
       if (session_key.split(":")[1] === normalized_workspace_id) {
@@ -595,7 +589,7 @@ export class AgentController {
     const workspace = this.data.workspaces.get(workspace_id);
     if (!workspace) throw new Error(`Workspace is not registered: ${workspace_id}`);
     if (!this.city.agents.get(config.agent_id)) throw new Error(`Agent is not available in Desktop City: ${config.agent_id}`);
-    await this.require_workspace_entry(config.agent_id, workspace_id);
+    await this.require_workspace(config.agent_id, workspace_id);
     return { agent_id: config.agent_id, workspace_id, workspace: await to_desktop_workspace_summary(workspace) };
   }
 
@@ -805,7 +799,7 @@ export class AgentController {
   async create_session(agent_id: string, workspace_id: string, configuration: DesktopSessionConfiguration): Promise<DesktopCreateSessionResult> {
     const agent = this.require_native_agent(agent_id);
     const workspace = this.city.workspaces.get(workspace_id)
-      ?? (await this.require_workspace_entry(agent_id, workspace_id)).workspace;
+      ?? await this.require_workspace(agent_id, workspace_id);
     const session = await agent.sessions.create({ workspace });
     this.observe_session(agent_id, workspace_id, session);
     try {
@@ -1169,9 +1163,9 @@ export class AgentController {
 
   /** 解析 Federation 模型并切换当前 Session。 */
   async set_model(agent_id: string, workspace_id: string, session_id: string, model_id: string): Promise<DesktopSessionConfiguration> {
-    const entry = await this.require_workspace_entry(agent_id, workspace_id);
+    const workspace = await this.require_workspace(agent_id, workspace_id);
     const session = await this.get_session(agent_id, workspace_id, session_id);
-    const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
+    const model = await resolve_desktop_agent_model(this.data, model_id, workspace.get_env());
     const configured_effort = this.read_session_reasoning_efforts()[get_session_key(agent_id, workspace_id, session_id)];
     const reasoning_effort = select_model_reasoning_effort(model, configured_effort);
     this.persist_session_reasoning_effort(agent_id, workspace_id, session_id, reasoning_effort);
@@ -1183,10 +1177,10 @@ export class AgentController {
 
   /** 设置当前 Session 的推理强度，并让后续 Turn 使用该档位。 */
   async set_reasoning_effort(agent_id: string, workspace_id: string, session_id: string, reasoning_effort?: string): Promise<DesktopSessionConfiguration> {
-    const entry = await this.require_workspace_entry(agent_id, workspace_id);
+    const workspace = await this.require_workspace(agent_id, workspace_id);
     const session = await this.get_session(agent_id, workspace_id, session_id);
     const model_id = (await this.read_session_configuration(workspace_id, session)).model_id;
-    const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
+    const model = await resolve_desktop_agent_model(this.data, model_id, workspace.get_env());
     const selected_effort = select_model_reasoning_effort(model, reasoning_effort);
     await session.set({ model: configure_desktop_agent_model(model, selected_effort) });
     this.persist_session_reasoning_effort(agent_id, workspace_id, session_id, selected_effort);
@@ -1317,11 +1311,11 @@ export class AgentController {
   private async get_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
     const config = this.data.workspaces.get(workspace_id);
     if (config) {
-      const entry = await this.require_workspace_entry(agent_id, workspace_id);
+      const workspace = await this.require_workspace(agent_id, workspace_id);
       const session = await this.require_native_agent(agent_id).sessions.get(
         session_id,
         "chat",
-        { workspace: entry.workspace },
+        { workspace },
       );
       this.observe_session(agent_id, workspace_id, session);
       return session;
@@ -1334,9 +1328,9 @@ export class AgentController {
   /** 恢复孤儿 Session 的只读实例；不写入 Registry，不产生任何副作用。 */
   private async get_orphan_session(agent_id: string, workspace_id: string, session_id: string): Promise<AgentSession> {
     const agent = this.require_native_agent(agent_id);
-    const existing_entry = get_workspace_entry(agent, workspace_id);
-    if (existing_entry) {
-      return await agent.sessions.get(session_id, "chat", { workspace: existing_entry.workspace });
+    const existing_workspace = this.city.workspaces.get(workspace_id);
+    if (existing_workspace) {
+      return await agent.sessions.get(session_id, "chat", { workspace: existing_workspace });
     }
     return await agent.sessions.get(session_id, "chat", { workspace: await this.get_orphan_workspace(workspace_id) });
   }
@@ -1470,8 +1464,8 @@ export class AgentController {
     const session_key = get_session_key(agent_id, workspace_id, session.id);
     const model_id = this.read_session_model_ids()[session_key];
     if (!model_id || this.restored_session_models.get(session_key) === model_id) return;
-    const entry = await this.require_workspace_entry(agent_id, workspace_id);
-    const model = await resolve_desktop_agent_model(this.data, model_id, entry.workspace.get_env());
+    const workspace = await this.require_workspace(agent_id, workspace_id);
+    const model = await resolve_desktop_agent_model(this.data, model_id, workspace.get_env());
     const reasoning_effort = select_model_reasoning_effort(model, this.read_session_reasoning_efforts()[session_key]);
     this.persist_session_reasoning_effort(agent_id, workspace_id, session.id, reasoning_effort);
     await session.set({ model: configure_desktop_agent_model(model, reasoning_effort) }, { persist_action: false });
@@ -1606,16 +1600,14 @@ export class AgentController {
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
   }
 
-  /** 按需让 Desktop Agent 进入指定 Workspace。 */
-  private async require_workspace_entry(agent_id: string, workspace_id: string) {
-    const agent = this.require_native_agent(agent_id);
-    const existing = get_workspace_entry(agent, workspace_id);
+  /** 校验 Agent，并按需把指定 Workspace 登记到 Desktop City。 */
+  private async require_workspace(agent_id: string, workspace_id: string) {
+    this.require_native_agent(agent_id);
+    const existing = this.city.workspaces.get(workspace_id);
     if (existing) return existing;
     const config = this.data.workspaces.get(workspace_id);
     if (!config) throw new Error(`Workspace not found: ${workspace_id}`);
-    const workspace = this.city.workspaces.get(workspace_id)
-      ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
-    return create_workspace_entry(agent, workspace);
+    return this.city.workspaces.add(await create_desktop_workspace(this.data, config));
   }
 }
 

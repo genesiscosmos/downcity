@@ -7,7 +7,6 @@
  * - 仅提供 `listen()` / `close()` / `binding()` 三个方法，端口、host 由调用方决定。
  */
 
-import { create_workspace_entry } from "@downcity/agent/internal";
 import type { Agent, AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
@@ -45,11 +44,10 @@ export class AgentRPC {
   ) {
     if (workspace_or_options && "id" in workspace_or_options && "path" in workspace_or_options) {
       const agent = agent_or_workspace as Agent;
-      const entry = create_workspace_entry(agent, workspace_or_options);
       this.agent = agent;
       this.workspace = workspace_or_options;
       this.plugins = undefined;
-      this.session_collection = entry.sessions;
+      this.session_collection = agent.sessions;
       this.runtime_options = runtime_options;
     } else {
       const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceRuntime; plugins: AgentPluginRuntime };
@@ -57,7 +55,7 @@ export class AgentRPC {
       this.agent = agent;
       this.workspace = entry.workspace;
       this.plugins = entry.plugins;
-      this.session_collection = create_workspace_entry(agent, entry.workspace).sessions;
+      this.session_collection = agent.sessions;
       this.runtime_options = (workspace_or_options as AgentRpcRuntimeOptions | undefined) ?? {};
     }
     this.lifecycle = new SerializedTransport({
@@ -70,6 +68,7 @@ export class AgentRPC {
           host,
           port,
           sessions: this.session_collection,
+          workspace: this.workspace,
           get_agent_context: undefined,
           resolve_session_model: this.runtime_options.resolve_session_model,
           reload_workspace_env: this.runtime_options.reload_workspace_env,

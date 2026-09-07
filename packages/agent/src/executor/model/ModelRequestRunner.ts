@@ -4,10 +4,8 @@
  * 本模块唯一拥有请求重试次数、退避和逐次失败通知；具体模型流解析由调用方提供。
  */
 
-import type {
-  ModelRequestFailureReporter,
-  ModelRequestKind,
-} from "@/types/executor/ModelRequest.js";
+import type { ModelRequestKind } from "@downcity/type";
+import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
 import {
   ModelStreamFailure,
   is_retryable_empty_model_stream_failure,

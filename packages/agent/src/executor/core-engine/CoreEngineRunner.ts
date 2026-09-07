@@ -42,18 +42,18 @@ import {
   should_compact_after_usage,
 } from "@executor/core-engine/CoreEngineContextCompaction.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { JsonObject } from "@/types/common/Json.js";
+import type { JsonObject } from "@downcity/type";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
 } from "@/types/session/SessionExecution.js";
-import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
+import type { SessionAssistantResultPart } from "@downcity/type";
 import type {
   SessionAssistantMessagePart,
   SessionUserMessage,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
 

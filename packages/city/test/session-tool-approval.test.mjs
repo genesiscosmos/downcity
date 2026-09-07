@@ -16,7 +16,6 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { z } from "zod";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/city";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 
 function create_usage() {
   return {
@@ -117,10 +116,10 @@ async function run_approval_case(decision) {
       },
     },
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const workspace = new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
 
   try {
-    const session = await entry.sessions.create({ session_id: "tool_approval" });
+    const session = await agent.sessions.create({ session_id: "tool_approval", workspace });
     let pending_request;
     let response_promise;
     const unsubscribe = session.subscribe((mutation) => {

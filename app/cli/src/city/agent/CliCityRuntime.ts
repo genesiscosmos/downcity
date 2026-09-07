@@ -8,7 +8,6 @@
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
 import { LocalStorageProvider } from "@downcity/city";
-import { create_workspace_entry } from "@downcity/agent/internal";
 import {
   create_city_host_instance_id,
   register_city_host,
@@ -122,19 +121,20 @@ export class CliCityRuntime {
             agent_id: agent.id,
             repository: data.agent_tokens,
           });
-          const entry = create_workspace_entry(agent, workspace);
+          const data_path = city.storage.open_scope(["agents", agent.id]).root_path;
           return {
             router: create_agent_http_gateway_app({
               get_context: () => ({
                 agent,
                 workspace,
                 workspace_id: workspace.id,
-                data_path: entry.data_path,
-                sessions: entry.sessions,
+                data_path,
+                sessions: agent.sessions,
                 plugins,
                 id: agent.id,
                 list_plugin_states: () => city.plugins.snapshots(),
-                resolve_system_messages: (input) => entry.resolve_system_messages(input),
+                resolve_system_messages: (input) =>
+                  agent.resolve_system_messages(workspace, input),
                 register_plugin_http_routes: (app) => {
                   city.plugins.register_http_routes(app, {
                     agent_id: agent.id,

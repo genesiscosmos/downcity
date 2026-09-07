@@ -227,7 +227,7 @@ Agent 持有：
 - Agent 级自定义工具。
 - Agent 自身长期运行状态。
 
-Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集合；Workspace 通过 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 注入单个 Session。运行时可以存在内部装配对象，但它不拥有 Session，也不属于公开领域 API。
+Agent 不持有单一 Workspace。AgentSessions 是 Agent 唯一的 Session 集合；Workspace 通过 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 注入单个 Session。Agent 自身直接持有宿主装配状态，不为装配过程增加中间领域对象。
 
 加入 City 后，每个 Agent 的运行状态统一保存在：
 

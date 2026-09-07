@@ -13,7 +13,7 @@ import type {
 import type {
   SessionAssistantToolPart,
   SessionMessage,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 
 /** 将未知数据转换为有界展示文本。 */
 function stringify_for_display(input: unknown, max_chars = 2400): string {

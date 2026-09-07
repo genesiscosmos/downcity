@@ -15,7 +15,7 @@ import type { SessionHooks } from "@/session/SessionHooks.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 /**
  * Agent 可管理的本地 Session 实例。
@@ -39,23 +39,6 @@ export interface AgentManagedSession extends AgentSession {
    */
   is_executing(): boolean;
 
-  /** 把 Workspace env 快照加入当前 Session 的有序输入队列。 */
-  enqueue_workspace_env(input: {
-    /** 当前 Workspace env 修改的稳定标识。 */
-    command_id: string;
-    /** 下一 Session Step 使用的完整环境变量快照。 */
-    env: Record<string, string>;
-  }): void;
-
-  /** 把 City 扩展执行视图加入当前 Session 的有序输入队列。 */
-  enqueue_hooks(input: {
-    /** 当前扩展修改的稳定标识。 */
-    command_id: string;
-    /** 当前扩展修改的用户可读标题。 */
-    title: string;
-    /** 下一 Session Step 使用的扩展执行视图。 */
-    hooks: SessionHooks;
-  }): void;
 }
 
 /**
@@ -96,10 +79,8 @@ export interface SessionOptions {
    */
   session_id: string;
 
-  /**
-   * 当前 agent 默认工具集合。
-   */
-  tools: Record<string, Tool>;
+  /** 在每个 Step 检查点读取当前可用 Tool 集合。 */
+  get_tools: () => Record<string, Tool>;
 
   /**
    * 统一日志器。
@@ -128,8 +109,7 @@ export interface SessionOptions {
    * 读取当前 Workspace configured env。
    *
    * 关键点（中文）
-   * - Session 创建时用它建立初始 effective env。
-   * - 后续 Workspace env 修改通过 Session command 在 step 检查点执行。
+   * - 每个 Step 在检查点读取一次并形成不可变快照。
    */
   get_workspace_env: () => Record<string, string>;
 

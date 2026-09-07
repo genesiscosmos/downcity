@@ -6,7 +6,6 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { City, LocalStorageProvider, Workspace } from "@downcity/city";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
@@ -24,11 +23,11 @@ async function create_session(t) {
     workspaces: [workspace],
   });
   t.after(async () => await city.close());
-  const entry = create_workspace_entry(agent, workspace);
   return {
     root_path,
-    entry,
-    session: await entry.sessions.create({ session_id: "source" }),
+    agent,
+    workspace,
+    session: await agent.sessions.create({ session_id: "source", workspace }),
   };
 }
 
@@ -49,13 +48,13 @@ test("Fork 默认包含锚点消息，显式排除时只复制锚点之前的历
 });
 
 test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (t) => {
-  const { entry, session } = await create_session(t);
+  const { agent, workspace, session } = await create_session(t);
   await session.append_user_message({ text: "需要编辑" });
   const target = (await session.messages()).items.find((message) => message.type === "user");
   assert.ok(target);
 
   const forked = await session.fork({ message_id: target.message_id, include_message: false });
-  const restored = await entry.sessions.get(forked.id);
+  const restored = await agent.sessions.get(forked.id, "chat", { workspace });
   assert.equal(restored, forked);
 
   const turn_mutations = [];
@@ -74,7 +73,7 @@ test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (
 });
 
 test("Fork 将源 Session 持有的附件复制到自己的生命周期", async (t) => {
-  const { root_path, entry, session } = await create_session(t);
+  const { root_path, agent, workspace, session } = await create_session(t);
   const workspace_file = path.join(root_path, "workspace.txt");
   await fs.writeFile(workspace_file, "workspace");
   const turn = await session.prompt({
@@ -104,6 +103,7 @@ test("Fork 将源 Session 持有的附件复制到自己的生命周期", async 
   const forked_workspace_file = forked_message?.type === "user" ? forked_message.parts.find((part) => part.type === "file" && part.filename === "workspace.txt") : undefined;
   assert.equal(forked_workspace_file?.url, workspace_file);
 
-  await entry.sessions.archive({ id: session.id });
+  await agent.sessions.get(session.id, "chat", { workspace });
+  await agent.sessions.archive({ id: session.id });
   assert.equal(await fs.readFile(forked_file.url, "utf8"), "hello");
 });

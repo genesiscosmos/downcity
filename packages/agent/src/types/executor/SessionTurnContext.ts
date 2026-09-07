@@ -9,8 +9,8 @@
 
 import type { RuntimeToolEffect } from "@downcity/type";
 import type { ShellApprovalGateway } from "@downcity/type";
-import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
-import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
+import type { SessionUserMessage } from "@downcity/type";
+import type { SessionAssistantResultPart } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type { SessionHookContext } from "@/types/session/SessionHook.js";
 import type { SessionHookScope } from "@/session/SessionHooks.js";
@@ -19,10 +19,10 @@ import type {
   AgentSessionActionEvent,
   AgentSessionActionRecord,
 } from "@/types/sdk/AgentSessionAction.js";
-import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionInteractionPort } from "@downcity/type";
+import type { SessionOrigin } from "@downcity/type";
 import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
-import type { ModelRequestFailureNotice } from "@/types/executor/ModelRequest.js";
+import type { ModelRequestFailureNotice } from "@downcity/type";
 
 /**
  * 创建一个 Session Turn 上下文所需的稳定输入。

@@ -9,7 +9,7 @@
 import type {
   SessionActionEvent,
   SessionActionStatus,
-} from "@/types/session/SessionAction.js";
+} from "@downcity/type";
 
 /**
  * Session action 当前状态。

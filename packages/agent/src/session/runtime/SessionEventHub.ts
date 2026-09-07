@@ -10,7 +10,7 @@ import type {
   SessionMutation,
   SessionMutationSubscriber,
   SessionMutationUnsubscribe,
-} from "@/types/session/SessionMutation.js";
+} from "@downcity/type";
 
 /**
  * SessionEventHub：最小事件总线实现。

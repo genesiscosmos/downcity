@@ -5,12 +5,12 @@
  * 均为内部 part，不提升为顶层消息。
  */
 
-import type { JsonObject, JsonValue } from "@/types/common/Json.js";
+import type { JsonObject, JsonValue } from "../json/Json.js";
 import type {
   SessionInteractionRequest,
   SessionInteractionResponse,
   SessionInteractionStatus,
-} from "@/types/session/SessionInteraction.js";
+} from "./SessionInteraction.js";
 
 /** Message 默认展示范围。 */
 export type SessionMessageVisibility = "visible" | "internal";

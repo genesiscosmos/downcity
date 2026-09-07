@@ -80,34 +80,36 @@ export class CityRPC {
           if (!agent_id) throw new Error("CityRPC request requires agent_id");
           const workspace_id = String(request.workspace_id || "").trim();
           if (!workspace_id) throw new Error("CityRPC request requires workspace_id");
-          const workspace_entry = await this.runtime_access.enter_workspace(agent_id, workspace_id);
+          const workspace = await this.runtime_access.enter_workspace(agent_id, workspace_id);
           const agent = this.runtime_access.get_agent(agent_id);
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);
-          const sessions = workspace_entry.sessions;
+          const sessions = agent.sessions;
           const plugins = this.runtime_access.plugin_scope(agent_id, workspace_id);
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
             sessions,
+            workspace,
             get_agent_context: () => ({
               agent,
-              workspace: workspace_entry.workspace,
+              workspace,
               sessions,
               plugins,
               list_plugin_states: () => this.runtime_access.plugin_snapshots(),
-              resolve_system_messages: async (input) => await workspace_entry.resolve_system_messages(input),
+              resolve_system_messages: async (input) =>
+                await agent.resolve_system_messages(workspace, input),
             }),
             resolve_session_model: resolve_session_model
               ? async (model_id) => await resolve_session_model({
                   agent,
-                  workspace: workspace_entry.workspace,
+                  workspace,
                   model_id,
                 })
               : undefined,
             reload_workspace_env: reload_workspace_env
               ? async () => await reload_workspace_env({
                   agent,
-                  workspace: workspace_entry.workspace,
+                  workspace,
                 })
               : undefined,
             shutdown_city: this.runtime_options.shutdown,

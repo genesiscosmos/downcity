@@ -5,7 +5,7 @@
  * 由 Tool、Plugin、Shell 或宿主应用动态定义，前端可以自由选择渲染方式。
  */
 
-import type { JsonValue } from "@/types/common/Json.js";
+import type { JsonValue } from "../json/Json.js";
 
 /** Interaction 当前生命周期状态。 */
 export type SessionInteractionStatus =

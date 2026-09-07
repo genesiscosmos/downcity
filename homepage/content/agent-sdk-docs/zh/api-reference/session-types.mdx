@@ -5,6 +5,10 @@ description: Session 输入输出对象里最重要的字段和语义
 
 # Session 类型与结果
 
+`SessionMessage`、`SessionMutation`、`SessionOrigin`、Interaction 与 JSON 值等跨 package
+数据协议统一从 `@downcity/type` 导入；`AgentSession`、Turn Handle 等 Agent 可执行契约从
+`@downcity/agent` 导入。
+
 最常见的输入输出对象有：
 
 - `AgentSession`

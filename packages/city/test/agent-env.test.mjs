@@ -9,7 +9,6 @@ import test from "node:test";
 import {
   Agent,
 } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Workspace, resolve_workspace_env } from "@downcity/city/workspace";
 
 function create_project_root() {
@@ -45,10 +44,10 @@ test("Agent 运行时只使用显式 id，不读取完整项目 config", async (
       version: "9.9.9",
     }));
     const agent = new Agent({ id: "sdk_id" });
-    const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+    const workspace = new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
     assert.equal(agent.id, "sdk_id");
-    assert.equal(entry.workspace.path, fs.realpathSync(project_root));
-    await entry.sessions.create({ session_id: "env_runtime" });
+    assert.equal(workspace.path, fs.realpathSync(project_root));
+    await agent.sessions.create({ session_id: "env_runtime", workspace });
     await agent.dispose();
   } finally {
     fs.rmSync(project_root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });

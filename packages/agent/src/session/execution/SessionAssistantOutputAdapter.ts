@@ -10,8 +10,8 @@ import {
   SessionAssistantMessageWriter,
   SessionMessages,
 } from "@/session/SessionMessages.js";
-import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
-import type { SessionAssistantMessagePart } from "@/types/session/SessionMessage.js";
+import type { SessionAssistantResultPart } from "@downcity/type";
+import type { SessionAssistantMessagePart } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type {
   SessionToolExecutionResult,

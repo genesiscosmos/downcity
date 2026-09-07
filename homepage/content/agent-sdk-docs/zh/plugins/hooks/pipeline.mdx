@@ -29,7 +29,7 @@ description: 详细说明 pipeline 的输入输出语义、顺序语义，以及
 ## 最小例子
 
 ```ts
-const next = await entry.plugins.pipeline("chat.enrich_message", {
+const next = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", {
   text: "Please summarize this page",
 });
 ```

@@ -8,7 +8,6 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Workspace, LocalStorageProvider } from "@downcity/city";
 import { LocalSessionStore } from "../../agent/bin/session/storage/LocalSessionStore.js";
 
@@ -153,7 +152,7 @@ test("LocalSessionStore 按 Workspace 隔离活动与归档 Session", async (t) 
   );
 });
 
-test("Workspace execution entry obtains its Store from the Agent storage scope", async (t) => {
+test("Agent Session 显式使用 Workspace，同时保持 Agent 级存储所有权", async (t) => {
   const { data_root_path, workspace_path } = await create_test_roots(t);
   const workspace = new Workspace({
     id: "test_workspace",
@@ -161,10 +160,8 @@ test("Workspace execution entry obtains its Store from the Agent storage scope",
     data_root_path,
   });
   const agent = new Agent({ id: "dispose-test" });
-  const entry = create_workspace_entry(agent, workspace);
-
-  assert.equal(entry.workspace, workspace);
-  const first_session = await entry.sessions.create();
+  const first_session = await agent.sessions.create({ workspace });
+  assert.equal(first_session.workspace_id, workspace.id);
   assert.ok(first_session.id);
   await agent.dispose();
 });

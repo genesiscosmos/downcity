@@ -42,4 +42,4 @@ Action 应把 `execution.abort_signal` 传给网络请求、轮询和长耗时�
 
 模型通过当前 Session 的 `plugin_call` Tool 调用 Action。Plugin 内部可以通过
 `context.city.plugins.run_action()` 调用 City 中的其他 Plugin；应用代码则从
-`city.enter_workspace()` 返回的执行入口调用 `entry.plugins.run_action()`。
+`city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })` 创建明确的执行视图，再调用 `run_action()`。

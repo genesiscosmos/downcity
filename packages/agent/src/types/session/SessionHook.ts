@@ -5,10 +5,10 @@
  * 不感知 Plugin、City 或其他宿主概念。
  */
 
-import type { JsonValue } from "@/types/common/Json.js";
+import type { JsonValue } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import type { SessionOrigin } from "@downcity/type";
+import type { SessionMessage } from "@downcity/type";
 
 /** Session 向 Hook 暴露的单次执行快照。 */
 export interface SessionHookContext {

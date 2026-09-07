@@ -8,34 +8,36 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Workspace } from "@downcity/city";
 
-test("Agent runtime uses memory data when no City is attached", async (t) => {
+test("Agent uses isolated memory Session storage when no City is attached", async (t) => {
   const fixture_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-root-"));
   const project_path = path.join(fixture_root, "project");
   await fs.mkdir(project_path);
   const agent = new Agent({ id: "internal-root-agent" });
-  const entry = create_workspace_entry(agent, new Workspace({
+  const workspace = new Workspace({
     id: "internal-root-workspace",
     path: project_path,
-  }));
+  });
   t.after(async () => {
     await agent.dispose();
+    await workspace.dispose();
     await fs.rm(fixture_root, { recursive: true, force: true });
   });
 
-  assert.equal(entry.data_path, "/agent-memory/agents/internal-root-agent");
+  const session = await agent.sessions.create({ workspace });
+  assert.deepEqual(
+    (await agent.sessions.list({ workspace_id: workspace.id })).items.map((item) => item.session_id),
+    [session.id],
+  );
 });
 
 test("Workspace exposes file tools without requiring Shell", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-"));
 
   const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
-  const agent = new Agent({ id: "workspace-files" });
-  const entry = create_workspace_entry(agent, workspace);
   t.after(async () => {
-    await agent.dispose();
+    await workspace.dispose();
     await fs.rm(root_path, { recursive: true, force: true });
   });
 
@@ -47,11 +49,10 @@ test("Workspace exposes file tools without requiring Shell", async (t) => {
     "read",
     "write",
   ]);
-  assert.equal(entry.workspace, workspace);
-  assert.equal(entry.get_shell(), undefined);
+  assert.equal(workspace.shell, undefined);
 });
 
-test("one unbound Workspace instance belongs to one Agent", async (t) => {
+test("Workspace lifetime is independent from Agents using it", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-shared-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   let dispose_count = 0;
@@ -72,14 +73,13 @@ test("one unbound Workspace instance belongs to one Agent", async (t) => {
   const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data"), shell });
   const agent = new Agent({ id: "workspace-first" });
   const second_agent = new Agent({ id: "workspace-second" });
-  create_workspace_entry(agent, workspace);
-  assert.throws(
-    () => create_workspace_entry(second_agent, workspace),
-    /already bound to another scope/,
-  );
+  await agent.sessions.create({ workspace });
+  await second_agent.sessions.create({ workspace });
 
   await agent.dispose();
   await second_agent.dispose();
+  assert.equal(dispose_count, 0);
+  await workspace.dispose();
   assert.equal(dispose_count, 1);
 });
 
@@ -88,44 +88,49 @@ test("separate Workspace instances may use the same directory", async (t) => {
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   const first_agent = new Agent({ id: "workspace-directory-first" });
   const second_agent = new Agent({ id: "workspace-directory-second" });
-  const first_entry = create_workspace_entry(first_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
-  const second_entry = create_workspace_entry(second_agent, new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }));
-  assert.notEqual(first_entry.data_path, second_entry.data_path);
-  const first_session = await first_entry.sessions.create();
-  const second_session = await second_entry.sessions.create();
+  const first_workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
+  const second_workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
+  const first_session = await first_agent.sessions.create({ workspace: first_workspace });
+  const second_session = await second_agent.sessions.create({ workspace: second_workspace });
   assert.deepEqual(
-    (await first_entry.sessions.list()).items.map((item) => item.session_id),
+    (await first_agent.sessions.list({ workspace_id: first_workspace.id })).items.map((item) => item.session_id),
     [first_session.id],
   );
   assert.deepEqual(
-    (await second_entry.sessions.list()).items.map((item) => item.session_id),
+    (await second_agent.sessions.list({ workspace_id: second_workspace.id })).items.map((item) => item.session_id),
     [second_session.id],
   );
 
   await first_agent.dispose();
   await second_agent.dispose();
+  await first_workspace.dispose();
+  await second_workspace.dispose();
 });
 
 test("同一 Agent 的 Workspace Session 列表彼此隔离", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-session-filter-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
   const agent = new Agent({ id: "workspace-session-filter" });
-  const first_entry = create_workspace_entry(agent, new Workspace({
+  const first_workspace = new Workspace({
     id: "workspace-first",
     path: root_path,
     data_root_path: path.join(root_path, "data"),
-  }));
-  const second_entry = create_workspace_entry(agent, new Workspace({
+  });
+  const second_workspace = new Workspace({
     id: "workspace-second",
     path: root_path,
     data_root_path: path.join(root_path, "data"),
-  }));
-  t.after(async () => await agent.dispose());
+  });
+  t.after(async () => {
+    await agent.dispose();
+    await first_workspace.dispose();
+    await second_workspace.dispose();
+  });
 
-  const first_session = await first_entry.sessions.create();
-  const second_session = await second_entry.sessions.create();
-  assert.deepEqual((await first_entry.sessions.list()).items.map((item) => item.session_id), [first_session.id]);
-  assert.deepEqual((await second_entry.sessions.list()).items.map((item) => item.session_id), [second_session.id]);
+  const first_session = await agent.sessions.create({ workspace: first_workspace });
+  const second_session = await agent.sessions.create({ workspace: second_workspace });
+  assert.deepEqual((await agent.sessions.list({ workspace_id: first_workspace.id })).items.map((item) => item.session_id), [first_session.id]);
+  assert.deepEqual((await agent.sessions.list({ workspace_id: second_workspace.id })).items.map((item) => item.session_id), [second_session.id]);
 });
 
 test("恢复绑定 Workspace 的 Session 必须提供同一个 Workspace", async (t) => {
@@ -137,16 +142,16 @@ test("恢复绑定 Workspace 的 Session 必须提供同一个 Workspace", async
     path: root_path,
     data_root_path: path.join(root_path, "data"),
   });
-  const entry = create_workspace_entry(agent, workspace);
   try {
-    const session = await entry.sessions.create();
+    const session = await agent.sessions.create({ workspace });
     await assert.rejects(
       agent.sessions.get(session.id),
       /requires Workspace "restore-workspace"/u,
     );
-    assert.equal((await entry.sessions.get(session.id, "chat", { workspace })).id, session.id);
+    assert.equal((await agent.sessions.get(session.id, "chat", { workspace })).id, session.id);
   } finally {
     await agent.dispose();
+    await workspace.dispose();
   }
 });
 
@@ -158,25 +163,27 @@ test("Session IDs are isolated by Agent in one Workspace", async (t) => {
   const data_root_path = path.join(root_path, "data");
   const first_agent = new Agent({ id: "session-owner-first" });
   const second_agent = new Agent({ id: "session-owner-second" });
-  const first_entry = create_workspace_entry(first_agent, new Workspace({
+  const first_workspace = new Workspace({
     id: "test_workspace",
     path: root_path,
     data_root_path,
-  }));
-  const second_entry = create_workspace_entry(second_agent, new Workspace({
+  });
+  const second_workspace = new Workspace({
     id: "test_workspace",
     path: root_path,
     data_root_path,
-  }));
+  });
 
   const results = await Promise.allSettled([
-    first_entry.sessions.create({ session_id: "shared-session" }),
-    second_entry.sessions.create({ session_id: "shared-session" }),
+    first_agent.sessions.create({ workspace: first_workspace }),
+    second_agent.sessions.create({ workspace: second_workspace }),
   ]);
   assert.equal(results.every((result) => result.status === "fulfilled"), true);
 
   await first_agent.dispose();
   await second_agent.dispose();
+  await first_workspace.dispose();
+  await second_workspace.dispose();
 });
 
 test("Workspace owns env and publishes only real changes", async (t) => {
@@ -237,19 +244,18 @@ test("Agent rejects Workspace Tool conflicts and does not reserve Plugin Tool na
     id: "workspace-tool-conflict",
     tools: { read: {} },
   });
-  assert.throws(
-    () => create_workspace_entry(workspace_conflict_agent,
-      new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") }),
-    ),
+  const workspace = new Workspace({ id: "test_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
+  await assert.rejects(
+    workspace_conflict_agent.sessions.create({ workspace }),
     /Agent tool name conflict: "read"/,
   );
   const plugin_conflict_agent = new Agent({
     id: "plugin-tool-conflict",
     tools: { plugin_call: {} },
   });
-  const plugin_named_entry = create_workspace_entry(plugin_conflict_agent,
-    new Workspace({ id: "plugin_name_workspace", path: root_path, data_root_path: path.join(root_path, "data") }),
-  );
-  assert.equal(plugin_named_entry.workspace.id, "plugin_name_workspace");
+  const plugin_named_workspace = new Workspace({ id: "plugin_name_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
+  const session = await plugin_conflict_agent.sessions.create({ workspace: plugin_named_workspace });
+  assert.equal(session.workspace_id, "plugin_name_workspace");
   await Promise.all([workspace_conflict_agent.dispose(), plugin_conflict_agent.dispose()]);
+  await Promise.all([workspace.dispose(), plugin_named_workspace.dispose()]);
 });

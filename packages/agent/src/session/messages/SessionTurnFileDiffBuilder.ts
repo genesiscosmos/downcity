@@ -24,7 +24,7 @@ import type {
   SessionTurnFileDiffData,
   SessionTurnFileDiffStatus,
   SessionTurnFileDiffSummary,
-} from "@/types/session/SessionTurnFileDiff.js";
+} from "@downcity/type";
 
 interface CollectedFileMutation {
   /** 相对于当前 Workspace 根目录的规范化路径。 */

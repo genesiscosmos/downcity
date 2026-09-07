@@ -15,7 +15,6 @@ import path from "node:path";
 import test from "node:test";
 
 import { Agent } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import {
   build_session_turn_file_diff,
 } from "../../agent/bin/session/messages/SessionTurnFileDiffBuilder.js";
@@ -174,13 +173,13 @@ test("并行 Session 的真实 Workspace write 只进入各自 Assistant Diff", 
   };
   const agent = new Agent({ id: "turn_diff_agent", model });
   context.after(async () => await agent.dispose());
-  const entry = create_workspace_entry(agent, new Workspace({
+  const workspace = new Workspace({
     id: "workspace",
     path: workspace_path,
-  }));
+  });
   const [session_a, session_b] = await Promise.all([
-    entry.sessions.create(),
-    entry.sessions.create(),
+    agent.sessions.create({ workspace }),
+    agent.sessions.create({ workspace }),
   ]);
 
   await Promise.all([

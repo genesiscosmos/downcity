@@ -9,7 +9,7 @@ import type {
   SessionInteractionAnswer,
   SessionInteractionOption,
   SessionInteractionQuestion,
-} from "@/types/session/SessionInteraction.js";
+} from "@downcity/type";
 
 /** 模型调用 ask_question 时提交的一条问题。 */
 export interface AskQuestionsToolQuestion {

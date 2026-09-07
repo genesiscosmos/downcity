@@ -24,7 +24,7 @@ import type {
   SessionAssistantMessagePart,
   SessionMessage,
   SessionUserMessagePart,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import type {
   SessionCompactionPlan,
 } from "@/types/session/SessionComposer.js";

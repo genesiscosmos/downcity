@@ -8,11 +8,12 @@
  */
 
 import { Executor } from "@executor/Executor.js";
-import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
 import {
+  type ModelClient,
   read_model_context_window,
   read_model_label,
-} from "@/agent/ModelMetadata.js";
+  type RuntimeTool as Tool,
+} from "@downcity/type";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import type {
   AgentSessionConfigSnapshot,
@@ -27,14 +28,14 @@ import type { AgentSession } from "@/types/agent/SessionActor.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { create_runtime_session_port } from "@/session/storage/RuntimeSessionPort.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
-import type { SessionMutationSubscriber, SessionMutationUnsubscribe } from "@/types/session/SessionMutation.js";
+import type { SessionMutationSubscriber, SessionMutationUnsubscribe } from "@downcity/type";
 import type {
   RespondSessionInteractionInput,
   SessionApprovalMode,
   SessionInteractionResult,
   SessionPendingInteraction,
-} from "@/types/session/SessionInteraction.js";
-import type { ListSessionMessagesInput, SessionMessagePage } from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
+import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionCompactHandle } from "@/types/sdk/AgentSessionCompact.js";
@@ -61,8 +62,8 @@ import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
 import { ensure_session_title } from "@/session/SessionTitle.js";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
-import type { SessionActionEventInput } from "@/types/session/SessionAction.js";
+import type { SessionMessage } from "@downcity/type";
+import type { SessionActionEventInput } from "@downcity/type";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import { SessionComposition } from "@/session/SessionComposition.js";
@@ -84,7 +85,7 @@ export class Session implements AgentSession {
   private readonly store: SessionDataStore;
   private readonly get_session_store: SessionOptions["get_session_store"];
   private readonly register_forked_session: SessionOptions["register_forked_session"];
-  private readonly tools: Record<string, Tool>;
+  private readonly get_tools: SessionOptions["get_tools"];
   private readonly logger: SessionOptions["logger"];
   private readonly get_managed_plugin_system_blocks: SessionOptions["get_managed_plugin_system_blocks"];
   private readonly ensure_configured_hook?: SessionOptions["ensure_configured"];
@@ -119,7 +120,7 @@ export class Session implements AgentSession {
     this.store = options.store;
     this.get_session_store = options.get_session_store;
     this.register_forked_session = options.register_forked_session;
-    this.tools = options.tools;
+    this.get_tools = options.get_tools;
     this.logger = options.logger;
     this.get_workspace_env = options.get_workspace_env;
     this.get_agent_model = options.get_agent_model;
@@ -164,18 +165,17 @@ export class Session implements AgentSession {
       store: this.store,
       messages: this.session_messages,
       composer: this.composer,
-      tools: this.tools,
+      get_tools: this.get_tools,
       instruction_system_blocks: options.instruction_system_blocks,
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_hooks: this.get_hooks,
+      get_workspace_env: this.get_workspace_env,
       get_managed_plugin_system_blocks: this.get_managed_plugin_system_blocks,
       get_model: () => this.get_model(),
       get_model_context_window: () => this.get_model_context_window(),
       get_created_at: () => this.local_state.created_at,
       get_timezone: () => this.local_state.timezone,
       logger: this.logger,
-      workspace_env: options.get_workspace_env(),
-      hooks: options.get_hooks(),
     });
     this.executor = this.create_executor();
     this.state = new SessionState({
@@ -405,46 +405,6 @@ export class Session implements AgentSession {
       created_at: Date.now(),
     });
     return operation.handle;
-  }
-
-  /** 把 Workspace env 快照加入当前 Session 的有序输入队列。 */
-  enqueue_workspace_env(input: {
-    /** 当前 Workspace env 修改的稳定标识。 */
-    command_id: string;
-    /** 下一 Session Step 使用的完整环境变量快照。 */
-    env: Record<string, string>;
-  }): void {
-    this.enqueue_command({
-      execute: async () => {
-        this.session_composition.set_workspace_env(input.env);
-      },
-      completion: {
-        type: "action",
-        id: `agent-env:${this.id}:${input.command_id}`,
-        title: "Workspace environment updated",
-      },
-    });
-  }
-
-  /** 把 City 扩展执行视图加入当前 Session 的有序输入队列。 */
-  enqueue_hooks(input: {
-    /** 当前扩展修改的稳定标识。 */
-    command_id: string;
-    /** 当前扩展修改的用户可读标题。 */
-    title: string;
-    /** 下一 Session Step 使用的扩展执行视图。 */
-    hooks: SessionHooks;
-  }): void {
-    this.enqueue_command({
-      execute: async () => {
-        this.session_composition.set_hooks(input.hooks);
-      },
-      completion: {
-        type: "action",
-        id: `agent-plugins:${this.id}:${input.command_id}`,
-        title: input.title,
-      },
-    });
   }
 
   /** 创建一个具体 Session Command 对象并加入当前 FIFO。 */
@@ -698,7 +658,7 @@ export class Session implements AgentSession {
       get_session_store: this.get_session_store,
       register_forked_session: this.register_forked_session,
       session_id: session_id,
-      tools: this.tools,
+      get_tools: this.get_tools,
       logger: this.logger,
       instruction_system_blocks: this.session_composition.instruction_blocks(),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
@@ -750,7 +710,7 @@ export class Session implements AgentSession {
       compact_history: async (input) => await this.compact_history(input),
       get_model: () => this.get_model(),
       logger: this.logger,
-      get_hooks: () => this.session_composition.get_effective_hooks(),
+      get_hooks: () => this.get_hooks(),
       apply_system_snapshot: (input) => this.session_composition.apply_snapshot(input),
     });
   }

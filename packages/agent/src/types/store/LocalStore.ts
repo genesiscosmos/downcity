@@ -7,7 +7,7 @@
  */
 
 import type { FileSystem } from "@downcity/type";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 /** LocalSessionStore 构造参数。 */
 export interface LocalSessionStoreOptions {

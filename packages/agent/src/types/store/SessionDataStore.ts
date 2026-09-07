@@ -10,7 +10,7 @@ import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js"
 import type {
   SessionAssistantMessage,
   SessionMessage,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import type {
   SessionMessageStorageStats,
   SessionSegmentRange,
@@ -18,7 +18,7 @@ import type {
   SessionSegmentSummary,
 } from "@/types/session/SessionSegment.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 /** 在 Message Store 写事务中创建新消息所需的稳定状态。 */
 export interface SessionMessageCommitState {

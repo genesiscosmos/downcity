@@ -41,7 +41,7 @@ class AuditEffectPlugin extends Plugin {
 }
 
 // City 已登记并把 audit_effect 绑定到 entry 的 Agent/Workspace。
-await entry.plugins.effect("audit.observe", {
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).effect("audit.observe", {
   event: "incoming_message",
   session_id: "sess_001",
 });

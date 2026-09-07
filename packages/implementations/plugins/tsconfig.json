@@ -12,8 +12,7 @@
     "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": ["./src/*"],
-      "@downcity/agent": ["../../agent/bin/index.d.ts"],
-      "@downcity/agent/internal/*": ["../../agent/bin/*"]
+      "@downcity/agent": ["../../agent/bin/index.d.ts"]
     },
     "strict": true,
     "noImplicitAny": false,

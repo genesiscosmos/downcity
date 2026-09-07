@@ -15,7 +15,6 @@ import fs from "node:fs/promises";
 
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
-import { create_workspace_entry } from "@downcity/agent/internal";
 import { City } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/city";
 
@@ -135,8 +134,8 @@ test("Session keeps title empty when no model is available", async () => {
     path.join(os.tmpdir(), "downcity-agent-session-title-"),
   );
   const agent = new Agent({ id: "title_agent" });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
-  const session = await entry.sessions.create();
+  const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const session = await agent.sessions.create({ workspace });
   const events = [];
   const unsubscribe = session.subscribe((event) => {
     events.push(event);
@@ -169,8 +168,8 @@ test("Session title generation does not block user message append", async () => 
     id: "title_async_agent",
     model: delayed.model,
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
-  const session = await entry.sessions.create();
+  const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const session = await agent.sessions.create({ workspace });
 
   try {
     await session.append_user_message({ text: "标题生成不应阻塞消息写入" });
@@ -200,8 +199,7 @@ test("Session logs title generation failure without blocking the session", async
     model: create_failing_title_model(),
   });
   city.agents.add(agent);
-  const entry = create_workspace_entry(agent, workspace);
-  const session = await entry.sessions.create();
+  const session = await agent.sessions.create({ workspace });
   await session.set({ model: create_failing_title_model() });
 
   try {
@@ -214,8 +212,8 @@ test("Session logs title generation failure without blocking the session", async
     let log_lines = [];
     const log_deadline = Date.now() + 1000;
     while (Date.now() < log_deadline) {
-      await entry.get_logger().save_all_logs();
-      log_lines = await read_log_lines(entry.data_path);
+      await agent.get_logger().save_all_logs();
+      log_lines = await read_log_lines(path.join(agent_path, "city-data", "agents", agent.id));
       if (log_lines.some((line) => line.includes("session_title.generate_failed"))) {
         break;
       }
@@ -228,7 +226,7 @@ test("Session logs title generation failure without blocking the session", async
     assert.ok(title_failure_log);
     assert.equal(title_failure_log.type, "warn");
     assert.equal(title_failure_log.agent_id, "title_log_agent");
-    assert.equal(title_failure_log.workspace_id, "test_workspace");
+    assert.equal(title_failure_log.workspace_id, undefined);
     assert.equal(title_failure_log.details.session_id, session.id);
     assert.equal(
       title_failure_log.details.model_label,
@@ -253,8 +251,8 @@ test("Session retries title generation after model becomes available", async () 
     path.join(os.tmpdir(), "downcity-agent-session-title-retry-"),
   );
   const agent = new Agent({ id: "title_retry_agent" });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
-  const session = await entry.sessions.create();
+  const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const session = await agent.sessions.create({ workspace });
   const events = [];
   const unsubscribe = session.subscribe((event) => {
     events.push(event);

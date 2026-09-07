@@ -10,7 +10,8 @@
 import {
   read_model_context_window,
   read_model_label,
-} from "@/agent/ModelMetadata.js";
+  type ModelClient,
+} from "@downcity/type";
 import {
   normalize_session_title,
   resolve_system_timezone,
@@ -19,16 +20,15 @@ import { ensure_session_title } from "@/session/SessionTitle.js";
 import type {
   AgentSessionConfigSnapshot,
 } from "@/types/agent/SessionTypes.js";
-import type { ModelClient } from "@downcity/type";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import { SessionTitleTask } from "@/session/runtime/SessionTitleTask.js";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import type { SessionMessage } from "@downcity/type";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
+import type { SessionApprovalMode } from "@downcity/type";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 
 /** Session 模型配置写入结果。 */

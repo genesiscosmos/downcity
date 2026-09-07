@@ -7,7 +7,6 @@ import fs from "node:fs/promises";
 import { define_runtime_tool } from "@downcity/type";
 import { z } from "zod";
 import { Agent } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Workspace } from "@downcity/city";
 
 const usage = { input_tokens: 5, output_tokens: 3, total_tokens: 8 };
@@ -73,12 +72,12 @@ test("Agent executes a RuntimeTool and sends tool_result into the next ModelCall
       }),
     },
   });
-  const entry = create_workspace_entry(agent, new Workspace({
+  const workspace = new Workspace({
     id: "workspace", path: agent_path, data_root_path: path.join(agent_path, "data"),
-  }));
+  });
 
   try {
-    const session = await entry.sessions.create();
+    const session = await agent.sessions.create({ workspace });
     const result = await (await session.prompt({ query: "use ping" })).finished;
     assert.equal(result.success, true);
     assert.equal(result.text, "done");

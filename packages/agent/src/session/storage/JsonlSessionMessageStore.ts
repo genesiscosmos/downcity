@@ -6,7 +6,7 @@
  */
 
 import path from "node:path";
-import type { SessionAssistantMessage, SessionMessage } from "@/types/session/SessionMessage.js";
+import type { SessionAssistantMessage, SessionMessage } from "@downcity/type";
 import type {
   SessionMessageStorageStats,
   SessionSegmentRange,

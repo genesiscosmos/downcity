@@ -4,7 +4,6 @@ import { nanoid } from "nanoid";
 import { GroupSession } from "@/group/GroupSession.js";
 import type { Group } from "@/group/Group.js";
 import type { WorkspaceRuntime } from "@downcity/type";
-import { get_group_session_store, mark_group_session_started } from "@/internal/GroupRuntime.js";
 import type {
   GroupSession as GroupSessionContract,
   GroupSessionCreateInput,
@@ -26,9 +25,9 @@ export class GroupSessions implements GroupSessionsContract {
   /** 创建一个新的群聊上下文，session_id 由内部生成。 */
   async create(input?: GroupSessionCreateInput): Promise<GroupSessionContract> {
     const session = this.create_runtime_session(`group-session-${Date.now()}-${nanoid(8)}`, input?.workspace);
-    const store = get_group_session_store(this.group);
+    const store = this.group.get_session_store();
     await session.initialize(store.session(session.id));
-    mark_group_session_started(this.group);
+    this.group.mark_session_started();
     this.sessions_by_id.set(session.id, session);
     return session;
   }
@@ -43,20 +42,20 @@ export class GroupSessions implements GroupSessionsContract {
       }
       return cached;
     }
-    const store = get_group_session_store(this.group);
+    const store = this.group.get_session_store();
     if (!(await store.has_session(resolved_session_id))) return null;
     const session = this.create_runtime_session(resolved_session_id, input?.workspace);
     await session.initialize(store.session(resolved_session_id));
-    mark_group_session_started(this.group);
+    this.group.mark_session_started();
     this.sessions_by_id.set(session.id, session);
     return session;
   }
 
   /** 恢复当前 Group 的全部群聊上下文。 */
   async list(input?: GroupSessionListInput): Promise<readonly GroupSessionSummary[]> {
-    const store = get_group_session_store(this.group);
+    const store = this.group.get_session_store();
     const metadata = await store.list_session_metadata();
-    if (metadata.length > 0) mark_group_session_started(this.group);
+    if (metadata.length > 0) this.group.mark_session_started();
     const workspace_id = String(input?.workspace_id || "").trim() || undefined;
     const filtered_metadata = workspace_id
       ? metadata.filter((item) => item.workspace_id === workspace_id)
@@ -79,7 +78,7 @@ export class GroupSessions implements GroupSessionsContract {
     const session = await this.get(resolved_session_id, input);
     if (!session) return null;
     await session.dispose();
-    await get_group_session_store(this.group).remove_session(resolved_session_id);
+    await this.group.get_session_store().remove_session(resolved_session_id);
     this.sessions_by_id.delete(resolved_session_id);
     return session;
   }
@@ -88,7 +87,7 @@ export class GroupSessions implements GroupSessionsContract {
   async dispose(): Promise<void> {
     await Promise.allSettled([...this.sessions_by_id.values()].map((session) => session.dispose()));
     this.sessions_by_id.clear();
-    await get_group_session_store(this.group).dispose();
+    await this.group.dispose_session_store();
   }
 
   private create_runtime_session(session_id: string, workspace?: WorkspaceRuntime): GroupSession {

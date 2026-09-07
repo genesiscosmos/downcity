@@ -17,7 +17,7 @@ description: 按日常使用、常用进阶和框架集成三个层级理解 Age
 - `agent.sessions.create({ workspace })` / `get()`：创建或恢复当前作用域的 Session。
 - `session.prompt()`：启动一次 Turn。
 - `turn.finished`：等待最终结果。
-- `agent.dispose()`：释放 Agent 进入的全部 Workspace 作用域。
+- `agent.dispose()`：释放 Agent 的 Sessions 并解除当前 City 装配关系。
 
 ```ts
 const workspace = new Workspace({ id: workspace_id, path, shell });
@@ -41,9 +41,9 @@ try {
 
 - `agent.set_instruction()`：更新 Agent 静态指令。
 - `city.plugins`：添加或移除 Plugin 实例并调用宿主管理 action。
-- `entry.plugins`：在 Agent/Workspace 执行作用域查询或调用 Plugin。
+- `city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })`：在明确的 Agent/Workspace 执行作用域查询或调用 Plugin。
 - `workspace.get_env()` / `set_env()` / `patch_env()`：管理项目执行环境。
-- `agent.get_logger()` / `get_shell()`：宿主集成入口。
+- `agent.get_logger()`：读取 Agent 级日志；Shell 从当前选择的 Workspace 获取。
 
 ### Session
 

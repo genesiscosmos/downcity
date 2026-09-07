@@ -36,10 +36,10 @@ plugin 里声明了 hook，不代表它会自动执行。
 例如：
 
 ```ts
-const value = await entry.plugins.pipeline("chat.enrich_message", input);
-await entry.plugins.guard("review.require_checked", value);
-await entry.plugins.effect("audit.observe", value);
-const role = await entry.plugins.resolve("auth.resolve_role", {
+const value = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", input);
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", value);
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).effect("audit.observe", value);
+const role = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).resolve("auth.resolve_role", {
   userId: "owner",
 });
 ```
@@ -53,7 +53,7 @@ const role = await entry.plugins.resolve("auth.resolve_role", {
 
 Hook 声明在 Plugin 实例上，由 City 持有的 Registry 按当前 Agent/Workspace 作用域调度。Session 在每个执行检查点捕获一次 execution lease，因此本次调用看到的是稳定的 Plugin 集合；并发解绑会等待活跃 lease 释放。
 
-Plugin 内部只能通过 `context.city.plugins.pipeline()`、`effect()` 和 `run_action()` 协作，不能主动触发 `guard` 或 `resolve`。后两者代表宿主控制流和唯一权威决策，只从 `entry.plugins` 等宿主执行面调用。
+Plugin 内部只能通过 `context.city.plugins.pipeline()`、`effect()` 和 `run_action()` 协作，不能主动触发 `guard` 或 `resolve`。后两者代表宿主控制流和唯一权威决策，只从 `city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })` 等宿主执行面调用。
 
 ## 为什么 `resolve` 要单独看
 

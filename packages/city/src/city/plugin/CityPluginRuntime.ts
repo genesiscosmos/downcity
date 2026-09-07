@@ -9,10 +9,7 @@
 import type { Hono } from "hono";
 import type { Agent, Logger } from "@downcity/agent";
 import { get_logger, SessionHooks } from "@downcity/agent";
-import {
-  get_workspace_entry,
-  plugin_storage_scope,
-} from "@downcity/agent/internal";
+import type { RuntimeTool } from "@downcity/type";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type {
   AgentPluginExecutionLease,
@@ -30,7 +27,6 @@ import type {
 } from "@/plugin/index.js";
 import type { CityPluginInput, CityPlugins } from "@/city/types/CityPlugin.js";
 import type {
-  CityAgentPluginBinding,
   CityPluginRecord,
   CityPluginRuntimeOptions,
 } from "@/city/types/CityPluginRuntime.js";
@@ -245,30 +241,21 @@ export class CityPluginRuntime {
     return this.plugins_by_id.get(String(plugin_id_input || "").trim())?.plugin ?? null;
   }
 
-  /** 为 Agent 创建只捕获主体引用的无状态执行网关。 */
-  attach_agent(agent: Agent): CityAgentPluginBinding {
-    const initial_plugin_records = new Set(this.plugins_by_id.values());
-    return Object.freeze({
-      ensure_ready: async () => await this.lifecycle_stability,
-      tools: (workspace, logger) => {
-        const context_factory = this.context_factory(agent, workspace, logger);
-        const runtime = this.ready_contextual(context_factory);
-        return this.registry.tools(context_factory, runtime);
-      },
-      hooks: (workspace, logger) =>
-        this.session_hooks(this.context_factory(agent, workspace, logger)),
-      subscribe: (subscriber) => this.registry.subscribe_change((change) => {
-        const record = this.plugins_by_id.get(change.plugin_name);
-        const initial = change.type === "register"
-          && record !== undefined
-          && initial_plugin_records.delete(record);
-        subscriber({
-          type: change.type === "register" ? "add" : "remove",
-          plugin_id: change.plugin_name,
-          initial,
-        });
-      }),
-    });
+  /** 等待当前已提交的 Plugin 生命周期操作稳定。 */
+  async ensure_ready(): Promise<void> {
+    await this.lifecycle_stability;
+  }
+
+  /** 为明确的 Agent/Workspace 执行检查点创建 Tool 视图。 */
+  tools(agent: Agent, workspace: WorkspaceRuntime, logger: Logger): Record<string, RuntimeTool> {
+    const context_factory = this.context_factory(agent, workspace, logger);
+    const runtime = this.ready_contextual(context_factory);
+    return this.registry.tools(context_factory, runtime);
+  }
+
+  /** 为明确的 Agent/Workspace 执行检查点创建 Hook 视图。 */
+  hooks(agent: Agent, workspace: WorkspaceRuntime, logger: Logger): SessionHooks {
+    return this.session_hooks(this.context_factory(agent, workspace, logger));
   }
 
   /** City 开始关闭时立即封闭新的 Plugin 生命周期操作与直接执行。 */
@@ -350,13 +337,19 @@ export class CityPluginRuntime {
     let contextual_plugins: AgentPluginRuntime | undefined;
     const context_factory: PluginContextFactory = (plugin_id_input) => {
       const plugin_id = normalize_id(plugin_id_input, "plugin_id");
-      const plugin_storage = plugin_storage_scope(agent, plugin_id);
+      const plugin_storage = this.options.storage.open_scope([
+        "agents",
+        agent.id,
+        "plugins",
+        plugin_id,
+      ]);
       return create_plugin_context({
         agent_id: agent.id,
         agent_name: agent.name,
         agent_description: agent.description,
         workspace_id: workspace.id,
         workspace_path: workspace.path,
+        workspace,
         data_path: plugin_storage.root_path,
         files: workspace.files,
         data_files: plugin_storage.files,
@@ -373,8 +366,7 @@ export class CityPluginRuntime {
           contextual_plugins ??= this.ready_contextual(context_factory);
           return contextual_plugins;
         },
-        get_sessions: () => get_workspace_entry(agent, workspace.id)?.sessions
-          ?? agent.sessions,
+        get_sessions: () => agent.sessions,
       });
     };
     return context_factory;
@@ -501,9 +493,11 @@ export class CityPluginRuntime {
   /** 返回一个 Agent/Workspace 的直接 Plugin 执行面。 */
   private scope(agent_id_input: string, workspace_id_input: string): AgentPluginRuntime {
     const agent_id = normalize_id(agent_id_input, "agent_id");
-    const entry = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
+    const agent = this.options.runtime_access.get_agent(agent_id);
+    if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
+    const workspace = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
     return this.ready_contextual(
-      this.context_factory(entry.agent, entry.workspace, entry.get_logger()),
+      this.context_factory(agent, workspace, agent.get_logger()),
     );
   }
 
@@ -514,11 +508,13 @@ export class CityPluginRuntime {
     workspace_id_input: string,
   ): void {
     const agent_id = normalize_id(agent_id_input, "agent_id");
-    const entry = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
+    const agent = this.options.runtime_access.get_agent(agent_id);
+    if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
+    const workspace = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
     const context_factory = this.context_factory(
-      entry.agent,
-      entry.workspace,
-      entry.get_logger(),
+      agent,
+      workspace,
+      agent.get_logger(),
     );
     register_plugin_http_routes({
       app,
@@ -660,12 +656,14 @@ export class CityPluginRuntime {
           }) as unknown as PluginJsonValue;
         },
         append_agent_session_assistant_message: async (input) => {
-          const entry = await this.options.runtime_access.enter_workspace(
+          const workspace = await this.options.runtime_access.enter_workspace(
             input.agent_id,
             input.workspace_id,
           );
-          await entry.sessions.get(input.session_id, input.origin_type);
-          await entry.sessions.runtime(
+          const agent = this.options.runtime_access.get_agent(input.agent_id);
+          if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
+          await agent.sessions.get(input.session_id, input.origin_type, { workspace });
+          await agent.sessions.runtime(
             input.session_id,
             input.origin_type,
           ).append_assistant_message({ text: input.text });

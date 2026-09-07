@@ -16,7 +16,7 @@ import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js"
 import type { Logger } from "@/utils/logger/Logger.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import type { SessionMessage } from "@downcity/type";
 import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
 import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
 

@@ -4,7 +4,7 @@
  * 该模块只提取可见文本并写入统一 Logger，不参与协议转换或持久化。
  */
 
-import type { SessionAssistantMessagePart } from "@/types/session/SessionMessage.js";
+import type { SessionAssistantMessagePart } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
 
 /** 从 canonical Assistant Parts 提取可见文本。 */

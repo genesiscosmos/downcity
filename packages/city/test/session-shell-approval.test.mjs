@@ -15,7 +15,6 @@ import path from "node:path";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/city";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Shell } from "@downcity/city";
 import { create_test_sandbox_provider } from "./PlatformSandbox.mjs";
 
@@ -124,16 +123,17 @@ test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
     id: "session_shell_approval_agent",
     model,
   });
-  const entry = create_workspace_entry(agent, new Workspace({
+  const workspace = new Workspace({
     id: "test_workspace",
     path: project_root, data_root_path: path.join(project_root, "data"),
     shell: new Shell({ sandbox_provider }),
     runtime_path: path.join(project_root, "runtime"),
-  }));
+  });
 
   try {
-    const session = await entry.sessions.create({
+    const session = await agent.sessions.create({
       session_id: "session_shell_approval",
+      workspace,
     });
     let interaction_snapshot;
     let interaction_result;

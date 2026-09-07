@@ -5,7 +5,7 @@
  * 模型执行阶段的文件读取与 `ModelFileContent` 转换由 `SessionModelMessages` 负责。
  */
 
-import type { SessionPromptPart } from "@/types/session/SessionContent.js";
+import type { SessionPromptPart } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 /** 在用户 prompt 入库前持久化 Data URL 文件。 */

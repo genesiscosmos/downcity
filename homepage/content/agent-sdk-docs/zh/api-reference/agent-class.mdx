@@ -40,5 +40,5 @@ const session = await agent.sessions.create({ workspace });
 
 一个 Agent 可以在多个 Workspace 中创建 Session。Workspace 只在创建 Session 时传入，不会成为
 Agent 的公开对象。Plugin 由 City 提供，City 中全部 Plugin 自动对全部 Agent 可用；执行时从
-`city.enter_workspace()` 返回的 `entry.plugins` 调用。`agent.dispose()` 会释放 Session 与当前
+`city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })` 创建明确的执行视图。`agent.dispose()` 会释放 Session 与当前
 City 绑定；网络 transport 仍由宿主负责关闭。

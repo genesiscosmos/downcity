@@ -8,7 +8,7 @@
  */
 
 import path from "node:path";
-import { normalize_session_origin_type } from "@/session/SessionOrigin.js";
+import { normalize_session_origin_type } from "@downcity/type";
 
 /** 把标识转换为安全、可逆的单层目录名。 */
 function encode_path_segment(input: string): string {

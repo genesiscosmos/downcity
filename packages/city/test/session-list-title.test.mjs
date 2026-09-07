@@ -15,7 +15,6 @@ import fs from "node:fs/promises";
 
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Workspace } from "@downcity/city";
 
 function create_mock_title_model(title_text) {
@@ -64,10 +63,11 @@ async function create_agent_with_titled_session(input) {
     id: input.agent_id,
     model: create_mock_title_model(input.title),
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") }));
-  const collection = entry.sessions;
+  const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const collection = agent.sessions;
   const session = await collection.create({
     session_id: input.session_id,
+    workspace,
   });
   await session.set({ model: create_mock_title_model(input.title) });
 
@@ -83,14 +83,13 @@ async function create_agent_with_titled_session(input) {
 
   return {
     agent,
-    entry,
     collection,
     session,
   };
 }
 
 test("list_sessions returns persisted title from active session metadata", async () => {
-  const { agent, entry, collection, session } = await create_agent_with_titled_session({
+  const { agent, collection, session } = await create_agent_with_titled_session({
     tmp_prefix: "downcity-agent-session-list-title-",
     agent_id: "list_title_agent",
     session_id: "active_session",
@@ -121,23 +120,13 @@ test("list_sessions returns persisted title from active session metadata", async
 });
 
 test("list_sessions reflects canonical SessionMessages changes", async () => {
-  const { agent, entry, collection, session } = await create_agent_with_titled_session({
+  const { agent, collection, session } = await create_agent_with_titled_session({
     tmp_prefix: "downcity-agent-session-summary-repair-",
     agent_id: "summary_repair_agent",
     session_id: "summary_repair_session",
     title: "摘要修复",
     first_user_text: "Initial history",
   });
-  const messages_dir = path.join(
-    entry.data_path,
-    "sessions",
-    "chat",
-    encodeURIComponent(session.id),
-    "messages",
-  );
-  const messages_path = path.join(messages_dir, "active.jsonl");
-  const meta_path = path.join(path.dirname(messages_dir), "meta.json");
-
   try {
     await session.append_assistant_message({
       text: "Recorder appended history",

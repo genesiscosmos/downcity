@@ -7,8 +7,8 @@
  */
 
 import type { ModelClient } from "@downcity/type";
-import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionApprovalMode } from "@downcity/type";
+import type { SessionOrigin } from "@downcity/type";
 import type {
   SessionSystemBlock,
   SessionSystemBlockSource,

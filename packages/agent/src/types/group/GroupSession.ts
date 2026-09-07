@@ -4,7 +4,7 @@ import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { GroupMessage } from "@/types/group/Group.js";
 import type { Agent } from "@/agent/Agent.js";
 import type { WorkspaceRuntime } from "@downcity/type";
-import type { RespondSessionInteractionInput, SessionInteractionRequest } from "@/types/session/SessionInteraction.js";
+import type { RespondSessionInteractionInput, SessionInteractionRequest } from "@downcity/type";
 
 /** Group 成员运行态。 */
 export interface GroupMemberRuntime {

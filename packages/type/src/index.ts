@@ -23,6 +23,8 @@ export type { AuthRoutePolicy } from "./types/auth/AuthRoute.js";
 export {
   MODEL_PROTOCOL_VERSION,
   ModelStreamValidator,
+  read_model_context_window,
+  read_model_label,
 } from "./types/model/index.js";
 export type {
   ModelCall,
@@ -40,6 +42,8 @@ export type {
   ModelMessage,
   ModelReasoningContent,
   ModelReasoningRequest,
+  ModelRequestFailureNotice,
+  ModelRequestKind,
   ModelResponseFormat,
   ModelStreamEnvelope,
   ModelStreamEvent,

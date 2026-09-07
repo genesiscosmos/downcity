@@ -44,7 +44,7 @@ class RoleResolverPlugin extends Plugin {
 }
 
 // City 已登记并把 role_resolver 绑定到 entry 的 Agent/Workspace。
-const role = await entry.plugins.resolve<{ userId: string }, string>(
+const role = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).resolve<{ userId: string }, string>(
   "auth.resolve_role",
   { userId: "owner" },
 );

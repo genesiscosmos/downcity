@@ -45,7 +45,7 @@ class MessageAugmentPlugin extends Plugin {
 }
 
 // City has registered message_augment and bound it to entry's Agent/Workspace.
-const message = await entry.plugins.pipeline<PluginJsonObject>("chat.enrich_message", {
+const message = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline<PluginJsonObject>("chat.enrich_message", {
   text: "Please summarize this page",
 });
 ```

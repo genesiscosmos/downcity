@@ -18,7 +18,6 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
-import { create_workspace_entry } from "@downcity/agent/internal";
 import { Workspace } from "@downcity/city";
 import { create_action } from "@downcity/city/plugin";
 import { CITY_MODEL_KIND } from "@downcity/type";
@@ -155,15 +154,11 @@ test("multiple session prompts use only their owning Agent plugin registry", asy
   await city.plugins.add(registration);
   city.agents.add(agent_a);
   city.agents.add(agent_b);
-  const entry_a = create_workspace_entry(agent_a, workspace_a);
-  const entry_b = create_workspace_entry(agent_b, workspace_b);
 
   try {
     await Promise.all([agent_a.ensure_ready(), agent_b.ensure_ready()]);
-    assert.notEqual(entry_a.tools.plugin_call, undefined);
-    assert.notEqual(entry_b.tools.plugin_call, undefined);
-    const session_a = await entry_a.sessions.create({ session_id: "session_a" });
-    const session_b = await entry_b.sessions.create({ session_id: "session_b" });
+    const session_a = await agent_a.sessions.create({ session_id: "session_a", workspace: workspace_a });
+    const session_b = await agent_b.sessions.create({ session_id: "session_b", workspace: workspace_b });
     const [turn_a, turn_b] = await Promise.all([
       session_a.prompt({ query: "Call your skill plugin" }),
       session_b.prompt({ query: "Call your skill plugin" }),

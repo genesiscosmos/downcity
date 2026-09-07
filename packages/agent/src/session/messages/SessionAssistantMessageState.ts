@@ -15,14 +15,14 @@ import type {
   SessionAssistantMessagePart,
   SessionAssistantToolPart,
   SessionMessage,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import type {
   SessionInteractionCloseInput,
   SessionInteractionRequest,
   SessionInteractionResponse,
-} from "@/types/session/SessionInteraction.js";
+} from "@downcity/type";
 import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
-import type { SessionMutation } from "@/types/session/SessionMutation.js";
+import type { SessionMutation } from "@downcity/type";
 import type { SessionAssistantMessageStateOptions } from "@/types/session/SessionAssistantMessageState.js";
 
 /** 管理 Assistant 草稿、Part 与 Interaction 的原子状态转换。 */

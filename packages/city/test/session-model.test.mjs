@@ -14,7 +14,6 @@ import path from "node:path";
 import test from "node:test";
 import { Agent } from "@downcity/agent";
 import { RemoteAgent, Workspace } from "@downcity/city";
-import { create_workspace_entry } from "@downcity/agent/internal";
 import { AgentRPC } from "../bin/city/transport/rpc/AgentRPC.js";
 
 const network_tests_enabled = process.env.DOWNCITY_RUN_NETWORK_TESTS === "1";
@@ -65,9 +64,9 @@ test("RPC resolves model_id through the host and queues compact", {
     id: "rpc_model_agent",
     model,
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "rpc_model_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const workspace = new Workspace({ id: "rpc_model_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
   let resolved_model_id = "";
-  const rpc = new AgentRPC(entry, {
+  const rpc = new AgentRPC(agent, workspace, {
     resolve_session_model: (model_id) => {
       resolved_model_id = model_id;
       return {
@@ -110,8 +109,8 @@ test("RPC rejects remote model switching when the host has no resolver", {
     id: "rpc_model_resolver_required_agent",
     model: { modelId: "host-model", provider: "test" },
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "resolver_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
-  const rpc = new AgentRPC(entry);
+  const workspace = new Workspace({ id: "resolver_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
+  const rpc = new AgentRPC(agent, workspace);
   const port = await reserve_port();
   const remote_agent = new RemoteAgent({ url: `rpc://127.0.0.1:${port}` });
   try {
@@ -139,9 +138,8 @@ test("internal RPC 让宿主重新加载 Workspace Env", {
     env: { BEFORE: "value" },
   });
   const agent = new Agent({ id: "rpc_env_agent" });
-  const entry = create_workspace_entry(agent, workspace);
   let reload_count = 0;
-  const rpc = new AgentRPC(entry, {
+  const rpc = new AgentRPC(agent, workspace, {
     reload_workspace_env: () => {
       reload_count += 1;
       const env = { AFTER: "value" };

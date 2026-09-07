@@ -609,10 +609,6 @@ test("统一 Store 仍按 Task 的 agent_id 向 Agent 投影", async () => {
   });
   try {
     await city.plugins.add(create_task_registration(new TaskPlugin()));
-    await Promise.all([
-      city.enter_workspace(agent_a.id, workspace.id),
-      city.enter_workspace(agent_b.id, workspace.id),
-    ]);
     const scope_a = city.plugins.scope({ agent_id: agent_a.id, workspace_id: workspace.id });
     const scope_b = city.plugins.scope({ agent_id: agent_b.id, workspace_id: workspace.id });
     const created = await scope_a.run_action({
@@ -651,7 +647,6 @@ test("Task 定义通过 Storage 文件端口支持 City 默认内存存储", asy
   });
   try {
     await city.plugins.add(create_task_registration(new TaskPlugin()));
-    await city.enter_workspace(agent.id, workspace.id);
     const scope = city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id });
     const created = await scope.run_action({
       plugin: "task",
@@ -698,8 +693,7 @@ test("Task 重新绑定执行 Agent 后仍向原始 Agent Session 交付结果",
     agents: [agent_a, agent_b],
   });
   try {
-    const delivery_entry = await city.enter_workspace(agent_a.id, workspace.id);
-    const delivery_session = await delivery_entry.sessions.create();
+    const delivery_session = await agent_a.sessions.create({ workspace });
     const definitions_repository = new TaskDefinitionRepository(
       task_storage,
       new TaskExecutionCoordinator(),
@@ -734,7 +728,6 @@ test("Task 重新绑定执行 Agent 后仍向原始 Agent Session 交付结果",
       status: "enabled",
       body: "直接输出 CROSS_AGENT_RESULT。",
     });
-    await city.enter_workspace(agent_b.id, workspace.id);
     const scope = city.plugins.scope({ agent_id: agent_b.id, workspace_id: workspace.id });
     const result = await scope.run_action({
       plugin: "task",
@@ -758,7 +751,27 @@ test("City close 会停止 Task Session 并等待后台执行收口", async () =
   });
   const model = {
     id: "blocking-task-model",
-    async stream(_call, abort_signal) {
+    async stream(call, abort_signal) {
+      if (!Array.isArray(call.tools) || call.tools.length === 0) {
+        return new ReadableStream({
+          start(controller) {
+            controller.enqueue({
+              type: "model_start",
+              request_id: "task-title-request",
+              model_id: "blocking-task-model",
+            });
+            controller.enqueue({ type: "text_start", content_id: "title" });
+            controller.enqueue({ type: "text_delta", content_id: "title", delta: "Task" });
+            controller.enqueue({ type: "text_finish", content_id: "title" });
+            controller.enqueue({
+              type: "model_usage",
+              usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+            });
+            controller.enqueue({ type: "model_finish", finish_reason: "stop" });
+            controller.close();
+          },
+        });
+      }
       return new ReadableStream({
         start(controller) {
           controller.enqueue({
@@ -784,7 +797,6 @@ test("City close 会停止 Task Session 并等待后台执行收口", async () =
 
   try {
     await city.plugins.add(create_task_registration(new TaskPlugin()));
-    await city.enter_workspace(agent.id, workspace.id);
     const scope = city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id });
     await scope.run_action({
       plugin: "task",

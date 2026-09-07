@@ -5,12 +5,12 @@
  * 任意 JSON 结构。
  */
 
-import type { SessionAssistantDataPart } from "@/types/session/SessionMessage.js";
+import type { SessionAssistantDataPart } from "@downcity/type";
 import type {
   SessionTurnFileDiff,
   SessionTurnFileDiffData,
   SessionTurnFileDiffStatus,
-} from "@/types/session/SessionTurnFileDiff.js";
+} from "@downcity/type";
 
 /** 当前 Turn 文件改动使用的稳定 Assistant data part 类型。 */
 export const SESSION_TURN_FILE_DIFF_DATA_TYPE = "data-session-turn-file-diff";

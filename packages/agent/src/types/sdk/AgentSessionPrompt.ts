@@ -6,7 +6,7 @@
  * - 首条输入、运行中补充输入、排队到下一轮的输入，调用侧都使用同一结构。
  */
 
-import type { SessionPromptPart } from "@/types/session/SessionContent.js";
+import type { SessionPromptPart } from "@downcity/type";
 
 /**
  * Session user message part 类型。

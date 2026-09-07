@@ -12,7 +12,7 @@ import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type {
   SessionMutationSubscriber,
   SessionMutationUnsubscribe,
-} from "@/types/session/SessionMutation.js";
+} from "@downcity/type";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 
 /**

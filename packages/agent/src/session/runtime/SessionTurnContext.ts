@@ -8,16 +8,16 @@
  */
 
 import type { RuntimeToolEffect } from "@downcity/type";
-import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
-import type { SessionAssistantResultPart } from "@/types/session/SessionContent.js";
+import type { SessionUserMessage } from "@downcity/type";
+import type { SessionAssistantResultPart } from "@downcity/type";
 import type {
   SessionTurnContext,
   SessionTurnContextInit,
 } from "@/types/executor/SessionTurnContext.js";
 import type { SessionHookContext } from "@/types/session/SessionHook.js";
 import type { SessionHookScope } from "@/session/SessionHooks.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
-import { normalize_session_origin } from "@/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
+import { normalize_session_origin } from "@downcity/type";
 import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
 
 /** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */

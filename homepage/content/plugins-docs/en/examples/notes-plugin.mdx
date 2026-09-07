@@ -39,7 +39,7 @@ const notes_plugin = new NotesPlugin();
 
 The host provides `notes_plugin` to City, which exposes it to every Agent. After entering a
 Workspace, host code may call
-`entry.plugins.run_action()` explicitly. Sessions collect System content and Hooks from the same City
+`city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action()` explicitly. Sessions collect System content and Hooks from the same City
 execution view.
 
 This Plugin owns no long-lived resources, so it needs no Lifecycle. Use `context.workspace.files` for

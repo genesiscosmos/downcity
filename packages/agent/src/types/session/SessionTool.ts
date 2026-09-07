@@ -4,7 +4,7 @@
  * 这些类型描述 Tool 生命周期协调器与 Recorder 之间的稳定边界。
  */
 
-import type { SessionAssistantToolPart } from "@/types/session/SessionMessage.js";
+import type { SessionAssistantToolPart } from "@downcity/type";
 
 /** 当前流式 Assistant 中的 Tool Part 定位结果。 */
 export interface SessionStreamingToolLocation {

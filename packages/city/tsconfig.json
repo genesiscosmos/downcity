@@ -10,8 +10,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@downcity/agent": ["../agent/bin/index.d.ts"],
-      "@downcity/agent/internal": ["../agent/bin/internal/index.d.ts"]
+      "@downcity/agent": ["../agent/bin/index.d.ts"]
     },
     "ignoreDeprecations": "6.0",
     "strict": true,

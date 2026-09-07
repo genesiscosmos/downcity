@@ -1,12 +1,11 @@
 /**
  * City Plugin 包内运行时类型。
  *
- * 这些类型只描述 City 唯一 Registry、Plugin 生命周期记录与 Agent 执行网关，
+ * 这些类型只描述 City 唯一 Registry 与 Plugin 生命周期记录，
  * 不属于用户公开 API。
  */
 
-import type { Agent, Logger, SessionHooks } from "@downcity/agent";
-import type { RuntimeTool } from "@downcity/type";
+import type { Logger } from "@downcity/agent";
 import type { Embassy } from "@downcity/federation";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 import type {
@@ -17,7 +16,7 @@ import type {
   PluginLifecycleContext,
 } from "@/plugin/index.js";
 import type { CityPluginHost } from "@/city/types/CityPlugin.js";
-import type { StorageProvider, WorkspaceRuntime } from "@/workspace/index.js";
+import type { StorageProvider } from "@/workspace/index.js";
 
 /** City Plugin Runtime 创建参数。 */
 export interface CityPluginRuntimeOptions {
@@ -28,7 +27,7 @@ export interface CityPluginRuntimeOptions {
   /** Plugin Runtime 所需的 City 内部事实源访问能力。 */
   readonly runtime_access: Pick<
     CityRuntimeAccess,
-    "list_agents" | "list_workspaces" | "require_workspace" | "enter_workspace"
+    "get_agent" | "list_agents" | "list_workspaces" | "require_workspace" | "enter_workspace"
   >;
   /** City 可选的平台宿主能力。 */
   readonly host?: CityPluginHost;
@@ -68,23 +67,4 @@ export interface CityPluginRecord {
   updated_at: number;
   /** Plugin 最近一次初始化错误。 */
   last_error?: string;
-}
-
-/** City 绑定到一个 Agent 的无状态 Plugin 能力网关。 */
-export interface CityAgentPluginBinding {
-  /** 等待 City 当前已提交的 Plugin 生命周期操作完成。 */
-  ensure_ready(): Promise<void>;
-  /** 返回当前 Agent/Workspace 可用的模型 Tool。 */
-  tools(workspace: WorkspaceRuntime, logger: Logger): Record<string, RuntimeTool>;
-  /** 返回当前 Agent/Workspace 的 Session Hooks。 */
-  hooks(workspace: WorkspaceRuntime, logger: Logger): SessionHooks;
-  /** 订阅 City 唯一 Plugin Registry 的变化。 */
-  subscribe(subscriber: (change: {
-    /** Plugin 变化类型。 */
-    readonly type: "add" | "remove";
-    /** Plugin 稳定 ID。 */
-    readonly plugin_id: string;
-    /** 是否属于 Agent 绑定时已经提交、但仍在初始化的 Plugin。 */
-    readonly initial: boolean;
-  }) => void): () => void;
 }

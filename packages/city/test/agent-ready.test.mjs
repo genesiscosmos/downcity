@@ -20,7 +20,6 @@ import fs from "node:fs/promises";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
-import { create_workspace_entry } from "@downcity/agent/internal";
 import { Workspace } from "@downcity/city";
 
 function create_deferred() {
@@ -148,11 +147,11 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   const city = new City({ workspaces: [workspace] });
   add_test_plugin(city, blocking_plugin);
   city.agents.add(agent);
-  const entry = create_workspace_entry(agent, workspace);
 
   try {
-    const session = await entry.sessions.create({
+    const session = await agent.sessions.create({
       session_id: "ready_session",
+      workspace,
     });
     const prompt_promise = session.prompt({
       query: "hello",
@@ -205,7 +204,6 @@ test("city.plugins scope waits for lifecycle initialization before direct action
   const city = new City({ workspaces: [workspace] });
   add_test_plugin(city, plugin);
   city.agents.add(agent);
-  create_workspace_entry(agent, workspace);
   try {
     const action_promise = city.plugins.scope({
       agent_id: agent.id,
@@ -256,10 +254,8 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 初始化�
   add_test_plugin(city, failing_plugin);
   add_test_plugin(city, healthy_plugin);
   city.agents.add(agent);
-  const entry = create_workspace_entry(agent, workspace);
-
   try {
-    await entry.sessions.create({ session_id: "initial_barrier" });
+    await agent.sessions.create({ session_id: "initial_barrier", workspace });
 
     assert.equal(healthy_started, true);
     const failing_snapshot = city.plugins
@@ -283,7 +279,6 @@ test("Agent registers PluginRegistry tools and removes them with the last action
   const workspace = new Workspace({ id: "plugin_tools_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
   city.agents.add(agent);
-  const entry = create_workspace_entry(agent, workspace);
   const action_plugin = create_plugin({
     name: "dynamic_action",
     actions: {
@@ -295,19 +290,17 @@ test("Agent registers PluginRegistry tools and removes them with the last action
   });
 
   try {
-    assert.equal(entry.tools.plugin_read, undefined);
-    assert.equal(entry.tools.plugin_call, undefined);
+    const plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id });
+    assert.equal(plugins.list().some((item) => item.name === "dynamic_action"), false);
 
     add_test_plugin(city, action_plugin);
     await agent.ensure_ready();
 
-    assert.notEqual(entry.tools.plugin_read, undefined);
-    assert.notEqual(entry.tools.plugin_call, undefined);
+    assert.equal(plugins.list().some((item) => item.name === "dynamic_action"), true);
 
     await city.plugins.remove("dynamic_action");
 
-    assert.equal(entry.tools.plugin_read, undefined);
-    assert.equal(entry.tools.plugin_call, undefined);
+    assert.equal(plugins.list().some((item) => item.name === "dynamic_action"), false);
   } finally {
     await city.close();
   }
@@ -337,13 +330,12 @@ test("初始化中的 City Plugin 发布后会刷新已创建 Workspace 的 tool
     workspaces: [workspace],
     agents: [agent],
   });
-  const entry = create_workspace_entry(agent, workspace);
-
   try {
-    assert.equal(entry.tools.plugin_call, undefined);
+    const plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id });
+    assert.equal(plugins.list().some((item) => item.name === "pending_action"), false);
     lifecycle_ready.resolve();
     await agent.ensure_ready();
-    assert.notEqual(entry.tools.plugin_call, undefined);
+    assert.equal(plugins.list().some((item) => item.name === "pending_action"), true);
   } finally {
     lifecycle_ready.resolve();
     await city.close();

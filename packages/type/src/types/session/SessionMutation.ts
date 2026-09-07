@@ -4,10 +4,10 @@
  * Mutation 描述订阅之后发生的状态变化，不等同于 Active/Segment 持久化格式。
  */
 
-import type { SessionAssistantMessagePart, SessionMessage } from "@/types/session/SessionMessage.js";
-import type { AgentSessionCompactReason } from "@/types/sdk/AgentSessionCompact.js";
-import type { ModelErrorCode } from "@downcity/type";
-import type { ModelRequestKind } from "@/types/executor/ModelRequest.js";
+import type { SessionAssistantMessagePart, SessionMessage } from "./SessionMessage.js";
+import type { SessionCompactReason } from "./SessionCompact.js";
+import type { ModelErrorCode } from "../model/ModelError.js";
+import type { ModelRequestKind } from "../model/ModelRequest.js";
 
 /** 所有 Session Mutation 的公共字段。 */
 export interface SessionMutationBase {
@@ -136,7 +136,7 @@ export type SessionCompactMutation = SessionMutationBase & {
   /** 完成时是否实际提交了压缩计划。 */
   compacted?: boolean;
   /** 完成时的稳定结束原因。 */
-  reason?: AgentSessionCompactReason;
+  reason?: SessionCompactReason;
   /** 压缩失败时的错误文本。 */
   error?: string;
 };

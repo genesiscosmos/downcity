@@ -34,8 +34,8 @@ import {
 } from "@/session/browse/Browse.js";
 import type { FileSystem } from "@downcity/type";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
-import { normalize_session_origin, normalize_session_origin_type } from "@/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
+import { normalize_session_origin, normalize_session_origin_type } from "@downcity/type";
 
 /** 解码目录中经过 URL 编码的 Session 标识。 */
 function decode_session_id(input: string): string {

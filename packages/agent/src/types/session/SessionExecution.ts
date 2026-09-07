@@ -8,7 +8,7 @@
  */
 
 import type { ModelMessage, RuntimeTool as Tool } from "@downcity/type";
-import type { SessionUserMessage } from "@/types/session/SessionMessage.js";
+import type { SessionUserMessage } from "@downcity/type";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 

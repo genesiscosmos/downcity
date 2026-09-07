@@ -12,7 +12,7 @@ import type {
   ShellApprovalStatus,
 } from "@downcity/type";
 import type { SessionInteractions } from "@/session/control/SessionInteractions.js";
-import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
+import type { SessionApprovalMode } from "@downcity/type";
 import { generate_id } from "@/utils/Id.js";
 
 /** 单个 Session 的 Shell 高风险操作审批 Adapter。 */

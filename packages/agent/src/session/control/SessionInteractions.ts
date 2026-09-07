@@ -15,7 +15,7 @@ import type {
   SessionInteractionResponse,
   SessionInteractionResult,
   SessionPendingInteraction,
-} from "@/types/session/SessionInteraction.js";
+} from "@downcity/type";
 import type { SessionPendingInteractionRuntime } from "@/types/session/SessionInteractions.js";
 
 /** 单个 Session 的异步用户交互入口。 */

@@ -8,8 +8,8 @@
  */
 
 import { nanoid } from "nanoid";
-import type { SessionMessage, SessionUserMessage } from "@/types/session/SessionMessage.js";
-import type { SessionActionEvent } from "@/types/session/SessionAction.js";
+import type { SessionMessage, SessionUserMessage } from "@downcity/type";
+import type { SessionActionEvent } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type {
@@ -31,7 +31,7 @@ import type { ShellApprovalGateway } from "@downcity/type";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
-} from "@/types/session/SessionInteraction.js";
+} from "@downcity/type";
 import { SessionAssistantOutputAdapter } from "@/session/execution/SessionAssistantOutputAdapter.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
@@ -49,7 +49,7 @@ import {
 } from "@/session/messages/SessionTurnFileDiffBuilder.js";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
 import type { SessionTurnCommittedHookValue } from "@/types/session/SessionHook.js";
-import type { JsonValue } from "@/types/common/Json.js";
+import type { JsonValue } from "@downcity/type";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";

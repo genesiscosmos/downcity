@@ -7,18 +7,8 @@
  */
 
 import { Agent, Group } from "@downcity/agent";
-import {
-  attach_group_storage,
-  bind_agent_runtime,
-  create_workspace_entry,
-  detach_group_storage,
-  get_workspace_entry,
-  list_workspace_entries,
-  unbind_agent_runtime,
-} from "@downcity/agent/internal";
 import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
 import type { CityPlugins } from "@/city/types/CityPlugin.js";
-import type { WorkspaceEntry } from "@downcity/agent/internal";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
 import { MemoryStorageProvider } from "@/workspace/index.js";
@@ -77,8 +67,8 @@ export class City {
   /** 宿主提供的按需 Workspace 创建能力。 */
   private readonly resolve_workspace?: CityRuntimeOptions["resolve_workspace"];
 
-  /** 相同 Agent/Workspace 目标当前唯一的进入流程。 */
-  private readonly workspace_entry_promises = new Map<string, Promise<WorkspaceEntry>>();
+  /** 相同 Workspace 目标当前唯一的按需解析流程。 */
+  private readonly workspace_resolution_promises = new Map<string, Promise<WorkspaceRuntime>>();
 
   /** 正在解除注册的 Workspace；对查询与新 Session 立即不可见。 */
   private readonly removing_workspace_ids = new Set<string>();
@@ -193,7 +183,7 @@ export class City {
         throw new Error(`Group member is not registered in City: ${member.id}`);
       }
     }
-    attach_group_storage(group, this.storage, this);
+    group.attach(this, this.storage);
     this.groups_by_id.set(group.id, group);
     return group;
   }
@@ -243,42 +233,35 @@ export class City {
     return agent;
   }
 
-  /** 按 Agent ID 与 Workspace ID 返回 transport 所需的明确执行作用域。 */
-  private require_workspace(agent_id_input: string, workspace_id_input: string): WorkspaceEntry {
-    const agent = this.require_agent(agent_id_input);
+  /** 校验 Agent 与 Workspace 均属于当前 City，并返回 Workspace。 */
+  private require_workspace(agent_id_input: string, workspace_id_input: string): WorkspaceRuntime {
+    this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
     if (!workspace_id) throw new Error("City request requires workspace_id");
     const workspace = this.get_workspace(workspace_id);
     if (!workspace) throw new Error(`Workspace not found in City: ${workspace_id}`);
-    const entry = get_workspace_entry(agent, workspace_id);
-    if (!entry || entry.workspace !== workspace) {
-      throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
-    }
-    return entry;
+    return workspace;
   }
 
-  /** 按需解析并进入 Workspace；相同目标的并发请求共享一次创建流程。 */
+  /** 按需解析 Workspace；同一 ID 的并发请求共享一次创建流程。 */
   private async enter_workspace(
     agent_id_input: string,
     workspace_id_input: string,
-  ): Promise<WorkspaceEntry> {
+  ): Promise<WorkspaceRuntime> {
     const agent = this.require_agent(agent_id_input);
     const workspace_id = String(workspace_id_input || "").trim();
     if (!workspace_id) throw new Error("City request requires workspace_id");
     if (this.removing_workspace_ids.has(workspace_id)) {
       throw new Error(`Workspace is being removed from City: ${workspace_id}`);
     }
-    const existing = get_workspace_entry(agent, workspace_id);
-    if (existing) return existing;
     const city_workspace = this.get_workspace(workspace_id);
-    if (city_workspace) return create_workspace_entry(agent, city_workspace);
+    if (city_workspace) return city_workspace;
     if (!this.resolve_workspace) {
-      throw new Error(`Agent "${agent.id}" has not entered Workspace: ${workspace_id}`);
+      throw new Error(`Workspace not found in City: ${workspace_id}`);
     }
-    const target_key = `${agent.id}/${workspace_id}`;
-    const current = this.workspace_entry_promises.get(target_key);
+    const current = this.workspace_resolution_promises.get(workspace_id);
     if (current) return await current;
-    const entry_promise = (async () => {
+    const resolution_promise = (async () => {
       const workspace = await this.resolve_workspace!(agent, workspace_id);
       if (workspace.id !== workspace_id) {
         await workspace.dispose().catch(() => undefined);
@@ -286,15 +269,14 @@ export class City {
           `Resolved Workspace ID mismatch: expected ${workspace_id}, received ${workspace.id}`,
         );
       }
-      this.add_workspace(workspace);
-      return create_workspace_entry(agent, workspace);
+      return this.add_workspace(workspace);
     })();
-    this.workspace_entry_promises.set(target_key, entry_promise);
+    this.workspace_resolution_promises.set(workspace_id, resolution_promise);
     try {
-      return await entry_promise;
+      return await resolution_promise;
     } finally {
-      if (this.workspace_entry_promises.get(target_key) === entry_promise) {
-        this.workspace_entry_promises.delete(target_key);
+      if (this.workspace_resolution_promises.get(workspace_id) === resolution_promise) {
+        this.workspace_resolution_promises.delete(workspace_id);
       }
     }
   }
@@ -444,23 +426,15 @@ export class City {
     if (this.agents_by_id.has(agent.id) || this.removing_agent_ids.has(agent.id)) {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
-    let plugins: ReturnType<CityPluginRuntime["attach_agent"]>;
-    bind_agent_runtime(agent, {
+    agent.attach({
       owner: this,
       storage: this.storage,
       get_workspace: (workspace_id) => this.get_workspace(workspace_id),
-      ensure_ready: async () => await plugins.ensure_ready(),
-      tools: (workspace, logger) => plugins.tools(workspace, logger),
-      hooks: (workspace, logger) => plugins.hooks(workspace, logger),
-      subscribe_plugins: (subscriber) => plugins.subscribe(subscriber),
+      ensure_ready: async () => await this.plugin_runtime.ensure_ready(),
+      get_tools: (workspace, logger) => this.plugin_runtime.tools(agent, workspace, logger),
+      get_hooks: (workspace, logger) => this.plugin_runtime.hooks(agent, workspace, logger),
       release_agent: async (current) => await this.release_agent(current),
     });
-    try {
-      plugins = this.plugin_runtime.attach_agent(agent);
-    } catch (error) {
-      unbind_agent_runtime(agent, this);
-      throw error;
-    }
     this.agents_by_id.set(agent.id, agent);
     return agent;
   }
@@ -470,7 +444,7 @@ export class City {
     const current = this.agents_by_id.get(agent.id);
     if (!current || current !== agent) return;
     const errors: unknown[] = [];
-    unbind_agent_runtime(current, this);
+    current.detach(this);
     this.agents_by_id.delete(agent.id);
     try {
       await this.http_transport.detach_agent(agent.id);
@@ -491,7 +465,7 @@ export class City {
       errors.push(error);
     }
     try {
-      await detach_group_storage(group, this);
+      await group.detach(this);
     } catch (error) {
       errors.push(error);
     }
@@ -528,10 +502,10 @@ export class City {
     if (!workspace) return null;
     this.removing_workspace_ids.add(workspace_id);
     const removal = (async () => {
-      const entries = [...this.agents_by_id.values()]
-        .flatMap((agent) => [...list_workspace_entries(agent)])
-        .filter((entry) => entry.workspace === workspace);
-      const results = await Promise.allSettled(entries.map(async (entry) => await entry.leave()));
+      const results = await Promise.allSettled(
+        [...this.agents_by_id.values()].map(async (agent) =>
+          await agent.release_workspace(workspace_id)),
+      );
       results.push(...await Promise.allSettled([workspace.dispose()]));
       this.workspaces_by_id.delete(workspace_id);
       const errors = results.flatMap((result) =>

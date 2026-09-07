@@ -7,8 +7,8 @@
 import type {
   SessionAssistantResultPart,
   SessionPromptPart,
-} from "@/types/session/SessionContent.js";
-import type { SessionUserMessagePart } from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
+import type { SessionUserMessagePart } from "@downcity/type";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import {
   normalize_session_context_content,

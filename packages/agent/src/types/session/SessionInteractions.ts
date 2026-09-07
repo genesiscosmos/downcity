@@ -8,7 +8,7 @@
 import type {
   SessionInteractionRequest,
   SessionInteractionResult,
-} from "@/types/session/SessionInteraction.js";
+} from "@downcity/type";
 
 /** 单个等待用户响应的运行时 Interaction。 */
 export interface SessionPendingInteractionRuntime {

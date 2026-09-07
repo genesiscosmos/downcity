@@ -38,7 +38,7 @@ const notes_plugin = new NotesPlugin();
 ```
 
 宿主把 `notes_plugin` 交给 City；全部 Agent 自动获得它。进入 Workspace 后，可以通过
-`entry.plugins.run_action()` 显式调用；
+`city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action()` 显式调用；
 Session 会从同一 City execution view 收集 System 与 Hook。
 
 这个 Plugin 没有长期资源，因此不需要 Lifecycle。用户项目文件应使用

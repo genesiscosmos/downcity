@@ -63,7 +63,7 @@ export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { Session } from "./session/Session.js";
 export { SessionHooks, SessionHookScope } from "./session/SessionHooks.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
-export type { SessionOrigin } from "./types/session/SessionOrigin.js";
+export type { SessionOrigin } from "@downcity/type";
 export { SESSION_HOOK_POINTS } from "./session/SessionHookPoints.js";
 export type {
   SessionCommittedTurnStatus,
@@ -120,13 +120,13 @@ export type {
   SessionUserMessage,
   SessionUserMessagePart,
   SessionUserTextPart,
-} from "./types/session/SessionMessage.js";
+} from "@downcity/type";
 export type {
   SessionTurnFileDiff,
   SessionTurnFileDiffData,
   SessionTurnFileDiffStatus,
   SessionTurnFileDiffSummary,
-} from "./types/session/SessionTurnFileDiff.js";
+} from "@downcity/type";
 export {
   is_session_turn_file_diff_data_part,
   read_session_turn_file_diff_data,
@@ -143,10 +143,10 @@ export type {
 } from "./types/session/SessionSegment.js";
 export {
   is_session_mutation,
-} from "./types/session/SessionMutation.js";
+} from "@downcity/type";
 export type {
   ModelRequestKind,
-} from "./types/executor/ModelRequest.js";
+} from "@downcity/type";
 export type {
   SessionCompactMutation,
   SessionConfigMutation,
@@ -161,7 +161,7 @@ export type {
   SessionTitleMutation,
   SessionTurnFileDiffMutation,
   SessionTurnMutation,
-} from "./types/session/SessionMutation.js";
+} from "@downcity/type";
 export type {
   RespondSessionInteractionInput,
   SessionApprovalMode,
@@ -181,11 +181,12 @@ export type {
   SessionInteractionStatus,
   SessionPendingInteraction,
   SessionResolvedInteractionResult,
-} from "./types/session/SessionInteraction.js";
+} from "@downcity/type";
 export type {
   AgentOptions,
   AgentSessionConstructor,
 } from "./types/agent/AgentOptions.js";
+export type { AgentAttachment } from "./types/agent/AgentAttachment.js";
 export type {
   AgentCreateSessionOptions,
   AgentSessionCollection,
@@ -212,7 +213,7 @@ export type {
   SessionContextInputPart,
   SessionFileInputPart,
   SessionDataInputPart,
-} from "./types/session/SessionContent.js";
+} from "@downcity/type";
 export type { AgentSessionStopResult } from "./types/sdk/AgentSessionStop.js";
 export type {
   AgentSessionTurnHandle,
@@ -220,7 +221,6 @@ export type {
 } from "./types/sdk/AgentSessionTurn.js";
 export type {
   AgentSessionCompactHandle,
-  AgentSessionCompactReason,
   AgentSessionCompactResult,
 } from "./types/sdk/AgentSessionCompact.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
@@ -274,7 +274,7 @@ export type {
   SessionActionEvent,
   SessionActionEventInput,
   SessionActionStatus,
-} from "./types/session/SessionAction.js";
+} from "@downcity/type";
 export type { SessionSystemMessage } from "./executor/types/SessionPrompts.js";
 export { transform_prompts_into_system_messages } from "./executor/composer/system/default/PromptRenderer.js";
 export {
@@ -304,6 +304,6 @@ export {
 } from "./utils/Time.js";
 
 // JSON 基础类型
-export type { JsonObject, JsonPrimitive, JsonValue } from "./types/common/Json.js";
+export type { JsonObject, JsonPrimitive, JsonValue } from "@downcity/type";
 
 export { resolve_session_id } from "./executor/ids/resolveSessionId.js";

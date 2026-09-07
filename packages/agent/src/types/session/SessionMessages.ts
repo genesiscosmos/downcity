@@ -4,19 +4,19 @@
  * 这些类型只描述 canonical Message 领域入口的参数，不包含持久化行为。
  */
 
-import type { JsonObject } from "@/types/common/Json.js";
+import type { JsonObject } from "@downcity/type";
 import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
   SessionAssistantResultPart,
   SessionPromptPart,
-} from "@/types/session/SessionContent.js";
+} from "@downcity/type";
 import type {
   SessionAssistantMessagePart,
   SessionUserMessagePart,
-} from "@/types/session/SessionMessage.js";
-import type { SessionMutation } from "@/types/session/SessionMutation.js";
+} from "@downcity/type";
+import type { SessionMutation } from "@downcity/type";
 
 /** SessionMessages 构造参数。 */
 export interface SessionMessagesOptions {

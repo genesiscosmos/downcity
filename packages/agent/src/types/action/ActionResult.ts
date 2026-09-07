@@ -12,7 +12,7 @@ import type { RuntimeToolEffect } from "@downcity/type";
 import type {
   SessionAssistantResultPart,
   SessionPromptPart,
-} from "@/types/session/SessionContent.js";
+} from "@downcity/type";
 
 /** Action 执行后产生的一条 Session 消息。 */
 export type ActionResultMessage =

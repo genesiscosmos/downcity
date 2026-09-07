@@ -7,7 +7,6 @@ import path from "node:path";
 import test from "node:test";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
-import { create_workspace_entry, get_workspace_entry } from "@downcity/agent/internal";
 import { Workspace } from "@downcity/city";
 import {
   add_test_plugin,
@@ -60,8 +59,6 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
   const city = new City({ workspaces: [first_workspace, second_workspace] });
   add_test_plugin(city, plugin);
   city.agents.add(agent);
-  const first = create_workspace_entry(agent, first_workspace);
-  const second = create_workspace_entry(agent, second_workspace);
 
   try {
     const first_plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: first_workspace.id });
@@ -77,9 +74,9 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     assert.match(contexts[0].data_path, /\/memory\/agents\/coder\/plugins\/context_probe$/u);
     assert.equal(lifecycle_events.filter((item) => item === "initialize").length, 1);
 
-    await first.leave();
-    assert.equal(get_workspace_entry(agent, "sdk"), null);
-    assert.equal(get_workspace_entry(agent, "homepage"), second);
+    assert.equal(await city.workspaces.remove("sdk"), first_workspace);
+    assert.equal(city.workspaces.get("sdk"), null);
+    assert.equal(city.workspaces.get("homepage"), second_workspace);
   } finally {
     await city.close();
     await fs.rm(root, { recursive: true, force: true });
@@ -127,10 +124,9 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
   const city = new City({ workspaces: [workspace] });
   add_test_plugin(city, plugin);
   city.agents.add(agent);
-  const entry = create_workspace_entry(agent, workspace);
 
   try {
-    const linked_session = await entry.sessions.create();
+    const linked_session = await agent.sessions.create({ workspace });
     linked_session_id = linked_session.id;
     const mutations = [];
     const unsubscribe = linked_session.subscribe((mutation) => {
@@ -206,9 +202,6 @@ test("Plugin runtime data is isolated by Agent and shared across Workspaces", as
   await city.plugins.add(registration);
   city.agents.add(agent_a);
   city.agents.add(agent_b);
-  const first = create_workspace_entry(agent_a, first_workspace);
-  const second = create_workspace_entry(agent_a, second_workspace);
-  const third = create_workspace_entry(agent_b, third_workspace);
   try {
     await Promise.all([
       city.plugins.scope({ agent_id: agent_a.id, workspace_id: first_workspace.id })
@@ -263,8 +256,6 @@ test("Plugin can ignore Workspace while still receiving its Context", async () =
   const city = new City({ workspaces: [first_workspace, second_workspace] });
   add_test_plugin(city, plugin);
   city.agents.add(agent);
-  const first = create_workspace_entry(agent, first_workspace);
-  const second = create_workspace_entry(agent, second_workspace);
   try {
     assert.equal((await city.plugins.scope({ agent_id: agent.id, workspace_id: first_workspace.id })
       .run_action({ plugin: "counter", action: "increment" })).data.value, 1);
@@ -288,12 +279,11 @@ test("Workspace cleanup is independent from Plugin lifecycle", async () => {
   const city = new City({ workspaces: [workspace] });
   add_test_plugin(city, plugin);
   city.agents.add(agent);
-  const entry = create_workspace_entry(agent, workspace);
 
   try {
-    await entry.sessions.list();
-    await entry.leave();
-    assert.equal(get_workspace_entry(agent, "cleanup"), null);
+    await agent.sessions.list({ workspace_id: workspace.id });
+    assert.equal(await city.workspaces.remove(workspace.id), workspace);
+    assert.equal(city.workspaces.get(workspace.id), null);
   } finally {
     await city.close();
     await fs.rm(root, { recursive: true, force: true });

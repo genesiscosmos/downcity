@@ -21,7 +21,7 @@ import type {
 } from "@/types/group/DispatchStrategy.js";
 import type { ModelClient, WorkspaceRuntime } from "@downcity/type";
 import type { GroupSessionDataStore } from "@/types/group/GroupSessionStore.js";
-import type { RespondSessionInteractionInput } from "@/types/session/SessionInteraction.js";
+import type { RespondSessionInteractionInput } from "@downcity/type";
 import {
   GroupDispatchRuntime,
   GroupDispatchStoppedError,

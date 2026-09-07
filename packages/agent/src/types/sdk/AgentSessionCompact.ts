@@ -5,11 +5,7 @@
  * `finished` 兑现最终结果，调用方不需要从 Action Message 反推完成状态。
  */
 
-/** Session 显式压缩的稳定结束原因。 */
-export type AgentSessionCompactReason =
-  | "compacted"
-  | "nothing_to_compact"
-  | "compact_failed";
+import type { SessionCompactReason } from "@downcity/type";
 
 /** 一次显式 Session 压缩的最终结果。 */
 export interface AgentSessionCompactResult {
@@ -20,7 +16,7 @@ export interface AgentSessionCompactResult {
   /** 是否实际生成并提交了压缩计划。 */
   compacted: boolean;
   /** 当前请求结束的稳定原因。 */
-  reason: AgentSessionCompactReason;
+  reason: SessionCompactReason;
   /** 压缩失败时的错误文本。 */
   error?: string;
 }

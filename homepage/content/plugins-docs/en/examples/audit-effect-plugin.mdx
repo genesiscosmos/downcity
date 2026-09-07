@@ -41,7 +41,7 @@ class AuditEffectPlugin extends Plugin {
 }
 
 // City has registered audit_effect and bound it to entry's Agent/Workspace.
-await entry.plugins.effect("audit.observe", {
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).effect("audit.observe", {
   event: "incoming_message",
   session_id: "sess_001",
 });

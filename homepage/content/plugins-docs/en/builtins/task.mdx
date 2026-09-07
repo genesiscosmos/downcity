@@ -52,7 +52,6 @@ Every Task binds one execution Workspace. When `create` is called from an Agent 
 const registrations = create_builtin_plugin_registrations();
 const city = new City({ plugins: registrations, workspaces: [workspace] });
 city.agents.add(agent);
-const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
 Cron uses the current machine timezone by default. To customize it, provide
@@ -62,7 +61,7 @@ offset embedded in the ISO string itself.
 ## SDK action use
 
 ```ts
-await entry.plugins.run_action({
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "task",
   action: "run",
   payload: {

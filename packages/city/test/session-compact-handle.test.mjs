@@ -19,7 +19,6 @@ import {
   DefaultSessionComposer,
   Session,
 } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Workspace } from "@downcity/city";
 
 function create_deferred() {
@@ -81,11 +80,12 @@ test("compact Handle 在队列命令完成后兑现并阻塞后续 Prompt", asyn
     }),
     session_class: CompactSession,
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const workspace = new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
 
   try {
-    const session = await entry.sessions.create({
+    const session = await agent.sessions.create({
       session_id: "compact_handle_session",
+      workspace,
     });
     const compact_handle = await session.compact();
     assert.equal(compact_handle.result, null);

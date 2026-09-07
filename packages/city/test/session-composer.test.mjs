@@ -13,7 +13,6 @@ import {
   DefaultSessionComposer,
   Session,
 } from "../../agent/bin/index.js";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Workspace } from "@downcity/city";
 
 function create_input(model) {
@@ -144,10 +143,11 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
     model: new MockModelClient({ modelId: "custom-composer-model" }),
     session_class: CustomSession,
   });
-  const entry = create_workspace_entry(agent, new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") }));
+  const workspace = new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
   try {
-    const session = await entry.sessions.create({
+    const session = await agent.sessions.create({
       session_id: "custom_composer_session",
+      workspace,
     });
     const snapshot = await session.system();
     assert.equal(snapshot.blocks.at(-1).content, "Custom snapshot behavior");

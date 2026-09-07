@@ -8,7 +8,7 @@
 
 import type { ModelMessage } from "@downcity/type";
 import { session_messages_to_model_messages } from "@executor/messages/SessionModelMessages.js";
-import type { SessionMessage, SessionUserMessage } from "@/types/session/SessionMessage.js";
+import type { SessionMessage, SessionUserMessage } from "@downcity/type";
 
 /**
  * CoreEngine 单轮执行期间的消息基线。

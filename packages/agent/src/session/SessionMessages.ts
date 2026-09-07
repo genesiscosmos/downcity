@@ -15,7 +15,7 @@ import {
   normalize_canonical_session_user_parts,
   normalize_session_user_parts,
 } from "@/session/messages/SessionUserMessage.js";
-import type { JsonObject } from "@/types/common/Json.js";
+import type { JsonObject } from "@downcity/type";
 import type {
   ListSessionMessagesInput,
   SessionActionMessage,
@@ -27,11 +27,11 @@ import type {
   SessionMessagePage,
   SessionUserMessage,
   SessionUserMessagePart,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import type {
   SessionMutation,
   SessionMessageMutation as SessionMessageSnapshotMutation,
-} from "@/types/session/SessionMutation.js";
+} from "@downcity/type";
 import type {
   SessionContextSnapshot,
   SessionMessageStorageStats,
@@ -42,8 +42,8 @@ import type {
   SessionInteractionCloseInput,
   SessionInteractionRequest,
   SessionInteractionResponse,
-} from "@/types/session/SessionInteraction.js";
-import type { SessionActionEvent } from "@/types/session/SessionAction.js";
+} from "@downcity/type";
+import type { SessionActionEvent } from "@downcity/type";
 import { persist_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
 import type {
   AppendCompletedAssistantMessageInput,

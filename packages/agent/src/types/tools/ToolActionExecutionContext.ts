@@ -5,7 +5,7 @@
  * Session Interaction，不暴露 SessionTurnContext、消息写入器或 Plugin lease。
  */
 
-import type { SessionInteractionPort } from "@/types/session/SessionInteraction.js";
+import type { SessionInteractionPort } from "@downcity/type";
 
 /** 普通 Tool 所属的 Session 范围。 */
 export interface ToolSessionExecutionScope {

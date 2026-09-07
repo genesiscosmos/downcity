@@ -49,6 +49,7 @@ export function register_sdk_session_routes(
         ...(c.req.query("limit") ? { limit: Number(c.req.query("limit")) } : {}),
         ...(c.req.query("cursor") ? { cursor: c.req.query("cursor") } : {}),
         ...(c.req.query("query") ? { query: c.req.query("query") } : {}),
+        ...(workspace ? { workspace_id: workspace.id } : {}),
       };
       const page = await sessions.list(input);
       return c.json({
@@ -343,6 +344,7 @@ export function register_sdk_session_routes(
         id: session_id,
         origin_type: get_origin_type(c.req.query("origin_type")),
       };
+      await get_session(session_id, input.origin_type);
       const result = await sessions.archive(input);
       return c.json({
         success: true,
@@ -483,7 +485,10 @@ export function register_sdk_session_routes(
         ...(c.req.query("cursor") ? { cursor: c.req.query("cursor") } : {}),
         ...(c.req.query("query") ? { query: c.req.query("query") } : {}),
       };
-      const page = await sessions.archived(input);
+      const page = await sessions.archived({
+        ...input,
+        ...(workspace ? { workspace_id: workspace.id } : {}),
+      });
       return c.json({
         success: true,
         page,

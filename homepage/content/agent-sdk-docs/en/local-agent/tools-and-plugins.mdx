@@ -96,16 +96,15 @@ refreshes any affected long-lived resources.
 Host code calls Actions and Hooks through an Agent/Workspace execution entry:
 
 ```ts
-const entry = await city.enter_workspace(agent.id, workspace.id);
 
-const result = await entry.plugins.run_action({
+const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "memory",
   action: "search",
   payload: { query: "project conventions" },
 });
 
-const enriched = await entry.plugins.pipeline("chat.enrich_message", input);
-await entry.plugins.guard("review.require_checked", enriched);
+const enriched = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", input);
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", enriched);
 ```
 
 When Actions exist, Session receives the `plugin_read` and `plugin_call` Tools. The model can inspect an Action schema before sending a validated payload. Plugin `system(context, execution_context)` text is injected at Session prompt checkpoints.

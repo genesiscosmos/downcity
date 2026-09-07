@@ -11,12 +11,12 @@ import type {
   SessionAssistantMessage,
   SessionAssistantMessagePart,
   SessionMessage,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import type {
   SessionInteractionCloseInput,
   SessionInteractionRequest,
   SessionInteractionResponse,
-} from "@/types/session/SessionInteraction.js";
+} from "@downcity/type";
 import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
 
 /** Interaction 写入器依赖的最小 Message 能力。 */

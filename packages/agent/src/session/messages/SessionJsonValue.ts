@@ -5,7 +5,7 @@
  * 避免 Tool、User Data 等外部输入污染 canonical Message。
  */
 
-import type { JsonObject, JsonValue } from "@/types/common/Json.js";
+import type { JsonObject, JsonValue } from "@downcity/type";
 
 /** 把任意运行时输入转换为可持久化的 JSON 值。 */
 export function to_session_json_value(input: unknown): JsonValue {

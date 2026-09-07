@@ -21,7 +21,7 @@ import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { FileSystem } from "@downcity/type";
 import type { LocalSessionDataStoreOptions } from "@/types/store/LocalStore.js";
 import { LocalSessionAttachmentStore } from "@/session/storage/LocalSessionAttachmentStore.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 /** 本地 Session Store。 */
 export class LocalSessionDataStore implements SessionDataStore {

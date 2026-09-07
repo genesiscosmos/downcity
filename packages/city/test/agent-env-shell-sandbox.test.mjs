@@ -14,11 +14,10 @@ import path from "node:path";
 
 import { Agent } from "@downcity/agent";
 import { Workspace, Shell } from "@downcity/city";
-import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { create_test_sandbox_provider } from "./PlatformSandbox.mjs";
 
-async function execute_shell(agent, cmd) {
-  const result = await agent.tools.shell_exec.execute(
+async function execute_shell(workspace, cmd) {
+  const result = await workspace.tools.shell_exec.execute(
     {
       cmd,
       shell: "/bin/sh",
@@ -45,7 +44,6 @@ test("workspace set_env and patch_env are visible in its Sandbox", async () => {
     runtime_path: path.join(root_path, "runtime"),
   });
   const agent = new Agent({ id: "agent-env-shell-sandbox-test" });
-  const entry = create_workspace_entry(agent, workspace);
 
   try {
     workspace.set_env({
@@ -55,7 +53,7 @@ test("workspace set_env and patch_env are visible in its Sandbox", async () => {
     });
 
     const first_output = await execute_shell(
-      entry,
+      workspace,
       'printf "CURRENT=%s\\nDC=%s\\nREMOVED=%s\\nHOST_ONLY=%s\\n" "$DYNAMIC_ENV_REPRO" "$DC_DYNAMIC_REPRO" "$REMOVED_ENV_REPRO" "$HOST_ONLY_ENV_REPRO"',
     );
     assert.match(first_output, /CURRENT=initial_value/);
@@ -70,7 +68,7 @@ test("workspace set_env and patch_env are visible in its Sandbox", async () => {
     });
 
     const second_output = await execute_shell(
-      entry,
+      workspace,
       'printf "CURRENT=%s\\nADDED=%s\\nREMOVED=%s\\nHOST_ONLY=%s\\n" "$DYNAMIC_ENV_REPRO" "$ADDED_ENV_REPRO" "$REMOVED_ENV_REPRO" "$HOST_ONLY_ENV_REPRO"',
     );
     assert.match(second_output, /CURRENT=updated_value/);

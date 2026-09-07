@@ -94,16 +94,15 @@ const city = new City({
 宿主从 Agent/Workspace 执行入口调用 Action 或 Hook：
 
 ```ts
-const entry = await city.enter_workspace(agent.id, workspace.id);
 
-const result = await entry.plugins.run_action({
+const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "memory",
   action: "search",
   payload: { query: "项目约定" },
 });
 
-const enriched = await entry.plugins.pipeline("chat.enrich_message", input);
-await entry.plugins.guard("review.require_checked", enriched);
+const enriched = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", input);
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", enriched);
 ```
 
 存在 Action 时，Session 会获得 `plugin_read` 和 `plugin_call` Tool。模型先读取 Action schema，再执行经过校验的 payload。Plugin 的 `system(context, execution_context)` 也会在 Session prompt 检查点注入。

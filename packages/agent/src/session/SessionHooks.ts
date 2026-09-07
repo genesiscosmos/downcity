@@ -5,7 +5,7 @@
  * 组合根可以注入处理函数，并在 open() 时为单个 Step 捕获稳定作用域。
  */
 
-import type { JsonValue } from "@/types/common/Json.js";
+import type { JsonValue } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type {
   SessionHookContext,

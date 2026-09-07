@@ -5,7 +5,7 @@
  * Summary 只服务模型上下文，不占用 Session Message sequence。
  */
 
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import type { SessionMessage } from "@downcity/type";
 
 /** 已关闭 Segment 的累计上下文摘要。 */
 export interface SessionSegmentSummary {

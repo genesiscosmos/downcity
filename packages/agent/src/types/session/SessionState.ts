@@ -7,10 +7,10 @@
 import type { ModelClient } from "@downcity/type";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
-import type { SessionMutation } from "@/types/session/SessionMutation.js";
+import type { SessionMutation } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 /** SessionState 构造参数。 */
 export interface SessionStateOptions {

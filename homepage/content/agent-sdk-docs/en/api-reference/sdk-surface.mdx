@@ -18,7 +18,7 @@ Most local applications need only:
 - `agent.sessions.create({ workspace })` / `get()`: create or restore a Session in the current scope.
 - `session.prompt()`: start one Turn.
 - `turn.finished`: await the final result.
-- `agent.dispose()`: release every Workspace scope entered by the Agent.
+- `agent.dispose()`: release the Agent's Sessions and detach it from its current City.
 
 ```ts
 const workspace = new Workspace({ id: workspace_id, path, shell });
@@ -42,9 +42,9 @@ The local SDK is session-first: Agent performs composition, while Session owns i
 
 - `agent.set_instruction()`: update static Agent instructions.
 - `city.plugins`: add or remove Plugin instances and call host-management Actions.
-- `entry.plugins`: inspect or call Plugins in an Agent/Workspace execution scope.
+- `city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })`: inspect or call Plugins in an explicit Agent/Workspace execution scope.
 - `workspace.get_env()` / `set_env()` / `patch_env()`: manage the project execution environment.
-- `agent.get_logger()` / `get_shell()`: host integration entry points.
+- `agent.get_logger()`: access Agent-level logs; Shell is read from the selected Workspace.
 
 ### Session
 

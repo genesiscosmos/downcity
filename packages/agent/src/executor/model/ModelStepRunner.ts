@@ -24,7 +24,7 @@ import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOu
 import type {
   SessionAssistantMessagePart,
   SessionAssistantToolPart,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import { consume_model_stream } from "@/executor/model/ModelStreamConsumer.js";
 
 /** 单个工具调用的执行事实。 */

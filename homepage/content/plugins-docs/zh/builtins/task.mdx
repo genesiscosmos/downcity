@@ -52,7 +52,6 @@ city plugin action task run <agent_id> --input '{"title":"daily-summary","reason
 const registrations = create_builtin_plugin_registrations();
 const city = new City({ plugins: registrations, workspaces: [workspace] });
 city.agents.add(agent);
-const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
 cron 默认采用当前运行机器的时区。自定义时区时，直接把 `new TaskPlugin({ timezone })` 交给
@@ -61,7 +60,7 @@ City。`time:<ISO8601-with-timezone>` 一次性任务以 ISO 字符串自身的 
 ## SDK action 用法
 
 ```ts
-await entry.plugins.run_action({
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "task",
   action: "run",
   payload: {

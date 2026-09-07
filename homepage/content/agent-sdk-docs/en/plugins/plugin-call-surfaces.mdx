@@ -10,7 +10,7 @@ Plugins expose four call surfaces for different callers:
 | Surface | Caller | Purpose |
 | --- | --- | --- |
 | `city.plugins` | Host application | Add or remove unique instances and invoke host/config actions |
-| `entry.plugins` | Host execution code | Call Actions, Availability, or Hooks in one Agent/Workspace scope |
+| `city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })` | Host execution code | Call Actions, Availability, or Hooks in one Agent/Workspace scope |
 | `context.city.plugins` | Plugin code | Call another Plugin Action, pipeline, or effect in the current scope |
 | `plugin_call` | Model in a Session | Call a Plugin Action provided by City |
 
@@ -28,8 +28,7 @@ they are not Session execution Actions.
 ## Workspace execution surface
 
 ```ts
-const entry = await city.enter_workspace(agent.id, workspace.id);
-const result = await entry.plugins.run_action({
+const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "skill",
   action: "lookup",
   payload: { name: "frontend-design" },

@@ -4,8 +4,8 @@
  * 所有消息判断都直接读取 canonical `SessionAssistantMessagePart`，不依赖 UI 投影。
  */
 
-import type { JsonObject } from "@/types/common/Json.js";
-import type { SessionAssistantMessagePart } from "@/types/session/SessionMessage.js";
+import type { JsonObject } from "@downcity/type";
+import type { SessionAssistantMessagePart } from "@downcity/type";
 
 /** 单次 Tool Loop 允许的最大 Step 数。 */
 export const MAX_TOOL_LOOP_STEPS = 64;

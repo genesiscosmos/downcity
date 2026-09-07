@@ -33,8 +33,8 @@ import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
 import type { SessionHooks } from "@/session/SessionHooks.js";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { WorkspaceRuntime } from "@downcity/type";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
-import { normalize_session_origin, normalize_session_origin_type } from "@/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
+import { normalize_session_origin, normalize_session_origin_type } from "@downcity/type";
 
 type AgentSessionsOptions = {
   /**
@@ -52,7 +52,7 @@ type AgentSessionsOptions = {
     workspace_path: string;
     workspace_id?: string;
     logger: Logger;
-    tools: Record<string, Tool>;
+    get_tools: () => Record<string, Tool>;
     get_workspace_env: () => Record<string, string>;
     get_hooks: () => SessionHooks;
     store: SessionStore;
@@ -150,38 +150,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     for (const session of this.sessions_by_id.values()) {
       if (workspace_id && session.workspace_id !== workspace_id) continue;
       session.dispose_title_generation?.();
-    }
-  }
-
-  /**
-   * 把 Agent env 修改广播到已有 Session 的统一输入队列。
-   */
-  broadcast_env(env: Record<string, string>, command_id: string, workspace_id?: string): void {
-    for (const session of this.sessions_by_id.values()) {
-      if (workspace_id && session.workspace_id !== workspace_id) continue;
-      session.enqueue_workspace_env({
-        command_id,
-        env: { ...env },
-      });
-    }
-  }
-
-  /**
-   * 把 Plugin 配置修改广播到已有 Session 的统一输入队列。
-   */
-  broadcast_hooks(input: {
-    command_id: string;
-    title: string;
-    hooks: SessionHooks;
-    workspace_id?: string;
-  }): void {
-    for (const session of this.sessions_by_id.values()) {
-      if (input.workspace_id && session.workspace_id !== input.workspace_id) continue;
-      session.enqueue_hooks({
-        command_id: input.command_id,
-        title: input.title,
-        hooks: input.hooks,
-      });
     }
   }
 
@@ -448,7 +416,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_session_store: (session_id) => context.store.session(session_id, origin, context.workspace_id),
       register_forked_session: (session) => this.register_forked_session(session),
       session_id: resolved_session_id,
-      tools: context.tools,
+      get_tools: () => context.get_tools(),
       logger: context.logger,
       instruction_system_blocks: this.load_instruction_system_blocks(context.workspace_path),
       get_instruction_system_blocks: () => this.load_instruction_system_blocks(context.workspace_path),

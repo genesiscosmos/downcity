@@ -5,7 +5,7 @@
  * `SessionMessages` 会为每个 part 分配稳定标识并转换成 canonical `SessionMessage`。
  */
 
-import type { JsonValue } from "@/types/common/Json.js";
+import type { JsonValue } from "../json/Json.js";
 
 /** Session 输入中的文本内容。 */
 export interface SessionTextInputPart {

@@ -6,8 +6,8 @@
  */
 
 import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
-import type { SessionMutation } from "@/types/session/SessionMutation.js";
+import type { SessionMessage } from "@downcity/type";
+import type { SessionMutation } from "@downcity/type";
 
 /** Assistant Message 状态转换器的构造参数。 */
 export interface SessionAssistantMessageStateOptions {

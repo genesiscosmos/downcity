@@ -8,7 +8,7 @@
  */
 
 import type { AgentSessionConfigSnapshot } from "@/types/agent/SessionTypes.js";
-import type { SessionApprovalMode } from "@/types/session/SessionInteraction.js";
+import type { SessionApprovalMode } from "@downcity/type";
 
 /**
  * 本地 Session 内存状态。

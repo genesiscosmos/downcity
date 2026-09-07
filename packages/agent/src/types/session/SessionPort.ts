@@ -10,7 +10,7 @@ import type { ModelClient } from "@downcity/type";
 import type {
   SessionAssistantResultPart,
   SessionPromptPart,
-} from "@/types/session/SessionContent.js";
+} from "@downcity/type";
 import type { SessionExecutor } from "@/types/session/SessionExecution.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
@@ -18,7 +18,7 @@ import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import type {
   SessionMutationSubscriber,
   SessionMutationUnsubscribe,
-} from "@/types/session/SessionMutation.js";
+} from "@downcity/type";
 import type { SessionContextSnapshot } from "@/types/session/SessionSegment.js";
 
 /**

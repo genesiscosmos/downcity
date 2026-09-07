@@ -74,6 +74,7 @@ export async function handle_internal_rpc_request(params: {
       const context = requireAgent(options);
       const session_id = String(request.params.session_id || "").trim();
       if (!session_id) throw new Error("Missing session_id");
+      await context.sessions.get(session_id, "chat", { workspace: context.workspace });
       await context.sessions.clear_messages(session_id);
       write_success(request.id, {
         session_id: session_id,

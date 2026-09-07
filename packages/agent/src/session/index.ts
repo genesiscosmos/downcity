@@ -9,7 +9,7 @@ export type {
   SessionTurnFileDiffData,
   SessionTurnFileDiffStatus,
   SessionTurnFileDiffSummary,
-} from "@/types/session/SessionTurnFileDiff.js";
+} from "@downcity/type";
 export {
   is_session_turn_file_diff_data_part,
   read_session_turn_file_diff_data,

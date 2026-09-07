@@ -1,5 +1,5 @@
 /**
- * Agent 无宿主模式使用的私有进程内存储。
+ * Agent 与 Group 无宿主模式使用的私有进程内存储。
  *
  * 该实现只保证 Agent/Group Store 所需的文件原语，不作为 SDK 资源公开。正式 City
  * 运行时会在创建 Session 前注入 City 持有的 StorageProvider。

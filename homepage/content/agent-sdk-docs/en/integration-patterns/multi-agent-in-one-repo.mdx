@@ -13,12 +13,14 @@ For example:
 
 ```ts
 const planner = new Agent({ id: "planner" });
-planner.enter(new Workspace({ id: "planner-project", path: repo_path }));
+const planner_workspace = new Workspace({ id: "planner-project", path: repo_path });
+const planner_session = await planner.sessions.create({ workspace: planner_workspace });
 
 const reviewer = new Agent({ id: "reviewer" });
-reviewer.enter(new Workspace({ id: "reviewer-project", path: repo_path }));
+const reviewer_workspace = new Workspace({ id: "reviewer-project", path: repo_path });
+const reviewer_session = await reviewer.sessions.create({ workspace: reviewer_workspace });
 ```
 
-Each Agent requires a separate Workspace instance. Both Workspaces may target the same physical directory; Store partitions Sessions by `agent_id`. If both Agents need command capabilities, create and pass a separate Shell instance to each Workspace as well.
+Both Workspaces may target the same physical directory. Session storage remains partitioned by `agent_id`, while each Session explicitly selects its Workspace. If the Agents need isolated command environments, create and pass a separate Shell instance to each Workspace.
 
 This is especially useful when one repository needs several agents with different roles.

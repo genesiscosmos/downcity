@@ -11,7 +11,7 @@ import type { PluginAction, PluginActionResult } from "@/plugin/index.js";
 import type { PluginActionExecutionContext } from "@/plugin/index.js";
 import type { PluginContext } from "@/plugin/index.js";
 import type { PluginExecutionContext } from "@/plugin/index.js";
-import { normalize_session_origin } from "@downcity/agent/internal";
+import { normalize_session_origin } from "@downcity/type";
 import type { JsonValue } from "@downcity/agent";
 import type { SessionInteractionPort } from "@downcity/agent";
 import { generate_id } from "@downcity/agent";

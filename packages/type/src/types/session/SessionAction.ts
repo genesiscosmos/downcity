@@ -1,5 +1,5 @@
 /**
- * Session Action 运行事件协议。
+ * Session Action 跨包运行事件协议。
  *
  * Action 事件描述尚未持久化或正在更新的领域事实；`SessionMessages` 负责把它收口为
  * canonical `SessionActionMessage`。该协议不属于模型消息。

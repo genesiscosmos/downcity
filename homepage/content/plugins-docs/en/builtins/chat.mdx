@@ -63,7 +63,6 @@ const city = new City({
   },
 });
 city.agents.add(agent);
-const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
 Chat registers `config.read` and `config.save` during `initialize()` to validate the complete Config
@@ -94,7 +93,7 @@ When Feishu is enabled without the SDK installed, the runtime error tells you wh
 In an embedded SDK scenario, call the visible chat actions by plugin name:
 
 ```ts
-await entry.plugins.run_action({
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "chat",
   action: "send",
   payload: {
@@ -128,7 +127,7 @@ Authorization actions also live under `chat`:
 SDK example:
 
 ```ts
-await entry.plugins.run_action({
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "chat",
   action: "authorization-set-user-role",
   payload: {

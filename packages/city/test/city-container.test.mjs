@@ -6,11 +6,6 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Agent, Group } from "@downcity/agent";
-import {
-  attach_group_storage,
-  detach_group_storage,
-  get_workspace_entry,
-} from "@downcity/agent/internal";
 import { City, Workspace } from "../bin/index.js";
 
 /** 创建临时运行时 Agent。 */
@@ -48,7 +43,7 @@ test("Agent 创建无 City Session 后不能再切换到 City 存储", async () 
     await agent.sessions.create();
     assert.throws(
       () => city.agents.add(agent),
-      /already created Session data without City/u,
+      /already used standalone storage/u,
     );
     assert.equal(city.agents.add(replacement), replacement);
     assert.equal(city.agents.get(replacement.id), replacement);
@@ -65,14 +60,11 @@ test("City 删除 Workspace 前释放全部 Agent 执行作用域", async () => 
   const city = new City({ agents: [agent], workspaces: [workspace] });
   try {
     await agent.sessions.create({ workspace });
-    assert.ok(get_workspace_entry(agent, workspace.id));
-
     assert.equal(await city.workspaces.remove(workspace.id), workspace);
     assert.equal(city.workspaces.get(workspace.id), null);
-    assert.equal(get_workspace_entry(agent, workspace.id), null);
     await assert.rejects(
       agent.sessions.create({ workspace }),
-      /does not belong to the Agent resource container/u,
+      /does not belong to the Agent host/u,
     );
   } finally {
     await city.close();
@@ -88,23 +80,21 @@ test("City 删除 Workspace 期间拒绝返回旧执行作用域", async () => {
   const city = new City({ agents: [agent], workspaces: [workspace] });
   try {
     await agent.sessions.create({ workspace });
-    const entry = get_workspace_entry(agent, workspace.id);
-    assert.ok(entry);
     let finish_leave;
     const leave_finished = new Promise((resolve) => {
       finish_leave = resolve;
     });
-    const original_leave = entry.leave.bind(entry);
-    entry.leave = async () => {
+    const original_release = agent.release_workspace.bind(agent);
+    agent.release_workspace = async (workspace_id) => {
       await leave_finished;
-      await original_leave();
+      await original_release(workspace_id);
     };
 
     const removal = city.workspaces.remove(workspace.id);
     try {
       await assert.rejects(
         agent.sessions.create({ workspace }),
-        /does not belong to the Agent resource container/u,
+        /does not belong to the Agent host/u,
       );
     } finally {
       finish_leave();
@@ -125,8 +115,8 @@ test("City 连带删除 Agent Group 时解除 Group Storage 所有权", async ()
   try {
     assert.equal(await city.agents.remove(agent.id), agent);
     assert.equal(city.groups.get(group.id), null);
-    assert.doesNotThrow(() => attach_group_storage(group, next_city.storage, next_city));
-    await detach_group_storage(group, next_city);
+    assert.doesNotThrow(() => group.attach(next_city, next_city.storage));
+    await group.detach(next_city);
   } finally {
     await city.close();
     await next_city.close();

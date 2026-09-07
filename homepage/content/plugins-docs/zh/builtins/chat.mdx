@@ -62,7 +62,6 @@ const city = new City({
   },
 });
 city.agents.add(agent);
-const entry = await city.enter_workspace(agent.id, workspace.id);
 ```
 
 Chat Plugin 在 `initialize()` 中注册 `config.read` 与 `config.save`，负责完整配置校验和凭据安全投影。
@@ -92,7 +91,7 @@ import { ChatPlugin, FeishuChannel } from "@downcity/plugins/chat";
 本地嵌入 SDK 场景里，可以按 plugin 名称调用会话 action：
 
 ```ts
-await entry.plugins.run_action({
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "chat",
   action: "send",
   payload: {
@@ -126,7 +125,7 @@ Chat 授权现在属于 `ChatPlugin` 自己，不需要额外挂一个独立授�
 SDK 调用示例：
 
 ```ts
-await entry.plugins.run_action({
+await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
   plugin: "chat",
   action: "authorization-set-user-role",
   payload: {

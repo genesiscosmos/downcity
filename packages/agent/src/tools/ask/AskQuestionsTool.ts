@@ -18,8 +18,8 @@ import type {
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
 import { generate_id } from "@/utils/Id.js";
 import type { ActionResult } from "@/types/action/ActionResult.js";
-import type { JsonValue } from "@/types/common/Json.js";
-import type { SessionInteractionAnswer } from "@/types/session/SessionInteraction.js";
+import type { JsonValue } from "@downcity/type";
+import type { SessionInteractionAnswer } from "@downcity/type";
 
 /**
  * 由调用方显式注册、按当前 Session Turn 上下文执行的提问 Tool。

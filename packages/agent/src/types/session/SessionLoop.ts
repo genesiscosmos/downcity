@@ -12,7 +12,7 @@ import type { AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
-} from "@/types/session/SessionInteraction.js";
+} from "@downcity/type";
 import type {
   SessionCompactHistory,
   SessionExecutor,
@@ -20,7 +20,7 @@ import type {
 import type { SessionQueue } from "@/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 /** Promise 延迟控制器。 */
 export interface SessionDeferred<T> {

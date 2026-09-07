@@ -1,7 +1,7 @@
 /** Session fork 时重新归属 canonical Message 中由源 Session 持有的附件。 */
 
 import path from "node:path";
-import type { SessionMessage } from "@/types/session/SessionMessage.js";
+import type { SessionMessage } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 /**

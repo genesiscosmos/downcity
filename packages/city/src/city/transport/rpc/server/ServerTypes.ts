@@ -25,6 +25,8 @@ export interface RpcServerStartOptions {
   host: string;
   /** Session 集合访问口。 */
   sessions: AgentSessionCollection;
+  /** 当前 RPC 路由绑定的 Workspace；独立 Agent 模式允许为空。 */
+  workspace?: WorkspaceRuntime;
   /** 当前请求对应的 Agent 执行能力。 */
   get_agent_context?: () => RpcAgentContext;
   /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */
@@ -43,6 +45,8 @@ export interface RpcServerStartOptions {
 export interface RpcRequestHandlerOptions {
   /** Session 集合访问口。 */
   sessions: AgentSessionCollection;
+  /** 当前 RPC 请求绑定的 Workspace；独立 Agent 模式允许为空。 */
+  workspace?: WorkspaceRuntime;
   /** 当前请求对应的 Agent 执行能力。 */
   get_agent_context?: () => RpcAgentContext;
   /** 将远程模型 ID 解析为当前宿主可执行的模型实例。 */

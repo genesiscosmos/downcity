@@ -7,7 +7,12 @@
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建时提供执行资源。
  */
 
-import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
+import type {
+  ModelClient,
+  RuntimeTool as Tool,
+  StorageProvider,
+  WorkspaceRuntime,
+} from "@downcity/type";
 import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
 import type {
   AgentOptions,
@@ -18,18 +23,16 @@ import type {
 } from "@/types/agent/AgentSessionCollection.js";
 import { Logger } from "@/utils/logger/Logger.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
+import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
+import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
+import { EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
+import type { AgentAttachment } from "@/types/agent/AgentAttachment.js";
+import type { AgentStorage } from "@/types/agent/AgentStorage.js";
+import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import {
-  clear_agent_runtime,
-  create_workspace_entry,
-  dispose_agent_runtime,
-  ensure_agent_runtime_ready,
-  get_agent_storage,
-  initialize_agent_runtime,
-  list_workspace_entries,
-  mark_agent_session_started,
-  resolve_agent_session_hooks,
-  release_agent_from_container,
-} from "@/internal/AgentRuntime.js";
+  resolve_session_system_messages,
+  type SystemProfile,
+} from "@/executor/composer/system/default/SystemDomain.js";
 
 /** SDK Agent 主体。 */
 export class Agent {
@@ -66,32 +69,29 @@ export class Agent {
   /** Agent 唯一的 Session 集合。 */
   private readonly session_manager: AgentSessions;
 
+  /** 未加入宿主时使用的隔离进程内存储。 */
+  private storage_provider: StorageProvider = new AgentMemoryStorageProvider();
+
+  /** Agent 当前唯一的宿主装配关系。 */
+  private attachment?: AgentAttachment;
+
+  /** 延迟创建的 Agent 私有持久化视图。 */
+  private agent_storage?: AgentStorage;
+
+  /** 是否已经在无宿主存储中创建或恢复过 Session。 */
+  private memory_session_started = false;
+
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
     if (!this.id) throw new Error("Agent requires a non-empty id");
     this.name = String(options.name || "").trim() || this.id;
     this.description = String(options.description || "").trim();
-    initialize_agent_runtime(this);
     this.model = options.model;
     this.instruction = normalize_instruction_input(options.instruction);
-    const agent = this;
     this.session_class = options.session_class;
     this.custom_tools = options.tools && typeof options.tools === "object"
       ? { ...options.tools }
       : {};
-    const get_store = (): import("@/types/store/SessionStore.js").SessionStore =>
-      get_agent_storage(this).sessions;
-    const session_store = {
-      session: (session_id, origin, workspace_id) => get_store().session(session_id, origin, workspace_id),
-      has_session: async (session_id, origin_type) => await get_store().has_session(session_id, origin_type),
-      remove_session: async (session_id, origin_type) => await get_store().remove_session(session_id, origin_type),
-      clear_session_messages: async (session_id, origin_type) => await get_store().clear_session_messages(session_id, origin_type),
-      list_sessions: async (input: Parameters<import("@/types/store/SessionStore.js").SessionStore["list_sessions"]>[0], executing: ReadonlySet<string>) => await get_store().list_sessions(input, executing),
-      archive_session: async (session_id, origin_type) => await get_store().archive_session(session_id, origin_type),
-      list_archived_sessions: async (input?: Parameters<import("@/types/store/SessionStore.js").SessionStore["list_archived_sessions"]>[0]) => await get_store().list_archived_sessions(input),
-      clean_archive: async () => await get_store().clean_archive(),
-      dispose: async () => {},
-    } satisfies import("@/types/store/SessionStore.js").SessionStore;
     this.session_manager = new AgentSessions({
       agent_id: this.id,
       logger: this.logger,
@@ -99,17 +99,33 @@ export class Agent {
       ensure_agent_ready: async () => await this.ensure_ready(),
       get_agent_model: () => this.model,
       session_class: this.session_class,
-      on_session_routed: () => mark_agent_session_started(agent),
+      on_session_routed: () => {
+        if (!this.attachment) this.memory_session_started = true;
+      },
       resolve_session_context: (workspace) => {
+        const storage = this.resolve_storage();
         if (!workspace) return {
           workspace_path: ".",
           logger: this.logger,
-          tools: this.custom_tools,
+          get_tools: () => ({ ...this.custom_tools }),
           get_workspace_env: () => ({}),
-          get_hooks: () => resolve_agent_session_hooks(this),
-          store: session_store,
+          get_hooks: () => EMPTY_SESSION_HOOKS,
+          store: storage.sessions,
         };
-        return create_workspace_entry(this, workspace).get_session_context();
+        this.assert_workspace(workspace);
+        // 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，
+        // 在装配时立即失败；执行时仍通过 getter 读取最新宿主扩展。
+        this.resolve_tools(workspace);
+        return {
+          workspace_path: workspace.path,
+          workspace_id: workspace.id,
+          logger: this.logger,
+          get_tools: () => this.resolve_tools(workspace),
+          get_workspace_env: () => workspace.get_env(),
+          get_hooks: () => this.attachment?.get_hooks(workspace, this.logger)
+            ?? EMPTY_SESSION_HOOKS,
+          store: storage.sessions,
+        };
       },
     });
     this.sessions = this.session_manager;
@@ -131,16 +147,70 @@ export class Agent {
     return this.logger;
   }
 
-  /** 释放 Agent 进入的全部 Workspace 与运行时资源。 */
+  /** 把宿主能力装配到 Agent；必须在创建或恢复 Session 前完成。 */
+  attach(attachment: AgentAttachment): void {
+    if (this.dispose_promise) throw new Error(`Agent "${this.id}" is disposing`);
+    if (this.attachment) {
+      if (this.attachment.owner === attachment.owner) return;
+      throw new Error(`Agent "${this.id}" already belongs to another host`);
+    }
+    if (this.memory_session_started || this.agent_storage) {
+      throw new Error(
+        `Agent "${this.id}" already used standalone storage; attach it before using Sessions`,
+      );
+    }
+    this.attachment = attachment;
+    this.storage_provider = attachment.storage;
+  }
+
+  /** 清除指定宿主的装配关系；其他宿主不能解除当前绑定。 */
+  detach(owner: object): void {
+    if (this.attachment?.owner === owner) this.attachment = undefined;
+  }
+
+  /** 停止绑定到指定 Workspace 的运行中 Session，并释放后台标题任务。 */
+  async release_workspace(workspace_id: string): Promise<void> {
+    await this.session_manager.stop_executing_sessions(workspace_id);
+    this.session_manager.dispose_title_generation(workspace_id);
+  }
+
+  /** 解析指定 Workspace 下一个 Session 当前可见的 system messages。 */
+  async resolve_system_messages(
+    workspace: WorkspaceRuntime,
+    input: {
+      /** 目标 Session 稳定标识。 */
+      session_id: string;
+      /** system message 使用场景。 */
+      profile?: SystemProfile;
+    },
+  ): Promise<SessionSystemMessage[]> {
+    this.assert_workspace(workspace);
+    return await resolve_session_system_messages({
+      project_root: workspace.path,
+      session_id: input.session_id,
+      profile: input.profile || "chat",
+      static_system_prompts: [...this.get_instructions()],
+      hooks: this.attachment?.get_hooks(workspace, this.logger)
+        ?? EMPTY_SESSION_HOOKS,
+    });
+  }
+
+  /** 释放 Agent 的 Session 后台任务、存储与宿主引用。 */
   async dispose(): Promise<void> {
     this.dispose_promise ??= (async () => {
-      const entries = [...list_workspace_entries(this)];
-      const results = await Promise.allSettled(entries.map(async (entry) => await entry.leave()));
+      const results = await Promise.allSettled([
+        this.session_manager.stop_executing_sessions(),
+      ]);
       this.session_manager.dispose_title_generation();
-      results.push(...await Promise.allSettled([release_agent_from_container(this)]));
-      results.push(...await Promise.allSettled([dispose_agent_runtime(this)]));
+      const attachment = this.attachment;
+      results.push(...await Promise.allSettled([
+        attachment?.release_agent(this) ?? Promise.resolve(),
+        this.agent_storage?.sessions.dispose() ?? Promise.resolve(),
+        this.logger.save_all_logs(),
+      ]));
       const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
-      clear_agent_runtime(this);
+      this.attachment = undefined;
+      this.agent_storage = undefined;
       if (errors.length > 0) throw new AggregateError(errors, "Agent dispose failed");
     })();
     await this.dispose_promise;
@@ -148,7 +218,60 @@ export class Agent {
 
   /** 等待 Agent 自身运行时 ready，供内部运行时使用。 */
   async ensure_ready(): Promise<void> {
-    await ensure_agent_runtime_ready(this);
+    await this.attachment?.ensure_ready();
   }
 
+  /** 获取或创建 Agent 唯一的 Session 存储。 */
+  private resolve_storage(): AgentStorage {
+    if (this.agent_storage) return this.agent_storage;
+    const scope = this.storage_provider.open_scope(["agents", this.id]);
+    this.logger.bind_storage(scope.files, scope.root_path, { agent_id: this.id });
+    this.agent_storage = {
+      root_path: scope.root_path,
+      files: scope.files,
+      sessions: new LocalSessionStore({
+        files: scope.files,
+        storage_root_path: scope.root_path,
+        agent_id: this.id,
+      }),
+    };
+    return this.agent_storage;
+  }
+
+  /** 校验宿主模式下使用的 Workspace 来自当前宿主事实源。 */
+  private assert_workspace(workspace: WorkspaceRuntime): void {
+    const workspace_id = String(workspace?.id || "").trim();
+    if (!workspace_id) throw new Error("Agent sessions require a Workspace with a stable id");
+    if (this.attachment && this.attachment.get_workspace(workspace_id) !== workspace) {
+      throw new Error(`Workspace "${workspace_id}" does not belong to the Agent host`);
+    }
+  }
+
+  /** 在明确检查点合并 Workspace、宿主扩展和 Agent Tool。 */
+  private resolve_tools(workspace: WorkspaceRuntime): Record<string, Tool> {
+    const tools: Record<string, Tool> = {};
+    register_tools(tools, workspace.tools, "WorkspaceTools");
+    register_tools(
+      tools,
+      this.attachment?.get_tools(workspace, this.logger) ?? {},
+      "HostExtensions",
+    );
+    register_tools(tools, this.custom_tools, "AgentOptions.tools");
+    return tools;
+  }
+
+}
+
+/** 注册 Tool 集合，并拒绝不同来源静默覆盖。 */
+function register_tools(
+  target: Record<string, Tool>,
+  source: Record<string, Tool>,
+  source_name: string,
+): void {
+  for (const [tool_name, tool_definition] of Object.entries(source)) {
+    if (Object.prototype.hasOwnProperty.call(target, tool_name)) {
+      throw new Error(`Agent tool name conflict: "${tool_name}" from ${source_name}`);
+    }
+    target[tool_name] = tool_definition;
+  }
 }

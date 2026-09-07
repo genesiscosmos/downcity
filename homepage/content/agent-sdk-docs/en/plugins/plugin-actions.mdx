@@ -43,4 +43,5 @@ second business implementation; both end at the same `execute` function.
 
 Models call Actions through the current Session's `plugin_call` Tool. Plugin code may use
 `context.city.plugins.run_action()` for another Plugin registered in City. Application code
-calls `entry.plugins.run_action()` on the execution entry returned by `city.enter_workspace()`.
+creates an explicit execution view with
+`city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })` and calls `run_action()` on it.

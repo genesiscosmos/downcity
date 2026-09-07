@@ -6,7 +6,7 @@
  * - 用于保存 session 列表、详情和索引所需的轻量元信息
  */
 
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 export type SessionHistoryMeta = {
   /** schema 版本。 */

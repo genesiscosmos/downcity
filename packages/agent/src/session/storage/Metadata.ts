@@ -7,9 +7,9 @@
  */
 
 import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 import type { FileSystem } from "@downcity/type";
-import { restore_session_origin } from "@/session/SessionOrigin.js";
+import { restore_session_origin } from "@downcity/type";
 
 function normalizeModelLabel(input: unknown): string | undefined {
   const label = typeof input === "string" ? input.trim() : "";

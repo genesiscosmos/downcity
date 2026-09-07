@@ -7,8 +7,8 @@
 import type {
   SessionAssistantMessage,
   SessionMessage,
-} from "@/types/session/SessionMessage.js";
-import type { JsonObject, JsonValue } from "@/types/common/Json.js";
+} from "@downcity/type";
+import type { JsonObject, JsonValue } from "@downcity/type";
 
 /** Session 工具调用的只读摘要。 */
 export interface SessionToolCallSummary {

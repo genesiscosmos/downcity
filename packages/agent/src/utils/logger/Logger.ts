@@ -8,7 +8,7 @@
 
 import path from "node:path";
 import { get_timestamp } from "@/utils/Time.js";
-import type { JsonObject } from "@/types/common/Json.js";
+import type { JsonObject } from "@downcity/type";
 import type { FileSystem } from "@downcity/type";
 
 type LogDetails = {
@@ -213,8 +213,8 @@ export class Logger {
     owner?: {
       /** 当前 Agent 的稳定标识。 */
       agent_id: string;
-      /** 当前 Workspace 的稳定标识。 */
-      workspace_id: string;
+      /** 当前 Workspace 的稳定标识；Agent 级日志允许为空。 */
+      workspace_id?: string;
     },
   ): void {
     this.storage_files = files;

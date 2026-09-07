@@ -15,7 +15,7 @@ import type {
   AgentSessionSummaryPage,
 } from "@/types/agent/SessionTypes.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 /** 一个 Agent 所属全部 Session 的持久化入口。 */
 export interface SessionStore {

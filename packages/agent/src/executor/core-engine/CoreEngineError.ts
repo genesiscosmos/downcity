@@ -6,7 +6,7 @@
  * - Executor 内部 CoreEngine 流程只需要消费这里输出的日志字段与最终错误文本。
  */
 
-import type { JsonObject } from "@/types/common/Json.js";
+import type { JsonObject } from "@downcity/type";
 
 /**
  * 归一化 stream 错误日志字段。

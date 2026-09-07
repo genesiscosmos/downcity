@@ -27,21 +27,21 @@ import type {
 import type {
   SessionMutationSubscriber,
   SessionMutationUnsubscribe,
-} from "@/types/session/SessionMutation.js";
+} from "@downcity/type";
 import type {
   RespondSessionInteractionInput,
   SessionInteractionResult,
   SessionPendingInteraction,
-} from "@/types/session/SessionInteraction.js";
+} from "@downcity/type";
 import type {
   ListSessionMessagesInput,
   SessionMessagePage,
-} from "@/types/session/SessionMessage.js";
+} from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionCompactHandle } from "@/types/sdk/AgentSessionCompact.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
-import type { SessionOrigin } from "@/types/session/SessionOrigin.js";
+import type { SessionOrigin } from "@downcity/type";
 
 /**
  * SDK Session 集合入口。

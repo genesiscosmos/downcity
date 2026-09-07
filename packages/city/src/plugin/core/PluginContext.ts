@@ -6,7 +6,7 @@
  */
 
 import type { Embassy } from "@downcity/federation";
-import type { FileSystem, WorkspaceShell } from "@/workspace/index.js";
+import type { FileSystem, WorkspaceRuntime, WorkspaceShell } from "@/workspace/index.js";
 import type {
   PluginContext,
   PluginJsonObject,
@@ -33,6 +33,8 @@ export interface CreatePluginContextInput {
   readonly workspace_id: string;
   /** 当前 Workspace 绝对根目录。 */
   readonly workspace_path: string;
+  /** 当前 PluginContext 对应的 Workspace 运行时引用。 */
+  readonly workspace: WorkspaceRuntime;
   /** 当前 Plugin 私有数据根路径。 */
   readonly data_path: string;
   /** 当前 Workspace 文件端口。 */
@@ -62,7 +64,7 @@ export interface CreatePluginContextInput {
 /** 创建一个不复制动态领域状态的 PluginContext。 */
 export function create_plugin_context(input: CreatePluginContextInput): PluginContext {
   const abort_controller = new AbortController();
-  const sessions = create_session_collection(input.get_sessions);
+  const sessions = create_session_collection(input.get_sessions, input.workspace);
   // 配置只在 Context 创建检查点读取一次，确保同一次 Action、Hook、System 或
   // Availability 调用不会因并发保存而观察到中途变化。
   const config = freeze_json_object(input.get_config?.() ?? {});
@@ -158,16 +160,19 @@ export function create_plugin_action_context(
 /** 把 AgentSessionCollection 收窄为 Plugin 可直接使用的集合端口。 */
 function create_session_collection(
   get_sessions: () => AgentSessionCollection,
+  workspace: WorkspaceRuntime,
 ): PluginSessionCollection {
   const collection: PluginSessionCollection = {
     create: async (input) => {
-      const session = await get_sessions().create(
-        input?.origin ? { origin: input.origin } : undefined,
-      );
+      const session = await get_sessions().create({
+        ...(input?.origin ? { origin: input.origin } : {}),
+        workspace,
+      });
       if (input?.inherit_model_from) {
         const source = await get_sessions().get(
           input.inherit_model_from.session_id,
           input.inherit_model_from.origin_type,
+          { workspace },
         );
         if (source.config.model) {
           await session.set(
@@ -184,7 +189,7 @@ function create_session_collection(
       );
     },
     get: async (session_id, origin_type = "chat") => {
-      const session = await get_sessions().get(session_id, origin_type);
+      const session = await get_sessions().get(session_id, origin_type, { workspace });
       return create_session_handle(
         collection,
         session.id,
@@ -198,8 +203,10 @@ function create_session_collection(
       { type: origin_type },
       undefined,
     ),
-    remove: async (session_id, origin_type) =>
-      await get_sessions().remove(session_id, origin_type),
+    remove: async (session_id, origin_type) => {
+      await get_sessions().get(session_id, origin_type, { workspace });
+      return await get_sessions().remove(session_id, origin_type);
+    },
   };
   return Object.freeze(collection);
 
