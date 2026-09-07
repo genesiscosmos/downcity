@@ -2,8 +2,8 @@
  * Shell write action。
  *
  * 关键点（中文）
- * - safe shell 可直接写入 stdin。
- * - unrestricted shell 每次写入都必须带 reason 并完成审批。
+ * - Sandbox Shell 可直接写入 stdin。
+ * - Host Shell 每次写入都必须带 reason 并完成审批。
  */
 
 import type { ShellHostContext } from "@downcity/type/shell";
@@ -19,9 +19,9 @@ import {
   resolve_session,
 } from "../ShellActionRuntimeSupport.js";
 import {
-  request_unrestricted_approval,
-  validate_unrestricted_request,
-} from "../../approval/ShellApprovalRuntime.js";
+  request_host_approval,
+  validate_host_request,
+} from "../../approval/HostApprovalRuntime.js";
 import { build_denied_write_approval_response } from "./ShellActionShared.js";
 
 /**
@@ -61,10 +61,10 @@ export async function write_shell_session(
     String(
       request.turn_id || "",
     ).trim() || undefined;
-  if (session.snapshot.sandbox_mode === "unrestricted") {
-    const validation_error = validate_unrestricted_request({ cmd: chars, reason });
+  if (session.snapshot.target === "host") {
+    const validation_error = validate_host_request({ cmd: chars, reason });
     if (validation_error) throw new Error(validation_error);
-    const approval = await request_unrestricted_approval({
+    const approval = await request_host_approval({
       context,
       shell_id,
       tool_name: "shell_write",

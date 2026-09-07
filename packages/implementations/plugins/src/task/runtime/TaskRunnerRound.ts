@@ -265,8 +265,7 @@ export async function runScriptTask(params: {
   const body = String(params.scriptBody || "");
   if (!body.trim()) throw new Error("script task body cannot be empty");
 
-  const childEnv: NodeJS.ProcessEnv = {
-    ...process.env,
+  const childEnv: Record<string, string> = {
     DC_SESSION_ID: params.session_id,
   };
   stripTaskSecretEnv(childEnv);
@@ -274,14 +273,13 @@ export async function runScriptTask(params: {
   if (!shell) {
     throw new Error("Script task execution requires Agent to be configured with a Shell.");
   }
-  const execResult = await shell.run_safe_command({
+  const execResult = await shell.run_sandbox_command({
     execution_id: `task-script:${params.session_id}`,
-    execution_dir: params.context.workspace.path,
     cmd: body,
     cwd: params.context.workspace.path,
     shell_path: "/bin/sh",
     login: false,
-    base_env: childEnv,
+    env: childEnv,
   });
 
   const stdout = String(execResult.stdout || "").trim();

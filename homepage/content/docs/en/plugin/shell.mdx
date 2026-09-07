@@ -1,22 +1,22 @@
 ---
-title: Shell Plugin
-description: How the Shell plugin executes local commands safely
+title: Shell
+description: How Workspace Shell executes sandbox and host commands
 ---
 
-# Shell Plugin
+# Shell
 
-The Shell plugin lets your Agent execute local commands in a sandboxed environment. It is useful for file operations, script execution, and system integration.
+Shell is a Workspace capability, not a Plugin. It owns its Sandbox Provider, the isolated Workspace Sandbox, and reusable Shell Sessions.
 
 ## What it does
 
-- Executes shell commands on behalf of the Agent
-- Sandboxes execution to prevent harmful operations
+- Executes commands in the Workspace Sandbox by default
+- Keeps installed tools and HOME state across Chat Sessions
 - Captures stdout, stderr, and exit codes
 - Supports timeouts and cancellation
 
 ## Safety
 
-By default, the Shell plugin runs commands in a restricted environment. Dangerous operations (deleting system files, modifying system config) are blocked unless explicitly allowed.
+Shell has only two targets: `sandbox` and `host`. Sandbox execution is the default and cannot see arbitrary host paths. Host execution requires an explicit reason and host approval; Sandbox failures never fall back to the host.
 
 ## Use cases
 

@@ -34,6 +34,16 @@ export interface WorkspaceRuntime {
   /** 当前 Workspace 可选的命令和进程执行能力。 */
   readonly shell?: WorkspaceShell;
 
+  /**
+   * 将宿主运行目录一次性绑定到当前 Workspace。
+   *
+   * 远程 Workspace 或已经自行完成装配的实现可以不提供该方法。
+   */
+  bind_runtime?(input: {
+    /** 当前 Workspace 的 Downcity 私有运行数据目录。 */
+    runtime_path: string;
+  }): void;
+
   /** 返回当前 Workspace 环境变量的独立快照。 */
   get_env(): Record<string, string>;
 

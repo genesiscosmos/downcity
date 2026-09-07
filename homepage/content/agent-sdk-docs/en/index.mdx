@@ -22,7 +22,8 @@ flowchart LR
 
 | Object | Owns | Does not own |
 | --- | --- | --- |
-| `Workspace` | Project files, env, Tools, Shell, and Sandbox | Agent identity, plugins, and Session persistence |
+| `Workspace` | Project files, env, Tools, and optional Shell | Agent identity, plugins, Session persistence, and Sandbox implementation |
+| `Shell` | Sandbox Provider, persistent Workspace Sandbox, and Shell Sessions | Chat Session identity and City lifecycle |
 | `Agent` | Model, instructions, custom Tools, and Sessions | Plugin instances, Workspace resources, HTTP/RPC transports |
 | `AgentSessions` | All Sessions owned by one Agent; each Session may receive a Workspace | Agent identity and Plugin definitions |
 | `Session` | Conversation state, message history, execution order, and approvals | Project resource ownership |
@@ -44,22 +45,23 @@ then use `city.http()` or `city.rpc()` to expose the City.
 
 ## Recommended local composition
 
-Shell is the standard entry for project commands and processes. The SDK does not select a platform Sandbox automatically; install and inject the Adapter for the current operating system. This example uses macOS:
+Shell is the standard entry for project commands and processes. This embedded example injects a microsandbox Provider directly into Shell:
 
 ```ts
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 import { Shell } from "@downcity/city";
 
 const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
+  sandbox_provider: new MicrosandboxProvider(),
 });
 
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
   shell,
+  runtime_path: "/path/to/downcity-runtime/project",
 });
 
 const agent = new Agent({

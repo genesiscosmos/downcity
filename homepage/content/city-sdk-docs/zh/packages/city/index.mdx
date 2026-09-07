@@ -45,7 +45,7 @@ SDK 也可以调用 `city.plugins.add(plugin)` 动态添加实例，或调用 `c
 
 `city.workspaces.add(workspace)` 将 Workspace 交给 City 持有；`get()` 与 `list()` 提供稳定查询。
 不再使用某个 Workspace 时，调用 `await city.workspaces.remove(workspace_id)`。City 会先释放该
-Workspace 的 Shell、Sandbox 等运行资源，再将其移出当前 City；不存在时返回 `null`。这个操作
+Workspace，再由 Workspace 委托 Shell 收口 Shell Sessions 与 Sandbox，然后将其移出当前 City；不存在时返回 `null`。这个操作
 只管理运行时对象，不会删除项目目录。
 
 ## Plugin 生命周期

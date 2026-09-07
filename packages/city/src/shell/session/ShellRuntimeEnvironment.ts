@@ -8,6 +8,7 @@
 
 import path from "node:path";
 import type { ShellHostContext } from "@downcity/type/shell";
+import type { ShellExecutionTarget } from "@downcity/type/shell";
 
 function strip_shell_secret_env(env: NodeJS.ProcessEnv): void {
   delete env.DC_AUTH_TOKEN;
@@ -23,8 +24,9 @@ function strip_shell_secret_env(env: NodeJS.ProcessEnv): void {
 export function build_shell_env(
   context: ShellHostContext,
   session_id?: string,
+  target: ShellExecutionTarget = "sandbox",
 ): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env };
+  const env: NodeJS.ProcessEnv = target === "host" ? { ...process.env } : {};
 
   // 关键点（中文）
   // - ShellHostContext.env 现在就是宿主已经整理好的最终 env 视图。
@@ -39,7 +41,9 @@ export function build_shell_env(
   const explicit_session_id = String(session_id || "").trim();
   const run_context = context.shell_integration?.get_run_context?.();
   const resolved_session_id = explicit_session_id || String(run_context?.session_id || "").trim();
-  const agent_path = String(context.root_path || "").trim();
+  const agent_path = target === "host"
+    ? String(context.root_path || "").trim()
+    : context.sandbox.workspace_path;
   const configured_agent_id = String(context.config?.id || "").trim();
   const agent_id = configured_agent_id || (agent_path ? path.basename(agent_path) : "");
 
@@ -50,8 +54,9 @@ export function build_shell_env(
   if (agent_path) env.DC_AGENT_PATH = agent_path;
   if (agent_id) env.DC_AGENT_ID = agent_id;
   if (resolved_session_id) env.DC_SESSION_ID = resolved_session_id;
-  if (process.env.DC_CITY_HOST) env.DC_CITY_HOST = process.env.DC_CITY_HOST;
-  if (process.env.DC_CITY_PORT) env.DC_CITY_PORT = process.env.DC_CITY_PORT;
+  if (target === "host" && process.env.DC_CITY_HOST) env.DC_CITY_HOST = process.env.DC_CITY_HOST;
+  if (target === "host" && process.env.DC_CITY_PORT) env.DC_CITY_PORT = process.env.DC_CITY_PORT;
+  if (target === "sandbox") env.DC_SANDBOX = "1";
   strip_shell_secret_env(env);
 
   return env;
@@ -64,6 +69,41 @@ export function resolve_shell_cwd(context: ShellHostContext, cwd?: string): stri
   const raw = String(cwd || "").trim();
   if (!raw) return context.root_path;
   return path.isAbsolute(raw) ? raw : path.resolve(context.root_path, raw);
+}
+
+/**
+ * 把 Workspace 工作目录映射为 Sandbox 内路径。
+ *
+ * 关键点（中文）：Sandbox 只挂载当前 Workspace，任何无法映射到该根目录的路径都直接拒绝。
+ */
+export function resolve_sandbox_cwd(context: ShellHostContext, cwd?: string): string {
+  const host_root_path = path.resolve(context.root_path);
+  const sandbox_root_path = path.posix.resolve(context.sandbox.workspace_path);
+  const raw_path = String(cwd || "").trim();
+  if (!raw_path) return sandbox_root_path;
+
+  if (raw_path === sandbox_root_path || raw_path.startsWith(`${sandbox_root_path}/`)) {
+    const normalized = path.posix.resolve(raw_path);
+    if (normalized === sandbox_root_path || normalized.startsWith(`${sandbox_root_path}/`)) {
+      return normalized;
+    }
+    throw new Error(`Sandbox cwd escapes Workspace: ${raw_path}`);
+  }
+
+  const host_path = path.resolve(path.isAbsolute(raw_path)
+    ? raw_path
+    : path.join(host_root_path, raw_path));
+  const relative_path = path.relative(host_root_path, host_path);
+  if (
+    relative_path === ".."
+    || relative_path.startsWith(`..${path.sep}`)
+    || path.isAbsolute(relative_path)
+  ) {
+    throw new Error(`Sandbox cwd escapes Workspace: ${raw_path}`);
+  }
+  return relative_path
+    ? path.posix.join(sandbox_root_path, ...relative_path.split(path.sep))
+    : sandbox_root_path;
 }
 
 /**

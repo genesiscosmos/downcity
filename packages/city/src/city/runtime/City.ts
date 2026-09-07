@@ -138,7 +138,7 @@ export class City {
       if (this.workspaces_by_id.has(workspace_id)) {
         throw new Error(`Workspace already exists in City: ${workspace_id}`);
       }
-      this.bind_workspace_shell(workspace);
+      this.bind_workspace(workspace);
       this.workspaces_by_id.set(workspace_id, workspace);
     }
     const runtime_options = options.runtime ?? {};
@@ -514,7 +514,7 @@ export class City {
       throw new Error(`Workspace already exists in City: ${workspace_id}`);
     }
     if (existing) return existing;
-    this.bind_workspace_shell(workspace);
+    this.bind_workspace(workspace);
     this.workspaces_by_id.set(workspace_id, workspace);
     return workspace;
   }
@@ -553,11 +553,10 @@ export class City {
     }
   }
 
-  /** 将 City 的底层 Storage 绑定到 Workspace 的 Shell 运行目录。 */
-  private bind_workspace_shell(workspace: WorkspaceRuntime): void {
-    workspace.shell?.bind({
-      root_path: workspace.path,
-      data_path: this.storage.open_scope(["workspaces", workspace.id, "shell"]).root_path,
+  /** 将 City 分配的私有运行目录绑定到 Workspace。 */
+  private bind_workspace(workspace: WorkspaceRuntime): void {
+    workspace.bind_runtime?.({
+      runtime_path: this.storage.open_scope(["workspaces", workspace.id]).root_path,
     });
   }
 

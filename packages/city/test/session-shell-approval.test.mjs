@@ -2,7 +2,7 @@
  * @file 验证 Session Tool Runtime 向 Shell 传递完整审批归属。
  *
  * 关键点（中文）
- * - 通过真实 Agent、Executor 与 Shell tool loop 发起 unrestricted 请求。
+ * - 通过真实 Agent、Executor 与 Shell tool loop 发起 host 请求。
  * - approval Interaction 必须携带当前 Turn 与 Tool Call 标识。
  * - 用户批准后命令才执行，最终 Tool Part 收口为 completed。
  */
@@ -17,7 +17,7 @@ import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/city";
 import { create_workspace_entry } from "../../agent/bin/internal/index.js";
 import { Shell } from "@downcity/city";
-import { create_platform_sandbox } from "./PlatformSandbox.mjs";
+import { create_test_sandbox_provider } from "./PlatformSandbox.mjs";
 
 /** 构造 AI SDK V3 usage。 */
 function create_usage() {
@@ -27,7 +27,7 @@ function create_usage() {
   };
 }
 
-/** 构造要求执行 unrestricted shell_exec 的模型流。 */
+/** 构造要求执行 host shell_exec 的模型流。 */
 function create_tool_call_stream() {
   return {
     stream: new ReadableStream({
@@ -35,34 +35,34 @@ function create_tool_call_stream() {
         controller.enqueue({ type: "stream-start", warnings: [] });
         controller.enqueue({
           type: "tool-input-start",
-          id: "call_unrestricted",
+          id: "call_host",
           toolName: "shell_exec",
         });
         controller.enqueue({
           type: "tool-input-delta",
-          id: "call_unrestricted",
+          id: "call_host",
           delta: JSON.stringify({
             cmd: "printf approval-ok",
             shell: "/bin/sh",
             login: false,
-            sandbox: "unrestricted",
-            reason: "验证 Session unrestricted 审批归属。",
+            target: "host",
+            reason: "验证 Session host 审批归属。",
           }),
         });
         controller.enqueue({
           type: "tool-input-end",
-          id: "call_unrestricted",
+          id: "call_host",
         });
         controller.enqueue({
           type: "tool-call",
-          toolCallId: "call_unrestricted",
+          toolCallId: "call_host",
           toolName: "shell_exec",
           input: JSON.stringify({
             cmd: "printf approval-ok",
             shell: "/bin/sh",
             login: false,
-            sandbox: "unrestricted",
-            reason: "验证 Session unrestricted 审批归属。",
+            target: "host",
+            reason: "验证 Session host 审批归属。",
           }),
         });
         controller.enqueue({
@@ -96,8 +96,8 @@ function create_final_text_stream() {
   };
 }
 
-test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async () => {
-  const sandbox = await create_platform_sandbox();
+test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
+  const sandbox_provider = create_test_sandbox_provider();
   const project_root = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-session-shell-approval-"),
   );
@@ -127,7 +127,8 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
   const entry = create_workspace_entry(agent, new Workspace({
     id: "test_workspace",
     path: project_root, data_root_path: path.join(project_root, "data"),
-    shell: new Shell({ sandbox }),
+    shell: new Shell({ sandbox_provider }),
+    runtime_path: path.join(project_root, "runtime"),
   }));
 
   try {
@@ -152,7 +153,7 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
       });
     });
 
-    const turn = await session.prompt({ query: "run unrestricted command" });
+    const turn = await session.prompt({ query: "run host command" });
     const result = await turn.finished;
     unsubscribe();
 
@@ -161,10 +162,10 @@ test("unrestricted Shell 审批保留当前 Turn 并等待用户决定", async (
     const messages = await session.messages();
     const tool_part = messages.items
       .flatMap((message) => message.type === "assistant" ? message.parts : [])
-      .find((part) => part.type === "tool" && part.tool_call_id === "call_unrestricted");
+      .find((part) => part.type === "tool" && part.tool_call_id === "call_host");
     assert.ok(interaction_snapshot, JSON.stringify(messages.items));
     assert.equal(interaction_snapshot.request.turn_id, turn.id);
-    assert.equal(interaction_snapshot.request.source.tool_call_id, "call_unrestricted");
+    assert.equal(interaction_snapshot.request.source.tool_call_id, "call_host");
     assert.deepEqual(await interaction_result, {
       status: "resolved",
       interaction_id: interaction_snapshot.interaction_id,

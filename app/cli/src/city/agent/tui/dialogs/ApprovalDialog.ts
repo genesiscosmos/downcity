@@ -2,7 +2,7 @@
  * Session 内联审批面板。
  *
  * 关键点（中文）
- * - 普通 Tool 与 unrestricted sandbox 请求共用决策交互，但展示各自的真实字段。
+ * - 普通 Tool 与 host 执行请求共用决策交互，但展示各自的真实字段。
  * - 上下方向键选择，Enter 确认，Esc / Ctrl+C 按安全语义拒绝请求。
  * - 与 SessionPicker 风格一致：primary 色边框、指针、底部 hint。
  */
@@ -120,7 +120,7 @@ export class ApprovalPanelComponent implements Component, Focusable {
   private render_title(inner_width: number): string {
     const title = current_theme.bold_fg(
       "accent",
-      ` ${this.approval_type === "tool" ? "Tool approval" : "Unrestricted sandbox approval"} · ${this.approval_id} `,
+      ` ${this.approval_type === "tool" ? "Tool approval" : "Host execution approval"} · ${this.approval_id} `,
     );
     return " " + truncateToWidth(title, inner_width, ELLIPSIS);
   }

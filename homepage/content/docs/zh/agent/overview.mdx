@@ -47,7 +47,7 @@ import { City } from "@downcity/city";
 import { create_builtin_plugin_registrations } from "@downcity/plugins";
 import { Workspace } from "@downcity/city";
 import { Shell } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const agent = new Agent({
   id: "repo-helper",
@@ -57,7 +57,9 @@ const agent = new Agent({
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
 });
 const city = new City({
   workspaces: [workspace],

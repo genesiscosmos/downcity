@@ -1,5 +1,5 @@
 /**
- * Shell unrestricted 权限审批网关类型。
+ * Shell 宿主执行审批网关类型。
  *
  * 关键点（中文）
  * - Shell 负责校验命令并等待审批结果，但不拥有 Session 的 pending approval 状态。
@@ -11,7 +11,7 @@ import type {
   ShellApprovalToolName,
 } from "./ShellAction.js";
 
-/** Shell 向宿主提交的单次 unrestricted 审批请求。 */
+/** Shell 向宿主提交的单次 host 执行审批请求。 */
 export interface ShellApprovalRequest {
   /** 当前请求关联的 Shell 运行标识。 */
   shell_id: string;
@@ -27,7 +27,7 @@ export interface ShellApprovalRequest {
   command: string;
   /** 当前工具工作目录。 */
   cwd: string;
-  /** 请求 unrestricted 权限的原因。 */
+  /** 请求 host 执行的原因。 */
   reason: string;
   /** 当前请求对应的 Shell 操作。 */
   operation: "exec" | "start" | "write";

@@ -23,7 +23,8 @@ flowchart LR
 
 | 对象 | 负责 | 不负责 |
 | --- | --- | --- |
-| `Workspace` | 项目文件、Env、Tools、Shell 与 Sandbox | Agent 身份、Plugin、Session 持久化 |
+| `Workspace` | 项目文件、Env、Tools 与可选 Shell | Agent 身份、Plugin、Session 持久化与 Sandbox 实现 |
+| `Shell` | Sandbox Provider、Workspace 持久 Sandbox 与 Shell Sessions | Chat Session 身份与 City 生命周期 |
 | `Agent` | 模型、指令、自定义 Tool 与 Session | Plugin 实例、Workspace 资源、HTTP/RPC transport |
 | `AgentSessions` | 当前 Agent 的全部 Session；每个 Session 可以接收一个 Workspace | Agent 身份与 Plugin 定义 |
 | `Session` | 对话状态、消息历史、执行顺序与审批 | 项目资源所有权 |
@@ -45,22 +46,23 @@ flowchart LR
 
 ## 推荐的本地组合
 
-Shell 是本地 Agent 使用项目命令和进程的标准入口。SDK 不会自动选择平台 Sandbox；应用只安装并注入当前操作系统对应的 Adapter。以下示例使用 macOS：
+Shell 是本地 Agent 使用项目命令和进程的标准入口。下面的嵌入式示例直接把 microsandbox Provider 注入 Shell：
 
 ```ts
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 import { Shell } from "@downcity/city";
 
 const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
+  sandbox_provider: new MicrosandboxProvider(),
 });
 
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
   shell,
+  runtime_path: "/path/to/downcity-runtime/project",
 });
 
 const agent = new Agent({

@@ -1,37 +1,26 @@
 ---
 title: 本地 Agent 快速开始
-description: 创建带模型、Shell 和平台 Sandbox 的本地 Agent，并完成第一次 Session 执行
+description: 创建带 Workspace 持久 Sandbox 的本地 Agent，并完成第一次 Session 执行
 ---
 
 # 本地 Agent 快速开始
 
-这条路径适合把 Agent 直接嵌入 Node.js 应用。一个完整的本地 Agent 由 Workspace、Shell、平台 Sandbox、模型和 Session 组成。
-
 ## 安装
 
-以下示例使用 macOS：
-
 ```bash
-pnpm add @downcity/agent @downcity/federation @downcity/city @downcity/sandbox-macos
+pnpm add @downcity/agent @downcity/city @downcity/federation @downcity/sandbox-microsandbox
+npx microsandbox setup
 ```
 
-其他平台只替换 Sandbox package 和实例：
+`@downcity/sandbox-microsandbox` 是跨平台 Sandbox Provider，为每个 Workspace 提供独立、持久的 microVM 环境。
 
-| 平台 | Package | Adapter |
-| --- | --- | --- |
-| macOS | `@downcity/sandbox-macos` | `MacOsSeatbeltSandbox` |
-| Linux | `@downcity/sandbox-linux` | `LinuxBubblewrapSandbox` |
-| Windows | `@downcity/sandbox-windows-mxc` | `WindowsMxcSandbox` |
-
-## 完整的最小示例
+## 完整示例
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { City } from "@downcity/city";
-import { Workspace } from "@downcity/city";
+import { City, Shell, Workspace } from "@downcity/city";
 import { create_openai_compatible_model } from "@downcity/federation";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
-import { Shell } from "@downcity/city";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const model = create_openai_compatible_model({
   id: "gpt-5",
@@ -39,76 +28,41 @@ const model = create_openai_compatible_model({
   base_url: "https://api.openai.com/v1",
   api_key: process.env.OPENAI_API_KEY!,
 });
-
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-});
-
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  shell,
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
 });
-
-const city = new City({ workspaces: [workspace] });
-const agent = new Agent({
-  id: "repo-helper",
-  city,
-  model,
+const agent = new Agent({ id: "repo-helper", model });
+const city = new City({
+  workspaces: [workspace],
+  agents: [agent],
 });
 
 try {
-  const session = await agent.sessions.create({ workspace: city.workspaces.get("project")! });
-  const turn = await session.prompt({
-    query: "总结当前仓库结构",
-  });
-
-  const result = await turn.finished;
-  console.log(result.text);
+  const session = await agent.sessions.create({ workspace });
+  const turn = await session.prompt({ query: "总结当前仓库结构" });
+  console.log((await turn.finished).text);
 } finally {
-  await agent.dispose();
+  await city.close();
 }
 ```
 
-## 六个关键步骤
+## 所有权
 
-1. 创建当前平台的 Sandbox Adapter。
-2. 创建 `Shell` 并注入 Sandbox。
-3. 创建 `Workspace` 并传入项目路径、稳定 ID 和 Shell。
-4. 创建包含 Workspace 的 `City`，独立创建 Agent，再调用 `city.agents.add(agent)`。
-5. 创建 Session，通过 `prompt()` 启动 Turn，并等待 `turn.finished`。
-6. 在 `finally` 中调用 `agent.dispose()`。
+- City 持有 Plugin 与登记资源，但不理解 Workspace 的执行后端。
+- Workspace 持有项目资源、环境变量与可选 Shell。
+- Shell 持有 Sandbox Provider、Workspace 持久 Sandbox 与 Shell Sessions；`shell_id` 与 Chat `session_id` 相互独立。
+- Agent 持有 Chat Sessions。Chat Session 只借用选中的 Workspace，不拥有 Shell 或 Sandbox。
 
-Shell 很重要：没有 Shell 时，Workspace 仍提供文件和搜索工具，但 Agent 没有 `shell_exec` 与 `shell_session`，无法运行项目命令或管理长时间进程。SDK 不会自动选择 Sandbox，也不会在缺少 Adapter 时静默切换到 unrestricted。
+Shell 命令默认使用 `target: "sandbox"`，项目固定挂载到 `/workspace`。同一 Workspace 会跨 Chat Session 保留 HOME 和已安装工具。`target: "host"` 必须提供原因并经过审批。Sandbox 启动失败不会降级成宿主执行。
 
-## 对象与生命周期
-
-```text
-City(Workspace) → Agent(city) → Agent Session(Workspace) → Turn
-                                      └──────────────→ agent.dispose()
-```
-
-- Agent 绑定一个 City；每个 Session 显式选择 City 中的 Workspace。
-- Workspace 只描述项目资源边界；AgentSessions 承载当前 Agent 的 Session，运行状态位于 Agent 存储作用域。
-- 多个 Agent 可以指向同一目录，但应使用不同的 `agent.id` 和独立的 Agent 存储作用域。
-- Plugin 在加入 City 后初始化；ActionSchedule 是 Agent 自己的运行资源。
-- Session 执行会自动等待 Agent runtime 就绪，调用方不管理独立的启动状态。
-- `agent.dispose()` 释放 Agent 的 Session；`city.close()` 释放 Plugin、共享 Workspace、Shell 和 Sandbox。
-- HTTP/RPC transport 不属于 Agent；需要网络服务时使用 `@downcity/agent`。
-
-## 模型如何解析
-
-本地执行按以下顺序选择模型：
-
-1. Session 通过 `await session.set({ model })` 设置的模型。
-2. Agent 构造参数中的默认 `model`。
-
-如果两处都没有模型，Session 无法执行。纯 SDK 嵌入模式由宿主持有模型实例；Downcity 项目模式则由 CLI 宿主根据项目配置和 City AIService 模型目录解析模型。
+没有 Shell 时，Workspace 仍提供文件与搜索工具。`city.close()` 会释放 Agent、Plugin 与 Workspace；Workspace 再委托 Shell 停止 Sandbox 计算资源并保留其持久文件系统。
 
 ## 下一步
 
-- [Session 总览](/zh/agent-sdk-docs/sessions/overview)
-- [Shell 与沙箱](/zh/agent-sdk-docs/local-agent/shell-reference)
-- [Tools 与 Plugins](/zh/agent-sdk-docs/local-agent/tools-and-plugins)
-- [构造参数](/zh/agent-sdk-docs/local-agent/constructor-options)
-- [HTTP 与 RPC](/zh/agent-sdk-docs/local-agent/http-and-rpc)
+- [Shell 与 Sandbox](/zh/agent-sdk-docs/local-agent/shell-reference)
+- [Session 概览](/zh/agent-sdk-docs/sessions/overview)
+- [Tools 和 Plugins](/zh/agent-sdk-docs/local-agent/tools-and-plugins)

@@ -18,6 +18,6 @@ export {
 } from "./types/workspace/WorkspaceFileMutation.js";
 export type {
   WorkspaceShell,
-  WorkspaceShellSafeCommandInput,
-  WorkspaceShellSafeCommandResult,
+  WorkspaceShellSandboxCommandInput,
+  WorkspaceShellSandboxCommandResult,
 } from "./types/shell/WorkspaceShell.js";

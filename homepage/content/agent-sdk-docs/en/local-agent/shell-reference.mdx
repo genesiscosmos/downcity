@@ -1,158 +1,96 @@
 ---
-title: Shell & Sandbox
-description: Configure shell execution, sandboxing, and approval flows for the local Agent
+title: Shell and Sandbox
+description: Persistent Workspace Sandboxes, Shell Sessions, host execution, and approvals
 ---
 
-# Shell & Sandbox
+# Shell and Sandbox
 
-The Agent uses `@downcity/city` for local command execution, sandboxed runners, shell session management, and interactive approval flows.
+Downcity separates four responsibilities:
 
-## Install
-
-Shell core and platform implementations are separate packages. Install only the adapter for the current OS:
-
-```bash
-# macOS
-pnpm add @downcity/city @downcity/sandbox-macos
-
-# Linux
-pnpm add @downcity/city @downcity/sandbox-linux
-
-# Windows (MXC Development)
-pnpm add @downcity/city @downcity/sandbox-windows-mxc
-
-# Windows (Anthropic SRT Alpha)
-pnpm add @downcity/city @downcity/sandbox-windows-srt
-npx @downcity/sandbox-windows-srt setup
+```text
+City → Workspace
+Workspace → Shell
+Shell → SandboxProvider + persistent Workspace Sandbox + Shell Sessions
+Chat Session → caller only
 ```
 
-## Shell
+A Workspace gets one isolated, persistent Sandbox. Every Chat Session using that Workspace shares its Sandbox HOME, installed tools, and caches. Different Workspaces never share writable Sandbox state. Shell Sessions are independent resources identified by `shell_id`; they are not Chat Sessions.
 
-The `Shell` class manages command execution and the approval runtime. Application-level approvals belong to a specific Session.
+## Install and setup
 
-### Minimal usage
+```bash
+pnpm add @downcity/agent @downcity/city @downcity/sandbox-microsandbox
+npx microsandbox setup
+```
+
+The default Provider uses microsandbox microVMs and OCI images on supported macOS, Linux, and Windows hosts.
 
 ```ts
-import { Shell } from "@downcity/city";
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { City, Shell, Workspace } from "@downcity/city";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-});
-
-const agent = new Agent({ id: "demo" });
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-  shell,
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
 });
+const city = new City({
+  workspaces: [workspace],
+});
+const agent = new Agent({ id: "repo-helper", model });
+city.agents.add(agent);
 ```
 
-Workspace binds its project root to Shell; Agent no longer configures or owns Shell directly. Pass `root_path` only when using Shell independently.
+An embedded host that does not use City passes `sandbox_provider` to Shell and `runtime_path` to Workspace. City only supplies the runtime path automatically; it never selects or owns the Provider.
 
-### Resource disposal
+## Execution targets
 
-- When Workspace is bound to Agent, call `agent.dispose()`; it releases Shell as well.
-- Call `workspace.dispose()` directly only when Workspace has not been bound to Agent.
-- `shell.set_safe_read_only_paths(paths)` — Replace host-approved read-only directories.
+Shell has only two targets:
 
-Approval requests appear as pending Interaction Parts while their Tools are `waiting-user`. Read the complete Shell request from the Interaction `request`, then submit the user's decision with `session.respond(...)`. A reconnected client can recover pending requests with `session.interactions()`. Do not call internal Shell Runtime approval methods directly.
-
-## Model tools
-
-Workspace always provides file and search tools; configuring Shell adds two command tools:
-
-| Tool | Purpose |
-|------|---------|
-| `shell_exec` | Run one non-interactive command |
-| `shell_session` | Manage long-running or interactive PTY commands |
-| `grep` | Search project file contents directly with ripgrep |
-| `find` | Discover project files with POSIX glob patterns |
-| `read` | Read paginated text and attach images to the model |
-| `write` | Create UTF-8 files or atomically replace them with `overwrite: true` |
-| `edit` | Apply unique, non-overlapping exact-text replacements to one file |
-
-`read` returns up to 500 lines by default, with a maximum of 2,000 lines or 256KB per call. Continue with `truncated` and `next_offset`. `write` accepts up to 1MB and creates parent directories automatically.
-
-For PNG, JPEG, GIF, WebP, BMP, and PDF files, `read.output` contains metadata only and the Tool injects a User File Part pointing to the local file into the next model step. The Tool Result does not contain base64. Other binary files return metadata only.
-
-`edit` accepts up to ten operations. Every operation is matched against the original file, and the file is written only when all operations are valid. Pass `read.sha256` as `edit.expected_sha256` to reject stale concurrent edits.
-
-`grep` runs `rg --json` directly without a shell. It searches literal text case-insensitively by default; set `literal: false` for regular expressions or `case_sensitive: true` for exact casing. Use `glob` to limit candidate files.
-
-`find` accepts a POSIX glob `pattern`, includes dotfiles, respects `.gitignore`, and does not follow symbolic links. Both search tools return up to 200 results by default and accept `max_results` up to 2,000.
-
-`shell_exec` and `shell_session` belong to Shell; the other five tools belong to Workspace. All file and search tools are fixed to the Workspace root and reject symbolic-link escapes. They never request unrestricted access.
-
-## Sandbox
-
-Shell commands use the safe sandbox by default. The SDK does not select or install a platform backend automatically; the application injects one adapter into `Shell`:
-
-- `macos-seatbelt` — macOS sandbox
-- `linux-bubblewrap` — Linux sandbox
-- `windows-mxc-dev` — Microsoft MXC Windows process sandbox; Development / unstable
-- `windows-srt-alpha` — Anthropic Sandbox Runtime native Windows sandbox; Alpha
-- `unrestricted-host` — No sandboxing
-
-`@downcity/city` owns the workspace write boundary, path validation, environment convergence, and policy fingerprint. Independent adapters own system paths, host preflight, policy compilation, and process startup. MXC and Anthropic SRT belong only to their Windows packages, so installing `@downcity/city` does not download a Windows runtime on macOS or Linux. The Downcity CLI keeps MXC as its default and enables SRT only when `DC_WINDOWS_SANDBOX=srt` is set. SDK applications install and inject their selected adapter explicitly.
-
-### Windows adapters
-
-Native Windows support is currently Development / unstable and requires Windows 11 24H2 build 26100 or newer. Agent preflight checks `cmd.exe`, the bundled Microsoft MXC runtime, and its selected isolation tier. A missing dependency, unsupported build, or failed probe refuses Safe Sandbox startup and never silently falls back to unrestricted execution.
-
-Windows uses the native `cmd.exe /d /s /c` command model. Environment variables, pipes, and redirects must use cmd syntax such as `%NAME%`, `|`, and `>`. The SDK does not translate POSIX shell commands into cmd. Invoke `powershell.exe` explicitly from the command when PowerShell semantics are required.
-
-The SDK delegates Windows isolation to the pinned `@microsoft/mxc-sdk` runtime. MXC selects its available process isolation tier, owns AppContainer and Job Object lifecycle, and restores temporary filesystem policy after execution. Downcity only maps its resolved read-only and read-write roots to the MXC `0.7.0-alpha` policy schema.
-
-Current Windows considerations:
-
-- MXC host or port allowlists and Windows `deniedPaths` are not part of Downcity's current Windows policy contract.
-- PTY and pipe execution are provided by MXC; console-sensitive programs may still differ from macOS or Linux.
-- MXC is Public Preview and its upstream documentation states that current profiles may be overly permissive. This backend must not be treated as a production security boundary.
-
-The SRT adapter directly uses Anthropic's open-source `@anthropic-ai/sandbox-runtime`. It protects the host with a dedicated `downcity-sandbox` Windows user, Restricted Token, Job Object, NTFS ACLs, and WFP network filters. Run `npx @downcity/sandbox-windows-srt setup` once and approve UAC before use. Normal command execution never installs or elevates automatically.
+- `sandbox` is the default. Commands run in the Workspace microVM, with the project mounted at `/workspace`.
+- `host` runs with full host permissions and requires a non-empty reason plus host approval.
 
 ```ts
-import { Shell } from "@downcity/city";
-import { WindowsSrtSandbox } from "@downcity/sandbox-windows-srt";
-
-const shell = new Shell({
-  sandbox: new WindowsSrtSandbox(),
+shell_exec({
+  cmd: "open ./report.pdf",
+  target: "host",
+  reason: "Open the generated report in the host desktop application.",
 });
 ```
 
-SRT's Windows backend is currently Alpha, and one Downcity process permits only one active workspace security domain. Do not run different workspaces concurrently under the shared `downcity-sandbox` SID; use MXC, WSL/a container, or separate host security domains for that case. Per-user tools installed through nvm, Scoop, or `pip install --user` are not readable by the dedicated sandbox user unless their directories are explicitly added as read-only paths.
+There is no partial host-path allowlist, intermediate permission mode, or silent fallback. If the Sandbox is unavailable, execution fails instead of switching to the host.
 
-SRT's Windows filesystem boundary relies on a dedicated user and additive NTFS ACLs. If a directory outside the workspace already grants write access to a broad principal such as `Authenticated Users`, SRT's `allowWrite` does not revoke that existing access. Do not treat the current Alpha backend as a complete default-deny boundary on arbitrary Windows hosts. Use a workspace parent with hardened host ACLs, or prefer MXC, WSL, or a container for stronger requirements.
+## Tools and lifecycle
 
-### Additional read-only directories
+`Shell` provides `shell_exec` for short non-interactive commands and `shell_session` for long-running or interactive processes. `shell_session` supports `start`, `send`, `read`, `wait`, `list`, and `stop`.
 
-A host can expose a version-pinned CLI or runtime directory to the Safe Sandbox as read-only:
+Closing a Workspace disposes its Shell. Shell first closes its Shell Sessions and then stops Sandbox compute, preserving the Sandbox filesystem. Recreating the same Workspace under the same City storage reconnects to that environment. Only an explicit `shell.reset_sandbox()` deletes HOME and installed tools.
 
-```ts
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-  safe_read_only_paths: [
-    "/Users/user/.vibecape/tools/officecli/v1.0.136",
-  ],
-});
-```
+The Workspace mount is fixed when the Sandbox is created. If a stable Workspace ID is later bound to a different host path or City runtime path, Downcity rejects the connection and requires an explicit reset rather than silently mounting unexpected files.
 
-Each entry must be an existing absolute directory outside the project. macOS emits a Seatbelt `file-read*` rule, Linux uses Bubblewrap `--ro-bind`, and Windows maps it to either an MXC read-only root or an SRT READ ACL. This never expands project-external write access.
+## Environment
 
-On macOS, Shell resolves `xcode-select -p`, adds the selected Xcode runtime as a system read-only path, and prepends the real `Developer/usr/bin` directory to `PATH`. Normal `git` calls use the Xcode binary directly instead of the xcrun entry that writes a host cache.
+Sandbox commands receive the explicit Workspace env and Downcity execution identifiers; they do not inherit the complete host `process.env`. Host commands start from the host environment and then apply Workspace env. Secret Downcity authentication variables are removed in both cases.
 
-### Policy
+`workspace.set_env()` and `workspace.patch_env()` affect subsequent commands. Existing processes keep the environment captured when they started.
 
-`SandboxPolicy` combines system read-only paths, the fixed writable workspace, and host read-only paths, then validates realpaths, overlaps, and directory permissions.
-
-Each adapter exposes `preflight()` for its host-specific readiness checks.
 ## Approval
 
-`ShellApprovalRuntime` manages the interactive approval loop. Unrestricted requests use the current Session approval mode; the default `ask` mode requires an explicit approve or deny decision.
+Every `host` start and every stdin write to a host Shell Session goes through the calling Chat Session's approval gateway. Approval belongs to the tool call, while the resulting Shell Session remains a Workspace Shell resource.
 
-## ShellTools
+```ts
+const pending = await session.interactions();
+await session.respond({
+  interaction_id: pending[0].request.interaction_id,
+  response: {
+    type: "approval",
+    outcome: "resolved",
+    payload: { decision: "approved" },
+  },
+});
+```
 
-`ShellTools`, `FileTools`, `SearchTools`, and their schemas provide the AI-ready definitions used by the Agent. You do not normally need to use them directly; they are wired automatically when you pass `shell` to the Agent constructor.
+`ask` is the default approval mode. `always-allow` affects new host approval requests in that Chat Session only; it does not change the Sandbox boundary.

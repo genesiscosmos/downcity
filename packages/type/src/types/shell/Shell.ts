@@ -6,15 +6,8 @@
  * - `shell_id` 与 chat `session_id` 严格分离，避免语义混淆。
  */
 
-/**
- * shell 执行 sandbox 模式。
- */
-export type ShellSandboxMode = "safe" | "unrestricted";
-
-/**
- * shell unrestricted sandbox 申请原因。
- */
-export type ShellUnrestrictedReason = string;
+/** Shell 命令的明确执行目标。 */
+export type ShellExecutionTarget = "sandbox" | "host";
 
 /**
  * 操作交互式 shell session 的输入。
@@ -50,9 +43,9 @@ export type ShellSessionInput = {
   cols?: number;
   /** PTY 行数。 */
   rows?: number;
-  /** 命令执行 sandbox 模式；默认 safe。 */
-  sandbox?: ShellSandboxMode;
-  /** 请求 unrestricted sandbox 时展示给用户的原因。 */
+  /** 命令执行目标；默认在 Workspace Sandbox 中执行。 */
+  target?: ShellExecutionTarget;
+  /** 请求宿主执行时展示给用户的原因。 */
   reason?: string;
 };
 
@@ -72,8 +65,8 @@ export type ShellExecInput = {
   timeout_ms?: number;
   /** 最多返回多少输出 token。 */
   max_output_tokens?: number;
-  /** 命令执行 sandbox 模式；默认 safe。 */
-  sandbox?: ShellSandboxMode;
-  /** 请求 unrestricted sandbox 时展示给用户的原因。 */
+  /** 命令执行目标；默认在 Workspace Sandbox 中执行。 */
+  target?: ShellExecutionTarget;
+  /** 请求宿主执行时展示给用户的原因。 */
   reason?: string;
 };

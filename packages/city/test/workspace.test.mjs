@@ -57,14 +57,11 @@ test("one unbound Workspace instance belongs to one Agent", async (t) => {
   let dispose_count = 0;
   const shell = {
     tools: { shell_exec: {} },
-    bind(binding) {
-      assert.equal(binding.root_path, workspace_path);
-      assert.equal(binding.data_path, workspace_path);
-    },
+    bind() {},
     set_env(env) {
       assert.deepEqual(env, {});
     },
-    async run_safe_command() {
+    async run_sandbox_command() {
       throw new Error("not used");
     },
     async dispose() {
@@ -193,7 +190,7 @@ test("Workspace owns env and publishes only real changes", async (t) => {
     set_env(env) {
       shell_env_snapshots.push({ ...env });
     },
-    async run_safe_command() {
+    async run_sandbox_command() {
       throw new Error("not used");
     },
     async dispose() {},

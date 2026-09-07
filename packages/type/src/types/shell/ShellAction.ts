@@ -6,6 +6,8 @@
  * - 这些类型同时服务于 shell runtime 状态管理与 agent tool 协议。
  */
 
+import type { ShellExecutionTarget } from "./Shell.js";
+
 export type ShellSessionStatus =
   | "starting"
   | "running"
@@ -15,12 +17,7 @@ export type ShellSessionStatus =
   | "expired";
 
 /**
- * shell 执行 sandbox 模式。
- */
-export type ShellSandboxMode = "safe" | "unrestricted";
-
-/**
- * unrestricted sandbox 审批状态。
+ * host 执行审批状态。
  */
 export type ShellApprovalStatus = "approved" | "denied" | "expired";
 
@@ -28,14 +25,14 @@ export type ShellApprovalStatus = "approved" | "denied" | "expired";
  * shell approval 模式。
  *
  * 说明（中文）
- * - `ask` 是默认模式，unrestricted shell 每次执行前都需要用户审批。
+ * - `ask` 是默认模式，宿主 Shell 每次危险操作前都需要用户审批。
  * - `always-allow` 只作用于当前 session，会自动通过本应进入审批队列的 shell 请求。
  * - 该模式不改变 sandbox 权限模型，只影响 approval 是否需要等待人工确认。
  */
 export type ShellApprovalMode = "ask" | "always-allow";
 
 /**
- * shell unrestricted sandbox 审批来源工具。
+ * shell host 执行审批来源工具。
  */
 export type ShellApprovalToolName = "shell_exec" | "shell_session" | "shell_write";
 
@@ -73,15 +70,13 @@ export type ShellSessionSnapshot = {
   cwd: string;
   /** 实际使用的 shell 可执行文件路径。 */
   shell_path: string;
-  /** 当前 shell 是否运行在 sandbox 中。 */
-  sandboxed?: boolean;
-  /** 当前 shell 的 Downcity sandbox 模式。 */
-  sandbox_mode?: ShellSandboxMode;
-  /** unrestricted sandbox 审批状态。 */
+  /** 当前 Shell Session 的执行目标。 */
+  target: ShellExecutionTarget;
+  /** 宿主执行审批状态。 */
   approval_status?: ShellApprovalStatus;
-  /** unrestricted sandbox 审批请求 ID。 */
+  /** 宿主执行审批请求 ID。 */
   approval_id?: string;
-  /** unrestricted sandbox 申请原因。 */
+  /** 宿主执行申请原因。 */
   approval_reason?: string;
   /** 当前 shell 是否允许继续写入 stdin。 */
   stdin_writable?: boolean;
@@ -91,20 +86,10 @@ export type ShellSessionSnapshot = {
   cols?: number;
   /** PTY 行数；仅 `terminal=true` 时存在。 */
   rows?: number;
-  /** 当前 shell 使用的 sandbox backend。 */
-  sandbox_backend?: string;
-  /** 当前 shell 采用的 sandbox 网络模式。 */
-  sandbox_network_mode?: "off" | "restricted" | "full";
-  /** 当前 Safe Sandbox 策略摘要；unrestricted 执行时为空。 */
-  sandbox_policy_fingerprint?: string;
-  /** 当前 agent 级 sandbox 的持久目录。 */
-  sandbox_dir?: string;
-  /** 当前 shell 在 sandbox 中使用的 HOME。 */
-  sandbox_home_dir?: string;
-  /** 当前 shell 在 sandbox 中使用的临时目录。 */
-  sandbox_tmp_dir?: string;
-  /** 当前 shell 在 sandbox 中使用的 XDG cache 目录。 */
-  sandbox_cache_dir?: string;
+  /** 当前执行后端；Sandbox 时为 Provider backend，宿主执行时为 host。 */
+  execution_backend: string;
+  /** 当前持久 Sandbox 的稳定身份；宿主执行时不存在。 */
+  sandbox_id?: string;
   /** 当前 shell 状态。 */
   status: ShellSessionStatus;
   /** 子进程 pid；若尚未创建成功则为空。 */
@@ -163,9 +148,9 @@ export type ShellStartRequest = {
   cols?: number;
   /** PTY 行数；仅 `terminal=true` 时生效。 */
   rows?: number;
-  /** 命令执行 sandbox 模式；默认 safe。 */
-  sandbox?: ShellSandboxMode;
-  /** 请求 unrestricted sandbox 时展示给用户的原因。 */
+  /** 命令执行目标；默认 sandbox。 */
+  target?: ShellExecutionTarget;
+  /** 请求宿主执行时展示给用户的原因。 */
   reason?: string;
   /** 内部审批来源工具名；普通调用方不需要传。 */
   approval_tool_name?: ShellApprovalToolName;
@@ -198,9 +183,9 @@ export type ShellExecRequest = {
   timeout_ms?: number;
   /** 单次读取输出返回给模型的 token 上限。 */
   max_output_tokens?: number;
-  /** 命令执行 sandbox 模式；默认 safe。 */
-  sandbox?: ShellSandboxMode;
-  /** 请求 unrestricted sandbox 时展示给用户的原因。 */
+  /** 命令执行目标；默认 sandbox。 */
+  target?: ShellExecutionTarget;
+  /** 请求宿主执行时展示给用户的原因。 */
   reason?: string;
   /** 显式指定 owner session_id。 */
   owner_context_id?: string;
@@ -251,7 +236,7 @@ export type ShellWriteRequest = {
   shell_id: string;
   /** 要写入 stdin 的原始文本。 */
   chars: string;
-  /** 向 unrestricted shell session 写入 stdin 时展示给用户的原因。 */
+  /** 向宿主 Shell Session 写入 stdin 时展示给用户的原因。 */
   reason?: string;
   /** 显式指定 owner session_id。 */
   owner_context_id?: string;

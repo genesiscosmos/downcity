@@ -54,6 +54,12 @@ export class Workspace implements WorkspaceRuntime {
   /** Workspace 内可选的受控命令执行能力。 */
   readonly shell?: WorkspaceOptions["shell"];
 
+  /** 当前 Workspace 的一次性宿主运行资源绑定。 */
+  private runtime_binding?: {
+    /** Downcity 私有运行数据目录。 */
+    runtime_path: string;
+  };
+
   /** Workspace 首次释放产生的稳定 Promise，保证重复释放不会重复关闭资源。 */
   private dispose_promise?: Promise<void>;
 
@@ -76,6 +82,33 @@ export class Workspace implements WorkspaceRuntime {
       files: this.files,
       ...(this.shell ? { shell: this.shell } : {}),
     });
+    if (options.runtime_path) {
+      this.bind_runtime({ runtime_path: options.runtime_path });
+    }
+  }
+
+  /** 由 City 或独立宿主一次性注入运行目录，并绑定当前 Shell。 */
+  bind_runtime(input: {
+    runtime_path: string;
+  }): void {
+    const runtime_path = String(input?.runtime_path || "").trim();
+    if (!runtime_path) throw new Error("Workspace.bind_runtime requires runtime_path");
+    if (!this.shell) return;
+    const next_binding = {
+      runtime_path: path.resolve(runtime_path),
+    };
+    if (this.runtime_binding) {
+      if (this.runtime_binding.runtime_path !== next_binding.runtime_path) {
+        throw new Error(`Workspace is already bound: ${this.id}`);
+      }
+      return;
+    }
+    this.shell.bind({
+      workspace_id: this.id,
+      root_path: this.path,
+      data_path: next_binding.runtime_path,
+    });
+    this.runtime_binding = next_binding;
   }
 
   /** 返回当前 Workspace env 的浅拷贝快照。 */
@@ -106,15 +139,15 @@ export class Workspace implements WorkspaceRuntime {
     };
   }
 
-  /** 关闭命令进程与平台 Sandbox 资源。 */
+  /** 释放当前 Workspace 持有的 Shell。 */
   async dispose(): Promise<void> {
     this.dispose_promise ??= (async () => {
-      const results = await Promise.allSettled([
-        this.shell?.dispose() ?? Promise.resolve(),
-      ]);
-      const errors = results.flatMap((result) =>
-        result.status === "rejected" ? [result.reason] : []
-      );
+      const errors: unknown[] = [];
+      try {
+        await (this.shell?.dispose() ?? Promise.resolve());
+      } catch (error) {
+        errors.push(error);
+      }
       if (errors.length > 0) {
         throw new AggregateError(errors, "Workspace dispose failed");
       }

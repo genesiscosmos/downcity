@@ -1,20 +1,25 @@
 /**
- * Shell 对象入口。
+ * Workspace Shell。
  *
  * 关键点（中文）
- * - Shell 是 Workspace 的主要命令执行对象，拥有 tools、sessions 与 sandbox。
- * - Workspace 组合 Shell 实例，并负责把它绑定到项目资源边界。
+ * - Shell 属于 Workspace，并持有与 Chat Session 独立的 Shell Sessions。
+ * - Shell 构造时接收 Sandbox Provider，并拥有由它创建的 Workspace Sandbox。
+ * - 默认命令进入当前 Workspace 独享的持久 Sandbox，host 目标必须经过审批。
  */
 
-import type { ShellHostContext } from "@downcity/type/shell";
+import path from "node:path";
 import type {
-  ShellOptions,
+  ShellActionResponse,
   ShellBinding,
   ShellExecutionContext,
+  ShellHostContext,
+  ShellOptions,
   ShellToolAction,
   ShellToolSet,
+  SandboxProvider,
+  WorkspaceSandbox,
+  WorkspaceShellSandboxCommandInput,
 } from "@downcity/type/shell";
-import type { ShellActionResponse } from "@downcity/type/shell";
 import type { ShellRuntimeState } from "@/shell/session/ShellRuntimeTypes.js";
 import {
   close_all_shell_sessions,
@@ -29,161 +34,141 @@ import {
   write_shell_session,
 } from "@/shell/session/ShellActionRuntime.js";
 import { create_shell_tools } from "@/shell/tool/ShellTools.js";
-import { resolve_sandbox_policy } from "@/shell/sandbox/SandboxPolicy.js";
-import {
-  run_sandbox_command,
-  type SandboxStartInput,
-} from "@/shell/sandbox/Sandbox.js";
+import { run_sandbox_command } from "@/shell/sandbox/Sandbox.js";
 
-/**
- * Shell 运行时对象。
- */
+/** Workspace 命令与长期进程服务。 */
 export class Shell {
-  /** 当前 Shell 唯一的平台 Sandbox Adapter。 */
-  readonly sandbox: ShellOptions["sandbox"];
-  /**
-   * Shell 内部状态。
-   */
+  /** 当前 Shell 的实例级运行状态。 */
   private readonly state: ShellRuntimeState;
-
-  /**
-   * Shell 宿主配置。
-   */
-  private host_options: ShellOptions;
-
-  /**
-   * 模型可调用的 shell tools。
-   */
+  /** 构造期宿主配置。 */
+  private readonly options: ShellOptions;
+  /** 为当前 Shell 创建具体 Workspace Sandbox 的 Provider。 */
+  private readonly sandbox_provider: SandboxProvider;
+  /** Workspace env 的最新快照。 */
+  private env: Record<string, string | undefined>;
+  /** 当前 Shell 的一次性 Workspace 绑定。 */
+  private binding?: ShellBinding;
+  /** 当前 Workspace 交给 Shell 使用的持久 Sandbox。 */
+  private sandbox?: WorkspaceSandbox;
+  /** Shell 首次释放产生的稳定 Promise，保证资源只收口一次。 */
+  private dispose_promise?: Promise<void>;
+  /** 模型可调用的 Shell tools。 */
   readonly tools: ShellToolSet;
 
   constructor(options: ShellOptions) {
-    this.sandbox = options.sandbox;
-    this.host_options = {
-      ...options,
-      safe_read_only_paths: [...(options.safe_read_only_paths || [])],
-    };
+    if (!options?.sandbox_provider) {
+      throw new Error("Shell requires sandbox_provider");
+    }
+    this.options = { ...options };
+    this.sandbox_provider = options.sandbox_provider;
+    this.env = { ...(options.env || {}) };
     this.state = create_shell_runtime_state();
-    this.tools = {
-      ...create_shell_tools({
-        run_action: async (params) =>
-          await this.run_action(
-            params.action,
-            params.payload,
-            params.execution,
-          ),
-      }),
-    };
-  }
-
-  /**
-   * 将 Shell 一次性绑定到 Workspace 根目录。
-   *
-   * 关键点（中文）
-   * - 同一个 Shell 可以被同一路径重复绑定，方便组合根幂等初始化。
-   * - 已绑定后拒绝切换目录，避免活动进程与后续命令跨越 Workspace 安全边界。
-   */
-  bind(input: ShellBinding): void {
-    const next_root_path = String(input?.root_path || "").trim();
-    const next_data_path = String(input?.data_path || "").trim();
-    if (!next_root_path || !next_data_path) {
-      throw new Error("Shell.bind requires root_path and data_path");
-    }
-    const current_root_path = String(this.host_options.root_path || "").trim();
-    const current_data_path = String(this.host_options.data_path || "").trim();
-    if (
-      (current_root_path && current_root_path !== next_root_path)
-      || (current_data_path && current_data_path !== next_data_path)
-    ) {
-      throw new Error(
-        `Shell is already bound to another Agent execution context: ${current_root_path}`,
-      );
-    }
-    this.host_options.root_path = next_root_path;
-    this.host_options.data_path = next_data_path;
-  }
-
-  /**
-   * 释放所有 shell sessions。
-   */
-  async dispose(): Promise<void> {
-    await close_all_shell_sessions(this.state, true);
-    for (const session of this.state.sessions.values()) {
-      if (session.cleanup_timer) {
-        clearTimeout(session.cleanup_timer);
-      }
-    }
-    this.state.sessions.clear();
-    this.state.context = null;
-    await this.sandbox.dispose?.();
-  }
-
-  /**
-   * 更新当前 Shell 的 Workspace 基础环境变量。
-   *
-   * 关键点（中文）
-   * - Workspace 在构造和 env 修改时调用本方法。
-   * - Session Tool 仍优先使用单个 Step 显式传入的 effective env。
-   * - 已启动进程保持创建时的环境，新值只影响后续进程。
-   */
-  set_env(env: Readonly<Record<string, string>>): void {
-    this.host_options.env = { ...env };
-  }
-
-  /**
-   * 替换 Safe Sandbox 的宿主只读目录。
-   *
-   * 关键点（中文）
-   * - 权限收缩或切换时先关闭活动 shell，避免旧进程继续持有已撤销权限。
-   * - 只读目录只影响后续启动的进程，不会扩大 workspace 之外的写权限。
-   */
-  async set_safe_read_only_paths(paths: string[]): Promise<void> {
-    const current_paths = this.host_options.safe_read_only_paths || [];
-    const next_paths = Array.from(new Set(
-      paths.map((value) => String(value || "").trim()).filter(Boolean),
-    ));
-    if (
-      current_paths.length === next_paths.length &&
-      current_paths.every((value, index) => value === next_paths[index])
-    ) {
-      return;
-    }
-    const root_path = String(this.host_options.root_path || "").trim();
-    const data_path = String(this.host_options.data_path || "").trim();
-    if (root_path && data_path) {
-      await resolve_sandbox_policy({
-        sandbox: this.sandbox,
-        root_path: root_path,
-        data_path: data_path,
-        env: this.host_options.env,
-        safe_read_only_paths: next_paths,
-        logger: this.host_options.logger,
-      }, {
-        ...process.env,
-        ...this.host_options.env,
-      });
-    }
-    const next_path_set = new Set(next_paths);
-    const removes_access = current_paths.some((value) => !next_path_set.has(value));
-    if (removes_access) {
-      await close_all_shell_sessions(this.state, true);
-    }
-    this.host_options.safe_read_only_paths = next_paths;
-  }
-
-  /**
-   * 使用当前 Shell 已配置的 adapter 执行一次 Safe Sandbox 命令。
-   *
-   * 关键点（中文）：宿主服务复用同一个 Shell 安全边界，无需自行持有平台 adapter。
-   */
-  async run_safe_command(
-    input: Omit<SandboxStartInput, "context" | "sandbox_mode">,
-  ): ReturnType<typeof run_sandbox_command> {
-    return await run_sandbox_command({
-      ...input,
-      context: this.create_host_context(),
+    this.tools = create_shell_tools({
+      run_action: async (params) =>
+        await this.run_action(params.action, params.payload, params.execution),
     });
   }
 
+  /** 将 Shell 一次性绑定到 Workspace，并创建由自身持有的持久 Sandbox。 */
+  bind(input: ShellBinding): void {
+    const workspace_id = String(input?.workspace_id || "").trim();
+    const root_path = String(input?.root_path || "").trim();
+    const data_path = String(input?.data_path || "").trim();
+    if (!workspace_id || !root_path || !data_path) {
+      throw new Error(
+        "Shell.bind requires workspace_id, root_path and data_path",
+      );
+    }
+    const next_binding: ShellBinding = {
+      workspace_id,
+      root_path: path.resolve(root_path),
+      data_path: path.resolve(data_path),
+    };
+    if (this.binding) {
+      if (
+        this.binding.workspace_id !== next_binding.workspace_id
+        || this.binding.root_path !== next_binding.root_path
+        || this.binding.data_path !== next_binding.data_path
+      ) {
+        throw new Error("Shell is already bound to Workspace: " + this.binding.workspace_id);
+      }
+      return;
+    }
+    const sandbox = this.sandbox_provider.create_workspace({
+      workspace_id: next_binding.workspace_id,
+      workspace_path: next_binding.root_path,
+      runtime_path: next_binding.data_path,
+    });
+    this.sandbox = sandbox;
+    this.binding = next_binding;
+  }
+
+  /** 关闭全部 Shell Sessions，再停止 Sandbox 计算资源并保留持久文件系统。 */
+  async dispose(): Promise<void> {
+    this.dispose_promise ??= (async () => {
+      const errors: unknown[] = [];
+      try {
+        await this.close_sessions();
+      } catch (error) {
+        errors.push(error);
+      }
+      try {
+        await (this.sandbox?.stop() ?? Promise.resolve());
+      } catch (error) {
+        errors.push(error);
+      }
+      if (errors.length > 0) throw new AggregateError(errors, "Shell dispose failed");
+    })();
+    await this.dispose_promise;
+  }
+
+  /** 关闭现有 Shell Sessions，并显式删除、重建当前持久 Sandbox。 */
+  async reset_sandbox(): Promise<void> {
+    const sandbox = this.require_sandbox();
+    const results = await Promise.allSettled([
+      this.close_sessions(),
+    ]);
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : []
+    );
+    if (errors.length > 0) {
+      throw new AggregateError(errors, "Shell sessions close failed before Sandbox reset");
+    }
+    if (!sandbox.reset) {
+      throw new Error(`Sandbox Provider ${this.sandbox_provider.backend} does not support reset`);
+    }
+    await sandbox.reset();
+  }
+
+  /** 更新后续命令使用的 Workspace 环境变量。 */
+  set_env(env: Readonly<Record<string, string>>): void {
+    this.env = { ...env };
+  }
+
+  /** 在当前 Workspace 的持久 Sandbox 中执行一次短命令。 */
+  async run_sandbox_command(input: WorkspaceShellSandboxCommandInput) {
+    const context = this.create_host_context();
+    const execution_dir = path.join(
+      this.require_binding().data_path,
+      "commands",
+      input.execution_id,
+    );
+    return await run_sandbox_command({
+      context,
+      execution_id: input.execution_id,
+      execution_dir,
+      cmd: input.cmd,
+      cwd: input.cwd,
+      shell_path: input.shell_path,
+      login: input.login,
+      env: { ...this.env, ...input.env },
+      terminal: input.terminal,
+      cols: input.cols,
+      rows: input.rows,
+    });
+  }
+
+  /** 将模型 Tool action 路由到当前 Shell 实例。 */
   private async run_action(
     action: ShellToolAction,
     payload: Record<string, unknown>,
@@ -192,63 +177,84 @@ export class Shell {
     const session_id = execution.session?.session_id;
     const turn_id = execution.session?.turn_id;
     const context = this.create_host_context(execution);
-    const payload_with_context: Record<string, unknown> = {
+    const request = {
       ...payload,
       ...(session_id ? { owner_context_id: session_id } : {}),
-      ...(turn_id ? { turn_id: turn_id } : {}),
+      ...(turn_id ? { turn_id } : {}),
       ...(execution.call_id ? { tool_call_id: execution.call_id } : {}),
     };
     switch (action) {
       case "start":
-        return await start_shell_session(this.state, context, payload_with_context as never);
+        return await start_shell_session(this.state, context, request as never);
       case "exec":
-        return await exec_shell_command(this.state, context, payload_with_context as never);
+        return await exec_shell_command(this.state, context, request as never);
       case "status":
-        return await get_shell_session_status(this.state, context, payload_with_context as never);
+        return await get_shell_session_status(this.state, context, request as never);
       case "read":
-        return await read_shell_session(this.state, context, payload_with_context as never);
+        return await read_shell_session(this.state, context, request as never);
       case "write":
-        return await write_shell_session(this.state, context, payload_with_context as never);
+        return await write_shell_session(this.state, context, request as never);
       case "wait":
-        return await wait_shell_session(this.state, context, payload_with_context as never);
+        return await wait_shell_session(this.state, context, request as never);
       case "close":
-        return await close_shell_session(this.state, context, payload_with_context as never);
+        return await close_shell_session(this.state, context, request as never);
       case "list":
-        return await list_shell_sessions(this.state, context, payload_with_context as never);
+        return await list_shell_sessions(this.state, context, request as never);
       default:
-        throw new Error(`Unknown shell action: ${String(action)}`);
+        throw new Error("Unknown shell action: " + String(action));
     }
   }
 
-  /**
-   * 根据单次 action 的显式运行上下文构建宿主上下文。
-   */
-  private create_host_context(
-    execution: ShellExecutionContext = {},
-  ): ShellHostContext {
-    const root_path = String(this.host_options.root_path || "").trim();
-    const data_path = String(this.host_options.data_path || "").trim();
-    if (!root_path || !data_path) {
-      throw new Error("Shell requires root_path and data_path from Agent private runtime directory");
-    }
+  /** 根据单次 Tool 调用创建 Shell 最小宿主上下文。 */
+  private create_host_context(execution: ShellExecutionContext = {}): ShellHostContext {
+    const binding = this.require_binding();
+    const sandbox = this.require_sandbox();
     const session_id = execution.session?.session_id || "";
     const turn_id = execution.session?.turn_id || "";
     return {
-      sandbox: this.sandbox,
-      root_path: root_path,
-      data_path: data_path,
-      env: execution.workspace_env || this.host_options.env,
-      safe_read_only_paths: this.host_options.safe_read_only_paths,
+      sandbox,
+      root_path: binding.root_path,
+      data_path: binding.data_path,
+      env: execution.workspace_env || this.env,
       config: {},
-      logger: this.host_options.logger,
+      logger: this.options.logger,
       approval_gateway: execution.approval_gateway,
       shell_integration: {
         get_run_context: () => ({
-          ...(session_id ? { session_id: session_id } : {}),
-          ...(turn_id ? { turn_id: turn_id } : {}),
+          ...(session_id ? { session_id } : {}),
+          ...(turn_id ? { turn_id } : {}),
         }),
       },
     };
   }
 
+  /** 返回已完成的一次性 Workspace 绑定。 */
+  private require_binding(): ShellBinding {
+    if (!this.binding) {
+      throw new Error("Shell must be bound to a Workspace before execution");
+    }
+    return this.binding;
+  }
+
+  /** 返回 Shell 自己持有的具体 Workspace Sandbox。 */
+  private require_sandbox(): WorkspaceSandbox {
+    if (!this.sandbox) {
+      throw new Error("Shell must be bound to a Workspace before Sandbox access");
+    }
+    return this.sandbox;
+  }
+
+  /** 关闭并清理全部 Shell Sessions；单个关闭失败不阻止内存状态收口。 */
+  private async close_sessions(): Promise<void> {
+    const results = await Promise.allSettled([close_all_shell_sessions(this.state, true)]);
+    for (const session of this.state.sessions.values()) {
+      if (session.cleanup_timer) clearTimeout(session.cleanup_timer);
+    }
+    this.state.sessions.clear();
+    this.state.context = null;
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : []
+    );
+    if (errors.length > 0) throw new AggregateError(errors, "Shell sessions close failed");
+  }
 }

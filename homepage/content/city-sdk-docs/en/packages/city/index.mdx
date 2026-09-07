@@ -46,8 +46,9 @@ One Plugin ID maps to one instance within a City, shared automatically by every 
 
 `city.workspaces.add(workspace)` transfers runtime ownership to City, while `get()` and `list()`
 provide stable lookup surfaces. When a Workspace is no longer needed, call
-`await city.workspaces.remove(workspace_id)`. City disposes its Shell, Sandbox, and other runtime
-resources before removing it from the current City, and returns `null` when it does not exist. This
+`await city.workspaces.remove(workspace_id)`. City disposes the Workspace before removing it from
+the current City; Workspace delegates Shell Sessions and Sandbox cleanup to its Shell. The method
+returns `null` when the Workspace does not exist. This
 only manages the runtime object; it never deletes the project directory.
 
 ## Plugin lifecycle

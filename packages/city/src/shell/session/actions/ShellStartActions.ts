@@ -2,7 +2,7 @@
  * Shell start action。
  *
  * 关键点（中文）
- * - 负责创建 shell session、发起 unrestricted 审批、启动子进程并返回初始输出。
+ * - 负责创建 shell session、发起 host 审批、启动子进程并返回初始输出。
  * - 长轮询与读取逻辑仍由 query actions 提供。
  */
 
@@ -34,13 +34,13 @@ import {
 } from "../ShellActionRuntimeSupport.js";
 import { attach_shell_process_event_handlers } from "../ShellProcessEvents.js";
 import {
-  request_unrestricted_approval,
-  validate_unrestricted_request,
-} from "../../approval/ShellApprovalRuntime.js";
+  request_host_approval,
+  validate_host_request,
+} from "../../approval/HostApprovalRuntime.js";
 import {
   build_denied_approval_response,
   resolve_default_shell_path,
-  resolve_sandbox_mode,
+  resolve_execution_target,
 } from "./ShellActionShared.js";
 import { bind_shell_runtime } from "./ShellLifecycleActions.js";
 import { wait_shell_session } from "./ShellQueryActions.js";
@@ -60,10 +60,10 @@ export async function start_shell_session(
 
   const shell_id = `sh_${generate_id()}`;
   const cwd = resolve_shell_cwd(context, request.cwd);
-  const shell_path =
-    String(request.shell || resolve_default_shell_path()).trim() || resolve_default_shell_path();
+  const target = resolve_execution_target(request.target);
+  const default_shell_path = target === "host" ? resolve_default_shell_path() : "/bin/sh";
+  const shell_path = String(request.shell || default_shell_path).trim() || default_shell_path;
   const login = request.login !== false;
-  const sandbox_mode = resolve_sandbox_mode(request.sandbox);
   const reason = String(request.reason || "").trim();
   // 关键点（中文）
   // - owner_context_id/turn_id 由 tool action 显式传入。
@@ -84,10 +84,10 @@ export async function start_shell_session(
 
   let approval_id: string | undefined;
   let approval_status: ShellApprovalStatus | undefined;
-  if (sandbox_mode === "unrestricted") {
-    const validation_error = validate_unrestricted_request({ cmd, reason });
+  if (target === "host") {
+    const validation_error = validate_host_request({ cmd, reason });
     if (validation_error) throw new Error(validation_error);
-    const approval = await request_unrestricted_approval({
+    const approval = await request_host_approval({
       context,
       shell_id,
       tool_name: request.approval_tool_name || "shell_session",
@@ -123,8 +123,8 @@ export async function start_shell_session(
     cwd,
     shell_path: shell_path,
     login,
-    base_env: build_shell_env(context, owner_context_id),
-    sandbox_mode: sandbox_mode,
+    env: build_shell_env(context, owner_context_id, target),
+    target,
     terminal: request.terminal !== false,
     cols: request.cols,
     rows: request.rows,
@@ -144,15 +144,9 @@ export async function start_shell_session(
       cmd,
       cwd: actual_cwd,
       shell_path,
-      sandboxed: spawn_result.sandboxed,
-      sandbox_mode: spawn_result.sandbox_mode || sandbox_mode,
-      sandbox_backend: spawn_result.backend,
-      sandbox_network_mode: spawn_result.network_mode,
-      sandbox_dir: spawn_result.sandbox_dir,
-      sandbox_home_dir: spawn_result.home_dir,
-      sandbox_tmp_dir: spawn_result.tmp_dir,
-      sandbox_cache_dir: spawn_result.cache_dir,
-      sandbox_policy_fingerprint: spawn_result.policy_fingerprint,
+      target,
+      execution_backend: spawn_result.backend,
+      ...(spawn_result.sandbox_id ? { sandbox_id: spawn_result.sandbox_id } : {}),
       ...(approval_status ? { approval_status } : {}),
       ...(approval_id ? { approval_id } : {}),
       ...(reason ? { approval_reason: reason } : {}),

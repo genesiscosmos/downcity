@@ -541,7 +541,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
       state: "ready",
       input: {
         cmd: "ls -la ~/Desktop",
-        sandbox: "unrestricted",
+        target: "host",
         reason: "Inspect the requested desktop files",
       },
     },
@@ -566,7 +566,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
       state: "waiting-user",
       input: {
         cmd: "ls -la ~/Desktop",
-        sandbox: "unrestricted",
+        target: "host",
         reason: "Inspect the requested desktop files",
       },
     },

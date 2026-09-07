@@ -13,7 +13,10 @@ import os from "node:os";
 import path from "node:path";
 
 import { Shell } from "@downcity/city";
-import { test_sandbox } from "./PlatformSandbox.mjs";
+import {
+  create_test_sandbox_provider,
+  create_test_workspace_sandbox,
+} from "./PlatformSandbox.mjs";
 import {
   close_all_shell_sessions,
   create_shell_runtime_state,
@@ -25,10 +28,15 @@ import {
 async function create_context() {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-shell-pty-"));
   const data_path = path.join(root_path, "agent-workspace-data");
+  const sandbox = create_test_workspace_sandbox({
+    workspace_id: "test-workspace",
+    workspace_path: root_path,
+    runtime_path: data_path,
+  });
   return {
     root_path,
     context: {
-      sandbox: test_sandbox,
+      sandbox,
       root_path: root_path,
       data_path: data_path,
       env: {},
@@ -44,13 +52,9 @@ async function create_context() {
 /** 创建一个在收到 kill 后延迟上报 exit 的测试 Sandbox。 */
 function create_delayed_exit_sandbox(delay_ms, on_process_exit) {
   return {
+    id: "delayed-exit-test-sandbox",
     backend: "delayed-exit-test-sandbox",
-    async preflight() {
-      return { ok: true, platform: process.platform, backend: this.backend, issues: [] };
-    },
-    async resolve_system_read_only_paths() {
-      return [];
-    },
+    workspace_path: "/workspace",
     async spawn(request) {
       let exit_callback = () => {};
       let kill_requested = false;
@@ -74,26 +78,16 @@ function create_delayed_exit_sandbox(delay_ms, on_process_exit) {
           },
         },
         cwd: request.cwd,
-        sandboxed: true,
-        sandbox_mode: "safe",
+        sandbox_id: this.id,
         backend: this.backend,
-        network_mode: request.policy.network_mode,
-        sandbox_dir: request.policy.sandbox_dir,
-        home_dir: request.policy.home_dir,
-        tmp_dir: request.policy.tmp_dir,
-        cache_dir: request.policy.cache_dir,
-        policy_fingerprint: request.policy.fingerprint,
       };
     },
+    async stop() {},
   };
 }
 
 test("Shell only exposes command tools", () => {
-  const shell = new Shell({
-    root_path: process.cwd(),
-    data_path: path.join(process.cwd(), "agent-workspace-data"),
-    sandbox: test_sandbox,
-  });
+  const shell = new Shell({ sandbox_provider: create_test_sandbox_provider() });
   assert.deepEqual(Object.keys(shell.tools).sort(), [
     "shell_exec",
     "shell_session",
@@ -101,12 +95,12 @@ test("Shell only exposes command tools", () => {
 });
 
 test("Shell rejects rebinding to another Agent execution context", () => {
-  const shell = new Shell({ sandbox: test_sandbox });
-  shell.bind({ root_path: "/workspace/first", data_path: "/data/first" });
-  shell.bind({ root_path: "/workspace/first", data_path: "/data/first" });
+  const shell = new Shell({ sandbox_provider: create_test_sandbox_provider() });
+  shell.bind({ workspace_id: "first", root_path: "/workspace/first", data_path: "/data/first" });
+  shell.bind({ workspace_id: "first", root_path: "/workspace/first", data_path: "/data/first" });
   assert.throws(
-    () => shell.bind({ root_path: "/workspace/second", data_path: "/data/second" }),
-    /already bound to another Agent execution context/,
+    () => shell.bind({ workspace_id: "second", root_path: "/workspace/second", data_path: "/data/second" }),
+    /already bound to Workspace/,
   );
 });
 
@@ -128,7 +122,7 @@ test("shell_session uses PTY while shell_exec stays non-interactive", async () =
       shell: "/bin/sh",
       login: false,
       timeout_ms: 2000,
-      sandbox: "safe",
+      target: "sandbox",
     });
     assert.match(exec_result.chunk?.output || "", /notty$/);
     assert.equal(exec_result.shell?.terminal, false);
@@ -139,7 +133,7 @@ test("shell_session uses PTY while shell_exec stays non-interactive", async () =
       shell: "/bin/sh",
       login: false,
       inline_wait_ms: 200,
-      sandbox: "safe",
+      target: "sandbox",
     });
     const observed_result = session_result.chunk?.output
       ? session_result
@@ -169,7 +163,7 @@ test("shell_exec honors an explicit short total timeout", async () => {
         shell: "/bin/sh",
         login: false,
         timeout_ms: 80,
-        sandbox: "safe",
+        target: "sandbox",
       }),
       /shell\.exec timed out after 80ms/,
     );
@@ -200,7 +194,7 @@ test("shell_exec timeout waits for the process exit event before returning", asy
         shell: "/bin/sh",
         login: false,
         timeout_ms: 20,
-        sandbox: "safe",
+        target: "sandbox",
       }),
       /shell\.exec timed out after 20ms/,
     );
@@ -229,7 +223,7 @@ test("shell_exec closes stdin so commands waiting for EOF can exit", async () =>
       shell: "/bin/sh",
       login: false,
       timeout_ms: 2000,
-      sandbox: "unrestricted",
+      target: "host",
       reason: "验证 one-shot stdin EOF",
       owner_context_id: "session-stdin-eof",
       turn_id: "turn-stdin-eof",
@@ -244,7 +238,7 @@ test("shell_exec closes stdin so commands waiting for EOF can exit", async () =>
   }
 });
 
-test("unrestricted shell without an Approval Gateway is denied before execution", async () => {
+test("host shell without an Approval Gateway is denied before execution", async () => {
   const fixture = await create_context();
   const state = create_shell_runtime_state();
   const marker_path = path.join(fixture.root_path, "executed.txt");
@@ -253,7 +247,7 @@ test("unrestricted shell without an Approval Gateway is denied before execution"
     cwd: fixture.root_path,
     shell: "/bin/sh",
     login: false,
-    sandbox: "unrestricted",
+    target: "host",
     reason: "verify missing gateway denial",
     owner_context_id: "session-1",
     turn_id: "turn-1",
@@ -264,7 +258,7 @@ test("unrestricted shell without an Approval Gateway is denied before execution"
   await fs.rm(fixture.root_path, { recursive: true, force: true });
 });
 
-test("unrestricted shell waits for the injected Approval Gateway before execution", async () => {
+test("host shell waits for the injected Approval Gateway before execution", async () => {
   const fixture = await create_context();
   const state = create_shell_runtime_state();
   const marker_path = path.join(fixture.root_path, "approved.txt");
@@ -294,7 +288,7 @@ test("unrestricted shell waits for the injected Approval Gateway before executio
     cwd: fixture.root_path,
     shell: "/bin/sh",
     login: false,
-    sandbox: "unrestricted",
+    target: "host",
     reason: "verify gateway ordering",
     owner_context_id: "session-1",
     turn_id: "turn-1",

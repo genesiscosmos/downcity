@@ -8,16 +8,16 @@
 
 import { z } from "zod";
 
-const shell_sandbox_mode_schema = z
-  .enum(["safe", "unrestricted"])
+const shell_execution_target_schema = z
+  .enum(["sandbox", "host"])
   .optional()
-  .default("safe")
-  .describe("Sandbox mode. safe is the default; unrestricted requires user approval.");
+  .default("sandbox")
+  .describe("Execution target. sandbox is the default; host requires user approval.");
 
-const shell_unrestricted_reason_schema = z
+const shell_host_reason_schema = z
   .string()
   .optional()
-  .describe("Required when sandbox is unrestricted. Explain why host-level execution is needed.");
+  .describe("Required when target is host. Explain why host execution is needed.");
 
 const shell_session_action_schema = z
   .enum(["start", "send", "read", "list", "stop"])
@@ -76,8 +76,8 @@ export const shell_session_input_schema = z.object({
     .number()
     .optional()
     .describe("PTY rows for start. Defaults to 40."),
-  sandbox: shell_sandbox_mode_schema,
-  reason: shell_unrestricted_reason_schema,
+  target: shell_execution_target_schema,
+  reason: shell_host_reason_schema,
 });
 
 export const shell_exec_input_schema = z.object({
@@ -104,6 +104,6 @@ export const shell_exec_input_schema = z.object({
     .number()
     .optional()
     .describe("Maximum output tokens returned in the final result."),
-  sandbox: shell_sandbox_mode_schema,
-  reason: shell_unrestricted_reason_schema,
+  target: shell_execution_target_schema,
+  reason: shell_host_reason_schema,
 });

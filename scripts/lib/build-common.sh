@@ -68,18 +68,9 @@ import path from "node:path";
 
 const [, , package_dir, manifest_path] = process.argv;
 const manifest = JSON.parse(fs.readFileSync(manifest_path, "utf8"));
-const platform_sandbox = process.platform === "darwin"
-  ? "@downcity/sandbox-macos"
-  : process.platform === "linux"
-    ? "@downcity/sandbox-linux"
-    : process.platform === "win32"
-      ? process.env.DC_WINDOWS_SANDBOX === "srt"
-        ? "@downcity/sandbox-windows-srt"
-        : "@downcity/sandbox-windows-mxc"
-      : "";
 const dependencies = [
   ...Object.keys(manifest.dependencies || {}),
-  ...(platform_sandbox ? [platform_sandbox] : []),
+  ...Object.keys(manifest.optionalDependencies || {}),
 ];
 
 for (const dependency_name of dependencies) {

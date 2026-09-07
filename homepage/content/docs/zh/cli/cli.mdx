@@ -45,8 +45,8 @@ my-project/
 
 从 Agent 列表直接进入最近对话后，使用 `/security` 打开当前 Session 的安全策略选择器：
 
-- `Default` — 对应 Session 的 `ask` 模式；每次 unrestricted Shell 操作都需要明确审批。
-- `Always Allow` — 对应 `always-allow` 模式；当前 Session 后续的 unrestricted Shell 操作会自动批准。
+- `Default` — 对应 Session 的 `ask` 模式；每次 host Shell 操作都需要明确审批。
+- `Always Allow` — 对应 `always-allow` 模式；当前 Session 后续的 host Shell 操作会自动批准。
 
 当前策略展示在 Chat Header 中。策略只影响当前 Session 的后续 Shell 请求；已经等待审批的请求仍需单独处理。`Always Allow` 不会绕过危险命令拒绝、Workspace 边界或其他运行时安全检查。
 

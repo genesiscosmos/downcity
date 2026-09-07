@@ -45,14 +45,15 @@ flowchart TD
     Session --> Storage
     Workspace --> Files["Project File/Search"]
     Workspace --> Env["Workspace Env"]
-    Workspace --> Shell["Shell and Sandbox adapter"]
+    Workspace --> Shell["Shell"]
+    Shell --> Sandbox["Sandbox Provider + Workspace Sandbox"]
 ```
 
 The dependency direction stays explicit:
 
 - `@downcity/agent` depends only on neutral resource protocols from `@downcity/type`.
 - `@downcity/city` depends on Agent and injects Workspace, Tools, and `SessionHooks` through its internal binding; Agent does not depend back on City.
-- Hosts choose a platform Sandbox and compose Agent with Workspace.
+- Hosts choose a Sandbox Provider when constructing each Shell; City does not understand the backend.
 - Edge adapters use `@downcity/type/workspace` without loading Node.js local implementations.
 
 ## Agent is the subject

@@ -45,13 +45,13 @@ Downcity gives creators, indie builders, and teams one reusable runtime layer fo
 
 ## Platform Support
 
-| Platform | Local Agent and Safe Sandbox |
+| Platform | Local Agent and isolated Sandbox |
 | --- | --- |
-| macOS | Supported with Seatbelt |
-| Linux | Supported with Bubblewrap |
-| Windows 11 24H2+ | Development / unstable with Microsoft MXC and native `cmd.exe` execution |
+| macOS (Apple Silicon) | Supported with microsandbox microVMs |
+| Linux (x64 / ARM64) | Supported with microsandbox microVMs |
+| Windows (x64 / ARM64) | Preview with microsandbox microVMs |
 
-Native Windows uses `cmd.exe /d /s /c` inside the Microsoft MXC `processcontainer` backend. Preflight requires Windows build 26100 or newer and a successful MXC isolation-tier probe; failures never fall back to unrestricted execution. MXC is currently Public Preview and is not presented as a production security boundary. See the Agent SDK Shell documentation for current limitations.
+Each Workspace receives an independent persistent Sandbox with its project mounted at `/workspace`. Run `npx microsandbox setup` once before local Shell execution. Sandbox failures never fall back to host execution.
 
 ## Quick Start
 
@@ -137,7 +137,7 @@ downcity agent chat <agent_id>
 ```ts
 import { Agent, Shell, Workspace } from "@downcity/city";
 import { create_openai_compatible_model } from "@downcity/federation";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const model = create_openai_compatible_model({
   id: "gpt-5",
@@ -149,7 +149,10 @@ const model = create_openai_compatible_model({
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
+  runtime_path: "/path/to/downcity-runtime/project",
 });
 const agent = new Agent({ id: "repo-helper", tools: {} });
 

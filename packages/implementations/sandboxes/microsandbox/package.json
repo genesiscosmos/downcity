@@ -1,15 +1,12 @@
 {
-  "name": "@downcity/sandbox-windows-mxc",
-  "version": "0.1.39",
+  "name": "@downcity/sandbox-microsandbox",
+  "version": "0.1.0",
   "type": "module",
-  "description": "Downcity experimental Microsoft MXC Windows sandbox adapter",
+  "description": "Downcity persistent microVM sandbox provider powered by microsandbox",
   "main": "./bin/index.js",
   "types": "./bin/index.d.ts",
   "files": [
     "bin"
-  ],
-  "os": [
-    "win32"
   ],
   "publishConfig": {
     "access": "public"
@@ -18,14 +15,10 @@
     ".": {
       "types": "./bin/index.d.ts",
       "import": "./bin/index.js"
-    },
-    "./*": {
-      "types": "./bin/*",
-      "import": "./bin/*"
     }
   },
   "scripts": {
-    "build": "node ../../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "build": "node ../../../../scripts/clean-package.mjs && tsc",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test scripts/*.test.mjs",
     "prepack": "npm run build && node ../../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
@@ -34,15 +27,14 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@downcity/city": "workspace:^",
     "@downcity/type": "workspace:*",
-    "@microsoft/mxc-sdk": "0.7.0",
-    "fs-extra": "^11.3.5"
+    "microsandbox": "^0.6.17"
   },
   "devDependencies": {
-    "@types/fs-extra": "^11.0.4",
     "@types/node": "^25.9.1",
-    "tsc-alias": "^1.8.17",
     "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

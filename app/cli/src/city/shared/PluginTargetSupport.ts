@@ -6,7 +6,7 @@
 
 import path from "node:path";
 import { CliError } from "@/shared/CliError.js";
-import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
+import { create_sandbox_provider } from "@/city/sandbox/PlatformSandbox.js";
 import { get_agent_config } from "@/city/process/registry/AgentConfigRepository.js";
 import {
   get_workspace_by_path,
@@ -27,7 +27,7 @@ export async function checkAgentPreflight(
   options?: AgentPreflightOptions,
 ): Promise<void> {
   if (options?.requireShellSandbox !== false) {
-    const result = await (await create_platform_sandbox()).preflight();
+    const result = await create_sandbox_provider().check();
     if (!result.ok) {
       throw new CliError({
         title: "Shell sandbox is not ready",

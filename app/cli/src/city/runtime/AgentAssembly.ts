@@ -25,7 +25,7 @@ import {
 import { create_city_ai_model_client } from "@/city/runtime/city-model/CityAiServiceBinding.js";
 import { resolve_local_agent_env } from "@downcity/city/local";
 import { resolve_local_root_path } from "@downcity/city/local";
-import { create_platform_sandbox } from "@/city/sandbox/PlatformSandbox.js";
+import { create_sandbox_provider } from "@/city/sandbox/PlatformSandbox.js";
 
 /** 创建 CLI 与 Desktop 可共享语义的官方 Plugin 注册集合。 */
 export function create_cli_builtin_plugin_registrations(): LocalPluginRegistration[] {
@@ -65,7 +65,7 @@ export async function create_cli_agent(input: {
   });
 }
 
-/** 创建 CLI 当前 Agent 独享的 Workspace、Shell 与 Sandbox。 */
+/** 创建 CLI Workspace 与其显式注入 Sandbox Provider 的 Shell。 */
 export async function create_cli_workspace(
   config: LocalWorkspaceConfig,
   root_path_input?: string,
@@ -80,7 +80,9 @@ export async function create_cli_workspace(
       workspace_path: config.workspace_path,
       process_env: process.env,
     }),
-    shell: new Shell({ sandbox: await create_platform_sandbox() }),
+    shell: new Shell({
+      sandbox_provider: create_sandbox_provider(),
+    }),
   });
 }
 

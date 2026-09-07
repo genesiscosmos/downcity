@@ -158,8 +158,8 @@ Security is enforced at distinct capability boundaries:
 | Capability | Enforced boundary | Permission semantics |
 | --- | --- | --- |
 | File/Search Tools | Rooted LocalFileSystem | May actively access only the Workspace |
-| Safe Shell | OS Sandbox Adapter | Workspace is writable; host-declared extra paths are read-only |
-| Unrestricted Shell | Approval gateway | The user explicitly authorizes one command |
+| Sandbox Shell | Workspace Sandbox | Commands run in the Workspace's isolated, persistent environment |
+| Host Shell | Approval gateway | The user explicitly authorizes one host command with a recorded reason |
 | Plugin | Plugin business authorization | Workspace does not own all Plugin resource access |
 | Custom Tool | Registering host | Agent Core does not infer business permissions |
 
@@ -169,15 +169,7 @@ Explicit attachments may use an absolute path selected by the host because they 
 
 Node.js already normalizes files, paths, networking, JSON, timers, AbortController, and basic child processes. Agent, Session, Store, and Workspace therefore contain no operating-system branches.
 
-Only native security and process semantics enter platform Adapters:
-
-- macOS Seatbelt.
-- Linux Bubblewrap / namespaces.
-- Windows MXC or SRT.
-- Unix PTY and Windows ConPTY.
-- Signals, process groups, and Windows Job Objects.
-
-When Downcity is installed on macOS, core packages contain portable TypeScript/JavaScript logic but do not automatically install native Windows Sandbox packages. Supporting Windows only changes the Sandbox Adapter injected by the host.
+Isolation differences are contained by the neutral Sandbox Provider protocol. Each Shell receives its Provider explicitly and owns the isolated, persistent Sandbox created when it binds a Workspace. City only manages Workspace resources and does not know whether their Shell uses a local container, microVM, remote host, or another backend. The default implementation uses microsandbox microVMs.
 
 ## Lifecycle
 

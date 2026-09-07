@@ -1,6 +1,6 @@
 {
   "name": "downcity",
-  "version": "1.1.479",
+  "version": "1.1.480",
   "type": "module",
   "description": "Downcity CLI — local City container and Federation Server management",
   "bin": {
@@ -33,6 +33,7 @@
     "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
     "@downcity/plugins": "workspace:^",
+    "@downcity/sandbox-microsandbox": "workspace:^",
     "@downcity/type": "workspace:*",
     "@earendil-works/pi-tui": "^0.74.2",
     "@larksuiteoapi/node-sdk": "^1.66.0",
@@ -52,12 +53,6 @@
     "ora": "^9.4.0",
     "ws": "^8.21.0",
     "zod": "^4.4.3"
-  },
-  "optionalDependencies": {
-    "@downcity/sandbox-linux": "workspace:^",
-    "@downcity/sandbox-macos": "workspace:^",
-    "@downcity/sandbox-windows-mxc": "workspace:^",
-    "@downcity/sandbox-windows-srt": "workspace:^"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

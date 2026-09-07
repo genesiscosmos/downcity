@@ -1,15 +1,12 @@
 /** Workspace 可选 Shell 能力协议。 */
 
 import type { RuntimeTool } from "@downcity/type";
-import type { SandboxSpawnResult } from "./Sandbox.js";
+import type { ShellProcessResult } from "./Sandbox.js";
 
 /** Workspace Shell 执行一次受控命令的输入。 */
-export interface WorkspaceShellSafeCommandInput {
+export interface WorkspaceShellSandboxCommandInput {
   /** 当前命令执行记录的稳定标识。 */
   execution_id: string;
-
-  /** 当前命令执行记录使用的私有目录。 */
-  execution_dir: string;
 
   /** 要交给解释器执行的完整命令。 */
   cmd: string;
@@ -23,8 +20,8 @@ export interface WorkspaceShellSafeCommandInput {
   /** 是否使用 login shell 语义。 */
   login: boolean;
 
-  /** Sandbox 收敛前的基础环境变量。 */
-  base_env: NodeJS.ProcessEnv;
+  /** 当前命令显式获得的环境变量。 */
+  env: Readonly<Record<string, string>>;
 
   /** 是否通过 PTY 启动命令。 */
   terminal?: boolean;
@@ -37,7 +34,7 @@ export interface WorkspaceShellSafeCommandInput {
 }
 
 /** Workspace Shell 执行一次受控命令的结果。 */
-export interface WorkspaceShellSafeCommandResult {
+export interface WorkspaceShellSandboxCommandResult {
   /** 命令的标准输出。 */
   stdout: string;
 
@@ -47,8 +44,8 @@ export interface WorkspaceShellSafeCommandResult {
   /** 命令最终退出码。 */
   exit_code: number;
 
-  /** 平台 Sandbox 返回的完整启动信息。 */
-  spawn: SandboxSpawnResult;
+  /** Workspace Sandbox 返回的完整启动信息。 */
+  spawn: ShellProcessResult;
 }
 
 /** 由 Workspace 持有并绑定到项目边界的命令执行能力。 */
@@ -58,6 +55,8 @@ export interface WorkspaceShell {
 
   /** 将 Shell 绑定到一个 Workspace 项目和私有数据作用域。 */
   bind(input: {
+    /** Workspace 的稳定业务标识。 */
+    workspace_id: string;
     /** 项目文件和命令 cwd 的根路径。 */
     root_path: string;
     /** Agent private runtime directory 私有数据根路径。 */
@@ -67,10 +66,13 @@ export interface WorkspaceShell {
   /** 更新后续进程使用的 Workspace 环境变量。 */
   set_env(env: Readonly<Record<string, string>>): void;
 
-  /** 在当前 Workspace 的 Safe Sandbox 中执行一次命令。 */
-  run_safe_command(
-    input: WorkspaceShellSafeCommandInput,
-  ): Promise<WorkspaceShellSafeCommandResult>;
+  /** 在当前 Workspace 的持久 Sandbox 中执行一次命令。 */
+  run_sandbox_command(
+    input: WorkspaceShellSandboxCommandInput,
+  ): Promise<WorkspaceShellSandboxCommandResult>;
+
+  /** 关闭全部 Shell Sessions，并删除、重建当前 Shell 的持久 Sandbox。 */
+  reset_sandbox(): Promise<void>;
 
   /** 释放当前 Shell 的进程、PTY 与 Sandbox 资源。 */
   dispose(): Promise<void>;

@@ -1,71 +1,111 @@
 /**
- * @file City 集成测试使用的最小 Sandbox Adapter。
+ * @file City 与 Shell 集成测试使用的内存 Sandbox Provider。
  *
- * 该 Adapter 只验证 Shell core 与 Session 的装配行为，不模拟生产平台的隔离实现。
+ * 该实现只模拟 Provider、Workspace Sandbox 与 guest 路径映射协议；进程仍在测试
+ * 宿主启动，因此不能作为生产隔离实现。
  */
 
 import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   build_shell_command_invocation,
   create_pipe_process_handle,
   spawn_pty_process_handle,
 } from "../bin/shell/index.js";
 
-/** 当前测试进程共享的最小 Sandbox Adapter。 */
-export const test_sandbox = {
-    backend: "test-sandbox",
-    async preflight() {
-      return { ok: true, platform: process.platform, backend: this.backend, issues: [] };
-    },
-    async resolve_system_read_only_paths() {
-      return [];
+const guest_workspace_path = "/workspace";
+
+/** 把 guest Workspace cwd 映射回测试宿主目录。 */
+function resolve_host_cwd(workspace_path, guest_cwd) {
+  const normalized = path.posix.resolve(guest_cwd);
+  if (
+    normalized !== guest_workspace_path
+    && !normalized.startsWith(`${guest_workspace_path}/`)
+  ) {
+    throw new Error(`Test Sandbox cwd escapes Workspace: ${guest_cwd}`);
+  }
+  const relative = path.posix.relative(guest_workspace_path, normalized);
+  return relative
+    ? path.join(workspace_path, ...relative.split("/"))
+    : workspace_path;
+}
+
+/** 创建测试 Workspace Sandbox。 */
+export function create_test_workspace_sandbox(binding, backend = "test-sandbox") {
+  const workspace_path = path.resolve(binding.workspace_path);
+  const sandbox_id = `test:${binding.workspace_id}`;
+  let stopped = false;
+  return {
+    id: sandbox_id,
+    backend,
+    workspace_path: guest_workspace_path,
+    get stopped() {
+      return stopped;
     },
     async spawn(request) {
+      stopped = false;
+      const cwd = resolve_host_cwd(workspace_path, request.cwd);
+      const home_path = path.join(binding.runtime_path, "sandbox-home");
+      await fs.mkdir(home_path, { recursive: true });
       const invocation = build_shell_command_invocation({
         shell_path: request.shell_path,
         cmd: request.cmd,
         login: request.login,
       });
-      const env = Object.fromEntries(
-        Object.entries(request.base_env).filter(([key, value]) =>
-          (request.policy.env_allowlist.includes(key) || key.startsWith("DC_"))
-          && typeof value === "string"
-          && value.trim().length > 0
-        ),
-      );
-      env.PATH = env.PATH || request.base_env.PATH || "/usr/bin:/bin";
-      env.HOME = request.policy.home_dir;
-      env.TMPDIR = request.policy.tmp_dir;
+      const env = {
+        PATH: process.env.PATH || "/usr/bin:/bin",
+        HOME: home_path,
+        TMPDIR: path.join(home_path, "tmp"),
+        ...request.env,
+      };
+      await fs.mkdir(env.TMPDIR, { recursive: true });
       const child = request.terminal
         ? spawn_pty_process_handle({
             command: invocation.command,
             args: invocation.args,
-            cwd: request.cwd,
+            cwd,
             env,
             terminal: { cols: request.cols, rows: request.rows },
           })
         : create_pipe_process_handle(spawn(invocation.command, invocation.args, {
-            cwd: request.cwd,
+            cwd,
             env,
             stdio: "pipe",
           }));
       return {
         child,
         cwd: request.cwd,
-        sandboxed: true,
-        sandbox_mode: "safe",
-        backend: this.backend,
-        network_mode: request.policy.network_mode,
-        sandbox_dir: request.policy.sandbox_dir,
-        home_dir: request.policy.home_dir,
-        tmp_dir: request.policy.tmp_dir,
-        cache_dir: request.policy.cache_dir,
-        policy_fingerprint: request.policy.fingerprint,
+        sandbox_id,
+        backend,
       };
     },
-};
+    async stop() {
+      stopped = true;
+    },
+    async reset() {
+      await fs.rm(path.join(binding.runtime_path, "sandbox-home"), {
+        recursive: true,
+        force: true,
+      });
+      stopped = true;
+    },
+  };
+}
 
-/** 创建当前测试进程共享的最小 Sandbox Adapter。 */
-export async function create_platform_sandbox() {
-  return test_sandbox;
+/** 创建可记录 Workspace Sandbox 的测试 Provider。 */
+export function create_test_sandbox_provider() {
+  const workspaces = new Map();
+  return {
+    backend: "test-sandbox",
+    workspaces,
+    async check() {
+      return { ok: true, backend: this.backend, issues: [] };
+    },
+    create_workspace(binding) {
+      const sandbox = create_test_workspace_sandbox(binding, this.backend);
+      workspaces.set(binding.workspace_id, sandbox);
+      return sandbox;
+    },
+  };
 }

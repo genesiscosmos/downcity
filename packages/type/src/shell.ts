@@ -4,7 +4,7 @@ export type * from "./types/shell/Sandbox.js";
 export type {
   ShellExecInput,
   ShellSessionInput,
-  ShellUnrestrictedReason,
+  ShellExecutionTarget,
 } from "./types/shell/Shell.js";
 export type * from "./types/shell/ShellAction.js";
 export type * from "./types/shell/ShellApproval.js";

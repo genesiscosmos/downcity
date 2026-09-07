@@ -27,16 +27,16 @@ export function resolve_default_shell_path(): string {
 }
 
 /**
- * 解析 shell action 请求的 sandbox 模式。
+ * 解析 Shell action 请求的执行目标。
  */
-export function resolve_sandbox_mode(value: unknown): "safe" | "unrestricted" {
-  return value === "unrestricted" ? "unrestricted" : "safe";
+export function resolve_execution_target(value: unknown): "sandbox" | "host" {
+  return value === "host" ? "host" : "sandbox";
 }
 
 function approval_denied_message(status: ShellApprovalStatus): string {
   return status === "expired"
-    ? "Unrestricted sandbox approval expired."
-    : "User denied unrestricted sandbox execution.";
+    ? "Host execution approval expired."
+    : "User denied host execution.";
 }
 
 /**
@@ -85,10 +85,8 @@ export function build_denied_approval_response(params: {
       cmd: params.cmd,
       cwd: params.cwd,
       shell_path: params.shell_path,
-      sandboxed: false,
-      sandbox_mode: "unrestricted",
-      sandbox_backend: "unrestricted-host",
-      sandbox_network_mode: "full",
+      target: "host",
+      execution_backend: "host",
       approval_status: params.approval_status,
       approval_id: params.approval_id,
       approval_reason: params.reason,

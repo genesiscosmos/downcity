@@ -121,7 +121,7 @@ SessionContext = Workspace resources + tools + env + Plugin execution view
 
 Session = State + Queue + Messages + Composer + Executor + Approvals
 
-Shell = Command/Process Protocol + Sandbox Adapter
+Shell = Sandbox Provider + Workspace Sandbox + Command/Process Protocol + Shell Sessions
 ```
 
 不要创建一个可以访问所有资源、转发所有方法的万能对象。万能对象会隐藏依赖，使测试、替换、权限分析和生命周期管理变得困难。
@@ -199,6 +199,7 @@ Workspace 统一持有一个 Agent 可以使用的项目资源：
 - Rooted FileSystem。
 - 文件与搜索工具。
 - Workspace env。
+- 可选的独立持久 Sandbox。
 - 可选 Shell。
 
 Workspace 不负责：
@@ -213,7 +214,9 @@ Workspace 不负责：
 Workspace 可以登记在 City 内，也可以由宿主在 City 外管理。它可以代表本地目录、SSH
 远程目录、容器、云电脑或其他工作环境；文件系统不是 Workspace 的必要条件。
 
-Workspace 必须有稳定 ID。Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.sessions.create({ workspace })` 创建 Session。一个 Agent 可以同时使用多个 Workspace；Workspace 只提供当前 Session 的项目文件、Shell、env 与工具，Session 仍由 AgentSessions 统一持有。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。Workspace 上下文只作为 Session 的内部执行参数，不构成新的领域所有者。
+Workspace 必须有稳定 ID。存在 Shell 时，Workspace 持有 Shell；Shell 在绑定 Workspace 时创建并持有一个独立、持久且可恢复的 Sandbox，并把项目显式挂载到隔离环境固定路径 `/workspace`。同一 Workspace 的多个 Chat Session 共享该 Shell 的 Sandbox HOME、工具链、缓存与安装结果；不同 Workspace 不共享可写 Sandbox 状态。普通 Shell dispose 只停止计算资源并保留文件系统，只有显式 reset 才删除持久状态。
+
+Agent 定义不保存 Workspace 绑定；宿主在一次具体执行开始时创建 Workspace，并通过 `agent.sessions.create({ workspace })` 创建 Session。一个 Agent 可以同时使用多个 Workspace；Workspace 只提供当前 Session 的项目文件、Sandbox、Shell、env 与工具，Session 仍由 AgentSessions 统一持有。项目目录只承担真实项目文件与命令 cwd，不承担 Downcity 运行状态。Workspace 上下文只作为 Session 的内部执行参数，不构成新的领域所有者。
 
 ### 4.2 Agent 是单 Agent 组合根
 
@@ -351,7 +354,7 @@ Workspace 只保证底层文件和 Shell 安全边界，不为 Plugin 的业务�
 
 ### 4.7 Shell 只负责命令和进程
 
-Shell 提供统一的命令与长期进程协议，并与 Sandbox Adapter 协作。
+Shell 提供统一的命令与长期进程协议。它在构造时显式接收 Sandbox Provider，在绑定 Workspace 时创建并持有具体 Workspace Sandbox，同时持有与 Chat Session 独立的 Shell Sessions。一个 Chat Session 可以创建多个 Shell Session，Shell Session 也不会因 Chat Session 身份而变成一对一资源。Shell 释放时先关闭 Shell Sessions，再停止 Sandbox 计算资源。
 
 Shell 不应该吸收：
 
@@ -372,7 +375,7 @@ Shell 不应该吸收：
 - 用户级路径与配置。
 - 模型目录、账号和密钥。
 - HTTP/RPC Server 装配。
-- 平台 Sandbox Package 选择。
+- 默认 Sandbox Provider 的选择与构造。
 
 `@downcity/agent` 应保持为可以独立嵌入任意 Node.js 应用的单 Agent SDK。
 
@@ -391,21 +394,20 @@ Shell 不应该吸收：
 
 不要为 Node.js 已经统一的能力增加 macOS、Linux、Windows 三套实现。
 
-### 5.2 只抽象真实的平台差异
+### 5.2 隔离实现只暴露中立协议
 
-以下能力可以进入平台 Adapter：
+容器、microVM 或远程计算环境的差异必须收敛到 Sandbox Provider：
 
-- macOS Seatbelt、Linux Bubblewrap、Windows MXC/SRT。
-- Unix PTY 与 Windows ConPTY。
-- Signal、进程组与 Windows Job Object。
-- ACL、reparse point 和平台凭据系统。
-- 系统服务管理。
+- Provider 负责宿主可用性检查和共享镜像、缓存等基础设施。
+- Provider 为每个 Workspace 创建独立可写环境，不能让多个 Workspace 共用同一可写 VM。
+- Workspace Sandbox 负责命令启动、停止与显式 reset，不理解 Agent 或 Chat Session。
+- Workspace 挂载在 Sandbox 创建时固定完成，不能在单次 exec 中临时扩大宿主可见范围。
 
-平台判断应尽可能出现在依赖树底部。Agent、Session、Message、Store 和 Plugin contract 不得出现无必要的平台分支。
+平台判断应尽可能出现在 Provider 实现底部。Agent、Session、Message、Store、Plugin 和 Shell contract 不得出现实现平台分支。
 
-### 5.3 平台包独立安装
+### 5.3 Sandbox Provider 独立安装
 
-原生 Sandbox 适配必须拆分为独立 package，由宿主按当前系统选择和注入。核心 Agent/Shell 包不能直接捆绑全部平台依赖。
+Sandbox Provider 必须拆分为独立 package，由宿主在构造 Shell 时显式注入。核心 Agent、City 与 Workspace 不依赖具体隔离实现，Shell 只依赖中立协议。当前默认实现使用 microsandbox 的 microVM 与 OCI 镜像，但协议不能绑定 microsandbox 特有类型。
 
 目标使用方式：
 
@@ -413,11 +415,17 @@ Shell 不应该吸收：
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-  shell: new Shell({ sandbox: platform_sandbox }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
+});
+
+const city = new City({
+  workspaces: [workspace],
 });
 ```
 
-更换操作系统只替换 `platform_sandbox`，不改变 Agent 业务代码。
+替换隔离实现只替换 `new Shell({ sandbox_provider })` 中的 Provider，不改变 City、Workspace 或 Agent 业务代码。
 
 ## 6. 安全与开放性的平衡
 
@@ -440,9 +448,9 @@ Downcity 的安全边界负责防止意外逃逸、路径混乱和未审批的�
 
 不要为了权限控制复制一套文件系统或创建无业务意义的 RuntimeFileSystem。也不要把所有能力塞进 Shell，只因为 Shell 可以访问系统。
 
-### 6.3 unrestricted 必须显式
+### 6.3 host 执行必须显式
 
-开放高权限能力时必须满足：
+Shell 只有 `sandbox` 与 `host` 两种执行目标。`sandbox` 是默认值；请求完整宿主执行时必须满足：
 
 - 调用方显式请求。
 - 原因可记录。
@@ -548,7 +556,7 @@ Store 只能使用 City Storage，不能使用项目 FileSystem。项目 Tool �
 - 模型 Provider 错误由 Executor/恢复策略处理。
 - Message 写入失败由 SessionMessages 暴露并阻止伪完成。
 - Plugin lifecycle 失败由 City Plugin Runtime 隔离和记录。
-- Shell/Sandbox 启动失败由 Shell 返回明确错误，不能静默降级为 unrestricted。
+- Shell/Sandbox 启动失败由 Shell 返回明确错误，不能静默降级为 host。
 - daemon 身份不一致由 CLI 拒绝终止进程。
 
 不要在错误的上层使用大范围 `catch` 隐藏下层不变量破坏。
@@ -563,7 +571,7 @@ Plugin action 返回 `success: false` 是业务结果，不等于 Plugin runtime
 
 以下回退默认禁止：
 
-- Sandbox 不可用时转 unrestricted。
+- Sandbox 不可用时转 host。
 - 指定模型不可用时静默换模型。
 - Store 写入失败后仍报告成功。
 - 无法验证 daemon 身份时仍发送 kill。

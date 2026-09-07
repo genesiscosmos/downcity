@@ -29,6 +29,9 @@ export interface WorkspaceOptions {
   /** Workspace 内可选的受控命令执行能力。 */
   shell?: WorkspaceShell;
 
+  /** City 外独立使用 Workspace 时保存 Shell 运行数据的宿主目录。 */
+  runtime_path?: string;
+
   /**
    * Workspace 的显式环境变量覆盖项。
    *

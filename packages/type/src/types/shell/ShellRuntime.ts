@@ -3,7 +3,8 @@
  *
  * 关键点（中文）
  * - 这里定义 `new Shell(...)` 对外可见的最小构造参数。
- * - Shell 自己拥有 tools、sessions 与 sandbox；审批状态由宿主 Gateway 管理。
+ * - Shell 自己拥有 tools、Shell Sessions 与 Workspace Sandbox。
+ * - Sandbox Provider 在 Shell 构造时显式注入，具体 Sandbox 随 Shell 生命周期释放。
  */
 
 import type { RuntimeTool } from "@downcity/type";
@@ -11,7 +12,7 @@ import type {
   ShellActionResponse,
 } from "./ShellAction.js";
 import type { ShellApprovalGateway } from "./ShellApproval.js";
-import type { ShellSandboxAdapter } from "./Sandbox.js";
+import type { SandboxProvider } from "./Sandbox.js";
 
 /**
  * Shell 运行时日志器。
@@ -36,7 +37,7 @@ export interface ShellExecutionContext {
   readonly call_id?: string;
   /** 当前调用的取消信号。 */
   readonly abort_signal?: AbortSignal;
-  /** 当前 Session 注入的 unrestricted 审批网关。 */
+  /** 当前 Session 注入的宿主执行审批网关。 */
   readonly approval_gateway?: ShellApprovalGateway;
   /** 当前 Step 已提交生效的环境变量。 */
   readonly workspace_env?: Readonly<Record<string, string>>;
@@ -59,34 +60,17 @@ export interface ShellToolExecutionContext {
  */
 export interface ShellOptions {
   /**
-   * 项目根目录。未传时由 Workspace 构造阶段补齐。
-   */
-  root_path?: string;
-  /**
-   * Shell、Sandbox 与审计日志使用的内部数据根目录。
+   * 为当前 Shell 创建 Workspace Sandbox 的 Provider。
    *
-   * 该目录必须与项目根目录分离，由 Agent private runtime directory 组合阶段显式绑定。
+   * 关键点（中文）
+   * - Provider 只负责创建具体隔离环境，不归 City 或 Workspace 持有。
+   * - Shell 绑定 Workspace 时创建 Sandbox，并在自身释放时停止 Sandbox。
    */
-  data_path?: string;
+  sandbox_provider: SandboxProvider;
   /**
    * 传给 shell 子进程的基础环境变量。
    */
   env?: Record<string, string | undefined>;
-  /**
-   * Safe Sandbox 额外允许读取的宿主目录。
-   *
-   * 说明（中文）
-   * - 适合宿主托管的固定版本 CLI、shim 和只读运行时目录。
-   * - 目录必须是绝对路径，且不能与 workspace 写边界重叠。
-   * - 模型不能通过 `shell_exec` 或 `shell_session` 修改该配置。
-   */
-  safe_read_only_paths?: string[];
-  /**
-   * 当前平台的 Sandbox Adapter。
-   *
-   * 说明（中文）：Shell 核心不选择平台实现，调用方必须在组合根显式注入。
-   */
-  sandbox: ShellSandboxAdapter;
   /**
    * 可选日志器。
    */
@@ -95,11 +79,15 @@ export interface ShellOptions {
 
 /** Shell 绑定到 Agent private runtime directory 时使用的路径。 */
 export interface ShellBinding {
+  /** 当前 Shell 所属 Workspace 的稳定标识。 */
+  workspace_id: string;
+
   /** 命令实际执行和文件权限约束使用的项目根目录。 */
   root_path: string;
 
   /** Shell、Sandbox 与审计产物使用的内部数据根目录。 */
   data_path: string;
+
 }
 
 /**

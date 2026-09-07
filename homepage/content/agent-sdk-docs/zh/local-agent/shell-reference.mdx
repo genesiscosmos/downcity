@@ -1,170 +1,96 @@
 ---
-title: Shell 与沙箱
-description: 配置 Agent 的本地命令执行、沙箱和审批流程
+title: Shell 与 Sandbox
+description: Workspace 持久 Sandbox、Shell Session、宿主执行与审批
 ---
 
-# Shell 与沙箱
+# Shell 与 Sandbox
 
-Agent 使用 `@downcity/city` 执行本地命令、管理沙箱运行环境、处理交互式审批。
+Downcity 将四种职责分开：
 
-## 安装
-
-Shell 核心与平台实现分包安装。只安装当前系统需要的 adapter：
-
-```bash
-# macOS
-pnpm add @downcity/city @downcity/sandbox-macos
-
-# Linux
-pnpm add @downcity/city @downcity/sandbox-linux
-
-# Windows（MXC Development）
-pnpm add @downcity/city @downcity/sandbox-windows-mxc
-
-# Windows（Anthropic SRT Alpha）
-pnpm add @downcity/city @downcity/sandbox-windows-srt
-npx @downcity/sandbox-windows-srt setup
+```text
+City → Workspace
+Workspace → Shell
+Shell → SandboxProvider + Workspace 持久 Sandbox + Shell Sessions
+Chat Session → 只负责调用
 ```
 
-## Shell
+每个 Workspace 拥有一个独立、持久的 Sandbox。同一 Workspace 下的多个 Chat Session 共享 Sandbox HOME、安装工具和缓存；不同 Workspace 不共享可写 Sandbox 状态。Shell Session 使用 `shell_id` 标识，是独立进程资源，不是 Chat Session。
 
-`Shell` 类管理命令执行和交互式审批运行时。应用层审批归属具体 Session，通过 Session API 处理。
+## 安装与初始化
 
-### 最小示例
+```bash
+pnpm add @downcity/agent @downcity/city @downcity/sandbox-microsandbox
+npx microsandbox setup
+```
+
+默认 Provider 使用 microsandbox microVM 与 OCI 镜像，支持相应的 macOS、Linux 和 Windows 宿主。
 
 ```ts
-import { Shell } from "@downcity/city";
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { City, Shell, Workspace } from "@downcity/city";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-});
-
-const agent = new Agent({ id: "demo" });
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
-  shell,
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
 });
+const city = new City({
+  workspaces: [workspace],
+});
+const agent = new Agent({ id: "repo-helper", model });
+city.agents.add(agent);
 ```
 
-Workspace 会把项目根目录绑定给 Shell，Agent 不再直接配置或持有 Shell。独立使用 Shell 时仍可以传入 `root_path`。
+不使用 City 的嵌入式宿主，需要向 Shell 提供 `sandbox_provider`，向 Workspace 提供 `runtime_path`。City 只自动分配运行目录，不选择或持有 Provider。
 
-### 释放资源
+## 执行目标
 
-- Workspace 已绑定 Agent 时调用 `agent.dispose()`，它会一并释放 Shell。
-- 只有 Workspace 尚未绑定 Agent 时，才直接调用 `workspace.dispose()`。
-- `shell.set_safe_read_only_paths(paths)` — 替换宿主批准的额外只读目录
+Shell 只保留两个目标：
 
-审批请求表现为 pending Interaction Part，关联 Tool 同时进入 `waiting-user`。应用层从 Interaction 的 `request` 读取完整 Shell 请求，再使用 `session.respond(...)` 提交用户决定；重连后可通过 `session.interactions()` 恢复 pending 请求。不要直接调用 Shell Runtime 的内部审批方法。
-
-## 模型工具
-
-Workspace 始终提供文件与搜索工具；配置 Shell 后再增加两个命令工具：
-
-| 工具 | 用途 |
-|------|------|
-| `shell_exec` | 执行一次性非交互命令 |
-| `shell_session` | 管理长运行或交互式 PTY 命令 |
-| `grep` | 底层直接使用 ripgrep 搜索项目文件内容 |
-| `find` | 使用 POSIX glob 模式发现项目文件 |
-| `read` | 按行分页读取文本，并把图片注入模型输入 |
-| `write` | 创建 UTF-8 文件，或在 `overwrite: true` 时原子覆盖 |
-| `edit` | 使用唯一、非重叠的 `old_text` 精确编辑一个文件 |
-
-`read` 默认最多返回 500 行，单次最多 2,000 行或 256KB。结果中的 `truncated` 和 `next_offset` 用于继续读取。`write` 单次最多写入 1MB，并自动创建父目录。
-
-对于 PNG、JPEG、GIF、WebP、BMP 和 PDF，`read` 的 `output` 只返回文件元数据，并把指向本地文件的 User File Part 注入下一个模型 Step。不在 Tool Result 中返回 base64。其他二进制文件只返回元数据。
-
-`edit` 一次最多接受 10 个修改，所有修改都基于原始文件匹配并且全部成功后才写入。可以把 `read.sha256` 传给 `edit.expected_sha256`，防止覆盖并发修改。
-
-`grep` 不经过 shell，直接执行 `rg --json`。它默认使用不区分大小写的字面量搜索；设为 `literal: false` 可使用正则表达式，设为 `case_sensitive: true` 可区分大小写，`glob` 用于限制候选文件。
-
-`find` 接受 POSIX glob `pattern`，包含 dotfile、遵守 `.gitignore`，且不会跟随符号链接。两个搜索工具默认最多返回 200 项，`max_results` 最大为 2,000。
-
-其中 `shell_exec` 与 `shell_session` 属于 Shell，其余五个工具属于 Workspace。所有文件和搜索工具都固定限制在 Workspace 根目录内，并拒绝符号链接逃逸。它们不会申请 unrestricted 权限。
-
-## 沙箱
-
-Shell 命令默认使用 safe sandbox。SDK 不会自动选择或安装平台后端；应用必须向 `Shell` 注入一个 adapter：
-
-- `macos-seatbelt` — macOS 沙箱
-- `linux-bubblewrap` — Linux 沙箱
-- `windows-mxc-dev` — Microsoft MXC Windows 进程沙箱，当前为 Development / unstable
-- `windows-srt-alpha` — Anthropic Sandbox Runtime 原生 Windows 沙箱，当前为 Alpha
-- `unrestricted-host` — 不启用沙箱
-
-`@downcity/city` 只维护 workspace 写边界、路径校验、环境收敛和策略指纹。系统目录、宿主预检、策略编译和进程启动由独立 adapter 负责。MXC 与 Anthropic SRT 只属于各自的 Windows package，macOS/Linux 用户不会因为安装 `@downcity/city` 下载 Windows runtime。Downcity CLI 默认继续使用 MXC；设置 `DC_WINDOWS_SANDBOX=srt` 才会显式启用 SRT。SDK 用户需要安装并注入对应 adapter。
-
-### Windows adapter
-
-原生 Windows 当前属于 Development / unstable 支持范围，要求 Windows 11 24H2 build 26100 或更高版本。Agent 启动前会检查 `cmd.exe`、随包安装的 Microsoft MXC runtime 及其实际选择的隔离层级；依赖缺失、系统版本不支持或 probe 失败时都会拒绝启动 Safe Sandbox，不会自动降级到 unrestricted。
-
-Windows 使用原生 `cmd.exe /d /s /c` 命令模型。命令中的环境变量、管道和重定向需要使用 cmd 语法，例如 `%NAME%`、`|` 和 `>`；SDK 不会把 POSIX shell 命令自动翻译成 cmd。如果需要 PowerShell，可以在 cmd 命令中显式调用 `powershell.exe`。
-
-SDK 把 Windows 隔离交给锁定版本的 `@microsoft/mxc-sdk` runtime。MXC 负责选择当前宿主可用的进程隔离层级、管理 AppContainer 与 Job Object 生命周期，并在执行后恢复临时文件策略；Downcity 只把最终只读和读写根目录映射到 MXC `0.7.0-alpha` policy schema。
-
-当前 Windows 注意事项：
-
-- MXC 的 host/port allowlist 与 Windows `deniedPaths` 尚未进入 Downcity 当前 Windows policy contract。
-- PTY 与 pipe 由 MXC 提供；依赖完整控制台行为的程序仍可能与 macOS/Linux 表现不同。
-- MXC 仍是 Public Preview，其上游文档明确说明当前 profile 可能过度授权，因此该后端不能作为生产级安全边界。
-
-SRT 方案直接使用 Anthropic 开源的 `@anthropic-ai/sandbox-runtime`。它通过独立的 `downcity-sandbox` Windows 用户、Restricted Token、Job Object、NTFS ACL 和 WFP 网络规则保护宿主。第一次使用前必须显式运行 `npx @downcity/sandbox-windows-srt setup` 并确认 UAC；普通命令执行不会自动提权或静默安装。
+- `sandbox`：默认值。命令在 Workspace microVM 中执行，项目固定挂载到 `/workspace`。
+- `host`：使用完整宿主权限，必须提供非空原因并经过宿主审批。
 
 ```ts
-import { Shell } from "@downcity/city";
-import { WindowsSrtSandbox } from "@downcity/sandbox-windows-srt";
-
-const shell = new Shell({
-  sandbox: new WindowsSrtSandbox(),
+shell_exec({
+  cmd: "open ./report.pdf",
+  target: "host",
+  reason: "在宿主桌面应用中打开生成的报告。",
 });
 ```
 
-SRT Windows 当前仍是 Alpha，并且同一个 Downcity 进程只允许一个活动 workspace 安全域。不同 workspace 不能并发共享 `downcity-sandbox` SID；这种场景应继续使用 MXC、WSL/container，或拆分到不同宿主安全域。SRT 也无法默认读取当前 Windows 用户通过 nvm、Scoop 或 `pip install --user` 安装的工具，需要把相应目录作为额外只读路径显式授权。
+系统不提供部分宿主路径白名单、中间权限模式或静默降级。Sandbox 不可用时直接失败，不会切换到宿主执行。
 
-SRT Windows 的文件隔离依赖独立用户和 additive NTFS ACL。如果 workspace 外目录已经向 `Authenticated Users` 等宽泛主体开放写权限，SRT 的 `allowWrite` 不会撤销该既有权限。不要把当前 Alpha 后端视为任意 Windows 主机上的完整默认拒绝边界；请使用收紧过宿主 ACL 的工作目录，安全要求较高时继续选择 MXC、WSL 或容器。
+## 工具与生命周期
 
-### 额外只读目录
+`Shell` 提供适合短命令的 `shell_exec`，以及适合长任务和交互进程的 `shell_session`。后者支持 `start`、`send`、`read`、`wait`、`list` 和 `stop`。
 
-宿主可以把固定版本 CLI 或运行时目录以只读方式加入 Safe Sandbox：
+关闭 Workspace 会释放其 Shell；Shell 先关闭全部 Shell Sessions，再停止 Sandbox 计算资源，同时保留 Sandbox 文件系统。使用相同 City storage 恢复同一 Workspace 时会重新连接该环境。只有显式调用 `shell.reset_sandbox()` 才会删除 HOME 和已安装工具。
+
+Workspace 挂载在 Sandbox 创建时固定。如果稳定 Workspace ID 后续指向不同宿主路径或 City runtime path，Downcity 会拒绝连接并要求显式 reset，避免静默挂载意外文件。
+
+## 环境变量
+
+Sandbox 命令只获得显式 Workspace env 与 Downcity 执行标识，不继承完整宿主 `process.env`。Host 命令从宿主环境开始，再叠加 Workspace env。两种执行都会移除 Downcity 鉴权密钥。
+
+`workspace.set_env()` 与 `workspace.patch_env()` 只影响后续命令；已启动进程继续使用创建时的环境快照。
+
+## 审批
+
+每次 `host` 启动，以及向 host Shell Session 写 stdin，都会经过当前 Chat Session 注入的审批网关。审批属于当前工具调用，但创建出的 Shell Session 仍是 Workspace Shell 资源。
 
 ```ts
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-  safe_read_only_paths: [
-    "/Users/user/.vibecape/tools/officecli/v1.0.136",
-  ],
+const pending = await session.interactions();
+await session.respond({
+  interaction_id: pending[0].request.interaction_id,
+  response: {
+    type: "approval",
+    outcome: "resolved",
+    payload: { decision: "approved" },
+  },
 });
 ```
 
-目录必须是项目外已存在的绝对目录。macOS 为它生成 Seatbelt `file-read*` 规则；Linux 使用 Bubblewrap `--ro-bind`；Windows adapter 把它映射成 MXC 只读根或 SRT READ ACL。项目外写权限不会随之扩大。
-
-macOS 还会自动解析 `xcode-select -p`，把当前 Xcode 运行目录加入系统只读路径，并把真实的 `Developer/usr/bin` 放到 `PATH` 最前面。普通 `git` 会直接使用 Xcode Git，不经过会写宿主 cache 的 xcrun。
-
-### Env
-
-`shell_exec` 和 `shell_session` 使用当前 Session step 已生效的 Workspace env 构造子进程环境。宿主可以通过 `workspace.set_env(next)` 或 `workspace.patch_env(patch)` 动态更新 configured env；已有 Session 会在下一个 step 检查点提交该修改，当前 provider 请求及其工具调用继续使用原 env。如果当前 Session turn 没有后续 step，则在下一个 Session turn 开始时提交。
-
-safe sandbox 只会导出两类环境变量：
-
-- shell 运行所需的最小基础变量，例如 `PATH`、`LANG`、`SHELL`
-- 当前 Workspace env 中显式存在的 key
-
-这意味着 `.env`、Workspace 构造参数 `env` 和运行时 `workspace.patch_env()` 写入的 key 可以被 sandbox 内命令读取，但 SDK 不会把完整宿主 `process.env` 暴露给 sandbox。
-
-```ts
-workspace.patch_env({
-  GITHUB_TOKEN: token,
-});
-
-await session.prompt({ query: "执行 shell 命令" });
-```
-
-### Policy
-
-`SandboxPolicy` 合并系统只读目录、固定的 workspace 写目录和宿主额外只读目录，并完成 realpath、路径重叠和目录权限校验。
-
-每个 adapter 的 `preflight()` 执行对应宿主的前置检查，验证沙箱环境是否就绪。
+`ask` 是默认审批模式。`always-allow` 只影响当前 Chat Session 后续的新 host 审批请求，不改变 Sandbox 隔离边界。

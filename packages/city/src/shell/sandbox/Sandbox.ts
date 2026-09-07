@@ -1,27 +1,25 @@
 /**
- * Shell Sandbox 统一入口。
+ * Shell 执行目标统一入口。
  *
  * 关键点（中文）
- * - Shell session 只通过本模块启动进程，不直接依赖具体平台后端。
- * - Safe 模式先解析统一策略，再交给 Seatbelt 或 Bubblewrap。
- * - unrestricted 模式必须由上层完成审批，本模块不重复实现审批状态机。
+ * - 默认命令直接进入当前 Workspace 独享的持久 Sandbox。
+ * - host 目标必须由上层先完成审批，本模块只负责启动已经获批的宿主进程。
+ * - Sandbox 内只存在固定的 Workspace 挂载，不再编译宿主路径权限列表。
  */
 
-import type { ShellHostContext } from "@downcity/type/shell";
-import type { SandboxSpawnResult } from "@downcity/type/shell";
-import {
-  resolve_sandbox_cwd,
-  resolve_sandbox_policy,
-} from "@/shell/sandbox/SandboxPolicy.js";
-import { spawn_unrestricted_host } from "@/shell/sandbox/backends/UnrestrictedHost.js";
+import type {
+  ShellProcessResult,
+  ShellExecutionTarget,
+  ShellHostContext,
+} from "@downcity/type/shell";
+import { spawn_host_process } from "@/shell/sandbox/backends/Host.js";
+import { resolve_sandbox_cwd } from "@/shell/session/ShellRuntimeEnvironment.js";
 
-/**
- * 单次 Shell Sandbox 启动输入。
- */
-export interface SandboxStartInput {
+/** 单次 Shell 进程启动输入。 */
+export interface ShellProcessStartInput {
   /** 当前 Shell 宿主上下文。 */
   context: ShellHostContext;
-  /** 当前执行记录标识。 */
+  /** 当前 Shell Session 标识。 */
   execution_id: string;
   /** 当前执行记录目录。 */
   execution_dir: string;
@@ -29,14 +27,14 @@ export interface SandboxStartInput {
   cmd: string;
   /** 调用方请求的工作目录。 */
   cwd: string;
-  /** shell 可执行文件路径。 */
+  /** 当前执行使用的 Shell 路径。 */
   shell_path: string;
   /** 是否使用 login shell。 */
   login: boolean;
-  /** Sandbox 收敛前的基础环境变量。 */
-  base_env: NodeJS.ProcessEnv;
-  /** 当前执行模式，默认 safe。 */
-  sandbox_mode?: "safe" | "unrestricted";
+  /** 当前目标可见的环境变量。 */
+  env: NodeJS.ProcessEnv;
+  /** 当前明确执行目标。 */
+  target?: ShellExecutionTarget;
   /** 是否通过 PTY 启动。 */
   terminal?: boolean;
   /** PTY 列数。 */
@@ -45,56 +43,45 @@ export interface SandboxStartInput {
   rows?: number;
 }
 
-/**
- * 在 Safe Sandbox 或已审批的 unrestricted 环境启动进程。
- */
-export async function spawn_in_sandbox(
-  input: SandboxStartInput,
-): Promise<SandboxSpawnResult> {
-  if (input.sandbox_mode === "unrestricted") {
-    return await spawn_unrestricted_host({
+/** 在 Workspace Sandbox 或已审批的宿主环境启动进程。 */
+export async function spawn_shell_process(
+  input: ShellProcessStartInput,
+): Promise<ShellProcessResult> {
+  if (input.target === "host") {
+    return await spawn_host_process({
       execution_id: input.execution_id,
       execution_dir: input.execution_dir,
       cmd: input.cmd,
       cwd: input.cwd,
       shell_path: input.shell_path,
       login: input.login,
-      base_env: input.base_env,
+      env: input.env,
       terminal: input.terminal,
       cols: input.cols,
       rows: input.rows,
     });
   }
 
-  const policy = await resolve_sandbox_policy(input.context, input.base_env);
-  const request = {
+  return await input.context.sandbox.spawn({
     execution_id: input.execution_id,
-    execution_dir: input.execution_dir,
     cmd: input.cmd,
     cwd: resolve_sandbox_cwd(input.context, input.cwd),
     shell_path: input.shell_path,
     login: input.login,
-    base_env: input.base_env,
-    policy,
+    env: Object.fromEntries(
+      Object.entries(input.env).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    ),
     terminal: input.terminal,
     cols: input.cols,
     rows: input.rows,
-  };
-  return await input.context.sandbox.spawn(request);
+  });
 }
 
-/** Shell session 使用的语义化启动别名。 */
-export async function spawn_shell_process(
-  input: SandboxStartInput,
-): Promise<SandboxSpawnResult> {
-  return await spawn_in_sandbox(input);
-}
-
-/**
- * 执行一次无需 Shell session 管理的 Safe Sandbox 命令。
- */
+/** 执行一次不进入 Shell Session 管理的 Sandbox 命令。 */
 export async function run_sandbox_command(
-  input: Omit<SandboxStartInput, "sandbox_mode">,
+  input: Omit<ShellProcessStartInput, "target">,
 ): Promise<{
   /** 合并后的标准输出与标准错误。 */
   stdout: string;
@@ -103,22 +90,19 @@ export async function run_sandbox_command(
   /** 子进程退出码。 */
   exit_code: number;
   /** Sandbox 启动结果。 */
-  spawn: SandboxSpawnResult;
+  spawn: ShellProcessResult;
 }> {
-  const spawn = await spawn_in_sandbox({ ...input, sandbox_mode: "safe" });
+  const spawn = await spawn_shell_process({ ...input, target: "sandbox" });
   const output_chunks: string[] = [];
-  spawn.child.on_data((chunk) => {
-    output_chunks.push(String(chunk ?? ""));
-  });
+  spawn.child.on_data((chunk) => output_chunks.push(String(chunk ?? "")));
   const exit_code = await new Promise<number>((resolve, reject) => {
     spawn.child.on_error(reject);
     spawn.child.on_exit(resolve);
     spawn.child.close_stdin?.();
   });
   const stdout = output_chunks.join("");
-  const stderr = "";
   if (exit_code !== 0) {
     throw new Error(stdout.trim() || `Sandbox command failed with exit code ${exit_code}`);
   }
-  return { stdout, stderr, exit_code, spawn };
+  return { stdout, stderr: "", exit_code, spawn };
 }

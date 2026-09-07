@@ -79,13 +79,6 @@ export class WorkspaceEntry {
     const storage: AgentStorage = get_agent_storage(this.agent);
     this.storage = storage;
     this.data_path = storage.root_path;
-    if (!agent_has_resource_container(this.agent)) {
-      this.workspace.shell?.bind({
-        root_path: this.workspace.path,
-        // 无 City 时内部状态仍在内存；Shell 的审批/临时文件必须落在真实项目根目录。
-        data_path: this.workspace.path,
-      });
-    }
     this.logger = new Logger();
     this.logger.bind_storage(storage.files, storage.root_path, {
       agent_id: this.agent.id,

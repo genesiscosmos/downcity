@@ -44,14 +44,15 @@ flowchart TD
     Session --> Storage
     Workspace --> Files["项目 File/Search"]
     Workspace --> Env["Workspace Env"]
-    Workspace --> Shell["Shell 与 Sandbox Adapter"]
+    Workspace --> Shell["Shell"]
+    Shell --> Sandbox["Sandbox Provider + Workspace Sandbox"]
 ```
 
 依赖方向保持明确：
 
 - `@downcity/agent` 只依赖 `@downcity/type` 中的中立资源协议。
 - `@downcity/city` 依赖 Agent，并通过 Agent 内部绑定注入 Workspace、Tool 与 SessionHooks；Agent 不反向依赖 City。
-- 宿主选择平台 Sandbox，并组合 Agent 与 Workspace。
+- 宿主在构造每个 Shell 时选择 Sandbox Provider；City 不理解具体后端。
 - Edge Adapter 使用 `@downcity/type/workspace`，不会加载 Node.js 本地实现。
 
 ## Agent 是主体

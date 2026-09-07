@@ -1,5 +1,5 @@
 /**
- * Shell unrestricted sandbox 审批边界。
+ * Shell host 执行审批边界。
  *
  * 关键点（中文）
  * - Shell 负责危险命令校验、权限审计和等待宿主审批结果。
@@ -16,7 +16,7 @@ import type {
 } from "@downcity/type/shell";
 import { now_ms } from "../session/ShellActionRuntimeSupport.js";
 
-const DANGEROUS_COMMAND_PATTERNS = [
+const DANGEROUS_HOST_COMMAND_PATTERNS = [
   /\bsudo\b/,
   /\brm\s+-[^&|;\n]*r[^&|;\n]*f\s+\/(?:\s|$)/,
   /\bchmod\s+-R\s+777\s+\/(?:\s|$)/,
@@ -27,7 +27,7 @@ const DANGEROUS_COMMAND_PATTERNS = [
 
 /** 判断命令是否命中 Shell 固定拒绝规则。 */
 function is_dangerous_command(cmd: string): boolean {
-  return DANGEROUS_COMMAND_PATTERNS.some((pattern) => pattern.test(cmd));
+  return DANGEROUS_HOST_COMMAND_PATTERNS.some((pattern) => pattern.test(cmd));
 }
 
 /** 把 stdin 审批预览限制在审计日志可读范围内。 */
@@ -37,9 +37,9 @@ function build_input_preview(value: string): string {
   return `${normalized.slice(0, 240)}...`;
 }
 
-/** 返回 unrestricted 权限审计日志路径。 */
+/** 返回 host 执行审计日志路径。 */
 function resolve_audit_path(context: ShellHostContext): string {
-  return path.join(context.data_path, "logs", "unrestricted-sandbox-audit.jsonl");
+  return path.join(context.data_path, "logs", "host-execution-audit.jsonl");
 }
 
 /** 追加一条权限审计记录。 */
@@ -54,27 +54,27 @@ async function append_audit(params: {
   await fs.appendFile(file_path, `${JSON.stringify(params.record)}\n`, "utf-8");
 }
 
-/** 校验 unrestricted sandbox 请求。 */
-export function validate_unrestricted_request(params: {
+/** 校验 host 执行请求。 */
+export function validate_host_request(params: {
   /** 待执行命令或写入内容。 */
   cmd: string;
   /** 权限申请原因。 */
   reason?: string;
 }): string | null {
   const reason = String(params.reason || "").trim();
-  if (!reason) return "unrestricted sandbox requires a non-empty reason";
+  if (!reason) return "host execution requires a non-empty reason";
   if (is_dangerous_command(params.cmd)) {
-    return "unrestricted sandbox rejected a dangerous command";
+    return "host execution rejected a dangerous command";
   }
   return null;
 }
 
 /**
- * 通过当前 Tool 上下文的 Gateway 请求 unrestricted 权限。
+ * 通过当前 Tool 上下文的 Gateway 请求 host 执行权限。
  *
  * Gateway 缺失时按拒绝处理，Shell 绝不会因为宿主集成不完整而直接执行。
  */
-export async function request_unrestricted_approval(params: {
+export async function request_host_approval(params: {
   /** 当前 Shell 宿主上下文。 */
   context: ShellHostContext;
   /** 当前 Shell 运行标识。 */

@@ -1,131 +1,35 @@
 ---
 title: Shell Built-In
-description: Built-in shell tools, sandbox modes, and approval flow
+description: Built-in Shell tools, persistent Workspace Sandbox, and host approval
 ---
 
 # Shell Built-In
 
-Shell is no longer a plugin. It is a built-in capability provided by `@downcity/city`, composed with an independent platform Sandbox Adapter, and mounted on an Agent.
+Shell is a built-in Workspace capability from `@downcity/city`, not a Plugin. Shell owns its `SandboxProvider`, the persistent Sandbox created for its Workspace, and all Shell Sessions created inside it. City does not know which execution backend the Workspace uses.
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/city";
-import { Shell } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { City, Shell, Workspace } from "@downcity/city";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
-const agent = new Agent({ id: "repo-helper" });
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
 });
-```
-
-## Tools
-
-Mounting a `Shell` configured with a platform adapter adds these model tools:
-
-- `shell_exec`
-- `shell_session`
-
-`shell_exec` is for one-shot non-interactive commands. `shell_session` is for interactive PTY sessions and supports `start`, `send`, `read`, `list`, and `stop` actions.
-
-`timeout_ms` on `shell_exec` is the total command runtime and defaults to 10 minutes. An explicitly short value is honored and terminates the process at that deadline. Use `shell_session` for long-running work instead of keeping `shell_exec` open.
-
-## Sandbox Modes
-
-Shell tools run in the Safe Sandbox by default.
-
-macOS uses Seatbelt and Linux uses Bubblewrap. Native Windows keeps the pinned Microsoft MXC runtime as `windows-mxc-dev` by default. Set `DC_WINDOWS_SANDBOX=srt` to explicitly enable `windows-srt-alpha`, which uses a dedicated Windows user, ACLs, and WFP. SRT requires `npx @downcity/sandbox-windows-srt setup` first and currently permits one active workspace security domain. Its additive ACLs do not revoke existing writes granted to broad principals such as `Authenticated Users` outside the workspace, so this Alpha backend is not a complete default-deny boundary on arbitrary Windows hosts. Neither Windows backend falls back to unrestricted execution when unavailable.
-
-Use `sandbox: "unrestricted"` only when a command needs host-level access, such as `brew install`, `npm install -g`, `pip install --user`, `gh auth login`, or service initialization outside the project sandbox.
-
-```ts
-shell_exec({
-  cmd: "brew install ffmpeg",
-  sandbox: "unrestricted",
-  reason: "Homebrew writes to the host-level package directory.",
+const city = new City({
+  workspaces: [workspace],
 });
-```
-
-Unrestricted execution always requires user approval. Missing `reason` is rejected before execution.
-
-## Host Read-Only Directories
-
-The Safe Sandbox write boundary always remains inside the project. A host can grant a trusted, version-pinned CLI an additional read-only directory without upgrading the command to unrestricted execution:
-
-```ts
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-  safe_read_only_paths: [
-    "/Users/user/.vibecape/tools/officecli/v1.0.136",
-  ],
-});
-
 const agent = new Agent({ id: "repo-helper" });
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
-  shell,
-});
+city.agents.add(agent);
 ```
 
-Each entry must be an existing absolute directory outside the project. macOS compiles it to a Seatbelt `file-read*` rule, Linux maps it with Bubblewrap `--ro-bind`, and Windows passes it to MXC as a read-only root or grants an SRT READ ACL to its dedicated user. No backend grants write access.
+The model receives `shell_exec` and `shell_session`. Both default to `target: "sandbox"`, where the project is mounted at `/workspace`. Use `target: "host"` with a clear `reason` only when full host access is required; the request must pass approval.
 
-The host can replace the directories after a tool install, upgrade, or shutdown:
+The same Workspace shares Sandbox HOME and installed tools across Chat Sessions. Different Workspaces have separate writable environments. A `shell_id` identifies a Shell Session and is never interchangeable with a Chat `session_id`.
 
-```ts
-await shell.set_safe_read_only_paths([
-  "/Users/user/.vibecape/tools/officecli/v1.0.137",
-]);
-```
+Closing City or Workspace stops compute without deleting the persistent Sandbox filesystem. There are no host path allowlists or intermediate execution modes.
 
-When access is removed, Shell closes active sessions that could retain the previous permission. On macOS, the Xcode runtime selected by `xcode-select` is added as a system read-only path and its real `Developer/usr/bin` directory is prepended to `PATH`. Normal `git` calls therefore bypass xcrun without project-external write access.
-
-## Approval API
-
-Clients approve shell requests through the Session that started the tool call:
-
-```ts
-const pending = await session.interactions();
-
-await session.respond({
-  interaction_id: pending[0].request.interaction_id,
-  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
-});
-```
-
-Local and remote Sessions expose the same API. A live UI reads a pending Interaction Part while the related Tool is `waiting-user`, then submits the response with `session.respond(...)`.
-
-## Session Approval Mode
-
-Shell approval mode is scoped to the current session:
-
-- `ask`: default mode. Every unrestricted request enters the approval queue.
-- `always-allow`: automatically approves shell approvals in the current session.
-
-```ts
-await session.set({
-  security: { approval_mode: "always-allow" },
-});
-
-const current = await session.status();
-```
-
-`always-allow` does not change the sandbox mode. It only records new unrestricted requests as approved instead of creating pending approvals. Existing pending approvals are not auto-approved.
-
-## Semantics
-
-- Shell is owned by `@downcity/city`, not `@downcity/plugins`.
-- Agent only mounts Shell tools; approvals and live Mutations belong to a specific Session.
-- Safe Sandbox commands can read and write the project and use the configured sandbox directory.
-- Host read-only directories can extend read access but never project-external write access.
-- Unrestricted commands execute outside the Safe Sandbox only after per-request approval.
-- `always-allow` only affects new approval requests in the current session, not other sessions.
-- Every `send` to an unrestricted `shell_session` also requires approval.
-- `agent.dispose()` disposes Shell sessions and expires pending approvals so waiting calls do not remain unresolved.
-
-## Related Docs
-
-- [Agent Constructor Options](/en/agent-sdk-docs/local-agent/constructor-options)
-- [Tools and Plugins](/en/agent-sdk-docs/local-agent/tools-and-plugins)
+See [Shell and Sandbox](/en/agent-sdk-docs/local-agent/shell-reference) for lifecycle, environment, and approval details.

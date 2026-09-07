@@ -7,7 +7,7 @@
  */
 
 import type { ShellApprovalGateway } from "./ShellApproval.js";
-import type { ShellSandboxAdapter } from "./Sandbox.js";
+import type { WorkspaceSandbox } from "./Sandbox.js";
 
 export type ShellLogger = {
   /**
@@ -35,8 +35,8 @@ export type ShellHostIntegration = {
 };
 
 export type ShellHostContext = {
-  /** 当前 Shell 强制注入的平台 Sandbox Adapter。 */
-  sandbox: ShellSandboxAdapter;
+  /** 当前 Workspace 独享的持久 Sandbox。 */
+  sandbox: WorkspaceSandbox;
   /**
    * 当前项目根目录。
    */
@@ -47,14 +47,6 @@ export type ShellHostContext = {
    * 传给 shell 的显式环境变量。
    */
   env?: Record<string, string | undefined>;
-  /**
-   * 宿主批准给 Safe Sandbox 的额外只读目录。
-   *
-   * 关键点（中文）
-   * - 该能力只能由 Shell 宿主配置，不能来自模型 tool input。
-   * - 目录不会获得写权限，且会在启动前完成 realpath 与权限校验。
-   */
-  safe_read_only_paths?: readonly string[];
   /**
    * Agent 配置的最小视图。
    */
@@ -68,7 +60,7 @@ export type ShellHostContext = {
    * 可选日志器。
    */
   logger?: ShellLogger;
-  /** 当前 Tool 执行上下文注入的 unrestricted 审批网关。 */
+  /** 当前 Tool 执行上下文注入的宿主执行审批网关。 */
   approval_gateway?: ShellApprovalGateway;
   /**
    * 宿主注入的 shell 集成能力。

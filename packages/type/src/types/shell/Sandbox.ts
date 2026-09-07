@@ -1,155 +1,57 @@
 /**
- * Shell Sandbox 共享类型。
+ * Shell Sandbox 中立协议。
  *
  * 关键点（中文）
- * - Shell session 负责进程生命周期，Sandbox 只负责按策略启动进程。
- * - 宿主只能增加额外只读目录，不能扩大 workspace 之外的写权限。
- * - 具体平台 adapter 共同消费 Shell 核心生成的同一份已解析策略。
+ * - Shell 持有 Provider，Provider 为 Shell 绑定的 Workspace 创建独立且可恢复的隔离环境。
+ * - Workspace Sandbox 只暴露命令启动与停止能力，不理解 Agent 或 Chat Session。
+ * - 宿主文件只有通过 Workspace 绑定显式挂载后才会进入隔离环境。
  */
 
-/** Sandbox 网络模式。 */
-export type SandboxNetworkMode = "off" | "full";
-
-/** 当前支持的 Sandbox 执行后端。 */
-export type SandboxBackend = string;
-
-/**
- * 宿主传入的 Safe Sandbox 扩展能力。
- */
-export interface ShellSafePolicy {
-  /**
-   * 宿主批准的额外只读目录。
-   *
-   * 说明（中文）
-   * - 目录必须是已存在的绝对目录。
-   * - 运行时会解析 realpath，并拒绝 group/world writable 目录。
-   * - 该字段不能来自模型 tool input 或 workspace 配置。
-   */
-  read_only_paths: string[];
-}
-
-/**
- * 单次 Safe Sandbox 执行使用的最终策略。
- */
-export interface ResolvedSandboxPolicy {
-  /** 当前平台使用的 Safe Sandbox 后端。 */
-  backend: SandboxBackend;
-  /** 当前 workspace 根目录绝对路径。 */
-  root_path: string;
-  /** 当前 agent 级 Sandbox 持久目录。 */
-  sandbox_dir: string;
-  /** 子进程使用的 HOME。 */
-  home_dir: string;
-  /** 子进程使用的临时目录。 */
-  tmp_dir: string;
-  /** 子进程使用的 cache 目录。 */
-  cache_dir: string;
-  /** 允许导出到子进程的环境变量名称。 */
-  env_allowlist: string[];
-  /** 最终只读路径集合，所有路径均已经规范化。 */
-  read_only_paths: string[];
-  /**
-   * 宿主显式批准的项目外只读路径。
-   *
-   * 说明（中文）
-   * - 本集合是 `read_only_paths` 的子集，不包含 adapter 自动发现的系统目录。
-   * - 需要修改宿主 ACL 的 adapter 只能授权本集合，禁止触碰系统目录。
-   */
-  host_read_only_paths: string[];
-  /** 最终可读写路径集合，固定收敛在 workspace 内。 */
-  read_write_paths: string[];
-  /** 当前网络访问模式。 */
-  network_mode: SandboxNetworkMode;
-  /** 当前完整策略的稳定摘要。 */
-  fingerprint: string;
-}
-
-/**
- * 平台 adapter 解析系统只读目录时使用的宿主输入。
- */
-export interface ShellSandboxHostInput {
-  /** Sandbox 收敛前的完整基础环境变量。 */
-  base_env: NodeJS.ProcessEnv;
-}
-
-/** sandbox 预检失败原因。 */
-export type SandboxPreflightIssueCode =
-  | "unsupported-platform"
-  | "missing-command"
-  | "userns-disabled"
-  | "unsupported-windows-version"
-  | "sandbox-runtime-unavailable";
-
-/** 单条 sandbox 预检失败。 */
-export interface SandboxPreflightIssue {
-  /** 机器可读的失败原因。 */
-  code: SandboxPreflightIssueCode;
-  /** 人类可读的失败说明。 */
+/** Sandbox Provider 自检发现的单条问题。 */
+export interface SandboxProviderIssue {
+  /** 机器可读的问题代码。 */
+  code: string;
+  /** 面向用户的问题说明。 */
   message: string;
-  /** 可复制的修复建议列表。 */
+  /** 可直接执行或参考的修复建议。 */
   fixes: string[];
 }
 
-/** sandbox adapter 的宿主预检结果。 */
-export interface SandboxPreflightResult {
-  /** 当前宿主是否满足 adapter 启动要求。 */
+/** Sandbox Provider 当前宿主可用性。 */
+export interface SandboxProviderStatus {
+  /** 当前 Provider 是否可以创建 Workspace Sandbox。 */
   ok: boolean;
-  /** 当前宿主平台。 */
-  platform: NodeJS.Platform;
-  /** 当前 adapter 的稳定后端标识。 */
-  backend: SandboxBackend;
-  /** 预检发现的问题集合。 */
-  issues: SandboxPreflightIssue[];
+  /** Provider 的稳定后端标识。 */
+  backend: string;
+  /** 自检发现的问题集合。 */
+  issues: SandboxProviderIssue[];
 }
 
-/**
- * Shell 平台 Sandbox Adapter 契约。
- *
- * 关键点（中文）
- * - adapter 只负责宿主探测、系统只读目录和受限进程启动。
- * - workspace 写边界、宿主路径校验和策略指纹始终由 Shell 核心维护。
- */
-export interface ShellSandboxAdapter {
-  /** 当前 adapter 的稳定后端标识。 */
-  readonly backend: SandboxBackend;
-  /** 检查当前宿主是否满足 adapter 的运行要求。 */
-  preflight(): Promise<SandboxPreflightResult>;
-  /** 解析当前平台执行命令必须读取的系统目录。 */
-  resolve_system_read_only_paths(input: ShellSandboxHostInput): Promise<string[]>;
-  /** 使用已经校验完成的统一策略启动受限进程。 */
-  spawn(request: SandboxSpawnRequest): Promise<SandboxSpawnResult>;
-  /**
-   * 释放 adapter 持有的平台资源。
-   *
-   * 说明（中文）
-   * - 无状态 adapter 可以不实现本方法。
-   * - 持有代理、临时 ACL 或平台 broker 的 adapter 必须在这里完成清理。
-   * - Shell 会先关闭全部活动 session，再调用本方法。
-   */
-  dispose?(): Promise<void>;
+/** Shell 为绑定的 Workspace 创建持久 Sandbox 时提供的绑定信息。 */
+export interface WorkspaceSandboxBinding {
+  /** Workspace 的稳定业务标识。 */
+  workspace_id: string;
+  /** 需要显式挂载到隔离环境的宿主项目目录。 */
+  workspace_path: string;
+  /** Shell 快照、日志等 Downcity 私有运行数据目录。 */
+  runtime_path: string;
 }
 
-/**
- * 单次 Sandbox 后端启动参数。
- */
-export interface SandboxSpawnRequest {
-  /** 当前执行记录标识。 */
+/** Sandbox 内启动单个命令所需的最小参数。 */
+export interface SandboxProcessRequest {
+  /** Downcity Shell Session 的稳定标识。 */
   execution_id: string;
-  /** 当前执行记录目录。 */
-  execution_dir: string;
-  /** 要执行的完整命令文本。 */
+  /** 要交给 Shell 解释器执行的完整命令。 */
   cmd: string;
-  /** 最终工作目录。 */
+  /** Sandbox 内的绝对工作目录。 */
   cwd: string;
-  /** shell 可执行文件路径。 */
+  /** Sandbox 内的 Shell 可执行文件路径。 */
   shell_path: string;
   /** 是否使用 login shell 语义。 */
   login: boolean;
-  /** Sandbox 收敛前的基础环境变量。 */
-  base_env: NodeJS.ProcessEnv;
-  /** 当前请求已经解析和校验的 Safe Sandbox 策略。 */
-  policy: ResolvedSandboxPolicy;
-  /** 是否使用 PTY 启动进程。 */
+  /** 当前命令显式获得的环境变量快照。 */
+  env: Readonly<Record<string, string>>;
+  /** 是否通过 PTY 启动命令。 */
   terminal?: boolean;
   /** PTY 列数。 */
   cols?: number;
@@ -157,16 +59,9 @@ export interface SandboxSpawnRequest {
   rows?: number;
 }
 
-/**
- * unrestricted 宿主进程启动参数。
- */
-export type UnrestrictedSpawnRequest = Omit<SandboxSpawnRequest, "policy">;
-
-/**
- * pipe 与 PTY 进程统一句柄。
- */
+/** pipe、PTY 与远程命令统一进程句柄。 */
 export interface ShellProcessHandle {
-  /** 当前子进程 pid。 */
+  /** 当前子进程在执行环境中的 PID。 */
   pid?: number;
   /** 当前进程 stdin 是否仍可写。 */
   readonly writable: boolean;
@@ -178,42 +73,46 @@ export interface ShellProcessHandle {
   on_error(callback: (error: Error) => void): void;
   /** 向 stdin 或 PTY 写入原始字符。 */
   write(chars: string): Promise<void>;
-  /**
-   * 结束 pipe stdin 并向子进程发送 EOF。
-   *
-   * 说明（中文）
-   * - 仅 pipe 句柄提供该能力，PTY session 需要持续保持交互输入。
-   * - one-shot 调用必须主动关闭 stdin，避免平台执行器等待输入转发结束而无法退出。
-   */
+  /** 关闭非交互进程的 stdin。 */
   close_stdin?(): void;
-  /** 结束当前子进程。 */
+  /** 请求结束当前进程。 */
   kill(signal?: NodeJS.Signals): void;
 }
 
-/**
- * Sandbox 启动后的统一结果。
- */
-export interface SandboxSpawnResult {
-  /** 已启动的子进程句柄。 */
+/** Shell 在 Sandbox 或宿主启动进程后的中立结果。 */
+export interface ShellProcessResult {
+  /** 已启动的进程句柄。 */
   child: ShellProcessHandle;
-  /** 子进程实际使用的工作目录。 */
+  /** 进程实际使用的工作目录。 */
   cwd: string;
-  /** 当前进程是否受 Safe Sandbox 限制。 */
-  sandboxed: boolean;
-  /** 当前执行使用的 Sandbox 模式。 */
-  sandbox_mode: "safe" | "unrestricted";
-  /** 当前执行使用的后端。 */
-  backend: SandboxBackend;
-  /** 当前实际网络访问模式。 */
-  network_mode: SandboxNetworkMode;
-  /** 当前 agent 级 Sandbox 持久目录。 */
-  sandbox_dir: string;
-  /** 当前子进程 HOME。 */
-  home_dir: string;
-  /** 当前子进程临时目录。 */
-  tmp_dir: string;
-  /** 当前子进程 cache 目录。 */
-  cache_dir: string;
-  /** Safe Sandbox 策略摘要；unrestricted 执行时为空。 */
-  policy_fingerprint?: string;
+  /** 当前执行后端的稳定标识。 */
+  backend: string;
+  /** Sandbox 执行时使用的稳定环境身份；host 执行时省略。 */
+  sandbox_id?: string;
+}
+
+/** 单个 Workspace 独享的持久隔离环境。 */
+export interface WorkspaceSandbox {
+  /** 当前隔离环境的稳定身份。 */
+  readonly id: string;
+  /** 当前实现的稳定后端标识。 */
+  readonly backend: string;
+  /** Workspace 在隔离环境中的固定挂载路径。 */
+  readonly workspace_path: string;
+  /** 在隔离环境中启动一个命令。 */
+  spawn(request: SandboxProcessRequest): Promise<ShellProcessResult>;
+  /** 停止计算资源但保留 Sandbox 文件系统和工具环境。 */
+  stop(): Promise<void>;
+  /** 删除并重建时由宿主显式调用；普通释放不得删除持久状态。 */
+  reset?(): Promise<void>;
+}
+
+/** Shell 构造时显式注入的 Workspace Sandbox 工厂。 */
+export interface SandboxProvider {
+  /** Provider 的稳定后端标识。 */
+  readonly backend: string;
+  /** 检查宿主是否满足隔离环境运行要求。 */
+  check(): Promise<SandboxProviderStatus>;
+  /** 为一个 Workspace 创建延迟启动的持久隔离环境。 */
+  create_workspace(binding: WorkspaceSandboxBinding): WorkspaceSandbox;
 }

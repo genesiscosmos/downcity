@@ -1,9 +1,9 @@
 /**
- * @file 验证 Agent 动态 env 会进入 shell safe sandbox。
+ * @file 验证 Workspace 动态 env 会进入持久 Sandbox。
  *
  * 关键点（中文）
  * - 测试编译后的 package 入口，确保 SDK 用户拿到的行为与源码一致。
- * - 只允许 Agent env 中显式存在的 key 进入 safe sandbox，不继承完整宿主环境。
+ * - 只允许 Workspace env 中显式存在的 key 进入 Sandbox，不继承完整宿主环境。
  */
 
 import test from "node:test";
@@ -15,7 +15,7 @@ import path from "node:path";
 import { Agent } from "@downcity/agent";
 import { Workspace, Shell } from "@downcity/city";
 import { create_workspace_entry } from "../../agent/bin/internal/index.js";
-import { create_platform_sandbox } from "./PlatformSandbox.mjs";
+import { create_test_sandbox_provider } from "./PlatformSandbox.mjs";
 
 async function execute_shell(agent, cmd) {
   const result = await agent.tools.shell_exec.execute(
@@ -24,7 +24,7 @@ async function execute_shell(agent, cmd) {
       shell: "/bin/sh",
       login: false,
       timeout_ms: 5000,
-      sandbox: "safe",
+      target: "sandbox",
     },
     { toolCallId: "agent-env-shell-sandbox-test" },
   );
@@ -32,21 +32,17 @@ async function execute_shell(agent, cmd) {
   return String(result.output || "");
 }
 
-test("workspace set_env and patch_env are visible in shell safe sandbox", async (t) => {
-  const sandbox = await create_platform_sandbox();
-  const preflight = await sandbox.preflight();
-  if (!preflight.ok) {
-    t.skip(`safe sandbox unavailable: ${preflight.issues.map((issue) => issue.message).join("; ")}`);
-    return;
-  }
-
+test("workspace set_env and patch_env are visible in its Sandbox", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-env-"));
   const previous_host_value = process.env.HOST_ONLY_ENV_REPRO;
   process.env.HOST_ONLY_ENV_REPRO = "host_secret";
 
   const workspace = new Workspace({ id: "test_workspace",
-    path: root_path, data_root_path: path.join(root_path, "data"),
-    shell: new Shell({ sandbox }),
+    path: root_path,
+    shell: new Shell({
+      sandbox_provider: create_test_sandbox_provider(),
+    }),
+    runtime_path: path.join(root_path, "runtime"),
   });
   const agent = new Agent({ id: "agent-env-shell-sandbox-test" });
   const entry = create_workspace_entry(agent, workspace);

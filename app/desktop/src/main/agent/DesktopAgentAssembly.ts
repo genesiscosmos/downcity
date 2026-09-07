@@ -23,8 +23,8 @@ import {
   create_builtin_plugin_registrations,
   type BuiltinPluginRegistration,
 } from "@downcity/plugins";
-import { create_desktop_platform_sandbox } from "./DesktopPlatformSandbox.js";
 import type { DesktopModelSummary } from "../../common/types/DesktopApi.js";
+import { create_desktop_sandbox_provider } from "./DesktopPlatformSandbox.js";
 
 const default_federation_url = "https://base.downcity.ai";
 
@@ -54,7 +54,7 @@ export function create_desktop_plugin_loader(
   });
 }
 
-/** 创建 Desktop 当前 Agent 独享的 Workspace、Shell 与 Sandbox。 */
+/** 创建 Desktop Workspace 与其显式注入 Sandbox Provider 的 Shell。 */
 export async function create_desktop_workspace(
   data: DesktopLocalData,
   config: LocalWorkspaceConfig,
@@ -68,7 +68,9 @@ export async function create_desktop_workspace(
       workspace_path: config.workspace_path,
       process_env: {},
     }),
-    shell: new Shell({ sandbox: await create_desktop_platform_sandbox() }),
+    shell: new Shell({
+      sandbox_provider: create_desktop_sandbox_provider(),
+    }),
   });
 }
 

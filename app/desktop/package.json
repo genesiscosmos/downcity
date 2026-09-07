@@ -20,6 +20,7 @@
     "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
     "@downcity/plugins": "workspace:^",
+    "@downcity/sandbox-microsandbox": "workspace:^",
     "@downcity/type": "workspace:*",
     "@tiptap/core": "3.29.2",
     "@tiptap/extension-placeholder": "3.29.2",
@@ -38,12 +39,6 @@
     "react-i18next": "^16.0.0",
     "streamdown": "^1.6.11",
     "tailwind-merge": "^2.2.0"
-  },
-  "optionalDependencies": {
-    "@downcity/sandbox-linux": "workspace:^",
-    "@downcity/sandbox-macos": "workspace:^",
-    "@downcity/sandbox-windows-mxc": "workspace:^",
-    "@downcity/sandbox-windows-srt": "workspace:^"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",

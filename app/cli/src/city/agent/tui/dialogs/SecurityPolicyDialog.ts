@@ -72,13 +72,13 @@ export class SecurityPolicyPanelComponent implements Component, Focusable {
       this.render_option(
         0,
         "Default",
-        "Ask before every unrestricted Shell action",
+        "Ask before every host Shell action",
         "ask",
       ),
       this.render_option(
         1,
         "Always Allow",
-        "Automatically approve future unrestricted Shell actions",
+        "Automatically approve future host Shell actions",
         "always-allow",
       ),
       "",

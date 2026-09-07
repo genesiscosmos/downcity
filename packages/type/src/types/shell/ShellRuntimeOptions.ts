@@ -61,7 +61,7 @@ export interface ShellRuntimeOptions {
   default_exec_timeout_ms?: number;
 
   /**
-   * unrestricted sandbox 审批默认超时时间，单位毫秒。
+   * host 执行审批默认超时时间，单位毫秒。
    */
   default_approval_timeout_ms?: number;
 }
@@ -116,7 +116,7 @@ export interface ResolvedShellRuntimeOptions {
   default_exec_timeout_ms: number;
 
   /**
-   * unrestricted sandbox 审批默认超时时间，单位毫秒。
+   * host 执行审批默认超时时间，单位毫秒。
    */
   default_approval_timeout_ms: number;
 }

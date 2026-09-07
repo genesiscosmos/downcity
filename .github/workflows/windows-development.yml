@@ -10,10 +10,7 @@ on:
       - "app/cli/**"
       - "app/fedman/**"
       - "packages/implementations/plugins/**"
-      - "packages/implementations/sandboxes/linux/**"
-      - "packages/implementations/sandboxes/macos/**"
-      - "packages/implementations/sandboxes/windows-mxc/**"
-      - "packages/implementations/sandboxes/windows-srt/**"
+      - "packages/implementations/sandboxes/microsandbox/**"
       - "packages/type/**"
       - "packages/ui/**"
       - "scripts/clean-package.mjs"
@@ -29,10 +26,7 @@ on:
       - "app/cli/**"
       - "app/fedman/**"
       - "packages/implementations/plugins/**"
-      - "packages/implementations/sandboxes/linux/**"
-      - "packages/implementations/sandboxes/macos/**"
-      - "packages/implementations/sandboxes/windows-mxc/**"
-      - "packages/implementations/sandboxes/windows-srt/**"
+      - "packages/implementations/sandboxes/microsandbox/**"
       - "packages/type/**"
       - "packages/ui/**"
       - "scripts/clean-package.mjs"
@@ -41,7 +35,7 @@ on:
 
 jobs:
   windows-development:
-    name: Native Windows SDK, MXC, and SRT
+    name: Native Windows SDK and microsandbox
     runs-on: windows-2025
     timeout-minutes: 30
     permissions:
@@ -67,34 +61,17 @@ jobs:
       - name: Build CLI dependency closure
         run: pnpm -r --filter "downcity..." build
 
-      - name: Verify Windows command and sandbox adapter models
-        run: node --test packages/city/test/shell-command-model.test.mjs packages/implementations/sandboxes/windows-mxc/scripts/windows-mxc-command-line.test.mjs packages/implementations/sandboxes/windows-mxc/scripts/windows-mxc-policy.test.mjs packages/implementations/sandboxes/windows-mxc/scripts/windows-mxc-support.test.mjs packages/implementations/sandboxes/windows-srt/scripts/windows-srt-policy.test.mjs packages/implementations/sandboxes/windows-srt/scripts/windows-srt-environment.test.mjs app/cli/scripts/env-file.test.mjs app/cli/scripts/windows-platform.test.mjs
+      - name: Verify Windows command model
+        run: node --test packages/city/test/shell-command-model.test.mjs app/cli/scripts/env-file.test.mjs
 
       - name: Verify CLI platform storage
         working-directory: app/cli
         run: node --test scripts/config-storage.test.mjs
 
-      - name: Verify native MXC isolation
-        run: node --test packages/implementations/sandboxes/windows-mxc/scripts/windows-mxc.integration.test.mjs
-
-      - name: Install native SRT isolation
-        run: node packages/implementations/sandboxes/windows-srt/bin/cli.js setup
-
-      - name: Verify native SRT isolation
-        env:
-          DC_WINDOWS_SRT_INTEGRATION: "1"
-        run: node --test packages/implementations/sandboxes/windows-srt/scripts/windows-srt.integration.test.mjs
-
-      - name: Remove native SRT isolation
-        if: always()
-        run: node packages/implementations/sandboxes/windows-srt/bin/cli.js remove
-
       - name: Typecheck affected packages
         shell: pwsh
         run: |
-          pnpm -C packages/implementations/sandboxes/windows-mxc typecheck
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          pnpm -C packages/implementations/sandboxes/windows-srt typecheck
+          pnpm -C packages/implementations/sandboxes/microsandbox typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           pnpm -C packages/agent typecheck
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

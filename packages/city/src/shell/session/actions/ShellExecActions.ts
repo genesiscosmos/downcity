@@ -49,7 +49,7 @@ export async function exec_shell_command(
     ...(request.cwd ? { cwd: request.cwd } : {}),
     ...(request.shell ? { shell: request.shell } : {}),
     login: request.login,
-    sandbox: request.sandbox,
+    target: request.target,
     reason: request.reason,
     approval_tool_name: "shell_exec",
     terminal: false,

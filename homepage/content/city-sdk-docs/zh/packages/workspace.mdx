@@ -9,21 +9,25 @@ description: "项目资源、文件工具、环境变量与 Shell。"
 或模型调用。
 
 ```bash
-pnpm add @downcity/city @downcity/sandbox-macos
+pnpm add @downcity/city @downcity/sandbox-microsandbox
 ```
 
 ```ts
 import { Agent, City, Shell, Workspace } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
   env: { NODE_ENV: "development" },
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
 });
 
-const city = new City({ workspaces: [workspace] });
+const city = new City({
+  workspaces: [workspace],
+});
 const agent = new Agent({ id: "repo-helper", model });
 city.agents.add(agent);
 const session = await agent.sessions.create({ workspace });
@@ -32,6 +36,8 @@ const session = await agent.sessions.create({ workspace });
 ## 所有权
 
 - `Workspace` 拥有项目资源与可选 Shell。
+- `Shell` 持有 Sandbox Provider、当前 Workspace 的持久 Sandbox 与 Shell Sessions。
+- `City` 持有登记的 Workspace，但不理解其执行后端。
 - `Agent` 拥有身份、指令、模型、自定义工具和 Session；`City` 拥有 Plugin。
 - `AgentSessions` 拥有 Session。Workspace 只是 Session 可以使用的一种资源。
 - Shell 是 Workspace 能力，不再存在独立的 `@downcity/shell` 包。

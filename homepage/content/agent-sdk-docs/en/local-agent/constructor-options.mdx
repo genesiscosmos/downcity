@@ -216,13 +216,16 @@ Optional built-in shell capability.
 import { Agent } from "@downcity/agent";
 import { Workspace } from "@downcity/city";
 import { Shell } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const agent = new Agent({ id: "repo-helper" });
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
+  runtime_path: "/path/to/downcity-runtime/project",
 });
 ```
 
@@ -233,7 +236,7 @@ Key points:
 - Workspace mounts `grep`, `find`, `read`, `write`, and `edit`, even without Shell
 - session and turn context are wired internally
 - approvals belong to a specific Session; use `session.interactions()`, `session.respond(...)`, and `session.set({ security })`
-- file and search tools are always restricted to the Agent project root and have no unrestricted mode
+- file and search tools are always rooted in the Agent project and do not expose a host execution target
 
 ## Plugins are not Agent constructor options
 

@@ -12,9 +12,9 @@ Run only one active runtime for the same Agent ID in the same physical Workspace
 ```ts
 import { Agent } from "@downcity/agent";
 import { City, Shell, Workspace } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
-const shell = new Shell({ sandbox: new MacOsSeatbeltSandbox() });
+const shell = new Shell({ sandbox_provider: new MicrosandboxProvider() });
 const agent = new Agent({
   id: "my-agent",
   model,

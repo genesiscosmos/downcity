@@ -1,22 +1,22 @@
 ---
-title: Shell 插件
-description: Shell 插件如何安全地执行本地命令
+title: Shell
+description: Workspace Shell 如何执行 Sandbox 与宿主命令
 ---
 
-# Shell 插件
+# Shell
 
-Shell 插件让 Agent 在沙箱环境中执行本地命令。它适用于文件操作、脚本执行和系统集成。
+Shell 是 Workspace 能力，不是 Plugin。它持有 Sandbox Provider、当前 Workspace 的隔离 Sandbox 与可复用的 Shell Session。
 
 ## 功能
 
-- 代表 Agent 执行 Shell 命令
-- 沙箱执行以防止有害操作
+- 默认在 Workspace Sandbox 中执行命令
+- 在不同 Chat Session 之间保留已安装工具和 HOME 状态
 - 捕获 stdout、stderr 和退出码
 - 支持超时和取消
 
 ## 安全
 
-默认情况下，Shell 插件在受限环境中运行命令。危险操作（删除系统文件、修改系统配置）会被阻止，除非显式允许。
+Shell 只有 `sandbox` 和 `host` 两个执行目标。默认使用 Sandbox，且不能看到任意宿主路径；host 执行必须提供明确原因并经过宿主审批。Sandbox 失败时不会回退到宿主执行。
 
 ## 使用场景
 

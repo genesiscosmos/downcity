@@ -9,21 +9,25 @@ project path, rooted file access, file and search tools, environment variables, 
 It does not own Agent identity, Plugins, Sessions, storage, or model calls.
 
 ```bash
-pnpm add @downcity/city @downcity/sandbox-macos
+pnpm add @downcity/city @downcity/sandbox-microsandbox
 ```
 
 ```ts
 import { Agent, City, Shell, Workspace } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const workspace = new Workspace({
   id: "project",
   path: process.cwd(),
   env: { NODE_ENV: "development" },
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
 });
 
-const city = new City({ workspaces: [workspace] });
+const city = new City({
+  workspaces: [workspace],
+});
 const agent = new Agent({ id: "repo-helper", model });
 city.agents.add(agent);
 const session = await agent.sessions.create({ workspace });
@@ -32,6 +36,8 @@ const session = await agent.sessions.create({ workspace });
 ## Ownership
 
 - `Workspace` owns project resources and the optional Shell.
+- `Shell` owns its Sandbox Provider, persistent Workspace Sandbox, and Shell Sessions.
+- `City` owns registered Workspaces without understanding their execution backend.
 - `Agent` owns identity, instruction, model, custom tools, and Sessions; `City` owns Plugins.
 - `AgentSessions` owns Sessions. A Workspace is only a resource that a Session may use.
 - Shell is a Workspace capability. There is no separate `@downcity/shell` package.

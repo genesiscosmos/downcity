@@ -29,6 +29,9 @@ importers:
       '@downcity/plugins':
         specifier: workspace:^
         version: link:../../packages/implementations/plugins
+      '@downcity/sandbox-microsandbox':
+        specifier: workspace:^
+        version: link:../../packages/implementations/sandboxes/microsandbox
       '@downcity/type':
         specifier: workspace:*
         version: link:../../packages/type
@@ -111,19 +114,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-    optionalDependencies:
-      '@downcity/sandbox-linux':
-        specifier: workspace:^
-        version: link:../../packages/implementations/sandboxes/linux
-      '@downcity/sandbox-macos':
-        specifier: workspace:^
-        version: link:../../packages/implementations/sandboxes/macos
-      '@downcity/sandbox-windows-mxc':
-        specifier: workspace:^
-        version: link:../../packages/implementations/sandboxes/windows-mxc
-      '@downcity/sandbox-windows-srt':
-        specifier: workspace:^
-        version: link:../../packages/implementations/sandboxes/windows-srt
 
   app/desktop:
     dependencies:
@@ -142,6 +132,9 @@ importers:
       '@downcity/plugins':
         specifier: workspace:^
         version: link:../../packages/implementations/plugins
+      '@downcity/sandbox-microsandbox':
+        specifier: workspace:^
+        version: link:../../packages/implementations/sandboxes/microsandbox
       '@downcity/type':
         specifier: workspace:*
         version: link:../../packages/type
@@ -230,19 +223,6 @@ importers:
       vite:
         specifier: ^7.1.6
         version: 7.3.3(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.3)(yaml@2.9.0)
-    optionalDependencies:
-      '@downcity/sandbox-linux':
-        specifier: workspace:^
-        version: link:../../packages/implementations/sandboxes/linux
-      '@downcity/sandbox-macos':
-        specifier: workspace:^
-        version: link:../../packages/implementations/sandboxes/macos
-      '@downcity/sandbox-windows-mxc':
-        specifier: workspace:^
-        version: link:../../packages/implementations/sandboxes/windows-mxc
-      '@downcity/sandbox-windows-srt':
-        specifier: workspace:^
-        version: link:../../packages/implementations/sandboxes/windows-srt
 
   app/fedman:
     dependencies:
@@ -676,108 +656,18 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/implementations/sandboxes/linux:
+  packages/implementations/sandboxes/microsandbox:
     dependencies:
-      '@downcity/city':
-        specifier: workspace:^
-        version: link:../../../city
       '@downcity/type':
         specifier: workspace:*
         version: link:../../../type
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
+      microsandbox:
+        specifier: ^0.6.17
+        version: 0.6.17
     devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/implementations/sandboxes/macos:
-    dependencies:
-      '@downcity/city':
-        specifier: workspace:^
-        version: link:../../../city
-      '@downcity/type':
-        specifier: workspace:*
-        version: link:../../../type
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/implementations/sandboxes/windows-mxc:
-    dependencies:
-      '@downcity/city':
-        specifier: workspace:^
-        version: link:../../../city
-      '@downcity/type':
-        specifier: workspace:*
-        version: link:../../../type
-      '@microsoft/mxc-sdk':
-        specifier: 0.7.0
-        version: 0.7.0
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-
-  packages/implementations/sandboxes/windows-srt:
-    dependencies:
-      '@anthropic-ai/sandbox-runtime':
-        specifier: 0.0.67
-        version: 0.0.67
-      '@downcity/city':
-        specifier: workspace:^
-        version: link:../../../city
-      '@downcity/type':
-        specifier: workspace:*
-        version: link:../../../type
-      fs-extra:
-        specifier: ^11.3.5
-        version: 11.3.5
-    devDependencies:
-      '@types/fs-extra':
-        specifier: ^11.0.4
-        version: 11.0.4
-      '@types/node':
-        specifier: ^25.9.1
-        version: 25.9.1
-      tsc-alias:
-        specifier: ^1.8.17
-        version: 1.8.17
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1106,11 +996,6 @@ packages:
 
   '@antfu/install-pkg@1.1.0':
     resolution: {integrity: sha512-MGQsmw10ZyI+EJo45CdSER4zEb+p31LpDAFp2Z3gkSd1yqVZGi0Ebx++YTEMonJy4oChEMLsxZ64j8FH6sSqtQ==}
-
-  '@anthropic-ai/sandbox-runtime@0.0.67':
-    resolution: {integrity: sha512-4doSyr6KNdc/4zARMXYEawhFu3z6bPQjgKRq3lKp6dbgEYVMv39oaLJ28QsDc7TmLvrLqzHW+VzD2LAXxvnw8A==}
-    engines: {node: '>=20.11.0'}
-    hasBin: true
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -2559,10 +2444,6 @@ packages:
   '@mermaid-js/parser@1.1.1':
     resolution: {integrity: sha512-VuHdsYMK1bT6X2JbcAaWAhugTRvRBRyuZgd+c22swUeI9g/ntaxF7CY7dYarhZovofCbUNO0G7JesfmNtjYOCw==}
 
-  '@microsoft/mxc-sdk@0.7.0':
-    resolution: {integrity: sha512-EWhz2pKkcPluZHAOI1yneV+JK0NO/3hdh7nABBb0x4PjyUWMeSWPTBAjtIu+BhtMYOqlaijSPZMZ0Hs/J4ZL4A==}
-    engines: {node: '>=18.0.0'}
-
   '@mixmark-io/domino@2.2.0':
     resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
 
@@ -2629,9 +2510,6 @@ packages:
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
-
-  '@pondwader/socks5-server@1.0.10':
-    resolution: {integrity: sha512-bQY06wzzR8D2+vVCUoBsr5QS2U6UgPUQRmErNwtsuI6vLcyRKkafjkr3KxbtGFf9aBBIV2mcvlsKD1UYaIV+sg==}
 
   '@poppinss/colors@4.1.6':
     resolution: {integrity: sha512-H9xkIdFswbS8n1d6vmRd8+c10t2Qe+rZITbbDHHkQixH5+2x1FDGmi/0K+WgWiqQFKPSlIYB7jlH6Kpfn6Fleg==}
@@ -3463,6 +3341,36 @@ packages:
 
   '@standard-schema/utils@0.3.0':
     resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
+
+  '@superradcompany/microsandbox-darwin-arm64@0.6.17':
+    resolution: {integrity: sha512-H+h+lNGlPWpt9qQ9k/MOFAApLFloA22zJAzormM1CSISkyaLBromH4bt9XlCP3nhG3/oHuYnO7FqhKZN+klVgA==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.17':
+    resolution: {integrity: sha512-j7YfBbVKDpF1fC38FPI0Ut1iThpUf0U4+I4IA+lBTyxo3ptux0b2ouY0CDSB+okrWTCe/kxgxUhgOKc9V3gOPA==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.17':
+    resolution: {integrity: sha512-o9IXJNWi1Ml9VMD0IAbLdUTeujbmY39z5reuez03Svxrqy8AlGGJoNR6Nh+oAm5p0Ytke8BChI9OlYcSFFCPHw==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [linux]
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.17':
+    resolution: {integrity: sha512-M2wdSTTEBRKJXpYX3P0+5tQJep17HY1p7UTFLxFsiWH+xEJ6z5RvYb1U2i5BvNVvyymkfBbh5rnyBSv8vnyDcg==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.17':
+    resolution: {integrity: sha512-1Acpg7zb7o+R1BRV2pWFyMAKTqm7YvMJFPMjAA6H69jAyPTVBdJw3TVCLiN2RR5lHLvV2EdHmx/awl9X5Oj8/g==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [win32]
 
   '@szmarczak/http-timer@4.0.6':
     resolution: {integrity: sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w==}
@@ -4442,10 +4350,6 @@ packages:
 
   comma-separated-tokens@2.0.3:
     resolution: {integrity: sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==}
-
-  commander@12.1.0:
-    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
-    engines: {node: '>=18'}
 
   commander@15.0.0:
     resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
@@ -6377,6 +6281,11 @@ packages:
     resolution: {integrity: sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA==}
     engines: {node: '>=8.6'}
 
+  microsandbox@0.6.17:
+    resolution: {integrity: sha512-1JpOtboSgnv2qGzwIRF2GwiMH+79RnY/I6QNriA9WCqsmoSWh5sYoeRNpAPnuUhxm9GYztWNvFST+aZ3+p8iYg==}
+    engines: {node: '>= 22'}
+    hasBin: true
+
   mime-db@1.52.0:
     resolution: {integrity: sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg==}
     engines: {node: '>= 0.6'}
@@ -6586,10 +6495,6 @@ packages:
   node-cron@4.2.1:
     resolution: {integrity: sha512-lgimEHPE/QDgFlywTd8yTR61ptugX3Qer29efeyWw2rv259HtGBNn1vZVmp8lB9uo9wC0t/AT4iGqXxia+CJFg==}
     engines: {node: '>=6.0.0'}
-
-  node-forge@1.4.0:
-    resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
-    engines: {node: '>= 6.13.0'}
 
   node-gyp-build@4.8.4:
     resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
@@ -8132,9 +8037,6 @@ packages:
     resolution: {integrity: sha512-9qv4rlDiopXg4E69k+vMHjNN63YFMe9sZMrdlvKnCjlCRWeCBswPPMPUfx+ipsAWq1LXHe70RcbaHdJJpS6hyQ==}
     engines: {node: '>= 10'}
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
@@ -8171,13 +8073,6 @@ snapshots:
     dependencies:
       package-manager-detector: 1.6.0
       tinyexec: 1.2.3
-
-  '@anthropic-ai/sandbox-runtime@0.0.67':
-    dependencies:
-      '@pondwader/socks5-server': 1.0.10
-      commander: 12.1.0
-      node-forge: 1.4.0
-      zod: 3.25.76
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -9307,11 +9202,6 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
-  '@microsoft/mxc-sdk@0.7.0':
-    dependencies:
-      node-pty: 1.2.0-beta.14
-      semver: 7.8.1
-
   '@mixmark-io/domino@2.2.0': {}
 
   '@mjackson/node-fetch-server@0.2.0': {}
@@ -9368,8 +9258,6 @@ snapshots:
 
   '@pkgjs/parseargs@0.11.0':
     optional: true
-
-  '@pondwader/socks5-server@1.0.10': {}
 
   '@poppinss/colors@4.1.6':
     dependencies:
@@ -10145,6 +10033,21 @@ snapshots:
   '@standard-schema/spec@1.1.0': {}
 
   '@standard-schema/utils@0.3.0': {}
+
+  '@superradcompany/microsandbox-darwin-arm64@0.6.17':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.17':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.17':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.17':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.17':
+    optional: true
 
   '@szmarczak/http-timer@4.0.6':
     dependencies:
@@ -11243,8 +11146,6 @@ snapshots:
       delayed-stream: 1.0.0
 
   comma-separated-tokens@2.0.3: {}
-
-  commander@12.1.0: {}
 
   commander@15.0.0: {}
 
@@ -13664,6 +13565,14 @@ snapshots:
       braces: 3.0.3
       picomatch: 2.3.2
 
+  microsandbox@0.6.17:
+    optionalDependencies:
+      '@superradcompany/microsandbox-darwin-arm64': 0.6.17
+      '@superradcompany/microsandbox-linux-arm64-gnu': 0.6.17
+      '@superradcompany/microsandbox-linux-x64-gnu': 0.6.17
+      '@superradcompany/microsandbox-win32-arm64-msvc': 0.6.17
+      '@superradcompany/microsandbox-win32-x64-msvc': 0.6.17
+
   mime-db@1.52.0: {}
 
   mime-db@1.54.0: {}
@@ -13842,8 +13751,6 @@ snapshots:
       semver: 7.8.1
 
   node-cron@4.2.1: {}
-
-  node-forge@1.4.0: {}
 
   node-gyp-build@4.8.4:
     optional: true
@@ -15574,8 +15481,6 @@ snapshots:
       archiver-utils: 3.0.4
       compress-commons: 4.1.2
       readable-stream: 3.6.2
-
-  zod@3.25.76: {}
 
   zod@4.4.3: {}
 

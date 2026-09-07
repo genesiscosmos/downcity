@@ -45,13 +45,13 @@ Downcity 给 creators、indie builders 和团队提供一套可复用的 Agent �
 
 ## 平台支持
 
-| 平台 | 本机 Agent 与 Safe Sandbox |
+| 平台 | 本机 Agent 与隔离 Sandbox |
 | --- | --- |
-| macOS | 使用 Seatbelt，正式支持 |
-| Linux | 使用 Bubblewrap，正式支持 |
-| Windows 11 24H2+ | 使用 Microsoft MXC 和原生 `cmd.exe` 命令模型，Development / unstable |
+| macOS（Apple Silicon） | 使用 microsandbox microVM，正式支持 |
+| Linux（x64 / ARM64） | 使用 microsandbox microVM，正式支持 |
+| Windows（x64 / ARM64） | 使用 microsandbox microVM，Preview |
 
-Windows 原生运行通过 Microsoft MXC `processcontainer` 后端执行 `cmd.exe /d /s /c`。启动预检要求 Windows build 26100 或更高版本，并要求 MXC 成功探测到可用隔离层级；失败时不会降级为 unrestricted。MXC 当前仍是 Public Preview，Downcity 不把它声明为生产级安全边界。当前限制见 Agent SDK 的 Shell 文档。
+每个 Workspace 都有独立、持久的 Sandbox，项目固定挂载到 `/workspace`。本地执行 Shell 前需要运行一次 `npx microsandbox setup`。Sandbox 失败时不会降级为宿主执行。
 
 ## 快速开始
 
@@ -137,7 +137,7 @@ downcity agent chat <agent_id>
 ```ts
 import { Agent, Shell, Workspace } from "@downcity/city";
 import { create_openai_compatible_model } from "@downcity/federation";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
 const model = create_openai_compatible_model({
   id: "gpt-5",
@@ -149,7 +149,10 @@ const model = create_openai_compatible_model({
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
+  runtime_path: "/path/to/downcity-runtime/project",
 });
 const agent = new Agent({ id: "repo-helper", tools: {} });
 

@@ -1,131 +1,35 @@
 ---
 title: Shell Built-In
-description: 内建 shell tools、sandbox 模式与审批流程
+description: 内建 Shell tools、Workspace 持久 Sandbox 与 host 审批
 ---
 
 # Shell Built-In
 
-Shell 不再是 plugin。它是 `@downcity/city` 提供的内建能力，并组合一个独立平台 Sandbox Adapter 后挂到 Agent 上。
+Shell 是 `@downcity/city` 提供的 Workspace 内建能力，不是 Plugin。Shell 持有自己的 `SandboxProvider`、为当前 Workspace 创建的持久 Sandbox，以及其中创建的全部 Shell Sessions。City 不理解 Workspace 使用哪种执行后端。
 
 ```ts
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/city";
-import { Shell } from "@downcity/city";
-import { MacOsSeatbeltSandbox } from "@downcity/sandbox-macos";
+import { City, Shell, Workspace } from "@downcity/city";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
 
-const agent = new Agent({ id: "repo-helper" });
 const workspace = new Workspace({
   id: "project",
   path: "/path/to/project",
-  shell: new Shell({ sandbox: new MacOsSeatbeltSandbox() }),
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
 });
-```
-
-## Tools
-
-传入配置了平台 adapter 的 `Shell` 后，模型会获得这些工具：
-
-- `shell_exec`
-- `shell_session`
-
-`shell_exec` 用于一次性非交互命令；`shell_session` 用于 PTY 交互式会话，支持 `start`、`send`、`read`、`list`、`stop` action。
-
-`shell_exec` 的 `timeout_ms` 是命令总执行时长，默认 10 分钟。显式传入较短值会按该值超时并终止进程；长任务应改用 `shell_session`，不要依赖 `shell_exec` 持续等待。
-
-## Sandbox 模式
-
-Shell tools 默认进入 Safe Sandbox。
-
-macOS 使用 Seatbelt，Linux 使用 Bubblewrap。原生 Windows 默认通过锁定版本的 Microsoft MXC runtime 使用 `windows-mxc-dev`；设置 `DC_WINDOWS_SANDBOX=srt` 后可显式启用基于独立 Windows 用户、ACL 与 WFP 的 `windows-srt-alpha`。SRT 需要先运行 `npx @downcity/sandbox-windows-srt setup`，且当前只允许一个活动 workspace 安全域。SRT 的 additive ACL 不会撤销 workspace 外目录授予 `Authenticated Users` 的既有写权限，因此仍属于 Alpha，不能视为任意 Windows 主机上的完整默认拒绝边界。两个 Windows 后端都不会在不可用时降级成 unrestricted。
-
-只有需要宿主级能力时才使用 `sandbox: "unrestricted"`，例如 `brew install`、`npm install -g`、`pip install --user`、`gh auth login`，或初始化项目 sandbox 外的宿主服务。
-
-```ts
-shell_exec({
-  cmd: "brew install ffmpeg",
-  sandbox: "unrestricted",
-  reason: "Homebrew 需要写入宿主级 package 目录。",
+const city = new City({
+  workspaces: [workspace],
 });
-```
-
-Unrestricted 执行每次都需要用户审批。缺少 `reason` 会在执行前被拒绝。
-
-## 宿主只读目录
-
-Safe Sandbox 的写边界始终固定在项目目录。宿主可以为受信任的固定版本 CLI 增加额外只读目录，不需要把命令升级为 unrestricted：
-
-```ts
-const shell = new Shell({
-  sandbox: new MacOsSeatbeltSandbox(),
-  safe_read_only_paths: [
-    "/Users/user/.vibecape/tools/officecli/v1.0.136",
-  ],
-});
-
 const agent = new Agent({ id: "repo-helper" });
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
-  shell,
-});
+city.agents.add(agent);
 ```
 
-只读目录必须是已存在的绝对目录，不能位于项目目录内。macOS 将其编译为 Seatbelt `file-read*` 规则，Linux 将其映射为 Bubblewrap `--ro-bind`，Windows 则把它作为只读根目录交给 MXC，或为 SRT 的独立用户添加 READ ACL；所有后端都不会增加写权限。
+模型会获得 `shell_exec` 和 `shell_session`。两者默认使用 `target: "sandbox"`，项目固定挂载在 `/workspace`。只有确实需要完整宿主能力时才使用 `target: "host"` 并提供清晰 `reason`，请求必须经过审批。
 
-宿主在工具安装、升级或停用后可以动态替换目录：
+同一 Workspace 下的 Chat Session 共享 Sandbox HOME 与已安装工具，不同 Workspace 的可写环境彼此独立。`shell_id` 标识 Shell Session，不能与 Chat `session_id` 混用。
 
-```ts
-await shell.set_safe_read_only_paths([
-  "/Users/user/.vibecape/tools/officecli/v1.0.137",
-]);
-```
+关闭 City 或 Workspace 只停止计算资源，不删除持久 Sandbox 文件系统。系统不再提供宿主路径白名单或中间执行 mode。
 
-权限收缩时，Shell 会关闭仍持有旧权限的活动 session。macOS 还会自动把当前 `xcode-select` 对应的 Xcode 运行目录加入系统只读路径，并把真实的 `Developer/usr/bin` 放到 `PATH` 最前面，因此普通 `git` 不会经过 xcrun，也不需要项目外写权限。
-
-## 审批 API
-
-前端或 SDK 客户端通过发起工具调用的 Session 审批：
-
-```ts
-const pending = await session.interactions();
-
-await session.respond({
-  interaction_id: pending[0].request.interaction_id,
-  response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
-});
-```
-
-本地和远程 Session 暴露相同 API。实时 UI 从 pending Interaction Part 读取请求，关联 Tool 同时处于 `waiting-user`，再通过 `session.respond(...)` 提交决定。
-
-## Session Approval Mode
-
-Shell approval mode 只作用于当前 session：
-
-- `ask`：默认模式，每次 unrestricted 请求都进入审批队列。
-- `always-allow`：当前 session 内自动通过 shell approval，不再弹出新的 pending approval。
-
-```ts
-await session.set({
-  security: { approval_mode: "always-allow" },
-});
-
-const current = await session.status();
-```
-
-`always-allow` 不改变 sandbox 模式，只是把原本需要手动批准的 unrestricted 请求自动记录为 approved。已有 pending approval 不会被自动批准。
-
-## 关键语义
-
-- Shell 归属于 `@downcity/city`，不属于 `@downcity/plugins`。
-- Agent 只挂载 Shell tools；工具审批和实时 Mutation 都归属具体 Session。
-- Safe Sandbox 命令可读写项目，并使用配置的 sandbox 目录。
-- 宿主只读目录只能扩展读取能力，不能扩展项目外写权限。
-- Unrestricted 命令只有在逐次审批通过后才会离开 Safe Sandbox 执行。
-- `always-allow` 只影响当前 session 的新 approval 请求，不影响其它 session。
-- 对 unrestricted `shell_session` 会话执行的每一次 `send` 也需要审批。
-- `agent.dispose()` 会释放 Shell sessions，并把仍在等待的 approval 兑现为过期，调用不会永久挂起。
-
-## 相关文档
-
-- [Agent 构造参数](/zh/agent-sdk-docs/local-agent/constructor-options)
-- [Tools 和 Plugins](/zh/agent-sdk-docs/local-agent/tools-and-plugins)
+生命周期、环境变量和审批细节见 [Shell 与 Sandbox](/zh/agent-sdk-docs/local-agent/shell-reference)。

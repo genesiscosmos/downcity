@@ -158,8 +158,8 @@ ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件�
 | 能力 | 强制边界 | 权限语义 |
 | --- | --- | --- |
 | File/Search Tools | Rooted LocalFileSystem | 只能主动访问 Workspace |
-| Safe Shell | OS Sandbox Adapter | Workspace 可读写，额外目录由宿主声明只读 |
-| Unrestricted Shell | 审批网关 | 由用户对单次命令显式授权 |
+| Sandbox Shell | Workspace Sandbox | 命令在当前 Workspace 独享、持久的隔离环境中执行 |
+| Host Shell | 审批网关 | 用户基于已记录的原因显式授权一次宿主命令 |
 | Plugin | Plugin 自身业务授权 | Workspace 不替 Plugin 负责全部资源访问 |
 | Custom Tool | 注册它的宿主 | Agent Core 不猜测业务权限 |
 
@@ -169,15 +169,7 @@ ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件�
 
 Node.js 已经统一文件、路径、网络、JSON、Timer、AbortController 和普通子进程能力，所以 Agent、Session、Store 与 Workspace 不写操作系统分支。
 
-只有原生安全和进程语义进入平台 Adapter：
-
-- macOS Seatbelt。
-- Linux Bubblewrap / namespace。
-- Windows MXC 或 SRT。
-- Unix PTY 与 Windows ConPTY。
-- Signal、进程组与 Windows Job Object。
-
-因此在 macOS 安装 Downcity 时，核心包会包含跨平台 TypeScript/JavaScript 逻辑，但不会自动安装 Windows Sandbox 原生包。Windows 也只需要替换应用注入的 Sandbox Adapter。
+隔离实现差异统一收敛在中立的 Sandbox Provider 协议内。每个 Shell 显式接收 Provider，并持有绑定 Workspace 时创建的独立、持久 Sandbox。City 只管理 Workspace 资源，不理解其 Shell 使用本地容器、microVM、远程主机还是其他后端。默认实现使用 microsandbox microVM。
 
 ## 生命周期
 
