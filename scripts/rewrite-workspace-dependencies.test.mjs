@@ -40,10 +40,12 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
   const package_dir = path.join(temp_dir, "packages", "agent");
   const type_dir = path.join(temp_dir, "packages", "type");
   const workspace_dir = path.join(temp_dir, "packages", "city");
+  const database_dir = path.join(temp_dir, "packages", "implementations", "databases", "d1");
 
   fs.mkdirSync(package_dir, { recursive: true });
   fs.mkdirSync(type_dir, { recursive: true });
   fs.mkdirSync(workspace_dir, { recursive: true });
+  fs.mkdirSync(database_dir, { recursive: true });
   fs.writeFileSync(path.join(temp_dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
 
   write_json(path.join(type_dir, "package.json"), {
@@ -54,12 +56,17 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
     name: "@downcity/city",
     version: "0.1.4",
   });
+  write_json(path.join(database_dir, "package.json"), {
+    name: "@downcity/database-d1",
+    version: "0.1.13",
+  });
   write_json(path.join(package_dir, "package.json"), {
     name: "@downcity/agent",
     version: "1.1.118",
     dependencies: {
       "@downcity/type": "workspace:*",
       "@downcity/city": "workspace:^",
+      "@downcity/database-d1": "workspace:*",
       zod: "^4.4.3",
     },
   });
@@ -73,6 +80,7 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
   assert.deepEqual(read_json(manifest_path).dependencies, {
     "@downcity/type": "0.1.43",
     "@downcity/city": "^0.1.4",
+    "@downcity/database-d1": "0.1.13",
     zod: "^4.4.3",
   });
 
@@ -83,6 +91,7 @@ test("rewrite workspace dependencies for npm pack and restore source manifest", 
   assert.deepEqual(read_json(manifest_path).dependencies, {
     "@downcity/type": "workspace:*",
     "@downcity/city": "workspace:^",
+    "@downcity/database-d1": "workspace:*",
     zod: "^4.4.3",
   });
 });

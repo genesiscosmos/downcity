@@ -77,20 +77,19 @@ function find_workspace_root(start_dir) {
  * @returns {string[]} package.json 路径列表。
  */
 function list_workspace_manifest_paths(workspace_root) {
-  const parent_dirs = ["packages", "cli"];
   const manifest_paths = [];
+  const ignored_directories = new Set([".git", "bin", "build", "dist", "node_modules"]);
+  const pending_directories = [workspace_root];
 
-  for (const parent_dir of parent_dirs) {
-    const absolute_parent_dir = path.join(workspace_root, parent_dir);
-    if (!fs.existsSync(absolute_parent_dir)) continue;
+  while (pending_directories.length > 0) {
+    const current_dir = pending_directories.pop();
+    if (!current_dir) continue;
+    const manifest_path = path.join(current_dir, "package.json");
+    if (fs.existsSync(manifest_path)) manifest_paths.push(manifest_path);
 
-    for (const entry of fs.readdirSync(absolute_parent_dir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-
-      const manifest_path = path.join(absolute_parent_dir, entry.name, "package.json");
-      if (fs.existsSync(manifest_path)) {
-        manifest_paths.push(manifest_path);
-      }
+    for (const entry of fs.readdirSync(current_dir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || ignored_directories.has(entry.name)) continue;
+      pending_directories.push(path.join(current_dir, entry.name));
     }
   }
 
