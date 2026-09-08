@@ -78,7 +78,7 @@ export async function fail_session_turn(
         recoverable: true,
       });
     } catch {
-      // Error Message 写入失败不能阻止 Turn Handle 收口。
+      // Error Part 所属 Agent Message 写入失败不能阻止 Turn Handle 收口。
     }
   }
   options.events.publish({

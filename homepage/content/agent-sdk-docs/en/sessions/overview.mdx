@@ -58,7 +58,7 @@ unsubscribe();
 
 `apply_mutation_to_ui()` should merge snapshots by `message_id + revision` and append each `delta` only to its matching text or Tool input. See [Live subscriptions](/en/agent-sdk-docs/sessions/subscribe) and [Reconnect and sync](/en/agent-sdk-docs/sessions/reconnect-and-sync).
 
-On failure, the canonical `error` Message carries the user-visible error. Use `turn.finished.error` for control flow, logging, or interfaces that do not render Messages; a chat UI that already renders Session Messages must not append it as a second error.
+On failure, an Error Part in the canonical failed Agent Message carries the user-visible error. Use `turn.finished.error` for control flow, logging, or interfaces that do not render Messages; a chat UI that already renders Session Messages must not append it as a second error.
 
 ## The objects inside a Session
 
@@ -112,8 +112,8 @@ must resume the current Interaction immediately, while `stop()` must interrupt t
 so neither operation is queued.
 
 A Command may declare an Action completion to persist after successful execution. The Session
-applies the domain change first and then persists the canonical Action Message. Its Mutation is
-published only after that Message commits. A completion-persistence failure does not roll back an
+applies the domain change first and then persists a canonical Agent Message containing the Action Part.
+Its Mutation is published only after that Message commits. A completion-persistence failure does not roll back an
 already applied configuration and does not publish a success event that has no persisted state.
 
 ## Local versus remote

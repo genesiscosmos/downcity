@@ -58,7 +58,7 @@ unsubscribe();
 
 `apply_mutation_to_ui()` 应按 `message_id + revision` 合并完整快照；对 `delta` 只向对应文本或 Tool 输入追加增量。完整做法见 [实时订阅](/zh/agent-sdk-docs/sessions/subscribe) 和 [重连与同步](/zh/agent-sdk-docs/sessions/reconnect-and-sync)。
 
-失败时，用户可见错误由 canonical `error` Message 提供。`turn.finished.error` 用于控制流、日志或非 Message 界面；已经渲染 Session Message 的聊天界面不要再把它追加成第二条错误。
+失败时，用户可见错误由 canonical failed Agent Message 内的 Error Part 提供。`turn.finished.error` 用于控制流、日志或非 Message 界面；已经渲染 Session Message 的聊天界面不要再把它追加成第二条错误。
 
 ## Session 里有哪些对象
 
@@ -110,7 +110,7 @@ flowchart TB
 Interaction，`stop()` 必须立即中断当前 Turn，因此两者不会排队。
 
 Command 可以声明成功后的 Action 完成信息。Session 先执行领域修改，再持久化
-canonical Action Message；Message 提交成功后才发布对应 Mutation。完成信息落盘失败
+包含该 Action Part 的 canonical Agent Message；Message 提交成功后才发布对应 Mutation。完成信息落盘失败
 不会回滚已经生效的配置，也不会发布并不存在的成功事件。
 
 ## 本地与远程的差异

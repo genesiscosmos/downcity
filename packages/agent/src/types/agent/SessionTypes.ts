@@ -97,17 +97,17 @@ export interface AgentSessionSetInput {
 /** Session 配置提交后的 Action 可观测性选项。 */
 export interface AgentSessionSetOptions {
   /**
-   * 是否把真实配置变化持久化为 completed Action Message。
+   * 是否把真实配置变化持久化为包含 completed Action Part 的 Agent Message。
    *
    * 关键点（中文）
    * - 默认值为 true。
-   * - 设为 false 只关闭 Action Message，不影响配置写入与检查点提交。
+   * - 设为 false 只关闭 Action Part 历史，不影响配置写入与检查点提交。
    * - 适用于 Session 初始化、恢复与其他不应进入时间线的宿主装配流程。
    */
   persist_action?: boolean;
 
   /**
-   * 是否在 Action Message 持久化成功后发布对应 Session Mutation。
+   * 是否在 Action Part 所属 Agent Message 持久化成功后发布对应 Session Mutation。
    *
    * 关键点（中文）
    * - 默认跟随 `persist_action`。

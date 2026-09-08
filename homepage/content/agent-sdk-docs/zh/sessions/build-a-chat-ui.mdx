@@ -69,10 +69,10 @@ async function stop(): Promise<void> {
 - `text` / `reasoning` Delta 追加到当前文本 Part，`tool_input` Delta 追加到当前 Tool Part 的 `input_text`。
 - `part` 用稳定 `part_id` 覆盖完整状态。
 - `message` 用 `message_id + revision` 覆盖完整 Message。
-- 顶层 `error` Message 是一次失败唯一的用户可见错误提示。
+- failed Agent Message 内的 Error Part 是一次失败唯一的用户可见错误提示。
 - Interaction Part 为 `pending` 时显示交互控件；关联 Tool 为 `waiting-user` 时显示等待状态。
 
-不要创建 Transcript Message DTO 或把工具调用平铺到第二份可持久化列表，也不要用最终 `turn.text` 覆盖已经按 Part 渲染的 Assistant Message。`turn.finished.error` 只用于控制流和日志；若已经渲染 `error` Message，不要再追加一条错误提示。
+不要创建 Transcript Message DTO 或把工具调用平铺到第二份可持久化列表，也不要用最终 `turn.text` 覆盖已经按 Part 渲染的 Agent Message。`turn.finished.error` 只用于控制流和日志；若已经渲染 Error Part，不要再追加一条错误提示。
 
 ## 审批卡片
 

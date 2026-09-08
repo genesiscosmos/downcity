@@ -813,7 +813,7 @@ export class Session implements AgentSession {
     if (appended) await this.state.touch_metadata();
   }
 
-  /** 持久化并发布一条 canonical Action Message。 */
+  /** 持久化并发布一条只包含 Action Part 的 canonical Agent Message。 */
   private async emit_action_event(input: SessionActionEventInput): Promise<void> {
     const action_id = String(input.action_id || "").trim() ||
       `action:${this.id}:${Date.now()}`;

@@ -28,14 +28,14 @@ export type SessionCommandOptions = SessionCommand;
 
 /** Session Command 成功执行后的 canonical 持久化信息。 */
 export interface SessionCommandCompletion {
-  /** 完成信息固定持久化为 Action Message。 */
+  /** 完成信息固定持久化为 Agent Message 内的 Action Part。 */
   type: "action";
-  /** Action Message 使用的稳定业务标识。 */
+  /** Action Part 及其所属 Agent Message 共用的稳定业务标识。 */
   id: string;
-  /** Action Message 展示的用户可读标题。 */
+  /** Action Part 展示的用户可读标题。 */
   title: string;
-  /** Action Message 展示的可选结果说明。 */
+  /** Action Part 展示的可选结果说明。 */
   description?: string;
-  /** Action Message 持久化后是否发布对应 Session Mutation。 */
+  /** Action Part 所属 Agent Message 持久化后是否发布对应 Session Mutation。 */
   publish_mutation?: boolean;
 }

@@ -53,7 +53,7 @@ The stable Handle result includes:
 
 If summary generation fails or returns empty text, Compact returns `compact_failed` directly and leaves Active history unchanged. The SDK never starts the canonical commit, commits a fallback Summary, or reports the operation as successfully compacted.
 
-`subscribe()` still emits `compact` lifecycle mutations and timeline actions for UI state. Application logic should normally await `handle.finished` instead of inferring completion from Action Messages.
+`subscribe()` still emits `compact` lifecycle mutations and timeline actions for UI state. Application logic should normally await `handle.finished` instead of inferring completion from Action Parts.
 
 ## Automatic and explicit compaction
 

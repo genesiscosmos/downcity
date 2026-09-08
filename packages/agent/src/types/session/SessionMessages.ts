@@ -72,7 +72,7 @@ export interface AppendCompletedAgentMessageInput {
   summary_through_message_id?: string;
 }
 
-/** Action Message 创建参数。 */
+/** Action Part 及其所属 Agent Message 的创建参数。 */
 export interface OpenSessionAgentActionPartInput {
   /** 可选的稳定 Message 标识，用于更新同一个 Action 生命周期。 */
   message_id?: string;
@@ -90,7 +90,7 @@ export interface OpenSessionAgentActionPartInput {
   publish_mutation?: boolean;
 }
 
-/** 完成 Action Message 时允许覆盖的内容。 */
+/** 完成 Action Part 时允许覆盖的内容。 */
 export interface CompleteSessionAgentActionPartInput {
   /** 完成时覆盖的可选标题。 */
   title?: string;
@@ -100,7 +100,7 @@ export interface CompleteSessionAgentActionPartInput {
   data?: JsonObject;
 }
 
-/** Error Message 创建参数。 */
+/** Error Part 及其所属 Agent Message 的创建参数。 */
 export interface AppendSessionAgentErrorPartInput {
   /** 当前错误影响 Session 还是单个 Turn。 */
   scope: "session" | "turn";

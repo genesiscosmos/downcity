@@ -2,7 +2,7 @@
  * Session 显式压缩句柄与结果类型。
  *
  * `session.compact()` 返回句柄表示请求已进入有序队列；压缩真正结束后由
- * `finished` 兑现最终结果，调用方不需要从 Action Message 反推完成状态。
+ * `finished` 兑现最终结果，调用方不需要从 Action Part 反推完成状态。
  */
 
 import type { SessionCompactReason } from "@downcity/type";

@@ -1,5 +1,5 @@
 /**
- * 单个 canonical Action Message 的生命周期写入器。
+ * 单个 canonical Action Part 的生命周期写入器。
  *
  * Writer 只保存目标 Message 身份与发布策略，实际状态仍由 SessionMessages
  * 持久化和接受，避免形成第二份 Action 状态。
@@ -8,9 +8,9 @@
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { CompleteSessionAgentActionPartInput } from "@/types/session/SessionMessages.js";
 
-/** 单个 Action Message 的生命周期 writer。 */
+/** 单个 Action Part 的生命周期 writer。 */
 export class SessionAgentActionPartWriter {
-  /** 当前 Action Message 的稳定标识。 */
+  /** 当前 Action Part 所属 Agent Message 的稳定标识。 */
   readonly message_id: string;
   private readonly messages: SessionMessages;
   private readonly publish_mutation: boolean;

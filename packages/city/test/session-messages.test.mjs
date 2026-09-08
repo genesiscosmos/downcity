@@ -131,6 +131,52 @@ function create_user_message(session_id, sequence) {
   };
 }
 
+/** 用一条原始磁盘记录创建 Store，验证反序列化边界。 */
+async function create_store_with_raw_message(session_id, message) {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-validation-"));
+  const file_path = path.join(root_path, "active.jsonl");
+  await fs.writeFile(file_path, `${JSON.stringify(message)}\n`);
+  return new JsonlSessionMessageStore({
+    files: new LocalFileSystem(root_path),
+    session_id,
+    file_path,
+  });
+}
+
+test("Store 拒绝旧顶层 Session Message 类型", async (context) => {
+  const session_id = "legacy-top-level-message-test";
+  for (const type of ["assistant", "action", "error"]) {
+    await context.test(type, async () => {
+      const store = await create_store_with_raw_message(session_id, {
+        ...create_user_message(session_id, 1),
+        type,
+      });
+      await assert.rejects(
+        store.initialize(),
+        new RegExp(`unsupported Session Message type: ${type}`),
+      );
+    });
+  }
+});
+
+test("Store 拒绝缺少 parts 的 User 与 Agent Message", async (context) => {
+  const session_id = "missing-message-parts-test";
+  for (const type of ["user", "agent"]) {
+    await context.test(type, async () => {
+      const { parts: _parts, ...message } = create_user_message(session_id, 1);
+      const store = await create_store_with_raw_message(session_id, {
+        ...message,
+        type,
+        ...(type === "agent" ? { kind: "normal", status: "completed" } : {}),
+      });
+      await assert.rejects(
+        store.initialize(),
+        new RegExp(`Session ${type} Message parts must be an array`),
+      );
+    });
+  }
+});
+
 test("User Context Part 保持 canonical 结构并安全映射到模型文本", async () => {
   const parts = normalize_session_user_parts([{
     type: "context",

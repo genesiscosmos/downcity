@@ -408,7 +408,7 @@ export class SessionLoop {
     throw new Error("Session Command requires an active Turn");
   }
 
-  /** 以失败结果结束当前 Active Turn，并尽力持久化 Error Message。 */
+  /** 以失败结果结束当前 Active Turn，并尽力持久化包含 Error Part 的 Agent Message。 */
   private async fail_active_turn(
     active_turn: ActiveSessionTurnState,
     error: unknown,

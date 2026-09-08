@@ -35,8 +35,8 @@ await session.set(
 );
 ```
 
-- `persist_action` defaults to `true`. When false, no configuration Action Message is created.
-- `publish_mutation` defaults to the value of `persist_action`. Set it to false to keep the historical Action without publishing its Mutation through `subscribe()`.
+- `persist_action` defaults to `true`. When false, no Agent Message containing the configuration Action Part is created.
+- `publish_mutation` defaults to the value of `persist_action`. Set it to false to keep the historical Action Part without publishing its Message Mutation through `subscribe()`.
 - `publish_mutation=true` is invalid when `persist_action=false`, because every Message Mutation must correspond to a canonical Message.
 - Setting the same model identity again does not create another configuration Action. After restart, passing the same model only rebinds the runtime instance.
 

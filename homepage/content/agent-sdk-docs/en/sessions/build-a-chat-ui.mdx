@@ -69,10 +69,10 @@ Disable Send for empty input. Drive the Stop button from Turn Mutations or `get_
 - Append `text` / `reasoning` Deltas to the current text Part and `tool_input` Deltas to the current Tool Part's `input_text`.
 - Replace complete Part state by stable `part_id`.
 - Replace complete Message state by `message_id + revision`.
-- Treat the top-level `error` Message as the single user-visible error for one failure.
+- Treat the Error Part in a failed Agent Message as the single user-visible error for one failure.
 - Render controls for a `pending` Interaction and a waiting state for its `waiting-user` Tool.
 
-Do not create Transcript Message DTOs, flatten tool calls into another persisted list, or overwrite an Assistant already rendered by Parts with final `turn.text`. Use `turn.finished.error` only for control flow and logging; when the UI already renders an `error` Message, do not append another error notice.
+Do not create Transcript Message DTOs, flatten tool calls into another persisted list, or overwrite an Agent Message already rendered by Parts with final `turn.text`. Use `turn.finished.error` only for control flow and logging; when the UI already renders an Error Part, do not append another error notice.
 
 ## Approval card
 

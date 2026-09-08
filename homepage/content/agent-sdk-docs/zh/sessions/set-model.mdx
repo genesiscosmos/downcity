@@ -35,8 +35,8 @@ await session.set(
 );
 ```
 
-- `persist_action` 默认为 `true`；设为 `false` 时不创建配置 Action Message。
-- `publish_mutation` 默认跟随 `persist_action`；设为 `false` 时可以保留历史 Action，但不向 `subscribe()` 发布对应 Mutation。
+- `persist_action` 默认为 `true`；设为 `false` 时不创建包含配置 Action Part 的 Agent Message。
+- `publish_mutation` 默认跟随 `persist_action`；设为 `false` 时可以保留历史 Action Part，但不向 `subscribe()` 发布对应 Message Mutation。
 - `persist_action=false` 时不能设置 `publish_mutation=true`，因为 Message Mutation 必须对应 canonical Message。
 - 重复设置相同模型身份不会创建新的配置 Action；重启后传入同一模型只会重新绑定运行时实例。
 

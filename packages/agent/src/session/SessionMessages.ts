@@ -275,7 +275,7 @@ export class SessionMessages {
     return messages.length;
   }
 
-  /** 按稳定 Action ID 创建或更新 canonical Action Message。 */
+  /** 按稳定 Action ID 创建或更新只包含 Action Part 的 Agent Message。 */
   async persist_action(
     event: SessionActionEvent,
     options?: { publish_mutation?: boolean },
