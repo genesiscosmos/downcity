@@ -1,6 +1,6 @@
 /** Downcity Session Chat 主视图，交互语义与 Duobox ChatCore 保持一致。 */
 
-import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import type { JSONContent } from "@tiptap/core";
 import { TbArrowUp, TbAlertTriangle, TbChecklist, TbCheck, TbChevronDown, TbCopy, TbDots, TbFolder, TbGitBranch, TbLoader2, TbMessageReply, TbPencil, TbRoute, TbSearch, TbWriting } from "react-icons/tb";
@@ -141,7 +141,7 @@ export function SessionView(props: SessionViewProps) {
           <div ref={content_ref} className="chat-scroll-content mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
             {props.history?.has_more && props.load_earlier_history ? <div className="flex justify-center py-1"><Button disabled={props.history.loading} onClick={() => void load_earlier()}><TbArrowUp />{translate_chat(props.history.loading ? "message.loading_earlier" : "message.load_earlier")}</Button></div> : null}
             {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} on_select={props.select_prompt} /> : null}
-            <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}>{message_projection.segments.map((segment) => <MessageSegment key={segment.segment_id} segment={segment} agent={props.agent} open_agent_info={props.open_agent_info} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={segment.has_streaming_message ? props.file_diff_by_session : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} send_message_on_enter={settings.send_message_on_enter} />)}</TurnFileOpenProvider>
+            <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}><ProgressiveMessageSegments key={session.session_id} segments={message_projection.segments}>{(segment) => <MessageSegment key={segment.segment_id} segment={segment} agent={props.agent} open_agent_info={props.open_agent_info} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={segment.has_streaming_message ? props.file_diff_by_session : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} send_message_on_enter={settings.send_message_on_enter} />}</ProgressiveMessageSegments></TurnFileOpenProvider>
             {busy && !message_projection.has_streaming_message ? <ActivityIndicator agent={props.agent} status={runtime?.status} file_diff={props.file_diff_by_session} /> : null}
           </div>
           <div ref={bottom_ref} className="chat-scroll-bottom-anchor" aria-hidden="true" />
@@ -193,6 +193,27 @@ const MessageRenderer = memo(function MessageRenderer({ message, actions, agent,
   && previous.can_replace_session === next.can_replace_session
   && previous.send_message_on_enter === next.send_message_on_enter
   && same_action_messages(previous.actions, next.actions));
+
+/**
+ * 切换 Session 时先挂载最新分段，再逐帧向前补齐历史分段。
+ * 这样 Markdown 与消息组件不会在一次点击帧内全部挂载，Sidebar 状态动画可以持续绘制。
+ */
+function ProgressiveMessageSegments({ segments, children }: { /** 按时间排序的消息分段。 */ segments: readonly SessionMessageSegment[]; /** 渲染一个已进入视图树的分段。 */ children(segment: SessionMessageSegment): ReactNode }) {
+  const [first_visible_segment_id, set_first_visible_segment_id] = useState<number>();
+  const stored_start_index = first_visible_segment_id === undefined
+    ? -1
+    : segments.findIndex((segment) => segment.segment_id === first_visible_segment_id);
+  const start_index = stored_start_index >= 0 ? stored_start_index : Math.max(0, segments.length - 1);
+  const next_segment_id = start_index > 0 ? segments[start_index - 1]?.segment_id : undefined;
+
+  useEffect(() => {
+    if (next_segment_id === undefined) return;
+    const timer = window.setTimeout(() => set_first_visible_segment_id(next_segment_id), 24);
+    return () => window.clearTimeout(timer);
+  }, [next_segment_id]);
+
+  return <>{segments.slice(start_index).map(children)}</>;
+}
 
 /** 只在分段内容或消息交互依赖变化时进入该分段的消息级协调。 */
 const MessageSegment = memo(function MessageSegment({ segment, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, can_use_history_actions, can_replace_session, send_message_on_enter }: { /** 稳定的消息渲染分段。 */ segment: SessionMessageSegment; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前流式消息的文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean; /** 当前 Session 是否允许被替换。 */ can_replace_session: boolean; /** Enter 是否直接提交编辑。 */ send_message_on_enter: boolean }) {

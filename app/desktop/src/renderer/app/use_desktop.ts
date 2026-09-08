@@ -520,9 +520,13 @@ export function use_desktop_controller(): DesktopController {
   const open_agent_chat = useCallback(async (agent_id: string) => {
     settings.set_error("");
     try {
-      const latest_session = Object.entries(session.state_ref.current.sessions_by_workspace)
-        .flatMap(([workspace_id, entries]) => entries.filter((entry) => entry.agent_id === agent_id).map((entry) => ({ workspace_id, session: entry.session })))
-        .sort((left, right) => right.session.updated_at - left.session.updated_at)[0];
+      let latest_session: { workspace_id: string; session: DesktopSessionSummary } | undefined;
+      for (const [workspace_id, entries] of Object.entries(session.state_ref.current.sessions_by_workspace)) {
+        for (const entry of entries) {
+          if (entry.agent_id !== agent_id || latest_session && entry.session.updated_at <= latest_session.session.updated_at) continue;
+          latest_session = { workspace_id, session: entry.session };
+        }
+      }
       if (latest_session) {
         await select_session(latest_session.workspace_id, agent_id, latest_session.session.session_id, true);
         return;

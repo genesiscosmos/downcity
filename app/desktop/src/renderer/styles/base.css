@@ -210,22 +210,25 @@ a,
   pointer-events: none;
 }
 
-/* Chat Sidebar 运行中副标题：深蓝基底与亮蓝高光之间流动的渐变。 */
-@keyframes chat-status-shimmer {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
+/* Replying 文案保持稳定，仅让三个点按 .、..、... 的节奏循环。 */
+@keyframes chat-replying-dot-two {
+  0%, 32% { opacity: 0; }
+  33%, 100% { opacity: 1; }
 }
 
-.chat-status-highlight {
-  background: linear-gradient(
-    105deg,
-    #1d4ed8 30%,
-    #60a5fa 50%,
-    #1d4ed8 70%
-  );
-  background-size: 300% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  animation: chat-status-shimmer 5s ease-in-out infinite;
+@keyframes chat-replying-dot-three {
+  0%, 65% { opacity: 0; }
+  66%, 100% { opacity: 1; }
+}
+
+.chat-replying-dots > span:nth-child(2) {
+  animation: chat-replying-dot-two 1.2s step-end infinite;
+}
+
+.chat-replying-dots > span:nth-child(3) {
+  animation: chat-replying-dot-three 1.2s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-replying-dots > span { opacity: 1; animation: none; }
 }

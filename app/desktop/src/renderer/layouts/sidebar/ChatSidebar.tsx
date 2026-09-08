@@ -34,7 +34,6 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
   const active_workspace_id = use_desktop_selector(controller.stores.navigation, (state) => state.active_workspace_id);
   const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
   const groups = use_desktop_selector(controller.stores.catalog, (state) => state.groups);
-  const models = use_desktop_selector(controller.stores.catalog, (state) => state.models);
   const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
   const loading = use_desktop_selector(controller.stores.settings, (state) => state.loading);
   const selected_agent_id = selection && "agent_id" in selection ? selection.agent_id : "";
@@ -45,7 +44,7 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
 
   return <SidebarPanel>
     <SidebarHeader title={translate("views.chat")} actions={<DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("sidebar.add_chat_subject")} aria-label={translate("sidebar.add_chat_subject")}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_create_agent}><TbGhost3 /><span>{translate("sidebar.new_agent")}</span></DropdownMenuItem><DropdownMenuItem onClick={open_create_group}><TbUsers /><span>{translate("sidebar.new_group")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>} />
-    <ChatSubjectList controller={controller} selection={selection} active_workspace_id={active_workspace_id} agents={agents} groups={groups} models={models} workspaces={workspaces} loading={loading} notification_state={notification_state} open_create_agent={open_create_agent} open_group_config={open_group_config} />
+    <ChatSubjectList controller={controller} selected_agent_id={selected_agent_id} selected_group_id={selected_group_id} active_workspace_id={active_workspace_id} agents={agents} groups={groups} workspaces={workspaces} loading={loading} notification_state={notification_state} open_create_agent={open_create_agent} open_group_config={open_group_config} />
     <ChatSessionPanel controller={controller} notification_state={notification_state} selection={selection} selected_agent={selected_agent} selected_group={selected_group} workspace_id={workspace_id} />
   </SidebarPanel>;
 });
