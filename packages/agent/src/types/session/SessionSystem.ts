@@ -5,6 +5,11 @@
  */
 
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
+import type {
+  SessionHookContext,
+  SessionHookRuntime,
+  SessionHookScopeRuntime,
+} from "@downcity/type";
 
 /** 默认 Session System Block 的组装参数。 */
 export interface BuildSessionSystemBlocksInput {
@@ -24,4 +29,18 @@ export interface BuildSessionSystemBlocksInput {
   get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
   /** 读取当前 Session Plugin 的 System Block。 */
   get_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
+}
+
+/** 解析 Plugin system blocks 所需的稳定执行输入。 */
+export interface ResolveSessionPluginSystemBlocksInput {
+  /** 当前 Session 的稳定标识。 */
+  session_id: string;
+  /** 当前 Turn 的稳定标识；控制面预览等非 Turn 调用允许为空。 */
+  turn_id?: string;
+  /** 当前调用捕获的 Hook runtime 或 Step scope。 */
+  hooks: SessionHookRuntime | SessionHookScopeRuntime;
+  /** 向 Plugin 暴露的只读 Session 上下文。 */
+  context: SessionHookContext;
+  /** Plugin system 解析失败后的可选降级观测入口。 */
+  on_error?: (error: unknown) => void | Promise<void>;
 }

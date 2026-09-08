@@ -35,13 +35,15 @@ import type {
 import { SessionAssistantOutputAdapter } from "@/session/execution/SessionAssistantOutputAdapter.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
-import { SessionCommand } from "@/session/SessionCommand.js";
 import type {
   ActiveSessionTurnState,
   SessionDeferred,
   SessionLoopOptions,
 } from "@/types/session/SessionLoop.js";
-import type { SessionCommandCompletion } from "@/types/session/SessionCommand.js";
+import type {
+  SessionCommand,
+  SessionCommandCompletion,
+} from "@/types/session/SessionCommand.js";
 import { SESSION_TURN_FILE_DIFF_DATA_TYPE } from "@/session/messages/SessionTurnFileDiffData.js";
 import {
   build_session_turn_file_diff,
@@ -109,7 +111,8 @@ export class SessionLoop {
     await this.state.ensure_runnable();
     const deferred_handle = create_deferred<AgentSessionTurnHandle>();
     this.pending_prompt_count += 1;
-    this.queue.enqueue_command(new SessionCommand({
+    this.enqueue_command({
+      kind: "prompt",
       execute: async () => {
         await this.execute_prompt_command(input, deferred_handle);
       },
@@ -117,9 +120,14 @@ export class SessionLoop {
         this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
         this.resolve_cancelled_prompt(deferred_handle);
       },
-    }));
-    this.ensure_processing();
+    });
     return await deferred_handle.promise;
+  }
+
+  /** 追加 Command，并确保空闲 Session 也会主动消费维护操作。 */
+  enqueue_command(command: SessionCommand): void {
+    this.queue.enqueue_command(command);
+    this.ensure_processing();
   }
 
   /**
@@ -154,7 +162,7 @@ export class SessionLoop {
    * - Session 会用它阻止内部 direct execution 与 actor 模式并发混用。
    */
   is_active(): boolean {
-    return this.processing_promise !== null || this.has_pending_prompt();
+    return this.processing_promise !== null || this.has_pending_command();
   }
 
   /**
@@ -186,14 +194,21 @@ export class SessionLoop {
     if (this.processing_promise) return;
     this.processing_promise = this.process_loop().finally(() => {
       this.processing_promise = null;
-      if (this.has_pending_prompt()) {
+      if (this.has_pending_command()) {
         this.ensure_processing();
       }
     });
   }
 
   private async process_loop(): Promise<void> {
-    while (this.has_pending_prompt()) {
+    while (this.has_pending_command()) {
+      const command = this.queue.take_next();
+      if (!command) return;
+      if (command.kind === "maintenance") {
+        await this.execute_maintenance_command(command);
+        continue;
+      }
+
       const turn_id = `turn:${this.session_id}:${Date.now()}:${nanoid(6)}`;
       const active_turn = create_active_session_turn_state(turn_id);
       this.active_turn = active_turn;
@@ -208,20 +223,26 @@ export class SessionLoop {
         created_at: Date.now(),
       });
 
-      while (this.active_turn === active_turn) {
-        const command = this.queue.take_next();
-        if (!command) {
-          await this.fail_active_turn(
-            active_turn,
-            new Error("Session Queue lost its pending Prompt Command"),
-          );
-          break;
-        }
-        try {
-          await this.execute_command(command);
-        } catch (error) {
-          await this.fail_active_turn(active_turn, error);
-        }
+      try {
+        await this.execute_command(command);
+      } catch (error) {
+        await this.fail_active_turn(active_turn, error);
+      }
+    }
+  }
+
+  /** 在没有 Active Turn 时执行 Session 级维护命令。 */
+  private async execute_maintenance_command(command: SessionCommand): Promise<void> {
+    try {
+      await this.execute_command(command);
+    } catch (error) {
+      try {
+        await this.logger.log("warn", "[agent] session maintenance command failed", {
+          session_id: this.session_id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } catch {
+        // Maintenance Command 已经失败，日志失败不能阻止后续 Command 继续执行。
       }
     }
   }
@@ -261,7 +282,8 @@ export class SessionLoop {
 
   /** 执行 Command，并尽力持久化其声明的 canonical 完成信息。 */
   private async execute_command(command: SessionCommand): Promise<void> {
-    const completion = await command.execute();
+    await command.execute();
+    const completion = command.completion;
     if (!completion) return;
     await this.persist_command_completion(completion);
   }
@@ -270,12 +292,12 @@ export class SessionLoop {
   private async persist_command_completion(
     completion: SessionCommandCompletion,
   ): Promise<void> {
-    const turn_id = this.require_active_turn().turn_id;
+    const turn_id = this.current_turn_id();
     try {
       await this.persist_action_event({
         action_id: completion.id,
         action_type: "command",
-        turn_id,
+        ...(turn_id ? { turn_id } : {}),
         title: completion.title,
         ...(completion.description
           ? { description: completion.description }
@@ -301,8 +323,10 @@ export class SessionLoop {
   async compact_history(
     compact_id: string,
   ): ReturnType<SessionCompactHistory> {
-    const turn_id = this.require_active_turn().turn_id;
-    const result = await this.compact_history_handler({ turn_id });
+    const turn_id = this.current_turn_id();
+    const result = await this.compact_history_handler({
+      ...(turn_id ? { turn_id } : {}),
+    });
     if (
       result.compacted &&
       this.active_turn?.turn_context
@@ -314,7 +338,7 @@ export class SessionLoop {
         await this.persist_action_event({
           action_id: compact_id,
           action_type: "history-compaction",
-          turn_id,
+          ...(turn_id ? { turn_id } : {}),
           title: "Session messages already compact",
           description: "The Session has no active messages to compact.",
           status: "completed",

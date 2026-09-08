@@ -23,11 +23,11 @@ The method is available on both `AgentSession` and `RemoteAgentSession`.
 
 `await session.compact()` returns a Handle after the command passes validation and enters the Session's ordered input queue. `handle.result` remains `null` while it is pending; `await handle.finished` waits until summary generation and canonical history rewriting have actually finished.
 
-- when the Session is idle, the command runs before the next `prompt()` turn starts
+- when the Session is idle, the command runs immediately without waiting for another `prompt()`
 - when a turn is active, it runs at the next Session step checkpoint
-- if the active turn ends before another checkpoint, the command remains queued for the next turn
+- if the active turn ends before another checkpoint, the command runs independently after the turn closes
 - compact commands, configuration commands, and steer prompts preserve their queue order
-- calling `compact()` alone never creates a turn or starts a provider request
+- calling `compact()` alone never creates a turn; it starts its own model request when a summary is required
 
 Before compacting during an active turn, the SDK closes the current Assistant draft. After the canonical history is rewritten, the next provider request reloads that history instead of continuing with stale in-memory messages.
 

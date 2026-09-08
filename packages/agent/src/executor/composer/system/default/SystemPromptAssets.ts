@@ -7,14 +7,8 @@
  */
 
 import coreSystemPromptText from "@executor/composer/system/default/assets/core.prompt.js";
-import taskSystemPromptText from "@executor/composer/system/default/assets/task.prompt.js";
 
 /**
  * 默认 core system prompt。
  */
 export const CORE_SYSTEM_PROMPT = coreSystemPromptText.trim();
-
-/**
- * task 模式专用 system prompt。
- */
-export const TASK_SYSTEM_PROMPT = taskSystemPromptText.trim();

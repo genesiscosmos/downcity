@@ -4,8 +4,17 @@
  * Command 只存在于 Session 运行进程内，不属于 Remote Transport 协议，也不持久化。
  */
 
-/** Session Command 构造参数。 */
-export interface SessionCommandOptions {
+/** Session Command 的执行类别。 */
+export type SessionCommandKind =
+  /** Prompt Command 需要创建或加入一个 Turn。 */
+  | "prompt"
+  /** Maintenance Command 可以在 Session 空闲期独立执行。 */
+  | "maintenance";
+
+/** Session 有序输入队列中的 Command。 */
+export interface SessionCommand {
+  /** 当前 Command 的执行类别。 */
+  kind: SessionCommandKind;
   /** Command 出队后执行的完整行为。 */
   execute: () => Promise<void>;
   /** Session stop 时取消该 Command 的可选行为；未提供时 Command 继续保留。 */
@@ -13,6 +22,9 @@ export interface SessionCommandOptions {
   /** Command 成功执行后需要持久化的完成信息；未提供时静默完成。 */
   completion?: SessionCommandCompletion;
 }
+
+/** Session facade 创建 Command 时使用的输入。 */
+export type SessionCommandOptions = SessionCommand;
 
 /** Session Command 成功执行后的 canonical 持久化信息。 */
 export interface SessionCommandCompletion {

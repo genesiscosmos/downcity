@@ -14,7 +14,10 @@ import type {
   StorageProvider,
   WorkspaceRuntime,
 } from "@downcity/type";
-import { normalize_instruction_input } from "@/agent/AgentInstructions.js";
+import {
+  create_instruction_system_blocks,
+  normalize_instruction_input,
+} from "@/agent/AgentInstructions.js";
 import type {
   AgentOptions,
   AgentSessionConstructor,
@@ -30,9 +33,11 @@ import { EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import {
-  resolve_session_system_messages,
-  type SystemProfile,
-} from "@/executor/composer/system/default/SystemDomain.js";
+  build_session_system_blocks,
+  resolve_session_plugin_system_blocks,
+} from "@/session/SessionSystem.js";
+import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
+import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 
 /** SDK Agent 主体。 */
 export class Agent {
@@ -180,19 +185,42 @@ export class Agent {
     input: {
       /** 目标 Session 稳定标识。 */
       session_id: string;
-      /** system message 使用场景。 */
-      profile?: SystemProfile;
     },
   ): Promise<SessionSystemMessage[]> {
     this.assert_workspace(workspace);
-    return await resolve_session_system_messages({
+    const session_id = String(input.session_id || "").trim();
+    if (!session_id) {
+      throw new Error("resolve_system_messages requires a non-empty session_id");
+    }
+    const instruction_system_blocks = create_instruction_system_blocks(
+      [...this.get_instructions()],
+      workspace.path,
+    );
+    const hooks = this.city?.get_session_hooks(this.id, workspace)
+      ?? EMPTY_SESSION_HOOKS;
+    const hook_context = create_session_hook_context({
+      session_id,
+      session_origin: { type: "chat" },
       project_root: workspace.path,
-      session_id: input.session_id,
-      profile: input.profile || "chat",
-      static_system_prompts: [...this.get_instructions()],
-      hooks: this.city?.get_session_hooks(this.id, workspace)
-        ?? EMPTY_SESSION_HOOKS,
+      workspace_env: Object.freeze({ ...workspace.get_env() }),
+      agent_systems: instruction_system_blocks.map((block) => block.content),
     });
+    const plugin_system_blocks = await resolve_session_plugin_system_blocks({
+      session_id,
+      hooks,
+      context: hook_context,
+    });
+    const blocks = await build_session_system_blocks({
+      agent_id: this.id,
+      project_root: workspace.path,
+      session_id,
+      created_at: Date.now(),
+      timezone: resolve_system_timezone(),
+      get_instruction_system_blocks: () => instruction_system_blocks,
+      get_managed_plugin_system_blocks: async () => [],
+      get_plugin_system_blocks: async () => plugin_system_blocks,
+    });
+    return blocks.map((block) => ({ role: "system", content: block.content }));
   }
 
   /** 释放 Agent 的 Session 后台任务、存储与宿主引用。 */

@@ -109,7 +109,6 @@ export async function handle_internal_rpc_request(params: {
         String(request.params.session_id || "").trim() || "consoleui-chat-main";
       const system_messages = await context.resolve_system_messages({
         session_id,
-        profile: "chat",
       });
       write_success(request.id, {
         session_id: session_id,

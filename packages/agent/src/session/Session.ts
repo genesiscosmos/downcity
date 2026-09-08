@@ -46,7 +46,6 @@ import { run_session_history_compaction } from "@/session/runtime/SessionHistory
 import { SessionState } from "@/session/SessionState.js";
 import { SessionLoop } from "@/session/SessionLoop.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
-import { SessionCommand } from "@/session/SessionCommand.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
 import type { SessionHookRuntime } from "@downcity/type";
@@ -331,6 +330,7 @@ export class Session implements AgentSession {
         }
       : undefined;
     this.enqueue_command({
+      kind: "maintenance",
       execute: async () => {
         if (model_result) this.state.apply_model_config(model_result.config);
         if (security_changed && next_approval_mode) {
@@ -393,6 +393,7 @@ export class Session implements AgentSession {
       },
     });
     this.enqueue_command({
+      kind: "maintenance",
       execute: operation.execute,
     });
     this.events.publish({
@@ -409,7 +410,7 @@ export class Session implements AgentSession {
 
   /** 创建一个具体 Session Command 对象并加入当前 FIFO。 */
   private enqueue_command(options: SessionCommandOptions): void {
-    this.session_queue.enqueue_command(new SessionCommand(options));
+    this.session_loop.enqueue_command(options);
   }
 
   /**

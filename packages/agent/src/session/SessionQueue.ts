@@ -5,7 +5,7 @@
  * 也不持有 active Turn。
  */
 
-import { SessionCommand } from "@/session/SessionCommand.js";
+import type { SessionCommand } from "@/types/session/SessionCommand.js";
 
 /** 单个 Session 的进程内 FIFO。 */
 export class SessionQueue {
@@ -41,7 +41,8 @@ export class SessionQueue {
     let cancelled_count = 0;
     const retained_commands: SessionCommand[] = [];
     for (const command of this.commands) {
-      if (command.cancel()) {
+      if (command.cancel) {
+        command.cancel();
         cancelled_count += 1;
       } else {
         retained_commands.push(command);

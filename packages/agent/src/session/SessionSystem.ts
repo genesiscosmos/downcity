@@ -11,7 +11,12 @@ import type {
   AgentSessionSystemBlock,
   AgentSessionSystemSessionInfo,
 } from "@/types/agent/SessionTypes.js";
-import type { BuildSessionSystemBlocksInput } from "@/types/session/SessionSystem.js";
+import type {
+  BuildSessionSystemBlocksInput,
+  ResolveSessionPluginSystemBlocksInput,
+} from "@/types/session/SessionSystem.js";
+import type { JsonValue, SessionSystemContextHookValue } from "@downcity/type";
+import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
 
 function normalize_system_blocks(
   blocks: AgentSessionSystemBlock[],
@@ -37,6 +42,51 @@ function normalize_system_blocks(
       } satisfies AgentSessionSystemBlock;
     })
     .filter((block): block is AgentSessionSystemBlock => Boolean(block));
+}
+
+/** 把 system pipeline 输出限制为稳定的 Plugin 命名内容块。 */
+export function normalize_plugin_system_blocks(
+  input: unknown,
+): AgentSessionSystemBlock[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const record = item as Record<string, unknown>;
+    const name = String(record.name || "").trim();
+    const content = String(record.content || "").trim();
+    if (!name || !content) return [];
+    return [{ source: "plugin" as const, name, content }];
+  });
+}
+
+/** 使用统一 Hook 检查点解析当前 Session 的 Plugin system blocks。 */
+export async function resolve_session_plugin_system_blocks(
+  input: ResolveSessionPluginSystemBlocksInput,
+): Promise<AgentSessionSystemBlock[]> {
+  let blocks: AgentSessionSystemBlock[];
+  try {
+    blocks = normalize_plugin_system_blocks(
+      await input.hooks.system_blocks(input.context),
+    );
+  } catch (error) {
+    await input.on_error?.(error);
+    return [];
+  }
+  const value: SessionSystemContextHookValue = {
+    session_id: input.session_id,
+    ...(input.turn_id ? { turn_id: input.turn_id } : {}),
+    blocks,
+  };
+  try {
+    const output = await input.hooks.pipeline(
+      SESSION_HOOK_POINTS.system_context,
+      value as unknown as JsonValue,
+    ) as unknown as SessionSystemContextHookValue;
+    return normalize_plugin_system_blocks(output?.blocks);
+  } catch (error) {
+    await input.on_error?.(error);
+    return blocks;
+  }
 }
 
 function create_session_info(

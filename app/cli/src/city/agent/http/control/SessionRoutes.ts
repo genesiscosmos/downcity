@@ -202,7 +202,6 @@ export function registerControlSessionRoutes(
           DEFAULT_SYSTEM_SESSION_ID;
         const systemMessages = await runtime.resolve_system_messages({
           session_id: session_id,
-          profile: "chat",
         });
         return c.json({
           success: true,

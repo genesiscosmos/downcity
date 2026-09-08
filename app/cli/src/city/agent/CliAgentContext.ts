@@ -38,8 +38,6 @@ export interface CliAgentContext {
   resolve_system_messages: (input: {
     /** 目标 Session ID。 */
     session_id: string;
-    /** system message profile。 */
-    profile?: "chat" | "task";
   }) => Promise<SessionSystemMessage[]>;
   /** 注册当前 Workspace 下的 Plugin HTTP 路由。 */
   register_plugin_http_routes: (app: import("hono").Hono) => void;

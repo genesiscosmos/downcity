@@ -23,11 +23,11 @@ await session.prompt({ query: "基于压缩后的历史继续" });
 
 `await session.compact()` 返回一个 Handle，表示 command 已通过校验并进入 Session 有序输入队列。`handle.result` 在运行中为 `null`；`await handle.finished` 会等待摘要生成和 canonical 历史重写真正结束。
 
-- Session 空闲时，command 在下一次 `prompt()` turn 开始前执行
+- Session 空闲时，command 立即执行，不需要等待后续 `prompt()`
 - turn 运行中时，command 在下一个 Session step 检查点执行
-- 如果当前 turn 在下一个检查点前结束，command 会保留到下一个 turn
+- 如果当前 turn 在下一个检查点前结束，command 会在 turn 收口后独立执行
 - compact command、配置 command 和 steer prompt 严格保持入队顺序
-- 单独调用 `compact()` 不会创建 turn，也不会主动发起 provider 请求
+- 单独调用 `compact()` 不会创建 turn；需要摘要时会自行发起对应的模型请求
 
 运行中执行 compact 前，SDK 会先收口当前 Assistant 草稿。canonical history 重写完成后，下一次 provider 调用会重新加载历史，不会继续使用压缩前的内存消息。
 

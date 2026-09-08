@@ -51,7 +51,7 @@ function create_stream_text_result(text) {
   };
 }
 
-test("compact Handle 在队列命令完成后兑现并阻塞后续 Prompt", async () => {
+test("空闲 Session 的 compact Handle 不依赖后续 Prompt 即可完成", async () => {
   const compact_started = create_deferred();
   const release_compact = create_deferred();
 
@@ -89,6 +89,65 @@ test("compact Handle 在队列命令完成后兑现并阻塞后续 Prompt", asyn
     });
     const compact_handle = await session.compact();
     assert.equal(compact_handle.result, null);
+
+    await compact_started.promise;
+    assert.equal(compact_handle.result, null);
+    release_compact.resolve();
+    const compact_result = await compact_handle.finished;
+    assert.deepEqual(compact_result, {
+      compact_id: compact_handle.id,
+      success: true,
+      compacted: false,
+      reason: "nothing_to_compact",
+    });
+    assert.deepEqual(compact_handle.result, compact_result);
+
+    const turn_handle = await session.prompt({ query: "continue" });
+    assert.equal((await turn_handle.finished).success, true);
+  } finally {
+    release_compact.resolve();
+    await agent.dispose();
+    await fs.rm(project_root, { recursive: true, force: true });
+  }
+});
+
+test("compact Command 会阻塞排在它后面的 Prompt", async () => {
+  const compact_started = create_deferred();
+  const release_compact = create_deferred();
+
+  class CompactComposer extends DefaultSessionComposer {
+    async compact() {
+      compact_started.resolve();
+      await release_compact.promise;
+      return null;
+    }
+  }
+
+  class CompactSession extends Session {
+    constructor(options) {
+      super({ ...options, composer: new CompactComposer() });
+    }
+  }
+
+  const project_root = await fs.mkdtemp(
+    path.join(os.tmpdir(), "downcity-session-compact-order-"),
+  );
+  const agent = new Agent({
+    id: "compact_order_agent",
+    model: new MockModelClient({
+      modelId: "compact-order-model",
+      doStream: async () => create_stream_text_result("done"),
+    }),
+    session_class: CompactSession,
+  });
+  const workspace = new Workspace({ id: "test_workspace", path: project_root, data_root_path: path.join(project_root, "data") });
+
+  try {
+    const session = await agent.sessions.create({
+      session_id: "compact_order_session",
+      workspace,
+    });
+    const compact_handle = await session.compact();
 
     let prompt_returned = false;
     const prompt_promise = session.prompt({ query: "continue" }).then((handle) => {

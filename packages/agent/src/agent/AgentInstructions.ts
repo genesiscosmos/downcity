@@ -8,7 +8,7 @@
  */
 
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import { DEFAULT_SHIP_PROMPTS } from "@executor/composer/system/default/SystemDomain.js";
+import { CORE_SYSTEM_PROMPT } from "@executor/composer/system/default/SystemPromptAssets.js";
 
 /**
  * 归一化调用方传入的静态 instruction。
@@ -28,7 +28,7 @@ export function normalize_instruction_input(
 
 function createCoreInstructionContent(project_root: string): string {
   const current_year = String(new Date().getFullYear());
-  return DEFAULT_SHIP_PROMPTS
+  return CORE_SYSTEM_PROMPT
     .replaceAll("{{project_path}}", project_root)
     .replaceAll("{{project_root}}", project_root)
     .replaceAll("{{current_year}}", current_year);

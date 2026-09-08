@@ -19,14 +19,13 @@ import type {
 } from "@/types/session/SessionComposer.js";
 import type {
   SessionHookContextBlock,
-  SessionSystemContextHookValue,
   SessionTurnContextHookValue,
 } from "@downcity/type";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
-import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionCompositionOptions } from "@/types/session/SessionComposition.js";
 import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
+import { resolve_session_plugin_system_blocks } from "@/session/SessionSystem.js";
 
 /** 管理当前 Session 的 system snapshot 与 Step 组装输入。 */
 export class SessionComposition {
@@ -167,20 +166,21 @@ export class SessionComposition {
     const plugin_runtime = refresh_system
       ? this.options.get_hooks()
       : turn_context?.step.hooks || this.options.get_hooks();
-    const plugin_system_blocks = this.snapshot_blocks && !refresh_system
-      ? []
-      : refresh_system
-        ? await plugin_runtime.system_blocks(hook_context)
-        : turn_context?.step.hooks
-          ? await turn_context.step.hooks.system_blocks(hook_context)
-          : await plugin_runtime.system_blocks(hook_context);
     const resolved_plugin_system_blocks = this.snapshot_blocks && !refresh_system
       ? []
-      : await this.resolve_plugin_system_context(
-          plugin_runtime,
-          plugin_system_blocks,
-          turn_context?.session.turn_id,
-        );
+      : await resolve_session_plugin_system_blocks({
+          session_id: this.options.session_id,
+          ...(turn_context?.session.turn_id
+            ? { turn_id: turn_context.session.turn_id }
+            : {}),
+          hooks: plugin_runtime,
+          context: hook_context,
+          on_error: async (error) => await this.log_plugin_hook_warning(
+            SESSION_HOOK_POINTS.system_context,
+            error,
+            turn_context?.session.turn_id,
+          ),
+        });
     const plugin_context_blocks = turn_context
       ? await turn_context.step.resolve_plugin_context_blocks(async () => {
           const hooks = turn_context.step.hooks;
@@ -260,33 +260,6 @@ export class SessionComposition {
     };
   }
 
-  /** 通过 pipeline point 解析 Plugin 追加的命名 system blocks。 */
-  private async resolve_plugin_system_context(
-    hooks: SessionHookRuntime | NonNullable<SessionTurnContext["step"]["hooks"]>,
-    blocks: readonly AgentSessionSystemBlock[],
-    turn_id?: string,
-  ): Promise<AgentSessionSystemBlock[]> {
-    const value: SessionSystemContextHookValue = {
-      session_id: this.options.session_id,
-      ...(turn_id ? { turn_id } : {}),
-      blocks: blocks.map((block) => ({ ...block })),
-    };
-    try {
-      const output = await hooks.pipeline(
-        SESSION_HOOK_POINTS.system_context,
-        value as unknown as JsonValue,
-      ) as unknown as SessionSystemContextHookValue;
-      return normalize_plugin_system_blocks(output?.blocks);
-    } catch (error) {
-      await this.log_plugin_hook_warning(
-        SESSION_HOOK_POINTS.system_context,
-        error,
-        turn_id,
-      );
-      return value.blocks;
-    }
-  }
-
   /** Plugin 上下文 Hook 失败只降级当前扩展内容。 */
   private async log_plugin_hook_warning(
     point_name: string,
@@ -328,19 +301,6 @@ export class SessionComposition {
       blocks.map((block) => block.content).join("\n\n"),
     );
   }
-}
-
-/** 把 system pipeline 输出限制为 Plugin 命名内容块。 */
-function normalize_plugin_system_blocks(input: unknown): AgentSessionSystemBlock[] {
-  if (!Array.isArray(input)) return [];
-  return input.flatMap((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
-    const record = item as Record<string, unknown>;
-    const name = String(record.name || "").trim();
-    const content = String(record.content || "").trim();
-    if (!name || !content) return [];
-    return [{ source: "plugin" as const, name, content }];
-  });
 }
 
 /** 把 Turn pipeline 输出限制为低权限动态参考内容块。 */

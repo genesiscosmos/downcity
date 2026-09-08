@@ -93,7 +93,8 @@ src/
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
   - `SessionState.ts` 管理配置与 metadata
-  - `SessionLoop.ts` 管理输入队列和 Turn 生命周期
+  - `SessionLoop.ts` 是 Command Queue 的唯一消费者，并管理 Turn 生命周期
+  - Prompt Command 创建或加入 Turn；配置与压缩等 Maintenance Command 在空闲期独立执行
   - `SessionComposition.ts` 管理 system snapshot、检查点 env/hook 与 Composer 输入
   - `SessionMessages.ts` 是 canonical Message 唯一事实源
   - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
@@ -109,6 +110,7 @@ src/
   - 内部执行内核
   - `Executor` 只负责单轮 LLM/Tool Loop、Step 状态和上下文恢复
   - 不持有 History Store，不负责 Message 或 metadata 持久化
+  - 默认 system block 只由 `session/SessionSystem.ts` 组装，不维护第二套 system composer
 
 - `src/plugin/`
   - 只保留 Agent 公开的 Action schedule 与 Plugin 协议辅助
@@ -120,7 +122,6 @@ src/
 
 - `src/types/`
   - 跨模块、跨包共享协议类型
-  - `common/` 放 JSON、模板等无领域依赖的基础类型
   - `config/` 放 LLM、execution binding、plugin 配置、start options 等宿主配置契约
   - `runtime/` 放 auth、agent、host、platform 等运行时与控制面共享协议
   - 领域内部类型仍保留在对应领域目录，例如 `plugin/types/`、`executor/types/`

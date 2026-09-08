@@ -82,8 +82,6 @@ export interface RpcAgentContext {
   resolve_system_messages: (input: {
     /** 目标 Session ID。 */
     session_id: string;
-    /** system message profile。 */
-    profile?: "chat" | "task";
   }) => Promise<SessionSystemMessage[]>;
 }
 

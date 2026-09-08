@@ -1,19 +1,19 @@
 /**
- * @file 验证 SessionQueue 只保存具体 Command 对象并维护确定的 FIFO 顺序。
+ * @file 验证 SessionQueue 只保存最小 Command 数据并维护确定的 FIFO 顺序。
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SessionQueue } from "../bin/session/SessionQueue.js";
-import { SessionCommand } from "../bin/session/SessionCommand.js";
 
 function create_command(name, executed, cancel) {
-  return new SessionCommand({
+  return {
+    kind: cancel ? "prompt" : "maintenance",
     execute: async () => {
       executed.push(name);
     },
     ...(cancel ? { cancel } : {}),
-  });
+  };
 }
 
 test("SessionQueue 按 FIFO 返回具体 Command 对象", async () => {
@@ -79,21 +79,22 @@ test("SessionQueue 可以把未处理 Command 恢复到队列头部", async () =
   assert.deepEqual(executed, ["head", "middle", "tail"]);
 });
 
-test("SessionCommand 成功执行后返回可选的持久化完成信息", async () => {
+test("SessionQueue 保留 Command 的类别与完成信息", async () => {
+  const queue = new SessionQueue();
   const completion = {
     type: "action",
     id: "config-completed",
     title: "Configuration updated",
     description: "The next step uses the new configuration.",
   };
-  const command = new SessionCommand({
+  const command = {
+    kind: "maintenance",
     execute: async () => {},
     completion,
-  });
-  const silent_command = new SessionCommand({
-    execute: async () => {},
-  });
+  };
+  queue.enqueue_command(command);
 
-  assert.deepEqual(await command.execute(), completion);
-  assert.equal(await silent_command.execute(), undefined);
+  assert.equal(queue.take_next(), command);
+  assert.equal(command.kind, "maintenance");
+  assert.deepEqual(command.completion, completion);
 });
