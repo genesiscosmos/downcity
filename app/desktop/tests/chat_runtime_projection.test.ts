@@ -3,11 +3,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { DesktopChatRuntime } from "../src/common/types/DesktopApi.ts";
-import { collect_executing_agent_ids, project_executing_agent_ids } from "../src/renderer/features/chat/lib/chat_runtime_projection.ts";
+import { collect_executing_agent_ids, project_active_turn_file_diff, project_executing_agent_ids } from "../src/renderer/features/chat/lib/chat_runtime_projection.ts";
 
 function create_runtime(session_id: string, status: DesktopChatRuntime["status"], agent_id = "builder"): DesktopChatRuntime {
   return { agent_id, workspace_id: "workspace", session_id, status, updated_at: 1 };
 }
+
+test("实时文件改动只归属于当前 Turn", () => {
+  const previous_diff = { turn_id: "turn-1", files_count: 2, additions: 8, deletions: 3 };
+  assert.equal(project_active_turn_file_diff({ ...create_runtime("session", "streaming"), turn_id: "turn-1" }, previous_diff), previous_diff);
+  assert.equal(project_active_turn_file_diff({ ...create_runtime("session", "streaming"), turn_id: "turn-2" }, previous_diff), undefined);
+  assert.equal(project_active_turn_file_diff(create_runtime("session", "submitted"), previous_diff), undefined);
+});
 
 test("一个 Session 结束时保留同 Agent 的其它运行中 Session", () => {
   const runtimes = {

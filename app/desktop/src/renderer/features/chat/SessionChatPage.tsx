@@ -6,6 +6,7 @@ import type { RespondSessionInteractionInput } from "@downcity/agent";
 import { use_desktop_selector } from "@/app/use_desktop";
 
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
+import { project_active_turn_file_diff } from "@/features/chat/lib/chat_runtime_projection";
 import type { DesktopController, NavigationTarget } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopChatRewriteInput, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import { SessionView } from "@/features/chat/components/SessionTimeline";
@@ -37,7 +38,8 @@ export function AgentSessionChatSurface({ selection, agent, session, open_agent_
   const session_key = get_session_key(workspace_id, agent_id, session_id);
   const messages = use_desktop_selector(controller.stores.chat_stream, (state) => state.messages_by_session[session_key]);
   const runtime = use_desktop_selector(controller.stores.chat_stream, (state) => state.chat_runtime_by_session[session_key]);
-  const file_diff = use_desktop_selector(controller.stores.chat_stream, (state) => state.file_diff_by_session[session_key]);
+  const latest_file_diff = use_desktop_selector(controller.stores.chat_stream, (state) => state.file_diff_by_session[session_key]);
+  const file_diff = project_active_turn_file_diff(runtime, latest_file_diff);
   const history = use_desktop_selector(controller.stores.chat_stream, (state) => state.history_by_session[session_key]);
   const has_queued_messages = use_desktop_selector(controller.stores.composer, (state) => (state.queued_messages_by_session[session_key]?.length ?? 0) > 0);
   const switch_workspace = useCallback((target_workspace_id: string) => controller.actions.create_session(target_workspace_id, agent_id), [agent_id, controller.actions]);

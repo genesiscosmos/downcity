@@ -1,9 +1,23 @@
 /** Desktop Chat 运行态的跨 Session Agent 聚合投影。 */
 
 import type { DesktopChatRuntime } from "@common/types/DesktopApi";
+import type { DesktopTurnFileDiffSummary } from "@/types/DesktopView";
 
 /** 仍占用 Session 执行槽位的运行阶段。 */
 const executing_statuses = new Set<DesktopChatRuntime["status"]>(["submitted", "streaming", "waiting_input"]);
+
+/**
+ * 只返回属于当前 Runtime Turn 的实时文件改动。
+ *
+ * Session 级缓存会保留上一轮的最终摘要；新 Turn 的首条 file_diff mutation 到达前，
+ * 必须按 turn_id 隔离，避免 Thinking 状态短暂展示上一轮结果。
+ */
+export function project_active_turn_file_diff(
+  runtime?: DesktopChatRuntime,
+  file_diff?: DesktopTurnFileDiffSummary,
+): DesktopTurnFileDiffSummary | undefined {
+  return runtime?.turn_id && runtime.turn_id === file_diff?.turn_id ? file_diff : undefined;
+}
 
 /** 从 canonical runtime 表重建正在执行的 Agent 集合。 */
 export function collect_executing_agent_ids(runtimes: Record<string, DesktopChatRuntime>): Set<string> {

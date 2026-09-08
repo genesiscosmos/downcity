@@ -7,9 +7,9 @@
  */
 
 import { useCallback, useMemo, useRef } from "react";
-import type { SessionMessage, SessionMutation, SessionTurnFileDiffSummary } from "@downcity/agent";
+import type { SessionMessage, SessionMutation } from "@downcity/agent";
 import type { DesktopChatRuntime, DesktopGroupMessage, DesktopGroupMemberRuntime, DesktopGroupStatusPhase, DesktopSessionConfiguration } from "@common/types/DesktopApi";
-import type { ChatHistoryState, ChatStreamState, GroupInteraction } from "@/types/DesktopView";
+import type { ChatHistoryState, ChatStreamState, DesktopTurnFileDiffSummary, GroupInteraction } from "@/types/DesktopView";
 import type { SessionMessageIndex } from "@/types/SessionProjection";
 import type { GroupMessageProjection } from "@/types/GroupProjection";
 import { apply_indexed_session_mutations, create_session_message_index, merge_session_snapshot } from "@/features/chat/lib/session_mutation";
@@ -213,11 +213,11 @@ export function use_chat_stream_store() {
   }, [commit]);
 
   /** 写入指定 Session 的最新实时文件改动摘要。 */
-  const set_file_diff = useCallback((session_key: string, diff: SessionTurnFileDiffSummary) => {
+  const set_file_diff = useCallback((session_key: string, diff: DesktopTurnFileDiffSummary) => {
     if (!can_receive_render_event(session_key)) return;
     const current = state_ref.current;
     const previous = current.file_diff_by_session[session_key];
-    if (previous?.files_count === diff.files_count && previous.additions === diff.additions && previous.deletions === diff.deletions) return;
+    if (previous?.turn_id === diff.turn_id && previous.files_count === diff.files_count && previous.additions === diff.additions && previous.deletions === diff.deletions) return;
     commit({
       ...current,
       file_diff_by_session: { ...current.file_diff_by_session, [session_key]: diff },

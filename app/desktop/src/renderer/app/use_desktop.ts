@@ -247,6 +247,7 @@ export function use_desktop_controller(): DesktopController {
       if (chat_lifecycle.is_session_deleted(session_key)) return;
       if (mutation.variant === "file_diff") {
         chat_stream.set_file_diff(session_key, {
+          turn_id: mutation.turn_id,
           files_count: mutation.files_count,
           additions: mutation.additions,
           deletions: mutation.deletions,

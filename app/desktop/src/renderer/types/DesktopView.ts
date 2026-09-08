@@ -158,14 +158,20 @@ export interface GroupInteraction {
   part: SessionAssistantInteractionPart;
 }
 
+/** 带 Turn 身份的实时文件改动摘要，避免跨轮复用旧状态。 */
+export interface DesktopTurnFileDiffSummary extends SessionTurnFileDiffSummary {
+  /** 摘要所属 Turn 的稳定标识。 */
+  turn_id: string;
+}
+
 /** Chat 流式领域的完整不可变快照。 */
 export interface ChatStreamState {
   /** 按 Session 组合键缓存的 canonical 可见消息。 */
   messages_by_session: Record<string, SessionMessage[]>;
   /** 按 Session 组合键缓存的实时运行态。 */
   chat_runtime_by_session: Record<string, DesktopChatRuntime>;
-  /** 按 Session 组合键缓存的最新实时文件改动摘要。 */
-  file_diff_by_session: Record<string, SessionTurnFileDiffSummary>;
+  /** 按 Session 组合键缓存的最新实时文件改动摘要；展示前必须匹配当前 Turn。 */
+  file_diff_by_session: Record<string, DesktopTurnFileDiffSummary>;
   /** 按 Session 组合键缓存的模型与审批配置。 */
   configuration_by_session: Record<string, DesktopSessionConfiguration>;
   /** 按 Session 组合键保存的历史分页状态。 */
