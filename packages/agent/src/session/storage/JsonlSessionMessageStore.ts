@@ -20,7 +20,6 @@ import type {
 } from "@/types/store/SessionDataStore.js";
 import type { JsonlSessionMessageStoreOptions } from "@/types/store/LocalStore.js";
 import type { FileSystem } from "@downcity/type";
-import { migrate_session_message_storage_unsafe } from "@/session/storage/SessionMessageStorageMigration.js";
 
 const SEGMENT_FILE_PATTERN = /^(\d+)-(\d+)\.jsonl$/;
 const SEQUENCE_FILE_WIDTH = 12;
@@ -51,11 +50,6 @@ export class JsonlSessionMessageStore {
   /** 创建 Active 与 Segment 布局，并清理已经完成的遗留草稿。 */
   async initialize(): Promise<void> {
     await this.with_write_lock(async () => {
-      await migrate_session_message_storage_unsafe({
-        files: this.files,
-        active_file_path: this.active_file_path,
-        agent_message_file_path: this.agent_message_file_path,
-      });
       const ranges = await this.list_segment_ranges();
       const folded_messages = await this.read_folded_active_messages_unsafe();
       const latest_segment_end = ranges.at(-1)?.end_sequence || 0;

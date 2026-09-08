@@ -14,7 +14,6 @@ files as their own database.
 ├── meta.json
 ├── instruction.md
 └── messages/
-    ├── schema.json
     ├── active.jsonl
     ├── agent_message.json
     └── segments/
@@ -27,8 +26,6 @@ or any other non-empty string selects another partition. The path layer safely e
 as one directory segment. Metadata schema v2 always records `agent_id` and the complete immutable `origin`,
 and records `workspace_id` only when the Session was created with a Workspace. The same `session_id` may
 exist in different origin partitions without sharing data, and the project directory never receives `.downcity`.
-
-`schema.json` marks the current Message storage format. On the first read of an older Session, the SDK takes the Session Message write lock, converts top-level `assistant` records to `agent`, and moves top-level `action` and `error` records into Agent Parts. Segments, Active, and the streaming draft are replaced atomically one file at a time, and the version marker is committed only after all files succeed. An interrupted migration is retried on the next read. Archived Sessions follow the same migration path when browsed.
 
 `instruction.md` is an optional complete system snapshot. A Session fixes its first generated system in memory by default. Local `session.snapshot()` creates or overwrites the file. `session.syncshot()` regenerates the in-memory system and also overwrites the file when it already exists. If the file is absent when restored, the Session regenerates from the Agent's current instruction and plugins; deleting the file restores that behavior.
 
