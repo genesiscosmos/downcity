@@ -655,7 +655,7 @@ export class CityPluginRuntime {
             ...(input.input !== undefined ? { payload: input.input } : {}),
           }) as unknown as PluginJsonValue;
         },
-        append_agent_session_assistant_message: async (input) => {
+        append_agent_session_message: async (input) => {
           const workspace = await this.options.runtime_access.enter_workspace(
             input.agent_id,
             input.workspace_id,
@@ -666,7 +666,7 @@ export class CityPluginRuntime {
           await agent.sessions.runtime(
             input.session_id,
             input.origin_type,
-          ).append_assistant_message({ text: input.text });
+          ).append_agent_message({ text: input.text });
         },
         open_external: async ({ url }) => {
           if (!this.options.host?.open_external) throw new Error("City does not provide open_external");

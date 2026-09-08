@@ -11,7 +11,7 @@ import { JsonlSessionMessageStore } from "@/session/storage/JsonlSessionMessageS
 import {
   get_agent_session_instruction_path,
   get_agent_session_meta_path,
-  get_agent_session_assistant_message_path,
+  get_agent_session_agent_message_path,
   get_agent_session_active_messages_path,
   get_agent_session_attachments_path,
 } from "@/session/storage/LocalStorePaths.js";
@@ -64,7 +64,7 @@ export class LocalSessionDataStore implements SessionDataStore {
         this.origin.type,
         this.session_id,
       ),
-      assistant_message_file_path: get_agent_session_assistant_message_path(
+      agent_message_file_path: get_agent_session_agent_message_path(
         this.storage_root_path,
         this.origin.type,
         this.session_id,

@@ -29,7 +29,7 @@ import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { cn } from "@/lib/utils";
 import { translate, use_translation } from "@/locales/i18n";
 import { is_chat_busy, type ChatHistoryState } from "@/types/DesktopView";
-import type { SessionActionMessage, SessionMessageProjection, SessionMessageSegment } from "@/types/SessionProjection";
+import type { SessionMessageProjection, SessionMessageSegment } from "@/types/SessionProjection";
 import type { DesktopAgentSummary, DesktopChatRewriteAction, DesktopChatRewriteInput, DesktopChatRuntime, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Session Chat 主视图属性。 */
@@ -167,19 +167,9 @@ function EmptyPrompts({ surface = "workspace", agent, workspace, workspaces, age
 }
 
 /** 按 canonical 消息类型渲染。 */
-const MessageRenderer = memo(function MessageRenderer({ message, actions, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, has_later_visible_message, can_use_history_actions, can_replace_session, send_message_on_enter }: { /** canonical 消息。 */ message: SessionMessage; /** 紧邻当前 Assistant 的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前 Session 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前消息之后是否仍有可见内容。 */ has_later_visible_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean; /** 当前 Session 是否允许被替换。 */ can_replace_session: boolean; /** Enter 是否直接提交编辑。 */ send_message_on_enter: boolean }) {
-  if (message.type === "error") return <div className="group is-assistant flex min-w-0 w-full items-start gap-2 py-2 !m-0 !p-0">
-    <div className="size-8 shrink-0 px-1" aria-hidden="true" />
-    <div className="min-w-0 flex-1 px-1 pt-0.5 text-sm text-foreground">
-      <div className="flex min-w-0 w-full items-start gap-2 rounded-md bg-foreground/[0.045] px-2.5 py-2">
-        <TbAlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/75" />
-        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[0.78125rem] leading-[1.55] text-muted-foreground [overflow-wrap:anywhere]">{message.message}</p>
-      </div>
-    </div>
-  </div>;
-  if (message.type === "action") return <AgentActionMessages actions={[message]} agent={agent} open_agent_info={open_agent_info} />;
+const MessageRenderer = memo(function MessageRenderer({ message, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, has_later_visible_message, can_use_history_actions, can_replace_session, send_message_on_enter }: { /** canonical 消息。 */ message: SessionMessage; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前 Session 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前消息之后是否仍有可见内容。 */ has_later_visible_message: boolean; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean; /** 当前 Session 是否允许被替换。 */ can_replace_session: boolean; /** Enter 是否直接提交编辑。 */ send_message_on_enter: boolean }) {
   if (message.type === "user") return <UserMessage message={message} fork_message={fork_message} rewrite_message={rewrite_message} has_later_visible_message={has_later_visible_message} can_use_history_actions={can_use_history_actions} can_replace_session={can_replace_session} send_message_on_enter={send_message_on_enter} />;
-  return <AssistantMessage message={message} actions={actions} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} file_diff={file_diff} />;
+  return <AssistantMessage message={message} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} file_diff={file_diff} />;
 }, (previous, next) => previous.message === next.message
   && previous.agent === next.agent
   && previous.open_agent_info === next.open_agent_info
@@ -191,8 +181,7 @@ const MessageRenderer = memo(function MessageRenderer({ message, actions, agent,
   && previous.has_later_visible_message === next.has_later_visible_message
   && previous.can_use_history_actions === next.can_use_history_actions
   && previous.can_replace_session === next.can_replace_session
-  && previous.send_message_on_enter === next.send_message_on_enter
-  && same_action_messages(previous.actions, next.actions));
+  && previous.send_message_on_enter === next.send_message_on_enter);
 
 /**
  * 切换 Session 时先挂载最新分段，再逐帧向前补齐历史分段。
@@ -217,7 +206,7 @@ function ProgressiveMessageSegments({ segments, children }: { /** 按时间排�
 
 /** 只在分段内容或消息交互依赖变化时进入该分段的消息级协调。 */
 const MessageSegment = memo(function MessageSegment({ segment, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, can_use_history_actions, can_replace_session, send_message_on_enter }: { /** 稳定的消息渲染分段。 */ segment: SessionMessageSegment; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写历史用户消息。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 当前流式消息的文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean; /** 当前 Session 是否允许被替换。 */ can_replace_session: boolean; /** Enter 是否直接提交编辑。 */ send_message_on_enter: boolean }) {
-  return <>{segment.rows.map(({ message, actions, has_later_visible_message }) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id} active={message.type === "assistant" && message.status === "streaming"}><MessageRenderer message={message} actions={actions} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} rewrite_message={rewrite_message} file_diff={message.type === "assistant" && message.status === "streaming" ? file_diff : undefined} has_later_visible_message={has_later_visible_message} can_use_history_actions={can_use_history_actions} can_replace_session={can_replace_session} send_message_on_enter={send_message_on_enter} /></ChatMessageViewportRow>)}</>;
+  return <>{segment.rows.map(({ message, has_later_visible_message }) => <ChatMessageViewportRow key={message.message_id} row_id={message.message_id} active={message.type === "agent" && message.status === "streaming"}><MessageRenderer message={message} agent={agent} open_agent_info={open_agent_info} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} rewrite_message={rewrite_message} file_diff={message.type === "agent" && message.status === "streaming" ? file_diff : undefined} has_later_visible_message={has_later_visible_message} can_use_history_actions={can_use_history_actions} can_replace_session={can_replace_session} send_message_on_enter={send_message_on_enter} /></ChatMessageViewportRow>)}</>;
 }, (previous, next) => previous.segment === next.segment
   && previous.agent === next.agent
   && previous.open_agent_info === next.open_agent_info
@@ -309,7 +298,7 @@ function UserMessage({ message, fork_message, rewrite_message, has_later_visible
 }
 
 /** Assistant 消息按 Duobox 规则展示内容、活动流和尾部操作栏。 */
-function AssistantMessage({ message, actions, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, file_diff }: { /** canonical Assistant 消息。 */ message: Extract<SessionMessage, { type: "assistant" }>; /** 归属于当前回复的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 当前 Session 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; }) {
+function AssistantMessage({ message, agent, open_agent_info, show_reasoning, respond_interaction, fork_message, file_diff }: { /** canonical Agent 消息。 */ message: Extract<SessionMessage, { type: "agent" }>; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void; /** 是否显示推理。 */ show_reasoning: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 当前 Session 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; }) {
   const translate_common = use_translation("common");
   const translate_chat = use_translation("chat");
   const [copied, set_copied] = useState(false);
@@ -336,7 +325,6 @@ function AssistantMessage({ message, actions, agent, open_agent_info, show_reaso
       <div className="min-h-0 w-full">
         <AssistantContent message_id={message.message_id} parts={message.parts} show_reasoning={show_reasoning} respond_interaction={respond_interaction} streaming={message.status === "streaming"} />
       </div>
-      {actions.length > 0 ? <ActionMessageList actions={actions} /> : null}
       {message.status === "streaming" ? <ActivityIndicator status="streaming" compact file_diff={file_diff} /> : show_actions ? <div className="assistant-message-menu-bar flex h-6 min-h-6 shrink-0 items-center">
         {text ? <div className="message-action-toolbar pointer-events-none flex h-5 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
           <MessageActionButton title={translate_chat("message.copy")} on_click={() => void copy_message()}>{copied ? <TbCheck /> : <TbCopy />}</MessageActionButton>
@@ -345,21 +333,6 @@ function AssistantMessage({ message, actions, agent, open_agent_info, show_reaso
       </div> : null}
     </div>
   </div>;
-}
-
-/** 比较 Action 链的成员引用，允许投影数组重建后复用历史消息行。 */
-function same_action_messages(left: SessionActionMessage[], right: SessionActionMessage[]): boolean {
-  return left.length === right.length && left.every((action, index) => action === right[index]);
-}
-
-/** 在 Agent 消息内部展示动作记录。 */
-function ActionMessageList({ actions }: { /** 按发生顺序排列的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[] }) {
-  return <div className="mt-1 flex flex-col gap-0.5 border-l border-border/50 pl-2">{actions.map((action) => <div key={action.message_id} className="flex min-w-0 items-baseline gap-1.5 text-[0.6875rem] leading-4 text-foreground/75"><span className="font-medium">{action.title}</span>{action.description ? <span className="min-w-0 truncate text-muted-foreground">{action.description}</span> : null}<ChatMessageTimestamp created_at={action.created_at} class_name="ml-auto opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></div>)}</div>;
-}
-
-/** 为没有前置回复的动作提供最小 Agent 消息容器。 */
-function AgentActionMessages({ actions, agent, open_agent_info }: { /** 待展示的动作消息。 */ actions: Extract<SessionMessage, { type: "action" }>[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info?(): void }) {
-  return <div className="group is-assistant flex w-full items-start gap-2 py-2"><button type="button" disabled={!open_agent_info} onClick={open_agent_info} className="shrink-0 rounded-md px-1 transition-opacity duration-150 enabled:hover:opacity-75"><AgentAvatar agent={agent} class_name="size-7 rounded-md" /></button><div className="min-w-0 flex-1 px-1"><div className="mb-1 text-xs font-medium text-foreground/85">{agent.name}</div><ActionMessageList actions={actions} /></div></div>;
 }
 
 const message_action_button_class_name = "group/message-action flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-[1.65]";

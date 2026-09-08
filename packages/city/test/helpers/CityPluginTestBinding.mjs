@@ -47,7 +47,7 @@ export function create_test_plugin_context(options = {}) {
     stop: async () => ({}),
     subscribe: () => () => {},
     context: async () => ({ messages: [] }),
-    append_assistant_message: async () => {},
+    append_agent_message: async () => {},
   });
   const plugins = {
     get: () => null,

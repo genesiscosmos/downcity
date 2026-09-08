@@ -31,13 +31,13 @@ class FailingAssistantMessageStore extends JsonlSessionMessageStore {
     this.next_assistant_error = new Error(message);
   }
 
-  async write_assistant_message(message) {
+  async write_agent_message(message) {
     const error = this.next_assistant_error;
     if (error) {
       this.next_assistant_error = null;
       throw error;
     }
-    await super.write_assistant_message(message);
+    await super.write_agent_message(message);
   }
 }
 
@@ -48,14 +48,14 @@ async function create_recorder(
 ) {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-messages-"));
   const file_path = path.join(root_path, "active.jsonl");
-  const assistant_message_file_path = path.join(root_path, "assistant_message.json");
+  const agent_message_file_path = path.join(root_path, "agent_message.json");
   const files = new LocalFileSystem(root_path);
   const events = [];
   const store = create_store({
     files,
     session_id,
     file_path,
-    assistant_message_file_path,
+    agent_message_file_path,
   });
   const recorder = new SessionMessages({
     session_id,
@@ -70,7 +70,7 @@ async function create_recorder(
     files,
     root_path,
     file_path,
-    assistant_message_file_path,
+    agent_message_file_path,
   };
 }
 
@@ -182,20 +182,20 @@ test("模型文本增量只更新草稿，完成后写入 active JSONL", async (
     recorder,
     events,
     file_path,
-    assistant_message_file_path,
+    agent_message_file_path,
   } = await create_recorder();
   await recorder.append_user_message({
     turn_id: "turn-1",
     input_type: "prompt",
     parts: [{ part_id: "user-text-1", type: "text", text: "你好", state: "done" }],
   });
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.apply_model_event({ type: "text_start", content_id: "text-1" });
   await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "你" });
   await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "好" });
 
   const active_during_stream = await read_jsonl(file_path);
-  const draft = JSON.parse(await fs.readFile(assistant_message_file_path, "utf8"));
+  const draft = JSON.parse(await fs.readFile(agent_message_file_path, "utf8"));
   assert.deepEqual(active_during_stream.map((message) => message.type), ["user"]);
   assert.equal(draft.parts[0].text, "你好");
   assert.equal(draft.parts[0].state, "streaming");
@@ -204,11 +204,11 @@ test("模型文本增量只更新草稿，完成后写入 active JSONL", async (
   await writer.complete();
 
   const active = await read_jsonl(file_path);
-  assert.deepEqual(active.map((message) => message.type), ["user", "assistant"]);
+  assert.deepEqual(active.map((message) => message.type), ["user", "agent"]);
   assert.equal(active[1].parts[0].text, "你好");
   assert.equal(active[1].parts[0].state, "done");
   assert.equal(
-    await fs.stat(assistant_message_file_path).then(() => true).catch(() => false),
+    await fs.stat(agent_message_file_path).then(() => true).catch(() => false),
     false,
   );
   assert.equal(events.some((event) => event.variant === "delta"), true);
@@ -224,7 +224,7 @@ test("工具调用、审批、结果和后续文本保持 canonical 顺序", asy
     session_id: "tool-order-test",
     interactions,
   });
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   await write_text(writer, "text-1", "before");
   await write_tool_call(writer, {
@@ -292,7 +292,7 @@ test("工具调用、审批、结果和后续文本保持 canonical 顺序", asy
 
 test("reasoning signature 经 canonical Message 保留到模型历史", async () => {
   const { recorder } = await create_recorder("reasoning-signature-test");
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   await writer.apply_model_event({ type: "reasoning_start", content_id: "reasoning-1" });
   await writer.apply_model_event({
@@ -323,7 +323,7 @@ test("reasoning signature 经 canonical Message 保留到模型历史", async ()
 
 test("多个模型 Step 可复用 content_id 且追加到同一 Assistant Message", async () => {
   const { recorder } = await create_recorder("reused-content-id-test");
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
 
   await writer.begin_step();
   await write_text(writer, "text-1", "first");
@@ -353,7 +353,7 @@ test("多个模型 Step 可复用 content_id 且追加到同一 Assistant Messag
 
 test("工具执行等待对应标准流事件创建 canonical Part", async () => {
   const { recorder } = await create_recorder("tool-gate-test");
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   let prepared = false;
   const preparation = writer.prepare_tool_input({
@@ -381,7 +381,7 @@ test("工具执行等待对应标准流事件创建 canonical Part", async () =>
 
 test("Step 最终快照不能补造未经过模型事件的 Part", async () => {
   const { recorder } = await create_recorder("snapshot-mismatch-test");
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   await write_text(writer, "text-1", "final");
   await assert.rejects(writer.finish_step([
@@ -406,7 +406,7 @@ test("Tool Part 持久化失败时不释放工具执行等待", async () => {
     "tool-write-failure-test",
     (options) => new FailingAssistantMessageStore(options),
   );
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   store.fail_next_assistant_write("tool write failed");
   await assert.rejects(writer.apply_model_event({
@@ -429,11 +429,11 @@ test("Tool Part 持久化失败时不释放工具执行等待", async () => {
 test("重启时收口流式 Assistant 和运行中 Action", async () => {
   const session_id = "restart-recovery-test";
   const harness = await create_recorder(session_id);
-  const writer = await harness.recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await harness.recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   await writer.apply_model_event({ type: "text_start", content_id: "text-1" });
   await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "partial" });
-  await harness.recorder.open_action_message({
+  await harness.recorder.open_action_part({
     message_id: "action-1",
     turn_id: "turn-1",
     action_type: "test",
@@ -446,22 +446,22 @@ test("重启时收口流式 Assistant 和运行中 Action", async () => {
       files: harness.files,
       session_id,
       file_path: harness.file_path,
-      assistant_message_file_path: harness.assistant_message_file_path,
+      agent_message_file_path: harness.agent_message_file_path,
     }),
     publish: () => {},
   });
   await restarted.initialize();
   const page = await restarted.list_messages();
-  const assistant = page.items.find((message) => message.type === "assistant");
-  const action = page.items.find((message) => message.type === "action");
+  const assistant = page.items.find((message) => message.type === "agent" && message.parts.some((part) => part.type === "text"));
+  const action = page.items.find((message) => message.type === "agent" && message.parts.some((part) => part.type === "action"));
   assert.equal(assistant.status, "stopped");
   assert.equal(assistant.parts[0].text, "partial");
-  assert.equal(action.status, "failed");
+  assert.equal(action.parts.find((part) => part.type === "action")?.state, "failed");
 });
 
 test("Action 更新保留 identity 并只读取最新 revision", async () => {
   const { recorder } = await create_recorder("action-revision-test");
-  const writer = await recorder.open_action_message({
+  const writer = await recorder.open_action_part({
     message_id: "action-1",
     turn_id: "turn-1",
     action_type: "deploy",
@@ -473,6 +473,8 @@ test("Action 更新保留 identity 并只读取最新 revision", async () => {
   assert.equal(page.items[0].message_id, "action-1");
   assert.equal(page.items[0].revision, 2);
   assert.equal(page.items[0].status, "completed");
+  assert.equal(page.items[0].parts[0].type, "action");
+  assert.equal(page.items[0].parts[0].state, "completed");
 });
 
 test("Compact 生成累计 Summary 并让模型只读取 Summary 与 Active", async () => {

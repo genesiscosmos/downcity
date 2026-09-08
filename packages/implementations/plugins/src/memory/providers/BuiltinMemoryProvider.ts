@@ -522,7 +522,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         const message_id = String(message.message_id || "").trim();
         const text = String(message.text || "").trim();
         if (!message_id || !text) return [];
-        if (message.role !== "user" && message.role !== "assistant") return [];
+        if (message.role !== "user" && message.role !== "agent") return [];
         return [{ message_id, role: message.role, text }];
       });
     if (messages.length === 0) {

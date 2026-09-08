@@ -132,7 +132,7 @@ export default new GithubPlugin();
 
 `notifications.publish()` 与 `notifications.dismiss()` 始终绑定当前 Plugin。宿主会把 `topic_key` 放入 Plugin 命名空间，并把 `route` 解释为当前 Plugin 工作区路由，因此 Plugin 不能代表其他 Plugin 或跳转到任意 Desktop 页面。相同 `topic_key` 只保留最新一条未读通知。
 
-`PluginLifecycleContext.system` 只提供明确授权的 City 宿主能力。需要把后台结果写回既有 Session 时，使用 `append_agent_session_assistant_message({ agent_id, workspace_id, session_id, origin_type, text })`；四个身份字段必须来自已持久化的明确目标，不能扫描或猜测 Session。
+`PluginLifecycleContext.system` 只提供明确授权的 City 宿主能力。需要把后台结果写回既有 Session 时，使用 `append_agent_session_message({ agent_id, workspace_id, session_id, origin_type, text })`；四个身份字段必须来自已持久化的明确目标，不能扫描或猜测 Session。
 
 需要实现类似 Skill 管理器的功能主页时，可以通过 `system.list_workspaces()` 读取宿主已经登记的 Workspace 摘要。Plugin 是受信任本地 Node.js 代码；它负责验证 action 输入，并自行拥有文件、网络和长期资源的业务行为。
 

@@ -34,7 +34,7 @@ async function create_session(t) {
 test("Fork 默认包含锚点消息，显式排除时只复制锚点之前的历史", async (t) => {
   const { session } = await create_session(t);
   await session.append_user_message({ text: "第一条" });
-  await session.append_assistant_message({ text: "第一次回答" });
+  await session.append_agent_message({ text: "第一次回答" });
   await session.append_user_message({ text: "需要编辑" });
   const source_messages = (await session.messages()).items;
   const target = source_messages.find((message) => message.type === "user" && message.parts.some((part) => part.type === "text" && part.text === "需要编辑"));
@@ -44,7 +44,7 @@ test("Fork 默认包含锚点消息，显式排除时只复制锚点之前的历
   const excluded = await session.fork({ message_id: target.message_id, include_message: false });
   assert.equal((await included.messages()).items.length, 3);
   assert.equal((await excluded.messages()).items.length, 2);
-  assert.deepEqual((await excluded.messages()).items.map((message) => message.type), ["user", "assistant"]);
+  assert.deepEqual((await excluded.messages()).items.map((message) => message.type), ["user", "agent"]);
 });
 
 test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (t) => {

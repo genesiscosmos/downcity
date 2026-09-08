@@ -14,7 +14,7 @@ Session API 读写，不要把这些文件当作自己的数据库。
 ├── instruction.md
 └── messages/
     ├── active.jsonl
-    ├── assistant_message.json
+    ├── agent_message.json
     └── segments/
         ├── 000000000001-000000000900.jsonl
         └── 000000000901-000000001500.jsonl
@@ -79,7 +79,7 @@ sequenceDiagram
     Session->>Model: 执行当前 Step
     Model-->>Loop: text / tool / file chunks
     Loop->>Messages: 更新 Assistant 草稿与 Part
-    Messages->>Store: 原子覆盖 assistant_message.json
+    Messages->>Store: 原子覆盖 agent_message.json
     Loop->>Messages: 完成 Assistant Message
     Messages->>Store: 持久化最终 Assistant snapshot
     Store->>Active: append Message
@@ -103,7 +103,7 @@ Composer 只读取快照并返回模型输入或压缩计划。Message、Assista
 
 只有摘要生成成功后才能提交压缩计划。Provider 错误或空摘要会直接让 Compact 失败，不会创建 Segment，也不会修改 Active 历史。
 
-## `assistant_message.json`
+## `agent_message.json`
 
 流式 Assistant 在完成前不会把每个 Delta 追加到 Active，而是持续原子覆盖当前完整草稿。Assistant 完成后，最终快照追加到 `active.jsonl`，再删除草稿。同一时刻每个 Session 最多有一个流式草稿；Text、Tool、File Part 均按各自 `sequence` 保持模型生成顺序。
 

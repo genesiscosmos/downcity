@@ -34,7 +34,7 @@ async function start_chat_plugin() {
       async list_agents() { return []; },
       async list_workspaces() { return []; },
       async invoke_agent_plugin() { return {}; },
-      async append_agent_session_assistant_message() {},
+      async append_agent_session_message() {},
       async open_external() {},
       async show_item_in_folder() {},
       async write_clipboard_text() {},
@@ -64,7 +64,7 @@ async function start_skill_plugin(workspace_path) {
         return [{ workspace_id: "test", name: "Test", workspace_path }];
       },
       async invoke_agent_plugin() { return {}; },
-      async append_agent_session_assistant_message() {},
+      async append_agent_session_message() {},
       async open_external() {},
       async show_item_in_folder() {},
       async write_clipboard_text() {},
@@ -160,7 +160,7 @@ async function start_task_plugin(options = {}) {
         invocations.push(input);
         return { success: true, data: { accepted: true } };
       },
-      async append_agent_session_assistant_message() {},
+      async append_agent_session_message() {},
       async open_external() {},
       async show_item_in_folder() {},
       async write_clipboard_text() {},

@@ -13,7 +13,7 @@ is commonly `~/.downcity`:
 ├── meta.json
 └── messages/
     ├── active.jsonl
-    ├── assistant_message.json
+    ├── agent_message.json
     └── segments/
         └── <start_sequence>-<end_sequence>.jsonl
 ```
@@ -24,7 +24,7 @@ directories. `meta.json` v2 records the owning `agent_id` and complete immutable
 `workspace_id` only when a Workspace was passed to the Session. The project directory never receives a `.downcity` directory.
 
 - `active.jsonl`: complete `SessionMessage` snapshots retained after the latest Compact.
-- `assistant_message.json`: the one complete in-progress Assistant draft.
+- `agent_message.json`: the one complete in-progress Agent draft.
 - `segments/*.jsonl`: immutable history ranges with real Messages first and a cumulative Summary footer last.
 - `meta.json`: a lightweight index of Agent, origin, and Workspace ownership, title, model label, timestamps, message count, and storage bytes; it never stores the runtime model instance.
 

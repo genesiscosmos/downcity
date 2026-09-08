@@ -57,7 +57,7 @@ export type SessionPromptPart =
   | SessionDataInputPart;
 
 /** Action 可以追加到 Assistant Message 的封闭内容集合。 */
-export type SessionAssistantResultPart =
+export type SessionAgentResultPart =
   | SessionTextInputPart
   | SessionFileInputPart
   | SessionDataInputPart;

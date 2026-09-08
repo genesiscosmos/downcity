@@ -243,7 +243,7 @@ export async function runAgentRound(params: {
   }
 
   // 宿主 Session 保存实际执行历史；run 目录额外保留一份独立调试快照。
-  await params.taskSessionRuntime.get_messages(params.session_id).append_external_assistant_message({
+  await params.taskSessionRuntime.get_messages(params.session_id).append_external_agent_message({
     text: outputPick.text,
   });
 

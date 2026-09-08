@@ -7,11 +7,11 @@
 
 import type { ModelStreamEvent } from "@downcity/type";
 import {
-  SessionAssistantMessageWriter,
+  SessionAgentMessageWriter,
   SessionMessages,
 } from "@/session/SessionMessages.js";
-import type { SessionAssistantResultPart } from "@downcity/type";
-import type { SessionAssistantMessagePart } from "@downcity/type";
+import type { SessionAgentResultPart } from "@downcity/type";
+import type { SessionAgentMessagePart } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type {
   SessionToolExecutionResult,
@@ -22,8 +22,8 @@ import type {
 export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   private readonly turn_id: string;
   private readonly messages: SessionMessages;
-  private writer: SessionAssistantMessageWriter | null = null;
-  private writer_task: Promise<SessionAssistantMessageWriter> | null = null;
+  private writer: SessionAgentMessageWriter | null = null;
+  private writer_task: Promise<SessionAgentMessageWriter> | null = null;
   private step_pending = false;
 
   constructor(options: {
@@ -65,7 +65,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 使用模型聚合出的 canonical Parts 校验当前 Step。 */
-  async finish_step(parts: SessionAssistantMessagePart[]): Promise<void> {
+  async finish_step(parts: SessionAgentMessagePart[]): Promise<void> {
     await (await this.ensure_writer()).finish_step(parts);
   }
 
@@ -86,7 +86,7 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 追加 Action 产生的封闭 Assistant 内容。 */
-  async append_result_parts(parts: readonly SessionAssistantResultPart[]): Promise<void> {
+  async append_result_parts(parts: readonly SessionAgentResultPart[]): Promise<void> {
     if (parts.length === 0) return;
     await (await this.ensure_writer()).append_result_parts(parts);
   }
@@ -110,10 +110,10 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 惰性打开当前连续 Assistant 回复的唯一 Writer。 */
-  private async ensure_writer(): Promise<SessionAssistantMessageWriter> {
+  private async ensure_writer(): Promise<SessionAgentMessageWriter> {
     if (this.writer) return this.writer;
     if (this.writer_task) return await this.writer_task;
-    this.writer_task = this.messages.open_assistant_message({
+    this.writer_task = this.messages.open_agent_message({
       turn_id: this.turn_id,
     });
     try {

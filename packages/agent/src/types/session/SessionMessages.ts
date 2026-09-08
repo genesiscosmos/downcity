@@ -9,11 +9,11 @@ import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
-  SessionAssistantResultPart,
+  SessionAgentResultPart,
   SessionPromptPart,
 } from "@downcity/type";
 import type {
-  SessionAssistantMessagePart,
+  SessionAgentMessagePart,
   SessionUserMessagePart,
 } from "@downcity/type";
 import type { SessionMutation } from "@downcity/type";
@@ -45,7 +45,7 @@ export interface AppendSessionUserMessageInput {
 }
 
 /** Assistant Message 创建参数。 */
-export interface OpenSessionAssistantMessageInput {
+export interface OpenSessionAgentMessageInput {
   /** 当前 Assistant 所属 Turn。 */
   turn_id: string;
   /** 当前 Assistant 是普通回复还是压缩 Summary。 */
@@ -59,11 +59,11 @@ export interface OpenSessionAssistantMessageInput {
 }
 
 /** 已完成 Assistant Message 的直接写入参数。 */
-export interface AppendCompletedAssistantMessageInput {
+export interface AppendCompletedAgentMessageInput {
   /** 当前 Assistant 所属 Turn。 */
   turn_id?: string;
   /** Assistant 完整结构化 Part。 */
-  parts: SessionAssistantMessagePart[];
+  parts: SessionAgentMessagePart[];
   /** 当前 Assistant 是普通回复还是压缩 Summary。 */
   kind?: "normal" | "summary";
   /** 当前 Message 的默认展示范围。 */
@@ -73,7 +73,7 @@ export interface AppendCompletedAssistantMessageInput {
 }
 
 /** Action Message 创建参数。 */
-export interface OpenSessionActionMessageInput {
+export interface OpenSessionAgentActionPartInput {
   /** 可选的稳定 Message 标识，用于更新同一个 Action 生命周期。 */
   message_id?: string;
   /** 当前 Action 所属 Turn。 */
@@ -91,7 +91,7 @@ export interface OpenSessionActionMessageInput {
 }
 
 /** 完成 Action Message 时允许覆盖的内容。 */
-export interface CompleteSessionActionMessageInput {
+export interface CompleteSessionAgentActionPartInput {
   /** 完成时覆盖的可选标题。 */
   title?: string;
   /** 完成时覆盖的可选描述。 */
@@ -101,7 +101,7 @@ export interface CompleteSessionActionMessageInput {
 }
 
 /** Error Message 创建参数。 */
-export interface AppendSessionErrorMessageInput {
+export interface AppendSessionAgentErrorPartInput {
   /** 当前错误影响 Session 还是单个 Turn。 */
   scope: "session" | "turn";
   /** 当前错误所属 Turn。 */
@@ -123,9 +123,9 @@ export interface AppendExternalSessionUserMessageInput {
 }
 
 /** 公开 Session API 追加 Assistant Message 的输入。 */
-export interface AppendExternalSessionAssistantMessageInput {
+export interface AppendExternalSessionAgentMessageInput {
   /** 可选的结构化 Assistant 内容。 */
-  parts?: SessionAssistantResultPart[];
+  parts?: SessionAgentResultPart[];
   /** 未提供结构化内容时使用的纯文本。 */
   text?: string;
 }

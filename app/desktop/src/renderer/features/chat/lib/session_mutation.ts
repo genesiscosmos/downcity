@@ -82,7 +82,7 @@ export function apply_indexed_session_mutations(
     const message_position = positions_by_id.get(mutation.message_id);
     if (message_position === undefined) continue;
     const current = next_messages[message_position];
-    if (!current || current.type !== "assistant" || current.revision > mutation.revision) continue;
+    if (!current || current.type !== "agent" || current.revision > mutation.revision) continue;
     let draft = assistant_drafts.get(mutation.message_id);
     if (!draft || draft.message !== current) {
       const parts = [...current.parts];

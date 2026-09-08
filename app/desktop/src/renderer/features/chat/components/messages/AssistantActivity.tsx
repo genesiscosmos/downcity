@@ -6,9 +6,9 @@
  */
 
 import { useEffect, useState, type FormEvent, type ComponentType } from "react";
-import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionAssistantMessagePart, SessionInteractionQuestion } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionAgentInteractionPart, SessionAgentMessagePart, SessionInteractionQuestion } from "@downcity/agent";
 import { read_session_turn_file_diff_data } from "@downcity/agent/session";
-import { TbBulb, TbCheck, TbChevronLeft, TbChevronRight, TbFile, TbFilePencil, TbFilePlus, TbFileSearch, TbLoader2, TbMessageQuestion, TbPuzzle, TbSearch, TbSend, TbTerminal2, TbTextScan2, TbX } from "react-icons/tb";
+import { TbAlertTriangle, TbBulb, TbCheck, TbChevronLeft, TbChevronRight, TbFile, TbFilePencil, TbFilePlus, TbFileSearch, TbLoader2, TbMessageQuestion, TbPuzzle, TbSearch, TbSend, TbTerminal2, TbTextScan2, TbX } from "react-icons/tb";
 import { Markdown } from "@/components/markdown/Markdown";
 import { cn } from "@/lib/utils";
 import { translate, use_translation } from "@/locales/i18n";
@@ -16,7 +16,7 @@ import { TurnFileDiffCard } from "@/features/chat/components/messages/TurnFileDi
 import { group_assistant_activities, group_assistant_content, read_tool_input_text, resolve_tool_presentation, should_auto_open_activity_group, should_force_open_activity_group, should_force_open_tool, type AssistantActivityPart, type AssistantToolVisualKind } from "@/features/chat/lib/assistant/assistant_activity";
 
 /** 按 canonical 顺序渲染 Assistant 的全部用户可见内容。 */
-export function AssistantContent({ message_id, parts, show_reasoning, streaming, respond_interaction }: { /** canonical Assistant 消息标识。 */ message_id: string; /** Assistant 原始 parts。 */ parts: SessionAssistantMessagePart[]; /** 是否展示 Reasoning。 */ show_reasoning: boolean; /** 当前消息是否流式生成。 */ streaming: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
+export function AssistantContent({ message_id, parts, show_reasoning, streaming, respond_interaction }: { /** canonical Assistant 消息标识。 */ message_id: string; /** Assistant 原始 parts。 */ parts: SessionAgentMessagePart[]; /** 是否展示 Reasoning。 */ show_reasoning: boolean; /** 当前消息是否流式生成。 */ streaming: boolean; /** 响应审批或问题。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   const translate_chat = use_translation("chat");
   const groups = group_assistant_content(parts);
   return <>{groups.map((group, index) => {
@@ -28,6 +28,8 @@ export function AssistantContent({ message_id, parts, show_reasoning, streaming,
       const file_diff = read_session_turn_file_diff_data(part);
       return file_diff ? <TurnFileDiffCard key={part.part_id} data={file_diff} /> : null;
     }
+    if (part.type === "action") return <div key={part.part_id} className="mt-1 flex min-w-0 items-baseline gap-1.5 border-l border-border/50 pl-2 text-[0.6875rem] leading-4 text-foreground/75"><span className="font-medium">{part.title}</span>{part.description ? <span className="min-w-0 truncate text-muted-foreground">{part.description}</span> : null}</div>;
+    if (part.type === "error") return <div key={part.part_id} className="flex min-w-0 w-full items-start gap-2 rounded-md bg-foreground/[0.045] px-2.5 py-2"><TbAlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/75" /><p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[0.78125rem] leading-[1.55] text-muted-foreground [overflow-wrap:anywhere]">{part.message}</p></div>;
     // 未注册的 data 没有稳定通用展示语义。
     return null;
   })}</>;
@@ -53,7 +55,7 @@ function ActivityGroup({ parts, message_streaming, respond_interaction }: { /** 
   const tool_parts = parts.filter((part): part is Extract<AssistantActivityPart, { type: "tool" }> => part.type === "tool");
   const last_tool = tool_parts[tool_parts.length - 1];
   const last_reasoning = find_last_reasoning(parts);
-  const pending_interaction = parts.find((part): part is SessionAssistantInteractionPart => part.type === "interaction" && part.status === "pending");
+  const pending_interaction = parts.find((part): part is SessionAgentInteractionPart => part.type === "interaction" && part.status === "pending");
   const failed = tool_parts.some((part) => part.state === "failed");
   const force_open = should_force_open_activity_group(parts);
   const auto_open = should_auto_open_activity_group(parts);
@@ -120,14 +122,14 @@ function FileChangePreview({ part, visual_kind }: { /** Tool part。 */ part: Ex
 }
 
 /** Interaction 统一使用 Duobox 风格的独立卡片。 */
-function InteractionCard({ part, respond }: { /** Interaction part。 */ part: SessionAssistantInteractionPart; /** 提交响应。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
+function InteractionCard({ part, respond }: { /** Interaction part。 */ part: SessionAgentInteractionPart; /** 提交响应。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
   if (part.request.type === "approval") return <ApprovalCard part={part} respond={respond} />;
   if (part.request.type === "question") return <QuestionCard part={part} respond={respond} />;
   return <GenericInteractionCard part={part} />;
 }
 
 /** 高风险操作审批卡片。 */
-function ApprovalCard({ part, respond }: { /** Approval interaction。 */ part: SessionAssistantInteractionPart; /** 提交审批。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
+function ApprovalCard({ part, respond }: { /** Approval interaction。 */ part: SessionAgentInteractionPart; /** 提交审批。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
   const [submitting, set_submitting] = useState<"approve" | "deny">();
   const pending = part.status === "pending";
   const request = part.request;
@@ -148,7 +150,7 @@ function ApprovalCard({ part, respond }: { /** Approval interaction。 */ part: 
 }
 
 /** 多问题逐题导航卡片。 */
-function QuestionCard({ part, respond }: { /** Question interaction。 */ part: SessionAssistantInteractionPart; /** 提交回答。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
+function QuestionCard({ part, respond }: { /** Question interaction。 */ part: SessionAgentInteractionPart; /** 提交回答。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
   const [answers, set_answers] = useState<Record<string, string | string[]>>(() => read_question_answers(part));
   const [current_index, set_current_index] = useState(0);
   const [submitting, set_submitting] = useState(false);
@@ -211,9 +213,9 @@ function find_last_reasoning(parts: AssistantActivityPart[]): Extract<AssistantA
   }
   return undefined;
 }
-function interaction_title(part: SessionAssistantInteractionPart): string { return part.request.title || (part.request.type === "approval" ? translate("chat:activity.confirmation") : part.request.type === "question" ? translate("chat:activity.input_required") : part.request.type); }
+function interaction_title(part: SessionAgentInteractionPart): string { return part.request.title || (part.request.type === "approval" ? translate("chat:activity.confirmation") : part.request.type === "question" ? translate("chat:activity.input_required") : part.request.type); }
 function is_answer_complete(value: string | string[] | undefined): value is string | string[] { return Array.isArray(value) ? value.length > 0 : typeof value === "string" && Boolean(value.trim()); }
-function read_question_answers(part: SessionAssistantInteractionPart): Record<string, string | string[]> {
+function read_question_answers(part: SessionAgentInteractionPart): Record<string, string | string[]> {
   const payload = part.response?.payload;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
   const answers = (payload as { answers?: unknown }).answers;
@@ -227,27 +229,27 @@ function read_question_answers(part: SessionAssistantInteractionPart): Record<st
   }));
 }
 function format_value(value: unknown): string { if (typeof value === "string") return value; try { return JSON.stringify(value, null, 2) ?? ""; } catch { return String(value); } }
-function interaction_status_label(part: SessionAssistantInteractionPart): string { return translate(`chat:activity.${part.status === "resolved" ? "responded" : part.status === "failed" ? "failed" : part.status}`); }
-function approval_result_label(part: SessionAssistantInteractionPart): string {
+function interaction_status_label(part: SessionAgentInteractionPart): string { return translate(`chat:activity.${part.status === "resolved" ? "responded" : part.status === "failed" ? "failed" : part.status}`); }
+function approval_result_label(part: SessionAgentInteractionPart): string {
   const payload = part.response?.payload;
   const decision = payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as { decision?: unknown }).decision : undefined;
   return translate(`chat:activity.${decision === "approved" ? "approved" : part.status === "expired" ? "expired" : part.status === "cancelled" ? "cancelled" : part.status === "failed" ? "failed" : "denied"}`);
 }
-function question_result_label(part: SessionAssistantInteractionPart): string { return translate(`chat:activity.${part.status === "expired" ? "expired" : part.status === "cancelled" ? "cancelled" : "answered"}`); }
+function question_result_label(part: SessionAgentInteractionPart): string { return translate(`chat:activity.${part.status === "expired" ? "expired" : part.status === "cancelled" ? "cancelled" : "answered"}`); }
 
-function interaction_payload(request: SessionAssistantInteractionPart["request"]): Record<string, unknown> {
+function interaction_payload(request: SessionAgentInteractionPart["request"]): Record<string, unknown> {
   return request.payload && typeof request.payload === "object" && !Array.isArray(request.payload)
     ? request.payload as Record<string, unknown>
     : {};
 }
 
-function interaction_questions(request: SessionAssistantInteractionPart["request"]): SessionInteractionQuestion[] {
+function interaction_questions(request: SessionAgentInteractionPart["request"]): SessionInteractionQuestion[] {
   const questions = interaction_payload(request).questions;
   return Array.isArray(questions) ? questions as SessionInteractionQuestion[] : [];
 }
 
 function string_value(value: unknown): string | undefined { return typeof value === "string" && value ? value : undefined; }
 
-function GenericInteractionCard({ part }: { /** 未注册 renderer 的动态 Interaction。 */ part: SessionAssistantInteractionPart }) {
+function GenericInteractionCard({ part }: { /** 未注册 renderer 的动态 Interaction。 */ part: SessionAgentInteractionPart }) {
   return <div className="interaction-card" role="status"><header className="interaction-card-header"><span className="interaction-card-title">{interaction_title(part)}</span><span className="interaction-card-meta">{interaction_status_label(part)}</span></header><div className="interaction-card-body">{translate("chat:activity.custom_required", { type: part.request.type })}</div></div>;
 }

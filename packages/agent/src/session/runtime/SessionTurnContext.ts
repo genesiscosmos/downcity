@@ -9,7 +9,7 @@
 
 import type { RuntimeToolEffect } from "@downcity/type";
 import type { SessionUserMessage } from "@downcity/type";
-import type { SessionAssistantResultPart } from "@downcity/type";
+import type { SessionAgentResultPart } from "@downcity/type";
 import type {
   SessionTurnContext,
   SessionTurnContextInit,
@@ -53,7 +53,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private plugin_context_blocks_promise?: Promise<readonly SessionHookContextBlock[]>;
   private injected_user_messages: SessionUserMessage[] = [];
   private deferred_messages: SessionUserMessage[] = [];
-  private pending_assistant_parts: SessionAssistantResultPart[] = [];
+  private pending_assistant_parts: SessionAgentResultPart[] = [];
   private turn_effects: RuntimeToolEffect[] = [];
 
   readonly lifecycle: SessionTurnContext["lifecycle"];

@@ -10,7 +10,7 @@ import type { SessionMessage } from "@downcity/type";
 import type { SessionMutation } from "@downcity/type";
 
 /** Assistant Message 状态转换器的构造参数。 */
-export interface SessionAssistantMessageStateOptions {
+export interface SessionAgentMessageStateOptions {
   /** 当前 Assistant Message 所属 Session 的稳定标识。 */
   session_id: string;
   /** 负责持久化 canonical Message 与 Assistant 草稿的 Store。 */

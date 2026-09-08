@@ -112,7 +112,7 @@ Session 提供三种 System 语义：
 │  ├─ meta.json
 │  └─ messages/
 │     ├─ active.jsonl
-│     ├─ assistant_message.json
+│     ├─ agent_message.json
 │     └─ segments/*.jsonl
 ├─ archived-sessions/
 ├─ logs/
@@ -121,7 +121,7 @@ Session 提供三种 System 语义：
 ```
 
 - `active.jsonl` 保存上次压缩后的活动历史。
-- `assistant_message.json` 保存当前 Assistant 的完整流式草稿。
+- `agent_message.json` 保存当前 Assistant 的完整流式草稿。
 - `segments` 保存压缩后的不可变历史前缀。
 - `instruction.md` 保存显式固化的 System Snapshot。
 

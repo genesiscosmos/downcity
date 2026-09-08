@@ -128,7 +128,7 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
     first_user_text: "Initial history",
   });
   try {
-    await session.append_assistant_message({
+    await session.append_agent_message({
       text: "Recorder appended history",
     });
     await session.session_messages.compact_active({

@@ -1,8 +1,8 @@
 /**
  * Session canonical 消息类型。
  *
- * Session 只维护一条由 sequence 排序的消息序列；assistant 的 text、reasoning、tool、file
- * 均为内部 part，不提升为顶层消息。
+ * Session 只维护一条由 sequence 排序的双主体消息序列；User 与 Agent 是顶层消息，
+ * text、reasoning、tool、interaction、file、data、action、error 都是主体内部 Part。
  */
 
 import type { JsonObject, JsonValue } from "../json/Json.js";
@@ -116,9 +116,9 @@ export interface SessionUserMessage extends SessionMessageBase {
   parts: SessionUserMessagePart[];
 }
 
-/** Assistant 普通文本 part。 */
-export interface SessionAssistantTextPart {
-  /** Assistant Message 内稳定的 part 标识。 */
+/** Agent 普通文本 Part。 */
+export interface SessionAgentTextPart {
+  /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
@@ -130,9 +130,9 @@ export interface SessionAssistantTextPart {
   state: "streaming" | "done";
 }
 
-/** Assistant 推理文本 part。 */
-export interface SessionAssistantReasoningPart {
-  /** Assistant Message 内稳定的 part 标识。 */
+/** Agent 推理文本 Part。 */
+export interface SessionAgentReasoningPart {
+  /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
@@ -146,9 +146,9 @@ export interface SessionAssistantReasoningPart {
   reasoning_signature?: string;
 }
 
-/** Assistant 工具 part。 */
-export interface SessionAssistantToolPart {
-  /** Assistant Message 内稳定的 part 标识。 */
+/** Agent 工具 Part。 */
+export interface SessionAgentToolPart {
+  /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
@@ -172,9 +172,9 @@ export interface SessionAssistantToolPart {
   title?: string;
 }
 
-/** Assistant 用户异步交互 part。 */
-export interface SessionAssistantInteractionPart {
-  /** Assistant Message 内稳定的 part 标识。 */
+/** Agent 用户异步交互 Part。 */
+export interface SessionAgentInteractionPart {
+  /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
@@ -196,9 +196,9 @@ export interface SessionAssistantInteractionPart {
   cancel_reason?: "turn_stopped" | "session_disposed" | "runtime_interrupted";
 }
 
-/** Assistant 文件 part。 */
-export interface SessionAssistantFilePart {
-  /** Assistant Message 内稳定的 part 标识。 */
+/** Agent 文件 Part。 */
+export interface SessionAgentFilePart {
+  /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
@@ -212,9 +212,9 @@ export interface SessionAssistantFilePart {
   filename?: string;
 }
 
-/** Assistant 结构化数据 part。 */
-export interface SessionAssistantDataPart {
-  /** Assistant Message 内稳定的 part 标识。 */
+/** Agent 结构化数据 Part。 */
+export interface SessionAgentDataPart {
+  /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
@@ -228,37 +228,20 @@ export interface SessionAssistantDataPart {
   data_id?: string;
 }
 
-/** Assistant Message part。 */
-export type SessionAssistantMessagePart =
-  | SessionAssistantTextPart
-  | SessionAssistantReasoningPart
-  | SessionAssistantToolPart
-  | SessionAssistantInteractionPart
-  | SessionAssistantFilePart
-  | SessionAssistantDataPart;
-
-/** Assistant 顶层 Message。 */
-export interface SessionAssistantMessage extends SessionMessageBase {
-  /** Message 类型固定为 assistant。 */
-  type: "assistant";
-  /** 普通 Assistant 回复或内部 compact summary。 */
-  kind: "normal" | "summary";
-  /** Assistant 当前执行状态。 */
-  status: "streaming" | "completed" | "stopped" | "failed";
-  /** Assistant 内按真实生成顺序保存的 parts。 */
-  parts: SessionAssistantMessagePart[];
-  /** Summary 已覆盖到的来源 Message 标识。 */
-  summary_through_message_id?: string;
-}
-
-/** Action 顶层 Message。 */
-export interface SessionActionMessage extends SessionMessageBase {
-  /** Message 类型固定为 action。 */
+/** Agent Action Part。 */
+export interface SessionAgentActionPart {
+  /** Agent Message 内稳定的 Part 标识。 */
+  part_id: string;
+  /** Agent Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
+  sequence: number;
+  /** Part 类型固定为 action。 */
   type: "action";
-  /** Action 业务类型。 */
+  /** 同一 Action 生命周期内稳定复用的业务标识。 */
+  action_id: string;
+  /** Action 业务类别。 */
   action_type: string;
-  /** Action 当前状态。 */
-  status: "running" | "completed" | "failed";
+  /** Action 当前生命周期状态。 */
+  state: "running" | "completed" | "failed";
   /** Action 展示标题。 */
   title: string;
   /** Action 展示描述。 */
@@ -267,9 +250,13 @@ export interface SessionActionMessage extends SessionMessageBase {
   data?: JsonObject;
 }
 
-/** Error 顶层 Message。 */
-export interface SessionErrorMessage extends SessionMessageBase {
-  /** Message 类型固定为 error。 */
+/** Agent Error Part。 */
+export interface SessionAgentErrorPart {
+  /** Agent Message 内稳定的 Part 标识。 */
+  part_id: string;
+  /** Agent Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
+  sequence: number;
+  /** Part 类型固定为 error。 */
   type: "error";
   /** 错误影响范围。 */
   scope: "session" | "turn";
@@ -281,12 +268,35 @@ export interface SessionErrorMessage extends SessionMessageBase {
   recoverable: boolean;
 }
 
+/** Agent Message Part。 */
+export type SessionAgentMessagePart =
+  | SessionAgentTextPart
+  | SessionAgentReasoningPart
+  | SessionAgentToolPart
+  | SessionAgentInteractionPart
+  | SessionAgentFilePart
+  | SessionAgentDataPart
+  | SessionAgentActionPart
+  | SessionAgentErrorPart;
+
+/** Agent 顶层 Message。 */
+export interface SessionAgentMessage extends SessionMessageBase {
+  /** Message 类型固定为 agent。 */
+  type: "agent";
+  /** 普通 Agent 输出或内部 compact summary。 */
+  kind: "normal" | "summary";
+  /** Agent Message 当前写入状态。 */
+  status: "streaming" | "completed" | "stopped" | "failed";
+  /** Agent 内按真实产生顺序保存的 Parts。 */
+  parts: SessionAgentMessagePart[];
+  /** Summary 已覆盖到的来源 Message 标识。 */
+  summary_through_message_id?: string;
+}
+
 /** Session 唯一顶层 Message 联合类型。 */
 export type SessionMessage =
   | SessionUserMessage
-  | SessionAssistantMessage
-  | SessionActionMessage
-  | SessionErrorMessage;
+  | SessionAgentMessage;
 
 /** 读取 Session Message snapshot 的分页输入。 */
 export interface ListSessionMessagesInput {

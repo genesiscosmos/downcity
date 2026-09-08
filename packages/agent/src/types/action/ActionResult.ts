@@ -10,7 +10,7 @@
 
 import type { RuntimeToolEffect } from "@downcity/type";
 import type {
-  SessionAssistantResultPart,
+  SessionAgentResultPart,
   SessionPromptPart,
 } from "@downcity/type";
 
@@ -26,7 +26,7 @@ export type ActionResultMessage =
       /** Assistant 内容写入当前回复。 */
       role: "assistant";
       /** 等待进入 canonical Assistant Message 的内容。 */
-      parts: SessionAssistantResultPart[];
+      parts: SessionAgentResultPart[];
     };
 
 /** Action 或 Tool 内部实现返回的统一结果。 */

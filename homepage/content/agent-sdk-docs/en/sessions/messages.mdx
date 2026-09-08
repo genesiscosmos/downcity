@@ -31,22 +31,20 @@ interface SessionMessagePage {
 
 `total` is the total number of real Messages created by the Session, not `items.length`. `source` identifies whether the result came from Active or one closed Segment.
 
-## Four top-level Message types
+## Two top-level Message types
 
 | `type` | Meaning | Typical presentation |
 | --- | --- | --- |
 | `user` | User input or in-flight steering | User bubble and attachments |
-| `assistant` | One continuous generated response | Text, reasoning, tools, files |
-| `action` | Runtime activity such as a model change or compaction | Status notice |
-| `error` | A displayable Session or Turn error | Error callout and retry entry point |
+| `agent` | Agent output and internal runtime records | Text, reasoning, tools, actions, errors, files |
 
-A Session has one top-level Message sequence ordered by `sequence`. Tool calls are neither a second Timeline nor top-level Messages: they live in an Assistant Message's `parts`, so `text -> tool -> text` is persisted in its real generation order.
+A Session has one two-party Message sequence ordered by `sequence`. Tools, actions, and errors live in an Agent Message's `parts`, so `text -> tool -> text` is persisted in its real generation order.
 
-An ordinary Tool Loop, Provider continuation, or recovery retry does not create another Assistant Message. It appends ordered Parts to the current Assistant. Only a new User Message—including an in-flight steer—closes the preceding Assistant Message, after which later output creates the next Assistant Message. A model step is an execution boundary and is not persisted as a Part.
+An ordinary Tool Loop, Provider continuation, or recovery retry does not create another Agent Message. It appends ordered Parts to the current Agent Message. Only a new User Message—including an in-flight steer—closes the preceding Agent Message, after which later output creates the next Agent Message. A model step is an execution boundary and is not persisted as a Part.
 
-`SessionMessage` is the single source of truth for persistence and the UI timeline. The Executor consumes Downcity `ModelStreamEvent` values directly, updates the canonical Assistant Message, and publishes live changes through `SessionMutation`; there is no intermediate UI Message or chunk protocol. `action` and `error` are Session top-level types and are never sent to the model.
+`SessionMessage` is the single source of truth for persistence and the UI timeline. The Executor consumes Downcity `ModelStreamEvent` values directly, updates the canonical Agent Message, and publishes live changes through `SessionMutation`; there is no intermediate UI Message or chunk protocol. `action` and `error` are Agent Parts and are never sent to the model.
 
-If a Turn fails before producing any Assistant content, the Session writes one `error` Message and does not fabricate an Assistant reply from the error text. If partial content already exists, that Assistant is retained with `status: "failed"`, followed by the structured `error` Message.
+If a Turn fails before producing any Agent content, the Session writes an Agent Message containing an `error` Part. If partial content already exists, that Agent Message is retained with `status: "failed"`, followed by an Agent Message containing the structured `error` Part.
 
 ## User Parts
 
@@ -69,7 +67,7 @@ Use `context` for supporting model context that should not be mixed into the ord
 
 `tag` must start with a lowercase letter and may contain only lowercase letters, numbers, underscores, and hyphens. XML structural characters in `context` are escaped at the model-mapping boundary so the body cannot close or inject a tag. Generic previews, titles, and user bubbles treat only `text` as the ordinary user body, so callers should normally provide a `text` Part as well.
 
-## Assistant Parts
+## Agent Parts
 
 | `type` | Key fields | Meaning |
 | --- | --- | --- |
@@ -79,6 +77,8 @@ Use `context` for supporting model context that should not be mixed into the ord
 | `interaction` | `interaction_id`, `interaction_type`, `status`, `request`, `response` | Asynchronous user approval or questions |
 | `file` | `url`, `media_type`, `filename` | A file generated or referenced by the Assistant |
 | `data` | `data_type`, `data`, `data_id` | Persisted structured UI data |
+| `action` | `action_id`, `action_type`, `state`, `title` | Runtime activity such as a model change or compaction |
+| `error` | `scope`, `code`, `message`, `recoverable` | A structured Session or Turn error |
 
 Every Assistant Part has a stable `part_id` and a `sequence` that never changes after creation. Model stream events create or update canonical Parts in arrival order. The final step snapshot validates count, type, and order; it cannot create, remove, or reorder Parts. A tool state change updates the same Part, so a UI should not create separate request and result rows. Action results with the same `data_id` update the corresponding Data Part without changing its order.
 
@@ -86,7 +86,7 @@ Tool Parts do not carry a duplicate approval snapshot. User participation uses a
 Interaction Part:
 
 ```ts
-interface SessionAssistantInteractionPart {
+interface SessionAgentInteractionPart {
   interaction_id: string;
   interaction_type: "approval" | "question";
   status: "pending" | "resolved" | "expired" | "cancelled";

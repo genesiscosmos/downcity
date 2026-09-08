@@ -5,7 +5,7 @@
  */
 
 import type {
-  SessionAssistantMessage,
+  SessionAgentMessage,
   SessionMessage,
 } from "@downcity/type";
 import type { JsonObject, JsonValue } from "@downcity/type";
@@ -24,7 +24,7 @@ export interface SessionToolCallSummary {
 
 /** 提取单条 canonical Message 的全部普通文本。 */
 export function extract_session_message_text(message: SessionMessage): string {
-  if (message.type !== "user" && message.type !== "assistant") return "";
+  if (message.type !== "user" && message.type !== "agent") return "";
   return message.parts
     .flatMap((part) => part.type === "text" ? [part.text] : [])
     .map((text) => text.trim())
@@ -35,7 +35,7 @@ export function extract_session_message_text(message: SessionMessage): string {
 
 /** 提取 Assistant Message 中的 canonical 工具调用摘要。 */
 export function extract_session_tool_calls(
-  message: SessionAssistantMessage,
+  message: SessionAgentMessage,
 ): SessionToolCallSummary[] {
   return message.parts.flatMap((part) => {
     if (part.type !== "tool" || part.input === undefined) return [];
@@ -52,7 +52,7 @@ export function extract_session_tool_calls(
 
 /** 读取最终一次成功 `chat_send` 的可见文本，并回退到普通 Assistant 文本。 */
 export function resolve_session_assistant_visible_text(
-  message: SessionAssistantMessage,
+  message: SessionAgentMessage,
 ): string {
   const calls = extract_session_tool_calls(message);
   for (let index = calls.length - 1; index >= 0; index -= 1) {

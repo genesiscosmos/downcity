@@ -40,15 +40,15 @@ test("append_user_message 透传 Store 写入失败", async () => {
   );
 });
 
-test("open_assistant_message 透传草稿写入失败", async () => {
+test("open_agent_message 透传草稿写入失败", async () => {
   const messages = create_messages({
-    create_assistant_message: async () => {
+    create_agent_message: async () => {
       throw new Error("disk full");
     },
   });
   await messages.initialize();
   await assert.rejects(
-    messages.open_assistant_message({
+    messages.open_agent_message({
       turn_id: "turn-1",
     }),
     /disk full/,

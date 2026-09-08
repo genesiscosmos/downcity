@@ -9,11 +9,11 @@ import type { ModelStreamEvent } from "@downcity/type";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import { SessionToolPartGate } from "@/session/messages/SessionToolPartGate.js";
-import type { SessionAssistantResultPart } from "@downcity/type";
+import type { SessionAgentResultPart } from "@downcity/type";
 import type {
-  SessionAssistantMessage,
-  SessionAssistantMessagePart,
-  SessionAssistantToolPart,
+  SessionAgentMessage,
+  SessionAgentMessagePart,
+  SessionAgentToolPart,
 } from "@downcity/type";
 import type {
   SessionToolExecutionResult,
@@ -22,7 +22,7 @@ import type {
 import { generate_id } from "@/utils/Id.js";
 
 /** 单个 Assistant Message 的流式 Writer。 */
-export class SessionAssistantMessageWriter {
+export class SessionAgentMessageWriter {
   /** 当前 canonical Assistant Message 标识。 */
   readonly message_id: string;
 
@@ -108,7 +108,7 @@ export class SessionAssistantMessageWriter {
    *
    * 最终快照不能创建、删除或重排模型 Part；不一致意味着事件链不完整。
    */
-  async finish_step(parts: SessionAssistantMessagePart[]): Promise<void> {
+  async finish_step(parts: SessionAgentMessagePart[]): Promise<void> {
     await this.enqueue_write(async () => {
       if (!this.step_active) {
         throw new Error("Assistant canonical step is not active");
@@ -122,7 +122,7 @@ export class SessionAssistantMessageWriter {
           `part count ${current_parts.length} != ${parts.length}`,
         );
       }
-      const merged_parts = new Map<string, SessionAssistantMessagePart>();
+      const merged_parts = new Map<string, SessionAgentMessagePart>();
       for (let index = 0; index < current_parts.length; index += 1) {
         const current_part = current_parts[index];
         const final_part = parts[index];
@@ -131,7 +131,7 @@ export class SessionAssistantMessageWriter {
           this.merge_step_part(current_part, final_part, index),
         );
       }
-      await this.recorder.commit_assistant_step(
+      await this.recorder.commit_agent_step(
         this.message_id,
         current.parts.map((part) => merged_parts.get(part.part_id) ?? part),
       );
@@ -148,7 +148,7 @@ export class SessionAssistantMessageWriter {
   }
 
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
-  async append_result_parts(parts: readonly SessionAssistantResultPart[]): Promise<void> {
+  async append_result_parts(parts: readonly SessionAgentResultPart[]): Promise<void> {
     await this.enqueue_write(async () => {
       if (this.closed) throw new Error("Assistant Message writer is closed");
       for (const part of parts) {
@@ -184,8 +184,8 @@ export class SessionAssistantMessageWriter {
   }
 
   /** 写入一个完整 canonical Assistant Part。 */
-  async upsert_part(part: SessionAssistantMessagePart): Promise<void> {
-    await this.recorder.update_assistant_part(this.message_id, part);
+  async upsert_part(part: SessionAgentMessagePart): Promise<void> {
+    await this.recorder.update_agent_part(this.message_id, part);
     if (this.step_active) this.current_step_part_ids.add(part.part_id);
   }
 
@@ -234,7 +234,7 @@ export class SessionAssistantMessageWriter {
       if (!event.delta) return;
       const type = event.type === "text_delta" ? "text" : "reasoning";
       const part_id = this.require_content_part_id(event.content_id);
-      await this.recorder.append_assistant_delta(
+      await this.recorder.append_agent_delta(
         this.message_id,
         part_id,
         type,
@@ -271,7 +271,7 @@ export class SessionAssistantMessageWriter {
       if (!event.input_delta) return;
       const tool_call_id = this.require_tool_call_id(event.content_id);
       const tool = this.require_tool(tool_call_id);
-      await this.recorder.append_assistant_tool_input_delta(
+      await this.recorder.append_agent_tool_input_delta(
         this.message_id,
         tool.part_id,
         tool_call_id,
@@ -292,24 +292,24 @@ export class SessionAssistantMessageWriter {
   }
 
   /** 读取当前 Assistant Message 快照。 */
-  private current_message(): SessionAssistantMessage {
+  private current_message(): SessionAgentMessage {
     const message = this.recorder.get_message(this.message_id);
-    if (!message || message.type !== "assistant") {
+    if (!message || message.type !== "agent") {
       throw new Error(`Assistant Message not found: ${this.message_id}`);
     }
     return message;
   }
 
   /** 查找当前 Assistant 中的指定 Tool Part。 */
-  private find_tool(tool_call_id: string): SessionAssistantToolPart | undefined {
+  private find_tool(tool_call_id: string): SessionAgentToolPart | undefined {
     return this.current_message().parts.find(
-      (part): part is SessionAssistantToolPart =>
+      (part): part is SessionAgentToolPart =>
         part.type === "tool" && part.tool_call_id === tool_call_id,
     );
   }
 
   /** 读取指定 Tool Part，否则抛出稳定错误。 */
-  private require_tool(tool_call_id: string): SessionAssistantToolPart {
+  private require_tool(tool_call_id: string): SessionAgentToolPart {
     const tool = this.find_tool(tool_call_id);
     if (tool) return tool;
     throw new Error(`Assistant canonical Tool Part not found: ${tool_call_id}`);
@@ -332,8 +332,8 @@ export class SessionAssistantMessageWriter {
   /** 更新已经由模型事件创建的 Tool Part。 */
   private async upsert_tool(
     tool_call_id: string,
-    changes: Pick<SessionAssistantToolPart, "tool_name" | "state"> &
-      Partial<Omit<SessionAssistantToolPart, "part_id" | "type" | "tool_call_id" | "tool_name" | "state">>,
+    changes: Pick<SessionAgentToolPart, "tool_name" | "state"> &
+      Partial<Omit<SessionAgentToolPart, "part_id" | "type" | "tool_call_id" | "tool_name" | "state">>,
   ): Promise<void> {
     const current = this.require_tool(tool_call_id);
     await this.upsert_part({ ...current, ...changes });
@@ -342,8 +342,8 @@ export class SessionAssistantMessageWriter {
   /** 创建由模型事件声明的 Tool Part。 */
   private async create_tool(
     tool_call_id: string,
-    changes: Pick<SessionAssistantToolPart, "tool_name" | "state"> &
-      Partial<Omit<SessionAssistantToolPart, "part_id" | "type" | "tool_call_id" | "tool_name" | "state">>,
+    changes: Pick<SessionAgentToolPart, "tool_name" | "state"> &
+      Partial<Omit<SessionAgentToolPart, "part_id" | "type" | "tool_call_id" | "tool_name" | "state">>,
   ): Promise<void> {
     if (this.find_tool(tool_call_id)) {
       throw new Error(`Assistant canonical Tool Part already exists: ${tool_call_id}`);
@@ -359,10 +359,10 @@ export class SessionAssistantMessageWriter {
 
   /** 校验并合并同一位置的 canonical Part 与 Step 最终快照。 */
   private merge_step_part(
-    current_part: SessionAssistantMessagePart,
-    final_part: SessionAssistantMessagePart,
+    current_part: SessionAgentMessagePart,
+    final_part: SessionAgentMessagePart,
     index: number,
-  ): SessionAssistantMessagePart {
+  ): SessionAgentMessagePart {
     if (current_part.type !== final_part.type) {
       throw this.step_snapshot_error(
         `part ${index + 1} type ${current_part.type} != ${final_part.type}`,
@@ -387,7 +387,7 @@ export class SessionAssistantMessageWriter {
       ...final_part,
       part_id: current_part.part_id,
       sequence: current_part.sequence,
-    } as SessionAssistantMessagePart;
+    } as SessionAgentMessagePart;
   }
 
   /** 构造不包含正文与 Tool 输出的结构化 Step 快照错误。 */
@@ -430,7 +430,7 @@ export class SessionAssistantMessageWriter {
       `Assistant Message writer closed with status ${status}`,
     );
     this.reset_step_state();
-    await this.recorder.complete_assistant_message(this.message_id, status, error);
+    await this.recorder.complete_agent_message(this.message_id, status, error);
     this.closed = true;
   }
 }

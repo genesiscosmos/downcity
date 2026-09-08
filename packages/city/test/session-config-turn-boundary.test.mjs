@@ -33,6 +33,22 @@ function create_deferred() {
   return { promise, resolve };
 }
 
+/** 将 canonical Agent Message 内的 Action Part 投影为便于断言的记录。 */
+function read_action_records(messages) {
+  return messages.flatMap((message) => message.type === "agent"
+    ? message.parts
+        .filter((part) => part.type === "action")
+        .map((part) => ({ ...message, ...part, status: part.state }))
+    : []);
+}
+
+/** 读取完整消息 mutation 中携带的 Action Part。 */
+function read_action_mutations(mutations) {
+  return mutations.flatMap((mutation) => mutation.variant === "message" && mutation.type === "agent"
+    ? read_action_records([mutation.message]).map((message) => ({ ...mutation, type: "action", message }))
+    : []);
+}
+
 function create_stream_text_result(text) {
   return {
     stream: new ReadableStream({
@@ -151,7 +167,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     assert.match(provider_prompts[1], /plugin-env:old/);
 
     const messages = await session.messages();
-    const completed_actions = messages.items
+    const completed_actions = read_action_records(messages.items)
       .filter((message) => message.type === "action" && message.status === "completed")
       .map((message) => message.title);
     assert.deepEqual(completed_actions, []);
@@ -549,7 +565,7 @@ test("running session model changes apply with steer at the next Session step", 
     assert.deepEqual(model_calls, ["old-model", "new-model"]);
 
     const messages = await session.messages();
-    const model_actions = messages.items.filter(
+    const model_actions = read_action_records(messages.items).filter(
       (message) =>
         message.type === "action" &&
         message.title === "Session configuration updated" &&
@@ -568,7 +584,7 @@ test("running session model changes apply with steer at the next Session step", 
       true,
     );
     assert.equal(
-      mutations.some(
+      read_action_mutations(mutations).some(
         (mutation) =>
           mutation.variant === "message" &&
           mutation.type === "action" &&
@@ -680,7 +696,7 @@ test("running session approval mode changes stay queued until the next Session s
     });
     const messages = await session.messages();
     assert.equal(
-      messages.items.some(
+      read_action_records(messages.items).some(
         (message) =>
           message.type === "action" &&
           message.status === "completed" &&
@@ -730,7 +746,7 @@ test("session set options independently control Action persistence and Mutation 
     );
     assert.equal((await (await session.prompt({ query: "first" })).finished).success, true);
     assert.equal(
-      (await session.messages()).items.some(
+      read_action_records((await session.messages()).items).some(
         (message) =>
           message.type === "action" &&
           message.title === "Session configuration updated",
@@ -745,7 +761,7 @@ test("session set options independently control Action persistence and Mutation 
     );
     assert.equal((await (await session.prompt({ query: "second" })).finished).success, true);
     assert.equal(
-      (await session.messages()).items.some(
+      read_action_records((await session.messages()).items).some(
         (message) =>
           message.type === "action" &&
           message.description === "model: set-options-second-model",
@@ -753,7 +769,7 @@ test("session set options independently control Action persistence and Mutation 
       true,
     );
     assert.equal(
-      mutations.some(
+      read_action_mutations(mutations).some(
         (mutation) =>
           mutation.variant === "message" &&
           mutation.type === "action",
@@ -761,7 +777,7 @@ test("session set options independently control Action persistence and Mutation 
       false,
     );
 
-    const before_duplicate_count = (await session.messages()).items.filter(
+    const before_duplicate_count = read_action_records((await session.messages()).items).filter(
       (message) =>
         message.type === "action" &&
         message.title === "Session configuration updated",
@@ -769,7 +785,7 @@ test("session set options independently control Action persistence and Mutation 
     await session.set({ model: second_model });
     assert.equal((await (await session.prompt({ query: "duplicate" })).finished).success, true);
     assert.equal(
-      (await session.messages()).items.filter(
+      read_action_records((await session.messages()).items).filter(
         (message) =>
           message.type === "action" &&
           message.title === "Session configuration updated",
@@ -843,7 +859,7 @@ test("restored Session rebinds the same model without emitting a configuration M
       approval_mode: "always-allow",
       effective_approval_mode: "always-allow",
     });
-    const before_action_count = (await session.messages()).items.filter(
+    const before_action_count = read_action_records((await session.messages()).items).filter(
       (message) =>
         message.type === "action" &&
         message.title === "Session configuration updated",
@@ -859,7 +875,7 @@ test("restored Session rebinds the same model without emitting a configuration M
     });
     assert.equal((await (await session.prompt({ query: "restore" })).finished).success, true);
     assert.equal(
-      (await session.messages()).items.filter(
+      read_action_records((await session.messages()).items).filter(
         (message) =>
           message.type === "action" &&
           message.title === "Session configuration updated",
@@ -867,7 +883,7 @@ test("restored Session rebinds the same model without emitting a configuration M
       before_action_count,
     );
     assert.equal(
-      mutations.some(
+      read_action_mutations(mutations).some(
         (mutation) =>
           mutation.variant === "message" &&
           mutation.type === "action" &&
@@ -917,7 +933,7 @@ test("config remains effective when its action message cannot be persisted", asy
     const initial_turn = await session.prompt({ query: "initialize model" });
     assert.equal((await initial_turn.finished).success, true);
     model_calls.splice(0, model_calls.length);
-    const initial_action_count = (await session.messages()).items.filter(
+    const initial_action_count = read_action_records((await session.messages()).items).filter(
       (message) => message.type === "action",
     ).length;
 
@@ -932,7 +948,7 @@ test("config remains effective when its action message cannot be persisted", asy
 
     const messages = await session.messages();
     assert.equal(
-      messages.items.filter((message) => message.type === "action").length,
+      read_action_records(messages.items).filter((message) => message.type === "action").length,
       initial_action_count,
     );
   } finally {

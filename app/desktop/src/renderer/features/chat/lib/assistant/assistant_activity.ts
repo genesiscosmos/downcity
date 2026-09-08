@@ -4,11 +4,11 @@
  * 该模块只处理纯数据规则，确保 Renderer 不依赖组件状态判断消息顺序、活动聚合与操作栏可见性。
  */
 
-import type { SessionAssistantMessagePart } from "@downcity/agent";
+import type { SessionAgentMessagePart } from "@downcity/agent";
 import { is_session_turn_file_diff_data_part } from "@downcity/agent/session";
 
 /** Canonical 文本接口同时承载 text 与 reasoning，展示层将两者收窄为明确类型。 */
-type AssistantTextualPart = Extract<SessionAssistantMessagePart, { type: "text" | "reasoning" }>;
+type AssistantTextualPart = Extract<SessionAgentMessagePart, { type: "text" | "reasoning" }>;
 
 /** 展示层使用的 Reasoning part。 */
 export type AssistantReasoningPart = AssistantTextualPart & { /** part 类型固定为 reasoning。 */ type: "reasoning" };
@@ -19,12 +19,12 @@ export type AssistantTextPart = AssistantTextualPart & { /** part 类型固定�
 /** Reasoning、Tool 与 Interaction 构成 Assistant 活动流。 */
 export type AssistantActivityPart =
   | AssistantReasoningPart
-  | Extract<SessionAssistantMessagePart, { type: "tool" | "interaction" }>;
+  | Extract<SessionAgentMessagePart, { type: "tool" | "interaction" }>;
 
 /** 不属于活动流、可以独立渲染的 canonical part。 */
 type AssistantStandalonePart =
   | AssistantTextPart
-  | Exclude<SessionAssistantMessagePart, AssistantTextualPart | Extract<SessionAssistantMessagePart, { type: "tool" | "interaction" }>>;
+  | Exclude<SessionAgentMessagePart, AssistantTextualPart | Extract<SessionAgentMessagePart, { type: "tool" | "interaction" }>>;
 
 /** 页面按原始生成顺序渲染的顶层内容分组。 */
 export type AssistantContentGroup =
@@ -54,7 +54,7 @@ export interface AssistantToolPresentation {
 }
 
 /** 保留 canonical 顺序，把连续活动 part 合并为活动块。 */
-export function group_assistant_content(parts: SessionAssistantMessagePart[]): AssistantContentGroup[] {
+export function group_assistant_content(parts: SessionAgentMessagePart[]): AssistantContentGroup[] {
   const groups: AssistantContentGroup[] = [];
   for (const part of parts) {
     // 无展示语义的 part 不能切断连续 Tool 活动。
@@ -81,7 +81,7 @@ export function group_assistant_activities(parts: AssistantActivityPart[], show_
 }
 
 /** Assistant 操作栏只在最后一个具有展示语义的 part 是非空文本时出现。 */
-export function should_show_assistant_actions(parts: SessionAssistantMessagePart[]): boolean {
+export function should_show_assistant_actions(parts: SessionAgentMessagePart[]): boolean {
   const visible = parts.filter((part) => {
     if ((part as { type: string }).type === "step-start") return false;
     if (part.type === "data") return false;
@@ -92,7 +92,7 @@ export function should_show_assistant_actions(parts: SessionAssistantMessagePart
 }
 
 /** 将 canonical Tool 映射为稳定的 Duobox 风格展示语义。 */
-export function resolve_tool_presentation(part: Extract<SessionAssistantMessagePart, { type: "tool" }>): AssistantToolPresentation {
+export function resolve_tool_presentation(part: Extract<SessionAgentMessagePart, { type: "tool" }>): AssistantToolPresentation {
   const visual_kind = resolve_tool_visual_kind(part.tool_name);
   const running = part.state === "input-streaming" || part.state === "ready" || part.state === "running";
   const failed = part.state === "failed";
@@ -106,7 +106,7 @@ export function resolve_tool_presentation(part: Extract<SessionAssistantMessageP
 }
 
 /** 写入或编辑参数仍在流式生成时，详情必须保持展开以展示实时代码变化。 */
-export function should_force_open_tool(part: Extract<SessionAssistantMessagePart, { type: "tool" }>): boolean {
+export function should_force_open_tool(part: Extract<SessionAgentMessagePart, { type: "tool" }>): boolean {
   if (part.state !== "input-streaming") return false;
   const visual_kind = resolve_tool_visual_kind(part.tool_name);
   return visual_kind === "write" || visual_kind === "edit";
@@ -133,7 +133,7 @@ export function read_tool_input_text(input: unknown, keys: string[]): string {
   return "";
 }
 
-function is_activity_part(part: SessionAssistantMessagePart): part is AssistantActivityPart {
+function is_activity_part(part: SessionAgentMessagePart): part is AssistantActivityPart {
   return part.type === "reasoning" || part.type === "tool" || part.type === "interaction";
 }
 
@@ -150,13 +150,13 @@ function resolve_tool_visual_kind(tool_name: string): AssistantToolVisualKind {
   return "generic";
 }
 
-function resolve_tool_state_key(visual_kind: AssistantToolVisualKind, state: Extract<SessionAssistantMessagePart, { type: "tool" }>["state"]): string {
+function resolve_tool_state_key(visual_kind: AssistantToolVisualKind, state: Extract<SessionAgentMessagePart, { type: "tool" }>["state"]): string {
   if (state === "waiting-user") return "activity.waiting_confirmation";
   const lifecycle = state === "failed" ? "failed" : state === "completed" ? "completed" : "running";
   return `activity.${visual_kind}.${lifecycle}`;
 }
 
-function resolve_tool_detail(part: Extract<SessionAssistantMessagePart, { type: "tool" }>, visual_kind: AssistantToolVisualKind): string {
+function resolve_tool_detail(part: Extract<SessionAgentMessagePart, { type: "tool" }>, visual_kind: AssistantToolVisualKind): string {
   const input = part.input;
   if (visual_kind === "read" || visual_kind === "write" || visual_kind === "edit") {
     return read_tool_input_text(input, ["file_path", "path", "filename"]) || part.title || part.tool_name;

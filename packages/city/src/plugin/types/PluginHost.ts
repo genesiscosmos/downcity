@@ -84,7 +84,7 @@ export interface PluginHostSystem {
     readonly input?: PluginJsonValue;
   }): Promise<PluginJsonValue>;
   /** 向指定 Agent 持有的既有 Session 追加一条外部 Assistant 消息。 */
-  append_agent_session_assistant_message(input: {
+  append_agent_session_message(input: {
     /** 持有目标 Session 的 Agent 稳定 ID。 */
     readonly agent_id: string;
     /** 目标 Session 创建时绑定的 Workspace 稳定 ID。 */

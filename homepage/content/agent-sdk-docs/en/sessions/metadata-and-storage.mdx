@@ -15,7 +15,7 @@ files as their own database.
 ├── instruction.md
 └── messages/
     ├── active.jsonl
-    ├── assistant_message.json
+    ├── agent_message.json
     └── segments/
         ├── 000000000001-000000000900.jsonl
         └── 000000000901-000000001500.jsonl
@@ -81,7 +81,7 @@ sequenceDiagram
     Session->>Model: execute current Step
     Model-->>Loop: text / tool / file chunks
     Loop->>Messages: update Assistant draft and Parts
-    Messages->>Store: atomically replace assistant_message.json
+    Messages->>Store: atomically replace agent_message.json
     Loop->>Messages: complete Assistant Message
     Messages->>Store: persist final Assistant snapshot
     Store->>Active: append Message
@@ -105,7 +105,7 @@ The Composer only reads snapshots and returns model input or a compaction plan. 
 
 Summary generation must succeed before a compaction plan can be committed. Provider errors and empty summaries fail Compact without creating a Segment or changing Active history.
 
-## `assistant_message.json`
+## `agent_message.json`
 
 Before completion, a streaming Assistant atomically replaces one complete draft instead of appending every Delta to Active. On completion, the final snapshot is appended to `active.jsonl` and the draft is removed. Each Session has at most one streaming draft. Text, Tool, and File Parts retain the model's generation order through their own `sequence` values.
 

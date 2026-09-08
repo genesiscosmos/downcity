@@ -9,7 +9,7 @@ import {
   truncateToWidth,
   type Component,
 } from "@earendil-works/pi-tui";
-import type { SessionAssistantToolPart } from "@downcity/agent";
+import type { SessionAgentToolPart } from "@downcity/agent";
 
 import {
   BRAILLE_SPINNER_FRAMES,
@@ -21,15 +21,15 @@ import { current_theme } from "@/city/agent/tui/theme/index.js";
 
 /** 渲染并原位更新 Assistant Message 内的一次 Tool Call。 */
 export class ToolActivityComponent implements Component {
-  private part: SessionAssistantToolPart;
+  private part: SessionAgentToolPart;
 
   /** @param part 初次渲染的 canonical Tool Part 快照。 */
-  constructor(part: SessionAssistantToolPart) {
+  constructor(part: SessionAgentToolPart) {
     this.part = structuredClone(part);
   }
 
   /** 使用最新 canonical Tool Part 原位更新状态。 */
-  update_part(part: SessionAssistantToolPart): void {
+  update_part(part: SessionAgentToolPart): void {
     this.part = structuredClone(part);
   }
 

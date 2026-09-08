@@ -50,7 +50,7 @@ A real UI should process `buffered` and set `snapshot_ready = true` in one seria
 | `turn` | Update runtime state by `turn_id` |
 | `session` | Update Session metadata such as the title |
 
-After a disconnect, do not assume Deltas can be replayed. Lost Deltas have already been merged into `assistant_message.json` or a final Message snapshot, so reloading `messages()` is what restores correct state.
+After a disconnect, do not assume Deltas can be replayed. Lost Deltas have already been merged into `agent_message.json` or a final Message snapshot, so reloading `messages()` is what restores correct state.
 
 ## RemoteSession disconnects
 

@@ -31,7 +31,7 @@ description: 运行时数据目录结构与用途
 
 ### `agents/<agent_id>/sessions/<origin_type>/<session_id>/messages/`
 
-会话消息事实源：`active.jsonl`、`assistant_message.json` 与按 sequence 命名的 `segments/*.jsonl`。
+会话消息事实源：`active.jsonl`、`agent_message.json` 与按 sequence 命名的 `segments/*.jsonl`。
 默认来源分区是 `chat`；其他任意非空来源类型会被编码为安全的单个目录段。
 
 ### Memory

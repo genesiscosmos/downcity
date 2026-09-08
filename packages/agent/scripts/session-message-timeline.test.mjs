@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { to_session_message_timeline_events } from "../bin/index.js";
 
-test("Session timeline preserves assistant text and tool order", () => {
+test("Session timeline preserves Agent text and tool order", () => {
   const message = {
     message_id: "assistant-1",
     session_id: "session-1",
@@ -16,7 +16,7 @@ test("Session timeline preserves assistant text and tool order", () => {
     visibility: "visible",
     created_at: 10,
     updated_at: 20,
-    type: "assistant",
+    type: "agent",
     kind: "normal",
     status: "completed",
     parts: [
@@ -49,10 +49,10 @@ test("Session timeline preserves assistant text and tool order", () => {
 
   const events = to_session_message_timeline_events(message);
   assert.deepEqual(events.map((event) => event.role), [
-    "assistant",
+    "agent",
     "tool-call",
     "tool-result",
-    "assistant",
+    "agent",
   ]);
   assert.deepEqual(events.map((event) => event.id), [
     "assistant-1:0",

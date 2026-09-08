@@ -2,13 +2,31 @@
 
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildWorkboardGameMapConfig, ChatPanel, ChatComposer, ChatHistory, ChatMessage, cn } from "../dist/index.js"
+import { buildWorkboardGameMapConfig, ChatPanel, ChatComposer, ChatHistory, ChatMessage, cn, session_message_to_chat_message } from "../dist/index.js"
 
 test("Chat UI 公开导出保持可用", () => {
   assert.equal(typeof ChatPanel, "function")
   assert.equal(typeof ChatComposer, "function")
   assert.equal(typeof ChatHistory, "function")
   assert.equal(typeof ChatMessage, "function")
+})
+
+test("canonical Agent Action 与 Error Part 投影为 UI operation", () => {
+  const message = session_message_to_chat_message({
+    message_id: "agent-1",
+    type: "agent",
+    status: "failed",
+    parts: [
+      { part_id: "action-1", sequence: 1, type: "action", action_type: "compact", state: "completed", title: "Compacted" },
+      { part_id: "error-1", sequence: 2, type: "error", code: "turn_failed", message: "failed", recoverable: true },
+    ],
+  })
+  assert.equal(message.role, "assistant")
+  assert.equal(message.metadata.session_type, "agent")
+  assert.equal(message.metadata.error, "failed")
+  assert.deepEqual(message.parts.map((part) => part.type), ["operation", "operation"])
+  assert.equal(message.parts[0].operation.status, "finished")
+  assert.equal(message.parts[1].operation.status, "failed")
 })
 
 function create_agent(overrides = {}) {

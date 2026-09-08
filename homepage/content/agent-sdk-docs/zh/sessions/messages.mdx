@@ -31,22 +31,20 @@ interface SessionMessagePage {
 
 `total` 是 Session 已创建的真实 Message 总数，不是当前 `items.length`。`source` 说明本次结果来自当前 Active 还是一个已关闭 Segment。
 
-## 四类顶层 Message
+## 两类顶层 Message
 
 | `type` | 表示什么 | 常见展示 |
 | --- | --- | --- |
 | `user` | 用户输入或运行中 steering | 用户气泡、附件 |
-| `assistant` | 模型生成的一次连续回复 | 文本、推理、工具、文件 |
-| `action` | 模型切换、压缩等运行时操作 | 状态通知 |
-| `error` | Session 或 Turn 的可展示错误 | 错误提示与重试入口 |
+| `agent` | Agent 输出与内部运行记录 | 文本、推理、工具、动作、错误、文件 |
 
-Session 内只有一条按 `sequence` 排序的顶层 Message 序列。工具调用不是另一条 Timeline，也不是顶层 Message；它属于 Assistant Message 的 `parts`，因此 `text -> tool -> text` 会以真实生成顺序保存。
+Session 内只有一条按 `sequence` 排序的双主体 Message 序列。工具、动作与错误都属于 Agent Message 的 `parts`，因此 `text -> tool -> text` 会以真实生成顺序保存。
 
-普通 Tool Loop、Provider continuation 和恢复重试不会创建新的 Assistant Message；它们继续向当前 Assistant 追加有序 Part。只有新的 User Message（包括运行中 steer）真正进入消息序列时，才结束之前的 Assistant Message，后续输出再创建下一条 Assistant Message。模型 step 是执行期边界，不作为 Part 持久化。
+普通 Tool Loop、Provider continuation 和恢复重试不会创建新的 Agent Message；它们继续向当前 Agent Message 追加有序 Part。只有新的 User Message（包括运行中 steer）真正进入消息序列时，才结束之前的 Agent Message，后续输出再创建下一条 Agent Message。模型 step 是执行期边界，不作为 Part 持久化。
 
-`SessionMessage` 是持久化与 UI 时间线的唯一事实源。Executor 直接消费 Downcity `ModelStreamEvent`，把文本、推理和工具事件更新到 canonical Assistant Message，同时由 `SessionMutation` 发布实时变化；中间不存在 UI Message 或 chunk 协议。`action` 和 `error` 是 Session 顶层类型，不会送入模型。
+`SessionMessage` 是持久化与 UI 时间线的唯一事实源。Executor 直接消费 Downcity `ModelStreamEvent`，把文本、推理和工具事件更新到 canonical Agent Message，同时由 `SessionMutation` 发布实时变化；中间不存在 UI Message 或 chunk 协议。`action` 和 `error` 是 Agent Part，不会送入模型。
 
-Turn 在产生任何 Assistant 内容前失败时，只写入一条 `error` Message，不会用错误文本伪造 Assistant 回复。若失败前已经产生部分内容，该 Assistant 会以 `status: "failed"` 保留，随后再写入结构化 `error` Message。
+Turn 在产生任何 Agent 内容前失败时，只写入一条包含 `error` Part 的 Agent Message。若失败前已经产生部分内容，该 Agent Message 会以 `status: "failed"` 保留，随后再写入包含结构化 `error` Part 的 Agent Message。
 
 ## User Part
 
@@ -69,7 +67,7 @@ Turn 在产生任何 Assistant 内容前失败时，只写入一条 `error` Mess
 
 `tag` 必须以小写字母开头，且只能包含小写字母、数字、下划线和连字符。`context` 中的 XML 结构字符会在模型映射边界转义，避免正文提前闭合或注入标签。通用预览、标题和用户气泡只把 `text` 当作普通用户正文；调用方通常应同时提供一个 `text` Part。
 
-## Assistant Part
+## Agent Part
 
 | `type` | 关键字段 | 说明 |
 | --- | --- | --- |
@@ -79,13 +77,15 @@ Turn 在产生任何 Assistant 内容前失败时，只写入一条 `error` Mess
 | `interaction` | `interaction_id`, `interaction_type`, `status`, `request`, `response` | 审批、问题等用户异步交互 |
 | `file` | `url`, `media_type`, `filename` | Assistant 生成或引用的文件 |
 | `data` | `data_type`, `data`, `data_id` | 可持久化的结构化 UI 数据 |
+| `action` | `action_id`, `action_type`, `state`, `title` | 模型切换、压缩等运行时操作 |
+| `error` | `scope`, `code`, `message`, `recoverable` | Session 或 Turn 的结构化错误 |
 
 每个 Assistant Part 有稳定的 `part_id` 和创建后不可变的 `sequence`。模型流事件按到达顺序直接创建或更新 canonical Part；step 最终快照只校验数量、类型与顺序，不会创建、删除或重排 Part。工具状态变化更新同一个 Part，不应在 UI 中创建“请求”和“结果”两个重复行。相同 `data_id` 的 Action 结果会更新对应 Data Part 并保留顺序。
 
 Tool 状态不保存审批副本。用户参与使用独立 Interaction Part：
 
 ```ts
-interface SessionAssistantInteractionPart {
+interface SessionAgentInteractionPart {
   interaction_id: string;
   interaction_type: "approval" | "question";
   status: "pending" | "resolved" | "expired" | "cancelled";

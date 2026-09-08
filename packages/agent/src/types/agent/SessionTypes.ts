@@ -181,7 +181,7 @@ export interface AgentSessionTimelineEvent {
    * 说明（中文）
    * - `tool-call` / `tool-result` 用于把 assistant 内部工具过程平铺给 UI。
    */
-  role: "user" | "assistant" | "tool-call" | "tool-result" | "action";
+  role: "user" | "agent" | "tool-call" | "tool-result" | "action";
   /** 事件时间戳（毫秒）。 */
   ts?: number;
   /** 事件所属消息种类。 */

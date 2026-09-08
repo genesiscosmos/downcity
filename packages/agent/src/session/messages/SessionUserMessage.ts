@@ -5,7 +5,7 @@
  */
 
 import type {
-  SessionAssistantResultPart,
+  SessionAgentResultPart,
   SessionPromptPart,
 } from "@downcity/type";
 import type { SessionUserMessagePart } from "@downcity/type";
@@ -73,7 +73,7 @@ export function normalize_canonical_session_user_parts(
 
 /** 判断 Assistant 结果中是否包含可持久化内容。 */
 export function has_assistant_result_content(
-  parts: readonly SessionAssistantResultPart[],
+  parts: readonly SessionAgentResultPart[],
 ): boolean {
   return parts.some((part) => {
     if (part.type === "text") return Boolean(part.text.trim());

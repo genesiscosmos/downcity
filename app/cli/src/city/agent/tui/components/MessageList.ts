@@ -8,8 +8,8 @@
 
 import { type Component } from "@earendil-works/pi-tui";
 import type {
-  SessionAssistantMessage,
-  SessionAssistantMessagePart,
+  SessionAgentMessage,
+  SessionAgentMessagePart,
   SessionMessage,
 } from "@downcity/agent";
 
@@ -82,7 +82,7 @@ export class MessageListComponent implements Component {
     this.items[index] = next_message;
     const component = this.components.get(message.message_id);
     if (
-      next_message.type === "assistant" &&
+      next_message.type === "agent" &&
       component instanceof AssistantMessageComponent
     ) {
       component.update_message(next_message);
@@ -94,7 +94,7 @@ export class MessageListComponent implements Component {
   /** 在所属 canonical Assistant Message 中新增或更新一个 Part 快照。 */
   upsert_assistant_part(
     message_id: string,
-    part: SessionAssistantMessagePart,
+    part: SessionAgentMessagePart,
     revision: number,
     updated_at: number,
   ): void {
@@ -217,18 +217,18 @@ export class MessageListComponent implements Component {
   }
 
   /** 获取当前 Message 快照中的 Assistant Message。 */
-  private get_assistant_message(message_id: string): SessionAssistantMessage | null {
+  private get_assistant_message(message_id: string): SessionAgentMessage | null {
     const item = this.items.find(
       (candidate) =>
         !is_transcript_notice(candidate) && candidate.message_id === message_id,
     );
-    return item && !is_transcript_notice(item) && item.type === "assistant"
+    return item && !is_transcript_notice(item) && item.type === "agent"
       ? item
       : null;
   }
 
   /** 原位提交 Assistant Message，并更新已经挂载的角色组件。 */
-  private commit_assistant_message(message: SessionAssistantMessage): void {
+  private commit_assistant_message(message: SessionAgentMessage): void {
     const index = this.items.findIndex(
       (item) => !is_transcript_notice(item) && item.message_id === message.message_id,
     );
@@ -273,14 +273,8 @@ export class MessageListComponent implements Component {
         return new UserMessageComponent(
           item.parts.flatMap((part) => part.type === "text" ? [part.text] : []).join(""),
         );
-      case "assistant":
+      case "agent":
         return new AssistantMessageComponent(item);
-      case "action":
-        return new StatusMessageComponent(
-          [item.title, item.description, item.status].filter(Boolean).join(" · "),
-        );
-      case "error":
-        return new NoticeMessageComponent("Error", item.message);
     }
   }
 
@@ -302,8 +296,8 @@ function is_transcript_notice(
 
 /** 深拷贝并按 canonical sequence 排序 Assistant Parts。 */
 function sort_assistant_parts(
-  parts: SessionAssistantMessagePart[],
-): SessionAssistantMessagePart[] {
+  parts: SessionAgentMessagePart[],
+): SessionAgentMessagePart[] {
   return parts
     .map((part) => structuredClone(part))
     .sort((left, right) => left.sequence - right.sequence);

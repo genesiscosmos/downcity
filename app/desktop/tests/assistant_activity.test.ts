@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { SessionAssistantMessagePart } from "@downcity/agent";
+import type { SessionAgentMessagePart } from "@downcity/agent";
 import {
   group_assistant_activities,
   group_assistant_content,
@@ -15,17 +15,17 @@ import {
 } from "../src/renderer/features/chat/lib/assistant/assistant_activity.ts";
 
 /** 创建测试用 Assistant 文本或 Reasoning part。 */
-function create_text_part(type: "text" | "reasoning", sequence: number, text: string): SessionAssistantMessagePart {
+function create_text_part(type: "text" | "reasoning", sequence: number, text: string): SessionAgentMessagePart {
   return { part_id: `${type}-${sequence}`, sequence, type, text, state: "done" };
 }
 
 /** 创建测试用 Tool part。 */
-function create_tool_part(tool_name: string, sequence: number, input: Record<string, string> = {}): Extract<SessionAssistantMessagePart, { type: "tool" }> {
+function create_tool_part(tool_name: string, sequence: number, input: Record<string, string> = {}): Extract<SessionAgentMessagePart, { type: "tool" }> {
   return { part_id: `tool-${sequence}`, sequence, type: "tool", tool_call_id: `call-${sequence}`, tool_name, state: "completed", input };
 }
 
 /** 创建测试用 Interaction part。 */
-function create_interaction_part(sequence: number): Extract<SessionAssistantMessagePart, { type: "interaction" }> {
+function create_interaction_part(sequence: number): Extract<SessionAgentMessagePart, { type: "interaction" }> {
   return {
     part_id: `interaction-${sequence}`,
     sequence,
@@ -120,8 +120,8 @@ test("关闭 Reasoning 后过滤推理并保留 Tool", () => {
 
 test("操作栏只在最后一个有效 part 为非空文本时展示", () => {
   const text = create_text_part("text", 1, "回答");
-  const ignored_data: SessionAssistantMessagePart = { part_id: "data-2", sequence: 2, type: "data", data_type: "data-test", data: {} };
-  const ignored_step: SessionAssistantMessagePart = { part_id: "step-3", sequence: 3, type: "step-start" };
+  const ignored_data: SessionAgentMessagePart = { part_id: "data-2", sequence: 2, type: "data", data_type: "data-test", data: {} };
+  const ignored_step: SessionAgentMessagePart = { part_id: "step-3", sequence: 3, type: "step-start" };
   assert.equal(should_show_assistant_actions([text, ignored_data, ignored_step]), true);
   assert.equal(should_show_assistant_actions([text, create_tool_part("read", 2)]), false);
   assert.equal(should_show_assistant_actions([text, create_text_part("reasoning", 2, "分析")]), false);

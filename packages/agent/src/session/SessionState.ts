@@ -383,14 +383,18 @@ function resolve_message_preview(message: SessionMessage | undefined): string {
       .join("")
       .trim();
   }
-  if (message.type === "assistant") {
-    return message.parts
+  if (message.type === "agent") {
+    const text = message.parts
       .flatMap((part) => part.type === "text" ? [part.text] : [])
       .join("")
       .trim();
+    if (text) return text;
+    for (const part of message.parts) {
+      if (part.type === "action") {
+        return [part.title, part.description].filter(Boolean).join("\n");
+      }
+      if (part.type === "error") return part.message.trim();
+    }
   }
-  if (message.type === "action") {
-    return [message.title, message.description].filter(Boolean).join("\n");
-  }
-  return message.message.trim();
+  return "";
 }

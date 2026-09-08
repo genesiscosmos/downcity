@@ -4,12 +4,12 @@
  * 该模块只提取可见文本并写入统一 Logger，不参与协议转换或持久化。
  */
 
-import type { SessionAssistantMessagePart } from "@downcity/type";
+import type { SessionAgentMessagePart } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
 
 /** 从 canonical Assistant Parts 提取可见文本。 */
 export function extract_assistant_text_for_log(
-  parts: readonly SessionAssistantMessagePart[],
+  parts: readonly SessionAgentMessagePart[],
 ): string {
   return parts
     .flatMap((part) => part.type === "text" ? [part.text] : [])
@@ -20,7 +20,7 @@ export function extract_assistant_text_for_log(
 /** 立即输出 Assistant 文本日志。 */
 export async function log_assistant_message_now(
   logger: Logger,
-  parts: readonly SessionAssistantMessagePart[],
+  parts: readonly SessionAgentMessagePart[],
 ): Promise<void> {
   const text = extract_assistant_text_for_log(parts) || "-";
   const lines = text.replace(/\r\n/gu, "\n").split("\n");

@@ -11,7 +11,7 @@ import type {
   AgentSessionTimelineEvent,
 } from "@/types/agent/SessionTypes.js";
 import type {
-  SessionAssistantToolPart,
+  SessionAgentToolPart,
   SessionMessage,
 } from "@downcity/type";
 
@@ -53,7 +53,7 @@ function create_timeline_event(input: {
 /** 将单个 Tool Part 展开为调用与可选结果事件。 */
 function project_tool_part(
   message: SessionMessage,
-  part: SessionAssistantToolPart,
+  part: SessionAgentToolPart,
   start_index: number,
 ): AgentSessionTimelineEvent[] {
   const events = [create_timeline_event({
@@ -84,27 +84,6 @@ function project_tool_part(
 export function to_session_message_timeline_events(
   message: SessionMessage,
 ): AgentSessionTimelineEvent[] {
-  if (message.type === "action") {
-    return [{
-      id: `${message.message_id}:0`,
-      role: "action",
-      ts: message.updated_at,
-      text: message.description
-        ? `${message.title}\n${message.description}`
-        : message.title,
-      action_title: message.title,
-      ...(message.description ? { action_description: message.description } : {}),
-      action_state: message.status,
-    }];
-  }
-  if (message.type === "error") {
-    return [create_timeline_event({
-      message,
-      role: "assistant",
-      text: message.message,
-      index: 0,
-    })];
-  }
   if (message.type === "user") {
     const text = message.parts
       .filter((part) => part.type === "text")
@@ -121,11 +100,34 @@ export function to_session_message_timeline_events(
       if (text) {
         events.push(create_timeline_event({
           message,
-          role: "assistant",
+          role: "agent",
           text,
           index: events.length,
         }));
       }
+      continue;
+    }
+    if (part.type === "action") {
+      events.push({
+        id: `${message.message_id}:${events.length}`,
+        role: "action",
+        ts: message.updated_at,
+        text: part.description
+          ? `${part.title}\n${part.description}`
+          : part.title,
+        action_title: part.title,
+        ...(part.description ? { action_description: part.description } : {}),
+        action_state: part.state,
+      });
+      continue;
+    }
+    if (part.type === "error") {
+      events.push(create_timeline_event({
+        message,
+        role: "agent",
+        text: part.message,
+        index: events.length,
+      }));
       continue;
     }
     if (part.type !== "tool") continue;

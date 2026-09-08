@@ -67,7 +67,7 @@ export class TaskPlugin extends Plugin {
         executions: this.executions,
         resolve_delivery: () => ({
           deliver: async ({ delivery_session, text }) => {
-            await this.require_lifecycle_context().system.append_agent_session_assistant_message({
+            await this.require_lifecycle_context().system.append_agent_session_message({
               ...delivery_session,
               text,
             });

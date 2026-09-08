@@ -21,7 +21,7 @@ import {
   SESSION_COMPACTION_SYSTEM_PROMPT,
 } from "@executor/composer/compaction/jsonl/JsonlSessionCompactionPrompts.js";
 import type {
-  SessionAssistantMessagePart,
+  SessionAgentMessagePart,
   SessionMessage,
   SessionUserMessagePart,
 } from "@downcity/type";
@@ -49,7 +49,7 @@ export async function compose_session_compaction(input: {
   on_model_request_failure?: ModelRequestFailureReporter;
 }): Promise<SessionCompactionPlan | null> {
   const context_messages = input.snapshot.messages.filter(
-    (message) => message.type === "user" || message.type === "assistant",
+    (message) => message.type === "user" || message.type === "agent",
   );
   const compact_message_count = Math.floor(context_messages.length / 2);
   if (compact_message_count <= 0) return null;
@@ -98,7 +98,7 @@ export async function compose_session_compaction(input: {
 }
 
 function message_to_compaction_text(message: SessionMessage): string {
-  if (message.type !== "user" && message.type !== "assistant") return "";
+  if (message.type !== "user" && message.type !== "agent") return "";
   const parts = message.parts
     .map(to_compaction_part)
     .filter((part) => part !== null);
@@ -110,7 +110,7 @@ function message_to_compaction_text(message: SessionMessage): string {
 
 /** 把 canonical Part 收窄为 Summary 模型需要的稳定会话事实。 */
 function to_compaction_part(
-  part: SessionUserMessagePart | SessionAssistantMessagePart,
+  part: SessionUserMessagePart | SessionAgentMessagePart,
 ): Record<string, unknown> | null {
   if (part.type === "text") return { type: "text", text: part.text };
   if (part.type === "context") {

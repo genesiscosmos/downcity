@@ -226,8 +226,8 @@ function create_session_collection(
       subscribe: (subscriber) => runtime.subscribe((mutation) =>
         subscriber(mutation as unknown as PluginSessionMutation)),
       context: async () => await runtime.context() as unknown as import("@/plugin/index.js").PluginSessionContextSnapshot,
-      append_assistant_message: async (message_input) =>
-        await runtime.append_assistant_message(message_input),
+      append_agent_message: async (message_input) =>
+        await runtime.append_agent_message(message_input),
     });
   }
 }

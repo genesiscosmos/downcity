@@ -50,7 +50,7 @@ snapshot_ready = true;
 | `turn` | 按 `turn_id` 更新运行状态 |
 | `session` | 更新当前 Session 元数据，例如标题 |
 
-断线后不要假定 Delta 可以重放。丢失的 Delta 已经合并进 `assistant_message.json` 或最终 Message 快照，因此重新读取 `messages()` 是恢复正确状态的关键。
+断线后不要假定 Delta 可以重放。丢失的 Delta 已经合并进 `agent_message.json` 或最终 Message 快照，因此重新读取 `messages()` 是恢复正确状态的关键。
 
 ## RemoteSession 断线
 

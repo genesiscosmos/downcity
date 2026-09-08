@@ -16,13 +16,13 @@ function parse_user_text(text: string): string {
 }
 
 /**
- * 将 Session SDK 的 user/assistant/action/error 记录投影为 UI 消息。
+ * 将 Session SDK 的 user/agent 记录投影为 UI 消息。
  * 该函数不读取运行时，也不修改输入，适合在宿主的 store selector 中使用。
  */
 export function session_message_to_chat_message(record: Record<string, unknown>): DowncityChatMessage {
   const message_id = typeof record.message_id === "string" ? record.message_id : String(record.id ?? `message-${String(record.sequence ?? "unknown")}`);
-  const record_type = String(record.type ?? "assistant");
-  const role = record_type === "user" ? "user" : record_type === "error" ? "error" : "assistant";
+  const record_type = String(record.type ?? "agent");
+  const role = record_type === "user" ? "user" : "assistant";
   const raw_parts = Array.isArray(record.parts) ? [...record.parts] : [];
   raw_parts.sort((left, right) => Number((left as Record<string, unknown>)?.sequence ?? 0) - Number((right as Record<string, unknown>)?.sequence ?? 0));
   const parts = raw_parts.map((part, index) => session_part_to_chat_part(part, index)).filter((part): part is DowncityChatMessagePart => part !== null);
@@ -44,18 +44,18 @@ export function session_message_to_chat_message(record: Record<string, unknown>)
     const text_parts = parts.filter((part) => part.type === "text");
     for (const part of text_parts) if (part.text) part.text = parse_user_text(part.text);
   }
-  if (record_type === "action") {
-    const status = record.status === "completed" ? "finished" : record.status === "failed" ? "failed" : "progress";
-    parts.push({ id: message_id, type: "operation", operation: { status, name: String(record.action_type ?? "operation"), label: typeof record.title === "string" ? record.title : undefined, error: status === "failed" ? to_string(record.description) : undefined, progress: typeof (record.data as Record<string, unknown> | undefined)?.progress === "number" ? (record.data as Record<string, number>).progress : undefined } });
-  }
+  const error_message = raw_parts.flatMap((part) => {
+    const item = part && typeof part === "object" ? part as Record<string, unknown> : undefined;
+    return item?.type === "error" && typeof item.message === "string" ? [item.message] : [];
+  })[0];
   return {
     id: message_id,
     role,
-    content: typeof record.message === "string" ? record.message : undefined,
+    content: error_message,
     parts,
     created_at: typeof record.created_at === "number" || typeof record.created_at === "string" ? record.created_at : undefined,
     is_streaming: record.status === "streaming",
-    metadata: { official_message_id: message_id, presentation_status: typeof record.status === "string" ? record.status : undefined, error: typeof record.message === "string" && record_type === "error" ? record.message : undefined, sequence: typeof record.sequence === "number" ? record.sequence : undefined, revision: typeof record.revision === "number" ? record.revision : undefined, turn_id: to_string(record.turn_id), visibility: to_string(record.visibility), session_type: record_type },
+    metadata: { official_message_id: message_id, presentation_status: typeof record.status === "string" ? record.status : undefined, error: error_message, sequence: typeof record.sequence === "number" ? record.sequence : undefined, revision: typeof record.revision === "number" ? record.revision : undefined, turn_id: to_string(record.turn_id), visibility: to_string(record.visibility), session_type: record_type },
   };
 }
 
@@ -101,6 +101,12 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
   if (type === "source") return { id, type, source_title: typeof part.title === "string" ? part.title : undefined, source_url: typeof part.url === "string" ? part.url : undefined };
   if (type === "data") return { id, type, data_type: typeof part.data_type === "string" ? part.data_type : undefined, data: part.data };
   if (type === "changed-files") return { id, type, files: Array.isArray(part.files) ? part.files as DowncityChatMessagePart["files"] : [], summary: part.summary as DowncityChatMessagePart["summary"] };
+  if (type === "action") {
+    const status = part.state === "completed" ? "finished" : part.state === "failed" ? "failed" : "progress";
+    const data = part.data && typeof part.data === "object" && !Array.isArray(part.data) ? part.data as Record<string, unknown> : undefined;
+    return { id, type: "operation", operation: { status, name: String(part.action_type ?? "operation"), label: to_string(part.title), error: status === "failed" ? to_string(part.description) : undefined, progress: typeof data?.progress === "number" ? data.progress : undefined } };
+  }
+  if (type === "error") return { id, type: "operation", operation: { status: "failed", name: to_string(part.code) ?? "error", label: to_string(part.message), error: to_string(part.message) } };
   return null;
 }
 

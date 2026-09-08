@@ -28,7 +28,7 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
     session_id: "dynamic-interaction-test",
     messages: recorder,
   });
-  const writer = await recorder.open_assistant_message({ turn_id: "turn-1" });
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
 
   try {
     const handle = await interactions.request({

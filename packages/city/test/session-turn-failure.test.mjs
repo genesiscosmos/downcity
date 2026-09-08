@@ -110,7 +110,7 @@ async function write_tool_call(output, input) {
   });
 }
 
-test("Provider 在输出前失败时只持久化 Error Message", async () => {
+test("Provider 在输出前失败时只持久化包含 Error Part 的 Agent Message", async () => {
   const { messages, turn } = await create_turn_harness(async () => ({
     success: false,
     text: "",
@@ -125,9 +125,10 @@ test("Provider 在输出前失败时只持久化 Error Message", async () => {
   assert.equal(result.success, false);
   assert.equal(result.error, "quota exceeded");
   assert.equal(result.assistant_message, undefined);
-  assert.deepEqual(page.items.map((message) => message.type), ["user", "error"]);
-  assert.equal(page.items[1].code, "turn_execution_failed");
-  assert.equal(page.items[1].message, "quota exceeded");
+  assert.deepEqual(page.items.map((message) => message.type), ["user", "agent"]);
+  assert.equal(page.items[1].parts[0].type, "error");
+  assert.equal(page.items[1].parts[0].code, "turn_execution_failed");
+  assert.equal(page.items[1].parts[0].message, "quota exceeded");
 });
 
 test("SessionLoop 只在 canonical 用户消息写入后返回 prompt 句柄", async () => {
@@ -213,7 +214,7 @@ test("SessionLoop 在释放 Plugin Hook 作用域前触发 turn committed effect
   assert.equal(effects[0].value.status, "completed");
   assert.deepEqual(
     effects[0].value.messages.map((message) => message.type),
-    ["user", "assistant"],
+    ["user", "agent"],
   );
 });
 
@@ -243,7 +244,7 @@ test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async
   const handle = await turn.prompt({ query: "修改文件" });
   await handle.finished;
   const page = await messages.list_messages();
-  const assistant = page.items.find((message) => message.type === "assistant");
+  const assistant = page.items.find((message) => message.type === "agent");
   const file_diff = assistant.parts.find((part) => part.type === "data");
 
   assert.equal(assistant.status, "completed");
@@ -275,12 +276,13 @@ test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Erro
   assert.equal(result.assistant_message, undefined);
   assert.deepEqual(page.items.map((message) => message.type), [
     "user",
-    "assistant",
-    "error",
+    "agent",
+    "agent",
   ]);
   assert.equal(page.items[1].status, "failed");
   assert.equal(page.items[1].parts[0].text, "partial response");
-  assert.equal(page.items[2].message, "stream interrupted");
+  assert.equal(page.items[2].parts[0].type, "error");
+  assert.equal(page.items[2].parts[0].message, "stream interrupted");
 });
 
 test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async () => {
@@ -308,7 +310,7 @@ test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async ()
   const handle = await turn.prompt({ query: "hello" });
   await handle.finished;
   const page = await messages.list_messages();
-  const assistant = page.items.find((message) => message.type === "assistant");
+  const assistant = page.items.find((message) => message.type === "agent");
 
   assert.equal(assistant?.status, "failed");
   assert.equal(assistant?.parts[0]?.type, "tool");
@@ -356,7 +358,7 @@ test("Turn 使用标准模型事件保持 Tool 与最终正文顺序", async () 
   const handle = await turn.prompt({ query: "diagnose" });
   const result = await handle.finished;
   const page = await messages.list_messages();
-  const assistant = page.items.find((message) => message.type === "assistant");
+  const assistant = page.items.find((message) => message.type === "agent");
 
   assert.equal(result.success, true);
   assert.deepEqual(assistant.parts.map((part) => part.type), ["tool", "text"]);
@@ -409,7 +411,7 @@ test("普通 Tool Loop 的多个 Provider Step 始终写入同一个 Assistant M
   await handle.finished;
   const page = await messages.list_messages();
   const assistant_messages = page.items.filter(
-    (message) => message.type === "assistant",
+    (message) => message.type === "agent",
   );
 
   assert.equal(assistant_messages.length, 1);
@@ -457,11 +459,12 @@ test("Turn 在 step 最终快照出现未流式写入的 Tool 时失败", async 
   const handle = await turn.prompt({ query: "diagnose" });
   const result = await handle.finished;
   const page = await messages.list_messages();
-  const assistant = page.items.find((message) => message.type === "assistant");
+  const assistant = page.items.find((message) => message.type === "agent");
 
   assert.equal(result.success, false);
   assert.match(result.error, /snapshot mismatch/);
   assert.equal(assistant.status, "failed");
   assert.deepEqual(assistant.parts.map((part) => part.type), ["text"]);
-  assert.equal(page.items.at(-1).type, "error");
+  assert.equal(page.items.at(-1).type, "agent");
+  assert.equal(page.items.at(-1).parts[0].type, "error");
 });

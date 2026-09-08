@@ -6,7 +6,7 @@
  */
 
 import path from "node:path";
-import type { SessionAssistantMessage, SessionMessage } from "@downcity/type";
+import type { SessionAgentMessage, SessionMessage } from "@downcity/type";
 import type {
   SessionMessageStorageStats,
   SessionSegmentRange,
@@ -28,7 +28,7 @@ const SEQUENCE_FILE_WIDTH = 12;
 export class JsonlSessionMessageStore {
   readonly session_id: string;
   readonly active_file_path: string;
-  readonly assistant_message_file_path: string;
+  readonly agent_message_file_path: string;
   readonly segments_dir_path: string;
 
   private readonly lock_file_path: string;
@@ -38,9 +38,9 @@ export class JsonlSessionMessageStore {
     this.files = options.files;
     this.session_id = String(options.session_id || "").trim();
     this.active_file_path = path.resolve(options.file_path);
-    this.assistant_message_file_path = path.resolve(
-      options.assistant_message_file_path ||
-        path.join(path.dirname(this.active_file_path), "assistant_message.json"),
+    this.agent_message_file_path = path.resolve(
+      options.agent_message_file_path ||
+        path.join(path.dirname(this.active_file_path), "agent_message.json"),
     );
     this.segments_dir_path = path.join(path.dirname(this.active_file_path), "segments");
     this.lock_file_path = `${this.active_file_path}.lock`;
@@ -63,14 +63,14 @@ export class JsonlSessionMessageStore {
         await this.write_active_messages_unsafe(messages);
       }
 
-      const draft = await this.read_assistant_message();
+      const draft = await this.read_agent_message();
       if (draft && draft.session_id !== this.session_id) {
-        throw new Error("assistant_message.json session_id mismatch");
+        throw new Error("agent_message.json session_id mismatch");
       }
       const finalized = draft && messages.find(
         (message) => message.message_id === draft.message_id,
       );
-      const effective_draft = draft && finalized?.type === "assistant" &&
+      const effective_draft = draft && finalized?.type === "agent" &&
         finalized.revision >= draft.revision &&
         finalized.status !== "streaming"
         ? null
@@ -81,11 +81,11 @@ export class JsonlSessionMessageStore {
       );
       if (
         draft &&
-        finalized?.type === "assistant" &&
+        finalized?.type === "agent" &&
         finalized.revision >= draft.revision &&
         finalized.status !== "streaming"
       ) {
-        await this.files.remove_path(this.assistant_message_file_path);
+        await this.files.remove_path(this.agent_message_file_path);
       }
     });
   }
@@ -96,7 +96,7 @@ export class JsonlSessionMessageStore {
     const by_id = new Map(
       (await this.read_active_messages_unsafe()).map((message) => [message.message_id, message]),
     );
-    const draft = await this.read_assistant_message();
+    const draft = await this.read_agent_message();
     if (draft) {
       const previous = by_id.get(draft.message_id);
       if (!previous || draft.revision > previous.revision) by_id.set(draft.message_id, draft);
@@ -174,13 +174,13 @@ export class JsonlSessionMessageStore {
   }
 
   /** 读取当前运行中的 Assistant 草稿。 */
-  async read_assistant_message(): Promise<SessionAssistantMessage | null> {
+  async read_agent_message(): Promise<SessionAgentMessage | null> {
     try {
       const value = JSON.parse(
-        (await this.files.read_file(this.assistant_message_file_path)).toString("utf8"),
-      ) as SessionAssistantMessage;
+        (await this.files.read_file(this.agent_message_file_path)).toString("utf8"),
+      ) as SessionAgentMessage;
       this.validate_message(value);
-      return value.type === "assistant" && value.status === "streaming" ? value : null;
+      return value.type === "agent" && value.status === "streaming" ? value : null;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw error;
@@ -188,27 +188,27 @@ export class JsonlSessionMessageStore {
   }
 
   /** 原子覆盖运行中的 Assistant 草稿。 */
-  async write_assistant_message(message: SessionAssistantMessage): Promise<void> {
+  async write_agent_message(message: SessionAgentMessage): Promise<void> {
     this.validate_message(message);
     if (message.status !== "streaming") throw new Error("Assistant draft must be streaming");
     await this.with_write_lock(async () => {
-      const current = await this.read_assistant_message();
+      const current = await this.read_agent_message();
       if (!current || current.message_id !== message.message_id) {
         throw new Error(`Assistant draft does not exist: ${message.message_id}`);
       }
       if (message.revision !== current.revision + 1) {
         throw new Error(`Invalid Assistant draft revision: ${message.message_id}`);
       }
-      await this.write_assistant_message_unsafe(message);
+      await this.write_agent_message_unsafe(message);
     });
   }
 
   /** 在写锁内分配全局 sequence 并创建唯一 Assistant 草稿。 */
-  async create_assistant_message(
-    build_message: (state: SessionMessageCommitState) => SessionAssistantMessage,
-  ): Promise<SessionAssistantMessage> {
+  async create_agent_message(
+    build_message: (state: SessionMessageCommitState) => SessionAgentMessage,
+  ): Promise<SessionAgentMessage> {
     return await this.with_write_lock(async () => {
-      const current = await this.read_assistant_message();
+      const current = await this.read_agent_message();
       if (current) throw new Error(`Assistant draft already exists: ${current.message_id}`);
       const messages = await this.read_active_messages_unsafe();
       const ranges = await this.list_segment_ranges();
@@ -221,7 +221,7 @@ export class JsonlSessionMessageStore {
       if (message.status !== "streaming" || message.revision !== 1) {
         throw new Error("New Assistant draft must be streaming at revision 1");
       }
-      await this.write_assistant_message_unsafe(message);
+      await this.write_agent_message_unsafe(message);
       return message;
     });
   }
@@ -232,7 +232,7 @@ export class JsonlSessionMessageStore {
   ): Promise<SessionMessage> {
     return await this.with_write_lock(async () => {
       const messages = await this.read_active_messages_unsafe();
-      const draft = await this.read_assistant_message();
+      const draft = await this.read_agent_message();
       const current_messages = draft ? [...messages, draft] : messages;
       const ranges = await this.list_segment_ranges();
       this.validate_runtime_sequence(
@@ -250,11 +250,11 @@ export class JsonlSessionMessageStore {
   }
 
   /** 将 Assistant 草稿最终追加到 Active，并删除草稿文件。 */
-  async finalize_assistant_message(message: SessionAssistantMessage): Promise<void> {
+  async finalize_agent_message(message: SessionAgentMessage): Promise<void> {
     this.validate_message(message);
     if (message.status === "streaming") throw new Error("Final Assistant message cannot be streaming");
     await this.with_write_lock(async () => {
-      const current = await this.read_assistant_message();
+      const current = await this.read_agent_message();
       if (!current || current.message_id !== message.message_id) {
         throw new Error(`Assistant draft does not exist: ${message.message_id}`);
       }
@@ -262,7 +262,7 @@ export class JsonlSessionMessageStore {
         throw new Error(`Invalid final Assistant revision: ${message.message_id}`);
       }
       await this.files.append_file(this.active_file_path, `${JSON.stringify(message)}\n`);
-      await this.files.remove_path(this.assistant_message_file_path);
+      await this.files.remove_path(this.agent_message_file_path);
     });
   }
 
@@ -271,7 +271,7 @@ export class JsonlSessionMessageStore {
     input: CompactActiveMessagesInput,
   ): Promise<CompactActiveMessagesResult> {
     return await this.with_write_lock(async () => {
-      const draft = await this.read_assistant_message();
+      const draft = await this.read_agent_message();
       if (draft) throw new Error("Cannot compact while Assistant is streaming");
       const active_messages = await this.read_active_messages_unsafe();
       const ranges = await this.list_segment_ranges();
@@ -406,9 +406,9 @@ export class JsonlSessionMessageStore {
   }
 
   /** 原子覆盖 Assistant 草稿。 */
-  private async write_assistant_message_unsafe(message: SessionAssistantMessage): Promise<void> {
+  private async write_agent_message_unsafe(message: SessionAgentMessage): Promise<void> {
     await this.files.write_file_atomically(
-      this.assistant_message_file_path,
+      this.agent_message_file_path,
       `${JSON.stringify(message, null, 2)}\n`,
     );
   }
@@ -451,11 +451,11 @@ export class JsonlSessionMessageStore {
     if (!message.message_id || !Number.isInteger(message.sequence) || !Number.isInteger(message.revision)) {
       throw new Error("message identity, sequence and revision are required");
     }
-    if (message.type === "assistant") {
+    if (message.type === "agent") {
       const sequences = new Set<number>();
       for (const part of message.parts) {
         if (!Number.isInteger(part.sequence) || sequences.has(part.sequence)) {
-          throw new Error(`invalid Assistant part sequence: ${part.part_id}`);
+          throw new Error(`invalid Agent Part sequence: ${part.part_id}`);
         }
         sequences.add(part.sequence);
       }

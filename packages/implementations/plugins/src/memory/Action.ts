@@ -21,7 +21,7 @@ import type { MemoryAccessContext } from "@/memory/types/MemoryAccess.js";
 
 /** 从 canonical Session Message 提取可供 Provider 提炼的文本。 */
 function extract_session_message_line(message: SessionMessage): string {
-  if (message.type !== "user" && message.type !== "assistant") return "";
+  if (message.type !== "user" && message.type !== "agent") return "";
   const role = message.type === "user" ? "User" : "Assistant";
   const text = message.parts
     .flatMap((part) => part.type === "text" ? [String(part.text || "").trim()] : [])

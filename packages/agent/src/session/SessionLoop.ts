@@ -533,7 +533,7 @@ export class SessionLoop {
     });
 
     if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {
-      await this.messages.append_error_message({
+      await this.messages.append_error_part({
         scope: "turn",
         turn_id: input.active_turn.turn_id,
         code: "turn_execution_failed",

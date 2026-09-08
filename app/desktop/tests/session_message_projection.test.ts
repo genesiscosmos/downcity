@@ -19,7 +19,7 @@ function create_user_message(sequence: number): Extract<SessionMessage, { type: 
   };
 }
 
-function create_assistant_message(sequence: number, status: "streaming" | "completed" = "completed"): Extract<SessionMessage, { type: "assistant" }> {
+function create_agent_message(sequence: number, status: "streaming" | "completed" = "completed"): Extract<SessionMessage, { type: "agent" }> {
   return {
     message_id: `assistant-${String(sequence)}`,
     session_id: "session",
@@ -28,25 +28,10 @@ function create_assistant_message(sequence: number, status: "streaming" | "compl
     visibility: "visible",
     created_at: sequence,
     updated_at: sequence,
-    type: "assistant",
+    type: "agent",
+    kind: "normal",
     status,
     parts: [],
-  };
-}
-
-function create_action_message(sequence: number): Extract<SessionMessage, { type: "action" }> {
-  return {
-    message_id: `action-${String(sequence)}`,
-    session_id: "session",
-    sequence,
-    revision: 1,
-    visibility: "visible",
-    created_at: sequence,
-    updated_at: sequence,
-    type: "action",
-    action_type: "test",
-    status: "completed",
-    title: "Action",
   };
 }
 
@@ -63,7 +48,7 @@ test("尾部消息变化只替换命中的稳定分段", () => {
 
 test("五千条消息的尾部流式更新复用全部历史分段", () => {
   const messages: SessionMessage[] = Array.from({ length: 4_999 }, (_, index) => create_user_message(index + 1));
-  messages.push(create_assistant_message(5_000, "streaming"));
+  messages.push(create_agent_message(5_000, "streaming"));
   const previous = project_session_message_segments(messages);
   const updated = [...messages];
   updated[updated.length - 1] = { ...updated[updated.length - 1], revision: 2, updated_at: 5_001 };
@@ -81,18 +66,18 @@ test("历史前插不会改变既有 sequence 分段引用", () => {
   assert.equal(next.segments[1], previous.segments[0]);
 });
 
-test("跨分段边界的连续 Action 仍归属前一条 Assistant", () => {
-  const assistant = create_assistant_message(session_message_segment_size);
-  const action = create_action_message(session_message_segment_size + 1);
+test("跨分段边界的 Agent Action Part 仍保持自身消息所有权", () => {
+  const agent = create_agent_message(session_message_segment_size);
+  agent.parts = [{ part_id: "action-1", sequence: 1, type: "action", action_id: "action-1", action_type: "test", state: "completed", title: "Action" }];
   const next_user = create_user_message(session_message_segment_size + 2);
-  const projection = project_session_message_segments([assistant, action, next_user]);
+  const projection = project_session_message_segments([agent, next_user]);
   assert.deepEqual(projection.segments.map((segment) => segment.segment_id), [0, 1]);
-  assert.deepEqual(projection.segments[0].rows[0].actions, [action]);
+  assert.equal(projection.segments[0].rows[0].message, agent);
   assert.equal(projection.segments[1].rows[0].message, next_user);
 });
 
 test("投影同时汇总流式状态与可压缩消息状态", () => {
-  const projection = project_session_message_segments([create_assistant_message(1, "streaming")]);
+  const projection = project_session_message_segments([create_agent_message(1, "streaming")]);
   assert.equal(projection.has_streaming_message, true);
   assert.equal(projection.has_conversation_message, true);
   assert.equal(project_session_message_segments([]).has_conversation_message, false);
@@ -100,8 +85,9 @@ test("投影同时汇总流式状态与可压缩消息状态", () => {
 
 test("末尾语义基于后续可见消息而不是用户消息类型", () => {
   const user = create_user_message(1);
-  const action = create_action_message(2);
-  const projection = project_session_message_segments([user, action]);
+  const agent = create_agent_message(2);
+  agent.parts = [{ part_id: "action-1", sequence: 1, type: "action", action_id: "action-1", action_type: "test", state: "completed", title: "Action" }];
+  const projection = project_session_message_segments([user, agent]);
   assert.equal(projection.segments[0].rows[0].has_later_visible_message, true);
   assert.equal(projection.segments[0].rows[1].has_later_visible_message, false);
 });

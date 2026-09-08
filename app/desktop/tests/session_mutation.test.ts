@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { SessionAssistantMessage, SessionMutation, SessionUserMessage } from "@downcity/agent";
+import type { SessionAgentMessage, SessionMutation, SessionUserMessage } from "@downcity/agent";
 import {
   apply_indexed_session_mutations,
   apply_session_mutation,
@@ -11,7 +11,7 @@ import {
   merge_session_snapshot,
 } from "../src/renderer/features/chat/lib/session_mutation.ts";
 
-const assistant_message: SessionAssistantMessage = {
+const assistant_message: SessionAgentMessage = {
   message_id: "assistant-1",
   session_id: "session-1",
   turn_id: "turn-1",
@@ -20,7 +20,7 @@ const assistant_message: SessionAssistantMessage = {
   visibility: "visible",
   created_at: 1,
   updated_at: 1,
-  type: "assistant",
+  type: "agent",
   kind: "normal",
   status: "streaming",
   parts: [{ part_id: "text-1", sequence: 1, type: "text", text: "你", state: "streaming" }],
@@ -55,7 +55,7 @@ test("按 delta 更新 assistant part 并拒绝旧 revision", () => {
   };
   const updated = apply_session_mutation([assistant_message], delta);
   assert.equal(updated[0].revision, 2);
-  assert.equal(updated[0].type === "assistant" && updated[0].parts[0].type === "text" ? updated[0].parts[0].text : "", "你好");
+  assert.equal(updated[0].type === "agent" && updated[0].parts[0].type === "text" ? updated[0].parts[0].text : "", "你好");
   assert.equal(apply_session_mutation(updated, { ...delta, mutation_id: "mutation-old", revision: 1, delta: "旧" }), updated);
 });
 
@@ -114,8 +114,8 @@ test("用户消息与 assistant delta 通过同一 mutation 流连续投影", ()
     delta: "好",
   });
   assert.deepEqual(updated.map((message) => message.message_id), ["user-1", "assistant-1"]);
-  assert.equal(updated[1].type === "assistant" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好");
-  assert.equal(updated[1].type === "assistant" ? updated[1].status : "", "streaming");
+  assert.equal(updated[1].type === "agent" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好");
+  assert.equal(updated[1].type === "agent" ? updated[1].status : "", "streaming");
 });
 
 test("同一帧的多个 delta 只生成一次最终消息投影", () => {
@@ -148,7 +148,7 @@ test("同一帧的多个 delta 只生成一次最终消息投影", () => {
   const updated = apply_session_mutations([user_message, assistant_message], mutations);
   assert.equal(updated[0], user_message);
   assert.equal(updated[1].revision, 3);
-  assert.equal(updated[1].type === "assistant" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好！");
+  assert.equal(updated[1].type === "agent" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好！");
 });
 
 test("批量投影在全部 mutation 无效时保留消息数组引用", () => {
@@ -169,7 +169,7 @@ test("批量投影在全部 mutation 无效时保留消息数组引用", () => {
 });
 
 test("五千条消息的尾部 delta 复用持久位置索引", () => {
-  const messages = Array.from({ length: 5_000 }, (_, index): SessionAssistantMessage => ({
+  const messages = Array.from({ length: 5_000 }, (_, index): SessionAgentMessage => ({
     ...assistant_message,
     message_id: `assistant-${index}`,
     sequence: index + 1,

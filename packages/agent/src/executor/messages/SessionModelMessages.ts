@@ -16,8 +16,8 @@ import type {
 import { parse_chat_message_markup } from "@executor/messages/ChatMessageMarkup.js";
 import { render_session_user_context } from "@/session/messages/SessionUserContext.js";
 import type {
-  SessionAssistantMessage,
-  SessionAssistantToolPart,
+  SessionAgentMessage,
+  SessionAgentToolPart,
   SessionMessage,
   SessionUserFilePart,
   SessionUserMessage,
@@ -52,7 +52,7 @@ export async function session_messages_to_model_messages(
   for (const message of messages) {
     if (message.type === "user") {
       output.push(...await convert_user_message(message, project_root));
-    } else if (message.type === "assistant") {
+    } else if (message.type === "agent") {
       output.push(...convert_assistant_message(message));
     }
   }
@@ -84,8 +84,8 @@ async function convert_user_message(
   return content.length > 0 ? [{ role: "user", content }] : [];
 }
 
-/** 把单条 canonical Assistant Message 转换为 assistant 与 tool 消息。 */
-function convert_assistant_message(message: SessionAssistantMessage): ModelMessage[] {
+/** 把单条 canonical Agent Message 转换为模型 assistant 与 tool 消息。 */
+function convert_assistant_message(message: SessionAgentMessage): ModelMessage[] {
   const content: ModelContent[] = [];
   const tool_results: ModelContent[] = [];
   for (const part of message.parts) {
@@ -113,7 +113,7 @@ function convert_assistant_message(message: SessionAssistantMessage): ModelMessa
 
 /** 把 canonical Tool Part 投影为模型工具调用和可选工具结果。 */
 function append_tool_content(
-  part: SessionAssistantToolPart,
+  part: SessionAgentToolPart,
   content: ModelContent[],
   tool_results: ModelContent[],
 ): void {

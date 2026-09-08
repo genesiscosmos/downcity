@@ -7,9 +7,9 @@
  */
 
 import type {
-  SessionAssistantInteractionPart,
-  SessionAssistantMessage,
-  SessionAssistantMessagePart,
+  SessionAgentInteractionPart,
+  SessionAgentMessage,
+  SessionAgentMessagePart,
   SessionMessage,
 } from "@downcity/type";
 import type {
@@ -34,8 +34,8 @@ interface SessionMessageInteractionWriterOptions {
   ) => Promise<T>;
   /** 原子持久化 Assistant 完整快照并发布发生变化的 Part。 */
   commit_assistant_snapshot: (
-    current: SessionAssistantMessage,
-    parts: SessionAssistantMessagePart[],
+    current: SessionAgentMessage,
+    parts: SessionAgentMessagePart[],
   ) => Promise<void>;
 }
 
@@ -48,9 +48,9 @@ export class SessionMessageInteractionWriter {
   }
 
   /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
-  list_pending(): SessionAssistantInteractionPart[] {
+  list_pending(): SessionAgentInteractionPart[] {
     return [...this.options.list_messages()].flatMap((message) =>
-      message.type === "assistant" && message.status === "streaming"
+      message.type === "agent" && message.status === "streaming"
         ? message.parts.flatMap((part) =>
             part.type === "interaction" && part.status === "pending"
               ? [structuredClone(part)]
@@ -63,7 +63,7 @@ export class SessionMessageInteractionWriter {
   /** 原子创建 Interaction，并把关联 Tool 转为 waiting-user。 */
   async request(
     request: SessionInteractionRequest,
-  ): Promise<SessionAssistantInteractionPart> {
+  ): Promise<SessionAgentInteractionPart> {
     const tool_call_id = request.source.tool_call_id;
     const message_id = tool_call_id
       ? this.require_streaming_tool(tool_call_id).message_id
@@ -102,7 +102,7 @@ export class SessionMessageInteractionWriter {
         }
       }
 
-      const interaction: SessionAssistantInteractionPart = {
+      const interaction: SessionAgentInteractionPart = {
         part_id: `interaction:${request.interaction_id}`,
         sequence: parts.reduce(
           (sequence, part) => Math.max(sequence, part.sequence + 1),
@@ -123,7 +123,7 @@ export class SessionMessageInteractionWriter {
   async resolve(
     interaction_id: string,
     response: SessionInteractionResponse,
-  ): Promise<SessionAssistantInteractionPart> {
+  ): Promise<SessionAgentInteractionPart> {
     const { message_id } = this.require_pending_interaction(interaction_id);
     await this.options.enqueue_assistant_write(message_id, async () => {
       const current = this.require_streaming_assistant(message_id);
@@ -171,7 +171,7 @@ export class SessionMessageInteractionWriter {
   async close(
     interaction_id: string,
     input: SessionInteractionCloseInput,
-  ): Promise<SessionAssistantInteractionPart> {
+  ): Promise<SessionAgentInteractionPart> {
     const { message_id } = this.require_pending_interaction(interaction_id);
     await this.options.enqueue_assistant_write(message_id, async () => {
       const current = this.require_streaming_assistant(message_id);
@@ -209,15 +209,15 @@ export class SessionMessageInteractionWriter {
   /** 读取指定或当前唯一的流式 Assistant Message。 */
   private require_streaming_assistant(
     message_id?: string,
-  ): SessionAssistantMessage {
+  ): SessionAgentMessage {
     const message = message_id
       ? [...this.options.list_messages()].find(
           (item) => item.message_id === message_id,
         )
       : [...this.options.list_messages()].find(
-          (item) => item.type === "assistant" && item.status === "streaming",
+          (item) => item.type === "agent" && item.status === "streaming",
         );
-    if (!message || message.type !== "assistant" || message.status !== "streaming") {
+    if (!message || message.type !== "agent" || message.status !== "streaming") {
       throw new Error(
         message_id
           ? `Streaming Assistant Message not found: ${message_id}`
@@ -231,13 +231,13 @@ export class SessionMessageInteractionWriter {
   private find_interaction(interaction_id: string):
     | {
         message_id: string;
-        part: SessionAssistantInteractionPart;
+        part: SessionAgentInteractionPart;
       }
     | undefined {
     for (const message of this.options.list_messages()) {
-      if (message.type !== "assistant" || message.status !== "streaming") continue;
+      if (message.type !== "agent" || message.status !== "streaming") continue;
       const part = message.parts.find(
-        (item): item is SessionAssistantInteractionPart =>
+        (item): item is SessionAgentInteractionPart =>
           item.type === "interaction" &&
           item.interaction_id === interaction_id,
       );
@@ -249,7 +249,7 @@ export class SessionMessageInteractionWriter {
   /** 读取指定 Interaction，否则抛出稳定领域错误。 */
   private require_interaction(interaction_id: string): {
     message_id: string;
-    part: SessionAssistantInteractionPart;
+    part: SessionAgentInteractionPart;
   } {
     const interaction = this.find_interaction(interaction_id);
     if (interaction) return interaction;
@@ -259,7 +259,7 @@ export class SessionMessageInteractionWriter {
   /** 读取指定 pending Interaction，否则拒绝重复响应终态 Interaction。 */
   private require_pending_interaction(interaction_id: string): {
     message_id: string;
-    part: SessionAssistantInteractionPart;
+    part: SessionAgentInteractionPart;
   } {
     const interaction = this.require_interaction(interaction_id);
     if (interaction.part.status !== "pending") {

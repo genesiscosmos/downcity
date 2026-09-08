@@ -5,7 +5,7 @@
  * 任意 JSON 结构。
  */
 
-import type { SessionAssistantDataPart } from "@downcity/type";
+import type { SessionAgentDataPart } from "@downcity/type";
 import type {
   SessionTurnFileDiff,
   SessionTurnFileDiffData,
@@ -17,7 +17,7 @@ export const SESSION_TURN_FILE_DIFF_DATA_TYPE = "data-session-turn-file-diff";
 
 /** 从 Assistant data part 中读取经过校验的 Turn 文件改动。 */
 export function read_session_turn_file_diff_data(
-  part: SessionAssistantDataPart,
+  part: SessionAgentDataPart,
 ): SessionTurnFileDiffData | undefined {
   if (part.data_type !== SESSION_TURN_FILE_DIFF_DATA_TYPE) return undefined;
   if (!is_record(part.data) || !Array.isArray(part.data.files)) return undefined;
@@ -34,7 +34,7 @@ export function read_session_turn_file_diff_data(
 
 /** 判断 data part 是否为有效的 Turn 文件改动。 */
 export function is_session_turn_file_diff_data_part(
-  part: SessionAssistantDataPart,
+  part: SessionAgentDataPart,
 ): boolean {
   return read_session_turn_file_diff_data(part) !== undefined;
 }

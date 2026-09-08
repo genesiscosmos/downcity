@@ -128,9 +128,9 @@ export async function createTaskSessionRuntimePort(params: {
         files: params.storage.files,
         session_id: key,
         file_path: path.join(messages_dir_path, "active.jsonl"),
-        assistant_message_file_path: path.join(
+        agent_message_file_path: path.join(
           messages_dir_path,
-          "assistant_message.json",
+          "agent_message.json",
         ),
       }),
       attachment_store,

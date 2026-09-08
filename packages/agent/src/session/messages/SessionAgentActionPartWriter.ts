@@ -6,10 +6,10 @@
  */
 
 import type { SessionMessages } from "@/session/SessionMessages.js";
-import type { CompleteSessionActionMessageInput } from "@/types/session/SessionMessages.js";
+import type { CompleteSessionAgentActionPartInput } from "@/types/session/SessionMessages.js";
 
 /** 单个 Action Message 的生命周期 writer。 */
-export class SessionActionMessageWriter {
+export class SessionAgentActionPartWriter {
   /** 当前 Action Message 的稳定标识。 */
   readonly message_id: string;
   private readonly messages: SessionMessages;
@@ -27,9 +27,9 @@ export class SessionActionMessageWriter {
   }
 
   /** 把 Action 更新为 completed。 */
-  async complete(input?: CompleteSessionActionMessageInput): Promise<void> {
+  async complete(input?: CompleteSessionAgentActionPartInput): Promise<void> {
     if (this.closed) return;
-    await this.messages.update_action_message(
+    await this.messages.update_action_part(
       this.message_id,
       "completed",
       input,
@@ -41,7 +41,7 @@ export class SessionActionMessageWriter {
   /** 把 Action 更新为 failed。 */
   async fail(error: unknown): Promise<void> {
     if (this.closed) return;
-    await this.messages.update_action_message(
+    await this.messages.update_action_part(
       this.message_id,
       "failed",
       {

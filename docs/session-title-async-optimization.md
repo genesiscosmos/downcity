@@ -17,12 +17,12 @@ append_prompt_message
   → compose system / history / tools
   → 实际模型请求
   → 首个 assistant chunk
-  → open_assistant_message
+  → open_agent_message
 ```
 
 `SessionLoop.persist_prompt_message()` 在用户消息写入后同步调用标题生成。标题生成内部再次调用 `streamText()` 并等待 `result.text`，因此首轮对话可能产生两次模型请求。
 
-同时，Assistant Message 当前是惰性创建的。`begin_step()` 只记录 step 已开始，只有收到第一个可持久化的 reasoning、text 或 tool chunk 后，`write_chunk()` 才会调用 `open_assistant_message()`。因此前端的 `preparing` 实际覆盖了“首个 assistant 输出之前的全部等待”，而不是只表示消息对象创建过程。
+同时，Assistant Message 当前是惰性创建的。`begin_step()` 只记录 step 已开始，只有收到第一个可持久化的 reasoning、text 或 tool chunk 后，`write_chunk()` 才会调用 `open_agent_message()`。因此前端的 `preparing` 实际覆盖了“首个 assistant 输出之前的全部等待”，而不是只表示消息对象创建过程。
 
 这造成三个问题：
 

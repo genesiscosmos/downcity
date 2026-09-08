@@ -111,7 +111,7 @@ export interface MemoryCaptureMessage {
   message_id: string;
 
   /** 当前证据的消息角色。 */
-  role: "user" | "assistant";
+  role: "user" | "agent";
 
   /** 从允许捕获的 canonical text parts 提取的原始文本。 */
   text: string;

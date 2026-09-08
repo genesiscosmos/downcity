@@ -59,7 +59,7 @@ function create_lifecycle_context(storage, invocations) {
         invocations.push(input);
         return { success: true, data: { accepted: true } };
       },
-      append_agent_session_assistant_message: async () => {},
+      append_agent_session_message: async () => {},
       open_external: async () => {},
       show_item_in_folder: async () => {},
       write_clipboard_text: async () => {},

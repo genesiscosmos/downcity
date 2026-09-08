@@ -49,9 +49,9 @@ import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
 } from "@/types/session/SessionExecution.js";
-import type { SessionAssistantResultPart } from "@downcity/type";
+import type { SessionAgentResultPart } from "@downcity/type";
 import type {
-  SessionAssistantMessagePart,
+  SessionAgentMessagePart,
   SessionUserMessage,
 } from "@downcity/type";
 
@@ -145,7 +145,7 @@ export class CoreEngineRunner {
       : [];
     let tools = input.execute_input.tools;
     let last_observed_stream_error: unknown = undefined;
-    let final_assistant_parts: SessionAssistantMessagePart[] = [];
+    let final_assistant_parts: SessionAgentMessagePart[] = [];
     let compact_required = false;
 
     try {
@@ -236,7 +236,7 @@ export class CoreEngineRunner {
         }
 
         last_observed_stream_error = undefined;
-        let step_assistant_parts: SessionAssistantMessagePart[];
+        let step_assistant_parts: SessionAgentMessagePart[];
         let executed_steps: ModelStepResult[];
         try {
           const result = await execute_model_request({
@@ -632,8 +632,8 @@ function build_internal_user_message(input: {
 
 /** 把 Action 结果内容转换为当前 Turn 使用的 canonical Assistant Parts。 */
 function action_parts_to_canonical(
-  parts: readonly SessionAssistantResultPart[],
-): SessionAssistantMessagePart[] {
+  parts: readonly SessionAgentResultPart[],
+): SessionAgentMessagePart[] {
   return parts.map((part, index) => {
     const sequence = index + 1;
     if (part.type === "text") {
@@ -669,7 +669,7 @@ function action_parts_to_canonical(
 /** 构造成功执行但缺少最终内容时使用的 canonical Assistant Parts。 */
 function build_fallback_assistant_parts(
   text: string,
-): SessionAssistantMessagePart[] {
+): SessionAgentMessagePart[] {
   return [{
     part_id: "fallback-text:1",
     sequence: 1,

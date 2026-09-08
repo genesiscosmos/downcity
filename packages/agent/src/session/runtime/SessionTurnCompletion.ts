@@ -70,7 +70,7 @@ export async function fail_session_turn(
   active_turn.result = final_result;
   if (message !== options.stopped_message) {
     try {
-      await options.messages.append_error_message({
+      await options.messages.append_error_part({
         scope: "turn",
         turn_id: active_turn.turn_id,
         code: "turn_execution_failed",

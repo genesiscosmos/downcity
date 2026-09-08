@@ -117,8 +117,8 @@ export interface PluginSessionHandle {
   subscribe(subscriber: (mutation: PluginSessionMutation) => void | Promise<void>): () => void;
   /** 读取当前 Session 的累计摘要与 canonical 消息快照。 */
   context(): Promise<PluginSessionContextSnapshot>;
-  /** 追加一条 Assistant 文本消息。 */
-  append_assistant_message(input: { /** Assistant 文本。 */ readonly text: string }): Promise<void>;
+  /** 追加一条 Agent 文本消息。 */
+  append_agent_message(input: { /** Agent 文本。 */ readonly text: string }): Promise<void>;
 }
 
 /** Plugin 可调用的 Agent Session 集合。 */

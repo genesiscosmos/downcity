@@ -37,7 +37,7 @@ function plain(lines) {
   return lines.map((line) => line.replace(ANSI_SGR, ""));
 }
 
-function create_assistant_message(overrides = {}) {
+function create_agent_message(overrides = {}) {
   return {
     message_id: "assistant-default",
     session_id: "session-default",
@@ -47,7 +47,7 @@ function create_assistant_message(overrides = {}) {
     visibility: "visible",
     created_at: 1,
     updated_at: 1,
-    type: "assistant",
+    type: "agent",
     kind: "normal",
     status: "streaming",
     parts: [],
@@ -55,14 +55,14 @@ function create_assistant_message(overrides = {}) {
   };
 }
 
-function create_assistant_message_event(message, mutation_id = "assistant-message") {
+function create_agent_message_event(message, mutation_id = "assistant-message") {
   return {
     mutation_id,
     session_id: message.session_id,
     turn_id: message.turn_id,
     created_at: message.updated_at,
     variant: "message",
-    type: "assistant",
+    type: "agent",
     message_id: message.message_id,
     sequence: message.sequence,
     revision: message.revision,
@@ -268,7 +268,7 @@ test("角色消息和 Assistant 内 Tool Call 保持稳定层级且不超过可�
     visibility: "visible",
     created_at: 1,
     updated_at: 1,
-    type: "assistant",
+    type: "agent",
     kind: "normal",
     parts: [{
       part_id: "text-1",
@@ -343,17 +343,17 @@ test("canonical Assistant Message 的完整快照直接驱动 working 与终态"
     },
   });
   assert.match(plain(message_list.render(80)).join("\n"), /You[\s\S]*Inspect the project/);
-  const streaming_message = create_assistant_message({
+  const streaming_message = create_agent_message({
     message_id: "assistant-start",
     session_id: "session-start",
     turn_id: "turn-start",
     sequence: 2,
     revision: 1,
   });
-  streaming_ui.handle_event(create_assistant_message_event(streaming_message));
+  streaming_ui.handle_event(create_agent_message_event(streaming_message));
   assert.match(plain(message_list.render(80)).join("\n"), /Assistant · .* working/);
 
-  streaming_ui.handle_event(create_assistant_message_event({
+  streaming_ui.handle_event(create_agent_message_event({
     ...streaming_message,
     revision: 2,
     updated_at: 2,
@@ -364,7 +364,7 @@ test("canonical Assistant Message 的完整快照直接驱动 working 与终态"
 });
 
 test("历史 Tool Call 保留 canonical Assistant 所有权且不展示 output", () => {
-  const messages = [create_assistant_message({
+  const messages = [create_agent_message({
     message_id: "assistant-history",
     session_id: "session-history",
     turn_id: "turn-history",
@@ -415,7 +415,7 @@ test("Text → Tool → Text 保持一个 Assistant 容器和 canonical Part 顺
       text: "Inspect the build",
       state: "done",
     }],
-  }, create_assistant_message({
+  }, create_agent_message({
     message_id: "assistant-order",
     session_id: "session-order",
     turn_id: "turn-order",
@@ -478,7 +478,7 @@ test("Assistant 内 Tool Call 跟随 canonical 六态更新且不展示 JSON 与
     request_render: () => {},
   });
   streaming_ui.set_executing(true);
-  streaming_ui.handle_event(create_assistant_message_event(create_assistant_message({
+  streaming_ui.handle_event(create_agent_message_event(create_agent_message({
     message_id: "assistant-streaming-input",
     session_id: "session-1",
     turn_id: "turn-streaming-input",
@@ -760,7 +760,7 @@ test("审批 part 展示请求详情且 Esc 按安全语义拒绝", () => {
     request_render: () => {},
   });
   streaming_ui.set_executing(true);
-  streaming_ui.handle_event(create_assistant_message_event(create_assistant_message({
+  streaming_ui.handle_event(create_agent_message_event(create_agent_message({
     message_id: "assistant-1",
     session_id: "session-1",
     turn_id: "turn-1",
@@ -934,7 +934,7 @@ test("reasoning Part 与 Delta 按 canonical 顺序实时渲染", () => {
     request_render: () => {},
   });
   streaming_ui.set_executing(true);
-  streaming_ui.handle_event(create_assistant_message_event(create_assistant_message({
+  streaming_ui.handle_event(create_agent_message_event(create_agent_message({
     message_id: "assistant-reasoning",
     session_id: "session-reasoning",
     turn_id: "turn-reasoning",

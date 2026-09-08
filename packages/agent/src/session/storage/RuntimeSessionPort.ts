@@ -48,9 +48,9 @@ export interface CreateRuntimeSessionPortParams {
    */
   append_user_message: SessionPort["append_user_message"];
   /**
-   * 追加 assistant 消息到底层历史。
+   * 追加 Agent 消息到底层历史。
    */
-  append_assistant_message: SessionPort["append_assistant_message"];
+  append_agent_message: SessionPort["append_agent_message"];
   /**
    * 返回当前 session 是否正在执行。
    */
@@ -88,8 +88,8 @@ export function create_runtime_session_port(
     append_user_message: async (messageParams) => {
       await params.append_user_message(messageParams);
     },
-    append_assistant_message: async (messageParams) => {
-      await params.append_assistant_message(messageParams);
+    append_agent_message: async (message_params) => {
+      await params.append_agent_message(message_params);
     },
     is_executing: () => params.is_executing(),
   };

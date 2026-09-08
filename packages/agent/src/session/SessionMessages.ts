@@ -7,9 +7,9 @@
  */
 
 import { generate_id } from "@/utils/Id.js";
-import { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
-import { SessionAssistantMessageState } from "@/session/messages/SessionAssistantMessageState.js";
-import { SessionActionMessageWriter } from "@/session/messages/SessionActionMessageWriter.js";
+import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
+import { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
+import { SessionAgentActionPartWriter } from "@/session/messages/SessionAgentActionPartWriter.js";
 import {
   has_assistant_result_content,
   normalize_canonical_session_user_parts,
@@ -18,11 +18,11 @@ import {
 import type { JsonObject } from "@downcity/type";
 import type {
   ListSessionMessagesInput,
-  SessionActionMessage,
-  SessionAssistantInteractionPart,
-  SessionAssistantMessage,
-  SessionAssistantMessagePart,
-  SessionErrorMessage,
+  SessionAgentActionPart,
+  SessionAgentErrorPart,
+  SessionAgentInteractionPart,
+  SessionAgentMessage,
+  SessionAgentMessagePart,
   SessionMessage,
   SessionMessagePage,
   SessionUserMessage,
@@ -46,21 +46,21 @@ import type {
 import type { SessionActionEvent } from "@downcity/type";
 import { persist_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
 import type {
-  AppendCompletedAssistantMessageInput,
-  AppendExternalSessionAssistantMessageInput,
+  AppendCompletedAgentMessageInput,
+  AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
-  AppendSessionErrorMessageInput,
+  AppendSessionAgentErrorPartInput,
   AppendSessionPromptMessageInput,
   AppendSessionUserMessageInput,
-  OpenSessionActionMessageInput,
-  OpenSessionAssistantMessageInput,
+  OpenSessionAgentActionPartInput,
+  OpenSessionAgentMessageInput,
   SessionMessagesOptions,
 } from "@/types/session/SessionMessages.js";
 import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
-export { SessionAssistantMessageWriter } from "@/session/messages/SessionAssistantMessageWriter.js";
-export { SessionActionMessageWriter } from "@/session/messages/SessionActionMessageWriter.js";
+export { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
+export { SessionAgentActionPartWriter } from "@/session/messages/SessionAgentActionPartWriter.js";
 export { normalize_session_user_parts } from "@/session/messages/SessionUserMessage.js";
 
 /** 唯一 Session Message 写入服务。 */
@@ -71,7 +71,7 @@ export class SessionMessages {
   private readonly publish: SessionMessagesOptions["publish"];
   private readonly messages_by_id = new Map<string, SessionMessage>();
   /** Assistant 草稿与 Interaction 的串行状态转换器。 */
-  private readonly assistant_state: SessionAssistantMessageState;
+  private readonly agent_state: SessionAgentMessageState;
   /** 当前 Message 恢复事务；并发初始化共享同一个 Promise。 */
   private initialize_promise: Promise<void> | null = null;
 
@@ -81,7 +81,7 @@ export class SessionMessages {
     this.attachment_store = options.attachment_store;
     this.publish = options.publish;
     if (!this.session_id) throw new Error("SessionMessages requires session_id");
-    this.assistant_state = new SessionAssistantMessageState({
+    this.agent_state = new SessionAgentMessageState({
       session_id: this.session_id,
       store: this.store,
       list_messages: () => this.messages_by_id.values(),
@@ -118,13 +118,17 @@ export class SessionMessages {
     }
     const unfinished = [...this.messages_by_id.values()];
     for (const message of unfinished) {
-      if (message.type === "assistant" && message.status === "streaming") {
-        await this.complete_assistant_message(message.message_id, "stopped");
+      if (message.type === "agent" && message.status === "streaming") {
+        await this.complete_agent_message(message.message_id, "stopped");
       }
-      if (message.type === "action" && message.status === "running") {
-        await this.update_action_message(message.message_id, "failed", {
-          description: message.description || "Action interrupted before completion.",
-        });
+      if (message.type === "agent") {
+        for (const part of message.parts) {
+          if (part.type !== "action" || part.state !== "running") continue;
+          await this.update_action_part(message.message_id, "failed", {
+            description:
+              part.description || "Action interrupted before completion.",
+          });
+        }
       }
     }
   }
@@ -157,13 +161,13 @@ export class SessionMessages {
   }
 
   /** 创建可持续接收 chunk 的 Assistant Message。 */
-  async open_assistant_message(
-    input: OpenSessionAssistantMessageInput,
-  ): Promise<SessionAssistantMessageWriter> {
+  async open_agent_message(
+    input: OpenSessionAgentMessageInput,
+  ): Promise<SessionAgentMessageWriter> {
     const message = (await this.create_message((sequence, created_at) => ({
       message_id:
         String(input.message_id || "").trim() ||
-        `assistant:${this.session_id}:${generate_id()}`,
+        `agent:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
       turn_id: input.turn_id,
       sequence,
@@ -171,23 +175,23 @@ export class SessionMessages {
       visibility: input.visibility || "visible",
       created_at,
       updated_at: created_at,
-      type: "assistant",
+      type: "agent",
       kind: input.kind || "normal",
       status: "streaming",
       parts: [],
       ...(input.summary_through_message_id
         ? { summary_through_message_id: input.summary_through_message_id }
         : {}),
-    }), true)) as SessionAssistantMessage;
-    return new SessionAssistantMessageWriter(this, message.message_id);
+    }), true)) as SessionAgentMessage;
+    return new SessionAgentMessageWriter(this, message.message_id);
   }
 
   /** 直接写入一条已完成 Assistant Message。 */
-  async append_completed_assistant_message(
-    input: AppendCompletedAssistantMessageInput,
-  ): Promise<SessionAssistantMessage> {
+  async append_completed_agent_message(
+    input: AppendCompletedAgentMessageInput,
+  ): Promise<SessionAgentMessage> {
     const turn_id = input.turn_id || `external:${this.session_id}:${generate_id()}`;
-    const writer = await this.open_assistant_message({
+    const writer = await this.open_agent_message({
       turn_id,
       kind: input.kind || "normal",
       visibility: input.visibility || "visible",
@@ -197,7 +201,7 @@ export class SessionMessages {
     });
     for (const part of input.parts) await writer.upsert_part(part);
     await writer.complete();
-    return this.get_message(writer.message_id) as SessionAssistantMessage;
+    return this.get_message(writer.message_id) as SessionAgentMessage;
   }
 
   /** 把公开 Session API 的 User 输入转换为 canonical Message 并持久化。 */
@@ -219,15 +223,15 @@ export class SessionMessages {
   }
 
   /** 把公开 Session API 的 Assistant 输入转换为 canonical Message 并持久化。 */
-  async append_external_assistant_message(
-    input: AppendExternalSessionAssistantMessageInput,
+  async append_external_agent_message(
+    input: AppendExternalSessionAgentMessageInput,
   ): Promise<boolean> {
     const parts = input.parts || [{
       type: "text" as const,
       text: String(input.text || "").trim(),
     }];
     if (!has_assistant_result_content(parts)) return false;
-    const writer = await this.open_assistant_message({
+    const writer = await this.open_agent_message({
       turn_id: `external:${this.session_id}:${Date.now()}`,
     });
     await writer.append_result_parts(parts);
@@ -279,7 +283,7 @@ export class SessionMessages {
     const publish_mutation = options?.publish_mutation !== false;
     const existing = this.get_message(event.action_id);
     if (!existing) {
-      const writer = await this.open_action_message({
+      const writer = await this.open_action_part({
         message_id: event.action_id,
         turn_id: event.turn_id,
         action_type: event.action_type,
@@ -293,22 +297,23 @@ export class SessionMessages {
       }
       return;
     }
-    if (existing.type === "action" && event.status !== "running") {
-      await this.update_action_message(event.action_id, event.status, {
+    if (existing.type === "agent" && event.status !== "running") {
+      await this.update_action_part(event.action_id, event.status, {
         title: event.title,
         description: event.description,
       }, { publish_mutation });
     }
   }
 
-  /** 创建 running Action Message。 */
-  async open_action_message(
-    input: OpenSessionActionMessageInput,
-  ): Promise<SessionActionMessageWriter> {
+  /** 创建只包含 running Action Part 的 Agent Message。 */
+  async open_action_part(
+    input: OpenSessionAgentActionPartInput,
+  ): Promise<SessionAgentActionPartWriter> {
+    const message_id =
+      String(input.message_id || "").trim() ||
+      `agent-action:${this.session_id}:${generate_id()}`;
     const message = (await this.create_message((sequence, created_at) => ({
-      message_id:
-        String(input.message_id || "").trim() ||
-        `action:${this.session_id}:${generate_id()}`,
+      message_id,
       session_id: this.session_id,
       ...(input.turn_id ? { turn_id: input.turn_id } : {}),
       sequence,
@@ -316,14 +321,22 @@ export class SessionMessages {
       visibility: "visible",
       created_at,
       updated_at: created_at,
-      type: "action",
-      action_type: input.action_type,
-      status: "running",
-      title: input.title,
-      ...(input.description ? { description: input.description } : {}),
-      ...(input.data ? { data: structuredClone(input.data) } : {}),
-    }), false, input.publish_mutation !== false)) as SessionActionMessage;
-    return new SessionActionMessageWriter(
+      type: "agent",
+      kind: "normal",
+      status: "completed",
+      parts: [{
+        part_id: `action-part:${message_id}`,
+        sequence: 1,
+        type: "action",
+        action_id: message_id,
+        action_type: input.action_type,
+        state: "running",
+        title: input.title,
+        ...(input.description ? { description: input.description } : {}),
+        ...(input.data ? { data: structuredClone(input.data) } : {}),
+      }],
+    }), false, input.publish_mutation !== false)) as SessionAgentMessage;
+    return new SessionAgentActionPartWriter(
       this,
       message.message_id,
       input.publish_mutation !== false,
@@ -331,37 +344,46 @@ export class SessionMessages {
   }
 
   /** 更新 Action 状态，同时保持 message_id 与 sequence 不变。 */
-  async update_action_message(
+  async update_action_part(
     message_id: string,
     status: "running" | "completed" | "failed",
     changes?: { title?: string; description?: string; data?: JsonObject },
     options?: { publish_mutation?: boolean },
-  ): Promise<SessionActionMessage> {
+  ): Promise<SessionAgentMessage> {
     const message = await this.store.append_message((state) => {
-      const current = require_message(state.messages, message_id, "action");
+      const current = require_message(state.messages, message_id, "agent");
+      const action = current.parts.find(
+        (part): part is SessionAgentActionPart => part.type === "action",
+      );
+      if (!action) throw new Error(`Session Action Part not found: ${message_id}`);
       const created_at = Date.now();
       return {
         ...current,
-        status,
-        ...(changes?.title ? { title: changes.title } : {}),
-        ...(changes?.description !== undefined
-          ? { description: changes.description }
-          : {}),
-        ...(changes?.data ? { data: structuredClone(changes.data) } : {}),
+        parts: current.parts.map((part) => part.part_id === action.part_id
+          ? {
+              ...action,
+              state: status,
+              ...(changes?.title ? { title: changes.title } : {}),
+              ...(changes?.description !== undefined
+                ? { description: changes.description }
+                : {}),
+              ...(changes?.data ? { data: structuredClone(changes.data) } : {}),
+            }
+          : part),
         revision: current.revision + 1,
         updated_at: created_at,
-      } satisfies SessionActionMessage;
+      } satisfies SessionAgentMessage;
     });
     this.accept_message(message, options?.publish_mutation !== false);
-    return message as SessionActionMessage;
+    return message as SessionAgentMessage;
   }
 
-  /** 创建用户可见 Error Message。 */
-  async append_error_message(
-    input: AppendSessionErrorMessageInput,
-  ): Promise<SessionErrorMessage> {
+  /** 创建只包含 Error Part 的用户可见 Agent Message。 */
+  async append_error_part(
+    input: AppendSessionAgentErrorPartInput,
+  ): Promise<SessionAgentMessage> {
     return (await this.create_message((sequence, created_at) => ({
-      message_id: `error:${this.session_id}:${generate_id()}`,
+      message_id: `agent:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
       ...(input.turn_id ? { turn_id: input.turn_id } : {}),
       sequence,
@@ -369,12 +391,19 @@ export class SessionMessages {
       visibility: "visible",
       created_at,
       updated_at: created_at,
-      type: "error",
-      scope: input.scope,
-      code: input.code,
-      message: input.message,
-      recoverable: input.recoverable,
-    }))) as SessionErrorMessage;
+      type: "agent",
+      kind: "normal",
+      status: "failed",
+      parts: [{
+        part_id: `error:${generate_id()}`,
+        sequence: 1,
+        type: "error",
+        scope: input.scope,
+        code: input.code,
+        message: input.message,
+        recoverable: input.recoverable,
+      } satisfies SessionAgentErrorPart],
+    }))) as SessionAgentMessage;
   }
 
   /** 读取 Active 或指定边界之前最近的完整 Segment。 */
@@ -491,23 +520,23 @@ export class SessionMessages {
   }
 
   /** @internal 写入 Assistant 原始文本 delta。 */
-  async append_assistant_delta(
+  async append_agent_delta(
     message_id: string,
     part_id: string,
     type: "text" | "reasoning",
     delta: string,
   ): Promise<void> {
-    await this.assistant_state.append_delta(message_id, part_id, type, delta);
+    await this.agent_state.append_delta(message_id, part_id, type, delta);
   }
 
   /** @internal 写入 Assistant Tool 输入原始 delta。 */
-  async append_assistant_tool_input_delta(
+  async append_agent_tool_input_delta(
     message_id: string,
     part_id: string,
     tool_call_id: string,
     delta: string,
   ): Promise<void> {
-    await this.assistant_state.append_tool_input_delta(
+    await this.agent_state.append_tool_input_delta(
       message_id,
       part_id,
       tool_call_id,
@@ -516,28 +545,28 @@ export class SessionMessages {
   }
 
   /** @internal 写入 Assistant 完整 part。 */
-  async update_assistant_part(
+  async update_agent_part(
     message_id: string,
-    part: SessionAssistantMessagePart,
+    part: SessionAgentMessagePart,
   ): Promise<void> {
-    await this.assistant_state.update_part(message_id, part);
+    await this.agent_state.update_part(message_id, part);
   }
 
   /** @internal 原子提交当前 Assistant step 的 metadata 快照。 */
-  async commit_assistant_step(
+  async commit_agent_step(
     message_id: string,
-    parts: SessionAssistantMessagePart[],
+    parts: SessionAgentMessagePart[],
   ): Promise<void> {
-    await this.assistant_state.commit_step(message_id, parts);
+    await this.agent_state.commit_step(message_id, parts);
   }
 
   /** @internal 收口 Assistant Message。 */
-  async complete_assistant_message(
+  async complete_agent_message(
     message_id: string,
     status: "completed" | "stopped" | "failed",
     error?: string,
   ): Promise<void> {
-    await this.assistant_state.complete(message_id, status, error);
+    await this.agent_state.complete(message_id, status, error);
   }
 
   private async create_message(
@@ -547,9 +576,9 @@ export class SessionMessages {
   ): Promise<SessionMessage> {
     await this.ensure_initialized();
     if (draft) {
-      const message = await this.store.create_assistant_message((state) => {
+      const message = await this.store.create_agent_message((state) => {
         const candidate = factory(state.message_sequence, Date.now());
-        if (candidate.type !== "assistant" || candidate.status !== "streaming") {
+        if (candidate.type !== "agent" || candidate.status !== "streaming") {
           throw new Error("Draft Message must be a streaming Assistant");
         }
         return candidate;
@@ -566,27 +595,27 @@ export class SessionMessages {
 
   /** 读取当前流式 Assistant 中的指定 Tool Part。 */
   find_streaming_tool(tool_call_id: string): SessionStreamingToolLocation | undefined {
-    return this.assistant_state.find_streaming_tool(tool_call_id);
+    return this.agent_state.find_streaming_tool(tool_call_id);
   }
 
   /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
-  list_pending_interactions(): SessionAssistantInteractionPart[] {
-    return this.assistant_state.list_pending_interactions();
+  list_pending_interactions(): SessionAgentInteractionPart[] {
+    return this.agent_state.list_pending_interactions();
   }
 
   /** 原子创建 Interaction，并把关联 Tool 转为 waiting-user。 */
   async request_interaction(
     request: SessionInteractionRequest,
-  ): Promise<SessionAssistantInteractionPart> {
-    return await this.assistant_state.request_interaction(request);
+  ): Promise<SessionAgentInteractionPart> {
+    return await this.agent_state.request_interaction(request);
   }
 
   /** 原子保存用户响应，并按 Interaction 结果恢复或终止关联 Tool。 */
   async resolve_interaction(
     interaction_id: string,
     response: SessionInteractionResponse,
-  ): Promise<SessionAssistantInteractionPart> {
-    return await this.assistant_state.resolve_interaction(
+  ): Promise<SessionAgentInteractionPart> {
+    return await this.agent_state.resolve_interaction(
       interaction_id,
       response,
     );
@@ -596,8 +625,8 @@ export class SessionMessages {
   async close_interaction(
     interaction_id: string,
     input: SessionInteractionCloseInput,
-  ): Promise<SessionAssistantInteractionPart> {
-    return await this.assistant_state.close_interaction(interaction_id, input);
+  ): Promise<SessionAgentInteractionPart> {
+    return await this.agent_state.close_interaction(interaction_id, input);
   }
 
   private build_message_mutation(

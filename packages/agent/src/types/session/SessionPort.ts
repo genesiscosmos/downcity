@@ -8,7 +8,7 @@
 
 import type { ModelClient } from "@downcity/type";
 import type {
-  SessionAssistantResultPart,
+  SessionAgentResultPart,
   SessionPromptPart,
 } from "@downcity/type";
 import type { SessionExecutor } from "@/types/session/SessionExecution.js";
@@ -57,11 +57,11 @@ export interface SessionPort {
   }): Promise<void>;
 
   /**
-   * 追加一条 assistant 消息。
+   * 追加一条 Agent 消息。
    */
-  append_assistant_message(params: {
-    /** 已构造好的 Assistant 内容。 */
-    parts?: SessionAssistantResultPart[];
+  append_agent_message(params: {
+    /** 已构造好的 Agent 内容。 */
+    parts?: SessionAgentResultPart[];
     /** 未传入结构化内容时使用的文本。 */
     text?: string;
   }): Promise<void>;

@@ -14,7 +14,7 @@ export function SessionComposer(props: AgentComposerProps) {
   const session_id = selection.kind === "session" ? selection.session_id : selection.draft_id;
   const session_key = get_session_key(workspace_id, agent_id, session_id);
   const busy = use_store_selector(stores.chat_stream, state => is_chat_busy(state.chat_runtime_by_session[session_key]));
-  const has_history = use_store_selector(stores.chat_stream, state => (state.messages_by_session[session_key] ?? []).some(message => message.type === "user" || message.type === "assistant"));
+  const has_history = use_store_selector(stores.chat_stream, state => (state.messages_by_session[session_key] ?? []).some(message => message.type === "user" || message.type === "agent"));
   return <RichTextEditor {...editor} busy={busy}
     enqueue_message={input => actions.send_message(workspace_id, agent_id, session_id, input, "queue")}
     stop_session={() => actions.stop_session(workspace_id, agent_id, session_id)}

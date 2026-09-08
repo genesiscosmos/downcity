@@ -22,8 +22,8 @@ import { z } from "zod";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type {
-  SessionAssistantMessagePart,
-  SessionAssistantToolPart,
+  SessionAgentMessagePart,
+  SessionAgentToolPart,
 } from "@downcity/type";
 import { consume_model_stream } from "@/executor/model/ModelStreamConsumer.js";
 
@@ -86,7 +86,7 @@ export interface RunModelStepInput {
 /** 执行一个 Downcity 模型 Step 并收敛工具结果。 */
 export async function run_model_step(input: RunModelStepInput): Promise<{
   /** 当前 Step 的 canonical Assistant Parts。 */
-  assistant_parts: SessionAssistantMessagePart[];
+  assistant_parts: SessionAgentMessagePart[];
   /** 当前 Step 的运行结果。 */
   step_result: ModelStepResult;
 }> {
@@ -156,7 +156,7 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
 /** 模型事件聚合器。 */
 class StepEventCollector {
   private readonly model_content: ModelContent[] = [];
-  private readonly assistant_parts: SessionAssistantMessagePart[] = [];
+  private readonly assistant_parts: SessionAgentMessagePart[] = [];
   private readonly text_by_id = new Map<string, string>();
   private readonly reasoning_by_id = new Map<string, string>();
   private readonly tool_by_content_id = new Map<string, ModelStepToolCall>();
@@ -249,7 +249,7 @@ class StepEventCollector {
 
   /** 返回完整 Step 聚合结果。 */
   finish(): {
-    assistant_parts: SessionAssistantMessagePart[];
+    assistant_parts: SessionAgentMessagePart[];
     assistant_model_message: ModelMessage;
     finish_reason: ModelFinishReason;
     usage?: ModelUsage;
@@ -377,9 +377,9 @@ function to_model_json_value(value: unknown): ModelJsonValue {
 
 /** 把工具结果合并到 canonical Tool Parts。 */
 function append_tool_results(
-  parts: SessionAssistantMessagePart[],
+  parts: SessionAgentMessagePart[],
   results: ModelStepToolResult[],
-): SessionAssistantMessagePart[] {
+): SessionAgentMessagePart[] {
   if (results.length === 0) return parts;
   const result_by_id = new Map(results.map((result) => [result.tool_call_id, result]));
   return parts.map((part) => {
@@ -391,12 +391,12 @@ function append_tool_results(
           ...part,
           state: "completed",
           output: to_model_json_value(result.output),
-        } satisfies SessionAssistantToolPart
+        } satisfies SessionAgentToolPart
       : {
           ...part,
           state: "failed",
           error: read_tool_error(result.output),
-        } satisfies SessionAssistantToolPart;
+        } satisfies SessionAgentToolPart;
   });
 }
 

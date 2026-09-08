@@ -10,10 +10,10 @@
 import { generate_id } from "@/utils/Id.js";
 import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
 import type {
-  SessionAssistantInteractionPart,
-  SessionAssistantMessage,
-  SessionAssistantMessagePart,
-  SessionAssistantToolPart,
+  SessionAgentInteractionPart,
+  SessionAgentMessage,
+  SessionAgentMessagePart,
+  SessionAgentToolPart,
   SessionMessage,
 } from "@downcity/type";
 import type {
@@ -23,18 +23,18 @@ import type {
 } from "@downcity/type";
 import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
 import type { SessionMutation } from "@downcity/type";
-import type { SessionAssistantMessageStateOptions } from "@/types/session/SessionAssistantMessageState.js";
+import type { SessionAgentMessageStateOptions } from "@/types/session/SessionAgentMessageState.js";
 
 /** 管理 Assistant 草稿、Part 与 Interaction 的原子状态转换。 */
-export class SessionAssistantMessageState {
+export class SessionAgentMessageState {
   private readonly session_id: string;
-  private readonly options: SessionAssistantMessageStateOptions;
+  private readonly options: SessionAgentMessageStateOptions;
   /** 按 Assistant Message 隔离的完整写事务链。 */
   private readonly write_chains = new Map<string, Promise<void>>();
   /** Assistant Message 内 Interaction Part 的原子状态写入器。 */
   private readonly interaction_writer: SessionMessageInteractionWriter;
 
-  constructor(options: SessionAssistantMessageStateOptions) {
+  constructor(options: SessionAgentMessageStateOptions) {
     this.session_id = options.session_id;
     this.options = options;
     this.interaction_writer = new SessionMessageInteractionWriter({
@@ -65,7 +65,7 @@ export class SessionAssistantMessageState {
         throw new Error(`Delta type changed for Part: ${part_id}`);
       }
       const created_at = Date.now();
-      const message: SessionAssistantMessage = {
+      const message: SessionAgentMessage = {
         ...current,
         revision: current.revision + 1,
         updated_at: created_at,
@@ -76,7 +76,7 @@ export class SessionAssistantMessageState {
             : item,
         ),
       };
-      await this.options.store.write_assistant_message(message);
+      await this.options.store.write_agent_message(message);
       this.options.accept_mutation({
         mutation_id: generate_id(),
         variant: "delta",
@@ -113,7 +113,7 @@ export class SessionAssistantMessageState {
         throw new Error(`Tool input Delta cannot update ${part.state} Part: ${part_id}`);
       }
       const created_at = Date.now();
-      const message: SessionAssistantMessage = {
+      const message: SessionAgentMessage = {
         ...current,
         revision: current.revision + 1,
         updated_at: created_at,
@@ -123,7 +123,7 @@ export class SessionAssistantMessageState {
             : item,
         ),
       };
-      await this.options.store.write_assistant_message(message);
+      await this.options.store.write_agent_message(message);
       this.options.accept_mutation({
         mutation_id: generate_id(),
         variant: "delta",
@@ -143,7 +143,7 @@ export class SessionAssistantMessageState {
   /** 提交一个完整 canonical Assistant Part。 */
   async update_part(
     message_id: string,
-    part: SessionAssistantMessagePart,
+    part: SessionAgentMessagePart,
   ): Promise<void> {
     await this.enqueue_write(message_id, async () => {
       const current = this.require_streaming_assistant(message_id);
@@ -153,7 +153,7 @@ export class SessionAssistantMessageState {
       }
       const created_at = Date.now();
       const next_part = structuredClone(part);
-      const message: SessionAssistantMessage = {
+      const message: SessionAgentMessage = {
         ...current,
         revision: current.revision + 1,
         updated_at: created_at,
@@ -163,7 +163,7 @@ export class SessionAssistantMessageState {
           : [...current.parts, next_part]
         ).sort((left, right) => left.sequence - right.sequence),
       };
-      await this.options.store.write_assistant_message(message);
+      await this.options.store.write_agent_message(message);
       this.options.accept_mutation({
         mutation_id: generate_id(),
         variant: "part",
@@ -182,7 +182,7 @@ export class SessionAssistantMessageState {
   /** 原子提交当前 Assistant step 的 metadata 快照。 */
   async commit_step(
     message_id: string,
-    parts: SessionAssistantMessagePart[],
+    parts: SessionAgentMessagePart[],
   ): Promise<void> {
     await this.enqueue_write(message_id, async () => {
       const current = this.require_streaming_assistant(message_id);
@@ -197,13 +197,13 @@ export class SessionAssistantMessageState {
           `Assistant step changed canonical Part identity: ${message_id}`,
         );
       }
-      const message: SessionAssistantMessage = {
+      const message: SessionAgentMessage = {
         ...current,
         revision: current.revision + 1,
         updated_at: Date.now(),
         parts: structuredClone(parts),
       };
-      await this.options.store.write_assistant_message(message);
+      await this.options.store.write_agent_message(message);
       this.options.accept_message(message);
     });
   }
@@ -219,7 +219,7 @@ export class SessionAssistantMessageState {
       const created_at = Date.now();
       const interrupted_interactions = status === "stopped"
         ? current.parts.filter(
-            (part): part is SessionAssistantInteractionPart =>
+            (part): part is SessionAgentInteractionPart =>
               part.type === "interaction" && part.status === "pending",
           )
         : [];
@@ -230,7 +230,7 @@ export class SessionAssistantMessageState {
             : [],
         ),
       );
-      const message: SessionAssistantMessage = {
+      const message: SessionAgentMessage = {
         ...current,
         revision: current.revision + 1,
         status,
@@ -266,7 +266,7 @@ export class SessionAssistantMessageState {
           return part;
         }),
       };
-      await this.options.store.finalize_assistant_message(message);
+      await this.options.store.finalize_agent_message(message);
       this.options.accept_message(message);
     });
   }
@@ -276,9 +276,9 @@ export class SessionAssistantMessageState {
     tool_call_id: string,
   ): SessionStreamingToolLocation | undefined {
     for (const message of this.options.list_messages()) {
-      if (message.type !== "assistant" || message.status !== "streaming") continue;
+      if (message.type !== "agent" || message.status !== "streaming") continue;
       const part = message.parts.find(
-        (item): item is SessionAssistantToolPart =>
+        (item): item is SessionAgentToolPart =>
           item.type === "tool" && item.tool_call_id === tool_call_id,
       );
       if (part) return { message_id: message.message_id, part };
@@ -287,14 +287,14 @@ export class SessionAssistantMessageState {
   }
 
   /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
-  list_pending_interactions(): SessionAssistantInteractionPart[] {
+  list_pending_interactions(): SessionAgentInteractionPart[] {
     return this.interaction_writer.list_pending();
   }
 
   /** 原子创建 Interaction，并把关联 Tool 转为 waiting-user。 */
   async request_interaction(
     request: SessionInteractionRequest,
-  ): Promise<SessionAssistantInteractionPart> {
+  ): Promise<SessionAgentInteractionPart> {
     return await this.interaction_writer.request(request);
   }
 
@@ -302,7 +302,7 @@ export class SessionAssistantMessageState {
   async resolve_interaction(
     interaction_id: string,
     response: SessionInteractionResponse,
-  ): Promise<SessionAssistantInteractionPart> {
+  ): Promise<SessionAgentInteractionPart> {
     return await this.interaction_writer.resolve(interaction_id, response);
   }
 
@@ -310,7 +310,7 @@ export class SessionAssistantMessageState {
   async close_interaction(
     interaction_id: string,
     input: SessionInteractionCloseInput,
-  ): Promise<SessionAssistantInteractionPart> {
+  ): Promise<SessionAgentInteractionPart> {
     return await this.interaction_writer.close(interaction_id, input);
   }
 
@@ -334,11 +334,11 @@ export class SessionAssistantMessageState {
 
   /** 原子提交包含多个 Part 状态变化的 Assistant 完整快照。 */
   private async commit_snapshot(
-    current: SessionAssistantMessage,
-    parts: SessionAssistantMessagePart[],
+    current: SessionAgentMessage,
+    parts: SessionAgentMessagePart[],
   ): Promise<void> {
     const created_at = Date.now();
-    const message: SessionAssistantMessage = {
+    const message: SessionAgentMessage = {
       ...current,
       revision: current.revision + 1,
       updated_at: created_at,
@@ -346,7 +346,7 @@ export class SessionAssistantMessageState {
         (left, right) => left.sequence - right.sequence,
       ),
     };
-    await this.options.store.write_assistant_message(message);
+    await this.options.store.write_agent_message(message);
     const current_by_id = new Map(
       current.parts.map((part) => [part.part_id, part]),
     );
@@ -377,11 +377,11 @@ export class SessionAssistantMessageState {
   /** 读取指定的流式 Assistant Message，否则抛出稳定领域错误。 */
   private require_streaming_assistant(
     message_id: string,
-  ): SessionAssistantMessage {
+  ): SessionAgentMessage {
     const message = [...this.options.list_messages()].find(
       (item) => item.message_id === message_id,
     );
-    if (!message || message.type !== "assistant") {
+    if (!message || message.type !== "agent") {
       throw new Error(`Session assistant Message not found: ${message_id}`);
     }
     if (message.status !== "streaming") {

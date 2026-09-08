@@ -1,11 +1,11 @@
 /**
  * CoreEngine Tool Loop 的纯信号与诊断模块。
  *
- * 所有消息判断都直接读取 canonical `SessionAssistantMessagePart`，不依赖 UI 投影。
+ * 所有消息判断都直接读取 canonical `SessionAgentMessagePart`，不依赖 UI 投影。
  */
 
 import type { JsonObject } from "@downcity/type";
-import type { SessionAssistantMessagePart } from "@downcity/type";
+import type { SessionAgentMessagePart } from "@downcity/type";
 
 /** 单次 Tool Loop 允许的最大 Step 数。 */
 export const MAX_TOOL_LOOP_STEPS = 64;
@@ -60,7 +60,7 @@ export function summarize_step_for_debug(step_result: unknown): JsonObject {
 
 /** 汇总最终 canonical Assistant Parts。 */
 export function summarize_assistant_parts_for_debug(
-  parts: readonly SessionAssistantMessagePart[],
+  parts: readonly SessionAgentMessagePart[],
 ): JsonObject {
   const text = extract_assistant_text(parts);
   const tool_names = parts
@@ -79,9 +79,9 @@ export function summarize_assistant_parts_for_debug(
 
 /** 按 Step 顺序合并 canonical Assistant Parts。 */
 export function merge_assistant_parts(
-  base: readonly SessionAssistantMessagePart[],
-  incoming: readonly SessionAssistantMessagePart[],
-): SessionAssistantMessagePart[] {
+  base: readonly SessionAgentMessagePart[],
+  incoming: readonly SessionAgentMessagePart[],
+): SessionAgentMessagePart[] {
   return [...base, ...incoming].map((part, index) => ({
     ...part,
     sequence: index + 1,
@@ -90,7 +90,7 @@ export function merge_assistant_parts(
 
 /** 从 canonical Assistant Parts 提取用户可见文本。 */
 export function extract_assistant_text(
-  parts: readonly SessionAssistantMessagePart[],
+  parts: readonly SessionAgentMessagePart[],
 ): string {
   const chat_send = [...parts].reverse().find(
     (part) => part.type === "tool" && part.tool_name === "chat_send",
@@ -124,7 +124,7 @@ export function detect_incomplete_response(input: {
   /** 当前 Step 结果。 */
   step_result: unknown;
   /** 当前 Step canonical Assistant Parts。 */
-  assistant_parts: readonly SessionAssistantMessagePart[];
+  assistant_parts: readonly SessionAgentMessagePart[];
 }): { reason: string; details: JsonObject } | null {
   const record = to_json_object(input.step_result) ?? {};
   const finish_reason = typeof record.finish_reason === "string"
@@ -132,7 +132,7 @@ export function detect_incomplete_response(input: {
     : "";
   const text = typeof record.text === "string" ? record.text.trim() : "";
   const incomplete_tools = input.assistant_parts
-    .filter((part): part is Extract<SessionAssistantMessagePart, { type: "tool" }> =>
+    .filter((part): part is Extract<SessionAgentMessagePart, { type: "tool" }> =>
       part.type === "tool" &&
       part.state !== "completed" &&
       part.state !== "failed"

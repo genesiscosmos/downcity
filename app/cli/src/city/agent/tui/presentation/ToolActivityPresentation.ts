@@ -5,7 +5,7 @@
  * output、error、metadata 与完整 JSON 永远不会进入展示模型。
  */
 
-import type { SessionAssistantToolPart } from "@downcity/agent";
+import type { SessionAgentToolPart } from "@downcity/agent";
 
 import type {
   ToolActivityField,
@@ -15,7 +15,7 @@ import type {
 
 /** 把 canonical Tool Part 转换为与终端渲染框架无关的展示信息。 */
 export function present_tool_activity(
-  part: SessionAssistantToolPart,
+  part: SessionAgentToolPart,
 ): ToolActivityPresentation {
   return {
     tool_name: String(part.tool_name || "unknown_tool"),
@@ -26,7 +26,7 @@ export function present_tool_activity(
 }
 
 /** 根据 canonical 六态提供稳定的用户可读状态。 */
-function resolve_state_label(state: SessionAssistantToolPart["state"]): string {
+function resolve_state_label(state: SessionAgentToolPart["state"]): string {
   switch (state) {
     case "input-streaming":
       return "Preparing input";
@@ -45,7 +45,7 @@ function resolve_state_label(state: SessionAssistantToolPart["state"]): string {
 
 /** 根据 canonical 状态选择终端语义颜色。 */
 function resolve_state_tone(
-  state: SessionAssistantToolPart["state"],
+  state: SessionAgentToolPart["state"],
 ): ToolActivityTone {
   switch (state) {
     case "waiting-user":
@@ -60,7 +60,7 @@ function resolve_state_tone(
 }
 
 /** 按 Tool 语义提取少量、有字段名的基础调用输入。 */
-function resolve_tool_fields(part: SessionAssistantToolPart): ToolActivityField[] {
+function resolve_tool_fields(part: SessionAgentToolPart): ToolActivityField[] {
   const input = as_record(part.input);
   const tool_name = part.tool_name.toLowerCase();
 

@@ -194,7 +194,7 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
     });
 
     const assistant_parts = messages.items.flatMap((message) =>
-      message.type === "assistant" ? message.parts : []
+      message.type === "agent" ? message.parts : []
     );
     const tool_part = assistant_parts.find(
       (part) => part.type === "tool" && part.tool_call_id === "call_ask_question",

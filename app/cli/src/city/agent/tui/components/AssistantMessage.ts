@@ -15,7 +15,7 @@ import {
 } from "@/city/agent/tui/constant/rendering.js";
 import { current_theme } from "@/city/agent/tui/theme/index.js";
 import { createMarkdownTheme } from "@/city/agent/tui/theme/pi-tui-theme.js";
-import type { SessionAssistantMessage } from "@downcity/agent";
+import type { SessionAgentMessage } from "@downcity/agent";
 
 /** 缓存一个文本类 Part 的 Markdown 组件及其源文本。 */
 interface TextPartView {
@@ -27,18 +27,18 @@ interface TextPartView {
 
 /** 渲染并原位更新一条 Assistant Message。 */
 export class AssistantMessageComponent implements Component {
-  private message: SessionAssistantMessage;
+  private message: SessionAgentMessage;
   private readonly text_views = new Map<string, TextPartView>();
   private readonly tool_views = new Map<string, ToolActivityComponent>();
 
   /** @param message 初次渲染的 canonical Assistant Message 快照。 */
-  constructor(message: SessionAssistantMessage) {
+  constructor(message: SessionAgentMessage) {
     this.message = structuredClone(message);
     this.synchronize_part_views();
   }
 
   /** 使用最新 canonical Assistant Message 快照原位更新角色容器。 */
-  update_message(message: SessionAssistantMessage): void {
+  update_message(message: SessionAgentMessage): void {
     this.message = structuredClone(message);
     this.synchronize_part_views();
   }
@@ -55,7 +55,7 @@ export class AssistantMessageComponent implements Component {
     if (safe_width <= 0) return [""];
 
     const visible_parts = this.message.parts.filter((part) => {
-      if (part.type === "tool") return true;
+      if (part.type === "tool" || part.type === "action" || part.type === "error") return true;
       return (
         (part.type === "text" || part.type === "reasoning") &&
         part.text.trim().length > 0
@@ -97,7 +97,14 @@ export class AssistantMessageComponent implements Component {
       if (part.type === "tool") {
         const view = this.tool_views.get(part.part_id);
         if (view) lines.push(...view.render(safe_width));
+        continue;
       }
+      if (part.type === "action") {
+        const detail = [part.title, part.description].filter(Boolean).join(" · ");
+        lines.push(MESSAGE_INDENT + current_theme.dim_fg(part.state === "failed" ? "error" : "textDim", detail));
+        continue;
+      }
+      if (part.type === "error") lines.push(MESSAGE_INDENT + current_theme.fg("error", part.message));
     }
 
     return lines.map((line) => truncateToWidth(line, safe_width, "…"));

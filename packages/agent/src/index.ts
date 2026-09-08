@@ -102,16 +102,16 @@ export type {
 } from "./types/agent/SessionTypes.js";
 export type {
   ListSessionMessagesInput,
-  SessionActionMessage,
-  SessionAssistantDataPart,
-  SessionAssistantFilePart,
-  SessionAssistantInteractionPart,
-  SessionAssistantMessage,
-  SessionAssistantMessagePart,
-  SessionAssistantReasoningPart,
-  SessionAssistantTextPart,
-  SessionAssistantToolPart,
-  SessionErrorMessage,
+  SessionAgentActionPart,
+  SessionAgentDataPart,
+  SessionAgentFilePart,
+  SessionAgentInteractionPart,
+  SessionAgentMessage,
+  SessionAgentMessagePart,
+  SessionAgentReasoningPart,
+  SessionAgentTextPart,
+  SessionAgentToolPart,
+  SessionAgentErrorPart,
   SessionMessage,
   SessionMessagePage,
   SessionUserDataPart,
@@ -207,7 +207,7 @@ export type { AgentSessionPromptInput } from "./types/sdk/AgentSessionPrompt.js"
 export { is_agent_session_prompt_input_empty } from "./types/sdk/AgentSessionPrompt.js";
 export type {
   SessionPromptPart,
-  SessionAssistantResultPart,
+  SessionAgentResultPart,
   SessionTextInputPart,
   SessionContextInputPart,
   SessionFileInputPart,
@@ -233,14 +233,14 @@ export { Executor } from "./executor/Executor.js";
 export { DefaultSessionComposer } from "./session/DefaultSessionComposer.js";
 export { SessionMessages } from "./session/SessionMessages.js";
 export type {
-  AppendCompletedAssistantMessageInput,
-  AppendExternalSessionAssistantMessageInput,
+  AppendCompletedAgentMessageInput,
+  AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
-  AppendSessionErrorMessageInput,
+  AppendSessionAgentErrorPartInput,
   AppendSessionPromptMessageInput,
   AppendSessionUserMessageInput,
-  OpenSessionActionMessageInput,
-  OpenSessionAssistantMessageInput,
+  OpenSessionAgentActionPartInput,
+  OpenSessionAgentMessageInput,
   SessionMessagesOptions,
 } from "./types/session/SessionMessages.js";
 export type {

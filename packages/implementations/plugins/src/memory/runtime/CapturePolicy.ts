@@ -25,7 +25,7 @@ export function select_memory_capture_messages(
 ): MemoryCaptureMessage[] {
   if (input.status !== "completed" || !Array.isArray(input.messages)) return [];
   const messages = input.messages.flatMap((message) => {
-    if (message.type !== "user" && message.type !== "assistant") return [];
+    if (message.type !== "user" && message.type !== "agent") return [];
     const text = message.parts
       .flatMap((part) => part.type === "text" ? [String(part.text || "").trim()] : [])
       .filter(Boolean)

@@ -42,7 +42,7 @@ export async function relocate_fork_message_files(
 ): Promise<SessionMessage[]> {
   const relocated_urls = new Map<string, Promise<string>>();
   return await Promise.all(messages.map(async (message) => {
-    if (message.type !== "user" && message.type !== "assistant") return structuredClone(message);
+    if (message.type !== "user" && message.type !== "agent") return structuredClone(message);
     const parts = await Promise.all(message.parts.map(async (part) => {
       if (part.type !== "file") return structuredClone(part);
       if (!part.url.startsWith("data:") && (!path.isAbsolute(part.url) || !source_store.owns_local_file(part.url))) {

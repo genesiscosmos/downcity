@@ -135,14 +135,14 @@ export function get_agent_session_active_messages_path(
 }
 
 /** 返回单个 Session 的运行中 Assistant 快照路径。 */
-export function get_agent_session_assistant_message_path(
+export function get_agent_session_agent_message_path(
   storage_root_path: string,
   origin_type: string,
   session_id: string,
 ): string {
   return path.join(
     get_agent_session_messages_path(storage_root_path, origin_type, session_id),
-    "assistant_message.json",
+    "agent_message.json",
   );
 }
 

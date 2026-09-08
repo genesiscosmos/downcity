@@ -46,5 +46,5 @@ export interface JsonlSessionMessageStoreOptions {
   /** Active JSONL 文件的绝对路径。 */
   file_path: string;
   /** Assistant 运行中快照的可选绝对路径。 */
-  assistant_message_file_path?: string;
+  agent_message_file_path?: string;
 }

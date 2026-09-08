@@ -112,7 +112,7 @@ Local state lives under the Agent-specific Workspace scope in the user-level Dow
 │  ├─ meta.json
 │  └─ messages/
 │     ├─ active.jsonl
-│     ├─ assistant_message.json
+│     ├─ agent_message.json
 │     └─ segments/*.jsonl
 ├─ archived-sessions/
 ├─ logs/
@@ -121,7 +121,7 @@ Local state lives under the Agent-specific Workspace scope in the user-level Dow
 ```
 
 - `active.jsonl` stores history since the last compaction.
-- `assistant_message.json` stores the latest complete streaming Assistant draft.
+- `agent_message.json` stores the latest complete streaming Assistant draft.
 - `segments` stores immutable compacted history prefixes.
 - `instruction.md` stores an explicitly persisted System Snapshot.
 

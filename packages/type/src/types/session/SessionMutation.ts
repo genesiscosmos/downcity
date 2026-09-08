@@ -4,7 +4,7 @@
  * Mutation 描述订阅之后发生的状态变化，不等同于 Active/Segment 持久化格式。
  */
 
-import type { SessionAssistantMessagePart, SessionMessage } from "./SessionMessage.js";
+import type { SessionAgentMessagePart, SessionMessage } from "./SessionMessage.js";
 import type { SessionCompactReason } from "./SessionCompact.js";
 import type { ModelErrorCode } from "../model/ModelError.js";
 import type { ModelRequestKind } from "../model/ModelRequest.js";
@@ -38,9 +38,9 @@ export type SessionMessageMutation = {
   };
 }[SessionMessage["type"]];
 
-/** Assistant Part 创建或完整快照更新 Mutation。 */
+/** Agent Part 创建或完整快照更新 Mutation。 */
 export type SessionPartMutation = {
-  [TType in SessionAssistantMessagePart["type"]]: SessionMutationBase & {
+  [TType in SessionAgentMessagePart["type"]]: SessionMutationBase & {
     /** Mutation 层级固定为 part。 */
     variant: "part";
     /** 当前完整 Part 类型。 */
@@ -54,11 +54,11 @@ export type SessionPartMutation = {
     /** 当前被创建或更新的 Part 标识。 */
     part_id: string;
     /** 创建或更新后的完整 Part 快照。 */
-    part: SessionAssistantMessagePart & { type: TType };
+    part: SessionAgentMessagePart & { type: TType };
   };
-}[SessionAssistantMessagePart["type"]];
+}[SessionAgentMessagePart["type"]];
 
-/** Assistant Part 原始增量 Mutation 的公共字段。 */
+/** Agent Part 原始增量 Mutation 的公共字段。 */
 interface SessionDeltaMutationBase extends SessionMutationBase {
   /** Mutation 层级固定为 delta。 */
   variant: "delta";

@@ -8,7 +8,7 @@
 
 import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import type {
-  SessionAssistantMessage,
+  SessionAgentMessage,
   SessionMessage,
 } from "@downcity/type";
 import type {
@@ -63,19 +63,19 @@ export interface SessionMessageStore {
   /** 计算当前 Active Message 之前的读取边界。 */
   active_before_sequence(messages: SessionMessage[]): Promise<number | undefined>;
   /** 读取当前运行中的 Assistant 草稿。 */
-  read_assistant_message(): Promise<SessionAssistantMessage | null>;
+  read_agent_message(): Promise<SessionAgentMessage | null>;
   /** 原子覆盖当前运行中的 Assistant 草稿。 */
-  write_assistant_message(message: SessionAssistantMessage): Promise<void>;
+  write_agent_message(message: SessionAgentMessage): Promise<void>;
   /** 在存储事务中创建唯一 Assistant 草稿。 */
-  create_assistant_message(
-    build_message: (state: SessionMessageCommitState) => SessionAssistantMessage,
-  ): Promise<SessionAssistantMessage>;
+  create_agent_message(
+    build_message: (state: SessionMessageCommitState) => SessionAgentMessage,
+  ): Promise<SessionAgentMessage>;
   /** 在存储事务中追加一条 Message。 */
   append_message(
     build_message: (state: SessionMessageCommitState) => SessionMessage,
   ): Promise<SessionMessage>;
   /** 提交最终 Assistant Message 并删除运行中草稿。 */
-  finalize_assistant_message(message: SessionAssistantMessage): Promise<void>;
+  finalize_agent_message(message: SessionAgentMessage): Promise<void>;
   /** 将 Active 前缀压缩为不可变历史分段。 */
   compact_active(input: CompactActiveMessagesInput): Promise<CompactActiveMessagesResult>;
   /** 读取全部历史分段的 sequence 索引。 */

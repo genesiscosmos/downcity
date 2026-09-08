@@ -128,13 +128,13 @@ export async function load_session_messages_from_path(
     }
   }
 
-  const inflight_path = path.join(path.dirname(filePath), "assistant_message.json");
+  const inflight_path = path.join(path.dirname(filePath), "agent_message.json");
   if (await files.path_exists(inflight_path)) {
     try {
       const message = JSON.parse(
         (await files.read_file(inflight_path)).toString("utf8"),
       ) as SessionMessage;
-      if (is_canonical_session_message(message) && message.type === "assistant") {
+      if (is_canonical_session_message(message) && message.type === "agent") {
         messages_by_id.set(message.message_id, message);
       }
     } catch {
@@ -154,15 +154,12 @@ function is_canonical_session_message(input: unknown): input is SessionMessage {
     typeof candidate.session_id === "string" &&
     typeof candidate.sequence === "number" &&
     typeof candidate.revision === "number" &&
-    (candidate.type === "user" ||
-      candidate.type === "assistant" ||
-      candidate.type === "action" ||
-      candidate.type === "error")
+    (candidate.type === "user" || candidate.type === "agent")
   );
 }
 
 function is_compact_summary_message(message: SessionMessage): boolean {
-  return message.type === "assistant" && message.kind === "summary";
+  return message.type === "agent" && message.kind === "summary";
 }
 
 function filter_user_visible_history_messages(
@@ -242,7 +239,7 @@ async function resolve_session_summary_metadata(input: {
     input.files,
   );
   const history_bytes = storage_stats.history_bytes;
-  const inflight_path = path.join(path.dirname(input.messagesPath), "assistant_message.json");
+  const inflight_path = path.join(path.dirname(input.messagesPath), "agent_message.json");
   const has_inflight = await input.files.path_exists(inflight_path);
   if (
     !input.refresh &&
@@ -316,7 +313,7 @@ async function resolve_session_disk_stats(
       // 单行损坏不阻断 Session 列表，其正文读取时会按既有规则忽略。
     }
   }
-  const inflight_path = path.join(messages_dir_path, "assistant_message.json");
+  const inflight_path = path.join(messages_dir_path, "agent_message.json");
   try {
     const inflight = JSON.parse(
       (await files.read_file(inflight_path)).toString("utf8"),

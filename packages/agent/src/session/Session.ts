@@ -66,7 +66,7 @@ import { ensure_session_title } from "@/session/SessionTitle.js";
 import type { SessionActionEventInput } from "@downcity/type";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type {
-  AppendExternalSessionAssistantMessageInput,
+  AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
 } from "@/types/session/SessionMessages.js";
 import { SessionComposition } from "@/session/SessionComposition.js";
@@ -468,12 +468,12 @@ export class Session implements AgentSession {
   }
 
   /**
-   * 追加一条 assistant 文本消息。
+   * 追加一条 Agent 文本消息。
    */
-  async append_assistant_message(input: {
+  async append_agent_message(input: {
     text: string;
   }): Promise<void> {
-    await this.append_external_assistant_message({
+    await this.append_external_agent_message({
       text: String(input.text || "").trim(),
     });
   }
@@ -608,8 +608,8 @@ export class Session implements AgentSession {
       subscribe: (subscriber) => this.subscribe(subscriber),
       append_user_message: async (message_params) =>
         await this.append_external_user_message(message_params),
-      append_assistant_message: async (message_params) =>
-        await this.append_external_assistant_message(message_params),
+      append_agent_message: async (message_params) =>
+        await this.append_external_agent_message(message_params),
       is_executing: () => this.is_executing(),
       context: async () => await this.session_messages.context_snapshot(),
       ensure_ready_for_execution: async () => {
@@ -804,10 +804,10 @@ export class Session implements AgentSession {
   }
 
   /** 追加外部 Assistant Message，并统一提交 Metadata。 */
-  private async append_external_assistant_message(
-    input: AppendExternalSessionAssistantMessageInput,
+  private async append_external_agent_message(
+    input: AppendExternalSessionAgentMessageInput,
   ): Promise<void> {
-    const appended = await this.session_messages.append_external_assistant_message(
+    const appended = await this.session_messages.append_external_agent_message(
       input,
     );
     if (appended) await this.state.touch_metadata();

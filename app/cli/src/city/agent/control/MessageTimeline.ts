@@ -46,7 +46,7 @@ function to_message_event(input: {
     id: `${input.message.message_id}:${String(input.sequence)}`,
     role: input.role,
     ts: input.message.updated_at,
-    ...(input.message.type === "assistant" ? { kind: input.message.kind } : {}),
+    ...(input.message.type === "agent" ? { kind: input.message.kind } : {}),
     text: input.text,
     ...(input.tool_name ? { tool_name: input.tool_name } : {}),
   };
@@ -54,15 +54,15 @@ function to_message_event(input: {
 
 /** 读取一条 canonical Message 的用户可见预览。 */
 export function resolve_message_preview(message: SessionMessage): string {
-  if (message.type === "action") {
-    return message.description
-      ? `${message.title}\n${message.description}`
-      : message.title;
-  }
-  if (message.type === "error") return message.message;
-  if (message.type === "assistant") {
+  if (message.type === "agent") {
     const visible_text = resolve_session_assistant_visible_text(message);
     if (visible_text) return visible_text;
+    for (const part of message.parts) {
+      if (part.type === "action") {
+        return part.description ? `${part.title}\n${part.description}` : part.title;
+      }
+      if (part.type === "error") return part.message;
+    }
     const tool_names = [...new Set(
       message.parts.flatMap((part) => part.type === "tool" ? [part.tool_name] : []),
     )];
@@ -73,25 +73,6 @@ export function resolve_message_preview(message: SessionMessage): string {
 
 /** 把一条 canonical Message 展开为 Control 时间线。 */
 export function to_message_timeline(message: SessionMessage): ControlTimelineEvent[] {
-  if (message.type === "action") {
-    return [{
-      id: `${message.message_id}:0`,
-      role: "action",
-      ts: message.updated_at,
-      text: resolve_message_preview(message),
-      action_title: message.title,
-      ...(message.description ? { action_description: message.description } : {}),
-      action_state: message.status,
-    }];
-  }
-  if (message.type === "error") {
-    return [to_message_event({
-      message,
-      role: "assistant",
-      text: message.message,
-      sequence: 0,
-    })];
-  }
   if (message.type === "user") {
     return [to_message_event({
       message,
@@ -131,6 +112,23 @@ export function to_message_timeline(message: SessionMessage): ControlTimelineEve
           tool_name: part.tool_name,
         }));
       }
+    } else if (part.type === "action") {
+      events.push({
+        id: `${message.message_id}:${String(events.length)}`,
+        role: "action",
+        ts: message.updated_at,
+        text: part.description ? `${part.title}\n${part.description}` : part.title,
+        action_title: part.title,
+        ...(part.description ? { action_description: part.description } : {}),
+        action_state: part.state,
+      });
+    } else if (part.type === "error") {
+      events.push(to_message_event({
+        message,
+        role: "assistant",
+        text: part.message,
+        sequence: events.length,
+      }));
     }
   }
   if (events.length === 0) {
@@ -175,8 +173,5 @@ function is_session_message(input: unknown): input is SessionMessage {
   return typeof candidate.message_id === "string" &&
     typeof candidate.sequence === "number" &&
     typeof candidate.revision === "number" &&
-    (candidate.type === "user" ||
-      candidate.type === "assistant" ||
-      candidate.type === "action" ||
-      candidate.type === "error");
+    (candidate.type === "user" || candidate.type === "agent");
 }

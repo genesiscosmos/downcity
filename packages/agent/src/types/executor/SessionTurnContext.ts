@@ -10,7 +10,7 @@
 import type { RuntimeToolEffect } from "@downcity/type";
 import type { ShellApprovalGateway } from "@downcity/type";
 import type { SessionUserMessage } from "@downcity/type";
-import type { SessionAssistantResultPart } from "@downcity/type";
+import type { SessionAgentResultPart } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type { SessionHookContext } from "@downcity/type";
 import type { SessionHookScopeRuntime } from "@downcity/type";
@@ -169,10 +169,10 @@ export interface SessionTurnContext {
     readonly assistant?: SessionAssistantOutput;
 
     /** 把 Action 产生的 Assistant Parts 加入当前 Step 收口队列。 */
-    enqueue_assistant_parts(parts: readonly SessionAssistantResultPart[]): void;
+    enqueue_assistant_parts(parts: readonly SessionAgentResultPart[]): void;
 
     /** 消费当前 Step 中等待写入 canonical Assistant Message 的 Parts。 */
-    take_assistant_parts(): SessionAssistantResultPart[];
+    take_assistant_parts(): SessionAgentResultPart[];
 
     /** 发布一条不进入 LLM 输入的 Session Action。 */
     publish_action(event: AgentSessionActionEvent): Promise<void>;

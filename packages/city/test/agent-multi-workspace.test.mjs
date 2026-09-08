@@ -97,7 +97,7 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
         execute: async ({ context }) => {
           const linked_session = await context.agent.sessions.get(linked_session_id);
           const task_session = await context.agent.sessions.create();
-          await context.agent.sessions.runtime(linked_session_id).append_assistant_message({
+          await context.agent.sessions.runtime(linked_session_id).append_agent_message({
             text: "task completed",
           });
           return {
@@ -155,12 +155,12 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
       direct_workspace_id: "plugin-session-workspace",
     });
     const messages = await linked_session.messages();
-    assert.equal(messages.items.at(-1)?.type, "assistant");
+    assert.equal(messages.items.at(-1)?.type, "agent");
     assert.equal(messages.items.at(-1)?.parts.at(-1)?.type, "text");
     assert.equal(messages.items.at(-1)?.parts.at(-1)?.text, "task completed");
     assert.equal(
       mutations.some((mutation) =>
-        mutation.variant === "message" && mutation.type === "assistant"
+        mutation.variant === "message" && mutation.type === "agent"
       ),
       true,
     );

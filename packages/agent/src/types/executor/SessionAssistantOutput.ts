@@ -5,8 +5,8 @@
  */
 
 import type { ModelStreamEvent } from "@downcity/type";
-import type { SessionAssistantResultPart } from "@downcity/type";
-import type { SessionAssistantMessagePart } from "@downcity/type";
+import type { SessionAgentResultPart } from "@downcity/type";
+import type { SessionAgentMessagePart } from "@downcity/type";
 import type {
   SessionToolExecutionResult,
   SessionToolInputReady,
@@ -23,13 +23,13 @@ export interface SessionAssistantOutput {
   /** 写入 Tool 执行终态。 */
   write_tool_result(result: SessionToolExecutionResult): Promise<void>;
   /** 使用模型流聚合出的 canonical Parts 校验当前 Step。 */
-  finish_step(parts: SessionAssistantMessagePart[]): Promise<void>;
+  finish_step(parts: SessionAgentMessagePart[]): Promise<void>;
   /** 放弃当前未完成 Step 的临时作用域。 */
   abort_step(): Promise<void>;
   /** User steer 插入前关闭当前连续 Assistant Message。 */
   close_current_message(): Promise<void>;
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
-  append_result_parts(parts: readonly SessionAssistantResultPart[]): Promise<void>;
+  append_result_parts(parts: readonly SessionAgentResultPart[]): Promise<void>;
   /** 按 Turn 最终结果收口 Assistant 输出。 */
   finish(input: {
     /** Assistant 最终状态。 */
