@@ -12,8 +12,8 @@ import type { ShellApprovalGateway } from "@downcity/type";
 import type { SessionUserMessage } from "@downcity/type";
 import type { SessionAssistantResultPart } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
-import type { SessionHookContext } from "@/types/session/SessionHook.js";
-import type { SessionHookScope } from "@/session/SessionHooks.js";
+import type { SessionHookContext } from "@downcity/type";
+import type { SessionHookScopeRuntime } from "@downcity/type";
 import type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
@@ -21,7 +21,7 @@ import type {
 } from "@/types/sdk/AgentSessionAction.js";
 import type { SessionInteractionPort } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
-import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
+import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelRequestFailureNotice } from "@downcity/type";
 
 /**
@@ -113,7 +113,7 @@ export interface SessionTurnContext {
     readonly agent_systems: readonly string[];
 
     /** 当前 Step 持有的稳定 Hook 作用域。 */
-    readonly hooks?: SessionHookScope;
+    readonly hooks?: SessionHookScopeRuntime;
 
     /** 当前 Turn 首次解析后冻结的 Plugin 动态上下文。 */
     readonly plugin_context_blocks: readonly SessionHookContextBlock[];
@@ -128,7 +128,7 @@ export interface SessionTurnContext {
     }): void;
 
     /** 切换当前 Step 的 Hook 作用域，并先关闭前一个作用域。 */
-    replace_hooks(hooks?: SessionHookScope): Promise<void>;
+    replace_hooks(hooks?: SessionHookScopeRuntime): Promise<void>;
 
     /** 首次调用时解析并冻结动态上下文，后续 Step 与重试复用同一快照。 */
     resolve_plugin_context_blocks(

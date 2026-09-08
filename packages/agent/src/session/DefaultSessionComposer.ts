@@ -15,7 +15,7 @@ import type {
   SessionComposeInput,
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
-import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
+import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelMessage } from "@downcity/type";
 
 /** 把低权限 Plugin 内容渲染为与用户原文分离的模型参考区。 */

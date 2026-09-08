@@ -21,9 +21,9 @@ import type {
   SessionHookContextBlock,
   SessionSystemContextHookValue,
   SessionTurnContextHookValue,
-} from "@/types/session/SessionHook.js";
+} from "@downcity/type";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
-import type { SessionHooks } from "@/session/SessionHooks.js";
+import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionCompositionOptions } from "@/types/session/SessionComposition.js";
 import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
@@ -262,7 +262,7 @@ export class SessionComposition {
 
   /** 通过 pipeline point 解析 Plugin 追加的命名 system blocks。 */
   private async resolve_plugin_system_context(
-    hooks: SessionHooks | NonNullable<SessionTurnContext["step"]["hooks"]>,
+    hooks: SessionHookRuntime | NonNullable<SessionTurnContext["step"]["hooks"]>,
     blocks: readonly AgentSessionSystemBlock[],
     turn_id?: string,
   ): Promise<AgentSessionSystemBlock[]> {

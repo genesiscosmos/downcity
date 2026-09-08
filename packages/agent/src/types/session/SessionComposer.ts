@@ -10,7 +10,7 @@ import type { RuntimeTool as Tool } from "@downcity/type";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionContextSnapshot, SessionSegmentSummary } from "@/types/session/SessionSegment.js";
-import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
+import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
 
 /** Composer 可读取的 Session 身份快照。 */

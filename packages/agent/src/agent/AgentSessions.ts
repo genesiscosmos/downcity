@@ -30,7 +30,7 @@ import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { Session } from "@/session/Session.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
-import type { SessionHooks } from "@/session/SessionHooks.js";
+import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { WorkspaceRuntime } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
@@ -54,7 +54,7 @@ type AgentSessionsOptions = {
     logger: Logger;
     get_tools: () => Record<string, Tool>;
     get_workspace_env: () => Record<string, string>;
-    get_hooks: () => SessionHooks;
+    get_hooks: () => SessionHookRuntime;
     store: SessionStore;
   };
 

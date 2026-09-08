@@ -21,3 +21,4 @@ export type {
   SessionSystemBlock,
   SessionSystemBlockSource,
 } from "./types/session/SessionSystem.js";
+export type * from "./types/session/SessionHook.js";

@@ -8,7 +8,7 @@
 
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import { transform_prompts_into_system_messages } from "@executor/composer/system/default/PromptRenderer.js";
-import type { SessionHooks } from "@/session/SessionHooks.js";
+import type { SessionHookRuntime } from "@downcity/type";
 import { build_runtime_clock_system_prompt } from "@executor/composer/system/default/variables/VariableReplacer.js";
 import {
   CORE_SYSTEM_PROMPT,
@@ -150,7 +150,7 @@ export async function load_plugin_system_prompts(input: {
   /**
    * 当前执行上下文。
    */
-  hooks: SessionHooks;
+  hooks: SessionHookRuntime;
 
   /**
    * 当前轮禁用的 Plugin 名称集合。
@@ -283,7 +283,7 @@ export async function resolve_session_system_messages(input: {
   /**
    * 当前执行上下文。
    */
-  hooks: SessionHooks;
+  hooks: SessionHookRuntime;
 
 }): Promise<SessionSystemMessage[]> {
   const profile = resolve_system_context_profile(input.profile);

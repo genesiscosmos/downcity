@@ -13,6 +13,7 @@ export type {
   AgentOptions,
   GroupOptions,
 } from "@downcity/agent";
+export type { CityRuntime } from "@downcity/type";
 export type { RemoteAgentOptions } from "./types/remote/RemoteAgentOptions.js";
 export {
   LocalFileSystem,

@@ -64,6 +64,7 @@ For a live UI, load initial Session and Message snapshots before calling `subscr
 
 Use these capabilities only when building plugins, servers, or custom runtime components:
 
+- `CityRuntime` from `@downcity/type`: the minimal cross-package City contract used when embedding Agent in a custom composition root. The concrete `City` already implements it.
 - `PluginContext`: the restricted City projection for the current Agent/Workspace/Session/Turn, exported by `@downcity/city/plugin`.
 - `SessionTurnContext`: the execution context that coordinates identity, lifecycle, steps, input, and output for one Turn; plugins receive only its read-only `PluginExecutionContext` projection.
 - `create_session_turn_context(...)`: the standard factory used by custom executors or runtime components to create that Turn Context.

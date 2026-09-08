@@ -5,22 +5,24 @@
  * 组合根可以注入处理函数，并在 open() 时为单个 Step 捕获稳定作用域。
  */
 
-import type { JsonValue } from "@downcity/type";
-import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type {
+  JsonValue,
   SessionHookContext,
   SessionHookHandlers,
-} from "@/types/session/SessionHook.js";
+  SessionHookRuntime,
+  SessionHookScopeRuntime,
+  SessionSystemBlock,
+} from "@downcity/type";
 
 /** 单个 Session Step 捕获的稳定 Hook 作用域。 */
-export class SessionHookScope {
+export class SessionHookScope implements SessionHookScopeRuntime {
   /** 当前作用域是否已经关闭。 */
   private closed = false;
 
   constructor(private readonly handlers: SessionHookHandlers = {}) {}
 
   /** 读取当前作用域提供的 system blocks。 */
-  async system_blocks(context?: SessionHookContext): Promise<AgentSessionSystemBlock[]> {
+  async system_blocks(context?: SessionHookContext): Promise<SessionSystemBlock[]> {
     return await this.handlers.system_blocks?.(context) ?? [];
   }
 
@@ -45,11 +47,11 @@ export class SessionHookScope {
 }
 
 /** Session 级 Hook 集合。 */
-export class SessionHooks {
+export class SessionHooks implements SessionHookRuntime {
   constructor(private readonly handlers: SessionHookHandlers = {}) {}
 
   /** 读取当前配置提供的 system blocks。 */
-  async system_blocks(context?: SessionHookContext): Promise<AgentSessionSystemBlock[]> {
+  async system_blocks(context?: SessionHookContext): Promise<SessionSystemBlock[]> {
     return await this.handlers.system_blocks?.(context) ?? [];
   }
 

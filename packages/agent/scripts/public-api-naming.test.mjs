@@ -67,6 +67,13 @@ test("Agent SDK root exports do not expose camelCase functions", () => {
   assert.deepEqual([...new Set(camel_function_exports)], []);
 });
 
+test("Agent SDK does not expose a separate attachment concept", () => {
+  const file_path = path.join(package_root, "bin", "index.d.ts");
+  const content = strip_comments(fs.readFileSync(file_path, "utf8"));
+
+  assert.doesNotMatch(content, /AgentAttachment/u);
+});
+
 test("Agent non-root module exports use snake_case function names", () => {
   const source_root = path.join(package_root, "src");
   const failures = [];

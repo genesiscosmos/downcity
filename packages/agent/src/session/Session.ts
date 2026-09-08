@@ -49,7 +49,7 @@ import { SessionQueue } from "@/session/SessionQueue.js";
 import { SessionCommand } from "@/session/SessionCommand.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
-import type { SessionHooks } from "@/session/SessionHooks.js";
+import type { SessionHookRuntime } from "@downcity/type";
 import { SessionInteractions } from "@/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "@/session/execution/tools/SessionShellApprovalAdapter.js";
 import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";

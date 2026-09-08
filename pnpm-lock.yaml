@@ -603,6 +603,9 @@ importers:
       '@downcity/city':
         specifier: workspace:^
         version: link:../../city
+      '@downcity/type':
+        specifier: workspace:*
+        version: link:../../type
       commander:
         specifier: ^15.0.0
         version: 15.0.0

@@ -48,7 +48,7 @@ import {
   build_session_turn_file_diff_summary,
 } from "@/session/messages/SessionTurnFileDiffBuilder.js";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
-import type { SessionTurnCommittedHookValue } from "@/types/session/SessionHook.js";
+import type { SessionTurnCommittedHookValue } from "@downcity/type";
 import type { JsonValue } from "@downcity/type";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 

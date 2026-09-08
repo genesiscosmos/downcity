@@ -11,6 +11,7 @@ import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
 import type { CityPlugins } from "@/city/types/CityPlugin.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
+import type { CityRuntime, RuntimeTool, SessionHookRuntime } from "@downcity/type";
 import { MemoryStorageProvider } from "@/workspace/index.js";
 import { CityHTTP } from "@/city/transport/http/CityHTTP.js";
 import { CityRPC } from "@/city/transport/rpc/CityRPC.js";
@@ -25,7 +26,7 @@ import type {
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 
 /** Agent 实例索引与 transport 宿主。 */
-export class City {
+export class City implements CityRuntime {
   /** City 持有的底层 Storage；默认是进程内存储。 */
   readonly storage: StorageProvider;
 
@@ -161,6 +162,47 @@ export class City {
     }
   }
 
+  /** 等待当前 City 中 Agent 执行依赖的 Plugin 生命周期稳定。 */
+  async ensure_ready(): Promise<void> {
+    await this.plugin_runtime.ensure_ready();
+  }
+
+  /** 返回当前 Agent/Workspace 在一个执行检查点可见的 City Tool。 */
+  get_session_tools(
+    agent_id: string,
+    workspace: WorkspaceRuntime,
+  ): Record<string, RuntimeTool> {
+    const agent = this.require_agent_workspace(agent_id, workspace);
+    return this.plugin_runtime.tools(agent, workspace, agent.get_logger());
+  }
+
+  /** 返回当前 Agent/Workspace 在一个执行检查点可见的 Session Hook。 */
+  get_session_hooks(
+    agent_id: string,
+    workspace: WorkspaceRuntime,
+  ): SessionHookRuntime {
+    const agent = this.require_agent_workspace(agent_id, workspace);
+    return this.plugin_runtime.hooks(agent, workspace, agent.get_logger());
+  }
+
+  /** Agent 主动释放时清除 City 持有的运行时引用。 */
+  async release_agent(agent: { readonly id: string }): Promise<void> {
+    const agent_id = String(agent.id || "").trim();
+    const current = this.agents_by_id.get(agent_id);
+    if (!current || current !== agent) return;
+    const errors: unknown[] = [];
+    current.detach(this);
+    this.agents_by_id.delete(agent_id);
+    try {
+      await this.http_transport.detach_agent(agent_id);
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, `Agent release failed: ${agent_id}`);
+    }
+  }
+
   /** 按稳定 ID 获取 City 管理的 Group。 */
   private get_group(group_id_input: string): Group | null {
     return this.groups_by_id.get(String(group_id_input || "").trim()) ?? null;
@@ -241,6 +283,16 @@ export class City {
     const workspace = this.get_workspace(workspace_id);
     if (!workspace) throw new Error(`Workspace not found in City: ${workspace_id}`);
     return workspace;
+  }
+
+  /** 校验 Agent 与具体 Workspace 实例均属于当前 City。 */
+  private require_agent_workspace(agent_id: string, workspace: WorkspaceRuntime): Agent {
+    const agent = this.require_agent(agent_id);
+    const workspace_id = String(workspace?.id || "").trim();
+    if (!workspace_id || this.get_workspace(workspace_id) !== workspace) {
+      throw new Error(`Workspace not found in City: ${workspace_id}`);
+    }
+    return agent;
   }
 
   /** 按需解析 Workspace；同一 ID 的并发请求共享一次创建流程。 */
@@ -426,34 +478,9 @@ export class City {
     if (this.agents_by_id.has(agent.id) || this.removing_agent_ids.has(agent.id)) {
       throw new Error(`Agent already exists in City: ${agent.id}`);
     }
-    agent.attach({
-      owner: this,
-      storage: this.storage,
-      get_workspace: (workspace_id) => this.get_workspace(workspace_id),
-      ensure_ready: async () => await this.plugin_runtime.ensure_ready(),
-      get_tools: (workspace, logger) => this.plugin_runtime.tools(agent, workspace, logger),
-      get_hooks: (workspace, logger) => this.plugin_runtime.hooks(agent, workspace, logger),
-      release_agent: async (current) => await this.release_agent(current),
-    });
+    agent.attach(this);
     this.agents_by_id.set(agent.id, agent);
     return agent;
-  }
-
-  /** Agent 自行释放时清除 City 运行时引用。 */
-  private async release_agent(agent: { readonly id: string }): Promise<void> {
-    const current = this.agents_by_id.get(agent.id);
-    if (!current || current !== agent) return;
-    const errors: unknown[] = [];
-    current.detach(this);
-    this.agents_by_id.delete(agent.id);
-    try {
-      await this.http_transport.detach_agent(agent.id);
-    } catch (error) {
-      errors.push(error);
-    }
-    if (errors.length > 0) {
-      throw new AggregateError(errors, `Agent release failed: ${agent.id}`);
-    }
   }
 
   /** 释放 Group 全部资源并解除其 City Storage 所有权。 */

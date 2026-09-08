@@ -21,7 +21,7 @@ import type {
 } from "@/types/session/SessionExecution.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
-import type { SessionHooks } from "@/session/SessionHooks.js";
+import type { SessionHookRuntime } from "@downcity/type";
 import { is_action_result } from "@/types/action/ActionResult.js";
 import { generate_id } from "@/utils/Id.js";
 import {
@@ -70,7 +70,7 @@ type ExecutorOptions = {
   logger: Logger;
 
   /** 创建当前 Session effective City 扩展执行视图。 */
-  get_hooks?: () => SessionHooks;
+  get_hooks?: () => SessionHookRuntime;
 };
 
 /**

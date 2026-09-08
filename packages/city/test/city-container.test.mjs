@@ -64,7 +64,7 @@ test("City 删除 Workspace 前释放全部 Agent 执行作用域", async () => 
     assert.equal(city.workspaces.get(workspace.id), null);
     await assert.rejects(
       agent.sessions.create({ workspace }),
-      /does not belong to the Agent host/u,
+      /does not belong to the Agent City/u,
     );
   } finally {
     await city.close();
@@ -94,7 +94,7 @@ test("City 删除 Workspace 期间拒绝返回旧执行作用域", async () => {
     try {
       await assert.rejects(
         agent.sessions.create({ workspace }),
-        /does not belong to the Agent host/u,
+        /does not belong to the Agent City/u,
       );
     } finally {
       finish_leave();

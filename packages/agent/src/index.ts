@@ -74,7 +74,7 @@ export type {
   SessionSystemContextHookValue,
   SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
-} from "./types/session/SessionHook.js";
+} from "@downcity/type";
 export type {
   AgentArchiveSessionInput,
   AgentArchiveSessionsInput,
@@ -186,7 +186,6 @@ export type {
   AgentOptions,
   AgentSessionConstructor,
 } from "./types/agent/AgentOptions.js";
-export type { AgentAttachment } from "./types/agent/AgentAttachment.js";
 export type {
   AgentCreateSessionOptions,
   AgentSessionCollection,

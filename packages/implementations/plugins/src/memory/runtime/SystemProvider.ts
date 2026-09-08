@@ -7,7 +7,7 @@
  * - Dynamic Recall 通过 `session.turn_context` pipeline 进入 User 模型副本。
  */
 
-import type { SessionHookContextBlock } from "@downcity/agent";
+import type { SessionHookContextBlock } from "@downcity/type";
 import type {
   MemoryProvider,
   MemoryRecallItem,

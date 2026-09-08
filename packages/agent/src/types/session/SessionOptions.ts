@@ -11,7 +11,7 @@ import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionHooks } from "@/session/SessionHooks.js";
+import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
@@ -114,7 +114,7 @@ export interface SessionOptions {
   get_workspace_env: () => Record<string, string>;
 
   /** 创建当前 City configured extension 的 Session Step 执行视图。 */
-  get_hooks: () => SessionHooks;
+  get_hooks: () => SessionHookRuntime;
 
   /** 读取当前 Agent 显式注入的受托管 Plugin system blocks。 */
   get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;

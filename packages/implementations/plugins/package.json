@@ -67,6 +67,7 @@
   "dependencies": {
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
+    "@downcity/type": "workspace:*",
     "commander": "^15.0.0",
     "execa": "^9.6.1",
     "fs-extra": "^11.3.5",

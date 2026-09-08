@@ -10,7 +10,7 @@ import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionOrigin } from "@downcity/type";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { SessionMessages } from "@/session/SessionMessages.js";
-import type { SessionHooks } from "@/session/SessionHooks.js";
+import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 
@@ -37,7 +37,7 @@ export interface SessionCompositionOptions {
   /** 显式 syncshot 时读取 Agent 最新 instruction system blocks。 */
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
   /** 显式 syncshot 时读取当前配置的 Hook 执行视图。 */
-  get_hooks: () => SessionHooks;
+  get_hooks: () => SessionHookRuntime;
   /** 在每个 Step 检查点读取 Workspace env。 */
   get_workspace_env: () => Record<string, string>;
   /** 读取宿主显式注入的受托管 Plugin system blocks。 */

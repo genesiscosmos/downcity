@@ -14,11 +14,11 @@ import type {
   SessionTurnContext,
   SessionTurnContextInit,
 } from "@/types/executor/SessionTurnContext.js";
-import type { SessionHookContext } from "@/types/session/SessionHook.js";
-import type { SessionHookScope } from "@/session/SessionHooks.js";
+import type { SessionHookContext } from "@downcity/type";
+import type { SessionHookScopeRuntime } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
 import { normalize_session_origin } from "@downcity/type";
-import type { SessionHookContextBlock } from "@/types/session/SessionHook.js";
+import type { SessionHookContextBlock } from "@downcity/type";
 
 /** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */
 export interface CreateSessionHookContextInput {
@@ -46,7 +46,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private disposed = false;
   private workspace_env_snapshot?: Readonly<Record<string, string>>;
   private agent_systems_snapshot: readonly string[] = Object.freeze([]);
-  private hook_scope?: SessionHookScope;
+  private hook_scope?: SessionHookScopeRuntime;
   /** 整个 Turn 共享的 Plugin 动态上下文，不随 Step lease 切换而失效。 */
   private plugin_context_blocks_snapshot: readonly SessionHookContextBlock[] = Object.freeze([]);
   /** 并发或重复解析时复用的唯一 Promise。 */
