@@ -118,36 +118,42 @@ export class SessionState {
    * 初始化当前 session metadata 与内存快照。
    */
   async initialize(): Promise<void> {
-    if (this.state.initialize_promise) {
-      await this.state.initialize_promise;
-      return;
+    if (!this.state.initialize_promise) {
+      this.state.initialize_promise = (async () => {
+        const metadata = await this.store.read_metadata();
+        const created_at =
+          typeof metadata.created_at === "number" ? metadata.created_at : Date.now();
+        const timezone =
+          typeof metadata.timezone === "string" && metadata.timezone.trim()
+            ? metadata.timezone.trim()
+            : resolve_system_timezone();
+        await this.store.write_metadata({
+          ...metadata,
+          agent_id: this.agent_id,
+          created_at: created_at,
+          timezone,
+          origin: this.origin,
+        });
+        this.state.created_at = created_at;
+        this.state.timezone = timezone;
+        this.state.session_config = {
+          ...(metadata.model_label ? { model_label: metadata.model_label } : {}),
+        };
+        this.state.effective_session_config = {
+          ...this.state.session_config,
+        };
+        this.state.configured_approval_mode = metadata.approval_mode || "ask";
+      })();
     }
-    this.state.initialize_promise = (async () => {
-      const metadata = await this.store.read_metadata();
-      const created_at =
-        typeof metadata.created_at === "number" ? metadata.created_at : Date.now();
-      const timezone =
-        typeof metadata.timezone === "string" && metadata.timezone.trim()
-          ? metadata.timezone.trim()
-          : resolve_system_timezone();
-      await this.store.write_metadata({
-        ...metadata,
-        agent_id: this.agent_id,
-        created_at: created_at,
-        timezone,
-        origin: this.origin,
-      });
-      this.state.created_at = created_at;
-      this.state.timezone = timezone;
-      this.state.session_config = {
-        ...(metadata.model_label ? { model_label: metadata.model_label } : {}),
-      };
-      this.state.effective_session_config = {
-        ...this.state.session_config,
-      };
-      this.state.configured_approval_mode = metadata.approval_mode || "ask";
-    })();
-    await this.state.initialize_promise;
+    const initialize_promise = this.state.initialize_promise;
+    try {
+      await initialize_promise;
+    } catch (error) {
+      if (this.state.initialize_promise === initialize_promise) {
+        this.state.initialize_promise = null;
+      }
+      throw error;
+    }
   }
 
   /**

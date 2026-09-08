@@ -234,7 +234,15 @@ export class Session implements AgentSession {
         );
       })();
     }
-    await this.initialize_promise;
+    const initialize_promise = this.initialize_promise;
+    try {
+      await initialize_promise;
+    } catch (error) {
+      if (this.initialize_promise === initialize_promise) {
+        this.initialize_promise = null;
+      }
+      throw error;
+    }
     return this;
   }
 
