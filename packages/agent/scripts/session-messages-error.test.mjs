@@ -54,3 +54,45 @@ test("open_assistant_message 透传草稿写入失败", async () => {
     /disk full/,
   );
 });
+
+test("SessionMessages 并发初始化只执行一次 Store 恢复", async () => {
+  let initialize_count = 0;
+  let list_count = 0;
+  let release_initialize;
+  const initialize_gate = new Promise((resolve) => {
+    release_initialize = resolve;
+  });
+  const messages = create_messages({
+    initialize: async () => {
+      initialize_count += 1;
+      await initialize_gate;
+    },
+    list_messages: async () => {
+      list_count += 1;
+      return [];
+    },
+  });
+
+  const first = messages.initialize();
+  const second = messages.initialize();
+  await Promise.resolve();
+  assert.equal(initialize_count, 1);
+
+  release_initialize();
+  await Promise.all([first, second]);
+  assert.equal(list_count, 1);
+});
+
+test("SessionMessages 初始化失败后允许重试", async () => {
+  let initialize_count = 0;
+  const messages = create_messages({
+    initialize: async () => {
+      initialize_count += 1;
+      if (initialize_count === 1) throw new Error("restore failed");
+    },
+  });
+
+  await assert.rejects(messages.initialize(), /restore failed/);
+  await messages.initialize();
+  assert.equal(initialize_count, 2);
+});

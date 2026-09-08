@@ -64,8 +64,11 @@ import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
 import { ensure_session_title } from "@/session/SessionTitle.js";
 import type { SessionActionEventInput } from "@downcity/type";
-import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type {
+  AppendExternalSessionAssistantMessageInput,
+  AppendExternalSessionUserMessageInput,
+} from "@/types/session/SessionMessages.js";
 import { SessionComposition } from "@/session/SessionComposition.js";
 import {
   relocate_fork_message_files,
@@ -159,7 +162,7 @@ export class Session implements AgentSession {
       session_id: this.id,
       interactions: this.session_interactions,
     });
-    this.local_state = this.create_local_state();
+    this.local_state = create_session_local_state();
     this.session_composition = new SessionComposition({
       agent_id: this.agent_id,
       session_id: this.id,
@@ -333,7 +336,7 @@ export class Session implements AgentSession {
           publish_mutation,
         }
       : undefined;
-    this.enqueue_command({
+    this.session_loop.enqueue_command({
       kind: "maintenance",
       execute: async () => {
         if (model_result) this.state.apply_model_config(model_result.config);
@@ -396,7 +399,7 @@ export class Session implements AgentSession {
         });
       },
     });
-    this.enqueue_command({
+    this.session_loop.enqueue_command({
       kind: "maintenance",
       execute: operation.execute,
     });
@@ -410,11 +413,6 @@ export class Session implements AgentSession {
       created_at: Date.now(),
     });
     return operation.handle;
-  }
-
-  /** 创建一个具体 Session Command 对象并加入当前 FIFO。 */
-  private enqueue_command(options: SessionCommandOptions): void {
-    this.session_loop.enqueue_command(options);
   }
 
   /**
@@ -456,12 +454,9 @@ export class Session implements AgentSession {
   async append_user_message(input: {
     text: string;
   }): Promise<void> {
-    const appended = await this.session_messages.append_external_user_message({
+    await this.append_external_user_message({
       text: String(input.text || "").trim(),
     });
-    if (!appended) return;
-    this.state.touch_metadata_in_background();
-    this.state.schedule_title_generation();
   }
 
   /**
@@ -470,10 +465,9 @@ export class Session implements AgentSession {
   async append_assistant_message(input: {
     text: string;
   }): Promise<void> {
-    const appended = await this.session_messages.append_external_assistant_message({
+    await this.append_external_assistant_message({
       text: String(input.text || "").trim(),
     });
-    if (appended) await this.state.touch_metadata();
   }
 
   /**
@@ -604,21 +598,10 @@ export class Session implements AgentSession {
       prompt: async (input) => await this.prompt(input),
       stop: async () => await this.stop(),
       subscribe: (subscriber) => this.subscribe(subscriber),
-      append_user_message: async (message_params) => {
-        const appended = await this.session_messages.append_external_user_message(
-          message_params,
-        );
-        if (!appended) return;
-        this.state.touch_metadata_in_background();
-        this.state.schedule_title_generation();
-      },
-      append_assistant_message: async (message_params) => {
-        const appended = await this.session_messages.append_external_assistant_message({
-          parts: message_params.parts,
-          text: message_params.text,
-        });
-        if (appended) await this.state.touch_metadata();
-      },
+      append_user_message: async (message_params) =>
+        await this.append_external_user_message(message_params),
+      append_assistant_message: async (message_params) =>
+        await this.append_external_assistant_message(message_params),
       is_executing: () => this.is_executing(),
       context: async () => await this.session_messages.context_snapshot(),
       ensure_ready_for_execution: async () => {
@@ -676,10 +659,6 @@ export class Session implements AgentSession {
       options: SessionOptions,
     ) => Session;
     return new session_class(options) as this;
-  }
-
-  private create_local_state(): SessionLocalState {
-    return create_session_local_state();
   }
 
   /** 创建只依赖统一 Composer 的 Turn Executor。 */
@@ -802,6 +781,28 @@ export class Session implements AgentSession {
       this.local_state.session_config.model_context_window ||
       read_model_context_window(this.get_selected_model())
     );
+  }
+
+  /** 追加外部 User Message，并统一触发 Metadata 与标题更新。 */
+  private async append_external_user_message(
+    input: AppendExternalSessionUserMessageInput,
+  ): Promise<void> {
+    const appended = await this.session_messages.append_external_user_message(
+      input,
+    );
+    if (!appended) return;
+    this.state.touch_metadata_in_background();
+    this.state.schedule_title_generation();
+  }
+
+  /** 追加外部 Assistant Message，并统一提交 Metadata。 */
+  private async append_external_assistant_message(
+    input: AppendExternalSessionAssistantMessageInput,
+  ): Promise<void> {
+    const appended = await this.session_messages.append_external_assistant_message(
+      input,
+    );
+    if (appended) await this.state.touch_metadata();
   }
 
   /** 持久化并发布一条 canonical Action Message。 */

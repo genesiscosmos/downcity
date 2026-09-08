@@ -72,7 +72,8 @@ export class SessionMessages {
   private readonly messages_by_id = new Map<string, SessionMessage>();
   /** Assistant 草稿与 Interaction 的串行状态转换器。 */
   private readonly assistant_state: SessionAssistantMessageState;
-  private initialized = false;
+  /** 当前 Message 恢复事务；并发初始化共享同一个 Promise。 */
+  private initialize_promise: Promise<void> | null = null;
 
   constructor(options: SessionMessagesOptions) {
     this.session_id = String(options.session_id || "").trim();
@@ -93,12 +94,28 @@ export class SessionMessages {
 
   /** 恢复已有 Message，并收口进程中断遗留的运行状态。 */
   async initialize(): Promise<void> {
-    if (this.initialized) return;
+    if (!this.initialize_promise) {
+      this.initialize_promise = this.restore_messages();
+    }
+    const initialize_promise = this.initialize_promise;
+    try {
+      await initialize_promise;
+    } catch (error) {
+      if (this.initialize_promise === initialize_promise) {
+        this.initialize_promise = null;
+      }
+      throw error;
+    }
+  }
+
+  /** 执行一次完整恢复，并收口进程中断遗留的运行状态。 */
+  private async restore_messages(): Promise<void> {
     await this.store.initialize();
-    for (const message of await this.store.list_messages()) {
+    const persisted_messages = await this.store.list_messages();
+    this.messages_by_id.clear();
+    for (const message of persisted_messages) {
       this.messages_by_id.set(message.message_id, message);
     }
-    this.initialized = true;
     const unfinished = [...this.messages_by_id.values()];
     for (const message of unfinished) {
       if (message.type === "assistant" && message.status === "streaming") {
@@ -614,7 +631,7 @@ export class SessionMessages {
   }
 
   private async ensure_initialized(): Promise<void> {
-    if (!this.initialized) await this.initialize();
+    await this.initialize();
   }
 
 }
