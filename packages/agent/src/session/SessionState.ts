@@ -31,6 +31,19 @@ import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import type { SessionApprovalMode } from "@downcity/type";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 
+/** 创建单个 Session 唯一的可变内存状态。 */
+export function create_session_local_state(): SessionLocalState {
+  return {
+    session_config: {},
+    effective_session_config: {},
+    configured_approval_mode: "ask",
+    created_at: Date.now(),
+    timezone: resolve_system_timezone(),
+    initialize_promise: null,
+    ensure_configured_promise: null,
+  };
+}
+
 /** Session 模型配置写入结果。 */
 export interface SessionModelSetResult {
   /** 已包含最新运行时模型实例的 configured 快照。 */

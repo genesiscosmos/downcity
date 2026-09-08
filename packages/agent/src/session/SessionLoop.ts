@@ -8,7 +8,7 @@
  */
 
 import { nanoid } from "nanoid";
-import type { SessionMessage, SessionUserMessage } from "@downcity/type";
+import type { SessionUserMessage } from "@downcity/type";
 import type { SessionActionEvent } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
@@ -33,7 +33,6 @@ import type {
   SessionInteractionPort,
 } from "@downcity/type";
 import { SessionAssistantOutputAdapter } from "@/session/execution/SessionAssistantOutputAdapter.js";
-import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
 import type {
   ActiveSessionTurnState,
@@ -44,15 +43,16 @@ import type {
   SessionCommand,
   SessionCommandCompletion,
 } from "@/types/session/SessionCommand.js";
-import { SESSION_TURN_FILE_DIFF_DATA_TYPE } from "@/session/messages/SessionTurnFileDiffData.js";
-import {
-  build_session_turn_file_diff,
-  build_session_turn_file_diff_summary,
-} from "@/session/messages/SessionTurnFileDiffBuilder.js";
-import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
-import type { SessionTurnCommittedHookValue } from "@downcity/type";
-import type { JsonValue } from "@downcity/type";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
+import {
+  complete_session_turn,
+  fail_session_turn,
+} from "@/session/runtime/SessionTurnCompletion.js";
+import {
+  append_session_turn_file_diff,
+  publish_session_turn_file_diff,
+} from "@/session/runtime/SessionTurnFileDiff.js";
+import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
@@ -388,7 +388,13 @@ export class SessionLoop {
         active_turn,
         prompt_input: input,
       });
-      await this.finish_active_turn(active_turn, result);
+      const final_result = await complete_session_turn(
+        this.turn_completion_options(),
+        active_turn,
+        result,
+      );
+      if (this.active_turn === active_turn) this.active_turn = null;
+      active_turn.deferred_finished.resolve(final_result);
     } catch (error) {
       // 持久化失败时仍兑现句柄，让调用方可以观察到失败的 Turn，而不是永久等待。
       if (!handle_resolved) deferred_handle.resolve(create_turn_handle(active_turn));
@@ -402,89 +408,18 @@ export class SessionLoop {
     throw new Error("Session Command requires an active Turn");
   }
 
-  /** 用 Executor 结果结束当前 Active Turn。 */
-  private async finish_active_turn(
-    active_turn: ActiveSessionTurnState,
-    result: SessionTurnExecutionResult,
-  ): Promise<void> {
-    const stopped = active_turn.turn_context?.lifecycle.abort_signal.aborted === true;
-    const final_result: AgentSessionTurnResult = {
-      turn_id: active_turn.turn_id,
-      text: result.text,
-      success: stopped ? false : result.success,
-      ...(stopped
-        ? { error: TURN_STOPPED_MESSAGE }
-        : result.error ? { error: result.error } : {}),
-    };
-    active_turn.result = final_result;
-    this.events.publish({
-      mutation_id: nanoid(),
-      variant: "turn",
-      type: "finish",
-      session_id: this.session_id,
-      turn_id: active_turn.turn_id,
-      status: stopped ? "stopped" : final_result.success ? "completed" : "failed",
-      created_at: Date.now(),
-      text: final_result.text,
-      ...(final_result.error ? { error: final_result.error } : {}),
-    });
-    await this.notify_turn_committed(
-      active_turn,
-      stopped ? "stopped" : final_result.success ? "completed" : "failed",
-    );
-    await this.dispose_turn_context(active_turn);
-    active_turn.deferred_finished.resolve(final_result);
-    if (this.active_turn === active_turn) this.active_turn = null;
-  }
-
   /** 以失败结果结束当前 Active Turn，并尽力持久化 Error Message。 */
   private async fail_active_turn(
     active_turn: ActiveSessionTurnState,
     error: unknown,
   ): Promise<void> {
-    if (active_turn.result) return;
-    const stopped = active_turn.turn_context?.lifecycle.abort_signal.aborted === true;
-    const message = stopped
-      ? TURN_STOPPED_MESSAGE
-      : error instanceof Error ? error.message : String(error);
-    const final_result: AgentSessionTurnResult = {
-      turn_id: active_turn.turn_id,
-      text: "",
-      success: false,
-      error: message,
-    };
-    active_turn.result = final_result;
-    if (message !== TURN_STOPPED_MESSAGE) {
-      try {
-        await this.messages.append_error_message({
-          scope: "turn",
-          turn_id: active_turn.turn_id,
-          code: "turn_execution_failed",
-          message,
-          recoverable: true,
-        });
-      } catch {
-        // Error Message 写入失败不能阻止 Turn Handle 收口。
-      }
-    }
-    this.events.publish({
-      mutation_id: nanoid(),
-      variant: "turn",
-      type: "finish",
-      session_id: this.session_id,
-      turn_id: active_turn.turn_id,
-      status: stopped ? "stopped" : "failed",
-      created_at: Date.now(),
-      text: "",
-      error: message,
-    });
-    await this.notify_turn_committed(
+    const final_result = await fail_session_turn(
+      this.turn_completion_options(),
       active_turn,
-      stopped ? "stopped" : "failed",
+      error,
     );
-    await this.dispose_turn_context(active_turn);
-    active_turn.deferred_finished.resolve(final_result);
     if (this.active_turn === active_turn) this.active_turn = null;
+    active_turn.deferred_finished.resolve(final_result);
   }
 
   /** 为一条尚未执行的 Prompt 创建可观测取消结果。 */
@@ -552,31 +487,41 @@ export class SessionLoop {
         turn_context,
       });
     } catch (error) {
-      await this.append_turn_file_diff(
-        input.active_turn.turn_id,
+      await append_session_turn_file_diff({
+        session_id: this.session_id,
+        turn_id: input.active_turn.turn_id,
+        workspace_path: this.workspace_path,
         turn_context,
         assistant_output,
-      );
+        logger: this.logger,
+      });
       try {
         await assistant_output.finish({
           status: turn_context.lifecycle.abort_signal.aborted ? "stopped" : "failed",
           error: error instanceof Error ? error.message : String(error),
         });
       } catch (finish_error) {
-        await this.log_file_diff_warning(
-          input.active_turn.turn_id,
-          "failed to close Assistant output after execution error",
-          finish_error,
-        );
+        try {
+          await this.logger.log("warn", "[agent] failed to close Assistant output after execution error", {
+            session_id: this.session_id,
+            turn_id: input.active_turn.turn_id,
+            error: finish_error instanceof Error ? finish_error.message : String(finish_error),
+          });
+        } catch {
+          // Assistant 已经失败，日志失败不能覆盖原始执行错误。
+        }
       }
       throw error;
     }
 
-    await this.append_turn_file_diff(
-      input.active_turn.turn_id,
+    await append_session_turn_file_diff({
+      session_id: this.session_id,
+      turn_id: input.active_turn.turn_id,
+      workspace_path: this.workspace_path,
       turn_context,
       assistant_output,
-    );
+      logger: this.logger,
+    });
 
     await assistant_output.finish({
       status: turn_context.lifecycle.abort_signal.aborted
@@ -613,56 +558,6 @@ export class SessionLoop {
     };
   }
 
-  /** 把当前 Turn 成功的结构化文件修改写入 canonical Assistant data part。 */
-  private async append_turn_file_diff(
-    turn_id: string,
-    turn_context: SessionTurnContext,
-    assistant_output: SessionAssistantOutput,
-  ): Promise<void> {
-    try {
-      const file_diff = build_session_turn_file_diff(
-        this.workspace_path,
-        turn_context.effects.snapshot(),
-      );
-      if (!file_diff) return;
-      await assistant_output.append_result_parts([{
-        type: "data",
-        data_type: SESSION_TURN_FILE_DIFF_DATA_TYPE,
-        data_id: `turn-file-diff:${turn_id}`,
-        data: {
-          files: file_diff.files.map((file) => ({
-            file: file.file,
-            status: file.status,
-            additions: file.additions,
-            deletions: file.deletions,
-            patch: file.patch,
-          })),
-          additions: file_diff.additions,
-          deletions: file_diff.deletions,
-        },
-      }]);
-    } catch (error) {
-      await this.log_file_diff_warning(turn_id, "failed to persist structured file edits", error);
-    }
-  }
-
-  /** 文件修改展示属于辅助观测能力，失败不能改变 Turn 结果。 */
-  private async log_file_diff_warning(
-    turn_id: string,
-    message: string,
-    error: unknown,
-  ): Promise<void> {
-    try {
-      await this.logger.log("warn", `[agent] ${message}`, {
-        session_id: this.session_id,
-        turn_id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    } catch {
-      // 文件编辑观测失败不影响 canonical 对话执行。
-    }
-  }
-
   /** 在 Turn 创建时建立其唯一执行上下文和 Assistant 输出端口。 */
   private create_turn_context(
     active_turn: ActiveSessionTurnState,
@@ -691,30 +586,14 @@ export class SessionLoop {
       shell_approval_gateway: this.shell_approval_gateway,
       interactions: this.interactions,
       on_effects_changed: (effects) => {
-        // Thinking 状态行的文件改动是辅助观测，失败不影响 Turn 结果。
-        try {
-          const summary = build_session_turn_file_diff_summary(
-            this.workspace_path,
-            effects,
-          );
-          if (summary.files_count === 0) return;
-          this.events.publish({
-            mutation_id: nanoid(),
-            variant: "file_diff",
-            session_id: this.session_id,
-            turn_id: active_turn.turn_id,
-            created_at: Date.now(),
-            files_count: summary.files_count,
-            additions: summary.additions,
-            deletions: summary.deletions,
-          });
-        } catch (error) {
-          void this.log_file_diff_warning(
-            active_turn.turn_id,
-            "failed to publish live file edit summary",
-            error,
-          );
-        }
+        publish_session_turn_file_diff({
+          session_id: this.session_id,
+          turn_id: active_turn.turn_id,
+          workspace_path: this.workspace_path,
+          effects,
+          publish: (mutation) => this.events.publish(mutation),
+          logger: this.logger,
+        });
       },
       publish_action: async (event) => {
         await this.persist_action_event(event);
@@ -755,58 +634,15 @@ export class SessionLoop {
     await this.state.touch_metadata();
   }
 
-  /** 由 Turn 生命周期所有者尽力释放其唯一 Context。 */
-  private async dispose_turn_context(
-    active_turn: ActiveSessionTurnState,
-  ): Promise<void> {
-    try {
-      await active_turn.turn_context?.lifecycle.dispose();
-    } catch (error) {
-      try {
-        await this.logger.log("warn", "[agent] turn context disposal failed", {
-          session_id: this.session_id,
-          turn_id: active_turn.turn_id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } catch {
-        // Context 已进入释放流程，日志失败不能阻止 Turn Handle 收口。
-      }
-    }
-  }
-
-  /** 在释放当前 lease 前触发现有 Plugin effect point。 */
-  private async notify_turn_committed(
-    active_turn: ActiveSessionTurnState,
-    status: SessionTurnCommittedHookValue["status"],
-  ): Promise<void> {
-    const extensions = active_turn.turn_context?.step.hooks;
-    if (!extensions) return;
-    try {
-      const messages = (await this.messages.list_history_messages())
-        .filter((message) => message.turn_id === active_turn.turn_id)
-        .map((message) => structuredClone(message));
-      const value: SessionTurnCommittedHookValue = {
-        session_id: this.session_id,
-        turn_id: active_turn.turn_id,
-        status,
-        messages: messages as SessionMessage[],
-      };
-      await extensions.effect(
-        SESSION_HOOK_POINTS.turn_committed,
-        value as unknown as JsonValue,
-      );
-    } catch (error) {
-      try {
-        await this.logger.log("warn", "[agent] session plugin effect failed", {
-          session_id: this.session_id,
-          turn_id: active_turn.turn_id,
-          point_name: SESSION_HOOK_POINTS.turn_committed,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } catch {
-        // Plugin effect 不改变已经确定的 Turn 结果。
-      }
-    }
+  /** 为 Turn 收口领域函数投影稳定依赖。 */
+  private turn_completion_options(): SessionTurnCompletionOptions {
+    return {
+      session_id: this.session_id,
+      messages: this.messages,
+      events: this.events,
+      logger: this.logger,
+      stopped_message: TURN_STOPPED_MESSAGE,
+    };
   }
 }
 

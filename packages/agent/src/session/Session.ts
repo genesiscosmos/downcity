@@ -25,7 +25,6 @@ import type {
   AgentSessionSystemSnapshot,
 } from "@/types/agent/SessionTypes.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
-import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { create_runtime_session_port } from "@/session/storage/RuntimeSessionPort.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { SessionMutationSubscriber, SessionMutationUnsubscribe } from "@downcity/type";
@@ -43,7 +42,10 @@ import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { create_session_compact_operation } from "@/session/runtime/SessionCompactOperation.js";
 import { run_session_history_compaction } from "@/session/runtime/SessionHistoryCompaction.js";
-import { SessionState } from "@/session/SessionState.js";
+import {
+  create_session_local_state,
+  SessionState,
+} from "@/session/SessionState.js";
 import { SessionLoop } from "@/session/SessionLoop.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
@@ -61,12 +63,14 @@ import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
 import { ensure_session_title } from "@/session/SessionTitle.js";
-import type { SessionMessage } from "@downcity/type";
 import type { SessionActionEventInput } from "@downcity/type";
 import type { SessionCommandOptions } from "@/types/session/SessionCommand.js";
 import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
 import { SessionComposition } from "@/session/SessionComposition.js";
-import { relocate_fork_message_files } from "@/session/messages/SessionForkMessageFiles.js";
+import {
+  relocate_fork_message_files,
+  resolve_session_fork_messages,
+} from "@/session/messages/SessionForkMessageFiles.js";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 
 /**
@@ -537,7 +541,12 @@ export class Session implements AgentSession {
     const include_message = typeof input === "string" || input?.include_message !== false;
     const messages = await this.session_messages.list_history_messages();
     const fork_messages = message_id
-      ? this.resolve_fork_messages(messages, message_id, include_message)
+      ? resolve_session_fork_messages({
+          session_id: this.id,
+          messages,
+          message_id,
+          include_message,
+        })
       : messages;
     const action_id = `history-forking:${this.id}:${Date.now()}:${nanoid(8)}`;
     await this.emit_action_event({
@@ -581,23 +590,6 @@ export class Session implements AgentSession {
       });
       throw error;
     }
-  }
-
-  /** 截取 Fork 目标 Message 之前的历史，并按调用语义决定是否包含锚点。 */
-  private resolve_fork_messages(
-    messages: SessionMessage[],
-    message_id: string,
-    include_message: boolean,
-  ): SessionMessage[] {
-    const target_index = messages.findIndex(
-      (message) => message.message_id === message_id,
-    );
-    if (target_index < 0) {
-      throw new Error(
-        `Cannot fork session "${this.id}": message_id "${message_id}" not found.`,
-      );
-    }
-    return messages.slice(0, include_message ? target_index + 1 : target_index);
   }
 
   /**
@@ -687,15 +679,7 @@ export class Session implements AgentSession {
   }
 
   private create_local_state(): SessionLocalState {
-    return {
-      session_config: {},
-      effective_session_config: {},
-      configured_approval_mode: "ask",
-      created_at: Date.now(),
-      timezone: resolve_system_timezone(),
-      initialize_promise: null,
-      ensure_configured_promise: null,
-    };
+    return create_session_local_state();
   }
 
   /** 创建只依赖统一 Composer 的 Turn Executor。 */

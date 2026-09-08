@@ -4,6 +4,31 @@ import path from "node:path";
 import type { SessionMessage } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
+/** 截取 Fork 锚点之前的历史，并按调用语义决定是否包含锚点。 */
+export function resolve_session_fork_messages(input: {
+  /** 当前源 Session 的稳定标识。 */
+  session_id: string;
+  /** 当前源 Session 的完整 canonical 历史。 */
+  messages: SessionMessage[];
+  /** Fork 使用的锚点 Message 标识。 */
+  message_id: string;
+  /** Fork 历史是否包含锚点 Message 本身。 */
+  include_message: boolean;
+}): SessionMessage[] {
+  const target_index = input.messages.findIndex(
+    (message) => message.message_id === input.message_id,
+  );
+  if (target_index < 0) {
+    throw new Error(
+      `Cannot fork session "${input.session_id}": message_id "${input.message_id}" not found.`,
+    );
+  }
+  return input.messages.slice(
+    0,
+    input.include_message ? target_index + 1 : target_index,
+  );
+}
+
 /**
  * 将 fork 历史中的本地绝对路径复制到目标 Session 的附件 Store。
  *
