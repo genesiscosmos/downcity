@@ -12,6 +12,8 @@ import { use_translation } from "@/locales/i18n";
 interface SessionListItemProps {
   /** Session 摘要。 */
   session: DesktopSessionSummary;
+  /** 当前 Session 是否正在执行。 */
+  executing: boolean;
   /** 是否选中。 */
   active: boolean;
   /** 当前 Session 是否有未读完成通知。 */
@@ -63,10 +65,10 @@ export const SessionListRow = memo(function SessionListRow({ title, active, on_s
 });
 
 /** 带完整 Agent Session 操作能力的标准行。 */
-export const SessionListItem = memo(function SessionListItem({ session, active, unread, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
+export const SessionListItem = memo(function SessionListItem({ session, executing, active, unread, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
   const translate_common = use_translation("common");
   const translate_chat = use_translation("chat");
-  const has_status = session.executing || unread;
+  const has_status = executing || unread;
   return <SessionListRow title={session.title || translate_chat("conversation.new")} active={active} on_select={on_select} menu={
     <SessionActionsMenu session={session} on_rename={on_rename} on_archive={on_archive} on_remove={on_remove} trigger={
           <Button
@@ -76,8 +78,8 @@ export const SessionListItem = memo(function SessionListItem({ session, active, 
             aria-label={translate_common("actions.more")}
             onClick={(event) => event.stopPropagation()}
           >
-            {session.executing
-              ? <TbLoader2 className="animate-spin text-primary" aria-label={translate_chat("conversation.responding")} />
+            {executing
+              ? <TbLoader2 className="animate-spin text-primary motion-reduce:animate-none" aria-label={translate_chat("conversation.responding")} />
               : unread
                 ? <span className="size-1.5 rounded-full bg-blue-500" aria-label={translate_chat("conversation.unread_result")} />
                 : <TbDots />}

@@ -21,12 +21,17 @@ export function group_agent_sessions_by_workspace(
 export function select_agent_sessions(
   sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>,
   agent_id: string,
-): Array<{ workspace_id: string; session: DesktopSessionSummary }> {
+  resolve_executing: (workspace_id: string, session: DesktopSessionSummary) => boolean = (_workspace_id, session) => session.executing,
+): Array<{ workspace_id: string; session: DesktopSessionSummary; executing: boolean }> {
   if (!agent_id) return [];
   return Object.entries(sessions_by_workspace)
     .flatMap(([workspace_id, entries]) => entries
       .filter((entry) => entry.agent_id === agent_id)
-      .map((entry) => ({ workspace_id, session: entry.session })))
-    .sort((left, right) => Number(right.session.executing) - Number(left.session.executing)
+      .map((entry) => ({
+        workspace_id,
+        session: entry.session,
+        executing: resolve_executing(workspace_id, entry.session),
+      })))
+    .sort((left, right) => Number(right.executing) - Number(left.executing)
       || right.session.updated_at - left.session.updated_at);
 }

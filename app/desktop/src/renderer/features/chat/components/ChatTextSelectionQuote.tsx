@@ -6,7 +6,6 @@
  */
 
 import { useEffect, useState, type RefObject } from "react";
-import { TbQuote } from "react-icons/tb";
 import type { ChatTextSelection } from "@/types/ChatTextSelection";
 import { dispatch_chat_reference } from "@/features/chat/composer/editor/chatReferenceEvent";
 import { use_translation } from "@/locales/i18n";
@@ -56,13 +55,11 @@ export function ChatTextSelectionQuote({ container_ref, session_id }: { /** 消�
   };
   return <button
     type="button"
-    className="fixed z-50 inline-flex h-7 -translate-x-1/2 -translate-y-full items-center gap-1 rounded-md border border-border-subtle bg-popover px-2 text-[0.6875rem] font-medium text-foreground shadow-md transition-colors hover:bg-muted"
+    className="fixed z-50 -translate-x-1/2 -translate-y-full rounded-md border border-border bg-popover px-2.5 py-1 text-xs font-medium text-popover-foreground transition-colors hover:border-foreground/30 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     style={{ left: selected.viewport_x, top: selected.viewport_y }}
-    aria-label={translate("message.quote")}
-    title={translate("message.quote")}
     onPointerDown={(event) => event.preventDefault()}
     onClick={insert_reference}
-  ><TbQuote className="size-3" /><span>{translate("message.quote")}</span></button>;
+  >{translate("message.quote")}</button>;
 }
 
 /** 从浏览器 Selection 中读取一段属于同一消息正文的有效文本。 */

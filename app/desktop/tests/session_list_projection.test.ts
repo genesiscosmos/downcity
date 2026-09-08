@@ -2,7 +2,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { DesktopSessionSummary } from "../src/common/types/DesktopApi.ts";
+import type { DesktopChatRuntime, DesktopSessionSummary } from "../src/common/types/DesktopApi.ts";
+import { get_session_key } from "../src/renderer/features/chat/lib/chat_cache_key.ts";
 import {
   group_agent_sessions_by_workspace,
   select_agent_sessions,
@@ -30,6 +31,33 @@ test("按 Session 自身 Workspace 归属构建完整目录", () => {
 
   assert.deepEqual(Object.keys(grouped_sessions).sort(), ["project-a", "project-b"]);
   assert.deepEqual(grouped_sessions["project-a"].map((entry) => entry.agent_id), ["writer", "reviewer"]);
+});
+
+test("实时 Runtime 覆盖 Session 目录中的旧执行状态", () => {
+  const sessions_by_workspace = group_agent_sessions_by_workspace([
+    { agent_id: "writer", sessions: [create_session("stale-running", "project-a", 20, true), create_session("now-running", "project-a", 10)] },
+  ]);
+  const create_runtime = (session_id: string, status: DesktopChatRuntime["status"]): DesktopChatRuntime => ({
+    agent_id: "writer",
+    workspace_id: "project-a",
+    session_id,
+    status,
+    updated_at: 30,
+  });
+  const runtimes = {
+    [get_session_key("project-a", "writer", "stale-running")]: create_runtime("stale-running", "completed"),
+    [get_session_key("project-a", "writer", "now-running")]: create_runtime("now-running", "streaming"),
+  };
+
+  const selected_sessions = select_agent_sessions(sessions_by_workspace, "writer", (workspace_id, session) => {
+    const runtime = runtimes[get_session_key(workspace_id, "writer", session.session_id)];
+    return runtime?.status === "streaming";
+  });
+
+  assert.deepEqual(selected_sessions.map(({ session, executing }) => [session.session_id, executing]), [
+    ["now-running", true],
+    ["stale-running", false],
+  ]);
 });
 
 test("所选 Agent 的列表跨 Workspace 汇总并优先显示执行中 Session", () => {

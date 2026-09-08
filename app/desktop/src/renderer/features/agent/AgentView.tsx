@@ -291,7 +291,7 @@ export function AgentView({
                 void controller.actions.choose_agent_avatar(agent.agent_id)
               }
             >
-              {translate_resources("agent_details.choose_image")}
+              {translate_resources("agent_details.upload_image")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -406,18 +406,53 @@ function AgentEditorPanel({
 /** 编辑 Agent 的头像、用户可见名称与简介。 */
 function IdentityEditor({ agent, controller, definition, set_definition }: { /** 当前 Agent 展示摘要。 */ agent: DesktopAgentSummary; /** Renderer 稳定控制器。 */ controller: DesktopController; /** 当前 Agent 定义。 */ definition: DesktopAgentDefinition; /** 替换未提交定义。 */ set_definition(value: DesktopAgentDefinition): void }) {
   const translate_resources = use_translation("resources");
+  const [avatar_dialog_open, set_avatar_dialog_open] = useState(false);
   return <div className="flex flex-col gap-5 p-3">
-    <div className="flex flex-col items-center gap-2.5 py-2">
-      <button type="button" onClick={() => void controller.actions.choose_agent_avatar(definition.agent_id)} className="rounded-2xl transition-opacity duration-150 hover:opacity-80" title={translate_resources("agent_details.choose_avatar")}>
-        <AgentAvatar agent={agent} class_name="size-16 rounded-2xl" icon_class_name="size-8" />
+    <div className="flex justify-center py-2">
+      <button
+        type="button"
+        onClick={() => set_avatar_dialog_open(true)}
+        className="rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/30"
+        title={translate_resources("agent_details.choose_avatar")}
+        aria-label={translate_resources("agent_details.choose_avatar")}
+      >
+        <AgentAvatar agent={agent} class_name="size-24 rounded-lg" icon_class_name="size-10" />
       </button>
-      <div className="flex items-center gap-1">
-        <Button className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={() => void controller.actions.generate_agent_avatar(definition.agent_id)}><TbRefresh />{translate_resources("agent_details.random")}</Button>
-        <Button className="h-7 gap-1 px-2 text-[0.6875rem]" onClick={() => void controller.actions.choose_agent_avatar(definition.agent_id)}><TbPhoto />{translate_resources("agent_details.choose_image")}</Button>
-      </div>
     </div>
-    <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">{translate_resources("agent.name")}</span><input value={definition.name} className="h-9 rounded-lg border border-input bg-background px-3 text-sm" onChange={(event) => set_definition({ ...definition, name: event.target.value })} /></label>
-    <label className="flex flex-col gap-1.5"><span className="text-xs text-muted-foreground">{translate_resources("agent.description")}</span><textarea value={definition.description} rows={5} className="resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm leading-5" onChange={(event) => set_definition({ ...definition, description: event.target.value })} /></label>
+    <label className="flex flex-col gap-2">
+      <span className="px-1 text-[0.6875rem] font-medium text-muted-foreground">{translate_resources("agent.name")}</span>
+      <input
+        value={definition.name}
+        className="h-10 w-full appearance-none rounded-lg border-0 bg-muted-foreground/10 px-3 text-[0.8125rem] text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:bg-muted-foreground/[0.13]"
+        onChange={(event) => set_definition({ ...definition, name: event.target.value })}
+      />
+    </label>
+    <label className="flex flex-col gap-2">
+      <span className="px-1 text-[0.6875rem] font-medium text-muted-foreground">{translate_resources("agent.description")}</span>
+      <textarea
+        value={definition.description}
+        rows={5}
+        className="block min-h-28 w-full appearance-none resize-none rounded-lg border-0 bg-muted-foreground/10 px-3 py-2.5 text-[0.8125rem] leading-5 text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:bg-muted-foreground/[0.13]"
+        onChange={(event) => set_definition({ ...definition, description: event.target.value })}
+      />
+    </label>
+    <Dialog open={avatar_dialog_open} onOpenChange={set_avatar_dialog_open}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{translate_resources("agent_details.avatar_title")}</DialogTitle>
+          <DialogDescription>{translate_resources("agent_details.avatar_description", { name: agent.name })}</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <div className="flex justify-center py-5">
+            <AgentAvatar agent={agent} class_name="size-32 rounded-lg" icon_class_name="size-14" />
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button onClick={() => void controller.actions.generate_agent_avatar(definition.agent_id)}><TbRefresh />{translate_resources("agent_details.random")}</Button>
+          <Button variant="primary" onClick={() => void controller.actions.choose_agent_avatar(definition.agent_id)}><TbPhoto />{translate_resources("agent_details.upload_image")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>;
 }
 

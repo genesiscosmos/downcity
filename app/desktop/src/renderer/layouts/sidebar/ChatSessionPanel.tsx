@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { TbChevronDown, TbChevronUp, TbPlus } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { GroupSessionActionsMenu } from "@/features/chat/components/GroupSessionActionsMenu";
+import { get_session_key } from "@/features/chat/lib/chat_cache_key";
 import { select_agent_sessions } from "@/features/chat/lib/session_list_projection";
 import { has_unread_session_notification } from "@/lib/notification/notification_state";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
-import type { DesktopController, NavigationTarget } from "@/types/DesktopView";
+import { is_chat_busy, type DesktopController, type NavigationTarget } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopGroupSummary } from "@common/types/DesktopApi";
 import type { DesktopNotificationState } from "@common/types/DesktopNotification";
 import { SessionListItem, SessionListRow } from "./SessionListItem";
@@ -40,10 +41,15 @@ export function ChatSessionPanel({ controller, notification_state, selection, se
   const resize_start_y_ref = useRef(0);
   const resize_start_height_ref = useRef(0);
   const sessions_by_workspace = use_desktop_selector(controller.stores.session, (state) => state.sessions_by_workspace);
-  const agent_sessions = useMemo(
-    () => select_agent_sessions(sessions_by_workspace, selected_agent?.agent_id ?? ""),
-    [selected_agent?.agent_id, sessions_by_workspace],
-  );
+  const chat_runtimes = use_desktop_selector(controller.stores.chat_stream, (state) => state.chat_runtime_by_session);
+  const agent_sessions = useMemo(() => {
+    const agent_id = selected_agent?.agent_id ?? "";
+    return select_agent_sessions(sessions_by_workspace, agent_id, (session_workspace_id, session) => {
+      const runtime = chat_runtimes[get_session_key(session_workspace_id, agent_id, session.session_id)];
+      // Runtime 是当前事实；尚未收到 Runtime 时回退到目录快照。
+      return runtime ? is_chat_busy(runtime) : session.executing;
+    });
+  }, [chat_runtimes, selected_agent?.agent_id, sessions_by_workspace]);
   const group_sessions = useMemo(
     () => selected_group ? [...selected_group.sessions].sort((left, right) => right.updated_at - left.updated_at) : [],
     [selected_group],
@@ -99,7 +105,7 @@ export function ChatSessionPanel({ controller, notification_state, selection, se
       <Button size="icon" title={translate("sidebar.new_chat")} aria-label={translate("sidebar.new_chat")} disabled={!workspace_id} onClick={() => { if (!workspace_id) return; if (selected_agent) void controller.actions.create_session(workspace_id, selected_agent.agent_id); else if (selected_group) void controller.actions.create_group_session(selected_group.group_id, workspace_id); }}><TbPlus /></Button>
     </div>
     {!collapsed ? <SidebarContent class_name="space-y-0.5 px-1.5 pb-1.5">
-      {selected_agent ? agent_sessions.map(({ workspace_id: session_workspace_id, session }) => <SessionListItem key={`${session_workspace_id}:${session.session_id}`} session={session} active={selection?.kind === "session" && selection.session_id === session.session_id} unread={has_unread_session_notification(notification_state, session_workspace_id, selected_agent.agent_id, session.session_id)} on_select={() => void controller.actions.select_session(session_workspace_id, selected_agent.agent_id, session.session_id, true)} on_rename={(title) => controller.actions.rename_session(session_workspace_id, selected_agent.agent_id, session.session_id, title)} on_archive={() => controller.actions.archive_session(session_workspace_id, selected_agent.agent_id, session.session_id)} on_remove={() => controller.actions.remove_session(session_workspace_id, selected_agent.agent_id, session.session_id)} />) : null}
+      {selected_agent ? agent_sessions.map(({ workspace_id: session_workspace_id, session, executing }) => <SessionListItem key={`${session_workspace_id}:${session.session_id}`} session={session} executing={executing} active={selection?.kind === "session" && selection.session_id === session.session_id} unread={has_unread_session_notification(notification_state, session_workspace_id, selected_agent.agent_id, session.session_id)} on_select={() => void controller.actions.select_session(session_workspace_id, selected_agent.agent_id, session.session_id, true)} on_rename={(title) => controller.actions.rename_session(session_workspace_id, selected_agent.agent_id, session.session_id, title)} on_archive={() => controller.actions.archive_session(session_workspace_id, selected_agent.agent_id, session.session_id)} on_remove={() => controller.actions.remove_session(session_workspace_id, selected_agent.agent_id, session.session_id)} />) : null}
       {selected_group ? group_sessions.map((session) => <SessionListRow key={session.session_id} title={session.title || translate("sidebar.new_chat")} active={selection?.kind === "group_session" && selection.session_id === session.session_id} on_select={() => void controller.actions.open_group(selected_group.group_id, session.session_id)} menu={<GroupSessionActionsMenu session={session} on_rename={(title) => controller.actions.rename_group_session(selected_group.group_id, session.session_id, title)} on_remove={() => controller.actions.remove_group_session(selected_group.group_id, session.session_id)} />} />) : null}
       {empty ? <div className="px-2 py-5 text-center text-[10px] text-muted-foreground/55">{translate("sidebar.no_sessions")}</div> : null}
     </SidebarContent> : null}
