@@ -26,6 +26,7 @@ import {
   get_agent_sessions_path,
 } from "@/session/storage/LocalStorePaths.js";
 import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
+import { migrate_session_message_storage_unsafe } from "@/session/storage/SessionMessageStorageMigration.js";
 import { normalize_session_origin_type } from "@downcity/type";
 import type { SessionMessage } from "@downcity/type";
 import type { FileSystem } from "@downcity/type";
@@ -107,12 +108,22 @@ function encodeCursor(offset: number): string | undefined {
  * 读取指定 JSONL 消息文件。
  */
 export async function load_session_messages_from_path(
-  filePath: string,
+  file_path: string,
   files: FileSystem,
 ): Promise<SessionMessage[]> {
+  const messages_dir_path = path.dirname(file_path);
+  const inflight_path = path.join(messages_dir_path, "agent_message.json");
+  await files.with_file_lock(`${file_path}.lock`, async () => {
+    await migrate_session_message_storage_unsafe({
+      files,
+      active_file_path: file_path,
+      agent_message_file_path: inflight_path,
+    });
+  });
+
   const messages_by_id = new Map<string, SessionMessage>();
-  if (await files.path_exists(filePath)) {
-    const raw = (await files.read_file(filePath)).toString("utf8");
+  if (await files.path_exists(file_path)) {
+    const raw = (await files.read_file(file_path)).toString("utf8");
     const lines = raw.split("\n").filter(Boolean);
     for (const line of lines) {
       try {
@@ -128,7 +139,6 @@ export async function load_session_messages_from_path(
     }
   }
 
-  const inflight_path = path.join(path.dirname(filePath), "agent_message.json");
   if (await files.path_exists(inflight_path)) {
     try {
       const message = JSON.parse(
@@ -154,6 +164,7 @@ function is_canonical_session_message(input: unknown): input is SessionMessage {
     typeof candidate.session_id === "string" &&
     typeof candidate.sequence === "number" &&
     typeof candidate.revision === "number" &&
+    Array.isArray(candidate.parts) &&
     (candidate.type === "user" || candidate.type === "agent")
   );
 }

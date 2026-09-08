@@ -21,6 +21,7 @@ import {
 import { compose_session_compaction } from "../../agent/bin/session/messages/SessionMessageCompaction.js";
 import { session_context_to_model_messages } from "../../agent/bin/executor/messages/SessionModelMessages.js";
 import { JsonlSessionMessageStore } from "../../agent/bin/session/storage/JsonlSessionMessageStore.js";
+import { load_session_messages_from_path } from "../../agent/bin/session/browse/Browse.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 /** 可让下一次 Assistant 草稿更新失败的测试 Store。 */
@@ -130,6 +131,199 @@ function create_user_message(session_id, sequence) {
     }],
   };
 }
+
+test("初始化时一次性迁移旧 Session Message 存储并可幂等重试", async () => {
+  const session_id = "legacy-message-migration-test";
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-migration-"));
+  const segments_dir_path = path.join(root_path, "segments");
+  const active_file_path = path.join(root_path, "active.jsonl");
+  const legacy_draft_file_path = path.join(root_path, "assistant_message.json");
+  const agent_draft_file_path = path.join(root_path, "agent_message.json");
+  const segment_file_path = path.join(
+    segments_dir_path,
+    "000000000001-000000000002.jsonl",
+  );
+  const base = (message_id, sequence, revision = 1) => ({
+    message_id,
+    session_id,
+    turn_id: `turn-${String(sequence)}`,
+    sequence,
+    revision,
+    visibility: "visible",
+    created_at: sequence,
+    updated_at: sequence,
+  });
+  const legacy_assistant = {
+    ...base("assistant-2", 2),
+    type: "assistant",
+    kind: "normal",
+    status: "completed",
+    parts: [{
+      part_id: "text-2",
+      sequence: 1,
+      type: "text",
+      text: "legacy assistant",
+      state: "done",
+    }],
+  };
+  const legacy_action = (revision, status) => ({
+    ...base("action-3", 3, revision),
+    type: "action",
+    action_type: "deploy",
+    status,
+    title: "Deploy",
+    description: "Deploy service",
+    data: { region: "cn" },
+  });
+  const legacy_error = {
+    ...base("error-4", 4),
+    type: "error",
+    scope: "turn",
+    code: "legacy_error",
+    message: "Legacy failure",
+    recoverable: true,
+  };
+  const legacy_draft = {
+    ...base("assistant-5", 5, 2),
+    type: "assistant",
+    kind: "normal",
+    status: "streaming",
+    parts: [{
+      part_id: "text-5",
+      sequence: 1,
+      type: "text",
+      text: "draft",
+      state: "streaming",
+    }],
+  };
+  const summary = {
+    record_type: "summary",
+    session_id,
+    summary_id: "summary-1",
+    through_sequence: 2,
+    text: "summary",
+    created_at: 1,
+  };
+
+  await fs.mkdir(segments_dir_path, { recursive: true });
+  await fs.writeFile(
+    segment_file_path,
+    `${[create_user_message(session_id, 1), legacy_assistant, summary].map(JSON.stringify).join("\n")}\n`,
+  );
+  await fs.writeFile(
+    active_file_path,
+    `${[
+      legacy_action(1, "running"),
+      legacy_action(2, "completed"),
+      legacy_error,
+    ].map(JSON.stringify).join("\n")}\n`,
+  );
+  await fs.writeFile(legacy_draft_file_path, `${JSON.stringify(legacy_draft, null, 2)}\n`);
+
+  const files = new LocalFileSystem(root_path);
+  const create_store = () => new JsonlSessionMessageStore({
+    files,
+    session_id,
+    file_path: active_file_path,
+    agent_message_file_path: agent_draft_file_path,
+  });
+  const store = create_store();
+  await store.initialize();
+
+  const history = await store.list_history_messages();
+  assert.deepEqual(history.map((message) => message.type), ["user", "agent", "agent", "agent", "agent"]);
+  assert.equal(history[1].parts[0].text, "legacy assistant");
+  assert.equal(history[2].status, "completed");
+  assert.equal(history[2].revision, 2);
+  assert.deepEqual(history[2].parts[0], {
+    part_id: "action-part:action-3",
+    sequence: 1,
+    type: "action",
+    action_id: "action-3",
+    action_type: "deploy",
+    state: "completed",
+    title: "Deploy",
+    description: "Deploy service",
+    data: { region: "cn" },
+  });
+  assert.equal(history[3].status, "failed");
+  assert.equal(history[3].parts[0].type, "error");
+  assert.equal(history[3].parts[0].message, "Legacy failure");
+  assert.equal(history[4].status, "streaming");
+  assert.equal(await files.path_exists(legacy_draft_file_path), false);
+  assert.equal(await files.path_exists(agent_draft_file_path), true);
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(path.join(root_path, "schema.json"), "utf8")),
+    { version: 2 },
+  );
+  assert.deepEqual(
+    (await read_jsonl(segment_file_path)).at(-1),
+    summary,
+  );
+
+  const persisted_before_retry = await Promise.all([
+    fs.readFile(segment_file_path, "utf8"),
+    fs.readFile(active_file_path, "utf8"),
+    fs.readFile(agent_draft_file_path, "utf8"),
+  ]);
+  await create_store().initialize();
+  const persisted_after_retry = await Promise.all([
+    fs.readFile(segment_file_path, "utf8"),
+    fs.readFile(active_file_path, "utf8"),
+    fs.readFile(agent_draft_file_path, "utf8"),
+  ]);
+  assert.deepEqual(persisted_after_retry, persisted_before_retry);
+});
+
+test("迁移拒绝未知顶层 Message 且不提交 schema marker", async () => {
+  const session_id = "invalid-message-migration-test";
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-migration-"));
+  const active_file_path = path.join(root_path, "active.jsonl");
+  await fs.writeFile(active_file_path, `${JSON.stringify({
+    ...create_user_message(session_id, 1),
+    type: "unknown",
+  })}\n`);
+  const files = new LocalFileSystem(root_path);
+  const store = new JsonlSessionMessageStore({
+    files,
+    session_id,
+    file_path: active_file_path,
+  });
+
+  await assert.rejects(store.initialize(), /Unsupported Session Message type: unknown/);
+  assert.equal(await files.path_exists(path.join(root_path, "schema.json")), false);
+});
+
+test("浏览入口会迁移尚未加载 Store 的旧 Session", async () => {
+  const session_id = "browse-message-migration-test";
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-migration-"));
+  const active_file_path = path.join(root_path, "active.jsonl");
+  const files = new LocalFileSystem(root_path);
+  await fs.writeFile(active_file_path, `${JSON.stringify({
+    message_id: "legacy-action",
+    session_id,
+    turn_id: "turn-1",
+    sequence: 1,
+    revision: 1,
+    visibility: "visible",
+    created_at: 1,
+    updated_at: 1,
+    type: "action",
+    action_type: "archive",
+    status: "running",
+    title: "Archive",
+  })}\n`);
+
+  const messages = await load_session_messages_from_path(active_file_path, files);
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].type, "agent");
+  assert.equal(messages[0].parts[0].type, "action");
+  assert.equal(messages[0].parts[0].state, "running");
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(path.join(root_path, "schema.json"), "utf8")),
+    { version: 2 },
+  );
+});
 
 test("User Context Part 保持 canonical 结构并安全映射到模型文本", async () => {
   const parts = normalize_session_user_parts([{

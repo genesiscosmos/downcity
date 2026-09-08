@@ -11,6 +11,7 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
 ~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/
 ├── meta.json
 └── messages/
+    ├── schema.json
     ├── active.jsonl
     ├── agent_message.json
     └── segments/
@@ -25,9 +26,12 @@ Session 以 `(origin.type, session_id)` 作为稳定身份，默认分区是 `ch
 - `active.jsonl`：上次 Compact 后保留的完整 `SessionMessage` 快照。
 - `agent_message.json`：唯一的运行中 Agent 完整草稿。
 - `segments/*.jsonl`：不可变历史段；真实 Message 在前，累计 Summary footer 在最后。
+- `schema.json`：Message 存储格式版本标记。
 - `meta.json`：Agent、来源与 Workspace 归属、标题、模型标签、时间戳、消息数和存储字节数等轻量索引，不保存运行时模型实例。
 
 Segment 文件名使用 12 位补零 sequence，例如 `000000000001-000000000900.jsonl`。目录不使用 manifest，扫描文件名即可确定历史顺序。Summary 不属于 Message，也不占 sequence。
+
+首次打开旧 Session 时，SDK 会在该 Session 的 Message 写锁内，把旧顶层 `assistant`、`action`、`error` 记录一次性迁移为 `agent` Message；其中 Action 和 Error 成为 Agent Part。每个文件会原子替换，`schema.json` 在全部文件成功后才写入，因此进程中断后可安全重试。活动 Session 与归档 Session 使用相同迁移规则。
 
 应用应调用 `session.messages()` 读取 Active，通过 `before_sequence` 逐段读取旧历史。不要直接写入这些文件。
 

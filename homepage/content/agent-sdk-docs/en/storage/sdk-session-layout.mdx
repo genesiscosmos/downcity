@@ -12,6 +12,7 @@ is commonly `~/.downcity`:
 ~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/
 ├── meta.json
 └── messages/
+    ├── schema.json
     ├── active.jsonl
     ├── agent_message.json
     └── segments/
@@ -26,9 +27,12 @@ directories. `meta.json` v2 records the owning `agent_id` and complete immutable
 - `active.jsonl`: complete `SessionMessage` snapshots retained after the latest Compact.
 - `agent_message.json`: the one complete in-progress Agent draft.
 - `segments/*.jsonl`: immutable history ranges with real Messages first and a cumulative Summary footer last.
+- `schema.json`: the Message storage format marker.
 - `meta.json`: a lightweight index of Agent, origin, and Workspace ownership, title, model label, timestamps, message count, and storage bytes; it never stores the runtime model instance.
 
 Segment filenames use zero-padded 12-digit sequences, such as `000000000001-000000000900.jsonl`. There is no manifest; scanning filenames determines history order. A Summary is not a Message and consumes no sequence.
+
+When an older Session is first opened, the SDK takes that Session's Message write lock and migrates legacy top-level `assistant`, `action`, and `error` records into `agent` Messages. Actions and errors become Agent Parts. Each file is replaced atomically, and `schema.json` is written only after every file succeeds, so an interrupted migration can be retried safely. Active and archived Sessions use the same migration rule.
 
 Applications should call `session.messages()` for Active and use `before_sequence` to load older Segments. Do not write these files directly.
 

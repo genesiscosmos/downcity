@@ -20,6 +20,7 @@ import type {
 } from "@/types/store/SessionDataStore.js";
 import type { JsonlSessionMessageStoreOptions } from "@/types/store/LocalStore.js";
 import type { FileSystem } from "@downcity/type";
+import { migrate_session_message_storage_unsafe } from "@/session/storage/SessionMessageStorageMigration.js";
 
 const SEGMENT_FILE_PATTERN = /^(\d+)-(\d+)\.jsonl$/;
 const SEQUENCE_FILE_WIDTH = 12;
@@ -50,6 +51,11 @@ export class JsonlSessionMessageStore {
   /** 创建 Active 与 Segment 布局，并清理已经完成的遗留草稿。 */
   async initialize(): Promise<void> {
     await this.with_write_lock(async () => {
+      await migrate_session_message_storage_unsafe({
+        files: this.files,
+        active_file_path: this.active_file_path,
+        agent_message_file_path: this.agent_message_file_path,
+      });
       const ranges = await this.list_segment_ranges();
       const folded_messages = await this.read_folded_active_messages_unsafe();
       const latest_segment_end = ranges.at(-1)?.end_sequence || 0;
@@ -451,11 +457,36 @@ export class JsonlSessionMessageStore {
     if (!message.message_id || !Number.isInteger(message.sequence) || !Number.isInteger(message.revision)) {
       throw new Error("message identity, sequence and revision are required");
     }
+    if (message.type !== "user" && message.type !== "agent") {
+      throw new Error(`unsupported Session Message type: ${String((message as { type?: unknown }).type)}`);
+    }
+    if (!Array.isArray(message.parts)) {
+      throw new Error(`Session ${message.type} Message parts must be an array`);
+    }
     if (message.type === "agent") {
+      if (message.kind !== "normal" && message.kind !== "summary") {
+        throw new Error("invalid Agent Message kind");
+      }
+      if (
+        message.status !== "streaming" &&
+        message.status !== "completed" &&
+        message.status !== "stopped" &&
+        message.status !== "failed"
+      ) {
+        throw new Error("invalid Agent Message status");
+      }
       const sequences = new Set<number>();
       for (const part of message.parts) {
-        if (!Number.isInteger(part.sequence) || sequences.has(part.sequence)) {
-          throw new Error(`invalid Agent Part sequence: ${part.part_id}`);
+        if (
+          !part ||
+          typeof part !== "object" ||
+          typeof part.part_id !== "string" ||
+          !part.part_id ||
+          !Number.isInteger(part.sequence) ||
+          part.sequence < 1 ||
+          sequences.has(part.sequence)
+        ) {
+          throw new Error(`invalid Agent Part sequence: ${part?.part_id || "unknown"}`);
         }
         sequences.add(part.sequence);
       }

@@ -13,6 +13,7 @@ Session API 读写，不要把这些文件当作自己的数据库。
 ├── meta.json
 ├── instruction.md
 └── messages/
+    ├── schema.json
     ├── active.jsonl
     ├── agent_message.json
     └── segments/
@@ -24,6 +25,8 @@ Session 以 `(origin.type, session_id)` 作为身份。默认来源是 `chat`；
 非空字符串会进入独立分区，自定义来源类型由路径层安全编码为单个目录段。`meta.json` v2 始终记录
 `agent_id` 和完整且不可变的 `origin`，只有创建 Session 时传入 Workspace 才记录 `workspace_id`。
 同一个 `session_id` 可以存在于不同来源分区而互不共享数据，项目目录不会创建 `.downcity`。
+
+`schema.json` 标记当前 Message 存储格式。首次读取旧 Session 时，SDK 会在 Session Message 写锁内，把旧顶层 `assistant` 转为 `agent`，并把旧顶层 `action`、`error` 下沉为 Agent Part。Segment、Active 与流式草稿逐文件原子替换，全部完成后才提交版本标记；迁移中断不会产生已完成标记，下次读取会继续重试。归档 Session 在浏览时也执行同一迁移。
 
 `instruction.md` 是可选的完整 system 快照。Session 首次生成 system 后默认只在内存中固定；调用本地 `session.snapshot()` 会创建或覆盖该文件。`session.syncshot()` 会重新生成内存 system，并在文件已经存在时同步覆盖。恢复时若文件不存在，Session 会从 Agent 当前 instruction 和 plugin 重新生成；删除文件即可恢复这一行为。
 
