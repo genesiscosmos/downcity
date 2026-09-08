@@ -5,7 +5,7 @@ import type { JSONContent } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { TbArrowDown, TbArrowUp, TbCheck, TbCornerDownRight, TbLoader2, TbPaperclip, TbPencil, TbPhoto, TbPlayerPause, TbPlayerPlay, TbPlus, TbSquare, TbTrash, TbX } from "react-icons/tb";
+import { TbArrowDown, TbArrowUp, TbCheck, TbCornerDownRight, TbList, TbLoader2, TbPaperclip, TbPencil, TbPhoto, TbPlayerPause, TbPlayerPlay, TbPlus, TbSquare, TbTrash, TbX } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
@@ -33,8 +33,9 @@ export function MessageQueue(props: MessageQueueProps) {
     set_editing(undefined);
   };
   const action_class = "size-5 rounded-sm text-muted-foreground/70 [&_svg]:size-3";
-  return <div className="chat-queued-message-list max-h-32 overflow-y-auto">
-    <div className="flex min-h-6 items-center justify-end px-2">
+  return <div className="chat-queued-message-list max-h-32 overflow-y-auto rounded-xl bg-interaction-selected">
+    <div className="flex min-h-7 items-center justify-between px-2.5">
+      <TbList className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
       <Button className="h-5 gap-1 rounded-sm px-1 text-[0.625rem] text-muted-foreground/75 [&_svg]:size-3" title={translate(props.queue_paused ? "queue.resume_all" : "queue.pause_all")} onClick={() => props.set_queue_paused(!props.queue_paused)}>{props.queue_paused ? <TbPlayerPlay /> : <TbPlayerPause />}{translate(props.queue_paused ? "queue.resume" : "queue.pause")}</Button>
     </div>
     <div className="flex flex-col divide-y divide-border/30">{props.queued_messages.map((message, index) => {

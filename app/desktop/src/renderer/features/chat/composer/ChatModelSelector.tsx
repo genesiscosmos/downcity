@@ -31,9 +31,10 @@ export function ChatModelSelector(props: ChatModelSelectorProps) {
   const current_model = text_models.find((model) => model.model_id === current_model_id);
   const selected_effort = current_model?.reasoning?.efforts.find((effort) => effort.id === props.configuration?.reasoning_effort);
   const trigger_label = props.models_loading && !current_model_id ? translate("model.loading") : current_model?.name || current_model_id || common_translate("state.not_configured");
+  const trigger_accessible_label = selected_effort?.name ? `${trigger_label}, ${translate("model.reasoning")}: ${selected_effort.name}` : trigger_label;
 
   return <Popover>
-    <PopoverTrigger asChild><Button className="min-w-0 max-w-48 justify-start rounded-full" title={trigger_label} aria-label={trigger_label} disabled={props.models_loading && !current_model_id}>{props.models_loading && !current_model_id ? <TbLoader2 className="size-4 animate-spin" /> : <LLMModelIcon model_id={current_model?.model_id || current_model_id} model_name={current_model?.name} tags={current_model?.tags} size_class="size-4" />}<span className="min-w-0 truncate">{trigger_label}</span></Button></PopoverTrigger>
+    <PopoverTrigger asChild><Button className="min-w-0 max-w-64 justify-start rounded-full" title={trigger_accessible_label} aria-label={trigger_accessible_label} disabled={props.models_loading && !current_model_id}>{props.models_loading && !current_model_id ? <TbLoader2 className="size-4 animate-spin" /> : <LLMModelIcon model_id={current_model?.model_id || current_model_id} model_name={current_model?.name} tags={current_model?.tags} size_class="size-4" />}<span className="min-w-0 flex-1 truncate">{trigger_label}</span>{selected_effort?.name ? <span className="max-w-20 shrink-0 truncate rounded-full bg-foreground/[0.07] px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">{selected_effort.name}</span> : null}</Button></PopoverTrigger>
     <PopoverContent side="top" align="start" sideOffset={4} className="w-64 max-w-[calc(100vw-1rem)] p-1">
       <SelectorSubmenu label={translate("model.model")} value={current_model?.name || current_model_id || common_translate("state.not_configured")}>
         <ModelOptions models={text_models} current_model_id={current_model_id} loading={props.models_loading} on_select={props.set_model} />
