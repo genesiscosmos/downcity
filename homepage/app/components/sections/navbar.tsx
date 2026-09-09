@@ -27,6 +27,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconDeviceDesktop,
+  IconDownload,
   IconLanguage,
   IconLayoutDashboard,
   IconMenu2,
@@ -277,6 +278,12 @@ export function Navbar() {
                   >
                     {t("nav.features")}
                   </Link>
+                ) : null}
+                {group === productGroup ? (
+                  <a href="/download/macos" className={cn(linkBaseClass, linkInactiveClass, "gap-1.5")}>
+                    <IconDownload className="size-4" />
+                    <span>{isZh ? "下载" : "Download"}</span>
+                  </a>
                 ) : null}
               </React.Fragment>
             );

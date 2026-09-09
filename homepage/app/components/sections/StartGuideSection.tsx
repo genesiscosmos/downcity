@@ -253,6 +253,14 @@ export function StartGuideSection() {
               ))}
             </div>
             <p className="text-sm text-text-soft">{platform.requirement}</p>
+            {selected_platform === "macos" ? (
+              <a
+                href="/download/macos"
+                className="inline-flex h-10 items-center rounded-lg border border-line px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/[0.05]"
+              >
+                {is_zh ? "下载 macOS Desktop（Apple Silicon）" : "Download macOS Desktop (Apple Silicon)"}
+              </a>
+            ) : null}
           </div>
 
           <div className={cn("grid", platform.options.length > 1 && "lg:grid-cols-2")}>

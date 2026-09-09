@@ -19,7 +19,8 @@ pnpm install --frozen-lockfile
 pnpm -C packages/ui build
 pnpm -C homepage typecheck
 pnpm -C homepage build
-pnpm dlx wrangler@4.95.0 pages deploy homepage/build/client \
+(cd homepage && pnpm dlx wrangler@4.95.0 pages deploy build/client \
   --project-name "$PROJECT_NAME" \
   --branch "$BRANCH_NAME" \
-  --commit-hash "$COMMIT_HASH"
+  --commit-hash "$COMMIT_HASH" \
+  --commit-dirty=true)

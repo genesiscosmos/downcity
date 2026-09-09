@@ -1,0 +1,8 @@
+extends: ./electron-builder.yml
+
+# macOS arm64 包只保留当前平台的原生依赖，避免把其他平台运行时带入产物。
+files:
+  - "!**/node_modules/@downcity/sandbox-linux/**"
+  - "!**/node_modules/@downcity/sandbox-windows-mxc/**"
+  - "!**/node_modules/node-pty/prebuilds/linux-*/**"
+  - "!**/node_modules/node-pty/prebuilds/win32-*/**"

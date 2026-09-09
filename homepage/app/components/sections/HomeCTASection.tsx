@@ -1,7 +1,7 @@
 import { useState, type FC } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
-import { IconPlayerPlayFilled, IconBrandGithub, IconCheck, IconCopy } from "@tabler/icons-react";
+import { IconPlayerPlayFilled, IconBrandGithub, IconCheck, IconCopy, IconDownload } from "@tabler/icons-react";
 import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 
 const github_url = "https://github.com/genesiscosmos/downcity";
@@ -51,6 +51,14 @@ export const HomeCTASection: FC = () => {
               <IconPlayerPlayFilled className="size-3.5" />
               {t("cta.start")}
             </Link>
+
+            <a
+              href="/download/macos"
+              className="inline-flex h-11 items-center gap-2 rounded-lg border border-line px-5 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/[0.05]"
+            >
+              <IconDownload className="size-4" />
+              {is_zh ? "下载 macOS Desktop" : "Download macOS Desktop"}
+            </a>
 
             <a
               href={github_url}

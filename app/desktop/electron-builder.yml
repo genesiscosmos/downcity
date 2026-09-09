@@ -1,6 +1,7 @@
 appId: ai.downcity.desktop
 productName: Downcity
 npmRebuild: false
+artifactName: downcity-${version}.${ext}
 directories:
   buildResources: build
   output: dist
@@ -17,6 +18,11 @@ win:
     - nsis
 mac:
   category: public.app-category.developer-tools
+  hardenedRuntime: true
+  identity: "Zheng Wang (76Y42WCHN4)"
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  notarize: false
   target:
     - dmg
     - zip
@@ -25,3 +31,7 @@ linux:
   category: Development
   target:
     - AppImage
+
+publish:
+  provider: generic
+  url: https://downcity.ai/download/macos

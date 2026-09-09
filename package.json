@@ -17,6 +17,11 @@
     "build:fedman": "pnpm -C packages/ui build && pnpm -C app/fedman build",
     "build:cli": "pnpm patch:build -- --no-bump --cli",
     "build:desktop": "pnpm run build:city && pnpm -C app/desktop build",
+    "desktop:build:mac": "sh scripts/build-desktop-mac-release.sh",
+    "desktop:notarize:mac": "sh scripts/notarize-desktop-mac-app.sh",
+    "desktop:package:mac": "sh scripts/package-desktop-mac-release.sh",
+    "desktop:upload": "sh scripts/publish-desktop-release-to-r2.sh",
+    "desktop:publish": "sh scripts/publish-desktop-release.sh",
     "build:homepage": "pnpm -C homepage build",
     "install:ws": "pnpm install",
     "dev:cli": "pnpm -C app/cli dev",
@@ -44,6 +49,7 @@
     "all:patch:build": "bash ./scripts/build-packages.sh --all"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1095.0",
     "@types/bun": "latest",
     "downcity": "workspace:*"
   },
