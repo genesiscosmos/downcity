@@ -81,14 +81,6 @@ export interface PluginSessionTurnHandle {
   readonly finished: Promise<PluginSessionTurnResult>;
 }
 
-/** Plugin 可读取的 Session 上下文快照。 */
-export interface PluginSessionContextSnapshot {
-  /** Session 当前累计摘要。 */
-  readonly summary?: string;
-  /** Session 当前 canonical 消息；具体消息协议由 Agent 定义。 */
-  readonly messages: PluginJsonObject[];
-}
-
 /** Plugin 订阅 Session 时收到的结构化变化。 */
 export interface PluginSessionMutation extends PluginJsonObject {
   /** Mutation 稳定标识。 */
@@ -97,8 +89,6 @@ export interface PluginSessionMutation extends PluginJsonObject {
   readonly session_id: string;
   /** Mutation 层级。 */
   readonly variant: string;
-  /** Mutation 类型。 */
-  readonly type: string;
 }
 
 /** Plugin 可直接调用的单个 Session 句柄。 */
@@ -115,8 +105,8 @@ export interface PluginSessionHandle {
   stop(): Promise<PluginJsonObject>;
   /** 订阅当前 Session 的后续变化。 */
   subscribe(subscriber: (mutation: PluginSessionMutation) => void | Promise<void>): () => void;
-  /** 读取当前 Session 的累计摘要与 canonical 消息快照。 */
-  context(): Promise<PluginSessionContextSnapshot>;
+  /** 读取当前 Session 的全部 canonical Message。 */
+  messages(): Promise<PluginJsonObject[]>;
   /** 追加一条 Agent 文本消息。 */
   append_agent_message(input: { /** Agent 文本。 */ readonly text: string }): Promise<void>;
 }

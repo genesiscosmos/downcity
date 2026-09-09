@@ -15,10 +15,7 @@ import type {
 import { CoreEngineRunner } from "@executor/core-engine/CoreEngineRunner.js";
 import { ExecutorRecoveryPolicy } from "@executor/services/ExecutorRecoveryPolicy.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type {
-  SessionCompactHistory,
-  SessionExecutor,
-} from "@/types/session/SessionExecution.js";
+import type { SessionExecutor } from "@/types/session/SessionExecution.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
 import type { SessionHookRuntime } from "@downcity/type";
@@ -53,11 +50,11 @@ type ExecutorOptions = {
     retry_count: number,
   ) => Promise<SessionComposeInput>;
 
+  /** 请求当前 Composer 推进派生上下文状态。 */
+  recover_context: (error: unknown) => Promise<boolean>;
+
   /** 应用 Session 级固定 system snapshot。 */
   apply_system_snapshot?: (input: SessionStepInput) => SessionStepInput;
-
-  /** 请求 Session 领域生成并提交 canonical 历史压缩。 */
-  compact_history: SessionCompactHistory;
 
   /**
    * 读取当前 session 使用的模型实例。
@@ -84,8 +81,8 @@ export class Executor implements SessionExecutor {
 
   private readonly composer: SessionComposer;
   private readonly get_compose_input: ExecutorOptions["get_compose_input"];
+  private readonly recover_context: ExecutorOptions["recover_context"];
   private readonly apply_system_snapshot?: ExecutorOptions["apply_system_snapshot"];
-  private readonly compact_history: ExecutorOptions["compact_history"];
   private readonly get_model: ExecutorOptions["get_model"];
   private readonly get_hooks: ExecutorOptions["get_hooks"];
   private readonly logger: Logger;
@@ -103,21 +100,21 @@ export class Executor implements SessionExecutor {
     this.session_id = session_id;
     this.composer = options.composer;
     this.get_compose_input = options.get_compose_input;
+    this.recover_context = options.recover_context;
     this.apply_system_snapshot = options.apply_system_snapshot;
-    this.compact_history = options.compact_history;
     this.get_model = options.get_model;
     this.get_hooks = options.get_hooks;
     this.logger = options.logger;
     this.recovery_policy = new ExecutorRecoveryPolicy({
       session_id: this.session_id,
-      should_compact: (error) => this.composer.should_compact(error),
+      recover_context: async (error) => await this.recover_context(error),
       logger: this.logger,
     });
     this.core_engine_runner = new CoreEngineRunner({
       session_id: this.session_id,
       logger: this.logger,
       should_compact_on_error: (error) =>
-        this.composer.should_compact(error),
+        is_context_limit_error(error),
     });
   }
 
@@ -192,21 +189,13 @@ export class Executor implements SessionExecutor {
     turn_context: SessionTurnContext,
     retry_count: number,
   ): Promise<SessionStepExecutionInput> {
-    if (retry_count > 0) {
-      await this.logger.log("info", "[agent] compacting", {
-        retryCount: retry_count,
-      });
-      await this.compact_history({
-        turn_id: turn_context.session.turn_id,
-      });
-    }
     const step = await this.compose_step(turn_context, retry_count, true);
     return {
       query,
       system: step.input.system,
       messages: step.input.messages,
-      ...(step.compose_input.history.summary?.summary_id
-        ? { history_summary_id: step.compose_input.history.summary.summary_id }
+      ...(step.input.context_diagnostics?.derivation_id
+        ? { history_summary_id: step.input.context_diagnostics.derivation_id }
         : {}),
       tools: step.input.tools,
     };
@@ -230,8 +219,8 @@ export class Executor implements SessionExecutor {
         const step = await this.compose_step(turn_context, 0, false);
         return {
           messages: step.input.messages,
-          ...(step.compose_input.history.summary?.summary_id
-            ? { summary_id: step.compose_input.history.summary.summary_id }
+          ...(step.input.context_diagnostics?.derivation_id
+            ? { summary_id: step.input.context_diagnostics.derivation_id }
             : {}),
         };
       },
@@ -398,12 +387,13 @@ export class Executor implements SessionExecutor {
               visibility: "internal",
               created_at: now,
               updated_at: now,
-              type: "user",
+              role: "user",
               input_type: "steer",
               parts: message.parts.map((part, index) => {
                 if (part.type === "text") {
                   return {
                     part_id: `runtime-text:${index + 1}`,
+                    sequence: index + 1,
                     type: "text" as const,
                     text: part.text,
                     state: "done" as const,
@@ -412,6 +402,7 @@ export class Executor implements SessionExecutor {
                 if (part.type === "context") {
                   return {
                     part_id: `runtime-context:${index + 1}`,
+                    sequence: index + 1,
                     type: "context" as const,
                     tag: normalize_session_context_tag(part.tag),
                     context: normalize_session_context_content(part.context),
@@ -420,6 +411,7 @@ export class Executor implements SessionExecutor {
                 if (part.type === "file") {
                   return {
                     part_id: `runtime-file:${index + 1}`,
+                    sequence: index + 1,
                     type: "file" as const,
                     media_type: part.media_type,
                     url: part.url,
@@ -428,6 +420,7 @@ export class Executor implements SessionExecutor {
                 }
                 return {
                   part_id: `runtime-data:${index + 1}`,
+                  sequence: index + 1,
                   type: "data" as const,
                   data_type: part.data_type,
                   data: part.data,
@@ -453,4 +446,13 @@ export class Executor implements SessionExecutor {
     }
     return model;
   }
+}
+
+/** Core Engine 的单 Step 内恢复仍需同步识别 Provider 上下文错误。 */
+function is_context_limit_error(error: unknown): boolean {
+  const message = String(error ?? "").toLowerCase();
+  return message.includes("context_length") ||
+    message.includes("too long") ||
+    message.includes("maximum context") ||
+    message.includes("context window");
 }

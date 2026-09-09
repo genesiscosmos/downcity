@@ -39,7 +39,6 @@ import type {
 } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
-import type { AgentSessionCompactHandle } from "@/types/sdk/AgentSessionCompact.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import type { SessionOrigin } from "@downcity/type";
 
@@ -87,15 +86,6 @@ export interface AgentSessionActor {
 
   /** 停止当前 turn，并取消尚未被吸收的排队 prompt。 */
   stop(): Promise<AgentSessionStopResult>;
-
-  /**
-   * 把一次显式历史压缩加入当前 Session 的有序输入队列。
-   *
-   * 关键点（中文）
-   * - 返回句柄表示 Command 已成功入队。
-   * - `handle.finished` 在压缩真正完成或失败后兑现。
-   */
-  compact(): Promise<AgentSessionCompactHandle>;
 
   /** 订阅当前 session 的未来事件。 */
   subscribe(

@@ -74,6 +74,18 @@ export function get_agent_session_path(
   );
 }
 
+/** 返回单个活动 Session 的 SQLite 数据库路径。 */
+export function get_agent_session_database_path(
+  storage_root_path: string,
+  origin_type: string,
+  session_id: string,
+): string {
+  return path.join(
+    get_agent_session_path(storage_root_path, origin_type, session_id),
+    "session.db",
+  );
+}
+
 /** 返回单个归档 Session 目录。 */
 export function get_agent_archived_session_path(
   storage_root_path: string,
@@ -86,15 +98,15 @@ export function get_agent_archived_session_path(
   );
 }
 
-/** 返回单个 Session 的 instruction.md 路径。 */
-export function get_agent_session_instruction_path(
+/** 返回单个归档 Session 的 SQLite 数据库路径。 */
+export function get_agent_archived_session_database_path(
   storage_root_path: string,
   origin_type: string,
   session_id: string,
 ): string {
   return path.join(
-    get_agent_session_path(storage_root_path, origin_type, session_id),
-    "instruction.md",
+    get_agent_archived_session_path(storage_root_path, origin_type, session_id),
+    "session.db",
   );
 }
 
@@ -107,89 +119,5 @@ export function get_agent_session_attachments_path(
   return path.join(
     get_agent_session_path(storage_root_path, origin_type, session_id),
     "attachments",
-  );
-}
-
-/** 返回单个 Session 的消息目录。 */
-export function get_agent_session_messages_path(
-  storage_root_path: string,
-  origin_type: string,
-  session_id: string,
-): string {
-  return path.join(
-    get_agent_session_path(storage_root_path, origin_type, session_id),
-    "messages",
-  );
-}
-
-/** 返回单个 Session 的 Active JSONL 路径。 */
-export function get_agent_session_active_messages_path(
-  storage_root_path: string,
-  origin_type: string,
-  session_id: string,
-): string {
-  return path.join(
-    get_agent_session_messages_path(storage_root_path, origin_type, session_id),
-    "active.jsonl",
-  );
-}
-
-/** 返回单个 Session 的运行中 Assistant 快照路径。 */
-export function get_agent_session_agent_message_path(
-  storage_root_path: string,
-  origin_type: string,
-  session_id: string,
-): string {
-  return path.join(
-    get_agent_session_messages_path(storage_root_path, origin_type, session_id),
-    "agent_message.json",
-  );
-}
-
-/** 返回单个 Session 的 meta.json 路径。 */
-export function get_agent_session_meta_path(
-  storage_root_path: string,
-  origin_type: string,
-  session_id: string,
-): string {
-  return path.join(
-    get_agent_session_path(storage_root_path, origin_type, session_id),
-    "meta.json",
-  );
-}
-
-/** 返回单个归档 Session 的消息目录。 */
-export function get_agent_archived_session_messages_path(
-  storage_root_path: string,
-  origin_type: string,
-  session_id: string,
-): string {
-  return path.join(
-    get_agent_archived_session_path(storage_root_path, origin_type, session_id),
-    "messages",
-  );
-}
-
-/** 返回单个归档 Session 的 Active JSONL 路径。 */
-export function get_agent_archived_session_active_messages_path(
-  storage_root_path: string,
-  origin_type: string,
-  session_id: string,
-): string {
-  return path.join(
-    get_agent_archived_session_messages_path(storage_root_path, origin_type, session_id),
-    "active.jsonl",
-  );
-}
-
-/** 返回单个归档 Session 的 meta.json 路径。 */
-export function get_agent_archived_session_meta_path(
-  storage_root_path: string,
-  origin_type: string,
-  session_id: string,
-): string {
-  return path.join(
-    get_agent_archived_session_path(storage_root_path, origin_type, session_id),
-    "meta.json",
   );
 }

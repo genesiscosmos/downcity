@@ -16,7 +16,6 @@ import type {
   TaskSessionRuntimePort,
   UserSimulatorDecision,
 } from "@/task/types/TaskRunner.js";
-import { appendTaskRoundUserMessage } from "./TaskRunnerSession.js";
 
 function stripTaskSecretEnv(env: NodeJS.ProcessEnv): void {
   delete env.DC_AUTH_TOKEN;
@@ -209,19 +208,6 @@ export async function runAgentRound(params: {
   actorId: string;
   actorName: string;
 }): Promise<{ outputText: string; delivered: boolean; rawResult: SessionTurnExecutionResult }> {
-  try {
-    await appendTaskRoundUserMessage({
-      taskSessionRuntime: params.taskSessionRuntime,
-      session_id: params.session_id,
-      taskId: params.taskId,
-      query: params.query,
-      actorId: params.actorId,
-      actorName: params.actorName,
-    });
-  } catch {
-    // ignore
-  }
-
   const turn = await params.taskSessionRuntime.get_session(params.session_id).prompt({
     query: params.query,
   });
@@ -241,11 +227,6 @@ export async function runAgentRound(params: {
   if (!String(outputPick.text || "").trim()) {
     throw new Error("agent produced no user-visible output");
   }
-
-  // 宿主 Session 保存实际执行历史；run 目录额外保留一份独立调试快照。
-  await params.taskSessionRuntime.get_messages(params.session_id).append_external_agent_message({
-    text: outputPick.text,
-  });
 
   return {
     outputText: outputPick.text,

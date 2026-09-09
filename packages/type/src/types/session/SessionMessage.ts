@@ -1,7 +1,7 @@
 /**
  * Session canonical 消息类型。
  *
- * Session 只维护一条由 sequence 排序的双主体消息序列；User 与 Agent 是顶层消息，
+ * Session 只维护一条由 sequence 排序的双主体消息序列；User 与 Agent 是顶层角色，
  * text、reasoning、tool、interaction、file、data、action、error 都是主体内部 Part。
  */
 
@@ -51,6 +51,8 @@ export interface SessionMessageBase {
 export interface SessionUserTextPart {
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
+  /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
+  sequence: number;
   /** part 类型固定为 text。 */
   type: "text";
   /** 用户输入文本。 */
@@ -63,6 +65,8 @@ export interface SessionUserTextPart {
 export interface SessionUserContextPart {
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
+  /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
+  sequence: number;
   /** part 类型固定为 context。 */
   type: "context";
   /** 模型上下文使用的安全 XML 风格标签名。 */
@@ -75,6 +79,8 @@ export interface SessionUserContextPart {
 export interface SessionUserFilePart {
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
+  /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
+  sequence: number;
   /** part 类型固定为 file。 */
   type: "file";
   /** 文件可读取地址或 data URL。 */
@@ -89,6 +95,8 @@ export interface SessionUserFilePart {
 export interface SessionUserDataPart {
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
+  /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
+  sequence: number;
   /** part 类型固定为 data。 */
   type: "data";
   /** Session data part 的类型名称。 */
@@ -108,8 +116,8 @@ export type SessionUserMessagePart =
 
 /** User 顶层 Message。 */
 export interface SessionUserMessage extends SessionMessageBase {
-  /** Message 类型固定为 user。 */
-  type: "user";
+  /** Message 主体角色固定为 user。 */
+  role: "user";
   /** 普通 prompt 或当前 turn 中的 steering 输入。 */
   input_type: "prompt" | "steer";
   /** 用户消息的结构化 parts。 */
@@ -122,6 +130,8 @@ export interface SessionAgentTextPart {
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
+  /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
+  step_id?: string;
   /** part 类型固定为 text。 */
   type: "text";
   /** 当前已经累计的完整文本。 */
@@ -136,6 +146,8 @@ export interface SessionAgentReasoningPart {
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
+  /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
+  step_id?: string;
   /** part 类型固定为 reasoning。 */
   type: "reasoning";
   /** 当前已经累计的完整推理文本。 */
@@ -152,6 +164,8 @@ export interface SessionAgentToolPart {
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
+  /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
+  step_id?: string;
   /** part 类型固定为 tool。 */
   type: "tool";
   /** 模型工具调用稳定标识。 */
@@ -178,6 +192,8 @@ export interface SessionAgentInteractionPart {
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
+  /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
+  step_id?: string;
   /** part 类型固定为 interaction。 */
   type: "interaction";
   /** 当前 Interaction 的稳定唯一标识。 */
@@ -202,6 +218,8 @@ export interface SessionAgentFilePart {
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
+  /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
+  step_id?: string;
   /** part 类型固定为 file。 */
   type: "file";
   /** 文件 MIME 类型。 */
@@ -218,6 +236,8 @@ export interface SessionAgentDataPart {
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
+  /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
+  step_id?: string;
   /** part 类型固定为 data。 */
   type: "data";
   /** Session data part 的类型名称。 */
@@ -234,6 +254,8 @@ export interface SessionAgentActionPart {
   part_id: string;
   /** Agent Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
+  /** 产生当前 Part 的模型 Step；Session Action 可以为空。 */
+  step_id?: string;
   /** Part 类型固定为 action。 */
   type: "action";
   /** 同一 Action 生命周期内稳定复用的业务标识。 */
@@ -256,6 +278,8 @@ export interface SessionAgentErrorPart {
   part_id: string;
   /** Agent Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
+  /** 产生当前 Part 的模型 Step；Session/Turn 错误可以为空。 */
+  step_id?: string;
   /** Part 类型固定为 error。 */
   type: "error";
   /** 错误影响范围。 */
@@ -281,16 +305,12 @@ export type SessionAgentMessagePart =
 
 /** Agent 顶层 Message。 */
 export interface SessionAgentMessage extends SessionMessageBase {
-  /** Message 类型固定为 agent。 */
-  type: "agent";
-  /** 普通 Agent 输出或内部 compact summary。 */
-  kind: "normal" | "summary";
+  /** Message 主体角色固定为 agent。 */
+  role: "agent";
   /** Agent Message 当前写入状态。 */
   status: "streaming" | "completed" | "stopped" | "failed";
   /** Agent 内按真实产生顺序保存的 Parts。 */
   parts: SessionAgentMessagePart[];
-  /** Summary 已覆盖到的来源 Message 标识。 */
-  summary_through_message_id?: string;
 }
 
 /** Session 唯一顶层 Message 联合类型。 */
@@ -300,29 +320,25 @@ export type SessionMessage =
 
 /** 读取 Session Message snapshot 的分页输入。 */
 export interface ListSessionMessagesInput {
-  /**
-   * 返回该 sequence 之前的最近一个完整历史 Segment。
-   *
-   * 必须是正整数；省略时直接返回 Active 中的全部 Message。
-   */
+  /** 返回该 Message sequence 之前的一页历史；必须是正整数。 */
   before_sequence?: number;
+  /** 单页返回的最大 Message 数量。 */
+  limit?: number;
   /** 是否包含 internal Message。 */
   include_internal?: boolean;
 }
 
 /** Session Message snapshot 分页结果。 */
 export interface SessionMessagePage {
-  /** 当前 Active 或 Segment 中按 sequence 升序排列的 Message。 */
+  /** 当前页按 sequence 升序排列的完整 Message。 */
   items: SessionMessage[];
   /** 当前 Session 已分配的真实 Message 总数。 */
   total: number;
-  /** 当前结果来自 Active 还是已关闭 Segment。 */
-  source: "active" | "segment";
   /** 当前结果覆盖的第一条真实 Message sequence。 */
   start_sequence?: number;
   /** 当前结果覆盖的最后一条真实 Message sequence。 */
   end_sequence?: number;
-  /** 继续向前读取时应作为 before_sequence 传入的边界。 */
+  /** 继续向前读取时作为 before_sequence 传入的边界。 */
   next_before_sequence?: number;
   /** 当前结果之前是否仍有更早 Segment。 */
   has_more: boolean;

@@ -1,5 +1,5 @@
 /**
- * @file 验证 canonical SessionMessage 的流式写入、交互、恢复与分段压缩。
+ * @file 验证 canonical SessionMessage 的 SQLite 写入、交互、恢复与上下文策略。
  *
  * 测试只使用 Downcity Model Protocol 与 canonical SessionMessage，不经过 UI Message
  * 或 Executor Record 投影。
@@ -18,48 +18,51 @@ import {
   normalize_session_user_parts,
   SessionMessages,
 } from "../../agent/bin/session/SessionMessages.js";
-import { compose_session_compaction } from "../../agent/bin/session/messages/SessionMessageCompaction.js";
-import { session_context_to_model_messages } from "../../agent/bin/executor/messages/SessionModelMessages.js";
-import { JsonlSessionMessageStore } from "../../agent/bin/session/storage/JsonlSessionMessageStore.js";
+import { session_messages_to_model_messages } from "../../agent/bin/executor/messages/SessionModelMessages.js";
+import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
+import { SequenceSummaryContextPolicy } from "../../agent/bin/session/composer/policies/SequenceSummaryContextPolicy.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 /** 可让下一次 Assistant 草稿更新失败的测试 Store。 */
-class FailingAssistantMessageStore extends JsonlSessionMessageStore {
+class FailingAssistantMessageStore extends SqliteSessionStorage {
   next_assistant_error = null;
 
   fail_next_assistant_write(message) {
     this.next_assistant_error = new Error(message);
   }
 
-  async write_agent_message(message) {
+  async update_message(...input) {
     const error = this.next_assistant_error;
     if (error) {
       this.next_assistant_error = null;
       throw error;
     }
-    await super.write_agent_message(message);
+    return await super.update_message(...input);
   }
 }
 
 /** 创建隔离的 canonical SessionMessages 测试环境。 */
 async function create_recorder(
   session_id = "session-messages-test",
-  create_store = (options) => new JsonlSessionMessageStore(options),
+  create_store = (options) => new SqliteSessionStorage(options),
 ) {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-messages-"));
-  const file_path = path.join(root_path, "active.jsonl");
-  const agent_message_file_path = path.join(root_path, "agent_message.json");
+  const database_path = path.join(root_path, "session.db");
   const files = new LocalFileSystem(root_path);
   const events = [];
   const store = create_store({
     files,
     session_id,
-    file_path,
-    agent_message_file_path,
+    agent_id: "test-agent",
+    origin: { type: "chat" },
+    database_path,
+    database_location: { type: "file" },
+    attachments: {},
   });
   const recorder = new SessionMessages({
     session_id,
     store,
+    attachment_store: store.attachments,
     publish: (mutation) => events.push(mutation),
   });
   await recorder.initialize();
@@ -69,15 +72,8 @@ async function create_recorder(
     events,
     files,
     root_path,
-    file_path,
-    agent_message_file_path,
+    database_path,
   };
-}
-
-/** 读取 active JSONL。 */
-async function read_jsonl(file_path) {
-  const raw = await fs.readFile(file_path, "utf8");
-  return raw.split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
 /** 写入一个完整的标准模型文本事件序列。 */
@@ -120,7 +116,7 @@ function create_user_message(session_id, sequence) {
     visibility: "visible",
     created_at: sequence,
     updated_at: sequence,
-    type: "user",
+    role: "user",
     input_type: "prompt",
     parts: [{
       part_id: `text-${String(sequence)}`,
@@ -131,51 +127,6 @@ function create_user_message(session_id, sequence) {
   };
 }
 
-/** 用一条原始磁盘记录创建 Store，验证反序列化边界。 */
-async function create_store_with_raw_message(session_id, message) {
-  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-validation-"));
-  const file_path = path.join(root_path, "active.jsonl");
-  await fs.writeFile(file_path, `${JSON.stringify(message)}\n`);
-  return new JsonlSessionMessageStore({
-    files: new LocalFileSystem(root_path),
-    session_id,
-    file_path,
-  });
-}
-
-test("Store 拒绝旧顶层 Session Message 类型", async (context) => {
-  const session_id = "legacy-top-level-message-test";
-  for (const type of ["assistant", "action", "error"]) {
-    await context.test(type, async () => {
-      const store = await create_store_with_raw_message(session_id, {
-        ...create_user_message(session_id, 1),
-        type,
-      });
-      await assert.rejects(
-        store.initialize(),
-        new RegExp(`unsupported Session Message type: ${type}`),
-      );
-    });
-  }
-});
-
-test("Store 拒绝缺少 parts 的 User 与 Agent Message", async (context) => {
-  const session_id = "missing-message-parts-test";
-  for (const type of ["user", "agent"]) {
-    await context.test(type, async () => {
-      const { parts: _parts, ...message } = create_user_message(session_id, 1);
-      const store = await create_store_with_raw_message(session_id, {
-        ...message,
-        type,
-        ...(type === "agent" ? { kind: "normal", status: "completed" } : {}),
-      });
-      await assert.rejects(
-        store.initialize(),
-        new RegExp(`Session ${type} Message parts must be an array`),
-      );
-    });
-  }
-});
 
 test("User Context Part 保持 canonical 结构并安全映射到模型文本", async () => {
   const parts = normalize_session_user_parts([{
@@ -185,14 +136,13 @@ test("User Context Part 保持 canonical 结构并安全映射到模型文本", 
   }]);
   assert.deepEqual(parts, [{
     part_id: "user-context:1",
+    sequence: 1,
     type: "context",
     tag: "quoted_message",
     context: "A < B & C > D",
   }]);
 
-  const model_messages = await session_context_to_model_messages({
-    summary: null,
-    messages: [{
+  const model_messages = await session_messages_to_model_messages([{
       message_id: "user-context-message",
       session_id: "user-context-session",
       turn_id: "user-context-turn",
@@ -201,11 +151,10 @@ test("User Context Part 保持 canonical 结构并安全映射到模型文本", 
       visibility: "visible",
       created_at: 1,
       updated_at: 1,
-      type: "user",
+      role: "user",
       input_type: "prompt",
       parts,
-    }],
-  });
+    }]);
   assert.deepEqual(model_messages, [{
     role: "user",
     content: [{
@@ -223,12 +172,11 @@ test("User Context Part 保持 canonical 结构并安全映射到模型文本", 
   );
 });
 
-test("模型文本增量只更新草稿，完成后写入 active JSONL", async () => {
+test("模型文本增量持续更新同一 SQLite Message 聚合", async () => {
   const {
     recorder,
     events,
-    file_path,
-    agent_message_file_path,
+    store,
   } = await create_recorder();
   await recorder.append_user_message({
     turn_id: "turn-1",
@@ -236,32 +184,29 @@ test("模型文本增量只更新草稿，完成后写入 active JSONL", async (
     parts: [{ part_id: "user-text-1", type: "text", text: "你好", state: "done" }],
   });
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
+  await writer.begin_step();
   await writer.apply_model_event({ type: "text_start", content_id: "text-1" });
   await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "你" });
   await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "好" });
 
-  const active_during_stream = await read_jsonl(file_path);
-  const draft = JSON.parse(await fs.readFile(agent_message_file_path, "utf8"));
-  assert.deepEqual(active_during_stream.map((message) => message.type), ["user"]);
+  const active_during_stream = await store.list_messages();
+  const draft = active_during_stream.at(-1);
+  assert.deepEqual(active_during_stream.map((message) => message.role), ["user", "agent"]);
   assert.equal(draft.parts[0].text, "你好");
   assert.equal(draft.parts[0].state, "streaming");
 
   await writer.apply_model_event({ type: "text_finish", content_id: "text-1" });
   await writer.complete();
 
-  const active = await read_jsonl(file_path);
-  assert.deepEqual(active.map((message) => message.type), ["user", "agent"]);
+  const active = await store.list_messages();
+  assert.deepEqual(active.map((message) => message.role), ["user", "agent"]);
   assert.equal(active[1].parts[0].text, "你好");
   assert.equal(active[1].parts[0].state, "done");
-  assert.equal(
-    await fs.stat(agent_message_file_path).then(() => true).catch(() => false),
-    false,
-  );
   assert.equal(events.some((event) => event.variant === "delta"), true);
 });
 
 test("工具调用、审批、结果和后续文本保持 canonical 顺序", async () => {
-  const { recorder, file_path } = await create_recorder("tool-order-test");
+  const { recorder, store } = await create_recorder("tool-order-test");
   const interactions = new SessionInteractions({
     session_id: "tool-order-test",
     messages: recorder,
@@ -326,7 +271,7 @@ test("工具调用、审批、结果和后续文本保持 canonical 顺序", asy
   ]);
   await writer.complete();
 
-  const assistant = (await read_jsonl(file_path))[0];
+  const assistant = (await store.list_messages())[0];
   assert.deepEqual(
     assistant.parts.map((part) => part.type),
     ["text", "tool", "interaction", "text"],
@@ -361,9 +306,9 @@ test("reasoning signature 经 canonical Message 保留到模型历史", async ()
   }]);
   await writer.complete();
 
-  const snapshot = await recorder.context_snapshot();
-  const model_messages = await session_context_to_model_messages(snapshot);
-  assert.equal(snapshot.messages[0].parts[0].reasoning_signature, "opaque-signature");
+  const snapshot = await recorder.list_history_messages();
+  const model_messages = await session_messages_to_model_messages(snapshot);
+  assert.equal(snapshot[0].parts[0].reasoning_signature, "opaque-signature");
   assert.equal(model_messages[0].content[0].signature, "opaque-signature");
 });
 
@@ -486,20 +431,26 @@ test("重启时收口流式 Assistant 和运行中 Action", async () => {
     title: "Running action",
   });
 
+  await harness.store.dispose();
+  const restarted_store = new SqliteSessionStorage({
+    files: harness.files,
+    session_id,
+    agent_id: "test-agent",
+    origin: { type: "chat" },
+    database_path: harness.database_path,
+    database_location: { type: "file" },
+    attachments: {},
+  });
   const restarted = new SessionMessages({
     session_id,
-    store: new JsonlSessionMessageStore({
-      files: harness.files,
-      session_id,
-      file_path: harness.file_path,
-      agent_message_file_path: harness.agent_message_file_path,
-    }),
+    store: restarted_store,
+    attachment_store: restarted_store.attachments,
     publish: () => {},
   });
   await restarted.initialize();
   const page = await restarted.list_messages();
-  const assistant = page.items.find((message) => message.type === "agent" && message.parts.some((part) => part.type === "text"));
-  const action = page.items.find((message) => message.type === "agent" && message.parts.some((part) => part.type === "action"));
+  const assistant = page.items.find((message) => message.role === "agent" && message.parts.some((part) => part.type === "text"));
+  const action = page.items.find((message) => message.role === "agent" && message.parts.some((part) => part.type === "action"));
   assert.equal(assistant.status, "stopped");
   assert.equal(assistant.parts[0].text, "partial");
   assert.equal(action.parts.find((part) => part.type === "action")?.state, "failed");
@@ -523,9 +474,9 @@ test("Action 更新保留 identity 并只读取最新 revision", async () => {
   assert.equal(page.items[0].parts[0].state, "completed");
 });
 
-test("Compact 生成累计 Summary 并让模型只读取 Summary 与 Active", async () => {
+test("Sequence Policy 生成累计 Summary 且不改写 canonical history", async () => {
   const session_id = "compact-model-history-test";
-  const { recorder } = await create_recorder(session_id);
+  const { recorder, store, root_path } = await create_recorder(session_id);
   for (let sequence = 1; sequence <= 4; sequence += 1) {
     await recorder.append_user_message({
       message_id: `user-${String(sequence)}`,
@@ -556,24 +507,17 @@ test("Compact 生成累计 Summary 并让模型只读取 Summary 与 Active", as
       };
     },
   });
-  const plan = await compose_session_compaction({
-    session_id,
-    snapshot: await recorder.context_snapshot(),
-    model,
-  });
-  assert.equal(plan.through_sequence, 2);
+  const policy = new SequenceSummaryContextPolicy();
+  const policy_storage = store.composer_storage(policy.name);
+  await policy.initialize({ storage: policy_storage });
+  assert.equal(await policy.recover({ storage: policy_storage, model, error: new Error("maximum context window"), project_root: root_path }), true);
   assert.match(summary_prompt, /\\\"type\\\":\\\"context\\\"/);
   assert.match(summary_prompt, /\\\"tag\\\":\\\"reference\\\"/);
   assert.match(summary_prompt, /\\\"context\\\":\\\"earlier context\\\"/);
-  await recorder.compact_active({
-    through_sequence: plan.through_sequence,
-    summary: plan.summary,
-  });
-
-  const snapshot = await recorder.context_snapshot();
-  const model_messages = await session_context_to_model_messages(snapshot);
-  assert.equal(snapshot.summary.text, "summary checkpoint");
-  assert.deepEqual(snapshot.messages.map((message) => message.sequence), [3, 4]);
+  const context = await policy.resolve({ storage: policy_storage, project_root: root_path });
+  const canonical = await recorder.list_history_messages();
+  assert.deepEqual(canonical.map((message) => message.sequence), [1, 2, 3, 4]);
+  const model_messages = context.messages;
   assert.equal(model_messages[0].role, "assistant");
   assert.equal(model_messages[0].content[0].text, "summary checkpoint");
   assert.deepEqual(
@@ -593,9 +537,9 @@ test("内部上下文读取不会被 500 条 UI 分页边界截断", async () =>
       parts: create_user_message(session_id, sequence).parts,
     });
   }
-  const snapshot = await recorder.context_snapshot();
-  const model_messages = await session_context_to_model_messages(snapshot);
-  assert.equal(snapshot.messages.length, 505);
+  const snapshot = await recorder.list_history_messages();
+  const model_messages = await session_messages_to_model_messages(snapshot);
+  assert.equal(snapshot.length, 505);
   assert.equal(model_messages.length, 505);
   assert.equal(model_messages.at(-1).content[0].text, "message 505");
 });

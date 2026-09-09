@@ -15,7 +15,6 @@ export type * from "./types/session/SessionMessage.js";
 export type * from "./types/session/SessionInteraction.js";
 export type * from "./types/session/SessionAction.js";
 export type * from "./types/session/SessionTurnFileDiff.js";
-export type { SessionCompactReason } from "./types/session/SessionCompact.js";
 export * from "./types/session/SessionMutation.js";
 export type {
   SessionSystemBlock,

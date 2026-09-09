@@ -11,11 +11,30 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import {
   Agent,
   DefaultSessionComposer,
+  FullHistoryContextPolicy,
   Session,
 } from "../../agent/bin/index.js";
 import { Workspace } from "@downcity/city";
 
 function create_input(model) {
+  const canonical_messages = [{
+    message_id: "user-1",
+    session_id: "composer-session",
+    turn_id: "turn-1",
+    sequence: 1,
+    revision: 1,
+    visibility: "visible",
+    created_at: 1,
+    updated_at: 1,
+    role: "user",
+    input_type: "prompt",
+    parts: [{
+      part_id: "text-1",
+      type: "text",
+      text: "hello",
+      state: "done",
+    }],
+  }];
   return {
     session: {
       agent_id: "composer-agent",
@@ -38,26 +57,12 @@ function create_input(model) {
       plugin_system_blocks: [],
       plugin_context_blocks: [],
     },
-    history: {
-      summary: null,
-      messages: [{
-        message_id: "user-1",
-        session_id: "composer-session",
-        turn_id: "turn-1",
-        sequence: 1,
-        revision: 1,
-        visibility: "visible",
-        created_at: 1,
-        updated_at: 1,
-        type: "user",
-        input_type: "prompt",
-        parts: [{
-          part_id: "text-1",
-          type: "text",
-          text: "hello",
-          state: "done",
-        }],
-      }],
+    storage: {
+      list_messages: async () => structuredClone(canonical_messages),
+      composer_storage: () => ({
+        list_messages: async () => structuredClone(canonical_messages),
+        transaction: async () => undefined,
+      }),
     },
     turn: { turn_id: "turn-1", retry_count: 0 },
   };
@@ -66,7 +71,7 @@ function create_input(model) {
 test("DefaultSessionComposer 从 canonical 快照组装 Step 输入", async () => {
   const model = new MockModelClient({ modelId: "composer-model" });
   const input = create_input(model);
-  const step = await new DefaultSessionComposer().compose(input);
+  const step = await new DefaultSessionComposer({ context_policy: new FullHistoryContextPolicy() }).compose(input);
 
   assert.equal(step.messages.length, 1);
   assert.equal(step.messages[0].content[0].text, "hello");
@@ -83,13 +88,11 @@ test("DefaultSessionComposer 只把 Plugin Context 注入模型副本", async ()
     content: "用户偏好使用中文。",
     trust_level: "reference",
   }];
-  const before = structuredClone(input.history);
-  const step = await new DefaultSessionComposer().compose(input);
+  const step = await new DefaultSessionComposer({ context_policy: new FullHistoryContextPolicy() }).compose(input);
 
   assert.match(step.messages[0].content[0].text, /extension-context/);
   assert.match(step.messages[0].content[0].text, /用户偏好使用中文/);
   assert.equal(step.messages[0].content[1].text, "hello");
-  assert.deepEqual(input.history, before);
 });
 
 test("Custom Composer 可以覆盖组装结果而不接触持久化", async () => {
@@ -108,11 +111,9 @@ test("Custom Composer 可以覆盖组装结果而不接触持久化", async () =
 
   const model = new MockModelClient({ modelId: "custom-composer-model" });
   const input = create_input(model);
-  const before = structuredClone(input.history);
   const step = await new CustomComposer().compose(input);
 
   assert.equal(step.system.at(-1).content, "Custom behavior");
-  assert.deepEqual(input.history, before);
 });
 
 test("Session system 快照与 Custom Composer 的实际模型输入一致", async () => {
@@ -156,72 +157,4 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
     await agent.dispose();
     await fs.rm(project_root, { recursive: true, force: true });
   }
-});
-
-test("Composer compact 只返回计划，不修改 Message 快照", async () => {
-  const prompts = [];
-  const model = new MockModelClient({
-    modelId: "composer-compact-model",
-    doGenerate: async (options) => {
-      prompts.push(JSON.stringify(options.prompt));
-      return {
-        content: [{ type: "text", text: "Composer summary" }],
-        finishReason: { unified: "stop", raw: "stop" },
-        usage: {
-          inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-          outputTokens: { total: 0, text: 0, reasoning: 0 },
-        },
-        warnings: [],
-      };
-    },
-  });
-  const input = create_input(model);
-  for (let sequence = 2; sequence <= 3; sequence += 1) {
-    input.history.messages.push({
-      ...structuredClone(input.history.messages[0]),
-      message_id: `user-${String(sequence)}`,
-      sequence,
-      parts: [{
-        part_id: `text-${String(sequence)}`,
-        type: "text",
-        text: `message ${String(sequence)}`,
-        state: "done",
-      }],
-    });
-  }
-  const before = structuredClone(input.history);
-  const plan = await new DefaultSessionComposer().compact({
-    session: input.session,
-    model: input.state.model,
-    history: input.history,
-  });
-
-  assert.equal(plan.through_sequence, 1);
-  assert.equal(plan.summary.text, "Composer summary");
-  assert.equal(prompts.length, 1);
-  assert.match(prompts[0], /hello/);
-  assert.doesNotMatch(prompts[0], /message 2/);
-  assert.doesNotMatch(prompts[0], /message 3/);
-  assert.deepEqual(input.history, before);
-});
-
-test("Composer compact 在 Active 少于两条上下文消息时不调用模型", async () => {
-  let generation_count = 0;
-  const model = new MockModelClient({
-    modelId: "composer-no-compact-model",
-    doGenerate: async () => {
-      generation_count += 1;
-      throw new Error("summary should not run");
-    },
-  });
-  const input = create_input(model);
-
-  const plan = await new DefaultSessionComposer().compact({
-    session: input.session,
-    model: input.state.model,
-    history: input.history,
-  });
-
-  assert.equal(plan, null);
-  assert.equal(generation_count, 0);
 });

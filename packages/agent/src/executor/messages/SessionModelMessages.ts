@@ -22,26 +22,6 @@ import type {
   SessionUserFilePart,
   SessionUserMessage,
 } from "@downcity/type";
-import type { SessionContextSnapshot } from "@/types/session/SessionSegment.js";
-
-/** 把完整 Session 上下文快照转换为模型消息。 */
-export async function session_context_to_model_messages(
-  snapshot: Readonly<SessionContextSnapshot>,
-  project_root?: string,
-): Promise<ModelMessage[]> {
-  const messages = await session_messages_to_model_messages(
-    snapshot.messages,
-    project_root,
-  );
-  if (!snapshot.summary?.text.trim()) return messages;
-  return [
-    {
-      role: "assistant",
-      content: [{ type: "text", text: snapshot.summary.text }],
-    },
-    ...messages,
-  ];
-}
 
 /** 把一组 canonical Session Message 转换为模型消息。 */
 export async function session_messages_to_model_messages(
@@ -50,9 +30,9 @@ export async function session_messages_to_model_messages(
 ): Promise<ModelMessage[]> {
   const output: ModelMessage[] = [];
   for (const message of messages) {
-    if (message.type === "user") {
+    if (message.role === "user") {
       output.push(...await convert_user_message(message, project_root));
-    } else if (message.type === "agent") {
+    } else if (message.role === "agent") {
       output.push(...convert_assistant_message(message));
     }
   }
@@ -86,9 +66,20 @@ async function convert_user_message(
 
 /** 把单条 canonical Agent Message 转换为模型 assistant 与 tool 消息。 */
 function convert_assistant_message(message: SessionAgentMessage): ModelMessage[] {
+  const output: ModelMessage[] = [];
+  let current_step_id: string | null = null;
   const content: ModelContent[] = [];
   const tool_results: ModelContent[] = [];
-  for (const part of message.parts) {
+  const flush_step = (): void => {
+    if (content.length > 0) output.push({ role: "assistant", content: [...content] });
+    if (tool_results.length > 0) output.push({ role: "tool", content: [...tool_results] });
+    content.length = 0;
+    tool_results.length = 0;
+  };
+  for (const part of [...message.parts].sort((left, right) => left.sequence - right.sequence)) {
+    const part_step_id = part.step_id ?? "__unscoped__";
+    if (current_step_id !== null && part_step_id !== current_step_id) flush_step();
+    current_step_id = part_step_id;
     if (part.type === "text" && part.text.trim()) {
       content.push({ type: "text", text: part.text });
     } else if (part.type === "reasoning" && part.text.trim()) {
@@ -103,12 +94,8 @@ function convert_assistant_message(message: SessionAgentMessage): ModelMessage[]
       append_tool_content(part, content, tool_results);
     }
   }
-  return [
-    ...(content.length > 0 ? [{ role: "assistant", content } as ModelMessage] : []),
-    ...(tool_results.length > 0
-      ? [{ role: "tool", content: tool_results } as ModelMessage]
-      : []),
-  ];
+  flush_step();
+  return output;
 }
 
 /** 把 canonical Tool Part 投影为模型工具调用和可选工具结果。 */

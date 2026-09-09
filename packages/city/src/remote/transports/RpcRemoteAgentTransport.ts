@@ -78,10 +78,6 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.stop_session(session_id, origin_type);
   }
 
-  async compact(session_id: string, origin_type: string): Promise<{ id: string }> {
-    return await this.client.compact_session(session_id, origin_type);
-  }
-
   async subscribe(params: {
     session_id: string;
     origin_type: string;

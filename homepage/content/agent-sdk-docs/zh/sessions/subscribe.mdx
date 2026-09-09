@@ -24,16 +24,15 @@ unsubscribe();
 
 | `variant` | `type` | 用途 | 是否带 Message revision |
 | --- | --- | --- | --- |
-| `message` | `user | assistant | action | error` | 顶层 Message 的完整快照 | 是 |
+| `message` | `user | agent` | 顶层 Message 的完整快照 | 是 |
 | `part` | `text | reasoning | tool | interaction | file | data` | Assistant Part 的完整快照 | 是 |
 | `delta` | `text | reasoning | tool_input` | 新增的原始文本或 Tool 输入片段 | 是 |
 | `turn` | `start | finish` | Turn 执行生命周期 | 否 |
 | `file_diff` | — | 当前 Turn 的文件改动实时摘要 | 否 |
-| `compact` | `start | finish` | 显式 Compact Command 生命周期 | 否 |
 | `session` | `title | config` | Session 自身属性变化 | 否 |
 | `warning` | `model_request` | 模型请求失败与重试进度 | 否 |
 
-`message`、`part` 和 `delta` 都在对应完整 Message 或 Assistant 草稿持久化成功后才发布。Mutation envelope 本身不写入 `active.jsonl` 或 Segment。
+`message`、`part` 和 `delta` 都在对应完整 Message 持久化成功后才发布。Mutation envelope 本身不写入 canonical history。
 
 ## 用 Delta 流式显示文本
 

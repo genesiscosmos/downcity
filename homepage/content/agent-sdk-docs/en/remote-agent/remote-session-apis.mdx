@@ -5,7 +5,7 @@ description: Core RemoteAgent Session methods and their boundaries
 
 # Remote Session API
 
-Remote Sessions provide `get_info()`, `prompt()`, `stop()`, `compact()`, `subscribe()`, `messages()`,
+Remote Sessions provide `get_info()`, `prompt()`, `stop()`, `subscribe()`, `messages()`,
 `system()`, `interactions()`, `respond()`, `status()`, `set({ security })`, and `fork()`.
 
 ```ts
@@ -14,9 +14,6 @@ const session = await agent.sessions.create();
 const unsubscribe = session.subscribe(apply_mutation);
 const turn = await session.prompt({ query: "Continue" });
 await turn.finished;
-
-const compact = await session.compact();
-await compact.finished;
 
 const page = await session.messages();
 const status = await session.status();
@@ -27,9 +24,7 @@ await session.set({
 unsubscribe();
 ```
 
-The subscription emits `message | part | delta | turn | file_diff | compact | session | warning`. User participation is a pending Interaction Part while its related Tool is `waiting-user`; a failed model call emits `warning / model_request`. Submit structured user responses with `session.respond(...)`.
-
-Remote and local Sessions use the same compaction Handle: `compact()` returns after the command is queued, and `finished` resolves only after the server-side Compact Command actually completes.
+The subscription emits `message | part | delta | turn | file_diff | session | warning`. User participation is a pending Interaction Part while its related Tool is `waiting-user`; a failed model call emits `warning / model_request`. Submit structured user responses with `session.respond(...)`.
 
 Remote clients can set serializable security policy but do not select models through the Agent SDK.
 The server host owns model IDs, defaults, recovery, and runtime instance injection.

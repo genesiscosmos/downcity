@@ -24,16 +24,15 @@ Every Mutation has `mutation_id`, `session_id`, and `created_at`.
 
 | `variant` | `type` | Purpose | Has Message revision |
 | --- | --- | --- | --- |
-| `message` | `user | assistant | action | error` | Complete top-level Message snapshot | Yes |
+| `message` | `user | agent` | Complete top-level Message snapshot | Yes |
 | `part` | `text | reasoning | tool | interaction | file | data` | Complete Assistant Part snapshot | Yes |
 | `delta` | `text | reasoning | tool_input` | New raw text or Tool input fragment | Yes |
 | `turn` | `start | finish` | Turn execution lifecycle | No |
 | `file_diff` | — | Live file-change summary for the current Turn | No |
-| `compact` | `start | finish` | Explicit Compact Command lifecycle | No |
 | `session` | `title | config` | Session property change | No |
 | `warning` | `model_request` | Model request failure and retry progress | No |
 
-`message`, `part`, and `delta` are published only after the corresponding complete Message or Assistant draft is persisted. The Mutation envelope itself is never written to `active.jsonl` or a Segment.
+`message`, `part`, and `delta` are published only after the corresponding complete Message is persisted. The Mutation envelope itself is never written to canonical history.
 
 ## Render text with Deltas
 

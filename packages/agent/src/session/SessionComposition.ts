@@ -49,6 +49,8 @@ export class SessionComposition {
   async initialize(): Promise<void> {
     if (!this.initialize_promise) {
       this.initialize_promise = (async () => {
+        await this.options.store.initialize();
+        await this.options.composer.initialize({ storage: this.options.store });
         const persisted_instruction = await this.options.store.read_instruction();
         if (persisted_instruction === null) return;
 
@@ -170,7 +172,7 @@ export class SessionComposition {
           (block) => block.content,
         ),
       });
-    const history = await this.options.messages.context_snapshot();
+    const canonical_messages = await this.options.store.list_messages();
     const plugin_runtime = refresh_system
       ? this.options.get_hooks()
       : turn_context?.step.hooks || this.options.get_hooks();
@@ -196,9 +198,9 @@ export class SessionComposition {
           const value: SessionTurnContextHookValue = {
             session_id: this.options.session_id,
             turn_id: turn_context.session.turn_id,
-            user_messages: history.messages.flatMap((message) => {
+            user_messages: canonical_messages.flatMap((message) => {
               if (
-                message.type !== "user" ||
+                message.role !== "user" ||
                 message.turn_id !== turn_context.session.turn_id
               ) return [];
               return [{
@@ -245,7 +247,7 @@ export class SessionComposition {
         plugin_system_blocks: resolved_plugin_system_blocks,
         plugin_context_blocks,
       },
-      history,
+      storage: this.options.store,
       turn: {
         ...(turn_context ? { turn_id: turn_context.session.turn_id } : {}),
         retry_count,

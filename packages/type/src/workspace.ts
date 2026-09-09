@@ -1,6 +1,10 @@
 /** @downcity/type/workspace：Workspace 与 Storage 中立协议入口。 */
 
-export type { StorageProvider, StorageScope } from "./types/storage/Storage.js";
+export type {
+  StorageDatabaseLocation,
+  StorageProvider,
+  StorageScope,
+} from "./types/storage/Storage.js";
 export type { FileSystem, WorkspaceDirectoryEntry } from "./types/workspace/FileSystem.js";
 export type * from "./types/workspace/FileTool.js";
 export type * from "./types/workspace/SearchTool.js";

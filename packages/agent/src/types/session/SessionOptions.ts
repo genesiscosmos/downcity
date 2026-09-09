@@ -14,7 +14,7 @@ import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionOrigin } from "@downcity/type";
 
 /**
@@ -60,10 +60,10 @@ export interface SessionOptions {
   origin: SessionOrigin;
 
   /** 当前 Session 独享的领域持久化视图。 */
-  store: SessionDataStore;
+  store: SessionStorage;
 
   /** 为 fork 创建另一个 Session 的领域持久化视图。 */
-  get_session_store: (session_id: string) => SessionDataStore;
+  get_session_store: (session_id: string) => SessionStorage;
 
   /**
    * 将 fork 创建的子 Session 交回 AgentSessions 登记。

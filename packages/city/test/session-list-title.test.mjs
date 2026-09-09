@@ -69,7 +69,10 @@ async function create_agent_with_titled_session(input) {
     session_id: input.session_id,
     workspace,
   });
-  await session.set({ model: create_mock_title_model(input.title) });
+  await session.set(
+    { model: create_mock_title_model(input.title) },
+    { persist_action: false, publish_mutation: false },
+  );
 
   await session.append_user_message({
     text: input.first_user_text,
@@ -131,18 +134,6 @@ test("list_sessions reflects canonical SessionMessages changes", async () => {
     await session.append_agent_message({
       text: "Recorder appended history",
     });
-    await session.session_messages.compact_active({
-      through_sequence: 1,
-      summary: {
-        record_type: "summary",
-        session_id: session.id,
-        summary_id: "summary-through-1",
-        through_sequence: 1,
-        text: "Initial history was compacted.",
-        created_at: Date.now(),
-      },
-    });
-
     const page = await collection.list();
     const info = await session.get_info();
     assert.equal(page.items[0].message_count, 2);

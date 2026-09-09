@@ -338,7 +338,7 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
     visibility: "visible",
     created_at: 1,
     updated_at: 1,
-    type: "user",
+    role: "user",
     input_type: "prompt",
     parts: [{
       part_id: "text-capture-1",

@@ -96,6 +96,6 @@ session 创建时间和时区是当前会话的参考时间上下文。当前时
 
 ## 它不会做什么
 
-`session.system()` 不会把 system prompt 写进 `active.jsonl` 或历史 Segment。
+`session.system()` 不会把 system prompt 写进 canonical Message history。
 
 Session history 仍然只关注可见的 user / assistant 消息。如果你需要检查当前会随历史一起进入模型的提示词上下文，用 `system()`。

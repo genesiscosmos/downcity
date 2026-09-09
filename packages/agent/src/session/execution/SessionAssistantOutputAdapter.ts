@@ -91,6 +91,20 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
     await (await this.ensure_writer()).append_result_parts(parts);
   }
 
+  /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */
+  async append_error(input: {
+    /** 错误影响范围。 */
+    scope: "session" | "turn";
+    /** 稳定错误码。 */
+    code: string;
+    /** 用户可见错误信息。 */
+    message: string;
+    /** 当前错误是否允许重试恢复。 */
+    recoverable: boolean;
+  }): Promise<void> {
+    await (await this.ensure_writer()).append_error(input);
+  }
+
   /** 按 Turn 结果收口最后一个 canonical Message。 */
   async finish(input: {
     /** Assistant 最终状态。 */

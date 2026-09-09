@@ -244,7 +244,7 @@ function final_text_stream(model_id, session_name) {
 
 /** 从 Session 历史中读取 Turn Diff 的文件路径。 */
 function read_diff_files(messages) {
-  const assistant = messages.items.find((message) => message.type === "agent");
+  const assistant = messages.items.find((message) => message.role === "agent");
   const file_diff = assistant?.parts.find((part) =>
     part.type === "data" && part.data_type === "data-session-turn-file-diff"
   );

@@ -1,17 +1,17 @@
 /**
  * Session Composer 类型。
  *
- * Composer 是自定义 Session 的执行策略边界：它只读取 Session 的只读快照，
- * 负责组装模型输入和生成压缩计划，不持久化 Message、Metadata 或事件。
+ * Composer 是最终模型输入的唯一生成者：它组合运行快照、canonical history 与内部
+ * Context Policy；不拥有 Message、Turn 或数据库连接生命周期。
  */
 
-import type { ModelClient, ModelMessage } from "@downcity/type";
-import type { RuntimeTool as Tool } from "@downcity/type";
+import type { ModelClient, ModelMessage, RuntimeTool as Tool } from "@downcity/type";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionContextSnapshot, SessionSegmentSummary } from "@/types/session/SessionSegment.js";
 import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
+import type { SessionResolvedContextDiagnostics } from "@/types/session/SessionContextPolicy.js";
 
 /** Composer 可读取的 Session 身份快照。 */
 export interface SessionComposeIdentity {
@@ -19,9 +19,9 @@ export interface SessionComposeIdentity {
   agent_id: string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
-  /** 当前 Agent 项目的绝对根目录。 */
+  /** 当前 Workspace 的绝对根目录。 */
   project_root: string;
-  /** 当前 Session 的创建时间戳，单位为毫秒。 */
+  /** 当前 Session 的创建时间戳。 */
   created_at: number;
   /** 当前 Session 使用的参考时区。 */
   timezone: string;
@@ -29,11 +29,11 @@ export interface SessionComposeIdentity {
 
 /** Composer 可读取的当前 Step 生效状态。 */
 export interface SessionComposeState {
-  /** 当前 Step 使用的模型实例；只读查询允许为空。 */
+  /** 当前 Step 使用的模型实例。 */
   model?: ModelClient;
-  /** 当前模型声明的上下文窗口，单位为 token。 */
+  /** 当前模型声明的上下文窗口。 */
   model_context_window?: number;
-  /** 当前 Step 生效的 Agent 环境变量快照。 */
+  /** 当前 Step 生效的 Workspace 环境变量。 */
   env: Readonly<Record<string, string>>;
   /** 当前 Step 生效的 Agent instruction 文本。 */
   systems: readonly string[];
@@ -41,20 +41,26 @@ export interface SessionComposeState {
   tools: Readonly<Record<string, Tool>>;
   /** 当前 Step 生效的 instruction system blocks。 */
   instruction_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 当前 Session 由宿主注入的受托管 Plugin system blocks。 */
+  /** 宿主注入的受托管 Plugin system blocks。 */
   managed_plugin_system_blocks: readonly AgentSessionSystemBlock[];
   /** 当前 Step 捕获的 Plugin system blocks。 */
   plugin_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 当前 Turn 首次解析后复用、只进入模型输入副本的 Plugin 动态上下文。 */
+  /** 当前 Turn 冻结的 Plugin 动态上下文。 */
   plugin_context_blocks: readonly SessionHookContextBlock[];
 }
 
 /** Composer 可读取的当前 Turn 快照。 */
 export interface SessionComposeTurn {
-  /** 当前 Turn 标识；只读查询场景允许为空。 */
+  /** 当前 Turn 标识；只读查询时允许为空。 */
   turn_id?: string;
-  /** 当前执行因上下文超限而进行的重试次数。 */
+  /** 当前执行已进行的上下文恢复次数。 */
   retry_count: number;
+}
+
+/** Composer 初始化输入。 */
+export interface SessionComposerInitializeInput {
+  /** 当前 Session 的统一持久化边界。 */
+  storage: SessionStorage;
 }
 
 /** 单次模型输入组装参数。 */
@@ -63,57 +69,48 @@ export interface SessionComposeInput {
   session: SessionComposeIdentity;
   /** 当前 Step 已生效的运行状态。 */
   state: SessionComposeState;
-  /** 当前 Session 的累计 Summary 与 Active Message 快照。 */
-  history: Readonly<SessionContextSnapshot>;
+  /** 当前 Session 的统一持久化边界。 */
+  storage: SessionStorage;
   /** 当前 Turn 快照。 */
   turn: SessionComposeTurn;
+}
+
+/** 上下文超限后的恢复输入。 */
+export interface SessionContextRecoveryInput {
+  /** 当前 Session 身份快照。 */
+  session: SessionComposeIdentity;
+  /** 当前 Session 使用的模型。 */
+  model?: ModelClient;
+  /** 当前 Session 的统一持久化边界。 */
+  storage: SessionStorage;
+  /** 触发恢复的原始错误。 */
+  error: unknown;
+  /** 模型请求逐次失败的可选观测入口。 */
+  on_model_request_failure?: ModelRequestFailureReporter;
 }
 
 /** Composer 为一次模型 Step 生成的完整输入。 */
 export interface SessionStepInput {
   /** 当前 Step 的 system messages。 */
   system: SessionSystemMessage[];
-  /** 当前 Step 的可解释 system block；自定义 Composer 可以省略。 */
+  /** 当前 Step 的可解释 system blocks。 */
   system_blocks?: AgentSessionSystemBlock[];
   /** 当前 Step 已转换完成的标准模型消息。 */
   messages: ModelMessage[];
   /** 当前 Step 可调用的工具集合。 */
   tools: Record<string, Tool>;
+  /** 本次上下文策略诊断。 */
+  context_diagnostics?: SessionResolvedContextDiagnostics;
 }
 
-/** 持久化上下文压缩所需的最小只读输入。 */
-export interface SessionCompactionInput {
-  /** 当前 Session 的稳定身份快照。 */
-  session: SessionComposeIdentity;
-  /** 当前 Session 实际使用的模型；只读或未配置场景允许为空。 */
-  model?: ModelClient;
-  /** 当前 Session 的累计 Summary 与 Active Message 快照。 */
-  history: Readonly<SessionContextSnapshot>;
-  /** 可选的模型请求逐次失败通知入口。 */
-  on_model_request_failure?: ModelRequestFailureReporter;
-}
-
-/** Composer 生成、等待 SessionMessages 提交的压缩计划。 */
-export interface SessionCompactionPlan {
-  /** Active 中最后一条需要移入 Segment 的 Message sequence。 */
-  through_sequence: number;
-  /** 新 Segment 使用的累计 Summary。 */
-  summary: SessionSegmentSummary;
-  /** 当前计划覆盖到的最后一条 Message 标识。 */
-  boundary_message_id: string;
-}
-
-/** Session 级可替换执行策略。 */
+/** Session 级可替换 Composer。 */
 export interface SessionComposer {
   /** Composer 的稳定可读名称。 */
   readonly name: string;
-
-  /** 组装一次模型 Step 使用的 system、history 与 tools。 */
+  /** 初始化 Composer 及其内部 Policy。 */
+  initialize(input: SessionComposerInitializeInput): Promise<void>;
+  /** 组装一次模型 Step 使用的最终输入。 */
   compose(input: SessionComposeInput): Promise<SessionStepInput>;
-
-  /** 根据只读历史生成压缩计划；无需压缩时返回空。 */
-  compact(input: SessionCompactionInput): Promise<SessionCompactionPlan | null>;
-
-  /** 判断给定错误是否应在持久化压缩后重试。 */
-  should_compact(error: unknown): boolean;
+  /** 尝试推进上下文派生状态；有效推进时返回 true。 */
+  recover_context(input: SessionContextRecoveryInput): Promise<boolean>;
 }

@@ -2,6 +2,17 @@
 
 import type { FileSystem } from "../workspace/FileSystem.js";
 
+/** 当前 Storage Scope 为内部 SQLite 数据库提供的位置。 */
+export type StorageDatabaseLocation =
+  | {
+      /** 使用 Scope 根目录内的本地数据库文件。 */
+      type: "file";
+    }
+  | {
+      /** 使用跟随当前进程生命周期的内存数据库。 */
+      type: "memory";
+    };
+
 /** City 存储中的一个受控作用域。 */
 export interface StorageScope {
   /** 当前作用域稳定且不可越界的逻辑根路径。 */
@@ -9,6 +20,9 @@ export interface StorageScope {
 
   /** 只允许访问当前作用域的文件能力。 */
   readonly files: FileSystem;
+
+  /** 当前作用域中结构化数据库应使用的明确位置类型。 */
+  readonly database_location: StorageDatabaseLocation;
 }
 
 /** 不理解业务语义的底层存储后端。 */

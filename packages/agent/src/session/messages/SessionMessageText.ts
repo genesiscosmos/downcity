@@ -24,7 +24,6 @@ export interface SessionToolCallSummary {
 
 /** 提取单条 canonical Message 的全部普通文本。 */
 export function extract_session_message_text(message: SessionMessage): string {
-  if (message.type !== "user" && message.type !== "agent") return "";
   return message.parts
     .flatMap((part) => part.type === "text" ? [part.text] : [])
     .map((text) => text.trim())

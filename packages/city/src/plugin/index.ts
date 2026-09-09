@@ -32,7 +32,6 @@ export type {
   PluginLogDetails,
   PluginLogLevel,
   PluginSessionCollection,
-  PluginSessionContextSnapshot,
   PluginSessionHandle,
   PluginSessionMutation,
   PluginSessionOrigin,

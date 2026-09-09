@@ -161,26 +161,6 @@ export function register_sdk_session_routes(
     }
   });
 
-  app.post("/api/sdk/sessions/:session_id/compact", async (c) => {
-    try {
-      const session_id = String(c.req.param("session_id") || "").trim();
-      if (!session_id) {
-        return c.json({ success: false, error: "Missing session_id" }, 400);
-      }
-      const session = await get_session(session_id, c.req.query("origin_type"));
-      const compact = await session.compact();
-      return c.json({ success: true, compact: { id: compact.id } });
-    } catch (error) {
-      return c.json(
-        {
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        },
-        500,
-      );
-    }
-  });
-
   app.get("/api/sdk/sessions/:session_id/events", async (c) => {
     const session_id = String(c.req.param("session_id") || "").trim();
     if (!session_id) {

@@ -5,7 +5,7 @@
  */
 
 import type { JsonObject } from "@downcity/type";
-import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
@@ -23,7 +23,7 @@ export interface SessionMessagesOptions {
   /** 当前 Session 标识。 */
   session_id: string;
   /** Message 快照持久化 Store。 */
-  store: SessionMessageStore;
+  store: SessionStorage;
   /** 当前 Session 的附件持久化能力。 */
   attachment_store: SessionAttachmentStore;
   /** 持久化成功后的实时 Mutation 发布函数。 */
@@ -48,14 +48,10 @@ export interface AppendSessionUserMessageInput {
 export interface OpenSessionAgentMessageInput {
   /** 当前 Assistant 所属 Turn。 */
   turn_id: string;
-  /** 当前 Assistant 是普通回复还是压缩 Summary。 */
-  kind?: "normal" | "summary";
   /** 当前 Message 的默认展示范围。 */
   visibility?: "visible" | "internal";
   /** 可选的稳定 Message 标识。 */
   message_id?: string;
-  /** Summary 已覆盖到的来源 Message 标识。 */
-  summary_through_message_id?: string;
 }
 
 /** 已完成 Assistant Message 的直接写入参数。 */
@@ -64,12 +60,8 @@ export interface AppendCompletedAgentMessageInput {
   turn_id?: string;
   /** Assistant 完整结构化 Part。 */
   parts: SessionAgentMessagePart[];
-  /** 当前 Assistant 是普通回复还是压缩 Summary。 */
-  kind?: "normal" | "summary";
   /** 当前 Message 的默认展示范围。 */
   visibility?: "visible" | "internal";
-  /** Summary 已覆盖到的来源 Message 标识。 */
-  summary_through_message_id?: string;
 }
 
 /** Action Part 及其所属 Agent Message 的创建参数。 */
@@ -100,7 +92,7 @@ export interface CompleteSessionAgentActionPartInput {
   data?: JsonObject;
 }
 
-/** Error Part 及其所属 Agent Message 的创建参数。 */
+/** 将 Error Part 归入所属 Turn Agent Message 的参数。 */
 export interface AppendSessionAgentErrorPartInput {
   /** 当前错误影响 Session 还是单个 Turn。 */
   scope: "session" | "turn";

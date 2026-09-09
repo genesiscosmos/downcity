@@ -2,7 +2,7 @@
  * SDK Session 标题生成与持久化辅助。
  *
  * 关键点（中文）
- * - session title 是 `meta.json` 顶层字段，列表与详情都以它为准。
+ * - session title 是 `session_state` 的字段，列表与详情都以它为准。
  * - title 默认允许为空；只有模型成功生成标题时才会写入。
  * - 当 title 仍为空时，后续执行链路可以再次尝试生成。
  */
@@ -15,7 +15,7 @@ import {
 import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
-import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionMessage } from "@downcity/type";
 import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
 import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
@@ -27,7 +27,7 @@ const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
  */
 export interface EnsureSessionTitleParams {
   /** 当前 Session 的领域持久化入口。 */
-  store: SessionDataStore;
+  store: SessionStorage;
 
   /**
    * 当前 session_id。
@@ -78,7 +78,7 @@ function truncate_title(input: string, max_chars: number): string {
 
 function resolve_first_user_text(messages: SessionMessage[]): string {
   for (const message of messages) {
-    if (message.type !== "user") continue;
+    if (message.role !== "user") continue;
     const text = extract_session_message_text(message);
     if (text) return text;
   }

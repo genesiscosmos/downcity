@@ -32,11 +32,7 @@ import type {
   SessionMutation,
   SessionMessageMutation as SessionMessageSnapshotMutation,
 } from "@downcity/type";
-import type {
-  SessionContextSnapshot,
-  SessionMessageStorageStats,
-  SessionSegmentSummary,
-} from "@/types/session/SessionSegment.js";
+import type { SessionMessageStorageStats } from "@/types/store/SessionStorage.js";
 import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
 import type {
   SessionInteractionCloseInput,
@@ -56,7 +52,7 @@ import type {
   OpenSessionAgentMessageInput,
   SessionMessagesOptions,
 } from "@/types/session/SessionMessages.js";
-import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 export { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
@@ -66,7 +62,7 @@ export { normalize_session_user_parts } from "@/session/messages/SessionUserMess
 /** 唯一 Session Message 写入服务。 */
 export class SessionMessages {
   readonly session_id: string;
-  private readonly store: SessionMessageStore;
+  private readonly store: SessionStorage;
   private readonly attachment_store: SessionAttachmentStore;
   private readonly publish: SessionMessagesOptions["publish"];
   private readonly messages_by_id = new Map<string, SessionMessage>();
@@ -118,10 +114,10 @@ export class SessionMessages {
     }
     const unfinished = [...this.messages_by_id.values()];
     for (const message of unfinished) {
-      if (message.type === "agent" && message.status === "streaming") {
+      if (message.role === "agent" && message.status === "streaming") {
         await this.complete_agent_message(message.message_id, "stopped");
       }
-      if (message.type === "agent") {
+      if (message.role === "agent") {
         for (const part of message.parts) {
           if (part.type !== "action" || part.state !== "running") continue;
           await this.update_action_part(message.message_id, "failed", {
@@ -142,10 +138,11 @@ export class SessionMessages {
   async append_user_message(
     input: AppendSessionUserMessageInput,
   ): Promise<SessionUserMessage> {
+    const message_id =
+      String(input.message_id || "").trim() ||
+      `user:${this.session_id}:${generate_id()}`;
     const message = await this.create_message((sequence, created_at) => ({
-      message_id:
-        String(input.message_id || "").trim() ||
-        `user:${this.session_id}:${generate_id()}`,
+      message_id,
       session_id: this.session_id,
       turn_id: input.turn_id,
       sequence,
@@ -153,9 +150,12 @@ export class SessionMessages {
       visibility: input.visibility || "visible",
       created_at,
       updated_at: created_at,
-      type: "user",
+      role: "user",
       input_type: input.input_type,
-      parts: normalize_canonical_session_user_parts(input.parts),
+      parts: normalize_canonical_session_user_parts(input.parts).map((part) => ({
+        ...part,
+        part_id: `${message_id}:part:${String(part.sequence)}`,
+      })),
     }));
     return message as SessionUserMessage;
   }
@@ -175,13 +175,9 @@ export class SessionMessages {
       visibility: input.visibility || "visible",
       created_at,
       updated_at: created_at,
-      type: "agent",
-      kind: input.kind || "normal",
+      role: "agent",
       status: "streaming",
       parts: [],
-      ...(input.summary_through_message_id
-        ? { summary_through_message_id: input.summary_through_message_id }
-        : {}),
     }), true)) as SessionAgentMessage;
     return new SessionAgentMessageWriter(this, message.message_id);
   }
@@ -193,11 +189,7 @@ export class SessionMessages {
     const turn_id = input.turn_id || `external:${this.session_id}:${generate_id()}`;
     const writer = await this.open_agent_message({
       turn_id,
-      kind: input.kind || "normal",
       visibility: input.visibility || "visible",
-      ...(input.summary_through_message_id
-        ? { summary_through_message_id: input.summary_through_message_id }
-        : {}),
     });
     for (const part of input.parts) await writer.upsert_part(part);
     await writer.complete();
@@ -297,7 +289,7 @@ export class SessionMessages {
       }
       return;
     }
-    if (existing.type === "agent" && event.status !== "running") {
+    if (existing.role === "agent" && event.status !== "running") {
       await this.update_action_part(event.action_id, event.status, {
         title: event.title,
         description: event.description,
@@ -321,8 +313,7 @@ export class SessionMessages {
       visibility: "visible",
       created_at,
       updated_at: created_at,
-      type: "agent",
-      kind: "normal",
+      role: "agent",
       status: "completed",
       parts: [{
         part_id: `action-part:${message_id}`,
@@ -350,8 +341,16 @@ export class SessionMessages {
     changes?: { title?: string; description?: string; data?: JsonObject },
     options?: { publish_mutation?: boolean },
   ): Promise<SessionAgentMessage> {
-    const message = await this.store.append_message((state) => {
-      const current = require_message(state.messages, message_id, "agent");
+    const current_message = require_message(
+      [...this.messages_by_id.values()],
+      message_id,
+      "agent",
+    );
+    const message = await this.store.update_message(
+      message_id,
+      current_message.revision,
+      (current_value) => {
+      const current = require_message([current_value], message_id, "agent");
       const action = current.parts.find(
         (part): part is SessionAgentActionPart => part.type === "action",
       );
@@ -373,15 +372,79 @@ export class SessionMessages {
         revision: current.revision + 1,
         updated_at: created_at,
       } satisfies SessionAgentMessage;
-    });
+      },
+    );
     this.accept_message(message, options?.publish_mutation !== false);
     return message as SessionAgentMessage;
   }
 
-  /** 创建只包含 Error Part 的用户可见 Agent Message。 */
+  /**
+   * 将 Error Part 追加到当前 Turn 最后一个 Agent Message。
+   *
+   * 同一错误码已经存在时保持幂等；只有当前 Turn 从未产生 Agent Message 时，才创建
+   * 一个仅含 Error 的失败 Message。这样错误与已经产生的 Text、Tool 和 Diff 始终
+   * 共享同一 Message，并由 Part sequence 表达真实顺序。
+   */
   async append_error_part(
     input: AppendSessionAgentErrorPartInput,
   ): Promise<SessionAgentMessage> {
+    await this.ensure_initialized();
+    const target = [...this.messages_by_id.values()]
+      .filter((message): message is SessionAgentMessage =>
+        message.role === "agent" && message.turn_id === input.turn_id,
+      )
+      .sort((left, right) => right.sequence - left.sequence)[0];
+    const existing_error = target?.parts.find(
+      (part): part is SessionAgentErrorPart =>
+        part.type === "error" && part.code === input.code,
+    );
+    if (target && existing_error) return target;
+
+    const error_part: SessionAgentErrorPart = {
+      part_id: `error:${generate_id()}`,
+      sequence: target
+        ? target.parts.reduce(
+            (sequence, part) => Math.max(sequence, part.sequence + 1),
+            1,
+          )
+        : 1,
+      type: "error",
+      scope: input.scope,
+      code: input.code,
+      message: input.message,
+      recoverable: input.recoverable,
+    };
+
+    if (target?.status === "streaming") {
+      await this.agent_state.update_part(target.message_id, error_part);
+      return require_message(
+        [...this.messages_by_id.values()],
+        target.message_id,
+        "agent",
+      );
+    }
+
+    if (target) {
+      const message = await this.store.update_message(
+        target.message_id,
+        target.revision,
+        (current_value) => {
+        const current = require_message([current_value], target.message_id, "agent");
+        const created_at = Date.now();
+        return {
+          ...current,
+          revision: current.revision + 1,
+          updated_at: created_at,
+          parts: [...current.parts, error_part].sort(
+            (left, right) => left.sequence - right.sequence,
+          ),
+        } satisfies SessionAgentMessage;
+        },
+      );
+      this.accept_message(message);
+      return message as SessionAgentMessage;
+    }
+
     return (await this.create_message((sequence, created_at) => ({
       message_id: `agent:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
@@ -391,101 +454,58 @@ export class SessionMessages {
       visibility: "visible",
       created_at,
       updated_at: created_at,
-      type: "agent",
-      kind: "normal",
+      role: "agent",
       status: "failed",
-      parts: [{
-        part_id: `error:${generate_id()}`,
-        sequence: 1,
-        type: "error",
-        scope: input.scope,
-        code: input.code,
-        message: input.message,
-        recoverable: input.recoverable,
-      } satisfies SessionAgentErrorPart],
+      parts: [error_part],
     }))) as SessionAgentMessage;
   }
 
-  /** 读取 Active 或指定边界之前最近的完整 Segment。 */
+  /** 按 Message sequence 返回一页完整 Message 聚合。 */
   async list_messages(
     input?: ListSessionMessagesInput,
   ): Promise<SessionMessagePage> {
     await this.ensure_initialized();
-    const requests_segment = input?.before_sequence !== undefined;
     const before_sequence = input?.before_sequence;
     if (
-      requests_segment &&
+      before_sequence !== undefined &&
       (!Number.isInteger(before_sequence) || Number(before_sequence) <= 0)
     ) {
       throw new Error("before_sequence must be a positive integer");
     }
-    const segment = requests_segment
-      ? await this.store.read_segment_before(Number(before_sequence))
-      : null;
-    const source = requests_segment ? "segment" as const : "active" as const;
-    const messages = requests_segment
-      ? segment?.messages || []
-      : [...this.messages_by_id.values()].sort(compare_message_sequence);
+    const limit = Math.min(Math.max(input?.limit ?? 50, 1), 200);
+    const eligible = [...this.messages_by_id.values()]
+      .sort(compare_message_sequence)
+      .filter((message) =>
+        (before_sequence === undefined || message.sequence < before_sequence) &&
+        (input?.include_internal === true || message.visibility === "visible")
+      );
+    const messages = eligible.slice(-limit);
     const start_sequence = messages[0]?.sequence;
     const end_sequence = messages.at(-1)?.sequence;
-    const history_boundary = source === "segment"
-      ? segment?.range.start_sequence
-      : await this.store.active_before_sequence(messages);
-    const has_more = history_boundary !== undefined &&
-      await this.store.has_segment_before(history_boundary);
-    const stats = await this.store.stats();
-    const items = messages
-      .filter((message) => input?.include_internal === true || message.visibility === "visible")
-      .map((message) => structuredClone(message));
+    const has_more = eligible.length > messages.length;
+    const stats = await this.store.message_stats();
     return {
-      items,
+      items: messages.map((message) => structuredClone(message)),
       total: stats.message_count,
-      source,
       ...(start_sequence !== undefined ? { start_sequence } : {}),
       ...(end_sequence !== undefined ? { end_sequence } : {}),
-      ...(has_more && history_boundary !== undefined
-        ? { next_before_sequence: history_boundary }
+      ...(has_more && start_sequence !== undefined
+        ? { next_before_sequence: start_sequence }
         : {}),
       has_more,
-    };
-  }
-
-  /** 读取最新累计 Summary 与全部 Active Message，供模型上下文使用。 */
-  async context_snapshot(): Promise<SessionContextSnapshot> {
-    await this.ensure_initialized();
-    return {
-      summary: await this.store.read_latest_summary(),
-      messages: [...this.messages_by_id.values()]
-        .sort(compare_message_sequence)
-        .map((message) => structuredClone(message)),
     };
   }
 
   /** 读取全部真实历史，供 Fork 等明确的全量复制操作使用。 */
   async list_history_messages(): Promise<SessionMessage[]> {
     await this.ensure_initialized();
-    return await this.store.list_history_messages();
+    return await this.store.list_messages();
   }
 
   /** 读取当前 Session 的存储统计。 */
   async storage_stats(): Promise<SessionMessageStorageStats> {
     await this.ensure_initialized();
-    return await this.store.stats();
-  }
-
-  /** 把 Active 前缀和累计 Summary 提交为不可变 Segment。 */
-  async compact_active(input: {
-    /** 移入 Segment 的最后一条真实 Message sequence。 */
-    through_sequence: number;
-    /** 写入 Segment footer 的累计 Summary。 */
-    summary: SessionSegmentSummary;
-  }): Promise<void> {
-    await this.ensure_initialized();
-    const result = await this.store.compact_active(input);
-    this.messages_by_id.clear();
-    for (const message of result.active_messages) {
-      this.messages_by_id.set(message.message_id, structuredClone(message));
-    }
+    return await this.store.message_stats();
   }
 
   /** 向当前 Session 导入 fork 来源 Message，并重新分配全部身份和顺序。 */
@@ -499,7 +519,7 @@ export class SessionMessages {
       const message_id = resolve_import_id(
         message_ids,
         source.message_id,
-        source.type,
+        source.role,
       );
       await this.create_message((sequence, created_at) => ({
         ...structuredClone(source),
@@ -575,20 +595,13 @@ export class SessionMessages {
     publish_mutation = true,
   ): Promise<SessionMessage> {
     await this.ensure_initialized();
-    if (draft) {
-      const message = await this.store.create_agent_message((state) => {
-        const candidate = factory(state.message_sequence, Date.now());
-        if (candidate.type !== "agent" || candidate.status !== "streaming") {
-          throw new Error("Draft Message must be a streaming Assistant");
-        }
-        return candidate;
-      });
-      this.accept_message(message, publish_mutation);
-      return message;
-    }
-    const message = await this.store.append_message((state) =>
-      factory(state.message_sequence, Date.now()),
-    );
+    const message = await this.store.create_message((state) => {
+      const candidate = factory(state.message_sequence, Date.now());
+      if (draft && (candidate.role !== "agent" || candidate.status !== "streaming")) {
+        throw new Error("Draft Message must be a streaming Agent Message");
+      }
+      return candidate;
+    });
     this.accept_message(message, publish_mutation);
     return message;
   }
@@ -635,7 +648,7 @@ export class SessionMessages {
     return {
       mutation_id: generate_id(),
       variant: "message",
-      type: message.type,
+      role: message.role,
       message_id: message.message_id,
       sequence: message.sequence,
       revision: message.revision,
@@ -665,16 +678,16 @@ export class SessionMessages {
 
 }
 
-function require_message<TType extends SessionMessage["type"]>(
+function require_message<TRole extends SessionMessage["role"]>(
   messages: SessionMessage[],
   message_id: string,
-  type: TType,
-): Extract<SessionMessage, { type: TType }> {
+  role: TRole,
+): Extract<SessionMessage, { role: TRole }> {
   const message = messages.find((item) => item.message_id === message_id);
-  if (!message || message.type !== type) {
-    throw new Error(`Session ${type} Message not found: ${message_id}`);
+  if (!message || message.role !== role) {
+    throw new Error(`Session ${role} Message not found: ${message_id}`);
   }
-  return message as Extract<SessionMessage, { type: TType }>;
+  return message as Extract<SessionMessage, { role: TRole }>;
 }
 
 function resolve_import_id(map: Map<string, string>, source_id: string, prefix: string): string {

@@ -25,9 +25,8 @@ import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { SessionMessages } from "@/session/SessionMessages.js";
 import { SessionTitleTask } from "@/session/runtime/SessionTitleTask.js";
-import type { SessionMessage } from "@downcity/type";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
-import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionApprovalMode } from "@downcity/type";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
 
@@ -59,7 +58,7 @@ export class SessionState {
   private readonly agent_id: string;
   private readonly session_id: string;
   private readonly origin: SessionStateOptions["origin"];
-  private readonly store: SessionDataStore;
+  private readonly store: SessionStorage;
   private readonly messages: SessionMessages;
   private readonly state: SessionLocalState;
   private readonly logger: Logger;
@@ -270,10 +269,6 @@ export class SessionState {
    * 仅刷新当前 session metadata。
    */
   async touch_metadata(): Promise<void> {
-    const stats = await this.messages.storage_stats();
-    const preview_text = resolve_message_preview(
-      stats.latest_message || undefined,
-    ).slice(0, 180);
     await this.run_metadata_mutation(async () => {
       const metadata = await this.store.read_metadata();
       await this.store.write_metadata({
@@ -283,9 +278,6 @@ export class SessionState {
         ...(this.state.session_config.model_label
           ? { model_label: this.state.session_config.model_label }
           : {}),
-        message_count: stats.message_count,
-        historyBytes: stats.history_bytes,
-        ...(preview_text ? { preview_text: preview_text } : {}),
       });
     });
   }
@@ -309,9 +301,9 @@ export class SessionState {
     this.title_task.schedule(async (signal) => {
       const before_metadata = await this.store.read_metadata();
       if (String(before_metadata.title || "").trim()) return;
-      const messages = (await this.messages.context_snapshot()).messages;
+      const messages = await this.messages.list_history_messages();
       const first_user_message = messages.find(
-        (message) => message.type === "user",
+        (message) => message.role === "user",
       );
       if (!first_user_message) return;
       const first_user_message_id = first_user_message.message_id;
@@ -335,7 +327,7 @@ export class SessionState {
           const latest_metadata = await this.store.read_metadata();
           if (signal.aborted) return latest_metadata;
           if (String(latest_metadata.title || "").trim()) return latest_metadata;
-          const latest_messages = (await this.messages.context_snapshot()).messages;
+          const latest_messages = await this.messages.list_history_messages();
           const source_exists = latest_messages.some(
             (message) => message.message_id === first_user_message_id,
           );
@@ -373,28 +365,4 @@ export class SessionState {
     return await task;
   }
 
-}
-
-function resolve_message_preview(message: SessionMessage | undefined): string {
-  if (!message) return "";
-  if (message.type === "user") {
-    return message.parts
-      .flatMap((part) => part.type === "text" ? [part.text] : [])
-      .join("")
-      .trim();
-  }
-  if (message.type === "agent") {
-    const text = message.parts
-      .flatMap((part) => part.type === "text" ? [part.text] : [])
-      .join("")
-      .trim();
-    if (text) return text;
-    for (const part of message.parts) {
-      if (part.type === "action") {
-        return [part.title, part.description].filter(Boolean).join("\n");
-      }
-      if (part.type === "error") return part.message.trim();
-    }
-  }
-  return "";
 }

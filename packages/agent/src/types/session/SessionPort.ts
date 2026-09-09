@@ -10,6 +10,7 @@ import type { ModelClient } from "@downcity/type";
 import type {
   SessionAgentResultPart,
   SessionPromptPart,
+  SessionMessage,
 } from "@downcity/type";
 import type { SessionExecutor } from "@/types/session/SessionExecution.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
@@ -19,7 +20,6 @@ import type {
   SessionMutationSubscriber,
   SessionMutationUnsubscribe,
 } from "@downcity/type";
-import type { SessionContextSnapshot } from "@/types/session/SessionSegment.js";
 
 /**
  * 单个 Session 实例端口。
@@ -34,8 +34,8 @@ export interface SessionPort {
   /** 获取当前 Session 的执行端口。 */
   get_executor(): SessionExecutor;
 
-  /** 读取当前 Session 的累计 Summary 与 Active Message 快照。 */
-  context(): Promise<SessionContextSnapshot>;
+  /** 读取全部 canonical Session Message。 */
+  messages(): Promise<SessionMessage[]>;
 
   /** 向当前 Session actor 追加一条新的 prompt。 */
   prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle>;

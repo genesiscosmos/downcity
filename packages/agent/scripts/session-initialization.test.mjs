@@ -14,18 +14,28 @@ function create_session(overrides = {}) {
     read_metadata: 0,
     write_metadata: 0,
   };
-  const message_store = {
-    initialize: async () => {
-      calls.initialize_messages += 1;
-      await overrides.initialize_messages?.(calls.initialize_messages);
-    },
-    list_messages: async () => [],
-  };
+  let initialize_promise;
   const store = {
     session_id: "initialization-session",
     origin: { type: "chat" },
-    messages: message_store,
     attachments: {},
+    initialize: async () => {
+      if (!initialize_promise) initialize_promise = (async () => {
+        calls.initialize_messages += 1;
+        await overrides.initialize_messages?.(calls.initialize_messages);
+      })();
+      await initialize_promise;
+    },
+    list_messages: async () => [],
+    message_stats: async () => ({ message_count: 0, storage_bytes: 0, latest_message: null }),
+    composer_storage: () => ({
+      list_messages: async () => [],
+      transaction: async (operation) => operation({
+        execute: () => {},
+        get: () => null,
+        all: () => [],
+      }),
+    }),
     read_instruction: async () => {
       calls.read_instruction += 1;
       return await overrides.read_instruction?.(calls.read_instruction) ?? null;
@@ -37,6 +47,8 @@ function create_session(overrides = {}) {
     write_metadata: async () => {
       calls.write_metadata += 1;
     },
+    has_instruction: async () => false,
+    write_instruction: async () => {},
   };
   const session = new Session({
     agent_id: "initialization-agent",
@@ -78,7 +90,7 @@ test("Session 并发初始化共享完整初始化图", async () => {
 
   const first = session.initialize();
   const second = session.initialize();
-  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(calls.initialize_messages, 1);
   assert.equal(calls.read_instruction, 1);
   assert.equal(calls.read_metadata, 1);

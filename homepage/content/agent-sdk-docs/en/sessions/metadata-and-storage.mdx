@@ -1,131 +1,50 @@
 ---
-title: Metadata and Storage
-description: Understand Active, Segments, cumulative Summaries, Assistant drafts, and recovery
+title: Metadata and storage
+description: Session SQLite, canonical messages, and Composer context policies
 ---
 
-# Metadata and Storage
+# Metadata and storage
 
-SDK Sessions are persisted under the Agent scope supplied by City storage. Without a City, the default
-provider is in-memory. Applications should read and write through the Session API rather than use these
-files as their own database.
+A persisted Session belongs to the Agent storage scope provided by City. Without City, the default is
+in-memory storage. Use the Session API instead of treating these files as an application database.
 
 ```text
 ~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/
-├── meta.json
-├── instruction.md
-└── messages/
-    ├── active.jsonl
-    ├── agent_message.json
-    └── segments/
-        ├── 000000000001-000000000900.jsonl
-        └── 000000000901-000000001500.jsonl
+├── session.db
+└── attachments/
 ```
 
-A Session is identified by `(origin.type, session_id)`. The default origin is `chat`; `group`, `task`,
-or any other non-empty string selects another partition. The path layer safely encodes custom origin types
-as one directory segment. Metadata schema v2 always records `agent_id` and the complete immutable `origin`,
-and records `workspace_id` only when the Session was created with a Workspace. The same `session_id` may
-exist in different origin partitions without sharing data, and the project directory never receives `.downcity`.
+Each Session has one `session.db` with three stable tables:
 
-`instruction.md` is an optional complete system snapshot. A Session fixes its first generated system in memory by default. Local `session.snapshot()` creates or overwrites the file. `session.syncshot()` regenerates the in-memory system and also overwrites the file when it already exists. If the file is absent when restored, the Session regenerates from the Agent's current instruction and plugins; deleting the file restores that behavior.
+- `session_state`: identity, configuration, title, preview, and the system snapshot.
+- `messages`: the User/Agent Message envelope.
+- `message_parts`: one row per Part; each content value belongs to one Part.
 
-## Active and Segments
+The API reconstructs `SessionMessage` aggregates when reading. The table layout is not exposed to the UI
+or model providers. Canonical history is never deleted or rewritten by context compaction.
 
-`active.jsonl` contains only real `SessionMessage` values still in the active window after the latest Compact. It has no fixed message-count or API page-size limit. The SDK does not estimate tokens before a model call. Compact is scheduled only when the Provider's real `usage.totalTokens` (or `inputTokens + outputTokens` when total is unavailable) reaches 95% of the model's configured `context_window`.
+## Composer and context policies
 
-During Compact, the SDK selects `floor(n / 2)` of the oldest User and Assistant Messages in Active. It sends only that prefix, together with the previous cumulative Summary when one exists, to one summary-model call. The newer half is not part of the summary input and remains in Active. After the Assistant has finished persisting, the selected prefix is closed as an immutable Segment named by its sequence range. The Segment stores real Messages first and one cumulative Summary footer last:
+`SessionComposer` generates the final system, messages, and tools sent to the model. It uses one
+`SessionContextPolicy`, such as `SequenceSummaryContextPolicy`, which stores cumulative summaries in
+its own `composer_sequence_summaries` derived table.
+
+Summaries, indexes, and retrieval results are rebuildable derived data, not Messages. A policy resolves:
 
 ```text
-message sequence 1
-...
-message sequence 450
-summary through sequence 450
+latest policy-derived summary
++ canonical Messages after the summary boundary
 ```
 
-The next Compact selects the oldest half of the then-current Active window. Its footer merges the previous Summary with that selected prefix, so the Summary remains cumulative. A Summary is not a `SessionMessage`, consumes no sequence, and is never stored in Active.
+When a provider reports a context limit, Composer asks the policy to advance its derived state through
+`recover_context()`. There is no public `session.compact()`, Active file, Segment file, or second
+message log.
 
-The next real usage after Compact validates the result: 50% of `context_window` or less passes; above 50% schedules another deep compact before the next step. If a Provider returns a context-length error without usage, the SDK also forces an in-memory fold and retries.
+## Recovery and transactions
 
-## Model context
+The Message envelope and its Parts commit in one SQLite transaction; Mutations publish only after commit.
+On startup, SessionStorage closes streaming Agent Messages and running Actions left by an interrupted process.
+Attachments remain under `attachments/`, while Parts store attachment references.
 
-Each model request reads only:
-
-```text
-latest Segment cumulative Summary
-+ every User / Assistant Message in Active
-```
-
-It does not scan all old Segments. Old Segments serve historical UI, Fork, and audit. `session.messages()` returns all Active Messages; passing `before_sequence` returns the immediately preceding whole Segment.
-
-## Session progression
-
-```mermaid
-sequenceDiagram
-    participant App
-    participant Session
-    participant Loop as SessionLoop
-    participant Composer as SessionComposer
-    participant Messages as SessionMessages
-    participant Store as Message Store
-    participant Active as active.jsonl
-    participant Segment as segments/<start>-<end>.jsonl
-    participant Model
-
-    App->>Session: prompt({ query })
-    Session->>Loop: Queue and Turn orchestration
-    Loop->>Messages: create User Message
-    Messages->>Store: persist complete User snapshot
-    Store->>Active: append Message
-    Session->>Composer: read-only Summary + Active snapshot
-    Composer-->>Session: system + messages + tools
-    Session->>Model: execute current Step
-    Model-->>Loop: text / tool / file chunks
-    Loop->>Messages: update Assistant draft and Parts
-    Messages->>Store: atomically replace agent_message.json
-    Loop->>Messages: complete Assistant Message
-    Messages->>Store: persist final Assistant snapshot
-    Store->>Active: append Message
-    Session->>Session: Provider usage reaches 95% of context_window
-    Session->>Session: deep compact Parts/Tool transaction before next step
-    Session->>Composer: request read-only compaction plan
-    Composer->>Model: old Summary + oldest 50% of Active context
-    Model-->>Composer: new cumulative Summary
-    Composer-->>Session: SessionCompactionPlan
-    Session->>Messages: commit compaction plan
-    Messages->>Store: commit Active prefix and Summary
-    Store->>Segment: atomically create Messages + Summary footer
-    Store->>Active: atomically retain only Active tail
-    App->>Session: messages()
-    Session-->>App: every Active Message
-    App->>Session: messages({ before_sequence })
-    Session-->>App: Messages from previous whole Segment
-```
-
-The Composer only reads snapshots and returns model input or a compaction plan. `SessionMessages` owns the actual writes for Messages, Assistant drafts, and Segments.
-
-Summary generation must succeed before a compaction plan can be committed. Provider errors and empty summaries fail Compact without creating a Segment or changing Active history.
-
-## `agent_message.json`
-
-Before completion, a streaming Assistant atomically replaces one complete draft instead of appending every Delta to Active. On completion, the final snapshot is appended to `active.jsonl` and the draft is removed. Each Session has at most one streaming draft. Text, Tool, and File Parts retain the model's generation order through their own `sequence` values.
-
-## Recovery and consistency
-
-Compact atomically creates the Segment before atomically replacing Active. If the process exits between those operations, the original Messages temporarily exist in both files but are not lost. Initialization uses the latest Segment end sequence to remove the overlapping Active prefix.
-
-When a Session starts or reopens, the SDK also checks the Assistant draft. Existing text, reasoning, tool, and file Parts are retained in their original order.
-
-## Performance boundaries
-
-- Normal model progression reads only the latest Summary and Active, so it does not grow linearly with total history.
-- Compact triggering uses only real Provider usage and performs no pre-call token estimation.
-- Each Compact makes exactly one summary-model call for the selected prefix.
-- Loading older history parses one Segment at a time.
-- Segment files are immutable and their names are the sequence index; no `manifest.json` is required.
-- `fork()` intentionally copies full history and therefore reads every Segment; it is a lower-frequency full-history operation.
-
-## `meta.json`
-
-`meta.json` stores `v: 2`, `session_id`, `agent_id`, the complete `origin`, and lightweight list and detail fields such as title, model label, timestamps, message count, history bytes, and timezone. Runtime model instances are never persisted. The SDK updates these summaries as Session properties and Message state change; `origin` is fixed at creation time.
-
-Archiving a Session and Compact Segments are distinct. `archive()` moves the entire Session into archived sessions storage; Compact only closes an old Active prefix under the current Session's `segments/` directory.
+Legacy JSONL data is not migrated by Desktop or Runtime. Run the external one-time
+`scripts/migrate-session-storage-to-sqlite.mjs` script when migration is needed.

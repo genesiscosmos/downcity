@@ -152,6 +152,7 @@ export class MemoryStorageProvider implements StorageProvider {
     const scope: StorageScope = {
       root_path,
       files: new MemoryFileSystem(root_path),
+      database_location: { type: "memory" },
     };
     this.scopes.set(scope_key, scope);
     return scope;

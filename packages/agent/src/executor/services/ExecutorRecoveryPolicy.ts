@@ -24,8 +24,8 @@ interface ExecutorRecoveryPolicyOptions {
   /** 当前 Session 稳定标识。 */
   session_id: string;
 
-  /** 判断错误是否需要持久化压缩后重试。 */
-  should_compact: (error: unknown) => boolean;
+  /** 请求 Composer 尝试推进上下文派生状态。 */
+  recover_context: (error: unknown) => Promise<boolean>;
 
   /**
    * 当前 session 统一日志器。
@@ -107,13 +107,13 @@ interface ExecutorRecoveryInput {
  * 执行恢复与重试策略服务。
  */
 export class ExecutorRecoveryPolicy {
-  private readonly should_compact: ExecutorRecoveryPolicyOptions["should_compact"];
+  private readonly recover_context: ExecutorRecoveryPolicyOptions["recover_context"];
   private readonly logger: Logger;
   private retry_count = 0;
 
   constructor(options: ExecutorRecoveryPolicyOptions) {
     const session_id = String(options.session_id || "").trim();
-    this.should_compact = options.should_compact;
+    this.recover_context = options.recover_context;
     this.logger = options.logger;
     if (!session_id) {
       throw new Error("ExecutorRecoveryPolicy requires a non-empty session_id");
@@ -146,17 +146,18 @@ export class ExecutorRecoveryPolicy {
         turn_context: input.turn_context,
       });
     } catch (error) {
-      if (this.should_compact(error)) {
+      if (this.retry_count < MAX_COMPACTION_RETRY_ATTEMPTS) {
+        const recovered = await this.recover_context(error);
+        if (recovered) {
         await this.logger.log("info", "[agent] compacting", {
           retryCount: this.retry_count,
           error: String(error),
         });
-
-        if (this.retry_count < MAX_COMPACTION_RETRY_ATTEMPTS) {
           this.retry_count += 1;
           return await this.execute_with_retry(input);
         }
-
+      }
+      if (this.retry_count > 0) {
         return this.build_failure_result({
           error_text:
             "Context length exceeded and retries failed. Please resend your question.",

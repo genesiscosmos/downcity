@@ -82,7 +82,7 @@ export class MessageListComponent implements Component {
     this.items[index] = next_message;
     const component = this.components.get(message.message_id);
     if (
-      next_message.type === "agent" &&
+      next_message.role === "agent" &&
       component instanceof AssistantMessageComponent
     ) {
       component.update_message(next_message);
@@ -222,7 +222,7 @@ export class MessageListComponent implements Component {
       (candidate) =>
         !is_transcript_notice(candidate) && candidate.message_id === message_id,
     );
-    return item && !is_transcript_notice(item) && item.type === "agent"
+    return item && !is_transcript_notice(item) && item.role === "agent"
       ? item
       : null;
   }
@@ -268,7 +268,7 @@ export class MessageListComponent implements Component {
         ? new NoticeMessageComponent("Error", item.text)
         : new StatusMessageComponent(item.text);
     }
-    switch (item.type) {
+    switch (item.role) {
       case "user":
         return new UserMessageComponent(
           item.parts.flatMap((part) => part.type === "text" ? [part.text] : []).join(""),

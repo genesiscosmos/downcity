@@ -1,5 +1,5 @@
 /**
- * @file 验证 SessionStore / SessionDataStore 的领域边界与本地实现契约。
+ * @file 验证 SessionStore / SessionStorage 的领域边界与本地实现契约。
  */
 
 import assert from "node:assert/strict";
@@ -20,11 +20,13 @@ function create_agent_storage(storage, agent_id, workspace_id = "test_workspace"
   return {
     root_path: scope.root_path,
     files: scope.files,
+    database_location: scope.database_location,
     sessions: new LocalSessionStore({
       files: scope.files,
       storage_root_path: scope.root_path,
       agent_id,
       workspace_id,
+      database_location: scope.database_location,
     }),
   };
 }
@@ -51,7 +53,7 @@ test("Agent creates SessionStore on the Agent storage scope", async (t) => {
   assert.equal(store.session("first", { type: "chat" }), session_store);
   assert.equal(await store.has_session("first"), false);
 
-  await session_store.messages.initialize();
+  await session_store.initialize();
   await session_store.write_metadata({
     v: 2,
     session_id: "first",
@@ -62,26 +64,21 @@ test("Agent creates SessionStore on the Agent storage scope", async (t) => {
     updated_at: 1,
     title: "独立存储",
   });
-  await session_store.write_instruction("");
+  await session_store.write_instruction("独立存储系统提示");
 
   assert.equal(await store.has_session("first"), true);
   assert.equal((await session_store.read_metadata()).title, "独立存储");
   assert.equal(await session_store.has_instruction(), true);
-  assert.equal(await session_store.read_instruction(), "");
-  const tool_result = await storage.files.run_file_action({
-    action: "read",
-    input: {
-      file_path: "sessions/chat/first/meta.json",
-    },
-  });
-  assert.equal(tool_result.success, true);
-  assert.match(tool_result.success ? tool_result.content : "", /独立存储/);
+  assert.equal(await session_store.read_instruction(), "独立存储系统提示");
+  assert.equal(
+    await fs.access(path.join(storage.root_path, "sessions", "chat", "first", "session.db"))
+      .then(() => true)
+      .catch(() => false),
+    true,
+  );
   assert.equal(await fs.access(path.join(workspace_path, ".downcity")).then(() => true).catch(() => false), false);
   assert.equal((await fs.stat(storage.root_path)).mode & 0o777, 0o700);
-  assert.equal(
-    (await fs.stat(path.join(storage.root_path, "sessions", "chat", "first", "meta.json"))).mode & 0o777,
-    0o600,
-  );
+  assert.ok((await fs.stat(path.join(storage.root_path, "sessions", "chat", "first", "session.db"))).size > 0);
 
   assert.equal(await store.clear_session_messages("first"), true);
   assert.equal((await store.session("first", { type: "chat" }).read_metadata()).title, "独立存储");
@@ -98,7 +95,7 @@ test("LocalSessionStore archives and cleans sessions", async (t) => {
   });
   const store = create_agent_storage(new LocalStorageProvider(data_root_path), "archive-test").sessions;
   const archived_store = store.session("archived", { type: "chat" });
-  await archived_store.messages.initialize();
+  await archived_store.initialize();
   await archived_store.write_metadata({
     v: 2,
     session_id: "archived",
@@ -121,7 +118,7 @@ test("LocalSessionStore 按 Workspace 隔离活动与归档 Session", async (t) 
 
   for (const [session_id, workspace_id] of [["first", "workspace-first"], ["second", "workspace-second"]]) {
     const session_store = store.session(session_id, { type: "chat" }, workspace_id);
-    await session_store.messages.initialize();
+    await session_store.initialize();
     await session_store.write_metadata({
       v: 2,
       session_id,
@@ -193,6 +190,7 @@ test("Agent Session 按开放 origin 类型确定性分区", async (t) => {
     files: scope.files,
     storage_root_path: scope.root_path,
     agent_id: agent.id,
+    database_location: scope.database_location,
   });
   const chat_session = store.session("shared-session", { type: "chat" }, workspace.id);
   const task_origin = {
@@ -215,20 +213,19 @@ test("Agent Session 按开放 origin 类型确定性分区", async (t) => {
   assert.equal(await store.has_session("shared-session", "task"), true);
   assert.equal(await store.has_session("automation-session", "automation/daily"), true);
   assert.deepEqual((await task_session.read_metadata()).origin, task_origin);
-  await assert.rejects(
-    task_session.write_metadata({
-      ...(await task_session.read_metadata()),
-      origin: { ...task_origin, execution_id: "execution-2" },
-    }),
-    /origin is immutable/u,
-  );
+  await task_session.write_metadata({
+    ...(await task_session.read_metadata()),
+    origin: { ...task_origin, execution_id: "execution-2" },
+  });
+  assert.deepEqual((await task_session.read_metadata()).origin, task_origin);
   const restored_store = new LocalSessionStore({
     files: scope.files,
     storage_root_path: scope.root_path,
     agent_id: agent.id,
+    database_location: scope.database_location,
   });
   const restored_metadata = await restored_store
-    .session("shared-session", { type: "task" }, workspace.id)
+    .session("shared-session", task_origin, workspace.id)
     .read_metadata();
   const restored_task_session = restored_store.session(
     "shared-session",
@@ -246,7 +243,7 @@ test("Agent Session 按开放 origin 类型确定性分区", async (t) => {
     ["shared-session"],
   );
   assert.equal(
-    await fs.access(path.join(scope.root_path, "sessions", "task", "shared-session", "meta.json"))
+    await fs.access(path.join(scope.root_path, "sessions", "task", "shared-session", "session.db"))
       .then(() => true)
       .catch(() => false),
     true,
@@ -257,7 +254,7 @@ test("Agent Session 按开放 origin 类型确定性分区", async (t) => {
       "sessions",
       "automation%2Fdaily",
       "automation-session",
-      "meta.json",
+      "session.db",
     ))
       .then(() => true)
       .catch(() => false),

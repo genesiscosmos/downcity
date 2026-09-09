@@ -11,6 +11,7 @@ import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import { SessionToolPartGate } from "@/session/messages/SessionToolPartGate.js";
 import type { SessionAgentResultPart } from "@downcity/type";
 import type {
+  SessionAgentErrorPart,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionAgentToolPart,
@@ -33,6 +34,7 @@ export class SessionAgentMessageWriter {
   private readonly tool_part_gate = new SessionToolPartGate();
   private write_chain: Promise<void> = Promise.resolve();
   private step_index = 0;
+  private current_step_id: string | null = null;
   private step_active = false;
   private closed = false;
 
@@ -49,6 +51,7 @@ export class SessionAgentMessageWriter {
         throw new Error("Assistant canonical step is already active");
       }
       this.step_index += 1;
+      this.current_step_id = `step:${this.message_id}:${this.step_index}`;
       this.step_active = true;
       this.content_part_ids.clear();
       this.tool_call_ids.clear();
@@ -183,6 +186,31 @@ export class SessionAgentMessageWriter {
     });
   }
 
+  /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */
+  async append_error(input: {
+    /** 错误影响范围。 */
+    scope: "session" | "turn";
+    /** 稳定错误码。 */
+    code: string;
+    /** 用户可见错误信息。 */
+    message: string;
+    /** 当前错误是否允许重试恢复。 */
+    recoverable: boolean;
+  }): Promise<void> {
+    await this.enqueue_write(async () => {
+      if (this.closed) throw new Error("Assistant Message writer is closed");
+      await this.upsert_part({
+        part_id: `error:${generate_id()}`,
+        sequence: this.next_part_sequence(),
+        type: "error",
+        scope: input.scope,
+        code: input.code,
+        message: input.message,
+        recoverable: input.recoverable,
+      } satisfies SessionAgentErrorPart);
+    });
+  }
+
   /** 写入一个完整 canonical Assistant Part。 */
   async upsert_part(part: SessionAgentMessagePart): Promise<void> {
     await this.recorder.update_agent_part(this.message_id, part);
@@ -224,6 +252,7 @@ export class SessionAgentMessageWriter {
       await this.upsert_part({
         part_id,
         sequence: this.next_part_sequence(),
+        step_id: this.require_step_id(),
         type,
         text: "",
         state: "streaming",
@@ -294,7 +323,7 @@ export class SessionAgentMessageWriter {
   /** 读取当前 Assistant Message 快照。 */
   private current_message(): SessionAgentMessage {
     const message = this.recorder.get_message(this.message_id);
-    if (!message || message.type !== "agent") {
+    if (!message || message.role !== "agent") {
       throw new Error(`Assistant Message not found: ${this.message_id}`);
     }
     return message;
@@ -351,6 +380,7 @@ export class SessionAgentMessageWriter {
     await this.upsert_part({
       part_id: `tool:${tool_call_id}`,
       sequence: this.next_part_sequence(),
+      step_id: this.require_step_id(),
       type: "tool",
       tool_call_id,
       ...changes,
@@ -387,6 +417,7 @@ export class SessionAgentMessageWriter {
       ...final_part,
       part_id: current_part.part_id,
       sequence: current_part.sequence,
+      step_id: current_part.step_id,
     } as SessionAgentMessagePart;
   }
 
@@ -400,9 +431,16 @@ export class SessionAgentMessageWriter {
   /** 清理当前 Step 的临时关联状态。 */
   private reset_step_state(): void {
     this.step_active = false;
+    this.current_step_id = null;
     this.content_part_ids.clear();
     this.tool_call_ids.clear();
     this.current_step_part_ids.clear();
+  }
+
+  /** 返回当前模型 Step 的稳定标识。 */
+  private require_step_id(): string {
+    if (this.step_active && this.current_step_id) return this.current_step_id;
+    throw new Error("Assistant canonical step is not active");
   }
 
   /** 计算下一个不可变 Part 顺序号。 */

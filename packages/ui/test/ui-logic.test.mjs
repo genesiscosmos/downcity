@@ -14,7 +14,7 @@ test("Chat UI 公开导出保持可用", () => {
 test("canonical Agent Action 与 Error Part 投影为 UI operation", () => {
   const message = session_message_to_chat_message({
     message_id: "agent-1",
-    type: "agent",
+    role: "agent",
     status: "failed",
     parts: [
       { part_id: "action-1", sequence: 1, type: "action", action_type: "compact", state: "completed", title: "Compacted" },

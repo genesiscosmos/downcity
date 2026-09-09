@@ -16,11 +16,12 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/city";
-import { get_agent_session_instruction_path } from "../../agent/bin/session/storage/LocalStorePaths.js";
+import { get_agent_session_database_path } from "../../agent/bin/session/storage/LocalStorePaths.js";
 import {
   create_action,
 } from "@downcity/city/plugin";
@@ -33,9 +34,29 @@ function create_deferred() {
   return { promise, resolve };
 }
 
+/** 直接读取测试数据库中的 system snapshot。 */
+function read_system_snapshot(database_path) {
+  const database = new DatabaseSync(database_path, { readOnly: true });
+  try {
+    return database.prepare("SELECT system_snapshot FROM session_state WHERE singleton_id = 1").get()?.system_snapshot ?? null;
+  } finally {
+    database.close();
+  }
+}
+
+/** 直接修改测试数据库中的 system snapshot。 */
+function write_system_snapshot(database_path, system_snapshot) {
+  const database = new DatabaseSync(database_path);
+  try {
+    database.prepare("UPDATE session_state SET system_snapshot = ? WHERE singleton_id = 1").run(system_snapshot);
+  } finally {
+    database.close();
+  }
+}
+
 /** 将 canonical Agent Message 内的 Action Part 投影为便于断言的记录。 */
 function read_action_records(messages) {
-  return messages.flatMap((message) => message.type === "agent"
+  return messages.flatMap((message) => message.role === "agent"
     ? message.parts
         .filter((part) => part.type === "action")
         .map((part) => ({ ...message, ...part, status: part.state }))
@@ -44,7 +65,7 @@ function read_action_records(messages) {
 
 /** 读取完整消息 mutation 中携带的 Action Part。 */
 function read_action_mutations(mutations) {
-  return mutations.flatMap((mutation) => mutation.variant === "message" && mutation.type === "agent"
+  return mutations.flatMap((mutation) => mutation.variant === "message" && mutation.role === "agent"
     ? read_action_records([mutation.message]).map((message) => ({ ...mutation, type: "action", message }))
     : []);
 }
@@ -366,20 +387,20 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     );
     await session.snapshot();
 
-    const instruction_path = get_agent_session_instruction_path(
+    const database_path = get_agent_session_database_path(
       city.storage.open_scope(["agents", first_agent.id]).root_path,
       "chat",
       session_id,
     );
-    const persisted_system = await fs.readFile(instruction_path, "utf8");
+    const persisted_system = read_system_snapshot(database_path);
     assert.match(persisted_system, /instruction:old/);
     assert.match(persisted_system, /# Harness Design/);
     assert.match(persisted_system, /plugin-system:persisted/);
     assert.match(persisted_system, /Current session context:/);
 
-    await fs.writeFile(instruction_path, "instruction:manual", "utf8");
+    write_system_snapshot(database_path, "instruction:manual");
     await session.snapshot();
-    assert.equal(await fs.readFile(instruction_path, "utf8"), persisted_system);
+    assert.equal(read_system_snapshot(database_path), persisted_system);
   } finally {
     await first_agent.dispose();
   }
@@ -407,12 +428,12 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     await restarted_agent.dispose();
   }
 
-  const instruction_path = get_agent_session_instruction_path(
+  const database_path = get_agent_session_database_path(
     city.storage.open_scope(["agents", "instruction_restart_agent"]).root_path,
     "chat",
     session_id,
   );
-  await fs.rm(instruction_path);
+  write_system_snapshot(database_path, null);
 
   const fallback_agent = new Agent({
     id: "instruction_restart_agent",

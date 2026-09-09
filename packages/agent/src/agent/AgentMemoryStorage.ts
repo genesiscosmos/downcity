@@ -191,6 +191,7 @@ export class AgentMemoryStorageProvider implements StorageProvider {
     const scope = Object.freeze({
       root_path,
       files: new AgentMemoryFileSystem(root_path),
+      database_location: { type: "memory" as const },
     });
     this.scopes_by_key.set(scope_key, scope);
     return scope;

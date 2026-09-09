@@ -46,7 +46,6 @@ function to_message_event(input: {
     id: `${input.message.message_id}:${String(input.sequence)}`,
     role: input.role,
     ts: input.message.updated_at,
-    ...(input.message.type === "agent" ? { kind: input.message.kind } : {}),
     text: input.text,
     ...(input.tool_name ? { tool_name: input.tool_name } : {}),
   };
@@ -54,7 +53,7 @@ function to_message_event(input: {
 
 /** 读取一条 canonical Message 的用户可见预览。 */
 export function resolve_message_preview(message: SessionMessage): string {
-  if (message.type === "agent") {
+  if (message.role === "agent") {
     const visible_text = resolve_session_assistant_visible_text(message);
     if (visible_text) return visible_text;
     for (const part of message.parts) {
@@ -73,7 +72,7 @@ export function resolve_message_preview(message: SessionMessage): string {
 
 /** 把一条 canonical Message 展开为 Control 时间线。 */
 export function to_message_timeline(message: SessionMessage): ControlTimelineEvent[] {
-  if (message.type === "user") {
+  if (message.role === "user") {
     return [to_message_event({
       message,
       role: "user",
@@ -173,5 +172,5 @@ function is_session_message(input: unknown): input is SessionMessage {
   return typeof candidate.message_id === "string" &&
     typeof candidate.sequence === "number" &&
     typeof candidate.revision === "number" &&
-    (candidate.type === "user" || candidate.type === "agent");
+    (candidate.role === "user" || candidate.role === "agent");
 }

@@ -62,7 +62,7 @@ async function get_session() {
 
 /** 把 Session canonical Message 投影为浏览器需要的纯文本消息。 */
 function to_chat_message(message: SessionMessage): ChatMessage | undefined {
-  if (message.type === "user") {
+  if (message.role === "user") {
     const content = message.parts
       .filter((part) => part.type === "text")
       .map((part) => part.text)
@@ -76,24 +76,23 @@ function to_chat_message(message: SessionMessage): ChatMessage | undefined {
     } : undefined;
   }
 
-  if (message.type === "assistant") {
+  if (message.role === "agent") {
     const content = message.parts
       .flatMap((part) => part.type === "text" ? [part.text] : [])
       .join("\n")
       .trim();
-    return content ? {
+    if (content) return {
       id: message.message_id,
       role: "assistant",
       content,
       created_at: message.created_at,
-    } : undefined;
-  }
-
-  if (message.type === "error") {
+    };
+    const error = message.parts.find((part) => part.type === "error");
+    if (!error) return undefined;
     return {
       id: message.message_id,
       role: "error",
-      content: message.message,
+      content: error.message,
       created_at: message.created_at,
     };
   }

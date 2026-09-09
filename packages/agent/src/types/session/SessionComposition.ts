@@ -8,8 +8,7 @@
 import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionOrigin } from "@downcity/type";
-import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
-import type { SessionMessages } from "@/session/SessionMessages.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -25,9 +24,7 @@ export interface SessionCompositionOptions {
   /** 当前 Session 使用的 Workspace 绝对根目录。 */
   workspace_path: string;
   /** 当前 Session 的领域持久化视图。 */
-  store: SessionDataStore;
-  /** canonical Message 唯一事实源。 */
-  messages: SessionMessages;
+  store: SessionStorage;
   /** 当前 Session 使用的统一 Composer。 */
   composer: SessionComposer;
   /** 在每个 Step 检查点读取当前可用 Tool 集合。 */

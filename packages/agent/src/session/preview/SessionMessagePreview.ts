@@ -12,7 +12,7 @@ import {
 } from "@/session/messages/SessionMessageText.js";
 import type { SessionMessage } from "@downcity/type";
 
-function extract_assistant_tool_summary(message: Extract<SessionMessage, { type: "agent" }>): string {
+function extract_assistant_tool_summary(message: Extract<SessionMessage, { role: "agent" }>): string {
   const tool_names = new Set<string>();
   for (const part of message.parts) {
     if (part.type !== "tool") continue;
@@ -32,7 +32,7 @@ export function resolve_session_message_preview(
 ): string {
   const plain_text = extract_session_message_text(message);
   if (plain_text) return plain_text;
-  if (message.type !== "agent") return "";
+  if (message.role !== "agent") return "";
 
   const user_visible = resolve_session_assistant_visible_text(message).trim();
   if (user_visible) return user_visible;

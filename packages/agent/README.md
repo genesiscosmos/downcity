@@ -100,7 +100,7 @@ src/
   - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
   - `SessionTurnContext.effects` 只负责按发生顺序收集当前 Turn 的 Tool 副作用，不解释具体业务
   - `messages/` 放 Assistant 状态转换与 writer、Message codec、Tool effect 投影、结构化文件编辑 Diff 与 compaction
-  - `storage/` 负责 Session、附件和 JSONL Message 的本地持久化；只使用 AgentStorage，不访问项目 Workspace
+  - `storage/` 负责 Session SQLite、附件和事务；只使用 AgentStorage，不访问项目 Workspace
   - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 的单次执行输入
 
 - `src/group/`
@@ -148,10 +148,10 @@ src/
 - `types / utils` 提供横向公共支撑
 
 持久化规则：加入 City 后，AgentSession 使用 `agents/<agent_id>/sessions/<origin_type>/<session_id>/`，
-归档后使用 `agents/<agent_id>/archived-sessions/<origin_type>/<session_id>/`；`origin_type`
-会被安全编码为单个目录段。普通聊天默认位于 `sessions/chat/`。
+归档后使用 `agents/<agent_id>/archived-sessions/<origin_type>/<session_id>/`；每个 Session 目录包含
+`session.db` 与 `attachments/`，`origin_type` 会被安全编码为单个目录段。普通聊天默认位于 `sessions/chat/`。
 GroupSession 使用 `groups/<group_id>/sessions/<group_session_id>/`；未加入 City 时两者均使用
 当前主体实例的内存 Storage。只有传入 Workspace 的 AgentSession 或 GroupSession 才会在
-`meta.json` 写入 `workspace_id`。GroupSession 使用 `Group.model` 根据首条用户消息异步生成并持久化
+`session_state` 写入 `workspace_id`。GroupSession 使用 `Group.model` 根据首条用户消息异步生成并持久化
 `title`，`preview_text` 仍只保存最后一条消息摘要；`rename(title)` 可提交手动标题。AgentSession 的
-`meta.json` 使用 v2，并始终保存完整且不可变的 `origin`。
+状态均由 `session_state` 保存，并始终保留完整且不可变的 `origin`。

@@ -1,20 +1,17 @@
 /**
  * 默认 Session Composer。
  *
- * 负责把 Session 的只读状态与 canonical Message 快照组装为模型输入；
- * 压缩只生成计划，实际 Segment 提交仍由 SessionMessages 负责。
+ * 负责把 Session 运行快照与 Context Policy 结果组装为最终模型输入。
  */
 
 import { build_session_system_blocks } from "@/session/SessionSystem.js";
-import { compose_session_compaction } from "@/session/messages/SessionMessageCompaction.js";
-import { session_context_to_model_messages } from "@executor/messages/SessionModelMessages.js";
 import type {
   SessionComposer,
-  SessionCompactionInput,
-  SessionCompactionPlan,
   SessionComposeInput,
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
+import type { SessionContextPolicy } from "@/types/session/SessionContextPolicy.js";
+import { SequenceSummaryContextPolicy } from "@/session/composer/policies/SequenceSummaryContextPolicy.js";
 import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelMessage } from "@downcity/type";
 
@@ -60,6 +57,23 @@ function inject_plugin_context(
 export class DefaultSessionComposer implements SessionComposer {
   readonly name = "default_session";
 
+  /** 当前 Composer 使用的上下文策略。 */
+  private readonly context_policy: SessionContextPolicy;
+
+  constructor(options?: {
+    /** 生成模型历史的上下文策略。 */
+    context_policy?: SessionContextPolicy;
+  }) {
+    this.context_policy = options?.context_policy || new SequenceSummaryContextPolicy();
+  }
+
+  /** 初始化内部 Context Policy 的派生 schema。 */
+  async initialize(input: Parameters<SessionComposer["initialize"]>[0]): Promise<void> {
+    await this.context_policy.initialize({
+      storage: input.storage.composer_storage(this.context_policy.name),
+    });
+  }
+
   /** 组装当前 Step 的 system、history 与 tools。 */
   async compose(input: SessionComposeInput): Promise<SessionStepInput> {
     const system_blocks = await build_session_system_blocks({
@@ -79,42 +93,30 @@ export class DefaultSessionComposer implements SessionComposer {
       ],
     });
 
-    const messages = await session_context_to_model_messages(
-      input.history,
-      input.session.project_root,
-    );
+    const context = await this.context_policy.resolve({
+      storage: input.storage.composer_storage(this.context_policy.name),
+      project_root: input.session.project_root,
+    });
     return {
       system: system_blocks.map((block) => ({
         role: "system" as const,
         content: block.content,
       })),
       system_blocks,
-      messages: inject_plugin_context(messages, input.state.plugin_context_blocks ?? []),
+      messages: inject_plugin_context(context.messages, input.state.plugin_context_blocks ?? []),
       tools: { ...input.state.tools },
+      context_diagnostics: context.diagnostics,
     };
   }
 
-  /** 生成等待 SessionMessages 提交的压缩计划。 */
-  async compact(
-    input: SessionCompactionInput,
-  ): Promise<SessionCompactionPlan | null> {
-    if (!input.model) return null;
-    return await compose_session_compaction({
-      session_id: input.session.session_id,
-      snapshot: input.history,
+  /** 把上下文恢复委托给当前 Policy。 */
+  async recover_context(input: Parameters<SessionComposer["recover_context"]>[0]): Promise<boolean> {
+    return await this.context_policy.recover({
+      storage: input.storage.composer_storage(this.context_policy.name),
+      project_root: input.session.project_root,
+      error: input.error,
       model: input.model,
       on_model_request_failure: input.on_model_request_failure,
     });
-  }
-
-  /** 判断错误是否属于模型上下文超限。 */
-  should_compact(error: unknown): boolean {
-    const message = String(error ?? "");
-    return (
-      message.includes("context_length") ||
-      message.includes("too long") ||
-      message.includes("maximum context") ||
-      message.includes("context window")
-    );
   }
 }

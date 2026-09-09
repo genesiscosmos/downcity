@@ -20,7 +20,7 @@ function create_messages(store) {
 
 test("append_user_message 透传 Store 写入失败", async () => {
   const messages = create_messages({
-    append_message: async () => {
+    create_message: async () => {
       throw new Error("disk full");
     },
   });
@@ -42,7 +42,7 @@ test("append_user_message 透传 Store 写入失败", async () => {
 
 test("open_agent_message 透传草稿写入失败", async () => {
   const messages = create_messages({
-    create_agent_message: async () => {
+    create_message: async () => {
       throw new Error("disk full");
     },
   });

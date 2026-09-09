@@ -2,7 +2,7 @@
  * SessionHistoryMeta：随 session_id 持久化的元信息。
  *
  * 关键点（中文）
- * - 存储位置：Agent Storage `sessions/<encodedSessionId>/meta.json`
+ * - 存储位置：Session SQLite 的 `session_state` 表
  * - 用于保存 session 列表、详情和索引所需的轻量元信息
  */
 
@@ -35,6 +35,4 @@ export type SessionHistoryMeta = {
   message_count?: number;
   /** 当前 session 最后一条记录的用户可见摘要，用于列表预览。 */
   preview_text?: string;
-  /** 生成当前摘要时 messages.jsonl 的字节长度，用于校验摘要是否仍然有效。 */
-  historyBytes?: number;
 };

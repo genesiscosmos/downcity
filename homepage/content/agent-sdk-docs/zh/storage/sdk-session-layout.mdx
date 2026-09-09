@@ -1,6 +1,6 @@
 ---
 title: SDK Session 布局
-description: 本地 SDK Agent 的 Session 文件布局与数据边界
+description: 本地 SDK Agent 的 Session SQLite 布局与数据边界
 ---
 
 # SDK Session 布局
@@ -9,26 +9,20 @@ description: 本地 SDK Agent 的 Session 文件布局与数据边界
 
 ```text
 ~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/
-├── meta.json
-└── messages/
-    ├── active.jsonl
-    ├── agent_message.json
-    └── segments/
-        └── <start_sequence>-<end_sequence>.jsonl
+├── session.db
+└── attachments/
 ```
 
 Session 以 `(origin.type, session_id)` 作为稳定身份，默认分区是 `chat`。其他非空来源类型会被
-安全编码为单个目录段，例如 `automation/daily` 不会产生嵌套目录。`meta.json` v2 记录 Session
-所属的 `agent_id` 与完整且不可变的 `origin`，只有传入 Workspace 时才增加 `workspace_id`；
-项目目录不会创建 `.downcity`。
+安全编码为单个目录段，例如 `automation/daily` 不会产生嵌套目录。项目目录不会创建 `.downcity`。
 
-- `active.jsonl`：上次 Compact 后保留的完整 `SessionMessage` 快照。
-- `agent_message.json`：唯一的运行中 Agent 完整草稿。
-- `segments/*.jsonl`：不可变历史段；真实 Message 在前，累计 Summary footer 在最后。
-- `meta.json`：Agent、来源与 Workspace 归属、标题、模型标签、时间戳、消息数和存储字节数等轻量索引，不保存运行时模型实例。
+`session.db` 的核心表：
 
-Segment 文件名使用 12 位补零 sequence，例如 `000000000001-000000000900.jsonl`。目录不使用 manifest，扫描文件名即可确定历史顺序。Summary 不属于 Message，也不占 sequence。
+- `session_state`：身份、Workspace 归属、标题、模型标签、时间戳与 system snapshot。
+- `messages`：User/Agent Message envelope。
+- `message_parts`：按 sequence 保存每个 Part 的具体内容。
 
-应用应调用 `session.messages()` 读取 Active，通过 `before_sequence` 逐段读取旧历史。不要直接写入这些文件。
+Composer Policy 可以在同一数据库中维护自己的 `composer_<policy>_*` 派生表。派生表可以删除重建，
+不会改变 canonical Message。应用应调用 `session.messages()` 读取消息，不要直接写数据库。
 
-完整推进、Compact 和恢复逻辑见 [Session 元数据与落盘](/zh/agent-sdk-docs/sessions/metadata-and-storage)。
+完整设计见 [Session 元数据与落盘](/zh/agent-sdk-docs/sessions/metadata-and-storage)。

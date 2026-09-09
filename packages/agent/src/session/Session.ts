@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 面向 `new Agent(...)` 的本地会话使用场景。
  * - 对外保留稳定 Session facade，把状态、turn、view 逻辑下沉到独立 service。
- * - 内部使用 `SessionMessages` 统一管理 Active、Segment 与流式 Assistant 草稿。
+ * - 内部使用 `SessionMessages` 管理 SQLite 中的 canonical Message 聚合。
  */
 
 import { Executor } from "@executor/Executor.js";
@@ -37,11 +37,8 @@ import type {
 import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
-import type { AgentSessionCompactHandle } from "@/types/sdk/AgentSessionCompact.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
-import { create_session_compact_operation } from "@/session/runtime/SessionCompactOperation.js";
-import { run_session_history_compaction } from "@/session/runtime/SessionHistoryCompaction.js";
 import {
   create_session_local_state,
   SessionState,
@@ -54,17 +51,13 @@ import type { SessionHookRuntime } from "@downcity/type";
 import { SessionInteractions } from "@/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "@/session/execution/tools/SessionShellApprovalAdapter.js";
 import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
-import type {
-  SessionComposer,
-  SessionCompactionPlan,
-} from "@/types/session/SessionComposer.js";
-import type { SessionCompactHistory } from "@/types/session/SessionExecution.js";
+import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
 import { ensure_session_title } from "@/session/SessionTitle.js";
 import type { SessionActionEventInput } from "@downcity/type";
-import type { SessionDataStore } from "@/types/store/SessionDataStore.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type {
   AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
@@ -88,7 +81,7 @@ export class Session implements AgentSession {
   readonly origin: SessionOptions["origin"];
 
   private readonly workspace_path: string;
-  private readonly store: SessionDataStore;
+  private readonly store: SessionStorage;
   private readonly get_session_store: SessionOptions["get_session_store"];
   private readonly register_forked_session: SessionOptions["register_forked_session"];
   private readonly get_tools: SessionOptions["get_tools"];
@@ -148,7 +141,7 @@ export class Session implements AgentSession {
     this.events = new SessionEventHub();
     this.session_messages = new SessionMessages({
       session_id: this.id,
-      store: this.store.messages,
+      store: this.store,
       attachment_store: this.store.attachments,
       publish: (mutation) => {
         this.events.publish(mutation);
@@ -169,7 +162,6 @@ export class Session implements AgentSession {
       session_origin: this.origin,
       workspace_path: this.workspace_path,
       store: this.store,
-      messages: this.session_messages,
       composer: this.composer,
       get_tools: this.get_tools,
       instruction_system_blocks: options.instruction_system_blocks,
@@ -207,7 +199,9 @@ export class Session implements AgentSession {
       session_origin: this.origin,
       workspace_path: this.workspace_path,
       executor: this.executor,
-      compact_history: async (input) => await this.compact_history(input),
+      maintain_context: async () => {
+        await this.recover_context(new Error("context window usage threshold"));
+      },
       state: this.state,
       events: this.events,
       logger: this.logger,
@@ -377,53 +371,6 @@ export class Session implements AgentSession {
   }
 
   /**
-   * 把一次显式历史压缩加入当前 Session 的有序输入队列。
-   */
-  async compact(): Promise<AgentSessionCompactHandle> {
-    await this.state.ensure_runnable();
-    const compact_id = `compact:${this.id}:${generate_id()}`;
-    const operation = create_session_compact_operation({
-      compact_id,
-      run: async () => await this.session_loop.compact_history(compact_id),
-      log_error: async (error_message) => {
-        await this.logger.log("warn", "[agent] session compact command failed", {
-          session_id: this.id,
-          compact_id,
-          error: error_message,
-        });
-      },
-      publish_finish: (final_result) => {
-        this.events.publish({
-          mutation_id: nanoid(),
-          variant: "compact",
-          type: "finish",
-          session_id: this.id,
-          compact_id,
-          status: final_result.success ? "completed" : "failed",
-          compacted: final_result.compacted,
-          reason: final_result.reason,
-          created_at: Date.now(),
-          ...(final_result.error ? { error: final_result.error } : {}),
-        });
-      },
-    });
-    this.session_loop.enqueue_command({
-      kind: "maintenance",
-      execute: operation.execute,
-    });
-    this.events.publish({
-      mutation_id: nanoid(),
-      variant: "compact",
-      type: "start",
-      session_id: this.id,
-      compact_id,
-      status: "queued",
-      created_at: Date.now(),
-    });
-    return operation.handle;
-  }
-
-  /**
    * 订阅当前 Session 的未来事件。
    */
   subscribe(
@@ -482,16 +429,16 @@ export class Session implements AgentSession {
    * 读取当前 session 详情。
    */
   async get_info(): Promise<AgentSessionInfo> {
-    const [metadata, snapshot] = await Promise.all([
+    const [metadata, messages] = await Promise.all([
       this.store.read_metadata(),
-      this.session_messages.context_snapshot(),
+      this.session_messages.list_history_messages(),
     ]);
     const metadata_with_title = metadata.title
       ? metadata
       : await ensure_session_title({
           session_id: this.id,
           store: this.store,
-          messages: snapshot.messages,
+          messages,
           logger: this.logger,
         });
     const model_label = String(
@@ -507,7 +454,7 @@ export class Session implements AgentSession {
         ...metadata_with_title,
         ...(model_label ? { model_label } : {}),
       },
-      messages: snapshot.messages,
+      messages,
       executing: this.is_executing(),
     });
   }
@@ -603,6 +550,7 @@ export class Session implements AgentSession {
       session_id: this.id,
       get_model: () => this.get_model(),
       get_executor: () => this.executor,
+      messages: async () => await this.session_messages.list_history_messages(),
       prompt: async (input) => await this.prompt(input),
       stop: async () => await this.stop(),
       subscribe: (subscriber) => this.subscribe(subscriber),
@@ -611,7 +559,6 @@ export class Session implements AgentSession {
       append_agent_message: async (message_params) =>
         await this.append_external_agent_message(message_params),
       is_executing: () => this.is_executing(),
-      context: async () => await this.session_messages.context_snapshot(),
       ensure_ready_for_execution: async () => {
         await this.ensure_ready_for_execution();
       },
@@ -679,7 +626,7 @@ export class Session implements AgentSession {
           turn_context,
           retry_count,
         ),
-      compact_history: async (input) => await this.compact_history(input),
+      recover_context: async (error) => await this.recover_context(error),
       get_model: () => this.get_model(),
       logger: this.logger,
       get_hooks: () => this.get_hooks(),
@@ -687,81 +634,21 @@ export class Session implements AgentSession {
     });
   }
 
-  /** 生成并提交 canonical 历史压缩；该职责不进入 Executor。 */
-  private async compact_history(
-    input: Parameters<SessionCompactHistory>[0],
-  ): ReturnType<SessionCompactHistory> {
-    return await run_session_history_compaction({
-      turn_id: input.turn_id,
-      create_plan: async () => await this.composer.compact({
-        session: this.session_composition.compose_identity(),
-        model: this.get_model(),
-        history: await this.session_messages.context_snapshot(),
-        on_model_request_failure: (notice) => {
-          this.events.publish(create_session_model_request_warning({
-            session_id: this.id,
-            turn_id: input.turn_id,
-            notice,
-          }));
-        },
-      }),
-      commit_plan: async (plan) => {
-        await this.commit_compaction_plan(plan, input.turn_id);
-      },
-      log_error: async (error_message) => {
-        await this.logger.log("warn", "[agent] session history compaction failed", {
+  /** 让 Composer 的 Context Policy 尝试推进派生上下文状态。 */
+  private async recover_context(error: unknown): Promise<boolean> {
+    return await this.composer.recover_context({
+      session: this.session_composition.compose_identity(),
+      model: this.get_model(),
+      storage: this.store,
+      error,
+      on_model_request_failure: (notice) => {
+        this.events.publish(create_session_model_request_warning({
           session_id: this.id,
-          ...(input.turn_id ? { turn_id: input.turn_id } : {}),
-          error: error_message,
-        });
+          turn_id: this.session_loop.current_turn_id(),
+          notice,
+        }));
       },
     });
-  }
-
-  /** 提交 Composer 生成的 Segment 压缩计划。 */
-  private async commit_compaction_plan(
-    plan: SessionCompactionPlan,
-    turn_id?: string,
-  ): Promise<void> {
-    const action_id = `compacting:${this.id}:${generate_id()}`;
-    await this.emit_action_event({
-      action_id,
-      action_type: "history-compaction",
-      title: "Compacting session messages",
-      status: "running",
-      ...(turn_id
-        ? { turn_id }
-        : {}),
-    });
-    try {
-      await this.session_messages.compact_active({
-        through_sequence: plan.through_sequence,
-        summary: plan.summary,
-      });
-      await this.emit_action_event({
-        action_id,
-        action_type: "history-compaction",
-        title: "Session messages compacted",
-        description: `Closed Active through Message ${plan.boundary_message_id}.`,
-        status: "completed",
-        ...(turn_id
-          ? { turn_id }
-          : {}),
-      });
-      await this.state.touch_metadata();
-    } catch (error) {
-      await this.emit_action_event({
-        action_id,
-        action_type: "history-compaction",
-        title: "Session messages compact failed",
-        description: error instanceof Error ? error.message : String(error),
-        status: "failed",
-        ...(turn_id
-          ? { turn_id }
-          : {}),
-      });
-      throw error;
-    }
   }
 
   /**

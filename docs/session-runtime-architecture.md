@@ -71,22 +71,23 @@ Agent instruction → Downcity core → Plugin system → Session context
 执行路径、`session.system()` 和控制面 system 预览都复用该入口。Plugin system 必须先经过
 `session.system_context` Hook 检查点；旧的独立 `SessionSystemComposer/SystemDomain` 链路不再存在。
 
-Session 首次执行会固定 system snapshot。`snapshot()` 显式写入 `instruction.md`，`syncshot()` 显式按当前 Agent instruction 与 Plugin 重新生成；普通运行时变化不得静默重写已有 snapshot。
+Session 首次执行会固定 system snapshot。`snapshot()` 和 `syncshot()` 将完整快照写入 `session.db` 的 `session_state.system_snapshot`；普通运行时变化不得静默重写已有 snapshot。
 
 ## 5. 持久化与恢复
 
 ```text
-SessionDataStore
-  ├─ meta.json
-  ├─ instruction.md
-  ├─ messages/active.jsonl
-  ├─ messages/segments/*.jsonl
+SessionStorage
+  ├─ session.db
+  │  ├─ session_state
+  │  ├─ messages
+  │  ├─ message_parts
+  │  └─ composer_<policy>_* 派生表
   └─ attachments/*
 ```
 
-Active 保存最近的真实 Message；Compact 把连续前缀提交为不可变 Segment，并保存累计 Summary。Summary 只服务模型上下文，不替代用户可浏览的原始 Message。
+核心表保存完整 canonical Message；Composer Policy 的 Summary、索引等只写自己的派生表，不改写原始历史。
 
-Session 只依赖 `SessionDataStore` 协议，不拼接物理路径；来源分区、归档和路径编码由 `SessionStore` 与存储实现负责。
+Session 只依赖 `SessionStorage` 协议，不拼接物理路径；来源分区、归档和路径编码由 `SessionStore` 与存储实现负责。
 
 ## 6. 依赖方向
 

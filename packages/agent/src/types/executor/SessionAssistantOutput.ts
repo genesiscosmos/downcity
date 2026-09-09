@@ -30,6 +30,17 @@ export interface SessionAssistantOutput {
   close_current_message(): Promise<void>;
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
   append_result_parts(parts: readonly SessionAgentResultPart[]): Promise<void>;
+  /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */
+  append_error(input: {
+    /** 错误影响范围。 */
+    scope: "session" | "turn";
+    /** 稳定错误码。 */
+    code: string;
+    /** 用户可见错误信息。 */
+    message: string;
+    /** 当前错误是否允许重试恢复。 */
+    recoverable: boolean;
+  }): Promise<void>;
   /** 按 Turn 最终结果收口 Assistant 输出。 */
   finish(input: {
     /** Assistant 最终状态。 */

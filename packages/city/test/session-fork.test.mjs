@@ -37,20 +37,20 @@ test("Fork 默认包含锚点消息，显式排除时只复制锚点之前的历
   await session.append_agent_message({ text: "第一次回答" });
   await session.append_user_message({ text: "需要编辑" });
   const source_messages = (await session.messages()).items;
-  const target = source_messages.find((message) => message.type === "user" && message.parts.some((part) => part.type === "text" && part.text === "需要编辑"));
+  const target = source_messages.find((message) => message.role === "user" && message.parts.some((part) => part.type === "text" && part.text === "需要编辑"));
   assert.ok(target);
 
   const included = await session.fork({ message_id: target.message_id });
   const excluded = await session.fork({ message_id: target.message_id, include_message: false });
   assert.equal((await included.messages()).items.length, 3);
   assert.equal((await excluded.messages()).items.length, 2);
-  assert.deepEqual((await excluded.messages()).items.map((message) => message.type), ["user", "agent"]);
+  assert.deepEqual((await excluded.messages()).items.map((message) => message.role), ["user", "agent"]);
 });
 
 test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (t) => {
   const { agent, workspace, session } = await create_session(t);
   await session.append_user_message({ text: "需要编辑" });
-  const target = (await session.messages()).items.find((message) => message.type === "user");
+  const target = (await session.messages()).items.find((message) => message.role === "user");
   assert.ok(target);
 
   const forked = await session.fork({ message_id: target.message_id, include_message: false });
@@ -90,17 +90,17 @@ test("Fork 将源 Session 持有的附件复制到自己的生命周期", async 
     }],
   });
   await turn.finished;
-  const source_message = (await session.messages()).items.find((message) => message.type === "user");
-  const source_file = source_message?.type === "user" ? source_message.parts.find((part) => part.type === "file") : undefined;
+  const source_message = (await session.messages()).items.find((message) => message.role === "user");
+  const source_file = source_message?.role === "user" ? source_message.parts.find((part) => part.type === "file") : undefined;
   assert.ok(source_file);
 
   const forked = await session.fork();
-  const forked_message = (await forked.messages()).items.find((message) => message.type === "user");
-  const forked_file = forked_message?.type === "user" ? forked_message.parts.find((part) => part.type === "file") : undefined;
+  const forked_message = (await forked.messages()).items.find((message) => message.role === "user");
+  const forked_file = forked_message?.role === "user" ? forked_message.parts.find((part) => part.type === "file") : undefined;
   assert.ok(forked_file);
   assert.notEqual(forked_file.url, source_file.url);
   assert.equal(await fs.readFile(forked_file.url, "utf8"), "hello");
-  const forked_workspace_file = forked_message?.type === "user" ? forked_message.parts.find((part) => part.type === "file" && part.filename === "workspace.txt") : undefined;
+  const forked_workspace_file = forked_message?.role === "user" ? forked_message.parts.find((part) => part.type === "file" && part.filename === "workspace.txt") : undefined;
   assert.equal(forked_workspace_file?.url, workspace_file);
 
   await agent.sessions.get(session.id, "chat", { workspace });

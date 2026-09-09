@@ -84,7 +84,7 @@ function project_tool_part(
 export function to_session_message_timeline_events(
   message: SessionMessage,
 ): AgentSessionTimelineEvent[] {
-  if (message.type === "user") {
+  if (message.role === "user") {
     const text = message.parts
       .filter((part) => part.type === "text")
       .map((part) => part.text.trim())

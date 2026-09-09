@@ -13,10 +13,7 @@ import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
 } from "@downcity/type";
-import type {
-  SessionCompactHistory,
-  SessionExecutor,
-} from "@/types/session/SessionExecution.js";
+import type { SessionExecutor } from "@/types/session/SessionExecution.js";
 import type { SessionQueue } from "@/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
@@ -40,8 +37,6 @@ export interface ActiveSessionTurnState {
   deferred_finished: SessionDeferred<AgentSessionTurnResult>;
   /** 当前 Turn 进入执行阶段后拥有的唯一上下文。 */
   turn_context: SessionTurnContext | null;
-  /** 下一 Step 是否需要重新读取 canonical history。 */
-  history_reload_requested: boolean;
   /** 当前 Turn 是否已经接收并持久化首条 Prompt。 */
   prompt_started: boolean;
 }
@@ -56,8 +51,8 @@ export interface SessionLoopOptions {
   workspace_path: string;
   /** 当前 Session 的模型执行器。 */
   executor: SessionExecutor;
-  /** 由 Session 领域提供的 canonical 历史压缩入口。 */
-  compact_history: SessionCompactHistory;
+  /** Turn 结束后按需维护 Composer 派生上下文。 */
+  maintain_context: () => Promise<void>;
   /** 当前 Session 的配置与 Metadata 状态。 */
   state: SessionState;
   /** 当前 Session 的 canonical Message 入口。 */

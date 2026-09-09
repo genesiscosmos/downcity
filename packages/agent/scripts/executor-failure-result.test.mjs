@@ -168,7 +168,7 @@ test("恢复策略捕获普通异常后只返回结构化错误", async () => {
   const policy = new ExecutorRecoveryPolicy({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
-    should_compact: () => false,
+    recover_context: async () => false,
   });
   const turn_context = create_turn_context();
   const result = await policy.execute_with_retry({

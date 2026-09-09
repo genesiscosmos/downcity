@@ -122,19 +122,6 @@ type RpcRequestPayload =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 把显式历史压缩加入 Session 的有序输入队列。 */
-      method: "sdk.sessions.compact";
-      /** 目标 Session 参数。 */
-      params: {
-        /** 目标 session id。 */
-        session_id: string;
-        /** Session 来源分区。 */
-        origin_type: string;
-      };
-    }
-  | {
-      /** 请求 id，用于匹配响应。 */
-      id: string;
       /** 读取 session messages。 */
       method: "sdk.sessions.messages";
       /** messages 查询参数。 */

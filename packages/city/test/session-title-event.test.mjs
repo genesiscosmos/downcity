@@ -148,7 +148,7 @@ test("Session keeps title empty when no model is available", async () => {
 
     assert.equal(
       events.some(
-        (event) => event.variant === "message" && event.type === "user",
+        (event) => event.variant === "message" && event.role === "user",
       ),
       true,
     );

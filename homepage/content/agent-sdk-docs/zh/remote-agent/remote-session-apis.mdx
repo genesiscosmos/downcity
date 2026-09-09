@@ -50,16 +50,7 @@ const unsubscribe = session.subscribe((event) => {
 unsubscribe();
 ```
 
-订阅会收到 `message | part | delta | turn | file_diff | compact | session | warning` 八类 Mutation。用户参与请求表现为 pending Interaction Part，关联 Tool 同时进入 `waiting-user`；模型调用失败会产生 `warning / model_request`。通过 `session.respond(...)` 提交结构化响应。
-
-## 显式压缩
-
-```ts
-const compact = await session.compact();
-const result = await compact.finished;
-```
-
-远程 Session 与本地 Session 使用相同 Handle：`compact()` 返回表示命令已经入队，`finished` 在服务端 Compact Command 真正完成后兑现。
+订阅会收到 `message | part | delta | turn | file_diff | session | warning` 七类 Mutation。用户参与请求表现为 pending Interaction Part，关联 Tool 同时进入 `waiting-user`；模型调用失败会产生 `warning / model_request`。通过 `session.respond(...)` 提交结构化响应。
 
 ## 历史消息
 

@@ -21,8 +21,8 @@ function parse_user_text(text: string): string {
  */
 export function session_message_to_chat_message(record: Record<string, unknown>): DowncityChatMessage {
   const message_id = typeof record.message_id === "string" ? record.message_id : String(record.id ?? `message-${String(record.sequence ?? "unknown")}`);
-  const record_type = String(record.type ?? "agent");
-  const role = record_type === "user" ? "user" : "assistant";
+  const record_role = String(record.role ?? "agent");
+  const role = record_role === "user" ? "user" : "assistant";
   const raw_parts = Array.isArray(record.parts) ? [...record.parts] : [];
   raw_parts.sort((left, right) => Number((left as Record<string, unknown>)?.sequence ?? 0) - Number((right as Record<string, unknown>)?.sequence ?? 0));
   const parts = raw_parts.map((part, index) => session_part_to_chat_part(part, index)).filter((part): part is DowncityChatMessagePart => part !== null);
@@ -55,7 +55,7 @@ export function session_message_to_chat_message(record: Record<string, unknown>)
     parts,
     created_at: typeof record.created_at === "number" || typeof record.created_at === "string" ? record.created_at : undefined,
     is_streaming: record.status === "streaming",
-    metadata: { official_message_id: message_id, presentation_status: typeof record.status === "string" ? record.status : undefined, error: error_message, sequence: typeof record.sequence === "number" ? record.sequence : undefined, revision: typeof record.revision === "number" ? record.revision : undefined, turn_id: to_string(record.turn_id), visibility: to_string(record.visibility), session_type: record_type },
+    metadata: { official_message_id: message_id, presentation_status: typeof record.status === "string" ? record.status : undefined, error: error_message, sequence: typeof record.sequence === "number" ? record.sequence : undefined, revision: typeof record.revision === "number" ? record.revision : undefined, turn_id: to_string(record.turn_id), visibility: to_string(record.visibility), session_type: record_role },
   };
 }
 

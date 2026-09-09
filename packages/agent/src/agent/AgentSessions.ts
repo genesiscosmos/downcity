@@ -349,7 +349,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 把 Session 重新绑定到另一个 Workspace。
    *
    * 关键点（中文）
-   * - 只改写 meta.json 中的 workspace_id 并清掉运行时缓存；
+   * - 只改写 session_state 中的 workspace_id 并清掉运行时缓存；
    * - 之后用新 Workspace 恢复时不再触发严格的 workspace 归属校验。
    */
   async workspace(

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - RemoteAgent 只传递 model_id，模型实例由 Agent Server 宿主解析。
- * - compact 只验证 command 被远程 Session 接受，不应自行启动 turn。
+ * - 远程 Session 只验证模型配置转发。
  */
 
 import assert from "node:assert/strict";
@@ -90,7 +90,6 @@ test("RPC resolves model_id through the host and queues compact", {
     await session.set({ model_id: "selected-model" });
     assert.equal(resolved_model_id, "selected-model");
     assert.equal((await session.get_info()).model_label, "selected-model");
-    await session.compact();
   } finally {
     await remote_agent.close();
     await rpc.close();

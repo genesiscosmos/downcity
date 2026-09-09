@@ -1,14 +1,11 @@
 /**
- * SDK Session 浏览辅助。
+ * Session 浏览投影。
  *
- * 关键点（中文）
- * - 统一负责 session 列表摘要、session 详情与 history 分页的投影逻辑。
- * - session title 允许为空；浏览层不会再从首条 user message 推导 fallback title。
- * - 面向 SDK / RemoteAgent / downcity gateway route 复用，避免在多个入口重复拼列表与分页语义。
- * - 这里不持有运行态状态；执行状态等动态信息通过调用参数显式注入。
+ * 本模块只从每个 Session 的 `session.db` 读取列表所需的轻量状态；Message 正文仍由
+ * SessionStorage 聚合读取。浏览逻辑不创建 schema，也不尝试迁移旧文件格式。
  */
 
-import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type {
   AgentListSessionsInput,
   AgentSessionInfo,
@@ -18,53 +15,64 @@ import type {
 import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import { resolve_session_message_preview } from "@/session/preview/SessionMessagePreview.js";
 import {
-  get_agent_archived_session_active_messages_path,
-  get_agent_archived_session_meta_path,
+  get_agent_archived_session_database_path,
   get_agent_archived_sessions_path,
-  get_agent_session_active_messages_path,
-  get_agent_session_meta_path,
+  get_agent_session_database_path,
   get_agent_sessions_path,
 } from "@/session/storage/LocalStorePaths.js";
-import { read_session_metadata_from_path } from "@/session/storage/Metadata.js";
-import { normalize_session_origin_type } from "@downcity/type";
-import type { SessionMessage } from "@downcity/type";
-import type { FileSystem } from "@downcity/type";
+import {
+  normalize_session_origin_type,
+  restore_session_origin,
+  type FileSystem,
+  type SessionMessage,
+} from "@downcity/type";
 
-type SessionBrowseBaseInput = {
-  /**
-   * 当前项目根目录。
-   */
-  project_root: string;
-
-  /**
-   * 当前 agent_id。
-   */
-  agent_id: string;
-
-  /**
-   * 当前 session_id。
-   */
+/** SQLite 中列表投影所需的 session_state 行。 */
+interface SessionBrowseStateRow {
+  /** Session 标识。 */
   session_id: string;
+  /** Agent 标识。 */
+  agent_id: string;
+  /** 可选 Workspace 标识。 */
+  workspace_id: string | null;
+  /** JSON 编码的来源。 */
+  origin: string;
+  /** Session 时区。 */
+  timezone: string;
+  /** 可选标题。 */
+  title: string | null;
+  /** 可选模型标签。 */
+  model_label: string | null;
+  /** 可选审批模式。 */
+  approval_mode: "ask" | "always-allow" | null;
+  /** canonical Message 数量。 */
+  message_count: number;
+  /** 最新消息预览。 */
+  preview_text: string | null;
+  /** 创建时间。 */
+  created_at: number;
+  /** 更新时间。 */
+  updated_at: number;
+}
 
-  /**
-   * 当前 session 已读取到的 metadata。
-   */
+/** Session 详情投影输入。 */
+interface SessionBrowseBaseInput {
+  /** 当前项目或私有存储根目录。 */
+  project_root: string;
+  /** 当前 Agent 标识。 */
+  agent_id: string;
+  /** 当前 Session 标识。 */
+  session_id: string;
+  /** 已读取的 Session 状态。 */
   metadata: SessionHistoryMeta;
-
-  /**
-   * 当前 session 已读取到的完整消息。
-   *
-   * 说明（中文）：列表查询已有 metadata 摘要时可省略，详情查询仍传完整记录。
-   */
+  /** 可选完整 Message，用于即时生成详情预览。 */
   messages?: SessionMessage[];
-
-  /**
-   * 当前 session 是否正在执行。
-   */
+  /** 当前 Session 是否正在执行。 */
   executing?: boolean;
-};
+}
 
-function decodeMaybe(input: string): string {
+/** 从目录名恢复 Session 标识。 */
+function decode_session_id(input: string): string {
   try {
     return decodeURIComponent(input);
   } catch {
@@ -72,484 +80,191 @@ function decodeMaybe(input: string): string {
   }
 }
 
-function normalizeLimit(input: unknown, fallback: number, max: number): number {
-  const value =
-    typeof input === "number" && Number.isFinite(input)
-      ? input
-      : typeof input === "string" && input.trim()
-        ? Number(input)
-        : NaN;
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(1, Math.min(max, Math.floor(value)));
+/** 规范化分页上限。 */
+function normalize_limit(input: unknown, fallback: number, max: number): number {
+  const value = typeof input === "number" && Number.isFinite(input)
+    ? input
+    : typeof input === "string" && input.trim()
+      ? Number(input)
+      : NaN;
+  return Number.isFinite(value)
+    ? Math.max(1, Math.min(max, Math.floor(value)))
+    : fallback;
 }
 
-function truncateText(input: string, maxChars: number): string {
+/** 规范化透明 offset cursor。 */
+function normalize_cursor(input: unknown): number {
+  const value = Number(String(input || "").trim());
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+}
+
+/** 裁剪用户可见预览。 */
+function truncate_text(input: string, max_chars: number): string {
   const value = String(input || "").trim();
-  if (!value) return "";
-  if (value.length <= maxChars) return value;
-  return `${value.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+  if (value.length <= max_chars) return value;
+  return `${value.slice(0, Math.max(0, max_chars - 1)).trimEnd()}…`;
 }
 
-function normalizeCursor(input: unknown): number {
-  const raw = String(input || "").trim();
-  if (!raw) return 0;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) return 0;
-  return Math.floor(value);
-}
-
-function encodeCursor(offset: number): string | undefined {
-  if (!Number.isFinite(offset) || offset <= 0) return undefined;
-  return String(Math.floor(offset));
-}
-
-/**
- * 读取指定 JSONL 消息文件。
- */
-export async function load_session_messages_from_path(
-  file_path: string,
-  files: FileSystem,
-): Promise<SessionMessage[]> {
-  const messages_dir_path = path.dirname(file_path);
-  const inflight_path = path.join(messages_dir_path, "agent_message.json");
-  const messages_by_id = new Map<string, SessionMessage>();
-  if (await files.path_exists(file_path)) {
-    const raw = (await files.read_file(file_path)).toString("utf8");
-    const lines = raw.split("\n").filter(Boolean);
-    for (const line of lines) {
-      try {
-        const message = JSON.parse(line) as SessionMessage;
-        if (!is_canonical_session_message(message)) continue;
-        const previous = messages_by_id.get(message.message_id);
-        if (!previous || message.revision > previous.revision) {
-          messages_by_id.set(message.message_id, message);
-        }
-      } catch {
-        // 关键点（中文）：单行损坏不影响整个 session 的可读性。
-      }
-    }
-  }
-
-  if (await files.path_exists(inflight_path)) {
-    try {
-      const message = JSON.parse(
-        (await files.read_file(inflight_path)).toString("utf8"),
-      ) as SessionMessage;
-      if (is_canonical_session_message(message) && message.type === "agent") {
-        messages_by_id.set(message.message_id, message);
-      }
-    } catch {
-      // 运行中快照损坏时仍返回已经完成的历史。
-    }
-  }
-
-  return [...messages_by_id.values()]
-    .sort((left, right) => left.sequence - right.sequence);
-}
-
-function is_canonical_session_message(input: unknown): input is SessionMessage {
-  if (!input || typeof input !== "object") return false;
-  const candidate = input as Partial<SessionMessage>;
-  return (
-    typeof candidate.message_id === "string" &&
-    typeof candidate.session_id === "string" &&
-    typeof candidate.sequence === "number" &&
-    typeof candidate.revision === "number" &&
-    Array.isArray(candidate.parts) &&
-    (candidate.type === "user" || candidate.type === "agent")
-  );
-}
-
-function is_compact_summary_message(message: SessionMessage): boolean {
-  return message.type === "agent" && message.kind === "summary";
-}
-
-function filter_user_visible_history_messages(
-  messages: SessionMessage[],
-): SessionMessage[] {
-  return messages.filter((message) =>
-    message.visibility === "visible" && !is_compact_summary_message(message)
-  );
-}
-
-/**
- * 基于 metadata + messages 构建 SDK session 详情。
- */
-export function build_session_info(
-  input: SessionBrowseBaseInput,
-): AgentSessionInfo {
-  const messages = input.messages;
-  const preview_text = messages && messages.length > 0
-    ? truncateText(
-        resolve_session_message_preview(messages[messages.length - 1]),
-        180,
-      )
+/** 基于 metadata 与可选 Message 构建 SDK Session 详情。 */
+export function build_session_info(input: SessionBrowseBaseInput): AgentSessionInfo {
+  const latest_message = input.messages?.at(-1);
+  const preview_text = latest_message
+    ? truncate_text(resolve_session_message_preview(latest_message), 180)
     : input.metadata.preview_text;
-  const message_count = typeof input.metadata.message_count === "number"
-    ? input.metadata.message_count
-    : messages
-      ? filter_user_visible_history_messages(messages).length
-      : 0;
-  const title =
-    typeof input.metadata.title === "string" && input.metadata.title.trim()
-      ? input.metadata.title.trim()
-      : undefined;
   return {
     agent_id: input.agent_id,
     session_id: input.session_id,
-    ...(title ? { title } : {}),
+    ...(input.metadata.title?.trim() ? { title: input.metadata.title.trim() } : {}),
     ...(preview_text ? { preview_text } : {}),
-    message_count: message_count,
+    message_count: input.metadata.message_count ?? input.messages?.length ?? 0,
     ...(typeof input.metadata.created_at === "number"
       ? { created_at: input.metadata.created_at }
       : {}),
     ...(typeof input.metadata.updated_at === "number"
       ? { updated_at: input.metadata.updated_at }
       : {}),
-    ...(input.metadata.model_label
-      ? { model_label: input.metadata.model_label }
-      : {}),
+    ...(input.metadata.model_label ? { model_label: input.metadata.model_label } : {}),
     origin: input.metadata.origin,
-    ...(typeof input.metadata.timezone === "string" && input.metadata.timezone.trim()
-      ? { timezone: input.metadata.timezone.trim() }
-      : {}),
+    ...(input.metadata.workspace_id ? { workspace_id: input.metadata.workspace_id } : {}),
+    ...(input.metadata.timezone ? { timezone: input.metadata.timezone } : {}),
     ...(input.executing ? { executing: true } : {}),
   };
 }
 
-/**
- * 读取列表所需的轻量 session 摘要。
- *
- * 关键点（中文）
- * - 新记录直接使用 metadata 摘要，不扫描 active.jsonl。
- * - 旧记录或执行中记录回退读取一次完整历史，并把摘要补写回 metadata。
- */
-async function resolve_session_summary_metadata(input: {
-  /** 当前 session metadata。 */
-  metadata: SessionHistoryMeta;
-  /** 当前消息 JSONL 路径。 */
-  messagesPath: string;
-  /** 当前 metadata 路径。 */
-  metaPath: string;
-  /** 是否强制刷新摘要。 */
-  refresh: boolean;
-  /** 当前 Workspace 的统一文件能力。 */
-  files: FileSystem;
-}): Promise<SessionHistoryMeta> {
-  const storage_stats = await resolve_session_disk_stats(
-    input.messagesPath,
-    input.files,
-  );
-  const history_bytes = storage_stats.history_bytes;
-  const inflight_path = path.join(path.dirname(input.messagesPath), "agent_message.json");
-  const has_inflight = await input.files.path_exists(inflight_path);
-  if (
-    !input.refresh &&
-    !has_inflight &&
-    typeof input.metadata.message_count === "number" &&
-    input.metadata.historyBytes === history_bytes
-  ) {
-    return input.metadata;
-  }
-  const messages = await load_session_messages_from_path(
-    input.messagesPath,
-    input.files,
-  );
-  const last_message = messages[messages.length - 1];
-  const preview_text = last_message
-    ? truncateText(resolve_session_message_preview(last_message), 180)
-    : "";
-  const { preview_text: _previous_preview, ...metadata_without_preview } = input.metadata;
-  void _previous_preview;
-  const next_metadata: SessionHistoryMeta = {
-    ...metadata_without_preview,
-    message_count: storage_stats.message_count,
-    historyBytes: history_bytes,
-    ...(preview_text || input.metadata.preview_text
-      ? { preview_text: preview_text || input.metadata.preview_text }
-      : {}),
-  };
-  await input.files.write_file_atomically(
-    input.metaPath,
-    `${JSON.stringify(next_metadata, null, 2)}\n`,
-  );
-  return next_metadata;
-}
-
-/**
- * 只读取 Active 和 Segment 文件索引，计算列表所需的持久化统计。
- *
- * 关键点（中文）
- * - Segment 的结束 sequence 直接来自文件名，不解析历史正文。
- * - Active 需要逐行读取，以同时覆盖 revision 行与运行中 Assistant sequence。
- */
-async function resolve_session_disk_stats(
-  messages_path: string,
-  files: FileSystem,
-) {
-  const messages_dir_path = path.dirname(messages_path);
-  const segments_dir_path = path.join(messages_dir_path, "segments");
-  const segment_entries = await files.read_directory(segments_dir_path)
-    .catch(() => []);
-  const segment_files = segment_entries.flatMap((entry) => {
-    if (!entry.is_file) return [];
-    const match = /^(\d+)-(\d+)\.jsonl$/.exec(entry.name);
-    if (!match) return [];
-    return [{
-      file_path: path.join(segments_dir_path, entry.name),
-      end_sequence: Number(match[2]),
-    }];
-  });
-  const active_raw = await files.read_file(messages_path)
-    .then((value) => value.toString("utf8"))
-    .catch(() => "");
-  let latest_active_sequence = 0;
-  for (const line of active_raw.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const message = JSON.parse(line) as Partial<SessionMessage>;
-      if (Number.isInteger(message.sequence)) {
-        latest_active_sequence = Math.max(latest_active_sequence, Number(message.sequence));
-      }
-    } catch {
-      // 单行损坏不阻断 Session 列表，其正文读取时会按既有规则忽略。
-    }
-  }
-  const inflight_path = path.join(messages_dir_path, "agent_message.json");
+/** 只读打开一个现有数据库并读取 Session 状态；失败时不改写磁盘。 */
+export function read_session_metadata_from_database(
+  database_path: string,
+  fallback_origin_type: string,
+): SessionHistoryMeta | null {
+  let database: DatabaseSync | null = null;
   try {
-    const inflight = JSON.parse(
-      (await files.read_file(inflight_path)).toString("utf8"),
-    ) as Partial<SessionMessage>;
-    if (Number.isInteger(inflight.sequence)) {
-      latest_active_sequence = Math.max(latest_active_sequence, Number(inflight.sequence));
-    }
+    database = new DatabaseSync(database_path, { readOnly: true });
+    const row = database.prepare(`
+      SELECT session_id, agent_id, workspace_id, origin, timezone, title,
+             model_label, approval_mode, message_count, preview_text,
+             created_at, updated_at
+      FROM session_state WHERE singleton_id = 1
+    `).get() as unknown as SessionBrowseStateRow | undefined;
+    if (!row) return null;
+    return {
+      v: 2,
+      session_id: row.session_id,
+      agent_id: row.agent_id,
+      ...(row.workspace_id ? { workspace_id: row.workspace_id } : {}),
+      origin: restore_session_origin(JSON.parse(row.origin), fallback_origin_type),
+      timezone: row.timezone,
+      ...(row.title ? { title: row.title } : {}),
+      ...(row.model_label ? { model_label: row.model_label } : {}),
+      ...(row.approval_mode ? { approval_mode: row.approval_mode } : {}),
+      message_count: row.message_count,
+      ...(row.preview_text ? { preview_text: row.preview_text } : {}),
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
   } catch {
-    // 草稿不存在或损坏时只统计已完成历史。
+    return null;
+  } finally {
+    database?.close();
   }
-  const segment_sizes = await Promise.all(
-    segment_files.map(({ file_path }) => files.file_size(file_path)
-      .catch(() => 0)),
-  );
-  const latest_segment_sequence = segment_files.reduce(
-    (latest, segment) => Math.max(latest, segment.end_sequence),
-    0,
-  );
-  return {
-    history_bytes: Buffer.byteLength(active_raw, "utf8") +
-      segment_sizes.reduce((total, size) => total + size, 0),
-    message_count: Math.max(latest_segment_sequence, latest_active_sequence),
-  };
 }
 
-/**
- * 列出指定 agent 的 session 摘要页。
- */
-export async function list_agent_session_summary_page(params: {
+/** 列出活动 Session 摘要页。 */
+export async function list_agent_session_summary_page(input: {
+  /** Agent 私有存储根目录。 */
   project_root: string;
+  /** 当前 Agent 标识。 */
   agent_id: string;
+  /** 可选 Workspace 过滤。 */
   workspace_id?: string;
+  /** 列表查询。 */
   input?: AgentListSessionsInput;
-  executingSessionIds?: Set<string>;
+  /** 当前执行中的 Session。 */
+  executing_session_ids?: ReadonlySet<string>;
+  /** Agent 私有文件能力。 */
   files: FileSystem;
 }): Promise<AgentSessionSummaryPage> {
-  const limit = normalizeLimit(params.input?.limit, 50, 500);
-  const cursor = normalizeCursor(params.input?.cursor);
-  const query = String(params.input?.query || "").trim().toLowerCase();
-  const origin_type = normalize_session_origin_type(params.input?.origin_type ?? "chat");
-  const sessionsRoot = get_agent_sessions_path(params.project_root, origin_type);
+  return await list_session_summary_page({ ...input, archived: false });
+}
 
-  if (!(await params.files.path_exists(sessionsRoot))) {
-    return {
-      items: [],
-      total: 0,
-      has_more: false,
-    };
+/** 列出归档 Session 摘要页。 */
+export async function list_archived_agent_session_summary_page(input: {
+  /** Agent 私有存储根目录。 */
+  project_root: string;
+  /** 当前 Agent 标识。 */
+  agent_id: string;
+  /** 可选 Workspace 过滤。 */
+  workspace_id?: string;
+  /** 列表查询。 */
+  input?: AgentListSessionsInput;
+  /** Agent 私有文件能力。 */
+  files: FileSystem;
+}): Promise<AgentSessionSummaryPage> {
+  return await list_session_summary_page({ ...input, archived: true });
+}
+
+/** 扫描单个来源分区中的 Session 数据库并建立轻量列表。 */
+async function list_session_summary_page(input: {
+  /** Agent 私有存储根目录。 */
+  project_root: string;
+  /** 当前 Agent 标识。 */
+  agent_id: string;
+  /** 可选 Workspace 过滤。 */
+  workspace_id?: string;
+  /** 列表查询。 */
+  input?: AgentListSessionsInput;
+  /** 当前执行中的 Session。 */
+  executing_session_ids?: ReadonlySet<string>;
+  /** Agent 私有文件能力。 */
+  files: FileSystem;
+  /** 是否扫描归档目录。 */
+  archived: boolean;
+}): Promise<AgentSessionSummaryPage> {
+  const origin_type = normalize_session_origin_type(input.input?.origin_type ?? "chat");
+  const sessions_path = input.archived
+    ? get_agent_archived_sessions_path(input.project_root, origin_type)
+    : get_agent_sessions_path(input.project_root, origin_type);
+  if (!(await input.files.path_exists(sessions_path))) {
+    return { items: [], total: 0, has_more: false };
   }
-
-  const entries = await params.files.read_directory(sessionsRoot);
+  const query = String(input.input?.query || "").trim().toLowerCase();
   const summaries: AgentSessionSummary[] = [];
-
-  for (const entry of entries) {
+  for (const entry of await input.files.read_directory(sessions_path)) {
     if (!entry.is_directory) continue;
-    const session_id = decodeMaybe(entry.name);
-    if (!session_id) continue;
-    const meta_path = get_agent_session_meta_path(
-      params.project_root,
-      origin_type,
-      session_id,
-    );
-    const messages_path = get_agent_session_active_messages_path(
-      params.project_root,
-      origin_type,
-      session_id,
-    );
-    const persisted_metadata = await read_session_metadata_from_path({
-      filePath: meta_path,
-      session_id,
-      agent_id: params.agent_id,
-      workspace_id: params.workspace_id,
-      origin_type,
-      files: params.files,
-    }).catch(() => null);
-    if (!persisted_metadata) continue;
-    const metadata = await resolve_session_summary_metadata({
-      metadata: persisted_metadata,
-      messagesPath: messages_path,
-      metaPath: meta_path,
-      refresh: params.executingSessionIds?.has(session_id) === true,
-      files: params.files,
-    });
-    const info = build_session_info({
-      project_root: params.project_root,
-      agent_id: params.agent_id,
+    const session_id = decode_session_id(entry.name);
+    const database_path = input.archived
+      ? get_agent_archived_session_database_path(input.project_root, origin_type, session_id)
+      : get_agent_session_database_path(input.project_root, origin_type, session_id);
+    if (!(await input.files.path_exists(database_path))) continue;
+    const metadata = read_session_metadata_from_database(database_path, origin_type);
+    if (
+      !metadata ||
+      metadata.agent_id !== input.agent_id ||
+      metadata.origin.type !== origin_type ||
+      (input.workspace_id && metadata.workspace_id !== input.workspace_id)
+    ) continue;
+    const summary = build_session_info({
+      project_root: input.project_root,
+      agent_id: input.agent_id,
       session_id,
       metadata,
-      executing: params.executingSessionIds?.has(session_id),
+      executing: !input.archived && input.executing_session_ids?.has(session_id) === true,
     });
-    const summary: AgentSessionSummary = {
-      agent_id: info.agent_id,
-      session_id: info.session_id,
-      ...(info.title ? { title: info.title } : {}),
-      ...(info.preview_text ? { preview_text: info.preview_text } : {}),
-      message_count: info.message_count,
-      ...(typeof info.created_at === "number" ? { created_at: info.created_at } : {}),
-      ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
-      ...(info.model_label ? { model_label: info.model_label } : {}),
-      origin: info.origin,
-      ...(persisted_metadata.workspace_id ? { workspace_id: persisted_metadata.workspace_id } : {}),
-      ...(info.executing ? { executing: true } : {}),
-    };
-
-    if (query) {
-      const haystack = [
-        summary.session_id,
-        summary.title || "",
-        summary.preview_text || "",
-      ]
-        .join("\n")
-        .toLowerCase();
-      if (!haystack.includes(query)) continue;
-    }
-
+    if (query && ![
+      summary.session_id,
+      summary.title || "",
+      summary.preview_text || "",
+    ].join("\n").toLowerCase().includes(query)) continue;
     summaries.push(summary);
   }
-
   summaries.sort((left, right) => (right.updated_at || 0) - (left.updated_at || 0));
-
+  const cursor = normalize_cursor(input.input?.cursor);
+  const limit = normalize_limit(input.input?.limit, 50, 500);
   const items = summaries.slice(cursor, cursor + limit);
-  const nextOffset = cursor + items.length;
+  const next_cursor = cursor + items.length;
   return {
     items,
     total: summaries.length,
-    ...(nextOffset < summaries.length
-      ? { next_cursor: encodeCursor(nextOffset) }
-      : {}),
-    has_more: nextOffset < summaries.length,
-  };
-}
-
-/**
- * 列出指定 agent 的已归档 session 摘要页。
- */
-export async function list_archived_agent_session_summary_page(params: {
-  project_root: string;
-  agent_id: string;
-  workspace_id?: string;
-  input?: AgentListSessionsInput;
-  files: FileSystem;
-}): Promise<AgentSessionSummaryPage> {
-  const limit = normalizeLimit(params.input?.limit, 50, 500);
-  const cursor = normalizeCursor(params.input?.cursor);
-  const query = String(params.input?.query || "").trim().toLowerCase();
-  const origin_type = normalize_session_origin_type(params.input?.origin_type ?? "chat");
-  const archivedRoot = get_agent_archived_sessions_path(params.project_root, origin_type);
-
-  if (!(await params.files.path_exists(archivedRoot))) {
-    return {
-      items: [],
-      total: 0,
-      has_more: false,
-    };
-  }
-
-  const entries = await params.files.read_directory(archivedRoot);
-  const summaries: AgentSessionSummary[] = [];
-
-  for (const entry of entries) {
-    if (!entry.is_directory) continue;
-    const session_id = decodeMaybe(entry.name);
-    if (!session_id) continue;
-    const meta_path = get_agent_archived_session_meta_path(
-      params.project_root,
-      origin_type,
-      session_id,
-    );
-    const messages_path = get_agent_archived_session_active_messages_path(
-      params.project_root,
-      origin_type,
-      session_id,
-    );
-    const persisted_metadata = await read_session_metadata_from_path({
-      filePath: meta_path,
-      session_id,
-      agent_id: params.agent_id,
-      workspace_id: params.workspace_id,
-      origin_type,
-      files: params.files,
-    }).catch(() => null);
-    if (!persisted_metadata) continue;
-    const metadata = await resolve_session_summary_metadata({
-      metadata: persisted_metadata,
-      messagesPath: messages_path,
-      metaPath: meta_path,
-      refresh: false,
-      files: params.files,
-    });
-    // 关键点（中文）：归档 session 不再生成新 title，仅读取归档目录内已有 meta。
-    const info = build_session_info({
-      project_root: params.project_root,
-      agent_id: params.agent_id,
-      session_id,
-      metadata,
-      executing: false,
-    });
-    const summary: AgentSessionSummary = {
-      agent_id: info.agent_id,
-      session_id: info.session_id,
-      ...(info.title ? { title: info.title } : {}),
-      ...(info.preview_text ? { preview_text: info.preview_text } : {}),
-      message_count: info.message_count,
-      ...(typeof info.created_at === "number" ? { created_at: info.created_at } : {}),
-      ...(typeof info.updated_at === "number" ? { updated_at: info.updated_at } : {}),
-      ...(info.model_label ? { model_label: info.model_label } : {}),
-      origin: info.origin,
-      ...(persisted_metadata.workspace_id ? { workspace_id: persisted_metadata.workspace_id } : {}),
-    };
-
-    if (query) {
-      const haystack = [
-        summary.session_id,
-        summary.title || "",
-        summary.preview_text || "",
-      ]
-        .join("\n")
-        .toLowerCase();
-      if (!haystack.includes(query)) continue;
-    }
-
-    summaries.push(summary);
-  }
-
-  summaries.sort((left, right) => (right.updated_at || 0) - (left.updated_at || 0));
-
-  const items = summaries.slice(cursor, cursor + limit);
-  const nextOffset = cursor + items.length;
-  return {
-    items,
-    total: summaries.length,
-    ...(nextOffset < summaries.length
-      ? { next_cursor: encodeCursor(nextOffset) }
-      : {}),
-    has_more: nextOffset < summaries.length,
+    ...(next_cursor < summaries.length ? { next_cursor: String(next_cursor) } : {}),
+    has_more: next_cursor < summaries.length,
   };
 }

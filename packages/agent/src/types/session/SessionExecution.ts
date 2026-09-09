@@ -100,16 +100,3 @@ export interface SessionExecutor {
     input: SessionTurnExecutionInput,
   ): Promise<SessionTurnExecutionResult>;
 }
-
-/** Session 领域执行一次持久化历史压缩的统一回调。 */
-export type SessionCompactHistory = (input: {
-  /** 触发压缩的 Turn 标识；非 Turn 维护操作允许为空。 */
-  turn_id?: string;
-}) => Promise<{
-  /** 是否生成并成功提交了压缩计划。 */
-  compacted: boolean;
-  /** 没有压缩时的稳定原因。 */
-  reason?: string;
-  /** 压缩失败时的具体错误文本。 */
-  error?: string;
-}>;

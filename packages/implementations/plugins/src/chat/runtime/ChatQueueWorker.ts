@@ -340,7 +340,7 @@ export class ChatQueueWorker {
     }
     if (
       event.variant !== "message" ||
-      event.type !== "agent" ||
+      event.role !== "agent" ||
       event.message.status === "streaming"
     ) return;
     const segment_text = String(

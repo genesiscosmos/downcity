@@ -225,7 +225,7 @@ function create_session_collection(
       stop: async () => await runtime.stop() as unknown as PluginJsonObject,
       subscribe: (subscriber) => runtime.subscribe((mutation) =>
         subscriber(mutation as unknown as PluginSessionMutation)),
-      context: async () => await runtime.context() as unknown as import("@/plugin/index.js").PluginSessionContextSnapshot,
+      messages: async () => await runtime.messages() as unknown as import("@/plugin/index.js").PluginJsonObject[],
       append_agent_message: async (message_input) =>
         await runtime.append_agent_message(message_input),
     });

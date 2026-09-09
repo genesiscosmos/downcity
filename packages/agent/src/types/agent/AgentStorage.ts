@@ -6,7 +6,7 @@
  */
 
 import type { SessionStore } from "@/types/store/SessionStore.js";
-import type { FileSystem } from "@downcity/type";
+import type { FileSystem, StorageDatabaseLocation } from "@downcity/type";
 
 /** Agent 持有的 Session、日志与调度共享存储。 */
 export interface AgentStorage {
@@ -14,6 +14,8 @@ export interface AgentStorage {
   root_path: string;
   /** 受当前 Agent 根路径约束的文件能力。 */
   files: FileSystem;
+  /** Agent 私有结构化数据库使用的位置类型。 */
+  database_location: StorageDatabaseLocation;
   /** 当前 Agent 的 Session 集合存储。 */
   sessions: SessionStore;
 }

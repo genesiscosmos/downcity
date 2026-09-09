@@ -30,7 +30,6 @@ async function reserve_port() {
 
 function create_fake_agent() {
   const subscribers = new Set();
-  let compact_count = 0;
   let approval_mode = "ask";
   const set_calls = [];
   const info = {
@@ -128,26 +127,6 @@ function create_fake_agent() {
     async stop() {
       return { stopped: false, cancelled_queued_prompts: 0, reason: "idle" };
     },
-    async compact() {
-      compact_count += 1;
-      const compact_id = "compact-http-test";
-      queueMicrotask(() => {
-        for (const subscriber of subscribers) {
-          subscriber({
-            mutation_id: "compact-finish-http-test",
-            variant: "compact",
-            type: "finish",
-            session_id: info.session_id,
-            compact_id,
-            status: "completed",
-            compacted: false,
-            reason: "nothing_to_compact",
-            created_at: Date.now(),
-          });
-        }
-      });
-      return { id: compact_id };
-    },
     async messages() {
       return { items: [], total: 0, source: "active", has_more: false };
     },
@@ -185,9 +164,6 @@ function create_fake_agent() {
     },
   };
   return {
-    read_compact_count() {
-      return compact_count;
-    },
     read_set_calls() {
       return structuredClone(set_calls);
     },
@@ -295,15 +271,6 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", {
         response: { type: "approval", payload: { decision: "approved" } },
       },
     );
-    const compact = await session.compact();
-    assert.deepEqual(await compact.finished, {
-      compact_id: "compact-http-test",
-      success: true,
-      compacted: false,
-      reason: "nothing_to_compact",
-    });
-    assert.equal(fake_agent.read_compact_count(), 1);
-
     const action = await remote_agent.run_plugin_action({
       plugin: "demo",
       action: "echo",

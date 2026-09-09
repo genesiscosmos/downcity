@@ -22,7 +22,7 @@ function create_user_message(message_id, text, created_at) {
     visibility: "visible",
     created_at,
     updated_at: created_at,
-    type: "user",
+    role: "user",
     input_type: "steer",
     parts: [{
       part_id: `${message_id}:text`,

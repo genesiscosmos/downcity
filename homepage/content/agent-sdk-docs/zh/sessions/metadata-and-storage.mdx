@@ -1,6 +1,6 @@
 ---
 title: 元数据与落盘
-description: 理解 Active、Segment、累计 Summary、Assistant 草稿和中断恢复
+description: Session SQLite、canonical Message 与 Composer Context Policy
 ---
 
 # 元数据与落盘
@@ -10,120 +10,40 @@ Session API 读写，不要把这些文件当作自己的数据库。
 
 ```text
 ~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/
-├── meta.json
-├── instruction.md
-└── messages/
-    ├── active.jsonl
-    ├── agent_message.json
-    └── segments/
-        ├── 000000000001-000000000900.jsonl
-        └── 000000000901-000000001500.jsonl
+├── session.db
+└── attachments/
 ```
 
-Session 以 `(origin.type, session_id)` 作为身份。默认来源是 `chat`；`group`、`task` 或其他任意
-非空字符串会进入独立分区，自定义来源类型由路径层安全编码为单个目录段。`meta.json` v2 始终记录
-`agent_id` 和完整且不可变的 `origin`，只有创建 Session 时传入 Workspace 才记录 `workspace_id`。
-同一个 `session_id` 可以存在于不同来源分区而互不共享数据，项目目录不会创建 `.downcity`。
+一个 Session 对应一个 `session.db`。核心表为：
 
-`instruction.md` 是可选的完整 system 快照。Session 首次生成 system 后默认只在内存中固定；调用本地 `session.snapshot()` 会创建或覆盖该文件。`session.syncshot()` 会重新生成内存 system，并在文件已经存在时同步覆盖。恢复时若文件不存在，Session 会从 Agent 当前 instruction 和 plugin 重新生成；删除文件即可恢复这一行为。
+- `session_state`：Session 身份、配置、标题、预览和 system snapshot。
+- `messages`：User/Agent Message 的 envelope。
+- `message_parts`：每个 Message 的独立 Part；一个 content 对应一个 Part。
 
-## Active 与 Segment
+读取 API 返回聚合后的 `SessionMessage`，数据库表结构不会泄漏到 UI 或模型 Provider。Message 是
+canonical history，永远不会因为上下文压缩而删除或改写。
 
-`active.jsonl` 只保存最近一次 Compact 之后仍处于活动窗口中的真实 `SessionMessage`。它没有固定条数上限，也不按 API 页大小切分。SDK 不在模型调用前估算 token；只有 Provider 返回的真实 `usage.totalTokens`（缺失时使用 `inputTokens + outputTokens`）达到模型 `context_window` 的 95% 时，才安排 Compact。
+## Composer 与上下文策略
 
-Compact 发生时，SDK 按 Active 中 User 和 Assistant Message 的数量选择最旧的 `floor(n / 2)` 条消息。摘要模型只调用一次，输入仅包含该前缀，以及存在时的上一版累计 Summary；较新的后 50% 不进入摘要输入并继续保留在 Active。Assistant 完成落盘后，选中的前缀被关闭为按 sequence 范围命名的不可变 Segment。Segment 每行先保存真实 Message，最后一行保存累计 Summary footer：
+`SessionComposer` 负责生成最终送给模型的 system、messages 和 tools。Composer 内部使用一个
+`SessionContextPolicy`，例如 `SequenceSummaryContextPolicy` 会在自己的
+`composer_sequence_summaries` 派生表中保存累计摘要。
+
+派生摘要、索引和检索结果不是 Message，可以删除并重建，也不会改变用户可浏览的 canonical history。
+当前策略只会读取最新摘要边界之后的 Message：
 
 ```text
-message sequence 1
-...
-message sequence 450
-summary through sequence 450
+最新 Policy 派生摘要
++ 边界之后的 canonical Message
 ```
 
-下一次 Compact 会选择届时 Active 窗口中最旧的一半消息，其 footer Summary 合并旧 Summary 与本次选中的前缀，因此 Summary 始终累计覆盖已归档历史。Summary 不是 `SessionMessage`，不占用 sequence，也不放进 Active。
+模型返回上下文超限时，Composer 调用 Policy 的 `recover_context()` 推进派生状态；不会写入 Active、Segment 或第二份消息文件。
 
-Compact 后的下一次真实 usage 用于验收：不超过 `context_window` 的 50% 即达标；高于 50% 时继续在下一 step 前 deep compact。Provider 直接返回 context-length error 且没有 usage 时，SDK 也会强制折叠当前模型消息并重试。
+## 中断恢复与事务
 
-## 模型上下文
+Message envelope 与 Parts 在同一个 SQLite 事务中提交，只有提交成功后才发布 Mutation。启动时
+SessionStorage 会把 streaming Agent Message 和 running Action 收口为可恢复状态。附件仍放在
+`attachments/`，Message Part 只保存附件引用。
 
-每轮模型输入只需要读取：
-
-```text
-最新 Segment 的累计 Summary
-+ Active 中的全部 User / Assistant Message
-```
-
-不需要扫描所有旧 Segment。旧 Segment 用于历史 UI、Fork 和审计；`session.messages()` 返回 Active 全量，传入 `before_sequence` 时返回紧邻的前一个完整 Segment。
-
-## 推进泳道图
-
-```mermaid
-sequenceDiagram
-    participant App as 调用方
-    participant Session
-    participant Loop as SessionLoop
-    participant Composer as SessionComposer
-    participant Messages as SessionMessages
-    participant Store as Message Store
-    participant Active as active.jsonl
-    participant Segment as segments/<start>-<end>.jsonl
-    participant Model
-
-    App->>Session: prompt({ query })
-    Session->>Loop: Queue 与 Turn 编排
-    Loop->>Messages: 创建 User Message
-    Messages->>Store: 持久化完整 User snapshot
-    Store->>Active: append Message
-    Session->>Composer: 只读 Summary + Active 快照
-    Composer-->>Session: system + messages + tools
-    Session->>Model: 执行当前 Step
-    Model-->>Loop: text / tool / file chunks
-    Loop->>Messages: 更新 Assistant 草稿与 Part
-    Messages->>Store: 原子覆盖 agent_message.json
-    Loop->>Messages: 完成 Assistant Message
-    Messages->>Store: 持久化最终 Assistant snapshot
-    Store->>Active: append Message
-    Session->>Session: Provider usage 达到 context_window 的 95%
-    Session->>Session: 下一 step 前按 Part/Tool 事务 deep compact
-    Session->>Composer: 请求只读压缩计划
-    Composer->>Model: 旧 Summary + Active 最旧 50% 上下文
-    Model-->>Composer: 新累计 Summary
-    Composer-->>Session: SessionCompactionPlan
-    Session->>Messages: 提交压缩计划
-    Messages->>Store: 提交 Active 前缀和 Summary
-    Store->>Segment: 原子创建 Message 前缀 + Summary footer
-    Store->>Active: 原子覆盖，仅保留 Active 尾部
-    App->>Session: messages()
-    Session-->>App: 全部 Active Message
-    App->>Session: messages({ before_sequence })
-    Session-->>App: 前一个完整 Segment 的 Message
-```
-
-Composer 只读取快照并返回模型输入或压缩计划。Message、Assistant 草稿和 Segment 的实际写入统一由 `SessionMessages` 提交。
-
-只有摘要生成成功后才能提交压缩计划。Provider 错误或空摘要会直接让 Compact 失败，不会创建 Segment，也不会修改 Active 历史。
-
-## `agent_message.json`
-
-流式 Assistant 在完成前不会把每个 Delta 追加到 Active，而是持续原子覆盖当前完整草稿。Assistant 完成后，最终快照追加到 `active.jsonl`，再删除草稿。同一时刻每个 Session 最多有一个流式草稿；Text、Tool、File Part 均按各自 `sequence` 保持模型生成顺序。
-
-## 中断恢复与一致性
-
-Compact 先原子创建 Segment，再原子覆盖 Active。若进程在两步之间退出，原始 Message 会短暂同时存在于 Segment 和 Active，但不会丢失；下次初始化会以最新 Segment 的结束 sequence 为边界，清理 Active 的重叠前缀。
-
-启动或重新打开 Session 时，SDK 还会检查 Assistant 草稿。草稿中的文本、推理、工具和文件 Part 会保留并按原顺序恢复。
-
-## 性能边界
-
-- 正常模型推进只读最新 Summary 与 Active，不随完整历史线性增长。
-- Compact 的触发只依赖 Provider 真实 usage，不执行调用前 token 预估。
-- 每次 Compact 只为选中的消息前缀调用一次摘要模型。
-- 历史向上加载每次只解析一个 Segment。
-- Segment 文件不可变，文件名就是 sequence 索引，不需要 `manifest.json`。
-- `fork()` 明确复制完整历史，因此会读取所有 Segment；这是低频全量操作。
-
-## `meta.json`
-
-`meta.json` 保存 `v: 2`、`session_id`、`agent_id`、完整 `origin`，以及标题、模型标签、时间戳、消息数、历史字节数和时区等列表摘要。运行时模型实例不会持久化。Session 属性或消息状态变化时，SDK 会同步更新摘要字段；`origin` 在创建后不会改变。
-
-归档整个 Session 与 Compact Segment 是两件不同的事。`archive()` 会把整个 Session 移入 archived sessions 区域；Compact 只在当前 Session 的 `segments/` 中关闭旧 Active 前缀。
+旧版本 JSONL 数据不由 Desktop 或 Runtime 自动迁移。需要迁移时，在应用外执行仓库提供的一次性脚本
+`scripts/migrate-session-storage-to-sqlite.mjs`。

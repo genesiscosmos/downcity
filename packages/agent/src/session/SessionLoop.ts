@@ -18,7 +18,6 @@ import type {
 } from "@/types/sdk/AgentSessionTurn.js";
 import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
-  SessionCompactHistory,
   SessionExecutor,
   SessionTurnExecutionResult,
 } from "@/types/session/SessionExecution.js";
@@ -66,7 +65,7 @@ export class SessionLoop {
   private readonly session_origin: SessionLoopOptions["session_origin"];
   private readonly workspace_path: string;
   private readonly executor: SessionExecutor;
-  private readonly compact_history_handler: SessionCompactHistory;
+  private readonly maintain_context: SessionLoopOptions["maintain_context"];
   private readonly state: SessionState;
   private readonly messages: SessionMessages;
   private readonly events: SessionEventHub;
@@ -85,7 +84,7 @@ export class SessionLoop {
     this.session_origin = options.session_origin;
     this.workspace_path = String(options.workspace_path || "").trim();
     this.executor = options.executor;
-    this.compact_history_handler = options.compact_history;
+    this.maintain_context = options.maintain_context;
     this.state = options.state;
     this.messages = options.messages;
     this.events = options.events;
@@ -319,45 +318,6 @@ export class SessionLoop {
     }
   }
 
-  /** 在当前 Turn 上执行一次显式历史压缩。 */
-  async compact_history(
-    compact_id: string,
-  ): ReturnType<SessionCompactHistory> {
-    const turn_id = this.current_turn_id();
-    const result = await this.compact_history_handler({
-      ...(turn_id ? { turn_id } : {}),
-    });
-    if (
-      result.compacted &&
-      this.active_turn?.turn_context
-    ) {
-      this.require_active_turn().history_reload_requested = true;
-    }
-    if (result.reason === "nothing_to_compact") {
-      try {
-        await this.persist_action_event({
-          action_id: compact_id,
-          action_type: "history-compaction",
-          ...(turn_id ? { turn_id } : {}),
-          title: "Session messages already compact",
-          description: "The Session has no active messages to compact.",
-          status: "completed",
-        });
-      } catch (error) {
-        try {
-          await this.logger.log("warn", "[agent] compact result persistence failed", {
-            session_id: this.session_id,
-            compact_id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        } catch {
-          // 领域结果已经确定，Action 与日志失败都不能把成功压缩改写为失败。
-        }
-      }
-    }
-    return result;
-  }
-
   /** 执行一个出队 Prompt；首条 Prompt 启动 Turn，后续 Prompt 作为 steer 合并。 */
   private async execute_prompt_command(
     input: AgentSessionPromptInput,
@@ -487,31 +447,20 @@ export class SessionLoop {
         turn_context,
       });
     } catch (error) {
-      await append_session_turn_file_diff({
-        session_id: this.session_id,
-        turn_id: input.active_turn.turn_id,
-        workspace_path: this.workspace_path,
-        turn_context,
-        assistant_output,
-        logger: this.logger,
+      result = {
+        text: "",
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {
+      await assistant_output.append_error({
+        scope: "turn",
+        code: "turn_execution_failed",
+        message: result.error,
+        recoverable: true,
       });
-      try {
-        await assistant_output.finish({
-          status: turn_context.lifecycle.abort_signal.aborted ? "stopped" : "failed",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } catch (finish_error) {
-        try {
-          await this.logger.log("warn", "[agent] failed to close Assistant output after execution error", {
-            session_id: this.session_id,
-            turn_id: input.active_turn.turn_id,
-            error: finish_error instanceof Error ? finish_error.message : String(finish_error),
-          });
-        } catch {
-          // Assistant 已经失败，日志失败不能覆盖原始执行错误。
-        }
-      }
-      throw error;
     }
 
     await append_session_turn_file_diff({
@@ -532,24 +481,13 @@ export class SessionLoop {
       ...(result.error ? { error: result.error } : {}),
     });
 
-    if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {
-      await this.messages.append_error_part({
-        scope: "turn",
-        turn_id: input.active_turn.turn_id,
-        code: "turn_execution_failed",
-        message: result.error,
-        recoverable: true,
-      });
-    }
     await this.state.touch_metadata();
     const deferred_count = await this.messages.append_deferred_user_messages(
       result.deferred_persisted_user_messages,
     );
     if (deferred_count > 0) await this.state.touch_metadata();
     if (result.compact_required) {
-      await this.compact_history_handler({
-        turn_id: input.active_turn.turn_id,
-      });
+      await this.maintain_context();
     }
     return {
       text: result.text,
@@ -577,11 +515,6 @@ export class SessionLoop {
         return merged;
       },
       has_pending_step_input: () => this.has_pending_prompt(),
-      consume_history_reload: () => {
-        const requested = active_turn.history_reload_requested;
-        active_turn.history_reload_requested = false;
-        return requested;
-      },
       assistant_output,
       shell_approval_gateway: this.shell_approval_gateway,
       interactions: this.interactions,
@@ -665,7 +598,6 @@ function create_active_session_turn_state(
     result: null,
     deferred_finished: create_deferred<AgentSessionTurnResult>(),
     turn_context: null,
-    history_reload_requested: false,
     prompt_started: false,
   };
 }

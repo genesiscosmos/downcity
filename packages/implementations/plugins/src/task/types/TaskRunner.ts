@@ -6,7 +6,6 @@
  * - 这些类型服务于 task 运行链路，统一归档到当前功能域的 `types/`。
  */
 
-import type { SessionMessages } from "@downcity/agent";
 import type { PluginSessionHandle } from "@downcity/city/plugin";
 import type {
   ShipTaskRunExecutionStatusV1,
@@ -183,13 +182,9 @@ export type ScriptExecutionResult = {
  *
  * 关键点（中文）
  * - task runner 不直接依赖具体 SDK `Session` 实现。
- * - 这里暴露的是 task 场景最小可用端口：执行器 + canonical Messages。
+ * - 这里仅暴露 task 场景实际使用的宿主 Session。
  */
 export type TaskSessionRuntimePort = {
-  /**
-   * 获取指定 session_id 对应的 canonical Session Messages。
-   */
-  get_messages(session_id: string): SessionMessages;
   /** 获取 task session 对应的宿主 Session runtime port。 */
   get_session(session_id: string): PluginSessionHandle;
 };

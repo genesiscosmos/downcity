@@ -1,35 +1,30 @@
 ---
-title: SDK Session Layout
-description: File layout and data boundaries for local SDK Agent Sessions
+title: SDK Session layout
+description: Local Agent Session SQLite layout and data boundaries
 ---
 
-# SDK Session Layout
+# SDK Session layout
 
-Local SDK Agent Sessions are persisted under the City-provided storage root; with a local provider this
-is commonly `~/.downcity`:
+A local SDK Agent stores Sessions under the City-provided storage root, usually `~/.downcity`:
 
 ```text
 ~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/
-├── meta.json
-└── messages/
-    ├── active.jsonl
-    ├── agent_message.json
-    └── segments/
-        └── <start_sequence>-<end_sequence>.jsonl
+├── session.db
+└── attachments/
 ```
 
-The stable identity is `(origin.type, session_id)`. `chat` is the default partition. Other non-empty origin
-types are safely encoded into one path segment, so values such as `automation/daily` cannot create nested
-directories. `meta.json` v2 records the owning `agent_id` and complete immutable `origin`, and adds
-`workspace_id` only when a Workspace was passed to the Session. The project directory never receives a `.downcity` directory.
+A Session is identified by `(origin.type, session_id)`; the default partition is `chat`. Other non-empty
+origin types are safely encoded as one directory segment. The project directory never receives a `.downcity`
+directory.
 
-- `active.jsonl`: complete `SessionMessage` snapshots retained after the latest Compact.
-- `agent_message.json`: the one complete in-progress Agent draft.
-- `segments/*.jsonl`: immutable history ranges with real Messages first and a cumulative Summary footer last.
-- `meta.json`: a lightweight index of Agent, origin, and Workspace ownership, title, model label, timestamps, message count, and storage bytes; it never stores the runtime model instance.
+Core `session.db` tables:
 
-Segment filenames use zero-padded 12-digit sequences, such as `000000000001-000000000900.jsonl`. There is no manifest; scanning filenames determines history order. A Summary is not a Message and consumes no sequence.
+- `session_state`: identity, Workspace ownership, title, model label, timestamps, and system snapshot.
+- `messages`: the User/Agent Message envelope.
+- `message_parts`: each Part and its content, ordered by sequence.
 
-Applications should call `session.messages()` for Active and use `before_sequence` to load older Segments. Do not write these files directly.
+A Composer Policy may maintain its own `composer_<policy>_*` derived tables in the same database. Derived
+tables can be rebuilt without changing canonical Messages. Use `session.messages()` to read history; do not
+write these files or tables directly.
 
-See [Session metadata and storage](/en/agent-sdk-docs/sessions/metadata-and-storage) for progression, Compact, and recovery behavior.
+See [Session metadata and storage](/en/agent-sdk-docs/sessions/metadata-and-storage) for the full design.

@@ -7,20 +7,27 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { JsonlSessionMessageStore } from "../../agent/bin/session/storage/JsonlSessionMessageStore.js";
+import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
 import { LocalFileSystem } from "@downcity/city";
 import { SessionMessages } from "../../agent/bin/session/SessionMessages.js";
 import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";
 
 test("动态 Extension Interaction 使用通用 type/payload 完成恢复", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-dynamic-interaction-"));
+  const files = new LocalFileSystem(root_path);
+  const store = new SqliteSessionStorage({
+    files,
+    session_id: "dynamic-interaction-test",
+    agent_id: "test-agent",
+    origin: { type: "chat" },
+    database_path: path.join(root_path, "session.db"),
+    database_location: { type: "file" },
+    attachments: {},
+  });
   const recorder = new SessionMessages({
     session_id: "dynamic-interaction-test",
-    store: new JsonlSessionMessageStore({
-      files: new LocalFileSystem(root_path),
-      session_id: "dynamic-interaction-test",
-      file_path: path.join(root_path, "active.jsonl"),
-    }),
+    store,
+    attachment_store: store.attachments,
     publish: () => {},
   });
   await recorder.initialize();

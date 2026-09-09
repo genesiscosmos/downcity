@@ -24,6 +24,7 @@ export function normalize_session_user_parts(
     if (part.type === "text") {
       return [{
         part_id: `user-text:${index + 1}`,
+        sequence: index + 1,
         type: "text",
         text: part.text,
         state: "done",
@@ -32,6 +33,7 @@ export function normalize_session_user_parts(
     if (part.type === "context") {
       return [{
         part_id: `user-context:${index + 1}`,
+        sequence: index + 1,
         type: "context",
         tag: normalize_session_context_tag(part.tag),
         context: normalize_session_context_content(part.context),
@@ -40,6 +42,7 @@ export function normalize_session_user_parts(
     if (part.type === "file") {
       return [{
         part_id: `user-file:${index + 1}`,
+        sequence: index + 1,
         type: "file",
         url: part.url,
         media_type: part.media_type,
@@ -48,6 +51,7 @@ export function normalize_session_user_parts(
     }
     return [{
       part_id: `user-data:${index + 1}`,
+      sequence: index + 1,
       type: "data",
       data_type: part.data_type,
       data: to_session_json_value(part.data),
@@ -60,8 +64,8 @@ export function normalize_session_user_parts(
 export function normalize_canonical_session_user_parts(
   parts: readonly SessionUserMessagePart[],
 ): SessionUserMessagePart[] {
-  return parts.map((part) => {
-    const canonical = structuredClone(part);
+  return parts.map((part, index) => {
+    const canonical = { ...structuredClone(part), sequence: index + 1 };
     if (canonical.type !== "context") return canonical;
     return {
       ...canonical,

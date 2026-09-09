@@ -18,12 +18,13 @@ async function create_harness() {
     files,
     storage_root_path: root_path,
     agent_id: "attachment-test-agent",
+    database_location: { type: "file" },
     session_id: "attachment-test-session",
     origin: { type: "chat" },
   });
   const messages = new SessionMessages({
     session_id: "attachment-test-session",
-    store: store.messages,
+    store,
     attachment_store: store.attachments,
     publish: () => {},
   });
@@ -101,5 +102,5 @@ test("无效 Data URL 不会写入 Session Message", async () => {
     }),
     /Invalid data URL/,
   );
-  assert.deepEqual(await harness.store.messages.list_messages(), []);
+  assert.deepEqual(await harness.store.list_messages(), []);
 });

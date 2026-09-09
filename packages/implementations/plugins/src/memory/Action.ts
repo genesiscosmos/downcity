@@ -21,8 +21,7 @@ import type { MemoryAccessContext } from "@/memory/types/MemoryAccess.js";
 
 /** 从 canonical Session Message 提取可供 Provider 提炼的文本。 */
 function extract_session_message_line(message: SessionMessage): string {
-  if (message.type !== "user" && message.type !== "agent") return "";
-  const role = message.type === "user" ? "User" : "Assistant";
+  const role = message.role === "user" ? "User" : "Assistant";
   const text = message.parts
     .flatMap((part) => part.type === "text" ? [String(part.text || "").trim()] : [])
     .filter(Boolean)
@@ -107,9 +106,9 @@ export async function digest_memory_action(
     const max_messages = Number.isFinite(input.max_messages)
       ? Math.max(1, Math.floor(input.max_messages as number))
       : 30;
-    const snapshot = await context.agent.sessions.runtime(session_id).context();
-    const start_index = Math.max(0, snapshot.messages.length - max_messages);
-    const lines = snapshot.messages
+    const messages = await context.agent.sessions.runtime(session_id).messages();
+    const start_index = Math.max(0, messages.length - max_messages);
+    const lines = messages
       .slice(start_index)
       .map((message) => extract_session_message_line(message as unknown as SessionMessage))
       .filter(Boolean);

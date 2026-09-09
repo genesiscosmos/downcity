@@ -619,10 +619,11 @@ function build_internal_user_message(input: {
     visibility: "internal",
     created_at: now,
     updated_at: now,
-    type: "user",
+    role: "user",
     input_type: "steer",
     parts: [{
       part_id: "runtime-text:1",
+      sequence: 1,
       type: "text",
       text: input.text,
       state: "done",

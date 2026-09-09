@@ -29,6 +29,8 @@ export interface CreateRuntimeSessionPortParams {
    * 读取当前 session 底层执行端口。
    */
   get_executor: SessionPort["get_executor"];
+  /** 读取全部 canonical Session Message。 */
+  messages: SessionPort["messages"];
   /**
    * 追加一条新的 session prompt。
    */
@@ -55,8 +57,6 @@ export interface CreateRuntimeSessionPortParams {
    * 返回当前 session 是否正在执行。
    */
   is_executing: () => boolean;
-  /** 读取当前 Session 的只读上下文快照。 */
-  context: SessionPort["context"];
   /**
    * 在执行前确保当前 session 已完成初始化与宿主级配置。
    */
@@ -73,7 +73,7 @@ export function create_runtime_session_port(
     session_id: params.session_id,
     get_model: () => params.get_model(),
     get_executor: () => params.get_executor(),
-    context: async () => await params.context(),
+    messages: async () => await params.messages(),
     prompt: async (input) => {
       await params.ensure_ready_for_execution();
       return await params.prompt(input);

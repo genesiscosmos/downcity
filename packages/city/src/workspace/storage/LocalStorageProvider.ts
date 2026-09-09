@@ -43,6 +43,7 @@ export class LocalStorageProvider implements StorageProvider {
         directory_mode: 0o700,
         file_mode: 0o600,
       }),
+      database_location: { type: "file" },
     };
     this.opened_scopes.set(scope_key, scope);
     return scope;

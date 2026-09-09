@@ -50,15 +50,7 @@ export type {
 } from "./group/index.js";
 export { AiDispatchStrategy } from "./group/index.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
-export type {
-  CompactActiveMessagesInput,
-  CompactActiveMessagesResult,
-  SessionMessageCommitState,
-  SessionMessageStore,
-  SessionDataStore,
-} from "./types/store/SessionDataStore.js";
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
-export { create_session_message_store } from "./session/storage/SessionMessageStoreFactory.js";
 export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { Session } from "./session/Session.js";
 export { SessionHooks, SessionHookScope } from "./session/SessionHooks.js";
@@ -134,13 +126,6 @@ export {
 } from "./session/messages/SessionTurnFileDiffData.js";
 export { to_session_message_timeline_events } from "./session/browse/SessionMessageTimeline.js";
 export { SessionAssistantOutputAdapter } from "./session/execution/SessionAssistantOutputAdapter.js";
-export type {
-  SessionContextSnapshot,
-  SessionMessageStorageStats,
-  SessionSegmentRange,
-  SessionSegmentSnapshot,
-  SessionSegmentSummary,
-} from "./types/session/SessionSegment.js";
 export {
   is_session_mutation,
 } from "@downcity/type";
@@ -148,7 +133,6 @@ export type {
   ModelRequestKind,
 } from "@downcity/type";
 export type {
-  SessionCompactMutation,
   SessionConfigMutation,
   SessionDeltaMutation,
   SessionMessageMutation,
@@ -218,10 +202,6 @@ export type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "./types/sdk/AgentSessionTurn.js";
-export type {
-  AgentSessionCompactHandle,
-  AgentSessionCompactResult,
-} from "./types/sdk/AgentSessionCompact.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
 export type {
   ActionResult,
@@ -231,6 +211,8 @@ export type {
 // Session 与即时执行集成
 export { Executor } from "./executor/Executor.js";
 export { DefaultSessionComposer } from "./session/DefaultSessionComposer.js";
+export { FullHistoryContextPolicy } from "./session/composer/policies/FullHistoryContextPolicy.js";
+export { SequenceSummaryContextPolicy } from "./session/composer/policies/SequenceSummaryContextPolicy.js";
 export { SessionMessages } from "./session/SessionMessages.js";
 export type {
   AppendCompletedAgentMessageInput,
@@ -245,14 +227,22 @@ export type {
 } from "./types/session/SessionMessages.js";
 export type {
   SessionComposer,
-  SessionCompactionInput,
-  SessionCompactionPlan,
   SessionComposeIdentity,
   SessionComposeInput,
   SessionComposeState,
   SessionComposeTurn,
+  SessionComposerInitializeInput,
+  SessionContextRecoveryInput,
   SessionStepInput,
 } from "./types/session/SessionComposer.js";
+export type {
+  SessionContextPolicy,
+  SessionContextPolicyInitializeInput,
+  SessionContextPolicyInput,
+  SessionContextPolicyRecoveryInput,
+  SessionResolvedContext,
+  SessionResolvedContextDiagnostics,
+} from "./types/session/SessionContextPolicy.js";
 export type {
   SessionExecutor,
   SessionTurnExecutionResult,

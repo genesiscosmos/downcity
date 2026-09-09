@@ -32,10 +32,6 @@ import { is_agent_session_prompt_input_empty } from "@downcity/agent";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type { AgentSessionStopResult } from "@downcity/agent";
 import type {
-  AgentSessionCompactHandle,
-  AgentSessionCompactResult,
-} from "@downcity/agent";
-import type {
   AgentSessionTurnHandle,
   AgentSessionTurnResult,
 } from "@downcity/agent";
@@ -62,15 +58,6 @@ type RemoteTurnLifecycle = {
   deferred_finished: Deferred<AgentSessionTurnResult>;
 };
 
-type RemoteCompactLifecycle = {
-  /** 当前显式压缩请求标识。 */
-  compact_id: string;
-  /** 当前压缩请求的最终结果；运行中为 null。 */
-  result: AgentSessionCompactResult | null;
-  /** 当前压缩完成 Promise 控制器。 */
-  deferred_finished: Deferred<AgentSessionCompactResult>;
-};
-
 /** 远程 Session 客户端。 */
 export class RemoteSession implements RemoteAgentSession {
   readonly id: string;
@@ -81,9 +68,7 @@ export class RemoteSession implements RemoteAgentSession {
   private readonly transport: RemoteSessionTransport;
   private readonly event_hub: SessionEventHub;
   private readonly turns_by_id = new Map<string, RemoteTurnLifecycle>();
-  private readonly compacts_by_id = new Map<string, RemoteCompactLifecycle>();
   private readonly completed_turn_ids: string[] = [];
-  private readonly completed_compact_ids: string[] = [];
   private event_pump_connect_promise: Promise<void> | null = null;
   private event_pump_running = false;
   private event_subscriber_count = 0;
@@ -119,13 +104,6 @@ export class RemoteSession implements RemoteAgentSession {
   async stop(): Promise<AgentSessionStopResult> {
     await this.ensure_event_pump();
     return await this.transport.stop(this.id, this.origin.type);
-  }
-
-  /** 把一次显式历史压缩加入当前远程 Session 的有序输入队列。 */
-  async compact(): Promise<AgentSessionCompactHandle> {
-    await this.ensure_event_pump();
-    const compact = await this.transport.compact(this.id, this.origin.type);
-    return create_compact_handle(this.ensure_compact_lifecycle(compact.id));
   }
 
   /** 订阅当前 Session 的全部未来 Mutation。 */
@@ -223,20 +201,6 @@ export class RemoteSession implements RemoteAgentSession {
       this.remember_completed_turn(mutation.turn_id);
       void this.maybe_stop_event_pump();
     }
-    if (mutation.variant === "compact" && mutation.type === "finish") {
-      const lifecycle = this.ensure_compact_lifecycle(mutation.compact_id);
-      const result: AgentSessionCompactResult = {
-        compact_id: mutation.compact_id,
-        success: mutation.status === "completed",
-        compacted: mutation.compacted === true,
-        reason: mutation.reason || "compact_failed",
-        ...(mutation.error ? { error: mutation.error } : {}),
-      };
-      lifecycle.result = result;
-      lifecycle.deferred_finished.resolve(result);
-      this.remember_completed_compact(mutation.compact_id);
-      void this.maybe_stop_event_pump();
-    }
     this.event_hub.publish(mutation);
   }
 
@@ -273,19 +237,6 @@ export class RemoteSession implements RemoteAgentSession {
       lifecycle.deferred_finished.resolve(result);
       this.remember_completed_turn(lifecycle.turn_id);
     }
-    for (const lifecycle of this.compacts_by_id.values()) {
-      if (lifecycle.result) continue;
-      const result: AgentSessionCompactResult = {
-        compact_id: lifecycle.compact_id,
-        success: false,
-        compacted: false,
-        reason: "compact_failed",
-        error: message,
-      };
-      lifecycle.result = result;
-      lifecycle.deferred_finished.resolve(result);
-      this.remember_completed_compact(lifecycle.compact_id);
-    }
   }
 
   private remember_completed_turn(turn_id: string): void {
@@ -296,21 +247,9 @@ export class RemoteSession implements RemoteAgentSession {
     }
   }
 
-  /** 有界保留已完成压缩，覆盖 finish Mutation 早于 transport 响应到达的竞态。 */
-  private remember_completed_compact(compact_id: string): void {
-    if (!this.completed_compact_ids.includes(compact_id)) {
-      this.completed_compact_ids.push(compact_id);
-    }
-    while (this.completed_compact_ids.length > 200) {
-      const oldest_compact_id = this.completed_compact_ids.shift();
-      if (oldest_compact_id) this.compacts_by_id.delete(oldest_compact_id);
-    }
-  }
-
   private async maybe_stop_event_pump(): Promise<void> {
     if (this.event_subscriber_count > 0) return;
     if ([...this.turns_by_id.values()].some((item) => item.result === null)) return;
-    if ([...this.compacts_by_id.values()].some((item) => item.result === null)) return;
     const current = this.event_subscription;
     this.event_subscription = null;
     this.event_pump_running = false;
@@ -320,19 +259,6 @@ export class RemoteSession implements RemoteAgentSession {
     });
   }
 
-  private ensure_compact_lifecycle(
-    compact_id: string,
-  ): RemoteCompactLifecycle {
-    const cached = this.compacts_by_id.get(compact_id);
-    if (cached) return cached;
-    const created: RemoteCompactLifecycle = {
-      compact_id,
-      result: null,
-      deferred_finished: create_deferred<AgentSessionCompactResult>(),
-    };
-    this.compacts_by_id.set(compact_id, created);
-    return created;
-  }
 }
 
 function create_deferred<T>(): Deferred<T> {
@@ -346,18 +272,6 @@ function create_deferred<T>(): Deferred<T> {
 function create_turn_handle(lifecycle: RemoteTurnLifecycle): AgentSessionTurnHandle {
   return {
     id: lifecycle.turn_id,
-    get result() {
-      return lifecycle.result;
-    },
-    finished: lifecycle.deferred_finished.promise,
-  };
-}
-
-function create_compact_handle(
-  lifecycle: RemoteCompactLifecycle,
-): AgentSessionCompactHandle {
-  return {
-    id: lifecycle.compact_id,
     get result() {
       return lifecycle.result;
     },

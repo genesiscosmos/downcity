@@ -5,7 +5,7 @@
  * 复制 SessionMessages 的消息索引或 Mutation 发布状态。
  */
 
-import type { SessionMessageStore } from "@/types/store/SessionDataStore.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionMessage } from "@downcity/type";
 import type { SessionMutation } from "@downcity/type";
 
@@ -14,7 +14,7 @@ export interface SessionAgentMessageStateOptions {
   /** 当前 Assistant Message 所属 Session 的稳定标识。 */
   session_id: string;
   /** 负责持久化 canonical Message 与 Assistant 草稿的 Store。 */
-  store: SessionMessageStore;
+  store: SessionStorage;
   /** 读取 SessionMessages 当前持有的 canonical Message 集合。 */
   list_messages: () => Iterable<SessionMessage>;
   /** 接受已持久化的完整 Message 快照，并按需发布 Mutation。 */

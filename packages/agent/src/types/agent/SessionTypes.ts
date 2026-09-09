@@ -289,7 +289,7 @@ export interface AgentSessionSummary {
    * 当前 session 可读标题。
    *
    * 说明（中文）
-   * - 标题持久化在 session `meta.json` 顶层。
+   * - 标题持久化在 Session SQLite 的 `session_state` 中。
    * - SDK 只在模型成功生成标题时写入，不再从首条用户消息生成 fallback。
    * - 标题允许为空，调用方需要展示占位文案时可自行回退到 `session_id`。
    */

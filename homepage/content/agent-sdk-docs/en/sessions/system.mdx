@@ -96,6 +96,6 @@ Even when the host provides `instruction`, `core` is still injected immediately 
 
 ## What It Does Not Do
 
-`session.system()` does not write system prompts into `active.jsonl` or historical Segments.
+`session.system()` does not write system prompts into canonical Message history.
 
 Session history stays focused on visible user and assistant messages. Use `system()` when you need to inspect the prompt context that will be sent alongside that history.

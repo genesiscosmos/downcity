@@ -161,7 +161,7 @@ test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
     assert.equal(stream_count, 2);
     const messages = await session.messages();
     const tool_part = messages.items
-      .flatMap((message) => message.type === "agent" ? message.parts : [])
+      .flatMap((message) => message.role === "agent" ? message.parts : [])
       .find((part) => part.type === "tool" && part.tool_call_id === "call_host");
     assert.ok(interaction_snapshot, JSON.stringify(messages.items));
     assert.equal(interaction_snapshot.request.turn_id, turn.id);

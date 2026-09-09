@@ -5,7 +5,6 @@
  */
 
 import type { SessionAgentMessagePart, SessionMessage } from "./SessionMessage.js";
-import type { SessionCompactReason } from "./SessionCompact.js";
 import type { ModelErrorCode } from "../model/ModelError.js";
 import type { ModelRequestKind } from "../model/ModelRequest.js";
 
@@ -20,11 +19,11 @@ export interface SessionMutationBase {
 }
 /** Message 创建或完整快照更新 Mutation。 */
 export type SessionMessageMutation = {
-  [TType in SessionMessage["type"]]: SessionMutationBase & {
+  [TRole in SessionMessage["role"]]: SessionMutationBase & {
     /** Mutation 层级固定为 message。 */
     variant: "message";
-    /** 当前完整 Message 类型。 */
-    type: TType;
+    /** 当前完整 Message 的主体角色。 */
+    role: TRole;
     /** 当前 Mutation 目标 Message 标识。 */
     message_id: string;
     /** 当前 Mutation 所属 Turn 标识。 */
@@ -34,9 +33,9 @@ export type SessionMessageMutation = {
     /** 应用当前 Mutation 后的 Message revision。 */
     revision: number;
     /** 创建或更新后的完整 Message 快照。 */
-    message: Extract<SessionMessage, { type: TType }>;
+    message: Extract<SessionMessage, { role: TRole }>;
   };
-}[SessionMessage["type"]];
+}[SessionMessage["role"]];
 
 /** Agent Part 创建或完整快照更新 Mutation。 */
 export type SessionPartMutation = {
@@ -123,24 +122,6 @@ export type SessionTurnFileDiffMutation = SessionMutationBase & {
   deletions: number;
 };
 
-/** 显式 Session 压缩请求的生命周期 Mutation。 */
-export type SessionCompactMutation = SessionMutationBase & {
-  /** Mutation 层级固定为 compact。 */
-  variant: "compact";
-  /** 当前压缩请求是进入队列还是已经结束。 */
-  type: "start" | "finish";
-  /** 当前显式压缩请求的稳定标识。 */
-  compact_id: string;
-  /** 当前压缩请求的生命周期状态。 */
-  status: "queued" | "completed" | "failed";
-  /** 完成时是否实际提交了压缩计划。 */
-  compacted?: boolean;
-  /** 完成时的稳定结束原因。 */
-  reason?: SessionCompactReason;
-  /** 压缩失败时的错误文本。 */
-  error?: string;
-};
-
 /** Session 标题变化 Mutation。 */
 export type SessionTitleMutation = SessionMutationBase & {
   /** Mutation 层级固定为 session。 */
@@ -199,7 +180,6 @@ export type SessionMutation =
   | SessionDeltaMutation
   | SessionTurnMutation
   | SessionTurnFileDiffMutation
-  | SessionCompactMutation
   | SessionStateMutation
   | SessionModelRequestWarningMutation;
 
@@ -214,15 +194,17 @@ export type SessionMutationUnsubscribe = () => void;
 /** 判断未知事件是否为 Session Mutation。 */
 export function is_session_mutation(input: unknown): input is SessionMutation {
   if (!input || typeof input !== "object") return false;
-  const candidate = input as { mutation_id?: unknown; variant?: unknown; type?: unknown };
-  if (typeof candidate.mutation_id !== "string" || typeof candidate.type !== "string") return false;
+  const candidate = input as { mutation_id?: unknown; variant?: unknown; type?: unknown; role?: unknown };
+  if (typeof candidate.mutation_id !== "string") return false;
+  if (candidate.variant === "message") {
+    return candidate.role === "user" || candidate.role === "agent";
+  }
+  if (typeof candidate.type !== "string") return false;
   return (
-    candidate.variant === "message" ||
     candidate.variant === "part" ||
     candidate.variant === "delta" ||
     candidate.variant === "turn" ||
     candidate.variant === "file_diff" ||
-    candidate.variant === "compact" ||
     candidate.variant === "session" ||
     candidate.variant === "warning"
   );

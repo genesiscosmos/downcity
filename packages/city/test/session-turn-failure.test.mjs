@@ -10,7 +10,7 @@ import test from "node:test";
 
 import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";
 import { SessionShellApprovalAdapter } from "../../agent/bin/session/execution/tools/SessionShellApprovalAdapter.js";
-import { JsonlSessionMessageStore } from "../../agent/bin/session/storage/JsonlSessionMessageStore.js";
+import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
 import {
   create_workspace_file_mutation_effect,
 } from "@downcity/type/workspace";
@@ -23,13 +23,20 @@ import { SessionQueue } from "../../agent/bin/session/SessionQueue.js";
 async function create_turn_harness(execute_turn, session_origin = { type: "chat" }) {
   const session_id = "session-turn-failure-test";
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-turn-failure-"));
+  const files = new LocalFileSystem(root_path);
+  const store = new SqliteSessionStorage({
+    files,
+    session_id,
+    agent_id: "test-agent",
+    origin: session_origin,
+    database_path: path.join(root_path, "session.db"),
+    database_location: { type: "file" },
+    attachments: {},
+  });
   const messages = new SessionMessages({
     session_id,
-    store: new JsonlSessionMessageStore({
-      files: new LocalFileSystem(root_path),
-      session_id,
-      file_path: path.join(root_path, "active.jsonl"),
-    }),
+    store,
+    attachment_store: store.attachments,
     publish: () => {},
   });
   await messages.initialize();
@@ -46,7 +53,7 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
     executor: {
       execute: async ({ turn_context }) => await execute_turn(turn_context, root_path),
     },
-    compact_history: async () => ({ compacted: false, reason: "nothing_to_compact" }),
+    maintain_context: async () => {},
     state: {
       ensure_runnable: async () => {},
       schedule_title_generation: () => {},
@@ -125,7 +132,7 @@ test("Provider 在输出前失败时只持久化包含 Error Part 的 Agent Mess
   assert.equal(result.success, false);
   assert.equal(result.error, "quota exceeded");
   assert.equal(result.assistant_message, undefined);
-  assert.deepEqual(page.items.map((message) => message.type), ["user", "agent"]);
+  assert.deepEqual(page.items.map((message) => message.role), ["user", "agent"]);
   assert.equal(page.items[1].parts[0].type, "error");
   assert.equal(page.items[1].parts[0].code, "turn_execution_failed");
   assert.equal(page.items[1].parts[0].message, "quota exceeded");
@@ -149,7 +156,7 @@ test("SessionLoop 只在 canonical 用户消息写入后返回 prompt 句柄", a
   const page = await messages.list_messages();
 
   assert.equal(handle.result, null);
-  assert.deepEqual(page.items.map((message) => message.type), ["user"]);
+  assert.deepEqual(page.items.map((message) => message.role), ["user"]);
   assert.equal(page.items[0].parts[0].text, "已持久化的输入");
 
   finish_execution();
@@ -213,7 +220,7 @@ test("SessionLoop 在释放 Plugin Hook 作用域前触发 turn committed effect
   assert.equal(effects[0].point_name, "session.turn_committed");
   assert.equal(effects[0].value.status, "completed");
   assert.deepEqual(
-    effects[0].value.messages.map((message) => message.type),
+    effects[0].value.messages.map((message) => message.role),
     ["user", "agent"],
   );
 });
@@ -244,7 +251,7 @@ test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async
   const handle = await turn.prompt({ query: "修改文件" });
   await handle.finished;
   const page = await messages.list_messages();
-  const assistant = page.items.find((message) => message.type === "agent");
+  const assistant = page.items.find((message) => message.role === "agent");
   const file_diff = assistant.parts.find((part) => part.type === "data");
 
   assert.equal(assistant.status, "completed");
@@ -256,7 +263,7 @@ test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async
   assert.equal(file_diff.data.files.some((file) => file.file === "external.ts"), false);
 });
 
-test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Error Message", async () => {
+test("Provider 在部分输出后失败时将 Error 追加到同一 Agent Message", async () => {
   const { messages, turn } = await create_turn_harness(async (turn_context) => {
     await turn_context.output.assistant.begin_step();
     await write_text(turn_context.output.assistant, "text-1", "partial response");
@@ -274,15 +281,14 @@ test("Provider 在部分输出后失败时保留 failed Assistant 并追加 Erro
 
   assert.equal(result.success, false);
   assert.equal(result.assistant_message, undefined);
-  assert.deepEqual(page.items.map((message) => message.type), [
+  assert.deepEqual(page.items.map((message) => message.role), [
     "user",
-    "agent",
     "agent",
   ]);
   assert.equal(page.items[1].status, "failed");
   assert.equal(page.items[1].parts[0].text, "partial response");
-  assert.equal(page.items[2].parts[0].type, "error");
-  assert.equal(page.items[2].parts[0].message, "stream interrupted");
+  assert.equal(page.items[1].parts[1].type, "error");
+  assert.equal(page.items[1].parts[1].message, "stream interrupted");
 });
 
 test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async () => {
@@ -310,7 +316,7 @@ test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async ()
   const handle = await turn.prompt({ query: "hello" });
   await handle.finished;
   const page = await messages.list_messages();
-  const assistant = page.items.find((message) => message.type === "agent");
+  const assistant = page.items.find((message) => message.role === "agent");
 
   assert.equal(assistant?.status, "failed");
   assert.equal(assistant?.parts[0]?.type, "tool");
@@ -358,7 +364,7 @@ test("Turn 使用标准模型事件保持 Tool 与最终正文顺序", async () 
   const handle = await turn.prompt({ query: "diagnose" });
   const result = await handle.finished;
   const page = await messages.list_messages();
-  const assistant = page.items.find((message) => message.type === "agent");
+  const assistant = page.items.find((message) => message.role === "agent");
 
   assert.equal(result.success, true);
   assert.deepEqual(assistant.parts.map((part) => part.type), ["tool", "text"]);
@@ -411,7 +417,7 @@ test("普通 Tool Loop 的多个 Provider Step 始终写入同一个 Assistant M
   await handle.finished;
   const page = await messages.list_messages();
   const assistant_messages = page.items.filter(
-    (message) => message.type === "agent",
+    (message) => message.role === "agent",
   );
 
   assert.equal(assistant_messages.length, 1);
@@ -459,12 +465,12 @@ test("Turn 在 step 最终快照出现未流式写入的 Tool 时失败", async 
   const handle = await turn.prompt({ query: "diagnose" });
   const result = await handle.finished;
   const page = await messages.list_messages();
-  const assistant = page.items.find((message) => message.type === "agent");
+  const assistant = page.items.find((message) => message.role === "agent");
 
   assert.equal(result.success, false);
   assert.match(result.error, /snapshot mismatch/);
   assert.equal(assistant.status, "failed");
-  assert.deepEqual(assistant.parts.map((part) => part.type), ["text"]);
-  assert.equal(page.items.at(-1).type, "agent");
-  assert.equal(page.items.at(-1).parts[0].type, "error");
+  assert.deepEqual(assistant.parts.map((part) => part.type), ["text", "error"]);
+  assert.equal(page.items.at(-1).role, "agent");
+  assert.equal(page.items.at(-1).parts[1].type, "error");
 });

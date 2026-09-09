@@ -16,8 +16,7 @@ test("Session timeline preserves Agent text and tool order", () => {
     visibility: "visible",
     created_at: 10,
     updated_at: 20,
-    type: "agent",
-    kind: "normal",
+    role: "agent",
     status: "completed",
     parts: [
       {

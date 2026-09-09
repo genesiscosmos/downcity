@@ -3,10 +3,10 @@
  *
  * 关键点（中文）
  * - 本地 Store 接收 AgentStorage 创建的私有 FileSystem 与存储根目录。
- * - SessionStore 与 SessionDataStore 不复用项目 WorkspaceTools 的 FileSystem。
+ * - SessionStore 与 SessionStorage 不复用项目 WorkspaceTools 的 FileSystem。
  */
 
-import type { FileSystem } from "@downcity/type";
+import type { FileSystem, StorageDatabaseLocation } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
 
 /** LocalSessionStore 构造参数。 */
@@ -17,6 +17,8 @@ export interface LocalSessionStoreOptions {
   storage_root_path: string;
   /** 当前 Session 查询视图所属 Agent 的稳定标识。 */
   agent_id: string;
+  /** Session 数据库使用本地文件还是进程内存。 */
+  database_location: StorageDatabaseLocation;
   /** 当前 Workspace 的稳定标识。 */
   workspace_id?: string;
 }
@@ -29,22 +31,12 @@ export interface LocalSessionDataStoreOptions {
   storage_root_path: string;
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
+  /** 当前 Session 数据库使用本地文件还是进程内存。 */
+  database_location: StorageDatabaseLocation;
   /** 当前 Session 所属 Workspace 的稳定标识。 */
   workspace_id?: string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Session 的创建来源与物理存储分区。 */
   origin: SessionOrigin;
-}
-
-/** JsonlSessionMessageStore 构造参数。 */
-export interface JsonlSessionMessageStoreOptions {
-  /** 当前 Message Store 使用的 Agent 私有文件能力。 */
-  files: FileSystem;
-  /** 当前 Session 的稳定标识。 */
-  session_id: string;
-  /** Active JSONL 文件的绝对路径。 */
-  file_path: string;
-  /** Assistant 运行中快照的可选绝对路径。 */
-  agent_message_file_path?: string;
 }

@@ -76,7 +76,11 @@ export class SessionAgentMessageState {
             : item,
         ),
       };
-      await this.options.store.write_agent_message(message);
+      await this.options.store.update_message(
+        message.message_id,
+        current.revision,
+        () => message,
+      );
       this.options.accept_mutation({
         mutation_id: generate_id(),
         variant: "delta",
@@ -123,7 +127,11 @@ export class SessionAgentMessageState {
             : item,
         ),
       };
-      await this.options.store.write_agent_message(message);
+      await this.options.store.update_message(
+        message.message_id,
+        current.revision,
+        () => message,
+      );
       this.options.accept_mutation({
         mutation_id: generate_id(),
         variant: "delta",
@@ -163,7 +171,11 @@ export class SessionAgentMessageState {
           : [...current.parts, next_part]
         ).sort((left, right) => left.sequence - right.sequence),
       };
-      await this.options.store.write_agent_message(message);
+      await this.options.store.update_message(
+        message.message_id,
+        current.revision,
+        () => message,
+      );
       this.options.accept_mutation({
         mutation_id: generate_id(),
         variant: "part",
@@ -203,7 +215,11 @@ export class SessionAgentMessageState {
         updated_at: Date.now(),
         parts: structuredClone(parts),
       };
-      await this.options.store.write_agent_message(message);
+      await this.options.store.update_message(
+        message.message_id,
+        current.revision,
+        () => message,
+      );
       this.options.accept_message(message);
     });
   }
@@ -266,7 +282,11 @@ export class SessionAgentMessageState {
           return part;
         }),
       };
-      await this.options.store.finalize_agent_message(message);
+      await this.options.store.update_message(
+        message.message_id,
+        current.revision,
+        () => message,
+      );
       this.options.accept_message(message);
     });
   }
@@ -276,7 +296,7 @@ export class SessionAgentMessageState {
     tool_call_id: string,
   ): SessionStreamingToolLocation | undefined {
     for (const message of this.options.list_messages()) {
-      if (message.type !== "agent" || message.status !== "streaming") continue;
+      if (message.role !== "agent" || message.status !== "streaming") continue;
       const part = message.parts.find(
         (item): item is SessionAgentToolPart =>
           item.type === "tool" && item.tool_call_id === tool_call_id,
@@ -346,7 +366,11 @@ export class SessionAgentMessageState {
         (left, right) => left.sequence - right.sequence,
       ),
     };
-    await this.options.store.write_agent_message(message);
+    await this.options.store.update_message(
+      message.message_id,
+      current.revision,
+      () => message,
+    );
     const current_by_id = new Map(
       current.parts.map((part) => [part.part_id, part]),
     );
@@ -381,7 +405,7 @@ export class SessionAgentMessageState {
     const message = [...this.options.list_messages()].find(
       (item) => item.message_id === message_id,
     );
-    if (!message || message.type !== "agent") {
+    if (!message || message.role !== "agent") {
       throw new Error(`Session assistant Message not found: ${message_id}`);
     }
     if (message.status !== "streaming") {

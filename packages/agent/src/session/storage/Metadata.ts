@@ -2,8 +2,8 @@
  * SDK Session 元数据辅助。
  *
  * 关键点（中文）
- * - 统一负责 Agent Storage 内 `sessions/<origin_type>/<session_id>/meta.json` 的规范化读取。
- * - 仅处理轻量配置摘要与索引信息，不负责消息 JSONL 的读写。
+ * - 统一负责 Session SQLite 中轻量配置摘要与索引字段的规范化。
+ * - 不负责数据库连接、消息聚合或附件读写。
  */
 
 import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
@@ -57,21 +57,15 @@ function normalize_preview_text(input: unknown): string | undefined {
   return preview_text || undefined;
 }
 
-function normalize_history_bytes(input: unknown): number | undefined {
-  return typeof input === "number" && Number.isInteger(input) && input >= 0
-    ? input
-    : undefined;
-}
-
 /**
- * 从指定路径读取 session meta.json。
+ * 从指定路径读取旧版 Session metadata。
  *
  * 关键点（中文）
  * - 供归档 session 等需要脱离默认 `sessions/` 目录的场景复用。
  * - 路径本身不做校验，调用方需保证可访问。
  */
 export async function read_session_metadata_from_path(input: {
-  /** meta.json 文件路径。 */
+  /** 旧版 metadata 文件路径。 */
   filePath: string;
   /** 当前 session_id。 */
   session_id: string;
@@ -142,9 +136,6 @@ export function normalize_session_metadata(
       : {}),
     ...(normalize_preview_text(raw.preview_text)
       ? { preview_text: normalize_preview_text(raw.preview_text) }
-      : {}),
-    ...(normalize_history_bytes(raw.historyBytes) !== undefined
-      ? { historyBytes: normalize_history_bytes(raw.historyBytes) }
       : {}),
   };
 }

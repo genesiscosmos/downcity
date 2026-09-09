@@ -257,10 +257,12 @@ export class Agent {
     this.agent_storage = {
       root_path: scope.root_path,
       files: scope.files,
+      database_location: scope.database_location,
       sessions: new LocalSessionStore({
         files: scope.files,
         storage_root_path: scope.root_path,
         agent_id: this.id,
+        database_location: scope.database_location,
       }),
     };
     return this.agent_storage;

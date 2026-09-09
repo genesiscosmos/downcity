@@ -55,29 +55,28 @@ Session.prompt()
 | 旧能力 | 当前归属 |
 | --- | --- |
 | `SystemComposer` | `DefaultSessionComposer.compose()` + `SessionSystem` |
-| `HistoryComposer` | `SessionMessages.context_snapshot()` + `SessionModelMessages` |
+| `HistoryComposer` | `SessionComposer` + `SessionContextPolicy` + `SessionModelMessages` |
 | `ContextComposer` 的 tools | `Session.create_compose_input()` + `SessionComposer.compose()` |
 | `ContextComposer` 的 Step Callback | `SessionLoop` + `CoreEngineRunner` |
 | `ContextComposer` 的 fallback Assistant | `CoreEngineRunner` + `ExecutorRecoveryPolicy` |
-| `CompactionComposer` | `SessionComposer.compact()` + `should_compact()`，由 Session 提交计划 |
+| `CompactionComposer` | `SessionComposer.recover_context()` + Context Policy 派生表 |
 
-统一 Composer 只回答两个策略问题：
+统一 Composer 只回答一个策略问题：
 
-1. 当前 Step 的 system、messages 和 tools 是什么？
-2. 当前只读 Message 快照应生成什么压缩计划？
+1. 当前 Step 的 system、messages 和 tools 是什么？上下文超限时是否能由当前 Policy 推进派生状态？
 
-Queue 消费、Turn 控制、Message 写入、Mutation 发布和 Segment 提交都不是 Composer 职责。
+Queue 消费、Turn 控制、Message 写入和 Mutation 发布都不是 Composer 职责。
 
-## Compaction
+## Context recovery
 
 ```text
-SessionComposer.compact(readonly snapshot)
-  -> SessionCompactionPlan
-  -> Session.commit_compaction_plan()
-  -> SessionMessages.compact_active()
+SessionLoop / CoreEngine
+  -> SessionComposer.recover_context()
+  -> SessionContextPolicy 写入自己的派生表
+  -> Composer 下一次 compose() 读取最新派生上下文
 ```
 
-Composer 可以调用模型生成 Summary，但不能修改 Message、Metadata 或发布事件。持久化提交始终由 Session 领域完成。
+Composer 可以调用模型生成 Summary，但不能修改 canonical Message、Metadata 或发布事件。持久化提交始终由 `SessionStorage` 事务完成。
 
 ## 目录
 
