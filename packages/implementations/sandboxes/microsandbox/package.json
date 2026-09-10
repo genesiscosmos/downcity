@@ -1,6 +1,6 @@
 {
   "name": "@downcity/sandbox-microsandbox",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Downcity persistent microVM sandbox provider powered by microsandbox",
   "main": "./bin/index.js",
