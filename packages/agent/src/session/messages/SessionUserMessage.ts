@@ -5,8 +5,8 @@
  */
 
 import type {
-  SessionAgentResultPart,
-  SessionPromptPart,
+  SessionAgentContent,
+  SessionUserContent,
 } from "@downcity/type";
 import type { SessionUserMessagePart } from "@downcity/type";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
@@ -17,7 +17,7 @@ import {
 
 /** 把 Downcity Session User parts 归一为 canonical User parts。 */
 export function normalize_session_user_parts(
-  parts: SessionPromptPart[] | null | undefined,
+  parts: SessionUserContent[] | null | undefined,
 ): SessionUserMessagePart[] {
   if (!Array.isArray(parts)) return [];
   return parts.flatMap<SessionUserMessagePart>((part, index) => {
@@ -27,7 +27,6 @@ export function normalize_session_user_parts(
         sequence: index + 1,
         type: "text",
         text: part.text,
-        state: "done",
       }];
     }
     if (part.type === "context") {
@@ -77,7 +76,7 @@ export function normalize_canonical_session_user_parts(
 
 /** 判断 Assistant 结果中是否包含可持久化内容。 */
 export function has_assistant_result_content(
-  parts: readonly SessionAgentResultPart[],
+  parts: readonly SessionAgentContent[],
 ): boolean {
   return parts.some((part) => {
     if (part.type === "text") return Boolean(part.text.trim());

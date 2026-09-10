@@ -2,12 +2,11 @@
  * CoreEngineRunner：模型与 tool-loop 主循环执行器。
  *
  * 关键点（中文）
- * - 只负责单次已装配输入的执行，不负责外层运行上下文、重试与历史准备。
- * - 把 step 循环、续写恢复、最终 assistant 汇总等细节从 Executor 中剥离。
+ * - 每个 Provider Step 都通过回调取得 Composer 生成的完整输入。
+ * - 只负责 step 循环、续写恢复与最终 assistant 汇总，不持有历史副本。
  * - 保持失败返回结构稳定，避免对外 Session 行为变化。
  */
 
-import type { ModelClient, ModelMessage } from "@downcity/type";
 import type { RuntimeTool as Tool } from "@downcity/type";
 import { log_assistant_message_now } from "@executor/messages/SessionMessageLog.js";
 import {
@@ -27,7 +26,6 @@ import {
 } from "@executor/core-engine/CoreEngineLoopDecision.js";
 import {
   resolve_effective_core_engine_error,
-  summarize_stream_error,
 } from "@executor/core-engine/CoreEngineError.js";
 import {
   run_model_step,
@@ -35,30 +33,22 @@ import {
   type ModelStepToolCall,
 } from "@executor/model/ModelStepRunner.js";
 import { execute_model_request } from "@executor/model/ModelRequestRunner.js";
-import { CoreEngineMessageState } from "@executor/core-engine/CoreEngineMessageState.js";
 import {
-  deep_compact_model_messages,
   resolve_model_usage_ratio,
   should_compact_after_usage,
 } from "@executor/core-engine/CoreEngineContextCompaction.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { JsonObject } from "@downcity/type";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
 } from "@/types/session/SessionExecution.js";
-import type { SessionAgentResultPart } from "@downcity/type";
-import type {
-  SessionAgentMessagePart,
-  SessionUserMessage,
-} from "@downcity/type";
+import type { SessionAgentMessagePart } from "@downcity/type";
+import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
+import { generate_id } from "@/utils/Id.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
-
-/** Provider context-length error 在当前 step 内最多压缩重试三次。 */
-const MAX_CONTEXT_ERROR_COMPACTION_RETRIES = 3;
 
 interface CoreEngineRunnerOptions {
   /** 当前 Session 稳定标识。 */
@@ -77,16 +67,6 @@ interface CoreEngineRunnerOptions {
 
 interface CoreEngineTurnInput {
   /**
-   * 已装配好的执行输入。
-   */
-  execute_input: SessionStepExecutionInput;
-
-  /**
-   * 当前轮模型实例。
-   */
-  model: ModelClient;
-
-  /**
    * 当前显式运行上下文。
    */
   turn_context: SessionTurnContext;
@@ -94,24 +74,7 @@ interface CoreEngineTurnInput {
   /**
    * 在统一输入队列提交后解析当前 Session step 的 effective 配置。
    */
-  resolve_step_inputs: () => Promise<{
-    /** 当前 Session step 使用的模型。 */
-    model: ModelClient;
-    /** 当前 Session step 使用的 system messages。 */
-    system: SessionStepExecutionInput["system"];
-    /** 当前 Session step 使用的工具集合。 */
-    tools: SessionStepExecutionInput["tools"];
-    /** 当前 Session step 模型支持的总上下文窗口长度。 */
-    context_window?: number;
-  }>;
-
-  /** 持久化 compact 后重新读取 Composer 生成的模型历史与 Summary 身份。 */
-  reload_history: () => Promise<{
-    /** Composer 重新生成的标准模型消息。 */
-    messages: ModelMessage[];
-    /** 当前模型历史包含的最新持久化 Summary 标识。 */
-    summary_id?: string;
-  }>;
+  resolve_step_input: () => Promise<SessionStepExecutionInput>;
 }
 
 /**
@@ -121,9 +84,6 @@ export class CoreEngineRunner {
   private readonly session_id: string;
   private readonly logger: Logger;
   private readonly should_compact_on_error: CoreEngineRunnerOptions["should_compact_on_error"];
-
-  /** 最近一次已经通过真实 usage 验收的持久化 Summary 标识。 */
-  private validated_compaction_summary_id = "";
 
   constructor(options: CoreEngineRunnerOptions) {
     this.session_id = String(options.session_id || "").trim();
@@ -140,25 +100,11 @@ export class CoreEngineRunner {
   async execute(input: CoreEngineTurnInput): Promise<SessionTurnExecutionResult> {
     const start_time = Date.now();
     const session_id = this.session_id;
-    let system = Array.isArray(input.execute_input.system)
-      ? input.execute_input.system
-      : [];
-    let tools = input.execute_input.tools;
     let last_observed_stream_error: unknown = undefined;
     let final_assistant_parts: SessionAgentMessagePart[] = [];
     let compact_required = false;
 
     try {
-      const message_state = await CoreEngineMessageState.create({
-        messages: input.execute_input.messages,
-        project_root: input.turn_context.session.project_root,
-      });
-      let persisted_compaction_summary_id =
-        input.execute_input.history_summary_id || "";
-
-      const append_merged_user_messages = (messages: SessionUserMessage[]) =>
-        message_state.append_merged_user_messages(messages);
-
       let step_count = 0;
       let total_tool_call_count = 0;
       let total_tool_result_count = 0;
@@ -181,63 +127,15 @@ export class CoreEngineRunner {
       };
 
       let incomplete_response_recovery_count = 0;
-      let context_error_compaction_retries = 0;
-      let compact_pending = false;
-      let compact_validation_pending = Boolean(
-        persisted_compaction_summary_id &&
-          persisted_compaction_summary_id !==
-            this.validated_compaction_summary_id,
-      );
-      let compact_depth = 0;
-
       while (step_count < MAX_TOOL_LOOP_STEPS) {
         // 关键点（中文）：steer 与 command 在同一个 Session step 检查点执行。
         // 当前流与 tool callback 保持原执行视图，下一 step 再统一读取 effective 配置。
-        await append_merged_user_messages(
-          await input.turn_context.input.checkpoint(),
-        );
-        const step_inputs = await input.resolve_step_inputs();
-        system = Array.isArray(step_inputs.system) ? step_inputs.system : [];
-        tools = step_inputs.tools;
-        if (input.turn_context.input.consume_history_reload()) {
-          const reloaded_history = await input.reload_history();
-          message_state.replace_model_history(reloaded_history.messages);
-          persisted_compaction_summary_id = reloaded_history.summary_id || "";
-          compact_validation_pending = Boolean(
-            persisted_compaction_summary_id &&
-              persisted_compaction_summary_id !==
-                this.validated_compaction_summary_id,
-          );
-          await this.logger.log("info", "[agent] context.history_reloaded", {
-            session_id: session_id,
-            recordCount: reloaded_history.messages.length,
-            compactionSummaryId: persisted_compaction_summary_id || undefined,
-          });
-        }
-        if (compact_pending) {
-          const previous_message_count = message_state.model_messages.length;
-          message_state.replace_model_messages(
-            deep_compact_model_messages(
-              message_state.model_messages,
-              compact_depth,
-            ),
-          );
-          compact_depth += 1;
-          compact_pending = false;
-          compact_validation_pending = true;
-          compact_required = true;
-          await this.logger.log("info", "[agent] context.compacted", {
-            session_id: session_id,
-            reason: "usage_threshold",
-            compactDepth: compact_depth,
-            previousMessageCount: previous_message_count,
-            nextMessageCount: message_state.model_messages.length,
-          });
-        }
+        await input.turn_context.input.checkpoint();
+        const step_input = await input.resolve_step_input();
 
         last_observed_stream_error = undefined;
         let step_assistant_parts: SessionAgentMessagePart[];
-        let executed_steps: ModelStepResult[];
+        let step_result: ModelStepResult;
         try {
           const result = await execute_model_request({
             request_kind: "turn",
@@ -245,16 +143,13 @@ export class CoreEngineRunner {
             should_retry: (error) => !this.should_compact_on_error(error),
             on_failure: async (notice, error) => {
               const is_compact_error = this.should_compact_on_error(error);
-              const can_compact = is_compact_error &&
-                context_error_compaction_retries <
-                  MAX_CONTEXT_ERROR_COMPACTION_RETRIES;
               input.turn_context.output.report_model_request_failure({
                 ...notice,
                 ...(is_compact_error
                   ? {
-                      attempt: context_error_compaction_retries + 1,
-                      max_attempts: MAX_CONTEXT_ERROR_COMPACTION_RETRIES + 1,
-                      will_retry: can_compact,
+                      attempt: 1,
+                      max_attempts: 1,
+                      will_retry: false,
                     }
                   : {}),
               });
@@ -272,10 +167,10 @@ export class CoreEngineRunner {
               await input.turn_context.output.assistant?.begin_step();
               try {
                 return await run_model_step({
-                  model: step_inputs.model,
-                  system,
-                  messages: message_state.model_messages,
-                  tools,
+                  model: step_input.model,
+                  system: step_input.system,
+                  messages: step_input.messages,
+                  tools: step_input.tools,
                   abort_signal: input.turn_context.lifecycle.abort_signal,
                   ...(input.turn_context.output.assistant
                     ? { assistant_output: input.turn_context.output.assistant }
@@ -303,94 +198,60 @@ export class CoreEngineRunner {
           const action_assistant_parts =
             input.turn_context.output.take_assistant_parts();
           if (action_assistant_parts.length > 0) {
-            await input.turn_context.output.assistant?.append_result_parts(
-              action_assistant_parts,
-            );
+            const persisted_parts = input.turn_context.output.assistant
+              ? await input.turn_context.output.assistant.append_result_parts(
+                  action_assistant_parts,
+                )
+              : action_assistant_parts.map((part, index) =>
+                  create_session_agent_content_part(
+                    part,
+                    `${part.type}:${generate_id()}`,
+                    index + 1,
+                  )
+                );
             step_assistant_parts = merge_assistant_parts(
               step_assistant_parts,
-              action_parts_to_canonical(action_assistant_parts),
+              persisted_parts,
             );
           }
           final_assistant_parts = merge_assistant_parts(
             final_assistant_parts,
             step_assistant_parts,
           );
-          executed_steps = [result.step_result];
+          step_result = result.step_result;
         } catch (error) {
           const compact_error = this.should_compact_on_error(error)
             ? error
             : last_observed_stream_error;
-          const is_compact_error = this.should_compact_on_error(compact_error);
-          const can_retry_after_compaction =
-            is_compact_error &&
-            context_error_compaction_retries <
-              MAX_CONTEXT_ERROR_COMPACTION_RETRIES;
-          if (can_retry_after_compaction) {
-            context_error_compaction_retries += 1;
-            const previous_message_count = message_state.model_messages.length;
-            message_state.replace_model_messages(
-              deep_compact_model_messages(
-                message_state.model_messages,
-                compact_depth,
-              ),
-            );
-            compact_depth += 1;
-            compact_pending = false;
-            compact_validation_pending = true;
-            compact_required = true;
-            await this.logger.log("warn", "[agent] context.compacted", {
-              session_id: session_id,
-              reason: "provider_context_error",
-              retryCount: context_error_compaction_retries,
-              compactDepth: compact_depth,
-              previousMessageCount: previous_message_count,
-              nextMessageCount: message_state.model_messages.length,
-              ...summarize_stream_error(compact_error),
-            });
-            continue;
-          }
+          if (this.should_compact_on_error(compact_error)) throw compact_error;
           throw error;
         }
 
-        context_error_compaction_retries = 0;
-        const last_step = executed_steps[executed_steps.length - 1];
-        if (!last_step) break;
-
         const usage_ratio = resolve_model_usage_ratio(
-          last_step.usage,
-          step_inputs.context_window,
+          step_result.usage,
+          step_input.context_window,
         );
         if (usage_ratio !== null) {
-          const validating_compaction = compact_validation_pending;
-          compact_pending = should_compact_after_usage(
-            usage_ratio,
-            validating_compaction,
-          );
-          compact_validation_pending = false;
-          if (validating_compaction && persisted_compaction_summary_id) {
-            this.validated_compaction_summary_id =
-              persisted_compaction_summary_id;
-          }
-          if (compact_pending) compact_required = true;
+          const pressure_detected = should_compact_after_usage(usage_ratio);
+          if (pressure_detected) compact_required = true;
           await this.logger.log("info", "[agent] context.usage", {
             session_id: session_id,
             step_index: step_count,
             usageRatio: usage_ratio,
-            contextWindow: step_inputs.context_window,
-            validatingCompaction: validating_compaction,
-            compactPending: compact_pending,
+            contextWindow: step_input.context_window,
+            compactPending: pressure_detected,
           });
         }
 
         const incomplete_response = detect_incomplete_response({
-          step_result: last_step,
+          step_result,
           assistant_parts: step_assistant_parts,
         });
         const loop_decision = evaluate_core_engine_loop_decision({
           hasIncompleteResponse: incomplete_response !== null,
           incompleteRecoveryCount: incomplete_response_recovery_count,
           maxIncompleteRecoveries: MAX_INCOMPLETE_RESPONSE_RECOVERIES,
-          toolCallCount: last_step.tool_calls.length,
+          toolCallCount: step_result.tool_calls.length,
         });
 
         await this.logger.log("info", "[agent] loop.decision", {
@@ -402,10 +263,10 @@ export class CoreEngineRunner {
           decisionKind: loop_decision.kind,
           incompleteResponseReason: incomplete_response?.reason ?? null,
           incompleteResponseRecoveryCount: incomplete_response_recovery_count,
-          toolCallCount: last_step.tool_calls.length,
-          toolResultCount: last_step.tool_results.length,
-          finishReason: last_step.finish_reason,
-          textPreview: to_inline_preview(last_step.text),
+          toolCallCount: step_result.tool_calls.length,
+          toolResultCount: step_result.tool_results.length,
+          finishReason: step_result.finish_reason,
+          textPreview: to_inline_preview(step_result.text),
         });
 
         if (
@@ -420,18 +281,12 @@ export class CoreEngineRunner {
             reason: incomplete_response.reason,
             ...incomplete_response.details,
           });
-          const recovery_message = build_internal_user_message({
-            session_id,
-            text: build_incomplete_response_recovery_nudge(
-              incomplete_response_recovery_count,
-            ),
-            extra: {
-              internal: "agent_incomplete_response_recover",
-              reason: incomplete_response.reason,
-              step_index: step_count,
-            },
-          });
-          await message_state.append_user_message(recovery_message);
+          await input.turn_context.input.append_internal([{
+              type: "text",
+              text: build_incomplete_response_recovery_nudge(
+                incomplete_response_recovery_count,
+              ),
+            }]);
           continue;
         }
 
@@ -447,11 +302,6 @@ export class CoreEngineRunner {
             `Agent received incomplete response (${incomplete_response.reason})`,
           );
         }
-
-        const response_messages = Array.isArray(last_step.response?.messages)
-          ? last_step.response.messages
-          : [];
-        message_state.append_model_messages(response_messages);
 
         if (loop_decision.continueForToolCalls) {
           incomplete_response_recovery_count = 0;
@@ -511,9 +361,6 @@ export class CoreEngineRunner {
         success: true,
         text: extract_assistant_text(final_parts),
         ...(compact_required ? { compact_required: true } : {}),
-        deferred_persisted_user_messages: [
-          ...input.turn_context.input.deferred_user_messages(),
-        ],
       };
     } catch (error) {
       if (input.turn_context.lifecycle.abort_signal.aborted) {
@@ -526,9 +373,6 @@ export class CoreEngineRunner {
           text: extract_assistant_text(final_assistant_parts),
           error: error_text,
           ...(compact_required ? { compact_required: true } : {}),
-          deferred_persisted_user_messages: [
-            ...input.turn_context.input.deferred_user_messages(),
-          ],
         };
       }
 
@@ -550,9 +394,6 @@ export class CoreEngineRunner {
         text: extract_assistant_text(final_assistant_parts),
         error: error_text,
         ...(compact_required ? { compact_required: true } : {}),
-        deferred_persisted_user_messages: [
-          ...input.turn_context.input.deferred_user_messages(),
-        ],
       };
     }
   }
@@ -601,70 +442,6 @@ async function resolve_tool_approval(input: {
     result.response.type === "approval" &&
     result.response.outcome === "resolved" &&
     payload?.decision === "approved";
-}
-
-/** 构造仅在当前 Turn 内使用的内部 User Message。 */
-function build_internal_user_message(input: {
-  session_id: string;
-  text: string;
-  extra: JsonObject;
-}): SessionUserMessage {
-  void input.extra;
-  const now = Date.now();
-  return {
-    message_id: `runtime-user:${input.session_id}:${now}`,
-    session_id: input.session_id,
-    sequence: 0,
-    revision: 1,
-    visibility: "internal",
-    created_at: now,
-    updated_at: now,
-    role: "user",
-    input_type: "steer",
-    parts: [{
-      part_id: "runtime-text:1",
-      sequence: 1,
-      type: "text",
-      text: input.text,
-      state: "done",
-    }],
-  };
-}
-
-/** 把 Action 结果内容转换为当前 Turn 使用的 canonical Assistant Parts。 */
-function action_parts_to_canonical(
-  parts: readonly SessionAgentResultPart[],
-): SessionAgentMessagePart[] {
-  return parts.map((part, index) => {
-    const sequence = index + 1;
-    if (part.type === "text") {
-      return {
-        part_id: `action-text:${sequence}`,
-        sequence,
-        type: "text",
-        text: part.text,
-        state: "done",
-      };
-    }
-    if (part.type === "file") {
-      return {
-        part_id: `action-file:${sequence}`,
-        sequence,
-        type: "file",
-        media_type: part.media_type,
-        url: part.url,
-        ...(part.filename ? { filename: part.filename } : {}),
-      };
-    }
-    return {
-      part_id: `action-data:${sequence}`,
-      sequence,
-      type: "data",
-      data_type: part.data_type,
-      data: part.data,
-      ...(part.data_id ? { data_id: part.data_id } : {}),
-    };
-  });
 }
 
 /** 构造成功执行但缺少最终内容时使用的 canonical Assistant Parts。 */

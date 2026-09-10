@@ -59,7 +59,7 @@ function read_action_records(messages) {
   return messages.flatMap((message) => message.role === "agent"
     ? message.parts
         .filter((part) => part.type === "action")
-        .map((part) => ({ ...message, ...part, status: part.state }))
+        .map((part) => ({ ...message, ...part }))
     : []);
 }
 
@@ -189,7 +189,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
 
     const messages = await session.messages();
     const completed_actions = read_action_records(messages.items)
-      .filter((message) => message.type === "action" && message.status === "completed")
+      .filter((message) => message.type === "action" && message.state === "completed")
       .map((message) => message.title);
     assert.deepEqual(completed_actions, []);
 
@@ -594,7 +594,7 @@ test("running session model changes apply with steer at the next Session step", 
           "model: new-model; security.approval_mode: always-allow",
     );
     assert.equal(model_actions.length, 1);
-    assert.equal(model_actions[0].status, "completed");
+    assert.equal(model_actions[0].state, "completed");
     assert.equal(
       mutations.some(
         (mutation) =>
@@ -609,7 +609,7 @@ test("running session model changes apply with steer at the next Session step", 
         (mutation) =>
           mutation.variant === "message" &&
           mutation.type === "action" &&
-          mutation.message.status === "completed" &&
+          mutation.message.state === "completed" &&
           mutation.message.title === "Session configuration updated" &&
           mutation.message.description ===
             "model: new-model; security.approval_mode: always-allow",
@@ -720,7 +720,7 @@ test("running session approval mode changes stay queued until the next Session s
       read_action_records(messages.items).some(
         (message) =>
           message.type === "action" &&
-          message.status === "completed" &&
+          message.state === "completed" &&
           message.title === "Session configuration updated" &&
           message.description === "security.approval_mode: always-allow",
       ),

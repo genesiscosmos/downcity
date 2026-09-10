@@ -40,13 +40,11 @@ render_messages(initial_page.items);
 const unsubscribe = session.subscribe((mutation) => {
   apply_mutation_to_ui(mutation);
 
-  if (
-    mutation.variant === "part" &&
-    mutation.type === "interaction" &&
-    mutation.part.status === "pending"
-  ) {
-    render_interaction(mutation.part);
-  }
+  if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+  const interaction = mutation.message.parts.find(
+    (part) => part.type === "interaction" && part.status === "pending",
+  );
+  if (interaction) render_interaction(interaction);
 });
 
 const turn = await session.prompt({ query: "分析这个仓库的 Session 设计" });
@@ -58,7 +56,7 @@ unsubscribe();
 
 `apply_mutation_to_ui()` 应按 `message_id + revision` 合并完整快照；对 `delta` 只向对应文本或 Tool 输入追加增量。完整做法见 [实时订阅](/zh/agent-sdk-docs/sessions/subscribe) 和 [重连与同步](/zh/agent-sdk-docs/sessions/reconnect-and-sync)。
 
-失败时，用户可见错误由 canonical failed Agent Message 内的 Error Part 提供。`turn.finished.error` 用于控制流、日志或非 Message 界面；已经渲染 Session Message 的聊天界面不要再把它追加成第二条错误。
+失败时，用户可见错误由已收口 canonical Agent Message 内的 Error Part 提供。`turn.finished.error` 用于控制流、日志或非 Message 界面；已经渲染 Session Message 的聊天界面不要再把它追加成第二条错误。
 
 ## Session 里有哪些对象
 

@@ -5,7 +5,6 @@
  */
 
 import type { ModelClient } from "@downcity/type";
-import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionMutation } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -22,8 +21,6 @@ export interface SessionStateOptions {
   origin: SessionOrigin;
   /** 当前 Session 独享的领域持久化视图。 */
   store: SessionStorage;
-  /** 当前 Session 的 canonical Message 入口。 */
-  messages: SessionMessages;
   /** 当前 Session 的可变内存状态。 */
   state: SessionLocalState;
   /** 当前 Session 的运行日志器。 */

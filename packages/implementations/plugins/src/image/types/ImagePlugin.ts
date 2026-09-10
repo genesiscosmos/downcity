@@ -148,7 +148,7 @@ export interface ImagePluginResolvedInput {
 /**
  * ImagePlugin 图片成功结果。
  */
-export type ImagePluginResult = ActionResultMessage;
+export type ImagePluginResult = Extract<ActionResultMessage, { role: "agent" }>;
 
 /**
  * 图片结果本地存储输入。

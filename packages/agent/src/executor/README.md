@@ -11,7 +11,7 @@
 - `SessionComposer` 根据只读 Session 快照组装 system、messages 和 tools。
 - `Executor` 管理一次 Turn 的输入装配、上下文超限恢复和 Step Plugin Lease；它只对外提供 `execute()`。
 - `ModelRequestRunner` 唯一拥有普通模型请求的五次重试、退避和逐次失败通知。
-- `CoreEngineRunner` 执行 Tool Loop、续写和内存上下文折叠，不维护普通请求重试状态。
+- `CoreEngineRunner` 执行 Tool Loop、续写和真实 usage 观测，不自行改写模型历史，也不维护普通请求重试状态。
 - `SessionMessages` 是 Message 唯一事实源；Executor 不写文件、不持有 Store。
 
 ## 执行关系

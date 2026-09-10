@@ -15,7 +15,7 @@ test("canonical Agent Action 与 Error Part 投影为 UI operation", () => {
   const message = session_message_to_chat_message({
     message_id: "agent-1",
     role: "agent",
-    status: "failed",
+    state: "done",
     parts: [
       { part_id: "action-1", sequence: 1, type: "action", action_type: "compact", state: "completed", title: "Compacted" },
       { part_id: "error-1", sequence: 2, type: "error", code: "turn_failed", message: "failed", recoverable: true },

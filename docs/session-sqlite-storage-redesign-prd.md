@@ -59,7 +59,7 @@
 
 8. `SessionComposer` 负责生成最终送给模型的 `system + messages + tools`，并在内部组合一个 Context Policy。
 
-9. 当前 sequence summary 方案实现为 `SequenceSummaryContextPolicy`，使用自己的派生表，不再使用 Active/Segment。
+9. 默认摘要方案实现为 `AdaptivePartContextPolicy`，以 Part 为上下文边界并使用自己的 checkpoint 派生表。
 
 10. JSONL、Active、Segment、Assistant draft file、revision fold 和文件级崩溃补偿全部删除，不保留运行时双轨兼容。
 
@@ -295,13 +295,13 @@ Session
 各层含义：
 
 - Turn 拥有执行生命周期，不是 UI Message；
-- Message 拥有主体、可见性、revision 和整体完成状态；
+- Message 拥有主体、可见性、revision，以及 Agent 聚合是否仍可写；
 - Part 拥有具体内容类型和类型专属状态；
 - Step 只是 Agent Part 的来源关联，不替代 Message。
 
 ### 8.2 Message 边界
 
-一条 User Message 表示一次完整 Prompt 或 Steer 输入，可以包含多个 Part。
+一条 User Message 表示一次完整输入，可以包含多个 Part。是否创建新 Turn 或并入当前 Turn 是 SessionLoop 的调度结果，由 `turn_id` 表达，不在 Message 中重复保存 prompt/steer 类别。
 
 一条 Agent Message 表示一次连续 Agent 表达：
 
@@ -349,8 +349,6 @@ User Message：
 interface SessionUserMessage extends SessionMessageBase {
   /** User Message 主体固定为 user。 */
   role: "user";
-  /** 普通 Prompt 或当前 Turn 的 Steer。 */
-  input_type: "prompt" | "steer";
   /** User Message 内按 sequence 排序的内容。 */
   parts: SessionUserMessagePart[];
 }
@@ -362,12 +360,14 @@ Agent Message：
 interface SessionAgentMessage extends SessionMessageBase {
   /** Agent Message 主体固定为 agent。 */
   role: "agent";
-  /** Agent Message 当前整体生命周期状态。 */
-  status: "streaming" | "completed" | "stopped" | "failed";
+  /** Agent Message 是否仍可追加 Part。 */
+  state: "streaming" | "done";
   /** Agent Message 内按 sequence 排序的内容。 */
   parts: SessionAgentMessagePart[];
 }
 ```
+
+Agent Message 不持久化 Turn 的成功、停止、失败四态。`state` 只表示聚合写入生命周期；停止和失败的持久化原因由 Error Part 表达，Turn 结果仍保留自己的终态。
 
 以下旧概念删除：
 
@@ -544,12 +544,8 @@ CREATE TABLE messages (
   sequence INTEGER NOT NULL UNIQUE CHECK (sequence >= 1),
   revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
   role TEXT NOT NULL CHECK (role IN ('user', 'agent')),
-  input_type TEXT CHECK (
-    input_type IS NULL OR
-    input_type IN ('prompt', 'steer')
-  ),
-  status TEXT NOT NULL CHECK (
-    status IN ('streaming', 'completed', 'stopped', 'failed')
+  state TEXT CHECK (
+    state IS NULL OR state IN ('streaming', 'done')
   ),
   visibility TEXT NOT NULL CHECK (
     visibility IN ('visible', 'internal')
@@ -560,8 +556,8 @@ CREATE TABLE messages (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   CHECK (
-    (role = 'user' AND input_type IS NOT NULL AND status = 'completed') OR
-    (role = 'agent' AND input_type IS NULL)
+    (role = 'user' AND state IS NULL) OR
+    (role = 'agent' AND state IS NOT NULL)
   )
 );
 
@@ -700,8 +696,7 @@ Message 创建后 `role` 不允许更新。User/Agent 身份变化必须创建�
 `SessionStorage` 是单个 Session 的结构化存储拥有者，负责：
 
 - 创建和关闭 SQLite 连接；
-- 初始化核心 schema；
-- 执行 schema migration；
+- 初始化全新核心 schema，并拒绝运行时打开旧版本；
 - 提供 State 和 Message Repository；
 - 执行单 Session 数据库事务；
 - 恢复中断的业务状态；
@@ -843,19 +838,32 @@ sequenceDiagram
 
 ### 12.2 创建 Agent Message
 
-创建 streaming Agent Message 与初始 Parts 在同一事务中提交：
+创建空的 streaming Agent Message，并与 Session 列表投影在同一事务中提交：
 
 ```text
-INSERT messages(status = streaming, revision = 1)
-+
-INSERT initial message_parts
+INSERT messages(state = streaming, revision = 1)
 +
 UPDATE session_state
 ```
 
 不再创建 `agent_message.json`。
 
-### 12.3 更新一个 Part
+### 12.3 模型 Step 投影与提交
+
+模型流事件不逐 chunk 写数据库：
+
+```text
+ModelStreamEvent
+→ 更新 Agent Message 内存投影
+→ 发布 part / delta Mutation
+→ Step 完成并校验 Part identity
+→ 一次事务提交完整 Step 快照
+→ 发布提交后的完整 message Mutation
+```
+
+Tool 执行前后、Interaction 状态、Action/Error 和 Message 收口是不可丢失的语义检查点，可以在 Step 内独立提交。也就是说：事件负责实时展示，内存负责流式组装，数据库只保存稳定语义检查点。
+
+### 12.4 更新一个稳定检查点
 
 ```text
 BEGIN IMMEDIATE
@@ -870,7 +878,7 @@ COMMIT
 
 `UPDATE messages` 受影响行数必须为 `1`，否则抛出稳定 revision conflict，不能覆盖较新状态。
 
-### 12.4 原子更新多个 Part
+### 12.5 原子更新多个 Part
 
 Interaction 响应的典型事务：
 
@@ -885,7 +893,7 @@ COMMIT
 
 调用方只收到一个提交后的完整 Message snapshot。不得先发布 Interaction、再尝试更新 Tool。
 
-### 12.5 完成 Agent Message
+### 12.6 完成 Agent Message
 
 ```text
 BEGIN IMMEDIATE
@@ -893,15 +901,16 @@ BEGIN IMMEDIATE
   text/reasoning streaming → done
   未完成 tool → failed
   pending interaction → cancelled
-  messages.status → completed/stopped/failed
+  按需追加停止或失败 Error Part
+  messages.state → done
   messages.revision += 1
   更新 session_state projection
 COMMIT
 ```
 
-### 12.6 发布顺序
+### 12.7 发布顺序
 
-所有 Message 写入必须保持：
+所有稳定检查点写入必须保持：
 
 ```text
 数据库事务 COMMIT
@@ -911,8 +920,8 @@ COMMIT
 
 禁止：
 
-- 乐观更新 canonical 内存后异步落盘；
-- COMMIT 前发布成功事件；
+- 把未提交的流式投影伪装成稳定 Message snapshot；
+- COMMIT 前发布检查点成功事件；
 - Store 失败后仍完成 TurnHandle；
 - Mutation 成为数据库事实源。
 
@@ -920,14 +929,14 @@ COMMIT
 
 ### 13.1 初始化恢复事务
 
-`SessionStorage.initialize()` 在一个事务中完成业务恢复：
+`SessionStorage.initialize()` 只初始化 schema 与身份；`SessionMessages.initialize()` 查询非终态 Message 后提交领域恢复结果：
 
 ```text
 BEGIN IMMEDIATE
   校验 session_state 身份
   校验 schema version
-  查询 status = streaming 的 Agent Message
-  收口为 stopped
+  查询 state = streaming 的 Agent Message
+  收口为 done 并追加 runtime_interrupted Error Part
   收口其中未完成 Tool
   取消 pending Interaction
   将 running Action 标记为 failed
@@ -1031,7 +1040,7 @@ compact()
 Session.compact_history()
 ```
 
-错误是否属于上下文超限、是否可以生成新派生上下文，统一由当前 Composer 及其 Policy 判断。
+Provider 错误是否属于上下文超限只在 Executor 边界识别一次；Composer 与 Policy 只接收 `provider_context_limit` 或 `usage_pressure` 领域原因，并判断是否可以生成新派生上下文。
 
 ### 14.3 SessionComposition 与 Composer
 
@@ -1074,7 +1083,7 @@ interface SessionContextPolicy {
 
 ```ts
 new DefaultSessionComposer({
-  context_policy: new SequenceSummaryContextPolicy(),
+  context_policy: new AdaptivePartContextPolicy(),
 });
 ```
 
@@ -1088,6 +1097,8 @@ Context Policy 返回已经按模型历史语义组织的内容：
 interface SessionResolvedContext {
   /** 送入模型的历史消息，顺序已经确定。 */
   messages: ModelMessage[];
+  /** Policy 生成的显式 system 上下文，不伪装成普通历史。 */
+  system_blocks?: SessionSystemBlock[];
   /** 可观察但不进入 canonical Message 的策略诊断。 */
   diagnostics: {
     /** 当前 Policy 名称。 */
@@ -1106,7 +1117,7 @@ Composer 再把这些历史与 system、当前 Plugin context 和 tools 组合�
 
 每个 Policy 可以建立自己的表，但必须满足：
 
-- 表名使用稳定 namespace，例如 `composer_sequence_summary_*`；
+- 表名使用稳定 namespace，例如 `composer_adaptive_part_*`；
 - 只能把核心 Message/Part 当来源，不能修改它们；
 - 派生 row 应通过外键引用来源 Message 或 Part；
 - 来源删除时使用 `ON DELETE CASCADE` 或明确失效机制；
@@ -1153,45 +1164,50 @@ interface SessionComposerStorageTransaction {
 
 这组 SQL 能力只在 Agent package 内部交给 Policy Repository，不从 package 根入口导出，也不提供数据库 close、attach 或 pragma 权限。Policy 属于受信任的本地代码；核心表只读是架构 contract，并由内置 Policy 测试和 SQL 静态扫描守护，不能宣称它是第三方恶意代码的安全沙箱。
 
-## 16. 默认 Sequence Summary Policy
+## 16. 默认 Adaptive Part Policy
 
 ### 16.1 专属表
 
-当前 sequence summary 方案改为以下派生表：
+默认策略只使用一个独立派生表：
 
 ```sql
-CREATE TABLE composer_sequence_summaries (
-  summary_id TEXT PRIMARY KEY,
-  through_message_id TEXT NOT NULL
-    REFERENCES messages(message_id)
-    ON DELETE CASCADE,
-  through_sequence INTEGER NOT NULL UNIQUE,
+CREATE TABLE composer_adaptive_part_checkpoints (
+  checkpoint_id TEXT PRIMARY KEY,
+  through_message_id TEXT NOT NULL REFERENCES messages(message_id) ON DELETE CASCADE,
+  through_message_sequence INTEGER NOT NULL,
+  through_part_sequence INTEGER NOT NULL,
   summary TEXT NOT NULL,
   policy_version INTEGER NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  UNIQUE(through_message_sequence, through_part_sequence, policy_version)
 );
+
 ```
 
-该表只对 `SequenceSummaryContextPolicy` 有意义。
+该表只对 `AdaptivePartContextPolicy` 有意义，canonical Part 永远不被派生内容覆盖。当前没有独立 Part reduction 行为，因此不预留未被消费的表结构。
 
 ### 16.2 正常读取
 
 ```text
-读取最新 Summary
-→ 查询 sequence > through_sequence 的 canonical Messages
-→ Summary 转为上下文前缀
-→ Tail Messages 按 Message/Part 语义转为 ModelMessage
+读取最新 Part checkpoint
+→ 查询 checkpoint 位置之后的 canonical Parts
+→ Summary 转为显式 <session-context-summary> system block
+→ Tail Parts 按 Message/Step 语义转为 ModelMessage
 → 返回给 Composer
 ```
 
 ### 16.3 生成新 Summary
 
-默认策略可以继续选择未覆盖 Message 中较旧的 50%，但必须满足：
+默认策略按序列化体积选择足以释放约 50% 原始上下文的较旧稳定 Part，并满足：
 
-- 只选择已经关闭的完整 Message；
-- 不能把当前 streaming Agent Message 作为边界；
-- 边界只能落在 Message 之间，不能落在 Part 中间；
-- 输入为“上一个累计 Summary + 新选中的完整 Messages”；
+- Message 是持久化聚合边界，Part 是上下文处理边界，Turn 是运行生命周期边界；
+- 已经稳定的 Part 可以成为边界，即使所属 Agent Message 仍包含其他内容；
+- streaming Text/Reasoning Part 不进入摘要；
+- Reasoning、Action、Interaction 默认丢弃，不占据摘要；
+- Tool call/result 保持一个 Part 的原子性，不能产生孤立调用或结果；
+- 上下文压力按 Part 序列化字符体积近似估算，不使用 Part 数量代替体积；
+- 只有一个稳定 Part 时仍可以建立 checkpoint，避免单个大 Part 无法恢复；
+- 输入为“上一个累计 Summary + 新选中的稳定 Parts”；
 - 模型返回空 Summary 时不写派生表；
 - Summary 成功后只 INSERT 新 row，不修改或移动 Message；
 - 并发提交时通过 `through_sequence UNIQUE` 保证幂等；
@@ -1203,7 +1219,7 @@ CREATE TABLE composer_sequence_summaries (
 sequenceDiagram
     participant Executor
     participant Composer as SessionComposer
-    participant Policy as SequenceSummaryPolicy
+    participant Policy as AdaptivePartPolicy
     participant Storage as SessionStorage
     participant Model
 
@@ -1213,9 +1229,9 @@ sequenceDiagram
     Composer-->>Executor: final model input
     Executor->>Model: request
     Model-->>Executor: context length error
-    Executor->>Composer: recover_context(error)
-    Composer->>Policy: recover(error)
-    Policy->>Storage: 读取新的 closed boundary
+    Executor->>Composer: recover_context(reason)
+    Composer->>Policy: recover(reason)
+    Policy->>Storage: 读取新的 stable Part boundary
     Policy->>Model: 生成累计 Summary
     Policy->>Storage: 写 Policy 派生表
     Policy-->>Composer: true
@@ -1325,10 +1341,10 @@ delta mutation
 ### 19.2 revision 规则
 
 - Message 创建后 `revision = 1`；
-- 任一 Part 新建或更新后，Message revision 加一；
+- 每个稳定检查点提交后，Message revision 加一；
 - 多个 Part 在同一事务中变化，只增加一次 revision；
-- Part Mutation 携带提交后的 Message revision；
-- UI 丢弃小于等于本地 revision 的旧 Mutation；
+- 未提交的 Part/Delta Mutation 使用当前稳定 revision，不代表数据库版本增加；
+- UI 丢弃低于本地稳定 revision 的旧 Mutation；
 - UI 断线或 revision 跳跃时重新读取完整 Message snapshot；
 - Delta 可以减少渲染成本，但不能用于数据库恢复。
 
@@ -1373,8 +1389,10 @@ sequenceDiagram
     Policy->>Storage: read messages / derived tables
     Policy-->>Composer: resolved ModelMessage history
     Composer-->>Executor: final StepInput
-    Executor->>Messages: stream Agent Parts
-    Messages->>Storage: transactional Part updates
+    Executor->>Messages: stream Agent Parts to memory projection
+    Messages-->>App: part / delta Mutation
+    Executor->>Messages: commit completed Step
+    Messages->>Storage: one transactional Step snapshot
 
     opt queued Prompt at checkpoint
       Loop->>Messages: create steer User Message
@@ -1493,6 +1511,8 @@ SessionMutation
 ### 24.2 修改
 
 - `SessionMessage.type` 改为 `SessionMessage.role`；
+- 删除 User Message 的 `input_type`；
+- Agent Message 顶层状态收敛为 `state: streaming | done`；
 - Part 的 `type` 保持不变；
 - Agent Part 增加可选 `step_id`；
 - Message page 删除 `source: active | segment`；
@@ -1559,8 +1579,8 @@ packages/agent/src/session/
 │   ├── SessionMessageModelCodec.ts
 │   └── policies/
 │       ├── FullHistoryContextPolicy.ts
-│       ├── SequenceSummaryContextPolicy.ts
-│       └── SequenceSummaryPrompt.ts
+│       ├── AdaptivePartContextPolicy.ts
+│       └── SessionSummaryPrompts.ts
 │
 ├── messages/
 │   ├── SessionAgentMessageState.ts
@@ -1769,7 +1789,7 @@ scripts/migrate-session-storage-to-sqlite.mjs
 
 ### 31.3 恢复
 
-- streaming Agent Message 恢复为 stopped；
+- streaming Agent Message 恢复为 done，并追加 `runtime_interrupted` Error Part；
 - running Action 恢复为 failed；
 - pending Interaction 被取消；
 - waiting Tool 被收口；

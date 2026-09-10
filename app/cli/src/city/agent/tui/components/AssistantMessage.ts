@@ -61,7 +61,7 @@ export class AssistantMessageComponent implements Component {
         part.text.trim().length > 0
       );
     });
-    const streaming = this.message.status === "streaming";
+    const streaming = this.message.state === "streaming";
     if (visible_parts.length === 0 && !streaming) return [];
 
     const role = current_theme.bold_fg("primary", "Assistant");

@@ -11,6 +11,7 @@ import type {
   ModelClient,
   RuntimeTool as Tool,
   RuntimeToolExecutionOptions as ToolExecutionOptions,
+  SessionHookRuntime,
 } from "@downcity/type";
 import { CoreEngineRunner } from "@executor/core-engine/CoreEngineRunner.js";
 import { ExecutorRecoveryPolicy } from "@executor/services/ExecutorRecoveryPolicy.js";
@@ -18,13 +19,7 @@ import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionExecutor } from "@/types/session/SessionExecution.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
-import type { SessionHookRuntime } from "@downcity/type";
 import { is_action_result } from "@/types/action/ActionResult.js";
-import { generate_id } from "@/utils/Id.js";
-import {
-  normalize_session_context_content,
-  normalize_session_context_tag,
-} from "@/session/messages/SessionUserContext.js";
 import type {
   SessionStepExecutionInput,
   SessionTurnExecutionResult,
@@ -34,6 +29,7 @@ import type {
   SessionComposeInput,
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
+import type { SessionContextRecoveryReason } from "@/types/session/SessionContextPolicy.js";
 
 type ExecutorOptions = {
   /**
@@ -46,20 +42,15 @@ type ExecutorOptions = {
 
   /** 为 Composer 创建当前 Step 的只读输入快照。 */
   get_compose_input: (
-    turn_context: SessionTurnContext | undefined,
+    turn_context: SessionTurnContext,
     retry_count: number,
   ) => Promise<SessionComposeInput>;
 
   /** 请求当前 Composer 推进派生上下文状态。 */
-  recover_context: (error: unknown) => Promise<boolean>;
+  recover_context: (reason: SessionContextRecoveryReason) => Promise<boolean>;
 
   /** 应用 Session 级固定 system snapshot。 */
   apply_system_snapshot?: (input: SessionStepInput) => SessionStepInput;
-
-  /**
-   * 读取当前 session 使用的模型实例。
-   */
-  get_model: () => ModelClient | undefined;
 
   /**
    * 统一日志器。
@@ -83,7 +74,6 @@ export class Executor implements SessionExecutor {
   private readonly get_compose_input: ExecutorOptions["get_compose_input"];
   private readonly recover_context: ExecutorOptions["recover_context"];
   private readonly apply_system_snapshot?: ExecutorOptions["apply_system_snapshot"];
-  private readonly get_model: ExecutorOptions["get_model"];
   private readonly get_hooks: ExecutorOptions["get_hooks"];
   private readonly logger: Logger;
   private readonly recovery_policy: ExecutorRecoveryPolicy;
@@ -102,19 +92,21 @@ export class Executor implements SessionExecutor {
     this.get_compose_input = options.get_compose_input;
     this.recover_context = options.recover_context;
     this.apply_system_snapshot = options.apply_system_snapshot;
-    this.get_model = options.get_model;
     this.get_hooks = options.get_hooks;
     this.logger = options.logger;
     this.recovery_policy = new ExecutorRecoveryPolicy({
       session_id: this.session_id,
-      recover_context: async (error) => await this.recover_context(error),
+      recover_context: async (error) =>
+        is_provider_context_limit_error(error)
+          ? await this.recover_context("provider_context_limit")
+          : false,
       logger: this.logger,
     });
     this.core_engine_runner = new CoreEngineRunner({
       session_id: this.session_id,
       logger: this.logger,
       should_compact_on_error: (error) =>
-        is_context_limit_error(error),
+        is_provider_context_limit_error(error),
     });
   }
 
@@ -133,7 +125,6 @@ export class Executor implements SessionExecutor {
    * - scope 绑定、assistant step 持久化、executing 状态都收在实例内部。
    */
   async execute(params: {
-    query: string;
     turn_context: SessionTurnContext;
   }): Promise<SessionTurnExecutionResult> {
     if (this.executing) {
@@ -141,117 +132,46 @@ export class Executor implements SessionExecutor {
       // 否则 step 回调、scope 与执行器状态都会互相污染。
       throw new Error("Executor.execute does not support concurrent execution");
     }
-    const query = String(params.query || "").trim();
     const turn_context = params.turn_context;
     this.executing = true;
-    this.recovery_policy.reset_execution_state();
     try {
       const result = await this.recovery_policy.execute_with_retry({
-        query,
-        model: this.resolve_model_or_throw(),
-        turn_context,
-        prepare_execute_input: async ({
-          query: next_query,
-          model,
-          turn_context: next_turn_context,
-          retry_count,
-        }) =>
-          await this.prepare_execute_input(
-            next_query,
-            model,
-            next_turn_context,
-            retry_count,
-          ),
-        execute_prepared_input: async ({
-          execute_input,
-          model,
-          turn_context: next_turn_context,
-        }) =>
-          await this.execute_prepared_input(
-            execute_input,
-            model,
-            next_turn_context,
-          ),
+        execute_turn: async (retry_count) =>
+          await this.core_engine_runner.execute({
+            turn_context,
+            resolve_step_input: async () =>
+              await this.resolve_step_input(turn_context, retry_count),
+          }),
       });
       return result;
     } finally {
-      this.recovery_policy.reset_execution_state();
       this.executing = false;
     }
   }
 
   /**
-   * 调用 Composer 组装当前轮执行输入。
-   */
-  private async prepare_execute_input(
-    query: string,
-    _model: ModelClient,
-    turn_context: SessionTurnContext,
-    retry_count: number,
-  ): Promise<SessionStepExecutionInput> {
-    const step = await this.compose_step(turn_context, retry_count, true);
-    return {
-      query,
-      system: step.input.system,
-      messages: step.input.messages,
-      ...(step.input.context_diagnostics?.derivation_id
-        ? { history_summary_id: step.input.context_diagnostics.derivation_id }
-        : {}),
-      tools: step.input.tools,
-    };
-  }
-
-  /**
-   * 执行一次已装配完成的 Step 输入。
-   */
-  private async execute_prepared_input(
-    input: SessionStepExecutionInput,
-    model: ModelClient,
-    turn_context: SessionTurnContext,
-  ): Promise<SessionTurnExecutionResult> {
-    return await this.core_engine_runner.execute({
-      execute_input: input,
-      model,
-      turn_context,
-      resolve_step_inputs: async () =>
-        await this.resolve_step_inputs(turn_context),
-      reload_history: async () => {
-        const step = await this.compose_step(turn_context, 0, false);
-        return {
-          messages: step.input.messages,
-          ...(step.input.context_diagnostics?.derivation_id
-            ? { summary_id: step.input.context_diagnostics.derivation_id }
-            : {}),
-        };
-      },
-    });
-  }
-
-  /**
-   * 解析下一 Session step 实际使用的运行配置。
+   * 为下一 Provider Step 生成唯一一份完整输入。
    *
    * 关键点（中文）
    * - 调用方必须先提交 Session 统一输入队列，再调用本方法。
    * - 每次调用只读取一次 model、system 与 tools，并把它们传给同一个模型 step。
    */
-  private async resolve_step_inputs(turn_context: SessionTurnContext): Promise<{
-    model: ModelClient;
-    system: SessionStepExecutionInput["system"];
-    tools: SessionStepExecutionInput["tools"];
-    context_window?: number;
-  }> {
-    const composed = await this.compose_step(turn_context, 0, true);
+  private async resolve_step_input(
+    turn_context: SessionTurnContext,
+    retry_count: number,
+  ): Promise<SessionStepExecutionInput> {
+    const composed = await this.compose_step(turn_context, retry_count);
     return {
       model: composed.model,
       system: composed.input.system,
+      messages: composed.input.messages,
       tools: this.bind_turn_context_to_tools(
         composed.input.tools,
         turn_context,
       ),
-      ...(composed.compose_input.state.model_context_window !== undefined
+      ...(composed.context_window !== undefined
         ? {
-            context_window:
-              composed.compose_input.state.model_context_window,
+            context_window: composed.context_window,
           }
         : {}),
     };
@@ -259,32 +179,33 @@ export class Executor implements SessionExecutor {
 
   /** 读取只读 Session 快照并交给统一 Composer。 */
   private async compose_step(
-    turn_context: SessionTurnContext | undefined,
+    turn_context: SessionTurnContext,
     retry_count: number,
-    refresh_plugins: boolean,
   ): Promise<{
-    compose_input: SessionComposeInput;
     input: SessionStepInput;
     model: ModelClient;
+    context_window?: number;
   }> {
-    if (refresh_plugins && turn_context) await this.refresh_step_runtime(turn_context);
+    await this.refresh_step_runtime(turn_context);
     const compose_input = await this.get_compose_input(
       turn_context,
       retry_count,
     );
     const model = compose_input.state.model;
     if (!model) throw new Error("requires a configured model.");
-    turn_context?.step.commit({
+    turn_context.step.commit({
       workspace_env: compose_input.state.env,
       agent_systems: compose_input.state.systems,
     });
     const raw_input = await this.composer.compose(compose_input);
     return {
-      compose_input,
       input: this.apply_system_snapshot
         ? this.apply_system_snapshot(raw_input)
         : raw_input,
       model,
+      ...(compose_input.state.model_context_window !== undefined
+        ? { context_window: compose_input.state.model_context_window }
+        : {}),
     };
   }
 
@@ -373,61 +294,11 @@ export class Executor implements SessionExecutor {
             turn_context.effects.append(output.effects);
           }
           for (const message of output.messages) {
-            if (message.role === "assistant") {
+            if (message.role === "agent") {
               turn_context.output.enqueue_assistant_parts(message.parts);
               continue;
             }
-            const now = Date.now();
-            turn_context.input.inject_user_message({
-              message_id: `runtime-user:${turn_context.session.session_id}:${generate_id()}`,
-              session_id: turn_context.session.session_id,
-              turn_id: turn_context.session.turn_id,
-              sequence: 0,
-              revision: 1,
-              visibility: "internal",
-              created_at: now,
-              updated_at: now,
-              role: "user",
-              input_type: "steer",
-              parts: message.parts.map((part, index) => {
-                if (part.type === "text") {
-                  return {
-                    part_id: `runtime-text:${index + 1}`,
-                    sequence: index + 1,
-                    type: "text" as const,
-                    text: part.text,
-                    state: "done" as const,
-                  };
-                }
-                if (part.type === "context") {
-                  return {
-                    part_id: `runtime-context:${index + 1}`,
-                    sequence: index + 1,
-                    type: "context" as const,
-                    tag: normalize_session_context_tag(part.tag),
-                    context: normalize_session_context_content(part.context),
-                  };
-                }
-                if (part.type === "file") {
-                  return {
-                    part_id: `runtime-file:${index + 1}`,
-                    sequence: index + 1,
-                    type: "file" as const,
-                    media_type: part.media_type,
-                    url: part.url,
-                    ...(part.filename ? { filename: part.filename } : {}),
-                  };
-                }
-                return {
-                  part_id: `runtime-data:${index + 1}`,
-                  sequence: index + 1,
-                  type: "data" as const,
-                  data_type: part.data_type,
-                  data: part.data,
-                  ...(part.data_id ? { data_id: part.data_id } : {}),
-                };
-              }),
-            });
+            await turn_context.input.append_internal(message.parts);
           }
           return output.output;
         },
@@ -436,20 +307,10 @@ export class Executor implements SessionExecutor {
     return wrapped;
   }
 
-  /**
-   * 读取当前 session 模型。
-   */
-  private resolve_model_or_throw(): ModelClient {
-    const model = this.get_model();
-    if (!model) {
-      throw new Error("requires a configured model.");
-    }
-    return model;
-  }
 }
 
 /** Core Engine 的单 Step 内恢复仍需同步识别 Provider 上下文错误。 */
-function is_context_limit_error(error: unknown): boolean {
+function is_provider_context_limit_error(error: unknown): boolean {
   const message = String(error ?? "").toLowerCase();
   return message.includes("context_length") ||
     message.includes("too long") ||

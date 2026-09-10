@@ -123,16 +123,17 @@ async function run_approval_case(decision) {
     let pending_request;
     let response_promise;
     const unsubscribe = session.subscribe((mutation) => {
-      if (
-        mutation.variant !== "part" ||
-        mutation.type !== "interaction" ||
-        mutation.part.status !== "pending" ||
-        mutation.part.request.type !== "approval" ||
-        mutation.part.request.payload.operation !== "tool"
-      ) return;
-      pending_request = mutation.part.request;
+      if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+      const interaction = mutation.message.parts.find((part) =>
+        part.type === "interaction" &&
+        part.status === "pending" &&
+        part.request.type === "approval" &&
+        part.request.payload.operation === "tool"
+      );
+      if (!interaction) return;
+      pending_request = interaction.request;
       response_promise = session.respond({
-        interaction_id: mutation.part.interaction_id,
+        interaction_id: interaction.interaction_id,
         response: { type: "approval", outcome: decision === "approved" ? "resolved" : "denied", payload: { decision } },
       });
     });

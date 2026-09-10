@@ -5,7 +5,7 @@ import test from "node:test";
 import type { SessionMessage } from "@downcity/agent";
 import { project_session_message_segments, session_message_segment_size } from "../src/renderer/features/chat/lib/session_message_projection.ts";
 
-function create_user_message(sequence: number): Extract<SessionMessage, { type: "user" }> {
+function create_user_message(sequence: number): Extract<SessionMessage, { role: "user" }> {
   return {
     message_id: `user-${String(sequence)}`,
     session_id: "session",
@@ -14,12 +14,12 @@ function create_user_message(sequence: number): Extract<SessionMessage, { type: 
     visibility: "visible",
     created_at: sequence,
     updated_at: sequence,
-    type: "user",
-    parts: [{ part_id: `part-${String(sequence)}`, type: "text", text: String(sequence), state: "done" }],
+    role: "user",
+    parts: [{ part_id: `part-${String(sequence)}`, sequence: 1, type: "text", text: String(sequence) }],
   };
 }
 
-function create_agent_message(sequence: number, status: "streaming" | "completed" = "completed"): Extract<SessionMessage, { type: "agent" }> {
+function create_agent_message(sequence: number, state: "streaming" | "done" = "done"): Extract<SessionMessage, { role: "agent" }> {
   return {
     message_id: `assistant-${String(sequence)}`,
     session_id: "session",
@@ -28,9 +28,8 @@ function create_agent_message(sequence: number, status: "streaming" | "completed
     visibility: "visible",
     created_at: sequence,
     updated_at: sequence,
-    type: "agent",
-    kind: "normal",
-    status,
+    role: "agent",
+    state,
     parts: [],
   };
 }

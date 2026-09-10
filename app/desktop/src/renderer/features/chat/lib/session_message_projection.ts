@@ -6,7 +6,7 @@
  */
 
 import type { SessionMessage } from "@downcity/agent";
-import type { SessionMessageProjection, SessionMessageRow, SessionMessageSegment } from "@/types/SessionProjection";
+import type { SessionMessageProjection, SessionMessageProjectionRow, SessionMessageSegment } from "@/types/SessionProjection";
 
 /** 单个稳定区间容纳的最大 canonical sequence 数量。 */
 export const session_message_segment_size = 32;
@@ -16,7 +16,7 @@ export function project_session_message_segments(
   messages: SessionMessage[],
   previous?: SessionMessageProjection,
 ): SessionMessageProjection {
-  const segments_by_id = new Map<number, SessionMessageRow[]>();
+  const segments_by_id = new Map<number, SessionMessageProjectionRow[]>();
   let has_streaming_message = false;
   let has_conversation_message = false;
   let last_visible_message_index = -1;
@@ -28,12 +28,12 @@ export function project_session_message_segments(
 
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
-    if (message.type === "user" || message.type === "agent") has_conversation_message = true;
+    has_conversation_message = true;
     const segment_id = resolve_segment_id(message.sequence);
     const rows = segments_by_id.get(segment_id) ?? [];
 
-    if (message.type === "agent") {
-      const streaming = message.status === "streaming";
+    if (message.role === "agent") {
+      const streaming = message.state === "streaming";
       if (streaming) has_streaming_message = true;
       rows.push({ message, has_later_visible_message: index < last_visible_message_index });
     } else {
@@ -49,7 +49,7 @@ export function project_session_message_segments(
     return {
       segment_id,
       rows,
-      has_streaming_message: rows.some((row) => row.message.type === "agent" && row.message.status === "streaming"),
+      has_streaming_message: rows.some((row) => row.message.role === "agent" && row.message.state === "streaming"),
     } satisfies SessionMessageSegment;
   });
 
@@ -70,7 +70,7 @@ function resolve_segment_id(sequence: number): number {
 }
 
 /** 比较分段内 canonical 消息与末尾语义是否完全未变。 */
-function same_message_rows(left: SessionMessageRow[], right: SessionMessageRow[]): boolean {
+function same_message_rows(left: SessionMessageProjectionRow[], right: SessionMessageProjectionRow[]): boolean {
   return left.length === right.length && left.every((row, index) => {
     const candidate = right[index];
     return row.message === candidate.message

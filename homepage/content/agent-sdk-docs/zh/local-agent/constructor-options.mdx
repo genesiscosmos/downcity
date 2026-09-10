@@ -261,61 +261,24 @@ city.agents.add(agent);
 City 持有 Plugin 唯一实例、配置投影与生命周期；Agent 只持有身份、模型、指令、Tools 和 Sessions。
 联网能力仍需由宿主配置，请参阅 [Web Plugin 文档](/zh/plugins-docs/builtins/web)。
 
-## `Session`
+## `session_composer`
 
-本地 session 的高级自定义类。
-
-当你希望替换本地 session 实现，或者在 Session 层注入自定义 Composer 时使用它。`Agent` 只负责用这个类创建和恢复 session，不理解 Composer 的具体策略。
+只需要调整模型输入或上下文策略时，直接提供 Composer 工厂。每次创建、恢复或 Fork Session 都会调用一次，因此 Composer 与 Policy 实例不会跨 Session 共享。
 
 ```ts
 import {
   Agent,
-  Workspace,
+  AdaptivePartContextPolicy,
   DefaultSessionComposer,
-  Session,
-  type SessionOptions,
-  type SessionComposeInput,
 } from "@downcity/agent";
-
-class CustomSessionComposer extends DefaultSessionComposer {
-  override async compose(input: SessionComposeInput) {
-    const step = await super.compose(input);
-    return {
-      ...step,
-      system: [
-        ...step.system,
-        { role: "system" as const, content: "始终简洁回答。" },
-      ],
-    };
-  }
-}
-
-class CustomSession extends Session {
-  constructor(options: SessionOptions) {
-    super({
-      ...options,
-      composer: new CustomSessionComposer(),
-    });
-  }
-}
 
 const agent = new Agent({
   id: "repo-helper",
-  session_class: CustomSession,
-});
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
+  session_composer: () => new DefaultSessionComposer({
+    context_policy: new AdaptivePartContextPolicy(),
+  }),
 });
 ```
-
-关键点：
-
-- 传入的是 class，不是已经创建好的 session 实例
-- 这样 `Agent` 可以按不同 `session_id` 创建多个 session
-- Composer 自定义留在自定义 Session 类内部
-- Composer 只读取 Session 快照并组装 system、history、tools 或压缩计划，不直接持久化消息
-- `RemoteAgent` 不支持本地 Session 类，因为它只是远程 runtime 的访问器
 
 ### Session Composer 的可定制范围
 
@@ -323,9 +286,9 @@ const workspace = new Workspace({
 
 | 方法 | 用途 |
 | --- | --- |
+| `initialize(input)` | 在当前 Session 的 `session.db` 初始化所选 Policy 派生表 |
 | `compose(input)` | 返回当前模型 Step 使用的 `system`、`messages` 和 `tools` |
-| `compact(input)` | 根据只读 Message 快照返回 `SessionCompactionPlan`，无需压缩时返回 `null` |
-| `should_compact(error)` | 判断模型错误是否需要在持久化压缩后重试 |
+| `recover_context(input)` | 在真实 usage 压力或 Provider 上下文超限后推进 Policy 派生状态 |
 
 `compose(input)` 可以：
 
@@ -333,6 +296,4 @@ const workspace = new Workspace({
 - 筛选、转换或注入本轮模型 messages
 - 调整当前 Step 可见的 tools
 
-Composer 不消费 Prompt Queue，不控制 Turn，也不写 Message、Metadata、Mutation 或 JSONL。User Message 会在调用 Composer 前由 Session 持久化，所以自定义 Composer 不需要把当前 query 再追加到 history。
-
-压缩也分为策略和提交两个阶段：Composer 只返回计划，Session 在 Assistant 草稿完成后提交 Segment。这样自定义策略不会绕过 Session 的消息一致性和恢复机制。
+Composer 不消费 Prompt Queue，不控制 Turn，也不修改 canonical Message。它内部的 Context Policy 只能写命名空间隔离、可重建的派生表。只有确实要替换 Session 行为时才使用 `session_class`。

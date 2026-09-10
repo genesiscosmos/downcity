@@ -69,7 +69,7 @@ test("invoke_plugin_call_tool preserves Action output and messages", async () =>
       message: "image generated",
       data: { job_id: "img_1" },
       messages: [{
-        role: "assistant",
+        role: "agent",
         parts: [
           {
             type: "file",
@@ -108,7 +108,7 @@ test("invoke_plugin_call_tool preserves Action output and messages", async () =>
     data: { job_id: "img_1" },
   });
   assert.deepEqual(result.messages, [{
-    role: "assistant",
+    role: "agent",
     parts: [{
       type: "file",
       media_type: "image/png",

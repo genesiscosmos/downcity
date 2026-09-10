@@ -47,11 +47,13 @@ function create_execution_input(model, turn_context) {
     content: [{ type: "text", text: "hello" }],
   }];
   return {
-    execute_input: { query: "hello", system: [], messages, tools: {} },
-    model,
     turn_context,
-    resolve_step_inputs: async () => ({ model, system: [], tools: {} }),
-    reload_history: async () => ({ messages }),
+    resolve_step_input: async () => ({
+      model,
+      system: [],
+      messages,
+      tools: {},
+    }),
   };
 }
 
@@ -90,11 +92,13 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
   }];
 
   const result = await runner.execute({
-    execute_input: { query: "hello", system: [], messages, tools: {} },
-    model,
     turn_context: create_turn_context(),
-    resolve_step_inputs: async () => ({ model, system: [], tools: {} }),
-    reload_history: async () => ({ messages }),
+    resolve_step_input: async () => ({
+      model,
+      system: [],
+      messages,
+      tools: {},
+    }),
   });
 
   assert.equal(result.success, false);
@@ -170,16 +174,9 @@ test("恢复策略捕获普通异常后只返回结构化错误", async () => {
     logger: { log: async () => {} },
     recover_context: async () => false,
   });
-  const turn_context = create_turn_context();
   const result = await policy.execute_with_retry({
-    query: "hello",
-    model: {},
-    turn_context,
-    prepare_execute_input: async () => {
+    execute_turn: async () => {
       throw new Error("configuration failed");
-    },
-    execute_prepared_input: async () => {
-      throw new Error("unexpected execution");
     },
   });
 

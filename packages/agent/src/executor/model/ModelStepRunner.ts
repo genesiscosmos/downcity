@@ -8,7 +8,6 @@
 import {
   type ModelCall,
   type ModelClient,
-  type ModelContent,
   type ModelFinishReason,
   type ModelJsonValue,
   type ModelMessage,
@@ -59,8 +58,6 @@ export interface ModelStepResult {
   tool_calls: ModelStepToolCall[];
   /** 当前 Step 的工具结果。 */
   tool_results: ModelStepToolResult[];
-  /** 用于后续模型 Step 的消息。 */
-  response: { messages: ModelMessage[] };
   /** 供诊断代码读取的内容事实。 */
   content: Array<Record<string, unknown>>;
 }
@@ -123,19 +120,6 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
     collected.assistant_parts,
     tool_results,
   );
-  const response_messages: ModelMessage[] = [collected.assistant_model_message];
-  if (tool_results.length > 0) {
-    response_messages.push({
-      role: "tool",
-      content: tool_results.map((result) => ({
-        type: "tool_result",
-        tool_call_id: result.tool_call_id,
-        tool_name: result.tool_name,
-        outcome: result.success ? "succeeded" : "failed",
-        content: [{ type: "json", value: to_model_json_value(result.output) }],
-      })),
-    });
-  }
   return {
     assistant_parts,
     step_result: {
@@ -144,7 +128,6 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
       ...(collected.usage ? { usage: collected.usage } : {}),
       tool_calls: collected.tool_calls,
       tool_results,
-      response: { messages: response_messages },
       content: collected.tool_calls.map((tool_call) => ({
         type: "tool-call",
         ...tool_call,
@@ -155,7 +138,6 @@ export async function run_model_step(input: RunModelStepInput): Promise<{
 
 /** 模型事件聚合器。 */
 class StepEventCollector {
-  private readonly model_content: ModelContent[] = [];
   private readonly assistant_parts: SessionAgentMessagePart[] = [];
   private readonly text_by_id = new Map<string, string>();
   private readonly reasoning_by_id = new Map<string, string>();
@@ -183,7 +165,6 @@ class StepEventCollector {
       this.text += event.delta;
     } else if (event.type === "text_finish") {
       const text = this.text_by_id.get(event.content_id) ?? "";
-      this.model_content.push({ type: "text", text });
       this.assistant_parts.push({
         part_id: `text:${event.content_id}`,
         sequence: this.assistant_parts.length + 1,
@@ -200,11 +181,6 @@ class StepEventCollector {
       );
     } else if (event.type === "reasoning_finish") {
       const text = this.reasoning_by_id.get(event.content_id) ?? "";
-      this.model_content.push({
-        type: "reasoning",
-        text,
-        ...(event.signature ? { signature: event.signature } : {}),
-      });
       this.assistant_parts.push({
         part_id: `reasoning:${event.content_id}`,
         sequence: this.assistant_parts.length + 1,
@@ -224,12 +200,6 @@ class StepEventCollector {
       if (tool) {
         tool.input = event.input;
         if (event.input_error) tool.input_error = event.input_error;
-        this.model_content.push({
-          type: "tool_call",
-          tool_call_id: tool.tool_call_id,
-          tool_name: tool.tool_name,
-          input: tool.input,
-        });
         this.assistant_parts.push({
           part_id: `tool:${tool.tool_call_id}`,
           sequence: this.assistant_parts.length + 1,
@@ -250,7 +220,6 @@ class StepEventCollector {
   /** 返回完整 Step 聚合结果。 */
   finish(): {
     assistant_parts: SessionAgentMessagePart[];
-    assistant_model_message: ModelMessage;
     finish_reason: ModelFinishReason;
     usage?: ModelUsage;
     text: string;
@@ -259,7 +228,6 @@ class StepEventCollector {
     if (!this.finish_reason) throw new Error("Model stream ended without model_finish");
     return {
       assistant_parts: this.assistant_parts,
-      assistant_model_message: { role: "assistant", content: this.model_content },
       finish_reason: this.finish_reason,
       ...(this.usage ? { usage: this.usage } : {}),
       text: this.text,

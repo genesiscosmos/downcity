@@ -1,27 +1,21 @@
 ---
 title: Message 与 Part
-description: 读取 Active 与 Segment 历史，理解 Message、Part 和 sequence
+description: 理解 canonical Message、Part、分页与流式 Mutation
 ---
 
 # Message 与 Part
 
-`session.messages()` 返回当前 Active 的全部持久化 Message，不需要 `limit`。实时变化由 `subscribe()` 补充。
+`session.messages()` 按 Message 边界分页读取 SQLite 中的稳定快照。实时变化由 `subscribe()` 补充。
 
 ```ts
-const page = await session.messages();
-
-for (const message of page.items) {
-  render_message(message);
-}
+const page = await session.messages({ limit: 50 });
+for (const message of page.items) render_message(message);
 ```
-
-返回结果为：
 
 ```ts
 interface SessionMessagePage {
   items: SessionMessage[];
   total: number;
-  source: "active" | "segment";
   start_sequence?: number;
   end_sequence?: number;
   next_before_sequence?: number;
@@ -29,107 +23,97 @@ interface SessionMessagePage {
 }
 ```
 
-`total` 是 Session 已创建的真实 Message 总数，不是当前 `items.length`。`source` 说明本次结果来自当前 Active 还是一个已关闭 Segment。
+`total` 是 Session 已创建的真实 Message 总数，不是当前 `items.length`。`limit` 默认为 50，最大为 200。
 
 ## 两类顶层 Message
 
-| `type` | 表示什么 | 常见展示 |
+```ts
+type SessionMessage = SessionUserMessage | SessionAgentMessage;
+```
+
+| `role` | 表示什么 | 顶层状态 |
 | --- | --- | --- |
-| `user` | 用户输入或运行中 steering | 用户气泡、附件 |
-| `agent` | Agent 输出与内部运行记录 | 文本、推理、工具、动作、错误、文件 |
+| `user` | 用户输入或内部恢复提示 | 无状态字段，写入即完整 |
+| `agent` | Agent 输出与运行记录 | `state: "streaming" \| "done"` |
 
-Session 内只有一条按 `sequence` 排序的双主体 Message 序列。工具、动作与错误都属于 Agent Message 的 `parts`，因此 `text -> tool -> text` 会以真实生成顺序保存。
+User Message 不区分 prompt 和 steer。它属于新 Turn 还是当前 Turn，由 `turn_id` 和 SessionLoop 决定，不重复编码在消息内容中。
 
-普通 Tool Loop、Provider continuation 和恢复重试不会创建新的 Agent Message；它们继续向当前 Agent Message 追加有序 Part。只有新的 User Message（包括运行中 steer）真正进入消息序列时，才结束之前的 Agent Message，后续输出再创建下一条 Agent Message。模型 step 是执行期边界，不作为 Part 持久化。
+Agent Message 的 `state` 只回答“还能否继续追加 Part”。成功、停止与失败属于 Turn 结果；需要持久化的停止或失败原因使用 `error` Part 表达。
 
-`SessionMessage` 是持久化与 UI 时间线的唯一事实源。Executor 直接消费 Downcity `ModelStreamEvent`，把文本、推理和工具事件更新到 canonical Agent Message，同时由 `SessionMutation` 发布实时变化；中间不存在 UI Message 或 chunk 协议。`action` 和 `error` 是 Agent Part，不会送入模型。
-
-Turn 在产生任何 Agent 内容前失败时，只写入一条包含 `error` Part 的 Agent Message。若失败前已经产生部分内容，该 Agent Message 会以 `status: "failed"` 保留，随后再写入包含结构化 `error` Part 的 Agent Message。
+Session 内只有一条按 `sequence` 排序的双主体消息序列。Tool、Interaction、Action 和 Error 都是 Agent Message 的 Part，不是独立 Message。普通 Tool Loop 的多个模型 Step 可以继续写入同一 Agent Message；每个模型产生的 Part 用 `step_id` 记录来源。
 
 ## User Part
 
 | `type` | 关键字段 | 说明 |
 | --- | --- | --- |
-| `text` | `text`, `state` | 用户可见正文；canonical 状态固定为 `done` |
-| `context` | `tag`, `context` | 带语义标签的模型上下文；canonical Message 保存原始结构 |
+| `text` | `text` | 用户正文 |
+| `context` | `tag`, `context` | 带语义标签的模型上下文 |
 | `file` | `url`, `media_type`, `filename` | 用户提交的文件 |
-| `data` | `data_type`, `data`, `data_id` | 可持久化的结构化 UI 数据，不会自动发送给模型 |
+| `data` | `data_type`, `data`, `data_id` | 仅供宿主/UI 使用，不发送给模型 |
 
-`context` 用于向模型传入不应混入普通用户正文的补充语义。Session 不会提前保存拼接后的标签文本；进入模型上下文时才把它安全转换为 Text Content：
+User Part 没有流式状态。`context` 进入模型上下文时才安全转换成带标签文本：
 
 ```ts
 // canonical User Part
-{ part_id: "user-context:1", type: "context", tag: "reference", context: "此前消息" }
+{ part_id: "user-context:1", sequence: 1, type: "context", tag: "reference", context: "此前消息" }
 
-// 对应的 Model Content
+// Model Content
 { type: "text", text: "<reference>此前消息</reference>" }
 ```
 
-`tag` 必须以小写字母开头，且只能包含小写字母、数字、下划线和连字符。`context` 中的 XML 结构字符会在模型映射边界转义，避免正文提前闭合或注入标签。通用预览、标题和用户气泡只把 `text` 当作普通用户正文；调用方通常应同时提供一个 `text` Part。
+`visibility: "internal"` 使用同一个 User Message 格式。恢复提示等仅供下一 Step 使用的输入也会先持久化，再由 Composer 从 canonical history 读取；运行时没有另一套临时输入结构。
 
 ## Agent Part
 
 | `type` | 关键字段 | 说明 |
 | --- | --- | --- |
 | `text` | `text`, `state` | 用户可见输出，`streaming -> done` |
-| `reasoning` | `text`, `state` | 推理输出，是否展示由产品决定 |
-| `tool` | `tool_call_id`, `tool_name`, `state`, `input`, `output` | 工具输入、等待、运行和结果 |
-| `interaction` | `interaction_id`, `interaction_type`, `status`, `request`, `response` | 审批、问题等用户异步交互 |
-| `file` | `url`, `media_type`, `filename` | Assistant 生成或引用的文件 |
-| `data` | `data_type`, `data`, `data_id` | 可持久化的结构化 UI 数据 |
-| `action` | `action_id`, `action_type`, `state`, `title` | 模型切换、压缩等运行时操作 |
-| `error` | `scope`, `code`, `message`, `recoverable` | Session 或 Turn 的结构化错误 |
+| `reasoning` | `text`, `state` | 推理输出 |
+| `tool` | `tool_call_id`, `tool_name`, `state`, `input`, `output` | 工具完整生命周期 |
+| `interaction` | `interaction_id`, `status`, `request`, `response` | 审批、提问等异步交互 |
+| `file` | `url`, `media_type`, `filename` | Agent 文件结果 |
+| `data` | `data_type`, `data`, `data_id` | 结构化 UI 数据 |
+| `action` | `action_id`, `action_type`, `state`, `title` | Session 操作状态 |
+| `error` | `scope`, `code`, `message`, `recoverable` | Session 或 Turn 错误 |
 
-每个 Assistant Part 有稳定的 `part_id` 和创建后不可变的 `sequence`。模型流事件按到达顺序直接创建或更新 canonical Part；step 最终快照只校验数量、类型与顺序，不会创建、删除或重排 Part。工具状态变化更新同一个 Part，不应在 UI 中创建“请求”和“结果”两个重复行。相同 `data_id` 的 Action 结果会更新对应 Data Part 并保留顺序。
+每个 Part 有稳定 `part_id` 和不可变 `sequence`。Tool 状态变化更新同一个 Part，不创建“请求”和“结果”两条重复消息。Tool 与关联 Interaction 的状态在一个检查点事务中提交。
 
-Tool 状态不保存审批副本。用户参与使用独立 Interaction Part：
+## 流式与持久化边界
 
-```ts
-interface SessionAgentInteractionPart {
-  interaction_id: string;
-  interaction_type: "approval" | "question";
-  status: "pending" | "resolved" | "expired" | "cancelled";
-  request: SessionInteractionRequest;
-  response?: SessionInteractionResponse;
-}
+```text
+事件负责实时展示
+内存负责流式组装
+数据库只保存稳定语义检查点
 ```
 
-关联 Tool 使用 `ready -> waiting-user -> running -> completed`，拒绝、超时或取消进入
-`failed`。Tool 与 Interaction 在同一 Assistant revision 中提交；同一 revision 出现两条
-Part Mutation 表示一次原子快照中的两个变更，不是两个独立事务。
+模型 stream 的 start、delta 和 finish 先更新当前 Agent Message 的内存投影，并发布 `part` / `delta` Mutation；普通 chunk 不写 SQLite。一个模型 Step 完成时，SDK 校验 Part identity，并用一次事务提交完整 Step 快照。
 
-## 顺序、版本与可见性
+Tool 执行前后、Interaction 状态变化、Action/Error 和 Message 收口属于不可丢失的语义检查点，可以独立提交。数据库提交后的完整 `message` Mutation 会替换流式投影。
 
-每条 Message 都有稳定 `message_id`、创建后不变的 `sequence`，以及随完整快照更新递增的 `revision`。客户端不能用较低 revision 覆盖较高 revision。
+## 顺序、版本与重连
 
-SDK 在每个模型 step 完成时校验事件聚合结果与 canonical Assistant Message 的 Part 数量、类型和顺序。只有 start/finish、没有 delta 的空 Text 或 Reasoning Part 会在对账前忽略，不进入 canonical history。其余最终快照不一致或 canonical Part 写入失败都会使 Turn 失败，不会通过正文内容猜测 identity，也不会发布历史不完整的 completed Turn。客户端收到更高 revision 的完整 `message` Mutation 时，应替换整条 Message，而不是保留旧 revision 的 parts 数组。
+每条 Message 有稳定 `message_id`、不可变 `sequence` 和递增的 `revision`。客户端应：
 
-默认 `messages()` 只返回 `visibility: "visible"` 的 Message。调试或审计时可传 `include_internal: true`。Compact Summary 不是 Message，不占用 sequence，也不会出现在 `messages()` 结果中。
+1. 先订阅并缓冲 Mutation，再读取初始快照。
+2. 对完整 `message` 快照按 `message_id + revision` 合并。
+3. 在流连续时应用 `part` 与 `delta`。
+4. 断线后重新读取快照，不假定 Delta 可以重放。
+
+未完成 Step 的内存投影在进程中断后可能丢弃；Session 会把遗留的 streaming Agent Message 收口为 `done` 并追加 Error Part。因此 SQLite 快照始终是重连后的权威事实。
 
 ## 加载更早历史
 
-第一次调用不传参数，得到 Active 全量。若 `has_more` 为 `true`，把 `next_before_sequence` 原样传回，会得到紧邻的前一个完整 Segment：
-
 ```ts
-let page = await session.messages();
-render_messages(page.items);
-
+let page = await session.messages({ limit: 50 });
 while (page.has_more && page.next_before_sequence !== undefined) {
   page = await session.messages({
     before_sequence: page.next_before_sequence,
+    limit: 50,
   });
   prepend_messages(page.items);
 }
 ```
 
-`before_sequence` 必须是正整数。每次历史读取返回一个完整 Segment，不支持 `limit`、`cursor`、offset 或 Segment 内切片。这样 UI 边界与物理 Compact 边界一致，也不会重复读取累计 Summary。
-
-## 与实时 Mutation 配合
-
-1. 用 `messages()` 建立 Active 初始状态。
-2. 用 `message` / `part` Mutation 替换对应快照。
-3. 用 `delta` 追加当前文本 Part 的新文本或 Tool Part 的输入原文。
-4. 向上滚动时按 `next_before_sequence` 逐个加载 Segment。
-5. 断线后重新读取 Active，并按 `message_id + revision` 合并。
+默认只返回 `visibility: "visible"` 的 Message；调试或审计时传入 `include_internal: true`。摘要属于 Composer Policy 的派生数据，不占 Message sequence，也不会出现在 `messages()` 中。
 
 完整同步算法见 [重连与同步](/zh/agent-sdk-docs/sessions/reconnect-and-sync)，存储细节见 [元数据与落盘](/zh/agent-sdk-docs/sessions/metadata-and-storage)。

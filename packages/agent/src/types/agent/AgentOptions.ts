@@ -11,6 +11,7 @@ import type {
   AgentManagedSession,
   SessionOptions,
 } from "@/types/session/SessionOptions.js";
+import type { SessionComposer } from "@/types/session/SessionComposer.js";
 
 /**
  * Agent 可使用的 Session 类。
@@ -87,5 +88,15 @@ export interface AgentOptions {
    * - 该能力仅适用于本地 `Agent`。
    */
   session_class?: AgentSessionConstructor;
+
+  /**
+   * 为每个 Session 创建独立 Composer 的工厂。
+   *
+   * 关键点（中文）
+   * - 每次创建、恢复或 fork Session 都会调用一次，禁止返回共享实例。
+   * - 省略时创建默认 `DefaultSessionComposer`。
+   * - Context Policy 应在工厂内部随 Composer 一起创建，避免跨 Session 共享派生状态。
+   */
+  session_composer?: () => SessionComposer;
 
 }

@@ -862,7 +862,7 @@ export class AgentController {
     if (!message_id) throw new Error("message_id is required");
     if (input.action !== "fork" && input.action !== "replace") throw new Error("不支持的历史消息重写方式");
     const target_message = await this.find_session_message(source, message_id);
-    if (target_message?.type !== "user" || target_message.visibility !== "visible") {
+    if (target_message?.role !== "user" || target_message.visibility !== "visible") {
       throw new Error("只能重写当前 Session 中可见的用户消息");
     }
     const allowed_attachment_urls = new Set(target_message.parts.flatMap((part) => part.type === "file" ? [part.url] : []));
@@ -1125,12 +1125,6 @@ export class AgentController {
     if (this.rewriting_session_keys.has(get_session_key(agent_id, workspace_id, session_id))) {
       throw new Error("Session 正在重写历史消息，请稍后再试");
     }
-  }
-
-  /** 将显式压缩命令加入 Session 的有序执行队列。 */
-  async compact_session(agent_id: string, workspace_id: string, session_id: string): Promise<void> {
-    const session = await this.get_execution_session(agent_id, workspace_id, session_id);
-    await session.compact();
   }
 
   /** 停止当前 Session Turn。 */

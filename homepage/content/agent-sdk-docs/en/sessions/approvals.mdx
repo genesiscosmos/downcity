@@ -21,13 +21,13 @@ close:   Interaction expired / cancelled + Tool failed
 
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
-  if (
-    mutation.variant !== "part" ||
-    mutation.type !== "interaction" ||
-    mutation.part.status !== "pending"
-  ) return;
+  if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+  const interaction = mutation.message.parts.find(
+    (part) => part.type === "interaction" && part.status === "pending",
+  );
+  if (!interaction) return;
 
-  render_interaction(mutation.part);
+  render_interaction(interaction);
 });
 
 await session.respond({

@@ -1,27 +1,21 @@
 ---
 title: Messages and Parts
-description: Read Active and Segment history and understand Messages, Parts, and sequence
+description: Understand canonical Messages, Parts, pagination, and live Mutations
 ---
 
 # Messages and Parts
 
-`session.messages()` returns every persisted Message in the current Active set. It does not take a `limit`; `subscribe()` complements the snapshot with live changes.
+`session.messages()` reads stable SQLite snapshots, paginated on Message boundaries. Use `subscribe()` for live changes.
 
 ```ts
-const page = await session.messages();
-
-for (const message of page.items) {
-  render_message(message);
-}
+const page = await session.messages({ limit: 50 });
+for (const message of page.items) render_message(message);
 ```
-
-It returns:
 
 ```ts
 interface SessionMessagePage {
   items: SessionMessage[];
   total: number;
-  source: "active" | "segment";
   start_sequence?: number;
   end_sequence?: number;
   next_before_sequence?: number;
@@ -29,109 +23,97 @@ interface SessionMessagePage {
 }
 ```
 
-`total` is the total number of real Messages created by the Session, not `items.length`. `source` identifies whether the result came from Active or one closed Segment.
+`total` is the number of real Messages in the Session, not `items.length`. `limit` defaults to 50 and is capped at 200.
 
 ## Two top-level Message types
 
-| `type` | Meaning | Typical presentation |
+```ts
+type SessionMessage = SessionUserMessage | SessionAgentMessage;
+```
+
+| `role` | Meaning | Top-level state |
 | --- | --- | --- |
-| `user` | User input or in-flight steering | User bubble and attachments |
-| `agent` | Agent output and internal runtime records | Text, reasoning, tools, actions, errors, files |
+| `user` | User input or an internal recovery instruction | No state field; complete when written |
+| `agent` | Agent output and runtime records | `state: "streaming" \| "done"` |
 
-A Session has one two-party Message sequence ordered by `sequence`. Tools, actions, and errors live in an Agent Message's `parts`, so `text -> tool -> text` is persisted in its real generation order.
+A User Message does not distinguish prompt from steer. Whether it starts a Turn or joins the current Turn is represented by `turn_id` and decided by SessionLoop, not duplicated in message content.
 
-An ordinary Tool Loop, Provider continuation, or recovery retry does not create another Agent Message. It appends ordered Parts to the current Agent Message. Only a new User Message—including an in-flight steer—closes the preceding Agent Message, after which later output creates the next Agent Message. A model step is an execution boundary and is not persisted as a Part.
+An Agent Message's `state` only answers whether Parts can still be appended. Success, stop, and failure belong to the Turn result. Persisted stop and failure reasons use an `error` Part.
 
-`SessionMessage` is the single source of truth for persistence and the UI timeline. The Executor consumes Downcity `ModelStreamEvent` values directly, updates the canonical Agent Message, and publishes live changes through `SessionMutation`; there is no intermediate UI Message or chunk protocol. `action` and `error` are Agent Parts and are never sent to the model.
-
-If a Turn fails before producing any Agent content, the Session writes an Agent Message containing an `error` Part. If partial content already exists, that Agent Message is retained with `status: "failed"`, followed by an Agent Message containing the structured `error` Part.
+A Session has one two-party Message sequence ordered by `sequence`. Tools, Interactions, Actions, and Errors are Agent Parts rather than independent Messages. Multiple model Steps in an ordinary Tool Loop may append to the same Agent Message; model-produced Parts carry their source `step_id`.
 
 ## User Parts
 
 | `type` | Key fields | Meaning |
 | --- | --- | --- |
-| `text` | `text`, `state` | User-visible body; canonical state is always `done` |
-| `context` | `tag`, `context` | Semantically tagged model context; the canonical Message retains the raw structure |
-| `file` | `url`, `media_type`, `filename` | A file submitted by the user |
-| `data` | `data_type`, `data`, `data_id` | Persisted structured UI data that is not sent to the model automatically |
+| `text` | `text` | User body |
+| `context` | `tag`, `context` | Semantically tagged model context |
+| `file` | `url`, `media_type`, `filename` | A user-submitted file |
+| `data` | `data_type`, `data`, `data_id` | Persisted host/UI data not sent to the model |
 
-Use `context` for supporting model context that should not be mixed into the ordinary user body. The Session does not persist pre-rendered markup. It converts the Part safely into Text Content only at the model boundary:
+User Parts have no streaming state. A `context` Part becomes safely tagged text only at the model boundary:
 
 ```ts
 // Canonical User Part
-{ part_id: "user-context:1", type: "context", tag: "reference", context: "Earlier message" }
+{ part_id: "user-context:1", sequence: 1, type: "context", tag: "reference", context: "Earlier message" }
 
-// Corresponding Model Content
+// Model Content
 { type: "text", text: "<reference>Earlier message</reference>" }
 ```
 
-`tag` must start with a lowercase letter and may contain only lowercase letters, numbers, underscores, and hyphens. XML structural characters in `context` are escaped at the model-mapping boundary so the body cannot close or inject a tag. Generic previews, titles, and user bubbles treat only `text` as the ordinary user body, so callers should normally provide a `text` Part as well.
+`visibility: "internal"` uses the same User Message shape. Recovery instructions that affect the next Step are persisted first and then read from canonical history by the Composer; there is no separate runtime-input protocol.
 
 ## Agent Parts
 
 | `type` | Key fields | Meaning |
 | --- | --- | --- |
 | `text` | `text`, `state` | Visible output, `streaming -> done` |
-| `reasoning` | `text`, `state` | Reasoning output; product decides whether to display it |
-| `tool` | `tool_call_id`, `tool_name`, `state`, `input`, `output` | Tool input, waiting, execution, and result |
-| `interaction` | `interaction_id`, `interaction_type`, `status`, `request`, `response` | Asynchronous user approval or questions |
-| `file` | `url`, `media_type`, `filename` | A file generated or referenced by the Assistant |
-| `data` | `data_type`, `data`, `data_id` | Persisted structured UI data |
-| `action` | `action_id`, `action_type`, `state`, `title` | Runtime activity such as a model change or compaction |
-| `error` | `scope`, `code`, `message`, `recoverable` | A structured Session or Turn error |
+| `reasoning` | `text`, `state` | Reasoning output |
+| `tool` | `tool_call_id`, `tool_name`, `state`, `input`, `output` | Complete Tool lifecycle |
+| `interaction` | `interaction_id`, `status`, `request`, `response` | Async approval or questions |
+| `file` | `url`, `media_type`, `filename` | Agent file result |
+| `data` | `data_type`, `data`, `data_id` | Structured UI data |
+| `action` | `action_id`, `action_type`, `state`, `title` | Session operation state |
+| `error` | `scope`, `code`, `message`, `recoverable` | Session or Turn error |
 
-Every Assistant Part has a stable `part_id` and a `sequence` that never changes after creation. Model stream events create or update canonical Parts in arrival order. The final step snapshot validates count, type, and order; it cannot create, remove, or reorder Parts. A tool state change updates the same Part, so a UI should not create separate request and result rows. Action results with the same `data_id` update the corresponding Data Part without changing its order.
+Every Part has a stable `part_id` and immutable `sequence`. A Tool state transition updates the same Part instead of creating duplicate request/result messages. A Tool and its related Interaction transition commit in one checkpoint transaction.
 
-Tool Parts do not carry a duplicate approval snapshot. User participation uses a separate
-Interaction Part:
+## Streaming and persistence boundary
 
-```ts
-interface SessionAgentInteractionPart {
-  interaction_id: string;
-  interaction_type: "approval" | "question";
-  status: "pending" | "resolved" | "expired" | "cancelled";
-  request: SessionInteractionRequest;
-  response?: SessionInteractionResponse;
-}
+```text
+Events drive live rendering
+Memory assembles the stream
+The database stores stable semantic checkpoints
 ```
 
-A related Tool follows `ready -> waiting-user -> running -> completed`; denial, expiry, or
-cancellation moves it to `failed`. The Tool and Interaction are committed in one Assistant
-revision. Two Part Mutations with the same revision are two changes from one atomic snapshot,
-not two independent transactions.
+Model stream start, delta, and finish events first update the current Agent Message's in-memory projection and publish `part` / `delta` Mutations. Ordinary chunks do not write SQLite. When a model Step completes, the SDK validates Part identity and commits the complete Step snapshot in one transaction.
 
-## Order, revision, and visibility
+Tool transitions, Interaction changes, Actions/Errors, and Message closure are durable semantic checkpoints and may commit independently. A committed `message` Mutation replaces the live projection with a complete snapshot.
 
-Every Message has a stable `message_id`, a creation-time `sequence` that never changes, and a `revision` that increases with each complete snapshot update. A client must not replace a greater revision with a lower one.
+## Ordering, revision, and reconnects
 
-At the end of each model step, the SDK validates the event collector result against the canonical Assistant Message by Part count, type, and order. An empty Text or Reasoning Part with start/finish but no delta is ignored before validation and is not added to canonical history. Any other final snapshot mismatch or canonical Part write failure fails the Turn. The SDK does not infer identity from text content and never publishes an incomplete completed history. When a client receives a complete `message` Mutation with a greater revision, it should replace the whole Message instead of retaining the older revision's Parts array.
+Every Message has a stable `message_id`, immutable `sequence`, and increasing `revision`. Clients should:
 
-`messages()` returns only `visibility: "visible"` Messages by default. Pass `include_internal: true` for debugging or audit. A Compact Summary is not a Message, consumes no sequence, and never appears in `messages()`.
+1. Subscribe and buffer Mutations before loading the initial snapshot.
+2. Merge complete `message` snapshots by `message_id + revision`.
+3. Apply `part` and `delta` only while the live stream is continuous.
+4. Reload snapshots after disconnect instead of assuming Deltas can be replayed.
+
+An interrupted, unfinished Step projection may be discarded. The Session closes the persisted streaming Agent Message as `done` and appends an Error Part, so SQLite is authoritative after reconnect.
 
 ## Loading older history
 
-Call the method with no arguments first to load all Active Messages. When `has_more` is `true`, pass `next_before_sequence` back unchanged to read the immediately preceding whole Segment:
-
 ```ts
-let page = await session.messages();
-render_messages(page.items);
-
+let page = await session.messages({ limit: 50 });
 while (page.has_more && page.next_before_sequence !== undefined) {
   page = await session.messages({
     before_sequence: page.next_before_sequence,
+    limit: 50,
   });
   prepend_messages(page.items);
 }
 ```
 
-`before_sequence` must be a positive integer. Each historical read returns one complete Segment. There is no `limit`, cursor, offset, or slicing within a Segment. This keeps UI boundaries aligned with physical Compact boundaries and avoids reading cumulative Summaries as Messages.
-
-## Combining snapshots with live Mutations
-
-1. Use `messages()` to establish the Active state.
-2. Replace the targeted snapshot for a `message` or `part` Mutation.
-3. Append new text or raw Tool input for a `delta` Mutation.
-4. Load older Segments one at a time with `next_before_sequence`.
-5. On disconnect, reload Active and merge by `message_id + revision`.
+By default, only `visibility: "visible"` Messages are returned. Pass `include_internal: true` for debugging or audit. Composer Policy summaries are derived data: they consume no Message sequence and never appear in `messages()`.
 
 See [Reconnect and sync](/en/agent-sdk-docs/sessions/reconnect-and-sync) for synchronization and [Metadata and storage](/en/agent-sdk-docs/sessions/metadata-and-storage) for persistence details.

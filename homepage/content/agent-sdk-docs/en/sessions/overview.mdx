@@ -40,13 +40,11 @@ render_messages(initial_page.items);
 const unsubscribe = session.subscribe((mutation) => {
   apply_mutation_to_ui(mutation);
 
-  if (
-    mutation.variant === "part" &&
-    mutation.type === "interaction" &&
-    mutation.part.status === "pending"
-  ) {
-    render_interaction(mutation.part);
-  }
+  if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+  const interaction = mutation.message.parts.find(
+    (part) => part.type === "interaction" && part.status === "pending",
+  );
+  if (interaction) render_interaction(interaction);
 });
 
 const turn = await session.prompt({ query: "Analyze this repository's Session design" });
@@ -58,7 +56,7 @@ unsubscribe();
 
 `apply_mutation_to_ui()` should merge snapshots by `message_id + revision` and append each `delta` only to its matching text or Tool input. See [Live subscriptions](/en/agent-sdk-docs/sessions/subscribe) and [Reconnect and sync](/en/agent-sdk-docs/sessions/reconnect-and-sync).
 
-On failure, an Error Part in the canonical failed Agent Message carries the user-visible error. Use `turn.finished.error` for control flow, logging, or interfaces that do not render Messages; a chat UI that already renders Session Messages must not append it as a second error.
+On failure, an Error Part in the closed canonical Agent Message carries the user-visible error. Use `turn.finished.error` for control flow, logging, or interfaces that do not render Messages; a chat UI that already renders Session Messages must not append it as a second error.
 
 ## The objects inside a Session
 

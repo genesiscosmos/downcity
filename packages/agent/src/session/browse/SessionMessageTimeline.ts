@@ -85,53 +85,76 @@ export function to_session_message_timeline_events(
   message: SessionMessage,
 ): AgentSessionTimelineEvent[] {
   if (message.role === "user") {
-    const text = message.parts
-      .filter((part) => part.type === "text")
-      .map((part) => part.text.trim())
-      .filter(Boolean)
-      .join("\n");
+    const text_parts: string[] = [];
+    for (const part of message.parts) {
+      switch (part.type) {
+        case "text":
+          if (part.text.trim()) text_parts.push(part.text.trim());
+          break;
+        case "context":
+        case "file":
+        case "data":
+          break;
+        default:
+          assert_never(part);
+      }
+    }
+    const text = text_parts.join("\n");
     return [create_timeline_event({ message, role: "user", text, index: 0 })];
   }
 
   const events: AgentSessionTimelineEvent[] = [];
   for (const part of [...message.parts].sort((left, right) => left.sequence - right.sequence)) {
-    if (part.type === "text") {
-      const text = part.text.trim();
-      if (text) {
+    switch (part.type) {
+      case "text": {
+        const text = part.text.trim();
+        if (text) {
+          events.push(create_timeline_event({
+            message,
+            role: "agent",
+            text,
+            index: events.length,
+          }));
+        }
+        break;
+      }
+      case "action":
+        events.push({
+          id: `${message.message_id}:${events.length}`,
+          role: "action",
+          ts: message.updated_at,
+          text: part.description
+            ? `${part.title}\n${part.description}`
+            : part.title,
+          action_title: part.title,
+          ...(part.description ? { action_description: part.description } : {}),
+          action_state: part.state,
+        });
+        break;
+      case "error":
         events.push(create_timeline_event({
           message,
           role: "agent",
-          text,
+          text: part.message,
           index: events.length,
         }));
-      }
-      continue;
+        break;
+      case "tool":
+        events.push(...project_tool_part(message, part, events.length));
+        break;
+      case "reasoning":
+      case "interaction":
+      case "file":
+      case "data":
+        break;
+      default:
+        assert_never(part);
     }
-    if (part.type === "action") {
-      events.push({
-        id: `${message.message_id}:${events.length}`,
-        role: "action",
-        ts: message.updated_at,
-        text: part.description
-          ? `${part.title}\n${part.description}`
-          : part.title,
-        action_title: part.title,
-        ...(part.description ? { action_description: part.description } : {}),
-        action_state: part.state,
-      });
-      continue;
-    }
-    if (part.type === "error") {
-      events.push(create_timeline_event({
-        message,
-        role: "agent",
-        text: part.message,
-        index: events.length,
-      }));
-      continue;
-    }
-    if (part.type !== "tool") continue;
-    events.push(...project_tool_part(message, part, events.length));
   }
   return events;
+}
+
+/** canonical Part 联合类型新增成员时强制时间线显式处理。 */
+function assert_never(value: never): never {
+  throw new Error(`Unsupported timeline Session Part: ${String((value as { type?: unknown }).type)}`);
 }

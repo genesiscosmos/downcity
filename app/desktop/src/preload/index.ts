@@ -63,7 +63,6 @@ const desktop_api: DesktopApi = {
     get_snapshot: (...args) => ipcRenderer.invoke("chat:get-snapshot", ...args),
     get_history: (...args) => ipcRenderer.invoke("chat:get-history", ...args),
     send: (...args) => ipcRenderer.invoke("chat:send", ...args),
-    compact_session: (...args) => ipcRenderer.invoke("chat:compact-session", ...args),
     stop: (...args) => ipcRenderer.invoke("chat:stop", ...args),
     respond: (...args) => ipcRenderer.invoke("chat:respond", ...args),
     get_runtime: (...args) => ipcRenderer.invoke("chat:get-runtime", ...args),

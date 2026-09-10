@@ -54,8 +54,8 @@ export function session_message_to_chat_message(record: Record<string, unknown>)
     content: error_message,
     parts,
     created_at: typeof record.created_at === "number" || typeof record.created_at === "string" ? record.created_at : undefined,
-    is_streaming: record.status === "streaming",
-    metadata: { official_message_id: message_id, presentation_status: typeof record.status === "string" ? record.status : undefined, error: error_message, sequence: typeof record.sequence === "number" ? record.sequence : undefined, revision: typeof record.revision === "number" ? record.revision : undefined, turn_id: to_string(record.turn_id), visibility: to_string(record.visibility), session_type: record_role },
+    is_streaming: record.state === "streaming",
+    metadata: { official_message_id: message_id, presentation_status: typeof record.state === "string" ? record.state : undefined, error: error_message, sequence: typeof record.sequence === "number" ? record.sequence : undefined, revision: typeof record.revision === "number" ? record.revision : undefined, turn_id: to_string(record.turn_id), visibility: to_string(record.visibility), session_type: record_role },
   };
 }
 

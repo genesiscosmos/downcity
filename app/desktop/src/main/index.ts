@@ -191,7 +191,6 @@ ipcMain.handle("chat:list-archived-sessions", (_event, agent_id: string, workspa
 ipcMain.handle("chat:get-snapshot", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_chat_snapshot(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:get-history", (_event, agent_id: string, workspace_id: string, session_id: string, before_sequence: number) => require_agent_controller().get_chat_history(agent_id, workspace_id, session_id, before_sequence));
 ipcMain.handle("chat:send", (_event, agent_id: string, workspace_id: string, session_id: string, input: JSONContent) => require_agent_controller().send_message(agent_id, workspace_id, session_id, input));
-ipcMain.handle("chat:compact-session", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().compact_session(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:stop", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().stop_session(agent_id, workspace_id, session_id));
 ipcMain.handle("chat:respond", (_event, agent_id: string, workspace_id: string, session_id: string, input: RespondSessionInteractionInput) => require_agent_controller().respond_interaction(agent_id, workspace_id, session_id, input));
 ipcMain.handle("chat:get-runtime", (_event, agent_id: string, workspace_id: string, session_id: string) => require_agent_controller().get_runtime(agent_id, workspace_id, session_id));

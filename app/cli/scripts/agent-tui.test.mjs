@@ -48,7 +48,7 @@ function create_agent_message(overrides = {}) {
     created_at: 1,
     updated_at: 1,
     role: "agent",
-    status: "streaming",
+    state: "streaming",
     parts: [],
     ...overrides,
   };
@@ -262,7 +262,7 @@ test("角色消息和 Assistant 内 Tool Call 保持稳定层级且不超过可�
     session_id: "session-component",
     turn_id: "turn-component",
     sequence: 1,
-    status: "streaming",
+    state: "streaming",
     revision: 1,
     visibility: "visible",
     created_at: 1,
@@ -331,12 +331,11 @@ test("canonical Assistant Message 的完整快照直接驱动 working 与终态"
       created_at: 1,
       updated_at: 1,
       role: "user",
-      input_type: "prompt",
       parts: [{
         part_id: "user-text",
+        sequence: 1,
         type: "text",
         text: "Inspect the project",
-        state: "done",
       }],
     },
   });
@@ -355,7 +354,7 @@ test("canonical Assistant Message 的完整快照直接驱动 working 与终态"
     ...streaming_message,
     revision: 2,
     updated_at: 2,
-    status: "completed",
+    state: "done",
   }, "assistant-completed"));
   streaming_ui.set_executing(false);
   assert.doesNotMatch(plain(message_list.render(80)).join("\n"), /working/);
@@ -371,7 +370,7 @@ test("历史 Tool Call 保留 canonical Assistant 所有权且不展示 output",
     visibility: "visible",
     created_at: 1,
     updated_at: 2,
-    status: "completed",
+    state: "done",
     parts: [{
       part_id: "tool:history-read",
       sequence: 1,
@@ -406,12 +405,11 @@ test("Text → Tool → Text 保持一个 Assistant 容器和 canonical Part 顺
     created_at: 1,
     updated_at: 1,
     role: "user",
-    input_type: "prompt",
     parts: [{
       part_id: "user-text",
+      sequence: 1,
       type: "text",
       text: "Inspect the build",
-      state: "done",
     }],
   }, create_agent_message({
     message_id: "assistant-order",
@@ -422,7 +420,7 @@ test("Text → Tool → Text 保持一个 Assistant 容器和 canonical Part 顺
     visibility: "visible",
     created_at: 2,
     updated_at: 4,
-    status: "completed",
+    state: "done",
     parts: [{
       part_id: "text-before",
       sequence: 1,

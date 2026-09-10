@@ -5,7 +5,11 @@
  */
 
 import type {
+  JsonObject,
+  JsonValue,
   SessionAgentMessagePart,
+  SessionInteractionRequest,
+  SessionInteractionResponse,
   SessionMessage,
   SessionUserMessagePart,
 } from "@downcity/type";
@@ -22,10 +26,8 @@ export interface SessionMessageRow {
   revision: number;
   /** Message 主体角色。 */
   role: "user" | "agent";
-  /** User 输入类别。 */
-  input_type: "prompt" | "steer" | null;
-  /** Agent Message 生命周期状态。 */
-  status: "streaming" | "completed" | "stopped" | "failed";
+  /** Agent Message 写入状态；User Message 固定为空。 */
+  state: "streaming" | "done" | null;
   /** 默认展示范围。 */
   visibility: "visible" | "internal";
   /** Fork 来源 Session。 */
@@ -68,8 +70,7 @@ export function encode_session_message_row(message: SessionMessage): SessionMess
     sequence: message.sequence,
     revision: message.revision,
     role: message.role,
-    input_type: message.role === "user" ? message.input_type : null,
-    status: message.role === "agent" ? message.status : "completed",
+    state: message.role === "agent" ? message.state : null,
     visibility: message.visibility,
     origin_session_id: message.origin?.session_id ?? null,
     origin_message_id: message.origin?.message_id ?? null,
@@ -115,7 +116,7 @@ export function decode_session_message(
       }
     : undefined;
   const parts = part_rows
-    .map((part_row) => decode_session_part(part_row))
+    .map((part_row) => decode_session_part(part_row, row.role))
     .sort((left, right) => left.sequence - right.sequence);
   const base = {
     message_id: row.message_id,
@@ -129,31 +130,336 @@ export function decode_session_message(
     ...(origin ? { origin } : {}),
   };
   if (row.role === "user") {
+    const user_parts = parts.filter(is_session_user_part);
+    if (row.state !== null || user_parts.length !== parts.length) {
+      throw new Error(`Invalid persisted User Message: ${row.message_id}`);
+    }
     return {
       ...base,
       role: "user",
-      input_type: row.input_type || "prompt",
-      parts: parts as SessionUserMessagePart[],
+      parts: user_parts,
     };
+  }
+  const agent_parts = parts.filter(is_session_agent_part);
+  if (!row.state || agent_parts.length !== parts.length) {
+    throw new Error(`Invalid persisted Agent Message: ${row.message_id}`);
   }
   return {
     ...base,
     role: "agent",
-    status: row.status,
-    parts: parts as SessionAgentMessagePart[],
+    state: row.state,
+    parts: agent_parts,
   };
 }
 
 /** 解码单个 Part 的类型专属 content。 */
 function decode_session_part(
   row: SessionMessagePartRow,
+  role: SessionMessageRow["role"],
 ): SessionUserMessagePart | SessionAgentMessagePart {
-  const content = JSON.parse(row.content) as Record<string, unknown>;
-  return {
+  const content = parse_part_content(row);
+  const identity = {
     part_id: row.part_id,
     sequence: row.sequence,
     ...(row.step_id ? { step_id: row.step_id } : {}),
-    type: row.type,
-    ...content,
-  } as SessionUserMessagePart | SessionAgentMessagePart;
+  };
+  switch (row.type) {
+    case "text":
+      if (role === "user") {
+        if (row.step_id) throw invalid_part(row, "User text cannot have step_id");
+        if (content.state !== undefined) {
+          throw invalid_part(row, "User text cannot have streaming state");
+        }
+        return {
+          part_id: row.part_id,
+          sequence: row.sequence,
+          type: "text",
+          text: read_string(content, "text", row),
+        };
+      }
+      return {
+        ...identity,
+        type: "text",
+        text: read_string(content, "text", row),
+        state: read_enum(content, "state", ["streaming", "done"], row),
+      };
+    case "context":
+      if (row.step_id) throw invalid_part(row, "User context cannot have step_id");
+      return {
+        part_id: row.part_id,
+        sequence: row.sequence,
+        type: "context",
+        tag: read_string(content, "tag", row),
+        context: read_string(content, "context", row),
+      };
+    case "reasoning":
+      return {
+        ...identity,
+        type: "reasoning",
+        text: read_string(content, "text", row),
+        state: read_enum(content, "state", ["streaming", "done"], row),
+        ...optional_string(content, "reasoning_signature", row),
+      };
+    case "tool":
+      return {
+        ...identity,
+        type: "tool",
+        tool_call_id: read_string(content, "tool_call_id", row),
+        tool_name: read_string(content, "tool_name", row),
+        state: read_enum(
+          content,
+          "state",
+          ["input-streaming", "ready", "waiting-user", "running", "completed", "failed"],
+          row,
+        ),
+        ...optional_string(content, "input_text", row),
+        ...optional_json(content, "input"),
+        ...optional_json(content, "output"),
+        ...optional_string(content, "error", row),
+        ...optional_string(content, "title", row),
+      };
+    case "interaction":
+      return {
+        ...identity,
+        type: "interaction",
+        interaction_id: read_string(content, "interaction_id", row),
+        interaction_type: read_string(content, "interaction_type", row),
+        status: read_enum(
+          content,
+          "status",
+          ["pending", "resolved", "denied", "expired", "cancelled", "failed"],
+          row,
+        ),
+        request: decode_interaction_request(content.request, row),
+        ...(content.response === undefined
+          ? {}
+          : { response: decode_interaction_response(content.response, row) }),
+        ...optional_number(content, "resolved_at", row),
+        ...(content.cancel_reason === undefined
+          ? {}
+          : {
+              cancel_reason: read_enum(
+                content,
+                "cancel_reason",
+                ["turn_stopped", "session_disposed", "runtime_interrupted"],
+                row,
+              ),
+            }),
+      };
+    case "file":
+      return {
+        ...identity,
+        type: "file",
+        media_type: read_string(content, "media_type", row),
+        url: read_string(content, "url", row),
+        ...optional_string(content, "filename", row),
+      };
+    case "data":
+      return {
+        ...identity,
+        type: "data",
+        data_type: read_string(content, "data_type", row),
+        data: read_json(content, "data", row),
+        ...optional_string(content, "data_id", row),
+      };
+    case "action":
+      return {
+        ...identity,
+        type: "action",
+        action_id: read_string(content, "action_id", row),
+        action_type: read_string(content, "action_type", row),
+        state: read_enum(content, "state", ["running", "completed", "failed"], row),
+        title: read_string(content, "title", row),
+        ...optional_string(content, "description", row),
+        ...(content.data === undefined
+          ? {}
+          : { data: read_json_object(content, "data", row) }),
+      };
+    case "error":
+      return {
+        ...identity,
+        type: "error",
+        scope: read_enum(content, "scope", ["session", "turn"], row),
+        code: read_string(content, "code", row),
+        message: read_string(content, "message", row),
+        recoverable: read_boolean(content, "recoverable", row),
+      };
+    default:
+      return assert_never(row.type);
+  }
+}
+
+/** 判断解码结果是否符合 User Message 的封闭 Part 集合。 */
+function is_session_user_part(
+  part: SessionUserMessagePart | SessionAgentMessagePart,
+): part is SessionUserMessagePart {
+  if ("step_id" in part) return false;
+  return part.type === "text" || part.type === "context" ||
+    part.type === "file" || part.type === "data";
+}
+
+/** 判断解码结果是否符合 Agent Message 的封闭 Part 集合。 */
+function is_session_agent_part(
+  part: SessionUserMessagePart | SessionAgentMessagePart,
+): part is SessionAgentMessagePart {
+  return part.type !== "context" &&
+    (part.type !== "text" || "state" in part);
+}
+
+/** 解析单个 Part 的 JSON 对象，并拒绝数组、null 与损坏内容。 */
+function parse_part_content(row: SessionMessagePartRow): Record<string, unknown> {
+  let value: unknown;
+  try {
+    value = JSON.parse(row.content);
+  } catch (error) {
+    throw invalid_part(row, `content is not valid JSON: ${String(error)}`);
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalid_part(row, "content must be a JSON object");
+  }
+  return value as Record<string, unknown>;
+}
+
+/** 读取必需字符串字段。 */
+function read_string(
+  content: Record<string, unknown>,
+  key: string,
+  row: SessionMessagePartRow,
+): string {
+  const value = content[key];
+  if (typeof value !== "string") throw invalid_part(row, `${key} must be a string`);
+  return value;
+}
+
+/** 读取可选字符串字段，并保留原字段名。 */
+function optional_string(
+  content: Record<string, unknown>,
+  key: string,
+  row: SessionMessagePartRow,
+): Record<string, string> {
+  if (content[key] === undefined) return {};
+  return { [key]: read_string(content, key, row) };
+}
+
+/** 读取可选有限数字字段，并保留原字段名。 */
+function optional_number(
+  content: Record<string, unknown>,
+  key: string,
+  row: SessionMessagePartRow,
+): Record<string, number> {
+  if (content[key] === undefined) return {};
+  const value = content[key];
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw invalid_part(row, `${key} must be a finite number`);
+  }
+  return { [key]: value };
+}
+
+/** 读取必需布尔字段。 */
+function read_boolean(
+  content: Record<string, unknown>,
+  key: string,
+  row: SessionMessagePartRow,
+): boolean {
+  const value = content[key];
+  if (typeof value !== "boolean") throw invalid_part(row, `${key} must be a boolean`);
+  return value;
+}
+
+/** 读取封闭字符串枚举字段。 */
+function read_enum<const TValue extends string>(
+  content: Record<string, unknown>,
+  key: string,
+  values: readonly TValue[],
+  row: SessionMessagePartRow,
+): TValue {
+  const value = content[key];
+  if (typeof value !== "string" || !values.includes(value as TValue)) {
+    throw invalid_part(row, `${key} has an unsupported value`);
+  }
+  return value as TValue;
+}
+
+/** 读取必需 JSON 字段。 */
+function read_json(
+  content: Record<string, unknown>,
+  key: string,
+  row: SessionMessagePartRow,
+): JsonValue {
+  if (!Object.prototype.hasOwnProperty.call(content, key)) {
+    throw invalid_part(row, `${key} is required`);
+  }
+  return content[key] as JsonValue;
+}
+
+/** 读取可选 JSON 字段，并保留原字段名。 */
+function optional_json(
+  content: Record<string, unknown>,
+  key: string,
+): Record<string, JsonValue> {
+  return Object.prototype.hasOwnProperty.call(content, key)
+    ? { [key]: content[key] as JsonValue }
+    : {};
+}
+
+/** 读取必需 JSON object 字段。 */
+function read_json_object(
+  content: Record<string, unknown>,
+  key: string,
+  row: SessionMessagePartRow,
+): JsonObject {
+  const value = content[key];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalid_part(row, `${key} must be a JSON object`);
+  }
+  return value as JsonObject;
+}
+
+/** 校验并读取持久化 Interaction 请求。 */
+function decode_interaction_request(
+  value: unknown,
+  row: SessionMessagePartRow,
+): SessionInteractionRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalid_part(row, "request must be a JSON object");
+  }
+  const request = value as Record<string, unknown>;
+  read_string(request, "interaction_id", row);
+  read_string(request, "turn_id", row);
+  read_string(request, "type", row);
+  read_json(request, "payload", row);
+  const source = read_json_object(request, "source", row);
+  if (!["tool", "plugin", "shell", "execution"].includes(String(source.type))) {
+    throw invalid_part(row, "request.source.type has an unsupported value");
+  }
+  const created_at = request.created_at;
+  if (typeof created_at !== "number" || !Number.isFinite(created_at)) {
+    throw invalid_part(row, "request.created_at must be a finite number");
+  }
+  return value as SessionInteractionRequest;
+}
+
+/** 校验并读取持久化 Interaction 响应。 */
+function decode_interaction_response(
+  value: unknown,
+  row: SessionMessagePartRow,
+): SessionInteractionResponse {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalid_part(row, "response must be a JSON object");
+  }
+  const response = value as Record<string, unknown>;
+  read_string(response, "type", row);
+  read_enum(response, "outcome", ["resolved", "denied"], row);
+  read_json(response, "payload", row);
+  return value as SessionInteractionResponse;
+}
+
+/** 构造带稳定 Part 身份的存储损坏错误。 */
+function invalid_part(row: SessionMessagePartRow, reason: string): Error {
+  return new Error(`Invalid persisted Session Part ${row.part_id} (${row.type}): ${reason}`);
+}
+
+/** schema 联合类型增加成员时强制 codec 显式解码。 */
+function assert_never(value: never): never {
+  throw new Error(`Unsupported persisted Session Part type: ${String(value)}`);
 }

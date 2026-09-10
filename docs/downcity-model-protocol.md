@@ -23,7 +23,7 @@ Downcity 应拥有从 Agent 推理到 Federation Provider 执行的完整模型�
 核心执行链：
 
 ```text
-SessionPromptPart
+SessionUserContent
   → canonical SessionMessage
   → SessionModelMessages
   → ModelCall

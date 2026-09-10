@@ -20,9 +20,8 @@ const assistant_message: SessionAgentMessage = {
   visibility: "visible",
   created_at: 1,
   updated_at: 1,
-  type: "agent",
-  kind: "normal",
-  status: "streaming",
+  role: "agent",
+  state: "streaming",
   parts: [{ part_id: "text-1", sequence: 1, type: "text", text: "你", state: "streaming" }],
 };
 
@@ -35,9 +34,8 @@ const user_message: SessionUserMessage = {
   visibility: "visible",
   created_at: 1,
   updated_at: 1,
-  type: "user",
-  input_type: "prompt",
-  parts: [{ part_id: "user-text-1", type: "text", text: "问题", state: "done" }],
+  role: "user",
+  parts: [{ part_id: "user-text-1", sequence: 1, type: "text", text: "问题" }],
 };
 
 test("按 delta 更新 assistant part 并拒绝旧 revision", () => {
@@ -55,7 +53,7 @@ test("按 delta 更新 assistant part 并拒绝旧 revision", () => {
   };
   const updated = apply_session_mutation([assistant_message], delta);
   assert.equal(updated[0].revision, 2);
-  assert.equal(updated[0].type === "agent" && updated[0].parts[0].type === "text" ? updated[0].parts[0].text : "", "你好");
+  assert.equal(updated[0].role === "agent" && updated[0].parts[0].type === "text" ? updated[0].parts[0].text : "", "你好");
   assert.equal(apply_session_mutation(updated, { ...delta, mutation_id: "mutation-old", revision: 1, delta: "旧" }), updated);
 });
 
@@ -114,8 +112,8 @@ test("用户消息与 assistant delta 通过同一 mutation 流连续投影", ()
     delta: "好",
   });
   assert.deepEqual(updated.map((message) => message.message_id), ["user-1", "assistant-1"]);
-  assert.equal(updated[1].type === "agent" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好");
-  assert.equal(updated[1].type === "agent" ? updated[1].status : "", "streaming");
+  assert.equal(updated[1].role === "agent" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好");
+  assert.equal(updated[1].role === "agent" ? updated[1].state : "", "streaming");
 });
 
 test("同一帧的多个 delta 只生成一次最终消息投影", () => {
@@ -148,7 +146,7 @@ test("同一帧的多个 delta 只生成一次最终消息投影", () => {
   const updated = apply_session_mutations([user_message, assistant_message], mutations);
   assert.equal(updated[0], user_message);
   assert.equal(updated[1].revision, 3);
-  assert.equal(updated[1].type === "agent" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好！");
+  assert.equal(updated[1].role === "agent" && updated[1].parts[0].type === "text" ? updated[1].parts[0].text : "", "你好！");
 });
 
 test("批量投影在全部 mutation 无效时保留消息数组引用", () => {

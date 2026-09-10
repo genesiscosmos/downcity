@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 测试编译后的公开入口，确保 package 导出与用户实际使用方式一致。
  * - ASR 测试验证本地音频只会转成 data URL，不会把本地路径传给 FED。
- * - TTS 测试验证输出严格使用 AI SDK UIMessage。
+ * - TTS 测试验证输出严格使用 Downcity Agent Session Message。
  */
 
 import test from "node:test";
@@ -50,7 +50,7 @@ async function run_action(plugin, action_name, context, input) {
 function create_tts_message(url = "/workspace/speech.mp3") {
   return {
     id: "sound:test",
-    role: "assistant",
+    role: "agent",
     parts: [
       {
         type: "file",
@@ -131,7 +131,7 @@ test("sound.asr 把本地音频转为 data URL 后直接调用 FED", async () =>
   }
 });
 
-test("sound.tts 使用默认参数并返回 AI SDK UIMessage", async () => {
+test("sound.tts 使用默认参数并返回 Agent Session Message", async () => {
   let received_input;
   const message = create_tts_message();
   const plugin = create_sound_plugin({
@@ -164,7 +164,7 @@ test("sound.tts 使用默认参数并返回 AI SDK UIMessage", async () => {
   assert.deepEqual(result.messages, [message]);
 });
 
-test("sound action 不会隐式选择模型或接受非 UIMessage TTS 结果", async () => {
+test("sound action 不会隐式选择模型或接受非 Agent Message TTS 结果", async () => {
   const plugin = create_sound_plugin({
     asr: async () => ({ text: "ok" }),
     tts: async () => ({ url: "https://example.com/speech.mp3" }),
@@ -199,12 +199,12 @@ test("sound.asr 只接受一种音频来源", async () => {
   assert.match(result.error, /requires exactly one/);
 });
 
-test("sound.tts 要求 UIMessage 包含音频 file part", async () => {
+test("sound.tts 要求 Agent Message 包含音频 file part", async () => {
   const plugin = create_sound_plugin({
     asr: async () => ({ text: "ok" }),
     tts: async () => ({
       id: "sound:text-only",
-      role: "assistant",
+      role: "agent",
       parts: [{ type: "text", text: "not audio" }],
     }),
   });

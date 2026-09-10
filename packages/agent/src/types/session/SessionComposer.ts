@@ -11,7 +11,10 @@ import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
-import type { SessionResolvedContextDiagnostics } from "@/types/session/SessionContextPolicy.js";
+import type {
+  SessionContextRecoveryReason,
+  SessionResolvedContextDiagnostics,
+} from "@/types/session/SessionContextPolicy.js";
 
 /** Composer 可读取的 Session 身份快照。 */
 export interface SessionComposeIdentity {
@@ -83,8 +86,8 @@ export interface SessionContextRecoveryInput {
   model?: ModelClient;
   /** 当前 Session 的统一持久化边界。 */
   storage: SessionStorage;
-  /** 触发恢复的原始错误。 */
-  error: unknown;
+  /** 触发当前恢复的稳定领域原因。 */
+  reason: SessionContextRecoveryReason;
   /** 模型请求逐次失败的可选观测入口。 */
   on_model_request_failure?: ModelRequestFailureReporter;
 }

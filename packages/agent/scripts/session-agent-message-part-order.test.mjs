@@ -18,20 +18,27 @@ test("Error Part 在后续 Turn 结果 Data Part 之前写入", async () => {
     created_at: 1,
     updated_at: 1,
     role: "agent",
-    status: "streaming",
+    state: "streaming",
     parts: [],
   };
   const recorder = {
     get_message: () => message,
-    update_agent_part: async (_message_id, part) => {
+    project_agent_part: (_message_id, part) => {
       const index = message.parts.findIndex((candidate) => candidate.part_id === part.part_id);
       const parts = [...message.parts];
       if (index < 0) parts.push(part);
       else parts[index] = part;
-      message = { ...message, revision: message.revision + 1, parts };
+      message = { ...message, parts };
+    },
+    commit_agent_parts: async (_message_id, new_parts) => {
+      message = {
+        ...message,
+        revision: message.revision + 1,
+        parts: [...message.parts, ...new_parts],
+      };
     },
     complete_agent_message: async (_message_id, status) => {
-      message = { ...message, status, revision: message.revision + 1 };
+      message = { ...message, state: "done", revision: message.revision + 1 };
     },
   };
   const writer = new SessionAgentMessageWriter(recorder, message.message_id);
@@ -52,5 +59,5 @@ test("Error Part 在后续 Turn 结果 Data Part 之前写入", async () => {
 
   assert.deepEqual(message.parts.map((part) => part.type), ["text", "error", "data"]);
   assert.deepEqual(message.parts.map((part) => part.sequence), [1, 2, 3]);
-  assert.equal(message.status, "failed");
+  assert.equal(message.state, "done");
 });

@@ -36,7 +36,6 @@ test("Data URL 落盘后保留用户文件名并保存相对路径", async () =>
   const harness = await create_harness();
   const result = await harness.messages.append_prompt_message({
     turn_id: "turn-1",
-    input_type: "prompt",
     prompt: {
       query: [{
         type: "file",
@@ -65,7 +64,6 @@ test("视频 Data URL 使用 MIME 类型和扩展名落盘", async () => {
   const harness = await create_harness();
   const result = await harness.messages.append_prompt_message({
     turn_id: "turn-1",
-    input_type: "prompt",
     prompt: {
       query: [{
         type: "file",
@@ -90,7 +88,6 @@ test("无效 Data URL 不会写入 Session Message", async () => {
   await assert.rejects(
     harness.messages.append_prompt_message({
       turn_id: "turn-1",
-      input_type: "prompt",
       prompt: {
         query: [{
           type: "file",

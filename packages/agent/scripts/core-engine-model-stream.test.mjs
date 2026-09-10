@@ -212,9 +212,8 @@ test("模型生成无效工具输入时向下一 Step 返回 failed tool_result"
 
   assert.equal(executed, false);
   assert.equal(result.step_result.tool_results[0].success, false);
-  const tool_message = result.step_result.response.messages[1];
-  assert.equal(tool_message.content[0].outcome, "failed");
-  assert.match(tool_message.content[0].content[0].value.error, /invalid JSON/);
+  assert.match(result.step_result.tool_results[0].output.error, /invalid JSON/);
+  assert.equal(result.assistant_parts[0].state, "failed");
 });
 
 test("Tool 返回 success false 时不会被标记为成功", async () => {
@@ -244,5 +243,4 @@ test("Tool 返回 success false 时不会被标记为成功", async () => {
 
   assert.equal(result.step_result.tool_results[0].success, false);
   assert.equal(result.assistant_parts[0].state, "failed");
-  assert.equal(result.step_result.response.messages[1].content[0].outcome, "failed");
 });

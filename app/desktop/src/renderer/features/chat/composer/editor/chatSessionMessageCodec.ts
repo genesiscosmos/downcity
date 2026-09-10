@@ -12,7 +12,7 @@ export function create_chat_composer_from_user_parts(parts: SessionUserMessagePa
       type: "chatReference",
       attrs: {
         message_id: "",
-        role: "assistant",
+        role: "agent",
         tag: part.tag,
         text: part.context,
         preview_text: part.context.replace(/\s+/gu, " ").trim().slice(0, 80),

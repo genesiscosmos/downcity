@@ -187,15 +187,19 @@ export type {
   AgentSessionActionRecord,
   AgentSessionActionState,
 } from "./types/sdk/AgentSessionAction.js";
-export type { AgentSessionPromptInput } from "./types/sdk/AgentSessionPrompt.js";
+export type {
+  AgentSessionPromptContent,
+  AgentSessionPromptInput,
+} from "./types/sdk/AgentSessionPrompt.js";
 export { is_agent_session_prompt_input_empty } from "./types/sdk/AgentSessionPrompt.js";
 export type {
-  SessionPromptPart,
-  SessionAgentResultPart,
-  SessionTextInputPart,
-  SessionContextInputPart,
-  SessionFileInputPart,
-  SessionDataInputPart,
+  SessionAgentContent,
+  SessionContextContent,
+  SessionDataContent,
+  SessionFileContent,
+  SessionModelUserContent,
+  SessionTextContent,
+  SessionUserContent,
 } from "@downcity/type";
 export type { AgentSessionStopResult } from "./types/sdk/AgentSessionStop.js";
 export type {
@@ -212,7 +216,7 @@ export type {
 export { Executor } from "./executor/Executor.js";
 export { DefaultSessionComposer } from "./session/DefaultSessionComposer.js";
 export { FullHistoryContextPolicy } from "./session/composer/policies/FullHistoryContextPolicy.js";
-export { SequenceSummaryContextPolicy } from "./session/composer/policies/SequenceSummaryContextPolicy.js";
+export { AdaptivePartContextPolicy } from "./session/composer/policies/AdaptivePartContextPolicy.js";
 export { SessionMessages } from "./session/SessionMessages.js";
 export type {
   AppendCompletedAgentMessageInput,
@@ -240,6 +244,7 @@ export type {
   SessionContextPolicyInitializeInput,
   SessionContextPolicyInput,
   SessionContextPolicyRecoveryInput,
+  SessionContextRecoveryReason,
   SessionResolvedContext,
   SessionResolvedContextDiagnostics,
 } from "./types/session/SessionContextPolicy.js";

@@ -50,7 +50,7 @@ snapshot_ready = true;
 | `turn` | 按 `turn_id` 更新运行状态 |
 | `session` | 更新当前 Session 元数据，例如标题 |
 
-断线后不要假定 Delta 可以重放。丢失的 Delta 已经合并进 `agent_message.json` 或最终 Message 快照，因此重新读取 `messages()` 是恢复正确状态的关键。
+断线后不要假定 Delta 可以重放。已完成 Step 的 Delta 已合并进 SQLite 稳定快照；尚未完成 Step 的投影可能因中断而丢弃，并以 Error Part 收口。因此重新读取 `messages()` 才能恢复权威状态。
 
 ## RemoteSession 断线
 
@@ -64,9 +64,9 @@ snapshot_ready = true;
 
 如果断线时本地仍有 `turn.finished` 等待者，应用层应处理其失败结果，并通过重新读取 Session 恢复界面。不要凭客户端计时器合成 Assistant 完成状态。
 
-## Segment 历史
+## 历史分页
 
-首屏会读取全部 Active。需要更早历史时，使用当前结果的 `next_before_sequence` 读取前一个完整 Segment。实时 Mutation 只更新 Active；不要用它覆盖已加载的旧 Segment。
+首屏读取最近一页 Message。需要更早历史时，使用当前结果的 `next_before_sequence` 并保留合适的 `limit`。实时 Mutation 更新当前快照；不要让较旧 revision 覆盖已加载 Message。
 
 ## 去重
 

@@ -34,7 +34,7 @@ function create_image_plugin(options = {}) {
 function create_image_message() {
   return {
     id: "msg_image_test",
-    role: "assistant",
+    role: "agent",
     parts: [
       {
         type: "file",
@@ -261,7 +261,7 @@ test("ImagePlugin image_result stores remote images locally", async (t) => {
 
   const remote_message = {
     id: "msg_remote_images",
-    role: "assistant",
+    role: "agent",
     parts: [
       {
         type: "file",
@@ -322,7 +322,7 @@ test("ImagePlugin image_result keeps remote URL when local storage fails", async
       status: "succeeded",
       result: {
         id: "msg_remote_fallback",
-        role: "assistant",
+        role: "agent",
         parts: [{ type: "file", media_type: "image/png", url: remote_url }],
       },
     }),

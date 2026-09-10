@@ -71,7 +71,7 @@ src/
 ├── index.ts               # 包公开入口
 ├── agent/                 # Agent facade、状态、模型、环境与执行绑定
 ├── group/                 # Group 主体、GroupSession 和消息调度策略
-├── executor/              # LLM/Tool Loop、执行恢复与内存上下文折叠
+├── executor/              # LLM/Tool Loop、usage 观测与执行恢复
 ├── host/                  # Agent 宿主端口
 ├── internal/              # Agent 与 Group 的内部运行时装配
 ├── plugin/                # Agent 使用的 Plugin 执行协议辅助
@@ -96,10 +96,11 @@ src/
   - `SessionLoop.ts` 是 Command Queue 的唯一消费者，并管理 Turn 生命周期
   - Prompt Command 创建或加入 Turn；配置与压缩等 Maintenance Command 在空闲期独立执行
   - `SessionComposition.ts` 管理 system snapshot、检查点 env/hook 与 Composer 输入
-  - `SessionMessages.ts` 是 canonical Message 唯一事实源
-  - `DefaultSessionComposer.ts` 负责 system/history/tools 与压缩计划定制
+  - `session.db` 是 canonical Message 唯一事实源，`SessionMessages.ts` 负责领域写入、恢复和有界运行态投影
+  - `DefaultSessionComposer.ts` 负责 system/history/tools，并默认使用 Part 级上下文策略
   - `SessionTurnContext.effects` 只负责按发生顺序收集当前 Turn 的 Tool 副作用，不解释具体业务
-  - `messages/` 放 Assistant 状态转换与 writer、Message codec、Tool effect 投影、结构化文件编辑 Diff 与 compaction
+  - `messages/` 放 Assistant 状态转换与 writer、Message codec、Tool effect 投影与结构化文件编辑 Diff
+  - `composer/policies/` 放只读 canonical Message 并管理自有派生表的上下文策略
   - `storage/` 负责 Session SQLite、附件和事务；只使用 AgentStorage，不访问项目 Workspace
   - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 的单次执行输入
 

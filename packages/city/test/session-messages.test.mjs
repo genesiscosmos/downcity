@@ -20,18 +20,20 @@ import {
 } from "../../agent/bin/session/SessionMessages.js";
 import { session_messages_to_model_messages } from "../../agent/bin/executor/messages/SessionModelMessages.js";
 import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
-import { SequenceSummaryContextPolicy } from "../../agent/bin/session/composer/policies/SequenceSummaryContextPolicy.js";
+import { AdaptivePartContextPolicy } from "../../agent/bin/session/composer/policies/AdaptivePartContextPolicy.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 /** 可让下一次 Assistant 草稿更新失败的测试 Store。 */
 class FailingAssistantMessageStore extends SqliteSessionStorage {
   next_assistant_error = null;
+  update_count = 0;
 
   fail_next_assistant_write(message) {
     this.next_assistant_error = new Error(message);
   }
 
   async update_message(...input) {
+    this.update_count += 1;
     const error = this.next_assistant_error;
     if (error) {
       this.next_assistant_error = null;
@@ -117,12 +119,11 @@ function create_user_message(session_id, sequence) {
     created_at: sequence,
     updated_at: sequence,
     role: "user",
-    input_type: "prompt",
     parts: [{
       part_id: `text-${String(sequence)}`,
+      sequence: 1,
       type: "text",
       text: `message ${String(sequence)}`,
-      state: "done",
     }],
   };
 }
@@ -152,7 +153,6 @@ test("User Context Part 保持 canonical 结构并安全映射到模型文本", 
       created_at: 1,
       updated_at: 1,
       role: "user",
-      input_type: "prompt",
       parts,
     }]);
   assert.deepEqual(model_messages, [{
@@ -172,7 +172,53 @@ test("User Context Part 保持 canonical 结构并安全映射到模型文本", 
   );
 });
 
-test("模型文本增量持续更新同一 SQLite Message 聚合", async () => {
+test("User data Part 明确只持久化，不进入模型输入", async () => {
+  const model_messages = await session_messages_to_model_messages([{
+    message_id: "user-data-message",
+    session_id: "user-data-session",
+    turn_id: "user-data-turn",
+    sequence: 1,
+    revision: 1,
+    visibility: "visible",
+    created_at: 1,
+    updated_at: 1,
+    role: "user",
+    parts: [{
+      part_id: "user-data:1",
+      sequence: 1,
+      type: "data",
+      data_type: "data-view-state",
+      data: { selected: true },
+    }],
+  }]);
+  assert.deepEqual(model_messages, []);
+});
+
+test("文本中的 chat file markup 不再隐式生成模型附件", async () => {
+  const model_messages = await session_messages_to_model_messages([{
+    message_id: "user-markup-message",
+    session_id: "user-markup-session",
+    turn_id: "user-markup-turn",
+    sequence: 1,
+    revision: 1,
+    visibility: "visible",
+    created_at: 1,
+    updated_at: 1,
+    role: "user",
+    parts: [{
+      part_id: "user-text:1",
+      sequence: 1,
+      type: "text",
+      text: '<file path="image.png" type="photo" />',
+    }],
+  }], process.cwd());
+  assert.deepEqual(model_messages, [{
+    role: "user",
+    content: [{ type: "text", text: '<file path="image.png" type="photo" />' }],
+  }]);
+});
+
+test("模型增量只更新内存投影，Step 完成后才写入 SQLite", async () => {
   const {
     recorder,
     events,
@@ -180,22 +226,30 @@ test("模型文本增量持续更新同一 SQLite Message 聚合", async () => {
   } = await create_recorder();
   await recorder.append_user_message({
     turn_id: "turn-1",
-    input_type: "prompt",
-    parts: [{ part_id: "user-text-1", type: "text", text: "你好", state: "done" }],
+    parts: [{ part_id: "user-text-1", sequence: 1, type: "text", text: "你好" }],
   });
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   await writer.apply_model_event({ type: "text_start", content_id: "text-1" });
   await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "你" });
   await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "好" });
-
   const active_during_stream = await store.list_messages();
   const draft = active_during_stream.at(-1);
   assert.deepEqual(active_during_stream.map((message) => message.role), ["user", "agent"]);
-  assert.equal(draft.parts[0].text, "你好");
-  assert.equal(draft.parts[0].state, "streaming");
+  assert.deepEqual(draft.parts, []);
+  assert.equal(recorder.get_message(writer.message_id).parts[0].text, "你好");
 
   await writer.apply_model_event({ type: "text_finish", content_id: "text-1" });
+  await writer.finish_step([{
+    part_id: "text-1",
+    sequence: 1,
+    type: "text",
+    text: "你好",
+    state: "done",
+  }]);
+  const committed_step = await store.read_message(writer.message_id);
+  assert.equal(committed_step.parts[0].text, "你好");
+  assert.equal(committed_step.state, "streaming");
   await writer.complete();
 
   const active = await store.list_messages();
@@ -203,6 +257,33 @@ test("模型文本增量持续更新同一 SQLite Message 聚合", async () => {
   assert.equal(active[1].parts[0].text, "你好");
   assert.equal(active[1].parts[0].state, "done");
   assert.equal(events.some((event) => event.variant === "delta"), true);
+});
+
+test("同一 Part 的高频 delta 在 Step 完成前不会写入 SQLite", async () => {
+  const { recorder, store } = await create_recorder(
+    "delta-batch-test",
+    (options) => new FailingAssistantMessageStore(options),
+  );
+  const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
+  await writer.begin_step();
+  await writer.apply_model_event({ type: "text_start", content_id: "text-1" });
+  const count_after_start = store.update_count;
+  await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "a" });
+  await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "b" });
+  await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "c" });
+  assert.equal(store.update_count, count_after_start);
+  assert.deepEqual((await store.read_message(writer.message_id)).parts, []);
+  await writer.apply_model_event({ type: "text_finish", content_id: "text-1" });
+  await writer.finish_step([{
+    part_id: "text-1",
+    sequence: 1,
+    type: "text",
+    text: "abc",
+    state: "done",
+  }]);
+  assert.equal(store.update_count, count_after_start + 1);
+  assert.equal((await store.read_message(writer.message_id)).parts[0].text, "abc");
+  await writer.fail("test completed");
 });
 
 test("工具调用、审批、结果和后续文本保持 canonical 顺序", async () => {
@@ -337,7 +418,9 @@ test("多个模型 Step 可复用 content_id 且追加到同一 Assistant Messag
   }]);
   await writer.complete();
 
-  const assistant = recorder.get_message(writer.message_id);
+  const assistant = (await recorder.list_history_messages()).find(
+    (message) => message.message_id === writer.message_id,
+  );
   assert.deepEqual(assistant.parts.map((part) => part.text), ["first", "second"]);
   assert.deepEqual(assistant.parts.map((part) => part.sequence), [1, 2]);
 });
@@ -392,28 +475,26 @@ test("Step 最终快照不能补造未经过模型事件的 Part", async () => {
   await writer.fail("invalid stream");
 });
 
-test("Tool Part 持久化失败时不释放工具执行等待", async () => {
+test("Tool 输入检查点持久化失败时终止工具执行", async () => {
   const { recorder, store } = await create_recorder(
     "tool-write-failure-test",
     (options) => new FailingAssistantMessageStore(options),
   );
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
-  store.fail_next_assistant_write("tool write failed");
-  await assert.rejects(writer.apply_model_event({
+  await writer.apply_model_event({
     type: "tool_call_start",
     content_id: "tool-1",
     tool_call_id: "call-1",
     tool_name: "lookup",
-  }), /tool write failed/);
-
-  const pending = writer.prepare_tool_input({
+  });
+  store.fail_next_assistant_write("tool write failed");
+  await assert.rejects(writer.prepare_tool_input({
     tool_call_id: "call-1",
     tool_name: "lookup",
     input: {},
-  });
+  }), /tool write failed/);
   await writer.abort_step();
-  await assert.rejects(pending, /aborted/);
   await writer.fail("write failed");
 });
 
@@ -430,6 +511,10 @@ test("重启时收口流式 Assistant 和运行中 Action", async () => {
     action_type: "test",
     title: "Running action",
   });
+  assert.equal(
+    (await harness.store.read_message("action-1")).state,
+    "streaming",
+  );
 
   await harness.store.dispose();
   const restarted_store = new SqliteSessionStorage({
@@ -449,10 +534,15 @@ test("重启时收口流式 Assistant 和运行中 Action", async () => {
   });
   await restarted.initialize();
   const page = await restarted.list_messages();
-  const assistant = page.items.find((message) => message.role === "agent" && message.parts.some((part) => part.type === "text"));
+  const assistant = page.items.find((message) =>
+    message.role === "agent" &&
+    message.parts.some((part) => part.type === "error" && part.code === "runtime_interrupted")
+  );
   const action = page.items.find((message) => message.role === "agent" && message.parts.some((part) => part.type === "action"));
-  assert.equal(assistant.status, "stopped");
-  assert.equal(assistant.parts[0].text, "partial");
+  assert.equal(assistant.state, "done");
+  assert.equal(assistant.parts.some((part) => part.type === "text"), false);
+  assert.equal(assistant.parts.at(-1).type, "error");
+  assert.equal(action.state, "done");
   assert.equal(action.parts.find((part) => part.type === "action")?.state, "failed");
 });
 
@@ -469,29 +559,24 @@ test("Action 更新保留 identity 并只读取最新 revision", async () => {
   assert.equal(page.items.length, 1);
   assert.equal(page.items[0].message_id, "action-1");
   assert.equal(page.items[0].revision, 2);
-  assert.equal(page.items[0].status, "completed");
+  assert.equal(page.items[0].state, "done");
   assert.equal(page.items[0].parts[0].type, "action");
   assert.equal(page.items[0].parts[0].state, "completed");
 });
 
-test("Sequence Policy 生成累计 Summary 且不改写 canonical history", async () => {
+test("Adaptive Part Policy 可在单个 Agent Message 内建立摘要边界", async () => {
   const session_id = "compact-model-history-test";
   const { recorder, store, root_path } = await create_recorder(session_id);
-  for (let sequence = 1; sequence <= 4; sequence += 1) {
-    await recorder.append_user_message({
-      message_id: `user-${String(sequence)}`,
-      turn_id: `turn-${String(sequence)}`,
-      input_type: "prompt",
-      parts: sequence === 1
-        ? [{
-            part_id: "context-1",
-            type: "context",
-            tag: "reference",
-            context: "earlier context",
-          }]
-        : create_user_message(session_id, sequence).parts,
-    });
-  }
+  await recorder.append_completed_agent_message({
+    turn_id: "turn-1",
+    parts: Array.from({ length: 6 }, (_, index) => ({
+      part_id: `text-${String(index + 1)}`,
+      sequence: index + 1,
+      type: "text",
+      text: `part ${String(index + 1)}`,
+      state: "done",
+    })),
+  });
   let summary_prompt = "";
   const model = new MockModelClient({
     modelId: "summary-model",
@@ -507,23 +592,68 @@ test("Sequence Policy 生成累计 Summary 且不改写 canonical history", asyn
       };
     },
   });
-  const policy = new SequenceSummaryContextPolicy();
+  const policy = new AdaptivePartContextPolicy();
   const policy_storage = store.composer_storage(policy.name);
   await policy.initialize({ storage: policy_storage });
-  assert.equal(await policy.recover({ storage: policy_storage, model, error: new Error("maximum context window"), project_root: root_path }), true);
-  assert.match(summary_prompt, /\\\"type\\\":\\\"context\\\"/);
-  assert.match(summary_prompt, /\\\"tag\\\":\\\"reference\\\"/);
-  assert.match(summary_prompt, /\\\"context\\\":\\\"earlier context\\\"/);
+  assert.equal(await policy.recover({ storage: policy_storage, model, reason: "provider_context_limit", project_root: root_path }), true);
+  assert.match(summary_prompt, /part 1/);
+  assert.match(summary_prompt, /part 3/);
+  assert.doesNotMatch(summary_prompt, /part 4/);
   const context = await policy.resolve({ storage: policy_storage, project_root: root_path });
   const canonical = await recorder.list_history_messages();
-  assert.deepEqual(canonical.map((message) => message.sequence), [1, 2, 3, 4]);
+  assert.equal(canonical.length, 1);
+  assert.equal(canonical[0].parts.length, 6);
   const model_messages = context.messages;
-  assert.equal(model_messages[0].role, "assistant");
-  assert.equal(model_messages[0].content[0].text, "summary checkpoint");
-  assert.deepEqual(
-    model_messages.slice(1).map((message) => message.content[0].text),
-    ["message 3", "message 4"],
-  );
+  assert.equal(context.system_blocks[0].source, "session");
+  assert.match(context.system_blocks[0].content, /<session-context-summary>/);
+  assert.equal(model_messages.length, 1);
+  assert.deepEqual(model_messages[0].content.map((part) => part.text), [
+    "part 4",
+    "part 5",
+    "part 6",
+  ]);
+});
+
+test("Adaptive Part Policy 可压缩单个占满上下文的 Part", async () => {
+  const session_id = "compact-single-large-part-test";
+  const { recorder, store, root_path } = await create_recorder(session_id);
+  await recorder.append_completed_agent_message({
+    turn_id: "turn-1",
+    parts: [{
+      part_id: "large-text",
+      sequence: 1,
+      type: "text",
+      text: "large context ".repeat(1_000),
+      state: "done",
+    }],
+  });
+  const model = new MockModelClient({
+    modelId: "single-large-part-summary-model",
+    doGenerate: async () => ({
+      content: [{ type: "text", text: "single part summary" }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: {
+        inputTokens: { total: 1 },
+        outputTokens: { total: 1 },
+      },
+    }),
+  });
+  const policy = new AdaptivePartContextPolicy();
+  const policy_storage = store.composer_storage(policy.name);
+  await policy.initialize({ storage: policy_storage });
+
+  assert.equal(await policy.recover({
+    storage: policy_storage,
+    model,
+    reason: "provider_context_limit",
+    project_root: root_path,
+  }), true);
+  const context = await policy.resolve({
+    storage: policy_storage,
+    project_root: root_path,
+  });
+  assert.equal(context.messages.length, 0);
+  assert.match(context.system_blocks[0].content, /single part summary/);
 });
 
 test("内部上下文读取不会被 500 条 UI 分页边界截断", async () => {
@@ -533,7 +663,6 @@ test("内部上下文读取不会被 500 条 UI 分页边界截断", async () =>
     await recorder.append_user_message({
       message_id: `user-${String(sequence)}`,
       turn_id: `turn-${String(sequence)}`,
-      input_type: "prompt",
       parts: create_user_message(session_id, sequence).parts,
     });
   }

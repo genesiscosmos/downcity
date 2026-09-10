@@ -79,6 +79,9 @@ export function normalize_image_result(result: ImagePluginResult): ImagePluginRe
   if (!record || !Array.isArray(record.parts)) {
     throw new TypeError("ImagePlugin image provider must return a Downcity Session message");
   }
+  if (record.role !== "agent") {
+    throw new TypeError("ImagePlugin image provider must return an Agent Session message");
+  }
   for (const part of record.parts) {
     const part_record = to_record(part);
     if (part_record?.type !== "file") continue;

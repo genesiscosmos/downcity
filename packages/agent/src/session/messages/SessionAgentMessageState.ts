@@ -1,20 +1,20 @@
 /**
- * canonical Assistant Message 的串行状态转换器。
+ * canonical Agent Message 的运行投影与检查点提交器。
  *
- * 关键点（中文）
- * - 只拥有每条 Assistant Message 的临时写事务链，不拥有 Message 事实源。
- * - 所有草稿、Part、Interaction 与终态都先持久化，再交回 SessionMessages 接受。
- * - 同一 Assistant Message 的 revision 严格串行，不同 Message 可以并行推进。
+ * Model stream 只更新内存投影并发布实时 Mutation；完整 Step、Tool、Interaction
+ * 与 Message 收口才通过一次 SQLite 事务提交稳定快照。数据库不承担流事件日志职责。
  */
 
 import { generate_id } from "@/utils/Id.js";
 import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
 import type {
+  SessionAgentErrorPart,
   SessionAgentInteractionPart,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionAgentToolPart,
   SessionMessage,
+  SessionMutation,
 } from "@downcity/type";
 import type {
   SessionInteractionCloseInput,
@@ -22,16 +22,14 @@ import type {
   SessionInteractionResponse,
 } from "@downcity/type";
 import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
-import type { SessionMutation } from "@downcity/type";
 import type { SessionAgentMessageStateOptions } from "@/types/session/SessionAgentMessageState.js";
 
-/** 管理 Assistant 草稿、Part 与 Interaction 的原子状态转换。 */
+/** 管理 Agent Message 运行投影、语义检查点与 Interaction 原子状态。 */
 export class SessionAgentMessageState {
   private readonly session_id: string;
   private readonly options: SessionAgentMessageStateOptions;
-  /** 按 Assistant Message 隔离的完整写事务链。 */
+  /** 同一 Agent Message 的检查点严格串行，不同 Message 可以独立提交。 */
   private readonly write_chains = new Map<string, Promise<void>>();
-  /** Assistant Message 内 Interaction Part 的原子状态写入器。 */
   private readonly interaction_writer: SessionMessageInteractionWriter;
 
   constructor(options: SessionAgentMessageStateOptions) {
@@ -43,161 +41,104 @@ export class SessionAgentMessageState {
       enqueue_assistant_write: (message_id, operation) =>
         this.enqueue_write(message_id, operation),
       commit_assistant_snapshot: (current, parts) =>
-        this.commit_snapshot(current, parts),
+        this.persist_snapshot(current.message_id, parts),
     });
   }
 
-  /** 写入 Assistant 原始文本 delta。 */
-  async append_delta(
+  /** 只在内存中创建或替换一个 Part，并立即发布实时完整 Part。 */
+  project_part(message_id: string, part: SessionAgentMessagePart): void {
+    const current = this.require_streaming_agent(message_id);
+    const existing = current.parts.find((item) => item.part_id === part.part_id);
+    if (existing && existing.sequence !== part.sequence) {
+      throw new Error(`Agent Part sequence changed: ${part.part_id}`);
+    }
+    const projected: SessionAgentMessage = {
+      ...current,
+      updated_at: Date.now(),
+      parts: (existing
+        ? current.parts.map((item) => item.part_id === part.part_id ? structuredClone(part) : item)
+        : [...current.parts, structuredClone(part)]
+      ).sort((left, right) => left.sequence - right.sequence),
+    };
+    this.options.project_mutation({
+      mutation_id: generate_id(),
+      variant: "part",
+      type: part.type,
+      message_id,
+      revision: current.revision,
+      session_id: this.session_id,
+      ...(current.turn_id ? { turn_id: current.turn_id } : {}),
+      created_at: projected.updated_at,
+      part_id: part.part_id,
+      part: structuredClone(part),
+    } as SessionMutation, projected);
+  }
+
+  /** 只在内存中追加文本、推理或 Tool 输入增量，并立即发布 delta。 */
+  project_delta(
     message_id: string,
     part_id: string,
-    type: "text" | "reasoning",
+    type: "text" | "reasoning" | "tool_input",
     delta: string,
-  ): Promise<void> {
+    tool_call_id?: string,
+  ): void {
     if (!delta) return;
+    const current = this.require_streaming_agent(message_id);
+    let matched = false;
+    const projected: SessionAgentMessage = {
+      ...current,
+      updated_at: Date.now(),
+      parts: current.parts.map((part) => {
+        if (part.part_id !== part_id) return part;
+        if (
+          (type === "text" || type === "reasoning") &&
+          (part.type === "text" || part.type === "reasoning") &&
+          part.type === type
+        ) {
+          matched = true;
+          return { ...part, text: part.text + delta };
+        }
+        if (
+          type === "tool_input" && part.type === "tool" &&
+          part.tool_call_id === tool_call_id && part.state === "input-streaming"
+        ) {
+          matched = true;
+          return { ...part, input_text: `${part.input_text || ""}${delta}` };
+        }
+        throw new Error(`Delta target Part is incompatible: ${part_id}`);
+      }),
+    };
+    if (!matched) throw new Error(`Delta target Part does not exist: ${part_id}`);
+    this.options.project_mutation({
+      mutation_id: generate_id(),
+      variant: "delta",
+      type,
+      message_id,
+      revision: current.revision,
+      session_id: this.session_id,
+      ...(current.turn_id ? { turn_id: current.turn_id } : {}),
+      created_at: projected.updated_at,
+      part_id,
+      ...(tool_call_id ? { tool_call_id } : {}),
+      delta,
+    } as SessionMutation, projected);
+  }
+
+  /** 将当前内存投影作为一个稳定语义检查点原子提交。 */
+  async checkpoint(message_id: string): Promise<void> {
     await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_assistant(message_id);
-      const part = current.parts.find((item) => item.part_id === part_id);
-      if (!part || (part.type !== "text" && part.type !== "reasoning")) {
-        throw new Error(`Delta target Part does not exist: ${part_id}`);
-      }
-      if (part.type !== type) {
-        throw new Error(`Delta type changed for Part: ${part_id}`);
-      }
-      const created_at = Date.now();
-      const message: SessionAgentMessage = {
-        ...current,
-        revision: current.revision + 1,
-        updated_at: created_at,
-        parts: current.parts.map((item) =>
-          item.part_id === part_id &&
-              (item.type === "text" || item.type === "reasoning")
-            ? { ...item, text: item.text + delta }
-            : item,
-        ),
-      };
-      await this.options.store.update_message(
-        message.message_id,
-        current.revision,
-        () => message,
-      );
-      this.options.accept_mutation({
-        mutation_id: generate_id(),
-        variant: "delta",
-        type,
-        message_id,
-        revision: message.revision,
-        session_id: this.session_id,
-        turn_id: message.turn_id,
-        created_at,
-        part_id,
-        delta,
-      }, message);
+      const current = this.require_streaming_agent(message_id);
+      await this.persist_snapshot(message_id, current.parts);
     });
   }
 
-  /** 写入 Assistant Tool 输入原始 delta。 */
-  async append_tool_input_delta(
-    message_id: string,
-    part_id: string,
-    tool_call_id: string,
-    delta: string,
-  ): Promise<void> {
-    if (!delta) return;
-    await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_assistant(message_id);
-      const part = current.parts.find((item) => item.part_id === part_id);
-      if (!part || part.type !== "tool") {
-        throw new Error(`Tool input Delta target Part does not exist: ${part_id}`);
-      }
-      if (part.tool_call_id !== tool_call_id) {
-        throw new Error(`Tool input Delta tool_call_id changed for Part: ${part_id}`);
-      }
-      if (part.state !== "input-streaming") {
-        throw new Error(`Tool input Delta cannot update ${part.state} Part: ${part_id}`);
-      }
-      const created_at = Date.now();
-      const message: SessionAgentMessage = {
-        ...current,
-        revision: current.revision + 1,
-        updated_at: created_at,
-        parts: current.parts.map((item) =>
-          item.part_id === part_id && item.type === "tool"
-            ? { ...item, input_text: `${item.input_text || ""}${delta}` }
-            : item,
-        ),
-      };
-      await this.options.store.update_message(
-        message.message_id,
-        current.revision,
-        () => message,
-      );
-      this.options.accept_mutation({
-        mutation_id: generate_id(),
-        variant: "delta",
-        type: "tool_input",
-        message_id,
-        revision: message.revision,
-        session_id: this.session_id,
-        turn_id: message.turn_id,
-        created_at,
-        part_id,
-        tool_call_id,
-        delta,
-      }, message);
-    });
-  }
-
-  /** 提交一个完整 canonical Assistant Part。 */
-  async update_part(
-    message_id: string,
-    part: SessionAgentMessagePart,
-  ): Promise<void> {
-    await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_assistant(message_id);
-      const existing = current.parts.find((item) => item.part_id === part.part_id);
-      if (existing && existing.sequence !== part.sequence) {
-        throw new Error(`Assistant Part sequence changed: ${part.part_id}`);
-      }
-      const created_at = Date.now();
-      const next_part = structuredClone(part);
-      const message: SessionAgentMessage = {
-        ...current,
-        revision: current.revision + 1,
-        updated_at: created_at,
-        parts: (existing
-          ? current.parts.map((item) =>
-              item.part_id === part.part_id ? next_part : item)
-          : [...current.parts, next_part]
-        ).sort((left, right) => left.sequence - right.sequence),
-      };
-      await this.options.store.update_message(
-        message.message_id,
-        current.revision,
-        () => message,
-      );
-      this.options.accept_mutation({
-        mutation_id: generate_id(),
-        variant: "part",
-        type: next_part.type,
-        message_id,
-        revision: message.revision,
-        session_id: this.session_id,
-        turn_id: message.turn_id,
-        created_at,
-        part_id: next_part.part_id,
-        part: next_part,
-      } as SessionMutation, message);
-    });
-  }
-
-  /** 原子提交当前 Assistant step 的 metadata 快照。 */
+  /** 校验 Step Part identity 后原子提交模型给出的最终快照。 */
   async commit_step(
     message_id: string,
     parts: SessionAgentMessagePart[],
   ): Promise<void> {
     await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_assistant(message_id);
+      const current = this.require_streaming_agent(message_id);
       if (
         parts.length !== current.parts.length ||
         parts.some((part, index) =>
@@ -205,98 +146,109 @@ export class SessionAgentMessageState {
           part.sequence !== current.parts[index]?.sequence
         )
       ) {
-        throw new Error(
-          `Assistant step changed canonical Part identity: ${message_id}`,
-        );
+        throw new Error(`Agent step changed canonical Part identity: ${message_id}`);
       }
-      const message: SessionAgentMessage = {
-        ...current,
-        revision: current.revision + 1,
-        updated_at: Date.now(),
-        parts: structuredClone(parts),
-      };
-      await this.options.store.update_message(
-        message.message_id,
-        current.revision,
-        () => message,
-      );
-      this.options.accept_message(message);
+      await this.persist_snapshot(message_id, parts);
     });
   }
 
-  /** 收口 Assistant Message，并把草稿提交到 Active。 */
+  /** 原子追加一组非流式 Agent Parts。 */
+  async commit_parts(
+    message_id: string,
+    parts: readonly SessionAgentMessagePart[],
+  ): Promise<void> {
+    if (parts.length === 0) return;
+    await this.enqueue_write(message_id, async () => {
+      const current = this.require_streaming_agent(message_id);
+      const replacements = new Map(parts.map((part) => [part.part_id, structuredClone(part)]));
+      const existing_ids = new Set(current.parts.map((part) => part.part_id));
+      const merged = current.parts.map((part) => replacements.get(part.part_id) ?? part);
+      for (const part of parts) {
+        if (!existing_ids.has(part.part_id)) merged.push(structuredClone(part));
+      }
+      await this.persist_snapshot(
+        message_id,
+        merged.sort((left, right) => left.sequence - right.sequence),
+      );
+    });
+  }
+
+  /** 丢弃当前未提交 Step 投影，并向订阅方恢复最近持久化快照。 */
+  async rollback_projection(message_id: string): Promise<void> {
+    await this.enqueue_write(message_id, async () => {
+      const persisted = await this.options.store.read_message(message_id);
+      if (!persisted || persisted.role !== "agent") {
+        throw new Error(`Persisted Agent Message not found: ${message_id}`);
+      }
+      this.options.accept_message(persisted);
+    });
+  }
+
+  /** 收口 Agent Message，并将局部非终态与失败原因一并原子提交。 */
   async complete(
     message_id: string,
-    status: "completed" | "stopped" | "failed",
+    outcome: "completed" | "stopped" | "failed",
     error?: string,
   ): Promise<void> {
     await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_assistant(message_id);
-      const created_at = Date.now();
-      const interrupted_interactions = status === "stopped"
-        ? current.parts.filter(
-            (part): part is SessionAgentInteractionPart =>
-              part.type === "interaction" && part.status === "pending",
-          )
-        : [];
+      const current = this.require_streaming_agent(message_id);
+      const completed_at = Date.now();
       const interrupted_tool_ids = new Set(
-        interrupted_interactions.flatMap((part) =>
-          part.request.source.tool_call_id
+        current.parts.flatMap((part) =>
+          part.type === "interaction" && part.status === "pending" &&
+            part.request.source.tool_call_id
             ? [part.request.source.tool_call_id]
             : [],
         ),
       );
-      const message: SessionAgentMessage = {
-        ...current,
-        revision: current.revision + 1,
-        status,
-        updated_at: created_at,
-        parts: current.parts.map((part) => {
-          if (part.type === "text" || part.type === "reasoning") {
-            return { ...part, state: "done" as const };
-          }
-          if (part.type === "interaction" && part.status === "pending") {
-            return {
-              ...part,
-              status: "cancelled" as const,
-              cancel_reason: "runtime_interrupted" as const,
-              resolved_at: created_at,
-            };
-          }
-          if (
-            part.type === "tool" &&
-            part.state !== "completed" &&
-            part.state !== "failed"
-          ) {
-            return {
-              ...part,
-              state: "failed" as const,
-              error:
-                status === "stopped" &&
-                  part.state === "waiting-user" &&
-                  interrupted_tool_ids.has(part.tool_call_id)
-                  ? "Interaction cancelled"
-                  : error || "Tool did not complete before Assistant Message closed",
-            };
-          }
-          return part;
-        }),
-      };
-      await this.options.store.update_message(
-        message.message_id,
-        current.revision,
-        () => message,
-      );
-      this.options.accept_message(message);
+      const parts: SessionAgentMessagePart[] = current.parts.map((part) => {
+        if (part.type === "text" || part.type === "reasoning") {
+          return { ...part, state: "done" as const };
+        }
+        if (part.type === "action" && part.state === "running") {
+          return {
+            ...part,
+            state: outcome === "completed" ? "completed" as const : "failed" as const,
+            ...(outcome === "completed" || part.description
+              ? {}
+              : { description: error || "Action did not complete before Agent Message closed" }),
+          };
+        }
+        if (part.type === "interaction" && part.status === "pending") {
+          return {
+            ...part,
+            status: "cancelled" as const,
+            cancel_reason: "runtime_interrupted" as const,
+            resolved_at: completed_at,
+          };
+        }
+        if (part.type === "tool" && part.state !== "completed" && part.state !== "failed") {
+          return {
+            ...part,
+            state: "failed" as const,
+            error: outcome === "stopped" && part.state === "waiting-user" &&
+                interrupted_tool_ids.has(part.tool_call_id)
+              ? "Interaction cancelled"
+              : error || "Tool did not complete before Agent Message closed",
+          };
+        }
+        return part;
+      });
+      if (outcome === "stopped" && !parts.some((part) =>
+        part.type === "error" && part.code === "turn_stopped"
+      )) {
+        parts.push(create_terminal_error_part(parts, "turn_stopped", error || "Turn stopped"));
+      } else if (outcome === "failed" && error && !parts.some((part) => part.type === "error")) {
+        parts.push(create_terminal_error_part(parts, "turn_execution_failed", error));
+      }
+      await this.persist_snapshot(message_id, parts, "done");
     });
   }
 
-  /** 读取当前流式 Assistant 中的指定 Tool Part。 */
-  find_streaming_tool(
-    tool_call_id: string,
-  ): SessionStreamingToolLocation | undefined {
+  /** 读取当前流式 Agent Message 中的指定 Tool Part。 */
+  find_streaming_tool(tool_call_id: string): SessionStreamingToolLocation | undefined {
     for (const message of this.options.list_messages()) {
-      if (message.role !== "agent" || message.status !== "streaming") continue;
+      if (message.role !== "agent" || message.state !== "streaming") continue;
       const part = message.parts.find(
         (item): item is SessionAgentToolPart =>
           item.type === "tool" && item.tool_call_id === tool_call_id,
@@ -306,19 +258,19 @@ export class SessionAgentMessageState {
     return undefined;
   }
 
-  /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
+  /** 返回当前 Session 全部待响应 Interaction。 */
   list_pending_interactions(): SessionAgentInteractionPart[] {
     return this.interaction_writer.list_pending();
   }
 
-  /** 原子创建 Interaction，并把关联 Tool 转为 waiting-user。 */
+  /** 持久化 Interaction 请求及关联 Tool 状态。 */
   async request_interaction(
     request: SessionInteractionRequest,
   ): Promise<SessionAgentInteractionPart> {
     return await this.interaction_writer.request(request);
   }
 
-  /** 原子保存用户响应，并按 Interaction 结果恢复或终止关联 Tool。 */
+  /** 持久化 Interaction 响应及关联 Tool 状态。 */
   async resolve_interaction(
     interaction_id: string,
     response: SessionInteractionResponse,
@@ -326,7 +278,7 @@ export class SessionAgentMessageState {
     return await this.interaction_writer.resolve(interaction_id, response);
   }
 
-  /** 原子结束未响应 Interaction，并把关联 Tool 标记为失败。 */
+  /** 持久化 Interaction 关闭及关联 Tool 状态。 */
   async close_interaction(
     interaction_id: string,
     input: SessionInteractionCloseInput,
@@ -334,7 +286,34 @@ export class SessionAgentMessageState {
     return await this.interaction_writer.close(interaction_id, input);
   }
 
-  /** 串行执行同一 Assistant Message 的完整写事务。 */
+  /** 原子保存完整 Message 快照；变更比较以数据库事实而非运行投影为准。 */
+  private async persist_snapshot(
+    message_id: string,
+    parts: SessionAgentMessagePart[],
+    state: SessionAgentMessage["state"] = "streaming",
+  ): Promise<void> {
+    const persisted = await this.options.store.read_message(message_id);
+    if (!persisted || persisted.role !== "agent" || persisted.state !== "streaming") {
+      throw new Error(`Persisted streaming Agent Message not found: ${message_id}`);
+    }
+    const committed_at = Date.now();
+    const message: SessionAgentMessage = {
+      ...persisted,
+      state,
+      revision: persisted.revision + 1,
+      updated_at: committed_at,
+      parts: structuredClone(parts).sort((left, right) => left.sequence - right.sequence),
+    };
+    const changed_parts = resolve_changed_parts(persisted.parts, message.parts);
+    await this.options.store.update_message({
+      message,
+      expected_revision: persisted.revision,
+      changed_parts,
+    });
+    this.options.accept_message(message);
+  }
+
+  /** 串行执行同一 Message 的语义检查点。 */
   private async enqueue_write<T>(
     message_id: string,
     operation: () => Promise<T>,
@@ -346,71 +325,54 @@ export class SessionAgentMessageState {
     try {
       return await result;
     } finally {
-      if (this.write_chains.get(message_id) === chain) {
-        this.write_chains.delete(message_id);
-      }
+      if (this.write_chains.get(message_id) === chain) this.write_chains.delete(message_id);
     }
   }
 
-  /** 原子提交包含多个 Part 状态变化的 Assistant 完整快照。 */
-  private async commit_snapshot(
-    current: SessionAgentMessage,
-    parts: SessionAgentMessagePart[],
-  ): Promise<void> {
-    const created_at = Date.now();
-    const message: SessionAgentMessage = {
-      ...current,
-      revision: current.revision + 1,
-      updated_at: created_at,
-      parts: structuredClone(parts).sort(
-        (left, right) => left.sequence - right.sequence,
-      ),
-    };
-    await this.options.store.update_message(
-      message.message_id,
-      current.revision,
-      () => message,
-    );
-    const current_by_id = new Map(
-      current.parts.map((part) => [part.part_id, part]),
-    );
-    const changed_parts = message.parts.filter((part) => {
-      const previous = current_by_id.get(part.part_id);
-      return !previous || JSON.stringify(previous) !== JSON.stringify(part);
-    });
-    if (changed_parts.length === 0) {
-      this.options.accept_message(message);
-      return;
-    }
-    for (const part of changed_parts) {
-      this.options.accept_mutation({
-        mutation_id: generate_id(),
-        variant: "part",
-        type: part.type,
-        message_id: message.message_id,
-        revision: message.revision,
-        session_id: this.session_id,
-        turn_id: message.turn_id,
-        created_at,
-        part_id: part.part_id,
-        part: structuredClone(part),
-      } as SessionMutation, message);
-    }
-  }
-
-  /** 读取指定的流式 Assistant Message，否则抛出稳定领域错误。 */
-  private require_streaming_assistant(
-    message_id: string,
-  ): SessionAgentMessage {
+  /** 读取当前运行投影中的可写 Agent Message。 */
+  private require_streaming_agent(message_id: string): SessionAgentMessage {
     const message = [...this.options.list_messages()].find(
       (item) => item.message_id === message_id,
     );
     if (!message || message.role !== "agent") {
-      throw new Error(`Session assistant Message not found: ${message_id}`);
+      throw new Error(`Agent Message not found: ${message_id}`);
     }
-    if (message.status !== "streaming") {
-      throw new Error(`Assistant Message is already closed: ${message_id}`);
+    if (message.state !== "streaming") {
+      throw new Error(`Agent Message is already done: ${message_id}`);
     }
     return message;
   }
+}
+
+/** 为 Message 终止原因创建最后一个 Error Part。 */
+function create_terminal_error_part(
+  parts: readonly SessionAgentMessagePart[],
+  code: string,
+  message: string,
+): SessionAgentErrorPart {
+  return {
+    part_id: `error:${generate_id()}`,
+    sequence: parts.reduce(
+      (sequence, part) => Math.max(sequence, part.sequence + 1),
+      1,
+    ),
+    type: "error",
+    scope: "turn",
+    code,
+    message,
+    recoverable: true,
+  };
+}
+
+/** 返回相较上次稳定检查点新增或变化的 Parts。 */
+function resolve_changed_parts(
+  current_parts: readonly SessionAgentMessagePart[],
+  next_parts: readonly SessionAgentMessagePart[],
+): SessionAgentMessagePart[] {
+  const current_by_id = new Map(
+    current_parts.map((part) => [part.part_id, JSON.stringify(part)]),
+  );
+  return next_parts.filter(
+    (part) => current_by_id.get(part.part_id) !== JSON.stringify(part),
+  );
 }

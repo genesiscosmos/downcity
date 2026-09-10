@@ -57,8 +57,6 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
     state: {
       ensure_runnable: async () => {},
       schedule_title_generation: () => {},
-      touch_metadata: async () => {},
-      touch_metadata_in_background: () => {},
     },
     messages,
     events: new SessionEventHub(),
@@ -83,7 +81,6 @@ test("Plugin execution context 保留完整 Session origin", async () => {
     return {
       success: true,
       text: "done",
-      deferred_persisted_user_messages: [],
     };
   }, origin);
 
@@ -122,7 +119,6 @@ test("Provider 在输出前失败时只持久化包含 Error Part 的 Agent Mess
     success: false,
     text: "",
     error: "quota exceeded",
-    deferred_persisted_user_messages: [],
   }));
 
   const handle = await turn.prompt({ query: "hello" });
@@ -148,7 +144,6 @@ test("SessionLoop 只在 canonical 用户消息写入后返回 prompt 句柄", a
     return {
       success: true,
       text: "done",
-      deferred_persisted_user_messages: [],
     };
   });
 
@@ -177,7 +172,6 @@ test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
     return {
       success: true,
       text: "done",
-      deferred_persisted_user_messages: [],
     };
   });
 
@@ -208,7 +202,6 @@ test("SessionLoop 在释放 Plugin Hook 作用域前触发 turn committed effect
     return {
       success: true,
       text: "完成",
-      deferred_persisted_user_messages: [],
     };
   });
 
@@ -244,7 +237,6 @@ test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async
     return {
       success: true,
       text: "done",
-      deferred_persisted_user_messages: [],
     };
   });
 
@@ -254,7 +246,7 @@ test("SessionLoop 只持久化当前 Turn 成功的结构化文件修改", async
   const assistant = page.items.find((message) => message.role === "agent");
   const file_diff = assistant.parts.find((part) => part.type === "data");
 
-  assert.equal(assistant.status, "completed");
+  assert.equal(assistant.state, "done");
   assert.equal(file_diff.data_type, "data-session-turn-file-diff");
   assert.equal(file_diff.data.additions, 2);
   assert.equal(file_diff.data.deletions, 1);
@@ -271,7 +263,6 @@ test("Provider 在部分输出后失败时将 Error 追加到同一 Agent Messag
       success: false,
       text: "partial response",
       error: "stream interrupted",
-      deferred_persisted_user_messages: [],
     };
   });
 
@@ -285,7 +276,7 @@ test("Provider 在部分输出后失败时将 Error 追加到同一 Agent Messag
     "user",
     "agent",
   ]);
-  assert.equal(page.items[1].status, "failed");
+  assert.equal(page.items[1].state, "done");
   assert.equal(page.items[1].parts[0].text, "partial response");
   assert.equal(page.items[1].parts[1].type, "error");
   assert.equal(page.items[1].parts[1].message, "stream interrupted");
@@ -309,7 +300,6 @@ test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async ()
       success: false,
       text: "",
       error: "stream interrupted",
-      deferred_persisted_user_messages: [],
     };
   });
 
@@ -318,7 +308,7 @@ test("Assistant 失败收口时不会遗留 input-streaming Tool Part", async ()
   const page = await messages.list_messages();
   const assistant = page.items.find((message) => message.role === "agent");
 
-  assert.equal(assistant?.status, "failed");
+  assert.equal(assistant?.state, "done");
   assert.equal(assistant?.parts[0]?.type, "tool");
   assert.equal(assistant?.parts[0]?.state, "failed");
   assert.equal(assistant?.parts[0]?.error, "stream interrupted");
@@ -357,7 +347,6 @@ test("Turn 使用标准模型事件保持 Tool 与最终正文顺序", async () 
     return {
       success: true,
       text: "最终结论",
-      deferred_persisted_user_messages: [],
     };
   });
 
@@ -409,7 +398,6 @@ test("普通 Tool Loop 的多个 Provider Step 始终写入同一个 Assistant M
     return {
       success: true,
       text: "检查完成。",
-      deferred_persisted_user_messages: [],
     };
   });
 
@@ -457,7 +445,6 @@ test("Turn 在 step 最终快照出现未流式写入的 Tool 时失败", async 
         success: false,
         text: "最终结论",
         error: error.message,
-        deferred_persisted_user_messages: [],
       };
     }
   });
@@ -469,8 +456,8 @@ test("Turn 在 step 最终快照出现未流式写入的 Tool 时失败", async 
 
   assert.equal(result.success, false);
   assert.match(result.error, /snapshot mismatch/);
-  assert.equal(assistant.status, "failed");
-  assert.deepEqual(assistant.parts.map((part) => part.type), ["text", "error"]);
+  assert.equal(assistant.state, "done");
+  assert.deepEqual(assistant.parts.map((part) => part.type), ["error"]);
   assert.equal(page.items.at(-1).role, "agent");
-  assert.equal(page.items.at(-1).parts[1].type, "error");
+  assert.equal(page.items.at(-1).parts[0].type, "error");
 });

@@ -138,7 +138,7 @@ export interface SoundPluginTtsInput {
  *
  * 音频通过 Downcity Session 消息的 file part 返回。
  */
-export type SoundPluginTtsResult = ActionResultMessage;
+export type SoundPluginTtsResult = Extract<ActionResultMessage, { role: "agent" }>;
 
 /**
  * SoundPlugin 构造参数。

@@ -5,7 +5,7 @@
  */
 
 import type { ModelStreamEvent } from "@downcity/type";
-import type { SessionAgentResultPart } from "@downcity/type";
+import type { SessionAgentContent } from "@downcity/type";
 import type { SessionAgentMessagePart } from "@downcity/type";
 import type {
   SessionToolExecutionResult,
@@ -29,7 +29,7 @@ export interface SessionAssistantOutput {
   /** User steer 插入前关闭当前连续 Assistant Message。 */
   close_current_message(): Promise<void>;
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
-  append_result_parts(parts: readonly SessionAgentResultPart[]): Promise<void>;
+  append_result_parts(parts: readonly SessionAgentContent[]): Promise<SessionAgentMessagePart[]>;
   /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */
   append_error(input: {
     /** 错误影响范围。 */

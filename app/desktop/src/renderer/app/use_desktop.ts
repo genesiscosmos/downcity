@@ -676,17 +676,6 @@ export function use_desktop_controller(): DesktopController {
 
   useEffect(() => { send_message_ref.current = send_message; }, [send_message]);
 
-  const compact_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
-    if (is_draft_session_id(session_id)) return;
-    settings.set_error("");
-    try {
-      await window.downcity.chat.compact_session(agent_id, workspace_id, session_id);
-    } catch (reason) {
-      settings.set_error(to_error_message(reason));
-      throw reason;
-    }
-  }, [settings]);
-
   const set_session_model = useCallback(async (workspace_id: string, agent_id: string, session_id: string, model_id: string) => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
     try {
@@ -887,7 +876,6 @@ export function use_desktop_controller(): DesktopController {
     remove_workspace,
     update_draft,
     send_message,
-    compact_session,
     set_session_model,
     set_session_reasoning_effort,
     set_session_approval_mode,
@@ -900,7 +888,7 @@ export function use_desktop_controller(): DesktopController {
     set_queue_paused,
     move_queued_message,
     clear_error: settings.clear_error,
-  }), [archive_session, clear_session_attach_request, compact_session, create_session, create_workspace_for_session, fork_session, group_actions, load_archived_sessions, load_earlier_history, management, move_queued_message, navigation_actions, open_agent_chat, rebind_session_workspace, remove_queued_message, remove_session, remove_workspace, rename_session, respond_interaction, rewrite_session_message, select_session, send_message, send_queued_message, set_queue_paused, set_session_approval_mode, set_session_model, set_session_reasoning_effort, settings.clear_error, stop_session, switch_draft_context, toggle_queued_message_paused, update_draft, update_queued_message]);
+  }), [archive_session, clear_session_attach_request, create_session, create_workspace_for_session, fork_session, group_actions, load_archived_sessions, load_earlier_history, management, move_queued_message, navigation_actions, open_agent_chat, rebind_session_workspace, remove_queued_message, remove_session, remove_workspace, rename_session, respond_interaction, rewrite_session_message, select_session, send_message, send_queued_message, set_queue_paused, set_session_approval_mode, set_session_model, set_session_reasoning_effort, settings.clear_error, stop_session, switch_draft_context, toggle_queued_message_paused, update_draft, update_queued_message]);
 
   return {
     // 稳定句柄：组件用 use_desktop_selector 按最小切片订阅。

@@ -37,10 +37,26 @@ export function resolve_session_message_preview(
   const user_visible = resolve_session_assistant_visible_text(message).trim();
   if (user_visible) return user_visible;
   for (const part of message.parts) {
-    if (part.type === "action") {
-      return part.description ? `${part.title}\n${part.description}` : part.title;
+    switch (part.type) {
+      case "action":
+        return part.description ? `${part.title}\n${part.description}` : part.title;
+      case "error":
+        return part.message;
+      case "text":
+      case "reasoning":
+      case "tool":
+      case "interaction":
+      case "file":
+      case "data":
+        break;
+      default:
+        assert_never(part);
     }
-    if (part.type === "error") return part.message;
   }
   return extract_assistant_tool_summary(message);
+}
+
+/** canonical Agent Part 增加成员时强制预览投影显式处理。 */
+function assert_never(value: never): never {
+  throw new Error(`Unsupported preview Session Part: ${String((value as { type?: unknown }).type)}`);
 }

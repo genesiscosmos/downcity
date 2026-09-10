@@ -79,15 +79,15 @@ export class LocalSessionStore implements SessionStore {
     this.database_location = options.database_location;
   }
 
-  /** 返回指定 Session 的稳定持久化视图。 */
-  session(
+  /** 为新 Session 创建稳定持久化视图。 */
+  create_session(
     session_id: string,
     origin: SessionOrigin,
     workspace_id = this.workspace_id,
   ): SessionStorage {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
-      throw new Error("SessionStore.session requires a non-empty session_id");
+      throw new Error("SessionStore.create_session requires a non-empty session_id");
     }
     const resolved_origin = normalize_session_origin(origin);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_origin.type);
@@ -110,6 +110,44 @@ export class LocalSessionStore implements SessionStore {
     });
     this.sessions.set(cache_key, created);
     return created;
+  }
+
+  /** 打开已有 Session，并以数据库中的完整 origin 作为唯一事实。 */
+  async open_session(session_id: string, origin_type = "chat"): Promise<SessionStorage> {
+    const resolved_session_id = String(session_id || "").trim();
+    if (!resolved_session_id) {
+      throw new Error("SessionStore.open_session requires a non-empty session_id");
+    }
+    const resolved_origin_type = normalize_session_origin_type(origin_type);
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin_type);
+    const cached = this.sessions.get(cache_key);
+    if (cached) return cached;
+    if (this.database_location.type === "memory") {
+      throw new Error(`Session "${resolved_session_id}" not found`);
+    }
+    const database_path = get_agent_session_database_path(
+      this.storage_root_path,
+      resolved_origin_type,
+      resolved_session_id,
+    );
+    if (!(await this.files.path_exists(database_path))) {
+      throw new Error(`Session "${resolved_session_id}" not found`);
+    }
+    const metadata = read_session_metadata_from_database(database_path, resolved_origin_type);
+    if (!metadata || metadata.agent_id !== this.agent_id) {
+      throw new Error(`Session "${resolved_session_id}" belongs to another Agent`);
+    }
+    const opened = new LocalSessionDataStore({
+      files: this.files,
+      storage_root_path: this.storage_root_path,
+      agent_id: this.agent_id,
+      database_location: this.database_location,
+      ...(metadata.workspace_id ? { workspace_id: metadata.workspace_id } : {}),
+      session_id: resolved_session_id,
+      origin: metadata.origin,
+    });
+    this.sessions.set(cache_key, opened);
+    return opened;
   }
 
   /** 判断活动 Session 是否存在。 */
@@ -153,7 +191,7 @@ export class LocalSessionStore implements SessionStore {
   async clear_session_messages(session_id: string, origin_type = "chat"): Promise<boolean> {
     const resolved_origin_type = normalize_session_origin_type(origin_type);
     if (!(await this.has_session(session_id, resolved_origin_type))) return false;
-    const storage = this.session(session_id, { type: resolved_origin_type });
+    const storage = await this.open_session(session_id, resolved_origin_type);
     await storage.clear_messages();
     return true;
   }

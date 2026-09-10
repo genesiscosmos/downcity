@@ -15,7 +15,7 @@ interface SelectableMessageSurface {
   /** canonical 消息标识。 */
   message_id: string;
   /** 消息身份。 */
-  role: "user" | "assistant";
+  role: "user" | "agent";
 }
 
 /** 在当前 Session 消息区内展示选区引用按钮。 */
@@ -88,6 +88,6 @@ function find_selectable_surface(node: Node): { element: HTMLElement; metadata: 
   if (!element) return undefined;
   const message_id = element.dataset.chatMessageId?.trim();
   const role = element.dataset.chatMessageRole;
-  if (!message_id || (role !== "user" && role !== "assistant")) return undefined;
+  if (!message_id || (role !== "user" && role !== "agent")) return undefined;
   return { element, metadata: { message_id, role } };
 }

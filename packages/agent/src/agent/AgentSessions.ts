@@ -29,9 +29,12 @@ import type {
 import type { AgentManagedSession } from "@/types/session/SessionOptions.js";
 import { Session } from "@/session/Session.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
+import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
+import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
 import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionStore } from "@/types/store/SessionStore.js";
+import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { WorkspaceRuntime } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
 import { normalize_session_origin, normalize_session_origin_type } from "@downcity/type";
@@ -78,6 +81,9 @@ type AgentSessionsOptions = {
    */
   session_class?: AgentSessionConstructor;
 
+  /** 为每个 Session 创建独立 Composer 的工厂。 */
+  create_session_composer?: () => SessionComposer;
+
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;
 
@@ -95,6 +101,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
   private readonly ensure_agent_ready: AgentSessionsOptions["ensure_agent_ready"];
   private readonly session_class: AgentSessionConstructor;
+  private readonly create_session_composer: () => SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly on_session_routed?: AgentSessionsOptions["on_session_routed"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
@@ -106,6 +113,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.get_instruction = options.get_instruction;
     this.ensure_agent_ready = options.ensure_agent_ready;
     this.session_class = options.session_class || Session;
+    this.create_session_composer = options.create_session_composer ||
+      (() => new DefaultSessionComposer());
     this.get_agent_model = options.get_agent_model;
     this.on_session_routed = options.on_session_routed;
   }
@@ -180,9 +189,17 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     input?: AgentCreateSessionInput & { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
     const origin = normalize_session_origin(input?.origin);
+    const session_id = `session-${Date.now()}-${nanoid(8)}`;
+    const context = this.resolve_session_context(input?.workspace);
     const session = this.get_or_create_session({
+      session_id,
       workspace: input?.workspace,
       origin,
+      storage: context.store.create_session(
+        session_id,
+        origin,
+        context.workspace_id,
+      ),
     });
     this.on_session_routed?.(session.id, this);
     await session.initialize();
@@ -213,9 +230,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         `Session "${resolved_session_id}" not found in origin "${resolved_origin_type}"`,
       );
     }
-    const persisted_metadata = await store
-      .session(resolved_session_id, { type: resolved_origin_type }, input?.workspace?.id)
-      .read_metadata();
+    const storage = await store.open_session(resolved_session_id, resolved_origin_type);
+    const persisted_metadata = await storage.read_metadata();
     const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
     const persisted_origin = persisted_metadata.origin;
     const cached = this.sessions_by_id.get(cache_key);
@@ -236,6 +252,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       session_id: resolved_session_id,
       workspace: input?.workspace,
       origin: persisted_origin,
+      storage,
     });
     this.on_session_routed?.(resolved_session_id, this);
     await session.initialize();
@@ -370,10 +387,9 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (!(await context.store.has_session(resolved_session_id, resolved_origin_type))) {
       throw new Error(`Session "${resolved_session_id}" not found`);
     }
-    const store = context.store.session(
+    const store = await context.store.open_session(
       resolved_session_id,
-      { type: resolved_origin_type },
-      context.workspace_id,
+      resolved_origin_type,
     );
     const metadata = await store.read_metadata();
     if (metadata.agent_id !== this.agent_id) {
@@ -397,10 +413,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     workspace?: WorkspaceRuntime;
     /** 当前 Session 的创建来源。 */
     origin?: SessionOrigin;
+    /** 已由集合层创建或打开的单 Session Storage。 */
+    storage?: SessionStorage;
   }): AgentManagedSession {
-    const resolved_session_id =
-      String(input?.session_id || "").trim() ||
-      `session-${Date.now()}-${nanoid(8)}`;
+    const resolved_session_id = String(
+      input?.session_id || input?.storage?.session_id || "",
+    ).trim() || `session-${Date.now()}-${nanoid(8)}`;
     const origin = normalize_session_origin(input?.origin);
     const cache_key = this.session_cache_key(resolved_session_id, origin.type);
     const cached = this.sessions_by_id.get(cache_key);
@@ -412,8 +430,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       workspace_path: context.workspace_path,
       ...(context.workspace_id ? { workspace_id: context.workspace_id } : {}),
       origin,
-      store: context.store.session(resolved_session_id, origin, context.workspace_id),
-      get_session_store: (session_id) => context.store.session(session_id, origin, context.workspace_id),
+      store: input?.storage || context.store.create_session(resolved_session_id, origin, context.workspace_id),
+      create_session_store: (session_id) => context.store.create_session(session_id, origin, context.workspace_id),
       register_forked_session: (session) => this.register_forked_session(session),
       session_id: resolved_session_id,
       get_tools: () => context.get_tools(),
@@ -424,6 +442,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_agent_model: () => this.get_agent_model(),
       get_hooks: () => context.get_hooks(),
       get_managed_plugin_system_blocks: async () => [],
+      create_composer: this.create_session_composer,
       ensure_configured: async (session) => {
         await this.ensure_agent_ready();
       },

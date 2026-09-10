@@ -26,15 +26,15 @@ canonical history，永远不会因为上下文压缩而删除或改写。
 ## Composer 与上下文策略
 
 `SessionComposer` 负责生成最终送给模型的 system、messages 和 tools。Composer 内部使用一个
-`SessionContextPolicy`，例如 `SequenceSummaryContextPolicy` 会在自己的
-`composer_sequence_summaries` 派生表中保存累计摘要。
+`SessionContextPolicy`。默认 `AdaptivePartContextPolicy` 以 Part 为上下文处理边界，并在自己的
+`composer_adaptive_part_checkpoints` 派生表中保存累计摘要边界。
 
 派生摘要、索引和检索结果不是 Message，可以删除并重建，也不会改变用户可浏览的 canonical history。
-当前策略只会读取最新摘要边界之后的 Message：
+当前策略只会读取最新摘要边界之后的 Part，因此即使单条 Agent Message 本身很大，也能在其中间建立边界：
 
 ```text
-最新 Policy 派生摘要
-+ 边界之后的 canonical Message
+显式 <session-context-summary> system block
++ 边界之后的 canonical Parts
 ```
 
 模型返回上下文超限时，Composer 调用 Policy 的 `recover_context()` 推进派生状态；不会写入 Active、Segment 或第二份消息文件。
@@ -42,8 +42,11 @@ canonical history，永远不会因为上下文压缩而删除或改写。
 ## 中断恢复与事务
 
 Message envelope 与 Parts 在同一个 SQLite 事务中提交，只有提交成功后才发布 Mutation。启动时
-SessionStorage 会把 streaming Agent Message 和 running Action 收口为可恢复状态。附件仍放在
+SessionMessages 会把 Storage 查询到的 streaming Agent Message 和 running Action 收口为可恢复状态；Storage 不解释业务终态。附件仍放在
 `attachments/`，Message Part 只保存附件引用。
 
+模型流遵循“事件负责实时展示、内存负责流式组装、数据库只保存稳定语义检查点”：普通 chunk 不写 SQLite；完整模型 Step、Tool 执行前后、Interaction、Action/Error 和 Message 收口才提交事务。
+
 旧版本 JSONL 数据不由 Desktop 或 Runtime 自动迁移。需要迁移时，在应用外执行仓库提供的一次性脚本
-`scripts/migrate-session-storage-to-sqlite.mjs`。
+`scripts/migrate-session-storage-to-sqlite.mjs`。已经生成旧 SQLite 的开发期数据使用
+`scripts/migrate-session-sqlite-v3.mjs` 升级；Runtime 只检查版本，不会隐式修改磁盘。

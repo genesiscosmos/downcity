@@ -21,13 +21,13 @@ Interaction 是 Assistant Message 的 Part，不是新的顶层 Message，也不
 
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
-  if (
-    mutation.variant !== "part" ||
-    mutation.type !== "interaction" ||
-    mutation.part.status !== "pending"
-  ) return;
+  if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+  const interaction = mutation.message.parts.find(
+    (part) => part.type === "interaction" && part.status === "pending",
+  );
+  if (!interaction) return;
 
-  render_interaction(mutation.part);
+  render_interaction(interaction);
 });
 
 await session.respond({

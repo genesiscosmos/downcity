@@ -63,7 +63,7 @@ export interface SessionOptions {
   store: SessionStorage;
 
   /** 为 fork 创建另一个 Session 的领域持久化视图。 */
-  get_session_store: (session_id: string) => SessionStorage;
+  create_session_store: (session_id: string) => SessionStorage;
 
   /**
    * 将 fork 创建的子 Session 交回 AgentSessions 登记。
@@ -127,6 +127,6 @@ export interface SessionOptions {
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;
 
-  /** 当前 Session 使用的统一执行策略；省略时使用默认 Composer。 */
-  composer?: SessionComposer;
+  /** 为当前 Session 及其 fork 子 Session 创建独立 Composer 的工厂。 */
+  create_composer?: () => SessionComposer;
 }

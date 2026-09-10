@@ -26,14 +26,14 @@ or model providers. Canonical history is never deleted or rewritten by context c
 ## Composer and context policies
 
 `SessionComposer` generates the final system, messages, and tools sent to the model. It uses one
-`SessionContextPolicy`, such as `SequenceSummaryContextPolicy`, which stores cumulative summaries in
-its own `composer_sequence_summaries` derived table.
+`SessionContextPolicy`. The default `AdaptivePartContextPolicy` treats each Part as the context-processing
+boundary and stores checkpoints in its own `composer_adaptive_part_checkpoints` derived table.
 
 Summaries, indexes, and retrieval results are rebuildable derived data, not Messages. A policy resolves:
 
 ```text
-latest policy-derived summary
-+ canonical Messages after the summary boundary
+explicit <session-context-summary> system block
++ canonical Parts after the summary boundary
 ```
 
 When a provider reports a context limit, Composer asks the policy to advance its derived state through
@@ -43,8 +43,13 @@ message log.
 ## Recovery and transactions
 
 The Message envelope and its Parts commit in one SQLite transaction; Mutations publish only after commit.
-On startup, SessionStorage closes streaming Agent Messages and running Actions left by an interrupted process.
+On startup, SessionMessages closes the non-terminal Agent Messages and running Actions selected by Storage;
+Storage does not interpret domain terminal states.
 Attachments remain under `attachments/`, while Parts store attachment references.
 
+Model streaming follows one boundary: events drive live rendering, memory assembles the stream, and SQLite stores only stable semantic checkpoints. Ordinary chunks do not write SQLite; complete model steps, Tool transitions, Interactions, Actions/Errors, and Message closure do.
+
 Legacy JSONL data is not migrated by Desktop or Runtime. Run the external one-time
-`scripts/migrate-session-storage-to-sqlite.mjs` script when migration is needed.
+`scripts/migrate-session-storage-to-sqlite.mjs` script when migration is needed. Development databases
+already written with an older SQLite schema use `scripts/migrate-session-sqlite-v3.mjs`; Runtime only checks the
+version and never mutates an old database implicitly.

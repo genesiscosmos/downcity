@@ -92,9 +92,10 @@ test("迁移 Message/Part/Summary 并移动到标准来源分区", async () => {
     assert.equal(state.message_count, 2);
     assert.equal(state.preview_text, "完成");
     assert.equal(state.system_snapshot, "你是测试 Agent。");
-    assert.deepEqual(database.prepare("SELECT role, revision FROM messages ORDER BY sequence").all().map((row) => ({ ...row })), [
-      { role: "user", revision: 2 },
-      { role: "agent", revision: 1 },
+    assert.equal(database.prepare("PRAGMA user_version").get().user_version, 3);
+    assert.deepEqual(database.prepare("SELECT role, revision, state FROM messages ORDER BY sequence").all().map((row) => ({ ...row })), [
+      { role: "user", revision: 2, state: null },
+      { role: "agent", revision: 1, state: "done" },
     ]);
     const parts = database.prepare("SELECT sequence, step_id, type, content FROM message_parts WHERE message_id = 'agent-2' ORDER BY sequence").all();
     assert.deepEqual(parts.map((part) => [part.sequence, part.step_id, part.type]), [
@@ -146,10 +147,10 @@ test("迁移运行中草稿和旧顶层 Action/Error", async () => {
   await migrate_session_storage_to_sqlite({ root_path });
   const database = new DatabaseSync(path.join(session_path, "session.db"), { readOnly: true });
   try {
-    assert.deepEqual(database.prepare("SELECT role, status FROM messages ORDER BY sequence").all().map((row) => ({ ...row })), [
-      { role: "agent", status: "completed" },
-      { role: "agent", status: "failed" },
-      { role: "agent", status: "stopped" },
+    assert.deepEqual(database.prepare("SELECT role, state FROM messages ORDER BY sequence").all().map((row) => ({ ...row })), [
+      { role: "agent", state: "done" },
+      { role: "agent", state: "done" },
+      { role: "agent", state: "done" },
     ]);
     assert.deepEqual(database.prepare("SELECT type FROM message_parts ORDER BY message_id").all().map((row) => row.type).sort(), ["action", "error", "text"]);
     assert.equal(JSON.parse(database.prepare("SELECT content FROM message_parts WHERE part_id = 'action-1:part:1'").get().content).state, "failed");

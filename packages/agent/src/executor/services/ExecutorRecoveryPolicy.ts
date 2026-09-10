@@ -3,17 +3,12 @@
  *
  * 关键点（中文）
  * - 统一封装“压缩后重试”和“普通失败兜底”逻辑。
- * - Executor 只负责准备输入与调用策略，不再直接承载重试状态机。
+ * - Executor 提供单次 Turn 行为，本模块只决定是否恢复并重试。
  * - 不改变外部行为，只把异常分流规则集中到一个地方。
  */
 
-import type { ModelClient } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
-import type {
-  SessionStepExecutionInput,
-  SessionTurnExecutionResult,
-} from "@/types/session/SessionExecution.js";
+import type { SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
 
 /**
  * 可压缩错误的最大重试次数。
@@ -33,74 +28,9 @@ interface ExecutorRecoveryPolicyOptions {
   logger: Logger;
 }
 
-interface ExecutorPrepareExecutionInput {
-  /**
-   * 当前轮用户 query。
-   */
-  query: string;
-
-  /**
-   * 当前轮模型实例。
-   */
-  model: ModelClient;
-
-  /**
-   * 当前显式运行上下文。
-   */
-  turn_context: SessionTurnContext;
-
-  /**
-   * 当前压缩重试次数。
-   */
-  retry_count: number;
-}
-
-interface ExecutorExecutePreparedInput {
-  /**
-   * 已装配好的执行输入。
-   */
-  execute_input: SessionStepExecutionInput;
-
-  /**
-   * 当前轮模型实例。
-   */
-  model: ModelClient;
-
-  /**
-   * 当前显式运行上下文。
-   */
-  turn_context: SessionTurnContext;
-}
-
 interface ExecutorRecoveryInput {
-  /**
-   * 当前轮用户 query。
-   */
-  query: string;
-
-  /**
-   * 当前轮模型实例。
-   */
-  model: ModelClient;
-
-  /**
-   * 当前显式运行上下文。
-   */
-  turn_context: SessionTurnContext;
-
-  /**
-   * 运行前装配执行输入。
-   */
-  prepare_execute_input: (
-    input: ExecutorPrepareExecutionInput,
-  ) => Promise<SessionStepExecutionInput>;
-
-  /**
-   * 执行已装配好的运行输入。
-   */
-  execute_prepared_input: (
-    input: ExecutorExecutePreparedInput,
-  ) => Promise<SessionTurnExecutionResult>;
+  /** 按当前恢复次数执行完整 Turn。 */
+  execute_turn: (retry_count: number) => Promise<SessionTurnExecutionResult>;
 }
 
 /**
@@ -109,7 +39,6 @@ interface ExecutorRecoveryInput {
 export class ExecutorRecoveryPolicy {
   private readonly recover_context: ExecutorRecoveryPolicyOptions["recover_context"];
   private readonly logger: Logger;
-  private retry_count = 0;
 
   constructor(options: ExecutorRecoveryPolicyOptions) {
     const session_id = String(options.session_id || "").trim();
@@ -121,58 +50,42 @@ export class ExecutorRecoveryPolicy {
   }
 
   /**
-   * 重置当前 Turn 执行状态。
-   */
-  reset_execution_state(): void {
-    this.retry_count = 0;
-  }
-
-  /**
    * 执行一次带恢复策略的 Session Turn。
    */
   async execute_with_retry(
     input: ExecutorRecoveryInput,
   ): Promise<SessionTurnExecutionResult> {
-    try {
-      const execute_input = await input.prepare_execute_input({
-        query: input.query,
-        model: input.model,
-        turn_context: input.turn_context,
-        retry_count: this.retry_count,
-      });
-      return await input.execute_prepared_input({
-        execute_input,
-        model: input.model,
-        turn_context: input.turn_context,
-      });
-    } catch (error) {
-      if (this.retry_count < MAX_COMPACTION_RETRY_ATTEMPTS) {
-        const recovered = await this.recover_context(error);
-        if (recovered) {
-        await this.logger.log("info", "[agent] compacting", {
-          retryCount: this.retry_count,
-          error: String(error),
-        });
-          this.retry_count += 1;
-          return await this.execute_with_retry(input);
+    let retry_count = 0;
+    while (true) {
+      try {
+        return await input.execute_turn(retry_count);
+      } catch (error) {
+        if (retry_count < MAX_COMPACTION_RETRY_ATTEMPTS) {
+          const recovered = await this.recover_context(error);
+          if (recovered) {
+            await this.logger.log("info", "[agent] compacting", {
+              retryCount: retry_count,
+              error: String(error),
+            });
+            retry_count += 1;
+            continue;
+          }
         }
-      }
-      if (this.retry_count > 0) {
+        if (retry_count > 0) {
+          return this.build_failure_result({
+            error_text:
+              "Context length exceeded and retries failed. Please resend your question.",
+          });
+        }
+
+        const error_text = String(error);
+        await this.logger.log("error", "Executor execution failed", {
+          error: error_text,
+        });
         return this.build_failure_result({
-          error_text:
-            "Context length exceeded and retries failed. Please resend your question.",
-          turn_context: input.turn_context,
+          error_text,
         });
       }
-
-      const error_text = String(error);
-      await this.logger.log("error", "Executor execution failed", {
-        error: error_text,
-      });
-      return this.build_failure_result({
-        error_text,
-        turn_context: input.turn_context,
-      });
     }
   }
 
@@ -182,18 +95,11 @@ export class ExecutorRecoveryPolicy {
      */
     error_text: string;
 
-    /**
-     * 当前显式运行上下文。
-     */
-    turn_context: SessionTurnContext;
   }): SessionTurnExecutionResult {
     return {
       success: false,
       text: "",
       error: input.error_text,
-      deferred_persisted_user_messages: [
-        ...input.turn_context.input.deferred_user_messages(),
-      ],
     };
   }
 }

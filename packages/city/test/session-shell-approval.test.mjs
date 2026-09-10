@@ -138,17 +138,18 @@ test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
     let interaction_snapshot;
     let interaction_result;
     const unsubscribe = session.subscribe((mutation) => {
-      if (
-        mutation.variant !== "part" ||
-        mutation.type !== "interaction" ||
-        mutation.part.interaction_type !== "approval" ||
-        mutation.part.status !== "pending" ||
-        mutation.part.request.type !== "approval" ||
-        mutation.part.request.source.type !== "shell"
-      ) return;
-      interaction_snapshot = mutation.part;
+      if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+      const interaction = mutation.message.parts.find((part) =>
+        part.type === "interaction" &&
+        part.interaction_type === "approval" &&
+        part.status === "pending" &&
+        part.request.type === "approval" &&
+        part.request.source.type === "shell"
+      );
+      if (!interaction) return;
+      interaction_snapshot = interaction;
       interaction_result = session.respond({
-        interaction_id: mutation.part.interaction_id,
+        interaction_id: interaction.interaction_id,
         response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
       });
     });

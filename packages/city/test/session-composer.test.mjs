@@ -27,12 +27,10 @@ function create_input(model) {
     created_at: 1,
     updated_at: 1,
     role: "user",
-    input_type: "prompt",
     parts: [{
       part_id: "text-1",
       type: "text",
       text: "hello",
-      state: "done",
     }],
   }];
   return {
@@ -132,7 +130,7 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
 
   class CustomSession extends Session {
     constructor(options) {
-      super({ ...options, composer: new CustomComposer() });
+      super({ ...options, create_composer: () => new CustomComposer() });
     }
   }
 
@@ -156,5 +154,37 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
   } finally {
     await agent.dispose();
     await fs.rm(project_root, { recursive: true, force: true });
+  }
+});
+
+test("Agent Composer 工厂为创建、恢复缓存与 Fork 保持实例隔离", async () => {
+  const composer_instances = [];
+  const agent = new Agent({
+    id: "composer_factory_agent",
+    session_composer: () => {
+      const composer = new DefaultSessionComposer({
+        context_policy: new FullHistoryContextPolicy(),
+      });
+      composer_instances.push(composer);
+      return composer;
+    },
+  });
+  try {
+    const first = await agent.sessions.create();
+    const second = await agent.sessions.create();
+    assert.equal(composer_instances.length, 2);
+    assert.notEqual(composer_instances[0], composer_instances[1]);
+
+    const restored = await agent.sessions.get(first.id);
+    assert.equal(restored, first);
+    assert.equal(composer_instances.length, 2);
+
+    const forked = await first.fork();
+    assert.ok(forked.id);
+    assert.equal(composer_instances.length, 3);
+    assert.notEqual(composer_instances[0], composer_instances[2]);
+    assert.notEqual(second.id, forked.id);
+  } finally {
+    await agent.dispose();
   }
 });

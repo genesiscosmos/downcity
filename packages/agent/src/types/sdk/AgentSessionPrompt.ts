@@ -6,7 +6,7 @@
  * - 首条输入、运行中补充输入、排队到下一轮的输入，调用侧都使用同一结构。
  */
 
-import type { SessionPromptPart } from "@downcity/type";
+import type { SessionUserContent } from "@downcity/type";
 
 /**
  * Session user message part 类型。
@@ -15,7 +15,7 @@ import type { SessionPromptPart } from "@downcity/type";
  * - 这是 Downcity Session 输入边界，不依赖模型协议或第三方 SDK。
  * - 可直接用于 `session.prompt({ query: [...parts] })` 传入 text、context、file 等 parts。
  */
-export type SessionUserMessagePart = SessionPromptPart;
+export type AgentSessionPromptContent = SessionUserContent;
 
 /**
  * Session prompt 输入。
@@ -45,16 +45,26 @@ export type SessionUserMessagePart = SessionPromptPart;
  */
 export interface AgentSessionPromptInput {
   /**
+   * 调用方为同一业务输入提供的稳定幂等标识。
+   *
+   * 说明（中文）
+   * - 相同 Session 内重复提交同一个 `request_id`，只会创建一条 canonical User Message。
+   * - 已完成的请求直接返回原 Turn 结果；进程重启后未完成的请求会复用原 Turn 恢复执行。
+   * - 不同业务输入不得复用同一个值；不需要跨进程重试的交互式调用可以省略。
+   */
+  request_id?: string;
+
+  /**
    * 当前这次要追加到 Session 的用户文本或 parts 数组。
    *
    * 说明（中文）
    * - 支持两种格式：
    *   1. `string`：纯文本用户输入，Session 会将其包装为用户消息。
-   *   2. `SessionUserMessagePart[]`：Downcity Session user parts，可直接携带 text、context、file 等内容。
+   *   2. `AgentSessionPromptContent[]`：Downcity Session 内容，可直接携带 text、context、file 等内容。
    * - 调用侧永远只传"新的用户输入"。
    * - 它是否并入当前 turn，还是排到下一 turn，由 Session 内部决定。
    */
-  query: string | SessionUserMessagePart[];
+  query: string | AgentSessionPromptContent[];
 }
 
 /**
@@ -62,7 +72,7 @@ export interface AgentSessionPromptInput {
  *
  * 说明（中文）
  * - `string`：trim 后为空即视为空。
- * - `SessionUserMessagePart[]`：数组为空，或仅包含空文本和空 Context 时视为空。
+ * - `AgentSessionPromptContent[]`：数组为空，或仅包含空文本和空 Context 时视为空。
  */
 export function is_agent_session_prompt_input_empty(input: AgentSessionPromptInput): boolean {
   const query = input.query;

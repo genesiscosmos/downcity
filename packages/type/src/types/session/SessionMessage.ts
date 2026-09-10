@@ -7,6 +7,12 @@
 
 import type { JsonObject, JsonValue } from "../json/Json.js";
 import type {
+  SessionContextContent,
+  SessionDataContent,
+  SessionFileContent,
+  SessionTextContent,
+} from "./SessionContent.js";
+import type {
   SessionInteractionRequest,
   SessionInteractionResponse,
   SessionInteractionStatus,
@@ -48,63 +54,35 @@ export interface SessionMessageBase {
 }
 
 /** User 文本 part。 */
-export interface SessionUserTextPart {
+export interface SessionUserTextPart extends SessionTextContent {
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
   /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
   sequence: number;
-  /** part 类型固定为 text。 */
-  type: "text";
-  /** 用户输入文本。 */
-  text: string;
-  /** User 文本已经完整，不参与流式更新。 */
-  state: "done";
 }
 
 /** User 带语义标签的模型上下文 part。 */
-export interface SessionUserContextPart {
+export interface SessionUserContextPart extends SessionContextContent {
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
   /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
   sequence: number;
-  /** part 类型固定为 context。 */
-  type: "context";
-  /** 模型上下文使用的安全 XML 风格标签名。 */
-  tag: string;
-  /** 进入模型上下文时由标签包裹的原始内容。 */
-  context: string;
 }
 
 /** User 文件 part。 */
-export interface SessionUserFilePart {
+export interface SessionUserFilePart extends SessionFileContent {
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
   /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
   sequence: number;
-  /** part 类型固定为 file。 */
-  type: "file";
-  /** 文件可读取地址或 data URL。 */
-  url: string;
-  /** 文件 MIME 类型。 */
-  media_type: string;
-  /** 可选原始文件名。 */
-  filename?: string;
 }
 
 /** User 结构化数据 part。 */
-export interface SessionUserDataPart {
+export interface SessionUserDataPart extends SessionDataContent {
   /** User Message 内稳定的 part 标识。 */
   part_id: string;
   /** Part 在当前 User Message 内的不可变线性顺序，从 1 开始。 */
   sequence: number;
-  /** part 类型固定为 data。 */
-  type: "data";
-  /** Session data part 的类型名称。 */
-  data_type: `data-${string}` | string;
-  /** 可 JSON 序列化的数据。 */
-  data: JsonValue;
-  /** Session data part 的可选稳定标识。 */
-  data_id?: string;
 }
 
 /** User Message part。 */
@@ -118,24 +96,18 @@ export type SessionUserMessagePart =
 export interface SessionUserMessage extends SessionMessageBase {
   /** Message 主体角色固定为 user。 */
   role: "user";
-  /** 普通 prompt 或当前 turn 中的 steering 输入。 */
-  input_type: "prompt" | "steer";
   /** 用户消息的结构化 parts。 */
   parts: SessionUserMessagePart[];
 }
 
 /** Agent 普通文本 Part。 */
-export interface SessionAgentTextPart {
+export interface SessionAgentTextPart extends SessionTextContent {
   /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
   /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
   step_id?: string;
-  /** part 类型固定为 text。 */
-  type: "text";
-  /** 当前已经累计的完整文本。 */
-  text: string;
   /** 文本 part 是否已经结束。 */
   state: "streaming" | "done";
 }
@@ -213,39 +185,23 @@ export interface SessionAgentInteractionPart {
 }
 
 /** Agent 文件 Part。 */
-export interface SessionAgentFilePart {
+export interface SessionAgentFilePart extends SessionFileContent {
   /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
   /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
   step_id?: string;
-  /** part 类型固定为 file。 */
-  type: "file";
-  /** 文件 MIME 类型。 */
-  media_type: string;
-  /** 文件可读取地址或 data URL。 */
-  url: string;
-  /** 可选原始文件名。 */
-  filename?: string;
 }
 
 /** Agent 结构化数据 Part。 */
-export interface SessionAgentDataPart {
+export interface SessionAgentDataPart extends SessionDataContent {
   /** Agent Message 内稳定的 Part 标识。 */
   part_id: string;
   /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
   sequence: number;
   /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
   step_id?: string;
-  /** part 类型固定为 data。 */
-  type: "data";
-  /** Session data part 的类型名称。 */
-  data_type: `data-${string}` | string;
-  /** 可 JSON 序列化的数据。 */
-  data: JsonValue;
-  /** Session data part 的可选稳定标识。 */
-  data_id?: string;
 }
 
 /** Agent Action Part。 */
@@ -307,8 +263,8 @@ export type SessionAgentMessagePart =
 export interface SessionAgentMessage extends SessionMessageBase {
   /** Message 主体角色固定为 agent。 */
   role: "agent";
-  /** Agent Message 当前写入状态。 */
-  status: "streaming" | "completed" | "stopped" | "failed";
+  /** Agent Message 聚合当前仍在写入，还是已经永久收口。 */
+  state: "streaming" | "done";
   /** Agent 内按真实产生顺序保存的 Parts。 */
   parts: SessionAgentMessagePart[];
 }

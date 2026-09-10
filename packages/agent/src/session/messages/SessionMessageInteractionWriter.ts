@@ -50,7 +50,7 @@ export class SessionMessageInteractionWriter {
   /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
   list_pending(): SessionAgentInteractionPart[] {
     return [...this.options.list_messages()].flatMap((message) =>
-      message.role === "agent" && message.status === "streaming"
+      message.role === "agent" && message.state === "streaming"
         ? message.parts.flatMap((part) =>
             part.type === "interaction" && part.status === "pending"
               ? [structuredClone(part)]
@@ -215,9 +215,9 @@ export class SessionMessageInteractionWriter {
           (item) => item.message_id === message_id,
         )
       : [...this.options.list_messages()].find(
-          (item) => item.role === "agent" && item.status === "streaming",
+          (item) => item.role === "agent" && item.state === "streaming",
         );
-    if (!message || message.role !== "agent" || message.status !== "streaming") {
+    if (!message || message.role !== "agent" || message.state !== "streaming") {
       throw new Error(
         message_id
           ? `Streaming Assistant Message not found: ${message_id}`
@@ -235,7 +235,7 @@ export class SessionMessageInteractionWriter {
       }
     | undefined {
     for (const message of this.options.list_messages()) {
-      if (message.role !== "agent" || message.status !== "streaming") continue;
+      if (message.role !== "agent" || message.state !== "streaming") continue;
       const part = message.parts.find(
         (item): item is SessionAgentInteractionPart =>
           item.type === "interaction" &&

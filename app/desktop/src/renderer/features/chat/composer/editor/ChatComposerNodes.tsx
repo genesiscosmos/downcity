@@ -68,7 +68,7 @@ export const ChatReferenceNode = Node.create({
   inline: true,
   atom: true,
   selectable: true,
-  addAttributes: () => ({ message_id: { default: "" }, role: { default: "assistant" }, tag: { default: "reference" }, text: { default: "" }, preview_text: { default: "" } }),
+  addAttributes: () => ({ message_id: { default: "" }, role: { default: "agent" }, tag: { default: "reference" }, text: { default: "" }, preview_text: { default: "" } }),
   parseHTML: () => [{ tag: "span[data-chat-reference]" }],
   renderHTML: ({ HTMLAttributes }) => ["span", mergeAttributes(HTMLAttributes, { "data-chat-reference": "" })],
   addNodeView: () => ReactNodeViewRenderer(ChatReferenceView),

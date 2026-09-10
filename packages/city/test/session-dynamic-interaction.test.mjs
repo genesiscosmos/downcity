@@ -43,8 +43,8 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
       turn_id: "turn-1",
       type: "plugin:deployment/confirm",
       source: {
-        type: "extension",
-        extension_name: "deployment",
+        type: "plugin",
+        plugin_name: "deployment",
       },
       title: "确认发布",
       payload: {

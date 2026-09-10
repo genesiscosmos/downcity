@@ -341,13 +341,13 @@ export class ChatQueueWorker {
     if (
       event.variant !== "message" ||
       event.role !== "agent" ||
-      event.message.status === "streaming"
+      event.message.state === "streaming"
     ) return;
     const segment_text = String(
       lane.assistantTextByMessageId.get(event.message_id) || "",
     ).trim();
     lane.assistantTextByMessageId.delete(event.message_id);
-    if (!segment_text || event.message.status !== "completed") return;
+    if (!segment_text || event.message.parts.some((part) => part.type === "error")) return;
 
     try {
       await this.dispatchAssistantStepMessage({

@@ -79,7 +79,7 @@ const result = await turn.finished;
 
 因此应用代码必须检查 `success`，而不是只等待 Promise 成功兑现。
 
-结构化 Agent Message 通过 `messages()` 与 `subscribe()` 读取，不在 Turn Result 中复制。模型或运行时在输出前失败时，Session 会持久化一条包含用户可见 Error Part 的 failed Agent Message。
+结构化 Agent Message 通过 `messages()` 与 `subscribe()` 读取，不在 Turn Result 中复制。模型或运行时失败时，Session 会收口 Agent Message，并使用用户可见的 Error Part 持久化失败原因。
 
 Tool 抛出异常、返回 `{ success: false }`，或者模型生成的 Tool 参数不是完整 JSON 时，SDK 会把同一个 Tool Part 标记为 `failed`，并把 failed Tool Result 交回下一次模型 Step。它们不会直接使 Turn 失败。只有模型 Provider 流、canonical Message 写入或其他执行基础设施失败才会结束 Turn；无任何可见输出的临时 Provider 流错误会自动重试 5 次，连同首次调用最多请求 6 次。已经产生部分输出时则保留草稿并明确返回失败，避免重试造成正文重复。
 
@@ -100,7 +100,7 @@ Session 会自行决定第二条输入：
 
 | 情况 | 结果 |
 | --- | --- |
-| 当前 Turn 仍可吸收输入 | 写入一条 `input_type: "steer"` 的 User Message，并入当前 Turn |
+| 当前 Turn 仍可吸收输入 | 写入一条普通 canonical User Message，并入当前 Turn |
 | 当前 Turn 已越过可吸收边界 | 写入普通 User Message，排到下一 Turn |
 | Session 空闲 | 立即创建新 Turn |
 

@@ -172,7 +172,6 @@ export class SessionComposition {
           (block) => block.content,
         ),
       });
-    const canonical_messages = await this.options.store.list_messages();
     const plugin_runtime = refresh_system
       ? this.options.get_hooks()
       : turn_context?.step.hooks || this.options.get_hooks();
@@ -198,19 +197,13 @@ export class SessionComposition {
           const value: SessionTurnContextHookValue = {
             session_id: this.options.session_id,
             turn_id: turn_context.session.turn_id,
-            user_messages: canonical_messages.flatMap((message) => {
-              if (
-                message.role !== "user" ||
-                message.turn_id !== turn_context.session.turn_id
-              ) return [];
-              return [{
+            user_messages: turn_context.input.user_messages().map((message) => ({
                 message_id: message.message_id,
                 text: message.parts
                   .filter((part) => part.type === "text")
                   .map((part) => part.text)
                   .join("\n"),
-              }];
-            }),
+              })),
             blocks: [],
           };
           try {

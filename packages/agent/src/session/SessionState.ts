@@ -23,7 +23,6 @@ import type {
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import { SessionMessages } from "@/session/SessionMessages.js";
 import { SessionTitleTask } from "@/session/runtime/SessionTitleTask.js";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
@@ -59,7 +58,6 @@ export class SessionState {
   private readonly session_id: string;
   private readonly origin: SessionStateOptions["origin"];
   private readonly store: SessionStorage;
-  private readonly messages: SessionMessages;
   private readonly state: SessionLocalState;
   private readonly logger: Logger;
   private readonly ensure_configured_hook?: SessionStateOptions["ensure_configured_hook"];
@@ -73,7 +71,6 @@ export class SessionState {
     this.session_id = options.session_id;
     this.origin = options.origin;
     this.store = options.store;
-    this.messages = options.messages;
     this.state = options.state;
     this.logger = options.logger;
     this.ensure_configured_hook = options.ensure_configured_hook;
@@ -265,53 +262,19 @@ export class SessionState {
     };
   }
 
-  /**
-   * 仅刷新当前 session metadata。
-   */
-  async touch_metadata(): Promise<void> {
-    await this.run_metadata_mutation(async () => {
-      const metadata = await this.store.read_metadata();
-      await this.store.write_metadata({
-        ...metadata,
-        agent_id: this.agent_id,
-        updated_at: Date.now(),
-        ...(this.state.session_config.model_label
-          ? { model_label: this.state.session_config.model_label }
-          : {}),
-      });
-    });
-  }
-
-  /** 在后台刷新 Session metadata，不阻塞当前 Turn。 */
-  touch_metadata_in_background(): void {
-    void this.touch_metadata().catch(async (error) => {
-      try {
-        await this.logger.log("warn", "[agent] session_metadata.background_update_failed", {
-          session_id: this.session_id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      } catch {
-        // metadata 诊断日志失败不能影响当前 Turn。
-      }
-    });
-  }
-
   /** 异步调度首条用户消息的 Session 标题生成。 */
   schedule_title_generation(): void {
     this.title_task.schedule(async (signal) => {
       const before_metadata = await this.store.read_metadata();
       if (String(before_metadata.title || "").trim()) return;
-      const messages = await this.messages.list_history_messages();
-      const first_user_message = messages.find(
-        (message) => message.role === "user",
-      );
+      const first_user_message = await this.store.read_first_user_message();
       if (!first_user_message) return;
       const first_user_message_id = first_user_message.message_id;
       const before_title = String(before_metadata.title || "").trim();
       const next_metadata = await ensure_session_title({
         session_id: this.session_id,
         store: this.store,
-        messages,
+        messages: [first_user_message],
         model: this.get_model(),
         model_label: this.state.session_config.model_label,
         logger: this.logger,
@@ -327,10 +290,10 @@ export class SessionState {
           const latest_metadata = await this.store.read_metadata();
           if (signal.aborted) return latest_metadata;
           if (String(latest_metadata.title || "").trim()) return latest_metadata;
-          const latest_messages = await this.messages.list_history_messages();
-          const source_exists = latest_messages.some(
-            (message) => message.message_id === first_user_message_id,
+          const source_message = await this.store.read_message(
+            first_user_message_id,
           );
+          const source_exists = source_message?.role === "user";
           if (!source_exists || signal.aborted) return latest_metadata;
           const next_metadata = { ...latest_metadata, title };
           await this.store.write_metadata(next_metadata);

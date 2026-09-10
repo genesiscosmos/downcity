@@ -10,7 +10,7 @@ test("按照 Tiptap 节点顺序生成 text、context 与 file parts", () => {
     content: [{
       type: "paragraph",
       content: [
-        { type: "chatReference", attrs: { message_id: "message-1", role: "assistant", text: "此前回答", preview_text: "此前回答" } },
+        { type: "chatReference", attrs: { message_id: "message-1", role: "agent", text: "此前回答", preview_text: "此前回答" } },
         { type: "chatAttachment", attrs: { attachment_id: "attachment-1", filename: "design.png", media_type: "image/png", data_url: "data:image/png;base64,AA==" } },
         { type: "text", text: "分析一下这张图" },
       ],

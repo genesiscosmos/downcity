@@ -55,7 +55,6 @@ import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
-import { ensure_session_title } from "@/session/SessionTitle.js";
 import type { SessionActionEventInput } from "@downcity/type";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type {
@@ -68,6 +67,7 @@ import {
   resolve_session_fork_messages,
 } from "@/session/messages/SessionForkMessageFiles.js";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
+import type { SessionContextRecoveryReason } from "@/types/session/SessionContextPolicy.js";
 
 /**
  * SDK 本地 Session。
@@ -82,13 +82,14 @@ export class Session implements AgentSession {
 
   private readonly workspace_path: string;
   private readonly store: SessionStorage;
-  private readonly get_session_store: SessionOptions["get_session_store"];
+  private readonly create_session_store: SessionOptions["create_session_store"];
   private readonly register_forked_session: SessionOptions["register_forked_session"];
   private readonly get_tools: SessionOptions["get_tools"];
   private readonly logger: SessionOptions["logger"];
   private readonly get_managed_plugin_system_blocks: SessionOptions["get_managed_plugin_system_blocks"];
   private readonly ensure_configured_hook?: SessionOptions["ensure_configured"];
   private readonly composer: SessionComposer;
+  private readonly create_composer: () => SessionComposer;
   private readonly session_messages: SessionMessages;
   private readonly executor: Executor;
   private readonly events: SessionEventHub;
@@ -117,7 +118,7 @@ export class Session implements AgentSession {
     this.origin = options.origin;
     this.workspace_path = String(options.workspace_path || "").trim();
     this.store = options.store;
-    this.get_session_store = options.get_session_store;
+    this.create_session_store = options.create_session_store;
     this.register_forked_session = options.register_forked_session;
     this.get_tools = options.get_tools;
     this.logger = options.logger;
@@ -127,7 +128,9 @@ export class Session implements AgentSession {
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
     this.get_managed_plugin_system_blocks = options.get_managed_plugin_system_blocks;
     this.ensure_configured_hook = options.ensure_configured;
-    this.composer = options.composer || new DefaultSessionComposer();
+    this.create_composer = options.create_composer ||
+      (() => new DefaultSessionComposer());
+    this.composer = this.create_composer();
     if (!this.id) {
       throw new Error("Session requires a non-empty session_id");
     }
@@ -181,7 +184,6 @@ export class Session implements AgentSession {
       session_id: this.id,
       origin: this.origin,
       store: this.store,
-      messages: this.session_messages,
       state: this.local_state,
       logger: this.logger,
       ensure_configured_hook: this.ensure_configured_hook
@@ -200,7 +202,7 @@ export class Session implements AgentSession {
       workspace_path: this.workspace_path,
       executor: this.executor,
       maintain_context: async () => {
-        await this.recover_context(new Error("context window usage threshold"));
+        await this.recover_context("usage_pressure");
       },
       state: this.state,
       events: this.events,
@@ -429,20 +431,9 @@ export class Session implements AgentSession {
    * 读取当前 session 详情。
    */
   async get_info(): Promise<AgentSessionInfo> {
-    const [metadata, messages] = await Promise.all([
-      this.store.read_metadata(),
-      this.session_messages.list_history_messages(),
-    ]);
-    const metadata_with_title = metadata.title
-      ? metadata
-      : await ensure_session_title({
-          session_id: this.id,
-          store: this.store,
-          messages,
-          logger: this.logger,
-        });
+    const metadata = await this.store.read_metadata();
     const model_label = String(
-      metadata_with_title.model_label ||
+      metadata.model_label ||
       read_model_label(this.get_selected_model()) ||
       "",
     ).trim();
@@ -451,10 +442,9 @@ export class Session implements AgentSession {
       agent_id: this.agent_id,
       session_id: this.id,
       metadata: {
-        ...metadata_with_title,
+        ...metadata,
         ...(model_label ? { model_label } : {}),
       },
-      messages,
       executing: this.is_executing(),
     });
   }
@@ -585,8 +575,8 @@ export class Session implements AgentSession {
       workspace_path: this.workspace_path,
       ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
       origin: this.origin,
-      store: this.get_session_store(session_id),
-      get_session_store: this.get_session_store,
+      store: this.create_session_store(session_id),
+      create_session_store: this.create_session_store,
       register_forked_session: this.register_forked_session,
       session_id: session_id,
       get_tools: this.get_tools,
@@ -598,7 +588,7 @@ export class Session implements AgentSession {
       get_managed_plugin_system_blocks: this.get_managed_plugin_system_blocks,
       ensure_configured: this.ensure_configured_hook,
       get_agent_model: this.get_agent_model,
-      composer: this.composer,
+      create_composer: this.create_composer,
     });
   }
 
@@ -626,8 +616,7 @@ export class Session implements AgentSession {
           turn_context,
           retry_count,
         ),
-      recover_context: async (error) => await this.recover_context(error),
-      get_model: () => this.get_model(),
+      recover_context: async (reason) => await this.recover_context(reason),
       logger: this.logger,
       get_hooks: () => this.get_hooks(),
       apply_system_snapshot: (input) => this.session_composition.apply_snapshot(input),
@@ -635,12 +624,14 @@ export class Session implements AgentSession {
   }
 
   /** 让 Composer 的 Context Policy 尝试推进派生上下文状态。 */
-  private async recover_context(error: unknown): Promise<boolean> {
+  private async recover_context(
+    reason: SessionContextRecoveryReason,
+  ): Promise<boolean> {
     return await this.composer.recover_context({
       session: this.session_composition.compose_identity(),
       model: this.get_model(),
       storage: this.store,
-      error,
+      reason,
       on_model_request_failure: (notice) => {
         this.events.publish(create_session_model_request_warning({
           session_id: this.id,
@@ -686,7 +677,6 @@ export class Session implements AgentSession {
       input,
     );
     if (!appended) return;
-    this.state.touch_metadata_in_background();
     this.state.schedule_title_generation();
   }
 
@@ -694,10 +684,9 @@ export class Session implements AgentSession {
   private async append_external_agent_message(
     input: AppendExternalSessionAgentMessageInput,
   ): Promise<void> {
-    const appended = await this.session_messages.append_external_agent_message(
+    await this.session_messages.append_external_agent_message(
       input,
     );
-    if (appended) await this.state.touch_metadata();
   }
 
   /** 持久化并发布一条只包含 Action Part 的 canonical Agent Message。 */
@@ -712,7 +701,6 @@ export class Session implements AgentSession {
       ...(input.description ? { description: input.description } : {}),
       status: input.status,
     });
-    await this.state.touch_metadata();
   }
 
 }

@@ -1,22 +1,22 @@
 /**
- * Session 入站与 Action 内容类型。
+ * Session Message 的无身份内容协议。
  *
- * 这些类型只描述尚未分配 Session identity 的内容。进入 Session 后，
- * `SessionMessages` 会为每个 part 分配稳定标识并转换成 canonical `SessionMessage`。
+ * Content 只表达调用方希望写入的内容；Session 持久化时为其增加 Part identity，
+ * 不再为 Prompt、Action 或运行期输入复制多套同构 Part 类型。
  */
 
 import type { JsonValue } from "../json/Json.js";
 
-/** Session 输入中的文本内容。 */
-export interface SessionTextInputPart {
+/** Session 文本内容。 */
+export interface SessionTextContent {
   /** 内容判别字段。 */
   type: "text";
-  /** 用户或 Action 产生的完整文本。 */
+  /** 完整文本。 */
   text: string;
 }
 
-/** Session 输入中带语义标签的模型上下文。 */
-export interface SessionContextInputPart {
+/** Session 带语义标签的模型上下文内容。 */
+export interface SessionContextContent {
   /** 内容判别字段。 */
   type: "context";
   /** 模型上下文使用的安全 XML 风格标签名。 */
@@ -25,8 +25,8 @@ export interface SessionContextInputPart {
   context: string;
 }
 
-/** Session 输入中的文件内容。 */
-export interface SessionFileInputPart {
+/** Session 文件内容。 */
+export interface SessionFileContent {
   /** 内容判别字段。 */
   type: "file";
   /** 文件的 IANA MIME 类型。 */
@@ -37,8 +37,8 @@ export interface SessionFileInputPart {
   filename?: string;
 }
 
-/** Session 输入中的结构化数据内容。 */
-export interface SessionDataInputPart {
+/** Session 结构化数据内容。 */
+export interface SessionDataContent {
   /** 内容判别字段。 */
   type: "data";
   /** 结构化数据的业务类型。 */
@@ -49,15 +49,19 @@ export interface SessionDataInputPart {
   data_id?: string;
 }
 
-/** `session.prompt()` 接受的封闭内容集合。 */
-export type SessionPromptPart =
-  | SessionTextInputPart
-  | SessionContextInputPart
-  | SessionFileInputPart
-  | SessionDataInputPart;
+/** 可以进入模型 User Message 的 Session 内容。 */
+export type SessionModelUserContent =
+  | SessionTextContent
+  | SessionContextContent
+  | SessionFileContent;
 
-/** Action 可以追加到 Assistant Message 的封闭内容集合。 */
-export type SessionAgentResultPart =
-  | SessionTextInputPart
-  | SessionFileInputPart
-  | SessionDataInputPart;
+/** `session.prompt()` 可以写入 User Message 的封闭内容集合。 */
+export type SessionUserContent =
+  | SessionModelUserContent
+  | SessionDataContent;
+
+/** Action 可以追加到 Agent Message 的封闭内容集合。 */
+export type SessionAgentContent =
+  | SessionTextContent
+  | SessionFileContent
+  | SessionDataContent;

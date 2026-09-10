@@ -50,7 +50,7 @@ A real UI should process `buffered` and set `snapshot_ready = true` in one seria
 | `turn` | Update runtime state by `turn_id` |
 | `session` | Update Session metadata such as the title |
 
-After a disconnect, do not assume Deltas can be replayed. Lost Deltas have already been merged into `agent_message.json` or a final Message snapshot, so reloading `messages()` is what restores correct state.
+After a disconnect, do not assume Deltas can be replayed. Deltas from completed steps are already part of a stable SQLite snapshot; an interrupted unfinished projection may be discarded and closed with an Error Part. Reload `messages()` to restore authoritative state.
 
 ## RemoteSession disconnects
 
@@ -64,9 +64,9 @@ When a remote connection closes:
 
 If a client is awaiting `turn.finished` when the connection breaks, handle its failed result and restore the UI by reloading the Session. Do not synthesize Assistant completion from client-side timers.
 
-## Segment history
+## History pagination
 
-The initial snapshot loads all Active Messages. To load earlier history, pass the current result's `next_before_sequence` to read the previous whole Segment. Live Mutations update Active only; do not use them to replace already loaded Segments.
+The initial snapshot loads the most recent Message page. To load earlier history, pass its `next_before_sequence` with an appropriate `limit`. Live Mutations update the current snapshot; never let an older revision replace a loaded Message.
 
 ## Deduplication
 

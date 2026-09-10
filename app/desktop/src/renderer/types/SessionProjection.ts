@@ -1,13 +1,10 @@
 /** Renderer 对 canonical Session 消息执行批处理与渲染投影时使用的内部类型。 */
 
-import type { SessionMessage } from "@downcity/agent";
+import type { SessionAgentMessage, SessionMessage } from "@downcity/agent";
 
-/** canonical Assistant 消息。 */
-export type SessionAgentMessage = Extract<SessionMessage, { type: "agent" }>;
-
-/** Assistant 消息在单批 mutation 内部使用的可变构建状态，不会逃逸到 Renderer 快照。 */
-export interface AssistantMutationDraft {
-  /** 当前批次已经合并到的 Assistant 消息。 */
+/** Agent 消息在单批 mutation 内部使用的可变构建状态，不会逃逸到 Renderer 快照。 */
+export interface AgentMessageMutationDraft {
+  /** 当前批次已经合并到的 Agent 消息。 */
   message: SessionAgentMessage;
   /** 只在当前批次首次修改消息时复制一次的 parts。 */
   parts: SessionAgentMessage["parts"];
@@ -32,7 +29,7 @@ export interface IndexedSessionMutationResult {
 }
 
 /** 一条 Session 消息渲染投影。 */
-export interface SessionMessageRow {
+export interface SessionMessageProjectionRow {
   /** 当前需要渲染的 canonical 消息。 */
   message: SessionMessage;
   /** 当前消息之后是否仍有可见 canonical 内容。 */
@@ -44,7 +41,7 @@ export interface SessionMessageSegment {
   /** 由 canonical sequence 区间生成的稳定分段标识。 */
   segment_id: number;
   /** 当前分段包含的有序消息渲染行。 */
-  rows: SessionMessageRow[];
+  rows: SessionMessageProjectionRow[];
   /** 当前分段是否包含仍在流式更新的 Agent 消息。 */
   has_streaming_message: boolean;
 }

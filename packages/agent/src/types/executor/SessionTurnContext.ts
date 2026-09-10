@@ -9,8 +9,11 @@
 
 import type { RuntimeToolEffect } from "@downcity/type";
 import type { ShellApprovalGateway } from "@downcity/type";
-import type { SessionUserMessage } from "@downcity/type";
-import type { SessionAgentResultPart } from "@downcity/type";
+import type {
+  SessionModelUserContent,
+  SessionUserMessage,
+} from "@downcity/type";
+import type { SessionAgentContent } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type { SessionHookContext } from "@downcity/type";
 import type { SessionHookScopeRuntime } from "@downcity/type";
@@ -45,14 +48,16 @@ export interface SessionTurnContextInit {
   /** 上游取消信号；上下文会把它转发到自身拥有的运行生命周期。 */
   abort_signal?: AbortSignal;
 
-  /** 在 Step 检查点消费 Session 队列，并返回应并入模型上下文的 User 消息。 */
-  merge_step_input?: () => Promise<SessionUserMessage[]>;
+  /** 在 Step 检查点提交 Session 输入队列；持久化消息由 Composer 重新读取。 */
+  commit_step_input?: () => Promise<void>;
+
+  /** 将 Executor 产生的内部模型输入持久化为当前 Turn 的 canonical User Message。 */
+  append_internal_user_message?: (
+    parts: readonly SessionModelUserContent[],
+  ) => Promise<SessionUserMessage>;
 
   /** 判断是否仍有等待下一个 Step 消费的 User prompt。 */
   has_pending_step_input?: () => boolean;
-
-  /** 消费一次 canonical history 重载请求。 */
-  consume_history_reload?: () => boolean;
 
   /** Executor 写入 canonical Assistant Message 使用的唯一输出端口。 */
   assistant_output?: SessionAssistantOutput;
@@ -142,25 +147,23 @@ export interface SessionTurnContext {
     hook_context(call_id?: string): SessionHookContext;
   };
 
-  /** 当前运行的动态 User 输入及延迟持久化输入。 */
+  /** 当前运行的动态 User 输入。 */
   readonly input: {
-    /** 在 Step 边界消费运行期注入消息与 Session 队列消息。 */
-    checkpoint(): Promise<SessionUserMessage[]>;
+    /** 登记已经持久化、属于本 Turn 的 canonical User Message。 */
+    observe_user_message(message: SessionUserMessage): void;
+
+    /** 返回本 Turn 已登记 User Message 的不可变快照。 */
+    user_messages(): readonly SessionUserMessage[];
+
+    /** 提交输入队列；下一 Step 由 Composer 重新读取 canonical history。 */
+    checkpoint(): Promise<void>;
 
     /** 判断是否有等待下一个 Step 消费的 Session prompt。 */
     has_pending(): boolean;
 
-    /** 注入一条只影响当前运行、在下一 Step 生效的 User 消息。 */
-    inject_user_message(message: SessionUserMessage): void;
+    /** 持久化一条只供模型消费的内部 canonical User Message。 */
+    append_internal(parts: readonly SessionModelUserContent[]): Promise<SessionUserMessage>;
 
-    /** 延迟到 Assistant 结果落盘后再持久化一条 User 消息。 */
-    defer_user_message(message: SessionUserMessage): void;
-
-    /** 返回延迟持久化 User 消息的不可变快照。 */
-    deferred_user_messages(): readonly SessionUserMessage[];
-
-    /** 消费一次 canonical history 重载请求。 */
-    consume_history_reload(): boolean;
   };
 
   /** 当前运行的 Assistant Message 与辅助 Action 输出能力。 */
@@ -169,10 +172,10 @@ export interface SessionTurnContext {
     readonly assistant?: SessionAssistantOutput;
 
     /** 把 Action 产生的 Assistant Parts 加入当前 Step 收口队列。 */
-    enqueue_assistant_parts(parts: readonly SessionAgentResultPart[]): void;
+    enqueue_assistant_parts(parts: readonly SessionAgentContent[]): void;
 
     /** 消费当前 Step 中等待写入 canonical Assistant Message 的 Parts。 */
-    take_assistant_parts(): SessionAgentResultPart[];
+    take_assistant_parts(): SessionAgentContent[];
 
     /** 发布一条不进入 LLM 输入的 Session Action。 */
     publish_action(event: AgentSessionActionEvent): Promise<void>;

@@ -17,7 +17,7 @@ const MESSAGE_PART_TYPES = new Set([
 ]);
 const USER_PART_TYPES = new Set(["text", "context", "file", "data"]);
 
-/** 迁移脚本冻结使用的 v1 Session schema。 */
+/** 迁移脚本冻结使用的 v3 Session schema。 */
 const SESSION_STORAGE_SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
 
@@ -45,15 +45,14 @@ CREATE TABLE messages (
   sequence INTEGER NOT NULL UNIQUE CHECK (sequence >= 1),
   revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
   role TEXT NOT NULL CHECK (role IN ('user', 'agent')),
-  input_type TEXT CHECK (input_type IS NULL OR input_type IN ('prompt', 'steer')),
-  status TEXT NOT NULL CHECK (status IN ('streaming', 'completed', 'stopped', 'failed')),
+  state TEXT CHECK (state IS NULL OR state IN ('streaming', 'done')),
   visibility TEXT NOT NULL CHECK (visibility IN ('visible', 'internal')),
   origin_session_id TEXT,
   origin_message_id TEXT,
   origin_turn_id TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  CHECK ((role = 'user' AND input_type IS NOT NULL AND status = 'completed') OR (role = 'agent' AND input_type IS NULL))
+  CHECK ((role = 'user' AND state IS NULL) OR (role = 'agent' AND state IS NOT NULL))
 );
 
 CREATE TABLE message_parts (
@@ -352,8 +351,7 @@ function normalize_legacy_message(value, session_id, summaries) {
     sequence,
     revision,
     role: wrapped.role,
-    input_type: wrapped.role === "user" && wrapped.input_type === "steer" ? "steer" : "prompt",
-    status: wrapped.role === "agent" && ["streaming", "completed", "stopped", "failed"].includes(wrapped.status) ? wrapped.status : "completed",
+    state: wrapped.role === "agent" && wrapped.status === "streaming" ? "streaming" : "done",
     visibility: wrapped.visibility === "internal" ? "internal" : "visible",
     origin: normalize_message_origin(wrapped.origin),
     created_at,
@@ -424,6 +422,7 @@ function normalize_parts(role, source_parts, message_id) {
       ...(normalize_optional_string(source.step_id) || derived_step_id
         ? { step_id: normalize_optional_string(source.step_id) || derived_step_id }
         : {}),
+      ...(role === "user" && source.type === "text" ? { state: undefined } : {}),
     };
   });
 }
@@ -431,7 +430,7 @@ function normalize_parts(role, source_parts, message_id) {
 /** 将运行中状态收口为可恢复的终态。 */
 function recover_interrupted_message(message) {
   if (message.role !== "agent") return message;
-  let changed = message.status === "streaming";
+  let changed = message.state === "streaming";
   const parts = message.parts.map((part) => {
     if (part.type === "action" && part.state === "running") {
       changed = true;
@@ -453,7 +452,7 @@ function recover_interrupted_message(message) {
   });
   return changed ? {
     ...message,
-    status: message.status === "streaming" ? "stopped" : message.status,
+    state: "done",
     revision: message.revision + 1,
     updated_at: Math.max(Date.now(), message.updated_at),
     parts,
@@ -486,7 +485,7 @@ function write_session_database(database_path, session) {
   try {
     database.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE; PRAGMA synchronous = FULL;");
     database.exec(SESSION_STORAGE_SCHEMA_SQL);
-    database.exec("PRAGMA user_version = 1; BEGIN IMMEDIATE;");
+    database.exec("PRAGMA user_version = 3; BEGIN IMMEDIATE;");
     const preview_text = resolve_message_preview(session.messages.at(-1)).slice(0, 180) || null;
     database.prepare(`
       INSERT INTO session_state (
@@ -501,10 +500,10 @@ function write_session_database(database_path, session) {
     );
     const insert_message = database.prepare(`
       INSERT INTO messages (
-        message_id, turn_id, sequence, revision, role, input_type, status,
+        message_id, turn_id, sequence, revision, role, state,
         visibility, origin_session_id, origin_message_id, origin_turn_id,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insert_part = database.prepare(`
       INSERT INTO message_parts (
@@ -514,8 +513,7 @@ function write_session_database(database_path, session) {
     for (const message of session.messages) {
       insert_message.run(
         message.message_id, message.turn_id, message.sequence, message.revision, message.role,
-        message.role === "user" ? message.input_type : null,
-        message.role === "agent" ? message.status : "completed",
+        message.role === "agent" ? message.state : null,
         message.visibility, message.origin?.session_id ?? null, message.origin?.message_id ?? null,
         message.origin?.turn_id ?? null, message.created_at, message.updated_at,
       );

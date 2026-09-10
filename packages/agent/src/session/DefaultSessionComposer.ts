@@ -11,7 +11,7 @@ import type {
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
 import type { SessionContextPolicy } from "@/types/session/SessionContextPolicy.js";
-import { SequenceSummaryContextPolicy } from "@/session/composer/policies/SequenceSummaryContextPolicy.js";
+import { AdaptivePartContextPolicy } from "@/session/composer/policies/AdaptivePartContextPolicy.js";
 import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelMessage } from "@downcity/type";
 
@@ -64,7 +64,7 @@ export class DefaultSessionComposer implements SessionComposer {
     /** 生成模型历史的上下文策略。 */
     context_policy?: SessionContextPolicy;
   }) {
-    this.context_policy = options?.context_policy || new SequenceSummaryContextPolicy();
+    this.context_policy = options?.context_policy || new AdaptivePartContextPolicy();
   }
 
   /** 初始化内部 Context Policy 的派生 schema。 */
@@ -97,6 +97,7 @@ export class DefaultSessionComposer implements SessionComposer {
       storage: input.storage.composer_storage(this.context_policy.name),
       project_root: input.session.project_root,
     });
+    system_blocks.push(...(context.system_blocks ?? []));
     return {
       system: system_blocks.map((block) => ({
         role: "system" as const,
@@ -114,7 +115,7 @@ export class DefaultSessionComposer implements SessionComposer {
     return await this.context_policy.recover({
       storage: input.storage.composer_storage(this.context_policy.name),
       project_root: input.session.project_root,
-      error: input.error,
+      reason: input.reason,
       model: input.model,
       on_model_request_failure: input.on_model_request_failure,
     });

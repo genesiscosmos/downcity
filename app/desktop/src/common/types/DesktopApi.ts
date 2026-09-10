@@ -910,8 +910,6 @@ export interface DesktopApi {
     get_history(agent_id: string, workspace_id: string, session_id: string, before_sequence: number): Promise<DesktopChatHistoryPage>;
     /** 提交输入并在 Session 接受后返回。 */
     send(agent_id: string, workspace_id: string, session_id: string, input: JSONContent): Promise<DesktopChatSendResult>;
-    /** 将显式压缩命令加入 Session 的有序执行队列。 */
-    compact_session(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
     /** 停止当前 Session Turn。 */
     stop(agent_id: string, workspace_id: string, session_id: string): Promise<void>;
     /** 响应 Session 当前等待的审批或问题。 */

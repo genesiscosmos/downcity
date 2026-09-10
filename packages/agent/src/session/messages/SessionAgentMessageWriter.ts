@@ -9,7 +9,7 @@ import type { ModelStreamEvent } from "@downcity/type";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import { SessionToolPartGate } from "@/session/messages/SessionToolPartGate.js";
-import type { SessionAgentResultPart } from "@downcity/type";
+import type { SessionAgentContent } from "@downcity/type";
 import type {
   SessionAgentErrorPart,
   SessionAgentMessage,
@@ -21,6 +21,7 @@ import type {
   SessionToolInputReady,
 } from "@/types/session/SessionTool.js";
 import { generate_id } from "@/utils/Id.js";
+import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
 
 /** 单个 Assistant Message 的流式 Writer。 */
 export class SessionAgentMessageWriter {
@@ -84,6 +85,7 @@ export class SessionAgentMessageWriter {
         state: "ready",
         input: to_session_json_value(input.input),
       });
+      await this.recorder.checkpoint_agent_message(this.message_id);
     });
   }
 
@@ -103,6 +105,7 @@ export class SessionAgentMessageWriter {
             state: "failed",
             error: read_tool_error(result.output),
           });
+      await this.recorder.checkpoint_agent_message(this.message_id);
     });
   }
 
@@ -142,47 +145,34 @@ export class SessionAgentMessageWriter {
     });
   }
 
-  /** 释放异常结束的 Step 作用域并保留已经写入的 canonical Parts。 */
+  /** 释放异常 Step，并丢弃最近检查点之后的运行投影。 */
   async abort_step(): Promise<void> {
     await this.enqueue_write(async () => {
       this.tool_part_gate.reject_pending("Assistant canonical step was aborted");
-      if (this.step_active) this.reset_step_state();
+      if (this.step_active) {
+        await this.recorder.rollback_agent_projection(this.message_id);
+        this.reset_step_state();
+      }
     });
   }
 
   /** 把 Action 产生的封闭内容追加到当前 Assistant Message。 */
-  async append_result_parts(parts: readonly SessionAgentResultPart[]): Promise<void> {
-    await this.enqueue_write(async () => {
+  async append_result_parts(parts: readonly SessionAgentContent[]): Promise<SessionAgentMessagePart[]> {
+    return await this.enqueue_write(async () => {
       if (this.closed) throw new Error("Assistant Message writer is closed");
+      const appended_parts: SessionAgentMessagePart[] = [];
+      let sequence = this.next_part_sequence();
       for (const part of parts) {
-        if (part.type === "text") {
-          await this.upsert_part({
-            part_id: `text:${generate_id()}`,
-            sequence: this.next_part_sequence(),
-            type: "text",
-            text: part.text,
-            state: "done",
-          });
-        } else if (part.type === "file") {
-          await this.upsert_part({
-            part_id: `file:${generate_id()}`,
-            sequence: this.next_part_sequence(),
-            type: "file",
-            media_type: part.media_type,
-            url: part.url,
-            ...(part.filename ? { filename: part.filename } : {}),
-          });
-        } else {
-          await this.upsert_part({
-            part_id: `data:${generate_id()}`,
-            sequence: this.next_part_sequence(),
-            type: "data",
-            data_type: part.data_type,
-            data: part.data,
-            ...(part.data_id ? { data_id: part.data_id } : {}),
-          });
-        }
+        const canonical = create_session_agent_content_part(
+          part,
+          `${part.type}:${generate_id()}`,
+          sequence,
+        );
+        appended_parts.push(canonical);
+        sequence += 1;
       }
+      await this.recorder.commit_agent_parts(this.message_id, appended_parts);
+      return appended_parts;
     });
   }
 
@@ -199,7 +189,7 @@ export class SessionAgentMessageWriter {
   }): Promise<void> {
     await this.enqueue_write(async () => {
       if (this.closed) throw new Error("Assistant Message writer is closed");
-      await this.upsert_part({
+      const part = {
         part_id: `error:${generate_id()}`,
         sequence: this.next_part_sequence(),
         type: "error",
@@ -207,13 +197,14 @@ export class SessionAgentMessageWriter {
         code: input.code,
         message: input.message,
         recoverable: input.recoverable,
-      } satisfies SessionAgentErrorPart);
+      } satisfies SessionAgentErrorPart;
+      await this.recorder.commit_agent_parts(this.message_id, [part]);
     });
   }
 
   /** 写入一个完整 canonical Assistant Part。 */
   async upsert_part(part: SessionAgentMessagePart): Promise<void> {
-    await this.recorder.update_agent_part(this.message_id, part);
+    this.recorder.project_agent_part(this.message_id, part);
     if (this.step_active) this.current_step_part_ids.add(part.part_id);
   }
 
@@ -263,7 +254,7 @@ export class SessionAgentMessageWriter {
       if (!event.delta) return;
       const type = event.type === "text_delta" ? "text" : "reasoning";
       const part_id = this.require_content_part_id(event.content_id);
-      await this.recorder.append_agent_delta(
+      this.recorder.project_agent_delta(
         this.message_id,
         part_id,
         type,
@@ -300,7 +291,7 @@ export class SessionAgentMessageWriter {
       if (!event.input_delta) return;
       const tool_call_id = this.require_tool_call_id(event.content_id);
       const tool = this.require_tool(tool_call_id);
-      await this.recorder.append_agent_tool_input_delta(
+      this.recorder.project_agent_tool_input_delta(
         this.message_id,
         tool.part_id,
         tool_call_id,
@@ -452,10 +443,10 @@ export class SessionAgentMessageWriter {
   }
 
   /** 串行执行对当前 Assistant Message 的全部写操作。 */
-  private async enqueue_write(operation: () => Promise<void>): Promise<void> {
+  private async enqueue_write<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
     const current = this.write_chain.then(operation, operation);
-    this.write_chain = current.catch(() => undefined);
-    await current;
+    this.write_chain = current.then(() => undefined, () => undefined);
+    return await current;
   }
 
   /** 在队列内关闭当前 Assistant Message。 */

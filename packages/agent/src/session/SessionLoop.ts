@@ -7,8 +7,9 @@
  * - Queue 由 Session 持有；这里不解释配置种类，只执行出队 Command。
  */
 
+import { createHash } from "node:crypto";
 import { nanoid } from "nanoid";
-import type { SessionUserMessage } from "@downcity/type";
+import type { SessionAgentMessage, SessionUserMessage } from "@downcity/type";
 import type { SessionActionEvent } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
@@ -25,7 +26,10 @@ import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js"
 import { create_session_turn_context } from "@/session/runtime/SessionTurnContext.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { SessionState } from "@/session/SessionState.js";
-import { SessionMessages } from "@/session/SessionMessages.js";
+import {
+  normalize_session_user_parts,
+  SessionMessages,
+} from "@/session/SessionMessages.js";
 import type { ShellApprovalGateway } from "@downcity/type";
 import type {
   SessionInteractionLifecycle,
@@ -33,6 +37,7 @@ import type {
 } from "@downcity/type";
 import { SessionAssistantOutputAdapter } from "@/session/execution/SessionAssistantOutputAdapter.js";
 import { SessionQueue } from "@/session/SessionQueue.js";
+import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
 import type {
   ActiveSessionTurnState,
   SessionDeferred,
@@ -77,7 +82,8 @@ export class SessionLoop {
   private pending_prompt_count = 0;
   private processing_promise: Promise<void> | null = null;
   private active_turn: ActiveSessionTurnState | null = null;
-  private checkpoint_merged_messages: SessionUserMessage[] | null = null;
+  /** 尚未完成 canonical 接收的幂等 Prompt，防止进程内并发重复入队。 */
+  private readonly pending_request_handles = new Map<string, Promise<AgentSessionTurnHandle>>();
 
   constructor(options: SessionLoopOptions) {
     this.session_id = String(options.session_id || "").trim();
@@ -108,12 +114,52 @@ export class SessionLoop {
       throw new Error("session.prompt requires a non-empty query");
     }
     await this.state.ensure_runnable();
+    const request_identity = resolve_prompt_request_identity(this.session_id, input.request_id);
+    if (!request_identity) return await this.enqueue_prompt(input);
+    const pending_handle = this.pending_request_handles.get(request_identity.turn_id);
+    if (pending_handle) return await pending_handle;
+    const operation = this.prompt_with_identity(input, request_identity);
+    this.pending_request_handles.set(request_identity.turn_id, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.pending_request_handles.get(request_identity.turn_id) === operation) {
+        this.pending_request_handles.delete(request_identity.turn_id);
+      }
+    }
+  }
+
+  /** 解析已有幂等结果，或把同一个稳定 Prompt 加入队列。 */
+  private async prompt_with_identity(
+    input: AgentSessionPromptInput,
+    request_identity: PromptRequestIdentity,
+  ): Promise<AgentSessionTurnHandle> {
+    const existing_handle = await this.resolve_idempotent_prompt(request_identity);
+    if (existing_handle) return existing_handle;
+    const persisted_message = this.messages.get_message(request_identity.message_id);
+    return await this.enqueue_prompt(input, request_identity, persisted_message?.role === "user"
+      ? persisted_message
+      : undefined);
+  }
+
+  /** 把一个已校验的 Prompt 加入 Session FIFO。 */
+  private async enqueue_prompt(
+    input: AgentSessionPromptInput,
+    request_identity?: PromptRequestIdentity,
+    persisted_message?: SessionUserMessage,
+  ): Promise<AgentSessionTurnHandle> {
     const deferred_handle = create_deferred<AgentSessionTurnHandle>();
     this.pending_prompt_count += 1;
     this.enqueue_command({
       kind: "prompt",
+      ...(request_identity ? { turn_id: request_identity.turn_id } : {}),
       execute: async () => {
-        await this.execute_prompt_command(input, deferred_handle);
+        await this.execute_prompt_command(
+          input,
+          deferred_handle,
+          request_identity?.message_id,
+          persisted_message,
+        );
       },
       cancel: () => {
         this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
@@ -208,7 +254,7 @@ export class SessionLoop {
         continue;
       }
 
-      const turn_id = `turn:${this.session_id}:${Date.now()}:${nanoid(6)}`;
+      const turn_id = command.turn_id || `turn:${this.session_id}:${Date.now()}:${nanoid(6)}`;
       const active_turn = create_active_session_turn_state(turn_id);
       this.active_turn = active_turn;
       active_turn.turn_context = this.create_turn_context(active_turn);
@@ -253,30 +299,20 @@ export class SessionLoop {
   /**
    * 在下一 Session step 检查点按入队顺序提交配置并持久化 steer。
    */
-  private async drain_queued_inputs(
-    active_turn: ActiveSessionTurnState,
-  ): Promise<SessionUserMessage[]> {
+  private async drain_queued_inputs(): Promise<void> {
     const drained = this.queue.drain();
-    if (drained.length <= 0) return [];
-    const merged: SessionUserMessage[] = [];
-    this.checkpoint_merged_messages = merged;
+    if (drained.length <= 0) return;
 
-    try {
-      for (let index = 0; index < drained.length; index += 1) {
-        const command = drained[index];
-        try {
-          await this.execute_command(command);
-        } catch {
-          // Prompt 持久化失败时恢复尚未处理的对象；Action 自己负责失败观测。
-          this.queue.restore_front(drained.slice(index));
-          break;
-        }
+    for (let index = 0; index < drained.length; index += 1) {
+      const command = drained[index];
+      try {
+        await this.execute_command(command);
+      } catch {
+        // Prompt 持久化失败时恢复尚未处理的对象；Action 自己负责失败观测。
+        this.queue.restore_front(drained.slice(index));
+        break;
       }
-    } finally {
-      this.checkpoint_merged_messages = null;
     }
-
-    return merged;
   }
 
   /** 执行 Command，并尽力持久化其声明的 canonical 完成信息。 */
@@ -322,17 +358,18 @@ export class SessionLoop {
   private async execute_prompt_command(
     input: AgentSessionPromptInput,
     deferred_handle: SessionDeferred<AgentSessionTurnHandle>,
+    message_id?: string,
+    persisted_message?: SessionUserMessage,
   ): Promise<void> {
     const active_turn = this.require_active_turn();
     if (active_turn.prompt_started) {
       const message = await this.persist_prompt_message(
         input,
         active_turn.turn_id,
-        "steer",
       );
+      active_turn.turn_context?.input.observe_user_message(message);
       this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
       deferred_handle.resolve(create_turn_handle(active_turn));
-      this.checkpoint_merged_messages?.push(message);
       return;
     }
 
@@ -340,13 +377,17 @@ export class SessionLoop {
     this.pending_prompt_count = Math.max(0, this.pending_prompt_count - 1);
     let handle_resolved = false;
     try {
-      await this.persist_prompt_message(input, active_turn.turn_id, "prompt");
+      const message = persisted_message || await this.persist_prompt_message(
+          input,
+          active_turn.turn_id,
+          message_id,
+        );
+      active_turn.turn_context?.input.observe_user_message(message);
       // 只有 canonical user message 已经写入 Session 后，调用方才认为输入被接收。
       deferred_handle.resolve(create_turn_handle(active_turn));
       handle_resolved = true;
       const result = await this.execute_prompt_turn({
         active_turn,
-        prompt_input: input,
       });
       const final_result = await complete_session_turn(
         this.turn_completion_options(),
@@ -422,7 +463,6 @@ export class SessionLoop {
   /** 执行一个 Turn 内的模型与 Tool Step Loop。 */
   private async execute_prompt_turn(input: {
     active_turn: ActiveSessionTurnState;
-    prompt_input: AgentSessionPromptInput;
   }): Promise<{
     text: string;
     success: boolean;
@@ -433,19 +473,9 @@ export class SessionLoop {
     if (!turn_context || !assistant_output) {
       throw new Error("Active Session Turn requires an initialized context");
     }
-    const query = input.prompt_input.query;
-    const executor_query = typeof query === "string"
-      ? query
-      : query
-          .flatMap((part) => part.type === "text" ? [part.text] : [])
-          .join("\n")
-          .trim();
     let result: SessionTurnExecutionResult;
     try {
-      result = await this.executor.execute({
-        query: executor_query,
-        turn_context,
-      });
+      result = await this.executor.execute({ turn_context });
     } catch (error) {
       result = {
         text: "",
@@ -481,11 +511,6 @@ export class SessionLoop {
       ...(result.error ? { error: result.error } : {}),
     });
 
-    await this.state.touch_metadata();
-    const deferred_count = await this.messages.append_deferred_user_messages(
-      result.deferred_persisted_user_messages,
-    );
-    if (deferred_count > 0) await this.state.touch_metadata();
     if (result.compact_required) {
       await this.maintain_context();
     }
@@ -509,10 +534,19 @@ export class SessionLoop {
       session_id: this.session_id,
       session_origin: this.session_origin,
       project_root: this.workspace_path,
-      merge_step_input: async () => {
-        const merged = await this.drain_queued_inputs(active_turn);
-        if (merged.length > 0) await assistant_output.close_current_message();
-        return merged;
+      commit_step_input: async () => {
+        const had_pending_prompt = this.has_pending_prompt();
+        await this.drain_queued_inputs();
+        if (had_pending_prompt) await assistant_output.close_current_message();
+      },
+      append_internal_user_message: async (parts) => {
+        const message = await this.messages.append_user_message({
+          turn_id: active_turn.turn_id,
+          visibility: "internal",
+          parts: normalize_session_user_parts([...parts]),
+        });
+        active_turn.turn_context?.input.observe_user_message(message);
+        return message;
       },
       has_pending_step_input: () => this.has_pending_prompt(),
       assistant_output,
@@ -545,17 +579,33 @@ export class SessionLoop {
   private async persist_prompt_message(
     prompt: AgentSessionPromptInput,
     turn_id: string,
-    input_type: "prompt" | "steer",
+    message_id?: string,
   ): Promise<SessionUserMessage> {
     const message = await this.messages.append_prompt_message({
       project_root: this.workspace_path,
       prompt,
       turn_id,
-      input_type,
+      ...(message_id ? { message_id } : {}),
     });
-    this.state.touch_metadata_in_background();
     this.state.schedule_title_generation();
     return message;
+  }
+
+  /** 解析已经持久化或仍在执行的幂等 Prompt。 */
+  private async resolve_idempotent_prompt(
+    identity: PromptRequestIdentity,
+  ): Promise<AgentSessionTurnHandle | null> {
+    const existing_message = this.messages.get_message(identity.message_id);
+    if (!existing_message) return null;
+    if (existing_message.role !== "user" || existing_message.turn_id !== identity.turn_id) {
+      throw new Error("Session prompt request identity conflicts with canonical history");
+    }
+    if (this.active_turn?.turn_id === identity.turn_id) {
+      return create_turn_handle(this.active_turn);
+    }
+    const agent_message = await this.messages.read_latest_agent_message(identity.turn_id);
+    if (!agent_message || agent_message.state === "streaming") return null;
+    return create_completed_turn_handle(to_persisted_turn_result(identity.turn_id, agent_message));
   }
 
   /** 持久化 Executor Action，并同步刷新 Session metadata。 */
@@ -564,7 +614,6 @@ export class SessionLoop {
     options?: { publish_mutation?: boolean },
   ): Promise<void> {
     await this.messages.persist_action(event, options);
-    await this.state.touch_metadata();
   }
 
   /** 为 Turn 收口领域函数投影稳定依赖。 */
@@ -611,5 +660,61 @@ function create_turn_handle(
       return active_turn.result;
     },
     finished: active_turn.deferred_finished.promise,
+  };
+}
+
+/** 幂等 Prompt 在 canonical history 中使用的稳定身份。 */
+interface PromptRequestIdentity {
+  /** 稳定 User Message ID。 */
+  message_id: string;
+  /** 稳定 Turn ID。 */
+  turn_id: string;
+}
+
+/** 把调用方业务键映射为不暴露原值的 Session 内稳定身份。 */
+function resolve_prompt_request_identity(
+  session_id: string,
+  request_id_input: string | undefined,
+): PromptRequestIdentity | null {
+  const request_id = String(request_id_input || "").trim();
+  if (!request_id) return null;
+  if (request_id.length > 512) {
+    throw new Error("session.prompt request_id must not exceed 512 characters");
+  }
+  const digest = createHash("sha256")
+    .update(session_id)
+    .update("\u0000")
+    .update(request_id)
+    .digest("hex");
+  return {
+    message_id: `user-request:${digest}`,
+    turn_id: `turn-request:${digest}`,
+  };
+}
+
+/** 从已完成的 canonical Agent Message 恢复 Turn 结果。 */
+function to_persisted_turn_result(
+  turn_id: string,
+  message: SessionAgentMessage,
+): AgentSessionTurnResult {
+  const error_part = [...message.parts].reverse().find((part) => part.type === "error");
+  const error = error_part?.type === "error" ? error_part.message : undefined;
+  const success = !error;
+  return {
+    turn_id,
+    text: extract_session_message_text(message),
+    success,
+    ...(!success ? { error } : {}),
+  };
+}
+
+/** 为已经持久化完成的 Turn 创建立即兑现的句柄。 */
+function create_completed_turn_handle(
+  result: AgentSessionTurnResult,
+): AgentSessionTurnHandle {
+  return {
+    id: result.turn_id,
+    result,
+    finished: Promise.resolve(result),
   };
 }

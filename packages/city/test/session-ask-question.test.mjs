@@ -150,15 +150,16 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
     let pending_interaction;
     let response_result;
     const unsubscribe = session.subscribe((mutation) => {
-      if (
-        mutation.variant !== "part" ||
-        mutation.type !== "interaction" ||
-        mutation.part.status !== "pending" ||
-        mutation.part.request.type !== "question"
-      ) return;
-      pending_interaction = mutation.part;
+      if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+      const interaction = mutation.message.parts.find((part) =>
+        part.type === "interaction" &&
+        part.status === "pending" &&
+        part.request.type === "question"
+      );
+      if (!interaction) return;
+      pending_interaction = interaction;
       response_result = session.respond({
-        interaction_id: mutation.part.interaction_id,
+        interaction_id: interaction.interaction_id,
         response: {
           type: "question",
           outcome: "resolved",

@@ -16,7 +16,7 @@ test("引用和附件保留在 Tiptap 文档中", () => {
     content: [{
       type: "paragraph",
       content: [
-        { type: "chatReference", attrs: { message_id: "message-1", role: "assistant", text: "被引用的回答", preview_text: "被引用的回答" } },
+        { type: "chatReference", attrs: { message_id: "message-1", role: "agent", text: "被引用的回答", preview_text: "被引用的回答" } },
         { type: "chatAttachment", attrs: { attachment_id: "attachment-1", filename: "screen.png", media_type: "image/png", data_url: "data:image/png;base64,AA==" } },
         { type: "text", text: "继续分析" },
       ],

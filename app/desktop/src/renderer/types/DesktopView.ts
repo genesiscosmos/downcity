@@ -1,6 +1,6 @@
 /** Downcity Desktop Renderer 的页面和交互状态类型。 */
 
-import type { RespondSessionInteractionInput, SessionAssistantInteractionPart, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionAgentInteractionPart, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopAgentSummary, DesktopAgentDefinition, DesktopAccountResources, DesktopAccountSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopCreateGroupInput, DesktopUpdateGroupInput, DesktopGroupMemberRuntime, DesktopGroupStatusPhase, DesktopGroupSummary, DesktopModelSummary, DesktopPluginSummary, DesktopPluginDefinition, DesktopInvokePluginActionInput, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopUserSummary, DesktopUpdateAgentInput, DesktopWorkspaceSummary } from "../../common/types/DesktopApi";
@@ -155,7 +155,7 @@ export interface GroupInteraction {
   /** 发起交互的成员 Agent 标识。 */
   agent_id: string;
   /** 交互内容。 */
-  part: SessionAssistantInteractionPart;
+  part: SessionAgentInteractionPart;
 }
 
 /** 带 Turn 身份的实时文件改动摘要，避免跨轮复用旧状态。 */
@@ -346,8 +346,6 @@ export interface DesktopActions {
   update_draft(workspace_id: string, agent_id: string, session_id: string, input: JSONContent): void;
   /** 发送消息；send 立即提交，queue 等待当前 Turn 完成后提交。绑定后补发时内部跳过孤儿检测。 */
   send_message(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode?: ChatSubmitMode, skip_orphan_check?: boolean): Promise<void>;
-  /** 请求当前 Session 历史上下文压缩。 */
-  compact_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 刷新当前 Federation 模型目录。 */
   refresh_models(): Promise<void>;
   /** 为 Draft 或已存在 Session 选择模型。 */

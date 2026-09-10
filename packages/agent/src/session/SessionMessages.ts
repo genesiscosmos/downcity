@@ -83,7 +83,7 @@ export class SessionMessages {
       list_messages: () => this.messages_by_id.values(),
       accept_message: (message, publish_mutation) =>
         this.accept_message(message, publish_mutation),
-      accept_mutation: (mutation, message) =>
+      project_mutation: (mutation, message) =>
         this.accept_mutation(mutation, message),
     });
   }
@@ -104,28 +104,73 @@ export class SessionMessages {
     }
   }
 
-  /** 执行一次完整恢复，并收口进程中断遗留的运行状态。 */
+  /** 只恢复非终态 Message，并由领域层统一收口进程中断状态。 */
   private async restore_messages(): Promise<void> {
     await this.store.initialize();
-    const persisted_messages = await this.store.list_messages();
+    const persisted_messages = await this.store.list_recoverable_agent_messages();
     this.messages_by_id.clear();
     for (const message of persisted_messages) {
-      this.messages_by_id.set(message.message_id, message);
-    }
-    const unfinished = [...this.messages_by_id.values()];
-    for (const message of unfinished) {
-      if (message.role === "agent" && message.status === "streaming") {
-        await this.complete_agent_message(message.message_id, "stopped");
-      }
-      if (message.role === "agent") {
-        for (const part of message.parts) {
-          if (part.type !== "action" || part.state !== "running") continue;
-          await this.update_action_part(message.message_id, "failed", {
-            description:
-              part.description || "Action interrupted before completion.",
-          });
-        }
-      }
+      this.remember_message(message);
+      const updated_at = Date.now();
+      const recovered: SessionAgentMessage = {
+        ...message,
+        state: "done",
+        revision: message.revision + 1,
+        updated_at,
+        parts: [...message.parts.map((part) => {
+          if (part.type === "action" && part.state === "running") {
+            return {
+              ...part,
+              state: "failed" as const,
+              description: part.description || "Action interrupted before completion.",
+            };
+          }
+          if (part.type === "interaction" && part.status === "pending") {
+            return {
+              ...part,
+              status: "cancelled" as const,
+              cancel_reason: "runtime_interrupted" as const,
+              resolved_at: updated_at,
+            };
+          }
+          if (
+            part.type === "tool" &&
+            part.state !== "completed" &&
+            part.state !== "failed"
+          ) {
+            return {
+              ...part,
+              state: "failed" as const,
+              error: "Tool interrupted before completion.",
+            };
+          }
+          if (
+            (part.type === "text" || part.type === "reasoning") &&
+            part.state === "streaming"
+          ) {
+            return { ...part, state: "done" as const };
+          }
+          return part;
+        }), {
+          part_id: `error:${generate_id()}`,
+          sequence: message.parts.reduce(
+            (sequence, part) => Math.max(sequence, part.sequence + 1),
+            1,
+          ),
+          type: "error",
+          scope: message.turn_id ? "turn" : "session",
+          code: "runtime_interrupted",
+          message: "Agent execution was interrupted before completion.",
+          recoverable: true,
+        }],
+      };
+      const changed_parts = resolve_changed_agent_parts(message, recovered);
+      await this.store.update_message({
+        message: recovered,
+        expected_revision: message.revision,
+        changed_parts,
+      });
+      this.accept_message(recovered, false);
     }
   }
 
@@ -134,7 +179,7 @@ export class SessionMessages {
     return this.messages_by_id.get(message_id);
   }
 
-  /** 追加普通 prompt 或 steering User Message。 */
+  /** 追加一条 canonical User Message。 */
   async append_user_message(
     input: AppendSessionUserMessageInput,
   ): Promise<SessionUserMessage> {
@@ -151,7 +196,6 @@ export class SessionMessages {
       created_at,
       updated_at: created_at,
       role: "user",
-      input_type: input.input_type,
       parts: normalize_canonical_session_user_parts(input.parts).map((part) => ({
         ...part,
         part_id: `${message_id}:part:${String(part.sequence)}`,
@@ -176,7 +220,7 @@ export class SessionMessages {
       created_at,
       updated_at: created_at,
       role: "agent",
-      status: "streaming",
+      state: "streaming",
       parts: [],
     }), true)) as SessionAgentMessage;
     return new SessionAgentMessageWriter(this, message.message_id);
@@ -193,7 +237,11 @@ export class SessionMessages {
     });
     for (const part of input.parts) await writer.upsert_part(part);
     await writer.complete();
-    return this.get_message(writer.message_id) as SessionAgentMessage;
+    const message = await this.store.read_message(writer.message_id);
+    if (!message || message.role !== "agent") {
+      throw new Error(`Completed Agent Message not found: ${writer.message_id}`);
+    }
+    return message;
   }
 
   /** 把公开 Session API 的 User 输入转换为 canonical Message 并持久化。 */
@@ -208,7 +256,6 @@ export class SessionMessages {
     if (parts.length === 0) return false;
     await this.append_user_message({
       turn_id: `external:${this.session_id}:${Date.now()}`,
-      input_type: "prompt",
       parts,
     });
     return true;
@@ -244,27 +291,15 @@ export class SessionMessages {
         );
     const canonical = await this.append_user_message({
       turn_id: input.turn_id,
-      input_type: input.input_type,
       parts: normalize_session_user_parts(ui_parts),
+      ...(input.message_id ? { message_id: input.message_id } : {}),
     });
     return canonical;
   }
 
-  /** 持久化 Executor 在本轮延迟产生的 User Message。 */
-  async append_deferred_user_messages(
-    deferred_messages?: SessionUserMessage[],
-  ): Promise<number> {
-    const messages = Array.isArray(deferred_messages)
-      ? deferred_messages
-      : [];
-    for (const message of messages) {
-      await this.append_user_message({
-        turn_id: message.turn_id || `deferred:${this.session_id}:${Date.now()}`,
-        input_type: "steer",
-        parts: structuredClone(message.parts),
-      });
-    }
-    return messages.length;
+  /** 读取指定 Turn 最近一条 canonical Agent Message。 */
+  async read_latest_agent_message(turn_id: string): Promise<SessionAgentMessage | null> {
+    return await this.store.read_latest_agent_message(turn_id);
   }
 
   /** 按稳定 Action ID 创建或更新只包含 Action Part 的 Agent Message。 */
@@ -273,7 +308,8 @@ export class SessionMessages {
     options?: { publish_mutation?: boolean },
   ): Promise<void> {
     const publish_mutation = options?.publish_mutation !== false;
-    const existing = this.get_message(event.action_id);
+    const existing = this.get_message(event.action_id) ||
+      await this.store.read_message(event.action_id) || undefined;
     if (!existing) {
       const writer = await this.open_action_part({
         message_id: event.action_id,
@@ -314,7 +350,7 @@ export class SessionMessages {
       created_at,
       updated_at: created_at,
       role: "agent",
-      status: "completed",
+      state: "streaming",
       parts: [{
         part_id: `action-part:${message_id}`,
         sequence: 1,
@@ -341,39 +377,35 @@ export class SessionMessages {
     changes?: { title?: string; description?: string; data?: JsonObject },
     options?: { publish_mutation?: boolean },
   ): Promise<SessionAgentMessage> {
-    const current_message = require_message(
-      [...this.messages_by_id.values()],
-      message_id,
-      "agent",
-    );
-    const message = await this.store.update_message(
-      message_id,
-      current_message.revision,
-      (current_value) => {
-      const current = require_message([current_value], message_id, "agent");
-      const action = current.parts.find(
+    const current_message = require_message([
+      this.get_message(message_id) || await this.store.read_message(message_id),
+    ].filter((message): message is SessionMessage => Boolean(message)), message_id, "agent");
+    const action = current_message.parts.find(
         (part): part is SessionAgentActionPart => part.type === "action",
       );
-      if (!action) throw new Error(`Session Action Part not found: ${message_id}`);
-      const created_at = Date.now();
-      return {
-        ...current,
-        parts: current.parts.map((part) => part.part_id === action.part_id
-          ? {
-              ...action,
-              state: status,
-              ...(changes?.title ? { title: changes.title } : {}),
-              ...(changes?.description !== undefined
-                ? { description: changes.description }
-                : {}),
-              ...(changes?.data ? { data: structuredClone(changes.data) } : {}),
-            }
-          : part),
-        revision: current.revision + 1,
-        updated_at: created_at,
-      } satisfies SessionAgentMessage;
-      },
-    );
+    if (!action) throw new Error(`Session Action Part not found: ${message_id}`);
+    const next_action: SessionAgentActionPart = {
+      ...action,
+      state: status,
+      ...(changes?.title ? { title: changes.title } : {}),
+      ...(changes?.description !== undefined
+        ? { description: changes.description }
+        : {}),
+      ...(changes?.data ? { data: structuredClone(changes.data) } : {}),
+    };
+    const message: SessionAgentMessage = {
+      ...current_message,
+      state: status === "running" ? "streaming" : "done",
+      parts: current_message.parts.map((part) =>
+        part.part_id === action.part_id ? next_action : part),
+      revision: current_message.revision + 1,
+      updated_at: Date.now(),
+    };
+    await this.store.update_message({
+      message,
+      expected_revision: current_message.revision,
+      changed_parts: [next_action],
+    });
     this.accept_message(message, options?.publish_mutation !== false);
     return message as SessionAgentMessage;
   }
@@ -389,16 +421,14 @@ export class SessionMessages {
     input: AppendSessionAgentErrorPartInput,
   ): Promise<SessionAgentMessage> {
     await this.ensure_initialized();
-    const target = [...this.messages_by_id.values()]
-      .filter((message): message is SessionAgentMessage =>
-        message.role === "agent" && message.turn_id === input.turn_id,
-      )
-      .sort((left, right) => right.sequence - left.sequence)[0];
+    const target = await this.store.read_latest_agent_message(input.turn_id);
     const existing_error = target?.parts.find(
       (part): part is SessionAgentErrorPart =>
         part.type === "error" && part.code === input.code,
     );
-    if (target && existing_error) return target;
+    if (target && existing_error) {
+      return target;
+    }
 
     const error_part: SessionAgentErrorPart = {
       part_id: `error:${generate_id()}`,
@@ -415,32 +445,30 @@ export class SessionMessages {
       recoverable: input.recoverable,
     };
 
-    if (target?.status === "streaming") {
-      await this.agent_state.update_part(target.message_id, error_part);
-      return require_message(
-        [...this.messages_by_id.values()],
-        target.message_id,
-        "agent",
-      );
+    if (target?.state === "streaming") {
+      this.remember_message(target);
+      await this.agent_state.commit_parts(target.message_id, [error_part]);
+      const updated = await this.store.read_message(target.message_id);
+      if (!updated || updated.role !== "agent") {
+        throw new Error(`Agent Message not found after Error Part commit: ${target.message_id}`);
+      }
+      return updated;
     }
 
     if (target) {
-      const message = await this.store.update_message(
-        target.message_id,
-        target.revision,
-        (current_value) => {
-        const current = require_message([current_value], target.message_id, "agent");
-        const created_at = Date.now();
-        return {
-          ...current,
-          revision: current.revision + 1,
-          updated_at: created_at,
-          parts: [...current.parts, error_part].sort(
-            (left, right) => left.sequence - right.sequence,
-          ),
-        } satisfies SessionAgentMessage;
-        },
-      );
+      const message: SessionAgentMessage = {
+        ...target,
+        revision: target.revision + 1,
+        updated_at: Date.now(),
+        parts: [...target.parts, error_part].sort(
+          (left, right) => left.sequence - right.sequence,
+        ),
+      };
+      await this.store.update_message({
+        message,
+        expected_revision: target.revision,
+        changed_parts: [error_part],
+      });
       this.accept_message(message);
       return message as SessionAgentMessage;
     }
@@ -455,7 +483,7 @@ export class SessionMessages {
       created_at,
       updated_at: created_at,
       role: "agent",
-      status: "failed",
+      state: "done",
       parts: [error_part],
     }))) as SessionAgentMessage;
   }
@@ -473,16 +501,15 @@ export class SessionMessages {
       throw new Error("before_sequence must be a positive integer");
     }
     const limit = Math.min(Math.max(input?.limit ?? 50, 1), 200);
-    const eligible = [...this.messages_by_id.values()]
-      .sort(compare_message_sequence)
-      .filter((message) =>
-        (before_sequence === undefined || message.sequence < before_sequence) &&
-        (input?.include_internal === true || message.visibility === "visible")
-      );
-    const messages = eligible.slice(-limit);
+    const page = await this.store.list_message_page({
+      ...(before_sequence !== undefined ? { before_sequence } : {}),
+      limit: limit + 1,
+      include_internal: input?.include_internal === true,
+    });
+    const has_more = page.length > limit;
+    const messages = has_more ? page.slice(1) : page;
     const start_sequence = messages[0]?.sequence;
     const end_sequence = messages.at(-1)?.sequence;
-    const has_more = eligible.length > messages.length;
     const stats = await this.store.message_stats();
     return {
       items: messages.map((message) => structuredClone(message)),
@@ -539,37 +566,56 @@ export class SessionMessages {
     }
   }
 
-  /** @internal 写入 Assistant 原始文本 delta。 */
-  async append_agent_delta(
+  /** @internal 只向运行投影追加 Agent 文本 delta。 */
+  project_agent_delta(
     message_id: string,
     part_id: string,
     type: "text" | "reasoning",
     delta: string,
-  ): Promise<void> {
-    await this.agent_state.append_delta(message_id, part_id, type, delta);
+  ): void {
+    this.agent_state.project_delta(message_id, part_id, type, delta);
   }
 
-  /** @internal 写入 Assistant Tool 输入原始 delta。 */
-  async append_agent_tool_input_delta(
+  /** @internal 只向运行投影追加 Agent Tool 输入 delta。 */
+  project_agent_tool_input_delta(
     message_id: string,
     part_id: string,
     tool_call_id: string,
     delta: string,
-  ): Promise<void> {
-    await this.agent_state.append_tool_input_delta(
+  ): void {
+    this.agent_state.project_delta(
       message_id,
       part_id,
-      tool_call_id,
+      "tool_input",
       delta,
+      tool_call_id,
     );
   }
 
-  /** @internal 写入 Assistant 完整 part。 */
-  async update_agent_part(
+  /** @internal 只向运行投影写入 Agent 完整 Part。 */
+  project_agent_part(
     message_id: string,
     part: SessionAgentMessagePart,
+  ): void {
+    this.agent_state.project_part(message_id, part);
+  }
+
+  /** @internal 原子提交当前运行投影。 */
+  async checkpoint_agent_message(message_id: string): Promise<void> {
+    await this.agent_state.checkpoint(message_id);
+  }
+
+  /** @internal 原子提交一组非流式 Agent Parts。 */
+  async commit_agent_parts(
+    message_id: string,
+    parts: readonly SessionAgentMessagePart[],
   ): Promise<void> {
-    await this.agent_state.update_part(message_id, part);
+    await this.agent_state.commit_parts(message_id, parts);
+  }
+
+  /** @internal 丢弃未提交的当前 Step 投影。 */
+  async rollback_agent_projection(message_id: string): Promise<void> {
+    await this.agent_state.rollback_projection(message_id);
   }
 
   /** @internal 原子提交当前 Assistant step 的 metadata 快照。 */
@@ -597,7 +643,7 @@ export class SessionMessages {
     await this.ensure_initialized();
     const message = await this.store.create_message((state) => {
       const candidate = factory(state.message_sequence, Date.now());
-      if (draft && (candidate.role !== "agent" || candidate.status !== "streaming")) {
+      if (draft && (candidate.role !== "agent" || candidate.state !== "streaming")) {
         throw new Error("Draft Message must be a streaming Agent Message");
       }
       return candidate;
@@ -661,15 +707,23 @@ export class SessionMessages {
 
   private accept_message(message: SessionMessage, publish_mutation = true): void {
     if (!publish_mutation) {
-      this.messages_by_id.set(message.message_id, structuredClone(message));
+      this.remember_message(message);
       return;
     }
     this.accept_mutation(this.build_message_mutation(message), message);
   }
 
   private accept_mutation(mutation: SessionMutation, message: SessionMessage): void {
-    this.messages_by_id.set(message.message_id, structuredClone(message));
+    this.remember_message(message);
     this.publish(mutation);
+  }
+
+  /** 仅缓存可变的 streaming Agent Message；终态历史始终读取 SQLite。 */
+  private remember_message(message: SessionMessage): void {
+    this.messages_by_id.delete(message.message_id);
+    if (message.role === "agent" && message.state === "streaming") {
+      this.messages_by_id.set(message.message_id, structuredClone(message));
+    }
   }
 
   private async ensure_initialized(): Promise<void> {
@@ -699,6 +753,14 @@ function resolve_import_id(map: Map<string, string>, source_id: string, prefix: 
 }
 
 /** 按真实 Message sequence 升序排序。 */
-function compare_message_sequence(left: SessionMessage, right: SessionMessage): number {
-  return left.sequence - right.sequence;
+function resolve_changed_agent_parts(
+  current: SessionAgentMessage,
+  next: SessionAgentMessage,
+): SessionAgentMessagePart[] {
+  const current_by_id = new Map(
+    current.parts.map((part) => [part.part_id, JSON.stringify(part)]),
+  );
+  return next.parts.filter(
+    (part) => current_by_id.get(part.part_id) !== JSON.stringify(part),
+  );
 }

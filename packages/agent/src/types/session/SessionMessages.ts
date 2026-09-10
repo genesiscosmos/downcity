@@ -9,8 +9,8 @@ import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type {
-  SessionAgentResultPart,
-  SessionPromptPart,
+  SessionAgentContent,
+  SessionUserContent,
 } from "@downcity/type";
 import type {
   SessionAgentMessagePart,
@@ -34,8 +34,6 @@ export interface SessionMessagesOptions {
 export interface AppendSessionUserMessageInput {
   /** 当前输入所属 Turn。 */
   turn_id: string;
-  /** 当前输入是普通 Prompt 还是 Steering 输入。 */
-  input_type: "prompt" | "steer";
   /** User 结构化 Part。 */
   parts: SessionUserMessagePart[];
   /** 可选的稳定 Message 标识。 */
@@ -109,7 +107,7 @@ export interface AppendSessionAgentErrorPartInput {
 /** 公开 Session API 追加 User Message 的输入。 */
 export interface AppendExternalSessionUserMessageInput {
   /** 可选的结构化 User 内容。 */
-  parts?: SessionPromptPart[];
+  parts?: SessionUserContent[];
   /** 未提供结构化内容时使用的纯文本。 */
   text?: string;
 }
@@ -117,7 +115,7 @@ export interface AppendExternalSessionUserMessageInput {
 /** 公开 Session API 追加 Assistant Message 的输入。 */
 export interface AppendExternalSessionAgentMessageInput {
   /** 可选的结构化 Assistant 内容。 */
-  parts?: SessionAgentResultPart[];
+  parts?: SessionAgentContent[];
   /** 未提供结构化内容时使用的纯文本。 */
   text?: string;
 }
@@ -130,6 +128,6 @@ export interface AppendSessionPromptMessageInput {
   prompt: AgentSessionPromptInput;
   /** 当前输入所属 Turn。 */
   turn_id: string;
-  /** 当前输入是普通 Prompt 还是 Steering 输入。 */
-  input_type: "prompt" | "steer";
+  /** 幂等 Prompt 使用的稳定 User Message ID。 */
+  message_id?: string;
 }

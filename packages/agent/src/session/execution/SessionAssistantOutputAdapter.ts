@@ -10,7 +10,7 @@ import {
   SessionAgentMessageWriter,
   SessionMessages,
 } from "@/session/SessionMessages.js";
-import type { SessionAgentResultPart } from "@downcity/type";
+import type { SessionAgentContent } from "@downcity/type";
 import type { SessionAgentMessagePart } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type {
@@ -86,9 +86,9 @@ export class SessionAssistantOutputAdapter implements SessionAssistantOutput {
   }
 
   /** 追加 Action 产生的封闭 Assistant 内容。 */
-  async append_result_parts(parts: readonly SessionAgentResultPart[]): Promise<void> {
-    if (parts.length === 0) return;
-    await (await this.ensure_writer()).append_result_parts(parts);
+  async append_result_parts(parts: readonly SessionAgentContent[]): Promise<SessionAgentMessagePart[]> {
+    if (parts.length === 0) return [];
+    return await (await this.ensure_writer()).append_result_parts(parts);
   }
 
   /** 在 Turn 收口产物之前追加用户可见的 canonical Error Part。 */

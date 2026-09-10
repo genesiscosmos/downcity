@@ -339,12 +339,11 @@ test("MemoryPlugin 通过现有 Session Hook points 分离 Usage、Core 与 Reca
     created_at: 1,
     updated_at: 1,
     role: "user",
-    input_type: "prompt",
     parts: [{
       part_id: "text-capture-1",
+      sequence: 1,
       type: "text",
       text: "以后回答请保持简洁。",
-      state: "done",
     }],
   }];
   await committed_hook({

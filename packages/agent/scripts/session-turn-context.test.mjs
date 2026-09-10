@@ -12,52 +12,40 @@ import test from "node:test";
 
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 
-function create_user_message(message_id, text, created_at) {
-  return {
-    message_id,
-    session_id: "session-context-test",
-    turn_id: "turn-context-test",
-    sequence: created_at,
-    revision: 1,
-    visibility: "visible",
-    created_at,
-    updated_at: created_at,
-    role: "user",
-    input_type: "steer",
-    parts: [{
-      part_id: `${message_id}:text`,
-      type: "text",
-      text,
-      state: "done",
-    }],
-  };
-}
-
 test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async () => {
+  let commit_count = 0;
+  const internal_messages = [];
   const context = create_session_turn_context({
     session_id: "session-context-test",
     session_origin: { type: "chat" },
     turn_id: "turn-context-test",
     project_root: "/workspace",
-    merge_step_input: async () => [create_user_message("queued-message", "queued", 2)],
+    commit_step_input: async () => {
+      commit_count += 1;
+    },
+    append_internal_user_message: async (parts) => {
+      internal_messages.push(parts);
+      return {
+        message_id: "internal-1", session_id: "session-context-test",
+        turn_id: "turn-context-test", sequence: 1, revision: 1,
+        visibility: "internal", created_at: 1, updated_at: 1,
+        role: "user", parts: parts.map((part, index) => ({
+          ...part, part_id: `part-${index + 1}`, sequence: index + 1,
+        })),
+      };
+    },
   });
-  context.input.inject_user_message(
-    create_user_message("injected-message", "injected", 1),
-  );
+  await context.input.append_internal([{ type: "text", text: "injected" }]);
   context.output.enqueue_assistant_parts([{
     type: "file",
     media_type: "text/plain",
     url: "/workspace/result.txt",
   }]);
 
-  assert.deepEqual(
-    (await context.input.checkpoint()).map((message) => message.message_id),
-    ["injected-message", "queued-message"],
-  );
-  assert.deepEqual(
-    (await context.input.checkpoint()).map((message) => message.message_id),
-    ["queued-message"],
-  );
+  await context.input.checkpoint();
+  await context.input.checkpoint();
+  assert.equal(internal_messages[0][0].text, "injected");
+  assert.equal(commit_count, 2);
   assert.equal(context.output.take_assistant_parts().length, 1);
   assert.equal(context.output.take_assistant_parts().length, 0);
 });

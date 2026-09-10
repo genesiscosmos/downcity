@@ -9,7 +9,7 @@
 
 import type { RuntimeToolEffect } from "@downcity/type";
 import type { SessionUserMessage } from "@downcity/type";
-import type { SessionAgentResultPart } from "@downcity/type";
+import type { SessionAgentContent } from "@downcity/type";
 import type {
   SessionTurnContext,
   SessionTurnContextInit,
@@ -51,9 +51,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private plugin_context_blocks_snapshot: readonly SessionHookContextBlock[] = Object.freeze([]);
   /** 并发或重复解析时复用的唯一 Promise。 */
   private plugin_context_blocks_promise?: Promise<readonly SessionHookContextBlock[]>;
-  private injected_user_messages: SessionUserMessage[] = [];
-  private deferred_messages: SessionUserMessage[] = [];
-  private pending_assistant_parts: SessionAgentResultPart[] = [];
+  private observed_user_messages: SessionUserMessage[] = [];
+  private pending_assistant_parts: SessionAgentContent[] = [];
   private turn_effects: RuntimeToolEffect[] = [];
 
   readonly lifecycle: SessionTurnContext["lifecycle"];
@@ -146,27 +145,27 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     });
 
     this.input = Object.freeze({
-      checkpoint: async () => {
-        const injected = context.injected_user_messages;
-        context.injected_user_messages = [];
-        let queued: SessionUserMessage[] = [];
-        try {
-          queued = (await context.init.merge_step_input?.()) || [];
-        } catch {
-          queued = [];
+      observe_user_message: (message) => {
+        if (message.turn_id !== context.session.turn_id) {
+          throw new Error(`Observed User Message belongs to another Turn: ${message.message_id}`);
         }
-        return [...injected, ...queued];
+        context.observed_user_messages.push(structuredClone(message));
+      },
+      user_messages: () => Object.freeze(
+        context.observed_user_messages.map((message) => structuredClone(message)),
+      ),
+      checkpoint: async () => {
+        await context.init.commit_step_input?.();
       },
       has_pending: () => context.init.has_pending_step_input?.() === true,
-      inject_user_message: (message) => {
-        context.injected_user_messages.push(message);
+      append_internal: async (parts) => {
+        if (!context.init.append_internal_user_message) {
+          throw new Error("SessionTurnContext cannot persist internal User input");
+        }
+        return await context.init.append_internal_user_message(
+          parts.map((part) => structuredClone(part)),
+        );
       },
-      defer_user_message: (message) => {
-        context.deferred_messages.push(message);
-      },
-      deferred_user_messages: () => Object.freeze([...context.deferred_messages]),
-      consume_history_reload: () =>
-        context.init.consume_history_reload?.() === true,
     });
 
     this.output = Object.freeze({

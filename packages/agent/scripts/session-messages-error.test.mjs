@@ -12,6 +12,7 @@ function create_messages(store) {
     store: {
       initialize: async () => {},
       list_messages: async () => [],
+      list_recoverable_agent_messages: async () => [],
       ...store,
     },
     publish: () => {},
@@ -28,12 +29,10 @@ test("append_user_message 透传 Store 写入失败", async () => {
   await assert.rejects(
     messages.append_user_message({
       turn_id: "turn-1",
-      input_type: "prompt",
       parts: [{
         part_id: "text-1",
         type: "text",
         text: "hello",
-        state: "done",
       }],
     }),
     /disk full/,
@@ -67,7 +66,7 @@ test("SessionMessages 并发初始化只执行一次 Store 恢复", async () => 
       initialize_count += 1;
       await initialize_gate;
     },
-    list_messages: async () => {
+    list_recoverable_agent_messages: async () => {
       list_count += 1;
       return [];
     },

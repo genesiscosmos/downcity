@@ -13,7 +13,7 @@ import type { SessionMutation } from "@downcity/type";
 export interface SessionAgentMessageStateOptions {
   /** 当前 Assistant Message 所属 Session 的稳定标识。 */
   session_id: string;
-  /** 负责持久化 canonical Message 与 Assistant 草稿的 Store。 */
+  /** 负责持久化 canonical Message 稳定检查点的 Store。 */
   store: SessionStorage;
   /** 读取 SessionMessages 当前持有的 canonical Message 集合。 */
   list_messages: () => Iterable<SessionMessage>;
@@ -22,8 +22,8 @@ export interface SessionAgentMessageStateOptions {
     message: SessionMessage,
     publish_mutation?: boolean,
   ) => void;
-  /** 接受已持久化的增量 Mutation，并更新 canonical Message 快照。 */
-  accept_mutation: (
+  /** 接受未持久化的实时 Mutation，并只更新当前运行投影。 */
+  project_mutation: (
     mutation: SessionMutation,
     message: SessionMessage,
   ) => void;

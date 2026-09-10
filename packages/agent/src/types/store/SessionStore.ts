@@ -19,8 +19,11 @@ import type { SessionOrigin } from "@downcity/type";
 
 /** 一个 Agent 所属全部 Session 的持久化入口。 */
 export interface SessionStore {
-  /** 返回指定 Session 的稳定持久化视图。 */
-  session(session_id: string, origin: SessionOrigin, workspace_id?: string): SessionStorage;
+  /** 为一个新 Session 创建稳定持久化视图；完整来源只在创建时由调用方提供。 */
+  create_session(session_id: string, origin: SessionOrigin, workspace_id?: string): SessionStorage;
+
+  /** 打开一个已有 Session；完整来源必须从数据库状态恢复。 */
+  open_session(session_id: string, origin_type?: string): Promise<SessionStorage>;
 
   /** 判断活动 Session 是否存在。 */
   has_session(session_id: string, origin_type?: string): Promise<boolean>;

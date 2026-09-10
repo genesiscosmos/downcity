@@ -7,8 +7,11 @@
  * - 输出只返回执行结果；Assistant Message 通过显式输出端口写入唯一事实源。
  */
 
-import type { ModelMessage, RuntimeTool as Tool } from "@downcity/type";
-import type { SessionUserMessage } from "@downcity/type";
+import type {
+  ModelClient,
+  ModelMessage,
+  RuntimeTool as Tool,
+} from "@downcity/type";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 
@@ -30,15 +33,6 @@ export interface SessionTurnExecutionResult {
   error?: string;
 
   /**
-   * 本轮执行结束后待写入长期历史的 user 消息。
-   *
-   * 关键点（中文）
-   * - 这些消息通常由 tool 运行时在执行过程中动态注入。
-   * - 为保证消息顺序稳定，统一在 assistant 结果落盘后再由外层 Session 持久化。
-   */
-  deferred_persisted_user_messages?: SessionUserMessage[];
-
-  /**
    * 本轮结束后是否需要把已完成的 canonical 历史持久化压缩。
    *
    * 关键点（中文）
@@ -53,11 +47,6 @@ export interface SessionTurnExecutionResult {
  */
 export interface SessionTurnExecutionInput {
   /**
-   * 本轮用户输入查询文本。
-   */
-  query: string;
-
-  /**
    * 本轮唯一的显式 Turn 上下文。
    *
    * 关键点（中文）
@@ -71,10 +60,8 @@ export interface SessionTurnExecutionInput {
  * Executor 通过 Composer 装配后的中间运行态。
  */
 export interface SessionStepExecutionInput {
-  /**
-   * 当前轮用户查询文本。
-   */
-  query: string;
+  /** 当前 Step 使用的模型实例。 */
+  model: ModelClient;
 
   /**
    * 当前轮 system messages。
@@ -84,13 +71,14 @@ export interface SessionStepExecutionInput {
   /** 当前轮标准模型消息历史。 */
   messages: ModelMessage[];
 
-  /** 当前模型历史所包含的最新持久化 Summary 标识。 */
-  history_summary_id?: string;
-
   /**
    * 当前轮可用工具集合。
    */
   tools: Record<string, Tool>;
+
+  /** 当前模型支持的上下文窗口长度。 */
+  context_window?: number;
+
 }
 
 /** 单个 Session 的统一 Turn 执行协议。 */

@@ -27,6 +27,7 @@ function create_session(overrides = {}) {
       await initialize_promise;
     },
     list_messages: async () => [],
+    list_recoverable_agent_messages: async () => [],
     message_stats: async () => ({ message_count: 0, storage_bytes: 0, latest_message: null }),
     composer_storage: () => ({
       list_messages: async () => [],
@@ -55,7 +56,7 @@ function create_session(overrides = {}) {
     workspace_path: "/tmp/downcity-session-initialization",
     origin: store.origin,
     store,
-    get_session_store: () => store,
+    create_session_store: () => store,
     register_forked_session: () => {},
     session_id: store.session_id,
     get_tools: () => ({}),

@@ -15,6 +15,8 @@ export type SessionCommandKind =
 export interface SessionCommand {
   /** 当前 Command 的执行类别。 */
   kind: SessionCommandKind;
+  /** Prompt 恢复执行时要求复用的稳定 Turn ID。 */
+  turn_id?: string;
   /** Command 出队后执行的完整行为。 */
   execute: () => Promise<void>;
   /** Session stop 时取消该 Command 的可选行为；未提供时 Command 继续保留。 */

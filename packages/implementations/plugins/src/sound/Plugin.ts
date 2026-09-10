@@ -5,7 +5,7 @@
  * - 对 Agent 暴露 `models`、`asr`、`tts` 三个 action。
  * - 模型目录与真实 ASR/TTS 能力从运行时 Context 的 City 环境读取。
  * - 本地音频只负责读取并转换为 data URL，不加载或运行任何本地语音模型。
- * - TTS 返回已经落盘的本地音频 Session Parts，并由 Action 声明 Assistant Message。
+ * - TTS 返回已经落盘的本地音频 Session Parts，并由 Action 声明 Agent Message。
  */
 
 import fs from "node:fs/promises";
@@ -381,6 +381,9 @@ function normalize_tts_result(result: SoundPluginTtsResult): SoundPluginTtsResul
   const record = to_record(result);
   if (!record || !Array.isArray(record.parts)) {
     throw new TypeError("SoundPlugin tts function must return a Downcity Session message");
+  }
+  if (record.role !== "agent") {
+    throw new TypeError("SoundPlugin tts function must return an Agent Session message");
   }
   const has_audio_file = record.parts.some((part) => {
     const part_record = to_record(part);

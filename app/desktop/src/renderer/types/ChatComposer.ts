@@ -14,7 +14,7 @@ export interface ChatReferenceNodeAttributes {
   /** 被引用 canonical 消息的稳定标识。 */
   message_id: string;
   /** 被引用消息在对话中的身份。 */
-  role: "user" | "assistant";
+  role: "user" | "agent";
   /** Context part 原始语义标签。 */
   tag: string;
   /** 提交时冻结并写入 Session Context Part 的可读文本。 */

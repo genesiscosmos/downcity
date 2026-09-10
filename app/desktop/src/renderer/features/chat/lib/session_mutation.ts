@@ -1,7 +1,7 @@
 /** Renderer 对 canonical Session mutation 的纯函数投影。 */
 
 import type { SessionMessage, SessionMutation } from "@downcity/agent";
-import type { AssistantMutationDraft, IndexedSessionMutationResult, SessionMessageIndex } from "@/types/SessionProjection";
+import type { AgentMessageMutationDraft, IndexedSessionMutationResult, SessionMessageIndex } from "@/types/SessionProjection";
 
 /**
  * 把一条 mutation 合并进当前可见消息。
@@ -19,7 +19,7 @@ export function apply_session_mutation(
 /**
  * 在一次批处理中合并多条 Session mutation。
  *
- * 消息索引、外层数组和每条 Assistant 的 parts 都只创建一次；处理完成后再发布
+ * 消息索引、外层数组和每条 Agent Message 的 parts 都只创建一次；处理完成后再发布
  * 一份不可变快照，避免流式 delta 在同一帧内反复扫描并复制完整会话。
  */
 export function apply_session_mutations(
@@ -52,7 +52,7 @@ export function apply_indexed_session_mutations(
   if (mutations.length === 0) return { messages, message_index: current_index };
   let next_messages = messages;
   let positions_by_id = current_index.positions_by_id;
-  const assistant_drafts = new Map<string, AssistantMutationDraft>();
+  const agent_message_drafts = new Map<string, AgentMessageMutationDraft>();
   let changed = false;
 
   const ensure_messages_copy = () => {
@@ -73,7 +73,7 @@ export function apply_indexed_session_mutations(
       } else {
         next_messages[current_position] = mutation.message;
       }
-      assistant_drafts.delete(mutation.message_id);
+      agent_message_drafts.delete(mutation.message_id);
       changed = true;
       continue;
     }
@@ -82,8 +82,8 @@ export function apply_indexed_session_mutations(
     const message_position = positions_by_id.get(mutation.message_id);
     if (message_position === undefined) continue;
     const current = next_messages[message_position];
-    if (!current || current.type !== "agent" || current.revision > mutation.revision) continue;
-    let draft = assistant_drafts.get(mutation.message_id);
+    if (!current || current.role !== "agent" || current.revision > mutation.revision) continue;
+    let draft = agent_message_drafts.get(mutation.message_id);
     if (!draft || draft.message !== current) {
       const parts = [...current.parts];
       draft = {
@@ -91,7 +91,7 @@ export function apply_indexed_session_mutations(
         parts,
         part_indexes: new Map(parts.map((part, index) => [part.part_id, index])),
       };
-      assistant_drafts.set(mutation.message_id, draft);
+      agent_message_drafts.set(mutation.message_id, draft);
     }
 
     if (mutation.variant === "part") {
@@ -130,7 +130,7 @@ export function apply_indexed_session_mutations(
   }
 
   if (!changed) return { messages, message_index: current_index };
-  for (const [message_id, draft] of assistant_drafts) {
+  for (const [message_id, draft] of agent_message_drafts) {
     draft.parts.sort((left, right) => left.sequence - right.sequence);
     const message_position = positions_by_id.get(message_id);
     if (message_position !== undefined) next_messages[message_position] = { ...draft.message, parts: draft.parts };

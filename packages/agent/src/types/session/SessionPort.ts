@@ -8,8 +8,8 @@
 
 import type { ModelClient } from "@downcity/type";
 import type {
-  SessionAgentResultPart,
-  SessionPromptPart,
+  SessionAgentContent,
+  SessionUserContent,
   SessionMessage,
 } from "@downcity/type";
 import type { SessionExecutor } from "@/types/session/SessionExecution.js";
@@ -51,7 +51,7 @@ export interface SessionPort {
    */
   append_user_message(params: {
     /** 已构造好的 User 内容。 */
-    parts?: SessionPromptPart[];
+    parts?: SessionUserContent[];
     /** 未传入结构化内容时使用的文本。 */
     text?: string;
   }): Promise<void>;
@@ -61,7 +61,7 @@ export interface SessionPort {
    */
   append_agent_message(params: {
     /** 已构造好的 Agent 内容。 */
-    parts?: SessionAgentResultPart[];
+    parts?: SessionAgentContent[];
     /** 未传入结构化内容时使用的文本。 */
     text?: string;
   }): Promise<void>;

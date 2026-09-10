@@ -260,61 +260,24 @@ City owns unique Plugin instances, configuration projection, and lifecycle. Agen
 model, instructions, Tools, and Sessions. Web capabilities still require host configuration; see the
 [Web Plugin guide](/en/plugins-docs/builtins/web).
 
-## `Session`
+## `session_composer`
 
-Advanced local-only custom Session class for sessions created by this agent.
-
-Use this when you want to replace the local session implementation or inject custom Session-level Composers. `Agent` only uses the class to create and restore sessions; it does not inspect Composer behavior.
+Use a factory when you only need to customize model input or the context policy. The factory is called once for every created, restored, or forked Session, so Composer and Policy instances are never shared across Sessions.
 
 ```ts
 import {
   Agent,
-  Workspace,
+  AdaptivePartContextPolicy,
   DefaultSessionComposer,
-  Session,
-  type SessionOptions,
-  type SessionComposeInput,
 } from "@downcity/agent";
-
-class CustomSessionComposer extends DefaultSessionComposer {
-  override async compose(input: SessionComposeInput) {
-    const step = await super.compose(input);
-    return {
-      ...step,
-      system: [
-        ...step.system,
-        { role: "system" as const, content: "Always answer tersely." },
-      ],
-    };
-  }
-}
-
-class CustomSession extends Session {
-  constructor(options: SessionOptions) {
-    super({
-      ...options,
-      composer: new CustomSessionComposer(),
-    });
-  }
-}
 
 const agent = new Agent({
   id: "repo-helper",
-  session_class: CustomSession,
-});
-const workspace = new Workspace({
-  id: "project",
-  path: "/path/to/project",
+  session_composer: () => new DefaultSessionComposer({
+    context_policy: new AdaptivePartContextPolicy(),
+  }),
 });
 ```
-
-Key points:
-
-- pass a class, not an already-created session instance
-- `Agent` can then create multiple sessions with different `session_id` values
-- Composer customization stays inside the custom Session class
-- Composer reads Session snapshots and composes system, history, tools, or compaction plans; it never persists messages directly
-- `RemoteAgent` does not support local Session classes because it only accesses a remote runtime
 
 ### What a Session Composer can customize
 
@@ -322,9 +285,9 @@ One `SessionComposer` replaces the previous System, History, Context, and Compac
 
 | Method | Purpose |
 | --- | --- |
+| `initialize(input)` | Initialize the selected Policy's derived tables in this Session's `session.db` |
 | `compose(input)` | Return the `system`, `messages`, and `tools` for the current model Step |
-| `compact(input)` | Return a `SessionCompactionPlan` from a read-only Message snapshot, or `null` when no compaction is needed |
-| `should_compact(error)` | Decide whether a model error should retry after persistent compaction |
+| `recover_context(input)` | Advance Policy-derived context after real usage pressure or a provider context-limit error |
 
 `compose(input)` may:
 
@@ -332,6 +295,4 @@ One `SessionComposer` replaces the previous System, History, Context, and Compac
 - filter, transform, or inject model messages for the current Step
 - change the tools visible to the current Step
 
-A Composer does not consume the Prompt Queue, control Turns, or write Messages, Metadata, Mutations, or JSONL. The Session persists the User Message before invoking the Composer, so a custom Composer does not need to append the current query to history.
-
-Compaction is also split into policy and commit stages. The Composer only returns a plan; the Session commits the Segment after the Assistant draft has closed. Custom policy therefore cannot bypass Session Message consistency and recovery.
+A Composer does not consume the Prompt Queue, control Turns, or modify canonical Messages. Its Context Policy may only write namespaced, rebuildable derived tables. Use `session_class` only when replacing Session behavior itself.

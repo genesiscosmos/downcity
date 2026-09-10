@@ -32,6 +32,7 @@ import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
 import { EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
+import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import {
   build_session_system_blocks,
   resolve_session_plugin_system_blocks,
@@ -61,6 +62,9 @@ export class Agent {
 
   /** Agent 使用的 Session 类。 */
   readonly session_class?: AgentSessionConstructor;
+
+  /** 为每个 Session 创建独立 Composer 的工厂。 */
+  readonly session_composer?: () => SessionComposer;
 
   /** Agent 级日志器，不绑定任何 Workspace。 */
   private readonly logger = new Logger();
@@ -94,6 +98,7 @@ export class Agent {
     this.model = options.model;
     this.instruction = normalize_instruction_input(options.instruction);
     this.session_class = options.session_class;
+    this.session_composer = options.session_composer;
     this.custom_tools = options.tools && typeof options.tools === "object"
       ? { ...options.tools }
       : {};
@@ -104,6 +109,7 @@ export class Agent {
       ensure_agent_ready: async () => await this.ensure_ready(),
       get_agent_model: () => this.model,
       session_class: this.session_class,
+      create_session_composer: this.session_composer,
       on_session_routed: () => {
         if (!this.city) this.memory_session_started = true;
       },

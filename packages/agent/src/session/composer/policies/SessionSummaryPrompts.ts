@@ -1,4 +1,4 @@
-/** Session sequence summary 策略使用的稳定提示词。 */
+/** Session 累计摘要策略使用的稳定提示词。 */
 
 /** 上下文摘要 system prompt。 */
 export const SESSION_SUMMARY_SYSTEM_PROMPT = [

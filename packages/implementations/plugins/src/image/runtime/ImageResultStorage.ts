@@ -12,7 +12,7 @@ import type {
   ImagePluginResultStorageInput,
   ImagePluginResultStorageResult,
 } from "@/image/types/ImagePlugin.js";
-import type { SessionAgentResultPart } from "@downcity/agent";
+import type { SessionAgentContent } from "@downcity/agent";
 
 const HTTP_URL_RE = /^https?:\/\//i;
 const MAX_IMAGE_RESULT_BYTES = 50 * 1024 * 1024;
@@ -87,7 +87,7 @@ async function read_response_bytes(response: Response): Promise<Buffer> {
 async function persist_remote_image(input: {
   context: ImagePluginResultStorageInput["context"];
   job_id: string;
-  part: Extract<SessionAgentResultPart, { type: "file" }>;
+  part: Extract<SessionAgentContent, { type: "file" }>;
   source_url: string;
   part_index: number;
   abort_signal?: AbortSignal;
@@ -135,8 +135,8 @@ export async function localize_image_result(
   input: ImagePluginResultStorageInput,
 ): Promise<ImagePluginResultStorageResult> {
   const errors: string[] = [];
-  const parts: SessionAgentResultPart[] = await Promise.all(
-    input.result.parts.map(async (part, part_index): Promise<SessionAgentResultPart> => {
+  const parts: SessionAgentContent[] = await Promise.all(
+    input.result.parts.map(async (part, part_index): Promise<SessionAgentContent> => {
       if (part.type !== "file") return part;
       const source_url = part.url.trim();
       if (!HTTP_URL_RE.test(source_url)) return part;

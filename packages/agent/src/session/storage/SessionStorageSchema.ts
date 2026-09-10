@@ -6,7 +6,7 @@
  */
 
 /** 当前 Session SQLite schema 版本。 */
-export const SESSION_STORAGE_SCHEMA_VERSION = 1;
+export const SESSION_STORAGE_SCHEMA_VERSION = 3;
 
 /** 创建 Session canonical 表、索引与角色约束。 */
 export const SESSION_STORAGE_SCHEMA_SQL = `
@@ -38,8 +38,9 @@ CREATE TABLE IF NOT EXISTS messages (
   sequence INTEGER NOT NULL UNIQUE CHECK (sequence >= 1),
   revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
   role TEXT NOT NULL CHECK (role IN ('user', 'agent')),
-  input_type TEXT CHECK (input_type IS NULL OR input_type IN ('prompt', 'steer')),
-  status TEXT NOT NULL CHECK (status IN ('streaming', 'completed', 'stopped', 'failed')),
+  state TEXT CHECK (
+    state IS NULL OR state IN ('streaming', 'done')
+  ),
   visibility TEXT NOT NULL CHECK (visibility IN ('visible', 'internal')),
   origin_session_id TEXT,
   origin_message_id TEXT,
@@ -47,8 +48,8 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   CHECK (
-    (role = 'user' AND input_type IS NOT NULL AND status = 'completed') OR
-    (role = 'agent' AND input_type IS NULL)
+    (role = 'user' AND state IS NULL) OR
+    (role = 'agent' AND state IS NOT NULL)
   )
 );
 

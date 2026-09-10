@@ -13,6 +13,7 @@ import type {
   SessionAgentMessagePart,
   SessionMessage,
   SessionOrigin,
+  SessionUserMessage,
 } from "@downcity/type";
 import { restore_session_origin } from "@downcity/type";
 import type { FileSystem, StorageDatabaseLocation } from "@downcity/type";
@@ -35,6 +36,7 @@ import type {
   SessionComposerStorageTransaction,
   SessionMessageCreateState,
   SessionMessageStorageStats,
+  SessionMessageUpdate,
   SessionStorage,
   SessionStorageValue,
 } from "@/types/store/SessionStorage.js";
@@ -89,7 +91,7 @@ export class SqliteSessionStorage implements SessionStorage {
     }
   }
 
-  /** 初始化数据库、校验身份并收口中断运行态。 */
+  /** 初始化数据库 schema 并校验 Session 身份。 */
   async initialize(): Promise<void> {
     if (!this.initialize_promise) this.initialize_promise = this.initialize_storage();
     const initialize_promise = this.initialize_promise;
@@ -206,42 +208,46 @@ export class SqliteSessionStorage implements SessionStorage {
     return row ? this.read_aggregates([row])[0] ?? null : null;
   }
 
+  /** 只读取标题生成所需的最早一条 User Message。 */
+  async read_first_user_message(): Promise<SessionUserMessage | null> {
+    await this.initialize();
+    const row = this.require_database().prepare(
+      "SELECT * FROM messages WHERE role = 'user' ORDER BY sequence ASC LIMIT 1",
+    ).get() as unknown as SessionMessageRow | undefined;
+    if (!row) return null;
+    const message = this.read_aggregates([row])[0];
+    return message?.role === "user" ? message : null;
+  }
+
   /** 分配全局 sequence 并创建完整 Message 聚合。 */
   async create_message(
     build_message: (state: SessionMessageCreateState) => SessionMessage,
   ): Promise<SessionMessage> {
     await this.initialize();
     return this.run_transaction(() => {
-      const messages = this.read_all_aggregates_unsafe();
+      const sequence_row = this.require_database().prepare(
+        "SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence FROM messages",
+      ).get() as { next_sequence: number };
       const message = build_message({
-        message_sequence: (messages.at(-1)?.sequence ?? 0) + 1,
-        messages,
+        message_sequence: sequence_row.next_sequence,
       });
-      this.validate_new_message(message, messages);
+      this.validate_new_message(message, sequence_row.next_sequence);
       this.insert_message_unsafe(message);
-      this.refresh_message_projection_unsafe(message.updated_at);
+      this.update_message_projection_unsafe(message, true);
       return structuredClone(message);
     });
   }
 
-  /** 使用 expected revision 更新 Message envelope 与 Part 差异。 */
-  async update_message(
-    message_id: string,
-    expected_revision: number,
-    build_message: (current: SessionMessage) => SessionMessage,
-  ): Promise<SessionMessage> {
+  /** 原子更新 Message envelope，并只写入调用方声明变化的 Part。 */
+  async update_message(input: SessionMessageUpdate): Promise<void> {
     await this.initialize();
-    return this.run_transaction(() => {
-      const current = this.read_aggregate_unsafe(message_id);
-      if (!current) throw new Error(`Session Message not found: ${message_id}`);
-      if (current.revision !== expected_revision) {
-        throw new Error(`Session Message revision conflict: ${message_id}`);
+    this.run_transaction(() => {
+      this.validate_message_update_unsafe(input);
+      this.update_message_envelope_unsafe(input.message, input.expected_revision);
+      for (const part of input.changed_parts) {
+        this.upsert_part_unsafe(input.message, part);
       }
-      const message = build_message(structuredClone(current));
-      this.validate_updated_message(current, message);
-      this.update_message_unsafe(message, current.revision);
-      this.refresh_message_projection_unsafe(message.updated_at);
-      return structuredClone(message);
+      this.update_message_projection_unsafe(input.message, false);
     });
   }
 
@@ -249,25 +255,67 @@ export class SqliteSessionStorage implements SessionStorage {
   async list_message_page(input?: {
     before_sequence?: number;
     limit?: number;
+    include_internal?: boolean;
   }): Promise<SessionMessage[]> {
     await this.initialize();
-    const limit = Math.min(Math.max(input?.limit ?? 50, 1), 200);
+    const limit = Math.min(Math.max(input?.limit ?? 50, 1), 201);
     const before_sequence = input?.before_sequence;
-    const rows = before_sequence === undefined
-      ? this.require_database().prepare(
-          "SELECT * FROM messages ORDER BY sequence DESC LIMIT ?",
-        ).all(limit)
-      : this.require_database().prepare(
-          "SELECT * FROM messages WHERE sequence < ? ORDER BY sequence DESC LIMIT ?",
-        ).all(before_sequence, limit);
+    const include_internal = input?.include_internal === true;
+    const rows = this.require_database().prepare(`
+      SELECT * FROM messages
+      WHERE (? = 1 OR visibility = 'visible')
+        AND (? IS NULL OR sequence < ?)
+      ORDER BY sequence DESC
+      LIMIT ?
+    `).all(
+      include_internal ? 1 : 0,
+      before_sequence ?? null,
+      before_sequence ?? null,
+      limit,
+    );
     return this.read_aggregates((rows as unknown as SessionMessageRow[]).reverse());
+  }
+
+  /** 只读取上次进程中断后需要收口的 Agent Message。 */
+  async list_recoverable_agent_messages(): Promise<SessionAgentMessage[]> {
+    await this.initialize();
+    const rows = this.require_database().prepare(`
+      SELECT messages.*
+      FROM messages
+      WHERE messages.role = 'agent'
+        AND messages.state = 'streaming'
+      ORDER BY messages.sequence ASC
+    `).all() as unknown as SessionMessageRow[];
+    return this.read_aggregates(rows).filter(
+      (message): message is SessionAgentMessage => message.role === "agent",
+    );
+  }
+
+  /** 读取指定 Turn 或整个 Session 的最后一条 Agent Message。 */
+  async read_latest_agent_message(turn_id?: string): Promise<SessionAgentMessage | null> {
+    await this.initialize();
+    const row = turn_id
+      ? this.require_database().prepare(`
+          SELECT * FROM messages
+          WHERE role = 'agent' AND turn_id = ?
+          ORDER BY sequence DESC LIMIT 1
+        `).get(turn_id)
+      : this.require_database().prepare(`
+          SELECT * FROM messages
+          WHERE role = 'agent'
+          ORDER BY sequence DESC LIMIT 1
+        `).get();
+    const message = row
+      ? this.read_aggregates([row as unknown as SessionMessageRow])[0] ?? null
+      : null;
+    return message?.role === "agent" ? message : null;
   }
 
   /** 读取当前 Message 数量、数据库大小与最新 Message。 */
   async message_stats(): Promise<SessionMessageStorageStats> {
     await this.initialize();
     const count_row = this.require_database().prepare(
-      "SELECT COUNT(*) AS message_count FROM messages",
+      "SELECT message_count FROM session_state WHERE singleton_id = 1",
     ).get() as { message_count: number };
     const latest_row = this.require_database().prepare(
       "SELECT * FROM messages ORDER BY sequence DESC LIMIT 1",
@@ -350,10 +398,14 @@ export class SqliteSessionStorage implements SessionStorage {
       if (version > SESSION_STORAGE_SCHEMA_VERSION) {
         throw new Error(`Unsupported Session schema version: ${String(version)}`);
       }
+      if (version > 0 && version < SESSION_STORAGE_SCHEMA_VERSION) {
+        throw new Error(
+          `Session schema version ${String(version)} requires the external migration script`,
+        );
+      }
       database.exec(SESSION_STORAGE_SCHEMA_SQL);
       database.exec(`PRAGMA user_version = ${String(SESSION_STORAGE_SCHEMA_VERSION)}`);
       this.initialize_identity_unsafe();
-      this.recover_interrupted_messages_unsafe();
     } catch (error) {
       if (this.database === database) this.database = null;
       try {
@@ -400,61 +452,6 @@ export class SqliteSessionStorage implements SessionStorage {
     });
   }
 
-  /** 收口上次进程中断遗留的 Message 与 Part 状态。 */
-  private recover_interrupted_messages_unsafe(): void {
-    this.run_transaction(() => {
-      const messages = this.read_all_aggregates_unsafe();
-      let recovered_any = false;
-      for (const current of messages) {
-        if (current.role !== "agent") continue;
-        let changed = current.status === "streaming";
-        const updated_at = Date.now();
-        const parts = current.parts.map((part): SessionAgentMessagePart => {
-          if (part.type === "action" && part.state === "running") {
-            changed = true;
-            return { ...part, state: "failed", description: part.description || "Action interrupted before completion." };
-          }
-          if (part.type === "interaction" && part.status === "pending") {
-            changed = true;
-            return {
-              ...part,
-              status: "cancelled",
-              cancel_reason: "runtime_interrupted",
-              resolved_at: updated_at,
-            } satisfies SessionAgentInteractionPart;
-          }
-          if (
-            part.type === "tool" &&
-            part.state !== "completed" &&
-            part.state !== "failed"
-          ) {
-            changed = true;
-            return { ...part, state: "failed", error: "Tool interrupted before completion." };
-          }
-          if (
-            (part.type === "text" || part.type === "reasoning") &&
-            part.state === "streaming"
-          ) {
-            changed = true;
-            return { ...part, state: "done" };
-          }
-          return part;
-        });
-        if (!changed) continue;
-        const recovered: SessionAgentMessage = {
-          ...current,
-          status: current.status === "streaming" ? "stopped" : current.status,
-          revision: current.revision + 1,
-          updated_at,
-          parts,
-        };
-        this.update_message_unsafe(recovered, current.revision);
-        recovered_any = true;
-      }
-      if (recovered_any) this.refresh_message_projection_unsafe(Date.now());
-    });
-  }
-
   /** 批量读取 Message rows 对应的所有 Parts 并组装聚合。 */
   private read_aggregates(rows: readonly SessionMessageRow[]): SessionMessage[] {
     if (rows.length === 0) return [];
@@ -477,91 +474,66 @@ export class SqliteSessionStorage implements SessionStorage {
     ));
   }
 
-  /** 在当前事务中读取全部 Message 聚合。 */
-  private read_all_aggregates_unsafe(): SessionMessage[] {
-    const rows = this.require_database().prepare(
-      "SELECT * FROM messages ORDER BY sequence ASC",
-    ).all() as unknown as SessionMessageRow[];
-    return this.read_aggregates(rows);
-  }
-
-  /** 在当前事务中读取单个 Message 聚合。 */
-  private read_aggregate_unsafe(message_id: string): SessionMessage | null {
-    const row = this.require_database().prepare(
-      "SELECT * FROM messages WHERE message_id = ?",
-    ).get(message_id) as unknown as SessionMessageRow | undefined;
-    return row ? this.read_aggregates([row])[0] ?? null : null;
-  }
-
   /** 插入 Message envelope 与全部 Parts。 */
   private insert_message_unsafe(message: SessionMessage): void {
     const row = encode_session_message_row(message);
     this.require_database().prepare(`
       INSERT INTO messages (
-        message_id, turn_id, sequence, revision, role, input_type, status,
+        message_id, turn_id, sequence, revision, role, state,
         visibility, origin_session_id, origin_message_id, origin_turn_id,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       row.message_id, row.turn_id, row.sequence, row.revision, row.role,
-      row.input_type, row.status, row.visibility, row.origin_session_id,
+      row.state, row.visibility, row.origin_session_id,
       row.origin_message_id, row.origin_turn_id, row.created_at, row.updated_at,
     );
     for (const part of message.parts) this.insert_part_unsafe(message, part);
   }
 
-  /** 更新 Message envelope 并只写入发生变化的 Part rows。 */
-  private update_message_unsafe(message: SessionMessage, expected_revision: number): void {
+  /** 使用 revision 乐观锁更新 Message envelope。 */
+  private update_message_envelope_unsafe(
+    message: SessionMessage,
+    expected_revision: number,
+  ): void {
     const row = encode_session_message_row(message);
     const result = this.require_database().prepare(`
       UPDATE messages SET
-        turn_id = ?, revision = ?, input_type = ?, status = ?, visibility = ?,
+        turn_id = ?, revision = ?, state = ?, visibility = ?,
         updated_at = ?
       WHERE message_id = ? AND revision = ? AND role = ? AND sequence = ?
     `).run(
-      row.turn_id, row.revision, row.input_type, row.status, row.visibility,
+      row.turn_id, row.revision, row.state, row.visibility,
       row.updated_at, row.message_id, expected_revision, row.role, row.sequence,
     );
     if (result.changes !== 1) {
       throw new Error(`Session Message revision conflict: ${message.message_id}`);
     }
-    const existing_rows = this.require_database().prepare(
-      "SELECT * FROM message_parts WHERE message_id = ? ORDER BY sequence",
-    ).all(message.message_id) as unknown as SessionMessagePartRow[];
-    const existing_by_id = new Map(existing_rows.map((part) => [part.part_id, part]));
-    const next_rows = message.parts.map((part) => {
-      const row = encode_session_part_row(message, part);
-      return {
-        ...row,
-        created_at: existing_by_id.get(row.part_id)?.created_at ?? message.updated_at,
-      };
-    });
-    const next_ids = new Set(next_rows.map((part) => part.part_id));
-    for (const existing of existing_rows) {
-      if (!next_ids.has(existing.part_id)) {
-        this.require_database().prepare("DELETE FROM message_parts WHERE part_id = ?").run(existing.part_id);
-      }
-    }
-    for (const part of next_rows) {
-      const existing = existing_by_id.get(part.part_id);
-      if (!existing) {
-        this.insert_part_row_unsafe(part);
-        continue;
-      }
-      if (
-        existing.sequence === part.sequence &&
-        existing.step_id === part.step_id &&
-        existing.type === part.type &&
-        existing.content === part.content
-      ) continue;
-      this.require_database().prepare(`
-        UPDATE message_parts SET
-          sequence = ?, step_id = ?, type = ?, content = ?, updated_at = ?
-        WHERE part_id = ? AND message_id = ?
-      `).run(
-        part.sequence, part.step_id, part.type, part.content,
-        part.updated_at, part.part_id, part.message_id,
-      );
+  }
+
+  /** 插入或替换单个明确变化的 Part，不扫描同 Message 的其他 Part。 */
+  private upsert_part_unsafe(
+    message: SessionMessage,
+    part: SessionMessage["parts"][number],
+  ): void {
+    const row = encode_session_part_row(message, part);
+    const result = this.require_database().prepare(`
+      INSERT INTO message_parts (
+        part_id, message_id, sequence, step_id, type, content, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(part_id) DO UPDATE SET
+        sequence = excluded.sequence,
+        step_id = excluded.step_id,
+        type = excluded.type,
+        content = excluded.content,
+        updated_at = excluded.updated_at
+      WHERE message_parts.message_id = excluded.message_id
+    `).run(
+      row.part_id, row.message_id, row.sequence, row.step_id,
+      row.type, row.content, row.created_at, row.updated_at,
+    );
+    if (result.changes !== 1) {
+      throw new Error(`Session Part belongs to another Message: ${part.part_id}`);
     }
   }
 
@@ -585,51 +557,77 @@ export class SqliteSessionStorage implements SessionStorage {
     );
   }
 
-  /** 事务性刷新 Session 列表物化字段。 */
-  private refresh_message_projection_unsafe(updated_at: number): void {
-    const count = this.require_database().prepare(
-      "SELECT COUNT(*) AS count FROM messages",
-    ).get() as { count: number };
-    const latest_row = this.require_database().prepare(
-      "SELECT * FROM messages ORDER BY sequence DESC LIMIT 1",
-    ).get() as unknown as SessionMessageRow | undefined;
-    const latest_message = latest_row
-      ? this.read_aggregates([latest_row])[0] ?? null
-      : null;
-    const preview_text = latest_message
-      ? resolve_session_message_preview(latest_message).trim().slice(0, 180)
-      : "";
+  /** 以当前已知 Message 增量维护列表投影，不反查完整历史。 */
+  private update_message_projection_unsafe(
+    message: SessionMessage,
+    created: boolean,
+  ): void {
+    if (!created && message.role === "agent" && message.state === "streaming") {
+      return;
+    }
+    const preview_text = resolve_session_message_preview(message).trim().slice(0, 180);
     this.require_database().prepare(`
       UPDATE session_state SET
-        message_count = ?, preview_text = ?,
+        message_count = message_count + ?,
+        preview_text = CASE
+          WHEN (SELECT MAX(sequence) FROM messages) = ? THEN ?
+          ELSE preview_text
+        END,
         revision = revision + 1, updated_at = ?
       WHERE singleton_id = 1
-    `).run(count.count, preview_text || null, updated_at);
+    `).run(
+      created ? 1 : 0,
+      message.sequence,
+      preview_text || null,
+      message.updated_at,
+    );
   }
 
   /** 校验新 Message 身份、顺序和 Part 结构。 */
-  private validate_new_message(message: SessionMessage, existing: SessionMessage[]): void {
+  private validate_new_message(message: SessionMessage, next_sequence: number): void {
     if (message.session_id !== this.session_id) throw new Error("Session Message session_id mismatch");
-    if (message.sequence !== (existing.at(-1)?.sequence ?? 0) + 1 || message.revision !== 1) {
+    if (message.sequence !== next_sequence || message.revision !== 1) {
       throw new Error("New Session Message requires the next sequence and revision 1");
     }
     this.validate_parts(message);
   }
 
-  /** 校验更新没有改变 Message identity 与 Part identity。 */
-  private validate_updated_message(current: SessionMessage, message: SessionMessage): void {
+  /** 只读取 envelope，校验定向更新没有改变聚合身份。 */
+  private validate_message_update_unsafe(input: SessionMessageUpdate): void {
+    const message = input.message;
+    const current = this.require_database().prepare(
+      "SELECT * FROM messages WHERE message_id = ?",
+    ).get(message.message_id) as unknown as SessionMessageRow | undefined;
+    if (!current) throw new Error(`Session Message not found: ${message.message_id}`);
     if (
-      message.message_id !== current.message_id ||
-      message.session_id !== current.session_id ||
+      message.session_id !== this.session_id ||
       message.sequence !== current.sequence ||
       message.role !== current.role ||
-      message.revision !== current.revision + 1 ||
+      current.revision !== input.expected_revision ||
+      message.revision !== input.expected_revision + 1 ||
       message.created_at !== current.created_at ||
-      JSON.stringify(message.origin) !== JSON.stringify(current.origin)
+      message.origin?.session_id !== (current.origin_session_id ?? undefined) ||
+      message.origin?.message_id !== (current.origin_message_id ?? undefined) ||
+      message.origin?.turn_id !== (current.origin_turn_id ?? undefined)
     ) {
-      throw new Error(`Session Message update changed immutable identity: ${current.message_id}`);
+      if (current.revision !== input.expected_revision) {
+        throw new Error(`Session Message revision conflict: ${message.message_id}`);
+      }
+      throw new Error(`Session Message update changed immutable identity: ${message.message_id}`);
     }
     this.validate_parts(message);
+    const message_parts = new Map<string, SessionMessage["parts"][number]>();
+    for (const part of message.parts) message_parts.set(part.part_id, part);
+    const changed_ids = new Set<string>();
+    for (const part of input.changed_parts) {
+      if (
+        changed_ids.has(part.part_id) ||
+        JSON.stringify(message_parts.get(part.part_id)) !== JSON.stringify(part)
+      ) {
+        throw new Error(`Invalid changed Session Part: ${part.part_id}`);
+      }
+      changed_ids.add(part.part_id);
+    }
   }
 
   /** 校验 Part identity、类型和连续顺序。 */
@@ -645,6 +643,23 @@ export class SqliteSessionStorage implements SessionStorage {
       if (message.role === "user" && !user_type) {
         throw new Error(`User Message cannot contain ${part.type} Part`);
       }
+    }
+    if (message.role !== "agent") return;
+    const has_non_terminal_part = message.parts.some((part) => {
+      if (part.type === "text" || part.type === "reasoning") {
+        return part.state === "streaming";
+      }
+      if (part.type === "tool") {
+        return part.state !== "completed" && part.state !== "failed";
+      }
+      if (part.type === "interaction") return part.status === "pending";
+      if (part.type === "action") return part.state === "running";
+      return false;
+    });
+    if (has_non_terminal_part && message.state !== "streaming") {
+      throw new Error(
+        `Non-terminal Agent Part requires a streaming Message: ${message.message_id}`,
+      );
     }
   }
 
@@ -730,19 +745,21 @@ function normalize_composer_namespace(value: string): string {
 function assert_policy_sql(sql: string, table_prefix: string): void {
   const source = String(sql || "").trim();
   if (!source) throw new Error("Composer storage SQL cannot be empty");
-  if (/\b(?:ATTACH|DETACH|VACUUM|PRAGMA|REINDEX|ANALYZE)\b/iu.test(source)) {
+  if (
+    /\b(?:ATTACH|DETACH|VACUUM|PRAGMA|REINDEX|ANALYZE|ALTER)\b/iu.test(source) ||
+    /\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/iu.test(source) ||
+    /\bCREATE\s+TRIGGER\b/iu.test(source) ||
+    /\bDROP\s+(?:INDEX|TRIGGER)\b/iu.test(source)
+  ) {
     throw new Error("Composer Policy cannot execute database control statements");
   }
   const mutation_targets = [
     ...source.matchAll(/\bCREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
-    ...source.matchAll(/\bCREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
-    ...source.matchAll(/\bCREATE\s+TRIGGER(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
     ...source.matchAll(/\bINSERT(?:\s+OR\s+(?:ROLLBACK|ABORT|REPLACE|FAIL|IGNORE))?\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
     ...source.matchAll(/\bREPLACE\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
     ...source.matchAll(/\bUPDATE(?:\s+OR\s+(?:ROLLBACK|ABORT|REPLACE|FAIL|IGNORE))?\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
     ...source.matchAll(/\bDELETE\s+FROM\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
-    ...source.matchAll(/\bDROP\s+(?:TABLE|INDEX|TRIGGER)(?:\s+IF\s+EXISTS)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
-    ...source.matchAll(/\bALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
+    ...source.matchAll(/\bDROP\s+TABLE(?:\s+IF\s+EXISTS)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
   ].map((match) => match[1] || "");
   const mutates_database = /\b(?:CREATE|INSERT|REPLACE|UPDATE|DELETE|DROP|ALTER)\b/iu.test(source);
   if (mutates_database && mutation_targets.length === 0) {

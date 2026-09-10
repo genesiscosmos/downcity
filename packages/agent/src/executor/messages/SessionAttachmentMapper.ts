@@ -5,15 +5,15 @@
  * 模型执行阶段的文件读取与 `ModelFileContent` 转换由 `SessionModelMessages` 负责。
  */
 
-import type { SessionPromptPart } from "@downcity/type";
+import type { SessionUserContent } from "@downcity/type";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 /** 在用户 prompt 入库前持久化 Data URL 文件。 */
 export async function persist_user_prompt_file_parts(
-  parts: SessionPromptPart[],
+  parts: SessionUserContent[],
   attachment_store: SessionAttachmentStore,
-): Promise<SessionPromptPart[]> {
-  const output: SessionPromptPart[] = [];
+): Promise<SessionUserContent[]> {
+  const output: SessionUserContent[] = [];
   for (const part of parts) {
     if (part.type !== "file" || !part.url.startsWith("data:")) {
       output.push(part);

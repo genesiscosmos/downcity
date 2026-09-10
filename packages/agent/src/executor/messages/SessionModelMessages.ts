@@ -13,7 +13,6 @@ import type {
   ModelJsonValue,
   ModelMessage,
 } from "@downcity/type";
-import { parse_chat_message_markup } from "@executor/messages/ChatMessageMarkup.js";
 import { render_session_user_context } from "@/session/messages/SessionUserContext.js";
 import type {
   SessionAgentMessage,
@@ -21,6 +20,7 @@ import type {
   SessionMessage,
   SessionUserFilePart,
   SessionUserMessage,
+  SessionUserMessagePart,
 } from "@downcity/type";
 
 /** 把一组 canonical Session Message 转换为模型消息。 */
@@ -44,24 +44,38 @@ async function convert_user_message(
   message: SessionUserMessage,
   project_root?: string,
 ): Promise<ModelMessage[]> {
+  const converted = await convert_user_parts(message.parts, project_root);
+  return converted ? [converted] : [];
+}
+
+/** 将 canonical User Parts 投影为单条模型消息。 */
+async function convert_user_parts(
+  parts: readonly SessionUserMessagePart[],
+  project_root?: string,
+): Promise<ModelMessage | null> {
   const content: ModelContent[] = [];
-  const has_explicit_file = message.parts.some((part) => part.type === "file");
-  for (const part of message.parts) {
-    if (part.type === "text" && part.text.trim()) {
-      content.push({ type: "text", text: part.text });
-    } else if (part.type === "context") {
-      content.push({
-        type: "text",
-        text: render_session_user_context(part.tag, part.context),
-      });
-    } else if (part.type === "file") {
-      content.push(await convert_file_part(part, project_root));
+  for (const part of parts) {
+    switch (part.type) {
+      case "text":
+        if (part.text.trim()) content.push({ type: "text", text: part.text });
+        break;
+      case "context":
+        content.push({
+          type: "text",
+          text: render_session_user_context(part.tag, part.context),
+        });
+        break;
+      case "file":
+        content.push(await convert_file_part(part, project_root));
+        break;
+      case "data":
+        // Data Part 是持久化 UI 数据，不属于模型输入协议。
+        break;
+      default:
+        assert_never(part);
     }
   }
-  if (!has_explicit_file) {
-    content.push(...await read_markup_files(message, project_root));
-  }
-  return content.length > 0 ? [{ role: "user", content }] : [];
+  return content.length > 0 ? { role: "user", content } : null;
 }
 
 /** 把单条 canonical Agent Message 转换为模型 assistant 与 tool 消息。 */
@@ -80,18 +94,35 @@ function convert_assistant_message(message: SessionAgentMessage): ModelMessage[]
     const part_step_id = part.step_id ?? "__unscoped__";
     if (current_step_id !== null && part_step_id !== current_step_id) flush_step();
     current_step_id = part_step_id;
-    if (part.type === "text" && part.text.trim()) {
-      content.push({ type: "text", text: part.text });
-    } else if (part.type === "reasoning" && part.text.trim()) {
-      content.push({
-        type: "reasoning",
-        text: part.text,
-        ...(part.reasoning_signature
-          ? { signature: part.reasoning_signature }
-          : {}),
-      });
-    } else if (part.type === "tool" && part.input !== undefined) {
-      append_tool_content(part, content, tool_results);
+    switch (part.type) {
+      case "text":
+        if (part.text.trim()) content.push({ type: "text", text: part.text });
+        break;
+      case "reasoning":
+        if (part.text.trim()) {
+          content.push({
+            type: "reasoning",
+            text: part.text,
+            ...(part.reasoning_signature
+              ? { signature: part.reasoning_signature }
+              : {}),
+          });
+        }
+        break;
+      case "tool":
+        if (part.input !== undefined) {
+          append_tool_content(part, content, tool_results);
+        }
+        break;
+      case "interaction":
+      case "file":
+      case "data":
+      case "action":
+      case "error":
+        // 这些 Part 只属于运行状态或宿主展示，不进入模型历史。
+        break;
+      default:
+        assert_never(part);
     }
   }
   flush_step();
@@ -156,36 +187,6 @@ function build_model_file(
   };
 }
 
-/** 解析兼容聊天入口写入文本中的附件标记。 */
-async function read_markup_files(
-  message: SessionUserMessage,
-  project_root?: string,
-): Promise<ModelFileContent[]> {
-  const text = message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("\n");
-  const output: ModelFileContent[] = [];
-  for (const file of parse_chat_message_markup(text).files) {
-    const media_type = guess_media_type(file.path);
-    if (!media_type || (!media_type.startsWith("image/") && media_type !== "application/pdf")) {
-      continue;
-    }
-    const file_path = resolve_local_file_path(file.path, project_root);
-    if (!await fs.pathExists(file_path)) continue;
-    output.push({
-      type: "file",
-      media_type,
-      source: {
-        type: "base64",
-        data: (await fs.readFile(file_path)).toString("base64"),
-      },
-      filename: path.basename(file_path),
-    });
-  }
-  return output;
-}
-
 /** 把本地文件引用限制在项目根目录内，绝对附件路径保持可读。 */
 function resolve_local_file_path(raw_path: string, project_root?: string): string {
   if (path.isAbsolute(raw_path)) return path.resolve(raw_path);
@@ -198,19 +199,13 @@ function resolve_local_file_path(raw_path: string, project_root?: string): strin
   return file_path;
 }
 
-/** 根据文件扩展名解析模型可用的 MIME type。 */
-function guess_media_type(file_path: string): string | undefined {
-  const extension = path.extname(file_path).toLowerCase();
-  if (extension === ".png") return "image/png";
-  if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
-  if (extension === ".webp") return "image/webp";
-  if (extension === ".gif") return "image/gif";
-  if (extension === ".pdf") return "application/pdf";
-  return undefined;
-}
-
 /** 将未知值限制为可传输 JSON。 */
 function to_model_json_value(value: unknown): ModelJsonValue {
   if (value === undefined) return null;
   return JSON.parse(JSON.stringify(value)) as ModelJsonValue;
+}
+
+/** 联合类型增加成员时，强制模型投影显式选择支持或忽略。 */
+function assert_never(value: never): never {
+  throw new Error(`Unsupported Session model part: ${String((value as { type?: unknown }).type)}`);
 }
