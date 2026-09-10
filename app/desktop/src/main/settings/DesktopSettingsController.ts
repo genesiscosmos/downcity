@@ -10,7 +10,6 @@ const default_settings: DesktopSettings = {
   auto_scroll: true,
   default_agent_id: "",
   open_empty_chat_on_start: false,
-  send_message_on_enter: true,
   spellcheck_enabled: false,
   appearance_mode: "system",
   color_theme: "duobox",
@@ -62,7 +61,6 @@ export function normalize_settings(input?: Partial<DesktopSettings> | null): Des
     auto_scroll: typeof input?.auto_scroll === "boolean" ? input.auto_scroll : default_settings.auto_scroll,
     default_agent_id: typeof input?.default_agent_id === "string" ? input.default_agent_id.trim() : "",
     open_empty_chat_on_start: typeof input?.open_empty_chat_on_start === "boolean" ? input.open_empty_chat_on_start : default_settings.open_empty_chat_on_start,
-    send_message_on_enter: typeof input?.send_message_on_enter === "boolean" ? input.send_message_on_enter : default_settings.send_message_on_enter,
     spellcheck_enabled: typeof input?.spellcheck_enabled === "boolean" ? input.spellcheck_enabled : default_settings.spellcheck_enabled,
     appearance_mode: appearance_modes.has(input?.appearance_mode as DesktopSettings["appearance_mode"])
       ? input!.appearance_mode as DesktopSettings["appearance_mode"]

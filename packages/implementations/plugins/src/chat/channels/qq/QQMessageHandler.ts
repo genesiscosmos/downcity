@@ -8,13 +8,12 @@
  */
 
 import type { PluginLogger } from "@downcity/city/plugin";
-import type { PluginContext } from "@downcity/city/plugin";
 import type {
   ChannelChatKeyParams,
   IncomingChatAccessParams,
   IncomingChatAccessResult,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { ChannelUserMessageMeta } from "@/chat/channels/BaseChatChannelSupport.js";
+import type { ChannelUserMessageMeta } from "@/chat/types/ChatConnector.js";
 import {
   buildQqAuditText,
   extractQqAuthorIdentity,
@@ -49,10 +48,6 @@ export type QqMessageActor = {
  * QQ 入站消息处理依赖。
  */
 export interface QQMessageHandlerOptions {
-  /**
-   * 当前 agent context。
-   */
-  context: PluginContext;
   /**
    * 项目根目录。
    */
@@ -258,7 +253,6 @@ export async function handleQqChannelMessage(
   }
 
   const instructions = await buildQqInboundInstructions({
-    context: options.context,
     rootPath: options.rootPath,
     dataPath: options.dataPath,
     chatId: channelId,
@@ -413,7 +407,6 @@ async function handleQqInboundMessage(
   }
 
   const instructions = await buildQqInboundInstructions({
-    context: options.context,
     rootPath: options.rootPath,
     dataPath: options.dataPath,
     chatId,

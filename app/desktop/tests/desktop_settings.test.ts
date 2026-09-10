@@ -11,7 +11,6 @@ test("缺失设置使用稳定默认值", () => {
     auto_scroll: true,
     default_agent_id: "",
     open_empty_chat_on_start: false,
-    send_message_on_enter: true,
     spellcheck_enabled: false,
     appearance_mode: "system",
     color_theme: "duobox",

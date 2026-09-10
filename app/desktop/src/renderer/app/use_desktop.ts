@@ -30,7 +30,7 @@ import { use_desktop_group_actions } from "@/features/chat/hooks/use_group_actio
 import { use_desktop_navigation_actions } from "@/features/navigation/use_navigation_actions";
 import { update_group_session_title } from "@/features/chat/lib/group/group_session_projection";
 import { create_chat_composer, is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
-import { group_agent_sessions_by_workspace } from "@/features/chat/lib/session_list_projection";
+import { group_agent_sessions_by_workspace, resolve_agent_chat_target, type AgentChatTarget } from "@/features/chat/lib/session_list_projection";
 import { translate } from "@/locales/i18n";
 
 const active_workspace_storage_key = "downcity.active_workspace_id";
@@ -61,6 +61,8 @@ export function use_desktop_controller(): DesktopController {
   // 组合层只保留跨领域导航引用；Chat 请求生命周期由 chat_lifecycle 统一拥有。
   const hydrated_navigation_keys_ref = useRef(new Set<string>());
   const active_group_session_ids_ref = useRef(new Map<string, string>());
+  // Agent 主体入口按“最近打开”恢复，而不是误用消息更新时间推断用户最后访问的对话。
+  const recent_agent_chat_targets_ref = useRef(new Map<string, AgentChatTarget>());
   const previous_selection_ref = useRef<NavigationTarget | null>(null);
   const selection_by_sidebar_mode_ref = useRef<Partial<Record<SidebarMode, NavigationTarget>>>({});
   const send_message_ref = useRef<(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode, skip_orphan_check?: boolean) => Promise<void>>(async () => undefined);
@@ -163,6 +165,18 @@ export function use_desktop_controller(): DesktopController {
       })
       .catch((reason) => settings.set_user({ ...settings.state_ref.current.user, error: to_error_message(reason) }));
   }, [catalog, composer, navigation, session, settings]);
+
+  // 记录每个 Agent 最近实际打开的 Session 或 Draft，供主体入口恢复。
+  useEffect(() => {
+    const remember_agent_chat_target = () => {
+      const target = navigation.state_ref.current.selection;
+      if (target?.kind === "session" || target?.kind === "draft") {
+        recent_agent_chat_targets_ref.current.set(target.agent_id, target);
+      }
+    };
+    remember_agent_chat_target();
+    return navigation.store.subscribe(remember_agent_chat_target);
+  }, [navigation]);
 
   // ---- 队列发送循环 ----
   const commit_queue = useCallback((next: Record<string, QueuedChatMessage[]>) => {
@@ -517,19 +531,23 @@ export function use_desktop_controller(): DesktopController {
     }
   }, [chat_lifecycle, discard_session_render_state, navigation, session, settings]);
 
-  /** 打开 Agent 最近更新的 Session；没有历史时进入未持久化的新对话。 */
+  /** 打开 Agent 最近访问的对话；目标失效时回退到最近更新的 Session，没有历史时进入新对话。 */
   const open_agent_chat = useCallback(async (agent_id: string) => {
     settings.set_error("");
     try {
-      let latest_session: { workspace_id: string; session: DesktopSessionSummary } | undefined;
-      for (const [workspace_id, entries] of Object.entries(session.state_ref.current.sessions_by_workspace)) {
-        for (const entry of entries) {
-          if (entry.agent_id !== agent_id || latest_session && entry.session.updated_at <= latest_session.session.updated_at) continue;
-          latest_session = { workspace_id, session: entry.session };
-        }
+      const workspace_ids = new Set(catalog.state_ref.current.workspaces.map((workspace) => workspace.workspace_id));
+      const target = resolve_agent_chat_target(
+        session.state_ref.current.sessions_by_workspace,
+        workspace_ids,
+        agent_id,
+        recent_agent_chat_targets_ref.current.get(agent_id),
+      );
+      if (target?.kind === "session") {
+        await select_session(target.workspace_id, agent_id, target.session_id, true);
+        return;
       }
-      if (latest_session) {
-        await select_session(latest_session.workspace_id, agent_id, latest_session.session.session_id, true);
+      if (target?.kind === "draft") {
+        await create_session(target.workspace_id, agent_id);
         return;
       }
       const target_workspace = catalog.state_ref.current.workspaces.find((workspace) => workspace.workspace_id === navigation.state_ref.current.active_workspace_id)
@@ -654,7 +672,7 @@ export function use_desktop_controller(): DesktopController {
       session.set_session_attach_request({ agent_id, session_id, workspace_id, pending_input: input });
       return;
     }
-    if (mode === "queue" || is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key]) || (composer.state_ref.current.queued_messages_by_session[session_key]?.length ?? 0) > 0) {
+    if (mode !== "steer" && (mode === "queue" || is_chat_busy(chat_stream.state_ref.current.chat_runtime_by_session[session_key]) || (composer.state_ref.current.queued_messages_by_session[session_key]?.length ?? 0) > 0)) {
       const queued: QueuedChatMessage = {
         message_id: crypto.randomUUID(),
         input,

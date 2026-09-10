@@ -2,9 +2,9 @@
  * Chat Access SQLite Schema。
  *
  * 关键点（中文）
- * - 所有表只保存当前 Agent 的 Chat 准入数据。
+ * - 所有表保存 Chat Plugin 的准入数据，并通过 issuer 隔离 Bot Account。
  * - 不保存 Bot Token、App Secret 或消息正文。
- * - WAL 与 busy_timeout 保证 Agent runtime 和 CLI 可以并发读写。
+ * - WAL 与 busy_timeout 保证 Connector runtime 和 Desktop 可以并发读写。
  */
 
 import type { DatabaseSync } from "node:sqlite";

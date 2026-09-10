@@ -20,12 +20,11 @@ export function GroupComposer({ selection, stores, actions }: GroupComposerProps
     return selection.kind === "group_session" && (phase === "dispatching" || phase === "dispatched" || phase === "executing");
   });
   const spellcheck_enabled = use_store_selector(stores.settings, state => state.settings.spellcheck_enabled);
-  const send_message_on_enter = use_store_selector(stores.settings, state => state.settings.send_message_on_enter);
   const members = useMemo(() => agents.filter(agent => group?.members.some(member => member.agent_id === agent.agent_id)), [agents, group?.members]);
   const commands = useMemo(() => (group?.sessions ?? []).map(session => ({ command_id: `sessions:${session.session_id}`, title: `/sessions ${session.session_id.slice(0, 8)}`, description: translate("commands.switch_group_session"), keywords: ["session", "sessions", session.session_id], run: () => actions.open_group(group_id, session.session_id) })), [actions, group?.sessions, group_id, translate]);
   return <RichTextEditor editor_key={chat_key} draft_content={draft ?? empty_chat_content}
     placeholder={translate("composer.group_placeholder")} busy={busy} spellcheck_enabled={spellcheck_enabled}
-    send_message_on_enter={send_message_on_enter} members={members} commands={commands}
+    members={members} commands={commands}
     update_draft={input => actions.update_group_draft(workspace_id, group_id, session_id, input)}
     send_message={async input => { await actions.send_group_message(group_id, workspace_id, session_id, input); }}
     stop_session={selection.kind === "group_session" ? () => actions.stop_group(group_id, session_id) : undefined} />;

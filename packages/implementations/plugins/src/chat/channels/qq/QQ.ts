@@ -28,7 +28,7 @@ import type {
   ChannelChatKeyParams,
   ChannelSendTextParams,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { PluginContext } from "@downcity/city/plugin";
+import type { ChatConnectorContext } from "@/chat/types/ChatConnector.js";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { QQConfig, QQMessageData } from "@/chat/channels/qq/types/QqChannel.js";
@@ -48,7 +48,7 @@ export class QQBot extends BaseChatChannel {
   private botDisplayName = "";
 
   constructor(
-    context: PluginContext,
+    context: ChatConnectorContext,
     appId: string,
     appSecret: string,
     useSandbox: boolean = false,
@@ -266,7 +266,6 @@ export class QQBot extends BaseChatChannel {
    */
   private getMessageHandlerOptions(): QQMessageHandlerOptions {
     return {
-      context: this.context,
       rootPath: this.rootPath,
       dataPath: this.dataPath,
       logger: this.logger,
@@ -386,7 +385,7 @@ export class QQBot extends BaseChatChannel {
  */
 export async function createQQBot(
   config: QQConfig,
-  context: PluginContext,
+  context: ChatConnectorContext,
 ): Promise<QQBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;

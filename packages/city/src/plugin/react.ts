@@ -45,6 +45,7 @@ export type {
   PluginRendererSelectProps,
   PluginRendererSidebarItemProps,
   PluginRendererSidebarProps,
+  PluginRendererSidebarCreateMenuProps,
   PluginRendererSidebarSectionProps,
   PluginRendererSidebarTreeItemProps,
   PluginRendererStackProps,

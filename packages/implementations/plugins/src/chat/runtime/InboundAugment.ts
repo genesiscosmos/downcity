@@ -16,6 +16,28 @@ function normalizeText(value: string | undefined): string | undefined {
   return text || undefined;
 }
 
+/** 只执行确定性的入站字段规范化，不调用其他 Plugin。 */
+export function normalize_chat_inbound_input(
+  input: ChatInboundAugmentInput,
+): ChatInboundAugmentInput {
+  return {
+    ...input,
+    ...(input.chatType ? { chatType: input.chatType } : {}),
+    ...(input.chat_key ? { chat_key: input.chat_key } : {}),
+    ...(input.message_id ? { message_id: input.message_id } : {}),
+    ...(normalizeText(input.attachmentText)
+      ? { attachmentText: normalizeText(input.attachmentText) }
+      : {}),
+    ...(normalizeText(input.body_text)
+      ? { body_text: normalizeText(input.body_text) }
+      : {}),
+    pluginSections: Array.isArray(input.pluginSections)
+      ? input.pluginSections.map((item) => String(item || "").trim()).filter(Boolean)
+      : [],
+    attachments: Array.isArray(input.attachments) ? input.attachments : [],
+  };
+}
+
 /**
  * 执行 chat 入站增强 pipeline。
  */
@@ -23,22 +45,7 @@ export async function augmentChatInboundInput(params: {
   context: PluginContext;
   input: ChatInboundAugmentInput;
 }): Promise<ChatInboundAugmentInput> {
-  const normalized: ChatInboundAugmentInput = {
-    ...params.input,
-    ...(params.input.chatType ? { chatType: params.input.chatType } : {}),
-    ...(params.input.chat_key ? { chat_key: params.input.chat_key } : {}),
-    ...(params.input.message_id ? { message_id: params.input.message_id } : {}),
-    ...(normalizeText(params.input.attachmentText)
-      ? { attachmentText: normalizeText(params.input.attachmentText) }
-      : {}),
-    ...(normalizeText(params.input.body_text)
-      ? { body_text: normalizeText(params.input.body_text) }
-      : {}),
-    pluginSections: Array.isArray(params.input.pluginSections)
-      ? params.input.pluginSections.map((item) => String(item || "").trim()).filter(Boolean)
-      : [],
-    attachments: Array.isArray(params.input.attachments) ? params.input.attachments : [],
-  };
+  const normalized = normalize_chat_inbound_input(params.input);
 
   return (params.context.city.plugins.pipeline<PluginJsonValue>(
     CHAT_PLUGIN_POINTS.augmentInbound,

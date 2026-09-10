@@ -4,13 +4,12 @@
  * 关键点（中文）
  * - 把当前 chat 路由环境从入站 `<info>` 中剥离，改由 system prompt 注入。
  * - 仅描述当前会话环境，不承载用户身份字段。
- * - 统一从 request context + ChatMetaStore 读取当前 chat 元信息。
+ * - 只从 Session origin 读取 Account/Conversation 路由元信息。
  */
 
 import type { PluginContext } from "@downcity/city/plugin";
 import type { PluginExecutionContext } from "@downcity/city/plugin";
 import type { ChatEnvironmentPromptInput } from "@/chat/types/ChatPromptContext.js";
-import { readChatMetaBySessionId } from "@/chat/runtime/ChatMetaStore.js";
 
 function normalizePromptValue(value: unknown, fallback: string): string {
   const text = String(value ?? "").trim();
@@ -30,21 +29,34 @@ export async function resolveCurrentChatEnvironmentPromptInput(
   const session_id = String(execution_context?.session_id || "").trim();
   if (!session_id) return null;
 
-  const meta = await readChatMetaBySessionId({
-    context,
-    session_id,
-  }).catch(() => null);
-  if (!meta?.channel || !meta.chatId) return null;
+  const origin = execution_context?.session_origin;
+  const origin_channel = String(origin?.channel || "").trim();
+  const origin_chat_id = String(origin?.chat_id || "").trim();
+  if (origin?.type === "chat" && origin_channel && origin_chat_id) {
+    const channel = resolve_chat_channel(origin_channel);
+    if (!channel) return null;
+    const thread_value = Number(origin.thread_id);
+    return {
+      session_id,
+      chat_key: session_id,
+      channel,
+      chat_id: origin_chat_id,
+      ...(String(origin.chat_type || "").trim()
+        ? { chat_type: String(origin.chat_type).trim() }
+        : {}),
+      ...(Number.isFinite(thread_value) ? { thread_id: thread_value } : {}),
+      ...(String(origin.chat_title || "").trim()
+        ? { chat_title: String(origin.chat_title).trim() }
+        : {}),
+    };
+  }
+  return null;
+}
 
-  return {
-    session_id: meta.session_id,
-    chat_key: meta.session_id,
-    channel: meta.channel,
-    chatId: meta.chatId,
-    ...(meta.targetType ? { chatType: meta.targetType } : {}),
-    ...(typeof meta.threadId === "number" ? { threadId: meta.threadId } : {}),
-    ...(meta.chatTitle ? { chatTitle: meta.chatTitle } : {}),
-  };
+/** 校验 Session origin 中的平台类型。 */
+function resolve_chat_channel(value: string): "telegram" | "feishu" | "qq" | null {
+  if (value === "telegram" || value === "feishu" || value === "qq") return value;
+  return null;
 }
 
 /**
@@ -57,17 +69,17 @@ export function buildChatEnvironmentPrompt(input: ChatEnvironmentPromptInput): s
     `- channel: ${normalizePromptValue(input.channel, "unknown")}`,
     `- session_id: ${normalizePromptValue(input.session_id, "unknown")}`,
     `- chat_key: ${normalizePromptValue(input.chat_key, "unknown")}`,
-    `- chat_id: ${normalizePromptValue(input.chatId, "unknown")}`,
-    `- chat_type: ${normalizePromptValue(input.chatType, "unknown")}`,
+    `- chat_id: ${normalizePromptValue(input.chat_id, "unknown")}`,
+    `- chat_type: ${normalizePromptValue(input.chat_type, "unknown")}`,
     `- thread_id: ${normalizePromptValue(
-      typeof input.threadId === "number" ? String(input.threadId) : "",
+      typeof input.thread_id === "number" ? String(input.thread_id) : "",
       "none",
     )}`,
   ];
 
-  const chatTitle = normalizePromptValue(input.chatTitle, "");
-  if (chatTitle) {
-    lines.push(`- chat_title: ${chatTitle}`);
+  const chat_title = normalizePromptValue(input.chat_title, "");
+  if (chat_title) {
+    lines.push(`- chat_title: ${chat_title}`);
   }
 
   return lines.join("\n");

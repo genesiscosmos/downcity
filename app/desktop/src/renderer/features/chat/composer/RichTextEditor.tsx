@@ -13,10 +13,11 @@ import type { DesktopAgentSummary } from "@common/types/DesktopApi";
 import type { RichTextEditorProps } from "@/types/ChatComponents";
 import { create_chat_composer_extensions } from "@/features/chat/composer/editor/chatComposerExtensions";
 import { ChatSlashMenu } from "@/features/chat/composer/editor/ChatSlashMenu";
-import { is_chat_composer_empty, resolve_chat_input_command } from "@/features/chat/composer/editor/chatComposerCodec";
+import { is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
 import { should_restore_editor_draft } from "@/features/chat/composer/editor/draftSync";
 import { add_chat_reference_listener } from "@/features/chat/composer/editor/chatReferenceEvent";
 import { add_chat_mention_listener } from "@/features/chat/composer/editor/chatMentionEvent";
+import { is_plain_enter, resolve_chat_composer_enter_action } from "@/features/chat/composer/editor/chatComposerKeymap";
 import { translate, use_translation } from "@/locales/i18n";
 
 /** 编辑器当前可见的 Slash 查询。 */
@@ -166,49 +167,22 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     }
   }
 
-  const run_compact_command = useCallback(async (restore_command_on_failure: boolean) => {
-    const current_editor = editor_ref.current;
-    if (!current_editor || submitting_ref.current || !props_ref.current.compact_session) return;
-    set_submitting(true);
-    submitting_ref.current = true;
-    try {
-      await props_ref.current.compact_session();
-      current_editor.commands.clearContent();
-      current_editor.commands.focus();
-    } catch {
-      if (restore_command_on_failure && is_chat_composer_empty(current_editor.getJSON())) {
-        current_editor.chain().focus().insertContent("/compact").run();
-      }
-    } finally {
-      submitting_ref.current = false;
-      set_submitting(false);
-    }
-  }, []);
-
   const submit_message = useCallback(async (mode: ChatSubmitMode = "send") => {
     const current_editor = editor_ref.current;
     if (!current_editor || submitting_ref.current) return;
     const input = current_editor.getJSON();
     if (is_chat_composer_empty(input)) return;
-    // 群聊没有 Agent 专属本地命令；斜杠文本应作为普通群聊消息交给调度器。
-    const command = props_ref.current.compact_session ? resolve_chat_input_command(input) : undefined;
-    if (command === "compact") {
-      if (!props_ref.current.compact_session) return;
-      await run_compact_command(false);
-      return;
-    }
     set_submitting(true);
     submitting_ref.current = true;
     try {
       discard_pending_draft();
-      if (mode === "queue" && props_ref.current.enqueue_message) await props_ref.current.enqueue_message(input);
-      else await props_ref.current.send_message(input);
+      await props_ref.current.send_message(input, mode);
       current_editor.commands.focus();
     } finally {
       submitting_ref.current = false;
       set_submitting(false);
     }
-  }, [discard_pending_draft, run_compact_command]);
+  }, [discard_pending_draft]);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -230,29 +204,23 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
         void insert_files(files);
         return true;
       },
-      handleKeyDown: (_view, event) => {
-        if (event.isComposing || event.key !== "Enter") return false;
-        if (!props_ref.current.attachments && member_query_ref.current && member_candidates_ref.current[0]) {
-          event.preventDefault();
-          select_group_member(member_candidates_ref.current[0]);
-          return true;
+      handleKeyDown: (view, event) => {
+        if (is_plain_enter(event)) {
+          if (!props_ref.current.attachments && member_query_ref.current && member_candidates_ref.current[0]) {
+            event.preventDefault();
+            select_group_member(member_candidates_ref.current[0]);
+            return true;
+          }
+          if (props_ref.current.attachments && file_query_ref.current && file_candidates[0]) {
+            event.preventDefault();
+            void select_workspace_file(file_candidates[0]);
+            return true;
+          }
         }
-        if (props_ref.current.attachments && file_query_ref.current && file_candidates[0]) {
-          event.preventDefault();
-          void select_workspace_file(file_candidates[0]);
-          return true;
-        }
-        if (slash_query_ref.current) return false;
-        const current_busy = props_ref.current.busy;
-        if (props_ref.current.enqueue_message && current_busy && event.shiftKey && (event.metaKey || event.ctrlKey)) {
-          event.preventDefault();
-          void submit_message("queue");
-          return true;
-        }
-        const shortcut = props_ref.current.send_message_on_enter ? !event.shiftKey && !event.metaKey && !event.ctrlKey : event.metaKey || event.ctrlKey;
-        if (!shortcut) return false;
+        const action = resolve_chat_composer_enter_action(event, view.state.doc.toJSON());
+        if (action === "native" || (action === "queue-paused" && !props_ref.current.can_queue)) return false;
         event.preventDefault();
-        void submit_message();
+        void submit_message(action === "submit-immediately" ? "steer" : action === "queue-paused" ? "queue" : "send");
         return true;
       },
     },
@@ -264,6 +232,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
   }, []);
 
   const show_stop = Boolean(props.stop_session) && busy && input_empty && !submitting;
+  const queues_submission = busy || Boolean(props.has_pending_queue);
 
   useEffect(() => {
     if (!editor) return;
@@ -304,12 +273,11 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
         { command_id: "image", title: "/image", description: translate_chat("composer.attach_image"), keywords: ["photo", "image"], run: () => image_input_ref.current?.click() },
       ]),
       { command_id: "clear", title: "/clear", description: translate_chat("composer.clear"), keywords: ["reset", "clear"], run: () => { editor_ref.current?.commands.clearContent(); } },
-      ...(props.compact_session ? [{ command_id: "compact", title: "/compact", description: translate_chat("composer.compact"), keywords: ["compact", "context"], run: () => run_compact_command(true) }] : []),
     ];
     commands.push(...(props.commands ?? []));
     const query = slash_query?.query.toLowerCase() ?? "";
     return commands.filter((command) => !query || `${command.title} ${command.keywords.join(" ")}`.toLowerCase().includes(query)).slice(0, 8);
-  }, [props.compact_session, props.attachments, props.commands, run_compact_command, slash_query?.query, translate_chat]);
+  }, [props.attachments, props.commands, slash_query?.query, translate_chat]);
 
   const file_candidates = useMemo(() => {
     const query = file_query?.query.toLowerCase() ?? "";
@@ -366,7 +334,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
         </> : null}
         {props.toolbar}
       </div>
-      <Button type="button" onClick={() => void (show_stop ? props.stop_session?.() : submit_message("send"))} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={translate_chat(show_stop ? "composer.stop" : busy ? "composer.send_steering" : "composer.send_message")} title={translate_chat(show_stop ? "composer.stop" : busy ? "composer.send_steering_hint" : "composer.send_message")}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
+      <Button type="button" onClick={() => void (show_stop ? props.stop_session?.() : submit_message("send"))} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={translate_chat(show_stop ? "composer.stop" : queues_submission ? "composer.queue_message" : "composer.send_message")} title={translate_chat(show_stop ? "composer.stop" : queues_submission ? "composer.queue_message_hint" : "composer.send_message")}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
     </div>
   </div>);
 });

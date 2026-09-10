@@ -40,9 +40,9 @@ export function create_builtin_plugin_registrations(): BuiltinPluginRegistration
     },
     {
       readme: builtin_readme_path("chat"),
-      has_config: true,
-      has_sidebar: false,
-      has_mainview: false,
+      has_config: false,
+      has_sidebar: true,
+      has_mainview: true,
       plugin: new ChatPlugin(),
     },
     {

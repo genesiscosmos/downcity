@@ -7,7 +7,7 @@
  * - `FeishuBot` 只调用这里暴露的平台能力，不再直接持有底层 Feishu 连接细节。
  */
 
-import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 import type {
   FeishuConfig,
   FeishuDownloadedAttachment,
@@ -40,10 +40,12 @@ const FEISHU_INBOUND_ACK_REACTION_TYPE = "OK";
  * Feishu 平台 client 构造参数。
  */
 export interface FeishuPlatformClientOptions {
-  /**
-   * 当前执行上下文。
-   */
-  context: PluginContext;
+  /** 当前 Connector 使用的 Workspace 根目录。 */
+  workspace_path: string;
+  /** 当前 Connector 私有数据目录。 */
+  storage_path: string;
+  /** Chat Plugin 生命周期日志器。 */
+  logger: PluginLogger;
   /**
    * 飞书渠道配置。
    */
@@ -58,10 +60,9 @@ export interface FeishuPlatformClientOptions {
  * 飞书平台 client。
  */
 export class FeishuPlatformClient {
-  private readonly context: PluginContext;
   private readonly rootPath: string;
   private readonly dataPath: string;
-  private readonly logger: PluginContext["logger"];
+  private readonly logger: PluginLogger;
   private readonly appId: string;
   private readonly appSecret: string;
   private readonly domain?: string;
@@ -78,10 +79,9 @@ export class FeishuPlatformClient {
   private readonly lookupWarnings: Set<string> = new Set();
 
   constructor(options: FeishuPlatformClientOptions) {
-    this.context = options.context;
-    this.rootPath = options.context.workspace.path;
-    this.dataPath = options.context.storage.path;
-    this.logger = options.context.logger;
+    this.rootPath = options.workspace_path;
+    this.dataPath = options.storage_path;
+    this.logger = options.logger;
     this.appId = options.config.appId;
     this.appSecret = options.config.appSecret;
     this.domain = options.config.domain;

@@ -1,6 +1,6 @@
 /** Chat runtime：把 Session JSONL、发送队列和宿主执行能力连接到 ChatPanel。 */
 import { session_jsonl_to_chat_messages, session_message_to_chat_message } from "./session-message";
-import type { DowncityChatApprovalMode, DowncityChatMessage, DowncityChatModelOption, DowncityChatStatus, DowncityChatSubmitInput } from "../types/chat";
+import type { DowncityChatApprovalMode, DowncityChatMessage, DowncityChatModelOption, DowncityChatStatus, DowncityChatSubmitInput, DowncityChatSubmitMode } from "../types/chat";
 import type { DowncityChatRuntimeListener, DowncityChatRuntimeOptions, DowncityChatRuntimeSnapshot } from "../types/chat-runtime";
 
 function create_id(prefix: string): string { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; }
@@ -37,17 +37,18 @@ export class DowncityChatRuntime {
   }
   /** 追加已经解析的 Session message。 */
   append_message(record: Record<string, unknown>): void { this.append_jsonl(JSON.stringify(record)); }
-  /** 提交输入；streaming 时进入队列。 */
-  async submit(input: DowncityChatSubmitInput, mode: "send" | "queue" = "send"): Promise<void> {
+  /** 提交输入；常规发送在运行中进入队列，steer 始终绕过队列即时提交。 */
+  async submit(input: DowncityChatSubmitInput, mode: DowncityChatSubmitMode = "send"): Promise<void> {
     if (!input.text.trim() && input.attachments.length === 0) return;
-    if (mode === "queue" || this.snapshot.status === "streaming" || this.snapshot.status === "submitted" || this.snapshot.status === "building-context") {
+    const is_busy = this.snapshot.status === "streaming" || this.snapshot.status === "submitted" || this.snapshot.status === "building-context";
+    if (mode !== "steer" && (mode === "queue" || is_busy || this.queued_inputs.length > 0)) {
       this.queued_inputs = [...this.queued_inputs, { id: create_id("queue"), input }];
       this.sync_queued_inputs();
       return;
     }
     // 用户消息由 Session 持久化后统一读取，runtime 不再创建第二份 optimistic 消息。
-    this.update({ status: "submitted" });
-    await this.options.submit_message?.(input, "send");
+    if (!is_busy) this.update({ status: "submitted" });
+    await this.options.submit_message?.(input, mode === "steer" ? "steer" : "send");
   }
   /** 停止当前生成并恢复可输入状态。 */
   async stop(): Promise<void> { await this.options.stop_generation?.(); this.update({ status: "ready" }); }

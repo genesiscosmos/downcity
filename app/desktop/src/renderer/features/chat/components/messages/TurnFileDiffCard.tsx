@@ -1,7 +1,7 @@
 /**
  * Agent Chat 单轮文件改动卡片与完整 diff 审核视图。
  *
- * 数据只来自 canonical Assistant data part；组件不访问 Git，也不根据 Tool 日志推断改动。
+ * 数据只来自 canonical Agent Data Part；组件不访问 Git，也不根据 Tool 日志推断改动。
  */
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
@@ -28,7 +28,6 @@ export function TurnFileOpenProvider({ open_file, workspace_path, children }: { 
   const value = useMemo<TurnFileOpenAction | null>(() => open_file ? { open_file, workspace_path } : null, [open_file, workspace_path]);
   return <TurnFileOpenContext.Provider value={value}>{children}</TurnFileOpenContext.Provider>;
 }
-
 /** 读取 diff 文件项的打开动作；未注入时为空。 */
 function use_turn_file_open(): TurnFileOpenAction | undefined {
   return useContext(TurnFileOpenContext) ?? undefined;
@@ -88,12 +87,13 @@ function DiffStats({ additions, deletions, compact = false }: { /** 新增行数
 /** 在右侧 BayBar 中展示当前 Turn 的完整 diff。 */
 function TurnFileDiffReviewPanel({ data }: { /** 当前 Turn 的 canonical 文件改动。 */ data: SessionTurnFileDiffData }) {
   const translate_chat = use_translation("chat");
-  return <div className="flex min-h-full flex-col gap-3 p-3">
-    <div className="flex items-center gap-2 rounded-lg border border-border-subtle bg-background px-3 py-2 text-[0.6875rem]">
-      <span className="min-w-0 flex-1 text-foreground/75">{translate_chat("message.files_changed", { count: data.files.length })}</span>
-      <DiffStats additions={data.additions} deletions={data.deletions} compact />
-    </div>
-    {data.files.map((file) => <FilePatch key={file.file} file={file} variant="review" default_open />)}
+  return <div className="file-diff-review-panel">
+    <header className="file-diff-review-summary">
+      <TbFileDiff className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <span className="min-w-0 flex-1 text-[0.75rem] font-medium text-foreground/80">{translate_chat("message.files_changed", { count: data.files.length })}</span>
+      <span className="file-diff-review-stats"><DiffStats additions={data.additions} deletions={data.deletions} compact /></span>
+    </header>
+    <div className="file-diff-review-files">{data.files.map((file) => <FilePatch key={file.file} file={file} variant="review" default_open />)}</div>
   </div>;
 }
 
@@ -104,35 +104,78 @@ function FilePatch({ file, variant, default_open = false }: { /** 单个文件�
   const [open, set_open] = useState(default_open);
   const [copied, set_copied] = useState(false);
   const open_action = use_turn_file_open();
-  const lines = file.patch ? file.patch.split("\n") : [translate_chat("file_diff.binary")];
+  const rows = file.patch ? parse_unified_diff(file.patch) : [{ type: "meta", text: translate_chat("file_diff.binary") } satisfies DiffRow];
   const copy_link = async () => {
     if (!open_action) return;
     await navigator.clipboard.writeText(build_file_link(open_action.workspace_path, file.file));
     set_copied(true);
     window.setTimeout(() => set_copied(false), 1200);
   };
-  return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={cn("group/file shrink-0 overflow-hidden", variant === "review" && "overflow-hidden rounded-lg border border-border-subtle bg-background")}>
-    <summary className={cn("flex min-h-9 cursor-pointer list-none items-center gap-2.5 px-3 py-1.5 outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover [&::-webkit-details-marker]:hidden", variant === "review" && "bg-foreground/[0.025]")}>
+  return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={cn("group/file shrink-0 overflow-hidden", variant === "review" && "file-diff-review-file")}>
+    <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2.5 px-3 py-1.5 outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover [&::-webkit-details-marker]:hidden">
       <TbChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/file:rotate-90" aria-hidden />
       <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] font-medium text-foreground/80" title={file.file}>{file.file}</span>
       {open_action ? <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/file:opacity-100 focus-within:opacity-100">
         <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); open_action.open_file(file.file); }} className="flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-[1.65]" title={translate_chat("file_diff.open")} aria-label={translate_chat("file_diff.open_file", { name: file.file })}><TbExternalLink aria-hidden /></button>
         <DropdownMenu><DropdownMenuTrigger asChild><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); }} className="flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-[1.65]" title={translate_common("actions.more")} aria-label={translate_chat("file_diff.file_actions", { name: file.file })}>{copied ? <TbCheck aria-hidden /> : <TbDots aria-hidden />}</button></DropdownMenuTrigger><DropdownMenuContent align="end" side="top" sideOffset={4}><DropdownMenuItem onClick={() => void copy_link()}><TbLink className="size-3.5" /><span>{copied ? translate_chat("message.copied") : translate_chat("file_diff.copy_link")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
       </span> : null}
-      <DiffStats additions={file.additions} deletions={file.deletions} compact />
+      <span className={variant === "review" ? "file-diff-review-stats" : undefined}><DiffStats additions={file.additions} deletions={file.deletions} compact /></span>
     </summary>
-    <div className={cn("overflow-x-auto border-t border-border/45 py-1 font-mono text-[0.6875rem] leading-[1.55]", variant === "inline" && "max-h-80")}>
-      {lines.map((line, index) => <div key={`${index}:${line}`} className={diff_line_class_name(line)}><span className="block min-w-max px-3.5 whitespace-pre">{line || " "}</span></div>)}
+    <div className={cn("file-diff-patch border-t border-border/45", variant === "inline" && "max-h-80")}>
+      {rows.map((row, index) => row.type === "omitted"
+        ? <div key={`omitted:${index}`} className="file-diff-omitted">{translate_chat("file_diff.unmodified", { count: row.count })}</div>
+        : row.type === "meta"
+          ? <div key={`meta:${index}`} className="file-diff-meta">{row.text}</div>
+          : <div key={`${row.type}:${row.old_line}:${row.new_line}:${index}`} className={cn("file-diff-code-row", `is-${row.type}`)}>
+            <span className="file-diff-line-number" aria-hidden>{row.type === "addition" ? row.new_line : row.old_line}</span>
+            <code>{row.text || " "}</code>
+          </div>)}
     </div>
   </details>;
 }
 
-/** 根据 unified diff 行前缀返回稳定视觉语义。 */
-function diff_line_class_name(line: string): string {
-  if (line.startsWith("+++") || line.startsWith("---")) return "text-muted-foreground/75";
-  if (line.startsWith("+")) return "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300";
-  if (line.startsWith("-")) return "bg-red-500/10 text-red-800 dark:text-red-300";
-  if (line.startsWith("@@")) return "bg-sky-500/[0.08] text-sky-700 dark:text-sky-300";
-  if (line.startsWith("diff --git") || line.startsWith("index ")) return "text-muted-foreground";
-  return "text-foreground/70";
+/** 消息内 Diff 使用并排复用的单列行号，不把 unified diff 的 +/- 前缀混入正文。 */
+type DiffRow =
+  | { type: "context" | "addition" | "removal"; text: string; old_line?: number; new_line?: number }
+  | { type: "omitted"; count: number }
+  | { type: "meta"; text: string };
+
+function parse_unified_diff(patch: string): DiffRow[] {
+  const rows: DiffRow[] = [];
+  let old_line = 0;
+  let new_line = 0;
+  let previous_old_end = 0;
+  let previous_new_end = 0;
+  for (const line of patch.split("\n")) {
+    const hunk = line.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) {
+      const next_old = Number(hunk[1]);
+      const next_new = Number(hunk[2]);
+      const omitted = previous_old_end || previous_new_end
+        ? Math.max(next_old - previous_old_end, next_new - previous_new_end)
+        : Math.max(next_old - 1, next_new - 1);
+      if (omitted > 0) rows.push({ type: "omitted", count: omitted });
+      old_line = next_old;
+      new_line = next_new;
+      continue;
+    }
+    if (line.startsWith("diff --git") || line.startsWith("index ") || line.startsWith("---") || line.startsWith("+++")) continue;
+    if (line.startsWith("\\ No newline")) continue;
+    if (line.startsWith("-")) {
+      rows.push({ type: "removal", text: line.slice(1), old_line });
+      old_line += 1;
+    } else if (line.startsWith("+")) {
+      rows.push({ type: "addition", text: line.slice(1), new_line });
+      new_line += 1;
+    } else if (line.startsWith(" ")) {
+      rows.push({ type: "context", text: line.slice(1), old_line, new_line });
+      old_line += 1;
+      new_line += 1;
+    } else if (line) {
+      rows.push({ type: "meta", text: line });
+    }
+    previous_old_end = old_line;
+    previous_new_end = new_line;
+  }
+  return rows;
 }

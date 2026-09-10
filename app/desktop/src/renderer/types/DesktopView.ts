@@ -8,7 +8,7 @@ import type { DesktopNotificationState } from "../../common/types/DesktopNotific
 import type { GroupMessageProjection } from "./GroupProjection";
 
 /** 设置主视图当前展示的分区。 */
-export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat";
+export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat" | "shortcuts";
 
 /** 功能型 Plugin 在一级导航中的动态模式。 */
 export type PluginWorkspaceSidebarMode = `plugin:${string}`;
@@ -67,8 +67,8 @@ export interface QueuedChatMessage {
   paused: boolean;
 }
 
-/** Chat 输入的提交意图。 */
-export type ChatSubmitMode = "send" | "queue";
+/** Chat 输入的提交意图：常规发送、显式排队或绕过队列即时调整。 */
+export type ChatSubmitMode = "send" | "queue" | "steer";
 
 /** Session 更早历史的分页状态。 */
 export interface ChatHistoryState {

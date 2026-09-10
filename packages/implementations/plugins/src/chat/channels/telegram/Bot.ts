@@ -22,7 +22,7 @@ import {
   type TelegramUpdate,
   type TelegramUser,
 } from "./Shared.js";
-import type { PluginContext } from "@downcity/city/plugin";
+import type { ChatConnectorContext } from "@/chat/types/ChatConnector.js";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import {
@@ -50,11 +50,13 @@ export class TelegramBot extends BaseChatChannel {
   private startTask: Promise<void> | null = null;
   private startupGeneration = 0;
 
-  constructor(context: PluginContext, botToken: string) {
+  constructor(context: ChatConnectorContext, botToken: string) {
     super({ channel: "telegram", context });
     this.botToken = botToken;
     this.platform = new TelegramPlatformClient({
-      context,
+      workspace_path: context.workspace_path,
+      storage_path: context.storage_path,
+      logger: context.logger,
       botToken,
       onMessage: async (message) => {
         await this.handleMessage(message);
@@ -87,12 +89,6 @@ export class TelegramBot extends BaseChatChannel {
   protected format_access_code(value: string): string {
     const escaped_value = value.replace(/([\\`])/g, "\\$1");
     return `\`${escaped_value}\``;
-  }
-
-  /** 使用带语言标记的代码块展示可直接执行的管理命令。 */
-  protected format_access_command(command: string): string {
-    const escaped_command = command.replace(/([\\`])/g, "\\$1");
-    return `\`\`\`bash\n${escaped_command}\n\`\`\``;
   }
 
   protected async sendTextToPlatform(
@@ -225,7 +221,6 @@ export class TelegramBot extends BaseChatChannel {
   ): Promise<void> {
     await handleTelegramMessage(
       {
-        context: this.context,
         rootPath: this.rootPath,
         logger: this.logger,
         inboundAckEmoji: TelegramBot.INBOUND_ACK_EMOJI,
@@ -393,7 +388,7 @@ export class TelegramBot extends BaseChatChannel {
  */
 export function createTelegramBot(
   config: TelegramConfig,
-  context: PluginContext,
+  context: ChatConnectorContext,
 ): TelegramBot | null {
   if (!config.enabled || !config.botToken || config.botToken === "${}") {
     return null;

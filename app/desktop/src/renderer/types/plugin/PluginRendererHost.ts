@@ -20,6 +20,8 @@ export interface PluginRendererCapabilities {
 export interface PluginRendererHostProps {
   /** 当前 Plugin 稳定 ID。 */
   readonly plugin_id: string;
+  /** Sidebar 插槽由宿主展示的 Plugin 标题。 */
+  readonly sidebar_title?: string;
   /** 当前要渲染的独立插槽。 */
   readonly slot: PluginRendererSlot;
   /** Plugin 清单声明的插槽能力，用于校验实际 ESM 导出。 */

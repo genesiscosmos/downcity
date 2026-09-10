@@ -5,7 +5,6 @@ import type { DesktopController, NavigationTarget } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import { SessionView } from "@/features/chat/components/SessionTimeline";
 import { DraftComposer } from "@/features/chat/composer/DraftComposer";
-import { create_chat_composer } from "@/features/chat/composer/editor/chatComposerCodec";
 
 import { WelcomeView } from "@/app/WelcomeView";
 
@@ -32,7 +31,6 @@ export function AgentDraftChatSurface({ selection, agent, open_agent_info, works
   const { workspace_id, agent_id, draft_id } = selection;
   const draft_session = useMemo<DesktopSessionSummary>(() => ({ session_id: draft_id, session_path: "", title: translate("conversation.new"), preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }), [draft_id, translate]);
   const switch_workspace = useCallback((target_workspace_id: string) => controller.actions.switch_draft_context(target_workspace_id, agent_id), [agent_id, controller.actions]);
-  const select_prompt = useCallback((prompt: string) => controller.actions.update_draft(workspace_id, agent_id, draft_id, create_chat_composer(prompt)), [agent_id, controller.actions, draft_id, workspace_id]);
   return <SessionView
     chat_surface="agent"
     open_agent_info={open_agent_info}
@@ -48,7 +46,6 @@ export function AgentDraftChatSurface({ selection, agent, open_agent_info, works
     messages={empty_items}
     settings={settings}
     switch_draft_context={controller.actions.switch_draft_context}
-    select_prompt={select_prompt}
     composer={<DraftComposer selection={selection} stores={controller.stores} actions={controller.actions} />}
   />;
 }

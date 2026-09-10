@@ -45,7 +45,7 @@ export interface ChatEnvironmentPromptInput {
    * 说明（中文）
    * - 该值仅用于路由，不应被模型当作用户身份字段理解。
    */
-  chatId: string;
+  chat_id: string;
 
   /**
    * 平台侧会话类型。
@@ -53,7 +53,7 @@ export interface ChatEnvironmentPromptInput {
    * 说明（中文）
    * - 例如 `private`、`group`、`channel`、`topic`、`c2c`。
    */
-  chatType?: string;
+  chat_type?: string;
 
   /**
    * 平台 thread/topic 标识。
@@ -61,7 +61,7 @@ export interface ChatEnvironmentPromptInput {
    * 说明（中文）
    * - 仅在支持 topic/thread 的平台中提供。
    */
-  threadId?: number;
+  thread_id?: number;
 
   /**
    * 当前会话展示名。
@@ -70,7 +70,7 @@ export interface ChatEnvironmentPromptInput {
    * - 例如群名、频道名、私聊对象名。
    * - 仅用于帮助模型理解上下文，不参与路由匹配。
    */
-  chatTitle?: string;
+  chat_title?: string;
 }
 
 /**

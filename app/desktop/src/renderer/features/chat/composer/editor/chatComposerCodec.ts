@@ -90,12 +90,6 @@ export function count_chat_composer_atoms(document: JSONContent): number {
   return count;
 }
 
-/** 识别只由纯文本构成、应由 Chat Input 本地处理的命令。 */
-export function resolve_chat_input_command(document: JSONContent): "compact" | undefined {
-  if (has_chat_composer_atoms(document)) return undefined;
-  return read_chat_composer_text(document) === "/compact" ? "compact" : undefined;
-}
-
 /** 深度遍历一份 Chat Composer 文档。 */
 function walk_chat_composer(document: JSONContent, visit: (node: JSONContent) => void): void {
   visit(document);

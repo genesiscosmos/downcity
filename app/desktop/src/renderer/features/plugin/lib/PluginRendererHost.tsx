@@ -6,6 +6,7 @@ import type { PluginRendererConfirmInput, PluginRendererDefinition, PluginRender
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { create_plugin_renderer_ui_components } from "@/features/plugin/lib/PluginRendererComponents";
+import { SidebarHeader } from "@/layouts/sidebar/SidebarHeader";
 import type { LoadedPluginRenderer, PluginRendererCapabilities, PluginRendererConfirmationState, PluginRendererHostProps, PluginRendererToastState } from "@/types/plugin/PluginRendererHost";
 import { use_translation } from "@/locales/i18n";
 
@@ -19,7 +20,7 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
   const confirmation_resolve_ref = useRef<((confirmed: boolean) => void) | undefined>(undefined);
   const toast_sequence_ref = useRef(0);
   const toast_timer_ref = useRef<number | undefined>(undefined);
-  const ui_components = useMemo(() => create_plugin_renderer_ui_components({ plugin_id: props.plugin_id, surface: props.slot }), [props.plugin_id, props.slot]);
+  const ui_components = useMemo(() => create_plugin_renderer_ui_components({ plugin_id: props.plugin_id, surface: props.slot, sidebar_title: props.sidebar_title }), [props.plugin_id, props.sidebar_title, props.slot]);
 
   useEffect(() => {
     let disposed = false;
@@ -76,6 +77,8 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
   const definition_error = definition ? get_renderer_definition_error(definition, props.capabilities) : undefined;
   const Config = definition?.config;
   const Workspace = props.slot === "sidebar" ? definition?.sidebar : definition?.mainview;
+  const workspace_props = { plugin, navigation, notifications: props.notifications ?? [], ui };
+  const sidebar_fallback_header = props.slot === "sidebar" && (load_error || definition_error || !Workspace);
 
   const close_confirmation = (confirmed: boolean) => {
     const resolve = confirmation_resolve_ref.current;
@@ -85,11 +88,12 @@ export function PluginRendererHost(props: PluginRendererHostProps) {
   };
 
   return <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    {sidebar_fallback_header ? <SidebarHeader title={props.sidebar_title ?? props.plugin_id} /> : null}
     {load_error || definition_error ? <ui_components.Callout tone="danger">{load_error || `Plugin renderer definition is invalid: ${props.plugin_id} (${definition_error})`}</ui_components.Callout>
       : !definition ? <ui_components.LoadingState label={translate("loading")} />
         : props.slot === "config"
           ? Config ? <Config config={config} ui={ui} /> : <ui_components.EmptyState title={translate("missing_config")} size="compact" />
-          : Workspace ? <Workspace plugin={plugin} navigation={navigation} notifications={props.notifications ?? []} ui={ui} /> : <ui_components.EmptyState title={translate("missing_slot", { slot: props.slot })} size="compact" />}
+          : Workspace ? <Workspace {...workspace_props} /> : <ui_components.EmptyState title={translate("missing_slot", { slot: props.slot })} size="compact" />}
     {toast ? <div className="fixed bottom-5 left-1/2 z-40 max-w-xl -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl">{toast.message}</div> : null}
     <Dialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) close_confirmation(false); }}>
       <DialogContent size="sm"><DialogHeader><div><DialogTitle>{confirmation?.input.title}</DialogTitle>{confirmation?.input.description ? <DialogDescription>{confirmation.input.description}</DialogDescription> : null}</div></DialogHeader><DialogFooter><Button onClick={() => close_confirmation(false)}>{translate("cancel")}</Button><Button variant={confirmation?.input.destructive ? "destructive" : "primary"} onClick={() => close_confirmation(true)}>{confirmation?.input.action || translate("confirm")}</Button></DialogFooter></DialogContent>

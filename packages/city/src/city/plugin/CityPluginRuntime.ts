@@ -566,10 +566,8 @@ export class CityPluginRuntime {
     return await this.with_record_execution(plugin_id, async (record) => {
       const action = record.config_actions.get(action_id);
       if (!action) throw new Error(`Plugin config action not found: ${plugin_id}/${action_id}`);
-      const config = this.options.host?.config?.(plugin_id);
-      if (!config) throw new Error("City Plugin config actions require a config host");
       return normalize_json_value(
-        await action.run(input, { config }),
+        await action.run(input, { config: record.lifecycle_context.config }),
         `${plugin_id}/${action_id} result`,
       );
     });
@@ -626,6 +624,13 @@ export class CityPluginRuntime {
       publish: async () => {},
       dismiss: async () => {},
     };
+    const hosted_config = this.options.host?.config?.(plugin_id);
+    const config = hosted_config ?? {
+      get: () => ({}),
+      set: async () => {
+        throw new Error("City does not provide Plugin config storage");
+      },
+    };
     return Object.freeze({
       plugin: Object.freeze({
         id: plugin_id,
@@ -634,6 +639,7 @@ export class CityPluginRuntime {
         config_action: (action: PluginConfigAction) =>
           register_host_action(plugin_id, config_actions, host_actions, action, "config"),
       }),
+      config,
       storage,
       logger,
       notifications,
@@ -654,6 +660,48 @@ export class CityPluginRuntime {
             action: input.action_id,
             ...(input.input !== undefined ? { payload: input.input } : {}),
           }) as unknown as PluginJsonValue;
+        },
+        create_agent_session: async (input) => {
+          const workspace = await this.options.runtime_access.enter_workspace(
+            input.agent_id,
+            input.workspace_id,
+          );
+          const agent = this.options.runtime_access.get_agent(input.agent_id);
+          if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
+          const session = await agent.sessions.create({
+            workspace,
+            origin: input.origin,
+          });
+          return { session_id: session.id };
+        },
+        prompt_agent_session: async (input) => {
+          const workspace = await this.options.runtime_access.enter_workspace(
+            input.agent_id,
+            input.workspace_id,
+          );
+          const agent = this.options.runtime_access.get_agent(input.agent_id);
+          if (!agent) throw new Error(`Agent not found in City: ${input.agent_id}`);
+          await agent.sessions.get(input.session_id, input.origin_type, { workspace });
+          const session = agent.sessions.runtime(input.session_id, input.origin_type);
+          const turn = await session.prompt({
+            query: input.query,
+            ...(input.request_id ? { request_id: input.request_id } : {}),
+          });
+          return Object.freeze({
+            session_id: input.session_id,
+            turn_id: turn.id,
+            finished: turn.finished.then((result) => ({
+              turn_id: turn.id,
+              text: String(result.text || ""),
+              success: result.success === true,
+              ...(result.error ? { error: String(result.error) } : {}),
+            })),
+            subscribe: (subscriber) => session.subscribe((mutation) =>
+              subscriber(mutation as unknown as import("@/plugin/index.js").PluginSessionMutation)),
+            stop: async () => {
+              await session.stop();
+            },
+          });
         },
         append_agent_session_message: async (input) => {
           const workspace = await this.options.runtime_access.enter_workspace(

@@ -9,13 +9,15 @@
 
 import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-core";
-import type { Browser, Page } from "playwright-core";
+import type { Browser, Locator, Page } from "playwright-core";
 import type {
+  BrowserAction,
   BrowserActInput,
   BrowserCloseSessionInput,
   BrowserCreateSessionInput,
   BrowserExtractInput,
   BrowserExtractResult,
+  BrowserElementReference,
   BrowserObservation,
   BrowserObserveInput,
   BrowserProvider,
@@ -26,6 +28,21 @@ const DEFAULT_URL = "about:blank";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_CHARS = 12_000;
 const MAX_WAIT_MS = 60_000;
+const MAX_ELEMENT_REFS = 200;
+const INTERACTIVE_SELECTOR = [
+  "a:visible",
+  "button:visible",
+  "input:visible",
+  "textarea:visible",
+  "select:visible",
+  "[role=button]:visible",
+  "[role=link]:visible",
+  "[role=checkbox]:visible",
+  "[role=radio]:visible",
+  "[role=combobox]:visible",
+  "[role=menuitem]:visible",
+  "[tabindex]:visible",
+].join(",");
 
 /** provider 内部持有的浏览器 session。 */
 interface PlaywrightBrowserSession {
@@ -33,6 +50,22 @@ interface PlaywrightBrowserSession {
   session_id: string;
   /** session 唯一拥有的页面。 */
   page: Page;
+  /** 最近一次 observation 的代次。 */
+  observation_generation: number;
+  /** 最近一次 observation 生成的元素引用。 */
+  element_refs: Map<string, Locator>;
+}
+
+/** 从页面一次性读取的可交互元素元数据。 */
+interface BrowserElementMetadata {
+  /** 元素在当前 Locator 集合中的位置。 */
+  index: number;
+  /** 元素 HTML 标签名。 */
+  tag: string;
+  /** 元素显式或推导出的可访问角色。 */
+  role: string;
+  /** 元素可访问名称或简短可见文本。 */
+  name: string;
 }
 
 /** 把字符上限归一化到安全范围。 */
@@ -167,6 +200,8 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
       const session = {
         session_id: randomUUID(),
         page,
+        observation_generation: 0,
+        element_refs: new Map<string, Locator>(),
       };
       const observation = await this.read_observation(
         session,
@@ -202,11 +237,11 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
     if (action.type === "goto") {
       await page.goto(action.url, { waitUntil: "domcontentloaded" });
     } else if (action.type === "click") {
-      await page.locator(action.selector).click();
+      await this.resolve_action_locator(session, action).click();
     } else if (action.type === "fill") {
-      await page.locator(action.selector).fill(action.value);
+      await this.resolve_action_locator(session, action).fill(action.value);
     } else if (action.type === "press") {
-      await page.locator(action.selector).press(action.key);
+      await this.resolve_action_locator(session, action).press(action.key);
     } else if (action.type === "scroll") {
       await page.evaluate(
         ([x, y]) => globalThis.scrollBy(x, y),
@@ -293,13 +328,39 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
     return session;
   }
 
+  /** 根据当前 observation ref 或显式 selector 解析动作目标。 */
+  private resolve_action_locator(
+    session: PlaywrightBrowserSession,
+    action: Extract<BrowserAction, { type: "click" | "fill" | "press" }>,
+  ): Locator {
+    if (action.ref) {
+      if (action.observation_generation !== session.observation_generation) {
+        throw new Error(
+          `Browser element reference is stale: expected observation generation ${session.observation_generation}`,
+        );
+      }
+      const locator = session.element_refs.get(action.ref);
+      if (!locator) {
+        throw new Error(`Browser element reference not found: ${action.ref}`);
+      }
+      return locator;
+    }
+    if (action.selector) return session.page.locator(action.selector);
+    throw new Error("Browser action requires exactly one of ref or selector");
+  }
+
   /** 生成当前页面的模型友好观察结果。 */
   private async read_observation(
     session: PlaywrightBrowserSession,
     include_screenshot: boolean | undefined,
   ): Promise<BrowserObservation> {
     const page = session.page;
-    const text = await page.locator("body").innerText().catch(() => "");
+    const body = page.locator("body");
+    const [text, accessibility_snapshot] = await Promise.all([
+      body.innerText().catch(() => ""),
+      body.ariaSnapshot().catch(() => ""),
+    ]);
+    const elements = await this.read_element_references(session);
     const screenshot_data_url = include_screenshot
       ? `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`
       : undefined;
@@ -308,8 +369,59 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
       session_id: session.session_id,
       url: page.url(),
       title: await page.title().catch(() => ""),
+      observation_generation: session.observation_generation,
+      accessibility_snapshot: accessibility_snapshot.slice(
+        0,
+        this.options.max_observation_chars,
+      ),
       text: text.slice(0, this.options.max_observation_chars),
+      elements,
       screenshot_data_url: screenshot_data_url ?? null,
     };
+  }
+
+  /** 为当前页面生成仅在本次 observation 内有效的元素引用。 */
+  private async read_element_references(
+    session: PlaywrightBrowserSession,
+  ): Promise<BrowserElementReference[]> {
+    const locator = session.page.locator(INTERACTIVE_SELECTOR);
+    const metadata = await locator.evaluateAll((elements, max_elements) =>
+      elements.slice(0, max_elements).map((element, index) => {
+        const html_element = element as HTMLElement;
+        const tag = element.tagName.toLowerCase();
+        const explicit_role = element.getAttribute("role")?.trim();
+        const role = explicit_role || ({
+          a: "link",
+          button: "button",
+          input: "input",
+          textarea: "textbox",
+          select: "combobox",
+        }[tag] ?? "interactive");
+        const value = "value" in html_element
+          ? String((html_element as HTMLInputElement).value || "")
+          : "";
+        const name = String(
+          element.getAttribute("aria-label")
+          || html_element.innerText
+          || value
+          || element.getAttribute("placeholder")
+          || element.getAttribute("title")
+          || "",
+        ).replace(/\s+/gu, " ").trim().slice(0, 240);
+        return { index, tag, role, name };
+      }), MAX_ELEMENT_REFS).catch(() => [] as BrowserElementMetadata[]);
+
+    session.observation_generation += 1;
+    session.element_refs.clear();
+    return metadata.map((element, position) => {
+      const ref = `e${position + 1}`;
+      session.element_refs.set(ref, locator.nth(element.index));
+      return {
+        ref,
+        tag: element.tag,
+        role: element.role,
+        name: element.name,
+      };
+    });
   }
 }

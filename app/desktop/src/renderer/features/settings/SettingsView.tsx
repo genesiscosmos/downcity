@@ -49,6 +49,7 @@ export function SettingsView({ controller, section, open_global_env }: SettingsV
             {section === "general" ? <GeneralSettings controller={controller} open_global_env={open_global_env} /> : null}
             {section === "appearance" ? <AppearanceSettings controller={controller} /> : null}
             {section === "chat" ? <ChatSettings controller={controller} /> : null}
+            {section === "shortcuts" ? <ShortcutsSettings /> : null}
           </div>
         </div>
       </div>
@@ -316,15 +317,68 @@ function ChatSettings({ controller }: { /** Renderer 稳定控制器。 */ contr
     </SettingSection>
     <SettingSection title={translate("chat.input")}>
       <SettingGroup>
-        <SettingRow label={translate("chat.send_on_enter")} description={translate("chat.send_on_enter_description")}><SettingSwitch checked={settings.send_message_on_enter} label={translate("chat.send_on_enter")} on_change={(checked) => void controller.actions.update_settings({ send_message_on_enter: checked })} /></SettingRow>
         <SettingRow label={translate("chat.spellcheck")} description={translate("chat.spellcheck_description")}><SettingSwitch checked={settings.spellcheck_enabled} label={translate("chat.spellcheck")} on_change={(checked) => void controller.actions.update_settings({ spellcheck_enabled: checked })} /></SettingRow>
       </SettingGroup>
     </SettingSection>
   </SettingsContainer>;
 }
 
+/** 汇总 Desktop 实际注册的应用快捷键；标准表单与按钮键盘语义不重复列出。 */
+function ShortcutsSettings() {
+  const translate = use_translation("settings");
+  return <SettingsContainer>
+    <SettingsHeader title={translate("shortcuts.title")} description={translate("shortcuts.description")} />
+    <SettingSection title={translate("shortcuts.global_navigation")}>
+      <SettingGroup>
+        <SettingRow label={translate("shortcuts.toggle_sidebar")} description={translate("shortcuts.toggle_sidebar_description")}><ShortcutKeys keys={["⌘ / Ctrl", "B"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.focus_chat_input")} description={translate("shortcuts.focus_chat_input_description")}><ShortcutAlternatives shortcuts={[["⌘ / Ctrl", "L"], ["⌘ / Ctrl", "I"]]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.open_settings")} description={translate("shortcuts.open_settings_description")}><ShortcutKeys keys={["⌘ / Ctrl", ","]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.open_command_palette")} description={translate("shortcuts.open_command_palette_description")}><ShortcutKeys keys={["⌘ / Ctrl", "P"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.new_conversation")} description={translate("shortcuts.new_conversation_description")}><ShortcutKeys keys={["⌘ / Ctrl", "R"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.close_settings")} description={translate("shortcuts.close_settings_description")}><ShortcutKeys keys={["Esc"]} /></SettingRow>
+      </SettingGroup>
+    </SettingSection>
+    <SettingSection title={translate("shortcuts.primary_views")} description={translate("shortcuts.primary_views_description")}>
+      <SettingGroup>
+        <SettingRow label={translate("shortcuts.open_chat")} description={translate("shortcuts.open_chat_description")}><ShortcutKeys keys={["⌘ / Ctrl", "1"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.open_workspace")} description={translate("shortcuts.open_workspace_description")}><ShortcutKeys keys={["⌘ / Ctrl", "2"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.open_plugins")} description={translate("shortcuts.open_plugins_description")}><ShortcutKeys keys={["⌘ / Ctrl", "3"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.open_plugin_view")} description={translate("shortcuts.open_plugin_view_description")}><ShortcutKeys keys={["⌘ / Ctrl", "4–9"]} /></SettingRow>
+      </SettingGroup>
+    </SettingSection>
+    <SettingSection title={translate("shortcuts.chat_input")}>
+      <SettingGroup>
+        <SettingRow label={translate("shortcuts.enter")} description={translate("shortcuts.enter_description")}><ShortcutKeys keys={["Enter"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.hard_break")} description={translate("shortcuts.hard_break_description")}><ShortcutKeys keys={["Shift", "Enter"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.submit")} description={translate("shortcuts.submit_description")}><ShortcutKeys keys={["⌘ / Ctrl", "Enter"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.queue_paused")} description={translate("shortcuts.queue_paused_description")}><ShortcutKeys keys={["⌥ / Alt", "⌘ / Ctrl", "Enter"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.steer")} description={translate("shortcuts.steer_description")}><ShortcutKeys keys={["⌘ / Ctrl", "Shift", "Enter"]} /></SettingRow>
+      </SettingGroup>
+    </SettingSection>
+    <SettingSection title={translate("shortcuts.contextual_actions")} description={translate("shortcuts.contextual_actions_description")}>
+      <SettingGroup>
+        <SettingRow label={translate("shortcuts.generate_draft")} description={translate("shortcuts.generate_draft_description")}><ShortcutKeys keys={["⌘ / Ctrl", "Enter"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.save_queue_edit")} description={translate("shortcuts.save_queue_edit_description")}><ShortcutKeys keys={["⌘ / Ctrl", "Enter"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.cancel_edit")} description={translate("shortcuts.cancel_edit_description")}><ShortcutKeys keys={["Esc"]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.navigate_suggestions")} description={translate("shortcuts.navigate_suggestions_description")}><ShortcutAlternatives shortcuts={[["↑"], ["↓"]]} /></SettingRow>
+        <SettingRow label={translate("shortcuts.accept_suggestion")} description={translate("shortcuts.accept_suggestion_description")}><ShortcutKeys keys={["Enter"]} /></SettingRow>
+      </SettingGroup>
+    </SettingSection>
+  </SettingsContainer>;
+}
+
+/** 以可辨识的键帽组合展示不可编辑快捷键。 */
+function ShortcutKeys({ keys }: { keys: string[] }) {
+  return <div className="flex items-center gap-1" aria-label={keys.join(" + ")}>{keys.map((key) => <kbd key={key} className="min-w-7 rounded border border-border/70 bg-background px-1.5 py-1 text-center font-mono text-[0.6875rem] leading-none text-foreground/80 shadow-sm">{key}</kbd>)}</div>;
+}
+
+/** 展示多个都可触发同一动作的快捷键。 */
+function ShortcutAlternatives({ shortcuts }: { shortcuts: string[][] }) {
+  return <div className="flex items-center gap-2">{shortcuts.map((keys, index) => <div key={keys.join("+")} className="flex items-center gap-2">{index > 0 ? <span className="text-[0.6875rem] text-muted-foreground">/</span> : null}<ShortcutKeys keys={keys} /></div>)}</div>;
+}
+
 /** 设置页面内容容器。 */
-function SettingsContainer({ children }: { /** 设置内容。 */ children: ReactNode }) {
+function SettingsContainer({ children }: { /** 页面内容。 */ children: ReactNode }) {
   return <div className="flex flex-col gap-7">{children}</div>;
 }
 

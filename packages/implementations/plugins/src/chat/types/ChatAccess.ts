@@ -2,7 +2,7 @@
  * Chat Access 领域类型。
  *
  * 关键点（中文）
- * - Chat Access 只负责外部聊天用户进入当前 Agent 前的准入判定。
+ * - Chat Access 只负责外部身份通过当前 Bot Account 进入 Conversation 前的准入判定。
  * - 用户唯一身份由 channel、issuer、subject_id 共同确定。
  * - `all` 仅用于管理命令输入，持久化时展开为 direct/group 两条明确记录。
  */
@@ -208,7 +208,7 @@ export interface RevokeChatAccessGrantInput {
 
 /** ChatAccessService 构造参数。 */
 export interface ChatAccessServiceOptions {
-  /** 当前 Agent private runtime directory 私有数据根目录。 */
+  /** Chat Plugin 生命周期私有数据根目录。 */
   data_path: string;
 }
 

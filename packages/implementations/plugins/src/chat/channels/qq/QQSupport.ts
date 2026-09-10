@@ -6,8 +6,7 @@
  * - 这些逻辑尽量保持纯函数或最小依赖，便于单测与复用。
  */
 
-import { buildChatInboundText, augmentChatInboundInput } from "@/chat/runtime/InboundAugment.js";
-import type { PluginContext } from "@downcity/city/plugin";
+import { buildChatInboundText, normalize_chat_inbound_input } from "@/chat/runtime/InboundAugment.js";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { QQMessageData, QQReadyUser } from "@/chat/channels/qq/types/QqChannel.js";
 import type { QqIncomingAttachment } from "@/chat/types/QqVoice.js";
@@ -49,10 +48,6 @@ export interface QqCommandAction {
  * QQ 入站增强组装参数。
  */
 export interface BuildQqInboundInstructionsParams {
-  /**
-   * 当前执行上下文。
-   */
-  context: PluginContext;
   /**
    * 项目根目录。
    */
@@ -252,9 +247,7 @@ export async function buildQqInboundInstructions(
   );
 
   return buildChatInboundText(
-    await augmentChatInboundInput({
-      context: params.context,
-      input: {
+    normalize_chat_inbound_input({
         channel: "qq",
         chatId: params.chatId,
         chat_key: params.chat_key,
@@ -262,7 +255,6 @@ export async function buildQqInboundInstructions(
         rootPath: params.rootPath,
         body_text: text || undefined,
         attachments: resolvedAttachments,
-      },
     }),
   );
 }

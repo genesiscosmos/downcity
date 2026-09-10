@@ -47,30 +47,25 @@ test("Chat Access 按 issuer 隔离并复用 pending request", () => {
   }
 });
 
-test("Telegram 授权命令使用代码格式并保留完整标识符", () => {
+test("Telegram 授权提示保留完整标识符并指向 Desktop Access", () => {
   const project_root = create_project_root();
   try {
     const bot = new TelegramBot(
       {
-        agent: {
-          id: "lucas_whitman",
-          name: "lucas_whitman",
-          description: "",
-          instructions: [],
-          sessions: {},
-        },
-        workspace: { id: "test", path: project_root, files: {}, env: {} },
-        storage: { path: project_root, files: {} },
+        account_id: "telegram-main",
+        agent_id: "lucas_whitman",
+        workspace_path: project_root,
+        storage_path: project_root,
         logger: {
-          async log() {},
           debug() {},
           info() {},
           warn() {},
           error() {},
         },
-        city: { plugins: {} },
-        profile: { id: "default", config: {} },
-        abort_signal: new AbortController().signal,
+        evaluate_access: async () => ({ allowed: true }),
+        receive_message: async () => ({ chat_key: "test", position: 1 }),
+        record_audit: async () => {},
+        clear_conversation: async () => {},
       },
       "test-token",
     );
@@ -84,10 +79,7 @@ test("Telegram 授权命令使用代码格式并保留完整标识符", () => {
 
     assert.match(text, /Agent "`lucas_whitman`"/);
     assert.match(text, /访问请求：`req_dFij9rOzsDnDPOVJ`/);
-    assert.match(
-      text,
-      /```bash\ncity plugin action chat access-approve lucas_whitman --input '\{"request_id":"req_dFij9rOzsDnDPOVJ"\}' --token <token>\n```/,
-    );
+    assert.match(text, /Desktop 的 Channels > Access/);
   } finally {
     remove_project_root(project_root);
   }

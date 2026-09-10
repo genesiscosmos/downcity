@@ -1,158 +1,95 @@
 ---
-title: chat Plugin
-description: Channel runtime, queue worker, chat authorization, chat system text, and chat-facing plugin actions
+title: Chat Plugin
+description: Manage Bot Accounts in Desktop and reliably route external conversations to Agent Sessions
 ---
 
-# `chat` Plugin
+# Chat Plugin
 
-`chat` is the channel runtime plugin.
+Chat Plugin is a channel runtime owned by City. It does not belong to an individual Agent and does not expose long-lived state through `context.agent.chat`.
 
-It owns:
+## Desktop workflow
 
-- channel state
-- the chat queue worker
-- the chat queue store
-- chat authorization hooks and resolves
-- chat-facing actions
-- chat system text
+Open Channels to see every Bot Account in a dedicated Sidebar. Use the plus button in the Sidebar header and choose Telegram, Feishu/Lark, or QQ from the dropdown to create a Channel. You can add multiple bots for the same provider.
 
-## Main shape
+Selecting an Account lets you manage:
 
-- `lifecycle`
-- `actions`
-- `hooks`
-- `resolves`
-- `system`
+- enabled state, credentials, connection tests, and reconnects
+- the default Agent and Workspace for new Conversations
+- Access requests and grants for external identities
+- each Conversation's Agent, Workspace, Session, and paused state
+- Inbox and Outbox items that exceeded automatic retry limits
+- Activity records that exclude message bodies and secrets
 
-## What it is for
+Desktop applies Account saves immediately. It restarts only that Account's Connector, so Desktop, City, and other Bot Accounts do not need to restart. Credentials can be entered in Settings. Stored secrets are never echoed; leave a secret field empty to preserve its current value.
 
-Use `chat` when you need:
+## Account configuration
 
-- Telegram, Feishu, or QQ chat channel runtime
-- one ChatPlugin instance managing the unique channel and queue runtime
-- chat delivery and inbound message execution
-- inbound user authorization, principal observation, and role resolution
+Account definitions and credentials have one source of truth: City Plugin Config.
 
-## How users use it
-
-Chat manages its inbound target, queues, and channels in one Config. Open Chat in the Desktop Plugins
-Catalog to configure it. City automatically provides Chat capabilities to every Agent:
-
-```bash
-city plugin config chat --set '{"owner_agent_id":"assistant","owner_workspace_id":"project","channels":[]}'
+```json
+{
+  "accounts": [
+    {
+      "account_id": "support-telegram",
+      "name": "Support Bot",
+      "provider": "telegram",
+      "enabled": true,
+      "agent_id": "support",
+      "workspace_id": "support-workspace",
+      "bot_token": "<telegram-bot-token>"
+    }
+  ]
+}
 ```
 
-Use the generic Plugin Action command when you need to invoke a Chat Action from the terminal:
+Feishu/Lark accounts use `app_id`, `app_secret`, and optional `domain`. QQ accounts use `app_id`, `app_secret`, and optional `sandbox`.
 
-```bash
-city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","text":"Done"}' --token <token>
+## Messages and Sessions
+
+An allowed external message is persisted to Inbox, then routed through a Conversation to a real Agent Session. Session Messages remain the only complete conversation history; the Chat database does not duplicate it.
+
+```text
+Platform → Access → Inbox → Conversation → Agent Session
+         → Outbox → Platform
 ```
 
-## SDK Assembly
+Inbox deduplicates provider message IDs and prompts Session with a stable `request_id`. If the process exits after the User Message is committed, recovery does not append a second User Message. Agent results use stable Delivery IDs when entering Outbox, preventing duplicate jobs during recovery.
 
-An SDK host provides the Chat instance to City and exposes its unique Config store through
-`plugin_host.config`:
+Outbox provides persistence, leases, bounded retries, and manual recovery. When a provider has no idempotent send protocol, external delivery is at-least-once: a crash after provider acceptance but before local acknowledgement can cause a repeated send.
+
+## Agent Actions
+
+An Agent can only access Conversations it owns through strict actions:
+
+- `context`: read the current Chat Session route
+- `list`: list Conversations owned by the current Agent
+- `history`: read canonical Agent Session messages
+- `send`: persist text to the reliable Outbox
+- `react`: persist a Telegram message reaction to the reliable Outbox
+
+## SDK assembly
 
 ```ts
+import { ChatPlugin } from "@downcity/plugins/chat";
+
 const city = new City({
-  plugins: create_builtin_plugin_registrations(),
+  plugins: [new ChatPlugin()],
   workspaces: [workspace],
-  plugin_host: {
-    config: (plugin_id) => open_plugin_config_store(plugin_id),
-    notifications: (plugin_id, agent_id) => open_notifications(plugin_id, agent_id),
-  },
+  plugin_host,
 });
-city.agents.add(agent);
 ```
 
-Chat registers `config.read` and `config.save` during `initialize()` to validate the complete Config
-and return a credential-safe projection. `owner_agent_id` and `owner_workspace_id` select the inbound
-message target. The unique ChatPlugin instance owns one channel and queue runtime, stops the old runtime
-after Config is saved, and rebuilds it lazily on the next use.
+The City host provides Plugin Config, lifecycle Storage, and Agent/Workspace lookup. Connectors are restored during `initialize()` and closed together during `dispose()`.
 
 ## Feishu dependency
 
-`@downcity/plugins` keeps the Feishu/Lark SDK outside its default production dependencies. Apps that do not enable Feishu can import `@downcity/plugins` without installing Feishu runtime dependencies.
-
-If your host enables `FeishuChannel`, install the SDK in that host:
+A host that enables a Feishu/Lark Account must install:
 
 ```bash
 npm install @larksuiteoapi/node-sdk@^1.66.0
 ```
 
-Use the isolated Chat plugin subpath:
-
-```ts
-import { ChatPlugin, FeishuChannel } from "@downcity/plugins/chat";
-```
-
-When Feishu is enabled without the SDK installed, the runtime error tells you which package to install before enabling channel `"feishu"`.
-
-## SDK action use
-
-In an embedded SDK scenario, call the visible chat actions by plugin name:
-
-```ts
-await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "chat",
-  action: "send",
-  payload: {
-    chat_key: "telegram:123456",
-    text: "Done",
-  },
-});
-```
-
-The common actions are `list`, `info`, `send`, `react`, `context`, `history`, and `delete`.
-
-## Built-in Authorization
-
-Chat authorization now belongs to `ChatPlugin` itself. You no longer attach a separate authorization plugin.
-
-It participates in inbound chat execution through three chat plugin points:
-
-- `chat.observePrincipal`: records observed users and chats
-- `chat.authorizeIncoming`: decides whether the current message may enter the agent based on roles and permissions
-- `chat.resolveUserRole`: enriches history / queue metadata with the current user role
-
-Authorization actions also live under `chat`:
-
-| Action | Purpose |
-| --- | --- |
-| `authorization-snapshot` | read the authorization catalog, config, observed users, and observed chats |
-| `authorization-read-config` | read the current authorization config |
-| `authorization-write-config` | replace the authorization config |
-| `authorization-set-user-role` | set a user's role for a channel |
-
-SDK example:
-
-```ts
-await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "chat",
-  action: "authorization-set-user-role",
-  payload: {
-    channel: "telegram",
-    userId: "12345678",
-    roleId: "admin",
-  },
-});
-```
-
-## Important runtime semantics
-
-- channel connections and queue workers belong to City's unique ChatPlugin instance and are created lazily on first relevant call
-- Agent/Workspace only supplies message-routing context and does not define ChatPlugin lifecycle
-- inbound authorization belongs to `ChatPlugin`, while still being dispatched through generic plugin hooks / resolves
-- `Agent` does not own ChatPlugin or chat domain state
-
-## Public status
-
-`ChatPlugin` is exported from `@downcity/plugins`.
-
-SDK users provide it to City, never to Agent.
-
-## Related docs
+## Related documentation
 
 - [Plugin Lifecycle](/en/agent-sdk-docs/plugins/lifecycle)
-- [Plugin System](/en/agent-sdk-docs/plugins/plugin-system)
 - [Built-ins Overview](/en/plugins-docs/builtins/overview)

@@ -9,20 +9,19 @@
 
 import path from "path";
 import type { PluginLogger } from "@downcity/city/plugin";
-import type { PluginContext } from "@downcity/city/plugin";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type {
   IncomingChatAccessParams,
   IncomingChatAccessResult,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { ChannelUserMessageMeta } from "@/chat/channels/BaseChatChannelSupport.js";
+import type { ChannelUserMessageMeta } from "@/chat/types/ChatConnector.js";
 import {
   buildReplyContextExtra,
   buildReplyContextInstruction,
 } from "@/chat/runtime/ReplyContextFormatter.js";
 import {
-  augmentChatInboundInput,
   buildChatInboundText,
+  normalize_chat_inbound_input,
 } from "@/chat/runtime/InboundAugment.js";
 import { render_chat_message_file_tag } from "@downcity/agent";
 import { extractTelegramReplyContext } from "./ReplyContext.js";
@@ -107,10 +106,6 @@ export type TelegramMessageCommandHandler = (params: {
  * Telegram message handler 依赖。
  */
 export interface TelegramMessageHandlerOptions {
-  /**
-   * 当前 agent context。
-   */
-  context: PluginContext;
   /**
    * 项目根目录。
    */
@@ -338,9 +333,7 @@ export async function handleTelegramMessage(
     const instructions = buildReplyContextInstruction({
       text:
         buildChatInboundText(
-          await augmentChatInboundInput({
-            context: options.context,
-            input: {
+          normalize_chat_inbound_input({
               channel: "telegram",
               chatId,
               chatType: message.chat.type,
@@ -356,7 +349,6 @@ export async function handleTelegramMessage(
                 path: attachment.path,
                 desc: attachment.desc,
               })),
-            },
           }),
         ) ||
         (attachmentLines.length > 0

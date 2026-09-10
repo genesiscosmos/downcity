@@ -14,7 +14,7 @@ import type {
   ChannelChatKeyParams,
   ChannelSendTextParams,
 } from "@/chat/channels/BaseChatChannel.js";
-import type { PluginContext } from "@downcity/city/plugin";
+import type { ChatConnectorContext } from "@/chat/types/ChatConnector.js";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { ParsedFeishuAttachmentCommand } from "@/chat/types/FeishuAttachment.js";
@@ -27,7 +27,6 @@ import { parseFeishuAttachments } from "./Shared.js";
 import { FeishuPlatformClient } from "./FeishuPlatformClient.js";
 import { handleFeishuMessage } from "./FeishuMessageHandler.js";
 import { isMissingFeishuSdkDependencyError } from "./FeishuSdk.js";
-import { get_feishu_dedupe_dir_path } from "@/chat/runtime/ChatStorage.js";
 
 /**
  * 飞书入站确认 reaction 类型。
@@ -55,7 +54,7 @@ export class FeishuBot extends BaseChatChannel {
   > = new Map();
 
   constructor(
-    context: PluginContext,
+    context: ChatConnectorContext,
     appId: string,
     appSecret: string,
     domain: string | undefined,
@@ -64,9 +63,11 @@ export class FeishuBot extends BaseChatChannel {
     this.appId = appId;
     this.appSecret = appSecret;
     this.domain = domain;
-    this.dedupeDir = get_feishu_dedupe_dir_path(context.storage.path);
+    this.dedupeDir = path.join(context.storage_path, "dedupe");
     this.platform = new FeishuPlatformClient({
-      context,
+      workspace_path: context.workspace_path,
+      storage_path: context.storage_path,
+      logger: context.logger,
       config: {
         appId: this.appId,
         appSecret: this.appSecret,
@@ -194,7 +195,6 @@ export class FeishuBot extends BaseChatChannel {
    */
   private async handleMessage(data: FeishuMessageEvent): Promise<void> {
     await handleFeishuMessage({
-      context: this.context,
       rootPath: this.rootPath,
       logger: this.logger,
       buildChatKey: (chatId) => this.buildChatKey(chatId),
@@ -464,7 +464,7 @@ Available commands:
  */
 export async function createFeishuBot(
   config: FeishuConfig,
-  context: PluginContext,
+  context: ChatConnectorContext,
 ): Promise<FeishuBot | null> {
   if (!config.enabled || !config.appId || !config.appSecret) {
     return null;

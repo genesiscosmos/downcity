@@ -80,6 +80,9 @@ export interface PluginRendererPageProps {
 export interface PluginRendererSidebarProps {
   /** Sidebar 内的全部导航内容。 */
   readonly children: ReactNode;
+
+  /** 由宿主渲染到 Sidebar Header 右侧的业务操作。 */
+  readonly actions?: ReactNode;
 }
 
 /** Plugin Sidebar 分区属性。 */
@@ -182,6 +185,15 @@ export interface PluginRendererItemMenuProps {
 
   /** 是否仅在所属 Item 悬浮或菜单展开时显示触发器。 */
   readonly reveal_on_hover?: boolean;
+}
+
+/** Plugin Sidebar Header 创建菜单属性。 */
+export interface PluginRendererSidebarCreateMenuProps {
+  /** 加号按钮的无障碍名称与悬浮提示。 */
+  readonly label: string;
+
+  /** 点击加号后展示的创建类型。 */
+  readonly actions: readonly PluginRendererItemMenuAction[];
 }
 
 /** Section 布局属性。 */
@@ -484,6 +496,8 @@ export interface PluginRendererUiComponents {
   readonly SidebarTreeItem: (props: PluginRendererSidebarTreeItemProps) => ReactNode;
   /** Item 的统一操作菜单。 */
   readonly ItemMenu: (props: PluginRendererItemMenuProps) => ReactNode;
+  /** Sidebar Header 中由加号触发的统一创建菜单。 */
+  readonly SidebarCreateMenu: (props: PluginRendererSidebarCreateMenuProps) => ReactNode;
   /** Mainview 页面根布局。 */
   readonly Page: (props: PluginRendererPageProps) => ReactNode;
   /** 带标题和表面的内容分区。 */
@@ -598,7 +612,7 @@ export type PluginConfigComponent = (
   props: PluginConfigComponentProps,
 ) => ReactNode;
 
-/** 单一 Renderer 入口声明的三个独立 UI 插槽。 */
+/** 单一 Renderer 入口声明的固定 UI 插槽。 */
 export interface PluginRendererDefinition {
   /** Plugin 工作区左侧的业务导航；必须与 Mainview 同时声明。 */
   readonly sidebar?: PluginSidebarComponent;

@@ -6,6 +6,7 @@ import type { DesktopChatRuntime, DesktopSessionSummary } from "../src/common/ty
 import { get_session_key } from "../src/renderer/features/chat/lib/chat_cache_key.ts";
 import {
   group_agent_sessions_by_workspace,
+  resolve_agent_chat_target,
   select_agent_sessions,
 } from "../src/renderer/features/chat/lib/session_list_projection.ts";
 
@@ -72,4 +73,45 @@ test("所选 Agent 的列表跨 Workspace 汇总并优先显示执行中 Session
     ["project-b", "running"],
     ["project-a", "older"],
   ]);
+});
+
+test("Agent 主体入口优先恢复最近打开的 Session，而不是最近更新的 Session", () => {
+  const sessions_by_workspace = group_agent_sessions_by_workspace([
+    { agent_id: "writer", sessions: [create_session("last-opened", "project-a", 10), create_session("latest-updated", "project-b", 20)] },
+  ]);
+
+  const target = resolve_agent_chat_target(sessions_by_workspace, new Set(["project-a", "project-b"]), "writer", {
+    kind: "session",
+    workspace_id: "project-a",
+    agent_id: "writer",
+    session_id: "last-opened",
+  });
+
+  assert.deepEqual(target, { kind: "session", workspace_id: "project-a", agent_id: "writer", session_id: "last-opened" });
+});
+
+test("最近打开目标失效后回退到最近更新的 Session", () => {
+  const sessions_by_workspace = group_agent_sessions_by_workspace([
+    { agent_id: "writer", sessions: [create_session("older", "project-a", 10), create_session("latest", "project-b", 20)] },
+  ]);
+
+  const target = resolve_agent_chat_target(sessions_by_workspace, new Set(["project-a", "project-b"]), "writer", {
+    kind: "session",
+    workspace_id: "project-a",
+    agent_id: "writer",
+    session_id: "removed",
+  });
+
+  assert.deepEqual(target, { kind: "session", workspace_id: "project-b", agent_id: "writer", session_id: "latest" });
+});
+
+test("Agent 主体入口可以恢复最近打开的 Draft", () => {
+  const target = resolve_agent_chat_target({}, new Set(["project-a"]), "writer", {
+    kind: "draft",
+    workspace_id: "project-a",
+    agent_id: "writer",
+    draft_id: "draft:writer",
+  });
+
+  assert.deepEqual(target, { kind: "draft", workspace_id: "project-a", agent_id: "writer", draft_id: "draft:writer" });
 });

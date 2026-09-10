@@ -13,7 +13,6 @@ append_prompt_message
   → publish user message mutation
   → ensure_title_from_history({ generate: true })
   → 标题模型请求
-  → touch_metadata
   → compose system / history / tools
   → 实际模型请求
   → 首个 assistant chunk
@@ -97,10 +96,11 @@ schedule_title_generation() 负责去重、取消、调用模型和提交 title 
 
 ```ts
 const message = await messages.append_prompt_message(...);
-await state.touch_metadata();
 title_task.schedule();
 return message;
 ```
+
+Message 事务已经同步维护 `session_state` 的消息数量、预览与更新时间，主路径不再追加独立的 metadata touch。
 
 `schedule()` 不返回需要主路径等待的 Promise；它应同步完成“是否需要启动任务”的判断，然后由协调器安全地启动后台流程。不建议使用未捕获的裸 `void generate_title()`。
 

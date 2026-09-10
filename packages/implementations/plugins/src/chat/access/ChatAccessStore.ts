@@ -2,7 +2,7 @@
  * Chat Access SQLite Store。
  *
  * 关键点（中文）
- * - 该 Store 是当前 Agent Chat Access 的唯一持久化入口。
+ * - 该 Store 是 Chat Plugin Bot Account Access 的唯一持久化入口。
  * - 所有字段先归一化再写入，避免平台适配器差异污染查询键。
  * - Service 负责业务编排，Store 只负责结构化读写和事务。
  */

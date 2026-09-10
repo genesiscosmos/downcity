@@ -9,7 +9,6 @@
 
 import path from "path";
 import type { PluginLogger } from "@downcity/city/plugin";
-import type { PluginContext } from "@downcity/city/plugin";
 import type {
   IncomingChatAccessParams,
   IncomingChatAccessResult,
@@ -21,8 +20,8 @@ import {
   buildReplyContextInstruction,
 } from "@/chat/runtime/ReplyContextFormatter.js";
 import {
-  augmentChatInboundInput,
   buildChatInboundText,
+  normalize_chat_inbound_input,
 } from "@/chat/runtime/InboundAugment.js";
 import { render_chat_message_file_tag } from "@downcity/agent";
 import { parseFeishuInboundMessage } from "./InboundAttachment.js";
@@ -41,10 +40,6 @@ import type {
  * Feishu message handler 依赖。
  */
 export interface FeishuMessageHandlerOptions {
-  /**
-   * 当前 agent context。
-   */
-  context: PluginContext;
   /**
    * 项目根目录。
    */
@@ -415,9 +410,7 @@ async function handleAuthorizedMessage(params: {
     const instructions = buildReplyContextInstruction({
       text:
         buildChatInboundText(
-          await augmentChatInboundInput({
-            context: options.context,
-            input: {
+          normalize_chat_inbound_input({
               channel: "feishu",
               chatId,
               chatType,
@@ -433,7 +426,6 @@ async function handleAuthorizedMessage(params: {
                 path: attachment.path,
                 desc: attachment.desc,
               })),
-            },
           }),
         ) ||
         (attachmentLines.length > 0

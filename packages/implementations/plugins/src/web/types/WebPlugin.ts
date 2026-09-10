@@ -65,6 +65,16 @@ export interface WebSearchResult extends PluginJsonObject {
   items: WebSearchItem[];
 }
 
+/** Web 搜索 Provider 协议。 */
+export interface WebSearchProvider {
+  /** Provider 稳定名称，用于结果标识、日志和诊断。 */
+  readonly name: string;
+  /** 搜索公开 Web 内容并返回结构化结果。 */
+  search(input: WebSearchInput): Promise<WebSearchResult>;
+  /** 释放 Provider 自己拥有的连接或其他长期资源。 */
+  dispose?(): Promise<void>;
+}
+
 /** 已知 URL 打开输入。 */
 export interface WebOpenInput {
   /** 要读取的 HTTP(S) URL。 */
@@ -85,6 +95,16 @@ export interface WebOpenResult extends PluginJsonObject {
   content: string;
 }
 
+/** Web 文档 Provider 协议。 */
+export interface WebDocumentProvider {
+  /** Provider 稳定名称，用于结果标识、日志和诊断。 */
+  readonly name: string;
+  /** 读取已知 URL 并返回适合模型使用的正文。 */
+  open(input: WebOpenInput): Promise<WebOpenResult>;
+  /** 释放 Provider 自己拥有的连接或其他长期资源。 */
+  dispose?(): Promise<void>;
+}
+
 /** 浏览器 session 创建输入。 */
 export interface BrowserCreateSessionInput {
   /** 创建后立即打开的 URL。 */
@@ -103,29 +123,60 @@ export interface BrowserObservation extends PluginJsonObject {
   url: string;
   /** 当前页面标题。 */
   title: string;
+  /** 当前页面观察代次；元素引用只在该代次有效。 */
+  observation_generation: number;
+  /** 当前页面经过字符上限裁剪的 Accessibility Snapshot。 */
+  accessibility_snapshot: string;
   /** 当前页面的可见文本快照。 */
   text: string;
+  /** 当前页面中可供 Agent 操作的稳定元素引用。 */
+  elements: BrowserElementReference[];
   /** 可选的 PNG data URL，供视觉模型使用。 */
   screenshot_data_url: string | null;
+}
+
+/** 当前观察中一个可交互页面元素的稳定引用。 */
+export interface BrowserElementReference extends PluginJsonObject {
+  /** 当前 observation generation 内有效的简短引用。 */
+  ref: string;
+  /** 元素的 HTML 标签名。 */
+  tag: string;
+  /** 元素显式或推导出的可访问角色。 */
+  role: string;
+  /** 元素的可访问名称或简短可见文本。 */
+  name: string;
 }
 
 /** 浏览器动作输入。 */
 export type BrowserAction =
   | { /** 导航到目标地址。 */ type: "goto"; /** 目标 URL。 */ url: string }
-  | { /** 点击元素。 */ type: "click"; /** CSS selector。 */ selector: string }
+  | {
+      /** 点击元素。 */ type: "click";
+      /** 当前 observation 中的元素引用，与 selector 二选一。 */ ref?: string;
+      /** 高级确定性调用使用的 CSS selector，与 ref 二选一。 */ selector?: string;
+      /** 使用 ref 时必须提交生成该 ref 的观察代次。 */ observation_generation?: number;
+    }
   | {
       /** 填充表单元素。 */
       type: "fill";
-      /** CSS selector。 */
-      selector: string;
+      /** 当前 observation 中的元素引用，与 selector 二选一。 */
+      ref?: string;
+      /** 高级确定性调用使用的 CSS selector，与 ref 二选一。 */
+      selector?: string;
+      /** 使用 ref 时必须提交生成该 ref 的观察代次。 */
+      observation_generation?: number;
       /** 要填充的文本。 */
       value: string;
     }
   | {
       /** 在元素上按键。 */
       type: "press";
-      /** CSS selector。 */
-      selector: string;
+      /** 当前 observation 中的元素引用，与 selector 二选一。 */
+      ref?: string;
+      /** 高级确定性调用使用的 CSS selector，与 ref 二选一。 */
+      selector?: string;
+      /** 使用 ref 时必须提交生成该 ref 的观察代次。 */
+      observation_generation?: number;
       /** Playwright 支持的键名。 */
       key: string;
     }
@@ -236,12 +287,43 @@ export interface BrowserProvider {
   dispose(): Promise<void>;
 }
 
+/** BrowserProvider 工厂收到的当前执行作用域。 */
+export interface BrowserProviderScope {
+  /** 当前 Agent 稳定标识。 */
+  readonly agent_id: string;
+  /** 当前 Workspace 稳定标识。 */
+  readonly workspace_id: string;
+  /** 当前 Agent/Plugin 私有数据目录，用于持久化本地浏览器 profile。 */
+  readonly data_path: string;
+  /** 当前 Workspace 的环境变量快照，用于解析 Provider 凭据。 */
+  readonly env: Readonly<Record<string, string>>;
+  /** 当前 WebPlugin 配置快照。 */
+  readonly config: Readonly<WebPluginConfig>;
+}
+
+/** 按执行作用域创建 BrowserProvider 的工厂。 */
+export type BrowserProviderFactory = (
+  scope: BrowserProviderScope,
+) => BrowserProvider | Promise<BrowserProvider>;
+
 /** WebPlugin 配置。 */
 export interface WebPluginConfig {
-  /** 浏览器实现类型。 */
-  browser?: "playwright";
-  /** 浏览器 CDP 地址。 */
+  /** 搜索实现；auto 按 Tavily、Exa 的顺序选择首个已配置 Provider。 */
+  search_provider?: "auto" | "tavily" | "exa" | "disabled";
+  /** 网页正文实现；fetch 无需密钥，firecrawl 适合复杂页面。 */
+  document_provider?: "fetch" | "firecrawl" | "disabled";
+  /** 浏览器运行方式；local 自动启动专用 Chromium，cdp 连接现有端点。 */
+  browser_provider?: "local" | "cdp" | "disabled";
+  /** Tavily API Key；只允许配置端写入，不应返回给 Renderer。 */
+  tavily_api_key?: string;
+  /** Exa API Key；只允许配置端写入，不应返回给 Renderer。 */
+  exa_api_key?: string;
+  /** Firecrawl API Key；只允许配置端写入，不应返回给 Renderer。 */
+  firecrawl_api_key?: string;
+  /** 外部浏览器 CDP 地址，仅在 browser_provider=cdp 时使用。 */
   cdp_url?: string;
+  /** 本地 Chrome/Chromium 可执行文件路径；留空时自动发现。 */
+  browser_executable_path?: string;
   /** 新建 Session 时使用的默认地址。 */
   default_url?: string;
   /** 浏览器操作超时时间。 */
@@ -251,4 +333,13 @@ export interface WebPluginConfig {
 }
 
 /** WebPlugin 的显式构造参数。 */
-export type WebPluginOptions = WebPluginConfig;
+export interface WebPluginOptions {
+  /** 构造时固定配置；字段优先级高于 City 保存的配置。 */
+  readonly config?: WebPluginConfig;
+  /** Web 搜索 Provider；实例生命周期由 WebPlugin 统一管理。 */
+  readonly search_provider?: WebSearchProvider;
+  /** Web 文档 Provider；实例生命周期由 WebPlugin 统一管理。 */
+  readonly document_provider?: WebDocumentProvider;
+  /** 按 Agent 与 Workspace 作用域创建 BrowserProvider 的工厂。 */
+  readonly browser_provider_factory?: BrowserProviderFactory;
+}

@@ -1,25 +1,6 @@
-/** Web、Image 与 Sound Plugin 自己拥有的设置 Mainview 字段定义。 */
+/** Image 与 Sound Plugin 自己拥有的设置 Mainview 字段定义。 */
 
 import type { PluginSettingsDefinition } from "@/builtin/types/PluginSettings.js";
-
-/** Web Plugin 设置。 */
-export const WEB_PLUGIN_SETTINGS: PluginSettingsDefinition = {
-  title: "Web",
-  description: "配置浏览器连接与页面观察默认值。未填写 CDP 地址时仍可使用搜索和文档读取。",
-  fields: [
-    {
-      key: "browser",
-      label: "Browser provider",
-      description: "当前支持 Playwright CDP 连接。",
-      type: "select",
-      options: [{ value: "playwright", label: "Playwright" }],
-    },
-    { key: "cdp_url", label: "CDP endpoint", description: "现有浏览器的 HTTP 或 WebSocket 调试地址。", type: "string" },
-    { key: "default_url", label: "Default URL", description: "浏览器 Session 没有指定地址时打开的页面。", type: "string" },
-    { key: "timeout_ms", label: "Operation timeout (ms)", type: "number", minimum: 1000, maximum: 60000 },
-    { key: "max_observation_chars", label: "Observation character limit", type: "number", minimum: 1, maximum: 100000 },
-  ],
-};
 
 /** Image Plugin 设置。 */
 export const IMAGE_PLUGIN_SETTINGS: PluginSettingsDefinition = {

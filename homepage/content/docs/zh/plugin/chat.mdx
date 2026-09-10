@@ -1,83 +1,97 @@
 ---
-title: Chat 插件
-description: Chat 插件如何将 Agent 连接到聊天渠道
+title: Chat Plugin
+description: 在 Desktop 中管理 Bot Account，并把外部会话可靠地路由到 Agent Session
 ---
 
-# Chat 插件
+# Chat Plugin
 
-Chat 插件将 Agent 连接到 Telegram、飞书、QQ 等聊天渠道。它处理收到的消息，将它们路由到 Agent 会话，并将回复发送回渠道。
+Chat Plugin 是 City 持有的渠道运行时。它不属于某个 Agent，也不通过 `context.agent.chat` 暴露长期状态。
 
-## 功能
+## Desktop 使用
 
-- 监听已配置渠道的消息
-- 为每个对话创建或复用会话
-- 将用户消息路由到 Agent
-- 将 Agent 回复发送回渠道
-- 在消息进入 Agent 前执行按 Agent 隔离的 Chat Access 准入
+打开 Channels 后，左侧 Sidebar 会列出全部 Bot Account。点击 Sidebar 标题栏中的加号，从下拉菜单选择 Telegram、飞书/Lark 或 QQ 后创建对应的 Channel。可以添加多个同平台 Bot Account。
 
-## 配置
+点击一个 Account 可以管理：
 
-Chat 在 `~/.downcity/plugins/chat/config.toml` 中拥有一份 City 级配置。它包含入站目标、队列行为和渠道：
+- 启用状态、平台凭据与连接测试
+- 新 Conversation 默认使用的 Agent 和 Workspace
+- 外部身份的 Access 申请与授权
+- 每个 Conversation 的 Agent、Workspace、Session 与暂停状态
+- 达到自动重试上限的 Inbox/Outbox 任务
+- 不包含消息正文和密钥的 Activity
 
-```toml
-schema_version = 2
+在 Desktop 保存 Account 后立即应用，只重启该 Account 的 Connector，不需要重启 Desktop 或 City，其他 Bot 连接不受影响。密钥可以直接在 Settings 中写入；已保存的密钥不会回显，编辑时留空表示保留原值。
 
-[config]
-owner_agent_id = "assistant"
-owner_workspace_id = "project"
+## Account 配置
 
-[config.queue]
-max_concurrency = 4
+Account 定义与密钥以 City Plugin Config 为唯一事实源。示例：
 
-[[config.channels]]
-id = "telegram_primary"
-type = "telegram"
-name = "Primary Bot"
-bot_token = "123456:token"
+```json
+{
+  "accounts": [
+    {
+      "account_id": "support-telegram",
+      "name": "Support Bot",
+      "provider": "telegram",
+      "enabled": true,
+      "agent_id": "support",
+      "workspace_id": "support-workspace",
+      "bot_token": "<telegram-bot-token>"
+    }
+  ]
+}
 ```
 
-在 Desktop 的 Plugins Catalog 中打开 Chat Config 即可编辑。City 自动把 Chat 能力提供给全部 Agent；
-`owner_agent_id` 和 `owner_workspace_id` 只确定外部渠道入站消息的执行目标，不是 Plugin 绑定。
+飞书/Lark 使用 `app_id`、`app_secret` 和可选 `domain`；QQ 使用 `app_id`、`app_secret` 和可选 `sandbox`。
 
-## 渠道凭据
+## 消息与 Session
 
-渠道凭据明文保存在 `config.toml`，通过仅当前用户可访问的目录与文件权限保护（`0700` 和 `0600`）。Chat Config 通过 Chat 自己的 Config actions 读取和保存配置；读取不会返回 `bot_token`、`app_secret` 原文，编辑时留空会保留已有凭据。保存后 Chat 会停止旧渠道与队列，下一次使用时按新配置惰性重建。
+允许访问的外部消息先写入 Inbox，再由 Conversation 路由到一个真实 Agent Session。Session Messages 是完整对话的唯一事实源，Chat 数据库不会复制一份聊天历史。
 
-## Chat Access
+可靠链路为：
 
-外部用户第一次发送消息时，Chat Plugin 会在当前 Agent 的 `.downcity/chat/access.db` 中记录 Principal，并在没有 Grant 时创建 pending Request。管理员使用 Request ID 批准或拒绝：
-
-```bash
-city plugin action chat access-snapshot <agent_id> --input '{}' --token <token>
-city plugin action chat access-approve <agent_id> --input '{"request_id":"<request_id>"}' --token <token>
+```text
+Platform → Access → Inbox → Conversation → Agent Session
+         → Outbox → Platform
 ```
 
-身份由唯一配置中的渠道 ID 和平台用户 ID 共同确定。批准只对目标 Agent 生效，不会成为 City 全局权限，也不会传播到其他 Plugin。
+Inbox 使用平台消息 ID 去重，并以稳定 `request_id` 调用 Session。进程在 User Message 落盘后退出，恢复时不会追加第二条用户消息。Agent 结果以稳定 Delivery ID 写入 Outbox，避免恢复时重复建单。
 
-## 支持的渠道
+Outbox 提供持久化、lease、有限重试和人工恢复。平台本身不支持幂等发送时，对外语义是 at-least-once：平台已接收但本地尚未记录确认的瞬间退出，恢复后可能再次发送。
 
-- Telegram
-- 飞书 (Lark)
-- QQ
+## Agent Actions
+
+Agent 只看到自己拥有的 Conversation，并使用严格输入的 Action：
+
+- `context`：读取当前 Chat Session 路由
+- `list`：列出当前 Agent 的 Conversation
+- `history`：读取 Agent Session 的 canonical messages
+- `send`：将文本写入可靠 Outbox
+- `react`：为 Telegram 消息写入可靠 Reaction 操作
+
+## SDK 装配
+
+```ts
+import { ChatPlugin } from "@downcity/plugins/chat";
+
+const city = new City({
+  plugins: [new ChatPlugin()],
+  workspaces: [workspace],
+  plugin_host,
+});
+```
+
+Chat Plugin 需要 City 宿主提供 Plugin Config、生命周期 Storage、Agent 和 Workspace 查询能力。Bot Connector 在 `initialize()` 中主动恢复，在 `dispose()` 中统一关闭。
 
 ## 飞书依赖
 
-`@downcity/plugins` 默认不再安装飞书 / Lark SDK。如果你在本地嵌入 SDK 宿主中启用飞书渠道，需要在宿主应用里安装：
+启用飞书/Lark Account 的宿主需要安装：
 
 ```bash
 npm install @larksuiteoapi/node-sdk@^1.66.0
 ```
 
-使用 Chat plugin 的独立子路径：
+## 相关文档
 
-```ts
-import { ChatPlugin, FeishuChannel } from "@downcity/plugins/chat";
-```
-
-不启用飞书的应用不需要安装飞书 SDK。
-
-继续阅读：
-
-- [Task 插件](/zh/docs/plugin/task)
-- [Memory 插件](/zh/docs/plugin/memory)
-- [Agent Plugins Docs](/zh/plugins-docs)
+- [Plugin Lifecycle](/zh/agent-sdk-docs/plugins/lifecycle)
+- [Built-ins Overview](/zh/plugins-docs/builtins/overview)

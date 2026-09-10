@@ -4,7 +4,7 @@ import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionAgentInteractionPart, SessionAgentReasoningPart, SessionAgentToolPart } from "@downcity/agent";
 import { TbBulb, TbChevronRight, TbFilePencil, TbFilePlus, TbFileSearch, TbMessageQuestion, TbPuzzle, TbSearch, TbTerminal2, TbTextScan2 } from "react-icons/tb";
 import { AgentInteraction, resolve_agent_interaction_title } from "@/features/chat/components/messages/AgentInteraction";
-import { resolve_agent_tool_presentation, should_auto_open_agent_activity, should_force_open_agent_activity, should_force_open_agent_tool } from "@/features/chat/lib/message/agent_tool_presentation";
+import { resolve_agent_tool_presentation, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_tool_presentation";
 import type { AgentActivityPart, AgentToolVisualKind } from "@/features/chat/types/AgentMessage";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
@@ -25,12 +25,11 @@ function AgentActivityGroup({ parts, message_streaming, respond_interaction }: {
   const translate_chat = use_translation("chat");
   const [open, set_open] = useState(() => should_auto_open_agent_activity(parts));
   const summary_part = find_last_non_reasoning(parts) ?? parts[parts.length - 1];
-  const force_open = should_force_open_agent_activity(parts);
   const auto_open = should_auto_open_agent_activity(parts);
-  useEffect(() => set_open(auto_open), [auto_open, parts.find((part) => part.type === "interaction" && part.status === "pending")?.part_id]);
+  useEffect(() => { if (auto_open) set_open(true); }, [auto_open, parts.find((part) => part.type === "interaction" && part.status === "pending")?.part_id]);
 
   const summary = activity_summary(summary_part, message_streaming, translate_chat);
-  return <details open={force_open || open} onToggle={(event) => handle_details_toggle(event.currentTarget, force_open, set_open)} className={cn("activity-tool-row activity-tool-group", summary.state_class)}>
+  return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={cn("activity-tool-row activity-tool-group", summary.state_class)}>
     <summary className="activity-tool-summary activity-tool-group-summary"><span className="activity-tool-main"><ActivityIcon visual_kind={summary.visual_kind} /><span className="activity-tool-state">{summary.state}</span><span className="activity-tool-name">{summary.detail}</span><span className="activity-tool-count">+{parts.length - 1}</span><TbChevronRight className="activity-tool-chevron" aria-hidden /></span></summary>
     <div className="activity-tool-group-body">{parts.map((part, index) => <div key={part.part_id} className="activity-tool-log"><AgentActivityItem part={part} message_streaming={message_streaming && index === parts.length - 1} respond_interaction={respond_interaction} /></div>)}</div>
   </details>;
@@ -75,14 +74,15 @@ function AgentReasoning({ part, message_streaming }: { part: SessionAgentReasoni
 /** Tool 生命周期、摘要以及按工具语义裁剪后的主要内容。 */
 function AgentTool({ part }: { part: SessionAgentToolPart }) {
   const translate_chat = use_translation("chat");
-  const [open, set_open] = useState(false);
+  const [open, set_open] = useState(() => should_auto_open_agent_tool(part));
   const presentation = resolve_agent_tool_presentation(part);
-  const force_open = should_force_open_agent_tool(part);
+  const auto_open = should_auto_open_agent_tool(part);
+  useEffect(() => { if (auto_open) set_open(true); }, [auto_open, part.part_id]);
   const details = render_tool_details(part, presentation.visual_kind);
   const class_name = cn("activity-tool-row activity-tool-item", presentation.running ? "is-running" : presentation.failed ? "is-failed" : "is-complete");
   const summary = <span className="activity-tool-main"><ActivityIcon visual_kind={presentation.visual_kind} /><span className="activity-tool-state">{translate_chat(presentation.state_key)}</span><span className="activity-tool-name">{presentation.detail}</span>{details ? <TbChevronRight className="activity-tool-chevron" aria-hidden /> : null}</span>;
   if (!details) return <div className={class_name}><div className="activity-tool-summary">{summary}</div></div>;
-  return <details open={force_open || open} onToggle={(event) => handle_details_toggle(event.currentTarget, force_open, set_open)} className={class_name}>
+  return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={class_name}>
     <summary className="activity-tool-summary">{summary}</summary>
     <div className={cn("activity-tool-detail", `is-${presentation.visual_kind}`)}>{details}</div>
   </details>;
@@ -186,5 +186,4 @@ function streamed_fields(input_text: string | undefined, key: string): string[] 
 function decode_json_fragment(raw: string): string { try { return JSON.parse(`"${raw.replace(/\\$/g, "")}"`) as string; } catch { return raw.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\"/g, '"').replace(/\\\\/g, "\\"); } }
 function reasoning_preview(text: string): string { return text.replace(/\s+/g, " ").trim(); }
 function find_last_non_reasoning(parts: readonly AgentActivityPart[]): SessionAgentToolPart | SessionAgentInteractionPart | undefined { for (let index = parts.length - 1; index >= 0; index -= 1) { const part = parts[index]; if (part?.type === "tool" || part?.type === "interaction") return part; } return undefined; }
-function handle_details_toggle(details: HTMLDetailsElement, force_open: boolean, set_open: (open: boolean) => void): void { if (force_open) { if (!details.open) details.open = true; return; } set_open(details.open); }
 function assert_never(value: never): never { throw new Error(`不支持的 Agent Activity Part：${String((value as { type?: unknown }).type)}`); }

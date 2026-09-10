@@ -1,7 +1,7 @@
 /** Plugin 语义图标映射，供 Sidebar 与 Mainview Overview 共享。 */
 
 import { useEffect, useState } from "react";
-import { TbChecklist, TbDatabase, TbMessageCircle, TbPhoto, TbPlugConnected, TbSparkles, TbVolume, TbWorld } from "react-icons/tb";
+import { TbChecklist, TbDatabase, TbMessageCircle, TbPhoto, TbPillFilled, TbPlugConnected, TbVolume, TbWorld } from "react-icons/tb";
 
 /** 展示 Plugin 声明的图标，并在加载失败时回退到稳定语义图标。 */
 export function PluginIcon({ plugin_id, icon_url, class_name = "size-4" }: {
@@ -29,7 +29,7 @@ export function PluginIcon({ plugin_id, icon_url, class_name = "size-4" }: {
 function render_fallback_plugin_icon(plugin_id: string, class_name: string) {
   if (plugin_id === "chat") return <TbMessageCircle className={class_name} />;
   if (plugin_id === "memory") return <TbDatabase className={class_name} />;
-  if (plugin_id === "skill") return <TbSparkles className={class_name} />;
+  if (plugin_id === "skill") return <TbPillFilled className={class_name} />;
   if (plugin_id === "task") return <TbChecklist className={class_name} />;
   if (plugin_id === "web") return <TbWorld className={class_name} />;
   if (plugin_id === "image") return <TbPhoto className={class_name} />;

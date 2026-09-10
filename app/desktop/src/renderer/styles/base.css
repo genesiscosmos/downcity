@@ -135,6 +135,14 @@ a,
   background: color-mix(in srgb, var(--muted-foreground) 13%, transparent);
 }
 
+/* 历史消息编辑只保留 Composer 自身一层表面，不再叠加 User Message 气泡。 */
+.user-message-rewrite-editor {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border-radius: 0.75rem;
+}
+
 .chat-composer-content {
   display: block;
   width: 100%;

@@ -1,7 +1,7 @@
 /** Sidebar Rail 中的一级导航入口。 */
 
 import { Tooltip } from "@base-ui/react/tooltip";
-import { TbComponents, TbFolder, TbMessageCircle } from "react-icons/tb";
+import { TbComponents, TbFolder, TbMoodNeutral } from "react-icons/tb";
 import { PluginIcon } from "@/features/plugin/lib/PluginIcon";
 import type { DesktopPluginSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,7 @@ interface SidebarNavigationItemsProps {
 export function SidebarNavigationItems({ active_mode, on_change, plugin_workspaces, unread_modes }: SidebarNavigationItemsProps) {
   const translate = use_translation("navigation");
   const core_items = [
-    { mode: "chat", label: translate("views.chat"), icon: <TbMessageCircle /> },
+    { mode: "chat", label: translate("views.agent"), icon: <TbMoodNeutral /> },
     { mode: "workspace", label: translate("views.workspaces"), icon: <TbFolder /> },
     { mode: "plugins", label: translate("views.plugins"), icon: <TbComponents /> },
   ] as const;

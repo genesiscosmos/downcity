@@ -38,6 +38,11 @@ Actions should pass `execution.abort_signal` to network requests, polling, and l
 `timeout_ms` only triggers cooperative cancellation; underlying operations must observe the signal.
 The returned `PluginActionResult` must be JSON-serializable.
 
+An Action may return additional current-Turn content through `messages`. Text/file/data Parts with
+`role: "agent"` are appended to the current Agent Message. Text/context/file Parts with `role: "user"`
+are ephemeral input for the next model step and never impersonate a persisted Session Message. The
+Session domain consistently uses `agent`; only the model protocol boundary uses `assistant`.
+
 `command` maps Commander input to a payload, while `api` maps an HTTP request. They do not create a
 second business implementation; both end at the same `execute` function.
 

@@ -16,7 +16,7 @@ import { ChatApprovalModeSelector } from "@/features/chat/composer/ChatApprovalM
 import { ChatModelSelector } from "@/features/chat/composer/ChatModelSelector";
 import { ChatAttachmentNode, ChatReferenceNode } from "@/features/chat/composer/editor/ChatComposerNodes";
 import { ChatSlashMenu } from "@/features/chat/composer/editor/ChatSlashMenu";
-import { count_chat_composer_atoms, has_chat_composer_atoms, has_chat_composer_rich_formatting, is_chat_composer_empty, read_chat_composer_visible_text, resolve_chat_input_command } from "@/features/chat/composer/editor/chatComposerCodec";
+import { count_chat_composer_atoms, has_chat_composer_atoms, has_chat_composer_rich_formatting, read_chat_composer_visible_text } from "@/features/chat/composer/editor/chatComposerCodec";
 import { add_chat_reference_listener } from "@/features/chat/composer/editor/chatReferenceEvent";
 import { add_chat_mention_listener } from "@/features/chat/composer/editor/chatMentionEvent";
 

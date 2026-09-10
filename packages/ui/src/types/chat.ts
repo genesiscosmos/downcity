@@ -84,6 +84,8 @@ export interface DowncityChatModelOption { /** 模型标识。 */ id: string; /*
 export type DowncityChatApprovalMode = "ask" | "always-allow";
 /** 输入附件。 */
 export interface DowncityChatSubmitAttachment extends DowncityChatAttachment { /** 附件文本内容。 */ text?: string; /** 附件 base64。 */ base64?: string; }
+/** Chat 输入提交意图：常规发送、显式排队或绕过队列即时调整。 */
+export type DowncityChatSubmitMode = "send" | "queue" | "steer";
 /** 输入提交值。 */
 export interface DowncityChatSubmitInput { /** 输入正文。 */ text: string; /** 输入附件。 */ attachments: DowncityChatSubmitAttachment[]; }
 /** 自定义消息渲染参数。 */
@@ -109,7 +111,7 @@ export interface DowncityChatPanelProps extends Omit<React.ComponentPropsWithout
   /** 模型切换回调。 */ on_model_change?: (model_id: string) => void | Promise<void>;
   /** 当前审批模式。 */ approval_mode?: DowncityChatApprovalMode;
   /** 审批模式切换回调。 */ on_approval_mode_change?: (mode: DowncityChatApprovalMode) => void | Promise<void>;
-  /** 提交消息。 */ on_submit?: (input: DowncityChatSubmitInput, mode?: "send" | "queue") => void | Promise<void>;
+  /** 提交消息。 */ on_submit?: (input: DowncityChatSubmitInput, mode?: DowncityChatSubmitMode) => void | Promise<void>;
   /** 停止生成。 */ on_stop?: () => void | Promise<void>;
   /** 响应当前 Session Interaction。 */ on_respond_interaction?: (interaction_id: string, response: unknown) => void | Promise<void>;
   /** 自定义 Interaction 呈现器；未提供时使用内置呈现。 */ render_interaction?: (props: { part: DowncityChatMessagePart; on_respond_interaction?: DowncityChatPanelProps["on_respond_interaction"] }) => React.ReactNode;

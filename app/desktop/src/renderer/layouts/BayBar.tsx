@@ -48,7 +48,7 @@ export function MainViewBayBarFrame({ view_key, sidebar_collapsed, title, baybar
   }, [storage_key]);
   const open_baybar = useCallback(() => set_baybar_open(true), [set_baybar_open]);
   return <div className="relative flex h-full min-h-0 min-w-0 flex-1 bg-background">
-    <MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available: false, baybar_open: open }}><div className="flex h-full min-w-0 flex-1 flex-col">{children(open_baybar)}</div></MainViewHeaderProvider>
+    <MainViewHeaderProvider value={{ sidebar_collapsed }}><div className="flex h-full min-w-0 flex-1 flex-col">{children(open_baybar)}</div></MainViewHeaderProvider>
     <BayBar open={open} title={title} close_baybar={() => set_baybar_open(false)}>{baybar_content}</BayBar>
   </div>;
 }

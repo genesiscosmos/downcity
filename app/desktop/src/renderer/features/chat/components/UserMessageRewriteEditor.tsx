@@ -7,6 +7,7 @@ import { TbLoader2 } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { create_chat_composer_extensions } from "@/features/chat/composer/editor/chatComposerExtensions";
 import { is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
+import { resolve_chat_composer_enter_action } from "@/features/chat/composer/editor/chatComposerKeymap";
 import type { UserMessageRewriteEditorProps } from "@/types/ChatComponents";
 import { use_translation } from "@/locales/i18n";
 
@@ -32,17 +33,14 @@ export function UserMessageRewriteEditor(props: UserMessageRewriteEditorProps) {
     content: props.initial_document,
     editorProps: {
       attributes: { class: "chat-input-editor", "data-chat-input": "true", spellcheck: "true" },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         if (event.key === "Escape" && !props_ref.current.submitting) {
           event.preventDefault();
           props_ref.current.cancel();
           return true;
         }
-        if (event.isComposing || event.key !== "Enter") return false;
-        const shortcut = props_ref.current.send_message_on_enter
-          ? !event.shiftKey && !event.metaKey && !event.ctrlKey
-          : event.metaKey || event.ctrlKey;
-        if (!shortcut) return false;
+        const action = resolve_chat_composer_enter_action(event, view.state.doc.toJSON());
+        if (action === "native" || action === "queue-paused") return false;
         event.preventDefault();
         submit();
         return true;
@@ -53,7 +51,7 @@ export function UserMessageRewriteEditor(props: UserMessageRewriteEditorProps) {
     onDestroy: () => { editor_ref.current = null; },
   }, []);
 
-  return <div className="chat-composer flex min-w-0 flex-col gap-2 p-1">
+  return <div className="chat-composer user-message-rewrite-editor flex min-w-0 flex-col gap-2 p-1">
     <div className="chat-composer-editor min-h-16 max-h-60 w-full overflow-y-auto p-1">
       <EditorContent editor={editor} className="chat-composer-content" />
     </div>

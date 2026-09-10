@@ -169,6 +169,8 @@ Desktop loads the Renderer in its host React tree. Sidebar and Mainview use `plu
 
 Sidebar and Mainview also receive a read-only `notifications` array scoped to the current Plugin. Each item includes the local `topic_key`, content, route, and creation time so navigation objects can render unread state. Navigating to the notification's exact route lets the host mark it read; the Renderer cannot publish or mutate notifications.
 
+When a Sidebar needs a creation entry in its header, pass the host-provided `SidebarCreateMenu` through the `Sidebar` component's `actions` prop. The host owns the header, plus button, and dropdown presentation; the Plugin declares only the creation types and the business navigation for each selection.
+
 Use `SidebarTreeItem` for a tree Sidebar: `depth` expresses hierarchy, `kind` distinguishes `branch` and `leaf`, parents own expansion through `expanded` and `on_toggle`, and `on_select` updates the Mainview through shared `navigation`. When `leading` is omitted, the host supplies consistent default icons for branches and leaves. A branch with no children can omit `on_toggle` and will not show a disclosure button. History and other deeper navigation should remain in this tree instead of consuming Mainview space. Use `ItemMenu` for row actions and the host-safe `Markdown` for Markdown content. After a mutation, call `ui.invalidate()`; the host increments `ui.revision` for that Plugin so Sidebar and Mainview reload their snapshots without copying host styles or putting refresh state in the route.
 
 ## Config interaction

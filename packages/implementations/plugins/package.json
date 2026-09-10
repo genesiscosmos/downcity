@@ -1,6 +1,6 @@
 {
   "name": "@downcity/plugins",
-  "version": "1.0.309",
+  "version": "1.0.311",
   "type": "module",
   "description": "Downcity 内建 plugin 集合包",
   "files": [
@@ -60,7 +60,7 @@
     "test:skill": "pnpm build && node --test scripts/skill-plugin.test.mjs",
     "test:sound": "pnpm build && node --test scripts/sound-plugin.test.mjs",
     "test:task": "pnpm build && node --test scripts/task-plugin.test.mjs",
-    "test:web": "pnpm build && node --test scripts/web-plugin.test.mjs && node --experimental-test-module-mocks --test scripts/playwright-browser-provider.test.mjs",
+    "test:web": "pnpm build && node --test scripts/web-plugin.test.mjs scripts/web-data-providers.test.mjs && node --experimental-test-module-mocks --test scripts/playwright-browser-provider.test.mjs",
     "prepack": "npm run build && node ../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },

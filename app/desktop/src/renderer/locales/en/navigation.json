@@ -1,5 +1,5 @@
 {
-  "views": { "chat": "Chat", "workspaces": "Workspace", "plugins": "Plugins", "settings": "Settings" },
+  "views": { "chat": "Chat", "agent": "Agent", "workspaces": "Workspace", "plugins": "Plugins", "settings": "Settings" },
   "view_switcher": "Sidebar views",
   "unread": "Unread notifications",
   "account": { "user": "Downcity user", "settings_login": "Settings and sign in" },

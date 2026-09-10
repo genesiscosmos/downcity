@@ -35,12 +35,11 @@ export type {
   PluginSessionHandle,
   PluginSessionMutation,
   PluginSessionOrigin,
-  PluginSessionPromptPart,
+  PluginSessionPromptContent,
   PluginSessionTurnHandle,
   PluginSessionTurnResult,
   PluginStorage,
   PluginTurnHandle,
-  PluginWebServices,
   PluginWorkspaceHandle,
 } from "./types/PluginContext.js";
 
@@ -85,6 +84,7 @@ export type {
   PluginConfigActionContext,
   PluginHostAction,
   PluginHostAgent,
+  PluginHostSessionTurn,
   PluginHostSystem,
   PluginHostWorkspace,
   PluginConfigStore,

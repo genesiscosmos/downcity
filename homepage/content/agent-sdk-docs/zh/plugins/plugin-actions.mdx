@@ -37,6 +37,11 @@ const status = create_action({
 Action 应把 `execution.abort_signal` 传给网络请求、轮询和长耗时任务。`timeout_ms` 只触发协作式
 取消，底层操作必须响应信号。返回值必须是可 JSON 序列化的 `PluginActionResult`。
 
+Action 可通过 `messages` 返回当前 Turn 的附加内容。`role: "agent"` 的 text/file/data Parts
+会写入当前 Agent Message；`role: "user"` 的 text/context/file Parts 只作为下一模型 Step 的
+临时输入，不会伪装成已持久化的 Session Message。Session 领域内统一使用 `agent`，只有模型协议
+边界使用 `assistant`。
+
 `command` 只把 Commander 输入映射为 payload；`api` 只把 HTTP 请求映射为 payload。它们不创建
 第二套业务入口，最终都执行同一个 `execute`。
 

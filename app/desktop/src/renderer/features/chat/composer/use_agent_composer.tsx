@@ -21,7 +21,6 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
   const models = use_store_selector(stores.catalog, state => state.models);
   const models_loading = use_store_selector(stores.catalog, state => state.models_loading);
   const spellcheck_enabled = use_store_selector(stores.settings, state => state.settings.spellcheck_enabled);
-  const send_message_on_enter = use_store_selector(stores.settings, state => state.settings.send_message_on_enter);
   const default_model_id = use_store_selector(stores.settings, state => state.settings.default_text_model_id);
   const attachments = useMemo(() => ({
     list_files: () => window.downcity.chat.list_workspace_files(workspace_id),
@@ -41,9 +40,8 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
     placeholder: translate("composer.placeholder"),
     busy: false,
     spellcheck_enabled,
-    send_message_on_enter,
     update_draft: input => actions.update_draft(workspace_id, agent_id, session_id, input),
-    send_message: input => actions.send_message(workspace_id, agent_id, session_id, input, "send"),
+    send_message: (input, mode = "send") => actions.send_message(workspace_id, agent_id, session_id, input, mode),
     attachments,
     commands,
     toolbar: <>

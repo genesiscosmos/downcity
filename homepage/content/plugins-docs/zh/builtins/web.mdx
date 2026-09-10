@@ -1,100 +1,118 @@
 ---
 title: web Plugin
-description: 通过可替换 provider 提供结构化搜索、网页读取和 Playwright/CDP 浏览器能力
+description: 开箱即用的网页读取、本地浏览器，以及可配置的 Tavily、Exa 和 Firecrawl
 ---
 
 # web Plugin
 
-`web` 是真实的联网能力插件。City 持有唯一 WebPlugin 实例和一份配置，Plugin 根据当前
-`PluginContext.config` 按 Agent 惰性创建浏览器 Provider。
+`web` 由 WebPlugin 自己持有搜索、网页读取和浏览器 Provider，不依赖
+`context.agent.web`。Desktop 安装后无需手工启动浏览器：静态网页读取和本地 Chrome
+浏览器默认可用，搜索在配置 API Key 后启用。
 
-## 使用 Playwright/CDP
+## Desktop 配置
+
+进入「Plugins → Web」。配置分为三个能力区：
+
+- 搜索：`Auto`、`Tavily`、`Exa` 或关闭。Auto 优先使用 Tavily，其次 Exa。
+- 网页读取：默认 `Built-in Fetch`，也可以选择 Firecrawl。
+- 浏览器：默认 `Local Chrome`，也可以切换为远程 CDP 或关闭。
+
+API Key 可以直接在 Web 配置页写入。已保存的 Key 只显示“已配置”，不会回显明文；
+空输入会保留旧 Key，只有点击“清除”并保存才会删除。Key 当前保存在 Downcity 本地
+Plugin 配置文件中，尚未使用系统钥匙串。
+
+也可以在「设置 → Global Env」写入：
+
+```dotenv
+TAVILY_API_KEY=...
+EXA_API_KEY=...
+FIRECRAWL_API_KEY=...
+```
+
+Web 配置页中的 Key 优先于 Global Env。每个能力区都提供测试按钮；测试会先保存当前
+配置，再通过一个真实 Agent 和 Workspace 执行最小调用。
+
+## 默认行为
 
 ```ts
 import { WebPlugin } from "@downcity/plugins/web";
 
+const web = new WebPlugin();
+```
+
+- `open` 使用内建 Fetch，只读取公网 HTTP(S) 页面，不执行页面脚本。
+- 浏览器自动发现 Google Chrome、Chromium 或 Microsoft Edge，并使用 Plugin 私有的持久 profile。
+- `search` 在找到 Tavily 或 Exa Key 后启用；没有 Key 时只禁用搜索，不影响其他能力。
+
+本地浏览器进程和它创建的页面由 WebPlugin 负责关闭。持久 profile 保留用户主动建立的
+登录状态。若需要云浏览器，将 Browser Provider 切换为 `Remote CDP` 并填写 HTTP 或
+WebSocket endpoint。
+
+## SDK 固定配置
+
+构造配置的优先级高于 City/Desktop 保存的配置：
+
+```ts
 const web = new WebPlugin({
-  browser: "playwright",
-  cdp_url: "http://127.0.0.1:9222",
+  config: {
+    search_provider: "tavily",
+    tavily_api_key: process.env.TAVILY_API_KEY,
+    document_provider: "firecrawl",
+    firecrawl_api_key: process.env.FIRECRAWL_API_KEY,
+    browser_provider: "cdp",
+    cdp_url: "https://browser.example.com/cdp",
+  },
 });
 ```
 
-`PlaywrightBrowserProvider` 连接已经启动的 Chrome/Chromium CDP 端点，不负责下载浏览器或执行安装命令。云端 Browserbase、Browserless、Kitesurf 等只要提供 CDP，也可以实现同一个 `BrowserProvider` 协议。
-
-Provider 在 CDP 浏览器已有的默认 context 中为每个 session 创建独立页面，不创建隔离 context，也不接管浏览器中已经打开的页面。关闭 session 只会关闭该 session 创建的页面。
-
-连接默认启用 Playwright 的 `noDefaults` 模式，兼容不支持 Browser Context 管理、但允许在默认 context 创建页面的 CDP 端点。该模式保留浏览器已有的下载、焦点和媒体模拟设置；Provider 不会覆盖 `acceptDownloads`、focus emulation、`colorScheme`、`reducedMotion`、`forcedColors` 或 `contrast`。
-
-目标 CDP 端点仍需支持发现默认 context 和创建新页面。连接、默认 context 解析、页面创建或页面初始化失败时，Provider 会返回带阶段标识的脱敏错误，不会在错误中暴露 endpoint 的认证信息、查询参数或 browser id。
+宿主仍可注入自定义 `search_provider`、`document_provider` 或
+`browser_provider_factory`。注入对象的生命周期所有权转移给 WebPlugin。
 
 ## Actions
 
 | Action | 用途 |
 |---|---|
-| `search` | 委托配置的搜索 provider |
-| `open` | 委托配置的已知 URL 文档 provider |
-| `browser_create_session` | 创建浏览器 session |
-| `browser_observe` | 读取 URL、标题、可见文本和可选截图 |
-| `browser_act` | 执行 `goto`、`click`、`fill`、`press`、`scroll`、`wait` |
-| `browser_semantic_act` | 通过 Stagehand、Computer Use 或其他语义 adapter 执行自然语言动作 |
+| `search` | 使用 Tavily、Exa 或注入的搜索 Provider |
+| `open` | 使用安全 Fetch、Firecrawl 或注入的文档 Provider |
+| `browser_create_session` | 创建浏览器 Session |
+| `browser_observe` | 读取 URL、标题、Accessibility Snapshot、可见文本、元素 ref 和可选截图 |
+| `browser_act` | 使用 observation generation + ref 执行确定性动作 |
+| `browser_semantic_act` | 通过可选语义 Adapter 执行自然语言动作 |
 | `browser_extract` | 按 CSS selector 或 body 抽取文本 |
-| `browser_semantic_extract` | 通过语义 adapter 按自然语言要求抽取内容 |
-| `browser_close_session` | 关闭 session 并释放页面 |
+| `browser_semantic_extract` | 通过可选语义 Adapter 抽取内容 |
+| `browser_close_session` | 关闭 Session 并释放页面 |
 
-浏览器示例：
+先观察，再使用该代观察中的 ref：
 
 ```ts
-const created = await web.actions.browser_create_session.execute({
-  context,
-  input: { url: "https://example.com" },
-});
-
-const session_id = created.data.session_id;
-await web.actions.browser_observe.execute({
+const observed = await web.actions.browser_observe.execute({
   context,
   input: { session_id },
 });
 
-await web.actions.browser_close_session.execute({
+await web.actions.browser_act.execute({
   context,
-  input: { session_id },
+  input: {
+    session_id,
+    action: {
+      type: "click",
+      ref: observed.data.elements[0].ref,
+      observation_generation: observed.data.observation_generation,
+    },
+  },
 });
 ```
 
-## Provider 组合
+元素 ref 只在生成它的 observation generation 内有效。动作返回新观察后必须使用新的
+ref；CSS selector 仅保留给显式的确定性自动化。
 
-`WebPlugin` 可以只配置其中一种能力：
+## 网络与安全边界
 
-```ts
-const web = new WebPlugin({ browser: "playwright", cdp_url: "http://127.0.0.1:9222" });
-```
-
-语义能力通过 adapter 注入，不直接绑定模型厂商：
-
-```ts
-import {
-  SemanticBrowserProviderAdapter,
-} from "@downcity/plugins/web";
-
-const browser = new SemanticBrowserProviderAdapter({
-  name: "stagehand",
-  browser: playwright_browser,
-  semantic_act: (input) => stagehand_service.act(input),
-  semantic_extract: (input) => stagehand_service.extract(input),
-});
-```
-
-Computer Use 可以使用 `ComputerUseBrowserProviderAdapter`，它会先取得带截图的当前观察，再将目标交给宿主的 OpenAI、Anthropic、Gemini 或自建模型循环。模型不接触 Playwright 对象。
-
-推荐路由：先用搜索或 HTTP 读取解决静态任务；页面需要动态渲染、登录态或交互时再创建浏览器；自然语言动作可在 provider 内接入 Stagehand，视觉页面可在动作失败后回退到 Computer Use。
-
-## 生命周期与安全
-
-- `WebPlugin` 可以接收显式构造参数，也可以从 City 级 Config 读取浏览器配置。
-- 浏览器 Session 由 Agent 级 Provider 持有；Config 保存后旧 Provider 会被释放，City 停止实例时也会统一调用 `dispose()`。
-- `browser_act` 只提供确定性的浏览器动作；提交、发送、购买、上传、删除等副作用必须由宿主审批。
-- 不要把 Playwright `Browser`、`Page` 或 `Buffer` 直接返回给 Agent；Action 结果始终是 JSON 数据。
-- 安装 Skill、发现 Skill 和读取 `SKILL.md` 仍由 `SkillPlugin` 负责。
+- Fetch 只允许公网 HTTP(S)，每次重定向都重新检查目标并阻止本机、私网和链路本地地址。
+- 网络请求限制超时、重定向次数和响应大小。
+- Provider 错误不返回 API Key、认证请求头或完整错误响应正文。
+- 提交、发送、购买、上传和删除等副作用仍必须经过宿主审批。
+- 页面内容始终视为不可信输入，不能覆盖 Agent 或宿主指令。
 
 ## 相关文档
 

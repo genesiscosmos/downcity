@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildWorkboardGameMapConfig, ChatPanel, ChatComposer, ChatHistory, ChatMessage, cn, session_message_to_chat_message } from "../dist/index.js"
+import { buildWorkboardGameMapConfig, ChatPanel, ChatComposer, ChatHistory, ChatMessage, cn, create_chat_runtime, resolve_chat_composer_enter_action, session_message_to_chat_message } from "../dist/index.js"
 
 test("Chat UI 公开导出保持可用", () => {
   assert.equal(typeof ChatPanel, "function")
@@ -27,6 +27,31 @@ test("canonical Agent Action 与 Error Part 投影为 UI operation", () => {
   assert.deepEqual(message.parts.map((part) => part.type), ["operation", "operation"])
   assert.equal(message.parts[0].operation.status, "finished")
   assert.equal(message.parts[1].operation.status, "failed")
+})
+
+const enter_key = (overrides = {}) => ({ key: "Enter", shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, isComposing: false, ...overrides })
+const plain_paragraph = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "hello" }] }] }
+
+test("Chat Composer 使用统一 Enter 矩阵", () => {
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph), "submit")
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "one" }] }, { type: "paragraph", content: [{ type: "text", text: "two" }] }] }), "native")
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "hello" }, { type: "hardBreak" }] }] }), "native")
+  assert.equal(resolve_chat_composer_enter_action(enter_key({ shiftKey: true }), plain_paragraph), "native")
+  assert.equal(resolve_chat_composer_enter_action(enter_key({ metaKey: true }), undefined), "submit")
+  assert.equal(resolve_chat_composer_enter_action(enter_key({ metaKey: true, altKey: true }), undefined), "queue-paused")
+  assert.equal(resolve_chat_composer_enter_action(enter_key({ ctrlKey: true, altKey: true }), undefined), "queue-paused")
+  assert.equal(resolve_chat_composer_enter_action(enter_key({ ctrlKey: true, shiftKey: true }), undefined), "submit-immediately")
+  assert.equal(resolve_chat_composer_enter_action(enter_key({ isComposing: true }), plain_paragraph), "native")
+})
+
+test("steer 绕过 busy 和已有队列，常规发送保持排队", async () => {
+  const submitted = []
+  const runtime = create_chat_runtime({ submit_message: async (input, mode) => submitted.push({ input, mode }) })
+  await runtime.submit({ text: "queued first", attachments: [] }, "queue")
+  await runtime.submit({ text: "queued second", attachments: [] }, "send")
+  await runtime.submit({ text: "steer now", attachments: [] }, "steer")
+  assert.equal(runtime.get_snapshot().queued_inputs.length, 2)
+  assert.deepEqual(submitted, [{ input: { text: "steer now", attachments: [] }, mode: "steer" }])
 })
 
 function create_agent(overrides = {}) {

@@ -168,6 +168,8 @@ Desktop 在宿主 React 树中加载 Renderer。Sidebar 与 Mainview 通过 `plu
 
 Sidebar 与 Mainview 还会获得当前 Plugin 的只读 `notifications` 数组。每项包含 Plugin 本地 `topic_key`、文案、route 和产生时间，可用于在对应导航对象旁显示未读状态。Renderer 通过导航到通知的完整 route 触发宿主已读收口，但没有发布或修改通知的权限。
 
+需要在 Sidebar 标题栏提供创建入口时，可以向 `Sidebar` 的 `actions` 传入宿主提供的 `SidebarCreateMenu`。宿主负责标题栏、加号与下拉菜单的统一视觉，Plugin 只声明创建类型以及选择后的业务导航。
+
 需要树状 Sidebar 时使用 `SidebarTreeItem`：`depth` 表达层级，`kind` 区分 `branch` 与 `leaf`，父节点通过 `expanded` 与 `on_toggle` 管理展开，`on_select` 通过共享 `navigation` 更新 Mainview。省略 `leading` 时宿主会为分支和叶子节点提供统一默认图标；没有子项的分支可以省略 `on_toggle`，此时不会显示折叠按钮。历史记录等多级导航也应继续放在 Plugin Sidebar 的树中，不占用 Mainview。行级操作使用 `ItemMenu`，Markdown 正文使用宿主安全的 `Markdown`。写操作完成后调用 `ui.invalidate()`，宿主会增加同一 Plugin 的 `ui.revision`，使 Sidebar 与 Mainview 重新读取快照；Plugin 不需要复制宿主样式或把刷新状态写入 route。
 
 ## Config 交互

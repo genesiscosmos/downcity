@@ -2,36 +2,22 @@
  * Chat channel 基类。
  *
  * 关键点（中文）
- * - 通过 context 显式注入 runtime 依赖。
- * - 统一注册 dispatcher，暴露 sendText/sendAction 能力。
- * - 基类只保留 Chat Access、工具发送与入站编排；存储/队列细节已下沉到辅助模块。
+ * - 通过 Account 级 Connector Context 显式注入 runtime 依赖。
+ * - 基类只保留 Chat Access、平台发送与标准化入站回调。
+ * - 不持有 Agent PluginContext，也不访问 Agent Session 或 Chat Store。
  */
 
-import { registerChatSender } from "@/chat/runtime/ChatSendRegistry.js";
 import type {
   ChatDispatchAction,
   ChatDispatchChannel,
   ChatDispatchSendActionParams,
-  ChatDispatcher,
 } from "@/chat/types/ChatDispatcher.js";
 import type { PluginLogger } from "@downcity/city/plugin";
-import type { PluginContext } from "@downcity/city/plugin";
-import { resolveChatQueueStore } from "@/chat/runtime/ChatQueue.js";
-import { deleteChatSessionById } from "@/chat/runtime/ChatSessionDelete.js";
-import {
-  create_chat_access_service,
-  resolve_chat_access_issuer,
-} from "@/chat/access/ChatAccessRuntime.js";
 import type { ChatAccessDecision } from "@/chat/types/ChatAccess.js";
-import {
-  appendToolOutboundChannelHistory,
-  resolveChannelSessionId,
-  type ChannelUserMessageMeta,
-} from "./BaseChatChannelSupport.js";
-import {
-  enqueueAuditChannelMessage,
-  enqueueExecChannelMessage,
-} from "./BaseChatChannelQueue.js";
+import type {
+  ChannelUserMessageMeta,
+  ChatConnectorContext,
+} from "@/chat/types/ChatConnector.js";
 
 /**
  * Channel chat_key 计算入参。
@@ -129,7 +115,7 @@ export type IncomingChatAccessResult = ChatAccessDecision;
  */
 export abstract class BaseChatChannel {
   readonly channel: ChatDispatchChannel;
-  protected readonly context: PluginContext;
+  protected readonly connector_context: ChatConnectorContext;
   protected readonly rootPath: string;
   protected readonly dataPath: string;
   protected readonly logger: PluginLogger;
@@ -137,21 +123,13 @@ export abstract class BaseChatChannel {
 
   protected constructor(params: {
     channel: ChatDispatchChannel;
-    context: PluginContext;
+    context: ChatConnectorContext;
   }) {
     this.channel = params.channel;
-    this.context = params.context;
-    this.rootPath = params.context.workspace.path;
-    this.dataPath = params.context.storage.path;
+    this.connector_context = params.context;
+    this.rootPath = params.context.workspace_path;
+    this.dataPath = params.context.storage_path;
     this.logger = params.context.logger;
-
-    const dispatcher: ChatDispatcher = {
-      sendText: async (p) => this.sendToolText(p),
-    };
-    if (typeof this.sendActionToPlatform === "function") {
-      dispatcher.sendAction = async (p) => this.sendToolAction(p);
-    }
-    registerChatSender(this.channel, dispatcher);
   }
 
   protected abstract getChatKey(params: ChannelChatKeyParams): string;
@@ -176,17 +154,6 @@ export abstract class BaseChatChannel {
    */
   protected format_access_code(value: string): string {
     return value;
-  }
-
-  /**
-   * 格式化 Chat Access 管理命令。
-   *
-   * 说明（中文）
-   * - 默认复用平台的原样值格式，避免通用层引入具体富文本语法。
-   * - 平台可单独覆写为块级代码，改善长命令的阅读和复制体验。
-   */
-  protected format_access_command(command: string): string {
-    return this.format_access_code(command);
   }
 
   protected sendActionToPlatform?(
@@ -227,18 +194,7 @@ export abstract class BaseChatChannel {
   protected async evaluateIncomingAccess(
     params: IncomingChatAccessParams,
   ): Promise<IncomingChatAccessResult> {
-    const issuer =
-      resolve_chat_access_issuer(this.context, this.channel) ||
-      String(this.getAccessIssuerFallback() || "").trim();
-    return create_chat_access_service(this.context).evaluate({
-      channel: this.channel,
-      issuer,
-      subject_id: String(params.user_id || "").trim(),
-      display_name: String(params.username || "").trim() || undefined,
-      chat_id: String(params.chatId || "").trim(),
-      chat_type: String(params.chatType || "").trim() || undefined,
-      chat_title: String(params.chatTitle || "").trim() || undefined,
-    });
+    return await this.connector_context.evaluate_access(params);
   }
 
   /**
@@ -247,7 +203,7 @@ export abstract class BaseChatChannel {
   protected buildAccessBlockedText(params: {
     result: IncomingChatAccessResult;
   }): string {
-    const agent_id = String(this.context.agent.id || "agent").trim() || "agent";
+    const agent_id = String(this.connector_context.agent_id || "agent").trim() || "agent";
     const displayed_agent_id = this.format_access_code(agent_id);
     if (params.result.reason === "identity_missing") {
       return "当前平台身份无法识别，请联系管理员检查 Chat 账号配置。";
@@ -260,16 +216,12 @@ export abstract class BaseChatChannel {
       return `当前账号尚未获准访问 Agent "${displayed_agent_id}"。`;
     }
     const displayed_request_id = this.format_access_code(request_id);
-    const approval_command = this.format_access_command(
-      `city plugin action chat access-approve ${agent_id} --input '{"request_id":"${request_id}"}' --token <token>`,
-    );
     return [
       `当前账号尚未获准访问 Agent "${displayed_agent_id}"。`,
       "",
       `访问请求：${displayed_request_id}`,
       "",
-      "请将下面命令发送给管理员：",
-      approval_command,
+      "请管理员在 Desktop 的 Channels > Access 中批准此请求。",
     ].join("\n");
   }
 
@@ -303,20 +255,6 @@ export abstract class BaseChatChannel {
     try {
       const normalized: ChannelSendTextParams = { ...params, chatId, text };
       await this.sendTextToPlatform(normalized);
-      if (this.shouldAppendOutboundHistoryOnSend()) {
-        await appendToolOutboundChannelHistory({
-          context: this.context,
-          logger: this.logger,
-          channel: this.channel,
-          chatId: normalized.chatId,
-          chatType: normalized.chatType,
-          messageThreadId: normalized.messageThreadId,
-          text: normalized.text,
-          ...(typeof normalized.message_id === "string"
-            ? { message_id: normalized.message_id }
-            : {}),
-        });
-      }
       return { success: true };
     } catch (e) {
       return { success: false, error: String(e) };
@@ -370,14 +308,6 @@ export abstract class BaseChatChannel {
   clearChat(session_id: string): void {
     const key = String(session_id || "").trim();
     if (!key) return;
-    resolveChatQueueStore(this.context).enqueue({
-      kind: "control",
-      channel: this.channel,
-      targetId: key,
-      session_id: key,
-      text: "",
-      control: { type: "clear" },
-    });
     this.logger.info(`Cleared chat: ${key}`);
   }
 
@@ -387,42 +317,12 @@ export abstract class BaseChatChannel {
   protected async clearChatByTarget(params: ChannelChatKeyParams): Promise<void> {
     const chatId = String(params.chatId || "").trim();
     if (!chatId) return;
-    const session_id = await resolveChannelSessionId({
-      context: this.context,
-      channel: this.channel,
-      chatId,
-      chatType: params.chatType,
-      messageThreadId: params.messageThreadId,
-    });
-    if (!session_id) {
-      this.logger.info("Skip clear chat: context mapping not found", {
-        channel: this.channel,
-        chatId,
-        chatType: params.chatType,
-        messageThreadId: params.messageThreadId,
-      });
-      return;
-    }
-    const deleted = await deleteChatSessionById({
-      context: this.context,
-      session_id,
-    });
-    if (!deleted.success) {
-      this.logger.warn("Failed to delete chat context by target", {
-        channel: this.channel,
-        chatId,
-        session_id,
-        error: deleted.error || "delete failed",
-      });
-      return;
-    }
-    this.logger.info("Deleted chat context by target", {
-      channel: this.channel,
-      chatId,
-      session_id,
-      removedMeta: deleted.removedMeta,
-      removedChatDir: deleted.removedChatDir,
-      removedSessionDir: deleted.removedSessionDir,
+    await this.connector_context.clear_conversation({
+      chat_id: chatId,
+      ...(params.chatType ? { chat_type: params.chatType } : {}),
+      ...(typeof params.messageThreadId === "number"
+        ? { thread_id: String(params.messageThreadId) }
+        : {}),
     });
   }
 
@@ -436,10 +336,8 @@ export abstract class BaseChatChannel {
     text: string;
     meta?: ChannelUserMessageMeta;
   }): Promise<void> {
-    await enqueueAuditChannelMessage({
-      context: this.context,
-      channel: this.channel,
-      chatId: params.chatId,
+    await this.connector_context.record_audit({
+      chat_id: params.chatId,
       text: params.text,
       ...(typeof params.message_id === "string" ? { message_id: params.message_id } : {}),
       ...(typeof params.user_id === "string" ? { user_id: params.user_id } : {}),
@@ -457,10 +355,6 @@ export abstract class BaseChatChannel {
   protected async enqueueMessage(
     msg: IncomingChatMessage,
   ): Promise<{ chat_key: string; position: number }> {
-    return await enqueueExecChannelMessage({
-      context: this.context,
-      channel: this.channel,
-      message: msg,
-    });
+    return await this.connector_context.receive_message(msg);
   }
 }

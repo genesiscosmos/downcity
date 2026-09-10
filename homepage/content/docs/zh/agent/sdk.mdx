@@ -79,13 +79,11 @@ Tool 生命周期使用 `type: "tool"`，用户参与使用 `type: "interaction"
 
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
-  if (
-    mutation.variant === "part" &&
-    mutation.type === "interaction" &&
-    mutation.part.status === "pending"
-  ) {
-    render_interaction(mutation.part);
-  }
+  if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+  const interaction = mutation.message.parts.find(
+    (part) => part.type === "interaction" && part.status === "pending",
+  );
+  if (interaction) render_interaction(interaction);
 });
 
 async function decide_approval(interaction_id: string, decision: "approved" | "denied") {
@@ -96,7 +94,7 @@ async function decide_approval(interaction_id: string, decision: "approved" | "d
 }
 ```
 
-历史快照使用 `session.messages()`。它返回当前 Active 页；存在更早的不可变 Segment 时，会同时返回 `next_before_sequence` 游标。连接断开后重新读取快照并建立新的订阅。
+历史快照使用 `session.messages()`。它按 Message 边界分页，并在存在更早历史时返回 `next_before_sequence` 游标。连接断开后重新读取快照并建立新的订阅。
 
 需要渲染平铺活动时间线的宿主可以直接使用 SDK 投影，不需要依赖 `.downcity` 的物理文件名：
 

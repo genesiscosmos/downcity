@@ -8,7 +8,11 @@ import type { Command } from "commander";
 import type { Hono } from "hono";
 import type { Context as HonoContext } from "hono";
 import type { z } from "zod";
-import type { AuthRoutePolicy } from "@downcity/type";
+import type {
+  AuthRoutePolicy,
+  SessionAgentContent,
+  SessionModelUserContent,
+} from "@downcity/type";
 import type { PluginContext } from "./PluginContext.js";
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
 import type { PluginLifecycleContext } from "./PluginHost.js";
@@ -19,22 +23,13 @@ export type PluginActionMessage =
       /** User 内容在下一 Step 生效。 */
       readonly role: "user";
       /** User 消息内容。 */
-      readonly parts: Array<
-        | { readonly type: "text"; readonly text: string }
-        | { readonly type: "context"; readonly tag: string; readonly context: string }
-        | { readonly type: "file"; readonly media_type: string; readonly url: string; readonly filename?: string }
-        | { readonly type: "data"; readonly data_type: string; readonly data: PluginJsonValue; readonly data_id?: string }
-      >;
+      readonly parts: SessionModelUserContent[];
     }
   | {
-      /** Assistant 内容写入当前回复。 */
-      readonly role: "assistant";
-      /** Assistant 消息内容。 */
-      readonly parts: Array<
-        | { readonly type: "text"; readonly text: string }
-        | { readonly type: "file"; readonly media_type: string; readonly url: string; readonly filename?: string }
-        | { readonly type: "data"; readonly data_type: string; readonly data: PluginJsonValue; readonly data_id?: string }
-      >;
+      /** Agent 内容写入当前回复。 */
+      readonly role: "agent";
+      /** Agent 消息内容。 */
+      readonly parts: SessionAgentContent[];
     };
 
 /** PluginDefinition Action 执行结果。 */

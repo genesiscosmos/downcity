@@ -8,6 +8,7 @@
  */
 
 import type { Embassy } from "@downcity/federation";
+import type { SessionUserContent } from "@downcity/type";
 import type { FileSystem, WorkspaceShell } from "@/workspace/index.js";
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
 import type { PluginNotificationPublisher } from "./PluginNotification.js";
@@ -36,14 +37,6 @@ export interface PluginLogger {
   error(message: string, details?: PluginLogDetails): void;
 }
 
-/** Plugin 可使用的 Web 服务端口。 */
-export interface PluginWebServices {
-  /** 搜索公开 Web 内容。 */
-  search(input: PluginJsonObject): Promise<PluginJsonValue>;
-  /** 读取指定 Web 文档。 */
-  open(input: PluginJsonObject): Promise<PluginJsonValue>;
-}
-
 /** Plugin 可观察的 Session 来源。 */
 export interface PluginSessionOrigin {
   /** 来源类型，同时也是 Session 的持久化分区。 */
@@ -52,12 +45,8 @@ export interface PluginSessionOrigin {
   readonly [key: string]: PluginJsonValue;
 }
 
-/** Plugin 发起 Session prompt 时可提交的内容片段。 */
-export type PluginSessionPromptPart =
-  | { /** 文本片段。 */ readonly type: "text"; /** 完整文本。 */ readonly text: string }
-  | { /** 上下文片段。 */ readonly type: "context"; /** 安全标签名。 */ readonly tag: string; /** 上下文正文。 */ readonly context: string }
-  | { /** 文件片段。 */ readonly type: "file"; /** IANA MIME 类型。 */ readonly media_type: string; /** 文件地址。 */ readonly url: string; /** 可选文件名。 */ readonly filename?: string }
-  | { /** 数据片段。 */ readonly type: "data"; /** 业务数据类型。 */ readonly data_type: string; /** JSON 数据。 */ readonly data: PluginJsonValue; /** 可选稳定标识。 */ readonly data_id?: string };
+/** Plugin 发起 Session prompt 时复用的标准无身份内容片段。 */
+export type PluginSessionPromptContent = SessionUserContent;
 
 /** Plugin 可读取的 Session Turn 最终结果。 */
 export interface PluginSessionTurnResult {
@@ -100,7 +89,7 @@ export interface PluginSessionHandle {
   /** Session 绑定的 Workspace 标识。 */
   readonly workspace_id?: string;
   /** 向 Session 提交一条用户输入。 */
-  prompt(input: { /** 文本或结构化内容。 */ readonly query: string | PluginSessionPromptPart[] }): Promise<PluginSessionTurnHandle>;
+  prompt(input: { /** 文本或结构化内容。 */ readonly query: string | PluginSessionPromptContent[] }): Promise<PluginSessionTurnHandle>;
   /** 停止当前 Turn。 */
   stop(): Promise<PluginJsonObject>;
   /** 订阅当前 Session 的后续变化。 */
@@ -143,8 +132,6 @@ export interface PluginAgentHandle {
   readonly instructions: readonly string[];
   /** 当前 Agent 持有的 Session 集合端口。 */
   readonly sessions: PluginSessionCollection;
-  /** 当前 Agent 可选 Web 服务。 */
-  readonly web?: PluginWebServices;
 }
 
 /** Plugin 可直接使用的 Workspace 受限句柄。 */

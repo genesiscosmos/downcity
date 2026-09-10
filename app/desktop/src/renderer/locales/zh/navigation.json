@@ -1,5 +1,5 @@
 {
-  "views": { "chat": "Chat", "workspaces": "Workspace", "plugins": "Plugins", "settings": "设置" },
+  "views": { "chat": "Chat", "agent": "Agent", "workspaces": "Workspace", "plugins": "Plugins", "settings": "设置" },
   "view_switcher": "侧边栏视图",
   "unread": "有未读通知",
   "account": { "user": "Downcity 用户", "settings_login": "设置与登录" },

@@ -1,5 +1,5 @@
 /**
- * Chat Plugin 存储所有权测试。
+ * @file 验证 Chat Plugin 新可靠消息 Store 的幂等、租约与人工恢复语义。
  */
 
 import assert from "node:assert/strict";
@@ -7,90 +7,91 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ChatPlugin, clean_chat_storage } from "../bin/index.js";
+import { ChatStore } from "../bin/chat/storage/ChatStore.js";
 
-function create_project_root() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-chat-storage-"));
+/** 创建测试独占的 Chat 生命周期存储目录。 */
+function create_storage_path() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "downcity-chat-store-"));
 }
 
-test("clean_chat_storage 只清理 Chat Plugin 自有数据", async () => {
-  const data_path = create_project_root();
-  try {
-    const session_id = "session_chat";
-    const meta_path = path.join(data_path, "channel", "meta.json");
-    const chat_dir = path.join(data_path, "chat", session_id);
-    const agent_session_dir = path.join(
-      data_path,
-      "sessions",
-      session_id,
-    );
-    fs.mkdirSync(path.dirname(meta_path), { recursive: true });
-    fs.mkdirSync(chat_dir, { recursive: true });
-    fs.mkdirSync(agent_session_dir, { recursive: true });
-    fs.writeFileSync(path.join(chat_dir, "history.jsonl"), "{}\n");
-    fs.writeFileSync(meta_path, JSON.stringify({
-      v: 1,
-      updated_at: Date.now(),
-      sessionIdByTargetKey: { "telegram|chat_1||": session_id },
-      routesBySessionId: {
-        [session_id]: {
-          v: 1,
-          session_id: session_id,
-          channel: "telegram",
-          chatId: "chat_1",
-          updated_at: Date.now(),
-        },
-      },
-    }));
+/** 创建一条完整标准化入站消息。 */
+function create_inbound(external_message_id = "message-1") {
+  return {
+    account_id: "account-1",
+    provider: "telegram",
+    external_message_id,
+    external_chat_id: "chat-1",
+    chat_type: "private",
+    sender_id: "user-1",
+    sender_name: "User",
+    text: "hello",
+    received_at: 1,
+  };
+}
 
-    const result = await clean_chat_storage({
-      data_path,
-      channel: "telegram",
-      chat_id: "chat_1",
-    });
-    assert.equal(result.session_id, session_id);
-    assert.equal(result.removed_chat_dir, true);
-    assert.equal(result.removed_route, true);
-    assert.equal(fs.existsSync(chat_dir), false);
-    assert.equal(fs.existsSync(agent_session_dir), true);
-    const meta = JSON.parse(fs.readFileSync(meta_path, "utf8"));
-    assert.equal(meta.routesBySessionId[session_id], undefined);
+test("Inbox 按 Account 与平台消息 ID 幂等写入", () => {
+  const storage_path = create_storage_path();
+  const store = new ChatStore(storage_path);
+  try {
+    const first = store.insert_inbound(create_inbound());
+    const second = store.insert_inbound(create_inbound());
+
+    assert.equal(first.inserted, true);
+    assert.equal(second.inserted, false);
+    assert.equal(second.record.inbound_id, first.record.inbound_id);
   } finally {
-    fs.rmSync(data_path, { recursive: true, force: true });
+    store.close();
+    fs.rmSync(storage_path, { recursive: true, force: true });
   }
 });
 
-test("chat.history_clear action 只清空事件历史", async () => {
-  const data_path = create_project_root();
+test("同一 Agent Turn 结果只创建一个稳定 Outbox", () => {
+  const storage_path = create_storage_path();
+  const store = new ChatStore(storage_path);
   try {
-    const session_id = "session_history";
-    const history_path = path.join(
-      data_path,
-      "chat",
-      session_id,
-      "history.jsonl",
-    );
-    fs.mkdirSync(path.dirname(history_path), { recursive: true });
-    fs.writeFileSync(history_path, "{}\n");
-    const plugin = new ChatPlugin({ channels: [] });
-    const result = await plugin.actions.history_clear.execute({
-      context: {
-        city: { plugins: {} },
-        agent: { id: "chat-test-agent", name: "chat-test-agent", description: "", instructions: [], sessions: {} },
-        workspace: { id: "chat-test-workspace", path: data_path, files: {}, env: {} },
-        profile: { id: "default", config: {} },
-        storage: { path: data_path, files: {} },
-        logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
-        abort_signal: new AbortController().signal,
-      },
-      input: { session_id: session_id },
-      plugin_name: "chat",
-      action_name: "history_clear",
+    const conversation = store.resolve_conversation({
+      account_id: "account-1",
+      external_chat_id: "chat-1",
+      chat_type: "private",
+      agent_id: "agent-1",
+      workspace_id: "workspace-1",
+      session_id: "session-1",
+      last_message_at: 1,
     });
-    assert.equal(result.success, true);
-    assert.equal(result.data.cleared, true);
-    assert.equal(fs.existsSync(history_path), false);
+    const input = {
+      delivery_id: "delivery:inbound:inbound-1",
+      account_id: "account-1",
+      conversation_id: conversation.conversation_id,
+      operation: "text",
+      payload: { text: "world" },
+    };
+
+    const first = store.insert_outbound(input);
+    const second = store.insert_outbound(input);
+
+    assert.equal(first.delivery_id, input.delivery_id);
+    assert.equal(second.delivery_id, input.delivery_id);
+    assert.equal(store.lease_next_outbound(1_000)?.delivery_id, input.delivery_id);
+    assert.equal(store.lease_next_outbound(1_000), null);
   } finally {
-    fs.rmSync(data_path, { recursive: true, force: true });
+    store.close();
+    fs.rmSync(storage_path, { recursive: true, force: true });
+  }
+});
+
+test("失败 Inbox 可以由 Desktop 人工恢复", () => {
+  const storage_path = create_storage_path();
+  const store = new ChatStore(storage_path);
+  try {
+    const inbound = store.insert_inbound(create_inbound()).record;
+    store.fail_inbound(inbound.inbound_id, "model unavailable");
+
+    assert.equal(store.list_failed_inbound("account-1").length, 1);
+    assert.equal(store.retry_inbound(inbound.inbound_id), true);
+    assert.equal(store.get_inbound(inbound.inbound_id)?.status, "retry_wait");
+    assert.equal(store.get_inbound(inbound.inbound_id)?.attempt_count, 0);
+  } finally {
+    store.close();
+    fs.rmSync(storage_path, { recursive: true, force: true });
   }
 });

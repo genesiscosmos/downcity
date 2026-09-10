@@ -78,13 +78,11 @@ Part order within an Assistant step always follows the model stream. If Tool exe
 
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
-  if (
-    mutation.variant === "part" &&
-    mutation.type === "interaction" &&
-    mutation.part.status === "pending"
-  ) {
-    render_interaction(mutation.part);
-  }
+  if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
+  const interaction = mutation.message.parts.find(
+    (part) => part.type === "interaction" && part.status === "pending",
+  );
+  if (interaction) render_interaction(interaction);
 });
 
 async function decide_approval(interaction_id: string, decision: "approved" | "denied") {
@@ -95,7 +93,7 @@ async function decide_approval(interaction_id: string, decision: "approved" | "d
 }
 ```
 
-Use `session.messages()` for a canonical history snapshot. It returns the current Active page and a `next_before_sequence` cursor when older immutable Segments exist. After a disconnect, reload the snapshot and establish a new subscription.
+Use `session.messages()` for a canonical history snapshot. It paginates on Message boundaries and returns a `next_before_sequence` cursor when older history exists. After a disconnect, reload the snapshot and establish a new subscription.
 
 Hosts that render a flat activity feed can use the SDK projection instead of depending on `.downcity` file names:
 

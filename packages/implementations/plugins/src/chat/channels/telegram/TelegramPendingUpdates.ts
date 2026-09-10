@@ -8,7 +8,7 @@
  */
 
 import type { PluginLogger } from "@downcity/city/plugin";
-import type { ChannelUserMessageMeta } from "@/chat/channels/BaseChatChannelSupport.js";
+import type { ChannelUserMessageMeta } from "@/chat/types/ChatConnector.js";
 import {
   getTelegramChatTitle,
   type TelegramUpdate,

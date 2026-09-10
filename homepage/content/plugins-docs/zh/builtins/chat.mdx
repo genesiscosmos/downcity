@@ -1,156 +1,97 @@
 ---
-title: chat Plugin
-description: 渠道 runtime、queue worker、chat 授权、chat system text 和 chat 相关 action 的说明
+title: Chat Plugin
+description: 在 Desktop 中管理 Bot Account，并把外部会话可靠地路由到 Agent Session
 ---
 
-# `chat` Plugin
+# Chat Plugin
 
-`chat` 是渠道运行时 plugin。
+Chat Plugin 是 City 持有的渠道运行时。它不属于某个 Agent，也不通过 `context.agent.chat` 暴露长期状态。
 
-它主要持有：
+## Desktop 使用
 
-- channel state
-- chat queue worker
-- chat queue store
-- chat authorization hooks / resolves
-- chat 相关 actions
-- chat system text
+打开 Channels 后，左侧 Sidebar 会列出全部 Bot Account。点击 Sidebar 标题栏中的加号，从下拉菜单选择 Telegram、飞书/Lark 或 QQ 后创建对应的 Channel。可以添加多个同平台 Bot Account。
 
-## 主要形状
+点击一个 Account 可以管理：
 
-- `lifecycle`
-- `actions`
-- `hooks`
-- `resolves`
-- `system`
+- 启用状态、平台凭据与连接测试
+- 新 Conversation 默认使用的 Agent 和 Workspace
+- 外部身份的 Access 申请与授权
+- 每个 Conversation 的 Agent、Workspace、Session 与暂停状态
+- 达到自动重试上限的 Inbox/Outbox 任务
+- 不包含消息正文和密钥的 Activity
 
-## 它主要解决什么问题
+在 Desktop 保存 Account 后立即应用，只重启该 Account 的 Connector，不需要重启 Desktop 或 City，其他 Bot 连接不受影响。密钥可以直接在 Settings 中写入；已保存的密钥不会回显，编辑时留空表示保留原值。
 
-当你需要这些能力时，应该关注 `chat`：
+## Account 配置
 
-- Telegram、Feishu、QQ 这类 chat 渠道 runtime
-- 一个 ChatPlugin 实例管理唯一的渠道与 queue worker
-- 消息入站后的执行与消息出站发送
-- 入站用户授权、主体观测和角色解析
+Account 定义与密钥以 City Plugin Config 为唯一事实源。示例：
 
-## 用户怎么使用
-
-Chat 在自己的唯一 Config 中管理入站目标、队列和渠道。在 Desktop 的 Plugins Catalog 中打开
-Chat 详情即可配置；City 自动把 Chat 能力提供给全部 Agent：
-
-```bash
-city plugin config chat --set '{"owner_agent_id":"assistant","owner_workspace_id":"project","channels":[]}'
+```json
+{
+  "accounts": [
+    {
+      "account_id": "support-telegram",
+      "name": "Support Bot",
+      "provider": "telegram",
+      "enabled": true,
+      "agent_id": "support",
+      "workspace_id": "support-workspace",
+      "bot_token": "<telegram-bot-token>"
+    }
+  ]
+}
 ```
 
-需要从终端调用 Chat Action 时，也使用通用 Plugin Action 命令：
+飞书/Lark 使用 `app_id`、`app_secret` 和可选 `domain`；QQ 使用 `app_id`、`app_secret` 和可选 `sandbox`。
 
-```bash
-city plugin action chat send <agent_id> --input '{"chat_key":"telegram:123456","text":"Done"}' --token <token>
+## 消息与 Session
+
+允许访问的外部消息先写入 Inbox，再由 Conversation 路由到一个真实 Agent Session。Session Messages 是完整对话的唯一事实源，Chat 数据库不会复制一份聊天历史。
+
+可靠链路为：
+
+```text
+Platform → Access → Inbox → Conversation → Agent Session
+         → Outbox → Platform
 ```
+
+Inbox 使用平台消息 ID 去重，并以稳定 `request_id` 调用 Session。进程在 User Message 落盘后退出，恢复时不会追加第二条用户消息。Agent 结果以稳定 Delivery ID 写入 Outbox，避免恢复时重复建单。
+
+Outbox 提供持久化、lease、有限重试和人工恢复。平台本身不支持幂等发送时，对外语义是 at-least-once：平台已接收但本地尚未记录确认的瞬间退出，恢复后可能再次发送。
+
+## Agent Actions
+
+Agent 只看到自己拥有的 Conversation，并使用严格输入的 Action：
+
+- `context`：读取当前 Chat Session 路由
+- `list`：列出当前 Agent 的 Conversation
+- `history`：读取 Agent Session 的 canonical messages
+- `send`：将文本写入可靠 Outbox
+- `react`：为 Telegram 消息写入可靠 Reaction 操作
 
 ## SDK 装配
 
-SDK 宿主把 Chat 实例提供给 City，并通过 `plugin_host.config` 提供唯一 Config store：
-
 ```ts
+import { ChatPlugin } from "@downcity/plugins/chat";
+
 const city = new City({
-  plugins: create_builtin_plugin_registrations(),
+  plugins: [new ChatPlugin()],
   workspaces: [workspace],
-  plugin_host: {
-    config: (plugin_id) => open_plugin_config_store(plugin_id),
-    notifications: (plugin_id, agent_id) => open_notifications(plugin_id, agent_id),
-  },
+  plugin_host,
 });
-city.agents.add(agent);
 ```
 
-Chat Plugin 在 `initialize()` 中注册 `config.read` 与 `config.save`，负责完整配置校验和凭据安全投影。
-配置中的 `owner_agent_id` 与 `owner_workspace_id` 确定外部消息的入站目标；唯一 ChatPlugin 实例
-管理一套渠道与 queue，保存配置后停止旧 runtime，并在下一次使用时惰性重建。
+Chat Plugin 需要 City 宿主提供 Plugin Config、生命周期 Storage、Agent 和 Workspace 查询能力。Bot Connector 在 `initialize()` 中主动恢复，在 `dispose()` 中统一关闭。
 
 ## 飞书依赖
 
-`@downcity/plugins` 不再把飞书 / Lark SDK 放进默认生产依赖。不启用飞书的应用可以直接导入 `@downcity/plugins`，无需安装飞书运行时依赖。
-
-如果宿主应用启用了 `FeishuChannel`，需要在宿主应用中安装这个依赖：
+启用飞书/Lark Account 的宿主需要安装：
 
 ```bash
 npm install @larksuiteoapi/node-sdk@^1.66.0
 ```
 
-使用 Chat plugin 的独立子路径：
-
-```ts
-import { ChatPlugin, FeishuChannel } from "@downcity/plugins/chat";
-```
-
-如果启用了飞书但没有安装 SDK，运行时错误会明确提示需要安装的包，并说明是在启用 channel `"feishu"` 前安装。
-
-## SDK action 用法
-
-本地嵌入 SDK 场景里，可以按 plugin 名称调用会话 action：
-
-```ts
-await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "chat",
-  action: "send",
-  payload: {
-    chat_key: "telegram:123456",
-    text: "Done",
-  },
-});
-```
-
-常用 action 是 `list`、`info`、`send`、`react`、`context`、`history`、`delete`。
-
-## 内置授权能力
-
-Chat 授权现在属于 `ChatPlugin` 自己，不需要额外挂一个独立授权 plugin。
-
-它通过三个 chat plugin 点参与入站链路：
-
-- `chat.observePrincipal`：记录已观测到的用户和会话
-- `chat.authorizeIncoming`：根据角色与权限决定当前消息是否允许进入 agent
-- `chat.resolveUserRole`：为 history / queue metadata 补齐当前用户角色
-
-授权 action 也挂在 `chat` 下：
-
-| Action | 作用 |
-| --- | --- |
-| `authorization-snapshot` | 读取授权目录、配置、已观测用户和会话 |
-| `authorization-read-config` | 读取当前授权配置 |
-| `authorization-write-config` | 覆盖写入授权配置 |
-| `authorization-set-user-role` | 设置某个渠道用户的角色 |
-
-SDK 调用示例：
-
-```ts
-await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "chat",
-  action: "authorization-set-user-role",
-  payload: {
-    channel: "telegram",
-    userId: "12345678",
-    roleId: "admin",
-  },
-});
-```
-
-## 关键运行语义
-
-- 渠道连接与 queue worker 归属于 City 持有的 ChatPlugin 唯一实例，并在首次相关调用时惰性创建
-- Agent/Workspace 只提供消息路由上下文，不构成 ChatPlugin 生命周期
-- 入站授权能力归属于 `ChatPlugin`，但仍通过通用 plugin hooks / resolves 调度
-- `Agent` 不持有 ChatPlugin 或 chat 领域长期状态
-
-## 公开性说明
-
-`ChatPlugin` 从 `@downcity/plugins` 包根导出。
-
-SDK 用户把 `ChatPlugin` 实例交给 City，不把它交给 Agent。
-
 ## 相关文档
 
 - [Plugin Lifecycle](/zh/agent-sdk-docs/plugins/lifecycle)
-- [Plugin System](/zh/agent-sdk-docs/plugins/plugin-system)
 - [Built-ins Overview](/zh/plugins-docs/builtins/overview)

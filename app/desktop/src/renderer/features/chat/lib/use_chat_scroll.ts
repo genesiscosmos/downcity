@@ -13,6 +13,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
   const content_ref = useRef<HTMLDivElement | null>(null);
   const bottom_ref = useRef<HTMLDivElement | null>(null);
   const sticky_ref = useRef(true);
+  const last_scroll_top_ref = useRef(0);
   const preserving_ref = useRef(false);
   const auto_scroll_ref = useRef(auto_scroll);
   const surface_id_ref = useRef(surface_id);
@@ -28,6 +29,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     if (!container || !bottom || preserving_ref.current) return;
     bottom.scrollIntoView({ block: "end" });
     sticky_ref.current = true;
+    last_scroll_top_ref.current = container.scrollTop;
   }, []);
 
   /** 仅在用户仍位于底部且启用了自动跟随时响应内容增长。 */
@@ -37,7 +39,13 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     const target_surface_id = surface_id_ref.current;
     follow_frame_ref.current = window.requestAnimationFrame(() => {
       follow_frame_ref.current = undefined;
-      if (surface_id_ref.current === target_surface_id) align_bottom_anchor();
+      // ResizeObserver 排队后用户可能已经向上滚动；执行前必须再次确认跟随资格。
+      if (
+        surface_id_ref.current === target_surface_id
+        && auto_scroll_ref.current
+        && sticky_ref.current
+        && !preserving_ref.current
+      ) align_bottom_anchor();
     });
   }, [align_bottom_anchor]);
 
@@ -47,6 +55,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     follow_frame_ref.current = undefined;
     anchor_frame_ref.current = undefined;
     sticky_ref.current = true;
+    last_scroll_top_ref.current = 0;
     preserving_ref.current = false;
     align_bottom_anchor();
   }, [align_bottom_anchor, surface_id]);
@@ -70,11 +79,18 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
 
   const handle_scroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     const container = event.currentTarget;
-    sticky_ref.current = is_chat_scroll_sticky({
+    const moved_up = container.scrollTop < last_scroll_top_ref.current;
+    last_scroll_top_ref.current = container.scrollTop;
+    // 用户一旦向上浏览便立即退出跟随，即使仍落在底部容差范围内。
+    sticky_ref.current = moved_up ? false : is_chat_scroll_sticky({
       scroll_height: container.scrollHeight,
       scroll_top: container.scrollTop,
       client_height: container.clientHeight,
     });
+    if (!sticky_ref.current && follow_frame_ref.current !== undefined) {
+      window.cancelAnimationFrame(follow_frame_ref.current);
+      follow_frame_ref.current = undefined;
+    }
   }, []);
 
   const preserve_prepend_position = useCallback(async (load_earlier: () => Promise<void>) => {

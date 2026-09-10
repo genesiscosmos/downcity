@@ -8,7 +8,6 @@ import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SettingActionItem, SettingGroup, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
 import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
-import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
@@ -31,9 +30,6 @@ interface AgentViewProps {
   /** 打开 Agent 信息编辑面板。 */ open_config(
     section: AgentEditorSection,
   ): void;
-  /** Agent Left Panel。 */ sidebar?: React.ReactNode;
-  /** Agent Left Panel 是否折叠。 */ sidebar_collapsed?: boolean;
-  /** 切换 Agent Left Panel。 */ toggle_sidebar?: () => void;
 }
 /** Agent 信息侧栏属性。 */
 interface AgentInfoSidebarProps {
@@ -171,9 +167,6 @@ export function AgentView({
   controller,
   open_main_session,
   open_config,
-  sidebar,
-  sidebar_collapsed = false,
-  toggle_sidebar,
 }: AgentViewProps) {
   const translate_resources = use_translation("resources");
   const translate_common = use_translation();
@@ -298,15 +291,6 @@ export function AgentView({
       </Dialog>
     </div>
   );
-  if (sidebar && toggle_sidebar)
-    return (
-      <ChatSurfaceLayout
-        sidebar={sidebar}
-        header_left={agent.name}
-      >
-        {content}
-      </ChatSurfaceLayout>
-    );
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 bg-background">
       <MainViewLayout>

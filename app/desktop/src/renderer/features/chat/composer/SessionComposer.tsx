@@ -14,13 +14,13 @@ export function SessionComposer(props: AgentComposerProps) {
   const session_id = selection.kind === "session" ? selection.session_id : selection.draft_id;
   const session_key = get_session_key(workspace_id, agent_id, session_id);
   const busy = use_store_selector(stores.chat_stream, state => is_chat_busy(state.chat_runtime_by_session[session_key]));
-  return <RichTextEditor {...editor} busy={busy}
-    enqueue_message={input => actions.send_message(workspace_id, agent_id, session_id, input, "queue")}
+  const has_pending_queue = use_store_selector(stores.composer, state => Boolean(state.queued_messages_by_session[session_key]?.length));
+  return <RichTextEditor {...editor} busy={busy} has_pending_queue={has_pending_queue} can_queue
     stop_session={() => actions.stop_session(workspace_id, agent_id, session_id)}
     queue={<SessionMessageQueue {...props} />} />;
 }
 
-/** 队列变化只重绘队列，不影响编辑器文档及消息列表。 */
+/** 队列详情由独立组件订阅；主输入区只感知队列是否为空。 */
 function SessionMessageQueue({ selection, stores, actions }: AgentComposerProps) {
   const { workspace_id, agent_id } = selection;
   const session_id = selection.kind === "session" ? selection.session_id : selection.draft_id;

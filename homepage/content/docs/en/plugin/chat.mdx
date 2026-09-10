@@ -1,84 +1,95 @@
 ---
 title: Chat Plugin
-description: How the Chat plugin connects agents to messaging channels
+description: Manage Bot Accounts in Desktop and reliably route external conversations to Agent Sessions
 ---
 
 # Chat Plugin
 
-The Chat plugin connects your Agent to messaging channels like Telegram, Feishu, and QQ. It handles incoming messages, routes them to the Agent session, and sends replies back to the channel.
+Chat Plugin is a channel runtime owned by City. It does not belong to an individual Agent and does not expose long-lived state through `context.agent.chat`.
 
-## What it does
+## Desktop workflow
 
-- Listens to incoming messages from configured channels
-- Creates or reuses sessions per conversation
-- Routes user messages to the Agent
-- Sends Agent replies back to the channel
-- Applies per-Agent Chat Access before a message enters the Agent
+Open Channels to see every Bot Account in a dedicated Sidebar. Use the plus button in the Sidebar header and choose Telegram, Feishu/Lark, or QQ from the dropdown to create a Channel. You can add multiple bots for the same provider.
 
-## Configuration
+Selecting an Account lets you manage:
 
-Chat owns one City-level configuration in `~/.downcity/plugins/chat/config.toml`. It contains the inbound target, queue behavior, and channels:
+- enabled state, credentials, connection tests, and reconnects
+- the default Agent and Workspace for new Conversations
+- Access requests and grants for external identities
+- each Conversation's Agent, Workspace, Session, and paused state
+- Inbox and Outbox items that exceeded automatic retry limits
+- Activity records that exclude message bodies and secrets
 
-```toml
-schema_version = 2
+Desktop applies Account saves immediately. It restarts only that Account's Connector, so Desktop, City, and other Bot Accounts do not need to restart. Credentials can be entered in Settings. Stored secrets are never echoed; leave a secret field empty to preserve its current value.
 
-[config]
-owner_agent_id = "assistant"
-owner_workspace_id = "project"
+## Account configuration
 
-[config.queue]
-max_concurrency = 4
+Account definitions and credentials have one source of truth: City Plugin Config.
 
-[[config.channels]]
-id = "telegram_primary"
-type = "telegram"
-name = "Primary Bot"
-bot_token = "123456:token"
+```json
+{
+  "accounts": [
+    {
+      "account_id": "support-telegram",
+      "name": "Support Bot",
+      "provider": "telegram",
+      "enabled": true,
+      "agent_id": "support",
+      "workspace_id": "support-workspace",
+      "bot_token": "<telegram-bot-token>"
+    }
+  ]
+}
 ```
 
-Open Chat Config in the Desktop Plugins Catalog to edit it. City automatically provides Chat
-capabilities to every Agent. `owner_agent_id` and `owner_workspace_id` only select the execution target
-for inbound channel messages; they are not Plugin bindings.
+Feishu/Lark accounts use `app_id`, `app_secret`, and optional `domain`. QQ accounts use `app_id`, `app_secret`, and optional `sandbox`.
 
-## Channel credentials
+## Messages and Sessions
 
-Channel credentials are plaintext in `config.toml`, protected by user-only directory and file permissions (`0700` and `0600`). Chat Config reads and saves configuration through Chat-owned Config actions. Reads never return plaintext `bot_token` or `app_secret` values, and leaving a credential blank preserves the saved value. After a save, Chat stops the old channels and queue and rebuilds them lazily on the next use.
+An allowed external message is persisted to Inbox, then routed through a Conversation to a real Agent Session. Session Messages remain the only complete conversation history; the Chat database does not duplicate it.
 
-## Chat Access
-
-When an external user sends a first message, the Chat Plugin records a principal in the current Agent's `.downcity/chat/access.db`. Without a grant, it creates a pending request. Administrators approve or deny by request ID:
-
-```bash
-city plugin action chat access-snapshot <agent_id> --input '{}' --token <token>
-city plugin action chat access-approve <agent_id> --input '{"request_id":"<request_id>"}' --token <token>
+```text
+Platform → Access → Inbox → Conversation → Agent Session
+         → Outbox → Platform
 ```
 
-Identity combines the channel ID from the unique configuration and the platform user ID. Approval applies only to the target Agent; it is neither a City-global permission nor propagated to other Plugins.
+Inbox deduplicates provider message IDs and prompts Session with a stable `request_id`. If the process exits after the User Message is committed, recovery does not append a second User Message. Agent results use stable Delivery IDs when entering Outbox, preventing duplicate jobs during recovery.
 
-## Supported channels
+Outbox provides persistence, leases, bounded retries, and manual recovery. When a provider has no idempotent send protocol, external delivery is at-least-once: a crash after provider acceptance but before local acknowledgement can cause a repeated send.
 
-- Telegram
-- Feishu (Lark)
-- QQ
+## Agent Actions
+
+An Agent can only access Conversations it owns through strict actions:
+
+- `context`: read the current Chat Session route
+- `list`: list Conversations owned by the current Agent
+- `history`: read canonical Agent Session messages
+- `send`: persist text to the reliable Outbox
+- `react`: persist a Telegram message reaction to the reliable Outbox
+
+## SDK assembly
+
+```ts
+import { ChatPlugin } from "@downcity/plugins/chat";
+
+const city = new City({
+  plugins: [new ChatPlugin()],
+  workspaces: [workspace],
+  plugin_host,
+});
+```
+
+The City host provides Plugin Config, lifecycle Storage, and Agent/Workspace lookup. Connectors are restored during `initialize()` and closed together during `dispose()`.
 
 ## Feishu dependency
 
-`@downcity/plugins` does not install the Feishu/Lark SDK by default. If you enable the Feishu channel in an embedded SDK host, install it in that host app:
+A host that enables a Feishu/Lark Account must install:
 
 ```bash
 npm install @larksuiteoapi/node-sdk@^1.66.0
 ```
 
-Use the isolated Chat plugin subpath:
+## Related documentation
 
-```ts
-import { ChatPlugin, FeishuChannel } from "@downcity/plugins/chat";
-```
-
-Apps that do not enable Feishu do not need the Feishu SDK.
-
-Continue with:
-
-- [Task Plugin](/en/docs/plugin/task)
-- [Memory Plugin](/en/docs/plugin/memory)
-- [Agent Plugins Docs](/en/plugins-docs)
+- [Plugin Lifecycle](/en/agent-sdk-docs/plugins/lifecycle)
+- [Built-ins Overview](/en/plugins-docs/builtins/overview)

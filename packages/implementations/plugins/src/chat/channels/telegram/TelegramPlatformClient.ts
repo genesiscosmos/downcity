@@ -7,7 +7,7 @@
  * - `TelegramBot` 只保留入站授权、命令分发、消息入队等业务编排。
  */
 
-import type { PluginContext } from "@downcity/city/plugin";
+import type { PluginLogger } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import { TelegramApiClient } from "./ApiClient.js";
 import { TelegramStateStore } from "./StateStore.js";
@@ -20,10 +20,12 @@ import type {
  * Telegram 平台 client 构造参数。
  */
 export interface TelegramPlatformClientOptions {
-  /**
-   * 当前执行上下文。
-   */
-  context: PluginContext;
+  /** 当前 Connector 使用的 Workspace 根目录。 */
+  workspace_path: string;
+  /** 当前 Connector 的私有数据目录。 */
+  storage_path: string;
+  /** Chat Plugin 生命周期日志器。 */
+  logger: PluginLogger;
   /**
    * Telegram bot token。
    */
@@ -48,7 +50,7 @@ export interface TelegramPlatformClientOptions {
  * Telegram 平台运行时。
  */
 export class TelegramPlatformClient {
-  private readonly logger: PluginContext["logger"];
+  private readonly logger: PluginLogger;
   private readonly api: TelegramApiClient;
   private readonly stateStore: TelegramStateStore;
   private readonly onMessage: TelegramPlatformClientOptions["onMessage"];
@@ -70,15 +72,15 @@ export class TelegramPlatformClient {
   private lastStartupError: string | null = null;
 
   constructor(options: TelegramPlatformClientOptions) {
-    this.logger = options.context.logger;
+    this.logger = options.logger;
     this.botToken = options.botToken;
     this.api = new TelegramApiClient({
       botToken: options.botToken,
-      project_root: options.context.workspace.path,
-      data_path: options.context.storage.path,
-      logger: options.context.logger,
+      project_root: options.workspace_path,
+      data_path: options.storage_path,
+      logger: options.logger,
     });
-    this.stateStore = new TelegramStateStore(options.context.storage.path);
+    this.stateStore = new TelegramStateStore(options.storage_path);
     this.onMessage = options.onMessage;
     this.onCallbackQuery = options.onCallbackQuery;
     this.onWebhookConflictResolved = options.onWebhookConflictResolved;

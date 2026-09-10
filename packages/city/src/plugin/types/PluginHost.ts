@@ -7,6 +7,9 @@
 
 import type {
   PluginLogger,
+  PluginSessionMutation,
+  PluginSessionPromptContent,
+  PluginSessionTurnResult,
   PluginStorage,
 } from "./PluginContext.js";
 import type { PluginJsonObject, PluginJsonValue } from "./Json.js";
@@ -38,6 +41,20 @@ export interface PluginConfigStore {
   get(): PluginJsonObject;
   /** 原子替换当前 Plugin 的完整配置。 */
   set(config: PluginJsonObject): Promise<void>;
+}
+
+/** Plugin 在 City 生命周期中发起的一次 Agent Session Turn。 */
+export interface PluginHostSessionTurn {
+  /** 当前 Session 的稳定 ID。 */
+  readonly session_id: string;
+  /** 当前 Turn 的稳定 ID。 */
+  readonly turn_id: string;
+  /** 等待 Turn 完成并返回稳定结果。 */
+  readonly finished: Promise<PluginSessionTurnResult>;
+  /** 订阅当前 Session 后续变化；返回取消订阅函数。 */
+  subscribe(subscriber: (mutation: PluginSessionMutation) => void | Promise<void>): () => void;
+  /** 请求停止当前 Session 正在执行的 Turn。 */
+  stop(): Promise<void>;
 }
 
 /** 每次配置动作调用获得的动态上下文。 */
@@ -83,6 +100,30 @@ export interface PluginHostSystem {
     /** 传递给 action 的可选 JSON 输入。 */
     readonly input?: PluginJsonValue;
   }): Promise<PluginJsonValue>;
+  /** 在指定 Agent 与 Workspace 下创建一个新的 Session。 */
+  create_agent_session(input: {
+    /** 持有新 Session 的 Agent 稳定 ID。 */
+    readonly agent_id: string;
+    /** 新 Session 绑定的 Workspace 稳定 ID。 */
+    readonly workspace_id: string;
+    /** 新 Session 的来源及其业务路由元数据。 */
+    readonly origin: { readonly type: string; readonly [key: string]: PluginJsonValue };
+  }): Promise<{ readonly session_id: string }>;
+  /** 在指定 Agent 与 Workspace 上恢复或创建 Session，并提交一次用户输入。 */
+  prompt_agent_session(input: {
+    /** 持有目标 Session 的 Agent 稳定 ID。 */
+    readonly agent_id: string;
+    /** 本次 Session 执行使用的 Workspace 稳定 ID。 */
+    readonly workspace_id: string;
+    /** 目标 Session 的稳定 ID。 */
+    readonly session_id: string;
+    /** Session 的持久化来源分区。 */
+    readonly origin_type: string;
+    /** 同一 Session 内标识本次业务输入的稳定幂等键。 */
+    readonly request_id?: string;
+    /** 提交给 Session 的文本或结构化内容。 */
+    readonly query: string | PluginSessionPromptContent[];
+  }): Promise<PluginHostSessionTurn>;
   /** 向指定 Agent 持有的既有 Session 追加一条外部 Assistant 消息。 */
   append_agent_session_message(input: {
     /** 持有目标 Session 的 Agent 稳定 ID。 */
@@ -127,6 +168,8 @@ export interface PluginSelf {
 export interface PluginLifecycleContext {
   /** 当前 Plugin 的自身能力。 */
   readonly plugin: PluginSelf;
+  /** 当前 Plugin 在 City 中唯一的结构化配置存储。 */
+  readonly config: PluginConfigStore;
   /** 当前 Plugin 在 City 中唯一的私有存储。 */
   readonly storage: PluginStorage;
   /** Plugin 独享的结构化日志器。 */

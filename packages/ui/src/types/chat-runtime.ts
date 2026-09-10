@@ -1,5 +1,5 @@
 /** Chat runtime 的可移植状态和宿主回调协议。 */
-import type { DowncityChatApprovalMode, DowncityChatMessage, DowncityChatModelOption, DowncityChatStatus, DowncityChatSubmitInput } from "./chat";
+import type { DowncityChatApprovalMode, DowncityChatMessage, DowncityChatModelOption, DowncityChatStatus, DowncityChatSubmitInput, DowncityChatSubmitMode } from "./chat";
 
 /** 已排队但尚未交给 Agent 执行的输入。 */
 export interface DowncityChatQueuedInput {
@@ -14,7 +14,7 @@ export interface DowncityChatRuntimeOptions {
   /** 默认模型列表。 */ model_options?: DowncityChatModelOption[];
   /** 当前模型。 */ model_id?: string;
   /** 当前 approval 模式。 */ approval_mode?: DowncityChatApprovalMode;
-  /** 将用户输入提交到宿主 Session。 */ submit_message?: (input: DowncityChatSubmitInput, mode: "send" | "queue") => void | Promise<void>;
+  /** 将用户输入提交到宿主 Session。 */ submit_message?: (input: DowncityChatSubmitInput, mode: DowncityChatSubmitMode) => void | Promise<void>;
   /** 请求宿主停止当前 turn。 */ stop_generation?: () => void | Promise<void>;
   /** 将 approval/question 响应写回 Session。 */ respond_interaction?: (interaction_id: string, response: unknown) => void | Promise<void>;
 }

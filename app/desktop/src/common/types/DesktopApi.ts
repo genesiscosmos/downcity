@@ -627,8 +627,6 @@ export interface DesktopSettings {
   default_agent_id: string;
   /** 启动后是否直接进入默认 Agent 的空对话。 */
   open_empty_chat_on_start: boolean;
-  /** Enter 是否发送消息；关闭后使用 Command/Ctrl + Enter。 */
-  send_message_on_enter: boolean;
   /** Chat 输入框是否启用系统拼写检查。 */
   spellcheck_enabled: boolean;
   /** 外观明暗模式。 */

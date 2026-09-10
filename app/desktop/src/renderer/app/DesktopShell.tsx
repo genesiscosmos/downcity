@@ -131,7 +131,7 @@ export function DesktopShell() {
         collapsed={sidebar_collapsed}
       />
       <main className="main-view-shell relative flex h-full min-w-0 flex-1 bg-background">
-        <TurnFileDiffReviewHost><MainViewHeaderProvider value={{ sidebar_collapsed, baybar_available: false, baybar_open: false }}><div className="flex h-full min-w-0 flex-1 flex-col"><DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} /></div></MainViewHeaderProvider></TurnFileDiffReviewHost>
+        <TurnFileDiffReviewHost><MainViewHeaderProvider value={{ sidebar_collapsed }}><div className="flex h-full min-w-0 flex-1 flex-col"><DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} /></div></MainViewHeaderProvider></TurnFileDiffReviewHost>
       </main>
     </div>
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />

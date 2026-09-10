@@ -28,25 +28,49 @@ mock.module("playwright-core", {
 const { PlaywrightBrowserProvider } = await import("../bin/web.js");
 
 function create_page(overrides = {}) {
-  return {
+  const page = {
     closed: false,
     default_timeout: null,
     default_navigation_timeout: null,
     goto_calls: [],
+    action_calls: [],
     setDefaultTimeout(value) { this.default_timeout = value; },
     setDefaultNavigationTimeout(value) { this.default_navigation_timeout = value; },
     async goto(...args) { this.goto_calls.push(args); },
-    locator() {
-      return {
+    locator(selector) {
+      const target = {
         async innerText() { return "Page body"; },
+        async ariaSnapshot() { return "- button \"Continue\""; },
         async allTextContents() { return ["Page body"]; },
+        async evaluateAll(callback, argument) {
+          return callback([{
+            tagName: "BUTTON",
+            innerText: "Continue",
+            getAttribute(name) {
+              if (name === "aria-label") return "Continue";
+              return null;
+            },
+          }], argument);
+        },
+        nth(index) {
+          return {
+            async click() { page.action_calls.push(["click", selector, index]); },
+            async fill(value) { page.action_calls.push(["fill", selector, index, value]); },
+            async press(key) { page.action_calls.push(["press", selector, index, key]); },
+          };
+        },
+        async click() { page.action_calls.push(["click", selector]); },
+        async fill(value) { page.action_calls.push(["fill", selector, value]); },
+        async press(key) { page.action_calls.push(["press", selector, key]); },
       };
+      return target;
     },
     url() { return "https://example.com/"; },
     async title() { return "Example"; },
     async close() { this.closed = true; },
     ...overrides,
   };
+  return page;
 }
 
 function create_browser(overrides = {}) {
@@ -116,11 +140,53 @@ test("连接传递 timeout 和 noDefaults，并在默认 context 创建独占 pa
     { waitUntil: "domcontentloaded" },
   ]]);
   assert.equal(result.title, "Example");
+  assert.equal(result.observation_generation, 1);
+  assert.equal(result.accessibility_snapshot, "- button \"Continue\"");
+  assert.deepEqual(result.elements, [{
+    ref: "e1",
+    tag: "button",
+    role: "button",
+    name: "Continue",
+  }]);
 
   await provider.close_session({ session_id: result.session_id });
   assert.equal(current_browser.session_page.closed, true);
   assert.equal(current_browser.existing_page.closed, false);
   assert.equal(current_browser.context.closed, false);
+});
+
+test("元素 ref 只在对应 observation generation 内有效", async () => {
+  const provider = new PlaywrightBrowserProvider({
+    cdp_url: "http://127.0.0.1:9222",
+  });
+  const created = await provider.create_session({});
+
+  const acted = await provider.act({
+    session_id: created.session_id,
+    action: {
+      type: "click",
+      ref: "e1",
+      observation_generation: created.observation_generation,
+    },
+  });
+
+  assert.deepEqual(current_browser.session_page.action_calls, [[
+    "click",
+    "a:visible,button:visible,input:visible,textarea:visible,select:visible,[role=button]:visible,[role=link]:visible,[role=checkbox]:visible,[role=radio]:visible,[role=combobox]:visible,[role=menuitem]:visible,[tabindex]:visible",
+    0,
+  ]]);
+  assert.equal(acted.observation_generation, 2);
+  await assert.rejects(
+    provider.act({
+      session_id: created.session_id,
+      action: {
+        type: "click",
+        ref: "e1",
+        observation_generation: created.observation_generation,
+      },
+    }),
+    /reference is stale/u,
+  );
 });
 
 test("默认 context 不存在时返回 resolve-context 且不创建隔离 context", async () => {

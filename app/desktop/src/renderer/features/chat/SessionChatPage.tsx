@@ -11,7 +11,6 @@ import type { DesktopController, NavigationTarget } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopChatRewriteInput, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import { SessionView } from "@/features/chat/components/SessionTimeline";
 import { SessionComposer } from "@/features/chat/composer/SessionComposer";
-import { create_chat_composer } from "@/features/chat/composer/editor/chatComposerCodec";
 
 import { WelcomeView } from "@/app/WelcomeView";
 
@@ -50,7 +49,6 @@ export function AgentSessionChatSurface({ selection, agent, session, open_agent_
   const fork_message = useCallback((message_id: string) => controller.actions.fork_session(workspace_id, agent_id, session_id, message_id), [agent_id, controller.actions, session_id, workspace_id]);
   const rewrite_message = useCallback((input: DesktopChatRewriteInput) => controller.actions.rewrite_session_message(workspace_id, agent_id, session_id, input), [agent_id, controller.actions, session_id, workspace_id]);
   const load_earlier_history = useCallback(() => controller.actions.load_earlier_history(workspace_id, agent_id, session_id), [agent_id, controller.actions, session_id, workspace_id]);
-  const select_prompt = useCallback((prompt: string) => controller.actions.update_draft(workspace_id, agent_id, session_id, create_chat_composer(prompt)), [agent_id, controller.actions, session_id, workspace_id]);
   return <SessionView
     chat_surface="agent"
     open_agent_info={open_agent_info}
@@ -72,7 +70,6 @@ export function AgentSessionChatSurface({ selection, agent, session, open_agent_
     archive_session={archive_session}
     remove_session={remove_session}
     switch_draft_context={controller.actions.switch_draft_context}
-    select_prompt={select_prompt}
     composer={<SessionComposer selection={selection} stores={controller.stores} actions={controller.actions} />}
     respond_interaction={respond_interaction}
     fork_message={fork_message}

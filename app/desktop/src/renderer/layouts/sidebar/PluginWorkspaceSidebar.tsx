@@ -46,8 +46,7 @@ export const PluginWorkspaceSidebar = memo(function PluginWorkspaceSidebar({ con
   const invalidate = useCallback(() => invalidate_plugin(plugin_id), [invalidate_plugin, plugin_id]);
   if (!plugin?.has_sidebar || !plugin.has_mainview) return <SidebarPanel><SidebarContent class_name="px-3 py-8 text-center text-xs text-muted-foreground">Plugin 未提供功能界面</SidebarContent></SidebarPanel>;
   return <SidebarPanel>
-    <SidebarHeader title={plugin.title} />
-    {error ? <SidebarContent><div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div></SidebarContent> : <PluginRendererHost plugin_id={plugin.plugin_id} slot="sidebar" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={route ?? empty_plugin_route} notifications={plugin_renderer_notifications(notification_state, plugin.plugin_id)} navigate={navigate} revision={revision} invalidate={invalidate} />}
+    {error ? <><SidebarHeader title={plugin.title} /><SidebarContent><div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div></SidebarContent></> : <PluginRendererHost plugin_id={plugin.plugin_id} sidebar_title={plugin.title} slot="sidebar" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={route ?? empty_plugin_route} notifications={plugin_renderer_notifications(notification_state, plugin.plugin_id)} navigate={navigate} revision={revision} invalidate={invalidate} />}
   </SidebarPanel>;
 });
 

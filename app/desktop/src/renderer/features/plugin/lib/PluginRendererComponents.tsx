@@ -6,13 +6,14 @@
  */
 
 import { Fragment, useState, type KeyboardEvent } from "react";
-import { TbChevronDown, TbChevronRight, TbDots, TbLoader2 } from "react-icons/tb";
+import { TbChevronDown, TbChevronRight, TbDots, TbLoader2, TbPlus } from "react-icons/tb";
 import type { PluginRendererUiComponents } from "@downcity/city/plugin/react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Markdown } from "@/components/markdown/Markdown";
+import { SidebarHeader } from "@/layouts/sidebar/SidebarHeader";
 import { SidebarContent } from "@/layouts/sidebar/SidebarPanel";
 import { cn } from "@/lib/utils";
 
@@ -23,12 +24,15 @@ interface PluginRendererUiComponentOptions {
 
   /** 当前 UI Components 服务的 Renderer 插槽。 */
   readonly surface: "sidebar" | "mainview" | "config";
+
+  /** Sidebar Header 中展示的 Plugin 标题。 */
+  readonly sidebar_title?: string;
 }
 
 /** 创建稳定的宿主 Plugin UI Components 集合。 */
 export function create_plugin_renderer_ui_components(options: PluginRendererUiComponentOptions): PluginRendererUiComponents {
   return {
-    Sidebar: ({ children }) => <SidebarContent class_name="flex flex-col">{children}</SidebarContent>,
+    Sidebar: ({ children, actions }) => <><SidebarHeader title={options.sidebar_title ?? options.plugin_id} actions={actions} /><SidebarContent class_name="flex flex-col">{children}</SidebarContent></>,
     SidebarSection: ({ label, children }) => <section className="mb-4 min-w-0">
       {label ? <h3 className="px-2 pb-1.5 pt-1 text-[0.625rem] font-medium uppercase tracking-[0.08em] text-muted-foreground/65">{label}</h3> : null}
       <div className="space-y-0.5">{children}</div>
@@ -64,6 +68,10 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
     ItemMenu: ({ label, actions, reveal_on_hover = false }) => <DropdownMenu>
       <DropdownMenuTrigger asChild><button type="button" aria-label={label} title={label} onClick={(event) => event.stopPropagation()} className={cn("flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-[background-color,color,opacity] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[state=open]:bg-interaction-hover data-[state=open]:text-foreground", reveal_on_hover && "pointer-events-none opacity-0 group-hover/item:pointer-events-auto group-hover/item:opacity-100 group-focus-within/item:pointer-events-auto group-focus-within/item:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100")}><TbDots className="size-3.5" /></button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>{actions.map((action) => <Fragment key={action.action_id}>{action.separator_before ? <DropdownMenuSeparator /> : null}<DropdownMenuItem disabled={action.disabled} className={action.destructive ? "text-destructive" : undefined} onClick={() => void action.on_select()}>{action.leading}<span>{action.label}</span></DropdownMenuItem></Fragment>)}</DropdownMenuContent>
+    </DropdownMenu>,
+    SidebarCreateMenu: ({ label, actions }) => <DropdownMenu>
+      <DropdownMenuTrigger asChild><Button size="icon" title={label} aria-label={label}><TbPlus /></Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end">{actions.map((action) => <Fragment key={action.action_id}>{action.separator_before ? <DropdownMenuSeparator /> : null}<DropdownMenuItem disabled={action.disabled} className={action.destructive ? "text-destructive" : undefined} onClick={() => void action.on_select()}>{action.leading}<span>{action.label}</span></DropdownMenuItem></Fragment>)}</DropdownMenuContent>
     </DropdownMenu>,
     Page: ({ children }) => options.surface === "mainview"
       ? <div className="sidebar-body-scroll h-full min-h-0 min-w-0 flex-1 overflow-y-auto bg-background"><div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-5 px-4 pb-10 pt-4 md:px-8 md:pt-6">{children}</div></div>

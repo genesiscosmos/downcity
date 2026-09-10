@@ -1,78 +1,118 @@
 ---
 title: web Plugin
-description: Structured web search, document reading, and Playwright/CDP browser capabilities through replaceable providers
+description: Ready-to-use document reading and local browsing, with configurable Tavily, Exa, and Firecrawl providers
 ---
 
 # web Plugin
 
-`web` is a real web-capability plugin. City owns one shared instance and one configuration. The Plugin creates browser providers lazily for Agent isolation. Search and document services are read from the current `PluginContext`.
+`web` owns its search, document, and browser providers. It does not depend on
+`context.agent.web`. In Desktop, static document reading and a managed local Chrome browser work
+without manual CDP setup. Search becomes available after an API key is configured.
 
-## Playwright/CDP
+## Desktop configuration
+
+Open **Plugins → Web**. The page has three capability sections:
+
+- Search: `Auto`, `Tavily`, `Exa`, or disabled. Auto prefers Tavily and then Exa.
+- Documents: built-in Fetch by default, or Firecrawl for harder pages.
+- Browser: managed Local Chrome by default, Remote CDP, or disabled.
+
+API keys can be entered directly on the Web configuration page. Saved values are never returned
+to the renderer; the page only shows whether a key is configured. An empty field preserves the
+existing value, while the explicit Clear action removes it. Keys currently live in Downcity's
+local Plugin configuration and are not stored in the operating-system keychain.
+
+Global Env remains supported:
+
+```dotenv
+TAVILY_API_KEY=...
+EXA_API_KEY=...
+FIRECRAWL_API_KEY=...
+```
+
+Plugin configuration takes precedence over Global Env. Each capability section includes a test
+button that saves the draft and performs one minimal call through a real Agent and Workspace.
+
+## Defaults
 
 ```ts
-import {
-  PlaywrightBrowserProvider,
-  WebPlugin,
-} from "@downcity/plugins/web";
+import { WebPlugin } from "@downcity/plugins/web";
 
+const web = new WebPlugin();
+```
+
+- `open` uses the built-in Fetch provider and never executes page scripts.
+- Browser actions discover Google Chrome, Chromium, or Microsoft Edge and use a private persistent profile.
+- `search` selects Tavily or Exa when a key is available; missing search credentials do not disable other capabilities.
+
+WebPlugin closes browser processes and pages it owns. The persistent profile keeps login state.
+For a cloud browser, select Remote CDP and enter its HTTP or WebSocket endpoint.
+
+## Fixed SDK configuration
+
+Constructor configuration overrides saved City/Desktop configuration:
+
+```ts
 const web = new WebPlugin({
-  browser: "playwright",
-  cdp_url: "http://127.0.0.1:9222",
+  config: {
+    search_provider: "tavily",
+    tavily_api_key: process.env.TAVILY_API_KEY,
+    document_provider: "firecrawl",
+    firecrawl_api_key: process.env.FIRECRAWL_API_KEY,
+    browser_provider: "cdp",
+    cdp_url: "https://browser.example.com/cdp",
+  },
 });
 ```
 
-`PlaywrightBrowserProvider` connects to an already-running Chrome/Chromium CDP endpoint. It does not download browsers or execute installation commands. Browserbase, Browserless, Kitesurf, and other CDP-compatible backends can implement the same `BrowserProvider` protocol.
-
-The provider creates one owned page per session in the CDP browser's existing default context. It does not create isolated contexts or take ownership of pages that were already open. Closing a session only closes the page created for that session.
-
-CDP connections enable Playwright's `noDefaults` mode. This supports endpoints that do not implement Browser Context management but can create pages in the default context. The browser's existing download, focus, and media emulation settings remain unchanged; the provider does not override `acceptDownloads`, focus emulation, `colorScheme`, `reducedMotion`, `forcedColors`, or `contrast`.
-
-The endpoint must still expose a default context and support creating a new page. Connection, default-context resolution, page creation, and page initialization failures include a stable stage identifier and a sanitized endpoint without credentials, query parameters, or browser identifiers.
+Hosts may still inject `search_provider`, `document_provider`, or `browser_provider_factory`.
+Ownership of injected providers transfers to WebPlugin.
 
 ## Actions
 
 | Action | Purpose |
 |---|---|
-| `search` | Delegate to the configured search provider |
-| `open` | Read a known URL through the configured document provider |
+| `search` | Search through Tavily, Exa, or an injected provider |
+| `open` | Read through safe Fetch, Firecrawl, or an injected provider |
 | `browser_create_session` | Create a browser session |
-| `browser_observe` | Read URL, title, visible text, and an optional screenshot |
-| `browser_act` | Run `goto`, `click`, `fill`, `press`, `scroll`, or `wait` |
-| `browser_semantic_act` | Run a natural-language action through a Stagehand, Computer Use, or other semantic adapter |
-| `browser_extract` | Extract text from a CSS selector or the body |
-| `browser_semantic_extract` | Extract content through a semantic provider |
+| `browser_observe` | Read URL, title, accessibility snapshot, visible text, refs, and an optional screenshot |
+| `browser_act` | Perform a deterministic action with an observation generation and ref |
+| `browser_semantic_act` | Use an optional semantic adapter |
+| `browser_extract` | Extract text from a selector or the body |
+| `browser_semantic_extract` | Extract through an optional semantic adapter |
 | `browser_close_session` | Close a session and release its page |
 
-## Provider composition
+Observe first, then act with a ref from that exact generation:
 
 ```ts
-const web = new WebPlugin({ browser: "playwright", cdp_url: "http://127.0.0.1:9222" });
-```
+const observed = await web.actions.browser_observe.execute({
+  context,
+  input: { session_id },
+});
 
-Semantic capabilities are injected through an adapter and are not tied to one model vendor:
-
-```ts
-import { SemanticBrowserProviderAdapter } from "@downcity/plugins/web";
-
-const browser = new SemanticBrowserProviderAdapter({
-  name: "stagehand",
-  browser: playwright_browser,
-  semantic_act: (input) => stagehand_service.act(input),
-  semantic_extract: (input) => stagehand_service.extract(input),
+await web.actions.browser_act.execute({
+  context,
+  input: {
+    session_id,
+    action: {
+      type: "click",
+      ref: observed.data.elements[0].ref,
+      observation_generation: observed.data.observation_generation,
+    },
+  },
 });
 ```
 
-Computer Use can use `ComputerUseBrowserProviderAdapter`. It captures an observation with a screenshot before handing the goal to an OpenAI, Anthropic, Gemini, or custom model loop. The model never receives Playwright objects.
+Element refs are valid only for the observation generation that produced them. Use new refs after
+every action. CSS selectors remain available only for explicit deterministic automation.
 
-Use search or HTTP reading first. Create a browser for dynamic rendering, logged-in state, or interaction. Stagehand can be added inside a provider for semantic actions, while Computer Use should remain a visual fallback for pages that cannot be handled reliably through the DOM.
+## Network and safety boundaries
 
-## Lifecycle and safety
-
-- `WebPlugin` accepts explicit constructor options or reads the City-level Config and creates the selected browser provider internally.
-- The provider owns browser sessions and is disposed when the final execution lease is released and City stops the shared instance.
-- `browser_act` exposes deterministic browser actions. Host approval is required for consequential actions such as submit, send, purchase, upload, or delete.
-- Playwright `Browser`, `Page`, and `Buffer` objects never cross the Plugin action boundary; results are JSON-serializable.
-- Skill installation, discovery, and `SKILL.md` loading remain responsibilities of `SkillPlugin`.
+- Fetch only permits public HTTP(S) targets and revalidates every redirect against SSRF rules.
+- Requests have timeout, redirect-count, and response-size limits.
+- Provider errors do not expose API keys, authentication headers, or full error response bodies.
+- Consequential actions such as submit, send, purchase, upload, and delete still require host approval.
+- Page content is always untrusted input and cannot override Agent or host instructions.
 
 ## Related docs
 

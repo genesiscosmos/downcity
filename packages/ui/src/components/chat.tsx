@@ -11,8 +11,9 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, CircleStop, Copy, File, FilePenLine, History, LoaderCircle, MessageCircle, MoreHorizontal, Paperclip, Plus, Send, Terminal, X } from "lucide-react";
 import { TbArrowUp, TbCheck, TbChevronDown, TbChevronRight, TbFile as TbFileIcon, TbLoader2, TbLock, TbPaperclip, TbPlus, TbRobot, TbShieldCheck, TbSquare, TbTerminal } from "./chat-icons";
 import { cn } from "../lib/utils";
+import { resolve_chat_composer_enter_action } from "../lib/chat-composer-keymap";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu";
-import type { DowncityChatApprovalMode, DowncityChatChangedFile, DowncityChatMessage, DowncityChatMessagePart, DowncityChatModelOption, DowncityChatPanelProps, DowncityChatQuestion, DowncityChatSubmitInput, DowncityChatThread } from "../types/chat";
+import type { DowncityChatApprovalMode, DowncityChatChangedFile, DowncityChatMessage, DowncityChatMessagePart, DowncityChatModelOption, DowncityChatPanelProps, DowncityChatQuestion, DowncityChatSubmitInput, DowncityChatSubmitMode, DowncityChatThread } from "../types/chat";
 import type { DowncityChatQueuedInput } from "../types/chat-runtime";
 
 function format_thread_time(value: DowncityChatThread["updated_at"]): string {
@@ -196,33 +197,33 @@ export function ChatComposer({ status = "ready", input_placeholder, on_submit, o
   const [text, set_text] = useState("");
   const editor = useEditor({ extensions: [StarterKit.configure({ heading: false, codeBlock: false }), Placeholder.configure({ placeholder: input_placeholder ?? "输入消息…", emptyEditorClass: "is-editor-empty" })], editorProps: { attributes: { class: "chat-input-editor dc-chat-input-editor", "data-chat-input": "true", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } }, onUpdate: ({ editor: current_editor }) => set_text(current_editor.getText()) });
   const is_streaming = status === "submitted" || status === "streaming" || status === "building-context";
-  const submit = useCallback(async (mode: "send" | "queue" = "send") => {
+  const submit = useCallback(async (mode: DowncityChatSubmitMode = "send") => {
     const normalized_text = text.trim();
     if (!normalized_text || !on_submit) return;
     const input: DowncityChatSubmitInput = { text: normalized_text, attachments: [] };
     editor?.commands.clearContent();
     set_text("");
     editor?.commands.focus();
-    await on_submit(input, mode);
-  }, [editor, on_submit, text]);
+    const effective_mode = mode === "send" && (is_streaming || queued_inputs.length > 0) ? "queue" : mode;
+    await on_submit(input, effective_mode);
+  }, [editor, is_streaming, on_submit, queued_inputs.length, text]);
   return <div className="dc-chat-input-root">
     {queued_inputs.length ? <div className="dc-chat-queue">{queued_inputs.map((item, index) => <div key={item.id}><ArrowDown /><span>{item.text}</span><button type="button" title="上移" disabled={index === 0} onClick={() => on_move_queued?.(item.id, "up")}><ArrowUp /></button><button type="button" title="下移" disabled={index === queued_inputs.length - 1} onClick={() => on_move_queued?.(item.id, "down")}><ArrowDown /></button><button type="button" title="取消排队" onClick={() => on_remove_queued?.(item.id)}><X /></button></div>)}</div> : null}
     <div className="dc-chat-input-shell" aria-busy={is_streaming && !text.trim()}>
       <EditorContent editor={editor} onKeyDown={(event) => {
-        if (event.key !== "Enter") return;
-        if (event.shiftKey && (event.metaKey || event.ctrlKey)) {
-          event.preventDefault();
-          void submit("queue");
-          return;
-        }
-        if (event.shiftKey) return;
-        const content = editor?.getJSON();
-        const is_single_paragraph = Boolean(content?.type === "doc" && content.content?.length === 1 && content.content[0]?.type === "paragraph");
-        if (!event.metaKey && !event.ctrlKey && (!is_single_paragraph || text.includes("\n"))) return;
+        const action = resolve_chat_composer_enter_action({
+          key: event.key,
+          shiftKey: event.shiftKey,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          altKey: event.altKey,
+          isComposing: event.nativeEvent.isComposing,
+        }, editor?.getJSON());
+        if (action === "native") return;
         event.preventDefault();
-        void submit("send");
+        void submit(action === "submit-immediately" ? "steer" : action === "queue-paused" ? "queue" : "send");
       }} />
-      <div className="dc-chat-input-toolbar"><div><button type="button" onClick={on_attach} title="添加附件"><TbPlus /></button><DropdownMenu><DropdownMenuTrigger render={<button type="button" className="dc-chat-input-chip" />}><TbRobot /><span>{model_options.find((option) => option.id === model_id)?.label ?? "Default model"}</span><TbChevronDown /></DropdownMenuTrigger><DropdownMenuContent side="top" align="start">{model_options.map((option) => <DropdownMenuItem key={option.id} onClick={() => void on_model_change?.(option.id)}>{option.id === model_id ? "✓" : ""}<span>{option.label}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu><DropdownMenu><DropdownMenuTrigger render={<button type="button" className="dc-chat-input-chip" />}>{approval_mode === "ask" ? <TbLock /> : <TbShieldCheck />}<span>{approval_mode === "ask" ? "Ask" : "Always allow"}</span><TbChevronDown /></DropdownMenuTrigger><DropdownMenuContent side="top" align="start"><DropdownMenuItem onClick={() => void on_approval_mode_change?.("ask")}><TbLock /><span>Ask</span></DropdownMenuItem><DropdownMenuItem onClick={() => void on_approval_mode_change?.("always-allow")}><TbShieldCheck /><span>Always allow</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div><button type="button" className="dc-chat-send" disabled={!is_streaming && !text.trim()} onClick={() => is_streaming && !text.trim() ? void on_stop?.() : void submit(is_streaming ? "queue" : "send")} title={is_streaming && !text.trim() ? "停止生成" : "发送消息"}>{is_streaming && !text.trim() ? <TbSquare /> : <TbArrowUp />}</button></div>
+      <div className="dc-chat-input-toolbar"><div><button type="button" onClick={on_attach} title="添加附件"><TbPlus /></button><DropdownMenu><DropdownMenuTrigger render={<button type="button" className="dc-chat-input-chip" />}><TbRobot /><span>{model_options.find((option) => option.id === model_id)?.label ?? "Default model"}</span><TbChevronDown /></DropdownMenuTrigger><DropdownMenuContent side="top" align="start">{model_options.map((option) => <DropdownMenuItem key={option.id} onClick={() => void on_model_change?.(option.id)}>{option.id === model_id ? "✓" : ""}<span>{option.label}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu><DropdownMenu><DropdownMenuTrigger render={<button type="button" className="dc-chat-input-chip" />}>{approval_mode === "ask" ? <TbLock /> : <TbShieldCheck />}<span>{approval_mode === "ask" ? "Ask" : "Always allow"}</span><TbChevronDown /></DropdownMenuTrigger><DropdownMenuContent side="top" align="start"><DropdownMenuItem onClick={() => void on_approval_mode_change?.("ask")}><TbLock /><span>Ask</span></DropdownMenuItem><DropdownMenuItem onClick={() => void on_approval_mode_change?.("always-allow")}><TbShieldCheck /><span>Always allow</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div><button type="button" className="dc-chat-send" disabled={!is_streaming && !text.trim()} onClick={() => is_streaming && !text.trim() ? void on_stop?.() : void submit("send")} title={is_streaming && !text.trim() ? "停止生成" : is_streaming || queued_inputs.length > 0 ? "加入队列" : "发送消息"}>{is_streaming && !text.trim() ? <TbSquare /> : <TbArrowUp />}</button></div>
     </div>
   </div>;
 }

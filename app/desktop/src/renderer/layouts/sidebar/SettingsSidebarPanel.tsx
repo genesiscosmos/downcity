@@ -1,7 +1,7 @@
 /** Desktop Sidebar 中的设置导航 Panel。 */
 
 import { memo } from "react";
-import { TbAdjustments, TbArrowLeft, TbBrush, TbCpu, TbMessageCircle, TbUser } from "react-icons/tb";
+import { TbAdjustments, TbArrowLeft, TbBrush, TbCpu, TbKeyboard, TbMessageCircle, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
@@ -29,6 +29,7 @@ export const SettingsSidebarPanel = memo(function SettingsSidebarPanel({ control
       { section: "general", label: translate("sections.general"), icon: TbAdjustments },
       { section: "appearance", label: translate("sections.appearance"), icon: TbBrush },
       { section: "chat", label: translate("sections.chat"), icon: TbMessageCircle },
+      { section: "shortcuts", label: translate("sections.shortcuts"), icon: TbKeyboard },
     ] },
   ];
 

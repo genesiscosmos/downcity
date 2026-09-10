@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopAgentSummary, DesktopChatFileInput, DesktopWorkspaceFile } from "@common/types/DesktopApi";
-import type { QueuedChatMessage } from "@/types/DesktopView";
+import type { ChatSubmitMode, QueuedChatMessage } from "@/types/DesktopView";
 import type { ChatSlashCommand } from "@/types/ChatComposer";
 
 /** 当前工作区为编辑器提供的附件读取能力。 */
@@ -23,20 +23,18 @@ export interface RichTextEditorProps {
   placeholder: string;
   /** 当前对话是否正在执行，用于提交和停止交互。 */
   busy: boolean;
+  /** 当前是否已有待发送队列，用于准确呈现常规提交的去向。 */
+  has_pending_queue?: boolean;
+  /** 当前场景是否支持创建暂停队列。 */
+  can_queue?: boolean;
   /** 是否启用浏览器拼写检查。 */
   spellcheck_enabled: boolean;
-  /** Enter 是否直接发送，关闭时使用系统修饰键加 Enter。 */
-  send_message_on_enter: boolean;
   /** 保存当前输入文档。 */
   update_draft(input: JSONContent): void;
-  /** 提交输入，失败时拒绝 Promise，由调用方恢复草稿。 */
-  send_message(input: JSONContent): Promise<void>;
-  /** 加入下一轮队列；不支持排队的场景不提供此能力。 */
-  enqueue_message?(input: JSONContent): Promise<void>;
+  /** 按常规策略提交，或在 steer 模式下绕过队列立即提交。 */
+  send_message(input: JSONContent, mode?: ChatSubmitMode): Promise<void>;
   /** 停止执行；草稿场景不提供此能力。 */
   stop_session?(): Promise<void>;
-  /** 执行当前会话的压缩命令；无历史的场景不提供。 */
-  compact_session?(): Promise<void>;
   /** 工作区附件能力；不支持附件的场景不提供。 */
   attachments?: ComposerAttachments;
   /** 可通过 @ 引用的成员，未提供时关闭成员选择。 */
@@ -57,8 +55,6 @@ export interface UserMessageRewriteEditorProps {
   submitting: boolean;
   /** 当前提交失败的用户可见原因。 */
   error: string;
-  /** Enter 是否直接提交；关闭时使用系统修饰键加 Enter。 */
-  send_message_on_enter: boolean;
   /** 放弃本次编辑。 */
   cancel(): void;
   /** 提交编辑器当前完整文档。 */
@@ -92,7 +88,7 @@ export interface AgentComposerProps {
   /** 输入区域按切片订阅的目录、草稿、配置与用户偏好。 */
   stores: Pick<import("./DesktopView").DesktopController["stores"], "catalog" | "composer" | "chat_stream" | "settings">;
   /** 输入配置与消息提交能力。 */
-  actions: Pick<import("./DesktopView").DesktopActions, "update_draft" | "send_message" | "set_session_model" | "set_session_reasoning_effort" | "set_session_approval_mode" | "compact_session" | "stop_session" | "remove_queued_message" | "send_queued_message" | "update_queued_message" | "toggle_queued_message_paused" | "set_queue_paused" | "move_queued_message">;
+  actions: Pick<import("./DesktopView").DesktopActions, "update_draft" | "send_message" | "set_session_model" | "set_session_reasoning_effort" | "set_session_approval_mode" | "stop_session" | "remove_queued_message" | "send_queued_message" | "update_queued_message" | "toggle_queued_message_paused" | "set_queue_paused" | "move_queued_message">;
 }
 
 /** 群聊输入区域的精确领域依赖。 */
