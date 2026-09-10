@@ -90,6 +90,11 @@
   display: none;
 }
 
+.activity-tool-summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  outline-offset: 2px;
+}
+
 .activity-tool-summary:hover .activity-tool-state,
 .activity-tool-summary:hover .activity-tool-icon,
 .activity-tool-summary:hover .activity-tool-chevron {
@@ -169,7 +174,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Assistant 活动详情遵循 Duobox 的紧凑日志布局。 */
+/* Agent 活动详情遵循 Duobox 的紧凑日志布局。 */
 .reasoning-activity-content,
 .activity-tool-terminal {
   min-width: 0;
@@ -344,6 +349,97 @@
   50% { opacity: 0; }
 }
 
+/* Activity 展开态：用单层内容面板替代嵌套终端和 JSON 容器。 */
+.activity-tool-count {
+  flex: 0 0 auto;
+  padding: 0.06rem 0.28rem;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--foreground) 46%, transparent);
+  background: color-mix(in srgb, var(--muted) 52%, transparent);
+  font-size: 0.625rem;
+  line-height: 1.2;
+}
+
+.activity-tool-group-body {
+  gap: 0.25rem;
+  margin: 0.1rem 0 0 0.47rem;
+  padding: 0.08rem 0 0.1rem 0.92rem;
+  border-left: 1px solid color-mix(in srgb, var(--border) 52%, transparent);
+}
+
+.activity-tool-detail {
+  min-width: 0;
+  max-height: 15rem;
+  margin: 0.18rem 0 0.18rem 1.38rem;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--border) 28%, transparent);
+  border-radius: 5px;
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
+}
+
+.activity-tool-detail pre {
+  min-width: 0;
+  margin: 0;
+  padding: 0.55rem 0.62rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.activity-tool-detail.is-write,
+.activity-tool-detail.is-edit {
+  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
+}
+
+.activity-tool-console {
+  color: color-mix(in srgb, var(--foreground) 78%, transparent);
+  background: transparent;
+}
+
+.activity-tool-edit-diff {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 0.36rem 0;
+}
+
+.activity-tool-edit-diff .activity-tool-edit-pair {
+  min-width: 0;
+}
+
+.activity-tool-edit-diff .activity-tool-diff-line {
+  display: block;
+  min-height: 1.45rem;
+  padding: 0.16rem 0.62rem;
+  border-left: 3px solid transparent;
+  font-size: 0.6875rem;
+  line-height: 1.48;
+}
+
+.activity-tool-edit-diff .activity-tool-diff-line.is-removal {
+  border-left-color: rgb(220 38 38);
+  color: rgb(153 27 27);
+  background: rgb(239 68 68 / 0.14);
+}
+
+.activity-tool-edit-diff .activity-tool-diff-line.is-addition {
+  border-left-color: rgb(22 163 74);
+  color: rgb(3 105 67);
+  background: rgb(34 197 94 / 0.14);
+}
+
+.dark .activity-tool-edit-diff .activity-tool-diff-line.is-removal {
+  color: rgb(252 165 165);
+}
+
+.dark .activity-tool-edit-diff .activity-tool-diff-line.is-addition {
+  color: rgb(110 231 183);
+}
+
 /* Interaction 保持消息流内联，不引入独立弹窗生命周期。 */
 .interaction-card {
   display: grid;
@@ -490,8 +586,45 @@
   border-color: color-mix(in srgb, var(--primary) 58%, transparent);
 }
 
+.interaction-note-input {
+  width: 100%;
+  min-height: 2.75rem;
+  margin-top: 0.5rem;
+  resize: vertical;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--border) 52%, transparent);
+  border-radius: 6px;
+  outline: none;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 62%, transparent);
+  font-size: 0.71875rem;
+  line-height: 1.4;
+}
+
+.question-stage > .interaction-note-input {
+  margin-top: 0.08rem;
+}
+
+.interaction-note-input::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 74%, transparent);
+}
+
+.interaction-note-input:focus {
+  border-color: color-mix(in srgb, var(--primary) 58%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.interaction-note-input:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
 .question-options {
   display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
   gap: 0.3rem;
 }
 
@@ -538,7 +671,7 @@
   line-height: 1.32;
 }
 
-.assistant-resource-row {
+.agent-message-resource {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -552,13 +685,13 @@
   font-size: 0.71875rem;
 }
 
-.assistant-resource-row svg {
+.agent-message-resource svg {
   width: 0.9rem;
   height: 0.9rem;
   flex: 0 0 auto;
 }
 
-.assistant-resource-row span {
+.agent-message-resource span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -152,6 +152,8 @@ export interface SessionInteractionAnswer {
 export interface SessionQuestionResponsePayload {
   /** 按 question_id 关联的完整回答集合。 */
   answers: SessionInteractionAnswer[];
+  /** 用户随回答提交的可选补充说明。 */
+  note?: string;
 }
 
 /** 用户提交一次 Interaction 响应的通用结构。 */

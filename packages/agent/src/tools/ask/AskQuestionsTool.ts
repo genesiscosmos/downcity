@@ -90,10 +90,12 @@ export const AskQuestionsTool = define_runtime_tool<AskQuestionsToolInput, Actio
         "ask_question received an incompatible Interaction response",
       );
     }
+    const response_payload = result.response.payload as unknown as { answers: SessionInteractionAnswer[]; note?: string };
     return {
       output: {
         status: "resolved",
-        answers: (result.response.payload as unknown as { answers: SessionInteractionAnswer[] }).answers,
+        answers: response_payload.answers,
+        ...(response_payload.note ? { note: response_payload.note } : {}),
       },
       messages: [],
     };
