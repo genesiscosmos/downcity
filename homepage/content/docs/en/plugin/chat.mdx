@@ -22,6 +22,21 @@ Selecting an Account lets you manage:
 
 Desktop applies Account saves immediately. It restarts only that Account's Connector, so Desktop, City, and other Bot Accounts do not need to restart. Credentials can be entered in Settings. Stored secrets are never echoed; leave a secret field empty to preserve its current value.
 
+:::callout
+Telegram and similar platforms may require a proxy in some networks. As soon as a proxy is enabled at the system or Desktop level, channels use it automatically.
+
+### Network and connectivity
+
+Telegram, Feishu, and QQ requests all go through one shared plugin egress layer, so behavior is identical:
+
+- Every request has an overall timeout, so a connection can never hang forever. On failure the Account moves to `Error` and shows the reason directly.
+- Proxy priority: the Desktop network proxy setting, then the operating system proxy, then `HTTPS_PROXY` and related variables from `Global / Env`. On macOS the plugin inherits the system proxy automatically, and system bypass lists are converted into `NO_PROXY`.
+- When the proxy changes (including toggling the system proxy or a VPN), Desktop re-resolves it within 30 seconds and reconnects enabled channels. No restart is needed.
+- Only `http://` or `https://` proxy URLs are supported. A `socks5://` URL fails immediately with an actionable message. `NO_PROXY` supports host names, `.example.com`, `*.example.com`, and IPv4 CIDR.
+- After an unexpected disconnect the Account reconnects with capped backoff (at most once every 5 minutes) and resets on success. While an Account is disconnected, Outbox deliveries are only delayed, and do not consume retry attempts.
+
+If an Account stays in `Connecting`, click Test connection once. If it still fails, the error text shown in the UI names the concrete cause, such as an unusable proxy or an unreachable endpoint.
+
 ## Account configuration
 
 Account definitions and credentials have one source of truth: City Plugin Config.

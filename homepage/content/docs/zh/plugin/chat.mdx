@@ -22,6 +22,22 @@ Chat Plugin 是 City 持有的渠道运行时。它不属于某个 Agent，也�
 
 在 Desktop 保存 Account 后立即应用，只重启该 Account 的 Connector，不需要重启 Desktop 或 City，其他 Bot 连接不受影响。密钥可以直接在 Settings 中写入；已保存的密钥不会回显，编辑时留空表示保留原值。
 
+:::callout
+Telegram 等平台在部分网络环境下需要代理才能访问。只要在系统或 Desktop 中开启代理，Channel 会自动使用，无需额外配置。
+:::
+
+### 网络与连接
+
+Telegram、飞书与 QQ 的请求都经过 Plugin 统一出站层，行为一致：
+
+- 每个请求都有整体超时，不会无限挂起。连接失败时 Account 会进入 `错误` 并直接展示原因。
+- 代理优先级：Desktop 网络代理设置 → 操作系统系统代理 → `Global / Env` 中的 `HTTPS_PROXY` 等变量。macOS 开启系统代理后插件会自动继承，系统例外列表会转换为 `NO_PROXY`。
+- 代理变化（包括开系统代理 / 连 VPN）后，Desktop 会在 30 秒内自动重新解析并重连已启用的 Channel，无需重启。
+- 只支持 `http://` 或 `https://` 代理地址；`socks5://` 会直接报错并提示改用 http 地址。`NO_PROXY` 支持主机名、`.example.com`、`*.example.com` 与 IPv4 CIDR。
+- 连接意外失败后会自动按退避重连（最长 5 分钟一次），成功后退避重置。Account `未连接` 时 Outbox 只延后发送，不消耗重试次数。
+
+如果 Account 一直停在 `连接中`，先点一次“测试连接”；仍失败时，界面上的错误文本会给出具体原因（例如代理不可用或目标不可达）。
+
 ## Account 配置
 
 Account 定义与密钥以 City Plugin Config 为唯一事实源。示例：

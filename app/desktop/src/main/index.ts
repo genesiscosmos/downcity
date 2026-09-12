@@ -12,6 +12,12 @@ import {
   register_plugin_renderer_scheme,
 } from "@/plugin/PluginRendererProtocol.js";
 import { DesktopGlobalEnvController } from "@/settings/DesktopGlobalEnvController.js";
+import {
+  read_global_env_no_proxy,
+  read_global_env_proxy_url,
+  read_system_proxy,
+} from "@/settings/DesktopProxyResolver.js";
+import { resolve_local_global_env } from "@downcity/city/local";
 import { DesktopAppBadge } from "@/notification/DesktopAppBadge.js";
 import { DesktopNotificationCenter } from "@/notification/DesktopNotificationCenter.js";
 import { NotificationStore } from "@/notification/NotificationStore.js";
@@ -37,6 +43,13 @@ const global_env_controller = new DesktopGlobalEnvController(local_data);
 let plugin_controller: PluginController | undefined;
 let user_controller: DesktopUserController;
 let quitting = false;
+/** 当前已应用到 Chromium Session 的代理配置，用于避免重复设置。 */
+let applied_session_proxy_config = "";
+/** 系统代理变化监听 Timer。 */
+let system_proxy_watch_timer: ReturnType<typeof setInterval> | undefined;
+
+/** 系统代理变化检测周期。 */
+const SYSTEM_PROXY_WATCH_INTERVAL_MS = 30_000;
 
 register_plugin_renderer_scheme();
 
@@ -208,14 +221,16 @@ ipcMain.handle("chat:set-reasoning-effort", (_event, agent_id: string, workspace
 ipcMain.handle("chat:set-approval-mode", (_event, agent_id: string, workspace_id: string, session_id: string, approval_mode: SessionApprovalMode) => require_agent_controller().set_approval_mode(agent_id, workspace_id, session_id, approval_mode));
 ipcMain.handle("settings:get", () => settings_controller.get());
 ipcMain.handle("settings:update", async (_event, patch) => {
-  const settings = settings_controller.update(patch);
-  await apply_proxy_settings(settings.proxy_enabled, settings.proxy_url);
-  return settings;
+  settings_controller.update(patch);
+  await apply_proxy_settings();
+  return settings_controller.get();
 });
 ipcMain.handle("settings:env-list", () => global_env_controller.list());
 ipcMain.handle("settings:env-update", async (_event, raw: unknown) => {
   const result = await global_env_controller.update(raw);
   await agent_controller?.reload_global_env();
+  // 关键点（中文）：Global Env 中可能包含代理变量，保存后需同步到插件运行时并重建连接。
+  await apply_proxy_settings();
   return result;
 });
 ipcMain.handle("user:current", () => user_controller.current());
@@ -269,21 +284,101 @@ async function prepare_city_host(): Promise<void> {
   await request_city_host_shutdown(existing_host);
 }
 
-/** 把 Desktop 网络代理设置应用到 Electron 默认 Session。 */
-async function apply_proxy_settings(proxy_enabled: boolean, proxy_url: string): Promise<void> {
-  const proxy_rules = proxy_enabled ? String(proxy_url || "").trim() : "";
-  if (proxy_enabled && !proxy_rules) throw new Error("启用网络代理前需要填写代理地址");
-  await session.defaultSession.setProxy({
-    proxyRules: proxy_rules,
-    // 本地回环服务（包括 Electron 开发环境的 Vite Server）始终直连，不经过用户代理。
-    proxyBypassRules: "localhost;127.0.0.1;[::1]",
-  });
+/**
+ * 解析并应用 Desktop 当前应当使用的出站代理。
+ *
+ * 关键点（中文）
+ * - Chromium 侧与插件侧必须得到一致的代理，否则会出现“部分请求可用”的困惑。
+ * - 插件侧优先级：Desktop 显式设置 → 系统代理 → Global Env。
+ * - 只有生效值真实变化时才重建连接，避免无意义地打断稳定连接。
+ */
+async function apply_proxy_settings(): Promise<void> {
+  const settings = settings_controller.get();
+  const explicit_proxy = settings.proxy_enabled ? String(settings.proxy_url || "").trim() : "";
+  if (settings.proxy_enabled && !explicit_proxy) {
+    throw new Error("启用网络代理前需要填写代理地址");
+  }
+
+  // 关键点（中文）：未显式设置时让 Chromium 遵循系统代理，而不是强制直连。
+  const session_config = explicit_proxy
+    ? {
+        proxyRules: explicit_proxy,
+        // 本地回环服务（包括 Electron 开发环境的 Vite Server）始终直连。
+        proxyBypassRules: "localhost;127.0.0.1;[::1]",
+      }
+    : { mode: "system" as const };
+  const session_config_key = JSON.stringify(session_config);
+  if (session_config_key !== applied_session_proxy_config) {
+    await session.defaultSession.setProxy(session_config);
+    applied_session_proxy_config = session_config_key;
+  }
+
+  const system_proxy = explicit_proxy ? { proxy_url: "", no_proxy: "" } : await read_system_proxy();
+  const global_env = resolve_local_global_env(local_data.root_path);
+  const plugin_proxy = explicit_proxy
+    || system_proxy.proxy_url
+    || read_global_env_proxy_url(global_env);
+  const plugin_no_proxy = explicit_proxy
+    ? ""
+    : system_proxy.no_proxy || read_global_env_no_proxy(global_env);
+
+  if (!apply_plugin_proxy_env(plugin_proxy, plugin_no_proxy)) return;
+  await reconnect_chat_accounts();
+}
+
+/**
+ * 把解析结果写入插件运行时环境变量。
+ *
+ * 说明（中文）
+ * - 返回是否发生了变化；未变化时调用方不应触发重连。
+ * - 先清理再写入，避免关闭代理后残留旧地址。
+ */
+function apply_plugin_proxy_env(proxy_url: string, no_proxy: string): boolean {
+  const previous = String(process.env.DOWNCITY_PROXY_URL || "").trim();
+  const previous_no_proxy = String(process.env.DOWNCITY_NO_PROXY || "").trim();
+  if (proxy_url) process.env.DOWNCITY_PROXY_URL = proxy_url;
+  else delete process.env.DOWNCITY_PROXY_URL;
+  if (no_proxy) process.env.DOWNCITY_NO_PROXY = no_proxy;
+  else delete process.env.DOWNCITY_NO_PROXY;
+  if (previous === proxy_url && previous_no_proxy === no_proxy) return false;
+  console.log(
+    `Downcity plugin proxy ${proxy_url ? `set to ${proxy_url}` : "cleared"}`
+      + `${no_proxy ? ` (no_proxy: ${no_proxy})` : ""}`,
+  );
+  return true;
+}
+
+/** 监听系统代理变化，使 VPN / 代理软件开关后无需重启 Desktop。 */
+function start_system_proxy_watch(): void {
+  system_proxy_watch_timer = setInterval(() => {
+    void apply_proxy_settings().catch((error: unknown) => {
+      console.warn("Downcity proxy refresh skipped", to_error_message(error));
+    });
+  }, SYSTEM_PROXY_WATCH_INTERVAL_MS);
+  system_proxy_watch_timer.unref?.();
+}
+
+/** 重建 Chat 插件的全部启用连接，使新代理立即生效。 */
+async function reconnect_chat_accounts(): Promise<void> {
+  const controller = agent_controller;
+  if (!controller) return;
+  try {
+    await controller.invoke_plugin_main("chat", "accounts.refresh_network");
+  } catch (error) {
+    // 关键点（中文）：插件尚未完成初始化时直接忽略，启动流程会使用已同步的代理环境变量。
+    console.warn("Downcity chat accounts reconnect skipped", to_error_message(error));
+  }
+}
+
+/** 把未知异常转为可读文本。 */
+function to_error_message(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 app.whenReady().then(async () => {
   register_plugin_renderer_protocol(local_data);
-  const current_settings = settings_controller.get();
-  await apply_proxy_settings(current_settings.proxy_enabled, current_settings.proxy_url);
+  await apply_proxy_settings();
+  start_system_proxy_watch();
   await prepare_city_host();
   const next_notification_center = new DesktopNotificationCenter(
     new NotificationStore(local_data.settings),
@@ -336,6 +431,8 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   event.preventDefault();
   quitting = true;
+  if (system_proxy_watch_timer) clearInterval(system_proxy_watch_timer);
+  system_proxy_watch_timer = undefined;
   void Promise.allSettled([
     agent_controller?.dispose() ?? Promise.resolve(),
   ]).finally(() => {
