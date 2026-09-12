@@ -15,6 +15,7 @@ import path from "node:path";
 import test from "node:test";
 import { TelegramApiClient } from "../bin/chat/channels/telegram/ApiClient.js";
 import { create_chat_agent_actions } from "../bin/chat/runtime/ChatAgentActions.js";
+import { FeishuBot } from "../bin/chat/channels/feishu/Feishu.js";
 
 /** 记录日志调用的最小 PluginLogger 桩。 */
 function create_logger(records) {
@@ -138,6 +139,57 @@ function create_runtime_stub(delivery) {
     react_from_agent: () => delivery,
   };
 }
+
+/** 构造一个最小可用的 FeishuBot，不参与真实入站流程。 */
+function create_feishu_bot(project_root, log_records) {
+  return new FeishuBot(
+    {
+      account_id: "feishu-account",
+      agent_id: "agent-1",
+      workspace_path: project_root,
+      storage_path: project_root,
+      logger: create_logger(log_records),
+      evaluate_access: async () => ({ allowed: true }),
+      receive_message: async () => ({ chat_key: "k", position: 0 }),
+      record_audit: async () => undefined,
+      clear_conversation: async () => undefined,
+    },
+    "app-id",
+    "app-secret",
+    undefined,
+  );
+}
+
+test("飞书附件投递失败同样必须上抛，不得降级为聊天文本", async () => {
+  const project_root = create_project_root();
+  const log_records = [];
+  const sent_messages = [];
+  const bot = create_feishu_bot(project_root, log_records);
+  bot.sendAttachment = async () => {
+    throw new Error("Feishu file upload failed: HTTP 500");
+  };
+  bot.sendPlatformMessage = async (_chatId, _chatType, _messageId, msgType, content) => {
+    sent_messages.push({ msgType, content });
+  };
+
+  await assert.rejects(
+    () => bot.sendChatMessage("chat-1", "p2p", '<file type="document">report.md</file>'),
+    (error) => {
+      assert.match(String(error.message), /Feishu file upload failed/u);
+      return true;
+    },
+  );
+  assert.deepEqual(sent_messages, [], "附件失败时不允许向用户补发错误文本");
+  assert.ok(
+    log_records.some(
+      (record) =>
+        record.level === "error" &&
+        record.message.includes("Failed to send Feishu attachment"),
+    ),
+    "飞书附件失败必须留下可定位的错误日志",
+  );
+  fs.rmSync(project_root, { recursive: true, force: true });
+});
 
 test("chat.send 返回受理回执而不是送达承诺", async () => {
   const actions = create_chat_agent_actions(() =>
