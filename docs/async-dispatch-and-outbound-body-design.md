@@ -96,19 +96,33 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 ### 4.1 队列能力收敛为三态
 
+> 状态：已实现（commit `7e4241a4b`，`@downcity/federation` 0.1.19）
+
 | 状态 | 出现场景 | `send()` 行为 |
 | --- | --- | --- |
-| `in_process` | Node / 本地 Federation 默认 | 由内置延迟适配器在进程内调用 `queue.call()` |
+| `in_process` | 长期运行宿主（Node / CLI / Desktop）默认 | 由内置延迟适配器在进程内调用 `queue.call()` |
 | `external` | 显式 `federation.queue.use(...)`（Cloudflare Queue 等） | 交给外部队列 |
-| `unavailable` | Edge 运行时且未注册外部 adapter | 不隐式降级，能力校验阶段即报错 |
+| `unavailable` | 请求级隔离运行时且未注册外部 adapter | 不隐式降级，能力校验阶段即报错 |
 
-判定规则：adapter 由 `queue.use()` 显式提供即 `external`；Node 运行时默认 `in_process`；Edge 运行时且无 adapter 即 `unavailable`。运行时类型从 Federation 已有的运行时信息推导，不新增 `if (isWorker)` 之类散落判断。
+**运行时判定采用「正向识别请求级运行时」**（`federation/dispatch-environment.ts`），而不是反向识别 Node：
+
+- 命中 `navigator.userAgent === "Cloudflare-Workers"` 或 `globalThis.EdgeRuntime` → `request_scoped`。
+- 其余一律 `long_lived`。
+
+关键原因：本仓库 `WranglerConfigWriter.ts:37` 为部署的 Worker 开启了 `nodejs_compat`，那里 `process` 与 `process.versions.node` **都会存在**，用 Node 特征反推会把 Worker 误判为长期进程，从而在响应结束后静静丢失定时器任务。
 
 ### 4.2 默认适配器与生命周期
 
-- 在 `packages/federation/src/federation/queue.ts` 内新增进程内延迟适配器实现：按 `delay_ms` 用定时器把消息交回 `federation.queue.call()`，并持有未完成定时器集合。
-- 生命周期闭合：`Federation` 提供（或复用）`dispose()`，关闭 adapter、清理未触发定时器；不得留下悬挂 timer。
-- 不新增"队列可用性"公开 API：`send()` 在 `unavailable` 下抛出带 `code` 的明确错误，调用方通过能力校验而不是探测接口判断。
+- 新增 `federation/queue-in-process.ts`：按 `delay_ms` 用定时器把消息交回 `FederationQueue.call()`，并用 `unref()` 确保调度不阻止宿主进程退出（与 `ChatRuntime` 的定时器约定一致）。
+- **投递是解耦的**：`send()` 只负责排入定时器，不等待任务执行；定时器触发后的执行失败无法回传调用方，只能上报（`console.error`，与 `AIImageJobRuntime` 现有用法一致），未完成任务由 4.4 的恢复流程兜底。
+- 生命周期闭合：`Federation.dispose()` 会先关闭调度器清理未触发定时器，再释放数据库；`FederationQueue.dispose()` **幂等且为终态**，释放后拒绝新消息而不重建适配器（避免「已释放又恢复调度」的悬挂状态）。
+- 能力校验用 `require_available()`：它是抛错的断言，不是返回布尔的探测接口，调用方不需要自己分支。
+
+**与初版方案的差异**：设计初稿写「不新增队列可用性探测公开 API」，实际实现新增了 `require_available()`。原因：4.3 要求「能力缺失必须在副作用之前失败」，预检必须有一个可调用的断言入口。与其让调用方自己读布尔值分支，不如提供一个直接抛类型化错误的方法——这是断言而非探测。
+
+### 4.2.1 能力可探测
+
+`Federation.health()` 新增 `queue` 字段（`FederationQueueState`），使部署期就能发现「运行时不支持调度且未配置队列」，而不必等到第一次任务入队失败。
 
 ### 4.3 调度前置校验与失败语义
 
@@ -230,7 +244,10 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 | 文件 | 变化 | 依赖方向 |
 | --- | --- | --- |
-| `packages/federation/src/federation/queue.ts` | 新增进程内适配器、能力三态、带 code 的错误 | 不变（Federation 内部） |
+| `packages/federation/src/federation/dispatch-environment.ts` | 新增：主机调度模型判定 | Federation 内部 |
+| `packages/federation/src/federation/queue-in-process.ts` | 新增：进程内延迟适配器 | Federation 内部 |
+| `packages/federation/src/federation/queue.ts` | 能力三态、进程内适配器、带 code 错误、dispose | 不变（Federation 内部） |
+| `packages/federation/src/federation/federation.ts` | `health()` 上报 queue 状态；`dispose()` 关闭调度器 | 不变 |
 | `packages/federation/src/service/ai/AIImageJobRuntime.ts` | 前置能力校验；投递失败保留事实；接入 reconciler | Service → Federation 能力，方向不变 |
 | `packages/federation/src/service/ai/AISettlementRuntime.ts` | 同上（结算重试） | 不变 |
 | `packages/implementations/plugins/src/http/PluginHttp.ts` | 出站边界归一化全局 `FormData` | Plugin → 出站层，方向不变 |
@@ -248,10 +265,10 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 | 类型 | 内容 |
 | --- | --- |
-| 新增 | `chat.delivery` plugin action |
-| 修改 | `FederationQueue.send()` 错误改为带 `code`、语义改为"能力决定"；`chat.send` 返回体新增 `status` |
+| 新增 | `chat.delivery` plugin action（P1-5）；`FederationQueueUnavailableError`；`FederationQueueState`；`FederationQueue.state` / `is_available()` / `require_available()` / `dispose()` |
+| 修改 | `FederationQueue.send()` 错误改为带 `code`、语义改为"能力决定"；`Federation.health()` 新增 `queue` 字段；`chat.send` 返回体新增 `status` |
 | 删除 | `AIImageJobRuntime` / `AISettlementRuntime` 中永不生效的 `!ctx.queue` 分支；`ApiClient` 的吞错降级路径 |
-| 不引入 | 不新增"队列可用性探测"公开 API（能力校验已在服务侧完成）；不新增 `files` 字段；不引入运行时 flag 开关 |
+| 不引入 | 不新增"队列可用性探测"公开 API（改用抛错的 `require_available()` 断言）；不新增 `files` 字段；不引入运行时 flag 开关 |
 
 ---
 
@@ -272,11 +289,13 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 | 层级 | 用例 |
 | --- | --- |
 | `@downcity/plugins` | multipart 回归（5.3）；附件失败必须上抛且不发 ❌ 文本；纯文本不受影响；`chat.send` / `chat.react` 返回含 `status`。`chat.delivery` 用例待 P1-5 |
-| `@downcity/federation` | 无外部 adapter 时 Node 下 `queue.send` 成功（in_process）；投递失败时 `create_job` 仍返回 `job_id` 且 `dispatch_error` 已写入；reconciler 能把非终态任务重新入队；能力缺失时前置失败且无副作用 |
+| `@downcity/federation` | 无外部 adapter 时 Node 下 `send()` 真实投递（in_process）；请求级运行时未注册 adapter 时 `state=unavailable` 且错误带 `code`；`dispose()` 清理定时器且为终态；`health()` 上报 queue 状态；投递失败只上报不产生未处理拒绝。**已实现：`test/queue-dispatch.test.mjs` 10/10 通过，全套 84/84 通过** |
 | templates | localfed 端到端图像生成；edgefed 缺 binding 时 `health()` 报错 |
 | 验证顺序 | 定向 typecheck → 定向测试 → 消费 package typecheck → patch build（`@downcity/federation`、`@downcity/plugins`）→ homepage build（文档变化时） |
 
 无法在当前系统验证的部分：Telegram / 飞书真实上传与 Cloudflare Queue 行为必须由对应环境验证，本机只能验证到"请求体编码正确"与"能力装配正确"。
+
+另需注意：`@downcity/federation` 的测试依赖 `better-sqlite3` 原生模块，在 Linux 沙箱中会报 `invalid ELF header`（该模块在宿主机 macOS 编译）。federation 测试必须在宿主机运行，沙箱只能做 typecheck 与构建。
 
 ---
 
@@ -294,7 +313,7 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 1. ✅ **P0-1 出站体修复**：`PluginHttp` 归一化全局 `FormData` + multipart 回归测试（commit `894ecfb19`，`plugins` 1.0.313）。一次改动同时修好 Telegram、飞书、Web。
 2. ✅ **P0-2 失败语义**：Telegram / 飞书附件失败上抛；`chat.send` / `chat.react` 返回受理回执（含 `status`）（commit `f2321b50e`、`97b9935a2`，`plugins` 1.0.314）。
-3. **P1-1 调度能力**：进程内适配器 + 能力三态 + `Federation.dispose()` 清理。
+3. ✅ **P1-1 调度能力**：进程内适配器 + 能力三态 + `dispose()` 清理（commit `7e4241a4b`，`@downcity/federation` 0.1.19）。
 4. **P1-2 服务侧校验**：`AIImageJobRuntime` / `AISettlementRuntime` 前置校验、投递失败保留事实、删除死分支。
 5. **P1-3 恢复**：reconciler 与触发点。
 6. **P1-4 模板与文档**：localfed / edgefed / Cloudflare 生成器、homepage 文档。
