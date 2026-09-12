@@ -25,14 +25,15 @@ export function AgentSessionRouteMainView({ selection, controller, sidebar_colla
   const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
   const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
   const session = use_desktop_selector(controller.stores.session, (state) => (state.sessions_by_workspace[selection.workspace_id] ?? []).find((item) => item.agent_id === selection.agent_id && item.session.session_id === selection.session_id)?.session);
+  const file_diff_summary = use_desktop_selector(controller.stores.chat_stream, (state) => state.file_diff_by_session[get_session_key(selection.workspace_id, selection.agent_id, selection.session_id)]);
   if (!agent || !session) return <WelcomeView />;
-  return <AgentChatMainView agent={agent} controller={controller} sidebar_collapsed={sidebar_collapsed} view_key={`agent-session:${agent.agent_id}:${session.session_id}`}>
-    {(open_agent_info) => <AgentSessionChatSurface selection={selection} agent={agent} session={session} open_agent_info={open_agent_info} workspaces={workspaces} agents={agents} settings={settings} controller={controller} />}
+  return <AgentChatMainView agent={agent} controller={controller} view_key={`agent-session:${agent.agent_id}:${session.session_id}`} file_diff_summary={file_diff_summary}>
+    <AgentSessionChatSurface selection={selection} agent={agent} session={session} workspaces={workspaces} agents={agents} settings={settings} controller={controller} />
   </AgentChatMainView>;
 }
 
 /** 已创建 Agent Session 的高频状态消费边界。 */
-export function AgentSessionChatSurface({ selection, agent, session, open_agent_info, workspaces, agents, settings, controller }: { /** 当前 Session 导航目标。 */ selection: Extract<NavigationTarget, { kind: "session" }>; /** Session 所属 Agent。 */ agent: DesktopAgentSummary; /** 当前 Session 摘要。 */ session: DesktopSessionSummary; /** 打开 Agent 编辑侧栏。 */ open_agent_info(): void; /** 可用 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 可用 Agent。 */ agents: DesktopAgentSummary[]; /** Chat 设置。 */ settings: DesktopSettings; /** Desktop 稳定控制器。 */ controller: DesktopController }) {
+export function AgentSessionChatSurface({ selection, agent, session, workspaces, agents, settings, controller }: { /** 当前 Session 导航目标。 */ selection: Extract<NavigationTarget, { kind: "session" }>; /** Session 所属 Agent。 */ agent: DesktopAgentSummary; /** 当前 Session 摘要。 */ session: DesktopSessionSummary; /** 可用 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 可用 Agent。 */ agents: DesktopAgentSummary[]; /** Chat 设置。 */ settings: DesktopSettings; /** Desktop 稳定控制器。 */ controller: DesktopController }) {
   const { workspace_id, agent_id, session_id } = selection;
   const session_key = get_session_key(workspace_id, agent_id, session_id);
   const messages = use_desktop_selector(controller.stores.chat_stream, (state) => state.messages_by_session[session_key]);
@@ -51,7 +52,6 @@ export function AgentSessionChatSurface({ selection, agent, session, open_agent_
   const load_earlier_history = useCallback(() => controller.actions.load_earlier_history(workspace_id, agent_id, session_id), [agent_id, controller.actions, session_id, workspace_id]);
   return <SessionView
     chat_surface="agent"
-    open_agent_info={open_agent_info}
     open_workspace_file={controller.actions.select_workspace_file}
     workspace_id={workspace_id}
     agent={agent}

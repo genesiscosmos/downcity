@@ -8,11 +8,10 @@ import { DesktopSidebar } from "@/layouts/DesktopSidebar";
 
 import type { DesktopController } from "@/types/DesktopView";
 
-import { MainViewHeaderProvider } from "@/layouts/MainViewLayout";
+import { ShellLayoutProvider } from "@/layouts/MainViewLayout";
 import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
 import { resolve_desktop_link } from "@/features/navigation/lib/desktop_link";
 import { resolve_sidebar_shortcut_mode } from "@/features/navigation/lib/sidebar_shortcut";
-import { TurnFileDiffReviewHost } from "@/features/chat/components/messages/TurnFileDiffCard";
 
 import { DesktopMainView } from "@/app/DesktopRouter";
 import { DesktopErrorHost } from "@/app/DesktopOverlays";
@@ -35,6 +34,8 @@ export function DesktopShell() {
   const [command_palette_open, set_command_palette_open] = useState(false);
   const open_group_from_sidebar = useCallback((group_id: string) => controller.actions.select_group(group_id), [controller.actions]);
   const open_create_workspace = useCallback(() => set_create_workspace_dialog_open(true), []);
+  // Shell 只负责左侧 Sidebar；右侧 BayBar 属于 MainView，Shell 不需要知道它的存在。
+  const shell_layout = useMemo(() => ({ sidebar_collapsed }), [sidebar_collapsed]);
 
   useEffect(() => {
     const handle_key_down = (event: KeyboardEvent) => {
@@ -130,8 +131,11 @@ export function DesktopShell() {
         open_group_config={open_group_from_sidebar}
         collapsed={sidebar_collapsed}
       />
-      <main className="main-view-shell relative flex h-full min-w-0 flex-1 bg-background">
-        <TurnFileDiffReviewHost><MainViewHeaderProvider value={{ sidebar_collapsed }}><div className="flex h-full min-w-0 flex-1 flex-col"><DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} /></div></MainViewHeaderProvider></TurnFileDiffReviewHost>
+      <main className="relative flex h-full min-w-0 flex-1 bg-muted p-1">
+        <ShellLayoutProvider value={shell_layout}>
+          {/* 右侧 BayBar 属于 MainView，由页面自己组合；Shell 不参与。 */}
+          <DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} />
+        </ShellLayoutProvider>
       </main>
     </div>
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={() => set_sidebar_collapsed((value) => !value)} />

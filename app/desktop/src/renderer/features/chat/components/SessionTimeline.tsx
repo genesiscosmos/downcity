@@ -3,6 +3,7 @@
 import { useCallback, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import { TbAlertTriangle, TbCheck, TbChevronDown, TbDots, TbFolder } from "react-icons/tb";
+import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
@@ -40,8 +41,6 @@ interface SessionViewProps {
   agents: DesktopAgentSummary[];
   /** 当前 Session 摘要。 */
   session: DesktopSessionSummary;
-  /** 打开当前 Agent 信息侧栏。 */
-  open_agent_info?(): void;
   /** 当前 Session 的 canonical 可见消息。 */
   messages: SessionMessage[];
   /** 当前 Session 实时运行态。 */
@@ -76,8 +75,7 @@ interface SessionViewProps {
   load_earlier_history?(): Promise<void>;
 }
 
-/** 草稿没有历史消息能力；仅作为消息渲染器的内部空实现。 */
-async function ignore_unavailable_history_action(): Promise<void> {}
+/** 草稿没有历史消息能力；仅作为消息渲染器的内部空实现。 */async function ignore_unavailable_history_action(): Promise<void> {}
 
 /** Session 对话主视图。 */
 export function SessionView(props: SessionViewProps) {
@@ -93,17 +91,18 @@ export function SessionView(props: SessionViewProps) {
     : props.workspace_draft_mode
       ? <ChatWorkspaceSelector workspace_id={props.workspace_id} workspaces={props.workspaces} disabled={busy} switch_workspace={props.switch_workspace} />
       : <WorkspaceTagMenu workspace={props.workspace} />;
+  const session_title = session.title || translate_chat("conversation.new");
 
   return <ChatSurfaceLayout
-    header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><button type="button" disabled={!props.open_agent_info} onClick={props.open_agent_info} className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-xs font-medium text-foreground transition-colors duration-150 enabled:hover:bg-interaction-hover" title={props.open_agent_info ? translate_chat("message.edit_agent") : undefined}><AgentAvatar agent={props.agent} class_name="size-5 rounded-md" /><span className="truncate">{session.title || translate_chat("conversation.new")}</span></button>{workspace_tag}</div>}
-    header_right={<div className="flex shrink-0 items-center gap-1">{props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<button type="button" className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground" title={translate_chat("conversation.actions")} aria-label={translate_chat("conversation.actions")}><TbDots className="size-4" /></button>} /> : null}</div>}
+    header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={session_title}>{session_title}</span>{workspace_tag}</div>}
+    header_right={props.rename_session && props.archive_session && props.remove_session ? <div className="flex shrink-0 items-center gap-1"><SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<Button size="icon" title={translate_chat("conversation.actions")} aria-label={translate_chat("conversation.actions")}><TbDots /></Button>} /></div> : null}
   >
     <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
       <div ref={scroll_ref} className="chat-scroll-viewport relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log" onScroll={handle_scroll}>
         <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
         <div ref={content_ref} className="chat-scroll-content mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
           {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} /> : null}
-          <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} open_agent_info={props.open_agent_info} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></TurnFileOpenProvider>
+          <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></TurnFileOpenProvider>
         </div>
         <div ref={bottom_ref} className="chat-scroll-bottom-anchor" aria-hidden="true" />
       </div>

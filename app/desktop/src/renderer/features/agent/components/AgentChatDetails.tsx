@@ -1,21 +1,70 @@
-/** Desktop 按业务职责组织的页面与应用组件。 */
-import { useState, type ReactNode } from "react";
+/** Agent Chat：MainView 组合内容与右侧「Agent」「本轮」两个域。 */
+import { useMemo, useState, type ReactNode } from "react";
+
+import type { SessionTurnFileDiffData, SessionTurnFileDiffSummary } from "@downcity/agent/session";
 
 import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopAgentSummary } from "@common/types/DesktopApi";
 
-import { MainViewBayBarFrame } from "@/layouts/BayBar";
+import { MainView, type BayBarDomain } from "@/layouts/BayBar";
 
-import { AgentInfoSidebar, type AgentEditorSection } from "@/features/agent/AgentView";
+import { AGENT_DOMAIN_ID, AGENT_EDITOR_SECTIONS, AgentEditorPanel } from "@/features/agent/AgentView";
+import { use_agent_definition } from "@/features/agent/lib/use_agent_definition";
+import { FILE_DIFF_SECTION_ID, TURN_DOMAIN_ID, TurnFileDiffOverview, TurnFileDiffReviewPanel, TurnFileDiffReviewProvider } from "@/features/chat/components/messages/TurnFileDiffCard";
 import { use_translation } from "@/locales/i18n";
 
-/** Agent Chat 独立持有完整 Agent 编辑 BayBar。 */
-export function AgentChatMainView({ agent, controller, sidebar_collapsed, view_key, children }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** 当前 Chat 的稳定标识。 */ view_key: string; /** 渲染 Chat 并接收编辑入口。 */ children(open_agent_info: () => void): ReactNode }) {
-  const translate = use_translation("resources");
-  const [section, set_section] = useState<AgentEditorSection>("identity");
-  const titles: Record<AgentEditorSection, string> = { identity: translate("agent_details.identity"), model: "Model", soul: "SOUL.md" };
-  const baybar_content = <div className="flex h-full min-h-0 flex-col"><nav className="flex shrink-0 gap-1 border-b border-border/45 p-2" aria-label={translate("editor.agent_sections")}>{(["identity", "model", "soul"] as const).map((item) => <button key={item} type="button" onClick={() => set_section(item)} className={`rounded-md px-2 py-1 text-[0.6875rem] transition-colors duration-150 ${section === item ? "bg-interaction-selected text-foreground" : "text-muted-foreground hover:bg-interaction-hover hover:text-foreground"}`}>{titles[item]}</button>)}</nav><div className="min-h-0 flex-1 overflow-y-auto"><AgentInfoSidebar agent={agent} controller={controller} section={section} embedded close_sidebar={() => undefined} /></div></div>;
-  return <MainViewBayBarFrame view_key={view_key} sidebar_collapsed={sidebar_collapsed} title={titles[section]} baybar_content={baybar_content}>
-    {children}
-  </MainViewBayBarFrame>;
+/** Agent Chat MainView 属性。 */
+interface AgentChatMainViewProps {
+  /** 当前 Agent。 */
+  agent: DesktopAgentSummary;
+  /** Desktop 稳定控制器。 */
+  controller: DesktopController;
+  /** 当前 Chat 的稳定标识，用于按会话记忆显示位置。 */
+  view_key: string;
+  /** 当前轮次的文件改动摘要；为空时「本轮」域显示空态。 */
+  file_diff_summary?: SessionTurnFileDiffSummary;
+  /** 渲染 Chat 正文。 */
+  children: ReactNode;
+}
+
+/**
+ * Agent Chat 的右侧域。
+ *
+ * 「本轮」域始终存在：集合稳定，tab 条不会随有没有改动忽长忽短。
+ */
+export function AgentChatMainView({ agent, controller, view_key, file_diff_summary, children }: AgentChatMainViewProps) {
+  const translate_resources = useTranslation_resources();
+  const translate_chat = use_translation("chat");
+  // 点击历史轮次的 diff 卡片时切换到这里指向的那一轮；否则展示当前轮摘要。
+  const [review_data, set_review_data] = useState<SessionTurnFileDiffData>();
+  const definition_state = use_agent_definition(agent.agent_id, controller);
+  const domains = useMemo<BayBarDomain[]>(() => [
+    {
+      id: AGENT_DOMAIN_ID,
+      label: translate_resources("agent.edit"),
+      sections: AGENT_EDITOR_SECTIONS.map((item) => ({
+        id: item.id,
+        label: item.label_key ? translate_resources(item.label_key) : item.label ?? item.id,
+        content: <AgentEditorPanel agent={agent} controller={controller} section={item.id} {...definition_state} />,
+      })),
+    },
+    {
+      id: TURN_DOMAIN_ID,
+      label: translate_chat("file_diff.turn_label"),
+      sections: [{
+        id: FILE_DIFF_SECTION_ID,
+        label: translate_chat("file_diff.tab_label"),
+        content: review_data ? <TurnFileDiffReviewPanel data={review_data} /> : <TurnFileDiffOverview summary={file_diff_summary} />,
+      }],
+    },
+  ], [agent, controller, definition_state, file_diff_summary, review_data, translate_chat, translate_resources]);
+
+  return <MainView view_key={view_key} domains={domains}>
+    {() => <TurnFileDiffReviewProvider open_review={set_review_data}>{children}</TurnFileDiffReviewProvider>}
+  </MainView>;
+}
+
+/** resources 命名空间的翻译函数。 */
+function useTranslation_resources() {
+  return use_translation("resources");
 }

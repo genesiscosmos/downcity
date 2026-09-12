@@ -4,13 +4,17 @@
  * 数据只来自 canonical Agent Data Part；组件不访问 Git，也不根据 Tool 日志推断改动。
  */
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import type { SessionTurnFileDiff, SessionTurnFileDiffData } from "@downcity/agent/session";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import type { SessionTurnFileDiff, SessionTurnFileDiffData, SessionTurnFileDiffSummary } from "@downcity/agent/session";
 import { TbCheck, TbChevronDown, TbChevronRight, TbChevronUp, TbDots, TbExternalLink, TbFileDiff, TbLink } from "react-icons/tb";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
-import { BayBar } from "@/layouts/BayBar";
+import { use_baybar_open } from "@/layouts/BayBar";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
+
+/** 「本轮」域与其下文件改动分区的稳定标识；卡片与 MainView 共用。 */
+export const TURN_DOMAIN_ID = "turn";
+export const FILE_DIFF_SECTION_ID = "file-diff";
 
 const DEFAULT_VISIBLE_FILE_COUNT = 3;
 const TurnFileDiffReviewContext = createContext<((data: SessionTurnFileDiffData) => void) | null>(null);
@@ -41,36 +45,43 @@ function build_file_link(workspace_path: string | undefined, relative_path: stri
   return `file://${encodeURI(absolute_path)}`;
 }
 
-/** 在应用主视图中统一持有本轮 Diff 审核侧栏。 */
-export function TurnFileDiffReviewHost({ children }: { /** Desktop 当前主视图。 */ children: ReactNode }) {
-  const translate_chat = use_translation("chat");
-  const [review_data, set_review_data] = useState<SessionTurnFileDiffData>();
-  const [open, set_open] = useState(false);
-  const open_review = useCallback((data: SessionTurnFileDiffData) => {
-    set_review_data(data);
-    set_open(true);
-  }, []);
-  return <TurnFileDiffReviewContext.Provider value={open_review}>
-    <div className="flex h-full min-h-0 min-w-0 flex-1">
-      <div className="flex h-full min-w-0 flex-1 flex-col">{children}</div>
-      <BayBar open={open} title={translate_chat("file_diff.review")} close_baybar={() => set_open(false)}>{review_data ? <TurnFileDiffReviewPanel data={review_data} /> : null}</BayBar>
-    </div>
-  </TurnFileDiffReviewContext.Provider>;
+/**
+ * 注入 Diff 审核入口。
+ * 审核数据由 Chat Surface 持有，因此这里只提供“选中某一轮改动”的动作。
+ */
+export function TurnFileDiffReviewProvider({ open_review, children }: {
+  /** 选中某一轮文件改动。 */
+  open_review(data: SessionTurnFileDiffData): void;
+  /** 消息渲染内容。 */
+  children: ReactNode;
+}) {
+  return <TurnFileDiffReviewContext.Provider value={open_review}>{children}</TurnFileDiffReviewContext.Provider>;
+}
+
+/** 读取 Diff 审核入口；未注入时为空。 */
+function use_turn_file_diff_review(): ((data: SessionTurnFileDiffData) => void) | undefined {
+  return useContext(TurnFileDiffReviewContext) ?? undefined;
 }
 
 /** 展示当前 Turn 的文件数、行数统计和可展开文件列表。 */
 export function TurnFileDiffCard({ data }: { /** 当前 Turn 的 canonical 文件改动。 */ data: SessionTurnFileDiffData }) {
   const translate_chat = use_translation("chat");
   const [show_all, set_show_all] = useState(false);
-  const open_review = useContext(TurnFileDiffReviewContext);
+  const open_review = use_turn_file_diff_review();
+  const open_baybar = use_baybar_open();
   const hidden_count = Math.max(0, data.files.length - DEFAULT_VISIBLE_FILE_COUNT);
   const visible_files = show_all ? data.files : data.files.slice(0, DEFAULT_VISIBLE_FILE_COUNT);
+  // 选中本轮改动并打开右侧「本轮」域：点击只切换显示内容，不会收起右侧。
+  const review = () => {
+    open_review?.(data);
+    open_baybar(TURN_DOMAIN_ID, FILE_DIFF_SECTION_ID);
+  };
   return <section className="mt-2 overflow-hidden rounded-xl bg-surface-subtle text-[0.6875rem] text-foreground/80">
     <div className="flex min-h-11 items-center gap-2 px-3.5">
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4"><TbFileDiff aria-hidden /></span>
       <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">{translate_chat("message.files_changed", { count: data.files.length })}</div>
       <DiffStats additions={data.additions} deletions={data.deletions} compact />
-      {open_review ? <button type="button" onClick={() => open_review(data)} className="ml-1 flex h-6 shrink-0 items-center rounded-md px-2 text-[0.6875rem] font-medium text-foreground/70 transition-colors hover:bg-interaction-hover hover:text-foreground">{translate_chat("file_diff.review")}</button> : null}
+      {open_review ? <button type="button" onClick={review} className="ml-1 flex h-6 shrink-0 items-center rounded-md px-2 text-[0.6875rem] font-medium text-foreground/70 transition-colors hover:bg-interaction-hover hover:text-foreground">{translate_chat("file_diff.review")}</button> : null}
     </div>
     <div className="divide-y divide-border/45 border-t border-border/45">
       {visible_files.map((file) => <FilePatch key={file.file} file={file} variant="inline" />)}
@@ -84,8 +95,8 @@ function DiffStats({ additions, deletions, compact = false }: { /** 新增行数
   return <span className={cn("tabular-nums", compact ? "shrink-0" : "mt-0.5 block")}><span className="text-emerald-600 dark:text-emerald-400">+{additions}</span><span className="ml-1 text-red-500 dark:text-red-400">-{deletions}</span></span>;
 }
 
-/** 在右侧 BayBar 中展示当前 Turn 的完整 diff。 */
-function TurnFileDiffReviewPanel({ data }: { /** 当前 Turn 的 canonical 文件改动。 */ data: SessionTurnFileDiffData }) {
+/** 在右侧 BayBar 中展示当前选中 Turn 的完整 diff。 */
+export function TurnFileDiffReviewPanel({ data }: { /** 当前 Turn 的 canonical 文件改动。 */ data: SessionTurnFileDiffData }) {
   const translate_chat = use_translation("chat");
   return <div className="file-diff-review-panel">
     <header className="file-diff-review-summary">
@@ -178,4 +189,26 @@ function parse_unified_diff(patch: string): DiffRow[] {
     previous_new_end = new_line;
   }
   return rows;
+}
+
+/**
+ * 尚未选中具体轮次时的 Diff 面板内容。
+ *
+ * 当前轮次存在改动就会出现在右侧 Rail 中，因此这里必须给出明确去向，
+ * 而不是留一个空面板。
+ */
+export function TurnFileDiffOverview({ summary }: { /** 当前 Turn 的实时改动摘要；为空表示本轮尚无改动。 */ summary?: SessionTurnFileDiffSummary }) {
+  const translate_chat = use_translation("chat");
+  // 「本轮」域始终存在，没有改动时也要给出明确说明，而不是留一个空面板。
+  if (!summary) return <div className="p-3 text-[11px] leading-5 text-muted-foreground">{translate_chat("file_diff.empty_turn")}</div>;
+  return <div className="flex min-h-0 flex-col gap-3 p-3">
+    <div className="flex min-w-0 items-start gap-2.5 rounded-xl bg-surface-subtle px-3 py-2.5">
+      <TbFileDiff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-medium text-foreground">{translate_chat("message.files_changed", { count: summary.files_count })}</div>
+        <div className="mt-1 text-[11px]"><DiffStats additions={summary.additions} deletions={summary.deletions} /></div>
+      </div>
+    </div>
+    <p className="text-[11px] leading-5 text-muted-foreground">{translate_chat("file_diff.pick_turn")}</p>
+  </div>;
 }

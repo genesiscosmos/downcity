@@ -1,5 +1,5 @@
-/** Desktop 按业务职责组织的页面与应用组件。 */
-import { useState } from "react";
+/** Agent 管理页：MainView 组合内容与右侧「Agent」域。 */
+import { useMemo } from "react";
 
 import { use_desktop_selector } from "@/app/use_desktop";
 
@@ -8,9 +8,10 @@ import type { DesktopAgentSummary, DesktopSessionSummary } from "@common/types/D
 
 import { WelcomeView } from "@/app/WelcomeView";
 
-import { MainViewBayBarFrame } from "@/layouts/BayBar";
+import { MainView, type BayBarDomain } from "@/layouts/BayBar";
 
-import { AgentInfoSidebar, AgentView, type AgentEditorSection } from "@/features/agent/AgentView";
+import { AGENT_DOMAIN_ID, AGENT_EDITOR_SECTIONS, AgentEditorPanel, AgentView } from "@/features/agent/AgentView";
+import { use_agent_definition } from "@/features/agent/lib/use_agent_definition";
 import { use_translation } from "@/locales/i18n";
 
 /** Agent 配置路由只订阅当前 Agent 与其主 Session 索引。 */
@@ -24,13 +25,26 @@ export function AgentRouteMainView({ selection, controller, sidebar_collapsed }:
   return <AgentMainView key={`agent:${agent.agent_id}`} agent={agent} controller={controller} sidebar_collapsed={sidebar_collapsed} main_session={main_context && main_session ? { workspace_id: main_context.workspace_id, session: main_session.session } : undefined} />;
 }
 
-/** Agent MainView 独立拥有配置 BayBar 的状态与编辑分区。 */
+/** Agent MainView：定义状态在此持有，分区内容组装为右侧「Agent」域。 */
 export function AgentMainView({ agent, controller, sidebar_collapsed, main_session }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** Agent 主对话。 */ main_session?: { workspace_id: string; session: DesktopSessionSummary } }) {
-  const translate = use_translation("resources");
-  const [section, set_section] = useState<AgentEditorSection>("model");
-  const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
-  const titles: Record<AgentEditorSection, string> = { identity: translate("agent_details.identity"), model: "Model", soul: "SOUL.md" };
-  return <MainViewBayBarFrame view_key={`agent:${agent.agent_id}`} sidebar_collapsed={sidebar_collapsed} title={titles[section]} baybar_content={<AgentInfoSidebar agent={agent} controller={controller} section={section} embedded close_sidebar={() => undefined} />}>
-    {(open_baybar) => <AgentView agent={agent} workspaces={workspaces} main_session={main_session} controller={controller} open_main_session={() => controller.actions.open_agent_chat(agent.agent_id)} open_config={(next_section) => { set_section(next_section); open_baybar(); }} />}
-  </MainViewBayBarFrame>;
+  const translate_resources = useTranslation_resources();
+  const definition_state = use_agent_definition(agent.agent_id, controller);
+  const domains = useMemo<BayBarDomain[]>(() => [{
+    id: AGENT_DOMAIN_ID,
+    label: translate_resources("agent.edit"),
+    sections: AGENT_EDITOR_SECTIONS.map((item) => ({
+      id: item.id,
+      label: item.label_key ? translate_resources(item.label_key) : item.label ?? item.id,
+      content: <AgentEditorPanel agent={agent} controller={controller} section={item.id} {...definition_state} />,
+    })),
+  }], [agent, controller, definition_state, translate_resources]);
+
+  return <MainView view_key={`agent:${agent.agent_id}`} domains={domains}>
+    {() => <AgentView agent={agent} main_session={main_session} controller={controller} open_main_session={() => controller.actions.open_agent_chat(agent.agent_id)} />}
+  </MainView>;
+}
+
+/** resources 命名空间的翻译函数。 */
+function useTranslation_resources() {
+  return use_translation("resources");
 }

@@ -35,7 +35,9 @@ export function SidebarFrame({ collapsed, children }: SidebarFrameProps) {
     initial={false}
     animate={{ width: collapsed ? 0 : current_width }}
     transition={{ ...SHELL_PANEL_TRANSITION, duration: is_resizing ? 0 : SHELL_PANEL_TRANSITION.duration }}
-    className="flex h-full min-h-0 flex-none select-none overflow-hidden whitespace-nowrap border-r border-border/35 bg-muted"
+    // Sidebar 与 MainView 卡片之间不画分隔线：两者同处一个背景面，
+    // 卡片自己的边框已经提供了足够的层次，再画一条线会显得拥挤。
+    className="flex h-full min-h-0 flex-none select-none overflow-hidden whitespace-nowrap bg-muted"
   >
     <aside className="relative flex h-full min-h-0 flex-col overflow-hidden" style={{ width: current_width }}>
       <div className="header-drag-region h-10 shrink-0" aria-hidden="true" />

@@ -3,16 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { TbChevronRight, TbFileText, TbMessageCircle, TbPhoto, TbRefresh, TbTrash, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
-import { DetailEditorSidebar } from "@/components/DetailEditorSidebar";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SettingActionItem, SettingGroup, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
-import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
+import { use_baybar_open } from "@/layouts/BayBar";
+import { MainViewBody, MainViewHeader } from "@/layouts/MainViewLayout";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
 import type { DesktopController } from "@/types/DesktopView";
-import type { DesktopAgentDefinition, DesktopAgentSummary, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
+import type { DesktopAgentDefinition, DesktopAgentSummary, DesktopSessionSummary } from "@common/types/DesktopApi";
 
 /** Agent 页面可以编辑的定义分区。 */
 export type AgentEditorSection = "identity" | "model" | "soul";
@@ -20,156 +20,80 @@ export type AgentEditorSection = "identity" | "model" | "soul";
 /** Agent 管理页属性。 */
 interface AgentViewProps {
   /** 当前 Agent。 */ agent: DesktopAgentSummary;
-  /** 全部 Workspace。 */ workspaces: DesktopWorkspaceSummary[];
   /** 当前 Agent 的主 Session。 */ main_session?: {
     workspace_id: string;
     session: DesktopSessionSummary;
   };
   /** Renderer 稳定控制器。 */ controller: DesktopController;
   /** 打开主 Session 对话。 */ open_main_session(): Promise<void>;
-  /** 打开 Agent 信息编辑面板。 */ open_config(
-    section: AgentEditorSection,
-  ): void;
-}
-/** Agent 信息侧栏属性。 */
-interface AgentInfoSidebarProps {
-  /** 当前 Agent。 */
-  agent: DesktopAgentSummary;
-  /** Renderer 根控制器。 */
-  controller: DesktopController;
-  /** 关闭信息侧栏。 */
-  close_sidebar(): void;
-  /** 当前配置分区。 */
-  section?: AgentEditorSection;
-  /** 是否折叠侧栏。 */
-  collapsed?: boolean;
-  /** 是否嵌入 BayBar。 */
-  embedded?: boolean;
 }
 
-/** 当前 Agent 配置项的单一编辑器。 */
-export function AgentInfoSidebar({
+/** 一级域「Agent」的稳定标识。 */
+export const AGENT_DOMAIN_ID = "agent";
+
+/**
+ * Agent 定义分区；一级域「Agent」下的二级分区。
+ *
+ * 只描述分区标识与文案，具体内容由页面组装为域，避免视图层重复一次翻译表。
+ */
+export const AGENT_EDITOR_SECTIONS: readonly { id: AgentEditorSection; label_key: string | null; label?: string }[] = [
+  { id: "identity", label_key: "agent_details.identity" },
+  { id: "model", label_key: null, label: "Model" },
+  { id: "soul", label_key: null, label: "SOUL.md" },
+];
+
+/** Agent 单个分区的内容属性。 */
+interface AgentEditorPanelProps {
+  /** 当前 Agent。 */ agent: DesktopAgentSummary;
+  /** Renderer 根控制器。 */ controller: DesktopController;
+  /** 当前编辑分区。 */ section: AgentEditorSection;
+  /** 当前未保存的定义。 */ definition?: DesktopAgentDefinition;
+  /** 是否正在读取定义。 */ loading: boolean;
+  /** 当前编辑错误。 */ error: string;
+  /** 替换未保存的定义。 */ set_definition(value: DesktopAgentDefinition): void;
+}
+
+/**
+ * Agent 单个分区的编辑内容。
+ *
+ * 纯视图：定义状态由页面通过 use_agent_definition 持有，分区导航由 BayBar 负责，
+ * 因此切换分区或域都不会重新请求，也不会丢失正在编辑的内容。
+ */
+export function AgentEditorPanel({
   agent,
   controller,
-  close_sidebar,
   section,
-  collapsed = false,
-  embedded = false,
-}: AgentInfoSidebarProps) {
-  const translate_resources = use_translation("resources");
-  const [editor_section, set_editor_section] = useState<
-    AgentEditorSection | undefined
-  >(section || "model");
-  useEffect(() => {
-    if (section) set_editor_section(section);
-  }, [section]);
-  const [definition, set_definition] = useState<DesktopAgentDefinition>();
-  const [loading_definition, set_loading_definition] = useState(false);
-  const [definition_dirty, set_definition_dirty] = useState(false);
-  const [editor_error, set_editor_error] = useState("");
-  const definition_version_ref = useRef(0);
-  const load_definition = async () => {
-    set_loading_definition(true);
-    set_editor_error("");
-    try {
-      set_definition(await controller.actions.get_agent(agent.agent_id));
-    } catch (reason) {
-      set_editor_error(
-        reason instanceof Error ? reason.message : String(reason),
-      );
-    } finally {
-      set_loading_definition(false);
-    }
-  };
-  useEffect(() => {
-    let disposed = false;
-    set_definition(undefined);
-    set_definition_dirty(false);
-    set_editor_error("");
-    set_loading_definition(true);
-    void controller.actions.get_agent(agent.agent_id).then((next_definition) => {
-      if (!disposed) set_definition(next_definition);
-    }).catch((reason) => {
-      if (!disposed) set_editor_error(reason instanceof Error ? reason.message : String(reason));
-    }).finally(() => {
-      if (!disposed) set_loading_definition(false);
-    });
-    return () => { disposed = true; };
-  }, [agent.agent_id, controller.actions]);
-  const update_definition = (value: DesktopAgentDefinition) => {
-    definition_version_ref.current += 1;
-    set_definition(value);
-    set_definition_dirty(true);
-  };
-  useEffect(() => {
-    if (!definition_dirty || !definition) return;
-    const version = definition_version_ref.current;
-    const timeout_id = window.setTimeout(() => {
-      void controller.actions
-        .update_agent(agent.agent_id, {
-          name: definition.name,
-          description: definition.description,
-          model_id: definition.model_id,
-          instruction: definition.instruction,
-        })
-        .then(() => {
-          if (definition_version_ref.current === version)
-            set_definition_dirty(false);
-        })
-        .catch((reason) =>
-          set_editor_error(
-            reason instanceof Error ? reason.message : String(reason),
-          ),
-        );
-    }, 500);
-    return () => window.clearTimeout(timeout_id);
-  }, [agent.agent_id, controller.actions, definition, definition_dirty]);
-  const titles: Record<AgentEditorSection, string> = {
-    identity: translate_resources("agent_details.identity"),
-    model: "Model",
-    soul: "SOUL.md",
-  };
-  const content = editor_section ? (
-    <AgentEditorPanel
-      embedded
-      agent={agent}
-      section={editor_section}
-      definition={definition}
-      controller={controller}
-      loading={loading_definition}
-      error={editor_error}
-      set_definition={update_definition}
-      close_editor={close_sidebar}
-    />
-  ) : null;
-  if (embedded) return content;
-  return (
-    <DetailEditorSidebar
-      title={`${agent.name} / ${titles[editor_section || "model"]}`}
-      storage_key="downcity.agent_config_width"
-      default_width={400}
-      max_width={560}
-      on_close={close_sidebar}
-      collapsed={collapsed}
-      show_close={false}
-      embedded={embedded}
-    >
-      {content}
-    </DetailEditorSidebar>
-  );
+  definition,
+  loading,
+  error,
+  set_definition,
+}: AgentEditorPanelProps) {
+  const translate_common = use_translation();
+  return <div className={`h-full min-h-0 w-full ${section === "soul" ? "" : "p-2"}`}>
+    {loading && !definition ? (
+      <div className="py-10 text-center text-xs text-muted-foreground">
+        {translate_common("state.loading")}
+      </div>
+    ) : null}
+    {definition && section === "identity" ? <IdentityEditor agent={agent} controller={controller} definition={definition} set_definition={set_definition} /> : null}
+    {definition && section === "model" ? <ModelEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
+    {definition && section === "soul" ? <SoulEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
+    {error ? <div className="mx-2 mt-3 text-[0.6875rem] leading-4 text-destructive">{error}</div> : null}
+  </div>;
 }
+
 
 /** 左侧展示 Agent 摘要，点击配置项后在右侧展开对应编辑容器。 */
 export function AgentView({
   agent,
-  workspaces,
   main_session,
   controller,
   open_main_session,
-  open_config,
 }: AgentViewProps) {
   const translate_resources = use_translation("resources");
   const translate_common = use_translation();
+  // 右侧编辑面板由 MainView 提供；这里只需按「域 + 分区」打开。
+  const open_baybar = use_baybar_open();
   const [avatar_dialog_open, set_avatar_dialog_open] = useState(false);
   const recent_sessions = main_session ? [main_session.session] : [];
 
@@ -202,7 +126,7 @@ export function AgentView({
             description={translate_resources("agent_details.agent_description")}
           >
             <SettingGroup>
-              <SettingActionItem icon={<TbUser />} label={translate_resources("agent_details.identity")} description={agent.description || translate_resources("agent_details.identity_description")} trailing={<TbChevronRight />} on_select={() => open_config("identity")} />
+              <SettingActionItem icon={<TbUser />} label={translate_resources("agent_details.identity")} description={agent.description || translate_resources("agent_details.identity_description")} trailing={<TbChevronRight />} on_select={() => open_baybar(AGENT_DOMAIN_ID, "identity")} />
               <SettingActionItem
                 icon={<LLMModelIcon model_id={agent.model_id} />}
                 label="Model"
@@ -215,14 +139,14 @@ export function AgentView({
                     <TbChevronRight />
                   </>
                 }
-                on_select={() => open_config("model")}
+                on_select={() => open_baybar(AGENT_DOMAIN_ID, "model")}
               />
               <SettingActionItem
                 icon={<TbFileText />}
                 label="SOUL.md"
                 description={translate_resources("agent_details.soul_description")}
                 trailing={<TbChevronRight />}
-                on_select={() => open_config("soul")}
+                on_select={() => open_baybar(AGENT_DOMAIN_ID, "soul")}
               />
             </SettingGroup>
           </SettingSection>
@@ -292,98 +216,17 @@ export function AgentView({
     </div>
   );
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 bg-background">
-      <MainViewLayout>
-        <MainViewHeader
-          title={
-            <span className="flex min-w-0 items-center gap-1.5">
-              <AgentAvatar agent={agent} />
-              <span className="truncate">{agent.name}</span>
-            </span>
-          }
-        />
-        <MainViewBody>{content}</MainViewBody>
-      </MainViewLayout>
-    </div>
-  );
-}
-
-/** Agent 页面右侧的分区编辑容器。 */
-function AgentEditorPanel({
-  agent,
-  section,
-  definition,
-  controller,
-  loading,
-  error,
-  set_definition,
-  close_editor,
-  embedded = false,
-}: {
-  /** 当前 Agent 展示摘要。 */ agent: DesktopAgentSummary;
-  /** 当前编辑分区。 */ section: AgentEditorSection;
-  /** 当前未提交定义。 */ definition?: DesktopAgentDefinition;
-  /** Renderer 稳定控制器。 */ controller: DesktopController;
-  /** 是否正在读取定义。 */ loading: boolean;
-  /** 当前编辑错误。 */ error: string;
-  /** 替换未提交定义。 */ set_definition(value: DesktopAgentDefinition): void;
-  /** 收起右侧容器。 */ close_editor(): void;
-  /** 是否嵌入已有信息侧栏。 */ embedded?: boolean;
-}) {
-  const translate_resources = use_translation("resources");
-  const translate_common = use_translation();
-  const content = (
     <>
-      {loading && !definition ? (
-        <div className="py-10 text-center text-xs text-muted-foreground">
-          {translate_common("state.loading")}
-        </div>
-      ) : null}
-      {definition && section === "model" ? (
-        <ModelEditor
-          definition={definition}
-          controller={controller}
-          set_definition={set_definition}
-        />
-      ) : null}
-      {definition && section === "identity" ? <IdentityEditor agent={agent} controller={controller} definition={definition} set_definition={set_definition} /> : null}
-      {definition && section === "soul" ? (
-        <SoulEditor
-          definition={definition}
-          controller={controller}
-          set_definition={set_definition}
-        />
-      ) : null}
-      {error ? (
-        <div className="mt-3 text-[0.6875rem] leading-4 text-destructive">
-          {error}
-        </div>
-      ) : null}
+      <MainViewHeader
+        title={
+          <span className="flex min-w-0 items-center gap-1.5">
+            <AgentAvatar agent={agent} />
+            <span className="truncate">{agent.name}</span>
+          </span>
+        }
+      />
+      <MainViewBody>{content}</MainViewBody>
     </>
-  );
-  if (embedded)
-    return (
-      <div
-        className={`h-full min-h-0 w-full ${section === "soul" ? "" : "p-2"}`}
-      >
-        {content}
-      </div>
-    );
-  const titles: Record<AgentEditorSection, string> = {
-    identity: translate_resources("agent_details.identity"),
-    model: "Model",
-    soul: "SOUL.md",
-  };
-  return (
-    <DetailEditorSidebar
-      title={titles[section]}
-      storage_key="downcity.agent_editor_width"
-      default_width={400}
-      max_width={560}
-      on_close={close_editor}
-    >
-      {content}
-    </DetailEditorSidebar>
   );
 }
 
@@ -554,3 +397,4 @@ function SoulEditor({
     />
   );
 }
+

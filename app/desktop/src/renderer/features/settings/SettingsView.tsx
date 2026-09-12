@@ -13,7 +13,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { UsageHeatmap } from "@/components/usage/UsageHeatmap";
 import { UsageLineChart } from "@/components/usage/UsageLineChart";
-import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
+import { MainViewBody, MainViewHeader } from "@/layouts/MainViewLayout";
 import { format_credits_as_usd } from "@/lib/usage/usage_format";
 import { build_usage_heatmap, build_usage_trend, current_date_key, sum_heatmap_credits, summarize_usage_period } from "@/lib/usage/usage_metrics";
 import { build_model_pricing } from "@/lib/model/model_pricing";
@@ -38,10 +38,10 @@ interface SettingsViewProps {
 /** Desktop 设置主视图。 */
 export function SettingsView({ controller, section, open_global_env }: SettingsViewProps) {
   const translate = use_translation("settings");
-  return <MainViewLayout>
+  return <>
     <MainViewHeader title={translate("title")} />
     <MainViewBody>
-      <div className="flex min-h-0 flex-1 overflow-hidden bg-background">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-3xl px-8 pb-12 pt-10">
             {section === "user" ? <UserSettingsExact controller={controller} /> : null}
@@ -54,7 +54,7 @@ export function SettingsView({ controller, section, open_global_env }: SettingsV
         </div>
       </div>
     </MainViewBody>
-  </MainViewLayout>;
+  </>;
 }
 
 /** 按 Duobox AccountSettings 结构展示账户资料、余额、账户切换与用量。 */
