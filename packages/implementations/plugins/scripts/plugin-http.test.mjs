@@ -273,3 +273,119 @@ test("不支持的 socks 代理会给出可执行的错误提示", async () => {
     );
   });
 });
+
+/**
+ * 收下一个请求的完整请求体，供 multipart 断言使用。
+ *
+ * 说明（中文）
+ * - 用 latin1 读取字节，避免二进制分段被 UTF-8 解码破坏。
+ */
+async function start_body_capture_server() {
+  return await start_server((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(
+        JSON.stringify({
+          content_type: String(request.headers["content-type"] || ""),
+          body: Buffer.concat(chunks).toString("latin1"),
+        }),
+      );
+    });
+  });
+}
+
+test("全局 FormData 请求体被编码为完整 multipart，文件名与分段类型不丢失", async () => {
+  const target = await start_body_capture_server();
+  let received;
+  try {
+    await with_proxy_env({}, async () => {
+      const form = new FormData();
+      form.set("chat_id", "123");
+      form.set("caption", "说明文字");
+      form.set(
+        "document",
+        new Blob([Buffer.from("# hello\n")], { type: "text/markdown" }),
+        "prd.md",
+      );
+      form.set(
+        "photo",
+        new File([Buffer.from([0xff, 0xd8, 0xff])], "p.jpg", { type: "image/jpeg" }),
+      );
+      received = await plugin_http_json(`${target.origin}/sendDocument`, {
+        method: "POST",
+        body: form,
+      });
+    });
+
+    // 关键点（中文）：修复前这里是 text/plain，body 只剩 "[object FormData]"，
+    // Telegram / 飞书会因请求体缺少文件字段而返回 400。
+    assert.match(received.content_type, /^multipart\/form-data; boundary=/u);
+    assert.equal(received.body.includes("[object FormData]"), false);
+    assert.match(received.body, /name="chat_id"\r\n\r\n123/u);
+    assert.match(received.body, /name="document"; filename="prd\.md"/u);
+    assert.match(received.body, /Content-Type: text\/markdown/u);
+    assert.match(received.body, /name="photo"; filename="p\.jpg"/u);
+    assert.match(received.body, /Content-Type: image\/jpeg/u);
+    assert.match(received.body, /# hello/u);
+  } finally {
+    await target.close();
+  }
+});
+
+test("multipart 附件上传在配置代理后仍经过代理隧道", async () => {
+  const tunnels = [];
+  const target = await start_body_capture_server();
+  const target_port = Number(new URL(target.origin).port);
+  const proxy = await start_connect_proxy((host, port) => {
+    tunnels.push(`${host}:${port}`);
+    return true;
+  }, target_port);
+  try {
+    await with_proxy_env({ DOWNCITY_PROXY_URL: proxy.origin }, async () => {
+      const form = new FormData();
+      form.set(
+        "document",
+        new Blob([Buffer.from("payload")], { type: "text/plain" }),
+        "a.txt",
+      );
+      const received = await plugin_http_json(`${target.origin}/upload`, {
+        method: "POST",
+        body: form,
+      });
+      // 关键点（中文）：归一化只改请求体，不能绕过代理与超时策略。
+      assert.match(received.content_type, /^multipart\/form-data; boundary=/u);
+      assert.match(received.body, /name="document"; filename="a\.txt"/u);
+      assert.match(received.body, /payload/u);
+      assert.deepEqual(tunnels, [`127.0.0.1:${target_port}`]);
+    });
+  } finally {
+    await proxy.close();
+    await target.close();
+  }
+});
+
+test("非 FormData 请求体保持原有序列化语义", async () => {
+  const target = await start_body_capture_server();
+  try {
+    await with_proxy_env({}, async () => {
+      const json_body = await plugin_http_json(`${target.origin}/json`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ a: 1 }),
+      });
+      assert.match(json_body.content_type, /^application\/json/u);
+      assert.equal(json_body.body, '{"a":1}');
+
+      const form_urlencoded = await plugin_http_json(`${target.origin}/token`, {
+        method: "POST",
+        body: new URLSearchParams({ grant_type: "client_credential" }),
+      });
+      assert.match(form_urlencoded.content_type, /^application\/x-www-form-urlencoded/u);
+      assert.equal(form_urlencoded.body, "grant_type=client_credential");
+    });
+  } finally {
+    await target.close();
+  }
+});

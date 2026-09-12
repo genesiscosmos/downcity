@@ -5,11 +5,14 @@
  * - 所有需要访问公网的插件都必须经过这里，保证代理与超时语义完全一致。
  * - 代理来源按优先级读取：DOWNCITY_PROXY_URL、HTTPS_PROXY、HTTP_PROXY、ALL_PROXY。
  * - 每个请求都必须有整体超时，禁止出现"永远挂起"的连接，否则上层状态机会一直停在 connecting。
+ * - 请求体语义透传：调用方传入的全局 `FormData` 会在边界归一化成 undici 实现，
+ *   保证 multipart 附件上传（Telegram / 飞书文档）不会被降级成 `[object FormData]`。
  * - 错误信息只包含脱敏 endpoint，绝不把 bot token 等路径密钥写进日志或 UI。
  */
 
 import {
   Agent,
+  FormData as UndiciFormData,
   ProxyAgent,
   fetch as undici_fetch,
   type Dispatcher,
@@ -154,6 +157,7 @@ export async function plugin_http_fetch(
     // 关键点（中文）：undici 的 RequestInit 与全局 RequestInit 运行期一致，此处仅收敛类型。
     const response = await undici_fetch(url_string, {
       ...rest,
+      body: normalize_request_body(rest.body),
       signal: request_signal,
       dispatcher,
     } as unknown as UndiciRequestInit);
@@ -205,6 +209,36 @@ function normalize_timeout_ms(value: number | undefined): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return DEFAULT_TIMEOUT_MS;
   return Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, Math.trunc(parsed)));
+}
+
+/**
+ * 归一化请求体，保证 undici 按调用方的原意序列化。
+ *
+ * 关键点（中文）
+ * - Node 全局 `FormData` 与 undici 自带 `FormData` 是两个互不相通的实现，类身份不同；
+ *   undici 的 fetch 不认识全局实例，会把整个 body 降级成字符串 `[object FormData]`，
+ *   于是 Telegram / 飞书的 multipart 附件上传会因为请求体没有文件字段而失败。
+ * - 这里在出站边界做一次等价转换：逐项复制到 undici `FormData`，保留文件名与分段 Content-Type。
+ *   调用方仍可继续使用全局 `FormData` / `Blob` / `File`，不需要感知 undici 类型。
+ * - 其余请求体（字符串、Buffer、URLSearchParams、全局 Blob 等）undici 能正确序列化，原样透传。
+ */
+function normalize_request_body(body: unknown): unknown {
+  if (!is_global_form_data(body)) return body;
+  const normalized = new UndiciFormData();
+  for (const [name, value] of body.entries()) {
+    if (typeof value === "string") {
+      normalized.append(name, value);
+      continue;
+    }
+    // 文件字段必须保留原始文件名；无名 Blob 与标准实现一致回退为 "blob"。
+    normalized.append(name, value, value.name || "blob");
+  }
+  return normalized;
+}
+
+/** 判断请求体是否为 Node 全局 `FormData`（即 undici 无法直接序列化的那一套实现）。 */
+function is_global_form_data(value: unknown): value is FormData {
+  return typeof FormData !== "undefined" && value instanceof FormData;
 }
 
 /** 解析本次请求应使用的 dispatcher 与代理地址。 */
