@@ -9,6 +9,9 @@ cache
 wrangler.toml
 **/wrangler.toml
 !homepage/wrangler.toml
+# Wrangler 本地状态与临时产物
+.wrangler/
+**/.wrangler/
 package-lock.json
 yarn.lock
 
