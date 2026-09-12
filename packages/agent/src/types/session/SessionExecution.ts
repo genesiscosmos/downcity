@@ -33,6 +33,15 @@ export interface SessionTurnExecutionResult {
   error?: string;
 
   /**
+   * 失败时的稳定错误码；缺省时由 Session 层回退为通用 Turn 失败码。
+   *
+   * 关键点（中文）
+   * - 只用于让上层写入 canonical Error Part 时保留领域语义，不参与执行分支判断。
+   * - 成功时为空。
+   */
+  error_code?: string;
+
+  /**
    * 本轮结束后是否需要把已完成的 canonical 历史持久化压缩。
    *
    * 关键点（中文）

@@ -733,7 +733,7 @@ streaming
 - 工具执行顺序沿用当前产品语义；如支持并发，必须由 ToolLoop 显式声明并保持确定性落盘顺序。
 - `model_finish: tool_call` 但没有完整工具调用属于协议错误。
 - 收到工具调用但工具未注册时，Agent 生成失败的 `tool_result`，由下一 step 交给模型处理；不由 Federation 判定业务工具是否存在。
-- 达到最大 step 数时 Agent 以明确错误结束，不能无限循环。
+- 达到最大 step 数时 Agent 不能无限循环，也不能静默成功收口：先写入一条 internal 收尾提示并禁用工具强制执行一次收尾 Step；收尾仍无正文时以明确错误结束，并保留 `tool_loop_max_steps` 错误码语义。
 
 ### 11.3 Session 与 Model 消息分离
 

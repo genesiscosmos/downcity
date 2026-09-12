@@ -508,7 +508,7 @@ export class SessionLoop {
     if (!result.success && !turn_context.lifecycle.abort_signal.aborted && result.error) {
       await assistant_output.append_error({
         scope: "turn",
-        code: "turn_execution_failed",
+        code: result.error_code || "turn_execution_failed",
         message: result.error,
         recoverable: true,
       });
