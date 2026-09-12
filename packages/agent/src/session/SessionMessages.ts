@@ -18,6 +18,7 @@ import {
 import type { JsonObject } from "@downcity/type";
 import type {
   ListSessionMessagesInput,
+  SessionActionStatus,
   SessionAgentActionPart,
   SessionAgentErrorPart,
   SessionAgentInteractionPart,
@@ -302,12 +303,32 @@ export class SessionMessages {
     return await this.store.read_latest_agent_message(turn_id);
   }
 
-  /** 按稳定 Action ID 创建或更新只包含 Action Part 的 Agent Message。 */
+  /**
+   * 按稳定 Action ID 落盘一条 canonical Action。
+   *
+   * 关键点（中文）
+   * - Action 属于仍在流式写的 Agent Message 时，Action Part 直接追加/更新到该
+   *   Message，与正文共享同一条 canonical Message，避免执行期间出现割裂的独立气泡。
+   * - 没有可写目标（Session 空闲、目标 Turn 尚未产生 Agent Message，或消息已收口）
+   *   时，回退为只含 Action Part 的独立 Agent Message，保证 Action 始终可观测。
+   */
   async persist_action(
     event: SessionActionEvent,
     options?: { publish_mutation?: boolean },
   ): Promise<void> {
+    await this.ensure_initialized();
     const publish_mutation = options?.publish_mutation !== false;
+    const streaming_target = event.turn_id
+      ? this.find_streaming_agent_message(event.turn_id)
+      : undefined;
+    if (streaming_target) {
+      await this.agent_state.commit_parts(
+        streaming_target.message_id,
+        [this.resolve_streaming_action_part(streaming_target, event)],
+        { publish_mutation },
+      );
+      return;
+    }
     const existing = this.get_message(event.action_id) ||
       await this.store.read_message(event.action_id) || undefined;
     if (!existing) {
@@ -333,6 +354,38 @@ export class SessionMessages {
     }
   }
 
+  /** 查找指定 Turn 当前仍在流式写的 canonical Agent Message（同一时刻至多一条）。 */
+  private find_streaming_agent_message(turn_id: string): SessionAgentMessage | undefined {
+    let latest: SessionAgentMessage | undefined;
+    for (const message of this.messages_by_id.values()) {
+      if (message.role !== "agent" || message.state !== "streaming") continue;
+      if (message.turn_id !== turn_id) continue;
+      if (!latest || message.sequence > latest.sequence) latest = message;
+    }
+    return latest;
+  }
+
+  /** 复用已有 Action Part 身份，为流式 Agent Message 构造对齐的 Action Part。 */
+  private resolve_streaming_action_part(
+    target: SessionAgentMessage,
+    event: SessionActionEvent,
+  ): SessionAgentActionPart {
+    const part_id = `action-part:${event.action_id}`;
+    const existing = target.parts.find(
+      (part): part is SessionAgentActionPart =>
+        part.type === "action" && part.part_id === part_id,
+    );
+    return create_action_part({
+      action_id: event.action_id,
+      part_id,
+      sequence: existing?.sequence ?? next_agent_part_sequence(target),
+      action_type: event.action_type,
+      state: event.status,
+      title: event.title,
+      description: event.description,
+    });
+  }
+
   /** 创建只包含 running Action Part 的 Agent Message。 */
   async open_action_part(
     input: OpenSessionAgentActionPartInput,
@@ -351,17 +404,16 @@ export class SessionMessages {
       updated_at: created_at,
       role: "agent",
       state: "streaming",
-      parts: [{
+      parts: [create_action_part({
+        action_id: message_id,
         part_id: `action-part:${message_id}`,
         sequence: 1,
-        type: "action",
-        action_id: message_id,
         action_type: input.action_type,
         state: "running",
         title: input.title,
-        ...(input.description ? { description: input.description } : {}),
-        ...(input.data ? { data: structuredClone(input.data) } : {}),
-      }],
+        description: input.description,
+        data: input.data,
+      })],
     }), false, input.publish_mutation !== false)) as SessionAgentMessage;
     return new SessionAgentActionPartWriter(
       this,
@@ -750,6 +802,46 @@ function resolve_import_id(map: Map<string, string>, source_id: string, prefix: 
   const created = `${prefix}:${generate_id()}`;
   map.set(source_id, created);
   return created;
+}
+
+/** 构造一个 canonical Action Part。 */
+function create_action_part(input: {
+  /** Action 稳定业务标识。 */
+  action_id: string;
+  /** Part 在所属 Message 内的稳定标识。 */
+  part_id: string;
+  /** Part 在所属 Message 内的顺序号。 */
+  sequence: number;
+  /** Action 业务类别。 */
+  action_type: string;
+  /** Action 生命周期状态。 */
+  state: SessionActionStatus;
+  /** Action 展示标题。 */
+  title: string;
+  /** Action 展示描述。 */
+  description?: string;
+  /** Action 结构化附加数据。 */
+  data?: JsonObject;
+}): SessionAgentActionPart {
+  return {
+    part_id: input.part_id,
+    sequence: input.sequence,
+    type: "action",
+    action_id: input.action_id,
+    action_type: input.action_type,
+    state: input.state,
+    title: input.title,
+    ...(input.description ? { description: input.description } : {}),
+    ...(input.data ? { data: structuredClone(input.data) } : {}),
+  };
+}
+
+/** 计算追加到 Agent Message 末尾的下一个 Part 顺序号。 */
+function next_agent_part_sequence(message: SessionAgentMessage): number {
+  return message.parts.reduce(
+    (sequence, part) => Math.max(sequence, part.sequence + 1),
+    1,
+  );
 }
 
 /** 按真实 Message sequence 升序排序。 */

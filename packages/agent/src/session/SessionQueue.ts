@@ -31,6 +31,24 @@ export class SessionQueue {
     return this.commands.splice(0, this.commands.length);
   }
 
+  /**
+   * 只取出当前全部 Maintenance Command，并保留 Prompt 的相对顺序。
+   *
+   * Turn 收口前用它抽干配置类命令，让这些 Action 与当前 Agent Message 共享同一条
+   * Message；Prompt 必须留在队列里由后续 Turn 消费，否则会在没有后续 Step 的情况下
+   * 被持久化为 steer 却永远得不到响应。
+   */
+  drain_maintenance(): SessionCommand[] {
+    const drained: SessionCommand[] = [];
+    const retained: SessionCommand[] = [];
+    for (const command of this.commands) {
+      if (command.kind === "maintenance") drained.push(command);
+      else retained.push(command);
+    }
+    this.commands.splice(0, this.commands.length, ...retained);
+    return drained;
+  }
+
   /** 把尚未处理的 Command 恢复到队列头部。 */
   restore_front(commands: SessionCommand[]): void {
     this.commands.unshift(...commands);

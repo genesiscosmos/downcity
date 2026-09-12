@@ -42,6 +42,8 @@ An Agent Message's `state` only answers whether Parts can still be appended. Suc
 
 A Session has one two-party Message sequence ordered by `sequence`. Tools, Interactions, Actions, and Errors are Agent Parts rather than independent Messages. Multiple model Steps in an ordinary Tool Loop may append to the same Agent Message; model-produced Parts carry their source `step_id`.
 
+Action ownership rule: while the target Turn still has a streaming Agent Message, the Action Part is appended directly to that Message and shares its canonical identity (for example, changing the model or approval mode mid-run). Only when the Session is idle, the target Turn has no Agent Message yet, or the existing Message is already closed does an Action fall back to a standalone Agent Message containing just the Action Part.
+
 ## User Parts
 
 | `type` | Key fields | Meaning |

@@ -152,10 +152,16 @@ export class SessionAgentMessageState {
     });
   }
 
-  /** 原子追加一组非流式 Agent Parts。 */
+  /**
+   * 原子追加或替换一组非流式 Agent Parts。
+   *
+   * 同 part_id 已存在时原地替换并保留原 sequence；不存在时追加到 Message 末尾。
+   * options.publish_mutation 为 false 时只更新 canonical 快照而不发布 Mutation。
+   */
   async commit_parts(
     message_id: string,
     parts: readonly SessionAgentMessagePart[],
+    options?: { publish_mutation?: boolean },
   ): Promise<void> {
     if (parts.length === 0) return;
     await this.enqueue_write(message_id, async () => {
@@ -169,6 +175,7 @@ export class SessionAgentMessageState {
       await this.persist_snapshot(
         message_id,
         merged.sort((left, right) => left.sequence - right.sequence),
+        { publish_mutation: options?.publish_mutation !== false },
       );
     });
   }
@@ -241,7 +248,7 @@ export class SessionAgentMessageState {
       } else if (outcome === "failed" && error && !parts.some((part) => part.type === "error")) {
         parts.push(create_terminal_error_part(parts, "turn_execution_failed", error));
       }
-      await this.persist_snapshot(message_id, parts, "done");
+      await this.persist_snapshot(message_id, parts, { state: "done" });
     });
   }
 
@@ -290,7 +297,12 @@ export class SessionAgentMessageState {
   private async persist_snapshot(
     message_id: string,
     parts: SessionAgentMessagePart[],
-    state: SessionAgentMessage["state"] = "streaming",
+    options?: {
+      /** 快照落盘后的 Message 状态；检查点默认保持 streaming。 */
+      state?: SessionAgentMessage["state"];
+      /** 是否向订阅方发布 Message Mutation。 */
+      publish_mutation?: boolean;
+    },
   ): Promise<void> {
     const persisted = await this.options.store.read_message(message_id);
     if (!persisted || persisted.role !== "agent" || persisted.state !== "streaming") {
@@ -299,7 +311,7 @@ export class SessionAgentMessageState {
     const committed_at = Date.now();
     const message: SessionAgentMessage = {
       ...persisted,
-      state,
+      state: options?.state ?? "streaming",
       revision: persisted.revision + 1,
       updated_at: committed_at,
       parts: structuredClone(parts).sort((left, right) => left.sequence - right.sequence),
@@ -310,7 +322,7 @@ export class SessionAgentMessageState {
       expected_revision: persisted.revision,
       changed_parts,
     });
-    this.options.accept_message(message);
+    this.options.accept_message(message, options?.publish_mutation !== false);
   }
 
   /** 串行执行同一 Message 的语义检查点。 */

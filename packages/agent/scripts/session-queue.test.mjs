@@ -98,3 +98,23 @@ test("SessionQueue 保留 Command 的类别与完成信息", async () => {
   assert.equal(command.kind, "maintenance");
   assert.deepEqual(command.completion, completion);
 });
+
+test("SessionQueue drain_maintenance 只取出 Maintenance 并保留 Prompt", async () => {
+  const queue = new SessionQueue();
+  const executed = [];
+  const prompt = create_command("prompt", executed, () => {});
+  const first_maintenance = create_command("config-1", executed);
+  const second_maintenance = create_command("config-2", executed);
+  queue.enqueue_command(prompt);
+  queue.enqueue_command(first_maintenance);
+  queue.enqueue_command(second_maintenance);
+
+  const drained = queue.drain_maintenance();
+  assert.deepEqual(drained, [first_maintenance, second_maintenance]);
+  for (const command of drained) await command.execute();
+  assert.deepEqual(executed, ["config-1", "config-2"]);
+
+  // Prompt 必须留在队列里由后续 Turn 消费。
+  assert.equal(queue.take_next(), prompt);
+  assert.equal(queue.has_command(), false);
+});

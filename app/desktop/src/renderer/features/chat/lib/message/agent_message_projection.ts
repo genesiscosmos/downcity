@@ -41,8 +41,8 @@ export function project_agent_message(parts: readonly SessionAgentMessagePart[])
         break;
       }
       case "action": {
+        // Action 是辅助活动记录，不切断两侧正文的操作栏资格。
         blocks.push({ type: "action", part });
-        last_action_boundary = "other";
         break;
       }
       case "error": {

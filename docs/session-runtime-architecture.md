@@ -40,7 +40,17 @@ Queue processor 由“是否存在 Command”驱动，Turn 只由 Prompt Command
 1. 空闲 Session 的 `compact()` 不依赖未来 Prompt。
 2. Prompt、steer、配置和 compact 仍严格遵守同一 FIFO。
 3. Turn 运行期间的 Command 只在 Step 检查点生效。
-4. Turn 在检查点前结束时，剩余 maintenance command 在 Turn 收口后继续执行。
+4. Turn 在检查点前结束时，剩余 maintenance command 先尝试并入当前 Turn 的 Agent Message，无法并入时才在 Turn 收口后独立执行。
+
+## 2.1 Action 落盘归属
+
+Action 属于辅助活动记录，不是独立对话轮次。它的 canonical 归属规则是：
+
+- 目标 Turn 仍有正在流式写的 Agent Message 时，Action Part 直接追加为该 Message 的一个 Part，与正文共享同一条 canonical Message。
+- Session 空闲、目标 Turn 尚未产生 Agent Message，或已有 Message 已收口时，才回退为只含 Action Part 的独立 Agent Message。
+- 同一次 Turn 结束时，`SessionLoop` 先抽干尚未处理的 maintenance Command，再收口 Assistant Message，避免收尾窗口内的配置变更落到 Turn 之外。
+
+因此“执行中切权限 / 改模型”会呈现为当前回复内部的一条 activity action，而不再是一条割裂的独立气泡。
 
 ## 3. Prompt 主链路
 

@@ -42,6 +42,8 @@ Agent Message 的 `state` 只回答“还能否继续追加 Part”。成功、�
 
 Session 内只有一条按 `sequence` 排序的双主体消息序列。Tool、Interaction、Action 和 Error 都是 Agent Message 的 Part，不是独立 Message。普通 Tool Loop 的多个模型 Step 可以继续写入同一 Agent Message；每个模型产生的 Part 用 `step_id` 记录来源。
 
+Action 的归属规则：目标 Turn 仍有正在流式写的 Agent Message 时，Action Part 直接追加为该 Message 的 Part，与正文共享同一条 canonical Message（例如执行中修改模型或审批模式）。只有当 Session 空闲、目标 Turn 尚未产生 Agent Message，或已有 Message 已收口时，Action 才回退为只含 Action Part 的独立 Agent Message。
+
 ## User Part
 
 | `type` | 关键字段 | 说明 |

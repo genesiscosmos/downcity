@@ -315,6 +315,27 @@ export class SessionLoop {
     }
   }
 
+  /**
+   * 在 Turn 收口前抽干尚未处理的 Maintenance Command。
+   *
+   * 关键点（中文）
+   * - 收尾窗口内到达的配置变更 Action 借此与当前 Agent Message 共享同一条 Message。
+   * - 只抽 Maintenance；Prompt 继续留在 FIFO 里由下一 Turn 消费。
+   */
+  private async drain_queued_maintenance_commands(): Promise<void> {
+    const drained = this.queue.drain_maintenance();
+    for (let index = 0; index < drained.length; index += 1) {
+      const command = drained[index];
+      try {
+        await this.execute_command(command);
+      } catch {
+        // 失败时保留尚未处理的 Maintenance；Action 自己负责失败观测。
+        this.queue.restore_front(drained.slice(index));
+        break;
+      }
+    }
+  }
+
   /** 执行 Command，并尽力持久化其声明的 canonical 完成信息。 */
   private async execute_command(command: SessionCommand): Promise<void> {
     await command.execute();
@@ -501,6 +522,8 @@ export class SessionLoop {
       assistant_output,
       logger: this.logger,
     });
+
+    await this.drain_queued_maintenance_commands();
 
     await assistant_output.finish({
       status: turn_context.lifecycle.abort_signal.aborted
