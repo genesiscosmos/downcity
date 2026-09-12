@@ -11,6 +11,7 @@ import { WorkspaceSidebar } from "./sidebar/WorkspaceSidebar";
 import { SidebarRail } from "./sidebar/SidebarRail";
 import { SettingsSidebarPanel } from "./sidebar/SettingsSidebarPanel";
 import { get_chat_unread_attention, has_unread_plugin_notification } from "@/lib/notification/notification_state";
+import { order_rail_plugins } from "@/features/navigation/lib/sidebar_shortcut";
 import type { UnreadAttention } from "@/lib/notification/unread_attention";
 
 /** 左侧导航面板属性。 */
@@ -36,7 +37,7 @@ export const DesktopSidebar = memo(function DesktopSidebar({ controller, open_cr
   const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
   const settings_active = selection?.kind === "settings";
   const notification_state = use_desktop_selector(controller.stores.notification, (state) => state);
-  const plugin_workspaces = useMemo(() => plugins.filter((plugin) => plugin.has_sidebar && plugin.has_mainview), [plugins]);
+  const plugin_workspaces = useMemo(() => order_rail_plugins(plugins), [plugins]);
   const unread_attention_by_mode = useMemo(() => {
     const entries: [SidebarMode, UnreadAttention][] = [];
     const chat_attention = get_chat_unread_attention(notification_state);
