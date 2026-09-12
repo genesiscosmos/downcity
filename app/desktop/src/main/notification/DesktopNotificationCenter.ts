@@ -5,7 +5,7 @@
  * 收敛为通知领域操作；调用方不需要理解通知存储、聚合或生产者实现。
  */
 
-import type { DesktopChatRuntime } from "../../common/types/DesktopApi.js";
+import type { DesktopChatRuntime, DesktopGroupEvent } from "../../common/types/DesktopApi.js";
 import type {
   DesktopNotificationState,
   DesktopNotificationViewState,
@@ -17,6 +17,7 @@ import type {
   DesktopPluginNotificationInput,
 } from "../types/notification/Notification.js";
 import { NotificationController } from "./NotificationController.js";
+import { GroupNotificationProducer } from "./GroupNotificationProducer.js";
 import { PluginNotificationProducer } from "./PluginNotificationProducer.js";
 import { SessionTurnNotificationProducer } from "./SessionTurnNotificationProducer.js";
 
@@ -26,6 +27,8 @@ export class DesktopNotificationCenter {
   private readonly controller: NotificationController;
   /** Session Turn 完成事件生产者。 */
   private readonly session_turn_producer: SessionTurnNotificationProducer;
+  /** GroupSession 待处理交互与失败事件生产者。 */
+  private readonly group_producer: GroupNotificationProducer;
   /** 受宿主身份约束的 Plugin 通知生产者。 */
   private readonly plugin_producer: PluginNotificationProducer;
 
@@ -36,6 +39,7 @@ export class DesktopNotificationCenter {
   ) {
     this.controller = new NotificationController(storage, badge, events);
     this.session_turn_producer = new SessionTurnNotificationProducer(this.controller);
+    this.group_producer = new GroupNotificationProducer(this.controller);
     this.plugin_producer = new PluginNotificationProducer(this.controller);
   }
 
@@ -54,9 +58,14 @@ export class DesktopNotificationCenter {
     this.controller.remove_view(view_id);
   }
 
-  /** 消费 Session 运行态并在完成检查点产生通知。 */
+  /** 消费 Session 运行态并在需要用户注意的落点产生通知。 */
   handle_session_runtime(runtime: DesktopChatRuntime): void {
     this.session_turn_producer.handle_runtime(runtime);
+  }
+
+  /** 消费 GroupSession 事件并在需要用户注意的落点产生通知。 */
+  handle_group_event(event: DesktopGroupEvent): void {
+    this.group_producer.handle_event(event);
   }
 
   /** 发布 Desktop City Plugin 产生的宿主通知。 */
@@ -83,8 +92,18 @@ export class DesktopNotificationCenter {
     this.controller.mark_target_read({ kind: "agent_session", agent_id, workspace_id, session_id });
   }
 
+  /** GroupSession 被删除后清理其精确目标通知。 */
+  handle_group_session_closed(group_id: string, session_id: string): void {
+    this.controller.mark_target_read({ kind: "group_session", group_id, session_id });
+  }
+
   /** Agent 删除后清理其 Session 和 Plugin 执行范围产生的全部通知。 */
   handle_agent_removed(agent_id: string): void {
     this.controller.mark_scope_read({ kind: "agent", agent_id });
+  }
+
+  /** Group 删除后清理其全部 GroupSession 通知。 */
+  handle_group_removed(group_id: string): void {
+    this.controller.mark_scope_read({ kind: "group", group_id });
   }
 }

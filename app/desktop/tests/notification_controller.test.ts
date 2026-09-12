@@ -6,12 +6,14 @@ import type { DesktopNotification } from "../src/common/types/DesktopNotificatio
 import { NotificationController } from "../src/main/notification/NotificationController.ts";
 import { NotificationStore } from "../src/main/notification/NotificationStore.ts";
 import { SessionTurnNotificationProducer } from "../src/main/notification/SessionTurnNotificationProducer.ts";
+import { GroupNotificationProducer } from "../src/main/notification/GroupNotificationProducer.ts";
 import { PluginNotificationProducer } from "../src/main/notification/PluginNotificationProducer.ts";
 import {
-  has_unread_agent_notification,
-  has_unread_chat_notification,
+  get_agent_unread_attention,
+  get_chat_unread_attention,
+  get_group_session_unread_attention,
+  get_group_unread_attention,
   has_unread_plugin_notification,
-  has_unread_session_notification,
   notification_target_from_navigation,
   plugin_renderer_notifications,
 } from "../src/renderer/lib/notification/notification_state.ts";
@@ -41,6 +43,25 @@ const target = {
   session_id: "session",
 };
 const agent_scope = [{ kind: "agent" as const, agent_id: "writer" }];
+const group_target = { kind: "group_session" as const, group_id: "crew", session_id: "group-session" };
+const group_scope = [{ kind: "group" as const, group_id: "crew" }];
+/** 构造一条 Group 成员 Agent 的待响应交互事件。 */
+function create_group_interaction(interaction_id: string) {
+  return {
+    type: "interaction" as const,
+    group_id: "crew",
+    session_id: "group-session",
+    agent_id: "writer",
+    request: {
+      interaction_id,
+      turn_id: "turn-1",
+      type: "confirmation",
+      source: { type: "tool" as const },
+      payload: {},
+      created_at: 1,
+    },
+  };
+}
 
 test("相同 topic 的多次完成只保留最新一条未读通知", () => {
   const fixture = create_fixture();
@@ -75,7 +96,20 @@ test("打开未读目标后统一持久化已读并清除角标", () => {
   assert.equal(fixture.states.at(-1)?.revision, 2);
 });
 
-test("Session Turn 生产者忽略失败和重复完成事件", () => {
+test("Session Turn 生产者对等待输入、失败和完成都产生通知", () => {
+  const fixture = create_fixture();
+  const producer = new SessionTurnNotificationProducer(fixture.controller);
+  const base = { agent_id: "writer", workspace_id: "workspace", session_id: "session", turn_id: "turn-1", updated_at: 10 };
+
+  producer.handle_runtime({ ...base, status: "waiting_input" });
+  assert.equal(fixture.controller.get_state().notifications[0]?.kind, "session_turn_waiting_input");
+
+  producer.handle_runtime({ ...base, status: "failed" });
+  assert.equal(fixture.controller.get_state().unread_count, 1);
+  assert.equal(fixture.controller.get_state().notifications[0]?.kind, "session_turn_failed");
+});
+
+test("Session Turn 生产者按 Turn 去重并阻止终态回退", () => {
   const fixture = create_fixture();
   const producer = new SessionTurnNotificationProducer(fixture.controller);
   const runtime = {
@@ -87,13 +121,44 @@ test("Session Turn 生产者忽略失败和重复完成事件", () => {
     updated_at: 10,
   };
 
-  producer.handle_runtime({ ...runtime, status: "failed" });
   producer.handle_runtime(runtime);
   producer.handle_runtime(runtime);
+  // 迟到的等待输入收口事件不能把已完成通知回退成等待输入。
+  producer.handle_runtime({ ...runtime, status: "waiting_input", updated_at: 20 });
 
   assert.equal(fixture.controller.get_state().unread_count, 1);
   assert.equal(fixture.controller.get_state().notifications[0]?.kind, "session_turn_completed");
   assert.deepEqual(fixture.badge_counts, [0, 1]);
+});
+
+test("Session 重新进入运行态会收回尚未查看的等待输入通知", () => {
+  const fixture = create_fixture();
+  const producer = new SessionTurnNotificationProducer(fixture.controller);
+  const waiting = {
+    agent_id: "writer",
+    workspace_id: "workspace",
+    session_id: "session",
+    status: "waiting_input" as const,
+    turn_id: "turn-1",
+    updated_at: 10,
+  };
+
+  producer.handle_runtime(waiting);
+  assert.equal(fixture.controller.get_state().unread_count, 1);
+  producer.handle_runtime({ ...waiting, status: "streaming", updated_at: 20 });
+  assert.equal(fixture.controller.get_state().unread_count, 0);
+});
+
+test("同一 Session 的不同落点聚合为一条未读通知", () => {
+  const fixture = create_fixture();
+  const producer = new SessionTurnNotificationProducer(fixture.controller);
+  const base = { agent_id: "writer", workspace_id: "workspace", session_id: "session", updated_at: 10 };
+
+  producer.handle_runtime({ ...base, status: "failed", turn_id: "turn-1" });
+  producer.handle_runtime({ ...base, status: "completed", turn_id: "turn-2", updated_at: 20 });
+
+  assert.equal(fixture.controller.get_state().unread_count, 1);
+  assert.equal(fixture.controller.get_state().notifications[0]?.kind, "session_turn_completed");
 });
 
 test("NotificationStore 过滤损坏记录并原子写回未读集合", () => {
@@ -107,6 +172,15 @@ test("NotificationStore 过滤损坏记录并原子写回未读集合", () => {
       title: "已完成",
       created_at: 1,
     },
+    {
+      notification_id: "waiting",
+      kind: "session_turn_waiting_input",
+      topic_key: "session:writer:waiting",
+      target,
+      scopes: agent_scope,
+      title: "等待输入",
+      created_at: 2,
+    },
     { notification_id: "broken", kind: "unknown" },
   ];
   const store = new NotificationStore({
@@ -115,35 +189,52 @@ test("NotificationStore 过滤损坏记录并原子写回未读集合", () => {
     remove: () => undefined,
   } as never);
 
-  assert.deepEqual(store.read().map((notification) => notification.notification_id), ["valid"]);
+  assert.deepEqual(store.read().map((notification) => notification.notification_id), ["valid", "waiting"]);
   store.write([]);
   assert.deepEqual(stored, []);
 });
 
-test("Renderer 按 Agent 聚合并按 Session 精确查询未读通知", () => {
+test("Renderer 按 Agent 聚合并按 Session 精确查询未读注意力", () => {
   const fixture = create_fixture();
   fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session:writer", target, scopes: agent_scope, title: "已完成", created_at: 1 });
   const state = fixture.controller.get_state();
 
-  assert.equal(has_unread_agent_notification(state, "writer"), true);
-  assert.equal(has_unread_chat_notification(state), true);
-  assert.equal(has_unread_session_notification(state, "workspace", "writer", "session"), true);
-  assert.equal(has_unread_session_notification(state, "workspace", "writer", "other"), false);
+  assert.equal(get_agent_unread_attention(state, "writer"), "completed");
+  assert.equal(get_chat_unread_attention(state), "completed");
+  assert.equal(get_group_unread_attention(state, "writer"), null);
   assert.deepEqual(notification_target_from_navigation({ kind: "session", workspace_id: "workspace", agent_id: "writer", session_id: "session" }), target);
   assert.equal(notification_target_from_navigation({ kind: "agent", agent_id: "writer" }), undefined);
 });
 
-test("Chat 一级导航只汇总 Session 未读通知", () => {
+test("聚合未读时优先展示最需要用户处理的落点", () => {
+  const fixture = create_fixture();
+  fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session:done", target, scopes: agent_scope, title: "已完成", created_at: 1 });
+  fixture.controller.publish({ kind: "session_turn_failed", topic_key: "session:failed", target, scopes: agent_scope, title: "执行失败", created_at: 2 });
+  assert.equal(get_agent_unread_attention(fixture.controller.get_state(), "writer"), "failed");
+
+  fixture.controller.publish({ kind: "session_turn_waiting_input", topic_key: "session:waiting", target, scopes: agent_scope, title: "等待输入", created_at: 3 });
+  assert.equal(get_agent_unread_attention(fixture.controller.get_state(), "writer"), "action_required");
+  assert.equal(get_chat_unread_attention(fixture.controller.get_state()), "action_required");
+});
+
+test("Chat 一级导航汇总 Session 与 Group 未读通知", () => {
   const fixture = create_fixture();
   const producer = new PluginNotificationProducer(fixture.controller);
   producer.publish("task", { topic_key: "global", title: "Plugin 完成", route: {} });
 
-  assert.equal(has_unread_chat_notification(fixture.controller.get_state()), false);
+  assert.equal(get_chat_unread_attention(fixture.controller.get_state()), null);
   fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session:writer", target, scopes: agent_scope, title: "Session 完成", created_at: 1 });
-  assert.equal(has_unread_chat_notification(fixture.controller.get_state()), true);
+  assert.equal(get_chat_unread_attention(fixture.controller.get_state()), "completed");
 
   fixture.controller.mark_target_read(target);
-  assert.equal(has_unread_chat_notification(fixture.controller.get_state()), false);
+  assert.equal(get_chat_unread_attention(fixture.controller.get_state()), null);
+
+  fixture.controller.publish({ kind: "group_interaction_pending", topic_key: "group_session:crew:group-session", target: group_target, scopes: group_scope, title: "群聊等待你的输入", created_at: 2 });
+  assert.equal(get_chat_unread_attention(fixture.controller.get_state()), "action_required");
+  assert.equal(get_group_unread_attention(fixture.controller.get_state(), "crew"), "action_required");
+  assert.equal(get_group_session_unread_attention(fixture.controller.get_state(), "crew", "group-session"), "action_required");
+  assert.equal(get_group_session_unread_attention(fixture.controller.get_state(), "crew", "other"), null);
+  assert.deepEqual(notification_target_from_navigation({ kind: "group_session", group_id: "crew", workspace_id: "workspace", session_id: "group-session" }), group_target);
 });
 
 test("Plugin 发布由宿主绑定身份并按本地 topic 聚合", () => {
@@ -210,4 +301,67 @@ test("Agent 生命周期结束会清理 Session 与 Plugin 执行范围通知", 
   fixture.controller.mark_scope_read({ kind: "agent", agent_id: "writer" });
 
   assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["plugin:task:global"]);
+});
+
+test("Group 成员等待输入时产生未读，并回到空闲后收回", () => {
+  const fixture = create_fixture();
+  const producer = new GroupNotificationProducer(fixture.controller);
+  const interaction = create_group_interaction("interaction-1");
+
+  producer.handle_event(interaction);
+  assert.equal(fixture.controller.get_state().notifications[0]?.kind, "group_interaction_pending");
+  assert.equal(get_group_session_unread_attention(fixture.controller.get_state(), "crew", "group-session"), "action_required");
+
+  // 同一交互重复到达不再重复打扰。
+  producer.handle_event(interaction);
+  assert.equal(fixture.controller.get_state().unread_count, 1);
+
+  producer.handle_event({ type: "status", group_id: "crew", session_id: "group-session", turn_id: "turn-1", phase: "executing", members: [] });
+  assert.equal(fixture.controller.get_state().unread_count, 1);
+
+  producer.handle_event({ type: "status", group_id: "crew", session_id: "group-session", turn_id: "turn-1", phase: "idle", members: [] });
+  assert.equal(fixture.controller.get_state().unread_count, 0);
+});
+
+test("Group 执行失败产生未读，且下一轮等待输入会取代它", () => {
+  const fixture = create_fixture();
+  const producer = new GroupNotificationProducer(fixture.controller);
+
+  producer.handle_event({ type: "status", group_id: "crew", session_id: "group-session", turn_id: "turn-1", phase: "failed", members: [] });
+  producer.handle_event({ type: "status", group_id: "crew", session_id: "group-session", turn_id: "turn-1", phase: "failed", members: [] });
+  assert.equal(fixture.controller.get_state().unread_count, 1);
+  assert.equal(fixture.controller.get_state().notifications[0]?.kind, "group_turn_failed");
+  assert.equal(get_group_unread_attention(fixture.controller.get_state(), "crew"), "failed");
+
+  // 失败后回到空闲不能抹掉失败通知，必须等用户查看。
+  producer.handle_event({ type: "status", group_id: "crew", session_id: "group-session", phase: "idle", members: [] });
+  assert.equal(fixture.controller.get_state().unread_count, 1);
+
+  producer.handle_event(create_group_interaction("interaction-2"));
+  assert.equal(fixture.controller.get_state().unread_count, 1);
+  assert.equal(fixture.controller.get_state().notifications[0]?.kind, "group_interaction_pending");
+});
+
+test("Group 删除后清理其全部 GroupSession 通知", () => {
+  const fixture = create_fixture();
+  const producer = new GroupNotificationProducer(fixture.controller);
+  producer.handle_event(create_group_interaction("interaction-1"));
+  fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session:writer", target, scopes: agent_scope, title: "已完成", created_at: 1 });
+
+  fixture.controller.mark_scope_read({ kind: "group", group_id: "crew" });
+
+  assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["session:writer"]);
+});
+
+test("GroupSession 通知可以持久化恢复", () => {
+  const stored: unknown = [
+    { notification_id: "group", kind: "group_interaction_pending", topic_key: "group_session:crew:group-session", target: group_target, scopes: group_scope, title: "群聊等待你的输入", created_at: 3 },
+  ];
+  const store = new NotificationStore({
+    get: () => stored,
+    set: () => undefined,
+    remove: () => undefined,
+  } as never);
+
+  assert.deepEqual(store.read().map((notification) => notification.kind), ["group_interaction_pending"]);
 });

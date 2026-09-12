@@ -4,8 +4,10 @@ import { memo, type ReactNode } from "react";
 import { TbDots, TbLoader2 } from "react-icons/tb";
 import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
 import { Button } from "@/components/ui/button";
+import { UnreadIndicator } from "@/components/UnreadIndicator";
 import { cn } from "@/lib/utils";
 import type { DesktopSessionSummary } from "@common/types/DesktopApi";
+import type { UnreadAttention } from "@/lib/notification/unread_attention";
 import { use_translation } from "@/locales/i18n";
 
 /** Session 导航项属性。 */
@@ -16,8 +18,8 @@ interface SessionListItemProps {
   executing: boolean;
   /** 是否选中。 */
   active: boolean;
-  /** 当前 Session 是否有未读完成通知。 */
-  unread: boolean;
+  /** 当前 Session 未读通知表达的注意力等级；无未读时为 null。 */
+  unread_attention: UnreadAttention | null;
   /** 进入 Session。 */
   on_select(): void;
   /** 修改标题。 */
@@ -65,10 +67,11 @@ export const SessionListRow = memo(function SessionListRow({ title, active, on_s
 });
 
 /** 带完整 Agent Session 操作能力的标准行。 */
-export const SessionListItem = memo(function SessionListItem({ session, executing, active, unread, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
+export const SessionListItem = memo(function SessionListItem({ session, executing, active, unread_attention, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
   const translate_common = use_translation("common");
   const translate_chat = use_translation("chat");
-  const has_status = executing || unread;
+  // 运行态与未读态都由菜单按钮承载；存在状态时常显，否则未读提示会被 hover 隐藏。
+  const has_status = executing || Boolean(unread_attention);
   return <SessionListRow title={session.title || translate_chat("conversation.new")} active={active} on_select={on_select} menu={
     <SessionActionsMenu session={session} on_rename={on_rename} on_archive={on_archive} on_remove={on_remove} trigger={
           <Button
@@ -80,8 +83,8 @@ export const SessionListItem = memo(function SessionListItem({ session, executin
           >
             {executing
               ? <TbLoader2 className="animate-spin text-primary motion-reduce:animate-none" aria-label={translate_chat("conversation.responding")} />
-              : unread
-                ? <span className="size-1.5 rounded-full bg-blue-500" aria-label={translate_chat("conversation.unread_result")} />
+              : unread_attention
+                ? <UnreadIndicator attention={unread_attention} />
                 : <TbDots />}
           </Button>
     } />

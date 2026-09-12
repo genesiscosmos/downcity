@@ -7,6 +7,7 @@ import { SidebarNavigationItems } from "./SidebarNavigationItems";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 import type { SidebarMode } from "@/types/DesktopView";
+import type { UnreadAttention } from "@/lib/notification/unread_attention";
 
 /** 左侧一级图标导航栏属性。 */
 interface SidebarRailProps {
@@ -16,8 +17,8 @@ interface SidebarRailProps {
   on_change(mode: SidebarMode): void;
   /** 动态贡献一级入口的 Plugin。 */
   plugin_workspaces: DesktopPluginSummary[];
-  /** 当前包含未读通知的业务入口。 */
-  unread_modes: readonly SidebarMode[];
+  /** 各业务入口的未读注意力等级；不在其中的入口没有未读。 */
+  unread_attention_by_mode: ReadonlyMap<SidebarMode, UnreadAttention>;
   /** 设置入口是否处于激活状态。 */
   settings_active: boolean;
   /** 打开设置页。 */
@@ -42,7 +43,7 @@ export function SidebarRail(props: SidebarRailProps) {
   ><TbSettings /></button>;
 
   return <div className="flex min-h-0 w-10 shrink-0 flex-col items-center pb-2 pl-2">
-    <SidebarNavigationItems active_mode={props.active_mode} on_change={props.on_change} plugin_workspaces={props.plugin_workspaces} unread_modes={props.unread_modes} />
+    <SidebarNavigationItems active_mode={props.active_mode} on_change={props.on_change} plugin_workspaces={props.plugin_workspaces} unread_attention_by_mode={props.unread_attention_by_mode} />
     <Tooltip.Root>
       <Tooltip.Trigger delay={300} render={settings_button} />
       <Tooltip.Portal><Tooltip.Positioner side="right" sideOffset={8} className="z-50"><Tooltip.Popup className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground shadow-lg outline-none">{settings_label}</Tooltip.Popup></Tooltip.Positioner></Tooltip.Portal>

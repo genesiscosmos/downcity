@@ -36,7 +36,8 @@ export class NotificationStore implements DesktopNotificationStorage {
 function normalize_notification(input: unknown): DesktopNotification | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const candidate = input as Partial<DesktopNotification>;
-  if (candidate.kind !== "session_turn_completed" && candidate.kind !== "plugin") return null;
+  const kind = candidate.kind;
+  if (!is_supported_notification_kind(kind)) return null;
   const notification_id = normalize_text(candidate.notification_id);
   const topic_key = normalize_text(candidate.topic_key);
   const title = normalize_text(candidate.title);
@@ -48,7 +49,7 @@ function normalize_notification(input: unknown): DesktopNotification | null {
     const body = normalize_text(candidate.body);
     return {
       notification_id,
-      kind: candidate.kind,
+      kind,
       topic_key,
       target,
       scopes,
@@ -72,6 +73,11 @@ function normalize_notification_scopes(input: unknown): DesktopNotificationScope
       if (!agent_id) throw new Error("notification scope is incomplete");
       return { kind: "agent", agent_id };
     }
+    if (candidate.kind === "group") {
+      const group_id = normalize_text(candidate.group_id);
+      if (!group_id) throw new Error("notification scope is incomplete");
+      return { kind: "group", group_id };
+    }
     if (candidate.kind === "plugin") {
       const plugin_id = normalize_text(candidate.plugin_id);
       if (!plugin_id) throw new Error("notification scope is incomplete");
@@ -86,6 +92,16 @@ function normalize_text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** 判断持久化记录的通知类型是否仍属于当前协议；新增类型必须同步登记。 */
+function is_supported_notification_kind(kind: unknown): kind is DesktopNotification["kind"] {
+  return kind === "session_turn_completed"
+    || kind === "session_turn_waiting_input"
+    || kind === "session_turn_failed"
+    || kind === "group_interaction_pending"
+    || kind === "group_turn_failed"
+    || kind === "plugin";
+}
+
 /** 校验持久化通知所指向的业务目标。 */
 function normalize_notification_target(input: unknown): DesktopNotificationTarget {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("notification target is invalid");
@@ -96,6 +112,12 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
     const session_id = normalize_text(candidate.session_id);
     if (!agent_id || !workspace_id || !session_id) throw new Error("notification target is incomplete");
     return { kind: "agent_session", agent_id, workspace_id, session_id };
+  }
+  if (candidate.kind === "group_session") {
+    const group_id = normalize_text(candidate.group_id);
+    const session_id = normalize_text(candidate.session_id);
+    if (!group_id || !session_id) throw new Error("notification target is incomplete");
+    return { kind: "group_session", group_id, session_id };
   }
   if (candidate.kind === "plugin") {
     const plugin_id = normalize_text(candidate.plugin_id);

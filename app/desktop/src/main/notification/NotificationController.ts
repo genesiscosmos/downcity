@@ -199,6 +199,13 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
     const session_id = require_text(candidate.session_id, "target session_id");
     return { kind: "agent_session", agent_id, workspace_id, session_id };
   }
+  if (candidate.kind === "group_session") {
+    return {
+      kind: "group_session",
+      group_id: require_text(candidate.group_id, "target group_id"),
+      session_id: require_text(candidate.session_id, "target session_id"),
+    };
+  }
   if (candidate.kind === "plugin") {
     return {
       kind: "plugin",
@@ -211,9 +218,9 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
 
 /** 为通知目标生成不依赖展示文案的稳定比较键。 */
 function get_notification_target_key(target: DesktopNotificationTarget): string {
-  return target.kind === "agent_session"
-    ? stable_json_stringify(["agent_session", target.agent_id, target.workspace_id, target.session_id])
-    : stable_json_stringify(["plugin", target.plugin_id, target.route]);
+  if (target.kind === "agent_session") return stable_json_stringify(["agent_session", target.agent_id, target.workspace_id, target.session_id]);
+  if (target.kind === "group_session") return stable_json_stringify(["group_session", target.group_id, target.session_id]);
+  return stable_json_stringify(["plugin", target.plugin_id, target.route]);
 }
 
 /** 校验、去重并复制通知的生命周期作用域。 */
@@ -234,15 +241,16 @@ function normalize_notification_scope(input: unknown): DesktopNotificationScope 
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("notification scope is invalid");
   const candidate = input as Partial<DesktopNotificationScope>;
   if (candidate.kind === "agent") return { kind: "agent", agent_id: require_text(candidate.agent_id, "scope agent_id") };
+  if (candidate.kind === "group") return { kind: "group", group_id: require_text(candidate.group_id, "scope group_id") };
   if (candidate.kind === "plugin") return { kind: "plugin", plugin_id: require_text(candidate.plugin_id, "scope plugin_id") };
   throw new Error("notification scope kind is invalid");
 }
 
 /** 为生命周期作用域生成无分隔符碰撞的稳定比较键。 */
 function get_notification_scope_key(scope: DesktopNotificationScope): string {
-  return scope.kind === "agent"
-    ? stable_json_stringify(["agent", scope.agent_id])
-    : stable_json_stringify(["plugin", scope.plugin_id]);
+  if (scope.kind === "agent") return stable_json_stringify(["agent", scope.agent_id]);
+  if (scope.kind === "group") return stable_json_stringify(["group", scope.group_id]);
+  return stable_json_stringify(["plugin", scope.plugin_id]);
 }
 
 /** 复制一条通知，避免调用者修改控制器持有的唯一事实源。 */
@@ -250,9 +258,9 @@ function copy_notification(notification: DesktopNotification): DesktopNotificati
   return {
     ...notification,
     scopes: notification.scopes.map((scope) => ({ ...scope })),
-    target: notification.target.kind === "agent_session"
-      ? { ...notification.target }
-      : { ...notification.target, route: structuredClone(notification.target.route) },
+    target: notification.target.kind === "plugin"
+      ? { ...notification.target, route: structuredClone(notification.target.route) }
+      : { ...notification.target },
   };
 }
 

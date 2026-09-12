@@ -19,6 +19,16 @@ export interface DesktopAgentSessionNotificationTarget {
   session_id: string;
 }
 
+/** GroupSession 通知所指向的稳定业务对象。 */
+export interface DesktopGroupSessionNotificationTarget {
+  /** 通知目标类型，用于安全区分后续新增的目标。 */
+  kind: "group_session";
+  /** 目标 GroupSession 所属 Group 的稳定标识。 */
+  group_id: string;
+  /** 目标 GroupSession 的稳定标识。 */
+  session_id: string;
+}
+
 /** Plugin 通知所指向的受控业务工作区路由。 */
 export interface DesktopPluginNotificationTarget {
   /** 通知目标类型。 */
@@ -30,7 +40,10 @@ export interface DesktopPluginNotificationTarget {
 }
 
 /** Desktop 通知可以关联的业务目标。 */
-export type DesktopNotificationTarget = DesktopAgentSessionNotificationTarget | DesktopPluginNotificationTarget;
+export type DesktopNotificationTarget =
+  | DesktopAgentSessionNotificationTarget
+  | DesktopGroupSessionNotificationTarget
+  | DesktopPluginNotificationTarget;
 
 /** Desktop 通知随业务对象结束而清理的生命周期作用域。 */
 export type DesktopNotificationScope =
@@ -41,14 +54,31 @@ export type DesktopNotificationScope =
     readonly agent_id: string;
   }
   | {
+    /** Group 生命周期作用域。 */
+    readonly kind: "group";
+    /** 拥有该通知的 Group 稳定标识。 */
+    readonly group_id: string;
+  }
+  | {
     /** Plugin 生命周期作用域。 */
     readonly kind: "plugin";
     /** 拥有该通知的 Plugin 稳定标识。 */
     readonly plugin_id: string;
   };
 
-/** Desktop 当前支持的通知类型。 */
-export type DesktopNotificationKind = "session_turn_completed" | "plugin";
+/**
+ * Desktop 当前支持的通知类型。
+ *
+ * Session 与 Group 需要用户注意的每种落点各自成类，便于消费方区分注意力等级；
+ * 同一目标的不同落点仍按同一聚合键收敛为一条未读通知。
+ */
+export type DesktopNotificationKind =
+  | "session_turn_completed"
+  | "session_turn_waiting_input"
+  | "session_turn_failed"
+  | "group_interaction_pending"
+  | "group_turn_failed"
+  | "plugin";
 
 /** Renderer 可见的一条未读通知。 */
 export interface DesktopNotification {

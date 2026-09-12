@@ -156,7 +156,11 @@ ipcMain.handle("group:list", () => require_agent_controller().list_groups());
 ipcMain.handle("group:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateGroupInput) => require_agent_controller().create_group(input));
 ipcMain.handle("group:generate-draft", (_event, input: import("../common/types/DesktopApi.js").DesktopGenerateGroupDraftInput) => require_agent_controller().generate_group_draft(input));
 ipcMain.handle("group:update", (_event, group_id: string, input: import("../common/types/DesktopApi.js").DesktopUpdateGroupInput) => require_agent_controller().update_group(group_id, input));
-ipcMain.handle("group:remove", (_event, group_id: string) => require_agent_controller().remove_group(group_id));
+ipcMain.handle("group:remove", async (_event, group_id: string) => {
+  const removed = await require_agent_controller().remove_group(group_id);
+  if (removed) require_notification_center().handle_group_removed(group_id);
+  return removed;
+});
 ipcMain.handle("group:open", (_event, group_id: string, session_id?: string) => require_agent_controller().open_group(group_id, session_id));
 ipcMain.handle("group:list-sessions", (_event, group_id: string) => require_agent_controller().list_group_sessions(group_id));
 ipcMain.handle("group:create-session", (_event, group_id: string, workspace_id?: string) => require_agent_controller().create_group_session(group_id, workspace_id));
@@ -165,7 +169,11 @@ ipcMain.handle("group:list-messages", (_event, group_id: string, session_id?: st
 ipcMain.handle("group:send", (_event, group_id: string, session_id: string | undefined, input: import("../common/types/DesktopApi.js").DesktopGroupSendInput) => require_agent_controller().send_group_message(group_id, session_id, input));
 ipcMain.handle("group:stop", (_event, group_id: string, session_id?: string) => require_agent_controller().stop_group(group_id, session_id));
 ipcMain.handle("group:respond-interaction", (_event, group_id: string, session_id: string, input: RespondSessionInteractionInput) => require_agent_controller().respond_group_interaction(group_id, session_id, input));
-ipcMain.handle("group:remove-session", (_event, group_id: string, session_id: string) => require_agent_controller().remove_group_session(group_id, session_id));
+ipcMain.handle("group:remove-session", async (_event, group_id: string, session_id: string) => {
+  const result = await require_agent_controller().remove_group_session(group_id, session_id);
+  require_notification_center().handle_group_session_closed(group_id, session_id);
+  return result;
+});
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id?: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
 ipcMain.handle("chat:rebind-session-workspace", (_event, agent_id: string, session_id: string, workspace_id: string) => require_agent_controller().rebind_session_workspace(agent_id, session_id, workspace_id));
 ipcMain.handle("chat:list-models", () => require_agent_controller().list_models());
@@ -289,7 +297,10 @@ app.whenReady().then(async () => {
       next_notification_center.handle_session_runtime(event.runtime);
       broadcast("chat:runtime", event);
     },
-    group_event: (event) => broadcast("group:event", event),
+    group_event: (event) => {
+      next_notification_center.handle_group_event(event);
+      broadcast("group:event", event);
+    },
     plugin_notification: async (plugin_id, agent_id, input) => next_notification_center.publish_agent_plugin_notification(plugin_id, agent_id, input),
     plugin_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
     plugin_host_notification: async (plugin_id, input) => next_notification_center.publish_plugin_notification(plugin_id, input),
