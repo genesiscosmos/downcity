@@ -10,6 +10,7 @@
 
 import { BaseChatChannel } from "@/chat/channels/BaseChatChannel.js";
 import { parse_chat_message_markup } from "@downcity/agent";
+import type { ChatConnectorStatus } from "@/chat/types/ChatConnector.js";
 import { QqInboundDedupeStore } from "./QQInboundDedupe.js";
 import { getQqEventCaptureConfig } from "./QQEventCapture.js";
 import { QQGatewayClient } from "./QQGatewayClient.js";
@@ -117,12 +118,7 @@ export class QQBot extends BaseChatChannel {
   /**
    * 读取 QQ 状态快照。
    */
-  getExecutorStatus(): {
-    running: boolean;
-    linkState: "connected" | "disconnected" | "unknown";
-    statusText: string;
-    detail: Record<string, string | number | boolean | null>;
-  } {
+  getExecutorStatus(): ChatConnectorStatus {
     const runtime = this.gateway.getExecutorStatus();
     return {
       ...runtime,

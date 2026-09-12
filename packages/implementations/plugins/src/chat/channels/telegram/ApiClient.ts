@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
 import type { PluginLogger } from "@downcity/city/plugin";
+import { plugin_http_fetch } from "@/http/PluginHttp.js";
 import {
   guessMimeType,
   parseTelegramAttachments,
@@ -12,6 +13,10 @@ import {
 
 const TELEGRAM_SEND_MAX_ATTEMPTS = 3;
 const TELEGRAM_SEND_RETRY_DELAYS_MS = [1_000, 3_000];
+/** 普通 Bot API 请求的整体超时。 */
+const TELEGRAM_REQUEST_TIMEOUT_MS = 30_000;
+/** 附件上传与文件下载的整体超时。 */
+const TELEGRAM_TRANSFER_TIMEOUT_MS = 5 * 60_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -63,12 +68,17 @@ export class TelegramApiClient {
   async requestJson<T>(
     method: string,
     data: Record<string, unknown>,
+    options?: {
+      /** 本次请求的整体超时；长轮询等场景需要显式放宽。 */
+      timeout_ms?: number;
+    },
   ): Promise<T> {
     const url = `https://api.telegram.org/bot${this.botToken}/${method}`;
-    const response = await fetch(url, {
+    const response = await plugin_http_fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
+      timeout_ms: options?.timeout_ms ?? TELEGRAM_REQUEST_TIMEOUT_MS,
     });
 
     const payload = (await response.json()) as TelegramApiResponse<T>;
@@ -96,9 +106,10 @@ export class TelegramApiClient {
    */
   async requestForm<T>(method: string, form: FormData): Promise<T> {
     const url = `https://api.telegram.org/bot${this.botToken}/${method}`;
-    const response = await fetch(url, {
+    const response = await plugin_http_fetch(url, {
       method: "POST",
       body: form,
+      timeout_ms: TELEGRAM_TRANSFER_TIMEOUT_MS,
     });
 
     const payload = (await response.json()) as TelegramApiResponse<T>;
@@ -192,7 +203,7 @@ export class TelegramApiClient {
     }
 
     const url = `https://api.telegram.org/file/bot${this.botToken}/${filePath}`;
-    const res = await fetch(url);
+    const res = await plugin_http_fetch(url, { timeout_ms: TELEGRAM_TRANSFER_TIMEOUT_MS });
     if (!res.ok) {
       throw new Error(`Telegram file download failed: HTTP ${res.status}`);
     }

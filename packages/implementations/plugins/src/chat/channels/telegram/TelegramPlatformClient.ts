@@ -9,12 +9,23 @@
 
 import type { PluginLogger } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
+import type { ChatConnectorStatus } from "@/chat/types/ChatConnector.js";
+import { PluginHttpError } from "@/http/PluginHttp.js";
 import { TelegramApiClient } from "./ApiClient.js";
 import { TelegramStateStore } from "./StateStore.js";
 import type {
   TelegramConfig,
   TelegramUpdate,
 } from "./Shared.js";
+
+/**
+ * 连续轮询失败达到该次数后对外报告 error。
+ *
+ * 说明（中文）
+ * - 单次网络抖动不应改变对外状态，否则会造成 UI 频繁闪烁。
+ * - 达到阈值说明链路已明显不可用，需要让用户看到真实原因。
+ */
+const TELEGRAM_POLL_ERROR_THRESHOLD = 3;
 
 /**
  * Telegram 平台 client 构造参数。
@@ -70,6 +81,7 @@ export class TelegramPlatformClient {
   private clearedWebhookOnce = false;
   private isStarting = false;
   private lastStartupError: string | null = null;
+  private lastPollError: string | null = null;
 
   constructor(options: TelegramPlatformClientOptions) {
     this.logger = options.logger;
@@ -88,33 +100,40 @@ export class TelegramPlatformClient {
 
   /**
    * 返回只读 runtime 快照。
+   *
+   * 说明（中文）
+   * - 启动失败后 `running` 为 false 且 linkState 为 error，Runtime 据此触发自愈重连。
+   * - 持续轮询失败也归为 error，避免 UI 在链路不可用时仍显示“已连接”。
    */
-  getExecutorStatus(): {
-    running: boolean;
-    linkState: "connected" | "disconnected" | "unknown";
-    statusText: string;
-    detail: Record<string, string | number | boolean | null>;
-  } {
+  getExecutorStatus(): ChatConnectorStatus {
     const running = this.isRunning;
-    const linkState =
-      running && (typeof this.botId === "number" || !!this.botUsername)
+    const polling_failed =
+      running && this.consecutivePollErrors >= TELEGRAM_POLL_ERROR_THRESHOLD;
+    const link_error = this.lastStartupError
+      || (polling_failed
+        ? `Telegram 轮询连续失败 ${this.consecutivePollErrors} 次，最近错误：${this.lastPollError || "未知"}`
+        : undefined);
+    const linkState: ChatConnectorStatus["linkState"] = link_error
+      ? "error"
+      : running && (typeof this.botId === "number" || !!this.botUsername)
         ? "connected"
         : running
-          ? "unknown"
+          ? "connecting"
           : "disconnected";
-    const statusText = this.lastStartupError
+    const statusText = link_error
       ? "start_failed"
       : this.isStarting
         ? "starting"
         : linkState === "connected"
           ? "polling"
-          : linkState === "unknown"
+          : linkState === "connecting"
             ? "starting"
             : "stopped";
     return {
       running,
       linkState,
       statusText,
+      ...(link_error ? { link_error } : {}),
       detail: {
         isStarting: this.isStarting,
         pollInFlight: this.pollInFlight,
@@ -398,11 +417,16 @@ export class TelegramPlatformClient {
     this.pollInFlight = true;
 
     try {
-      const updates = await this.api.requestJson<TelegramUpdate[]>("getUpdates", {
-        offset: this.lastUpdateId + 1,
-        limit: 10,
-        timeout: 30,
-      });
+      const updates = await this.api.requestJson<TelegramUpdate[]>(
+        "getUpdates",
+        {
+          offset: this.lastUpdateId + 1,
+          limit: 10,
+          timeout: 30,
+        },
+        // 关键点（中文）：Telegram 长轮询最长挂起 30 秒，整体超时必须高于该窗口。
+        { timeout_ms: 60_000 },
+      );
 
       if (this.consecutivePollErrors > 0) {
         this.logger.info(
@@ -410,6 +434,7 @@ export class TelegramPlatformClient {
         );
       }
       this.consecutivePollErrors = 0;
+      this.lastPollError = null;
       this.nextPollAllowedAt = 0;
 
       for (const update of updates) {
@@ -432,8 +457,8 @@ export class TelegramPlatformClient {
         }
       }
     } catch (error) {
-      const msg = (error as Error)?.message || String(error);
-      if (!this.isPollingTimeoutError(msg)) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (!this.isPollingTimeoutError(error)) {
         const looksLikeWebhookConflict =
           /webhook/i.test(msg) || /Conflict/i.test(msg) || /getUpdates/i.test(msg);
         if (!this.clearedWebhookOnce && looksLikeWebhookConflict) {
@@ -459,6 +484,7 @@ export class TelegramPlatformClient {
         }
 
         this.consecutivePollErrors += 1;
+        this.lastPollError = msg;
         const backoffMs = this.computePollBackoffMs(this.consecutivePollErrors);
         this.nextPollAllowedAt = Date.now() + backoffMs;
         const retryInSeconds = Math.ceil(backoffMs / 1000);
@@ -480,9 +506,15 @@ export class TelegramPlatformClient {
 
   /**
    * 是否属于 polling timeout。
+   *
+   * 说明（中文）
+   * - 长轮询到达服务端返回窗口是正常情况，不能计入错误退避。
+   * - 插件 HTTP 层主动超时会抛出 code=timeout 的标准化错误，需一并识别。
    */
-  private isPollingTimeoutError(message: string): boolean {
-    return /timeout/i.test(String(message || ""));
+  private isPollingTimeoutError(error: unknown): boolean {
+    if (error instanceof PluginHttpError && error.code === "timeout") return true;
+    const message = error instanceof Error ? error.message : String(error || "");
+    return /timeout/i.test(message);
   }
 
   /**

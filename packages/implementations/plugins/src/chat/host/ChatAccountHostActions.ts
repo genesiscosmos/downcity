@@ -152,6 +152,15 @@ export function register_chat_account_host_actions(
     ),
   });
   context.plugin.action({
+    id: "accounts.refresh_network",
+    run: async () => {
+      // 关键点（中文）：网络代理变化后必须用新出口重建连接，否则旧连接会继续用旧代理。
+      await resolve_runtime().restart_enabled_accounts();
+      const snapshot = await create_snapshot(context, resolve_runtime());
+      return as_json(snapshot.accounts);
+    },
+  });
+  context.plugin.action({
     id: "conversations.update_route",
     run: async (input) => {
       const source = read_object(input);

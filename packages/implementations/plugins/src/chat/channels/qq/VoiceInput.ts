@@ -6,6 +6,7 @@ import type {
   QqRawInboundAttachment,
 } from "@/chat/types/QqVoice.js";
 import type { PluginLogger } from "@downcity/city/plugin";
+import { plugin_http_fetch } from "@/http/PluginHttp.js";
 
 /**
  * QQ 入站附件候选字段（宽松结构）。
@@ -313,10 +314,10 @@ async function downloadRemoteAttachment(params: {
       ? { Authorization: params.authToken.trim() }
       : undefined;
 
-  let response = await fetch(url, headers ? { headers } : undefined);
+  let response = await plugin_http_fetch(url, headers ? { headers } : {});
   if (!response.ok && headers) {
     // 关键点（中文）：某些下载地址不接受 Authorization 头，失败后回退无头重试。
-    response = await fetch(url);
+    response = await plugin_http_fetch(url);
   }
   if (!response.ok) {
     throw new Error(`QQ attachment download failed: HTTP ${response.status}`);

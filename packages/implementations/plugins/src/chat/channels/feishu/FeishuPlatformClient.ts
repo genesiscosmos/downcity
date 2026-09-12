@@ -8,6 +8,7 @@
  */
 
 import type { PluginLogger } from "@downcity/city/plugin";
+import { plugin_http_fetch } from "@/http/PluginHttp.js";
 import type {
   FeishuConfig,
   FeishuDownloadedAttachment,
@@ -15,6 +16,7 @@ import type {
   FeishuMessagePayloadType,
 } from "@/chat/channels/feishu/types/FeishuChannel.js";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
+import type { ChatConnectorStatus } from "@/chat/types/ChatConnector.js";
 import type { ParsedFeishuAttachmentCommand } from "@/chat/types/FeishuAttachment.js";
 import type { FeishuIncomingAttachmentDescriptor } from "@/chat/types/FeishuInboundAttachment.js";
 import type { InboundReplyContext } from "@/chat/types/ReplyContext.js";
@@ -74,6 +76,8 @@ export class FeishuPlatformClient {
   private messageCleanupInterval: NodeJS.Timeout | null = null;
   private appAccessToken = "";
   private appAccessTokenExpiresAtMs = 0;
+  /** 最近一次启动失败原因；成功启动后清空。 */
+  private lastStartupError: string | null = null;
   private readonly chatTitleByChatId: Map<string, string> = new Map();
   private readonly senderNameBySenderKey: Map<string, string> = new Map();
   private readonly lookupWarnings: Set<string> = new Set();
@@ -90,30 +94,37 @@ export class FeishuPlatformClient {
 
   /**
    * 获取 runtime 快照。
+   *
+   * 说明（中文）
+   * - 启动失败时 linkState 为 error 并附带可展示原因，Runtime 据此触发自愈重连。
    */
-  getExecutorStatus(): {
-    running: boolean;
-    linkState: "connected" | "disconnected" | "unknown";
-    statusText: string;
-    detail: Record<string, string | number | boolean | null>;
-  } {
+  getExecutorStatus(): ChatConnectorStatus {
     const running = this.isRunning;
     const hasClients = Boolean(this.client && this.wsClient);
-    const linkState = running && hasClients ? "connected" : running ? "unknown" : "disconnected";
+    const linkState: ChatConnectorStatus["linkState"] = this.lastStartupError
+      ? "error"
+      : running && hasClients
+        ? "connected"
+        : running
+          ? "connecting"
+          : "disconnected";
     return {
       running,
       linkState,
-      statusText:
-        linkState === "connected"
+      statusText: this.lastStartupError
+        ? "start_failed"
+        : linkState === "connected"
           ? "ws_online"
-          : linkState === "unknown"
+          : linkState === "connecting"
             ? "starting"
             : "stopped",
+      ...(this.lastStartupError ? { link_error: this.lastStartupError } : {}),
       detail: {
         hasClient: Boolean(this.client),
         hasWsClient: Boolean(this.wsClient),
         cachedChatTitleCount: this.chatTitleByChatId.size,
         cachedSenderNameCount: this.senderNameBySenderKey.size,
+        lastStartupError: this.lastStartupError,
       },
     };
   }
@@ -135,7 +146,7 @@ export class FeishuPlatformClient {
     const domain = this.domain || "https://open.feishu.cn";
     const endpoint = `${domain.replace(/\/+$/, "")}/open-apis/auth/v3/app_access_token/internal`;
     try {
-      const response = await fetch(endpoint, {
+      const response = await plugin_http_fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -201,6 +212,21 @@ export class FeishuPlatformClient {
       return;
     }
 
+    try {
+      await this.startUnsafe(processedMessages);
+      this.lastStartupError = null;
+    } catch (error) {
+      // 关键点（中文）：启动失败必须落到 runtime 状态，否则 UI 会一直停在“连接中”。
+      this.lastStartupError = error instanceof Error ? error.message : String(error);
+      this.isRunning = false;
+      this.client = null;
+      this.wsClient = null;
+      throw error;
+    }
+  }
+
+  /** 执行真实的飞书 SDK 启动流程。 */
+  private async startUnsafe(processedMessages: Set<string>): Promise<void> {
     this.isRunning = true;
     const baseConfig = {
       appId: this.appId,
@@ -233,6 +259,7 @@ export class FeishuPlatformClient {
    */
   async stop(): Promise<void> {
     this.isRunning = false;
+    this.lastStartupError = null;
     if (this.messageCleanupInterval) {
       clearInterval(this.messageCleanupInterval);
       this.messageCleanupInterval = null;
@@ -346,7 +373,7 @@ export class FeishuPlatformClient {
 
     const domain = this.getNormalizedDomain();
     try {
-      const response = await fetch(
+      const response = await plugin_http_fetch(
         `${domain}/open-apis/auth/v3/tenant_access_token/internal`,
         {
           method: "POST",

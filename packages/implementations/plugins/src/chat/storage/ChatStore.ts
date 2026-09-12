@@ -445,6 +445,27 @@ export class ChatStore {
     );
   }
 
+  /**
+   * 将一条 Outbox 重新排队，不消耗已用重试次数。
+   *
+   * 说明（中文）
+   * - 用于“连接暂时不可用”这类与内容无关的障碍，避免把消息直接判死。
+   * - 恢复连接后消息会自然被重新领取并投递。
+   */
+  requeue_outbound(delivery_id: string, delay_ms: number): void {
+    const safe_delay_ms = Math.max(0, Math.trunc(delay_ms));
+    this.database.prepare(`
+      UPDATE chat_outbox
+      SET status = 'retry_wait', attempt_count = MAX(0, attempt_count - 1),
+          available_at = ?, lease_expires_at = NULL, updated_at = ?
+      WHERE delivery_id = ? AND status = 'sending'
+    `).run(
+      Date.now() + safe_delay_ms,
+      Date.now(),
+      normalize_required(delivery_id, "delivery_id"),
+    );
+  }
+
   /** 按是否仍可重试记录 Outbox 投递失败。 */
   fail_outbound(delivery_id: string, error: unknown, retry_at?: number): void {
     this.database.prepare(`

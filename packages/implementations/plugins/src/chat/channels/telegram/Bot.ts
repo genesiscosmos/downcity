@@ -8,6 +8,7 @@
  */
 
 import { BaseChatChannel } from "@/chat/channels/BaseChatChannel.js";
+import type { ChatConnectorStatus } from "@/chat/types/ChatConnector.js";
 import type {
   ChannelChatKeyParams,
   ChannelSendActionParams,
@@ -140,12 +141,7 @@ export class TelegramBot extends BaseChatChannel {
   /**
    * 读取 runtime 快照。
    */
-  getExecutorStatus(): {
-    running: boolean;
-    linkState: "connected" | "disconnected" | "unknown";
-    statusText: string;
-    detail: Record<string, string | number | boolean | null>;
-  } {
+  getExecutorStatus(): ChatConnectorStatus {
     return this.platform.getExecutorStatus();
   }
 

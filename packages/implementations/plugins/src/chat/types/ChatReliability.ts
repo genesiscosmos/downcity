@@ -144,6 +144,8 @@ export type ChatActivityType =
   | "account_started"
   | "account_stopped"
   | "account_error"
+  | "account_reconnecting"
+  | "account_recovered"
   | "message_received"
   | "inbound_audit"
   | "access_blocked"

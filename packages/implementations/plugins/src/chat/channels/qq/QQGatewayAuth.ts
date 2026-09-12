@@ -7,6 +7,7 @@
  */
 
 import type { PluginLogger } from "@downcity/city/plugin";
+import { plugin_http_fetch } from "@/http/PluginHttp.js";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { QqGatewayRuntimeStatus } from "@/chat/channels/qq/types/QqChannel.js";
 
@@ -135,7 +136,7 @@ export async function fetchQqAccessToken(
     };
     params.logger.debug(`请求体: ${JSON.stringify(requestBody)}`);
 
-    const response = await fetch(`${params.authApiBase}/app/getAppAccessToken`, {
+    const response = await plugin_http_fetch(`${params.authApiBase}/app/getAppAccessToken`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -184,7 +185,7 @@ export async function fetchQqGatewayUrl(
 ): Promise<string> {
   try {
     params.logger.info(`正在获取 Gateway 地址... (API: ${params.apiBase})`);
-    const response = await fetch(`${params.apiBase}/gateway`, {
+    const response = await plugin_http_fetch(`${params.apiBase}/gateway`, {
       method: "GET",
       headers: {
         Authorization: params.authToken,
@@ -237,7 +238,7 @@ export async function testQqGatewayConnection(
 
   try {
     const authToken = await params.getAuthToken();
-    const response = await fetch(`${params.apiBase}/gateway`, {
+    const response = await plugin_http_fetch(`${params.apiBase}/gateway`, {
       method: "GET",
       headers: {
         Authorization: authToken,

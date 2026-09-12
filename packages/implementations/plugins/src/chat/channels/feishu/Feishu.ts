@@ -17,6 +17,7 @@ import type {
 import type { ChatConnectorContext } from "@/chat/types/ChatConnector.js";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
+import type { ChatConnectorStatus } from "@/chat/types/ChatConnector.js";
 import type { ParsedFeishuAttachmentCommand } from "@/chat/types/FeishuAttachment.js";
 import type {
   FeishuConfig,
@@ -145,13 +146,11 @@ export class FeishuBot extends BaseChatChannel {
 
   /**
    * 读取 Feishu runtime 快照。
+   *
+   * 说明（中文）
+   * - 启动失败后 linkState 为 error，Runtime 据此判定是否需要自愈重连。
    */
-  getExecutorStatus(): {
-    running: boolean;
-    linkState: "connected" | "disconnected" | "unknown";
-    statusText: string;
-    detail: Record<string, string | number | boolean | null>;
-  } {
+  getExecutorStatus(): ChatConnectorStatus {
     const runtime = this.platform.getExecutorStatus();
     return {
       ...runtime,

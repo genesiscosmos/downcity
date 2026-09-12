@@ -84,12 +84,22 @@ export function buildQqGatewayRuntimeStatus(
   };
   const heartbeatHealthy = hasQqHealthyHeartbeat(heartbeatState, now);
   const heartbeatTimedOut = hasQqHeartbeatTimeout(heartbeatState, now);
-  const linkState =
-    !input.isRunning
+  const reconnectExhausted =
+    input.reconnectAttempts >= input.maxReconnectAttempts && !input.reconnectScheduled;
+  const link_error = !input.isRunning
+    ? undefined
+    : heartbeatTimedOut
+      ? `QQ 心跳超时（${input.heartbeatIntervalMs}ms 未收到 ACK），链路已不可用。`
+      : reconnectExhausted
+        ? `QQ 网关重连已达上限（${input.maxReconnectAttempts} 次），停止自动重连。`
+        : undefined;
+  const linkState: QqGatewayRuntimeStatus["linkState"] = link_error
+    ? "error"
+    : !input.isRunning
       ? "disconnected"
       : isOpen && hasContext && heartbeatHealthy
         ? "connected"
-        : "unknown";
+        : "connecting";
 
   const statusText = !input.isRunning
     ? "stopped"
@@ -107,6 +117,7 @@ export function buildQqGatewayRuntimeStatus(
     running: input.isRunning,
     linkState,
     statusText,
+    ...(link_error ? { link_error } : {}),
     detail: {
       appId: input.appId || null,
       wsReadyState: input.wsReadyState,

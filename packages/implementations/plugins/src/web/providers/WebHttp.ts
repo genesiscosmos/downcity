@@ -9,6 +9,7 @@
 
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { plugin_http_fetch } from "@/http/PluginHttp.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -60,7 +61,7 @@ export async function safe_fetch(
     let url = new URL(input_url);
     for (let redirect_count = 0; redirect_count <= MAX_REDIRECTS; redirect_count += 1) {
       await assert_safe_url(url, options.trusted_endpoint === true && redirect_count === 0);
-      const response = await fetch(url, {
+      const response = await plugin_http_fetch(url, {
         method: options.method ?? "GET",
         headers: options.headers,
         body: options.body,

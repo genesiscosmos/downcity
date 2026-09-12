@@ -7,6 +7,7 @@
  */
 
 import type { PluginLogger } from "@downcity/city/plugin";
+import { plugin_http_fetch, PluginHttpError } from "@/http/PluginHttp.js";
 import type { QQSendMessageBody } from "@/chat/channels/qq/types/QqChannel.js";
 import {
   isRetryableQqSendFailure,
@@ -160,30 +161,24 @@ async function postQqMessageOnce(params: {
   getAuthToken: () => Promise<string>;
 }): Promise<{ status: number; responseText: string }> {
   const authToken = await params.getAuthToken();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, params.requestTimeoutMs);
 
   let response: Response;
   try {
-    response = await fetch(params.url, {
+    // 关键点（中文）：超时、代理与错误归一化统一交给插件 HTTP 层，QQ 侧只声明超时预算。
+    response = await plugin_http_fetch(params.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: authToken,
       },
       body: JSON.stringify(params.body),
-      signal: controller.signal,
+      timeout_ms: params.requestTimeoutMs,
     });
   } catch (error) {
-    const errorText = String(error);
-    if (errorText.toLowerCase().includes("abort")) {
+    if (error instanceof PluginHttpError && error.code === "timeout") {
       throw new Error(`QQ send failed: timeout after ${params.requestTimeoutMs}ms`);
     }
     throw error;
-  } finally {
-    clearTimeout(timeout);
   }
 
   const responseText = await response.text();

@@ -26,8 +26,17 @@ const INBOX_LEASE_MS = 10 * 60_000;
 const OUTBOX_LEASE_MS = 2 * 60_000;
 const MAX_ATTEMPTS = 5;
 const MAX_CONCURRENT_CONVERSATIONS = 4;
+/** 连接健康检查周期。 */
+const CONNECTION_HEALTH_INTERVAL_MS = 15_000;
+/** 自愈重连的基础退避与上限。 */
+const RECONNECT_BASE_DELAY_MS = 5_000;
+const RECONNECT_MAX_DELAY_MS = 5 * 60_000;
+/** Account 未连接时 Requeue Outbox 的延后时间，不消耗重试次数。 */
+const OFFLINE_REQUEUE_DELAY_MS = 30_000;
 
-/** 单个 Account 的 Connector 与可观察状态。 */
+/**
+ * 单个 Account 的 Connector、可观察状态与自愈重连状态。
+ */
 interface ChatAccountRuntime {
   /** 当前 Account 配置快照。 */
   account: ChatAccountConfig;
@@ -37,6 +46,20 @@ interface ChatAccountRuntime {
   state: ChatAccountConnectionState;
   /** 最近一次连接错误。 */
   last_error?: string;
+  /** 已连续发起的自愈重连次数。 */
+  reconnect_attempts: number;
+  /** 下一次允许发起自愈重连的时间。 */
+  next_reconnect_at: number;
+  /** 当前是否正在执行重连，避免并发重复重连。 */
+  reconnecting: boolean;
+  /**
+   * 当前是否允许自愈重连。
+   *
+   * 说明（中文）
+   * - 凭据缺失、Workspace 不存在等配置问题必须由用户修正，重连不会成功。
+   * - 此类失败会关闭自动重连，避免无意义地反复重试。
+   */
+  reconnect_allowed: boolean;
 }
 
 /** Chat Runtime 对 Desktop 暴露的 Account 状态。 */
@@ -64,6 +87,10 @@ export class ChatRuntime {
   private inbox_timer?: ReturnType<typeof setInterval>;
   /** Outbox Worker 周期 Timer。 */
   private outbox_timer?: ReturnType<typeof setInterval>;
+  /** 连接健康检查 Timer。 */
+  private health_timer?: ReturnType<typeof setInterval>;
+  /** 连接健康检查当前是否正在执行。 */
+  private health_running = false;
   /** Inbox Worker 当前是否正在调度。 */
   private inbox_running = false;
   /** Outbox Worker 当前是否正在调度。 */
@@ -89,26 +116,31 @@ export class ChatRuntime {
   get_account_state(account_id: string): ChatRuntimeAccountState | undefined {
     const runtime = this.accounts.get(String(account_id || "").trim());
     if (!runtime) return undefined;
-    const status = runtime.connector?.getExecutorStatus();
-    const state = runtime.account.enabled && status
-      ? status.linkState === "connected"
-        ? "connected"
-        : status.running
-          ? "connecting"
-          : runtime.last_error
-            ? "error"
-            : "disconnected"
-      : runtime.state;
     return {
-      state,
+      state: this.resolve_runtime_state(runtime),
       ...(runtime.last_error ? { last_error: runtime.last_error } : {}),
     };
   }
 
-  /** 使用最新配置启动或重建一个 Account。 */
+  /** 使用最新配置重启一个 Account，并重置自愈重连计数。 */
   async restart_account(account: ChatAccountConfig): Promise<void> {
     await this.stop_account(account.account_id);
     await this.start_account(account);
+  }
+
+  /**
+   * 重启全部 enabled Account。
+   *
+   * 说明（中文）
+   * - 供网络代理等运行环境发生变化的场景使用，立即使用新配置重建连接。
+   */
+  async restart_enabled_accounts(): Promise<void> {
+    const accounts = [...this.accounts.values()]
+      .map((runtime) => runtime.account)
+      .filter((account) => account.enabled);
+    for (const account of accounts) {
+      await this.restart_account(account);
+    }
   }
 
   /** 测试一个已创建 Account 的平台连通性。 */
@@ -214,8 +246,10 @@ export class ChatRuntime {
     this.disposed = true;
     if (this.inbox_timer) clearInterval(this.inbox_timer);
     if (this.outbox_timer) clearInterval(this.outbox_timer);
+    if (this.health_timer) clearInterval(this.health_timer);
     this.inbox_timer = undefined;
     this.outbox_timer = undefined;
+    this.health_timer = undefined;
 
     const turns = [...this.active_turns];
     await Promise.allSettled(turns.map(async (turn) => await turn.stop()));
@@ -232,36 +266,87 @@ export class ChatRuntime {
     const runtime: ChatAccountRuntime = {
       account,
       state: account.enabled ? "connecting" : "disabled",
+      reconnect_attempts: 0,
+      next_reconnect_at: 0,
+      reconnecting: false,
+      reconnect_allowed: true,
     };
     this.accounts.set(account.account_id, runtime);
     if (!account.enabled) return;
 
+    let connector: (BaseChatChannel & ChatConnector) | null;
     try {
-      const connector = await this.create_connector(account);
-      if (!connector) throw new Error("Chat Account credentials are incomplete");
+      connector = await this.create_connector(account);
+    } catch (error) {
+      // 关键点（中文）：凭据或 Workspace 等配置错误无法通过重连恢复，直接等待用户修正。
+      runtime.state = "error";
+      runtime.last_error = normalize_error(error);
+      runtime.reconnect_allowed = false;
+      this.record_account_failure(runtime, runtime.last_error);
+      return;
+    }
+    if (!connector) {
+      runtime.state = "error";
+      runtime.last_error = "Chat Account credentials are incomplete";
+      runtime.reconnect_allowed = false;
+      this.record_account_failure(runtime, runtime.last_error);
+      return;
+    }
+
+    try {
       runtime.connector = connector;
       await connector.start();
-      const status = connector.getExecutorStatus();
-      runtime.state = status.linkState === "connected"
-        ? "connected"
-        : status.running
-          ? "connecting"
-          : "disconnected";
+      this.sync_runtime_status(runtime);
       this.store.append_activity({ account_id: account.account_id, type: "account_started" });
     } catch (error) {
       runtime.state = "error";
       runtime.last_error = normalize_error(error);
-      this.store.append_activity({
-        account_id: account.account_id,
-        type: "account_error",
-        detail: { error: runtime.last_error },
-      });
-      this.context.logger.error("Chat Account startup failed", {
-        account_id: account.account_id,
-        provider: account.provider,
-        error: runtime.last_error,
-      });
+      this.record_account_failure(runtime, runtime.last_error);
     }
+  }
+
+  /** 记录一次 Account 级失败，并保留可展示原因。 */
+  private record_account_failure(runtime: ChatAccountRuntime, error: string): void {
+    this.store.append_activity({
+      account_id: runtime.account.account_id,
+      type: "account_error",
+      detail: { error },
+    });
+    this.context.logger.error("Chat Account startup failed", {
+      account_id: runtime.account.account_id,
+      provider: runtime.account.provider,
+      error,
+    });
+  }
+
+  /**
+   * 把 Connector 权威状态同步到 Account Runtime。
+   *
+   * 关键点（中文）
+   * - 连接状态只以 Connector 的 `linkState` 为准，不再根据进程内标志推测。
+   * - 失败原因必须写入 `last_error`，使 Desktop 能直接展示可操作信息。
+   */
+  private sync_runtime_status(runtime: ChatAccountRuntime): void {
+    if (!runtime.account.enabled) {
+      runtime.state = "disabled";
+      runtime.last_error = undefined;
+      return;
+    }
+    const status = runtime.connector?.getExecutorStatus();
+    if (!status) {
+      runtime.state = "disconnected";
+      return;
+    }
+    runtime.state = status.linkState;
+    runtime.last_error = status.linkState === "error"
+      ? status.link_error || "Chat Account connection failed"
+      : undefined;
+  }
+
+  /** 解析一个 Account 对外暴露的连接状态。 */
+  private resolve_runtime_state(runtime: ChatAccountRuntime): ChatAccountConnectionState {
+    this.sync_runtime_status(runtime);
+    return runtime.state;
   }
 
   /** 根据 Account Provider 创建平台 Connector。 */
@@ -476,14 +561,94 @@ export class ChatRuntime {
     }
   }
 
-  /** 启动两个可靠 Worker 的短周期触发器。 */
+  /** 启动可靠 Worker 与连接健康检查的周期触发器。 */
   private start_workers(): void {
     this.inbox_timer = setInterval(() => void this.kick_inbox(), WORKER_INTERVAL_MS);
     this.outbox_timer = setInterval(() => void this.kick_outbox(), WORKER_INTERVAL_MS);
+    this.health_timer = setInterval(
+      () => void this.kick_connection_health(),
+      CONNECTION_HEALTH_INTERVAL_MS,
+    );
     this.inbox_timer.unref?.();
     this.outbox_timer.unref?.();
+    this.health_timer.unref?.();
     void this.kick_inbox();
     void this.kick_outbox();
+  }
+
+  /**
+   * 检查全部 enabled Account 的连接健康度，并为失败的连接安排自愈重连。
+   *
+   * 关键点（中文）
+   * - 只有 Connector 已停止（`running === false`）才重建，避免对能自恢复的链路频繁重连。
+   * - 重连采用有上限的指数退避，成功后重置计数，避免失败时持续消耗资源。
+   */
+  private async kick_connection_health(): Promise<void> {
+    if (this.disposed || this.health_running) return;
+    this.health_running = true;
+    try {
+      for (const runtime of [...this.accounts.values()]) {
+        if (this.disposed) return;
+        if (!runtime.account.enabled) continue;
+        this.sync_runtime_status(runtime);
+        if (runtime.state === "connected") {
+          if (runtime.reconnect_attempts > 0) {
+            runtime.reconnect_attempts = 0;
+            this.store.append_activity({
+              account_id: runtime.account.account_id,
+              type: "account_recovered",
+            });
+          }
+          continue;
+        }
+        const status = runtime.connector?.getExecutorStatus();
+        // 说明（中文）：Connector 仍在运行（例如轮询自愈中）时不主动重建。
+        if (status?.running) continue;
+        if (!runtime.reconnect_allowed) continue;
+        if (runtime.reconnecting || Date.now() < runtime.next_reconnect_at) continue;
+        await this.reconnect_account(runtime);
+      }
+    } finally {
+      this.health_running = false;
+    }
+  }
+
+  /** 对一个已停止的 Account 执行一次带退避的自愈重连。 */
+  private async reconnect_account(runtime: ChatAccountRuntime): Promise<void> {
+    const account = runtime.account;
+    runtime.reconnecting = true;
+    runtime.reconnect_attempts += 1;
+    const attempt = runtime.reconnect_attempts;
+    try {
+      this.store.append_activity({
+        account_id: account.account_id,
+        type: "account_reconnecting",
+        detail: { attempt, error: runtime.last_error ?? null },
+      });
+      if (runtime.connector) await runtime.connector.stop().catch(() => undefined);
+      runtime.connector = undefined;
+      const connector = await this.create_connector(account);
+      if (!connector) throw new Error("Chat Account credentials are incomplete");
+      runtime.connector = connector;
+      await connector.start();
+      this.sync_runtime_status(runtime);
+    } catch (error) {
+      runtime.last_error = normalize_error(error);
+      this.store.append_activity({
+        account_id: account.account_id,
+        type: "account_error",
+        detail: { error: runtime.last_error, attempt },
+      });
+      this.context.logger.warn("Chat Account reconnect failed", {
+        account_id: account.account_id,
+        provider: account.provider,
+        attempt,
+        error: runtime.last_error,
+      });
+    } finally {
+      runtime.reconnecting = false;
+      runtime.next_reconnect_at = Date.now() + reconnect_backoff_ms(attempt);
+    }
   }
 
   /** 领取并执行下一条 Inbox。 */
@@ -590,9 +755,14 @@ export class ChatRuntime {
         if (!delivery) return;
         const runtime = this.accounts.get(delivery.account_id);
         const conversation = this.store.get_conversation(delivery.conversation_id);
-        if (!runtime?.connector || !conversation) {
-          this.store.fail_outbound(delivery.delivery_id, "Chat Account is not connected");
+        if (!conversation) {
+          this.store.fail_outbound(delivery.delivery_id, "Chat conversation is unavailable");
           continue;
+        }
+        if (!runtime?.connector) {
+          // 关键点（中文）：Account 离线只是暂时不可投递，不应消耗有限重试次数。
+          this.store.requeue_outbound(delivery.delivery_id, OFFLINE_REQUEUE_DELAY_MS);
+          return;
         }
         try {
           if (delivery.operation === "attachment") {
@@ -668,6 +838,12 @@ function fallback_message_id(
 /** 根据失败次数计算有上限的指数退避。 */
 function retry_delay_ms(attempt_count: number): number {
   return Math.min(5 * 60_000, 1_000 * 2 ** Math.max(0, attempt_count - 1));
+}
+
+/** 根据自愈重连次数计算有上限的指数退避。 */
+function reconnect_backoff_ms(attempt_count: number): number {
+  const exponent = Math.max(0, Math.trunc(attempt_count) - 1);
+  return Math.min(RECONNECT_MAX_DELAY_MS, RECONNECT_BASE_DELAY_MS * 2 ** exponent);
 }
 
 /** 把未知错误规范化为日志与持久化文本。 */

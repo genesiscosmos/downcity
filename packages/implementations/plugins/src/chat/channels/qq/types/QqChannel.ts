@@ -417,12 +417,20 @@ export interface QqGatewayRuntimeStatus {
   running: boolean;
   /**
    * 链路可用性状态。
+   *
+   * 说明（中文）
+   * - `connecting`：网关在跑但尚未 READY 或心跳未确认。
+   * - `error`：已达最大重连次数或心跳超时，需要重新建立链路。
    */
-  linkState: "connected" | "disconnected" | "unknown";
+  linkState: "connected" | "connecting" | "error" | "disconnected";
   /**
    * 面向诊断的状态文本。
    */
   statusText: string;
+  /**
+   * 链路失败的可展示原因；仅在 linkState 为 error 时提供。
+   */
+  link_error?: string;
   /**
    * 诊断明细。
    */
