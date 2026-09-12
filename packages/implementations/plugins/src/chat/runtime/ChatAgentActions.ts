@@ -52,7 +52,7 @@ export function create_chat_agent_actions(
       },
     }),
     send: create_action({
-      description: "Reliably send text to a Chat conversation owned by the current Agent.",
+      description: "Reliably enqueue text to a Chat conversation owned by the current Agent. Returns an acceptance receipt: `status` is the Outbox state at enqueue time, not the platform delivery result.",
       input_schema: z.object({
         session_id: z.string().min(1).optional(),
         text: z.string().min(1),
@@ -61,17 +61,25 @@ export function create_chat_agent_actions(
       execute: async ({ context, execution, input }) => {
         const session_id = input.session_id || execution.snapshot.session_id || "";
         if (!session_id) return { success: false, error: "session_id is required" };
-        const delivery_id = resolve_runtime().send_from_agent({
+        const delivery = resolve_runtime().send_from_agent({
           agent_id: context.agent.id,
           session_id,
           text: input.text,
           available_at: input.available_at,
         });
-        return { success: true, data: { delivery_id, session_id } };
+        // 关键点（中文）：明确告知这是受理回执，不是送达回执。
+        return {
+          success: true,
+          data: {
+            delivery_id: delivery.delivery_id,
+            status: delivery.status,
+            session_id,
+          },
+        };
       },
     }),
     react: create_action({
-      description: "Reliably react to a Telegram message in a conversation owned by the current Agent.",
+      description: "Reliably enqueue a Telegram reaction in a conversation owned by the current Agent. Returns an acceptance receipt: `status` is the Outbox state at enqueue time, not the platform delivery result.",
       input_schema: z.object({
         session_id: z.string().min(1).optional(),
         message_id: z.string().min(1),
@@ -82,14 +90,22 @@ export function create_chat_agent_actions(
         const session_id = input.session_id || execution.snapshot.session_id || "";
         if (!session_id) return { success: false, error: "session_id is required" };
         try {
-          const delivery_id = resolve_runtime().react_from_agent({
+          const delivery = resolve_runtime().react_from_agent({
             agent_id: context.agent.id,
             session_id,
             message_id: input.message_id,
             emoji: input.emoji,
             is_big: input.is_big,
           });
-          return { success: true, data: { delivery_id, session_id } };
+          // 关键点（中文）：与 send 一致，返回值描述的是受理状态。
+          return {
+            success: true,
+            data: {
+              delivery_id: delivery.delivery_id,
+              status: delivery.status,
+              session_id,
+            },
+          };
         } catch (error) {
           return {
             success: false,

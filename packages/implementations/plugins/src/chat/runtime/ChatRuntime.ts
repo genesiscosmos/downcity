@@ -19,7 +19,11 @@ import type {
   ChatAccountConnectionState,
 } from "@/chat/types/ChatAccount.js";
 import type { ChatConnector, ChatConnectorContext } from "@/chat/types/ChatConnector.js";
-import type { ChatConversationRecord, ChatInboxRecord } from "@/chat/types/ChatReliability.js";
+import type {
+  ChatConversationRecord,
+  ChatDeliveryAcceptance,
+  ChatInboxRecord,
+} from "@/chat/types/ChatReliability.js";
 
 const WORKER_INTERVAL_MS = 400;
 const INBOX_LEASE_MS = 10 * 60_000;
@@ -160,7 +164,12 @@ export class ChatRuntime {
     await this.kick_outbox();
   }
 
-  /** 为 Agent Action 创建一条经过所有权校验的可靠外发消息。 */
+  /**
+   * 为 Agent Action 创建一条经过所有权校验的可靠外发消息。
+   *
+   * 返回（中文）
+   * - 返回受理回执：消息已可靠入队，不代表已经送达平台。
+   */
   send_from_agent(input: {
     /** 发起操作的 Agent ID。 */
     agent_id: string;
@@ -170,7 +179,7 @@ export class ChatRuntime {
     text: string;
     /** 可选最早发送时间。 */
     available_at?: number;
-  }): string {
+  }): ChatDeliveryAcceptance {
     const conversation = this.store.get_conversation_by_session(input.session_id);
     if (!conversation || conversation.agent_id !== input.agent_id) {
       throw new Error("Chat conversation is not owned by the current Agent");
@@ -188,10 +197,15 @@ export class ChatRuntime {
       available_at: input.available_at,
     });
     void this.kick_outbox();
-    return delivery.delivery_id;
+    return { delivery_id: delivery.delivery_id, status: delivery.status };
   }
 
-  /** 为当前 Agent 拥有的 Telegram Conversation 创建可靠 Reaction 操作。 */
+  /**
+   * 为当前 Agent 拥有的 Telegram Conversation 创建可靠 Reaction 操作。
+   *
+   * 返回（中文）
+   * - 返回受理回执：Reaction 已可靠入队，不代表已经送达平台。
+   */
   react_from_agent(input: {
     /** 发起操作的 Agent ID。 */
     agent_id: string;
@@ -203,7 +217,7 @@ export class ChatRuntime {
     emoji: string;
     /** 是否使用平台的大号 Reaction 展示。 */
     is_big?: boolean;
-  }): string {
+  }): ChatDeliveryAcceptance {
     const conversation = this.store.get_conversation_by_session(input.session_id);
     if (!conversation || conversation.agent_id !== input.agent_id) {
       throw new Error("Chat conversation is not owned by the current Agent");
@@ -226,7 +240,7 @@ export class ChatRuntime {
       },
     });
     void this.kick_outbox();
-    return delivery.delivery_id;
+    return { delivery_id: delivery.delivery_id, status: delivery.status };
   }
 
   /** 停止一个 Account，不影响其他 Bot。 */

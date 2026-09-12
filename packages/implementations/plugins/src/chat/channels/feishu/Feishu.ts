@@ -398,9 +398,11 @@ Available commands:
       try {
         await this.sendAttachment(chatId, chatType, message_id, segment.attachment);
       } catch (error) {
-        await this.sendPlatformMessage(chatId, chatType, message_id, "text", {
-          text: `❌ Failed to send attachment: ${segment.attachment.pathOrUrl}\n${String(error)}`,
-        });
+        // 关键点（中文）：附件失败必须上抛，不能降级成一条 "❌ ..." 文本后正常返回。
+        // 降级会让 Outbox 记为已投递，Agent 无法感知文件未送达。
+        throw new Error(
+          `Failed to send attachment ${segment.attachment.pathOrUrl}: ${String(error)}`,
+        );
       }
     }
   }

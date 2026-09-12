@@ -139,6 +139,20 @@ export interface ChatOutboxRecord {
   updated_at: number;
 }
 
+/**
+ * 可靠外发被受理后的回执。
+ *
+ * 关键点（中文）
+ * - 这是“受理”回执，不是“送达”回执：`delivery_id` 已可靠入队，但尚未确认平台送达。
+ * - 需要确认真实送达结果时，用 `delivery_id` 查询 Outbox 记录，不要把受理当送达。
+ */
+export interface ChatDeliveryAcceptance {
+  /** Outbox 内部稳定投递 ID，用于后续查询真实投递结果。 */
+  delivery_id: string;
+  /** 受理时 Outbox 记录的初始状态，取自真实记录而非硬编码。 */
+  status: ChatOutboxStatus;
+}
+
 /** Chat Activity 事件类型。 */
 export type ChatActivityType =
   | "account_started"

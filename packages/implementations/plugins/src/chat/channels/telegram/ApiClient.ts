@@ -284,21 +284,14 @@ export class TelegramApiClient {
           messageThreadId: message_thread_id,
           replyToMessageId: reply_to_message_id,
         });
-      } catch (e) {
-        try {
-          await this.requestSendJson("sendMessage", {
-            chat_id: chatId,
-            text: `❌ Failed to send ${segment.attachment.type}: ${String(e)}`,
-            ...(message_thread_id ? { message_thread_id } : {}),
-            ...(reply_to_message_id ? { reply_to_message_id } : {}),
-          });
-        } catch (e2) {
-          this.logger.error(
-            `Failed to send attachment error message: ${String(e2)}`,
-          );
-          // 关键点（中文）：附件和错误提示都发送失败时，上层必须感知失败。
-          throw e2;
-        }
+      } catch (error) {
+        // 关键点（中文）：附件投递失败必须向上冒泡，交由 Outbox 记录失败并重试。
+        // 绝不能把失败改写成一条 "❌ ..." 文本后正常返回：那会让 Outbox 误判为投递成功，
+        // 发起方永远无法感知文件其实没有送达（PRD 记录的静默失败）。
+        this.logger.error(
+          `Failed to send ${segment.attachment.type} attachment: ${String(error)}`,
+        );
+        throw error;
       }
     }
   }
