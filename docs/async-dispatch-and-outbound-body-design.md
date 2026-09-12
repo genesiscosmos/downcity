@@ -139,49 +139,87 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 ## 5. 设计：出站请求体
 
-### 5.1 单一 body 语义（根因修复）
+> 状态：已实现（commit `894ecfb19`，`@downcity/plugins` 1.0.313）
 
-在 `plugin_http_fetch` 内部按 body 类型选择 transport，对外维持同一套代理、超时、取消与错误归一化：
+### 5.1 在出站边界归一化 FormData（根因修复）
+
+根因不是 undici 缺少 multipart 能力，而是**类身份**：调用方用 Node 全局 `FormData`，出站层用 npm undici 的 fetch，两套实现的实例互不 `instanceof`，undici 因此把整个 body 当成普通对象序列化成字符串 `[object FormData]`。
+
+实现方式：在 `plugin_http_fetch` 内识别全局 `FormData`，逐项复制到 undici `FormData`，再走原有 undici fetch 链路。
 
 ```text
-body 是 web 类型（FormData / Blob / URLSearchParams / ReadableStream）
-  → 使用 Node 全局 fetch（与全局 FormData/Blob 同源，原生 multipart）
-否则
-  → 使用 npm undici fetch（保留现有链路）
+body instanceof 全局 FormData
+  → 逐项复制到 undici FormData（保留 filename 与分段 Content-Type）
+  → undici fetch（原有代理 / 超时 / 取消 / 错误归一化链路不变）
+其他 body（字符串 / Buffer / URLSearchParams / Blob）
+  → 原样透传（undici 已能正确序列化）
 ```
 
-两者共用同一个 `dispatcher` / `timeout_ms` / `signal` 与 `PluginHttpError` 归一化逻辑。实验已确认：Node 全局 fetch 会正确使用 npm undici 的 `ProxyAgent`/`Agent`（代理侧收到 `CONNECT`），因此代理能力不退化。
+选择这个方案而不是切换 fetch 实现的原因：
 
-### 5.2 为什么不改用 undici 自带的 FormData
+1. **单实现**：代理、超时、取消、脱敏全部留在原链路，不依赖 Node 全局 fetch 未文档化的 `dispatcher` 行为（原 §13 风险项随之消失）。
+2. **零额外内存**：调用方本来就是 `fs.readFile` + `Blob`，文件已在内存，逐项复制不新增文件读取。
+3. **改动最小**：已验证 `plugins/src` 内无裸 `fetch(`，`new FormData()` 仅 Telegram / 飞书两处，都经此边界。
 
-实验结论：npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File === "undefined"`）。因此"把全局 FormData 转成 undici FormData"需要自行读取每个 Blob 内容并伪造文件对象，既脆弱又引入流语义风险。选择 5.1 的分类 transport，改动集中在出站层一处。
+实测证据（Node v22.23.2）：
+
+| 组合 | 实际发出的请求 |
+| --- | --- |
+| npm undici fetch + 全局 `FormData`（修复前） | `text/plain`，body = `[object FormData]` ❌ |
+| npm undici fetch + 全局 `Blob` 作为 body | 正确按 `text/markdown` 发送 ✅ |
+| npm undici `FormData` + 全局 `Blob`/`File` | 正确 multipart，文件名与分段类型保留 ✅ |
+| 归一化后经 `ProxyAgent` | 正确 multipart，且代理侧收到 `CONNECT` ✅ |
+| 全局 `Headers` 交给 undici fetch | 正常，同样问题不存在 ✅ |
+
+### 5.2 为什么不自行伪造 undici 的 File
+
+npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File === "undefined"`）。但 5.1 的实验表明它**接受全局 `Blob`/`File` 实例**并正确序列化，因此不需要手动读取流或伪造文件对象——那才是我最初担心多余复杂度的地方。
 
 ### 5.3 回归测试
 
-`plugin-http.test.mjs` 新增 multipart 用例（本地 HTTP Server，不依赖外网）：
+`plugin-http.test.mjs` 新增 3 个 multipart 用例（本地 HTTP Server，不依赖外网）：
 
-- 断言 `content-type` 为 `multipart/form-data; boundary=...`；
-- 断言 body 同时包含普通字段与文件字段的 `Content-Disposition` 与文件内容；
-- 断言携带 `dispatcher` 时仍走代理（复用现有代理测试的假代理手法）。
+- 断言 `content-type` 为 `multipart/form-data; boundary=...`，且 body 不含 `[object FormData]`；
+- 断言 body 同时包含普通字段与文件字段的 `Content-Disposition`、文件名与分段 `Content-Type`；
+- 断言配置代理后仍走代理隧道（复用现有假代理手法）；
+- 断言非 `FormData` 请求体（JSON 字符串、`URLSearchParams`）序列化语义不变。
 
 ---
 
 ## 6. 设计：投递回执
 
+> 状态：6.1 与 6.2 前半已实现（commit `f2321b50e`，`plugins` 1.0.314）。6.2 的 `chat.delivery` 与 6.3 属 P1-5。
+
 ### 6.1 附件失败必须上抛
 
 `TelegramApiClient.sendMessage()` 的附件分支去掉"只发 ❌ 文本"的吞错路径：附件发送失败即抛出，由 outbox 记录失败并进入既有重试/失败状态；是否附带错误提示消息由上层策略决定，不允许由底层改写投递结果。Feishu 附件路径同样收敛到"失败即抛出"。
 
+实测确认：outbox 管道本来就是完好的——`sendToolText` 会把异常收敛为 `success: false`，`ChatRuntime.kick_outbox` 已在 `!result.success` 时抛错并调用 `fail_outbound`。故障仅在于**被喂了假的成功**：旧代码把附件失败改写成 ❌ 文本后正常返回，于是 `sendToolText` 返回 `success: true`，outbox 被标记为 `delivered`。因此修复点只在信道层源头。
+
 ### 6.2 `chat.send` 的回执契约
 
-- `chat.send` 保持"可靠入队"语义，返回 `{ delivery_id, status: "queued" }`，明确它是**受理回执**而不是送达回执。
-- 新增最小查询入口 `chat.delivery`（输入 `delivery_id`，输出 `status`/`attempt_count`/`last_error`），供 Agent 在需要确认时读取真实结果。
+- `chat.send` / `chat.react` 保持"可靠入队"语义，返回受理回执，明确它不是送达回执。
+- `status` 取自真实 Outbox 记录的初始状态（`pending`），不硬编码、不另造一套词汇表。类型为 `ChatDeliveryAcceptance`，定义在 `chat/types/ChatReliability.ts`。
+- 新增最小查询入口 `chat.delivery`（输入 `delivery_id`，输出 `status`/`attempt_count`/`last_error`），供 Agent 在需要确认时读取真实结果。**属 P1-5，尚未实现。**
 - 保持不新增 `files` 字段：附件表达方式唯一化为正文 `<file>` 标签（见 6.3），并为不支持的入参提供可读提示，替换 `unrecognized_keys` 这类框架级信息。
 
 ### 6.3 明确附件表达方式
 
 - 文档与 `PROMPT.direct` 明确：唯一受支持的附件表达是正文中的 `<file type="..." caption="...">path</file>`；`files` 等结构化字段不在契约内。
 - `ChatRuntime` 的 `Unsupported Chat delivery operation: attachment` 分支不再作为运行时兜底存在：要么补齐该操作类型，要么在写入侧（store）拒绝，二者只能取一。**本期选择后者**（见第 11 节），保证不再出现"契约里没有、运行时会炸"的中间状态。
+
+---
+
+## 6A. 回归测试（P0-2）
+
+新增 `scripts/chat-delivery.test.mjs`（`pnpm test:chat-delivery`），只桩网络层、保留真实路径解析与错误传播：
+
+- 附件 multipart 上传返回 Telegram 真实 400 时，`sendMessage` 必须 reject；断言 **没有任何 ❌ 文本被发出**（修复前正是这一点造成 outbox 静默成功）；
+- 附件路径不存在时给出可读的 `Attachment not found`，而不是被网络错误掩盖；
+- 纯文本发送不受影响；
+- `chat.send` / `chat.react` 返回值包含真实 `status`。
+
+已反向验证测试有拦截力：回退 `ApiClient.ts` 后前两个用例以 `Missing expected rejection` 失败，即旧代码下 `sendMessage` 正常返回。
 
 ---
 
@@ -192,11 +230,12 @@ body 是 web 类型（FormData / Blob / URLSearchParams / ReadableStream）
 | `packages/federation/src/federation/queue.ts` | 新增进程内适配器、能力三态、带 code 的错误 | 不变（Federation 内部） |
 | `packages/federation/src/service/ai/AIImageJobRuntime.ts` | 前置能力校验；投递失败保留事实；接入 reconciler | Service → Federation 能力，方向不变 |
 | `packages/federation/src/service/ai/AISettlementRuntime.ts` | 同上（结算重试） | 不变 |
-| `packages/implementations/plugins/src/http/PluginHttp.ts` | 按 body 类型选择 transport | Plugin → 出站层，方向不变 |
+| `packages/implementations/plugins/src/http/PluginHttp.ts` | 出站边界归一化全局 `FormData` | Plugin → 出站层，方向不变 |
 | `packages/implementations/plugins/src/chat/channels/telegram/ApiClient.ts` | 附件失败上抛 | 不变 |
-| `packages/implementations/plugins/src/chat/channels/feishu/FeishuPlatformMessaging.ts` | 依赖 5.1 自动修复 | 不变 |
-| `packages/implementations/plugins/src/chat/runtime/ChatAgentActions.ts` | 返回体增加 `status`；新增 `chat.delivery` | 不变 |
-| `packages/implementations/plugins/src/chat/runtime/ChatRuntime.ts` | 收口 attachment 分支 | 不变 |
+| `packages/implementations/plugins/src/chat/channels/feishu/Feishu.ts` | 附件失败上抛 | 不变 |
+| `packages/implementations/plugins/src/chat/types/ChatReliability.ts` | 新增 `ChatDeliveryAcceptance` 类型 | 不变 |
+| `packages/implementations/plugins/src/chat/runtime/ChatAgentActions.ts` | 返回体增加 `status`；新增 `chat.delivery`（P1-5） | 不变 |
+| `packages/implementations/plugins/src/chat/runtime/ChatRuntime.ts` | 两个 Agent 发送入口改为返回受理回执 | 不变 |
 | `templates/*`、`app/cli/.../CloudflareWorkersTemplate.ts` | 调度能力装配与启动期校验 | 部署层 → SDK，方向不变 |
 | `homepage/content/**` | 能力与部署文档 | 不变 |
 
@@ -229,7 +268,7 @@ body 是 web 类型（FormData / Blob / URLSearchParams / ReadableStream）
 
 | 层级 | 用例 |
 | --- | --- |
-| `@downcity/plugins` | multipart 回归（5.3）；附件失败必须上抛；`chat.send` 返回含 `status`；`chat.delivery` 反映失败 |
+| `@downcity/plugins` | multipart 回归（5.3）；附件失败必须上抛且不发 ❌ 文本；纯文本不受影响；`chat.send` / `chat.react` 返回含 `status`。`chat.delivery` 用例待 P1-5 |
 | `@downcity/federation` | 无外部 adapter 时 Node 下 `queue.send` 成功（in_process）；投递失败时 `create_job` 仍返回 `job_id` 且 `dispatch_error` 已写入；reconciler 能把非终态任务重新入队；能力缺失时前置失败且无副作用 |
 | templates | localfed 端到端图像生成；edgefed 缺 binding 时 `health()` 报错 |
 | 验证顺序 | 定向 typecheck → 定向测试 → 消费 package typecheck → patch build（`@downcity/federation`、`@downcity/plugins`）→ homepage build（文档变化时） |
@@ -250,19 +289,20 @@ body 是 web 类型（FormData / Blob / URLSearchParams / ReadableStream）
 
 ## 12. 实施顺序
 
-1. **P0-1 出站体修复**：`PluginHttp` 分类 transport + multipart 回归测试。一次改动同时修好 Telegram、飞书、Web。
-2. **P0-2 失败语义**：Telegram / 飞书附件失败上抛；`chat.send` 返回 `status`。
+1. ✅ **P0-1 出站体修复**：`PluginHttp` 归一化全局 `FormData` + multipart 回归测试（commit `894ecfb19`，`plugins` 1.0.313）。一次改动同时修好 Telegram、飞书、Web。
+2. ✅ **P0-2 失败语义**：Telegram / 飞书附件失败上抛；`chat.send` / `chat.react` 返回受理回执（含 `status`）（commit `f2321b50e`，`plugins` 1.0.314）。
 3. **P1-1 调度能力**：进程内适配器 + 能力三态 + `Federation.dispose()` 清理。
 4. **P1-2 服务侧校验**：`AIImageJobRuntime` / `AISettlementRuntime` 前置校验、投递失败保留事实、删除死分支。
 5. **P1-3 恢复**：reconciler 与触发点。
 6. **P1-4 模板与文档**：localfed / edgefed / Cloudflare 生成器、homepage 文档。
-7. **P1-5 回执**：`chat.delivery` 与 `ChatRuntime` 收口。
+7. **P1-5 回执**：`chat.delivery` 查询入口与 `ChatRuntime` 的 attachment 分支收口。
 
 ---
 
 ## 13. 风险与待确认
 
-1. **Node 全局 fetch 的 dispatcher 依赖**：实验已确认当前 Node 22 下可行，但该选项并非 Node 正式文档化 API。需要在 `PluginHttp` 内加显式版本/能力校验与回归测试，避免升级 Node 后静默退化。
+1. ~~**Node 全局 fetch 的 dispatcher 依赖**~~：已消失。最终方案保留 undici fetch 单实现，不依赖 Node 全局 fetch 的未文档化 `dispatcher` 行为。
 2. **进程内适配器的定时器语义**：Node 单实例可靠，但进程退出会丢失定时器，因此 4.4 的 reconciler 是必需项而非增强项。
 3. **Cloudflare 部署侧**：目标是确认现有部署是否缺少 `DOWNCITY_QUEUE` 生产者与 consumer；若缺失，需要部署侧配合补 binding，SDK 侧只保证"缺了就明确报错"。
 4. **`chat.delivery` 的边界**：仅允许查询当前 Agent 拥有 Session 的 delivery，沿用 `ChatAgentActions` 现有的所有权校验。
+5. **附件重试的重复文本**：Outbox 按整条 delivery 重试，一条消息内若"文本段已发、附件段失败"，重试会重发文本段。这是既有结构（无分段级进度）的固有限制，本期不改；修复后至少失败可见且可恢复，优于原先的静默成功。
