@@ -188,11 +188,13 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 ## 6. 设计：投递回执
 
-> 状态：6.1 与 6.2 前半已实现（commit `f2321b50e`，`plugins` 1.0.314）。6.2 的 `chat.delivery` 与 6.3 属 P1-5。
+> 状态：6.1 与 6.2 前半已实现（commit `f2321b50e`、`97b9935a2`，`plugins` 1.0.314）。6.2 的 `chat.delivery` 与 6.3 属 P1-5。
 
 ### 6.1 附件失败必须上抛
 
 `TelegramApiClient.sendMessage()` 的附件分支去掉"只发 ❌ 文本"的吞错路径：附件发送失败即抛出，由 outbox 记录失败并进入既有重试/失败状态；是否附带错误提示消息由上层策略决定，不允许由底层改写投递结果。Feishu 附件路径同样收敛到"失败即抛出"。
+
+两条路径都**重抛原错误**，不包装成新 Error：这样能保留 `PluginHttpError` 的 `timeout` / `connect` / `proxy_url` 等诊断字段，附件标识改由日志携带上下文。
 
 实测确认：outbox 管道本来就是完好的——`sendToolText` 会把异常收敛为 `success: false`，`ChatRuntime.kick_outbox` 已在 `!result.success` 时抛错并调用 `fail_outbound`。故障仅在于**被喂了假的成功**：旧代码把附件失败改写成 ❌ 文本后正常返回，于是 `sendToolText` 返回 `success: true`，outbox 被标记为 `delivered`。因此修复点只在信道层源头。
 
@@ -217,9 +219,10 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 - 附件 multipart 上传返回 Telegram 真实 400 时，`sendMessage` 必须 reject；断言 **没有任何 ❌ 文本被发出**（修复前正是这一点造成 outbox 静默成功）；
 - 附件路径不存在时给出可读的 `Attachment not found`，而不是被网络错误掩盖；
 - 纯文本发送不受影响；
+- 飞书附件失败同样必须 reject 且不得降级为文本（与 Telegram 用例对称）；
 - `chat.send` / `chat.react` 返回值包含真实 `status`。
 
-已反向验证测试有拦截力：回退 `ApiClient.ts` 后前两个用例以 `Missing expected rejection` 失败，即旧代码下 `sendMessage` 正常返回。
+已反向验证测试有拦截力：把 `ApiClient.ts` / `Feishu.ts` 回退到 P0-2 之前的实现后，两个附件用例都以 `Missing expected rejection` 失败，即旧代码下 `sendMessage` / `sendChatMessage` 均正常返回。
 
 ---
 
@@ -290,7 +293,7 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 ## 12. 实施顺序
 
 1. ✅ **P0-1 出站体修复**：`PluginHttp` 归一化全局 `FormData` + multipart 回归测试（commit `894ecfb19`，`plugins` 1.0.313）。一次改动同时修好 Telegram、飞书、Web。
-2. ✅ **P0-2 失败语义**：Telegram / 飞书附件失败上抛；`chat.send` / `chat.react` 返回受理回执（含 `status`）（commit `f2321b50e`，`plugins` 1.0.314）。
+2. ✅ **P0-2 失败语义**：Telegram / 飞书附件失败上抛；`chat.send` / `chat.react` 返回受理回执（含 `status`）（commit `f2321b50e`、`97b9935a2`，`plugins` 1.0.314）。
 3. **P1-1 调度能力**：进程内适配器 + 能力三态 + `Federation.dispose()` 清理。
 4. **P1-2 服务侧校验**：`AIImageJobRuntime` / `AISettlementRuntime` 前置校验、投递失败保留事实、删除死分支。
 5. **P1-3 恢复**：reconciler 与触发点。
