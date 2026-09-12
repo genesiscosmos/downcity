@@ -8,6 +8,7 @@ import type { Database } from "../database/Database.js";
 import type { FederationStorage } from "./storage.js";
 import type { RuntimeUser } from "./auth/types.js";
 import type { BureauRecord, RuntimeBureauToken } from "../types/Bureau.js";
+import type { CityQueueState as FederationQueueState } from "./queue.js";
 
 /**
  * Federation 进程内可信身份。
@@ -88,6 +89,15 @@ export interface FederationHealthStatus {
   services: string[];
   /** 当前启用的 service 信息列表 */
   service_list: { id: string; name: string }[];
+  /**
+   * 异步调度能力状态。
+   *
+   * 说明（中文）
+   * - `external` / `in_process` 表示图像生成、结算重试等异步任务可以入队。
+   * - `unavailable` 表示当前运行时无法调度异步任务，调用方应在启动期就感知，
+   *   而不是等到第一次任务入队失败。
+   */
+  queue: FederationQueueState;
 }
 
 /**

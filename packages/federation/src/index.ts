@@ -66,7 +66,9 @@ export type {
 export type {
   CityQueueAdapter as FederationQueueAdapter,
   CityQueueMessage as FederationQueueMessage,
+  CityQueueState as FederationQueueState,
 } from "./federation/queue.js";
+export { FederationQueueUnavailableError } from "./federation/queue.js";
 export { R2Storage } from "./federation/storage.js";
 export type {
   FederationStorage,
