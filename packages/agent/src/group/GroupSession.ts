@@ -710,12 +710,16 @@ export class GroupSession implements GroupSessionContract {
   private subscribe_member_session(agent_id: string, session: AgentSession): void {
     this.member_session_unsubscribes.get(agent_id)?.();
     this.member_session_unsubscribes.set(agent_id, session.subscribe((mutation) => {
-      if (mutation.variant !== "part" || mutation.type !== "interaction") return;
-      if (mutation.part.status === "pending") {
-        this.interaction_sessions.set(mutation.part.interaction_id, session);
-        this.publish_event({ type: "interaction", agent_id, request: mutation.part.request });
-      } else {
-        this.interaction_sessions.delete(mutation.part.interaction_id);
+      if (mutation.variant !== "part" || mutation.type !== "tool") return;
+      // Interaction 属于 Tool Part；同一次 Tool 更新可能同时出现新增与终结的 Interaction。
+      for (const interaction of mutation.part.interactions ?? []) {
+        const registered = this.interaction_sessions.has(interaction.interaction_id);
+        if (interaction.status === "pending" && !registered) {
+          this.interaction_sessions.set(interaction.interaction_id, session);
+          this.publish_event({ type: "interaction", agent_id, request: interaction.request });
+        } else if (interaction.status !== "pending" && registered) {
+          this.interaction_sessions.delete(interaction.interaction_id);
+        }
       }
     }));
   }

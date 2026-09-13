@@ -143,7 +143,6 @@ export function to_session_message_timeline_events(
         events.push(...project_tool_part(message, part, events.length));
         break;
       case "reasoning":
-      case "interaction":
       case "file":
       case "data":
         break;

@@ -1,11 +1,12 @@
 /** Downcity Desktop Renderer 的页面和交互状态类型。 */
 
-import type { RespondSessionInteractionInput, SessionAgentInteractionPart, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionAgentInteraction, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopAgentSummary, DesktopAgentDefinition, DesktopAccountResources, DesktopAccountSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopCreateGroupInput, DesktopUpdateGroupInput, DesktopGroupMemberRuntime, DesktopGroupStatusPhase, DesktopGroupSummary, DesktopModelSummary, DesktopPluginSummary, DesktopPluginDefinition, DesktopInvokePluginActionInput, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopUserSummary, DesktopUpdateAgentInput, DesktopWorkspaceSummary } from "../../common/types/DesktopApi";
 import type { DesktopNotificationState } from "../../common/types/DesktopNotification";
 import type { GroupMessageProjection } from "./GroupProjection";
+import type { ChatAttention } from "@/lib/notification/attention";
 
 /** 设置主视图当前展示的分区。 */
 export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat" | "shortcuts";
@@ -148,6 +149,8 @@ export interface SessionStoreState {
   archived_sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
   /** 当前等待用户选择 Workspace 的孤儿 Session 请求。 */
   session_attach_request: SessionAttachRequest | null;
+  /** 是否已经完整加载过一次 Session 目录；未完成时主体列表顺序尚未确定。 */
+  hydrated: boolean;
 }
 
 /** Group 中等待成员响应的交互项。 */
@@ -155,7 +158,7 @@ export interface GroupInteraction {
   /** 发起交互的成员 Agent 标识。 */
   agent_id: string;
   /** 交互内容。 */
-  part: SessionAgentInteractionPart;
+  part: SessionAgentInteraction;
 }
 
 /** 带 Turn 身份的实时文件改动摘要，避免跨轮复用旧状态。 */
@@ -163,6 +166,9 @@ export interface DesktopTurnFileDiffSummary extends SessionTurnFileDiffSummary {
   /** 摘要所属 Turn 的稳定标识。 */
   turn_id: string;
 }
+
+/** Chat 一行可以区分的实时运行状态；等待输入与未读注意力共用 action_required。 */
+export type ChatLiveStatus = "working" | Extract<ChatAttention, "action_required">;
 
 /** Chat 流式领域的完整不可变快照。 */
 export interface ChatStreamState {
@@ -176,8 +182,8 @@ export interface ChatStreamState {
   configuration_by_session: Record<string, DesktopSessionConfiguration>;
   /** 按 Session 组合键保存的历史分页状态。 */
   history_by_session: Record<string, ChatHistoryState>;
-  /** 当前正在执行的 Agent 标识集合。 */
-  executing_agent_ids: Set<string>;
+  /** 按 Agent 标识缓存的 Chat 行状态；同一 Agent 有多个 Session 时取最需要用户注意的一个。 */
+  agent_chat_status: Record<string, ChatLiveStatus>;
   /** 按 Group 标识缓存的持久共享消息分段。 */
   group_message_projection_by_group: Record<string, GroupMessageProjection>;
   /** 按 Group 标识缓存的成员运行态。 */
@@ -388,6 +394,8 @@ export interface DesktopActions {
   remove_account(account_id: string): Promise<void>;
   /** 清除当前用户可见错误。 */
   clear_error(): void;
+  /** 把一次用户可见的失败上报到全局错误条。 */
+  report_error(error: unknown): void;
 }
 
 /** Renderer 组件使用的稳定控制器，只暴露状态句柄与操作能力。 */

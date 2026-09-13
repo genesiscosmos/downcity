@@ -21,7 +21,7 @@ import type {
   SessionActionStatus,
   SessionAgentActionPart,
   SessionAgentErrorPart,
-  SessionAgentInteractionPart,
+  SessionAgentInteraction,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionMessage,
@@ -32,6 +32,7 @@ import type {
 import type {
   SessionMutation,
   SessionMessageMutation as SessionMessageSnapshotMutation,
+  SessionPartMutation,
 } from "@downcity/type";
 import type { SessionMessageStorageStats } from "@/types/store/SessionStorage.js";
 import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
@@ -126,23 +127,31 @@ export class SessionMessages {
               description: part.description || "Action interrupted before completion.",
             };
           }
-          if (part.type === "interaction" && part.status === "pending") {
-            return {
-              ...part,
-              status: "cancelled" as const,
-              cancel_reason: "runtime_interrupted" as const,
-              resolved_at: updated_at,
-            };
-          }
-          if (
-            part.type === "tool" &&
-            part.state !== "completed" &&
-            part.state !== "failed"
-          ) {
+          if (part.type === "tool") {
+            const existing_interactions = part.interactions ?? [];
+            const had_pending_interaction = existing_interactions.some(
+              (interaction) => interaction.status === "pending",
+            );
+            const interactions = had_pending_interaction
+              ? existing_interactions.map((interaction) =>
+                  interaction.status === "pending"
+                    ? {
+                        ...interaction,
+                        status: "cancelled" as const,
+                        cancel_reason: "runtime_interrupted" as const,
+                        resolved_at: updated_at,
+                      }
+                    : interaction,
+                )
+              : part.interactions;
+            if (part.state === "completed" || part.state === "failed") {
+              return had_pending_interaction ? { ...part, interactions } : part;
+            }
             return {
               ...part,
               state: "failed" as const,
               error: "Tool interrupted before completion.",
+              interactions,
             };
           }
           if (
@@ -710,14 +719,14 @@ export class SessionMessages {
   }
 
   /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
-  list_pending_interactions(): SessionAgentInteractionPart[] {
+  list_pending_interactions(): SessionAgentInteraction[] {
     return this.agent_state.list_pending_interactions();
   }
 
   /** 原子创建 Interaction，并把关联 Tool 转为 waiting-user。 */
   async request_interaction(
     request: SessionInteractionRequest,
-  ): Promise<SessionAgentInteractionPart> {
+  ): Promise<SessionAgentInteraction> {
     return await this.agent_state.request_interaction(request);
   }
 
@@ -725,7 +734,7 @@ export class SessionMessages {
   async resolve_interaction(
     interaction_id: string,
     response: SessionInteractionResponse,
-  ): Promise<SessionAgentInteractionPart> {
+  ): Promise<SessionAgentInteraction> {
     return await this.agent_state.resolve_interaction(
       interaction_id,
       response,
@@ -736,7 +745,7 @@ export class SessionMessages {
   async close_interaction(
     interaction_id: string,
     input: SessionInteractionCloseInput,
-  ): Promise<SessionAgentInteractionPart> {
+  ): Promise<SessionAgentInteraction> {
     return await this.agent_state.close_interaction(interaction_id, input);
   }
 
@@ -757,12 +766,40 @@ export class SessionMessages {
     } as SessionMessageSnapshotMutation;
   }
 
+  private build_part_mutation(
+    message: SessionMessage,
+    part: SessionAgentMessagePart,
+  ): SessionPartMutation {
+    return {
+      mutation_id: generate_id(),
+      variant: "part",
+      type: part.type,
+      message_id: message.message_id,
+      ...(message.turn_id ? { turn_id: message.turn_id } : {}),
+      revision: message.revision,
+      session_id: this.session_id,
+      created_at: message.updated_at,
+      part_id: part.part_id,
+      part,
+    } as SessionPartMutation;
+  }
+
+  /**
+   * 接受已持久化的 Message 快照。
+   *
+   * 发布形状由快照差异决定，调用方不需要描述“变化了什么”；
+   * publish_mutation 为 false 时只更新运行投影。
+   */
   private accept_message(message: SessionMessage, publish_mutation = true): void {
-    if (!publish_mutation) {
-      this.remember_message(message);
+    const previous = this.get_message(message.message_id);
+    this.remember_message(message);
+    if (!publish_mutation) return;
+    const change = project_message_change(previous, message);
+    if (change.variant === "message") {
+      this.publish(this.build_message_mutation(message));
       return;
     }
-    this.accept_mutation(this.build_message_mutation(message), message);
+    for (const part of change.parts) this.publish(this.build_part_mutation(message, part));
   }
 
   private accept_mutation(mutation: SessionMutation, message: SessionMessage): void {
@@ -794,6 +831,43 @@ function require_message<TRole extends SessionMessage["role"]>(
     throw new Error(`Session ${role} Message not found: ${message_id}`);
   }
   return message as Extract<SessionMessage, { role: TRole }>;
+}
+
+/** 一个 Message 快照相对上一稳定状态的最小变更投影。 */
+type SessionMessageChange =
+  | { variant: "message" }
+  | { variant: "part"; parts: SessionAgentMessagePart[] };
+
+/**
+ * 将一次 Message 提交投影为最小突变。
+ *
+ * Part Mutation 是「按 part_id 替换」，既无法让消费方建立一条尚不存在的 Message，
+ * 也无法表达 Part 消失。所以首次出现、User Message、state 收口与 Part 被移除都必须
+ * 整条发布；其余情况只发布发生变化的 Part，不重传整条会话。
+ */
+function project_message_change(
+  previous: SessionMessage | undefined,
+  message: SessionMessage,
+): SessionMessageChange {
+  if (
+    previous?.role !== "agent" ||
+    message.role !== "agent" ||
+    previous.state !== message.state ||
+    previous.parts.some(
+      (part) => !message.parts.some((next) => next.part_id === part.part_id)
+    )
+  ) {
+    return { variant: "message" };
+  }
+  const previous_parts = new Map(
+    previous.parts.map((part) => [part.part_id, JSON.stringify(part)]),
+  );
+  return {
+    variant: "part",
+    parts: message.parts.filter(
+      (part) => previous_parts.get(part.part_id) !== JSON.stringify(part),
+    ),
+  };
 }
 
 function resolve_import_id(map: Map<string, string>, source_id: string, prefix: string): string {

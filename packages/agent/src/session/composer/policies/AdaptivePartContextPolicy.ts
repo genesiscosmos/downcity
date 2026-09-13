@@ -177,7 +177,6 @@ function is_stable_summary_part(
   switch (part.type) {
     case "reasoning":
     case "action":
-    case "interaction":
       return false;
     case "tool":
       return part.state === "completed" || part.state === "failed";
@@ -228,7 +227,6 @@ function summary_part(
       return { type: "error", code: part.code, message: part.message };
     case "reasoning":
     case "action":
-    case "interaction":
       return { type: part.type };
     default:
       return assert_never(part);

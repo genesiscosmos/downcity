@@ -1,7 +1,27 @@
 {
   "actions": { "add": "Add", "back": "Back", "cancel": "Cancel", "close": "Close", "confirm": "Confirm", "copy": "Copy", "create": "Create", "delete": "Delete", "edit": "Edit", "more": "More actions", "refresh": "Refresh", "remove": "Remove", "retry": "Retry", "save": "Save", "saving": "Saving…" },
   "state": { "automatic": "Automatic", "configured": "Configured", "creating": "Creating…", "disabled": "Disabled", "empty": "None", "enabled": "Enabled", "loading": "Loading…", "not_configured": "Not configured", "paused": "Paused", "running": "Running", "unavailable": "Unavailable", "unread": "Unread" },
-  "command_palette": { "open_settings": "Open settings", "toggle_sidebar": "Toggle sidebar" },
+  "command_palette": {
+    "label": "Command palette",
+    "search": "Search commands",
+    "back": "Back",
+    "result_count": "{{count}} results",
+    "result_truncated": "Too many results; showing the first 200",
+    "placeholder": { "default": "Search commands…", "workspaces": "Search workspaces…", "agents": "Search agents…", "sessions": "Search sessions in the current workspace…", "plugins": "Search plugins…" },
+    "empty": { "default": "No matching commands", "workspaces": "No workspaces yet", "agents": "No agents yet", "sessions": "No sessions in the current workspace", "sessions_loading": "Loading sessions…", "plugins": "No plugins available" },
+    "hint": { "root": "↑↓ select · ↵ run · Esc close", "page": "↑↓ select · ↵ run · Esc back" },
+    "page": { "sessions_scope": "Current workspace: {{name}}" },
+    "group": { "navigation": "Navigation", "goto": "Go to", "create": "Create", "chat": "Current session", "appearance": "Appearance", "account": "Account and models" },
+    "cmd": {
+      "nav": { "open-chat": "Open Chat", "open-workspace": "Open Workspace", "open-plugins": "Open Plugins", "open-plugin-view": "Open a plugin…", "toggle-sidebar-show": "Show sidebar", "toggle-sidebar-hide": "Hide sidebar", "open-settings": "Open settings", "back-from-settings": "Go back" },
+      "goto": { "workspace": "Switch workspace…", "session": "Switch session…", "agent": "Open an agent…" },
+      "create": { "conversation": "New conversation", "agent": "New agent", "group": "New group", "workspace": "New workspace" },
+      "chat": { "stop": "Stop the current run", "archive": "Archive the current session", "load-earlier": "Load earlier history" },
+      "appearance": { "toggle-dark": "Switch to dark", "toggle-light": "Switch to light", "open": "Appearance settings" },
+      "account": { "refresh-models": "Refresh the model catalog", "open-models": "Model settings", "open-user": "Account and usage" }
+    },
+    "disabled": { "chat-stop": "Nothing is running right now", "chat-archive": "Not in a session", "chat-history": "Already at the earliest message", "session-list": "No workspace selected yet" }
+  },
   "welcome": "Select an Agent to get started with Downcity",
   "dialog": { "close": "Close" }
 }

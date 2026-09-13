@@ -54,7 +54,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     {props.workspaces.map((workspace) => {
       const key = directory_key(workspace.workspace_id, "");
       const expanded = expanded_keys.has(key);
-      return <section key={workspace.workspace_id} className="mb-0.5"><div className={cn("group flex min-h-8 items-center gap-1 rounded-lg px-1 py-0.5", props.selected_workspace_id === workspace.workspace_id ? "bg-primary/[0.1]" : "hover:bg-foreground/[0.07]")}>
+      return <section key={workspace.workspace_id} className="mb-0.5"><div className={cn("group/item flex min-h-8 items-center gap-1 rounded-lg px-1 py-0.5", props.selected_workspace_id === workspace.workspace_id ? "bg-primary/[0.1]" : "hover:bg-foreground/[0.07]")}>
         <button type="button" aria-label={translate(expanded ? "workspace.collapse" : "workspace.expand")} title={translate(expanded ? "workspace.collapse" : "workspace.expand")} className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30" onClick={() => void toggle_directory(workspace.workspace_id, "")}><TbChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} /></button>
         <button type="button" className="flex min-w-0 flex-1 cursor-pointer items-center text-left" onClick={() => props.select_workspace(workspace.workspace_id)} onDoubleClick={() => void toggle_directory(workspace.workspace_id, "")}><span className="min-w-0 flex-1 truncate text-xs font-medium">{workspace.name}</span></button>
         <WorkspaceRowMenu workspace={workspace} on_remove={props.remove_workspace} />

@@ -1361,9 +1361,10 @@ export class AgentController {
     if (this.session_unsubscribes.has(session_key)) return;
     const unsubscribe = session.subscribe((mutation: SessionMutation) => {
       this.events.mutation({ agent_id, workspace_id, session_id: session.id, mutation });
-      if (mutation.variant === "part" && mutation.type === "interaction") {
+      if (mutation.variant === "part" && mutation.type === "tool") {
         const current = this.runtimes.get(session_key);
-        // interaction 的收口事件可能晚于 Turn finish 到达，终态不能被回退为 streaming。
+        // Tool 在等待用户响应时阻塞，因此 Tool 状态就是等待输入的唯一依据；
+        // 收口事件可能晚于 Turn finish 到达，终态不能被回退为 streaming。
         if (
           !current
           || current.status === "completed"
@@ -1371,12 +1372,14 @@ export class AgentController {
           || current.status === "stopped"
           || (current.turn_id && mutation.turn_id && current.turn_id !== mutation.turn_id)
         ) return;
+        const status = mutation.part.state === "waiting-user" ? "waiting_input" : "streaming";
+        if (current.status === status) return;
         this.update_runtime({
           agent_id,
           workspace_id,
           session_id: session.id,
-          status: mutation.part.status === "pending" ? "waiting_input" : "streaming",
-          ...(mutation.turn_id ? { turn_id: mutation.turn_id } : current?.turn_id ? { turn_id: current.turn_id } : {}),
+          status,
+          ...(mutation.turn_id ? { turn_id: mutation.turn_id } : current.turn_id ? { turn_id: current.turn_id } : {}),
           updated_at: mutation.created_at,
         });
       }

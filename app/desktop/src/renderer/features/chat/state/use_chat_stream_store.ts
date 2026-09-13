@@ -13,7 +13,7 @@ import type { ChatHistoryState, ChatStreamState, DesktopTurnFileDiffSummary, Gro
 import type { SessionMessageIndex } from "@/types/SessionProjection";
 import type { GroupMessageProjection } from "@/types/GroupProjection";
 import { apply_indexed_session_mutations, create_session_message_index, merge_session_snapshot } from "@/features/chat/lib/session_mutation";
-import { collect_executing_agent_ids, project_executing_agent_ids } from "@/features/chat/lib/chat_runtime_projection";
+import { collect_agent_chat_status, project_agent_chat_status } from "@/features/chat/lib/chat_runtime_projection";
 import { get_workspace_chat_key_prefixes } from "@/features/chat/lib/chat_cache_key";
 import { project_chat_render_cache, recent_chat_render_cache_limit, touch_chat_render_cache } from "@/features/chat/lib/chat_render_cache";
 import { same_group_member_statuses } from "@/features/chat/lib/group/group_runtime_projection";
@@ -27,7 +27,7 @@ const initial_chat_stream_state: ChatStreamState = {
   file_diff_by_session: {},
   configuration_by_session: {},
   history_by_session: {},
-  executing_agent_ids: new Set(),
+  agent_chat_status: {},
   group_message_projection_by_group: {},
   group_member_statuses_by_group: {},
   group_phase_by_group: {},
@@ -192,11 +192,11 @@ export function use_chat_stream_store() {
   const set_runtime = useCallback((session_key: string, runtime: DesktopChatRuntime) => {
     const current = state_ref.current;
     if (Object.is(current.chat_runtime_by_session[session_key], runtime)) return;
-    const next_agent_ids = project_executing_agent_ids(current.executing_agent_ids, current.chat_runtime_by_session, session_key, runtime);
+    const next_agent_status = project_agent_chat_status(current.agent_chat_status, current.chat_runtime_by_session, session_key, runtime);
     commit({
       ...current,
       chat_runtime_by_session: { ...current.chat_runtime_by_session, [session_key]: runtime },
-      executing_agent_ids: next_agent_ids,
+      agent_chat_status: next_agent_status,
     });
   }, [commit]);
 
@@ -204,11 +204,11 @@ export function use_chat_stream_store() {
   const remove_runtime = useCallback((session_key: string) => {
     const current = state_ref.current;
     if (!(session_key in current.chat_runtime_by_session)) return;
-    const next_agent_ids = project_executing_agent_ids(current.executing_agent_ids, current.chat_runtime_by_session, session_key);
+    const next_agent_status = project_agent_chat_status(current.agent_chat_status, current.chat_runtime_by_session, session_key);
     commit({
       ...current,
       chat_runtime_by_session: remove_key(current.chat_runtime_by_session, session_key),
-      executing_agent_ids: next_agent_ids,
+      agent_chat_status: next_agent_status,
     });
   }, [commit]);
 
@@ -440,14 +440,14 @@ export function use_chat_stream_store() {
       && next_file_diff === current.file_diff_by_session && next_configuration === current.configuration_by_session
       && next_history === current.history_by_session
     ) return;
-    const next_agent_ids = next_runtime === current.chat_runtime_by_session
-      ? current.executing_agent_ids
-      : collect_executing_agent_ids(next_runtime);
+    const next_agent_status = next_runtime === current.chat_runtime_by_session
+      ? current.agent_chat_status
+      : collect_agent_chat_status(next_runtime);
     commit({
       ...current,
       messages_by_session: next_messages,
       chat_runtime_by_session: next_runtime,
-      executing_agent_ids: next_agent_ids,
+      agent_chat_status: next_agent_status,
       file_diff_by_session: next_file_diff,
       configuration_by_session: next_configuration,
       history_by_session: next_history,

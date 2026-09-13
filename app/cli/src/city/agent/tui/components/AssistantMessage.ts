@@ -65,9 +65,8 @@ export class AssistantMessageComponent implements Component {
     if (visible_parts.length === 0 && !streaming) return [];
 
     const role = current_theme.bold_fg("primary", "Assistant");
-    const waiting_for_user = this.message.parts.some((part) =>
-      (part.type === "tool" && part.state === "waiting-user") ||
-      (part.type === "interaction" && part.status === "pending")
+    const waiting_for_user = this.message.parts.some(
+      (part) => part.type === "tool" && part.state === "waiting-user",
     );
     const state = waiting_for_user
       ? current_theme.bold_fg("warning", " · waiting for you")

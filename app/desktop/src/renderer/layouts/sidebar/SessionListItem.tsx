@@ -1,25 +1,21 @@
 /** Chat MainView 内统一的 Session 导航项与操作菜单。 */
 
 import { memo, type ReactNode } from "react";
-import { TbDots, TbLoader2 } from "react-icons/tb";
 import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
-import { Button } from "@/components/ui/button";
-import { UnreadIndicator } from "@/components/UnreadIndicator";
+import { RowMenuButton } from "@/components/RowMenuButton";
 import { cn } from "@/lib/utils";
 import type { DesktopSessionSummary } from "@common/types/DesktopApi";
-import type { UnreadAttention } from "@/lib/notification/unread_attention";
+import { type ChatRowStatus } from "@/features/chat/lib/chat_row_status";
 import { use_translation } from "@/locales/i18n";
 
 /** Session 导航项属性。 */
 interface SessionListItemProps {
   /** Session 摘要。 */
   session: DesktopSessionSummary;
-  /** 当前 Session 是否正在执行。 */
-  executing: boolean;
+  /** 当前 Session 的行状态。 */
+  status: ChatRowStatus;
   /** 是否选中。 */
   active: boolean;
-  /** 当前 Session 未读通知表达的注意力等级；无未读时为 null。 */
-  unread_attention: UnreadAttention | null;
   /** 进入 Session。 */
   on_select(): void;
   /** 修改标题。 */
@@ -53,7 +49,7 @@ export const SessionListRow = memo(function SessionListRow({ title, active, on_s
       role={on_select ? "button" : undefined}
       tabIndex={on_select ? 0 : undefined}
       className={cn(
-        "group relative flex min-h-7 w-full cursor-pointer items-center gap-1 rounded-lg border border-transparent p-0.5 pl-2 text-left transition-colors duration-150",
+        "group/item relative flex min-h-7 w-full cursor-pointer items-center gap-1 rounded-lg border border-transparent p-0.5 pl-2 text-left transition-colors duration-150",
         active ? "bg-primary/[0.1] hover:bg-primary/[0.12]" : "hover:bg-foreground/[0.07] focus-visible:bg-foreground/[0.07]",
       )}
       onClick={on_select}
@@ -67,26 +63,12 @@ export const SessionListRow = memo(function SessionListRow({ title, active, on_s
 });
 
 /** 带完整 Agent Session 操作能力的标准行。 */
-export const SessionListItem = memo(function SessionListItem({ session, executing, active, unread_attention, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
+export const SessionListItem = memo(function SessionListItem({ session, status, active, on_select, on_rename, on_archive, on_remove }: SessionListItemProps) {
   const translate_common = use_translation("common");
   const translate_chat = use_translation("chat");
-  // 运行态与未读态都由菜单按钮承载；存在状态时常显，否则未读提示会被 hover 隐藏。
-  const has_status = executing || Boolean(unread_attention);
   return <SessionListRow title={session.title || translate_chat("conversation.new")} active={active} on_select={on_select} menu={
     <SessionActionsMenu session={session} on_rename={on_rename} on_archive={on_archive} on_remove={on_remove} trigger={
-          <Button
-            size="icon"
-            className={cn("group/menu", has_status ? "opacity-100" : "opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100 data-[state=open]:opacity-100")}
-            title={translate_common("actions.more")}
-            aria-label={translate_common("actions.more")}
-            onClick={(event) => event.stopPropagation()}
-          >
-            {executing
-              ? <TbLoader2 className="animate-spin text-primary motion-reduce:animate-none" aria-label={translate_chat("conversation.responding")} />
-              : unread_attention
-                ? <UnreadIndicator attention={unread_attention} />
-                : <TbDots />}
-          </Button>
+      <RowMenuButton status={status} label={translate_common("actions.more")} />
     } />
   } />;
 });

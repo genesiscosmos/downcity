@@ -1,7 +1,7 @@
 /** Desktop Session 导航目录的分组与列表投影。 */
 
 import type { DesktopSessionSummary } from "@common/types/DesktopApi";
-import type { DesktopWorkspaceSession, NavigationTarget } from "@/types/DesktopView";
+import type { ChatLiveStatus, DesktopWorkspaceSession, NavigationTarget } from "@/types/DesktopView";
 
 /** Agent 主体入口可以恢复的最近对话目标。 */
 export type AgentChatTarget = Extract<NavigationTarget, { kind: "session" } | { kind: "draft" }>;
@@ -24,8 +24,8 @@ export function group_agent_sessions_by_workspace(
 export function select_agent_sessions(
   sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>,
   agent_id: string,
-  resolve_executing: (workspace_id: string, session: DesktopSessionSummary) => boolean = (_workspace_id, session) => session.executing,
-): Array<{ workspace_id: string; session: DesktopSessionSummary; executing: boolean }> {
+  resolve_live_status: (workspace_id: string, session: DesktopSessionSummary) => ChatLiveStatus | null = (_workspace_id, session) => session.executing ? "working" : null,
+): Array<{ workspace_id: string; session: DesktopSessionSummary; live_status: ChatLiveStatus | null }> {
   if (!agent_id) return [];
   return Object.entries(sessions_by_workspace)
     .flatMap(([workspace_id, entries]) => entries
@@ -33,9 +33,9 @@ export function select_agent_sessions(
       .map((entry) => ({
         workspace_id,
         session: entry.session,
-        executing: resolve_executing(workspace_id, entry.session),
+        live_status: resolve_live_status(workspace_id, entry.session),
       })))
-    .sort((left, right) => Number(right.executing) - Number(left.executing)
+    .sort((left, right) => Number(right.live_status !== null) - Number(left.live_status !== null)
       || right.session.updated_at - left.session.updated_at);
 }
 

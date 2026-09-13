@@ -143,13 +143,18 @@ export function use_desktop_controller(): DesktopController {
         navigation.set_selection({ kind: "workspace", workspace_id: initial_workspace.workspace_id });
       }
       // Session 属于 Agent；导航恢复完成后异步加载完整目录，避免局部恢复结果覆盖全量目录。
+      // 主体列表的最近活跃顺序依赖这份目录，所以加载结束（含失败）后才允许渲染列表。
       void Promise.all(next_agents.map(async (agent) => ({
         agent_id: agent.agent_id,
         sessions: await window.downcity.chat.list_sessions(agent.agent_id),
       }))).then((sessions_by_agent) => {
         session.replace_all_sessions(group_agent_sessions_by_workspace(sessions_by_agent));
-      }).catch((reason) => settings.set_error(to_error_message(reason)));
-    }).catch((reason) => settings.set_error(to_error_message(reason))).finally(() => settings.set_loading(false));
+      }).catch((reason) => settings.set_error(to_error_message(reason))).finally(() => session.mark_hydrated());
+    }).catch((reason) => {
+      settings.set_error(to_error_message(reason));
+      // 引导阶段就失败时不会再加载 Session 目录，必须放行列表以免侧栏永久停在加载态。
+      session.mark_hydrated();
+    }).finally(() => settings.set_loading(false));
     // 远端资料刷新不能阻塞本地 Agent、Workspace 与设置进入可用状态。
     void window.downcity.user.current()
       .then((current_user) => {
@@ -231,9 +236,6 @@ export function use_desktop_controller(): DesktopController {
         chat_stream.upsert_group_interaction(event.group_id, {
           agent_id: event.agent_id,
           part: {
-            part_id: `group-interaction:${event.request.interaction_id}`,
-            sequence: 1,
-            type: "interaction",
             interaction_id: event.request.interaction_id,
             interaction_type: event.request.type,
             status: "pending",
@@ -404,16 +406,22 @@ export function use_desktop_controller(): DesktopController {
     };
   }, [navigation.state_ref, refresh_session_snapshot]);
 
+  /** 把 Draft 会话的模型重置为 Agent 当前配置，只保留审批模式这一非模型偏好。 */
+  const reset_draft_configuration = useCallback((session_key: string, agent_id: string) => {
+    const previous_configuration = chat_stream.state_ref.current.configuration_by_session[session_key];
+    const agent = catalog.state_ref.current.agents.find((item) => item.agent_id === agent_id);
+    chat_stream.set_configuration(session_key, { model_id: agent?.model_id || "", approval_mode: previous_configuration?.approval_mode ?? "ask" });
+  }, [catalog, chat_stream]);
+
   const create_session = useCallback(async (workspace_id: string, agent_id: string) => {
     settings.set_error("");
     navigation.set_sidebar_mode("chat");
     const draft_id = get_draft_session_id(agent_id);
-    const session_key = get_session_key(workspace_id, agent_id, draft_id);
-    const agent = catalog.state_ref.current.agents.find((item) => item.agent_id === agent_id);
-    chat_stream.set_configuration(session_key, chat_stream.state_ref.current.configuration_by_session[session_key] ?? { model_id: agent?.model_id || "", approval_mode: "ask" });
+    // 新对话的模型始终跟随 Agent 当前配置；上一次 Draft 临时选择的模型不带入新对话。
+    reset_draft_configuration(get_session_key(workspace_id, agent_id, draft_id), agent_id);
     navigation.set_active_workspace_id(workspace_id);
     navigation.set_selection({ kind: "draft", workspace_id, agent_id, draft_id });
-  }, [catalog, chat_stream, navigation, settings]);
+  }, [navigation, reset_draft_configuration, settings]);
 
   /** 将当前 Draft 的全部编辑状态移动到新的 Workspace 与 Agent。 */
   const switch_draft_context = useCallback((workspace_id: string, agent_id: string) => {
@@ -425,15 +433,14 @@ export function use_desktop_controller(): DesktopController {
     if (source_key === target_key) return;
     composer.move_draft(source_key, target_key);
     const agent = catalog.state_ref.current.agents.find((item) => item.agent_id === agent_id);
-    const fallback_configuration = {
-      model_id: settings.state_ref.current.settings.default_text_model_id || agent?.model_id || "",
-      approval_mode: "ask" as const,
-    };
-    chat_stream.move_configuration(source_key, target_key, fallback_configuration);
+    // 切换上下文后模型重置为目标 Agent 的配置；审批模式是唯一跟随 Draft 迁移的非模型偏好。
+    const source_configuration = chat_stream.state_ref.current.configuration_by_session[source_key];
+    chat_stream.remove_configuration(source_key);
+    chat_stream.set_configuration(target_key, { model_id: agent?.model_id || "", approval_mode: source_configuration?.approval_mode ?? "ask" });
     navigation.set_active_workspace_id(workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace_id);
     navigation.set_selection({ kind: "draft", workspace_id, agent_id, draft_id });
-  }, [catalog, chat_stream, composer, navigation, settings]);
+  }, [catalog, chat_stream, composer, navigation]);
 
   /** 创建分支 Session，将其加入导航列表并立即打开。 */
   const fork_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, message_id: string) => {
@@ -494,13 +501,16 @@ export function use_desktop_controller(): DesktopController {
       session.remove_session(workspace_id, agent_id, session_id);
       const current_selection = navigation.state_ref.current.selection;
       if (current_selection?.kind === "session" && current_selection.workspace_id === workspace_id && current_selection.agent_id === agent_id && current_selection.session_id === session_id) {
-        navigation.set_selection({ kind: "draft", workspace_id, agent_id, draft_id: get_draft_session_id(agent_id) });
+        const draft_id = get_draft_session_id(agent_id);
+        // 归档后落到新对话时同样重置模型，避免把此前的临时选择带回来。
+        reset_draft_configuration(get_session_key(workspace_id, agent_id, draft_id), agent_id);
+        navigation.set_selection({ kind: "draft", workspace_id, agent_id, draft_id });
       }
     } catch (reason) {
       settings.set_error(to_error_message(reason));
       throw reason;
     }
-  }, [navigation, session, settings]);
+  }, [navigation, reset_draft_configuration, session, settings]);
 
   const remove_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
@@ -522,6 +532,7 @@ export function use_desktop_controller(): DesktopController {
       }
       const current_selection = navigation.state_ref.current.selection;
       if (current_selection?.kind === "session" && current_selection.workspace_id === workspace_id && current_selection.agent_id === agent_id && current_selection.session_id === session_id) {
+        reset_draft_configuration(get_session_key(workspace_id, agent_id, get_draft_session_id(agent_id)), agent_id);
         navigation.set_selection(fallback_selection);
       }
     } catch (reason) {
@@ -529,7 +540,7 @@ export function use_desktop_controller(): DesktopController {
       settings.set_error(to_error_message(reason));
       throw reason;
     }
-  }, [chat_lifecycle, discard_session_render_state, navigation, session, settings]);
+  }, [chat_lifecycle, discard_session_render_state, navigation, reset_draft_configuration, session, settings]);
 
   /** 打开 Agent 最近访问的对话；目标失效时回退到最近更新的 Session，没有历史时进入新对话。 */
   const open_agent_chat = useCallback(async (agent_id: string) => {
@@ -649,7 +660,7 @@ export function use_desktop_controller(): DesktopController {
       try {
         const agent = catalog.state_ref.current.agents.find((item) => item.agent_id === agent_id);
         const draft_configuration = chat_stream.state_ref.current.configuration_by_session[session_key] ?? {
-          model_id: settings.state_ref.current.settings.default_text_model_id || agent?.model_id || "",
+          model_id: agent?.model_id || settings.state_ref.current.settings.default_text_model_id || "",
           approval_mode: "ask",
         };
         const created = await window.downcity.chat.create_session(agent_id, workspace_id, draft_configuration);
@@ -863,6 +874,11 @@ export function use_desktop_controller(): DesktopController {
     }
   }, [catalog, chat_lifecycle, chat_stream, composer, navigation, session, settings]);
 
+  /** 把一次用户可见的失败上报到全局错误条；命令面板与命令是主要调用方。 */
+  const report_error = useCallback((reason: unknown) => {
+    settings.set_error(to_error_message(reason));
+  }, [settings]);
+
   const current_stores = useMemo<DesktopController["stores"]>(() => ({
     navigation: navigation.store,
     catalog: catalog.store,
@@ -906,7 +922,8 @@ export function use_desktop_controller(): DesktopController {
     set_queue_paused,
     move_queued_message,
     clear_error: settings.clear_error,
-  }), [archive_session, clear_session_attach_request, create_session, create_workspace_for_session, fork_session, group_actions, load_archived_sessions, load_earlier_history, management, move_queued_message, navigation_actions, open_agent_chat, rebind_session_workspace, remove_queued_message, remove_session, remove_workspace, rename_session, respond_interaction, rewrite_session_message, select_session, send_message, send_queued_message, set_queue_paused, set_session_approval_mode, set_session_model, set_session_reasoning_effort, settings.clear_error, stop_session, switch_draft_context, toggle_queued_message_paused, update_draft, update_queued_message]);
+    report_error,
+  }), [archive_session, clear_session_attach_request, create_session, create_workspace_for_session, fork_session, group_actions, load_archived_sessions, load_earlier_history, management, move_queued_message, navigation_actions, open_agent_chat, rebind_session_workspace, remove_queued_message, remove_session, remove_workspace, rename_session, respond_interaction, rewrite_session_message, select_session, send_message, send_queued_message, set_queue_paused, set_session_approval_mode, set_session_model, set_session_reasoning_effort, settings.clear_error, report_error, stop_session, switch_draft_context, toggle_queued_message_paused, update_draft, update_queued_message]);
 
   return {
     // 稳定句柄：组件用 use_desktop_selector 按最小切片订阅。

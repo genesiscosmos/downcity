@@ -24,8 +24,7 @@ export function project_agent_message(parts: readonly SessionAgentMessagePart[])
         break;
       }
       case "reasoning":
-      case "tool":
-      case "interaction": {
+      case "tool": {
         append_activity_part(blocks, part);
         last_action_boundary = "other";
         break;

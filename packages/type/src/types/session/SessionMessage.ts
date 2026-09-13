@@ -156,18 +156,21 @@ export interface SessionAgentToolPart {
   error?: string;
   /** 工具调用的可选展示标题。 */
   title?: string;
+  /**
+   * 本次 Tool 执行中向用户发起的交互，按发生顺序排列。
+   *
+   * 同一时刻至多一个处于 pending：Tool 在等待响应时阻塞，因此顺序由数组本身表达。
+   */
+  interactions?: SessionAgentInteraction[];
 }
 
-/** Agent 用户异步交互 Part。 */
-export interface SessionAgentInteractionPart {
-  /** Agent Message 内稳定的 Part 标识。 */
-  part_id: string;
-  /** Assistant Part 在当前 Message 中的不可变线性顺序，从 1 开始。 */
-  sequence: number;
-  /** 产生当前 Part 的模型 Step；非模型追加内容可以为空。 */
-  step_id?: string;
-  /** part 类型固定为 interaction。 */
-  type: "interaction";
+/**
+ * Agent 工具执行期间向用户发起的一次交互。
+ *
+ * Interaction 不是独立 Part，而是所属 Tool 的一部分：Tool 在等待响应时阻塞，
+ * 所以一次 Interaction 的完整生命周期严格落在所属 Tool 的执行区间内。
+ */
+export interface SessionAgentInteraction {
   /** 当前 Interaction 的稳定唯一标识。 */
   interaction_id: string;
   /** 当前 Interaction 的具体业务类型。 */
@@ -253,7 +256,6 @@ export type SessionAgentMessagePart =
   | SessionAgentTextPart
   | SessionAgentReasoningPart
   | SessionAgentToolPart
-  | SessionAgentInteractionPart
   | SessionAgentFilePart
   | SessionAgentDataPart
   | SessionAgentActionPart

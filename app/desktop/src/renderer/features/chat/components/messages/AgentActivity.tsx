@@ -1,7 +1,7 @@
 /** Agent Message 中连续 Reasoning、Tool 与 Interaction 的活动展示。 */
 
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
-import type { RespondSessionInteractionInput, SessionAgentInteractionPart, SessionAgentReasoningPart, SessionAgentToolPart } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionAgentReasoningPart, SessionAgentToolPart } from "@downcity/agent";
 import { TbBulb, TbChevronRight, TbFilePencil, TbFilePlus, TbFileSearch, TbMessageQuestion, TbPuzzle, TbSearch, TbTerminal2, TbTextScan2 } from "react-icons/tb";
 import { AgentInteraction, resolve_agent_interaction_title } from "@/features/chat/components/messages/AgentInteraction";
 import { resolve_agent_tool_presentation, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_tool_presentation";
@@ -24,9 +24,11 @@ export function AgentActivity({ parts, show_reasoning, streaming, respond_intera
 function AgentActivityGroup({ parts, message_streaming, respond_interaction }: { parts: readonly AgentActivityPart[]; message_streaming: boolean; respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   const translate_chat = use_translation("chat");
   const [open, set_open] = useState(() => should_auto_open_agent_activity(parts));
-  const summary_part = find_last_non_reasoning(parts) ?? parts[parts.length - 1];
+  const summary_part = find_last_tool(parts) ?? parts[parts.length - 1];
   const auto_open = should_auto_open_agent_activity(parts);
-  useEffect(() => { if (auto_open) set_open(true); }, [auto_open, parts.find((part) => part.type === "interaction" && part.status === "pending")?.part_id]);
+  // Interaction 属于 Tool Part；待响应时自动展开一次，方便用户直接回答。
+  const pending_interaction_id = parts.flatMap((part) => part.type === "tool" ? (part.interactions ?? []) : []).find((interaction) => interaction.status === "pending")?.interaction_id;
+  useEffect(() => { if (auto_open) set_open(true); }, [auto_open, pending_interaction_id]);
 
   const summary = activity_summary(summary_part, message_streaming, translate_chat);
   return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={cn("activity-tool-row activity-tool-group", summary.state_class)}>
@@ -40,11 +42,6 @@ function activity_summary(part: AgentActivityPart, message_streaming: boolean, t
     const presentation = resolve_agent_tool_presentation(part);
     return { detail: presentation.detail, state: translate_chat(presentation.state_key), state_class: presentation.running ? "is-running" : presentation.failed ? "is-failed" : "is-complete", visual_kind: presentation.visual_kind };
   }
-  if (part.type === "interaction") {
-    const waiting = part.status === "pending";
-    const failed = part.status === "failed";
-    return { detail: resolve_agent_interaction_title(part), state: translate_chat(waiting ? "activity.waiting_response" : failed ? "activity.failed" : "activity.completed"), state_class: waiting ? "is-waiting" : failed ? "is-failed" : "is-complete", visual_kind: "ask" };
-  }
   const running = part.state === "streaming" || message_streaming;
   return { detail: reasoning_preview(part.text), state: translate_chat(running ? "activity.thinking" : "activity.thought"), state_class: running ? "is-running" : "is-complete" };
 }
@@ -53,8 +50,7 @@ function activity_summary(part: AgentActivityPart, message_streaming: boolean, t
 function AgentActivityItem({ part, message_streaming, respond_interaction }: { part: AgentActivityPart; message_streaming: boolean; respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   switch (part.type) {
     case "reasoning": return <AgentReasoning part={part} message_streaming={message_streaming} />;
-    case "tool": return <AgentTool part={part} />;
-    case "interaction": return <AgentInteraction part={part} respond={respond_interaction} />;
+    case "tool": return <AgentTool part={part} respond_interaction={respond_interaction} />;
     default: return assert_never(part);
   }
 }
@@ -71,8 +67,8 @@ function AgentReasoning({ part, message_streaming }: { part: SessionAgentReasoni
   </details>;
 }
 
-/** Tool 生命周期、摘要以及按工具语义裁剪后的主要内容。 */
-function AgentTool({ part }: { part: SessionAgentToolPart }) {
+/** Tool 生命周期、摘要、主要内容，以及属于本次调用的 Interaction。 */
+function AgentTool({ part, respond_interaction }: { part: SessionAgentToolPart; respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   const translate_chat = use_translation("chat");
   const [open, set_open] = useState(() => should_auto_open_agent_tool(part));
   const presentation = resolve_agent_tool_presentation(part);
@@ -81,11 +77,13 @@ function AgentTool({ part }: { part: SessionAgentToolPart }) {
   const details = render_tool_details(part, presentation.visual_kind);
   const class_name = cn("activity-tool-row activity-tool-item", presentation.running ? "is-running" : presentation.failed ? "is-failed" : "is-complete");
   const summary = <span className="activity-tool-main"><ActivityIcon visual_kind={presentation.visual_kind} /><span className="activity-tool-state">{translate_chat(presentation.state_key)}</span><span className="activity-tool-name">{presentation.detail}</span>{details ? <TbChevronRight className="activity-tool-chevron" aria-hidden /> : null}</span>;
-  if (!details) return <div className={class_name}><div className="activity-tool-summary">{summary}</div></div>;
-  return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={class_name}>
+  // Interaction 是面向用户的对话内容，不折叠进 Tool 详情，始终直接可见。
+  const interaction_cards = (part.interactions ?? []).map((interaction) => <AgentInteraction key={interaction.interaction_id} part={interaction} respond={respond_interaction} />);
+  if (!details) return <><div className={class_name}><div className="activity-tool-summary">{summary}</div></div>{interaction_cards}</>;
+  return <><details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={class_name}>
     <summary className="activity-tool-summary">{summary}</summary>
     <div className={cn("activity-tool-detail", `is-${presentation.visual_kind}`)}>{details}</div>
-  </details>;
+  </details>{interaction_cards}</>;
 }
 
 /** 不再通用打印 JSON；每类 Tool 只展示完成任务所需的主要字段。 */
@@ -185,5 +183,5 @@ function streamed_fields(input_text: string | undefined, key: string): string[] 
 }
 function decode_json_fragment(raw: string): string { try { return JSON.parse(`"${raw.replace(/\\$/g, "")}"`) as string; } catch { return raw.replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\"/g, '"').replace(/\\\\/g, "\\"); } }
 function reasoning_preview(text: string): string { return text.replace(/\s+/g, " ").trim(); }
-function find_last_non_reasoning(parts: readonly AgentActivityPart[]): SessionAgentToolPart | SessionAgentInteractionPart | undefined { for (let index = parts.length - 1; index >= 0; index -= 1) { const part = parts[index]; if (part?.type === "tool" || part?.type === "interaction") return part; } return undefined; }
+function find_last_tool(parts: readonly AgentActivityPart[]): SessionAgentToolPart | undefined { for (let index = parts.length - 1; index >= 0; index -= 1) { const part = parts[index]; if (part?.type === "tool") return part; } return undefined; }
 function assert_never(value: never): never { throw new Error(`不支持的 Agent Activity Part：${String((value as { type?: unknown }).type)}`); }

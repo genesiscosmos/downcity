@@ -9,7 +9,7 @@ import { generate_id } from "@/utils/Id.js";
 import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
 import type {
   SessionAgentErrorPart,
-  SessionAgentInteractionPart,
+  SessionAgentInteraction,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionAgentToolPart,
@@ -200,14 +200,6 @@ export class SessionAgentMessageState {
     await this.enqueue_write(message_id, async () => {
       const current = this.require_streaming_agent(message_id);
       const completed_at = Date.now();
-      const interrupted_tool_ids = new Set(
-        current.parts.flatMap((part) =>
-          part.type === "interaction" && part.status === "pending" &&
-            part.request.source.tool_call_id
-            ? [part.request.source.tool_call_id]
-            : [],
-        ),
-      );
       const parts: SessionAgentMessagePart[] = current.parts.map((part) => {
         if (part.type === "text" || part.type === "reasoning") {
           return { ...part, state: "done" as const };
@@ -221,25 +213,36 @@ export class SessionAgentMessageState {
               : { description: error || "Action did not complete before Agent Message closed" }),
           };
         }
-        if (part.type === "interaction" && part.status === "pending") {
-          return {
-            ...part,
-            status: "cancelled" as const,
-            cancel_reason: "runtime_interrupted" as const,
-            resolved_at: completed_at,
-          };
+        if (part.type !== "tool") return part;
+        // Interaction 属于 Tool，收口时随所属 Tool 一起终止。
+        const existing_interactions = part.interactions ?? [];
+        const had_pending_interaction = existing_interactions.some(
+          (interaction) => interaction.status === "pending",
+        );
+        const interactions = had_pending_interaction
+          ? existing_interactions.map((interaction) =>
+              interaction.status === "pending"
+                ? {
+                    ...interaction,
+                    status: "cancelled" as const,
+                    cancel_reason: "runtime_interrupted" as const,
+                    resolved_at: completed_at,
+                  }
+                : interaction,
+            )
+          : part.interactions;
+        if (part.state === "completed" || part.state === "failed") {
+          return had_pending_interaction ? { ...part, interactions } : part;
         }
-        if (part.type === "tool" && part.state !== "completed" && part.state !== "failed") {
-          return {
-            ...part,
-            state: "failed" as const,
-            error: outcome === "stopped" && part.state === "waiting-user" &&
-                interrupted_tool_ids.has(part.tool_call_id)
-              ? "Interaction cancelled"
-              : error || "Tool did not complete before Agent Message closed",
-          };
-        }
-        return part;
+        return {
+          ...part,
+          state: "failed" as const,
+          interactions,
+          error: outcome === "stopped" && part.state === "waiting-user" &&
+              had_pending_interaction
+            ? "Interaction cancelled"
+            : error || "Tool did not complete before Agent Message closed",
+        };
       });
       if (outcome === "stopped" && !parts.some((part) =>
         part.type === "error" && part.code === "turn_stopped"
@@ -266,14 +269,14 @@ export class SessionAgentMessageState {
   }
 
   /** 返回当前 Session 全部待响应 Interaction。 */
-  list_pending_interactions(): SessionAgentInteractionPart[] {
+  list_pending_interactions(): SessionAgentInteraction[] {
     return this.interaction_writer.list_pending();
   }
 
   /** 持久化 Interaction 请求及关联 Tool 状态。 */
   async request_interaction(
     request: SessionInteractionRequest,
-  ): Promise<SessionAgentInteractionPart> {
+  ): Promise<SessionAgentInteraction> {
     return await this.interaction_writer.request(request);
   }
 
@@ -281,7 +284,7 @@ export class SessionAgentMessageState {
   async resolve_interaction(
     interaction_id: string,
     response: SessionInteractionResponse,
-  ): Promise<SessionAgentInteractionPart> {
+  ): Promise<SessionAgentInteraction> {
     return await this.interaction_writer.resolve(interaction_id, response);
   }
 
@@ -289,7 +292,7 @@ export class SessionAgentMessageState {
   async close_interaction(
     interaction_id: string,
     input: SessionInteractionCloseInput,
-  ): Promise<SessionAgentInteractionPart> {
+  ): Promise<SessionAgentInteraction> {
     return await this.interaction_writer.close(interaction_id, input);
   }
 

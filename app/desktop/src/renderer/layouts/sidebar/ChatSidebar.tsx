@@ -1,6 +1,6 @@
 /** 组合 Chat 主体导航与当前主体 Session 面板。 */
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { TbGhost3, TbPlus, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
@@ -12,6 +12,7 @@ import { ChatSessionPanel } from "./ChatSessionPanel";
 import { ChatSubjectList } from "./ChatSubjectList";
 import { SidebarHeader } from "./SidebarHeader";
 import { SidebarPanel } from "./SidebarPanel";
+import { collect_agent_last_active, collect_group_last_active, merge_runtime_activity, order_chat_subjects } from "@/features/navigation/lib/chat_subject_order";
 
 /** Chat Sidebar 属性。 */
 interface ChatSidebarProps {
@@ -36,15 +37,25 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
   const groups = use_desktop_selector(controller.stores.catalog, (state) => state.groups);
   const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
   const loading = use_desktop_selector(controller.stores.settings, (state) => state.loading);
+  const sessions_by_workspace = use_desktop_selector(controller.stores.session, (state) => state.sessions_by_workspace);
+  const hydrated = use_desktop_selector(controller.stores.session, (state) => state.hydrated);
+  const chat_runtimes = use_desktop_selector(controller.stores.chat_stream, (state) => state.chat_runtime_by_session);
   const selected_agent_id = selection && "agent_id" in selection ? selection.agent_id : "";
   const selected_group_id = selection && "group_id" in selection ? selection.group_id : "";
   const selected_agent = agents.find((agent) => agent.agent_id === selected_agent_id);
   const selected_group = groups.find((group) => group.group_id === selected_group_id);
   const workspace_id = active_workspace_id || workspaces[0]?.workspace_id;
+  // Agent 与 Group 共用一条「最近一次对话」时间轴；Agent 的时间还要用实时运行态补上 Session 目录之后的对话。
+  const subjects = useMemo(() => order_chat_subjects({
+    agents,
+    groups,
+    last_active_by_agent: merge_runtime_activity(collect_agent_last_active(sessions_by_workspace), chat_runtimes),
+    last_active_by_group: collect_group_last_active(groups),
+  }), [agents, chat_runtimes, groups, sessions_by_workspace]);
 
   return <SidebarPanel>
     <SidebarHeader title={translate("views.chat")} actions={<DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("sidebar.add_chat_subject")} aria-label={translate("sidebar.add_chat_subject")}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_create_agent}><TbGhost3 /><span>{translate("sidebar.new_agent")}</span></DropdownMenuItem><DropdownMenuItem onClick={open_create_group}><TbUsers /><span>{translate("sidebar.new_group")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>} />
-    <ChatSubjectList controller={controller} selected_agent_id={selected_agent_id} selected_group_id={selected_group_id} active_workspace_id={active_workspace_id} agents={agents} groups={groups} workspaces={workspaces} loading={loading} notification_state={notification_state} open_create_agent={open_create_agent} open_group_config={open_group_config} />
+    <ChatSubjectList controller={controller} subjects={subjects} hydrated={hydrated} selected_agent_id={selected_agent_id} selected_group_id={selected_group_id} active_workspace_id={active_workspace_id} agents={agents} workspaces={workspaces} loading={loading} notification_state={notification_state} open_create_agent={open_create_agent} open_group_config={open_group_config} />
     <ChatSessionPanel controller={controller} notification_state={notification_state} selection={selection} selected_agent={selected_agent} selected_group={selected_group} workspace_id={workspace_id} />
   </SidebarPanel>;
 });

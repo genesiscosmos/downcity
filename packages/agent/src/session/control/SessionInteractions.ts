@@ -174,6 +174,9 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     if (!request.source || typeof request.source !== "object") {
       throw new Error("Session Interaction requires a source");
     }
+    if (!String(request.source.tool_call_id || "").trim()) {
+      throw new Error("Session Interaction requires the Tool Call it belongs to");
+    }
     if (request.type === "question") {
       const payload = request.payload as { questions?: unknown };
       const questions = payload?.questions;

@@ -2,10 +2,11 @@
 
 import { useCallback, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
-import { TbAlertTriangle, TbCheck, TbChevronDown, TbDots, TbFolder } from "react-icons/tb";
+import { TbAlertTriangle, TbCheck, TbChevronDown, TbDots, TbEdit, TbFolder } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
+import { AGENT_DOMAIN_ID } from "@/features/agent/AgentView";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { ChatTextSelectionQuote } from "@/features/chat/components/ChatTextSelectionQuote";
 import { ChatWorkspaceSelector } from "@/features/chat/components/ChatWorkspaceSelector";
@@ -15,6 +16,7 @@ import { TurnFileOpenProvider } from "@/features/chat/components/messages/TurnFi
 import { WorkspaceTagMenu } from "@/features/chat/components/WorkspaceTagMenu";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
 import { use_chat_scroll } from "@/features/chat/lib/use_chat_scroll";
+import { use_baybar_open } from "@/layouts/BayBar";
 import { use_translation } from "@/locales/i18n";
 import { is_chat_busy, type ChatHistoryState } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
@@ -113,15 +115,20 @@ export function SessionView(props: SessionViewProps) {
 
 /** 空会话提示。 */
 function EmptyPrompts({ surface = "workspace", agent, workspace, workspaces, agents, switch_context }: { /** 当前 Chat 表面。 */ surface?: "agent" | "workspace"; /** 当前联系人 Agent。 */ agent: DesktopAgentSummary; /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 可切换 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 可切换 Agent。 */ agents: DesktopAgentSummary[]; /** 切换新对话上下文。 */ switch_context(workspace_id: string, agent_id: string): void }) {
+  const translate_chat = use_translation("chat");
+  const open_baybar = use_baybar_open();
   if (surface === "workspace") return <div className="flex min-h-[50vh] items-center justify-center px-4"><NewChatContextSelector workspace={workspace} workspaces={workspaces} agent={agent} agents={agents} switch_context={switch_context} /></div>;
-  return <div className="flex min-h-[56vh] flex-col items-center justify-center px-4"><div className="flex flex-col items-center gap-2.5"><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" icon_class_name="size-7" /><div className="text-center text-sm font-medium text-foreground">{agent.name}</div></div><div className="mt-10"><ChatWorkspaceSelector workspace_id={workspace.workspace_id} workspaces={workspaces} disabled={false} variant="field" switch_workspace={(workspace_id) => switch_context(workspace_id, agent.agent_id)} /></div></div>;
+  // 头像即 Agent 配置入口：正文里的入口通过 BayBar context 打开右侧「Agent」域。
+  const open_agent_config_label = translate_chat("conversation.open_agent_config", { name: agent.name });
+  const agent_description = agent.description?.trim();
+  return <div className="flex min-h-[56vh] flex-col items-center justify-center px-4"><div className="flex flex-col items-center gap-2.5"><button type="button" onClick={() => open_baybar(AGENT_DOMAIN_ID)} title={open_agent_config_label} aria-label={open_agent_config_label} className="group relative shrink-0 cursor-pointer rounded-2xl p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" icon_class_name="size-7" /><span aria-hidden="true" className="absolute inset-0 flex items-center justify-center rounded-2xl bg-foreground/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"><TbEdit className="size-5 text-background" /></span></button><div className="text-center text-sm font-medium text-foreground">{agent.name}</div></div>{agent_description ? <p title={agent_description} className="mt-2.5 line-clamp-2 max-w-md text-center text-xs leading-5 text-muted-foreground">{agent_description}</p> : null}<div className={agent_description ? "mt-8" : "mt-10"}><ChatWorkspaceSelector workspace_id={workspace.workspace_id} workspaces={workspaces} disabled={false} variant="field" switch_workspace={(workspace_id) => switch_context(workspace_id, agent.agent_id)} /></div></div>;
 }
 
 /** 新建 Chat 输入框上方的当前上下文。 */
 function NewChatContextSelector({ workspace, workspaces, agent, agents, switch_context }: { /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 可切换 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 当前 Agent。 */ agent: DesktopAgentSummary; /** 可切换 Agent。 */ agents: DesktopAgentSummary[]; /** 提交上下文切换。 */ switch_context(workspace_id: string, agent_id: string): void }) {
   const translate_chat = use_translation("chat");
   return <div className="flex min-w-0 max-w-full flex-col items-center gap-4">
-    <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="group flex min-w-0 max-w-full flex-col items-center gap-2 rounded-xl px-5 py-3 transition-colors hover:bg-foreground/[0.05]" aria-label={translate_chat("conversation.select_contact")}><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" /><span className="flex max-w-64 items-center gap-1.5 text-base font-medium text-foreground"><span className="truncate">{agent.name}</span><TbChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" /></span><span className="text-xs text-muted-foreground">{translate_chat("conversation.contact")}</span></button></DropdownMenuTrigger><DropdownMenuContent align="center" side="bottom" sideOffset={6}>{agents.map((item) => <DropdownMenuItem key={item.agent_id} is_selected={item.agent_id === agent.agent_id} onClick={() => switch_context(workspace.workspace_id, item.agent_id)}><AgentAvatar agent={item} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{item.name}</span>{item.agent_id === agent.agent_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+    <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="group flex min-w-0 max-w-full flex-col items-center gap-2 rounded-xl px-5 py-3 transition-colors hover:bg-foreground/[0.05]" aria-label={translate_chat("conversation.select_contact")}><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" /><span className="flex max-w-64 items-center gap-1.5 text-base font-medium text-foreground"><span className="truncate">{agent.name}</span><TbChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[popup-open]:rotate-180" /></span><span className="text-xs text-muted-foreground">{translate_chat("conversation.contact")}</span></button></DropdownMenuTrigger><DropdownMenuContent align="center" side="bottom" sideOffset={6}>{agents.map((item) => <DropdownMenuItem key={item.agent_id} is_selected={item.agent_id === agent.agent_id} onClick={() => switch_context(workspace.workspace_id, item.agent_id)}><AgentAvatar agent={item} class_name="size-5 rounded" /><span className="min-w-0 flex-1 truncate">{item.name}</span>{item.agent_id === agent.agent_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
     <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="flex min-w-0 max-w-72 items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground" aria-label={translate_chat("conversation.select_workspace")}><TbFolder className="size-4 shrink-0" /><span className="truncate">{workspace.name}</span><TbChevronDown className="size-3.5 shrink-0" /></button></DropdownMenuTrigger><DropdownMenuContent align="center" side="bottom" sideOffset={6}>{workspaces.map((item) => <DropdownMenuItem key={item.workspace_id} is_selected={item.workspace_id === workspace.workspace_id} onClick={() => switch_context(item.workspace_id, agent.agent_id)}><TbFolder className="size-4" /><span className="min-w-0 flex-1 truncate">{item.name}</span>{item.workspace_id === workspace.workspace_id ? <TbCheck className="size-3.5 text-primary" /> : null}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
     <span className="text-[0.6875rem] text-muted-foreground/70">{translate_chat("message.choose_context")}</span>
   </div>;

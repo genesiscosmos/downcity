@@ -1,7 +1,27 @@
 {
   "actions": { "add": "添加", "back": "返回", "cancel": "取消", "close": "关闭", "confirm": "确认", "copy": "复制", "create": "创建", "delete": "删除", "edit": "编辑", "more": "更多操作", "refresh": "刷新", "remove": "移除", "retry": "重试", "save": "保存", "saving": "保存中…" },
   "state": { "automatic": "自动", "configured": "已配置", "creating": "创建中…", "disabled": "禁用", "empty": "无", "enabled": "启用", "loading": "加载中…", "not_configured": "未配置", "paused": "已暂停", "running": "运行中", "unavailable": "不可用", "unread": "未读" },
-  "command_palette": { "open_settings": "打开设置", "toggle_sidebar": "切换左侧边栏" },
+  "command_palette": {
+    "label": "命令面板",
+    "search": "搜索命令",
+    "back": "返回",
+    "result_count": "共 {{count}} 条结果",
+    "result_truncated": "结果过多，仅显示前 200 条",
+    "placeholder": { "default": "搜索命令…", "workspaces": "搜索 Workspace…", "agents": "搜索 Agent…", "sessions": "搜索当前 Workspace 的会话…", "plugins": "搜索 Plugin…" },
+    "empty": { "default": "没有匹配的命令", "workspaces": "还没有 Workspace", "agents": "还没有 Agent", "sessions": "当前 Workspace 还没有会话", "sessions_loading": "正在读取会话…", "plugins": "没有可用的 Plugin" },
+    "hint": { "root": "↑↓ 选择 · ↵ 执行 · Esc 关闭", "page": "↑↓ 选择 · ↵ 执行 · Esc 返回" },
+    "page": { "sessions_scope": "当前 Workspace：{{name}}" },
+    "group": { "navigation": "导航", "goto": "跳转", "create": "新建", "chat": "当前会话", "appearance": "外观", "account": "账户与模型" },
+    "cmd": {
+      "nav": { "open-chat": "打开 Chat", "open-workspace": "打开 Workspace", "open-plugins": "打开 Plugins", "open-plugin-view": "打开 Plugin…", "toggle-sidebar-show": "显示侧栏", "toggle-sidebar-hide": "隐藏侧栏", "open-settings": "打开设置", "back-from-settings": "返回上一个页面" },
+      "goto": { "workspace": "切换 Workspace…", "session": "切换会话…", "agent": "打开 Agent…" },
+      "create": { "conversation": "新建对话", "agent": "新建 Agent", "group": "新建 Group", "workspace": "新建 Workspace" },
+      "chat": { "stop": "停止当前执行", "archive": "归档当前会话", "load-earlier": "加载更早历史" },
+      "appearance": { "toggle-dark": "切换到深色", "toggle-light": "切换到浅色", "open": "外观设置" },
+      "account": { "refresh-models": "刷新模型目录", "open-models": "模型设置", "open-user": "账户与用量" }
+    },
+    "disabled": { "chat-stop": "当前没有正在执行的 Turn", "chat-archive": "当前不在会话中", "chat-history": "已经是最早的记录", "session-list": "还没有选择 Workspace" }
+  },
   "welcome": "选择一个 Agent 开始使用 Downcity",
   "dialog": { "close": "关闭" }
 }

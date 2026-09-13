@@ -45,7 +45,6 @@ export function resolve_session_message_preview(
       case "text":
       case "reasoning":
       case "tool":
-      case "interaction":
       case "file":
       case "data":
         break;

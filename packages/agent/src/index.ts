@@ -97,7 +97,7 @@ export type {
   SessionAgentActionPart,
   SessionAgentDataPart,
   SessionAgentFilePart,
-  SessionAgentInteractionPart,
+  SessionAgentInteraction,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionAgentReasoningPart,

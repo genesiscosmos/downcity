@@ -7,7 +7,7 @@ import { SidebarNavigationItems } from "./SidebarNavigationItems";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 import type { SidebarMode } from "@/types/DesktopView";
-import type { UnreadAttention } from "@/lib/notification/unread_attention";
+import type { ChatAttention } from "@/lib/notification/attention";
 
 /** 左侧一级图标导航栏属性。 */
 interface SidebarRailProps {
@@ -18,7 +18,7 @@ interface SidebarRailProps {
   /** 动态贡献一级入口的 Plugin。 */
   plugin_workspaces: DesktopPluginSummary[];
   /** 各业务入口的未读注意力等级；不在其中的入口没有未读。 */
-  unread_attention_by_mode: ReadonlyMap<SidebarMode, UnreadAttention>;
+  unread_attention_by_mode: ReadonlyMap<SidebarMode, ChatAttention>;
   /** 设置入口是否处于激活状态。 */
   settings_active: boolean;
   /** 打开设置页。 */

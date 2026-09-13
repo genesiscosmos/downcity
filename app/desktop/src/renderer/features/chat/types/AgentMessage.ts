@@ -5,7 +5,6 @@ import type {
   SessionAgentDataPart,
   SessionAgentErrorPart,
   SessionAgentFilePart,
-  SessionAgentInteractionPart,
   SessionAgentReasoningPart,
   SessionAgentTextPart,
   SessionAgentToolPart,
@@ -15,8 +14,7 @@ import type {
 /** 参与连续活动展示的 canonical Agent Part。 */
 export type AgentActivityPart =
   | SessionAgentReasoningPart
-  | SessionAgentToolPart
-  | SessionAgentInteractionPart;
+  | SessionAgentToolPart;
 
 /** Agent Message 中按 canonical 顺序排列的一层展示块。 */
 export type AgentMessageBlock =

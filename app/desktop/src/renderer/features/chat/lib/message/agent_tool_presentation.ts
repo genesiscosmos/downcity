@@ -26,9 +26,8 @@ export function should_auto_open_agent_tool(part: SessionAgentToolPart): boolean
 
 /** 待响应 Interaction 或流式文件内容出现时，活动组自动展开一次但不锁定。 */
 export function should_auto_open_agent_activity(parts: readonly AgentActivityPart[]): boolean {
-  return parts.some((part) => part.type === "interaction"
-    ? part.status === "pending"
-    : part.type === "tool" && should_auto_open_agent_tool(part));
+  return parts.some((part) => part.type === "tool" &&
+    (should_auto_open_agent_tool(part) || (part.interactions ?? []).some((interaction) => interaction.status === "pending")));
 }
 
 /** 从常见结构化输入中读取第一个非空字符串。 */

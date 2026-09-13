@@ -14,6 +14,7 @@ const initial_session_state: SessionStoreState = {
   sessions_by_workspace: {},
   archived_sessions_by_workspace: {},
   session_attach_request: null,
+  hydrated: false,
 };
 
 /** 创建 Session 导航索引领域 store。 */
@@ -94,6 +95,12 @@ export function use_session_store() {
     });
   }, [commit]);
 
+  /** 标记 Session 目录已经完整加载过一次；成功与失败都要放行，否则侧栏会停在加载态。 */
+  const mark_hydrated = useCallback(() => {
+    if (state_ref.current.hydrated) return;
+    commit({ ...state_ref.current, hydrated: true });
+  }, [commit]);
+
   /** 替换孤儿 Session 的 Workspace 绑定请求。 */
   const set_session_attach_request = useCallback((session_attach_request: SessionAttachRequest | null) => {
     if (Object.is(state_ref.current.session_attach_request, session_attach_request)) return;
@@ -111,7 +118,8 @@ export function use_session_store() {
     remove_agent_sessions,
     set_archived_sessions,
     set_session_attach_request,
-  }), [prepend_session, remove_agent_sessions, remove_session, remove_workspace, replace_all_sessions, set_archived_sessions, set_session_attach_request, set_workspace_sessions, state_ref, store]);
+    mark_hydrated,
+  }), [mark_hydrated, prepend_session, remove_agent_sessions, remove_session, remove_workspace, replace_all_sessions, set_archived_sessions, set_session_attach_request, set_workspace_sessions, state_ref, store]);
 }
 
 /** 从按 Workspace 分组的导航索引中移除一个 Workspace 键。 */

@@ -1,22 +1,21 @@
 /** GroupSession 操作菜单：维护 canonical 标题并提供永久删除入口。 */
 
 import { useState, type FormEvent } from "react";
-import { TbDots, TbPencil, TbTrash } from "react-icons/tb";
+import { TbPencil, TbTrash } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
-import { UnreadIndicator } from "@/components/UnreadIndicator";
-import { cn } from "@/lib/utils";
-import type { UnreadAttention } from "@/lib/notification/unread_attention";
+import { RowMenuButton } from "@/components/RowMenuButton";
+import { type ChatRowStatus } from "@/features/chat/lib/chat_row_status";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import type { DesktopGroupSessionSummary } from "@common/types/DesktopApi";
 import { use_translation } from "@/locales/i18n";
 
 /** 渲染 GroupSession 的重命名与删除流程。 */
-export function GroupSessionActionsMenu({ session, unread_attention = null, on_rename, on_remove }: {
+export function GroupSessionActionsMenu({ session, status, on_rename, on_remove }: {
   /** 当前 GroupSession 摘要。 */
   session: DesktopGroupSessionSummary;
-  /** 当前 GroupSession 未读通知表达的注意力等级；无未读时为 null。 */
-  unread_attention?: UnreadAttention | null;
+  /** 当前 GroupSession 的行状态。 */
+  status: ChatRowStatus;
   /** 持久化新的 canonical 标题。 */
   on_rename(title: string): Promise<void>;
   /** 永久删除当前 GroupSession。 */
@@ -54,9 +53,7 @@ export function GroupSessionActionsMenu({ session, unread_attention = null, on_r
 
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button size="icon" className={cn(unread_attention ? "opacity-100" : "opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100 data-[state=open]:opacity-100")} title={translate_common("actions.more")} aria-label={translate_common("actions.more")} onClick={(event) => event.stopPropagation()}>{unread_attention ? <UnreadIndicator attention={unread_attention} /> : <TbDots />}</Button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><RowMenuButton status={status} label={translate_common("actions.more")} /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={5} onClick={(event) => event.stopPropagation()}>
         <DropdownMenuItem onClick={() => { set_title(session.title || ""); set_rename_open(true); }}><TbPencil /><span>{translate_chat("conversation.rename")}</span></DropdownMenuItem>
         <DropdownMenuSeparator />

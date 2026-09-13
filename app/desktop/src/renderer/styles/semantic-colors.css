@@ -10,6 +10,9 @@
   --border-subtle: color-mix(in srgb, var(--border) 55%, transparent);
   --control-surface: var(--muted);
   --control-hover: color-mix(in srgb, var(--foreground) 10%, transparent);
+  /* 模态遮罩。语义上始终压暗下方内容，因此不随明暗主题反转；
+     放在令牌层是为了避免组件里出现原始颜色值。 */
+  --scrim: rgb(0 0 0 / 0.25);
 }
 
 :where(.dark) {

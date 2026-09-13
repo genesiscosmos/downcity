@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { SessionAgentInteractionPart, SessionAgentMessagePart } from "@downcity/agent";
+import type { SessionAgentInteraction, SessionAgentMessagePart } from "@downcity/agent";
 import { resolve_agent_tool_presentation, should_auto_open_agent_activity, should_auto_open_agent_tool } from "../src/renderer/features/chat/lib/message/agent_tool_presentation.ts";
 import type { AgentActivityPart } from "../src/renderer/features/chat/types/AgentMessage.ts";
 
@@ -10,8 +10,8 @@ function create_tool(tool_name: string, sequence: number, input: Record<string, 
   return { part_id: `tool-${sequence}`, sequence, type: "tool", tool_call_id: `call-${sequence}`, tool_name, state: "completed", input };
 }
 
-function create_interaction(sequence: number): SessionAgentInteractionPart {
-  return { part_id: `interaction-${sequence}`, sequence, type: "interaction", interaction_id: `interaction-${sequence}`, interaction_type: "question", status: "pending", request: { interaction_id: `interaction-${sequence}`, turn_id: "turn-1", source: { type: "execution" }, created_at: 1, title: "确认", type: "question", payload: { questions: [] } } };
+function create_interaction(sequence: number, status: SessionAgentInteraction["status"] = "pending"): SessionAgentInteraction {
+  return { interaction_id: `interaction-${sequence}`, interaction_type: "question", status, request: { interaction_id: `interaction-${sequence}`, turn_id: "turn-1", source: { type: "execution" }, created_at: 1, title: "确认", type: "question", payload: { questions: [] } } };
 }
 
 test("Tool 名称映射为稳定视觉语义与详情", () => {
@@ -46,9 +46,9 @@ test("只有流式 Write 与 Edit Tool 初始自动展开", () => {
 
 test("待响应 Interaction 自动展开但不锁定 Activity", () => {
   const tool = create_tool("shell_exec", 1);
-  const interaction = create_interaction(2);
-  const pending: AgentActivityPart[] = [tool, interaction];
-  const resolved: AgentActivityPart[] = [tool, { ...interaction, status: "resolved" }];
+  // Interaction 不是独立 Part，而是所属 Tool 的一部分；Activity 只由 Tool 与 Reasoning 组成。
+  const pending: AgentActivityPart[] = [{ ...tool, interactions: [create_interaction(1, "pending")] }];
+  const resolved: AgentActivityPart[] = [{ ...tool, interactions: [create_interaction(1, "resolved")] }];
   assert.equal(should_auto_open_agent_activity(pending), true);
   assert.equal(should_auto_open_agent_activity(resolved), false);
 });

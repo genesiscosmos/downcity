@@ -7,6 +7,7 @@
 import type {
   JsonObject,
   JsonValue,
+  SessionAgentInteraction,
   SessionAgentMessagePart,
   SessionInteractionRequest,
   SessionInteractionResponse,
@@ -158,6 +159,13 @@ function decode_session_part(
   role: SessionMessageRow["role"],
 ): SessionUserMessagePart | SessionAgentMessagePart {
   const content = parse_part_content(row);
+  // 旧数据可能仍存有已废弃的独立 Interaction Part；类型层已不含该值，按原始字符串拦截。
+  if ((row.type as string) === "interaction") {
+    throw invalid_part(
+      row,
+      "legacy standalone Interaction Part requires migration into its Tool Part",
+    );
+  }
   const identity = {
     part_id: row.part_id,
     sequence: row.sequence,
@@ -217,34 +225,9 @@ function decode_session_part(
         ...optional_json(content, "output"),
         ...optional_string(content, "error", row),
         ...optional_string(content, "title", row),
-      };
-    case "interaction":
-      return {
-        ...identity,
-        type: "interaction",
-        interaction_id: read_string(content, "interaction_id", row),
-        interaction_type: read_string(content, "interaction_type", row),
-        status: read_enum(
-          content,
-          "status",
-          ["pending", "resolved", "denied", "expired", "cancelled", "failed"],
-          row,
-        ),
-        request: decode_interaction_request(content.request, row),
-        ...(content.response === undefined
+        ...(content.interactions === undefined
           ? {}
-          : { response: decode_interaction_response(content.response, row) }),
-        ...optional_number(content, "resolved_at", row),
-        ...(content.cancel_reason === undefined
-          ? {}
-          : {
-              cancel_reason: read_enum(
-                content,
-                "cancel_reason",
-                ["turn_stopped", "session_disposed", "runtime_interrupted"],
-                row,
-              ),
-            }),
+          : { interactions: decode_tool_interactions(content.interactions, row) }),
       };
     case "file":
       return {
@@ -415,6 +398,46 @@ function read_json_object(
   return value as JsonObject;
 }
 
+/** 校验并读取 Tool Part 内持久化的 Interaction 列表。 */
+function decode_tool_interactions(
+  value: unknown,
+  row: SessionMessagePartRow,
+): SessionAgentInteraction[] {
+  if (!Array.isArray(value)) {
+    throw invalid_part(row, "interactions must be a JSON array");
+  }
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw invalid_part(row, "interaction must be a JSON object");
+    }
+    const interaction = item as Record<string, unknown>;
+    read_string(interaction, "interaction_id", row);
+    read_string(interaction, "interaction_type", row);
+    read_enum(
+      interaction,
+      "status",
+      ["pending", "resolved", "denied", "expired", "cancelled", "failed"],
+      row,
+    );
+    decode_interaction_request(interaction.request, row);
+    if (interaction.response !== undefined) {
+      decode_interaction_response(interaction.response, row);
+    }
+    if (interaction.resolved_at !== undefined) {
+      optional_number(interaction, "resolved_at", row);
+    }
+    if (interaction.cancel_reason !== undefined) {
+      read_enum(
+        interaction,
+        "cancel_reason",
+        ["turn_stopped", "session_disposed", "runtime_interrupted"],
+        row,
+      );
+    }
+    return item as SessionAgentInteraction;
+  });
+}
+
 /** 校验并读取持久化 Interaction 请求。 */
 function decode_interaction_request(
   value: unknown,
@@ -429,9 +452,10 @@ function decode_interaction_request(
   read_string(request, "type", row);
   read_json(request, "payload", row);
   const source = read_json_object(request, "source", row);
-  if (!["tool", "plugin", "shell", "execution"].includes(String(source.type))) {
+  if (!["tool", "shell"].includes(String(source.type))) {
     throw invalid_part(row, "request.source.type has an unsupported value");
   }
+  read_string(source, "tool_call_id", row);
   const created_at = request.created_at;
   if (typeof created_at !== "number" || !Number.isFinite(created_at)) {
     throw invalid_part(row, "request.created_at must be a finite number");

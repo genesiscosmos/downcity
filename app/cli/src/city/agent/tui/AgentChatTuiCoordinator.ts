@@ -860,11 +860,14 @@ export class AgentChatTuiCoordinator {
       mutation.variant === "delta"
     ) {
       this.streaming_ui.handle_event(mutation);
-      if (mutation.variant === "part" && mutation.type === "interaction") {
-        if (mutation.part.status === "pending") {
-          this.show_interaction_panel(mutation.part.request, mutation.session_id);
-        } else {
-          this.remove_resolved_interaction(mutation.part.interaction_id);
+      if (mutation.variant === "part" && mutation.type === "tool") {
+        // Interaction 属于 Tool Part；同一次 Tool 更新可能同时出现新增与终结。
+        for (const interaction of mutation.part.interactions ?? []) {
+          if (interaction.status === "pending") {
+            this.show_interaction_panel(interaction.request, mutation.session_id);
+          } else {
+            this.remove_resolved_interaction(interaction.interaction_id);
+          }
         }
       }
       return;

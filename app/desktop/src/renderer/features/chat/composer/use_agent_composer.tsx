@@ -33,7 +33,8 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
     ...models.map(model => ({ command_id: `model:${model.model_id}`, title: `/model ${model.name}`, description: translate("commands.switch_model", { model: model.model_id }), keywords: ["model", model.model_id], run: () => set_model(model.model_id) })),
     ...(["ask", "always-allow"] as const).map(mode => ({ command_id: `approval:${mode}`, title: `/approval ${mode}`, description: translate(mode === "ask" ? "commands.ask_before_run" : "commands.allow_automatically"), keywords: ["approval"], run: () => set_approval_mode(mode) })),
   ];
-  const effective_configuration = configuration ?? { model_id: default_model_id || agent?.model_id || "", approval_mode: "ask" as const };
+  // 新对话默认跟随 Agent 配置的模型；全局默认模型只作为兜底。
+  const effective_configuration = configuration ?? { model_id: agent?.model_id || default_model_id || "", approval_mode: "ask" as const };
   return {
     editor_key: session_key,
     draft_content: draft ?? empty_chat_content,

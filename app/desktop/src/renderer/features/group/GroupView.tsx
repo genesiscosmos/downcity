@@ -21,7 +21,7 @@ import { dispatch_chat_mention } from "@/features/chat/composer/editor/chatMenti
 import { use_desktop_selector } from "@/app/use_desktop";
 import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopGroupStatusPhase, DesktopModelSummary, DesktopSettings } from "@common/types/DesktopApi";
-import type { RespondSessionInteractionInput, SessionAgentInteractionPart } from "@downcity/agent";
+import type { RespondSessionInteractionInput, SessionAgentInteraction } from "@downcity/agent";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { MainViewBody, MainViewHeader } from "@/layouts/MainViewLayout";
 import { use_baybar_open } from "@/layouts/BayBar";
@@ -51,7 +51,7 @@ interface GroupViewProps {
   /** 当前 GroupSession 的运行阶段。 */
   group_phase: DesktopGroupStatusPhase;
   /** 当前待响应的成员交互。 */
-  interactions: { agent_id: string; part: SessionAgentInteractionPart }[];
+  interactions: { agent_id: string; part: SessionAgentInteraction }[];
   /** 响应成员交互。 */
   respond_interaction(input: RespondSessionInteractionInput): Promise<void>;
   /** 向 Group 发送文本。 */
@@ -187,7 +187,7 @@ const GroupMessageRow = memo(function GroupMessageRow({ message, agent, read }: 
 });
 
 /** 待响应的 Group 成员交互；其它消息变化时保持渲染结果。 */
-const GroupInteractionRow = memo(function GroupInteractionRow({ agent, agent_id, part, respond_interaction }: { /** 发起交互的 Agent。 */ agent?: DesktopAgentSummary; /** 发起交互的 Agent 标识。 */ agent_id: string; /** canonical Interaction part。 */ part: SessionAgentInteractionPart; /** 提交交互响应。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
+const GroupInteractionRow = memo(function GroupInteractionRow({ agent, agent_id, part, respond_interaction }: { /** 发起交互的 Agent。 */ agent?: DesktopAgentSummary; /** 发起交互的 Agent 标识。 */ agent_id: string; /** canonical Interaction。 */ part: SessionAgentInteraction; /** 提交交互响应。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   const translate = use_translation("resources");
   return <div className="group is-agent flex min-w-0 w-full items-start gap-2 py-2"><div className="size-8 shrink-0"><AgentAvatar agent={agent ?? { agent_id, model_id: "", version: "" }} class_name="size-8 rounded-md" /></div><div className="min-w-0 flex-1 px-1 pt-0.5"><div className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">{translate("group_details.response_required", { name: agent?.name || "Agent" })}</div><AgentInteraction part={part} respond={respond_interaction} /></div></div>;
 });

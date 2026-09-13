@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { DesktopChatRuntime, DesktopSessionSummary } from "../src/common/types/DesktopApi.ts";
 import { get_session_key } from "../src/renderer/features/chat/lib/chat_cache_key.ts";
+import { resolve_chat_session_live_status } from "../src/renderer/features/chat/lib/chat_runtime_projection.ts";
 import {
   group_agent_sessions_by_workspace,
   resolve_agent_chat_target,
@@ -52,12 +53,35 @@ test("实时 Runtime 覆盖 Session 目录中的旧执行状态", () => {
 
   const selected_sessions = select_agent_sessions(sessions_by_workspace, "writer", (workspace_id, session) => {
     const runtime = runtimes[get_session_key(workspace_id, "writer", session.session_id)];
-    return runtime?.status === "streaming";
+    return resolve_chat_session_live_status(runtime, session.executing);
   });
 
-  assert.deepEqual(selected_sessions.map(({ session, executing }) => [session.session_id, executing]), [
-    ["now-running", true],
-    ["stale-running", false],
+  assert.deepEqual(selected_sessions.map(({ session, live_status }) => [session.session_id, live_status]), [
+    ["now-running", "working"],
+    ["stale-running", null],
+  ]);
+});
+
+test("等待输入的 Session 优先排序并单独标记", () => {
+  const sessions_by_workspace = group_agent_sessions_by_workspace([
+    { agent_id: "writer", sessions: [create_session("recent-idle", "project-a", 30), create_session("waiting", "project-a", 10)] },
+  ]);
+  const runtimes = {
+    [get_session_key("project-a", "writer", "waiting")]: {
+      agent_id: "writer",
+      workspace_id: "project-a",
+      session_id: "waiting",
+      status: "waiting_input" as const,
+      updated_at: 30,
+    },
+  };
+
+  const selected_sessions = select_agent_sessions(sessions_by_workspace, "writer", (workspace_id, session) =>
+    resolve_chat_session_live_status(runtimes[get_session_key(workspace_id, "writer", session.session_id)], session.executing));
+
+  assert.deepEqual(selected_sessions.map(({ session, live_status }) => [session.session_id, live_status]), [
+    ["waiting", "action_required"],
+    ["recent-idle", null],
   ]);
 });
 

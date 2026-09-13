@@ -121,7 +121,7 @@ export class SessionAgentMessageWriter {
       }
       const current = this.current_message();
       const current_parts = current.parts.filter((part) =>
-        this.current_step_part_ids.has(part.part_id) && part.type !== "interaction"
+        this.current_step_part_ids.has(part.part_id)
       );
       if (current_parts.length !== parts.length) {
         throw this.step_snapshot_error(

@@ -1,8 +1,9 @@
 /** Workspace 根行的本地目录操作菜单。 */
 
 import { useState } from "react";
-import { TbCopy, TbDots, TbExternalLink, TbTrash } from "react-icons/tb";
+import { TbCopy, TbExternalLink, TbTrash } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { RowMenuButton } from "@/components/RowMenuButton";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { use_translation } from "@/locales/i18n";
@@ -46,7 +47,7 @@ export function WorkspaceRowMenu({ workspace, on_remove }: WorkspaceRowMenuProps
 
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button size="icon" className="size-6 opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100" title={translate("workspace.actions")} aria-label={translate("workspace.item_actions", { name: workspace.name })} onClick={(event) => event.stopPropagation()}><TbDots /></Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><RowMenuButton label={translate("workspace.item_actions", { name: workspace.name })} /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={5} onClick={(event) => event.stopPropagation()}>
         <DropdownMenuItem onClick={() => void copy_path()}><TbCopy /><span>{translate(copied ? "workspace.copied" : "workspace.copy_path")}</span></DropdownMenuItem>
         <DropdownMenuItem onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbExternalLink /><span>{translate("workspace.open_finder")}</span></DropdownMenuItem>

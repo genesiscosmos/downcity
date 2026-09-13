@@ -1,15 +1,18 @@
 /**
  * Session Message Interaction 写入器。
  *
- * 该模块只负责 Assistant Message 内 Interaction Part 与关联 Tool Part 的
- * 原子状态转换；消息持久化、revision 串行化和 Mutation 发布仍由
- * SessionMessages 提供，避免复制 canonical Message 状态。
+ * Interaction 不是独立 Part，而是所属 Tool Part 的从属数据：Tool 在等待响应时阻塞，
+ * 因此一次 Interaction 的完整生命周期严格落在所属 Tool 的执行区间内，归属即结构。
+ *
+ * 本模块只负责 Tool Part 内 Interaction 与 Tool 状态的原子转换；消息持久化、
+ * revision 串行化与 Mutation 发布仍由 SessionMessages 提供，避免复制 canonical 状态。
  */
 
 import type {
-  SessionAgentInteractionPart,
+  SessionAgentInteraction,
   SessionAgentMessage,
   SessionAgentMessagePart,
+  SessionAgentToolPart,
   SessionMessage,
 } from "@downcity/type";
 import type {
@@ -39,7 +42,17 @@ interface SessionMessageInteractionWriterOptions {
   ) => Promise<void>;
 }
 
-/** 管理 canonical Assistant Message 内的 Interaction 生命周期。 */
+/** 一次 Interaction 的定位结果：所属 Message、Tool 与自身。 */
+interface SessionInteractionLocation {
+  /** 所属 Assistant Message 标识。 */
+  message_id: string;
+  /** 承载该 Interaction 的 canonical Tool Part。 */
+  tool: SessionAgentToolPart;
+  /** Interaction 自身。 */
+  interaction: SessionAgentInteraction;
+}
+
+/** 管理 canonical Assistant Message 内 Tool Part 的 Interaction 生命周期。 */
 export class SessionMessageInteractionWriter {
   private readonly options: SessionMessageInteractionWriterOptions;
 
@@ -47,163 +60,147 @@ export class SessionMessageInteractionWriter {
     this.options = options;
   }
 
-  /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
-  list_pending(): SessionAgentInteractionPart[] {
+  /** 返回当前 Session 中全部等待用户响应的 Interaction。 */
+  list_pending(): SessionAgentInteraction[] {
     return [...this.options.list_messages()].flatMap((message) =>
       message.role === "agent" && message.state === "streaming"
         ? message.parts.flatMap((part) =>
-            part.type === "interaction" && part.status === "pending"
-              ? [structuredClone(part)]
+            part.type === "tool"
+              ? (part.interactions ?? []).flatMap((interaction) =>
+                  interaction.status === "pending"
+                    ? [structuredClone(interaction)]
+                    : [],
+                )
               : [],
           )
         : [],
     );
   }
 
-  /** 原子创建 Interaction，并把关联 Tool 转为 waiting-user。 */
+  /** 原子创建 Interaction，并把所属 Tool 转为 waiting-user。 */
   async request(
     request: SessionInteractionRequest,
-  ): Promise<SessionAgentInteractionPart> {
+  ): Promise<SessionAgentInteraction> {
     const tool_call_id = request.source.tool_call_id;
-    const message_id = tool_call_id
-      ? this.require_streaming_tool(tool_call_id).message_id
-      : this.require_streaming_assistant().message_id;
-    await this.options.enqueue_assistant_write(message_id, async () => {
-      const current = this.require_streaming_assistant(message_id);
-      if (
-        current.parts.some(
-          (part) =>
-            part.type === "interaction" &&
-            part.interaction_id === request.interaction_id,
-        )
-      ) {
-        throw new Error(`Session Interaction already exists: ${request.interaction_id}`);
-      }
-
-      let parts = current.parts;
-      if (tool_call_id) {
-        const tool = this.require_streaming_tool(tool_call_id);
-        if (tool.message_id !== message_id) {
+    const tool = this.require_streaming_tool(tool_call_id);
+    await this.options.enqueue_assistant_write(
+      tool.message_id,
+      async () => {
+        const current = this.require_streaming_assistant(tool.message_id);
+        const owner = current.parts.find(
+          (part): part is SessionAgentToolPart =>
+            part.type === "tool" && part.tool_call_id === tool_call_id,
+        );
+        if (!owner) {
+          throw new Error(`Streaming Tool Part not found: ${tool_call_id}`);
+        }
+        if (
+          (owner.interactions ?? []).some(
+            (item) => item.interaction_id === request.interaction_id,
+          )
+        ) {
           throw new Error(
-            `Tool Assistant Message changed: ${tool_call_id}`,
+            `Session Interaction already exists: ${request.interaction_id}`,
           );
         }
-        if (tool.part.state !== "ready" && tool.part.state !== "waiting-user") {
+        if (owner.state !== "ready" && owner.state !== "waiting-user") {
           throw new Error(
-            `Tool Interaction requires ready input: ${tool_call_id} (${tool.part.state})`,
+            `Tool Interaction requires ready input: ${tool_call_id} (${owner.state})`,
           );
         }
-        if (tool.part.state === "ready") {
-          parts = parts.map((part) =>
-            part.part_id === tool.part.part_id
-              ? { ...tool.part, state: "waiting-user" as const }
-              : part,
-          );
-        }
-      }
 
-      const interaction: SessionAgentInteractionPart = {
-        part_id: `interaction:${request.interaction_id}`,
-        sequence: parts.reduce(
-          (sequence, part) => Math.max(sequence, part.sequence + 1),
-          1,
-        ),
-        type: "interaction",
-        interaction_id: request.interaction_id,
-        interaction_type: request.type,
-        status: "pending",
-        request: structuredClone(request),
-      };
-      await this.options.commit_assistant_snapshot(current, [...parts, interaction]);
-    });
-    return this.require_pending_interaction(request.interaction_id).part;
+        const interaction: SessionAgentInteraction = {
+          interaction_id: request.interaction_id,
+          interaction_type: request.type,
+          status: "pending",
+          request: structuredClone(request),
+        };
+        await this.options.commit_assistant_snapshot(
+          current,
+          replace_tool(current.parts, {
+            ...owner,
+            state: "waiting-user",
+            interactions: [...(owner.interactions ?? []), interaction],
+          }),
+        );
+      },
+    );
+    return this.require_pending_interaction(request.interaction_id).interaction;
   }
 
-  /** 原子保存用户响应，并按 Interaction 结果恢复或终止关联 Tool。 */
+  /** 原子保存用户响应，并按 Interaction 结果恢复或终止所属 Tool。 */
   async resolve(
     interaction_id: string,
     response: SessionInteractionResponse,
-  ): Promise<SessionAgentInteractionPart> {
-    const { message_id } = this.require_pending_interaction(interaction_id);
-    await this.options.enqueue_assistant_write(message_id, async () => {
-      const current = this.require_streaming_assistant(message_id);
-      const interaction = this.require_pending_interaction(interaction_id);
-      if (interaction.message_id !== message_id) {
-        throw new Error(`Session Interaction Message changed: ${interaction_id}`);
-      }
-      if (interaction.part.interaction_type !== response.type) {
-        throw new Error(`Session Interaction response type mismatch: ${interaction_id}`);
-      }
-      const tool_call_id = interaction.part.request.source.tool_call_id;
-      const parts = current.parts.map((part) => {
-        if (part.part_id === interaction.part.part_id) {
-          return {
-            ...interaction.part,
-            status: response.outcome === "denied"
-              ? "denied" as const
-              : "resolved" as const,
-            response: structuredClone(response),
-            resolved_at: Date.now(),
-          };
+  ): Promise<SessionAgentInteraction> {
+    const location = this.require_pending_interaction(interaction_id);
+    if (location.interaction.interaction_type !== response.type) {
+      throw new Error(`Session Interaction response type mismatch: ${interaction_id}`);
+    }
+    await this.options.enqueue_assistant_write(
+      location.message_id,
+      async () => {
+        const current = this.require_streaming_assistant(location.message_id);
+        const owner = require_tool_in(current, location.tool.part_id);
+        if (owner.state !== "waiting-user") {
+          throw new Error(
+            `Tool is not waiting for Interaction: ${owner.tool_call_id} (${owner.state})`,
+          );
         }
-        if (
-          tool_call_id &&
-          part.type === "tool" &&
-          part.tool_call_id === tool_call_id
-        ) {
-          if (part.state !== "waiting-user") {
-            throw new Error(
-              `Tool is not waiting for Interaction: ${part.tool_call_id} (${part.state})`,
-            );
-          }
-          return response.outcome === "denied"
-            ? { ...part, state: "failed" as const, error: "Interaction denied" }
-            : { ...part, state: "running" as const };
-        }
-        return part;
-      });
-      await this.options.commit_assistant_snapshot(current, parts);
-    });
-    return this.require_interaction(interaction_id).part;
+        const denied = response.outcome === "denied";
+        await this.options.commit_assistant_snapshot(
+          current,
+          replace_tool(current.parts, {
+            ...owner,
+            state: denied ? "failed" : "running",
+            ...(denied ? { error: "Interaction denied" } : {}),
+            interactions: update_interaction(owner, interaction_id, (item) => ({
+              ...item,
+              status: denied ? "denied" : "resolved",
+              response: structuredClone(response),
+              resolved_at: Date.now(),
+            })),
+          }),
+        );
+      },
+    );
+    return this.require_interaction(interaction_id).interaction;
   }
 
-  /** 原子结束未响应 Interaction，并把关联 Tool 标记为失败。 */
+  /** 原子结束未响应 Interaction，并把所属 Tool 标记为失败。 */
   async close(
     interaction_id: string,
     input: SessionInteractionCloseInput,
-  ): Promise<SessionAgentInteractionPart> {
-    const { message_id } = this.require_pending_interaction(interaction_id);
-    await this.options.enqueue_assistant_write(message_id, async () => {
-      const current = this.require_streaming_assistant(message_id);
-      const interaction = this.require_pending_interaction(interaction_id);
-      const error = input.status === "expired"
-        ? "Interaction expired"
-        : "Interaction cancelled";
-      const parts = current.parts.map((part) => {
-        if (part.part_id === interaction.part.part_id) {
-          return {
-            ...interaction.part,
-            status: input.status,
-            resolved_at: Date.now(),
-            ...(input.status === "cancelled"
-              ? { cancel_reason: input.reason }
+  ): Promise<SessionAgentInteraction> {
+    const location = this.require_pending_interaction(interaction_id);
+    const error = input.status === "expired"
+      ? "Interaction expired"
+      : "Interaction cancelled";
+    await this.options.enqueue_assistant_write(
+      location.message_id,
+      async () => {
+        const current = this.require_streaming_assistant(location.message_id);
+        const owner = require_tool_in(current, location.tool.part_id);
+        await this.options.commit_assistant_snapshot(
+          current,
+          replace_tool(current.parts, {
+            ...owner,
+            ...(owner.state === "waiting-user"
+              ? { state: "failed" as const, error }
               : {}),
-          };
-        }
-        const tool_call_id = interaction.part.request.source.tool_call_id;
-        if (
-          tool_call_id &&
-          part.type === "tool" &&
-          part.tool_call_id === tool_call_id
-        ) {
-          if (part.state !== "waiting-user") return part;
-          return { ...part, state: "failed" as const, error };
-        }
-        return part;
-      });
-      await this.options.commit_assistant_snapshot(current, parts);
-    });
-    return this.require_interaction(interaction_id).part;
+            interactions: update_interaction(owner, interaction_id, (item) => ({
+              ...item,
+              status: input.status,
+              resolved_at: Date.now(),
+              ...(input.status === "cancelled"
+                ? { cancel_reason: input.reason }
+                : {}),
+            })),
+          }),
+        );
+      },
+    );
+    return this.require_interaction(interaction_id).interaction;
   }
 
   /** 读取指定或当前唯一的流式 Assistant Message。 */
@@ -227,44 +224,40 @@ export class SessionMessageInteractionWriter {
     return message;
   }
 
-  /** 查找指定 Interaction Part 及其所属流式 Assistant。 */
-  private find_interaction(interaction_id: string):
-    | {
-        message_id: string;
-        part: SessionAgentInteractionPart;
-      }
-    | undefined {
+  /** 查找指定 Interaction 及其所属 Tool 与流式 Assistant。 */
+  private find_interaction(
+    interaction_id: string,
+  ): SessionInteractionLocation | undefined {
     for (const message of this.options.list_messages()) {
       if (message.role !== "agent" || message.state !== "streaming") continue;
-      const part = message.parts.find(
-        (item): item is SessionAgentInteractionPart =>
-          item.type === "interaction" &&
-          item.interaction_id === interaction_id,
-      );
-      if (part) return { message_id: message.message_id, part };
+      for (const part of message.parts) {
+        if (part.type !== "tool") continue;
+        const interaction = (part.interactions ?? []).find(
+          (item) => item.interaction_id === interaction_id,
+        );
+        if (interaction) {
+          return { message_id: message.message_id, tool: part, interaction };
+        }
+      }
     }
     return undefined;
   }
 
   /** 读取指定 Interaction，否则抛出稳定领域错误。 */
-  private require_interaction(interaction_id: string): {
-    message_id: string;
-    part: SessionAgentInteractionPart;
-  } {
+  private require_interaction(interaction_id: string): SessionInteractionLocation {
     const interaction = this.find_interaction(interaction_id);
     if (interaction) return interaction;
     throw new Error(`Session Interaction not found: ${interaction_id}`);
   }
 
   /** 读取指定 pending Interaction，否则拒绝重复响应终态 Interaction。 */
-  private require_pending_interaction(interaction_id: string): {
-    message_id: string;
-    part: SessionAgentInteractionPart;
-  } {
+  private require_pending_interaction(
+    interaction_id: string,
+  ): SessionInteractionLocation {
     const interaction = this.require_interaction(interaction_id);
-    if (interaction.part.status !== "pending") {
+    if (interaction.interaction.status !== "pending") {
       throw new Error(
-        `Session Interaction is already ${interaction.part.status}: ${interaction_id}`,
+        `Session Interaction is already ${interaction.interaction.status}: ${interaction_id}`,
       );
     }
     return interaction;
@@ -276,4 +269,36 @@ export class SessionMessageInteractionWriter {
     if (tool) return tool;
     throw new Error(`Streaming Tool Part not found: ${tool_call_id}`);
   }
+}
+
+/** 以新的 Tool Part 替换同 part_id 的旧值，其余 Part 保持原引用。 */
+function replace_tool(
+  parts: readonly SessionAgentMessagePart[],
+  tool: SessionAgentToolPart,
+): SessionAgentMessagePart[] {
+  return parts.map((part) => (part.part_id === tool.part_id ? tool : part));
+}
+
+/** 读取指定 Message 中的 Tool Part，否则抛出稳定领域错误。 */
+function require_tool_in(
+  message: SessionAgentMessage,
+  part_id: string,
+): SessionAgentToolPart {
+  const tool = message.parts.find(
+    (part): part is SessionAgentToolPart =>
+      part.type === "tool" && part.part_id === part_id,
+  );
+  if (!tool) throw new Error(`Streaming Tool Part not found: ${part_id}`);
+  return tool;
+}
+
+/** 就地替换 Tool 内指定 Interaction，丢弃不存在的历史来源。 */
+function update_interaction(
+  tool: SessionAgentToolPart,
+  interaction_id: string,
+  update: (interaction: SessionAgentInteraction) => SessionAgentInteraction,
+): SessionAgentInteraction[] {
+  return (tool.interactions ?? []).map((item) =>
+    item.interaction_id === interaction_id ? update(item) : item,
+  );
 }

@@ -114,7 +114,6 @@ function convert_assistant_message(message: SessionAgentMessage): ModelMessage[]
           append_tool_content(part, content, tool_results);
         }
         break;
-      case "interaction":
       case "file":
       case "data":
       case "action":

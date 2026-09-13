@@ -20,41 +20,20 @@ export type SessionInteractionStatus =
 export type SessionApprovalMode = "ask" | "always-allow";
 
 /** Interaction 的执行来源。 */
-export type SessionInteractionSource =
-  | {
-      /** 来源为 Tool Call。 */
-      type: "tool";
-      /** 发起 Interaction 的稳定 Tool Call 标识。 */
-      tool_call_id?: string;
-      /** 发起 Interaction 的工具注册名称。 */
-      tool_name?: string;
-    }
-  | {
-      /** 来源为 Plugin。 */
-      type: "plugin";
-      /** 发起 Interaction 的 Plugin 名称。 */
-      plugin_name: string;
-      /** Plugin 关联的 Tool Call 标识。 */
-      tool_call_id?: string;
-      /** Plugin 关联的 Tool 名称。 */
-      tool_name?: string;
-    }
-  | {
-      /** 来源为 Shell。 */
-      type: "shell";
-      /** 发起 Interaction 的 Shell Tool Call 标识。 */
-      tool_call_id?: string;
-      /** 发起 Interaction 的 Shell 工具名称。 */
-      tool_name?: string;
-    }
-  | {
-      /** 来源为不绑定具体 Tool 的 Session 执行过程。 */
-      type: "execution";
-      /** 可选关联的 Tool Call 标识。 */
-      tool_call_id?: string;
-      /** 可选关联的 Tool 名称。 */
-      tool_name?: string;
-    };
+/**
+ * 发起 Interaction 的调用来源。
+ *
+ * Interaction 必然属于一次具体的工具调用：Tool 在等待响应时阻塞，所以不存在
+ * “不绑定具体调用”的 Interaction。plugin 是身份而非调用类别，不属于本维度。
+ */
+export interface SessionInteractionSource {
+  /** 发起交互的调用类别。 */
+  type: "tool" | "shell";
+  /** 发起交互的 Tool Call 标识。 */
+  tool_call_id: string;
+  /** 发起交互的工具注册名称。 */
+  tool_name?: string;
+}
 
 /** Interaction 请求公共字段。 */
 export interface SessionInteractionRequest {

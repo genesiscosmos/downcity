@@ -8,7 +8,7 @@
 import path from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import type {
-  SessionAgentInteractionPart,
+  SessionAgentActionPart,
   SessionAgentMessage,
   SessionAgentMessagePart,
   SessionMessage,
@@ -652,7 +652,6 @@ export class SqliteSessionStorage implements SessionStorage {
       if (part.type === "tool") {
         return part.state !== "completed" && part.state !== "failed";
       }
-      if (part.type === "interaction") return part.status === "pending";
       if (part.type === "action") return part.state === "running";
       return false;
     });
