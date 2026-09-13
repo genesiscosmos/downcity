@@ -71,6 +71,7 @@ import {
   IMAGE_FETCH_ACTION,
 } from "./AIImageJobRuntime.js";
 import { AISettlementRuntime } from "./AISettlementRuntime.js";
+import { AIJobReconciler, JOB_RESUME_ACTION } from "./AIJobReconciler.js";
 
 /** AIService 直接暴露的 action 模态列表。模型流与图片任务使用独立 handler。 */
 const MODALITIES = ["video", "tts", "asr"] as const;
@@ -98,6 +99,8 @@ export class AIService extends Service {
   private readonly settlement_runtime: AISettlementRuntime;
   /** AI 图片异步任务运行时。 */
   private readonly image_runtime: AIImageJobRuntime;
+  /** AI 异步任务恢复协调器。 */
+  private readonly job_reconciler: AIJobReconciler;
 
   constructor(options: AIServiceOptions = {}) {
     super({
@@ -116,6 +119,12 @@ export class AIService extends Service {
       resolve_model: (model_id) => this.models.get(model_id),
       attach_resolved_model: (ctx, model, mode) => this.attachResolvedModel(ctx, model, mode),
     }, this.settlement_runtime);
+    this.job_reconciler = new AIJobReconciler({
+      get_queue: () => this._queue,
+      resume_stalled_image_jobs: (ctx, options) =>
+        this.image_runtime.resume_stalled_jobs(ctx, options),
+      recover_due_settlements: (limit) => this.settlement_runtime.recover_due_settlements(limit),
+    }, { interval_ms: options.reconcile_interval_ms });
 
     // 为每个 modality 注册 routing action
     for (const modality of MODALITIES) {
@@ -152,6 +161,14 @@ export class AIService extends Service {
       return await this.settlement_runtime.process_settlement(ctx, usage_id);
     }, { auth: ["admin"] });
 
+    // 事实源驱动的恢复：停滞的图片任务重新入队，到期的结算任务重新推进。
+    // `loop` 由调用方决定是否续排：SDK 自驱动与部署侧 cron / scheduled handler
+    // 复用同一个动作，因此不需要在服务里再写一套调度分支。
+    this.action(JOB_RESUME_ACTION, async (ctx) =>
+      await this.job_reconciler.run(ctx, { loop: ctx.input.loop === true }), {
+      auth: ["admin"],
+    });
+
     // 模型列表走同一路径，根据身份决定可见范围。
     this.action("models", (ctx) => ({
       items: AIService.listModels(this, {
@@ -176,7 +193,7 @@ export class AIService extends Service {
     return this.models.size > 0;
   }
 
-  /** 初始化 AI Usage Repository 与查询索引。 */
+  /** 初始化 AI Usage Repository 与查询索引，并引导异步任务恢复。 */
   protected override async on_init(): Promise<void> {
     const database = this.require_service_database();
     await this.settlement_runtime.initialize({
@@ -184,6 +201,8 @@ export class AIService extends Service {
       usage_records: this.require_service_table<AIUsageRecord>("usage_records"),
       settlement_jobs: this.require_service_table<AISettlementJobRecord>("settlement_jobs"),
     });
+    // 关键点（中文）：恢复是兜底能力，启动失败不能反过来拖垮 Federation。
+    await this.job_reconciler.start();
   }
 
   /** UsageService 使用的 AI 技术用量只读入口。 */
