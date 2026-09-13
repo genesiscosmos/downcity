@@ -281,25 +281,43 @@ export class AISettlementRuntime {
     };
   }
 
-  /** 投递结算重试；没有 Queue Adapter 时保留数据库任务等待后续恢复。 */
+  /**
+   * 投递结算重试唤醒。
+   *
+   * 关键点（中文）
+   * - 结算以数据库为事实源：任务记录已经写入，队列只是“尽快唤醒”的优化。
+   *   因此调度不可用时不能抛错，否则会把计费问题升级成用户请求失败。
+   * - 与图片任务不同，此处降级是设计内行为，但必须留下可观察的日志。
+   * - 未完成的结算目前只在 AIService 初始化时恢复（`recover_due_settlements`），
+   *   所以降级后会拉长结算延迟；周期恢复由后续恢复流程补充。
+   */
   private async enqueue_settlement_retry(
     ctx: Context,
     usage_id: string,
     next_attempt_at?: string,
   ): Promise<void> {
-    if (!ctx.queue) return;
     const delay_ms = next_attempt_at
       ? Math.max(0, Date.parse(next_attempt_at) - Date.now())
       : undefined;
     try {
-      await ctx.queue.send({
+      const queue = ctx.queue;
+      if (!queue) {
+        throw new Error("Federation async dispatch capability is not available in this runtime");
+      }
+      queue.require_available();
+      await queue.send({
         service: "ai",
         action: "settlement/process",
         input: { usage_id },
         ...(delay_ms !== undefined ? { delay_ms } : {}),
       });
-    } catch {
-      // Queue 是唤醒优化；数据库任务会在启动或后续 AI 请求时恢复。
+    } catch (error) {
+      // 唤醒失败不影响结算正确性，但必须可观察；数据库任务等待恢复流程处理。
+      console.warn(
+        `[AIService] settlement retry wake-up skipped, database task remains for recovery :: ${usage_id} :: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 

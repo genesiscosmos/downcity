@@ -133,6 +133,31 @@ export function imageActionError(error: unknown, fallback_message: string): Erro
   return httpError(502, error instanceof Error ? error.message : fallback_message);
 }
 
+/**
+ * 断言当前 Context 具备异步调度能力。
+ *
+ * 关键点（中文）
+ * - 图像生成把任务提交到异步调度，能力缺失属于系统失败，必须与业务失败区分开；
+ *   因此映射为 503（服务端能力不可用），而不是笼统的上游错误。
+ * - 必须在产生任何副作用（调用上游、写入任务记录）之前调用：上游任务会真实计费，
+ *   任务记录会真实落库，等到入队时才失败会留下“调不到 job_id 的孤儿任务”。
+ * - 这是抛错断言而非布尔探测，调用方不需要自己分支。
+ */
+export function require_async_dispatch(ctx: { queue?: { require_available(): void } }): void {
+  const queue = ctx.queue;
+  try {
+    if (!queue) throw new Error("Federation async dispatch capability is not available in this runtime");
+    queue.require_available();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const http_error = httpError(503, message) as Error & { code?: string };
+    // 固定使用与 FederationQueueUnavailableError 一致的稳定错误码，
+    // 便于调用方按 code 判断是否是“能力缺失”而不是一般服务端错误。
+    http_error.code = "async_dispatch_unavailable";
+    throw http_error;
+  }
+}
+
 /** 从输出对象中读取上游 usage。 */
 export function extractUsage(output: unknown): unknown {
   if (!isRecord(output)) return undefined;

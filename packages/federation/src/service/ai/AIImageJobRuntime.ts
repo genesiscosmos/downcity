@@ -36,6 +36,7 @@ import {
   readFilePartMediaType,
   readOptionalNumber,
   readOptionalString,
+  require_async_dispatch,
   rowToAsyncJobRecord,
 } from "./ai-service-values.js";
 
@@ -65,8 +66,19 @@ export class AIImageJobRuntime {
     );
   }
 
-  /** 创建上游图片任务、保存本地记录并调度首次抓取。 */
+  /**
+   * 创建上游图片任务、保存本地记录并调度首次抓取。
+   *
+   * 关键点（中文）
+   * - 先校验异步调度能力，再产生任何副作用。
+   * - 调度能力可用但单次投递失败时，保留任务与 `job_id` 并记录降级原因，
+   *   不把已产生的事实丢掉。
+   */
   async create_job(ctx: Context): Promise<UserImageJobCreateResult> {
+    // 关键点（中文）：能力校验必须早于 resolved.action() 与 insert_image_job()。
+    // 上游任务会真实计费、任务记录会真实落库，若等到入队才失败，
+    // 调用方拿不到 job_id，库里还会多出一条无人认领的记录。
+    require_async_dispatch(ctx);
     const resolved = this.options.resolve_action({
       model: normalize_model_id(ctx.input.model),
       mode: "image_create",
@@ -79,8 +91,15 @@ export class AIImageJobRuntime {
       if (!isImageChannelCreateResult(created)) {
         throw httpError(500, "image_create action returned invalid result");
       }
-      await this.insert_image_job(ctx, created);
-      await this.enqueue_image_fetch(ctx, created.job_id, created.poll_after_ms);
+      const state: Record<string, unknown> = {
+        ...(created.metadata ?? {}),
+        downcity_usage_id: this.settlement_runtime.ensure_usage_id(ctx),
+      };
+      await this.insert_image_job(ctx, created, state);
+      await this.dispatch_image_fetch(ctx, created.job_id, {
+        delay_ms: created.poll_after_ms,
+        state,
+      });
       return created;
     } catch (error) {
       await this.settlement_runtime.settle_execution({
@@ -172,7 +191,11 @@ export class AIImageJobRuntime {
       }
       await finish_image_job_fetch(table, claim, stored_output);
       if (stored_output.status === "queued" || stored_output.status === "running") {
-        await this.enqueue_image_fetch(ctx, job.job_id, stored_output.poll_after_ms);
+        await this.dispatch_image_fetch(ctx, job.job_id, {
+          delay_ms: stored_output.poll_after_ms,
+          // 与 finish_image_job_fetch 保持一致的下一次状态，避免为写降级信息多读一次库。
+          state: stored_output.metadata ?? parseRecordJson(job.state_json),
+        });
       }
       return stored_output;
     } catch (error) {
@@ -210,15 +233,74 @@ export class AIImageJobRuntime {
     };
   }
 
-  /** 调度下一次图片任务抓取。 */
-  private async enqueue_image_fetch(ctx: Context, job_id: string, delay_ms?: number): Promise<void> {
-    if (!ctx.queue) return;
-    await ctx.queue.send({
-      service: "ai",
-      action: IMAGE_FETCH_ACTION,
-      input: { job_id },
-      delay_ms,
-    });
+  /**
+   * 调度下一次图片任务抓取，并把投递失败记录为可观察的降级状态。
+   *
+   * 关键点（中文）
+   * - 投递失败绝不抛错：任务记录与 `job_id` 是既成事实，抛错会让调用方误判
+   *   整个操作失败，反而丢掉已经产生的任务。
+   * - 失败写入 `state_json` 的 `downcity_dispatch_error`（`downcity_` 前缀字段
+   *   不对客户端暴露），任务保持非终态，由恢复流程重新入队。
+   * - 投递成功后清理上一次的降级痕迹；仅在确实存在痕迹时才写库，
+   *   避免在正常路径上多做一次写。
+   */
+  private async dispatch_image_fetch(
+    ctx: Context,
+    job_id: string,
+    options: { delay_ms?: number; state: Record<string, unknown> },
+  ): Promise<void> {
+    try {
+      const queue = ctx.queue;
+      if (!queue) {
+        throw new Error("Federation async dispatch capability is not available in this runtime");
+      }
+      queue.require_available();
+      await queue.send({
+        service: "ai",
+        action: IMAGE_FETCH_ACTION,
+        input: { job_id },
+        delay_ms: options.delay_ms,
+      });
+      if (options.state.downcity_dispatch_error !== undefined) {
+        const { downcity_dispatch_error: _cleared, ...clean_state } = options.state;
+        await this.write_image_job_state(ctx, job_id, clean_state);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[AIService] image job dispatch failed, keeping job for recovery :: ${job_id} :: ${message}`,
+      );
+      await this.write_image_job_state(ctx, job_id, {
+        ...options.state,
+        downcity_dispatch_error: message,
+      });
+    }
+  }
+
+  /** 覆盖写入图片任务 state_json；写失败不影响主流程。 */
+  private async write_image_job_state(
+    ctx: Context,
+    job_id: string,
+    state: Record<string, unknown>,
+  ): Promise<void> {
+    const table = ctx.db.async_jobs;
+    if (!table) return;
+    try {
+      await table.update({
+        where: { job_id, job_type: IMAGE_GENERATE_JOB_TYPE },
+        values: {
+          state_json: JSON.stringify(state),
+          updated_at: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      // 降级信息只是诊断证据；写不进去不能反过来让已经成功的调度失败。
+      console.warn(
+        `[AIService] failed to persist image job dispatch state :: ${job_id} :: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   /** 将图片结果里的外部文件 URL 归一到 Federation 默认存储。 */
@@ -279,7 +361,11 @@ export class AIImageJobRuntime {
   }
 
   /** 写入新建的图片任务。 */
-  private async insert_image_job(ctx: Context, created: AIImageCreateResult): Promise<void> {
+  private async insert_image_job(
+    ctx: Context,
+    created: AIImageCreateResult,
+    state: Record<string, unknown>,
+  ): Promise<void> {
     const table = ctx.db.async_jobs;
     if (!table) throw httpError(500, "AI async_jobs table is not initialized");
     const now = new Date().toISOString();
@@ -288,10 +374,7 @@ export class AIImageJobRuntime {
       job_type: IMAGE_GENERATE_JOB_TYPE,
       status: created.status,
       input_json: JSON.stringify(ctx.input ?? {}),
-      state_json: JSON.stringify({
-        ...(created.metadata ?? {}),
-        downcity_usage_id: this.settlement_runtime.ensure_usage_id(ctx),
-      }),
+      state_json: JSON.stringify(state),
       result_json: null,
       error: created.error ?? null,
       message: created.message ?? null,
@@ -345,11 +428,18 @@ export class AIImageJobRuntime {
     };
   }
 
-  /** 读取不会向 Provider 或客户端泄漏内部 usage_id 的任务状态。 */
+  /**
+   * 读取不会向 Provider 或客户端泄漏内部字段的任务状态。
+   *
+   * 关键点（中文）
+   * - `downcity_` 前缀是平台内部字段约定（usage_id、dispatch_error 等），
+   *   统一按前缀剥离，避免新增内部字段时逐个人工维护白名单而遗漏。
+   */
   private read_image_job_state(job: AsyncJobRecord): Record<string, unknown> {
     const state = parseRecordJson(job.state_json);
-    const { downcity_usage_id: _usage_id, ...public_state } = state;
-    return public_state;
+    return Object.fromEntries(
+      Object.entries(state).filter(([key]) => !key.startsWith("downcity_")),
+    );
   }
 }
 
