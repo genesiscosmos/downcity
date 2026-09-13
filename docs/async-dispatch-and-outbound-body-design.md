@@ -1,6 +1,6 @@
 # 异步任务调度与出站请求体统一修复设计
 
-> 状态：待确认
+> 状态：P0 全部完成；P1-1 / P1-2 完成，并已按奥卡姆剃刀收敛掉隐式兜底与自动恢复；P1-4 / P1-5 待做
 >
 > 适用范围：`@downcity/federation`、`@downcity/plugins`、`templates/edgefed`、`templates/localfed`、`app/cli` 的 Federation 模板生成器、homepage 文档
 >
@@ -77,7 +77,7 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 2. **能力缺失必须前置失败**：系统级能力（调度器、存储、凭据）缺失时，必须在产生副作用之前失败，而不是之后抛 502。
 3. **出站层必须原样传递 body**：调用方构造的 `FormData` / `Blob` / `URLSearchParams` 必须被正确编码传输，出站层不得改变 body 语义。
 4. **失败必须回到发起方**：投递失败必须出现在发起方可以读到的地方（返回值或可查询回执），不能被降级为聊天文本。
-5. **事实源唯一**：`async_jobs` / `chat_outbox` 是恢复依据，队列只是触发器；触发器丢失不得导致任务无法恢复。
+5. **事实源唯一**：`async_jobs` / `chat_outbox` 是事实源，队列只是触发器；恢复职责归队列（见 4.4）。
 6. **运行期能力可探测**：能力可用性必须在启动期或 `health()` 中暴露，而不是靠第一次调用失败来发现。
 
 ---
@@ -86,7 +86,7 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 | 对象 | 一句话职责 |
 | --- | --- |
-| `FederationQueue` | Federation 的异步调度能力：**默认可用**（进程内触发），**可替换**（`use` 外部队列），**缺失时必须前置失败**。 |
+| `FederationQueue` | Federation 的异步调度能力：**由宿主显式注册**，**缺失时必须前置失败**。 |
 | `plugin_http_fetch` | 插件唯一出站层：**body 语义透传**，代理、超时、脱敏统一在这里收口。 |
 | Chat Outbox | **投递事实的唯一回执点**：成功与失败都写在这里，并由发起方可读。 |
 
@@ -94,35 +94,34 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 ## 4. 设计：Federation 异步调度
 
-### 4.1 队列能力收敛为三态
+### 4.1 队列能力只有一个来源：宿主显式注册
 
-> 状态：已实现（commit `7e4241a4b`，`@downcity/federation` 0.1.19）
+> 状态：已收敛（原三态模型已移除）
 
-| 状态 | 出现场景 | `send()` 行为 |
-| --- | --- | --- |
-| `in_process` | 长期运行宿主（Node / CLI / Desktop）默认 | 由内置延迟适配器在进程内调用 `queue.call()` |
-| `external` | 显式 `federation.queue.use(...)`（Cloudflare Queue 等） | 交给外部队列 |
-| `unavailable` | 请求级隔离运行时且未注册外部 adapter | 不隐式降级，能力校验阶段即报错 |
+| | 机制 |
+| --- | --- |
+| 具备能力 | 宿主显式 `federation.queue.use(adapter)`（如 Cloudflare Queue） |
+| 不具备能力 | `is_available()` 为 `false`；`send()` 与 `require_available()` 抛出带 `code` 的可定位错误 |
 
-**运行时判定采用「正向识别请求级运行时」**（`federation/dispatch-environment.ts`），而不是反向识别 Node：
+**不做的事**：Federation 不判断宿主平台，不提供隐式兜底适配器，不存在 `in_process` 状态。
 
-- 命中 `navigator.userAgent === "Cloudflare-Workers"` 或 `globalThis.EdgeRuntime` → `request_scoped`。
-- 其余一律 `long_lived`。
+理由（重要）：识别宿主平台（嗅探 Cloudflare userAgent、`EdgeRuntime` 等）等于把**部署知识塞进核心**，
+而且不可靠——userAgent 会变、未覆盖的平台会漏网；一旦判断错，进程内定时器会在响应结束后
+静默丢失消息，正好复刻我们要消灭的那类 bug。用「平台嗅探 + 自动兜底」去换「本地少配一行」，
+是错误的权衡：**能力缺失应当被看见，而不是被猜出来。**
 
-关键原因：本仓库 `WranglerConfigWriter.ts:37` 为部署的 Worker 开启了 `nodejs_compat`，那里 `process` 与 `process.versions.node` **都会存在**，用 Node 特征反推会把 Worker 误判为长期进程，从而在响应结束后静静丢失定时器任务。
+### 4.2 `require_available()` 作为预检断言
 
-### 4.2 默认适配器与生命周期
+- 它是抛错的断言，不是返回布尔的探测接口：调用方不需要自己写 `if` 分支。
+- `is_available()` 保留，用于 `health()` 等只读汇报场景。
 
-- 新增 `federation/queue-in-process.ts`：按 `delay_ms` 用定时器把消息交回 `FederationQueue.call()`，并用 `unref()` 确保调度不阻止宿主进程退出（与 `ChatRuntime` 的定时器约定一致）。
-- **投递是解耦的**：`send()` 只负责排入定时器，不等待任务执行；定时器触发后的执行失败无法回传调用方，只能上报（`console.error`，与 `AIImageJobRuntime` 现有用法一致），未完成任务由 4.4 的恢复流程兜底。
-- 生命周期闭合：`Federation.dispose()` 会先关闭调度器清理未触发定时器，再释放数据库；`FederationQueue.dispose()` **幂等且为终态**，释放后拒绝新消息而不重建适配器（避免「已释放又恢复调度」的悬挂状态）。
-- 能力校验用 `require_available()`：它是抛错的断言，不是返回布尔的探测接口，调用方不需要自己分支。
-
-**与初版方案的差异**：设计初稿写「不新增队列可用性探测公开 API」，实际实现新增了 `require_available()`。原因：4.3 要求「能力缺失必须在副作用之前失败」，预检必须有一个可调用的断言入口。与其让调用方自己读布尔值分支，不如提供一个直接抛类型化错误的方法——这是断言而非探测。
+**与初稿方案的差异**：初稿写「不新增队列可用性探测公开 API」，实际保留了
+`require_available()`。原因：4.3 要求「能力缺失必须在副作用之前失败」，预检需要一个入口。
 
 ### 4.2.1 能力可探测
 
-`Federation.health()` 新增 `queue` 字段（`FederationQueueState`），使部署期就能发现「运行时不支持调度且未配置队列」，而不必等到第一次任务入队失败。
+`Federation.health()` 的 `queue` 字段是**布尔值**（是否已注册 adapter），
+使部署期就能发现「有异步任务但没有队列」，而不必等到第一次任务入队失败。
 
 ### 4.3 调度前置校验与失败语义
 
@@ -132,7 +131,7 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 （`require_async_dispatch(ctx)`）：
 
 1. **能力不可用（系统失败）**：在调用上游与落库之前失败，返回 `503`，`code: "async_dispatch_unavailable"`，message 指出缺失项与配置位置。**不允许**先建任务再报错。
-2. **能力可用但单次投递失败（瞬时系统失败）**：不吞掉已产生的事实——保留 `job` 记录，状态 `queued`，把投递错误写入 `state_json.downcity_dispatch_error`，**正常返回 `job_id`**，由 4.4 的恢复机制重试。投递恢复成功后清理该字段。
+2. **能力可用但单次投递失败（瞬时系统失败）**：不吞掉已产生的事实——保留 `job` 记录，状态 `queued`，把投递错误写入 `state_json.downcity_dispatch_error`，**正常返回 `job_id`**，由队列自身的重试保证最终一致。投递恢复成功后清理该字段。
 3. 删除 `if (!ctx.queue) return;` 这类永远不会触发的保护分支，改为显式能力校验，避免"假安全"。
 
 **服务端错误码映射**：`require_async_dispatch` 把队列错误归一为带 `statusCode = 503` 的错误，
@@ -144,59 +143,41 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 队列只是唤醒优化。把它改成致命错误会把计费问题升级成用户请求失败。
 因此只做两件事：删除死分支、把“静默吞掉”改为 `warn` 日志，使降级可观察。
 
-**本次发现的遗留问题**：原注释声称未完成的结算会“在启动或后续 AI 请求时恢复”，
-但 `recover_due_settlements` 实际只在 `AIService` 初始化时调用一次（暂无请求级或周期触发）。
-这不是 P1-2 引入的缺陷，但意味着“队列不可用 + 服务不重启”时结算延迟会被拉长。
-**已在 P1-3 修复**：结算恢复收敛为可复用的 `recover_due_settlements(limit)`（返回推进数量），
-由恢复协调器按周期调用，不再只依赖服务初始化那一刻。
+**结算恢复时机（诚实记录）**：`recover_due_settlements` 只在 `AIService` 初始化时调用一次，
+没有请求级或周期触发。原注释声称“在启动或后续 AI 请求时恢复”，与实际不符，已改准。
+常规唤醒由队列投递（见 4.1）；此处只负责把服务停机期间到期的任务补上。
 
 **内部字段约定**：`state_json` 中以 `downcity_` 开头的字段属于平台内部（`downcity_usage_id`、
 `downcity_dispatch_error`），`read_image_job_state` 按前缀统一剥离后再作为对外 `metadata`，
 避免新增内部字段时逐个人工维护白名单而遗漏。
 
-### 4.4 事实源驱动的恢复
+### 4.4 恢复职责归属：交给队列
 
-> 状态：已实现（commit `5b9cc97bc`，`@downcity/federation` 0.1.21）
+> 状态：**不做**（原 P1-3 的 SDK 内恢复协调器已移除）
 
-新增 `AIJobReconciler`（`service/ai/AIJobReconciler.ts` + `types/AIJobReconciler.ts`），
-从事实源重新推进失去触发器的任务，并通过 `ai/jobs/resume` 动作暴露统一入口：
+曾实现过一套 SDK 内恢复协调器（扫描停滞任务、按周期重新入队，约 550 行）。已移除，理由：
 
-1. **停滞的图片任务重新入队**：`AIImageJobRuntime.resume_stalled_jobs()` 从 `async_jobs`
-   读取非终态（queued/running/fetching）任务并重新投递抓取消息；超过最大 pending
-   时间的任务同样重新入队，由抓取路径判定超时并落终态。
-2. **到期的结算任务重新推进**：`AISettlementRuntime.recover_due_settlements(limit)`。
+1. **职责重复**：Cloudflare Worker 的 queue consumer 已经写了 `message.retry()`
+   （`CloudflareWorkersTemplate.ts:188`），失败重投本来就是队列基础设施的职责。
+   在 SDK 内再造一套恢复，是在重复基础设施已经提供的保证。
+2. **方向与 4.1 矛盾**：既然已确立「能力缺失必须前置失败」，那么
+   「没有队列时靠进程内定时器自愈」本身就是被否定的形态。
+3. **成本与收益不匹配**：约 550 行代码换取的只是「队列丢消息时兜底」——
+   而队列本就不该丢消息。
 
-**停滞判定（对初稿的细化）**：只有「距最后一次进展超过
-`max(恢复周期, 该任务原本的 poll_after_ms)`」的任务才会被接管。
-正常路径仍由任务自身的 `poll_after_ms` 驱动；若不加判断地每个周期全量重排，
-每个非终态任务都会被额外多打一次上游，白白消耗配额。
-
-**触发点（对初稿的细化）**：
-
-| 宿主 | 驱动方式 |
-| --- | --- |
-| 长期运行宿主（`in_process`） | SDK 在 `AIService.on_init()` 时引导一次，之后由恢复动作自行续排（`input.loop`），周期取自 `AIServiceOptions.reconcile_interval_ms`（默认 30s） |
-| 请求级运行时（`external` / `unavailable`） | 由部署契约的 cron / scheduled handler 调用同一个 `ai/jobs/resume` 动作；SDK 不隐式改用进程内定时器 |
-
-未采用初稿的「`federation.health()` 完成后执行一次」：`health()` 是只读探针，
-不应因为它被调用而产生后台副作用；引导点改为服务初始化，语义相同且不污染探针语义。
-
-**生命周期闭合**：周期驱动复用 Federation 异步调度能力，因此不需要新增进程级钩子——
-`Federation.dispose()` 关闭调度器时，未触发的恢复消息会被一并清理；调度器已释放后
-续排失败只上报，不产生未处理的 Promise 拒绝。**连续性**：续排放在 `finally`，
-单次恢复失败不会中断恢复循环本身（失败仍向上抛出，由调度层记录）。
-
-该 reconciler 同时兜住两个场景：进程重启导致 in-process 定时器丢失、队列唤醒消息丢失，
-使不变量 5 成立。
+**已知取舍（诚实记录）**：如果宿主自建进程内适配器，进程重启会丢失尚未执行的调度消息，
+此时任务会停在非终态直到 2 小时 pending 超时（而超时判定又在抓取路径里，需要一次抓取才会触发）。
+本方案接受这个代价：**宁可有明确的、可观察的缺口，也不要难以验证的自动兜底。**
+若日后确有需要，最小做法是宿主自己在启动时扫一次，而不是在 SDK 内建周期循环。
 
 ### 4.5 模板与部署契约
 
-| 位置 | 改动 |
+| 位置 | 约定 |
 | --- | --- |
-| `templates/localfed` | 无需配置即获得 `in_process`，图像生成可用 |
-| `templates/edgefed` | 不注册 adapter 时：`health()` 明确报告 `unavailable`，不得静默降级 |
-| `CloudflareWorkersTemplate`（`app/cli` 生成器） | 保持显式 `queue.use` + `queue()` consumer，并新增缺 binding 时的启动期校验与可读错误 |
-| homepage | 在 Federation / 图像能力文档中写明"图像生成与结算重试依赖异步调度能力；Cloudflare 需配置 `DOWNCITY_QUEUE`，本地由进程内调度器兜底" |
+| `CloudflareWorkersTemplate`（`app/cli` 生成器） | 显式 `queue.use` + `queue()` consumer，失败重投由消费者负责 |
+| `templates/localfed` | 未注册 adapter：异步能力返回 `503 + code`，不静默降级 |
+| `templates/edgefed` | 同上；`health().queue` 为 `false`，部署期即可发现 |
+| homepage | 写明「图像生成依赖异步调度能力；需在部署侧注册队列 adapter」 |
 
 ---
 
@@ -293,15 +274,12 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 | 文件 | 变化 | 依赖方向 |
 | --- | --- | --- |
-| `packages/federation/src/federation/dispatch-environment.ts` | 新增：主机调度模型判定 | Federation 内部 |
-| `packages/federation/src/federation/queue-in-process.ts` | 新增：进程内延迟适配器 | Federation 内部 |
-| `packages/federation/src/federation/queue.ts` | 能力三态、进程内适配器、带 code 错误、dispose | 不变（Federation 内部） |
-| `packages/federation/src/federation/federation.ts` | `health()` 上报 queue 状态；`dispose()` 关闭调度器 | 不变 |
+| `packages/federation/src/federation/queue.ts` | 带 `code` 的错误；`is_available()` / `require_available()` 预检 | 不变（Federation 内部） |
+| `packages/federation/src/federation/federation.ts` | `health()` 上报 queue 是否可用（布尔） | 不变 |
+| `packages/federation/src/federation/types.ts` | `FederationHealthStatus.queue` 改为布尔值 | 不变 |
 | `packages/federation/src/service/ai/ai-service-values.ts` | 新增 `require_async_dispatch` 能力断言（映射 503 + code） | Service → Federation 能力，方向不变 |
-| `packages/federation/src/service/ai/AIImageJobRuntime.ts` | 前置能力校验；投递降级保留事实；删除死分支；新增停滞任务重新入队 | Service → Federation 能力，方向不变 |
-| `packages/federation/src/service/ai/AISettlementRuntime.ts` | 同上（结算保持降级不抛错，改为可观察）；恢复入口公开且可复用 | 不变 |
-| `packages/federation/src/service/ai/AIJobReconciler.ts` | 新增：恢复协调器（停滞图片任务 + 到期结算 + 周期续排） | Service 内部 |
-| `packages/federation/src/types/AIJobReconciler.ts` | 新增：恢复协调器装配类型 | Service 内部 |
+| `packages/federation/src/service/ai/AIImageJobRuntime.ts` | 前置能力校验；投递降级保留事实；删除死分支 | Service → Federation 能力，方向不变 |
+| `packages/federation/src/service/ai/AISettlementRuntime.ts` | 同上（结算保持降级不抛错，改为可观察） | 不变 |
 | `packages/implementations/plugins/src/http/PluginHttp.ts` | 出站边界归一化全局 `FormData` | Plugin → 出站层，方向不变 |
 | `packages/implementations/plugins/src/chat/channels/telegram/ApiClient.ts` | 附件失败上抛 | 不变 |
 | `packages/implementations/plugins/src/chat/channels/feishu/Feishu.ts` | 附件失败上抛 | 不变 |
@@ -317,10 +295,10 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 | 类型 | 内容 |
 | --- | --- |
-| 新增 | `ai/jobs/resume` action（恢复统一入口）；`AIServiceOptions.reconcile_interval_ms`；`chat.delivery` plugin action（P1-5）；`FederationQueueUnavailableError`；`FederationQueueState`；`FederationQueue.state` / `is_available()` / `require_available()` / `dispose()` |
-| 修改 | `FederationQueue.send()` 错误改为带 `code`、语义改为"能力决定"；`Federation.health()` 新增 `queue` 字段；`chat.send` 返回体新增 `status` |
-| 删除 | `AIImageJobRuntime` / `AISettlementRuntime` 中永不生效的 `!ctx.queue` 分支（已完成）；`ApiClient` 的吞错降级路径（已完成） |
-| 不引入 | 不新增"队列可用性探测"公开 API（改用抛错的 `require_available()` 断言）；不新增 `files` 字段；不引入运行时 flag 开关 |
+| 新增 | `chat.delivery` plugin action（P1-5，尚未实现）；`FederationQueueUnavailableError`；`FederationQueue.is_available()` / `require_available()` |
+| 修改 | `FederationQueue.send()` 错误改为带 `code`；`Federation.health()` 的 `queue` 字段为布尔值；`chat.send` / `chat.react` 返回体新增 `status` |
+| 删除 | `AIImageJobRuntime` / `AISettlementRuntime` 中永不生效的 `!ctx.queue` 分支；`ApiClient` 的吞错降级路径；以及已收敛的 `FederationQueue.state` / `CityQueueState` / `FederationQueue.dispose()` / `InProcessQueueAdapter` / `AIServiceOptions.reconcile_interval_ms` |
+| 不引入 | 不新增“队列可用性探测”公开 API（改用抛错的 `require_available()` 断言）；不新增 `files` 字段；不引入运行时 flag 开关；**不引入平台嗅探、不提供隐式兜底适配器、不内置自动恢复循环** |
 
 ---
 
@@ -329,7 +307,7 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 | 场景 | 分类 | 处理 | 事实源状态 |
 | --- | --- | --- | --- |
 | 调度能力缺失 | 系统失败 | 前置 `503 + code`，不产生副作用 | 无写入 |
-| 单次投递失败 | 瞬时系统失败 | 返回 `job_id`；记录 `dispatch_error`；由 reconciler 重试 | `async_jobs.status = queued` |
+| 单次投递失败 | 瞬时系统失败 | 返回 `job_id`；记录 `dispatch_error`；由队列自身的重试保证最终一致 | `async_jobs.status = queued` |
 | 上游生成失败 | 业务失败 | 既有 `failed` 结果与原错误返回 | `async_jobs.status = failed` |
 | 附件上传失败 | 系统失败 | 抛出，outbox 记 `failed` + `last_error` | `chat_outbox.status = failed` |
 | 附件路径不存在 | 业务失败 | 抛出可读错误，不重试到耗尽 | `chat_outbox.status = failed` |
@@ -341,8 +319,7 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 | 层级 | 用例 |
 | --- | --- |
 | `@downcity/plugins` | multipart 回归（5.3）；附件失败必须上抛且不发 ❌ 文本；纯文本不受影响；`chat.send` / `chat.react` 返回含 `status`。`chat.delivery` 用例待 P1-5 |
-| `@downcity/federation` | 无外部 adapter 时 Node 下 `send()` 真实投递（in_process）；请求级运行时未注册 adapter 时 `state=unavailable` 且错误带 `code`；`dispose()` 清理定时器且为终态；`health()` 上报 queue 状态；投递失败只上报不产生未处理拒绝。**已实现：`test/queue-dispatch.test.mjs` 10/10 通过，全套 84/84 通过** |
-| `@downcity/federation`（恢复） | 停滞图片任务被重新入队、正常任务不被抢跑；仅 `loop` 调用续排；长期运行宿主自驱动并收敛 pending 超时任务；请求级运行时不自驱动；调度不可用留下可观察上报。**已实现：`test/job-recovery.test.mjs` 6/6 通过，全套 95/95 通过** |
+| `@downcity/federation` | 注册 adapter 后 `send()` 委托投递、未注册则前置失败且带 `code`；`health()` 上报能力布尔值；adapter 发送失败向上冒泡。**已实现：`test/queue-dispatch.test.mjs` 5/5 通过，全套 84/84 通过** |
 | templates | localfed 端到端图像生成；edgefed 缺 binding 时 `health()` 报错 |
 | 验证顺序 | 定向 typecheck → 定向测试 → 消费 package typecheck → patch build（`@downcity/federation`、`@downcity/plugins`）→ homepage build（文档变化时） |
 
@@ -356,7 +333,8 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 - 不新增模型、不改 ImagePlugin 的模型清单与 prompt 构造。
 - 不实现 outbox 的 `attachment` 独立操作类型（本期改为在写入侧拒绝，保持"唯一附件表达方式"）。
-- 不引入队列可用性探测 API、不新增布尔开关。
+- 不引入平台嗅探与隐式兜底适配器，不内置自动恢复循环（见 4.1 / 4.4）。
+- 不新增布尔开关；能力预检用抛错的 `require_available()` 断言。
 - 不改 Telegram / 飞书 Bot 权限与账号配置。
 - 不为旧行为保留双路径（按仓库规范直接迭代）。
 
@@ -366,10 +344,10 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 
 1. ✅ **P0-1 出站体修复**：`PluginHttp` 归一化全局 `FormData` + multipart 回归测试（commit `894ecfb19`，`plugins` 1.0.313）。一次改动同时修好 Telegram、飞书、Web。
 2. ✅ **P0-2 失败语义**：Telegram / 飞书附件失败上抛；`chat.send` / `chat.react` 返回受理回执（含 `status`）（commit `f2321b50e`、`97b9935a2`，`plugins` 1.0.314）。
-3. ✅ **P1-1 调度能力**：进程内适配器 + 能力三态 + `dispose()` 清理（commit `7e4241a4b`，`@downcity/federation` 0.1.19）。
+3. ✅ **P1-1 调度能力预检**：能力缺失前置失败（带 `code` 的错误 + `require_available()`）。初版曾引入进程内适配器与平台嗅探，**已按奥卡姆剃刀移除**（见 4.1）。
 4. ✅ **P1-2 服务侧校验**：`create_job` 前置能力断言、投递失败保留 `job_id` 与
    `downcity_dispatch_error`、删除死分支（commit `76700ca7b`，`@downcity/federation` 0.1.20）。
-5. ✅ **P1-3 恢复**：reconciler 与触发点（含补齐结算的周期恢复）（commit `5b9cc97bc`，`@downcity/federation` 0.1.21）。
+5. ❌ **P1-3 恢复：不做**。原 SDK 内恢复协调器已移除，恢复职责交还队列（见 4.4）。
 6. **P1-4 模板与文档**：localfed / edgefed / Cloudflare 生成器、homepage 文档。
 7. **P1-5 回执**：`chat.delivery` 查询入口与 `ChatRuntime` 的 attachment 分支收口。
 
@@ -378,7 +356,7 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 ## 13. 风险与待确认
 
 1. ~~**Node 全局 fetch 的 dispatcher 依赖**~~：已消失。最终方案保留 undici fetch 单实现，不依赖 Node 全局 fetch 的未文档化 `dispatcher` 行为。
-2. ~~**进程内适配器的定时器语义**~~：Node 单实例可靠，但进程退出会丢失定时器；4.4 的 reconciler 已实现（`ai/jobs/resume` + 周期续排），定时器丢失不再导致任务永久滞留。
+2. **进程内调度与自动恢复**：**已移除**。SDK 不判断宿主平台、不提供隐式兜底适配器、不内置恢复循环（见 4.1 / 4.4）。已知取舍：宿主自建进程内适配器时，进程重启会丢失尚未执行的调度消息。
 3. **Cloudflare 部署侧**：目标是确认现有部署是否缺少 `DOWNCITY_QUEUE` 生产者与 consumer；若缺失，需要部署侧配合补 binding，SDK 侧只保证"缺了就明确报错"。
 4. **`chat.delivery` 的边界**：仅允许查询当前 Agent 拥有 Session 的 delivery，沿用 `ChatAgentActions` 现有的所有权校验。
 5. **附件重试的重复文本**：Outbox 按整条 delivery 重试，一条消息内若"文本段已发、附件段失败"，重试会重发文本段。这是既有结构（无分段级进度）的固有限制，本期不改；修复后至少失败可见且可恢复，优于原先的静默成功。
