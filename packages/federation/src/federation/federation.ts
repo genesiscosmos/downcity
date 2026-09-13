@@ -155,7 +155,8 @@ export class Federation {
    * 健康检查。
    *
    * 说明（中文）
-   * - 同时报告异步调度能力状态，使部署期就能发现「运行时不支持调度且未配置队列」。
+   * - 同时报告异步调度能力是否可用，使部署期就能发现「有异步任务但没有队列」，
+   *   而不必等到第一次任务入队失败。
    */
   async health(): Promise<FederationHealthStatus> {
     await this.ensure_ready();
@@ -166,7 +167,7 @@ export class Federation {
       checked_at: new Date().toISOString(),
       services: services.map((service) => service.id),
       service_list: services.map((service) => ({ id: service.id, name: service.name })),
-      queue: this.queue.state,
+      queue: this.queue.is_available(),
     };
   }
 
@@ -211,14 +212,8 @@ export class Federation {
     await this.init_promise;
   }
 
-  /**
-   * 幂等释放 Federation 持有的资源。
-   *
-   * 说明（中文）
-   * - 先关闭异步调度器，清理未触发的进程内定时器，再释放主数据库。
-   */
+  /** 幂等释放 Federation 持有的资源。 */
   async dispose(): Promise<void> {
-    this.queue.dispose();
     await this.runtime.database.dispose();
   }
 

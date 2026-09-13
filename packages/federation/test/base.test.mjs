@@ -937,6 +937,9 @@ test("Federation AI image jobs reject incomplete provider actions", async () => 
       },
     })
     base.use(ai)
+    // 关键点（中文）：本用例验证的是「上游不支持 image_create 模式」的业务校验，
+    // 因此需显式提供调度能力，避免被「能力缺失」的前置失败抢先命中。
+    base.queue.use({ async send() {} })
 
     await base.health()
     const adminSession = await create_test_admin_session(base)

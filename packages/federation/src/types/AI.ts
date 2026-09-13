@@ -190,15 +190,6 @@ export interface AIServiceOptions {
   credits?: AICreditsBridge;
   /** 图片异步任务允许保持 queued/running 的最长时间，单位毫秒。 */
   image_max_pending_duration_ms?: number;
-  /**
-   * 异步任务恢复循环的周期，单位毫秒；非法值使用内部默认值（30 秒）。
-   *
-   * 说明（中文）
-   * - 周期同时作为“停滞判定”的下界：距最后一次进展不足一个周期的任务不会被接管。
-   * - 只在长期运行宿主自驱动；请求级运行时由部署侧 cron / scheduled handler
-   *   触发同一个 `ai/jobs/resume` 动作。
-   */
-  reconcile_interval_ms?: number;
 }
 
 // ===========================================================================

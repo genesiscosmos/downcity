@@ -17,22 +17,6 @@ import { AIService } from "../bin/index.js"
 import { createSqliteDb } from "./sqlite-db.mjs"
 import { create_test_admin_session, create_test_federation } from "./admin-fixture.mjs"
 
-/** 模拟请求级运行时：临时替换 navigator.userAgent。 */
-async function with_user_agent(user_agent, run) {
-  const original = Object.getOwnPropertyDescriptor(globalThis, "navigator")
-  Object.defineProperty(globalThis, "navigator", {
-    value: { userAgent: user_agent },
-    configurable: true,
-    writable: true,
-  })
-  try {
-    return await run()
-  } finally {
-    if (original) Object.defineProperty(globalThis, "navigator", original)
-    else delete globalThis.navigator
-  }
-}
-
 /** 创建记录调用次数的测试图片 Channel。 */
 function create_image_channel(counters) {
   const ai = new AIService()
@@ -134,21 +118,19 @@ async function read_job_row(base, job_id) {
 }
 
 test("调度能力不可用时 image/create 前置失败，不留孤儿任务", async () => {
-  await with_user_agent("Cloudflare-Workers", async () => {
-    const counters = { create_calls: 0, fetch_calls: 0 }
-    await with_image_federation({ counters, use_queue: false }, async (base, admin_session) => {
-      const created = await create_image(base, admin_session)
+  const counters = { create_calls: 0, fetch_calls: 0 }
+  await with_image_federation({ counters, use_queue: false }, async (base, admin_session) => {
+    const created = await create_image(base, admin_session)
 
-      // 关键点（中文）：修复前这里是 502，且上游任务与数据库记录都已产生。
-      assert.equal(created.status, 503)
-      assert.equal(created.body.error.code, "async_dispatch_unavailable")
-      assert.match(created.body.error.message, /queue adapter/u)
+    // 关键点（中文）：修复前这里是 502，且上游任务与数据库记录都已产生。
+    assert.equal(created.status, 503)
+    assert.equal(created.body.error.code, "async_dispatch_unavailable")
+    assert.match(created.body.error.message, /adapter/u)
 
-      // 副作用必须为零：上游没有被调用，库里没有任务记录。
-      assert.equal(counters.create_calls, 0, "能力缺失时不得调用上游")
-      const table = await base.table("ai.async_jobs")
-      assert.deepEqual(await table.select({}), [], "能力缺失时不得留下任务记录")
-    })
+    // 副作用必须为零：上游没有被调用，库里没有任务记录。
+    assert.equal(counters.create_calls, 0, "能力缺失时不得调用上游")
+    const table = await base.table("ai.async_jobs")
+    assert.deepEqual(await table.select({}), [], "能力缺失时不得留下任务记录")
   })
 })
 
@@ -234,29 +216,18 @@ test("降级后再次投递成功会清理降级痕迹", async () => {
 })
 
 test("结算重试在调度不可用时降级但不抛错，计费不受影响", async () => {
-  const warnings = []
-  const original_warn = console.warn
-  console.warn = (...args) => {
-    warnings.push(args.join(" "))
-  }
   const counters = { create_calls: 0, fetch_calls: 0 }
-  try {
-    await with_user_agent("Cloudflare-Workers", async () => {
-      await with_image_federation({ counters, use_queue: false }, async (base, admin_session) => {
-        // 文本模型请求会走结算；即使调度不可用，也必须正常返回而不是失败。
-        const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${admin_session}`,
-          },
-          body: JSON.stringify({ model: "missing-model", messages: [] }),
-        }))
-        // 模型不存在属于业务失败，但不应因为结算调度不可用而变成基础设施崩溃。
-        assert.ok([400, 404, 422].includes(response.status), `unexpected status ${response.status}`)
-      })
-    })
-  } finally {
-    console.warn = original_warn
-  }
+  await with_image_federation({ counters, use_queue: false }, async (base, admin_session) => {
+    // 文本模型请求会走结算；即使调度不可用，也必须正常返回而不是失败。
+    const response = await base.fetch(new Request("http://localhost/v1/ai/text", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${admin_session}`,
+      },
+      body: JSON.stringify({ model: "missing-model", messages: [] }),
+    }))
+    // 模型不存在属于业务失败，但不应因为结算调度不可用而变成基础设施崩溃。
+    assert.ok([400, 404, 422].includes(response.status), `unexpected status ${response.status}`)
+  })
 })

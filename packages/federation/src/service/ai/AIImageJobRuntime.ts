@@ -13,8 +13,6 @@ import type {
   AIImageResult,
 } from "../../types/AI.js";
 import type { AIImageJobRuntimeOptions } from "../../types/AIImageJobRuntime.js";
-import type { AIJobResumeOptions } from "../../types/AIJobReconciler.js";
-import type { CityTableApi } from "../../store/table-api.js";
 import type {
   UserImageJobCreateResult,
   UserImageJobResult,
@@ -48,8 +46,6 @@ export const IMAGE_ACTION_MODES = ["image_create", "image_fetch"] as const;
 export const IMAGE_FETCH_ACTION = "image/fetch";
 /** 图片生成任务在通用 async_jobs 表中的类型。 */
 const IMAGE_GENERATE_JOB_TYPE = "ai.image.generate";
-/** 需要恢复流程关注的非终态图片任务状态。 */
-const NON_TERMINAL_IMAGE_JOB_STATUSES = ["queued", "running", "fetching"] as const;
 /** 图片任务默认最长 pending 时间：2 小时。 */
 const DEFAULT_IMAGE_MAX_PENDING_DURATION_MS = 2 * 60 * 60 * 1000;
 /** 图片任务 pending 超时错误。 */
@@ -209,38 +205,6 @@ export class AIImageJobRuntime {
     }
   }
 
-  /**
-   * 重新入队停滞的非终态图片任务。
-   *
-   * 关键点（中文）
-   * - 图片任务的推进依赖调度消息；进程重启会丢掉进程内定时器，任务因此停在
-   *   queued/running/fetching。本方法从事实源（`async_jobs`）重新入队，
-   *   使「触发器丢失不得导致任务无法恢复」成立。
-   * - 只接管已经停滞的任务（见 `is_stalled_image_job`）：正常路径会按
-   *   `poll_after_ms` 自行排下一次抓取，不加判断地全量重排会额外多打上游。
-   * - 重新入队是幂等的：`claim_image_job` 用 compare-and-set 保证同一任务同一
-   *   时刻只有一个 worker 真正抓取，重复消息只会得到 no-op。
-   * - 已超过最大 pending 时间的任务同样重新入队：抓取路径会先判定超时并落终态，
-   *   这正是恢复流程需要收敛的结果。
-   *
-   * @returns 本次真正重新入队的任务数
-   */
-  async resume_stalled_jobs(
-    ctx: Context,
-    options: AIJobResumeOptions,
-  ): Promise<number> {
-    const table = ctx.db.async_jobs;
-    if (!table) return 0;
-    const stalled = await this.list_stalled_jobs(table, options.stalled_after_ms);
-    const bounded = stalled.slice(0, options.resume_limit);
-    for (const job of bounded) {
-      await this.dispatch_image_fetch(ctx, job.job_id, {
-        state: parseRecordJson(job.state_json),
-      });
-    }
-    return bounded.length;
-  }
-
   /** 判断图片任务是否已经进入本地终态。 */
   private is_terminal_image_job(job: AsyncJobRecord): boolean {
     return Boolean((job.status === "succeeded" && job.result_json) || job.status === "failed");
@@ -252,22 +216,6 @@ export class AIImageJobRuntime {
     const created_at = Date.parse(job.created_at);
     if (!Number.isFinite(created_at)) return false;
     return Date.now() - created_at >= this.image_max_pending_duration_ms;
-  }
-
-  /** 读取已经停滞、需要恢复流程接管的非终态图片任务。 */
-  private async list_stalled_jobs(
-    table: CityTableApi,
-    stalled_after_ms: number,
-  ): Promise<AsyncJobRecord[]> {
-    const stalled: AsyncJobRecord[] = [];
-    for (const status of NON_TERMINAL_IMAGE_JOB_STATUSES) {
-      const rows = await table.select({ job_type: IMAGE_GENERATE_JOB_TYPE, status });
-      for (const row of rows) {
-        const job = rowToAsyncJobRecord(row);
-        if (is_stalled_image_job(job, stalled_after_ms)) stalled.push(job);
-      }
-    }
-    return stalled;
   }
 
   /** 构造 pending 超时后的统一失败结果。 */
@@ -493,23 +441,6 @@ export class AIImageJobRuntime {
       Object.entries(state).filter(([key]) => !key.startsWith("downcity_")),
     );
   }
-}
-
-/**
- * 判断非终态图片任务是否已经停滞到需要恢复流程接管。
- *
- * 关键点（中文）
- * - 边界取「最后一次进展 + `max(恢复周期, 该任务原本的 poll_after_ms)`」：
- *   正常路径会在 `poll_after_ms` 后自行抓取并刷新 `updated_at`，只有超过这个
- *   更长边界仍未刷新，才说明调度消息真的丢了。
- * - `updated_at` 不可解析时按停滞处理：宁可多恢复一次（幂等），
- *   也不让一条坏记录永久停在非终态。
- */
-function is_stalled_image_job(job: AsyncJobRecord, stalled_after_ms: number): boolean {
-  const updated_at = Date.parse(job.updated_at);
-  if (!Number.isFinite(updated_at)) return true;
-  const poll_after_ms = Math.max(0, readOptionalNumber(job.poll_after_ms) ?? 0);
-  return Date.now() - updated_at >= Math.max(stalled_after_ms, poll_after_ms);
 }
 
 /** 将未知模型输入归一为可选稳定 ID。 */

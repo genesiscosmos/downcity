@@ -39,15 +39,6 @@ import {
 } from "./ai-service-values.js";
 
 /**
- * 单次结算恢复最多推进的任务数。
- *
- * 关键点（中文）
- * - 与恢复协调器的周期配合：单次只推进一小批，避免一轮恢复把长时间占满。
- * - 未推进完的任务仍处于到期状态，由下一轮周期继续收敛。
- */
-const DEFAULT_SETTLEMENT_RECOVERY_LIMIT = 20;
-
-/**
  * 一次 AI 执行的计量与结算协调器。
  *
  * 实例生命周期跟随 AIService；持久化资源在 Federation 完成 Service 装配后注入。
@@ -331,23 +322,17 @@ export class AISettlementRuntime {
   }
 
   /**
-   * 推进到期的可靠结算任务。
+   * 服务初始化时推进已到期的结算任务。
    *
-   * 关键点（中文）
-   * - 结算是“先写数据库记录，再尝试处理”，数据库是唯一事实源；本方法既在
-   *   AIService 启动期调用，也由周期恢复调用，使进程重启或队列唤醒丢失后仍能收敛。
-   * - 返回本次推进的任务数，供恢复协调器做可观察性上报；
-   *   调用方不需要为了恢复再自己写一遍排队逻辑。
+   * 说明（中文）
+   * - 结算是“先写数据库记录，再尝试处理”，数据库是唯一事实源；
+   *   常规唤醒由队列投递，此处只负责把服务停机期间到期的任务补上。
    */
-  async recover_due_settlements(
-    limit = DEFAULT_SETTLEMENT_RECOVERY_LIMIT,
-  ): Promise<number> {
+  private async recover_due_settlements(): Promise<void> {
     const repository = this.require_usage_repository();
-    const usage_ids = await repository.list_due_settlements(limit);
-    for (const usage_id of usage_ids) {
+    for (const usage_id of await repository.list_due_settlements()) {
       await repository.process_settlement(usage_id);
     }
-    return usage_ids.length;
   }
 
   /** 读取已初始化的 AI Usage Repository。 */
