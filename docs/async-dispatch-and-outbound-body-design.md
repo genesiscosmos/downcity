@@ -126,11 +126,32 @@ Telegram 收到没有 `document` 字段的纯文本请求，返回 `400 Bad Requ
 
 ### 4.3 调度前置校验与失败语义
 
-在 `AIImageJobRuntime.create_job()` 与 `AISettlementRuntime` 的入队路径前插入能力校验：
+> 状态：已实现（commit `76700ca7b`，`@downcity/federation` 0.1.20）
+
+在 `AIImageJobRuntime.create_job()` 的**上游调用与落库之前**插入能力断言
+（`require_async_dispatch(ctx)`）：
 
 1. **能力不可用（系统失败）**：在调用上游与落库之前失败，返回 `503`，`code: "async_dispatch_unavailable"`，message 指出缺失项与配置位置。**不允许**先建任务再报错。
-2. **能力可用但单次投递失败（瞬时系统失败）**：不吞掉已产生的事实——保留 `job` 记录，状态 `queued`，把投递错误写入 `state_json.dispatch_error`，**正常返回 `job_id`**，由 4.4 的恢复机制重试。`error.md`/日志记录投递失败。
+2. **能力可用但单次投递失败（瞬时系统失败）**：不吞掉已产生的事实——保留 `job` 记录，状态 `queued`，把投递错误写入 `state_json.downcity_dispatch_error`，**正常返回 `job_id`**，由 4.4 的恢复机制重试。投递恢复成功后清理该字段。
 3. 删除 `if (!ctx.queue) return;` 这类永远不会触发的保护分支，改为显式能力校验，避免"假安全"。
+
+**服务端错误码映射**：`require_async_dispatch` 把队列错误归一为带 `statusCode = 503` 的错误，
+`imageActionError` 会原样透传带状态码的错误，因此路由输出 503 而不是原来 `imageActionError`
+统一包装的 502。这样调用方可以直接按 `code` 区分“系统能力缺失”与“业务失败”。
+
+**结算侧为什么不一样（重要）**：`AISettlementRuntime` 的 `enqueue_settlement_retry` **不能**改为抛错。
+结算是“先写数据库记录，再尝试处理”（`create_settlement` → `process_settlement`），数据库是唯一事实源，
+队列只是唤醒优化。把它改成致命错误会把计费问题升级成用户请求失败。
+因此只做两件事：删除死分支、把“静默吞掉”改为 `warn` 日志，使降级可观察。
+
+**本次发现的遗留问题**：原注释声称未完成的结算会“在启动或后续 AI 请求时恢复”，
+但 `recover_due_settlements` 实际只在 `AIService` 初始化时调用一次（暂无请求级或周期触发）。
+这不是 P1-2 引入的缺陷，但意味着“队列不可用 + 服务不重启”时结算延迟会被拉长。
+归入 P1-3 与图片任务的 reconciler 一并补齐触发点。
+
+**内部字段约定**：`state_json` 中以 `downcity_` 开头的字段属于平台内部（`downcity_usage_id`、
+`downcity_dispatch_error`），`read_image_job_state` 按前缀统一剥离后再作为对外 `metadata`，
+避免新增内部字段时逐个人工维护白名单而遗漏。
 
 ### 4.4 事实源驱动的恢复
 
@@ -248,8 +269,9 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 | `packages/federation/src/federation/queue-in-process.ts` | 新增：进程内延迟适配器 | Federation 内部 |
 | `packages/federation/src/federation/queue.ts` | 能力三态、进程内适配器、带 code 错误、dispose | 不变（Federation 内部） |
 | `packages/federation/src/federation/federation.ts` | `health()` 上报 queue 状态；`dispose()` 关闭调度器 | 不变 |
-| `packages/federation/src/service/ai/AIImageJobRuntime.ts` | 前置能力校验；投递失败保留事实；接入 reconciler | Service → Federation 能力，方向不变 |
-| `packages/federation/src/service/ai/AISettlementRuntime.ts` | 同上（结算重试） | 不变 |
+| `packages/federation/src/service/ai/ai-service-values.ts` | 新增 `require_async_dispatch` 能力断言（映射 503 + code） | Service → Federation 能力，方向不变 |
+| `packages/federation/src/service/ai/AIImageJobRuntime.ts` | 前置能力校验；投递降级保留事实；删除死分支 | Service → Federation 能力，方向不变 |
+| `packages/federation/src/service/ai/AISettlementRuntime.ts` | 同上（结算保持降级不抛错，改为可观察） | 不变 |
 | `packages/implementations/plugins/src/http/PluginHttp.ts` | 出站边界归一化全局 `FormData` | Plugin → 出站层，方向不变 |
 | `packages/implementations/plugins/src/chat/channels/telegram/ApiClient.ts` | 附件失败上抛 | 不变 |
 | `packages/implementations/plugins/src/chat/channels/feishu/Feishu.ts` | 附件失败上抛 | 不变 |
@@ -267,7 +289,7 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 | --- | --- |
 | 新增 | `chat.delivery` plugin action（P1-5）；`FederationQueueUnavailableError`；`FederationQueueState`；`FederationQueue.state` / `is_available()` / `require_available()` / `dispose()` |
 | 修改 | `FederationQueue.send()` 错误改为带 `code`、语义改为"能力决定"；`Federation.health()` 新增 `queue` 字段；`chat.send` 返回体新增 `status` |
-| 删除 | `AIImageJobRuntime` / `AISettlementRuntime` 中永不生效的 `!ctx.queue` 分支；`ApiClient` 的吞错降级路径 |
+| 删除 | `AIImageJobRuntime` / `AISettlementRuntime` 中永不生效的 `!ctx.queue` 分支（已完成）；`ApiClient` 的吞错降级路径（已完成） |
 | 不引入 | 不新增"队列可用性探测"公开 API（改用抛错的 `require_available()` 断言）；不新增 `files` 字段；不引入运行时 flag 开关 |
 
 ---
@@ -314,8 +336,9 @@ npm undici 只导出 `FormData`，**不导出 `Blob` / `File`**（`typeof u.File
 1. ✅ **P0-1 出站体修复**：`PluginHttp` 归一化全局 `FormData` + multipart 回归测试（commit `894ecfb19`，`plugins` 1.0.313）。一次改动同时修好 Telegram、飞书、Web。
 2. ✅ **P0-2 失败语义**：Telegram / 飞书附件失败上抛；`chat.send` / `chat.react` 返回受理回执（含 `status`）（commit `f2321b50e`、`97b9935a2`，`plugins` 1.0.314）。
 3. ✅ **P1-1 调度能力**：进程内适配器 + 能力三态 + `dispose()` 清理（commit `7e4241a4b`，`@downcity/federation` 0.1.19）。
-4. **P1-2 服务侧校验**：`AIImageJobRuntime` / `AISettlementRuntime` 前置校验、投递失败保留事实、删除死分支。
-5. **P1-3 恢复**：reconciler 与触发点。
+4. ✅ **P1-2 服务侧校验**：`create_job` 前置能力断言、投递失败保留 `job_id` 与
+   `downcity_dispatch_error`、删除死分支（commit `76700ca7b`，`@downcity/federation` 0.1.20）。
+5. **P1-3 恢复**：reconciler 与触发点（含补齐结算的周期恢复）。
 6. **P1-4 模板与文档**：localfed / edgefed / Cloudflare 生成器、homepage 文档。
 7. **P1-5 回执**：`chat.delivery` 查询入口与 `ChatRuntime` 的 attachment 分支收口。
 
