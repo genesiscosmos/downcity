@@ -22,11 +22,7 @@ import type {
 } from "@/types/session/SessionTool.js";
 import { generate_id } from "@/utils/Id.js";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
-import {
-  is_agent_part_type,
-  merge_agent_part,
-  next_agent_part_sequence,
-} from "@/session/messages/SessionAgentParts.js";
+import { next_agent_part_sequence } from "@/session/messages/SessionAgentParts.js";
 
 /** 单个 Assistant Message 的流式 Writer。 */
 export class SessionAgentMessageWriter {
@@ -394,25 +390,15 @@ export class SessionAgentMessageWriter {
         `part ${index + 1} type ${current_part.type} != ${final_part.type}`,
       );
     }
-    const same_text = is_agent_part_type(current_part, "text")
-      && is_agent_part_type(final_part, "text");
-    const same_reasoning = is_agent_part_type(current_part, "reasoning")
-      && is_agent_part_type(final_part, "reasoning");
-    if ((same_text || same_reasoning) && current_part.text !== final_part.text) {
+    if (is_text_like(current_part) && is_text_like(final_part)
+      && current_part.text !== final_part.text) {
       throw this.step_snapshot_error(`part ${index + 1} text differs`);
     }
-    if (
-      is_agent_part_type(current_part, "tool") &&
-      is_agent_part_type(final_part, "tool") &&
-      current_part.tool_call_id !== final_part.tool_call_id
-    ) {
+    if (is_agent_part_type(current_part, "tool") && is_agent_part_type(final_part, "tool")
+      && current_part.tool_call_id !== final_part.tool_call_id) {
       throw this.step_snapshot_error(`part ${index + 1} tool_call_id differs`);
     }
-    const type = final_part.type;
-    if (is_agent_part_type(current_part, type) && is_agent_part_type(final_part, type)) {
-      return merge_agent_part(current_part, final_part);
-    }
-    throw this.step_snapshot_error(`part ${index + 1} type ${type} cannot be merged`);
+    return merge_same_part(current_part, final_part);
   }
 
   /** 构造不包含正文与 Tool 输出的结构化 Step 快照错误。 */
@@ -462,6 +448,36 @@ export class SessionAgentMessageWriter {
     await this.recorder.complete_agent_message(this.message_id, status, error);
     this.closed = true;
   }
+}
+
+/** 文本与推理 Part 都携带可直接比较的正文。 */
+type TextLikeAgentPart = Extract<SessionAgentMessagePart, { type: "text" | "reasoning" }>;
+
+/** 判断 Part 是否属于指定类型。 */
+function is_agent_part_type<T extends SessionAgentMessagePart["type"]>(
+  part: SessionAgentMessagePart,
+  type: T,
+): part is Extract<SessionAgentMessagePart, { type: T }> {
+  return part.type === type;
+}
+
+/** 判断 Part 是否携带可直接比较的正文。 */
+function is_text_like(part: SessionAgentMessagePart): part is TextLikeAgentPart {
+  return part.type === "text" || part.type === "reasoning";
+}
+
+/** 合并同一类型的两个 Part，只保留当前快照的规范身份字段。 */
+function merge_same_part<T extends SessionAgentMessagePart["type"]>(
+  current: Extract<SessionAgentMessagePart, { type: T }>,
+  final: Extract<SessionAgentMessagePart, { type: T }>,
+): Extract<SessionAgentMessagePart, { type: T }> {
+  return {
+    ...current,
+    ...final,
+    part_id: current.part_id,
+    sequence: current.sequence,
+    step_id: current.step_id,
+  };
 }
 
 /** 从 Tool 失败输出中提取稳定错误文本。 */

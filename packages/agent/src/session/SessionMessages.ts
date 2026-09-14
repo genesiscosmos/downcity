@@ -29,10 +29,7 @@ import type {
   SessionUserMessage,
   SessionUserMessagePart,
 } from "@downcity/type";
-import {
-  create_session_message_mutation,
-  create_session_part_mutation,
-} from "@/session/messages/SessionMutationFactory.js";
+import { create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
 import {
   next_agent_part_sequence,
   resolve_changed_agent_parts,
@@ -212,7 +209,10 @@ export class SessionMessages {
         part_id: `${message_id}:part:${String(part.sequence)}`,
       })),
     }));
-    return require_session_role(message, "user");
+    if (message.role !== "user") {
+      throw new Error(`User Message expected: ${message.message_id}`);
+    }
+    return message;
   }
 
   /** 创建可持续接收 chunk 的 Assistant Message。 */
@@ -439,9 +439,10 @@ export class SessionMessages {
     changes?: { title?: string; description?: string; data?: JsonObject },
     options?: { publish_mutation?: boolean },
   ): Promise<SessionAgentMessage> {
-    const current_message = require_message([
-      this.get_message(message_id) || await this.store.read_message(message_id),
-    ].filter((message): message is SessionMessage => Boolean(message)), message_id, "agent");
+    const current_message = this.get_message(message_id) || await this.store.read_message(message_id);
+    if (!current_message || current_message.role !== "agent") {
+      throw new Error(`Session agent Message not found: ${message_id}`);
+    }
     const action = current_message.parts.find(
         (part): part is SessionAgentActionPart => part.type === "action",
       );
@@ -530,7 +531,7 @@ export class SessionMessages {
       return message;
     }
 
-    return require_session_role(await this.create_message((sequence, created_at) => ({
+    const message = await this.create_message((sequence, created_at) => ({
       message_id: `agent:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
       ...(input.turn_id ? { turn_id: input.turn_id } : {}),
@@ -542,7 +543,11 @@ export class SessionMessages {
       role: "agent",
       state: "done",
       parts: [error_part],
-    })), "agent");
+    }));
+    if (message.role !== "agent") {
+      throw new Error(`Agent Message expected: ${message.message_id}`);
+    }
+    return message;
   }
 
   /** 按 Message sequence 返回一页完整 Message 聚合。 */
@@ -746,11 +751,18 @@ export class SessionMessages {
   }
 
   private build_message_mutation(message: SessionMessage): SessionMutation {
-    return create_session_message_mutation({
+    const base = {
       mutation_id: generate_id(),
+      variant: "message" as const,
+      message_id: message.message_id,
+      sequence: message.sequence,
+      revision: message.revision,
       session_id: this.session_id,
-      message,
-    });
+      ...(message.turn_id ? { turn_id: message.turn_id } : {}),
+      created_at: message.updated_at,
+    };
+    if (message.role === "agent") return { ...base, role: "agent", message };
+    return { ...base, role: "user", message };
   }
 
   private build_part_mutation(
@@ -803,37 +815,6 @@ export class SessionMessages {
     await this.initialize();
   }
 
-}
-
-/** 判断 Message 是否属于指定角色，供调用方安全收窄到具体顶层类型。 */
-function is_session_role<TRole extends SessionMessage["role"]>(
-  message: SessionMessage,
-  role: TRole,
-): message is Extract<SessionMessage, { role: TRole }> {
-  return message.role === role;
-}
-
-/** 按角色收窄 Message；不匹配时抛出稳定错误，而不是靠断言跳过检查。 */
-function require_session_role<TRole extends SessionMessage["role"]>(
-  message: SessionMessage,
-  role: TRole,
-): Extract<SessionMessage, { role: TRole }> {
-  if (!is_session_role(message, role)) {
-    throw new Error(`Session ${role} Message expected: ${message.message_id}`);
-  }
-  return message;
-}
-
-function require_message<TRole extends SessionMessage["role"]>(
-  messages: SessionMessage[],
-  message_id: string,
-  role: TRole,
-): Extract<SessionMessage, { role: TRole }> {
-  const message = messages.find((item) => item.message_id === message_id);
-  if (!message || !is_session_role(message, role)) {
-    throw new Error(`Session ${role} Message not found: ${message_id}`);
-  }
-  return message;
 }
 
 /** 一个 Message 快照相对上一稳定状态的最小变更投影。 */

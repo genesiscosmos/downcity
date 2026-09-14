@@ -7,7 +7,7 @@
 
 import { generate_id } from "@/utils/Id.js";
 import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
-import { create_session_delta_mutation, create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
+import { create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
 import { next_agent_part_sequence, resolve_changed_agent_parts } from "@/session/messages/SessionAgentParts.js";
 import type {
   SessionAgentErrorPart,
@@ -110,19 +110,22 @@ export class SessionAgentMessageState {
       }),
     };
     if (!matched) throw new Error(`Delta target Part does not exist: ${part_id}`);
+    const base = {
+      mutation_id: generate_id(),
+      variant: "delta" as const,
+      message_id,
+      ...(current.turn_id ? { turn_id: current.turn_id } : {}),
+      revision: current.revision,
+      session_id: this.session_id,
+      created_at: projected.updated_at,
+      part_id,
+      delta,
+    };
+    const tool_input_id = type === "tool_input" ? String(tool_call_id || "").trim() : "";
     this.options.project_mutation(
-      create_session_delta_mutation({
-        mutation_id: generate_id(),
-        session_id: this.session_id,
-        message_id,
-        ...(current.turn_id ? { turn_id: current.turn_id } : {}),
-        revision: current.revision,
-        created_at: projected.updated_at,
-        part_id,
-        delta,
-        type,
-        ...(tool_call_id ? { tool_call_id } : {}),
-      }),
+      type === "tool_input"
+        ? { ...base, type, tool_call_id: tool_input_id }
+        : { ...base, type },
       projected,
     );
   }
