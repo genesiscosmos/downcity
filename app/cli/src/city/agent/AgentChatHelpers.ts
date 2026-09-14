@@ -4,28 +4,30 @@
  * 关键点（中文）
  * - 统一覆盖交互式持续对话与一次性消息模式，不再保留独立 `quest` 命令。
  * - 目标 Agent 始终按持久化 Agent 配置解析，不依赖当前工作目录。
- * - 交互模式无显式选择时直接复用最近会话；Session 列表留在 Chat 内按需打开。
- * - 远程访问统一走 `RemoteAgent({ url })`，不再在 CLI 侧维护第二套 HTTP SDK transport。
- * - 远程连接、session 创建/列表等操作委托给 `AgentChatRemote.ts`。
+ * - 无显式选择时跟随最近会话所属 Workspace；没有历史会话才在当前 Workspace 新建。
+ * - 会话发现走 Agent 级只读读取器，读写仍必须进入确定的 Workspace。
+ * - 远程访问统一走 `RemoteAgent({ url })`，连接与会话操作委托给 `AgentChatRemote.ts`。
  */
 
 import prompts from "@/city/tui/Prompts.js";
 import {
+  type RemoteAgentSession,
   type SessionMutation,
 } from "@downcity/agent";
 import { emitCliBlock } from "@/shared/CliReporter.js";
 import { printResult } from "@/city/utils/cli/CliOutput.js";
 import {
-  resolveProjectRootByAgentId,
-  validateAgentProjectRoot,
-} from "@/city/shared/PluginTargetSupport.js";
-import { list_registered_agents_for_cli } from "@/city/agent/AgentSelection.js";
+  format_agent_display_label,
+  list_registered_agents_for_cli,
+  resolve_cli_agent_target,
+  resolve_cli_workspace,
+  type AgentExecutionTarget,
+} from "@/city/agent/AgentSelection.js";
 import {
-  createAgentChatSessionId,
+  buildAgentChatFailureText,
+  createAgentSessionReader,
   createRemoteAgent,
   createRemoteChatSession,
-  getOrCreateRemoteSession,
-  buildAgentChatFailureText,
   listRemoteChatSessions,
   type AgentChatClient,
 } from "@/city/agent/AgentChatRemote.js";
@@ -33,20 +35,21 @@ import type {
   AgentChatCliOptions,
   AgentChatExecutionOutcome,
   AgentChatSessionOptions,
-} from "@/city/agent/AgentChatTypes.js";
-import {
-  AGENT_CHAT_DEFAULT_SESSION_ID,
+  AgentChatSessionSummaryView,
 } from "@/city/agent/AgentChatTypes.js";
 
+/**
+ * 一次 chat 执行解析后的入口目标。
+ */
 export type ResolvedAgentChatTarget = {
   /** 目标 agent id。 */
   agent_id: string;
-  /** 目标项目根目录。 */
+  /** 本次执行进入的 Workspace ID。 */
+  workspace_id: string;
+  /** 本次执行进入的 Workspace 绝对路径。 */
   project_root: string;
-  /** 当前 chat 绑定的 session_id。 */
+  /** 当前 chat 使用的 session_id。 */
   session_id: string;
-  /** 当前 chat 是否要求创建全新的 session。 */
-  createNewSession: boolean;
 };
 
 export function normalizeChatMessage(input: string): string {
@@ -54,11 +57,10 @@ export function normalizeChatMessage(input: string): string {
 }
 
 /**
- * 解析 `city agent chat` 的 session 选择语义。
+ * 解析 `city agent chat` 的显式 session 选择语义。
  *
  * 关键点（中文）
- * - 无显式选择时使用最近活跃会话，没有历史时才创建默认会话。
- * - `--new-session` 生成不可预测的新 ID，避免用户手动清理旧上下文。
+ * - 无显式选择时返回空 session，由入口解析器跟随最近会话。
  * - `--session-id` 与 `--new-session` 互斥，避免“复用”和“新建”语义冲突。
  */
 export function resolveAgentChatSessionOptions(
@@ -66,7 +68,9 @@ export function resolveAgentChatSessionOptions(
 ):
   | {
       success: true;
-      session_id: string;
+      /** 显式指定的 session_id；为空表示未指定。 */
+      explicit_session_id: string;
+      /** 是否要求创建全新的 session。 */
       create_new_session: boolean;
     }
   | {
@@ -83,23 +87,11 @@ export function resolveAgentChatSessionOptions(
     };
   }
 
-  if (should_create_new_session) {
-    return {
-      success: true,
-      session_id: createAgentChatSessionId(),
-      create_new_session: true,
-    };
-  }
-
   return {
     success: true,
-    session_id: explicit_session_id || AGENT_CHAT_DEFAULT_SESSION_ID,
-    create_new_session: false,
+    explicit_session_id,
+    create_new_session: should_create_new_session,
   };
-}
-
-export function hasExplicitSessionSelection(input: AgentChatSessionOptions): boolean {
-  return Boolean(String(input.session_id || "").trim() || input.newSession === true);
 }
 
 export async function resolveChatTargetAgentId(inputId?: string): Promise<string | null> {
@@ -130,7 +122,7 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
     name: "agent_id",
     message: "选择要聊天的 Agent",
     choices: registered_agents.map((agent) => ({
-      title: agent.agent_id,
+      title: format_agent_display_label(agent),
       description: agent.status === "loaded" ? "City active" : "City inactive",
       value: agent.agent_id,
     })),
@@ -145,86 +137,6 @@ export async function resolveChatTargetAgentId(inputId?: string): Promise<string
     return null;
   }
   return agent_id;
-}
-
-export async function resolveAgentChatTarget(
-  agentIdInput: string,
-  sessionOptions?: AgentChatSessionOptions,
-): Promise<
-  | {
-      success: true;
-      target: ResolvedAgentChatTarget;
-    }
-  | {
-      success: false;
-      outcome: AgentChatExecutionOutcome;
-    }
-> {
-  const agent_id = String(agentIdInput || "").trim();
-  const resolved_session = resolveAgentChatSessionOptions(sessionOptions);
-  const session_id = resolved_session.success
-    ? resolved_session.session_id
-    : AGENT_CHAT_DEFAULT_SESSION_ID;
-  if (!resolved_session.success) {
-    return {
-      success: false,
-      outcome: {
-        agent_id,
-        session_id,
-        success: false,
-        error: resolved_session.error,
-      },
-    };
-  }
-
-  if (!agent_id) {
-    return {
-      success: false,
-      outcome: {
-        agent_id: "",
-        session_id,
-        success: false,
-        error: "Missing target agent id.",
-      },
-    };
-  }
-
-  const resolved = await resolveProjectRootByAgentId(agent_id);
-  if (!resolved.project_root) {
-    return {
-      success: false,
-      outcome: {
-        agent_id,
-        session_id,
-        success: false,
-        error: resolved.error || "Failed to resolve agent project path",
-      },
-    };
-  }
-
-  const pathError = validateAgentProjectRoot(resolved.project_root);
-  if (pathError) {
-    return {
-      success: false,
-      outcome: {
-        agent_id,
-        project_root: resolved.project_root,
-        session_id,
-        success: false,
-        error: pathError,
-      },
-    };
-  }
-
-  return {
-    success: true,
-    target: {
-      agent_id,
-      project_root: resolved.project_root,
-      session_id,
-      createNewSession: resolved_session.create_new_session,
-    },
-  };
 }
 
 export function printAssistantReply(replyText: string): void {
@@ -260,7 +172,16 @@ export function printAgentChatFailure(params: {
   });
 }
 
-export async function resolveInteractiveChatSession(params: {
+/**
+ * 解析一次 chat 的入口目标，并返回已绑定正确 Workspace 的远程客户端。
+ *
+ * 关键点（中文）
+ * - 显式 `--session-id` 必须存在，并按该 Session 的 Workspace 进入。
+ * - 无显式选择时跟随最近 chat Session 所属 Workspace。
+ * - 只有在没有任何历史会话时，才在 `--workspace` 或当前目录 Workspace 中新建 Session。
+ * - Session 所属 Workspace 已注销时回落到入口 Workspace 并新建会话。
+ */
+export async function resolveAgentChatEntry(params: {
   agent_id: string;
   options: AgentChatCliOptions;
   transport?: { host?: string; port?: number };
@@ -275,91 +196,202 @@ export async function resolveInteractiveChatSession(params: {
       error?: string;
     }
 > {
-  const preselected_session = resolveAgentChatSessionOptions(params.options);
-  if (!preselected_session.success) {
+  const agent_id = String(params.agent_id || "").trim();
+  if (!agent_id) return { success: false, error: "Missing target agent id." };
+
+  const selected = resolveAgentChatSessionOptions(params.options);
+  if (!selected.success) return { success: false, error: selected.error };
+
+  try {
+    return await open_agent_chat_entry({
+      agent_id: agent_id,
+      selected: selected,
+      options: params.options,
+      transport: params.transport,
+    });
+  } catch (error) {
     return {
       success: false,
-      error: preselected_session.error,
+      error: error instanceof Error ? error.message : String(error),
     };
   }
+}
 
-  const resolved = await resolveAgentChatTarget(params.agent_id, {
-    session_id: preselected_session.session_id,
-    newSession: false,
+/** 打开 chat 入口；失败时抛出，由公开入口统一转为结果。 */
+async function open_agent_chat_entry(params: {
+  agent_id: string;
+  selected: { explicit_session_id: string; create_new_session: boolean };
+  options: AgentChatCliOptions;
+  transport?: { host?: string; port?: number };
+}): Promise<
+  | {
+      success: true;
+      target: ResolvedAgentChatTarget;
+      remote_agent: AgentChatClient;
+    }
+  | {
+      success: false;
+      error?: string;
+    }
+> {
+  const agent_id = params.agent_id;
+  const explicit_workspace = String(params.options.workspace || "").trim();
+  const discovery = { agent_id: agent_id, transport: params.transport };
+
+  let session_id = "";
+  let workspace_id = "";
+  let create_new_session = params.selected.create_new_session;
+
+  if (!create_new_session && params.selected.explicit_session_id) {
+    const session = await find_chat_session({
+      ...discovery,
+      session_id: params.selected.explicit_session_id,
+    });
+    if (!session) {
+      return { success: false, error: `Session not found: ${params.selected.explicit_session_id}` };
+    }
+    if (explicit_workspace && session.workspace_id && session.workspace_id !== explicit_workspace) {
+      return {
+        success: false,
+        error: `Session "${session.session_id}" belongs to Workspace "${session.workspace_id}", which does not match --workspace "${explicit_workspace}".`,
+      };
+    }
+    if (!session.workspace_id) {
+      return {
+        success: false,
+        error: `Session "${session.session_id}" is not bound to a Workspace.`,
+      };
+    }
+    session_id = session.session_id;
+    workspace_id = session.workspace_id;
+  } else if (!create_new_session) {
+    // 未指定 `--workspace` 时跟随最近会话所属 Workspace；显式指定时只在该 Workspace 内查找。
+    const scoped_workspace_id = explicit_workspace
+      ? (await resolve_cli_workspace(explicit_workspace)).workspace_id
+      : undefined;
+    const latest = await find_latest_chat_session({
+      ...discovery,
+      ...(scoped_workspace_id ? { workspace_id: scoped_workspace_id } : {}),
+    });
+    if (latest?.workspace_id) {
+      session_id = latest.session_id;
+      workspace_id = latest.workspace_id;
+    } else {
+      create_new_session = true;
+    }
+  }
+
+  const target = await resolve_chat_entry_target({
+    agent_id: agent_id,
+    workspace_id: workspace_id,
+    fallback_workspace_input: explicit_workspace,
   });
-  if (!resolved.success) {
-    return {
-      success: false,
-      error: resolved.outcome.error,
-    };
-  }
-  resolved.target.createNewSession = preselected_session.create_new_session;
-
   const remote_agent = await createRemoteAgent({
-    agent_id: resolved.target.agent_id,
-    workspace: params.options.workspace,
+    agent_id: target.agent_id,
+    workspace: target.workspace_id,
     transport: params.transport,
   });
 
-  if (hasExplicitSessionSelection(params.options)) {
-    if (resolved.target.createNewSession) {
-      const created = await createRemoteChatSession({
-        remote_agent,
-        session_id: preselected_session.session_id,
-      });
-      resolved.target.session_id = created.session_id;
-      resolved.target.createNewSession = false;
+  if (create_new_session) {
+    try {
+      session_id = (await createRemoteChatSession({ remote_agent })).session_id;
+    } catch (error) {
+      await remote_agent.close().catch(() => undefined);
+      throw error;
     }
-    return {
-      success: true,
-      target: resolved.target,
-      remote_agent,
-    };
   }
 
-  // 关键点（中文）：未显式指定 session 时，直接复用最近活跃的会话，
-  // 不再弹出 SessionPicker；没有任何历史会话时回落到默认 session。
-  // 用户仍可在 TUI 内通过 /session 命令随时切换。
-  const latest_session_id = await resolveLatestChatSessionId({ remote_agent });
-  if (latest_session_id) {
-    resolved.target.session_id = latest_session_id;
-  }
   return {
     success: true,
-    target: resolved.target,
+    target: {
+      agent_id: target.agent_id,
+      workspace_id: target.workspace_id,
+      project_root: target.workspace_path,
+      session_id: session_id,
+    },
     remote_agent,
   };
 }
 
 /**
- * 解析最近活跃的 chat session id。
+ * 解析本次 chat 要进入的 Workspace。
  *
  * 说明（中文）
- * - 按 `updated_at` 取最新的会话；缺失 `updated_at` 视为最旧。
- * - 列表为空时返回 null，由调用方回落到默认 session。
- *
- * @param params.remote_agent 远程 agent 句柄。
- * @returns 最近活跃的 session id；无历史会话时为 null。
+ * - 优先使用 Session 绑定的 Workspace；该 Workspace 已注销时回落到入口 Workspace。
+ * - 入口 Workspace 由 `--workspace`、当前目录或唯一已登记 Workspace 决定。
  */
-async function resolveLatestChatSessionId(params: {
-  remote_agent: AgentChatClient;
-}): Promise<string | null> {
-  let sessions: Awaited<ReturnType<typeof listRemoteChatSessions>>;
+async function resolve_chat_entry_target(params: {
+  agent_id: string;
+  workspace_id: string;
+  fallback_workspace_input: string;
+}): Promise<AgentExecutionTarget> {
+  const preferred = String(params.workspace_id || "").trim();
+  if (preferred) {
+    try {
+      return await resolve_cli_agent_target(params.agent_id, preferred);
+    } catch {
+      // Session 绑定的 Workspace 已注销：回落到入口 Workspace。
+    }
+  }
+  return await resolve_cli_agent_target(params.agent_id, params.fallback_workspace_input);
+}
+
+/** 读取指定 Agent 的 chat Session；省略 `workspace_id` 时不限定 Workspace。 */
+async function read_agent_chat_sessions(params: {
+  agent_id: string;
+  session_id?: string;
+  workspace_id?: string;
+  transport?: { host?: string; port?: number };
+}): Promise<AgentChatSessionSummaryView[]> {
+  const reader = await createAgentSessionReader({
+    agent_id: params.agent_id,
+    transport: params.transport,
+  });
   try {
-    sessions = await listRemoteChatSessions({ remote_agent: params.remote_agent });
+    return await listRemoteChatSessions({
+      remote_agent: reader,
+      input: {
+        ...(params.workspace_id ? { workspace_id: params.workspace_id } : {}),
+        ...(params.session_id ? { query: params.session_id } : {}),
+      },
+    });
+  } finally {
+    await reader.close().catch(() => undefined);
+  }
+}
+
+/**
+ * 在全部 Workspace 中查找最近一次 chat Session。
+ *
+ * 说明（中文）
+ * - Session 列表已按 `updated_at` 倒序，首项即最近会话。
+ * - 发现失败时返回 null，由调用方回落到入口 Workspace 新建会话。
+ */
+async function find_latest_chat_session(params: {
+  agent_id: string;
+  workspace_id?: string;
+  transport?: { host?: string; port?: number };
+}): Promise<AgentChatSessionSummaryView | null> {
+  try {
+    const sessions = await read_agent_chat_sessions(params);
+    return sessions[0] ?? null;
   } catch {
     return null;
   }
-  if (sessions.length === 0) {
-    return null;
-  }
-  let latest = sessions[0];
-  for (const candidate of sessions) {
-    if ((candidate.updated_at ?? 0) > (latest.updated_at ?? 0)) {
-      latest = candidate;
-    }
-  }
-  return latest.session_id;
+}
+
+/** 在全部 Workspace 中按 session_id 查找 chat Session。 */
+async function find_chat_session(params: {
+  agent_id: string;
+  session_id: string;
+  transport?: { host?: string; port?: number };
+}): Promise<AgentChatSessionSummaryView | null> {
+  const sessions = await read_agent_chat_sessions({
+    agent_id: params.agent_id,
+    session_id: params.session_id,
+    transport: params.transport,
+  });
+  return sessions.find((item) => item.session_id === params.session_id) ?? null;
 }
 
 export async function runSdkPromptTurn(params: {
@@ -378,41 +410,50 @@ export async function runSdkPromptTurn(params: {
   text?: string;
 }> {
   const message = normalizeChatMessage(params.message);
-  const resolved_session = resolveAgentChatSessionOptions(params.sessionOptions);
   if (!message) {
     return {
       success: false,
       error: "Chat message is required.",
       emittedVisibleText: false,
-      session_id: resolved_session.success
-        ? resolved_session.session_id
-        : AGENT_CHAT_DEFAULT_SESSION_ID,
+      session_id: "",
       text: "",
     };
   }
 
-  const resolved = await resolveAgentChatTarget(params.agent_id, params.sessionOptions);
-  if (!resolved.success) {
-    return {
-      success: false,
-      error: resolved.outcome.error,
-      emittedVisibleText: false,
-      session_id: resolved.outcome.session_id,
-      ...(resolved.outcome.project_root ? { project_root: resolved.outcome.project_root } : {}),
-      text: "",
-    };
-  }
-
-  const remote_agent = await createRemoteAgent({
-    agent_id: resolved.target.agent_id,
-    workspace: params.workspace,
+  const entry = await resolveAgentChatEntry({
+    agent_id: params.agent_id,
+    options: {
+      workspace: params.workspace,
+      session_id: params.sessionOptions?.session_id,
+      newSession: params.sessionOptions?.newSession,
+    },
     transport: params.transport,
   });
-  const session = await getOrCreateRemoteSession({
-    remote_agent,
-    session_id: resolved.target.session_id,
-    create_new_session: resolved.target.createNewSession,
-  });
+  if (!entry.success) {
+    return {
+      success: false,
+      error: entry.error,
+      emittedVisibleText: false,
+      session_id: "",
+      text: "",
+    };
+  }
+
+  const remote_agent = entry.remote_agent;
+  let session: RemoteAgentSession;
+  try {
+    session = await remote_agent.sessions.get(entry.target.session_id);
+  } catch (error) {
+    await remote_agent.close().catch(() => undefined);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      emittedVisibleText: false,
+      session_id: entry.target.session_id,
+      project_root: entry.target.project_root,
+      text: "",
+    };
+  }
 
   let printed_leading_newline = false;
   let emitted_visible_text = false;
@@ -469,8 +510,8 @@ export async function runSdkPromptTurn(params: {
       success: result.success,
       ...(result.error ? { error: result.error } : {}),
       emittedVisibleText: emitted_visible_text,
-      session_id: resolved.target.session_id,
-      project_root: resolved.target.project_root,
+      session_id: entry.target.session_id,
+      project_root: entry.target.project_root,
       text: final_text,
     };
   } catch (error) {
@@ -481,8 +522,8 @@ export async function runSdkPromptTurn(params: {
       success: false,
       error: error instanceof Error ? error.message : String(error),
       emittedVisibleText: emitted_visible_text,
-      session_id: resolved.target.session_id,
-      project_root: resolved.target.project_root,
+      session_id: entry.target.session_id,
+      project_root: entry.target.project_root,
       text: final_text,
     };
   } finally {
@@ -502,15 +543,10 @@ export async function executeAgentChatTurn(params: {
   transport?: { host?: string; port?: number };
 }): Promise<AgentChatExecutionOutcome> {
   const message = normalizeChatMessage(params.message);
-  const resolved_session = resolveAgentChatSessionOptions(params.sessionOptions);
-  const session_id = resolved_session.success
-    ? resolved_session.session_id
-    : AGENT_CHAT_DEFAULT_SESSION_ID;
-
   if (!message) {
     return {
       agent_id: String(params.agent_id || "").trim(),
-      session_id,
+      session_id: "",
       success: false,
       error: "Chat message is required.",
     };

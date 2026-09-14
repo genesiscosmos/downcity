@@ -15,9 +15,9 @@ import { run_agent_configuration } from "@/city/agent/AgentConfiguration.js";
 import type { AgentChatCliOptions } from "@/city/agent/AgentChatTypes.js";
 import {
   normalizeChatMessage,
+  resolveAgentChatEntry,
   resolveAgentChatSessionOptions,
   resolveChatTargetAgentId,
-  resolveInteractiveChatSession,
   runOneShotChat,
 } from "@/city/agent/AgentChatHelpers.js";
 
@@ -66,7 +66,7 @@ export async function chatCommand(options: AgentChatCliOptions): Promise<void> {
     return;
   }
 
-  const interactive = await resolveInteractiveChatSession({
+  const interactive = await resolveAgentChatEntry({
     agent_id,
     options,
     transport: {

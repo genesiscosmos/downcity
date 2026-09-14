@@ -9,16 +9,6 @@
 import type { SessionInteractionRequest } from "@downcity/agent";
 
 /**
- * `city agent chat` 默认使用的 local-cli 会话 ID。
- */
-export const AGENT_CHAT_DEFAULT_SESSION_ID = "local-cli-chat-main";
-
-/**
- * `city agent chat --new-session` 生成的 session ID 前缀。
- */
-export const AGENT_CHAT_NEW_SESSION_ID_PREFIX = "local-cli-chat";
-
-/**
  * `city agent chat` 命令选项。
  */
 export interface AgentChatCliOptions {
@@ -91,16 +81,6 @@ export interface AgentChatSessionOptions {
 }
 
 /**
- * 交互式 chat session 选项。
- */
-export interface AgentChatSessionChoice {
-  /** 当前选项类型。 */
-  kind: "create" | "session";
-  /** 选中后要使用的 session_id。 */
-  session_id?: string;
-}
-
-/**
  * TUI 内展示的 session 摘要。
  */
 export interface AgentChatSessionSummaryView {
@@ -114,6 +94,8 @@ export interface AgentChatSessionSummaryView {
   message_count: number;
   /** 最近更新时间（ms）。 */
   updated_at?: number;
+  /** 当前 Session 绑定的 Workspace ID；未绑定时为空。 */
+  workspace_id?: string;
   /** 是否正在执行。 */
   executing?: boolean;
 }

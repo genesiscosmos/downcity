@@ -9,6 +9,7 @@
 import { run_agent_create_command } from "@/city/agent/Init.js";
 import { t } from "@/shared/CliLocale.js";
 import { list_agent_configs } from "@/city/process/registry/AgentConfigRepository.js";
+import { format_agent_display_label } from "@/city/agent/AgentSelection.js";
 import type { AgentManagerAgentSummary } from "@/city/agent/AgentManagerTypes.js";
 
 export function isInteractiveTerminal(): boolean {
@@ -19,6 +20,7 @@ export async function loadAgentSummaries(): Promise<AgentManagerAgentSummary[]> 
   return list_agent_configs().map((config) => {
     return {
       id: config.agent_id,
+      name: config.name,
       execution_binding: String(
         config?.execution?.type === "api" ? config.execution.model_id || "" : "",
       ).trim(),
@@ -46,13 +48,14 @@ export function formatAgentDetail(agent: AgentManagerAgentSummary): string {
 }
 
 export function formatAgentConfigPanelDescription(agent: AgentManagerAgentSummary): string {
+  const label = format_agent_display_label({ agent_id: agent.id, name: agent.name });
   return t({
     zh: [
-      `Agent ${agent.id} · 模型 ${agent.execution_binding || "未配置"}`,
+      `Agent ${label} · 模型 ${agent.execution_binding || "未配置"}`,
       "配置默认模型、Env，以及内建或第三方 Plugin Binding。",
     ].join("\n"),
     en: [
-      `Agent ${agent.id} · Model ${agent.execution_binding || "not configured"}`,
+      `Agent ${label} · Model ${agent.execution_binding || "not configured"}`,
       "Configure the default model, Env, and built-in or installed Plugin bindings.",
     ].join("\n"),
   });

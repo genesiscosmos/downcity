@@ -334,18 +334,46 @@ test("CityRPC routes RemoteAgent by rpc URL Agent ID", {
   const port = await reserve_port();
   const first = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/first_agent/first` });
   const second = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/second_agent/second` });
+  const first_in_second = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/first_agent/second` });
+  const first_agent_scope = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/first_agent` });
   try {
     await transport.listen({ host: "127.0.0.1", port });
-    await first.sessions.create({ session_id: "shared-session" });
+    const first_session = await first.sessions.create();
+    const second_workspace_session = await first_in_second.sessions.create();
     assert.deepEqual((await first.sessions.list()).items.map((item) => item.session_id), [
-      "shared-session",
+      first_session.id,
     ]);
     assert.deepEqual((await second.sessions.list()).items, []);
+
+    // Agent 级列表不绑定 Workspace，用于发现该 Agent 的全部会话。
+    const agent_scoped_sessions = (await first_agent_scope.sessions.list()).items;
+    assert.deepEqual(
+      agent_scoped_sessions.map((item) => item.session_id).sort(),
+      [first_session.id, second_workspace_session.id].sort(),
+    );
+    assert.deepEqual(
+      [...new Set(agent_scoped_sessions.map((item) => item.workspace_id))].sort(),
+      ["first", "second"],
+    );
+    // 写操作仍然必须携带 workspace_id。
+    await assert.rejects(
+      first_agent_scope.sessions.create(),
+      /requires workspace_id/u,
+    );
+
     const missing = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/missing/first` });
     await assert.rejects(missing.sessions.list(), /Agent not found in City: missing/);
-    await missing.close();
+    const missing_scope = new RemoteAgent({ url: `rpc://127.0.0.1:${port}/missing` });
+    await assert.rejects(missing_scope.sessions.list(), /Agent not found: missing/u);
+    await Promise.all([missing.close(), missing_scope.close()]);
   } finally {
-    await Promise.allSettled([first.close(), second.close(), transport.close()]);
+    await Promise.allSettled([
+      first.close(),
+      second.close(),
+      first_in_second.close(),
+      first_agent_scope.close(),
+      transport.close(),
+    ]);
     await city.close();
     await Promise.all(agents.map((agent) => agent.dispose()));
     await fs.rm(root, { recursive: true, force: true });

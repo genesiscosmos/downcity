@@ -11,13 +11,16 @@ export interface CliAgentView {
   /** Agent 全局稳定标识。 */
   agent_id: string;
 
+  /** Agent 的用户可见名称；未自定义时与 `agent_id` 相同。 */
+  name: string;
+
   /** 当前 CLI City daemon 是否已加载该 Agent。 */
   status: "loaded" | "unloaded";
 }
 
 /** 交互选择器中的 Agent 选项。 */
 export interface CliAgentPromptChoice {
-  /** Agent ID 展示标题。 */
+  /** Agent 展示标题，包含用户可见名称与稳定 ID。 */
   title: string;
 
   /** 选择后返回的 Agent ID。 */

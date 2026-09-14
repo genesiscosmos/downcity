@@ -16,6 +16,20 @@ import type {
 import { resolve_remote_session_set_input } from "@/city/transport/session/RemoteSessionConfig.js";
 
 /**
+ * 解析 Session 列表请求的 Workspace 过滤。
+ *
+ * 说明（中文）
+ * - 显式 `params.workspace_id` 优先，用于 Agent 级跨 Workspace 会话发现。
+ * - 未显式指定时回落到 RPC 端点绑定的 Workspace，保持既有作用域语义。
+ */
+function resolve_list_workspace_id(
+  params: { workspace_id?: string } | undefined,
+  options: RpcRequestHandlerOptions,
+): string | undefined {
+  return String(params?.workspace_id || "").trim() || options.workspace?.id;
+}
+
+/**
  * 处理 SDK session RPC 请求。
  */
 export async function handle_sdk_session_rpc_request(params: {
@@ -37,9 +51,10 @@ export async function handle_sdk_session_rpc_request(params: {
 
   switch (request.method) {
     case "sdk.sessions.list": {
+      const workspace_id = resolve_list_workspace_id(request.params, options);
       const page = await options.sessions.list({
         ...request.params,
-        ...(options.workspace ? { workspace_id: options.workspace.id } : {}),
+        ...(workspace_id ? { workspace_id } : {}),
       });
       write_success(request.id, { page });
       return true;
@@ -156,9 +171,10 @@ export async function handle_sdk_session_rpc_request(params: {
       return true;
     }
     case "sdk.sessions.archived.list": {
+      const workspace_id = resolve_list_workspace_id(request.params, options);
       const page = await options.sessions.archived({
         ...request.params,
-        ...(options.workspace ? { workspace_id: options.workspace.id } : {}),
+        ...(workspace_id ? { workspace_id } : {}),
       });
       write_success(request.id, { page });
       return true;

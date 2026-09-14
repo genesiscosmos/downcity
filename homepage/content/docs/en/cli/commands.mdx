@@ -32,14 +32,14 @@ city agent model [agent_id]
 city agent chat [agent_id]
 ```
 
-The bare `city` command opens the Agent list directly. It does not show Agent runtime status. Federation, global Plugins, language, and command help appear in a Settings group at the end of the same list.
+The bare `city` command opens the Agent list directly. It does not show Agent runtime status. `city agent list` prints every Agent as `name · agent_id`. Federation, global Plugins, language, and command help appear in a Settings group at the end of the same list.
 
 Agents assembled by City enable the `ask_question` tool by default.
-Selecting an Agent in the `city agent` panel opens its most recent conversation directly, or the default Session when no history exists. The model can present text, single-select, or multi-select
+Selecting an Agent in the `city agent` panel opens its most recent conversation and enters that Session's Workspace. When the Agent has no history yet, Chat opens in the current Workspace and creates a new Session. The model can present text, single-select, or multi-select
 questions when key information is missing. The CLI submits the complete answer set
 to the current Session and continues the same Turn. Press Esc to stop that Turn.
 
-Agents and Workspaces are registered independently. An Agent enters a selected Workspace for each execution and stores no persistent Workspace binding. Agents have no independent started state. In Chat, use `/new` to create a Session, `/session` to select an existing Session or create one, and `/config` to open Agent configuration. Configuration returns to the same conversation. Chat uses RPC while City is running; scriptable one-shot calls can use the local assembly path while City is off.
+Agents and Workspaces are registered independently. An Agent enters a selected Workspace for each execution and stores no persistent Workspace binding. Agents have no independent started state. `city agent chat --session-id <id>` must reference an existing Session and enters that Session's Workspace; `--workspace <id>` keeps Chat in that Workspace by limiting session lookup to it, requiring it to match the Workspace of a selected `--session-id` Session, and creating new Sessions there. In Chat, use `/new` to create a Session, `/session` to select an existing Session or create one, and `/config` to open Agent configuration. Configuration returns to the same conversation. Chat uses RPC while City is running; scriptable one-shot calls can use the local assembly path while City is off.
 
 Use the slash command to open the system file picker and attach local files to the next message:
 

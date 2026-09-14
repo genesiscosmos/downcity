@@ -32,13 +32,13 @@ city agent model [agent_id]
 city agent chat [agent_id]
 ```
 
-裸 `city` 命令直接打开 Agent 列表，不展示 Agent runtime 状态。Federation、全局 Plugins、语言和命令帮助直接位于同一列表末尾的“设置”分组。
+裸 `city` 命令直接打开 Agent 列表，不展示 Agent runtime 状态。`city agent list` 以 `名称 · agent_id` 展示每个 Agent。Federation、全局 Plugins、语言和命令帮助直接位于同一列表末尾的“设置”分组。
 
 City 装配的 Agent 默认启用 `ask_question` Tool。在
-`city agent` 面板选择 Agent 后会直接进入最近一次对话；没有历史时进入默认 Session。模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
+`city agent` 面板选择 Agent 后会直接进入最近一次对话，并跟随该 Session 所属 Workspace；该 Agent 还没有历史时，在入口 Workspace 新建 Session。模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
 提交给当前 Session，并继续同一个 Turn。按 Esc 可停止当前 Turn。
 
-Agent 与 Workspace 独立登记。Agent 每次执行时进入所选 Workspace，不保存持久化 Workspace 绑定。Agent 没有独立启动状态；Chat 内使用 `/new` 创建新 Session、`/session` 选择已有 Session 或新建 Session、`/config` 打开 Agent 配置，配置完成后会回到原对话。City 运行时 Chat 走 RPC，脚本化的一次性调用在 City 关闭时仍可使用本地装配路径。
+Agent 与 Workspace 独立登记。Agent 每次执行时进入所选 Workspace，不保存持久化 Workspace 绑定。Agent 没有独立启动状态；`city agent chat --session-id <id>` 必须指向已存在的 Session，并进入该 Session 所属 Workspace；`--workspace <id>` 会把 Chat 限定在该 Workspace：只在其中查找 Session、必须与所选 `--session-id` 的 Workspace 一致，新 Session 也会创建在那里。Chat 内使用 `/new` 创建新 Session、`/session` 选择已有 Session 或新建 Session、`/config` 打开 Agent 配置，配置完成后会回到原对话。City 运行时 Chat 走 RPC，脚本化的一次性调用在 City 关闭时仍可使用本地装配路径。
 
 在输入框中可以使用 slash command 打开系统文件选择器并添加本地附件：
 

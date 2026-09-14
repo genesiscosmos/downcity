@@ -9,16 +9,16 @@
 
 import {
   Agent,
-  generate_id,
   type AgentSessions,
   type AgentSession,
   type AgentSessionCollection,
   type AgentSessionSetOptions,
   type RemoteSessionSetInput,
+  type AgentListSessionsInput,
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import { City, LocalStorageProvider, RemoteAgent } from "@downcity/city";
+import { City, LocalStorageProvider, RemoteAgent, type CityPluginHost } from "@downcity/city";
 import type { ModelClient } from "@downcity/type";
 import type { WorkspaceRuntime } from "@downcity/type/workspace";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
@@ -28,7 +28,6 @@ import {
   read_daemon_pid,
 } from "@/city/process/daemon/Manager.js";
 import {
-  AGENT_CHAT_NEW_SESSION_ID_PREFIX,
   type AgentChatSessionSummaryView,
   type AgentChatTransportOptions,
 } from "@/city/agent/AgentChatTypes.js";
@@ -40,7 +39,7 @@ import {
   create_cli_plugin_loader,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
-import { create_cli_local_data } from "@/city/runtime/LocalData.js";
+import { create_cli_local_data, type CliLocalData } from "@/city/runtime/LocalData.js";
 import { resolve_cli_agent_target } from "@/city/agent/AgentSelection.js";
 
 /**
@@ -60,22 +59,15 @@ export interface AgentChatClient {
 }
 
 /**
- * 生成 CLI chat 专用的新 session_id。
- */
-export function createAgentChatSessionId(): string {
-  return [
-    AGENT_CHAT_NEW_SESSION_ID_PREFIX,
-    Date.now(),
-    generate_id().slice(0, 8),
-  ].join("-");
-}
-
-/**
  * 解析 chat 远程目标地址。
+ *
+ * 关键点（中文）
+ * - 省略 `workspace_id` 时生成 Agent 级地址，只用于跨 Workspace 会话发现。
+ * - 带 `workspace_id` 时地址与请求都固定进入该 Workspace。
  */
 export async function resolveAgentChatRemoteTarget(params: {
   agent_id: string;
-  workspace_id: string;
+  workspace_id?: string;
   transport?: AgentChatTransportOptions;
 }): Promise<AgentChatRemoteTarget> {
   // 关键点（中文）：chat 固定走 Agent 本机 RPC，由 City 负责对外暴露。
@@ -84,9 +76,19 @@ export async function resolveAgentChatRemoteTarget(params: {
     host: params.transport?.host,
     port: params.transport?.port,
   });
+  const workspace_segment = String(params.workspace_id || "").trim()
+    ? `/${encodeURIComponent(String(params.workspace_id).trim())}`
+    : "";
   return {
-    url: `rpc://${endpoint.host}:${endpoint.port}/${encodeURIComponent(params.agent_id)}/${encodeURIComponent(params.workspace_id)}`,
+    url: `rpc://${endpoint.host}:${endpoint.port}/${encodeURIComponent(params.agent_id)}${workspace_segment}`,
   };
+}
+
+/** 判断当前 CLI City daemon 是否已持有指定 Agent。 */
+async function is_agent_held_by_daemon(agent_id: string): Promise<boolean> {
+  const pid = await read_daemon_pid();
+  const meta = pid && is_process_alive(pid) ? await read_daemon_meta() : null;
+  return meta?.agent_ids.includes(agent_id) === true;
 }
 
 /**
@@ -98,9 +100,7 @@ export async function createRemoteAgent(params: {
   transport?: AgentChatTransportOptions;
 }): Promise<AgentChatClient> {
   const target_config = await resolve_cli_agent_target(params.agent_id, params.workspace);
-  const pid = await read_daemon_pid();
-  const meta = pid && is_process_alive(pid) ? await read_daemon_meta() : null;
-  if (!meta?.agent_ids.includes(params.agent_id)) {
+  if (!(await is_agent_held_by_daemon(params.agent_id))) {
     const data = create_cli_local_data();
     const plugin_loader = create_cli_plugin_loader({ plugin_repository: data.plugins });
     let agent: Agent | undefined;
@@ -117,18 +117,7 @@ export async function createRemoteAgent(params: {
         storage: new LocalStorageProvider(data.root_path),
         workspaces: [workspace],
         plugins: await plugin_loader.list_registrations(),
-        plugin_host: {
-          config: (plugin_id) => ({
-            get: () => structuredClone(data.plugins.get_config(plugin_id)),
-            set: async (config) => {
-              data.plugins.set_config(plugin_id, structuredClone(config));
-            },
-          }),
-          notifications: () => ({
-            publish: async () => {},
-            dismiss: async () => {},
-          }),
-        },
+        plugin_host: create_local_plugin_host(data),
       });
       city.agents.add(agent);
       return {
@@ -155,6 +144,99 @@ export async function createRemoteAgent(params: {
   return new RemoteAgent({
     url: target.url,
   });
+}
+
+/**
+ * 打开一个 Agent 级只读 Session 读取器。
+ *
+ * 关键点（中文）
+ * - 只用于跨 Workspace 发现最近会话，不进入任何 Workspace。
+ * - daemon 持有该 Agent 时走 Agent 级 RPC；否则走不绑定 Workspace 的本地装配。
+ * - 读写、创建与恢复 Session 仍然必须携带 Workspace，由 `createRemoteAgent` 负责。
+ */
+export async function createAgentSessionReader(params: {
+  agent_id: string;
+  transport?: AgentChatTransportOptions;
+}): Promise<AgentChatClient> {
+  const agent_id = String(params.agent_id || "").trim();
+  if (!agent_id) throw new Error("Agent id is required");
+  if (await is_agent_held_by_daemon(agent_id)) {
+    const target = await resolveAgentChatRemoteTarget({
+      agent_id,
+      transport: params.transport,
+    });
+    return new RemoteAgent({ url: target.url });
+  }
+  return await create_local_agent_session_reader(agent_id);
+}
+
+/** 构造 CLI 本地 Plugin 宿主回调。 */
+function create_local_plugin_host(data: CliLocalData): CityPluginHost {
+  return {
+    config: (plugin_id) => ({
+      get: () => structuredClone(data.plugins.get_config(plugin_id)),
+      set: async (config) => {
+        data.plugins.set_config(plugin_id, structuredClone(config));
+      },
+    }),
+    notifications: () => ({
+      publish: async () => {},
+      dismiss: async () => {},
+    }),
+  };
+}
+
+/** 在不绑定 Workspace 的本地装配中打开 Agent 级 Session 读取器。 */
+async function create_local_agent_session_reader(agent_id: string): Promise<AgentChatClient> {
+  const data = create_cli_local_data();
+  const plugin_loader = create_cli_plugin_loader({ plugin_repository: data.plugins });
+  let agent: Agent | undefined;
+  try {
+    const config = data.agents.get(agent_id);
+    if (!config) throw new Error(`Agent not found: ${agent_id}`);
+    agent = await create_cli_agent({ config });
+    const city = new City({
+      storage: new LocalStorageProvider(data.root_path),
+      workspaces: [],
+      plugins: await plugin_loader.list_registrations(),
+      plugin_host: create_local_plugin_host(data),
+    });
+    city.agents.add(agent);
+    return {
+      sessions: create_local_session_reader(agent.sessions),
+      close: async () => {
+        await city.close();
+        data.database.close();
+      },
+    };
+  } catch (error) {
+    await agent?.dispose().catch(() => undefined);
+    data.database.close();
+    throw error;
+  }
+}
+
+/**
+ * 把本地 Session 集合包装为只读发现视图。
+ *
+ * 说明（中文）
+ * - `list` / `archived` 不绑定 Workspace，用于跨 Workspace 发现。
+ * - `create` / `get` 依赖 Workspace 执行上下文，这里显式拒绝。
+ */
+function create_local_session_reader(
+  sessions: AgentSessionCollection,
+): AgentSessions<RemoteAgentSession> {
+  const requires_workspace = async (): Promise<never> => {
+    throw new Error("Opening a Session requires a Workspace; this reader only lists Sessions");
+  };
+  return {
+    create: requires_workspace,
+    get: requires_workspace,
+    list: async (input) => await sessions.list(input),
+    archive: async (input) => await sessions.archive(input),
+    archived: async (input) => await sessions.archived(input),
+    clean_archive: async () => await sessions.clean_archive(),
+  };
 }
 
 /** 把本地 Session 的模型实例输入适配为 RemoteSession 的 model_id 输入。 */
@@ -194,9 +276,9 @@ function create_local_chat_sessions(
       origin_type,
       { workspace },
     )),
-    list: async (input) => await sessions.list(input),
+    list: async (input) => await sessions.list({ ...input, workspace_id: workspace.id }),
     archive: async (input) => await sessions.archive(input),
-    archived: async (input) => await sessions.archived(input),
+    archived: async (input) => await sessions.archived({ ...input, workspace_id: workspace.id }),
     clean_archive: async () => await sessions.clean_archive(),
   };
 }
@@ -211,13 +293,23 @@ export async function listAgentChatModelChoices(): Promise<AgentChatModelChoice[
   }));
 }
 
+/** chat Session 列表默认拉取上限。 */
+const DEFAULT_CHAT_SESSION_LIST_LIMIT = 50;
+
 /**
  * 列出远程 chat session 摘要。
+ *
+ * 说明（中文）
+ * - 不传 `workspace_id` 时不限定 Workspace，用于发现最近会话。
  */
 export async function listRemoteChatSessions(params: {
   remote_agent: AgentChatClient;
+  input?: AgentListSessionsInput;
 }): Promise<AgentChatSessionSummaryView[]> {
-  const page = await params.remote_agent.sessions.list({ limit: 30 });
+  const page = await params.remote_agent.sessions.list({
+    limit: DEFAULT_CHAT_SESSION_LIST_LIMIT,
+    ...params.input,
+  });
   return page.items.map(toSessionSummaryView);
 }
 
@@ -226,33 +318,11 @@ export async function listRemoteChatSessions(params: {
  */
 export async function createRemoteChatSession(params: {
   remote_agent: AgentChatClient;
-  session_id?: string;
 }): Promise<{ session_id: string }> {
-  void params.session_id;
   const session = await params.remote_agent.sessions.create();
   return {
     session_id: session.id,
   };
-}
-
-/**
- * 获取或创建远程 session。
- */
-export async function getOrCreateRemoteSession(params: {
-  remote_agent: AgentChatClient;
-  session_id: string;
-  create_new_session?: boolean;
-}): Promise<RemoteAgentSession> {
-  const collection = params.remote_agent.sessions;
-  if (params.create_new_session === true) {
-    void params.session_id;
-    return await collection.create();
-  }
-  try {
-    return await collection.get(params.session_id);
-  } catch {
-    return await collection.create();
-  }
 }
 
 /**
@@ -267,20 +337,9 @@ export function toSessionSummaryView(
     ...(summary.preview_text ? { preview_text: summary.preview_text } : {}),
     message_count: summary.message_count,
     ...(typeof summary.updated_at === "number" ? { updated_at: summary.updated_at } : {}),
+    ...(summary.workspace_id ? { workspace_id: summary.workspace_id } : {}),
     ...(summary.executing ? { executing: true } : {}),
   };
-}
-
-/**
- * 构建 session 选择项描述文本。
- */
-export function buildSessionChoiceDescription(summary: AgentChatSessionSummaryView): string {
-  const parts = [
-    `${summary.message_count} messages`,
-    summary.preview_text || "",
-    summary.executing ? "running" : "",
-  ].filter(Boolean);
-  return parts.join(" · ");
 }
 
 /**

@@ -56,8 +56,28 @@ async function to_cli_agent_view(agent: AgentConfig): Promise<CliAgentView> {
   const active = meta?.pid === daemon_pid && meta.agent_ids.includes(agent.agent_id);
   return {
     agent_id: agent.agent_id,
+    name: agent.name,
     status: active ? "loaded" : "unloaded",
   };
+}
+
+/**
+ * 生成 Agent 的统一展示文案（用户可见名称 + 稳定 ID）。
+ *
+ * 关键点（中文）
+ * - 名称为空或与 ID 相同时只展示 ID，避免列表出现重复噪声。
+ * - CLI 列表、交互首页与 Chat 选择器共用，保证 Agent 展示一致。
+ */
+export function format_agent_display_label(agent: {
+  /** Agent 全局稳定标识。 */
+  agent_id: string;
+  /** Agent 用户可见名称；未自定义时与 ID 相同。 */
+  name?: string;
+}): string {
+  const agent_id = String(agent.agent_id || "").trim();
+  const name = String(agent.name || "").trim();
+  if (!name || name === agent_id) return agent_id;
+  return `${name} · ${agent_id}`;
 }
 
 /** 读取全部已登记 Agent 的 CLI 视图。 */
@@ -76,7 +96,7 @@ export function build_cli_agent_prompt_choices(
   agents: CliAgentView[],
 ): CliAgentPromptChoice[] {
   return agents.map((agent) => ({
-    title: agent.agent_id,
+    title: format_agent_display_label(agent),
     value: agent.agent_id,
     description: agent.status === "loaded" ? "City active" : "City inactive",
   }));
@@ -132,7 +152,7 @@ export async function emit_registered_agent_list_with_options(options?: {
     summary: `${agents.length} registered`,
     items: agents.map((agent) => ({
       tone: agent.status === "loaded" ? "success" : "info",
-      title: agent.agent_id,
+      title: format_agent_display_label(agent),
       facts: [
         { label: "City runtime", value: agent.status === "loaded" ? "active" : "inactive" },
       ],
@@ -153,7 +173,7 @@ export async function resolve_cli_agent_target(
   workspace_input?: string,
 ): Promise<AgentExecutionTarget> {
   const agent_id = await resolve_cli_agent_id(agent_id_input);
-  const workspace = await resolve_workspace(workspace_input);
+  const workspace = await resolve_cli_workspace(workspace_input);
   return {
     agent_id,
     workspace_id: workspace.workspace_id,
@@ -184,7 +204,9 @@ async function resolve_agent(agent_id_input?: string): Promise<AgentConfig> {
 }
 
 /** 解析显式 Workspace ID/路径，省略时优先使用当前目录。 */
-async function resolve_workspace(workspace_input?: string): Promise<WorkspaceRegistryRecord> {
+export async function resolve_cli_workspace(
+  workspace_input?: string,
+): Promise<WorkspaceRegistryRecord> {
   const explicit = String(workspace_input || "").trim();
   const current_workspace = get_workspace_by_path(path.resolve(explicit || process.cwd()));
   const resolved = explicit

@@ -24,6 +24,18 @@ type CityRpcAccess = Pick<
 const DEFAULT_RPC_HOST = "127.0.0.1";
 const DEFAULT_RPC_PORT = 15314;
 
+/**
+ * 无需进入 Workspace 的 Agent 级只读方法。
+ *
+ * 关键点（中文）
+ * - 会话列表天然属于 Agent，而不是某一个 Workspace。
+ * - 仅放开只读列表，创建、恢复与写入仍然必须携带 workspace_id。
+ */
+const AGENT_SCOPED_READ_METHODS: ReadonlySet<string> = new Set([
+  "sdk.sessions.list",
+  "sdk.sessions.archived.list",
+]);
+
 /** 在单一 RPC 端口暴露 City 的多 Agent transport。 */
 export class CityRPC {
   private readonly runtime_access: CityRpcAccess;
@@ -79,7 +91,14 @@ export class CityRPC {
           const agent_id = String(request.agent_id || "").trim();
           if (!agent_id) throw new Error("CityRPC request requires agent_id");
           const workspace_id = String(request.workspace_id || "").trim();
-          if (!workspace_id) throw new Error("CityRPC request requires workspace_id");
+          if (!workspace_id) {
+            if (!AGENT_SCOPED_READ_METHODS.has(request.method)) {
+              throw new Error("CityRPC request requires workspace_id");
+            }
+            const agent = this.runtime_access.get_agent(agent_id);
+            if (!agent) throw new Error(`Agent not found: ${agent_id}`);
+            return { sessions: agent.sessions };
+          }
           const workspace = await this.runtime_access.enter_workspace(agent_id, workspace_id);
           const agent = this.runtime_access.get_agent(agent_id);
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);

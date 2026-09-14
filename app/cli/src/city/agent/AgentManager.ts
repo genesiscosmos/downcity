@@ -13,7 +13,8 @@ import {
   loadAgentSummaries,
   runCreateFlow,
 } from "@/city/agent/AgentManagerHelpers.js";
-import { resolveInteractiveChatSession } from "@/city/agent/AgentChatHelpers.js";
+import { resolveAgentChatEntry } from "@/city/agent/AgentChatHelpers.js";
+import { format_agent_display_label } from "@/city/agent/AgentSelection.js";
 import { run_agent_chat_navigation } from "@/city/agent/AgentChatNavigation.js";
 import { run_agent_configuration } from "@/city/agent/AgentConfiguration.js";
 import type { tui_prompt_option } from "@/shared/types/TuiPrompt.js";
@@ -66,7 +67,7 @@ export async function runInteractiveAgentManager(
 /** 解析最近会话并直接进入 Chat；退出后回到 Agents 列表。 */
 async function run_agent_chat(agent_id: string): Promise<void> {
   try {
-    const interactive = await resolveInteractiveChatSession({
+    const interactive = await resolveAgentChatEntry({
       agent_id,
       options: {},
     });
@@ -96,7 +97,7 @@ async function build_agent_options(
   const agents = await loadAgentSummaries();
   return [
     ...agents.map((agent) => ({
-      label: agent.id,
+      label: format_agent_display_label({ agent_id: agent.id, name: agent.name }),
       value: agent.id,
       hint: formatAgentDetail(agent),
     })),
