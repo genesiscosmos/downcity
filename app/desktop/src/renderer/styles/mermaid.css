@@ -154,14 +154,27 @@
 }
 
 /*
- * 全屏下由 transform 组件负责缩放，图表必须回到原始像素尺寸，否则 CSS 会先把宽度压到容器，
- * 再交给缩放层一个已经被压缩过的内容，缩放范围也就失去意义。
+ * 画布是全屏图表的固定尺寸基座：宽度与高度由使用方按 SVG 的 viewBox 显式给出，
+ * SVG 再 100% 填满它。缩放层根据画布尺寸计算适配缩放。
+ *
+ * 不能让 SVG 自己用 `width: auto` 找尺寸：它的宽度要相对一个未定的容器解析，
+ * 结果是 0，全屏里就什么都看不见。
  */
+.markdown-mermaid-fullscreen-canvas {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
 .markdown-mermaid-fullscreen-canvas svg {
   display: block;
-  width: auto !important;
-  max-width: none !important;
-  height: auto;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
 }
 
 .markdown-mermaid-float {

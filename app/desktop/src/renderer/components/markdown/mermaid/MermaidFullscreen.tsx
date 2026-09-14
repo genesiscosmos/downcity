@@ -8,11 +8,11 @@
  * 全屏不会因为第二次渲染的尺寸/主题差异而与内联视图不一致。
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { TbDownload, TbRestore, TbX, TbZoomIn, TbZoomOut } from "react-icons/tb";
 import { TransformComponent, TransformWrapper, type ReactZoomPanPinchContentRef } from "react-zoom-pan-pinch";
-import { download_mermaid_png } from "@/components/markdown/mermaid/mermaid_image";
+import { download_mermaid_png, read_mermaid_svg_size } from "@/components/markdown/mermaid/mermaid_image";
 import { mermaid_overlay_button_class_name } from "@/components/markdown/mermaid/mermaid_styles";
 import { use_translation } from "@/locales/i18n";
 
@@ -46,6 +46,8 @@ export function MermaidFullscreen({ svg, on_close }: { /** 已渲染完成的图
   const container_ref = useRef<HTMLDivElement>(null);
   const transform_ref = useRef<ReactZoomPanPinchContentRef | null>(null);
   const [download_failed, set_download_failed] = useState(false);
+  // 缩放层需要一个确定尺寸的内容才能计算适配；尺寸取自 SVG 自己的 viewBox。
+  const svg_size = useMemo(() => read_mermaid_svg_size(svg), [svg]);
 
   useEffect(() => {
     // 打开即接管键盘焦点，Tab 从缩放控件开始；关闭时把焦点还给打开它的按钮，
@@ -94,8 +96,15 @@ export function MermaidFullscreen({ svg, on_close }: { /** 已渲染完成的图
         wheel={{ step: 0.08 }}
         panning={{ velocityDisabled: true }}
       >
-        <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }} contentStyle={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div className="markdown-mermaid-fullscreen-canvas" dangerouslySetInnerHTML={{ __html: svg }} />
+        <TransformComponent
+          wrapperStyle={{ width: "100%", height: "100%" }}
+          contentStyle={svg_size ? { width: svg_size.width, height: svg_size.height } : undefined}
+        >
+          <div
+            className="markdown-mermaid-fullscreen-canvas"
+            style={svg_size ? { width: svg_size.width, height: svg_size.height } : undefined}
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
         </TransformComponent>
       </TransformWrapper>
 
