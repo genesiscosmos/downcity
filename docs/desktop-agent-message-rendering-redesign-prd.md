@@ -1010,3 +1010,102 @@ Interaction 必须以 canonical status 为事实源。本地答案和 submitting
 8.后续可从 `AgentMessage` / `AgentMessageContent` 边界抽取到 `@downcity/ui`，无需搬运 SessionTimeline、Electron IPC 或 Workspace Store。
 
 只有以上条件全部满足，才能认为 Agent Message Renderer 已从历史叠加结构收敛为可长期演进的设计。
+
+---
+
+## 二十一、后续收敛：Tool 展示的单一映射（2026-09-14）
+
+> 状态：已实施
+>
+> 范围：`app/desktop/src/renderer/features/chat/` 的 Tool 展示层与 `styles/chat.css` 活动区
+
+### 21.1 触发原因
+
+第十二至二十节完成后，Tool 展示仍有三类遗留成本：
+
+1. Tool 名称启发式、状态文案、摘要与详情渲染分散在纯映射模块和组件之间，新增一种 Tool 要同时改投影、组件分支与 i18n。
+2. 组件用 `streamed_field` / `streamed_fields` / `decode_json_fragment` / `build_streamed_edit_pairs` 四个函数手工解析流式 JSON 原文，同一件事有四套实现。
+3. Tool、Reasoning 与活动组各自手写一份 `details / summary` 结构，语气样式判断重复三次。
+
+同时确认 `.activity-tool-terminal`、`.activity-tool-change-preview`、`.activity-tool-payload`、`.activity-tool-write-content`、`.activity-tool-diff-marker`、`.activity-tool-item`、`.reasoning-activity-row`、`.activity-tool-detail.is-write` 等类名已无引用，或被后续规则完全覆盖。
+
+### 21.2 决策
+
+- **规则表是唯一映射。** `AGENT_TOOL_RULES: Record<AgentToolVisualKind, AgentToolRule>` 定义每个种类的摘要与详情；新增种类由 `Record` 强制补全，组件不再按 Tool 名称分支。
+- **输入读取只有一条规则。** `read_input()` 结构化参数优先，`input-streaming` 时回退到原文；摘要与详情共用它。
+- **流式原文读取只保留一个函数。** `read_streaming_input_values()` 按 JSON 字符串词法扫描：只有紧跟在字段名之后的值才会命中，字段名出现在内容里不误配，未闭合的值按当前进度返回。原四个解析函数全部删除。
+- **详情形态收敛为三种。** `AgentToolDetail = code | console | edit`；组件只按形态渲染，不再理解 Tool 语义。
+- **活动行只有一个结构。** `ActivityRow` 统一 Tool、Reasoning 与活动组的图标、状态、摘要、徽标与展开容器；语气由 `AgentToolTone = running | complete | failed` 表达，样式钩子映射只写一次。
+- **失败原因独立于详情。** `error` 与 `detail` 分离，所有种类都在详情区渲染可读原因。
+
+### 21.3 行为与视觉
+
+- 视觉不变：被删除的 CSS 选择器均已无引用，或已被更具体的 `.activity-tool-edit-diff` 规则完全覆盖；`waiting-user` 仍为静态样式，因为被交互阻塞不是推进。
+- 两处正向变化：流式期间摘要会显示正在到达的字段（例如文件路径）；失败 Tool 的 `error` 对全部种类可见，此前只有 shell 把错误拼进控制台文本。
+- 未知结构化输出的兜底文本由「原始值用 `·` 连接」改为逐行 `key: value`，不隐藏嵌套结果。
+
+### 21.4 验证
+
+```bash
+pnpm --filter @downcity/desktop typecheck   # 通过
+pnpm --filter @downcity/desktop test        # 285/285 通过
+```
+
+`agent_tool_presentation.test.ts` 增加覆盖：语气映射、三种详情形态、失败原因与详情独立、流式字段读取不误配、流式 Edit 配对、未知输出兜底。
+
+### 21.5 仍未处理
+
+运行态仍是第二事实源：turn 与 Tool 状态由主进程 `AgentController` 反推为 `runtime` 后经独立通道广播，Renderer 侧因此保留一套 `chat_runtime_projection`。`warning:model_request` mutation 至今没有消费方，模型请求失败与自动重试对用户不可见。两项都属于后续独立变更。
+
+---
+
+## 二十二、后续收敛：Action Part 纳入活动集合（2026-09-14）
+
+> 状态：已实施
+>
+> 范围：`app/desktop/src/renderer/features/chat/` 的消息投影、活动展示与 `styles/chat.css` 活动区
+
+### 22.1 触发原因
+
+canonical `SessionAgentActionPart`（fork、上下文压缩、命令等）此前自成一条渲染路径：投影层给它单独的 `{ type: "action" }` Block，组件用一段内联 Tailwind 类名渲染。结果是同一段连续活动里出现两种行样式：
+
+| 维度 | 活动行（`.activity-tool-row`） | Action 行（内联类名） |
+| --- | --- | --- |
+| 字号 | 13px | 11px |
+| 图标 | 按种类映射 | 无 |
+| 左侧装饰 | 无 | 1px `border-divider` 竖线 |
+| 缩进 | 由行结构决定 | `pl-2` + `items-baseline` |
+| 展开 | `details / summary` | 无 |
+
+同时，因为 Action 独占一个 Block，`Tool → Action → Tool` 会被切成「活动组 / Action / 活动组」三段，时间连续性被打断。
+
+### 22.2 决策
+
+- **Action 是活动 Part，不是独立 Block。** `AgentActivityPart` 补入 `SessionAgentActionPart`，`AgentMessageBlock` 去掉 `action` 成员；投影层把 Action 交给 `append_activity_part()`。
+- **Action 不改变操作栏资格。** 与改动前一致：它不作为 `last_action_boundary`，因此位于消息末尾的 Action 不会剥夺正文的 Copy / Quote 资格。
+- **展示映射模块拥有三种活动的唯一映射。** `agent_tool_presentation.ts` 更名为 `agent_activity_presentation.ts`，新增 `resolve_agent_action_presentation()`；它与 `resolve_agent_tool_presentation()` 产出同一个 `AgentActivityPresentation`，因此组件只按结构渲染，不按 `action_type` 分支。
+- **展示层类型收敛为活动层共用。** `AgentToolTone` / `AgentToolDetail` / `AgentToolEditPair` / `AgentToolPresentation` 更名为 `AgentActivityTone` / `AgentActivityDetail` / `AgentActivityEditPair` / `AgentActivityPresentation`。
+- **图标表只有一个。** `AGENT_ACTIVITY_ICONS: Record<AgentActivityVisualKind, …>` 覆盖 Reasoning、Tool 与 Action 的全部种类，新增种类由 `Record` 强制补全。
+- **组摘要实现对齐既有文案。** 原 `find_last_tool()` 只找最后一个 Tool，而注释写的是「最后一个非 Reasoning 项」；Action 加入后两者分叉，改为 `find_summary_part()`，Tool 与 Action 一视同仁。
+
+### 22.3 用户可见变化
+
+- Action 行与 Tool / Reasoning 行完全同构：图标 + 本地化状态词 + 标题 + 展开箭头，`running` 时参与脉动动画。
+- Action 的 `description` 与 `data` 移入展开区；折叠态只保留标题。失败 Action 的 `description` 按错误原因呈现（沿用 Tool 的 `error` 语义），不再当作普通描述。
+- `Tool → Action → Tool` 现在合并为一个可展开组，`Tool → Action` 的组合组摘要由 Tool 变为 Action（最后一个非 Reasoning 项）。
+- 新增 i18n：`activity.action.running|completed|failed`。
+
+### 22.4 验证
+
+```bash
+pnpm --filter @downcity/desktop typecheck   # 通过
+pnpm --filter @downcity/desktop test        # 306/306 通过
+```
+
+`agent_activity_presentation.test.ts`（原 `agent_tool_presentation.test.ts`）增加覆盖：Action 类别映射、三态文案与语气、描述与 `data` 进入详情、空描述不可展开、失败描述归入 `error`、空标题回退、Action 不触发自动展开。`agent_message_projection.test.ts` 增加覆盖：Action 并入相邻活动不产生独立 Block、Action 不改变操作栏资格。
+
+### 22.5 仍未处理
+
+`@downcity/ui` 的公共 Chat 渲染器仍把 Action 映射为独立的 `operation` Part（`packages/ui/src/lib/session-message.ts`），与 Desktop 的 activity 集合不同源。按 §1.5 的约定，公共组件抽取时应收敛到同一套活动语义，而不是并行保留两套。
+
+

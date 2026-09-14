@@ -8,6 +8,9 @@ import type { AgentActivityPart, AgentMessageBlock, AgentMessageProjection } fro
  * 在一次遍历中完成可见内容分组、普通文本汇总和操作栏资格判断。
  *
  * 未注册 Data 没有通用展示语义，也不能切断其两侧连续的活动 Part。
+ *
+ * Reasoning、Tool 与 Action 归入同一类连续活动块，因此 `agent_message_projection` 的
+ * 迭代顺序决定它们的相邻性；这与 canonical sequence 一致。
  */
 export function project_agent_message(parts: readonly SessionAgentMessagePart[]): AgentMessageProjection {
   const blocks: AgentMessageBlock[] = [];
@@ -29,6 +32,11 @@ export function project_agent_message(parts: readonly SessionAgentMessagePart[])
         last_action_boundary = "other";
         break;
       }
+      case "action": {
+        // Action 是辅助活动记录：并入相邻活动，且不切断两侧正文的操作栏资格。
+        append_activity_part(blocks, part);
+        break;
+      }
       case "file": {
         blocks.push({ type: "file", part });
         last_action_boundary = "other";
@@ -37,11 +45,6 @@ export function project_agent_message(parts: readonly SessionAgentMessagePart[])
       case "data": {
         const data = read_session_turn_file_diff_data(part);
         if (data) blocks.push({ type: "file-diff", part, data });
-        break;
-      }
-      case "action": {
-        // Action 是辅助活动记录，不切断两侧正文的操作栏资格。
-        blocks.push({ type: "action", part });
         break;
       }
       case "error": {

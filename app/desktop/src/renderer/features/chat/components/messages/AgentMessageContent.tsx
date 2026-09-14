@@ -21,8 +21,6 @@ export function AgentMessageContent({ message_id, blocks, show_reasoning, stream
         return <AgentFileBlock key={block.part.part_id} url={block.part.url} filename={block.part.filename} />;
       case "file-diff":
         return <TurnFileDiffCard key={block.part.part_id} data={block.data} />;
-      case "action":
-        return <div key={block.part.part_id} className="mt-1 flex min-w-0 items-baseline gap-1.5 border-l border-divider pl-2 text-[0.6875rem] leading-4 text-foreground"><span className="font-medium">{block.part.title}</span>{block.part.description ? <span className="min-w-0 truncate text-muted-foreground">{block.part.description}</span> : null}</div>;
       case "error":
         return <div key={block.part.part_id} role="alert" className="flex min-w-0 w-full items-start gap-2 rounded-md bg-surface-subtle px-2.5 py-2"><TbAlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/75" aria-hidden /><p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[0.78125rem] leading-[1.55] text-muted-foreground [overflow-wrap:anywhere]">{block.part.message}</p></div>;
       default:

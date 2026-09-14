@@ -13,6 +13,10 @@ function create_tool(sequence: number, tool_name = "read"): Extract<SessionAgent
   return { part_id: `tool-${sequence}`, sequence, type: "tool", tool_call_id: `call-${sequence}`, tool_name, state: "completed", input: {} };
 }
 
+function create_action(sequence: number, action_type = "context-compaction"): Extract<SessionAgentMessagePart, { type: "action" }> {
+  return { part_id: `action-${sequence}`, sequence, type: "action", action_id: `action-${sequence}`, action_type, state: "completed", title: "Action" };
+}
+
 test("按 canonical sequence 投影 Text、Activity 与 Text，不依赖数组排列", () => {
   const start = create_text("text", 1, "开始");
   const reasoning = create_text("reasoning", 2, "分析");
@@ -49,6 +53,23 @@ test("有效 Turn File Diff Data 投影为独立 Block", () => {
   }]);
   assert.equal(projection.blocks[0]?.type, "file-diff");
   assert.equal(projection.blocks[0]?.type === "file-diff" ? projection.blocks[0].data.files[0]?.file : "", "src/a.ts");
+});
+
+test("Action 并入相邻活动，不切断活动组也不产生独立 Block", () => {
+  const tool = create_tool(1);
+  const action = create_action(2);
+  const reasoning = create_text("reasoning", 3, "继续");
+  const projection = project_agent_message([tool, action, reasoning]);
+
+  assert.equal(projection.blocks.length, 1);
+  assert.equal(projection.blocks[0]?.type, "activity");
+  assert.deepEqual(projection.blocks[0]?.type === "activity" ? projection.blocks[0].parts.map((part) => part.type) : [], ["tool", "action", "reasoning"]);
+});
+
+test("Action 不改变操作栏资格", () => {
+  const text = create_text("text", 1, "回答");
+  assert.equal(project_agent_message([text, create_action(2)]).show_actions, true);
+  assert.equal(project_agent_message([create_action(1), create_action(2)]).show_actions, false);
 });
 
 test("操作栏由最后一个有效操作边界决定，Data 不改变边界", () => {
