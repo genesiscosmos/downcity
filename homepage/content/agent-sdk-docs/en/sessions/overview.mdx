@@ -40,9 +40,9 @@ render_messages(initial_page.items);
 const unsubscribe = session.subscribe((mutation) => {
   apply_mutation_to_ui(mutation);
 
-  if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
-  const interaction = mutation.message.parts.find(
-    (part) => part.type === "interaction" && part.status === "pending",
+  if (mutation.variant !== "part" || mutation.part.type !== "tool") return;
+  const interaction = (mutation.part.interactions ?? []).find(
+    (item) => item.status === "pending",
   );
   if (interaction) render_interaction(interaction);
 });

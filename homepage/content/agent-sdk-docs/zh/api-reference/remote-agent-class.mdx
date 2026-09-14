@@ -48,17 +48,15 @@ await session.respond({
 });
 ```
 
-也可以在统一 Mutation 流里处理 pending Interaction Part：
+也可以在统一 Mutation 流里处理 pending Interaction：
 
 ```ts
 session.subscribe((mutation) => {
-  if (
-    mutation.variant === "part" &&
-    mutation.type === "interaction" &&
-    mutation.part.status === "pending"
-  ) {
-    render_interaction(mutation.part);
-  }
+  if (mutation.variant !== "part" || mutation.part.type !== "tool") return;
+  const interaction = (mutation.part.interactions ?? []).find(
+    (item) => item.status === "pending",
+  );
+  if (interaction) render_interaction(interaction);
 });
 ```
 

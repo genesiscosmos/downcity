@@ -79,9 +79,9 @@ Tool 生命周期使用 `type: "tool"`，用户参与使用 `type: "interaction"
 
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
-  if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
-  const interaction = mutation.message.parts.find(
-    (part) => part.type === "interaction" && part.status === "pending",
+  if (mutation.variant !== "part" || mutation.part.type !== "tool") return;
+  const interaction = (mutation.part.interactions ?? []).find(
+    (item) => item.status === "pending",
   );
   if (interaction) render_interaction(interaction);
 });

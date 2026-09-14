@@ -76,7 +76,7 @@ Do not create Transcript Message DTOs, flatten tool calls into another persisted
 
 ## Approval card
 
-Approval UI gets the same identity from an Interaction Part or `session.interactions()`:
+Approval UI gets the same identity from a pending Interaction on its Tool Part or from `session.interactions()`:
 
 ```ts
 await session.respond({

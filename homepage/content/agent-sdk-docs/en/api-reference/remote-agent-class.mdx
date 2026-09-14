@@ -48,17 +48,15 @@ await session.respond({
 });
 ```
 
-You can also handle a pending Interaction Part through the unified Mutation stream:
+You can also handle a pending Interaction through the unified Mutation stream:
 
 ```ts
 session.subscribe((mutation) => {
-  if (
-    mutation.variant === "part" &&
-    mutation.type === "interaction" &&
-    mutation.part.status === "pending"
-  ) {
-    render_interaction(mutation.part);
-  }
+  if (mutation.variant !== "part" || mutation.part.type !== "tool") return;
+  const interaction = (mutation.part.interactions ?? []).find(
+    (item) => item.status === "pending",
+  );
+  if (interaction) render_interaction(interaction);
 });
 ```
 

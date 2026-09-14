@@ -25,7 +25,7 @@ unsubscribe();
 | `variant` | `type` | 用途 | 是否带 Message revision |
 | --- | --- | --- | --- |
 | `message` | `user | agent` | 顶层 Message 的完整快照 | 是 |
-| `part` | `text | reasoning | tool | interaction | file | data` | Assistant Part 的完整快照 | 是 |
+| `part` | `text | reasoning | tool | file | data` | Assistant Part 的完整快照；`tool` Part 携带其 `interactions` | 是 |
 | `delta` | `text | reasoning | tool_input` | 新增的原始文本或 Tool 输入片段 | 是 |
 | `turn` | `start | finish` | Turn 执行生命周期 | 否 |
 | `file_diff` | — | 当前 Turn 的文件改动实时摘要 | 否 |

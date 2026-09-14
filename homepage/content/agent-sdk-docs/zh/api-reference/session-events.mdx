@@ -30,17 +30,15 @@ if (mutation.variant === "delta" && mutation.type === "text") {
 - `session`：Session 自身状态变化，例如 `title`
 - `warning`：不写入历史的运行期警告，例如模型请求失败与重试
 
-Interaction Part 进入 `pending` 后携带完整请求；关联 Tool 同时进入 `waiting-user`。订阅保持为纯数据通道，用户决定通过 Session 命令 API 提交：
+Interaction 作为所属 Tool Part 的从属数据进入 `pending` 并携带完整请求；该 Tool 同时进入 `waiting-user`。订阅保持为纯数据通道，用户决定通过 Session 命令 API 提交：
 
 ```ts
 session.subscribe((mutation) => {
-  if (
-    mutation.variant === "part" &&
-    mutation.type === "interaction" &&
-    mutation.part.status === "pending"
-  ) {
-    render_interaction(mutation.part);
-  }
+  if (mutation.variant !== "part" || mutation.part.type !== "tool") return;
+  const interaction = (mutation.part.interactions ?? []).find(
+    (item) => item.status === "pending",
+  );
+  if (interaction) render_interaction(interaction);
 });
 
 await session.respond({

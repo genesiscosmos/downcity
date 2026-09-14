@@ -24,7 +24,7 @@ await session.set({
 unsubscribe();
 ```
 
-The subscription emits `message | part | delta | turn | file_diff | session | warning`. User participation is a pending Interaction Part while its related Tool is `waiting-user`; a failed model call emits `warning / model_request`. Submit structured user responses with `session.respond(...)`.
+The subscription emits `message | part | delta | turn | file_diff | session | warning`. User participation is a pending Interaction on its Tool Part while that Tool is `waiting-user`; a failed model call emits `warning / model_request`. Submit structured user responses with `session.respond(...)`.
 
 Remote clients can set serializable security policy but do not select models through the Agent SDK.
 The server host owns model IDs, defaults, recovery, and runtime instance injection.
