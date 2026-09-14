@@ -250,7 +250,7 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
       <span className="px-1 text-[0.6875rem] font-medium text-muted-foreground">{translate_resources("agent.name")}</span>
       <input
         value={definition.name}
-        className="h-10 w-full appearance-none rounded-lg border-0 bg-muted-foreground/10 px-3 text-[0.8125rem] text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:bg-muted-foreground/[0.13]"
+        className="h-10 w-full appearance-none rounded-lg border-0 bg-control-surface px-3 text-[0.8125rem] text-foreground outline-none transition-colors focus:bg-control-hover"
         onChange={(event) => set_definition({ ...definition, name: event.target.value })}
       />
     </label>
@@ -259,7 +259,7 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
       <textarea
         value={definition.description}
         rows={5}
-        className="block min-h-28 w-full appearance-none resize-none rounded-lg border-0 bg-muted-foreground/10 px-3 py-2.5 text-[0.8125rem] leading-5 text-foreground outline-none transition-colors placeholder:text-muted-foreground/50 focus:bg-muted-foreground/[0.13]"
+        className="block min-h-28 w-full appearance-none resize-none rounded-lg border-0 bg-control-surface px-3 py-2.5 text-[0.8125rem] leading-5 text-foreground outline-none transition-colors focus:bg-control-hover"
         onChange={(event) => set_definition({ ...definition, description: event.target.value })}
       />
     </label>
@@ -387,7 +387,7 @@ function SoulEditor({
       autoFocus
       spellCheck={spellcheck_enabled}
       data-placeholder={translate_resources("agent_details.soul_placeholder")}
-      className="h-full min-h-full w-full overflow-y-auto bg-transparent p-3 font-mono text-xs leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground/50 empty:before:content-[attr(data-placeholder)]"
+      className="h-full min-h-full w-full overflow-y-auto bg-transparent p-3 font-mono text-xs leading-6 text-foreground outline-none empty:before:pointer-events-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]"
       onInput={(event) =>
         set_definition({
           ...definition,

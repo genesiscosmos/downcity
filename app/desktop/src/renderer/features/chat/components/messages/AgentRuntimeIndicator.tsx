@@ -13,7 +13,7 @@ export function AgentRuntimeIndicator({ agent, status, compact = false, file_dif
   return <div className="group is-agent flex w-full items-start gap-2 py-2 !m-0 !p-0" role="status" aria-live="polite">
     <div className="shrink-0 px-1 pt-0.5"><AgentAvatar agent={agent} class_name="size-7 rounded-md" /></div>
     <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-visible pt-0.5 text-sm text-foreground">
-      <div className="min-w-0 truncate text-xs font-medium text-foreground/85">{agent.name}</div>
+      <div className="min-w-0 truncate text-xs font-medium text-foreground">{agent.name}</div>
       <div className="agent-message-footer flex items-center">{status_content}</div>
     </div>
   </div>;

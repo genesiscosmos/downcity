@@ -34,7 +34,7 @@ const dialog_size_class_names: Record<DialogSize, string> = {
 /** 带 Portal、遮罩和标准动效的 Dialog 内容。 */
 const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
   ({ className, children, hide_close = false, size = "md", ...props }, ref) => <BaseDialog.Portal>
-    <BaseDialog.Backdrop className="desktop-dialog-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px]" />
+    <BaseDialog.Backdrop className="desktop-dialog-backdrop fixed inset-0 z-50 bg-scrim-strong backdrop-blur-[2px]" />
     <BaseDialog.Popup
       ref={ref}
       data-desktop-modal="true"
@@ -72,7 +72,7 @@ function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement
 
 /** Dialog 底部操作区。 */
 function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex shrink-0 items-center justify-end gap-2 bg-foreground/[0.015] px-4 py-3 [&_button]:h-8 [&_button]:px-3 [&_button]:text-xs", className)} {...props} />;
+  return <div className={cn("flex shrink-0 items-center justify-end gap-2 bg-surface-subtle px-4 py-3 [&_button]:h-8 [&_button]:px-3 [&_button]:text-xs", className)} {...props} />;
 }
 
 export { Dialog, DialogBody, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger };

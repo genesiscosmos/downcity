@@ -19,7 +19,7 @@
  *    收起时保留 selection，再次展开回到原处。
  */
 
-import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 import type { BayBarDomain, BayBarSelection } from "./baybarPanelState";
 import { baybar_storage_key, format_selection, parse_selection, resolve_domain_switch, resolve_selection } from "./baybarPanelState";
-import { SHELL_MAIN_VIEW_BAND_HEIGHT, SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM, SHELL_PANEL_TRANSITION, get_baybar_header_reserve } from "./shellMotion";
+import { SHELL_BAYBAR_HEADER_RESERVE_CSS, SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS, SHELL_PANEL_TRANSITION } from "./shellMotion";
 
 export type { BayBarDomain, BayBarSection, BayBarSelection } from "./baybarPanelState";
 
@@ -57,11 +57,16 @@ export function use_baybar_open(): BayBarOpen {
 interface BayBarChrome {
   /** 是否需要为折叠按钮预留空间。 */
   reserved: boolean;
-  /** 预留宽度。 */
-  inset: number;
+  /**
+   * 预留宽度，CSS 长度值。
+   *
+   * 类型是 string 而不是 number：预留量含卡片边框这类固定像素，
+   * 只有 CSS 长度能同时表达「跟随缩放的按钮宽度」与「不跟随缩放的细线」。
+   */
+  inset: string;
 }
 
-const BayBarChromeContext = createContext<BayBarChrome>({ reserved: false, inset: 0 });
+const BayBarChromeContext = createContext<BayBarChrome>({ reserved: false, inset: "0px" });
 
 /** 读取右侧预留信息；不在 MainView 内时不需要预留。 */
 export function use_baybar_chrome(): BayBarChrome {
@@ -119,11 +124,11 @@ export function MainView({ view_key, domains = [], children }: {
   const has_baybar = domains.length > 0;
   // 折叠按钮浮在 Header 之上，Header 需要让出等宽空间。
   const chrome: BayBarChrome = has_baybar && collapsed
-    ? { reserved: true, inset: get_baybar_header_reserve() }
-    : { reserved: false, inset: 0 };
+    ? { reserved: true, inset: SHELL_BAYBAR_HEADER_RESERVE_CSS }
+    : { reserved: false, inset: "0px" };
   return <BayBarOpenContext.Provider value={open}>
     <BayBarChromeContext.Provider value={chrome}>
-      <div className="main-view relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border/60 bg-background">
+      <div className="main-view relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border-subtle bg-background">
         <div className="flex h-full min-w-0 flex-1 flex-col">{children(open)}</div>
         {has_baybar ? <BayBarAside
           domains={domains}
@@ -179,14 +184,14 @@ function BayBarAside({ domains, selection, collapsed, on_select_domain, on_selec
     animate={{ width: collapsed ? 0 : current_width }}
     transition={is_resizing ? { duration: 0 } : SHELL_PANEL_TRANSITION}
     onAnimationComplete={() => { if (collapsed) set_content_mounted(false); }}
-    className={cn("relative flex h-full min-h-0 flex-none overflow-hidden", !collapsed && "border-l border-border/45")}
+    className={cn("relative flex h-full min-h-0 flex-none overflow-hidden", !collapsed && "border-l border-divider")}
     aria-label={translate("panels.rail")}
   >
     <div className="relative flex h-full min-h-0 flex-col" style={{ width: current_width }}>
       {show_content ? <>
         <div onMouseDown={handle_resize_start} className="absolute -left-[3px] top-0 z-10 h-full w-1.5 cursor-ew-resize" />
         {/* 标题行与 MainView Header 共用同一套卡片内顶栏几何，保证两侧内容同处一线。 */}
-        <div className="header-drag-region flex shrink-0 items-center px-2" style={{ height: SHELL_MAIN_VIEW_BAND_HEIGHT, paddingBottom: SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM }}>
+        <div className="header-drag-region flex shrink-0 items-center px-2" style={{ height: SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, paddingBottom: SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS }}>
           {show_domain_tabs
             // 一级：文字 title tab，当前项以颜色与字重区分，不使用背景块。
             ? <div role="tablist" style={no_drag_style} className="scrollbar-none flex min-w-0 flex-1 items-center gap-3 overflow-x-auto px-1">

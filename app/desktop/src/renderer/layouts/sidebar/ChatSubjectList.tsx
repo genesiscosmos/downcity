@@ -190,15 +190,15 @@ function ChatSubjectItem({ avatar, title, tag, description, active, status, on_s
   const translate_chat = use_translation("chat");
   const description_key = chat_row_status_description_key(status);
   const status_text = description_key ? translate_chat(description_key) : null;
-  return <div className={cn("group/item flex min-h-12 cursor-pointer items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 transition-colors duration-150 [&_button]:cursor-pointer", active ? "bg-primary/[0.1] hover:bg-primary/[0.12]" : "hover:bg-foreground/[0.07]")}>
+  return <div className={cn("group/item flex min-h-12 cursor-pointer items-center gap-2 rounded-lg border border-transparent px-1.5 py-1 transition-colors duration-150 [&_button]:cursor-pointer", active ? "bg-interaction-selected hover:bg-interaction-active" : "hover:bg-interaction-hover")}>
     <button type="button" aria-current={active ? "page" : undefined} className="flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30" onClick={on_select}>
       <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md">{avatar}</span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={cn("min-w-0 truncate text-xs font-medium text-foreground", tag ? "max-w-[55%] shrink" : "flex-1")}>{title}</span>
-          {tag ? <span className="max-w-36 shrink truncate rounded-full bg-foreground/[0.055] px-1.5 py-0.5 text-[9px] font-normal leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/item:opacity-100">{tag}</span> : null}
+          {tag ? <span className="max-w-36 shrink truncate rounded-full bg-surface-subtle px-1.5 py-0.5 text-[0.5625rem] font-normal leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/item:opacity-100">{tag}</span> : null}
         </span>
-        <span className={cn("mt-1 flex h-3.5 min-w-0 items-center truncate text-[10px] leading-3.5", status_text ? "font-medium text-muted-foreground" : "text-muted-foreground/70")}>
+        <span className={cn("mt-1 flex h-3.5 min-w-0 items-center truncate text-[0.625rem] leading-3.5", status_text ? "font-medium text-muted-foreground" : "text-muted-foreground")}>
           {status_text ? <StatusText status={status} text={status_text} /> : description}
         </span>
       </span>

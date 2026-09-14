@@ -1,13 +1,18 @@
 /**
  * 应用壳的顶栏对齐与两侧面板几何测试。
  *
- * 三件必须同时成立的事：
+ * 四件必须同时成立的事：
  * 1. 左右两个折叠按钮与 macOS 原生窗口按钮同高；
  * 2. 两侧顶栏内容落在同一条垂直基准线上；
- * 3. 两侧顶栏的下沿（内容起点）也一致。
+ * 3. 两侧顶栏的下沿（内容起点）也一致；
+ * 4. 上面三条在**任何界面缩放比例下**都成立。
  *
  * 这里按「绝对坐标」断言，而不是重述公式——公式写错时重述式测试会一起错，
  * 无法发现问题（曾经就漏掉过卡片 offset 这一项）。
+ *
+ * 第 4 条单独存在的原因：缩放通过根元素 font-size 实现，px 不跟随缩放、rem 才跟随。
+ * 所以样式必须走 shellMotion 的 CSS 长度出口，本文件用 parse_shell_css() 把它还原成
+ * 绝对坐标再断言，直接写 px 的实现会在 scale ≠ 1 时失败。
  */
 
 import assert from "node:assert/strict";
@@ -18,17 +23,29 @@ import {
   get_collapsed_header_inset,
   get_shell_control_left,
   get_shell_control_top,
+  shell_collapsed_header_inset_css,
+  shell_control_left_css,
+  SHELL_BAYBAR_CONTROL_RIGHT_CSS,
+  SHELL_BAYBAR_HEADER_RESERVE_CSS,
   SHELL_BAND_CENTER,
   SHELL_CONTROL_GAP,
   SHELL_CONTROL_SIZE,
+  SHELL_CONTROL_TOP_CSS,
   SHELL_HEADER_DEFAULT_PADDING,
   SHELL_HEADER_HEIGHT,
+  SHELL_HEADER_HEIGHT_CSS,
   SHELL_MAIN_VIEW_BAND_HEIGHT,
+  SHELL_MAIN_VIEW_BAND_HEIGHT_CSS,
   SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM,
+  SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS,
   SHELL_MAIN_VIEW_BORDER,
   SHELL_MAIN_VIEW_INSET,
   SHELL_MAIN_VIEW_OFFSET,
+  SHELL_REM_BASE,
 } from "../src/renderer/layouts/shellMotion.ts";
+
+/** 界面缩放的全部档位：设置页允许的最小值、默认值、最大值。 */
+const ui_scales = [0.85, 1, 1.2] as const;
 
 /** 在指定平台字符串下执行断言，并在结束后还原全局 navigator。 */
 function with_platform(platform: string, run: () => void): void {
@@ -168,4 +185,97 @@ test("按钮仍落在 MainView 顶栏内，不会压住或溢出该行", () => {
 test("卡片留白足够容纳圆角，不会贴住窗口边缘", () => {
   // offset 为 0 时圆角会直接贴边被裁切；保留一个最小值作为约束。
   assert.ok(SHELL_MAIN_VIEW_OFFSET >= 2, "卡片留白过小，圆角会贴边");
+});
+
+/**
+ * 把 shellMotion 输出的 CSS 长度还原成像素。
+ *
+ * 支持 `0px`、`1.25rem`、`calc(80px + 1.25rem)`、`calc(-1px + 2.25rem)`。
+ * 单测必须走这个还原：直接比较数值就发现不了「实现里偷偷写成 px」这种
+ * 只在缩放后暴露的错误（而它恰恰是这个文件第 4 条不变量的常见死法）。
+ */
+function parse_shell_css(value: string, scale: number): number {
+  const rem_px = SHELL_REM_BASE * scale;
+  const calc = value.trim().match(/^calc\((.+)\)$/);
+  const terms = (calc ? calc[1]! : value).match(/[+-]?\s*[\d.]+(?:px|rem)/g);
+  assert.ok(terms, `无法解析 CSS 长度：${value}`);
+  return terms.reduce((total, term) => {
+    const parsed = term.match(/^([+-]?)\s*([\d.]+)(px|rem)$/);
+    assert.ok(parsed, `无法解析 CSS 长度项：${term}（来自 ${value}）`);
+    const magnitude = parsed[1] === "-" ? -Number(parsed[2]) : Number(parsed[2]);
+    return total + (parsed[3] === "rem" ? magnitude * rem_px : magnitude);
+  }, 0);
+}
+
+/** 浮点安全的近似比较：rem 折算会引入极小的尾数。 */
+function assert_close(actual: number, expected: number, message: string): void {
+  assert.ok(Math.abs(actual - expected) < 1e-6, `${message}（实际 ${actual}，期望 ${expected}）`);
+}
+
+/**
+ * 断言样式出口确实带上了 rem。
+ *
+ * 这些值只要退回纯 px，就会在缩放后与侧栏顶栏错位；提前捺住比事后排查便宜。
+ */
+test("跟随缩放的长度出口必须使用 rem", () => {
+  for (const [name, value] of [
+    ["MainView 顶栏高度", SHELL_MAIN_VIEW_BAND_HEIGHT_CSS],
+    ["MainView 顶栏底距", SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS],
+    ["侧栏顶栏高度", SHELL_HEADER_HEIGHT_CSS],
+    ["折叠按钮 top", SHELL_CONTROL_TOP_CSS],
+    ["右侧按钮 right", SHELL_BAYBAR_CONTROL_RIGHT_CSS],
+    ["右侧预留", SHELL_BAYBAR_HEADER_RESERVE_CSS],
+  ] as const) {
+    assert.ok(value.includes("rem"), `${name} 没有跟随界面缩放：${value}`);
+  }
+});
+
+/**
+ * 缩放后仍成立的不变量；窗口 chrome 部分保持固定像素，应用密度部分按比例缩放。
+ */
+for (const scale of ui_scales) {
+  test(`${Math.round(scale * 100)}% 缩放下两侧顶栏仍然同处一线`, () => {
+    for (const platform of ["MacIntel", "Win32"]) {
+      with_platform(platform, () => {
+        const context = `平台 ${platform} / 缩放 ${scale}`;
+        // 卡片 offset 属于应用密度（缩放），1px 细线属于物理像素（不缩放）。
+        const inset = SHELL_MAIN_VIEW_OFFSET * scale + SHELL_MAIN_VIEW_BORDER;
+        const header_padding = SHELL_HEADER_DEFAULT_PADDING * scale;
+        const control_size = SHELL_CONTROL_SIZE * scale;
+        const control_gap = SHELL_CONTROL_GAP * scale;
+        const band_height = parse_shell_css(SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, scale);
+        const band_padding = parse_shell_css(SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS, scale);
+
+        // 1. 卡内顶栏下沿 = 侧栏内容起点。
+        assert_close(inset + band_height, parse_shell_css(SHELL_HEADER_HEIGHT_CSS, scale), `${context}：顶栏下沿未对齐`);
+        // 2. 卡内顶栏内容中心 = 两侧共同基准线。
+        assert_close(inset + (band_height - band_padding) / 2, parse_shell_css(SHELL_CONTROL_TOP_CSS, scale) + control_size / 2, `${context}：内容中心偏离基准线`);
+        // 3. 左右折叠按钮同高。
+        assert_close(parse_shell_css(SHELL_CONTROL_TOP_CSS, scale), parse_shell_css(SHELL_BAYBAR_CONTROL_RIGHT_CSS, scale), `${context}：两侧按钮纵向不一致`);
+
+        // 4. 折叠后 Header 内容与浮动按钮的实际间距等于设计值。
+        const control_left = parse_shell_css(shell_control_left_css(), scale);
+        const content_left = inset + header_padding + parse_shell_css(shell_collapsed_header_inset_css(), scale);
+        assert_close(content_left - (control_left + control_size), control_gap, `${context}：左侧预留间距不符`);
+
+        const control_right = parse_shell_css(SHELL_BAYBAR_CONTROL_RIGHT_CSS, scale);
+        const content_right = inset + header_padding + parse_shell_css(SHELL_BAYBAR_HEADER_RESERVE_CSS, scale);
+        assert_close(content_right - (control_right + control_size), control_gap, `${context}：右侧预留间距不符`);
+      });
+    }
+  });
+}
+
+test("缩放不会把预留量或顶栏内容带成负数", () => {
+  for (const scale of ui_scales) {
+    for (const platform of ["MacIntel", "Win32"]) {
+      with_platform(platform, () => {
+        const context = `平台 ${platform} / 缩放 ${scale}`;
+        const band_band = parse_shell_css(SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, scale) - parse_shell_css(SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS, scale);
+        assert.ok(band_band >= SHELL_CONTROL_SIZE * 0.85, `${context}：卡内顶栏装不下按钮`);
+        assert.ok(parse_shell_css(shell_collapsed_header_inset_css(), scale) > 0, `${context}：左侧预留不为正`);
+        assert.ok(parse_shell_css(SHELL_BAYBAR_HEADER_RESERVE_CSS, scale) > 0, `${context}：右侧预留不为正`);
+      });
+    }
+  }
 });

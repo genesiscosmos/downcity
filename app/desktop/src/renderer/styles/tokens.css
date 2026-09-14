@@ -45,5 +45,9 @@
   --color-border-subtle: var(--border-subtle);
   --color-control-surface: var(--control-surface);
   --color-control-hover: var(--control-hover);
+  --color-control-track: var(--control-track);
+  --color-surface-brand: var(--surface-brand);
   --color-scrim: var(--scrim);
+  --color-scrim-strong: var(--scrim-strong);
+  --color-subtle-foreground: var(--subtle-foreground);
 }

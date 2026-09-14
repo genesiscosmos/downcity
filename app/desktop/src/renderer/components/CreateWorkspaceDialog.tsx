@@ -76,7 +76,7 @@ export function CreateWorkspaceDialog({ open, close_dialog, create_workspace }: 
 }
 
 /** Workspace 表单字段。 */
-function Field({ label, children }: { /** 字段标签。 */ label: string; /** 字段控件。 */ children: React.ReactNode }) { return <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground/75">{label}</span>{children}</label>; }
+function Field({ label, children }: { /** 字段标签。 */ label: string; /** 字段控件。 */ children: React.ReactNode }) { return <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground">{label}</span>{children}</label>; }
 
 /** 从路径读取目录名称。 */
 function read_directory_name(workspace_path: string): string { return workspace_path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "Workspace"; }

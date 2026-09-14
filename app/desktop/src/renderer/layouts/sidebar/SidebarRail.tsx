@@ -46,7 +46,7 @@ export function SidebarRail(props: SidebarRailProps) {
     <SidebarNavigationItems active_mode={props.active_mode} on_change={props.on_change} plugin_workspaces={props.plugin_workspaces} unread_attention_by_mode={props.unread_attention_by_mode} />
     <Tooltip.Root>
       <Tooltip.Trigger delay={300} render={settings_button} />
-      <Tooltip.Portal><Tooltip.Positioner side="right" sideOffset={8} className="z-50"><Tooltip.Popup className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground shadow-lg outline-none">{settings_label}</Tooltip.Popup></Tooltip.Positioner></Tooltip.Portal>
+      <Tooltip.Portal><Tooltip.Positioner side="right" sideOffset={8} className="z-50"><Tooltip.Popup className="rounded-md border border-border bg-background px-2 py-1 text-[0.6875rem] text-foreground shadow-lg outline-none">{settings_label}</Tooltip.Popup></Tooltip.Positioner></Tooltip.Portal>
     </Tooltip.Root>
   </div>;
 }

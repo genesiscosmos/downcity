@@ -12,6 +12,7 @@ import { SidebarHeader } from "./SidebarHeader";
 import { SidebarContent, SidebarPanel } from "./SidebarPanel";
 import { plugin_renderer_notifications } from "@/lib/notification/notification_state";
 import { use_desktop_selector } from "@/app/use_desktop";
+import { use_translation } from "@/locales/i18n";
 
 const empty_plugin_route: PluginJsonObject = {};
 
@@ -22,6 +23,7 @@ export const PluginWorkspaceSidebar = memo(function PluginWorkspaceSidebar({ con
   /** 当前通知快照。 */ readonly notification_state: DesktopNotificationState;
 }) {
   const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
+  const translate = use_translation("plugin");
   const route = use_desktop_selector(controller.stores.navigation, (state) => state.plugin_routes[plugin_id]);
   const revision = use_desktop_selector(controller.stores.navigation, (state) => state.plugin_revisions[plugin_id] ?? 0);
   const plugin = plugins.find((item) => item.plugin_id === plugin_id);
@@ -44,7 +46,7 @@ export const PluginWorkspaceSidebar = memo(function PluginWorkspaceSidebar({ con
   }), [invoke_plugin_action, plugin_id]);
   const navigate = useCallback((route: PluginJsonObject) => navigate_plugin(plugin_id, route), [navigate_plugin, plugin_id]);
   const invalidate = useCallback(() => invalidate_plugin(plugin_id), [invalidate_plugin, plugin_id]);
-  if (!plugin?.has_sidebar || !plugin.has_mainview) return <SidebarPanel><SidebarContent class_name="px-3 py-8 text-center text-xs text-muted-foreground">Plugin 未提供功能界面</SidebarContent></SidebarPanel>;
+  if (!plugin?.has_sidebar || !plugin.has_mainview) return <SidebarPanel><SidebarContent class_name="px-3 py-8 text-center text-xs text-muted-foreground">{translate("missing_surface")}</SidebarContent></SidebarPanel>;
   return <SidebarPanel>
     {error ? <><SidebarHeader title={plugin.title} /><SidebarContent><div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div></SidebarContent></> : <PluginRendererHost plugin_id={plugin.plugin_id} sidebar_title={plugin.title} slot="sidebar" capabilities={plugin} builtin_renderer={plugin.source === "builtin" ? BUILTIN_PLUGIN_RENDERERS[plugin.plugin_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={route ?? empty_plugin_route} notifications={plugin_renderer_notifications(notification_state, plugin.plugin_id)} navigate={navigate} revision={revision} invalidate={invalidate} />}
   </SidebarPanel>;

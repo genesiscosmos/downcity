@@ -326,22 +326,22 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
         className={cn(
           "relative flex min-h-8 w-full select-none items-center gap-2.5 rounded-floating-item px-2.5 py-1.5 text-left text-xs outline-none transition-colors duration-100 [&>svg]:size-4 [&>svg]:shrink-0",
           row.disabled
-            ? "cursor-default text-muted-foreground/60"
-            : "cursor-pointer text-foreground/80 hover:bg-interaction-hover hover:text-foreground",
+            ? "cursor-default text-muted-foreground"
+            : "cursor-pointer text-foreground hover:bg-interaction-hover hover:text-foreground",
           highlighted && !row.disabled && "bg-interaction-selected text-foreground hover:bg-interaction-active",
         )}
       >
         {row.icon ? <span className="shrink-0 text-muted-foreground">{row.icon}</span> : null}
         <span className="min-w-0 flex-1">
           <span className="block truncate">{row.title}</span>
-          {row.subtitle ? <span className="mt-0.5 block truncate text-[10px] text-muted-foreground/70">{row.subtitle}</span> : null}
+          {row.subtitle ? <span className="mt-0.5 block truncate text-[0.625rem] text-muted-foreground">{row.subtitle}</span> : null}
         </span>
         {row.disabled && row.disabled_reason ? (
-          <span className="shrink-0 text-[10px] text-muted-foreground/50">{row.disabled_reason}</span>
+          <span className="shrink-0 text-[0.625rem] text-muted-foreground">{row.disabled_reason}</span>
         ) : null}
         {row.is_current ? <TbCheck className="size-4 shrink-0 text-foreground" aria-hidden="true" /> : null}
         {row.trailing}
-        {row.shortcut ? <span className="ml-auto shrink-0 pl-2 text-[11px] tracking-widest text-muted-foreground/60">{row.shortcut}</span> : null}
+        {row.shortcut ? <span className="ml-auto shrink-0 pl-2 text-[0.6875rem] tracking-widest text-subtle-foreground">{row.shortcut}</span> : null}
       </div>
     );
   };
@@ -396,12 +396,12 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
               placeholder={translate(command_page_placeholder_keys[page])}
               value={query}
               onChange={(event) => set_query(event.target.value)}
-              className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+              className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
             />
           </div>
 
           {is_sessions_page && page_projection.scope_label ? (
-            <p className="border-b border-divider px-3 py-1.5 text-[10px] text-muted-foreground">
+            <p className="border-b border-divider px-3 py-1.5 text-[0.625rem] text-muted-foreground">
               {translate("command_palette.page.sessions_scope", { name: page_projection.scope_label })}
             </p>
           ) : null}
@@ -424,7 +424,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
                     <div
                       id={`command-palette-group-${section.key}`}
                       role="presentation"
-                      className="px-2 py-2 text-[11px] font-medium text-muted-foreground/60 select-none"
+                      className="px-2 py-2 text-[0.6875rem] font-medium text-muted-foreground select-none"
                     >
                       {section.label}
                     </div>
@@ -438,7 +438,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
             )}
           </div>
 
-          <div className="flex h-8 items-center justify-between gap-3 border-t border-divider px-3 text-[10px] text-muted-foreground">
+          <div className="flex h-8 items-center justify-between gap-3 border-t border-divider px-3 text-[0.625rem] text-muted-foreground">
             <span>{translate(page === "root" ? "command_palette.hint.root" : "command_palette.hint.page")}</span>
             <span className="tabular-nums">
               {rows.length >= command_result_limit

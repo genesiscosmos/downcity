@@ -132,5 +132,5 @@ export function use_command_page_items(
 
 /** 子页面行的尾部装饰：当前项显示对勾，其余显示可进入箭头。 */
 export function command_page_item_trailing(is_current: boolean | undefined) {
-  return is_current ? undefined : <TbChevronRight className="size-3.5 text-muted-foreground/60" />;
+  return is_current ? undefined : <TbChevronRight className="size-3.5 text-subtle-foreground" />;
 }

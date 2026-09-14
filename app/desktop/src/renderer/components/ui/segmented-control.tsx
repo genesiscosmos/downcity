@@ -78,7 +78,7 @@ export function SegmentedControl<const Value extends string>(props: SegmentedCon
     props.on_value_change(option.value);
     group_ref.current?.querySelector<HTMLButtonElement>(`[data-segmented-option="${CSS.escape(option.value)}"]`)?.focus();
   };
-  return <div ref={group_ref} role="radiogroup" aria-label={props.aria_label} className={cn("relative isolate inline-flex h-8 max-w-full items-center rounded-full bg-muted-foreground/10 p-1", props.class_name)}>
+  return <div ref={group_ref} role="radiogroup" aria-label={props.aria_label} className={cn("relative isolate inline-flex h-8 max-w-full items-center rounded-full bg-control-track p-1", props.class_name)}>
     <span ref={indicator_ref} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-control-hover opacity-0 transition-[width,height,transform,opacity] duration-200 ease-out motion-reduce:transition-none" />
     {props.options.map((option, index) => <button
       key={option.value}
@@ -88,7 +88,7 @@ export function SegmentedControl<const Value extends string>(props: SegmentedCon
       disabled={option.disabled}
       tabIndex={props.value === option.value ? 0 : -1}
       data-segmented-option={option.value}
-      className="relative z-10 inline-flex h-6 min-w-0 shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-full bg-transparent px-2.5 text-[11px] leading-none text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/30 aria-checked:text-foreground disabled:pointer-events-none disabled:opacity-50"
+      className="relative z-10 inline-flex h-6 min-w-0 shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-full bg-transparent px-2.5 text-[0.6875rem] leading-none text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/30 aria-checked:text-foreground disabled:pointer-events-none disabled:opacity-50"
       onClick={() => props.on_value_change(option.value)}
       onKeyDown={(event) => handle_key_down(event, option.value)}
     >{option.label}</button>)}

@@ -18,5 +18,5 @@ export function format_chat_message_time(created_at: number): string {
 export function ChatMessageTimestamp({ created_at, class_name }: { /** 消息创建时间戳，单位为毫秒。 */ created_at: number; /** 调整布局的附加样式。 */ class_name?: string }) {
   const label = format_chat_message_time(created_at);
   if (!label) return null;
-  return <time dateTime={new Date(created_at).toISOString()} className={cn("shrink-0 text-[0.625rem] font-normal tabular-nums text-muted-foreground/60", class_name)}>{label}</time>;
+  return <time dateTime={new Date(created_at).toISOString()} className={cn("shrink-0 text-[0.625rem] font-normal tabular-nums text-muted-foreground", class_name)}>{label}</time>;
 }

@@ -8,6 +8,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { SessionTurnFileDiff, SessionTurnFileDiffData, SessionTurnFileDiffSummary } from "@downcity/agent/session";
 import { TbCheck, TbChevronDown, TbChevronRight, TbChevronUp, TbDots, TbExternalLink, TbFileDiff, TbLink } from "react-icons/tb";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
+import { message_action_button_class_name } from "@/features/chat/components/messages/MessageActionButton";
 import { use_baybar_open } from "@/layouts/BayBar";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
@@ -76,16 +77,16 @@ export function TurnFileDiffCard({ data }: { /** 当前 Turn 的 canonical 文�
     open_review?.(data);
     open_baybar(TURN_DOMAIN_ID, FILE_DIFF_SECTION_ID);
   };
-  return <section className="mt-2 overflow-hidden rounded-xl bg-surface-subtle text-[0.6875rem] text-foreground/80">
+  return <section className="mt-2 overflow-hidden rounded-xl bg-surface-subtle text-[0.6875rem] text-foreground">
     <div className="flex min-h-11 items-center gap-2 px-3.5">
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4"><TbFileDiff aria-hidden /></span>
-      <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">{translate_chat("message.files_changed", { count: data.files.length })}</div>
+      <div className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium text-foreground">{translate_chat("message.files_changed", { count: data.files.length })}</div>
       <DiffStats additions={data.additions} deletions={data.deletions} compact />
-      {open_review ? <button type="button" onClick={review} className="ml-1 flex h-6 shrink-0 items-center rounded-md px-2 text-[0.6875rem] font-medium text-foreground/70 transition-colors hover:bg-interaction-hover hover:text-foreground">{translate_chat("file_diff.review")}</button> : null}
+      {open_review ? <button type="button" onClick={review} className="ml-1 flex h-6 shrink-0 items-center rounded-md px-2 text-[0.6875rem] font-medium text-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30">{translate_chat("file_diff.review")}</button> : null}
     </div>
-    <div className="divide-y divide-border/45 border-t border-border/45">
+    <div className="divide-y divide-divider border-t border-divider">
       {visible_files.map((file) => <FilePatch key={file.file} file={file} variant="inline" />)}
-      {hidden_count > 0 ? <button type="button" onClick={() => set_show_all((current) => !current)} className="flex h-9 w-full cursor-pointer items-center gap-1.5 px-3.5 text-left text-[0.6875rem] font-medium text-foreground/75 transition-colors hover:bg-interaction-hover hover:text-foreground">{show_all ? <TbChevronUp className="size-3.5 shrink-0 text-muted-foreground" /> : <TbChevronDown className="size-3.5 shrink-0 text-muted-foreground" />}<span>{show_all ? translate_chat("file_diff.collapse") : translate_chat("file_diff.show_more", { count: hidden_count })}</span></button> : null}
+      {hidden_count > 0 ? <button type="button" onClick={() => set_show_all((current) => !current)} className="flex h-9 w-full cursor-pointer items-center gap-1.5 px-3.5 text-left text-[0.6875rem] font-medium text-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30">{show_all ? <TbChevronUp className="size-3.5 shrink-0 text-muted-foreground" /> : <TbChevronDown className="size-3.5 shrink-0 text-muted-foreground" />}<span>{show_all ? translate_chat("file_diff.collapse") : translate_chat("file_diff.show_more", { count: hidden_count })}</span></button> : null}
     </div>
   </section>;
 }
@@ -101,7 +102,7 @@ export function TurnFileDiffReviewPanel({ data }: { /** 当前 Turn 的 canonica
   return <div className="file-diff-review-panel">
     <header className="file-diff-review-summary">
       <TbFileDiff className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-      <span className="min-w-0 flex-1 text-[0.75rem] font-medium text-foreground/80">{translate_chat("message.files_changed", { count: data.files.length })}</span>
+      <span className="min-w-0 flex-1 text-[0.75rem] font-medium text-foreground">{translate_chat("message.files_changed", { count: data.files.length })}</span>
       <span className="file-diff-review-stats"><DiffStats additions={data.additions} deletions={data.deletions} compact /></span>
     </header>
     <div className="file-diff-review-files">{data.files.map((file) => <FilePatch key={file.file} file={file} variant="review" default_open />)}</div>
@@ -125,14 +126,14 @@ function FilePatch({ file, variant, default_open = false }: { /** 单个文件�
   return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={cn("group/file shrink-0 overflow-hidden", variant === "review" && "file-diff-review-file")}>
     <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2.5 px-3 py-1.5 outline-none transition-colors hover:bg-interaction-hover focus-visible:bg-interaction-hover [&::-webkit-details-marker]:hidden">
       <TbChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/file:rotate-90" aria-hidden />
-      <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] font-medium text-foreground/80" title={file.file}>{file.file}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] font-medium text-foreground" title={file.file}>{file.file}</span>
       {open_action ? <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover/file:opacity-100 focus-within:opacity-100">
-        <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); open_action.open_file(file.file); }} className="flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-[1.65]" title={translate_chat("file_diff.open")} aria-label={translate_chat("file_diff.open_file", { name: file.file })}><TbExternalLink aria-hidden /></button>
-        <DropdownMenu><DropdownMenuTrigger asChild><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); }} className="flex size-5 items-center justify-center rounded-md bg-transparent p-0 text-primary/45 transition-colors hover:bg-primary/10 hover:text-primary/65 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:stroke-[1.65]" title={translate_common("actions.more")} aria-label={translate_chat("file_diff.file_actions", { name: file.file })}>{copied ? <TbCheck aria-hidden /> : <TbDots aria-hidden />}</button></DropdownMenuTrigger><DropdownMenuContent align="end" side="top" sideOffset={4}><DropdownMenuItem onClick={() => void copy_link()}><TbLink className="size-3.5" /><span>{copied ? translate_chat("message.copied") : translate_chat("file_diff.copy_link")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+        <button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); open_action.open_file(file.file); }} className={message_action_button_class_name} title={translate_chat("file_diff.open")} aria-label={translate_chat("file_diff.open_file", { name: file.file })}><TbExternalLink aria-hidden /></button>
+        <DropdownMenu><DropdownMenuTrigger asChild><button type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); }} className={message_action_button_class_name} title={translate_common("actions.more")} aria-label={translate_chat("file_diff.file_actions", { name: file.file })}>{copied ? <TbCheck aria-hidden /> : <TbDots aria-hidden />}</button></DropdownMenuTrigger><DropdownMenuContent align="end" side="top" sideOffset={4}><DropdownMenuItem onClick={() => void copy_link()}><TbLink className="size-3.5" /><span>{copied ? translate_chat("message.copied") : translate_chat("file_diff.copy_link")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>
       </span> : null}
       <span className={variant === "review" ? "file-diff-review-stats" : undefined}><DiffStats additions={file.additions} deletions={file.deletions} compact /></span>
     </summary>
-    <div className={cn("file-diff-patch border-t border-border/45", variant === "inline" && "max-h-80")}>
+    <div className={cn("file-diff-patch border-t border-divider", variant === "inline" && "max-h-80")}>
       {rows.map((row, index) => row.type === "omitted"
         ? <div key={`omitted:${index}`} className="file-diff-omitted">{translate_chat("file_diff.unmodified", { count: row.count })}</div>
         : row.type === "meta"
@@ -200,15 +201,15 @@ function parse_unified_diff(patch: string): DiffRow[] {
 export function TurnFileDiffOverview({ summary }: { /** 当前 Turn 的实时改动摘要；为空表示本轮尚无改动。 */ summary?: SessionTurnFileDiffSummary }) {
   const translate_chat = use_translation("chat");
   // 「本轮」域始终存在，没有改动时也要给出明确说明，而不是留一个空面板。
-  if (!summary) return <div className="p-3 text-[11px] leading-5 text-muted-foreground">{translate_chat("file_diff.empty_turn")}</div>;
+  if (!summary) return <div className="p-3 text-[0.6875rem] leading-5 text-muted-foreground">{translate_chat("file_diff.empty_turn")}</div>;
   return <div className="flex min-h-0 flex-col gap-3 p-3">
     <div className="flex min-w-0 items-start gap-2.5 rounded-xl bg-surface-subtle px-3 py-2.5">
       <TbFileDiff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1">
         <div className="text-xs font-medium text-foreground">{translate_chat("message.files_changed", { count: summary.files_count })}</div>
-        <div className="mt-1 text-[11px]"><DiffStats additions={summary.additions} deletions={summary.deletions} /></div>
+        <div className="mt-1 text-[0.6875rem]"><DiffStats additions={summary.additions} deletions={summary.deletions} /></div>
       </div>
     </div>
-    <p className="text-[11px] leading-5 text-muted-foreground">{translate_chat("file_diff.pick_turn")}</p>
+    <p className="text-[0.6875rem] leading-5 text-muted-foreground">{translate_chat("file_diff.pick_turn")}</p>
   </div>;
 }

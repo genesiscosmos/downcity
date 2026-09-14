@@ -11,7 +11,7 @@ export interface SwitchProps extends BaseSwitch.Root.Props {}
 export const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(({ className, ...props }, ref) => (
   <BaseSwitch.Root
     ref={ref}
-    className={cn("inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-start rounded-full border-none p-0.5 transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 data-checked:bg-primary data-unchecked:bg-muted-foreground/20", className)}
+    className={cn("inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-start rounded-full border-none p-0.5 transition-colors focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 data-checked:bg-primary data-unchecked:bg-control-track", className)}
     {...props}
   >
     <BaseSwitch.Thumb className="pointer-events-none block size-4 shrink-0 rounded-full border-none bg-background transition-transform duration-200 data-checked:translate-x-4 data-checked:bg-primary-foreground data-unchecked:translate-x-0" />

@@ -3,7 +3,7 @@
 [data-theme="duobox"] { --theme-bg: #ffffff; --theme-fg: #2a2826; --theme-surface: #fcfbfa; --theme-primary: #755e55; --theme-muted: #f4f0ec; --theme-muted-fg: #706d69; --theme-accent: #eae4de; --theme-border: #e2dcd6; }
 [data-theme="duobox"].dark { --theme-bg: #151515; --theme-fg: #e8e8e7; --theme-surface: #1c1c1c; --theme-primary: #b8aa99; --theme-muted: #252423; --theme-muted-fg: #adaaa6; --theme-accent: #3b3430; --theme-border: #3a3836; }
 
-[data-theme="dim"] { --theme-bg: #f4f5f7; --theme-fg: #252a31; --theme-surface: #fafbfc; --theme-primary: #52606d; --theme-muted: #e9ecf0; --theme-muted-fg: #687381; --theme-accent: #d8dee6; --theme-border: #d9dee5; }
+[data-theme="dim"] { --theme-bg: #f4f5f7; --theme-fg: #252a31; --theme-surface: #fafbfc; --theme-primary: #52606d; --theme-muted: #e9ecf0; --theme-muted-fg: #636e7b; --theme-accent: #d8dee6; --theme-border: #d9dee5; }
 [data-theme="dim"].dark { --theme-bg: #1c2026; --theme-fg: #d7dce2; --theme-surface: #242930; --theme-primary: #aab4c0; --theme-muted: #2c323a; --theme-muted-fg: #929daa; --theme-accent: #3a424c; --theme-border: #353c45; }
 
 [data-theme="forest"] { --theme-bg: #f0fdf4; --theme-fg: #14532d; --theme-surface: #f5fef8; --theme-primary: #16a34a; --theme-muted: #dcfce7; --theme-muted-fg: #15803d; --theme-accent: #bbf7d0; --theme-border: #bbf7d0; }

@@ -35,16 +35,16 @@ export const SettingsSidebarPanel = memo(function SettingsSidebarPanel({ control
 
   return <SidebarPanel>
     <div className="shrink-0 px-2 pb-2">
-      <Button size="sidebar" className="justify-start text-foreground/80" onClick={controller.actions.close_settings}>
+      <Button size="sidebar" className="justify-start text-foreground" onClick={controller.actions.close_settings}>
         <TbArrowLeft />
         <span>{common_translate("actions.back")}</span>
       </Button>
     </div>
     <SidebarContent class_name="flex flex-col gap-2.5 py-1">
       {settings_groups.map((group) => <div key={group.label} className="flex min-w-0 flex-col gap-0.5">
-        <div className="px-2.5 pb-1 text-[10px] text-muted-foreground/65">{group.label}</div>
+        <div className="px-2.5 pb-1 text-[0.625rem] text-muted-foreground">{group.label}</div>
         <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-subtle p-1.5">
-          {group.items.map(({ section, label, icon: Icon }) => <Button key={section} size="sidebar" className="px-2.5 text-foreground/80" actived={active_section === section} onClick={() => controller.actions.open_settings(section)}><Icon /><span className="min-w-0 truncate">{label}</span></Button>)}
+          {group.items.map(({ section, label, icon: Icon }) => <Button key={section} size="sidebar" className="px-2.5 text-foreground" actived={active_section === section} onClick={() => controller.actions.open_settings(section)}><Icon /><span className="min-w-0 truncate">{label}</span></Button>)}
         </div>
       </div>)}
     </SidebarContent>

@@ -8,7 +8,7 @@ import { format_number, get_intl_locale } from "@/locales/format";
 import { use_desktop_language, use_translation } from "@/locales/i18n";
 
 const level_classes = [
-  "bg-foreground/[0.055]",
+  "bg-surface-subtle",
   "bg-chart-2/20",
   "bg-chart-2/40",
   "bg-chart-2/65",
@@ -47,7 +47,7 @@ export function UsageHeatmap({ heatmap, credits_used, credits_per_usd }: UsageHe
   return <div role="img" aria-label={activity_label}>
     <div className="min-w-0 overflow-x-clip pb-1">
       <div className="w-full min-w-0">
-        <div className="mb-2 grid h-4 min-w-0 gap-[2px] text-[10px] text-muted-foreground/75 sm:gap-1" style={{ gridTemplateColumns: `repeat(${heatmap.weeks.length}, minmax(0, 1fr))` }}>
+        <div className="mb-2 grid h-4 min-w-0 gap-[2px] text-[0.625rem] text-muted-foreground sm:gap-1" style={{ gridTemplateColumns: `repeat(${heatmap.weeks.length}, minmax(0, 1fr))` }}>
           {heatmap.months.map((month) => <span key={month.key} className="whitespace-nowrap" style={{ gridColumnStart: month.column + 1 }}>{month_formatter.format(date_value(month.date))}</span>)}
         </div>
         <div className="grid min-w-0 gap-[2px] sm:gap-1" style={{ gridTemplateColumns: `repeat(${heatmap.weeks.length}, minmax(0, 1fr))` }}>
@@ -63,7 +63,7 @@ export function UsageHeatmap({ heatmap, credits_used, credits_per_usd }: UsageHe
         </div>
       </div>
     </div>
-    <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground/65">
+    <div className="mt-3 flex items-center justify-end gap-1.5 text-[0.625rem] text-muted-foreground">
       <span>{translate("usage.less")}</span>
       {level_classes.map((class_name, index) => <span key={index} aria-hidden="true" className={cn("size-2.5 rounded-[3px]", class_name)} />)}
       <span>{translate("usage.more")}</span>

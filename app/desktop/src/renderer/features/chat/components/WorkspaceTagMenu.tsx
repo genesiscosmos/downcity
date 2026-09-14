@@ -21,7 +21,7 @@ export function WorkspaceTagMenu({ workspace }: { /** 当前 Session 绑定的 W
     <DropdownMenuTrigger asChild>
       <button
         type="button"
-        className="inline-flex h-5 min-w-0 max-w-40 shrink-0 items-center gap-1 rounded-full bg-foreground/[0.045] px-2 text-[0.625rem] font-normal text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.08] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-foreground/[0.08] data-[popup-open]:text-foreground"
+        className="inline-flex h-5 min-w-0 max-w-40 shrink-0 items-center gap-1 rounded-full bg-surface-subtle px-2 text-[0.625rem] font-normal text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-surface-emphasis data-[popup-open]:text-foreground"
         title={workspace.workspace_path}
         aria-label={translate("workspace.item_actions", { name: workspace.name })}
       >

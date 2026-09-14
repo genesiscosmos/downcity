@@ -13,7 +13,7 @@ export function WelcomeView() {
       <div className="flex h-full flex-1 select-none items-center justify-center">
         <div className="flex flex-col items-center text-center">
           <TbBuildingCommunity className="size-24 text-foreground opacity-[0.12]" />
-          <p className="mt-5 text-sm text-muted-foreground/55">{translate("welcome")}</p>
+          <p className="mt-5 text-sm text-muted-foreground">{translate("welcome")}</p>
         </div>
       </div>
     </MainViewBody>

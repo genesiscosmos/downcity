@@ -76,7 +76,7 @@ export function ModelSelector({
             {sorted_models.length === 0 ? <div className="py-4 text-center text-xs text-muted-foreground">{resolved_empty_text}</div> : <div className="space-y-0.5">
               {sorted_models.map((model) => {
                 const active = model.model_id === current_model_id;
-                return <Button key={model.model_id} size="full" className={cn("rounded-floating-item text-foreground/90 hover:bg-foreground/[0.06]", active && "bg-foreground/10 text-foreground hover:bg-foreground/10")} onClick={() => select_model(model.model_id)}>
+                return <Button key={model.model_id} size="full" className={cn("rounded-floating-item text-foreground hover:bg-interaction-hover", active && "bg-foreground/10 text-foreground hover:bg-foreground/10")} onClick={() => select_model(model.model_id)}>
                   <LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />
                   <span className="min-w-0 flex-1 truncate text-left" title={model.name}>{model.name}</span>
                 </Button>;

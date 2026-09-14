@@ -32,7 +32,7 @@ function PluginListItem({ plugin, active, select_plugin }: {
   /** 打开 Plugin 详情。 */ select_plugin(plugin_id: string): void;
 }) {
   return <button type="button" onClick={() => select_plugin(plugin.plugin_id)} className={cn("group flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30", active && "bg-interaction-selected")}>
-    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.055] text-muted-foreground"><PluginIcon plugin_id={plugin.plugin_id} icon_url={plugin.icon_url} /></span>
-    <span className="min-w-0 flex-1"><span className="block truncate text-xs text-foreground">{plugin.title}</span><span className="mt-0.5 block truncate text-[10px] text-muted-foreground/65">{plugin.description}</span></span>
+    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-muted-foreground"><PluginIcon plugin_id={plugin.plugin_id} icon_url={plugin.icon_url} /></span>
+    <span className="min-w-0 flex-1"><span className="block truncate text-xs text-foreground">{plugin.title}</span><span className="mt-0.5 block truncate text-[0.625rem] text-muted-foreground">{plugin.description}</span></span>
   </button>;
 }

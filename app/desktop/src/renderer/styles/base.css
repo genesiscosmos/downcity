@@ -71,6 +71,24 @@
   -webkit-app-region: drag;
 }
 
+/*
+ * Shell 顶栏两侧的预留位。
+ *
+ * 宽度来自「面板是否折叠」，必须与两侧面板的折叠动画同速（SHELL_PANEL_TRANSITION），
+ * 否则按钮会先于面板出现或面板已经展开而内容还没让位。
+ * 预留量含 macOS 红绿灯这类固定像素，所以宽度是 CSS 长度而不是动画数值——
+ * 用 framer-motion 动画 calc() 会丢失单位，只能交给 CSS 过渡。
+ */
+.shell-inline-reserve {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-inline-reserve {
+    transition: none;
+  }
+}
+
 .sidebar-header-actions,
 .sidebar-header-actions button,
 .sidebar-header-actions [role="button"] {
@@ -126,13 +144,14 @@ a,
   max-width: 840px;
   margin: 0.5rem auto;
   border-radius: 1rem;
-  background: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
+  /* 与其它输入控件共用同一档底色；原先自己写了一层 muted-foreground 10%。 */
+  background: var(--control-surface);
   overflow: visible;
   transition: background-color 140ms ease;
 }
 
 .chat-composer:focus-within {
-  background: color-mix(in srgb, var(--muted-foreground) 13%, transparent);
+  background: var(--interaction-active);
 }
 
 /* 历史消息编辑只保留 Composer 自身一层表面，不再叠加 User Message 气泡。 */
@@ -182,7 +201,7 @@ a,
 .chat-input-editor ul ul { list-style-type: circle; }
 .chat-input-editor ul ul ul { list-style-type: square; }
 .chat-input-editor li { display: list-item; padding-left: 0.1rem; }
-.chat-input-editor li::marker { color: color-mix(in srgb, var(--muted-foreground) 72%, transparent); }
+.chat-input-editor li::marker { color: var(--subtle-foreground); }
 .chat-input-editor li > p { margin: 0; }
 .chat-input-editor li + li { margin-top: 0.1rem; }
 
@@ -211,11 +230,24 @@ a,
 .chat-input-editor.is-editor-empty > p:first-child::before,
 .chat-input-editor > p.is-empty:first-child::before {
   content: attr(data-placeholder);
-  color: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
-  opacity: 0.5;
+  /* 占位符曾经同时写了 50% 透明度色值与 opacity: .5，双重减淡后在浅色主题只有 1.4:1，
+     整个空会话引导几乎看不见。占位符是文本，不再用透明度表达层级。 */
+  color: var(--text-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
+}
+
+/*
+ * 全应用占位符下限。
+ *
+ * Preflight 默认 currentColor 50%，在多数主题下不到 3:1；这里统一钉到语义令牌，
+ * 输入框不再各自决定占位符颜色。
+ */
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-placeholder);
+  opacity: 1;
 }
 
 /* Replying 文案保持稳定，仅让三个点按 .、..、... 的节奏循环。 */

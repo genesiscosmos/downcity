@@ -70,7 +70,7 @@ export function UsageLineChart({ series, period, credits_per_usd }: UsageLineCha
       "pointer-events-none absolute top-1 z-10 min-w-28 rounded-lg border border-border-subtle bg-background/95 px-2.5 py-2 shadow-lg backdrop-blur-sm",
       active_index === 0 ? "translate-x-0" : active_index === series.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
     )} style={{ left: `${active_position}%` }}>
-      <p className="text-[10px] text-muted-foreground">{format_range(active_point)}</p>
+      <p className="text-[0.625rem] text-muted-foreground">{format_range(active_point)}</p>
       <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">{format_amount(active_point.credits_used)}</p>
     </div> : null}
     <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full overflow-visible" role="img" aria-label={translate("usage.trend_label", { period: period_label })}>
@@ -79,15 +79,15 @@ export function UsageLineChart({ series, period, credits_per_usd }: UsageLineCha
         const y = padding.top + ratio * plot_height;
         return <line key={ratio} x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="var(--divider)" strokeWidth="1" />;
       })}
-      <text x={padding.left - 8} y={padding.top + 3} textAnchor="end" className="fill-muted-foreground/65 text-[9px]">{format_amount(maximum)}</text>
-      <text x={padding.left - 8} y={padding.top + plot_height + 3} textAnchor="end" className="fill-muted-foreground/65 text-[9px]">$0.00</text>
+      <text x={padding.left - 8} y={padding.top + 3} textAnchor="end" className="fill-muted-foreground/65 text-[0.5625rem]">{format_amount(maximum)}</text>
+      <text x={padding.left - 8} y={padding.top + plot_height + 3} textAnchor="end" className="fill-muted-foreground/65 text-[0.5625rem]">$0.00</text>
       {area_path ? <path d={area_path} fill={`url(#${gradient_id})`} /> : null}
       {path ? <path d={path} fill="none" stroke="var(--chart-2)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" /> : null}
       {points.map((point, index) => <g key={series[index].key}>
         {active_index === index ? <circle cx={point.x} cy={point.y} r="4" fill="var(--background)" stroke="var(--chart-2)" strokeWidth="2" vectorEffect="non-scaling-stroke" /> : null}
         <rect x={point.x - plot_width / series.length / 2} y={padding.top} width={plot_width / series.length} height={plot_height} fill="transparent" tabIndex={0} aria-label={`${format_range(series[index])}, ${format_amount(series[index].credits_used)}`} onPointerEnter={() => set_active_index(index)} onPointerDown={() => set_active_index(index)} onFocus={() => set_active_index(index)} onBlur={() => set_active_index(null)} />
       </g>)}
-      {[0, Math.floor((series.length - 1) / 2), series.length - 1].filter((index, position, values) => index >= 0 && values.indexOf(index) === position).map((index) => <text key={series[index]?.key} x={points[index]?.x} y={height - 7} textAnchor={index === 0 ? "start" : index === series.length - 1 ? "end" : "middle"} className="fill-muted-foreground/65 text-[9px]">{series[index] ? format_range(series[index]) : ""}</text>)}
+      {[0, Math.floor((series.length - 1) / 2), series.length - 1].filter((index, position, values) => index >= 0 && values.indexOf(index) === position).map((index) => <text key={series[index]?.key} x={points[index]?.x} y={height - 7} textAnchor={index === 0 ? "start" : index === series.length - 1 ? "end" : "middle"} className="fill-muted-foreground/65 text-[0.5625rem]">{series[index] ? format_range(series[index]) : ""}</text>)}
     </svg>
   </div>;
 }

@@ -35,7 +35,7 @@ export function Select({ value, options, on_value_change, className, align = "st
     <BaseSelect.Root items={options} value={value} onValueChange={(next_value) => next_value !== null && on_value_change(next_value)} {...props}>
       <BaseSelect.Trigger
         className={cn(
-          "group/select inline-flex h-8 min-w-36 items-center justify-between gap-2 rounded-lg bg-control-surface px-2.5 text-xs text-foreground/75 outline-none transition-colors hover:bg-control-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-interaction-selected data-[popup-open]:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          "group/select inline-flex h-8 min-w-36 items-center justify-between gap-2 rounded-lg bg-control-surface px-2.5 text-xs text-foreground outline-none transition-colors hover:bg-control-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-interaction-selected data-[popup-open]:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
       >
@@ -51,9 +51,9 @@ export function Select({ value, options, on_value_change, className, align = "st
                   key={option.value}
                   value={option.value}
                   disabled={option.disabled}
-                  className="relative flex w-full cursor-default select-none items-center gap-2.5 rounded-floating-item py-1.5 pr-2 pl-7 text-xs text-foreground/80 outline-none transition-colors duration-100 hover:bg-interaction-hover hover:text-foreground data-[highlighted]:bg-interaction-hover data-[highlighted]:text-foreground data-[selected]:bg-interaction-selected data-[selected]:text-foreground data-[selected]:hover:bg-interaction-active data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                  className="relative flex w-full cursor-default select-none items-center gap-2.5 rounded-floating-item py-1.5 pr-2 pl-7 text-xs text-foreground outline-none transition-colors duration-100 hover:bg-interaction-hover hover:text-foreground data-[highlighted]:bg-interaction-hover data-[highlighted]:text-foreground data-[selected]:bg-interaction-selected data-[selected]:text-foreground data-[selected]:hover:bg-interaction-active data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                 >
-                  <BaseSelect.ItemIndicator className="absolute left-1.5 flex size-4 items-center justify-center text-foreground/75"><TbCheck className="size-3.5" /></BaseSelect.ItemIndicator>
+                  <BaseSelect.ItemIndicator className="absolute left-1.5 flex size-4 items-center justify-center text-foreground"><TbCheck className="size-3.5" /></BaseSelect.ItemIndicator>
                   <BaseSelect.ItemText className="min-w-0 flex-1 truncate">{option.label}</BaseSelect.ItemText>
                 </BaseSelect.Item>
               ))}

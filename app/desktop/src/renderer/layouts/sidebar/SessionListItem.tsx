@@ -50,7 +50,7 @@ export const SessionListRow = memo(function SessionListRow({ title, active, on_s
       tabIndex={on_select ? 0 : undefined}
       className={cn(
         "group/item relative flex min-h-7 w-full cursor-pointer items-center gap-1 rounded-lg border border-transparent p-0.5 pl-2 text-left transition-colors duration-150",
-        active ? "bg-primary/[0.1] hover:bg-primary/[0.12]" : "hover:bg-foreground/[0.07] focus-visible:bg-foreground/[0.07]",
+        active ? "bg-interaction-selected hover:bg-interaction-active" : "hover:bg-interaction-hover focus-visible:bg-interaction-hover",
       )}
       onClick={on_select}
       onKeyDown={(event) => { if (on_select && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); on_select(); } }}

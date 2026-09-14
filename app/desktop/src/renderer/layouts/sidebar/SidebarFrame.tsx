@@ -3,7 +3,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
-import { SHELL_PANEL_TRANSITION, SHELL_SIDEBAR_DEFAULT_WIDTH, SHELL_SIDEBAR_MAX_WIDTH, SHELL_SIDEBAR_MIN_WIDTH } from "@/layouts/shellMotion";
+import { SHELL_HEADER_HEIGHT_CSS, SHELL_PANEL_TRANSITION, SHELL_SIDEBAR_DEFAULT_WIDTH, SHELL_SIDEBAR_MAX_WIDTH, SHELL_SIDEBAR_MIN_WIDTH } from "@/layouts/shellMotion";
 
 /** Sidebar 外壳属性。 */
 interface SidebarFrameProps {
@@ -40,7 +40,8 @@ export function SidebarFrame({ collapsed, children }: SidebarFrameProps) {
     className="flex h-full min-h-0 flex-none select-none overflow-hidden whitespace-nowrap bg-muted"
   >
     <aside className="relative flex h-full min-h-0 flex-col overflow-hidden" style={{ width: current_width }}>
-      <div className="header-drag-region h-10 shrink-0" aria-hidden="true" />
+      {/* 顶栏高度与 MainView 顶栏共用同一来源；写 h-10 只在 100% 缩放下恰好相等。 */}
+      <div className="header-drag-region shrink-0" style={{ height: SHELL_HEADER_HEIGHT_CSS }} aria-hidden="true" />
       <div className="flex min-h-0 flex-1 overflow-hidden">{children}</div>
       {!collapsed ? <div onMouseDown={handle_resize_start} className="absolute right-0 top-0 z-10 -mr-[3px] h-full w-1.5 cursor-ew-resize" /> : null}
     </aside>

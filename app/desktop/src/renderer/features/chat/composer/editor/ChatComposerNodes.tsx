@@ -12,12 +12,12 @@ function ChatAttachmentView({ node, deleteNode }: NodeViewProps) {
   const attributes = node.attrs as ChatAttachmentNodeAttributes;
   const image = attributes.media_type.startsWith("image/");
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
-    <span contentEditable={false} className="mention group/chat-attachment relative inline-flex max-w-[14rem] items-center rounded-md bg-foreground/[0.08] align-middle text-[0.6875rem] font-medium text-foreground/88 shadow-none transition-colors [box-shadow:none] [filter:none] hover:bg-foreground/[0.12]">
+    <span contentEditable={false} className="mention group/chat-attachment relative inline-flex max-w-[14rem] items-center rounded-md bg-surface-emphasis align-middle text-[0.6875rem] font-medium text-foreground shadow-none transition-colors [box-shadow:none] [filter:none] hover:bg-interaction-hover">
       <span className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-[inherit] px-1.5 py-0.5 text-left outline-none">
-        {image ? <span className="inline-flex size-4 shrink-0 overflow-hidden rounded bg-foreground/[0.08] transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><img src={attributes.data_url} alt="" className="size-full object-cover" draggable={false} /></span> : <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/75 transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><TbFile className="size-3" /></span>}
+        {image ? <span className="inline-flex size-4 shrink-0 overflow-hidden rounded bg-surface-emphasis transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><img src={attributes.data_url} alt="" className="size-full object-cover" draggable={false} /></span> : <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><TbFile className="size-3" /></span>}
         <span className="min-w-0 truncate leading-4">{attributes.filename}</span>
       </span>
-      <button type="button" className="absolute left-1 top-1/2 inline-flex size-3.5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground/70 opacity-0 transition-all hover:bg-foreground/[0.06] hover:text-foreground focus-visible:opacity-100 group-hover/chat-attachment:opacity-100 group-focus-within/chat-attachment:opacity-100" title={translate("composer.remove_attachment")} onClick={deleteNode}><TbX className="size-2.5" /></button>
+      <button type="button" className="absolute left-1 top-1/2 inline-flex size-3.5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-interaction-hover hover:text-foreground focus-visible:opacity-100 group-hover/chat-attachment:opacity-100 group-focus-within/chat-attachment:opacity-100" title={translate("composer.remove_attachment")} onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>
   </NodeViewWrapper>;
 }
@@ -27,12 +27,12 @@ function ChatReferenceView({ node, deleteNode }: NodeViewProps) {
   const translate = use_translation("chat");
   const attributes = node.attrs as ChatReferenceNodeAttributes;
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
-    <span contentEditable={false} className="group/chat-ref relative inline-flex max-w-[16rem] items-center rounded-lg bg-foreground/[0.09] align-middle text-[0.6875rem] text-foreground/88 shadow-none [box-shadow:none] [filter:none]">
-      <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-[inherit] px-1.5 py-1 text-left outline-none transition-colors hover:bg-foreground/[0.06]">
-        <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-md text-muted-foreground/75 transition-opacity group-hover/chat-ref:opacity-0 group-focus-within/chat-ref:opacity-0"><TbQuote className="size-3" /></span>
+    <span contentEditable={false} className="group/chat-ref relative inline-flex max-w-[16rem] items-center rounded-lg bg-surface-emphasis align-middle text-[0.6875rem] text-foreground shadow-none [box-shadow:none] [filter:none]">
+      <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-[inherit] px-1.5 py-1 text-left outline-none transition-colors hover:bg-interaction-hover">
+        <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity group-hover/chat-ref:opacity-0 group-focus-within/chat-ref:opacity-0"><TbQuote className="size-3" /></span>
         <span className="min-w-0 truncate font-medium leading-4">{attributes.preview_text}</span>
       </span>
-      <button type="button" className="absolute left-1.5 top-1/2 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 transition-all hover:bg-foreground/[0.06] hover:text-foreground focus-visible:opacity-100 group-hover/chat-ref:opacity-100 group-focus-within/chat-ref:opacity-100" title={translate("composer.remove_reference")} onClick={deleteNode}><TbX className="size-2.5" /></button>
+      <button type="button" className="absolute left-1.5 top-1/2 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-interaction-hover hover:text-foreground focus-visible:opacity-100 group-hover/chat-ref:opacity-100 group-focus-within/chat-ref:opacity-100" title={translate("composer.remove_reference")} onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>
   </NodeViewWrapper>;
 }
@@ -41,9 +41,9 @@ function ChatReferenceView({ node, deleteNode }: NodeViewProps) {
 function ChatDataView({ node, deleteNode }: NodeViewProps) {
   const attributes = node.attrs as ChatDataNodeAttributes;
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
-    <span contentEditable={false} className="group/chat-data relative inline-flex max-w-[16rem] items-center rounded-md bg-foreground/[0.08] align-middle text-[0.6875rem] font-medium text-foreground/88">
-      <span className="inline-flex min-w-0 items-center gap-1 px-1.5 py-0.5"><TbBraces className="size-3 text-muted-foreground/75" /><span className="truncate">{attributes.data_type}</span></span>
-      <button type="button" className="mr-1 inline-flex size-3.5 items-center justify-center rounded text-muted-foreground/70 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/chat-data:opacity-100" onClick={deleteNode}><TbX className="size-2.5" /></button>
+    <span contentEditable={false} className="group/chat-data relative inline-flex max-w-[16rem] items-center rounded-md bg-surface-emphasis align-middle text-[0.6875rem] font-medium text-foreground">
+      <span className="inline-flex min-w-0 items-center gap-1 px-1.5 py-0.5"><TbBraces className="size-3 text-muted-foreground" /><span className="truncate">{attributes.data_type}</span></span>
+      <button type="button" className="mr-1 inline-flex size-3.5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/chat-data:opacity-100" onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>
   </NodeViewWrapper>;
 }
