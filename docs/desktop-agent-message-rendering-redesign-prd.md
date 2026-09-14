@@ -1108,4 +1108,43 @@ pnpm --filter @downcity/desktop test        # 306/306 通过
 
 `@downcity/ui` 的公共 Chat 渲染器仍把 Action 映射为独立的 `operation` Part（`packages/ui/src/lib/session-message.ts`），与 Desktop 的 activity 集合不同源。按 §1.5 的约定，公共组件抽取时应收敛到同一套活动语义，而不是并行保留两套。
 
+---
+
+## 二十三、Markdown 图表渲染改由 Desktop 自持（2026-09-14）
+
+> 状态：已实施
+>
+> 范围：`app/desktop/src/renderer/components/markdown/`、`styles/mermaid.css`、`locales/*/markdown.json`
+
+### 23.1 触发原因
+
+Mermaid 此前走 Streamdown 内置分支，只传了 `controls.mermaid: true`，未传 `mermaid.config`。图表因此使用默认 `theme: "default"` 与 monospace 字体，不认 Desktop 的九套主题：深色模式下呈现浅色节点与紫色连线，与正文完全脱节。该分支同时把渲染 id、并发策略、Loading 文案与缩放控件封在内部，无法按 Desktop 的令牌体系调整。
+
+### 23.2 决策
+
+- **围栏在 rehype 阶段改写为图表节点。** `rehype_mermaid_blocks` 把 `pre > code.language-mermaid` 换成 `mermaid-diagram`，由 `markdown_components` 映射到自有组件。位置在 sanitize 之后，因此改写出的自定义元素不会被默认 schema 当作未知标签丢弃。代码块、表格与公式仍走 Streamdown 原管线。
+- **主题令牌映射只有一处。** `read_mermaid_theme_tokens` 从 `documentElement` 读取语义令牌，`build_mermaid_config` 生成 `themeVariables` 与 `themeCSS`；`c0..c4` 色阶由主色向背景与前景两端派生——Mermaid 用 khroma 计算配色，只能接受具体颜色值，不能把 `var()` 或 `color-mix()` 交给它。
+- **渲染串行且有确定性 id。** `mermaid.initialize` 与 `mermaid.render` 共用模块级状态，长会话中多图并发会互相覆盖；所有渲染进入同一条队列，id 由「渲染位置 + 源码」的稳定散列生成。
+- **主题在渲染时读取。** 配置不缓存，每次真正渲染时重新读取令牌；主题写在 `<html>` 上而非 React 状态，因此由 `use_document_theme_revision` 把文档级变化转成可依赖的计数。
+- **状态机为占位 / 画布 / 源码。** 懒渲染（进入视口前 320px 才渲染）；**重新渲染期间保留上一张图**，避免流式生成时每个 chunk 都把图表打回占位；失败只在流式结束后算数，之前一律显示渲染中。
+
+### 23.3 与 Duobox 的偏离
+
+- 全屏改用 react-zoom-pan-pinch v4 内建的 `fitOnInit="contain"` 与 `fitToView()`，不再手算适配缩放。
+- 内联视图不套缩放组件，交给 Mermaid 自身的 `width` / `max-width`，省掉一层恒为 `scale: 1` 的 transform。
+
+### 23.4 验证
+
+```bash
+pnpm --filter @downcity/desktop typecheck   # 通过
+pnpm --filter @downcity/desktop test        # 309/309 通过
+```
+
+`markdown_mermaid.test.ts` 覆盖围栏改写（大小写、多类名、嵌套、行内代码、无 code 的 pre）、色阶单调性、主题令牌进入配置、导出尺寸收敛，以及一条走真实 Streamdown 管线的端到端断言（同时证明 sanitize 没有吞掉 `language-mermaid`）。
+
+### 23.5 未验证
+
+图表观感（`themeCSS` 密度、全屏手感、深色模式配色）未经人工确认；渲染层打包在本环境受容器内存上限限制、无法完成 emit，产物需在本地执行 `pnpm build:desktop` 生成。
+
+
 

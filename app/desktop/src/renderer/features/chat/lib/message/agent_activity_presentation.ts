@@ -151,6 +151,21 @@ export function should_auto_open_agent_activity(parts: readonly AgentActivityPar
 }
 
 /**
+ * 活动组折叠摘要选中的 Part。
+ *
+ * Reasoning 只是过程说明，不是一次具体操作；Tool 与 Action 都是操作，因此两者一视同仁，
+ * 摘要反映最后发生的那一件事。全部为 Reasoning 时回退到最后一项；空数组返回 undefined，
+ * 调用方只在成组时使用它，组内至少有一项。
+ */
+export function select_activity_summary_part(parts: readonly AgentActivityPart[]): AgentActivityPart | undefined {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (part && part.type !== "reasoning") return part;
+  }
+  return parts[parts.length - 1];
+}
+
+/**
  * 读取 Tool 输入原文中指定字段已经到达的字符串值。
  *
  * Tool 输入原文是模型逐段输出的 JSON 片段，收口前无法整体解析。这里做一次 JSON 字符串词法

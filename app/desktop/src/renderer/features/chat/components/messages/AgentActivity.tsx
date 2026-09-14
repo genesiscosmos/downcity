@@ -4,7 +4,7 @@ import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionAgentActionPart, SessionAgentReasoningPart, SessionAgentToolPart } from "@downcity/agent";
 import { TbArrowsMinimize, TbBulb, TbChevronRight, TbCommand, TbFilePencil, TbFilePlus, TbFileSearch, TbGitFork, TbMessageQuestion, TbPuzzle, TbSearch, TbTerminal2, TbTextScan2 } from "react-icons/tb";
 import { AgentInteraction } from "@/features/chat/components/messages/AgentInteraction";
-import { resolve_agent_action_presentation, resolve_agent_tool_presentation, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_activity_presentation";
+import { resolve_agent_action_presentation, resolve_agent_tool_presentation, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_activity_presentation";
 import type { AgentActivityDetail, AgentActivityEditPair, AgentActivityPart, AgentActivityPresentation, AgentActivityTone, AgentActivityVisualKind } from "@/features/chat/types/AgentMessage";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
@@ -50,7 +50,7 @@ export function AgentActivity({ parts, show_reasoning, streaming, respond_intera
 /** 多个连续活动共用的折叠摘要与展开状态。摘要始终取最后一个非 Reasoning 项。 */
 function AgentActivityGroup({ parts, message_streaming, respond_interaction }: { parts: readonly AgentActivityPart[]; message_streaming: boolean; respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   const translate_chat = use_translation("chat");
-  const summary_part = find_summary_part(parts);
+  const summary_part = select_activity_summary_part(parts) ?? parts[parts.length - 1];
   // Interaction 属于 Tool Part；待响应时自动展开一次，方便用户直接回答。
   const pending_interaction_id = parts
     .flatMap((part) => part.type === "tool" ? (part.interactions ?? []) : [])
@@ -242,17 +242,4 @@ function ActivityIcon({ visual_kind }: { visual_kind: AgentActivityVisualKind })
 
 function split_lines(text: string): string[] { return text.split("\n"); }
 function reasoning_preview(text: string): string { return text.replace(/\s+/g, " ").trim(); }
-/**
- * 组摘要取最后一个非 Reasoning 项。
- *
- * Reasoning 只是过程说明，不是一次具体操作；Tool 与 Action 都算操作，因此两者一视同仁，
- * 摘要反映的是最后发生的那一件事。
- */
-function find_summary_part(parts: readonly AgentActivityPart[]): AgentActivityPart {
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (part && part.type !== "reasoning") return part;
-  }
-  return parts[parts.length - 1]!;
-}
 function assert_never(value: never): never { throw new Error(`不支持的 Agent Activity Part：${String((value as { type?: unknown }).type)}`); }

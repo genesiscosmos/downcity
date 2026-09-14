@@ -1,14 +1,15 @@
 /**
  * Markdown 中的 Mermaid 图表块。
  *
- * 三种状态各有明确的呈现：渲染中只占位，渲染成功进入可交互的画布，渲染失败退回源码。
- * 三个决定值得单独说明：
+ * 三种状态各有明确的呈现：渲染中只占位，渲染成功进入可交互的画布，流式结束仍失败才退回源码。
+ * 四个决定值得单独说明：
  *
  * 1. **懒渲染**。长会话可能带上十几张图，一次性渲染会卡住首屏；滚动到附近才开始渲染。
- * 2. **失败即源码**。图表渲染失败时不再显示红色错误块，而是把它还原成代码块——用户至少能
- *    拿到原始源码。流式生成中的围栏本来就可能是半截语法，此时连失败提示都不显示，等这一轮
- *    生成结束再由失败态决定要不要报错。
- * 3. **主题跟随**。渲染用的主题在渲染那一刻读取，因此明暗模式或主题切换后重新渲染的图表
+ * 2. **重新渲染期间保留上一张图**。流式生成时源码每个 chunk 都在变，若每次都先清空，图表会在
+ *    「出现 → 消失」之间反复。旧图一直留到新的渲染成功，确定失败才撤下。
+ * 3. **失败只在生成结束后算数**。流式中的围栏本来就可能是半截语法，此时一律显示渲染中；
+ *    等这一轮生成结束（会再渲染一次）仍失败，才显示可读原因并把源码还原成代码块。
+ * 4. **主题跟随**。渲染用的主题在渲染那一刻读取，因此明暗模式或主题切换后重新渲染的图表
  *    直接跟随；切换主题时不会为此重建整棵消息树。
  */
 
@@ -77,14 +78,8 @@ export function MermaidDiagram({ children }: { /** rehype 转换写入的图表�
     return () => observer.disconnect();
   }, [visible]);
 
-  // 源码变化时收起上一张图：旧结果属于旧源码，不能继续当成当前图表展示。
-  // 反过来，流式状态变化不代表内容变过，所以不在这里清空——否则每条消息结束生成时，
-  // 里面所有图表都会先闪回占位再重新出现。
-  useEffect(() => {
-    set_svg("");
-    set_failed(false);
-  }, [source]);
-
+  // 重新渲染期间保留上一张图，避免流式生成时每个 chunk 都把图表打回占位再重画。
+  // 只有渲染失败才撤下它——那时旧结果已经不属于当前源码，视图退回源码更诚实。
   useEffect(() => {
     if (!visible || !source) return;
 
@@ -93,10 +88,16 @@ export function MermaidDiagram({ children }: { /** rehype 转换写入的图表�
       () => {
         void render_mermaid_svg(source, render_key).then(
           (rendered) => {
-            if (!cancelled) set_svg(rendered);
+            if (cancelled) return;
+            set_svg(rendered);
+            set_failed(false);
           },
           () => {
-            if (!cancelled) set_failed(true);
+            if (cancelled) return;
+            set_failed(true);
+            // 流式期间失败很常见（围栏还没写完），此时保留最后一次成功结果；
+            // 否则图表会在“出现 → 消失”之间反复。结束生成后仍失败才撤下它、退回源码。
+            if (!streaming) set_svg("");
           },
         );
       },
@@ -118,7 +119,9 @@ export function MermaidDiagram({ children }: { /** rehype 转换写入的图表�
 
   if (!source) return null;
 
-  const state = svg ? "rendered" : failed ? "failed" : "pending";
+  // 流式生成中的围栏本来就可能是半截语法，此时不把失败当真：显示渲染中，
+  // 等这一轮生成结束（streaming 变假会重跑一次渲染）再决定是呈现图表还是回退到源码。
+  const state = svg ? "rendered" : failed && !streaming ? "failed" : "pending";
 
   return (
     <div ref={container_ref} className="markdown-mermaid" data-mermaid-state={state}>
@@ -148,15 +151,21 @@ export function MermaidDiagram({ children }: { /** rehype 转换写入的图表�
 
       {state === "failed" ? (
         <div className="markdown-mermaid-fallback">
-          {streaming ? null : (
-            <div className="markdown-mermaid-status" role="alert">
-              <TbAlertTriangle aria-hidden />
-              <span className="markdown-mermaid-status-text">{translate("mermaid.render_failed")}</span>
-              <button type="button" className={`${mermaid_action_button_class_name} markdown-mermaid-retry`} onClick={() => set_attempt((current) => current + 1)}>
-                {translate("mermaid.retry")}
-              </button>
-            </div>
-          )}
+          <div className="markdown-mermaid-status" role="alert">
+            <TbAlertTriangle aria-hidden />
+            <span className="markdown-mermaid-status-text">{translate("mermaid.render_failed")}</span>
+            <button
+              type="button"
+              className={`${mermaid_action_button_class_name} markdown-mermaid-retry`}
+              onClick={() => {
+                // 重试是用户的显式动作，先回到渲染中，让这次尝试有反馈。
+                set_failed(false);
+                set_attempt((current) => current + 1);
+              }}
+            >
+              {translate("mermaid.retry")}
+            </button>
+          </div>
           <div className="markdown-mermaid-source">{source}</div>
         </div>
       ) : null}

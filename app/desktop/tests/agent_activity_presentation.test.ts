@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionAgentActionPart, SessionAgentInteraction, SessionAgentMessagePart, SessionAgentToolPart } from "@downcity/agent";
-import { read_streaming_input_values, resolve_agent_action_presentation, resolve_agent_tool_presentation, should_auto_open_agent_activity, should_auto_open_agent_tool } from "../src/renderer/features/chat/lib/message/agent_activity_presentation.ts";
+import { read_streaming_input_values, resolve_agent_action_presentation, resolve_agent_tool_presentation, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "../src/renderer/features/chat/lib/message/agent_activity_presentation.ts";
 import type { AgentActivityPart, AgentActivityTone } from "../src/renderer/features/chat/types/AgentMessage.ts";
 
 function create_tool(tool_name: string, sequence: number, input: Record<string, string> = {}): SessionAgentToolPart {
@@ -158,4 +158,32 @@ test("标题为空时 Action 回退为 action_type", () => {
 
 test("Action 不触发活动组自动展开", () => {
   assert.equal(should_auto_open_agent_activity([create_action("command", 1, "running")]), false);
+});
+
+test("组摘要取最后一个非 Reasoning 项，Tool 与 Action 一视同仁", () => {
+  const read = create_tool("read", 1);
+  const grep = create_tool("grep", 2);
+  const action = create_action("history-fork", 3);
+  const reasoning = { part_id: "reasoning-4", sequence: 4, type: "reasoning" as const, text: "想一下", state: "done" as const };
+
+  assert.equal(select_activity_summary_part([read, grep]), grep);
+  // Action 与 Tool 同级：它发生在后，摘要就该是它，而不是更早的 Tool。
+  assert.equal(select_activity_summary_part([read, action]), action);
+  assert.equal(select_activity_summary_part([action, read]), read);
+  assert.equal(select_activity_summary_part([read, reasoning]), read);
+});
+
+test("组内全部为 Reasoning 或为空时，组摘要选择不抛错", () => {
+  const first = { part_id: "reasoning-1", sequence: 1, type: "reasoning" as const, text: "第一步", state: "done" as const };
+  const last = { part_id: "reasoning-2", sequence: 2, type: "reasoning" as const, text: "第二步", state: "done" as const };
+
+  assert.equal(select_activity_summary_part([first, last]), last);
+  assert.equal(select_activity_summary_part([]), undefined);
+});
+
+test("Action 展示信息可直接驱动活动行，不需要组件按 action_type 分支", () => {
+  const presentation = resolve_agent_action_presentation(create_action("context-compaction", 1, "running"));
+  assert.equal(presentation.visual_kind, "compaction");
+  assert.equal(presentation.tone, "running");
+  assert.equal(presentation.state_key, "activity.action.running");
 });
