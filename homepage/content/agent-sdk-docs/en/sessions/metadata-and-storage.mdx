@@ -52,4 +52,6 @@ Model streaming follows one boundary: events drive live rendering, memory assemb
 Legacy JSONL data is not migrated by Desktop or Runtime. Run the external one-time
 `scripts/migrate-session-storage-to-sqlite.mjs` script when migration is needed. Development databases
 already written with an older SQLite schema use `scripts/migrate-session-sqlite-v3.mjs`; Runtime only checks the
-version and never mutates an old database implicitly.
+version and never mutates an old database implicitly. Databases written before Interactions became part of
+their Tool Part still carry standalone Interaction rows and are rejected on read; run
+`scripts/migrate-session-interaction-into-tool.mjs` to move them back into the owning Tool Part.

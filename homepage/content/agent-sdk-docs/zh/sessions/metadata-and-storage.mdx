@@ -49,4 +49,6 @@ SessionMessages 会把 Storage 查询到的 streaming Agent Message 和 running 
 
 旧版本 JSONL 数据不由 Desktop 或 Runtime 自动迁移。需要迁移时，在应用外执行仓库提供的一次性脚本
 `scripts/migrate-session-storage-to-sqlite.mjs`。已经生成旧 SQLite 的开发期数据使用
-`scripts/migrate-session-sqlite-v3.mjs` 升级；Runtime 只检查版本，不会隐式修改磁盘。
+`scripts/migrate-session-sqlite-v3.mjs` 升级；Runtime 只检查版本，不会隐式修改磁盘。Interaction 并入
+Tool Part 之前生成的数据库仍保留独立的 Interaction 行，读取时会被拒绝；执行
+`scripts/migrate-session-interaction-into-tool.mjs` 把它们移回所属 Tool Part。

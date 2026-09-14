@@ -160,10 +160,12 @@ function decode_session_part(
 ): SessionUserMessagePart | SessionAgentMessagePart {
   const content = parse_part_content(row);
   // 旧数据可能仍存有已废弃的独立 Interaction Part；类型层已不含该值，按原始字符串拦截。
+  // 归属取自旧行的 request.source.tool_call_id，所以修复路径是确定的一次性迁移，而不是丢弃数据。
   if ((row.type as string) === "interaction") {
     throw invalid_part(
       row,
-      "legacy standalone Interaction Part requires migration into its Tool Part",
+      "legacy standalone Interaction Part requires migration into its Tool Part; "
+        + "run `node scripts/migrate-session-interaction-into-tool.mjs` once from the repository root",
     );
   }
   const identity = {
