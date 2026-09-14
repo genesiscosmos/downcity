@@ -22,7 +22,11 @@ import type {
 } from "@/types/session/SessionTool.js";
 import { generate_id } from "@/utils/Id.js";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
-import { next_agent_part_sequence } from "@/session/messages/SessionAgentParts.js";
+import {
+  is_agent_part_type,
+  merge_agent_part,
+  next_agent_part_sequence,
+} from "@/session/messages/SessionAgentParts.js";
 
 /** 单个 Assistant Message 的流式 Writer。 */
 export class SessionAgentMessageWriter {
@@ -390,27 +394,25 @@ export class SessionAgentMessageWriter {
         `part ${index + 1} type ${current_part.type} != ${final_part.type}`,
       );
     }
-    if (
-      (current_part.type === "text" || current_part.type === "reasoning") &&
-      (final_part.type === "text" || final_part.type === "reasoning") &&
-      current_part.text !== final_part.text
-    ) {
+    const same_text = is_agent_part_type(current_part, "text")
+      && is_agent_part_type(final_part, "text");
+    const same_reasoning = is_agent_part_type(current_part, "reasoning")
+      && is_agent_part_type(final_part, "reasoning");
+    if ((same_text || same_reasoning) && current_part.text !== final_part.text) {
       throw this.step_snapshot_error(`part ${index + 1} text differs`);
     }
     if (
-      current_part.type === "tool" &&
-      final_part.type === "tool" &&
+      is_agent_part_type(current_part, "tool") &&
+      is_agent_part_type(final_part, "tool") &&
       current_part.tool_call_id !== final_part.tool_call_id
     ) {
       throw this.step_snapshot_error(`part ${index + 1} tool_call_id differs`);
     }
-    return {
-      ...current_part,
-      ...final_part,
-      part_id: current_part.part_id,
-      sequence: current_part.sequence,
-      step_id: current_part.step_id,
-    } as SessionAgentMessagePart;
+    const type = final_part.type;
+    if (is_agent_part_type(current_part, type) && is_agent_part_type(final_part, type)) {
+      return merge_agent_part(current_part, final_part);
+    }
+    throw this.step_snapshot_error(`part ${index + 1} type ${type} cannot be merged`);
   }
 
   /** 构造不包含正文与 Tool 输出的结构化 Step 快照错误。 */
@@ -464,11 +466,18 @@ export class SessionAgentMessageWriter {
 
 /** 从 Tool 失败输出中提取稳定错误文本。 */
 function read_tool_error(output: unknown): string {
-  if (output && typeof output === "object") {
-    const result = output as { error?: unknown; message?: unknown; output?: unknown };
-    for (const candidate of [result.error, result.message, result.output]) {
-      if (typeof candidate === "string" && candidate.trim()) return candidate;
-    }
+  for (const candidate of read_tool_error_candidates(output)) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
   }
   return "Tool execution failed";
+}
+
+/** 读取 Tool 失败输出中可能携带错误文本的字段。 */
+function read_tool_error_candidates(output: unknown): unknown[] {
+  if (typeof output !== "object" || output === null) return [];
+  return [
+    "error" in output ? output.error : undefined,
+    "message" in output ? output.message : undefined,
+    "output" in output ? output.output : undefined,
+  ];
 }

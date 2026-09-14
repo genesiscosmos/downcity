@@ -150,7 +150,13 @@ export function create_session_message_mutation(
 
 /** canonical 联合类型新增成员时强制构造层显式处理。 */
 function assert_never(value: never): never {
-  throw new Error(
-    `Unsupported Session Mutation payload: ${String((value as { type?: unknown }).type)}`,
-  );
+  throw new Error(`Unsupported Session Mutation payload: ${read_part_type(value)}`);
+}
+
+/** 从未知值中安全读取 Part 类型名，用于穷尽性失败的错误信息。 */
+function read_part_type(value: unknown): string {
+  if (typeof value === "object" && value !== null && "type" in value) {
+    return typeof value.type === "string" ? value.type : "unknown";
+  }
+  return "unknown";
 }

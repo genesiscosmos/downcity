@@ -212,14 +212,14 @@ export class SessionMessages {
         part_id: `${message_id}:part:${String(part.sequence)}`,
       })),
     }));
-    return message as SessionUserMessage;
+    return require_session_role(message, "user");
   }
 
   /** 创建可持续接收 chunk 的 Assistant Message。 */
   async open_agent_message(
     input: OpenSessionAgentMessageInput,
   ): Promise<SessionAgentMessageWriter> {
-    const message = (await this.create_message((sequence, created_at) => ({
+    const message = await this.create_message((sequence, created_at) => ({
       message_id:
         String(input.message_id || "").trim() ||
         `agent:${this.session_id}:${generate_id()}`,
@@ -233,7 +233,7 @@ export class SessionMessages {
       role: "agent",
       state: "streaming",
       parts: [],
-    }), true)) as SessionAgentMessage;
+    }), true);
     return new SessionAgentMessageWriter(this, message.message_id);
   }
 
@@ -403,7 +403,7 @@ export class SessionMessages {
     const message_id =
       String(input.message_id || "").trim() ||
       `agent-action:${this.session_id}:${generate_id()}`;
-    const message = (await this.create_message((sequence, created_at) => ({
+    const message = await this.create_message((sequence, created_at) => ({
       message_id,
       session_id: this.session_id,
       ...(input.turn_id ? { turn_id: input.turn_id } : {}),
@@ -424,7 +424,7 @@ export class SessionMessages {
         description: input.description,
         data: input.data,
       })],
-    }), false, input.publish_mutation !== false)) as SessionAgentMessage;
+    }), false, input.publish_mutation !== false);
     return new SessionAgentActionPartWriter(
       this,
       message.message_id,
@@ -469,7 +469,7 @@ export class SessionMessages {
       changed_parts: [next_action],
     });
     this.accept_message(message, options?.publish_mutation !== false);
-    return message as SessionAgentMessage;
+    return message;
   }
 
   /**
@@ -527,10 +527,10 @@ export class SessionMessages {
         changed_parts: [error_part],
       });
       this.accept_message(message);
-      return message as SessionAgentMessage;
+      return message;
     }
 
-    return (await this.create_message((sequence, created_at) => ({
+    return require_session_role(await this.create_message((sequence, created_at) => ({
       message_id: `agent:${this.session_id}:${generate_id()}`,
       session_id: this.session_id,
       ...(input.turn_id ? { turn_id: input.turn_id } : {}),
@@ -542,7 +542,7 @@ export class SessionMessages {
       role: "agent",
       state: "done",
       parts: [error_part],
-    }))) as SessionAgentMessage;
+    })), "agent");
   }
 
   /** 按 Message sequence 返回一页完整 Message 聚合。 */
@@ -805,16 +805,35 @@ export class SessionMessages {
 
 }
 
+/** 判断 Message 是否属于指定角色，供调用方安全收窄到具体顶层类型。 */
+function is_session_role<TRole extends SessionMessage["role"]>(
+  message: SessionMessage,
+  role: TRole,
+): message is Extract<SessionMessage, { role: TRole }> {
+  return message.role === role;
+}
+
+/** 按角色收窄 Message；不匹配时抛出稳定错误，而不是靠断言跳过检查。 */
+function require_session_role<TRole extends SessionMessage["role"]>(
+  message: SessionMessage,
+  role: TRole,
+): Extract<SessionMessage, { role: TRole }> {
+  if (!is_session_role(message, role)) {
+    throw new Error(`Session ${role} Message expected: ${message.message_id}`);
+  }
+  return message;
+}
+
 function require_message<TRole extends SessionMessage["role"]>(
   messages: SessionMessage[],
   message_id: string,
   role: TRole,
 ): Extract<SessionMessage, { role: TRole }> {
   const message = messages.find((item) => item.message_id === message_id);
-  if (!message || message.role !== role) {
+  if (!message || !is_session_role(message, role)) {
     throw new Error(`Session ${role} Message not found: ${message_id}`);
   }
-  return message as Extract<SessionMessage, { role: TRole }>;
+  return message;
 }
 
 /** 一个 Message 快照相对上一稳定状态的最小变更投影。 */
