@@ -353,13 +353,21 @@ test("工具调用、审批、结果和后续文本保持 canonical 顺序", asy
   await writer.complete();
 
   const assistant = (await store.list_messages())[0];
+  // Interaction 不占独立 Part：顺序只由 text / tool 决定，交互归属其 Tool Part。
   assert.deepEqual(
     assistant.parts.map((part) => part.type),
-    ["text", "tool", "interaction", "text"],
+    ["text", "tool", "text"],
   );
-  assert.deepEqual(assistant.parts.map((part) => part.sequence), [1, 2, 3, 4]);
-  assert.equal(assistant.parts[1].state, "completed");
-  assert.deepEqual(assistant.parts[1].output, { count: 1 });
+  assert.deepEqual(assistant.parts.map((part) => part.sequence), [1, 2, 3]);
+  const ordered_tool = assistant.parts[1];
+  assert.equal(ordered_tool.state, "completed");
+  assert.deepEqual(ordered_tool.output, { count: 1 });
+  // 审批按发生顺序记录在所属 Tool Part 内，而不是成为兄弟 Part。
+  assert.deepEqual(
+    ordered_tool.interactions.map((item) => item.interaction_id),
+    [approval.approval_id],
+  );
+  assert.equal(ordered_tool.interactions[0].status, "resolved");
 });
 
 test("reasoning signature 经 canonical Message 保留到模型历史", async () => {

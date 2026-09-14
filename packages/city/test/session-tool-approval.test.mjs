@@ -123,12 +123,12 @@ async function run_approval_case(decision) {
     let pending_request;
     let response_promise;
     const unsubscribe = session.subscribe((mutation) => {
-      if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
-      const interaction = mutation.message.parts.find((part) =>
-        part.type === "interaction" &&
-        part.status === "pending" &&
-        part.request.type === "approval" &&
-        part.request.payload.operation === "tool"
+      // Tool Part 以 part Mutation 发布，Interaction 作为其从属数据一并到达。
+      if (mutation.variant !== "part" || mutation.part.type !== "tool") return;
+      const interaction = (mutation.part.interactions ?? []).find((item) =>
+        item.status === "pending" &&
+        item.request.type === "approval" &&
+        item.request.payload.operation === "tool"
       );
       if (!interaction) return;
       pending_request = interaction.request;

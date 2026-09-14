@@ -70,34 +70,40 @@ function create_fake_agent() {
           subscriber({
             mutation_id: "approval-http-mutation",
             variant: "part",
-            type: "interaction",
+            type: "tool",
             session_id: info.session_id,
             turn_id: "turn-http-test",
             message_id: "message-http-test",
             revision: 2,
             created_at: Date.now(),
-            part_id: "interaction:interaction-http-test",
+            part_id: "tool:call-http-test",
+            // Interaction 归属 Tool Part：等待审批体现为 waiting-user 的工具调用。
             part: {
-              part_id: "interaction:interaction-http-test",
+              part_id: "tool:call-http-test",
               sequence: 2,
-              type: "interaction",
-              interaction_id: "interaction-http-test",
-              interaction_type: "approval",
-              status: "pending",
-              request: {
+              type: "tool",
+              tool_call_id: "call-http-test",
+              tool_name: "shell_exec",
+              state: "waiting-user",
+              interactions: [{
                 interaction_id: "interaction-http-test",
-                turn_id: "turn-http-test",
-                type: "approval",
-                source: {
-                  type: "tool",
-                  tool_call_id: "call-http-test",
-                  tool_name: "shell_exec",
+                interaction_type: "approval",
+                status: "pending",
+                request: {
+                  interaction_id: "interaction-http-test",
+                  turn_id: "turn-http-test",
+                  type: "approval",
+                  source: {
+                    type: "tool",
+                    tool_call_id: "call-http-test",
+                    tool_name: "shell_exec",
+                  },
+                  title: "Approve shell_exec",
+                  payload: { command: "pwd", cwd: "/tmp", reason: "test", operation: "exec" },
+                  created_at: Date.now(),
+                  expires_at: Date.now() + 60_000,
                 },
-                title: "Approve shell_exec",
-                payload: { command: "pwd", cwd: "/tmp", reason: "test", operation: "exec" },
-                created_at: Date.now(),
-                expires_at: Date.now() + 60_000,
-              },
+              }],
             },
           });
           subscriber({
@@ -215,13 +221,13 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", {
     let approval_decision;
     const unsubscribe = session.subscribe((mutation) => {
       mutations.push(mutation);
-      if (
-        mutation.variant === "part" &&
-        mutation.type === "interaction" &&
-        mutation.part.status === "pending"
-      ) {
+      if (mutation.variant === "part" && mutation.part.type === "tool") {
+        const interaction = (mutation.part.interactions ?? []).find(
+          (item) => item.status === "pending",
+        );
+        if (!interaction) return;
         approval_decision = session.respond({
-          interaction_id: mutation.part.interaction_id,
+          interaction_id: interaction.interaction_id,
           response: { type: "approval", payload: { decision: "approved" } },
         });
       }

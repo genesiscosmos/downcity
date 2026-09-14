@@ -150,11 +150,11 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
     let pending_interaction;
     let response_result;
     const unsubscribe = session.subscribe((mutation) => {
-      if (mutation.variant !== "message" || mutation.message.role !== "agent") return;
-      const interaction = mutation.message.parts.find((part) =>
-        part.type === "interaction" &&
-        part.status === "pending" &&
-        part.request.type === "question"
+      // Tool Part 以 part Mutation 发布，Interaction 作为其从属数据一并到达。
+      if (mutation.variant !== "part" || mutation.part.type !== "tool") return;
+      const interaction = (mutation.part.interactions ?? []).find((item) =>
+        item.status === "pending" &&
+        item.request.type === "question"
       );
       if (!interaction) return;
       pending_interaction = interaction;
@@ -200,10 +200,11 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
     const tool_part = assistant_parts.find(
       (part) => part.type === "tool" && part.tool_call_id === "call_ask_question",
     );
-    const interaction_part = assistant_parts.find(
-      (part) => part.type === "interaction" &&
-        part.interaction_id === pending_interaction.interaction_id,
-    );
+    // Interaction 归属 Tool Part：从各工具调用的从属数据中取出本次交互。
+    const interaction_part = assistant_parts
+      .filter((part) => part.type === "tool")
+      .flatMap((part) => part.interactions ?? [])
+      .find((item) => item.interaction_id === pending_interaction.interaction_id);
     assert.equal(tool_part?.state, "completed");
     assert.deepEqual(tool_part?.output, {
       status: "resolved",
