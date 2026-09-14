@@ -8,7 +8,6 @@
 
 import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
 import type { SessionOrigin } from "@downcity/type";
-import type { FileSystem } from "@downcity/type";
 import { restore_session_origin } from "@downcity/type";
 
 function normalizeModelLabel(input: unknown): string | undefined {
@@ -55,48 +54,6 @@ function normalize_message_count(input: unknown): number | undefined {
 function normalize_preview_text(input: unknown): string | undefined {
   const preview_text = typeof input === "string" ? input.trim() : "";
   return preview_text || undefined;
-}
-
-/**
- * 从指定路径读取旧版 Session metadata。
- *
- * 关键点（中文）
- * - 供归档 session 等需要脱离默认 `sessions/` 目录的场景复用。
- * - 路径本身不做校验，调用方需保证可访问。
- */
-export async function read_session_metadata_from_path(input: {
-  /** 旧版 metadata 文件路径。 */
-  filePath: string;
-  /** 当前 session_id。 */
-  session_id: string;
-  /** 当前 agent_id。 */
-  agent_id: string;
-  /** 当前查询上下文的 workspace_id；存在时必须与 metadata 严格匹配。 */
-  workspace_id?: string;
-  /** 当前读取目录对应的来源类型。 */
-  origin_type: string;
-  /** 当前 Agent 私有 Storage 的文件能力。 */
-  files: FileSystem;
-}): Promise<SessionHistoryMeta> {
-  const raw = JSON.parse(
-    (await input.files.read_file(input.filePath)).toString("utf8"),
-  ) as Partial<SessionHistoryMeta>;
-  if (
-    raw.session_id !== input.session_id ||
-    raw.agent_id !== input.agent_id
-  ) {
-    throw new Error(`Invalid Session ownership metadata: ${input.session_id}`);
-  }
-  if (input.workspace_id && raw.workspace_id !== input.workspace_id) {
-    throw new Error(`Invalid Session Workspace metadata: ${input.session_id}`);
-  }
-  return normalize_session_metadata(
-    raw,
-    input.session_id,
-    input.agent_id,
-    restore_session_origin(raw.origin, input.origin_type),
-    raw.workspace_id,
-  );
 }
 
 /** 将未知 Metadata 内容规范化为当前 Session 的稳定结构。 */

@@ -7,6 +7,8 @@
 
 import { generate_id } from "@/utils/Id.js";
 import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
+import { create_session_delta_mutation, create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
+import { next_agent_part_sequence, resolve_changed_agent_parts } from "@/session/messages/SessionAgentParts.js";
 import type {
   SessionAgentErrorPart,
   SessionAgentInteraction,
@@ -14,7 +16,6 @@ import type {
   SessionAgentMessagePart,
   SessionAgentToolPart,
   SessionMessage,
-  SessionMutation,
 } from "@downcity/type";
 import type {
   SessionInteractionCloseInput,
@@ -60,18 +61,18 @@ export class SessionAgentMessageState {
         : [...current.parts, structuredClone(part)]
       ).sort((left, right) => left.sequence - right.sequence),
     };
-    this.options.project_mutation({
-      mutation_id: generate_id(),
-      variant: "part",
-      type: part.type,
-      message_id,
-      revision: current.revision,
-      session_id: this.session_id,
-      ...(current.turn_id ? { turn_id: current.turn_id } : {}),
-      created_at: projected.updated_at,
-      part_id: part.part_id,
-      part: structuredClone(part),
-    } as SessionMutation, projected);
+    this.options.project_mutation(
+      create_session_part_mutation({
+        mutation_id: generate_id(),
+        session_id: this.session_id,
+        message_id,
+        ...(current.turn_id ? { turn_id: current.turn_id } : {}),
+        revision: current.revision,
+        created_at: projected.updated_at,
+        part: structuredClone(part),
+      }),
+      projected,
+    );
   }
 
   /** 只在内存中追加文本、推理或 Tool 输入增量，并立即发布 delta。 */
@@ -109,19 +110,21 @@ export class SessionAgentMessageState {
       }),
     };
     if (!matched) throw new Error(`Delta target Part does not exist: ${part_id}`);
-    this.options.project_mutation({
-      mutation_id: generate_id(),
-      variant: "delta",
-      type,
-      message_id,
-      revision: current.revision,
-      session_id: this.session_id,
-      ...(current.turn_id ? { turn_id: current.turn_id } : {}),
-      created_at: projected.updated_at,
-      part_id,
-      ...(tool_call_id ? { tool_call_id } : {}),
-      delta,
-    } as SessionMutation, projected);
+    this.options.project_mutation(
+      create_session_delta_mutation({
+        mutation_id: generate_id(),
+        session_id: this.session_id,
+        message_id,
+        ...(current.turn_id ? { turn_id: current.turn_id } : {}),
+        revision: current.revision,
+        created_at: projected.updated_at,
+        part_id,
+        delta,
+        type,
+        ...(tool_call_id ? { tool_call_id } : {}),
+      }),
+      projected,
+    );
   }
 
   /** 将当前内存投影作为一个稳定语义检查点原子提交。 */
@@ -319,7 +322,7 @@ export class SessionAgentMessageState {
       updated_at: committed_at,
       parts: structuredClone(parts).sort((left, right) => left.sequence - right.sequence),
     };
-    const changed_parts = resolve_changed_parts(persisted.parts, message.parts);
+    const changed_parts = resolve_changed_agent_parts(persisted.parts, message.parts);
     await this.options.store.update_message({
       message,
       expected_revision: persisted.revision,
@@ -367,10 +370,7 @@ function create_terminal_error_part(
 ): SessionAgentErrorPart {
   return {
     part_id: `error:${generate_id()}`,
-    sequence: parts.reduce(
-      (sequence, part) => Math.max(sequence, part.sequence + 1),
-      1,
-    ),
+    sequence: next_agent_part_sequence(parts),
     type: "error",
     scope: "turn",
     code,
@@ -379,15 +379,3 @@ function create_terminal_error_part(
   };
 }
 
-/** 返回相较上次稳定检查点新增或变化的 Parts。 */
-function resolve_changed_parts(
-  current_parts: readonly SessionAgentMessagePart[],
-  next_parts: readonly SessionAgentMessagePart[],
-): SessionAgentMessagePart[] {
-  const current_by_id = new Map(
-    current_parts.map((part) => [part.part_id, JSON.stringify(part)]),
-  );
-  return next_parts.filter(
-    (part) => current_by_id.get(part.part_id) !== JSON.stringify(part),
-  );
-}

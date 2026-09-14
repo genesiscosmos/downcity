@@ -22,6 +22,7 @@ import type {
 } from "@/types/session/SessionTool.js";
 import { generate_id } from "@/utils/Id.js";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
+import { next_agent_part_sequence } from "@/session/messages/SessionAgentParts.js";
 
 /** 单个 Assistant Message 的流式 Writer。 */
 export class SessionAgentMessageWriter {
@@ -436,10 +437,7 @@ export class SessionAgentMessageWriter {
 
   /** 计算下一个不可变 Part 顺序号。 */
   private next_part_sequence(): number {
-    return this.current_message().parts.reduce(
-      (sequence, part) => Math.max(sequence, part.sequence + 1),
-      1,
-    );
+    return next_agent_part_sequence(this.current_message().parts);
   }
 
   /** 串行执行对当前 Assistant Message 的全部写操作。 */

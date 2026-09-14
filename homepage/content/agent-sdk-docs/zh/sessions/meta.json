@@ -7,7 +7,6 @@
     "info",
     "prompt-and-turns",
     "stop",
-    "compact",
     "messages",
     "subscribe",
     "reconnect-and-sync",

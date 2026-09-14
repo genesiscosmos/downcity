@@ -29,11 +29,15 @@ import type {
   SessionUserMessage,
   SessionUserMessagePart,
 } from "@downcity/type";
-import type {
-  SessionMutation,
-  SessionMessageMutation as SessionMessageSnapshotMutation,
-  SessionPartMutation,
-} from "@downcity/type";
+import {
+  create_session_message_mutation,
+  create_session_part_mutation,
+} from "@/session/messages/SessionMutationFactory.js";
+import {
+  next_agent_part_sequence,
+  resolve_changed_agent_parts,
+} from "@/session/messages/SessionAgentParts.js";
+import type { SessionMutation } from "@downcity/type";
 import type { SessionMessageStorageStats } from "@/types/store/SessionStorage.js";
 import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
 import type {
@@ -163,10 +167,7 @@ export class SessionMessages {
           return part;
         }), {
           part_id: `error:${generate_id()}`,
-          sequence: message.parts.reduce(
-            (sequence, part) => Math.max(sequence, part.sequence + 1),
-            1,
-          ),
+          sequence: next_agent_part_sequence(message.parts),
           type: "error",
           scope: message.turn_id ? "turn" : "session",
           code: "runtime_interrupted",
@@ -174,7 +175,7 @@ export class SessionMessages {
           recoverable: true,
         }],
       };
-      const changed_parts = resolve_changed_agent_parts(message, recovered);
+      const changed_parts = resolve_changed_agent_parts(message.parts, recovered.parts);
       await this.store.update_message({
         message: recovered,
         expected_revision: message.revision,
@@ -387,7 +388,7 @@ export class SessionMessages {
     return create_action_part({
       action_id: event.action_id,
       part_id,
-      sequence: existing?.sequence ?? next_agent_part_sequence(target),
+      sequence: existing?.sequence ?? next_agent_part_sequence(target.parts),
       action_type: event.action_type,
       state: event.status,
       title: event.title,
@@ -493,12 +494,7 @@ export class SessionMessages {
 
     const error_part: SessionAgentErrorPart = {
       part_id: `error:${generate_id()}`,
-      sequence: target
-        ? target.parts.reduce(
-            (sequence, part) => Math.max(sequence, part.sequence + 1),
-            1,
-          )
-        : 1,
+      sequence: target ? next_agent_part_sequence(target.parts) : 1,
       type: "error",
       scope: input.scope,
       code: input.code,
@@ -749,39 +745,27 @@ export class SessionMessages {
     return await this.agent_state.close_interaction(interaction_id, input);
   }
 
-  private build_message_mutation(
-    message: SessionMessage,
-  ): SessionMessageSnapshotMutation {
-    return {
+  private build_message_mutation(message: SessionMessage): SessionMutation {
+    return create_session_message_mutation({
       mutation_id: generate_id(),
-      variant: "message",
-      role: message.role,
-      message_id: message.message_id,
-      sequence: message.sequence,
-      revision: message.revision,
       session_id: this.session_id,
-      ...(message.turn_id ? { turn_id: message.turn_id } : {}),
-      created_at: message.updated_at,
       message,
-    } as SessionMessageSnapshotMutation;
+    });
   }
 
   private build_part_mutation(
-    message: SessionMessage,
+    message: SessionAgentMessage,
     part: SessionAgentMessagePart,
-  ): SessionPartMutation {
-    return {
+  ): SessionMutation {
+    return create_session_part_mutation({
       mutation_id: generate_id(),
-      variant: "part",
-      type: part.type,
+      session_id: this.session_id,
       message_id: message.message_id,
       ...(message.turn_id ? { turn_id: message.turn_id } : {}),
       revision: message.revision,
-      session_id: this.session_id,
       created_at: message.updated_at,
-      part_id: part.part_id,
       part,
-    } as SessionPartMutation;
+    });
   }
 
   /**
@@ -799,7 +783,7 @@ export class SessionMessages {
       this.publish(this.build_message_mutation(message));
       return;
     }
-    for (const part of change.parts) this.publish(this.build_part_mutation(message, part));
+    for (const part of change.parts) this.publish(this.build_part_mutation(change.message, part));
   }
 
   private accept_mutation(mutation: SessionMutation, message: SessionMessage): void {
@@ -836,7 +820,7 @@ function require_message<TRole extends SessionMessage["role"]>(
 /** 一个 Message 快照相对上一稳定状态的最小变更投影。 */
 type SessionMessageChange =
   | { variant: "message" }
-  | { variant: "part"; parts: SessionAgentMessagePart[] };
+  | { variant: "part"; message: SessionAgentMessage; parts: SessionAgentMessagePart[] };
 
 /**
  * 将一次 Message 提交投影为最小突变。
@@ -859,14 +843,10 @@ function project_message_change(
   ) {
     return { variant: "message" };
   }
-  const previous_parts = new Map(
-    previous.parts.map((part) => [part.part_id, JSON.stringify(part)]),
-  );
   return {
     variant: "part",
-    parts: message.parts.filter(
-      (part) => previous_parts.get(part.part_id) !== JSON.stringify(part),
-    ),
+    message,
+    parts: resolve_changed_agent_parts(previous.parts, message.parts),
   };
 }
 
@@ -910,23 +890,3 @@ function create_action_part(input: {
   };
 }
 
-/** 计算追加到 Agent Message 末尾的下一个 Part 顺序号。 */
-function next_agent_part_sequence(message: SessionAgentMessage): number {
-  return message.parts.reduce(
-    (sequence, part) => Math.max(sequence, part.sequence + 1),
-    1,
-  );
-}
-
-/** 按真实 Message sequence 升序排序。 */
-function resolve_changed_agent_parts(
-  current: SessionAgentMessage,
-  next: SessionAgentMessage,
-): SessionAgentMessagePart[] {
-  const current_by_id = new Map(
-    current.parts.map((part) => [part.part_id, JSON.stringify(part)]),
-  );
-  return next.parts.filter(
-    (part) => current_by_id.get(part.part_id) !== JSON.stringify(part),
-  );
-}

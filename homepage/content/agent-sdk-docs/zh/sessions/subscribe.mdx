@@ -83,7 +83,7 @@ function apply_mutation(mutation: SessionMutation): void {
 
 客户端应保存每个 Message 已应用的最大 `revision`。低于或等于当前 revision 的 `message` / `part` 快照可以忽略，避免旧事件覆盖新状态。
 
-## Turn、Compact 与标题
+## Turn 与标题
 
 ```ts
 session.subscribe((mutation) => {
@@ -95,10 +95,6 @@ session.subscribe((mutation) => {
     set_turn_finished(mutation.turn_id, mutation.status, mutation.error);
   }
 
-  if (mutation.variant === "compact" && mutation.type === "finish") {
-    set_compact_finished(mutation.compact_id, mutation.status, mutation.reason);
-  }
-
   if (mutation.variant === "session" && mutation.type === "title") {
     set_session_title(mutation.title);
   }
@@ -107,7 +103,7 @@ session.subscribe((mutation) => {
 
 `turn.finish` 的状态为 `completed`、`failed` 或 `stopped`。它和 `turn.finished` 共同描述同一最终结果：前者适合订阅 UI，后者适合控制流。
 
-`compact.finish` 与 `compact_handle.finished` 使用同一最终结果语义：Mutation 适合更新 UI，Handle 适合业务控制流。
+上下文压缩不是独立 Mutation，也没有对应的 public Handle。它是一次 Session 操作，结果写成 Action Part：成功时为 `completed`，失败时为 `failed`，`action_type` 为 `context-compaction`。压缩不会改写 canonical 历史，只推进 Context Policy 的派生表（见 [元数据与落盘](/zh/agent-sdk-docs/sessions/metadata-and-storage)）。
 
 模型调用失败时，`warning / model_request` 会携带 `request_kind`、`code`、`message`、`retryable`、`attempt`、`max_attempts` 与 `will_retry`。主 Turn 请求还携带 `turn_id`，后台标题与历史压缩请求允许不带。它是实时诊断，不写入 Message 历史；`retryable` 表示 Provider 的错误分类，`will_retry: false` 表示本次失败不会再自动重试。
 

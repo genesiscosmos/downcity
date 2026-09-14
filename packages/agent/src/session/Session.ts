@@ -623,23 +623,87 @@ export class Session implements AgentSession {
     });
   }
 
-  /** 让 Composer 的 Context Policy 尝试推进派生上下文状态。 */
+  /**
+   * 让 Composer 的 Context Policy 尝试推进派生上下文状态。
+   *
+   * 上下文压缩是用户可见的 Session 操作，因此结果记录为 Action：写入 checkpoint 时记为
+   * completed，抛错时记为 failed。Policy 判定没有可压缩区间时返回 false，此时不产生 Action，
+   * 避免空操作污染时间线。
+   */
   private async recover_context(
     reason: SessionContextRecoveryReason,
   ): Promise<boolean> {
-    return await this.composer.recover_context({
-      session: this.session_composition.compose_identity(),
-      model: this.get_model(),
-      storage: this.store,
-      reason,
-      on_model_request_failure: (notice) => {
-        this.events.publish(create_session_model_request_warning({
+    const turn_id = this.session_loop.current_turn_id();
+    const action_id = `context-compaction:${this.id}:${generate_id()}`;
+    try {
+      const recovered = await this.composer.recover_context({
+        session: this.session_composition.compose_identity(),
+        model: this.get_model(),
+        storage: this.store,
+        reason,
+        on_model_request_failure: (notice) => {
+          this.events.publish(create_session_model_request_warning({
+            session_id: this.id,
+            turn_id: this.session_loop.current_turn_id(),
+            notice,
+          }));
+        },
+      });
+      if (recovered) {
+        await this.record_compaction_action({
+          action_id,
+          turn_id,
+          status: "completed",
+          title: "Session context compacted",
+          description: "Older stable parts were folded into the context summary.",
+        });
+      }
+      return recovered;
+    } catch (error) {
+      await this.record_compaction_action({
+        action_id,
+        turn_id,
+        status: "failed",
+        title: "Session context compaction failed",
+        description: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+
+  /** 记录一次上下文压缩结果；Action 观测失败不能改变压缩本身的执行结果。 */
+  private async record_compaction_action(input: {
+    /** 本次压缩生命周期的稳定标识。 */
+    action_id: string;
+    /** 压缩所属 Turn；独立的 Session 压缩可以省略。 */
+    turn_id?: string;
+    /** 压缩结果状态。 */
+    status: "completed" | "failed";
+    /** Action 展示标题。 */
+    title: string;
+    /** Action 展示描述。 */
+    description?: string;
+  }): Promise<void> {
+    try {
+      await this.emit_action_event({
+        action_id: input.action_id,
+        action_type: "context-compaction",
+        ...(input.turn_id ? { turn_id: input.turn_id } : {}),
+        title: input.title,
+        ...(input.description ? { description: input.description } : {}),
+        status: input.status,
+      });
+    } catch (error) {
+      try {
+        await this.logger.log("warn", "[agent] context compaction action failed", {
           session_id: this.id,
-          turn_id: this.session_loop.current_turn_id(),
-          notice,
-        }));
-      },
-    });
+          action_id: input.action_id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      } catch {
+        // 压缩结果已经确定，日志失败同样不能反向改变执行结果。
+      }
+    }
   }
 
   /**

@@ -15,7 +15,7 @@ session.subscribe((mutation) => {
 });
 ```
 
-The eight variants are `message`, `part`, `delta`, `turn`, `file_diff`, `compact`, `session`, and `warning`. A `warning / model_request` Mutation reports a failed model call and whether another retry will follow. Delta types are `text`, `reasoning`, and `tool_input`; the last one also carries `tool_call_id`. All Mutations contain `mutation_id`, `session_id`, and `created_at`. Message-related Mutations also carry `message_id` and `revision` for safe snapshot updates.
+The seven variants are `message`, `part`, `delta`, `turn`, `file_diff`, `session`, and `warning`. A `warning / model_request` Mutation reports a failed model call and whether another retry will follow. Delta types are `text`, `reasoning`, and `tool_input`; the last one also carries `tool_call_id`. All Mutations contain `mutation_id`, `session_id`, and `created_at`. Message-related Mutations also carry `message_id` and `revision` for safe snapshot updates.
 
 A pending Interaction lives on its Tool Part and carries the complete request while that Tool is `waiting-user`. The subscription remains a data-only channel; submit a user response through the Session command API:
 

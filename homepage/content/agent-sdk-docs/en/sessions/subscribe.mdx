@@ -83,7 +83,7 @@ function apply_mutation(mutation: SessionMutation): void {
 
 Track the greatest applied `revision` for each Message. A `message` or `part` snapshot at or below that revision can be ignored so an old event cannot overwrite newer state.
 
-## Turns, compaction, and title updates
+## Turns and title updates
 
 ```ts
 session.subscribe((mutation) => {
@@ -95,10 +95,6 @@ session.subscribe((mutation) => {
     set_turn_finished(mutation.turn_id, mutation.status, mutation.error);
   }
 
-  if (mutation.variant === "compact" && mutation.type === "finish") {
-    set_compact_finished(mutation.compact_id, mutation.status, mutation.reason);
-  }
-
   if (mutation.variant === "session" && mutation.type === "title") {
     set_session_title(mutation.title);
   }
@@ -107,7 +103,7 @@ session.subscribe((mutation) => {
 
 `turn.finish` has `completed`, `failed`, or `stopped` status. It and `turn.finished` describe the same final execution: the former is for subscription-driven UI, the latter for control flow.
 
-`compact.finish` and `compact_handle.finished` use the same final-result semantics: the Mutation is for UI updates, while the Handle is for application control flow.
+Context compaction is not a separate Mutation and has no public Handle. It is a Session operation whose result is recorded as an Action Part: `completed` on success, `failed` on failure, with `action_type` set to `context-compaction`. Compaction never rewrites canonical history; it only advances the Context Policy's derived tables (see [Metadata and storage](/en/agent-sdk-docs/sessions/metadata-and-storage)).
 
 On a failed model call, `warning / model_request` carries `request_kind`, `code`, `message`, `retryable`, `attempt`, `max_attempts`, and `will_retry`. Main Turn requests also include `turn_id`; background title and history-compaction requests may omit it. It is a live diagnostic and is not persisted as Message history. `retryable` reflects the Provider error classification; `will_retry: false` means no further automatic retry follows this failure.
 

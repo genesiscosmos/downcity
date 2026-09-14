@@ -37,7 +37,7 @@ function encode_origin_type(origin_type: string): string {
 }
 
 /** 返回全部活动 Session 来源分区的根目录。 */
-export function get_agent_session_origins_path(storage_root_path: string): string {
+function get_agent_session_origins_path(storage_root_path: string): string {
   return path.join(path.resolve(storage_root_path), "sessions");
 }
 
