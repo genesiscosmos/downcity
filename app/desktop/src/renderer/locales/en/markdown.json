@@ -1,0 +1,17 @@
+{
+  "mermaid": {
+    "diagram": "Mermaid diagram",
+    "rendering": "Rendering diagram…",
+    "render_failed": "Unable to render this diagram",
+    "retry": "Retry",
+    "copy_source": "Copy Mermaid source",
+    "copied": "Copied",
+    "fullscreen": "View fullscreen",
+    "exit_fullscreen": "Exit fullscreen",
+    "download_png": "Download as PNG",
+    "download_failed": "Unable to export the diagram",
+    "zoom_in": "Zoom in",
+    "zoom_out": "Zoom out",
+    "fit": "Fit to view"
+  }
+}

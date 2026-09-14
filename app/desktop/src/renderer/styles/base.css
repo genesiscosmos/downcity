@@ -5,6 +5,7 @@
 @import "./semantic-colors.css";
 @import "./tokens.css";
 @import "./markdown.css";
+@import "./mermaid.css";
 @import "./chat.css";
 
 @layer base {

@@ -119,6 +119,8 @@ const focus_visible_idioms = [
   "focus-visible",
   "chat_row_trigger_class_name",
   "message_action_button_class_name",
+  "mermaid_action_button_class_name",
+  "mermaid_overlay_button_class_name",
   "menu_item_base_class_name",
   "menu_item_highlighted_class_name",
   "menu_item_interaction_class_name",

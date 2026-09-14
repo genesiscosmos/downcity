@@ -13,19 +13,21 @@ import en_settings from "./en/settings.json";
 import en_chat from "./en/chat.json";
 import en_resources from "./en/resources.json";
 import en_plugin from "./en/plugin.json";
+import en_markdown from "./en/markdown.json";
 import zh_common from "./zh/common.json";
 import zh_navigation from "./zh/navigation.json";
 import zh_settings from "./zh/settings.json";
 import zh_chat from "./zh/chat.json";
 import zh_resources from "./zh/resources.json";
 import zh_plugin from "./zh/plugin.json";
+import zh_markdown from "./zh/markdown.json";
 
 /** Desktop 翻译资源的领域命名空间。 */
-export type DesktopTranslationNamespace = "common" | "navigation" | "settings" | "chat" | "resources" | "plugin";
+export type DesktopTranslationNamespace = "common" | "navigation" | "settings" | "chat" | "resources" | "plugin" | "markdown";
 
 const resources = {
-  en: { common: en_common, navigation: en_navigation, settings: en_settings, chat: en_chat, resources: en_resources, plugin: en_plugin },
-  zh: { common: zh_common, navigation: zh_navigation, settings: zh_settings, chat: zh_chat, resources: zh_resources, plugin: zh_plugin },
+  en: { common: en_common, navigation: en_navigation, settings: en_settings, chat: en_chat, resources: en_resources, plugin: en_plugin, markdown: en_markdown },
+  zh: { common: zh_common, navigation: zh_navigation, settings: zh_settings, chat: zh_chat, resources: zh_resources, plugin: zh_plugin, markdown: zh_markdown },
 } as const;
 
 void i18n.use(initReactI18next).init({
@@ -33,7 +35,7 @@ void i18n.use(initReactI18next).init({
   lng: "en",
   fallbackLng: "en",
   defaultNS: "common",
-  ns: ["common", "navigation", "settings", "chat", "resources", "plugin"],
+  ns: ["common", "navigation", "settings", "chat", "resources", "plugin", "markdown"],
   interpolation: { escapeValue: false },
   react: { useSuspense: false },
   returnNull: false,

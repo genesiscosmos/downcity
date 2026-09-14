@@ -1,0 +1,193 @@
+/*
+ * Desktop Mermaid 图表的展示层。
+ *
+ * 图表块与代码块共用一套表面语言（1px 描边、0.5em 圆角、muted 底色），但语义不同：
+ * 图表是内容本身，代码块是可复制的文本。因此成功渲染时只给一层克制的描边，渲染失败或
+ * 流式生成中才退回代码块外观，让用户至少能拿到原始源码。
+ */
+
+.markdown .markdown-mermaid {
+  position: relative;
+  max-width: 100%;
+  margin: 0.75em 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.625em;
+  overflow: hidden;
+}
+
+/*
+ * 失败态不再套一层容器：此时内容本身就是一段源码，容器描边会与源码块的外框叠成双重边框。
+ */
+.markdown .markdown-mermaid[data-mermaid-state="failed"] {
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.markdown .markdown-mermaid-canvas {
+  display: flex;
+  max-width: 100%;
+  justify-content: center;
+  padding: 0.75em;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/* Mermaid 自带 width="100%" 与 max-width 内联样式，这里只需保证高度按比例自适应。 */
+.markdown .markdown-mermaid-canvas svg {
+  height: auto;
+}
+
+.markdown .markdown-mermaid-toolbar {
+  position: absolute;
+  top: 0.375em;
+  right: 0.375em;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.125em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.markdown .markdown-mermaid:hover .markdown-mermaid-toolbar,
+.markdown .markdown-mermaid:focus-within .markdown-mermaid-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.markdown .markdown-mermaid-pending {
+  display: flex;
+  min-height: 5.5em;
+  align-items: center;
+  justify-content: center;
+}
+
+.markdown .markdown-mermaid-spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--border);
+  border-bottom-color: var(--muted-foreground);
+  border-radius: 999px;
+  animation: markdown-mermaid-spin 0.9s linear infinite;
+}
+
+@keyframes markdown-mermaid-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown .markdown-mermaid-spinner {
+    animation: none;
+  }
+}
+
+.markdown .markdown-mermaid-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+}
+
+.markdown .markdown-mermaid-status {
+  display: flex;
+  align-items: center;
+  gap: 0.375em;
+  color: var(--muted-foreground);
+}
+
+.markdown .markdown-mermaid-status > svg {
+  width: 0.875em;
+  height: 0.875em;
+  flex: none;
+  color: var(--destructive);
+}
+
+.markdown .markdown-mermaid-status-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.markdown .markdown-mermaid-retry {
+  width: auto;
+  height: auto;
+  flex: none;
+  padding: 0.125em 0.4em;
+  border-radius: 0.3125em;
+  color: var(--foreground);
+  font-size: 0.875em;
+}
+
+.markdown .markdown-mermaid-source {
+  max-width: 100%;
+  /* 一张坏图的源码可能有几百行；限制高度，避免整条消息被一段源码淹没。 */
+  max-height: 20em;
+  padding: 0.7em 0.8em;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5em;
+  background: color-mix(in srgb, var(--muted) 42%, var(--background));
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  line-height: 1.6;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  scrollbar-width: thin;
+}
+
+/* 全屏查看层由 Portal 挂到 body，因此下列规则不能限定在 .markdown 之内。 */
+
+.markdown-mermaid-fullscreen {
+  position: fixed;
+  /* 高于对话框：全屏图表是整窗接管，下面的浮层不应该透出来。 */
+  z-index: 60;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--background) 95%, transparent);
+  backdrop-filter: blur(3px);
+  outline: none;
+}
+
+/*
+ * 全屏下由 transform 组件负责缩放，图表必须回到原始像素尺寸，否则 CSS 会先把宽度压到容器，
+ * 再交给缩放层一个已经被压缩过的内容，缩放范围也就失去意义。
+ */
+.markdown-mermaid-fullscreen-canvas svg {
+  display: block;
+  width: auto !important;
+  max-width: none !important;
+  height: auto;
+}
+
+.markdown-mermaid-float {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.markdown-mermaid-float.is-actions {
+  top: 0.75rem;
+  right: 0.75rem;
+}
+
+.markdown-mermaid-float.is-zoom {
+  bottom: 0.75rem;
+  left: 0.75rem;
+}
+
+.markdown-mermaid-download-error {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  margin: 0;
+  color: var(--destructive);
+  font-size: 0.75rem;
+}

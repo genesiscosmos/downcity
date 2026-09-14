@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const namespaces = ["common", "navigation", "settings", "chat", "resources", "plugin"] as const;
+const namespaces = ["common", "navigation", "settings", "chat", "resources", "plugin", "markdown"] as const;
 
 /** 将嵌套翻译对象展开成稳定 key 集合。 */
 function flatten_keys(value: unknown, prefix = ""): string[] {
