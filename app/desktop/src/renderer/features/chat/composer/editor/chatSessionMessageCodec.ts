@@ -1,13 +1,21 @@
 /** canonical User Message 与可编辑 Chat Composer 文档之间的恢复边界。 */
 
 import type { SessionUserMessagePart } from "@downcity/agent";
+import { is_chat_runtime_context_tag } from "@downcity/type";
 import type { JSONContent } from "@tiptap/core";
 import { marked, type Token, type Tokens } from "marked";
 
-/** 将 canonical User Message parts 按原始顺序恢复为可编辑 Tiptap 文档。 */
+/**
+ * 将 canonical User Message parts 按原始顺序恢复为可编辑 Tiptap 文档。
+ *
+ * 说明（中文）
+ * - 运行时注入的 context（如 `info`、`chat-environment`）是上一轮的事实快照，不代表用户输入，
+ *   因此不恢复到 Composer，避免用户重新发送时把过期环境原样带回。
+ */
 export function create_chat_composer_from_user_parts(parts: SessionUserMessagePart[]): JSONContent {
   const content = parts.flatMap((part): JSONContent[] => {
     if (part.type === "text") return markdown_to_chat_blocks(part.text);
+    if (part.type === "context" && is_chat_runtime_context_tag(part.tag)) return [];
     if (part.type === "context") return [atom_paragraph({
       type: "chatReference",
       attrs: {

@@ -2,16 +2,14 @@
  * ChatPluginSystem：chat plugin 的 system prompt 组装模块。
  *
  * 关键点（中文）
- * - chat plugin prompt 与 channel prompt 都属于静态资产。
+ * - chat plugin prompt 与 channel prompt 都属于静态资产，不会被会话压缩影响。
  * - 当前请求只注入当前 chat platform 的 prompt，避免平台规则串味。
+ * - 本轮 chat 路由环境属于 per-message 事实，走 user message context part，
+ *   不在这里注入，避免同一事实出现两份来源。
  * - 该模块只负责 prompt 解析与拼装，不承担运行态控制职责。
  */
-import type { PluginContext } from "@downcity/city/plugin";
 import type { PluginExecutionContext } from "@downcity/city/plugin";
-import {
-  buildCurrentChatEnvironmentPrompt,
-  resolveCurrentChatEnvironmentPromptInput,
-} from "@/chat/runtime/SystemPrompt.js";
+import { resolve_current_chat_channel } from "@/chat/runtime/ChatEnvironment.js";
 import {
   CHAT_PLUGIN_PROMPT,
   FEISHU_CHAT_CHANNEL_PROMPT,
@@ -25,15 +23,6 @@ const CHAT_CHANNEL_PROMPTS: Record<"telegram" | "feishu" | "qq", string> = {
   qq: QQ_CHAT_CHANNEL_PROMPT,
 };
 
-function resolveCurrentChatPromptChannel(
-  channel: string,
-): "telegram" | "feishu" | "qq" | null {
-  if (channel === "telegram" || channel === "feishu" || channel === "qq") {
-    return channel;
-  }
-  return null;
-}
-
 /**
  * 构建当前请求所属 channel 的提示词片段。
  *
@@ -41,20 +30,10 @@ function resolveCurrentChatPromptChannel(
  * - 仅注入当前 context 对应的 channel prompt，避免把其他平台规则混入本轮会话。
  * - 若当前 context 不是 chat platform（如 Console UI）或尚无路由元信息，则不注入 platform prompt。
  */
-export async function buildCurrentChannelPrompts(
-  context: PluginContext,
+export function buildCurrentChannelPrompts(
   execution_context?: PluginExecutionContext,
-): Promise<string[]> {
-  const chatEnvironment = await resolveCurrentChatEnvironmentPromptInput(
-    context,
-    execution_context,
-  );
-  if (!chatEnvironment) return [];
-  const channel = resolveCurrentChatPromptChannel(
-    String(chatEnvironment.channel || "")
-      .trim()
-      .toLowerCase(),
-  );
+): string[] {
+  const channel = resolve_current_chat_channel(execution_context);
   if (!channel) return [];
   return [CHAT_CHANNEL_PROMPTS[channel]].filter(Boolean);
 }
@@ -62,15 +41,10 @@ export async function buildCurrentChannelPrompts(
 /**
  * 构建 chat plugin 注入到 session 的 system 文本。
  */
-export async function buildChatPluginSystem(
-  context: PluginContext,
+export function buildChatPluginSystem(
   execution_context?: PluginExecutionContext,
-): Promise<string> {
-  return [
-    CHAT_PLUGIN_PROMPT,
-    await buildCurrentChatEnvironmentPrompt(context, execution_context),
-    ...(await buildCurrentChannelPrompts(context, execution_context)),
-  ]
+): string {
+  return [CHAT_PLUGIN_PROMPT, ...buildCurrentChannelPrompts(execution_context)]
     .filter(Boolean)
     .join("\n\n");
 }

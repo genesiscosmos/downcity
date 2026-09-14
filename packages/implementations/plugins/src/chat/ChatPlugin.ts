@@ -36,11 +36,11 @@ export class ChatPlugin extends Plugin {
     this.actions = create_chat_agent_actions(() => this.require_runtime());
   }
 
-  /** System Provider 只投影当前 Chat Session 上下文，不产生启动副作用。 */
+  /** System Provider 只投影静态提示资产，不产生启动副作用。 */
   readonly system = async (
-    context: PluginContext,
+    _context: PluginContext,
     execution_context?: PluginExecutionContext,
-  ): Promise<string> => await buildChatPluginSystem(context, execution_context);
+  ): Promise<string> => buildChatPluginSystem(execution_context);
 
   /** 从 City 唯一配置恢复全部 enabled Bot Account 和可靠 Worker。 */
   async initialize(context: PluginLifecycleContext): Promise<void> {

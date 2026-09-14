@@ -12,6 +12,13 @@ export {
 } from "./types/session/SessionOrigin.js";
 export type * from "./types/session/SessionContent.js";
 export type * from "./types/session/SessionMessage.js";
+export {
+  CHAT_ENVIRONMENT_CONTEXT_TAG,
+  CHAT_INFO_CONTEXT_TAG,
+  CHAT_RUNTIME_CONTEXT_TAGS,
+  is_chat_runtime_context_tag,
+  type ChatRuntimeContextTag,
+} from "./types/session/SessionUserContextTags.js";
 export type * from "./types/session/SessionInteraction.js";
 export type * from "./types/session/SessionAction.js";
 export type * from "./types/session/SessionTurnFileDiff.js";

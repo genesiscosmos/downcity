@@ -47,7 +47,9 @@ Here is today's report.
 
 ## Inbound Message Structure
 
-- Each queued user message contains an `<info>...</info>` metadata block plus the user text.
-- `<info>` keeps only user/request metadata such as `user_id`, `username`, `message_id`, and `received_at`.
-- The current chat routing environment, such as `channel`, `session_id`, `chat_key`, and `chat_id`, is injected separately through the system prompt and is no longer mixed into `<info>`.
-- Do not echo `<info>` back to the user.
+- Each inbound user message carries runtime facts as `<info>` and `<chat-environment>` blocks ahead of the user text.
+- `<info>` keeps only user/request metadata: `message_id`, `user_id`, `username`, `received_at`, `received_at_local`, `runtime_timezone`, and `user_timezone` when the upstream provides it.
+- `<chat-environment>` keeps only routing metadata: `channel`, `session_id`, `chat_id`, `chat_type`, `thread_id`, and `chat_title`.
+- Both blocks describe the current message. They are not part of what the user typed.
+- `chat_id` is a routing identifier, not a user identity field.
+- Do not echo either block back to the user.

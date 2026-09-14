@@ -12,7 +12,8 @@ import { createTelegramBot } from "@/chat/channels/telegram/Bot.js";
 import { createFeishuBot } from "@/chat/channels/feishu/Feishu.js";
 import { createQQBot } from "@/chat/channels/qq/QQ.js";
 import { ChatAccessService } from "@/chat/access/ChatAccessService.js";
-import { buildQueuedUserMessageWithInfo } from "./QueuedUserMessage.js";
+import { build_inbound_prompt_parts } from "./InboundPromptParts.js";
+import { build_chat_environment_input } from "./ChatEnvironment.js";
 import { ChatStore } from "@/chat/storage/ChatStore.js";
 import type {
   ChatAccountConfig,
@@ -697,12 +698,18 @@ export class ChatRuntime {
       return;
     }
     try {
-      const query = buildQueuedUserMessageWithInfo({
-        message_id: inbound.message.external_message_id,
-        user_id: inbound.message.sender_id,
-        username: inbound.message.sender_name,
-        receivedAt: new Date(inbound.message.received_at).toISOString(),
-        text: inbound.message.text,
+      const query = build_inbound_prompt_parts({
+        info: {
+          message_id: inbound.message.external_message_id,
+          user_id: inbound.message.sender_id,
+          username: inbound.message.sender_name,
+          receivedAt: new Date(inbound.message.received_at).toISOString(),
+          text: inbound.message.text,
+        },
+        environment: build_chat_environment_input({
+          conversation,
+          channel: inbound.message.provider,
+        }),
       });
       const turn = await this.context.system.prompt_agent_session({
         agent_id: conversation.agent_id,

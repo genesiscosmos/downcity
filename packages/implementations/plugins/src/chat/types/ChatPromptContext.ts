@@ -2,15 +2,19 @@
  * ChatPromptContext：chat prompt 注入相关类型。
  *
  * 关键点（中文）
- * - 统一描述“当前 chat 环境”与“入站用户信息”两类 prompt 数据。
- * - chat 路由环境与用户身份信息分离，避免把平台路由字段混入 user info。
- * - 所有字段均保持可序列化，便于 system prompt 与入站消息文本复用。
+ * - 统一描述「当前 chat 环境」与「入站用户信息」两类运行时事实。
+ * - 两类事实都以 user message context part 进入 Session，不再写入 system prompt。
+ * - 所有字段均保持可序列化，便于 context part 组装与诊断链路复用。
  */
 
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 
 /**
- * 当前 chat 环境提示输入。
+ * 当前 chat 环境输入。
+ *
+ * 说明（中文）
+ * - 描述「这条入站消息来自哪个平台会话」，只承载路由事实。
+ * - 不承载用户身份字段；用户身份属于 `InboundUserInfoInput`。
  */
 export interface ChatEnvironmentPromptInput {
   /**
@@ -18,18 +22,9 @@ export interface ChatEnvironmentPromptInput {
    *
    * 说明（中文）
    * - 对外统一使用 `session_id` 语义。
-   * - chat plugin runtime 内部统一按 session 语义路由与持久化。
+   * - 同时也是 Agent 侧 chat action 定位本会话的稳定键。
    */
   session_id: string;
-
-  /**
-   * 当前 chat_key。
-   *
-   * 说明（中文）
-   * - chat plugin runtime 里通常与 `session_id` 一致。
-   * - 保留独立字段，避免未来路由键语义调整时影响调用方。
-   */
-  chat_key: string;
 
   /**
    * 当前消息来源渠道。
@@ -74,9 +69,9 @@ export interface ChatEnvironmentPromptInput {
 }
 
 /**
- * 入站用户信息提示输入。
+ * 入站用户与请求元信息输入。
  */
-export interface QueuedUserInfoInput {
+export interface InboundUserInfoInput {
   /**
    * 当前消息 ID。
    *

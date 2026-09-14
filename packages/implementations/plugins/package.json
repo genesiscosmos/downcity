@@ -56,6 +56,7 @@
     "test:plugin-host": "pnpm build && node --test scripts/plugin-host-actions.test.mjs",
     "test:chat-storage": "pnpm build && node --test scripts/chat-storage.test.mjs",
     "test:chat-delivery": "pnpm build && node --test scripts/chat-delivery.test.mjs",
+    "test:chat-inbound-parts": "pnpm build && node --test scripts/chat-inbound-prompt-parts.test.mjs",
     "test:http": "pnpm build && node --test scripts/plugin-http.test.mjs",
     "test:exports": "pnpm build && node --test scripts/plugin-subpaths.test.mjs",
     "test:memory": "pnpm build && node --test scripts/memory-plugin.test.mjs",
