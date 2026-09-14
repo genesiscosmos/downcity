@@ -1,6 +1,6 @@
 /** Desktop Chat 共用的自动跟随、动态高度与历史前插滚动控制。 */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, type UIEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react";
 import type { ChatPrependAnchor } from "@/types/ChatScroll";
 import { is_chat_scroll_sticky, resolve_chat_anchor_scroll_top } from "@/features/chat/lib/chat_scroll";
 
@@ -19,8 +19,17 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
   const surface_id_ref = useRef(surface_id);
   const follow_frame_ref = useRef<number | undefined>(undefined);
   const anchor_frame_ref = useRef<number | undefined>(undefined);
+  // 跟随状态要驱动界面（「回到最新」入口），因此除了 ref 还需要一份 state；
+  // 两者始终同步，ref 供滚动回调用（不能读到过期 state），state 供渲染用。
+  const [is_following, set_is_following] = useState(true);
   auto_scroll_ref.current = auto_scroll;
   surface_id_ref.current = surface_id;
+
+  /** 同步跟随状态；同值时 React 会自动跳过重渲染，滚动事件里可放心调用。 */
+  const sync_following = useCallback((next: boolean) => {
+    sticky_ref.current = next;
+    set_is_following(next);
+  }, []);
 
   /** 立即将专用底部锚点对齐到视口底部。 */
   const align_bottom_anchor = useCallback(() => {
@@ -30,6 +39,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     bottom.scrollIntoView({ block: "end" });
     sticky_ref.current = true;
     last_scroll_top_ref.current = container.scrollTop;
+    set_is_following(true);
   }, []);
 
   /** 仅在用户仍位于底部且启用了自动跟随时响应内容增长。 */
@@ -55,6 +65,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     follow_frame_ref.current = undefined;
     anchor_frame_ref.current = undefined;
     sticky_ref.current = true;
+    set_is_following(true);
     last_scroll_top_ref.current = 0;
     preserving_ref.current = false;
     align_bottom_anchor();
@@ -82,16 +93,16 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     const moved_up = container.scrollTop < last_scroll_top_ref.current;
     last_scroll_top_ref.current = container.scrollTop;
     // 用户一旦向上浏览便立即退出跟随，即使仍落在底部容差范围内。
-    sticky_ref.current = moved_up ? false : is_chat_scroll_sticky({
+    sync_following(!moved_up && is_chat_scroll_sticky({
       scroll_height: container.scrollHeight,
       scroll_top: container.scrollTop,
       client_height: container.clientHeight,
-    });
+    }));
     if (!sticky_ref.current && follow_frame_ref.current !== undefined) {
       window.cancelAnimationFrame(follow_frame_ref.current);
       follow_frame_ref.current = undefined;
     }
-  }, []);
+  }, [sync_following]);
 
   const preserve_prepend_position = useCallback(async (load_earlier: () => Promise<void>) => {
     const container = scroll_ref.current;
@@ -117,7 +128,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean) {
     });
   }, []);
 
-  return { scroll_ref, content_ref, bottom_ref, handle_scroll, preserve_prepend_position };
+  return { scroll_ref, content_ref, bottom_ref, handle_scroll, preserve_prepend_position, is_following, scroll_to_bottom: align_bottom_anchor };
 }
 
 /** 捕获当前首个可见消息行，避免历史前插依赖整体内容高度。 */

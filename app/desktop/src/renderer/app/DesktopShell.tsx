@@ -1,5 +1,5 @@
 /** Desktop 按业务职责组织的页面与应用组件。 */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 
@@ -10,6 +10,8 @@ import type { DesktopController } from "@/types/DesktopView";
 
 import { ShellLayoutProvider } from "@/layouts/MainViewLayout";
 import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
+import { SIDEBAR_AUTO_COLLAPSE_WIDTH, resolve_shell_auto_collapse } from "@/layouts/shellResponsive";
+import { use_media_query } from "@/hooks/use_media_query";
 import { resolve_desktop_link } from "@/features/navigation/lib/desktop_link";
 import { resolve_sidebar_shortcut_mode } from "@/features/navigation/lib/sidebar_shortcut";
 
@@ -39,6 +41,21 @@ export function DesktopShell() {
   }), [controller.actions, controller.stores]);
   const [create_workspace_dialog_open, set_create_workspace_dialog_open] = useState(false);
   const [sidebar_collapsed, set_sidebar_collapsed] = useState(false);
+  // 窄窗口自动收起：窗口最小宽度只有 760px，两侧面板都展开会把正文挤到不足 130px。
+  const narrow_window = use_media_query(`(max-width: ${SIDEBAR_AUTO_COLLAPSE_WIDTH}px)`);
+  const auto_collapsed_ref = useRef(false);
+  useEffect(() => {
+    const next = resolve_shell_auto_collapse({
+      narrow: narrow_window,
+      collapsed: sidebar_collapsed,
+      auto_collapsed: auto_collapsed_ref.current,
+    });
+    auto_collapsed_ref.current = next.auto_collapsed;
+    set_sidebar_collapsed(next.collapsed);
+    // sidebar_collapsed 有意不进依赖：本效果只响应「窗口跨越断点」，
+    // 否则用户手动展开会被立即覆盖。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narrow_window]);
   const [command_palette_open, set_command_palette_open] = useState(false);
   const open_group_from_sidebar = useCallback((group_id: string) => controller.actions.select_group(group_id), [controller.actions]);
   const open_create_workspace = useCallback(() => set_create_workspace_dialog_open(true), []);

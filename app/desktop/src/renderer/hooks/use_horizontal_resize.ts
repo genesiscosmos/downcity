@@ -78,5 +78,38 @@ export function use_horizontal_resize(options: HorizontalResizeOptions) {
     };
   }, [is_resizing, max_width, min_width, on_width_change, resize_edge]);
 
-  return { current_width, is_resizing, handle_resize_start };
+  /**
+   * 键盘调整宽度。
+   *
+   * 拖拽手柄以前只能鼠标操作：`aria-valuenow` 与方向键都不存在，键盘用户完全改不了面板宽度。
+   * 步长 8px，按住 Shift 为 32px；方向键语义跟随边缘——向左边缘的面板，按左键是变宽。
+   */
+  const handle_resize_key_down = useCallback((event: React.KeyboardEvent) => {
+    const step = event.shiftKey ? 32 : 8;
+    const outward = resize_edge === "left" ? -step : step;
+    let next_width: number | null = null;
+    if (event.key === "ArrowLeft") next_width = current_width - outward;
+    if (event.key === "ArrowRight") next_width = current_width + outward;
+    if (event.key === "Home") next_width = min_width;
+    if (event.key === "End") next_width = max_width;
+    if (next_width === null) return;
+    event.preventDefault();
+    const clamped = clamp_width(next_width, min_width, max_width);
+    current_width_ref.current = clamped;
+    set_current_width(clamped);
+    on_width_change(clamped);
+  }, [current_width, max_width, min_width, on_width_change, resize_edge]);
+
+  // 手柄同时承担鼠标拖拽与键盘调整，因此 role=separator 上必须带完整可访问数值。
+  const resize_handle_props = {
+    role: "separator" as const,
+    tabIndex: 0,
+    "aria-orientation": "vertical" as const,
+    "aria-valuenow": Math.round(current_width),
+    "aria-valuemin": min_width,
+    "aria-valuemax": max_width,
+    onKeyDown: handle_resize_key_down,
+  };
+
+  return { current_width, is_resizing, handle_resize_start, resize_handle_props };
 }

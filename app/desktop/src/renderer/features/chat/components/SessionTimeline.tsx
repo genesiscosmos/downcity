@@ -1,6 +1,6 @@
 /** Downcity Session Chat 主视图与页面级滚动、空状态和 Composer 组合。 */
 
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useRef, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import { TbAlertTriangle, TbCheck, TbChevronDown, TbDots, TbEdit, TbFolder } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
@@ -10,11 +10,13 @@ import { AGENT_DOMAIN_ID } from "@/features/agent/AgentView";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { ChatTextSelectionQuote } from "@/features/chat/components/ChatTextSelectionQuote";
 import { ChatWorkspaceSelector } from "@/features/chat/components/ChatWorkspaceSelector";
+import { JumpToLatest } from "@/features/chat/components/JumpToLatest";
 import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
 import { SessionMessageList } from "@/features/chat/components/SessionMessageList";
 import { TurnFileOpenProvider } from "@/features/chat/components/messages/TurnFileDiffCard";
 import { WorkspaceTagMenu } from "@/features/chat/components/WorkspaceTagMenu";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
+import { resolve_chat_follow_indicator } from "@/features/chat/lib/chat_scroll";
 import { use_chat_scroll } from "@/features/chat/lib/use_chat_scroll";
 import { use_baybar_open } from "@/layouts/BayBar";
 import { use_translation } from "@/locales/i18n";
@@ -84,8 +86,13 @@ export function SessionView(props: SessionViewProps) {
   const translate_chat = use_translation("chat");
   const { session, messages, runtime, settings } = props;
   const scroll_surface_id = get_session_key(props.workspace_id, props.agent.agent_id, session.session_id);
-  const { scroll_ref, content_ref, bottom_ref, handle_scroll, preserve_prepend_position } = use_chat_scroll(scroll_surface_id, settings.auto_scroll);
+  const { scroll_ref, content_ref, bottom_ref, handle_scroll, preserve_prepend_position, is_following, scroll_to_bottom } = use_chat_scroll(scroll_surface_id, settings.auto_scroll);
   const busy = is_chat_busy(runtime);
+  // 「回到最新」的计数基线：跟随中基线持续跟随当前消息数，退出跟随后才开始累积。
+  // 这样用户只是上滑回看、没有新内容时不会报出一个凭空的数字。
+  const follow_baseline_ref = useRef(props.messages.length);
+  if (is_following) follow_baseline_ref.current = props.messages.length;
+  const follow_indicator = resolve_chat_follow_indicator(is_following, follow_baseline_ref.current, props.messages.length);
   const open_workspace_file = useCallback((relative_path: string) => props.open_workspace_file?.(props.workspace_id, relative_path), [props.open_workspace_file, props.workspace_id]);
   const load_earlier = () => props.load_earlier_history ? preserve_prepend_position(props.load_earlier_history) : Promise.resolve();
   const workspace_tag = props.workspace_missing
@@ -100,13 +107,17 @@ export function SessionView(props: SessionViewProps) {
     header_right={props.rename_session && props.archive_session && props.remove_session ? <div className="flex shrink-0 items-center gap-1"><SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<Button size="icon" title={translate_chat("conversation.actions")} aria-label={translate_chat("conversation.actions")}><TbDots /></Button>} /></div> : null}
   >
     <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
-      <div ref={scroll_ref} className="chat-scroll-viewport relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log" onScroll={handle_scroll}>
+      {/* 视口外层保持 relative，供「回到最新」浮在列表底部之上、又不被滚动带走。 */}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      <div ref={scroll_ref} className="chat-scroll-viewport relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log" aria-busy={busy} onScroll={handle_scroll}>
         <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
         <div ref={content_ref} className="chat-scroll-content mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
           {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} /> : null}
           <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></TurnFileOpenProvider>
         </div>
         <div ref={bottom_ref} className="chat-scroll-bottom-anchor" aria-hidden="true" />
+      </div>
+        <JumpToLatest visible={follow_indicator.visible && messages.length > 0} new_message_count={follow_indicator.new_message_count} on_click={scroll_to_bottom} />
       </div>
       <div className="flex w-full flex-none flex-col">{props.composer}</div>
     </div>

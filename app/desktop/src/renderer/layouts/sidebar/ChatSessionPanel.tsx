@@ -39,6 +39,9 @@ export function ChatSessionPanel({ controller, notification_state, selection, se
   const [collapsed, set_collapsed] = useState(() => localStorage.getItem("downcity.chat_sessions_collapsed") === "true");
   const [height, set_height] = useState(() => Number(localStorage.getItem("downcity.chat_sessions_height")) || 240);
   const [resizing, set_resizing] = useState(false);
+  // 高度上下限由键盘与鼠标拖拽共用，避免两套边界。
+  const min_height = 120;
+  const max_height = () => (panel_ref.current?.parentElement?.clientHeight ?? window.innerHeight) - 160;
   const panel_ref = useRef<HTMLElement | null>(null);
   const resize_start_y_ref = useRef(0);
   const resize_start_height_ref = useRef(0);
@@ -76,9 +79,8 @@ export function ChatSessionPanel({ controller, notification_state, selection, se
     document.body.style.cursor = "ns-resize";
     document.body.style.userSelect = "none";
     const handle_mouse_move = (event: MouseEvent) => {
-      const available_height = panel_ref.current?.parentElement?.clientHeight ?? window.innerHeight;
       const next_height = resize_start_height_ref.current + resize_start_y_ref.current - event.clientY;
-      set_height(Math.max(120, Math.min(available_height - 160, next_height)));
+      set_height(Math.max(min_height, Math.min(max_height(), next_height)));
     };
     const handle_mouse_up = () => {
       set_resizing(false);
@@ -101,7 +103,30 @@ export function ChatSessionPanel({ controller, notification_state, selection, se
   if (!subject_name) return null;
   const empty = selected_agent ? agent_sessions.length === 0 : group_sessions.length === 0;
   return <section ref={panel_ref} aria-label={translate("sidebar.sessions_for", { name: subject_name })} className="relative mx-2 mb-2 flex shrink-0 flex-col overflow-hidden rounded-xl bg-surface-subtle" style={collapsed ? undefined : { height }}>
-    {!collapsed ? <div role="separator" aria-orientation="horizontal" aria-label={translate("sidebar.resize_sessions")} onMouseDown={start_resize} className="group absolute -top-1.5 left-0 z-10 flex h-3 w-full cursor-ns-resize items-center justify-center"><span className="h-px w-8 rounded-full bg-transparent transition-colors group-hover:bg-muted-foreground" /></div> : null}
+    {!collapsed ? <div
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label={translate("sidebar.resize_sessions")}
+      aria-valuenow={Math.round(height)}
+      aria-valuemin={min_height}
+      aria-valuemax={Math.round(max_height())}
+      tabIndex={0}
+      onMouseDown={start_resize}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 32 : 8;
+        let next_height: number | null = null;
+        if (event.key === "ArrowUp") next_height = height + step;
+        if (event.key === "ArrowDown") next_height = height - step;
+        if (event.key === "Home") next_height = min_height;
+        if (event.key === "End") next_height = max_height();
+        if (next_height === null) return;
+        event.preventDefault();
+        const clamped = Math.max(min_height, Math.min(max_height(), next_height));
+        set_height(clamped);
+        localStorage.setItem("downcity.chat_sessions_height", String(clamped));
+      }}
+      className="group absolute -top-1.5 left-0 z-10 flex h-3 w-full cursor-ns-resize items-center justify-center outline-none"
+    ><span className="h-px w-8 rounded-full bg-transparent transition-colors group-hover:bg-muted-foreground group-focus-visible:bg-muted-foreground" /></div> : null}
     <div className="flex h-9 shrink-0 items-center gap-2 px-2">
       <button type="button" className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30" aria-expanded={!collapsed} onClick={toggle_collapsed}>{collapsed ? <TbChevronUp className="size-3.5" /> : <TbChevronDown className="size-3.5" />}<span className="truncate">{translate("sidebar.sessions_for", { name: subject_name })}</span></button>
       <Button size="icon" title={translate("sidebar.new_chat")} aria-label={translate("sidebar.new_chat")} disabled={!workspace_id} onClick={() => { if (!workspace_id) return; if (selected_agent) void controller.actions.create_session(workspace_id, selected_agent.agent_id); else if (selected_group) void controller.actions.create_group_session(selected_group.group_id, workspace_id); }}><TbPlus /></Button>
