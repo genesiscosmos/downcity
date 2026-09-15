@@ -19,6 +19,8 @@
  */
 
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import {
   get_baybar_control_right,
@@ -49,6 +51,11 @@ import {
   SHELL_MAIN_VIEW_MIN_WIDTH,
   SHELL_MAIN_VIEW_MIN_WIDTH_CSS,
   SHELL_MAIN_VIEW_OFFSET,
+  SHELL_RESIZE_HANDLE_BLEED,
+  SHELL_RESIZE_HANDLE_BLEED_CSS,
+  SHELL_RESIZE_HANDLE_GRIP,
+  SHELL_RESIZE_HANDLE_WIDTH,
+  SHELL_RESIZE_HANDLE_WIDTH_CSS,
   SHELL_REM_BASE,
 } from "../src/renderer/layouts/shellMotion.ts";
 
@@ -194,6 +201,49 @@ test("卡片留白足够容纳圆角，不会贴住窗口边缘", () => {
 });
 
 /**
+ * 缩放把手的几何。
+ *
+ * 面板是窗口级的一列，卡片却内缩 SHELL_MAIN_VIEW_OFFSET：面板边缘与卡片边缘相差
+ * 这段留白，而用户看到的边界是卡片边缘。把手因此必须跨过留白、外缘落在卡片边缘上；
+ * 只贴面板边缘会退回「把手没贴住正文卡片、中间还留一段拖不动的死区」。
+ */
+test("缩放把手跨过卡片留白，外缘落在卡片边缘", () => {
+  // 外扩量必须等于卡片留白：多了会盖住卡片内容，少了就退回死区。
+  assert.equal(SHELL_RESIZE_HANDLE_BLEED, SHELL_MAIN_VIEW_OFFSET);
+  assert.equal(SHELL_RESIZE_HANDLE_WIDTH, SHELL_RESIZE_HANDLE_BLEED + SHELL_RESIZE_HANDLE_GRIP);
+});
+
+test("缩放把手的抓握区足够宽", () => {
+  // 6px 是右侧把手原本的实际抓握宽度；左侧曾被裁切层削到 3px，两侧手感不一致。
+  assert.ok(SHELL_RESIZE_HANDLE_GRIP >= 6, `抓握区只有 ${SHELL_RESIZE_HANDLE_GRIP}px，拖不动`);
+});
+
+/**
+ * 两侧面板必须共用同一个把手实现。
+ *
+ * 曾经两侧各内联一份：左侧带负外边距、被 overflow-hidden 削掉一半（实际可拖 3px），
+ * 右侧没有负偏移（完整 6px），同一件事两侧手感不一样；而外扩量一旦分叉，
+ * 就会重新出现「一侧贴住卡片边缘、另一侧差 4px」。几何只能有一个来源。
+ *
+ * 安装位置也有硬要求：把手必须与折叠动画的裁切层同级（列结构见两个面板文件），
+ * 所以这里只允许用共享组件，不允许自己在面板内部摆一个把手。
+ */
+test("两侧面板共用同一个缩放把手，不各自内联", () => {
+  const renderer_root = path.join(import.meta.dirname, "../src/renderer");
+  for (const relative_path of ["layouts/sidebar/SidebarFrame.tsx", "layouts/BayBar.tsx"]) {
+    const source = fs.readFileSync(path.join(renderer_root, relative_path), "utf8");
+    assert.ok(source.includes("<PanelResizeHandle"), `${relative_path} 没有使用共享的缩放把手`);
+    assert.ok(!source.includes("cursor-ew-resize"), `${relative_path} 内联了自己的把手，几何会再次分叉`);
+  }
+
+  // 把手要跨过的「卡片留白」就是 main 的 p-1（Tailwind 间距单元 0.25rem）。
+  // 改这里就得同步改 SHELL_RESIZE_HANDLE_BLEED，否则把手会重新错开 4px。
+  assert.equal(SHELL_MAIN_VIEW_OFFSET, SHELL_REM_BASE * 0.25, "卡片留白与 Tailwind 间距单元不再一致");
+  const main_tag = /<main\b[^>]*>/.exec(fs.readFileSync(path.join(renderer_root, "app/DesktopShell.tsx"), "utf8"))?.[0] ?? "";
+  assert.ok(/\bp-1\b/.test(main_tag), `main 的留白不再是 p-1，把手外扩量必须跟着改：${main_tag.slice(0, 100)}`);
+});
+
+/**
  * BayBar 面板与 rail 顶栏内容中心的绝对坐标。
  *
  * 两者都是窗口级的一列（与 Sidebar 镜像），顶栏从窗口顶部开始、高 SHELL_HEADER_HEIGHT，
@@ -255,6 +305,8 @@ test("跟随缩放的长度出口必须使用 rem", () => {
     ["右侧 rail 宽度", SHELL_BAYBAR_CONTROL_RIGHT_CSS],
     ["左侧预留", shell_collapsed_header_inset_css()],
     ["右侧预留", SHELL_BAYBAR_COLLAPSED_HEADER_RESERVE_CSS],
+    ["缩放把手总宽", SHELL_RESIZE_HANDLE_WIDTH_CSS],
+    ["缩放把手外扩量", SHELL_RESIZE_HANDLE_BLEED_CSS],
   ] as const) {
     assert.ok(value.includes("rem"), `${name} 没有跟随界面缩放：${value}`);
   }
@@ -312,3 +364,19 @@ test("缩放不会把预留量或顶栏内容带成负数", () => {
     }
   }
 });
+
+/**
+ * 把手几何在任意缩放下成立。
+ *
+ * 卡片留白来自 main 的 p-1（rem），所以把手的每一段也必须走 rem 出口：
+ * 写成 px 会在 scale ≠ 1 时重新错开，表现就是「非 100% 缩放下把手又和卡片边缘对不上」。
+ */
+for (const scale of ui_scales) {
+  test(`${Math.round(scale * 100)}% 缩放下把手外缘仍与卡片边缘重合`, () => {
+    const context = `缩放 ${scale}`;
+    const bleed = parse_shell_css(SHELL_RESIZE_HANDLE_BLEED_CSS, scale);
+    const width = parse_shell_css(SHELL_RESIZE_HANDLE_WIDTH_CSS, scale);
+    assert_close(bleed, SHELL_MAIN_VIEW_OFFSET * scale, `${context}：把手外扩量与卡片留白不等`);
+    assert_close(width - bleed, SHELL_RESIZE_HANDLE_GRIP * scale, `${context}：抓握区宽度未跟随缩放`);
+  });
+}

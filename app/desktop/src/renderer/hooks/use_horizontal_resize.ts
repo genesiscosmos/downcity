@@ -23,6 +23,23 @@ function clamp_width(width: number, min_width: number, max_width: number): numbe
   return Math.max(min_width, Math.min(max_width, width));
 }
 
+/**
+ * 缩放把手必须携带的可访问属性与键盘处理。
+ *
+ * 单独导出类型，是为了让把手组件（layouts/PanelResizeHandle）能一次性收到完整的一套：
+ * `role="separator"` 上缺了 aria-valuenow / aria-valuemin / aria-valuemax，
+ * 键盘与读屏用户就读不出当前宽度，也无法知道自己能不能调整。
+ */
+export interface ResizeHandleProps {
+  role: "separator";
+  tabIndex: number;
+  "aria-orientation": "vertical";
+  "aria-valuenow": number;
+  "aria-valuemin": number;
+  "aria-valuemax": number;
+  onKeyDown(event: React.KeyboardEvent): void;
+}
+
 /** 提供与 Duobox Sidebar 相同的拖拽缩放生命周期。 */
 export function use_horizontal_resize(options: HorizontalResizeOptions) {
   const { stored_width, min_width, max_width, default_width, on_width_change, resize_edge = "right" } = options;
@@ -101,7 +118,7 @@ export function use_horizontal_resize(options: HorizontalResizeOptions) {
   }, [current_width, max_width, min_width, on_width_change, resize_edge]);
 
   // 手柄同时承担鼠标拖拽与键盘调整，因此 role=separator 上必须带完整可访问数值。
-  const resize_handle_props = {
+  const resize_handle_props: ResizeHandleProps = {
     role: "separator" as const,
     tabIndex: 0,
     "aria-orientation": "vertical" as const,

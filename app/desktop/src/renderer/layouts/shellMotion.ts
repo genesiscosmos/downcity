@@ -78,6 +78,31 @@ export const SHELL_MAIN_VIEW_MIN_REGION = SHELL_MAIN_VIEW_MIN_WIDTH + SHELL_MAIN
 /** 卡片最小宽度的 CSS 值；跟随界面缩放，走 rem 出口。 */
 export const SHELL_MAIN_VIEW_MIN_WIDTH_CSS = shell_length_css(shell_scaled_length(SHELL_MAIN_VIEW_MIN_WIDTH));
 
+/**
+ * 两侧面板缩放把手的几何。
+ *
+ * 面板是窗口级的一列，卡片却整体内缩 SHELL_MAIN_VIEW_OFFSET（也就是 main 的 p-1）：
+ * 面板边缘与卡片边缘之间必然隔着这段留白，而用户看到的边界是**卡片边缘**。
+ * 把手只覆盖面板内侧时，抓取区就比视觉边界向外偏了 4px——手感上表现为
+ * 「把手没贴住正文卡片」，其间那段留白还成了拖不动的死区。
+ *
+ * 所以把手要跨过这段留白：外缘与卡片边缘重合，内侧保留抓握宽度。
+ * BLEED 必须恒等于 SHELL_MAIN_VIEW_OFFSET；两者一旦不一致就会重新错开。
+ */
+export const SHELL_RESIZE_HANDLE_GRIP = 6;
+export const SHELL_RESIZE_HANDLE_BLEED = SHELL_MAIN_VIEW_OFFSET;
+export const SHELL_RESIZE_HANDLE_WIDTH = SHELL_RESIZE_HANDLE_BLEED + SHELL_RESIZE_HANDLE_GRIP;
+
+/** 把手总宽的 CSS 值。 */
+export const SHELL_RESIZE_HANDLE_WIDTH_CSS = shell_length_css(shell_scaled_length(SHELL_RESIZE_HANDLE_WIDTH));
+
+/**
+ * 把手向卡片一侧外扩的 CSS 值。
+ *
+ * 这是「面板边缘 → 卡片边缘」的距离，渲染时按边缘方向取负；见 layouts/PanelResizeHandle。
+ */
+export const SHELL_RESIZE_HANDLE_BLEED_CSS = shell_length_css(shell_scaled_length(SHELL_RESIZE_HANDLE_BLEED));
+
 /** 两侧顶栏内容共同的垂直中心（绝对坐标）：左侧折叠按钮与 macOS 红绿灯同高。 */
 export const SHELL_BAND_CENTER = SHELL_HEADER_DEFAULT_PADDING + SHELL_CONTROL_SIZE / 2;
 
