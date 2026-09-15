@@ -8,7 +8,6 @@
 
 import chatPluginPromptText from "@/chat/PROMPT.direct.js";
 import feishuChatPromptText from "@/chat/channels/feishu/PROMPT.direct.js";
-import qqChatPromptText from "@/chat/channels/qq/PROMPT.direct.js";
 import telegramChatPromptText from "@/chat/channels/telegram/PROMPT.direct.js";
 
 /**
@@ -20,11 +19,6 @@ export const CHAT_PLUGIN_PROMPT = chatPluginPromptText.trim();
  * 飞书 channel prompt。
  */
 export const FEISHU_CHAT_CHANNEL_PROMPT = feishuChatPromptText.trim();
-
-/**
- * QQ chat platform prompt。
- */
-export const QQ_CHAT_CHANNEL_PROMPT = qqChatPromptText.trim();
 
 /**
  * Telegram channel prompt。

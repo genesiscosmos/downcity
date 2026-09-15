@@ -82,7 +82,7 @@ test("context 正文保持未转义原文，避免与 Session 层二次转义冲
     },
     environment: build_chat_environment_input({
       conversation: create_conversation(),
-      channel: "qq",
+      channel: "telegram",
     }),
   });
 

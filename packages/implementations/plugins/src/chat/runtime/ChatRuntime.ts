@@ -10,7 +10,6 @@ import type {
 import type { BaseChatChannel, IncomingChatMessage } from "@/chat/channels/BaseChatChannel.js";
 import { createTelegramBot } from "@/chat/channels/telegram/Bot.js";
 import { createFeishuBot } from "@/chat/channels/feishu/Feishu.js";
-import { createQQBot } from "@/chat/channels/qq/QQ.js";
 import { ChatAccessService } from "@/chat/access/ChatAccessService.js";
 import { build_inbound_prompt_parts } from "./InboundPromptParts.js";
 import { build_chat_environment_input } from "./ChatEnvironment.js";
@@ -395,15 +394,9 @@ export class ChatRuntime {
         connector_context,
       );
     }
-    return await createQQBot(
-      {
-        enabled: true,
-        appId: account.app_id,
-        appSecret: account.app_secret,
-        sandbox: account.sandbox,
-      },
-      connector_context,
-    );
+    // 平台类型已在上方穷尽；新增平台时这里会先产生编译错误，避免静默走错分支。
+    const exhaustive_account: never = account;
+    throw new Error(`Unsupported Chat provider: ${JSON.stringify(exhaustive_account)}`);
   }
 
   /** 为单个 Connector 创建不包含 Agent 对象的稳定回调集合。 */

@@ -29,7 +29,7 @@ import type {
 } from "@/chat/types/ChatAccess.js";
 import type { ChatDispatchChannel } from "@/chat/types/ChatDispatcher.js";
 
-const CHANNELS: ChatDispatchChannel[] = ["telegram", "feishu", "qq"];
+const CHANNELS: ChatDispatchChannel[] = ["telegram", "feishu"];
 
 function normalize_text(value: unknown): string {
   return String(value || "").trim();
@@ -55,8 +55,7 @@ export function resolve_chat_access_scope(
   const type = normalize_text(chat_type).toLowerCase();
   if (!type) return "direct";
   if (channel === "telegram") return type === "private" ? "direct" : "group";
-  if (channel === "feishu") return type === "p2p" ? "direct" : "group";
-  return type === "private" || type === "c2c" ? "direct" : "group";
+  return type === "p2p" ? "direct" : "group";
 }
 
 /**

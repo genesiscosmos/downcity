@@ -70,15 +70,15 @@ test("更新时空密钥保留原值且安全投影不回显", () => {
 
 test("序列化配置可以由 City Config 原样恢复", () => {
   const created = create_chat_account({ accounts: [] }, {
-    account_id: "qq-main",
-    name: "QQ",
-    provider: "qq",
+    account_id: "feishu-main",
+    name: "飞书",
+    provider: "feishu",
     enabled: true,
     agent_id: "agent-main",
     workspace_id: "workspace-main",
-    app_id: "qq-app",
-    app_secret: "qq-secret",
-    sandbox: true,
+    app_id: "feishu-app",
+    app_secret: "feishu-secret",
+    domain: "https://open.feishu.cn",
   });
 
   const restored = read_chat_accounts_config(serialize_chat_accounts_config(created.config));

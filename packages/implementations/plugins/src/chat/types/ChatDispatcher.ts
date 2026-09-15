@@ -6,7 +6,7 @@
  * - sendText 是必需能力；sendAction（如 typing）是可选能力
  */
 
-export type ChatDispatchChannel = "telegram" | "feishu" | "qq";
+export type ChatDispatchChannel = "telegram" | "feishu";
 
 export type ChatDispatchAction = "typing" | "react";
 

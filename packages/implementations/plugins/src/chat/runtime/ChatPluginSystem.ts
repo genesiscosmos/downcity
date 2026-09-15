@@ -13,14 +13,12 @@ import { resolve_current_chat_channel } from "@/chat/runtime/ChatEnvironment.js"
 import {
   CHAT_PLUGIN_PROMPT,
   FEISHU_CHAT_CHANNEL_PROMPT,
-  QQ_CHAT_CHANNEL_PROMPT,
   TELEGRAM_CHAT_CHANNEL_PROMPT,
 } from "@/chat/runtime/ChatPromptAssets.js";
 
-const CHAT_CHANNEL_PROMPTS: Record<"telegram" | "feishu" | "qq", string> = {
+const CHAT_CHANNEL_PROMPTS: Record<"telegram" | "feishu", string> = {
   telegram: TELEGRAM_CHAT_CHANNEL_PROMPT,
   feishu: FEISHU_CHAT_CHANNEL_PROMPT,
-  qq: QQ_CHAT_CHANNEL_PROMPT,
 };
 
 /**

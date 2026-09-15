@@ -22,7 +22,7 @@ export function normalize_chat_channel(
   value: unknown,
 ): ChatEnvironmentPromptInput["channel"] | null {
   const channel = String(value ?? "").trim();
-  if (channel === "telegram" || channel === "feishu" || channel === "qq") return channel;
+  if (channel === "telegram" || channel === "feishu") return channel;
   return null;
 }
 

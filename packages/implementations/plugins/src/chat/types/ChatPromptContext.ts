@@ -30,7 +30,7 @@ export interface ChatEnvironmentPromptInput {
    * 当前消息来源渠道。
    *
    * 说明（中文）
-   * - 例如 `telegram`、`feishu`、`qq`。
+   * - 例如 `telegram`、`feishu`。
    */
   channel: ChatDispatchChannel;
 
@@ -111,7 +111,7 @@ export interface InboundUserInfoInput {
    *
    * 说明（中文）
    * - 仅在上游网关或客户端显式提供时传入。
-   * - Telegram / Feishu / QQ 等 bot 入站通常不会直接提供该字段。
+   * - Telegram / Feishu 等 bot 入站通常不会直接提供该字段。
    */
   userTimezone?: string;
 }

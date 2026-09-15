@@ -238,7 +238,7 @@ export abstract class BaseChatChannel {
    * 是否在 `sendToolText` 成功后自动写入 outbound chat history。
    *
    * 关键点（中文）
-   * - 默认开启，覆盖 QQ / Feishu 等未自行写 outbound history 的渠道。
+   * - 默认开启，覆盖未自行写 outbound history 的渠道。
    * - 已有独立 outbound 落盘逻辑的渠道（如 Telegram）应覆写为 false，避免重复记录。
    */
   protected shouldAppendOutboundHistoryOnSend(): boolean {

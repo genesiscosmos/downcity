@@ -237,7 +237,6 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
                   <Row label="App Secret" trailing={<Input type="password" value={draft.app_secret ?? ""} on_value_change={(app_secret) => set_draft({ ...draft, app_secret })} />} />
                 </>}
               {draft.provider === "feishu" ? <Row label="API Domain" trailing={<Input value={draft.domain ?? ""} placeholder="https://open.feishu.cn" on_value_change={(domain) => set_draft({ ...draft, domain })} />} /> : null}
-              {draft.provider === "qq" ? <Row label="Sandbox" trailing={<Switch checked={draft.sandbox === true} on_checked_change={(sandbox) => set_draft({ ...draft, sandbox })} aria_label="QQ Sandbox" />} /> : null}
               {draft.provider === "feishu" && manual_credential_mode ? <Row label="扫码创建" description="返回扫码方式，由飞书自动颁发凭据。" trailing={<Button on_click={() => set_manual_credential_mode(false)}>返回扫码</Button>} /> : null}
             </Group>}
         </Section>
@@ -307,7 +306,6 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
               <Row label="App Secret" trailing={<Input type="password" value={edit_draft.app_secret ?? ""} placeholder="留空保留当前 Secret" on_value_change={(app_secret) => set_edit_draft({ ...edit_draft, app_secret })} />} />
             </>}
           {edit_draft.provider === "feishu" ? <Row label="API Domain" trailing={<Input value={edit_draft.domain ?? ""} placeholder="https://open.feishu.cn" on_value_change={(domain) => set_edit_draft({ ...edit_draft, domain })} />} /> : null}
-          {edit_draft.provider === "qq" ? <Row label="Sandbox" trailing={<Switch checked={edit_draft.sandbox === true} on_checked_change={(sandbox) => set_edit_draft({ ...edit_draft, sandbox })} aria_label="QQ Sandbox" />} /> : null}
         </Group></Section>
         <div><Button variant="primary" disabled={busy} on_click={() => void mutate("accounts.update", edit_draft, "Bot Account 已更新")}>保存并应用</Button></div>
       </Stack> : null}
@@ -373,7 +371,6 @@ function empty_draft(provider: ChatProvider = "telegram"): ChatAccountDraft {
     workspace_id: "",
     ...(provider === "telegram" ? { bot_token: "" } : { app_id: "", app_secret: "" }),
     ...(provider === "feishu" ? { domain: "" } : {}),
-    ...(provider === "qq" ? { sandbox: false } : {}),
   };
 }
 
@@ -391,7 +388,6 @@ function account_view_to_draft(account: ChatAccountView): ChatAccountDraft {
       app_secret: "",
     }),
     ...(account.provider === "feishu" ? { domain: account.domain ?? "" } : {}),
-    ...(account.provider === "qq" ? { sandbox: account.sandbox === true } : {}),
   };
 }
 
@@ -400,21 +396,19 @@ function provider_options(): Array<{ readonly value: ChatProvider; readonly labe
   return [
     { value: "telegram", label: "Telegram" },
     { value: "feishu", label: "飞书 / Lark" },
-    { value: "qq", label: "QQ" },
   ];
 }
 
 /** 从创建路由读取受支持的平台，未知值回退到 Telegram。 */
 function read_provider_route(value: PluginJsonValue | undefined): ChatProvider {
   const provider = read_route(value);
-  return provider === "feishu" || provider === "qq" ? provider : "telegram";
+  return provider === "feishu" ? provider : "telegram";
 }
 
 /** 平台用户可见名称。 */
 function provider_label(provider: ChatProvider): string {
   if (provider === "telegram") return "Telegram";
-  if (provider === "feishu") return "Feishu / Lark";
-  return "QQ";
+  return "Feishu / Lark";
 }
 
 /** 状态用户可见名称。 */

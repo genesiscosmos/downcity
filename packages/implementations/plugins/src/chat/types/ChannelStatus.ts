@@ -9,7 +9,7 @@
 /**
  * 支持的 chat 渠道名称。
  */
-export type ChatChannelName = "telegram" | "feishu" | "qq";
+export type ChatChannelName = "telegram" | "feishu";
 
 /**
  * 渠道链路状态枚举。
@@ -38,7 +38,7 @@ export type ChatChannelDetailValue =
  */
 export type ChatChannelStateSnapshot = {
   /**
-   * 渠道名称（telegram/feishu/qq）。
+   * 渠道名称（telegram/feishu）。
    */
   channel: ChatChannelName;
   /**

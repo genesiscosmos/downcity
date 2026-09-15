@@ -102,7 +102,6 @@ export function to_chat_account_view(
     ...(runtime?.last_error ? { last_error: runtime.last_error } : {}),
     ...(account.provider !== "telegram" ? { app_id: account.app_id } : {}),
     ...(account.provider === "feishu" && account.domain ? { domain: account.domain } : {}),
-    ...(account.provider === "qq" ? { sandbox: account.sandbox } : {}),
   };
 }
 
@@ -125,7 +124,6 @@ function normalize_persisted_account(value: PluginJsonValue): ChatAccountConfig 
     app_id: read_string(source, "app_id"),
     app_secret: read_string(source, "app_secret"),
     domain: read_string(source, "domain"),
-    sandbox: source.sandbox === true,
   });
 }
 
@@ -143,7 +141,6 @@ function read_account_draft(value: PluginJsonValue | undefined): ChatAccountDraf
     ...(read_string(source, "app_id") ? { app_id: read_string(source, "app_id") } : {}),
     ...(read_string(source, "app_secret") ? { app_secret: read_string(source, "app_secret") } : {}),
     ...(read_string(source, "domain") ? { domain: read_string(source, "domain") } : {}),
-    ...(source.sandbox === true ? { sandbox: true } : {}),
   };
 }
 
@@ -173,13 +170,9 @@ function normalize_account_draft(draft: ChatAccountDraft & { account_id?: string
       ...(domain ? { domain } : {}),
     };
   }
-  return {
-    ...common,
-    provider: "qq",
-    app_id: normalize_required(draft.app_id, "app_id"),
-    app_secret: normalize_required(draft.app_secret, "app_secret"),
-    sandbox: draft.sandbox === true,
-  };
+  // 平台类型已在上面穷尽；保留显式失败，避免未来新增平台时静默走错分支。
+  const unsupported_provider: never = draft.provider;
+  throw new Error(`Unsupported Chat provider: ${String(unsupported_provider)}`);
 }
 
 /** 要求 JSON 值是普通对象。 */
@@ -193,7 +186,7 @@ function as_object(value: PluginJsonValue | undefined, label: string): PluginJso
 /** 读取支持的平台类型。 */
 function read_provider(value: PluginJsonValue | undefined): ChatProvider {
   const provider = normalize_text(value).toLowerCase();
-  if (provider === "telegram" || provider === "feishu" || provider === "qq") return provider;
+  if (provider === "telegram" || provider === "feishu") return provider;
   throw new Error(`Unsupported Chat provider: ${provider || "empty"}`);
 }
 
