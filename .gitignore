@@ -14,6 +14,9 @@ wrangler.toml
 **/.wrangler/
 package-lock.json
 yarn.lock
+bun.lock
+# pnpm 的本地内容寻址存储：pnpm 在仓库根目录生成，不应入库
+.pnpm-store/
 
 *.db
 *.db-shm
