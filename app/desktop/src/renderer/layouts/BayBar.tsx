@@ -37,7 +37,7 @@
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { motion } from "framer-motion";
-import { TbX } from "react-icons/tb";
+import { TbLayoutSidebarRight, TbX } from "react-icons/tb";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import { use_media_query } from "@/hooks/use_media_query";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -183,6 +183,28 @@ export function BayBar() {
 }
 
 /**
+ * 空白标签页的提示。
+ *
+ * 面板展开着但没有任何标签页时，右边一整列都是空的（约 400px 宽），
+ * 什么都不放会让人以为加载失败。这里给的是**功能说明**而不是装饰：
+ * 这个区域是怎么被填满的、从哪里触发。
+ *
+ * 尺寸与颜色取应用内既有的次要文字档（text-xs / text-muted-foreground / text-subtle-foreground），
+ * 与 Sidebar 的「暂无最近 Session」保持同一语气；不做插图、不放主按钮——
+ * 空态不该比内容本身更吸睛。
+ *
+ * 注释里不写任意透明度：文字层级只有三档，用令牌而不是 color-mix 或 /60 这类写法。
+ */
+function BayBarEmptyState() {
+  const translate = use_translation("navigation");
+  return <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 px-6 text-center">
+    <TbLayoutSidebarRight className="size-6 shrink-0 text-subtle-foreground" aria-hidden="true" />
+    <div className="text-xs text-muted-foreground">{translate("panels.empty_title")}</div>
+    <p className="max-w-56 text-[0.6875rem] leading-5 text-subtle-foreground">{translate("panels.empty_description")}</p>
+  </div>;
+}
+
+/**
  * 面板本体：宽度、缩放把手、标签行与内容。
  *
  * `open` 与「有没有标签页」无关：展开但 `active` 为空时就是一张空白标签页
@@ -281,58 +303,72 @@ function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
             **整条留在面板内**（不写负外边距）：面板有 overflow-hidden，
             负偏移会让一半握把被裁掉，只剩 3px 可点，手感上等同于拖不动。 */}
         <div {...resize_handle_props} aria-label={translate("panels.resize_right")} onMouseDown={handle_resize_start} className="group absolute left-0 top-0 z-20 flex h-full w-1.5 cursor-ew-resize items-center justify-center outline-none"><span className="h-8 w-0.5 rounded-full bg-transparent transition-colors group-hover:bg-muted-foreground group-focus-visible:bg-muted-foreground" /></div>
-        {/* 标签行：胶囊式（类浏览器标签页）。未激活项只是一段文字 + 图标，
-            激活项整块浮起（背景 + 边框）并带关闭按钮。
+        {/* 标签行。样式对齐应用内最近的同类元素（Button 的 sidebar 尺寸：
+            rounded-md / hover:bg-interaction-hover / 选中 bg-interaction-selected），
+            不自己发明一套。
 
-            三条几何约束：
+            三个设计取舍：
+            1. **不用胶囊**。整行只有 40px，胶囊的圆角半径会接近半高，看上去像一组按钮；
+               改为 rounded-md（与默认 Button 同档），才读得出「标签行」而不是「按钮群」。
+            2. **不用下划线**。激活态只用一块填充底色（且用语义令牌，不自创颜色），
+               也不再画横向分隔线——左侧 Sidebar 的顶栏本来就没有分隔线。
+            3. **不用边框**。描边 + 底色 + 圆角叠在一起就是之前那种“重”的来源；
+               只靠底色与文字色表达选中即可。
+
+            两条几何约束：
             1. 行高 = Sidebar 顶栏，三列内容中心才同在 20px 基准线上；
-            2. 分隔线用绝对定位而不是 border-b——border 会吃掉 1px 行高，
-               把内容中心从 20px 压到 19.5px，三列不再对齐；
-            3. 容器带 header-drag-region（= -webkit-app-region: drag）用于拖窗口，
+            2. 容器带 header-drag-region（= -webkit-app-region: drag）用于拖窗口，
                **因此每个标签页必须显式 no-drag**——否则点击会被窗口拖拽吞掉，
                表现为「标签页点不动」，双击还会触发系统的最小化/缩放。 */}
-        <div className="relative shrink-0" style={{ height: SHELL_HEADER_HEIGHT_CSS }}>
-          <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-divider" />
-          <div ref={tablist_ref} role="tablist" aria-label={translate("panels.rail")} className="header-drag-region scrollbar-none flex h-full items-center gap-1 overflow-x-auto px-2 pr-8">
-            {tabs.map((item) => {
-              const is_active = item.id === active_id;
-              return <div
-                key={item.id}
-                role="tab"
-                aria-selected={is_active}
-                aria-label={item.label}
-                // 标题会被 max-w-40 截断；悬停时给出全文（对象名可能很长）。
-                title={item.label}
-                // roving tabIndex：只有当前标签页是 Tab 键可达的，其余靠方向键切换。
-                tabIndex={is_active ? 0 : -1}
-                data-baybar-tab={item.id}
+        <div
+          ref={tablist_ref}
+          role="tablist"
+          aria-label={translate("panels.rail")}
+          className="header-drag-region scrollbar-none flex shrink-0 items-center gap-1 overflow-x-auto px-2 pr-8"
+          style={{ height: SHELL_HEADER_HEIGHT_CSS }}
+        >
+          {tabs.map((item) => {
+            const is_active = item.id === active_id;
+            return <div
+              key={item.id}
+              role="tab"
+              aria-selected={is_active}
+              aria-label={item.label}
+              // 标题会被 max-w-40 截断；悬停时给出全文（对象名可能很长）。
+              title={item.label}
+              // roving tabIndex：只有当前标签页是 Tab 键可达的，其余靠方向键切换。
+              tabIndex={is_active ? 0 : -1}
+              data-baybar-tab={item.id}
+              style={no_drag_style}
+              // 点标签页是「切换」，不是「关闭」：关闭由右侧的 × 负责。
+              onClick={() => activate?.(item.id)}
+              onKeyDown={(event) => handle_tab_key_down(event, item.id)}
+              className={cn(
+                "group/tab inline-flex h-7 min-w-0 max-w-40 shrink-0 cursor-default select-none items-center gap-1.5 rounded-md pl-2 outline-none transition-colors duration-150",
+                "focus-visible:ring-2 focus-visible:ring-ring/30",
+                // 激活项右侧让出 × 的位置，未激活项两端对称。
+                is_active
+                  ? "bg-interaction-selected pr-0.5 text-foreground"
+                  : "pr-2 text-muted-foreground hover:bg-interaction-hover hover:text-foreground",
+              )}
+            >
+              {/* 图标包一层定尺寸的容器：react-icons 默认 1em，在 text-xs 下只有 12px，
+                  比标签文字小一号且基线不齐。用容器而不是 [&_svg] 通配，
+                  免得把关闭按钮自己的图标也一起改大。 */}
+              <span className="flex size-3.5 shrink-0 items-center justify-center [&>svg]:size-3.5 [&>img]:size-3.5">{item.icon}</span>
+              <span className="truncate text-xs">{item.label}</span>
+              {is_active ? <button
+                type="button"
                 style={no_drag_style}
-                // 点标签页是「切换」，不是「关闭」：关闭由右侧的 × 负责。
-                onClick={() => activate?.(item.id)}
-                onKeyDown={(event) => handle_tab_key_down(event, item.id)}
-                className={cn(
-                  "group/tab relative inline-flex h-7 min-w-0 max-w-40 shrink-0 cursor-default select-none items-center gap-1.5 rounded-full outline-none transition-colors duration-150",
-                  "focus-visible:ring-2 focus-visible:ring-ring/30",
-                  is_active
-                    ? "border border-border-subtle bg-background pl-2.5 pr-1 text-foreground"
-                    : "pl-2.5 pr-2.5 text-muted-foreground hover:bg-interaction-hover hover:text-foreground",
-                )}
-              >
-                {item.icon}
-                <span className="truncate text-xs">{item.label}</span>
-                {is_active ? <button
-                  type="button"
-                  style={no_drag_style}
-                  tabIndex={-1}
-                  title={translate("panels.close_right")}
-                  aria-label={`${translate("panels.close_right")}：${item.label}`}
-                  // 只关这一个标签页；关掉当前页会接到相邻的一个，关掉最后一个则是空白标签页。
-                  onClick={(event) => { event.stopPropagation(); close_tab?.(item.id); }}
-                  className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
-                ><TbX className="size-3.5" /></button> : null}
-              </div>;
-            })}
-          </div>
+                tabIndex={-1}
+                title={translate("panels.close_right")}
+                aria-label={`${translate("panels.close_right")}：${item.label}`}
+                // 只关这一个标签页；关掉当前页会接到相邻的一个，关掉最后一个则是空白标签页。
+                onClick={(event) => { event.stopPropagation(); close_tab?.(item.id); }}
+                className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+              ><TbX className="size-3.5" /></button> : null}
+            </div>;
+          })}
         </div>
         {show_section_tabs && shown_tab && active_id ? <div className="shrink-0 px-2 py-2">
           <SegmentedControl<string>
@@ -342,7 +378,7 @@ function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
             aria_label={shown_tab.label}
           />
         </div> : null}
-        <div className="min-h-0 flex-1 overflow-y-auto">{section?.content ?? null}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto">{section?.content ?? <BayBarEmptyState />}</div>
       </> : null}
     </div>
   </motion.aside>;
