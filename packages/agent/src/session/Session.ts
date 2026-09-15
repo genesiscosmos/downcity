@@ -32,7 +32,7 @@ import type {
   RespondSessionInteractionInput,
   SessionApprovalMode,
   SessionInteractionResult,
-  SessionPendingInteraction,
+  SessionInteractionRequest,
 } from "@downcity/type";
 import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
@@ -381,7 +381,7 @@ export class Session implements AgentSession {
   }
 
   /** 列出当前 Session 正在等待用户响应的 Interaction。 */
-  async interactions(): Promise<SessionPendingInteraction[]> {
+  async interactions(): Promise<SessionInteractionRequest[]> {
     return this.session_interactions.list();
   }
 

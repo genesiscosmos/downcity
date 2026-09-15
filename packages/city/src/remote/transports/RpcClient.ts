@@ -39,7 +39,7 @@ import type { SessionMutation } from "@downcity/agent";
 import type {
   RespondSessionInteractionInput,
   SessionInteractionResult,
-  SessionPendingInteraction,
+  SessionInteractionRequest,
 } from "@downcity/agent";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type {
@@ -234,8 +234,8 @@ export class RpcClient {
     return data.system;
   }
 
-  async get_session_interactions(session_id: string, origin_type: string): Promise<SessionPendingInteraction[]> {
-    const data = await this.request<{ interactions: SessionPendingInteraction[] }>({
+  async get_session_interactions(session_id: string, origin_type: string): Promise<SessionInteractionRequest[]> {
+    const data = await this.request<{ interactions: SessionInteractionRequest[] }>({
       method: "sdk.sessions.interactions",
       params: { session_id: session_id, origin_type },
     });

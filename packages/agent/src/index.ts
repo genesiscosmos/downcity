@@ -162,7 +162,6 @@ export type {
   SessionInteractionResult,
   SessionInteractionSource,
   SessionInteractionStatus,
-  SessionPendingInteraction,
   SessionResolvedInteractionResult,
 } from "@downcity/type";
 export { SESSION_APPROVAL_RESPONSE_SCHEMA } from "@downcity/type";

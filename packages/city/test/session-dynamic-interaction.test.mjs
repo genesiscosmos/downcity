@@ -90,7 +90,7 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
       created_at: Date.now(),
     });
 
-    assert.deepEqual((await interactions.list())[0].request.payload, {
+    assert.deepEqual((await interactions.list())[0].payload, {
       environment: "production",
       version: "2026.08.24",
     });

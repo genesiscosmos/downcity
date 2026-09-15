@@ -17,7 +17,7 @@ import type { RemoteAgentSession } from "@downcity/agent";
 import type {
   RespondSessionInteractionInput,
   SessionInteractionResult,
-  SessionPendingInteraction,
+  SessionInteractionRequest,
 } from "@downcity/agent";
 import type {
   SessionMutation,
@@ -131,7 +131,7 @@ export class RemoteSession implements RemoteAgentSession {
   }
 
   /** 列出当前远程 Session 正在等待用户响应的 Interaction。 */
-  async interactions(): Promise<SessionPendingInteraction[]> {
+  async interactions(): Promise<SessionInteractionRequest[]> {
     return await this.transport.interactions(this.id, this.origin.type);
   }
 

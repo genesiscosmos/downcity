@@ -8,7 +8,7 @@ import type {
   AgentSessionSecurityStatus,
   SessionMessage,
   SessionMutation,
-  SessionPendingInteraction,
+  SessionInteractionRequest,
 } from "@downcity/agent";
 import type { AgentChatClient } from "@/city/agent/AgentChatRemote.js";
 
@@ -27,7 +27,7 @@ export interface ChatSessionSnapshot {
   /** 读取快照时 Session 是否正在执行 Turn。 */
   is_executing: boolean;
   /** 当前 Session 尚未进入终态的 Interaction。 */
-  interactions: SessionPendingInteraction[];
+  interactions: SessionInteractionRequest[];
 }
 
 /** ChatSessionSubscription 的构造依赖。 */

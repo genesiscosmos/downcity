@@ -49,7 +49,7 @@ mismatch, throws an explicit error.
 ```ts
 const pending = await session.interactions();
 
-for (const { request } of pending) {
+for (const request of pending) {
   if (request.type === "approval") render_approval(request);
   else render_questions(request.payload.questions);
 }

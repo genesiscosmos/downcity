@@ -41,7 +41,7 @@ import type {
 import type {
   RespondSessionInteractionInput,
   SessionInteractionResult,
-  SessionPendingInteraction,
+  SessionInteractionRequest,
 } from "@downcity/agent";
 
 /**
@@ -162,7 +162,7 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     });
   }
 
-  async interactions(session_id: string, origin_type: string): Promise<SessionPendingInteraction[]> {
+  async interactions(session_id: string, origin_type: string): Promise<SessionInteractionRequest[]> {
     return await this.client.get_session_interactions(session_id, origin_type);
   }
 

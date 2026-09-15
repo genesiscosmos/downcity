@@ -8,7 +8,7 @@
 import type { SessionAgentMessagePart } from "@downcity/type";
 
 /** 判断两个 Part 快照是否表示同一个 canonical 版本。 */
-function is_same_agent_part(
+export function is_same_agent_part(
   left: SessionAgentMessagePart | undefined,
   right: SessionAgentMessagePart,
 ): boolean {

@@ -31,7 +31,7 @@ import type {
 import type {
   RespondSessionInteractionInput,
   SessionInteractionResult,
-  SessionPendingInteraction,
+  SessionInteractionRequest,
 } from "@downcity/type";
 import type {
   ListSessionMessagesInput,
@@ -99,7 +99,7 @@ export interface AgentSessionActor {
   system(): Promise<AgentSessionSystemSnapshot>;
 
   /** 列出当前 Session 正在等待用户响应的 Interaction。 */
-  interactions(): Promise<SessionPendingInteraction[]>;
+  interactions(): Promise<SessionInteractionRequest[]>;
 
   /** 读取当前 Session 的运行与安全状态。 */
   status(): Promise<AgentSessionStatus>;

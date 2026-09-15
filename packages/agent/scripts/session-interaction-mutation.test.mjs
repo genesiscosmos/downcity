@@ -7,7 +7,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SessionMessageInteractionWriter } from "../bin/session/messages/SessionMessageInteractionWriter.js";
+import { SessionAgentMessageState } from "../bin/session/messages/SessionAgentMessageState.js";
+import { SessionMessageCache } from "../bin/session/messages/SessionMessageCache.js";
 import { SessionMessages } from "../bin/session/SessionMessages.js";
 
 /** 构造一条含 ready 状态 Tool Part 的流式 Assistant Message fixture。 */
@@ -35,21 +36,29 @@ function create_writer_fixture() {
       },
     ],
   };
-  const writer = new SessionMessageInteractionWriter({
-    list_messages: () => [message],
-    find_tool_in_open_message: (tool_call_id) => {
-      const part = message.parts.find(
-        (item) => item.type === "tool" && item.tool_call_id === tool_call_id,
-      );
-      return part ? { message_id: message.message_id, part } : undefined;
+  // 缓存与 State 都是真实实例：Interaction 变更依赖“读取当前快照 → 替换 Tool”的
+  // 串行语义，用桩会绕过被验证的部分。
+  const cache = new SessionMessageCache({
+    session_id: "session-1",
+    publish: () => {},
+  });
+  cache.set_held(message.message_id);
+  cache.accept(message, false);
+  const store = {
+    read_message: async (message_id) =>
+      message_id === message.message_id ? structuredClone(message) : null,
+    update_message: async (input) => {
+      message = structuredClone(input.message);
+      cache.accept(message, false);
     },
-    enqueue_assistant_write: async (_message_id, operation) => await operation(),
-    commit_assistant_snapshot: async (_current, parts) => {
-      message = { ...message, revision: message.revision + 1, parts };
-    },
+  };
+  const state = new SessionAgentMessageState({
+    session_id: "session-1",
+    store,
+    cache,
   });
   return {
-    writer,
+    state,
     read_parts: () => message.parts,
     read_tool: () => message.parts.find((part) => part.type === "tool"),
   };
@@ -70,7 +79,7 @@ function create_question_request(interaction_id = "interaction-1") {
 test("Interaction 创建后嵌套在所属 Tool Part 内，不再平级存在", async () => {
   const fixture = create_writer_fixture();
 
-  const interaction = await fixture.writer.request(create_question_request());
+  const interaction = await fixture.state.request_interaction(create_question_request());
 
   assert.equal(interaction.status, "pending");
   // 关键断言：Message 只有一个 Part，Interaction 不是其中之一。
@@ -85,9 +94,9 @@ test("Interaction 创建后嵌套在所属 Tool Part 内，不再平级存在", 
 
 test("用户响应后 Tool 恢复运行，Interaction 就地终结", async () => {
   const fixture = create_writer_fixture();
-  await fixture.writer.request(create_question_request());
+  await fixture.state.request_interaction(create_question_request());
 
-  await fixture.writer.resolve("interaction-1", {
+  await fixture.state.resolve_interaction("interaction-1", {
     type: "question",
     outcome: "resolved",
     payload: { answers: [{ question_id: "q1", value: "main" }] },
@@ -97,14 +106,14 @@ test("用户响应后 Tool 恢复运行，Interaction 就地终结", async () =>
   const tool = fixture.read_tool();
   assert.equal(tool.state, "running");
   assert.equal(tool.interactions[0].status, "resolved");
-  assert.deepEqual(fixture.writer.list_pending(), []);
+  assert.deepEqual(fixture.state.list_pending_interactions(), []);
 });
 
 test("拒绝响应会把所属 Tool 标记为失败", async () => {
   const fixture = create_writer_fixture();
-  await fixture.writer.request(create_question_request());
+  await fixture.state.request_interaction(create_question_request());
 
-  await fixture.writer.resolve("interaction-1", {
+  await fixture.state.resolve_interaction("interaction-1", {
     type: "question",
     outcome: "denied",
     payload: {},
@@ -118,10 +127,9 @@ test("拒绝响应会把所属 Tool 标记为失败", async () => {
 
 test("取消未响应交互会把所属 Tool 标记为失败并保留原因", async () => {
   const fixture = create_writer_fixture();
-  await fixture.writer.request(create_question_request());
+  await fixture.state.request_interaction(create_question_request());
 
-  await fixture.writer.close("interaction-1", {
-    status: "cancelled",
+  await fixture.state.close_interaction("interaction-1", {
     reason: "turn_stopped",
   });
 
@@ -134,11 +142,11 @@ test("取消未响应交互会把所属 Tool 标记为失败并保留原因", as
 
 test("等待中的 Interaction 可以按 Tool 归属查询", async () => {
   const fixture = create_writer_fixture();
-  await fixture.writer.request(create_question_request("interaction-1"));
-  await fixture.writer.request(create_question_request("interaction-2"));
+  await fixture.state.request_interaction(create_question_request("interaction-1"));
+  await fixture.state.request_interaction(create_question_request("interaction-2"));
 
   assert.deepEqual(
-    fixture.writer.list_pending().map((item) => item.interaction_id),
+    fixture.state.list_pending_interactions().map((item) => item.interaction_id),
     ["interaction-1", "interaction-2"],
   );
   // 同一 Tool 内部按发生顺序保留。

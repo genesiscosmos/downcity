@@ -198,12 +198,6 @@ export type SessionInteractionResult =
   | SessionCancelledInteractionResult
   | SessionFailedInteractionResult;
 
-/** 当前 Session 中一条 pending Interaction 的公开快照。 */
-export interface SessionPendingInteraction {
-  /** 已持久化的完整 Interaction 请求。 */
-  request: SessionInteractionRequest;
-}
-
 /** 执行方等待一次 Interaction 的运行时句柄。 */
 export interface SessionInteractionHandle {
   /** 已成功持久化并等待响应的 Interaction 标识。 */

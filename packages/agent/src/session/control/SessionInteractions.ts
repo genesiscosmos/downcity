@@ -14,7 +14,6 @@ import type {
   SessionInteractionRequest,
   SessionInteractionResponse,
   SessionInteractionResult,
-  SessionPendingInteraction,
 } from "@downcity/type";
 import type { SessionPendingInteractionRuntime } from "@/types/session/SessionInteractions.js";
 
@@ -73,10 +72,8 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
   }
 
   /** 返回当前 Session 全部 pending Interaction 请求快照。 */
-  list(): SessionPendingInteraction[] {
-    return this.messages.list_pending_interactions().map((interaction) => ({
-      request: structuredClone(interaction.request),
-    }));
+  list(): SessionInteractionRequest[] {
+    return this.messages.list_pending_interactions().map((interaction) => interaction.request);
   }
 
   /** 保存用户响应，并在提交成功后恢复原执行。 */

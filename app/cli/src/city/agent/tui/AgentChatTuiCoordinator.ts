@@ -845,8 +845,8 @@ export class AgentChatTuiCoordinator {
     this.terminal.setTitle(this.build_title());
     this.message_list.set_messages(snapshot.messages);
     this.message_list.scroll_to_bottom();
-    for (const pending of snapshot.interactions) {
-      this.show_interaction_panel(pending.request, snapshot.session_id);
+    for (const request of snapshot.interactions) {
+      this.show_interaction_panel(request, snapshot.session_id);
     }
   }
 

@@ -22,7 +22,7 @@ The most common input and output objects are:
 - `AgentSessionTurnResult`
 - `SessionMutation`
 - `SessionMessage`
-- `SessionPendingInteraction`
+- `SessionInteractionRequest`
 - `RespondSessionInteractionInput`
 - `AgentSessionInfo`
 
@@ -33,7 +33,7 @@ The most common input and output objects are:
 | Initial load, history, and reconnect recovery | `SessionMessagePage` / `SessionMessage` |
 | Live text, tools, and title | `SessionMutation` |
 | Waiting for one execution to finish | `AgentSessionTurnHandle` / `AgentSessionTurnResult` |
-| Displaying or responding to user interaction | `SessionPendingInteraction` / `SessionInteractionResult` |
+| Displaying or responding to user interaction | `SessionInteractionRequest` / `SessionInteractionResult` |
 | Sidebar and selected Session header | `AgentSessionSummary` / `AgentSessionInfo` |
 | Runtime and security state | `AgentSessionStatus` |
 

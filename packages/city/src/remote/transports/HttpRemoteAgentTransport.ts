@@ -40,7 +40,7 @@ import type {
 import type {
   RespondSessionInteractionInput,
   SessionInteractionResult,
-  SessionPendingInteraction,
+  SessionInteractionRequest,
 } from "@downcity/agent";
 
 type SdkEventsReadyFrame = {
@@ -390,11 +390,11 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     return payload;
   }
 
-  async interactions(session_id: string, origin_type: string): Promise<SessionPendingInteraction[]> {
+  async interactions(session_id: string, origin_type: string): Promise<SessionInteractionRequest[]> {
     const payload = await read_http_json<{
       success?: boolean;
       error?: string;
-      interactions?: SessionPendingInteraction[];
+      interactions?: SessionInteractionRequest[];
     }>(this.session_url(session_id, origin_type, "/interactions"), {
       headers: this.headers(),
     });

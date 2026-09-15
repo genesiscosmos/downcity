@@ -83,7 +83,7 @@ export interface SessionInteractionCloseInput {
 - **协议变更**：`SessionInteractionStatus` 六态 → 五态；`ShellApprovalStatus` 三态 → 二态。属公开协议，需随包版本发布。
 - **验证**：三个包重新构建通过，`packages/agent` 75/75，`packages/city` 250/264（两个基线失败），`app/cli` typecheck 通过。
 
-## 3. 九项待改，按风险分四批
+## 3. 待改项，按风险分四批
 
 ### 批次 1：零风险清理（已完成）
 
@@ -264,15 +264,37 @@ Interaction：
 
 ### 批次 4：结构收敛
 
-#### 4.1 构造函数里的回指闭包（已随批次 3 完成）
+#### 4.1 Interaction 写入器并入状态机（已完成）
 
-四个回指闭包与转发层已一并消除，见批次 3.1。
+与批次 3 同一个耦合，只是在下一层：`SessionMessageInteractionWriter` 的四个依赖里，三个是指回 `SessionAgentMessageState` 的闭包（`find_tool_in_open_message` / `enqueue_assistant_write` / `commit_assistant_snapshot`），第四个只是 `cache.all()`。
 
-#### 4.2 `validate_request` 里的业务校验
+这些方法本就是 State 自己的私有能力，而 Interaction 的转换语义与 `commit_parts` / `complete` 完全一致（读当前快照 → 算新快照 → 提交），因此合并即内聚：
+
+| | 之前 | 之后 |
+| --- | --- | --- |
+| `SessionMessageInteractionWriter.ts` | 299 行 | 删除 |
+| `SessionAgentMessageState.ts` | 390 行 | 589 行 |
+| 该类剩余依赖 | 4 个闭包 | 0（只用 `cache` + `store`） |
+
+合并后新增一个内部原语 `run_interaction_write`，把“定位 Tool → 在写链内读最新快照 → 替换”写一次，`request` / `resolve` / `close` 共用。
+
+#### 4.2 删除 `SessionPendingInteraction` 单字段包装（已完成）
+
+`SessionPendingInteraction` 的全部内容是 `{ request }`，唯一作用原本是剔除运行时的 `resolve` / `timer`。`timer` 已在批次 0 删除，`resolve` 从未进入过 `request`，所以它退化为纯嵌套。
+
+`Session.interactions()` 现在直接返回 `SessionInteractionRequest[]`。影响 12 个文件与 6 处文档，均为机械替换；消费端从 `for (const { request } of pending)` 变为 `for (const request of pending)`。
+
+#### 4.3 消除重复的 Part 发布（已完成）
+
+Tool 的 `ready` 状态有两个写入点：模型事件 `tool_call_finish` 与执行前的 `prepare_tool_input`（后者带已校验输入）。两者内容相同时仍各发一次 Mutation，实测序列为 `input-streaming → ready → ready`。
+
+修法在 `project_part`：内容未变化（`is_same_agent_part`）时不发布。实测变为 `input-streaming → ready`。这同时消除了同 revision、同内容的冗余事件。
+
+#### 4.4 `validate_request` 里的业务校验（待做）
 
 `SessionInteractions.validate_request` 内含整段 `if (request.type === "question")` 的逐字段校验（`questions` / `options` / 唯一性）。通用交互运行时不该知道 Question 的 payload 形状。
 
-方向：每个 Interaction 类型自带校验函数，运行时只校验通用信封（`interaction_id` / `turn_id` / `source` / 过期）。
+方向：每个 Interaction 类型自带校验函数，运行时只校验通用信封（`interaction_id` / `turn_id` / `source`）。
 
 ```ts
 /** 单个 Interaction 类型的请求校验。 */
@@ -287,15 +309,17 @@ interface SessionInteractionTypeValidator {
 ```
 
 这需要一张注册表。属于新概念，应先写进 PRD 再动手。
-## 4. 需要先回答的问题
+## 5. 需要先回答的问题
 
-**4.1 `state` 是否删列。** 本计划不含此项。当前状态是「值由一处推导、但仍落库」，语义已统一、存储仍冗余。删列前需确认没有外部直接读 `messages` 表（目前已知 desktop / ui / cli 都经 SDK 读取，未直接查库）。
+**5.1 `state` 列不删（经核实为持久化运行时事实）。** 本计划早期曾把它列为「待定」的删列项。核实后修正：`message.state` 在存储中回答的是「上次写入时该 Message 是否仍在写」，而 `held_by_writer` 是纯运行时事实（step 之间所有 Part 已终态但 writer 仍持有），**无法从 Parts 推出**。它不属于「存储了推导值」，落在存储层是合理的；真正的问题是写入方曾经用错误输入计算它（已由批次 1 修正）。
 
-**4.2 Interaction 的终止语义（已解决）。** 见「批次 0」：两者都不再设置超时。
+**5.2 Interaction 的终止语义（已解决）。** 见「批次 0」：两者都不再设置超时。
 
-**4.3 两处冗余发布的归属。** `part/tool state=ready` 连发两次（`prepare_tool_input` 与 `tool_call_finish` 各自落盘），以及 `list_messages()` 会返回未提交的草稿。两者都可单独修，但不属于本计划。
+**5.3 `waiting-user` 保持存储（经核实为原子去规范化）。** 它等价于「该 Tool 有 pending Interaction」，属于推导值；但它的三个写入点（`request` / `resolve` / `close`）均与 Interaction 状态在同一次快照提交中完成，不存在不同步窗口。把推导推给 20 个消费端（含 desktop / cli 展示）反而把复杂度外移，得不偿失。
 
-## 5. 验证方式
+**5.4 两处冗余发布的归属。** 见 4.3（已修）。
+
+## 6. 验证方式
 
 批次 1–3 均为行为不变，验收方式统一：
 
@@ -314,15 +338,15 @@ pnpm -C packages/city test                                        # 250/264，�
 - `running session approval mode changes stay queued until the next Session step`
 - 全仓库 `pnpm typecheck`：`templates/ui` 引用 `@downcity/ui` 未导出的 `ChatInputEditor`
 
-## 6. 建议顺序
+## 7. 建议顺序
 
 ```mermaid
 flowchart LR
-    A[批次 0 · 已完成<br/>删 Interaction 超时] --> B[批次 1 · 已完成<br/>零风险清理]
-    B --> C[批次 2 · 已撤销<br/>经核实是循环]
-    C --> D[批次 3 · 已完成<br/>抽缓存 + 删转发 + 去闭包]
-    D --> E[批次 4.2<br/>validate_request 业务校验]
-    E --> F[待定<br/>state 删列]
+    A[批次 0 · 完成<br/>删 Interaction 超时] --> B[批次 1 · 完成<br/>零风险清理]
+    B --> C[批次 2 · 撤销<br/>经核实是循环]
+    C --> D[批次 3 · 完成<br/>抽缓存 + 删转发 + 去闭包]
+    D --> E[批次 4 · 完成<br/>合并 Interaction 写入器<br/>删单字段包装<br/>去重复发布]
+    E --> F[待做<br/>validate_request 校验分层]
 ```
 
 一个适用到后续所有批次的教训：本计划已有三项判断被核实推翻（1.3a 的重读、整个批次 2、批次 3 的「13 个透传」）。共同点都是**从代码形状推断职责**，而没看那层实际在做什么。因此任何「看起来重复/多余」的删除，动手前先用探针确认它的真实职责。

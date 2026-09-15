@@ -65,7 +65,7 @@ On failure, an Error Part in the closed canonical Agent Message carries the user
 | `SessionMessage` | The only persisted history model | Initial load, reconnect, history browsing |
 | `SessionMutation` | Live protocol for changes after subscription | Streaming UI, tool state, title updates |
 | `TurnHandle` | Execution handle for an accepted input | Waiting for the final result, checking a stopped turn |
-| `SessionPendingInteraction` | A request waiting for user input | Approval, questions, background processing |
+| `SessionInteractionRequest` | A request waiting for user input | Approval, questions, background processing |
 
 Do not treat Messages and Mutations as interchangeable. Messages are recoverable state snapshots; Mutations deliver state changes to a live client.
 

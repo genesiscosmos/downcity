@@ -65,7 +65,7 @@ unsubscribe();
 | `SessionMessage` | 持久化历史的唯一模型 | 首次加载、重连、历史浏览 |
 | `SessionMutation` | 订阅后的实时变化协议 | 流式渲染、工具状态、标题更新 |
 | `TurnHandle` | 一次输入归属的执行句柄 | 等待最终结果、停止后检查结果 |
-| `SessionPendingInteraction` | 当前 Session 等待用户响应的请求 | 审批、问答、后台处理 |
+| `SessionInteractionRequest` | 当前 Session 等待用户响应的请求 | 审批、问答、后台处理 |
 
 Message 和 Mutation 不要混用：Message 是可恢复的状态快照；Mutation 是把状态变化及时送到客户端的协议。
 

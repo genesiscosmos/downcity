@@ -30,7 +30,7 @@ import type { SessionMutation } from "@downcity/agent";
 import type {
   RespondSessionInteractionInput,
   SessionInteractionResult,
-  SessionPendingInteraction,
+  SessionInteractionRequest,
 } from "@downcity/agent";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type { AgentSessionStopResult } from "@downcity/agent";
@@ -85,7 +85,7 @@ export type RemoteSessionTransport = {
     input?: AgentSessionForkInput | string,
   ): Promise<AgentSessionInfo>;
   /** 列出指定 Session 正在等待用户响应的 Interaction。 */
-  interactions(session_id: string, origin_type: string): Promise<SessionPendingInteraction[]>;
+  interactions(session_id: string, origin_type: string): Promise<SessionInteractionRequest[]>;
   /** 读取指定 Session 的运行与安全状态。 */
   status(session_id: string, origin_type: string): Promise<AgentSessionStatus>;
   /** 更新指定 Session 的可序列化动态配置。 */
