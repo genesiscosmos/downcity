@@ -7,7 +7,6 @@
  * - `TelegramBot` 只保留平台生命周期与命令/callback 分发入口。
  */
 
-import path from "path";
 import type { PluginLogger } from "@downcity/city/plugin";
 import type { PluginJsonObject } from "@downcity/city/plugin";
 import type {
@@ -106,10 +105,6 @@ export type TelegramMessageCommandHandler = (params: {
  * Telegram message handler 依赖。
  */
 export interface TelegramMessageHandlerOptions {
-  /**
-   * 项目根目录。
-   */
-  rootPath: string;
   /**
    * 日志器。
    */
@@ -339,7 +334,6 @@ export async function handleTelegramMessage(
               chatType: message.chat.type,
               chat_key,
               message_id,
-              rootPath: options.rootPath,
               attachmentText:
                 attachmentLines.length > 0 ? attachmentLines.join("\n") : undefined,
               body_text: cleaned ? cleaned.trim() : undefined,

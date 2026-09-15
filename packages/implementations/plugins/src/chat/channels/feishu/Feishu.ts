@@ -25,6 +25,7 @@ import type {
   FeishuMessagePayloadType,
 } from "@/chat/channels/feishu/types/FeishuChannel.js";
 import { parseFeishuAttachments } from "./Shared.js";
+import { resolve_chat_attachment_target } from "../AttachmentPath.js";
 import { FeishuPlatformClient } from "./FeishuPlatformClient.js";
 import { handleFeishuMessage } from "./FeishuMessageHandler.js";
 import { isMissingFeishuSdkDependencyError } from "./FeishuSdk.js";
@@ -98,10 +99,13 @@ export class FeishuBot extends BaseChatChannel {
     const text = String(params.text ?? "");
     const shouldReplyToMessage = params.reply_to_message === true;
 
+    // 关键点（中文）：附件基准由调用方按当前会话声明，Channel 不自行推断 Workspace。
+    const attachment_roots = params.attachment_roots;
+
     if (shouldReplyToMessage && message_id && chatType !== "p2p") {
-      await this.sendMessage(params.chatId, chatType, message_id, text);
+      await this.sendMessage(params.chatId, chatType, message_id, text, attachment_roots);
     } else {
-      await this.sendChatMessage(params.chatId, chatType, text);
+      await this.sendChatMessage(params.chatId, chatType, text, attachment_roots);
     }
   }
 
@@ -194,7 +198,6 @@ export class FeishuBot extends BaseChatChannel {
    */
   private async handleMessage(data: FeishuMessageEvent): Promise<void> {
     await handleFeishuMessage({
-      rootPath: this.rootPath,
       logger: this.logger,
       buildChatKey: (chatId) => this.buildChatKey(chatId),
       processedMessages: this.processedMessages,
@@ -350,9 +353,10 @@ Available commands:
     chatType: string,
     message_id: string,
     text: string,
+    attachment_roots?: string[],
   ): Promise<void> {
     const parsed = parseFeishuAttachments(text);
-    await this.sendParsedMessage(chatId, chatType, message_id, parsed.segments);
+    await this.sendParsedMessage(chatId, chatType, message_id, parsed.segments, attachment_roots);
   }
 
   /**
@@ -362,9 +366,10 @@ Available commands:
     chatId: string,
     chatType: string,
     text: string,
+    attachment_roots?: string[],
   ): Promise<void> {
     const parsed = parseFeishuAttachments(text);
-    await this.sendParsedMessage(chatId, chatType, undefined, parsed.segments);
+    await this.sendParsedMessage(chatId, chatType, undefined, parsed.segments, attachment_roots);
   }
 
   /**
@@ -384,6 +389,7 @@ Available commands:
           attachment: ParsedFeishuAttachmentCommand;
         }
     >,
+    attachment_roots?: string[],
   ): Promise<void> {
     for (const segment of segments) {
       if (segment.kind === "text") {
@@ -396,7 +402,17 @@ Available commands:
       }
 
       try {
-        await this.sendAttachment(chatId, chatType, message_id, segment.attachment);
+        // 关键点（中文）：路径解析发生在送入平台之前，且与 Telegram 共用同一套基准与越界校验。
+        // 解析后的绝对路径再交给平台层读取，平台层不需要理解 Workspace 或根目录概念。
+        const target = resolve_chat_attachment_target({
+          path_or_url: segment.attachment.pathOrUrl,
+          ...(attachment_roots ? { roots: attachment_roots } : {}),
+          fallback_root: this.rootPath,
+        });
+        await this.sendAttachment(chatId, chatType, message_id, {
+          ...segment.attachment,
+          pathOrUrl: target.path,
+        });
       } catch (error) {
         // 关键点（中文）：附件失败必须上抛，不能降级成一条 "❌ ..." 文本后正常返回。
         // 降级会让 Outbox 记为已投递，Agent 无法感知文件未送达。

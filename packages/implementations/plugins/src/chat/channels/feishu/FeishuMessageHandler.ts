@@ -7,7 +7,6 @@
  * - 解析失败/执行失败通过渠道门面提供的发送函数回写错误消息。
  */
 
-import path from "path";
 import type { PluginLogger } from "@downcity/city/plugin";
 import type {
   IncomingChatAccessParams,
@@ -40,10 +39,6 @@ import type {
  * Feishu message handler 依赖。
  */
 export interface FeishuMessageHandlerOptions {
-  /**
-   * 项目根目录。
-   */
-  rootPath: string;
   /**
    * 日志器。
    */
@@ -418,7 +413,6 @@ async function handleAuthorizedMessage(params: {
               chatType,
               chat_key: threadId,
               message_id,
-              rootPath: options.rootPath,
               attachmentText:
                 attachmentLines.length > 0 ? attachmentLines.join("\n") : undefined,
               body_text: userMessage ? userMessage.trim() : undefined,

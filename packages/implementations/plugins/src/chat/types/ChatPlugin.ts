@@ -83,10 +83,6 @@ export interface ChatInboundAugmentInput {
    */
   message_id?: string;
   /**
-   * 当前工程根目录。
-   */
-  rootPath: string;
-  /**
    * chat plugin runtime 已生成的附件文本块。
    *
    * 说明（中文）

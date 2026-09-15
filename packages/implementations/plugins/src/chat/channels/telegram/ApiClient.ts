@@ -10,6 +10,7 @@ import {
   type TelegramApiResponse,
   type TelegramAttachmentType,
 } from "./Shared.js";
+import { resolve_chat_attachment_target } from "../AttachmentPath.js";
 
 const TELEGRAM_SEND_MAX_ATTEMPTS = 3;
 const TELEGRAM_SEND_RETRY_DELAYS_MS = [1_000, 3_000];
@@ -398,14 +399,20 @@ export class TelegramApiClient {
         : undefined;
 
     const src = att.pathOrUrl.trim();
-    const isUrl = /^https?:\/\//i.test(src);
+    // 关键点（中文）：附件基准由调用方按当前会话声明，Channel 不自行推断 Workspace。
+    // 未声明时回退到 Connector 构造期根目录，越界校验统一由 AttachmentPath 负责。
+    const target = resolve_chat_attachment_target({
+      path_or_url: src,
+      ...(opts?.attachmentRoots ? { roots: opts.attachmentRoots } : {}),
+      fallback_root: this.rootPath,
+    });
 
     // URL mode: send via JSON request
-    if (isUrl) {
+    if (target.is_url) {
       const endpoint = this.resolveAttachmentEndpoint(att.type);
       await this.requestJson(endpoint.method, {
         chat_id: chatId,
-        [endpoint.field]: src,
+        [endpoint.field]: target.path,
         ...(caption ? { caption } : {}),
         ...(message_thread_id ? { message_thread_id } : {}),
         ...(reply_to_message_id ? { reply_to_message_id } : {}),
@@ -413,21 +420,7 @@ export class TelegramApiClient {
       return;
     }
 
-    // 关键点（中文）：附件基准由调用方按当前会话声明，Channel 不自行推断 Workspace。
-    // 未声明时回退到 Connector 构造期根目录，保持既有调用方行为不变。
-    const declared_roots = (opts?.attachmentRoots ?? [])
-      .map((item) => String(item || "").trim())
-      .filter(Boolean)
-      .map((item) => path.resolve(item));
-    const base_root = declared_roots[0] ?? path.resolve(this.rootPath);
-    const resolved = path.isAbsolute(src) ? path.resolve(src) : path.resolve(base_root, src);
-    const allowed_roots = declared_roots.length > 0 ? declared_roots : [path.resolve(this.rootPath)];
-    const is_allowed = allowed_roots.some(
-      (root) => resolved === root || resolved.startsWith(root + path.sep),
-    );
-    if (!is_allowed) {
-      throw new Error(`Attachment path is outside the allowed roots: ${src}`);
-    }
+    const resolved = target.path;
     if (!(await fs.pathExists(resolved))) {
       throw new Error(`Attachment not found: ${src}`);
     }

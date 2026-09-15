@@ -422,7 +422,6 @@ export class FeishuPlatformClient {
    */
   private getLookupDeps() {
     return {
-      rootPath: this.rootPath,
       dataPath: this.dataPath,
       logger: this.logger,
       client: this.client,

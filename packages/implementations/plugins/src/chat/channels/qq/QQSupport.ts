@@ -252,7 +252,6 @@ export async function buildQqInboundInstructions(
         chatId: params.chatId,
         chat_key: params.chat_key,
         message_id: params.message_id,
-        rootPath: params.rootPath,
         body_text: text || undefined,
         attachments: resolvedAttachments,
     }),

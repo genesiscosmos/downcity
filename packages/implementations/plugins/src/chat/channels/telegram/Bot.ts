@@ -218,7 +218,6 @@ export class TelegramBot extends BaseChatChannel {
   ): Promise<void> {
     await handleTelegramMessage(
       {
-        rootPath: this.rootPath,
         logger: this.logger,
         inboundAckEmoji: TelegramBot.INBOUND_ACK_EMOJI,
         platform: this.platform,

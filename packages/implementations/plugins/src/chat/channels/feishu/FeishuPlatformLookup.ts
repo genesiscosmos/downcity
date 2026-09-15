@@ -23,10 +23,6 @@ import type { FeishuSdkClient } from "./types/FeishuSdk.js";
  * Feishu 查询类依赖。
  */
 export interface FeishuLookupDeps {
-  /**
-   * 项目根目录。
-   */
-  rootPath: string;
   /** Agent private runtime directory 内部数据根目录。 */
   dataPath: string;
   /**
