@@ -1,0 +1,292 @@
+# Session 层代码收敛计划
+
+> 状态：待执行
+>
+> 适用范围：`packages/agent/src/session`、`packages/agent/src/types/session`
+>
+> 前置：`session-message-unified-state-prd.md` 的改动已落地（工作区，未提交）。本计划不重复其内容。
+
+## 1. 核心发现：30 个公开方法里 13 个是纯转发
+
+`SessionMessages` 有 30 个公开方法，其中 13 个只做一件事——把调用转发给 `agent_state`：
+
+```ts
+async commit_agent_step(message_id, parts) {
+  await this.agent_state.commit_step(message_id, parts);        // 仅此
+}
+async checkpoint_agent_message(message_id) {
+  await this.agent_state.checkpoint(message_id);                // 仅此
+}
+async complete_agent_message(message_id, status, error) {
+  await this.agent_state.complete(message_id, status, error);   // 仅此
+}
+// …另有 10 个同形
+```
+
+调用方只有两个（已核实）：
+
+| 调用方 | 用到的转发方法 |
+| --- | --- |
+| `SessionAgentMessageWriter`（持有 `recorder: SessionMessages`） | `project_agent_delta`、`project_agent_part`、`checkpoint_agent_message`、`commit_agent_parts`、`rollback_agent_projection`、`commit_agent_step`、`complete_agent_message`、`find_streaming_tool` |
+| `SessionInteractions`（持有 `messages: SessionMessages`） | `request_interaction`、`resolve_interaction`、`close_interaction`、`list_pending_interactions` |
+
+**这 13 个方法就是这轮开头被指出的「薄封装」。** 它们存在，只是为了让两个协作者穿过 `SessionMessages` 拿到 `agent_state`。结果是每次写操作都走两层，而两层的名字还不一样。
+
+## 2. 批次 0：删除 Interaction 超时（已完成）
+
+由用户决定：Question 与 Approval **都不应设置 `expires_at`**，`ShellApprovalRequest.timeout_ms` 一并删除。
+
+### 2.1 为什么删
+
+Interaction 的终止方式原本有三种：用户响应、等待超时、随 Turn/Session 结束。删掉超时后降到两种，且第二种不再是一个独立的领域路径。一条审批等两个小时再自动失败，对“高风险操作需人裁定”这个场景没有意义：要么等用户，要么随会话结束。
+
+### 2.2 删除链（跨两个包）
+
+| 位置 | 删除内容 |
+| --- | --- |
+| `SessionInteraction.ts` | `SessionInteractionRequest.expires_at`、`SessionInteractionStatus` 的 `expired`、`SessionExpiredInteractionResult`、`SessionExpireInteractionInput` |
+| `SessionInteractions.ts` | `request()` 里的 `setTimeout` + `timer.unref`、`validate_request` 的 `expires_at` 前置校验、`expire()` 整个方法、`finish_pending` 的 `clearTimeout` |
+| `SessionInteractions.ts`（types） | `SessionPendingInteractionRuntime.timer` |
+| `SessionMessageInteractionWriter.ts` | `expired → "Interaction expired"` 分支 |
+| `SessionStorageCodec.ts` | interaction status 枚举校验里的 `expired` |
+| `SessionShellApprovalAdapter.ts` | `expires_at` 输出、`expired` 结果映射 |
+| `AskQuestionsTool.ts` | `expired` 结果分支 |
+| `ShellAction.ts` | `ShellApprovalStatus` 的 `expired`；`ShellSessionStatus` 的 `expired` |
+| `ShellApproval.ts` | `ShellApprovalRequest.timeout_ms` |
+| `ShellRuntimeOptions.ts` | `default_approval_timeout_ms` |
+| `ShellActionRuntimeSupport.ts` | `DEFAULT_APPROVAL_TIMEOUT_MS`、`is_terminal_status` 的 `expired` |
+| `HostApprovalRuntime.ts` | `timeout_ms` 参数与透传 |
+| `ShellStartActions.ts` / `ShellWriteActions.ts` | 传递 `timeout_ms` |
+| `ShellActionShared.ts` | `"Host execution approval expired."` 文案、`status: "expired"` 派生 |
+| `ShellTools.ts` | 两处 `approval_status !== "expired"` |
+| `AgentInteraction.tsx` + locales | `expired` 展示分支与文案 |
+| `approvals.mdx`（中/英） | 生命周期里的 `expired` 说明 |
+
+### 2.3 附带的设计收益
+
+删到只剩下一种终态后，`SessionInteractionCloseInput` 不再需要 `status` 字段——它的唯一职责变成了携带 `reason`：
+
+```ts
+/** 关闭 pending Interaction 的输入；终态固定为 cancelled。 */
+export interface SessionInteractionCloseInput {
+  reason: "turn_stopped" | "session_disposed" | "runtime_interrupted";
+}
+```
+
+同一原因：`ShellSessionStatus` 的 `expired` 变体也成了死枚举（`derive_exit_status` 只产出 `killed`/`completed`/`failed`），一并删除。`starting` 仍被多处读取，保留。
+
+### 2.4 影响
+
+- **行为变更**：等待审批不再自动超时。原先 2 小时的审批窗口消失，审批要么得到用户响应，要么在 Turn/Session 结束时被标记为 cancelled 并把所属 Tool 标为 failed。
+- **协议变更**：`SessionInteractionStatus` 六态 → 五态；`ShellApprovalStatus` 三态 → 二态。属公开协议，需随包版本发布。
+- **验证**：三个包重新构建通过，`packages/agent` 75/75，`packages/city` 250/264（两个基线失败），`app/cli` typecheck 通过。
+
+## 3. 九项待改，按风险分四批
+
+### 批次 1：零风险清理（已完成）
+
+> 落地结果见「1.4 实施记录」。以下保留原始分析，其中一条已被实测推翻。
+
+#### 1.1 命名与语义对齐
+
+改了 `state` 语义后漏改的名字，现在会误导读者：
+
+| 现在 | 改为 | 位置 |
+| --- | --- | --- |
+| `find_streaming_tool` | `find_tool_in_open_message` | `SessionAgentMessageState.ts:266`、`SessionMessages.ts:713`、`SessionMessageInteractionWriter.ts:32,268` |
+| `require_streaming_assistant` | `require_open_message` | `SessionMessageInteractionWriter.ts:207` |
+| `require_streaming_tool` | `require_open_message_tool` | `SessionMessageInteractionWriter.ts:267` |
+| `SessionStreamingToolLocation` | `SessionOpenMessageToolLocation` | `types/session/SessionTool.ts:10` |
+
+#### 1.2 删除失效的 part_id 规则
+
+`normalize_session_user_parts` 生成 `user-text:${index + 1}`，随后 `append_user_message` 无条件覆盖为 `${message_id}:part:${sequence}`。第一条规则没有任何生效路径。
+
+补充证据：`part_id` 在 `message_parts` 中是 `PRIMARY KEY`，所以第二条消息的 `user-text:1` 会直接撞主键。这条规则不只是无用，而且是错的。
+
+#### 1.3 去掉多余读
+
+**每次翻页算全表统计（成立，已改）**：`list_messages` 末尾为填 `total` 调用 `message_stats()`，而它会读 `session_state`、查最新一条消息（带 join）、再算一次 `file_size`。给 Store 加一个只做计数的窄方法。
+
+```ts
+// SessionMessages.list_messages：只取计数，不取最新消息与字节数
+const total = await this.store.message_count();
+```
+
+**每次检查点重读消息（不成立，已保留）**：原判断是「调用方手上已有 `current` 快照，重读是冗余」。实测推翻了它，详见 1.4。
+
+#### 1.4 实施记录
+
+| 项 | 结果 |
+| --- | --- |
+| 1.1 改名 | 已完成。4 个标识符 + 5 处注释；`packages/agent/scripts/session-interaction-mutation.test.mjs` 直接构造 writer，同步改了 options 键名 |
+| 1.2 删死规则 | 已完成，且比原计划更彻底：新增 `SessionUserPartContent`（分配式 `Omit<part_id \| sequence>`），`normalize_session_user_parts` 只返回内容，`normalize_canonical_session_user_parts` 整个函数删除（其职责被 `append_user_message` 吸收），identity 与顺序统一由 `append_user_message` 分配 |
+| 1.3 `list_messages` 计数 | 已完成。`SessionStorage` 新增 `message_count()`，只查 `session_state` 一列 |
+| 1.3 `persist_snapshot` 重读 | **已保留**。原判断错误，见下 |
+
+**被实测推翻的判断**。我原本认为 `persist_snapshot` 开头那次 `read_message` 是冗余重读，改用调用方传入的 `current`。写探针实测后推翻：
+
+```text
+投影后已发布: message/agent, part/text, delta/text
+
+原实现（diff 基线 = DB）：     checkpoint 额外发布（无）  落盘 parts: text:streaming:"部分文本"   ← 正确
+探针版（diff 基线 = 内存快照）：checkpoint 额外发布（无）  落盘 parts: （空）                    ← 静默丢数据
+```
+
+原因是两个 diff 服务于不同目的，不能合并：
+
+| diff | 基线 | 用途 |
+| --- | --- | --- |
+| `persist_snapshot` 的 `changed_parts` | **DB** | 告诉存储层要 upsert 哪些 part 行 |
+| `accept_message` 的 `project_message_change` | **内存缓存** | 决定向订阅方发布什么 |
+
+「发布什么」由第二个 diff 决定，与那次重读无关；而那次重读是**存储写入的必要输入**。换成内存基线后 `changed_parts` 算成空集，part 行不会被写，数据静默丢失且不报错。
+
+教训：这两层的 diff 看起来重复，实际一个是「持久化」事实、一个是「订阅」事实。任何合并它们的尝试都会失掉一层语义。
+
+### 批次 2：还清本轮欠债
+
+#### 2.1 `Session.ts` 的四份 Action 字面量
+
+删掉 `emit_action_event` 后，同一段七字段对象字面量出现四次（fork 的 running/completed/failed + 压缩）。间接少了一层，重复多了三份。
+
+改法：把「构造并提交一条 Action」收成一个小助手，而不是让调用方每次拼字段。
+
+```ts
+// Session.ts
+/** 提交一条 Session 级 Action 事实。 */
+private async publish_action(input: {
+  action_id: string;
+  action_type: string;
+  title: string;
+  description?: string;
+  status: SessionActionStatus;
+  turn_id?: string;
+}): Promise<void> {
+  await this.session_messages.persist_action({
+    action_id: input.action_id,
+    action_type: input.action_type,
+    ...(input.turn_id ? { turn_id: input.turn_id } : {}),
+    title: input.title,
+    ...(input.description ? { description: input.description } : {}),
+    status: input.status,
+  });
+}
+```
+
+四处的差异只有 `title` / `description` / `status`，可以降到一行调用。
+
+### 批次 3：消掉 13 个转发方法（结构，行为不变）
+
+这是本计划的主体。目标是让协作者直接持有它真正需要的东西。
+
+```ts
+// open_agent_message 返回的 Writer 直接绑定 agent_state，不再经 SessionMessages 转手
+async open_agent_message(input: OpenSessionAgentMessageInput): Promise<SessionAgentMessageWriter> {
+  const message_id = ...;
+  const writer = new SessionAgentMessageWriter(this.agent_state, message_id);
+  ...
+}
+```
+
+```ts
+// SessionAgentMessageWriter：依赖从 SessionMessages 收窄为它真正使用的能力
+export class SessionAgentMessageWriter {
+  constructor(
+    private readonly state: SessionAgentMessageState,
+    readonly message_id: string,
+  ) {}
+}
+```
+
+`SessionInteractions` 同理改为持有 `agent_state`（它只用到四个 Interaction 方法）。
+
+随后删除 `SessionMessages` 的 13 个转发方法。预期效果：
+
+| | 现在 | 目标 |
+| --- | --- | --- |
+| `SessionMessages.ts` | 887 行 / 30 公开方法 | ~770 行 / 17 公开方法 |
+| 写路径层数 | 2 层（Messages → State） | 1 层 |
+| 转发方法 | 13 | 0 |
+
+**注意**：`SessionAgentMessageState` 需要更名以匹配它的新角色——它不再只是 `SessionMessages` 的内部助手，而是「Agent Message 写入服务」。建议 `SessionAgentMessageService`，文件名同步。这一步会牵动 `SessionMessages` 的构造函数闭包（见批次 4），建议一并处理。
+
+### 批次 4：结构收敛（需先评审）
+
+#### 4.1 构造函数里的回指闭包
+
+`SessionMessages` 构造 `agent_state` 时传入四个指回 `this` 的闭包，与 PRD §2.5 批评 `SessionMessageInteractionWriter` 的那处是同一种形状：
+
+```ts
+this.agent_state = new SessionAgentMessageState({
+  session_id: this.session_id,
+  store: this.store,
+  list_messages: () => this.messages_by_id.values(),
+  is_held_by_writer: (message_id) => this.is_held_by_writer(message_id),
+  accept_message: (message, publish_mutation) => this.accept_message(message, publish_mutation),
+  project_mutation: (mutation, message) => this.accept_mutation(mutation, message),
+});
+```
+
+`accept_message` / `project_mutation` 的唯一职责是「落盘后写缓存 + 发 Mutation」，这是 `SessionMessages` 的领域职责，不该以闭包形式外借。方向：把「消息缓存 + Mutation 发布」抽成一个独立协作者，双方各持一份引用，而不是互相穿透。
+
+此项与批次 3 强相关，建议合并设计。
+
+#### 4.2 `validate_request` 里的业务校验
+
+`SessionInteractions.validate_request` 内含整段 `if (request.type === "question")` 的逐字段校验（`questions` / `options` / 唯一性）。通用交互运行时不该知道 Question 的 payload 形状。
+
+方向：每个 Interaction 类型自带校验函数，运行时只校验通用信封（`interaction_id` / `turn_id` / `source` / 过期）。
+
+```ts
+/** 单个 Interaction 类型的请求校验。 */
+interface SessionInteractionTypeValidator {
+  /** 该类型名。 */
+  type: string;
+  /** 校验 payload；失败抛错。 */
+  validate_request(request: SessionInteractionRequest): void;
+  /** 校验响应 payload 与请求的一致性。 */
+  validate_response(request: SessionInteractionRequest, response: SessionInteractionResponse): void;
+}
+```
+
+这需要一张注册表。属于新概念，应先写进 PRD 再动手。
+## 4. 需要先回答的问题
+
+**4.1 `state` 是否删列。** 本计划不含此项。当前状态是「值由一处推导、但仍落库」，语义已统一、存储仍冗余。删列前需确认没有外部直接读 `messages` 表（目前已知 desktop / ui / cli 都经 SDK 读取，未直接查库）。
+
+**4.2 Interaction 的终止语义（已解决）。** 见「批次 0」：两者都不再设置超时。
+
+**4.3 两处冗余发布的归属。** `part/tool state=ready` 连发两次（`prepare_tool_input` 与 `tool_call_finish` 各自落盘），以及 `list_messages()` 会返回未提交的草稿。两者都可单独修，但不属于本计划。
+
+## 5. 验证方式
+
+批次 1–3 均为行为不变，验收方式统一：
+
+```bash
+pnpm -C packages/type build && pnpm -C packages/agent build && pnpm -C packages/city build
+pnpm -C packages/agent typecheck && pnpm -C packages/agent test   # 75/75
+pnpm -C packages/city typecheck
+pnpm -C packages/city test                                        # 250/264，两个基线失败
+```
+
+批次 3 需要额外确认写路径无回归：`packages/city/test/session-messages.test.mjs`（覆盖流式、检查点、Tool gate、恢复）与 `session-interaction-*.test.mjs` 必须全绿。
+
+**已知基线失败（与本计划无关，已核实）**：
+
+- `ImagePlugin image_result stores remote images locally`
+- `running session approval mode changes stay queued until the next Session step`
+- 全仓库 `pnpm typecheck`：`templates/ui` 引用 `@downcity/ui` 未导出的 `ChatInputEditor`
+
+## 6. 建议顺序
+
+```mermaid
+flowchart LR
+    A[批次 0<br/>删 Interaction 超时] --> B[批次 1<br/>零风险清理]
+    B --> C[批次 2<br/>还本轮债]
+    C --> D[批次 3<br/>删 13 个转发]
+    D --> E[批次 4<br/>结构收敛]
+    E --> F[待定<br/>state 删列]
+```
+
+批次 1 与 2 可以立刻做，互不干扰，各自可单独回滚。批次 3 是收益最大的一项——它同时解决「薄封装」和「887 行神对象」两个问题，且行为不变。批次 4 涉及新概念，应先写设计。
