@@ -91,6 +91,7 @@ import { resolve_local_agent_env } from "@downcity/city/local";
 import { select_builtin_agent_avatar_path } from "./BuiltinAgentAvatar.js";
 import type { PluginJsonValue } from "@downcity/city/plugin";
 import { initialize_desktop_plugins } from "../plugin/PluginInitialization.js";
+import { to_desktop_workspace_summary } from "./WorkspaceSummary.js";
 
 const session_model_settings_key = "desktop.session-models";
 const session_reasoning_settings_key = "desktop.session-reasoning";
@@ -1643,28 +1644,6 @@ function to_desktop_agent_summary(record: Pick<LocalAgentConfig, "agent_id" | "n
     model_id: typeof record.execution?.model_id === "string" ? record.execution.model_id : "",
     version: record.version,
   };
-}
-
-/** 把 Registry Workspace 收敛成 Renderer 所需摘要。 */
-async function to_desktop_workspace_summary(record: LocalWorkspaceConfig): Promise<DesktopWorkspaceSummary> {
-  return {
-    workspace_id: record.workspace_id,
-    workspace_path: record.workspace_path,
-    name: record.name,
-    readme: await read_workspace_readme(record.workspace_path),
-    created_at: record.created_at,
-    updated_at: record.updated_at,
-  };
-}
-
-/** 读取 Workspace 根目录 README.md；文件不存在时视为空内容。 */
-async function read_workspace_readme(workspace_path: string): Promise<string> {
-  try {
-    return await readFile(path.join(workspace_path, "README.md"), "utf8");
-  } catch (reason) {
-    if ((reason as NodeJS.ErrnoException).code === "ENOENT") return "";
-    throw reason;
-  }
 }
 
 /** 把 SDK Group 收敛成 Renderer 所需的可序列化摘要。 */
