@@ -11,7 +11,6 @@ import { createRequire } from "node:module";
 import type { FeishuSdkModule } from "./types/FeishuSdk.js";
 
 const FEISHU_SDK_PACKAGE_NAME = "@larksuiteoapi/node-sdk";
-const FEISHU_SDK_VERSION_RANGE = "^1.66.0";
 const FEISHU_SDK_MISSING_ERROR_CODE = "DOWNCITY_FEISHU_SDK_MISSING";
 const require_from_current_module = createRequire(import.meta.url);
 
@@ -23,9 +22,32 @@ function is_missing_feishu_sdk_error(error: unknown): boolean {
   return code === "MODULE_NOT_FOUND" || code === "ERR_MODULE_NOT_FOUND";
 }
 
+/**
+ * 读取插件自身声明的 Feishu SDK 依赖范围。
+ *
+ * 关键点（中文）
+ * - 以 package.json 为唯一事实来源，避免错误信息与依赖声明各自漂移。
+ * - 仅在 SDK 缺失、需要给出安装指引时调用，因此不做缓存。
+ * - 读取失败时返回空字符串，错误信息退化为不带版本范围，不影响诊断。
+ */
+function resolve_declared_version_range(): string {
+  try {
+    const manifest = require_from_current_module("../../../../package.json") as {
+      dependencies?: Record<string, string>;
+    };
+    return String(manifest?.dependencies?.[FEISHU_SDK_PACKAGE_NAME] ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
 function create_missing_feishu_sdk_error(cause: unknown): Error {
+  const version_range = resolve_declared_version_range();
+  const requirement = version_range
+    ? `${FEISHU_SDK_PACKAGE_NAME}@${version_range}`
+    : FEISHU_SDK_PACKAGE_NAME;
   const error = new Error(
-    `Feishu channel requires ${FEISHU_SDK_PACKAGE_NAME}@${FEISHU_SDK_VERSION_RANGE}. ` +
+    `Feishu channel requires ${requirement}. ` +
       `Install it before enabling channel "feishu".`,
   );
   if (error && typeof error === "object") {
