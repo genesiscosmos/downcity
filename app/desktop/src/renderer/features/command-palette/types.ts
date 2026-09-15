@@ -196,6 +196,10 @@ export interface ShellCommandEnvironment {
   sidebar_collapsed: boolean;
   /** 切换左侧侧栏。 */
   toggle_sidebar(): void;
+  /** 右侧 BayBar 是否收起；用于命令标题在展开/收起之间切换。 */
+  baybar_collapsed: boolean;
+  /** 切换右侧 BayBar。 */
+  toggle_baybar(): void;
   /** 打开新建 Workspace 对话框。 */
   open_create_workspace(): void;
   /** 按当前导航目标新建对话；键位与命令共用同一实现。 */

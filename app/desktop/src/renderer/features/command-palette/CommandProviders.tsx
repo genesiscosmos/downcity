@@ -17,6 +17,7 @@ import {
   TbFolderPlus,
   TbHistory,
   TbLayoutSidebar,
+  TbLayoutSidebarRight,
   TbMessageCircle,
   TbMoodNeutral,
   TbMoon,
@@ -126,10 +127,20 @@ function use_navigation_commands(controller: DesktopController, shell: ShellComm
         run: () => shell.toggle_sidebar(),
       },
       {
+        id: "nav.toggle-baybar",
+        title: translate(shell.baybar_collapsed ? "command_palette.cmd.nav.toggle-baybar-show" : "command_palette.cmd.nav.toggle-baybar-hide"),
+        group: "navigation",
+        order: 5,
+        icon: <TbLayoutSidebarRight className="size-4" />,
+        shortcut: resolve_command_shortcut("nav.toggle-baybar", platform),
+        keywords: ["baybar", "panel", "right", "tab", "右侧", "面板", "标签"],
+        run: () => shell.toggle_baybar(),
+      },
+      {
         id: "nav.open-settings",
         title: translate("command_palette.cmd.nav.open-settings"),
         group: "navigation",
-        order: 5,
+        order: 6,
         icon: <TbSettings className="size-4" />,
         shortcut: resolve_command_shortcut("nav.open-settings", platform),
         keywords: ["settings", "preferences", "config", "设置", "偏好", "配置"],
@@ -139,7 +150,7 @@ function use_navigation_commands(controller: DesktopController, shell: ShellComm
         id: "nav.back-from-settings",
         title: translate("command_palette.cmd.nav.back-from-settings"),
         group: "navigation",
-        order: 6,
+        order: 7,
         icon: <TbArrowLeft className="size-4" />,
         shortcut: resolve_command_shortcut("nav.back-from-settings", platform),
         keywords: ["back", "return", "close", "返回", "退出设置"],
@@ -147,7 +158,7 @@ function use_navigation_commands(controller: DesktopController, shell: ShellComm
         run: () => actions.close_settings(),
       },
     ],
-    [actions, plugin_count, platform, selection_kind, shell.sidebar_collapsed, shell.toggle_sidebar, translate],
+    [actions, platform, plugin_count, selection_kind, shell.baybar_collapsed, shell.sidebar_collapsed, shell.toggle_baybar, shell.toggle_sidebar, translate],
   );
 }
 

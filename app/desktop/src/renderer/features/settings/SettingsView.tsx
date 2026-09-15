@@ -333,7 +333,9 @@ function ShortcutsSettings() {
     <SettingSection title={translate("shortcuts.global_navigation")}>
       <SettingGroup>
         <SettingItem label={translate("shortcuts.toggle_sidebar")} description={translate("shortcuts.toggle_sidebar_description")}><ShortcutKeys keys={["⌘ / Ctrl", "B"]} /></SettingItem>
-        <SettingItem label={translate("shortcuts.focus_chat_input")} description={translate("shortcuts.focus_chat_input_description")}><ShortcutAlternatives shortcuts={[["⌘ / Ctrl", "L"], ["⌘ / Ctrl", "I"]]} /></SettingItem>
+        <SettingItem label={translate("shortcuts.toggle_baybar")} description={translate("shortcuts.toggle_baybar_description")}><ShortcutKeys keys={["⌘ / Ctrl", "L"]} /></SettingItem>
+        {/* 「聚焦 Chat 输入框」的键位已从 L/I 收敛为 I：L 让给右侧面板的展开折叠。 */}
+        <SettingItem label={translate("shortcuts.focus_chat_input")} description={translate("shortcuts.focus_chat_input_description")}><ShortcutKeys keys={["⌘ / Ctrl", "I"]} /></SettingItem>
         <SettingItem label={translate("shortcuts.open_settings")} description={translate("shortcuts.open_settings_description")}><ShortcutKeys keys={["⌘ / Ctrl", ","]} /></SettingItem>
         <SettingItem label={translate("shortcuts.open_command_palette")} description={translate("shortcuts.open_command_palette_description")}><ShortcutKeys keys={["⌘ / Ctrl", "P"]} /></SettingItem>
         <SettingItem label={translate("shortcuts.new_conversation")} description={translate("shortcuts.new_conversation_description")}><ShortcutKeys keys={["⌘ / Ctrl", "R"]} /></SettingItem>

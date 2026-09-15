@@ -66,14 +66,10 @@ export function DesktopShell() {
   const open_group_from_sidebar = useCallback((group_id: string) => controller.actions.select_group(group_id), [controller.actions]);
   const open_create_workspace = useCallback(() => set_create_workspace_dialog_open(true), []);
   const toggle_sidebar = useCallback(() => set_sidebar_collapsed((value) => !value), []);
-  // 两侧面板的折叠状态都交给 MainViewHeader 用于避让各自的浮动按钮。
-  // BayBar 的折叠是派生值（没有激活的 tab 就是收起），因此在这里订阅一位布尔值，
-  // 而不是把面板 store 透给 MainView。
-  // 右侧按钮是壳层控件，始终存在，所以卡片收起态直接跟面板的开合走。
-  // 不能用「里面有没有 tab」判断：空白标签页也是展开状态，会错误地让出空间。
-  // 折叠只看 open：与左侧 Sidebar 的 sidebar_collapsed 完全同构。
-  // 不能用「里面有没有标签页」判断：空白标签页也是展开状态。
+  // BayBar 与 Sidebar 同构：只订阅一位布尔值，不把面板 store 透给 MainView。
+  // 判断依据只能是 open——空白标签页也是展开状态。
   const baybar_collapsed = use_store_selector(baybar.store, (state) => !state.open);
+  const toggle_baybar = baybar.toggle;
   const shell_layout = useMemo(() => ({ sidebar_collapsed, baybar_collapsed }), [baybar_collapsed, sidebar_collapsed]);
 
   /** 在当前导航目标上新建对话；⌘R 与命令面板的「新建对话」共用同一实现。 */
@@ -94,9 +90,11 @@ export function DesktopShell() {
   const shell_environment = useMemo<ShellCommandEnvironment>(() => ({
     sidebar_collapsed,
     toggle_sidebar,
+    baybar_collapsed,
+    toggle_baybar,
     open_create_workspace,
     create_conversation_in_context,
-  }), [create_conversation_in_context, open_create_workspace, sidebar_collapsed, toggle_sidebar]);
+  }), [baybar_collapsed, create_conversation_in_context, open_create_workspace, sidebar_collapsed, toggle_baybar, toggle_sidebar]);
 
   useEffect(() => {
     const handle_key_down = (event: KeyboardEvent) => {
@@ -125,7 +123,14 @@ export function DesktopShell() {
         toggle_sidebar();
         return;
       }
-      if (modifier && (key === "l" || key === "i")) {
+      // ⌘/Ctrl+L 切右侧面板。它此前是「聚焦 Chat 输入框」的键位之一；
+      // 该操作保留同义键 ⌘/Ctrl+I，因此没丢失键盘入口（设置页已同步说明）。
+      if (modifier && key === "l") {
+        event.preventDefault();
+        toggle_baybar();
+        return;
+      }
+      if (modifier && key === "i") {
         event.preventDefault();
         const input = document.querySelector<HTMLElement>("[data-chat-input='true']");
         input?.focus();
@@ -157,7 +162,7 @@ export function DesktopShell() {
     };
     window.addEventListener("keydown", handle_key_down, true);
     return () => window.removeEventListener("keydown", handle_key_down, true);
-  }, [command_palette_open, create_conversation_in_context, stable_controller, toggle_sidebar]);
+  }, [command_palette_open, create_conversation_in_context, stable_controller, toggle_baybar, toggle_sidebar]);
 
   useEffect(() => {
     const handle_link_click = (event: MouseEvent) => {
