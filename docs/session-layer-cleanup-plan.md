@@ -144,37 +144,43 @@ const total = await this.store.message_count();
 
 教训：这两层的 diff 看起来重复，实际一个是「持久化」事实、一个是「订阅」事实。任何合并它们的尝试都会失掉一层语义。
 
-### 批次 2：还清本轮欠债
+### 批次 2：`Session.ts` 的 Action 字面量（已撤销）
 
-#### 2.1 `Session.ts` 的四份 Action 字面量
+原判断：删掉 `emit_action_event` 后，同一段七字段对象字面量出现四次，应把「构造并提交一条 Action」收成助手。
 
-删掉 `emit_action_event` 后，同一段七字段对象字面量出现四次（fork 的 running/completed/failed + 压缩）。间接少了一层，重复多了三份。
-
-改法：把「构造并提交一条 Action」收成一个小助手，而不是让调用方每次拼字段。
+**核实后撤销。** 三个 fork 调用点共享的只有 `action_id`（一个变量）与 `action_type: "history-fork"`（一个字面量），差异是 `title` / `description` / `status`。
 
 ```ts
-// Session.ts
-/** 提交一条 Session 级 Action 事实。 */
-private async publish_action(input: {
-  action_id: string;
-  action_type: string;
-  title: string;
-  description?: string;
-  status: SessionActionStatus;
-  turn_id?: string;
-}): Promise<void> {
-  await this.session_messages.persist_action({
-    action_id: input.action_id,
-    action_type: input.action_type,
-    ...(input.turn_id ? { turn_id: input.turn_id } : {}),
-    title: input.title,
-    ...(input.description ? { description: input.description } : {}),
-    status: input.status,
-  });
+// Session.ts:492 / 515 / 524 —— 共享部分只有前两行
+await this.session_messages.persist_action({
+  action_id,                              // 同一个变量
+  action_type: "history-fork",            // 同一个字面量
+  title: "Forking session messages",      // ↓ 各自不同
+  description: `Preparing ${...} messages for the new session.`,
+  status: "running",
+});
+```
+
+而那个拟议中的助手——入参五字段、出参同样五字段——**就是被删掉的 `emit_action_event`**。批次 1 删它有理由（合并类型后它变成纯透传），批次 2 再加回来是循环。
+
+我把「共享字段名」误计成了「重复代码」。字段名一致是 API 形状，不是重复。
+
+#### 2.1 顺便发现的一个真问题（独立于本计划）
+
+`action_type` 不是精确协议。desktop 用子串匹配做展示分派：
+
+```ts
+// app/desktop/.../agent_activity_presentation.ts:128
+function resolve_agent_action_visual_kind(action_type: string): AgentActionVisualKind {
+  const normalized = action_type.toLowerCase();
+  if (normalized.includes("fork")) return "fork";
+  if (normalized.includes("compact")) return "compaction";
+  if (normalized.includes("command")) return "command";
+  return "generic";
 }
 ```
 
-四处的差异只有 `title` / `description` / `status`，可以降到一行调用。
+所以把 `"history-fork"` 提成共享常量治不了任何东西；真正脆的是这个子串匹配本身（任何含 `fork` 的 action_type 都会得到 fork 视觉）。若希望 action_type 成为真正的契约，需要双方改成精确枚举——那是独立议题。
 
 ### 批次 3：消掉 13 个转发方法（结构，行为不变）
 
@@ -282,11 +288,13 @@ pnpm -C packages/city test                                        # 250/264，�
 
 ```mermaid
 flowchart LR
-    A[批次 0<br/>删 Interaction 超时] --> B[批次 1<br/>零风险清理]
-    B --> C[批次 2<br/>还本轮债]
-    C --> D[批次 3<br/>删 13 个转发]
+    A[批次 0 · 已完成<br/>删 Interaction 超时] --> B[批次 1 · 已完成<br/>零风险清理]
+    B --> C[批次 2 · 已撤销<br/>经核实是循环]
+    C --> D[批次 3 · 待验证<br/>删 13 个转发]
     D --> E[批次 4<br/>结构收敛]
     E --> F[待定<br/>state 删列]
 ```
+
+批次 2 撤销后的教训适用于批次 3：本计划前两项都被核实推翻（1.3a 的重读、整个批次 2），说明「看起来重复」的判断不能直接采信。批次 3 动手前应先对其中一个转发方法做与 1.4 相同的探针验证。
 
 批次 1 与 2 可以立刻做，互不干扰，各自可单独回滚。批次 3 是收益最大的一项——它同时解决「薄封装」和「887 行神对象」两个问题，且行为不变。批次 4 涉及新概念，应先写设计。
