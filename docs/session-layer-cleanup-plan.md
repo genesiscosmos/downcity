@@ -1,6 +1,6 @@
 # Session 层代码收敛计划
 
-> 状态：待执行
+> 状态：已完成（批次 0–4 均已落地）
 >
 > 适用范围：`packages/agent/src/session`、`packages/agent/src/types/session`
 >
@@ -290,25 +290,20 @@ Tool 的 `ready` 状态有两个写入点：模型事件 `tool_call_finish` 与�
 
 修法在 `project_part`：内容未变化（`is_same_agent_part`）时不发布。实测变为 `input-streaming → ready`。这同时消除了同 revision、同内容的冗余事件。
 
-#### 4.4 `validate_request` 里的业务校验（待做）
+#### 4.4 `validate_request` 里的业务校验（已完成）
 
-`SessionInteractions.validate_request` 内含整段 `if (request.type === "question")` 的逐字段校验（`questions` / `options` / 唯一性）。通用交互运行时不该知道 Question 的 payload 形状。
+`SessionInteractions.validate_request` 原先内含整段 `if (request.type === "question")` 的逐字段校验（`questions` / `options` / 唯一性），`validate_response` 也按 `response_type` 判断回答该是字符串还是数组。通用交互运行时不该知道 Question 的 payload 形状。
 
-方向：每个 Interaction 类型自带校验函数，运行时只校验通用信封（`interaction_id` / `turn_id` / `source`）。
+**实际做法比原先设想的注册表更简单：校验归还给 payload 的生产者。**
 
-```ts
-/** 单个 Interaction 类型的请求校验。 */
-interface SessionInteractionTypeValidator {
-  /** 该类型名。 */
-  type: string;
-  /** 校验 payload；失败抛错。 */
-  validate_request(request: SessionInteractionRequest): void;
-  /** 校验响应 payload 与请求的一致性。 */
-  validate_response(request: SessionInteractionRequest, response: SessionInteractionResponse): void;
-}
-```
+- `SessionInteractions` 只校验通用信封：请求查 `interaction_id` / `turn_id` / `type` / `source` / `expires_at`，响应只查 `type` 一致与 `outcome` 合法。
+- `AskQuestionsTool` 在发起交互前跑自己的 zod schema；该 schema 本就存在，只是从未在运行时使用。
+- 回答由 `AskQuestionAnswers` 解释：按问题自身 `type` 收敛形状（单选收到数组取首项、多选收到字符串包成数组），并校验缺答、重复与越界选项。
 
-这需要一张注册表。属于新概念，应先写进 PRD 再动手。
+不引入注册表的理由：今天只有一个 question 生产者，运行时根本不需要按 `type` 查表——它不读 payload。将来若出现第二个生产者，它自带校验即可，仍不需要中心注册表。
+
+顺带去掉了一层字段改名：`SessionInteractionQuestion` 现在直接使用 `question` / `type`，与模型输入同名，只多一个生产者生成的 `question_id`。
+
 ## 5. 需要先回答的问题
 
 **5.1 `state` 列不删（经核实为持久化运行时事实）。** 本计划早期曾把它列为「待定」的删列项。核实后修正：`message.state` 在存储中回答的是「上次写入时该 Message 是否仍在写」，而 `held_by_writer` 是纯运行时事实（step 之间所有 Part 已终态但 writer 仍持有），**无法从 Parts 推出**。它不属于「存储了推导值」，落在存储层是合理的；真正的问题是写入方曾经用错误输入计算它（已由批次 1 修正）。
@@ -321,7 +316,7 @@ interface SessionInteractionTypeValidator {
 
 ## 6. 验证方式
 
-批次 1–3 均为行为不变，验收方式统一：
+批次 1–3 均为行为不变，验收方式统一（下计数为当时基线，现已随新增用例变化）：
 
 ```bash
 pnpm -C packages/type build && pnpm -C packages/agent build && pnpm -C packages/city build
@@ -346,9 +341,9 @@ flowchart LR
     B --> C[批次 2 · 撤销<br/>经核实是循环]
     C --> D[批次 3 · 完成<br/>抽缓存 + 删转发 + 去闭包]
     D --> E[批次 4 · 完成<br/>合并 Interaction 写入器<br/>删单字段包装<br/>去重复发布]
-    E --> F[待做<br/>validate_request 校验分层]
+    E --> F[完成<br/>validate_request 校验分层]
 ```
 
 一个适用到后续所有批次的教训：本计划已有三项判断被核实推翻（1.3a 的重读、整个批次 2、批次 3 的「13 个透传」）。共同点都是**从代码形状推断职责**，而没看那层实际在做什么。因此任何「看起来重复/多余」的删除，动手前先用探针确认它的真实职责。
 
-批次 1 与 2 可以立刻做，互不干扰，各自可单独回滚。批次 3 是收益最大的一项——它同时解决「薄封装」和「887 行神对象」两个问题，且行为不变。批次 4 涉及新概念，应先写设计。
+批次 1–4 均已落地。全过程反复出现的一个教训值得保留：本计划已有三项判断被核实推翻（1.3a 的重读、整个批次 2、批次 3 的「13 个透传」）。共同点都是**从代码形状推断职责**，而没看那层实际在做什么。因此任何「看起来重复/多余」的删除，动手前先用探针确认它的真实职责。

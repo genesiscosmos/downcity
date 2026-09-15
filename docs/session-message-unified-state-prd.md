@@ -433,14 +433,16 @@ agent seq=4  "第一段回答"     ← 新开
 
 | | `approval` | `question` |
 | --- | --- | --- |
-| `question_id` 由谁生成 | 无此字段 | **Session 生成**（Tool 只给 `question` 文本，Session 补 `question:<id>`） |
+| `question_id` 由谁生成 | 无此字段 | **生产者生成**（模型只给 `question` / `type` / `options`，Tool 补 `question:<id>`） |
 | `response_schema` | 有（`SESSION_APPROVAL_RESPONSE_SCHEMA`） | **无** |
 
 两者的终止方式一致：只能由用户响应，或随所属 Turn/Session 结束而被取消。均无超时。
 
 > 修订（后续已落地）：本节最初记录的是「Approval 设 7000s 超时、Question 不设」，视为语义不对称。该不对称已被消除——**两者都不再设置超时**，`expires_at` 与 `expired` 终态已从协议中删除。详见 `session-layer-cleanup-plan.md` 的「批次 0」。
 
-回答校验（`SessionInteractions.validate_response`）实测生效：单选给数组立即被拒（`Session Interaction answer must be a string`），选项校验也在。
+> 修订：本节最初写的是「Session 生成 `question_id`」，但实际一直由发起交互的 Tool 生成；已按现状更正。
+
+回答校验不由核心负责（后续已落地）：`SessionInteractions` 只校验通用信封，Question 的 payload 由生产者解释。此前核心里的 `validate_response` 会因单选回答是数组而报 `Session Interaction answer must be a string`；现在这类形状差异在 `AskQuestionsTool` 一侧收敛（单选收到数组取首项），缺答、重复与越界选项仍会报错。
 
 ## 附录 B：已观察但不在本次范围
 
