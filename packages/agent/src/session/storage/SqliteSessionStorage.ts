@@ -330,6 +330,15 @@ export class SqliteSessionStorage implements SessionStorage {
     };
   }
 
+  /** 读取已持久化 Message 总数；不读最新 Message，也不计算文件大小。 */
+  async message_count(): Promise<number> {
+    await this.initialize();
+    const row = this.require_database().prepare(
+      "SELECT message_count FROM session_state WHERE singleton_id = 1",
+    ).get() as { message_count: number } | undefined;
+    return row?.message_count ?? 0;
+  }
+
   /** 清空 Message；外键负责同步删除 Part 与正确关联的派生数据。 */
   async clear_messages(): Promise<void> {
     await this.initialize();

@@ -92,6 +92,18 @@ export type SessionUserMessagePart =
   | SessionUserFilePart
   | SessionUserDataPart;
 
+/**
+ * 尚未分配身份与顺序的 User Part。
+ *
+ * 调用方只能提供内容：`part_id` 在存储中是全局主键，`sequence` 是消息内的位置，
+ * 两者都必须由拥有该消息的一方统一分配，否则多个 Message 会产生相同的 `part_id`。
+ */
+export type SessionUserPartContent =
+  | Omit<SessionUserTextPart, "part_id" | "sequence">
+  | Omit<SessionUserContextPart, "part_id" | "sequence">
+  | Omit<SessionUserFilePart, "part_id" | "sequence">
+  | Omit<SessionUserDataPart, "part_id" | "sequence">;
+
 /** User 顶层 Message。 */
 export interface SessionUserMessage extends SessionMessageBase {
   /** Message 主体角色固定为 user。 */

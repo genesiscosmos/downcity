@@ -33,10 +33,8 @@ export function resolve_execution_target(value: unknown): "sandbox" | "host" {
   return value === "host" ? "host" : "sandbox";
 }
 
-function approval_denied_message(status: ShellApprovalStatus): string {
-  return status === "expired"
-    ? "Host execution approval expired."
-    : "User denied host execution.";
+function approval_denied_message(): string {
+  return "User denied host execution.";
 }
 
 /**
@@ -77,7 +75,7 @@ export function build_denied_approval_response(params: {
   approval_status: ShellApprovalStatus;
 }): ShellActionResponse {
   const now = now_ms();
-  const message = approval_denied_message(params.approval_status);
+  const message = approval_denied_message();
   return build_action_response({
     shell: {
       shell_id: params.shell_id,
@@ -91,7 +89,7 @@ export function build_denied_approval_response(params: {
       approval_id: params.approval_id,
       approval_reason: params.reason,
       stdin_writable: true,
-      status: params.approval_status === "expired" ? "expired" : "failed",
+      status: "failed",
       started_at: now,
       updated_at: now,
       ended_at: now,
@@ -138,7 +136,7 @@ export function build_denied_write_approval_response(params: {
    */
   approval_status: ShellApprovalStatus;
 }): ShellActionResponse {
-  const message = approval_denied_message(params.approval_status);
+  const message = approval_denied_message();
   return build_action_response({
     shell: {
       ...params.session.snapshot,

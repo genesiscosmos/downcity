@@ -14,7 +14,7 @@ source, the Tool and Interaction change atomically in one Assistant revision:
 ```text
 create:  Tool ready -> waiting-user + Interaction pending
 respond: Interaction resolved + Tool running / failed
-close:   Interaction expired / cancelled + Tool failed
+close:   Interaction cancelled + Tool failed
 ```
 
 ## Subscribe and respond
@@ -54,6 +54,10 @@ for (const { request } of pending) {
   else render_questions(request.payload.questions);
 }
 ```
+
+Approval requests also carry a `response_schema` that describes the required response shape.
+Shell approval and Tool approval share one default schema, exported as
+`SESSION_APPROVAL_RESPONSE_SCHEMA` (it requires `decision` to be `approved` or `denied`).
 
 Questions support `text`, `single_select`, and `multi_select`. Answers must cover every requested
 `question_id`:
@@ -222,7 +226,7 @@ Setting the same approval mode is idempotent and does not create another configu
 - Use `interaction_id` as the stable card key.
 - For any source with `source.tool_call_id`, link it with that Tool Call ID.
 - Keep a `waiting-user` Tool in a waiting state; do not synthesize running or success client-side.
-- `resolved`, `expired`, and `cancelled` are terminal and cannot be answered again.
+- `resolved`, `denied`, `cancelled`, and `failed` are terminal and cannot be answered again. Interactions never time out: they end when the user responds or when the Turn/Session closes.
 - Clear old Interaction UI when switching Sessions; never send an old Session's ID to a new one.
 
 See [Messages and Parts](/en/agent-sdk-docs/sessions/messages) for complete Part states.

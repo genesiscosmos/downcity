@@ -11,6 +11,7 @@ import type {
   ShellApprovalRequest,
   ShellApprovalStatus,
 } from "@downcity/type";
+import { SESSION_APPROVAL_RESPONSE_SCHEMA } from "@downcity/type";
 import type { SessionInteractions } from "@/session/control/SessionInteractions.js";
 import type { SessionApprovalMode } from "@downcity/type";
 import { generate_id } from "@/utils/Id.js";
@@ -68,22 +69,14 @@ export class SessionShellApprovalAdapter implements ShellApprovalGateway {
         cwd: input.cwd,
         reason: input.reason,
       },
-      response_schema: {
-        type: "object",
-        required: ["decision"],
-        properties: {
-          decision: { type: "string", enum: ["approved", "denied"] },
-        },
-      },
+      response_schema: SESSION_APPROVAL_RESPONSE_SCHEMA,
       created_at,
-      expires_at: created_at + input.timeout_ms,
     });
 
     return {
       approval_id: interaction_id,
       requires_user_decision: true,
       decision: handle.result.then((result): ShellApprovalStatus => {
-        if (result.status === "expired") return "expired";
         if (result.status !== "resolved") return "denied";
         if (result.response.outcome !== "resolved" || result.response.type !== "approval") return "denied";
         const payload = result.response.payload;

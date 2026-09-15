@@ -1,4 +1,8 @@
-/** @downcity/type/session：Session 跨包数据协议入口。 */
+/**
+ * @downcity/type/session：Session 跨包数据协议入口。
+ *
+ * 这里同时导出 Session 领域类型与跨包共享的协议常量。
+ */
 export type {
   JsonObject,
   JsonPrimitive,
@@ -19,7 +23,7 @@ export {
   is_chat_runtime_context_tag,
   type ChatRuntimeContextTag,
 } from "./types/session/SessionUserContextTags.js";
-export type * from "./types/session/SessionInteraction.js";
+export * from "./types/session/SessionInteraction.js";
 export type * from "./types/session/SessionAction.js";
 export type * from "./types/session/SessionTurnFileDiff.js";
 export * from "./types/session/SessionMutation.js";

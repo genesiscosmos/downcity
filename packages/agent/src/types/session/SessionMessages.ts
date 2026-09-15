@@ -12,10 +12,7 @@ import type {
   SessionAgentContent,
   SessionUserContent,
 } from "@downcity/type";
-import type {
-  SessionAgentMessagePart,
-  SessionUserMessagePart,
-} from "@downcity/type";
+import type { SessionUserPartContent } from "@downcity/type";
 import type { SessionMutation } from "@downcity/type";
 
 /** SessionMessages 构造参数。 */
@@ -34,8 +31,8 @@ export interface SessionMessagesOptions {
 export interface AppendSessionUserMessageInput {
   /** 当前输入所属 Turn。 */
   turn_id: string;
-  /** User 结构化 Part。 */
-  parts: SessionUserMessagePart[];
+  /** User 内容 Part；identity 与顺序由 SessionMessages 分配。 */
+  parts: SessionUserPartContent[];
   /** 可选的稳定 Message 标识。 */
   message_id?: string;
   /** 当前 Message 的默认展示范围。 */
@@ -50,34 +47,6 @@ export interface OpenSessionAgentMessageInput {
   visibility?: "visible" | "internal";
   /** 可选的稳定 Message 标识。 */
   message_id?: string;
-}
-
-/** 已完成 Assistant Message 的直接写入参数。 */
-export interface AppendCompletedAgentMessageInput {
-  /** 当前 Assistant 所属 Turn。 */
-  turn_id?: string;
-  /** Assistant 完整结构化 Part。 */
-  parts: SessionAgentMessagePart[];
-  /** 当前 Message 的默认展示范围。 */
-  visibility?: "visible" | "internal";
-}
-
-/** Action Part 及其所属 Agent Message 的创建参数。 */
-export interface OpenSessionAgentActionPartInput {
-  /** 可选的稳定 Message 标识，用于更新同一个 Action 生命周期。 */
-  message_id?: string;
-  /** 当前 Action 所属 Turn。 */
-  turn_id?: string;
-  /** 当前 Action 的业务类型。 */
-  action_type: string;
-  /** 当前 Action 标题。 */
-  title: string;
-  /** 当前 Action 描述。 */
-  description?: string;
-  /** 当前 Action 附加数据。 */
-  data?: JsonObject;
-  /** Action 创建或更新后是否发布对应 Session Mutation。 */
-  publish_mutation?: boolean;
 }
 
 /** 完成 Action Part 时允许覆盖的内容。 */

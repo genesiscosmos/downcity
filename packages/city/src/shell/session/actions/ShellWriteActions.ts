@@ -76,7 +76,6 @@ export async function write_shell_session(
       input_preview: chars,
       input_chars: chars.length,
       ...(request.tool_call_id ? { tool_call_id: request.tool_call_id } : {}),
-      timeout_ms: state.options.default_approval_timeout_ms,
     });
     approval_id = approval.approval_id;
     approval_status = approval.status;

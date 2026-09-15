@@ -112,6 +112,8 @@ export interface SessionStorage {
   read_latest_agent_message(turn_id?: string): Promise<SessionAgentMessage | null>;
   /** 读取 Message 统计。 */
   message_stats(): Promise<SessionMessageStorageStats>;
+  /** 读取已持久化 Message 总数；只做计数，不读取内容。 */
+  message_count(): Promise<number>;
   /** 清空 canonical Message 与依赖它们的派生数据。 */
   clear_messages(): Promise<void>;
   /** 返回当前 Composer Policy 的派生存储视图。 */

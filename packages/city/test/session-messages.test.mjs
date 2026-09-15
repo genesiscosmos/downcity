@@ -136,8 +136,6 @@ test("User Context Part 保持 canonical 结构并安全映射到模型文本", 
     context: "A < B & C > D",
   }]);
   assert.deepEqual(parts, [{
-    part_id: "user-context:1",
-    sequence: 1,
     type: "context",
     tag: "quoted_message",
     context: "A < B & C > D",
@@ -513,11 +511,11 @@ test("重启时收口流式 Assistant 和运行中 Action", async () => {
   await writer.begin_step();
   await writer.apply_model_event({ type: "text_start", content_id: "text-1" });
   await writer.apply_model_event({ type: "text_delta", content_id: "text-1", delta: "partial" });
-  await harness.recorder.open_action_part({
-    message_id: "action-1",
-    turn_id: "turn-1",
+  await harness.recorder.persist_action({
+    action_id: "action-1",
     action_type: "test",
     title: "Running action",
+    status: "running",
   });
   assert.equal(
     (await harness.store.read_message("action-1")).state,
@@ -556,13 +554,18 @@ test("重启时收口流式 Assistant 和运行中 Action", async () => {
 
 test("Action 更新保留 identity 并只读取最新 revision", async () => {
   const { recorder } = await create_recorder("action-revision-test");
-  const writer = await recorder.open_action_part({
-    message_id: "action-1",
-    turn_id: "turn-1",
+  await recorder.persist_action({
+    action_id: "action-1",
     action_type: "deploy",
     title: "Deploying",
+    status: "running",
   });
-  await writer.complete();
+  await recorder.persist_action({
+    action_id: "action-1",
+    action_type: "deploy",
+    title: "Deploying",
+    status: "completed",
+  });
   const page = await recorder.list_messages();
   assert.equal(page.items.length, 1);
   assert.equal(page.items[0].message_id, "action-1");
@@ -575,14 +578,10 @@ test("Action 更新保留 identity 并只读取最新 revision", async () => {
 test("Adaptive Part Policy 可在单个 Agent Message 内建立摘要边界", async () => {
   const session_id = "compact-model-history-test";
   const { recorder, store, root_path } = await create_recorder(session_id);
-  await recorder.append_completed_agent_message({
-    turn_id: "turn-1",
+  await recorder.append_external_agent_message({
     parts: Array.from({ length: 6 }, (_, index) => ({
-      part_id: `text-${String(index + 1)}`,
-      sequence: index + 1,
       type: "text",
       text: `part ${String(index + 1)}`,
-      state: "done",
     })),
   });
   let summary_prompt = "";
@@ -625,14 +624,10 @@ test("Adaptive Part Policy 可在单个 Agent Message 内建立摘要边界", as
 test("Adaptive Part Policy 可压缩单个占满上下文的 Part", async () => {
   const session_id = "compact-single-large-part-test";
   const { recorder, store, root_path } = await create_recorder(session_id);
-  await recorder.append_completed_agent_message({
-    turn_id: "turn-1",
+  await recorder.append_external_agent_message({
     parts: [{
-      part_id: "large-text",
-      sequence: 1,
       type: "text",
       text: "large context ".repeat(1_000),
-      state: "done",
     }],
   });
   const model = new MockModelClient({

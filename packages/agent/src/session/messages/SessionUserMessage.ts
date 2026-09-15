@@ -1,38 +1,32 @@
 /**
  * Session User Message 与公开输入 Part 的 canonical 转换规则。
  *
- * 本模块只进行确定性数据归一化，不持有 Message、Store 或 Session 状态。
+ * 本模块只做内容归一化：把调用方提供的内容转成确定、可持久化的形状，
+ * 不分配 `part_id` 与 `sequence`——identity 属于拥有该消息的一方。
  */
 
 import type {
   SessionAgentContent,
   SessionUserContent,
+  SessionUserPartContent,
 } from "@downcity/type";
-import type { SessionUserMessagePart } from "@downcity/type";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import {
   normalize_session_context_content,
   normalize_session_context_tag,
 } from "@/session/messages/SessionUserContext.js";
 
-/** 把 Downcity Session User parts 归一为 canonical User parts。 */
+/** 把 Downcity Session User 输入归一为尚未分配身份的内容 Part。 */
 export function normalize_session_user_parts(
   parts: SessionUserContent[] | null | undefined,
-): SessionUserMessagePart[] {
+): SessionUserPartContent[] {
   if (!Array.isArray(parts)) return [];
-  return parts.flatMap<SessionUserMessagePart>((part, index) => {
+  return parts.flatMap<SessionUserPartContent>((part) => {
     if (part.type === "text") {
-      return [{
-        part_id: `user-text:${index + 1}`,
-        sequence: index + 1,
-        type: "text",
-        text: part.text,
-      }];
+      return [{ type: "text", text: part.text }];
     }
     if (part.type === "context") {
       return [{
-        part_id: `user-context:${index + 1}`,
-        sequence: index + 1,
         type: "context",
         tag: normalize_session_context_tag(part.tag),
         context: normalize_session_context_content(part.context),
@@ -40,8 +34,6 @@ export function normalize_session_user_parts(
     }
     if (part.type === "file") {
       return [{
-        part_id: `user-file:${index + 1}`,
-        sequence: index + 1,
         type: "file",
         url: part.url,
         media_type: part.media_type,
@@ -49,28 +41,11 @@ export function normalize_session_user_parts(
       }];
     }
     return [{
-      part_id: `user-data:${index + 1}`,
-      sequence: index + 1,
       type: "data",
       data_type: part.data_type,
       data: to_session_json_value(part.data),
       ...(part.data_id ? { data_id: part.data_id } : {}),
     }];
-  });
-}
-
-/** 校验直接写入的 canonical User Parts，并保留已有 Part identity。 */
-export function normalize_canonical_session_user_parts(
-  parts: readonly SessionUserMessagePart[],
-): SessionUserMessagePart[] {
-  return parts.map((part, index) => {
-    const canonical = { ...structuredClone(part), sequence: index + 1 };
-    if (canonical.type !== "context") return canonical;
-    return {
-      ...canonical,
-      tag: normalize_session_context_tag(canonical.tag),
-      context: normalize_session_context_content(canonical.context),
-    };
   });
 }
 

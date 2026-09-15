@@ -97,8 +97,6 @@ export async function request_host_approval(params: {
   input_chars?: number;
   /** 当前 Downcity Tool Call。 */
   tool_call_id?: string;
-  /** 人工审批最长等待时间。 */
-  timeout_ms: number;
 }): Promise<{
   /** 当前审批请求标识。 */
   approval_id: string;
@@ -157,7 +155,6 @@ export async function request_host_approval(params: {
     operation,
     ...(input_preview !== undefined ? { input_preview } : {}),
     ...(typeof params.input_chars === "number" ? { input_chars: params.input_chars } : {}),
-    timeout_ms: params.timeout_ms,
   });
   await append_audit({
     context: params.context,

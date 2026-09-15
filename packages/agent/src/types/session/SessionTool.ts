@@ -6,8 +6,8 @@
 
 import type { SessionAgentToolPart } from "@downcity/type";
 
-/** 当前流式 Assistant 中的 Tool Part 定位结果。 */
-export interface SessionStreamingToolLocation {
+/** 当前可写 Agent Message 中的 Tool Part 定位结果。 */
+export interface SessionOpenMessageToolLocation {
   /** Tool Part 所属 Assistant Message。 */
   message_id: string;
   /** 当前 Tool Part 完整快照。 */

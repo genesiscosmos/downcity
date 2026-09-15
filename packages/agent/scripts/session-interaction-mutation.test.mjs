@@ -37,7 +37,7 @@ function create_writer_fixture() {
   };
   const writer = new SessionMessageInteractionWriter({
     list_messages: () => [message],
-    find_streaming_tool: (tool_call_id) => {
+    find_tool_in_open_message: (tool_call_id) => {
       const part = message.parts.find(
         (item) => item.type === "tool" && item.tool_call_id === tool_call_id,
       );

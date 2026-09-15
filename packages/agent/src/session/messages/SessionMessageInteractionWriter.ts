@@ -20,16 +20,16 @@ import type {
   SessionInteractionRequest,
   SessionInteractionResponse,
 } from "@downcity/type";
-import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
+import type { SessionOpenMessageToolLocation } from "@/types/session/SessionTool.js";
 
 /** Interaction 写入器依赖的最小 Message 能力。 */
 interface SessionMessageInteractionWriterOptions {
   /** 返回当前 Session 内存中的 canonical Message 集合。 */
   list_messages: () => Iterable<SessionMessage>;
-  /** 查找当前流式 Assistant 中的指定 Tool Part。 */
-  find_streaming_tool: (
+  /** 查找当前可写 Agent Message 中的指定 Tool Part。 */
+  find_tool_in_open_message: (
     tool_call_id: string,
-  ) => SessionStreamingToolLocation | undefined;
+  ) => SessionOpenMessageToolLocation | undefined;
   /** 在指定 Assistant Message 的串行事务链中执行写操作。 */
   enqueue_assistant_write: <T>(
     message_id: string,
@@ -63,7 +63,7 @@ export class SessionMessageInteractionWriter {
   /** 返回当前 Session 中全部等待用户响应的 Interaction。 */
   list_pending(): SessionAgentInteraction[] {
     return [...this.options.list_messages()].flatMap((message) =>
-      message.role === "agent" && message.state === "streaming"
+      message.role === "agent"
         ? message.parts.flatMap((part) =>
             part.type === "tool"
               ? (part.interactions ?? []).flatMap((interaction) =>
@@ -82,11 +82,11 @@ export class SessionMessageInteractionWriter {
     request: SessionInteractionRequest,
   ): Promise<SessionAgentInteraction> {
     const tool_call_id = request.source.tool_call_id;
-    const tool = this.require_streaming_tool(tool_call_id);
+    const tool = this.require_open_message_tool(tool_call_id);
     await this.options.enqueue_assistant_write(
       tool.message_id,
       async () => {
-        const current = this.require_streaming_assistant(tool.message_id);
+        const current = this.require_open_message(tool.message_id);
         const owner = current.parts.find(
           (part): part is SessionAgentToolPart =>
             part.type === "tool" && part.tool_call_id === tool_call_id,
@@ -140,7 +140,7 @@ export class SessionMessageInteractionWriter {
     await this.options.enqueue_assistant_write(
       location.message_id,
       async () => {
-        const current = this.require_streaming_assistant(location.message_id);
+        const current = this.require_open_message(location.message_id);
         const owner = require_tool_in(current, location.tool.part_id);
         if (owner.state !== "waiting-user") {
           throw new Error(
@@ -173,28 +173,23 @@ export class SessionMessageInteractionWriter {
     input: SessionInteractionCloseInput,
   ): Promise<SessionAgentInteraction> {
     const location = this.require_pending_interaction(interaction_id);
-    const error = input.status === "expired"
-      ? "Interaction expired"
-      : "Interaction cancelled";
     await this.options.enqueue_assistant_write(
       location.message_id,
       async () => {
-        const current = this.require_streaming_assistant(location.message_id);
+        const current = this.require_open_message(location.message_id);
         const owner = require_tool_in(current, location.tool.part_id);
         await this.options.commit_assistant_snapshot(
           current,
           replace_tool(current.parts, {
             ...owner,
             ...(owner.state === "waiting-user"
-              ? { state: "failed" as const, error }
+              ? { state: "failed" as const, error: "Interaction cancelled" }
               : {}),
             interactions: update_interaction(owner, interaction_id, (item) => ({
               ...item,
-              status: input.status,
+              status: "cancelled",
               resolved_at: Date.now(),
-              ...(input.status === "cancelled"
-                ? { cancel_reason: input.reason }
-                : {}),
+              cancel_reason: input.reason,
             })),
           }),
         );
@@ -203,8 +198,8 @@ export class SessionMessageInteractionWriter {
     return this.require_interaction(interaction_id).interaction;
   }
 
-  /** 读取指定或当前唯一的流式 Assistant Message。 */
-  private require_streaming_assistant(
+  /** 读取指定或当前唯一的可写 Assistant Message。 */
+  private require_open_message(
     message_id?: string,
   ): SessionAgentMessage {
     const message = message_id
@@ -212,24 +207,24 @@ export class SessionMessageInteractionWriter {
           (item) => item.message_id === message_id,
         )
       : [...this.options.list_messages()].find(
-          (item) => item.role === "agent" && item.state === "streaming",
+          (item) => item.role === "agent",
         );
-    if (!message || message.role !== "agent" || message.state !== "streaming") {
+    if (!message || message.role !== "agent") {
       throw new Error(
         message_id
-          ? `Streaming Assistant Message not found: ${message_id}`
-          : "Streaming Assistant Message not found",
+          ? `Writable Assistant Message not found: ${message_id}`
+          : "Writable Assistant Message not found",
       );
     }
     return message;
   }
 
-  /** 查找指定 Interaction 及其所属 Tool 与流式 Assistant。 */
+  /** 查找指定 Interaction 及其所属 Tool 与可写 Assistant。 */
   private find_interaction(
     interaction_id: string,
   ): SessionInteractionLocation | undefined {
     for (const message of this.options.list_messages()) {
-      if (message.role !== "agent" || message.state !== "streaming") continue;
+      if (message.role !== "agent") continue;
       for (const part of message.parts) {
         if (part.type !== "tool") continue;
         const interaction = (part.interactions ?? []).find(
@@ -263,9 +258,9 @@ export class SessionMessageInteractionWriter {
     return interaction;
   }
 
-  /** 查找当前流式 Assistant 中的 Tool Part，否则抛出明确错误。 */
-  private require_streaming_tool(tool_call_id: string): SessionStreamingToolLocation {
-    const tool = this.options.find_streaming_tool(tool_call_id);
+  /** 查找当前可写 Agent Message 中的 Tool Part，否则抛出明确错误。 */
+  private require_open_message_tool(tool_call_id: string): SessionOpenMessageToolLocation {
+    const tool = this.options.find_tool_in_open_message(tool_call_id);
     if (tool) return tool;
     throw new Error(`Streaming Tool Part not found: ${tool_call_id}`);
   }

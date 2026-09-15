@@ -62,7 +62,6 @@ function flatten_shell_action_response(params: {
   const exit_code = typeof shell_snapshot.exit_code === "number" ? shell_snapshot.exit_code : null;
   const success =
     shell_snapshot.approval_status !== "denied" &&
-    shell_snapshot.approval_status !== "expired" &&
     (exit_code === null || exit_code === 0);
   return {
     success,
@@ -125,7 +124,6 @@ function flatten_shell_exec_response(params: {
   const exit_code = typeof shell_snapshot.exit_code === "number" ? shell_snapshot.exit_code : null;
   const success =
     shell_snapshot.approval_status !== "denied" &&
-    shell_snapshot.approval_status !== "expired" &&
     (exit_code === null || exit_code === 0);
   return {
     success,

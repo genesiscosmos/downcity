@@ -35,8 +35,6 @@ export interface ShellApprovalRequest {
   input_preview?: string;
   /** stdin 写入字符数，仅 write 操作存在。 */
   input_chars?: number;
-  /** 当前请求等待人工决定的最长时间。 */
-  timeout_ms: number;
 }
 
 /** 宿主创建审批请求后返回给 Shell 的等待句柄。 */

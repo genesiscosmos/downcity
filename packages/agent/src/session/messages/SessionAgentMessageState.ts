@@ -8,6 +8,7 @@
 import { generate_id } from "@/utils/Id.js";
 import { SessionMessageInteractionWriter } from "@/session/messages/SessionMessageInteractionWriter.js";
 import { create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
+import { resolve_session_message_state } from "@/session/messages/SessionMessageState.js";
 import { next_agent_part_sequence, resolve_changed_agent_parts } from "@/session/messages/SessionAgentParts.js";
 import type {
   SessionAgentErrorPart,
@@ -22,7 +23,7 @@ import type {
   SessionInteractionRequest,
   SessionInteractionResponse,
 } from "@downcity/type";
-import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
+import type { SessionOpenMessageToolLocation } from "@/types/session/SessionTool.js";
 import type { SessionAgentMessageStateOptions } from "@/types/session/SessionAgentMessageState.js";
 
 /** 管理 Agent Message 运行投影、语义检查点与 Interaction 原子状态。 */
@@ -38,7 +39,7 @@ export class SessionAgentMessageState {
     this.options = options;
     this.interaction_writer = new SessionMessageInteractionWriter({
       list_messages: options.list_messages,
-      find_streaming_tool: (tool_call_id) => this.find_streaming_tool(tool_call_id),
+      find_tool_in_open_message: (tool_call_id) => this.find_tool_in_open_message(tool_call_id),
       enqueue_assistant_write: (message_id, operation) =>
         this.enqueue_write(message_id, operation),
       commit_assistant_snapshot: (current, parts) =>
@@ -48,7 +49,7 @@ export class SessionAgentMessageState {
 
   /** 只在内存中创建或替换一个 Part，并立即发布实时完整 Part。 */
   project_part(message_id: string, part: SessionAgentMessagePart): void {
-    const current = this.require_streaming_agent(message_id);
+    const current = this.require_writable_agent(message_id);
     const existing = current.parts.find((item) => item.part_id === part.part_id);
     if (existing && existing.sequence !== part.sequence) {
       throw new Error(`Agent Part sequence changed: ${part.part_id}`);
@@ -84,7 +85,7 @@ export class SessionAgentMessageState {
     tool_call_id?: string,
   ): void {
     if (!delta) return;
-    const current = this.require_streaming_agent(message_id);
+    const current = this.require_writable_agent(message_id);
     let matched = false;
     const projected: SessionAgentMessage = {
       ...current,
@@ -133,7 +134,7 @@ export class SessionAgentMessageState {
   /** 将当前内存投影作为一个稳定语义检查点原子提交。 */
   async checkpoint(message_id: string): Promise<void> {
     await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_agent(message_id);
+      const current = this.require_writable_agent(message_id);
       await this.persist_snapshot(message_id, current.parts);
     });
   }
@@ -144,7 +145,7 @@ export class SessionAgentMessageState {
     parts: SessionAgentMessagePart[],
   ): Promise<void> {
     await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_agent(message_id);
+      const current = this.require_writable_agent(message_id);
       if (
         parts.length !== current.parts.length ||
         parts.some((part, index) =>
@@ -171,7 +172,7 @@ export class SessionAgentMessageState {
   ): Promise<void> {
     if (parts.length === 0) return;
     await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_agent(message_id);
+      const current = this.require_writable_agent(message_id);
       const replacements = new Map(parts.map((part) => [part.part_id, structuredClone(part)]));
       const existing_ids = new Set(current.parts.map((part) => part.part_id));
       const merged = current.parts.map((part) => replacements.get(part.part_id) ?? part);
@@ -204,7 +205,7 @@ export class SessionAgentMessageState {
     error?: string,
   ): Promise<void> {
     await this.enqueue_write(message_id, async () => {
-      const current = this.require_streaming_agent(message_id);
+      const current = this.require_writable_agent(message_id);
       const completed_at = Date.now();
       const parts: SessionAgentMessagePart[] = current.parts.map((part) => {
         if (part.type === "text" || part.type === "reasoning") {
@@ -257,14 +258,14 @@ export class SessionAgentMessageState {
       } else if (outcome === "failed" && error && !parts.some((part) => part.type === "error")) {
         parts.push(create_terminal_error_part(parts, "turn_execution_failed", error));
       }
-      await this.persist_snapshot(message_id, parts, { state: "done" });
+      await this.persist_snapshot(message_id, parts, { held_by_writer: false });
     });
   }
 
-  /** 读取当前流式 Agent Message 中的指定 Tool Part。 */
-  find_streaming_tool(tool_call_id: string): SessionStreamingToolLocation | undefined {
+  /** 读取当前可写 Agent Message 中的指定 Tool Part。 */
+  find_tool_in_open_message(tool_call_id: string): SessionOpenMessageToolLocation | undefined {
     for (const message of this.options.list_messages()) {
-      if (message.role !== "agent" || message.state !== "streaming") continue;
+      if (message.role !== "agent") continue;
       const part = message.parts.find(
         (item): item is SessionAgentToolPart =>
           item.type === "tool" && item.tool_call_id === tool_call_id,
@@ -307,23 +308,29 @@ export class SessionAgentMessageState {
     message_id: string,
     parts: SessionAgentMessagePart[],
     options?: {
-      /** 快照落盘后的 Message 状态；检查点默认保持 streaming。 */
-      state?: SessionAgentMessage["state"];
+      /** 本次提交后是否仍由 writer 持有；收口时传 false。省略时读取当前持有关系。 */
+      held_by_writer?: boolean;
       /** 是否向订阅方发布 Message Mutation。 */
       publish_mutation?: boolean;
     },
   ): Promise<void> {
     const persisted = await this.options.store.read_message(message_id);
-    if (!persisted || persisted.role !== "agent" || persisted.state !== "streaming") {
-      throw new Error(`Persisted streaming Agent Message not found: ${message_id}`);
+    if (!persisted || persisted.role !== "agent") {
+      throw new Error(`Agent Message not found: ${message_id}`);
     }
     const committed_at = Date.now();
+    const next_parts = structuredClone(parts).sort(
+      (left, right) => left.sequence - right.sequence,
+    );
     const message: SessionAgentMessage = {
       ...persisted,
-      state: options?.state ?? "streaming",
+      state: resolve_session_message_state(
+        next_parts,
+        options?.held_by_writer ?? this.options.is_held_by_writer(message_id),
+      ),
       revision: persisted.revision + 1,
       updated_at: committed_at,
-      parts: structuredClone(parts).sort((left, right) => left.sequence - right.sequence),
+      parts: next_parts,
     };
     const changed_parts = resolve_changed_agent_parts(persisted.parts, message.parts);
     await this.options.store.update_message({
@@ -350,16 +357,13 @@ export class SessionAgentMessageState {
     }
   }
 
-  /** 读取当前运行投影中的可写 Agent Message。 */
-  private require_streaming_agent(message_id: string): SessionAgentMessage {
+  /** 读取当前运行投影中的可写 Agent Message；只有 writer 持有的消息可写。 */
+  private require_writable_agent(message_id: string): SessionAgentMessage {
     const message = [...this.options.list_messages()].find(
       (item) => item.message_id === message_id,
     );
     if (!message || message.role !== "agent") {
-      throw new Error(`Agent Message not found: ${message_id}`);
-    }
-    if (message.state !== "streaming") {
-      throw new Error(`Agent Message is already done: ${message_id}`);
+      throw new Error(`Writable Agent Message not found: ${message_id}`);
     }
     return message;
   }

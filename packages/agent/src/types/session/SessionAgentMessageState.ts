@@ -17,6 +17,8 @@ export interface SessionAgentMessageStateOptions {
   store: SessionStorage;
   /** 读取 SessionMessages 当前持有的 canonical Message 集合。 */
   list_messages: () => Iterable<SessionMessage>;
+  /** 判断某条 Message 是否仍由未收口的 writer 持有；终态推导的唯一外部输入。 */
+  is_held_by_writer: (message_id: string) => boolean;
   /** 接受已持久化的完整 Message 快照，并按需发布 Mutation。 */
   accept_message: (
     message: SessionMessage,

@@ -9,10 +9,8 @@
 import { generate_id } from "@/utils/Id.js";
 import { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
 import { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
-import { SessionAgentActionPartWriter } from "@/session/messages/SessionAgentActionPartWriter.js";
 import {
   has_assistant_result_content,
-  normalize_canonical_session_user_parts,
   normalize_session_user_parts,
 } from "@/session/messages/SessionUserMessage.js";
 import type { JsonObject } from "@downcity/type";
@@ -30,13 +28,14 @@ import type {
   SessionUserMessagePart,
 } from "@downcity/type";
 import { create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
+import { resolve_session_message_state } from "@/session/messages/SessionMessageState.js";
 import {
   next_agent_part_sequence,
   resolve_changed_agent_parts,
 } from "@/session/messages/SessionAgentParts.js";
 import type { SessionMutation } from "@downcity/type";
 import type { SessionMessageStorageStats } from "@/types/store/SessionStorage.js";
-import type { SessionStreamingToolLocation } from "@/types/session/SessionTool.js";
+import type { SessionOpenMessageToolLocation } from "@/types/session/SessionTool.js";
 import type {
   SessionInteractionCloseInput,
   SessionInteractionRequest,
@@ -45,13 +44,11 @@ import type {
 import type { SessionActionEvent } from "@downcity/type";
 import { persist_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
 import type {
-  AppendCompletedAgentMessageInput,
   AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
   AppendSessionAgentErrorPartInput,
   AppendSessionPromptMessageInput,
   AppendSessionUserMessageInput,
-  OpenSessionAgentActionPartInput,
   OpenSessionAgentMessageInput,
   SessionMessagesOptions,
 } from "@/types/session/SessionMessages.js";
@@ -59,7 +56,6 @@ import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionAttachmentStore } from "@/types/store/SessionAttachmentStore.js";
 
 export { SessionAgentMessageWriter } from "@/session/messages/SessionAgentMessageWriter.js";
-export { SessionAgentActionPartWriter } from "@/session/messages/SessionAgentActionPartWriter.js";
 export { normalize_session_user_parts } from "@/session/messages/SessionUserMessage.js";
 
 /** 唯一 Session Message 写入服务。 */
@@ -69,6 +65,8 @@ export class SessionMessages {
   private readonly attachment_store: SessionAttachmentStore;
   private readonly publish: SessionMessagesOptions["publish"];
   private readonly messages_by_id = new Map<string, SessionMessage>();
+  /** 当前 Assistant 单写队列的持有关系；它决定哪条 Message 仍然可写。 */
+  private open_writer: SessionAgentMessageWriter | null = null;
   /** Assistant 草稿与 Interaction 的串行状态转换器。 */
   private readonly agent_state: SessionAgentMessageState;
   /** 当前 Message 恢复事务；并发初始化共享同一个 Promise。 */
@@ -84,11 +82,22 @@ export class SessionMessages {
       session_id: this.session_id,
       store: this.store,
       list_messages: () => this.messages_by_id.values(),
+      is_held_by_writer: (message_id) => this.is_held_by_writer(message_id),
       accept_message: (message, publish_mutation) =>
         this.accept_message(message, publish_mutation),
       project_mutation: (mutation, message) =>
         this.accept_mutation(mutation, message),
     });
+  }
+
+  /**
+   * 该 Message 是否仍由未收口的 writer 持有。
+   *
+   * 这是 Message 终态推导的唯一外部输入：持有关系由 writer 引用单一决定，
+   * 不再依赖任何存储字段。
+   */
+  is_held_by_writer(message_id: string): boolean {
+    return this.open_writer?.message_id === message_id;
   }
 
   /** 恢复已有 Message，并收口进程中断遗留的运行状态。 */
@@ -204,9 +213,11 @@ export class SessionMessages {
       created_at,
       updated_at: created_at,
       role: "user",
-      parts: normalize_canonical_session_user_parts(input.parts).map((part) => ({
-        ...part,
-        part_id: `${message_id}:part:${String(part.sequence)}`,
+      // 调用方只提供内容；part_id 是全局主键，必须在这里统一分配。
+      parts: input.parts.map((part, index) => ({
+        ...structuredClone(part),
+        sequence: index + 1,
+        part_id: `${message_id}:part:${String(index + 1)}`,
       })),
     }));
     if (message.role !== "user") {
@@ -219,40 +230,31 @@ export class SessionMessages {
   async open_agent_message(
     input: OpenSessionAgentMessageInput,
   ): Promise<SessionAgentMessageWriter> {
-    const message = await this.create_message((sequence, created_at) => ({
-      message_id:
-        String(input.message_id || "").trim() ||
-        `agent:${this.session_id}:${generate_id()}`,
-      session_id: this.session_id,
-      turn_id: input.turn_id,
-      sequence,
-      revision: 1,
-      visibility: input.visibility || "visible",
-      created_at,
-      updated_at: created_at,
-      role: "agent",
-      state: "streaming",
-      parts: [],
-    }), true);
-    return new SessionAgentMessageWriter(this, message.message_id);
-  }
-
-  /** 直接写入一条已完成 Assistant Message。 */
-  async append_completed_agent_message(
-    input: AppendCompletedAgentMessageInput,
-  ): Promise<SessionAgentMessage> {
-    const turn_id = input.turn_id || `external:${this.session_id}:${generate_id()}`;
-    const writer = await this.open_agent_message({
-      turn_id,
-      visibility: input.visibility || "visible",
-    });
-    for (const part of input.parts) await writer.upsert_part(part);
-    await writer.complete();
-    const message = await this.store.read_message(writer.message_id);
-    if (!message || message.role !== "agent") {
-      throw new Error(`Completed Agent Message not found: ${writer.message_id}`);
+    const message_id =
+      String(input.message_id || "").trim() ||
+      `agent:${this.session_id}:${generate_id()}`;
+    // 先建立持有关系，创建消息时的首次接受才会被登记为可写 Message。
+    const writer = new SessionAgentMessageWriter(this, message_id);
+    this.open_writer = writer;
+    try {
+      await this.create_message((sequence, created_at) => ({
+        message_id,
+        session_id: this.session_id,
+        turn_id: input.turn_id,
+        sequence,
+        revision: 1,
+        visibility: input.visibility || "visible",
+        created_at,
+        updated_at: created_at,
+        role: "agent",
+        state: "streaming",
+        parts: [],
+      }), true);
+    } catch (error) {
+      this.open_writer = null;
+      throw error;
     }
-    return message;
+    return writer;
   }
 
   /** 把公开 Session API 的 User 输入转换为 canonical Message 并持久化。 */
@@ -316,11 +318,12 @@ export class SessionMessages {
   /**
    * 按稳定 Action ID 落盘一条 canonical Action。
    *
-   * 关键点（中文）
-   * - Action 属于仍在流式写的 Agent Message 时，Action Part 直接追加/更新到该
-   *   Message，与正文共享同一条 canonical Message，避免执行期间出现割裂的独立气泡。
-   * - 没有可写目标（Session 空闲、目标 Turn 尚未产生 Agent Message，或消息已收口）
-   *   时，回退为只含 Action Part 的独立 Agent Message，保证 Action 始终可观测。
+   * 判定顺序固定，三分支互斥：
+   * 1. 该 Turn 存在 writer 持有的正文 Message → Action 作为其 Part 内联；
+   * 2. 否则存在 id 等于 action_id 的载体 Message → 原地更新其中的 Action Part；
+   * 3. 否则新建仅含该 Action Part 的载体 Message。
+   *
+   * 三个分支都只写 Part，Message 终态统一由 SessionMessageState 推导。
    */
   async persist_action(
     event: SessionActionEvent,
@@ -328,13 +331,11 @@ export class SessionMessages {
   ): Promise<void> {
     await this.ensure_initialized();
     const publish_mutation = options?.publish_mutation !== false;
-    const streaming_target = event.turn_id
-      ? this.find_streaming_agent_message(event.turn_id)
-      : undefined;
-    if (streaming_target) {
+    const body = event.turn_id ? this.find_open_message(event.turn_id) : undefined;
+    if (body) {
       await this.agent_state.commit_parts(
-        streaming_target.message_id,
-        [this.resolve_streaming_action_part(streaming_target, event)],
+        body.message_id,
+        [this.resolve_streaming_action_part(body, event)],
         { publish_mutation },
       );
       return;
@@ -342,18 +343,7 @@ export class SessionMessages {
     const existing = this.get_message(event.action_id) ||
       await this.store.read_message(event.action_id) || undefined;
     if (!existing) {
-      const writer = await this.open_action_part({
-        message_id: event.action_id,
-        turn_id: event.turn_id,
-        action_type: event.action_type,
-        title: event.title,
-        description: event.description,
-        publish_mutation,
-      });
-      if (event.status === "completed") await writer.complete();
-      if (event.status === "failed") {
-        await writer.fail(event.description || event.title);
-      }
+      await this.create_standalone_action_message(event, publish_mutation);
       return;
     }
     if (existing.role === "agent" && event.status !== "running") {
@@ -364,18 +354,18 @@ export class SessionMessages {
     }
   }
 
-  /** 查找指定 Turn 当前仍在流式写的 canonical Agent Message（同一时刻至多一条）。 */
-  private find_streaming_agent_message(turn_id: string): SessionAgentMessage | undefined {
-    let latest: SessionAgentMessage | undefined;
-    for (const message of this.messages_by_id.values()) {
-      if (message.role !== "agent" || message.state !== "streaming") continue;
-      if (message.turn_id !== turn_id) continue;
-      if (!latest || message.sequence > latest.sequence) latest = message;
+  /** 查找指定 Turn 当前由 writer 持有的正文 Message（同一时刻至多一条）。 */
+  private find_open_message(turn_id: string): SessionAgentMessage | undefined {
+    const message_id = this.open_writer?.message_id;
+    if (!message_id) return undefined;
+    const message = this.get_message(message_id);
+    if (!message || message.role !== "agent" || message.turn_id !== turn_id) {
+      return undefined;
     }
-    return latest;
+    return message;
   }
 
-  /** 复用已有 Action Part 身份，为流式 Agent Message 构造对齐的 Action Part。 */
+  /** 复用已有 Action Part 身份，为被 writer 持有的 Agent Message 构造对齐的 Action Part。 */
   private resolve_streaming_action_part(
     target: SessionAgentMessage,
     event: SessionActionEvent,
@@ -396,40 +386,40 @@ export class SessionMessages {
     });
   }
 
-  /** 创建只包含 running Action Part 的 Agent Message。 */
-  async open_action_part(
-    input: OpenSessionAgentActionPartInput,
-  ): Promise<SessionAgentActionPartWriter> {
-    const message_id =
-      String(input.message_id || "").trim() ||
-      `agent-action:${this.session_id}:${generate_id()}`;
-    const message = await this.create_message((sequence, created_at) => ({
-      message_id,
+  /**
+   * 创建只包含单个 Action Part 的独立 Agent Message。
+   *
+   * 只在当前 Turn 没有 writer 持有的 Agent Message 时使用；Action Part 直接以事件声明的
+   * 目标状态落盘，不再先建后改，避免同一个 Action 产生两次 Mutation。
+   */
+  private async create_standalone_action_message(
+    event: SessionActionEvent,
+    publish_mutation: boolean,
+  ): Promise<void> {
+    const description = event.description ??
+      (event.status === "failed" ? event.title : undefined);
+    const parts = [create_action_part({
+      action_id: event.action_id,
+      part_id: `action-part:${event.action_id}`,
+      sequence: 1,
+      action_type: event.action_type,
+      state: event.status,
+      title: event.title,
+      ...(description ? { description } : {}),
+    })];
+    await this.create_message((sequence, created_at) => ({
+      message_id: event.action_id,
       session_id: this.session_id,
-      ...(input.turn_id ? { turn_id: input.turn_id } : {}),
+      ...(event.turn_id ? { turn_id: event.turn_id } : {}),
       sequence,
       revision: 1,
       visibility: "visible",
       created_at,
       updated_at: created_at,
       role: "agent",
-      state: "streaming",
-      parts: [create_action_part({
-        action_id: message_id,
-        part_id: `action-part:${message_id}`,
-        sequence: 1,
-        action_type: input.action_type,
-        state: "running",
-        title: input.title,
-        description: input.description,
-        data: input.data,
-      })],
-    }), false, input.publish_mutation !== false);
-    return new SessionAgentActionPartWriter(
-      this,
-      message.message_id,
-      input.publish_mutation !== false,
-    );
+      state: resolve_session_message_state(parts, false),
+      parts,
+    }), event.status === "running", publish_mutation);
   }
 
   /** 更新 Action 状态，同时保持 message_id 与 sequence 不变。 */
@@ -456,11 +446,15 @@ export class SessionMessages {
         : {}),
       ...(changes?.data ? { data: structuredClone(changes.data) } : {}),
     };
+    const next_parts = current_message.parts.map((part) =>
+      part.part_id === action.part_id ? next_action : part);
     const message: SessionAgentMessage = {
       ...current_message,
-      state: status === "running" ? "streaming" : "done",
-      parts: current_message.parts.map((part) =>
-        part.part_id === action.part_id ? next_action : part),
+      state: resolve_session_message_state(
+        next_parts,
+        this.is_held_by_writer(message_id),
+      ),
+      parts: next_parts,
       revision: current_message.revision + 1,
       updated_at: Date.now(),
     };
@@ -503,7 +497,7 @@ export class SessionMessages {
       recoverable: input.recoverable,
     };
 
-    if (target?.state === "streaming") {
+    if (target && this.is_held_by_writer(target.message_id)) {
       this.remember_message(target);
       await this.agent_state.commit_parts(target.message_id, [error_part]);
       const updated = await this.store.read_message(target.message_id);
@@ -541,7 +535,7 @@ export class SessionMessages {
       created_at,
       updated_at: created_at,
       role: "agent",
-      state: "done",
+      state: resolve_session_message_state([error_part], false),
       parts: [error_part],
     }));
     if (message.role !== "agent") {
@@ -572,10 +566,10 @@ export class SessionMessages {
     const messages = has_more ? page.slice(1) : page;
     const start_sequence = messages[0]?.sequence;
     const end_sequence = messages.at(-1)?.sequence;
-    const stats = await this.store.message_stats();
+    const total = await this.store.message_count();
     return {
       items: messages.map((message) => structuredClone(message)),
-      total: stats.message_count,
+      total,
       ...(start_sequence !== undefined ? { start_sequence } : {}),
       ...(end_sequence !== undefined ? { end_sequence } : {}),
       ...(has_more && start_sequence !== undefined
@@ -694,6 +688,8 @@ export class SessionMessages {
     status: "completed" | "stopped" | "failed",
     error?: string,
   ): Promise<void> {
+    // 先释放持有，收口提交才能把 Message 收敛为终态。
+    if (this.open_writer?.message_id === message_id) this.open_writer = null;
     await this.agent_state.complete(message_id, status, error);
   }
 
@@ -714,9 +710,9 @@ export class SessionMessages {
     return message;
   }
 
-  /** 读取当前流式 Assistant 中的指定 Tool Part。 */
-  find_streaming_tool(tool_call_id: string): SessionStreamingToolLocation | undefined {
-    return this.agent_state.find_streaming_tool(tool_call_id);
+  /** 读取当前可写 Agent Message 中的指定 Tool Part。 */
+  find_tool_in_open_message(tool_call_id: string): SessionOpenMessageToolLocation | undefined {
+    return this.agent_state.find_tool_in_open_message(tool_call_id);
   }
 
   /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
@@ -803,12 +799,12 @@ export class SessionMessages {
     this.publish(mutation);
   }
 
-  /** 仅缓存可变的 streaming Agent Message；终态历史始终读取 SQLite。 */
+  /** 只缓存 writer 持有的 Agent Message；终态历史始终读取 SQLite。 */
   private remember_message(message: SessionMessage): void {
     this.messages_by_id.delete(message.message_id);
-    if (message.role === "agent" && message.state === "streaming") {
-      this.messages_by_id.set(message.message_id, structuredClone(message));
-    }
+    if (message.role !== "agent") return;
+    if (!this.is_held_by_writer(message.message_id)) return;
+    this.messages_by_id.set(message.message_id, structuredClone(message));
   }
 
   private async ensure_initialized(): Promise<void> {

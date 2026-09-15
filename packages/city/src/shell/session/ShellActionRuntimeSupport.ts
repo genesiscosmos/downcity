@@ -34,8 +34,6 @@ export {
   create_output_chunk,
 } from "./ShellActionResponse.js";
 
-const DEFAULT_APPROVAL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
-
 const DEFAULT_SHELL_RUNTIME_OPTIONS: ResolvedShellRuntimeOptions = {
   max_active_shells: 64,
   cleanup_delay_ms: 10 * 60 * 1000,
@@ -46,7 +44,6 @@ const DEFAULT_SHELL_RUNTIME_OPTIONS: ResolvedShellRuntimeOptions = {
   default_inline_wait_ms: 1_200,
   default_wait_timeout_ms: 10_000,
   default_exec_timeout_ms: 600_000,
-  default_approval_timeout_ms: DEFAULT_APPROVAL_TIMEOUT_MS,
 };
 
 /**
@@ -121,10 +118,6 @@ export function resolve_shell_runtime_options(
     default_exec_timeout_ms: read_positive_integer(
       options.default_exec_timeout_ms,
       DEFAULT_SHELL_RUNTIME_OPTIONS.default_exec_timeout_ms,
-    ),
-    default_approval_timeout_ms: read_positive_integer(
-      options.default_approval_timeout_ms,
-      DEFAULT_SHELL_RUNTIME_OPTIONS.default_approval_timeout_ms,
     ),
   };
 }
@@ -206,8 +199,7 @@ export function is_terminal_status(status: ShellSessionStatus): boolean {
   return (
     status === "completed" ||
     status === "failed" ||
-    status === "killed" ||
-    status === "expired"
+    status === "killed"
   );
 }
 

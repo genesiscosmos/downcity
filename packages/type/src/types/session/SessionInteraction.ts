@@ -3,6 +3,8 @@
  *
  * Interaction 只定义可持久化的生命周期与通用信封；业务类型和 payload
  * 由 Tool、Plugin、Shell 或宿主应用动态定义，前端可以自由选择渲染方式。
+ *
+ * Interaction 没有超时：它只能由用户响应，或随所属 Turn/Session 结束而被取消。
  */
 
 import type { JsonValue } from "../json/Json.js";
@@ -12,14 +14,12 @@ export type SessionInteractionStatus =
   | "pending"
   | "resolved"
   | "denied"
-  | "expired"
   | "cancelled"
   | "failed";
 
 /** 高风险操作审批请求是否需要用户逐次确认。 */
 export type SessionApprovalMode = "ask" | "always-allow";
 
-/** Interaction 的执行来源。 */
 /**
  * 发起 Interaction 的调用来源。
  *
@@ -55,8 +55,6 @@ export interface SessionInteractionRequest {
   response_schema?: JsonValue;
   /** 当前 Interaction 创建时间戳，单位为毫秒。 */
   created_at: number;
-  /** 当前 Interaction 自动过期时间戳，省略表示不自动过期。 */
-  expires_at?: number;
 }
 
 /** Approval Interaction 的默认 payload 结构。 */
@@ -173,14 +171,6 @@ export interface SessionDeniedInteractionResult {
   reason?: string;
 }
 
-/** Interaction 因等待超时结束。 */
-export interface SessionExpiredInteractionResult {
-  /** 终态固定为 expired。 */
-  status: "expired";
-  /** 已过期的 Interaction 标识。 */
-  interaction_id: string;
-}
-
 /** Interaction 因 Session 生命周期变化被取消。 */
 export interface SessionCancelledInteractionResult {
   /** 终态固定为 cancelled。 */
@@ -205,7 +195,6 @@ export interface SessionFailedInteractionResult {
 export type SessionInteractionResult =
   | SessionResolvedInteractionResult
   | SessionDeniedInteractionResult
-  | SessionExpiredInteractionResult
   | SessionCancelledInteractionResult
   | SessionFailedInteractionResult;
 
@@ -223,24 +212,11 @@ export interface SessionInteractionHandle {
   result: Promise<SessionInteractionResult>;
 }
 
-/** 把 pending Interaction 标记为超时的输入。 */
-export interface SessionExpireInteractionInput {
-  /** 目标终态固定为 expired。 */
-  status: "expired";
-}
-
-/** 因 Session 生命周期变化取消 pending Interaction 的输入。 */
-export interface SessionCancelInteractionInput {
-  /** 目标终态固定为 cancelled。 */
-  status: "cancelled";
+/** 关闭 pending Interaction 的输入；终态固定为 cancelled。 */
+export interface SessionInteractionCloseInput {
   /** Interaction 被取消的稳定生命周期原因。 */
   reason: "turn_stopped" | "session_disposed" | "runtime_interrupted";
 }
-
-/** 内部关闭 pending Interaction 时允许提交的终态输入。 */
-export type SessionInteractionCloseInput =
-  | SessionExpireInteractionInput
-  | SessionCancelInteractionInput;
 
 /** 执行面请求用户异步参与的最小端口。 */
 export interface SessionInteractionPort {

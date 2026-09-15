@@ -418,7 +418,7 @@ function decode_tool_interactions(
     read_enum(
       interaction,
       "status",
-      ["pending", "resolved", "denied", "expired", "cancelled", "failed"],
+      ["pending", "resolved", "denied", "cancelled", "failed"],
       row,
     );
     decode_interaction_request(interaction.request, row);

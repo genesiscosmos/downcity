@@ -59,11 +59,6 @@ export interface ShellRuntimeOptions {
    * `shell.exec` 默认总超时，单位毫秒。
    */
   default_exec_timeout_ms?: number;
-
-  /**
-   * host 执行审批默认超时时间，单位毫秒。
-   */
-  default_approval_timeout_ms?: number;
 }
 
 /**
@@ -114,9 +109,4 @@ export interface ResolvedShellRuntimeOptions {
    * `shell.exec` 默认总超时，单位毫秒。
    */
   default_exec_timeout_ms: number;
-
-  /**
-   * host 执行审批默认超时时间，单位毫秒。
-   */
-  default_approval_timeout_ms: number;
 }

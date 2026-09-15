@@ -97,7 +97,6 @@ export async function start_shell_session(
       ...(owner_context_id ? { owner_context_id } : {}),
       ...(turn_id ? { turn_id } : {}),
       ...(request.tool_call_id ? { tool_call_id: request.tool_call_id } : {}),
-      timeout_ms: state.options.default_approval_timeout_ms,
     });
     approval_id = approval.approval_id;
     approval_status = approval.status;

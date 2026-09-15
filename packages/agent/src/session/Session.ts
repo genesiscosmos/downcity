@@ -55,7 +55,6 @@ import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
 import { build_session_info } from "@/session/browse/Browse.js";
-import type { SessionActionEventInput } from "@downcity/type";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type {
   AppendExternalSessionAgentMessageInput,
@@ -488,7 +487,7 @@ export class Session implements AgentSession {
         })
       : messages;
     const action_id = `history-forking:${this.id}:${Date.now()}:${nanoid(8)}`;
-    await this.emit_action_event({
+    await this.session_messages.persist_action({
       action_id,
       action_type: "history-fork",
       title: "Forking session messages",
@@ -511,7 +510,7 @@ export class Session implements AgentSession {
       const relocated_messages = await relocate_fork_message_files(fork_messages, this.store.attachments, forked.store.attachments);
       await forked.session_messages.import_messages(relocated_messages);
       this.register_forked_session(forked);
-      await this.emit_action_event({
+      await this.session_messages.persist_action({
         action_id,
         action_type: "history-fork",
         title: "Session messages forked",
@@ -520,7 +519,7 @@ export class Session implements AgentSession {
       });
       return forked;
     } catch (error) {
-      await this.emit_action_event({
+      await this.session_messages.persist_action({
         action_id,
         action_type: "history-fork",
         title: "Session messages fork failed",
@@ -685,7 +684,7 @@ export class Session implements AgentSession {
     description?: string;
   }): Promise<void> {
     try {
-      await this.emit_action_event({
+      await this.session_messages.persist_action({
         action_id: input.action_id,
         action_type: "context-compaction",
         ...(input.turn_id ? { turn_id: input.turn_id } : {}),
@@ -702,8 +701,7 @@ export class Session implements AgentSession {
         });
       } catch {
         // 压缩结果已经确定，日志失败同样不能反向改变执行结果。
-      }
-    }
+      }    }
   }
 
   /**
@@ -752,19 +750,4 @@ export class Session implements AgentSession {
       input,
     );
   }
-
-  /** 持久化并发布一条只包含 Action Part 的 canonical Agent Message。 */
-  private async emit_action_event(input: SessionActionEventInput): Promise<void> {
-    const action_id = String(input.action_id || "").trim() ||
-      `action:${this.id}:${Date.now()}`;
-    await this.session_messages.persist_action({
-      action_id,
-      action_type: input.action_type,
-      ...(input.turn_id ? { turn_id: input.turn_id } : {}),
-      title: input.title,
-      ...(input.description ? { description: input.description } : {}),
-      status: input.status,
-    });
-  }
-
 }

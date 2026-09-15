@@ -66,15 +66,6 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
       throw error;
     }
 
-    if (request.expires_at !== undefined) {
-      const delay_ms = Math.max(0, request.expires_at - Date.now());
-      const timer = setTimeout(() => {
-        void this.expire(request.interaction_id);
-      }, delay_ms);
-      if (typeof timer.unref === "function") timer.unref();
-      pending.timer = timer;
-    }
-
     return {
       interaction_id: request.interaction_id,
       result,
@@ -125,33 +116,13 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
         reason,
       };
       try {
-        await this.messages.close_interaction(interaction_id, {
-          status: "cancelled",
-          reason,
-        });
+        await this.messages.close_interaction(interaction_id, { reason });
         this.finish_pending(interaction_id, result);
       } catch (error) {
         first_error ??= error;
       }
     }
     if (first_error) throw first_error;
-  }
-
-  /** 处理单个 Interaction 自动过期。 */
-  private async expire(interaction_id: string): Promise<void> {
-    if (!this.pending_by_id.has(interaction_id)) return;
-    const result: SessionInteractionResult = {
-      status: "expired",
-      interaction_id,
-    };
-    try {
-      await this.messages.close_interaction(interaction_id, {
-        status: "expired",
-      });
-    } catch {
-      return;
-    }
-    this.finish_pending(interaction_id, result);
   }
 
   /** 校验执行面提交的 Interaction 请求。 */
@@ -161,12 +132,6 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     }
     if (!String(request.turn_id || "").trim()) {
       throw new Error("Session Interaction requires turn_id");
-    }
-    if (
-      request.expires_at !== undefined &&
-      (!Number.isFinite(request.expires_at) || request.expires_at < request.created_at)
-    ) {
-      throw new Error("Session Interaction expires_at must not precede created_at");
     }
     if (!String(request.type || "").trim()) {
       throw new Error("Session Interaction requires a non-empty type");
@@ -298,7 +263,6 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
   ): void {
     const pending = this.pending_by_id.get(interaction_id);
     if (!pending) return;
-    if (pending.timer) clearTimeout(pending.timer);
     this.pending_by_id.delete(interaction_id);
     pending.resolve(result);
   }

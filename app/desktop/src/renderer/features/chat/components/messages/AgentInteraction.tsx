@@ -144,9 +144,9 @@ function interaction_status_label(part: SessionAgentInteraction): string { retur
 function approval_result_label(part: SessionAgentInteraction): string {
   const payload = part.response?.payload;
   const decision = payload && typeof payload === "object" && !Array.isArray(payload) ? (payload as { decision?: unknown }).decision : undefined;
-  return translate(`chat:activity.${decision === "approved" ? "approved" : part.status === "expired" ? "expired" : part.status === "cancelled" ? "cancelled" : part.status === "failed" ? "failed" : "denied"}`);
+  return translate(`chat:activity.${decision === "approved" ? "approved" : part.status === "cancelled" ? "cancelled" : part.status === "failed" ? "failed" : "denied"}`);
 }
-function question_result_label(part: SessionAgentInteraction): string { return translate(`chat:activity.${part.status === "expired" ? "expired" : part.status === "cancelled" ? "cancelled" : "answered"}`); }
+function question_result_label(part: SessionAgentInteraction): string { return translate(`chat:activity.${part.status === "cancelled" ? "cancelled" : "answered"}`); }
 function interaction_payload(request: SessionAgentInteraction["request"]): Record<string, unknown> { return request.payload && typeof request.payload === "object" && !Array.isArray(request.payload) ? request.payload as Record<string, unknown> : {}; }
 function interaction_questions(request: SessionAgentInteraction["request"]): SessionInteractionQuestion[] { const questions = interaction_payload(request).questions; return Array.isArray(questions) ? questions as SessionInteractionQuestion[] : []; }
 function string_value(value: unknown): string | undefined { return typeof value === "string" && value ? value : undefined; }

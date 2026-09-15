@@ -48,6 +48,7 @@ import type {
   SessionTurnExecutionResult,
 } from "@/types/session/SessionExecution.js";
 import type { SessionAgentMessagePart } from "@downcity/type";
+import { SESSION_APPROVAL_RESPONSE_SCHEMA } from "@downcity/type";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
 import { generate_id } from "@/utils/Id.js";
 
@@ -541,6 +542,7 @@ async function resolve_tool_approval(input: {
       validated_input: to_session_json_value(input.call.input),
       ...(input.tool.description ? { tool_description: input.tool.description } : {}),
     },
+    response_schema: SESSION_APPROVAL_RESPONSE_SCHEMA,
     created_at: Date.now(),
   });
   const result = await handle.result;

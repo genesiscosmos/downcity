@@ -20,7 +20,6 @@ import type { SessionHookScopeRuntime } from "@downcity/type";
 import type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
-  AgentSessionActionRecord,
 } from "@/types/sdk/AgentSessionAction.js";
 import type { SessionInteractionPort } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
@@ -208,5 +207,4 @@ export interface SessionTurnContext {
 export type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
-  AgentSessionActionRecord,
 };

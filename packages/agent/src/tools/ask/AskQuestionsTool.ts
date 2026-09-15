@@ -78,9 +78,6 @@ export const AskQuestionsTool = define_runtime_tool<AskQuestionsToolInput, Actio
     if (result.status === "cancelled") {
       throw new Error(`ask_question was cancelled: ${result.reason}`);
     }
-    if (result.status === "expired") {
-      throw new Error("ask_question expired before the user responded");
-    }
     if (
       result.status !== "resolved" ||
       result.response.type !== "question" ||

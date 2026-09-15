@@ -150,7 +150,6 @@ export type {
   RespondSessionInteractionInput,
   SessionApprovalMode,
   SessionCancelledInteractionResult,
-  SessionExpiredInteractionResult,
   SessionInteractionAnswer,
   SessionInteractionHandle,
   SessionInteractionLifecycle,
@@ -166,6 +165,7 @@ export type {
   SessionPendingInteraction,
   SessionResolvedInteractionResult,
 } from "@downcity/type";
+export { SESSION_APPROVAL_RESPONSE_SCHEMA } from "@downcity/type";
 export type {
   AgentOptions,
   AgentSessionConstructor,
@@ -184,8 +184,6 @@ export type { AgentManagedSession } from "./types/session/SessionOptions.js";
 export type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
-  AgentSessionActionRecord,
-  AgentSessionActionState,
 } from "./types/sdk/AgentSessionAction.js";
 export type {
   AgentSessionPromptContent,
@@ -219,13 +217,11 @@ export { FullHistoryContextPolicy } from "./session/composer/policies/FullHistor
 export { AdaptivePartContextPolicy } from "./session/composer/policies/AdaptivePartContextPolicy.js";
 export { SessionMessages } from "./session/SessionMessages.js";
 export type {
-  AppendCompletedAgentMessageInput,
   AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
   AppendSessionAgentErrorPartInput,
   AppendSessionPromptMessageInput,
   AppendSessionUserMessageInput,
-  OpenSessionAgentActionPartInput,
   OpenSessionAgentMessageInput,
   SessionMessagesOptions,
 } from "./types/session/SessionMessages.js";
@@ -264,7 +260,6 @@ export type {
 } from "./types/tools/ToolActionExecutionContext.js";
 export type {
   SessionActionEvent,
-  SessionActionEventInput,
   SessionActionStatus,
 } from "@downcity/type";
 export type { SessionSystemMessage } from "./executor/types/SessionPrompts.js";

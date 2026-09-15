@@ -13,13 +13,14 @@ export type ShellSessionStatus =
   | "running"
   | "completed"
   | "failed"
-  | "killed"
-  | "expired";
+  | "killed";
 
 /**
  * host 执行审批状态。
+ *
+ * 审批没有超时：它只能由用户裁定，或随 Turn/Session 结束而终止。
  */
-export type ShellApprovalStatus = "approved" | "denied" | "expired";
+export type ShellApprovalStatus = "approved" | "denied";
 
 /**
  * shell approval 模式。

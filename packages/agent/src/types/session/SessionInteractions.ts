@@ -16,6 +16,4 @@ export interface SessionPendingInteractionRuntime {
   request: SessionInteractionRequest;
   /** 兑现原执行等待 Promise 的回调。 */
   resolve: (result: SessionInteractionResult) => void;
-  /** 自动过期计时器；没有 expires_at 时省略。 */
-  timer?: ReturnType<typeof setTimeout>;
 }
