@@ -93,8 +93,8 @@ export function to_chat_account_view(
     name: account.name,
     provider: account.provider,
     enabled: account.enabled,
-    agent_id: account.agent_id,
-    workspace_id: account.workspace_id,
+    ...(account.agent_id ? { agent_id: account.agent_id } : {}),
+    ...(account.workspace_id ? { workspace_id: account.workspace_id } : {}),
     credential_configured: account.provider === "telegram"
       ? Boolean(account.bot_token)
       : Boolean(account.app_id && account.app_secret),
@@ -153,8 +153,8 @@ function normalize_account_draft(draft: ChatAccountDraft & { account_id?: string
     account_id: normalize_required(draft.account_id, "account_id"),
     name: normalize_required(draft.name, "name"),
     enabled: draft.enabled === true,
-    agent_id: normalize_required(draft.agent_id, "agent_id"),
-    workspace_id: normalize_required(draft.workspace_id, "workspace_id"),
+    ...(normalize_text(draft.agent_id) ? { agent_id: normalize_text(draft.agent_id) } : {}),
+    ...(normalize_text(draft.workspace_id) ? { workspace_id: normalize_text(draft.workspace_id) } : {}),
   };
   if (draft.provider === "telegram") {
     return {

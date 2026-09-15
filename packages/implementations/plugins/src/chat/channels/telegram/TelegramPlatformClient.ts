@@ -343,7 +343,11 @@ export class TelegramPlatformClient {
   async sendMessage(
     chatId: string,
     text: string,
-    opts?: { messageThreadId?: number; replyToMessageId?: number },
+    opts?: {
+      messageThreadId?: number;
+      replyToMessageId?: number;
+      attachmentRoots?: string[];
+    },
   ): Promise<void> {
     await this.api.sendMessage(chatId, text, opts);
   }

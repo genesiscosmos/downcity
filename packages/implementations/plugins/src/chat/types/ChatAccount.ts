@@ -13,10 +13,23 @@ export interface ChatAccountBaseConfig {
   provider: ChatProvider;
   /** 是否在 City 启动后连接并处理消息。 */
   enabled: boolean;
-  /** 新 Conversation 默认路由到的 Agent。 */
-  agent_id: string;
-  /** 新 Conversation 默认使用的 Workspace。 */
-  workspace_id: string;
+  /**
+   * 新 Conversation 默认路由到的 Agent。
+   *
+   * 说明（中文）
+   * - 可选：仅作为新 Conversation 的初始绑定，不是 Account 的身份。
+   * - 已有 Conversation 始终沿用自身记录的 agent_id，不受此处改动影响。
+   * - 缺失时由 City 级默认 Agent 兜底。
+   */
+  agent_id?: string;
+  /**
+   * 新 Conversation 默认使用的 Workspace。
+   *
+   * 说明（中文）
+   * - 可选：仅作为新 Conversation 的初始绑定。
+   * - 已有 Conversation 始终沿用自身记录的 workspace_id。
+   */
+  workspace_id?: string;
 }
 
 /** Telegram Bot Account 配置。 */
@@ -81,10 +94,10 @@ export interface ChatAccountView {
   provider: ChatProvider;
   /** 当前账号是否启用。 */
   enabled: boolean;
-  /** 默认 Agent ID。 */
-  agent_id: string;
-  /** 默认 Workspace ID。 */
-  workspace_id: string;
+  /** 新 Conversation 默认使用的 Agent ID；未配置时省略。 */
+  agent_id?: string;
+  /** 新 Conversation 默认使用的 Workspace ID；未配置时省略。 */
+  workspace_id?: string;
   /** 必需的平台凭据是否已经配置完整。 */
   credential_configured: boolean;
   /** 当前 Connector 状态。 */
@@ -109,10 +122,10 @@ export interface ChatAccountDraft {
   provider: ChatProvider;
   /** 当前账号是否启用。 */
   enabled: boolean;
-  /** 默认 Agent ID。 */
-  agent_id: string;
-  /** 默认 Workspace ID。 */
-  workspace_id: string;
+  /** 新 Conversation 默认使用的 Agent ID；可省略。 */
+  agent_id?: string;
+  /** 新 Conversation 默认使用的 Workspace ID；可省略。 */
+  workspace_id?: string;
   /** Telegram Bot Token；更新时留空表示保留。 */
   bot_token?: string;
   /** Feishu 或 QQ App ID。 */

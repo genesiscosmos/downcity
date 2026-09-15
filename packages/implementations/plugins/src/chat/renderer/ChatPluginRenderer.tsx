@@ -164,14 +164,8 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
       })();
     }, [feishu_registration?.state]);
 
-    /** 开始一次飞书扫码创建；缺少默认路由时提前阻止，避免扫码后才失败。 */
+    /** 开始一次飞书扫码创建。 */
     const start_feishu_registration = async () => {
-      if (!draft.agent_id || !draft.workspace_id) {
-        const message = "请先选择默认 Agent 和 Workspace";
-        set_error(message);
-        ui.toast({ type: "error", message });
-        return;
-      }
       committed_registration_id.current = "";
       const started = await mutate<FeishuAppRegistrationView>(
         "feishu.register.begin",
@@ -247,10 +241,10 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
               {draft.provider === "feishu" && manual_credential_mode ? <Row label="扫码创建" description="返回扫码方式，由飞书自动颁发凭据。" trailing={<Button on_click={() => set_manual_credential_mode(false)}>返回扫码</Button>} /> : null}
             </Group>}
         </Section>
-        <Section title="Default routing" description="新 Conversation 会继承该 Agent 和 Workspace。">
+        <Section title="Default routing" description="可选。只作为新 Conversation 的初始绑定，留空时由 City 默认兜底。">
           <Group>
-            <Row label="Agent" trailing={<Select value={draft.agent_id} options={agent_options} on_value_change={(agent_id) => set_draft({ ...draft, agent_id })} />} />
-            <Row label="Workspace" trailing={<Select value={draft.workspace_id} options={workspace_options} on_value_change={(workspace_id) => set_draft({ ...draft, workspace_id })} />} />
+            <Row label="Agent" trailing={<Select value={draft.agent_id ?? ""} options={agent_options} on_value_change={(agent_id) => set_draft({ ...draft, agent_id })} />} />
+            <Row label="Workspace" trailing={<Select value={draft.workspace_id ?? ""} options={workspace_options} on_value_change={(workspace_id) => set_draft({ ...draft, workspace_id })} />} />
           </Group>
         </Section>
       </Page>;
@@ -318,8 +312,8 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
         <div><Button variant="primary" disabled={busy} on_click={() => void mutate("accounts.update", edit_draft, "Bot Account 已更新")}>保存并应用</Button></div>
       </Stack> : null}
       {view === "routing" ? <Section title="Default routing" description="只影响之后首次建立的 Conversation；已有 Conversation 保持自己的路由。"><Group>
-        <Row label="Agent" trailing={<Select value={edit_draft?.agent_id ?? account.agent_id} options={agent_options} on_value_change={(agent_id) => set_edit_draft({ ...(edit_draft ?? account_view_to_draft(account)), agent_id })} />} />
-        <Row label="Workspace" trailing={<Select value={edit_draft?.workspace_id ?? account.workspace_id} options={workspace_options} on_value_change={(workspace_id) => set_edit_draft({ ...(edit_draft ?? account_view_to_draft(account)), workspace_id })} />} />
+        <Row label="Agent" trailing={<Select value={edit_draft?.agent_id ?? account.agent_id ?? ""} options={agent_options} on_value_change={(agent_id) => set_edit_draft({ ...(edit_draft ?? account_view_to_draft(account)), agent_id })} />} />
+        <Row label="Workspace" trailing={<Select value={edit_draft?.workspace_id ?? account.workspace_id ?? ""} options={workspace_options} on_value_change={(workspace_id) => set_edit_draft({ ...(edit_draft ?? account_view_to_draft(account)), workspace_id })} />} />
         <Row label="Apply" trailing={<Button variant="primary" disabled={busy || !edit_draft} on_click={() => edit_draft && void mutate("accounts.update", edit_draft, "默认路由已更新")}>保存默认路由</Button>} />
       </Group></Section> : null}
       {view === "access" ? <Stack>
@@ -440,16 +434,33 @@ function status_tone(state: ChatAccountView["connection_state"]): "success" | "w
   return "muted";
 }
 
-/** 显示 Agent 名称并保留稳定 ID。 */
-function display_agent(snapshot: ChatDesktopSnapshot, agent_id: string): string {
-  const agent = snapshot.agents.find((item) => item.agent_id === agent_id);
-  return agent ? `${agent.name} · ${agent_id}` : agent_id;
+/**
+ * 显示 Agent 名称并保留稳定 ID。
+ *
+ * 说明（中文）
+ * - 未配置时返回显式文案，避免界面出现空白而让人误以为已绑定。
+ */
+function display_agent(snapshot: ChatDesktopSnapshot, agent_id: string | undefined): string {
+  const value = String(agent_id ?? "").trim();
+  if (!value) return "未配置 · 使用 City 默认";
+  const agent = snapshot.agents.find((item) => item.agent_id === value);
+  return agent ? `${agent.name} · ${value}` : value;
 }
 
-/** 显示 Workspace 名称并保留稳定 ID。 */
-function display_workspace(snapshot: ChatDesktopSnapshot, workspace_id: string): string {
-  const workspace = snapshot.workspaces.find((item) => item.workspace_id === workspace_id);
-  return workspace ? `${workspace.name} · ${workspace_id}` : workspace_id;
+/**
+ * 显示 Workspace 名称并保留稳定 ID。
+ *
+ * 说明（中文）
+ * - 未配置时返回显式文案，避免界面出现空白而让人误以为已绑定。
+ */
+function display_workspace(
+  snapshot: ChatDesktopSnapshot,
+  workspace_id: string | undefined,
+): string {
+  const value = String(workspace_id ?? "").trim();
+  if (!value) return "未配置 · 使用 City 默认";
+  const workspace = snapshot.workspaces.find((item) => item.workspace_id === value);
+  return workspace ? `${workspace.name} · ${value}` : value;
 }
 
 /** 读取 Plugin 路由字符串。 */

@@ -394,14 +394,16 @@ async function handleAuthorizedMessage(params: {
       return;
     }
 
-    const attachmentLines = incomingAttachments.map((attachment) => {
-      const rel = path.relative(options.rootPath, attachment.path);
-      return render_chat_message_file_tag({
+    // 关键点（中文）：附件落在 Channel 自有存储中，不在任何 Workspace 内。
+    // 这里必须给出文件的真实绝对路径；用 Workspace 作基准算相对路径会产出逃逸路径，
+    // 既无法被读取，也无法在回传时还原。文件对 Agent 是否可见由 Agent 侧的访问能力决定。
+    const attachmentLines = incomingAttachments.map((attachment) =>
+      render_chat_message_file_tag({
         type: attachment.type,
-        path: rel,
+        path: attachment.path,
         ...(attachment.desc ? { caption: attachment.desc } : {}),
-      });
-    });
+      }),
+    );
 
     if (isFeishuGroupChat(chatType)) {
       userMessage = stripFeishuAtMentions(userMessage);

@@ -36,6 +36,15 @@ export type ChannelChatKeyParams = {
 export type ChannelSendTextParams = ChannelChatKeyParams & {
   text: string;
   reply_to_message?: boolean;
+  /**
+   * 本地附件路径允许的根目录，由调用方按当前会话上下文声明。
+   *
+   * 说明（中文）
+   * - Channel 不推断、也不持有任何 Workspace 概念；它只按调用方声明校验路径。
+   * - 首个根目录同时作为相对路径的解析基准。
+   * - 缺省时回退到 Connector 构造期的根目录，保持既有调用方行为不变。
+   */
+  attachment_roots?: string[];
 };
 
 export type ChannelSendActionParams = ChannelChatKeyParams & {

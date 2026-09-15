@@ -368,14 +368,14 @@ export class ChatRuntime {
   private async create_connector(
     account: ChatAccountConfig,
   ): Promise<(BaseChatChannel & ChatConnector) | null> {
-    const workspaces = await this.context.system.list_workspaces();
-    const workspace = workspaces.find((item) => item.workspace_id === account.workspace_id);
-    if (!workspace) throw new Error(`Workspace not found in City: ${account.workspace_id}`);
     const storage_path = path.join(this.context.storage.path, "accounts", account.account_id);
     await fs.ensureDir(storage_path);
+    // 关键点（中文）：Account 只描述传输身份，缺少默认 Workspace 不应阻止 Bot 连接。
+    // 附件根目录无法确定时退化为 Chat 自有目录，既有配置行为保持不变。
+    const workspace_path = await this.resolve_account_workspace_path(account);
     const connector_context = this.create_connector_context(
       account,
-      workspace.workspace_path,
+      workspace_path ?? storage_path,
       storage_path,
     );
     if (account.provider === "telegram") {
@@ -415,7 +415,7 @@ export class ChatRuntime {
     const access = new ChatAccessService({ data_path: this.context.storage.path });
     return {
       account_id: account.account_id,
-      agent_id: account.agent_id,
+      agent_id: normalize_text(account.agent_id),
       workspace_path,
       storage_path,
       logger: this.context.logger,
@@ -541,9 +541,10 @@ export class ChatRuntime {
     const pending = this.conversation_resolutions.get(route_key);
     if (pending) return await pending;
     const resolution = (async () => {
+      const target = await this.resolve_account_target(account);
       const session = await this.context.system.create_agent_session({
-        agent_id: account.agent_id,
-        workspace_id: account.workspace_id,
+        agent_id: target.agent_id,
+        workspace_id: target.workspace_id,
         origin: {
           type: "chat",
           account_id: account.account_id,
@@ -560,8 +561,8 @@ export class ChatRuntime {
         chat_type,
         thread_id,
         title: input.chatTitle,
-        agent_id: account.agent_id,
-        workspace_id: account.workspace_id,
+        agent_id: target.agent_id,
+        workspace_id: target.workspace_id,
         session_id: session.session_id,
         last_message_at: received_at,
       });
@@ -574,6 +575,79 @@ export class ChatRuntime {
         this.conversation_resolutions.delete(route_key);
       }
     }
+  }
+
+  /**
+   * 解析一次出站投递允许的本地附件根目录。
+   *
+   * 关键点（中文）
+   * - 基准取自 Conversation 自身的 Workspace，而不是 Account 的默认值，
+   *   避免账号默认值变更后，老会话按错误目录解析附件路径。
+   * - 同时允许 Channel 自有存储目录，使收到的附件可以原样回传。
+   * - 顺序即优先级：首个根目录同时作为相对路径的解析基准。
+   */
+  private async resolve_outbound_attachment_roots(
+    conversation: ChatConversationRecord,
+  ): Promise<string[]> {
+    const roots: string[] = [];
+    const workspaces = await this.context.system.list_workspaces();
+    const matched = workspaces.find(
+      (item) => item.workspace_id === conversation.workspace_id,
+    );
+    if (matched) roots.push(matched.workspace_path);
+    roots.push(path.join(this.context.storage.path, "accounts", conversation.account_id));
+    return roots;
+  }
+
+  /**
+   * 解析 Account 的附件根目录。
+   *
+   * 关键点（中文）
+   * - 优先使用 Account 显式配置的 Workspace，保证既有部署行为完全不变。
+   * - 未配置时退化为 City 中唯一 Workspace，让单 Workspace 部署无需额外配置。
+   * - 仍无法确定时返回 null，由调用方使用 Chat 自有目录兜底，不阻止 Bot 连接。
+   */
+  private async resolve_account_workspace_path(
+    account: ChatAccountConfig,
+  ): Promise<string | null> {
+    const workspace_id = normalize_text(account.workspace_id);
+    const workspaces = await this.context.system.list_workspaces();
+    if (workspace_id) {
+      const matched = workspaces.find((item) => item.workspace_id === workspace_id);
+      if (matched) return matched.workspace_path;
+      this.context.logger.warn("Chat Account references an unknown Workspace; falling back", {
+        account_id: account.account_id,
+        workspace_id,
+      });
+    }
+    const only = workspaces.length === 1 ? workspaces[0] : undefined;
+    return only ? only.workspace_path : null;
+  }
+
+  /**
+   * 解析一条 Account 在新 Conversation 上的实际执行目标。
+   *
+   * 说明（中文）
+   * - Account 不承载 Agent 身份；agent_id / workspace_id 只是可选的初始绑定。
+   * - 缺失时按 City 现状兜底，且只在候选唯一时自动选用，避免静默路由到错误对象。
+   * - 已有 Conversation 不会走到这里，它始终沿用自身记录的绑定。
+   */
+  private async resolve_account_target(account: ChatAccountConfig): Promise<{
+    agent_id: string;
+    workspace_id: string;
+  }> {
+    const agents = await this.context.system.list_agents();
+    const workspaces = await this.context.system.list_workspaces();
+    return {
+      agent_id: normalize_text(account.agent_id) || pick_unique_target(
+        agents.map((item) => item.agent_id),
+        `Chat Account "${account.account_id}" has no agent_id`,
+      ),
+      workspace_id: normalize_text(account.workspace_id) || pick_unique_target(
+        workspaces.map((item) => item.workspace_id),
+        `Chat Account "${account.account_id}" has no workspace_id`,
+      ),
+    };
   }
 
   /** 启动可靠 Worker 与连接健康检查的周期触发器。 */
@@ -808,6 +882,7 @@ export class ChatRuntime {
                 ...route,
                 text: String(payload.text || ""),
                 reply_to_message: true,
+                attachment_roots: await this.resolve_outbound_attachment_roots(conversation),
               });
           if (!result.success) throw new Error(result.error || "Chat delivery failed");
           this.store.complete_outbound(delivery.delivery_id);
@@ -833,6 +908,27 @@ export class ChatRuntime {
       this.outbox_running = false;
     }
   }
+}
+
+/**
+ * 在候选唯一时返回该候选，否则抛出可执行的配置错误。
+ *
+ * 关键点（中文）
+ * - 0 个候选说明 City 中不存在可兜底对象。
+ * - 多个候选无法安全猜测，必须显式配置，避免消息被静默路由到错误 Agent。
+ */
+function pick_unique_target(candidates: string[], message: string): string {
+  const only = candidates.length === 1 ? candidates[0] : undefined;
+  if (typeof only === "string") return only;
+  if (candidates.length === 0) {
+    throw new Error(`${message}, and City has no candidate to fall back to`);
+  }
+  throw new Error(`${message}, and City has ${candidates.length} candidates; configure it explicitly`);
+}
+
+/** 归一化可选的配置文本。 */
+function normalize_text(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 /** 解析平台时间，非法值使用当前时间。 */

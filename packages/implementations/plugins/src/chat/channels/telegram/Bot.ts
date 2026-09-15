@@ -102,6 +102,7 @@ export class TelegramBot extends BaseChatChannel {
     await this.sendMessage(params.chatId, params.text, {
       messageThreadId: params.messageThreadId,
       ...(typeof replyToMessageId === "number" ? { replyToMessageId } : {}),
+      ...(params.attachment_roots ? { attachmentRoots: params.attachment_roots } : {}),
     });
   }
 

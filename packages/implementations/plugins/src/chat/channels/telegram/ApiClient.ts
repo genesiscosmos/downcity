@@ -236,7 +236,11 @@ export class TelegramApiClient {
   async sendMessage(
     chatId: string,
     text: string,
-    opts?: { messageThreadId?: number; replyToMessageId?: number },
+    opts?: {
+      messageThreadId?: number;
+      replyToMessageId?: number;
+      attachmentRoots?: string[];
+    },
   ): Promise<void> {
     const parsed = parseTelegramAttachments(sanitizeChatText(text));
     const message_thread_id =
@@ -283,6 +287,7 @@ export class TelegramApiClient {
         await this.sendAttachment(chatId, segment.attachment, {
           messageThreadId: message_thread_id,
           replyToMessageId: reply_to_message_id,
+          ...(opts?.attachmentRoots ? { attachmentRoots: opts.attachmentRoots } : {}),
         });
       } catch (error) {
         // 关键点（中文）：附件投递失败必须向上冒泡，交由 Outbox 记录失败并重试。
@@ -373,7 +378,11 @@ export class TelegramApiClient {
   private async sendAttachment(
     chatId: string,
     att: { type: TelegramAttachmentType; pathOrUrl: string; caption?: string },
-    opts?: { messageThreadId?: number; replyToMessageId?: number },
+    opts?: {
+      messageThreadId?: number;
+      replyToMessageId?: number;
+      attachmentRoots?: string[];
+    },
   ): Promise<void> {
     const message_thread_id =
       typeof opts?.messageThreadId === "number"
@@ -404,13 +413,20 @@ export class TelegramApiClient {
       return;
     }
 
-    const abs = path.isAbsolute(src)
-      ? src
-      : path.resolve(this.rootPath, src);
-    const resolved = path.resolve(abs);
-    const root = path.resolve(this.rootPath);
-    if (!resolved.startsWith(root + path.sep) && resolved !== root) {
-      throw new Error(`Attachment path must be inside project root: ${src}`);
+    // 关键点（中文）：附件基准由调用方按当前会话声明，Channel 不自行推断 Workspace。
+    // 未声明时回退到 Connector 构造期根目录，保持既有调用方行为不变。
+    const declared_roots = (opts?.attachmentRoots ?? [])
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .map((item) => path.resolve(item));
+    const base_root = declared_roots[0] ?? path.resolve(this.rootPath);
+    const resolved = path.isAbsolute(src) ? path.resolve(src) : path.resolve(base_root, src);
+    const allowed_roots = declared_roots.length > 0 ? declared_roots : [path.resolve(this.rootPath)];
+    const is_allowed = allowed_roots.some(
+      (root) => resolved === root || resolved.startsWith(root + path.sep),
+    );
+    if (!is_allowed) {
+      throw new Error(`Attachment path is outside the allowed roots: ${src}`);
     }
     if (!(await fs.pathExists(resolved))) {
       throw new Error(`Attachment not found: ${src}`);
