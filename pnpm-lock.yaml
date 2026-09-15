@@ -41,9 +41,6 @@ importers:
       '@earendil-works/pi-tui':
         specifier: ^0.74.2
         version: 0.74.2
-      '@larksuiteoapi/node-sdk':
-        specifier: ^1.73.3
-        version: 1.74.0
       better-sqlite3:
         specifier: ^12.10.0
         version: 12.10.0
@@ -141,9 +138,6 @@ importers:
       '@downcity/type':
         specifier: workspace:*
         version: link:../../packages/type
-      '@larksuiteoapi/node-sdk':
-        specifier: ^1.73.3
-        version: 1.74.0
       '@tiptap/core':
         specifier: 3.29.2
         version: 3.29.2(@tiptap/pm@3.29.2)
@@ -195,6 +189,9 @@ importers:
       react-zoom-pan-pinch:
         specifier: ^4.2.0
         version: 4.2.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      shiki:
+        specifier: ^3.23.0
+        version: 3.23.0
       streamdown:
         specifier: ^1.6.11
         version: 1.6.11(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(react@19.2.6)
@@ -621,6 +618,9 @@ importers:
       '@downcity/type':
         specifier: workspace:*
         version: link:../../type
+      '@larksuiteoapi/node-sdk':
+        specifier: ^1.73.3
+        version: 1.74.0
       commander:
         specifier: ^15.0.0
         version: 15.0.0

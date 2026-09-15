@@ -71,6 +71,7 @@
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
     "@downcity/type": "workspace:*",
+    "@larksuiteoapi/node-sdk": "^1.73.3",
     "commander": "^15.0.0",
     "execa": "^9.6.1",
     "fs-extra": "^11.3.5",

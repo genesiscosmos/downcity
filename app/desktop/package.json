@@ -24,7 +24,6 @@
     "@downcity/plugins": "workspace:^",
     "@downcity/sandbox-microsandbox": "workspace:^",
     "@downcity/type": "workspace:*",
-    "@larksuiteoapi/node-sdk": "^1.73.3",
     "@tiptap/core": "3.29.2",
     "@tiptap/extension-placeholder": "3.29.2",
     "@tiptap/pm": "3.29.2",
