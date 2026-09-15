@@ -87,7 +87,8 @@ export function SessionView(props: SessionViewProps) {
   const translate_chat = use_translation("chat");
   const { session, messages, runtime, settings } = props;
   const scroll_surface_id = get_session_key(props.workspace_id, props.agent.agent_id, session.session_id);
-  const { scroll_ref, content_ref, bottom_ref, handle_scroll, preserve_prepend_position, is_following, scroll_to_bottom } = use_chat_scroll(scroll_surface_id, settings.auto_scroll);
+  // 滚动锚点以「首条消息 ID」为内容标识：只有历史前插会改变它，追加消息不会。
+  const { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, is_following, scroll_to_bottom } = use_chat_scroll(scroll_surface_id, settings.auto_scroll, messages[0]?.message_id ?? "");
   const busy = is_chat_busy(runtime);
   // 「回到最新」的计数基线：跟随中基线持续跟随当前消息数，退出跟随后才开始累积。
   // 这样用户只是上滑回看、没有新内容时不会报出一个凭空的数字。
@@ -126,7 +127,6 @@ export function SessionView(props: SessionViewProps) {
           {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} /> : null}
           <TurnFileOpenProvider open_file={props.open_file} workspace_path={props.workspace.workspace_path || undefined}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></TurnFileOpenProvider>
         </div>
-        <div ref={bottom_ref} className="chat-scroll-bottom-anchor" aria-hidden="true" />
       </div>
         <JumpToLatest visible={follow_indicator.visible && messages.length > 0} new_message_count={follow_indicator.new_message_count} on_click={scroll_to_bottom} />
       </div>

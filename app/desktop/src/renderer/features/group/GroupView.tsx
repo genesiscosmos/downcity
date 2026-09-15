@@ -78,7 +78,8 @@ interface GroupViewProps {
 export function GroupView({ group, agents, settings, message_projection, member_statuses, group_phase, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, composer, remove_session, controller }: GroupViewProps) {
   const translate = use_translation("resources");
   const scroll_surface_id = get_group_chat_key(workspace_id, group.group_id, session.session_id);
-  const { scroll_ref, content_ref, bottom_ref, handle_scroll } = use_chat_scroll(scroll_surface_id, settings.auto_scroll);
+  // Group 消息只会追加，首条消息 ID 天然不变，因此不会触发历史前插恢复。
+  const { scroll_ref, content_ref, handle_scroll } = use_chat_scroll(scroll_surface_id, settings.auto_scroll, message_projection?.segments[0]?.messages[0]?.message_id ?? "");
 
   const agents_by_id = useMemo(() => new Map(agents.map((agent) => [agent.agent_id, agent])), [agents]);
   const running_agent_ids = useMemo(() => group_phase === "executing" ? member_statuses.filter((status) => status.running).map((status) => status.agent_id) : empty_chat_items, [group_phase, member_statuses]);
@@ -103,7 +104,6 @@ export function GroupView({ group, agents, settings, message_projection, member_
             {interactions.map(({ agent_id, part }) => <GroupInteractionRow key={part.interaction_id} agent={agents_by_id.get(agent_id)} agent_id={agent_id} part={part} respond_interaction={respond_interaction} />)}
             {running_agent_ids.map((agent_id) => <GroupTypingRow key={`typing:${agent_id}`} agent={agents_by_id.get(agent_id)} agent_id={agent_id} />)}
           </div>
-          <div ref={bottom_ref} className="chat-scroll-bottom-anchor" aria-hidden="true" />
         </div>
         {composer}
       </div>

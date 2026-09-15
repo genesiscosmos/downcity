@@ -1,22 +1,20 @@
 /* Duobox Chat 的消息、Tool 活动与输入状态样式。 */
 
-/* 消息内容不参与原生滚动锚定，避免高度修正时浏览器选中任意消息行。 */
+/*
+ * 消息视口不关闭浏览器原生滚动锚定。
+ *
+ * 内容高度会在渲染后继续变化（Markdown、代码块、公式、图表、文件 diff、流式输出），
+ * 用户向上浏览时，视口【上方】任一行的变高都会把正在阅读的内容推走，而浏览器在
+ * 修正这类位移时保持 scrollTop 数值不变。原生锚定是唯一能自动补偿它的机制：
+ * 一旦把候选节点排除或收窄到视口外的元素（例如列表末尾的 1px 标记），
+ * 向上滚动就会表现为内容反复被推走又弹回。
+ *
+ * 同理，消息行【不能】做离屏布局跳过（如 content-visibility: auto + 占位高度）：
+ * 离屏行按占位高度记账、进入视口后换成真实高度，等于每一行经过视口边界时都在
+ * 改变视口上方的高度，且占位值与真实值差异通常是一个数量级。
+ */
 .chat-scroll-content {
-  overflow-anchor: none;
-}
-
-/* 唯一底部锚点：切换会话定位后，异步布局变化仍由浏览器保持在视口底部。 */
-.chat-scroll-bottom-anchor {
-  width: 100%;
-  height: 1px;
   overflow-anchor: auto;
-  pointer-events: none;
-}
-
-/* 保留消息 DOM、查找和文本选择语义，仅跳过离屏静态行的布局与绘制。 */
-.chat-message-viewport-row {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 96px;
 }
 
 .reasoning-activity-content {
