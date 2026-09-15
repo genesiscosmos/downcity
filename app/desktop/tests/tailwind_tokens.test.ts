@@ -122,6 +122,9 @@ const expected_variants: readonly [string, string][] = [
   ["hover:bg-interaction-active", "background-color"],
   ["focus-visible:bg-interaction-hover", "background-color"],
   ["group-hover:bg-muted-foreground", "background-color"],
+  // 具名 group：Agent 身份行的悬停下划线只在鼠标落在头像+名称上时出现，
+  // 用无名 group 会让悬停正文也下划线。变体不产出时它只是静默失效（看不出错）。
+  ["group-hover/identity:underline", "text-decoration-line: underline"],
   ["focus-visible:ring-ring/30", "--tw-ring-color"],
   ["divide-divider", "border-color: var(--divider)"],
   ["divide-border-subtle", "border-color: var(--border-subtle)"],

@@ -5,7 +5,7 @@ import type { DesktopAgentSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
 
 /** Agent 头像展示属性。 */
-interface AgentAvatarProps {
+export interface AgentAvatarProps {
   /** 当前 Agent 摘要。 */
   agent: Pick<DesktopAgentSummary, "agent_id" | "avatar_url"> & { /** Agent 用户可见名称。 */ name?: string; /** 兼容临时 Group 投影。 */ model_id?: string; /** 兼容临时 Group 投影。 */ version?: string };
   /** 头像容器样式。 */

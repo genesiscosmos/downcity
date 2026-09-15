@@ -30,6 +30,9 @@ import { Markdown } from "@/components/markdown/Markdown";
 import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 import { AgentInteraction } from "@/features/chat/components/messages/AgentInteraction";
+import { AgentMessageFrame } from "@/features/chat/components/messages/AgentMessageFrame";
+import { AgentThinkingStatus } from "@/features/chat/components/messages/AgentRuntimeIndicator";
+import { UserMessageFrame } from "@/features/chat/components/messages/UserMessageFrame";
 import { is_group_draft_session_id } from "@/types/DesktopView";
 import type { GroupMessageProjection, GroupMessageSegment } from "@/types/GroupProjection";
 import { use_translation } from "@/locales/i18n";
@@ -240,24 +243,67 @@ function GroupModelEditor({ group, models, models_loading, set_group }: { /** �
   return <SettingGroup>{text_models.map((model) => <SettingActionItem key={model.model_id} icon={<LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-4" />} label={model.name} active={model.model_id === group.model_id} on_select={() => set_group({ ...group, model_id: model.model_id })} />)}</SettingGroup>;
 }
 
-/** 按 Agent Chat 的左右消息结构渲染 Group 共享消息。 */
+/** 按与 Agent Session Chat 完全相同的结构渲染 Group 共享消息。
+ *
+ * 四种行型各自对应 Session 侧的同一件事，共用同一份骨架而不是各写一遍 DOM：
+ *
+ * | Group 行 | 骨架 | 与 Session 的唯一差异 |
+ * |---|---|---|
+ * | 用户发言 | UserMessageFrame | meta 是「已读 + 时间」，没有编辑/分支操作 |
+ * | Agent 发言 | AgentMessageFrame | 身份行动作是 @ 提及，不是打开配置 |
+ * | 成员待响应 | AgentMessageFrame | 身份行补一句「需要你的响应」，无身份行动作 |
+ * | 成员输入中 | AgentMessageFrame | 语义是 status，正文为空、只有状态行 |
+ *
+ * 因此这里不再写任何消息几何（头像尺寸、正文左缘、气泡圆角、元信息行高度）——
+ * 那些值只能有一个来源，否则两个表面会再次分叉。
+ */
 const GroupMessageRow = memo(function GroupMessageRow({ message, agent, read }: { /** Group 共享消息。 */ message: DesktopGroupMessage; /** 消息所属 Agent；用户与系统消息为空。 */ agent?: DesktopAgentSummary; /** 用户消息是否已完成 Dispatch。 */ read: boolean }) {
   const translate = use_translation("resources");
-  if (message.author_type === "user") return <div className="group is-user flex w-full items-end justify-end gap-2 py-2"><div className="w-full flex justify-end"><div className="user-message-stack flex w-fit max-w-[min(80%,42rem)] min-w-0 flex-col items-end gap-0.5"><div className="ml-auto flex max-w-full flex-col gap-2 overflow-hidden rounded-2xl rounded-tr-none bg-surface-subtle px-3 py-2 text-sm text-foreground"><div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className="break-words text-[0.8125rem] leading-[1.34]"><Markdown text={message.text} mode="static" /></div></div><div className="flex items-center gap-1.5 px-1">{read ? <span className="text-[0.6875rem] text-muted-foreground">{translate("group_details.read")}</span> : null}<ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></div></div></div></div>;
+  if (message.author_type === "user") return <UserMessageFrame
+    meta={<>
+      {read ? <span className="text-[0.6875rem] text-muted-foreground">{translate("group_details.read")}</span> : null}
+      <ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" />
+    </>}
+  >
+    <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className="break-words text-[0.8125rem] leading-[1.34]"><Markdown text={message.text} mode="static" /></div>
+  </UserMessageFrame>;
   if (message.author_type === "system") return <div className="group flex w-full items-center gap-3 py-2"><span className="h-px min-w-4 flex-1 bg-border/60" /><span className="flex max-w-[80%] items-center gap-2 text-center text-[0.75rem] text-muted-foreground"><span>{message.text}</span><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></span><span className="h-px min-w-4 flex-1 bg-border/60" /></div>;
-  return <div className="group is-agent flex min-w-0 w-full items-start gap-2 py-2"><button type="button" disabled={!agent} onClick={() => { if (agent) dispatch_chat_mention(agent); }} className="size-8 shrink-0 rounded-md outline-none transition-opacity duration-150 enabled:hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/30" title={agent ? `@${agent.name}` : undefined} aria-label={agent ? translate("group_details.mention", { name: agent.name }) : undefined}><AgentAvatar agent={agent ?? { agent_id: message.author_id || "Agent", model_id: "", version: "" }} class_name="size-8 rounded-md" /></button><div className="min-w-0 max-w-[min(80%,42rem)] px-1 pt-0.5 text-sm text-foreground"><div className="mb-1 flex items-center gap-2 text-[0.6875rem] font-medium text-muted-foreground"><span>{agent?.name || "Agent"}</span><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></div><div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="agent" className="max-w-full overflow-hidden rounded-2xl rounded-tl-none bg-surface-subtle px-3 py-2 text-[0.8125rem] leading-[1.54]"><Markdown text={message.text} mode="static" /></div></div></div>;
+  // 未知作者的降级身份：只需 id 与名称，头像会回退为默认图标。
+  // 不再补 `model_id` / `version`：那两个字段只有 GroupAvatar 的降级投影需要，
+  // 构造它们只会让每个调用点都要跟着写一遍。
+  const identity = agent ?? { agent_id: message.author_id || "Agent" };
+  return <AgentMessageFrame
+    agent={identity}
+    created_at={message.created_at}
+    identity_action={agent ? () => dispatch_chat_mention(agent) : undefined}
+    identity_title={agent ? `@${agent.name}` : undefined}
+    identity_label={agent ? translate("group_details.mention", { name: agent.name }) : undefined}
+  >
+    <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="agent" className="min-w-0 max-w-full break-words text-[0.8125rem] leading-[1.54]"><Markdown text={message.text} mode="static" /></div>
+  </AgentMessageFrame>;
 });
 
 /** 待响应的 Group 成员交互；其它消息变化时保持渲染结果。 */
 const GroupInteractionRow = memo(function GroupInteractionRow({ agent, agent_id, part, respond_interaction }: { /** 发起交互的 Agent。 */ agent?: DesktopAgentSummary; /** 发起交互的 Agent 标识。 */ agent_id: string; /** canonical Interaction。 */ part: SessionAgentInteraction; /** 提交交互响应。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   const translate = use_translation("resources");
-  return <div className="group is-agent flex min-w-0 w-full items-start gap-2 py-2"><div className="size-8 shrink-0"><AgentAvatar agent={agent ?? { agent_id, model_id: "", version: "" }} class_name="size-8 rounded-md" /></div><div className="min-w-0 flex-1 px-1 pt-0.5"><div className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">{translate("group_details.response_required", { name: agent?.name || "Agent" })}</div><AgentInteraction part={part} respond={respond_interaction} /></div></div>;
+  // 身份行已经给出了名字，这里只说「需要你的响应」，不再重复名字。
+  return <AgentMessageFrame
+    agent={agent ?? { agent_id }}
+    suffix={<span className="shrink-0 text-[0.6875rem] text-muted-foreground">{translate("group_details.response_required")}</span>}
+  >
+    <AgentInteraction part={part} respond={respond_interaction} />
+  </AgentMessageFrame>;
 });
 
 /** Group 成员正在生成消息时，直接在消息流中显示输入状态。 */
 const GroupTypingRow = memo(function GroupTypingRow({ agent, agent_id }: { /** 正在输入的 Agent。 */ agent?: DesktopAgentSummary; /** Agent 标识。 */ agent_id: string }) {
   const translate = use_translation("resources");
-  return <div className="group is-agent flex min-w-0 w-full items-start gap-2 py-2"><div className="size-8 shrink-0"><AgentAvatar agent={agent ?? { agent_id, model_id: "", version: "" }} class_name="size-8 rounded-md" /></div><div className="min-w-0 max-w-[min(80%,42rem)] px-1 pt-0.5 text-sm text-foreground"><div className="mb-1 text-[0.6875rem] font-medium text-muted-foreground">{agent?.name || "Agent"}</div><div className="rounded-2xl rounded-tl-none bg-surface-subtle px-3 py-2 text-[0.8125rem] leading-[1.54] text-muted-foreground">{translate("group_details.typing")}</div></div></div>;
+  // 语义是 status 而不是 message；状态行与 Session 的「思考中」共用同一个组件。
+  return <AgentMessageFrame
+    agent={agent ?? { agent_id }}
+    semantic="status"
+    footer={<AgentThinkingStatus label={translate("group_details.typing")} />}
+  />;
 });
 
 

@@ -419,7 +419,34 @@ SessionView
 2. 按 Block 类型穷尽渲染；
 3. 将 Activity 与 Interaction 所需能力向下传递。
 
-该组件允许 Group Chat 复用内容层，而不被迫渲染 Session Agent Message 的头像、Header 和 Footer。
+该组件允许 Group Chat 复用内容层，而不被迫渲染 Session Agent Message 的身份行和 Footer。
+
+#### `AgentMessageFrame` / `UserMessageFrame`
+
+消息行的唯一骨架，**两个表面（Agent Session Chat 与 Group 共享消息）共用**：
+
+- `AgentMessageFrame`：身份在上、正文在下的 Agent 侧行。Session 的正式消息、
+  Session 的独立「思考中」状态行、Group 的成员发言 / 待响应 / 输入中，四种用法共用它；
+- `UserMessageFrame`：右侧气泡 + 下方元信息行的用户侧行。Session 与 Group 共用。
+
+两者的差异只能用 props 表达（身份行动作、`suffix`、`meta`、编辑态、元素语义），
+不得在调用处另写一份 DOM：历史上两侧各写一遍，结果 Agent 正文在 Session 侧是
+「头像列 28px + 间距 8px」、在 Group 侧是「头像列 32px + px-1」，同一件事两种视觉。
+
+几何（头像尺寸、正文左缘、气泡圆角、元信息行高度）集中在 `message_layout` 的类名常量里，
+由 `tests/chat_message_layout.test.ts` 守住「两个表面不得自己写消息几何」。
+
+两个必须保持的不变量：
+
+- **身份行与正文共用同一条左边缘**，因此身份行与正文都不带左内边距；
+- **头像与名称是同一个按钮**——它们做同一件事，拆成两个会让键盘用户为同一动作按两次 Tab。
+
+#### `AgentThinkingStatus`
+
+「Agent 正在做什么」的唯一表达：点阵 + 文案 + 可选的文件改动统计。
+三种场景（独立状态行、流式消息 Footer、Group 成员输入中）共用它，
+live region（`role="status"`）挂在它自身而不是行容器上——变化的是这里的文案，
+而且每个场景只有一个实例，既不会重复播报，也不会因为外层容器换了语义就丢掉。
 
 #### `AgentActivity`
 
@@ -781,7 +808,7 @@ AgentInteraction
 本次结构重构必须保持并补足以下要求：
 
 1. Message Root 使用语义合理的容器，消息列表维持 `role="log"`；
-2.头像和 Agent 名称按钮必须有可读 `aria-label`；
+2.头像与 Agent 名称是**同一个按钮**（它们做同一件事），必须有可读 `aria-label`；
 3.所有纯图标按钮必须有 title 与 aria-label；
 4.`details / summary` 可通过键盘操作，并有明确 focus-visible；
 5. Interaction 使用 `form`、`fieldset`、`legend`、label 和原生 input 语义；
