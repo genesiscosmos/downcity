@@ -1,5 +1,6 @@
-/** Workspace 管理页：MainView 组合内容与右侧「Workspace」域。 */
+/** Workspace 管理页：MainView 承载正文，配置分区注册为右侧「Workspace」tab。 */
 import { useMemo } from "react";
+import { TbFolders } from "react-icons/tb";
 
 import { use_desktop_selector } from "@/app/use_desktop";
 
@@ -8,9 +9,9 @@ import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 import { WelcomeView } from "@/app/WelcomeView";
 
-import { MainView, type BayBarDomain } from "@/layouts/BayBar";
+import { MainView } from "@/layouts/BayBar";
 
-import { WORKSPACE_DOMAIN_ID, WORKSPACE_EDITOR_SECTIONS, WorkspaceEditorPanel, WorkspaceView } from "@/features/workspace/WorkspaceView";
+import { WorkspaceView } from "@/features/workspace/WorkspaceView";
 import { WorkspaceFileView } from "@/features/workspace/WorkspaceFileView";
 import { use_translation } from "@/locales/i18n";
 
@@ -20,25 +21,12 @@ export function WorkspaceRouteMainView({ selection, controller, sidebar_collapse
   if (!workspace) return <WelcomeView />;
   return selection.kind === "workspace"
     ? <WorkspaceMainView workspace={workspace} controller={controller} sidebar_collapsed={sidebar_collapsed} />
-    : <WorkspaceFileView workspace={workspace} relative_path={selection.relative_path} />;
+    : <WorkspaceFileView workspace={workspace} relative_path={selection.relative_path} line={selection.line} />;
 }
 
-/** Workspace MainView：配置分区组装为右侧「Workspace」域。 */
+/** Workspace MainView：配置标签页在正文的入口被点击时构造并打开。 */
 export function WorkspaceMainView({ workspace, controller, sidebar_collapsed }: { /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean }) {
-  const translate_resources = useTranslation_resources();
-  const domains = useMemo<BayBarDomain[]>(() => [{
-    id: WORKSPACE_DOMAIN_ID,
-    label: translate_resources("workspace.edit"),
-    sections: WORKSPACE_EDITOR_SECTIONS.map((item) => ({
-      id: item.id,
-      label: item.label_key ? translate_resources(item.label_key) : item.label ?? item.id,
-      content: <WorkspaceEditorPanel workspace={workspace} controller={controller.actions} section={item.id} />,
-    })),
-  }], [controller.actions, translate_resources, workspace]);
-
-  return <MainView view_key={`workspace:${workspace.workspace_id}`} domains={domains}>
-    {() => <WorkspaceView workspace={workspace} />}
-  </MainView>;
+  return <MainView><WorkspaceView workspace={workspace} controller={controller} /></MainView>;
 }
 
 /** resources 命名空间的翻译函数。 */

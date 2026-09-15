@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SettingActionItem, SettingGroup, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
-import { use_baybar_open } from "@/layouts/BayBar";
+import { use_baybar_open, baybar_tab_id, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
+import { use_agent_definition } from "@/features/agent/lib/use_agent_definition";
 import { MainViewBody, MainViewHeader } from "@/layouts/MainViewLayout";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { use_desktop_selector } from "@/app/use_desktop";
@@ -28,13 +29,9 @@ interface AgentViewProps {
   /** 打开主 Session 对话。 */ open_main_session(): Promise<void>;
 }
 
-/** 一级域「Agent」的稳定标识。 */
-export const AGENT_DOMAIN_ID = "agent";
-
-/**
- * Agent 定义分区；一级域「Agent」下的二级分区。
+/** Agent 定义分区；每个 Agent 的 tab 下的二级分区。
  *
- * 只描述分区标识与文案，具体内容由页面组装为域，避免视图层重复一次翻译表。
+ * 只描述分区标识与文案，具体内容由页面组装为 tab，避免视图层重复一次翻译表。
  */
 export const AGENT_EDITOR_SECTIONS: readonly { id: AgentEditorSection; label_key: string | null; label?: string }[] = [
   { id: "identity", label_key: "agent_details.identity" },
@@ -83,6 +80,54 @@ export function AgentEditorPanel({
 }
 
 
+/**
+ * 「某个 Agent 的配置」tab 的自解析内容。
+ *
+ * 只依赖 agent_id 与 controller，不接任何由页面持有的状态：
+ * 这样切走 Agent 页之后，已打开的 tab 依旧能渲染出正确内容
+ * （tab 与 MainView 不硬关联的关键就在这类组件）。
+ */
+export function AgentConfigTab({ agent_id, section, controller }: {
+  /** 目标 Agent 标识。 */
+  agent_id: string;
+  /** 当前编辑分区。 */
+  section: AgentEditorSection;
+  /** Renderer 稳定控制器。 */
+  controller: DesktopController;
+}) {
+  const translate_common = use_translation();
+  const agent = use_desktop_selector(controller.stores.catalog, (state) => state.agents.find((item) => item.agent_id === agent_id));
+  const definition_state = use_agent_definition(agent_id, controller);
+  // Agent 可能已被删除：给一个明确的空态，而不是渲染一半或默默什么都不显示。
+  if (!agent) return <div className="px-4 py-6 text-xs leading-5 text-muted-foreground">{translate_common("state.unavailable")}</div>;
+  return <AgentEditorPanel agent={agent} controller={controller} section={section} {...definition_state} />;
+}
+
+/** 「某个 Agent 的配置」标签页的种类标识。 */
+export const AGENT_TAB_KIND = "agent";
+
+/**
+ * 构造「某个 Agent 的配置」标签页。
+ *
+ * 在点击处调用，一次点击 = 一个标签页；内容自解析（只带 agent_id），
+ * 所以切走 Agent 页后已打开的标签页依旧渲染正确内容。
+ *
+ * 标题用**这个 Agent 的名字**，而不是「编辑 Agent」这类固定文案：
+ * 标签行上同时可能出现多个同类标签页，只有对象名能区分它们。
+ */
+export function agent_config_tab(agent: DesktopAgentSummary, controller: DesktopController, t: BayBarTranslate): BayBarTab {
+  return {
+    id: baybar_tab_id(AGENT_TAB_KIND, agent.agent_id),
+    label: agent.name,
+    icon: <AgentAvatar agent={agent} class_name="size-3.5 shrink-0 rounded-[0.25rem]" />,
+    sections: AGENT_EDITOR_SECTIONS.map((item) => ({
+      id: item.id,
+      label: item.label_key ? t(item.label_key) : item.label ?? item.id,
+      content: <AgentConfigTab agent_id={agent.agent_id} section={item.id} controller={controller} />,
+    })),
+  };
+}
+
 /** 左侧展示 Agent 摘要，点击配置项后在右侧展开对应编辑容器。 */
 export function AgentView({
   agent,
@@ -92,8 +137,9 @@ export function AgentView({
 }: AgentViewProps) {
   const translate_resources = use_translation("resources");
   const translate_common = use_translation();
-  // 右侧编辑面板由 MainView 提供；这里只需按「域 + 分区」打开。
+  // 右侧编辑面板由 MainView 提供；这里只需构造标签页并打开它。
   const open_baybar = use_baybar_open();
+  const open_agent_tab = (section: AgentEditorSection) => open_baybar(agent_config_tab(agent, controller, translate_resources), section);
   const [avatar_dialog_open, set_avatar_dialog_open] = useState(false);
   const recent_sessions = main_session ? [main_session.session] : [];
 
@@ -126,7 +172,7 @@ export function AgentView({
             description={translate_resources("agent_details.agent_description")}
           >
             <SettingGroup>
-              <SettingActionItem icon={<TbUser />} label={translate_resources("agent_details.identity")} description={agent.description || translate_resources("agent_details.identity_description")} trailing={<TbChevronRight />} on_select={() => open_baybar(AGENT_DOMAIN_ID, "identity")} />
+              <SettingActionItem icon={<TbUser />} label={translate_resources("agent_details.identity")} description={agent.description || translate_resources("agent_details.identity_description")} trailing={<TbChevronRight />} on_select={() => open_agent_tab("identity")} />
               <SettingActionItem
                 icon={<LLMModelIcon model_id={agent.model_id} />}
                 label="Model"
@@ -139,14 +185,14 @@ export function AgentView({
                     <TbChevronRight />
                   </>
                 }
-                on_select={() => open_baybar(AGENT_DOMAIN_ID, "model")}
+                on_select={() => open_agent_tab("model")}
               />
               <SettingActionItem
                 icon={<TbFileText />}
                 label="SOUL.md"
                 description={translate_resources("agent_details.soul_description")}
                 trailing={<TbChevronRight />}
-                on_select={() => open_baybar(AGENT_DOMAIN_ID, "soul")}
+                on_select={() => open_agent_tab("soul")}
               />
             </SettingGroup>
           </SettingSection>

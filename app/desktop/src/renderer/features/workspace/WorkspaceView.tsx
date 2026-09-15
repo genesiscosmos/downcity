@@ -1,29 +1,74 @@
 /** Workspace 身份、说明与本地资源位置的独立信息页。 */
 
 import { useState } from "react";
-import { TbCopy, TbDots, TbExternalLink, TbFolder, TbPencil } from "react-icons/tb";
+import { TbCopy, TbDots, TbExternalLink, TbFolder, TbFolders, TbPencil } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { MainViewBody, MainViewHeader } from "@/layouts/MainViewLayout";
 import { Markdown } from "@/components/markdown/Markdown";
-import { use_baybar_open } from "@/layouts/BayBar";
+import { use_baybar_open, baybar_tab_id, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
 import { use_translation } from "@/locales/i18n";
-import type { DesktopActions } from "@/types/DesktopView";
+import type { DesktopActions, DesktopController } from "@/types/DesktopView";
 import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
+import { use_desktop_selector } from "@/app/use_desktop";
 
 /** Workspace 主视图属性。 */
 interface WorkspaceViewProps {
   /** 当前打开的 Workspace。 */
   workspace: DesktopWorkspaceSummary;
+  /** Renderer 稳定控制器，用于构造配置标签页。 */
+  controller: DesktopController;
 }
 /** Workspace 配置侧栏支持的分区。 */
 export type WorkspaceEditorField = "identity" | "readme";
 
 /** 一级域「Workspace」的稳定标识。 */
-export const WORKSPACE_DOMAIN_ID = "workspace";
+/** Workspace 配置标签页的种类标识。 */
+export const WORKSPACE_TAB_KIND = "workspace";
+
+/**
+ * 构造「某个 Workspace 的配置」标签页。
+ *
+ * 在点击处调用；内容自解析（只带 workspace_id），
+ * 所以切走 Workspace 页后已打开的标签页依旧渲染正确内容。
+ *
+ * 标题用**这个 Workspace 的名字**，理由同 Agent 标签页：同类多开时靠对象名区分。
+ */
+export function workspace_config_tab(workspace: DesktopWorkspaceSummary, controller: DesktopController, t: BayBarTranslate): BayBarTab {
+  return {
+    id: baybar_tab_id(WORKSPACE_TAB_KIND, workspace.workspace_id),
+    label: workspace.name,
+    icon: <TbFolders />,
+    sections: WORKSPACE_EDITOR_SECTIONS.map((item) => ({
+      id: item.id,
+      label: item.label_key ? t(item.label_key) : item.label ?? item.id,
+      content: <WorkspaceConfigTab workspace_id={workspace.workspace_id} section={item.id} controller={controller} />,
+    })),
+  };
+}
+/**
+ * 「某个 Workspace 的配置」tab 的自解析内容。
+ *
+ * 只依赖 workspace_id 与 controller：切走 Workspace 页后，已打开的 tab 依旧渲染正确内容。
+ * workspace 先判空再进内层：hook 不能条件调用。
+ */
+export function WorkspaceConfigTab({ workspace_id, section, controller }: {
+  /** 目标 Workspace 标识。 */
+  workspace_id: string;
+  /** 当前编辑分区。 */
+  section: WorkspaceEditorField;
+  /** Renderer 稳定控制器。 */
+  controller: DesktopController;
+}) {
+  const translate_common = use_translation();
+  const workspace = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces.find((item) => item.workspace_id === workspace_id));
+  // Workspace 可能已被移除：给一个明确的空态，而不是渲染一半。
+  if (!workspace) return <div className="px-4 py-6 text-xs leading-5 text-muted-foreground">{translate_common("state.unavailable")}</div>;
+  return <WorkspaceEditorPanel workspace={workspace} controller={controller.actions} section={section} />;
+}
 
 /** 展示 Workspace 自身信息，不投影 Agent 或 Session。 */
-export function WorkspaceView({ workspace }: WorkspaceViewProps) {
+export function WorkspaceView({ workspace, controller }: WorkspaceViewProps) {
   const translate_common = use_translation("common");
   const translate_resources = use_translation("resources");
   const [copied, set_copied] = useState(false);
@@ -39,7 +84,7 @@ export function WorkspaceView({ workspace }: WorkspaceViewProps) {
     <MainViewBody><div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><main className="mx-auto w-full max-w-4xl px-8 pb-12 pt-10">
       <header className="min-w-0 px-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground"><TbFolder className="size-4" /><span>{translate_resources("workspace.title")}</span></div>
-        <div className="mt-3 flex min-w-0 items-center gap-2"><h1 className="min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight text-foreground">{workspace.name}</h1><div className="ml-auto flex shrink-0 items-center gap-1.5"><Button size="icon" className="size-6" title={translate_resources("workspace.edit")} aria-label={translate_resources("workspace.edit")} onClick={() => open_baybar(WORKSPACE_DOMAIN_ID, "identity")}><TbPencil /></Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="size-6" title={translate_common("actions.more")} aria-label={translate_common("actions.more")}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4}><DropdownMenuItem onClick={() => void copy_path()}><TbCopy /><span>{translate_resources(copied ? "workspace.copied" : "workspace.copy_path")}</span></DropdownMenuItem><DropdownMenuItem onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbExternalLink /><span>{translate_resources("workspace.open_finder")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div>
+        <div className="mt-3 flex min-w-0 items-center gap-2"><h1 className="min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight text-foreground">{workspace.name}</h1><div className="ml-auto flex shrink-0 items-center gap-1.5"><Button size="icon" className="size-6" title={translate_resources("workspace.edit")} aria-label={translate_resources("workspace.edit")} onClick={() => open_baybar(workspace_config_tab(workspace, controller, translate_resources), "identity")}><TbPencil /></Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" className="size-6" title={translate_common("actions.more")} aria-label={translate_common("actions.more")}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" sideOffset={4}><DropdownMenuItem onClick={() => void copy_path()}><TbCopy /><span>{translate_resources(copied ? "workspace.copied" : "workspace.copy_path")}</span></DropdownMenuItem><DropdownMenuItem onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbExternalLink /><span>{translate_resources("workspace.open_finder")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div>
         <div className="mt-2 min-w-0"><p className="truncate font-mono text-[0.6875rem] text-muted-foreground" title={workspace.workspace_path}>{workspace.workspace_path}</p></div>
       </header>
       <section className="mt-8" aria-labelledby="workspace-readme-title"><div className="mb-2 px-1"><h2 id="workspace-readme-title" className="text-xs text-muted-foreground">README.md</h2></div><article className="min-h-32 rounded-xl bg-surface-subtle px-6 py-5 text-[0.875rem] leading-[1.7] text-foreground">{workspace.readme ? <Markdown text={workspace.readme} mode="static" /> : <div className="flex min-h-24 items-center justify-center text-xs text-muted-foreground">{translate_resources("workspace.no_readme")}</div>}</article></section>

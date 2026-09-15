@@ -17,6 +17,7 @@ import { ChatWorkspaceSelector } from "@/features/chat/components/ChatWorkspaceS
 import { WorkspaceTagMenu } from "@/features/chat/components/WorkspaceTagMenu";
 import { use_chat_scroll } from "@/features/chat/lib/use_chat_scroll";
 import { get_group_chat_key } from "@/features/chat/lib/chat_cache_key";
+import { use_group_draft } from "@/features/group/lib/use_group_draft";
 import { dispatch_chat_mention } from "@/features/chat/composer/editor/chatMentionEvent";
 import { use_desktop_selector } from "@/app/use_desktop";
 import type { DesktopController } from "@/types/DesktopView";
@@ -24,7 +25,7 @@ import type { DesktopGroupStatusPhase, DesktopModelSummary, DesktopSettings } fr
 import type { RespondSessionInteractionInput, SessionAgentInteraction } from "@downcity/agent";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { MainViewBody, MainViewHeader } from "@/layouts/MainViewLayout";
-import { use_baybar_open } from "@/layouts/BayBar";
+import { use_baybar_open, baybar_tab_id, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
 import { Markdown } from "@/components/markdown/Markdown";
 import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessage, DesktopGroupSessionSummary, DesktopGroupSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
@@ -69,10 +70,12 @@ interface GroupViewProps {
   composer: ReactNode;
   /** 删除当前 Group Session；草稿态不提供。 */
   remove_session?(): Promise<void>;
+  /** Renderer 稳定控制器，用于构造标签页。 */
+  controller: DesktopController;
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, agents, settings, message_projection, member_statuses, group_phase, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, composer, remove_session }: GroupViewProps) {
+export function GroupView({ group, agents, settings, message_projection, member_statuses, group_phase, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, composer, remove_session, controller }: GroupViewProps) {
   const translate = use_translation("resources");
   const scroll_surface_id = get_group_chat_key(workspace_id, group.group_id, session.session_id);
   const { scroll_ref, content_ref, bottom_ref, handle_scroll } = use_chat_scroll(scroll_surface_id, settings.auto_scroll);
@@ -86,10 +89,11 @@ export function GroupView({ group, agents, settings, message_projection, member_
     : workspace
       ? <WorkspaceTagMenu workspace={workspace} />
       : <span className="inline-flex h-5 min-w-0 max-w-40 shrink-0 items-center gap-1 rounded-full bg-surface-subtle px-2 text-[0.625rem] font-normal text-muted-foreground"><TbFolder className="size-3 shrink-0" /><span className="truncate">{workspace_id}</span></span>;
-  // Group 编辑面板由当前 MainView 注册，这里只需按标识打开。
+  // Group 编辑面板在右侧打开；这里只需构造标签页。
   const open_panel = use_baybar_open();
+  const open_group_tab = () => open_panel(group_config_tab(group, controller, translate));
   const group_session_title = format_group_session_title(session, translate("group_details.empty_title"));
-  return <ChatSurfaceLayout header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={group_session_title}>{group_session_title}</span>{workspace_tag}</div>} header_right={<div className="flex shrink-0 items-center gap-1"><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("group_details.actions")} aria-label={translate("group_details.actions")}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => open_panel(GROUP_DOMAIN_ID)}><TbEdit /><span>{translate("group_details.settings")}</span></DropdownMenuItem>{remove_session ? <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(translate("group_details.delete_chat_confirmation"))) void remove_session(); }}><TbTrash /><span>{translate("group_details.delete_chat")}</span></DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu></div>}>
+  return <ChatSurfaceLayout header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={group_session_title}>{group_session_title}</span>{workspace_tag}</div>} header_right={<div className="flex shrink-0 items-center gap-1"><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("group_details.actions")} aria-label={translate("group_details.actions")}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_group_tab}><TbEdit /><span>{translate("group_details.settings")}</span></DropdownMenuItem>{remove_session ? <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(translate("group_details.delete_chat_confirmation"))) void remove_session(); }}><TbTrash /><span>{translate("group_details.delete_chat")}</span></DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu></div>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} onScroll={handle_scroll} className="chat-scroll-viewport relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
@@ -113,12 +117,13 @@ const GroupMessageSegmentRows = memo(function GroupMessageSegmentRows({ segment,
   && previous.agents_by_id === next.agents_by_id);
 
 /** Group 联系人主页面，只展示摘要和可进入的具体配置项。 */
-export function GroupConfigView({ group, agents }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[] }) {
+export function GroupConfigView({ group, agents, controller }: { /** 当前 Group。 */ group: DesktopGroupSummary; /** 全部 Agent。 */ agents: DesktopAgentSummary[]; /** Renderer 稳定控制器，用于构造标签页。 */ controller: DesktopController }) {
   const translate = use_translation("resources");
   const translate_common = use_translation();
-  // 右侧编辑面板由 MainView 提供；这里只需按「域 + 分区」打开。
+  // 右侧编辑面板由 MainView 提供；这里只需构造标签页并打开它。
   const open_baybar = use_baybar_open();
-  const content = <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><SettingsMainContent><SettingsContainer><SettingSection title="Group" description={translate("group_details.description")}><SettingGroup><SettingActionItem icon={<LLMModelIcon model_id={group.model_id} />} label="Model" description={translate("group_details.model_description")} trailing={<><span className="max-w-48 truncate">{group.model_id || translate_common("state.not_configured")}</span><TbChevronRight /></>} on_select={() => open_baybar(GROUP_DOMAIN_ID, "model")} /><SettingActionItem icon={<TbFileText />} label={translate("group_details.goal")} description={translate("group_details.goal_description")} trailing={<><span>{group.instruction ? translate("group_details.characters", { count: group.instruction.length }) : translate("group_details.not_set")}</span><TbChevronRight /></>} on_select={() => open_baybar(GROUP_DOMAIN_ID, "instruction")} /><SettingActionItem icon={<TbUsers />} label={translate("group_details.members")} description={translate("group_details.members_description")} trailing={<><span>{translate("group_details.members_count", { count: group.members.length })}</span><TbChevronRight /></>} on_select={() => open_baybar(GROUP_DOMAIN_ID, "members")} /></SettingGroup></SettingSection></SettingsContainer></SettingsMainContent></div>;
+  const open_group_tab = (section: GroupEditorSection) => open_baybar(group_config_tab(group, controller, translate), section);
+  const content = <div className="min-h-0 min-w-0 flex-1 overflow-y-auto"><SettingsMainContent><SettingsContainer><SettingSection title="Group" description={translate("group_details.description")}><SettingGroup><SettingActionItem icon={<LLMModelIcon model_id={group.model_id} />} label="Model" description={translate("group_details.model_description")} trailing={<><span className="max-w-48 truncate">{group.model_id || translate_common("state.not_configured")}</span><TbChevronRight /></>} on_select={() => open_group_tab("model")} /><SettingActionItem icon={<TbFileText />} label={translate("group_details.goal")} description={translate("group_details.goal_description")} trailing={<><span>{group.instruction ? translate("group_details.characters", { count: group.instruction.length }) : translate("group_details.not_set")}</span><TbChevronRight /></>} on_select={() => open_group_tab("instruction")} /><SettingActionItem icon={<TbUsers />} label={translate("group_details.members")} description={translate("group_details.members_description")} trailing={<><span>{translate("group_details.members_count", { count: group.members.length })}</span><TbChevronRight /></>} on_select={() => open_group_tab("members")} /></SettingGroup></SettingSection></SettingsContainer></SettingsMainContent></div>;
   return <>
     <MainViewHeader title={<span className="flex min-w-0 items-center gap-2"><GroupAvatar group={group} agents={agents} /><span className="truncate">{group.name}</span></span>} />
     <MainViewBody>{content}</MainViewBody>
@@ -132,7 +137,29 @@ function format_group_session_title(session: DesktopGroupSessionSummary, empty_t
 }
 
 /** 一级域「Group」的稳定标识。 */
-export const GROUP_DOMAIN_ID = "group";
+/** 「某个 Group 的配置」标签页的种类标识。 */
+export const GROUP_TAB_KIND = "group";
+
+/**
+ * 构造「某个 Group 的配置」标签页。
+ *
+ * 在点击处调用，一次点击 = 一个标签页；内容自解析（只带 group_id），
+ * 所以切走 Group 页后已打开的标签页依旧渲染正确内容。
+ *
+ * 标题用**这个 Group 的名字**，理由同 Agent 标签页：同类多开时靠对象名区分。
+ */
+export function group_config_tab(group: DesktopGroupSummary, controller: DesktopController, t: BayBarTranslate): BayBarTab {
+  return {
+    id: baybar_tab_id(GROUP_TAB_KIND, group.group_id),
+    label: group.name,
+    icon: <TbUsers />,
+    sections: GROUP_EDITOR_SECTIONS.map((item) => ({
+      id: item.id,
+      label: item.label_key ? t(item.label_key) : item.label ?? item.id,
+      content: <GroupConfigTab group_id={group.group_id} section={item.id} controller={controller} />,
+    })),
+  };
+}
 
 /** Group 配置分区，作为域内的二级分区。 */
 export const GROUP_EDITOR_SECTIONS: readonly { id: GroupEditorSection; label_key: string | null; label?: string }[] = [
@@ -140,6 +167,41 @@ export const GROUP_EDITOR_SECTIONS: readonly { id: GroupEditorSection; label_key
   { id: "instruction", label_key: "group_details.goal" },
   { id: "members", label_key: "group_details.members" },
 ];
+
+/**
+ * 「某个 Group 的配置」tab 的自解析内容。
+ *
+ * 只依赖 group_id 与 controller：切走 Group 页后，已打开的 tab 依旧渲染正确内容。
+ * group 必须先判空再进内层：hook 不能条件调用，内层组件才能无条件地调 use_group_draft。
+ */
+export function GroupConfigTab({ group_id, section, controller }: {
+  /** 目标 Group 标识。 */
+  group_id: string;
+  /** 当前编辑分区。 */
+  section: GroupEditorSection;
+  /** Renderer 稳定控制器。 */
+  controller: DesktopController;
+}) {
+  const translate_common = use_translation();
+  const group = use_desktop_selector(controller.stores.catalog, (state) => state.groups_by_id[group_id]);
+  // Group 可能已被删除：给一个明确的空态，而不是渲染一半。
+  if (!group) return <div className="px-4 py-6 text-xs leading-5 text-muted-foreground">{translate_common("state.unavailable")}</div>;
+  return <GroupConfigTabContent group={group} section={section} controller={controller} />;
+}
+
+/** GroupConfigTab 的内层：group 已确定为非空，可无条件调用草稿 hook。 */
+function GroupConfigTabContent({ group, section, controller }: {
+  /** 当前 Group。 */
+  group: DesktopGroupSummary;
+  /** 当前编辑分区。 */
+  section: GroupEditorSection;
+  /** Renderer 稳定控制器。 */
+  controller: DesktopController;
+}) {
+  const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
+  const { draft, update_draft } = use_group_draft(group, controller);
+  return <GroupEditorPanel group={draft} agents={agents} controller={controller} section={section} set_group={update_draft} />;
+}
 
 /** Group 单个分区的内容属性。 */
 interface GroupEditorPanelProps {

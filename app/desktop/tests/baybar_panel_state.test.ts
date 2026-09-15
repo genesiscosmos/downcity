@@ -1,100 +1,86 @@
 /**
- * 右侧 BayBar 的域 / 分区选择规则测试。
+ * 右侧 BayBar 的标签页模型与纯规则测试。
  *
- * 直接验证生产模块，锁定核心不变量：
- * 1. 展开右侧一定有内容可看，不给空面板；
- * 2. 选择失效时逐级回退（域存在则保留域、分区回退到第一个）；
- * 3. 序列化往返稳定，且不同视图互相隔离。
+ * 直接验证生产模块，锁定三条最容易写错的不变量：
+ * 1. 关标签页**不会**关面板——所以 `resolve_active_after_close` 的返回值里
+ *    根本没有「面板是否展开」这个字段，它在类型上就无法表达「顺带收起」；
+ * 2. 关掉当前标签页时接替规则明确（右侧优先，其次左侧，都没有则空着）；
+ * 3. 分区沿用上次、失效时回退到第一个，不让用户看到空面板。
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { baybar_storage_key, format_selection, parse_selection, resolve_domain_switch, resolve_selection } from "../src/renderer/layouts/baybarPanelState.ts";
-import type { BayBarDomain } from "../src/renderer/layouts/baybarPanelState.ts";
+import {
+  baybar_open_storage_key,
+  baybar_tab_id,
+  parse_stored_flag,
+  resolve_active_after_close,
+  resolve_section,
+} from "../src/renderer/layouts/baybarPanelState.ts";
+import type { BayBarTab } from "../src/renderer/layouts/baybarPanelState.ts";
 
-/** 构造一个域。 */
-function domain(id: string, section_ids: string[]): BayBarDomain {
-  return { id, label: id, sections: section_ids.map((section_id) => ({ id: section_id, label: section_id, content: null })) };
+/** 构造一个标签页。 */
+function tab(id: string, section_ids: string[]): BayBarTab {
+  return { id, label: id, icon: null, sections: section_ids.map((section_id) => ({ id: section_id, label: section_id, content: null })) };
 }
 
-// Agent 对话：两个域，分区数不同。
-const agent_chat = [domain("agent", ["identity", "model", "soul"]), domain("turn", ["file-diff"])];
-// Agent 配置：单域。
-const agent_config = [domain("agent", ["identity", "model", "soul"])];
+const agent_tab = tab("agent:a1", ["identity", "model", "soul"]);
 
-test("没有历史选择时落在第一个域的第一个分区", () => {
-  assert.deepEqual(resolve_selection(agent_chat, null), { domain_id: "agent", section_id: "identity" });
+test("标签页 id 指向具体对象，同类对象的每个实例各占一个", () => {
+  assert.equal(baybar_tab_id("agent", "a1"), "agent:a1");
+  assert.notEqual(baybar_tab_id("agent", "a1"), baybar_tab_id("agent", "a2"));
+  assert.notEqual(baybar_tab_id("agent", "a1"), baybar_tab_id("group", "a1"));
 });
 
-test("历史选择仍然有效时保持不变", () => {
-  const previous = { domain_id: "turn", section_id: "file-diff" };
-  assert.deepEqual(resolve_selection(agent_chat, previous), previous);
+test("关掉最后一个标签页时是空着，而不是收起面板", () => {
+  // 这是本轮修复的核心：关标签页与开关面板是两个正交维度。
+  // 返回值里没有「面板是否展开」——这就是不变量的表达方式。
+  assert.equal(resolve_active_after_close(["agent:a1"], "agent:a1", "agent:a1"), null);
 });
 
-test("域仍存在但分区消失时，回退到该域的第一个分区", () => {
-  // 例如某域内的分区集合变化，用户不该被踢到别的域。
-  assert.deepEqual(
-    resolve_selection(agent_config, { domain_id: "agent", section_id: "plugins" }),
-    { domain_id: "agent", section_id: "identity" },
-  );
+test("关掉非当前标签页时不改变当前标签页", () => {
+  assert.equal(resolve_active_after_close(["a", "b", "c"], "b", "c"), "b");
 });
 
-test("域整体消失时，回退到第一个域的第一个分区", () => {
-  // 从 Agent 对话切到 Agent 配置后，"turn" 域不再存在。
-  assert.deepEqual(
-    resolve_selection(agent_config, { domain_id: "turn", section_id: "file-diff" }),
-    { domain_id: "agent", section_id: "identity" },
-  );
+test("关掉当前标签页时接到右侧邻居", () => {
+  assert.equal(resolve_active_after_close(["a", "b", "c"], "a", "a"), "b");
+  assert.equal(resolve_active_after_close(["a", "b", "c"], "b", "b"), "c");
 });
 
-test("没有域时没有选择，右侧整体不存在", () => {
-  assert.equal(resolve_selection([], { domain_id: "agent", section_id: "identity" }), null);
+test("没有右侧邻居时接到左侧", () => {
+  assert.equal(resolve_active_after_close(["a", "b", "c"], "c", "c"), "b");
 });
 
-test("域内没有分区时该域不成立", () => {
-  assert.equal(resolve_selection([domain("empty", [])], null), null);
+test("关闭不存在的标签页时不改变当前标签页", () => {
+  assert.equal(resolve_active_after_close(["a", "b"], "a", "missing"), "a");
 });
 
-test("切换到某个域时进入它的第一个分区", () => {
-  assert.deepEqual(resolve_domain_switch(agent_chat, "turn"), { domain_id: "turn", section_id: "file-diff" });
+test("分区沿用上次的选择", () => {
+  assert.equal(resolve_section(agent_tab, "soul")?.id, "soul");
 });
 
-test("切换到不存在的域时不产生选择", () => {
-  assert.equal(resolve_domain_switch(agent_chat, "missing"), null);
+test("没记录过分区时落在第一个", () => {
+  assert.equal(resolve_section(agent_tab, null)?.id, "identity");
+  assert.equal(resolve_section(agent_tab, undefined)?.id, "identity");
 });
 
-test("任意输入下都只会返回集合内的值或 null", () => {
-  const cases: Array<[BayBarDomain[], { domain_id: string; section_id: string } | null]> = [
-    [agent_chat, null],
-    [agent_chat, { domain_id: "turn", section_id: "file-diff" }],
-    [agent_chat, { domain_id: "agent", section_id: "missing" }],
-    [agent_chat, { domain_id: "missing", section_id: "identity" }],
-    [agent_config, { domain_id: "turn", section_id: "file-diff" }],
-    [[], null],
-  ];
-  for (const [domains, previous] of cases) {
-    const resolved = resolve_selection(domains, previous);
-    if (resolved === null) continue;
-    const target = domains.find((item) => item.id === resolved.domain_id);
-    assert.ok(target, `${JSON.stringify(previous)} → 域 ${resolved.domain_id} 不存在`);
-    assert.ok(target.sections.some((section) => section.id === resolved.section_id), `${JSON.stringify(previous)} → 分区 ${resolved.section_id} 不在域内`);
-  }
+test("记录的分区消失时回退到第一个，而不是显示空面板", () => {
+  assert.equal(resolve_section(agent_tab, "plugins")?.id, "identity");
 });
 
-test("选择序列化可无损往返", () => {
-  const selection = { domain_id: "turn", section_id: "file-diff" };
-  assert.deepEqual(parse_selection(format_selection(selection)), selection);
+test("标签页没有分区时不给出内容", () => {
+  assert.equal(resolve_section(tab("empty", []), null), null);
 });
 
-test("非法持久化内容被安全忽略", () => {
-  assert.equal(parse_selection(null), null);
-  assert.equal(parse_selection(""), null);
-  assert.equal(parse_selection("没有分隔符"), null);
-  assert.equal(parse_selection(":only-section"), null);
-  assert.equal(parse_selection("only-domain:"), null);
+test("开合状态只有明确存过 true 才算展开", () => {
+  // 首次打开应用不应主动占用右侧空间。
+  assert.equal(parse_stored_flag(null), false);
+  assert.equal(parse_stored_flag(""), false);
+  assert.equal(parse_stored_flag("1"), false);
+  assert.equal(parse_stored_flag("yes"), false);
+  assert.equal(parse_stored_flag("true"), true);
 });
 
-test("不同视图的选择状态互相隔离", () => {
-  assert.notEqual(baybar_storage_key("agent-session:a:1"), baybar_storage_key("agent-session:a:2"));
-  assert.equal(baybar_storage_key("agent:demo"), "downcity.baybar_selection:agent:demo");
+test("开合状态的存储键是唯一持久化的东西", () => {
+  assert.equal(baybar_open_storage_key, "downcity.baybar_open");
 });

@@ -13,20 +13,24 @@
  * 第 4 条单独存在的原因：缩放通过根元素 font-size 实现，px 不跟随缩放、rem 才跟随。
  * 所以样式必须走 shellMotion 的 CSS 长度出口，本文件用 parse_shell_css() 把它还原成
  * 绝对坐标再断言，直接写 px 的实现会在 scale ≠ 1 时失败。
+ *
+ * 右侧几何与左侧镜像：两个面板开关都是窗口上的浮动控件，
+ * 面板收起后都会浮到卡片之上，两侧的预留推导共用 shell_collapsed_panel_reserve_length()。
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
   get_baybar_control_right,
-  get_baybar_header_reserve,
   get_collapsed_header_inset,
   get_shell_control_left,
   get_shell_control_top,
   shell_collapsed_header_inset_css,
+  shell_collapsed_panel_reserve_length,
   shell_control_left_css,
+  shell_length_at_scale,
+  SHELL_BAYBAR_COLLAPSED_HEADER_RESERVE_CSS,
   SHELL_BAYBAR_CONTROL_RIGHT_CSS,
-  SHELL_BAYBAR_HEADER_RESERVE_CSS,
   SHELL_BAND_CENTER,
   SHELL_CONTROL_GAP,
   SHELL_CONTROL_SIZE,
@@ -39,7 +43,11 @@ import {
   SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM,
   SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS,
   SHELL_MAIN_VIEW_BORDER,
+  SHELL_MAIN_VIEW_GUTTER,
   SHELL_MAIN_VIEW_INSET,
+  SHELL_MAIN_VIEW_MIN_REGION,
+  SHELL_MAIN_VIEW_MIN_WIDTH,
+  SHELL_MAIN_VIEW_MIN_WIDTH_CSS,
   SHELL_MAIN_VIEW_OFFSET,
   SHELL_REM_BASE,
 } from "../src/renderer/layouts/shellMotion.ts";
@@ -77,7 +85,7 @@ function left_geometry(): { control_right: number; content_left: number } {
 function right_geometry(): { control_edge: number; content_edge: number } {
   return {
     control_edge: get_baybar_control_right() + SHELL_CONTROL_SIZE,
-    content_edge: SHELL_MAIN_VIEW_INSET + SHELL_HEADER_DEFAULT_PADDING + get_baybar_header_reserve(),
+    content_edge: SHELL_MAIN_VIEW_INSET + SHELL_HEADER_DEFAULT_PADDING + shell_length_at_scale(shell_collapsed_panel_reserve_length("right"), 1),
   };
 }
 
@@ -107,29 +115,20 @@ test("右侧折叠留白让控件与 Header 内容的实际间距等于设计值
   }
 });
 
+test("两侧预留由同一个推导给出，只有按钮起始位置不同", () => {
+  // 左侧含 macOS 红绿灯留白，右侧不含；除此外双方完全对称。
+  with_platform("Win32", () => {
+    assert.equal(get_collapsed_header_inset(), shell_length_at_scale(shell_collapsed_panel_reserve_length("right"), 1));
+  });
+});
+
 test("卡片 inset 包含边框，否则卡内一切定位都会偏低 1px", () => {
   assert.equal(SHELL_MAIN_VIEW_INSET, SHELL_MAIN_VIEW_OFFSET + SHELL_MAIN_VIEW_BORDER);
   assert.ok(SHELL_MAIN_VIEW_BORDER > 0, "卡片边框必须计入 inset");
 });
 
-test("右侧按钮距上边缘与距右边缘相等，三边留白均匀", () => {
-  // 按钮是窗口级浮动控件，位置不应跟随卡片 inset。
-  for (const platform of ["MacIntel", "Win32"]) {
-    with_platform(platform, () => {
-      assert.equal(get_baybar_control_right(), get_shell_control_top());
-      assert.equal(get_baybar_control_right(), SHELL_HEADER_DEFAULT_PADDING);
-    });
-  }
-});
-
-test("右侧按钮右边缘不会超出卡片外沿", () => {
-  // 按钮距窗口右缘 8，卡片边框外沿距窗口右缘 offset；前者必须更大，否则按钮会溢出卡片。
-  assert.ok(get_baybar_control_right() >= SHELL_MAIN_VIEW_OFFSET, "按钮超出卡片右边缘");
-});
-
-test("两侧折叠按钮与 macOS 原生窗口按钮同高", () => {
-  // 左侧按钮历来与红绿灯对齐，这是窗口外壳的视觉基准；
-  // 右侧向它看齐，不受 MainView 卡片 offset 影响。
+test("左侧折叠按钮与 macOS 原生窗口按钮同高", () => {
+  // 左侧按钮与红绿灯对齐，这是窗口外壳的视觉基准。
   assert.equal(get_shell_control_top(), SHELL_HEADER_DEFAULT_PADDING);
 });
 
@@ -169,22 +168,51 @@ test("两侧预留都足够，不会让 Header 内容压到按钮", () => {
   for (const platform of ["MacIntel", "Win32"]) {
     with_platform(platform, () => {
       assert.ok(get_collapsed_header_inset() > 0, `平台 ${platform} 的左侧留白不为正`);
-      assert.ok(get_baybar_header_reserve() > 0, `平台 ${platform} 的右侧留白不为正`);
+      assert.ok(shell_length_at_scale(shell_collapsed_panel_reserve_length("right"), 1) > 0, `平台 ${platform} 的右侧留白不为正`);
     });
   }
 });
 
-test("按钮仍落在 MainView 顶栏内，不会压住或溢出该行", () => {
+test("右侧控制与左侧控制同高、距各自窗口边缘同宽", () => {
+  // 两个按钮是镜像的浮动控件，位置由窗口决定，不跟随卡片 inset。
+  assert.equal(get_baybar_control_right(), get_shell_control_top());
+  assert.equal(get_baybar_control_right(), SHELL_HEADER_DEFAULT_PADDING);
+});
+
+test("左侧折叠按钮完整落在窗口级顶栏内，不压住也不溢出该行", () => {
   const control_top = get_shell_control_top();
   const control_bottom = control_top + SHELL_CONTROL_SIZE;
-  // 按钮与红绿灯同高，比顶栏内容中心略靠上，但仍须完整落在顶栏内。
-  assert.ok(control_top >= SHELL_MAIN_VIEW_INSET, "按钮超出顶栏上边缘");
-  assert.ok(control_bottom <= main_view_band_bottom(), "按钮超出顶栏下边缘");
+  assert.ok(control_top >= 0, "按钮超出顶栏上边缘");
+  assert.ok(control_bottom <= SHELL_HEADER_HEIGHT, "按钮超出顶栏下边缘");
+  // Sidebar 折叠时它落在卡片顶栏上，卡内内容带同样要容得下。
+  assert.ok(control_bottom <= main_view_band_bottom(), "按钮超出卡内顶栏下边缘");
 });
 
 test("卡片留白足够容纳圆角，不会贴住窗口边缘", () => {
   // offset 为 0 时圆角会直接贴边被裁切；保留一个最小值作为约束。
   assert.ok(SHELL_MAIN_VIEW_OFFSET >= 2, "卡片留白过小，圆角会贴边");
+});
+
+/**
+ * BayBar 面板与 rail 顶栏内容中心的绝对坐标。
+ *
+ * 两者都是窗口级的一列（与 Sidebar 镜像），顶栏从窗口顶部开始、高 SHELL_HEADER_HEIGHT，
+ * 因此没有卡片 inset 那一项。
+ */
+function baybar_band_content_center(): number {
+  return SHELL_HEADER_HEIGHT / 2;
+}
+
+test("BayBar 顶栏与正文 Header 落在同一条基准线上", () => {
+  // 面板改用卡内 inset 几何（减去 offset、加回边框）会让它比正文 Header 高/低 1px。
+  assert.equal(baybar_band_content_center(), SHELL_BAND_CENTER);
+});
+
+test("正文保留量由卡片最小宽度与正文区留白共同构成", () => {
+  // 右栏宽度上限与窄窗口断点都扣除这个值；它算错时两处会一起错，只能在这里锁住。
+  assert.equal(SHELL_MAIN_VIEW_GUTTER, SHELL_MAIN_VIEW_OFFSET * 2);
+  assert.equal(SHELL_MAIN_VIEW_MIN_REGION, SHELL_MAIN_VIEW_MIN_WIDTH + SHELL_MAIN_VIEW_GUTTER);
+  assert.equal(SHELL_MAIN_VIEW_MIN_WIDTH, 450);
 });
 
 /**
@@ -221,10 +249,12 @@ test("跟随缩放的长度出口必须使用 rem", () => {
   for (const [name, value] of [
     ["MainView 顶栏高度", SHELL_MAIN_VIEW_BAND_HEIGHT_CSS],
     ["MainView 顶栏底距", SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS],
+    ["正文卡片最小宽度", SHELL_MAIN_VIEW_MIN_WIDTH_CSS],
     ["侧栏顶栏高度", SHELL_HEADER_HEIGHT_CSS],
     ["折叠按钮 top", SHELL_CONTROL_TOP_CSS],
-    ["右侧按钮 right", SHELL_BAYBAR_CONTROL_RIGHT_CSS],
-    ["右侧预留", SHELL_BAYBAR_HEADER_RESERVE_CSS],
+    ["右侧 rail 宽度", SHELL_BAYBAR_CONTROL_RIGHT_CSS],
+    ["左侧预留", shell_collapsed_header_inset_css()],
+    ["右侧预留", SHELL_BAYBAR_COLLAPSED_HEADER_RESERVE_CSS],
   ] as const) {
     assert.ok(value.includes("rem"), `${name} 没有跟随界面缩放：${value}`);
   }
@@ -250,8 +280,11 @@ for (const scale of ui_scales) {
         assert_close(inset + band_height, parse_shell_css(SHELL_HEADER_HEIGHT_CSS, scale), `${context}：顶栏下沿未对齐`);
         // 2. 卡内顶栏内容中心 = 两侧共同基准线。
         assert_close(inset + (band_height - band_padding) / 2, parse_shell_css(SHELL_CONTROL_TOP_CSS, scale) + control_size / 2, `${context}：内容中心偏离基准线`);
-        // 3. 左右折叠按钮同高。
-        assert_close(parse_shell_css(SHELL_CONTROL_TOP_CSS, scale), parse_shell_css(SHELL_BAYBAR_CONTROL_RIGHT_CSS, scale), `${context}：两侧按钮纵向不一致`);
+
+        // 2b. 右栏面板是窗口级一列，与左栏共用同一顶栏高度，内容中心落在同一条基准线上。
+        assert_close(parse_shell_css(SHELL_HEADER_HEIGHT_CSS, scale) / 2, parse_shell_css(SHELL_CONTROL_TOP_CSS, scale) + control_size / 2, `${context}：BayBar 顶栏内容中心偏离基准线`);
+        // 3. 两侧开关的 top 由同一个常量给出，逐档缩放后在缩放意义上仍相等。
+        assert_close(parse_shell_css(SHELL_CONTROL_TOP_CSS, scale), SHELL_HEADER_DEFAULT_PADDING * scale, `${context}：开关 top 未跟随缩放`);
 
         // 4. 折叠后 Header 内容与浮动按钮的实际间距等于设计值。
         const control_left = parse_shell_css(shell_control_left_css(), scale);
@@ -259,7 +292,7 @@ for (const scale of ui_scales) {
         assert_close(content_left - (control_left + control_size), control_gap, `${context}：左侧预留间距不符`);
 
         const control_right = parse_shell_css(SHELL_BAYBAR_CONTROL_RIGHT_CSS, scale);
-        const content_right = inset + header_padding + parse_shell_css(SHELL_BAYBAR_HEADER_RESERVE_CSS, scale);
+        const content_right = inset + header_padding + parse_shell_css(SHELL_BAYBAR_COLLAPSED_HEADER_RESERVE_CSS, scale);
         assert_close(content_right - (control_right + control_size), control_gap, `${context}：右侧预留间距不符`);
       });
     }
@@ -274,7 +307,7 @@ test("缩放不会把预留量或顶栏内容带成负数", () => {
         const band_band = parse_shell_css(SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, scale) - parse_shell_css(SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS, scale);
         assert.ok(band_band >= SHELL_CONTROL_SIZE * 0.85, `${context}：卡内顶栏装不下按钮`);
         assert.ok(parse_shell_css(shell_collapsed_header_inset_css(), scale) > 0, `${context}：左侧预留不为正`);
-        assert.ok(parse_shell_css(SHELL_BAYBAR_HEADER_RESERVE_CSS, scale) > 0, `${context}：右侧预留不为正`);
+        assert.ok(parse_shell_css(SHELL_BAYBAR_COLLAPSED_HEADER_RESERVE_CSS, scale) > 0, `${context}：右侧预留不为正`);
       });
     }
   }

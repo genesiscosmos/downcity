@@ -44,6 +44,40 @@ export const SHELL_MAIN_VIEW_INSET = SHELL_MAIN_VIEW_OFFSET + SHELL_MAIN_VIEW_BO
 /** 侧栏顶栏（窗口顶部拖拽带）的高度；两侧内容都从这条线开始。 */
 export const SHELL_HEADER_HEIGHT = 40;
 
+/**
+ * Sidebar 一级图标导航栏（Rail）的宽度。
+ *
+ * 只有左侧有 rail：右侧 BayBar 收起时完全让出空间，开关是一个与左侧同款的浮动按钮。
+ * 左侧最小占地 = Rail + Sidebar 最小宽度。
+ */
+export const SHELL_SIDEBAR_RAIL_WIDTH = 40;
+
+/** 右侧 BayBar 的宽度范围；与左侧 Sidebar 同为窗口级面板，不随卡片 offset 变化。 */
+export const SHELL_BAYBAR_MIN_WIDTH = 360;
+export const SHELL_BAYBAR_DEFAULT_WIDTH = 400;
+
+/**
+ * 正文卡片的最小宽度。
+ *
+ * 这是「给正文保留多少」的唯一来源。BayBar 没有自己的最大宽度：
+ * 它的上限由「可用区域 − 本值」隐式给出（见 shellResponsive.resolve_baybar_max_width）。
+ * 因此拖宽右栏时被限制的是正文的下限，而不是右栏的上限。
+ */
+export const SHELL_MAIN_VIEW_MIN_WIDTH = 450;
+
+/** 正文区（main）左右内边距之和；卡片最小宽度之外还要为它让出空间。 */
+export const SHELL_MAIN_VIEW_GUTTER = SHELL_MAIN_VIEW_OFFSET * 2;
+
+/**
+ * 正文需要的最小总占宽（设计 px）：卡片最小宽度 + 两侧留白。
+ *
+ * 这是右栏宽度上限与窄窗口断点共同的扣除项。
+ */
+export const SHELL_MAIN_VIEW_MIN_REGION = SHELL_MAIN_VIEW_MIN_WIDTH + SHELL_MAIN_VIEW_GUTTER;
+
+/** 卡片最小宽度的 CSS 值；跟随界面缩放，走 rem 出口。 */
+export const SHELL_MAIN_VIEW_MIN_WIDTH_CSS = shell_length_css(shell_scaled_length(SHELL_MAIN_VIEW_MIN_WIDTH));
+
 /** 两侧顶栏内容共同的垂直中心（绝对坐标）：左侧折叠按钮与 macOS 红绿灯同高。 */
 export const SHELL_BAND_CENTER = SHELL_HEADER_DEFAULT_PADDING + SHELL_CONTROL_SIZE / 2;
 
@@ -73,6 +107,51 @@ export const SHELL_PANEL_TRANSITION = {
   duration: 0.3,
   ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
 };
+
+/**
+ * 读取当前的界面缩放比例。
+ *
+ * 界面缩放是通过改写根元素 font-size 实现的，所以 1rem 的实际像素值就是缩放本身。
+ * 右栏宽度上限要把「给正文保留的宽度」按缩放换算成实际像素：保留量在 CSS 里是 rem，
+ * 而测量得到的可用宽度是实际像素，直接相减会让 120% 下的正文被夹到不足 450 设计像素。
+ */
+export function read_shell_scale(): number {
+  if (typeof document === "undefined") return 1;
+  const root_font_size = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return Number.isFinite(root_font_size) && root_font_size > 0 ? root_font_size / SHELL_REM_BASE : 1;
+}
+
+/**
+ * 两侧面板开关相对各自窗口边缘的偏移。
+ *
+ * 两个按钮是镜像的浮动控件，位置由窗口决定，不跟随卡片内边距，
+ * 因此两侧的 top / 边缘留白都取同一个值。
+ * 左侧还要额外让出 macOS 红绿灯（属于窗口 chrome，不随缩放变化，见 shell_control_left_length）。
+ */
+export function get_baybar_control_right(): number {
+  return SHELL_HEADER_DEFAULT_PADDING;
+}
+
+/** 右侧面板开关的 CSS `right`。 */
+export const SHELL_BAYBAR_CONTROL_RIGHT_CSS = shell_length_css(shell_scaled_length(SHELL_HEADER_DEFAULT_PADDING));
+
+/**
+ * 返回面板收起时，MainView Header 需要为对应的浮动按钮预留的宽度。
+ *
+ * 两侧共用同一套推导：按钮以窗口定位，而 Header 内容在卡片内容盒内，
+ * 两者基准相差一个 inset，预留量要同时补上这个 inset、按钮自身占宽与间距。
+ * 左、右的唯一区别是按钮的起始位置（左侧含 macOS 红绿灯留白，右侧没有）。
+ *
+ * 不预留的后果是：面板收起后按钮会盖住 Header 右侧的页面操作。
+ */
+export function shell_collapsed_panel_reserve_length(side: "left" | "right"): ShellLength {
+  const control = side === "left" ? shell_control_left_length() : shell_scaled_length(SHELL_HEADER_DEFAULT_PADDING);
+  return {
+    // 控件左缘含窗口 chrome 的固定留白；卡片边框也是 1px 细线，同样不随缩放变化。
+    pinned_px: control.pinned_px - main_view_inset_length.pinned_px,
+    scaled_px: control.scaled_px + SHELL_CONTROL_SIZE + SHELL_CONTROL_GAP - main_view_inset_length.scaled_px - SHELL_HEADER_DEFAULT_PADDING,
+  };
+}
 
 /**
  * 一段绝对长度。
@@ -186,22 +265,8 @@ export function get_shell_control_top(): number {
   return SHELL_HEADER_DEFAULT_PADDING;
 }
 
-/** 两侧折叠按钮的 CSS `top`。 */
+/** 左侧折叠按钮的 CSS `top`。 */
 export const SHELL_CONTROL_TOP_CSS = shell_length_css(shell_scaled_length(SHELL_HEADER_DEFAULT_PADDING));
-
-/**
- * 返回右侧折叠按钮相对窗口右缘的偏移（100% 缩放下的设计 px）。
- *
- * 按钮与左侧按钮同类，都是固定在窗口上的浮动控件，位置由窗口决定，
- * 不应跟随 MainView 卡片的内边距——否则距上边缘与距右边缘会不相等（曾经就是 8 与 13）。
- * 这里与 get_shell_control_top() 同值，保证右侧三边留白一致。
- */
-export function get_baybar_control_right(): number {
-  return SHELL_HEADER_DEFAULT_PADDING;
-}
-
-/** 右侧折叠按钮的 CSS `right`。 */
-export const SHELL_BAYBAR_CONTROL_RIGHT_CSS = shell_length_css(shell_scaled_length(SHELL_HEADER_DEFAULT_PADDING));
 
 /**
  * 返回 Sidebar 折叠时，MainView Header 需要额外预留的左侧留白。
@@ -212,14 +277,11 @@ export const SHELL_BAYBAR_CONTROL_RIGHT_CSS = shell_length_css(shell_scaled_leng
  *
  * 注意：控件以窗口左缘定位，而 Header 内容在卡片内容盒内，
  * 所以要一并减去 inset 与 Header 自身的内边距。
+ *
+ * 推导与右侧共用同一函数：两侧唯一的区别是按钮的起始位置。
  */
 export function shell_collapsed_header_inset_length(): ShellLength {
-  const control = shell_control_left_length();
-  return {
-    // 控件左缘含窗口 chrome 的固定留白；卡片边框也是 1px 细线，同样不随缩放变化。
-    pinned_px: control.pinned_px - main_view_inset_length.pinned_px,
-    scaled_px: control.scaled_px + SHELL_CONTROL_SIZE + SHELL_CONTROL_GAP - main_view_inset_length.scaled_px - SHELL_HEADER_DEFAULT_PADDING,
-  };
+  return shell_collapsed_panel_reserve_length("left");
 }
 
 /** 左侧预留留白（100% 缩放下的设计 px）。 */
@@ -233,23 +295,9 @@ export function shell_collapsed_header_inset_css(): string {
 }
 
 /**
- * 返回 BayBar 收起时，MainView Header 需要为按钮预留的宽度。
+ * 右侧预留留白的 CSS 值。
  *
- * 按钮以窗口定位，而 Header 内容在卡片内容盒内，两者基准不同（相差一个 inset）。
- * 预留量要同时补上这个 inset 与按钮自身占宽，
- * 使内容右边缘与按钮左边缘的实际间距恰好等于 SHELL_CONTROL_GAP。
+ * 必须放在 main_view_inset_length 之后：它在模块初始化时就会求值，
+ * 与上面的左侧常量同理（放到前面会命中 const 的暂时性死区）。
  */
-export function shell_baybar_header_reserve_length(): ShellLength {
-  return {
-    pinned_px: -main_view_inset_length.pinned_px,
-    scaled_px: SHELL_HEADER_DEFAULT_PADDING + SHELL_CONTROL_SIZE + SHELL_CONTROL_GAP - main_view_inset_length.scaled_px - SHELL_HEADER_DEFAULT_PADDING,
-  };
-}
-
-/** 右侧预留留白（100% 缩放下的设计 px）。 */
-export function get_baybar_header_reserve(): number {
-  return shell_length_at_scale(shell_baybar_header_reserve_length(), 1);
-}
-
-/** 右侧预留留白的 CSS 值。 */
-export const SHELL_BAYBAR_HEADER_RESERVE_CSS = shell_length_css(shell_baybar_header_reserve_length());
+export const SHELL_BAYBAR_COLLAPSED_HEADER_RESERVE_CSS = shell_length_css(shell_collapsed_panel_reserve_length("right"));

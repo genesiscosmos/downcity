@@ -1,88 +1,94 @@
 /**
- * 右侧 BayBar 的「域 / 分区」模型与选择规则。
+ * 右侧 BayBar 的标签页模型与纯规则。
  *
- * 两级语义：
- * - 一级 tab = 域（domain），回答「看哪个对象」，例如「Agent」「本轮」；
- * - 二级 tab = 分区（section），回答「看该对象的哪一部分」，例如「身份」「Model」。
+ * ## 一句话模型
  *
- * 与早期版本的关键差别：域是按语义划分的固定集合，不是「当前能提供什么」的枚举。
- * 因此「本轮」在没有文件改动时依然存在（显示空态），tab 条不会忽长忽短；
- * 以后新增「记忆」「任务」这类内容时，加一个域即可，不需要重新考虑组织原则。
+ * BayBar = **一个可开关的面板** + **一组标签页**。
+ * 面板的开合与标签页的数量互相独立：没有标签页时展开就是一张空白标签页。
+ *
+ * ## 标签页从哪来
+ *
+ * 由拥有内容的组件在用户点击时**直接构造并打开**（见各 feature 的 `*_tab()` 构造函数）。
+ * 没有「注册」、没有「声明」、没有生命周期：一次点击 = 一个标签页。
+ * 这曾经是一套带所有者标识的注册协议（声明可打开哪些、随视图卸载撤回），
+ * 代价是「切换视图会换掉已打开的标签页」，而且从视图卸载后内容无法渲染。
+ * 现在标签页自包含：id、标题、图标、内容齐备，与哪个视图还活着无关。
+ *
+ * ## 内容必须自解析
+ *
+ * `content` 只能依赖 id 与 controller，不能依赖构造它的那个视图的临时状态
+ * （例如 `useState` 里的选中项）。否则切走视图后，已打开的标签页会渲染成空或旧数据。
+ *
+ * 本模块保持纯粹（不引入 React 运行时、不读 localStorage），因此可被单测直接加载。
  */
 
 import type { ReactNode } from "react";
 
-/** 域内的一个分区，对应二级 tab。 */
+/** 标签页内的一个分区，对应内容区上方的一组分段按钮。 */
 export interface BayBarSection {
   /** 分区稳定标识。 */
   id: string;
-  /** 二级 tab 使用的名称。 */
+  /** 分段按钮使用的名称。 */
   label: string;
-  /** 分区内容。 */
+  /** 自解析的分区内容。 */
   content: ReactNode;
 }
 
-/** 一级 tab 的一个域。 */
-export interface BayBarDomain {
-  /** 域稳定标识。 */
+/** 一个标签页。id 指向具体对象，例如 `agent:a1`、`files:<会话>`。 */
+export interface BayBarTab {
+  /** 稳定标识；同类对象的每个实例各占一个标签页。 */
   id: string;
-  /** 一级 tab 与无障碍标签使用的名称，用名词，尽量简短。 */
+  /** 标签行上的名称。 */
   label: string;
-  /** 域内的分区；至少一个，否则该域不成立。 */
+  /** 标签行上的图标；属于具体对象的标签页用该对象的头像或图标。 */
+  icon: ReactNode;
+  /** 分区；至少一个。 */
   sections: BayBarSection[];
 }
 
-/** 当前显示的位置。 */
-export interface BayBarSelection {
-  /** 当前域。 */
-  domain_id: string;
-  /** 当前域内的分区。 */
-  section_id: string;
+/** 翻译函数的最小形态；各构造函数用它取自己命名空间下的文案。 */
+export type BayBarTranslate = (key: string) => string;
+
+/** 合成标签页标识：同类对象的每个实例各占一个。 */
+export function baybar_tab_id(kind: string, key: string): string {
+  return `${kind}:${key}`;
 }
 
-/** 把选择序列化为可持久化的字符串。 */
-export function format_selection(selection: BayBarSelection): string {
-  return `${selection.domain_id}:${selection.section_id}`;
-}
+/** 面板开合状态的持久化键。这是唯一持久化的东西：标签页是会话内的状态。 */
+export const baybar_open_storage_key = "downcity.baybar_open";
 
-/** 从持久化字符串还原选择；格式不合法时返回 null。 */
-export function parse_selection(value: string | null): BayBarSelection | null {
-  if (!value) return null;
-  const separator = value.indexOf(":");
-  if (separator <= 0) return null;
-  const domain_id = value.slice(0, separator);
-  const section_id = value.slice(separator + 1);
-  return domain_id && section_id ? { domain_id, section_id } : null;
+/** 解析布尔持久化值；只有明确存过 "true" 才算真（没存过时默认收起）。 */
+export function parse_stored_flag(value: string | null): boolean {
+  return value === "true";
 }
 
 /**
- * 解析当前应当显示的选择。
+ * 解析标签页内应当显示的分区。
  *
- * 优先沿用它之前的选择，失效时逐级回退，最终一定落在「第一个域的第一个分区」，
- * 而不是返回 null——展开右侧就应该有内容可看。域集合为空时才返回 null（右侧整体不存在）。
+ * 沿用上次的分区；它消失了则回退到第一个——切换分区、从正文入口打开时
+ * 用户不该看到空面板。`section_id` 为空表示没有指定，同样落到第一个。
  */
-export function resolve_selection(domains: readonly BayBarDomain[], previous: BayBarSelection | null): BayBarSelection | null {
-  const usable_domains = domains.filter((domain) => domain.sections.length > 0);
-  const first_domain = usable_domains[0];
-  if (!first_domain) return null;
-  if (previous) {
-    const domain = usable_domains.find((item) => item.id === previous.domain_id);
-    if (domain) {
-      const section = domain.sections.find((item) => item.id === previous.section_id);
-      return section ? previous : { domain_id: domain.id, section_id: domain.sections[0]!.id };
-    }
-  }
-  return { domain_id: first_domain.id, section_id: first_domain.sections[0]!.id };
+export function resolve_section(tab: BayBarTab, section_id: string | null | undefined): BayBarSection | null {
+  const first = tab.sections[0];
+  if (!first) return null;
+  if (!section_id) return first;
+  return tab.sections.find((section) => section.id === section_id) ?? first;
 }
 
-/** 切换域时，尽量保留该域上次看过的分区；没记录则用第一个。 */
-export function resolve_domain_switch(domains: readonly BayBarDomain[], domain_id: string): BayBarSelection | null {
-  const domain = domains.find((item) => item.id === domain_id);
-  const section = domain?.sections[0];
-  return domain && section ? { domain_id: domain.id, section_id: section.id } : null;
-}
-
-/** 当前视图的选择持久化键；不同视图之间互相隔离。 */
-export function baybar_storage_key(view_key: string): string {
-  return `downcity.baybar_selection:${view_key}`;
+/**
+ * 关闭一个标签页之后应当显示哪一个。
+ *
+ * 规则：关的不是当前页 → 当前页不变；关的是当前页 → 优先接右侧邻居，其次左侧；
+ * 都没有则返回 null，此时面板保持展开并显示空白标签页。
+ *
+ * **刻意只回答「显示哪一个」**：关标签页与开关面板是两个正交的维度，
+ * 面板是壳层的一列，不会因为里面没有标签页而消失。
+ * 曾经把「关掉最后一个」写成「收起面板」，于是关标签页会连带关掉整个 BayBar；
+ * 把规则做成这个签名（返回值里根本没有面板状态），它在类型上就无法再犯那个错。
+ */
+export function resolve_active_after_close(tab_ids: readonly string[], active_id: string | null, closing_id: string): string | null {
+  if (active_id !== closing_id) return active_id;
+  const index = tab_ids.indexOf(closing_id);
+  if (index === -1) return active_id;
+  return tab_ids[index + 1] ?? tab_ids[index - 1] ?? null;
 }

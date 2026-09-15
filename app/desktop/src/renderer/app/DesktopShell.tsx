@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
 
 import { use_desktop_controller, use_desktop_selector } from "@/app/use_desktop";
+import { use_store_selector } from "@/lib/store";
 import { DesktopSidebar } from "@/layouts/DesktopSidebar";
+import { BayBar, BayBarProvider } from "@/layouts/BayBar";
+import { use_baybar_store } from "@/layouts/baybarStore";
 
 import type { DesktopController } from "@/types/DesktopView";
 
@@ -41,6 +44,9 @@ export function DesktopShell() {
   }), [controller.actions, controller.stores]);
   const [create_workspace_dialog_open, set_create_workspace_dialog_open] = useState(false);
   const [sidebar_collapsed, set_sidebar_collapsed] = useState(false);
+  // 右侧 BayBar 与 Sidebar、MainView 并列：tab 由内容组件自己注册，
+  // Shell 不需要知道面板里显示什么。
+  const baybar = use_baybar_store();
   // 窄窗口自动收起：窗口最小宽度只有 760px，两侧面板都展开会把正文挤到不足 130px。
   const narrow_window = use_media_query(`(max-width: ${SIDEBAR_AUTO_COLLAPSE_WIDTH}px)`);
   const auto_collapsed_ref = useRef(false);
@@ -60,8 +66,15 @@ export function DesktopShell() {
   const open_group_from_sidebar = useCallback((group_id: string) => controller.actions.select_group(group_id), [controller.actions]);
   const open_create_workspace = useCallback(() => set_create_workspace_dialog_open(true), []);
   const toggle_sidebar = useCallback(() => set_sidebar_collapsed((value) => !value), []);
-  // Shell 只负责左侧 Sidebar；右侧 BayBar 属于 MainView，Shell 不需要知道它的存在。
-  const shell_layout = useMemo(() => ({ sidebar_collapsed }), [sidebar_collapsed]);
+  // 两侧面板的折叠状态都交给 MainViewHeader 用于避让各自的浮动按钮。
+  // BayBar 的折叠是派生值（没有激活的 tab 就是收起），因此在这里订阅一位布尔值，
+  // 而不是把面板 store 透给 MainView。
+  // 右侧按钮是壳层控件，始终存在，所以卡片收起态直接跟面板的开合走。
+  // 不能用「里面有没有 tab」判断：空白标签页也是展开状态，会错误地让出空间。
+  // 折叠只看 open：与左侧 Sidebar 的 sidebar_collapsed 完全同构。
+  // 不能用「里面有没有标签页」判断：空白标签页也是展开状态。
+  const baybar_collapsed = use_store_selector(baybar.store, (state) => !state.open);
+  const shell_layout = useMemo(() => ({ sidebar_collapsed, baybar_collapsed }), [baybar_collapsed, sidebar_collapsed]);
 
   /** 在当前导航目标上新建对话；⌘R 与命令面板的「新建对话」共用同一实现。 */
   const create_conversation_in_context = useCallback(() => {
@@ -162,7 +175,7 @@ export function DesktopShell() {
       event.preventDefault();
       if (action.kind === "blocked") return;
       if (action.kind === "workspace_file") {
-        stable_controller.actions.select_workspace_file(action.workspace_id, action.relative_path);
+        stable_controller.actions.select_workspace_file(action.workspace_id, action.relative_path, action.line);
         return;
       }
       const opening = action.kind === "external_url"
@@ -186,12 +199,16 @@ export function DesktopShell() {
         open_group_config={open_group_from_sidebar}
         collapsed={sidebar_collapsed}
       />
-      <main className="relative flex h-full min-w-0 flex-1 bg-muted p-1">
-        <ShellLayoutProvider value={shell_layout}>
-          {/* 右侧 BayBar 属于 MainView，由页面自己组合；Shell 不参与。 */}
-          <DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} />
-        </ShellLayoutProvider>
-      </main>
+      {/* 右侧 BayBar 与左侧 Sidebar 平级，同属窗口级面板。
+          Provider 同时包住正文与面板：正文里的入口靠同一份 context 打开面板。 */}
+      <BayBarProvider value={baybar}>
+        <main className="relative flex h-full min-w-0 flex-1 bg-muted p-1">
+          <ShellLayoutProvider value={shell_layout}>
+            <DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} />
+          </ShellLayoutProvider>
+        </main>
+        <BayBar />
+      </BayBarProvider>
     </div>
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={toggle_sidebar} />
     <DesktopErrorHost controller={stable_controller} />

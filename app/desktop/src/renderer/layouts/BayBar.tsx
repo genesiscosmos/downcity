@@ -1,245 +1,348 @@
 /**
- * Desktop MainView 的右侧 BayBar。
+ * Desktop 壳层右侧的 BayBar。
  *
- * 结构（本模块的核心契约）：
+ * ## 结构
  *
  * ```
- * MainView（一张卡：圆角 + 边框）
- * ├── MainContent = children
- * └── BayBar
+ * DesktopShell（一行）
+ * ├── Sidebar（贴窗口左缘、整窗高）
+ * ├── main（p-1）
+ * │   └── MainView 卡片（圆角 + 边框 + bg-background）
+ * └── BayBar（贴窗口右缘、整窗高）
+ *     └── 面板：顶栏一行标签页 + 内容区
+ *
+ * 窗口右上角另有一个固定的折叠按钮（ShellBayBarControl），与左侧 Sidebar 控件镜像。
  * ```
  *
- * 三条边界规则：
- * 1. **BayBar 属于 MainView，不属于 Shell。** 右栏是当前视图的上下文细节，
- *    只有视图知道该显示什么；Shell 完全不需要知道它的存在。
- * 2. **Provider 必须包住 MainContent 与 BayBar 两者。** 正文里的入口
- *    （header 头像、消息里的 Agent 名、diff 卡片等）通过 context 打开面板，
- *    一旦 Provider 只包住 BayBar，这些入口就会拿到空实现而静默失效。
- * 3. **收起与选择是两个正交维度。** `collapsed` 只管可见性，`selection` 只管显示什么；
- *    收起时保留 selection，再次展开回到原处。
+ * ## 与 Sidebar 完全同构
+ *
+ * | | Sidebar | BayBar |
+ * |---|---|---|
+ * | 折叠状态 | Shell 里的 `sidebar_collapsed` | store 里的 `open` |
+ * | 折叠按钮 | ShellSidebarControl（fixed） | ShellBayBarControl（fixed） |
+ * | 收起后 | 宽度动画到 0，卡片顶栏让出空间 | 同 |
+ * | 展开后 | 顶栏 + 内容 | 顶栏（标签行）+ 内容 |
+ *
+ * 差别只有一处：BayBar 的顶栏是标签行，而 Sidebar 的顶栏是模式标题。
+ *
+ * ## 三条边界规则
+ *
+ * 1. **折叠只看 `open`。** 不用「有没有标签页」反推——展开着但一个标签页都没有
+ *    是合法状态（空白标签页）。曾经用 `active === null` 当作「已收起」，
+ *    结果空白标签页状态下按钮只能展开、永远收不起来。
+ * 2. **面板与按钮始终渲染。** 面板是壳层的一列（与 Sidebar 同性质），
+ *    「里面有没有东西」不影响它存在；没有任何早期 return。
+ * 3. **Provider 必须包住正文与面板两者。** 正文里的入口与面板共用同一份 context。
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { motion } from "framer-motion";
+import { TbX } from "react-icons/tb";
 import { use_horizontal_resize } from "@/hooks/use_horizontal_resize";
 import { use_media_query } from "@/hooks/use_media_query";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { ShellBayBarControl } from "./ShellBayBarControl";
+import { use_store_selector } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
-import { BAYBAR_AUTO_COLLAPSE_WIDTH, resolve_shell_auto_collapse } from "./shellResponsive";
-import type { BayBarDomain, BayBarSelection } from "./baybarPanelState";
-import { baybar_storage_key, format_selection, parse_selection, resolve_domain_switch, resolve_selection } from "./baybarPanelState";
-import { SHELL_BAYBAR_HEADER_RESERVE_CSS, SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS, SHELL_PANEL_TRANSITION } from "./shellMotion";
+import { empty_baybar_store, type BayBarStore } from "./baybarStore";
+import { BAYBAR_AUTO_COLLAPSE_WIDTH, resolve_baybar_max_width, resolve_shell_auto_collapse } from "./shellResponsive";
+import type { BayBarSection, BayBarTab } from "./baybarPanelState";
+import { resolve_section } from "./baybarPanelState";
+import {
+  SHELL_BAYBAR_DEFAULT_WIDTH,
+  SHELL_BAYBAR_MIN_WIDTH,
+  SHELL_HEADER_HEIGHT_CSS,
+  SHELL_MAIN_VIEW_MIN_REGION,
+  SHELL_MAIN_VIEW_MIN_WIDTH_CSS,
+  SHELL_PANEL_TRANSITION,
+  read_shell_scale,
+} from "./shellMotion";
 
-export type { BayBarDomain, BayBarSection, BayBarSelection } from "./baybarPanelState";
+export type { BayBarSection, BayBarTab, BayBarTranslate } from "./baybarPanelState";
+export { baybar_tab_id } from "./baybarPanelState";
 
-const BAYBAR_MIN_WIDTH = 360;
-const BAYBAR_MAX_WIDTH = 600;
-const BAYBAR_DEFAULT_WIDTH = 400;
-
-/** 打开某处内容：只给域时进入该域的第一个分区。 */
-export type BayBarOpen = (domain_id: string, section_id?: string) => void;
-
-/** 打开右侧面板；不在 MainView 内时为空实现。 */
-const BayBarOpenContext = createContext<BayBarOpen>(() => undefined);
-
-/**
- * 读取打开右侧面板的动作。
- * 正文里的入口用它打开面板，避免从页面一路把回调透传到叶子组件。
- */
-export function use_baybar_open(): BayBarOpen {
-  return useContext(BayBarOpenContext);
-}
+/** 兜底的空 store：不在壳内渲染时（单测、独立组件）使用。 */
+const noop_open_tab = () => undefined;
 
 /**
- * MainView Header 需要的右侧预留信息。
- * 折叠时固定的折叠按钮会浮在 Header 之上，Header 必须让出等宽空间。
- */
-interface BayBarChrome {
-  /** 是否需要为折叠按钮预留空间。 */
-  reserved: boolean;
-  /**
-   * 预留宽度，CSS 长度值。
-   *
-   * 类型是 string 而不是 number：预留量含卡片边框这类固定像素，
-   * 只有 CSS 长度能同时表达「跟随缩放的按钮宽度」与「不跟随缩放的细线」。
-   */
-  inset: string;
-}
-
-const BayBarChromeContext = createContext<BayBarChrome>({ reserved: false, inset: "0px" });
-
-/** 读取右侧预留信息；不在 MainView 内时不需要预留。 */
-export function use_baybar_chrome(): BayBarChrome {
-  return useContext(BayBarChromeContext);
-}
-
-/**
- * MainView：把内容与右侧 BayBar 组合成一张卡。
+ * 壳层提供的 store 句柄。
  *
- * `children` 接收打开动作，供页面级入口使用；
- * 更深的入口直接用 use_baybar_open()。
+ * 值是稳定引用（store 句柄 + 动作），因此 Provider 自身不会因面板状态变化而重渲染；
+ * 需要响应状态的是各自的读取方，它们按最小切片订阅。
  */
-export function MainView({ view_key, domains = [], children }: {
-  /** 当前视图的稳定标识；用于按视图记忆显示位置。为空时不提供右侧。 */
-  view_key?: string;
-  /** 当前视图提供的域；为空时右侧整体不存在。 */
-  domains?: BayBarDomain[];
-  /** 内容区；参数为打开动作。 */
-  children: (open: BayBarOpen) => ReactNode;
+const BayBarContext = createContext<BayBarStore | undefined>(undefined);
+
+/** 向正文与面板提供 store 句柄；由 DesktopShell 挂在正文区之上。 */
+export function BayBarProvider({ value, children }: {
+  /** 面板 store 与动作。 */
+  value: BayBarStore;
+  /** 正文与面板。 */
+  children: ReactNode;
 }) {
-  const storage_key = view_key ? baybar_storage_key(view_key) : "";
-  const [stored, set_stored] = useState<BayBarSelection | null>(() => storage_key ? parse_selection(localStorage.getItem(storage_key)) : null);
-  // 切换视图时恢复该视图上次的显示位置。
-  useEffect(() => {
-    set_stored(storage_key ? parse_selection(localStorage.getItem(storage_key)) : null);
-  }, [storage_key]);
-  // 选择是派生值：域集合变化时自动回退到有效位置，不需要额外的同步逻辑。
-  const selection = resolve_selection(domains, stored);
-  const [collapsed, set_collapsed] = useState(true);
-  // 窗口窄到正文会被挤没时自动收起；面板自身保留展开能力，不锁死用户操作。
+  return <BayBarContext.Provider value={value}>{children}</BayBarContext.Provider>;
+}
+
+/**
+ * 打开一个标签页。
+ *
+ * 正文里的入口用它把「某个对象的某个面板」打开到右侧，避免一路透传回调。
+ * 标签页由调用方在点击处构造（见各 feature 的 `*_tab()`），
+ * 面板因此不认识任何业务内容。
+ */
+export function use_baybar_open(): (tab: BayBarTab, section_id?: string) => void {
+  // 直接返回 store 上那个稳定引用，不要包一层箭头函数：
+  // 调用方会把它放进 useCallback 依赖，每次渲染新建函数会让下游 memo 全部失效。
+  return useContext(BayBarContext)?.open_tab ?? noop_open_tab;
+}
+
+/**
+ * MainView：正文卡片。
+ *
+ * 只是一张卡：不接收标签页、不提供打开面板的动作，也不知道面板里显示什么。
+ */
+export function MainView({ children }: { /** 页面 Header 与 Body。 */ children: ReactNode }) {
+  // min-width 用 min(450px, 100%)：正文区本身容不下 450 时不溢出到右栏下面。
+  // 它是「有位置就给 450」的下限，也是右栏宽度上限的来源（同一约束的两面）。
+  return <div
+    style={{ minWidth: `min(${SHELL_MAIN_VIEW_MIN_WIDTH_CSS}, 100%)` }}
+    className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border-subtle bg-background"
+  >{children}</div>;
+}
+
+/** 壳层右侧的一列：宽度可拖动的面板 + 窗口上固定的折叠按钮。两者始终存在。 */
+export function BayBar() {
+  const baybar = useContext(BayBarContext);
+  const store = baybar?.store ?? empty_baybar_store;
+  const open = use_store_selector(store, (state) => state.open);
+  const tabs = use_store_selector(store, (state) => state.tabs);
+  const active_id = use_store_selector(store, (state) => state.active_id);
+  const section_by_tab = use_store_selector(store, (state) => state.section_by_tab);
+  const toggle = baybar?.toggle;
+
+  // 收起时没有「当前标签页」可言；展开时找不到就是空白标签页。
+  const active = open ? tabs.find((item) => item.id === active_id) ?? null : null;
+  const section_id = active ? section_by_tab[active.id] ?? null : null;
+
+  // 可用宽度：量本组件的**父层**，也就是 Shell 里那一行（main + BayBar）。
+  //
+  // 必须挂在这一层、不能挂在面板上：量到面板的宽度时它会随面板变宽而变宽，
+  // 而上限又等于可用宽度减保留量，结果上限永远跟着当前宽度走，
+  // 拖拽会自己把边界往前推（历史上已经因此坏过两次）。
+  // 这一行的宽度只由窗口与 Sidebar 决定，与面板宽度无关，是唯一稳定的基准。
+  const root_ref = useRef<HTMLDivElement>(null);
+  const [range, set_range] = useState({ available: 0, reserve: 0 });
+  useLayoutEffect(() => {
+    const region = root_ref.current?.parentElement;
+    if (!region) return;
+    const measure = () => {
+      const next = {
+        available: Math.round(region.getBoundingClientRect().width),
+        // 保留量是设计 px，而可用宽度是实际像素，必须按当前缩放换算后再相减；
+        // 否则 120% 下会把正文夹到不足 450 设计像素。
+        reserve: Math.round(SHELL_MAIN_VIEW_MIN_REGION * read_shell_scale()),
+      };
+      // 返回同一个引用让 React 跳过无意义的重渲染。
+      set_range((current) => current.available === next.available && current.reserve === next.reserve ? current : next);
+    };
+    // 在布局阶段同步量一次：拖拽上限依赖它，等普通 effect 就已经晚了一帧。
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(region);
+    return () => observer.disconnect();
+  }, []);
+
+  // 窗口窄到正文会被挤没时自动收起。与左侧 Sidebar 共用同一套决策：
+  // 只响应「窗口跨越断点」，用户手动展开不会被覆盖。
+  const open_ref = useRef(open);
+  open_ref.current = open;
   const narrow_window = use_media_query(`(max-width: ${BAYBAR_AUTO_COLLAPSE_WIDTH}px)`);
   const auto_collapsed_ref = useRef(false);
+  const collapse = baybar?.collapse;
+  const expand = baybar?.expand;
   useEffect(() => {
+    if (!collapse || !expand) return;
     const next = resolve_shell_auto_collapse({
       narrow: narrow_window,
-      collapsed,
+      collapsed: !open_ref.current,
       auto_collapsed: auto_collapsed_ref.current,
     });
     auto_collapsed_ref.current = next.auto_collapsed;
-    set_collapsed(next.collapsed);
-    // collapsed 有意不进依赖：本效果只响应「窗口跨越断点」，否则用户展开会被立即覆盖。
+    if (next.collapsed) collapse();
+    else expand();
+    // 依赖里刻意不放 open：本效果只响应「窗口跨越断点」。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [narrow_window]);
 
-  const update_selection = useCallback((next: BayBarSelection | null) => {
-    set_stored(next);
-    if (!storage_key) return;
-    if (next) localStorage.setItem(storage_key, format_selection(next));
-    else localStorage.removeItem(storage_key);
-  }, [storage_key]);
-  const open = useCallback<BayBarOpen>((domain_id, section_id) => {
-    const domain = domains.find((item) => item.id === domain_id);
-    const target = section_id
-      ? domain?.sections.find((item) => item.id === section_id)
-      : domain?.sections[0];
-    if (!domain || !target) return;
-    update_selection({ domain_id: domain.id, section_id: target.id });
-    set_collapsed(false);
-  }, [domains, update_selection]);
-  const select_domain = useCallback((domain_id: string) => {
-    const next = resolve_domain_switch(domains, domain_id);
-    if (next) update_selection(next);
-  }, [domains, update_selection]);
-  const select_section = useCallback((section_id: string) => {
-    if (!selection) return;
-    update_selection({ domain_id: selection.domain_id, section_id });
-  }, [selection, update_selection]);
-
-  const has_baybar = domains.length > 0;
-  // 折叠按钮浮在 Header 之上，Header 需要让出等宽空间。
-  const chrome: BayBarChrome = has_baybar && collapsed
-    ? { reserved: true, inset: SHELL_BAYBAR_HEADER_RESERVE_CSS }
-    : { reserved: false, inset: "0px" };
-  return <BayBarOpenContext.Provider value={open}>
-    <BayBarChromeContext.Provider value={chrome}>
-      <div className="main-view relative flex h-full min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border-subtle bg-background">
-        <div className="flex h-full min-w-0 flex-1 flex-col">{children(open)}</div>
-        {has_baybar ? <BayBarAside
-          domains={domains}
-          selection={selection}
-          collapsed={collapsed}
-          on_select_domain={select_domain}
-          on_select_section={select_section}
-        /> : null}
-      </div>
-      {has_baybar ? <ShellBayBarControl collapsed={collapsed} toggle_baybar={() => set_collapsed((value) => !value)} /> : null}
-    </BayBarChromeContext.Provider>
-  </BayBarOpenContext.Provider>;
+  return <>
+    <div ref={root_ref} className="flex h-full min-h-0 shrink-0">
+      <BayBarPanel open={open} active={active} active_id={active_id} tabs={tabs} section_id={section_id} range={range} />
+    </div>
+    <ShellBayBarControl collapsed={!open} toggle_baybar={() => toggle?.()} />
+  </>;
 }
 
-/** 右侧面板本体：一级域 tab、二级分区选择、内容。 */
-function BayBarAside({ domains, selection, collapsed, on_select_domain, on_select_section }: {
-  /** 当前视图提供的域。 */
-  domains: BayBarDomain[];
-  /** 当前显示位置。 */
-  selection: BayBarSelection | null;
-  /** 是否收起。 */
-  collapsed: boolean;
-  /** 切换域。 */
-  on_select_domain(domain_id: string): void;
-  /** 切换分区。 */
-  on_select_section(section_id: string): void;
+/**
+ * 面板本体：宽度、缩放把手、标签行与内容。
+ *
+ * `open` 与「有没有标签页」无关：展开但 `active` 为空时就是一张空白标签页
+ * （标签行为空、内容区为空），而不是不渲染。
+ */
+function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
+  /** 面板是否展开。 */
+  open: boolean;
+  /** 当前标签页；为空表示空白标签页。 */
+  active: BayBarTab | null;
+  /** 当前标签页 id。 */
+  active_id: string | null;
+  /** 全部已打开的标签页，用于标签行。 */
+  tabs: readonly BayBarTab[];
+  /** 当前标签页内选择的分区。 */
+  section_id: string | null;
+  /** 由 BayBar 量得的可用宽度与保留量；available 为 0 表示尚未测量。 */
+  range: { available: number; reserve: number };
 }) {
+  const baybar = useContext(BayBarContext);
   const translate = use_translation("navigation");
-  const [stored_width, set_stored_width] = useState(() => Number(localStorage.getItem("downcity.baybar_width")) || BAYBAR_DEFAULT_WIDTH);
-  // 折叠动画期间保留内容，避免收起过程中先消失再收缩。
-  const [content_mounted, set_content_mounted] = useState(!collapsed);
-  useEffect(() => {
-    if (!collapsed) set_content_mounted(true);
-  }, [collapsed]);
+  const activate = baybar?.activate;
+  const close_tab = baybar?.close_tab;
+  const select_section = baybar?.select_section;
+  const collapsed = !open;
+
+  const [stored_width, set_stored_width] = useState(() => Number(localStorage.getItem("downcity.baybar_width")) || SHELL_BAYBAR_DEFAULT_WIDTH);
+  // BayBar 没有自己的最大宽度：这里扣掉的 reserve 是 MainView 的最小占宽。
+  // 换言之限制来自「正文不得小于 450px」，不是给右栏设上限。
+  //
+  // available 为 0 表示还没测量到（首帧布局阶段前的初次渲染）。此时不能拿它算上限：
+  // 结果会是 max(最小值, 0-保留量) = 最小值，而 use_horizontal_resize 会拿这个上限
+  // 去夹取从 localStorage 读回的宽度，把用户上次的宽度截成最小值——
+  // 表面现象就是「宽度没有持久化」。未测量时改为回到已存宽度本身，不夹取。
+  const max_width = range.available > 0
+    ? resolve_baybar_max_width(range.available, SHELL_BAYBAR_MIN_WIDTH, range.reserve)
+    : Math.max(SHELL_BAYBAR_MIN_WIDTH, Math.round(stored_width));
+
   const { current_width, is_resizing, handle_resize_start, resize_handle_props } = use_horizontal_resize({
     stored_width,
-    min_width: BAYBAR_MIN_WIDTH,
-    max_width: BAYBAR_MAX_WIDTH,
-    default_width: BAYBAR_DEFAULT_WIDTH,
+    min_width: SHELL_BAYBAR_MIN_WIDTH,
+    max_width,
+    default_width: SHELL_BAYBAR_DEFAULT_WIDTH,
+    // 面板在右栏最左侧，左边缘贴着正文，因此拖动左边缘、向左为增宽。
     resize_edge: "left",
     on_width_change: (width) => { set_stored_width(width); localStorage.setItem("downcity.baybar_width", String(width)); },
   });
-  const show_content = content_mounted || !collapsed;
+
+  // 收起动画期间保留内容：否则收起会先清空内容再收缩，看起来像闪一下。
+  const [mounted, set_mounted] = useState(open);
+  useEffect(() => {
+    if (open) set_mounted(true);
+  }, [open]);
+  // 只有收起动画进行中才沿用最后一个标签页，否则关掉它之后会继续显示旧内容。
+  const last_tab_ref = useRef<BayBarTab | null>(active);
+  if (active) last_tab_ref.current = active;
+  const shown_tab = collapsed ? last_tab_ref.current : active;
+
+  // 标签行里的方向键导航；与 SegmentedControl 同一套语义（含 Home / End）。
+  // roving tabIndex 下只有当前标签页是 Tab 键可达的，切换后必须跟着移动焦点，
+  // 否则焦点会留在已是 tabIndex=-1 的元素上，下一次 Tab 直接跳出去。
+  const tablist_ref = useRef<HTMLDivElement>(null);
+  const handle_tab_key_down = (event: KeyboardEvent<HTMLDivElement>, tab_id: string) => {
+    const index = tabs.findIndex((item) => item.id === tab_id);
+    if (index === -1 || tabs.length < 2) return;
+    let next_index: number | null = null;
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") next_index = (index - 1 + tabs.length) % tabs.length;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") next_index = (index + 1) % tabs.length;
+    if (event.key === "Home") next_index = 0;
+    if (event.key === "End") next_index = tabs.length - 1;
+    if (next_index === null) return;
+    event.preventDefault();
+    const next = tabs[next_index]!;
+    activate?.(next.id);
+    tablist_ref.current?.querySelector<HTMLElement>(`[data-baybar-tab="${CSS.escape(next.id)}"]`)?.focus();
+  };
+
   const no_drag_style = { WebkitAppRegion: "no-drag" } as CSSProperties;
-  const active_domain = selection ? domains.find((domain) => domain.id === selection.domain_id) : undefined;
-  const active_section = active_domain && selection ? active_domain.sections.find((section) => section.id === selection.section_id) : undefined;
-  // 只有多个域时才需要一级 tab；多个分区时才需要二级选择。
-  const show_domain_tabs = domains.length > 1;
-  const show_section_tabs = (active_domain?.sections.length ?? 0) > 1;
+  const section: BayBarSection | null = shown_tab ? resolve_section(shown_tab, section_id) : null;
+  // 只有一个分区时没有可选项，不显示分段按钮。
+  const show_section_tabs = (shown_tab?.sections.length ?? 0) > 1;
 
   return <motion.aside
     initial={false}
     animate={{ width: collapsed ? 0 : current_width }}
     transition={is_resizing ? { duration: 0 } : SHELL_PANEL_TRANSITION}
-    onAnimationComplete={() => { if (collapsed) set_content_mounted(false); }}
-    className={cn("relative flex h-full min-h-0 flex-none overflow-hidden", !collapsed && "border-l border-divider")}
+    onAnimationComplete={() => { if (collapsed) set_mounted(false); }}
+    // 不铺卡片底色、不画外框：与 Sidebar 一样是窗口背景上的面板，靠卡片边框与间距分层次。
+    // min-w-0 + shrink 而非 flex-none：可用区域不足以同时满足正文下限时让面板先让步。
+    className="relative flex h-full min-h-0 min-w-0 shrink overflow-hidden bg-muted"
     aria-label={translate("panels.rail")}
   >
-    <div className="relative flex h-full min-h-0 flex-col" style={{ width: current_width }}>
-      {show_content ? <>
-        {/* 缩放把手：与左侧 Sidebar 一样同时支持拖拽与键盘方向键。 */}
-        <div {...resize_handle_props} aria-label={translate("panels.resize_right")} onMouseDown={handle_resize_start} className="group absolute -left-[3px] top-0 z-10 flex h-full w-1.5 cursor-ew-resize items-center justify-center outline-none"><span className="h-8 w-0.5 rounded-full bg-transparent transition-colors group-hover:bg-muted-foreground group-focus-visible:bg-muted-foreground" /></div>
-        {/* 标题行与 MainView Header 共用同一套卡片内顶栏几何，保证两侧内容同处一线。 */}
-        <div className="header-drag-region flex shrink-0 items-center px-2" style={{ height: SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, paddingBottom: SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS }}>
-          {show_domain_tabs
-            // 一级：文字 title tab，当前项以颜色与字重区分，不使用背景块。
-            ? <div role="tablist" style={no_drag_style} className="scrollbar-none flex min-w-0 flex-1 items-center gap-3 overflow-x-auto px-1">
-              {domains.map((domain) => {
-                const active = domain.id === active_domain?.id;
-                return <button
-                  key={domain.id}
+    <div className={cn("relative flex h-full min-h-0 flex-col", collapsed && "invisible")} style={{ width: current_width }}>
+      {mounted ? <>
+        {/* 缩放把手：与左侧 Sidebar 的把手同类。
+            **整条留在面板内**（不写负外边距）：面板有 overflow-hidden，
+            负偏移会让一半握把被裁掉，只剩 3px 可点，手感上等同于拖不动。 */}
+        <div {...resize_handle_props} aria-label={translate("panels.resize_right")} onMouseDown={handle_resize_start} className="group absolute left-0 top-0 z-20 flex h-full w-1.5 cursor-ew-resize items-center justify-center outline-none"><span className="h-8 w-0.5 rounded-full bg-transparent transition-colors group-hover:bg-muted-foreground group-focus-visible:bg-muted-foreground" /></div>
+        {/* 标签行：胶囊式（类浏览器标签页）。未激活项只是一段文字 + 图标，
+            激活项整块浮起（背景 + 边框）并带关闭按钮。
+
+            三条几何约束：
+            1. 行高 = Sidebar 顶栏，三列内容中心才同在 20px 基准线上；
+            2. 分隔线用绝对定位而不是 border-b——border 会吃掉 1px 行高，
+               把内容中心从 20px 压到 19.5px，三列不再对齐；
+            3. 容器带 header-drag-region（= -webkit-app-region: drag）用于拖窗口，
+               **因此每个标签页必须显式 no-drag**——否则点击会被窗口拖拽吞掉，
+               表现为「标签页点不动」，双击还会触发系统的最小化/缩放。 */}
+        <div className="relative shrink-0" style={{ height: SHELL_HEADER_HEIGHT_CSS }}>
+          <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-divider" />
+          <div ref={tablist_ref} role="tablist" aria-label={translate("panels.rail")} className="header-drag-region scrollbar-none flex h-full items-center gap-1 overflow-x-auto px-2 pr-8">
+            {tabs.map((item) => {
+              const is_active = item.id === active_id;
+              return <div
+                key={item.id}
+                role="tab"
+                aria-selected={is_active}
+                aria-label={item.label}
+                // 标题会被 max-w-40 截断；悬停时给出全文（对象名可能很长）。
+                title={item.label}
+                // roving tabIndex：只有当前标签页是 Tab 键可达的，其余靠方向键切换。
+                tabIndex={is_active ? 0 : -1}
+                data-baybar-tab={item.id}
+                style={no_drag_style}
+                // 点标签页是「切换」，不是「关闭」：关闭由右侧的 × 负责。
+                onClick={() => activate?.(item.id)}
+                onKeyDown={(event) => handle_tab_key_down(event, item.id)}
+                className={cn(
+                  "group/tab relative inline-flex h-7 min-w-0 max-w-40 shrink-0 cursor-default select-none items-center gap-1.5 rounded-full outline-none transition-colors duration-150",
+                  "focus-visible:ring-2 focus-visible:ring-ring/30",
+                  is_active
+                    ? "border border-border-subtle bg-background pl-2.5 pr-1 text-foreground"
+                    : "pl-2.5 pr-2.5 text-muted-foreground hover:bg-interaction-hover hover:text-foreground",
+                )}
+              >
+                {item.icon}
+                <span className="truncate text-xs">{item.label}</span>
+                {is_active ? <button
                   type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => on_select_domain(domain.id)}
-                  className={cn(
-                    "inline-flex h-full shrink-0 items-center text-xs outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/30",
-                    active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >{domain.label}</button>;
-              })}
-            </div>
-            // 只有一个域时没有可选项，标题直接说明当前域。
-            // 只有一个域时没有可选项，标题直接说明当前域；不加额外水平内边距，与下方分区控件对齐。
-            : <h2 className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">{active_domain?.label ?? ""}</h2>}
+                  style={no_drag_style}
+                  tabIndex={-1}
+                  title={translate("panels.close_right")}
+                  aria-label={`${translate("panels.close_right")}：${item.label}`}
+                  // 只关这一个标签页；关掉当前页会接到相邻的一个，关掉最后一个则是空白标签页。
+                  onClick={(event) => { event.stopPropagation(); close_tab?.(item.id); }}
+                  className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+                ><TbX className="size-3.5" /></button> : null}
+              </div>;
+            })}
+          </div>
         </div>
-        {show_section_tabs && active_domain && selection ? <div className="shrink-0 px-2 pb-2">
+        {show_section_tabs && shown_tab && active_id ? <div className="shrink-0 px-2 py-2">
           <SegmentedControl<string>
-            value={selection.section_id}
-            options={active_domain.sections.map((section) => ({ value: section.id, label: section.label }))}
-            on_value_change={on_select_section}
-            aria_label={active_domain.label}
+            value={section?.id ?? ""}
+            options={shown_tab.sections.map((item) => ({ value: item.id, label: item.label }))}
+            on_value_change={(next_section_id) => select_section?.(active_id, next_section_id)}
+            aria_label={shown_tab.label}
           />
         </div> : null}
-        <div className="min-h-0 flex-1 overflow-y-auto">{active_section?.content ?? null}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto">{section?.content ?? null}</div>
       </> : null}
     </div>
   </motion.aside>;

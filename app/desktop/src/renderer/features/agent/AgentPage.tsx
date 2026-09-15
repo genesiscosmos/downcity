@@ -8,10 +8,9 @@ import type { DesktopAgentSummary, DesktopSessionSummary } from "@common/types/D
 
 import { WelcomeView } from "@/app/WelcomeView";
 
-import { MainView, type BayBarDomain } from "@/layouts/BayBar";
+import { MainView } from "@/layouts/BayBar";
 
-import { AGENT_DOMAIN_ID, AGENT_EDITOR_SECTIONS, AgentEditorPanel, AgentView } from "@/features/agent/AgentView";
-import { use_agent_definition } from "@/features/agent/lib/use_agent_definition";
+import { AgentView } from "@/features/agent/AgentView";
 import { use_translation } from "@/locales/i18n";
 
 /** Agent 配置路由只订阅当前 Agent 与其主 Session 索引。 */
@@ -25,22 +24,11 @@ export function AgentRouteMainView({ selection, controller, sidebar_collapsed }:
   return <AgentMainView key={`agent:${agent.agent_id}`} agent={agent} controller={controller} sidebar_collapsed={sidebar_collapsed} main_session={main_context && main_session ? { workspace_id: main_context.workspace_id, session: main_session.session } : undefined} />;
 }
 
-/** Agent MainView：定义状态在此持有，分区内容组装为右侧「Agent」域。 */
+/** Agent MainView：定义状态在此持有，配置分区注册为右侧「Agent」tab。 */
 export function AgentMainView({ agent, controller, sidebar_collapsed, main_session }: { /** 当前 Agent。 */ agent: DesktopAgentSummary; /** Desktop 稳定控制器。 */ controller: DesktopController; /** 全局 Sidebar 是否折叠。 */ sidebar_collapsed: boolean; /** Agent 主对话。 */ main_session?: { workspace_id: string; session: DesktopSessionSummary } }) {
-  const translate_resources = useTranslation_resources();
-  const definition_state = use_agent_definition(agent.agent_id, controller);
-  const domains = useMemo<BayBarDomain[]>(() => [{
-    id: AGENT_DOMAIN_ID,
-    label: translate_resources("agent.edit"),
-    sections: AGENT_EDITOR_SECTIONS.map((item) => ({
-      id: item.id,
-      label: item.label_key ? translate_resources(item.label_key) : item.label ?? item.id,
-      content: <AgentEditorPanel agent={agent} controller={controller} section={item.id} {...definition_state} />,
-    })),
-  }], [agent, controller, definition_state, translate_resources]);
-
-  return <MainView view_key={`agent:${agent.agent_id}`} domains={domains}>
-    {() => <AgentView agent={agent} main_session={main_session} controller={controller} open_main_session={() => controller.actions.open_agent_chat(agent.agent_id)} />}
+  // 不在这里组装标签页：标签页在正文的入口被点击时构造并打开（见 agent_config_tab）。
+  return <MainView>
+    <AgentView agent={agent} main_session={main_session} controller={controller} open_main_session={() => controller.actions.open_agent_chat(agent.agent_id)} />
   </MainView>;
 }
 

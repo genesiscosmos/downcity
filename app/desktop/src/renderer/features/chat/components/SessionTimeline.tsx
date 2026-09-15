@@ -1,12 +1,12 @@
 /** Downcity Session Chat 主视图与页面级滚动、空状态和 Composer 组合。 */
 
-import { useCallback, useRef, type ReactNode } from "react";
+import { useCallback, useRef, type MouseEvent, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
 import { TbAlertTriangle, TbCheck, TbChevronDown, TbDots, TbEdit, TbFolder } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
-import { AGENT_DOMAIN_ID } from "@/features/agent/AgentView";
+import { use_open_agent_config } from "@/features/agent/components/AgentChatDetails";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { ChatTextSelectionQuote } from "@/features/chat/components/ChatTextSelectionQuote";
 import { ChatWorkspaceSelector } from "@/features/chat/components/ChatWorkspaceSelector";
@@ -16,6 +16,7 @@ import { SessionMessageList } from "@/features/chat/components/SessionMessageLis
 import { TurnFileOpenProvider } from "@/features/chat/components/messages/TurnFileDiffCard";
 import { WorkspaceTagMenu } from "@/features/chat/components/WorkspaceTagMenu";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
+import { resolve_workspace_file_link } from "@/features/navigation/lib/desktop_link";
 import { resolve_chat_follow_indicator } from "@/features/chat/lib/chat_scroll";
 import { use_chat_scroll } from "@/features/chat/lib/use_chat_scroll";
 import { use_baybar_open } from "@/layouts/BayBar";
@@ -51,8 +52,8 @@ interface SessionViewProps {
   runtime?: DesktopChatRuntime;
   /** 当前 Session 最新实时文件改动摘要。 */
   file_diff_by_session?: SessionTurnFileDiffSummary;
-  /** 在主视图的 Workspace 中打开指定相对路径文件。 */
-  open_workspace_file?(workspace_id: string, relative_path: string): void;
+  /** 在右侧面板打开指定相对路径文件；不提供时链接交回 Shell 处理。 */
+  open_file?(relative_path: string, line?: number): void;
   /** 当前 Session 更早历史分页状态。 */
   history?: ChatHistoryState;
   /** Desktop Chat 设置。 */
@@ -93,7 +94,17 @@ export function SessionView(props: SessionViewProps) {
   const follow_baseline_ref = useRef(props.messages.length);
   if (is_following) follow_baseline_ref.current = props.messages.length;
   const follow_indicator = resolve_chat_follow_indicator(is_following, follow_baseline_ref.current, props.messages.length);
-  const open_workspace_file = useCallback((relative_path: string) => props.open_workspace_file?.(props.workspace_id, relative_path), [props.open_workspace_file, props.workspace_id]);
+  const handle_link_click = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (!props.open_file || event.defaultPrevented || event.button !== 0) return;
+    const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;
+    const target = anchor?.getAttribute("href");
+    if (!target) return;
+    const file = resolve_workspace_file_link(target, props.workspaces, props.workspace_id);
+    // 其它链接（外链、系统文件、跨 Workspace）不在此收口，继续由 Shell 的统一路由处理。
+    if (!file) return;
+    event.preventDefault();
+    props.open_file(file.relative_path, file.line);
+  }, [props.open_file, props.workspace_id, props.workspaces]);
   const load_earlier = () => props.load_earlier_history ? preserve_prepend_position(props.load_earlier_history) : Promise.resolve();
   const workspace_tag = props.workspace_missing
     ? <span className="inline-flex h-5 max-w-40 shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 text-[0.625rem] font-normal text-amber-600 dark:text-amber-400"><TbAlertTriangle className="size-3 shrink-0" /><span className="truncate">{translate_chat("message.workspace_missing")}</span></span>
@@ -109,11 +120,11 @@ export function SessionView(props: SessionViewProps) {
     <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
       {/* 视口外层保持 relative，供「回到最新」浮在列表底部之上、又不被滚动带走。 */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <div ref={scroll_ref} className="chat-scroll-viewport relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log" aria-busy={busy} onScroll={handle_scroll}>
+      <div ref={scroll_ref} className="chat-scroll-viewport relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log" aria-busy={busy} onClick={handle_link_click} onScroll={handle_scroll}>
         <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
         <div ref={content_ref} className="chat-scroll-content mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
           {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} /> : null}
-          <TurnFileOpenProvider open_file={props.open_workspace_file ? open_workspace_file : undefined} workspace_path={props.workspace.workspace_path || undefined}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></TurnFileOpenProvider>
+          <TurnFileOpenProvider open_file={props.open_file} workspace_path={props.workspace.workspace_path || undefined}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></TurnFileOpenProvider>
         </div>
         <div ref={bottom_ref} className="chat-scroll-bottom-anchor" aria-hidden="true" />
       </div>
@@ -127,12 +138,12 @@ export function SessionView(props: SessionViewProps) {
 /** 空会话提示。 */
 function EmptyPrompts({ surface = "workspace", agent, workspace, workspaces, agents, switch_context }: { /** 当前 Chat 表面。 */ surface?: "agent" | "workspace"; /** 当前联系人 Agent。 */ agent: DesktopAgentSummary; /** 当前 Workspace。 */ workspace: DesktopWorkspaceSummary; /** 可切换 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 可切换 Agent。 */ agents: DesktopAgentSummary[]; /** 切换新对话上下文。 */ switch_context(workspace_id: string, agent_id: string): void }) {
   const translate_chat = use_translation("chat");
-  const open_baybar = use_baybar_open();
+  const open_agent_config = use_open_agent_config();
   if (surface === "workspace") return <div className="flex min-h-[50vh] items-center justify-center px-4"><NewChatContextSelector workspace={workspace} workspaces={workspaces} agent={agent} agents={agents} switch_context={switch_context} /></div>;
   // 头像即 Agent 配置入口：正文里的入口通过 BayBar context 打开右侧「Agent」域。
   const open_agent_config_label = translate_chat("conversation.open_agent_config", { name: agent.name });
   const agent_description = agent.description?.trim();
-  return <div className="flex min-h-[56vh] flex-col items-center justify-center px-4"><div className="flex flex-col items-center gap-2.5"><button type="button" onClick={() => open_baybar(AGENT_DOMAIN_ID)} title={open_agent_config_label} aria-label={open_agent_config_label} className="group relative shrink-0 cursor-pointer rounded-2xl p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" icon_class_name="size-7" /><span aria-hidden="true" className="absolute inset-0 flex items-center justify-center rounded-2xl bg-foreground/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"><TbEdit className="size-5 text-background" /></span></button><div className="text-center text-sm font-medium text-foreground">{agent.name}</div></div>{agent_description ? <p title={agent_description} className="mt-2.5 line-clamp-2 max-w-md text-center text-xs leading-5 text-muted-foreground">{agent_description}</p> : null}<div className={agent_description ? "mt-8" : "mt-10"}><ChatWorkspaceSelector workspace_id={workspace.workspace_id} workspaces={workspaces} disabled={false} variant="field" switch_workspace={(workspace_id) => switch_context(workspace_id, agent.agent_id)} /></div></div>;
+  return <div className="flex min-h-[56vh] flex-col items-center justify-center px-4"><div className="flex flex-col items-center gap-2.5"><button type="button" onClick={() => open_agent_config?.()} title={open_agent_config_label} aria-label={open_agent_config_label} className="group relative shrink-0 cursor-pointer rounded-2xl p-0 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><AgentAvatar agent={agent} class_name="size-14 rounded-2xl" icon_class_name="size-7" /><span aria-hidden="true" className="absolute inset-0 flex items-center justify-center rounded-2xl bg-foreground/40 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"><TbEdit className="size-5 text-background" /></span></button><div className="text-center text-sm font-medium text-foreground">{agent.name}</div></div>{agent_description ? <p title={agent_description} className="mt-2.5 line-clamp-2 max-w-md text-center text-xs leading-5 text-muted-foreground">{agent_description}</p> : null}<div className={agent_description ? "mt-8" : "mt-10"}><ChatWorkspaceSelector workspace_id={workspace.workspace_id} workspaces={workspaces} disabled={false} variant="field" switch_workspace={(workspace_id) => switch_context(workspace_id, agent.agent_id)} /></div></div>;
 }
 
 /** 新建 Chat 输入框上方的当前上下文。 */

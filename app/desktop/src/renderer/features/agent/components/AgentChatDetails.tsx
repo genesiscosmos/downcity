@@ -1,17 +1,32 @@
-/** Agent Chat：MainView 组合内容与右侧「Agent」「本轮」两个域。 */
-import { useMemo, useState, type ReactNode } from "react";
+/** Agent Chat：正文 + 两个把「打开某处」交给正文入口的 Provider。 */
 
-import type { SessionTurnFileDiffData, SessionTurnFileDiffSummary } from "@downcity/agent/session";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 
 import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopAgentSummary } from "@common/types/DesktopApi";
 
-import { MainView, type BayBarDomain } from "@/layouts/BayBar";
+import { MainView, use_baybar_open } from "@/layouts/BayBar";
 
-import { AGENT_DOMAIN_ID, AGENT_EDITOR_SECTIONS, AgentEditorPanel } from "@/features/agent/AgentView";
-import { use_agent_definition } from "@/features/agent/lib/use_agent_definition";
-import { FILE_DIFF_SECTION_ID, TURN_DOMAIN_ID, TurnFileDiffOverview, TurnFileDiffReviewPanel, TurnFileDiffReviewProvider } from "@/features/chat/components/messages/TurnFileDiffCard";
+import { agent_config_tab } from "@/features/agent/AgentView";
+import { ChatFilePanelProvider } from "@/features/chat/panel/ChatFilePanel";
+import { TurnFileDiffReviewProvider } from "@/features/chat/components/messages/TurnFileDiffCard";
 import { use_translation } from "@/locales/i18n";
+
+/** 打开当前会话所属 Agent 的配置标签页。 */
+type OpenAgentConfig = () => void;
+
+/**
+ * 让正文深处的入口（消息里的 Agent 名、空会话的头像）打开 Agent 配置标签页。
+ *
+ * 这些组件都在消息列表深处，拿不到 controller；把动作放在这里提供，
+ * 避免把 controller 一路透传下去，也避免它们各自构造标签页。
+ */
+const OpenAgentConfigContext = createContext<OpenAgentConfig | null>(null);
+
+/** 读取「打开当前 Agent 配置」；不在 Agent Chat 内时为空。 */
+export function use_open_agent_config(): OpenAgentConfig | undefined {
+  return useContext(OpenAgentConfigContext) ?? undefined;
+}
 
 /** Agent Chat MainView 属性。 */
 interface AgentChatMainViewProps {
@@ -19,48 +34,40 @@ interface AgentChatMainViewProps {
   agent: DesktopAgentSummary;
   /** Desktop 稳定控制器。 */
   controller: DesktopController;
-  /** 当前 Chat 的稳定标识，用于按会话记忆显示位置。 */
+  /** 当前对话所属 Workspace；决定「文件」标签页能预览哪个工作区。 */
+  workspace_id: string;
+  /** 当前 Chat 的稳定标识，用于按会话隔离打开的文件。 */
   view_key: string;
-  /** 当前轮次的文件改动摘要；为空时「本轮」域显示空态。 */
-  file_diff_summary?: SessionTurnFileDiffSummary;
+  /** chat_stream 的会话缓存键；「本轮」标签页靠它订阅本轮改动摘要。 */
+  session_key: string;
+  /** 当前会话标题（原始值，可能为空）；用作「本轮」标签页的标题。 */
+  session_title?: string;
   /** 渲染 Chat 正文。 */
   children: ReactNode;
 }
 
 /**
- * Agent Chat 的右侧域。
+ * Agent Chat 的正文容器。
  *
- * 「本轮」域始终存在：集合稳定，tab 条不会随有没有改动忽长忽短。
+ * 它不构造标签页：三个标签页分别在各自的入口被点击时创建
+ * （`agent_config_tab` / `turn_tab` / `files_tab`），
+ * 面板因此不需要提前知道有哪些标签页，切换会话也不会换掉已打开的那些。
+ * 这里只提供三样东西：打开 Agent 配置的动作、打开文件的动作、选中某一轮的动作。
  */
-export function AgentChatMainView({ agent, controller, view_key, file_diff_summary, children }: AgentChatMainViewProps) {
+export function AgentChatMainView({ agent, controller, workspace_id, view_key, session_key, session_title, children }: AgentChatMainViewProps) {
   const translate_resources = useTranslation_resources();
-  const translate_chat = use_translation("chat");
-  // 点击历史轮次的 diff 卡片时切换到这里指向的那一轮；否则展示当前轮摘要。
-  const [review_data, set_review_data] = useState<SessionTurnFileDiffData>();
-  const definition_state = use_agent_definition(agent.agent_id, controller);
-  const domains = useMemo<BayBarDomain[]>(() => [
-    {
-      id: AGENT_DOMAIN_ID,
-      label: translate_resources("agent.edit"),
-      sections: AGENT_EDITOR_SECTIONS.map((item) => ({
-        id: item.id,
-        label: item.label_key ? translate_resources(item.label_key) : item.label ?? item.id,
-        content: <AgentEditorPanel agent={agent} controller={controller} section={item.id} {...definition_state} />,
-      })),
-    },
-    {
-      id: TURN_DOMAIN_ID,
-      label: translate_chat("file_diff.turn_label"),
-      sections: [{
-        id: FILE_DIFF_SECTION_ID,
-        label: translate_chat("file_diff.tab_label"),
-        content: review_data ? <TurnFileDiffReviewPanel data={review_data} /> : <TurnFileDiffOverview summary={file_diff_summary} />,
-      }],
-    },
-  ], [agent, controller, definition_state, file_diff_summary, review_data, translate_chat, translate_resources]);
+  const open_baybar = use_baybar_open();
+  const open_agent_config = useCallback<OpenAgentConfig>(() => {
+    open_baybar(agent_config_tab(agent, controller, translate_resources));
+  }, [agent, controller, open_baybar, translate_resources]);
+  const agent_config_value = useMemo(() => open_agent_config, [open_agent_config]);
 
-  return <MainView view_key={view_key} domains={domains}>
-    {() => <TurnFileDiffReviewProvider open_review={set_review_data}>{children}</TurnFileDiffReviewProvider>}
+  return <MainView>
+    <OpenAgentConfigContext.Provider value={agent_config_value}>
+      <ChatFilePanelProvider view_key={view_key} workspace_id={workspace_id}>
+        <TurnFileDiffReviewProvider session_key={session_key} session_title={session_title} controller={controller}>{children}</TurnFileDiffReviewProvider>
+      </ChatFilePanelProvider>
+    </OpenAgentConfigContext.Provider>
   </MainView>;
 }
 

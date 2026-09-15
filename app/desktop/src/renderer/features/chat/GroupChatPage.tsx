@@ -48,6 +48,7 @@ export function GroupChatSurface({ selection, group, session, workspaces, agents
   const remove_session = useMemo(() => selection.kind === "group_session" ? () => controller.actions.remove_group_session(group_id, selection.session_id) : undefined, [controller.actions, group_id, selection]);
   return <GroupView
     group={group}
+    controller={controller}
     workspace_id={workspace_id}
     workspaces={workspaces}
     workspace_draft_mode={selection.kind === "group_draft"}

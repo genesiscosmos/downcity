@@ -4,21 +4,28 @@
  * 数据只来自 canonical Agent Data Part；组件不访问 Git，也不根据 Tool 日志推断改动。
  */
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { SessionTurnFileDiff, SessionTurnFileDiffData, SessionTurnFileDiffSummary } from "@downcity/agent/session";
-import { TbCheck, TbChevronDown, TbChevronRight, TbChevronUp, TbDots, TbExternalLink, TbFileDiff, TbLink } from "react-icons/tb";
+import { TbCheck, TbChevronDown, TbChevronRight, TbChevronUp, TbDots, TbExternalLink, TbFileDiff, TbGitCompare, TbLink } from "react-icons/tb";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { message_action_button_class_name } from "@/features/chat/components/messages/MessageActionButton";
-import { use_baybar_open } from "@/layouts/BayBar";
+import { use_baybar_open, baybar_tab_id, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
+import { use_desktop_selector } from "@/app/use_desktop";
+import type { DesktopController } from "@/types/DesktopView";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 
-/** 「本轮」域与其下文件改动分区的稳定标识；卡片与 MainView 共用。 */
-export const TURN_DOMAIN_ID = "turn";
+/** 「本轮」标签页与其下文件改动分区的稳定标识。 */
 export const FILE_DIFF_SECTION_ID = "file-diff";
 
 const DEFAULT_VISIBLE_FILE_COUNT = 3;
-const TurnFileDiffReviewContext = createContext<((data: SessionTurnFileDiffData) => void) | null>(null);
+
+/** 「本轮」标签页的种类标识。 */
+export const TURN_TAB_KIND = "turn";
+
+/** Diff 审核入口：选中某一轮并把它打开到右侧。 */
+export type TurnFileDiffReviewOpen = (data: SessionTurnFileDiffData) => void;
+const TurnFileDiffReviewContext = createContext<TurnFileDiffReviewOpen | null>(null);
 /** diff 文件项的打开动作与链接上下文。 */
 interface TurnFileOpenAction {
   /** 在主视图 Workspace 中打开指定相对路径文件。 */
@@ -47,20 +54,107 @@ function build_file_link(workspace_path: string | undefined, relative_path: stri
 }
 
 /**
- * 注入 Diff 审核入口。
- * 审核数据由 Chat Surface 持有，因此这里只提供“选中某一轮改动”的动作。
+ * 各会话当前选中的「待审阅轮次」。
+ *
+ * 模块级共享状态，理由与 Chat 打开文件相同：写入方是正文里的 diff 卡片，
+ * 读取方是面板里的「本轮」tab，两者不在同一棵子树里；
+ * 若放在页面的 useState 里，切换会话或收起面板后内容就丢了。
  */
-export function TurnFileDiffReviewProvider({ open_review, children }: {
-  /** 选中某一轮文件改动。 */
-  open_review(data: SessionTurnFileDiffData): void;
+const review_by_session = new Map<string, SessionTurnFileDiffData>();
+const review_listeners = new Set<() => void>();
+
+function subscribe_review(listener: () => void): () => void {
+  review_listeners.add(listener);
+  return () => { review_listeners.delete(listener); };
+}
+
+/** 写入某会话选中的轮次，并通知订阅者。 */
+function write_review(session_key: string, data: SessionTurnFileDiffData): void {
+  review_by_session.set(session_key, data);
+  for (const listener of review_listeners) listener();
+}
+
+/** 读取某会话选中的轮次；未选过时为空。 */
+export function use_turn_review(session_key: string): SessionTurnFileDiffData | undefined {
+  return useSyncExternalStore(
+    subscribe_review,
+    () => review_by_session.get(session_key),
+    () => review_by_session.get(session_key),
+  );
+}
+
+/**
+ * 注入 Diff 审核入口：选中某一轮 + 在右侧打开「本轮」标签页。
+ *
+ * 两件事收在这里，是因为它们共享同一份上下文（会话、controller、文案）：
+ * 卡片只负责「用户点了审核」，不需要知道标签页怎么构造。
+ * 选中的轮次写进模块级状态，面板里的「本轮」标签页能读到，
+ * 不依赖页面是否还在渲染。
+ */
+export function TurnFileDiffReviewProvider({ session_key, session_title, controller, children }: {
+  /** 当前 Chat 的会话缓存键。 */
+  session_key: string;
+  /** 当前会话标题（原始值，可能为空）；用于给标签页命名。 */
+  session_title?: string;
+  /** Renderer 稳定控制器，用于构造标签页内容。 */
+  controller: DesktopController;
   /** 消息渲染内容。 */
   children: ReactNode;
 }) {
+  const translate_chat = use_translation("chat");
+  const open_baybar = use_baybar_open();
+  const open_review = useCallback<TurnFileDiffReviewOpen>((data) => {
+    write_review(session_key, data);
+    // 标题用会话名，不用「本轮」：同时开着多个会话时，
+    // 「本轮」会重复出现而无法区分是哪个会话的。
+    const label = session_title?.trim() || translate_chat("conversation.new");
+    open_baybar(turn_tab(session_key, label, controller, translate_chat), FILE_DIFF_SECTION_ID);
+  }, [controller, open_baybar, session_key, session_title, translate_chat]);
   return <TurnFileDiffReviewContext.Provider value={open_review}>{children}</TurnFileDiffReviewContext.Provider>;
 }
 
-/** 读取 Diff 审核入口；未注入时为空。 */
-function use_turn_file_diff_review(): ((data: SessionTurnFileDiffData) => void) | undefined {
+/**
+ * 「本轮」tab 的自解析内容。
+ *
+ * 自己订阅会话的本轮改动摘要与选中轮次，因此正文是否还在渲染都不影响它。
+ */
+export function TurnTab({ session_key, controller }: {
+  /** 当前 Chat 的会话缓存键。 */
+  session_key: string;
+  /** Renderer 稳定控制器，用于读取本轮改动摘要。 */
+  controller: DesktopController;
+}) {
+  const summary = use_desktop_selector(controller.stores.chat_stream, (state) => state.file_diff_by_session[session_key]);
+  const review_data = use_turn_review(session_key);
+  return review_data ? <TurnFileDiffReviewPanel data={review_data} /> : <TurnFileDiffOverview summary={summary} />;
+}
+
+/**
+ * 构造「本轮改动」标签页。
+ *
+ * 在点击审核时调用；内容自解析（只带 session_key），
+ * 所以切换会话后已打开的标签页依旧显示它自己那一轮。
+ *
+ * 标题是**会话名**（由调用方算好）：本轮是会话内的一个阶段，没有自己的名字，
+ * 能区分多个同类标签页的只有会话名。
+ */
+export function turn_tab(session_key: string, session_label: string, controller: DesktopController, t: BayBarTranslate): BayBarTab {
+  return {
+    id: baybar_tab_id(TURN_TAB_KIND, session_key),
+    label: session_label,
+    icon: <TbGitCompare />,
+    sections: [{
+      id: FILE_DIFF_SECTION_ID,
+      label: t("file_diff.tab_label"),
+      content: <TurnTab session_key={session_key} controller={controller} />,
+    }],
+  };
+}
+
+/**
+ * 读取 Diff 审核入口；未注入时为空。
+ */
+function use_turn_file_diff_review(): TurnFileDiffReviewOpen | undefined {
   return useContext(TurnFileDiffReviewContext) ?? undefined;
 }
 
@@ -68,21 +162,15 @@ function use_turn_file_diff_review(): ((data: SessionTurnFileDiffData) => void) 
 export function TurnFileDiffCard({ data }: { /** 当前 Turn 的 canonical 文件改动。 */ data: SessionTurnFileDiffData }) {
   const translate_chat = use_translation("chat");
   const [show_all, set_show_all] = useState(false);
-  const open_review = use_turn_file_diff_review();
-  const open_baybar = use_baybar_open();
+  const review = use_turn_file_diff_review();
   const hidden_count = Math.max(0, data.files.length - DEFAULT_VISIBLE_FILE_COUNT);
   const visible_files = show_all ? data.files : data.files.slice(0, DEFAULT_VISIBLE_FILE_COUNT);
-  // 选中本轮改动并打开右侧「本轮」域：点击只切换显示内容，不会收起右侧。
-  const review = () => {
-    open_review?.(data);
-    open_baybar(TURN_DOMAIN_ID, FILE_DIFF_SECTION_ID);
-  };
   return <section className="mt-2 overflow-hidden rounded-xl bg-surface-subtle text-[0.6875rem] text-foreground">
     <div className="flex min-h-11 items-center gap-2 px-3.5">
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4"><TbFileDiff aria-hidden /></span>
       <div className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium text-foreground">{translate_chat("message.files_changed", { count: data.files.length })}</div>
       <DiffStats additions={data.additions} deletions={data.deletions} compact />
-      {open_review ? <button type="button" onClick={review} className="ml-1 flex h-6 shrink-0 items-center rounded-md px-2 text-[0.6875rem] font-medium text-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30">{translate_chat("file_diff.review")}</button> : null}
+      {review ? <button type="button" onClick={() => review(data)} className="ml-1 flex h-6 shrink-0 items-center rounded-md px-2 text-[0.6875rem] font-medium text-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30">{translate_chat("file_diff.review")}</button> : null}
     </div>
     <div className="divide-y divide-divider border-t border-divider">
       {visible_files.map((file) => <FilePatch key={file.file} file={file} variant="inline" />)}

@@ -1,19 +1,53 @@
 /**
- * 应用壳的窄窗口自适应。
+ * 应用壳的自适应：两侧面板的折叠决策与右栏的宽度上限。
  *
- * 窗口允许缩到 760px（main/index.ts 的 minWidth），而展开态需要
- * rail 40 + sidebar 232 + BayBar 最小 360 = 632px，正文只剩不到 130px。
- * 所以窄窗口下必须主动收起两侧面板，而不是让正文被挤没。
+ * 一个共同问题：窗口允许缩到 760px（main/index.ts 的 minWidth），而两侧面板展开时
+ * 正文会被挤到无法阅读。所以窄窗口下必须主动收起面板，而不是让正文被挤没；
+ * 同样地，右栏能拖多宽也必须由「给正文留多少」决定，而不能写成固定值。
  *
- * 判定本身写成纯函数：收起是「自动」还是「用户主动」会决定放宽时要不要恢复，
- * 这部分逻辑不放在组件里才可验证。
+ * 这些判定都写成纯函数：收起是「自动」还是「用户主动」会决定放宽时要不要恢复，
+ * 宽度上限则直接决定拖拽的边界。它们不放在组件里才可验证。
  */
 
-/** 窄到需要收起右侧 BayBar 的窗口宽度。 */
-export const BAYBAR_AUTO_COLLAPSE_WIDTH = 1000;
+// 本模块会被 node 测试直接加载，相对导入必须带扩展名（其余渲染层文件走 Vite 打包）。
+import { SHELL_BAYBAR_MIN_WIDTH, SHELL_MAIN_VIEW_MIN_REGION, SHELL_SIDEBAR_MIN_WIDTH, SHELL_SIDEBAR_RAIL_WIDTH } from "./shellMotion.ts";
 
 /** 窄到需要收起左侧 Sidebar 的窗口宽度。 */
 export const SIDEBAR_AUTO_COLLAPSE_WIDTH = 860;
+
+/**
+ * 窄到需要收起右侧 BayBar 的窗口宽度。
+ *
+ * 由「正文保留量」推导：可用正文区域至少要同时容得下正文下限与右栏最小宽度，
+ * 再加上左侧最窄的 Sidebar 占地。低于这条线时两者无法并存，
+ * 与其把正文压到 450 以下，不如收起右栏。
+ *
+ * 收起态右栏不占宽（开关是浮动按钮），因此右侧只计面板本身的最小宽度。
+ *
+ * 左侧按 Sidebar 的**最小**宽度计算，与上面的注释一致：Sidebar 本身可拖宽，
+ * 拖宽后实际可用区域会更小，而媒体查询只能表达一个固定窗口宽度。
+ */
+export const BAYBAR_AUTO_COLLAPSE_WIDTH = SHELL_SIDEBAR_RAIL_WIDTH
+  + SHELL_SIDEBAR_MIN_WIDTH
+  + SHELL_MAIN_VIEW_MIN_REGION
+  + SHELL_BAYBAR_MIN_WIDTH;
+
+/**
+ * 计算当前可用宽度下 BayBar 的最大宽度。
+ *
+ * `available_width` 取承载正文与 BayBar 的那一行的宽度，**不是**正文卡片本身：
+ * 行宽由窗口与 Sidebar 决定、与 BayBar 宽度无关，因此面板变宽不会反过来改小上限；
+ * 若按正文卡片算，卡片会随面板变宽而变窄、上限跟着缩水，拖拽会自己把边界往回推。
+ *
+ * BayBar 没有自己的最大宽度，这里扣除的 `reserve_width` 是「给正文保留的最小总占宽」。
+ * 下限取整是为了不让右栏蚕食到保留量里的小数位。
+ *
+ * 结果不得低于最小宽度，否则可用区域太小时会出现 min > max，宽度无法夹取。
+ * 此时卡片自己的 min-width 会成为兼底：两者不可能同时成立，那是窗口本身容不下的情形。
+ */
+export function resolve_baybar_max_width(available_width: number, min_width: number, reserve_width: number = SHELL_MAIN_VIEW_MIN_REGION): number {
+  return Math.max(min_width, Math.floor(available_width - reserve_width));
+}
 
 /** 一次自适应决策的结果。 */
 export interface ShellAutoCollapse {
