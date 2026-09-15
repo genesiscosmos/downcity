@@ -182,44 +182,74 @@ function resolve_agent_action_visual_kind(action_type: string): AgentActionVisua
 
 所以把 `"history-fork"` 提成共享常量治不了任何东西；真正脆的是这个子串匹配本身（任何含 `fork` 的 action_type 都会得到 fork 视觉）。若希望 action_type 成为真正的契约，需要双方改成精确枚举——那是独立议题。
 
-### 批次 3：消掉 13 个转发方法（结构，行为不变）
+### 批次 3：消掉转发方法（已探针验证，前提需修正）
 
-这是本计划的主体。目标是让协作者直接持有它真正需要的东西。
+原判断：`SessionMessages` 有 13 个纯转发方法，让协作者直接持有 `agent_state` 即可删除。
+
+**探针结果：前提不对。** 逐个体检查后：
+
+| 分类 | 数量 | 说明 |
+| --- | --- | --- |
+| 真透传 | **12** | `project_agent_*`、`checkpoint_agent_message`、`commit_agent_parts`、`rollback_agent_projection`、`commit_agent_step`、`list_pending_interactions`、`request/resolve/close_interaction`；其中 `find_tool_in_open_message` **已无调用者** |
+| 非透传 | **1** | `complete_agent_message`：它先释放 `open_writer` 持有，再委派 |
+
+但 Writer 的真实依赖不只有这 12 个。它调用 `this.recorder.*` 共 11 处，其中两处**不在**那 13 个里面：
 
 ```ts
-// open_agent_message 返回的 Writer 直接绑定 agent_state，不再经 SessionMessages 转手
+// SessionAgentMessageWriter
+private current_message(): SessionAgentMessage {
+  const message = this.recorder.get_message(this.message_id);   // ← 缓存读取
+  ...
+}
+async close_serialized(...) {
+  await this.recorder.complete_agent_message(...);              // ← 持有释放
+}
+```
+
+而 `get_message` 读的是 `messages_by_id`（`SessionMessages` 的缓存），`complete_agent_message` 释放的是 `open_writer`（也是 `SessionMessages` 的持有关系）。
+
+所以若只把 Writer 的依赖从 `SessionMessages` 改成 `agent_state`，它反而要从两个对象取东西——**比现状更绕**。真正的耦合不在转发层，而在：
+
+1. 消息缓存（`messages_by_id`）归谁；
+2. 持有关系（`open_writer`）归谁。
+
+#### 结论：批次 3 与 4.1 应合并为一次重构
+
+单独删转发没有收益，正确的做法是先把“消息缓存 + Mutation 发布”抽成独立协作者，再让三方共享它：
+
+```ts
+type SessionMessageCache = {
+  /** 读取一条已缓存的 Agent Message。 */
+  get(message_id: string): SessionMessage | undefined;
+  /** 在接受已持久化快照时更新缓存，并按需发布 Mutation。 */
+  accept(message: SessionMessage, publish_mutation?: boolean): void;
+  /** 当前被未收口 writer 持有的 Message 标识。 */
+  held_message_id(): string | undefined;
+};
+```
+
+这样才成立：
+
+- Writer 持有 `(agent_state, cache)`，不再依赖 `SessionMessages`；
+- 12 个透传方法可删；
+- `complete_agent_message` 的释放动作消失——持有关系改由 Writer 自己的 `closed` 标志回答（同时也消除“同一事实存两份”的问题）；
+- 构造函数里的四个回指闭包（4.1）随之消失。
+
+**这是一次真实的结构重构，不是删除批次。** 动手前需确认 `SessionMessageCache` 的职责边界，并重新评估测试影响（`SessionAgentMessageState` 的 options、`SessionInteractions` 的构造、`session-interaction-mutation.test.mjs` 的直接构造都会变）。
+
+```ts
+// 目标形态（待评审）：Writer 不再经 SessionMessages 转手
 async open_agent_message(input: OpenSessionAgentMessageInput): Promise<SessionAgentMessageWriter> {
-  const message_id = ...;
   const writer = new SessionAgentMessageWriter(this.agent_state, message_id);
   ...
 }
 ```
 
-```ts
-// SessionAgentMessageWriter：依赖从 SessionMessages 收窄为它真正使用的能力
-export class SessionAgentMessageWriter {
-  constructor(
-    private readonly state: SessionAgentMessageState,
-    readonly message_id: string,
-  ) {}
-}
-```
-
-`SessionInteractions` 同理改为持有 `agent_state`（它只用到四个 Interaction 方法）。
-
-随后删除 `SessionMessages` 的 13 个转发方法。预期效果：
-
-| | 现在 | 目标 |
-| --- | --- | --- |
-| `SessionMessages.ts` | 887 行 / 30 公开方法 | ~770 行 / 17 公开方法 |
-| 写路径层数 | 2 层（Messages → State） | 1 层 |
-| 转发方法 | 13 | 0 |
-
-**注意**：`SessionAgentMessageState` 需要更名以匹配它的新角色——它不再只是 `SessionMessages` 的内部助手，而是「Agent Message 写入服务」。建议 `SessionAgentMessageService`，文件名同步。这一步会牵动 `SessionMessages` 的构造函数闭包（见批次 4），建议一并处理。
-
 ### 批次 4：结构收敛（需先评审）
 
-#### 4.1 构造函数里的回指闭包
+#### 4.1 构造函数里的回指闭包（已并入批次 3）
+
+见批次 3 结论：四个回指闭包与 12 个转发方法是同一个耦合的两面，应在同一次重构中处理。
 
 `SessionMessages` 构造 `agent_state` 时传入四个指回 `this` 的闭包，与 PRD §2.5 批评 `SessionMessageInteractionWriter` 的那处是同一种形状：
 
