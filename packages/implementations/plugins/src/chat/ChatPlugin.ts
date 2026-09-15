@@ -8,6 +8,7 @@ import type {
   PluginLifecycleContext,
 } from "@downcity/city/plugin";
 import { read_chat_accounts_config } from "./accounts/ChatAccountConfig.js";
+import { FeishuAppRegistrationService } from "./accounts/FeishuAppRegistration.js";
 import { register_chat_account_host_actions } from "./host/ChatAccountHostActions.js";
 import { ChatRuntime } from "./runtime/ChatRuntime.js";
 import { buildChatPluginSystem } from "./runtime/ChatPluginSystem.js";
@@ -30,6 +31,9 @@ export class ChatPlugin extends Plugin {
   /** 当前 Plugin 唯一的长期 Chat Runtime。 */
   private runtime?: ChatRuntime;
 
+  /** 扫码创建飞书应用的注册会话；生命周期与 Plugin 一致。 */
+  private readonly feishu_registration = new FeishuAppRegistrationService();
+
   /** 创建稳定 Action 定义；执行时解析 initialize 后的唯一 Runtime。 */
   constructor() {
     super();
@@ -47,7 +51,7 @@ export class ChatPlugin extends Plugin {
     const config = read_chat_accounts_config(context.config.get());
     const runtime = new ChatRuntime(context);
     this.runtime = runtime;
-    register_chat_account_host_actions(context, () => this.require_runtime());
+    register_chat_account_host_actions(context, () => this.require_runtime(), this.feishu_registration);
     await runtime.initialize(config.accounts);
   }
 
@@ -55,6 +59,7 @@ export class ChatPlugin extends Plugin {
   async dispose(): Promise<void> {
     const runtime = this.runtime;
     this.runtime = undefined;
+    this.feishu_registration.dispose();
     if (runtime) await runtime.dispose();
   }
 

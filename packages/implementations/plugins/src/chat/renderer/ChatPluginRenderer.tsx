@@ -1,10 +1,11 @@
 /** Chat Plugin 的 Bot Account Sidebar 与管理 Mainview。 */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PluginJsonValue } from "@downcity/city/plugin";
 import { define_plugin_renderer } from "@downcity/city/plugin/react";
 import type { ChatAccountDraft, ChatAccountView, ChatProvider } from "@/chat/types/ChatAccount.js";
 import type { ChatAccountDetailSnapshot, ChatDesktopSnapshot } from "@/chat/types/ChatDesktop.js";
+import type { FeishuAppRegistrationView } from "@/chat/types/FeishuAppRegistration.js";
 
 const account_route = (account_id: string, view = "overview") => ({ account_id, view });
 const create_route = (provider: ChatProvider) => ({ view: "create", provider });
@@ -52,7 +53,7 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
   },
 
   mainview: function ChatPluginMainview({ plugin, navigation, ui }) {
-    const { Button, Callout, EmptyState, Group, Input, LoadingState, Page, Row, Section, Select, Stack, Status, Switch, Tabs, Toolbar } = ui.components;
+    const { Button, Callout, EmptyState, Group, Inline, Input, LoadingState, Page, Row, Section, Select, Stack, Status, Switch, Tabs, Toolbar } = ui.components;
     const account_id = read_route(navigation.route.account_id);
     const view = read_route(navigation.route.view) || "overview";
     const create_provider = read_provider_route(navigation.route.provider);
@@ -62,6 +63,9 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
     const [edit_draft, set_edit_draft] = useState<ChatAccountDraft>();
     const [busy, set_busy] = useState(false);
     const [error, set_error] = useState("");
+    const [feishu_registration, set_feishu_registration] = useState<FeishuAppRegistrationView>();
+    const [manual_credential_mode, set_manual_credential_mode] = useState(false);
+    const committed_registration_id = useRef("");
 
     useEffect(() => {
       let disposed = false;
@@ -97,7 +101,11 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
     }, [detail?.account.account_id]);
 
     useEffect(() => {
-      if (view === "create") set_draft(empty_draft(create_provider));
+      if (view !== "create") return;
+      set_draft(empty_draft(create_provider));
+      set_feishu_registration(undefined);
+      set_manual_credential_mode(false);
+      committed_registration_id.current = "";
     }, [create_provider, view]);
 
     const mutate = async <TResult,>(action_id: string, input: object, message: string): Promise<TResult | undefined> => {
@@ -118,6 +126,71 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
       }
     };
 
+    /** 轮询待完成的飞书扫码注册会话。 */
+    useEffect(() => {
+      if (feishu_registration?.state !== "pending") return;
+      const registration_id = feishu_registration.registration_id;
+      let disposed = false;
+      const timer = setInterval(() => {
+        void plugin.invoke<FeishuAppRegistrationView>("feishu.register.status", { registration_id })
+          .then((value) => { if (!disposed) set_feishu_registration(value); })
+          .catch((reason) => {
+            if (disposed) return;
+            set_feishu_registration(undefined);
+            set_error(to_error_message(reason));
+          });
+      }, 3_000);
+      return () => { disposed = true; clearInterval(timer); };
+    }, [plugin, feishu_registration?.registration_id, feishu_registration?.state]);
+
+    /** 扫码完成后的唯一一次建号提交，避免 React 重复执行导致重复创建。 */
+    useEffect(() => {
+      if (feishu_registration?.state !== "ready") return;
+      const registration_id = feishu_registration.registration_id;
+      const app_id = feishu_registration.app_id;
+      const app_secret = feishu_registration.app_secret;
+      if (!app_id || !app_secret) return;
+      if (committed_registration_id.current === registration_id) return;
+      committed_registration_id.current = registration_id;
+      void (async () => {
+        const created = await mutate<ChatAccountView>("accounts.create", {
+          ...draft,
+          name: draft.name.trim() || "飞书机器人",
+          app_id,
+          app_secret,
+          ...(feishu_registration.domain ? { domain: feishu_registration.domain } : {}),
+        }, "飞书 Bot Account 已创建");
+        if (created) navigation.navigate(account_route(created.account_id));
+      })();
+    }, [feishu_registration?.state]);
+
+    /** 开始一次飞书扫码创建；缺少默认路由时提前阻止，避免扫码后才失败。 */
+    const start_feishu_registration = async () => {
+      if (!draft.agent_id || !draft.workspace_id) {
+        const message = "请先选择默认 Agent 和 Workspace";
+        set_error(message);
+        ui.toast({ type: "error", message });
+        return;
+      }
+      committed_registration_id.current = "";
+      const started = await mutate<FeishuAppRegistrationView>(
+        "feishu.register.begin",
+        {},
+        "二维码已生成，请用飞书扫码确认",
+      );
+      if (started) set_feishu_registration(started);
+    };
+
+    /** 取消当前扫码会话，并立刻回到未开始状态。 */
+    const cancel_feishu_registration = async () => {
+      const current = feishu_registration;
+      if (!current) return;
+      set_feishu_registration(undefined);
+      await plugin
+        .invoke("feishu.register.cancel", { registration_id: current.registration_id })
+        .catch(() => undefined);
+    };
+
     if (!snapshot) return <LoadingState label="正在读取 Chat 工作区…" />;
     const agent_options = snapshot.agents.map((agent) => ({ value: agent.agent_id, label: agent.name }));
     const workspace_options = snapshot.workspaces.map((workspace) => ({ value: workspace.workspace_id, label: workspace.name }));
@@ -127,7 +200,7 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
         if (created) navigation.navigate(account_route(created.account_id));
       };
       return <Page>
-        <Toolbar title="添加 Bot Account" actions={<Button variant="primary" disabled={busy} on_click={() => void save()}>创建并启动</Button>} />
+        <Toolbar title="添加 Bot Account" actions={<Button variant="primary" disabled={busy || (draft.provider === "feishu" && !manual_credential_mode)} on_click={() => void save()}>创建并启动</Button>} />
         {error ? <Callout tone="danger">{error}</Callout> : null}
         <Section title="Account" description="一个 Account 对应一个真实的平台 Bot/App。">
           <Group>
@@ -136,17 +209,43 @@ export const CHAT_PLUGIN_RENDERER = define_plugin_renderer({
             <Row label="Enabled" trailing={<Switch checked={draft.enabled} on_checked_change={(enabled) => set_draft({ ...draft, enabled })} aria_label="启用 Bot Account" />} />
           </Group>
         </Section>
-        <Section title="Credentials">
-          <Group>
-            {draft.provider === "telegram"
-              ? <Row label="Bot Token" trailing={<Input type="password" value={draft.bot_token ?? ""} on_value_change={(bot_token) => set_draft({ ...draft, bot_token })} />} />
-              : <>
-                <Row label="App ID" trailing={<Input value={draft.app_id ?? ""} on_value_change={(app_id) => set_draft({ ...draft, app_id })} />} />
-                <Row label="App Secret" trailing={<Input type="password" value={draft.app_secret ?? ""} on_value_change={(app_secret) => set_draft({ ...draft, app_secret })} />} />
-              </>}
-            {draft.provider === "feishu" ? <Row label="API Domain" trailing={<Input value={draft.domain ?? ""} placeholder="https://open.feishu.cn" on_value_change={(domain) => set_draft({ ...draft, domain })} />} /> : null}
-            {draft.provider === "qq" ? <Row label="Sandbox" trailing={<Switch checked={draft.sandbox === true} on_checked_change={(sandbox) => set_draft({ ...draft, sandbox })} aria_label="QQ Sandbox" />} /> : null}
-          </Group>
+        <Section title="Credentials" description={draft.provider === "feishu" && !manual_credential_mode ? "扫码后凭据自动写入并立即启用，不需要手动复制 App ID 与 App Secret。" : undefined}>
+          {draft.provider === "feishu" && !manual_credential_mode
+            ? feishu_registration?.state === "pending"
+              ? <Group>
+                <div className="flex flex-col items-center gap-3 py-5">
+                  <img
+                    src={feishu_registration.qr_data_url}
+                    alt="飞书扫码创建应用"
+                    className="h-44 w-44 rounded-lg bg-white p-2"
+                  />
+                  <div className="text-[0.8125rem] text-foreground">用飞书扫描二维码，并在手机上确认创建</div>
+                  <div className="max-w-md break-all text-center text-[0.6875rem] leading-5 text-muted-foreground">{feishu_registration.verification_url}</div>
+                </div>
+                <Row label="操作" trailing={<Inline><Button disabled={busy} on_click={() => void cancel_feishu_registration()}>取消</Button><Button disabled={busy} on_click={() => void start_feishu_registration()}>重新生成</Button></Inline>} />
+              </Group>
+              : feishu_registration?.state === "ready"
+                ? <Group>
+                  <Row label="飞书应用" description="凭据已获取，正在创建并启动 Bot Account。" trailing={<Status tone="success">已授权</Status>} />
+                </Group>
+                : <Stack>
+                {feishu_registration?.error ? <Callout tone="danger">{feishu_registration.error}</Callout> : null}
+                <Group>
+                  <Row label="飞书应用" description="扫码即可自动创建应用，无需手动到开放平台复制凭据。" trailing={<Button variant="primary" disabled={busy} on_click={() => void start_feishu_registration()}>扫码创建</Button>} />
+                  <Row label="手动填写凭据" description="仅在无法扫码，或需要复用已有应用时使用。" trailing={<Switch checked={false} on_checked_change={() => set_manual_credential_mode(true)} aria_label="手动填写飞书凭据" />} />
+                </Group>
+              </Stack>
+            : <Group>
+              {draft.provider === "telegram"
+                ? <Row label="Bot Token" trailing={<Input type="password" value={draft.bot_token ?? ""} on_value_change={(bot_token) => set_draft({ ...draft, bot_token })} />} />
+                : <>
+                  <Row label="App ID" trailing={<Input value={draft.app_id ?? ""} on_value_change={(app_id) => set_draft({ ...draft, app_id })} />} />
+                  <Row label="App Secret" trailing={<Input type="password" value={draft.app_secret ?? ""} on_value_change={(app_secret) => set_draft({ ...draft, app_secret })} />} />
+                </>}
+              {draft.provider === "feishu" ? <Row label="API Domain" trailing={<Input value={draft.domain ?? ""} placeholder="https://open.feishu.cn" on_value_change={(domain) => set_draft({ ...draft, domain })} />} /> : null}
+              {draft.provider === "qq" ? <Row label="Sandbox" trailing={<Switch checked={draft.sandbox === true} on_checked_change={(sandbox) => set_draft({ ...draft, sandbox })} aria_label="QQ Sandbox" />} /> : null}
+              {draft.provider === "feishu" && manual_credential_mode ? <Row label="扫码创建" description="返回扫码方式，由飞书自动颁发凭据。" trailing={<Button on_click={() => set_manual_credential_mode(false)}>返回扫码</Button>} /> : null}
+            </Group>}
         </Section>
         <Section title="Default routing" description="新 Conversation 会继承该 Agent 和 Workspace。">
           <Group>

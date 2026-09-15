@@ -126,6 +126,168 @@ export interface FeishuSdkEventDispatcher {
 }
 
 /**
+ * 扫码创建应用时返回的二维码信息。
+ */
+export interface FeishuSdkQrCodeInfo {
+  /**
+   * 用户在飞书/Lark 中打开或扫码的验证链接。
+   */
+  url: string;
+  /**
+   * 链接有效期，单位秒。
+   */
+  expireIn: number;
+}
+
+/**
+ * 扫码创建应用的轮询状态。
+ */
+export interface FeishuSdkRegistrationStatusInfo {
+  /**
+   * 当前轮询状态；`domain_switched` 表示检测到 Lark 租户并已切换认证域名。
+   */
+  status: "polling" | "slow_down" | "domain_switched";
+  /**
+   * 服务端建议的下一次轮询间隔，单位秒。
+   */
+  interval?: number;
+}
+
+/**
+ * 扫码用户信息。
+ */
+export interface FeishuSdkRegistrationUserInfo {
+  /**
+   * 扫码用户的 open_id。
+   */
+  open_id?: string;
+  /**
+   * 扫码用户所属租户品牌，用于推导 Open API 域名。
+   */
+  tenant_brand?: "feishu" | "lark";
+}
+
+/**
+ * 扫码创建应用的结果。
+ */
+export interface FeishuSdkRegisterAppResult {
+  /**
+   * 新应用的 App ID。
+   */
+  client_id: string;
+  /**
+   * 新应用的 App Secret。
+   */
+  client_secret: string;
+  /**
+   * 扫码用户信息。
+   */
+  user_info?: FeishuSdkRegistrationUserInfo;
+}
+
+/**
+ * 预填到应用创建确认页的应用信息。
+ */
+export interface FeishuSdkAppPreset {
+  /**
+   * 应用头像 URL，支持 1-6 个。
+   */
+  avatar?: string | string[];
+  /**
+   * 应用名称，支持 `{user}` 占位符。
+   */
+  name?: string;
+  /**
+   * 应用描述，支持 `{user}` 占位符。
+   */
+  desc?: string;
+}
+
+/**
+ * 叠加在平台基础模板之上的增量应用配置。
+ */
+export interface FeishuSdkAppAddons {
+  /**
+   * 是否保留平台默认模板；为 `false` 时只保留最小基础能力。
+   */
+  preset?: boolean;
+  /**
+   * 增量申请的权限点。
+   */
+  scopes?: {
+    /**
+     * 应用身份权限点。
+     */
+    tenant?: string[];
+    /**
+     * 用户身份权限点。
+     */
+    user?: string[];
+  };
+  /**
+   * 增量申请的事件订阅。
+   */
+  events?: {
+    /**
+     * 事件清单。
+     */
+    items?: {
+      /**
+       * 应用身份事件。
+       */
+      tenant?: string[];
+      /**
+       * 用户身份事件。
+       */
+      user?: string[];
+    };
+  };
+  /**
+   * 增量申请的回调。
+   */
+  callbacks?: {
+    /**
+     * 回调清单。
+     */
+    items?: string[];
+  };
+}
+
+/**
+ * 扫码创建应用的调用参数。
+ */
+export interface FeishuSdkRegisterAppOptions {
+  /**
+   * 来源标识，会拼入二维码 URL。
+   */
+  source?: string;
+  /**
+   * 用于取消轮询的 AbortSignal。
+   */
+  signal?: AbortSignal;
+  /**
+   * 验证链接就绪时的回调。
+   */
+  onQRCodeReady: (info: FeishuSdkQrCodeInfo) => void;
+  /**
+   * 轮询状态变化时的回调。
+   */
+  onStatusChange?: (info: FeishuSdkRegistrationStatusInfo) => void;
+  /**
+   * 预填的应用信息。
+   */
+  appPreset?: FeishuSdkAppPreset;
+  /**
+   * 增量申请的应用配置。
+   */
+  addons?: FeishuSdkAppAddons;
+  /**
+   * 为 `true` 时确认页只允许创建新应用，隐藏绑定已有应用的入口。
+   */
+  createOnly?: boolean;
+}
+
+/**
  * Feishu SDK 模块的最小能力集合。
  */
 export interface FeishuSdkModule {
@@ -141,4 +303,8 @@ export interface FeishuSdkModule {
    * 事件分发器 constructor。
    */
   EventDispatcher: new (config: Record<string, unknown>) => FeishuSdkEventDispatcher;
+  /**
+   * 基于 OAuth 2.0 Device Authorization Grant 的扫码创建应用；`1.67.0` 起提供。
+   */
+  registerApp?(options: FeishuSdkRegisterAppOptions): Promise<FeishuSdkRegisterAppResult>;
 }

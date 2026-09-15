@@ -19,11 +19,13 @@ import type {
   ChatDesktopSnapshot,
 } from "@/chat/types/ChatDesktop.js";
 import { ChatAccessService } from "@/chat/access/ChatAccessService.js";
+import type { FeishuAppRegistrationService } from "@/chat/accounts/FeishuAppRegistration.js";
 
 /** 注册 Chat Plugin 的 Desktop 业务 Actions。 */
 export function register_chat_account_host_actions(
   context: PluginLifecycleContext,
   resolve_runtime: () => ChatRuntime,
+  feishu_registration: FeishuAppRegistrationService,
 ): void {
   context.plugin.action({
     id: "accounts.snapshot",
@@ -158,6 +160,23 @@ export function register_chat_account_host_actions(
       await resolve_runtime().restart_enabled_accounts();
       const snapshot = await create_snapshot(context, resolve_runtime());
       return as_json(snapshot.accounts);
+    },
+  });
+  context.plugin.action({
+    id: "feishu.register.begin",
+    run: async () => as_json(await feishu_registration.begin()),
+  });
+  context.plugin.action({
+    id: "feishu.register.status",
+    run: async (input) => as_json(
+      feishu_registration.read(read_required_id(input, "registration_id")),
+    ),
+  });
+  context.plugin.action({
+    id: "feishu.register.cancel",
+    run: async (input) => {
+      feishu_registration.cancel(read_required_id(input, "registration_id"));
+      return as_json({ cancelled: true });
     },
   });
   context.plugin.action({

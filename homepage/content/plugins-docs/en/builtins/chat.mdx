@@ -9,7 +9,7 @@ Chat Plugin is a channel runtime owned by City. It does not belong to an individ
 
 ## Desktop workflow
 
-Open Channels to see every Bot Account in a dedicated Sidebar. Use the plus button in the Sidebar header and choose Telegram, Feishu/Lark, or QQ from the dropdown to create a Channel. You can add multiple bots for the same provider.
+Open Channels to see every Bot Account in a dedicated Sidebar. Use the plus button in the Sidebar header and choose Telegram, Feishu/Lark, or QQ from the dropdown to create a Channel. You can add multiple bots for the same provider. Feishu/Lark defaults to scan sign-in, so you never have to paste an App ID or App Secret.
 
 Selecting an Account lets you manage:
 
@@ -43,6 +43,10 @@ Account definitions and credentials have one source of truth: City Plugin Config
 ```
 
 Feishu/Lark accounts use `app_id`, `app_secret`, and optional `domain`. QQ accounts use `app_id`, `app_secret`, and optional `sandbox`.
+
+Adding a Feishu/Lark Channel in Desktop defaults to scan sign-in. Click Scan to create, scan the QR code with Feishu, and confirm on your phone; the App ID and App Secret are written automatically and the Account starts immediately, so nothing has to be copied from the Open Platform. The confirmation page is pre-filled with an app name and description, and pre-selects the scopes this channel needs together with the `im.message.receive_v1` event.
+
+Scan sign-in uses the OAuth 2.0 Device Authorization Grant (RFC 8628) and can only create a new app, so it never overwrites an existing app's configuration. QR code lifetime follows the platform response (currently about one hour), and you can regenerate it after it expires. When scanning is not possible, such as when the organization has not enabled developer access or you want to reuse an existing app, switch to Manual credentials on the same page.
 
 ## Messages and Sessions
 
@@ -86,8 +90,10 @@ The City host provides Plugin Config, lifecycle Storage, and Agent/Workspace loo
 A host that enables a Feishu/Lark Account must install:
 
 ```bash
-npm install @larksuiteoapi/node-sdk@^1.66.0
+npm install @larksuiteoapi/node-sdk@^1.73.3
 ```
+
+Scan sign-in relies on the SDK's `registerApp` and requires `^1.67.0` or later. On older versions the scan entry reports that an upgrade is needed, while manual credentials keep working.
 
 ## Related documentation
 

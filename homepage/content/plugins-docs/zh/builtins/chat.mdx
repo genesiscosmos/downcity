@@ -9,7 +9,7 @@ Chat Plugin 是 City 持有的渠道运行时。它不属于某个 Agent，也�
 
 ## Desktop 使用
 
-打开 Channels 后，左侧 Sidebar 会列出全部 Bot Account。点击 Sidebar 标题栏中的加号，从下拉菜单选择 Telegram、飞书/Lark 或 QQ 后创建对应的 Channel。可以添加多个同平台 Bot Account。
+打开 Channels 后，左侧 Sidebar 会列出全部 Bot Account。点击 Sidebar 标题栏中的加号，从下拉菜单选择 Telegram、飞书/Lark 或 QQ 后创建对应的 Channel。可以添加多个同平台 Bot Account。选择飞书/Lark 时默认使用扫码创建，不需要手动填写 App ID 与 App Secret。
 
 点击一个 Account 可以管理：
 
@@ -43,6 +43,10 @@ Account 定义与密钥以 City Plugin Config 为唯一事实源。示例：
 ```
 
 飞书/Lark 使用 `app_id`、`app_secret` 和可选 `domain`；QQ 使用 `app_id`、`app_secret` 和可选 `sandbox`。
+
+在 Desktop 中添加飞书/Lark Channel 时默认走扫码创建：点“扫码创建”，用飞书扫描二维码并在手机上确认，App ID 与 App Secret 会自动写入并立即启动，不需要到开放平台手动复制。确认页会预填应用名称与描述，并勾选本渠道需要的权限点和 `im.message.receive_v1` 事件。
+
+扫码基于 OAuth 2.0 Device Authorization Grant（RFC 8628），只允许创建新应用，不会覆盖已有应用的配置。二维码有效期以平台返回为准（当前约 1 小时），过期后可以重新生成。无法扫码时（例如企业未开启开发者权限，或需要复用已有应用），在同一页面切换到“手动填写凭据”即可。
 
 ## 消息与 Session
 
@@ -88,8 +92,10 @@ Chat Plugin 需要 City 宿主提供 Plugin Config、生命周期 Storage、Agen
 启用飞书/Lark Account 的宿主需要安装：
 
 ```bash
-npm install @larksuiteoapi/node-sdk@^1.66.0
+npm install @larksuiteoapi/node-sdk@^1.73.3
 ```
+
+扫码创建依赖 SDK 的 `registerApp`，需要 `^1.67.0` 及以上版本；低于该版本时扫码入口会提示升级，手动填写凭据仍然可用。
 
 ## 相关文档
 
