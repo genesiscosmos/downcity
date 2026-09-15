@@ -72,7 +72,7 @@ export class QuestionPanelComponent implements Component, Focusable {
 
     const question = this.current_question;
     if (!question) return;
-    if (question.response_type === "text") {
+    if (question.type === "text") {
       this.input.handleInput(data);
       return;
     }
@@ -84,7 +84,7 @@ export class QuestionPanelComponent implements Component, Focusable {
       this.move_option(1);
       return;
     }
-    if (question.response_type === "multi_select" && matchesKey(data, Key.space)) {
+    if (question.type === "multi_select" && matchesKey(data, Key.space)) {
       this.toggle_current_option();
       return;
     }
@@ -154,7 +154,7 @@ export class QuestionPanelComponent implements Component, Focusable {
   /** 提交当前单选或多选答案。 */
   private submit_select_answer(question: SessionInteractionQuestion): void {
     const options = question.options ?? [];
-    if (question.response_type === "multi_select") {
+    if (question.type === "multi_select") {
       this.commit_answer(
         options
           .map((option) => option.value)
@@ -198,7 +198,7 @@ export class QuestionPanelComponent implements Component, Focusable {
     question: SessionInteractionQuestion,
   ): string {
     return " " + truncateToWidth(
-      current_theme.bold_fg("text", question.prompt),
+      current_theme.bold_fg("text", question.question),
       inner_width,
       ELLIPSIS,
     );
@@ -208,7 +208,7 @@ export class QuestionPanelComponent implements Component, Focusable {
     inner_width: number,
     question: SessionInteractionQuestion,
   ): string[] {
-    if (question.response_type === "text") {
+    if (question.type === "text") {
       this.input.focused = this.focused;
       return this.input
         .render(Math.max(1, inner_width - 2))
@@ -228,7 +228,7 @@ export class QuestionPanelComponent implements Component, Focusable {
       .map((option, offset) => {
         const index = start + offset;
         const selected = index === this.selected_option_index;
-        const checked = question.response_type === "multi_select"
+        const checked = question.type === "multi_select"
           ? (this.selected_values.has(option.value) ? "●" : "○")
           : "";
         const pointer = selected ? `${SELECT_POINTER} ` : "  ";
@@ -246,9 +246,9 @@ export class QuestionPanelComponent implements Component, Focusable {
     inner_width: number,
     question: SessionInteractionQuestion,
   ): string {
-    const hint = question.response_type === "text"
+    const hint = question.type === "text"
       ? "Enter submit · Esc stop turn"
-      : question.response_type === "multi_select"
+      : question.type === "multi_select"
         ? "↑↓ navigate · Space toggle · Enter submit · Esc stop turn"
         : "↑↓ navigate · Enter submit · Esc stop turn";
     return " " + truncateToWidth(

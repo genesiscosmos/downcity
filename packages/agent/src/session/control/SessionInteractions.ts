@@ -122,7 +122,12 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     if (first_error) throw first_error;
   }
 
-  /** 校验执行面提交的 Interaction 请求。 */
+  /**
+   * 校验执行面提交的 Interaction 信封。
+   *
+   * 核心不认识业务类型：`payload` 的类型就是 `JsonValue`，怎么解释由它的生产者负责。
+   * 因此这里只检查信封自身，不拆业务字段。
+   */
   private validate_request(request: SessionInteractionRequest): void {
     if (!String(request.interaction_id || "").trim()) {
       throw new Error("Session Interaction requires interaction_id");
@@ -139,54 +144,9 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     if (!String(request.source.tool_call_id || "").trim()) {
       throw new Error("Session Interaction requires the Tool Call it belongs to");
     }
-    if (request.type === "question") {
-      const payload = request.payload as { questions?: unknown };
-      const questions = payload?.questions;
-      if (!Array.isArray(questions) || questions.length === 0) {
-        throw new Error("Question Interaction requires at least one question");
-      }
-      const question_ids = new Set<string>();
-      for (const question of questions as Array<Record<string, unknown>>) {
-        if (!String(question.question_id || "").trim()) {
-          throw new Error("Interaction question requires question_id");
-        }
-        if (question_ids.has(String(question.question_id))) {
-          throw new Error("Duplicate Interaction question_id");
-        }
-        question_ids.add(String(question.question_id));
-        if (!String(question.prompt || "").trim()) {
-          throw new Error(
-            `Interaction question requires prompt: ${question.question_id}`,
-          );
-        }
-        if (
-          question.response_type !== "text" &&
-          (!Array.isArray(question.options) || question.options.length === 0)
-        ) {
-          throw new Error(
-            `Select Interaction question requires options: ${question.question_id}`,
-          );
-        }
-        if (question.options) {
-          const option_values = new Set<string>();
-          for (const option of question.options as Array<Record<string, unknown>>) {
-            if (!String(option.value || "").trim()) {
-              throw new Error(
-                `Interaction option requires value: ${question.question_id}`,
-              );
-            }
-            const option_value = String(option.value);
-            if (option_values.has(option_value)) {
-              throw new Error("Duplicate Interaction option value");
-            }
-            option_values.add(option_value);
-          }
-        }
-      }
-    }
   }
 
-  /** 校验响应 type、问题集合与回答值。 */
+  /** 校验响应信封：type 必须与请求一致，outcome 必须合法。 */
   private validate_response(
     request: SessionInteractionRequest,
     response: SessionInteractionResponse,
@@ -196,51 +156,6 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     }
     if (response.outcome !== "resolved" && response.outcome !== "denied") {
       throw new Error("Session Interaction response requires a valid outcome");
-    }
-    if (request.type !== "question") return;
-    const request_payload = request.payload as { questions?: unknown };
-    const response_payload = response.payload as { answers?: unknown };
-    const questions = Array.isArray(request_payload.questions)
-      ? request_payload.questions as Array<Record<string, unknown>>
-      : [];
-    const response_answers = Array.isArray(response_payload?.answers)
-      ? response_payload.answers as Array<Record<string, unknown>>
-      : [];
-    const answers = new Map<string, string | string[]>();
-    for (const answer of response_answers) {
-      const question_id = String(answer.question_id || "");
-      if (answers.has(question_id)) {
-        throw new Error("Duplicate Session Interaction answer");
-      }
-      answers.set(question_id, answer.value as string | string[]);
-    }
-    if (answers.size !== questions.length) {
-      throw new Error("Session Interaction answer count mismatch");
-    }
-    for (const question of questions) {
-      const question_id = String(question.question_id || "");
-      const value = answers.get(question_id);
-      if (value === undefined) {
-        throw new Error("Session Interaction answer is missing");
-      }
-      if (question.response_type === "multi_select") {
-        if (!Array.isArray(value)) {
-          throw new Error("Session Interaction answer must be an array");
-        }
-      } else if (typeof value !== "string") {
-        throw new Error("Session Interaction answer must be a string");
-      }
-      if (question.response_type !== "text") {
-        const allowed = new Set(
-          (Array.isArray(question.options) ? question.options : []).map(
-            (option) => (option as { value: string }).value,
-          ),
-        );
-        const selected = Array.isArray(value) ? value : [value];
-        if (selected.some((item) => !allowed.has(item))) {
-          throw new Error("Session Interaction answer contains an invalid option");
-        }
-      }
     }
   }
 

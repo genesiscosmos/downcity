@@ -1,25 +1,21 @@
 /**
  * ask_question Tool 的输入与输出协议。
  *
- * 该协议只描述模型发起问题和收到回答时可见的数据；Interaction 标识、Turn 标识与
- * 生命周期状态由 Session 运行时维护，不交给模型生成。
+ * 问题字段与 canonical Interaction 保持一致，只少一个由 Session 生成的 `question_id`；
+ * 模型写的形状就是落库与渲染的形状。Interaction 标识、Turn 标识与生命周期状态由 Session
+ * 运行时维护，不交给模型生成。
  */
 
 import type {
   SessionInteractionAnswer,
-  SessionInteractionOption,
   SessionInteractionQuestion,
 } from "@downcity/type";
 
-/** 模型调用 ask_question 时提交的一条问题。 */
-export interface AskQuestionsToolQuestion {
-  /** 向用户展示的完整问题文本。 */
-  question: string;
-  /** 当前问题要求的回答形式，所有问题都必须显式提供。 */
-  type: SessionInteractionQuestion["response_type"];
-  /** 单选或多选问题允许选择的候选项。 */
-  options?: SessionInteractionOption[];
-}
+/** 模型调用 ask_question 时提交的一条问题；`question_id` 由 Session 生成，不由模型提供。 */
+export type AskQuestionsToolQuestion = Omit<
+  SessionInteractionQuestion,
+  "question_id"
+>;
 
 /** 模型调用 ask_question 时提交的结构化输入。 */
 export interface AskQuestionsToolInput {
@@ -33,6 +29,8 @@ export interface AskQuestionsToolInput {
 export interface AskQuestionsToolOutput {
   /** 当前提问已由用户完整回答。 */
   status: "resolved";
-  /** 按 question_id 关联的完整回答集合。 */
+  /** 按 question_id 关联的完整回答集合，顺序与提问一致。 */
   answers: SessionInteractionAnswer[];
+  /** 用户随回答提交的可选补充说明。 */
+  note?: string;
 }

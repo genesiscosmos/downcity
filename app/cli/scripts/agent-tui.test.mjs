@@ -865,13 +865,13 @@ test("Question Interaction 逐项收集文本、单选和多选答案", () => {
     payload: { questions: [
       {
         question_id: "name",
-        prompt: "Project name?",
-        response_type: "text",
+        question: "Project name?",
+        type: "text",
       },
       {
         question_id: "runtime",
-        prompt: "Choose runtime",
-        response_type: "single_select",
+        question: "Choose runtime",
+        type: "single_select",
         options: [
           { value: "node", label: "Node.js" },
           { value: "bun", label: "Bun" },
@@ -879,8 +879,8 @@ test("Question Interaction 逐项收集文本、单选和多选答案", () => {
       },
       {
         question_id: "features",
-        prompt: "Choose features",
-        response_type: "multi_select",
+        question: "Choose features",
+        type: "multi_select",
         options: [
           { value: "lint", label: "Lint" },
           { value: "test", label: "Test" },

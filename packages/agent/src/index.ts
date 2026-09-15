@@ -156,7 +156,7 @@ export type {
   SessionInteractionOption,
   SessionInteractionPort,
   SessionInteractionQuestion,
-  SessionInteractionQuestionResponseType,
+  SessionInteractionQuestionType,
   SessionInteractionRequest,
   SessionInteractionResponse,
   SessionInteractionResult,

@@ -75,8 +75,8 @@ export interface SessionApprovalPayload {
   model_explanation?: string;
 }
 
-/** Question 支持的回答形式。 */
-export type SessionInteractionQuestionResponseType =
+/** Question 要求的回答形式。 */
+export type SessionInteractionQuestionType =
   | "text"
   | "single_select"
   | "multi_select";
@@ -91,14 +91,19 @@ export interface SessionInteractionOption {
   description?: string;
 }
 
-/** 一条等待用户回答的问题。 */
+/**
+ * 一条等待用户回答的问题。
+ *
+ * 字段与 `ask_question` Tool 的输入保持一致，只多一个 Session 生成的 `question_id`：
+ * 提问从模型到落库再到渲染是同一个形状，中间不做字段改名。
+ */
 export interface SessionInteractionQuestion {
-  /** 当前问题在 Interaction 内的稳定标识。 */
+  /** 当前问题在 Interaction 内的稳定标识，由 Session 生成。 */
   question_id: string;
   /** 向用户展示的完整问题文本。 */
-  prompt: string;
+  question: string;
   /** 当前问题要求的回答形式。 */
-  response_type: SessionInteractionQuestionResponseType;
+  type: SessionInteractionQuestionType;
   /** 单选或多选问题允许选择的候选项。 */
   options?: SessionInteractionOption[];
 }

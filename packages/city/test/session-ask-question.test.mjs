@@ -25,9 +25,9 @@ function create_usage() {
   };
 }
 
-/** 构造 ask_question Tool Call 模型流。 */
-function create_question_stream() {
-  const input = {
+/** ask_question Tool Call 的默认输入：一个单选问题。 */
+function default_question_input() {
+  return {
     title: "选择部署区域",
     questions: [
       {
@@ -40,6 +40,10 @@ function create_question_stream() {
       },
     ],
   };
+}
+
+/** 构造 ask_question Tool Call 模型流。 */
+function create_question_stream(input = default_question_input()) {
   return {
     stream: new ReadableStream({
       start(controller) {
@@ -219,8 +223,154 @@ test("显式注入的 ask_question 等待回答并继续同一个 Turn", async (
       interaction_part?.request.source.tool_call_id,
       "call_ask_question",
     );
+    // 落库的问题与模型写的字段同名，中间不改名；只多一个 Session 生成的 question_id。
+    assert.deepEqual(
+      interaction_part?.request.payload.questions,
+      default_question_input().questions.map((question) => ({
+        ...question,
+        question_id: interaction_part.request.payload.questions[0].question_id,
+      })),
+    );
   } finally {
     await agent.dispose();
     await fs.rm(project_root, { recursive: true, force: true });
   }
+});
+
+/**
+ * 跑一次包含 ask_question 的 Turn，并由 answer_factory 决定如何回答拦截到的交互。
+ *
+ * 返回拦截到的 Interaction、回答错误、Turn 结果与 canonical Tool Part，
+ * 使用例可以分别断言“交互能不能成立”和“最终交给模型的是什么”。
+ */
+async function run_ask_question_turn({ label, question_input, answer_factory }) {
+  const project_root = await fs.mkdtemp(
+    path.join(os.tmpdir(), `downcity-ask-question-${label}-`),
+  );
+  let stream_count = 0;
+  const model = new MockModelClient({
+    modelId: `${label}-model`,
+    doStream: async (options) => {
+      if (!Array.isArray(options.tools) || options.tools.length === 0) {
+        return create_final_text_stream();
+      }
+      stream_count += 1;
+      return stream_count === 1
+        ? create_question_stream(question_input)
+        : create_final_text_stream();
+    },
+    doGenerate: async () => ({
+      content: [{ type: "text", text: "Ask question test" }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: create_usage(),
+      warnings: [],
+    }),
+  });
+  const agent = new Agent({
+    id: `${label}_agent`,
+    model,
+    tools: { ask_question: AskQuestionsTool },
+  });
+  const workspace = new Workspace({
+    id: `${label}_workspace`,
+    path: project_root,
+    data_root_path: path.join(project_root, "data"),
+  });
+
+  try {
+    const session = await agent.sessions.create({
+      session_id: `${label}_session`,
+      workspace,
+    });
+    let pending_interaction;
+    let respond_error;
+    let respond_promise;
+    const unsubscribe = session.subscribe((mutation) => {
+      if (mutation.variant !== "part" || mutation.part.type !== "tool") return;
+      if (respond_promise) return;
+      const interaction = (mutation.part.interactions ?? []).find(
+        (item) => item.status === "pending",
+      );
+      if (!interaction) return;
+      pending_interaction = interaction;
+      respond_promise = session
+        .respond({
+          interaction_id: interaction.interaction_id,
+          response: answer_factory(interaction),
+        })
+        .catch((error) => {
+          respond_error = error;
+          return undefined;
+        });
+    });
+
+    const turn = await session.prompt({ query: "帮我选择部署方案" });
+    const result = await Promise.race([
+      turn.finished,
+      new Promise((resolve) => setTimeout(resolve, 8000)),
+    ]);
+    unsubscribe();
+    if (respond_promise) await respond_promise;
+
+    const messages = await session.messages();
+    const tool_part = messages.items
+      .flatMap((message) => (message.role === "agent" ? message.parts : []))
+      .find(
+        (part) => part.type === "tool" && part.tool_call_id === "call_ask_question",
+      );
+    return { pending_interaction, respond_error, result, tool_part };
+  } finally {
+    await agent.dispose();
+    await fs.rm(project_root, { recursive: true, force: true });
+  }
+}
+
+test("客户端把单选回答提交成数组时被收编，同一个 Turn 继续执行", async () => {
+  const outcome = await run_ask_question_turn({
+    label: "coerced-array-answer",
+    question_input: default_question_input(),
+    // 客户端曾经按「不是单选就当多选」反推形状，把单选回答提交成数组。
+    answer_factory: (interaction) => ({
+      type: "question",
+      outcome: "resolved",
+      payload: {
+        answers: [{
+          question_id: interaction.request.payload.questions[0].question_id,
+          value: ["cn"],
+        }],
+      },
+    }),
+  });
+
+  assert.equal(outcome.respond_error, undefined);
+  assert.equal(outcome.result?.text, "将部署到中国区域。");
+  assert.deepEqual(outcome.tool_part?.output?.answers, [{
+    question_id: outcome.pending_interaction.request.payload.questions[0].question_id,
+    value: "cn",
+  }]);
+});
+
+test("模型漏写 type 时不创建待响应 Interaction，Tool 直接失败", async () => {
+  let published_pending = false;
+  const outcome = await run_ask_question_turn({
+    label: "missing-type",
+    question_input: {
+      title: "选择部署区域",
+      questions: [{
+        question: "需要部署到哪个区域？",
+        options: [{ value: "cn", label: "中国" }],
+      }],
+    },
+    answer_factory: () => ({
+      type: "question",
+      outcome: "resolved",
+      payload: { answers: [] },
+    }),
+  });
+  if (outcome.pending_interaction) published_pending = true;
+
+  // 问题在入参 Schema 处就被拒绝，不会落成一张用户无法正确回答的卡片。
+  assert.equal(published_pending, false);
+  assert.equal(outcome.tool_part?.state, "failed");
+  assert.ok(String(outcome.tool_part?.error ?? "").trim().length > 0);
 });

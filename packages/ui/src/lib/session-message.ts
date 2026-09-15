@@ -90,8 +90,8 @@ export function session_part_to_chat_part(raw_part: unknown, index = 0): Downcit
         const item = question as Record<string, unknown>;
         return {
           id: typeof item.question_id === "string" ? item.question_id : `question-${question_index}`,
-          prompt: typeof item.prompt === "string" ? item.prompt : "",
-          response_type: item.response_type === "single_select" || item.response_type === "multi_select" ? item.response_type : "text",
+          prompt: typeof item.question === "string" ? item.question : "",
+          response_type: item.type === "single_select" || item.type === "multi_select" ? item.type : "text",
           options: Array.isArray(item.options) ? item.options.map((option) => typeof option === "string" ? { value: option, label: option } : option as { value: string; label: string }) : undefined,
         };
       }),
