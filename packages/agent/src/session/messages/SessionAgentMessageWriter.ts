@@ -2,11 +2,12 @@
  * 单个 canonical Assistant Message 的流式写入器。
  *
  * Writer 直接消费 Downcity `ModelStreamEvent`，并把模型内容、Tool 状态和 Action 内容
- * 串行写入 `SessionMessages`。它不理解 UI Message 或 Provider 私有事件。
+ * 串行写入 Agent Message 状态与运行缓存。它不理解 UI Message 或 Provider 私有事件。
  */
 
 import type { ModelStreamEvent } from "@downcity/type";
-import type { SessionMessages } from "@/session/SessionMessages.js";
+import type { SessionAgentMessageState } from "@/session/messages/SessionAgentMessageState.js";
+import type { SessionMessageCache } from "@/session/messages/SessionMessageCache.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import { SessionToolPartGate } from "@/session/messages/SessionToolPartGate.js";
 import type { SessionAgentContent } from "@downcity/type";
@@ -24,12 +25,23 @@ import { generate_id } from "@/utils/Id.js";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
 import { next_agent_part_sequence } from "@/session/messages/SessionAgentParts.js";
 
+/** Writer 构造参数。 */
+export interface SessionAgentMessageWriterOptions {
+  /** 当前 canonical Assistant Message 标识。 */
+  message_id: string;
+  /** Agent Message 写入状态转换器。 */
+  state: SessionAgentMessageState;
+  /** Message 运行缓存。 */
+  cache: SessionMessageCache;
+}
+
 /** 单个 Assistant Message 的流式 Writer。 */
 export class SessionAgentMessageWriter {
   /** 当前 canonical Assistant Message 标识。 */
   readonly message_id: string;
 
-  private readonly recorder: SessionMessages;
+  private readonly state: SessionAgentMessageState;
+  private readonly cache: SessionMessageCache;
   private readonly content_part_ids = new Map<string, string>();
   private readonly tool_call_ids = new Map<string, string>();
   private readonly current_step_part_ids = new Set<string>();
@@ -40,9 +52,10 @@ export class SessionAgentMessageWriter {
   private step_active = false;
   private closed = false;
 
-  constructor(recorder: SessionMessages, message_id: string) {
-    this.recorder = recorder;
-    this.message_id = message_id;
+  constructor(options: SessionAgentMessageWriterOptions) {
+    this.state = options.state;
+    this.cache = options.cache;
+    this.message_id = options.message_id;
   }
 
   /** 建立一个独立模型 Step 的 canonical Part 作用域。 */
@@ -86,7 +99,7 @@ export class SessionAgentMessageWriter {
         state: "ready",
         input: to_session_json_value(input.input),
       });
-      await this.recorder.checkpoint_agent_message(this.message_id);
+      await this.state.checkpoint(this.message_id);
     });
   }
 
@@ -106,7 +119,7 @@ export class SessionAgentMessageWriter {
             state: "failed",
             error: read_tool_error(result.output),
           });
-      await this.recorder.checkpoint_agent_message(this.message_id);
+      await this.state.checkpoint(this.message_id);
     });
   }
 
@@ -138,7 +151,7 @@ export class SessionAgentMessageWriter {
           this.merge_step_part(current_part, final_part, index),
         );
       }
-      await this.recorder.commit_agent_step(
+      await this.state.commit_step(
         this.message_id,
         current.parts.map((part) => merged_parts.get(part.part_id) ?? part),
       );
@@ -151,7 +164,7 @@ export class SessionAgentMessageWriter {
     await this.enqueue_write(async () => {
       this.tool_part_gate.reject_pending("Assistant canonical step was aborted");
       if (this.step_active) {
-        await this.recorder.rollback_agent_projection(this.message_id);
+        await this.state.rollback_projection(this.message_id);
         this.reset_step_state();
       }
     });
@@ -172,7 +185,7 @@ export class SessionAgentMessageWriter {
         appended_parts.push(canonical);
         sequence += 1;
       }
-      await this.recorder.commit_agent_parts(this.message_id, appended_parts);
+      await this.state.commit_parts(this.message_id, appended_parts);
       return appended_parts;
     });
   }
@@ -199,13 +212,13 @@ export class SessionAgentMessageWriter {
         message: input.message,
         recoverable: input.recoverable,
       } satisfies SessionAgentErrorPart;
-      await this.recorder.commit_agent_parts(this.message_id, [part]);
+      await this.state.commit_parts(this.message_id, [part]);
     });
   }
 
   /** 写入一个完整 canonical Assistant Part。 */
   async upsert_part(part: SessionAgentMessagePart): Promise<void> {
-    this.recorder.project_agent_part(this.message_id, part);
+    this.state.project_part(this.message_id, part);
     if (this.step_active) this.current_step_part_ids.add(part.part_id);
   }
 
@@ -255,7 +268,7 @@ export class SessionAgentMessageWriter {
       if (!event.delta) return;
       const type = event.type === "text_delta" ? "text" : "reasoning";
       const part_id = this.require_content_part_id(event.content_id);
-      this.recorder.project_agent_delta(
+      this.state.project_delta(
         this.message_id,
         part_id,
         type,
@@ -292,11 +305,12 @@ export class SessionAgentMessageWriter {
       if (!event.input_delta) return;
       const tool_call_id = this.require_tool_call_id(event.content_id);
       const tool = this.require_tool(tool_call_id);
-      this.recorder.project_agent_tool_input_delta(
+      this.state.project_delta(
         this.message_id,
         tool.part_id,
-        tool_call_id,
+        "tool_input",
         event.input_delta,
+        tool_call_id,
       );
       return;
     }
@@ -314,7 +328,7 @@ export class SessionAgentMessageWriter {
 
   /** 读取当前 Assistant Message 快照。 */
   private current_message(): SessionAgentMessage {
-    const message = this.recorder.get_message(this.message_id);
+    const message = this.cache.get(this.message_id);
     if (!message || message.role !== "agent") {
       throw new Error(`Assistant Message not found: ${this.message_id}`);
     }
@@ -445,7 +459,7 @@ export class SessionAgentMessageWriter {
       `Assistant Message writer closed with status ${status}`,
     );
     this.reset_step_state();
-    await this.recorder.complete_agent_message(this.message_id, status, error);
+    await this.state.complete(this.message_id, status, error);
     this.closed = true;
   }
 }

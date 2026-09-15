@@ -38,7 +38,7 @@ export class SessionAgentMessageState {
     this.session_id = options.session_id;
     this.options = options;
     this.interaction_writer = new SessionMessageInteractionWriter({
-      list_messages: options.list_messages,
+      list_messages: () => options.cache.all(),
       find_tool_in_open_message: (tool_call_id) => this.find_tool_in_open_message(tool_call_id),
       enqueue_assistant_write: (message_id, operation) =>
         this.enqueue_write(message_id, operation),
@@ -62,7 +62,7 @@ export class SessionAgentMessageState {
         : [...current.parts, structuredClone(part)]
       ).sort((left, right) => left.sequence - right.sequence),
     };
-    this.options.project_mutation(
+    this.options.cache.project(
       create_session_part_mutation({
         mutation_id: generate_id(),
         session_id: this.session_id,
@@ -123,7 +123,7 @@ export class SessionAgentMessageState {
       delta,
     };
     const tool_input_id = type === "tool_input" ? String(tool_call_id || "").trim() : "";
-    this.options.project_mutation(
+    this.options.cache.project(
       type === "tool_input"
         ? { ...base, type, tool_call_id: tool_input_id }
         : { ...base, type },
@@ -194,7 +194,7 @@ export class SessionAgentMessageState {
       if (!persisted || persisted.role !== "agent") {
         throw new Error(`Persisted Agent Message not found: ${message_id}`);
       }
-      this.options.accept_message(persisted);
+      this.options.cache.accept(persisted);
     });
   }
 
@@ -204,6 +204,8 @@ export class SessionAgentMessageState {
     outcome: "completed" | "stopped" | "failed",
     error?: string,
   ): Promise<void> {
+    // 先释放持有，收口提交才能把 Message 收敛为终态。
+    this.options.cache.release_held(message_id);
     await this.enqueue_write(message_id, async () => {
       const current = this.require_writable_agent(message_id);
       const completed_at = Date.now();
@@ -264,7 +266,7 @@ export class SessionAgentMessageState {
 
   /** 读取当前可写 Agent Message 中的指定 Tool Part。 */
   find_tool_in_open_message(tool_call_id: string): SessionOpenMessageToolLocation | undefined {
-    for (const message of this.options.list_messages()) {
+    for (const message of this.options.cache.all()) {
       if (message.role !== "agent") continue;
       const part = message.parts.find(
         (item): item is SessionAgentToolPart =>
@@ -326,7 +328,7 @@ export class SessionAgentMessageState {
       ...persisted,
       state: resolve_session_message_state(
         next_parts,
-        options?.held_by_writer ?? this.options.is_held_by_writer(message_id),
+        options?.held_by_writer ?? this.options.cache.is_held(message_id),
       ),
       revision: persisted.revision + 1,
       updated_at: committed_at,
@@ -338,7 +340,7 @@ export class SessionAgentMessageState {
       expected_revision: persisted.revision,
       changed_parts,
     });
-    this.options.accept_message(message, options?.publish_mutation !== false);
+    this.options.cache.accept(message, options?.publish_mutation !== false);
   }
 
   /** 串行执行同一 Message 的语义检查点。 */
@@ -359,7 +361,7 @@ export class SessionAgentMessageState {
 
   /** 读取当前运行投影中的可写 Agent Message；只有 writer 持有的消息可写。 */
   private require_writable_agent(message_id: string): SessionAgentMessage {
-    const message = [...this.options.list_messages()].find(
+    const message = [...this.options.cache.all()].find(
       (item) => item.message_id === message_id,
     );
     if (!message || message.role !== "agent") {

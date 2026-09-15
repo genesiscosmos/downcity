@@ -21,27 +21,33 @@ test("Error Part 在后续 Turn 结果 Data Part 之前写入", async () => {
     state: "streaming",
     parts: [],
   };
-  const recorder = {
-    get_message: () => message,
-    project_agent_part: (_message_id, part) => {
+  const cache = {
+    get: () => message,
+  };
+  const state = {
+    project_part: (_message_id, part) => {
       const index = message.parts.findIndex((candidate) => candidate.part_id === part.part_id);
       const parts = [...message.parts];
       if (index < 0) parts.push(part);
       else parts[index] = part;
       message = { ...message, parts };
     },
-    commit_agent_parts: async (_message_id, new_parts) => {
+    commit_parts: async (_message_id, new_parts) => {
       message = {
         ...message,
         revision: message.revision + 1,
         parts: [...message.parts, ...new_parts],
       };
     },
-    complete_agent_message: async (_message_id, status) => {
+    complete: async (_message_id, status) => {
       message = { ...message, state: "done", revision: message.revision + 1 };
     },
   };
-  const writer = new SessionAgentMessageWriter(recorder, message.message_id);
+  const writer = new SessionAgentMessageWriter({
+    message_id: message.message_id,
+    state,
+    cache,
+  });
 
   await writer.append_result_parts([{ type: "text", text: "处理中" }]);
   await writer.append_error({

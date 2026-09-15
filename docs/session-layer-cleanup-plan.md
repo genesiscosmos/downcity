@@ -6,7 +6,9 @@
 >
 > 前置：`session-message-unified-state-prd.md` 的改动已落地（工作区，未提交）。本计划不重复其内容。
 
-## 1. 核心发现：30 个公开方法里 13 个是纯转发
+## 1. 核心发现：30 个公开方法里有 8 个是纯转发
+
+逐个体检查后的真实分布（见批次 3）：7 个是 Writer 机制透传、1 个已死、4 个是合法域 API、1 个含真实行为。
 
 `SessionMessages` 有 30 个公开方法，其中 13 个只做一件事——把调用转发给 `agent_state`：
 
@@ -182,7 +184,7 @@ function resolve_agent_action_visual_kind(action_type: string): AgentActionVisua
 
 所以把 `"history-fork"` 提成共享常量治不了任何东西；真正脆的是这个子串匹配本身（任何含 `fork` 的 action_type 都会得到 fork 视觉）。若希望 action_type 成为真正的契约，需要双方改成精确枚举——那是独立议题。
 
-### 批次 3：消掉转发方法（已探针验证，前提需修正）
+### 批次 3：消掉转发层与回指闭包（已完成）
 
 原判断：`SessionMessages` 有 13 个纯转发方法，让协作者直接持有 `agent_state` 即可删除。
 
@@ -190,83 +192,81 @@ function resolve_agent_action_visual_kind(action_type: string): AgentActionVisua
 
 | 分类 | 数量 | 说明 |
 | --- | --- | --- |
-| 真透传 | **12** | `project_agent_*`、`checkpoint_agent_message`、`commit_agent_parts`、`rollback_agent_projection`、`commit_agent_step`、`list_pending_interactions`、`request/resolve/close_interaction`；其中 `find_tool_in_open_message` **已无调用者** |
-| 非透传 | **1** | `complete_agent_message`：它先释放 `open_writer` 持有，再委派 |
+| Writer 机制透传 | **7** | `project_agent_*`、`checkpoint_agent_message`、`commit_agent_parts`、`rollback_agent_projection`、`commit_agent_step` |
+| 域 API（不是 plumbing） | **4** | `list_pending_interactions`、`request/resolve/close_interaction`——方法名就是领域词汇，留在 Message 门面上是正确的 |
+| 已死 | **1** | `find_tool_in_open_message`，无调用者 |
+| 非透传 | **1** | `complete_agent_message`：先释放持有，再委派 |
 
-但 Writer 的真实依赖不只有这 12 个。它调用 `this.recorder.*` 共 11 处，其中两处**不在**那 13 个里面：
+且 Writer 还依赖两处不在清单里的东西：`get_message`（读缓存）与持有释放——两者都不属于 `agent_state`。所以只换依赖对象反而更绕，真正的耦合在**缓存与持有关系归谁**。
 
-```ts
-// SessionAgentMessageWriter
-private current_message(): SessionAgentMessage {
-  const message = this.recorder.get_message(this.message_id);   // ← 缓存读取
-  ...
-}
-async close_serialized(...) {
-  await this.recorder.complete_agent_message(...);              // ← 持有释放
-}
-```
+#### 3.1 实际做法：抽出 `SessionMessageCache`
 
-而 `get_message` 读的是 `messages_by_id`（`SessionMessages` 的缓存），`complete_agent_message` 释放的是 `open_writer`（也是 `SessionMessages` 的持有关系）。
-
-所以若只把 Writer 的依赖从 `SessionMessages` 改成 `agent_state`，它反而要从两个对象取东西——**比现状更绕**。真正的耦合不在转发层，而在：
-
-1. 消息缓存（`messages_by_id`）归谁；
-2. 持有关系（`open_writer`）归谁。
-
-#### 结论：批次 3 与 4.1 应合并为一次重构
-
-单独删转发没有收益，正确的做法是先把“消息缓存 + Mutation 发布”抽成独立协作者，再让三方共享它：
+新模块同时拥有三件事：Message 运行缓存、持有关系、Mutation 发布。三者本来就是同一件事的三面——Only 持有中的 Message 会被缓存，发布形状由新旧快照差异决定。
 
 ```ts
-type SessionMessageCache = {
-  /** 读取一条已缓存的 Agent Message。 */
-  get(message_id: string): SessionMessage | undefined;
-  /** 在接受已持久化快照时更新缓存，并按需发布 Mutation。 */
-  accept(message: SessionMessage, publish_mutation?: boolean): void;
-  /** 当前被未收口 writer 持有的 Message 标识。 */
+// packages/agent/src/session/messages/SessionMessageCache.ts
+export class SessionMessageCache {
+  get(message_id): SessionMessage | undefined;
+  all(): Iterable<SessionMessage>;
+  set_held(message_id): void;
+  release_held(message_id): void;
+  is_held(message_id): boolean;
   held_message_id(): string | undefined;
-};
-```
-
-这样才成立：
-
-- Writer 持有 `(agent_state, cache)`，不再依赖 `SessionMessages`；
-- 12 个透传方法可删；
-- `complete_agent_message` 的释放动作消失——持有关系改由 Writer 自己的 `closed` 标志回答（同时也消除“同一事实存两份”的问题）；
-- 构造函数里的四个回指闭包（4.1）随之消失。
-
-**这是一次真实的结构重构，不是删除批次。** 动手前需确认 `SessionMessageCache` 的职责边界，并重新评估测试影响（`SessionAgentMessageState` 的 options、`SessionInteractions` 的构造、`session-interaction-mutation.test.mjs` 的直接构造都会变）。
-
-```ts
-// 目标形态（待评审）：Writer 不再经 SessionMessages 转手
-async open_agent_message(input: OpenSessionAgentMessageInput): Promise<SessionAgentMessageWriter> {
-  const writer = new SessionAgentMessageWriter(this.agent_state, message_id);
-  ...
+  accept(message, publish_mutation?): void;   // 落盘快照 → 缓存 + 按差异发布
+  project(mutation, message): void;           // 实时投影 → 只缓存 + 发布给定 mutation
 }
 ```
 
-### 批次 4：结构收敛（需先评审）
-
-#### 4.1 构造函数里的回指闭包（已并入批次 3）
-
-见批次 3 结论：四个回指闭包与 12 个转发方法是同一个耦合的两面，应在同一次重构中处理。
-
-`SessionMessages` 构造 `agent_state` 时传入四个指回 `this` 的闭包，与 PRD §2.5 批评 `SessionMessageInteractionWriter` 的那处是同一种形状：
+`SessionMessages` 与 `SessionAgentMessageState` 都只单向依赖它，**双向依赖消失**：
 
 ```ts
-this.agent_state = new SessionAgentMessageState({
-  session_id: this.session_id,
-  store: this.store,
-  list_messages: () => this.messages_by_id.values(),
-  is_held_by_writer: (message_id) => this.is_held_by_writer(message_id),
-  accept_message: (message, publish_mutation) => this.accept_message(message, publish_mutation),
-  project_mutation: (mutation, message) => this.accept_mutation(mutation, message),
+// 之前：两个类互相回指
+new SessionAgentMessageState({
+  session_id, store,
+  list_messages: () => this.messages_by_id.values(),      // ← 指回 SessionMessages
+  is_held_by_writer: (id) => this.is_held_by_writer(id),  // ←
+  accept_message: (m, p) => this.accept_message(m, p),    // ←
+  project_mutation: (mu, m) => this.accept_mutation(mu, m), // ←
 });
+
+// 之后：只传协作对象
+new SessionAgentMessageState({ session_id, store, cache });
 ```
 
-`accept_message` / `project_mutation` 的唯一职责是「落盘后写缓存 + 发 Mutation」，这是 `SessionMessages` 的领域职责，不该以闭包形式外借。方向：把「消息缓存 + Mutation 发布」抽成一个独立协作者，双方各持一份引用，而不是互相穿透。
+#### 3.2 结果
 
-此项与批次 3 强相关，建议合并设计。
+| | 之前 | 之后 |
+| --- | --- | --- |
+| `SessionMessages.ts` | 888 行 | **707 行** |
+| `SessionMessageCache.ts` | — | 171 行（新增） |
+| `SessionAgentMessageState.ts` | 388 行 | 390 行（options 从 4 个闭包降为 1 个对象） |
+| Writer 依赖 | 整个 `SessionMessages`（11 处调用） | `(state, cache)` 两个窄接口 |
+| 写入路径层数 | 2（Messages → State） | 1 |
+| 回指闭包 | 4 个 | 0 |
+
+Writer 的依赖从 3 个位置参数改为 options 对象（`{ message_id, state, cache }`）；`SessionMessages.complete_agent_message` 删除，持有释放并入 `SessionAgentMessageState.complete`——那里本来就是唯一知道「这次提交是终态」的地方。
+
+#### 3.3 行为验证（不只跑测试）
+
+按 1.4 的教训，重构后用真实链路确认数据确实落盘，而非只在内存投影里：
+
+```text
+流式文本 + Tool：
+  落盘: {"state":"done","parts":["text:done:\"你好\"","tool:completed:{\"found\":true}"]}
+  → text 与 tool 两个 part 行都存在；aggregate 与 part 行数一致
+
+Interaction：
+  pending: ["interaction-1"]
+  恢复后 tool state: running
+  收口: {"state":"done","parts":["tool:failed"],"interactions":["resolved"]}
+  （tool 为 failed 是预期：该场景未调用 apply_tool_result，收口应把未完成的 Tool 标为失败）
+```
+
+### 批次 4：结构收敛
+
+#### 4.1 构造函数里的回指闭包（已随批次 3 完成）
+
+四个回指闭包与转发层已一并消除，见批次 3.1。
 
 #### 4.2 `validate_request` 里的业务校验
 
@@ -320,11 +320,11 @@ pnpm -C packages/city test                                        # 250/264，�
 flowchart LR
     A[批次 0 · 已完成<br/>删 Interaction 超时] --> B[批次 1 · 已完成<br/>零风险清理]
     B --> C[批次 2 · 已撤销<br/>经核实是循环]
-    C --> D[批次 3 · 待验证<br/>删 13 个转发]
-    D --> E[批次 4<br/>结构收敛]
+    C --> D[批次 3 · 已完成<br/>抽缓存 + 删转发 + 去闭包]
+    D --> E[批次 4.2<br/>validate_request 业务校验]
     E --> F[待定<br/>state 删列]
 ```
 
-批次 2 撤销后的教训适用于批次 3：本计划前两项都被核实推翻（1.3a 的重读、整个批次 2），说明「看起来重复」的判断不能直接采信。批次 3 动手前应先对其中一个转发方法做与 1.4 相同的探针验证。
+一个适用到后续所有批次的教训：本计划已有三项判断被核实推翻（1.3a 的重读、整个批次 2、批次 3 的「13 个透传」）。共同点都是**从代码形状推断职责**，而没看那层实际在做什么。因此任何「看起来重复/多余」的删除，动手前先用探针确认它的真实职责。
 
 批次 1 与 2 可以立刻做，互不干扰，各自可单独回滚。批次 3 是收益最大的一项——它同时解决「薄封装」和「887 行神对象」两个问题，且行为不变。批次 4 涉及新概念，应先写设计。

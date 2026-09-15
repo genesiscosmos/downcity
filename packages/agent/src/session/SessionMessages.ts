@@ -21,21 +21,18 @@ import type {
   SessionAgentErrorPart,
   SessionAgentInteraction,
   SessionAgentMessage,
-  SessionAgentMessagePart,
   SessionMessage,
   SessionMessagePage,
   SessionUserMessage,
   SessionUserMessagePart,
 } from "@downcity/type";
-import { create_session_part_mutation } from "@/session/messages/SessionMutationFactory.js";
+import { SessionMessageCache } from "@/session/messages/SessionMessageCache.js";
 import { resolve_session_message_state } from "@/session/messages/SessionMessageState.js";
 import {
   next_agent_part_sequence,
   resolve_changed_agent_parts,
 } from "@/session/messages/SessionAgentParts.js";
-import type { SessionMutation } from "@downcity/type";
 import type { SessionMessageStorageStats } from "@/types/store/SessionStorage.js";
-import type { SessionOpenMessageToolLocation } from "@/types/session/SessionTool.js";
 import type {
   SessionInteractionCloseInput,
   SessionInteractionRequest,
@@ -63,10 +60,8 @@ export class SessionMessages {
   readonly session_id: string;
   private readonly store: SessionStorage;
   private readonly attachment_store: SessionAttachmentStore;
-  private readonly publish: SessionMessagesOptions["publish"];
-  private readonly messages_by_id = new Map<string, SessionMessage>();
-  /** 当前 Assistant 单写队列的持有关系；它决定哪条 Message 仍然可写。 */
-  private open_writer: SessionAgentMessageWriter | null = null;
+  /** Message 运行缓存与 Mutation 发布边界。 */
+  private readonly cache: SessionMessageCache;
   /** Assistant 草稿与 Interaction 的串行状态转换器。 */
   private readonly agent_state: SessionAgentMessageState;
   /** 当前 Message 恢复事务；并发初始化共享同一个 Promise。 */
@@ -76,28 +71,21 @@ export class SessionMessages {
     this.session_id = String(options.session_id || "").trim();
     this.store = options.store;
     this.attachment_store = options.attachment_store;
-    this.publish = options.publish;
     if (!this.session_id) throw new Error("SessionMessages requires session_id");
+    this.cache = new SessionMessageCache({
+      session_id: this.session_id,
+      publish: options.publish,
+    });
     this.agent_state = new SessionAgentMessageState({
       session_id: this.session_id,
       store: this.store,
-      list_messages: () => this.messages_by_id.values(),
-      is_held_by_writer: (message_id) => this.is_held_by_writer(message_id),
-      accept_message: (message, publish_mutation) =>
-        this.accept_message(message, publish_mutation),
-      project_mutation: (mutation, message) =>
-        this.accept_mutation(mutation, message),
+      cache: this.cache,
     });
   }
 
-  /**
-   * 该 Message 是否仍由未收口的 writer 持有。
-   *
-   * 这是 Message 终态推导的唯一外部输入：持有关系由 writer 引用单一决定，
-   * 不再依赖任何存储字段。
-   */
-  is_held_by_writer(message_id: string): boolean {
-    return this.open_writer?.message_id === message_id;
+  /** 该 Message 是否仍由未收口的 writer 持有；终态推导与 Action 归属共同依赖它。 */
+  private is_held_by_writer(message_id: string): boolean {
+    return this.cache.is_held(message_id);
   }
 
   /** 恢复已有 Message，并收口进程中断遗留的运行状态。 */
@@ -120,9 +108,7 @@ export class SessionMessages {
   private async restore_messages(): Promise<void> {
     await this.store.initialize();
     const persisted_messages = await this.store.list_recoverable_agent_messages();
-    this.messages_by_id.clear();
     for (const message of persisted_messages) {
-      this.remember_message(message);
       const updated_at = Date.now();
       const recovered: SessionAgentMessage = {
         ...message,
@@ -187,13 +173,14 @@ export class SessionMessages {
         expected_revision: message.revision,
         changed_parts,
       });
-      this.accept_message(recovered, false);
+      // 恢复不属于本次订阅范围，只更新内存事实，不发布 Mutation。
+      this.cache.accept(recovered, false);
     }
   }
 
   /** 同步读取当前内存 Message。 */
   get_message(message_id: string): SessionMessage | undefined {
-    return this.messages_by_id.get(message_id);
+    return this.cache.get(message_id);
   }
 
   /** 追加一条 canonical User Message。 */
@@ -234,8 +221,12 @@ export class SessionMessages {
       String(input.message_id || "").trim() ||
       `agent:${this.session_id}:${generate_id()}`;
     // 先建立持有关系，创建消息时的首次接受才会被登记为可写 Message。
-    const writer = new SessionAgentMessageWriter(this, message_id);
-    this.open_writer = writer;
+    const writer = new SessionAgentMessageWriter({
+      message_id,
+      state: this.agent_state,
+      cache: this.cache,
+    });
+    this.cache.set_held(message_id);
     try {
       await this.create_message((sequence, created_at) => ({
         message_id,
@@ -251,7 +242,7 @@ export class SessionMessages {
         parts: [],
       }), true);
     } catch (error) {
-      this.open_writer = null;
+      this.cache.release_held(message_id);
       throw error;
     }
     return writer;
@@ -356,7 +347,7 @@ export class SessionMessages {
 
   /** 查找指定 Turn 当前由 writer 持有的正文 Message（同一时刻至多一条）。 */
   private find_open_message(turn_id: string): SessionAgentMessage | undefined {
-    const message_id = this.open_writer?.message_id;
+    const message_id = this.cache.held_message_id();
     if (!message_id) return undefined;
     const message = this.get_message(message_id);
     if (!message || message.role !== "agent" || message.turn_id !== turn_id) {
@@ -463,7 +454,7 @@ export class SessionMessages {
       expected_revision: current_message.revision,
       changed_parts: [next_action],
     });
-    this.accept_message(message, options?.publish_mutation !== false);
+    this.cache.accept(message, options?.publish_mutation !== false);
     return message;
   }
 
@@ -498,7 +489,6 @@ export class SessionMessages {
     };
 
     if (target && this.is_held_by_writer(target.message_id)) {
-      this.remember_message(target);
       await this.agent_state.commit_parts(target.message_id, [error_part]);
       const updated = await this.store.read_message(target.message_id);
       if (!updated || updated.role !== "agent") {
@@ -521,7 +511,7 @@ export class SessionMessages {
         expected_revision: target.revision,
         changed_parts: [error_part],
       });
-      this.accept_message(message);
+      this.cache.accept(message);
       return message;
     }
 
@@ -622,77 +612,6 @@ export class SessionMessages {
     }
   }
 
-  /** @internal 只向运行投影追加 Agent 文本 delta。 */
-  project_agent_delta(
-    message_id: string,
-    part_id: string,
-    type: "text" | "reasoning",
-    delta: string,
-  ): void {
-    this.agent_state.project_delta(message_id, part_id, type, delta);
-  }
-
-  /** @internal 只向运行投影追加 Agent Tool 输入 delta。 */
-  project_agent_tool_input_delta(
-    message_id: string,
-    part_id: string,
-    tool_call_id: string,
-    delta: string,
-  ): void {
-    this.agent_state.project_delta(
-      message_id,
-      part_id,
-      "tool_input",
-      delta,
-      tool_call_id,
-    );
-  }
-
-  /** @internal 只向运行投影写入 Agent 完整 Part。 */
-  project_agent_part(
-    message_id: string,
-    part: SessionAgentMessagePart,
-  ): void {
-    this.agent_state.project_part(message_id, part);
-  }
-
-  /** @internal 原子提交当前运行投影。 */
-  async checkpoint_agent_message(message_id: string): Promise<void> {
-    await this.agent_state.checkpoint(message_id);
-  }
-
-  /** @internal 原子提交一组非流式 Agent Parts。 */
-  async commit_agent_parts(
-    message_id: string,
-    parts: readonly SessionAgentMessagePart[],
-  ): Promise<void> {
-    await this.agent_state.commit_parts(message_id, parts);
-  }
-
-  /** @internal 丢弃未提交的当前 Step 投影。 */
-  async rollback_agent_projection(message_id: string): Promise<void> {
-    await this.agent_state.rollback_projection(message_id);
-  }
-
-  /** @internal 原子提交当前 Assistant step 的 metadata 快照。 */
-  async commit_agent_step(
-    message_id: string,
-    parts: SessionAgentMessagePart[],
-  ): Promise<void> {
-    await this.agent_state.commit_step(message_id, parts);
-  }
-
-  /** @internal 收口 Assistant Message。 */
-  async complete_agent_message(
-    message_id: string,
-    status: "completed" | "stopped" | "failed",
-    error?: string,
-  ): Promise<void> {
-    // 先释放持有，收口提交才能把 Message 收敛为终态。
-    if (this.open_writer?.message_id === message_id) this.open_writer = null;
-    await this.agent_state.complete(message_id, status, error);
-  }
-
   private async create_message(
     factory: (sequence: number, created_at: number) => SessionMessage,
     draft = false,
@@ -706,13 +625,8 @@ export class SessionMessages {
       }
       return candidate;
     });
-    this.accept_message(message, publish_mutation);
+    this.cache.accept(message, publish_mutation);
     return message;
-  }
-
-  /** 读取当前可写 Agent Message 中的指定 Tool Part。 */
-  find_tool_in_open_message(tool_call_id: string): SessionOpenMessageToolLocation | undefined {
-    return this.agent_state.find_tool_in_open_message(tool_call_id);
   }
 
   /** 返回当前 Session 中全部等待用户响应的 canonical Interaction。 */
@@ -746,104 +660,9 @@ export class SessionMessages {
     return await this.agent_state.close_interaction(interaction_id, input);
   }
 
-  private build_message_mutation(message: SessionMessage): SessionMutation {
-    const base = {
-      mutation_id: generate_id(),
-      variant: "message" as const,
-      message_id: message.message_id,
-      sequence: message.sequence,
-      revision: message.revision,
-      session_id: this.session_id,
-      ...(message.turn_id ? { turn_id: message.turn_id } : {}),
-      created_at: message.updated_at,
-    };
-    if (message.role === "agent") return { ...base, role: "agent", message };
-    return { ...base, role: "user", message };
-  }
-
-  private build_part_mutation(
-    message: SessionAgentMessage,
-    part: SessionAgentMessagePart,
-  ): SessionMutation {
-    return create_session_part_mutation({
-      mutation_id: generate_id(),
-      session_id: this.session_id,
-      message_id: message.message_id,
-      ...(message.turn_id ? { turn_id: message.turn_id } : {}),
-      revision: message.revision,
-      created_at: message.updated_at,
-      part,
-    });
-  }
-
-  /**
-   * 接受已持久化的 Message 快照。
-   *
-   * 发布形状由快照差异决定，调用方不需要描述“变化了什么”；
-   * publish_mutation 为 false 时只更新运行投影。
-   */
-  private accept_message(message: SessionMessage, publish_mutation = true): void {
-    const previous = this.get_message(message.message_id);
-    this.remember_message(message);
-    if (!publish_mutation) return;
-    const change = project_message_change(previous, message);
-    if (change.variant === "message") {
-      this.publish(this.build_message_mutation(message));
-      return;
-    }
-    for (const part of change.parts) this.publish(this.build_part_mutation(change.message, part));
-  }
-
-  private accept_mutation(mutation: SessionMutation, message: SessionMessage): void {
-    this.remember_message(message);
-    this.publish(mutation);
-  }
-
-  /** 只缓存 writer 持有的 Agent Message；终态历史始终读取 SQLite。 */
-  private remember_message(message: SessionMessage): void {
-    this.messages_by_id.delete(message.message_id);
-    if (message.role !== "agent") return;
-    if (!this.is_held_by_writer(message.message_id)) return;
-    this.messages_by_id.set(message.message_id, structuredClone(message));
-  }
-
   private async ensure_initialized(): Promise<void> {
     await this.initialize();
   }
-
-}
-
-/** 一个 Message 快照相对上一稳定状态的最小变更投影。 */
-type SessionMessageChange =
-  | { variant: "message" }
-  | { variant: "part"; message: SessionAgentMessage; parts: SessionAgentMessagePart[] };
-
-/**
- * 将一次 Message 提交投影为最小突变。
- *
- * Part Mutation 是「按 part_id 替换」，既无法让消费方建立一条尚不存在的 Message，
- * 也无法表达 Part 消失。所以首次出现、User Message、state 收口与 Part 被移除都必须
- * 整条发布；其余情况只发布发生变化的 Part，不重传整条会话。
- */
-function project_message_change(
-  previous: SessionMessage | undefined,
-  message: SessionMessage,
-): SessionMessageChange {
-  if (
-    previous?.role !== "agent" ||
-    message.role !== "agent" ||
-    previous.state !== message.state ||
-    previous.parts.some(
-      (part) => !message.parts.some((next) => next.part_id === part.part_id)
-    )
-  ) {
-    return { variant: "message" };
-  }
-  return {
-    variant: "part",
-    message,
-    parts: resolve_changed_agent_parts(previous.parts, message.parts),
-  };
 }
 
 function resolve_import_id(map: Map<string, string>, source_id: string, prefix: string): string {
