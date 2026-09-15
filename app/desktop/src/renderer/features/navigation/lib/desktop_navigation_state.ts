@@ -27,7 +27,10 @@ export function parse_navigation_target(serialized: string | null): RestorableNa
     if (!is_record(value) || typeof value.kind !== "string") return undefined;
     if (value.kind === "plugins") return { kind: "plugins" };
     if (value.kind === "workspace" && has_string(value, "workspace_id")) return { kind: "workspace", workspace_id: value.workspace_id };
-    if (value.kind === "workspace_file" && has_string(value, "workspace_id") && has_string(value, "relative_path")) return { kind: "workspace_file", workspace_id: value.workspace_id, relative_path: value.relative_path };
+    if (value.kind === "workspace_file" && has_string(value, "workspace_id") && has_string(value, "relative_path")) {
+      const line = read_positive_integer(value.line);
+      return { kind: "workspace_file", workspace_id: value.workspace_id, relative_path: value.relative_path, ...(line ? { line } : {}) };
+    }
     if (value.kind === "agent" && has_string(value, "agent_id")) return { kind: "agent", agent_id: value.agent_id };
     if (value.kind === "session" && has_string(value, "workspace_id") && has_string(value, "agent_id") && has_string(value, "session_id")) return { kind: "session", workspace_id: value.workspace_id, agent_id: value.agent_id, session_id: value.session_id };
     if (value.kind === "group" && has_string(value, "group_id")) return { kind: "group", group_id: value.group_id };
@@ -80,4 +83,9 @@ function is_record(value: unknown): value is Record<string, unknown> {
 /** 判断对象字段是否为非空字符串。 */
 function has_string(value: Record<string, unknown>, key: string): value is Record<string, unknown> & Record<typeof key, string> {
   return typeof value[key] === "string" && value[key].length > 0;
+}
+
+/** 读取可选的 1 基行号；非法值直接忽略，使被写入脏数据的导航目标仍可恢复。 */
+function read_positive_integer(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }

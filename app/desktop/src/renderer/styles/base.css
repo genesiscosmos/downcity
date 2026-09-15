@@ -6,6 +6,7 @@
 @import "./tokens.css";
 @import "./markdown.css";
 @import "./mermaid.css";
+@import "./workspace.css";
 @import "./chat.css";
 
 @layer base {

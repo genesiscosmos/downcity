@@ -23,6 +23,11 @@ test("只解析结构完整的稳定页面", () => {
   assert.equal(parse_navigation_target("invalid-json"), undefined);
 });
 
+test("Workspace 文件预览的行号可以被恢复，非法行号被忽略", () => {
+  assert.deepEqual(parse_navigation_target(JSON.stringify({ kind: "workspace_file", workspace_id: "project", relative_path: "src/index.ts", line: 45 })), { kind: "workspace_file", workspace_id: "project", relative_path: "src/index.ts", line: 45 });
+  assert.deepEqual(parse_navigation_target(JSON.stringify({ kind: "workspace_file", workspace_id: "project", relative_path: "src/index.ts", line: "45" })), { kind: "workspace_file", workspace_id: "project", relative_path: "src/index.ts" });
+});
+
 test("Group Draft 使用隔离键且不会进入持久化导航", () => {
   const draft_id = get_group_draft_session_id("team");
   assert.equal(draft_id, "group-draft:team");

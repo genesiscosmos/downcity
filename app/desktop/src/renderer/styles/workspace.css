@@ -1,0 +1,17 @@
+/* Workspace 源码视图（Shiki 语法高亮）。 */
+
+/*
+ * 深色模式下的片段配色。
+ *
+ * Shiki 把浅色取值作为内联 `color` 写在片段上，内联声明无法被普通 CSS 覆盖，
+ * 因此这里必须用 `!important` 切到它同时产出的 `--shiki-dark`。与 Markdown 代码块
+ * 使用同一套做法与同一组变量（见 markdown.css），只有作用范围不同。
+ *
+ * 兜底用 `inherit`：没有着色信息的片段应当沿用容器正文色，而不是被强制成某个固定颜色。
+ */
+.dark .workspace-file-source span {
+  color: var(--shiki-dark, inherit) !important;
+  font-style: var(--shiki-dark-font-style, inherit) !important;
+  font-weight: var(--shiki-dark-font-weight, inherit) !important;
+  text-decoration: var(--shiki-dark-text-decoration, none) !important;
+}

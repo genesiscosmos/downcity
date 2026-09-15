@@ -82,10 +82,10 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
     settings.set_error(""); navigation.set_sidebar_mode("workspace"); navigation.set_active_workspace_id(workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace_id); navigation.set_selection({ kind: "workspace", workspace_id });
   }, [catalog, navigation, settings]);
-  const select_workspace_file = useCallback((workspace_id: string, relative_path: string) => {
+  const select_workspace_file = useCallback((workspace_id: string, relative_path: string, line?: number) => {
     if (!catalog.state_ref.current.workspaces.some((workspace) => workspace.workspace_id === workspace_id)) return;
     settings.set_error(""); navigation.set_sidebar_mode("workspace"); navigation.set_active_workspace_id(workspace_id);
-    localStorage.setItem(active_workspace_storage_key, workspace_id); navigation.set_selection({ kind: "workspace_file", workspace_id, relative_path });
+    localStorage.setItem(active_workspace_storage_key, workspace_id); navigation.set_selection({ kind: "workspace_file", workspace_id, relative_path, ...(line ? { line } : {}) });
   }, [catalog, navigation, settings]);
   const select_agent = useCallback((agent_id: string) => { settings.set_error(""); navigation.set_selection({ kind: "agent", agent_id }); }, [navigation, settings]);
   const open_create_agent = useCallback(() => { settings.set_error(""); navigation.set_sidebar_mode("chat"); navigation.set_selection({ kind: "create_agent" }); }, [navigation, settings]);

@@ -5,7 +5,7 @@ import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 /** Desktop 可以执行的链接动作。 */
 export type DesktopLinkAction =
   | { /** 使用默认浏览器打开网络地址。 */ kind: "external_url"; /** 规范化后的 HTTP(S) 地址。 */ url: string }
-  | { /** 使用 Workspace 文件视图打开文件。 */ kind: "workspace_file"; /** 文件所属 Workspace。 */ workspace_id: string; /** Workspace 内相对路径。 */ relative_path: string }
+  | { /** 使用 Workspace 文件视图打开文件。 */ kind: "workspace_file"; /** 文件所属 Workspace。 */ workspace_id: string; /** Workspace 内相对路径。 */ relative_path: string; /** 链接携带的 1 基行号；链接未标注行号时省略。 */ line?: number }
   | { /** 使用系统默认应用打开文件。 */ kind: "local_file"; /** 规范化后的绝对文件路径。 */ file_path: string }
   | { /** 链接类型不受 Desktop 支持，应阻止 WebContents 导航。 */ kind: "blocked" }
   | { /** 当前链接不应触发跨页面打开。 */ kind: "ignore" };
@@ -18,11 +18,20 @@ export interface DesktopLinkContext {
   relative_path?: string;
 }
 
+/** 链接指向的目标文件在指定 Workspace 内的位置。 */
+export interface WorkspaceFileLink {
+  /** Workspace 内相对文件路径。 */
+  relative_path: string;
+  /** 链接标注的 1 基行号；未标注时省略。 */
+  line?: number;
+}
+
 /** 按 Desktop 产品语义把原始链接解析为唯一打开动作。 */
 export function resolve_desktop_link(target: string, workspaces: readonly DesktopWorkspaceSummary[], context: DesktopLinkContext): DesktopLinkAction {
   const value = target.trim();
   if (!value || value.startsWith("#")) return { kind: "ignore" };
   const protocol = read_protocol(value);
+  // 网络地址自身可能带端口号，因此绝不参与 `:行号` 拆分。
   if (protocol === "http:" || protocol === "https:") {
     try { return { kind: "external_url", url: new URL(value).toString() }; } catch { return { kind: "blocked" }; }
   }
@@ -32,21 +41,39 @@ export function resolve_desktop_link(target: string, workspaces: readonly Deskto
   } catch {
     return { kind: "blocked" };
   }
-  if (local_path) return resolve_local_path(local_path, workspaces);
+  if (local_path) {
+    const location = split_line_suffix(local_path);
+    return resolve_local_path(location.path, workspaces, location.line);
+  }
   if (protocol) return { kind: "blocked" };
 
   const workspace = context.workspace_id ? workspaces.find((item) => item.workspace_id === context.workspace_id) : undefined;
   if (!workspace) return { kind: "blocked" };
   const base_path = context.relative_path ? dirname(context.relative_path) : "";
   try {
-    const relative_path = normalize_relative_path(`${base_path}/${decodeURIComponent(value.split(/[?#]/, 1)[0])}`);
-    return relative_path ? { kind: "workspace_file", workspace_id: workspace.workspace_id, relative_path } : { kind: "blocked" };
+    const location = split_line_suffix(decodeURIComponent(value.split(/[?#]/, 1)[0]));
+    const relative_path = normalize_relative_path(`${base_path}/${location.path}`);
+    return relative_path
+      ? { kind: "workspace_file", workspace_id: workspace.workspace_id, relative_path, ...(location.line ? { line: location.line } : {}) }
+      : { kind: "blocked" };
   } catch {
     return { kind: "blocked" };
   }
 }
 
-function resolve_local_path(file_path: string, workspaces: readonly DesktopWorkspaceSummary[]): DesktopLinkAction {
+/**
+ * 把链接解析为「落在指定 Workspace 内」的文件位置。
+ *
+ * 供需要就地打开文件的场景使用（例如 Chat 右侧面板）：只有指向该 Workspace 的链接才返回结果；
+ * 外链、系统文件、其它 Workspace 一律返回 undefined，由调用方交回统一的链接路由处理。
+ */
+export function resolve_workspace_file_link(target: string, workspaces: readonly DesktopWorkspaceSummary[], workspace_id: string): WorkspaceFileLink | undefined {
+  const action = resolve_desktop_link(target, workspaces, { workspace_id });
+  if (action.kind !== "workspace_file" || action.workspace_id !== workspace_id) return undefined;
+  return { relative_path: action.relative_path, ...(action.line ? { line: action.line } : {}) };
+}
+
+function resolve_local_path(file_path: string, workspaces: readonly DesktopWorkspaceSummary[], line?: number): DesktopLinkAction {
   const normalized_path = normalize_absolute_path(file_path);
   const workspace = [...workspaces]
     .sort((left, right) => right.workspace_path.length - left.workspace_path.length)
@@ -54,7 +81,21 @@ function resolve_local_path(file_path: string, workspaces: readonly DesktopWorks
   if (!workspace) return { kind: "local_file", file_path: normalized_path };
   const workspace_path = normalize_absolute_path(workspace.workspace_path);
   const relative_path = normalized_path.slice(workspace_path.length).replace(/^\/+/, "");
-  return relative_path ? { kind: "workspace_file", workspace_id: workspace.workspace_id, relative_path } : { kind: "ignore" };
+  return relative_path
+    ? { kind: "workspace_file", workspace_id: workspace.workspace_id, relative_path, ...(line ? { line } : {}) }
+    : { kind: "ignore" };
+}
+
+/**
+ * 拆分链接末尾的 `:行号` 或 `:行号:列号` 定位后缀。
+ * Agent 输出的可点击文件链接普遍使用 `path:line` 形式，定位后缀不是路径的一部分；
+ * 路径本身以 `:数字` 结尾时会被优先识别为行号，这属于该链接约定的既定取舍。
+ */
+function split_line_suffix(value: string): { path: string; line?: number } {
+  const match = /^(.*?):(\d+)(?::\d+)?$/.exec(value);
+  if (!match || !match[1]) return { path: value };
+  const line = Number(match[2]);
+  return line > 0 ? { path: match[1], line } : { path: value };
 }
 
 function read_protocol(value: string): string | undefined {

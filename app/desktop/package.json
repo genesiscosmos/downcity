@@ -24,6 +24,7 @@
     "@downcity/plugins": "workspace:^",
     "@downcity/sandbox-microsandbox": "workspace:^",
     "@downcity/type": "workspace:*",
+    "@larksuiteoapi/node-sdk": "^1.73.3",
     "@tiptap/core": "3.29.2",
     "@tiptap/extension-placeholder": "3.29.2",
     "@tiptap/pm": "3.29.2",
@@ -40,6 +41,7 @@
     "react-dom": "^19.2.6",
     "react-i18next": "^16.0.0",
     "react-icons": "^5.5.0",
+    "shiki": "^3.23.0",
     "react-zoom-pan-pinch": "^4.2.0",
     "streamdown": "^1.6.11",
     "tailwind-merge": "^2.2.0"

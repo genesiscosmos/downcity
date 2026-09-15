@@ -23,7 +23,7 @@ export type NavigationTarget =
   | { /** Group 创建页面。 */ kind: "create_group" }
   | { /** Plugin 工作区列表。 */ kind: "plugins" }
   | { /** Workspace 管理页。 */ kind: "workspace"; /** Workspace 标识。 */ workspace_id: string }
-  | { /** Workspace 文件只读预览。 */ kind: "workspace_file"; /** Workspace 标识。 */ workspace_id: string; /** Workspace 内的相对文件路径。 */ relative_path: string }
+  | { /** Workspace 文件只读预览。 */ kind: "workspace_file"; /** Workspace 标识。 */ workspace_id: string; /** Workspace 内的相对文件路径。 */ relative_path: string; /** 预览需要滚动并高亮的 1 基行号；未指定时按文件开头展示。 */ line?: number }
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
   | { /** 尚未持久化的空对话。 */ kind: "draft"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** Session Chat。 */ kind: "session"; /** Workspace 标识。 */ workspace_id: string; /** Agent 标识。 */ agent_id: string; /** Session 标识。 */ session_id: string }
@@ -260,8 +260,8 @@ export interface DesktopActions {
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */
   select_workspace(workspace_id: string): void;
-  /** 在主视图中打开一个 Workspace 文件的只读预览。 */
-  select_workspace_file(workspace_id: string, relative_path: string): void;
+  /** 在主视图中打开一个 Workspace 文件的只读预览；提供 line 时同时定位到该行。 */
+  select_workspace_file(workspace_id: string, relative_path: string, line?: number): void;
   /** 选择 Group 配置页。 */
   select_group(group_id: string): void;
   /** 创建一个运行时 Group。 */
