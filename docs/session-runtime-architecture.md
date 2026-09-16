@@ -55,7 +55,7 @@ Action 属于辅助活动记录，不是独立对话轮次。它的 canonical �
 Action 只用于可观测的 Session 级操作，不承担 Turn 结果语义。当前取值：
 
 - `command`：维护 Command 完成，例如改模型、改审批模式。
-- `history-fork`：`session.fork()` 的进行中与完成状态。
+- `history-fork`：分叉完成后，写入分叉出的新 Session 末尾，记录复制条数与来源 Session。
 - `context-compaction`：上下文压缩写入 checkpoint（`completed`）或摘要失败（`failed`）。Context Policy 判定没有可压缩区间时不产生 Action，避免空操作污染时间线。
 
 ## 3. Prompt 主链路

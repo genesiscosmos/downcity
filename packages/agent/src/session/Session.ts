@@ -471,6 +471,9 @@ export class Session implements AgentSession {
 
   /**
    * 从当前 session 创建一个分叉会话。
+   *
+   * 复制历史与附件是分叉 Session 自身的建立过程，因此 fork 的 Action 只记录在新 Session
+   * 时间线末尾，源 Session 不留下任何痕迹；失败时直接抛错，由调用方决定半成品 Session 的去留。
    */
   async fork(input?: AgentSessionForkInput | string): Promise<this> {
     const message_id = typeof input === "string"
@@ -486,48 +489,29 @@ export class Session implements AgentSession {
           include_message,
         })
       : messages;
-    const action_id = `history-forking:${this.id}:${Date.now()}:${nanoid(8)}`;
-    await this.session_messages.persist_action({
-      action_id,
-      action_type: "history-fork",
-      title: "Forking session messages",
-      description: `Preparing ${String(fork_messages.length)} messages for the new session.`,
-      status: "running",
-    });
-    try {
-      const forked = this.create_fork_session(
-        `fork-${Date.now()}-${nanoid(8)}`,
-      );
-      await forked.initialize();
-      const session_config = this.state.get_config();
-      if (session_config.model) {
-        const forked_model = await forked.state.set_model(session_config.model);
-        forked.state.apply_model_config(forked_model.config);
-      }
-      const approval_mode = this.state.get_approval_mode();
-      await forked.state.set_approval_mode(approval_mode);
-      forked.shell_approval_adapter.set_effective_mode(approval_mode);
-      const relocated_messages = await relocate_fork_message_files(fork_messages, this.store.attachments, forked.store.attachments);
-      await forked.session_messages.import_messages(relocated_messages);
-      this.register_forked_session(forked);
-      await this.session_messages.persist_action({
-        action_id,
-        action_type: "history-fork",
-        title: "Session messages forked",
-        description: `Created ${forked.id} with ${String(fork_messages.length)} messages.`,
-        status: "completed",
-      });
-      return forked;
-    } catch (error) {
-      await this.session_messages.persist_action({
-        action_id,
-        action_type: "history-fork",
-        title: "Session messages fork failed",
-        description: error instanceof Error ? error.message : String(error),
-        status: "failed",
-      });
-      throw error;
+    const forked = this.create_fork_session(
+      `fork-${Date.now()}-${nanoid(8)}`,
+    );
+    await forked.initialize();
+    const session_config = this.state.get_config();
+    if (session_config.model) {
+      const forked_model = await forked.state.set_model(session_config.model);
+      forked.state.apply_model_config(forked_model.config);
     }
+    const approval_mode = this.state.get_approval_mode();
+    await forked.state.set_approval_mode(approval_mode);
+    forked.shell_approval_adapter.set_effective_mode(approval_mode);
+    const relocated_messages = await relocate_fork_message_files(fork_messages, this.store.attachments, forked.store.attachments);
+    await forked.session_messages.import_messages(relocated_messages);
+    await forked.session_messages.persist_action({
+      action_id: `history-fork:${forked.id}:${Date.now()}:${nanoid(8)}`,
+      action_type: "history-fork",
+      title: "Session messages forked",
+      description: `Copied ${String(fork_messages.length)} messages from session ${this.id}.`,
+      status: "completed",
+    });
+    this.register_forked_session(forked);
+    return forked;
   }
 
   /**

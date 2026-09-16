@@ -34,6 +34,8 @@ const branch = await session.fork("assistant:repo-analysis:abc");
 
 复制进新 Session 的 Message 保留新的 Session 身份和新的线性顺序，同时可携带 `origin`，记录来源的 `session_id`、`message_id` 与 `turn_id`。这使分叉可追溯，但分叉后两个 Session 不共享可变状态。
 
+分叉成功后，新 Session 时间线末尾会记录一条 `history-fork` Action，说明这段历史的来源。源 Session 不会留下任何分叉记录。
+
 不要把分叉理解为“两个窗口共同编辑一份历史”。源 Session 的后续 Message 不会自动出现到分叉中，分叉的后续 Message 也不会回写源 Session。
 
 ## 适合的场景

@@ -42,9 +42,16 @@ test("Fork 默认包含锚点消息，显式排除时只复制锚点之前的历
 
   const included = await session.fork({ message_id: target.message_id });
   const excluded = await session.fork({ message_id: target.message_id, include_message: false });
-  assert.equal((await included.messages()).items.length, 3);
-  assert.equal((await excluded.messages()).items.length, 2);
-  assert.deepEqual((await excluded.messages()).items.map((message) => message.role), ["user", "agent"]);
+  const included_items = (await included.messages()).items;
+  const excluded_items = (await excluded.messages()).items;
+  // 每个新 Session 在自己的时间线末尾多出一条记录本次分叉的 Action，复制出的历史顺序不变。
+  assert.deepEqual(included_items.map((message) => message.role), ["user", "agent", "user", "agent"]);
+  assert.deepEqual(excluded_items.map((message) => message.role), ["user", "agent", "agent"]);
+  assert.equal(included_items.at(-1).parts[0].type, "action");
+  assert.equal(included_items.at(-1).parts[0].action_type, "history-fork");
+  assert.equal(excluded_items.at(-1).parts[0].action_type, "history-fork");
+  // 源 Session 不被分叉污染。
+  assert.deepEqual((await session.messages()).items.map((message) => message.role), ["user", "agent", "user"]);
 });
 
 test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (t) => {

@@ -34,6 +34,8 @@ The boundary is a top-level Message, not an Assistant `part_id`. To experiment b
 
 Messages copied into the new Session receive the new Session identity and linear ordering while they can carry `origin` with the source `session_id`, `message_id`, and `turn_id`. This makes a fork traceable without sharing mutable state.
 
+A successful fork records one `history-fork` Action at the end of the new Session's timeline, describing where the history came from. The source Session gets no record of the fork.
+
 Do not treat a fork as two windows jointly editing one history. Later source Messages do not appear in the branch, and later branch Messages never write back to the source.
 
 ## Good use cases
