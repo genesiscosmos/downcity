@@ -8,6 +8,10 @@ import { DesktopSettingsController } from "@/settings/DesktopSettingsController.
 import { DesktopUserController } from "@/user/DesktopUserController.js";
 import { PluginController } from "@/plugin/PluginController.js";
 import {
+  register_local_file_protocol,
+  register_local_file_scheme,
+} from "@/file/DesktopFileProtocol.js";
+import {
   register_plugin_renderer_protocol,
   register_plugin_renderer_scheme,
 } from "@/plugin/PluginRendererProtocol.js";
@@ -52,6 +56,7 @@ let system_proxy_watch_timer: ReturnType<typeof setInterval> | undefined;
 const SYSTEM_PROXY_WATCH_INTERVAL_MS = 30_000;
 
 register_plugin_renderer_scheme();
+register_local_file_scheme();
 
 /** 向全部仍存活的 Renderer 广播一条安全事件。 */
 function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupEvent | DesktopNotificationState): void {
@@ -377,6 +382,7 @@ function to_error_message(error: unknown): string {
 
 app.whenReady().then(async () => {
   register_plugin_renderer_protocol(local_data);
+  register_local_file_protocol(local_data);
   await apply_proxy_settings();
   start_system_proxy_watch();
   await prepare_city_host();

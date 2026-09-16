@@ -7,12 +7,16 @@
  */
 
 import type { StreamdownProps } from "streamdown";
+import { MarkdownImage } from "@/components/markdown/MarkdownImage";
 import { MermaidDiagram } from "@/components/markdown/mermaid/MermaidDiagram";
 
 /**
  * `mermaid-diagram` 由 `rehype_mermaid_blocks` 写入。Streamdown 的 `Components` 类型只声明了
  * HTML 内建标签，自定义元素名不在其中；运行时它按标签名直接查表，因此这里显式放宽类型。
+ *
+ * `img` 需要覆写：Agent 产出的图片是本地文件，必须换成 Desktop 受控协议 URL 才能加载。
  */
 export const markdown_components = {
   "mermaid-diagram": MermaidDiagram,
+  img: MarkdownImage,
 } as unknown as NonNullable<StreamdownProps["components"]>;
