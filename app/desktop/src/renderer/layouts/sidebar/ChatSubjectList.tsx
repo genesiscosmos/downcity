@@ -1,7 +1,7 @@
 /** Chat Sidebar 的 Agent 与 Group 主体列表。 */
 
 import { memo, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { TbChevronDown, TbEdit, TbGhost3, TbPlus, TbTrash } from "react-icons/tb";
+import { TbEdit, TbGhost3, TbPlus, TbTrash } from "react-icons/tb";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { GroupAvatar } from "@/components/GroupAvatar";
 import { RowMenuButton } from "@/components/RowMenuButton";
@@ -215,8 +215,8 @@ function ChatSubjectRow({ avatar, title, tag, description, active, status, subje
   return <>
     <ChatSubjectItem
       avatar={avatar}
-      avatar_menu_label={subject_menu_open_label}
-      avatar_menu={subject_menu(() => set_delete_open(true))}
+      menu_label={subject_menu_open_label}
+      menu={subject_menu(() => set_delete_open(true))}
       title={title}
       tag={tag}
       description={description}
@@ -258,13 +258,13 @@ function SubjectDeleteDialog({ open, set_open, title, description, confirm_label
 }
 
 /** Agent 与 Group 共用的主体行；状态文案与动效由行状态唯一决定。 */
-function ChatSubjectItem({ avatar, avatar_menu_label, avatar_menu, title, tag, description, active, status, on_select, expanded, on_open_change, conversations, on_new_chat, pinned, on_toggle_pinned }: {
+function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, active, status, on_select, expanded, on_open_change, conversations, on_new_chat, pinned, on_toggle_pinned }: {
   /** 主体头像。 */
   avatar: ReactNode;
   /** 头像入口的可访问名称。 */
-  avatar_menu_label: string;
+  menu_label: string;
   /** 主体级操作项。 */
-  avatar_menu: ReactNode;
+  menu: ReactNode;
   /** 主体名称。 */
   title: string;
   /** 可选分类信息。 */
@@ -351,40 +351,61 @@ function ChatSubjectItem({ avatar, avatar_menu_label, avatar_menu, title, tag, d
    * 多一层绝对定位 + overflow-hidden 的包裹，在几百行时是纯粹的布局开销。
    * 展开时才搭出「槽位 + 卡片」——也只影响那一行。
    */
-  // 行内容两种状态完全一致，只换承载它的边框盒——这是「展开时布局不动」的前提：
-  // 边框盒始终是「1px 边框 + min-h-12」，因此在哪一层都给出同一个内容起点。
+  /**
+   * 行内容：左侧头像（开关）、中间两行、右侧主体菜单。两种状态完全一致。
+   *
+   * 三个动作各占一处，各用各的元素，不再有位置争用：
+   *
+   * ```
+   * [头像] 名称                        [⋯]   ← 头像 = 展开/收起列表；名称 = 打开主体；⋯ = 主体操作
+   *          描述                              ← 纯文字，不可点
+   * ```
+   *
+   * 头像当开关的取舍：它是行内视觉上最明确的“物件”，不需要额外占一个图标位；
+   * 代价是“点头像 = 展开列表”不自明，因此它带 `aria-expanded` / `aria-controls`
+   * 与悬停反馈（与 GroupView 里的头像按钮同一套写法）。
+   *
+   * 描述行还原为**纯文字**：它本来只是说明，不是控件；
+   * 把开关挂在一段说明上，读屏会把描述读成按钮名，反而听不出按钮要干什么。
+   */
   const row_content = <>
-    {/* 头像即主体级操作入口。尺寸与选择区内的头像一致，列表纵向才对得齐。
-        `[&_svg]:size-8` 是必要的：Button 基类带 `[&_svg]:size-3.5`，其选择器比头像自己的
-        `size-8` 更具体，不覆盖就会把回退头像图标缩成 14px。 */}
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild><Button size="icon" className="size-8 shrink-0 rounded-md p-0 [&_svg]:size-8" title={avatar_menu_label} aria-label={avatar_menu_label}>{avatar}</Button></DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={4}>{avatar_menu}</DropdownMenuContent>
-    </DropdownMenu>
-    <button type="button" aria-current={active ? "page" : undefined} className="flex min-w-0 flex-1 flex-col items-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30" onClick={on_select}>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span className={cn("min-w-0 truncate text-xs font-medium text-foreground", tag ? "max-w-[55%] shrink" : "flex-1")}>{title}</span>
-        {tag ? <span className="max-w-36 shrink truncate rounded-full bg-surface-subtle px-1.5 py-0.5 text-[0.5625rem] font-normal leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/item:opacity-100">{tag}</span> : null}
-      </span>
-      <span className={cn("mt-1 flex h-3.5 min-w-0 items-center truncate text-[0.625rem] leading-3.5", status_text ? "font-medium text-muted-foreground" : "text-muted-foreground")}>
-        {status_text ? <StatusText status={status} text={status_text} /> : description}
+    {/* 头像：展开 / 收起会话列表。
+        与 GroupView 的头像按钮同一套视觉（悬停降透明度 + focus-visible 环）：
+        头像本身已含尺寸，因此不需要 Button 的 [&_svg] 覆盖。 */}
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-controls={panel_id}
+      onClick={() => on_open_change(!expanded)}
+      title={trigger_label}
+      aria-label={trigger_label}
+      className="flex size-8 shrink-0 items-center justify-center rounded-md outline-none transition-opacity duration-150 hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/30"
+    >{avatar}</button>
+    {/* 名称 + 描述：整块都是「打开主体」的入口（沿用原本的实现）。
+        描述不是独立控件，因此这里也没有第二个按钮——行的三个动作分别是
+        头像（开关）、这一块（打开主体）、右端菜单（主体操作）。 */}
+    <button
+      type="button"
+      aria-current={active ? "page" : undefined}
+      onClick={on_select}
+      className="flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={cn("min-w-0 truncate text-xs font-medium text-foreground", tag ? "max-w-[55%] shrink" : "flex-1")}>{title}</span>
+          {tag ? <span className="max-w-36 shrink truncate rounded-full bg-surface-subtle px-1.5 py-0.5 text-[0.5625rem] font-normal leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/item:opacity-100">{tag}</span> : null}
+        </span>
+        <span className={cn("mt-1 flex h-3.5 min-w-0 items-center truncate text-[0.625rem] leading-3.5", status_text ? "font-medium text-muted-foreground" : "text-muted-foreground")}>
+          {status_text ? <StatusText status={status} text={status_text} /> : description}
+        </span>
       </span>
     </button>
-    {/* 会话列表入口：空闲时是折角，有状态时换成状态图标（失败与完成只靠它表达）。
-        展开后不再是一张浮层，而是**行下方同一个盒子**里多出来的一段，
-        所以这里是标准的展开按钮（disclosure）：
-        aria-expanded 表达开合、aria-controls 指向卡片下半的列表。 */}
-    <span className="flex size-7 shrink-0 items-center justify-center">
-      <RowMenuButton
-        status={status}
-        label={trigger_label}
-        aria-expanded={expanded}
-        aria-controls={panel_id}
-        className={expanded ? "opacity-100" : undefined}
-        fallback={<TbChevronDown aria-hidden="true" className={cn("transition-transform duration-150", expanded && "rotate-180")} />}
-        onClick={() => on_open_change(!expanded)}
-      />
-    </span>
+    {/* 主体级操作菜单：行右端。图标仍由行状态决定：失败与完成不占用描述位，
+        只靠这个图标表达，所以它不能换成通用的省略号。 */}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><RowMenuButton status={status} label={menu_label} /></DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={4}>{menu}</DropdownMenuContent>
+    </DropdownMenu>
   </>;
   /**
    * 行内容的交互底色。

@@ -135,7 +135,8 @@ test("列表型浮层把圆角与滚动分成两层", () => {
   assert.ok(conversations_panel.includes("overflow-y-auto"), "会话列表没有滚动层，长列表会漫出卡片");
   assert.ok(conversations_panel.includes("max-h-80"), "会话列表没有高度上限");
   // 卡片负责圆角、描边与裁剪；面板自己再画一层就会叠成双层描边。
-  // 裁剪是必要的：卡圆角 8px、面板内缩 6px、滚动条宽 5px，仅靠内缩挡不住滚动条最外 2px。
+  // 裁剪是必要的：卡圆角 8px、面板内缩 6px、滚动条宽 5px，仅靠内缩挡不住滚动条最外 1px。
+  // 边框用 border（卡片靠它读得出边界）、不用 inset-ring（多一圈线）；见 subjectCard。
   const card = read_without_comments(path.join(renderer_root, "layouts/sidebar/subjectCard.ts"));
   assert.ok(/subject_item_expanded_class_name = `absolute[^`]*flex-col overflow-hidden rounded-lg border border-border/.test(card), "卡片没有负责裁剪、圆角与描边");
   assert.ok(!/rounded-floating-surface|border border-border/.test(conversations_panel), "会话列表自己又画了一层表面，会和卡片叠成双层描边");

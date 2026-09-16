@@ -1,68 +1,69 @@
 /**
- * 主体行的形状：**折叠与展开共用同一个边框盒**，所以切换时布局不动。
+ * 主体行的形状：**折叠与展开共用同一个盒子**，所以切换时布局不动。
  *
- * ## 不变量：内容位置只由「边框 + 内边距」决定
+ * ## 位置由「居中」决定，不由高度撑满
  *
- * 折叠与展开的 DOM 不同（展开时多了卡片与列表），但那一行的**边框盒**始终存在，
- * 并且始终是 `1px 边框 + min-h-12`：
+ * 行内容是「名称一行 + 描述一行」这么一个块（约 34px），它**居中**在那个 48px 的带子里。
+ * 两个状态必须以完全相同的方式得到同一个居中结果，否则内容会跳。
+ *
+ * 关键在于带子的「内容盒」高度：
  *
  * ```
- * 折叠： [边框盒 min-h-12][边框 1px 透明][内边距 4px][行内容]        ← 行自己就是边框盒
- * 展开： [槽位 min-h-12]
- *          └ [边框盒 min-h-12][边框 1px][行内容(高 48−2)][会话列表]
+ * 折叠态：[行 min-h-12][1px 透明边框] …内容盒 46px… 内容居中
+ * 展开态：[卡片 1px 边框] [行 min-h-(3rem−2px) = 46px][…内容盒 46px…] 内容居中
  * ```
  *
- * 两处的行内容都落在「1px + 4px」之后，于是展开/收起时头像、名称、折角都不动。
+ * 折叠时行自己就是那个盒子，它的边框吃掉 2px，内容盒是 46px；
+ * 展开时卡片把边框画在外层，行在卡片**内部**，所以行要显式退回 46px——
+ * 写回 48px 会多出 2px，内容被推低。`calc(3rem − 2px)` 正是「缩放后的带高 − 钉在物理像素上的两条边框线」，
+ * 与仓库的单位约定一致（rem 跟随缩放，px 不跟随）。
  *
- * ## 为什么行内容要减掉 2px
+ * 早期版本除此之外还把内容**撑满**整条带子（名称 24px + 描述 22px），
+ * 那会改掉行的纵向节奏，也让名称与描述贴在带子的上下缘，反而更难看。
  *
- * 边框画在**外层**（折叠时是行本身、展开时是卡片）。折叠时外层就是那个 48px 的盒子，
- * 边框在它内部占 2px；展开时外层是卡片，行内容在它**里面**，若仍写 48px，
- * 加上卡片的上下边框就会变成 50px——内容被推低 2px，展开时能看到一次轻微下移。
- * 所以行内容在「位于边框盒内部」时必须用 `48 − 2×1px`。
+ * ## 边框必须有，ring 不要
  *
- * 这两个值只在这里定义；写死两处就会分叉，而分叉的症状（展开时内容跳 1~2px）不报错、只看着别扭。
- *
- * ## 为什么边框从一开始就存在（透明）
- *
- * 早先折叠态没有边框，展开时才出现——那 1px 是**布局变化**的来源之一。
- * 现在折叠态就带着 `border-transparent`：看不见，但占位，于是边框的出现不影响任何位置。
+ * 边框是这张卡的视觉语言。两个状态都画**同一条边框**（折叠透明、展开可见），
+ * 否则内容盒高度不同，又会回到上面那个 2px 问题。
+ * `inset-ring` 试过（不占布局），但多一圈线，在一列表里反复出现就是噪音，已弃用。
  */
 
-/** 边框盒的总高（设计值 3rem = 48px）；槽位与折叠态的行共用它。 */
+/** 带子总高，**含上下 1px 边框**（border-box），设计值 3rem = 48px。 */
 export const subject_row_height_class_name = "min-h-12";
 
 /**
- * 行内容的最小高度 = 总高 − 边框盒的上下边框（2 × 1px）。
+ * 展开态行内容的高度：卡片内容盒的高度（卡片有上下各 1px 边框）。
  *
- * 只在「行内容位于边框盒内部」时使用（展开态）；折叠态的承载者就是边框盒本身，
- * 直接用 `subject_row_height_class_name`。
+ * 只有 46px 才能让内容与折叠态落在同一位置，见文件头。
  */
-export const subject_row_content_height_class_name = "min-h-[calc(3rem-2px)]";
+export const subject_row_expanded_height_class_name = "min-h-[calc(3rem-2px)]";
 
-/** 行内容的排版与内边距；两种状态共用同一份，保证内部元素位置一致。 */
+/**
+ * 行内容的排版与内边距；两种状态共用同一份，保证内部元素位置一致。
+ *
+ * 纵向内边距不能省：内容本身只有 34px，`py-1` 是它与带子边缘之间的呼吸，
+ * 也是居中计算的一部分（去掉后内容会贴到 48px 带的边缘）。
+ */
 const row_layout_class_name = "group/item flex items-center gap-2.5 px-1.5 py-1";
 
 /**
- * 折叠态：**行自己就是那个边框盒**。
- *
- * `border-transparent` 而非「没有边框」：它要占住 1px，展开时换成可见边框才不会让内容位移。
+ * 折叠态：行自己就是这个带子。边框透明——看不见，但占住那 1px。
  */
 export const subject_item_collapsed_class_name = `${row_layout_class_name} ${subject_row_height_class_name} rounded-lg border border-transparent cursor-pointer transition-colors duration-150 [&_button]:cursor-pointer`;
 
 /**
- * 展开态：同一个边框盒变成卡片，行内容与会话列表都住在里面。
+ * 展开态：同一个带子变成卡片，行内容与会话列表都住在里面。
  *
  * - `absolute` + `inset-x-0 top-0`：与槽位同宽同位，向下浮在后续行之上；
- * - `flex-col`：行内容与列表纵向排列在同一个盒子里，边框只画这一次；
- * - `min-h-12`：与折叠态同高，折叠时占的位与展开时一模一样；
- * - `overflow-hidden`：把列表的滚动条裁在圆角内。仅靠面板的 `px-1.5` 不够：
- *   卡圆角 8px、面板内缩 6px、滚动条宽 5px，滚动条最外 2px 恰好落进圆角区域。
+ * - `flex-col`：内容纵向排列在同一个盒子里，边框只画这一次；
+ * - `min-h-12`：与折叠态同高；
+ * - `overflow-hidden`：把列表的滚动条裁在圆角内（卡圆角 8px、列表内缩 4px、
+ *   滚动条宽 5px，滚动条最外 1px 会落进圆角区域，只靠内缩挡不住）。
  */
 export const subject_item_expanded_class_name = `absolute inset-x-0 top-0 z-20 flex ${subject_row_height_class_name} flex-col overflow-hidden rounded-lg border border-border bg-background`;
 
-/** 展开态的行内容：卡片里的第一段，排版与折叠态一致，高度按边框盒内部折算。 */
-export const subject_row_class_name = `${row_layout_class_name} ${subject_row_content_height_class_name} shrink-0`;
+/** 展开态的行内容：卡片里的第一段，排版与折叠态一致，高度退回卡片内容盒。 */
+export const subject_row_class_name = `${row_layout_class_name} ${subject_row_expanded_height_class_name} shrink-0`;
 
 /**
  * 槽位：只在展开时出现，占住这一行在列表里的位置（后面的主体不会因展开而移动）。

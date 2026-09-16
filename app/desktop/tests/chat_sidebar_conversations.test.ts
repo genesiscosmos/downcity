@@ -60,14 +60,30 @@ test("旧的面板式与下拉式入口都已移除", () => {
   }
 });
 
-test("主体行的两个入口职责固定：头像管主体，右侧展开列表", () => {
-  // 头像触发的是主体级操作菜单（新建对话 / 配置 / 删除）。
-  assert.ok(subject_list.includes("<DropdownMenuTrigger asChild><Button size=\"icon\""), "头像不再是主体操作菜单的触发器");
-  assert.ok(subject_list.includes("on_open_change"), "主体行缺少会话列表的展开开关");
-  assert.ok(!subject_list.includes("<SubjectConversationsMenu"), "主体行又用回了外挂的下拉菜单");
-  // 中间的选择区必须仍然存在且可点，否则点头像不再打开对话之后就没有打开主体的地方了。
-  assert.ok(subject_list.includes("onClick={on_select}"), "主体行缺少打开主体的选择区");
-  assert.ok(subject_list.includes('aria-current={active ? "page" : undefined}'), "选择区没有表达当前项");
+/**
+ * 行的三个动作：头像开关、名称+描述打开主体、右端菜单管主体操作。
+ *
+ * 名称与描述是**同一块**（沿用原本的实现：两者同在一个按钮里，整块都可点打开主体）；
+ * 描述不是独立控件，因此行里只有三个交互目标，不多也不少。
+ */
+test("三个动作各占一处：头像开列表、名称+描述开主体、右侧管主体操作", () => {
+  // 头像 → 展开/收起会话列表（disclosure），且必须带可访问名称（头像是图标）。
+  const disclosure = /aria-expanded=\{expanded\}[\s\S]{0,200}?aria-controls=\{panel_id\}[\s\S]{0,400}?onClick=\{\(\) => on_open_change\(!expanded\)\}/.exec(subject_list);
+  assert.ok(disclosure, "头像不是展开/收起会话列表的按钮");
+  assert.ok(/title=\{trigger_label\}[\s\S]{0,80}?aria-label=\{trigger_label\}/.test(subject_list), "头像开关没有可访问名称");
+
+  // 名称 + 描述 → 打开主体。两者必须在同一个按钮里（原本的实现）。
+  const open_block = /onClick=\{on_select\}[\s\S]{0,2000}?\{status_text \? <StatusText status=\{status\} text=\{status_text\} \/> : description\}/.exec(subject_list);
+  assert.ok(open_block, "名称与描述不在同一个「打开主体」按钮里");
+  assert.ok(/aria-current=\{active \? "page" : undefined\}/.test(subject_list), "该按钮没有表达当前项");
+
+  // 右侧 → 主体操作菜单，且仍带行状态。
+  assert.ok(/<RowMenuButton status=\{status\} label=\{menu_label\} \/>/.test(subject_list), "主体操作菜单不在行右端，或丢了行状态");
+
+  // 行内只应有两个字面 button（头像、名称+描述），第三个目标是 RowMenuButton。
+  // 数量多一个就说明描述又变成了独立控件（或被拆成了两个按钮）。
+  const button_count = (subject_list.match(/<button\b/g) ?? []).length;
+  assert.equal(button_count, 2, `行内字面 button 应为 2 个（头像 + 名称/描述），实际 ${button_count}`);
 });
 
 /**
@@ -88,7 +104,7 @@ test("展开卡片是一个元素，不是浮层拼装", () => {
   // 行内容在两个状态之间必须原样复用：各写一份迟早会走形。
   assert.ok(/const row_content = <>/.test(subject_list) && /\{row_content\}/.test(subject_list), "行内容没有在两个状态间复用");
   const card = read_without_comments(path.join(sidebar_root, "subjectCard.ts"));
-  assert.ok(/subject_item_expanded_class_name = `absolute[^`]*flex-col[^`]*rounded-lg border border-border bg-background`/.test(card), "卡片不是单个纵向容器");
+  assert.ok(/subject_item_expanded_class_name = `absolute[^`]*flex-col[^`]*rounded-lg border border-border bg-background`/.test(card), "卡片不是单个纵向容器，或丢了边框");
   assert.ok(/subject_card_panel_class_name = "shrink-0"/.test(card), "卡片下半不是卡片内的普通流子节点");
   // 卡片两半在同一个流里，因此不存在“接缝对齐”这件事。
   assert.ok(!/subject_card_(top|bottom)_style/.test(subject_list + card), "又出现了拆分接缝的样式辅助：说明卡片又被拆成两个盒子了");
@@ -189,19 +205,33 @@ test("新建对话在列表顶部", () => {
  * 现在两半在同一个元素里，接缝已不存在；但**内边距仍必须同源**，否则面板里的会话行
  * 会与头像左缘错开；行高也必须同源，否则槽位会与行错位。
  */
-test("折叠与展开共用同一个边框盒：边框、行高、内边距各只有一个定义", () => {
+/**
+ * 折叠与展开必须落在同一个位置：**内容居中**在 48px 的带子里，两个状态的「内容盒」都得是 46px。
+ *
+ * ```
+ * 折叠：行 = min-h-12 + 透明边框      → 内容盒 46px（边框吃掉 2px）
+ * 展开：卡片 1px 边框 + 行 min-h-(3rem−2px) → 行内容盒 46px
+ * ```
+ *
+ * 展开态行若写回 48px，会多出 2px、内容被推低——这是这套几何唯一的坑，因此锁住。
+ * 位置不靠把内容撑满整条带子得到（那样会改掉行的纵向节奏、名称与描述贴住上下缘）。
+ */
+test("折叠与展开的内容盒同高，内容居中在同一位置", () => {
   const card = read_without_comments(path.join(sidebar_root, "subjectCard.ts"));
-  // 折叠态：行自己就是边框盒，边框透明但占位。
-  assert.ok(/subject_item_collapsed_class_name = `\$\{row_layout_class_name\} \$\{subject_row_height_class_name\} rounded-lg border border-transparent/.test(card), "折叠态没有「边框 + 行高」这套边框盒，展开时内容会位移");
-  // 展开态：同一个边框盒变成卡片。
-  assert.ok(/subject_item_expanded_class_name = `absolute[^`]*\$\{subject_row_height_class_name\} flex-col[^`]*rounded-lg border border-border/.test(card), "展开态的边框盒与折叠态不同源");
-  // 行内边距只有一份，两种状态共用。
-  assert.ok(/const row_layout_class_name = "group\/item flex items-center gap-2\.5 px-1\.5 py-1"/.test(card), "行内边距没有集中定义");
-  // 展开态的行内容在边框盒**内部**，高度要减掉上下边框，否则内容被推低 2px。
-  assert.ok(/subject_row_class_name = `\$\{row_layout_class_name\} \$\{subject_row_content_height_class_name\}/.test(card), "展开态的行没有使用折算后的高度");
-  assert.ok(/subject_row_content_height_class_name = "min-h-\[calc\(3rem-2px\)\]"/.test(card), "换算后的行高没有集中定义");
-});
+  // 边框两个状态是同一条：折叠透明、展开可见。只剩一边会让内容盒高度不同。
+  assert.ok(/subject_item_collapsed_class_name = `[^`]*border border-transparent/.test(card), "折叠态没有占位的透明边框");
+  assert.ok(/subject_item_expanded_class_name = `[^`]*border border-border/.test(card), "展开的卡片没有边框");
+  assert.ok(!card.includes("inset-ring"), "卡片又画上了 ring");
 
+  // 带子 48px；展开时行在卡片内部，退回 46px（缩放后的带高 − 两条钉住的边框线）。
+  assert.ok(/subject_row_height_class_name = "min-h-12"/.test(card), "带子总高没有集中定义");
+  assert.ok(/subject_row_expanded_height_class_name = "min-h-\[calc\(3rem-2px\)\]"/.test(card), "展开态的行没有退回卡片内容盒高度，内容会被推低 2px");
+  assert.ok(/subject_row_class_name = `\$\{row_layout_class_name\} \$\{subject_row_expanded_height_class_name\} shrink-0`/.test(card), "展开态的行没有引用那份高度");
+  // 纵向内边距不能省：它是居中计算的一部分（内容 34px + py-1 = 42px，居中在 46px 里）。
+  assert.ok(/const row_layout_class_name = "group\/item flex items-center gap-2\.5 px-1\.5 py-1"/.test(card), "行内容丢了纵向内边距或间距");
+  // 名称/描述不做成撑满的两行（那会改掉行的纵向节奏）。
+  assert.ok(!card.includes("min-h-6"), "又出现了把两行撑满的写法");
+});
 /**
  * 卡片常驻，但**列表只在展开时渲染**。
  *
@@ -211,7 +241,7 @@ test("折叠与展开共用同一个边框盒：边框、行高、内边距各�
  * 早先两种写法都错过：先是不判断就渲染列表（折叠的行溢出一整列会话），
  * 后来又把卡片常驻给每一行（每行多背一层绝对定位 + overflow-hidden 的包裹）。
  */
-test("折叠态不渲染卡片与列表，但保留边框盒", () => {
+test("折叠态不渲染卡片与列表，但保留行盒子", () => {
   assert.ok(/if \(!expanded\) return <div className=\{cn\(subject_item_collapsed_class_name/.test(subject_list), "折叠态没有提前返回：会多渲染槽位、卡片与列表");
   assert.ok(/\{row_content\}<\/div>\s*<div id=\{panel_id\}/.test(subject_list), "展开态没有把行内容与列表放进同一个卡片里");
   assert.ok(/<div className=\{subject_slot_class_name\}>/.test(subject_list), "展开态没有搭出槽位");
