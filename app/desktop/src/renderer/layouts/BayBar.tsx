@@ -209,7 +209,7 @@ function BayBarEmptyState() {
   return <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 px-6 text-center">
     <TbLayoutSidebarRight className="size-6 shrink-0 text-subtle-foreground" aria-hidden="true" />
     <div className="text-xs text-muted-foreground">{translate("panels.empty_title")}</div>
-    <p className="max-w-56 text-[0.6875rem] leading-5 text-subtle-foreground">{translate("panels.empty_description")}</p>
+    <p className="max-w-56 text-2xs leading-5 text-subtle-foreground">{translate("panels.empty_description")}</p>
   </div>;
 }
 

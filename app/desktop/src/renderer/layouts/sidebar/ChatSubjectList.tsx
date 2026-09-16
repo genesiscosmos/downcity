@@ -433,9 +433,9 @@ function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, ac
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={cn("min-w-0 truncate text-xs font-medium text-foreground", tag ? "max-w-[55%] shrink" : "flex-1")}>{title}</span>
-          {tag ? <span className="max-w-36 shrink truncate rounded-full bg-surface-subtle px-1.5 py-0.5 text-[0.5625rem] font-normal leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/item:opacity-100">{tag}</span> : null}
+          {tag ? <span className="max-w-36 shrink truncate rounded-full bg-surface-subtle px-1.5 py-0.5 text-3xs font-normal leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/item:opacity-100">{tag}</span> : null}
         </span>
-        <span className={cn("mt-1 flex h-3.5 min-w-0 items-center truncate text-[0.625rem] leading-3.5", status_text ? "font-medium text-muted-foreground" : "text-muted-foreground")}>
+        <span className={cn("mt-1 flex h-3.5 min-w-0 items-center truncate text-3xs leading-3.5", status_text ? "font-medium text-muted-foreground" : "text-muted-foreground")}>
           {status_text ? <StatusText status={status} text={status_text} /> : description}
         </span>
       </span>

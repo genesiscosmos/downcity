@@ -219,7 +219,7 @@ export function SubjectConversationsPanel({ conversations, on_new_chat, close, p
       </div>
       {conversations.length === 0
         // 空态直接说结果；新建入口就在上面一行。
-        ? <p className="px-2 py-1.5 text-[0.625rem] leading-4 text-muted-foreground">{translate("sidebar.no_sessions")}</p>
+        ? <p className="px-2 py-1.5 text-3xs leading-4 text-muted-foreground">{translate("sidebar.no_sessions")}</p>
         : <>
           {visible_conversations.map((conversation) => (
             // `group/item` 是 RowMenuButton 显隐入口的钩子（见 chat_row_status）。

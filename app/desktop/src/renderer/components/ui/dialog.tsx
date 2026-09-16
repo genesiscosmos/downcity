@@ -57,7 +57,7 @@ const DialogTitle = React.forwardRef<HTMLHeadingElement, BaseDialog.Title.Props>
 DialogTitle.displayName = "DialogTitle";
 
 /** Dialog 说明。 */
-const DialogDescription = React.forwardRef<HTMLParagraphElement, BaseDialog.Description.Props>(({ className, ...props }, ref) => <BaseDialog.Description ref={ref} className={cn("mt-1 text-[0.6875rem] leading-4 text-muted-foreground", className)} {...props} />);
+const DialogDescription = React.forwardRef<HTMLParagraphElement, BaseDialog.Description.Props>(({ className, ...props }, ref) => <BaseDialog.Description ref={ref} className={cn("mt-1 text-2xs leading-4 text-muted-foreground", className)} {...props} />);
 DialogDescription.displayName = "DialogDescription";
 
 /** Dialog 头部布局。 */

@@ -30,34 +30,100 @@
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
   --font-mono: var(--font-mono);
+
+  /* 清空 Tailwind 自带字号档位，只留下面的 9 级语义字号。 */
+  --text-*: initial;
   /*
-   * 消息阅读排版：**一个值**，Agent 与用户两侧共用。
+   * 语义字号：全应用**唯一**的字号出口，共 9 级，由小到大。
    *
-   * 消费者：`chat.css` 的 `.chat-message-text`（Agent 正文与用户消息，见
-   * `message_layout.ts` 的 `chat_message_text_class_name`）与 `base.css` 的
-   * `.chat-input-editor`（Composer）。两者都只引用 `var()`，不重写数值。
+   * 命名空间开头的 `--text-*: initial` 会清掉 Tailwind 自带的档位表，
+   * 下面的 9 级就是重编的阶梯。不清掉就有退路：新代码可以继续写不存在的档位，
+   * 收敛会立刻失效（而且这类写法不再生成规则，不报错）。
    *
-   * ## 取值：14px / 行高 1.8
+   * ## 与 Tailwind 同名档位等值（这是硬要求）
    *
-   * 两侧必须相等，所以只能取一个值；这个值被两条反馈夹在中间：
+   * `xs` / `sm` / `base` / `lg` / `xl` / `2xl` / `3xl` 的字号与配对行高
+   * **必须与 Tailwind 的默认主题完全一致**，不允许任何偏移。
+   * `3xs` 与 `2xs` 是 Tailwind 没有的名字，按本应用需要取 0.625 / 0.6875rem。
    *
-   * | 取值 | 反馈 |
-   * | --- | --- |
-   * | 13px（应用原来的正文档） | Agent 正文「字体有点小」 |
-   * | 16px | 两侧都「太大了」 |
-   * | 15px | 用户消息「还是很大」 |
-   * | **14px** | 唯一同时满足「比 13 大」与「比 15 小」的值，也是应用既有的 `text-sm` 档 |
+   * 为什么要等值：档名是前端的公共词汇。只要同名不同值，从 Tailwind 文档或
+   * 其他项目复制类名就会拿到错误的尺寸，且错误只在渲染后才发现。
    *
-   * 行高 1.8（14px → 25.2px）高于工具活动行（13px / 1.3）：
-   * 正文与机器活动的节奏差得越开，越不会被读成一类内容。
+   * 行高也一并等值。Tailwind v4 用比例写法（`calc(1.25 / 0.875)`），
+   * 其**计算值与这里写的绝对 rem 完全相同**（0.875rem × 1.25/0.875 = 1.25rem），
+   * 且两种写法在界面缩放下同比例变化。这里写绝对 rem 是为了能直接看懂。
    *
-   * ## 改动这个值前必须确认（由测试守着）
+   * 等值由 `tests/font_scale.test.ts` **向 Tailwind 本尊比对**：它编译一份默认主题，
+   * 读出 `--text-*` 真值再与本文件逐项对照。Tailwind 升版改了默认值，测试会失败。
    *
-   * `.markdown` 的段落间距是 0.5em（随本字号缩放），它必须比消息内的块间距
-   *（`message_layout.ts` 的 `gap-2.5` = 10px）小至少 2px，即字号不得超过 16px。
+   * ## 单位：rem
+   *
+   * 字号与配对行高**全部是 rem**，没有 px。界面缩放通过改写根元素 `font-size`
+   * 实现（见 `ui_scale`），px 不跟随缩放——这是硬要求，也是
+   * `tests/design_token_drift.test.ts` 禁用 `text-[12px]` 的原因。
+   *
+   * ## 规则（由 `tests/font_scale.test.ts` 守住）
+   *
+   * 1. 代码里只能用这 9 个档位名。`text-4xl` 及以上、`text-[0.8125rem]` 这类任意值
+   *    都不再生成规则。
+   * 2. 选档按**角色**而不是按字号：每一级允许出现在哪些表面，见
+   *    `docs/desktop-type-scale-design.md` 的角色表。新需求只能复用已有级别，
+   *    不能新增级，也不能在调用点微调数值。
+   * 3. 行高与字号成对定义。Tailwind 生成的声明形如
+   *    `line-height: var(--tw-leading, var(--text-sm--line-height))`，
+   *    所以显式 `leading-*` 永远能盖掉配对行高，两者不会互相打架。
+   *
+   * ## 取值来源
+   *
+   * 应用原来有 13 档字号（0.5625 … 1.5rem）。收敛到 Tailwind 等值的 9 级时，
+   * `base` 及以上整体下移一位（0.875rem 的正文档由 `base` 改叫 `sm`），字号本身不变；
+   * 四个半档（0.5625 / 0.65625 / 0.71875 / 0.78125rem）并入相邻档。
+   *
+   * **真正改变字号的共 32 处**，其中最大的一组是 0.8125rem（原 `sm`）：
+   * Tailwind 的档位表里没有 13px，它只能取相邻的 `sm`（0.875rem），即 16 处调用点 +0.0625rem。
+   * 上移而不是下移到 `xs`，是因为这 16 处绝大多数是「列表行主标签」，
+   * 与它们配对的描述文字是 0.6875–0.75rem；到 0.875rem 能拉开 0.125rem 以上的层次，
+   * 沉到 0.75rem 反而会与描述同级。
+   * 完整迁移映射与已知取舍见设计文档。
    */
-  --text-message: 0.875rem;
-  --text-message--line-height: 1.8;
+  --text-3xs: 0.625rem;   /* 极短标签：坐标轴刻度、头像首字母、计数角标 */
+  --text-3xs--line-height: 0.875rem;
+  --text-2xs: 0.6875rem;  /* 元信息：时间戳、chip、字段键名、工具行细节 */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;     /* 辅助正文：列表项描述、帮助文案、提示与错误 */
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;    /* 默认正文：消息正文、通用段落、按钮、标准输入、列表主标签 */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;      /* 强调正文：创作向导的大号输入 */
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;    /* 区块标题与关键数值 */
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;     /* 面板标题与主数值 */
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;     /* 页面主标题，每屏至多一个 */
+  --text-2xl--line-height: 2rem;
+  --text-3xl: 1.875rem;   /* 保留：供将来的全屏引导页使用；当前无调用点 */
+  --text-3xl--line-height: 2.25rem;
+  /*
+   * 阅读行高：`sm` 档的**唯一**例外，单位与字号不同（它是倍数，没有单位）。
+   *
+   * 正文需要比 UI 文本松（`--text-sm--line-height` = 1.25rem，对长文偏挤）。
+   * 1.8 不是随手取的：它是两条用户反馈夹出来的最终值（0.8125rem 被「有点小」否、
+   * 0.9375rem 被「还是很大」否，取 0.875rem；行高从 1.7 调到 1.8 才被认为
+   * 「行内间距够了」），完整过程见 `docs/desktop-agent-message-rendering-redesign-prd.md` 第 24 节。
+   *
+   * 它只给消息正文与 Composer 用：
+   * `message_layout.ts` 的 `chat_message_text_class_name`（`leading-reading`），
+   * 与 `base.css` 的 `.chat-input-editor`（`var(--leading-reading)`）。
+   * 两者是同一段文字在发送前后的两种状态，必须同值，否则会在按下回车的瞬间跳变。
+   *
+   * ## 与字号绑定的约束（改任一项前必读）
+   *
+   * `.markdown` 的段落间距是 0.5em（随正文字号缩放），它必须比消息内的块间距
+   *（`message_layout.ts` 的 `gap-2.5` = 0.625rem）小至少 0.125rem，
+   * 即正文不得超过 `base`（1rem）。`base` 时段落间距为 0.5rem，差值刚好触底。
+   */
+  --leading-reading: 1.8;
 }
 
 @theme inline {

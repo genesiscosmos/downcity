@@ -35,7 +35,7 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
   return {
     Sidebar: ({ children, actions }) => <><SidebarHeader title={options.sidebar_title ?? options.plugin_id} actions={actions} /><SidebarContent class_name="flex flex-col">{children}</SidebarContent></>,
     SidebarSection: ({ label, children }) => <section className="mb-4 min-w-0">
-      {label ? <h3 className="px-2 pb-1.5 pt-1 text-[0.625rem] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</h3> : null}
+      {label ? <h3 className="px-2 pb-1.5 pt-1 text-3xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</h3> : null}
       <div className="space-y-0.5">{children}</div>
     </section>,
     SidebarItem: ({ label, description, leading, trailing, active, disabled, on_select }) => <button
@@ -46,8 +46,8 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
       className={cn("flex min-h-10 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30", active ? "bg-interaction-selected text-foreground" : "text-foreground hover:bg-interaction-hover", disabled && "opacity-45")}
     >
       {leading ? <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">{leading}</span> : null}
-      <span className="min-w-0 flex-1"><span className="block truncate text-xs">{label}</span>{description ? <span className="mt-0.5 block truncate text-[0.625rem] text-muted-foreground">{description}</span> : null}</span>
-      {trailing ? <span className="shrink-0 text-[0.625rem] text-muted-foreground">{trailing}</span> : null}
+      <span className="min-w-0 flex-1"><span className="block truncate text-xs">{label}</span>{description ? <span className="mt-0.5 block truncate text-3xs text-muted-foreground">{description}</span> : null}</span>
+      {trailing ? <span className="shrink-0 text-3xs text-muted-foreground">{trailing}</span> : null}
     </button>,
     SidebarTreeItem: ({ label, leading, trailing, depth, kind, active, expanded, on_toggle, disabled, on_select }) => {
       // 这些组件由宿主与 Plugin 以 JSX 引用，React 会以组件身份挂载它们，因此可以使用 hook。
@@ -68,7 +68,7 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
             {is_branch && leading ? <span className={cn("flex size-4 shrink-0 items-center justify-center", active ? "text-primary" : "text-muted-foreground")}>{leading}</span> : null}
             <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
           </button>
-          {trailing != null ? <span className="flex min-w-6 shrink-0 items-center justify-end gap-1 text-[0.625rem] text-muted-foreground">{typeof trailing === "number" ? <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-emphasis tabular-nums">{trailing}</span> : trailing}</span> : null}
+          {trailing != null ? <span className="flex min-w-6 shrink-0 items-center justify-end gap-1 text-3xs text-muted-foreground">{typeof trailing === "number" ? <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-emphasis tabular-nums">{trailing}</span> : trailing}</span> : null}
         </div>
       </div>;
     },
@@ -87,7 +87,7 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
       {title || description || action ? <header className="flex min-w-0 items-start justify-between gap-4 px-2">
         <div className="flex min-w-0 flex-col gap-0.5">
           {title ? <div className="text-xs font-normal text-muted-foreground">{title}</div> : null}
-          {description ? <div className="text-[0.6875rem] leading-4 text-muted-foreground">{description}</div> : null}
+          {description ? <div className="text-2xs leading-4 text-muted-foreground">{description}</div> : null}
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </header> : null}
@@ -132,7 +132,7 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
         <div className="flex min-w-0 flex-1 items-center gap-3">
           {leading ? <div className="flex shrink-0 items-center text-muted-foreground">{leading}</div> : null}
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <div className="text-[0.8125rem] text-foreground">{label}</div>
+            <div className="text-sm text-foreground">{label}</div>
             {description ? <div className="text-xs leading-5 text-muted-foreground">{description}</div> : null}
           </div>
         </div>
@@ -144,8 +144,8 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
     Toolbar: ({ title, description, leading, actions }) => <div className="flex min-w-0 flex-wrap items-center gap-2">
       {leading ? <div className="flex shrink-0 items-center">{leading}</div> : null}
       {title || description ? <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {title ? <div className="truncate text-[0.8125rem] text-foreground">{title}</div> : null}
-        {description ? <div className="truncate text-[0.6875rem] text-muted-foreground">{description}</div> : null}
+        {title ? <div className="truncate text-sm text-foreground">{title}</div> : null}
+        {description ? <div className="truncate text-2xs text-muted-foreground">{description}</div> : null}
       </div> : <div className="min-w-0 flex-1" />}
       {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </div>,
@@ -164,13 +164,13 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
         )}
       >
         <span>{item.label}</span>
-        {typeof item.count === "number" ? <span className="tabular-nums text-[0.625rem] text-muted-foreground">{item.count}</span> : null}
+        {typeof item.count === "number" ? <span className="tabular-nums text-3xs text-muted-foreground">{item.count}</span> : null}
       </button>)}
     </div>,
     // 圆角与滚动分两层：`pre` 只负责排版，外层负责圆角与裁剪；
     // 合成一层时滚动条会戳出圆角（原因见 ui/menu-styles）。
-    CodeBlock: ({ children }) => <div className="max-h-[32rem] overflow-hidden rounded-lg bg-surface-subtle"><pre className="min-w-0 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[0.6875rem] leading-5 text-foreground">{children}</pre></div>,
-    Markdown: ({ text }) => <div className="text-[0.8125rem] leading-[1.6]"><Markdown text={text} mode="static" /></div>,
+    CodeBlock: ({ children }) => <div className="max-h-[32rem] overflow-hidden rounded-lg bg-surface-subtle"><pre className="min-w-0 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-2xs leading-5 text-foreground">{children}</pre></div>,
+    Markdown: ({ text }) => <div className="text-sm leading-[1.6]"><Markdown text={text} mode="static" /></div>,
     Button: ({ children, on_click, disabled, variant = "default", size = "default", title, aria_label }) => <Button variant={variant} size={size} disabled={disabled} onClick={on_click} title={title} aria-label={aria_label}>{children}</Button>,
     Input: ({ value, on_value_change, placeholder, disabled, type = "text", minimum, maximum, fill = false }) => <input
       value={value}
@@ -184,9 +184,9 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
     />,
     Field: ({ label, description, error, children }) => <div className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs text-foreground">{label}</span>
-      {description ? <span className="text-[0.6875rem] leading-4 text-muted-foreground">{description}</span> : null}
+      {description ? <span className="text-2xs leading-4 text-muted-foreground">{description}</span> : null}
       {children}
-      {error ? <span className="text-[0.6875rem] leading-4 text-destructive">{error}</span> : null}
+      {error ? <span className="text-2xs leading-4 text-destructive">{error}</span> : null}
     </div>,
     Textarea: ({ value, on_value_change, placeholder, disabled, rows = 8 }) => <textarea
       value={value}
@@ -198,9 +198,9 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
     />,
     Select: ({ value, options, on_value_change, disabled, fill = false }) => <Select value={value} options={[...options]} on_value_change={on_value_change} disabled={disabled} className={fill ? "w-full" : undefined} align="end" />,
     Switch: ({ checked, on_checked_change, disabled, aria_label }) => <Switch checked={checked} onCheckedChange={on_checked_change} disabled={disabled} aria-label={aria_label} />,
-    EmptyState: ({ title, description, icon, action, size = "default" }) => <div className={cn("flex flex-col items-center justify-center px-4 text-center", size === "compact" ? "py-8" : "min-h-64 py-12")}>{icon ? <div className="mb-3 flex size-9 items-center justify-center rounded-lg bg-muted/55 text-muted-foreground">{icon}</div> : null}<div className="text-[0.8125rem] text-foreground">{title}</div>{description ? <div className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">{description}</div> : null}{action ? <div className="mt-4">{action}</div> : null}</div>,
+    EmptyState: ({ title, description, icon, action, size = "default" }) => <div className={cn("flex flex-col items-center justify-center px-4 text-center", size === "compact" ? "py-8" : "min-h-64 py-12")}>{icon ? <div className="mb-3 flex size-9 items-center justify-center rounded-lg bg-muted/55 text-muted-foreground">{icon}</div> : null}<div className="text-sm text-foreground">{title}</div>{description ? <div className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">{description}</div> : null}{action ? <div className="mt-4">{action}</div> : null}</div>,
     LoadingState: ({ label }) => <div className="flex min-h-40 items-center justify-center gap-2 text-xs text-muted-foreground"><TbLoader2 className="size-4 animate-spin" />{label}</div>,
     Callout: ({ children, tone = "default" }) => <div className={cn("rounded-lg px-3 py-2 text-xs leading-5", tone === "default" && "bg-surface-subtle text-muted-foreground", tone === "warning" && "bg-amber-500/10 text-amber-700 dark:text-amber-400", tone === "danger" && "bg-destructive/10 text-destructive")}>{children}</div>,
-    Status: ({ children, tone = "muted" }) => <span className={cn("text-[0.6875rem]", tone === "muted" && "text-muted-foreground", tone === "success" && "text-emerald-600 dark:text-emerald-400", tone === "warning" && "text-amber-600 dark:text-amber-400", tone === "danger" && "text-destructive")}>{children}</span>,
+    Status: ({ children, tone = "muted" }) => <span className={cn("text-2xs", tone === "muted" && "text-muted-foreground", tone === "success" && "text-emerald-600 dark:text-emerald-400", tone === "warning" && "text-amber-600 dark:text-amber-400", tone === "danger" && "text-destructive")}>{children}</span>,
   };
 }

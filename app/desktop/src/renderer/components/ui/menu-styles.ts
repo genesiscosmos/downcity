@@ -46,6 +46,6 @@ export const menu_item_highlighted_class_name =
 export const menu_item_interaction_class_name =
   "hover:bg-interaction-hover hover:text-foreground data-highlighted:bg-interaction-hover data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50";
 
-export const menu_label_class_name = "px-2 py-2 text-[0.6875rem] font-medium text-muted-foreground select-none";
+export const menu_label_class_name = "px-2 py-2 text-2xs font-medium text-muted-foreground select-none";
 export const menu_separator_class_name = "-mx-1 my-1 h-px bg-divider";
 export const menu_shortcut_class_name = "ml-auto shrink-0 text-xs tracking-widest opacity-60";

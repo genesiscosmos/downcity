@@ -208,7 +208,7 @@ function ActivityDetail({ detail, error, input_streaming }: {
 }) {
   return <div className="activity-tool-detail">
     {detail ? <ActivityDetailBody detail={detail} streaming={input_streaming} /> : null}
-    {error ? <p role="alert" className="whitespace-pre-wrap break-words px-2.5 py-2 text-[0.6875rem] leading-[1.45] text-destructive">{error}</p> : null}
+    {error ? <p role="alert" className="whitespace-pre-wrap break-words px-2.5 py-2 text-2xs leading-[1.45] text-destructive">{error}</p> : null}
   </div>;
 }
 

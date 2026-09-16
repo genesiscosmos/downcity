@@ -115,7 +115,7 @@ export function GroupView({ group, agents, settings, message_projection, member_
     ? <ChatWorkspaceSelector workspace_id={workspace_id} workspaces={workspaces} disabled={group_phase !== "idle"} switch_workspace={switch_workspace} />
     : workspace
       ? <WorkspaceTagMenu workspace={workspace} />
-      : <span className="inline-flex h-5 min-w-0 max-w-40 shrink-0 items-center gap-1 rounded-full bg-surface-subtle px-2 text-[0.625rem] font-normal text-muted-foreground"><TbFolder className="size-3 shrink-0" /><span className="truncate">{workspace_id}</span></span>;
+      : <span className="inline-flex h-5 min-w-0 max-w-40 shrink-0 items-center gap-1 rounded-full bg-surface-subtle px-2 text-3xs font-normal text-muted-foreground"><TbFolder className="size-3 shrink-0" /><span className="truncate">{workspace_id}</span></span>;
   // Group 编辑面板在右侧打开；这里只需构造标签页。
   const open_panel = use_baybar_open();
   const open_group_tab = () => open_panel(group_config_tab(group, controller, translate));
@@ -292,13 +292,13 @@ const GroupMessageRow = memo(function GroupMessageRow({ message, agent, read }: 
   const translate = use_translation("resources");
   if (message.author_type === "user") return <UserMessageFrame
     meta={<>
-      {read ? <span className="text-[0.6875rem] text-muted-foreground">{translate("group_details.read")}</span> : null}
+      {read ? <span className="text-2xs text-muted-foreground">{translate("group_details.read")}</span> : null}
       <ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" />
     </>}
   >
     <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className={cn("break-words", chat_message_text_class_name)}><Markdown text={message.text} mode="static" /></div>
   </UserMessageFrame>;
-  if (message.author_type === "system") return <div className="group flex w-full items-center gap-3 py-2"><span className="h-px min-w-4 flex-1 bg-border/60" /><span className="flex max-w-[80%] items-center gap-2 text-center text-[0.75rem] text-muted-foreground"><span>{message.text}</span><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></span><span className="h-px min-w-4 flex-1 bg-border/60" /></div>;
+  if (message.author_type === "system") return <div className="group flex w-full items-center gap-3 py-2"><span className="h-px min-w-4 flex-1 bg-border/60" /><span className="flex max-w-[80%] items-center gap-2 text-center text-xs text-muted-foreground"><span>{message.text}</span><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></span><span className="h-px min-w-4 flex-1 bg-border/60" /></div>;
   // 未知作者的降级身份：只需 id 与名称，头像会回退为默认图标。
   // 不再补 `model_id` / `version`：那两个字段只有 GroupAvatar 的降级投影需要，
   // 构造它们只会让每个调用点都要跟着写一遍。
@@ -320,7 +320,7 @@ const GroupInteractionRow = memo(function GroupInteractionRow({ agent, agent_id,
   // 身份行已经给出了名字，这里只说「需要你的响应」，不再重复名字。
   return <AgentMessageFrame
     agent={agent ?? { agent_id }}
-    suffix={<span className="shrink-0 text-[0.6875rem] text-muted-foreground">{translate("group_details.response_required")}</span>}
+    suffix={<span className="shrink-0 text-2xs text-muted-foreground">{translate("group_details.response_required")}</span>}
   >
     <AgentInteraction part={part} respond={respond_interaction} />
   </AgentMessageFrame>;

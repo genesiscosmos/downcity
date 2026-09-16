@@ -6,6 +6,10 @@
  * `border-border/45` 这类任意值：同一件事最多出现 16 种写法，
  * 弱化文字有 80 处低于 3:1 对比度，顶栏高度用 px 导致界面缩放后两侧错位。
  *
+ * 字号是同一类问题的另一个面：13 档字号（其中相邻档只差 0.5px）全靠调用点各自决定，
+ * 于是无法收敛。这里把字号相关的写法一并列入禁用清单，
+ * 完整的 9 级档位表与角色约定见 `font_scale.test.ts` 与 `docs/desktop-type-scale-design.md`。
+ *
  * 逐条修完之后，这里守住底线：新代码不得再引入这些写法。
  * 需要新语义时，先在 styles/semantic-colors.css 里定义令牌，再引用它。
  *
@@ -28,7 +32,12 @@ const banned: readonly { rule: RegExp; why: string }[] = [
   { rule: /border-border\/\d/, why: "描边只用 border-border / border-divider / border-border-subtle" },
   { rule: /divide-border\/\d/, why: "分隔线用 divide-divider / divide-border-subtle" },
   { rule: /hover:bg-primary\/|bg-primary\/\[0\./, why: "交互态用 interaction-hover / interaction-selected / interaction-active" },
-  { rule: /text-\[\d+px\]/, why: "固定 px 字号不跟随界面缩放；用 rem 等价字号" },
+  { rule: /text-\[\d+px\]/, why: "固定 px 字号不跟随界面缩放；用语义字号档位（text-3xs … text-3xl）" },
+  // 字号收敛为 9 级语义档位后的底线（完整档位表见 `font_scale.test.ts`）：
+  // 一、Tailwind 自带档位已被 `--text-*: initial` 清掉，写 4xl 及以上不会生成规则；
+  // 二、任意值绕过档位收敛，而且 rem 任意值与语义档位长得一样却不受控。
+  { rule: /\btext-(?:4xl|5xl|6xl|7xl|8xl|9xl)(?![\w-])/, why: "字号只有 3xs/2xs/xs/sm/base/lg/xl/2xl/3xl 九档；4xl 及以上已被清空，写了不会生效" },
+  { rule: /text-\[[^\]]*(?:rem|px|em|pt|ch|ex|vh|vw|calc\()/, why: "字号只能取语义档位；要新档位先在 tokens.css 定义" },
   { rule: /bg-black\//, why: "遮罩用 bg-scrim / bg-scrim-strong" },
   { rule: /shadow-xl\b/, why: "阴影只有浮层（shadow-lg）与模态（shadow-2xl）两级" },
 ];

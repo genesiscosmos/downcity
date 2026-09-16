@@ -42,7 +42,7 @@ export const SettingsSidebarPanel = memo(function SettingsSidebarPanel({ control
     </div>
     <SidebarContent class_name="flex flex-col gap-2.5 py-1">
       {settings_groups.map((group) => <div key={group.label} className="flex min-w-0 flex-col gap-0.5">
-        <div className="px-2.5 pb-1 text-[0.625rem] text-muted-foreground">{group.label}</div>
+        <div className="px-2.5 pb-1 text-3xs text-muted-foreground">{group.label}</div>
         <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-subtle p-1.5">
           {group.items.map(({ section, label, icon: Icon }) => <Button key={section} size="sidebar" className="px-2.5 text-foreground" actived={active_section === section} onClick={() => controller.actions.open_settings(section)}><Icon /><span className="min-w-0 truncate">{label}</span></Button>)}
         </div>

@@ -68,16 +68,16 @@ const composer_styles = fs.readFileSync(path.join(renderer_root, "styles/base.cs
 const theme_tokens = fs.readFileSync(path.join(renderer_root, "styles/tokens.css"), "utf8");
 const markdown_styles = fs.readFileSync(path.join(renderer_root, "styles/markdown.css"), "utf8");
 
-/**
- * 100% 界面缩放下的根字号；所有 px 估算都基于它。
- *
- * 实际缩放由 `ui_scale` 改写根 `font-size`，但三个量级都是相对单位（em / rem），
- * 会等比缩放，所以这里的比值关系与缩放无关。
- */
-const ROOT_FONT_PX = 16;
-
 /** Tailwind 的 `--spacing`：1 个单位 = 0.25rem，即 `gap-2.5` → 0.625rem。 */
 const TAILWIND_SPACING_REM = 0.25;
+
+/**
+ * 可感知的最小差值：0.125rem。
+ *
+ * 三个量级都用 rem 比较，所以本文件不需要知道根字号是多少——这也正是为什么
+ * 字号与行高必须全部用 rem：px 只在 100% 缩放下才对得上，而界面缩放会改写根字号。
+ */
+const MIN_PERCEPTIBLE_GAP_REM = 0.125;
 
 /** 消息正文文字排版的消费处，按角色分开。 */
 const text_consumers = {
@@ -86,11 +86,17 @@ const text_consumers = {
   GroupView: consumers.GroupView,
 } as const;
 
-/** 读出 `tokens.css` 里的消息字号档；段落间距的像素估算与归组断言都用它。 */
-function read_message_text_token(): { size_rem: number; line_height: number } {
-  const size = /--text-message:\s*([\d.]+)rem/.exec(theme_tokens);
-  const line_height = /--text-message--line-height:\s*([\d.]+)/.exec(theme_tokens);
-  assert.ok(size && line_height, "tokens.css 里缺少 --text-message / --text-message--line-height");
+/**
+ * 读出消息正文用的语义字号档；段落间距的换算与归组断言都用它。
+ *
+ * 正文不另开字号档位，直接用 `--text-sm`（0.875rem），
+ * 行高单独取 `--leading-reading`（1.8，无单位倍数）——`sm` 的配对行高是
+ * 1.25rem，是 UI 文本的密度，对长段落太挤。所以这里读两个令牌，而不是一个配对。
+ */
+function read_body_type_token(): { size_rem: number; line_height: number } {
+  const size = /--text-sm:\s*([\d.]+)rem/.exec(theme_tokens);
+  const line_height = /--leading-reading:\s*([\d.]+)/.exec(theme_tokens);
+  assert.ok(size && line_height, "tokens.css 里缺少 --text-sm / --leading-reading");
   return { size_rem: Number(size[1]), line_height: Number(line_height[1]) };
 }
 
@@ -120,7 +126,7 @@ test("Agent 正文不被左内边距推离消息列左缘", () => {
 /**
  * 正文块与活动块之间的间距必须夹在「段落间距」与「消息间距」之间。
  *
- * 用像素比较而不是比 rem 数值，因为三个量级的单位不同：段落是 em（随 15px 正文字号），
+ * 用 rem 比较而不是直接比数字，因为三个量级的单位不同：段落是 em（随正文字号），
  * 块间距是 rem（随根字号），消息间距是根容器的 py-2。直接比数字会得出错误结论。
  */
 test("消息正文的块间距夹在段落间距与消息间距之间", () => {
@@ -128,24 +134,24 @@ test("消息正文的块间距夹在段落间距与消息间距之间", () => {
   const gap = /\bgap-(\d+(?:\.\d+)?)\b/.exec(body);
   assert.ok(gap, `正文容器没有声明块间距：${body}`);
 
-  const paragraph_px = read_paragraph_margin_em() * read_message_text_token().size_rem * ROOT_FONT_PX;
-  const block_px = Number(gap[1]) * TAILWIND_SPACING_REM * ROOT_FONT_PX;
+  const paragraph_rem = read_paragraph_margin_em() * read_body_type_token().size_rem;
+  const block_rem = Number(gap[1]) * TAILWIND_SPACING_REM;
   // 根容器 py-2：上下两段合计 1rem。
-  const message_px = 1 * ROOT_FONT_PX;
+  const message_rem = 1;
 
-  assert.ok(block_px > paragraph_px, `块间距（${block_px}px）不大于段落间距（${paragraph_px}px）：「另起一段」与「后面跟了工具活动」看起来一样宽`);
-  assert.ok(block_px < message_px, `块间距（${block_px}px）不小于消息间距（${message_px}px）：同一条消息会被读成两条`);
+  assert.ok(block_rem > paragraph_rem, `块间距（${block_rem}rem）不大于段落间距（${paragraph_rem}rem）：「另起一段」与「后面跟了工具活动」看起来一样宽`);
+  assert.ok(block_rem < message_rem, `块间距（${block_rem}rem）不小于消息间距（${message_rem}rem）：同一条消息会被读成两条`);
   /*
-   * 光「大于」不够：`gap-2`（8px）比段落间距只大 0.5px，虽然满足上面两个不等式，
-   * 视觉上两个层级已经抹平。留至少 2px 的可感知差值，把“小一点”和“小到看不出来”分开。
+   * 光「大于」不够：`gap-2`（0.5rem）比段落间距只大一点点，虽然满足上面两个不等式，
+   * 视觉上两个层级已经抹平。留至少 0.125rem 的可感知差值，把“小一点”和“小到看不出来”分开。
    *
    * 这条断言同时锁住了**字号的上限**：段落间距是 0.5em（随字号走），
-   * 因此 `0.5 × 字号 ≤ 块间距 − 2`，在块间距 10px 下等价于字号 ≤ 16px。
+   * 因此 `0.5 × 字号 ≤ 块间距 − 0.125rem`，在块间距 0.625rem 下等价于字号 ≤ 1rem。
    * 所以调大字号时它会失败——这是有意的：加字号就必须同时加块间距，
    * 否则正文与活动会粘在一起。
    */
-  assert.ok(block_px - paragraph_px >= 2, `块间距与段落间距只差 ${block_px - paragraph_px}px，两个层级会看起来一样；
-    要再收紧块间距必须先降段落间距，要调大消息字号必须先抬块间距（字号 ${read_message_text_token().size_rem}rem × 段落 0.5em 已占掉 ${paragraph_px}px）`);
+  assert.ok(block_rem - paragraph_rem >= MIN_PERCEPTIBLE_GAP_REM, `块间距与段落间距只差 ${block_rem - paragraph_rem}rem，两个层级会看起来一样；
+    要再收紧块间距必须先降段落间距，要调大消息字号必须先抬块间距（字号 ${read_body_type_token().size_rem}rem × 段落 0.5em 已占掉 ${paragraph_rem}rem）`);
 });
 
 /**
@@ -155,20 +161,22 @@ test("消息正文的块间距夹在段落间距与消息间距之间", () => {
  * 偏大或偏小。必须同值的还有 Composer↔用户气泡（同一段文字发送前后的两种状态）。
  *
  * 注意：本文件只能验证**源码上的引用关系**。「这个类在浏览器里是否真的生效」由
- * `tailwind_merge_classes.test.ts` 验证——那里跑真正的 `cn`，因为 tailwind-merge
- * 会把未登记的自定义字号当颜色删掉，而那种失效在本文件里看不出来。
+ * `tailwind_merge_classes.test.ts` 验证——那里跑真正的 `cn`。
  */
 test("消息字号只有一个来源，四个消费处都用它", () => {
   const text = read_class_name(layout_source, "chat_message_text_class_name");
-  // 必须是普通 CSS 类（定义在 styles/chat.css），而不是工具类：
-  // 工具类的自定义字号会被 cn() 当颜色删除，且依赖扫描器产物。
-  assert.ok(/\bchat-message-text\b/.test(text), `消息正文没有使用 chat-message-text：${text}`);
+  // 必须是语义字号档位 + 阅读行高。
+  assert.ok(/\btext-sm\b/.test(text), `消息正文没有使用 sm 档：${text}`);
+  assert.ok(/\bleading-reading\b/.test(text), `消息正文没有使用阅读行高：${text}`);
+  // 不得自己写任意字号，也不得另开一级。
   assert.ok(!/text-\[/.test(text), `消息正文自己写了任意字号：${text}`);
 
-  const { size_rem, line_height } = read_message_text_token();
-  // 必须落在「应用原有正文档（13px）」与「块间距约束上限（16px）」之间。
-  assert.ok(size_rem > 0.8125 && size_rem < 1, `消息字号不在 13px 与 16px 之间：${size_rem}rem`);
-  // 行高要够读长文：1.3 是工具活动行的紧凑节奏，正文不能跟它一档。
+  const { size_rem, line_height } = read_body_type_token();
+  // 必须等于 sm（0.875rem，与 Tailwind 同名档位等值），且不得超出块间距约束上限。
+  assert.equal(size_rem, 0.875, `消息字号不是 sm（0.875rem）：${size_rem}rem`);
+  // 0.5em 段落间距在正文超过 1rem 时会顶到块间距。
+  assert.ok(size_rem <= 1, `消息字号超过 base（1rem），段落间距会顶到块间距：${size_rem}rem`);
+  // 行高要够读长文：1.25rem 是 UI 文本的紧凑节奏，正文不能跟它一档。
   assert.ok(line_height >= 1.5, `消息行高不足以读长文：${line_height}`);
 
   // 四个消费处：Session 的两种消息、Group 的两种发言。
@@ -186,19 +194,19 @@ test("消息字号只有一个来源，四个消费处都用它", () => {
 /**
  * Composer 与用户气泡必须同源。
  *
- * 两边分居 TSX 与 CSS，无类型可达。字形由 `--text-message` 提供，两处都只引用它，
+ * 两边分居 TSX 与 CSS，无类型可达。字号由 `--text-sm` 提供，两处都只引用它，
  * 因此数值一定一致；但「引用同一个令牌」这件事本身仍会漂移：有人可能把某一边改回写死数值。
  * 那种情况下 Composer 与气泡会在回车前后用两种字号，只在发送瞬间可见，很容易漏过 review。
  * 所以这里锁两件事：两边都引用令牌，且没人再写死数值。
  */
 test("Composer 与消息正文的字号行高同源", () => {
   const text = read_class_name(layout_source, "chat_message_text_class_name");
-  assert.ok(/\bchat-message-text\b/.test(text), `消息正文没有引用排版类：${text}`);
+  assert.ok(/\btext-sm\b/.test(text) && /\bleading-reading\b/.test(text), `消息正文没有引用语义字号档：${text}`);
 
   const editor = /\.chat-input-editor,\s*\n?\.chat-input-editor\.ProseMirror\s*\{([\s\S]*?)\}/.exec(composer_styles);
   assert.ok(editor, "base.css 里找不到 .chat-input-editor 规则块");
-  assert.ok(/font-size:\s*var\(--text-message\)/.test(editor[1]), ".chat-input-editor 没有引用 --text-message：发送前后字号会跳变");
-  assert.ok(/line-height:\s*var\(--text-message--line-height\)/.test(editor[1]), ".chat-input-editor 没有引用 --text-message--line-height：发送前后段落高度会跳变");
+  assert.ok(/font-size:\s*var\(--text-sm\)/.test(editor[1]), ".chat-input-editor 没有引用 --text-sm：发送前后字号会跳变");
+  assert.ok(/line-height:\s*var\(--leading-reading\)/.test(editor[1]), ".chat-input-editor 没有引用 --leading-reading：发送前后段落高度会跳变");
   // 反向：不允许再用字面量写死字号或行高。
   assert.ok(!/font-size:\s*[\d.]+rem/.test(editor[1]), ".chat-input-editor 又用字面量写死了字号");
   assert.ok(!/line-height:\s*[\d.]+\s*!important/.test(editor[1]), ".chat-input-editor 又用字面量写死了行高");

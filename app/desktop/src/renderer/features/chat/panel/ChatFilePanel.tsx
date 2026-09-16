@@ -168,7 +168,7 @@ export function ChatFilePanelContent({ workspace_id, file }: {
   const show_source = !markdown_document || view_mode === "source";
   return <div className="flex h-full min-h-0 flex-col">
     <div className="flex shrink-0 items-center gap-2 border-b border-divider px-4 py-2">
-      <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-foreground" title={relative_path}>{relative_path}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-2xs text-muted-foreground" title={relative_path}>{relative_path}</span>
       {markdown_document ? <WorkspaceFileViewModeControl value={view_mode} on_value_change={set_view_mode} /> : null}
     </div>
     <div className="min-h-0 flex-1 overflow-auto">

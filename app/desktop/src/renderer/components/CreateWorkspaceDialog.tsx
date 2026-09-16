@@ -68,7 +68,7 @@ export function CreateWorkspaceDialog({ open, close_dialog, create_workspace }: 
       <DialogBody className="flex flex-col gap-3">
         <Field label={translate("workspace.path")}><div className="flex gap-1"><input value={workspace_path} readOnly placeholder={translate("workspace.path_placeholder")} className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /><Button type="button" size="icon" className="size-8" title={translate("workspace.choose_path")} onClick={() => void choose_directory()}><TbFolderOpen /></Button></div></Field>
         <Field label={translate("workspace.name")}><input value={name} placeholder={translate("workspace.name_placeholder")} className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" onChange={(event) => { name_edited.current = true; set_name(event.target.value); }} /></Field>
-        {form_error ? <div className="text-[0.6875rem] text-destructive">{form_error}</div> : null}
+        {form_error ? <div className="text-2xs text-destructive">{form_error}</div> : null}
       </DialogBody>
       <DialogFooter><Button type="button" disabled={submitting} onClick={close_dialog}>{common_translate("actions.cancel")}</Button><Button type="submit" variant="primary" disabled={submitting || !workspace_path}>{submitting ? translate("workspace.adding") : translate("workspace.create")}</Button></DialogFooter>
     </form>
@@ -76,7 +76,7 @@ export function CreateWorkspaceDialog({ open, close_dialog, create_workspace }: 
 }
 
 /** Workspace 表单字段。 */
-function Field({ label, children }: { /** 字段标签。 */ label: string; /** 字段控件。 */ children: React.ReactNode }) { return <label className="flex flex-col gap-1.5"><span className="text-[0.6875rem] font-medium text-foreground">{label}</span>{children}</label>; }
+function Field({ label, children }: { /** 字段标签。 */ label: string; /** 字段控件。 */ children: React.ReactNode }) { return <label className="flex flex-col gap-1.5"><span className="text-2xs font-medium text-foreground">{label}</span>{children}</label>; }
 
 /** 从路径读取目录名称。 */
 function read_directory_name(workspace_path: string): string { return workspace_path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "Workspace"; }

@@ -334,14 +334,14 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
         {row.icon ? <span className="shrink-0 text-muted-foreground">{row.icon}</span> : null}
         <span className="min-w-0 flex-1">
           <span className="block truncate">{row.title}</span>
-          {row.subtitle ? <span className="mt-0.5 block truncate text-[0.625rem] text-muted-foreground">{row.subtitle}</span> : null}
+          {row.subtitle ? <span className="mt-0.5 block truncate text-3xs text-muted-foreground">{row.subtitle}</span> : null}
         </span>
         {row.disabled && row.disabled_reason ? (
-          <span className="shrink-0 text-[0.625rem] text-muted-foreground">{row.disabled_reason}</span>
+          <span className="shrink-0 text-3xs text-muted-foreground">{row.disabled_reason}</span>
         ) : null}
         {row.is_current ? <TbCheck className="size-4 shrink-0 text-foreground" aria-hidden="true" /> : null}
         {row.trailing}
-        {row.shortcut ? <span className="ml-auto shrink-0 pl-2 text-[0.6875rem] tracking-widest text-subtle-foreground">{row.shortcut}</span> : null}
+        {row.shortcut ? <span className="ml-auto shrink-0 pl-2 text-2xs tracking-widest text-subtle-foreground">{row.shortcut}</span> : null}
       </div>
     );
   };
@@ -401,7 +401,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
           </div>
 
           {is_sessions_page && page_projection.scope_label ? (
-            <p className="border-b border-divider px-3 py-1.5 text-[0.625rem] text-muted-foreground">
+            <p className="border-b border-divider px-3 py-1.5 text-3xs text-muted-foreground">
               {translate("command_palette.page.sessions_scope", { name: page_projection.scope_label })}
             </p>
           ) : null}
@@ -424,7 +424,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
                     <div
                       id={`command-palette-group-${section.key}`}
                       role="presentation"
-                      className="px-2 py-2 text-[0.6875rem] font-medium text-muted-foreground select-none"
+                      className="px-2 py-2 text-2xs font-medium text-muted-foreground select-none"
                     >
                       {section.label}
                     </div>
@@ -438,7 +438,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
             )}
           </div>
 
-          <div className="flex h-8 items-center justify-between gap-3 border-t border-divider px-3 text-[0.625rem] text-muted-foreground">
+          <div className="flex h-8 items-center justify-between gap-3 border-t border-divider px-3 text-3xs text-muted-foreground">
             <span>{translate(page === "root" ? "command_palette.hint.root" : "command_palette.hint.page")}</span>
             <span className="tabular-nums">
               {rows.length >= command_result_limit

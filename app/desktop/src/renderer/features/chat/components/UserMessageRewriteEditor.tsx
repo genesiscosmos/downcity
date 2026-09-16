@@ -55,7 +55,7 @@ export function UserMessageRewriteEditor(props: UserMessageRewriteEditorProps) {
     <div className="chat-composer-editor min-h-16 max-h-60 w-full overflow-y-auto p-1">
       <EditorContent editor={editor} className="chat-composer-content" />
     </div>
-    {props.error ? <p className="px-1 text-right text-[0.6875rem] leading-4 text-destructive">{props.error}</p> : null}
+    {props.error ? <p className="px-1 text-right text-2xs leading-4 text-destructive">{props.error}</p> : null}
     <div className="flex justify-end gap-2 px-1 pb-1">
       <Button disabled={props.submitting} onClick={props.cancel}>{translate_common("actions.cancel")}</Button>
       <Button variant="primary" disabled={props.submitting || input_empty} onClick={submit}>

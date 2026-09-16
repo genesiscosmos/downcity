@@ -36,7 +36,7 @@ export function ChatModelSelector(props: ChatModelSelectorProps) {
   const trigger_accessible_label = selected_effort?.name ? `${trigger_label}, ${translate("model.reasoning")}: ${selected_effort.name}` : trigger_label;
 
   return <Popover>
-    <PopoverTrigger asChild><Button className="min-w-0 max-w-64 justify-start rounded-full" title={trigger_accessible_label} aria-label={trigger_accessible_label} disabled={props.models_loading && !current_model_id}>{props.models_loading && !current_model_id ? <TbLoader2 className="size-4 animate-spin" /> : <LLMModelIcon model_id={current_model?.model_id || current_model_id} model_name={current_model?.name} tags={current_model?.tags} size_class="size-4" />}<span className="min-w-0 flex-1 truncate">{trigger_label}</span>{selected_effort?.name ? <span className="max-w-20 shrink-0 truncate rounded-full bg-surface-emphasis px-1.5 py-0.5 text-[0.625rem] font-medium leading-none text-muted-foreground">{selected_effort.name}</span> : null}</Button></PopoverTrigger>
+    <PopoverTrigger asChild><Button className="min-w-0 max-w-64 justify-start rounded-full" title={trigger_accessible_label} aria-label={trigger_accessible_label} disabled={props.models_loading && !current_model_id}>{props.models_loading && !current_model_id ? <TbLoader2 className="size-4 animate-spin" /> : <LLMModelIcon model_id={current_model?.model_id || current_model_id} model_name={current_model?.name} tags={current_model?.tags} size_class="size-4" />}<span className="min-w-0 flex-1 truncate">{trigger_label}</span>{selected_effort?.name ? <span className="max-w-20 shrink-0 truncate rounded-full bg-surface-emphasis px-1.5 py-0.5 text-3xs font-medium leading-none text-muted-foreground">{selected_effort.name}</span> : null}</Button></PopoverTrigger>
     <PopoverContent side="top" align="start" sideOffset={4} className="w-64 max-w-[calc(100vw-1rem)] p-1">
       <SelectorSubmenu label={translate("model.model")} value={current_model?.name || current_model_id || common_translate("state.not_configured")}>
         <ModelOptions models={text_models} current_model_id={current_model_id} loading={props.models_loading} on_select={props.set_model} />
@@ -52,7 +52,7 @@ export function ChatModelSelector(props: ChatModelSelectorProps) {
 function SelectorSubmenu({ label, value, children }: { label: string; value: string; children: ReactNode }) {
   const [open, set_open] = useState(false);
   return <Popover open={open} onOpenChange={set_open}>
-    <PopoverTrigger asChild><button type="button" className={cn("flex min-h-10 w-full items-center gap-2 rounded-floating-item px-2.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30", open && "bg-interaction-selected")}><span className="min-w-0 flex-1"><span className="block text-xs font-medium text-foreground">{label}</span><span className="block truncate text-[0.625rem] text-muted-foreground">{value}</span></span><TbChevronRight className="size-3.5 shrink-0 text-subtle-foreground" /></button></PopoverTrigger>
+    <PopoverTrigger asChild><button type="button" className={cn("flex min-h-10 w-full items-center gap-2 rounded-floating-item px-2.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30", open && "bg-interaction-selected")}><span className="min-w-0 flex-1"><span className="block text-xs font-medium text-foreground">{label}</span><span className="block truncate text-3xs text-muted-foreground">{value}</span></span><TbChevronRight className="size-3.5 shrink-0 text-subtle-foreground" /></button></PopoverTrigger>
     {/* 高度上限取「视口 80%」与「锚点上方可用空间」的较小值，超出部分由列表内部滚动，避免溢出屏幕。 */}
     <PopoverContent side="right" align="start" sideOffset={4} className="flex max-h-[min(80vh,var(--available-height,100vh))] w-72 max-w-[calc(100vw-1rem)] flex-col">
       {children}
@@ -133,20 +133,20 @@ function ModelPreview({ model }: { /** 当前模型目录信息。 */ model: Des
         <div className="max-h-[min(60vh,var(--available-height,100vh))] overflow-y-auto overscroll-contain p-3">
         <div className="flex min-w-0 items-start gap-2.5">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-subtle"><LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-5" /></span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{model.name}</span><span className="mt-0.5 block truncate font-mono text-[0.625rem] text-muted-foreground">{model.model_id}</span></span>
+          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{model.name}</span><span className="mt-0.5 block truncate font-mono text-3xs text-muted-foreground">{model.model_id}</span></span>
         </div>
         {model.description ? <p className="mt-3 text-xs leading-5 text-muted-foreground">{model.description}</p> : null}
-        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-surface-subtle p-2.5 text-[0.6875rem]">
+        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-surface-subtle p-2.5 text-2xs">
           <ModelDetail label={translate("model.context")} value={model.context_window ? format_token_count(model.context_window) : translate("model.not_provided")} />
           <ModelDetail label={translate("model.capabilities")} value={model.modalities.join(" / ") || translate("model.not_provided")} />
           <ModelDetail label={translate("model.reasoning")} value={reasoning_label || translate("model.not_supported")} />
           <ModelDetail label={translate("model.default_effort")} value={default_effort?.name || common_translate("state.automatic")} />
         </dl>
-        <div className="mt-3 flex items-center gap-2 text-[0.6875rem]">
+        <div className="mt-3 flex items-center gap-2 text-2xs">
           <span className="text-muted-foreground">{translate("model.price")}</span>
           <span className="ml-auto tabular-nums text-foreground">{pricing ? translate("model.price_detail", { input: format_usd_price(pricing.input_usd_per_1m), output: format_usd_price(pricing.output_usd_per_1m) }) : translate("model.not_provided")}</span>
         </div>
-        {model.tags.length ? <div className="mt-3 flex flex-wrap gap-1">{model.tags.map((tag) => <span key={tag} className="rounded-md bg-surface-subtle px-1.5 py-0.5 text-[0.625rem] text-muted-foreground">{tag}</span>)}</div> : null}
+        {model.tags.length ? <div className="mt-3 flex flex-wrap gap-1">{model.tags.map((tag) => <span key={tag} className="rounded-md bg-surface-subtle px-1.5 py-0.5 text-3xs text-muted-foreground">{tag}</span>)}</div> : null}
         </div>
       </PreviewCard.Popup>
     </PreviewCard.Positioner>

@@ -88,7 +88,7 @@ export function SegmentedControl<const Value extends string>(props: SegmentedCon
       disabled={option.disabled}
       tabIndex={props.value === option.value ? 0 : -1}
       data-segmented-option={option.value}
-      className="relative z-10 inline-flex h-6 min-w-0 shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-full bg-transparent px-2.5 text-[0.6875rem] leading-none text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/30 aria-checked:text-foreground disabled:pointer-events-none disabled:opacity-50"
+      className="relative z-10 inline-flex h-6 min-w-0 shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-full bg-transparent px-2.5 text-2xs leading-none text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/30 aria-checked:text-foreground disabled:pointer-events-none disabled:opacity-50"
       onClick={() => props.on_value_change(option.value)}
       onKeyDown={(event) => handle_key_down(event, option.value)}
     >{option.label}</button>)}

@@ -75,7 +75,7 @@ export function AgentEditorPanel({
     {definition && section === "identity" ? <IdentityEditor agent={agent} controller={controller} definition={definition} set_definition={set_definition} /> : null}
     {definition && section === "model" ? <ModelEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
     {definition && section === "soul" ? <SoulEditor definition={definition} controller={controller} set_definition={set_definition} /> : null}
-    {error ? <div className="mx-2 mt-3 text-[0.6875rem] leading-4 text-destructive">{error}</div> : null}
+    {error ? <div className="mx-2 mt-3 text-2xs leading-4 text-destructive">{error}</div> : null}
   </div>;
 }
 
@@ -293,19 +293,19 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
       </button>
     </div>
     <label className="flex flex-col gap-2">
-      <span className="px-1 text-[0.6875rem] font-medium text-muted-foreground">{translate_resources("agent.name")}</span>
+      <span className="px-1 text-2xs font-medium text-muted-foreground">{translate_resources("agent.name")}</span>
       <input
         value={definition.name}
-        className="h-10 w-full appearance-none rounded-lg border-0 bg-control-surface px-3 text-[0.8125rem] text-foreground outline-none transition-colors focus:bg-control-hover"
+        className="h-10 w-full appearance-none rounded-lg border-0 bg-control-surface px-3 text-sm text-foreground outline-none transition-colors focus:bg-control-hover"
         onChange={(event) => set_definition({ ...definition, name: event.target.value })}
       />
     </label>
     <label className="flex flex-col gap-2">
-      <span className="px-1 text-[0.6875rem] font-medium text-muted-foreground">{translate_resources("agent.description")}</span>
+      <span className="px-1 text-2xs font-medium text-muted-foreground">{translate_resources("agent.description")}</span>
       <textarea
         value={definition.description}
         rows={5}
-        className="block min-h-28 w-full appearance-none resize-none rounded-lg border-0 bg-control-surface px-3 py-2.5 text-[0.8125rem] leading-5 text-foreground outline-none transition-colors focus:bg-control-hover"
+        className="block min-h-28 w-full appearance-none resize-none rounded-lg border-0 bg-control-surface px-3 py-2.5 text-sm leading-5 text-foreground outline-none transition-colors focus:bg-control-hover"
         onChange={(event) => set_definition({ ...definition, description: event.target.value })}
       />
     </label>

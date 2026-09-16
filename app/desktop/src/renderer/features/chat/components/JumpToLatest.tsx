@@ -57,7 +57,7 @@ export function JumpToLatest({ visible, new_message_count, on_click }: {
     >
       <TbArrowDown className="size-3.5 shrink-0" aria-hidden="true" />
       {/* 数量随消息到来变化，tabular-nums 防止逐位跳动。 */}
-      {has_new ? <span className="text-[0.6875rem] font-medium tabular-nums text-primary">{new_message_count}</span> : null}
+      {has_new ? <span className="text-2xs font-medium tabular-nums text-primary">{new_message_count}</span> : null}
     </button>
   </div>;
 }
