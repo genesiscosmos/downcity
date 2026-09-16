@@ -1,5 +1,5 @@
 /**
- * city tool `agent` namespace。
+ * city tool `agent` method。
  *
  * 关键点（中文）
  * - 返回当前 City 中全部 Agent，不做 Workspace 过滤：协作认知边界是 City，不是 Workspace。
@@ -8,13 +8,13 @@
  */
 
 import type { CityToolContext } from "@/city/types/CityTool.js";
-import type { CityToolAgentSummary } from "@/city/types/CityToolNamespaces.js";
+import type { CityToolAgentSummary } from "@/city/types/CityToolMethods.js";
 import {
   CityAction,
   string_arg,
   type CityToolArgs,
-} from "@/city/tool/namespaces/CityAction.js";
-import { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
+} from "@/city/tool/CityAction.js";
+import { CityMethod } from "@/city/tool/CityMethod.js";
 import { CityToolRuntimeError } from "@/city/tool/CityToolResult.js";
 
 /** 把 Agent 投影为模型可读摘要。 */
@@ -68,9 +68,9 @@ class GetAgentAction extends CityAction {
   }
 }
 
-/** `agent` namespace。 */
-export class AgentNamespace extends CityNamespace {
-  readonly namespace = "agent";
+/** `agent` method。 */
+export class AgentMethod extends CityMethod {
+  readonly method = "agent";
   readonly summary = "Agents registered in this City, including the current one.";
   protected readonly actions = [new ListAgentsAction(), new GetAgentAction()];
 }

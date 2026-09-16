@@ -153,43 +153,33 @@ ActionSchedule is a local delayed Plugin Action scheduler owned by the Agent. Ev
 
 ## City Tool
 
-Every Agent receives one read-only `city` Tool: the entry point for runtime facts that the harness holds and the model cannot read from files or commands.
+Every Agent receives one read-only `city` Tool: the single entry point for City capabilities. It is organised as **methods**, and one call looks like:
 
 ```jsonc
-{ "namespace": "sandbox", "action": "explain_path", "args": { "path": "~/.downcity/plugins/chat" } }
+{ "method": "sandbox", "action": "explain_path", "args": { "path": "~/.downcity/plugins/chat" } }
 ```
 
-| Namespace | Answers |
+| Method | Answers |
 | --- | --- |
 | `env` | Which Agent, Session, Workspace, model, timezone and local date this turn runs under |
 | `sandbox` | Which sandbox backend and instance this Session runs in, which host directories are mounted, and why a path is blocked |
 | `workspaces` | Every Workspace registered in this City |
 | `agent` | Every Agent registered in this City |
 | `usage` | User-level token usage; answers `unsupported_action` until bureau exposes it |
+| `image` | `models`, `create`, `result` — generate images |
+| `sound` | `models`, `asr`, `tts` — transcribe audio and synthesize speech |
 
-Calling `city` with no arguments lists the namespaces the current Agent can use. Omitting `action` lists one namespace's actions together with their arguments and return shape. The Tool never writes, and never returns credential values.
+Calling `city` with no arguments lists the methods. Omitting `action` lists one method's actions with their arguments, return shape and whether they write. Nothing here returns credential values, and each action declares `read` or `write` so you can see which ones consume quota or change state before calling them.
 
 Availability follows the same rule as Plugins: everything City registers is available to every Agent, with no per-Agent gating and no configuration file.
 
-## City capabilities
+### Image and sound
 
-Some capabilities are neither external integrations nor plugins: their whole ability comes from the
-resources City already holds. They are registered as City capabilities and reach the model as
-top-level tools rather than through `plugin_call`.
+Both use the models available to your Federation account, so there is no separate configuration and nothing to set up. Because there is no configured default, pass `model` explicitly or take it from `image.models` / `sound.models`; `asr` and `tts` fall back to the first suitable model when none is given.
 
-| Capability | Tools | Notes |
-| --- | --- | --- |
-| Image | `image_models`, `image_create`, `image_result` | Two-step job protocol. Creating an image consumes quota, so the model must confirm with you first. Results land in the Agent's private directory and are attached to the reply. |
-| Sound | `sound_models`, `asr`, `tts` | `asr` transcribes audio, `tts` synthesizes speech and attaches the audio file to the reply. |
+Image generation is a two-step job: `create` returns a `job_id`, `result` reads it. Creating an image consumes quota, so the model must confirm with you first. `result` writes the generated images into the Agent's private directory and returns their local paths; render them with `![](path)`.
 
-Both use the models available to your Federation account, so there is no separate configuration and
-nothing to set up. Because there is no configured default, pass `model` explicitly or let the model
-take it from `image_models` / `sound_models`; `asr` and `tts` fall back to the first suitable model
-when none is given.
-
-Automatic transcription of inbound voice messages belongs to the Chat plugin, which calls the Sound
-capability when a channel delivers a voice or audio attachment. If transcription fails for one
-attachment, the message still arrives.
+Automatic transcription of inbound voice messages belongs to the Chat plugin, which calls the `sound` method when a channel delivers a voice or audio attachment. If transcription fails for one attachment, the message still arrives.
 
 ## Security model
 
@@ -201,8 +191,7 @@ Security is enforced at distinct capability boundaries:
 | Sandbox Shell | Workspace Sandbox | Commands run in the Workspace's isolated, persistent environment |
 | Host Shell | Approval gateway | The user explicitly authorizes one host command with a recorded reason |
 | Plugin | Plugin business authorization | Workspace does not own all Plugin resource access |
-| City Tool | Read-only by construction | Answers runtime facts; performs no write and returns no credential value |
-| City capability | Capability's own rules | Reads the Agent's files and calls paid Federation models under your account |
+| City Tool | Read-only by construction | Answers runtime facts and runs declared `read` actions; `write` actions consume quota or write files under the Agent's directory |
 | Custom Tool | Registering host | Agent Core does not infer business permissions |
 
 Explicit attachments may use an absolute path selected by the host because they are declared Prompt inputs. This does not expand where model-driven File/Search Tools may browse.

@@ -14,8 +14,8 @@ import type {
   ChatPluginAttachment,
 } from "@/chat/types/ChatPlugin.js";
 
-/** 自动转写使用的 capability 标识。 */
-const SOUND_CAPABILITY_ID = "sound";
+/** 自动转写使用的 method 标识。 */
+const SOUND_METHOD_ID = "sound";
 
 /** 判断值是否为普通对象。 */
 function to_record(value: unknown): Record<string, unknown> | null {
@@ -72,8 +72,8 @@ export async function transcribe_inbound_voice(input: {
   /** 已归一化的入站输入。 */
   inbound: ChatInboundAugmentInput;
 }): Promise<ChatInboundAugmentInput> {
-  const capabilities = input.context.city.capabilities;
-  if (!capabilities.has(SOUND_CAPABILITY_ID)) return input.inbound;
+  const methods = input.context.city.methods;
+  if (!methods.has(SOUND_METHOD_ID)) return input.inbound;
 
   const voice_attachments = (Array.isArray(input.inbound.attachments)
     ? input.inbound.attachments
@@ -87,8 +87,8 @@ export async function transcribe_inbound_voice(input: {
   const voice_blocks: string[] = [];
   for (const attachment of voice_attachments) {
     try {
-      const result = to_record(await capabilities.invoke({
-        capability: SOUND_CAPABILITY_ID,
+      const result = to_record(await methods.invoke({
+        method: SOUND_METHOD_ID,
         action: "transcribe",
         input: {
           audio_path: String(attachment.path || "").trim(),

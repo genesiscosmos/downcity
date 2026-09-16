@@ -26,7 +26,7 @@ export type {
 export type {
   PluginAgentHandle,
   PluginCityHandle,
-  PluginCityCapabilities,
+  PluginCityMethods,
   PluginCityPlugins,
   PluginContext,
   PluginLogger,

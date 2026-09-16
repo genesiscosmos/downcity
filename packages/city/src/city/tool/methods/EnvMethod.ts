@@ -1,5 +1,5 @@
 /**
- * city tool `env` namespace。
+ * city tool `env` method。
  *
  * 关键点（中文）
  * - 只回答「我现在是谁、在哪、用什么模型、现在几点」这类自身环境问题。
@@ -7,10 +7,10 @@
  */
 
 import type { CityToolContext } from "@/city/types/CityTool.js";
-import type { CityToolEnv } from "@/city/types/CityToolNamespaces.js";
+import type { CityToolEnv } from "@/city/types/CityToolMethods.js";
 import { format_date_in_timezone } from "@downcity/agent";
-import { CityAction, type CityToolArgs } from "@/city/tool/namespaces/CityAction.js";
-import { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
+import { CityAction, type CityToolArgs } from "@/city/tool/CityAction.js";
+import { CityMethod } from "@/city/tool/CityMethod.js";
 
 /** 读取当前 Agent 与执行环境的身份事实。 */
 class GetEnvAction extends CityAction {
@@ -37,9 +37,9 @@ class GetEnvAction extends CityAction {
   }
 }
 
-/** `env` namespace。 */
-export class EnvNamespace extends CityNamespace {
-  readonly namespace = "env";
+/** `env` method。 */
+export class EnvMethod extends CityMethod {
+  readonly method = "env";
   readonly summary = "Identity and runtime facts for the current agent, session and workspace.";
   protected readonly actions = [new GetEnvAction()];
 }

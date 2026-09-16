@@ -13,7 +13,7 @@ import type { SessionAgentContent } from "@downcity/agent";
 import type {
   ImageResultStorageInput,
   ImageResultStorageResult,
-} from "@/capabilities/image/types/Image.js";
+} from "@/city/tool/methods/image/types/Image.js";
 
 const HTTP_URL_RE = /^https?:\/\//i;
 const MAX_IMAGE_RESULT_BYTES = 50 * 1024 * 1024;

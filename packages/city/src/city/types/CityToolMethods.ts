@@ -1,9 +1,10 @@
 /**
- * city tool 各 namespace 的数据契约。
+ * city tool 各 method 的数据契约。
  *
  * 关键点（中文）
  * - 只声明当前 harness 真实持有的事实；没有事实源的字段不进入契约。
- * - 所有字段名使用 snaker，并与 `packages/city/src/city/tool/namespaces/` 下的实现一一对应。
+ * - 所有字段名使用 snaker，并与 `packages/city/src/city/tool/methods/` 下的实现一一对应。
+ * - image 与 sound 的领域类型跟各自的 method 放在一起，不集中到这里。
  */
 
 import type { WorkspaceSandboxMount } from "@downcity/type/shell";

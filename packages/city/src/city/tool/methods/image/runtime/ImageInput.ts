@@ -14,7 +14,7 @@ import type {
   ImageCreateInput,
   ImageResolvedContent,
   ImageResolvedCreateInput,
-} from "@/capabilities/image/types/Image.js";
+} from "@/city/tool/methods/image/types/Image.js";
 
 const HTTP_URL_RE = /^https?:\/\//i;
 const DEFAULT_IMAGE_MEDIA_TYPE = "image/png";

@@ -41,7 +41,13 @@ export abstract class CityAction {
   /** 参数声明；同时是模型侧说明与运行时校验依据。 */
   readonly args: readonly CityToolArgSpec[] = [];
 
-  /** 读写性质；进入模型侧索引，声明当前动作只读。 */
+  /**
+   * 读写性质。
+   *
+   * 关键点（中文）
+   * - `read` 只读事实；`write` 会消耗额度、写文件或改变外部状态。
+   * - 模型侧索引会带上它，让模型在调用前就知道代价。
+   */
   readonly capability: CityToolCapability = "read";
 
   /** 执行动作，成功返回数据；由 `execute` 在参数校验后调用。 */

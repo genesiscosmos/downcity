@@ -7,12 +7,9 @@
  */
 
 import { Agent, Group } from "@downcity/agent";
+import { SessionHooks } from "@downcity/agent";
 import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
 import { CityTool } from "@/city/tool/CityTool.js";
-import { CityCapabilityRuntime } from "@/capabilities/runtime/CityCapabilityRuntime.js";
-import { create_capability_hooks } from "@/capabilities/runtime/CityCapabilityHooks.js";
-import { create_builtin_capabilities } from "@/capabilities/index.js";
-import type { CityCapabilityContext } from "@/capabilities/types/CityCapability.js";
 import type { CityPlugins } from "@/city/types/CityPlugin.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
@@ -43,9 +40,6 @@ export class City implements CityRuntime {
 
   /** City 唯一的 city tool；按 Agent/Workspace 检查点生成 `city` 工具。 */
   private readonly city_tool: CityTool;
-
-  /** City 自己拥有的一等能力集合。 */
-  private readonly capabilities: CityCapabilityRuntime;
 
   /** 仅供包内运行时组件使用的 City 事实源访问面。 */
   private readonly runtime_access: CityRuntimeAccess;
@@ -121,21 +115,23 @@ export class City implements CityRuntime {
       plugin_scope: (agent_id, workspace_id) =>
         this.plugin_runtime.public_api.scope({ agent_id, workspace_id }),
       plugin_snapshots: () => this.plugin_runtime.public_api.snapshots(),
-      invoke_capability: async (input) =>
-        await this.capabilities.invoke({
-          capability_id: input.capability_id,
+      invoke_method: async (input) =>
+        await this.city_tool.invoke({
+          agent: this.require_agent(input.agent_id),
+          workspace: this.require_workspace(input.agent_id, input.workspace_id),
+          method: input.method,
           action: input.action,
           payload: input.payload,
-          create_context: (capability_id) =>
-            this.capability_context({
-              agent: this.require_agent(input.agent_id),
-              workspace: this.require_workspace(input.agent_id, input.workspace_id),
-              capability_id,
-              session_id: input.session_id ?? null,
-              turn_id: input.turn_id ?? null,
-            }),
+          ...(input.session_id || input.turn_id
+            ? {
+                scope: {
+                  session_id: input.session_id ?? null,
+                  turn_id: input.turn_id ?? null,
+                },
+              }
+            : {}),
         }),
-      has_capability: (capability_id) => this.capabilities.has(capability_id),
+      has_method: (method_id) => this.city_tool.has_method(method_id),
     });
     this.plugin_runtime = new CityPluginRuntime({
       storage: this.storage,
@@ -144,8 +140,12 @@ export class City implements CityRuntime {
       ...(options.plugin_host ? { host: options.plugin_host } : {}),
     });
     this.plugins = this.plugin_runtime.public_api;
-    this.city_tool = new CityTool({ access: this.runtime_access });
-    this.capabilities = new CityCapabilityRuntime(create_builtin_capabilities());
+    this.city_tool = new CityTool({
+      access: this.runtime_access,
+      files_for: (agent_id, method_id) =>
+        this.storage.open_scope(["agents", agent_id, "methods", method_id]).files,
+      ...(this.embassy ? { embassy: this.embassy } : {}),
+    });
     for (const plugin of collection_values(options.plugins)) {
       // 构造函数不能等待异步 lifecycle；Agent ready、Plugin 调用与 snapshot
       // 会继续使用同一个受控 ready Promise。
@@ -204,76 +204,47 @@ export class City implements CityRuntime {
     return merge_session_tools(
       this.plugin_runtime.tools(agent, workspace, agent.get_logger()),
       this.city_tool.tools(agent, workspace),
-      this.capabilities.tools((capability_id, execution_options) =>
-        this.capability_context({
-          agent,
-          workspace,
-          capability_id,
-          execution_context: execution_options.context,
-        })),
     );
   }
 
-  /** 返回当前 Agent/Workspace 在一个执行检查点可见的 Session Hook。 */
+  /**
+   * 返回当前 Agent/Workspace 在一个执行检查点可见的 Session Hook。
+   *
+   * 关键点（中文）
+   * - Plugin 提供 pipeline / effect，City Tool 提供 method 的 session system 说明。
+   * - 两者组成同一套 Hook，因此 Agent 包只看到“一套 hook”。
+   */
   get_session_hooks(
     agent_id: string,
     workspace: WorkspaceRuntime,
   ): SessionHookRuntime {
     const agent = this.require_agent_workspace(agent_id, workspace);
-    return create_capability_hooks({
-      runtime: this.capabilities,
-      base: this.plugin_runtime.hooks(agent, workspace, agent.get_logger()),
-      create_context: (hook_context) => (capability_id) =>
-        this.capability_context({
-          agent,
-          workspace,
-          capability_id,
-          session_id: hook_context?.session_id ?? null,
-          turn_id: hook_context?.turn_id ?? null,
-          abort_signal: hook_context?.abort_signal,
-        }),
+    const base = this.plugin_runtime.hooks(agent, workspace, agent.get_logger());
+    const city_system_blocks = async () => await this.city_tool.system_blocks(agent, workspace);
+    return new SessionHooks({
+      system_blocks: async (hook_context) => [
+        ...await base.system_blocks(hook_context),
+        ...await city_system_blocks(),
+      ],
+      pipeline: async <TValue>(point_name: string, value: TValue) =>
+        await base.pipeline(point_name, value),
+      effect: async <TValue>(point_name: string, value: TValue) =>
+        await base.effect(point_name, value),
+      open: async () => {
+        const scope = await base.open();
+        return {
+          system_blocks: async (hook_context) => [
+            ...await scope.system_blocks(hook_context),
+            ...await city_system_blocks(),
+          ],
+          pipeline: async <TValue>(point_name: string, value: TValue) =>
+            await scope.pipeline(point_name, value),
+          effect: async <TValue>(point_name: string, value: TValue) =>
+            await scope.effect(point_name, value),
+          close: async () => await scope.close(),
+        };
+      },
     });
-  }
-
-  /** 投影一个 capability 在当前 Agent/Workspace 下的执行上下文。 */
-  private capability_context(input: {
-    /** 当前 Agent。 */
-    agent: Agent;
-    /** 当前 Workspace。 */
-    workspace: WorkspaceRuntime;
-    /** 目标 capability 标识。 */
-    capability_id: string;
-    /** 显式 Session 标识；未提供时尝试从执行上下文读取。 */
-    session_id?: string | null;
-    /** 显式 Turn 标识；未提供时尝试从执行上下文读取。 */
-    turn_id?: string | null;
-    /** 显式取消信号。 */
-    abort_signal?: AbortSignal;
-    /** 单个工具调用绑定的执行上下文。 */
-    execution_context?: unknown;
-  }): CityCapabilityContext {
-    const scope = this.storage.open_scope([
-      "agents",
-      input.agent.id,
-      "capabilities",
-      input.capability_id,
-    ]);
-    const turn = (input.execution_context as
-      | { session_turn_context?: { session: { session_id: string; turn_id: string } } }
-      | undefined)?.session_turn_context;
-    const session_id = input.session_id ?? turn?.session.session_id ?? null;
-    const turn_id = input.turn_id ?? turn?.session.turn_id ?? null;
-    const abort_signal = input.abort_signal;
-    return {
-      capability_id: input.capability_id,
-      agent_id: input.agent.id,
-      workspace_path: input.workspace.path,
-      files: scope.files,
-      ...(this.embassy ? { embassy: this.embassy } : {}),
-      session_id,
-      turn_id,
-      ...(abort_signal ? { abort_signal } : {}),
-    };
   }
 
   /** Agent 主动释放时清除 City 持有的运行时引用。 */

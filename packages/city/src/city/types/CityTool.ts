@@ -2,17 +2,20 @@
  * City Tool 契约类型。
  *
  * 关键点（中文）
- * - `city` 是 Agent 查询运行时事实的唯一只读入口，按 namespace 组织动作。
- * - 这里只描述参数声明、运行时事实与结果信封，不含具体 namespace 的数据结构。
- * - namespace 与动作由 `city/tool/namespaces/` 下的类自描述，模型侧说明从对象派生。
- * - 可用性与 Plugin 同一口径：City 注册什么，每个 Agent 就能用什么。
+ * - `city` 是 Agent 触碰 City 的唯一工具，内部按 method 组织动作：
+ *   `city({ method, action, args })`。省略字段返回索引，而不是报错。
+ * - Method 是 City 的一类能力，例如 `env`、`sandbox`、`image`、`sound`；
+ *   Action 是 method 内的单个可调用动作。
+ * - 这里只描述调用信封、执行上下文与参数声明，不含任何具体 method 的数据结构。
+ * - method 与 action 由 `city/tool/methods/` 下的类自描述，模型侧说明全部从对象派生。
  */
 
 import type { Agent } from "@downcity/agent";
-import type { WorkspaceRuntime } from "@/workspace/index.js";
+import type { WorkspaceRuntime, FileSystem } from "@/workspace/index.js";
 import type { WorkspaceSandboxSnapshot } from "@downcity/type/shell";
+import type { Embassy } from "@downcity/federation";
 
-/** city tool 动作的读写性质。 */
+/** 单个动作的读写性质。 */
 export type CityToolCapability = "read" | "write";
 
 /** city tool 失败时的机器可读错误码。 */
@@ -22,13 +25,13 @@ export type CityToolErrorCode =
   | "invalid_args"
   | "internal";
 
-/** city tool 返回给模型的统一信封，避免每个 namespace 各自约定成败表达。 */
+/** city tool 返回给模型的统一信封，避免每个 method 各自约定成败表达。 */
 export interface CityToolResult {
   /** 本次调用是否成功。 */
   readonly ok: boolean;
-  /** 被调用的 namespace；索引调用为 null。 */
-  readonly namespace: string | null;
-  /** 被调用的 action；索引调用或 namespace 索引调用为 null。 */
+  /** 被调用的 method；索引调用为 null。 */
+  readonly method: string | null;
+  /** 被调用的 action；索引调用或 method 索引调用为 null。 */
   readonly action: string | null;
   /** 成功时的数据；失败为 null。 */
   readonly data: unknown;
@@ -50,30 +53,43 @@ export interface CityToolError {
 export interface CityToolArgSpec {
   /** 参数名，snaker。 */
   readonly name: string;
-  /** 参数类型；数组只允许字符串数组。 */
-  readonly type: "string" | "number" | "boolean" | "string_array";
+  /** 参数类型；数组只允许字符串数组，json 表示任意 JSON 值。 */
+  readonly type: "string" | "number" | "boolean" | "string_array" | "json";
   /** 是否必填。 */
   readonly required: boolean;
   /** 参数用途的一行说明。 */
   readonly description: string;
 }
 
-/** 单次 city tool 调用可见的运行时事实。 */
+/**
+ * 单次 city 调用的执行上下文。
+ *
+ * 关键点（中文）
+ * - 一次调用只暴露两类东西：当前身份与视野（只读事实），以及当前 method 可用的资源。
+ * - 资源按 method 隔离：`files` 指向该 method 在该 Agent 下的私有目录，不跨 method 共享。
+ * - 上下文是即时投影的快照，method 不能借它改回 City 状态。
+ */
 export interface CityToolContext {
+  /** 当前被调用的 method 标识。 */
+  readonly method_id: string;
+
   /** 当前 Agent 标识。 */
   readonly agent_id: string;
   /** 当前 Agent 用户可见名称。 */
   readonly agent_name: string;
+
   /** 当前 Session 标识；无会话场景为 null。 */
   readonly session_id: string | null;
   /** 当前 Turn 标识；无会话场景为 null。 */
   readonly turn_id: string | null;
+
   /** 当前 Workspace 标识。 */
   readonly workspace_id: string;
   /** 当前 Workspace 用户可见名称。 */
   readonly workspace_name: string;
-  /** 当前 Workspace 的宿主绝对路径，也是沙箱内工作目录的来源。 */
+  /** 当前 Workspace 的宿主绝对路径；本地相对路径以此为根。 */
   readonly workspace_path: string;
+
   /** 当前 Agent 默认模型标识；未配置为 null。 */
   readonly model_id: string | null;
   /** 运行时参考时区，IANA 名称。 */
@@ -82,8 +98,16 @@ export interface CityToolContext {
   readonly now: Date;
   /** 当前 Workspace 沙箱自省快照；Workspace 未提供 Shell 时为 null。 */
   readonly sandbox: WorkspaceSandboxSnapshot | null;
+
   /** 当前 City 可见的 Agent 快照。 */
   readonly agents: readonly Agent[];
   /** 当前 City 可见的 Workspace 快照。 */
   readonly workspaces: readonly WorkspaceRuntime[];
+
+  /** 当前 method 在当前 Agent 范围内的私有文件端口。 */
+  readonly files: FileSystem;
+  /** City 的 Federation Embassy；未配置时为空。 */
+  readonly embassy?: Embassy;
+  /** 当前 Turn 的取消信号。 */
+  readonly abort_signal?: AbortSignal;
 }

@@ -1,5 +1,5 @@
 /**
- * city tool `workspaces` namespace。
+ * city tool `workspaces` method。
  *
  * 关键点（中文）
  * - 数据来源是当前 City 已登记的 Workspace 资源，不读本地数据文件。
@@ -8,13 +8,13 @@
  */
 
 import type { CityToolContext } from "@/city/types/CityTool.js";
-import type { CityToolWorkspaceSummary } from "@/city/types/CityToolNamespaces.js";
+import type { CityToolWorkspaceSummary } from "@/city/types/CityToolMethods.js";
 import {
   CityAction,
   string_arg,
   type CityToolArgs,
-} from "@/city/tool/namespaces/CityAction.js";
-import { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
+} from "@/city/tool/CityAction.js";
+import { CityMethod } from "@/city/tool/CityMethod.js";
 import { CityToolRuntimeError } from "@/city/tool/CityToolResult.js";
 
 /** 把 Workspace 投影为模型可读摘要。 */
@@ -72,9 +72,9 @@ class GetWorkspaceAction extends CityAction {
   }
 }
 
-/** `workspaces` namespace。 */
-export class WorkspacesNamespace extends CityNamespace {
-  readonly namespace = "workspaces";
+/** `workspaces` method。 */
+export class WorkspacesMethod extends CityMethod {
+  readonly method = "workspaces";
   readonly summary = "Workspaces known to this City, including the current one.";
   protected readonly actions = [new ListWorkspacesAction(), new GetWorkspaceAction()];
 }

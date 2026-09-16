@@ -15,7 +15,7 @@ import type {
   ImageModelsResult,
   ImageResult,
   ImageResultInput,
-} from "@/capabilities/image/types/Image.js";
+} from "@/city/tool/methods/image/types/Image.js";
 
 /** 判断值是否为普通对象。 */
 function to_record(value: unknown): Record<string, unknown> | null {

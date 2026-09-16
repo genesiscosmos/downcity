@@ -12,7 +12,7 @@ import test from "node:test";
 
 import { augmentChatInboundInput } from "../bin/chat/runtime/InboundAugment.js";
 
-/** 构造一个只提供 capabilities 端的 PluginContext 替身。 */
+/** 构造一个只提供 city methods 端的 PluginContext 替身。 */
 function create_context(options = {}) {
   const calls = [];
   return {
@@ -28,8 +28,8 @@ function create_context(options = {}) {
             return value;
           },
         },
-        capabilities: {
-          has: (capability_id) => (options.capabilities || []).includes(capability_id),
+        methods: {
+          has: (method_id) => (options.methods || []).includes(method_id),
           invoke: async (input) => {
             calls.push(input);
             if (options.invoke) return await options.invoke(input);
@@ -51,7 +51,7 @@ function create_inbound(attachments) {
 }
 
 test("chat 入站语音附件被转写为 voice 块并追加到正文", async () => {
-  const fixture = create_context({ capabilities: ["sound"] });
+  const fixture = create_context({ methods: ["sound"] });
   const result = await augmentChatInboundInput({
     context: fixture.context,
     input: create_inbound([
@@ -59,14 +59,14 @@ test("chat 入站语音附件被转写为 voice 块并追加到正文", async ()
     ]),
   });
   assert.equal(fixture.calls.length, 1);
-  assert.equal(fixture.calls[0].capability, "sound");
+  assert.equal(fixture.calls[0].method, "sound");
   assert.equal(fixture.calls[0].action, "transcribe");
   assert.equal(fixture.calls[0].input.audio_path, "/tmp/workspace/voice/one.mp3");
   assert.equal(result.body_text, "user question\n\n<voice src=\"voice/one.mp3\">transcribed text</voice>");
 });
 
 test("chat 入站忽略非语音附件", async () => {
-  const fixture = create_context({ capabilities: ["sound"] });
+  const fixture = create_context({ methods: ["sound"] });
   const result = await augmentChatInboundInput({
     context: fixture.context,
     input: create_inbound([{ kind: "document", path: "/tmp/workspace/doc.pdf" }]),
@@ -77,7 +77,7 @@ test("chat 入站忽略非语音附件", async () => {
 
 test("chat 入站单个语音附件转写失败不影响其他附件", async () => {
   const fixture = create_context({
-    capabilities: ["sound"],
+    methods: ["sound"],
     invoke: async (input) => {
       if (input.input.audio_path.endsWith("bad.mp3")) throw new Error("asr failed");
       return { text: "ok" };
@@ -96,7 +96,7 @@ test("chat 入站单个语音附件转写失败不影响其他附件", async () 
 });
 
 test("chat 入站未登记 sound capability 时静默跳过", async () => {
-  const fixture = create_context({ capabilities: [] });
+  const fixture = create_context({ methods: [] });
   const result = await augmentChatInboundInput({
     context: fixture.context,
     input: create_inbound([{ kind: "voice", path: "/tmp/workspace/voice/one.mp3" }]),

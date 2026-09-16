@@ -133,6 +133,24 @@ export interface ImageResolvedCreateInput {
 /** 图片成功结果：可直接追加到 canonical Agent 回复的 Session 消息。 */
 export type ImageResult = Extract<ActionResultMessage, { role: "agent" }>;
 
+/**
+ * `result` 动作返回给模型的数据。
+ *
+ * 关键点（中文）
+ * - 只给本地路径，不注入 Agent 消息；由模型在回复里引用。
+ * - 未能本地化的图片保留远端 URL，并通过 `warning` 说明，不静默丢弃。
+ */
+export interface ImageResultOutput {
+  /** 图片任务 ID。 */
+  readonly job_id: string;
+  /** 当前任务状态；仅 `succeeded` 时 `files` 非空。 */
+  readonly status: ImageJobStatus;
+  /** 已保存到本地的图片绝对路径。 */
+  readonly files: string[];
+  /** 部分图片未能本地化时的说明；全部成功时省略。 */
+  readonly warning?: string;
+}
+
 /** 图片结果本地化输入。 */
 export interface ImageResultStorageInput {
   /** 当前 capability 执行上下文。 */

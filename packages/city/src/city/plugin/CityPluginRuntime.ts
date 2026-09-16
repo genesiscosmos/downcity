@@ -366,16 +366,16 @@ export class CityPluginRuntime {
           contextual_plugins ??= this.ready_contextual(context_factory);
           return contextual_plugins;
         },
-        invoke_capability: async (input) =>
-          await this.options.runtime_access.invoke_capability({
+        invoke_method: async (input) =>
+          await this.options.runtime_access.invoke_method({
             agent_id: agent.id,
             workspace_id: workspace.id,
-            capability_id: input.capability_id,
+            method: input.method_id,
             action: input.action,
             payload: input.payload,
           }),
-        has_capability: (capability_id) =>
-          this.options.runtime_access.has_capability(capability_id),
+        has_method: (method_id) =>
+          this.options.runtime_access.has_method(method_id),
         get_sessions: () => agent.sessions,
       });
     };

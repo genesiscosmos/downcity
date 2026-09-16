@@ -45,14 +45,14 @@ export interface CityRuntimeAccess {
   /** 返回 City 当前全部 Plugin 生命周期快照。 */
   readonly plugin_snapshots: () => PluginSnapshot[];
 
-  /** 调用 City 自己拥有的 capability 程序化动作。 */
-  readonly invoke_capability: (input: {
+  /** 调用 City Tool 的 method 程序化动作。 */
+  readonly invoke_method: (input: {
     /** 目标 Agent 标识。 */
     agent_id: string;
     /** 目标 Workspace 标识。 */
     workspace_id: string;
-    /** 目标 capability 标识。 */
-    capability_id: string;
+    /** 目标 method 标识。 */
+    method: string;
     /** 目标动作名。 */
     action: string;
     /** 动作输入。 */
@@ -63,6 +63,6 @@ export interface CityRuntimeAccess {
     turn_id?: string | null;
   }) => Promise<unknown>;
 
-  /** 判断某个 capability 是否登记在当前 City。 */
-  readonly has_capability: (capability_id: string) => boolean;
+  /** 判断某个 method 是否登记在当前 City。 */
+  readonly has_method: (method_id: string) => boolean;
 }

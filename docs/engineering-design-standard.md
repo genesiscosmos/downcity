@@ -443,32 +443,32 @@ Downcity 的安全边界负责防止意外逃逸、路径混乱和未审批的�
 
 “系统能够做什么”与“当前调用是否允许做”是两个问题。
 
-- Capability 由 Workspace、Tool、Capability、Plugin 和 Shell 提供。
+- Capability 由 Workspace、Tool、City Tool method、Plugin 和 Shell 提供。
 - Policy 由宿主、Sandbox、审批和 Plugin 业务规则决定。
 
 不要为了权限控制复制一套文件系统或创建无业务意义的 RuntimeFileSystem。也不要把所有能力塞进 Shell，只因为 Shell 可以访问系统。
 
-### 6.3 City Capability 与 Plugin 的划分
+### 6.3 City Tool method 与 Plugin 的划分
 
 两者都是 City 级能力注册，区别在于能力从哪里来、以及模型怎么用。
 
-属于 **City Capability**：
+**City Tool method**：
 
 - 能力来源是 City 自己持有的资源：Federation Embassy、当前 Workspace、Session。
 - 不需要账号、凭据、第三方安装与设置页。
-- 需要向模型暴露**一等工具**，而不是让模型走 `plugin_call`。
-- 需要把说明文本统一注入 session system，不分散在多个 provider。
+- 通过唯一的 `city` 工具按 `{ method, action, args }` 暴露给模型，说明文本统一注入 session system。
+- 只读事实（`env`、`sandbox` 等）与会写的能力（`image`、`sound`）用同一套契约，区别在各自动作声明了 `read` 还是 `write`。
 
-属于 **Plugin**：
+**Plugin**：
 
 - 连接外部系统，持有账号、凭据、长连接或后台 Worker。
 - 需要安装协议、README、icon 或第三方可替换的实现。
 - 需要 Sidebar / Mainview / Config 这类产品界面。
 - 需要参与 `plugin↔plugin` 扩展点（例如 chat 的 `augmentInbound`）。
 
-当前实现：image 与 sound 是 City Capability；chat、task、memory、skill、web 是 Plugin。
+当前实现：`env`、`sandbox`、`workspaces`、`agent`、`usage`、`image`、`sound` 是 City Tool method；chat、task、memory、skill、web 是 Plugin。
 
-Capability 归 City、触发归 Plugin 的场景（例如入站语音自动转写）通过 `PluginContext.city.capabilities` 调用 capability 的程序化动作，不把触发逻辑搬进 City。
+Method 归 City、触发归 Plugin 的场景（例如入站语音自动转写）通过 `PluginContext.city.methods.invoke()` 调用 method 的程序化动作，不把触发逻辑搬进 City。
 
 ### 6.3 host 执行必须显式
 

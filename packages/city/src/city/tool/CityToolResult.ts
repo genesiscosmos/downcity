@@ -38,8 +38,8 @@ export class CityToolRuntimeError extends Error {
 
 /** 构造成功信封。 */
 export function city_tool_ok(input: {
-  /** 回显 namespace；索引调用为 null。 */
-  namespace: string | null;
+  /** 回显 method；索引调用为 null。 */
+  method: string | null;
   /** 回显 action；索引调用为 null。 */
   action: string | null;
   /** 成功数据。 */
@@ -47,7 +47,7 @@ export function city_tool_ok(input: {
 }): CityToolResult {
   return {
     ok: true,
-    namespace: input.namespace,
+    method: input.method,
     action: input.action,
     data: input.data,
     error: null,
@@ -56,8 +56,8 @@ export function city_tool_ok(input: {
 
 /** 构造失败信封，并把任意异常收敛为模型可读错误。 */
 export function city_tool_fail(input: {
-  /** 回显 namespace，用于多轮调用后对账。 */
-  namespace: string | null;
+  /** 回显 method，用于多轮调用后对账。 */
+  method: string | null;
   /** 回显 action。 */
   action: string | null;
   /** 动作或工具层抛出的异常。 */
@@ -65,7 +65,7 @@ export function city_tool_fail(input: {
 }): CityToolResult {
   return {
     ok: false,
-    namespace: input.namespace,
+    method: input.method,
     action: input.action,
     data: null,
     error: to_city_tool_error(input),
@@ -74,8 +74,8 @@ export function city_tool_fail(input: {
 
 /** 把任意异常收敛为结构化错误。 */
 function to_city_tool_error(input: {
-  /** 回显 namespace。 */
-  namespace: string | null;
+  /** 回显 method。 */
+  method: string | null;
   /** 回显 action。 */
   action: string | null;
   /** 抛出的异常。 */
@@ -94,6 +94,6 @@ function to_city_tool_error(input: {
   return {
     code: "internal",
     message: message.trim() || "City tool failed without a message.",
-    detail: { namespace: input.namespace, action: input.action },
+    detail: { method: input.method, action: input.action },
   };
 }

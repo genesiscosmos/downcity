@@ -19,7 +19,7 @@ import type {
   SoundModelsResult,
   SoundTtsInput,
   SoundTtsResult,
-} from "@/capabilities/sound/types/Sound.js";
+} from "@/city/tool/methods/sound/types/Sound.js";
 
 const DEFAULT_AUDIO_MEDIA_TYPE = "audio/mpeg";
 

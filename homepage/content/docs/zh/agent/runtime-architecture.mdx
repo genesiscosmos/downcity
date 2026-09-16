@@ -198,7 +198,7 @@ capability，并以顶层工具的形式交给模型，而不是走 `plugin_call
 | Sandbox Shell | Workspace Sandbox | 命令在当前 Workspace 独享、持久的隔离环境中执行 |
 | Host Shell | 审批网关 | 用户基于已记录的原因显式授权一次宿主命令 |
 | Plugin | Plugin 自身业务授权 | Workspace 不替 Plugin 负责全部资源访问 |
-| City Tool | 结构上只读 | 只回答运行时事实；不写、不返回凭据值 |
+| City Tool | 按动作声明区分 | 只读事实查询与已声明 `read` 的动作；`write` 动作会消耗额度或在 Agent 目录下写文件 |
 | Custom Tool | 注册它的宿主 | Agent Core 不猜测业务权限 |
 
 显式附件可以使用宿主选择的绝对路径，因为附件已经是本次 Prompt 的明确输入。这不会扩大模型 File/Search Tools 主动遍历文件系统的范围。

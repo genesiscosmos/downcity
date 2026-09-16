@@ -1,5 +1,5 @@
 /**
- * city tool `usage` namespace。
+ * city tool `usage` method。
  *
  * 关键点（中文）
  * - 口径是 user 级 token 用量，属于 bureau 的能力；city tool 只做只读展示。
@@ -7,9 +7,9 @@
  * - 只返回 token，不做额度与费用换算：那需要计价规则和账本，口径会随定价变化失效。
  */
 
-import type { CityToolUsageScope } from "@/city/types/CityToolNamespaces.js";
-import { CityAction, string_arg, type CityToolArgs } from "@/city/tool/namespaces/CityAction.js";
-import { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
+import type { CityToolUsageScope } from "@/city/types/CityToolMethods.js";
+import { CityAction, string_arg, type CityToolArgs } from "@/city/tool/CityAction.js";
+import { CityMethod } from "@/city/tool/CityMethod.js";
 import { CityToolRuntimeError } from "@/city/tool/CityToolResult.js";
 
 /** `usage.get` 支持的查询范围。 */
@@ -36,9 +36,9 @@ class GetUsageAction extends CityAction {
   }
 }
 
-/** `usage` namespace。 */
-export class UsageNamespace extends CityNamespace {
-  readonly namespace = "usage";
+/** `usage` method。 */
+export class UsageMethod extends CityMethod {
+  readonly method = "usage";
   readonly summary = "User-level token usage for this Downcity user.";
   protected readonly actions = [new GetUsageAction()];
 }

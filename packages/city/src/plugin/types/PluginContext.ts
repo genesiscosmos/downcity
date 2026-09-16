@@ -188,24 +188,24 @@ export interface PluginCityHandle {
   readonly embassy?: Embassy;
   /** 当前调用绑定的 City Plugin 端口。 */
   readonly plugins: PluginCityPlugins;
-  /** 当前调用可用的 City 一等能力端口。 */
-  readonly capabilities: PluginCityCapabilities;
+  /** 当前调用可用的 City Tool method 端口。 */
+  readonly methods: PluginCityMethods;
 }
 
 /**
- * Plugin 借用 City 一等能力的受限端口。
+ * Plugin 借用 City Tool method 的受限端口。
  *
  * 关键点（中文）
  * - 用于「能力归 City、触发归插件」的场景，例如 chat 入站自动转写。
- * - 只能调用 City 已登记的 capability 动作，不能绕过它们直接访问底层服务。
+ * - 只能调用 City 已登记的 method 动作，不能绕过它们直接访问底层服务。
  */
-export interface PluginCityCapabilities {
-  /** 判断某个 capability 是否登记在 City。 */
-  has(capability_id: string): boolean;
-  /** 调用一个 capability 的程序化动作。 */
+export interface PluginCityMethods {
+  /** 判断某个 method 是否登记在 City。 */
+  has(method_id: string): boolean;
+  /** 调用一个 method 的程序化动作。 */
   invoke(input: {
-    /** 目标 capability 标识。 */
-    capability: string;
+    /** 目标 method 标识。 */
+    method: string;
     /** 目标动作名。 */
     action: string;
     /** 动作输入。 */

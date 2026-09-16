@@ -98,31 +98,40 @@ async function create_city_tool_fixture() {
   };
 }
 
-test("city tool 从注册表派生描述并回答 namespace 与动作索引", async () => {
+test("city tool 从 method 自描述派生描述并回答 method 与动作索引", async () => {
   const fixture = await create_city_tool_fixture();
   try {
-    for (const namespace of ["env", "sandbox", "workspaces", "agent", "usage"]) {
-      assert.match(fixture.tool.description, new RegExp(`- ${namespace}: `, "u"));
+    // 只读事实与需要配额的能力用同一套契约，一起出现在模型侧描述与索引里。
+    for (const method_name of [
+      "env",
+      "sandbox",
+      "workspaces",
+      "agent",
+      "usage",
+      "image",
+      "sound",
+    ]) {
+      assert.match(fixture.tool.description, new RegExp(`- ${method_name}: `, "u"));
     }
     const index = await call_city_tool(fixture.tool, {});
     assert.equal(index.ok, true);
-    assert.equal(index.namespace, null);
+    assert.equal(index.method, null);
     assert.deepEqual(
-      index.data.namespaces.map((item) => item.namespace),
-      ["env", "sandbox", "workspaces", "agent", "usage"],
+      index.data.methods.map((item) => item.method),
+      ["env", "sandbox", "workspaces", "agent", "usage", "image", "sound"],
     );
-    const namespace_index = await call_city_tool(fixture.tool, { namespace: "sandbox" });
-    assert.equal(namespace_index.action, null);
+    const method_index = await call_city_tool(fixture.tool, { method: "sandbox" });
+    assert.equal(method_index.action, null);
     assert.deepEqual(
-      namespace_index.data.actions.map((item) => item.action),
+      method_index.data.actions.map((item) => item.action),
       ["get", "list_mounts", "explain_path"],
     );
-    const explain_arg_specs = namespace_index.data.actions[2].args;
+    const explain_arg_specs = method_index.data.actions[2].args;
     assert.equal(explain_arg_specs.length, 1);
     assert.equal(explain_arg_specs[0].name, "path");
     assert.equal(explain_arg_specs[0].type, "string");
     assert.equal(explain_arg_specs[0].required, true);
-    const unknown = await call_city_tool(fixture.tool, { namespace: "secret" });
+    const unknown = await call_city_tool(fixture.tool, { method: "secret" });
     assert.equal(unknown.ok, false);
     assert.equal(unknown.error.code, "not_found");
   } finally {
@@ -133,9 +142,9 @@ test("city tool 从注册表派生描述并回答 namespace 与动作索引", as
 test("city tool env 返回当前 Agent、Session 与 Workspace 事实", async () => {
   const fixture = await create_city_tool_fixture();
   try {
-    const env = await call_city_tool(fixture.tool, { namespace: "env", action: "get" });
+    const env = await call_city_tool(fixture.tool, { method: "env", action: "get" });
     assert.equal(env.ok, true);
-    assert.equal(env.namespace, "env");
+    assert.equal(env.method, "env");
     assert.equal(env.action, "get");
     assert.equal(env.data.agent_id, "test-agent");
     assert.equal(env.data.session_id, "session-1");
@@ -146,7 +155,7 @@ test("city tool env 返回当前 Agent、Session 与 Workspace 事实", async ()
     assert.match(env.data.now, /^\d{4}-\d{2}-\d{2}T/u);
     assert.match(env.data.current_date, /^\d{4}-\d{2}-\d{2}$/u);
     const unknown_args = await call_city_tool(fixture.tool, {
-      namespace: "env",
+      method: "env",
       action: "get",
       args: { keys: ["agent_id"] },
     });
@@ -160,7 +169,7 @@ test("city tool env 返回当前 Agent、Session 与 Workspace 事实", async ()
 test("city tool 回答沙箱事实并按 Workspace 边界判定路径", async () => {
   const fixture = await create_city_tool_fixture();
   try {
-    const sandbox = await call_city_tool(fixture.tool, { namespace: "sandbox", action: "get" });
+    const sandbox = await call_city_tool(fixture.tool, { method: "sandbox", action: "get" });
     assert.equal(sandbox.data.backend, "test-backend");
     assert.equal(sandbox.data.sandbox_id, "test-sandbox");
     assert.equal(sandbox.data.workdir, GUEST_WORKSPACE_PATH);
@@ -168,7 +177,7 @@ test("city tool 回答沙箱事实并按 Workspace 边界判定路径", async ()
     assert.equal(sandbox.data.persistent, true);
 
     const inside = await call_city_tool(fixture.tool, {
-      namespace: "sandbox",
+      method: "sandbox",
       action: "explain_path",
       args: { path: "packages/city/src/index.ts" },
     });
@@ -181,7 +190,7 @@ test("city tool 回答沙箱事实并按 Workspace 边界判定路径", async ()
     assert.equal(inside.data.matched_mount.host_path, fixture.workspace.path);
 
     const outside = await call_city_tool(fixture.tool, {
-      namespace: "sandbox",
+      method: "sandbox",
       action: "explain_path",
       args: { path: path.join(fixture.root, "outside.txt") },
     });
@@ -191,7 +200,7 @@ test("city tool 回答沙箱事实并按 Workspace 边界判定路径", async ()
     assert.match(outside.data.reason, /outside the Workspace root/u);
 
     const guest = await call_city_tool(fixture.tool, {
-      namespace: "sandbox",
+      method: "sandbox",
       action: "explain_path",
       args: { path: `${GUEST_WORKSPACE_PATH}/README.md` },
     });
@@ -200,7 +209,7 @@ test("city tool 回答沙箱事实并按 Workspace 边界判定路径", async ()
     assert.match(guest.data.reason, /mapped to the host path/u);
 
     const missing_arg = await call_city_tool(fixture.tool, {
-      namespace: "sandbox",
+      method: "sandbox",
       action: "explain_path",
       args: {},
     });
@@ -215,14 +224,14 @@ test("city tool usage 在 bureau 未暴露用户用量前返回 unsupported_acti
   const fixture = await create_city_tool_fixture();
   try {
     const usage = await call_city_tool(fixture.tool, {
-      namespace: "usage",
+      method: "usage",
       action: "get",
       args: { scope: "month" },
     });
     assert.equal(usage.ok, false);
     assert.equal(usage.error.code, "unsupported_action");
     const bad_scope = await call_city_tool(fixture.tool, {
-      namespace: "usage",
+      method: "usage",
       action: "get",
       args: { scope: "year" },
     });
@@ -242,12 +251,12 @@ test("city tool 在 Workspace 没有 Shell 时明确回答沙箱不可用", asyn
   city.agents.add(agent);
   try {
     const tool = city.get_session_tools(agent.id, workspace).city;
-    const sandbox = await call_city_tool(tool, { namespace: "sandbox", action: "get" });
+    const sandbox = await call_city_tool(tool, { method: "sandbox", action: "get" });
     assert.equal(sandbox.data.available, false);
     assert.equal(sandbox.data.backend, null);
     assert.deepEqual(sandbox.data.mounts, []);
     const explain = await call_city_tool(tool, {
-      namespace: "sandbox",
+      method: "sandbox",
       action: "explain_path",
       args: { path: "src" },
     });

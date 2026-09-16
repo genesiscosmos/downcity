@@ -111,5 +111,16 @@ export interface SoundTtsInput {
   provider_options?: PluginJsonObject;
 }
 
-/** TTS 结果：可直接追加到 canonical Agent 回复的 Session 消息。 */
+/** TTS 提供方返回的 Session 消息，校验后只取其中的本地音频路径。 */
 export type SoundTtsResult = Extract<ActionResultMessage, { role: "agent" }>;
+
+/**
+ * `tts` 动作返回给模型的数据。
+ *
+ * 关键点（中文）
+ * - 只给已落盘的本地音频路径，不注入 Agent 消息。
+ */
+export interface SoundTtsOutput {
+  /** 已保存到本地的音频绝对路径。 */
+  readonly files: string[];
+}

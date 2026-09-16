@@ -32,8 +32,8 @@ export interface CityPluginRuntimeOptions {
     | "list_workspaces"
     | "require_workspace"
     | "enter_workspace"
-    | "invoke_capability"
-    | "has_capability"
+    | "invoke_method"
+    | "has_method"
   >;
   /** City 可选的平台宿主能力。 */
   readonly host?: CityPluginHost;

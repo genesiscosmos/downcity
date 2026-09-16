@@ -1,0 +1,352 @@
+/**
+ * @file 验证 city tool `image` method 的两步式任务协议。
+ *
+ * 关键点（中文）
+ * - 全部能力都在唯一的 `city` 工具里，按 `{ method, action, args }` 调用。
+ * - `result` 默认只读一次；`until_done=true` 时在 method 内等待终态。
+ * - 成功结果只返回已保存的本地路径，不注入 Agent 消息。
+ */
+
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+
+import { Agent } from "@downcity/agent";
+import { City, LocalStorageProvider, Workspace } from "../bin/index.js";
+
+/** 当前测试注入的图片 AI 服务实现。 */
+let current_image_ai;
+
+/** 创建绑定测试图片服务的 City，并返回其 Agent、Workspace 与 city 工具。 */
+async function create_fixture(options = {}) {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-image-method-"));
+  const workspace_path = path.join(root, "workspace");
+  await fs.mkdir(workspace_path, { recursive: true });
+  current_image_ai = {
+    catalog: async () => ({ all: () => (options.list_models ? options.list_models() : []) }),
+    image_create: options.image_create,
+    image_result: options.image_result,
+  };
+  const workspace = new Workspace({ id: "image_workspace", path: workspace_path });
+  const agent = new Agent({ id: "image_agent" });
+  const city = new City({
+    storage: new LocalStorageProvider(root),
+    workspaces: [workspace],
+    embassy: { user: { ai: current_image_ai } },
+  });
+  city.agents.add(agent);
+  const tools = city.get_session_tools(agent.id, workspace);
+  return {
+    root,
+    workspace_path,
+    workspace,
+    agent,
+    city,
+    tools,
+    /** 调用一次 city 工具。 */
+    call: async (call_input) =>
+      await tools.city.execute(call_input, { tool_call_id: "call_1", messages: [], context: {} }),
+    close: async () => {
+      await city.close();
+      await workspace.dispose();
+      await fs.rm(root, { recursive: true, force: true });
+    },
+  };
+}
+
+/** 构造一张成功返回的远端图片消息。 */
+function create_image_message(url = "https://storage.example.com/result.png") {
+  return {
+    id: "msg_image_test",
+    role: "agent",
+    parts: [
+      {
+        type: "file",
+        media_type: "image/png",
+        filename: "image.png",
+        url,
+      },
+    ],
+  };
+}
+
+test("city 只暴露一个工具，image 是其中一个 method", async () => {
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({ job_id: "img_1", status: "queued" }),
+  });
+  try {
+    assert.deepEqual(Object.keys(fixture.tools), ["city"]);
+    assert.equal("image_create" in fixture.tools, false);
+    const index = await fixture.call({});
+    assert.equal(index.ok, true);
+    assert.ok(
+      index.data.methods.some((item) => item.method === "image"),
+      "image appears in the method index",
+    );
+    const image_index = await fixture.call({ method: "image" });
+    assert.deepEqual(
+      image_index.data.actions.map((item) => item.action),
+      ["models", "create", "result"],
+    );
+    const create_spec = image_index.data.actions[1];
+    assert.equal(create_spec.capability, "write", "create declares that it consumes quota");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image method 贡献一段 session system 说明", async () => {
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({ job_id: "img_1", status: "queued" }),
+  });
+  try {
+    const blocks = await fixture.city
+      .get_session_hooks(fixture.agent.id, fixture.workspace)
+      .system_blocks({ session_id: "s1" });
+    const image_block = blocks.find((block) => block.name === "image");
+    assert.ok(image_block, "image method should inject one system block");
+    assert.match(image_block.content, /# Image method/u);
+    assert.match(image_block.content, /explicitly confirm/u);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image create 返回任务并透传 prompt", async () => {
+  let received;
+  const fixture = await create_fixture({
+    image_create: (input) => {
+      received = input;
+      return { job_id: "img_1", status: "queued", poll_after_ms: 1 };
+    },
+    image_result: () => ({ job_id: "img_1", status: "queued" }),
+  });
+  try {
+    const result = await fixture.call({
+      method: "image",
+      action: "create",
+      args: { model: "image-model-id", prompt: "a rainy city corner", aspect_ratio: "16:9" },
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.data, { job_id: "img_1", status: "queued", poll_after_ms: 1 });
+    assert.equal(received.model, "image-model-id");
+    assert.equal(received.prompt, "a rainy city corner");
+    assert.equal(received.aspect_ratio, "16:9");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image models 过滤非图片模型", async () => {
+  const fixture = await create_fixture({
+    list_models: () => [
+      { id: "img-a", name: "Image A", modalities: ["image", "text"] },
+      { id: "text-only", name: "Text", modalities: ["text"] },
+      { id: "img-b", modalities: ["image"] },
+    ],
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({ job_id: "img_1", status: "queued" }),
+  });
+  try {
+    const result = await fixture.call({ method: "image", action: "models" });
+    assert.deepEqual(result.data.items.map((item) => item.id), ["img-a", "img-b"]);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image result 默认只读一次", async () => {
+  let reads = 0;
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => {
+      reads += 1;
+      return { job_id: "img_1", status: "running", poll_after_ms: 1 };
+    },
+  });
+  try {
+    const result = await fixture.call({
+      method: "image",
+      action: "result",
+      args: { job_id: "img_1" },
+    });
+    assert.equal(result.data.status, "running");
+    assert.equal(reads, 1);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image result 成功时只返回本地路径", async () => {
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "image/png" });
+    res.end("image-bytes");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({
+      job_id: "img_remote",
+      status: "succeeded",
+      result: create_image_message(`http://127.0.0.1:${port}/result.png`),
+    }),
+  });
+  try {
+    const result = await fixture.call({
+      method: "image",
+      action: "result",
+      args: { job_id: "img_remote" },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.data.status, "succeeded");
+    assert.deepEqual(result.data.files, [
+      path.join(
+        fixture.root,
+        "agents",
+        "image_agent",
+        "methods",
+        "image",
+        "image",
+        "results",
+        "img_remote",
+        "image_01.png",
+      ),
+    ]);
+    assert.equal(await fs.readFile(result.data.files[0], "utf8"), "image-bytes");
+    assert.equal("messages" in result.data, false);
+  } finally {
+    await fixture.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("image result 下载失败时保留远端地址并报告", async () => {
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({
+      job_id: "img_remote",
+      status: "succeeded",
+      result: create_image_message("http://127.0.0.1:1/result.png"),
+    }),
+  });
+  try {
+    const result = await fixture.call({
+      method: "image",
+      action: "result",
+      args: { job_id: "img_remote" },
+    });
+    assert.deepEqual(result.data.files, ["http://127.0.0.1:1/result.png"]);
+    assert.match(result.data.warning, /kept as remote URLs/u);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image result 失败任务返回错误信封", async () => {
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({
+      job_id: "img_1",
+      status: "failed",
+      error: "provider rejected the prompt",
+    }),
+  });
+  try {
+    const result = await fixture.call({
+      method: "image",
+      action: "result",
+      args: { job_id: "img_1" },
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.error.message, /provider rejected the prompt/u);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image create 把本地图片转为 data URL", async () => {
+  const fixture = await create_fixture({
+    image_create: (input) => ({ job_id: "img_1", status: "queued", received: input }),
+    image_result: () => ({ job_id: "img_1", status: "queued" }),
+  });
+  try {
+    await fs.writeFile(path.join(fixture.workspace_path, "input.png"), "local-bytes");
+    const result = await fixture.call({
+      method: "image",
+      action: "create",
+      args: {
+        model: "image-model-id",
+        content: [
+          { type: "text", text: "make it white" },
+          { type: "image", url: "./input.png" },
+        ],
+      },
+    });
+    const messages = result.data.received.messages;
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].content[0].text, "make it white");
+    assert.match(messages[0].content[1].data_url, /^data:image\/png;base64,/u);
+    assert.equal("prompt" in result.data.received, false);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image create 拒绝未声明参数与非法图片地址", async () => {
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => ({ job_id: "img_1", status: "queued" }),
+  });
+  try {
+    const unknown = await fixture.call({
+      method: "image",
+      action: "create",
+      args: { model: "m", messages: [{ role: "user" }] },
+    });
+    assert.equal(unknown.ok, false);
+    assert.equal(unknown.error.code, "invalid_args");
+
+    const data_url = await fixture.call({
+      method: "image",
+      action: "create",
+      args: { model: "m", content: [{ type: "image", url: "data:image/png;base64,AAAA" }] },
+    });
+    assert.equal(data_url.ok, false);
+    assert.match(data_url.error.message, /does not accept data URLs/u);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("image result 在 until_done 时轮询到终态", async () => {
+  let reads = 0;
+  const fixture = await create_fixture({
+    image_create: () => ({ job_id: "img_1", status: "queued" }),
+    image_result: () => {
+      reads += 1;
+      if (reads < 3) return { job_id: "img_1", status: "running", poll_after_ms: 1 };
+      return {
+        job_id: "img_1",
+        status: "succeeded",
+        result: create_image_message("/tmp/result.png"),
+      };
+    },
+  });
+  try {
+    const result = await fixture.call({
+      method: "image",
+      action: "result",
+      args: { job_id: "img_1", until_done: true, max_wait_ms: 5_000, poll_interval_ms: 1 },
+    });
+    assert.equal(result.data.status, "succeeded");
+    assert.equal(reads, 3);
+  } finally {
+    await fixture.close();
+  }
+});

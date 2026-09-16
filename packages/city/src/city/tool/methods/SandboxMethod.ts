@@ -1,5 +1,5 @@
 /**
- * city tool `sandbox` namespace。
+ * city tool `sandbox` method。
  *
  * 关键点（中文）
  * - 回答「我在什么隔离环境里跑」「哪些宿主目录被挂进来了」「这个路径为什么被拦」。
@@ -14,13 +14,13 @@ import type { CityToolContext } from "@/city/types/CityTool.js";
 import type {
   CityToolPathExplanation,
   CityToolSandbox,
-} from "@/city/types/CityToolNamespaces.js";
+} from "@/city/types/CityToolMethods.js";
 import {
   CityAction,
   string_arg,
   type CityToolArgs,
-} from "@/city/tool/namespaces/CityAction.js";
-import { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
+} from "@/city/tool/CityAction.js";
+import { CityMethod } from "@/city/tool/CityMethod.js";
 
 /** 读取当前隔离环境的后端、实例、工作目录与持久性。 */
 class GetSandboxAction extends CityAction {
@@ -95,9 +95,9 @@ class ExplainPathAction extends CityAction {
   }
 }
 
-/** `sandbox` namespace。 */
-export class SandboxNamespace extends CityNamespace {
-  readonly namespace = "sandbox";
+/** `sandbox` method。 */
+export class SandboxMethod extends CityMethod {
+  readonly method = "sandbox";
   readonly summary = "The isolated environment this session runs in and which host paths are visible.";
   protected readonly actions = [
     new GetSandboxAction(),
