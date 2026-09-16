@@ -19,7 +19,7 @@
     "dev": "tsc --watch",
     "start": "node bin/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm build && node --test scripts/*.test.mjs",
+    "test": "pnpm build && node --test scripts/agent-create-workspace.test.mjs scripts/agent-model-recovery.test.mjs scripts/agent-tui-subscription.test.mjs scripts/agent-tui.test.mjs scripts/config-storage.test.mjs scripts/daemon-identity.test.mjs scripts/env-file.test.mjs scripts/federation-web.test.mjs scripts/logic.test.mjs",
     "test:logic": "pnpm build && node --test scripts/logic.test.mjs",
     "test:tui": "pnpm build && node --test scripts/agent-tui.test.mjs scripts/agent-tui-subscription.test.mjs",
     "test:config-storage": "pnpm build && node --test scripts/config-storage.test.mjs",
