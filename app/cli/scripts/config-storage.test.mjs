@@ -555,8 +555,10 @@ test("内建 Plugin Catalog 暴露统一运行与 Renderer 能力", async () => 
     assert.equal(chat.plugin_id, "chat");
     assert.equal(chat.source, "builtin");
     assert.equal(chat.has_main, true);
-    assert.equal(chat.has_config, true);
-    assert.equal(chat.has_mainview, false);
+    // Chat 现在自己提供 Mainview（Channel 管理界面），配置改由 Mainview 承担。
+    // 这两个值随 BuiltinPluginTypes 的注册表变化，断言必须与那份注册表一致。
+    assert.equal(chat.has_config, false);
+    assert.equal(chat.has_mainview, true);
     const memory = await catalog.resolve_plugin_catalog_item("memory");
     assert.equal(memory.has_main, true);
     assert.equal(memory.has_config, false);
@@ -575,51 +577,24 @@ test("内建 Plugin Catalog 暴露统一运行与 Renderer 能力", async () => 
       env: { ...process.env, NO_COLOR: "1" },
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Chat \(chat\)/u);
+    // 断言稳定的 plugin_id，而不是展示名：`plugin list` 输出的是 Plugin 的 title
+    //（chat 的 title 是 "Channels"），title 属于可调整的展示文案。
+    assert.match(result.stdout, /\(chat\)/u);
   } finally {
     delete process.env.DC_PLATFORM_ROOT;
     fs.rmSync(platform_root, { recursive: true, force: true });
   }
 });
 
-test("内建 Chat Plugin 使用 City 持有的唯一 TOML 配置", async () => {
-  const platform_root = create_temp_root();
-  process.env.DC_PLATFORM_ROOT = platform_root;
-  try {
-    const plugins = await import("../bin/city/process/registry/PluginRepository.js");
-    const local_data = await import("../bin/city/runtime/LocalData.js");
-    const assembly = await import("../bin/city/runtime/AgentAssembly.js");
-    await plugins.save_plugin_config("chat", {
-      owner_agent_id: "chat_agent",
-      owner_workspace_id: "workspace_a",
-      queue: { max_concurrency: 5 },
-      channels: [{
-        id: "telegram_primary",
-        type: "telegram",
-        name: "Primary Bot",
-        bot_token: "plain-token",
-      }],
-    });
-    const data = local_data.create_cli_local_data();
-    try {
-      const loader = assembly.create_cli_plugin_loader({ plugin_repository: data.plugins });
-      const registration = await loader.load_plugin_registration("chat");
-      const context = {
-        agent: { id: "chat_agent" },
-        workspace: { id: "workspace_a" },
-        config: plugins.get_plugin_config("chat"),
-      };
-      assert.equal(registration.plugin.get_channel_id(context, "telegram"), "telegram_primary");
-      assert.deepEqual(registration.plugin.getQueueWorkerConfig(context), { max_concurrency: 5 });
-      assert.equal(registration.plugin.resolveChannelAccount(context, "telegram").bot_token, "plain-token");
-    } finally {
-      data.database.close();
-    }
-  } finally {
-    delete process.env.DC_PLATFORM_ROOT;
-    fs.rmSync(platform_root, { recursive: true, force: true });
-  }
-});
+/*
+ * 已删除："内建 Chat Plugin 使用 City 持有的唯一 TOML 配置"。
+ *
+ * 它断言的是 `registration.plugin.get_channel_id / getQueueWorkerConfig /
+ * resolveChannelAccount`——这三个方法全仓已不存在（Plugin 改为通过 City 持有的配置与
+ * Mainview 装配，不再由 Plugin 实例暴露 channel 读取方法）。
+ * 该能力现由 `@downcity/plugins` 自己的 `scripts/chat-channel-config.test.mjs`
+ *（`pnpm -C packages/implementations/plugins test:chat-config`）覆盖，因此不再在这里重复。
+ */
 
 test("CLI 生命周期只属于 City 且 Agent model 命令可见", () => {
   const platform_root = create_temp_root();
