@@ -4,6 +4,7 @@ import type { SessionUserMessagePart } from "@downcity/agent";
 import { is_chat_runtime_context_tag } from "@downcity/type";
 import { TbFile, TbQuote } from "react-icons/tb";
 import { Markdown } from "@/components/markdown/Markdown";
+import { chat_message_text_class_name } from "@/features/chat/components/messages/message_layout";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 
@@ -11,7 +12,7 @@ import { use_translation } from "@/locales/i18n";
 export function UserMessageContent({ message_id, parts }: { /** canonical 用户消息标识。 */ message_id: string; /** 保持发送顺序的 canonical 内容。 */ parts: SessionUserMessagePart[] }) {
   const translate_chat = use_translation("chat");
   return <div className="user-message-content" data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="user">{parts.map((part) => {
-    if (part.type === "text") return part.text ? <div key={part.part_id} className={cn("user-message-text-part text-[0.8125rem] leading-[1.34]", is_inline_text(part.text) && "is-inline")}><Markdown text={part.text} mode="static" /></div> : null;
+    if (part.type === "text") return part.text ? <div key={part.part_id} className={cn("user-message-text-part", chat_message_text_class_name, is_inline_text(part.text) && "is-inline")}><Markdown text={part.text} mode="static" /></div> : null;
     if (part.type === "context" && is_chat_runtime_context_tag(part.tag)) return null;
     if (part.type === "context" && part.tag === "reference") return <span key={part.part_id} className="user-message-atom user-message-reference" title={part.context}>
       <TbQuote aria-hidden /><span>{part.context.replace(/\s+/gu, " ").trim()}</span>

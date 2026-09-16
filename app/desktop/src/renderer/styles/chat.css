@@ -672,6 +672,37 @@
   color: rgb(110 231 183);
 }
 
+/*
+ * 消息正文的阅读排版。
+ *
+ * Agent 正文与用户消息**共用同一个值**：对话是两侧对照着读的，字号不同会让其中一侧无缘
+ * 无故显得偏大或偏小。Composer（`.chat-input-editor`）也用同一对令牌，
+ * 因为它是同一段文字在发送前后的另一种状态。
+ *
+ * ## 为什么是普通 CSS 类，而不是 Tailwind 工具类（重要）
+ *
+ * 这里曾经用自定义工具类 `text-message`，结果踩了两个坑，两个都是静默失败：
+ *
+ * 1. **`cn()` 会把它删掉。** tailwind-merge 不认识自定义字号，会归到「文字颜色」组
+ *    （颜色组接受任意自由值），于是 `cn("… text-foreground", "text-message")` 把字号类
+ *    当成冲突颜色删除。连续多轮「改字号没反应」就是这个原因。
+ * 2. **还要依赖 Tailwind 扫描器产物。** 工具类是否生成，取决于源码扫描是否命中——
+ *    这是第二条可能静默失效的链路，而且无法在本地轻易验证。
+ *
+ * 普通类名两边都绕开了：名字不是 Tailwind 工具类形状，twMerge 不会归类（直接保留）；
+ * 规则写在样式表里，不需要扫描器生成。
+ *
+ * 额外好处：本文件是**无图层（unlayered）CSS**，优先级高于 Tailwind 的 `@layer utilities`，
+ * 因此就算将来有人在元素上误加其它字号工具类，也盖不掉这里的值。
+ *
+ * 值本身只有一个来源：`tokens.css` 的 `--text-message` 对。改 `tokens.css` 一个数，
+ * Agent 正文、用户消息、Composer 三处一起走。
+ */
+.chat-message-text {
+  font-size: var(--text-message);
+  line-height: var(--text-message--line-height);
+}
+
 /* User Message 延续 Composer 的 inline 原子节点排版。 */
 .user-message-content {
   min-width: 0;

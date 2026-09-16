@@ -5,7 +5,9 @@ import { TbAlertTriangle, TbFile } from "react-icons/tb";
 import { Markdown } from "@/components/markdown/Markdown";
 import { AgentActivity } from "@/features/chat/components/messages/AgentActivity";
 import { TurnFileDiffCard } from "@/features/chat/components/messages/TurnFileDiffCard";
+import { chat_message_text_class_name } from "@/features/chat/components/messages/message_layout";
 import type { AgentMessageBlock } from "@/features/chat/types/AgentMessage";
+import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 
 /** 按 canonical 顺序渲染一条 Agent Message 的全部可见 Block。 */
@@ -14,7 +16,7 @@ export function AgentMessageContent({ message_id, blocks, show_reasoning, stream
     const block_streaming = streaming && index === blocks.length - 1;
     switch (block.type) {
       case "text":
-        return <div key={block.part.part_id} data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="agent" className="min-h-[1.54em] text-[0.8125rem] leading-[1.54] text-foreground"><Markdown text={block.part.text} mode={block_streaming && block.part.state === "streaming" ? "streaming" : "static"} /></div>;
+        return <div key={block.part.part_id} data-chat-selectable-message data-chat-message-id={message_id} data-chat-message-role="agent" className={cn("min-h-[1lh] text-foreground", chat_message_text_class_name)}><Markdown text={block.part.text} mode={block_streaming && block.part.state === "streaming" ? "streaming" : "static"} /></div>;
       case "activity":
         return <AgentActivity key={block.parts[0]?.part_id} parts={block.parts} show_reasoning={show_reasoning} streaming={block_streaming} respond_interaction={respond_interaction} />;
       case "file":

@@ -30,6 +30,34 @@
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
   --font-mono: var(--font-mono);
+  /*
+   * 消息阅读排版：**一个值**，Agent 与用户两侧共用。
+   *
+   * 消费者：`chat.css` 的 `.chat-message-text`（Agent 正文与用户消息，见
+   * `message_layout.ts` 的 `chat_message_text_class_name`）与 `base.css` 的
+   * `.chat-input-editor`（Composer）。两者都只引用 `var()`，不重写数值。
+   *
+   * ## 取值：14px / 行高 1.8
+   *
+   * 两侧必须相等，所以只能取一个值；这个值被两条反馈夹在中间：
+   *
+   * | 取值 | 反馈 |
+   * | --- | --- |
+   * | 13px（应用原来的正文档） | Agent 正文「字体有点小」 |
+   * | 16px | 两侧都「太大了」 |
+   * | 15px | 用户消息「还是很大」 |
+   * | **14px** | 唯一同时满足「比 13 大」与「比 15 小」的值，也是应用既有的 `text-sm` 档 |
+   *
+   * 行高 1.8（14px → 25.2px）高于工具活动行（13px / 1.3）：
+   * 正文与机器活动的节奏差得越开，越不会被读成一类内容。
+   *
+   * ## 改动这个值前必须确认（由测试守着）
+   *
+   * `.markdown` 的段落间距是 0.5em（随本字号缩放），它必须比消息内的块间距
+   *（`message_layout.ts` 的 `gap-2.5` = 10px）小至少 2px，即字号不得超过 16px。
+   */
+  --text-message: 0.875rem;
+  --text-message--line-height: 1.8;
 }
 
 @theme inline {

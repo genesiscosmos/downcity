@@ -1173,5 +1173,180 @@ pnpm --filter @downcity/desktop test        # 309/309 通过
 
 图表观感（`themeCSS` 密度、全屏手感、深色模式配色）未经人工确认；渲染层打包在本环境受容器内存上限限制、无法完成 emit，产物需在本地执行 `pnpm build:desktop` 生成。
 
+---
+
+## 二十四、消息阅读字号与块间距归位（2026-09-16）
+
+> 状态：已实施
+>
+> 范围：`features/chat/components/messages/message_layout.ts`、`AgentMessageContent.tsx`、`UserMessageContent.tsx`、`features/group/GroupView.tsx`、`styles/base.css`、`styles/markdown.css`、`styles/tokens.css`
+
+### 24.1 触发原因
+
+用户反馈 Agent 消息「字体有点小」，并指出活动与正文之间太挤。核对后发现是两个独立缺陷叠加：
+
+1. **同一个字号有两个来源。** `agent_message_body_class_name`（容器）声明 `text-sm`（14px），`AgentMessageContent` 的正文块又把它覆盖为 `text-[0.8125rem] leading-[1.54]`（13px）；`GroupView` 的 Agent 发言同样内联 13px。13px 是 `2f73f6a` 把固定 px 字号换成 rem 等价写法时保留的旧值。
+2. **块间距为 0。** `agent_message_body_class_name` 是 `gap-0`，而 `.markdown > :first-child/:last-child` 已把段落外边距清零（这是为了让正文容器不被首尾留白撑开），因此正文与紧随其后的工具活动行之间**没有任何间隔**，只有活动行自身的 `padding` 0.08rem。两者看起来像同一段文字的上下两行。
+
+### 24.2 字号取值的两次修正
+
+字号不是一次定下来的，这里保留完整过程，因为它是本节的唯一依据来源：
+
+| 轮次 | 取值 | 反馈 | 结论 |
+| --- | --- | --- | --- |
+| 初始 | 14px（`text-sm`） | 「可以。大一点。」 | 14px 可用，但不是目标；且容器/正文两处声明必须合一 |
+| 第二次 | 16px（`text-base`） | 「太大了。小一点。」 | 16px 超出上限 |
+| 第三次 | 15px | 「行间距有点小」「text 和 activity 之间的间距有点大」 | 字号附近；转而行高与块间距 |
+| 第四次 | 15px / 1.7 / 10px | 「行内间距大一点」「字体稍微再大一点点」 | 行高与字号都还差一点 |
+| 第五次 | 15.5px / 1.8 / 10px | 「我是说 agent message，现在 user message 太大了」 | 以为只是归组问题（实际是缺陷） |
+| 第六次 | Agent 15.5 / 用户 14px | 「现在 user message 字体太大了。小点啊」 | 仍无效 |
+| 第七次 | Agent 15.5 / 用户 13px | 「agent message 和 user message 的字体应该保持一致」「还是很大」无变化 | 此时才发现字号根本没生效 |
+| 第八次 | 两侧共用 15px | 「用户消息的字体还是很大！！！你检查一下」 | 真的生效了，但 15px 仍然偏大；同时发现机制层面还有第二个隐患 |
+| 最终 | 两侧共用 **14px / 1.8**；块间距 10px | — | 机制改为不依赖工具类；取值取区间中点 |
+
+### 24.2b 两个静默失效（都已修复）
+
+从第五轮开始的「改了没反应 / 还是很大」，**不是审美分歧，而是缺陷**。
+
+**失效一：`cn()` 删掉了字号类。** `cn` 底层是 tailwind-merge。它不认识自定义字号
+`text-message`，会把它归到**文字颜色**组（颜色组接受任意自由值），于是：
+
+```text
+twMerge("text-message text-foreground") → "text-foreground"
+```
+
+字号类被当成「与 `text-foreground` 冲突的颜色」直接删除。从把消息字号改成令牌那一刻（`371f2e461`）起，**所有基于令牌的字号都没生效过**，一直退回 `inherit`（根字号 16px）。
+
+**失效二：工具类还依赖扫描器产物。** 就算修好 twMerge，`text-message` 能否生效还取决于
+Tailwind 源码扫描是否命中并生成 `.text-message`。这是第二条可能静默失效的链路，
+而且本环境（无 oxide 原生模块）无法验证真实构建产物。
+
+两个失效对现有四道防线全部隐形：
+
+| 防线 | 为何没拦住 |
+| --- | --- |
+| TypeScript | 类名就是字符串 |
+| Tailwind 产物 | `.text-message` 规则确实生成了 |
+| `chat_message_layout.test.ts` | 断言的是源码里的类名常量，字符确实存在 |
+| 设计令牌漂移守卫 | 只禁固定 px 字号，不管类名是否被删 |
+
+### 24.2c 修复：不再让字号依赖工具类
+
+不是给 twMerge 打补丁，而是**把字号从工具类链路里拿出来**。
+
+字号改由 `styles/chat.css` 的普通类 `.chat-message-text` 提供：
+
+```css
+.chat-message-text {
+  font-size: var(--text-message);
+  line-height: var(--text-message--line-height);
+}
+```
+
+这个类名不是 Tailwind 工具类形状，因此：
+
+- twMerge 不会对它做任何归类（未知类名一律保留），失效一消失；
+- 规则写在样式表里，不需要扫描器生成，失效二消失；
+- 本条规则是**无图层 CSS**（chat.css 内无 `@layer`），优先级高于 Tailwind 的
+  `@layer utilities`，所以就算将来有人在元素上误加其它字号工具类，也盖不掉它的值。
+
+同时保留一条测试点：`chat_message_layout.test.ts` 断言排版类**必须**是 `chat-message-text`
+且不得出现自定义 `text-*` 形状的类；`tailwind_merge_classes.test.ts` 则跑
+**真正的 `cn`** 验证四个真实调用点都保留了它（并含一条反向断言，证明守卫不是恒真）。
+这两个文件合起来才能拦住同一个错误：一个测源码意图，一个测运行时转换结果。
+
+### 24.2d 教训
+
+1. **类名只存在字符串里时，静态断言不等于它进了 DOM。** `cn` / tailwind-merge 位于
+   源码与浏览器之间，是一个会重写类名列表的转换点；对它的验证必须调用它本身。
+2. **不要让样式属性依赖工具类生成。** 工具类要过「扫描器命中 → 生成规则 → twMerge 保留」三道关，
+   每一道都可能静默失败。值为一的样式（如消息阅读排版）直接写在样式表里最可靠。
+3. **排查顺序应当是「值到底有没有到达浏览器」，而不是先在概念层（归组、角色）找原因。**
+   前几轮在归组上反复修正，方向从一开始就错了。
+
+### 24.3 决策
+
+- **消息阅读排版就是一个值：`--text-message`（14px）+ `--text-message--line-height`（1.8），
+  由 `styles/chat.css` 的 `.chat-message-text` 消费。** 两侧一致是明确的产品要求。
+- **取值 14px 是两条反馈夹出的区间中点。** 两侧必须相等 ⇒ 只能一个值；而 13px 被
+  「Agent 正文有点小」否、15px 被「user 还是很很大」否 ⇒ 14px。它也是应用已有的 `text-sm` 档。
+- **四个消费处：** Agent 正文、用户消息、Group 的两种发言、Composer
+  （`.chat-input-editor`）。Composer 必须同值是因为它与用户气泡是同一段文字在发送前后的两种状态。
+- **排版类走普通 CSS 类而非 Tailwind 工具类**（理由见 24.2c）。`--text-message` 仍在
+  `@theme` 里定义，因此它仍是可被 Tailwind 识别的令牌，只是我们不让它承担消息字号这一个用途。
+- **消息内的块间距保持 `gap-2.5`（10px）。** 本次未要求，且三个量级的关系仍成立：
+  段落 0.5em = 7.5px < 块间距 10px < 消息间距（根容器 `py-2` 合计 16px），
+  差值 2.5px 仍在 2px 的可感知下限之上。
+- **Markdown 段落间距 `0.35em → 0.5em`。** 旧值是按 13px 定的；新字号下段落间距必须继续保持
+  小于块间距，0.5em 是同时满足「读得开」与「小于块间距」的取值。列表块外边距一并对齐到 0.5em。
+  注意它是按 **消息字号**缩放的：两侧共用同一字号，因此段落间距在两边一致。
+- **空块最小高度改用 `min-h-[1lh]`。** 原来写死 `1.54em`（一行），字号与行高一变就要跟着改；
+  `1lh` 等于当前行高，随令牌自动走，界面缩放也一样。
+- **气泡内边距 `px-3 py-2`。** 两侧统一字号后保留原值，未跟字号联动；若目测偏紧再调一档即可。
+- **不改 Workspace 文档预览、README 与 Plugin 说明。** 中途曾把它们从 14px 提到 16px，
+  理由是避免「会话正文比它所讨论的文档还大」；现在消息正文与文档都是 14px，
+  两者一致，保留原值可以避免把一个未受理的反馈扩散到更多表面。
+- **活动行、交互卡片、失败提示条的字号与间距不变。** 那些是消息里的操作与元信息（13px / 12.5px），
+  不是阅读正文；活动行**内部**的间距（`.agent-process-body` 0.22rem）也不动，
+  否则同一对「Tool 行 + Interaction 卡片」的间距会随分组状态变化。
+
+### 24.4 用户可见变化
+
+| 位置 | 改动前（一系列改动前） | 现在 |
+| --- | --- | --- |
+| Agent 正文、Group Agent 发言 | 13px / 20px 行高 | **14px / 25.2px 行高** |
+| 用户气泡、Group 用户发言 | 13px / 17.4px | **14px / 25.2px 行高**（与 Agent 一致） |
+| Composer、就地编辑 | 13px / 17.4px | **14px / 25.2px 行高** |
+| 正文与活动之间的间距 | 0px（仅活动行内边距） | **10px** |
+| Markdown 段落之间 | 4.6px | **7px** |
+| Workspace 文档预览、README | 14px / 23.8px | 字号不变，行高不同 |
+| 工具活动行、Reasoning、chips | 13px / 12px / 11px | 不变 |
+
+**用户可见变化三项**：消息正文（两侧）13px → 14px；行高 1.34/1.54 → 1.8；
+正文与工具活动间多出 10px 间距。注意**字号是到第八轮才真正生效的**——
+前面的 commit 虽然改了值，但因上述两个缺陷从未影响渲染。
+
+Markdown 内部按 em 派生的取值随之变化（两侧同基准 14px）：
+`h1/h2/h3` 从 20.2 / 17.4 / 15.6px 变为 21.7 / 18.2 / 16.1px（标题行高固定 1.3，不跟正文行高走），
+行内码、代码块、表格同为 14px 的 0.9–0.92 倍。
+
+### 24.5 未处理
+
+- **内联 chip 仍是 11px**（`.user-message-atom`、`agent-message-resource`、Composer 的 mention/ref/data 节点）。它们相对 14px 正文仍偏小，但在 Composer 与气泡两侧同值、未产生漂移，因此未一并调整。
+- **Plugin 自带 Markdown 仍是 12–13px**（`PluginView` 的 README、`PluginRendererComponents` 的 `Markdown`）。它们是 Plugin 自己的 UI，宿主不应单方面改变其密度。
+- **消息列仍为 `max-w-[840px]`。** 14px 下每行约 60 个汉字；继续缩窄会连带影响 Composer、表格与代码块宽度。
+- **活动行内部的间距未动**（`.agent-process-body` 0.22rem、`.activity-tool-group-body` 0.25rem）。单条 Tool 与成组 Tool 落在不同的容器上，只调其中一个会让同一对「Tool 行 + Interaction 卡片」的间距随分组状态变化。
+- **消息字号上限仍受块间距约束。** 段落间距是 0.5em（随消息字号走），而它必须比消息内的块间距
+  （`gap-2.5` = 10px）至少小 2px：`0.5 × 字号 ≤ 8px`，即**字号不得超过 16px**。当前 14px 下差值为 3px。
+- **不要再把字号改成 Tailwind 工具类。** 自定义 `text-*` 工具类会过三道可能静默失败的关
+  （扫描器命中 → 生成规则 → twMerge 保留）。需要新的排版类时，直接写在 `styles/chat.css`。
+
+### 24.6 验证
+
+```bash
+cd app/desktop && node --test tests/*.test.ts   # 410/411；唯一失败为既有的 qq 渠道断言
+cd app/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./node_modules/.bin/tsc -p tsconfig.node.json --noEmit   # 通过
+```
+
+- **`tailwind_merge_classes.test.ts`**：跑**真正的 `cn`**（而不是比对源码文本），验证四个真实
+  调用点都保留 `chat-message-text`；断言排版类不得是 Tailwind `text-*` 形状；
+  并含一条**反向**断言（当初那神写法 `text-message` 确实会被吞）证明守卫不是恒真。
+- `chat_message_layout.test.ts` 三条守卫：块间距以像素夹在段落间距与消息间距之间且留有 ≥ 2px
+  可感知差（该项已两次变异验证：字号改 17px 失败、块间距改 `gap-2` 失败）；
+  消息字号只有一个来源且四处都用它；Composer 与消息正文引用同一对令牌。
+- 链路已逐步实测：令牌 `0.875rem × 1.8` → `.chat-message-text` 规则只引用 `var()` →
+  四处的 `cn()` 产物均保留该类 → `--text-message` 确认注入 `:root`；
+  chat.css 内无任何 `@layer`，因此该规则为无图层 CSS，优先级高于 Tailwind 工具类。
+- **本环境不能验证的事**：Tailwind 扫描器在真实构建中是否生成 `.text-message`
+  （本机无 oxide 原生模块，repo 在 macOS 构建、沙箱为 Linux）。
+  正因为无法验证，这一稿才不依赖它——这是决定改成普通 CSS 类的原因之一。
+
+GUI 观感未经人工目测确认。本节的取值（字号 14px / 行高 1.8 / 块间距 10px）是按逐条反馈
+收敛出的区间解；改字号只需动 `tokens.css` 的一个数，Agent 正文、用户消息、Composer 三处一起走，
+但**动它前先重算与块间距的 2px 约束**。
+
+
+
+
 
 

@@ -12,10 +12,18 @@
 .markdown > :first-child { margin-top: 0 !important; }
 .markdown > :last-child { margin-bottom: 0 !important; }
 
+/*
+ * 正文块间距。
+ *
+ * 取值随正文基准字号（16px / 行高 1.6）缩放：0.5em = 8px，是段落之间的间隔。
+ * 它必须小于消息内的块间距（`message_layout.ts` 的 `gap-3` = 12px），
+ * 否则「同一段话的两段」和「两段话之间插了一段工具活动」会看起来一样宽。
+ * 这条规则对 Workspace 文档预览、Plugin 说明同样生效——它们是同一套 Markdown 排版。
+ */
 .markdown :where(p) {
   min-width: 0;
   max-width: 100%;
-  margin: 0.35em 0;
+  margin: 0.5em 0;
 }
 
 .markdown :where(h1, h2, h3, h4, h5, h6) {
@@ -41,7 +49,7 @@
 .markdown :where(ul, ol),
 .markdown [data-streamdown="unordered-list"],
 .markdown [data-streamdown="ordered-list"] {
-  margin: 0.4em 0 !important;
+  margin: 0.5em 0 !important;
   padding-left: 1.4em !important;
   list-style-position: outside;
 }

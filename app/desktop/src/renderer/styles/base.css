@@ -169,7 +169,22 @@ a,
   width: 100%;
 }
 
-/* 与 Duobox ChatInputEditor 一致的输入区域尺寸。 */
+/*
+ * Composer 输入区。
+ *
+ * 字号与行高直接引用用户消息排版令牌（`tokens.css` 的 `--text-message`），与气泡
+ * （`message_layout.ts` 的 `user_message_text_class_name`）同源：Composer 与用户气泡是同一段
+ * 文字在发送前后的两种状态，数值不同就会出现「按下回车，文字突然变小」的跳变。
+ *
+ * 请注意它**不**引用 Agent 正文那一档：Agent 消息是机器产出的长文（15.5px），
+ * 与用户敲的短句（13px）是两个角色，字号本来就应该不同。
+ *
+ * 行高 1.34 与字号是**两个独立的旋钮**：如果觉得多行输入时行距挤，
+ * 只改 `--text-message--line-height` 即可，气泡会同步跟上，不必动字号。
+ *
+ * 两边都用 `var()` 而不是各自写死数值，所以同步是结构性的；
+ * 由 `chat_message_layout.test.ts` 与 `tailwind_tokens.test.ts` 共同锁住。
+ */
 .chat-input-editor,
 .chat-input-editor.ProseMirror {
   width: 100%;
@@ -178,8 +193,8 @@ a,
   overflow-y: auto;
   padding: 4px 4px 0;
   font-family: var(--font-sans) !important;
-  font-size: 0.8125rem !important;
-  line-height: 1.34 !important;
+  font-size: var(--text-message) !important;
+  line-height: var(--text-message--line-height) !important;
   outline: none;
 }
 

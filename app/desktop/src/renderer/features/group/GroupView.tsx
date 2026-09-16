@@ -34,6 +34,8 @@ import { AgentInteraction } from "@/features/chat/components/messages/AgentInter
 import { AgentMessageFrame } from "@/features/chat/components/messages/AgentMessageFrame";
 import { AgentThinkingStatus } from "@/features/chat/components/messages/AgentRuntimeIndicator";
 import { UserMessageFrame } from "@/features/chat/components/messages/UserMessageFrame";
+import { chat_message_text_class_name } from "@/features/chat/components/messages/message_layout";
+import { cn } from "@/lib/utils";
 import { is_group_draft_session_id } from "@/types/DesktopView";
 import type { GroupMessageProjection, GroupMessageSegment } from "@/types/GroupProjection";
 import { use_translation } from "@/locales/i18n";
@@ -294,7 +296,7 @@ const GroupMessageRow = memo(function GroupMessageRow({ message, agent, read }: 
       <ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" />
     </>}
   >
-    <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className="break-words text-[0.8125rem] leading-[1.34]"><Markdown text={message.text} mode="static" /></div>
+    <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className={cn("break-words", chat_message_text_class_name)}><Markdown text={message.text} mode="static" /></div>
   </UserMessageFrame>;
   if (message.author_type === "system") return <div className="group flex w-full items-center gap-3 py-2"><span className="h-px min-w-4 flex-1 bg-border/60" /><span className="flex max-w-[80%] items-center gap-2 text-center text-[0.75rem] text-muted-foreground"><span>{message.text}</span><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></span><span className="h-px min-w-4 flex-1 bg-border/60" /></div>;
   // 未知作者的降级身份：只需 id 与名称，头像会回退为默认图标。
@@ -308,7 +310,7 @@ const GroupMessageRow = memo(function GroupMessageRow({ message, agent, read }: 
     identity_title={agent ? `@${agent.name}` : undefined}
     identity_label={agent ? translate("group_details.mention", { name: agent.name }) : undefined}
   >
-    <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="agent" className="min-w-0 max-w-full break-words text-[0.8125rem] leading-[1.54]"><Markdown text={message.text} mode="static" /></div>
+    <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="agent" className={cn("min-w-0 max-w-full break-words text-foreground", chat_message_text_class_name)}><Markdown text={message.text} mode="static" /></div>
   </AgentMessageFrame>;
 });
 

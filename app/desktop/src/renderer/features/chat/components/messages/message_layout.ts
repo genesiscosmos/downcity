@@ -17,6 +17,10 @@
  * 现在 Agent 消息是上下两段（身份在上、正文在下），用户消息是右侧气泡 + 下方元信息行。
  * 两个表面、两种角色都由 layouts 里的 frame 组件消费这里的类名——
  * **不要在组件里就地补类名**，那正是分叉的起点。
+ *
+ * 消息正文的**文字排版**（字号与行高）同样归这里：`styles/markdown.css` 的标题、列表、
+ * 引用、表格与代码全部按 em 相对值派生，基准字号一旦落到组件里，各消费处就会各自定义一套阅读节奏。
+ * 见 `chat_message_text_class_name`。
  */
 
 /** Agent 身份行的最小输入：与 AgentAvatar 的入参一致，Group 侧可能只有 id。 */
@@ -54,9 +58,62 @@ export const agent_identity_avatar_class_name = "size-5 rounded";
 /**
  * 正文容器：占满消息列宽度，左缘就是消息列左缘。
  *
+ * ## 为什么需要块间距
+ *
+ * 容器的直接子节点就是这条消息的展示块：正文、活动（Reasoning / Tool / Action）、
+ * 文件、文件改动、错误。`styles/markdown.css` 已把正文块的首/尾外边距清零
+ *（避免容器被首尾留白撑开），所以如果不在这里给间距，正文与紧随其后的工具活动行会**完全贴住**，
+ * 看起来就像同一段文字的上下两行。
+ *
+ * ## 三个量级的约束（改这个值前必读）
+ *
+ * | 层级 | 值 | 来源 |
+ * | --- | --- | --- |
+ * | Markdown 段落之间 | 0.5em ≈ 7.75px（15.5px 正文） | `styles/markdown.css` |
+ * | 消息内的块之间 | `gap-2.5` = 10px | 这里 |
+ * | 两条消息之间 | 根容器 `py-2`，合计 16px | `agent_message_root_class_name` |
+ *
+ * 它是**夹在中间的一档**：大于段落间距（否则「另起一段」与「后面跟了工具活动」看起来一样宽），
+ * 小于消息间距（否则同一条消息被读成两条）。
+ *
+ * 三个值都是相对单位（em / rem），界面缩放时等比走，因此上面的比值关系与缩放无关。
+ * 但注意：段落间距随**字号**走（0.5em），而字号是会被反复调的值——
+ * 字号一旦超过 16px，这个 10px 就顶不住了。要加字号，必须同时加块间距。
+ * 这条约束由 `chat_message_layout.test.ts` 以像素为单位守着。
+ *
+ * 容器上的 `text-sm` 只是给没有自己声明字号的附属内容兜底（活动行、交互卡片、文件 chip
+ * 都各自声明了 12–13px）；正文文字由 `chat_message_text_class_name` 单独给出阅读字号。
+ *
  * 不要给它加 `pl-*`/`ml-*`：那会重新把正文和身份行分开成两条竖线。
  */
-export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-0 text-sm text-foreground";
+export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-2.5 text-sm text-foreground";
+
+/**
+ * 消息正文与 Composer 共用的阅读排版：字号与行高只有这一处。
+ *
+ * ## 为什么四个消费处必须同值
+ *
+ * - **Composer ↔ 用户气泡**是同一段文字在发送前后的两种状态；不一致就会出现
+ *   「按下回车，文字突然变小」，而那只在发送瞬间可见。
+ * - **Agent 正文 ↔ 用户消息**是明确的产品要求（对话两侧对照着读）。
+ * - **Session ↔ Group** 两侧的同一种发言，不同值等于同一个 Agent 的长相不一致。
+ *
+ * 消费处：`AgentMessageContent`、`UserMessageContent`、`GroupView`（两种角色），
+ * 以及 `base.css` 的 `.chat-input-editor`（Composer）。前四处用本常量，
+ * Composer 用 `var()`；两边都指向 `tokens.css` 的 `--text-message` 对。
+ *
+ * ## 类名必须是普通 CSS 类（`chat-message-text`，定义在 `styles/chat.css`）
+ *
+ * **不要把它改回 `text-message` 这类 Tailwind 工具类。** 那个写法踩过两个静默失败：
+ *
+ * 1. `cn()`（tailwind-merge）不认识自定义字号，会把它归入「文字颜色」组，
+ *    于是 `cn("… text-foreground", 本常量)` 把它当作冲突颜色删除；
+ * 2. 工具类是否生成还取决于 Tailwind 扫描器是否命中源码，是第二条可能静默失效的链路。
+ *
+ * 普通类名不参与 twMerge 归类，规则也不靠扫描器生成。具体机制与验证见
+ * `chat_message_layout.test.ts` 与 `styles/chat.css` 的对应注释。
+ */
+export const chat_message_text_class_name = "chat-message-text text-foreground";
 
 /**
  * Footer：运行状态与消息操作栏的共用行。
@@ -86,10 +143,10 @@ export const user_message_stack_max_class_name = "max-w-[min(80%,42rem)]";
 export const user_message_stack_expanded_class_name = "max-w-[42rem]";
 
 /** 气泡本体：与 Agent 正文区分开的唯一手段（右侧、圆角、浅底）。 */
-export const user_message_bubble_class_name = "ml-auto w-fit max-w-full overflow-hidden rounded-2xl rounded-tr-none bg-surface-subtle px-3 py-2 text-sm text-foreground";
+export const user_message_bubble_class_name = "ml-auto w-fit max-w-full overflow-hidden rounded-2xl rounded-tr-none bg-surface-subtle px-3 py-2 text-foreground";
 
 /** 就地编辑时的容器：不要气泡外观，编辑器自带边框与背景。 */
-export const user_message_editor_class_name = "ml-auto flex w-full max-w-full flex-col overflow-visible text-sm text-foreground";
+export const user_message_editor_class_name = "ml-auto flex w-full max-w-full flex-col overflow-visible text-foreground";
 
 /**
  * 气泡下方的元信息行：时间与消息操作。

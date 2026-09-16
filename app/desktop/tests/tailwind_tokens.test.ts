@@ -57,6 +57,10 @@ async function compile_app_styles() {
 /** 需要产出的类名 → 期望出现在该规则块里的声明片段。 */
 const expected: readonly [string, string][] = [
   ["text-subtle-foreground", "color: var(--subtle-foreground)"],
+  // 阅读字号档：`--text-message--line-height` 成对定义。
+  // 注意：`.text-message` 工具类**已不再使用**（消息排版改走 styles/chat.css 的普通类
+  // `.chat-message-text`，因为 twMerge 会把自定义 text-* 工具类当颜色删掉）。
+  // 这里不再断言它——断言一个用不到的能力只会造成「看起来有保护」的假象。
   ["bg-control-track", "background-color: var(--control-track)"],
   ["bg-control-surface", "background-color: var(--control-surface)"],
   ["bg-control-hover", "background-color: var(--control-hover)"],
