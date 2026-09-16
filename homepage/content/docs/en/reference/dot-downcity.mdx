@@ -42,8 +42,6 @@ Long-term Memory is not part of the Workspace `.downcity/` contract. Agent-priva
 
 Plugin-owned runtime data uses the Agent-level storage scope exposed by PluginContext. Plugin definitions and unique configuration remain under `~/.downcity/plugins/<plugin_id>/`.
 
-City Tool namespace visibility is stored the same way, in `~/.downcity/plugins/city/config.toml`. That file is optional: without it every read-only namespace stays visible to every Agent.
-
 ### Skills location
 
 `SkillPlugin` scans `.agents/skills` (project) by default. If `use: ["home"]` is enabled in the constructor, it also scans `~/.agents/skills` (user).

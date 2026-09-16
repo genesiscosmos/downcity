@@ -91,15 +91,3 @@ export interface CityToolContext {
   /** 当前 City 可见的 Workspace 快照。 */
   readonly workspaces: readonly WorkspaceRuntime[];
 }
-
-/**
- * City tool 的宿主装配能力。
- *
- * 关键点（中文）
- * - 配置放在 City 级 `~/.downcity/plugins/city/config.toml`，路径约定属于宿主装配层。
- * - City 只调用读取函数，不感知配置文件格式、位置与是否存在。
- */
-export interface CityToolHost {
-  /** 读取 City 级 city tool 配置；未配置时返回空对象。 */
-  readonly read_config: () => Record<string, unknown>;
-}

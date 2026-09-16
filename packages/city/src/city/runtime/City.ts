@@ -122,11 +122,7 @@ export class City implements CityRuntime {
       ...(options.plugin_host ? { host: options.plugin_host } : {}),
     });
     this.plugins = this.plugin_runtime.public_api;
-    this.city_tool = new CityTool({
-      access: this.runtime_access,
-      // 配置与插件同一层级：由宿主按 `plugins/city/config.toml` 解析，每次读取都取最新值。
-      host: options.runtime?.city_tool ?? null,
-    });
+    this.city_tool = new CityTool({ access: this.runtime_access });
     for (const plugin of collection_values(options.plugins)) {
       // 构造函数不能等待异步 lifecycle；Agent ready、Plugin 调用与 snapshot
       // 会继续使用同一个受控 ready Promise。

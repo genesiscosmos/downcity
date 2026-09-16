@@ -169,20 +169,7 @@ ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件�
 
 不带参数调用 `city` 会列出当前 Agent 可用的 namespace；省略 `action` 会列出该 namespace 的动作、参数与返回结构。这个 Tool 不执行任何写操作，也不会返回凭据的值。
 
-namespace 可见性由 City 授予，不由 Agent 自己声明。需要收窄时添加 `~/.downcity/plugins/city/config.toml`；没有该文件时上述 namespace 全部可见。
-
-```toml
-schema_version = 2
-
-[config.defaults]
-namespaces = ["env", "sandbox", "workspaces", "agent", "usage"]
-
-[[config.agents]]
-agent_id = "cheng_xu_yuan"
-deny = ["usage"]
-```
-
-`deny` 永远优先，Agent 条目也可以用 `allow` 整体替换默认集合，敏感 namespace 不参与默认集合。配置在下一个 Session step 读取生效，不需要重启。
+可用性与 Plugin 同一口径：City 注册了什么，每个 Agent 就都能用，不做 per-agent 门控，也没有配置文件。被标为敏感的 namespace 不进入这个默认集合，而上面这些都不是。
 
 ## 安全模型
 
@@ -194,7 +181,7 @@ deny = ["usage"]
 | Sandbox Shell | Workspace Sandbox | 命令在当前 Workspace 独享、持久的隔离环境中执行 |
 | Host Shell | 审批网关 | 用户基于已记录的原因显式授权一次宿主命令 |
 | Plugin | Plugin 自身业务授权 | Workspace 不替 Plugin 负责全部资源访问 |
-| City Tool | City 授予的 namespace 可见性 | 只读运行时事实；可按 Agent 收窄 namespace |
+| City Tool | 结构上只读 | 只回答运行时事实；不写、不返回凭据值 |
 | Custom Tool | 注册它的宿主 | Agent Core 不猜测业务权限 |
 
 显式附件可以使用宿主选择的绝对路径，因为附件已经是本次 Prompt 的明确输入。这不会扩大模型 File/Search Tools 主动遍历文件系统的范围。

@@ -85,7 +85,6 @@ Workspace 没有 Shell 时（例如远程 Workspace）不报错，而是明确�
 ```
 packages/city/src/city/tool/
   CityTool.ts              // 工具本体：产出工具定义、组装运行事实、校验载荷、分发
-  CityToolPolicy.ts        // 可见性策略：配置 → 当前 Agent 可见的 namespace
   CityToolResult.ts        // 结果信封、错误类与异常收敛
   namespaces/
     CityAction.ts          // 抽象动作：自己声明自己、自己执行自己，并提供参数取值
@@ -133,36 +132,15 @@ class ExplainPathAction extends CityAction {
 
 ## 可见性
 
-默认规则：只读、非敏感的 namespace 对全部 Agent 可见。
+与 Plugin 同一口径：**City 注册了什么，每个 Agent 就能用什么**，不做 per-agent 门控，也没有配置文件。
 
-可见性是 City 授予的，不能让 Agent 自己声明能看什么，因此配置放 City 级 `~/.downcity/plugins/city/config.toml`，与插件配置同层：
+早先版本曾引入 City 级 `plugins/city/config.toml` 与 per-agent `allow` / `deny` 判定，现已删除。理由：第一期五个 namespace 全是只读非敏感，“可见性” 恒等于“全部”，那一层配置链与四个宿主装配点在算一个常量；而仓库里其他能力（Plugin、Workspace Tools）都没有 per-agent 门控这个维度。
 
-```toml
-schema_version = 2
-
-[config.defaults]
-namespaces = ["env", "sandbox", "workspaces", "agent", "usage"]
-
-[[config.agents]]
-agent_id = "cheng_xu_yuan"
-deny = ["usage"]
-```
-
-判定顺序固定：`deny` 优先，其次是 Agent 条目的 `allow`（整体替换默认集合），最后落到默认集合。敏感 namespace 不参与默认集合，必须显式 `allow`。配置在下一个 Session step 生效，不需要重启。
-
-配置由用户手工编辑，读取失败不能让全部 Session 建不出来，因此异常时回退默认可见性。
-
-**装配层责任划分。** `city` 这个 id 与 `plugins/city/config.toml` 的路径约定属于宿主装配，City 只认 `runtime.city_tool.read_config` 这个读取函数：
-
-```ts
-new City({ runtime: { city_tool: { read_config: () => data.plugins.get_config("city") } } })
-```
-
-早先版本复用了 `plugin_host.config("city")`，但那个钩子在 City 内部是插件专属的（有测试断言它只以真实插件名被调用），复用会让 City 自己挤进插件命名空间。现在四个宿主装配点各自提供 `runtime.city_tool`。
+保留的是动作上的 `sensitivity` 字段与一条规则：**敏感 namespace 不参与默认集合**。将来真出现敏感能力（例如 `secret`），强制点是 `CityTool.tools()` 里那行过滤再加上 dispatcher 的 `forbidden` 分支，是一处改动，不会散到各动作。写操作的审批与审计同理。
 
 ## 分期
 
-**第一期（已实现）**：`city` 单入口与 namespace / 动作对象框架；`env.get`、`sandbox.get|list_mounts|explain_path`、`workspaces.list|get`、`agent.list|get`、`usage.get`；工具描述与索引由动作对象自描述派生；City 级 per-agent 可见性；路径策略的纯判定接口。
+**第一期（已实现）**：`city` 单入口与 namespace / 动作对象框架；`env.get`、`sandbox.get|list_mounts|explain_path`、`workspaces.list|get`、`agent.list|get`、`usage.get`；工具描述与索引由动作对象自描述派生；路径策略的纯判定接口。
 
 **第二期（待定）**：写操作（`agent.delegate`、Session 间消息、task 管理）、写操作审批与审计落盘、敏感 namespace 的显式授权流程。
 
@@ -170,6 +148,6 @@ new City({ runtime: { city_tool: { read_config: () => data.plugins.get_config("c
 
 ## 契约中提前占位的字段
 
-`capability`（`read` / `write`）与 `sensitivity`（`public` / `internal` / `sensitive`）在第一期用不到，但已经进入动作声明。写操作的审计、敏感项的可见性收敛都靠这两个字段驱动，后补会牵动每个动作类。
+`capability`（`read` / `write`）与 `sensitivity`（`public` / `internal` / `sensitive`）在第一期用不到，但已经进入动作声明。写操作的审计与敏感项的可见性收敛靠这两个字段驱动，后补时改的是一处判定与每个动作声明的一行，而不是每个动作的实现。
 
 `WorkspaceSandboxSnapshot` 里的 `persistent` 与 `mounts[].mode` 同理：当前实现恒定 `persistent: true`、单条 `rw` 挂载，但远程 Workspace 与只读挂载补上时契约不用改。

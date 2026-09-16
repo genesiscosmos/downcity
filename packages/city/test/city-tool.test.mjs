@@ -76,16 +76,11 @@ async function call_city_tool(tool, input) {
 }
 
 /** 创建一套 City、Agent 与 Workspace，并返回 city tool。 */
-async function create_city_tool_fixture(options = {}) {
+async function create_city_tool_fixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-tool-"));
   const agent = create_test_agent("test-agent");
   const workspace = await create_test_workspace(root, "test-workspace");
-  const city = new City({
-    workspaces: [workspace],
-    runtime: options.read_config
-      ? { city_tool: { read_config: options.read_config } }
-      : {},
-  });
+  const city = new City({ workspaces: [workspace] });
   city.agents.add(agent);
   const tool = city.get_session_tools(agent.id, workspace).city;
   assert.ok(tool, "city tool should be assembled for every Agent/Workspace");
@@ -211,42 +206,6 @@ test("city tool 回答沙箱事实并按 Workspace 边界判定路径", async ()
     });
     assert.equal(missing_arg.ok, false);
     assert.equal(missing_arg.error.code, "invalid_args");
-  } finally {
-    await fixture.close();
-  }
-});
-
-test("city tool 按 City 级配置收窄 namespace 可见性", async () => {
-  const fixture = await create_city_tool_fixture({
-    read_config: () => ({
-      defaults: { namespaces: ["env", "sandbox", "workspaces", "agent"] },
-      agents: [{ agent_id: "test-agent", deny: ["agent"] }],
-    }),
-  });
-  try {
-    const index = await call_city_tool(fixture.tool, {});
-    assert.deepEqual(
-      index.data.namespaces.map((item) => item.namespace),
-      ["env", "sandbox", "workspaces"],
-    );
-    const denied = await call_city_tool(fixture.tool, { namespace: "agent", action: "list" });
-    assert.equal(denied.ok, false);
-    assert.equal(denied.error.code, "forbidden");
-  } finally {
-    await fixture.close();
-  }
-});
-
-test("city tool 配置不可读取时回退默认可见性", async () => {
-  const fixture = await create_city_tool_fixture({
-    read_config: () => {
-      throw new Error("broken config");
-    },
-  });
-  try {
-    const index = await call_city_tool(fixture.tool, {});
-    assert.equal(index.ok, true);
-    assert.equal(index.data.namespaces.length, 5);
   } finally {
     await fixture.close();
   }

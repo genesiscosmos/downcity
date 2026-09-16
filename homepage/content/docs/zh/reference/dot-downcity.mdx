@@ -42,8 +42,6 @@ description: 运行时数据目录结构与用途
 
 Plugin 自有运行数据使用 PluginContext 提供的 Agent 级存储作用域。Plugin 定义与唯一配置保存在 `~/.downcity/plugins/<plugin_id>/`。
 
-City Tool 的 namespace 可见性同样保存在 `~/.downcity/plugins/city/config.toml`。该文件可选：没有它时全部只读 namespace 对每个 Agent 保持可见。
-
 ### Skills 目录位置
 
 `SkillPlugin` 默认扫描 `.agents/skills`（项目级）。如果在构造函数中启用 `use: ["home"]`，也会扫描 `~/.agents/skills`（用户级）。

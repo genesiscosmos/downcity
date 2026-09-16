@@ -19,7 +19,6 @@ import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 import type {
   CityToolContext,
-  CityToolHost,
   CityToolResult,
 } from "@/city/types/CityTool.js";
 import {
@@ -27,7 +26,6 @@ import {
   city_tool_ok,
   CityToolRuntimeError,
 } from "@/city/tool/CityToolResult.js";
-import { CityToolPolicy } from "@/city/tool/CityToolPolicy.js";
 import type { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
 import { create_city_tool_namespaces } from "@/city/tool/namespaces/index.js";
 
@@ -69,8 +67,6 @@ interface CityToolCallInput {
 export interface CityToolOptions {
   /** City 内部事实源访问面；city tool 只读 Agent 与 Workspace 快照。 */
   readonly access: Pick<CityRuntimeAccess, "list_agents" | "list_workspaces">;
-  /** 宿主提供的 City 级配置读取能力；未提供时为 null，此时全部使用默认可见性。 */
-  readonly host: CityToolHost | null;
 }
 
 /** `city` 工具本体：持有 namespace，生成工具定义，并按载荷分发。 */
@@ -80,9 +76,15 @@ export class CityTool {
 
   constructor(private readonly options: CityToolOptions) {}
 
-  /** 为明确的 Agent/Workspace 执行检查点生成 `city` 工具。 */
+  /**
+   * 为明确的 Agent/Workspace 执行检查点生成 `city` 工具。
+   *
+   * 关键点（中文）
+   * - 能力可用性与 Plugin 同一口径：City 级注册即可见，不做 per-agent 门控。
+   * - 敏感 namespace 不参与默认集合，这一条就是未来的强制点。
+   */
   tools(agent: Agent, workspace: WorkspaceRuntime): Record<string, RuntimeTool> {
-    const visible = this.policy().visible_for(agent.id, this.namespaces);
+    const visible = this.namespaces.filter((namespace) => !namespace.is_sensitive());
     if (visible.length === 0) return {};
     return {
       city: define_runtime_tool<CityToolCallInput>({
@@ -96,20 +98,6 @@ export class CityTool {
           }),
       }),
     };
-  }
-
-  /**
-   * 读取 City 级可见性策略。
-   *
-   * 关键点（中文）
-   * - 配置由用户手工编辑，读取失败不能让全部 Session 建不出来，因此按缺省处理。
-   */
-  private policy(): CityToolPolicy {
-    try {
-      return CityToolPolicy.from_config(this.options.host?.read_config() ?? {});
-    } catch {
-      return CityToolPolicy.from_config({});
-    }
   }
 
   /** 校验并执行一次调用，永远返回结果信封。 */

@@ -18,7 +18,7 @@ import {
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import { City, LocalStorageProvider, RemoteAgent, type CityPluginHost, type CityRuntimeOptions } from "@downcity/city";
+import { City, LocalStorageProvider, RemoteAgent, type CityPluginHost } from "@downcity/city";
 import type { ModelClient } from "@downcity/type";
 import type { WorkspaceRuntime } from "@downcity/type/workspace";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
@@ -118,7 +118,6 @@ export async function createRemoteAgent(params: {
         workspaces: [workspace],
         plugins: await plugin_loader.list_registrations(),
         plugin_host: create_local_plugin_host(data),
-        runtime: create_local_city_runtime_options(data),
       });
       city.agents.add(agent);
       return {
@@ -187,21 +186,6 @@ function create_local_plugin_host(data: CliLocalData): CityPluginHost {
   };
 }
 
-/**
- * 构造 CLI 本地 City 运行时扩展。
- *
- * 关键点（中文）
- * - city tool 的可见性配置与插件配置同层：`plugins/city/config.toml`。
- * - 每次读取都重新取文件最新内容，用户改配置后下一个 Turn 即生效。
- */
-function create_local_city_runtime_options(data: CliLocalData): CityRuntimeOptions {
-  return {
-    city_tool: {
-      read_config: () => structuredClone(data.plugins.get_config("city")),
-    },
-  };
-}
-
 /** 在不绑定 Workspace 的本地装配中打开 Agent 级 Session 读取器。 */
 async function create_local_agent_session_reader(agent_id: string): Promise<AgentChatClient> {
   const data = create_cli_local_data();
@@ -216,7 +200,6 @@ async function create_local_agent_session_reader(agent_id: string): Promise<Agen
       workspaces: [],
       plugins: await plugin_loader.list_registrations(),
       plugin_host: create_local_plugin_host(data),
-      runtime: create_local_city_runtime_options(data),
     });
     city.agents.add(agent);
     return {

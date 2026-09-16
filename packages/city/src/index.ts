@@ -42,9 +42,6 @@ export type {
   CityPluginInput,
   CityPlugins,
 } from "./city/types/CityPlugin.js";
-export type {
-  CityToolHost,
-} from "./city/types/CityTool.js";
 export {
   create_city_host_instance_id,
   get_city_host_state_path,
