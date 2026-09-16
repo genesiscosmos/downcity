@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react";
 import type { ChatPrependAnchor } from "@/types/ChatScroll";
 import {
+  is_chat_latest_visible,
   is_chat_scroll_sticky,
   is_chat_scroll_up_intent,
   is_programmatic_scroll_top,
@@ -51,6 +52,13 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
   // 跟随状态要驱动界面（「回到最新」入口），因此除了 ref 还需要一份 state；
   // 两者始终同步，ref 供滚动回调用（不能读到过期 state），state 供渲染用。
   const [is_following, set_is_following] = useState(true);
+  /**
+   * 最新内容是否仍在视口内；「回到最新」入口的唯一展示依据。
+   *
+   * 与 `is_following` 分开：跟随与否是**用户意图**（向上滑 1px 就停），
+   * 而这里只看**距离**。两者相等时会在「刚离开底部、底部内容仍在眼前」时就弹出入口。
+   */
+  const [latest_visible, set_latest_visible] = useState(true);
   auto_scroll_ref.current = auto_scroll;
   surface_id_ref.current = surface_id;
 
@@ -66,6 +74,17 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
     scroll_top: container.scrollTop,
     client_height: container.clientHeight,
   }), []);
+
+  /**
+   * 按当前几何刷新「最新内容是否在视口内」。
+   *
+   * 凡是几何会变的地方都要调用它：滚动、兜底、**内容尺寸变化**。
+   * 最后一项容易漏——用户停在中段时内容继续增长不会触发 scroll，
+   * 只靠滚动事件会让这个标志永远停在旧值上，新内容溢出后入口也不出现。
+   */
+  const sync_latest_visible = useCallback((container: HTMLDivElement) => {
+    set_latest_visible(is_chat_latest_visible(read_metrics(container)));
+  }, [read_metrics]);
 
   /**
    * 写入 scrollTop 并登记，避免随后触发的 scroll 事件被当成用户操作。
@@ -92,6 +111,8 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
     sticky_ref.current = true;
     last_scroll_top_ref.current = container.scrollTop;
     set_is_following(true);
+    // 已经到底，入口必然不该再显示。
+    set_latest_visible(true);
   }, [write_scroll_top]);
 
   /** 仅在用户仍位于底部且启用了自动跟随时响应内容增长。 */
@@ -119,6 +140,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
     anchor_frame_ref.current = undefined;
     sticky_ref.current = true;
     set_is_following(true);
+    set_latest_visible(true);
     last_scroll_top_ref.current = 0;
     programmatic_top_ref.current = undefined;
     pending_anchor_ref.current = undefined;
@@ -143,19 +165,31 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
     last_scroll_top_ref.current = container.scrollTop;
     // 恢复后重新按真实位置判定跟随：仍在底部就继续跟随，停在中段就交回用户。
     sync_following(is_chat_scroll_sticky(read_metrics(container)));
-  }, [content_key, read_metrics, sync_following, write_scroll_top]);
+    sync_latest_visible(container);
+  }, [content_key, read_metrics, sync_following, sync_latest_visible, write_scroll_top]);
 
   useEffect(() => {
     if (auto_scroll) schedule_scroll_to_bottom();
   }, [auto_scroll, schedule_scroll_to_bottom]);
 
+  /**
+   * 内容尺寸变化：先刷新「最新内容是否在视口内」，再决定要不要继续跟随。
+   *
+   * 顺序不能反，也不能省掉前半句：停在中段时内容增长不会触发 scroll 事件，
+   * 这里是不依赖用户操作、唯一能发现「底部又被推远了一截」的时机。
+   */
+  const handle_content_resize = useCallback(() => {
+    if (scroll_ref.current) sync_latest_visible(scroll_ref.current);
+    schedule_scroll_to_bottom();
+  }, [schedule_scroll_to_bottom, sync_latest_visible]);
+
   useEffect(() => {
     const content = content_ref.current;
     if (!content) return;
-    const resize_observer = new ResizeObserver(schedule_scroll_to_bottom);
+    const resize_observer = new ResizeObserver(handle_content_resize);
     resize_observer.observe(content);
     return () => resize_observer.disconnect();
-  }, [schedule_scroll_to_bottom, surface_id]);
+  }, [handle_content_resize, surface_id]);
 
   useEffect(() => () => {
     if (follow_frame_ref.current !== undefined) window.cancelAnimationFrame(follow_frame_ref.current);
@@ -173,11 +207,12 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
     if (own_write || preserving_ref.current) return;
     // 用户一旦向上浏览便立即退出跟随，即使仍落在底部容差范围内。
     sync_following(!is_chat_scroll_up_intent(previous_top, next_top) && is_chat_scroll_sticky(read_metrics(container)));
+    sync_latest_visible(container);
     if (!sticky_ref.current && follow_frame_ref.current !== undefined) {
       window.cancelAnimationFrame(follow_frame_ref.current);
       follow_frame_ref.current = undefined;
     }
-  }, [read_metrics, sync_following]);
+  }, [read_metrics, sync_following, sync_latest_visible]);
 
   /**
    * 在历史前插前后保持同一条消息在视口内的位置。
@@ -214,7 +249,7 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
     });
   }, []);
 
-  return { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, is_following, scroll_to_bottom: pin_to_bottom };
+  return { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, is_following, latest_visible, scroll_to_bottom: pin_to_bottom };
 }
 
 /** 捕获当前首个可见消息行，避免历史前插依赖整体内容高度。 */

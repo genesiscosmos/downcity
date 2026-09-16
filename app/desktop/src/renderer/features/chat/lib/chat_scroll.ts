@@ -10,6 +10,23 @@ import type { ChatScrollMetrics } from "@/types/ChatScroll";
 export const chat_sticky_threshold = 80;
 
 /**
+ * 距底部不超过该距离时，认为「最新内容仍在视口内」，不需要回到最新的入口。
+ *
+ * 为什么不复用 `chat_sticky_threshold`：两者回答的是不同问题，服务的也是不同对象。
+ *
+ * - `chat_sticky_threshold` 回答「要不要继续自动跟随」：用户只要有向上浏览的意图就停止跟随
+ *   （见 `is_chat_scroll_up_intent`），这个值只用来吸收锚定修正与亚像素抖动，所以要宽容；
+ * - 本值回答「要不要给一个回到最新的入口」：只有当最新内容真的滑出视野、回去需要费力时才该出现。
+ *
+ * 两者相等时，向上滚 81px 就会冒出一个按钮——而视口高数百像素，此时底部内容仍一目了然，
+ * 用户会觉得「我明明没走远」。取 3 倍就是为了留出这段滞回区间：跟随在 80px 处停止、
+ * 入口在 240px 处出现，中间那一段两者都不抢视线。
+ *
+ * 写成倍数而不是另一个数字，是为了改一处时两者不会分叉。
+ */
+export const chat_latest_visible_threshold = chat_sticky_threshold * 3;
+
+/**
  * 构成「用户向上浏览」意图所需的最小位移，单位为 CSS 像素。
  *
  * 浏览器的滚动锚定修正、亚像素取整和容器缩放都会产生不足 1px 的向上位移；
@@ -30,6 +47,17 @@ export function is_chat_scroll_sticky(metrics: ChatScrollMetrics): boolean {
  */
 export function is_chat_scroll_up_intent(previous_top: number, next_top: number): boolean {
   return next_top < previous_top - chat_scroll_intent_tolerance;
+}
+
+/**
+ * 最新内容是否仍在视口内（距底部不超过入口阈值）。
+ *
+ * 这是「要不要展示回到最新」的唯一依据，与自动跟随是两个独立信号：
+ * 自动跟随由用户意图决定，本判定只看距离——内容增长把底部推远时距离会自动变大，
+ * 因此新内容一到来就能准确反映，不需要另外记账。
+ */
+export function is_chat_latest_visible(metrics: ChatScrollMetrics): boolean {
+  return metrics.scroll_height - metrics.scroll_top - metrics.client_height < chat_latest_visible_threshold;
 }
 
 /** 判断 scroll 事件是否恰好落在本模块上一次写入的滚动位置上。 */
@@ -53,11 +81,26 @@ export interface ChatFollowIndicator {
 /**
  * 决定是否展示「回到最新」。
  *
- * 用户一旦向上滚动就立即退出自动跟随，且【不会】再有任何视觉反馈——
- * 长输出进行到一半时，用户会以为 Agent 卡住了。因此只要不跟随就给出入口；
- * 只有确实存在新增消息时才附带数量，避免滚动位置与数量说法矛盾。
+ * 只看**最新内容在不在视野里**，不再看自动跟随状态。
+ *
+ * 早先的写法是「一退出跟随就伸出入口」，而退出跟随只需要向上滑 1px（那是自动跟随必须的
+ * 灵敏度：晚一步就会和用户的滚动抢视口），于是刚离开底部、底部内容还在眼前时按钮就出现了，
+ * 而且一旦新内容到来它就一直在——因为它同时兼任了「有新消息」的提示。
+ *
+ * 把两件事拆开后各自都准了：
+ *
+ * - 展示条件 = 最新内容已滑出视野（距离阈值，`is_chat_latest_visible`）；
+ * - 数量 = 离开底部之后新增的消息数；确实是 0 时只提示位置，不编造数量。
  */
-export function resolve_chat_follow_indicator(following: boolean, baseline_message_count: number, message_count: number): ChatFollowIndicator {
-  if (following) return { visible: false, new_message_count: 0 };
-  return { visible: true, new_message_count: Math.max(0, message_count - baseline_message_count) };
+export function resolve_chat_follow_indicator(options: {
+  /** 最新内容是否仍在视口内。 */
+  latest_visible: boolean;
+  /** 离开底部那一刻的消息数；基线由调用方的跟随状态维护。 */
+  baseline_message_count: number;
+  /** 当前消息数。 */
+  message_count: number;
+}): ChatFollowIndicator {
+  if (options.latest_visible) return { visible: false, new_message_count: 0 };
+  // 负数出现在重写历史消息后（消息数变少），此时退回「回到最新」而不是报「-1 条新消息」。
+  return { visible: true, new_message_count: Math.max(0, options.message_count - options.baseline_message_count) };
 }

@@ -88,13 +88,19 @@ export function SessionView(props: SessionViewProps) {
   const { session, messages, runtime, settings } = props;
   const scroll_surface_id = get_session_key(props.workspace_id, props.agent.agent_id, session.session_id);
   // 滚动锚点以「首条消息 ID」为内容标识：只有历史前插会改变它，追加消息不会。
-  const { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, is_following, scroll_to_bottom } = use_chat_scroll(scroll_surface_id, settings.auto_scroll, messages[0]?.message_id ?? "");
+  const { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, is_following, latest_visible, scroll_to_bottom } = use_chat_scroll(scroll_surface_id, settings.auto_scroll, messages[0]?.message_id ?? "");
   const busy = is_chat_busy(runtime);
-  // 「回到最新」的计数基线：跟随中基线持续跟随当前消息数，退出跟随后才开始累积。
+  // 「回到最新」的计数基线：仍在底部时基线跟着当前消息数走，离开底部后才开始累积。
   // 这样用户只是上滑回看、没有新内容时不会报出一个凭空的数字。
+  // 基线由**跟随状态**驱动（“什么时候离开底部”是意图），而入口的显隐由**距离**决定，
+  // 两者分开见 resolve_chat_follow_indicator。
   const follow_baseline_ref = useRef(props.messages.length);
   if (is_following) follow_baseline_ref.current = props.messages.length;
-  const follow_indicator = resolve_chat_follow_indicator(is_following, follow_baseline_ref.current, props.messages.length);
+  const follow_indicator = resolve_chat_follow_indicator({
+    latest_visible,
+    baseline_message_count: follow_baseline_ref.current,
+    message_count: props.messages.length,
+  });
   const handle_link_click = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (!props.open_file || event.defaultPrevented || event.button !== 0) return;
     const anchor = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>("a[href]") : null;

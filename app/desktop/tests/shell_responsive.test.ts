@@ -1,16 +1,18 @@
 /**
- * 窄窗口自适应与「回到最新」判定测试。
+ * 窄窗口自适应测试。
  *
- * 这两条都是「不写测试就一定会写错、而且肉眼不容易发现」的逻辑：
- * 自动收起如果分不清是系统收的还是用户收的，拉宽窗口后侧栏会莫名其妙地消失；
- * 「回到最新」的计数如果基线不对，会报出一个凭空的消息数。
+ * 这条是「不写测试就一定会写错、而且肉眼不容易发现」的逻辑：
+ * 自动收起如果分不清是系统收的还是用户收的，拉宽窗口后侧栏会莫名其妙地消失。
+ *
+ * 「回到最新」的判定属于 Chat 滚动策略，测试在 tests/chat_scroll.test.ts。
+ *
+ * 本文件会被 node 直接加载，相对导入必须带扩展名。
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BAYBAR_AUTO_COLLAPSE_WIDTH, SIDEBAR_AUTO_COLLAPSE_WIDTH, resolve_baybar_max_width, resolve_shell_auto_collapse } from "../src/renderer/layouts/shellResponsive.ts";
 import { SHELL_BAYBAR_MIN_WIDTH, SHELL_MAIN_VIEW_MIN_REGION, SHELL_SIDEBAR_MIN_WIDTH, SHELL_SIDEBAR_RAIL_WIDTH } from "../src/renderer/layouts/shellMotion.ts";
-import { resolve_chat_follow_indicator } from "../src/renderer/features/chat/lib/chat_scroll.ts";
 
 test("进入窄区间时自动收起并标记为系统行为", () => {
   assert.deepEqual(
@@ -96,23 +98,4 @@ test("窄窗口断点由两侧最小占地与正文保留量推导", () => {
   );
   // 断点之后仍可手动展开，但不能低到「两侧都塞不下正文」的程度。
   assert.ok(BAYBAR_AUTO_COLLAPSE_WIDTH > SIDEBAR_AUTO_COLLAPSE_WIDTH);
-});
-
-test("跟随中不展示回到最新入口", () => {
-  assert.deepEqual(resolve_chat_follow_indicator(true, 10, 10), { visible: false, new_message_count: 0 });
-  // 即使有新消息，只要用户仍在底部就不该出现入口。
-  assert.deepEqual(resolve_chat_follow_indicator(true, 10, 14), { visible: false, new_message_count: 0 });
-});
-
-test("离开底部的消息数从离开那一刻起算", () => {
-  assert.deepEqual(resolve_chat_follow_indicator(false, 10, 12), { visible: true, new_message_count: 2 });
-});
-
-test("只是上滑回看、没有新消息时不报数量", () => {
-  assert.deepEqual(resolve_chat_follow_indicator(false, 10, 10), { visible: true, new_message_count: 0 });
-});
-
-test("消息被替换或回退时不出现负数", () => {
-  // 重写历史消息会让消息数减少；此时应退回「回到最新」，而不是「-1 条新消息」。
-  assert.deepEqual(resolve_chat_follow_indicator(false, 10, 9), { visible: true, new_message_count: 0 });
 });
