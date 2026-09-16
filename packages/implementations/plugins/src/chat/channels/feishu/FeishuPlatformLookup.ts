@@ -9,7 +9,7 @@
 import fs from "fs-extra";
 import path from "path";
 import type { PluginJsonObject } from "@downcity/city/plugin";
-import { plugin_http_fetch } from "@/http/PluginHttp.js";
+import { outbound_http_fetch } from "@downcity/city/http";
 import type {
   FeishuDownloadedAttachment,
 } from "@/chat/channels/feishu/types/FeishuChannel.js";
@@ -103,7 +103,7 @@ async function resolveSenderNameFromChatMembers(
 
   const domain = deps.getNormalizedDomain();
   try {
-    const response = await plugin_http_fetch(
+    const response = await outbound_http_fetch(
       `${domain}/open-apis/im/v1/chats/${encodeURIComponent(chatId)}/members?member_id_type=${encodeURIComponent(params.idType)}&page_size=100`,
       {
         method: "GET",
@@ -215,7 +215,7 @@ export async function resolveFeishuSenderName(
 
   const domain = deps.getNormalizedDomain();
   try {
-    const response = await plugin_http_fetch(
+    const response = await outbound_http_fetch(
       `${domain}/open-apis/contact/v3/users/${encodeURIComponent(senderId)}?user_id_type=${encodeURIComponent(idType)}`,
       {
         method: "GET",
@@ -329,7 +329,7 @@ export async function resolveFeishuChatTitle(
 
   const domain = deps.getNormalizedDomain();
   try {
-    const response = await plugin_http_fetch(
+    const response = await outbound_http_fetch(
       `${domain}/open-apis/im/v1/chats/${encodeURIComponent(normalizedChatId)}`,
       {
         method: "GET",
@@ -404,7 +404,7 @@ export async function resolveFeishuReplyContext(
 
   const domain = deps.getNormalizedDomain();
   try {
-    const response = await plugin_http_fetch(
+    const response = await outbound_http_fetch(
       `${domain}/open-apis/im/v1/messages/${encodeURIComponent(parentMessageId)}`,
       {
         method: "GET",

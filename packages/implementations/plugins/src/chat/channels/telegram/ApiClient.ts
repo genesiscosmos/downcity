@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
 import type { PluginLogger } from "@downcity/city/plugin";
-import { plugin_http_fetch } from "@/http/PluginHttp.js";
+import { outbound_http_fetch } from "@downcity/city/http";
 import {
   guessMimeType,
   parseTelegramAttachments,
@@ -75,7 +75,7 @@ export class TelegramApiClient {
     },
   ): Promise<T> {
     const url = `https://api.telegram.org/bot${this.botToken}/${method}`;
-    const response = await plugin_http_fetch(url, {
+    const response = await outbound_http_fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -107,7 +107,7 @@ export class TelegramApiClient {
    */
   async requestForm<T>(method: string, form: FormData): Promise<T> {
     const url = `https://api.telegram.org/bot${this.botToken}/${method}`;
-    const response = await plugin_http_fetch(url, {
+    const response = await outbound_http_fetch(url, {
       method: "POST",
       body: form,
       timeout_ms: TELEGRAM_TRANSFER_TIMEOUT_MS,
@@ -204,7 +204,7 @@ export class TelegramApiClient {
     }
 
     const url = `https://api.telegram.org/file/bot${this.botToken}/${filePath}`;
-    const res = await plugin_http_fetch(url, { timeout_ms: TELEGRAM_TRANSFER_TIMEOUT_MS });
+    const res = await outbound_http_fetch(url, { timeout_ms: TELEGRAM_TRANSFER_TIMEOUT_MS });
     if (!res.ok) {
       throw new Error(`Telegram file download failed: HTTP ${res.status}`);
     }

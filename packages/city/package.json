@@ -32,6 +32,10 @@
     "./shell": {
       "types": "./bin/shell/index.d.ts",
       "import": "./bin/shell/index.js"
+    },
+    "./http": {
+      "types": "./bin/http/OutboundHttp.d.ts",
+      "import": "./bin/http/OutboundHttp.js"
     }
   },
   "publishConfig": {
@@ -58,6 +62,7 @@
     "node-pty": "1.2.0-beta.14",
     "pinyin-pro": "^3.27.0",
     "smol-toml": "^1.7.1",
+    "undici": "^7.16.0",
     "ws": "^8.21.0",
     "zod": "^4.4.3"
   },

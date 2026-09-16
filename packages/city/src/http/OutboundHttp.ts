@@ -1,10 +1,10 @@
 /**
- * Plugin 出站 HTTP 统一入口。
+ * 出站 HTTP 统一入口。
  *
  * 关键点（中文）
- * - 所有需要访问公网的插件都必须经过这里，保证代理与超时语义完全一致。
+ * - 需要访问公网的 Downcity 能力都必须经过这里，保证代理与超时语义完全一致。
  * - 代理来源按优先级读取：DOWNCITY_PROXY_URL、HTTPS_PROXY、HTTP_PROXY、ALL_PROXY。
- * - 每个请求都必须有整体超时，禁止出现"永远挂起"的连接，否则上层状态机会一直停在 connecting。
+ * - 每个请求都必须有整体超时，禁止出现「永远挂起」的连接，否则上层状态机会一直停在 connecting。
  * - 请求体语义透传：调用方传入的全局 `FormData` 会在边界归一化成 undici 实现，
  *   保证 multipart 附件上传（Telegram / 飞书文档）不会被降级成 `[object FormData]`。
  * - 错误信息只包含脱敏 endpoint，绝不把 bot token 等路径密钥写进日志或 UI。
@@ -18,6 +18,7 @@ import {
   type Dispatcher,
   type RequestInit as UndiciRequestInit,
 } from "undici";
+
 /** 未显式指定时的整体请求超时。 */
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** 允许调用方覆盖的超时下限与上限。 */
@@ -48,10 +49,8 @@ const PROXY_ENV_KEYS = [
 /** NO_PROXY 环境变量读取顺序。 */
 const NO_PROXY_ENV_KEYS = ["DOWNCITY_NO_PROXY", "NO_PROXY", "no_proxy"] as const;
 
-/**
- * 出站请求失败分类。
- */
-export type PluginHttpErrorCode =
+/** 出站请求失败分类。 */
+export type OutboundHttpErrorCode =
   /** 超过整体超时上限。 */
   | "timeout"
   /** 连接、TLS 或传输失败。 */
@@ -67,7 +66,7 @@ export type PluginHttpErrorCode =
  * - `dispatcher` 由本模块接管，调用方不能覆盖。
  * - `timeout_ms` 覆盖连接、响应头与响应体读取的总时长。
  */
-export type PluginHttpInit = Omit<RequestInit, "signal"> & {
+export type OutboundHttpInit = Omit<RequestInit, "signal"> & {
   /** 调用方可选的主动取消信号；会与超时信号合并。 */
   signal?: AbortSignal;
   /** 本次请求的整体超时毫秒数，缺省 30 秒。 */
@@ -75,15 +74,15 @@ export type PluginHttpInit = Omit<RequestInit, "signal"> & {
 };
 
 /**
- * 归一化后的插件出站错误。
+ * 归一化后的出站错误。
  *
  * 说明（中文）
  * - `message` 面向用户与日志，必须可直接展示。
  * - `endpoint` 已确认不含密钥，可直接写入日志。
  */
-export class PluginHttpError extends Error {
+export class OutboundHttpError extends Error {
   /** 失败分类。 */
-  readonly code: PluginHttpErrorCode;
+  readonly code: OutboundHttpErrorCode;
   /** 脱敏后的请求 endpoint。 */
   readonly endpoint: string;
   /** 本次请求使用的整体超时毫秒数。 */
@@ -92,14 +91,14 @@ export class PluginHttpError extends Error {
   readonly proxy_url: string;
 
   constructor(input: {
-    code: PluginHttpErrorCode;
+    code: OutboundHttpErrorCode;
     endpoint: string;
     timeout_ms: number;
     proxy_url: string;
     message: string;
   }) {
     super(input.message);
-    this.name = "PluginHttpError";
+    this.name = "OutboundHttpError";
     this.code = input.code;
     this.endpoint = input.endpoint;
     this.timeout_ms = input.timeout_ms;
@@ -117,7 +116,7 @@ let cached_dispatcher: { proxy_url: string; dispatcher: Dispatcher } | undefined
  * - 返回空字符串表示直连。
  * - 由于 Desktop 会在运行时改写环境变量，本函数每次调用都重新读取。
  */
-export function resolve_plugin_proxy_url(): string {
+export function resolve_outbound_proxy_url(): string {
   for (const key of PROXY_ENV_KEYS) {
     const value = String(process.env[key] || "").trim();
     if (value) return value;
@@ -125,23 +124,23 @@ export function resolve_plugin_proxy_url(): string {
   return "";
 }
 
-/** 关闭缓存中的 dispatcher，供插件释放或测试使用。 */
-export async function close_plugin_http_dispatchers(): Promise<void> {
+/** 关闭缓存中的 dispatcher，供释放或测试使用。 */
+export async function close_outbound_http_dispatchers(): Promise<void> {
   const current = cached_dispatcher;
   cached_dispatcher = undefined;
   if (current) await current.dispatcher.close().catch(() => undefined);
 }
 
 /**
- * 请求一个 HTTP 地址，并强制套用插件统一的代理与超时策略。
+ * 请求一个 HTTP 地址，并强制套用统一的代理与超时策略。
  *
  * 说明（中文）
  * - 返回全局 `Response`；undici 与 Node 内置 fetch 的 Response 运行时一致。
- * - 网络类失败统一抛 `PluginHttpError`，调用方只需读取 `message` 即可展示。
+ * - 网络类失败统一抛 `OutboundHttpError`，调用方只需读取 `message` 即可展示。
  */
-export async function plugin_http_fetch(
+export async function outbound_http_fetch(
   url: string | URL,
-  init: PluginHttpInit = {},
+  init: OutboundHttpInit = {},
 ): Promise<Response> {
   const url_string = typeof url === "string" ? url : url.toString();
   const endpoint = to_safe_endpoint(url_string);
@@ -163,7 +162,7 @@ export async function plugin_http_fetch(
     } as unknown as UndiciRequestInit);
     return response as unknown as Response;
   } catch (error) {
-    throw to_plugin_http_error({
+    throw to_outbound_http_error({
       error,
       endpoint,
       timeout_ms,
@@ -180,11 +179,11 @@ export async function plugin_http_fetch(
  * 说明（中文）
  * - 只负责传输与解析，不判断业务错误码，业务语义留给调用方。
  */
-export async function plugin_http_json<T>(
+export async function outbound_http_json<T>(
   url: string | URL,
-  init: PluginHttpInit = {},
+  init: OutboundHttpInit = {},
 ): Promise<T> {
-  const response = await plugin_http_fetch(url, init);
+  const response = await outbound_http_fetch(url, init);
   return (await response.json()) as T;
 }
 
@@ -246,7 +245,7 @@ function resolve_transport(url_string: string): {
   dispatcher: Dispatcher;
   proxy_url: string;
 } {
-  const configured_proxy = resolve_plugin_proxy_url();
+  const configured_proxy = resolve_outbound_proxy_url();
   const proxy_url = configured_proxy && !should_bypass_proxy(url_string)
     ? configure_proxy_url(configured_proxy)
     : "";
@@ -387,19 +386,19 @@ function split_host_port(rule: string): [string, string] {
   return [match[1].replace(/^\[|\]$/gu, ""), match[2] || ""];
 }
 
-/** 把底层异常归一化成用户可读的插件出站错误。 */
-function to_plugin_http_error(input: {
+/** 把底层异常归一化成用户可读的出站错误。 */
+function to_outbound_http_error(input: {
   error: unknown;
   endpoint: string;
   timeout_ms: number;
   proxy_url: string;
   timed_out: boolean;
   caller_aborted: boolean;
-}): PluginHttpError {
+}): OutboundHttpError {
   const { endpoint, timeout_ms, proxy_url } = input;
   const detail = describe_cause(input.error);
   if (input.timed_out) {
-    return new PluginHttpError({
+    return new OutboundHttpError({
       code: "timeout",
       endpoint,
       timeout_ms,
@@ -410,7 +409,7 @@ function to_plugin_http_error(input: {
     });
   }
   if (input.caller_aborted) {
-    return new PluginHttpError({
+    return new OutboundHttpError({
       code: "aborted",
       endpoint,
       timeout_ms,
@@ -418,7 +417,7 @@ function to_plugin_http_error(input: {
       message: `请求已取消：${endpoint}。`,
     });
   }
-  return new PluginHttpError({
+  return new OutboundHttpError({
     code: "connect",
     endpoint,
     timeout_ms,

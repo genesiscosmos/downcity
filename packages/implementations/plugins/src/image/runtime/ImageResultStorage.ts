@@ -8,7 +8,7 @@
  */
 
 import path from "node:path";
-import { plugin_http_fetch } from "@/http/PluginHttp.js";
+import { outbound_http_fetch } from "@downcity/city/http";
 import type {
   ImagePluginResultStorageInput,
   ImagePluginResultStorageResult,
@@ -93,7 +93,7 @@ async function persist_remote_image(input: {
   part_index: number;
   abort_signal?: AbortSignal;
 }): Promise<string> {
-  const response = await plugin_http_fetch(input.source_url, {
+  const response = await outbound_http_fetch(input.source_url, {
     ...(input.abort_signal ? { signal: input.abort_signal } : {}),
   });
   if (!response.ok) {

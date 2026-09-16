@@ -8,7 +8,7 @@
 
 import fs from "fs-extra";
 import path from "path";
-import { plugin_http_fetch } from "@/http/PluginHttp.js";
+import { outbound_http_fetch } from "@downcity/city/http";
 import type {
   FeishuMessagePayloadType,
 } from "@/chat/channels/feishu/types/FeishuChannel.js";
@@ -87,7 +87,7 @@ async function uploadFileToFeishu(
   form.set("file_name", fileName);
   form.set("file", new Blob([fileBuffer]), fileName);
 
-  const response = await plugin_http_fetch(`${domain}/open-apis/im/v1/files`, {
+  const response = await outbound_http_fetch(`${domain}/open-apis/im/v1/files`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,

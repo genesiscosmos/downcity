@@ -57,7 +57,6 @@
     "test:chat-storage": "pnpm build && node --test scripts/chat-storage.test.mjs",
     "test:chat-delivery": "pnpm build && node --test scripts/chat-delivery.test.mjs",
     "test:chat-inbound-parts": "pnpm build && node --test scripts/chat-inbound-prompt-parts.test.mjs",
-    "test:http": "pnpm build && node --test scripts/plugin-http.test.mjs",
     "test:exports": "pnpm build && node --test scripts/plugin-subpaths.test.mjs",
     "test:memory": "pnpm build && node --test scripts/memory-plugin.test.mjs",
     "test:skill": "pnpm build && node --test scripts/skill-plugin.test.mjs",
@@ -79,7 +78,6 @@
     "node-cron": "^4.2.1",
     "playwright-core": "^1.62.1",
     "qrcode-generator": "^2.0.4",
-    "undici": "^7.16.0",
     "ws": "^8.21.0",
     "zod": "^4.4.3"
   },

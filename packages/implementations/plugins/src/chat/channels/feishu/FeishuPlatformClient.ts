@@ -8,7 +8,7 @@
  */
 
 import type { PluginLogger } from "@downcity/city/plugin";
-import { plugin_http_fetch } from "@/http/PluginHttp.js";
+import { outbound_http_fetch } from "@downcity/city/http";
 import type {
   FeishuConfig,
   FeishuDownloadedAttachment,
@@ -146,7 +146,7 @@ export class FeishuPlatformClient {
     const domain = this.domain || "https://open.feishu.cn";
     const endpoint = `${domain.replace(/\/+$/, "")}/open-apis/auth/v3/app_access_token/internal`;
     try {
-      const response = await plugin_http_fetch(endpoint, {
+      const response = await outbound_http_fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -373,7 +373,7 @@ export class FeishuPlatformClient {
 
     const domain = this.getNormalizedDomain();
     try {
-      const response = await plugin_http_fetch(
+      const response = await outbound_http_fetch(
         `${domain}/open-apis/auth/v3/tenant_access_token/internal`,
         {
           method: "POST",

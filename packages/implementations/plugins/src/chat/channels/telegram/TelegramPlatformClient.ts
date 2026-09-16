@@ -10,7 +10,7 @@
 import type { PluginLogger } from "@downcity/city/plugin";
 import type { ChatChannelTestResult } from "@/chat/types/ChannelStatus.js";
 import type { ChatConnectorStatus } from "@/chat/types/ChatConnector.js";
-import { PluginHttpError } from "@/http/PluginHttp.js";
+import { OutboundHttpError } from "@downcity/city/http";
 import { TelegramApiClient } from "./ApiClient.js";
 import { TelegramStateStore } from "./StateStore.js";
 import type {
@@ -516,7 +516,7 @@ export class TelegramPlatformClient {
    * - 插件 HTTP 层主动超时会抛出 code=timeout 的标准化错误，需一并识别。
    */
   private isPollingTimeoutError(error: unknown): boolean {
-    if (error instanceof PluginHttpError && error.code === "timeout") return true;
+    if (error instanceof OutboundHttpError && error.code === "timeout") return true;
     const message = error instanceof Error ? error.message : String(error || "");
     return /timeout/i.test(message);
   }

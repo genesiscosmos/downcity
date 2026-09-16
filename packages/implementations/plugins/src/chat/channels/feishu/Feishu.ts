@@ -416,7 +416,7 @@ Available commands:
       } catch (error) {
         // 关键点（中文）：附件失败必须上抛，不能降级成一条 "❌ ..." 文本后正常返回。
         // 降级会让 Outbox 记为已投递，Agent 无法感知文件未送达。
-        // 抛出原错误而不包装，以保留 PluginHttpError 的 timeout / connect / proxy 诊断字段。
+        // 抛出原错误而不包装，以保留 OutboundHttpError 的 timeout / connect / proxy 诊断字段。
         this.logger.error("Failed to send Feishu attachment", {
           path: segment.attachment.pathOrUrl,
           error: String(error),

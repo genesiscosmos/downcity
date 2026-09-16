@@ -1,5 +1,5 @@
 /**
- * @file 验证 Plugin 统一出站 HTTP 层的代理选择、超时语义与错误脱敏。
+ * @file 验证统一出站 HTTP 层的代理选择、超时语义与错误脱敏。
  *
  * 关键点（中文）
  * - 代理与超时是 Telegram 等 Channel 卡死问题的根因，必须有回归测试保护。
@@ -11,12 +11,12 @@ import http from "node:http";
 import net from "node:net";
 import test from "node:test";
 import {
-  close_plugin_http_dispatchers,
-  PluginHttpError,
-  plugin_http_fetch,
-  plugin_http_json,
-  resolve_plugin_proxy_url,
-} from "../bin/http/PluginHttp.js";
+  close_outbound_http_dispatchers,
+  OutboundHttpError,
+  outbound_http_fetch,
+  outbound_http_json,
+  resolve_outbound_proxy_url,
+} from "../bin/http/OutboundHttp.js";
 
 /**
  * 与插件 HTTP 层相关的全部代理环境变量。
@@ -50,7 +50,7 @@ async function with_proxy_env(env, run) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    await close_plugin_http_dispatchers();
+    await close_outbound_http_dispatchers();
   }
 }
 
@@ -107,10 +107,10 @@ async function start_connect_proxy(on_connect, expected_port) {
 
 test("代理地址按 DOWNCITY_PROXY_URL 优先于通用变量解析", async () => {
   await with_proxy_env({}, async () => {
-    assert.equal(resolve_plugin_proxy_url(), "");
+    assert.equal(resolve_outbound_proxy_url(), "");
   });
   await with_proxy_env({ HTTPS_PROXY: "http://127.0.0.1:8080" }, async () => {
-    assert.equal(resolve_plugin_proxy_url(), "http://127.0.0.1:8080");
+    assert.equal(resolve_outbound_proxy_url(), "http://127.0.0.1:8080");
   });
   await with_proxy_env(
     {
@@ -118,7 +118,7 @@ test("代理地址按 DOWNCITY_PROXY_URL 优先于通用变量解析", async () 
       HTTPS_PROXY: "http://127.0.0.1:8080",
     },
     async () => {
-      assert.equal(resolve_plugin_proxy_url(), "http://127.0.0.1:7890");
+      assert.equal(resolve_outbound_proxy_url(), "http://127.0.0.1:7890");
     },
   );
 });
@@ -137,7 +137,7 @@ test("配置代理后请求经过代理隧道并正确解析", async () => {
   }, target_port);
   try {
     await with_proxy_env({ DOWNCITY_PROXY_URL: proxy.origin }, async () => {
-      const payload = await plugin_http_json(`${target.origin}/health`);
+      const payload = await outbound_http_json(`${target.origin}/health`);
       assert.deepEqual(payload, { ok: true });
       assert.deepEqual(tunnels, [`127.0.0.1:${target_port}`]);
     });
@@ -163,7 +163,7 @@ test("NO_PROXY 命中的目标直连，不经过代理", async () => {
     await with_proxy_env(
       { DOWNCITY_PROXY_URL: proxy.origin, NO_PROXY: "127.0.0.1" },
       async () => {
-        const payload = await plugin_http_json(`${direct.origin}/health`);
+        const payload = await outbound_http_json(`${direct.origin}/health`);
         assert.deepEqual(payload, { direct: true });
       },
     );
@@ -189,9 +189,9 @@ test("macOS 系统例外列表形式（CIDR 与 *.local）被正确识别", asyn
       async () => {
         // 127.0.0.1 命中例外，直连到不可达端口应当失败，而不是走代理拿到 200。
         await assert.rejects(
-          () => plugin_http_fetch("http://127.0.0.1:1/health", { timeout_ms: 1_000 }),
+          () => outbound_http_fetch("http://127.0.0.1:1/health", { timeout_ms: 1_000 }),
           (error) => {
-            assert.ok(error instanceof PluginHttpError);
+            assert.ok(error instanceof OutboundHttpError);
             // 命中例外时错误中不应出现代理地址。
             assert.equal(error.proxy_url, "");
             return true;
@@ -199,14 +199,14 @@ test("macOS 系统例外列表形式（CIDR 与 *.local）被正确识别", asyn
         );
         // 内网网段命中 CIDR 例外，同样必须直连。
         await assert.rejects(
-          () => plugin_http_fetch("http://10.1.2.3:1/health", { timeout_ms: 1_000 }),
+          () => outbound_http_fetch("http://10.1.2.3:1/health", { timeout_ms: 1_000 }),
           (error) => {
             assert.equal(error.proxy_url, "");
             return true;
           },
         );
         // 公网目标不在例外内，必须走代理。
-        const payload = await plugin_http_json(`${proxy.origin}/health`);
+        const payload = await outbound_http_json(`${proxy.origin}/health`);
         assert.deepEqual(payload, { via: "proxy" });
       },
     );
@@ -223,9 +223,9 @@ test("请求超时抛出可展示的 timeout 错误且不再挂起", async () =>
     await with_proxy_env({}, async () => {
       const started_at = Date.now();
       await assert.rejects(
-        () => plugin_http_fetch(`${hanging.origin}/hang`, { timeout_ms: 300 }),
+        () => outbound_http_fetch(`${hanging.origin}/hang`, { timeout_ms: 300 }),
         (error) => {
-          assert.ok(error instanceof PluginHttpError);
+          assert.ok(error instanceof OutboundHttpError);
           assert.equal(error.code, "timeout");
           assert.match(error.message, /请求超时/u);
           assert.match(error.message, /配置网络代理/u);
@@ -245,12 +245,12 @@ test("Telegram 风格的 endpoint 在错误信息中会脱敏 token", async () =
     await with_proxy_env({}, async () => {
       await assert.rejects(
         () =>
-          plugin_http_fetch(
+          outbound_http_fetch(
             `${hanging.origin}/bot123456:SUPER_SECRET_TOKEN/getMe`,
             { method: "POST", timeout_ms: 200 },
           ),
         (error) => {
-          assert.ok(error instanceof PluginHttpError);
+          assert.ok(error instanceof OutboundHttpError);
           assert.equal(error.endpoint.includes("SUPER_SECRET_TOKEN"), false);
           assert.equal(error.message.includes("SUPER_SECRET_TOKEN"), false);
           return true;
@@ -265,7 +265,7 @@ test("Telegram 风格的 endpoint 在错误信息中会脱敏 token", async () =
 test("不支持的 socks 代理会给出可执行的错误提示", async () => {
   await with_proxy_env({ DOWNCITY_PROXY_URL: "socks5://127.0.0.1:7890" }, async () => {
     await assert.rejects(
-      () => plugin_http_fetch("http://127.0.0.1:1/health", { timeout_ms: 200 }),
+      () => outbound_http_fetch("http://127.0.0.1:1/health", { timeout_ms: 200 }),
       (error) => {
         assert.match(String(error.message), /暂不支持 socks5/u);
         return true;
@@ -313,7 +313,7 @@ test("全局 FormData 请求体被编码为完整 multipart，文件名与分段
         "photo",
         new File([Buffer.from([0xff, 0xd8, 0xff])], "p.jpg", { type: "image/jpeg" }),
       );
-      received = await plugin_http_json(`${target.origin}/sendDocument`, {
+      received = await outbound_http_json(`${target.origin}/sendDocument`, {
         method: "POST",
         body: form,
       });
@@ -350,7 +350,7 @@ test("multipart 附件上传在配置代理后仍经过代理隧道", async () =
         new Blob([Buffer.from("payload")], { type: "text/plain" }),
         "a.txt",
       );
-      const received = await plugin_http_json(`${target.origin}/upload`, {
+      const received = await outbound_http_json(`${target.origin}/upload`, {
         method: "POST",
         body: form,
       });
@@ -370,7 +370,7 @@ test("非 FormData 请求体保持原有序列化语义", async () => {
   const target = await start_body_capture_server();
   try {
     await with_proxy_env({}, async () => {
-      const json_body = await plugin_http_json(`${target.origin}/json`, {
+      const json_body = await outbound_http_json(`${target.origin}/json`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ a: 1 }),
@@ -378,7 +378,7 @@ test("非 FormData 请求体保持原有序列化语义", async () => {
       assert.match(json_body.content_type, /^application\/json/u);
       assert.equal(json_body.body, '{"a":1}');
 
-      const form_urlencoded = await plugin_http_json(`${target.origin}/token`, {
+      const form_urlencoded = await outbound_http_json(`${target.origin}/token`, {
         method: "POST",
         body: new URLSearchParams({ grant_type: "client_credential" }),
       });
