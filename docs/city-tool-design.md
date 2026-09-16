@@ -122,7 +122,7 @@ class ExplainPathAction extends CityAction {
 
 时区与日期格式直接用 `@downcity/agent` 已导出的 `resolve_runtime_timezone` 与 `format_date_in_timezone`。日期用 sv-SE locale 输出 `YYYY-MM-DD`，harness 全域同一口径，工具内不再重复实现一份。
 
-工具层区分 `forbidden` 与 `not_found`：前者是 City 没有授予这个 namespace，后者是名字不存在。模型据此决定是换调用还是停止重试。动作对象只实现自己的语义，成功返回数据，失败抛 `CityToolRuntimeError`，由 `CityToolResult` 统一收敛成信封。
+失败只分两类：`invalid_args`（载荷或参数不合法）与 `not_found`（namespace 或动作名不存在），另有 `usage` 的 `unsupported_action`。`not_found` 的 detail 里带上可用的 namespace / 动作名，模型不用猜下一该试什么。动作对象只实现自己的语义，成功返回数据，失败抛 `CityToolRuntimeError`，由 `CityToolResult` 统一收敛成信封。
 
 ## 接入方式
 
@@ -130,24 +130,28 @@ class ExplainPathAction extends CityAction {
 
 没有做成官方 Plugin，是因为 Plugin 对模型只暴露 `plugin_call` / `plugin_read` 两个工具，Plugin 名不会变成工具名。做成 Plugin 的话模型看到的是 `plugin_call({ plugin: "city", ... })`，拿不到 `city(...)` 单入口和 namespace 分层。
 
-## 可见性
+## 可用性
 
-与 Plugin 同一口径：**City 注册了什么，每个 Agent 就能用什么**，不做 per-agent 门控，也没有配置文件。
+与 Plugin 同一口径：**City 注册了什么，每个 Agent 就能用什么**，没有 per-agent 门控，也没有配置文件。
 
-早先版本曾引入 City 级 `plugins/city/config.toml` 与 per-agent `allow` / `deny` 判定，现已删除。理由：第一期五个 namespace 全是只读非敏感，“可见性” 恒等于“全部”，那一层配置链与四个宿主装配点在算一个常量；而仓库里其他能力（Plugin、Workspace Tools）都没有 per-agent 门控这个维度。
+这里曾出现三层投机性设计，已全部删除：
 
-保留的是动作上的 `sensitivity` 字段与一条规则：**敏感 namespace 不参与默认集合**。将来真出现敏感能力（例如 `secret`），强制点是 `CityTool.tools()` 里那行过滤再加上 dispatcher 的 `forbidden` 分支，是一处改动，不会散到各动作。写操作的审批与审计同理。
+1. City 级 `plugins/city/config.toml` + 四个宿主装配点的 `read_config` 接线 + per-agent `allow` / `deny` 判定。
+2. 动作上的 `sensitivity` 字段与 `is_sensitive()`，以及 `tools()` 里那条永远通过的过滤。
+3. dispatcher 里永远不可达的 `forbidden` 分支。
+
+三者的共同问题是它们只读不写：计算的是“全部”这个常量。仓库里其他能力（Plugin、Workspace Tools）都没有 per-agent 这个维度。将来真需要限权时，加上去的成本并没有变高——那是 `tools()` 里一行过滤加一个错误分支。
 
 ## 分期
 
 **第一期（已实现）**：`city` 单入口与 namespace / 动作对象框架；`env.get`、`sandbox.get|list_mounts|explain_path`、`workspaces.list|get`、`agent.list|get`、`usage.get`；工具描述与索引由动作对象自描述派生；路径策略的纯判定接口。
 
-**第二期（待定）**：写操作（`agent.delegate`、Session 间消息、task 管理）、写操作审批与审计落盘、敏感 namespace 的显式授权流程。
+**第二期（待定）**：写操作（`agent.delegate`、Session 间消息、task 管理）、写操作审批与审计落盘。
 
 **不纳入**：文件读写与命令执行（会和现有工具形成两个真相源）、插件调用透传（会绕掉插件作用域模型）、凭据明文（任何情况下不通过此入口返回）。
 
-## 契约中提前占位的字段
+## 动作声明中的 `capability`
 
-`capability`（`read` / `write`）与 `sensitivity`（`public` / `internal` / `sensitive`）在第一期用不到，但已经进入动作声明。写操作的审计与敏感项的可见性收敛靠这两个字段驱动，后补时改的是一处判定与每个动作声明的一行，而不是每个动作的实现。
+`capability`（`read` / `write`）进入模型侧索引，告诉模型当前动作是否只读。第一期全部为 `read`；将来写操作落地时，它同时兼任审计与审批的判定依据。
 
-`WorkspaceSandboxSnapshot` 里的 `persistent` 与 `mounts[].mode` 同理：当前实现恒定 `persistent: true`、单条 `rw` 挂载，但远程 Workspace 与只读挂载补上时契约不用改。
+`WorkspaceSandboxSnapshot` 里的 `persistent` 与 `mounts[].mode` 是同类事实：当前实现恒定 `persistent: true`、单条 `rw` 挂载，但远程 Workspace 与只读挂载补上时契约不用改。

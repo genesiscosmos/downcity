@@ -1,6 +1,6 @@
 {
   "name": "@downcity/city",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "type": "module",
   "description": "Downcity City 组合根、Plugin 生命周期与 Agent transport 运行时",
   "files": [

@@ -12,7 +12,6 @@ import type {
   CityToolArgSpec,
   CityToolCapability,
   CityToolContext,
-  CityToolSensitivity,
 } from "@/city/types/CityTool.js";
 import { CityToolRuntimeError } from "@/city/tool/CityToolResult.js";
 
@@ -42,11 +41,8 @@ export abstract class CityAction {
   /** 参数声明；同时是模型侧说明与运行时校验依据。 */
   readonly args: readonly CityToolArgSpec[] = [];
 
-  /** 读写性质；第一期全部为 read。 */
+  /** 读写性质；进入模型侧索引，声明当前动作只读。 */
   readonly capability: CityToolCapability = "read";
-
-  /** 敏感级别；决定是否参与默认可见集合。 */
-  readonly sensitivity: CityToolSensitivity = "public";
 
   /** 执行动作，成功返回数据；由 `execute` 在参数校验后调用。 */
   protected abstract run(args: CityToolArgs, context: CityToolContext): Promise<unknown>;
@@ -68,12 +64,7 @@ export abstract class CityAction {
     return {
       action: this.action,
       summary: this.summary,
-      args: this.args.map((arg) => ({
-        name: arg.name,
-        type: arg.type,
-        required: arg.required,
-        description: arg.description,
-      })),
+      args: [...this.args],
       returns: this.returns,
       capability: this.capability,
     };

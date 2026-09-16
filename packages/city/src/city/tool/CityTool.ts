@@ -80,20 +80,16 @@ export class CityTool {
    * 为明确的 Agent/Workspace 执行检查点生成 `city` 工具。
    *
    * 关键点（中文）
-   * - 能力可用性与 Plugin 同一口径：City 级注册即可见，不做 per-agent 门控。
-   * - 敏感 namespace 不参与默认集合，这一条就是未来的强制点。
+   * - 可用性与 Plugin 同一口径：City 注册什么，每个 Agent 就能用什么。
    */
   tools(agent: Agent, workspace: WorkspaceRuntime): Record<string, RuntimeTool> {
-    const visible = this.namespaces.filter((namespace) => !namespace.is_sensitive());
-    if (visible.length === 0) return {};
     return {
       city: define_runtime_tool<CityToolCallInput>({
-        description: this.describe(visible),
+        description: this.describe(),
         input_schema: city_tool_input_schema,
         execute: async (call, execution_options) =>
           await this.dispatch({
             call: call as CityToolCallInput,
-            visible,
             context: this.context_of(agent, workspace, execution_options),
           }),
       }),
@@ -104,8 +100,6 @@ export class CityTool {
   private async dispatch(input: {
     /** 模型提交的原始载荷。 */
     call: CityToolCallInput;
-    /** 当前 Agent 可见的 namespace。 */
-    visible: readonly CityNamespace[];
     /** 本次调用可见的运行时事实。 */
     context: CityToolContext;
   }): Promise<CityToolResult> {
@@ -119,25 +113,15 @@ export class CityTool {
         return city_tool_ok({
           namespace: null,
           action: null,
-          data: { namespaces: describe_namespaces(input.visible) },
+          data: { namespaces: this.namespaces.map((item) => item.describe()) },
         });
       }
-      // 全量查找与可见性判定分开：模型据此区分「不存在」与「没授权」。
       const target = this.namespaces.find((item) => item.namespace === namespace) ?? null;
       if (!target) {
         throw new CityToolRuntimeError({
           code: "not_found",
           message: `Unknown city namespace: ${namespace}.`,
-          detail: { visible_namespaces: visible_names(input.visible) },
-        });
-      }
-      if (!input.visible.includes(target)) {
-        throw new CityToolRuntimeError({
-          code: "forbidden",
-          message:
-            `Namespace "${namespace}" is not enabled for agent "${input.context.agent_id}". `
-            + "Do not retry it; use one of the enabled namespaces instead.",
-          detail: { visible_namespaces: visible_names(input.visible) },
+          detail: { available_namespaces: this.namespaces.map((item) => item.namespace) },
         });
       }
       if (!action) {
@@ -193,8 +177,8 @@ export class CityTool {
     };
   }
 
-  /** 从可见 namespace 派生工具描述。 */
-  private describe(visible: readonly CityNamespace[]): string {
+  /** 从已注册 namespace 派生工具描述。 */
+  private describe(): string {
     return [
       "Read-only runtime facts about the current City: which agent, session and workspace you serve, "
         + "which sandbox you run in, and what else exists in this City.",
@@ -202,7 +186,7 @@ export class CityTool {
       "Call with no arguments to list namespaces; omit \"action\" to list the actions of one namespace.",
       "",
       "Namespaces:",
-      ...visible.map((namespace) => `- ${namespace.namespace}: ${namespace.summary}`),
+      ...this.namespaces.map((namespace) => `- ${namespace.namespace}: ${namespace.summary}`),
     ].join("\n");
   }
 }
@@ -228,14 +212,4 @@ function read_args(value: unknown): Record<string, unknown> {
     code: "invalid_args",
     message: "\"args\" must be a JSON object when provided.",
   });
-}
-
-/** 生成可见 namespace 索引。 */
-function describe_namespaces(visible: readonly CityNamespace[]): Record<string, unknown>[] {
-  return visible.map((namespace) => namespace.describe());
-}
-
-/** 生成可见 namespace 名称列表。 */
-function visible_names(visible: readonly CityNamespace[]): string[] {
-  return visible.map((namespace) => namespace.namespace);
 }

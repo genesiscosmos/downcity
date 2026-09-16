@@ -27,11 +27,6 @@ export abstract class CityNamespace {
     return this.actions.find((item) => item.action === action_name) ?? null;
   }
 
-  /** 当前 namespace 是否包含敏感动作。 */
-  is_sensitive(): boolean {
-    return this.actions.some((item) => item.sensitivity === "sensitive");
-  }
-
   /** 本 namespace 对模型侧索引的自描述。 */
   describe(): Record<string, unknown> {
     return {

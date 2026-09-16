@@ -169,7 +169,7 @@ Every Agent receives one read-only `city` Tool: the entry point for runtime fact
 
 Calling `city` with no arguments lists the namespaces the current Agent can use. Omitting `action` lists one namespace's actions together with their arguments and return shape. The Tool never writes, and never returns credential values.
 
-Availability follows the same rule as Plugins: everything City registers is available to every Agent, with no per-Agent gating and no configuration file. Namespaces marked sensitive would be excluded from that default set, and none of the namespaces above is.
+Availability follows the same rule as Plugins: everything City registers is available to every Agent, with no per-Agent gating and no configuration file.
 
 ## Security model
 

@@ -3,8 +3,9 @@
  *
  * 关键点（中文）
  * - `city` 是 Agent 查询运行时事实的唯一只读入口，按 namespace 组织动作。
- * - 这里只描述参数声明、运行时事实、结果信封与宿主接入，不含具体 namespace 的数据结构。
+ * - 这里只描述参数声明、运行时事实与结果信封，不含具体 namespace 的数据结构。
  * - namespace 与动作由 `city/tool/namespaces/` 下的类自描述，模型侧说明从对象派生。
+ * - 可用性与 Plugin 同一口径：City 注册什么，每个 Agent 就能用什么。
  */
 
 import type { Agent } from "@downcity/agent";
@@ -14,16 +15,11 @@ import type { WorkspaceSandboxSnapshot } from "@downcity/type/shell";
 /** city tool 动作的读写性质。 */
 export type CityToolCapability = "read" | "write";
 
-/** city tool namespace 的敏感级别。 */
-export type CityToolSensitivity = "public" | "internal" | "sensitive";
-
 /** city tool 失败时的机器可读错误码。 */
 export type CityToolErrorCode =
   | "not_found"
-  | "forbidden"
   | "unsupported_action"
   | "invalid_args"
-  | "sandbox_denied"
   | "internal";
 
 /** city tool 返回给模型的统一信封，避免每个 namespace 各自约定成败表达。 */
