@@ -9,7 +9,6 @@
  *   该动作不进入模型工具清单，模型侧只看到 `asr`。
  */
 
-import { z } from "zod";
 import type { ActionResult } from "@downcity/agent";
 import type { PluginJsonObject, PluginJsonValue } from "@/plugin/index.js";
 import type {
@@ -33,32 +32,6 @@ import {
   normalize_tts_result,
   resolve_asr_input,
 } from "@/capabilities/sound/runtime/SoundProtocol.js";
-
-const MODELS_INPUT_SCHEMA = z.object({
-  capability: z.enum(["asr", "tts"]).optional(),
-}).passthrough();
-
-const ASR_INPUT_SCHEMA = z.object({
-  model: z.string().optional(),
-  audio_path: z.string().optional(),
-  url: z.string().optional(),
-  data_url: z.string().optional(),
-  language: z.string().optional(),
-  media_type: z.string().optional(),
-  filename: z.string().optional(),
-  provider_options: z.record(z.string(), z.unknown()).optional(),
-}).passthrough();
-
-const TTS_INPUT_SCHEMA = z.object({
-  model: z.string().optional(),
-  text: z.string(),
-  language: z.string().optional(),
-  voice: z.string().optional(),
-  format: z.string().optional(),
-  speed: z.number().optional(),
-  instructions: z.string().optional(),
-  provider_options: z.record(z.string(), z.unknown()).optional(),
-}).passthrough();
 
 /** 从 City 注入的 Embassy 获取语音 AI 服务。 */
 function require_sound_ai(context: CityCapabilityContext): SoundAiService {

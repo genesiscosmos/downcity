@@ -8,7 +8,6 @@
  * - 失败直接抛错，由执行器统一收敛成 tool error result。
  */
 
-import { z } from "zod";
 import type { ActionResult } from "@downcity/agent";
 import type { PluginJsonObject, PluginJsonValue } from "@/plugin/index.js";
 import type {
@@ -38,39 +37,6 @@ import { localize_image_result } from "@/capabilities/image/runtime/ImageResultS
 const DEFAULT_WAIT_MS = 60_000;
 const DEFAULT_POLL_MS = 1_500;
 const MAX_WAIT_MS = 10 * 60_000;
-
-const TEXT_CONTENT_SCHEMA = z.object({
-  type: z.literal("text"),
-  text: z.string(),
-});
-
-const FILE_CONTENT_SCHEMA = z.object({
-  type: z.literal("image"),
-  url: z.string(),
-  media_type: z.string().optional(),
-});
-
-const CREATE_INPUT_SCHEMA = z.object({
-  model: z.string().optional(),
-  prompt: z.string().optional(),
-  content: z.array(z.union([TEXT_CONTENT_SCHEMA, FILE_CONTENT_SCHEMA])).optional(),
-  n: z.number().optional(),
-  count: z.number().optional(),
-  size: z.string().optional(),
-  aspect_ratio: z.string().optional(),
-  ratio: z.string().optional(),
-  quality: z.string().optional(),
-  seed: z.number().optional(),
-  client_job_id: z.string().optional(),
-  provider_options: z.object({}).passthrough().optional(),
-}).passthrough();
-
-const RESULT_INPUT_SCHEMA = z.object({
-  job_id: z.string(),
-  until_done: z.boolean().optional(),
-  max_wait_ms: z.number().optional(),
-  poll_interval_ms: z.number().optional(),
-}).passthrough();
 
 /** 从 City 注入的 Embassy 获取图片 AI 服务。 */
 function require_image_ai(context: CityCapabilityContext): ImageAiService {
