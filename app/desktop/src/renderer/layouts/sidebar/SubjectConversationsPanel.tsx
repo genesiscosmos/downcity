@@ -1,30 +1,33 @@
 /**
- * 主体行右侧按钮弹出的会话列表。
+ * 主体行展开出来的会话列表（卡片下半）。
  *
- * ## 它是浮层，不是行内展开
+ * ## 它是卡片的下半，不是浮层
  *
- * 会话列表**浮在侧栏之上**，不占列表的垂直空间：展开它不会把后面的主体推走，
- * 行列位置始终稳定。因此用 Popover（Portal + 碰撞定位），而不是把面板插进行里。
+ * 会话列表**不是**浮动层：卡片就长在列表里（浮动态绝对定位、嵌入态留在流里，见 subjectCard），
+ * 因此这里不需要描边、底色、圆角，也不需要外壳。
  *
- * 之前它曾是一个下拉**菜单**，问题不在「浮层」而在「菜单」：菜单项只有一种动作与一种外观，
- * 于是会话行只能是纯文字，也放不下自己的当前项高亮与操作入口。Popover 只提供
- * 「浮层 + 定位 + 展开语义」，里面渲染什么完全由这里决定——所以会话可以是**真的行**。
+ * 内边距由卡片提供（行与面板共用同一份，两段内容才对得齐）；高度上限与滚动留在本层。
  *
- * Popover 自带触发器的 `aria-expanded` / `aria-controls` / `aria-haspopup`，
- * 并且 Popup 的默认 role 是 `dialog`——**它需要有名字**，调用方必须传 `aria-label`。
+ * 早期它曾是一个下拉**菜单**，问题不在「浮层」而在「菜单」：菜单项只有一种动作与一种外观，
+ * 于是会话行只能是纯文字，也放不下自己的当前项高亮与操作入口。现在会话是**真的行**。
  *
- * ## 结构与归属
+ * ## 两层结构：表面负责裁剪，滚动区负责滚动
  *
- * 本组件是**卡片的下半**，上半是那一行；两者同属一个元素（见 subjectCard），
- * 因此这里不需要描边、底色、圆角，也不需要外壳：
+ * ```text
+ * [滚动容器]  铺满卡片宽度、**不带内边距** —— 滚动条的横向位置由它自己的盒子决定，
+ *             带内边距就会把滚动条从卡片右缘推到列表中间
+ *   └ [列表内边距] p-1
+ *       └ [会话行]  自己再带 px-2 做文字内缩
+ * ```
  *
- * - 内边距由卡片提供（行与面板共用同一份，两段内容才对得齐）；
- * - 高度上限与滚动留在本层：滚动条在卡片内部，被卡片的 `overflow-hidden` 裁在圆角内
- *   （原因见 ui/menu-styles，守卫见 tests/popup_scroll_region.test.ts）。
+ * 即：**内边距要给内容，不要给滚动容器**。高度上限只能写在滚动层（见 ui/menu-styles，
+ * 守卫见 tests/popup_scroll_region.test.ts）。
  *
- * 高度上限是**固定值**（20rem），不再引用 `--available-height`：那个变量由浮动层的
- * Positioner 写入，而本面板现在长在普通文档流里（同一个卡片内），根本没有 Positioner，
- * 引用它等于永远走回退分支，不如直接写清楚。
+ * ## 条数上限：嵌入态只直接列出 4 条
+ *
+ * 上限由调用方通过 `max_visible` 传入，只有嵌入态会传——理由是嵌入长期占位，而浮动点外部就收。
+ * 超出的部分不隐藏在滚动条后面，而是收进一条「全部对话」入口：滚动条只会告诉用户
+ * 「下面还有」，而一个菜单能把全部会话一次摆平，且不额外占高度。
  *
  * ## 会话行的两个入口
  *
@@ -36,12 +39,15 @@
  * 由 `RowMenuButton` 自己根据状态决定；行上的 `group/item` 就是它显隐的钩子。
  */
 
-import { TbPin, TbPinFilled, TbPlus } from "react-icons/tb";
+import { TbDots, TbPin, TbPinFilled, TbPlus } from "react-icons/tb";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { ChatStatusIcon } from "@/components/ChatStatusIcon";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import type { ChatRowStatus } from "@/features/chat/lib/chat_row_status";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
+import { split_visible_sessions } from "./subjectCard";
 
 /**
  * 面板里的一条会话。
@@ -72,6 +78,43 @@ export interface SubjectConversation {
 export const empty_conversations: readonly SubjectConversation[] = [];
 
 /**
+ * 没有任何展开面板时的共享空投影表。
+ *
+ * 与 `empty_conversations` 同理：投影结果是一张 `key → 会话列表` 的表，
+ * 没有展开时就不能每帧新建一张空 Map（行的 memo 靠引用比较）。
+ */
+export const empty_conversations_by_subject: ReadonlyMap<string, readonly SubjectConversation[]> = new Map();
+
+/**
+ * 「全部对话」菜单的宽度：比侧栏宽一档，且封在能完整读下一个标题的范围内。
+ *
+ * ```text
+ * min-w-80  320px  ← 比侧栏默认 280 宽一档，短标题也能一眼扫完
+ * max-w-md  448px  ← 长标题再长也封住，菜单不会横成一条难以阅读的长带
+ * ```
+ *
+ * 中间那段是**内容自等**：标题短就停在 320，长就长到 448 再截断。固定写死一个宽度
+ * 会让短会话名白白浪费横向空间，而那个空间本来可以用来读长名字。
+ *
+ * 为什么不用 `--available-width`：窗口最小宽度是 760，此时侧栏早已自动折叠
+ * （见 shellResponsive），正文区仍有 528px 以上，448 在任何可达尺寸下都放得下。
+ * 用一个在部分上下文里未定义的 CSS 变量反而会静默失效（`min()` 里出现未定义变量会让
+ * 整条声明被丢弃），不如直接写确定值。
+ */
+export const all_sessions_menu_class_name = "min-w-80 max-w-md";
+
+/**
+ * 浮动态的滚动容器：高度上限 + 自己的滚动 + **不把滚动传给侧栏**。
+ *
+ * `overscroll-contain` 在这种形态下是必需的：浮动卡片盖在后续行之上，
+ * 如果滚到头之后接着滚侧栏，动的就是被卡片盖住、用户看不见的那些行——
+ * 屏幕上一片静止、松手后才发现自己在别处。宁可滚到头就停住。
+ *
+ * 嵌入态**不用它，也没有滚动容器**（见下面的 `scrolls_itself`）。
+ */
+export const subject_panel_scroll_class_name = "max-h-80 overflow-y-auto overscroll-contain";
+
+/**
  * 会话行与新建行的共同骨架：同一套高度、圆角与交互态，差别只在内容与选中态。
  *
  * 提到模块级而不是写在组件里：一是每次渲染不必重建字符串，二是这份类名带了键盘焦点指示，
@@ -85,12 +128,24 @@ export interface SubjectConversationsPanelProps {
   conversations: readonly SubjectConversation[];
   /** 新建对话；不提供时该项禁用（例如还没有可用 Workspace）。 */
   on_new_chat?(): void;
-  /** 关闭列表；切换会话与新建之后都要关掉，否则它就会盖住刚打开的对话。 */
-  close(): void;
+  /**
+   * 选中一条会话 / 新建之后的收尾。
+   *
+   * **不传就是“不用收”**（面板里写 `close?.()`）：嵌入态的卡片不盖住任何东西，
+   * 没有“用完就得让位”这回事。
+   */
+  close?(): void;
   /** 是否保持展开（点外部不收起）。 */
   pinned: boolean;
   /** 切换保持展开。 */
   on_toggle_pinned(pinned: boolean): void;
+  /**
+   * 最多直接列出多少条会话；超出的收进「全部对话」菜单。
+   *
+   * 不传 = 不限制。只有嵌入态会传（见 `docked_visible_session_count`）：
+   * 嵌入长期占位，条数必须有上限；浮动点外部就收，滚动已经够用。
+   */
+  max_visible?: number;
 }
 
 /**
@@ -101,34 +156,53 @@ export interface SubjectConversationsPanelProps {
  * 「新建对话」是这一层的**首要动作**（进来通常就是为了开一个新的），因此固定在顶部，
  * 与列表分居两段；它不再随会话数量上下浮动。下面接会话列表。
  *
- * ## 固定按钮
+ * ## 固定开关
  *
- * 默认行为是「点外部收起」——面板会盖住下面的行，不收起就得先想办法关掉它。
- * 只有确实要边看边操作时才需要它留着，所以固定做成**显式开关**而不是默认：
- * 顶部那一行的右侧，与“新建对话”同高。
+ * 浮动会盖住它下面的行，所以它有「点外部收起」这个默认行为；嵌入没有这回事，
+ * 因此固定开关在嵌入态是「已经按下」的状态，按它只是回到浮动。
+ * 开关本身只上报目标状态，不判断当前处在哪个态——那是调用方的事。
  *
- * `aria-pressed` 表达开合，而不是把按钮名称改成“取消固定”：切换按钮的名称应保持稳定，
- * 状态交给 `aria-pressed`，读屏会读成“保持展开，切换按钮，已按下”。
+ * ## 滚动：嵌入态**不自己滚**
+ *
+ * ```text
+ * 浮动  max-h-80 + overflow-y-auto + overscroll-contain   ← 自己是浮层，自带滚动
+ * 嵌入  不包滚动容器，卡片直接长高                        ← 交给侧栏一起滚
+ * ```
+ *
+ * 这里曾经不分形态、两边都上 `max-h-80 + overflow-y-auto + overscroll-contain`，
+ * 结果是：**鼠标停在嵌入的面板上滚不动整个侧栏**。原因是嵌套滚动容器的正常行为——
+ * 光标下的元素既然是滚动容器，滚轮就先归它；它的内容装得下（嵌入态最多 4 条会话 + 2 行，
+ * 远不到 320px）所以一像素都不动，而 `overscroll-contain` 又明确禁止把滚动传给侧栏，
+ * 于是整个手势被吃掉。用户看到的正是“固定在列表里的面板把侧栏的滚动卡住了”。
+ *
+ * 修法不是去掉 `overscroll-contain`，而是**嵌入态不要那个滚动容器**：
+ * 嵌入的卡片就在列表流里，与它后面的主体是同一份内容，本来就该一起滚——
+ * 两个滚动容器嵌套在这里没有任何好处，只会制造一个“滚不动”的死区。
+ *
+ * 高度不会因此失控：条数上限（`docked_visible_session_count`）已经把嵌入态封在
+ * 新建行 + 4 条会话 + 「全部」行，约 176px；那个上限现在承担两件事——
+ * 一是别把后面主体推出屏幕，二是让“不自己滚”成立。两者是同一个约束。
+ *
+ * 判定就落在 `max_visible` 上，因为它的含义恰好是“调用方已经把我的高度封顶了”：
+ * 被封顶就不需要自己滚；没人封顶（浮动态）才要。
  */
-export function SubjectConversationsPanel({ conversations, on_new_chat, close, pinned, on_toggle_pinned }: SubjectConversationsPanelProps) {
+export function SubjectConversationsPanel({ conversations, on_new_chat, close, pinned, on_toggle_pinned, max_visible }: SubjectConversationsPanelProps) {
   const translate = use_translation("navigation");
-  // 内边距与滚动分成两层，这是滚动条能贴边的唯一办法：
-  //
-  // [滚动容器]  铺满卡片宽度、**不带内边距**——滚动条的横向位置由它自己的盒子决定，
-  //             带内边距就会把滚动条从卡片右缘推到列表中间；
-  //   └ [列表内边距]  p-1，与菜单同档
-  //       └ [会话行]  自己再带 px-2 做文字内缩
-  //
-  // 即：**内边距要给内容，而不是给滚动容器**。给错了层，滚动条会跟着一起内缩。
-  return <div className="max-h-80 overflow-y-auto overscroll-contain">
-    <div className="p-1">
+  // 超出的部分不靠滚动藏起来，而是走进「全部对话」菜单——滚动条只说“下面还有”，
+  // 而菜单能把全部会话一次摆平，还不额外占高度。缝界由纯函数决定（见 subjectCard）。
+  const { visible: visible_conversations, has_more } = split_visible_sessions(conversations, max_visible);
+  const scrolls_itself = max_visible === undefined;
+
+  // 内边距与滚动分成两层，这是滚动条能贴边的唯一办法（见文件头）。
+  // 嵌入态不包外层：内边距留在内容上，滚动归侧栏。
+  const content = <div className="p-1">
       {/* 顶部：新建对话（主操作）+ 保持展开（面板开关）。
           两个按钮同行，因此高度与下面的会话行一致，整列节奏不断。 */}
       <div className="flex items-center gap-0.5">
         <button
           type="button"
           disabled={!on_new_chat}
-          onClick={() => { on_new_chat?.(); close(); }}
+          onClick={() => { on_new_chat?.(); close?.(); }}
           title={translate("sidebar.new_chat")}
           className={cn(subject_session_row_class_name, "min-w-0 flex-1 text-muted-foreground enabled:hover:bg-interaction-hover enabled:hover:text-foreground disabled:opacity-50")}
         >
@@ -146,31 +220,99 @@ export function SubjectConversationsPanel({ conversations, on_new_chat, close, p
       {conversations.length === 0
         // 空态直接说结果；新建入口就在上面一行。
         ? <p className="px-2 py-1.5 text-[0.625rem] leading-4 text-muted-foreground">{translate("sidebar.no_sessions")}</p>
-        : conversations.map((conversation) => (
-          // `group/item` 是 RowMenuButton 显隐入口的钩子（见 chat_row_status）。
-          <div
-            key={conversation.key}
-            className={cn(
-              "group/item flex items-center gap-0.5 rounded-md transition-colors duration-150",
-              conversation.active ? "bg-interaction-selected hover:bg-interaction-active" : "hover:bg-interaction-hover",
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => { conversation.select(); close(); }}
-              // 「当前所在的会话」用 aria-current 表达；它不是导航到另一个页面，因此不用 page。
-              aria-current={conversation.active ? "true" : undefined}
-              title={conversation.title}
-              className={cn(subject_session_row_class_name, "min-w-0 flex-1")}
+        : <>
+          {visible_conversations.map((conversation) => (
+            // `group/item` 是 RowMenuButton 显隐入口的钩子（见 chat_row_status）。
+            <div
+              key={conversation.key}
+              className={cn(
+                "group/item flex items-center gap-0.5 rounded-md transition-colors duration-150",
+                conversation.active ? "bg-interaction-selected hover:bg-interaction-active" : "hover:bg-interaction-hover",
+              )}
             >
-              <span className="min-w-0 flex-1 truncate text-xs text-foreground">{conversation.title}</span>
-            </button>
-            {/* 操作入口与主体行同宽同位。状态（未读 / 失败 / 正在回复）就画在这个入口上，
-                因此不需要在标题旁边再放一个状态图标——那会让同一件事在一行里出现两次。 */}
-            {conversation.menu ? <span className="flex size-6 shrink-0 items-center justify-center">{conversation.menu}</span> : null}
-          </div>
-        ))
-      }
-    </div>
+              <button
+                type="button"
+                onClick={() => { conversation.select(); close?.(); }}
+                // 「当前所在的会话」用 aria-current 表达；它不是导航到另一个页面，因此不用 page。
+                aria-current={conversation.active ? "true" : undefined}
+                title={conversation.title}
+                className={cn(subject_session_row_class_name, "min-w-0 flex-1")}
+              >
+                <span className="min-w-0 flex-1 truncate text-xs text-foreground">{conversation.title}</span>
+              </button>
+              {/* 操作入口与主体行同宽同位。状态（未读 / 失败 / 正在回复）就画在这个入口上，
+                  因此不需要在标题旁边再放一个状态图标——那会让同一件事在一行里出现两次。 */}
+              {conversation.menu ? <span className="flex size-6 shrink-0 items-center justify-center">{conversation.menu}</span> : null}
+            </div>
+          ))}
+          {/* 超出的部分：一条与「新建对话」同构的行，点开是全部会话。
+              它自己也占一行、也在同一个列表里，因此不是“列表之外的补充入口”。 */}
+          {has_more ? <MoreSessionsRow conversations={conversations} close={close} /> : null}
+        </>}
   </div>;
+
+  return scrolls_itself ? <div className={subject_panel_scroll_class_name}>{content}</div> : content;
+}
+
+/**
+ * 「全部对话」入口：列出被上限挡住的那些，同时把已列出的也一并给出。
+ *
+ * 菜单里放**全部**会话而不是只放被挡住的那几条：用户点它的心态是「我要找的那条不在上面」，
+ * 此时还要在“上面 4 条”和“菜单里 8 条”之间做除法，等于把上限这件事泄漏给了用户。
+ * 全给一遍，上限就只是“上面能先看到几条”，不再是一条需要记住的规则。
+ *
+ * ## 为什么向右展开而不是向下
+ *
+ * 这条入口列的是**名字**，而侧栏最宽也只能拖到 400（默认 280，见 `SHELL_SIDEBAR_*_WIDTH`）：
+ * 往下弹时菜单跟侧栏一样窄，每条标题都被截断，长的会话名一眼分不出谁是谁——
+ * 而这正是用户点它的原因。向右飞去就落在正文区，宽度随便用，名字能完整读完。
+ *
+ * 这也跟侧栏既有的右侧飞出保持一致：Rail 的图标 tooltip 就是 `side="right"`。
+ * 上下方向的菜单仍然留给会话行右侧那三个动作（重命名 / 归档 / 删除）——它们只有三项，
+ * 贴在行下面离鼠标最近；把短菜单也飞出去反而要跨过侧栏去追它。
+ *
+ * 菜单是 Portal 出去的，因此不会被卡片的 `overflow-hidden` 剪掉。
+ * 条数上限与滚动由 `DropdownMenuContent` 的共享表面负责（见 ui/menu-styles），
+ * 因此再长也不会漫出窗口，也不会让滚动条戳出圆角。
+ */
+function MoreSessionsRow({ conversations, close }: {
+  /** 该主体的**全部**会话。 */
+  conversations: readonly SubjectConversation[];
+  /** 与普通会话行同一份收尾逻辑；嵌入态不传，菜单选中后不关面板。 */
+  close?(): void;
+}) {
+  const translate = use_translation("navigation");
+  return <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      {/* 与「新建对话」同一套骨架与文案档位：两者都是“对整列做点什么”，不是某一条会话。 */}
+      <button
+        type="button"
+        className={cn(subject_session_row_class_name, "text-muted-foreground hover:bg-interaction-hover hover:text-foreground")}
+      >
+        <TbDots className="size-3.5 shrink-0" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate text-xs">
+          {translate("sidebar.all_sessions", { count: conversations.length })}
+        </span>
+      </button>
+    </DropdownMenuTrigger>
+    {/* 向右展开，与被点的那一行顶端对齐，并留出与 Rail tooltip 同档的间距（8）。
+        菜单比侧栏宽得多，因此对齐方向是“从行向右延伸”，没有右边缘对齐这回事。 */}
+    <DropdownMenuContent side="right" align="start" sideOffset={8} className={all_sessions_menu_class_name}>
+      {/* 菜单项不重复提供逐条操作（重命名 / 归档 / 删除）：菜单里嵌菜单是另一套导航，
+          键盘用户会在两层方向之间迷路。要动某条会话，回到上面那几条行走右侧入口。 */}
+      {conversations.map((conversation) => (
+        <DropdownMenuItem
+          key={conversation.key}
+          // 当前会话在这里也要认得出：上面那 4 条之外，这里同样能一眼看到“我在哪”。
+          is_selected={conversation.active}
+          onClick={() => { conversation.select(); close?.(); }}
+        >
+          <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
+          {/* 状态是**展示**，不是入口：菜单项里再放一个按钮会让菜单的键盘导航多出一层。
+              idle 传 null，因此没有状态的条目不会多留一段空白。 */}
+          <ChatStatusIcon status={conversation.status} fallback={null} />
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuContent>
+  </DropdownMenu>;
 }

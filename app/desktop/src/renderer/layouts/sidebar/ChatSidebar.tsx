@@ -20,7 +20,8 @@ import type { DesktopAgentSummary, DesktopChatRuntime, DesktopGroupSummary, Desk
 import { ChatSubjectList } from "./ChatSubjectList";
 import { SidebarHeader } from "./SidebarHeader";
 import { SidebarPanel } from "./SidebarPanel";
-import { empty_conversations, type SubjectConversation } from "./SubjectConversationsPanel";
+import { advance_open_panels, no_open_panels, retain_open_panels, set_open_panel_mode, type OpenPanels, type SubjectPanelMode } from "./subjectCard";
+import { empty_conversations_by_subject, type SubjectConversation } from "./SubjectConversationsPanel";
 import { collect_agent_last_active, collect_group_last_active, merge_runtime_activity, order_chat_subjects, type ChatSubject } from "@/features/navigation/lib/chat_subject_order";
 
 /** Chat Sidebar 属性。 */
@@ -123,15 +124,22 @@ function build_subject_conversations(options: {
  *
  * 会话列表需要三份数据（Session 目录、运行态、通知），这三份在这一层本来就已经订阅。
  * 行内各自订阅会让每一行都持有整张表，任何会话变化都要广播到所有行，所以投影留在这一层；
- * 但**只为当前展开的那一个主体**投影（见 `build_subject_conversations`）。
+ * 但**只为展开的那几个主体**投影（见 `build_subject_conversations`）。
  *
  * ## 开合状态为什么在这里
  *
- * 「一次只能展开一个」是列表级约束，而投影又需要知道展开的是谁（只为它建会话列表）。
- * 两件事都需要同一个信号，因此它归这一层：行只上报意图，不自己持有状态。
+ * 行只上报意图、不自己持有状态（两行各记一个布尔值就会同时开着两张卡而列表层不知道），
+ * 而投影又需要知道到底展开了哪几行。两件事共用同一个信号，因此它归这一层。
  *
- * 这也让**折叠态完全不做投影**：`open_conversations` 直接是共享的空数组，
- * 点会话、收到通知、流式更新都不会再重建任何会话列表。
+ * 这也让**折叠态完全不做投影**：没有展开的面板时直接是共享空表，
+ * 点会话、收到通知、流式更新都不会重建任何会话列表。
+ *
+ * ## 状态是「一个浮动 + 一组嵌入」，不是「一个 key」
+ *
+ * 以前这里只存一个 key，默认“一次只能开一个”。那个默认对**浮动**成立（它绝对定位、
+ * 会盖住下面的行，两个同时存在必然互相遮挡），对**嵌入**却是错的：嵌入在列表流里各占
+ * 一段，本来就该能并存。所以“只能一个”不是一条交互偏好，而是浮动态的物理后果，
+ * 只作用在浮动那一侧。
  */
 export const ChatSidebar = memo(function ChatSidebar({ controller, notification_state, open_create_agent, open_create_group, open_group_config }: ChatSidebarProps) {
   const translate = use_translation("navigation");
@@ -155,53 +163,76 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
     last_active_by_group: collect_group_last_active(groups),
   }), [agents, chat_runtimes, groups, sessions_by_workspace]);
 
-  const [open_subject_key, set_open_subject_key] = useState<string | null>(null);
   /**
-   * 是否保持展开（点外部不收起）。
+   * 展开中的会话面板：至多一个浮动 + 任意多个嵌入（理由见 subjectCard 里的 `OpenPanels`）。
    *
-   * 默认 false：面板会盖住下面的行，默认就应该“点开外部就收起”。
-   * 只有确实要边看边操作时才需要它留着，因此做成**显式开关**（面板顶部那个固定按钮）。
-   *
-   * 每次展开都重置为 false —— 它是「这一次展开」的临时选择，不是要记住的模式：
-   * 记住的话，用户下次点开面板发现点外部不关，会先怀疑界面坏了。
+   * 「谁在展开」与「以什么方式展开」是同一个信号的两半，因此合成一个值而不是
+   * 一个 key 加一个 `pinned` 布尔值：后者能表达出「没展开但已固定」这种不存在的组合，
+   * 而且只能描述一个面板，嵌入态要的并存无从表达。
    */
-  const [pinned, set_pinned] = useState(false);
+  const [stored_panels, set_open_panels] = useState<OpenPanels>(no_open_panels);
   /**
-   * 上报某个主体的开合意图。
+   * 头像点击：推进这一个的展开循环（折叠 → 浮动 → 嵌入 → 折叠）。
    *
    * 引用恒定（`useCallback` 空依赖）：它要作为行组件的 prop，每次渲染新建会让行的 memo 全部失效。
    *
-   * 处理函数对回调顺序不敏感：关闭事件可能来自「点外部」，而按下另一个触发器时也会先触发一次
-   * 点外部——彼时用户其实正在开新的那个，只在关闭的正是当前项时才清空，而不是一律置空。
+   * **完全不动别的面板**——嵌入态要的“独立”就是这一条。点开另一个时也只是把它推成浮动，
+   * 而浮动至多一个（由 `set_open_panel_mode` 保证），已经嵌入的那几个原封不动。
    */
-  const set_open = useCallback((key: string, open: boolean) => {
-    set_open_subject_key((current) => open ? key : (current === key ? null : current));
-    // 展开新面板时回到默认（不固定）。
-    if (open) set_pinned(false);
+  const advance_panel = useCallback((key: string) => {
+    set_open_panels((current) => advance_open_panels(current, key));
+  }, []);
+  /**
+   * 把这个主体设成指定的展开方式；`null` 收起。
+   *
+   * 给「点外部 / Esc / 固定开关」这些**有明确目标**的动作。同样只动这一个。
+   *
+   * 对回调顺序不敏感：关闭事件可能来自「点外部」，而按下另一个头像时也会先触发一次
+   * 点外部——彼时用户其实正在开新的那个，只在关闭的正是当前项时才清空，而不是一律置空。
+   * （那段顺序无关的逻辑在 `set_open_panel_mode`，能独立验证。）
+   */
+  const set_panel_mode = useCallback((key: string, mode: SubjectPanelMode | null) => {
+    set_open_panels((current) => set_open_panel_mode(current, key, mode));
   }, []);
   // 展开的主体可能已从列表消失（被删除、切换 Workspace）；此时视为未展开，
   // 避免它在同 key 的主体回来时「记得」之前是打开的。
-  const opened_subject_key = open_subject_key !== null && subjects.some((subject) => subject.key === open_subject_key) ? open_subject_key : null;
+  const open_panels = useMemo(
+    () => retain_open_panels(stored_panels, subjects.map((subject) => subject.key)),
+    [stored_panels, subjects],
+  );
 
-  // 只为展开的那一个主体投影；折叠时直接是共享空数组，不做任何扫描。
+  /** 展开中的那几个主体 key；投影只认这几个。 */
+  const open_subject_keys = useMemo(
+    () => [
+      ...(open_panels.floating_key === null ? [] : [open_panels.floating_key]),
+      ...open_panels.docked_keys,
+    ],
+    [open_panels],
+  );
+
+  // 只为展开的那几个主体投影；没有展开就没有任何扫描。
   const open_conversations = useMemo(() => {
-    if (!opened_subject_key) return empty_conversations;
-    const subject = subjects.find((item) => item.key === opened_subject_key);
-    if (!subject) return empty_conversations;
-    return build_subject_conversations({
-      subject,
-      sessions_by_workspace,
-      chat_runtimes,
-      notification_state,
-      selection,
-      controller,
-      translate,
-      translate_common,
-    });
-  }, [chat_runtimes, controller, notification_state, opened_subject_key, selection, sessions_by_workspace, subjects, translate, translate_common]);
+    if (open_subject_keys.length === 0) return empty_conversations_by_subject;
+    const by_subject = new Map<string, readonly SubjectConversation[]>();
+    for (const key of open_subject_keys) {
+      const subject = subjects.find((item) => item.key === key);
+      if (!subject) continue;
+      by_subject.set(key, build_subject_conversations({
+        subject,
+        sessions_by_workspace,
+        chat_runtimes,
+        notification_state,
+        selection,
+        controller,
+        translate,
+        translate_common,
+      }));
+    }
+    return by_subject;
+  }, [chat_runtimes, controller, notification_state, open_subject_keys, selection, sessions_by_workspace, subjects, translate, translate_common]);
 
   return <SidebarPanel>
     <SidebarHeader title={translate("views.chat")} actions={<DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("sidebar.add_chat_subject")} aria-label={translate("sidebar.add_chat_subject")}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_create_agent}><TbGhost3 /><span>{translate("sidebar.new_agent")}</span></DropdownMenuItem><DropdownMenuItem onClick={open_create_group}><TbUsers /><span>{translate("sidebar.new_group")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>} />
-    <ChatSubjectList controller={controller} subjects={subjects} open_subject_key={opened_subject_key} open_conversations={open_conversations} set_open={set_open} pinned={pinned} set_pinned={set_pinned} hydrated={hydrated} selected_agent_id={selected_agent_id} selected_group_id={selected_group_id} active_workspace_id={active_workspace_id} agents={agents} workspaces={workspaces} loading={loading} notification_state={notification_state} open_create_agent={open_create_agent} open_group_config={open_group_config} />
+    <ChatSubjectList controller={controller} subjects={subjects} open_panels={open_panels} open_conversations={open_conversations} advance_panel={advance_panel} set_panel_mode={set_panel_mode} hydrated={hydrated} selected_agent_id={selected_agent_id} selected_group_id={selected_group_id} active_workspace_id={active_workspace_id} agents={agents} workspaces={workspaces} loading={loading} notification_state={notification_state} open_create_agent={open_create_agent} open_group_config={open_group_config} />
   </SidebarPanel>;
 });
