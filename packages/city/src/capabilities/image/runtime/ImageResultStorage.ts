@@ -1,19 +1,19 @@
 /**
- * ImagePlugin 生成结果本地化。
+ * Image capability 生成结果本地化。
  *
  * 关键点（中文）
- * - City / provider 返回的远程图片先落到当前 Agent private runtime directory 私有目录，再交给 Agent Session。
+ * - 图片服务返回的远程图片先落到当前 capability 私有目录，再交给 Agent Session。
  * - File Part 的 `url` 使用稳定的本地绝对路径。
  * - 单张图片下载失败时保留远程地址，并返回可观察错误，不丢弃已经生成成功的结果。
  */
 
 import path from "node:path";
-import { outbound_http_fetch } from "@downcity/city/http";
-import type {
-  ImagePluginResultStorageInput,
-  ImagePluginResultStorageResult,
-} from "@/image/types/ImagePlugin.js";
+import { outbound_http_fetch } from "@/http/OutboundHttp.js";
 import type { SessionAgentContent } from "@downcity/agent";
+import type {
+  ImageResultStorageInput,
+  ImageResultStorageResult,
+} from "@/capabilities/image/types/Image.js";
 
 const HTTP_URL_RE = /^https?:\/\//i;
 const MAX_IMAGE_RESULT_BYTES = 50 * 1024 * 1024;
@@ -60,15 +60,17 @@ function resolve_extension(input: {
   return extension_from_url(input.source_url) || ".bin";
 }
 
-/** 受大小上限保护地读取远程响应。 */
+/** 读取响应体，并强制上限，避免异常大文件占满磁盘。 */
 async function read_response_bytes(response: Response): Promise<Buffer> {
   const declared_length = Number(response.headers.get("content-length") || 0);
-  if (declared_length > MAX_IMAGE_RESULT_BYTES) {
-    throw new Error(`image result exceeds ${MAX_IMAGE_RESULT_BYTES} bytes`);
+  if (Number.isFinite(declared_length) && declared_length > MAX_IMAGE_RESULT_BYTES) {
+    throw new Error(
+      `image result exceeds ${Math.floor(MAX_IMAGE_RESULT_BYTES / 1024 / 1024)} MiB`,
+    );
   }
-  if (!response.body) return Buffer.from(await response.arrayBuffer());
-
-  const reader = response.body.getReader();
+  const body = response.body;
+  if (!body) return Buffer.from(await response.arrayBuffer());
+  const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let total_bytes = 0;
   while (true) {
@@ -76,25 +78,26 @@ async function read_response_bytes(response: Response): Promise<Buffer> {
     if (chunk.done) break;
     total_bytes += chunk.value.byteLength;
     if (total_bytes > MAX_IMAGE_RESULT_BYTES) {
-      await reader.cancel();
-      throw new Error(`image result exceeds ${MAX_IMAGE_RESULT_BYTES} bytes`);
+      await reader.cancel().catch(() => undefined);
+      throw new Error(
+        `image result exceeds ${Math.floor(MAX_IMAGE_RESULT_BYTES / 1024 / 1024)} MiB`,
+      );
     }
     chunks.push(chunk.value);
   }
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), total_bytes);
 }
 
-/** 下载一张远程图片并返回 Agent private runtime directory 私有目录中的绝对路径。 */
+/** 下载一张远程图片并返回当前 capability 私有目录中的绝对路径。 */
 async function persist_remote_image(input: {
-  context: ImagePluginResultStorageInput["context"];
+  context: ImageResultStorageInput["context"];
   job_id: string;
   part: Extract<SessionAgentContent, { type: "file" }>;
   source_url: string;
   part_index: number;
-  abort_signal?: AbortSignal;
 }): Promise<string> {
   const response = await outbound_http_fetch(input.source_url, {
-    ...(input.abort_signal ? { signal: input.abort_signal } : {}),
+    ...(input.context.abort_signal ? { signal: input.context.abort_signal } : {}),
   });
   if (!response.ok) {
     throw new Error(`image download failed with HTTP ${response.status}`);
@@ -112,17 +115,12 @@ async function persist_remote_image(input: {
   });
   const job_segment = to_safe_segment(input.job_id, "job");
   const filename = `image_${String(input.part_index + 1).padStart(2, "0")}${extension}`;
-  const relative_path = path.posix.join(
-    "image",
-    "results",
-    job_segment,
-    filename,
-  );
-  const absolute_path = input.context.storage.files.resolve_path(...relative_path.split("/"));
-  if (!(await input.context.storage.files.path_exists(absolute_path))) {
+  const relative_path = path.posix.join("image", "results", job_segment, filename);
+  const absolute_path = input.context.files.resolve_path(...relative_path.split("/"));
+  if (!(await input.context.files.path_exists(absolute_path))) {
     const bytes = await read_response_bytes(response);
-    await input.context.storage.files.ensure_directory(path.dirname(absolute_path));
-    await input.context.storage.files.write_file_atomically(absolute_path, bytes);
+    await input.context.files.ensure_directory(path.dirname(absolute_path));
+    await input.context.files.write_file_atomically(absolute_path, bytes);
   } else {
     await response.body?.cancel();
   }
@@ -133,8 +131,8 @@ async function persist_remote_image(input: {
  * 把图片结果中的远程 File Parts 本地化，并保留原始在线地址。
  */
 export async function localize_image_result(
-  input: ImagePluginResultStorageInput,
-): Promise<ImagePluginResultStorageResult> {
+  input: ImageResultStorageInput,
+): Promise<ImageResultStorageResult> {
   const errors: string[] = [];
   const parts: SessionAgentContent[] = await Promise.all(
     input.result.parts.map(async (part, part_index): Promise<SessionAgentContent> => {
@@ -149,7 +147,6 @@ export async function localize_image_result(
           part,
           source_url,
           part_index,
-          abort_signal: input.abort_signal,
         });
         return {
           ...part,

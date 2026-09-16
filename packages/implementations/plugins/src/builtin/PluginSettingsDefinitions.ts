@@ -1,15 +1,6 @@
-/** Image 与 Sound Plugin 自己拥有的设置 Mainview 字段定义。 */
+/** Sound Plugin 自己拥有的设置 Mainview 字段定义。 */
 
 import type { PluginSettingsDefinition } from "@/builtin/types/PluginSettings.js";
-
-/** Image Plugin 设置。 */
-export const IMAGE_PLUGIN_SETTINGS: PluginSettingsDefinition = {
-  title: "Image",
-  description: "选择图像生成请求没有显式指定模型时使用的默认模型。",
-  fields: [
-    { key: "default_model", label: "Default image model", type: "string" },
-  ],
-};
 
 /** Sound Plugin 设置。 */
 export const SOUND_PLUGIN_SETTINGS: PluginSettingsDefinition = {

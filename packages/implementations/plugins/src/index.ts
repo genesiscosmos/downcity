@@ -8,7 +8,6 @@
  */
 
 export * from "./chat.js";
-export * from "./image.js";
 export * from "./memory.js";
 export * from "./skill.js";
 export * from "./sound.js";

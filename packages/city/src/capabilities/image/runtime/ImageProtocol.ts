@@ -1,21 +1,21 @@
 /**
- * ImagePlugin 与 City 图片服务之间的任务协议归一化。
+ * Image capability 与 City 图片服务之间的任务协议归一化。
  *
  * 关键点（中文）
  * - 本模块校验任务、模型与 Session 消息的最小稳定结构。
- * - 所有返回值保持为纯 JSON 数据，便于 Plugin Action 安全透传。
- * - 本模块不调用图片服务，也不持有任务或 Plugin 生命周期。
+ * - 所有返回值保持为纯 JSON 数据。
+ * - 本模块不调用图片服务，也不持有任务或连接。
  */
 
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
+import type { PluginJsonObject, PluginJsonValue } from "@/plugin/index.js";
 import type {
-  ImagePluginJobCreateResult,
-  ImagePluginJobResult,
-  ImagePluginJobResultInput,
-  ImagePluginModel,
-  ImagePluginModelsResult,
-  ImagePluginResult,
-} from "@/image/types/ImagePlugin.js";
+  ImageJobCreateResult,
+  ImageJobResult,
+  ImageModel,
+  ImageModelsResult,
+  ImageResult,
+  ImageResultInput,
+} from "@/capabilities/image/types/Image.js";
 
 /** 判断值是否为普通对象。 */
 function to_record(value: unknown): Record<string, unknown> | null {
@@ -44,17 +44,17 @@ export function describe_error(error: unknown): string {
   return parts.filter(Boolean).join(" :: ");
 }
 
-/** 归一化图片任务查询 payload。 */
-export function normalize_image_result_payload(
+/** 归一化图片任务查询输入。 */
+export function normalize_image_result_input(
   payload: PluginJsonValue | undefined,
-): ImagePluginJobResultInput {
+): ImageResultInput {
   const record = to_record(payload ?? {});
   if (!record) {
-    throw new TypeError("ImagePlugin.image_result payload must be an object");
+    throw new TypeError("image_result input must be an object");
   }
   const job_id = typeof record.job_id === "string" ? record.job_id.trim() : "";
   if (!job_id) {
-    throw new TypeError("ImagePlugin.image_result payload must include job_id");
+    throw new TypeError("image_result input must include job_id");
   }
   const until_done = record.until_done === true;
   const max_wait_ms = typeof record.max_wait_ms === "number" && Number.isFinite(record.max_wait_ms)
@@ -70,23 +70,23 @@ export function normalize_image_result_payload(
     ...(until_done ? { until_done: true } : {}),
     ...(max_wait_ms !== undefined ? { max_wait_ms } : {}),
     ...(poll_interval_ms !== undefined ? { poll_interval_ms } : {}),
-  } as ImagePluginJobResultInput;
+  } as ImageResultInput;
 }
 
-/** 校验图片服务返回的 Downcity Session 消息。 */
-export function normalize_image_result(result: ImagePluginResult): ImagePluginResult {
+/** 校验图片服务返回的 Session 消息。 */
+export function normalize_image_result(result: ImageResult): ImageResult {
   const record = to_record(result);
   if (!record || !Array.isArray(record.parts)) {
-    throw new TypeError("ImagePlugin image provider must return a Downcity Session message");
+    throw new TypeError("image provider must return a Downcity Session message");
   }
   if (record.role !== "agent") {
-    throw new TypeError("ImagePlugin image provider must return an Agent Session message");
+    throw new TypeError("image provider must return an Agent Session message");
   }
   for (const part of record.parts) {
     const part_record = to_record(part);
     if (part_record?.type !== "file") continue;
     const url = String(part_record.url || "").trim();
-    if (!url) throw new TypeError("ImagePlugin result file parts must include a url");
+    if (!url) throw new TypeError("image result file parts must include a url");
   }
   return result;
 }
@@ -98,7 +98,7 @@ function normalize_json_object(value: unknown): PluginJsonObject | undefined {
 }
 
 /** 归一化图片模型信息，并过滤非图片模型。 */
-function normalize_image_model(value: ImagePluginModel): ImagePluginModel | null {
+function normalize_image_model(value: ImageModel): ImageModel | null {
   const record = to_record(value);
   if (!record) return null;
   const id = typeof record.id === "string" ? record.id.trim() : "";
@@ -122,28 +122,28 @@ function normalize_image_model(value: ImagePluginModel): ImagePluginModel | null
 }
 
 /** 归一化模型列表结果。 */
-export function normalize_image_models(values: ImagePluginModel[]): ImagePluginModelsResult {
+export function normalize_image_models(values: ImageModel[]): ImageModelsResult {
   return {
     items: values
       .map((item) => normalize_image_model(item))
-      .filter((item): item is ImagePluginModel => item !== null),
+      .filter((item): item is ImageModel => item !== null),
   };
 }
 
 /** 校验任务创建结果。 */
-export function validate_created_job(value: ImagePluginJobCreateResult): void {
+export function validate_created_job(value: ImageJobCreateResult): void {
   if (
     !value
     || typeof value !== "object"
     || typeof value.job_id !== "string"
     || !value.job_id.trim()
   ) {
-    throw new TypeError("ImagePlugin image_create must return a job_id");
+    throw new TypeError("image_create must return a job_id");
   }
 }
 
 /** 校验任务查询结果。 */
-export function validate_job_result(value: ImagePluginJobResult): void {
+export function validate_job_result(value: ImageJobResult): void {
   const status = value?.status;
   if (
     status !== "queued"
@@ -151,6 +151,6 @@ export function validate_job_result(value: ImagePluginJobResult): void {
     && status !== "succeeded"
     && status !== "failed"
   ) {
-    throw new TypeError("ImagePlugin image_result must return a valid job status");
+    throw new TypeError("image_result must return a valid job status");
   }
 }

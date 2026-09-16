@@ -18,10 +18,6 @@
       "types": "./bin/chat.d.ts",
       "import": "./bin/chat.js"
     },
-    "./image": {
-      "types": "./bin/image.d.ts",
-      "import": "./bin/image.js"
-    },
     "./memory": {
       "types": "./bin/memory.d.ts",
       "import": "./bin/memory.js"

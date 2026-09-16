@@ -8,7 +8,6 @@
 import { fileURLToPath } from "node:url";
 import type { CityPluginRegistration } from "@downcity/city/plugin";
 import { ChatPlugin } from "@/chat.js";
-import { ImagePlugin } from "@/image.js";
 import { MemoryPlugin } from "@/memory.js";
 import { SkillPlugin } from "@/skill.js";
 import { SoundPlugin } from "@/sound.js";
@@ -58,13 +57,6 @@ export function create_builtin_plugin_registrations(): BuiltinPluginRegistration
       has_sidebar: false,
       has_mainview: false,
       plugin: new WebPlugin(),
-    },
-    {
-      readme: builtin_readme_path("image"),
-      has_config: true,
-      has_sidebar: false,
-      has_mainview: false,
-      plugin: new ImagePlugin({}),
     },
     {
       readme: builtin_readme_path("sound"),
