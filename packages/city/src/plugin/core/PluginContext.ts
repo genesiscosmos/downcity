@@ -55,6 +55,17 @@ export interface CreatePluginContextInput {
   readonly get_sessions: () => AgentSessionCollection;
   /** 延迟读取 City 提供给当前 Agent 的 Plugin 执行面。 */
   readonly get_plugins: () => AgentPluginRuntime;
+  /** 调用 City 一等能力的受限端口。 */
+  readonly invoke_capability: (input: {
+    /** 目标 capability 标识。 */
+    capability_id: string;
+    /** 目标动作名。 */
+    action: string;
+    /** 动作输入。 */
+    payload: unknown;
+  }) => Promise<unknown>;
+  /** 判断某个 capability 是否登记在 City。 */
+  readonly has_capability: (capability_id: string) => boolean;
   /** 延迟读取 Workspace env。 */
   readonly get_workspace_env: () => Readonly<Record<string, string>>;
   /** 延迟读取 Agent instruction。 */
@@ -71,6 +82,14 @@ export function create_plugin_context(input: CreatePluginContextInput): PluginCo
   return Object.freeze({
     city: Object.freeze({
       ...(input.embassy ? { embassy: input.embassy } : {}),
+      capabilities: Object.freeze({
+        has: (capability_id: string) => input.has_capability(capability_id),
+        invoke: async (capability_input) => await input.invoke_capability({
+          capability_id: capability_input.capability,
+          action: capability_input.action,
+          payload: capability_input.input,
+        }) as PluginJsonValue,
+      }),
       plugins: Object.freeze({
         get: (plugin_id: string) => input.get_plugins().get(plugin_id),
         snapshots: () => input.get_plugins().snapshots(),

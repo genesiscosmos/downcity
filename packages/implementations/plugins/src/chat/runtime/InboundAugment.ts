@@ -10,6 +10,7 @@ import type { PluginContext } from "@downcity/city/plugin";
 import type { ChatInboundAugmentInput } from "@/chat/types/ChatPlugin.js";
 import type { PluginJsonValue } from "@downcity/city/plugin";
 import { CHAT_PLUGIN_POINTS } from "@/chat/runtime/PluginPoints.js";
+import { transcribe_inbound_voice } from "@/chat/runtime/InboundVoiceTranscription.js";
 
 function normalizeText(value: string | undefined): string | undefined {
   const text = String(value || "").trim();
@@ -40,6 +41,10 @@ export function normalize_chat_inbound_input(
 
 /**
  * 执行 chat 入站增强 pipeline。
+ *
+ * 关键点（中文）
+ * - 先跑插件 pipeline，再叠加入站语音自动转写，保证其他插件看到的仍是不带转写的正文。
+ * - 自动转写能力由 City 的 sound capability 提供。
  */
 export async function augmentChatInboundInput(params: {
   context: PluginContext;
@@ -47,10 +52,15 @@ export async function augmentChatInboundInput(params: {
 }): Promise<ChatInboundAugmentInput> {
   const normalized = normalize_chat_inbound_input(params.input);
 
-  return (params.context.city.plugins.pipeline<PluginJsonValue>(
+  const augmented = (await (params.context.city.plugins.pipeline<PluginJsonValue>(
     CHAT_PLUGIN_POINTS.augmentInbound,
     normalized as unknown as PluginJsonValue,
-  ) as unknown) as Promise<ChatInboundAugmentInput>;
+  ) as unknown as Promise<ChatInboundAugmentInput>)) as ChatInboundAugmentInput;
+
+  return await transcribe_inbound_voice({
+    context: params.context,
+    inbound: normalize_chat_inbound_input(augmented),
+  });
 }
 
 /**

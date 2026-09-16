@@ -10,7 +10,6 @@
 export * from "./chat.js";
 export * from "./memory.js";
 export * from "./skill.js";
-export * from "./sound.js";
 export * from "./task.js";
 export * from "./web.js";
 export {

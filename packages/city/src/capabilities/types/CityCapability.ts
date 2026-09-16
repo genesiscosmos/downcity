@@ -57,4 +57,19 @@ export interface CityCapability {
   readonly tools: readonly CityCapabilityTool[];
   /** 需要注入 session system 的说明文本；没有时省略。 */
   system?(context: CityCapabilityContext): string | Promise<string>;
+  /**
+   * 供其他插件或宿主调用的程序化入口，不进入模型工具清单。
+   *
+   * 关键点（中文）
+   * - 用于「能力归 City、触发归插件」的场景，例如 chat 入站自动转写。
+   * - 与 tool 共享同一套执行上下文与错误语义：失败直接抛错。
+   */
+  invoke?(
+    /** 程序化动作名，snaker。 */
+    action: string,
+    /** 动作输入。 */
+    input: unknown,
+    /** 当前执行上下文。 */
+    context: CityCapabilityContext,
+  ): Promise<unknown>;
 }

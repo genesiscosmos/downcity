@@ -83,4 +83,40 @@ export class CityCapabilityRuntime {
     }
     return blocks;
   }
+
+  /**
+   * 调用某个 capability 的程序化动作。
+   *
+   * 关键点（中文）
+   * - 这是给插件与宿主用的入口，不进入模型工具清单。
+   * - capability 未声明 `invoke` 或未声明该动作时都直接失败，不做静默降级。
+   */
+  async invoke(input: {
+    /** 目标 capability 标识。 */
+    capability_id: string;
+    /** 目标动作名。 */
+    action: string;
+    /** 动作输入。 */
+    payload: unknown;
+    /** 按 capability 标识投影执行上下文。 */
+    create_context: CityCapabilityContextFactory;
+  }): Promise<unknown> {
+    const capability = this.capabilities.find((item) => item.id === input.capability_id);
+    if (!capability) {
+      throw new Error(`City capability not found: ${input.capability_id}`);
+    }
+    if (!capability.invoke) {
+      throw new Error(`City capability has no programmatic actions: ${input.capability_id}`);
+    }
+    return await capability.invoke(
+      input.action,
+      input.payload,
+      input.create_context(input.capability_id),
+    );
+  }
+
+  /** 当前已登记的 capability 是否包含指定标识。 */
+  has(capability_id: string): boolean {
+    return this.capabilities.some((item) => item.id === capability_id);
+  }
 }

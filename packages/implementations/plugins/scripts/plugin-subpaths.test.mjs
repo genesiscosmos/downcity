@@ -15,7 +15,6 @@ const plugin_entries = [
   ["chat", "ChatPlugin"],
   ["memory", "MemoryPlugin"],
   ["skill", "SkillPlugin"],
-  ["sound", "SoundPlugin"],
   ["task", "TaskPlugin"],
   ["web", "WebPlugin"],
 ];
@@ -80,7 +79,6 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
   assert.deepEqual(Object.keys(renderers.BUILTIN_PLUGIN_RENDERERS).sort(), [
     "chat",
     "skill",
-    "sound",
     "task",
     "web",
   ]);
@@ -96,7 +94,6 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
 test("内建 Plugin 子路径不再公开宿主通用配置 Schema", async () => {
   const schema_exports = [
     ["chat", "CHAT_PLUGIN_CONFIG_JSON_SCHEMA"],
-    ["sound", "SOUND_PLUGIN_CONFIG_JSON_SCHEMA"],
     ["web", "WEB_PLUGIN_CONFIG_JSON_SCHEMA"],
   ];
   for (const [plugin_name, export_name] of schema_exports) {

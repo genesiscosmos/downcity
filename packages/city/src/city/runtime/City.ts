@@ -121,6 +121,21 @@ export class City implements CityRuntime {
       plugin_scope: (agent_id, workspace_id) =>
         this.plugin_runtime.public_api.scope({ agent_id, workspace_id }),
       plugin_snapshots: () => this.plugin_runtime.public_api.snapshots(),
+      invoke_capability: async (input) =>
+        await this.capabilities.invoke({
+          capability_id: input.capability_id,
+          action: input.action,
+          payload: input.payload,
+          create_context: (capability_id) =>
+            this.capability_context({
+              agent: this.require_agent(input.agent_id),
+              workspace: this.require_workspace(input.agent_id, input.workspace_id),
+              capability_id,
+              session_id: input.session_id ?? null,
+              turn_id: input.turn_id ?? null,
+            }),
+        }),
+      has_capability: (capability_id) => this.capabilities.has(capability_id),
     });
     this.plugin_runtime = new CityPluginRuntime({
       storage: this.storage,

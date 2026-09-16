@@ -44,4 +44,25 @@ export interface CityRuntimeAccess {
 
   /** 返回 City 当前全部 Plugin 生命周期快照。 */
   readonly plugin_snapshots: () => PluginSnapshot[];
+
+  /** 调用 City 自己拥有的 capability 程序化动作。 */
+  readonly invoke_capability: (input: {
+    /** 目标 Agent 标识。 */
+    agent_id: string;
+    /** 目标 Workspace 标识。 */
+    workspace_id: string;
+    /** 目标 capability 标识。 */
+    capability_id: string;
+    /** 目标动作名。 */
+    action: string;
+    /** 动作输入。 */
+    payload: unknown;
+    /** 当前调用所属 Session；非 Session 调用时为空。 */
+    session_id?: string | null;
+    /** 当前调用所属 Turn；非 Turn 调用时为空。 */
+    turn_id?: string | null;
+  }) => Promise<unknown>;
+
+  /** 判断某个 capability 是否登记在当前 City。 */
+  readonly has_capability: (capability_id: string) => boolean;
 }

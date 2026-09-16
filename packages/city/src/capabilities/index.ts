@@ -9,10 +9,12 @@
 
 import type { CityCapability } from "@/capabilities/types/CityCapability.js";
 import { create_image_capability } from "@/capabilities/image/ImageCapability.js";
+import { create_sound_capability } from "@/capabilities/sound/SoundCapability.js";
 
 /** 创建当前全部内置 capability。 */
 export function create_builtin_capabilities(): CityCapability[] {
   return [
     create_image_capability(),
+    create_sound_capability(),
   ];
 }

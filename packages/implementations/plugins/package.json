@@ -30,10 +30,6 @@
       "types": "./bin/skill.d.ts",
       "import": "./bin/skill.js"
     },
-    "./sound": {
-      "types": "./bin/sound.d.ts",
-      "import": "./bin/sound.js"
-    },
     "./task": {
       "types": "./bin/task.d.ts",
       "import": "./bin/task.js"
@@ -53,10 +49,10 @@
     "test:chat-storage": "pnpm build && node --test scripts/chat-storage.test.mjs",
     "test:chat-delivery": "pnpm build && node --test scripts/chat-delivery.test.mjs",
     "test:chat-inbound-parts": "pnpm build && node --test scripts/chat-inbound-prompt-parts.test.mjs",
+    "test:chat-inbound-voice": "pnpm build && node --test scripts/chat-inbound-voice.test.mjs",
     "test:exports": "pnpm build && node --test scripts/plugin-subpaths.test.mjs",
     "test:memory": "pnpm build && node --test scripts/memory-plugin.test.mjs",
     "test:skill": "pnpm build && node --test scripts/skill-plugin.test.mjs",
-    "test:sound": "pnpm build && node --test scripts/sound-plugin.test.mjs",
     "test:task": "pnpm build && node --test scripts/task-plugin.test.mjs",
     "test:web": "pnpm build && node --test scripts/web-plugin.test.mjs scripts/web-data-providers.test.mjs && node --experimental-test-module-mocks --test scripts/playwright-browser-provider.test.mjs",
     "prepack": "npm run build && node ../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",

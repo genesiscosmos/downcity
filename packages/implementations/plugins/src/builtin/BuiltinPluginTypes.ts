@@ -10,7 +10,6 @@ import type { CityPluginRegistration } from "@downcity/city/plugin";
 import { ChatPlugin } from "@/chat.js";
 import { MemoryPlugin } from "@/memory.js";
 import { SkillPlugin } from "@/skill.js";
-import { SoundPlugin } from "@/sound.js";
 import { TaskPlugin } from "@/task.js";
 import { WebPlugin } from "@/web.js";
 
@@ -57,13 +56,6 @@ export function create_builtin_plugin_registrations(): BuiltinPluginRegistration
       has_sidebar: false,
       has_mainview: false,
       plugin: new WebPlugin(),
-    },
-    {
-      readme: builtin_readme_path("sound"),
-      has_config: true,
-      has_sidebar: false,
-      has_mainview: false,
-      plugin: new SoundPlugin({}),
     },
   ];
 }

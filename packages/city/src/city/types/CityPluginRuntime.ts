@@ -27,7 +27,13 @@ export interface CityPluginRuntimeOptions {
   /** Plugin Runtime 所需的 City 内部事实源访问能力。 */
   readonly runtime_access: Pick<
     CityRuntimeAccess,
-    "get_agent" | "list_agents" | "list_workspaces" | "require_workspace" | "enter_workspace"
+    | "get_agent"
+    | "list_agents"
+    | "list_workspaces"
+    | "require_workspace"
+    | "enter_workspace"
+    | "invoke_capability"
+    | "has_capability"
   >;
   /** City 可选的平台宿主能力。 */
   readonly host?: CityPluginHost;
