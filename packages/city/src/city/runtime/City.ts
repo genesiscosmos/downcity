@@ -8,7 +8,7 @@
 
 import { Agent, Group } from "@downcity/agent";
 import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
-import { CityToolRuntime } from "@/city/tool/CityToolRuntime.js";
+import { CityTool } from "@/city/tool/CityTool.js";
 import type { CityPlugins } from "@/city/types/CityPlugin.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
@@ -37,8 +37,8 @@ export class City implements CityRuntime {
   /** City 唯一的 Plugin 生命周期运行时。 */
   private readonly plugin_runtime: CityPluginRuntime;
 
-  /** City 唯一的 city tool 运行时；按 Agent/Workspace 检查点生成 `city` 工具。 */
-  private readonly city_tool: CityToolRuntime;
+  /** City 唯一的 city tool；按 Agent/Workspace 检查点生成 `city` 工具。 */
+  private readonly city_tool: CityTool;
 
   /** 仅供包内运行时组件使用的 City 事实源访问面。 */
   private readonly runtime_access: CityRuntimeAccess;
@@ -122,7 +122,7 @@ export class City implements CityRuntime {
       ...(options.plugin_host ? { host: options.plugin_host } : {}),
     });
     this.plugins = this.plugin_runtime.public_api;
-    this.city_tool = new CityToolRuntime({
+    this.city_tool = new CityTool({
       access: this.runtime_access,
       // 配置与插件同一层级：由宿主按 `plugins/city/config.toml` 解析，每次读取都取最新值。
       host: options.runtime?.city_tool ?? null,
@@ -182,17 +182,10 @@ export class City implements CityRuntime {
     workspace: WorkspaceRuntime,
   ): Record<string, RuntimeTool> {
     const agent = this.require_agent_workspace(agent_id, workspace);
-    const tools: Record<string, RuntimeTool> = {
-      ...this.plugin_runtime.tools(agent, workspace, agent.get_logger()),
-    };
-    // `city` 与 Plugin 工具共用同一个 Tool 命名空间，冲突属于装配不变量，立即失败。
-    for (const [tool_name, tool] of Object.entries(this.city_tool.tools({ agent, workspace }))) {
-      if (Object.prototype.hasOwnProperty.call(tools, tool_name)) {
-        throw new Error(`City tool name conflict: ${tool_name}`);
-      }
-      tools[tool_name] = tool;
-    }
-    return tools;
+    return merge_session_tools(
+      this.plugin_runtime.tools(agent, workspace, agent.get_logger()),
+      this.city_tool.tools(agent, workspace),
+    );
   }
 
   /** 返回当前 Agent/Workspace 在一个执行检查点可见的 Session Hook。 */
@@ -606,4 +599,25 @@ function collection_values<TValue>(
   return Array.isArray(collection)
     ? collection
     : Object.values(collection);
+}
+
+/**
+ * 合并当前检查点的 City 工具视图。
+ *
+ * 关键点（中文）
+ * - Plugin 工具与 `city` 共用同一个 Tool 命名空间，冲突属于装配不变量，立即失败。
+ */
+function merge_session_tools(
+  ...sources: readonly Record<string, RuntimeTool>[]
+): Record<string, RuntimeTool> {
+  const merged: Record<string, RuntimeTool> = {};
+  for (const source of sources) {
+    for (const [tool_name, tool] of Object.entries(source)) {
+      if (Object.prototype.hasOwnProperty.call(merged, tool_name)) {
+        throw new Error(`City tool name conflict: ${tool_name}`);
+      }
+      merged[tool_name] = tool;
+    }
+  }
+  return merged;
 }

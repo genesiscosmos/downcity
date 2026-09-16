@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - `city` 是 Agent 查询运行时事实的唯一只读入口，按 namespace 组织动作。
- * - 这里只描述注册、分发、可见性与结果信封，不含任何具体 namespace 的数据结构。
- * - 动作参数与返回结构由各自 provider 声明，模型侧描述全部从注册表派生。
+ * - 这里只描述参数声明、运行时事实、结果信封与宿主接入，不含具体 namespace 的数据结构。
+ * - namespace 与动作由 `city/tool/namespaces/` 下的类自描述，模型侧说明从对象派生。
  */
 
 import type { Agent } from "@downcity/agent";
@@ -50,7 +50,7 @@ export interface CityToolError {
   readonly detail: Record<string, unknown> | null;
 }
 
-/** 单个动作参数的声明，用于模型侧描述与运行时取值。 */
+/** 单个动作参数的声明，同时驱动模型侧说明与运行时校验。 */
 export interface CityToolArgSpec {
   /** 参数名，snaker。 */
   readonly name: string;
@@ -60,50 +60,6 @@ export interface CityToolArgSpec {
   readonly required: boolean;
   /** 参数用途的一行说明。 */
   readonly description: string;
-}
-
-/** 单个动作的声明。 */
-export interface CityToolActionSpec {
-  /** 动作名，snaker。 */
-  readonly action: string;
-  /** 动作用途的一行摘要，进入模型侧描述。 */
-  readonly summary: string;
-  /** 动作参数声明。 */
-  readonly args: readonly CityToolArgSpec[];
-  /** 返回结构说明，进入模型侧描述。 */
-  readonly returns: string;
-  /** 读写性质；第一期全部为 read。 */
-  readonly capability: CityToolCapability;
-  /** 敏感级别；决定是否参与默认可见集合。 */
-  readonly sensitivity: CityToolSensitivity;
-}
-
-/** 单次动作调用输入。 */
-export interface CityToolActionCall {
-  /** 目标动作名。 */
-  readonly action: string;
-  /** 已经过 provider 取值校验的参数对象。 */
-  readonly args: Record<string, unknown>;
-  /** 本次调用可见的运行时事实。 */
-  readonly context: CityToolContext;
-}
-
-/**
- * 一个 namespace 的实现契约。
- *
- * 关键点（中文）
- * - provider 只实现自己声明的动作，不感知可见性判定与结果信封。
- * - 执行成功直接返回数据，失败抛出 CityToolRuntimeError。
- */
-export interface CityToolNamespaceProvider {
-  /** namespace 名，snaker。 */
-  readonly namespace: string;
-  /** namespace 用途的一行摘要，进入模型侧描述。 */
-  readonly summary: string;
-  /** 动作清单。 */
-  readonly actions: readonly CityToolActionSpec[];
-  /** 执行入口。 */
-  handle(call: CityToolActionCall): Promise<unknown>;
 }
 
 /** 单次 city tool 调用可见的运行时事实。 */
@@ -146,22 +102,4 @@ export interface CityToolContext {
 export interface CityToolHost {
   /** 读取 City 级 city tool 配置；未配置时返回空对象。 */
   readonly read_config: () => Record<string, unknown>;
-}
-
-/** City 级 city tool 可见性策略。 */
-export interface CityToolPolicy {
-  /** 默认可见的 namespace 名称；未配置时取全部非敏感 namespace。 */
-  readonly defaults: readonly string[];
-  /** 针对单个 Agent 的可见性覆盖。 */
-  readonly agents: readonly CityToolAgentPolicy[];
-}
-
-/** 单个 Agent 的 namespace 可见性覆盖。 */
-export interface CityToolAgentPolicy {
-  /** 目标 Agent 标识。 */
-  readonly agent_id: string;
-  /** 显式允许的 namespace；null 表示继承默认集合。 */
-  readonly allow: readonly string[] | null;
-  /** 显式禁止的 namespace，优先级高于 allow。 */
-  readonly deny: readonly string[];
 }

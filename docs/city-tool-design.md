@@ -27,7 +27,7 @@ Agent 能读项目文件、能执行命令、能通过 Plugin 访问外部系统
 { "namespace": "sandbox", "action": "explain_path", "args": { "path": "~/.downcity/plugins/chat" } }
 ```
 
-不做成 N 个独立工具，是因为工具清单每轮都进 prompt，独立开工具会随能力增长持续膨胀，而且每加一个能力都要改工具签名。收成一个入口后，加 namespace 只加一个 provider 文件加一次注册。
+不做成 N 个独立工具，是因为工具清单每轮都进 prompt，独立开工具会随能力增长持续膨胀，而且每加一个能力都要改工具签名。收成一个入口后，加 namespace 只加一个子类文件加一次注册。
 
 省略参数的调用不报错，而是返回索引，省掉一轮试错：
 
@@ -80,14 +80,16 @@ Workspace 没有 Shell 时（例如远程 Workspace）不报错，而是明确�
 
 ## 模块结构
 
+一个工具对象、一个策略对象、两层基类，加五个 namespace 子类。
+
 ```
 packages/city/src/city/tool/
-  CityToolRuntime.ts       // 持有 namespace 声明、读配置、算可见性、产出 RuntimeTool
-  CityToolDispatcher.ts    // 载荷校验、可见性判定、分发、结果信封
-  CityToolVisibility.ts    // per-agent namespace 白名单
-  CityToolArgs.ts          // 参数取值与校验
-  CityToolErrors.ts        // 错误码
-  namespaces/              // 一个 namespace 一个文件
+  CityTool.ts              // 工具本体：产出工具定义、组装运行事实、校验载荷、分发、封信封
+  CityToolPolicy.ts        // 可见性策略：配置 → 当前 Agent 可见的 namespace
+  CityToolErrors.ts        // 错误码与错误类
+  namespaces/
+    CityAction.ts          // 抽象动作：自己声明自己、自己执行自己，并提供参数取值
+    CityNamespace.ts        // 抽象 namespace：持有动作对象、按名分发、自描述
     index.ts               // 注册顺序
     EnvNamespace.ts
     SandboxNamespace.ts
@@ -95,15 +97,33 @@ packages/city/src/city/tool/
     AgentNamespace.ts
     UsageNamespace.ts
 packages/city/src/city/types/
-  CityTool.ts              // 注册、分发、可见性、结果信封契约
+  CityTool.ts              // 参数声明、运行时事实、结果信封、宿主接入
   CityToolNamespaces.ts    // 各 namespace 的数据契约
 ```
 
-中心只有五个文件。`city` 自己的输入 schema 放在工具定义旁边，namespace 数组由 Runtime 直接持有——给一个 Map 包一层 class 换不来什么。
+一个 namespace 是一个类，一个动作是一个类：
+
+```ts
+class ExplainPathAction extends CityAction {
+  readonly action = "explain_path"
+  readonly summary = "Decide whether a path is reachable and why it is blocked."
+  readonly returns = "allowed, resolved_path, matched_mount, reason_code, reason"
+  readonly args = [string_arg("path", "Path to test, relative, absolute or a sandbox path.")]
+
+  protected async run(args, context) {
+    const target = this.require_string(args, "path")   // 取值与校验由基类负责
+    ...
+  }
+}
+```
+
+声明（`action` / `summary` / `args` / `returns`）既驱动模型侧索引，也驱动运行时参数校验，因此不存在「声明一处、校验另一处」的漂移。动作不写 switch：工具层按名取到动作对象后直接调用。
+
+校验入口在基类的模板方法上，不在 `run` 里：`execute()` 先拒绝未声明的参数，再调 protected 的 `run()`。工具层只调 `execute`，所以没有哪个动作能漏掉这层校验。
 
 时区与日期格式直接用 `@downcity/agent` 已导出的 `resolve_runtime_timezone` 与 `format_date_in_timezone`。日期用 sv-SE locale 输出 `YYYY-MM-DD`，harness 全域同一口径，工具内不再重复实现一份。
 
-`CityToolDispatcher` 区分 `forbidden` 与 `not_found`：前者是 City 没有授予这个 namespace，后者是名字不存在。模型据此决定是换调用还是停止重试。provider 只实现自己的动作语义，成功返回数据，失败抛 `CityToolRuntimeError`，由 dispatcher 统一收敛成信封。
+工具层区分 `forbidden` 与 `not_found`：前者是 City 没有授予这个 namespace，后者是名字不存在。模型据此决定是换调用还是停止重试。动作对象只实现自己的语义，成功返回数据，失败抛 `CityToolRuntimeError`，由工具层统一收敛成信封。
 
 ## 接入方式
 
@@ -142,7 +162,7 @@ new City({ runtime: { city_tool: { read_config: () => data.plugins.get_config("c
 
 ## 分期
 
-**第一期（已实现）**：`city` 单入口与注册分发框架；`env.get`、`sandbox.get|list_mounts|explain_path`、`workspaces.list|get`、`agent.list|get`、`usage.get`；工具描述从注册表派生；City 级 per-agent 可见性；路径策略的纯判定接口。
+**第一期（已实现）**：`city` 单入口与 namespace / 动作对象框架；`env.get`、`sandbox.get|list_mounts|explain_path`、`workspaces.list|get`、`agent.list|get`、`usage.get`；工具描述与索引由动作对象自描述派生；City 级 per-agent 可见性；路径策略的纯判定接口。
 
 **第二期（待定）**：写操作（`agent.delegate`、Session 间消息、task 管理）、写操作审批与审计落盘、敏感 namespace 的显式授权流程。
 
@@ -150,6 +170,6 @@ new City({ runtime: { city_tool: { read_config: () => data.plugins.get_config("c
 
 ## 契约中提前占位的字段
 
-`capability`（`read` / `write`）与 `sensitivity`（`public` / `internal` / `sensitive`）在第一期用不到，但已经进入动作声明。写操作的审计、敏感项的可见性收敛都靠这两个字段驱动，后补会牵动每个 provider。
+`capability`（`read` / `write`）与 `sensitivity`（`public` / `internal` / `sensitive`）在第一期用不到，但已经进入动作声明。写操作的审计、敏感项的可见性收敛都靠这两个字段驱动，后补会牵动每个动作类。
 
 `WorkspaceSandboxSnapshot` 里的 `persistent` 与 `mounts[].mode` 同理：当前实现恒定 `persistent: true`、单条 `rw` 挂载，但远程 Workspace 与只读挂载补上时契约不用改。

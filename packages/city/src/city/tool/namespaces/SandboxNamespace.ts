@@ -10,39 +10,100 @@
 import path from "node:path";
 import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 import { is_path_inside_root, judge_workspace_path_access } from "@/workspace/file/PathAccessRule.js";
-import type {
-  CityToolActionCall,
-  CityToolContext,
-  CityToolNamespaceProvider,
-} from "@/city/types/CityTool.js";
+import type { CityToolContext } from "@/city/types/CityTool.js";
 import type {
   CityToolPathExplanation,
   CityToolSandbox,
 } from "@/city/types/CityToolNamespaces.js";
-import { assert_known_args, read_required_string_arg } from "@/city/tool/CityToolArgs.js";
-import { unexpected_city_tool_action } from "@/city/tool/CityToolErrors.js";
+import {
+  CityAction,
+  string_arg,
+  type CityToolArgs,
+} from "@/city/tool/namespaces/CityAction.js";
+import { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
 
-/** 构造当前沙箱事实。 */
-function read_sandbox(context: CityToolContext): CityToolSandbox {
-  const snapshot = context.sandbox;
-  if (!snapshot) {
+/** 读取当前隔离环境的后端、实例、工作目录与持久性。 */
+class GetSandboxAction extends CityAction {
+  readonly action = "get";
+  readonly summary = "Read the sandbox backend, instance, workdir, mounts and persistence.";
+  readonly returns =
+    "available, backend, sandbox_id, workdir, mounts(host_path, sandbox_path, mode), persistent";
+
+  protected async run(_args: CityToolArgs, context: CityToolContext): Promise<CityToolSandbox> {
+    const snapshot = context.sandbox;
+    if (!snapshot) {
+      return {
+        available: false,
+        backend: null,
+        sandbox_id: null,
+        workdir: null,
+        mounts: [],
+        persistent: false,
+      };
+    }
     return {
-      available: false,
-      backend: null,
-      sandbox_id: null,
-      workdir: null,
-      mounts: [],
-      persistent: false,
+      available: true,
+      backend: snapshot.backend,
+      sandbox_id: snapshot.sandbox_id,
+      workdir: snapshot.workdir,
+      mounts: snapshot.mounts,
+      persistent: snapshot.persistent,
     };
   }
-  return {
-    available: true,
-    backend: snapshot.backend,
-    sandbox_id: snapshot.sandbox_id,
-    workdir: snapshot.workdir,
-    mounts: snapshot.mounts,
-    persistent: snapshot.persistent,
-  };
+}
+
+/** 列出挂载进隔离环境的宿主目录。 */
+class ListMountsAction extends CityAction {
+  readonly action = "list_mounts";
+  readonly summary = "List the host directories mounted into the sandbox.";
+  readonly returns = "mounts(host_path, sandbox_path, mode)";
+
+  protected async run(_args: CityToolArgs, context: CityToolContext): Promise<{ mounts: readonly WorkspaceSandboxMount[] }> {
+    return { mounts: context.sandbox?.mounts ?? [] };
+  }
+}
+
+/** 判定一个路径是否可达，并给出原因。 */
+class ExplainPathAction extends CityAction {
+  readonly action = "explain_path";
+  readonly summary =
+    "Decide whether a path is reachable and why it is blocked. Read-only, no file access.";
+  readonly returns =
+    "allowed, resolved_path, matched_mount, reason_code(allowed|outside_workspace|invalid_path), reason";
+  readonly args = [
+    string_arg("path", "Path to test, either relative, absolute or a sandbox path."),
+  ];
+
+  protected async run(args: CityToolArgs, context: CityToolContext): Promise<CityToolPathExplanation> {
+    const target_path = this.require_string(args, "path");
+    const resolved = resolve_host_path({ target_path, snapshot: context.sandbox });
+    const verdict = judge_workspace_path_access({
+      root_path: context.workspace_path,
+      target_path: resolved.host_path,
+    });
+    return {
+      allowed: verdict.allowed,
+      resolved_path: verdict.resolved_path,
+      matched_mount: verdict.allowed
+        ? match_mount({ host_path: verdict.resolved_path, mounts: context.sandbox?.mounts ?? [] })
+        : null,
+      reason_code: verdict.code,
+      reason: resolved.translocated
+        ? `${verdict.reason} The input was a sandbox path and was mapped to the host path first.`
+        : verdict.reason,
+    };
+  }
+}
+
+/** `sandbox` namespace。 */
+export class SandboxNamespace extends CityNamespace {
+  readonly namespace = "sandbox";
+  readonly summary = "The isolated environment this session runs in and which host paths are visible.";
+  protected readonly actions = [
+    new GetSandboxAction(),
+    new ListMountsAction(),
+    new ExplainPathAction(),
+  ];
 }
 
 /**
@@ -79,90 +140,4 @@ function match_mount(input: {
 }): WorkspaceSandboxMount | null {
   return input.mounts.find((mount) => is_path_inside_root(mount.host_path, input.host_path))
     ?? null;
-}
-
-/** 判定一个路径是否可访问。 */
-function explain_path(call: CityToolActionCall): CityToolPathExplanation {
-  assert_known_args({ args: call.args, allowed: ["path"], action: call.action });
-  const target_path = read_required_string_arg({
-    args: call.args,
-    name: "path",
-    action: call.action,
-  });
-  const resolved_path = resolve_host_path({ target_path, snapshot: call.context.sandbox });
-  const verdict = judge_workspace_path_access({
-    root_path: call.context.workspace_path,
-    target_path: resolved_path.host_path,
-  });
-  const mounts = call.context.sandbox?.mounts ?? [];
-  const matched_mount = verdict.allowed
-    ? match_mount({ host_path: verdict.resolved_path, mounts })
-    : null;
-  return {
-    allowed: verdict.allowed,
-    resolved_path: verdict.resolved_path,
-    matched_mount,
-    reason_code: verdict.code,
-    reason: resolved_path.translocated
-      ? `${verdict.reason} The input was a sandbox path and was mapped to the host path first.`
-      : verdict.reason,
-  };
-}
-
-/** 创建 `sandbox` namespace provider。 */
-export function create_sandbox_namespace(): CityToolNamespaceProvider {
-  return {
-    namespace: "sandbox",
-    summary: "The isolated environment this session runs in and which host paths are visible.",
-    actions: [
-      {
-        action: "get",
-        summary: "Read the sandbox backend, instance, workdir, mounts and persistence.",
-        args: [],
-        returns:
-          "available, backend, sandbox_id, workdir, mounts(host_path, sandbox_path, mode), persistent",
-        capability: "read",
-        sensitivity: "public",
-      },
-      {
-        action: "list_mounts",
-        summary: "List the host directories mounted into the sandbox.",
-        args: [],
-        returns: "mounts(host_path, sandbox_path, mode)",
-        capability: "read",
-        sensitivity: "public",
-      },
-      {
-        action: "explain_path",
-        summary:
-          "Decide whether a path is reachable and why it is blocked. Read-only, no file access.",
-        args: [
-          {
-            name: "path",
-            type: "string",
-            required: true,
-            description: "Path to test, either relative, absolute or a sandbox path.",
-          },
-        ],
-        returns:
-          "allowed, resolved_path, matched_mount, reason_code(allowed|outside_workspace|invalid_path), reason",
-        capability: "read",
-        sensitivity: "public",
-      },
-    ],
-    handle: async (call: CityToolActionCall) => {
-      switch (call.action) {
-        case "get":
-          assert_known_args({ args: call.args, allowed: [], action: call.action });
-          return read_sandbox(call.context);
-        case "list_mounts":
-          assert_known_args({ args: call.args, allowed: [], action: call.action });
-          return { mounts: call.context.sandbox?.mounts ?? [] };
-        case "explain_path":
-          return explain_path(call);
-        default:
-          throw unexpected_city_tool_action({ namespace: "sandbox", action: call.action });
-      }
-    },
-  };
 }
