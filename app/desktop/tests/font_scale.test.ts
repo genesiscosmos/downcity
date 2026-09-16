@@ -333,8 +333,7 @@ test("源码里的每一个 text-* 类名都真的能生成规则", async () => 
   );
 });
 
-test("样式表里的字号只能引用语义令牌，或使用 em 相对值", () => {
-  const violations: string[] = [];
+test("样式表里的字号只能引用语义令牌，或使用 em 相对值", () => {  const violations: string[] = [];
   const token_pattern = new RegExp(`^var\\(--text-(?:${expected_levels.join("|")})\\)`);
   for (const file of collect_files(styles_root, /\.css$/)) {
     const name = path.basename(file);
@@ -360,7 +359,44 @@ test("样式表里的字号只能引用语义令牌，或使用 em 相对值", (
 });
 
 // ---------------------------------------------------------------------------
-// 3. 两处清单一致
+// 3. Markdown 宿主必须自己声明字号
+// ---------------------------------------------------------------------------
+
+/**
+ * 每个渲染 `<Markdown>` 的文件都必须自己声明字号。
+ *
+ * `markdown.css` 的 `.markdown` 是 `font-size: inherit`：同一套 Markdown 要同时服务于
+ * 消息正文（`sm`）、Workspace 文档预览（`sm`）与 Plugin 说明（Plugin 自己的 `xs`），
+ * 因此基准字号必须由宿主给出。
+ *
+ * 这是继承制的代价：新加一个 Markdown 宿主而忘了声明字号时，
+ * 它会静默继承到无关的祖先字号（可能是标题的 `xl`），不报错、不报类型错，
+ * 只在某个具体界面看起来「字号奇怪」。所以这里把它盯住。
+ */
+test("每个渲染 Markdown 的文件都自己声明了字号", () => {
+  const definition = path.join(renderer_root, "components/markdown/Markdown.tsx");
+  const hosts = collect_files(renderer_root, /\.tsx?$/)
+    .filter((file) => file !== definition)
+    .filter((file) => /<Markdown\b/.test(fs.readFileSync(file, "utf8")));
+  assert.ok(hosts.length >= 5, `只扫到 ${hosts.length} 个 Markdown 宿主，扫描方式可能已失效`);
+
+  const missing = hosts.filter((file) => {
+    const source = fs.readFileSync(file, "utf8");
+    const declares_size = new RegExp(`text-(?:${expected_levels.join("|")})\\b`).test(source)
+      || source.includes("chat_message_text_class_name");
+    return !declares_size;
+  }).map((file) => path.relative(renderer_root, file));
+
+  assert.deepEqual(
+    missing,
+    [],
+    `以下文件渲染了 Markdown 但没有声明字号，会静默继承祖先字号：\n  ${missing.join("\n  ")}\n`
+      + "在包含 <Markdown> 的容器上加语义档位（或消息正文的 chat_message_text_class_name）。",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 4. 两处清单一致
 // ---------------------------------------------------------------------------
 
 test("tailwind-merge 注册的档位与 tokens.css 完全一致", () => {
@@ -378,7 +414,7 @@ test("tailwind-merge 注册的档位与 tokens.css 完全一致", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. 真的能生成
+// 5. 真的能生成
 // ---------------------------------------------------------------------------
 
 /** 类名对应的规则块里是否包含指定声明（去掉选择器转义后按词边界定位）。 */

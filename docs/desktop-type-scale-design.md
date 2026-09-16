@@ -189,21 +189,60 @@ export const chat_message_text_class_name = "text-sm leading-reading text-foregr
 
 ---
 
-## 六、文档方言：有意保留的 em 相对值
+## 六、两处有意保留的例外
 
-`markdown.css`、`mermaid.css`、`base.css` 里的 `font-size` 仍是 **em 相对值**：
+这两处不用 9 级档位，都是结构性原因，不是遗漏。
+
+### 6.1 文档方言：`em` 相对值
+
+`markdown.css`、`mermaid.css`、`base.css` 里的 `font-size` 用的是 **em 相对值**：
 
 ```css
 .markdown :where(h1) { font-size: 1.55em; }
 .markdown :where(code) { font-size: 0.92em; }
 ```
 
-它们不是 UI 层级，而是**文档方言**：Markdown 的标题、行内码、表格，以及 Mermaid 图表内的文字，都相对**承载它们的正文字号**缩放。同一段 Markdown 会出现在消息正文（`sm`）、Workspace 文档预览（`sm`）与 Plugin 说明（Plugin 自己的 `xs`）里，正文一变它们必须跟着变。换成绝对档位反而会与所在的阅读容器脱钩。
+它们不是 UI 层级，而是**文档方言**：Markdown 的标题、行内码、表格，以及 Mermaid 图表内的文字，
+都相对**承载它们的正文字号**缩放。同一段 Markdown 会出现在消息正文（`sm`）、
+Workspace 文档预览（`sm`）与 Plugin 说明（Plugin 自己的 `xs`）里，正文一变它们必须跟着变。
+换成绝对档位反而会与所在的阅读容器脱钩。
 
-因此规则是：
+规则：
 
 - UI 层级（**决定这段文字有多重要**）→ 只能 `text-<档位>`。
 - 文档方言（**相对宿主缩放**）→ 允许 `em`，且只允许出现在上述三个样式表里。
+
+#### `markdown.css` 的字号是继承的，所以宿主必须声明
+
+`.markdown` 是 `font-size: inherit`，本文件不给基准字号（给了就会把消息正文、
+Workspace 预览、Plugin 说明三者钉成一样大）。代价是**每个渲染 `<Markdown>` 的文件
+必须自己声明字号**，否则会静默继承到无关的祖先字号（可能是标题的 `xl`）——
+不报错、不报类型错，只在某个界面看起来「字号奇怪」。
+
+`font_scale.test.ts` 的「每个渲染 Markdown 的文件都自己声明了字号」盯住这一点（用临时
+探针验证过：新加一个不带字号档位的宿主会立刻失败）。新增 Markdown 宿主时，
+在包含 `<Markdown>` 的容器上加语义档位，或复用消息正文的 `chat_message_text_class_name`。
+
+### 6.2 Mermaid 图表内文字：固定 px
+
+`components/markdown/mermaid/mermaid_theme.ts` 里是**固定 px**（`fontSize: 14`、
+themeCSS 里的 `14px` / `12px` / `12.5px`），不用 9 级档位。
+
+理由（该文件顶部已有注释）：Mermaid 自己按像素计算布局，图表内部坐标、字体度量与
+`viewBox` 是同一套像素单位；混入跟随界面缩放的相对单位会让标签与节点尺寸互相错位。
+
+**它实际呈现的字号不由这个值决定。** Mermaid 产出的 SVG 带内联 `width="100%"`，
+样式表只补 `height: auto`，所以整张图会被等比缩放到容器宽度。
+字号 ∝ 容器宽度 ÷ 图表自然宽度，而自然宽度也随字号增长——两者大多是同向变化的，
+因此图内文字实际大小**由容器宽度驱动**，`fontSize` 更像图表内部的密度旋钮。
+
+这意味着“把它改成 `14px × ui_scale` 就能跟随界面缩放”是不成立的
+（自然宽度会同步变大，再被缩回容器宽度，净效果接近不变）。要让它真正跟随界面缩放，
+需要改成显式控制 SVG 的尺寸（例如给图表一个 rem 上限并在内层做 `transform: scale`），
+那是一个独立的图表缩放议题，不在本次字号收敛范内。
+
+当前行为：图表随容器宽度缩放，文字在窄图时被放大、宽图时被缩小；
+这一点在改动前后一致，本次未改变它。
 
 ---
 
@@ -278,7 +317,7 @@ HEAD  9px×10  10px×39  11px×61  12px×152  12.5px×1  13px×12  14px×23  16p
 
 | 文件 | 守住什么 |
 | --- | --- |
-| `tests/font_scale.test.ts` | **`xs` … `3xl` 与 Tailwind 默认主题的字号与行高逐项等值**（编译 Tailwind 本尊后比对）；自有档位 `3xs`/`2xs` 小于 `xs`；9 级、递增、全 rem、成对行高；代码里无 `4xl` 及以上、无任意值；**源码里每一个 `text-*` 类名都能被 Tailwind 生成规则**；样式表字号只引令牌或 em；`lib/utils.ts` 与 `tokens.css` 两份清单一致；9 级都真的生成规则；`4xl` 及以上一个都不生成 |
+| `tests/font_scale.test.ts` | **`xs` … `3xl` 与 Tailwind 默认主题的字号与行高逐项等值**（编译 Tailwind 本尊后比对）；自有档位 `3xs`/`2xs` 小于 `xs`；9 级、递增、全 rem、成对行高；代码里无 `4xl` 及以上、无任意值；**源码里每一个 `text-*` 类名都能被 Tailwind 生成规则**；样式表字号只引令牌或 em；**每个渲染 Markdown 的文件都自己声明了字号**；`lib/utils.ts` 与 `tokens.css` 两份清单一致；9 级都真的生成规则；`4xl` 及以上一个都不生成 |
 | `tests/tailwind_merge_classes.test.ts` | 跑真正的 `cn()`：四个真实调用点保留字号；**逐级**验证 9 个档位都能穿过 `cn()`；反向断言未注册的档名确实被删除（证明守卫不是恒真）；字号之间后者覆盖前者；消息正文不再依赖普通类 |
 | `tests/design_token_drift.test.ts` | 渲染层不出现 `text-4xl` 及以上与 `text-[…rem]` 这类任意值 |
 | `tests/chat_message_layout.test.ts` | 消息正文档位与行高同行同源；块间距 > 段落间距且差值 ≥ 0.125rem（等价于正文 ≤ `base`） |
@@ -306,6 +345,7 @@ cd app/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./nod
 
 - **`leading-[…]` 仍是任意值**（`leading-[1.7]`、`leading-[1.6]`、`leading-[1.65]`、`leading-[1.55]`、`leading-[1.45]` 共 6 处），以及 `leading-4/5/6/7` 这类间距尺度值。它们与字号不同：`leading-N` 是 rem 绝对值，会跟随界面缩放，不会静默失效；改成「每档一个语义行高」会改到所有正文的阅读节奏，超出本次「字号收敛 + 与 Tailwind 等值」的范围。
 - **Plugin 自带的 Markdown 仍是 `xs`**（`PluginRendererComponents` 的默认正文与 CodeBlock）。它们是 Plugin 自己的 UI，宿主不应单方面改其密度；本次只按数值等值映射。
+- **Mermaid 图表内文字仍是固定 px**（`mermaid_theme.ts`），理由与实际行为见 §6.2。它不跟随界面缩放，也不取 9 级档位；本次未改变它。
 - **`markdown.css` 的 `em` 比值未重算**（`h1` 1.55em、`code` 0.92em）。它们在 `sm` 下的取值与改动前一致，重算属于排版审美调整，不属于字号收敛。
 - **`3xl`（1.875rem）当前无调用点。** 它是 9 级阶梯的第 9 级，且必须与 Tailwind 等值，因此保留定义并在此记录，避免被误认为「死令牌」而删除或改值。
 - **`homepage/` 与 `packages/ui/` 不在范围内。** homepage 是 Tailwind v3 + 自带 `tailwind.config.ts` 的营销站，`packages/ui` 尚未被 desktop 引用（desktop 的 `package.json` 里没有 `@downcity/ui`）。等 desktop 开始消费 `packages/ui` 时，需要让它在 `packages/ui/src/styles.css` 里声明同一套 `--text-*`，否则会出现第二套字号体系。
