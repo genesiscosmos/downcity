@@ -15,11 +15,11 @@
  * ## 这里最关键的一条：档名与数值的对应关系
  *
  * 档名沿用前端传统命名，但**数值是本应用自有的阶梯，与 Tailwind 同名档位不等值**：
- * 从 `xs` 到 `lg` 四档都比 Tailwind 小一档左右（本应用 `base` = 0.9rem，Tailwind = 1rem），
- * `xl` 及以上三档与 Tailwind 相同。原因是本应用是密集的桌面工具，
+ * 从 `sm` 到 `lg` 三档都比 Tailwind 小一档左右（本应用 `base` = 0.9375rem，Tailwind = 1rem），
+ * `xs` 与 `xl` 及以上四档与 Tailwind 相同。原因是本应用是密集的桌面工具，
  * Tailwind 的 `base` = 1rem（16px）对默认正文偏大。
  *
- * 代价是「凭 Tailwind 文档的记忆写代码」会拿到错误尺寸（写 `text-base` 得到 0.9rem）。
+ * 代价是「凭 Tailwind 文档的记忆写代码」会拿到错误尺寸（写 `text-base` 得到 0.9375rem）。
  * 因此下面把「档名 → rem」**硬编码**成断言，而不是从源码读出来再自比：
  * 从源码读出来的话，值被改成什么都测不出来；硬编码才能把这件事钉住。
  *
@@ -35,15 +35,18 @@
  *
  * | 档位 | 字号 | 配对行高 | 像素等效 |
  * | --- | --- | --- | --- |
- * | `3xs` | 0.6rem | 0.875rem | 9.6 / 14px |
- * | `2xs` | 0.65rem | 0.9rem | 10.4 / 14.4px |
- * | `xs` | 0.7rem | 1rem | 11.2 / 16px |
- * | `sm` | 0.825rem | 1.2rem | 13.2 / 19.2px |
- * | `base` | 0.9rem | 1.3rem | 14.4 / 20.8px |
- * | `lg` | 1.05rem | 1.5rem | 16.8 / 24px |
+ * | `3xs` | 0.625rem | 0.875rem | 10 / 14px |
+ * | `2xs` | 0.6875rem | 0.9375rem | 11 / 15px |
+ * | `xs` | 0.75rem | 1rem | 12 / 16px |
+ * | `sm` | 0.8125rem | 1.1875rem | 13 / 19px |
+ * | `base` | 0.9375rem | 1.25rem | 15 / 20px |
+ * | `lg` | 1.0625rem | 1.5rem | 17 / 24px |
  * | `xl` | 1.25rem | 1.75rem | 20 / 28px |
  * | `2xl` | 1.5rem | 2rem | 24 / 32px |
  * | `3xl` | 1.875rem | 2.25rem | 30 / 36px |
+ *
+ * 每一级都落在 **1/16rem（0.0625rem）网格**上，因此 100% 缩放下像素值全是整数。
+ * 这条性质由 `font_scale.test.ts` 的「都落在 1/16rem 网格上」断言盯住。
  *
  * ## 有意留下的例外
  *
@@ -77,16 +80,19 @@ const document_dialect_styles = ["markdown.css", "mermaid.css", "base.css"];
  * 改档位数值时必须改这里，改的时候会看见它到底影响了哪一级。
  */
 const expected_scale: readonly (readonly [string, string, string])[] = [
-  ["3xs", "0.6rem", "0.875rem"],
-  ["2xs", "0.65rem", "0.9rem"],
-  ["xs", "0.7rem", "1rem"],
-  ["sm", "0.825rem", "1.2rem"],
-  ["base", "0.9rem", "1.3rem"],
-  ["lg", "1.05rem", "1.5rem"],
+  ["3xs", "0.625rem", "0.875rem"],
+  ["2xs", "0.6875rem", "0.9375rem"],
+  ["xs", "0.75rem", "1rem"],
+  ["sm", "0.8125rem", "1.1875rem"],
+  ["base", "0.9375rem", "1.25rem"],
+  ["lg", "1.0625rem", "1.5rem"],
   ["xl", "1.25rem", "1.75rem"],
   ["2xl", "1.5rem", "2rem"],
   ["3xl", "1.875rem", "2.25rem"],
 ];
+
+/** 1/16 rem = 1px @ 100% 缩放；所有档位必须落在它的整数倍上。 */
+const GRID_REM = 0.0625;
 
 /** 默认档：全应用的「普通文字」。 */
 const default_level = "base";
@@ -208,11 +214,58 @@ test("字号递增，且每级都有配对行高", () => {
   }
 });
 
+test("每一级的字号与配对行高都落在 1/16rem 网格上", () => {
+  /*
+   * 1rem = 16px，所以 0.0625rem 正好是 1px：落在网格上就等于**在 100% 缩放下
+   * 像素值是整数**，不会出现半像素字形。
+   *
+   * 注意 0.05rem 作步进是无效的（0.05rem = 0.8px），所以这里检查的是 1/16 而不是 1/20。
+   * 整数倍判定用容差比较，避开浮点误差。
+   */
+  const declared = read_declared_scale();
+  const off_grid: string[] = [];
+
+  const check = (label: string, value_rem: number) => {
+    const steps = value_rem / GRID_REM;
+    if (Math.abs(steps - Math.round(steps)) > 1e-9) {
+      off_grid.push(`${label}: ${value_rem}rem（= ${(value_rem * 16).toFixed(3)}px）`);
+    }
+  };
+
+  for (const name of expected_levels) {
+    check(`--text-${name}`, declared.get(name)!.size_rem);
+    const line_height = /^([\d.]+)rem$/.exec(declared.get(name)!.line_height);
+    assert.ok(line_height, `--text-${name}--line-height 不是绝对 rem：${declared.get(name)!.line_height}`);
+    check(`--text-${name}--line-height`, Number(line_height[1]));
+  }
+
+  assert.deepEqual(
+    off_grid,
+    [],
+    `以下数值不在 1/16rem 网格上，100% 缩放下会出现小数像素：\n  ${off_grid.join("\n  ")}\n`
+      + "把数值改成 0.0625rem 的整数倍（即换算成 px 后是整数），再同步本文件的契约表。",
+  );
+});
+
+/**
+ * 反向确认：「网格」断言不是恒真的。
+ *
+ * 取一个上一版用过的非网格值（0.9rem = 14.4px），它必须被判为越界。
+ */
+test("非网格值确实会被判为越界（证明上面那条断言有效）", () => {
+  const steps = 0.9 / GRID_REM;
+  assert.ok(
+    Math.abs(steps - Math.round(steps)) > 1e-9,
+    "0.9rem 竟然被判为落在 1/16rem 网格上：上面那条断言可能恒真",
+  );
+  assert.equal(0.9 * 16, 14.4, "0.9rem 的像素值应当不是整数，本测试的前提已失效");
+});
+
 test("默认档 base 是正文用的那一档，且在正文约束之内", () => {
   const declared = read_declared_scale();
   const base = declared.get(default_level)!.size_rem;
   // 它是全应用最常用的档，动了就是全局字号变动。
-  assert.equal(base, 0.9, `默认档 base 不是 0.9rem：${base}rem`);
+  assert.equal(base, 0.9375, `默认档 base 不是 0.9375rem（15px）：${base}rem`);
   /*
    * `.markdown` 的段落间距是 0.5em，必须比消息块间距（gap-3 = 0.75rem）小至少 0.125rem：
    * `0.5 × 字号 ≤ 0.75 − 0.125` ⇒ 字号 ≤ 1.25rem。

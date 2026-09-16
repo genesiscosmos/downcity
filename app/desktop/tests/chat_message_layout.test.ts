@@ -89,9 +89,9 @@ const text_consumers = {
 /**
  * 读出消息正文用的语义字号档；段落间距的换算与归组断言都用它。
  *
- * 正文不另开字号档位，直接用**默认档** `--text-base`（0.9rem），
+ * 正文不另开字号档位，直接用**默认档** `--text-base`（0.9375rem），
  * 行高单独取 `--leading-reading`（1.8，无单位倍数）——`base` 的配对行高是
- * 1.3rem，是 UI 文本的密度，对长段落太挤。所以这里读两个令牌，而不是一个配对。
+ * 1.25rem，是 UI 文本的密度，对长段落太挤。所以这里读两个令牌，而不是一个配对。
  */
 function read_body_type_token(): { size_rem: number; line_height: number } {
   const size = /--text-base:\s*([\d.]+)rem/.exec(theme_tokens);
@@ -172,14 +172,14 @@ test("消息字号只有一个来源，四个消费处都用它", () => {
   assert.ok(!/text-\[/.test(text), `消息正文自己写了任意字号：${text}`);
 
   const { size_rem, line_height } = read_body_type_token();
-  // 必须等于默认档 base（0.9rem）。
-  assert.equal(size_rem, 0.9, `消息字号不是默认档 base（0.9rem）：${size_rem}rem`);
+  // 必须等于默认档 base（0.9375rem = 15px）。
+  assert.equal(size_rem, 0.9375, `消息字号不是默认档 base（0.9375rem）：${size_rem}rem`);
   /*
    * 0.5em 段落间距在正文超过 xl（1.25rem）时会顶到块间距。
    * 上限随块间距变化：`0.5 × 字号 ≤ 块间距 − 0.125`。
    */
   assert.ok(size_rem <= 1.25, `消息字号超过 xl（1.25rem），段落间距会顶到块间距：${size_rem}rem`);
-  // 行高要够读长文：1.3rem 是 UI 文本的紧凑节奏，正文不能跟它一档。
+  // 行高要够读长文：1.25rem 是 UI 文本的紧凑节奏，正文不能跟它一档。
   assert.ok(line_height >= 1.5, `消息行高不足以读长文：${line_height}`);
 
   // 四个消费处：Session 的两种消息、Group 的两种发言。
