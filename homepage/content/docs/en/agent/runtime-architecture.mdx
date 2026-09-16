@@ -171,6 +171,26 @@ Calling `city` with no arguments lists the namespaces the current Agent can use.
 
 Availability follows the same rule as Plugins: everything City registers is available to every Agent, with no per-Agent gating and no configuration file.
 
+## City capabilities
+
+Some capabilities are neither external integrations nor plugins: their whole ability comes from the
+resources City already holds. They are registered as City capabilities and reach the model as
+top-level tools rather than through `plugin_call`.
+
+| Capability | Tools | Notes |
+| --- | --- | --- |
+| Image | `image_models`, `image_create`, `image_result` | Two-step job protocol. Creating an image consumes quota, so the model must confirm with you first. Results land in the Agent's private directory and are attached to the reply. |
+| Sound | `sound_models`, `asr`, `tts` | `asr` transcribes audio, `tts` synthesizes speech and attaches the audio file to the reply. |
+
+Both use the models available to your Federation account, so there is no separate configuration and
+nothing to set up. Because there is no configured default, pass `model` explicitly or let the model
+take it from `image_models` / `sound_models`; `asr` and `tts` fall back to the first suitable model
+when none is given.
+
+Automatic transcription of inbound voice messages belongs to the Chat plugin, which calls the Sound
+capability when a channel delivers a voice or audio attachment. If transcription fails for one
+attachment, the message still arrives.
+
 ## Security model
 
 Security is enforced at distinct capability boundaries:
@@ -182,6 +202,7 @@ Security is enforced at distinct capability boundaries:
 | Host Shell | Approval gateway | The user explicitly authorizes one host command with a recorded reason |
 | Plugin | Plugin business authorization | Workspace does not own all Plugin resource access |
 | City Tool | Read-only by construction | Answers runtime facts; performs no write and returns no credential value |
+| City capability | Capability's own rules | Reads the Agent's files and calls paid Federation models under your account |
 | Custom Tool | Registering host | Agent Core does not infer business permissions |
 
 Explicit attachments may use an absolute path selected by the host because they are declared Prompt inputs. This does not expand where model-driven File/Search Tools may browse.

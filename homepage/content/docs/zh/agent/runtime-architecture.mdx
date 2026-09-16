@@ -171,6 +171,23 @@ ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件�
 
 可用性与 Plugin 同一口径：City 注册了什么，每个 Agent 就都能用，没有 per-agent 门控，也没有配置文件。
 
+## City 能力
+
+有一类能力既不是外部集成也不是插件：它的全部能力来自 City 已持有的资源。它们登记为 City
+capability，并以顶层工具的形式交给模型，而不是走 `plugin_call`。
+
+| 能力 | 工具 | 说明 |
+| --- | --- | --- |
+| Image | `image_models`、`image_create`、`image_result` | 两步式任务协议。生图会消耗额度，所以模型必须先与你确认。结果落在 Agent 私有目录并附到下一条回复。 |
+| Sound | `sound_models`、`asr`、`tts` | `asr` 转写音频，`tts` 合成语音并把音频文件附到回复。 |
+
+两者都使用你的 Federation 账号可用的模型，因此没有单独配置，也不需要设置。因为没有预设默认模型，
+要么显式传 `model`，要么让模型从 `image_models` / `sound_models` 里选；`asr` 与 `tts` 在未指定时
+会取第一个可用模型。
+
+入站语音消息的自动转写属于 Chat 插件：当渠道送来语音或音频附件时，由它调用 Sound 能力。
+单个附件转写失败不影响消息送达。
+
 ## 安全模型
 
 安全边界分为两层：
