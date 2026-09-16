@@ -19,11 +19,14 @@ import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 import type {
   CityToolContext,
-  CityToolError,
   CityToolHost,
   CityToolResult,
 } from "@/city/types/CityTool.js";
-import { CityToolRuntimeError } from "@/city/tool/CityToolErrors.js";
+import {
+  city_tool_fail,
+  city_tool_ok,
+  CityToolRuntimeError,
+} from "@/city/tool/CityToolResult.js";
 import { CityToolPolicy } from "@/city/tool/CityToolPolicy.js";
 import type { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
 import { create_city_tool_namespaces } from "@/city/tool/namespaces/index.js";
@@ -125,7 +128,11 @@ export class CityTool {
       action = read_name(input.call.action, "action");
       const args = read_args(input.call.args);
       if (!namespace) {
-        return ok({ namespace: null, action: null, data: { namespaces: describe_namespaces(input.visible) } });
+        return city_tool_ok({
+          namespace: null,
+          action: null,
+          data: { namespaces: describe_namespaces(input.visible) },
+        });
       }
       // 全量查找与可见性判定分开：模型据此区分「不存在」与「没授权」。
       const target = this.namespaces.find((item) => item.namespace === namespace) ?? null;
@@ -146,7 +153,7 @@ export class CityTool {
         });
       }
       if (!action) {
-        return ok({
+        return city_tool_ok({
           namespace,
           action: null,
           data: {
@@ -165,9 +172,9 @@ export class CityTool {
         });
       }
       const data = await action_object.execute(args, input.context);
-      return ok({ namespace, action, data: data === undefined ? null : data });
+      return city_tool_ok({ namespace, action, data: data === undefined ? null : data });
     } catch (error) {
-      return { ok: false, namespace, action, data: null, error: to_error(error, namespace, action) };
+      return city_tool_fail({ namespace, action, error });
     }
   }
 
@@ -243,33 +250,4 @@ function describe_namespaces(visible: readonly CityNamespace[]): Record<string, 
 /** 生成可见 namespace 名称列表。 */
 function visible_names(visible: readonly CityNamespace[]): string[] {
   return visible.map((namespace) => namespace.namespace);
-}
-
-/** 构造成功信封。 */
-function ok(input: {
-  /** 回显 namespace。 */
-  namespace: string | null;
-  /** 回显 action。 */
-  action: string | null;
-  /** 成功数据。 */
-  data: unknown;
-}): CityToolResult {
-  return { ok: true, namespace: input.namespace, action: input.action, data: input.data, error: null };
-}
-
-/** 把动作抛出的异常收敛为模型可读错误。 */
-function to_error(
-  error: unknown,
-  namespace: string | null,
-  action: string | null,
-): CityToolError {
-  if (error instanceof CityToolRuntimeError) {
-    return { code: error.code, message: error.message, detail: error.detail };
-  }
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  return {
-    code: "internal",
-    message: message.trim() || "City tool failed without a message.",
-    detail: { namespace, action },
-  };
 }

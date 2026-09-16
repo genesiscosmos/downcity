@@ -10,7 +10,7 @@
 import type { CityToolUsageScope } from "@/city/types/CityToolNamespaces.js";
 import { CityAction, string_arg, type CityToolArgs } from "@/city/tool/namespaces/CityAction.js";
 import { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
-import { CityToolRuntimeError } from "@/city/tool/CityToolErrors.js";
+import { CityToolRuntimeError } from "@/city/tool/CityToolResult.js";
 
 /** `usage.get` 支持的查询范围。 */
 const usage_scopes: readonly CityToolUsageScope[] = ["today", "month", "total"];

@@ -14,7 +14,7 @@ import type {
   CityToolContext,
   CityToolSensitivity,
 } from "@/city/types/CityTool.js";
-import { CityToolRuntimeError } from "@/city/tool/CityToolErrors.js";
+import { CityToolRuntimeError } from "@/city/tool/CityToolResult.js";
 
 /** 动作收到的原始参数。 */
 export type CityToolArgs = Readonly<Record<string, unknown>>;

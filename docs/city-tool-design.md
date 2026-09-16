@@ -84,9 +84,9 @@ Workspace 没有 Shell 时（例如远程 Workspace）不报错，而是明确�
 
 ```
 packages/city/src/city/tool/
-  CityTool.ts              // 工具本体：产出工具定义、组装运行事实、校验载荷、分发、封信封
+  CityTool.ts              // 工具本体：产出工具定义、组装运行事实、校验载荷、分发
   CityToolPolicy.ts        // 可见性策略：配置 → 当前 Agent 可见的 namespace
-  CityToolErrors.ts        // 错误码与错误类
+  CityToolResult.ts        // 结果信封、错误类与异常收敛
   namespaces/
     CityAction.ts          // 抽象动作：自己声明自己、自己执行自己，并提供参数取值
     CityNamespace.ts        // 抽象 namespace：持有动作对象、按名分发、自描述
@@ -123,7 +123,7 @@ class ExplainPathAction extends CityAction {
 
 时区与日期格式直接用 `@downcity/agent` 已导出的 `resolve_runtime_timezone` 与 `format_date_in_timezone`。日期用 sv-SE locale 输出 `YYYY-MM-DD`，harness 全域同一口径，工具内不再重复实现一份。
 
-工具层区分 `forbidden` 与 `not_found`：前者是 City 没有授予这个 namespace，后者是名字不存在。模型据此决定是换调用还是停止重试。动作对象只实现自己的语义，成功返回数据，失败抛 `CityToolRuntimeError`，由工具层统一收敛成信封。
+工具层区分 `forbidden` 与 `not_found`：前者是 City 没有授予这个 namespace，后者是名字不存在。模型据此决定是换调用还是停止重试。动作对象只实现自己的语义，成功返回数据，失败抛 `CityToolRuntimeError`，由 `CityToolResult` 统一收敛成信封。
 
 ## 接入方式
 

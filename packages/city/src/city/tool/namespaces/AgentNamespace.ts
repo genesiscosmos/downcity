@@ -15,7 +15,7 @@ import {
   type CityToolArgs,
 } from "@/city/tool/namespaces/CityAction.js";
 import { CityNamespace } from "@/city/tool/namespaces/CityNamespace.js";
-import { CityToolRuntimeError } from "@/city/tool/CityToolErrors.js";
+import { CityToolRuntimeError } from "@/city/tool/CityToolResult.js";
 
 /** 把 Agent 投影为模型可读摘要。 */
 function describe_agent(
