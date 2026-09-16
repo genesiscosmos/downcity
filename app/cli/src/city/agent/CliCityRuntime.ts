@@ -105,7 +105,10 @@ export class CliCityRuntime {
         }),
       },
       runtime: {
-      resolve_workspace: async (_agent, workspace_id) => {
+        city_tool: {
+          read_config: () => structuredClone(data.plugins.get_config("city")),
+        },
+        resolve_workspace: async (_agent, workspace_id) => {
         const workspace_config = data.workspaces.get(workspace_id);
         if (!workspace_config) throw new Error(`Workspace not found: ${workspace_id}`);
         return await create_cli_workspace(workspace_config, data.root_path);

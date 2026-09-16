@@ -18,6 +18,7 @@ import type {
   ShellToolSet,
   SandboxProvider,
   WorkspaceSandbox,
+  WorkspaceSandboxSnapshot,
   WorkspaceShellSandboxCommandInput,
 } from "@downcity/type/shell";
 import type { ShellRuntimeState } from "@/shell/session/ShellRuntimeTypes.js";
@@ -143,6 +144,33 @@ export class Shell {
   /** 更新后续命令使用的 Workspace 环境变量。 */
   set_env(env: Readonly<Record<string, string>>): void {
     this.env = { ...env };
+  }
+
+  /**
+   * 返回当前 Workspace Sandbox 的只读自省快照。
+   *
+   * 关键点（中文）
+   * - 只读取已经成立的绑定与 Sandbox 实例，不创建也不启动 Sandbox。
+   * - 当前协议下每个 Workspace 只有一条可写 Workspace 挂载。
+   */
+  describe_sandbox(): WorkspaceSandboxSnapshot | null {
+    const sandbox = this.sandbox;
+    const binding = this.binding;
+    if (!sandbox || !binding) return null;
+    return {
+      backend: sandbox.backend,
+      sandbox_id: sandbox.id,
+      workdir: sandbox.workspace_path,
+      mounts: [
+        {
+          host_path: binding.root_path,
+          sandbox_path: sandbox.workspace_path,
+          mode: "rw",
+        },
+      ],
+      // Sandbox 停止只释放计算资源，文件系统按协议保持，因此恒为持久。
+      persistent: true,
+    };
   }
 
   /** 在当前 Workspace 的持久 Sandbox 中执行一次短命令。 */

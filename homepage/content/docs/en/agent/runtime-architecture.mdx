@@ -151,6 +151,39 @@ PluginRegistry projection changes take effect at Session checkpoints. A Plugin i
 
 ActionSchedule is a local delayed Plugin Action scheduler owned by the Agent. Events are stored in the Agent's storage scope; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
 
+## City Tool
+
+Every Agent receives one read-only `city` Tool: the entry point for runtime facts that the harness holds and the model cannot read from files or commands.
+
+```jsonc
+{ "namespace": "sandbox", "action": "explain_path", "args": { "path": "~/.downcity/plugins/chat" } }
+```
+
+| Namespace | Answers |
+| --- | --- |
+| `env` | Which Agent, Session, Workspace, model, timezone and local date this turn runs under |
+| `sandbox` | Which sandbox backend and instance this Session runs in, which host directories are mounted, and why a path is blocked |
+| `workspaces` | Every Workspace registered in this City |
+| `agent` | Every Agent registered in this City |
+| `usage` | User-level token usage; answers `unsupported_action` until bureau exposes it |
+
+Calling `city` with no arguments lists the namespaces the current Agent can use. Omitting `action` lists one namespace's actions together with their arguments and return shape. The Tool never writes, and never returns credential values.
+
+Namespace visibility is granted by City, not declared by the Agent. Add `~/.downcity/plugins/city/config.toml` when you need to narrow it; without that file every namespace above stays visible.
+
+```toml
+schema_version = 2
+
+[config.defaults]
+namespaces = ["env", "sandbox", "workspaces", "agent", "usage"]
+
+[[config.agents]]
+agent_id = "cheng_xu_yuan"
+deny = ["usage"]
+```
+
+`deny` always wins, an Agent entry may also use `allow` to replace the default set, and Sensitive namespaces are never part of the default set. Changes are read at the next Session step, with no restart needed.
+
 ## Security model
 
 Security is enforced at distinct capability boundaries:
@@ -161,6 +194,7 @@ Security is enforced at distinct capability boundaries:
 | Sandbox Shell | Workspace Sandbox | Commands run in the Workspace's isolated, persistent environment |
 | Host Shell | Approval gateway | The user explicitly authorizes one host command with a recorded reason |
 | Plugin | Plugin business authorization | Workspace does not own all Plugin resource access |
+| City Tool | City-granted namespace visibility | Read-only runtime facts; namespaces can be denied per Agent |
 | Custom Tool | Registering host | Agent Core does not infer business permissions |
 
 Explicit attachments may use an absolute path selected by the host because they are declared Prompt inputs. This does not expand where model-driven File/Search Tools may browse.

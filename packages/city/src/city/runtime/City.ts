@@ -8,6 +8,7 @@
 
 import { Agent, Group } from "@downcity/agent";
 import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
+import { CityToolRuntime } from "@/city/tool/CityToolRuntime.js";
 import type { CityPlugins } from "@/city/types/CityPlugin.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
@@ -35,6 +36,9 @@ export class City implements CityRuntime {
 
   /** City 唯一的 Plugin 生命周期运行时。 */
   private readonly plugin_runtime: CityPluginRuntime;
+
+  /** City 唯一的 city tool 运行时；按 Agent/Workspace 检查点生成 `city` 工具。 */
+  private readonly city_tool: CityToolRuntime;
 
   /** 仅供包内运行时组件使用的 City 事实源访问面。 */
   private readonly runtime_access: CityRuntimeAccess;
@@ -118,6 +122,11 @@ export class City implements CityRuntime {
       ...(options.plugin_host ? { host: options.plugin_host } : {}),
     });
     this.plugins = this.plugin_runtime.public_api;
+    this.city_tool = new CityToolRuntime({
+      access: this.runtime_access,
+      // 配置与插件同一层级：由宿主按 `plugins/city/config.toml` 解析，每次读取都取最新值。
+      host: options.runtime?.city_tool ?? null,
+    });
     for (const plugin of collection_values(options.plugins)) {
       // 构造函数不能等待异步 lifecycle；Agent ready、Plugin 调用与 snapshot
       // 会继续使用同一个受控 ready Promise。
@@ -173,7 +182,17 @@ export class City implements CityRuntime {
     workspace: WorkspaceRuntime,
   ): Record<string, RuntimeTool> {
     const agent = this.require_agent_workspace(agent_id, workspace);
-    return this.plugin_runtime.tools(agent, workspace, agent.get_logger());
+    const tools: Record<string, RuntimeTool> = {
+      ...this.plugin_runtime.tools(agent, workspace, agent.get_logger()),
+    };
+    // `city` 与 Plugin 工具共用同一个 Tool 命名空间，冲突属于装配不变量，立即失败。
+    for (const [tool_name, tool] of Object.entries(this.city_tool.tools({ agent, workspace }))) {
+      if (Object.prototype.hasOwnProperty.call(tools, tool_name)) {
+        throw new Error(`City tool name conflict: ${tool_name}`);
+      }
+      tools[tool_name] = tool;
+    }
+    return tools;
   }
 
   /** 返回当前 Agent/Workspace 在一个执行检查点可见的 Session Hook。 */

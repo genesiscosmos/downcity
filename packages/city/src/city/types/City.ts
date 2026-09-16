@@ -12,6 +12,7 @@ import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
 import type { Group } from "@downcity/agent";
 import type { CityPluginCollection, CityPluginHost } from "@/city/types/CityPlugin.js";
+import type { CityToolHost } from "@/city/types/CityTool.js";
 
 /** City 的资源容器构造参数。 */
 export interface CityOptions {
@@ -42,6 +43,14 @@ export interface CityOptions {
 
 /** City 构造时可注入的 transport 扩展能力。 */
 export interface CityRuntimeOptions {
+  /**
+   * city tool 的宿主配置读取能力。
+   *
+   * 关键点（中文）
+   * - 配置是 City 授予的可见性来源，因此只能由宿主在装配层提供。
+   * - 省略时 city tool 使用默认可见性，不报错。
+   */
+  city_tool?: CityToolHost;
   /** 按需为 Agent 创建指定 Workspace；City 不读取任何持久化配置。 */
   resolve_workspace?: (
     agent: Agent,

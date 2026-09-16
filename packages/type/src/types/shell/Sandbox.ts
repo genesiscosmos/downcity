@@ -107,6 +107,36 @@ export interface WorkspaceSandbox {
   reset?(): Promise<void>;
 }
 
+/** Workspace Sandbox 中的一条显式挂载。 */
+export interface WorkspaceSandboxMount {
+  /** 挂载在宿主侧的真实路径。 */
+  host_path: string;
+  /** 同一个挂载在隔离环境内的绝对路径。 */
+  sandbox_path: string;
+  /** 隔离环境内的访问模式。 */
+  mode: "ro" | "rw";
+}
+
+/**
+ * Workspace Sandbox 的只读自省快照。
+ *
+ * 关键点（中文）
+ * - 只描述隔离环境已经成立的事实，不触发 Sandbox 创建或启动。
+ * - 消费者用于回答「我在什么环境里跑、什么被挂进来了」，不参与命令执行。
+ */
+export interface WorkspaceSandboxSnapshot {
+  /** Provider 的稳定后端标识，例如 microsandbox。 */
+  backend: string;
+  /** 当前隔离环境的稳定身份，用于跨进程恢复同一个 Sandbox。 */
+  sandbox_id: string;
+  /** 隔离环境内启动命令时使用的默认工作目录。 */
+  workdir: string;
+  /** 当前隔离环境显式挂载的全部宿主目录。 */
+  mounts: readonly WorkspaceSandboxMount[];
+  /** 停止计算资源后文件系统是否仍然保留。 */
+  persistent: boolean;
+}
+
 /** Shell 构造时显式注入的 Workspace Sandbox 工厂。 */
 export interface SandboxProvider {
   /** Provider 的稳定后端标识。 */

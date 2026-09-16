@@ -1,7 +1,7 @@
 /** Workspace 可选 Shell 能力协议。 */
 
 import type { RuntimeTool } from "@downcity/type";
-import type { ShellProcessResult } from "./Sandbox.js";
+import type { ShellProcessResult, WorkspaceSandboxSnapshot } from "./Sandbox.js";
 
 /** Workspace Shell 执行一次受控命令的输入。 */
 export interface WorkspaceShellSandboxCommandInput {
@@ -65,6 +65,9 @@ export interface WorkspaceShell {
 
   /** 更新后续进程使用的 Workspace 环境变量。 */
   set_env(env: Readonly<Record<string, string>>): void;
+
+  /** 返回当前 Workspace Sandbox 的只读自省快照；尚未绑定时返回 null。 */
+  describe_sandbox(): WorkspaceSandboxSnapshot | null;
 
   /** 在当前 Workspace 的持久 Sandbox 中执行一次命令。 */
   run_sandbox_command(

@@ -5,23 +5,14 @@
  * - 所有相对路径基于 Shell 的项目根目录解析。
  * - 词法路径和真实路径都必须位于项目根目录内。
  * - 最终目标不允许是符号链接，避免原子替换时产生歧义或逃逸。
+ * - 词法边界与 city tool 的 `sandbox.explain_path` 共用 PathAccessRule。
  */
 
 import path from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { FileToolRuntimeError } from "@/workspace/file/FileToolError.js";
+import { is_path_inside_root } from "@/workspace/file/PathAccessRule.js";
 import type { ResolvedFileToolPath } from "@downcity/type/workspace";
-
-/** 判断目标路径是否等于根目录或位于根目录之下。 */
-function is_path_inside_root(root_path: string, target_path: string): boolean {
-  const relative_path = path.relative(root_path, target_path);
-  return (
-    relative_path === "" ||
-    (relative_path !== ".." &&
-      !relative_path.startsWith(`..${path.sep}`) &&
-      !path.isAbsolute(relative_path))
-  );
-}
 
 /** 返回最接近目标且已经存在的祖先目录。 */
 async function resolve_existing_ancestor(target_path: string): Promise<string> {

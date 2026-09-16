@@ -218,6 +218,11 @@ export class AgentController {
           clipboard.writeText(String(text));
         },
       },
+      runtime: {
+        city_tool: {
+          read_config: () => structuredClone(this.data.plugins.get_config("city")),
+        },
+      },
     });
     this.plugin_loader = create_desktop_plugin_loader(this.data);
     this.ready_promise = this.initialize_agents();
