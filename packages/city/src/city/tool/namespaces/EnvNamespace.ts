@@ -6,6 +6,7 @@
  * - 全部字段来自当前执行上下文，不读取文件系统、不访问网络。
  */
 
+import { format_date_in_timezone } from "@downcity/agent";
 import type {
   CityToolActionCall,
   CityToolContext,
@@ -14,7 +15,6 @@ import type {
 import type { CityToolEnv } from "@/city/types/CityToolNamespaces.js";
 import { assert_known_args } from "@/city/tool/CityToolArgs.js";
 import { unexpected_city_tool_action } from "@/city/tool/CityToolErrors.js";
-import { format_local_date } from "@/city/tool/CityToolTime.js";
 
 /** 构造当前环境的返回数据。 */
 function read_env(context: CityToolContext): CityToolEnv {
@@ -29,7 +29,7 @@ function read_env(context: CityToolContext): CityToolEnv {
     model_id: context.model_id,
     timezone: context.timezone,
     now: context.now.toISOString(),
-    current_date: format_local_date({ date: context.now, timezone: context.timezone }),
+    current_date: format_date_in_timezone(context.now, context.timezone),
   };
 }
 

@@ -284,6 +284,7 @@ export type {
 export { get_logger, type Logger } from "./utils/logger/Logger.js";
 export { generate_id } from "./utils/Id.js";
 export {
+  format_date_in_timezone,
   format_date_time_in_timezone,
   resolve_runtime_timezone,
 } from "./utils/Time.js";

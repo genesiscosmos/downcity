@@ -82,14 +82,11 @@ Workspace 没有 Shell 时（例如远程 Workspace）不报错，而是明确�
 
 ```
 packages/city/src/city/tool/
-  CityToolRuntime.ts       // 装配：读配置、建运行时上下文、产出 RuntimeTool
-  CityToolRegistry.ts      // namespace → provider 注册表
+  CityToolRuntime.ts       // 持有 namespace 声明、读配置、算可见性、产出 RuntimeTool
   CityToolDispatcher.ts    // 载荷校验、可见性判定、分发、结果信封
   CityToolVisibility.ts    // per-agent namespace 白名单
   CityToolArgs.ts          // 参数取值与校验
-  CityToolSchemas.ts       // 工具输入 schema
   CityToolErrors.ts        // 错误码
-  CityToolTime.ts          // 时区与本地日期
   namespaces/              // 一个 namespace 一个文件
     index.ts               // 注册顺序
     EnvNamespace.ts
@@ -101,6 +98,10 @@ packages/city/src/city/types/
   CityTool.ts              // 注册、分发、可见性、结果信封契约
   CityToolNamespaces.ts    // 各 namespace 的数据契约
 ```
+
+中心只有五个文件。`city` 自己的输入 schema 放在工具定义旁边，namespace 数组由 Runtime 直接持有——给一个 Map 包一层 class 换不来什么。
+
+时区与日期格式直接用 `@downcity/agent` 已导出的 `resolve_runtime_timezone` 与 `format_date_in_timezone`。日期用 sv-SE locale 输出 `YYYY-MM-DD`，harness 全域同一口径，工具内不再重复实现一份。
 
 `CityToolDispatcher` 区分 `forbidden` 与 `not_found`：前者是 City 没有授予这个 namespace，后者是名字不存在。模型据此决定是换调用还是停止重试。provider 只实现自己的动作语义，成功返回数据，失败抛 `CityToolRuntimeError`，由 dispatcher 统一收敛成信封。
 

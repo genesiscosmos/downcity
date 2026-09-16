@@ -15,7 +15,6 @@ import type {
   CityToolResult,
 } from "@/city/types/CityTool.js";
 import { CityToolRuntimeError } from "@/city/tool/CityToolErrors.js";
-import type { CityToolRegistry } from "@/city/tool/CityToolRegistry.js";
 
 /** 模型提交给 city tool 的原始载荷。 */
 export interface CityToolCallInput {
@@ -31,6 +30,8 @@ export interface CityToolCallInput {
 export interface CityToolDispatchInput {
   /** 模型提交的原始载荷。 */
   call: CityToolCallInput;
+  /** 当前已注册的全部 namespace provider，用于区分「不存在」与「未授权」。 */
+  registered: readonly CityToolNamespaceProvider[];
   /** 当前 Agent 可见的 namespace provider。 */
   visible: readonly CityToolNamespaceProvider[];
   /** 本次调用可见的运行时事实。 */
@@ -39,8 +40,6 @@ export interface CityToolDispatchInput {
 
 /** city tool 的统一分发器。 */
 export class CityToolDispatcher {
-  constructor(private readonly registry: CityToolRegistry) {}
-
   /** 校验并执行一次 city tool 调用，永远返回结果信封。 */
   async dispatch(input: CityToolDispatchInput): Promise<CityToolResult> {
     let namespace: string | null = null;
@@ -56,7 +55,8 @@ export class CityToolDispatcher {
           data: { namespaces: describe_namespaces(input.visible) },
         });
       }
-      const provider = this.registry.get(namespace);
+      const provider = input.registered
+        .find((item) => item.namespace === namespace) ?? null;
       if (!provider) {
         throw new CityToolRuntimeError({
           code: "not_found",

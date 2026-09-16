@@ -4,27 +4,53 @@
  * 关键点（中文）
  * - `city` 是每个 Agent/Workspace 执行检查点动态生成的 Tool，与 Plugin 工具走同一条注入路径。
  * - 可见 namespace 在每次生成工具时按 City 级配置重新解析，配置修改无需重启。
- * - 工具描述从注册表派生，namespace 增减时模型侧描述自动跟上，不会与实现漂移。
+ * - 工具描述从 namespace 声明派生，namespace 增减时模型侧描述自动跟上，不会与实现漂移。
  */
 
-import { define_runtime_tool, type RuntimeTool, type RuntimeToolExecutionOptions } from "@downcity/type";
+import { resolve_runtime_timezone } from "@downcity/agent";
+import {
+  define_runtime_tool,
+  type RuntimeTool,
+  type RuntimeToolExecutionOptions,
+} from "@downcity/type";
 import type { Agent, SessionToolExecutionContext } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
-import type { CityToolHost } from "@/city/types/CityTool.js";
 import type {
   CityToolContext,
+  CityToolHost,
   CityToolNamespaceProvider,
 } from "@/city/types/CityTool.js";
 import { CityToolDispatcher, type CityToolCallInput } from "@/city/tool/CityToolDispatcher.js";
-import { city_tool_input_schema } from "@/city/tool/CityToolSchemas.js";
-import { resolve_runtime_timezone } from "@/city/tool/CityToolTime.js";
 import {
   resolve_city_tool_policy,
   resolve_visible_namespaces,
 } from "@/city/tool/CityToolVisibility.js";
-import { CityToolRegistry } from "@/city/tool/CityToolRegistry.js";
-import { create_city_tool_registry } from "@/city/tool/namespaces/index.js";
+import { create_city_tool_namespaces } from "@/city/tool/namespaces/index.js";
+
+/** `city` 工具对模型暴露的输入 schema。 */
+const city_tool_input_schema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    namespace: {
+      type: "string",
+      description:
+        "Namespace to use, for example env or sandbox. Omit to list the namespaces you can use.",
+    },
+    action: {
+      type: "string",
+      description:
+        "Action inside the namespace, for example get. Omit to list the actions of that namespace.",
+    },
+    args: {
+      type: "object",
+      additionalProperties: true,
+      default: {},
+      description: "JSON arguments passed to the action.",
+    },
+  },
+};
 
 /** City Tool 运行时创建参数。 */
 export interface CityToolRuntimeOptions {
@@ -42,17 +68,16 @@ export interface CreateCityToolInput {
   readonly workspace: WorkspaceRuntime;
 }
 
-/** 按 namespace 注册表组装 `city` 工具的运行时。 */
+/** 持有 namespace 声明并为执行检查点生成 `city` 工具的运行时。 */
 export class CityToolRuntime {
-  /** 第一期全部 namespace 的注册表。 */
-  private readonly registry: CityToolRegistry;
+  /** 全部已注册 namespace，顺序即模型侧索引顺序。 */
+  private readonly namespaces: readonly CityToolNamespaceProvider[];
 
   /** 载荷校验与分发。 */
-  private readonly dispatcher: CityToolDispatcher;
+  private readonly dispatcher = new CityToolDispatcher();
 
   constructor(private readonly options: CityToolRuntimeOptions) {
-    this.registry = create_city_tool_registry();
-    this.dispatcher = new CityToolDispatcher(this.registry);
+    this.namespaces = create_city_tool_namespaces();
   }
 
   /** 为明确的 Agent/Workspace 执行检查点创建 `city` 工具。 */
@@ -61,7 +86,7 @@ export class CityToolRuntime {
     const visible = resolve_visible_namespaces({
       policy,
       agent_id: input.agent.id,
-      providers: this.registry.list(),
+      providers: this.namespaces,
     });
     if (visible.length === 0) return {};
     return {
@@ -71,6 +96,7 @@ export class CityToolRuntime {
         execute: async (call, execution_options) =>
           await this.dispatcher.dispatch({
             call: call as CityToolCallInput,
+            registered: this.namespaces,
             visible,
             context: this.create_context({ ...input, execution_options }),
           }),
