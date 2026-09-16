@@ -2,7 +2,7 @@
  * Desktop 唯一的 Markdown 语义排版。
  *
  * 字号、行高和宽度**由业务容器继承**（`font-size: inherit`）：本文件不给出基准字号，
- * 因为同一套 Markdown 要同时服务于消息正文（`sm`）、Workspace 文档预览（`sm`）
+ * 因为同一套 Markdown 要同时服务于消息正文（`base`）、Workspace 文档预览（`base`）
  * 与 Plugin 说明（Plugin 自己的 `xs`）。给出基准就会把三者钉成一样大。
  *
  * 代价是每个渲染它的文件**必须**自己声明字号（语义档位，或消息正文的共享常量），
@@ -29,10 +29,11 @@
  * 正文块间距。
  *
  * 取值是 0.5em：随**承载它的正文字号**缩放，不钉死像素。
- * 在默认正文档 `sm`（0.875rem）下为 0.4375rem，是段落之间的间隔；
- * 它必须小于消息内的块间距（`message_layout.ts` 的 `gap-2.5` = 0.625rem，即 0.5rem 差值），
+ * 在默认正文档 `base`（0.9375rem）下为 0.46875rem（= 7.5px），是段落之间的间隔；
+ * 它必须小于消息内的块间距（`message_layout.ts` 的 `gap-3` = 0.75rem，即 12px），
  * 否则「同一段话的两段」和「两段话之间插了一段工具活动」会看起来一样宽。
- * 由此得出正文字号的上限：`0.5 × 字号 ≤ 0.625 − 0.125` ⇒ 不得超过 `base`（1rem）。
+ * 由此得出正文字号的上限：`0.5 × 字号 ≤ 0.75 − 0.125` ⇒ 不得超过 `xl`（1.25rem）。
+ * 当前正文是 `base`，差值 0.28125rem（= 4.5px），还剩一档余量。
  * 这条约束由 `chat_message_layout.test.ts` 守着。
  *
  * 这条规则对 Workspace 文档预览、Plugin 说明同样生效——它们是同一套 Markdown 排版，
@@ -127,101 +128,140 @@
 
 .markdown :where(blockquote p) { margin: 0.25em 0; }
 
+/*
+ * 行内码与块级代码共用一套「代码底色」语义，靠面积区分：
+ * 小块要比所在平面实一档（`surface-emphasis`），大块一档更轻的就够（见下）。
+ */
 .markdown code:not(pre code) {
   display: inline;
   max-width: 100%;
   padding: 0.125em 0.3em;
   border-radius: 0.3em;
   color: var(--foreground);
-  background: color-mix(in srgb, var(--foreground) 10%, transparent) !important;
+  background: var(--surface-emphasis) !important;
   font-size: 0.92em;
   overflow-wrap: anywhere;
   white-space: break-spaces;
   word-break: break-word;
 }
 
+/*
+ * 代码块容器：一档中性填充，不要边框。
+ *
+ * 原实现是 `color-mix(muted 42%, background)` + 半透明边框：浅色主题下填充只有 251/255，
+ * 等于一块看不见的方框；ocean、forest 这类主题的 `muted` 是饱和色，同一混色会把整块染成
+ * 蓝底或绿底，压掉 shiki 的语法色。`surface-subtle` 由前景色混合而来，九套主题下都成立。
+ *
+ * 行号不由这里关：库的行号依赖 `before:content-[counter(line)]` 这类任意值工具类，
+ * 本仓库不扫描 node_modules，因此根本不会生成。将来若有人加了扫描源，需要回这里补一条——
+ * Agent 消息里的代码块是引用片段，不是文件。
+ */
 .markdown :where(pre),
 .markdown [data-streamdown="code-block"] {
-  --markdown-code-foreground: var(--foreground);
-  --markdown-code-background: color-mix(in srgb, var(--muted) 42%, var(--background));
   position: relative;
   max-width: 100%;
   margin: 0.7em 0 !important;
   padding: 0 !important;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent) !important;
-  border-radius: 0.5em !important;
-  background: var(--markdown-code-background) !important;
+  border: 0 !important;
+  border-radius: var(--radius) !important;
+  background: var(--surface-subtle) !important;
   box-shadow: none;
 }
 
-/* 代码块统一只保留右上角复制操作。 */
+/*
+ * 元信息行：语言在左、复制在右，固定 1.5rem 高。
+ *
+ * 这一行不是装饰，是「操作不压住代码」的代价：代码区是横向滚动容器，
+ * 浮在角上的按钮既会被滚过来的长行穿过，也会纵向盖住首行。
+ * 它顺手回答「这段是什么语言」；围栏没写语言时左侧为空，只剩右侧一个按钮。
+ */
 .markdown [data-streamdown="code-block-header"] {
-  position: absolute;
-  top: 0.375em;
-  right: 0.375em;
-  z-index: 2;
-  display: block;
-  width: auto;
-  height: auto;
-  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.5rem;
   margin: 0;
-  padding: 0 !important;
+  padding: 0.375rem 0.375rem 0 0.625rem;
   border: 0 !important;
   background: transparent !important;
-  pointer-events: none;
 }
 
-.markdown [data-streamdown="code-block-header"] > span:first-child,
+.markdown [data-streamdown="code-block-header"] > span:first-child {
+  min-width: 0;
+  margin: 0 !important;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
+/*
+ * 下载按钮隐藏，不是漏写：库只提供 `controls.code` 这一个总开关，
+ * 没有单独的下载开关，Agent 消息里也不需要「把代码存成文件」。
+ */
 .markdown [data-streamdown="code-block-download-button"] {
   display: none !important;
 }
 
-.markdown [data-streamdown="code-block-header"] > div {
-  display: block;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
+/*
+ * 复制按钮：24px 常显。
+ *
+ * 尺寸用 rem 而不是本文件的 em 文档方言——同一个代码块也渲染在 Plugin 说明（`xs`）
+ * 等更小宿主里，按 em 缩会掉到 WCAG 2.2 的 24px 目标尺寸以下。
+ * 库自带复制成功（换对勾）与流式禁用态，这里只补悬停、焦点环与禁用颜色。
+ */
 .markdown [data-streamdown="code-block-copy-button"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.625rem;
-  height: 1.625rem;
+  width: 1.5rem;
+  height: 1.5rem;
   margin: 0;
   padding: 0;
   border: 0 !important;
   border-radius: 0.375rem;
   color: var(--muted-foreground) !important;
   background: transparent;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
-}
-
-.markdown [data-streamdown="code-block"]:hover [data-streamdown="code-block-copy-button"],
-.markdown [data-streamdown="code-block"]:focus-within [data-streamdown="code-block-copy-button"],
-.markdown [data-streamdown="code-block-copy-button"]:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .markdown [data-streamdown="code-block-copy-button"]:hover {
   color: var(--foreground) !important;
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  background: var(--interaction-hover);
 }
 
+.markdown [data-streamdown="code-block-copy-button"]:focus-visible {
+  outline: none;
+  /* 与消息操作栏等次级图标按钮同一条焦点环：ring-2 / ring-ring-30。 */
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent);
+}
+
+.markdown [data-streamdown="code-block-copy-button"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/*
+ * 代码区。上内边距交给元信息行，左右与底部 0.75rem 让长行滚到边界时不贴边。
+ *
+ * `color` 与 `background` 必须带 important：shiki 把浅色主题的前景色与底色写成
+ * `<pre>` 的行内样式，行内声明压过样式表。
+ */
 .markdown [data-streamdown="code-block-body"] {
   max-width: 100%;
   margin: 0 !important;
   overflow-x: auto;
-  padding: 0.8em !important;
+  padding: 0.375rem 0.75rem 0.75rem !important;
   border: 0 !important;
-  color: var(--markdown-code-foreground) !important;
+  color: var(--foreground) !important;
   background: transparent !important;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.9em !important;
   line-height: 1.6 !important;
   scrollbar-width: thin;
@@ -236,21 +276,10 @@
   font-weight: 400 !important;
 }
 
-.markdown [data-streamdown="code-block-body"] code > span::before {
-  content: none !important;
-}
-
-.markdown [data-streamdown="code-block-body"] code > span {
-  counter-increment: none !important;
-}
-
-.dark .markdown [data-streamdown="code-block"] .shiki span {
-  color: var(--shiki-dark, var(--foreground)) !important;
-  font-style: var(--shiki-dark-font-style, normal) !important;
-  font-weight: var(--shiki-dark-font-weight, 400) !important;
-  text-decoration: var(--shiki-dark-text-decoration, none) !important;
-}
-
+/*
+ * 深色语法色：shiki 把浅色写进行内 `color`、深色写进行内 `--shiki-dark`，翻转必须带 important。
+ * 四层都要列，因为颜色可能落在容器、code、行 span 或 token span 上。
+ */
 .dark .markdown [data-streamdown="code-block-body"],
 .dark .markdown [data-streamdown="code-block-body"] code,
 .dark .markdown [data-streamdown="code-block-body"] code > span,

@@ -1175,6 +1175,28 @@ pnpm --filter @downcity/desktop test        # 309/309 通过
 
 ---
 
+## 二十三·补、代码块呈现简化（2026-09-16）
+
+> 状态：已实施（自动化守卫通过；GUI 目检待产品确认）
+>
+> 范围：`app/desktop/src/renderer/styles/markdown.css`、`app/desktop/tests/markdown_code_block.test.ts`
+
+代码块不是自有组件，而是 Streamdown 渲染的 DOM（`[data-streamdown]`）加上一层覆写样式。原实现把这层覆写做成了「重排库的 DOM」：把元信息行绝对定位到右上角、藏掉语言标签、只留一个 hover 淡入的复制按钮。结果是两个可复现的错误：容器底色在浅色主题下只有 `rgb(251,251,251)`（背景 255），而 ocean / forest 这类主题的 `muted` 是饱和色，同一混色把整块染成蓝底或绿底；复制按钮 26px、代码区上内边距 11px，纵向必然压住首行，且代码区横向滚动时浮层会被长行穿过。
+
+决策：
+
+- **一档中性填充，不要边框。** 底色统一为 `--surface-subtle`（浅色 4% / 深色 8% 前景色），圆角用 `--radius`。九套主题 × 明暗由同一推导得出，不再逐主题校对显式混色。
+- **元信息行回到普通流布局。** 语言在左、复制在右，`min-height: 1.5rem`，不覆盖代码区。它是「操作不压住代码」的代价，同时回答「这段是什么语言」。
+- **复制按钮 24px 常显。** 24px 是 WCAG 2.2 目标尺寸下限，也是次级图标按钮的触控高度；尺寸用 rem 而非本文件的 em 方言，因为同一代码块也渲染在 Plugin 说明（`xs`）等更小宿主里。hover 改用 `--interaction-hover`，焦点环与消息操作栏统一为 `ring-2 / ring-ring-30`。
+- **行内码改用 `--surface-emphasis`。** 与块级代码共用一套「代码底色」语义，靠面积而非各自的混色区分。
+- **删掉不生效的规则。** `.shiki span` 在本版本 DOM 中不存在；`counter-increment: none` 无法关掉库放在 `::before` 上的计数器；行号本身依赖 `before:content-[counter(line)]` 这类任意值工具类，本仓库不扫描 `node_modules`，根本不会生成。
+
+已知保留项（都不在样式表可及范围内，故不修）：库的懒加载骨架屏不受 `[data-streamdown]` 选择器管辖，形态与加载后不一致；复制按钮 `title` 是库写死的英文 `Copy Code`；库只提供 `controls.code` 一个总开关，下载按钮只能隐藏。
+
+验证：`markdown_code_block.test.ts` 8 项断言上述决定（底色令牌、无边框、元信息行非浮层、语言标签可见、复制按钮尺寸与焦点环、下载按钮隐藏有注释依据、深色翻转只剩一条）。Desktop 全量测试 432/433 通过；唯一失败项 `chat_plugin_sidebar_renderer.test.ts` 期望 Channel 含 `qq`，与本次改动无关。
+
+---
+
 ## 二十四、消息阅读字号与块间距归位（2026-09-16）
 
 > 状态：已实施
