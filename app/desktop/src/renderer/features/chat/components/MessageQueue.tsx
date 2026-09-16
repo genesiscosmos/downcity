@@ -33,8 +33,11 @@ export function MessageQueue(props: MessageQueueProps) {
     set_editing(undefined);
   };
   const action_class = "size-5 rounded-sm text-muted-foreground [&_svg]:size-3";
-  return <div className="chat-queued-message-list max-h-32 overflow-y-auto rounded-xl bg-interaction-selected">
-    <div className="flex min-h-7 items-center justify-between px-2.5">
+  // 圆角与滚动分两层：圆角只对外层生效，否则滚动条会戳出圆角（原因见 ui/menu-styles 的注释）。
+  // 滚动条样式类必须跟着滚动层走。
+  return <div className="overflow-hidden rounded-xl bg-interaction-selected">
+    <div className="chat-queued-message-list max-h-32 overflow-y-auto overscroll-contain">
+      <div className="flex min-h-7 items-center justify-between px-2.5">
       <TbList className="size-3.5 text-muted-foreground" aria-hidden="true" />
       <Button className="h-5 gap-1 rounded-sm px-1 text-[0.625rem] text-muted-foreground [&_svg]:size-3" title={translate(props.queue_paused ? "queue.resume_all" : "queue.pause_all")} onClick={() => props.set_queue_paused(!props.queue_paused)}>{props.queue_paused ? <TbPlayerPlay /> : <TbPlayerPause />}{translate(props.queue_paused ? "queue.resume" : "queue.pause")}</Button>
     </div>
@@ -57,5 +60,6 @@ export function MessageQueue(props: MessageQueueProps) {
         </>}
       </div>;
     })}</div>
+    </div>
   </div>;
 }

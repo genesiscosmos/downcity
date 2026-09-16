@@ -167,7 +167,9 @@ export function create_plugin_renderer_ui_components(options: PluginRendererUiCo
         {typeof item.count === "number" ? <span className="tabular-nums text-[0.625rem] text-muted-foreground">{item.count}</span> : null}
       </button>)}
     </div>,
-    CodeBlock: ({ children }) => <pre className="max-h-[32rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-subtle px-4 py-3 font-mono text-[0.6875rem] leading-5 text-foreground">{children}</pre>,
+    // 圆角与滚动分两层：`pre` 只负责排版，外层负责圆角与裁剪；
+    // 合成一层时滚动条会戳出圆角（原因见 ui/menu-styles）。
+    CodeBlock: ({ children }) => <div className="max-h-[32rem] overflow-hidden rounded-lg bg-surface-subtle"><pre className="min-w-0 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[0.6875rem] leading-5 text-foreground">{children}</pre></div>,
     Markdown: ({ text }) => <div className="text-[0.8125rem] leading-[1.6]"><Markdown text={text} mode="static" /></div>,
     Button: ({ children, on_click, disabled, variant = "default", size = "default", title, aria_label }) => <Button variant={variant} size={size} disabled={disabled} onClick={on_click} title={title} aria-label={aria_label}>{children}</Button>,
     Input: ({ value, on_value_change, placeholder, disabled, type = "text", minimum, maximum, fill = false }) => <input

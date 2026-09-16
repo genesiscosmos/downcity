@@ -25,8 +25,15 @@ DropdownMenuTrigger.displayName = "DropdownMenuTrigger";
 
 /** 下拉菜单浮层属性。 */
 interface DropdownMenuContentProps extends Omit<Menu.Popup.Props, "className" | "render"> {
-  /** 附加样式。 */
+  /** 浮层自身样式（宽度、最小宽度等）。**不要**在这里写高度上限或 overflow。 */
   className?: string;
+  /**
+   * 内容滚动区样式；不传时用共享默认值：视口可用高度与 20rem 取小。
+   *
+   * 高度上限必须写在这里而不是 `className`：滚动区在内层，圆角只对外层生效，
+   * 写错那层会让滚动条戳出圆角（原因见 menu-styles）。
+   */
+  scroll_class_name?: string;
   /** 与触发器的间距。 */
   sideOffset?: number;
   /** 水平对齐方向。 */
@@ -37,10 +44,10 @@ interface DropdownMenuContentProps extends Omit<Menu.Popup.Props, "className" | 
 
 /** 带 Portal 和碰撞定位的下拉菜单浮层。 */
 const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContentProps>(
-  ({ className, sideOffset = 4, align = "start", side = "bottom", ...props }, ref) => (
+  ({ className, scroll_class_name, sideOffset = 4, align = "start", side = "bottom", ...props }, ref) => (
     <Menu.Portal>
       <Menu.Positioner sideOffset={sideOffset} align={align} side={side} className="z-50 outline-none">
-        <Menu.Popup ref={ref} render={<MenuSurface className={className} />} {...props} />
+        <Menu.Popup ref={ref} render={<MenuSurface className={className} scroll_class_name={scroll_class_name} />} {...props} />
       </Menu.Positioner>
     </Menu.Portal>
   ),
