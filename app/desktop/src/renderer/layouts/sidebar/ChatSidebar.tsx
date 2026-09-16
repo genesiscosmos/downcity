@@ -1,18 +1,27 @@
-/** 组合 Chat 主体导航与当前主体 Session 面板。 */
+/** 组合 Chat 主体导航与每个主体的会话入口。 */
 
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { TbGhost3, TbPlus, TbUsers } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { RowMenuButton } from "@/components/RowMenuButton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
+import { GroupSessionActionsMenu } from "@/features/chat/components/GroupSessionActionsMenu";
+import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
 import { use_desktop_selector } from "@/app/use_desktop";
+import { get_group_session_unread_attention, get_session_unread_attention } from "@/lib/notification/notification_state";
+import { get_session_key } from "@/features/chat/lib/chat_cache_key";
+import { resolve_chat_row_status } from "@/features/chat/lib/chat_row_status";
+import { resolve_chat_session_live_status } from "@/features/chat/lib/chat_runtime_projection";
+import { select_agent_sessions } from "@/features/chat/lib/session_list_projection";
 import { use_translation } from "@/locales/i18n";
-import type { DesktopController } from "@/types/DesktopView";
+import type { DesktopController, DesktopWorkspaceSession, NavigationTarget } from "@/types/DesktopView";
 import type { DesktopNotificationState } from "@common/types/DesktopNotification";
-import { ChatSessionPanel } from "./ChatSessionPanel";
+import type { DesktopAgentSummary, DesktopChatRuntime, DesktopGroupSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import { ChatSubjectList } from "./ChatSubjectList";
 import { SidebarHeader } from "./SidebarHeader";
 import { SidebarPanel } from "./SidebarPanel";
-import { collect_agent_last_active, collect_group_last_active, merge_runtime_activity, order_chat_subjects } from "@/features/navigation/lib/chat_subject_order";
+import { empty_conversations, type SubjectConversation } from "./SubjectConversationsPanel";
+import { collect_agent_last_active, collect_group_last_active, merge_runtime_activity, order_chat_subjects, type ChatSubject } from "@/features/navigation/lib/chat_subject_order";
 
 /** Chat Sidebar 属性。 */
 interface ChatSidebarProps {
@@ -28,9 +37,105 @@ interface ChatSidebarProps {
   open_group_config(group_id: string): void;
 }
 
-/** 读取 Chat 目录状态，并组合主体列表和 Session 面板。 */
+/**
+ * 投影一个主体的会话列表。
+ *
+ * ## 为什么要按需调用，而不是一次算出所有主体
+ *
+ * 早先这里把**每个主体**的会话列表连菜单一起建好，塞进一张 `subject.key → 列表` 的表。
+ * 代价在依赖里：`selection` 一变（点一次会话就算变），全部主体都要重建——
+ * N 个主体 × M 条会话的菜单元素、以及全量 Session 目录扫描，而**同时只有一个主体能看到**。
+ *
+ * 现在只在**展开的那一个**主体上调用它。折叠时一次都不调用，于是点会话、收到通知、
+ * 流式运行态更新都不会再触发这份投影。
+ *
+ * 菜单仍在这里构造（面板不必认识 Session 目录与删除确认框），但只构造当前可见的那一份。
+ */
+function build_subject_conversations(options: {
+  /** 目标是 Agent 还是 Group 主体。 */
+  subject: ChatSubject;
+  /** 全量 Session 目录。 */
+  sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
+  /** 实时运行态，用于逐条状态。 */
+  chat_runtimes: Record<string, DesktopChatRuntime>;
+  /** 当前通知快照。 */
+  notification_state: DesktopNotificationState;
+  /** 当前导航目标，用于标记当前项。 */
+  selection: NavigationTarget | null;
+  /** Renderer 根控制器。 */
+  controller: DesktopController;
+  /** 导航文案。 */
+  translate(key: string, values?: Record<string, unknown>): string;
+  /** 通用文案。 */
+  translate_common(key: string, values?: Record<string, unknown>): string;
+}): readonly SubjectConversation[] {
+  const { subject, sessions_by_workspace, chat_runtimes, notification_state, selection, controller, translate, translate_common } = options;
+  if (subject.kind === "group") {
+    const group: DesktopGroupSummary = subject.group;
+    return [...group.sessions]
+      .sort((left, right) => right.updated_at - left.updated_at)
+      .map((session) => {
+        const status = resolve_chat_row_status(null, get_group_session_unread_attention(notification_state, group.group_id, session.session_id));
+        return {
+          key: session.session_id,
+          title: session.title || translate("sidebar.new_chat"),
+          active: selection?.kind === "group_session" && selection.session_id === session.session_id,
+          status,
+          select: () => void controller.actions.open_group(group.group_id, session.session_id),
+          menu: <GroupSessionActionsMenu
+            session={session}
+            status={status}
+            on_rename={(title) => controller.actions.rename_group_session(group.group_id, session.session_id, title)}
+            on_remove={() => controller.actions.remove_group_session(group.group_id, session.session_id)}
+          />,
+        };
+      });
+  }
+  const agent_id = subject.agent.agent_id;
+  // 逐条状态与行上的规则一致（实时优先于未读），因此列表里那条「等待输入」和行上的提示不会矛盾。
+  return select_agent_sessions(sessions_by_workspace, agent_id, (session_workspace_id, session) => {
+    const runtime = chat_runtimes[get_session_key(session_workspace_id, agent_id, session.session_id)];
+    // Runtime 是当前事实；尚未收到 Runtime 时回退到目录快照。
+    return resolve_chat_session_live_status(runtime, session.executing);
+  }).map(({ workspace_id, session, live_status }) => {
+    const status = resolve_chat_row_status(live_status, get_session_unread_attention(notification_state, workspace_id, agent_id, session.session_id));
+    return {
+      key: `${workspace_id}:${session.session_id}`,
+      title: session.title || translate("sidebar.new_chat"),
+      active: selection?.kind === "session" && selection.session_id === session.session_id,
+      status,
+      select: () => void controller.actions.select_session(workspace_id, agent_id, session.session_id, true),
+      menu: <SessionActionsMenu
+        session={session}
+        trigger={<RowMenuButton status={status} label={translate_common("actions.more")} />}
+        on_rename={(title) => controller.actions.rename_session(workspace_id, agent_id, session.session_id, title)}
+        on_archive={() => controller.actions.archive_session(workspace_id, agent_id, session.session_id)}
+        on_remove={() => controller.actions.remove_session(workspace_id, agent_id, session.session_id)}
+      />,
+    };
+  });
+}
+
+/**
+ * 读取 Chat 目录状态，并组合主体列表。
+ *
+ * ## 会话列表的投影边界
+ *
+ * 会话列表需要三份数据（Session 目录、运行态、通知），这三份在这一层本来就已经订阅。
+ * 行内各自订阅会让每一行都持有整张表，任何会话变化都要广播到所有行，所以投影留在这一层；
+ * 但**只为当前展开的那一个主体**投影（见 `build_subject_conversations`）。
+ *
+ * ## 开合状态为什么在这里
+ *
+ * 「一次只能展开一个」是列表级约束，而投影又需要知道展开的是谁（只为它建会话列表）。
+ * 两件事都需要同一个信号，因此它归这一层：行只上报意图，不自己持有状态。
+ *
+ * 这也让**折叠态完全不做投影**：`open_conversations` 直接是共享的空数组，
+ * 点会话、收到通知、流式更新都不会再重建任何会话列表。
+ */
 export const ChatSidebar = memo(function ChatSidebar({ controller, notification_state, open_create_agent, open_create_group, open_group_config }: ChatSidebarProps) {
   const translate = use_translation("navigation");
+  const translate_common = use_translation();
   const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
   const active_workspace_id = use_desktop_selector(controller.stores.navigation, (state) => state.active_workspace_id);
   const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
@@ -42,9 +147,6 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
   const chat_runtimes = use_desktop_selector(controller.stores.chat_stream, (state) => state.chat_runtime_by_session);
   const selected_agent_id = selection && "agent_id" in selection ? selection.agent_id : "";
   const selected_group_id = selection && "group_id" in selection ? selection.group_id : "";
-  const selected_agent = agents.find((agent) => agent.agent_id === selected_agent_id);
-  const selected_group = groups.find((group) => group.group_id === selected_group_id);
-  const workspace_id = active_workspace_id || workspaces[0]?.workspace_id;
   // Agent 与 Group 共用一条「最近一次对话」时间轴；Agent 的时间还要用实时运行态补上 Session 目录之后的对话。
   const subjects = useMemo(() => order_chat_subjects({
     agents,
@@ -53,9 +155,53 @@ export const ChatSidebar = memo(function ChatSidebar({ controller, notification_
     last_active_by_group: collect_group_last_active(groups),
   }), [agents, chat_runtimes, groups, sessions_by_workspace]);
 
+  const [open_subject_key, set_open_subject_key] = useState<string | null>(null);
+  /**
+   * 是否保持展开（点外部不收起）。
+   *
+   * 默认 false：面板会盖住下面的行，默认就应该“点开外部就收起”。
+   * 只有确实要边看边操作时才需要它留着，因此做成**显式开关**（面板顶部那个固定按钮）。
+   *
+   * 每次展开都重置为 false —— 它是「这一次展开」的临时选择，不是要记住的模式：
+   * 记住的话，用户下次点开面板发现点外部不关，会先怀疑界面坏了。
+   */
+  const [pinned, set_pinned] = useState(false);
+  /**
+   * 上报某个主体的开合意图。
+   *
+   * 引用恒定（`useCallback` 空依赖）：它要作为行组件的 prop，每次渲染新建会让行的 memo 全部失效。
+   *
+   * 处理函数对回调顺序不敏感：关闭事件可能来自「点外部」，而按下另一个触发器时也会先触发一次
+   * 点外部——彼时用户其实正在开新的那个，只在关闭的正是当前项时才清空，而不是一律置空。
+   */
+  const set_open = useCallback((key: string, open: boolean) => {
+    set_open_subject_key((current) => open ? key : (current === key ? null : current));
+    // 展开新面板时回到默认（不固定）。
+    if (open) set_pinned(false);
+  }, []);
+  // 展开的主体可能已从列表消失（被删除、切换 Workspace）；此时视为未展开，
+  // 避免它在同 key 的主体回来时「记得」之前是打开的。
+  const opened_subject_key = open_subject_key !== null && subjects.some((subject) => subject.key === open_subject_key) ? open_subject_key : null;
+
+  // 只为展开的那一个主体投影；折叠时直接是共享空数组，不做任何扫描。
+  const open_conversations = useMemo(() => {
+    if (!opened_subject_key) return empty_conversations;
+    const subject = subjects.find((item) => item.key === opened_subject_key);
+    if (!subject) return empty_conversations;
+    return build_subject_conversations({
+      subject,
+      sessions_by_workspace,
+      chat_runtimes,
+      notification_state,
+      selection,
+      controller,
+      translate,
+      translate_common,
+    });
+  }, [chat_runtimes, controller, notification_state, opened_subject_key, selection, sessions_by_workspace, subjects, translate, translate_common]);
+
   return <SidebarPanel>
     <SidebarHeader title={translate("views.chat")} actions={<DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("sidebar.add_chat_subject")} aria-label={translate("sidebar.add_chat_subject")}><TbPlus /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_create_agent}><TbGhost3 /><span>{translate("sidebar.new_agent")}</span></DropdownMenuItem><DropdownMenuItem onClick={open_create_group}><TbUsers /><span>{translate("sidebar.new_group")}</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu>} />
-    <ChatSubjectList controller={controller} subjects={subjects} hydrated={hydrated} selected_agent_id={selected_agent_id} selected_group_id={selected_group_id} active_workspace_id={active_workspace_id} agents={agents} workspaces={workspaces} loading={loading} notification_state={notification_state} open_create_agent={open_create_agent} open_group_config={open_group_config} />
-    <ChatSessionPanel controller={controller} notification_state={notification_state} selection={selection} selected_agent={selected_agent} selected_group={selected_group} workspace_id={workspace_id} />
+    <ChatSubjectList controller={controller} subjects={subjects} open_subject_key={opened_subject_key} open_conversations={open_conversations} set_open={set_open} pinned={pinned} set_pinned={set_pinned} hydrated={hydrated} selected_agent_id={selected_agent_id} selected_group_id={selected_group_id} active_workspace_id={active_workspace_id} agents={agents} workspaces={workspaces} loading={loading} notification_state={notification_state} open_create_agent={open_create_agent} open_group_config={open_group_config} />
   </SidebarPanel>;
 });

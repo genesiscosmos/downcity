@@ -1,20 +1,28 @@
-/** GroupSession 操作菜单：维护 canonical 标题并提供永久删除入口。 */
+/**
+ * GroupSession 操作菜单：重命名与永久删除。
+ *
+ * Group 会话没有归档语义（只有 Agent Session 有），所以它的菜单比 `SessionActionsMenu` 少几项，
+ * 与 Group 页头菜单保持同一套动作。
+ *
+ * 它与 `SessionActionsMenu` 分工明确、不要合并：后者的归档、复制路径、复制 Session ID 都依赖
+ * Agent Session 的目录字段，硬合并会逼出一堆「Group 时该字段为空」的分支。
+ */
 
 import { useState, type FormEvent } from "react";
 import { TbPencil, TbTrash } from "react-icons/tb";
-import { Button } from "@/components/ui/button";
 import { RowMenuButton } from "@/components/RowMenuButton";
-import { type ChatRowStatus } from "@/features/chat/lib/chat_row_status";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
-import type { DesktopGroupSessionSummary } from "@common/types/DesktopApi";
+import { type ChatRowStatus } from "@/features/chat/lib/chat_row_status";
 import { use_translation } from "@/locales/i18n";
+import type { DesktopGroupSessionSummary } from "@common/types/DesktopApi";
 
 /** 渲染 GroupSession 的重命名与删除流程。 */
 export function GroupSessionActionsMenu({ session, status, on_rename, on_remove }: {
   /** 当前 GroupSession 摘要。 */
   session: DesktopGroupSessionSummary;
-  /** 当前 GroupSession 的行状态。 */
+  /** 当前 GroupSession 的行状态；决定入口图标与显隐。 */
   status: ChatRowStatus;
   /** 持久化新的 canonical 标题。 */
   on_rename(title: string): Promise<void>;
@@ -54,6 +62,7 @@ export function GroupSessionActionsMenu({ session, status, on_rename, on_remove 
   return <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild><RowMenuButton status={status} label={translate_common("actions.more")} /></DropdownMenuTrigger>
+      {/* 菜单里的点击不要冒泡到所在行，否则会顺带选中这个会话。 */}
       <DropdownMenuContent align="end" sideOffset={5} onClick={(event) => event.stopPropagation()}>
         <DropdownMenuItem onClick={() => { set_title(session.title || ""); set_rename_open(true); }}><TbPencil /><span>{translate_chat("conversation.rename")}</span></DropdownMenuItem>
         <DropdownMenuSeparator />

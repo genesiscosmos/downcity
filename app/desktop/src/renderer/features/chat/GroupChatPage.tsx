@@ -46,6 +46,7 @@ export function GroupChatSurface({ selection, group, session, workspaces, agents
   const switch_workspace = useCallback((target_workspace_id: string) => selection.kind === "group_draft" ? controller.actions.switch_group_draft_context(group_id, target_workspace_id) : controller.actions.create_group_session(group_id, target_workspace_id), [controller.actions, group_id, selection.kind]);
   const respond_interaction = useCallback((input: RespondSessionInteractionInput) => selection.kind === "group_session" ? controller.actions.respond_group_interaction(group_id, selection.session_id, input) : Promise.resolve(), [controller.actions, group_id, selection]);
   const remove_session = useMemo(() => selection.kind === "group_session" ? () => controller.actions.remove_group_session(group_id, selection.session_id) : undefined, [controller.actions, group_id, selection]);
+  const rename_session = useMemo(() => selection.kind === "group_session" ? (title: string) => controller.actions.rename_group_session(group_id, selection.session_id, title) : undefined, [controller.actions, group_id, selection]);
   return <GroupView
     group={group}
     controller={controller}
@@ -63,5 +64,6 @@ export function GroupChatSurface({ selection, group, session, workspaces, agents
     respond_interaction={respond_interaction}
     composer={<GroupComposer selection={selection} stores={controller.stores} actions={controller.actions} />}
     remove_session={remove_session}
+    rename_session={rename_session}
   />;
 }

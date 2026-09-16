@@ -24,6 +24,13 @@ interface RowMenuButtonProps extends Omit<React.ComponentPropsWithoutRef<typeof 
   label: string;
   /** 当前行状态；不表达状态的普通行保持默认 idle。 */
   status?: ChatRowStatus;
+  /**
+   * idle 时展示的常态图标。
+   *
+   * 默认是省略号，即「更多操作」；入口已经有明确含义时（如「查看该主体的对话」），
+   * 应传入表达该含义的图标——否则用户看到省略号会以为里面是通用操作菜单。
+   */
+  fallback?: React.ReactNode;
 }
 
 /**
@@ -32,7 +39,7 @@ interface RowMenuButtonProps extends Omit<React.ComponentPropsWithoutRef<typeof 
  * 点击先交给外部触发器（展开/收起菜单），再阻止冒泡，避免同时触发所在行的选择行为。
  */
 export const RowMenuButton = React.forwardRef<HTMLButtonElement, RowMenuButtonProps>(
-  function RowMenuButton({ label, status = "idle", className, onClick, ...props }, ref) {
+  function RowMenuButton({ label, status = "idle", fallback = <TbDots />, className, onClick, ...props }, ref) {
     const translate_chat = use_translation("chat");
     const status_label = status === "idle" ? null : translate_chat(chat_row_status_label_key(status));
     const accessible_label = [label, status_label].filter(Boolean).join(", ");
@@ -48,7 +55,7 @@ export const RowMenuButton = React.forwardRef<HTMLButtonElement, RowMenuButtonPr
         event.stopPropagation();
       }}
     >
-      <ChatStatusIcon status={status} fallback={<TbDots />} />
+      <ChatStatusIcon status={status} fallback={fallback} />
     </Button>;
   },
 );

@@ -1,10 +1,11 @@
 /** 运行时 Group 共享消息视图，保持与 Agent Session Chat 一致的视觉结构。 */
 
-import { memo, useMemo, type ReactNode } from "react";
-import { TbChevronRight, TbDots, TbEdit, TbFileText, TbFolder, TbTrash, TbUsers } from "react-icons/tb";
+import { memo, useMemo, useState, type ReactNode } from "react";
+import { TbChevronRight, TbDots, TbEdit, TbFileText, TbFolder, TbPencil, TbTrash, TbUsers } from "react-icons/tb";
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { GroupAvatar } from "@/components/GroupAvatar";
 import { ChatMessageTimestamp } from "@/features/chat/components/ChatMessageTimestamp";
@@ -73,13 +74,33 @@ interface GroupViewProps {
   composer: ReactNode;
   /** 删除当前 Group Session；草稿态不提供。 */
   remove_session?(): Promise<void>;
+  /** 重命名当前 Group Session；草稿态不提供。 */
+  rename_session?(title: string): Promise<void>;
   /** Renderer 稳定控制器，用于构造标签页。 */
   controller: DesktopController;
 }
 
 /** Group 复用 Agent Chat 的消息流和输入区布局，但保留共享消息语义。 */
-export function GroupView({ group, agents, settings, message_projection, member_statuses, group_phase, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, composer, remove_session, controller }: GroupViewProps) {
+export function GroupView({ group, agents, settings, message_projection, member_statuses, group_phase, interactions, respond_interaction, session, workspace_id, workspaces, workspace_draft_mode, switch_workspace, composer, remove_session, rename_session, controller }: GroupViewProps) {
   const translate = use_translation("resources");
+  const translate_chat = use_translation("chat");
+  const common_translate = use_translation();
+  // 当前 Group Session 的重命名就地用一个轻量 Dialog；删除直接用 confirm。
+  // 两者都放在页头菜单，与「Group 配置」并列——侧栏的旧对话面板移除后，这里是会话级操作的唯一位置。
+  const [rename_open, set_rename_open] = useState(false);
+  const [rename_pending, set_rename_pending] = useState(false);
+  const [rename_title, set_rename_title] = useState("");
+  const submit_rename = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!rename_session || !rename_title.trim() || rename_pending) return;
+    set_rename_pending(true);
+    try {
+      await rename_session(rename_title.trim());
+      set_rename_open(false);
+    } finally {
+      set_rename_pending(false);
+    }
+  };
   const scroll_surface_id = get_group_chat_key(workspace_id, group.group_id, session.session_id);
   // Group 消息只会追加，首条消息 ID 天然不变，因此不会触发历史前插恢复。
   const { scroll_ref, content_ref, handle_scroll } = use_chat_scroll(scroll_surface_id, settings.auto_scroll, message_projection?.segments[0]?.messages[0]?.message_id ?? "");
@@ -97,7 +118,7 @@ export function GroupView({ group, agents, settings, message_projection, member_
   const open_panel = use_baybar_open();
   const open_group_tab = () => open_panel(group_config_tab(group, controller, translate));
   const group_session_title = format_group_session_title(session, translate("group_details.empty_title"));
-  return <ChatSurfaceLayout header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={group_session_title}>{group_session_title}</span>{workspace_tag}</div>} header_right={<div className="flex shrink-0 items-center gap-1"><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("group_details.actions")} aria-label={translate("group_details.actions")}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_group_tab}><TbEdit /><span>{translate("group_details.settings")}</span></DropdownMenuItem>{remove_session ? <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(translate("group_details.delete_chat_confirmation"))) void remove_session(); }}><TbTrash /><span>{translate("group_details.delete_chat")}</span></DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu></div>}>
+  return <ChatSurfaceLayout header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={group_session_title}>{group_session_title}</span>{workspace_tag}</div>} header_right={<div className="flex shrink-0 items-center gap-1"><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" title={translate("group_details.actions")} aria-label={translate("group_details.actions")}><TbDots /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={open_group_tab}><TbEdit /><span>{translate("group_details.settings")}</span></DropdownMenuItem>{rename_session ? <DropdownMenuItem onClick={() => { set_rename_title(session.title || ""); set_rename_open(true); }}><TbPencil /><span>{translate_chat("conversation.rename")}</span></DropdownMenuItem> : null}{remove_session ? <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(translate("group_details.delete_chat_confirmation"))) void remove_session(); }}><TbTrash /><span>{translate("group_details.delete_chat")}</span></DropdownMenuItem> : null}</DropdownMenuContent></DropdownMenu></div>}>
       <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         <div ref={scroll_ref} onScroll={handle_scroll} className="chat-scroll-viewport relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log">
           <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
@@ -110,6 +131,14 @@ export function GroupView({ group, agents, settings, message_projection, member_
         </div>
         {composer}
       </div>
+      {/* 重命名属于会话级操作，弹层不参与消息流几何，因此与内容区平行。 */}
+      <Dialog open={rename_open} onOpenChange={set_rename_open}><DialogContent>
+        <form onSubmit={(event) => void submit_rename(event)}>
+          <DialogHeader><DialogTitle>{translate_chat("conversation.rename_title")}</DialogTitle><DialogDescription>{translate_chat("conversation.group_rename_description")}</DialogDescription></DialogHeader>
+          <DialogBody><input autoFocus value={rename_title} onChange={(event) => set_rename_title(event.target.value)} className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /></DialogBody>
+          <DialogFooter><Button type="button" onClick={() => set_rename_open(false)}>{common_translate("actions.cancel")}</Button><Button type="submit" variant="primary" disabled={rename_pending || !rename_title.trim()}>{common_translate(rename_pending ? "actions.saving" : "actions.save")}</Button></DialogFooter>
+        </form>
+      </DialogContent></Dialog>
   </ChatSurfaceLayout>;
 }
 

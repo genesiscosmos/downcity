@@ -124,6 +124,7 @@ const focus_visible_idioms = [
   "menu_item_base_class_name",
   "menu_item_highlighted_class_name",
   "menu_item_interaction_class_name",
+  "subject_session_row_class_name",
   "button_variants",
   "approval-action",
   "question-submit",
