@@ -10,30 +10,44 @@
  * 只剩下无法收敛的漂移。
  *
  * 现在字号收敛为 9 级语义档位（`tokens.css` 的 `--text-3xs` … `--text-3xl`），
- * 并且**七个与 Tailwind 同名的档位（`xs` … `3xl`）必须与 Tailwind 的默认主题完全等值**。
+ * `base` 为默认档。
  *
- * ## 为什么「等值」要专门测
+ * ## 这里最关键的一条：档名与数值的对应关系
  *
- * 档名是前端的公共词汇。只要同名不同值，从 Tailwind 文档或其他项目复制类名
- * 就会拿到错误的尺寸，而且错误只在渲染后才看得出来——回归成本很高。
- * 更麻烦的是这类偏移很容易被「都是相对单位、看着差不多」合理化。
+ * 档名沿用前端传统命名，但**数值是本应用自有的阶梯，与 Tailwind 同名档位不等值**：
+ * 从 `xs` 到 `lg` 四档都比 Tailwind 小一档左右（本应用 `base` = 0.9rem，Tailwind = 1rem），
+ * `xl` 及以上三档与 Tailwind 相同。原因是本应用是密集的桌面工具，
+ * Tailwind 的 `base` = 1rem（16px）对默认正文偏大。
  *
- * 因此 `tests/font_scale.test.ts` 不自己维护一张期望表：它**编译一份 Tailwind 默认主题**，
- * 把 `--text-*` 的真值读出来，再与 `tokens.css` 逐项对照。Tailwind 升版改了默认值，
- * 这里的测试会失败并告诉我们需要重新对齐。
+ * 代价是「凭 Tailwind 文档的记忆写代码」会拿到错误尺寸（写 `text-base` 得到 0.9rem）。
+ * 因此下面把「档名 → rem」**硬编码**成断言，而不是从源码读出来再自比：
+ * 从源码读出来的话，值被改成什么都测不出来；硬编码才能把这件事钉住。
  *
- * 除等值之外，本文件还守住四类会静默发生的退化：
+ * 除它之外，本文件还守住四类会静默发生的退化：
  *
  * 1. **档位表本身**：只有 9 级、全部 rem、递增、成对行高。
- * 2. **代码里的用法**：只能用这 9 个档名，不能出现任意值，且每一个写下的 `text-*`
- *    都必须真的能被 Tailwind 编译出规则。
+ * 2. **代码里的用法**：不能出现这 9 个之外的字号档名，也不能出现任意值。
  * 3. **两处清单一致**：`tokens.css` 定义几级，`lib/utils.ts` 注册进 tailwind-merge
  *    的就有几级。少注册一级，那一级会在所有 `cn()` 调用点被静默删除。
  * 4. **真的能生成**：9 个档位都产出规则，而 `4xl` 及以上一个都不产出。
+ * *
+ * ## 完整阶梯（唯一权威表）
+ *
+ * | 档位 | 字号 | 配对行高 | 像素等效 |
+ * | --- | --- | --- | --- |
+ * | `3xs` | 0.6rem | 0.875rem | 9.6 / 14px |
+ * | `2xs` | 0.65rem | 0.9rem | 10.4 / 14.4px |
+ * | `xs` | 0.7rem | 1rem | 11.2 / 16px |
+ * | `sm` | 0.825rem | 1.2rem | 13.2 / 19.2px |
+ * | `base` | 0.9rem | 1.3rem | 14.4 / 20.8px |
+ * | `lg` | 1.05rem | 1.5rem | 16.8 / 24px |
+ * | `xl` | 1.25rem | 1.75rem | 20 / 28px |
+ * | `2xl` | 1.5rem | 2rem | 24 / 32px |
+ * | `3xl` | 1.875rem | 2.25rem | 30 / 36px |
  *
  * ## 有意留下的例外
  *
- * `markdown.css`、`mermaid.css`、`base.css` 里的 `font-size` 用的是 **em 相对值**
+ * `markdown.css`、`mermaid.css`、`base.css` 里的 `font-size` 用 **em 相对值**
  *（`.markdown h1 { font-size: 1.55em }` 这类）。它们不是 UI 层级，而是文档方言：
  * 标题、行内码、表格相对**承载它们的正文字号**缩放，正文一变它们必须跟着变。
  * 因此规则是「样式表里要么引用语义令牌，要么是 em / inherit」，
@@ -57,16 +71,25 @@ const utils_source = fs.readFileSync(path.join(renderer_root, "lib/utils.ts"), "
 const document_dialect_styles = ["markdown.css", "mermaid.css", "base.css"];
 
 /**
- * 本应用自有、Tailwind 没有的档位：数值自行决定，只需小于 `xs`。
- * 其余 7 级（`xs` … `3xl`）必须与 Tailwind 等值。
+ * 契约：档名 → [字号(rem), 配对行高(rem)]。
+ *
+ * 这是本文件唯一「写死」的地方，也是整个字号体系的验收标准。
+ * 改档位数值时必须改这里，改的时候会看见它到底影响了哪一级。
  */
-const own_levels: readonly (readonly [string, string])[] = [["3xs", "0.625rem"], ["2xs", "0.6875rem"]];
+const expected_scale: readonly (readonly [string, string, string])[] = [
+  ["3xs", "0.6rem", "0.875rem"],
+  ["2xs", "0.65rem", "0.9rem"],
+  ["xs", "0.7rem", "1rem"],
+  ["sm", "0.825rem", "1.2rem"],
+  ["base", "0.9rem", "1.3rem"],
+  ["lg", "1.05rem", "1.5rem"],
+  ["xl", "1.25rem", "1.75rem"],
+  ["2xl", "1.5rem", "2rem"],
+  ["3xl", "1.875rem", "2.25rem"],
+];
 
-/** 必须与 Tailwind 默认主题等值的档位，由小到大。 */
-const tailwind_aligned_levels = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl"] as const;
-
-/** 9 级阶梯的完整顺序。 */
-const expected_levels = [...own_levels.map(([name]) => name), ...tailwind_aligned_levels];
+/** 默认档：全应用的「普通文字」。 */
+const default_level = "base";
 
 /** Tailwind 自带档位里本应用**不**定义的那些；它们不得再产出规则。 */
 const third_party_only_levels = ["4xl", "5xl", "6xl", "7xl", "8xl", "9xl"];
@@ -103,37 +126,6 @@ async function compile_app_styles() {
   });
 }
 
-/**
- * 读出 Tailwind **默认主题**的档位真值（不带本应用的任何覆盖）。
- *
- * Tailwind v4 的行高写成比例（`calc(1.25 / 0.875)`），因此这里把它折算成 rem：
- * 比例 × 字号。折算结果与 `tokens.css` 里写的绝对 rem 相等，
- * 这样两处可以直接按同一个量纲比对。
- */
-async function read_tailwind_default_scale(): Promise<Map<string, { size_rem: number; line_height_rem: number }>> {
-  const compiler = await compile('@import "tailwindcss";', {
-    base: styles_root,
-    loadStylesheet: async () => {
-      const index_css = path.join(tailwind_root, "index.css");
-      return { path: index_css, base: path.dirname(index_css), content: fs.readFileSync(index_css, "utf8") };
-    },
-  });
-  const css = compiler.build([...tailwind_aligned_levels].map((name) => `text-${name}`));
-
-  const scale = new Map<string, { size_rem: number; line_height_rem: number }>();
-  for (const name of tailwind_aligned_levels) {
-    const size = new RegExp(`--text-${name}:\\s*([\\d.]+)rem;`).exec(css);
-    const ratio = new RegExp(`--text-${name}--line-height:\\s*calc\\(([\\d.]+)\\s*/\\s*([\\d.]+)\\)`).exec(css);
-    assert.ok(size, `Tailwind 默认主题里没有 --text-${name}；本文件的解析方式可能已失效`);
-    assert.ok(ratio, `Tailwind 默认主题里 --text-${name}--line-height 不是 calc(比例) 写法；本文件的解析方式可能已失效`);
-    const size_rem = Number(size[1]);
-    scale.set(name, { size_rem, line_height_rem: Number(ratio[1]) });
-  }
-  // 解析方式自检：Tailwind 的 xs 必须是 0.75rem，否则说明上面读到的不是那些令牌。
-  assert.equal(scale.get("xs")!.size_rem, 0.75, "Tailwind 默认的 xs 不是 0.75rem，解析方式或依赖版本发生了变化");
-  return scale;
-}
-
 /** 读出 `tokens.css` 的定义：档名 → { size_rem, line_height }（行高原样字符串）。 */
 function read_declared_scale(): Map<string, { size_rem: number; line_height: string }> {
   const scale = new Map<string, { size_rem: number; line_height: string }>();
@@ -148,8 +140,11 @@ function read_declared_scale(): Map<string, { size_rem: number; line_height: str
   return scale;
 }
 
+/** 9 级阶梯的档名，由小到大。 */
+const expected_levels = expected_scale.map(([name]) => name);
+
 // ---------------------------------------------------------------------------
-// 1. 档位表与 Tailwind 等值
+// 1. 档位表与契约
 // ---------------------------------------------------------------------------
 
 test("语义字号恰好 9 级，且声明了 Tailwind 默认命名空间的重置", () => {
@@ -158,7 +153,7 @@ test("语义字号恰好 9 级，且声明了 Tailwind 默认命名空间的重�
     "tokens.css 没有 `--text-*: initial`：Tailwind 自带的档位仍然可用，"
       + "新代码可以绕过 9 级语义档位，收敛立刻失效",
   );
-  assert.equal(expected_levels.length, 9, "9 级档位是明确的设计要求");
+  assert.equal(expected_scale.length, 9, "9 级档位是明确的设计要求");
 
   const declared = [...read_declared_scale().keys()];
   assert.deepEqual(
@@ -169,57 +164,34 @@ test("语义字号恰好 9 级，且声明了 Tailwind 默认命名空间的重�
   );
 });
 
-test("xs … 3xl 的字号与 Tailwind 默认主题完全等值", async () => {
-  const tailwind = await read_tailwind_default_scale();
+/**
+ * 字号与配对行高必须与契约表逐项相等。
+ *
+ * 这套阶梯是**自有**的，与 Tailwind 同名档位不等值（`xs` 到 `lg` 都小一档左右）。
+ * 所以不能用“向 Tailwind 比对”来验证，只能把期望值写在这里。
+ * 好处是它同时管住了三件事：数值、行高、以及“改了值但没改契约”。
+ */
+test("每一级的字号与配对行高都与契约表一致", () => {
   const declared = read_declared_scale();
 
   const mismatched: string[] = [];
-  for (const name of tailwind_aligned_levels) {
-    const expected = tailwind.get(name)!;
+  for (const [name, size, line_height] of expected_scale) {
     const actual = declared.get(name);
     assert.ok(actual, `tokens.css 缺少 --text-${name}`);
-    if (actual.size_rem !== expected.size_rem) {
-      mismatched.push(`--text-${name}: 本应用 ${actual.size_rem}rem，Tailwind ${expected.size_rem}rem`);
+    if (`${actual.size_rem}rem` !== size) {
+      mismatched.push(`--text-${name}: 期望 ${size}，实际 ${actual.size_rem}rem`);
+    }
+    // 行高只接受绝对 rem；Tailwind 的 calc 比例写法在本应用语义不明确，不用。
+    if (actual.line_height !== line_height) {
+      mismatched.push(`--text-${name}--line-height: 期望 ${line_height}，实际 ${actual.line_height}`);
     }
   }
   assert.deepEqual(
     mismatched,
     [],
-    `以下档位与 Tailwind 同名档位不等值：\n  ${mismatched.join("\n  ")}\n`
-      + "档名是前端的公共词汇，同名不同值会让从 Tailwind 文档复制类名时拿到错误的尺寸。",
+    `以下档位与契约表不符：\n  ${mismatched.join("\n  ")}\n`
+      + "档名沿用 Tailwind 命名但数值是本应用自有的，对应关系只能由本文件的 expected_scale 保证。",
   );
-});
-
-test("xs … 3xl 的配对行高也与 Tailwind 等值", async () => {
-  const tailwind = await read_tailwind_default_scale();
-  const declared = read_declared_scale();
-
-  const mismatched: string[] = [];
-  for (const name of tailwind_aligned_levels) {
-    const expected = tailwind.get(name)!.line_height_rem;
-    const raw = declared.get(name)!.line_height;
-    // 允许两种写法：等值的绝对 rem，或 Tailwind 的比例写法。两者的计算值相同。
-    const size = declared.get(name)!.size_rem;
-    const ratio = /^calc\(\s*([\d.]+)\s*\/\s*([\d.]+)\s*\)$/.exec(raw);
-    const actual = ratio ? (Number(ratio[1]) / Number(ratio[2])) * size : Number(raw.replace("rem", ""));
-    assert.ok(Number.isFinite(actual), `--text-${name}--line-height 无法解析：${raw}`);
-    if (Math.abs(actual - expected) > 1e-6) {
-      mismatched.push(`--text-${name}--line-height: 本应用折合 ${actual}rem，Tailwind ${expected}rem`);
-    }
-  }
-  assert.deepEqual(mismatched, [], `以下档位的配对行高与 Tailwind 不等值：\n  ${mismatched.join("\n  ")}`);
-});
-
-test("自有档位 3xs / 2xs 小于 xs，且全部是 rem", () => {
-  const declared = read_declared_scale();
-  const xs = declared.get("xs")!.size_rem;
-  for (const [name, size] of own_levels) {
-    const actual = declared.get(name);
-    assert.ok(actual, `tokens.css 缺少 --text-${name}`);
-    assert.equal(actual.size_rem, Number.parseFloat(size), `--text-${name} 的值与预期不符`);
-    assert.ok(actual.size_rem < xs, `--text-${name}（${actual.size_rem}rem）不小于 xs（${xs}rem）`);
-    assert.ok(/rem$/.test(actual.line_height), `--text-${name}--line-height 必须是 rem：${actual.line_height}`);
-  }
 });
 
 test("字号递增，且每级都有配对行高", () => {
@@ -234,6 +206,18 @@ test("字号递增，且每级都有配对行高", () => {
   for (const name of expected_levels) {
     assert.ok(declared.get(name)!.line_height, `--text-${name} 没有成对的 --text-${name}--line-height`);
   }
+});
+
+test("默认档 base 是正文用的那一档，且在正文约束之内", () => {
+  const declared = read_declared_scale();
+  const base = declared.get(default_level)!.size_rem;
+  // 它是全应用最常用的档，动了就是全局字号变动。
+  assert.equal(base, 0.9, `默认档 base 不是 0.9rem：${base}rem`);
+  /*
+   * `.markdown` 的段落间距是 0.5em，必须比消息块间距（gap-3 = 0.75rem）小至少 0.125rem：
+   * `0.5 × 字号 ≤ 0.75 − 0.125` ⇒ 字号 ≤ 1.25rem。
+   */
+  assert.ok(base <= 1.25, `默认正文超过 xl（1.25rem），段落间距会顶到块间距：${base}rem`);
 });
 
 // ---------------------------------------------------------------------------
@@ -333,7 +317,8 @@ test("源码里的每一个 text-* 类名都真的能生成规则", async () => 
   );
 });
 
-test("样式表里的字号只能引用语义令牌，或使用 em 相对值", () => {  const violations: string[] = [];
+test("样式表里的字号只能引用语义令牌，或使用 em 相对值", () => {
+  const violations: string[] = [];
   const token_pattern = new RegExp(`^var\\(--text-(?:${expected_levels.join("|")})\\)`);
   for (const file of collect_files(styles_root, /\.css$/)) {
     const name = path.basename(file);
@@ -447,7 +432,7 @@ test("9 个语义档位都能生成真实规则，并解析到声明里的 rem �
 
 test("4xl 及以上一个都不再生成", async () => {
   const compiler = await compile_app_styles();
-  const css = compiler.build([...third_party_only_levels.map((name) => `text-${name}`), "text-sm"]);
+  const css = compiler.build([...third_party_only_levels.map((name) => `text-${name}`), "text-base"]);
 
   const generated = third_party_only_levels.filter((name) => has_declaration(css, `text-${name}`, "font-size"));
   assert.deepEqual(
@@ -458,5 +443,5 @@ test("4xl 及以上一个都不再生成", async () => {
   );
 
   // 反向确认：本测试不是恒真的。
-  assert.ok(has_declaration(css, "text-sm", "font-size: var(--text-sm)"), "语义档位在同一次编译里也生成不出规则，本测试无法证明任何事");
+  assert.ok(has_declaration(css, "text-base", "font-size: var(--text-base)"), "语义档位在同一次编译里也生成不出规则，本测试无法证明任何事");
 });

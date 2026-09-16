@@ -134,7 +134,7 @@ export function WorkspaceFileMarkdownBody({ content, class_name }: {
   /** 宿主自己的排版样式。 */
   class_name?: string;
 }) {
-  return <article className={cn("min-h-full w-full px-5 py-5 text-sm leading-[1.7] text-foreground md:px-6 md:py-6", class_name)}><Markdown text={content} mode="static" /></article>;
+  return <article className={cn("min-h-full w-full px-5 py-5 text-base leading-[1.7] text-foreground md:px-6 md:py-6", class_name)}><Markdown text={content} mode="static" /></article>;
 }
 
 /** Markdown 文档的阅读模式切换控件。 */

@@ -34,7 +34,7 @@ export function PluginView({ plugin, controller }: {
         <PluginOverview plugin={definition ?? plugin} />
         {plugin.runtime_status === "error" ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"><div className="font-medium">{translate("runtime.unavailable")}</div><div className="mt-1 break-words">{plugin.runtime_error || translate("runtime.initialize_failed")}</div></div> : null}
         {error ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-        {plugin.runtime_status === "error" ? null : plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-sm text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
+        {plugin.runtime_status === "error" ? null : plugin.has_config ? <PluginConfigPanel controller={controller} plugin={plugin} definition={definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-base text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
       </div>
     </main></MainViewBody>
   </MainViewLayout>;
@@ -48,7 +48,7 @@ function PluginOverview({ plugin }: {
   return <section className="min-w-0 overflow-hidden rounded-xl bg-surface-subtle">
     <div className="flex min-h-16 items-center gap-3 px-4 py-3.5">
       <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-brand text-primary"><PluginIcon plugin_id={plugin.plugin_id} icon_url={plugin.icon_url} class_name="size-5" /></div>
-      <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium text-foreground">{plugin.title}</div><div className="mt-1 text-3xs text-muted-foreground">{plugin.description}</div></div>
+      <div className="min-w-0 flex-1"><div className="truncate text-base font-medium text-foreground">{plugin.title}</div><div className="mt-1 text-3xs text-muted-foreground">{plugin.description}</div></div>
       {plugin.readme ? <button type="button" aria-expanded={expanded} onClick={() => set_expanded((current) => !current)} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbChevronDown className={cn("size-4 transition-transform", !expanded && "-rotate-90")} /></button> : null}
     </div>
     {expanded && plugin.readme ? <div className="max-w-[52rem] border-t border-divider px-4 py-4 text-xs leading-[1.65] text-muted-foreground"><Markdown text={plugin.readme} mode="static" /></div> : null}

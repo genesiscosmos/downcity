@@ -396,7 +396,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
               placeholder={translate(command_page_placeholder_keys[page])}
               value={query}
               onChange={(event) => set_query(event.target.value)}
-              className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+              className="h-full min-w-0 flex-1 bg-transparent text-base text-foreground outline-none"
             />
           </div>
 

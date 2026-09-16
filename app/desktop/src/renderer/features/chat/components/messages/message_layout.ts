@@ -69,24 +69,28 @@ export const agent_identity_avatar_class_name = "size-5 rounded";
  *
  * | 层级 | 值 | 来源 |
  * | --- | --- | --- |
- * | Markdown 段落之间 | 0.5em = 0.4375rem（`sm` 正文） | `styles/markdown.css` |
- * | 消息内的块之间 | `gap-2.5` = 0.625rem | 这里 |
+ * | Markdown 段落之间 | 0.5em = 0.45rem（`base` 正文） | `styles/markdown.css` |
+ * | 消息内的块之间 | `gap-3` = 0.75rem | 这里 |
  * | 两条消息之间 | 根容器 `py-2`，合计 1rem | `agent_message_root_class_name` |
  *
  * 它是**夹在中间的一档**：大于段落间距（否则「另起一段」与「后面跟了工具活动」看起来一样宽），
  * 小于消息间距（否则同一条消息被读成两条）。
  *
  * 三个值都是相对单位（em / rem），界面缩放时等比走，因此上面的比值关系与缩放无关。
- * 但注意：段落间距随**字号**走（0.5em），而字号是会被反复调的值——
- * 字号一旦超过 `base`（1rem），这个 0.625rem 就顶不住了。要加字号，必须同时加块间距。
+ * 但注意：段落间距随**字号**走（0.5em），而字号是会被反复调的值。
+ *
+ * 块间距从 0.625rem 抬到 0.75rem，是为了给「默认档定在 `base`」留出余量：
+ * 在 `base`（0.9rem）下段落间距是 0.45rem，与块间距差 0.3rem（= 4.8px）；
+ * 若沿用 0.625rem，差值只有 0.175rem（= 2.8px），两个层级会几乎分不出来。
+ * 由此得出正文的**字号上限**：`0.5 × 字号 ≤ 0.75 − 0.125` ⇒ 不得超过 `xl`（1.25rem）。
  * 这条约束由 `chat_message_layout.test.ts` 以「同一根字号下的换算」守着。
  *
- * 容器上的 `text-sm` 只是给没有自己声明字号的附属内容兜底（活动行、交互卡片、文件 chip
+ * 容器上的 `text-base` 只是给没有自己声明字号的附属内容兜底（活动行、交互卡片、文件 chip
  * 都各自声明了 `xs` / `2xs` / `3xs`）；正文文字由 `chat_message_text_class_name` 单独给出阅读字号。
  *
  * 不要给它加 `pl-*`/`ml-*`：那会重新把正文和身份行分开成两条竖线。
  */
-export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-2.5 text-sm text-foreground";
+export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-3 text-base text-foreground";
 
 /**
  * 消息正文与 Composer 共用的阅读排版：字号与行高只有这一处。
@@ -100,15 +104,26 @@ export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-2
  *
  * 消费处：`AgentMessageContent`、`UserMessageContent`、`GroupView`（两种角色），
  * 以及 `base.css` 的 `.chat-input-editor`（Composer）。前四处用本常量，
- * Composer 用 `var()`；两边都指向 `tokens.css` 的 `--text-sm` + `--leading-reading`。
- * 正文用 `sm`（0.875rem）而不是另开一级：这个值是被两条反馈夹出来的
- *（0.8125rem 被「有点小」否、0.9375rem 被「还是很大」否），详见 tokens.css 的注释。
+ * Composer 用 `var()`；两边都指向 `tokens.css` 的 `--text-base` + `--leading-reading`。
+ *
+ * ## 为什么用 `base`（0.9rem）
+ *
+ * 它是全应用「普通文字」的**默认档**：不特别说明就用它。
+ * 0.9rem 是本应用自有的数值（Tailwind 的 `base` 是 1rem）——默认档定在 `base`
+ * （名字语义正确）与「正文 ⩽ 约 14px」（尺寸合适）两个要求相交处。
+ * 档位对照见 `tokens.css`。
+ *
+ * 与块间距的关系是硬约束：段落间距 0.5em（= 0.45rem）与块间距（`gap-3` = 0.75rem）
+ * 差 0.3rem（= 4.8px），在两个层级之间留出了可感知的差值，
+ * 同时也给出正文字号的**上限 `xl`**（1.25rem）。
+ *
+ * `--leading-reading` 同时被 Composer 引用（`base.css` 的 `.chat-input-editor`）。
  *
  * ## 行高为什么单独用 `leading-reading`
  *
- * `text-sm` 的配对行高是 1.25rem，是 UI 文本的密度；
+ * `text-base` 的配对行高是 1.3rem，是 UI 文本的密度；
  * 正文是长段落，需要 1.8。两者是有意分开的：`leading-*` 会盖掉配对行高，
- * 所以这里同时写 `text-sm leading-reading`，不引入新的字号档位。
+ * 所以这里同时写 `text-base leading-reading`，不引入新的字号档位。
  *
  * ## 历史：为什么曾经不能用 Tailwind 工具类
  *
@@ -121,7 +136,7 @@ export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-2
  * `text-size-N` 不再与 `text-<颜色>` 冲突。因此本常量可以直接用语义字号工具类，
  * 不再需要普通类这个绕过手段。机制与回归验证见 `tests/font_scale.test.ts`。
  */
-export const chat_message_text_class_name = "text-sm leading-reading text-foreground";
+export const chat_message_text_class_name = "text-base leading-reading text-foreground";
 
 /**
  * Footer：运行状态与消息操作栏的共用行。

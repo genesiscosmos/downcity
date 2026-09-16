@@ -58,7 +58,7 @@ async function compile_app_styles() {
 const expected: readonly [string, string][] = [
   ["text-subtle-foreground", "color: var(--subtle-foreground)"],
   // 语义字号（--text-size-*）的可生成性由 `font_scale.test.ts` 负责：
-  // 它不但确认 9 级都产出规则，还确认旧的 text-xs/text-sm/text-base 一个都不产出。
+  // 它不但确认 9 级都产出规则，还确认 4xl 及以上一个都不产出。
   ["bg-control-track", "background-color: var(--control-track)"],
   ["bg-control-surface", "background-color: var(--control-surface)"],
   ["bg-control-hover", "background-color: var(--control-hover)"],

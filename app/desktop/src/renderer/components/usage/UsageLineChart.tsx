@@ -71,7 +71,7 @@ export function UsageLineChart({ series, period, credits_per_usd }: UsageLineCha
       active_index === 0 ? "translate-x-0" : active_index === series.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
     )} style={{ left: `${active_position}%` }}>
       <p className="text-3xs text-muted-foreground">{format_range(active_point)}</p>
-      <p className="mt-1 text-sm font-semibold tabular-nums text-foreground">{format_amount(active_point.credits_used)}</p>
+      <p className="mt-1 text-base font-semibold tabular-nums text-foreground">{format_amount(active_point.credits_used)}</p>
     </div> : null}
     <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full overflow-visible" role="img" aria-label={translate("usage.trend_label", { period: period_label })}>
       <defs><linearGradient id={gradient_id} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--chart-2)" stopOpacity="0.24" /><stop offset="100%" stopColor="var(--chart-2)" stopOpacity="0" /></linearGradient></defs>

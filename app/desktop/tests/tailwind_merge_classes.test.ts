@@ -11,13 +11,13 @@
  * 于是被按「`text-` + 自由值 = 文字颜色」处理：
  *
  * ```text
- * twMerge("text-sm text-foreground") → "text-foreground"
+ * twMerge("text-3xs text-foreground") → "text-foreground"
  * ```
  *
  * 字号类被当成「与 `text-foreground` 冲突的颜色」直接删掉。这个失效**完全静默**：
  *
  * - TypeScript 检查不到（类名就是字符串）；
- * - Tailwind 也确实生成了 `.text-sm` 规则；
+ * - Tailwind 也确实生成了 `.text-3xs` 规则；
  * - `chat_message_layout.test.ts` 断言源码里的类名常量也全部通过；
  * - 只有浏览器里字号悄悄退回 `inherit`。
  *
@@ -70,7 +70,7 @@ test("cn() 在真实调用点保留语义字号", () => {
 
   for (const [name, input] of Object.entries(call_sites)) {
     const merged = cn(...input);
-    for (const class_name of ["text-sm", "leading-reading", "text-foreground"]) {
+    for (const class_name of ["text-base", "leading-reading", "text-foreground"]) {
       assert.ok(
         merged.split(/\s+/).includes(class_name),
         `${name} 的 cn() 丢掉了 ${class_name}：得到「${merged}」`,
@@ -121,10 +121,10 @@ test("tailwind-merge 不认识的自定义档名确实会被吞掉（证明上�
  * 也是组件用 `cn(base, override)` 覆盖字号的依据。
  */
 test("字号之间仍然是后者覆盖前者", () => {
-  assert.equal(cn("text-xs", "text-sm"), "text-sm");
-  assert.equal(cn("text-sm", "text-xs"), "text-xs");
+  assert.equal(cn("text-xs", "text-base"), "text-base");
+  assert.equal(cn("text-base", "text-xs"), "text-xs");
   // 行高不属 font-size 组，不能被字号顺手清掉。
-  assert.ok(cn("text-sm", "leading-reading").split(/\s+/).includes("leading-reading"));
+  assert.ok(cn("text-base", "leading-reading").split(/\s+/).includes("leading-reading"));
 });
 
 /**

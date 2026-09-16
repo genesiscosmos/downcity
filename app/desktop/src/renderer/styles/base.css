@@ -172,7 +172,7 @@ a,
 /*
  * Composer 输入区。
  *
- * 字号与行高直接引用消息正文的语义档位（`tokens.css` 的 `--text-sm` 与
+ * 字号与行高直接引用消息正文的语义档位（`tokens.css` 的 `--text-base` 与
  * `--leading-reading`），与气泡（`message_layout.ts` 的 `chat_message_text_class_name`）同源：
  * Composer 与用户气泡是同一段文字在发送前后的两种状态，数值不同就会出现
  * 「按下回车，文字突然变小」的跳变。
@@ -184,7 +184,7 @@ a,
  * 只改 `--leading-reading` 即可，气泡会同步跟上，不必动字号。
  *
  * 两边都用 `var()` 而不是各自写死数值，所以同步是结构性的；
- * 由 `font_scale.test.ts` 锁住（它要求这两个 var 恰好指向 `sm` 与 `leading-reading`）。
+ * 由 `font_scale.test.ts` 锁住（它要求这两个 var 恰好指向 `base` 与 `leading-reading`）。
  */
 .chat-input-editor,
 .chat-input-editor.ProseMirror {
@@ -194,7 +194,7 @@ a,
   overflow-y: auto;
   padding: 4px 4px 0;
   font-family: var(--font-sans) !important;
-  font-size: var(--text-sm) !important;
+  font-size: var(--text-base) !important;
   line-height: var(--leading-reading) !important;
   outline: none;
 }

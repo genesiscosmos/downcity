@@ -68,7 +68,7 @@ const composer_styles = fs.readFileSync(path.join(renderer_root, "styles/base.cs
 const theme_tokens = fs.readFileSync(path.join(renderer_root, "styles/tokens.css"), "utf8");
 const markdown_styles = fs.readFileSync(path.join(renderer_root, "styles/markdown.css"), "utf8");
 
-/** Tailwind 的 `--spacing`：1 个单位 = 0.25rem，即 `gap-2.5` → 0.625rem。 */
+/** Tailwind 的 `--spacing`：1 个单位 = 0.25rem，即 `gap-3` → 0.75rem。 */
 const TAILWIND_SPACING_REM = 0.25;
 
 /**
@@ -89,14 +89,14 @@ const text_consumers = {
 /**
  * 读出消息正文用的语义字号档；段落间距的换算与归组断言都用它。
  *
- * 正文不另开字号档位，直接用 `--text-sm`（0.875rem），
- * 行高单独取 `--leading-reading`（1.8，无单位倍数）——`sm` 的配对行高是
- * 1.25rem，是 UI 文本的密度，对长段落太挤。所以这里读两个令牌，而不是一个配对。
+ * 正文不另开字号档位，直接用**默认档** `--text-base`（0.9rem），
+ * 行高单独取 `--leading-reading`（1.8，无单位倍数）——`base` 的配对行高是
+ * 1.3rem，是 UI 文本的密度，对长段落太挤。所以这里读两个令牌，而不是一个配对。
  */
 function read_body_type_token(): { size_rem: number; line_height: number } {
-  const size = /--text-sm:\s*([\d.]+)rem/.exec(theme_tokens);
+  const size = /--text-base:\s*([\d.]+)rem/.exec(theme_tokens);
   const line_height = /--leading-reading:\s*([\d.]+)/.exec(theme_tokens);
-  assert.ok(size && line_height, "tokens.css 里缺少 --text-sm / --leading-reading");
+  assert.ok(size && line_height, "tokens.css 里缺少 --text-base / --leading-reading");
   return { size_rem: Number(size[1]), line_height: Number(line_height[1]) };
 }
 
@@ -146,7 +146,7 @@ test("消息正文的块间距夹在段落间距与消息间距之间", () => {
    * 视觉上两个层级已经抹平。留至少 0.125rem 的可感知差值，把“小一点”和“小到看不出来”分开。
    *
    * 这条断言同时锁住了**字号的上限**：段落间距是 0.5em（随字号走），
-   * 因此 `0.5 × 字号 ≤ 块间距 − 0.125rem`，在块间距 0.625rem 下等价于字号 ≤ 1rem。
+   * 因此 `0.5 × 字号 ≤ 块间距 − 0.125rem`，在块间距 0.75rem 下等价于字号 ≤ 1.25rem。
    * 所以调大字号时它会失败——这是有意的：加字号就必须同时加块间距，
    * 否则正文与活动会粘在一起。
    */
@@ -166,17 +166,20 @@ test("消息正文的块间距夹在段落间距与消息间距之间", () => {
 test("消息字号只有一个来源，四个消费处都用它", () => {
   const text = read_class_name(layout_source, "chat_message_text_class_name");
   // 必须是语义字号档位 + 阅读行高。
-  assert.ok(/\btext-sm\b/.test(text), `消息正文没有使用 sm 档：${text}`);
+  assert.ok(/\btext-base\b/.test(text), `消息正文没有使用默认档 base：${text}`);
   assert.ok(/\bleading-reading\b/.test(text), `消息正文没有使用阅读行高：${text}`);
   // 不得自己写任意字号，也不得另开一级。
   assert.ok(!/text-\[/.test(text), `消息正文自己写了任意字号：${text}`);
 
   const { size_rem, line_height } = read_body_type_token();
-  // 必须等于 sm（0.875rem，与 Tailwind 同名档位等值），且不得超出块间距约束上限。
-  assert.equal(size_rem, 0.875, `消息字号不是 sm（0.875rem）：${size_rem}rem`);
-  // 0.5em 段落间距在正文超过 1rem 时会顶到块间距。
-  assert.ok(size_rem <= 1, `消息字号超过 base（1rem），段落间距会顶到块间距：${size_rem}rem`);
-  // 行高要够读长文：1.25rem 是 UI 文本的紧凑节奏，正文不能跟它一档。
+  // 必须等于默认档 base（0.9rem）。
+  assert.equal(size_rem, 0.9, `消息字号不是默认档 base（0.9rem）：${size_rem}rem`);
+  /*
+   * 0.5em 段落间距在正文超过 xl（1.25rem）时会顶到块间距。
+   * 上限随块间距变化：`0.5 × 字号 ≤ 块间距 − 0.125`。
+   */
+  assert.ok(size_rem <= 1.25, `消息字号超过 xl（1.25rem），段落间距会顶到块间距：${size_rem}rem`);
+  // 行高要够读长文：1.3rem 是 UI 文本的紧凑节奏，正文不能跟它一档。
   assert.ok(line_height >= 1.5, `消息行高不足以读长文：${line_height}`);
 
   // 四个消费处：Session 的两种消息、Group 的两种发言。
@@ -194,18 +197,18 @@ test("消息字号只有一个来源，四个消费处都用它", () => {
 /**
  * Composer 与用户气泡必须同源。
  *
- * 两边分居 TSX 与 CSS，无类型可达。字号由 `--text-sm` 提供，两处都只引用它，
+ * 两边分居 TSX 与 CSS，无类型可达。字号由 `--text-base` 提供，两处都只引用它，
  * 因此数值一定一致；但「引用同一个令牌」这件事本身仍会漂移：有人可能把某一边改回写死数值。
  * 那种情况下 Composer 与气泡会在回车前后用两种字号，只在发送瞬间可见，很容易漏过 review。
  * 所以这里锁两件事：两边都引用令牌，且没人再写死数值。
  */
 test("Composer 与消息正文的字号行高同源", () => {
   const text = read_class_name(layout_source, "chat_message_text_class_name");
-  assert.ok(/\btext-sm\b/.test(text) && /\bleading-reading\b/.test(text), `消息正文没有引用语义字号档：${text}`);
+  assert.ok(/\btext-base\b/.test(text) && /\bleading-reading\b/.test(text), `消息正文没有引用语义字号档：${text}`);
 
   const editor = /\.chat-input-editor,\s*\n?\.chat-input-editor\.ProseMirror\s*\{([\s\S]*?)\}/.exec(composer_styles);
   assert.ok(editor, "base.css 里找不到 .chat-input-editor 规则块");
-  assert.ok(/font-size:\s*var\(--text-sm\)/.test(editor[1]), ".chat-input-editor 没有引用 --text-sm：发送前后字号会跳变");
+  assert.ok(/font-size:\s*var\(--text-base\)/.test(editor[1]), ".chat-input-editor 没有引用 --text-base：发送前后字号会跳变");
   assert.ok(/line-height:\s*var\(--leading-reading\)/.test(editor[1]), ".chat-input-editor 没有引用 --leading-reading：发送前后段落高度会跳变");
   // 反向：不允许再用字面量写死字号或行高。
   assert.ok(!/font-size:\s*[\d.]+rem/.test(editor[1]), ".chat-input-editor 又用字面量写死了字号");

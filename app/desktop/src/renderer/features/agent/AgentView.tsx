@@ -158,7 +158,7 @@ export function AgentView({
               icon_class_name="size-8"
             />
             <span className="min-w-0">
-              <span className="block truncate text-base font-medium text-foreground">
+              <span className="block truncate text-lg font-medium text-foreground">
                 {agent.name}
               </span>
               <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
@@ -296,7 +296,7 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
       <span className="px-1 text-2xs font-medium text-muted-foreground">{translate_resources("agent.name")}</span>
       <input
         value={definition.name}
-        className="h-10 w-full appearance-none rounded-lg border-0 bg-control-surface px-3 text-sm text-foreground outline-none transition-colors focus:bg-control-hover"
+        className="h-10 w-full appearance-none rounded-lg border-0 bg-control-surface px-3 text-base text-foreground outline-none transition-colors focus:bg-control-hover"
         onChange={(event) => set_definition({ ...definition, name: event.target.value })}
       />
     </label>
@@ -305,7 +305,7 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
       <textarea
         value={definition.description}
         rows={5}
-        className="block min-h-28 w-full appearance-none resize-none rounded-lg border-0 bg-control-surface px-3 py-2.5 text-sm leading-5 text-foreground outline-none transition-colors focus:bg-control-hover"
+        className="block min-h-28 w-full appearance-none resize-none rounded-lg border-0 bg-control-surface px-3 py-2.5 text-base leading-5 text-foreground outline-none transition-colors focus:bg-control-hover"
         onChange={(event) => set_definition({ ...definition, description: event.target.value })}
       />
     </label>
