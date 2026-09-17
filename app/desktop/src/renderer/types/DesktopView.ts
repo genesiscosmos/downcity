@@ -202,6 +202,8 @@ export interface ComposerStoreState {
   queued_messages_by_session: Record<string, QueuedChatMessage[]>;
   /** 按 Session 组合键保存队列总暂停状态。 */
   queue_paused_by_session: Record<string, boolean>;
+  /** 按 Session 组合键记录递增的输入聚焦请求序号（新建对话后把键盘焦点交给输入框）。 */
+  focus_request_by_session: Record<string, number>;
 }
 
 /** 用户与偏好设置领域的完整不可变快照。 */

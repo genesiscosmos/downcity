@@ -10,6 +10,7 @@ import type { JSONContent } from "@tiptap/core";
 import type { ComposerStoreState, QueuedChatMessage } from "@/types/DesktopView";
 import { is_chat_busy } from "@/types/DesktopView";
 import { create_chat_composer, is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
+import { request_composer_focus } from "@/features/chat/composer/editor/composerFocus";
 import { chat_composer_storage } from "@/features/chat/composer/storage/chatComposerStorage";
 import { get_workspace_chat_key_prefixes } from "@/features/chat/lib/chat_cache_key";
 import { use_store } from "@/lib/store";
@@ -19,6 +20,7 @@ const initial_composer_state: ComposerStoreState = {
   draft_content_by_session: {},
   queued_messages_by_session: {},
   queue_paused_by_session: {},
+  focus_request_by_session: {},
 };
 
 /** 从 Record 移除一个键；不存在时保留原引用。 */
@@ -99,6 +101,15 @@ export function use_composer_store() {
     });
   }, [commit]);
 
+  /** 请求指定对话的输入框获得键盘焦点；序号递增，因此同一对话重复请求仍然生效。 */
+  const request_focus = useCallback((session_key: string) => {
+    const current = state_ref.current;
+    commit({
+      ...current,
+      focus_request_by_session: request_composer_focus(current.focus_request_by_session, session_key),
+    });
+  }, [commit]);
+
   /** 将输入草稿从旧键迁移到新键（切换上下文时使用）。 */
   const move_draft = useCallback((source_key: string, target_key: string) => {
     void chat_composer_storage.move_draft(source_key, target_key).catch(() => undefined);
@@ -171,12 +182,14 @@ export function use_composer_store() {
     const next_drafts = remove_record_prefixes(current.draft_content_by_session, prefixes);
     const next_queue = remove_record_prefixes(current.queued_messages_by_session, prefixes);
     const next_paused = remove_record_prefixes(current.queue_paused_by_session, prefixes);
-    if (next_drafts === current.draft_content_by_session && next_queue === current.queued_messages_by_session && next_paused === current.queue_paused_by_session) return;
+    const next_focus = remove_record_prefixes(current.focus_request_by_session, prefixes);
+    if (next_drafts === current.draft_content_by_session && next_queue === current.queued_messages_by_session && next_paused === current.queue_paused_by_session && next_focus === current.focus_request_by_session) return;
     commit({
       ...current,
       draft_content_by_session: next_drafts,
       queued_messages_by_session: next_queue,
       queue_paused_by_session: next_paused,
+      focus_request_by_session: next_focus,
     });
   }, [commit]);
 
@@ -227,5 +240,6 @@ export function use_composer_store() {
     set_queue_paused,
     remove_queue_paused,
     can_process_queue,
-  }), [append_queued, can_process_queue, hydrate_composer, move_draft, remove_draft, remove_queue, remove_queue_paused, remove_workspace, replace_all_queue, replace_queue, set_draft, set_queue_paused, state_ref, store]);
+    request_focus,
+  }), [append_queued, can_process_queue, hydrate_composer, move_draft, remove_draft, remove_queue, remove_queue_paused, remove_workspace, replace_all_queue, replace_queue, request_focus, set_draft, set_queue_paused, state_ref, store]);
 }

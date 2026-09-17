@@ -19,6 +19,8 @@ export interface RichTextEditorProps {
   editor_key: string;
   /** 当前结构化草稿，外部变更会同步到编辑器。 */
   draft_content: JSONContent;
+  /** 尚未处理的聚焦请求序号；大于 0 且与已处理序号不同时，编辑器挂载后获得键盘焦点。 */
+  focus_request?: number;
   /** 空输入时的占位提示。 */
   placeholder: string;
   /** 当前对话是否正在执行，用于提交和停止交互。 */

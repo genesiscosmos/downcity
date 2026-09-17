@@ -421,7 +421,9 @@ export function use_desktop_controller(): DesktopController {
     reset_draft_configuration(get_session_key(workspace_id, agent_id, draft_id), agent_id);
     navigation.set_active_workspace_id(workspace_id);
     navigation.set_selection({ kind: "draft", workspace_id, agent_id, draft_id });
-  }, [navigation, reset_draft_configuration, settings]);
+    // 新对话的输入框随后才挂载，因此先登记一次聚焦请求，键盘焦点直接进入输入框。
+    composer.request_focus(get_session_key(workspace_id, agent_id, draft_id));
+  }, [composer, navigation, reset_draft_configuration, settings]);
 
   /** 将当前 Draft 的全部编辑状态移动到新的 Workspace 与 Agent。 */
   const switch_draft_context = useCallback((workspace_id: string, agent_id: string) => {

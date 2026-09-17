@@ -56,7 +56,9 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
     navigation.set_active_workspace_id(workspace.workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace.workspace_id);
     navigation.set_selection({ kind: "group_draft", group_id, workspace_id: workspace.workspace_id, draft_id });
-  }, [active_group_session_ids_ref, chat_stream, navigation, resolve_chat_workspace]);
+    // Group 新对话的输入框随后才挂载，因此先登记一次聚焦请求，键盘焦点直接进入输入框。
+    composer.request_focus(get_group_chat_key(workspace.workspace_id, group_id, draft_id));
+  }, [active_group_session_ids_ref, chat_stream, composer, navigation, resolve_chat_workspace]);
   const open_group = useCallback(async (group_id: string, session_id?: string) => {
     const request_id = group_navigation_request_ref.current + 1;
     const initial_selection = navigation.state_ref.current.selection;

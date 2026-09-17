@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { use_store_selector } from "@/lib/store";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
 import { empty_chat_content } from "@/features/chat/lib/chat_view_defaults";
+import { read_composer_focus_request } from "@/features/chat/composer/editor/composerFocus";
 import { ChatModelSelector } from "./ChatModelSelector";
 import { ChatApprovalModeSelector } from "./ChatApprovalModeSelector";
 import type { AgentComposerProps, RichTextEditorProps } from "@/types/ChatComponents";
@@ -16,6 +17,7 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
   const session_id = selection.kind === "draft" ? selection.draft_id : selection.session_id;
   const session_key = get_session_key(workspace_id, agent_id, session_id);
   const draft = use_store_selector(stores.composer, state => state.draft_content_by_session[session_key]);
+  const focus_request = use_store_selector(stores.composer, state => read_composer_focus_request(state.focus_request_by_session, session_key));
   const configuration = use_store_selector(stores.chat_stream, state => state.configuration_by_session[session_key]);
   const agent = use_store_selector(stores.catalog, state => state.agents.find(item => item.agent_id === agent_id));
   const models = use_store_selector(stores.catalog, state => state.models);
@@ -38,6 +40,7 @@ export function use_agent_composer({ selection, stores, actions }: AgentComposer
   return {
     editor_key: session_key,
     draft_content: draft ?? empty_chat_content,
+    focus_request,
     placeholder: translate("composer.placeholder"),
     busy: false,
     spellcheck_enabled,

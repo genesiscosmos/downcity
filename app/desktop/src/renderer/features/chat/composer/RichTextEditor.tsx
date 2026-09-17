@@ -14,6 +14,7 @@ import type { RichTextEditorProps } from "@/types/ChatComponents";
 import { create_chat_composer_extensions } from "@/features/chat/composer/editor/chatComposerExtensions";
 import { ChatSlashMenu } from "@/features/chat/composer/editor/ChatSlashMenu";
 import { is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
+import { should_apply_composer_focus } from "@/features/chat/composer/editor/composerFocus";
 import { should_restore_editor_draft } from "@/features/chat/composer/editor/draftSync";
 import { add_chat_reference_listener } from "@/features/chat/composer/editor/chatReferenceEvent";
 import { add_chat_mention_listener } from "@/features/chat/composer/editor/chatMentionEvent";
@@ -59,6 +60,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
   const pending_draft_sync_ref = useRef<PendingDraftSync | undefined>(undefined);
   const locally_published_draft_ref = useRef<JSONContent | undefined>(undefined);
   const loaded_editor_key_ref = useRef(props.editor_key);
+  const applied_focus_request_ref = useRef(0);
   const props_ref = useRef(props);
   props_ref.current = props;
   const [submitting, set_submitting] = useState(false);
@@ -251,6 +253,14 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
 
   /** Session 切换或组件卸载前强制保存最后一次尚未同步的输入。 */
   useEffect(() => () => { flush_pending_draft(); }, [flush_pending_draft, props.editor_key]);
+
+  /** 新建对话后把键盘焦点交给输入框；序号变化保证每次请求只聚焦一次。 */
+  useEffect(() => {
+    const focus_request = props.focus_request ?? 0;
+    if (!editor || !should_apply_composer_focus(focus_request, applied_focus_request_ref.current)) return;
+    applied_focus_request_ref.current = focus_request;
+    editor.commands.focus("end");
+  }, [editor, props.focus_request]);
 
   useEffect(() => add_chat_reference_listener((reference) => {
     const current_editor = editor_ref.current;
