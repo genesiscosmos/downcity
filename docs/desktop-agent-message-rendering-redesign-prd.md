@@ -1189,7 +1189,8 @@ pnpm --filter @downcity/desktop test        # 309/309 通过
 - **元信息行回到普通流布局。** 语言在左、复制在右，`min-height: 1.5rem`，不覆盖代码区。它是「操作不压住代码」的代价，同时回答「这段是什么语言」。
 - **复制按钮 24px 常显。** 24px 是 WCAG 2.2 目标尺寸下限，也是次级图标按钮的触控高度；尺寸用 rem 而非本文件的 em 方言，因为同一代码块也渲染在 Plugin 说明（`xs`）等更小宿主里。hover 改用 `--interaction-hover`，焦点环与消息操作栏统一为 `ring-2 / ring-ring-30`。
 - **行内码改用 `--surface-emphasis`。** 与块级代码共用一套「代码底色」语义，靠面积而非各自的混色区分。
-- **删掉不生效的规则。** `.shiki span` 在本版本 DOM 中不存在；`counter-increment: none` 无法关掉库放在 `::before` 上的计数器；行号本身依赖 `before:content-[counter(line)]` 这类任意值工具类，本仓库不扫描 `node_modules`，根本不会生成。
+- **行号显式关闭，不再删掉抑制规则。** 库用 CSS 计数器把行号画在行 `span` 的伪元素上：容器上 reset、每行的伪元素上同时给出内容与自增，而这些类名写在 `node_modules/streamdown` 里（不被扫描）。曾经的结论是「不会生成，因此不用关」，但这里有一个陷阱：**本文档自己也属于扫描源**（Tailwind 的自动源检测从仓库根开始，`.md` 也算），只要正文里出现那个类名的字面写法，就会真的生成内容那一半——而自增那一半仍然不生成，结果是**每一行前面都是 0**。现在 `markdown.css` 里有一条 `content: none !important` 显式关掉它，并有测试盯着；**不要把它删掉**。
+- **删掉不生效的规则。** `.shiki span` 在本版本 DOM 中不存在；`counter-increment: none` 无法关掉库放在伪元素上的自增（自增在伪元素自己身上，不在行 `span` 上）。
 
 已知保留项（都不在样式表可及范围内，故不修）：库的懒加载骨架屏不受 `[data-streamdown]` 选择器管辖，形态与加载后不一致；复制按钮 `title` 是库写死的英文 `Copy Code`；库只提供 `controls.code` 一个总开关，下载按钮只能隐藏。
 

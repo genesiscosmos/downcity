@@ -108,3 +108,102 @@ test("深色语法色只剩一条生效的翻转规则", () => {
   assert.ok(!/\.shiki\s/.test(styles), "`.shiki` 选择器在本版本的 DOM 里不存在，是死规则");
   assert.ok(read_declaration(read_rule('\\.dark \\.markdown \\[data-streamdown="code-block-body"\\][^,]*'), "color", "深色代码色").includes("var(--shiki-dark"), "深色必须翻成 --shiki-dark（shiki 把浅色写成了行内样式）");
 });
+
+/**
+ * 行号必须被显式关闭。
+ *
+ * 库用 CSS 计数器把行号画在行 `span` 的伪元素上，而那些类名写在 `node_modules` 里。
+ * 曾经的结论是「不会生成，所以不用关」——**那个结论错过了一件事**：
+ * Tailwind 的自动源检测从**仓库根**开始，`.md` 也算源文件，
+ * 因此只要任何一个文档/测试/注释里出现那个类名的字面写法，内容那一半就会被生成，
+ * 而自增那一半（只在 `node_modules` 里）仍然不会——结果就是**每一行前面都是 0**。
+ *
+ * 这不是推测：`docs/desktop-agent-message-rendering-redesign-prd.md` 曾把它当例子写进正文，
+ * 于是真的出现了这个现象（同时抑制规则被删了）。下面两条断言把两个前提都钉住：
+ * 一、样式表里必须有抑制规则；二、不能让那个类名从别处泄漏进去。
+ */
+test("行号槽被显式关闭，且不依赖「那个类不会生成」", () => {
+  const rule = read_rule('\\.markdown \\[data-streamdown="code-block-body"\\] code > span::before');
+  assert.ok(
+    /content:\s*none\s*!important/.test(rule),
+    "行号槽没有被关闭：库的伪元素行号会直接显示出来。\n"
+      + "不要删除这条规则，也不要把它改成依赖「那些类不会被扫描」的说明。",
+  );
+});
+
+/**
+ * 那个会打开行号的类名不得从任何被扫描的文件里泄漏进来。
+ *
+ * Tailwind 的自动源检测从**仓库根**开始（不是从 `app/desktop`），除了被 `.gitignore` 排除的
+ * 东西之外，`.md` / `.ts` / `.json` 都是源文件。所以一行文档、一个测试里的字面类名，
+ * 就能让 Tailwind 真的生成对应的 CSS。
+ *
+ * 本项目已经撞过一次：一个 PRD 正文里把这个类名当例子写了出来，于是 `content` 那一半被生成，
+ * 而自增那一半只在 `node_modules` 里、仍然不生成——**每行前面都变成 0**。
+ *
+ * 要说明这些类名时，写在**CSS 注释**里（CSS 不参与源扫描），那个位置既安全又能被找到。
+ */
+test("代码块行号的类名没有泄漏进被扫描的文件", () => {
+  // 与 Tailwind 一致：向上找到含 .git 的目录作为仓库根。
+  let repo_root = import.meta.dirname;
+  while (!fs.existsSync(path.join(repo_root, ".git"))) {
+    const parent = path.dirname(repo_root);
+    assert.notEqual(parent, repo_root, "找不到仓库根（没有 .git）——本测试的扫描范围无法确定");
+    repo_root = parent;
+  }
+
+  /**
+   * 构建要搜的字符串：**必须把片段拼起来**，不能直接写完整字面量。
+   *
+   * 这里有两条互相牵制的约束，很容易写错：
+   *
+   * 1. 要抓的是 Tailwind **实际能抽取的子串**，而不是完整类名。
+   *    完整类名带 `before:` 前缀与方括号，但扫描器从文本里抽出来的是中间那一段属性写法；
+   *    只比完整类名会漏报。
+   * 2. 本文件自己也是被扫描的 `.ts` 文件。危险子串只要在文件里**连续出现一次**——
+   *    包括写在注释里当例子——这层守卫就变成新的泄露源。
+   *
+   * 所以切片点选在子串内部，让危险片段在文件里始终被引号或逗号隔开。
+   * 这也是为什么不在此处的注释里直接把那段属性写法写出来：说明它只能用
+   *「属性名 + 计数器名」这种拆开的方式描述。
+   */
+  const piece = (...fragments: string[]) => fragments.join("");
+  const leaking_tokens = [
+    piece("counter", "(line)"),
+    piece("counter", "-increment", ":line"),
+    piece("counter", "-reset", ":line"),
+    piece("line", "_0"),
+  ];
+  const skip_dirs = new Set([".git", "node_modules", "out", "build", ".pnpm-store", "dist"]);
+  /** 会被 Tailwind 当作源文件扫描的文本类型（CSS 不在内，因此可以在 CSS 注释里写说明）。 */
+  const scanned_extensions = /\.(?:md|mdx|tsx?|jsx?|mjs|cjs|json|html|ya?ml|txt|sh)$/;
+
+  const offenders: string[] = [];
+  let scanned_files = 0;
+  const walk = (directory: string) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (!skip_dirs.has(entry.name)) walk(path.join(directory, entry.name));
+        continue;
+      }
+      // CSS 不参与源扫描，可以安全地用它写说明。
+      if (entry.name.endsWith(".css")) continue;
+      if (!scanned_extensions.test(entry.name)) continue;
+      const file = path.join(directory, entry.name);
+      const content = fs.readFileSync(file, "utf8");
+      scanned_files += 1;
+      for (const token of leaking_tokens) {
+        if (content.includes(token)) offenders.push(`${path.relative(repo_root, file)} 含「${token}」`);
+      }
+    }
+  };
+  walk(repo_root);
+
+  assert.ok(scanned_files > 500, `只扫到 ${scanned_files} 个文件，扫描范围可能已失效`);
+  assert.deepEqual(
+    offenders,
+    [],
+    `以下文件写了会生成代码块行号的类名，请改成 CSS 注释里描述，或换个写法：\n  ${offenders.join("\n  ")}\n`
+      + "（这些字面量会让 Tailwind 生成行号 CSS；而自增那一半在 node_modules 里不生成，结果每行都显示 0）",
+  );
+});

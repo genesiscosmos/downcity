@@ -152,9 +152,9 @@
  * 等于一块看不见的方框；ocean、forest 这类主题的 `muted` 是饱和色，同一混色会把整块染成
  * 蓝底或绿底，压掉 shiki 的语法色。`surface-subtle` 由前景色混合而来，九套主题下都成立。
  *
- * 行号不由这里关：库的行号依赖 `before:content-[counter(line)]` 这类任意值工具类，
- * 本仓库不扫描 node_modules，因此根本不会生成。将来若有人加了扫描源，需要回这里补一条——
- * Agent 消息里的代码块是引用片段，不是文件。
+ * 行号由本文件显式关掉（见下面 `code > span::before` 的规则）：库用 CSS 计数器实现，
+ * 而其中一半类名只在 `node_modules` 里、另一半曾被文档正文泄漏出去，
+ * 于是出现过“每行前面都是 0”。不要依赖“那些类不会生成”这类假设。
  */
 .markdown :where(pre),
 .markdown [data-streamdown="code-block"] {
@@ -274,6 +274,27 @@
   border: 0 !important;
   background: transparent !important;
   font-weight: 400 !important;
+}
+
+/*
+ * 关掉行号槽。
+ *
+ * 库用 CSS 计数器把行号画在行 span 的 `::before` 上：`<code>` 上 `counter-reset`，
+ * 每行的 `::before` 同时 `content: counter(...)` 与 `counter-increment`。
+ * 这里显式清掉内容，**不依赖“那两个类不会生成”这个假设**。
+ *
+ * ## 这个假设曾经不成立，且现象很隐晦
+ *
+ * 那些类名写在 `node_modules/streamdown` 里（不被扫描），所以自增那一半不会生成；
+ * 但 `content` 那一半**被生成过**——因为某个 Markdown 文档里把它当例子写进了正文，
+ * 而 Tailwind 的自动源检测是从**仓库根**开始扫的，`.md` 也是源文件。
+ * 后果：`content: counter(...)` 生效、计数器从未自增，于是**每一行前面都是 0**。
+ *
+ * 所以这条规则不能删：它把“库的行号”与“扫描器会不会碰巧拓到那个类名”解耦。
+ * `tests/markdown_code_block.test.ts` 有断言盯着它。
+ */
+.markdown [data-streamdown="code-block-body"] code > span::before {
+  content: none !important;
 }
 
 /*
