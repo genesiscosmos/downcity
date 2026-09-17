@@ -47,13 +47,32 @@ export const agent_message_root_class_name = "group is-agent flex w-full flex-co
 /**
  * 身份行：头像 + 名称。
  *
- * `py-0.5` 让 20px 头像达到 24px 触控高度，同时也定义了身份行的高度（24px）——
- * 消息与「思考中」状态行靠它对齐正文的起点。
+ * `py-0.5` 现在**不再是**触控垫高：头像 24px 本身已满足 WCAG 2.2 的
+ * 24px 目标尺寸下限（20px 时代才需要靠它补到 24px）。它现在只负责身份行
+ * 与正文之间的呼吸，身份行高 28px。
+ *
+ * 它同时定义了正文起点：消息与「思考中」状态行共用同一个 Frame
+ * （`AgentRuntimeIndicator` 走 `semantic="status"`），所以两者永远对齐——
+ * 这也是头像尺寸不能单独在某一侧改动的原因。
  */
 export const agent_identity_row_class_name = "flex min-w-0 items-center gap-1.5 py-0.5";
 
-/** 身份行头像：20px。身份行是一行标签，不是头像展示位，不必占 28px。 */
-export const agent_identity_avatar_class_name = "size-5 rounded";
+/**
+ * 身份行头像：`size-6`（24px）。
+ *
+ * 从 20px 提到 24px 是为了与 `base`（15px）正文的比例：头像略高于一行文字。
+ * 20px 在这个比例下更像「一个图标」，24px 才读得出「一个人」。
+ */
+export const agent_identity_avatar_class_name = "size-6 rounded";
+
+/**
+ * 身份行名称：`sm`（13px）。
+ *
+ * 比 `xs` 大一号：它是这条消息的主体标识，不是附属于正文的元信息，
+ * 所以不跟 `ChatMessageTimestamp` 那一档。字重 `font-medium` 与档位一起
+ * 承担「标识」语义——只靠字号在 13px 这个尺寸上区分不出来。
+ */
+export const agent_identity_name_class_name = "min-w-0 truncate text-sm font-medium text-foreground";
 
 /**
  * 正文容器：占满消息列宽度，左缘就是消息列左缘。

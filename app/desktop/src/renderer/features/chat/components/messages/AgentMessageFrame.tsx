@@ -26,7 +26,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { ChatMessageTimestamp } from "@/features/chat/components/ChatMessageTimestamp";
-import { agent_identity_avatar_class_name, agent_identity_row_class_name, agent_message_body_class_name, agent_message_footer_class_name, agent_message_root_class_name, type MessageIdentity } from "@/features/chat/components/messages/message_layout";
+import { agent_identity_avatar_class_name, agent_identity_name_class_name, agent_identity_row_class_name, agent_message_body_class_name, agent_message_footer_class_name, agent_message_root_class_name, type MessageIdentity } from "@/features/chat/components/messages/message_layout";
 
 /** Agent 消息骨架属性。 */
 export interface AgentMessageFrameProps {
@@ -64,7 +64,7 @@ export function AgentMessageFrame({ agent, created_at, identity_action, identity
   const name = agent.name || "Agent";
   const identity_content = <>
     <AgentAvatar agent={agent} class_name={agent_identity_avatar_class_name} />
-    <span className={cn("min-w-0 truncate text-xs font-medium text-foreground", identity_action && "group-hover/identity:underline")}>{name}</span>
+    <span className={cn(agent_identity_name_class_name, identity_action && "group-hover/identity:underline")}>{name}</span>
   </>;
   const content = <>
     <header className="flex min-w-0 items-center gap-2">

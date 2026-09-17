@@ -268,10 +268,19 @@ test("消息几何只有一个来源", () => {
 });
 
 test("两个形态共用同一份身份行与 Footer 几何", () => {
-  for (const shared of ["agent_message_root_class_name", "agent_identity_row_class_name", "agent_identity_avatar_class_name", "agent_message_footer_class_name"]) {
+  for (const shared of ["agent_message_root_class_name", "agent_identity_row_class_name", "agent_identity_avatar_class_name", "agent_identity_name_class_name", "agent_message_footer_class_name"]) {
     assert.ok(frames.AgentMessageFrame.includes(shared), `AgentMessageFrame 没有使用共享的 ${shared}`);
   }
-  // 身份行高度定义了正文起点，头像尺寸必须一致，否则两个形态会差几像素。
-  assert.ok(read_class_name(layout_source, "agent_identity_row_class_name").includes("py-0.5"), "身份行没有纵向内边距，头像达不到 24px 触控高度");
-  assert.equal(read_class_name(layout_source, "agent_identity_avatar_class_name"), "size-5 rounded");
+  /*
+   * 身份行高度定义正文起点，而它由头像尺寸决定，所以头像不能单独在某一侧改动。
+   * `size-6` = 1.5rem = 24px，刚好是 WCAG 2.2 的目标尺寸下限，
+   * 因此 `py-0.5` 不再是触控垫高而是行间呼吸；两者一起决定身份行的 28px 高度。
+   */
+  assert.ok(read_class_name(layout_source, "agent_identity_row_class_name").includes("py-0.5"), "身份行没有纵向内边距，头像会贴住正文");
+  assert.equal(read_class_name(layout_source, "agent_identity_avatar_class_name"), "size-6 rounded", "身份行头像不再是 24px：身份行高度会随之变化，消息与「思考中」状态行的正文起点必须同步核对");
+  assert.equal(
+    read_class_name(layout_source, "agent_identity_name_class_name"),
+    "min-w-0 truncate text-sm font-medium text-foreground",
+    "身份行名称的尺寸/字重被改动；它比元信息大一档（sm，不是 xs 也不是 base），改档位需同步确认与时间戳的主次关系",
+  );
 });
