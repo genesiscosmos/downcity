@@ -172,19 +172,22 @@ a,
 /*
  * Composer 输入区。
  *
- * 字号与行高直接引用消息正文的语义档位（`tokens.css` 的 `--text-base` 与
- * `--leading-reading`），与气泡（`message_layout.ts` 的 `chat_message_text_class_name`）同源：
+ * 字号与行高直接引用用户气泡的语义档位（`tokens.css` 的 `--text-base` 与
+ * `--leading-chat`），与气泡（`message_layout.ts` 的 `user_message_text_class_name`）同源：
  * Composer 与用户气泡是同一段文字在发送前后的两种状态，数值不同就会出现
- * 「按下回车，文字突然变小」的跳变。
+ * 「按下回车，行距突然变了」的跳变。
+ *
+ * 注意它引用的是 `--leading-chat`（1.6）而**不是** `--leading-reading`（1.8）：
+ * 后者给 Agent 的长文用，1.8 在紧凑的输入框里太松。两个行高各自的依据见 `tokens.css`。
  *
  * 这里用 `!important` 是因为 TipTap 会在同一元素上挂 `.ProseMirror`，
  * 而它在运行时会写入自己的内联样式；样式表不加强制声明就会被盖掉。
  *
  * 行高与字号是**两个独立的旋钮**：如果觉得多行输入时行距挤，
- * 只改 `--leading-reading` 即可，气泡会同步跟上，不必动字号。
+ * 只改 `--leading-chat` 即可，气泡会同步跟上，不必动字号。
  *
  * 两边都用 `var()` 而不是各自写死数值，所以同步是结构性的；
- * 由 `font_scale.test.ts` 锁住（它要求这两个 var 恰好指向 `base` 与 `leading-reading`）。
+ * 由 `chat_message_layout.test.ts` 锁住（它要求这两个 var 恰好指向 `base` 与 `leading-chat`）。
  */
 .chat-input-editor,
 .chat-input-editor.ProseMirror {
@@ -195,7 +198,7 @@ a,
   padding: 4px 4px 0;
   font-family: var(--font-sans) !important;
   font-size: var(--text-base) !important;
-  line-height: var(--leading-reading) !important;
+  line-height: var(--leading-chat) !important;
   outline: none;
 }
 

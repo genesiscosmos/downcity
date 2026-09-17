@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChatMessageTimestamp } from "@/features/chat/components/ChatMessageTimestamp";
 import { UserMessageContent } from "@/features/chat/components/UserMessageContent";
+import { UserMessageBody } from "@/features/chat/components/messages/UserMessageBody";
 import { UserMessageFrame } from "@/features/chat/components/messages/UserMessageFrame";
+import { build_user_message_preview, user_message_parts_text } from "@/features/chat/lib/user_message_preview";
 import { UserMessageRewriteEditor } from "@/features/chat/components/UserMessageRewriteEditor";
 import { MessageActionButton } from "@/features/chat/components/messages/MessageActionButton";
 import { create_chat_composer_from_user_parts } from "@/features/chat/composer/editor/chatSessionMessageCodec";
@@ -22,6 +24,8 @@ export function UserMessage({ message, fork_message, rewrite_message, has_later_
   const translate_common = use_translation("common");
   const translate_chat = use_translation("chat");
   const initial_document = useMemo(() => create_chat_composer_from_user_parts(message.parts), [message.parts]);
+  // 预览按文本长度算：附件与引用 chip 不计入（它们很短，也不属于「阅读长度」）。
+  const preview = useMemo(() => build_user_message_preview(user_message_parts_text(message.parts)), [message.parts]);
   const [forking, set_forking] = useState(false);
   const [editing, set_editing] = useState(false);
   const [pending_document, set_pending_document] = useState<JSONContent | null>(null);
@@ -68,7 +72,7 @@ export function UserMessage({ message, fork_message, rewrite_message, has_later_
     >
       {editing
         ? <UserMessageRewriteEditor initial_document={initial_document} submitting={submitting} error={rewrite_error} cancel={cancel_editing} submit={confirm_editing} />
-        : <UserMessageContent message_id={message.message_id} parts={message.parts} />}
+        : <UserMessageBody preview={preview}><UserMessageContent message_id={message.message_id} parts={message.parts} /></UserMessageBody>}
     </UserMessageFrame>
     <Dialog open={choice_open} onOpenChange={set_choice_open}><DialogContent size="sm"><DialogHeader><div><DialogTitle>{translate_chat("message.rewrite_title")}</DialogTitle><DialogDescription>{translate_chat("message.rewrite_description")}</DialogDescription></div></DialogHeader><DialogBody className="gap-2">
       <button type="button" disabled={submitting} onClick={() => void submit_rewrite("fork")} className="flex w-full items-start gap-3 rounded-md border border-border-subtle px-3 py-3 text-left outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbGitBranch className="mt-0.5 size-4 shrink-0" /><span><span className="block text-xs font-medium">{translate_chat("message.fork_title")}</span><span className="mt-0.5 block text-2xs leading-4 text-muted-foreground">{translate_chat("message.fork_description")}</span></span></button>

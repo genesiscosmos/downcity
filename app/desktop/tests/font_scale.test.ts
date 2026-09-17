@@ -421,7 +421,8 @@ test("每个渲染 Markdown 的文件都自己声明了字号", () => {
   const missing = hosts.filter((file) => {
     const source = fs.readFileSync(file, "utf8");
     const declares_size = new RegExp(`text-(?:${expected_levels.join("|")})\\b`).test(source)
-      || source.includes("chat_message_text_class_name");
+      // 消息排版走共享常量（按角色两个：Agent 长文与用户气泡），它们内含 text-base。
+      || /(?:chat|user)_message_text_class_name/.test(source);
     return !declares_size;
   }).map((file) => path.relative(renderer_root, file));
 
@@ -429,7 +430,7 @@ test("每个渲染 Markdown 的文件都自己声明了字号", () => {
     missing,
     [],
     `以下文件渲染了 Markdown 但没有声明字号，会静默继承祖先字号：\n  ${missing.join("\n  ")}\n`
-      + "在包含 <Markdown> 的容器上加语义档位（或消息正文的 chat_message_text_class_name）。",
+      + "在包含 <Markdown> 的容器上加语义档位（或消息排版的 chat_message_text_class_name / user_message_text_class_name）。",
   );
 });
 

@@ -138,6 +138,8 @@ const focus_visible_idioms = [
   "approval-action",
   "question-submit",
   "question-back",
+  // 用户气泡的折叠开关：焦点环在共享常量里，不在 JSX 标签上。
+  "user_message_collapse_button_class_name",
 ];
 
 /** 按引号与花括号配对，取出一个 JSX 开标签的完整文本。 */

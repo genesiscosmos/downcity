@@ -163,15 +163,30 @@ test("消息正文的块间距夹在段落间距与消息间距之间", () => {
  * 注意：本文件只能验证**源码上的引用关系**。「这个类在浏览器里是否真的生效」由
  * `tailwind_merge_classes.test.ts` 验证——那里跑真正的 `cn`。
  */
-test("消息字号只有一个来源，四个消费处都用它", () => {
-  const text = read_class_name(layout_source, "chat_message_text_class_name");
-  // 必须是语义字号档位 + 阅读行高。
-  assert.ok(/\btext-base\b/.test(text), `消息正文没有使用默认档 base：${text}`);
-  assert.ok(/\bleading-reading\b/.test(text), `消息正文没有使用阅读行高：${text}`);
-  // 不得自己写任意字号，也不得另开一级。
-  assert.ok(!/text-\[/.test(text), `消息正文自己写了任意字号：${text}`);
+test("消息字号只有一个来源，两侧共用；行高按角色各一档", () => {
+  const agent_text = read_class_name(layout_source, "chat_message_text_class_name");
+  const user_text = read_class_name(layout_source, "user_message_text_class_name");
 
-  const { size_rem, line_height } = read_body_type_token();
+  /*
+   * **字号必须两侧同值**：曾经各设一档（13px / 15.5px），反馈是
+   * 「agent message 和 user message 的字体应该保持一致」。
+   * 这条不能因为行高拆开而一起松掉。
+   */
+  for (const [name, value] of [["Agent 正文", agent_text], ["用户气泡", user_text]] as const) {
+    assert.ok(/\btext-base\b/.test(value), `${name} 没有使用默认档 base：${value}`);
+    assert.ok(!/text-\[/.test(value), `${name} 自己写了任意字号：${value}`);
+  }
+
+  /*
+   * **行高按角色分开**，这是有意的：
+   * - Agent 正文是长文，1.8 是 15px 下被验证过的阅读节奏（1.7 被否过）；
+   * - 用户气泡多是短句，在紧凑气泡里 1.8 显得松，取 1.6。
+   * 两者各自的依据写在 `tokens.css`。若有人把它们改成同一个值，这条会失败并要求确认。
+   */
+  assert.ok(/\bleading-reading\b/.test(agent_text), `Agent 正文不是阅读行高：${agent_text}`);
+  assert.ok(/\bleading-chat\b/.test(user_text), `用户气泡不是气泡行高：${user_text}`);
+
+  const { size_rem } = read_body_type_token();
   // 必须等于默认档 base（0.9375rem = 15px）。
   assert.equal(size_rem, 0.9375, `消息字号不是默认档 base（0.9375rem）：${size_rem}rem`);
   /*
@@ -179,19 +194,18 @@ test("消息字号只有一个来源，四个消费处都用它", () => {
    * 上限随块间距变化：`0.5 × 字号 ≤ 块间距 − 0.125`。
    */
   assert.ok(size_rem <= 1.25, `消息字号超过 xl（1.25rem），段落间距会顶到块间距：${size_rem}rem`);
-  // 行高要够读长文：1.25rem 是 UI 文本的紧凑节奏，正文不能跟它一档。
-  assert.ok(line_height >= 1.5, `消息行高不足以读长文：${line_height}`);
 
-  // 四个消费处：Session 的两种消息、Group 的两种发言。
-  for (const [name, source] of Object.entries(text_consumers)) {
-    assert.ok(source.includes("chat_message_text_class_name"), `${name} 没有使用共享的消息排版：字号会在组件里被重新定义`);
+  // 四个消费处：Session 的两种消息、Group 的两种发言，各自用本角色的常量。
+  for (const [name, source] of Object.entries({ AgentMessageContent: text_consumers.AgentMessageContent, "GroupView(agent)": text_consumers.GroupView })) {
+    assert.ok(source.includes("chat_message_text_class_name"), `${name} 没有使用 Agent 侧的共享排版`);
   }
+  assert.ok(text_consumers.UserMessageContent.includes("user_message_text_class_name"), "UserMessageContent 没有使用用户侧的共享排版");
+  assert.ok(text_consumers.GroupView.includes("user_message_text_class_name"), "GroupView 的用户发言没有使用用户侧的共享排版");
+
   // 旧的内联写法不得回归。
   for (const [name, source] of Object.entries(text_consumers)) {
     assert.ok(!/text-\[0\.8125rem\]|leading-\[1\.(?:34|54)\]/.test(source), `${name} 仍内联旧的 13px / 紧凑行高写法`);
   }
-  // 两种角色不得再各自设一档字号（那是被缺陷掩盖时的应对，不是需求）。
-  assert.ok(!/agent_message_text_class_name|user_message_text_class_name/.test(layout_source), "message_layout 里仍然存在按角色分档的字号常量：两侧应当一致");
 });
 
 /**
@@ -202,14 +216,18 @@ test("消息字号只有一个来源，四个消费处都用它", () => {
  * 那种情况下 Composer 与气泡会在回车前后用两种字号，只在发送瞬间可见，很容易漏过 review。
  * 所以这里锁两件事：两边都引用令牌，且没人再写死数值。
  */
-test("Composer 与消息正文的字号行高同源", () => {
-  const text = read_class_name(layout_source, "chat_message_text_class_name");
-  assert.ok(/\btext-base\b/.test(text) && /\bleading-reading\b/.test(text), `消息正文没有引用语义字号档：${text}`);
+test("Composer 与用户气泡的字号行高同源", () => {
+  const text = read_class_name(layout_source, "user_message_text_class_name");
+  assert.ok(/\btext-base\b/.test(text) && /\bleading-chat\b/.test(text), `用户气泡没有引用语义字号档：${text}`);
 
   const editor = /\.chat-input-editor,\s*\n?\.chat-input-editor\.ProseMirror\s*\{([\s\S]*?)\}/.exec(composer_styles);
   assert.ok(editor, "base.css 里找不到 .chat-input-editor 规则块");
   assert.ok(/font-size:\s*var\(--text-base\)/.test(editor[1]), ".chat-input-editor 没有引用 --text-base：发送前后字号会跳变");
-  assert.ok(/line-height:\s*var\(--leading-reading\)/.test(editor[1]), ".chat-input-editor 没有引用 --leading-reading：发送前后段落高度会跳变");
+  assert.ok(
+    /line-height:\s*var\(--leading-chat\)/.test(editor[1]),
+    ".chat-input-editor 没有引用 --leading-chat：发送前后段落高度会跳变。"
+      + "注意它不该引用 --leading-reading：那是 Agent 长文的 1.8，在输入框里太松",
+  );
   // 反向：不允许再用字面量写死字号或行高。
   assert.ok(!/font-size:\s*[\d.]+rem/.test(editor[1]), ".chat-input-editor 又用字面量写死了字号");
   assert.ok(!/line-height:\s*[\d.]+\s*!important/.test(editor[1]), ".chat-input-editor 又用字面量写死了行高");

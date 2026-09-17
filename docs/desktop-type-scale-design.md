@@ -199,21 +199,39 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 
 每个档位都声明了配对行高（§二 的表），所以 UI 文本不需要各自写 `leading-*`。
 
-唯一的例外是消息正文：
+消息排版是例外：`base` 的配对行高是 1.25rem（UI 密度），对长文太挤。这里有两个行高，对应两种阅读节奏：
+
+| 令牌 | 值 | 15px 下 | 用在哪 |
+| --- | --- | --- | --- |
+| `--leading-reading` | 1.8 | 27px | Agent 正文（机器产出的长文） |
+| `--leading-chat` | 1.6 | 24px | 用户气泡与 Composer（人敲的短句） |
 
 ```ts
 // message_layout.ts
-export const chat_message_text_class_name = "text-base leading-reading text-foreground";
+export const chat_message_text_class_name = "text-base leading-reading text-foreground";      // Agent 正文
+export const user_message_text_class_name = "text-base leading-chat text-foreground";         // 用户气泡
 ```
 
-- 正文用**默认档** `base`（0.9375rem），**不另开一级**。
-- 行高单独取 `--leading-reading`（1.8，无单位倍数）：`base` 的配对行高是 1.25rem，是 UI 文本的密度，对长段落太挤。
+- 两侧都用**默认档** `base`（0.9375rem），**不另外开一级字号**。
+- `--leading-reading` = 1.8 不是随手取的：15px 下 1.7 被用户直接否过（「行内间距大一点」），才提到 1.8。**不要为了全局统一而把它改小**。
+- `--leading-chat` = 1.6 给短句：用户气泡里多是一两行，1.8 在紧凑气泡里显松。不取 1.5 是因为 1.5 × 0.9375rem = 22.5px，不在 1/16rem 网格上；1.6 正好是 24px。
 
-1.8 不是随手取的：行高从 1.7 调到 1.8 才被认为「行内间距够了」（完整过程见 `docs/desktop-agent-message-rendering-redesign-prd.md` 第 24 节）。
+### 5.1 字号必须同值，行高按角色分开
 
-**四处必须同值**：Agent 正文、用户消息、Group 的两种发言（都走上面的常量），以及 Composer（`base.css` 的 `.chat-input-editor`，用同一对令牌）。理由是 Composer 与用户气泡是同一段文字在发送前后的两种状态——不同值会出现「按下回车，文字突然变小」，而那只在发送瞬间可见。
+上一版守卫写的是「四个消费处必须同值」，并直接禁止按角色分档的常量。那条规则的**本意是字号**：曾经两侧各设一档（13px / 15.5px），用户的反馈是「agent message 和 user message 的字体应该保持一致」。
 
-### 5.1 与字号绑定的硬约束
+行高不是同一件事：它决定的是**阅读节奏**，而长文与短句的合适节奏本来就不同。所以现在的规则分两层：
+
+| 属性 | 约束 |
+| --- | --- |
+| 字号 | 四个消费处**必须**都是 `text-base`；不得按角色分档 |
+| 行高 | **按角色分开**（长文 1.8 / 短句 1.6） |
+| Composer ↔ 用户气泡 | **必须同源**（都用 `--leading-chat`）：同一段文字在发送前后的两种状态 |
+| Session ↔ Group | 同一角色必须用同一个常量（否则同一个 Agent 的长相会不一致） |
+
+`chat_message_layout.test.ts` 按这四行逐条断言。改行高时它会失败并要求确认这是有意为之。
+
+### 5.2 与字号绑定的硬约束
 
 `.markdown` 的段落间距是 `0.5em`（随正文字号缩放），它必须比消息内的块间距（`gap-3` = 0.75rem）小至少 0.125rem：
 

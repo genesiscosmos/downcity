@@ -132,18 +132,48 @@
   --text-3xl: 1.875rem;   /* 30px 最大档；当前无调用点，为将来的全屏引导页保留 */
   --text-3xl--line-height: 2.25rem;
   /*
-   * 阅读行高：`base` 档的**唯一**例外，单位与字号不同（它是倍数，没有单位）。
+   * 两个行高各自对应一种阅读节奏，**都由 `base` 字号驱动**（单位是倍数）。
    *
-   * 正文需要比 UI 文本松（`--text-base--line-height` = 1.25rem，对长文偏挤）。
+   * | 令牌 | 值 | 15px 下 | 用在哪 |
+   * | --- | --- | --- | --- |
+   * | `--leading-reading` | 1.8 | 27px | Agent 正文：机器产出的长文 |
+   * | `--leading-chat` | 1.6 | 24px | 用户气泡与 Composer：人敲的短句 |
+   *
+   * ## 为什么长文要 1.8
+   *
+   * 不是随手取的：15px 字号下 1.7 被用户直接否过（「行内间距大一点」），
+   * 才提到 1.8。完整过程见 `docs/desktop-agent-message-rendering-redesign-prd.md` 第 24 节。
+   * **因此不要为了全局统一而把这里改小**——那会推翻一条已经验证过的结论。
+   *
+   * ## 为什么短句可以更紧
+   *
+   * 1.8 是给连续阅读的长段落用的；用户气泡里通常只有一两行，
+   * 在 `py-2` 的紧凑气泡里会显得松散，所以取 1.6。
+   *
+   * 为什么不取 1.5：1.5 × 0.9375rem = 22.5px，不在 1/16rem 网格上
+   * （折算下来是小数像素），与字号那套“像素取整”的原则不一致。
+   * 1.6 × 0.9375rem 正好是 24px。
+   *
+   * ## 消费者与同源约束
+   *
+   * - `--leading-reading`：`message_layout.ts` 的 `chat_message_text_class_name`
+   *   （Agent 正文、Group 的 Agent 发言）。
+   * - `--leading-chat`：`user_message_text_class_name`（用户消息、Group 的用户发言）
+   *   与 `base.css` 的 `.chat-input-editor`（Composer）。
+   *
+   * **气泡与 Composer 必须同值**：它们是同一段文字在发送前后的两种状态，
+   * 不一致会出现「按下回车，行距突然变了」，而那只在发送瞬间可见。
+   * 两个表面共用 `--leading-chat` ，这一条是结构性的。
    *
    * ## 与字号绑定的约束（改任一项前必读）
    *
    * `.markdown` 的段落间距是 0.5em（随正文字号缩放），它必须比消息内的块间距
    *（`message_layout.ts` 的 `gap-3` = 0.75rem）小至少 0.125rem，
-   * 即正文不得超过 `xl`（1.25rem）。
-   * 当前正文是 `base`（0.9375rem），段落间距 0.46875rem（= 7.5px），差值 0.28125rem（= 4.5px）。
+   * 即字号不得超过 `xl`（1.25rem）。当前是 `base`（0.9375rem），
+   * 段落间距 0.46875rem（= 7.5px），差值 0.28125rem（= 4.5px）。
    */
   --leading-reading: 1.8;
+  --leading-chat: 1.6;
 }
 
 @theme inline {

@@ -33,8 +33,10 @@ import type { DesktopAgentSummary, DesktopGroupMemberRuntime, DesktopGroupMessag
 import { AgentInteraction } from "@/features/chat/components/messages/AgentInteraction";
 import { AgentMessageFrame } from "@/features/chat/components/messages/AgentMessageFrame";
 import { AgentThinkingStatus } from "@/features/chat/components/messages/AgentRuntimeIndicator";
+import { UserMessageBody } from "@/features/chat/components/messages/UserMessageBody";
 import { UserMessageFrame } from "@/features/chat/components/messages/UserMessageFrame";
-import { chat_message_text_class_name } from "@/features/chat/components/messages/message_layout";
+import { build_user_message_preview } from "@/features/chat/lib/user_message_preview";
+import { chat_message_text_class_name, user_message_text_class_name } from "@/features/chat/components/messages/message_layout";
 import { cn } from "@/lib/utils";
 import { is_group_draft_session_id } from "@/types/DesktopView";
 import type { GroupMessageProjection, GroupMessageSegment } from "@/types/GroupProjection";
@@ -290,13 +292,18 @@ function GroupModelEditor({ group, models, models_loading, set_group }: { /** �
  */
 const GroupMessageRow = memo(function GroupMessageRow({ message, agent, read }: { /** Group 共享消息。 */ message: DesktopGroupMessage; /** 消息所属 Agent；用户与系统消息为空。 */ agent?: DesktopAgentSummary; /** 用户消息是否已完成 Dispatch。 */ read: boolean }) {
   const translate = use_translation("resources");
+  // 折叠判断是内容自身的属性，与 author_type 无关；非用户消息不参与预览。
+  const user_preview = useMemo(
+    () => (message.author_type === "user" ? build_user_message_preview(message.text) : null),
+    [message],
+  );
   if (message.author_type === "user") return <UserMessageFrame
     meta={<>
       {read ? <span className="text-2xs text-muted-foreground">{translate("group_details.read")}</span> : null}
       <ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" />
     </>}
   >
-    <div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className={cn("break-words", chat_message_text_class_name)}><Markdown text={message.text} mode="static" /></div>
+    <UserMessageBody preview={user_preview}><div data-chat-selectable-message data-chat-message-id={message.message_id} data-chat-message-role="user" className={cn("break-words", user_message_text_class_name)}><Markdown text={message.text} mode="static" /></div></UserMessageBody>
   </UserMessageFrame>;
   if (message.author_type === "system") return <div className="group flex w-full items-center gap-3 py-2"><span className="h-px min-w-4 flex-1 bg-border/60" /><span className="flex max-w-[80%] items-center gap-2 text-center text-xs text-muted-foreground"><span>{message.text}</span><ChatMessageTimestamp created_at={message.created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /></span><span className="h-px min-w-4 flex-1 bg-border/60" /></div>;
   // 未知作者的降级身份：只需 id 与名称，头像会回退为默认图标。

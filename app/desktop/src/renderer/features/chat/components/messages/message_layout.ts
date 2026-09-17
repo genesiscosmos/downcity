@@ -136,12 +136,12 @@ export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-3
  * 差 0.28125rem（= 4.5px），在两个层级之间留出了可感知的差值，
  * 同时也给出正文字号的**上限 `xl`**（1.25rem）。
  *
- * `--leading-reading` 同时被 Composer 引用（`base.css` 的 `.chat-input-editor`）。
+ * `--leading-reading` 只被 Agent 侧引用；Composer 与用户气泡用 `--leading-chat`（见下）。
  *
  * ## 行高为什么单独用 `leading-reading`
  *
  * `text-base` 的配对行高是 1.25rem，是 UI 文本的密度；
- * 正文是长段落，需要 1.8。两者是有意分开的：`leading-*` 会盖掉配对行高，
+ * Agent 正文是长段落，需要 1.8。两者是有意分开的：`leading-*` 会盖掉配对行高，
  * 所以这里同时写 `text-base leading-reading`，不引入新的字号档位。
  *
  * ## 历史：为什么曾经不能用 Tailwind 工具类
@@ -156,6 +156,35 @@ export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-3
  * 不再需要普通类这个绕过手段。机制与回归验证见 `tests/font_scale.test.ts`。
  */
 export const chat_message_text_class_name = "text-base leading-reading text-foreground";
+
+/**
+ * 用户消息与 Group 用户发言的正文排版。
+ *
+ * ## 与 `chat_message_text_class_name` 的差异**只有行高**
+ *
+ * | 属性 | Agent 正文 | 用户气泡 |
+ * | --- | --- | --- |
+ * | 字号 | `base` | `base`（同值） |
+ * | 行高 | `--leading-reading`（1.8 / 27px） | `--leading-chat`（1.6 / 24px） |
+ * | 理由 | 机器产出的长文，要连续阅读 | 人敲的短句，多在紧凑气泡里 |
+ *
+ * **字号必须一致**：曾经两侧各设一档（13px / 15.5px），用户的反馈是
+ * 「agent message 和 user message 的字体应该保持一致」。那份历史说的是**字号**，
+ * 而不是行高；本常量与 `chat_message_text_class_name` 都写 `text-base`，
+ * 所以那条结论仍然成立。
+ *
+ * **行高可以不同**：1.8 是给长段落读的节奏，而用户气泡里通常只有一两行。
+ * 这不是拍脑袋——15px 下 1.7 曾被用户否过（「行内间距大一点」），
+ * 但那是在 Agent 正文的上下文里得出的，不能直接套到气泡。
+ * 两个值各自的依据写在 `tokens.css`。
+ *
+ * ## 与 Composer 必须同源
+ *
+ * Composer（`base.css` 的 `.chat-input-editor`）引用同一个 `--leading-chat`：
+ * 两者是同一段文字在发送前后的两种状态，行距不同会在按下回车那一下看出来。
+ * 由 `chat_message_layout.test.ts` 锁住。
+ */
+export const user_message_text_class_name = "text-base leading-chat text-foreground";
 
 /**
  * Footer：运行状态与消息操作栏的共用行。
@@ -197,3 +226,14 @@ export const user_message_editor_class_name = "ml-auto flex w-full max-w-full fl
  * 两个表面都用这一份，Group 的「已读」标记因此与 Session 的时间戳同处一线。
  */
 export const user_message_meta_class_name = "flex h-6 items-center gap-1";
+
+/**
+ * 折叠开关：常显（不能靠 hover，否则收起后看不出「还有内容」）。
+ *
+ * `h-6`（24px）是 WCAG 2.2 目标尺寸下限，也是消息区域内其它图标按钮的高度；
+ * `-ml-1` 把标签光学对齐到气泡内正文的左缘（气泡 px-3，按钮 px-1）。
+ *
+ * 它是普通流里的一行，不是浮层：代码块先前的教训是浮层会被滚动内容穿过，
+ * 且必然压住首行或末行文字。
+ */
+export const user_message_collapse_button_class_name = "-ml-1 mt-0.5 flex h-6 items-center gap-0.5 rounded-md px-1 text-2xs font-medium text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:size-3.5 [&_svg]:shrink-0";
