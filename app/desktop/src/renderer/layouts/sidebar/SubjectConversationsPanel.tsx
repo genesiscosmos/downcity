@@ -120,7 +120,7 @@ export const subject_panel_scroll_class_name = "max-h-80 overflow-y-auto overscr
  * 提到模块级而不是写在组件里：一是每次渲染不必重建字符串，二是这份类名带了键盘焦点指示，
  * 需要能被 tests/design_token_drift.test.ts 的焦点名单识别到。
  */
-export const subject_session_row_class_name = "flex min-h-7 w-full items-center gap-1.5 rounded-md px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30";
+export const subject_session_row_class_name = "flex min-h-7 w-full items-center gap-1.5 rounded-control px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30";
 
 /** 主体会话列表属性。 */
 export interface SubjectConversationsPanelProps {
@@ -226,7 +226,7 @@ export function SubjectConversationsPanel({ conversations, on_new_chat, close, p
             <div
               key={conversation.key}
               className={cn(
-                "group/item flex items-center gap-0.5 rounded-md transition-colors duration-150",
+                "group/item flex items-center gap-0.5 rounded-control transition-colors duration-150",
                 conversation.active ? "bg-interaction-selected hover:bg-interaction-active" : "hover:bg-interaction-hover",
               )}
             >

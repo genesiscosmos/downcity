@@ -43,7 +43,7 @@ export function create_power_renderer_ui_components(options: PowerRendererUiComp
       aria-current={active ? "page" : undefined}
       disabled={disabled}
       onClick={on_select}
-      className={cn("flex min-h-10 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30", active ? "bg-interaction-selected text-foreground" : "text-foreground hover:bg-interaction-hover", disabled && "opacity-45")}
+      className={cn("flex min-h-10 w-full items-center gap-2 rounded-control px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30", active ? "bg-interaction-selected text-foreground" : "text-foreground hover:bg-interaction-hover", disabled && "opacity-45")}
     >
       {leading ? <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">{leading}</span> : null}
       <span className="min-w-0 flex-1"><span className="block truncate text-xs">{label}</span>{description ? <span className="mt-0.5 block truncate text-3xs text-muted-foreground">{description}</span> : null}</span>
@@ -62,18 +62,18 @@ export function create_power_renderer_ui_components(options: PowerRendererUiComp
       return <div
         style={indentation === 0 ? undefined : { paddingLeft: indentation }}
       >
-        <div className={cn("group/item flex min-h-8 w-full items-center gap-1 rounded-lg py-0.5 pr-1 text-left transition-colors duration-150", aligns_with_parent_text ? "pl-2" : "pl-1", active ? "bg-interaction-selected text-foreground" : "text-foreground hover:bg-interaction-hover", disabled && "opacity-45")}>
-          {is_branch ? <button type="button" aria-label={toggle_accessible_label} aria-expanded={expanded} disabled={disabled} onClick={(event) => { event.stopPropagation(); on_toggle?.(); }} className="flex size-6 shrink-0 items-center justify-center rounded-md bg-transparent p-0 text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbChevronRight className={cn("size-3.5 transition-transform duration-150 motion-reduce:transition-none", expanded && "rotate-90")} /></button> : leading ? <span className={cn("flex size-6 shrink-0 items-center justify-center", active ? "text-primary" : "text-muted-foreground")} aria-hidden="true">{leading}</span> : null}
+        <div className={cn("group/item flex min-h-8 w-full items-center gap-1 rounded-control py-0.5 pr-1 text-left transition-colors duration-150", aligns_with_parent_text ? "pl-2" : "pl-1", active ? "bg-interaction-selected text-foreground" : "text-foreground hover:bg-interaction-hover", disabled && "opacity-45")}>
+          {is_branch ? <button type="button" aria-label={toggle_accessible_label} aria-expanded={expanded} disabled={disabled} onClick={(event) => { event.stopPropagation(); on_toggle?.(); }} className="flex size-6 shrink-0 items-center justify-center rounded-control bg-transparent p-0 text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbChevronRight className={cn("size-3.5 transition-transform duration-150 motion-reduce:transition-none", expanded && "rotate-90")} /></button> : leading ? <span className={cn("flex size-6 shrink-0 items-center justify-center", active ? "text-primary" : "text-muted-foreground")} aria-hidden="true">{leading}</span> : null}
           <button type="button" aria-current={active ? "page" : undefined} disabled={disabled} onClick={on_select} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
             {is_branch && leading ? <span className={cn("flex size-4 shrink-0 items-center justify-center", active ? "text-primary" : "text-muted-foreground")}>{leading}</span> : null}
             <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
           </button>
-          {trailing != null ? <span className="flex min-w-6 shrink-0 items-center justify-end gap-1 text-3xs text-muted-foreground">{typeof trailing === "number" ? <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-surface-emphasis tabular-nums">{trailing}</span> : trailing}</span> : null}
+          {trailing != null ? <span className="flex min-w-6 shrink-0 items-center justify-end gap-1 text-3xs text-muted-foreground">{typeof trailing === "number" ? <span className="flex size-6 shrink-0 items-center justify-center rounded-chip bg-surface-emphasis tabular-nums">{trailing}</span> : trailing}</span> : null}
         </div>
       </div>;
     },
     ItemMenu: ({ label, actions, reveal_on_hover = false }) => <DropdownMenu>
-      <DropdownMenuTrigger asChild><button type="button" aria-label={label} title={label} onClick={(event) => event.stopPropagation()} className={cn("flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-[background-color,color,opacity] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-interaction-hover data-[popup-open]:text-foreground", reveal_on_hover && "pointer-events-none opacity-0 group-hover/item:pointer-events-auto group-hover/item:opacity-100 group-focus-within/item:pointer-events-auto group-focus-within/item:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:opacity-100")}><TbDots className="size-3.5" /></button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><button type="button" aria-label={label} title={label} onClick={(event) => event.stopPropagation()} className={cn("flex size-6 shrink-0 items-center justify-center rounded-control text-muted-foreground outline-none transition-[background-color,color,opacity] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-interaction-hover data-[popup-open]:text-foreground", reveal_on_hover && "pointer-events-none opacity-0 group-hover/item:pointer-events-auto group-hover/item:opacity-100 group-focus-within/item:pointer-events-auto group-focus-within/item:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:opacity-100")}><TbDots className="size-3.5" /></button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>{actions.map((action) => <Fragment key={action.action_id}>{action.separator_before ? <DropdownMenuSeparator /> : null}<DropdownMenuItem disabled={action.disabled} className={action.destructive ? "text-destructive" : undefined} onClick={() => void action.on_select()}>{action.leading}<span>{action.label}</span></DropdownMenuItem></Fragment>)}</DropdownMenuContent>
     </DropdownMenu>,
     SidebarCreateMenu: ({ label, actions }) => <DropdownMenu>
@@ -180,7 +180,7 @@ export function create_power_renderer_ui_components(options: PowerRendererUiComp
       type={type}
       min={minimum}
       max={maximum}
-      className={cn("h-8 min-w-0 rounded-lg bg-control-surface px-2.5 text-xs text-foreground outline-none transition-colors hover:bg-control-hover focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50", fill ? "w-full" : "w-52")}
+      className={cn("h-8 min-w-0 rounded-control bg-control-surface px-2.5 text-xs text-foreground outline-none transition-colors hover:bg-control-hover focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50", fill ? "w-full" : "w-52")}
     />,
     Field: ({ label, description, error, children }) => <div className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs text-foreground">{label}</span>

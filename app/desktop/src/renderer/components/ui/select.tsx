@@ -35,7 +35,7 @@ export function Select({ value, options, on_value_change, className, align = "st
     <BaseSelect.Root items={options} value={value} onValueChange={(next_value) => next_value !== null && on_value_change(next_value)} {...props}>
       <BaseSelect.Trigger
         className={cn(
-          "group/select inline-flex h-8 min-w-36 items-center justify-between gap-2 rounded-lg bg-control-surface px-2.5 text-xs text-foreground outline-none transition-colors hover:bg-control-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-interaction-selected data-[popup-open]:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          "group/select inline-flex h-8 min-w-36 items-center justify-between gap-2 rounded-control bg-control-surface px-2.5 text-xs text-foreground outline-none transition-colors hover:bg-control-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-interaction-selected data-[popup-open]:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
       >

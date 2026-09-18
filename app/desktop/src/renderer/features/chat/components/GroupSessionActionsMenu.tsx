@@ -74,7 +74,7 @@ export function GroupSessionActionsMenu({ session, status, on_rename, on_remove 
       <DialogContent>
         <form onSubmit={(event) => void submit_rename(event)}>
           <DialogHeader><DialogTitle>{translate_chat("conversation.rename_title")}</DialogTitle><DialogDescription>{translate_chat("conversation.group_rename_description")}</DialogDescription></DialogHeader>
-          <DialogBody><input autoFocus value={title} onChange={(event) => set_title(event.target.value)} className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /></DialogBody>
+          <DialogBody><input autoFocus value={title} onChange={(event) => set_title(event.target.value)} className="h-8 w-full rounded-control border border-input bg-background px-2.5 text-xs text-foreground" /></DialogBody>
           <DialogFooter><Button type="button" onClick={() => set_rename_open(false)}>{translate_common("actions.cancel")}</Button><Button type="submit" variant="primary" disabled={pending || !title.trim()}>{translate_common(pending ? "actions.saving" : "actions.save")}</Button></DialogFooter>
         </form>
       </DialogContent>

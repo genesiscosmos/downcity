@@ -170,7 +170,7 @@ export function TurnFileDiffCard({ data }: { /** 当前 Turn 的 canonical 文�
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4"><TbFileDiff aria-hidden /></span>
       <div className="min-w-0 flex-1 truncate text-base font-medium text-foreground">{translate_chat("message.files_changed", { count: data.files.length })}</div>
       <DiffStats additions={data.additions} deletions={data.deletions} compact />
-      {review ? <button type="button" onClick={() => review(data)} className="ml-1 flex h-6 shrink-0 items-center rounded-md px-2 text-2xs font-medium text-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30">{translate_chat("file_diff.review")}</button> : null}
+      {review ? <button type="button" onClick={() => review(data)} className="ml-1 flex h-6 shrink-0 items-center rounded-control px-2 text-2xs font-medium text-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30">{translate_chat("file_diff.review")}</button> : null}
     </div>
     <div className="divide-y divide-divider border-t border-divider">
       {visible_files.map((file) => <FilePatch key={file.file} file={file} variant="inline" />)}

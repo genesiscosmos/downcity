@@ -139,7 +139,7 @@ export function GroupView({ group, agents, settings, message_projection, member_
       <Dialog open={rename_open} onOpenChange={set_rename_open}><DialogContent>
         <form onSubmit={(event) => void submit_rename(event)}>
           <DialogHeader><DialogTitle>{translate_chat("conversation.rename_title")}</DialogTitle><DialogDescription>{translate_chat("conversation.group_rename_description")}</DialogDescription></DialogHeader>
-          <DialogBody><input autoFocus value={rename_title} onChange={(event) => set_rename_title(event.target.value)} className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground" /></DialogBody>
+          <DialogBody><input autoFocus value={rename_title} onChange={(event) => set_rename_title(event.target.value)} className="h-8 w-full rounded-control border border-input bg-background px-2.5 text-xs text-foreground" /></DialogBody>
           <DialogFooter><Button type="button" onClick={() => set_rename_open(false)}>{common_translate("actions.cancel")}</Button><Button type="submit" variant="primary" disabled={rename_pending || !rename_title.trim()}>{common_translate(rename_pending ? "actions.saving" : "actions.save")}</Button></DialogFooter>
         </form>
       </DialogContent></Dialog>

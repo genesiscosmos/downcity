@@ -377,7 +377,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
                 onClick={go_back}
                 aria-label={translate("command_palette.back")}
                 title={translate("command_palette.back")}
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:text-foreground"
+                className="flex size-6 shrink-0 items-center justify-center rounded-control text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:text-foreground"
               >
                 <TbArrowLeft className="size-4" />
               </button>

@@ -353,7 +353,7 @@ function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
                 onClick={() => activate?.(item.id)}
                 onKeyDown={(event) => handle_tab_key_down(event, item.id)}
                 className={cn(
-                  "group/tab inline-flex h-7 min-w-0 max-w-40 shrink-0 cursor-default select-none items-center gap-1.5 rounded-md pl-2 outline-none transition-colors duration-150",
+                  "group/tab inline-flex h-7 min-w-0 max-w-40 shrink-0 cursor-default select-none items-center gap-1.5 rounded-control pl-2 outline-none transition-colors duration-150",
                   "focus-visible:ring-2 focus-visible:ring-ring/30",
                   // 激活项右侧让出 × 的位置，未激活项两端对称。
                   is_active
@@ -374,7 +374,7 @@ function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
                   aria-label={`${translate("panels.close_right")}：${item.label}`}
                   // 只关这一个标签页；关掉当前页会接到相邻的一个，关掉最后一个则是空白标签页。
                   onClick={(event) => { event.stopPropagation(); close_tab?.(item.id); }}
-                  className="flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
+                  className="flex size-5 shrink-0 items-center justify-center rounded-control text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
                 ><TbX className="size-3.5" /></button> : null}
               </div>;
             })}

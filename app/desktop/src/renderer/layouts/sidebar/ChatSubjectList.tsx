@@ -419,7 +419,7 @@ function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, ac
       onClick={on_advance}
       title={trigger_label}
       aria-label={trigger_label}
-      className="flex size-8 shrink-0 items-center justify-center rounded-md outline-none transition-opacity duration-150 hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/30"
+      className="flex size-8 shrink-0 items-center justify-center rounded-control outline-none transition-opacity duration-150 hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/30"
     >{avatar}</button>
     {/* 名称 + 描述：整块都是「打开主体」的入口（沿用原本的实现）。
         描述不是独立控件，因此这里也没有第二个按钮——行的三个动作分别是

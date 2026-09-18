@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * `focus-visible` 环，所有图表按钮都必须使用它（见 tests/design_token_drift.test.ts）。
  */
 export const mermaid_action_button_class_name =
-  "flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0";
+  "flex size-6 items-center justify-center rounded-control text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-3.5 [&_svg]:shrink-0";
 
 /**
  * 全屏浮层里的图表按钮。

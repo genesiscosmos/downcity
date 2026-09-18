@@ -29,10 +29,10 @@ function ChatReferenceView({ node, deleteNode }: NodeViewProps) {
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
     <span contentEditable={false} className="group/chat-ref relative inline-flex max-w-[16rem] items-center rounded-lg bg-surface-emphasis align-middle text-2xs text-foreground shadow-none [box-shadow:none] [filter:none]">
       <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-[inherit] px-1.5 py-1 text-left outline-none transition-colors hover:bg-interaction-hover">
-        <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-opacity group-hover/chat-ref:opacity-0 group-focus-within/chat-ref:opacity-0"><TbQuote className="size-3" /></span>
+        <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-control text-muted-foreground transition-opacity group-hover/chat-ref:opacity-0 group-focus-within/chat-ref:opacity-0"><TbQuote className="size-3" /></span>
         <span className="min-w-0 truncate font-medium leading-4">{attributes.preview_text}</span>
       </span>
-      <button type="button" className="absolute left-1.5 top-1/2 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-interaction-hover hover:text-foreground focus-visible:opacity-100 group-hover/chat-ref:opacity-100 group-focus-within/chat-ref:opacity-100" title={translate("composer.remove_reference")} onClick={deleteNode}><TbX className="size-2.5" /></button>
+      <button type="button" className="absolute left-1.5 top-1/2 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded-control text-muted-foreground opacity-0 transition-all hover:bg-interaction-hover hover:text-foreground focus-visible:opacity-100 group-hover/chat-ref:opacity-100 group-focus-within/chat-ref:opacity-100" title={translate("composer.remove_reference")} onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>
   </NodeViewWrapper>;
 }

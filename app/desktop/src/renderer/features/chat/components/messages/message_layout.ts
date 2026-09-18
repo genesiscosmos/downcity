@@ -236,4 +236,4 @@ export const user_message_meta_class_name = "flex h-6 items-center gap-1";
  * 它是普通流里的一行，不是浮层：代码块先前的教训是浮层会被滚动内容穿过，
  * 且必然压住首行或末行文字。
  */
-export const user_message_collapse_button_class_name = "-ml-1 mt-0.5 flex h-6 items-center gap-0.5 rounded-md px-1 text-2xs font-medium text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:size-3.5 [&_svg]:shrink-0";
+export const user_message_collapse_button_class_name = "-ml-1 mt-0.5 flex h-6 items-center gap-0.5 rounded-control px-1 text-2xs font-medium text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:size-3.5 [&_svg]:shrink-0";

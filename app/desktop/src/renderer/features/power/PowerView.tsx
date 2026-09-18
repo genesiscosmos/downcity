@@ -49,7 +49,7 @@ function PowerOverview({ power }: {
     <div className="flex min-h-16 items-center gap-3 px-4 py-3.5">
       <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-brand text-primary"><PowerIcon power_id={power.power_id} icon_url={power.icon_url} class_name="size-5" /></div>
       <div className="min-w-0 flex-1"><div className="truncate text-base font-medium text-foreground">{power.title}</div><div className="mt-1 text-3xs text-muted-foreground">{power.description}</div></div>
-      {power.readme ? <button type="button" aria-expanded={expanded} onClick={() => set_expanded((current) => !current)} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbChevronDown className={cn("size-4 transition-transform", !expanded && "-rotate-90")} /></button> : null}
+      {power.readme ? <button type="button" aria-expanded={expanded} onClick={() => set_expanded((current) => !current)} className="flex size-8 items-center justify-center rounded-control text-muted-foreground outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbChevronDown className={cn("size-4 transition-transform", !expanded && "-rotate-90")} /></button> : null}
     </div>
     {expanded && power.readme ? <div className="max-w-[52rem] border-t border-divider px-4 py-4 text-xs leading-[1.65] text-muted-foreground"><Markdown text={power.readme} mode="static" /></div> : null}
   </section>;

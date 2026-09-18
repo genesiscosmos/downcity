@@ -34,7 +34,7 @@ export function SidebarRail(props: SidebarRailProps) {
     aria-current={props.settings_active ? "page" : undefined}
     aria-label={settings_label}
     className={cn(
-      "relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-transparent text-muted-foreground outline-none transition-[background-color,color,box-shadow] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:size-4",
+      "relative inline-flex size-8 shrink-0 items-center justify-center rounded-control bg-transparent text-muted-foreground outline-none transition-[background-color,color,box-shadow] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 [&_svg]:size-4",
       props.settings_active && "bg-interaction-selected text-foreground hover:bg-interaction-active",
     )}
     onClick={() => {

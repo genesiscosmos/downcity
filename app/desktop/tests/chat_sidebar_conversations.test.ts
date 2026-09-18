@@ -336,7 +336,13 @@ test("内边距给列表内容而不是滚动容器：滚动条因此贴边", ()
   // 列表内边距在滚动容器**内部**的包装层上。嵌入态没有滚动容器，但它仍在内容那一层。
   assert.ok(/<div className="p-1">/.test(sessions_panel), "列表内容没有自己的内边距，或它不在滚动容器内部");
   // 行的文字内缩仍由行自己承担。
-  assert.ok(sessions_panel.includes('subject_session_row_class_name = "flex min-h-7 w-full items-center gap-1.5 rounded-md px-2'), "会话行没有自己的文字内缩");
+  //
+  // 只断言「行类名里带 px-2」这个意图，不把整串类名抄进来：
+  // 圆角从 `rounded-md` 改名为 `rounded-control`（角色令牌，等值）时，
+  // 抄全串的写法会失败，而它想守的「内缩在行自己身上」其实没变。
+  const row_class = /subject_session_row_class_name = "([^"]*)"/.exec(sessions_panel);
+  assert.ok(row_class, "找不到会话行的类名常量");
+  assert.ok(/\bpx-2\b/.test(row_class[1]!), `会话行没有自己的文字内缩：${row_class[1]}`);
 });
 
 /**

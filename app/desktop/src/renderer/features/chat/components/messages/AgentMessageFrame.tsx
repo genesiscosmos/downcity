@@ -69,7 +69,7 @@ export function AgentMessageFrame({ agent, created_at, identity_action, identity
   const content = <>
     <header className="flex min-w-0 items-center gap-2">
       {identity_action
-        ? <button type="button" onClick={identity_action} title={identity_title} aria-label={identity_label ?? identity_title ?? name} className={cn("group/identity", agent_identity_row_class_name, "max-w-full rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/30")}>{identity_content}</button>
+        ? <button type="button" onClick={identity_action} title={identity_title} aria-label={identity_label ?? identity_title ?? name} className={cn("group/identity", agent_identity_row_class_name, "max-w-full rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring/30")}>{identity_content}</button>
         : <div className={agent_identity_row_class_name}>{identity_content}</div>}
       {suffix}
       {created_at ? <ChatMessageTimestamp created_at={created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /> : null}
