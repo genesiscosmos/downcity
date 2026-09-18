@@ -81,8 +81,8 @@ type AgentSessionsOptions = {
    */
   session_class?: AgentSessionConstructor;
 
-  /** 为每个 Session 创建独立 Composer 的工厂。 */
-  create_session_composer?: () => SessionComposer;
+  /** 当前 Agent 使用的 Session Composer；其所有 Session 共享该实例。 */
+  session_composer?: SessionComposer;
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;
@@ -101,7 +101,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
   private readonly ensure_agent_ready: AgentSessionsOptions["ensure_agent_ready"];
   private readonly session_class: AgentSessionConstructor;
-  private readonly create_session_composer: () => SessionComposer;
+  private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly on_session_routed?: AgentSessionsOptions["on_session_routed"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
@@ -113,8 +113,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.get_instruction = options.get_instruction;
     this.ensure_agent_ready = options.ensure_agent_ready;
     this.session_class = options.session_class || Session;
-    this.create_session_composer = options.create_session_composer ||
-      (() => new DefaultSessionComposer());
+    this.session_composer = options.session_composer ?? new DefaultSessionComposer();
     this.get_agent_model = options.get_agent_model;
     this.on_session_routed = options.on_session_routed;
   }
@@ -442,7 +441,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       get_agent_model: () => this.get_agent_model(),
       get_hooks: () => context.get_hooks(),
       get_managed_power_system_blocks: async () => [],
-      create_composer: this.create_session_composer,
+      composer: this.session_composer,
       ensure_configured: async (session) => {
         await this.ensure_agent_ready();
       },

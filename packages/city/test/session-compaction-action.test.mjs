@@ -69,7 +69,7 @@ async function run_pressure_turn(outcome) {
 
   class ScriptedSession extends Session {
     constructor(options) {
-      super({ ...options, create_composer: () => composer });
+      super({ ...options, composer });
     }
   }
 

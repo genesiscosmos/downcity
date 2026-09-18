@@ -263,16 +263,18 @@ City 持有 Plugin 唯一实例、配置投影与生命周期；Agent 只持有�
 
 ## `session_composer`
 
-只需要调整模型输入或上下文维护方式时，直接提供 Composer 工厂。每次创建、恢复或 Fork Session 都会调用一次，因此 Composer 实例不会跨 Session 共享。
+只需要调整模型输入或上下文维护方式时，直接传入一个 Composer 实例。它属于 Agent 级特性，描述「这个 Agent 怎么和模型说话」，被该 Agent 的全部 Session 共享。
 
 ```ts
 import { Agent, DefaultSessionComposer } from "@downcity/agent";
 
 const agent = new Agent({
   id: "repo-helper",
-  session_composer: () => new DefaultSessionComposer(),
+  session_composer: new DefaultSessionComposer(),
 });
 ```
+
+因此 Composer 实现必须无状态：具体 Session 与上下文全部由 `compose(input)` 参数传入，派生数据写入传入的 `derived` 存储。不要在实例上缓存任何与 Session 相关的内容。
 
 ### Session Composer 的定位
 

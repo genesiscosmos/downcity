@@ -262,16 +262,18 @@ model, instructions, Tools, and Sessions. Web capabilities still require host co
 
 ## `session_composer`
 
-Use a factory when you only need to customize model input or context maintenance. The factory is called once for every created, restored, or forked Session, so Composer instances are never shared across Sessions.
+Pass a Composer instance when you only need to customize model input or context maintenance. It is an Agent-level concern that describes how this Agent talks to the model, and it is shared by every Session of that Agent.
 
 ```ts
 import { Agent, DefaultSessionComposer } from "@downcity/agent";
 
 const agent = new Agent({
   id: "repo-helper",
-  session_composer: () => new DefaultSessionComposer(),
+  session_composer: new DefaultSessionComposer(),
 });
 ```
+
+A Composer implementation must therefore be stateless: the Session and its context arrive through `compose(input)`, and derived data goes into the passed `derived` store. Do not cache anything Session-specific on the instance.
 
 ### What a Session Composer is
 

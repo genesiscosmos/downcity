@@ -127,6 +127,10 @@ export interface SessionOptions {
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;
 
-  /** 为当前 Session 及其 fork 子 Session 创建独立 Composer 的工厂。 */
-  create_composer?: () => SessionComposer;
+  /**
+   * 当前 Session 使用的 Composer。
+   *
+   * 关键点（中文）：由 Agent 传入并在其所有 Session 间共享，因此实现必须无状态。
+   */
+  composer?: SessionComposer;
 }

@@ -127,7 +127,7 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
 
   class CustomSession extends Session {
     constructor(options) {
-      super({ ...options, create_composer: () => new CustomComposer() });
+      super({ ...options, composer: new CustomComposer() });
     }
   }
 
@@ -154,31 +154,30 @@ test("Session system 快照与 Custom Composer 的实际模型输入一致", asy
   }
 });
 
-test("Agent Composer 工厂为创建、恢复缓存与 Fork 保持实例隔离", async () => {
-  const composer_instances = [];
+test("Agent 的 Composer 是无状态单例，被其全部 Session 共享", async () => {
+  const composer = new FullHistorySessionComposer();
   const agent = new Agent({
-    id: "composer_factory_agent",
-    session_composer: () => {
-      const composer = new FullHistorySessionComposer();
-      composer_instances.push(composer);
-      return composer;
-    },
+    id: "composer_shared_agent",
+    session_composer: composer,
   });
   try {
+    // 创建与 Fork 都不再产生新 Composer 实例。
+    assert.equal(agent.session_composer, composer);
+
     const first = await agent.sessions.create();
     const second = await agent.sessions.create();
-    assert.equal(composer_instances.length, 2);
-    assert.notEqual(composer_instances[0], composer_instances[1]);
+    assert.notEqual(first.id, second.id);
+    assert.equal(agent.session_composer, composer);
 
+    // 恢复缓存命中同一 Session 实例，同样不新建 Composer。
     const restored = await agent.sessions.get(first.id);
     assert.equal(restored, first);
-    assert.equal(composer_instances.length, 2);
 
+    // Fork 产生新 Session，但 Agent 级 Composer 仍只有一个。
     const forked = await first.fork();
     assert.ok(forked.id);
-    assert.equal(composer_instances.length, 3);
-    assert.notEqual(composer_instances[0], composer_instances[2]);
     assert.notEqual(second.id, forked.id);
+    assert.equal(agent.session_composer, composer);
   } finally {
     await agent.dispose();
   }

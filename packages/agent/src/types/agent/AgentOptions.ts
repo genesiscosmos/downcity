@@ -90,13 +90,13 @@ export interface AgentOptions {
   session_class?: AgentSessionConstructor;
 
   /**
-   * 为每个 Session 创建独立 Composer 的工厂。
+   * 当前 Agent 使用的 Session Composer。
    *
    * 关键点（中文）
-   * - 每次创建、恢复或 fork Session 都会调用一次，禁止返回共享实例。
-   * - 省略时创建默认 `DefaultSessionComposer`。
-   * - 派生状态应在工厂内部随 Composer 一起创建，避免跨 Session 共享派生数据。
+   * - Composer 描述「这个 Agent 怎么和模型说话」，属于 Agent 级特性，被其所有 Session 共享。
+   * - 实现必须无状态：全部 Session 与上下文都由 `compose(input)` 参数传入，派生数据写入传入的 `derived` 存储。
+   * - 省略时使用默认 `DefaultSessionComposer`。
    */
-  session_composer?: () => SessionComposer;
+  session_composer?: SessionComposer;
 
 }

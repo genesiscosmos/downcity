@@ -63,8 +63,8 @@ export class Agent {
   /** Agent 使用的 Session 类。 */
   readonly session_class?: AgentSessionConstructor;
 
-  /** 为每个 Session 创建独立 Composer 的工厂。 */
-  readonly session_composer?: () => SessionComposer;
+  /** 当前 Agent 使用的 Session Composer；其所有 Session 共享该实例。 */
+  readonly session_composer?: SessionComposer;
 
   /** Agent 级日志器，不绑定任何 Workspace。 */
   private readonly logger = new Logger();
@@ -109,7 +109,7 @@ export class Agent {
       ensure_agent_ready: async () => await this.ensure_ready(),
       get_agent_model: () => this.model,
       session_class: this.session_class,
-      create_session_composer: this.session_composer,
+      session_composer: this.session_composer,
       on_session_routed: () => {
         if (!this.city) this.memory_session_started = true;
       },

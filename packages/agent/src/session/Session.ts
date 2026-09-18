@@ -87,7 +87,6 @@ export class Session implements AgentSession {
   private readonly get_managed_power_system_blocks: SessionOptions["get_managed_power_system_blocks"];
   private readonly ensure_configured_hook?: SessionOptions["ensure_configured"];
   private readonly composer: SessionComposer;
-  private readonly create_composer: () => SessionComposer;
   private readonly session_messages: SessionMessages;
   private readonly events: SessionEventHub;
   private readonly session_interactions: SessionInteractions;
@@ -125,9 +124,7 @@ export class Session implements AgentSession {
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
     this.get_managed_power_system_blocks = options.get_managed_power_system_blocks;
     this.ensure_configured_hook = options.ensure_configured;
-    this.create_composer = options.create_composer ||
-      (() => new DefaultSessionComposer());
-    this.composer = this.create_composer();
+    this.composer = options.composer ?? new DefaultSessionComposer();
     if (!this.id) {
       throw new Error("Session requires a non-empty session_id");
     }
@@ -569,7 +566,7 @@ export class Session implements AgentSession {
       get_managed_power_system_blocks: this.get_managed_power_system_blocks,
       ensure_configured: this.ensure_configured_hook,
       get_agent_model: this.get_agent_model,
-      create_composer: this.create_composer,
+      composer: this.composer,
     });
   }
 
