@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useLoaderData } from "react-router";
-import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { IconArrowUpRight, IconBox } from "@tabler/icons-react";
 import { product } from "@/lib/product";
 import { fetch_webcap_metadata, type WebCapMetadata } from "@/lib/webcap";
@@ -58,9 +58,10 @@ export async function loader(): Promise<WebCapMetadata> {
  * - Vibecape 的标题、描述、图标通过 WebCap 实时解析官网获得。
  */
 export default function Showcase() {
-  const { i18n } = useTranslation();
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 i18n.language 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
   const metadata = useLoaderData<typeof loader>();
-  const is_zh = i18n.language.toLowerCase().startsWith("zh");
+  const is_zh = locale === "zh";
   const [image_error, set_image_error] = React.useState(false);
   const [favicon_error, set_favicon_error] = React.useState(false);
 

@@ -1,0 +1,35 @@
+# Cloudflare Pages 重定向规则（在静态资源之前生效）。
+#
+# 说明
+# - 站点是纯静态预渲染产物。React Router loader 里的 301 在静态部署下不会生效，
+#   旧路径会直接落到 404.html 或被预渲染成 React Router 的 .data 兜底页，
+#   因此需要在这里兜底。
+# - 目标一律使用带尾斜杠的规范形态，避免二次 308。
+# - 无语言前缀的旧文档路径统一导向英文文档区，与 routes/*/redirect.tsx 的既有行为一致。
+
+# ── /product/sdk/ 拆分 ──────────────────────────────────────────────
+# 原页面正文描述的是 Federation（@downcity/federation），故 301 到 Federation 页面。
+/product/sdk   /product/federation-sdk/  301
+/product/sdk/  /product/federation-sdk/  301
+/zh/product/sdk   /zh/product/federation-sdk/  301
+/zh/product/sdk/  /zh/product/federation-sdk/  301
+
+# ── 六个文档空间的旧无语言前缀路径 ──────────────────────────────────
+/docs            /en/docs/            301
+/docs/*          /en/docs/:splat      301
+/city-sdk-docs   /en/city-sdk-docs/   301
+/city-sdk-docs/* /en/city-sdk-docs/:splat 301
+/agent-sdk-docs  /en/agent-sdk-docs/  301
+/agent-sdk-docs/* /en/agent-sdk-docs/:splat 301
+/payments        /en/payments/        301
+/payments/*      /en/payments/:splat  301
+/plugins-docs    /en/plugins-docs/    301
+/plugins-docs/*  /en/plugins-docs/:splat 301
+/ui-sdk-docs     /en/ui-sdk-docs/     301
+/ui-sdk-docs/*   /en/ui-sdk-docs/:splat 301
+
+# ── 文章（blog）的裸路径 ────────────────────────────────────────────
+# 文章与列表页的公开 URL 都带语言前缀（/en/blog/... 与 /zh/blog/...）。
+# 裸 /blog 导向英文列表页（列表页已上线，不再是权宜的 301 到首篇）。
+/blog      /en/blog/    301
+/blog/*    /en/blog/:splat  301

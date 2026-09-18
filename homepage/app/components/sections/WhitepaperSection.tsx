@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { IconCheck, IconCopy, IconDownload } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 
@@ -140,11 +140,12 @@ const WHITEPAPER = {
 } as const;
 
 export function WhitepaperSection() {
-  const { i18n } = useTranslation();
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 i18n.language 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
   const [copied, setCopied] = useState(false);
   const [whitepaperCopied, setWhitepaperCopied] = useState(false);
   const [whitepaperCopyFailed, setWhitepaperCopyFailed] = useState(false);
-  const isZh = i18n.language.toLowerCase().startsWith("zh");
+  const isZh = locale === "zh";
   const content = isZh ? WHITEPAPER.zh : WHITEPAPER.en;
 
   const renderParagraph = (paragraph: string) =>

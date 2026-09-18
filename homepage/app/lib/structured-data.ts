@@ -7,6 +7,7 @@
 import { create_site_url } from "@/lib/seo";
 import { homepage_positioning } from "@/lib/homepage-positioning";
 import type {
+  SeoArticleStructuredData,
   SeoBreadcrumbStructuredData,
   SeoFAQStructuredData,
   SeoHomeStructuredData,
@@ -110,10 +111,48 @@ export function create_breadcrumb_structured_data(
 }
 
 /**
+ * 创建文章页使用的 BlogPosting JSON-LD。
+ *
+ * 关键点：author、publisher 复用首页实体图中的 Organization，about 指向 Downcity
+ * 软件实体。这样文章与首页实体图共享同一组 @id，搜索引擎能把它识别为同一产品体系
+ * 的内容，而不是一个孤立的页面。
+ */
+export function create_article_structured_data(options: {
+  title: string;
+  description: string;
+  pathname: string;
+  date_published: string;
+  lang: "en" | "zh";
+}): SeoArticleStructuredData {
+  const canonical_url = create_site_url(options.pathname);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: options.title,
+    description: options.description,
+    datePublished: options.date_published,
+    inLanguage: options.lang === "zh" ? "zh-CN" : "en",
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": canonical_url,
+    },
+    author: { "@id": organization_id },
+    publisher: { "@id": organization_id },
+    about: { "@id": software_id },
+    isPartOf: { "@id": website_id },
+  };
+}
+
+/**
  * 把 JSON-LD 转换成可安全嵌入 HTML script 的文本。
  */
 export function serialize_structured_data(
-  data: SeoHomeStructuredData | SeoFAQStructuredData | SeoBreadcrumbStructuredData,
+  data:
+    | SeoHomeStructuredData
+    | SeoFAQStructuredData
+    | SeoBreadcrumbStructuredData
+    | SeoArticleStructuredData,
 ): string {
   // 源码字面量 \\u003c 在运行时是单反斜杠 + u003c：JSON.parse 会还原为 <，
   // 同时避免原始 </script> 出现在 HTML 内联脚本中导致提前闭合。

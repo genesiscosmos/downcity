@@ -84,7 +84,8 @@ export function Navbar() {
 
   const homePath = isZh ? "/zh" : "/";
   const productPath = isZh ? "/zh/product" : "/product";
-  const productSdkPath = isZh ? "/zh/product/sdk" : "/product/sdk";
+  const productCitySdkPath = isZh ? "/zh/product/city-sdk" : "/product/city-sdk";
+  const productFederationSdkPath = isZh ? "/zh/product/federation-sdk" : "/product/federation-sdk";
   const productAgentSdkPath = isZh ? "/zh/product/agent-sdk" : "/product/agent-sdk";
   const productUiSdkPath = isZh ? "/zh/product/ui-sdk" : "/product/ui-sdk";
   const startPath = isZh ? "/zh/start" : "/start";
@@ -103,11 +104,12 @@ export function Navbar() {
 
   const productGroup: NavGroup = {
     label: t("nav.product"),
-    activePaths: [productPath, startPath, productSdkPath, productAgentSdkPath, productUiSdkPath, pluginsDocsPath, paymentsPath],
+    activePaths: [productPath, startPath, productCitySdkPath, productFederationSdkPath, productAgentSdkPath, productUiSdkPath, pluginsDocsPath, paymentsPath],
     items: [
       { label: t("nav.productOverview"), description: isZh ? "完整产品矩阵" : "Full product index", path: productPath, icon: IconLayoutDashboard },
       { label: "CLI", description: isZh ? "命令行工具" : "Command-line interface", path: startPath, icon: IconTerminal },
-      { label: "City SDK", description: isZh ? "城市运行时 SDK" : "City runtime SDK", path: productSdkPath, icon: IconServer },
+      { label: "City SDK", description: isZh ? "本地 Agent 宿主 SDK" : "Local agent host SDK", path: productCitySdkPath, icon: IconServer },
+      { label: "Federation SDK", description: isZh ? "Agent 产品后端 SDK" : "Agent product backend SDK", path: productFederationSdkPath, icon: IconServer },
       { label: "Agent SDK", description: isZh ? "Agent 嵌入 SDK" : "Agent embedding SDK", path: productAgentSdkPath, icon: IconRobot },
       { label: "UI SDK", description: isZh ? "UI 组件 SDK" : "UI component SDK", path: productUiSdkPath, icon: IconLayoutDashboard },
       { label: "Plugins", description: isZh ? "插件系统" : "Plugin system", path: pluginsDocsPath, icon: IconPuzzle },

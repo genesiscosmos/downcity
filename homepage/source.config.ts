@@ -33,6 +33,10 @@ export const pluginsDocs = defineDocs({
   dir: "content/plugins-docs",
 });
 
+export const blog = defineDocs({
+  dir: "content/blog",
+});
+
 export default defineConfig({
   mdxOptions: {
     remarkPlugins: (v) => [

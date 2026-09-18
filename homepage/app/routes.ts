@@ -17,6 +17,13 @@ export default [
   route("privacy", "routes/privacy.tsx"),
   route("sitemap.xml", "routes/sitemap.xml.ts"),
 
+  // Blog（信息型营销内容，不用文档侧边栏版式）
+  // 列表页必须排在 splat 之前，否则 /en/blog 会被 en/blog/* 吃掉。
+  route("en/blog", "routes/blog/index.tsx", { id: "blog-index-en" }),
+  route("zh/blog", "routes/blog/index.tsx", { id: "blog-index-zh" }),
+  route("en/blog/*", "routes/blog/page.tsx", { id: "blog-en" }),
+  route("zh/blog/*", "routes/blog/page.tsx", { id: "blog-zh" }),
+
   // Features page
   route("features", "routes/features.tsx"),
   route("zh/features", "routes/features.tsx", { id: "features-zh" }),
@@ -24,7 +31,8 @@ export default [
   // Product with child routes
   route("product", "routes/product.tsx", [
     index("routes/product/index.tsx"),
-    route("sdk", "routes/product/sdk.tsx"),
+    route("city-sdk", "routes/product/city-sdk.tsx"),
+    route("federation-sdk", "routes/product/federation-sdk.tsx"),
     route("agent-sdk", "routes/product/agent-sdk.tsx"),
     route("ui-sdk", "routes/product/ui-sdk.tsx"),
   ]),
@@ -34,8 +42,11 @@ export default [
     { id: "routes/zh/product" },
     [
       index("routes/product/index.tsx", { id: "routes/zh/product._index" }),
-      route("sdk", "routes/product/sdk.tsx", {
-        id: "routes/zh/product.sdk",
+      route("city-sdk", "routes/product/city-sdk.tsx", {
+        id: "routes/zh/product.city-sdk",
+      }),
+      route("federation-sdk", "routes/product/federation-sdk.tsx", {
+        id: "routes/zh/product.federation-sdk",
       }),
       route("agent-sdk", "routes/product/agent-sdk.tsx", {
         id: "routes/zh/product.agent-sdk",
@@ -52,6 +63,7 @@ export default [
     route("skills", "routes/resources.skills.tsx"),
     route("marketplace", "routes/resources.marketplace.tsx"),
     route("hosting", "routes/resources.hosting.tsx"),
+    route("examples", "routes/resources.examples.tsx"),
   ]),
   route(
     "zh/resources",
@@ -67,6 +79,9 @@ export default [
       }),
       route("hosting", "routes/resources.hosting.tsx", {
         id: "routes/zh/resources.hosting",
+      }),
+      route("examples", "routes/resources.examples.tsx", {
+        id: "routes/zh/resources.examples",
       }),
     ],
   ),

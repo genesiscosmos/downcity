@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { product } from "@/lib/product";
 import { cn } from "@/lib/utils";
 import { create_page_meta, get_path_locale } from "@/lib/seo";
@@ -6,10 +7,12 @@ import type { Route } from "./+types/community.roadmap";
 
 export function meta({ location }: Route.MetaArgs) {
   const is_chinese = get_path_locale(location.pathname) === "zh";
-  const title = `${product.productName} — ${is_chinese ? "路线图" : "Roadmap"}`;
+  const title = is_chinese
+    ? "Agent Harness 路线图：下一步在做什么 — Downcity"
+    : "Agent Harness Roadmap: What We Ship Next — Downcity";
   const description = is_chinese
-    ? "了解 Downcity 接下来正在建设的产品和生态能力。"
-    : "See what we are building next";
+    ? "查看 Downcity 在 Agent Harness、City 与 Federation 运行时、各 SDK 与 UI 层的下一步计划。"
+    : "See what Downcity is building next across the agent harness, the City and Federation runtimes, the SDKs, and the UI layer.";
   return create_page_meta({
     title,
     description,
@@ -19,7 +22,10 @@ export function meta({ location }: Route.MetaArgs) {
 }
 
 export default function Roadmap() {
-  const { t } = useTranslation();
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 useTranslation() 的 t 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale);
   const repoUrl =
     product.homepage?.includes("github.com") === true
       ? product.homepage

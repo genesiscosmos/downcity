@@ -1,0 +1,115 @@
+---
+title: What Is an Agent Harness?
+description: An agent harness is the runtime layer that turns a language model into a working agent. Here is what it owns, how it differs from a framework or MCP, and why production raises the bar.
+keywords: what is an agent harness, agent harness meaning, agent runtime, agent framework, MCP, agent session, agent permissions, open source agent harness
+---
+
+An agent harness is the runtime layer that turns a language model into a working agent.
+
+The model reasons. The harness does everything else. It runs the loop (call the model, execute a tool, feed the result back), keeps session state, gives the agent a workspace and the tools to act on it, and enforces the boundaries that keep those actions safe and reviewable.
+
+That split explains a pattern you see once agents leave the demo stage. Most failures are not reasoning failures. They are runtime failures. Context is lost between runs. A tool call reaches something it should not have reached. Nobody can reconstruct what happened. The agent cannot resume yesterday's work.
+
+## The four layers people mix up
+
+These terms get used interchangeably, but they are different layers with different jobs.
+
+| Layer | What it is | What it does not do |
+| --- | --- | --- |
+| Model | The reasoning engine | It has no memory, no tools, and no persistence |
+| Framework | A library for expressing agent logic | It does not own execution, state, or governance |
+| Harness | The runtime that executes and governs the agent | It does not decide your product's interface |
+| Protocol (MCP) | A contract for connecting tools and data | It is not a runtime and does not manage sessions |
+
+A useful test: if you delete it, what breaks?
+
+Delete the model and nothing reasons. Delete the framework and you write more code, but the agent can still run. Delete the harness and the agent stops existing between requests, because the thing that was holding its state, its tools, and its permissions is gone.
+
+## What a harness actually owns
+
+The list is short but every item is load-bearing. In practice a harness is responsible for:
+
+- **The execution loop.** Calling the model, parsing tool calls, running them, and feeding results back until the task finishes or a limit is hit.
+- **Session state.** The conversation, the working context, and the ability to resume, fork, or replay a session rather than starting over.
+- **A workspace.** The files, directories, and shell the agent operates on. An agent with no bounded workspace cannot do real work.
+- **Tools and plugins.** What the agent can actually call, mounted explicitly rather than discovered by accident.
+- **Memory.** What survives a single session, and how it is retrieved later.
+- **Permissions and sandboxing.** Which actions are allowed, which need approval, and where the hard boundary sits.
+- **Services.** Model access, identity, storage, and anything else the agent needs from the outside world.
+- **Usage and cost.** Which model was called, how many tokens were spent, and who pays for it.
+- **Observability.** Logs, traces, and artifacts good enough to answer "what did it do, and why?"
+
+Notice how little of that is about prompting. Harness work is mostly systems work: process boundaries, state machines, permissions, cost accounting.
+
+## How a harness differs from a framework
+
+A framework helps you describe an agent. A harness runs one.
+
+Frameworks are good at composition: chains, graphs, tool definitions, prompt templates. They are libraries, which means your application still owns the process, the persistence layer, the permission model, and the deployment story.
+
+When people say an agent "worked in the notebook but not in production," the gap is usually exactly that missing layer. The library was doing its job. Nothing was doing the runtime's job.
+
+## How a harness relates to MCP
+
+MCP (Model Context Protocol) is a connection standard. It answers one question well: how does an agent reach a tool or a data source in a predictable way?
+
+That is genuinely useful, and it is not the same job as a harness. MCP defines the contract at the edge of the agent. The harness is what holds the agent itself: its loop, its session, its workspace, its permissions, its accounting.
+
+They compose rather than compete. A harness can expose MCP servers as tools. MCP by itself will not tell you which session called which tool, with whose credentials, at what cost. That is harness territory.
+
+## Why production raises the bar
+
+Four requirements appear the moment real users depend on the agent.
+
+**Resumability.** A demo runs for ninety seconds in one process. A real agent runs for weeks across restarts and deploys. State has to outlive the process, which means sessions must be durable objects rather than in-memory conveniences.
+
+**Boundaries.** Unbounded tool access is fine when the only user is you. With real users you need an explicit answer to what the agent may touch, what needs human approval, and where the sandbox edge is.
+
+**Multiple products, one backend.** Most teams do not ship one agent. They ship a console, an extension, an API, and an internal tool, all needing the same models, accounts, and usage records. Rebuilding that per surface is how agent projects quietly die.
+
+**Cost visibility.** Token spend is a real line item. If you cannot attribute usage to a user, a product, or a session, you cannot price, throttle, or debug it.
+
+None of these are model problems. All of them are harness problems.
+
+## How Downcity maps to these concerns
+
+Downcity is an open-source agent harness plus the kits that make an agent shippable. The mapping from responsibility to component is deliberately one-to-one:
+
+| Harness responsibility | Downcity component |
+| --- | --- |
+| Execution loop, sessions, workspace | [Agent Harness](/en/docs/agent/overview/) and the [agent runtime](/features/) |
+| Local agent hosting and request routing | [City](/en/city-sdk-docs/) |
+| Model catalog, service routing, identity | [Federation](/en/docs/federation/overview/) |
+| Embedding agents in your own app | [Agent SDK](/en/agent-sdk-docs/) |
+| Tools, memory, shell, tasks | [Agent Plugins](/en/plugins-docs/) |
+| Usage, credits, and payment | [Accounts and Payments](/en/payments/) |
+| Agent-facing UI patterns | [UI SDK](/product/ui-sdk/) |
+
+Two design choices are worth calling out because they shape everything else.
+
+First, **capabilities are mounted explicitly**. The caller decides which plugins and tools an agent gets, instead of relying on automatic assembly. Explicit mounting is what makes permissions auditable.
+
+Second, **the product boundary is kept separate from the runtime**. Products own the user experience. Agents execute inside explicit boundaries. The runtime owns the repeated infrastructure: models, tools, tasks, memory, permissions, usage, billing, and observability. You can read the longer argument in the [whitepaper](/whitepaper/).
+
+## Common questions
+
+**Is an agent harness the same as an agent framework?**
+No. A framework is a library for describing agent logic. A harness is the runtime that executes it, holds its state, and governs what it can do. Most teams end up needing both.
+
+**Do I need a harness if I already use MCP?**
+If your agent only needs to call a few tools once, MCP may be enough. Once you need durable sessions, permissions, cost attribution, or multiple products sharing one backend, you need a runtime, and that is the harness.
+
+**Is a harness only for coding agents?**
+No. Coding agents made the term popular because they stress every runtime requirement at once: long sessions, file access, shell execution, approvals. The same requirements apply to research, operations, and support agents.
+
+**Can I build one myself?**
+You can, and many teams start there. The honest tradeoff is that you will end up reimplementing session persistence, sandboxing, permission checks, usage accounting, and multi-surface access. [Downcity](/start/) is open source if you would rather start from an existing one.
+
+**What does "open source agent harness" mean in practice?**
+It means the runtime is inspectable and self-hostable, and the license permits commercial use. For Downcity specifically, the runtime and kits live in the [public repository](https://github.com/genesiscosmos/downcity) under Apache 2.0.
+
+## Where to go next
+
+If you want to see a harness running before reading more theory, [install the CLI and start your first agent](/start/). It takes a few minutes and puts a real session, workspace, and tool boundary in front of you.
+
+If you would rather understand the architecture first, the [production agents whitepaper](/whitepaper/) explains why the harness layer exists and where its boundaries belong.

@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import { Link } from "react-router";
 import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { IconArrowRight } from "@tabler/icons-react";
 
 const GITHUB_URL = "https://github.com/genesiscosmos/downcity";
@@ -12,8 +13,11 @@ const GITHUB_URL = "https://github.com/genesiscosmos/downcity";
  * 2. 使用新的暖色主题与圆角按钮。
  */
 export const CTASection: FC = () => {
-  const { i18n, t } = useTranslation();
-  const isZh = i18n.language === "zh";
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 i18n.language 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale);
+  const isZh = locale === "zh";
   const docsPath = isZh ? "/zh/docs" : "/en/docs";
 
   return (

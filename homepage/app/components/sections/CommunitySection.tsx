@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { IconArrowUpRight, IconHelp, IconMap2, IconMessageCircle } from "@tabler/icons-react";
 import { COMMUNITY_LINKS } from "@/lib/community-links";
 
@@ -32,8 +33,11 @@ const communityLinks = [
  * 2. 视觉上与资源页保持同构，减少页面切换的断裂感。
  */
 export const CommunitySection: FC = () => {
-  const { i18n, t } = useTranslation();
-  const basePath = i18n.language.toLowerCase().startsWith("zh") ? "/zh/community" : "/community";
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 i18n.language 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale);
+  const basePath = locale === "zh" ? "/zh/community" : "/community";
 
   return (
     <section className="mx-auto max-w-[1320px] px-5 py-16 md:px-8 md:py-24 lg:px-20">
@@ -73,7 +77,7 @@ export const CommunitySection: FC = () => {
                 <p className="mt-2 text-sm leading-7 text-text-soft">{t(item.descriptionKey)}</p>
               </div>
               <span className="inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-                {i18n.language.toLowerCase().startsWith("zh") ? "进入" : "Open"}
+                {locale === "zh" ? "进入" : "Open"}
                 <IconArrowUpRight className="size-4" />
               </span>
             </a>

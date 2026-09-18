@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import {
   BotIcon,
   BrainIcon,
@@ -71,7 +72,10 @@ const scenarios = [
  * 3. 下方为场景列表与架构三栏说明。
  */
 export const FeaturesSection: FC = () => {
-  const { t } = useTranslation();
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 useTranslation() 的 t 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale);
 
   return (
     <section className="border-b border-line bg-background py-20 md:py-28">
@@ -80,10 +84,10 @@ export const FeaturesSection: FC = () => {
           <p className="mb-4 text-[0.78rem] font-medium uppercase tracking-[0.04em] text-text-soft">
             {t("features:sectionLabel")}
           </p>
-          <h2 className="font-serif text-[clamp(1.625rem,3vw,2.25rem)] font-bold leading-[1.12] tracking-[-0.02em] text-foreground">
+          <h1 className="font-serif text-[clamp(1.625rem,3vw,2.25rem)] font-bold leading-[1.12] tracking-[-0.02em] text-foreground">
             {t("features:title")}{" "}
             <span className="text-foreground/70">{t("features:titleItalic")}</span>
-          </h2>
+          </h1>
           <p className="mt-5 text-base leading-[1.65] text-text-soft">{t("features:description")}</p>
         </div>
 

@@ -20,6 +20,14 @@ The website is available in English and Chinese. All product documentation is pr
 - [Plugins docs](https://downcity.ai/en/plugins-docs/): extend agents with plugin capabilities.
 - [UI SDK docs](https://downcity.ai/en/ui-sdk-docs/): build interfaces for agent products.
 
+## Blog
+
+- [All articles](https://downcity.ai/en/blog/): the full list of Downcity articles.
+- [What is an agent harness?](https://downcity.ai/en/blog/what-is-an-agent-harness/): the runtime layer that turns a model into a working agent, and how it differs from a framework or MCP.
+- [The anatomy of an agent harness](https://downcity.ai/en/blog/the-anatomy-of-an-agent-harness/): one request traced end to end, the ten subsystems and what each one owns, plus a diagnostic table mapping production symptoms to missing subsystems.
+- [Agent harness vs MCP](https://downcity.ai/en/blog/agent-harness-vs-mcp/): why they are different layers rather than rivals, where each boundary sits, and how they compose for one tool call.
+- [智能体框架怎么选](https://downcity.ai/zh/blog/how-to-choose-an-agent-framework/)：先分清编排库、低代码平台与 Agent 运行时三类东西，再按四个维度选型（中文）。
+
 ## Community
 
 - [FAQ](https://downcity.ai/community/faq/): frequently asked questions about Downcity.

@@ -16,6 +16,9 @@ const docs_collections: DocsCollection[] = [
   { directory: "payments", route_prefix: "payments" },
   { directory: "plugins-docs", route_prefix: "plugins-docs" },
   { directory: "ui-sdk-docs", route_prefix: "ui-sdk-docs" },
+  // blog 不是文档，但 MDX → `/{lang}/{route_prefix}/<slug>` 的路径映射与文档一致，
+  // 复用同一套扫描可避免新增文章时漏配预渲染。
+  { directory: "blog", route_prefix: "blog" },
 ];
 
 /**
@@ -84,8 +87,11 @@ function get_prerender_paths() {
       "/zh/features",
       "/product",
       "/zh/product",
-      "/product/sdk",
-      "/zh/product/sdk",
+      // /product/sdk 已拆分，旧路径不再预渲染（由 public/_redirects 以 301 接管）。
+      "/product/city-sdk",
+      "/zh/product/city-sdk",
+      "/product/federation-sdk",
+      "/zh/product/federation-sdk",
       "/product/agent-sdk",
       "/zh/product/agent-sdk",
       "/product/ui-sdk",
@@ -98,6 +104,8 @@ function get_prerender_paths() {
       "/zh/resources/hosting",
       "/resources/marketplace",
       "/zh/resources/marketplace",
+      "/resources/examples",
+      "/zh/resources/examples",
       "/community",
       "/zh/community",
       "/community/faq",
@@ -112,6 +120,8 @@ function get_prerender_paths() {
       "/payments",
       "/plugins-docs",
       "/ui-sdk-docs",
+      "/en/blog",
+      "/zh/blog",
       "/api/search",
       "/api/city-sdk-docs/search",
       "/api/agent-sdk-docs/search",

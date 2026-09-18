@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { IconArrowRight, IconCheck, IconCopy, IconPlayerPlayFilled } from "@tabler/icons-react";
 import type { StartContent, StartPlatform } from "@/types/start-guide";
 
@@ -185,10 +185,11 @@ const START_GUIDE: Record<"zh" | "en", StartContent> = {
  * 首屏根据客户端系统选择安装方案，安装完成后继续展示跨平台一致的 Agent 启动路径。
  */
 export function StartGuideSection() {
-  const { i18n } = useTranslation();
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 i18n.language 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
   const [selected_platform, set_selected_platform] = useState<StartPlatform>("macos");
   const [copied_option, set_copied_option] = useState<string | null>(null);
-  const is_zh = i18n.language.toLowerCase().startsWith("zh");
+  const is_zh = locale === "zh";
   const content = is_zh ? START_GUIDE.zh : START_GUIDE.en;
   const platform = content.platforms.find((item) => item.id === selected_platform) ?? content.platforms[0];
   const docs_quickstart_path = is_zh ? "/zh/docs/quickstart/getting-started" : "/en/docs/quickstart/getting-started";

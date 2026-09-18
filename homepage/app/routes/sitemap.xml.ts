@@ -12,6 +12,7 @@ import { agentSdkDocsSource } from "@/lib/agent-sdk-docs-source";
 import { paymentsSource } from "@/lib/payments-source";
 import { pluginsDocsSource } from "@/lib/plugins-docs-source";
 import { uiSdkDocsSource } from "@/lib/ui-sdk-docs-source";
+import { blogSource } from "@/lib/blog-source";
 import { create_site_url, normalize_site_path } from "@/lib/seo";
 import type { SeoSitemapEntry } from "@/types/seo";
 
@@ -21,13 +22,16 @@ const localized_marketing_paths = [
   "/start/",
   "/features/",
   "/product/",
-  "/product/sdk/",
+  "/product/city-sdk/",
+  "/product/federation-sdk/",
   "/product/agent-sdk/",
   "/product/ui-sdk/",
-  "/resources/",
+  // "/resources/" 故意不入 sitemap：该路由只是客户端 Navigate 到 /resources/skills/ 的空壳页面，
+  // 让搜索引擎收录一个无内容的 JS 跳转页会浪费抓取预算并容易被判定为 soft 404。
   "/resources/skills/",
   "/resources/marketplace/",
   "/resources/hosting/",
+  "/resources/examples/",
   "/community/",
   "/community/faq/",
   "/community/roadmap/",
@@ -35,6 +39,25 @@ const localized_marketing_paths = [
 ] as const;
 
 const single_language_paths = ["/terms/", "/privacy/"] as const;
+
+/**
+ * Blog 列表页的双语条目。
+ *
+ * 文章页由 create_document_entries 从 content/blog 自动采集，但列表页不是 MDX，
+ * 不在其中，因此这里手工声明一对，保证 sitemap 里也带上 hreflang。
+ */
+const blog_index_entries: SeoSitemapEntry[] = [
+  {
+    pathname: "/en/blog/",
+    english_pathname: "/en/blog/",
+    chinese_pathname: "/zh/blog/",
+  },
+  {
+    pathname: "/zh/blog/",
+    english_pathname: "/en/blog/",
+    chinese_pathname: "/zh/blog/",
+  },
+];
 
 /**
  * 转义 XML 文本节点和属性值中的保留字符。
@@ -134,10 +157,15 @@ export function loader() {
     ...create_document_entries(paymentsSource.getPages()),
     ...create_document_entries(pluginsDocsSource.getPages()),
     ...create_document_entries(uiSdkDocsSource.getPages()),
+    ...create_document_entries(blogSource.getPages()),
   ];
   const unique_entries = new Map<string, SeoSitemapEntry>();
 
-  for (const entry of [...create_marketing_entries(), ...document_entries]) {
+  for (const entry of [
+    ...create_marketing_entries(),
+    ...blog_index_entries,
+    ...document_entries,
+  ]) {
     unique_entries.set(normalize_site_path(entry.pathname), entry);
   }
 

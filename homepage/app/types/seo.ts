@@ -167,3 +167,34 @@ export type SeoBreadcrumbStructuredData = {
   /** 从文档根到当前页的有序层级。 */
   itemListElement: readonly SeoBreadcrumbItemStructuredData[];
 };
+
+/** 文章页输出的 BlogPosting JSON-LD。 */
+export type SeoArticleStructuredData = {
+  /** JSON-LD 使用的 Schema.org 上下文。 */
+  "@context": "https://schema.org";
+  /** 声明当前页面为一篇文章。 */
+  "@type": "BlogPosting";
+  /** 文章标题，与页面 h1 保持一致。 */
+  headline: string;
+  /** 文章摘要，与页面 description 保持一致。 */
+  description: string;
+  /** 文章首次发布日期（ISO 8601 日期）。 */
+  datePublished: string;
+  /** 文章正文语言。 */
+  inLanguage: string;
+  /** 指向承载本文的页面实体。 */
+  mainEntityOfPage: {
+    /** Schema.org 网页实体类型。 */
+    "@type": "WebPage";
+    /** 本文的规范公开地址。 */
+    "@id": string;
+  };
+  /** 文章作者实体引用。 */
+  author: SeoStructuredDataReference;
+  /** 文章发布方实体引用。 */
+  publisher: SeoStructuredDataReference;
+  /** 本文主要讨论的软件实体引用，用于与首页实体图建立关联。 */
+  about: SeoStructuredDataReference;
+  /** 本文所属站点实体引用。 */
+  isPartOf: SeoStructuredDataReference;
+};

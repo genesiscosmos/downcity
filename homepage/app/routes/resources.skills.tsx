@@ -1,15 +1,17 @@
 import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { IconExternalLink } from "@tabler/icons-react";
-import { product } from "@/lib/product";
 import { create_page_meta, get_path_locale } from "@/lib/seo";
 import type { Route } from "./+types/resources.skills";
 
 export function meta({ location }: Route.MetaArgs) {
   const is_chinese = get_path_locale(location.pathname) === "zh";
-  const title = `${product.productName} — ${is_chinese ? "Skills 技能" : "Skills"}`;
+  const title = is_chinese
+    ? "Agent Skills 目录：可复用的 Agent 能力 — Downcity"
+    : "Agent Skills Directory: Reusable Capabilities — Downcity";
   const description = is_chinese
-    ? "查找可用于 Downcity Agent 的技能目录和插件资源。"
-    : "Skill directories and plugin resources";
+    ? "浏览用于扩展 Downcity Agent Harness 的 Skill 目录与插件资源，按需挂载可复用的能力。"
+    : "Browse skill directories and plugin resources that extend a Downcity agent harness with reusable, mountable capabilities.";
   return create_page_meta({
     title,
     description,
@@ -40,7 +42,10 @@ const skillDirectories = [
  * 2. 使用细线分隔卡片与柔和 hover 反馈。
  */
 export default function Skills() {
-  const { t } = useTranslation();
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 useTranslation() 的 t 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale);
 
   return (
     <div className="mx-auto max-w-[1320px] px-5 py-16 md:px-8 md:py-24 lg:px-20">

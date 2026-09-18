@@ -25,7 +25,8 @@ export const Footer: FC = () => {
 
   const homePath = isZh ? "/zh" : "/";
   const productPath = isZh ? "/zh/product" : "/product";
-  const productSdkPath = isZh ? "/zh/product/sdk" : "/product/sdk";
+  const productCitySdkPath = isZh ? "/zh/product/city-sdk" : "/product/city-sdk";
+  const productFederationSdkPath = isZh ? "/zh/product/federation-sdk" : "/product/federation-sdk";
   const productAgentSdkPath = isZh ? "/zh/product/agent-sdk" : "/product/agent-sdk";
   const productUiSdkPath = isZh ? "/zh/product/ui-sdk" : "/product/ui-sdk";
   const startPath = isZh ? "/zh/start" : "/start";
@@ -54,7 +55,8 @@ export const Footer: FC = () => {
         { label: t("footer.links.overview"), path: productPath },
         { label: isZh ? "快速开始" : "Quick Start", path: startPath },
         { label: "Agent SDK", path: productAgentSdkPath },
-        { label: "City SDK", path: productSdkPath },
+        { label: "City SDK", path: productCitySdkPath },
+        { label: "Federation SDK", path: productFederationSdkPath },
         { label: "UI SDK", path: productUiSdkPath },
         { label: t("footer.links.features"), path: featuresPath },
       ],

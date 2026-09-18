@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { IconFileText, IconSettings } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 
@@ -36,9 +37,11 @@ Chat Plugin
  * 2. 使用新主题变量，保持细边框与柔和背景。
  */
 export const CodePreviewSection: FC = () => {
-  const { i18n, t } = useTranslation();
+  const locale = use_interface_locale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale);
   const [active_tab, set_active_tab] = useState<"skill" | "config">("skill");
-  const is_zh = i18n.language.toLowerCase().startsWith("zh");
+  const is_zh = locale === "zh";
   const content = active_tab === "skill" ? SKILL_CONTENT : GLOBAL_CONFIG_CONTENT;
 
   return (

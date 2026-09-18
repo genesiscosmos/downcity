@@ -1,5 +1,24 @@
-import { useTranslation } from "react-i18next";
 import { ProductDetailSection, type ProductDetailContent } from "@/components/sections/ProductDetailSection";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
+import { create_page_meta, get_path_locale } from "@/lib/seo";
+import type { Route } from "./+types/ui-sdk";
+
+/** 子路由独立 meta，避免四个 /product/* 页共用同一组 title 与 description。 */
+export function meta({ location }: Route.MetaArgs) {
+  const is_chinese = get_path_locale(location.pathname) === "zh";
+
+  return create_page_meta({
+    title: is_chinese
+      ? "UI SDK：构建 Agent 工作台的可复用 UI 组件 — Downcity"
+      : "UI SDK: Reusable Components for Agent Workspaces — Downcity",
+    description: is_chinese
+      ? "复用 Downcity 面向 Agent 工作台的交互语言与组件模式，让团队更快搭建视觉与体验一致的 Agent 控制台。"
+      : "Reuse Downcity's agent workspace interaction language: component patterns derived from real product surfaces, so teams ship consistent agent consoles faster.",
+    pathname: location.pathname,
+    twitter_card: "summary_large_image",
+    localized: true,
+  });
+}
 
 const PAGE: Record<"zh" | "en", ProductDetailContent> = {
   zh: {
@@ -70,10 +89,11 @@ const PAGE: Record<"zh" | "en", ProductDetailContent> = {
 };
 
 export default function ProductUiSdkPage() {
-  const { i18n } = useTranslation();
-  const isZh = i18n.language.toLowerCase().startsWith("zh");
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 i18n.language 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
+  const isZh = locale === "zh";
   const content = isZh ? PAGE.zh : PAGE.en;
-  const docsPath = isZh ? "/zh/ui-sdk-docs" : "/en/ui-sdk-docs";
+  const docsPath = isZh ? "/zh/ui-sdk-docs/" : "/en/ui-sdk-docs/";
 
   return <ProductDetailSection content={content} docsPath={docsPath} isZh={isZh} />;
 }

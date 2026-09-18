@@ -1,20 +1,34 @@
 import { useTranslation } from "react-i18next";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { product } from "@/lib/product";
 import { marketingTheme } from "@/lib/marketing-theme";
 import {
   MarketingPanel,
   marketingTagClass,
 } from "@/components/shared/marketing-elements";
+import { create_page_meta, get_path_locale } from "@/lib/seo";
+import type { Route } from "./+types/resources.examples";
 
-export function meta() {
-  const title = `${product.productName} — Examples`;
-  const description = "Explore example projects and starters built with Downcity";
-  return [
-    { title },
-    { name: "description", content: description },
-    { property: "og:title", content: title },
-    { property: "og:description", content: description },
-  ];
+/**
+ * 示例页元信息。
+ *
+ * 必须走 create_page_meta：Footer 全站链接到本页，早期只返回裸 title/description，
+ * 会让页面丢失 canonical 与 hreflang。
+ */
+export function meta({ location }: Route.MetaArgs) {
+  const is_chinese = get_path_locale(location.pathname) === "zh";
+
+  return create_page_meta({
+    title: is_chinese
+      ? "Agent 示例项目与 Starter — Downcity"
+      : "Agent Examples and Starters — Downcity",
+    description: is_chinese
+      ? "浏览可运行的 Downcity 示例项目与 Starter：交互式 CLI Agent，以及带 cron、Webhooks 与审批的 Server Agent。"
+      : "Explore runnable Downcity example projects and starters, including an interactive CLI agent and a server agent with cron, webhooks, and approvals.",
+    pathname: location.pathname,
+    twitter_card: "summary_large_image",
+    localized: true,
+  });
 }
 
 const examples = [
@@ -33,7 +47,10 @@ const examples = [
 ] as const;
 
 export default function Examples() {
-  const { t } = useTranslation();
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 useTranslation() 的 t 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
+  const { i18n } = useTranslation();
+  const t = i18n.getFixedT(locale);
   const repoUrl =
     product.homepage?.includes("github.com") === true
       ? product.homepage

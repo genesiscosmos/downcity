@@ -1,18 +1,43 @@
 import { Link } from "react-router";
-import { useTranslation } from "react-i18next";
 import {
   IconAppWindow,
   IconArrowRight,
   IconBuildingSkyscraper,
   IconRobot,
 } from "@tabler/icons-react";
+import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
+import { create_page_meta, get_path_locale } from "@/lib/seo";
+import type { Route } from "./+types/index";
+
+/**
+ * 产品矩阵总览页元信息。
+ *
+ * 说明：子路由必须各自导出 meta，否则会继承 product.tsx 的标题与描述，
+ * 导致 /product/、/product/sdk/、/product/agent-sdk/、/product/ui-sdk/
+ * 四个页面出现完全重复的 title 与 description。
+ */
+export function meta({ location }: Route.MetaArgs) {
+  const is_chinese = get_path_locale(location.pathname) === "zh";
+
+  return create_page_meta({
+    title: is_chinese
+      ? "面向 AI Builders 的 Agent 基础设施产品矩阵 — Downcity"
+      : "Agent Infrastructure Product Matrix — Downcity",
+    description: is_chinese
+      ? "Downcity 的 Agent 基础设施产品矩阵：本地运行时的 CLI、可复用的 Federation 与 City SDK、用于嵌入的 Agent SDK，以及搭建工作台的 UI SDK。"
+      : "The Downcity agent infrastructure product matrix: CLI for local runtimes, Federation and City SDKs, Agent SDK for embedding, and UI SDK for workspaces.",
+    pathname: location.pathname,
+    twitter_card: "summary_large_image",
+    localized: true,
+  });
+}
 
 const page_content = {
   zh: {
     badge: "Product",
     title: "给 AI builders 的 Agent 基础设施产品矩阵",
     subtitle:
-      "Downcity 不是单点工具，而是一套可复用运行层：本地 Agent 宿主、Agent SDK、City SDK 与 UI SDK 共同支撑多个 Agent 产品和工作流。",
+      "Downcity 不是单点工具，而是一套可复用运行层：本地 Agent 宿主、City SDK、Federation SDK、Agent SDK、UI SDK 与官方服务共同支撑多个 Agent 产品和工作流。",
     logicBadge: "Product Logic",
     logicTitle: "Products、Agents 与 City Runtime",
     logicSubtitle:
@@ -33,31 +58,50 @@ const page_content = {
         title: "Downcity CLI",
         desc: "官方命令行：初始化、启动、管理和调试本地 Agent runtime。",
         source: "app/cli/",
+        href: "/zh/docs/cli/overview/",
       },
       {
-        id: "sdk",
+        id: "city-sdk",
         title: "City SDK",
-        desc: "把模型目录、Service 路由、身份、用量、余额和支付接入你的产品体系。",
+        desc: "托管本地 Agent 实例，并通过 Service、Action 与 AIService 边界把能力开放给产品客户端。",
         source: "packages/city/",
+        href: "/zh/product/city-sdk",
+      },
+      {
+        id: "federation-sdk",
+        title: "Federation SDK",
+        desc: "模型目录、Service 路由、身份、环境变量、用量、余额与支付，一套后端支撑多个 Agent 产品。",
+        source: "packages/federation/",
+        href: "/zh/product/federation-sdk",
       },
       {
         id: "agent-sdk",
         title: "Agent SDK",
         desc: "把本地 Agent、RemoteAgent、Session 与 City 资源组合进你的应用流程。",
         source: "packages/agent/",
+        href: "/zh/product/agent-sdk",
       },
       {
         id: "ui-sdk",
         title: "Downcity UI SDK",
         desc: "复用 Downcity 的 UI 组件思路，快速搭建你的 Agent 工作台。",
         source: "packages/ui/",
+        href: "/zh/product/ui-sdk",
+      },
+      {
+        id: "services",
+        title: "Services 与支付",
+        desc: "账号、Credits、Payment 与 Usage 四类官方服务，把计费与用量接进你的 Agent 产品。",
+        source: "packages/implementations/services/",
+        href: "/zh/payments/",
       },
     ],
     factsTitle: "产品事实",
     facts: [
       "Downcity 面向 AI builders：核心价值是让多个 Agent 产品复用同一套运行基础设施。",
       "Downcity CLI：官方命令行实现，目录为 app/cli/。",
-      "City SDK：核心 runtime 与服务访问方式位于 packages/city/。",
+      "City SDK：City 宿主与 HTTP/RPC 转发能力位于 packages/city/。",
+      "Federation SDK：模型目录、Service 路由、身份、用量、计费与支付位于 packages/federation/。",
       "Agent SDK：本地 Agent / RemoteAgent SDK 位于 packages/agent/。",
       "Downcity UI SDK：React + Tailwind 组件包目录为 packages/ui/。",
     ],
@@ -66,7 +110,7 @@ const page_content = {
     badge: "Product",
     title: "Agent infrastructure products for AI builders",
     subtitle:
-      "Downcity is not one tool. It is one reusable runtime layer across local agent hosting, Agent SDK, City SDK, and UI SDK for many agent products and workflows.",
+      "Downcity is not one tool. It is one reusable runtime layer across local agent hosting, City SDK, Federation SDK, Agent SDK, UI SDK, and official services for many agent products and workflows.",
     logicBadge: "Product Logic",
     logicTitle: "Products, Agents, and City Runtime",
     logicSubtitle:
@@ -87,31 +131,50 @@ const page_content = {
         title: "Downcity CLI",
         desc: "The official CLI for initializing, starting, managing, and debugging local agent runtime.",
         source: "app/cli/",
+        href: "/en/docs/cli/overview/",
       },
       {
-        id: "sdk",
+        id: "city-sdk",
         title: "City SDK",
-        desc: "Bring model catalogs, service routing, auth, usage, balance, and payment capabilities into your product flow.",
+        desc: "Host local Agent instances and expose them to product clients behind a Service, Action, and AIService boundary.",
         source: "packages/city/",
+        href: "/product/city-sdk",
+      },
+      {
+        id: "federation-sdk",
+        title: "Federation SDK",
+        desc: "Model catalogs, service routing, auth, runtime env, usage, balance, and payment: one backend for many agent products.",
+        source: "packages/federation/",
+        href: "/product/federation-sdk",
       },
       {
         id: "agent-sdk",
         title: "Agent SDK",
         desc: "Embed local agents, RemoteAgent clients, sessions, and host extension ports into your application flow.",
         source: "packages/agent/",
+        href: "/product/agent-sdk",
       },
       {
         id: "ui-sdk",
         title: "Downcity UI SDK",
         desc: "Reuse Downcity UI patterns to build your own agent-facing workspace faster.",
         source: "packages/ui/",
+        href: "/product/ui-sdk",
+      },
+      {
+        id: "services",
+        title: "Services & Payment",
+        desc: "Official accounts, credits, payment, and usage services that bring billing and metering into your agent product.",
+        source: "packages/implementations/services/",
+        href: "/en/payments/",
       },
     ],
     factsTitle: "Product Facts",
     facts: [
       "Downcity is for AI builders: the core value is reusing one runtime infrastructure across many agent products.",
       "Downcity CLI is the official command-line implementation under app/cli/.",
-      "City SDK runtime and service access helpers live in packages/city/.",
+      "City SDK host and HTTP/RPC forwarding capabilities live in packages/city/.",
+      "Federation SDK owns model catalogs, service routing, auth, usage, billing, and payment in packages/federation/.",
       "Agent SDK local Agent and RemoteAgent runtime are in packages/agent/.",
       "Downcity UI SDK is the React + Tailwind component package under packages/ui/.",
     ],
@@ -126,10 +189,10 @@ const page_content = {
  * 3. 事实列表使用简洁面板。
  */
 export default function ProductOverviewPage() {
-  const { i18n } = useTranslation();
-  const is_zh = i18n.language.toLowerCase().startsWith("zh");
+  // 语言必须来自 URL：i18next 单例在服务端固定为 en，用 i18n.language 会把 /zh/ 预渲染成英文正文。
+  const locale = use_interface_locale();
+  const is_zh = locale === "zh";
   const content = is_zh ? page_content.zh : page_content.en;
-  const base_path = is_zh ? "/zh/product" : "/product";
 
   return (
     <div className="mx-auto max-w-[1320px] px-5 py-16 md:px-8 md:py-24 lg:px-20">
@@ -146,11 +209,11 @@ export default function ProductOverviewPage() {
 
         <ProductLogicSection content={content} />
 
-        <section className="grid grid-cols-1 gap-px overflow-hidden rounded-[14px] bg-line sm:grid-cols-2">
+        <section className="grid grid-cols-1 gap-px overflow-hidden rounded-[14px] bg-line sm:grid-cols-2 lg:grid-cols-3">
           {content.cards.map((card) => (
             <Link
               key={card.id}
-              to={`${base_path}/${card.id}`}
+              to={card.href}
               className="group bg-card p-6 transition-colors hover:bg-background md:p-8"
             >
               <p className="font-mono text-[0.7rem] uppercase tracking-[0.06em] text-text-subtle">{card.source}</p>

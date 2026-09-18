@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
 import { COMMUNITY_LINKS } from "@/lib/community-links";
-import { product } from "@/lib/product";
 import { cn } from "@/lib/utils";
 import { create_page_meta, get_path_locale } from "@/lib/seo";
 import {
@@ -13,10 +12,12 @@ import type { Route } from "./+types/community.faq";
 
 export function meta({ location }: Route.MetaArgs) {
   const is_chinese = get_path_locale(location.pathname) === "zh";
-  const title = `${product.productName} — ${is_chinese ? "常见问题" : "FAQ"}`;
+  const title = is_chinese
+    ? "Agent Harness 常见问题：模型、记忆与部署 — Downcity"
+    : "Agent Harness FAQ: Models, Memory, Deployment — Downcity";
   const description = is_chinese
-    ? "查看关于 Downcity 的常见问题与解答。"
-    : "Frequently asked questions about Downcity";
+    ? "关于 Downcity 的常见问题解答：可用模型、Agent 记忆如何工作、权限边界、多 Agent 协作与部署方式。"
+    : "Answers to common questions about Downcity: which models you can use, how agent memory works, permissions, multi-agent setups, and deployment.";
   return create_page_meta({
     title,
     description,
