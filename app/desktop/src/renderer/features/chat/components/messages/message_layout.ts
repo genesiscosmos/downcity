@@ -63,7 +63,7 @@ export const agent_identity_row_class_name = "flex min-w-0 items-center gap-1.5 
  * 从 20px 提到 24px 是为了与 `base`（15px）正文的比例：头像略高于一行文字。
  * 20px 在这个比例下更像「一个图标」，24px 才读得出「一个人」。
  */
-export const agent_identity_avatar_class_name = "size-6 rounded";
+export const agent_identity_avatar_class_name = "size-6 rounded-chip";
 
 /**
  * 身份行名称：`sm`（13px）。

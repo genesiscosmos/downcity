@@ -29,7 +29,12 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --radius: 0.625rem;
+  /*
+   * 这里曾定义 `--radius: 0.625rem`（10px），但它在 Tailwind 的圆角档位表上没有位置
+   * （档位是 4/6/8/12/16），全库也只服务 1 处（代码块容器）。
+   * 已删除，改用角色令牌 `--radius-surface`（12px）；两者肉眼几乎不可辨。
+   * 圆角角色表见 styles/tokens.css。
+   */
 }
 
 .dark {

@@ -89,7 +89,23 @@ test("复制按钮与消息操作栏同形：常显、尺寸、圆角、焦点�
   const width = read_rem(read_declaration(rule, "width", "复制按钮"), "复制按钮宽度");
   const height = read_rem(read_declaration(rule, "height", "复制按钮"), "复制按钮高度");
   assert.ok(width >= 24 && height >= 24, `复制按钮小于 WCAG 2.2 的 24px 目标尺寸：${width}×${height}`);
-  assert.equal(read_declaration(rule, "border-radius", "复制按钮"), "0.375rem", "复制按钮圆角应与图标按钮一致（rounded-md）");
+  /*
+   * 圆角改成角色令牌后，断言从「字面量等于 0.375rem」改成「取 --radius-control」，
+   * 并**交叉核对角色值确实等于图标按钮用的 rounded-md**。
+   * 原始意图是「与消息操作栏的图标按钮同形」，那个意图没变，只是两侧现在
+   * 一个用工具类（rounded-md）、一个用 CSS 令牌（var），需要显式verify 两者等值。
+   */
+  assert.equal(
+    read_declaration(rule, "border-radius", "复制按钮"),
+    "var(--radius-control)",
+    "复制按钮圆角应取角色令牌 --radius-control",
+  );
+  const control_value = /--radius-control:\s*([^;]+);/.exec(fs.readFileSync(path.join(renderer_root, "styles/tokens.css"), "utf8"));
+  assert.equal(
+    control_value?.[1]?.trim(),
+    "0.375rem",
+    "--radius-control 不再是 0.375rem：复制按钮会与消息操作栏的图标按钮（rounded-md）不一致",
+  );
   assert.ok(read_declaration(rule, "color", "复制按钮").includes("var(--muted-foreground)"), "默认色应与图标按钮一致");
 });
 

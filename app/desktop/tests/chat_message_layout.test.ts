@@ -295,7 +295,7 @@ test("两个形态共用同一份身份行与 Footer 几何", () => {
    * 因此 `py-0.5` 不再是触控垫高而是行间呼吸；两者一起决定身份行的 28px 高度。
    */
   assert.ok(read_class_name(layout_source, "agent_identity_row_class_name").includes("py-0.5"), "身份行没有纵向内边距，头像会贴住正文");
-  assert.equal(read_class_name(layout_source, "agent_identity_avatar_class_name"), "size-6 rounded", "身份行头像不再是 24px：身份行高度会随之变化，消息与「思考中」状态行的正文起点必须同步核对");
+  assert.equal(read_class_name(layout_source, "agent_identity_avatar_class_name"), "size-6 rounded-chip", "身份行头像不再是 24px：身份行高度会随之变化，消息与「思考中」状态行的正文起点必须同步核对");
   assert.equal(
     read_class_name(layout_source, "agent_identity_name_class_name"),
     "min-w-0 truncate text-sm font-medium text-foreground",

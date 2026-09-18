@@ -14,10 +14,10 @@ function ChatAttachmentView({ node, deleteNode }: NodeViewProps) {
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
     <span contentEditable={false} className="mention group/chat-attachment relative inline-flex max-w-[14rem] items-center rounded-md bg-surface-emphasis align-middle text-2xs font-medium text-foreground shadow-none transition-colors [box-shadow:none] [filter:none] hover:bg-interaction-hover">
       <span className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-[inherit] px-1.5 py-0.5 text-left outline-none">
-        {image ? <span className="inline-flex size-4 shrink-0 overflow-hidden rounded bg-surface-emphasis transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><img src={attributes.data_url} alt="" className="size-full object-cover" draggable={false} /></span> : <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><TbFile className="size-3" /></span>}
+        {image ? <span className="inline-flex size-4 shrink-0 overflow-hidden rounded-chip bg-surface-emphasis transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><img src={attributes.data_url} alt="" className="size-full object-cover" draggable={false} /></span> : <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><TbFile className="size-3" /></span>}
         <span className="min-w-0 truncate leading-4">{attributes.filename}</span>
       </span>
-      <button type="button" className="absolute left-1 top-1/2 inline-flex size-3.5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-interaction-hover hover:text-foreground focus-visible:opacity-100 group-hover/chat-attachment:opacity-100 group-focus-within/chat-attachment:opacity-100" title={translate("composer.remove_attachment")} onClick={deleteNode}><TbX className="size-2.5" /></button>
+      <button type="button" className="absolute left-1 top-1/2 inline-flex size-3.5 -translate-y-1/2 items-center justify-center rounded-chip text-muted-foreground opacity-0 transition-all hover:bg-interaction-hover hover:text-foreground focus-visible:opacity-100 group-hover/chat-attachment:opacity-100 group-focus-within/chat-attachment:opacity-100" title={translate("composer.remove_attachment")} onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>
   </NodeViewWrapper>;
 }
@@ -43,7 +43,7 @@ function ChatDataView({ node, deleteNode }: NodeViewProps) {
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
     <span contentEditable={false} className="group/chat-data relative inline-flex max-w-[16rem] items-center rounded-md bg-surface-emphasis align-middle text-2xs font-medium text-foreground">
       <span className="inline-flex min-w-0 items-center gap-1 px-1.5 py-0.5"><TbBraces className="size-3 text-muted-foreground" /><span className="truncate">{attributes.data_type}</span></span>
-      <button type="button" className="mr-1 inline-flex size-3.5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/chat-data:opacity-100" onClick={deleteNode}><TbX className="size-2.5" /></button>
+      <button type="button" className="mr-1 inline-flex size-3.5 items-center justify-center rounded-chip text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/chat-data:opacity-100" onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>
   </NodeViewWrapper>;
 }

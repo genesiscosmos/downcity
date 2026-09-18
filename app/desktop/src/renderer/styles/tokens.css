@@ -176,7 +176,73 @@
   --leading-chat: 1.6;
 }
 
+/*
+ * 圆角角色：按**层级**取，不按元素大小取。
+ *
+ * | 角色 | 值 | 用在哪 |
+ * | --- | --- | --- |
+ * | `chip` | 0.25rem / 4px | 容器内小元素：chip、badge、计数、迷你按钮 |
+ * | `control` | 0.375rem / 6px | 控件：按钮、输入框、下拉触发器 |
+ * | `item` | 0.5rem / 8px | 列表项、菜单项、卡片内的块 |
+ * | `surface` | 0.75rem / 12px | 容器外框：卡片、面板、浮层、消息气泡 |
+ * | `shell` | 1rem / 16px | 页面级容器、全屏面板 |
+ *
+ * 圆形用 `rounded-full`，贴边用 `rounded-none`，不另立令牌。
+ * 完整角色表与判断顺序见 `docs/desktop-dimension-scale-design.md`。
+ *
+ * ## 两个推导依据
+ *
+ * 1. **嵌套公式** `inner = outer − gap`。角色是有序的（相邻差 2–4px），
+ *    因此任意内边距下都不会出现「内层比外层还圆」——那种错肉眼能看出但说不出哪里错。
+ * 2. **短边比例上限** `radius ≤ 短边 × 1/4`。超过就读成药丸，不再是圆角矩形。
+ *    这一条**无法静态守卫**（需要运行时元素高度），只能靠 review。
+ *
+ * ## 为什么写在普通 `@theme` 而不是 `@theme inline`
+ *
+ * 实测 Tailwind v4 的四种写法（字面量 vs `var()` 引用 会走不同分支）：
+ *
+ * | 写法 | 发出运行时 `:root` 变量 | 工具类 |
+ * | --- | --- | --- |
+ * | `@theme` + 字面量 | ✅ | `border-radius: var(--radius-x)` |
+ * | `@theme` + `var()` 引用 | ✅ | `var(--radius-x)` |
+ * | `@theme inline` + 字面量 | ❌ | 字面量（内联） |
+ * | `@theme inline` + `var()` 引用 | ✅ | `var(--radius-x)` |
+ *
+ * 圆角同时在两处消费：tsx 里用工具类（`rounded-surface`），样式表里用
+ * `var(--radius-surface)`（如 `chat.css` 的 `.interaction-card`）。
+ * 后者要求变量真的存在于 `:root`，因此必须用普通 `@theme` + 字面量。
+ *
+ * ## 一个容易误以为“没事”的陷阱
+ *
+ * 只要样式表里存在 `var(--radius-x)` 引用，Tailwind 就会把该变量**保留下来**
+ *（实测：inline + 字面量在「无 CSS 引用」时不发出、「有 CSS 引用」时发出）。
+ * 而本项目确实在用 `var(--radius-*)`，所以就算把角色表改成 `@theme inline`，
+ * 产物仍然正确——但那份正确建立在「别处恰好引用了这个变量」上。
+ * 一旦那些引用改成工具类，变量就静默消失、圆角变 0。
+ * `radius_scale.test.ts` 因此额外做了一条**源码级**断言：角色表必须写在普通 `@theme` 里。
+ *
+ * ## 取值与 Tailwind 原生档位等值
+ *
+ * `chip`=`sm`、`control`=`md`、`item`=`lg`、`surface`=`xl`、`shell`=`2xl`，
+ * 逐字节相等（0.25 / 0.375 / 0.5 / 0.75 / 1rem）。
+ * 这是**有意**的：圆角是视觉量，不另造数值阶梯（详见设计文档 §4.3）。
+ * 代价是 `--radius: 0.625rem`（10px）这种「介于两档之间」的值无法表达——
+ * 它已被删除，因为全库只服务 1 处，且 10 与 12px 肉眼几乎不可辨。
+ */
+@theme {
+  --radius-chip: 0.25rem;
+  --radius-control: 0.375rem;
+  --radius-item: 0.5rem;
+  --radius-surface: 0.75rem;
+  --radius-shell: 1rem;
+}
+
 @theme inline {
+  /*
+   * 浮层别名：`floating-surface` = `surface`、`floating-item` = `item`。
+   * 是同一套角色的早期版本（当时只覆盖浮层），保留是为了兼容现有调用点，
+   * 待迁移到 `rounded-surface` / `rounded-item` 后删除。
+   */
   --radius-floating-surface: var(--radius-xl);
   --radius-floating-item: var(--radius-lg);
   --color-surface-subtle: var(--surface-subtle);

@@ -153,7 +153,7 @@ radius ≤ 短边 × 1/4
 | 现状 | 处数 | 目标 | 是否等值 |
 | --- | --- | --- | --- |
 | `rounded-sm` | 3 | `rounded-chip` | 等值（4px） |
-| `rounded` | 17 | `rounded-chip` | 等值（都是 4px）——**顺带消除同值两名** |
+| `rounded` | 11 | `rounded-chip` | 等值（都是 4px）——**已在第一步完成**，顺带消除同值两名 |
 | `rounded-md` | 43 | 按角色判断：按钮/输入框 → `rounded-control`；列表项 → `rounded-item` | 多数等值 |
 | `rounded-lg` | 62 | 按角色判断：容器 → `rounded-surface`；列表项 → `rounded-item` | 部分变值（8px → 12px，容器那 17 处） |
 | `rounded-xl` | 21 | 容器 → `rounded-surface`（等值）；控件 → `rounded-control` | 部分变值 |
@@ -303,12 +303,28 @@ cd app/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./nod
 
 ### 第一步：修缩放缺陷（共 19 处 CSS，低风险）
 
-1. 在 `tokens.css` 补角色令牌：`--radius-chip` / `--radius-control` / `--radius-item` / `--radius-surface` / `--radius-shell`，并在 `@theme inline` 里映射成 `rounded-*` 工具类（照现有的 `--radius-floating-surface` 写法）。
+1. 在 `tokens.css` 补角色令牌：`--radius-chip` / `--radius-control` / `--radius-item` / `--radius-surface` / `--radius-shell`。
+   **必须写在普通 `@theme` 块里、值用字面量**，不能写进 `@theme inline`：
+
+   | 写法 | 发出运行时 `:root` 变量 | 工具类 |
+   | --- | --- | --- |
+   | `@theme` + 字面量 | ✅ | `border-radius: var(--radius-x)` |
+   | `@theme` + `var()` 引用 | ✅ | `var(--radius-x)` |
+   | `@theme inline` + 字面量 | ❌ | 字面量（内联） |
+   | `@theme inline` + `var()` 引用 | ✅ | `var(--radius-x)` |
+
+   样式表里要用 `var(--radius-*)`（如 `chat.css` 的 `.interaction-card`），
+   所以变量必须真的存在于 `:root`。另注意一个会让人误以为“没事”的行为：
+   **只要样式表里存在 `var(--radius-x)` 引用，Tailwind 就会保留该变量**——
+   就算写成 inline，产物当下也对，但那份正确建立在“别处恰好引用了它”上。
+   `radius_scale.test.ts` 因此额外做了一条源码级断言，把这种侥幸形式拦住。
 2. 改掉 15 处 px 字面量（**修缩放**）、3 处 rem 字面量（走令牌）、1 处 `var(--radius)`。
 3. 删除 `--radius: 0.625rem`。
-4. 跑测试与 typecheck。
+4. **把裸用的 `rounded` 改成 `rounded-chip`**（11 处）：它与 `rounded-sm` 同值（0.25rem），
+   两个名字一个值会让人以为两者有别。等值改名，零视觉变化。
+5. 跑测试与 typecheck。
 
-**风险**：低。**CSS 层视觉变化只有 4 处**（`5px`→4px 三处、代码块 10px→12px 一处）；滚动条那两处是零变化（§4.6）。其余为等值修正。
+**风险**：低。**CSS 层视觉变化只有 4 处**（`5px`→4px 三处、代码块 10px→12px 一处）；滚动条那两处是零变化（§4.6）。其余为等值修正（含 11 处 `rounded`→`rounded-chip`）。
 
 ### 第二步：角色语义化（202 处调用点）
 
