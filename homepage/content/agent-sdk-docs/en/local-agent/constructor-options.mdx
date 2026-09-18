@@ -262,32 +262,26 @@ model, instructions, Tools, and Sessions. Web capabilities still require host co
 
 ## `session_composer`
 
-Use a factory when you only need to customize model input or the context policy. The factory is called once for every created, restored, or forked Session, so Composer and Policy instances are never shared across Sessions.
+Use a factory when you only need to customize model input or context maintenance. The factory is called once for every created, restored, or forked Session, so Composer instances are never shared across Sessions.
 
 ```ts
-import {
-  Agent,
-  AdaptivePartContextPolicy,
-  DefaultSessionComposer,
-} from "@downcity/agent";
+import { Agent, DefaultSessionComposer } from "@downcity/agent";
 
 const agent = new Agent({
   id: "repo-helper",
-  session_composer: () => new DefaultSessionComposer({
-    context_policy: new AdaptivePartContextPolicy(),
-  }),
+  session_composer: () => new DefaultSessionComposer(),
 });
 ```
 
-### What a Session Composer can customize
+### What a Session Composer is
 
-One `SessionComposer` replaces the previous System, History, Context, and Compaction composer pipeline. A custom Session only needs one composer:
+A Composer is the single place that answers what the model sees this step. The caller passes canonical history and the derived store in, and the Composer reads them to produce the model input:
 
 | Method | Purpose |
 | --- | --- |
-| `initialize(input)` | Initialize the selected Policy's derived tables in this Session's `session.db` |
+| `initialize(input)` | Initialize its own derived schema in this Session's `session.db`; implementations without derived state may leave this empty |
 | `compose(input)` | Return the `system`, `messages`, and `tools` for the current model Step |
-| `recover_context(input)` | Advance Policy-derived context after real usage pressure or a provider context-limit error |
+| `advance_context(input)` | Try to advance derived state under a `usage_pressure` or `provider_context_limit` trigger; return `true` when something actually advanced |
 
 `compose(input)` may:
 
@@ -295,4 +289,6 @@ One `SessionComposer` replaces the previous System, History, Context, and Compac
 - filter, transform, or inject model messages for the current Step
 - change the tools visible to the current Step
 
-A Composer does not consume the Prompt Queue, control Turns, or modify canonical Messages. Its Context Policy may only write namespaced, rebuildable derived tables. Use `session_class` only when replacing Session behavior itself.
+Compaction is not a separate concept; it is one implementation of `advance_context()`. `FullHistorySessionComposer` is the built-in implementation that never advances derived state. To use a different compaction algorithm, extend `DefaultSessionComposer` and override `advance_context()`.
+
+A Composer does not consume the Prompt Queue, control Turns, or modify canonical Messages. It may only write rebuildable derived tables namespaced as `composer_<name>_*`. Use `session_class` only when replacing Session behavior itself.

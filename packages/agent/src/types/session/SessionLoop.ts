@@ -5,7 +5,7 @@
  */
 
 import type { SessionApprovalPort } from "@/types/executor/SessionTurnContext.js";
-import type { ShellApprovalGateway } from "@downcity/type";
+import type { SessionHookRuntime, ShellApprovalGateway } from "@downcity/type";
 import type { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import type { SessionMessages } from "@/session/SessionMessages.js";
 import type { SessionState } from "@/session/SessionState.js";
@@ -14,7 +14,13 @@ import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
 } from "@downcity/type";
-import type { SessionExecutor } from "@/types/session/SessionExecution.js";
+import type {
+  SessionComposer,
+  SessionComposeInput,
+  SessionContextAdvanceTrigger,
+  SessionStepInput,
+} from "@/types/session/SessionComposer.js";
+import type { SessionExecutorPort } from "@/session/runner/SessionExecutor.js";
 import type { SessionQueue } from "@/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
@@ -50,8 +56,26 @@ export interface SessionLoopOptions {
   session_origin: SessionOrigin;
   /** 当前 Session 所属 Workspace 的绝对根目录。 */
   workspace_path: string;
-  /** 当前 Session 的模型执行器。 */
-  executor: SessionExecutor;
+  /**
+   * 已装配的执行器。
+   *
+   * 关键点（中文）：省略时由 `composer` 与 `get_compose_input` 现场装配；传入后本 Loop
+   * 不再需要 Composer 输入，只调用该执行器。
+   */
+  executor?: SessionExecutorPort;
+  /** 当前 Session 使用的统一 Composer；注入执行器时可省略。 */
+  composer?: SessionComposer;
+  /** 为 Composer 创建当前 Step 的只读输入快照；注入执行器时可省略。 */
+  get_compose_input?: (
+    turn_context: SessionTurnContext,
+    advance_count: number,
+  ) => Promise<SessionComposeInput>;
+  /** 应用 Session 级冻结 system snapshot；省略时直接使用 Composer 结果。 */
+  apply_system_snapshot?: (input: SessionStepInput) => SessionStepInput;
+  /** 创建当前 Session effective City 扩展执行视图。 */
+  get_hooks?: () => SessionHookRuntime;
+  /** 请求当前 Composer 推进派生上下文状态。 */
+  advance_context: (trigger: SessionContextAdvanceTrigger) => Promise<boolean>;
   /** Turn 结束后按需维护 Composer 派生上下文。 */
   maintain_context: () => Promise<void>;
   /** 当前 Session 的配置与 Metadata 状态。 */

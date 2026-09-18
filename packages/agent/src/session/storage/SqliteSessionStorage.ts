@@ -32,8 +32,8 @@ import {
   SESSION_STORAGE_SCHEMA_VERSION,
 } from "@/session/storage/SessionStorageSchema.js";
 import type {
-  SessionComposerStorage,
-  SessionComposerStorageTransaction,
+  SessionDerivedStore,
+  SessionDerivedStoreTransaction,
   SessionMessageCreateState,
   SessionMessageStorageStats,
   SessionMessageUpdate,
@@ -353,25 +353,24 @@ export class SqliteSessionStorage implements SessionStorage {
     });
   }
 
-  /** 创建只允许当前 namespace 派生表的 Composer 存储。 */
-  composer_storage(namespace: string): SessionComposerStorage {
-    const normalized_namespace = normalize_composer_namespace(namespace);
+  /** 创建只允许当前 namespace 派生表的 Composer 派生存储。 */
+  derived_store(namespace: string): SessionDerivedStore {
+    const normalized_namespace = normalize_derived_namespace(namespace);
     const table_prefix = `composer_${normalized_namespace}_`;
     return {
-      list_messages: async () => await this.list_messages(),
-      transaction: async <T>(operation: (transaction: SessionComposerStorageTransaction) => T) => {
+      transaction: async <T>(operation: (transaction: SessionDerivedStoreTransaction) => T) => {
         await this.initialize();
         return this.run_transaction(() => operation({
           execute: (sql, parameters) => {
-            assert_policy_sql(sql, table_prefix);
+            assert_derived_sql(sql, table_prefix);
             this.run_statement(sql, parameters);
           },
           get: <TRow>(sql: string, parameters?: readonly SessionStorageValue[]) => {
-            assert_policy_sql(sql, table_prefix);
+            assert_derived_sql(sql, table_prefix);
             return (this.get_statement(sql, parameters) as TRow | undefined) ?? null;
           },
           all: <TRow>(sql: string, parameters?: readonly SessionStorageValue[]) => {
-            assert_policy_sql(sql, table_prefix);
+            assert_derived_sql(sql, table_prefix);
             return this.all_statement(sql, parameters) as TRow[];
           },
         }));
@@ -741,25 +740,25 @@ interface SessionStateRow {
 }
 
 /** 校验 Composer 派生表 namespace。 */
-function normalize_composer_namespace(value: string): string {
+function normalize_derived_namespace(value: string): string {
   const namespace = String(value || "").trim();
   if (!/^[a-z][a-z0-9_]*$/u.test(namespace)) {
-    throw new Error("Composer storage namespace must use lowercase snake_case");
+    throw new Error("Composer derived namespace must use lowercase snake_case");
   }
   return namespace;
 }
 
-/** 限制派生 SQL 的写目标，避免内置 Policy 修改 canonical 表。 */
-function assert_policy_sql(sql: string, table_prefix: string): void {
+/** 限制派生 SQL 的写目标，避免 Composer 修改 canonical 表。 */
+function assert_derived_sql(sql: string, table_prefix: string): void {
   const source = String(sql || "").trim();
-  if (!source) throw new Error("Composer storage SQL cannot be empty");
+  if (!source) throw new Error("Composer derived SQL cannot be empty");
   if (
     /\b(?:ATTACH|DETACH|VACUUM|PRAGMA|REINDEX|ANALYZE|ALTER)\b/iu.test(source) ||
     /\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/iu.test(source) ||
     /\bCREATE\s+TRIGGER\b/iu.test(source) ||
     /\bDROP\s+(?:INDEX|TRIGGER)\b/iu.test(source)
   ) {
-    throw new Error("Composer Policy cannot execute database control statements");
+    throw new Error("Composer derived SQL cannot execute database control statements");
   }
   const mutation_targets = [
     ...source.matchAll(/\bCREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/giu),
@@ -771,10 +770,10 @@ function assert_policy_sql(sql: string, table_prefix: string): void {
   ].map((match) => match[1] || "");
   const mutates_database = /\b(?:CREATE|INSERT|REPLACE|UPDATE|DELETE|DROP|ALTER)\b/iu.test(source);
   if (mutates_database && mutation_targets.length === 0) {
-    throw new Error("Composer Policy SQL mutation is not supported");
+    throw new Error("Composer derived SQL mutation is not supported");
   }
   if (mutation_targets.some((table_name) => !table_name.startsWith(table_prefix))) {
-    throw new Error(`Composer Policy can only mutate ${table_prefix}* tables`);
+    throw new Error(`Composer derived SQL can only mutate ${table_prefix}* tables`);
   }
 }
 

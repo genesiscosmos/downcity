@@ -1,10 +1,11 @@
 /**
- * CoreEngineRunner：模型与 tool-loop 主循环执行器。
+ * SessionExecutor：核心模型请求与 tool-loop 执行器。
  *
  * 关键点（中文）
- * - 每个 Provider Step 都通过回调取得 Composer 生成的完整输入。
- * - 只负责 step 循环、续写恢复与最终 assistant 汇总，不持有历史副本。
- * - 保持失败返回结构稳定，避免对外 Session 行为变化。
+ * - 只回答「发请求」与「是否继续」：step 循环、续写恢复、撞顶收尾与最终汇总。
+ * - 每个 Provider Step 的输入通过 `resolve_step_input` 回调取得，因此执行器不依赖
+ *   Composer 或存储，可以被独立构造与验证。
+ * - 不持有历史副本，也不修改 canonical Message。
  */
 
 import type { RuntimeTool as Tool } from "@downcity/type";
@@ -54,7 +55,7 @@ import { generate_id } from "@/utils/Id.js";
 
 const TURN_STOPPED_MESSAGE = "Turn stopped";
 
-interface CoreEngineRunnerOptions {
+export interface SessionExecutorOptions {
   /** 当前 Session 稳定标识。 */
   session_id: string;
 
@@ -64,12 +65,15 @@ interface CoreEngineRunnerOptions {
   logger: Logger;
 
   /**
-   * 判断某次执行错误是否应该上抛给外层压缩重试。
+   * 判断某次执行错误是否应该上抛给外层上下文推进重试。
    */
   should_compact_on_error: (error: unknown) => boolean;
 }
 
-interface CoreEngineTurnInput {
+/**
+ * 一次 Turn 执行输入。
+ */
+export interface SessionExecutorInput {
   /**
    * 当前显式运行上下文。
    */
@@ -82,26 +86,58 @@ interface CoreEngineTurnInput {
 }
 
 /**
- * 模型与 tool-loop 主循环执行器。
+ * SessionLoop 依赖的执行器端口。
+ *
+ * 关键点（中文）：`SessionLoop` 只要求「能执行一轮并报告是否正在执行」；默认实现是
+ * `SessionExecutor`，测试或自定义运行时可注入等价实现。
  */
-export class CoreEngineRunner {
+export interface SessionExecutorPort {
+  /** 执行一轮已经由调用方创建上下文的 Turn。 */
+  execute(input: SessionExecutorInput): Promise<SessionTurnExecutionResult>;
+  /** 返回当前是否正在执行。 */
+  is_executing(): boolean;
+}
+
+/** 核心模型请求与 tool-loop 执行器。 */
+export class SessionExecutor implements SessionExecutorPort {
   private readonly session_id: string;
   private readonly logger: Logger;
-  private readonly should_compact_on_error: CoreEngineRunnerOptions["should_compact_on_error"];
+  private readonly should_compact_on_error: SessionExecutorOptions["should_compact_on_error"];
+  private executing = false;
 
-  constructor(options: CoreEngineRunnerOptions) {
+  constructor(options: SessionExecutorOptions) {
     this.session_id = String(options.session_id || "").trim();
     this.logger = options.logger;
     this.should_compact_on_error = options.should_compact_on_error;
     if (!this.session_id) {
-      throw new Error("CoreEngineRunner requires a non-empty session_id");
+      throw new Error("SessionExecutor requires a non-empty session_id");
     }
+  }
+
+  /** 返回当前 Session 是否正在执行模型请求。 */
+  is_executing(): boolean {
+    return this.executing;
   }
 
   /**
    * 执行一次已装配完成的模型/tool-loop 运行。
+   *
+   * 关键点（中文）：同一个 Session 只允许一个活跃执行，避免 step 回调与运行态互相污染。
    */
-  async execute(input: CoreEngineTurnInput): Promise<SessionTurnExecutionResult> {
+  async execute(input: SessionExecutorInput): Promise<SessionTurnExecutionResult> {
+    if (this.executing) {
+      throw new Error("SessionExecutor.execute does not support concurrent execution");
+    }
+    this.executing = true;
+    try {
+      return await this.run_tool_loop(input);
+    } finally {
+      this.executing = false;
+    }
+  }
+
+  /** 运行模型与 tool-loop 主循环。 */
+  private async run_tool_loop(input: SessionExecutorInput): Promise<SessionTurnExecutionResult> {
     const start_time = Date.now();
     const session_id = this.session_id;
     let last_observed_stream_error: unknown = undefined;
@@ -558,4 +594,18 @@ function build_fallback_assistant_parts(
     text,
     state: "done",
   }];
+}
+
+/**
+ * 识别 Provider 拒绝请求是出于模型上下文超限的默认谓词。
+ *
+ * 关键点（中文）：Provider 错误是否属于上下文超限只在这里识别一次，外层恢复策略
+ * 只接收领域触发原因。
+ */
+export function is_provider_context_limit_error(error: unknown): boolean {
+  const message = String(error ?? "").toLowerCase();
+  return message.includes("context_length") ||
+    message.includes("too long") ||
+    message.includes("maximum context") ||
+    message.includes("context window");
 }

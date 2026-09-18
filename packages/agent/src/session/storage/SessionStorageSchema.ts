@@ -2,7 +2,7 @@
  * Session SQLite 核心 schema。
  *
  * 这里只定义所有 Composer 共享的 canonical 表和持久化约束；任何摘要、索引或
- * 检索表都由具体 Context Policy 在自己的 namespace 中创建。
+ * 检索表都由具体 Composer 在自己的 namespace 中创建。
  */
 
 /** 当前 Session SQLite schema 版本。 */

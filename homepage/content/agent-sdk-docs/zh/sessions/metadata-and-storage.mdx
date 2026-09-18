@@ -1,6 +1,6 @@
 ---
 title: 元数据与落盘
-description: Session SQLite、canonical Message 与 Composer Context Policy
+description: Session SQLite、canonical Message 与 Composer 派生上下文
 ---
 
 # 元数据与落盘
@@ -23,21 +23,21 @@ Session API 读写，不要把这些文件当作自己的数据库。
 读取 API 返回聚合后的 `SessionMessage`，数据库表结构不会泄漏到 UI 或模型 Provider。Message 是
 canonical history，永远不会因为上下文压缩而删除或改写。
 
-## Composer 与上下文策略
+## Composer 与派生上下文
 
-`SessionComposer` 负责生成最终送给模型的 system、messages 和 tools。Composer 内部使用一个
-`SessionContextPolicy`。默认 `AdaptivePartContextPolicy` 以 Part 为上下文处理边界，并在自己的
-`composer_adaptive_part_checkpoints` 派生表中保存累计摘要边界。
+`SessionComposer` 负责生成最终送给模型的 system、messages 和 tools。调用方把 canonical history 与带
+命名空间的派生存储传入每次调用，Composer 不会自己去打开 Session 存储。
 
-派生摘要、索引和检索结果不是 Message，可以删除并重建，也不会改变用户可浏览的 canonical history。
-当前策略只会读取最新摘要边界之后的 Part，因此即使单条 Agent Message 本身很大，也能在其中间建立边界：
+默认 `DefaultSessionComposer` 以 Part 为上下文处理边界，并在自己的
+`composer_adaptive_part_checkpoints` 派生表中保存累计摘要边界。它的 `compose()` 返回：
 
 ```text
 显式 <session-context-summary> system block
 + 边界之后的 canonical Parts
 ```
 
-模型返回上下文超限时，Composer 调用 Policy 的 `recover_context()` 推进派生状态；不会写入 Active、Segment 或第二份消息文件。
+摘要与其他投影出的上下文都是可重建的派生数据，不是 Message。模型返回上下文超限，或真实 usage 超过
+压力阈值时，Session 通过 `advance_context()` 请求 Composer 推进派生状态；不会写入 Active、Segment 或第二份消息文件。
 
 ## 中断恢复与事务
 

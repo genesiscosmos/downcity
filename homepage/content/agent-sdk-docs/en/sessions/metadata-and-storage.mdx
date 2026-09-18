@@ -23,22 +23,24 @@ Each Session has one `session.db` with three stable tables:
 The API reconstructs `SessionMessage` aggregates when reading. The table layout is not exposed to the UI
 or model providers. Canonical history is never deleted or rewritten by context compaction.
 
-## Composer and context policies
+## Composer and derived context
 
-`SessionComposer` generates the final system, messages, and tools sent to the model. It uses one
-`SessionContextPolicy`. The default `AdaptivePartContextPolicy` treats each Part as the context-processing
-boundary and stores checkpoints in its own `composer_adaptive_part_checkpoints` derived table.
+`SessionComposer` generates the final system, messages, and tools sent to the model. The caller passes
+canonical history and a namespaced derived store into every call; a Composer never opens Session storage
+by itself.
 
-Summaries, indexes, and retrieval results are rebuildable derived data, not Messages. A policy resolves:
+The default `DefaultSessionComposer` treats each Part as the context-processing boundary and stores
+checkpoints in its own `composer_adaptive_part_checkpoints` derived table. Its `compose()` returns:
 
 ```text
 explicit <session-context-summary> system block
 + canonical Parts after the summary boundary
 ```
 
-When a provider reports a context limit, Composer asks the policy to advance its derived state through
-`recover_context()`. There is no public `session.compact()`, Active file, Segment file, or second
-message log.
+Summaries and any other projected context are rebuildable derived data, not Messages. When a provider
+reports a context limit, or real usage crosses the pressure threshold, Session asks the Composer to
+advance its derived state through `advance_context()`. There is no public `session.compact()`, Active file,
+Segment file, or second message log.
 
 ## Recovery and transactions
 

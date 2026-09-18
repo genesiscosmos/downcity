@@ -1,4 +1,4 @@
-/** @file 验证 SessionStorage 的 SQLite 事务、投影、恢复与 Policy 隔离边界。 */
+/** @file 验证 SessionStorage 的 SQLite 事务、投影、恢复与派生 namespace 隔离边界。 */
 
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -121,11 +121,11 @@ test("Storage 只查询中断状态，不擅自解释领域恢复语义", async 
   await reopened.dispose();
 });
 
-test("Composer Policy 只能写自己的派生 namespace，clear 触发 FK 清理", async () => {
+test("Composer 只能写自己的派生 namespace，clear 触发 FK 清理", async () => {
   const directory_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-storage-"));
   const storage = await create_storage(directory_path);
   await storage.create_message(create_user_message);
-  const policy = storage.composer_storage("sequence");
+  const policy = storage.derived_store("sequence");
   await policy.transaction((transaction) => {
     transaction.execute("CREATE TABLE composer_sequence_test (message_id TEXT REFERENCES messages(message_id) ON DELETE CASCADE)");
     transaction.execute("INSERT INTO composer_sequence_test (message_id) VALUES (?)", ["user-1"]);

@@ -23,6 +23,7 @@ import type {
 } from "@downcity/type";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import type { SessionCompositionOptions } from "@/types/session/SessionComposition.js";
+import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
 import { resolve_session_power_system_blocks } from "@/session/SessionSystem.js";
@@ -50,7 +51,7 @@ export class SessionComposition {
     if (!this.initialize_promise) {
       this.initialize_promise = (async () => {
         await this.options.store.initialize();
-        await this.options.composer.initialize({ storage: this.options.store });
+        await this.options.composer.initialize({ derived: this.derived_store() });
         const persisted_instruction = await this.options.store.read_instruction();
         if (persisted_instruction === null) return;
 
@@ -149,7 +150,7 @@ export class SessionComposition {
   /** 为 Composer 创建当前 Step 的只读 Session 快照。 */
   async create_compose_input(
     turn_context: SessionTurnContext | undefined,
-    retry_count: number,
+    advance_count: number,
     refresh_system = false,
   ): Promise<SessionComposeInput> {
     const instruction_system_blocks = refresh_system
@@ -240,12 +241,18 @@ export class SessionComposition {
         power_system_blocks: resolved_power_system_blocks,
         power_context_blocks,
       },
-      storage: this.options.store,
+      history: await this.options.store.list_messages(),
+      derived: this.derived_store(),
       turn: {
         ...(turn_context ? { turn_id: turn_context.session.turn_id } : {}),
-        retry_count,
+        advance_count,
       },
     };
+  }
+
+  /** 返回当前 Composer 命名空间的派生存储视图。 */
+  private derived_store(): SessionDerivedStore {
+    return this.options.store.derived_store(this.options.composer.name);
   }
 
   /** 固定或应用当前 Session 的 system snapshot。 */

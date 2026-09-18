@@ -93,14 +93,13 @@ src/
 - `src/session/`
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
   - `SessionState.ts` 管理配置与 metadata
-  - `SessionLoop.ts` 是 Command Queue 的唯一消费者，并管理 Turn 生命周期
-  - Prompt Command 创建或加入 Turn；配置与压缩等 Maintenance Command 在空闲期独立执行
-  - `SessionComposition.ts` 管理 system snapshot、检查点 env/hook 与 Composer 输入
+  - `SessionLoop.ts` 是 Command Queue 的唯一消费者与 Turn 生命周期所有者；Prompt Command 创建或加入 Turn，维护类 Command 在空闲期独立执行
+  - `SessionComposition.ts` 提供 Compose 所需的宿主事实：system snapshot、检查点 env/hook 与只读历史
+  - `runner/` 放 Session 级编排对象：`SessionExecutor`（模型请求与 Tool Loop）与 `StepInputAssembly`（每个 Step 的模型输入装配）
   - `session.db` 是 canonical Message 唯一事实源，`SessionMessages.ts` 负责领域写入、恢复和有界运行态投影
-  - `DefaultSessionComposer.ts` 负责 system/history/tools，并默认使用 Part 级上下文策略
-  - `SessionTurnContext.effects` 只负责按发生顺序收集当前 Turn 的 Tool 副作用，不解释具体业务
+  - `DefaultSessionComposer.ts` 负责 system/history/tools，并默认使用 Part 级 checkpoint 压缩
   - `messages/` 放 Assistant 状态转换与 writer、Message codec、Tool effect 投影与结构化文件编辑 Diff
-  - `composer/policies/` 放只读 canonical Message 并管理自有派生表的上下文策略
+  - `composer/` 放 Composer 实现与共用组装原语；压缩算法为纯函数，checkpoint 表读写归 Composer 自己
   - `storage/` 负责 Session SQLite、附件和事务；只使用 AgentStorage，不访问项目 Workspace
   - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 的单次执行输入
 
@@ -108,7 +107,7 @@ src/
   - `storage/` 负责 GroupSession 的 metadata、共享消息和调度记录持久化
 
 - `src/executor/`
-  - 内部执行内核
+  - 模型请求与 Tool Loop 的低层内核
   - `Executor` 只负责单轮 LLM/Tool Loop、Step 状态和上下文恢复
   - 不持有 History Store，不负责 Message 或 metadata 持久化
   - 默认 system block 只由 `session/SessionSystem.ts` 组装，不维护第二套 system composer

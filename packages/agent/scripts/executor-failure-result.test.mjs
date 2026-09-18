@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { MockModelClient } from "./ModelClientMock.mjs";
 
-import { CoreEngineRunner } from "../bin/executor/core-engine/CoreEngineRunner.js";
+import { SessionExecutor } from "../bin/session/runner/SessionExecutor.js";
 import { ExecutorRecoveryPolicy } from "../bin/executor/services/ExecutorRecoveryPolicy.js";
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 
@@ -81,7 +81,7 @@ test("CoreEngine Provider 失败时只返回结构化错误", async () => {
       });
     },
   };
-  const runner = new CoreEngineRunner({
+  const runner = new SessionExecutor({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
     should_compact_on_error: () => false,
@@ -112,7 +112,7 @@ test("CoreEngine 成功流按 start、chunks、finish 完成 canonical step", as
     modelId: "canonical-step-model",
     doStream: async () => create_text_stream("done"),
   });
-  const runner = new CoreEngineRunner({
+  const runner = new SessionExecutor({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
     should_compact_on_error: () => false,
@@ -144,7 +144,7 @@ test("CoreEngine chunk 写入失败时中止 canonical step", async () => {
     modelId: "canonical-step-failure-model",
     doStream: async () => create_text_stream("partial"),
   });
-  const runner = new CoreEngineRunner({
+  const runner = new SessionExecutor({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
     should_compact_on_error: () => false,
@@ -172,7 +172,7 @@ test("恢复策略捕获普通异常后只返回结构化错误", async () => {
   const policy = new ExecutorRecoveryPolicy({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
-    recover_context: async () => false,
+    advance_context: async () => false,
   });
   const result = await policy.execute_with_retry({
     execute_turn: async () => {

@@ -12,7 +12,6 @@ import type {
   SessionUserContent,
   SessionMessage,
 } from "@downcity/type";
-import type { SessionExecutor } from "@/types/session/SessionExecution.js";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
@@ -30,9 +29,6 @@ export interface SessionPort {
 
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
   get_model(): ModelClient | undefined;
-
-  /** 获取当前 Session 的执行端口。 */
-  get_executor(): SessionExecutor;
 
   /** 读取全部 canonical Session Message。 */
   messages(): Promise<SessionMessage[]>;

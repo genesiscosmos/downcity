@@ -11,7 +11,7 @@ import {
   resolve_model_usage_tokens,
   should_compact_after_usage,
 } from "../bin/executor/core-engine/CoreEngineContextCompaction.js";
-import { CoreEngineRunner } from "../bin/executor/core-engine/CoreEngineRunner.js";
+import { SessionExecutor } from "../bin/session/runner/SessionExecutor.js";
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 
 function create_stream_text_result(text, input_tokens, output_tokens) {
@@ -46,7 +46,7 @@ function create_stream_text_result(text, input_tokens, output_tokens) {
 }
 
 function create_runner() {
-  return new CoreEngineRunner({
+  return new SessionExecutor({
     session_id: "compact-runner-session",
     logger: { log: async () => {} },
     should_compact_on_error: () => false,
@@ -54,7 +54,7 @@ function create_runner() {
 }
 
 function create_context_error_runner() {
-  return new CoreEngineRunner({
+  return new SessionExecutor({
     session_id: "compact-runner-session",
     logger: { log: async () => {} },
     should_compact_on_error: (error) =>
@@ -230,7 +230,7 @@ test("每个 Provider Step 使用 Composer 返回的最新 canonical history", a
     role: "assistant",
     content: [{ type: "text", text: "compacted checkpoint" }],
   }];
-  const runner = new CoreEngineRunner({
+  const runner = new SessionExecutor({
     session_id: "compact-runner-session",
     logger: { log: async () => {} },
     should_compact_on_error: () => false,

@@ -2,7 +2,7 @@
  * CoreEngine Downcity 模型上下文压缩模块。
  *
  * 本模块只判断真实 Provider usage 是否达到恢复阈值；具体选择、摘要和持久化全部
- * 归属于 SessionComposer 的 Context Policy。
+ * 归属于 SessionComposer 的上下文推进实现。
  */
 
 /** usage 达到模型上下文窗口 95% 时安排下一 step 压缩。 */

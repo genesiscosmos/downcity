@@ -11,7 +11,7 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent, DefaultSessionComposer, Session } from "@downcity/agent";
 import { Workspace } from "@downcity/city";
 
-/** 构造 usage 达到上下文窗口 95% 的模型流，用于触发 Context Policy 恢复。 */
+/** 构造 usage 达到上下文窗口 95% 的模型流，用于触发上下文推进。 */
 function create_pressure_stream(text) {
   return {
     stream: new ReadableStream({
@@ -36,11 +36,11 @@ class ScriptedComposer extends DefaultSessionComposer {
   constructor(outcome) {
     super();
     this.outcome = outcome;
-    this.recover_calls = 0;
+    this.advance_calls = 0;
   }
 
-  async recover_context() {
-    this.recover_calls += 1;
+  async advance_context() {
+    this.advance_calls += 1;
     if (this.outcome === "throw") throw new Error("summary model unavailable");
     return this.outcome === "compact";
   }
@@ -93,7 +93,7 @@ async function run_pressure_turn(outcome) {
     const result = await turn.finished;
     return {
       result,
-      recover_calls: composer.recover_calls,
+      recover_calls: composer.advance_calls,
       actions: read_action_records((await session.messages()).items)
         .filter((record) => record.action_type === "context-compaction"),
     };

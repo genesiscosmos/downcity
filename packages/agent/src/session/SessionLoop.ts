@@ -18,10 +18,15 @@ import type {
   AgentSessionTurnResult,
 } from "@/types/sdk/AgentSessionTurn.js";
 import { is_agent_session_prompt_input_empty } from "@/types/sdk/AgentSessionPrompt.js";
-import type {
+import type { SessionStepExecutionInput, SessionTurnExecutionResult } from "@/types/session/SessionExecution.js";
+import type { SessionComposer } from "@/types/session/SessionComposer.js";
+import {
+  is_provider_context_limit_error,
   SessionExecutor,
-  SessionTurnExecutionResult,
-} from "@/types/session/SessionExecution.js";
+  type SessionExecutorPort,
+} from "@/session/runner/SessionExecutor.js";
+import { StepInputAssembly } from "@/session/runner/StepInputAssembly.js";
+import { ExecutorRecoveryPolicy } from "@executor/services/ExecutorRecoveryPolicy.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import { create_session_turn_context } from "@/session/runtime/SessionTurnContext.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
@@ -70,7 +75,9 @@ export class SessionLoop {
   private readonly session_id: string;
   private readonly session_origin: SessionLoopOptions["session_origin"];
   private readonly workspace_path: string;
-  private readonly executor: SessionExecutor;
+  private readonly step_input_assembly: StepInputAssembly | null;
+  private readonly session_executor: SessionExecutorPort;
+  private readonly recovery_policy: ExecutorRecoveryPolicy;
   private readonly maintain_context: SessionLoopOptions["maintain_context"];
   private readonly state: SessionState;
   private readonly messages: SessionMessages;
@@ -91,7 +98,6 @@ export class SessionLoop {
     this.session_id = String(options.session_id || "").trim();
     this.session_origin = options.session_origin;
     this.workspace_path = String(options.workspace_path || "").trim();
-    this.executor = options.executor;
     this.maintain_context = options.maintain_context;
     this.state = options.state;
     this.messages = options.messages;
@@ -107,6 +113,61 @@ export class SessionLoop {
     if (!this.workspace_path) {
       throw new Error("SessionLoop requires a non-empty workspace_path");
     }
+    this.step_input_assembly = options.executor
+      ? null
+      : new StepInputAssembly({
+          composer: this.require_composer(options),
+          get_compose_input: this.require_get_compose_input(options),
+          ...(options.apply_system_snapshot
+            ? { apply_system_snapshot: options.apply_system_snapshot }
+            : {}),
+          ...(options.get_hooks ? { get_hooks: options.get_hooks } : {}),
+        });
+    this.session_executor = options.executor ||
+      new SessionExecutor({
+        session_id: this.session_id,
+        logger: this.logger,
+        should_compact_on_error: (error) =>
+          is_provider_context_limit_error(error),
+      });
+    this.recovery_policy = new ExecutorRecoveryPolicy({
+      session_id: this.session_id,
+      advance_context: async (error) =>
+        is_provider_context_limit_error(error)
+          ? await options.advance_context("provider_context_limit")
+          : false,
+      logger: this.logger,
+    });
+  }
+
+  /** 返回当前 Session 是否正在执行模型请求。 */
+  is_executing(): boolean {
+    return this.session_executor.is_executing();
+  }
+
+  /** 读取现场装配输入所需的 Composer；注入执行器时不需要。 */
+  private require_composer(
+    options: SessionLoopOptions,
+  ): SessionComposer {
+    if (!options.composer) {
+      throw new Error(
+        "SessionLoop requires either an injected executor or a composer",
+      );
+    }
+    return options.composer;
+  }
+
+  /** 读取现场装配输入所需的快照读取器；注入执行器时不需要。 */
+  private require_get_compose_input(
+    options: SessionLoopOptions,
+  ): NonNullable<SessionLoopOptions["get_compose_input"]> {
+    const get_compose_input = options.get_compose_input;
+    if (!get_compose_input) {
+      throw new Error(
+        "SessionLoop requires either an injected executor or get_compose_input",
+      );
+    }
+    return get_compose_input;
   }
 
   /**
@@ -499,7 +560,7 @@ export class SessionLoop {
     }
     let result: SessionTurnExecutionResult;
     try {
-      result = await this.executor.execute({ turn_context });
+      result = await this.run_turn_with_context_advance(turn_context);
     } catch (error) {
       result = {
         text: "",
@@ -545,6 +606,47 @@ export class SessionLoop {
       success: result.success,
       ...(result.error ? { error: result.error } : {}),
     };
+  }
+
+  /**
+   * 执行 Turn，并在 Provider 上下文超限时先推进派生上下文再重试。
+   *
+   * 关键点（中文）：重试是 Turn 级策略，因此归生命周期所有者；每次重试都重新装配 Step
+   * 输入，保证读到刚推进的上下文。
+   */
+  private async run_turn_with_context_advance(
+    turn_context: SessionTurnContext,
+  ): Promise<SessionTurnExecutionResult> {
+    return await this.recovery_policy.execute_with_retry({
+      execute_turn: async (advance_count) =>
+        await this.session_executor.execute({
+          turn_context,
+          resolve_step_input: async () =>
+            await this.require_step_input(
+              turn_context,
+              advance_count,
+            ),
+        }),
+    });
+  }
+
+  /**
+   * 解析当前 Step 的输入。
+   *
+   * 关键点（中文）：注入执行器时本 Loop 不拥有输入装配能力；回调一旦被调用即说明注入契约
+   * 被破坏，因此直接报错而不是静默返回空输入。
+   */
+  private async require_step_input(
+    turn_context: SessionTurnContext,
+    advance_count: number,
+  ): Promise<SessionStepExecutionInput> {
+    const assembly = this.step_input_assembly;
+    if (!assembly) {
+      throw new Error(
+        "SessionLoop was given an executor and cannot assemble step input",
+      );
+    }
+    return await assembly.resolve_step_input(turn_context, advance_count);
   }
 
   /** 在 Turn 创建时建立其唯一执行上下文和 Assistant 输出端口。 */

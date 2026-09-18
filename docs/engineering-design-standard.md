@@ -554,7 +554,7 @@ Store 只能使用 City Storage，不能使用项目 FileSystem。项目 Tool �
 - Metadata 与版本。
 - system snapshot。
 - action 和 approval 状态。
-- compact segment 与 summary。
+- compact 派生边界与 summary。
 
 每一种持久化状态都必须说明崩溃发生在写入前、中、后时如何恢复。
 

@@ -103,7 +103,7 @@ session.subscribe((mutation) => {
 
 `turn.finish` has `completed`, `failed`, or `stopped` status. It and `turn.finished` describe the same final execution: the former is for subscription-driven UI, the latter for control flow.
 
-Context compaction is not a separate Mutation and has no public Handle. It is a Session operation whose result is recorded as an Action Part: `completed` on success, `failed` on failure, with `action_type` set to `context-compaction`. Compaction never rewrites canonical history; it only advances the Context Policy's derived tables (see [Metadata and storage](/en/agent-sdk-docs/sessions/metadata-and-storage)).
+Context compaction is not a separate Mutation and has no public Handle. It is a `SessionComposer.advance_context()` result recorded as an Action Part: `completed` on success, `failed` on failure, with `action_type` set to `context-compaction`. It never rewrites canonical history; it only advances the Composer's derived tables (see [Metadata and storage](/en/agent-sdk-docs/sessions/metadata-and-storage)).
 
 On a failed model call, `warning / model_request` carries `request_kind`, `code`, `message`, `retryable`, `attempt`, `max_attempts`, and `will_retry`. Main Turn requests also include `turn_id`; background title and history-compaction requests may omit it. It is a live diagnostic and is not persisted as Message history. `retryable` reflects the Provider error classification; `will_retry: false` means no further automatic retry follows this failure.
 

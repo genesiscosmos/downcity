@@ -52,7 +52,9 @@ function create_loop(request_id) {
         execute_count += 1;
         return { text: "unexpected", success: true };
       },
+      is_executing: () => false,
     },
+    advance_context: async () => false,
     maintain_context: async () => {},
     state: { ensure_runnable: async () => {} },
     messages: {

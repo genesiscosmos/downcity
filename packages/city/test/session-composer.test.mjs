@@ -11,7 +11,7 @@ import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import {
   Agent,
   DefaultSessionComposer,
-  FullHistoryContextPolicy,
+  FullHistorySessionComposer,
   Session,
 } from "../../agent/bin/index.js";
 import { Workspace } from "@downcity/city";
@@ -55,21 +55,18 @@ function create_input(model) {
       power_system_blocks: [],
       power_context_blocks: [],
     },
-    storage: {
-      list_messages: async () => structuredClone(canonical_messages),
-      composer_storage: () => ({
-        list_messages: async () => structuredClone(canonical_messages),
-        transaction: async () => undefined,
-      }),
+    history: structuredClone(canonical_messages),
+    derived: {
+      transaction: async () => undefined,
     },
-    turn: { turn_id: "turn-1", retry_count: 0 },
+    turn: { turn_id: "turn-1", advance_count: 0 },
   };
 }
 
 test("DefaultSessionComposer 从 canonical 快照组装 Step 输入", async () => {
   const model = new MockModelClient({ modelId: "composer-model" });
   const input = create_input(model);
-  const step = await new DefaultSessionComposer({ context_policy: new FullHistoryContextPolicy() }).compose(input);
+  const step = await new FullHistorySessionComposer().compose(input);
 
   assert.equal(step.messages.length, 1);
   assert.equal(step.messages[0].content[0].text, "hello");
@@ -86,7 +83,7 @@ test("DefaultSessionComposer 只把 Power Context 注入模型副本", async () 
     content: "用户偏好使用中文。",
     trust_level: "reference",
   }];
-  const step = await new DefaultSessionComposer({ context_policy: new FullHistoryContextPolicy() }).compose(input);
+  const step = await new FullHistorySessionComposer().compose(input);
 
   assert.match(step.messages[0].content[0].text, /extension-context/);
   assert.match(step.messages[0].content[0].text, /用户偏好使用中文/);
@@ -162,9 +159,7 @@ test("Agent Composer 工厂为创建、恢复缓存与 Fork 保持实例隔离",
   const agent = new Agent({
     id: "composer_factory_agent",
     session_composer: () => {
-      const composer = new DefaultSessionComposer({
-        context_policy: new FullHistoryContextPolicy(),
-      });
+      const composer = new FullHistorySessionComposer();
       composer_instances.push(composer);
       return composer;
     },

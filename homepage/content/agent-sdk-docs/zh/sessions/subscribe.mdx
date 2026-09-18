@@ -103,7 +103,7 @@ session.subscribe((mutation) => {
 
 `turn.finish` 的状态为 `completed`、`failed` 或 `stopped`。它和 `turn.finished` 共同描述同一最终结果：前者适合订阅 UI，后者适合控制流。
 
-上下文压缩不是独立 Mutation，也没有对应的 public Handle。它是一次 Session 操作，结果写成 Action Part：成功时为 `completed`，失败时为 `failed`，`action_type` 为 `context-compaction`。压缩不会改写 canonical 历史，只推进 Context Policy 的派生表（见 [元数据与落盘](/zh/agent-sdk-docs/sessions/metadata-and-storage)）。
+上下文压缩不是独立 Mutation，也没有对应的 public Handle。它是 `SessionComposer.advance_context()` 的结果，写成 Action Part：成功时为 `completed`，失败时为 `failed`，`action_type` 为 `context-compaction`。它不会改写 canonical 历史，只推进 Composer 的派生表（见 [元数据与落盘](/zh/agent-sdk-docs/sessions/metadata-and-storage)）。
 
 模型调用失败时，`warning / model_request` 会携带 `request_kind`、`code`、`message`、`retryable`、`attempt`、`max_attempts` 与 `will_retry`。主 Turn 请求还携带 `turn_id`，后台标题与历史压缩请求允许不带。它是实时诊断，不写入 Message 历史；`retryable` 表示 Provider 的错误分类，`will_retry: false` 表示本次失败不会再自动重试。
 

@@ -7,7 +7,6 @@
  * - 内部使用 `SessionMessages` 管理 SQLite 中的 canonical Message 聚合。
  */
 
-import { Executor } from "@executor/Executor.js";
 import {
   type ModelClient,
   read_model_context_window,
@@ -50,7 +49,7 @@ import type { SessionOptions } from "@/types/session/SessionOptions.js";
 import type { SessionHookRuntime } from "@downcity/type";
 import { SessionInteractions } from "@/session/control/SessionInteractions.js";
 import { SessionApprovalRuntime } from "@/session/execution/tools/SessionApprovalRuntime.js";
-import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
+import { DefaultSessionComposer } from "@/session/composer/DefaultSessionComposer.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
@@ -66,7 +65,7 @@ import {
   resolve_session_fork_messages,
 } from "@/session/messages/SessionForkMessageFiles.js";
 import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
-import type { SessionContextRecoveryReason } from "@/types/session/SessionContextPolicy.js";
+import type { SessionContextAdvanceTrigger } from "@/types/session/SessionComposer.js";
 
 /**
  * SDK 本地 Session。
@@ -90,7 +89,6 @@ export class Session implements AgentSession {
   private readonly composer: SessionComposer;
   private readonly create_composer: () => SessionComposer;
   private readonly session_messages: SessionMessages;
-  private readonly executor: Executor;
   private readonly events: SessionEventHub;
   private readonly session_interactions: SessionInteractions;
   private readonly approval_runtime: SessionApprovalRuntime;
@@ -177,7 +175,6 @@ export class Session implements AgentSession {
       get_timezone: () => this.local_state.timezone,
       logger: this.logger,
     });
-    this.executor = this.create_executor();
     this.state = new SessionState({
       agent_id: this.agent_id,
       session_id: this.id,
@@ -199,9 +196,18 @@ export class Session implements AgentSession {
       session_id: this.id,
       session_origin: this.origin,
       workspace_path: this.workspace_path,
-      executor: this.executor,
+      composer: this.composer,
+      get_compose_input: async (turn_context, advance_count) =>
+        await this.session_composition.create_compose_input(
+          turn_context,
+          advance_count,
+        ),
+      apply_system_snapshot: (input) =>
+        this.session_composition.apply_snapshot(input),
+      get_hooks: () => this.get_hooks(),
+      advance_context: async (trigger) => await this.advance_context(trigger),
       maintain_context: async () => {
-        await this.recover_context("usage_pressure");
+        await this.advance_context("usage_pressure");
       },
       state: this.state,
       events: this.events,
@@ -391,7 +397,7 @@ export class Session implements AgentSession {
     const active_turn_id = this.session_loop.current_turn_id();
     return {
       session_id: this.id,
-      state: active_turn_id || this.executor.is_executing() ? "running" : "idle",
+      state: active_turn_id || this.session_loop.is_executing() ? "running" : "idle",
       ...(active_turn_id ? { active_turn_id } : {}),
       security: {
         approval_mode: this.state.get_approval_mode(),
@@ -467,7 +473,7 @@ export class Session implements AgentSession {
    * 返回当前 session 是否正在执行。
    */
   is_executing(): boolean {
-    return this.session_loop.is_active() || this.executor.is_executing();
+    return this.session_loop.is_active() || this.session_loop.is_executing();
   }
 
   /**
@@ -523,7 +529,6 @@ export class Session implements AgentSession {
     this.runtime_port = create_runtime_session_port({
       session_id: this.id,
       get_model: () => this.get_model(),
-      get_executor: () => this.executor,
       messages: async () => await this.session_messages.list_history_messages(),
       prompt: async (input) => await this.prompt(input),
       stop: async () => await this.stop(),
@@ -590,41 +595,25 @@ export class Session implements AgentSession {
     return new session_class(options) as this;
   }
 
-  /** 创建只依赖统一 Composer 的 Turn Executor。 */
-  private create_executor(): Executor {
-    return new Executor({
-      session_id: this.id,
-      composer: this.composer,
-      get_compose_input: async (turn_context, retry_count) =>
-        await this.session_composition.create_compose_input(
-          turn_context,
-          retry_count,
-        ),
-      recover_context: async (reason) => await this.recover_context(reason),
-      logger: this.logger,
-      get_hooks: () => this.get_hooks(),
-      apply_system_snapshot: (input) => this.session_composition.apply_snapshot(input),
-    });
-  }
-
   /**
-   * 让 Composer 的 Context Policy 尝试推进派生上下文状态。
+   * 让 Composer 尝试推进派生上下文状态。
    *
-   * 上下文压缩是用户可见的 Session 操作，因此结果记录为 Action：写入 checkpoint 时记为
-   * completed，抛错时记为 failed。Policy 判定没有可压缩区间时返回 false，此时不产生 Action，
-   * 避免空操作污染时间线。
+   * 上下文推进是用户可见的 Session 操作，因此结果记录为 Action：写入派生边界时记为
+   * completed，抛错时记为 failed。Composer 判定没有可推进区间时返回 false，此时不产生
+   * Action，避免空操作污染时间线。
    */
-  private async recover_context(
-    reason: SessionContextRecoveryReason,
+  private async advance_context(
+    trigger: SessionContextAdvanceTrigger,
   ): Promise<boolean> {
     const turn_id = this.session_loop.current_turn_id();
     const action_id = `context-compaction:${this.id}:${generate_id()}`;
     try {
-      const recovered = await this.composer.recover_context({
+      const advanced = await this.composer.advance_context({
         session: this.session_composition.compose_identity(),
         model: this.get_model(),
-        storage: this.store,
-        reason,
+        history: await this.store.list_messages(),
+        derived: this.store.derived_store(this.composer.name),
+        trigger,
         on_model_request_failure: (notice) => {
           this.events.publish(create_session_model_request_warning({
             session_id: this.id,
@@ -633,7 +622,7 @@ export class Session implements AgentSession {
           }));
         },
       });
-      if (recovered) {
+      if (advanced) {
         await this.record_compaction_action({
           action_id,
           turn_id,
@@ -642,7 +631,7 @@ export class Session implements AgentSession {
           description: "Older stable parts were folded into the context summary.",
         });
       }
-      return recovered;
+      return advanced;
     } catch (error) {
       await this.record_compaction_action({
         action_id,

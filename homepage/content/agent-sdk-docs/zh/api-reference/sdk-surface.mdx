@@ -66,8 +66,9 @@ try {
 - `@downcity/type` 的 `CityRuntime`：自定义组合根嵌入 Agent 时使用的最小 City 跨包协议；具体 `City` 已经直接实现该协议。
 - `PluginContext`：City 为当前 Agent/Workspace/Session/Turn 投影给 Plugin 的受限能力视图；宿主不应主动获取或持有它。
 - `SessionTurnContext`：一个 Turn 中统一管理身份、生命周期、Step、输入与输出协作的执行上下文；Plugin 只接收其只读投影 `PluginExecutionContext`。
-- `create_session_turn_context(...)`：自定义 Executor 或运行时组件创建上述 Turn Context 的标准工厂。
-- `AgentSession`、`SessionExecutor` 等接口：替换或扩展默认实现。
+- `create_session_turn_context(...)`：自定义执行器或运行时组件创建上述 Turn Context 的标准工厂。
+- `SessionExecutor` 与 `SessionExecutorPort`：模型请求与 Tool Loop 的默认执行器，以及 `SessionLoop` 接受注入的执行端口。
+- `AgentSession` 等接口：替换或扩展默认实现。
 - RPC/HTTP 类型：实现自定义 transport 或协议集成。
 
 网络服务实现位于 `@downcity/agent`。本地 `Agent` 不监听端口，也不管理 transport 生命周期。

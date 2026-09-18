@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CoreEngineRunner } from "../bin/executor/core-engine/CoreEngineRunner.js";
+import { SessionExecutor } from "../bin/session/runner/SessionExecutor.js";
 import {
   MAX_TOOL_LOOP_STEPS,
   TOOL_LOOP_MAX_STEPS_ERROR_CODE,
@@ -101,7 +101,7 @@ function create_turn_input(model) {
 }
 
 function create_runner() {
-  return new CoreEngineRunner({
+  return new SessionExecutor({
     session_id: "tool-loop-limit-session",
     logger: { log: async () => {} },
     should_compact_on_error: () => false,

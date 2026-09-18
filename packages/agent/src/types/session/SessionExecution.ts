@@ -90,10 +90,3 @@ export interface SessionStepExecutionInput {
 
 }
 
-/** 单个 Session 的统一 Turn 执行协议。 */
-export interface SessionExecutor {
-  /** 执行一个已经由 SessionLoop 创建上下文的 Turn。 */
-  execute(
-    input: SessionTurnExecutionInput,
-  ): Promise<SessionTurnExecutionResult>;
-}

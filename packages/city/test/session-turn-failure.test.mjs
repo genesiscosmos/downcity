@@ -52,7 +52,9 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
     workspace_path: root_path,
     executor: {
       execute: async ({ turn_context }) => await execute_turn(turn_context, root_path),
+      is_executing: () => false,
     },
+    advance_context: async () => false,
     maintain_context: async () => {},
     state: {
       ensure_runnable: async () => {},

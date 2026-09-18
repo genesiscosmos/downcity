@@ -25,10 +25,6 @@ export interface CreateRuntimeSessionPortParams {
   session_id: string;
   /** 获取当前 Session 优先解析后的运行时模型实例。 */
   get_model: SessionPort["get_model"];
-  /**
-   * 读取当前 session 底层执行端口。
-   */
-  get_executor: SessionPort["get_executor"];
   /** 读取全部 canonical Session Message。 */
   messages: SessionPort["messages"];
   /**
@@ -72,7 +68,6 @@ export function create_runtime_session_port(
   return {
     session_id: params.session_id,
     get_model: () => params.get_model(),
-    get_executor: () => params.get_executor(),
     messages: async () => await params.messages(),
     prompt: async (input) => {
       await params.ensure_ready_for_execution();

@@ -31,7 +31,7 @@ import { Session } from "@/session/Session.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
-import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
+import { DefaultSessionComposer } from "@/session/composer/DefaultSessionComposer.js";
 import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";

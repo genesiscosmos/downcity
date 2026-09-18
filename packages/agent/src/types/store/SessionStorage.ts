@@ -42,11 +42,11 @@ export interface SessionMessageStorageStats {
   latest_message: SessionMessage | null;
 }
 
-/** Composer Policy SQL 参数允许的 SQLite 标量。 */
+/** Composer 派生 SQL 参数允许的 SQLite 标量。 */
 export type SessionStorageValue = string | number | bigint | Uint8Array | null;
 
-/** Composer Policy 专属派生表的受限事务。 */
-export interface SessionComposerStorageTransaction {
+/** 单个 Composer 命名空间的派生表事务。 */
+export interface SessionDerivedStoreTransaction {
   /** 执行一条不返回数据的派生 SQL。 */
   execute(sql: string, parameters?: readonly SessionStorageValue[]): void;
   /** 读取第一条派生数据；没有匹配时返回空。 */
@@ -55,12 +55,15 @@ export interface SessionComposerStorageTransaction {
   all<TRow>(sql: string, parameters?: readonly SessionStorageValue[]): TRow[];
 }
 
-/** Composer 对 canonical history 和专属派生表的存储视图。 */
-export interface SessionComposerStorage {
-  /** 按 sequence 升序读取全部 canonical Message 聚合。 */
-  list_messages(): Promise<SessionMessage[]>;
-  /** 在短事务中操作当前 Policy 的派生表。 */
-  transaction<T>(operation: (transaction: SessionComposerStorageTransaction) => T): Promise<T>;
+/**
+ * Composer 的派生表存储视图。
+ *
+ * 关键点（中文）：这里只暴露当前命名空间的派生表事务；canonical history 由宿主读取后
+ * 以参数传给 Composer，因此 Composer 不可能改写或绕过 canonical Message。
+ */
+export interface SessionDerivedStore {
+  /** 在短事务中操作当前命名空间的派生表。 */
+  transaction<T>(operation: (transaction: SessionDerivedStoreTransaction) => T): Promise<T>;
 }
 
 /** 单个 Session 的结构化持久化能力。 */
@@ -116,8 +119,8 @@ export interface SessionStorage {
   message_count(): Promise<number>;
   /** 清空 canonical Message 与依赖它们的派生数据。 */
   clear_messages(): Promise<void>;
-  /** 返回当前 Composer Policy 的派生存储视图。 */
-  composer_storage(namespace: string): SessionComposerStorage;
+  /** 返回指定 Composer 命名空间的派生存储视图。 */
+  derived_store(namespace: string): SessionDerivedStore;
   /** 关闭数据库连接。 */
   dispose(): Promise<void>;
 }

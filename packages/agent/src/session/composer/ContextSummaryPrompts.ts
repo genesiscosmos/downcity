@@ -1,7 +1,10 @@
-/** Session 累计摘要策略使用的稳定提示词。 */
+/** Session 累计摘要使用的稳定提示词。 */
+
+/** 摘要模型可使用的最大输出 token。 */
+export const CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS = 4_000;
 
 /** 上下文摘要 system prompt。 */
-export const SESSION_SUMMARY_SYSTEM_PROMPT = [
+export const CONTEXT_SUMMARY_SYSTEM_PROMPT = [
   "You are a context summarization assistant.",
   "Read the conversation and produce only a structured checkpoint summary.",
   "Do not continue the conversation or answer its questions.",

@@ -50,6 +50,10 @@ export type {
 } from "./group/index.js";
 export { AiDispatchStrategy } from "./group/index.js";
 export type { SessionStore } from "./types/store/SessionStore.js";
+export type {
+  SessionDerivedStore,
+  SessionDerivedStoreTransaction,
+} from "./types/store/SessionStorage.js";
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { Session } from "./session/Session.js";
@@ -210,10 +214,9 @@ export type {
 } from "./types/action/ActionResult.js";
 
 // Session 与即时执行集成
-export { Executor } from "./executor/Executor.js";
-export { DefaultSessionComposer } from "./session/DefaultSessionComposer.js";
-export { FullHistoryContextPolicy } from "./session/composer/policies/FullHistoryContextPolicy.js";
-export { AdaptivePartContextPolicy } from "./session/composer/policies/AdaptivePartContextPolicy.js";
+export { SessionExecutor } from "./session/runner/SessionExecutor.js";
+export { DefaultSessionComposer } from "./session/composer/DefaultSessionComposer.js";
+export { FullHistorySessionComposer } from "./session/composer/FullHistorySessionComposer.js";
 export { SessionMessages } from "./session/SessionMessages.js";
 export type {
   AppendExternalSessionAgentMessageInput,
@@ -231,20 +234,12 @@ export type {
   SessionComposeState,
   SessionComposeTurn,
   SessionComposerInitializeInput,
-  SessionContextRecoveryInput,
+  SessionContextAdvanceInput,
+  SessionContextAdvanceTrigger,
+  SessionContextDiagnostics,
   SessionStepInput,
 } from "./types/session/SessionComposer.js";
 export type {
-  SessionContextPolicy,
-  SessionContextPolicyInitializeInput,
-  SessionContextPolicyInput,
-  SessionContextPolicyRecoveryInput,
-  SessionContextRecoveryReason,
-  SessionResolvedContext,
-  SessionResolvedContextDiagnostics,
-} from "./types/session/SessionContextPolicy.js";
-export type {
-  SessionExecutor,
   SessionTurnExecutionResult,
 } from "./types/session/SessionExecution.js";
 export { create_session_turn_context } from "./session/runtime/SessionTurnContext.js";
