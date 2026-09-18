@@ -6,6 +6,7 @@ import type { ControlsConfig } from "streamdown";
 import { MarkdownStreamingProvider } from "@/components/markdown/markdown_stream_context";
 import { markdown_components } from "@/components/markdown/markdown_components";
 import { markdown_rehype_plugins, markdown_remark_plugins } from "@/components/markdown/markdown_plugins";
+import { exceeds_markdown_limits } from "@/components/markdown/markdown_render_limits";
 import { normalize_markdown_math } from "@/components/markdown/normalize_markdown_math";
 import type { MarkdownProps } from "@/types/Markdown";
 
@@ -29,6 +30,16 @@ const markdown_controls: ControlsConfig = {
  * 流式状态通过 Context 下传，图表据此决定解析失败时是显示源码还是报错。
  */
 export function Markdown({ text, mode }: MarkdownProps) {
+  if (exceeds_markdown_limits(text)) {
+    return (
+      <MarkdownStreamingProvider value={false}>
+        <div className="markdown whitespace-pre-wrap break-words" data-markdown-fallback="plain">
+          {text}
+        </div>
+      </MarkdownStreamingProvider>
+    );
+  }
+
   return (
     <MarkdownStreamingProvider value={mode === "streaming"}>
       <Streamdown className="markdown" controls={markdown_controls} components={markdown_components} mode={mode} rehypePlugins={markdown_rehype_plugins} remarkPlugins={markdown_remark_plugins}>

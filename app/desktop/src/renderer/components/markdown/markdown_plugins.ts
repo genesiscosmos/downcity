@@ -4,11 +4,12 @@ import type { ComponentProps } from "react";
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from "streamdown";
 // 相对路径加显式扩展名：本模块被 node:test 直接加载，`@/` 别名与无扩展名在 Node 侧都无法解析。
 import { rehype_mermaid_blocks } from "./rehype_mermaid_blocks.ts";
+import { remark_gfm_without_autolink } from "./remark_gfm_without_autolink.ts";
 
 /** 开启常见的 `$...$` 行内公式语法，同时保留 Streamdown 的默认 Markdown 插件。 */
 const default_math_plugin = defaultRemarkPlugins.math as [any, ...any[]];
 export const markdown_remark_plugins: NonNullable<ComponentProps<typeof Streamdown>["remarkPlugins"]> = [
-  defaultRemarkPlugins.gfm,
+  remark_gfm_without_autolink,
   [default_math_plugin[0], { singleDollarTextMath: true }],
   defaultRemarkPlugins.cjkFriendly,
   defaultRemarkPlugins.cjkFriendlyGfmStrikethrough,
