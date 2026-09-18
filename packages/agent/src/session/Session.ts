@@ -49,7 +49,7 @@ import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
 import type { SessionHookRuntime } from "@downcity/type";
 import { SessionInteractions } from "@/session/control/SessionInteractions.js";
-import { SessionShellApprovalAdapter } from "@/session/execution/tools/SessionShellApprovalAdapter.js";
+import { SessionApprovalRuntime } from "@/session/execution/tools/SessionApprovalRuntime.js";
 import { DefaultSessionComposer } from "@/session/DefaultSessionComposer.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
@@ -93,7 +93,7 @@ export class Session implements AgentSession {
   private readonly executor: Executor;
   private readonly events: SessionEventHub;
   private readonly session_interactions: SessionInteractions;
-  private readonly shell_approval_adapter: SessionShellApprovalAdapter;
+  private readonly approval_runtime: SessionApprovalRuntime;
   private readonly local_state: SessionLocalState;
   private readonly get_workspace_env: SessionOptions["get_workspace_env"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
@@ -153,7 +153,7 @@ export class Session implements AgentSession {
       session_id: this.id,
       messages: this.session_messages,
     });
-    this.shell_approval_adapter = new SessionShellApprovalAdapter({
+    this.approval_runtime = new SessionApprovalRuntime({
       session_id: this.id,
       interactions: this.session_interactions,
     });
@@ -208,7 +208,8 @@ export class Session implements AgentSession {
       logger: this.logger,
       messages: this.session_messages,
       interactions: this.session_interactions,
-      shell_approval_gateway: this.shell_approval_adapter,
+      shell_approval_gateway: this.approval_runtime,
+      approval: this.approval_runtime,
       queue: this.session_queue,
     });
   }
@@ -224,7 +225,7 @@ export class Session implements AgentSession {
           this.session_messages.initialize(),
           this.state.initialize(),
         ]);
-        this.shell_approval_adapter.set_effective_mode(
+        this.approval_runtime.set_effective_mode(
           this.state.get_approval_mode(),
         );
       })();
@@ -344,7 +345,7 @@ export class Session implements AgentSession {
       execute: async () => {
         if (model_result) this.state.apply_model_config(model_result.config);
         if (security_changed && next_approval_mode) {
-          this.shell_approval_adapter.set_effective_mode(next_approval_mode);
+          this.approval_runtime.set_effective_mode(next_approval_mode);
         }
       },
       ...(completion ? { completion } : {}),
@@ -394,7 +395,7 @@ export class Session implements AgentSession {
       ...(active_turn_id ? { active_turn_id } : {}),
       security: {
         approval_mode: this.state.get_approval_mode(),
-        effective_approval_mode: this.shell_approval_adapter.get_effective_mode(),
+        effective_approval_mode: this.approval_runtime.get_effective_mode(),
       },
     };
   }
@@ -500,7 +501,7 @@ export class Session implements AgentSession {
     }
     const approval_mode = this.state.get_approval_mode();
     await forked.state.set_approval_mode(approval_mode);
-    forked.shell_approval_adapter.set_effective_mode(approval_mode);
+    forked.approval_runtime.set_effective_mode(approval_mode);
     const relocated_messages = await relocate_fork_message_files(fork_messages, this.store.attachments, forked.store.attachments);
     await forked.session_messages.import_messages(relocated_messages);
     await forked.session_messages.persist_action({

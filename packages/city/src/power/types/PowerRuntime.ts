@@ -170,6 +170,8 @@ export interface PowerAction<TInput extends PowerJsonValue = PowerJsonValue, TRe
    * - 只对消耗额度、不可逆或高风险的少量动作显式开启，默认关闭。
    * - 与 `access` 分开是刻意的：`chat.send` 是 write，但任务通知依赖它，
    *   把它当作审批条件会让无人值守的定时任务卡住。
+   * - 是否真进入人工队列由 Session 审批模式统一决定（见 SessionApprovalRuntime），
+   *   这里只声明「需不需要审批」。
    */
   readonly approval?: boolean;
   /** Action 输入 schema。 */

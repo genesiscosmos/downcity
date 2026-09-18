@@ -67,6 +67,15 @@ export interface SessionTurnContextInit {
   /** 当前 Session 提供的 host Shell 审批网关。 */
   shell_approval_gateway?: ShellApprovalGateway;
 
+  /**
+   * 当前 Session 提供的统一审批入口。
+   *
+   * 关键点（中文）
+   * - 工具层与 Shell 共用同一实例，因此审批模式只有一处事实源。
+   * - 未提供时工具审批回退到直接创建 Interaction（仅限有 interactions 的场景）。
+   */
+  approval?: SessionApprovalPort;
+
   /** 当前 Turn effects 追加后触发的实时观测回调，宿主可据此广播文件改动摘要。 */
   on_effects_changed?: (effects: readonly RuntimeToolEffect[]) => void;
 
@@ -202,6 +211,47 @@ export interface SessionTurnContext {
     /** 当前 Session 提供的 host 执行审批网关。 */
     readonly approval_gateway?: ShellApprovalGateway;
   };
+
+  /** 当前 Session 的统一审批入口；工具层与 Shell 共用同一实例。 */
+  readonly approval?: SessionApprovalPort;
+}
+
+/** 工具向当前 Session 提交的一次审批请求。 */
+export interface SessionApprovalRequest {
+  /** 当前请求所属 Session。 */
+  readonly session_id: string;
+  /** 当前请求所属 Turn。 */
+  readonly turn_id: string;
+  /** 当前请求关联的 Tool Call。 */
+  readonly tool_call_id: string;
+  /** 发起审批的工具名。 */
+  readonly tool_name: string;
+  /** 已校验的工具输入，原样进入审批 payload。 */
+  readonly input: unknown;
+  /** 工具用途说明；未声明时省略。 */
+  readonly tool_description?: string;
+}
+
+/** 一次审批请求的等待句柄。 */
+export interface SessionApprovalHandle {
+  /** 当前审批请求的稳定标识。 */
+  readonly approval_id: string;
+  /** 是否真正进入人工审批队列；always-allow 时为 false。 */
+  readonly requires_user_decision: boolean;
+  /** 最终决定；调用方必须等待该 Promise 后才能继续。 */
+  readonly decision: Promise<"approved" | "denied">;
+}
+
+/** 当前 Session 的统一审批入口。 */
+export interface SessionApprovalPort {
+  /**
+   * 创建一次工具审批请求，并返回可等待的决定句柄。
+   *
+   * 关键点（中文）
+   * - 审批模式（ask / always-allow）在这里统一生效，调用方不需要自己判断。
+   * - 方法名与 Shell 的 `request` 区分：两者请求形状不同，不能共用一个签名。
+   */
+  request_tool(input: SessionApprovalRequest): Promise<SessionApprovalHandle>;
 }
 
 export type {

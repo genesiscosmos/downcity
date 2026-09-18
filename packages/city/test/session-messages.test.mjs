@@ -13,14 +13,14 @@ import test from "node:test";
 
 import { LocalFileSystem } from "@downcity/city";
 import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";
-import { SessionShellApprovalAdapter } from "../../agent/bin/session/execution/tools/SessionShellApprovalAdapter.js";
+import { SessionApprovalRuntime } from "../../agent/bin/session/execution/tools/SessionApprovalRuntime.js";
 import {
   normalize_session_user_parts,
   SessionMessages,
 } from "../../agent/bin/session/SessionMessages.js";
 import { session_messages_to_model_messages } from "../../agent/bin/executor/messages/SessionModelMessages.js";
 import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
-import { AdaptivePartContextPolicy } from "../../agent/bin/session/composer/policies/AdaptivePartContextPolicy.js";
+import { DefaultSessionComposer } from "../../agent/bin/session/composer/DefaultSessionComposer.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 /** 可让下一次 Assistant 草稿更新失败的测试 Store。 */
@@ -290,7 +290,7 @@ test("工具调用、审批、结果和后续文本保持 canonical 顺序", asy
     session_id: "tool-order-test",
     messages: recorder,
   });
-  const approval_adapter = new SessionShellApprovalAdapter({
+  const approval_adapter = new SessionApprovalRuntime({
     session_id: "tool-order-test",
     interactions,
   });
@@ -575,7 +575,37 @@ test("Action 更新保留 identity 并只读取最新 revision", async () => {
   assert.equal(page.items[0].parts[0].state, "completed");
 });
 
-test("Adaptive Part Policy 可在单个 Agent Message 内建立摘要边界", async () => {
+/** Composer 需要的最小 Session 身份快照。 */
+function create_composer_session(root_path) {
+  return {
+    agent_id: "test-agent",
+    session_id: "session-messages-test",
+    project_root: root_path,
+    created_at: 1,
+    timezone: "UTC",
+  };
+}
+
+/** 组装 Composer 需要的最小只读 Step 快照。 */
+function create_composer_input(root_path, history, derived) {
+  return {
+    session: create_composer_session(root_path),
+    state: {
+      env: {},
+      systems: [],
+      tools: {},
+      instruction_system_blocks: [],
+      managed_power_system_blocks: [],
+      power_system_blocks: [],
+      power_context_blocks: [],
+    },
+    history,
+    derived,
+    turn: { advance_count: 0 },
+  };
+}
+
+test("DefaultSessionComposer 可在单个 Agent Message 内建立摘要边界", async () => {
   const session_id = "compact-model-history-test";
   const { recorder, store, root_path } = await create_recorder(session_id);
   await recorder.append_external_agent_message({
@@ -599,29 +629,39 @@ test("Adaptive Part Policy 可在单个 Agent Message 内建立摘要边界", as
       };
     },
   });
-  const policy = new AdaptivePartContextPolicy();
-  const policy_storage = store.composer_storage(policy.name);
-  await policy.initialize({ storage: policy_storage });
-  assert.equal(await policy.recover({ storage: policy_storage, model, reason: "provider_context_limit", project_root: root_path }), true);
+  const composer = new DefaultSessionComposer();
+  const derived = store.derived_store(composer.name);
+  await composer.initialize({ derived });
+  assert.equal(await composer.advance_context({
+    session: create_composer_session(root_path),
+    history: await store.list_messages(),
+    derived,
+    trigger: "provider_context_limit",
+    model,
+  }), true);
   assert.match(summary_prompt, /part 1/);
   assert.match(summary_prompt, /part 3/);
   assert.doesNotMatch(summary_prompt, /part 4/);
-  const context = await policy.resolve({ storage: policy_storage, project_root: root_path });
   const canonical = await recorder.list_history_messages();
   assert.equal(canonical.length, 1);
   assert.equal(canonical[0].parts.length, 6);
-  const model_messages = context.messages;
-  assert.equal(context.system_blocks[0].source, "session");
-  assert.match(context.system_blocks[0].content, /<session-context-summary>/);
-  assert.equal(model_messages.length, 1);
-  assert.deepEqual(model_messages[0].content.map((part) => part.text), [
+  const step = await composer.compose(
+    create_composer_input(root_path, await store.list_messages(), derived),
+  );
+  const summary_block = step.system_blocks.find(
+    (block) => block.name === "context-summary",
+  );
+  assert.equal(summary_block.source, "session");
+  assert.match(summary_block.content, /<session-context-summary>/);
+  assert.equal(step.messages.length, 1);
+  assert.deepEqual(step.messages[0].content.map((part) => part.text), [
     "part 4",
     "part 5",
     "part 6",
   ]);
 });
 
-test("Adaptive Part Policy 可压缩单个占满上下文的 Part", async () => {
+test("DefaultSessionComposer 可压缩单个占满上下文的 Part", async () => {
   const session_id = "compact-single-large-part-test";
   const { recorder, store, root_path } = await create_recorder(session_id);
   await recorder.append_external_agent_message({
@@ -641,22 +681,25 @@ test("Adaptive Part Policy 可压缩单个占满上下文的 Part", async () => 
       },
     }),
   });
-  const policy = new AdaptivePartContextPolicy();
-  const policy_storage = store.composer_storage(policy.name);
-  await policy.initialize({ storage: policy_storage });
+  const composer = new DefaultSessionComposer();
+  const derived = store.derived_store(composer.name);
+  await composer.initialize({ derived });
 
-  assert.equal(await policy.recover({
-    storage: policy_storage,
+  assert.equal(await composer.advance_context({
+    session: create_composer_session(root_path),
+    history: await store.list_messages(),
+    derived,
+    trigger: "provider_context_limit",
     model,
-    reason: "provider_context_limit",
-    project_root: root_path,
   }), true);
-  const context = await policy.resolve({
-    storage: policy_storage,
-    project_root: root_path,
-  });
-  assert.equal(context.messages.length, 0);
-  assert.match(context.system_blocks[0].content, /single part summary/);
+  const step = await composer.compose(
+    create_composer_input(root_path, await store.list_messages(), derived),
+  );
+  const summary_block = step.system_blocks.find(
+    (block) => block.name === "context-summary",
+  );
+  assert.equal(step.messages.length, 0);
+  assert.match(summary_block.content, /single part summary/);
 });
 
 test("内部上下文读取不会被 500 条 UI 分页边界截断", async () => {

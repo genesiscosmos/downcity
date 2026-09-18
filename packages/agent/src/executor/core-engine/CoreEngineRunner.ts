@@ -509,7 +509,13 @@ export class CoreEngineRunner {
   }
 }
 
-/** 在工具执行前接入 Session canonical Interaction 生命周期。 */
+/**
+ * 在工具执行前接入 Session 统一审批。
+ *
+ * 关键点（中文）
+ * - 审批模式（ask / always-allow）由 Session 审批运行时统一生效，本函数不自判模式。
+ * - 需不需要审批仍由工具自己的 `needs_approval` 声明。
+ */
 async function resolve_tool_approval(input: {
   call: ModelStepToolCall;
   tool: Tool;
@@ -523,36 +529,22 @@ async function resolve_tool_approval(input: {
       })
     : needs_approval === true;
   if (!required) return true;
-  const interactions = input.turn_context.interactions;
-  if (!interactions) {
-    throw new Error("Tool approval requires a Session Interaction port");
+
+  const approval = input.turn_context.approval;
+  if (!approval) {
+    throw new Error("Tool approval requires a Session approval port");
   }
-  const approval_id = `approval:${input.call.tool_call_id}`;
-  const handle = await interactions.request({
-    interaction_id: `interaction:tool-approval:${approval_id}`,
+  const handle = await approval.request_tool({
+    session_id: input.turn_context.session.session_id,
     turn_id: input.turn_context.session.turn_id,
-    type: "approval",
-    source: {
-      type: "tool",
-      tool_call_id: input.call.tool_call_id,
-      tool_name: input.call.tool_name,
-    },
-    payload: {
-      operation: "tool",
-      validated_input: to_session_json_value(input.call.input),
-      ...(input.tool.description ? { tool_description: input.tool.description } : {}),
-    },
-    response_schema: SESSION_APPROVAL_RESPONSE_SCHEMA,
-    created_at: Date.now(),
+    tool_call_id: input.call.tool_call_id,
+    tool_name: input.call.tool_name,
+    input: input.call.input,
+    ...(input.tool.description ? { tool_description: input.tool.description } : {}),
   });
-  const result = await handle.result;
-  const payload = result.status === "resolved" && result.response.type === "approval"
-    ? result.response.payload as { decision?: unknown }
-    : undefined;
-  return result.status === "resolved" &&
-    result.response.type === "approval" &&
-    result.response.outcome === "resolved" &&
-    payload?.decision === "approved";
+  // always-allow 由运行时直接放行，不会创建 Interaction。
+  if (!handle.requires_user_decision) return true;
+  return (await handle.decision) === "approved";
 }
 
 /** 构造成功执行但缺少最终内容时使用的 canonical Assistant Parts。 */

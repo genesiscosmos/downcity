@@ -547,57 +547,6 @@ flowchart TB
 
 目前 `approval` 只在四个消耗额度的 city 动作上开启。模式落地后，是否把其余 `access: "write"` 动作一并纳入 gate，就只是一个独立开关的事。
 
-## 18. Shell 转为 Power
-
-`shell_exec` 与 `shell_session({ action })` 是 power 重构后唯一残留的旧形态：两个工具，
-其中一个内部带动作开关。本阶段把 shell 收敛为一个 `shell` power。
-
-### 18.1 动作集
-
-| 动作 | 性质 | 对应旧形态 |
-| --- | --- | --- |
-| `exec` | write | `shell_exec` |
-| `session_start` | write | `shell_session({action:"start"})` |
-| `session_send` | write | `shell_session({action:"send"})` |
-| `session_read` | read | `shell_session({action:"read"})` |
-| `session_list` | read | `shell_session({action:"list"})` |
-| `session_stop` | write | `shell_session({action:"stop"})` |
-
-动作 id 是 power 内部命名空间，不带 power 名前缀，与 city 的 `env.get` 同一规则：
-模型调 `shell({ action: "session_start", args: { cmd } })`。省略 `action` 返回动作索引。
-
-### 18.2 所有权
-
-Shell 仍属于 Workspace（`Shell.tools` 与 per-Workspace 输出游标不动），但不再并进
-`WorkspaceTools`；模型面只经 City 注册的 `shell` power 暴露一次，避免同一能力两处出现。
-
-**行为变更：** shell 现在要求存在 City。此前 `workspace.tools` 自带 shell 工具，
-无 City 的裸 Agent 也有 shell；现在没有 City 就没有 `shell` 工具。仓库内的 CLI 与 Desktop
-始终建 City，因此实际路径不变，但这是 `@downcity/agent` 独立使用时的能力缩减。
-
-### 18.3 审批未改语义，但需要新增一条透传
-
-host 目标仍走 Shell 自己的审批网关（`ShellApprovalGateway`），未与 power 的
-`needs_approval` 合流——那条合并留给 `ask` / `allow` / `auto` 权限模式。
-
-但 power 动作原本拿不到工具层的执行上下文，而审批网关正在其中。为此新增一条最小透传：
-
-- `PowerExecutionContext.tool_context?: unknown`：Executor 注入的宿主工具上下文。
-- 链路：Executor 注入 → `create_power_tool` 透传 → `invoke_power_tool` 合入快照 →
-  `create_action_execution_context` 原样保留（此处曾漏掉，导致审批静默降级为拒绝）。
-- 非工具入口（CLI、定时任务、程序化调用）为空。
-
-### 18.4 验证
-
-`session-shell-approval` 测试（host 审批保留 Turn 并等待用户决定）通过，证明审批链路在
-power 路径下完整；该测试原本没建 City，本次补上以匹配新的所有权。city 277 项 264 通过，
-唯一失败仍为既有的 `session-config-turn-boundary`。
-
-七个包 + 两个 app 全部 `tsc --noEmit` 零错误；`release:test` 20/20。
-
-**未做：** `ask_question` 保持原样。它属于 `packages/agent`，是 interaction 机制的产出端，
-与审批同源；改成 City power 会让内核反向依赖上层，且它不使用 power 的任何特性。
-
 ## 17. 实施记录（阶段）
 
 ### 17.1 阶段 A（命名迁移）已完成
@@ -703,3 +652,118 @@ city 已改为普通 `PowerDefinition`，与其它 power 走同一条注册与�
 **未解决：`session-config-turn-boundary.test.mjs` 的第 7 项。** “running session approval mode changes stay queued until the next Session step” 失败：运行中的 Turn 尚未结束时，`effective_approval_mode` 已从 `ask` 变为 `always-allow`，而测试要求它排队到下一个 Step。该行为属于 agent 的 Session 配置与 approval-mode 边界，本次重构未修改该路径（`packages/agent/src` 相对 HEAD 仅为改名）。按“内核保持现状”的决定未做改动，留给 Session 权限模式那一阶段一并处理。
 
 **契约简化：工具结果不再携带机器可读错误码。** 旧 `city` 工具有 `error.code`（`invalid_args` / `not_found` / `unsupported_action`）；统一到 `PowerActionResult` 后只剩 `success` / `error` / `message` / `data`，失败原因以文本表达。模型侧不受影响，但宿主若需要结构化错误码需后续补回。
+
+## 18. Shell 转为 Power
+
+`shell_exec` 与 `shell_session({ action })` 是 power 重构后唯一残留的旧形态：两个工具，
+其中一个内部带动作开关。本阶段把 shell 收敛为一个 `shell` power。
+
+### 18.1 动作集
+
+| 动作 | 性质 | 对应旧形态 |
+| --- | --- | --- |
+| `exec` | write | `shell_exec` |
+| `session_start` | write | `shell_session({action:"start"})` |
+| `session_send` | write | `shell_session({action:"send"})` |
+| `session_read` | read | `shell_session({action:"read"})` |
+| `session_list` | read | `shell_session({action:"list"})` |
+| `session_stop` | write | `shell_session({action:"stop"})` |
+
+动作 id 是 power 内部命名空间，不带 power 名前缀，与 city 的 `env.get` 同一规则：
+模型调 `shell({ action: "session_start", args: { cmd } })`。省略 `action` 返回动作索引。
+
+### 18.2 所有权
+
+Shell 仍属于 Workspace（`Shell.tools` 与 per-Workspace 输出游标不动），但不再并进
+`WorkspaceTools`；模型面只经 City 注册的 `shell` power 暴露一次，避免同一能力两处出现。
+
+**行为变更：** shell 现在要求存在 City。此前 `workspace.tools` 自带 shell 工具，
+无 City 的裸 Agent 也有 shell；现在没有 City 就没有 `shell` 工具。仓库内的 CLI 与 Desktop
+始终建 City，因此实际路径不变，但这是 `@downcity/agent` 独立使用时的能力缩减。
+
+### 18.3 审批未改语义，但需要新增一条透传
+
+host 目标仍走 Shell 自己的审批网关（`ShellApprovalGateway`），未与 power 的
+`needs_approval` 合流——那条合并留给 `ask` / `allow` / `auto` 权限模式。
+
+但 power 动作原本拿不到工具层的执行上下文，而审批网关正在其中。为此新增一条最小透传：
+
+- `PowerExecutionContext.tool_context?: unknown`：Executor 注入的宿主工具上下文。
+- 链路：Executor 注入 → `create_power_tool` 透传 → `invoke_power_tool` 合入快照 →
+  `create_action_execution_context` 原样保留（此处曾漏掉，导致审批静默降级为拒绝）。
+- 非工具入口（CLI、定时任务、程序化调用）为空。
+
+### 18.4 验证
+
+`session-shell-approval` 测试（host 审批保留 Turn 并等待用户决定）通过，证明审批链路在
+power 路径下完整；该测试原本没建 City，本次补上以匹配新的所有权。city 277 项 264 通过，
+唯一失败仍为既有的 `session-config-turn-boundary`。
+
+七个包 + 两个 app 全部 `tsc --noEmit` 零错误；`release:test` 20/20。
+
+**未做：** `ask_question` 保持原样。它属于 `packages/agent`，是 interaction 机制的产出端，
+与审批同源；改成 City power 会让内核反向依赖上层，且它不使用 power 的任何特性。
+
+## 19. 审批合并为一条服务
+
+### 19.1 合并前的两条线
+
+| | 工具审批 | Shell host 审批 |
+| --- | --- | --- |
+| 触发 | power 动作声明 `approval` | 动作内判 `target === host` |
+| 创建 Interaction | CoreEngineRunner 内联 | `SessionShellApprovalAdapter` |
+| 读 `approval_mode` | 否 | 是 |
+| `always-allow` 效果 | 无效 | 自动放行 |
+| 身份标记 | `source.type: "tool"` | `source.type: "shell"` |
+
+两条线各自的抽象不同，且模式只挂在 Shell 一侧；用户把 Session 设为 `always-allow` 后
+`image.create` 这类动作仍会每次询问，与「已允许全部」的承诺不一致。
+
+### 19.2 合并后
+
+`SessionShellApprovalAdapter` → `SessionApprovalRuntime`，成为 Session 内唯一的审批入口：
+
+- `request()`：Shell host 审批（形状不变）。
+- `request_tool()`：通用工具审批，供内核门使用。
+- 两者共用 `decide()`：**模式只在这里生效**，创建 Interaction 也只在这里。
+- Session 向 turn context 同时注入 `shell_approval_gateway` 与 `approval`，两者是**同一个实例**，
+  因此模式只有一处事实源。
+
+内核门（`resolve_tool_approval`）改为调用 `turn_context.approval.request_tool()`，
+并看 `requires_user_decision`：`always-allow` 时运行时直接放行且不创建 Interaction。
+
+**已决：模式统一覆盖**（用户选择）。`always-allow` 现在也会跳过 power 写动作审批；
+这是行为变更，但它修的正是原先的不一致。
+
+### 19.3 保留了两个触发点
+
+合并的是**服务与模式**，不是触发点。Shell 仍自己判 host 并发起审批，理由：
+
+1. `session_send` 是否需要审批取决于目标会话的**运行时** target，不在工具入参里，
+   无法用 `needs_approval` 谓词判定。
+2. 去掉 Shell 内部的审批会让**程序化入口**绕过审批。今天 `run_action({power: "shell", action: "exec",
+   payload: { target: "host" }})` 因无审批网关而 fail closed（拒绝）；若改由工具层单点拦截，
+   这类调用将直接执行 host，属安全回退。
+
+实现过程中曾按「Shell 不再自判、声明 `approval` 谓词」写了一半，发现上述第 2 点后回退。
+同时为审批主题引入的 `approval_subject` 契约字段也一并撤销——它不再有使用方，
+按「避免不必要代码」原则不保留。
+
+### 19.4 兼容保持
+
+- Shell 审批 payload 字段不变（`operation` / `command` / `cwd` / `reason`），
+  因为该路径未改；`session-shell-approval` 测试通过背书。
+- 工具审批仍不带 `title` / `description`，`session-tool-approval` 测试原样通过。
+- 未加超时，挂起行为保持现状。
+
+### 19.5 验证
+
+`packages/city` 277 项 264 通过（唯一失败仍为既有的 `session-config-turn-boundary`）；
+`session-shell-approval` 1/1；`session-tool-approval` 2/2。另以临时脚本验证合并语义（已删除）：
+ask 模式下工具审批进入队列并可由用户批准；`always-allow` 下工具审批与 shell 审批均直接放行
+且不创建 Interaction；工具 payload 仍为 `operation` + `validated_input` 且无 `title`。
+
+七个包 + 两个 app 全部 `tsc --noEmit` 零错误；`release:test` 20/20；desktop 活动展示 19/19。
+
+**未做（属于后续 `ask` / `allow` / `auto`）：** 把模式决策点提升到可插 `auto`（模型判定）的位置；
+以及修掉 `session-config-turn-boundary` 那个 Turn 边界排队缺陷。
