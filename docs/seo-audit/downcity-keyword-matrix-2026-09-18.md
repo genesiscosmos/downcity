@@ -409,66 +409,74 @@ Downcity 目前**只有产品页 + 文档，没有一篇信息型内容**。而�
 
 ---
 
-## 十一、部署阻塞（2026-09-18，需你侧处理）
+## 十一、部署完成（2026-09-18）
 
-### 11.1 已完成的
+### 11.1 阻塞根因：`wrangler.toml` 的项目名写错了
 
-提交 `7bd8f141a` 已**成功推送**到 `origin/main`（`40a16a66d..7bd8f141a`）。本次推送共 25 个提交：本次 SEO 提交 1 个 + 你本地已有的 24 个。
+`wrangler.toml` 里写的是 `name = "downcity-homepage"`，但那是本项目的 **pages.dev 子域名**（`downcity-homepage.pages.dev`），**不是项目名**。真实 Pages 项目名是 **`downcity`**。
 
-### 11.2 阻塞：线上未更新
+因为名字不对，`wrangler pages deploy` 直接报「项目不存在」，部署从未成功过。已修正 `wrangler.toml` 并加上注释说明这个坑。
 
-推送后持续观测约 10 分钟，https://downcity.ai 完全未变：
+同时查清了两个先前的误判：
 
-| 检查项 | 期望 | 实测 |
-|---|---|---|
-| 首页 CSS 指纹 | `app-BQ3mq7BB.css`（新） | `app-CuDpOZoF.css`（旧） |
-| `/llms.txt` | 200 | **404** |
-| `/en/blog/` | 200 | **404** |
-
-即：**推送不触发自动部署**，站上仍然是修复前的版本，本轮与上轮的全部 SEO 改动都还没上线。
-
-### 11.3 部署机制的真实情况
-
-| 项 | 实测 |
+| 先前推断 | 实际 |
 |---|---|
-| 部署目标 | Cloudflare Pages 项目 `downcity-homepage`（`wrangler.toml` 的 `pages_build_output_dir = "build/client"`） |
-| `.vercel/` | 只有一个构建缓存文件，**不是**部署目标，属残留 |
-| CI workflow | 只有 `release-integrity.yml`，**没有部署 workflow** |
-| `package.json` | **没有 deploy 脚本** |
-| `wrangler` | **未安装**（全局与本地依赖都没有） |
-| `CLOUDFLARE_API_TOKEN` | **不存在** |
-| wrangler OAuth 登录态 | **不存在**（`~/.config/.wrangler` 与 `~/.wrangler` 均无） |
+| 部署目标可能是 Vercel（因存在 `.vercel/`） | `.vercel/` 只是构建缓存残留，**实际是 Cloudflare Pages 项目 `downcity`** |
+| 可能是仓库已连接但构建失败 | Pages 项目列表里 `downcity` 的 **Git Provider = No**，即**根本没连仓库**，所以 push 不会自动部署 |
 
-环境里只有 `CLOUDFLARE_ACCOUNT_ID` 与两个 `CLOUDFLARE_R2_*`，后者是给下载函数用的 R2 `RELEASES` 绑定，不能用于 Pages 部署。
-
-### 11.4 三条可选路径（选一条即可）
-
-**A. 接 Git 联动（推荐，一次配好之后永久自动）**
-Cloudflare 控制台 → Pages → `downcity-homepage` → Settings → Builds & deployments → 连接仓库 `genesiscosmos/downcity`，生产分支 `main`，根目录 `homepage`，构建命令 `pnpm build`，输出目录 `build/client`。之后每次 push 都自动部署。
-
-**B. 手动 wrangler 部署（适合现在立即上线）**
-需先登录一次（浏览器 OAuth，我无法代做）：
+### 11.2 部署执行
 
 ```bash
 cd homepage
-pnpm add -D wrangler          # 或 npx --yes wrangler@latest
-npx wrangler login            # 浏览器授权，只需一次
-npx wrangler pages deploy build/client --project-name downcity-homepage
+npx wrangler pages deploy build/client --project-name downcity --commit-dirty=true
 ```
 
-**C. 控制台直接上传**
-用 Pages 的 Direct Upload，把 `homepage/build/client` 拖上去。（本地产物已就绪且含全部改动。）
+结果：上传 **1829 个文件**，含 `_redirects` 与 Functions bundle，部署成功。
 
-> 建议先在 Cloudflare 控制台的 Deployments 列表看一眼：**如果存在一个失败的构建**，那说明仓库已连接但构建失败，走路径 A 排查构建日志即可；**如果列表里根本没有新构建**，那就是未连接仓库，选 A 或 B。
+### 11.3 部署后线上复验（全部通过）
 
-### 11.5 部署后必须立刻复验的 5 项
+线上 CSS 指纹已变为 `app-BQ3mq7BB.css`（部署前为 `app-CuDpOZoF.css`），确认切到新版本。
 
-部署完成后请（或让我）重新拉一次线上 HTML，确认这几项从「失效」变成「生效」：
+| 复验项 | 修复前 | 部署后 |
+|---|---|---|
+| 页面级小写 `hreflang` | **0** | **3**（首页/features/blog 均 3 个） |
+| `/llms.txt` | 404 | **200** |
+| `/en/blog/`、`/zh/blog/` | 404 | **200** |
+| 首页 H1 | `Downcity` | `Agent Harness + Agent Productization Kits` |
+| `/zh/` 首页 H1 | `Downcity` | `Agent Harness 与 Agent 产品化 Kit` |
+| `/zh/features/` 中文占比 | 0.03 | **0.51** |
+| `/zh/whitepaper/` 中文占比 | 0.02 | **0.85** |
+| `/zh/start/` 中文占比 | 0.06 | **0.42** |
+| `/community/faq/` JSON-LD | 0 块 | **1 块（FAQPage）** |
+| sitemap URL 数 | 543 | **554** |
+| `/resources/` 空壳页在 sitemap | 在 | **不在** |
+| `/product/sdk/` 旧路径在 sitemap | 在 | **不在** |
 
-1. `/llms.txt` → 200
-2. 任意页面出现小写 `hreflang`（修复前为 0；驼峰 `hrefLang` 属非法属性名）
-3. `/zh/features/` 的标题为中文、正文中文占比 > 0.35（修复前 0.03）
-4. `/community/faq/` 有 `FAQPage` 的 JSON-LD（修复前 0 块）
-5. `/en/blog/`、`/zh/blog/` 与四篇文章 → 200；sitemap 变为 554 条
+**4 处 404 修复全部生效**：`/resources/examples/`、`/product/city-sdk/`、`/product/federation-sdk/`、`/en/docs/agent/overview/`、`/en/docs/cli/overview/` 均 200。
+
+**`_redirects` 生效**（旧路径 301）：`/docs` → `/en/docs/`；`/docs/quickstart` → `/en/docs/quickstart`；`/product/sdk` → `/product/federation-sdk/`；`/blog` → `/en/blog/`。
+
+**全站冒烟测试**：41 条关键路径（含 9 个 blog 页面、6 个文档空间、全部营销页）**全部 200**，无回归；不存在的路径正确返回 404。
+
+### 11.4 顺带发现：`/download/macos` 的既存故障
+
+部署前它是 **404**（函数根本没被部署），部署后变为 **502**——函数已接通，但报出「manifest 缺失」。
+
+查证：R2 bucket `downcity` 中 **`releases/manifests/macos-latest.json` 不存在**（`The specified key does not exist.`）。
+
+即：**桌面端发布产物尚未上传到 R2**，与本次 SEO 改动无关，也不是代码缺陷。导航栏的下载入口目前指向一个不可用的目标，建议由发布流程补齐（上传 manifest 与 DMG 到 `releases/` 前缀）。
+
+### 11.5 待办（更新）
+
+1. ~~推送与部署~~ → **已完成**。但**部署不是自动的**（Pages 项目未连仓库），下次改动后需重复 `wrangler pages deploy`，或按 11.6 接上 Git 联动。
+2. **接入 GSC** —— 四轮未做。四篇文章已上线，但没有数据能告诉你哪篇排上了。
+3. **上传桌面端发布产物到 R2**，修复 `/download/macos`（属发布流程，不属 SEO）。
+4. 文章页剩余 84 KB（fumadocs MDX 浏览器运行时）需改服务端渲染，属独立课题。
+
+### 11.6 建议：接上 Git 联动，避免再次卡住
+
+Pages 项目 `downcity` 当前 `Git Provider = No`，所以每次发版都得手动部署。建议在 Cloudflare 控制台 → Pages → `downcity` → Settings → Builds & deployments 连接仓库 `genesiscosmos/downcity`：生产分支 `main`、根目录 `homepage`、构建命令 `pnpm build`、输出目录 `build/client`。
+
+> 注意：`wrangler.toml` 的 `[[r2_buckets]]` 绑定在 Pages 的 Git 构建下需要在控制台单独配置（Settings → Functions → R2 bindings），否则 `/download/*` 会拿不到 `RELEASES`。
 
 

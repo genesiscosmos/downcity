@@ -1,7 +1,12 @@
-name = "downcity-homepage"
+# Cloudflare Pages 项目名。
+# 注意：必须与 Pages 项目名完全一致。之前误写为 "downcity-homepage"，那是本项目的
+# pages.dev 子域名（downcity-homepage.pages.dev），不是项目名，导致 `wrangler pages deploy`
+# 报「项目不存在」而无法发布。真实项目名为 `downcity`，绑定自定义域名 downcity.ai。
+name = "downcity"
 compatibility_date = "2026-06-26"
 pages_build_output_dir = "build/client"
 
+# 下载接口（functions/download/*）使用该绑定提供安装包。
 [[r2_buckets]]
 binding = "RELEASES"
 bucket_name = "downcity"
