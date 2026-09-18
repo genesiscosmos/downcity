@@ -25,7 +25,7 @@ export function PowerConfigPanel({ controller, power, definition }: {
   const renderer = power.source === "builtin"
     ? BUILTIN_POWER_RENDERERS[power.power_id]
     : undefined;
-  return <section className="overflow-hidden rounded-xl bg-surface-subtle p-4">
+  return <section className="overflow-hidden rounded-surface bg-surface-subtle p-4">
     <PowerRendererHost
       power_id={power.power_id}
       slot="config"

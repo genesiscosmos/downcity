@@ -114,7 +114,7 @@ export function MainView({ children }: { /** 页面 Header 与 Body。 */ childr
   // 它是「有位置就给 450」的下限，也是右栏宽度上限的来源（同一约束的两面）。
   return <div
     style={{ minWidth: `min(${SHELL_MAIN_VIEW_MIN_WIDTH_CSS}, 100%)` }}
-    className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border-subtle bg-background"
+    className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-surface border border-border-subtle bg-background"
   >{children}</div>;
 }
 
@@ -313,12 +313,12 @@ function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
       <div className={cn("relative flex h-full min-h-0 flex-col", collapsed && "invisible")} style={{ width: current_width }}>
         {mounted ? <>
           {/* 标签行。样式对齐应用内最近的同类元素（Button 的 sidebar 尺寸：
-              rounded-md / hover:bg-interaction-hover / 选中 bg-interaction-selected），
+              rounded-control / hover:bg-interaction-hover / 选中 bg-interaction-selected），
               不自己发明一套。
 
               三个设计取舍：
               1. **不用胶囊**。整行只有 40px，胶囊的圆角半径会接近半高，看上去像一组按钮；
-                 改为 rounded-md（与默认 Button 同档），才读得出「标签行」而不是「按钮群」。
+                 改为 rounded-control（与默认 Button 同档），才读得出「标签行」而不是「按钮群」。
               2. **不用下划线**。激活态只用一块填充底色（且用语义令牌，不自创颜色），
                  也不再画横向分隔线——左侧 Sidebar 的顶栏本来就没有分隔线。
               3. **不用边框**。描边 + 底色 + 圆角叠在一起就是之前那种“重”的来源；

@@ -149,7 +149,7 @@ export function AgentView({
         <SettingsContainer>
           <button
             type="button"
-            className="group flex w-fit min-w-0 items-center gap-4 rounded-2xl px-2 py-1 text-left outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/30"
+            className="group flex w-fit min-w-0 items-center gap-4 rounded-surface px-2 py-1 text-left outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/30"
             onClick={() => set_avatar_dialog_open(true)}
           >
             <AgentAvatar
@@ -285,7 +285,7 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
       <button
         type="button"
         onClick={() => set_avatar_dialog_open(true)}
-        className="rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/30"
+        className="rounded-avatar outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/30"
         title={translate_resources("agent_details.choose_avatar")}
         aria-label={translate_resources("agent_details.choose_avatar")}
       >

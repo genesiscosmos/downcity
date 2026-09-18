@@ -60,7 +60,7 @@ export function WorkspaceFilePlaceholder({ error }: {
   error: string;
 }) {
   const translate_resources = use_translation("resources");
-  if (error) return <div className="mx-auto mt-20 max-w-lg rounded-lg bg-muted px-4 py-3 text-xs leading-5 text-muted-foreground">{error}</div>;
+  if (error) return <div className="mx-auto mt-20 max-w-lg rounded-item bg-muted px-4 py-3 text-xs leading-5 text-muted-foreground">{error}</div>;
   return <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground"><TbLoader2 className="animate-spin" />{translate_resources("workspace.reading_file")}</div>;
 }
 

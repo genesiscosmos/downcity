@@ -17,7 +17,7 @@ export function SettingSection({ title, description, action, children }: { /** �
 
 /** 具有统一圆角、背景与分隔线的设置组。 */
 export function SettingGroup({ children, class_name }: { /** 设置行。 */ children: ReactNode; /** 附加样式。 */ class_name?: string }) {
-  return <div className={cn("min-w-0 divide-y divide-divider overflow-hidden rounded-lg bg-surface-subtle", class_name)}>{children}</div>;
+  return <div className={cn("min-w-0 divide-y divide-divider overflow-hidden rounded-surface bg-surface-subtle", class_name)}>{children}</div>;
 }
 
 /** 左侧说明、右侧控件的标准设置行。 */

@@ -165,7 +165,7 @@ export function TurnFileDiffCard({ data }: { /** 当前 Turn 的 canonical 文�
   const review = use_turn_file_diff_review();
   const hidden_count = Math.max(0, data.files.length - DEFAULT_VISIBLE_FILE_COUNT);
   const visible_files = show_all ? data.files : data.files.slice(0, DEFAULT_VISIBLE_FILE_COUNT);
-  return <section className="mt-2 overflow-hidden rounded-xl bg-surface-subtle text-2xs text-foreground">
+  return <section className="mt-2 overflow-hidden rounded-surface bg-surface-subtle text-2xs text-foreground">
     <div className="flex min-h-11 items-center gap-2 px-3.5">
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4"><TbFileDiff aria-hidden /></span>
       <div className="min-w-0 flex-1 truncate text-base font-medium text-foreground">{translate_chat("message.files_changed", { count: data.files.length })}</div>
@@ -291,7 +291,7 @@ export function TurnFileDiffOverview({ summary }: { /** 当前 Turn 的实时改
   // 「本轮」域始终存在，没有改动时也要给出明确说明，而不是留一个空面板。
   if (!summary) return <div className="p-3 text-2xs leading-5 text-muted-foreground">{translate_chat("file_diff.empty_turn")}</div>;
   return <div className="flex min-h-0 flex-col gap-3 p-3">
-    <div className="flex min-w-0 items-start gap-2.5 rounded-xl bg-surface-subtle px-3 py-2.5">
+    <div className="flex min-w-0 items-start gap-2.5 rounded-surface bg-surface-subtle px-3 py-2.5">
       <TbFileDiff className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="min-w-0 flex-1">
         <div className="text-xs font-medium text-foreground">{translate_chat("message.files_changed", { count: summary.files_count })}</div>

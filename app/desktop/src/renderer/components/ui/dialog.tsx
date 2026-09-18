@@ -39,7 +39,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       ref={ref}
       data-desktop-modal="true"
       className={cn(
-        "desktop-dialog-popup fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border-subtle bg-background text-foreground shadow-2xl outline-none",
+        "desktop-dialog-popup fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-surface border border-border-subtle bg-background text-foreground shadow-2xl outline-none",
         dialog_size_class_names[size],
         className,
       )}

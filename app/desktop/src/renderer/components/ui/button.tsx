@@ -17,7 +17,7 @@ const button_variants = cva(
         default: "h-6 w-auto min-w-0 gap-1 px-1.5 text-2xs leading-4 [&_svg]:size-3.5",
         icon: "size-6 shrink-0 p-0 [&_svg]:size-3.5",
         full: "h-6 w-full justify-start gap-1 px-1.5 text-2xs leading-4 [&_svg]:size-3.5",
-        sidebar: "h-8 w-full justify-start gap-2 rounded-lg px-2 text-xs [&_svg]:size-4",
+        sidebar: "h-8 w-full justify-start gap-2 rounded-control px-2 text-xs [&_svg]:size-4",
         large: "h-14 w-full gap-2 px-5 text-base font-medium leading-4 [&_svg]:size-4",
       },
       actived: {

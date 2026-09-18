@@ -125,10 +125,10 @@ test("Select、Dialog 与 Popover 保持两层结构", () => {
 test("列表型浮层把圆角与滚动分成两层", () => {
   // 待发送队列与模型详情卡都曾把 overflow 写在圆角上，是同源问题，一并守住。
   const queue = read_without_comments(path.join(renderer_root, "features/chat/components/MessageQueue.tsx"));
-  assert.ok(/overflow-hidden rounded-xl/.test(queue), "待发送队列的外层不再裁剪圆角");
+  assert.ok(/overflow-hidden rounded-surface/.test(queue), "待发送队列的外层不再裁剪圆角");
   assert.ok(/chat-queued-message-list max-h-32 overflow-y-auto/.test(queue), "待发送队列的滚动层不完整（滚动条样式类要跟着滚动层走）");
   const preview = read_without_comments(path.join(renderer_root, "features/chat/composer/ChatModelSelector.tsx"));
-  assert.ok(/<PreviewCard\.Popup[\s\S]{0,400}?overflow-hidden rounded-xl/.test(preview), "模型详情卡的外层不再裁剪圆角");
+  assert.ok(/<PreviewCard\.Popup[\s\S]{0,400}?overflow-hidden rounded-surface/.test(preview), "模型详情卡的外层不再裁剪圆角");
   // 侧栏主体行展开出来的会话列表：卡片（在行组件内）负责圆角与裁剪，本层负责滚动。
   // 但**只有浮动态**是这样：嵌入态自己就是列表流里的一段，不包滚动容器（否则鼠标停在
   // 面板上就滚不动侧栏，见 SubjectConversationsPanel 的“滚动”一节）。
@@ -143,6 +143,6 @@ test("列表型浮层把圆角与滚动分成两层", () => {
   // 裁剪是必要的：卡圆角 8px、面板内缩 6px、滚动条宽 5px，仅靠内缩挡不住滚动条最外 1px。
   // 边框用 border（卡片靠它读得出边界）、不用 inset-ring（多一圈线）；见 subjectCard。
   const card = read_without_comments(path.join(renderer_root, "layouts/sidebar/subjectCard.ts"));
-  assert.ok(/const card_class_name = `flex[^`]*flex-col overflow-hidden rounded-lg border border-border/.test(card), "卡片没有负责裁剪、圆角与描边");
+  assert.ok(/const card_class_name = `flex[^`]*flex-col overflow-hidden rounded-surface border border-border/.test(card), "卡片没有负责裁剪、圆角与描边");
   assert.ok(!/rounded-floating-surface|border border-border/.test(conversations_panel), "会话列表自己又画了一层表面，会和卡片叠成双层描边");
 });

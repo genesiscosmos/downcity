@@ -214,7 +214,7 @@ export const user_message_stack_max_class_name = "max-w-[min(80%,42rem)]";
 export const user_message_stack_expanded_class_name = "max-w-[42rem]";
 
 /** 气泡本体：与 Agent 正文区分开的唯一手段（右侧、圆角、浅底）。 */
-export const user_message_bubble_class_name = "ml-auto w-fit max-w-full overflow-hidden rounded-2xl rounded-tr-none bg-surface-subtle px-3 py-2 text-foreground";
+export const user_message_bubble_class_name = "ml-auto w-fit max-w-full overflow-hidden rounded-surface rounded-tr-none bg-surface-subtle px-3 py-2 text-foreground";
 
 /** 就地编辑时的容器：不要气泡外观，编辑器自带边框与背景。 */
 export const user_message_editor_class_name = "ml-auto flex w-full max-w-full flex-col overflow-visible text-foreground";

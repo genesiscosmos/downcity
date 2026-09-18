@@ -31,7 +31,7 @@ function PowerListItem({ power, active, select_power }: {
   /** 当前是否打开该 Power 详情。 */ readonly active: boolean;
   /** 打开 Power 详情。 */ select_power(power_id: string): void;
 }) {
-  return <button type="button" onClick={() => select_power(power.power_id)} className={cn("group flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30", active && "bg-interaction-selected")}>
+  return <button type="button" onClick={() => select_power(power.power_id)} className={cn("group flex min-h-11 w-full items-center gap-2.5 rounded-item px-2 py-1.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30", active && "bg-interaction-selected")}>
     <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-muted-foreground"><PowerIcon power_id={power.power_id} icon_url={power.icon_url} /></span>
     <span className="min-w-0 flex-1"><span className="block truncate text-xs text-foreground">{power.title}</span><span className="mt-0.5 block truncate text-3xs text-muted-foreground">{power.description}</span></span>
   </button>;

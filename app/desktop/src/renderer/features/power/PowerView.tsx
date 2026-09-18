@@ -32,9 +32,9 @@ export function PowerView({ power, controller }: {
     <MainViewBody><main className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto bg-background">
       <div className="mx-auto flex min-h-full w-full max-w-[90rem] flex-col gap-5 px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
         <PowerOverview power={definition ?? power} />
-        {power.runtime_status === "error" ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"><div className="font-medium">{translate("runtime.unavailable")}</div><div className="mt-1 break-words">{power.runtime_error || translate("runtime.initialize_failed")}</div></div> : null}
-        {error ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
-        {power.runtime_status === "error" ? null : power.has_config ? <PowerConfigPanel controller={controller} power={power} definition={definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-base text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
+        {power.runtime_status === "error" ? <div className="rounded-item bg-destructive/10 px-3 py-2 text-xs text-destructive"><div className="font-medium">{translate("runtime.unavailable")}</div><div className="mt-1 break-words">{power.runtime_error || translate("runtime.initialize_failed")}</div></div> : null}
+        {error ? <div className="rounded-item bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
+        {power.runtime_status === "error" ? null : power.has_config ? <PowerConfigPanel controller={controller} power={power} definition={definition} /> : <section className="rounded-surface bg-surface-subtle px-5 py-10 text-center"><div className="text-base text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
       </div>
     </main></MainViewBody>
   </MainViewLayout>;
@@ -45,7 +45,7 @@ function PowerOverview({ power }: {
   /** 当前 Power 摘要与可选 README。 */ readonly power: DesktopPowerSummary & Partial<Pick<DesktopPowerDefinition, "readme">>;
 }) {
   const [expanded, set_expanded] = useState(false);
-  return <section className="min-w-0 overflow-hidden rounded-xl bg-surface-subtle">
+  return <section className="min-w-0 overflow-hidden rounded-surface bg-surface-subtle">
     <div className="flex min-h-16 items-center gap-3 px-4 py-3.5">
       <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-brand text-primary"><PowerIcon power_id={power.power_id} icon_url={power.icon_url} class_name="size-5" /></div>
       <div className="min-w-0 flex-1"><div className="truncate text-base font-medium text-foreground">{power.title}</div><div className="mt-1 text-3xs text-muted-foreground">{power.description}</div></div>

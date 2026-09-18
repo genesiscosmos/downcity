@@ -448,6 +448,61 @@ test("tsx 里不得裸用 rounded（它与 rounded-sm 同值）", () => {
   );
 });
 
+/**
+ * 命名档位（`rounded-sm`/`md`/`lg`/`xl`/`2xl`/`3xl`）不得用在允许清单之外。
+ *
+ * 两套名字（Tailwind 的尺寸名 vs 角色名）共存是过渡状态：同一档两个名字
+ * 会让人以为有别（`rounded` 与 `rounded-sm` 同值就是这么来的）。
+ * 已把 178 处改成角色名，剩下 11 处是因为取值还没定（见设计文档 §4.9）：
+ *
+ * - 图标徽章（`size-7`..`size-12` 的图标底）：比例随尺寸反向漂移，
+ *   需要形状令牌而不是层级令牌；
+ * - 创建向导的大号多行输入区（`px-5 py-4 text-lg`）：6px 对它的尺寸太紧。
+ *
+ * 作用：**新代码不得再引入命名档位**，且延后清单不能悄悄变长。
+ */
+test("命名档位只允许出现在待定的站点（延后清单不得变长）", () => {
+  /** 待定站点所在文件：图标徽章 + 大输入区。 */
+  const allowed_files = [
+    "components/AttachSessionWorkspaceDialog.tsx",
+    "components/CreateWorkspaceDialog.tsx",
+    "features/agent/CreateAgentView.tsx",
+    "features/group/CreateGroupView.tsx",
+    "features/chat/composer/ChatModelSelector.tsx",
+    "features/power/PowerView.tsx",
+    "features/power/lib/PowerRendererComponents.tsx",
+    "layouts/sidebar/PowerSidebar.tsx",
+  ];
+
+  const collect = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collect(full);
+    return /\.tsx?$/.test(entry.name) ? [full] : [];
+  });
+
+  const offenders: string[] = [];
+  for (const file of collect(renderer_root)) {
+    const relative = path.relative(renderer_root, file);
+    if (allowed_files.includes(relative)) continue;
+    for (const [index, line] of fs.readFileSync(file, "utf8").split("\n").entries()) {
+      const code = line.trim();
+      if (code.startsWith("*") || code.startsWith("//") || code.startsWith("/*")) continue;
+      if (/(?<![\w-])rounded-(?:sm|md|lg|xl|2xl|3xl)(?![\w-])/.test(line)) {
+        offenders.push(`${relative}:${index + 1}  ${code.slice(0, 88)}`);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `以下位置用了 Tailwind 的尺寸名而非角色名：\n  ${offenders.join("\n  ")}\n`
+      + "层级用角色令牌（rounded-chip / control / item / surface / shell）；"
+      + "形状用比例令牌（rounded-avatar / rounded-tile）；圆形用 rounded-full。\n"
+      + "若确实需要新档位，先回答「它属于哪一层」，而不是直接用尺寸名。",
+  );
+});
+
 test("浮层别名不得回归（同一档只能有一个名字）", () => {
   /*
    * `rounded-floating-surface` / `-item` 是同一套角色的早期版本：当时只覆盖了浮层，

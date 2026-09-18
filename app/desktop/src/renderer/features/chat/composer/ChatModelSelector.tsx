@@ -129,14 +129,14 @@ function ModelPreview({ model }: { /** 当前模型目录信息。 */ model: Des
   return <PreviewCard.Portal>
     <PreviewCard.Positioner side="right" align="start" sideOffset={8} collisionPadding={12} className="z-[60] outline-none">
       {/* 圆角与滚动分两层：圆角只对外层生效，否则滚动条会戳出圆角（原因见 ui/menu-styles 的注释）。 */}
-      <PreviewCard.Popup className="w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-background text-foreground outline-none data-open:animate-in data-closed:animate-out data-open:fade-in-0 data-closed:fade-out-0 data-[side=right]:slide-in-from-left-1 duration-150">
+      <PreviewCard.Popup className="w-80 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-surface border border-border bg-background text-foreground outline-none data-open:animate-in data-closed:animate-out data-open:fade-in-0 data-closed:fade-out-0 data-[side=right]:slide-in-from-left-1 duration-150">
         <div className="max-h-[min(60vh,var(--available-height,100vh))] overflow-y-auto overscroll-contain p-3">
         <div className="flex min-w-0 items-start gap-2.5">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-subtle"><LLMModelIcon model_id={model.model_id} model_name={model.name} tags={model.tags} size_class="size-5" /></span>
           <span className="min-w-0 flex-1"><span className="block truncate text-base font-medium">{model.name}</span><span className="mt-0.5 block truncate font-mono text-3xs text-muted-foreground">{model.model_id}</span></span>
         </div>
         {model.description ? <p className="mt-3 text-xs leading-5 text-muted-foreground">{model.description}</p> : null}
-        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-surface-subtle p-2.5 text-2xs">
+        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-item bg-surface-subtle p-2.5 text-2xs">
           <ModelDetail label={translate("model.context")} value={model.context_window ? format_token_count(model.context_window) : translate("model.not_provided")} />
           <ModelDetail label={translate("model.capabilities")} value={model.modalities.join(" / ") || translate("model.not_provided")} />
           <ModelDetail label={translate("model.reasoning")} value={reasoning_label || translate("model.not_supported")} />
@@ -146,7 +146,7 @@ function ModelPreview({ model }: { /** 当前模型目录信息。 */ model: Des
           <span className="text-muted-foreground">{translate("model.price")}</span>
           <span className="ml-auto tabular-nums text-foreground">{pricing ? translate("model.price_detail", { input: format_usd_price(pricing.input_usd_per_1m), output: format_usd_price(pricing.output_usd_per_1m) }) : translate("model.not_provided")}</span>
         </div>
-        {model.tags.length ? <div className="mt-3 flex flex-wrap gap-1">{model.tags.map((tag) => <span key={tag} className="rounded-md bg-surface-subtle px-1.5 py-0.5 text-3xs text-muted-foreground">{tag}</span>)}</div> : null}
+        {model.tags.length ? <div className="mt-3 flex flex-wrap gap-1">{model.tags.map((tag) => <span key={tag} className="rounded-chip bg-surface-subtle px-1.5 py-0.5 text-3xs text-muted-foreground">{tag}</span>)}</div> : null}
         </div>
       </PreviewCard.Popup>
     </PreviewCard.Positioner>

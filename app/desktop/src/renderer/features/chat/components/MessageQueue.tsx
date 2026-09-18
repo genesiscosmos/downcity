@@ -35,7 +35,7 @@ export function MessageQueue(props: MessageQueueProps) {
   const action_class = "size-5 rounded-chip text-muted-foreground [&_svg]:size-3";
   // 圆角与滚动分两层：圆角只对外层生效，否则滚动条会戳出圆角（原因见 ui/menu-styles 的注释）。
   // 滚动条样式类必须跟着滚动层走。
-  return <div className="overflow-hidden rounded-xl bg-interaction-selected">
+  return <div className="overflow-hidden rounded-surface bg-interaction-selected">
     <div className="chat-queued-message-list max-h-32 overflow-y-auto overscroll-contain">
       <div className="flex min-h-7 items-center justify-between px-2.5">
       <TbList className="size-3.5 text-muted-foreground" aria-hidden="true" />

@@ -48,7 +48,7 @@ export const PowerWorkspaceSidebar = memo(function PowerWorkspaceSidebar({ contr
   const invalidate = useCallback(() => invalidate_power(power_id), [invalidate_power, power_id]);
   if (!power?.has_sidebar || !power.has_mainview) return <SidebarPanel><SidebarContent class_name="px-3 py-8 text-center text-xs text-muted-foreground">{translate("missing_surface")}</SidebarContent></SidebarPanel>;
   return <SidebarPanel>
-    {error ? <><SidebarHeader title={power.title} /><SidebarContent><div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div></SidebarContent></> : <PowerRendererHost power_id={power.power_id} sidebar_title={power.title} slot="sidebar" capabilities={power} builtin_renderer={power.source === "builtin" ? BUILTIN_POWER_RENDERERS[power.power_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={route ?? empty_power_route} notifications={power_renderer_notifications(notification_state, power.power_id)} navigate={navigate} revision={revision} invalidate={invalidate} />}
+    {error ? <><SidebarHeader title={power.title} /><SidebarContent><div className="rounded-item bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div></SidebarContent></> : <PowerRendererHost power_id={power.power_id} sidebar_title={power.title} slot="sidebar" capabilities={power} builtin_renderer={power.source === "builtin" ? BUILTIN_POWER_RENDERERS[power.power_id] : undefined} renderer_url={definition?.renderer_url} invoke_mainview={invoke_mainview} route={route ?? empty_power_route} notifications={power_renderer_notifications(notification_state, power.power_id)} navigate={navigate} revision={revision} invalidate={invalidate} />}
   </SidebarPanel>;
 });
 

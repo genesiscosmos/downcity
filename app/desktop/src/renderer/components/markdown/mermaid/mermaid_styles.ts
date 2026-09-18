@@ -23,4 +23,4 @@ export const mermaid_action_button_class_name =
  * 与内联工具条相比，这里的按钮始终可见、且压在图表内容上，所以需要自己的表面与投影，
  * 尺寸也放大一档。它包含上面的焦点环（见 tests/design_token_drift.test.ts 的白名单）。
  */
-export const mermaid_overlay_button_class_name = cn(mermaid_action_button_class_name, "size-8 rounded-lg border border-border bg-popover shadow-lg [&_svg]:size-4");
+export const mermaid_overlay_button_class_name = cn(mermaid_action_button_class_name, "size-8 rounded-control border border-border bg-popover shadow-lg [&_svg]:size-4");

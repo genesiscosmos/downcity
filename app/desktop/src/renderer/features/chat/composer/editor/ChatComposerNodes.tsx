@@ -12,7 +12,7 @@ function ChatAttachmentView({ node, deleteNode }: NodeViewProps) {
   const attributes = node.attrs as ChatAttachmentNodeAttributes;
   const image = attributes.media_type.startsWith("image/");
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
-    <span contentEditable={false} className="mention group/chat-attachment relative inline-flex max-w-[14rem] items-center rounded-md bg-surface-emphasis align-middle text-2xs font-medium text-foreground shadow-none transition-colors [box-shadow:none] [filter:none] hover:bg-interaction-hover">
+    <span contentEditable={false} className="mention group/chat-attachment relative inline-flex max-w-[14rem] items-center rounded-control bg-surface-emphasis align-middle text-2xs font-medium text-foreground shadow-none transition-colors [box-shadow:none] [filter:none] hover:bg-interaction-hover">
       <span className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-[inherit] px-1.5 py-0.5 text-left outline-none">
         {image ? <span className="inline-flex size-4 shrink-0 overflow-hidden rounded-chip bg-surface-emphasis transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><img src={attributes.data_url} alt="" className="size-full object-cover" draggable={false} /></span> : <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground transition-opacity group-hover/chat-attachment:opacity-0 group-focus-within/chat-attachment:opacity-0"><TbFile className="size-3" /></span>}
         <span className="min-w-0 truncate leading-4">{attributes.filename}</span>
@@ -27,7 +27,7 @@ function ChatReferenceView({ node, deleteNode }: NodeViewProps) {
   const translate = use_translation("chat");
   const attributes = node.attrs as ChatReferenceNodeAttributes;
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
-    <span contentEditable={false} className="group/chat-ref relative inline-flex max-w-[16rem] items-center rounded-lg bg-surface-emphasis align-middle text-2xs text-foreground shadow-none [box-shadow:none] [filter:none]">
+    <span contentEditable={false} className="group/chat-ref relative inline-flex max-w-[16rem] items-center rounded-control bg-surface-emphasis align-middle text-2xs text-foreground shadow-none [box-shadow:none] [filter:none]">
       <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-[inherit] px-1.5 py-1 text-left outline-none transition-colors hover:bg-interaction-hover">
         <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-control text-muted-foreground transition-opacity group-hover/chat-ref:opacity-0 group-focus-within/chat-ref:opacity-0"><TbQuote className="size-3" /></span>
         <span className="min-w-0 truncate font-medium leading-4">{attributes.preview_text}</span>
@@ -41,7 +41,7 @@ function ChatReferenceView({ node, deleteNode }: NodeViewProps) {
 function ChatDataView({ node, deleteNode }: NodeViewProps) {
   const attributes = node.attrs as ChatDataNodeAttributes;
   return <NodeViewWrapper as="span" className="mx-0.5 inline align-baseline">
-    <span contentEditable={false} className="group/chat-data relative inline-flex max-w-[16rem] items-center rounded-md bg-surface-emphasis align-middle text-2xs font-medium text-foreground">
+    <span contentEditable={false} className="group/chat-data relative inline-flex max-w-[16rem] items-center rounded-control bg-surface-emphasis align-middle text-2xs font-medium text-foreground">
       <span className="inline-flex min-w-0 items-center gap-1 px-1.5 py-0.5"><TbBraces className="size-3 text-muted-foreground" /><span className="truncate">{attributes.data_type}</span></span>
       <button type="button" className="mr-1 inline-flex size-3.5 items-center justify-center rounded-chip text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/chat-data:opacity-100" onClick={deleteNode}><TbX className="size-2.5" /></button>
     </span>

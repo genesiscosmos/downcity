@@ -104,7 +104,7 @@ test("展开卡片是一个元素，不是浮层拼装", () => {
   // 行内容在三个状态之间必须原样复用：各写一份迟早会走形。
   assert.ok(/const row_content = <>/.test(subject_list) && /\{row_content\}/.test(subject_list), "行内容没有在状态之间复用");
   const card = read_without_comments(path.join(sidebar_root, "subjectCard.ts"));
-  assert.ok(/const card_class_name = `flex \$\{subject_row_height_class_name\} flex-col overflow-hidden rounded-lg border border-border bg-background`/.test(card), "卡片本体不是单个纵向容器，或丢了边框");
+  assert.ok(/const card_class_name = `flex \$\{subject_row_height_class_name\} flex-col overflow-hidden rounded-surface border border-border bg-background`/.test(card), "卡片本体不是单个纵向容器，或丢了边框");
   assert.ok(/subject_card_panel_class_name = "shrink-0"/.test(card), "卡片下半不是卡片内的普通流子节点");
   // 卡片两半在同一个流里，因此不存在“接缝对齐”这件事。
   assert.ok(!/subject_card_(top|bottom)_style/.test(subject_list + card), "又出现了拆分接缝的样式辅助：说明卡片又被拆成两个盒子了");

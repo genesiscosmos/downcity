@@ -67,7 +67,7 @@ export function UsageLineChart({ series, period, credits_per_usd }: UsageLineCha
 
   return <div className="relative" onPointerLeave={() => set_active_index(null)}>
     {active_point ? <div className={cn(
-      "pointer-events-none absolute top-1 z-10 min-w-28 rounded-lg border border-border-subtle bg-background/95 px-2.5 py-2 shadow-lg backdrop-blur-sm",
+      "pointer-events-none absolute top-1 z-10 min-w-28 rounded-surface border border-border-subtle bg-background/95 px-2.5 py-2 shadow-lg backdrop-blur-sm",
       active_index === 0 ? "translate-x-0" : active_index === series.length - 1 ? "-translate-x-full" : "-translate-x-1/2",
     )} style={{ left: `${active_position}%` }}>
       <p className="text-3xs text-muted-foreground">{format_range(active_point)}</p>

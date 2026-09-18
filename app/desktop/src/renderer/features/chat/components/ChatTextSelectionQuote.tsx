@@ -55,7 +55,7 @@ export function ChatTextSelectionQuote({ container_ref, session_id }: { /** æ¶ˆæ
   };
   return <button
     type="button"
-    className="fixed z-50 -translate-x-1/2 -translate-y-full rounded-md border border-border bg-popover px-2.5 py-1 text-xs font-medium text-popover-foreground transition-colors hover:border-foreground/30 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    className="fixed z-50 -translate-x-1/2 -translate-y-full rounded-control border border-border bg-popover px-2.5 py-1 text-xs font-medium text-popover-foreground transition-colors hover:border-foreground/30 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     style={{ left: selected.viewport_x, top: selected.viewport_y }}
     onPointerDown={(event) => event.preventDefault()}
     onClick={insert_reference}

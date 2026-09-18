@@ -24,7 +24,7 @@ export function AgentMessageContent({ message_id, blocks, show_reasoning, stream
       case "file-diff":
         return <TurnFileDiffCard key={block.part.part_id} data={block.data} />;
       case "error":
-        return <div key={block.part.part_id} role="alert" className="flex min-w-0 w-full items-start gap-2 rounded-md bg-surface-subtle px-2.5 py-2"><TbAlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/75" aria-hidden /><p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs leading-[1.55] text-muted-foreground [overflow-wrap:anywhere]">{block.part.message}</p></div>;
+        return <div key={block.part.part_id} role="alert" className="flex min-w-0 w-full items-start gap-2 rounded-item bg-surface-subtle px-2.5 py-2"><TbAlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive/75" aria-hidden /><p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-xs leading-[1.55] text-muted-foreground [overflow-wrap:anywhere]">{block.part.message}</p></div>;
       default:
         return assert_never(block);
     }

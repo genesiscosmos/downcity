@@ -67,17 +67,19 @@ const row_layout_class_name = "group/item flex items-center gap-2.5 px-1.5 py-1"
 /**
  * 折叠态：行自己就是这个带子。边框透明——看不见，但占住那 1px。
  */
-export const subject_item_collapsed_class_name = `${row_layout_class_name} ${subject_row_height_class_name} rounded-lg border border-transparent cursor-pointer transition-colors duration-150 [&_button]:cursor-pointer`;
+export const subject_item_collapsed_class_name = `${row_layout_class_name} ${subject_row_height_class_name} rounded-item border border-transparent cursor-pointer transition-colors duration-150 [&_button]:cursor-pointer`;
 
 /**
  * 卡片本体：两个展开态共用的盒子。
  *
  * - `flex-col`：内容纵向排列在同一个盒子里，边框只画这一次；
  * - `min-h-12`：与折叠态同高；
- * - `overflow-hidden`：把列表的滚动条裁在圆角内（卡圆角 8px、列表内缩 4px、
- *   滚动条宽 5px，滚动条最外 1px 会落进圆角区域，只靠内缩挡不住）。
+ * - `overflow-hidden`：把列表的滚动条裁在圆角内（卡圆角 12px、列表内缩 4px、
+ *   滚动条宽 5px）。圆角从 8px 提到 12px 后，滚动条落在圆角弧内的部分变多，
+ *   即顶部/底部各多裁掉约 1px；意图不变（滚动条只该出现在直边段），
+ *   但这一条是从数值推出来的，**实施后需要目检**侧栏卡片的滚动条两端。
  */
-const card_class_name = `flex ${subject_row_height_class_name} flex-col overflow-hidden rounded-lg border border-border bg-background`;
+const card_class_name = `flex ${subject_row_height_class_name} flex-col overflow-hidden rounded-surface border border-border bg-background`;
 
 /**
  * 浮动态：卡片相对槽位绝对定位，向下浮在后续行之上，后续主体**不动**。

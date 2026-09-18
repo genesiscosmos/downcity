@@ -94,7 +94,7 @@ export function PowerRendererHost(props: PowerRendererHostProps) {
         : props.slot === "config"
           ? Config ? <Config config={config} ui={ui} /> : <ui_components.EmptyState title={translate("missing_config")} size="compact" />
           : Workspace ? <Workspace {...workspace_props} /> : <ui_components.EmptyState title={translate("missing_slot", { slot: props.slot })} size="compact" />}
-    {toast ? <div className="fixed bottom-5 left-1/2 z-40 max-w-xl -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">{toast.message}</div> : null}
+    {toast ? <div className="fixed bottom-5 left-1/2 z-40 max-w-xl -translate-x-1/2 rounded-surface border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">{toast.message}</div> : null}
     <Dialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) close_confirmation(false); }}>
       <DialogContent size="sm"><DialogHeader><div><DialogTitle>{confirmation?.input.title}</DialogTitle>{confirmation?.input.description ? <DialogDescription>{confirmation.input.description}</DialogDescription> : null}</div></DialogHeader><DialogFooter><Button onClick={() => close_confirmation(false)}>{translate("cancel")}</Button><Button variant={confirmation?.input.destructive ? "destructive" : "primary"} onClick={() => close_confirmation(true)}>{confirmation?.input.action || translate("confirm")}</Button></DialogFooter></DialogContent>
     </Dialog>
