@@ -89,6 +89,8 @@ export function create_power_tool(options: CreatePowerToolOptions) {
         power_name,
         turn_context: require_turn_context(execution_options),
         call_id: String(execution_options.tool_call_id || "").trim(),
+        // 透传 Executor 注入的工具上下文；只有需要的动作会读。
+        ...(execution_options.context ? { tool_context: execution_options.context } : {}),
         input: input as PowerToolInput,
       }),
   });

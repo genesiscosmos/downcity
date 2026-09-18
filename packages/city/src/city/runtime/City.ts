@@ -10,6 +10,7 @@ import { Agent, Group } from "@downcity/agent";
 import { SessionHooks } from "@downcity/agent";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { create_city_power } from "@/city/power/builtin/CityPower.js";
+import { create_shell_power } from "@/city/power/builtin/shell/ShellPower.js";
 import { create_city_action_groups } from "@/city/power/builtin/groups/index.js";
 import type { CityPowers } from "@/city/types/CityPower.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
@@ -143,6 +144,8 @@ export class City implements CityRuntime {
         }),
       )
       .catch(() => undefined);
+    // Shell 属于 Workspace，但只在模型面以 power 形式暴露一次。
+    void this.powers.add(create_shell_power()).catch(() => undefined);
     for (const power of collection_values(options.powers)) {
       // 构造函数不能等待异步 lifecycle；Agent ready、Power 调用与 snapshot
       // 会继续使用同一个受控 ready Promise。

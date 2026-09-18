@@ -75,19 +75,21 @@ function resolve_tool_fields(part: SessionAgentToolPart): ToolActivityField[] {
       field("path", read_string(input, "path") || read_string(input, "cwd")),
     ]);
   }
-  if (tool_name.startsWith("shell_")) {
+  if (tool_name.startsWith("shell_") || tool_name === "shell") {
+    // shell power 把参数嵌在 args 内，故命令先读平铺字段、再回落一层。
+    const nested = as_record(input?.args);
     return compact_fields([
+      field("action", read_string(input, "action")),
       field(
         "command",
-        read_string(input, "cmd") ||
-          read_string(input, "command") ||
-          read_string(input, "code"),
+        read_string(input, "cmd")
+          || read_string(input, "command")
+          || read_string(input, "code")
+          || read_string(nested, "cmd")
+          || read_string(nested, "command")
+          || read_string(nested, "input"),
       ),
-      field(
-        "cwd",
-        read_string(input, "cwd") || read_string(input, "workdir"),
-      ),
-      field("action", read_string(input, "action")),
+      field("cwd", read_string(input, "cwd") || read_string(input, "workdir") || read_string(nested, "workdir")),
     ]);
   }
   if (read_string(input, "action")) {

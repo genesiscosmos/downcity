@@ -159,6 +159,8 @@ function create_action_execution_context(input: {
     ]),
     abort_signal: input.abort_signal,
     call_id,
+    // 宿主工具上下文原样透传：它不属于本模块解释的字段，丢掉会让需要宿主能力的动作失效。
+    ...(source?.tool_context !== undefined ? { tool_context: source.tool_context } : {}),
   });
   return Object.freeze({
     call_id,

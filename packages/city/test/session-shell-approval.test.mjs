@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
-import { Workspace } from "@downcity/city";
+import { City, Workspace } from "@downcity/city";
 import { Shell } from "@downcity/city";
 import { create_test_sandbox_provider } from "./PlatformSandbox.mjs";
 
@@ -26,7 +26,7 @@ function create_usage() {
   };
 }
 
-/** 构造要求执行 host shell_exec 的模型流。 */
+/** 构造要求执行 host shell exec 动作的模型流。 */
 function create_tool_call_stream() {
   return {
     stream: new ReadableStream({
@@ -35,17 +35,20 @@ function create_tool_call_stream() {
         controller.enqueue({
           type: "tool-input-start",
           id: "call_host",
-          toolName: "shell_exec",
+          toolName: "shell",
         });
         controller.enqueue({
           type: "tool-input-delta",
           id: "call_host",
           delta: JSON.stringify({
-            cmd: "printf approval-ok",
-            shell: "/bin/sh",
-            login: false,
-            target: "host",
-            reason: "验证 Session host 审批归属。",
+            action: "exec",
+            args: {
+              cmd: "printf approval-ok",
+              shell: "/bin/sh",
+              login: false,
+              target: "host",
+              reason: "验证 Session host 审批归属。",
+            },
           }),
         });
         controller.enqueue({
@@ -55,13 +58,16 @@ function create_tool_call_stream() {
         controller.enqueue({
           type: "tool-call",
           toolCallId: "call_host",
-          toolName: "shell_exec",
+          toolName: "shell",
           input: JSON.stringify({
-            cmd: "printf approval-ok",
-            shell: "/bin/sh",
-            login: false,
-            target: "host",
-            reason: "验证 Session host 审批归属。",
+            action: "exec",
+            args: {
+              cmd: "printf approval-ok",
+              shell: "/bin/sh",
+              login: false,
+              target: "host",
+              reason: "验证 Session host 审批归属。",
+            },
           }),
         });
         controller.enqueue({
@@ -127,8 +133,11 @@ test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
     id: "test_workspace",
     path: project_root, data_root_path: path.join(project_root, "data"),
     shell: new Shell({ sandbox_provider }),
-    runtime_path: path.join(project_root, "runtime"),
   });
+  // shell 属于 Workspace，但只在模型面以 City 注册的 `shell` power 暴露。
+  const city = new City({ workspaces: [workspace] });
+  city.agents.add(agent);
+  await city.ensure_ready();
 
   try {
     const session = await agent.sessions.create({
@@ -173,8 +182,10 @@ test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
       response: { type: "approval", outcome: "resolved", payload: { decision: "approved" } },
     });
     assert.equal(tool_part?.state, "completed");
-    assert.equal(tool_part?.output?.output, "approval-ok");
+    // power 工具的统一信封把 shell 字段放在 data 内。
+    assert.equal(tool_part?.output?.data?.output, "approval-ok");
   } finally {
+    await city.close();
     await agent.dispose();
     await fs.rm(project_root, { recursive: true, force: true });
   }

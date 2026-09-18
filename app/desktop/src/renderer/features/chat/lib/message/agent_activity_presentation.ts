@@ -72,7 +72,15 @@ const AGENT_TOOL_RULES: Record<AgentToolVisualKind, AgentToolRule> = {
   },
   shell: {
     auto_open_while_streaming: false,
-    summary: (part) => first_text([join_text([read_input(part, ["action"]), read_input(part, ["cmd", "command", "input"])]), part.title, part.tool_name]),
+    summary: (part) => first_text([
+      join_text([
+        read_input(part, ["action"]),
+        read_input(part, ["cmd", "command", "input"])
+          || pick_text(object_value(part.input)?.["args"], ["cmd", "command", "input"]),
+      ]),
+      part.title,
+      part.tool_name,
+    ]),
     detail: (part) => console_detail(part),
   },
   ask: plain_tool_rule,
@@ -354,7 +362,7 @@ function resolve_agent_tool_visual_kind(part: SessionAgentToolPart): AgentToolVi
   if (normalized === "edit" || normalized.endsWith("_edit")) return "edit";
   if (normalized === "grep" || normalized.includes("search")) return "grep";
   if (normalized === "find" || normalized.includes("glob")) return "find";
-  if (normalized === "shell_exec" || normalized === "shell_session" || normalized.includes("terminal")) return "shell";
+  if (normalized === "shell_exec" || normalized === "shell_session" || normalized === "shell" || normalized.includes("terminal")) return "shell";
   if (normalized === "ask_question" || normalized.includes("question")) return "ask";
   if (read_input(part, ["action"])) return "power";
   return "generic";

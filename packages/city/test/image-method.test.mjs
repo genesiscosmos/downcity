@@ -101,7 +101,7 @@ test("city 只暴露一个工具，image 是其中一个 method", async () => {
     image_result: () => ({ job_id: "img_1", status: "queued" }),
   });
   try {
-    assert.deepEqual(Object.keys(fixture.tools), ["city"]);
+    assert.deepEqual(Object.keys(fixture.tools).sort(), ["city", "shell"]);
     assert.equal("image_create" in fixture.tools, false);
     const index = await fixture.call({});
     assert.equal(index.success, true);

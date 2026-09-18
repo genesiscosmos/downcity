@@ -93,11 +93,16 @@ export async function invoke_power_tool(
 
   try {
     const turn_context = params.turn_context;
+    const snapshot = turn_context.step.hook_context(params.call_id);
     const result = await params.powers.run_action({
       power: power_name,
       action,
       payload: args as JsonValue,
-      execution_context: turn_context.step.hook_context(params.call_id),
+      // Executor 注入的工具上下文随快照下传，需要宿主能力的动作（如 shell 审批网关）读它。
+      execution_context: {
+        ...snapshot,
+        ...(params.tool_context ? { tool_context: params.tool_context } : {}),
+      },
       ...(turn_context.interactions ? { interactions: turn_context.interactions } : {}),
     });
     return {

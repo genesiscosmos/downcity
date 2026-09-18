@@ -547,6 +547,57 @@ flowchart TB
 
 目前 `approval` 只在四个消耗额度的 city 动作上开启。模式落地后，是否把其余 `access: "write"` 动作一并纳入 gate，就只是一个独立开关的事。
 
+## 18. Shell 转为 Power
+
+`shell_exec` 与 `shell_session({ action })` 是 power 重构后唯一残留的旧形态：两个工具，
+其中一个内部带动作开关。本阶段把 shell 收敛为一个 `shell` power。
+
+### 18.1 动作集
+
+| 动作 | 性质 | 对应旧形态 |
+| --- | --- | --- |
+| `exec` | write | `shell_exec` |
+| `session_start` | write | `shell_session({action:"start"})` |
+| `session_send` | write | `shell_session({action:"send"})` |
+| `session_read` | read | `shell_session({action:"read"})` |
+| `session_list` | read | `shell_session({action:"list"})` |
+| `session_stop` | write | `shell_session({action:"stop"})` |
+
+动作 id 是 power 内部命名空间，不带 power 名前缀，与 city 的 `env.get` 同一规则：
+模型调 `shell({ action: "session_start", args: { cmd } })`。省略 `action` 返回动作索引。
+
+### 18.2 所有权
+
+Shell 仍属于 Workspace（`Shell.tools` 与 per-Workspace 输出游标不动），但不再并进
+`WorkspaceTools`；模型面只经 City 注册的 `shell` power 暴露一次，避免同一能力两处出现。
+
+**行为变更：** shell 现在要求存在 City。此前 `workspace.tools` 自带 shell 工具，
+无 City 的裸 Agent 也有 shell；现在没有 City 就没有 `shell` 工具。仓库内的 CLI 与 Desktop
+始终建 City，因此实际路径不变，但这是 `@downcity/agent` 独立使用时的能力缩减。
+
+### 18.3 审批未改语义，但需要新增一条透传
+
+host 目标仍走 Shell 自己的审批网关（`ShellApprovalGateway`），未与 power 的
+`needs_approval` 合流——那条合并留给 `ask` / `allow` / `auto` 权限模式。
+
+但 power 动作原本拿不到工具层的执行上下文，而审批网关正在其中。为此新增一条最小透传：
+
+- `PowerExecutionContext.tool_context?: unknown`：Executor 注入的宿主工具上下文。
+- 链路：Executor 注入 → `create_power_tool` 透传 → `invoke_power_tool` 合入快照 →
+  `create_action_execution_context` 原样保留（此处曾漏掉，导致审批静默降级为拒绝）。
+- 非工具入口（CLI、定时任务、程序化调用）为空。
+
+### 18.4 验证
+
+`session-shell-approval` 测试（host 审批保留 Turn 并等待用户决定）通过，证明审批链路在
+power 路径下完整；该测试原本没建 City，本次补上以匹配新的所有权。city 277 项 264 通过，
+唯一失败仍为既有的 `session-config-turn-boundary`。
+
+七个包 + 两个 app 全部 `tsc --noEmit` 零错误；`release:test` 20/20。
+
+**未做：** `ask_question` 保持原样。它属于 `packages/agent`，是 interaction 机制的产出端，
+与审批同源；改成 City power 会让内核反向依赖上层，且它不使用 power 的任何特性。
+
 ## 17. 实施记录（阶段）
 
 ### 17.1 阶段 A（命名迁移）已完成

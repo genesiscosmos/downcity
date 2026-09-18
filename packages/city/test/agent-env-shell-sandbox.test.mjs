@@ -17,7 +17,9 @@ import { Workspace, Shell } from "@downcity/city";
 import { create_test_sandbox_provider } from "./PlatformSandbox.mjs";
 
 async function execute_shell(workspace, cmd) {
-  const result = await workspace.tools.shell_exec.execute(
+  // shell 不再并进 Workspace tools；模型面由 City 的 `shell` power 暴露，
+  // 这里直接驱动 Shell 持有的工具以验证 env 进入 Sandbox。
+  const result = await workspace.shell.tools.shell_exec.execute(
     {
       cmd,
       shell: "/bin/sh",

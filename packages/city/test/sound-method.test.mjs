@@ -76,7 +76,7 @@ async function create_fixture(options = {}) {
 test("sound method 与 image method 同在一个 city 工具里", async () => {
   const fixture = await create_fixture({ asr: () => ({ text: "hi" }), tts: () => ({}) });
   try {
-    assert.deepEqual(Object.keys(fixture.tools), ["city"]);
+    assert.deepEqual(Object.keys(fixture.tools).sort(), ["city", "shell"]);
     const index = await fixture.call({});
     const action_ids = index.data.actions.map((item) => item.action);
     assert.ok(action_ids.includes("sound.asr"));

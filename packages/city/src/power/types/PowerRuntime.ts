@@ -74,6 +74,15 @@ export interface PowerExecutionContext {
   readonly abort_signal?: AbortSignal;
   /** 当前 Action 调用标识。 */
   readonly call_id?: string;
+  /**
+   * Executor 为本次工具调用注入的宿主工具上下文。
+   *
+   * 关键点（中文）
+   * - 工具层创建 power 调用时透传，供需要宿主能力的动作读取，例如 shell 的 host 审批网关。
+   * - 非工具入口（CLI、定时任务、程序化调用）为空。
+   * - 类型保持 unknown：这是宿主上下文，不由 power 契约解释。
+   */
+  readonly tool_context?: unknown;
 }
 
 /** PowerDefinition Action 的单次执行上下文。 */
