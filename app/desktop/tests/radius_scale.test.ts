@@ -301,21 +301,35 @@ test("tsx 里不得裸用 rounded（它与 rounded-sm 同值）", () => {
   );
 });
 
-test("角色名与浮层别名不冲突（浮层别名等值于 surface / item）", () => {
-  // `rounded-floating-surface` / `-item` 是同一套角色的早期版本，当时只覆盖了浮层。
-  // 它们与 surface / item 等值，因此迁移到角色名是安全改名（Step 2）。
-  const mapping: readonly (readonly [string, string])[] = [["floating-surface", "surface"], ["floating-item", "item"]];
-  for (const [alias, role] of mapping) {
-    const alias_rule = new RegExp(`--radius-${alias}:\\s*var\\(--radius-([a-z0-9]+)\\)`).exec(tokens_css);
-    assert.ok(alias_rule, `tokens.css 里找不到 --radius-${alias} 的映射`);
-    const target = expected_roles.find(([name]) => name === role)!;
-    // floating-surface → radius-xl（0.75rem）= surface；floating-item → radius-lg（0.5rem）= item
-    const tailwind_level = { surface: "xl", item: "lg" }[role as "surface" | "item"];
-    assert.equal(
-      alias_rule[1]!,
-      tailwind_level,
-      `--radius-${alias} 应指向 radius-${tailwind_level}（与 ${role} 等值），实际指向 radius-${alias_rule[1]}`,
-    );
-    assert.ok(target, `角色表缺少 ${role}`);
+test("浮层别名不得回归（同一档只能有一个名字）", () => {
+  /*
+   * `rounded-floating-surface` / `-item` 是同一套角色的早期版本：当时只覆盖了浮层，
+   * 值与 `surface` / `item` 完全相等。它们已全部迁移到角色名并删除。
+   *
+   * 留着会重新出现「同一档两个名字」——两者看不出区别，但会让人以为有别，
+   * 于是新代码开始随机选其中一个（这正是圆角收敛前的问题）。
+   */
+  const aliases = ["floating-surface", "floating-item"];
+  const residuals: string[] = [];
+  for (const alias of aliases) {
+    if (new RegExp(`--radius-${alias}:`).test(tokens_css)) residuals.push(`tokens.css 又定义了 --radius-${alias}`);
   }
+  const collect = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collect(full);
+    return /\.tsx?$/.test(entry.name) ? [full] : [];
+  });
+  for (const file of collect(renderer_root)) {
+    fs.readFileSync(file, "utf8").split("\n").forEach((line, index) => {
+      const code = line.trim();
+      if (code.startsWith("*") || code.startsWith("//") || code.startsWith("/*")) return;
+      if (/rounded-floating-/.test(line)) residuals.push(`${path.relative(renderer_root, file)}:${index + 1}`);
+    });
+  }
+  assert.deepEqual(
+    residuals,
+    [],
+    `浮层别名又出现了：\n  ${residuals.join("\n  ")}\n`
+      + "它们与 --radius-surface / --radius-item 等值，同一档只能有一个名字。请在定义处删除，并把调用点改成角色名。",
+  );
 });

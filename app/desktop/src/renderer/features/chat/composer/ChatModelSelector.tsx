@@ -52,7 +52,7 @@ export function ChatModelSelector(props: ChatModelSelectorProps) {
 function SelectorSubmenu({ label, value, children }: { label: string; value: string; children: ReactNode }) {
   const [open, set_open] = useState(false);
   return <Popover open={open} onOpenChange={set_open}>
-    <PopoverTrigger asChild><button type="button" className={cn("flex min-h-10 w-full items-center gap-2 rounded-floating-item px-2.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30", open && "bg-interaction-selected")}><span className="min-w-0 flex-1"><span className="block text-xs font-medium text-foreground">{label}</span><span className="block truncate text-3xs text-muted-foreground">{value}</span></span><TbChevronRight className="size-3.5 shrink-0 text-subtle-foreground" /></button></PopoverTrigger>
+    <PopoverTrigger asChild><button type="button" className={cn("flex min-h-10 w-full items-center gap-2 rounded-item px-2.5 text-left outline-none transition-colors hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30", open && "bg-interaction-selected")}><span className="min-w-0 flex-1"><span className="block text-xs font-medium text-foreground">{label}</span><span className="block truncate text-3xs text-muted-foreground">{value}</span></span><TbChevronRight className="size-3.5 shrink-0 text-subtle-foreground" /></button></PopoverTrigger>
     {/* 高度上限取「视口 80%」与「锚点上方可用空间」的较小值，超出部分由列表内部滚动，避免溢出屏幕。 */}
     <PopoverContent side="right" align="start" sideOffset={4} className="flex max-h-[min(80vh,var(--available-height,100vh))] w-72 max-w-[calc(100vw-1rem)] flex-col">
       {children}

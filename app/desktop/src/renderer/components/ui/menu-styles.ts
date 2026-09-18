@@ -6,7 +6,7 @@
  * 这里刻意不带 padding、也不带滚动：内容再多也由内部滚动区处理（见下）。
  */
 export const menu_surface_class_name =
-  "z-50 min-w-52 overflow-hidden rounded-floating-surface border border-border bg-background text-popover-foreground outline-none";
+  "z-50 min-w-52 overflow-hidden rounded-surface border border-border bg-background text-popover-foreground outline-none";
 
 /**
  * 菜单内容的滚动区：padding 与滚动都在这里。
@@ -38,7 +38,7 @@ export const menu_surface_motion_class_name =
   "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 duration-150";
 
 export const menu_item_base_class_name =
-  "relative flex w-full cursor-default select-none items-center gap-2.5 rounded-floating-item px-2 py-1.5 text-left text-xs text-foreground outline-none transition-all duration-100 [&>svg]:size-3.5 [&>svg]:shrink-0";
+  "relative flex w-full cursor-default select-none items-center gap-2.5 rounded-item px-2 py-1.5 text-left text-xs text-foreground outline-none transition-all duration-100 [&>svg]:size-3.5 [&>svg]:shrink-0";
 
 export const menu_item_highlighted_class_name =
   "bg-interaction-selected text-foreground hover:bg-interaction-active focus:bg-interaction-active";

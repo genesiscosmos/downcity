@@ -239,12 +239,11 @@
 
 @theme inline {
   /*
-   * 浮层别名：`floating-surface` = `surface`、`floating-item` = `item`。
-   * 是同一套角色的早期版本（当时只覆盖浮层），保留是为了兼容现有调用点，
-   * 待迁移到 `rounded-surface` / `rounded-item` 后删除。
+   * 这里曾有 `--radius-floating-surface` / `--radius-floating-item` 两个浮层别名，
+   * 它们是同一套角色的早期版本（当时只覆盖浮层，值等于是 `surface` / `item`）。
+   * 已全部迁移到 `rounded-surface` / `rounded-item` 并删除——留着会出现
+   * 「同一档两个名字」的情况，正是本次要消除的问题。（守卫有一条反向断言盯着它。）
    */
-  --radius-floating-surface: var(--radius-xl);
-  --radius-floating-item: var(--radius-lg);
   --color-surface-subtle: var(--surface-subtle);
   --color-surface-emphasis: var(--surface-emphasis);
   --color-interaction-hover: var(--interaction-hover);

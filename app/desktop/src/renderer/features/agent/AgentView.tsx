@@ -119,7 +119,7 @@ export function agent_config_tab(agent: DesktopAgentSummary, controller: Desktop
   return {
     id: baybar_tab_id(AGENT_TAB_KIND, agent.agent_id),
     label: agent.name,
-    icon: <AgentAvatar agent={agent} class_name="size-3.5 shrink-0 rounded-[0.25rem]" />,
+    icon: <AgentAvatar agent={agent} class_name="size-3.5 shrink-0 rounded-chip" />,
     sections: AGENT_EDITOR_SECTIONS.map((item) => ({
       id: item.id,
       label: item.label_key ? t(item.label_key) : item.label ?? item.id,

@@ -324,7 +324,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
         }}
         onClick={() => void run_row(row)}
         className={cn(
-          "relative flex min-h-8 w-full select-none items-center gap-2.5 rounded-floating-item px-2.5 py-1.5 text-left text-xs outline-none transition-colors duration-100 [&>svg]:size-4 [&>svg]:shrink-0",
+          "relative flex min-h-8 w-full select-none items-center gap-2.5 rounded-item px-2.5 py-1.5 text-left text-xs outline-none transition-colors duration-100 [&>svg]:size-4 [&>svg]:shrink-0",
           row.disabled
             ? "cursor-default text-muted-foreground"
             : "cursor-pointer text-foreground hover:bg-interaction-hover hover:text-foreground",
@@ -365,7 +365,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
           aria-modal="true"
           aria-label={translate("command_palette.label")}
           onKeyDown={handle_key_down}
-          className="overflow-hidden rounded-floating-surface border border-border bg-background shadow-2xl"
+          className="overflow-hidden rounded-surface border border-border bg-background shadow-2xl"
         >
           <div className="flex h-11 items-center gap-2 border-b border-divider px-3">
             {page === "root" ? (

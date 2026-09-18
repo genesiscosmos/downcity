@@ -10,9 +10,10 @@
  * 断言输出里存在对应的声明。比跑完整 electron-vite 构建轻得多（后者需要 2GB+ 内存）。
  *
  * 注意 `@theme inline` 的语义：它把令牌的**值**直接内联进工具类。
- * 所以 `--color-subtle-foreground: var(--subtle-foreground)` 产出 `color: var(--subtle-foreground)`，
- * 而 `--radius-floating-surface: var(--radius-xl)` 产出的是 `border-radius: var(--radius-xl)`
- * ——不是 `var(--radius-floating-surface)`。断言必须按「实际声明」写，而不是按类名与令牌同名写。
+ * 所以 `--color-subtle-foreground: var(--subtle-foreground)` 产出 `color: var(--subtle-foreground)`；
+ * 而圆角角色令牌定义在普通 `@theme` 里，工具类引用的是令牌本身
+ *（`--radius-surface: 0.75rem` → `border-radius: var(--radius-surface)`）。
+ * 断言必须按「实际声明」写，而不是按类名与令牌同名写。
  */
 
 import assert from "node:assert/strict";
@@ -74,8 +75,9 @@ const expected: readonly [string, string][] = [
   ["border-border-subtle", "var(--border-subtle)"],
   ["divide-divider", "var(--divider)"],
   // 这两条的 `inline` 映射内联到主题基础值，因此断言的是内联后的结果。
-  ["rounded-floating-surface", "border-radius: var(--radius-xl)"],
-  ["rounded-floating-item", "border-radius: var(--radius-lg)"],
+  // 圆角角色令牌（普通 @theme，工具类引用令牌本身；详见 radius_scale.test.ts）。
+  ["rounded-surface", "border-radius: var(--radius-surface)"],
+  ["rounded-item", "border-radius: var(--radius-item)"],
 ];
 
 /**

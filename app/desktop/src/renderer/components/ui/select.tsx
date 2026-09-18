@@ -44,14 +44,14 @@ export function Select({ value, options, on_value_change, className, align = "st
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
         <BaseSelect.Positioner sideOffset={4} align={align} alignItemWithTrigger={false} className="z-[9999] outline-none">
-          <BaseSelect.Popup className="relative w-max min-w-[var(--anchor-width)] max-w-[min(20rem,var(--available-width))] overflow-hidden rounded-floating-surface border border-border bg-background text-foreground outline-none data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in data-[open]:slide-in-from-top-1 duration-150">
+          <BaseSelect.Popup className="relative w-max min-w-[var(--anchor-width)] max-w-[min(20rem,var(--available-width))] overflow-hidden rounded-surface border border-border bg-background text-foreground outline-none data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in data-[open]:slide-in-from-top-1 duration-150">
             <div className="max-h-[min(20rem,var(--available-height))] overflow-y-auto p-1 scrollbar-none">
               {options.map((option) => (
                 <BaseSelect.Item
                   key={option.value}
                   value={option.value}
                   disabled={option.disabled}
-                  className="relative flex w-full cursor-default select-none items-center gap-2.5 rounded-floating-item py-1.5 pr-2 pl-7 text-xs text-foreground outline-none transition-colors duration-100 hover:bg-interaction-hover hover:text-foreground data-[highlighted]:bg-interaction-hover data-[highlighted]:text-foreground data-[selected]:bg-interaction-selected data-[selected]:text-foreground data-[selected]:hover:bg-interaction-active data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                  className="relative flex w-full cursor-default select-none items-center gap-2.5 rounded-item py-1.5 pr-2 pl-7 text-xs text-foreground outline-none transition-colors duration-100 hover:bg-interaction-hover hover:text-foreground data-[highlighted]:bg-interaction-hover data-[highlighted]:text-foreground data-[selected]:bg-interaction-selected data-[selected]:text-foreground data-[selected]:hover:bg-interaction-active data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
                 >
                   <BaseSelect.ItemIndicator className="absolute left-1.5 flex size-4 items-center justify-center text-foreground"><TbCheck className="size-3.5" /></BaseSelect.ItemIndicator>
                   <BaseSelect.ItemText className="min-w-0 flex-1 truncate">{option.label}</BaseSelect.ItemText>

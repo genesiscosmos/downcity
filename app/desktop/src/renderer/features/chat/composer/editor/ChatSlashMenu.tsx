@@ -36,7 +36,7 @@ export function ChatSlashMenu({ commands, select_command }: ChatSlashMenuProps) 
     return () => window.removeEventListener("keydown", handle_key_down, true);
   }, [active_index, commands, select_command]);
   if (commands.length === 0) return null;
-  return <div className="absolute bottom-full left-1 z-30 mb-2 w-56 overflow-hidden rounded-floating-surface border border-border bg-background p-1 text-popover-foreground outline-none">
+  return <div className="absolute bottom-full left-1 z-30 mb-2 w-56 overflow-hidden rounded-surface border border-border bg-background p-1 text-popover-foreground outline-none">
     {commands.map((command, index) => {
       const Icon = command.command_id === "attach" ? TbFile : command.command_id === "image" ? TbPhoto : command.command_id === "clear" ? TbTrash : TbAdjustments;
       return <MenuItemShell key={command.command_id} is_selected={index === active_index} role="button" onMouseDown={(event) => event.preventDefault()} onClick={() => select_command(command)}>

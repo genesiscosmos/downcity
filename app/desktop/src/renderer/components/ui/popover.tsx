@@ -38,7 +38,7 @@ const PopoverContent = React.forwardRef<HTMLDivElement, PopoverContentProps>(
         <BasePopover.Popup
           ref={ref}
           className={cn(
-            "z-50 w-72 overflow-hidden rounded-floating-surface border border-border bg-background text-popover-foreground outline-none [&>div]:p-1",
+            "z-50 w-72 overflow-hidden rounded-surface border border-border bg-background text-popover-foreground outline-none [&>div]:p-1",
             "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-[side=bottom]:slide-in-from-top-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=top]:slide-in-from-bottom-1 duration-150",
             className,
           )}

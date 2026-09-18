@@ -32,14 +32,14 @@ export function MessageQueue(props: MessageQueueProps) {
     props.update_queued_message(editing.message_id, editing.text);
     set_editing(undefined);
   };
-  const action_class = "size-5 rounded-sm text-muted-foreground [&_svg]:size-3";
+  const action_class = "size-5 rounded-chip text-muted-foreground [&_svg]:size-3";
   // 圆角与滚动分两层：圆角只对外层生效，否则滚动条会戳出圆角（原因见 ui/menu-styles 的注释）。
   // 滚动条样式类必须跟着滚动层走。
   return <div className="overflow-hidden rounded-xl bg-interaction-selected">
     <div className="chat-queued-message-list max-h-32 overflow-y-auto overscroll-contain">
       <div className="flex min-h-7 items-center justify-between px-2.5">
       <TbList className="size-3.5 text-muted-foreground" aria-hidden="true" />
-      <Button className="h-5 gap-1 rounded-sm px-1 text-3xs text-muted-foreground [&_svg]:size-3" title={translate(props.queue_paused ? "queue.resume_all" : "queue.pause_all")} onClick={() => props.set_queue_paused(!props.queue_paused)}>{props.queue_paused ? <TbPlayerPlay /> : <TbPlayerPause />}{translate(props.queue_paused ? "queue.resume" : "queue.pause")}</Button>
+      <Button className="h-5 gap-1 rounded-chip px-1 text-3xs text-muted-foreground [&_svg]:size-3" title={translate(props.queue_paused ? "queue.resume_all" : "queue.pause_all")} onClick={() => props.set_queue_paused(!props.queue_paused)}>{props.queue_paused ? <TbPlayerPlay /> : <TbPlayerPause />}{translate(props.queue_paused ? "queue.resume" : "queue.pause")}</Button>
     </div>
     <div className="flex flex-col divide-y divide-divider">{props.queued_messages.map((message, index) => {
       const is_editing = editing?.message_id === message.message_id;
@@ -48,7 +48,7 @@ export function MessageQueue(props: MessageQueueProps) {
       const editable = !has_chat_composer_atoms(message.input) && !has_chat_composer_rich_formatting(message.input);
       return <div key={message.message_id} className="flex min-h-7 items-center gap-0.5 px-2.5 py-1 text-2xs text-muted-foreground">
         {message.sending ? <TbLoader2 className="size-3 shrink-0 animate-spin text-muted-foreground" /> : <TbCornerDownRight className="size-3 shrink-0 text-subtle-foreground" />}
-        {is_editing ? <><textarea autoFocus rows={1} value={editing.text} className="min-h-6 min-w-0 flex-1 resize-none rounded-sm border border-divider bg-background/50 px-1 py-0.5 text-2xs text-foreground" onChange={(event) => set_editing({ message_id: message.message_id, text: event.target.value })} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); save_editing(); } else if (event.key === "Escape") { event.preventDefault(); set_editing(undefined); } }} /><Button className={action_class} title={translate("queue.save")} onClick={save_editing}><TbCheck /></Button><Button className={action_class} title={translate("queue.cancel")} onClick={() => set_editing(undefined)}><TbX /></Button></> : <>
+        {is_editing ? <><textarea autoFocus rows={1} value={editing.text} className="min-h-6 min-w-0 flex-1 resize-none rounded-chip border border-divider bg-background/50 px-1 py-0.5 text-2xs text-foreground" onChange={(event) => set_editing({ message_id: message.message_id, text: event.target.value })} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); save_editing(); } else if (event.key === "Escape") { event.preventDefault(); set_editing(undefined); } }} /><Button className={action_class} title={translate("queue.save")} onClick={save_editing}><TbCheck /></Button><Button className={action_class} title={translate("queue.cancel")} onClick={() => set_editing(undefined)}><TbX /></Button></> : <>
           <span className="min-w-0 flex-1 truncate px-1 py-0.5 text-foreground">{text || translate("queue.contents", { count: atom_count })}</span>
           {message.paused && !message.sending ? <span className="shrink-0 px-1 text-3xs text-muted-foreground">{translate("queue.paused")}</span> : null}
           <Button className={action_class} title={translate(editable ? "queue.edit" : "queue.edit_unavailable")} disabled={message.sending || !editable} onClick={() => set_editing({ message_id: message.message_id, text })}><TbPencil /></Button>
