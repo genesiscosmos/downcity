@@ -119,7 +119,7 @@ export function agent_config_tab(agent: DesktopAgentSummary, controller: Desktop
   return {
     id: baybar_tab_id(AGENT_TAB_KIND, agent.agent_id),
     label: agent.name,
-    icon: <AgentAvatar agent={agent} class_name="size-3.5 shrink-0 rounded-chip" />,
+    icon: <AgentAvatar agent={agent} class_name="size-3.5 shrink-0" />,
     sections: AGENT_EDITOR_SECTIONS.map((item) => ({
       id: item.id,
       label: item.label_key ? t(item.label_key) : item.label ?? item.id,
@@ -154,7 +154,7 @@ export function AgentView({
           >
             <AgentAvatar
               agent={agent}
-              class_name="size-16 rounded-2xl"
+              class_name="size-16"
               icon_class_name="size-8"
             />
             <span className="min-w-0">
@@ -235,7 +235,7 @@ export function AgentView({
             <div className="flex justify-center py-4">
               <AgentAvatar
                 agent={agent}
-                class_name="size-28 rounded-3xl"
+                class_name="size-28"
                 icon_class_name="size-12"
               />
             </div>
@@ -289,7 +289,7 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
         title={translate_resources("agent_details.choose_avatar")}
         aria-label={translate_resources("agent_details.choose_avatar")}
       >
-        <AgentAvatar agent={agent} class_name="size-24 rounded-lg" icon_class_name="size-10" />
+        <AgentAvatar agent={agent} class_name="size-24" icon_class_name="size-10" />
       </button>
     </div>
     <label className="flex flex-col gap-2">
@@ -317,7 +317,7 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
         </DialogHeader>
         <DialogBody>
           <div className="flex justify-center py-5">
-            <AgentAvatar agent={agent} class_name="size-32 rounded-lg" icon_class_name="size-14" />
+            <AgentAvatar agent={agent} class_name="size-32" icon_class_name="size-14" />
           </div>
         </DialogBody>
         <DialogFooter>

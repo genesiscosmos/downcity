@@ -39,7 +39,7 @@ const tokens_css = fs.readFileSync(path.join(styles_root, "tokens.css"), "utf8")
 const theme_default_css = fs.readFileSync(path.join(styles_root, "theme/default.css"), "utf8");
 
 /**
- * 契约：角色 → 值（rem）。
+ * 契约：层级角色 → 值（rem）。
  *
  * 与 Tailwind 原生档位逐字节等值（`chip`=`sm` / `control`=`md` / `item`=`lg` /
  * `surface`=`xl` / `shell`=`2xl`）。这是**有意**的：圆角是视觉量，不另造数值阶梯。
@@ -52,6 +52,21 @@ const expected_roles: readonly (readonly [string, string])[] = [
   ["item", "0.5rem"],
   ["surface", "0.75rem"],
   ["shell", "1rem"],
+];
+
+/**
+ * 契约：形状角色 → 值（百分比）。
+ *
+ * 与层级角色是**两类不同的东西**：层级回答「元素嵌在哪一层」（绝对长度），
+ * 形状回答「元素自己是什么形状」（比例）。
+ *
+ * 为什么必须是比例：它们横跨很大的尺寸范围。头像有 14px 也有 128px（同一件事 9 倍差），
+ * 热力格是流式网格、宽度随窗口变。绝对半径会让「大元素反而更方」——
+ * 修正前就是这个状态：`size-24`(96px) 用 8px（8%）、`size-32`(128px) 用 8px（6%）。
+ */
+const expected_shape_radii: readonly (readonly [string, string])[] = [
+  ["avatar", "25%"],
+  ["tile", "20%"],
 ];
 
 /** 不参与角色表的一类：圆角是自身形状，不是层级表达（见设计文档 §4.6）。 */
@@ -201,6 +216,138 @@ test("角色表写在普通 @theme 块里，不依赖别处的 var() 引用侥�
       + "inline 会把值内联进工具类、不发出 :root 变量；本项目现在之所以还能跑，只是因为"
       + "chat.css / base.css 恰好引用了这些变量，Tailwind 因此把它们保留了——不要依赖这个侥幸。\n"
       + "请把圆角角色表放回普通 `@theme` 块。",
+  );
+});
+
+test("形状令牌也是比例值，且同样发出运行时变量与工具类", async () => {
+  for (const [shape, value] of expected_shape_radii) {
+    const rule = new RegExp(`--radius-${shape}:\\s*([^;]+);`).exec(tokens_css);
+    assert.ok(rule, `tokens.css 缺少 --radius-${shape}`);
+    assert.equal(
+      rule[1]!.trim(),
+      value,
+      `--radius-${shape} 应是比例值 ${value}。\n`
+        + "形状宽度必须随尺寸变——用绝对长度会让大元素反而更方（这正是头像曾经的问题）。",
+    );
+  }
+
+  const compiler = await compile_app_styles();
+  const css = compiler.build(expected_shape_radii.map(([shape]) => `rounded-${shape}`));
+  const theme_layer = css.split("@layer base")[0]!;
+  const utilities = (css.split("@layer utilities")[1] ?? "").split("@property")[0]!;
+
+  for (const [shape] of expected_shape_radii) {
+    assert.ok(
+      new RegExp(`--radius-${shape}:`).test(theme_layer),
+      `--radius-${shape} 没有发出运行时变量：样式表里的 var(--radius-${shape}) 会解析为空`,
+    );
+    assert.ok(
+      new RegExp(`\\.rounded-${shape}(?![\\w-])`).test(utilities),
+      `rounded-${shape} 没有生成工具类`,
+    );
+  }
+});
+
+/**
+ * tsx 里不得使用圆角任意值（唯一例外是 `inherit`）。
+ *
+ * 这是第一步的覆盖面缺口：当时只扫了 CSS 的 `border-radius` 字面量，
+ * 而 tsx 里同样可以用 `rounded-[2px]` 绕过去——那 3 处与 CSS 的 px 是同一种缺陷
+ *（px 不跟随界面缩放，缩放靠改根字号）。
+ *
+ * 现在所有比例都有了名字（`rounded-avatar` / `rounded-tile`），
+ * 因此不存在「必须写任意值」的情形。
+ */
+test("tsx 里不得使用圆角任意值（inherit 除外）", () => {
+  const collect = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collect(full);
+    return /\.tsx?$/.test(entry.name) ? [full] : [];
+  });
+
+  const violations: string[] = [];
+  for (const file of collect(renderer_root)) {
+    fs.readFileSync(file, "utf8").split("\n").forEach((line, index) => {
+      const code = line.trim();
+      if (code.startsWith("*") || code.startsWith("//") || code.startsWith("/*")) return;
+      for (const match of line.matchAll(/(?<![\w-])rounded-\[([^\]]+)\]/g)) {
+        // `inherit` 不是值而是引用（跟随外层圆角，嵌套公式），可以保留。
+        if (match[1] === "inherit") continue;
+        violations.push(`${path.relative(renderer_root, file)}:${index + 1} rounded-[${match[1]}]`);
+      }
+    });
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `以下位置用了圆角任意值：\n  ${violations.join("\n  ")}\n`
+      + "层级用角色令牌（rounded-chip … rounded-shell）；形状用比例令牌（rounded-avatar / rounded-tile）；"
+      + "跟随外层用 rounded-[inherit]。px/rem 任意值不跟随界面缩放，是缺陷。",
+  );
+});
+
+/**
+ * 头像的圆角由组件拥有，调用点只传尺寸。
+ *
+ * 曾经每个调用点各自指定，于是同一类元素出现四种比例且与尺寸反向：
+ * `size-5`→4px（20%）、`size-14`→16px（29%）、`size-24`→8px（8%）、`size-32`→8px（6%）。
+ * 尺寸属于布局（调用点决定），形状属于身份（组件决定）。
+ */
+test("头像调用点不得自带圆角", () => {
+  const collect = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collect(full);
+    return /\.tsx?$/.test(entry.name) ? [full] : [];
+  });
+
+  const violations: string[] = [];
+  for (const file of collect(renderer_root)) {
+    const source = fs.readFileSync(file, "utf8");
+    // 只看 <AgentAvatar> 这一个标签内部，避免误伤同一行上其它组件的 class_name。
+    for (const tag of source.matchAll(/<AgentAvatar\b[\s\S]{0,400}?\/>/g)) {
+      const class_name = /class_name="([^"]*)"/.exec(tag[0]);
+      if (class_name && /rounded/.test(class_name[1]!)) {
+        violations.push(`${path.relative(renderer_root, file)}  class_name="${class_name[1]}"`);
+      }
+    }
+  }
+  assert.deepEqual(
+    violations,
+    [],
+    `以下头像调用点自带了圆角：\n  ${violations.join("\n  ")}\n`
+      + "形状由 AgentAvatar 统一提供（rounded-avatar = 25%）；调用点只传尺寸与布局类。",
+  );
+});
+
+/**
+ * 头像的两个渲染分支必须共用同一份基础类。
+ *
+ * 这里记录的是一个真实缺陷：`<img>` 分支带圆角，而图标兜底分支（无自定义头像时）
+ * **不带**。后果是「同一个 Agent，配了自定义头像就是圆角、没配就是直角」——
+ * 只在没有自定义头像的 Agent 上显现，很容易被当成「还没设置头像」而放过。
+ *
+ * 上一条断言（调用点不得自带圆角）**拦不住它**：调用点确实没写圆角，
+ * 是组件自己漏了一边。所以这一条必须单独存在，且要检查两个分支各自拿到了基础类。
+ */
+test("头像的两个分支共用同一份基础类（含圆角与 shrink）", () => {
+  const source = strip_comments(fs.readFileSync(path.join(renderer_root, "components/AgentAvatar.tsx"), "utf8"));
+
+  // 基础类必须是一个命名常量，而不是两个分支各写一遍字面量。
+  const base = /const\s+avatar_base_class_name\s*=\s*"([^"]*)"/.exec(source);
+  assert.ok(base, "AgentAvatar 没有把基础类提成常量——两分支各写一遍正是漂移的起点");
+  assert.ok(/\brounded-avatar\b/.test(base[1]!), `头像基础类没有形状令牌 rounded-avatar：${base![1]}`);
+  assert.ok(/\bshrink-0\b/.test(base[1]!), `头像基础类没有 shrink-0：在 flex 行里会被压成椭圆（${base![1]}）`);
+
+  // 两个分支的 className 都必须引用它。
+  const branches = [...source.matchAll(/className=\{cn\(([^)]*)\)\}/g)].map((match) => match[1]!);
+  assert.ok(branches.length >= 2, `只找到 ${branches.length} 个分支，解析方式可能已失效`);
+  const missing = branches.filter((arguments_list) => !arguments_list.includes("avatar_base_class_name"));
+  assert.deepEqual(
+    missing,
+    [],
+    "以下分支没有引用头像基础类：\n"
+      + missing.map((list) => `  cn(${list.trim()})`).join("\n")
+      + "\n每个分支（自定义头像 / 图标兑底）都必须带上它，否则两者形状不一致。",
   );
 });
 

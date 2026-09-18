@@ -23,5 +23,5 @@ export function GroupAvatar({ group, agents, class_name = "size-8", member_class
   const translate_navigation = use_translation("navigation");
   const members = group.members.slice(0, 3).map((member) => agents.find((agent) => agent.agent_id === member.agent_id) ?? { agent_id: member.agent_id, name: "Agent", model_id: "", version: "" });
   if (members.length === 0) return <TbUsers className={cn("shrink-0 rounded-full bg-surface-emphasis p-2 text-muted-foreground", class_name)} />;
-  return <span className={cn("relative flex shrink-0", class_name)} aria-label={translate_navigation("sidebar.members", { count: group.members.length })}>{members.map((agent, index) => <AgentAvatar key={agent.agent_id} agent={agent} class_name={cn("absolute rounded-md border-2 border-background", member_class_name, index === 0 && "left-0 top-0", index === 1 && "right-0 top-1", index === 2 && "left-1 bottom-0")} />)}</span>;
+  return <span className={cn("relative flex shrink-0", class_name)} aria-label={translate_navigation("sidebar.members", { count: group.members.length })}>{members.map((agent, index) => <AgentAvatar key={agent.agent_id} agent={agent} class_name={cn("absolute border-2 border-background", member_class_name, index === 0 && "left-0 top-0", index === 1 && "right-0 top-1", index === 2 && "left-1 bottom-0")} />)}</span>;
 }

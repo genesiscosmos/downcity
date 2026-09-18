@@ -55,7 +55,7 @@ export function UsageHeatmap({ heatmap, credits_used, credits_per_usd }: UsageHe
             {week.days.map((day) => {
               const label = `${date_formatter.format(date_value(day.date))}: ${format_activity(day)}`;
               return <span key={day.date} title={day.in_range ? label : undefined} aria-hidden="true" className={cn(
-                "aspect-square min-w-0 rounded-[2px] transition-[transform,filter] duration-150 hover:scale-125 hover:brightness-110 motion-reduce:transition-none sm:rounded-[3px]",
+                "aspect-square min-w-0 rounded-tile transition-[transform,filter] duration-150 hover:scale-125 hover:brightness-110 motion-reduce:transition-none",
                 day.in_range ? level_classes[day.level] : "bg-transparent",
               )} />;
             })}
@@ -65,7 +65,7 @@ export function UsageHeatmap({ heatmap, credits_used, credits_per_usd }: UsageHe
     </div>
     <div className="mt-3 flex items-center justify-end gap-1.5 text-3xs text-muted-foreground">
       <span>{translate("usage.less")}</span>
-      {level_classes.map((class_name, index) => <span key={index} aria-hidden="true" className={cn("size-2.5 rounded-[3px]", class_name)} />)}
+      {level_classes.map((class_name, index) => <span key={index} aria-hidden="true" className={cn("size-2.5 rounded-tile", class_name)} />)}
       <span>{translate("usage.more")}</span>
     </div>
   </div>;

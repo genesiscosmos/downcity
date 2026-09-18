@@ -263,7 +263,7 @@ export function GroupEditorPanel({ group, agents, controller, section, set_group
       ? <textarea value={group.instruction || ""} onChange={(event) => set_group({ ...group, instruction: event.target.value })} placeholder={translate("group_details.goal_placeholder")} className="h-full min-h-full w-full resize-none bg-transparent p-3 font-mono text-xs leading-6 text-foreground outline-none" />
       : <SettingGroup>{agents.map((agent) => {
         const active = group.members.some((member) => member.agent_id === agent.agent_id);
-        return <SettingItem key={agent.agent_id} label={agent.name} leading={<AgentAvatar agent={agent} class_name="size-5 rounded-chip" />}><Switch checked={active} disabled={active && group.members.length === 1} onCheckedChange={(checked) => { const members = checked ? [...group.members, { agent_id: agent.agent_id }] : group.members.filter((member) => member.agent_id !== agent.agent_id); if (members.length > 0) set_group({ ...group, members }); }} aria-label={translate("group_details.member_state", { name: agent.name })} /></SettingItem>;
+        return <SettingItem key={agent.agent_id} label={agent.name} leading={<AgentAvatar agent={agent} class_name="size-5" />}><Switch checked={active} disabled={active && group.members.length === 1} onCheckedChange={(checked) => { const members = checked ? [...group.members, { agent_id: agent.agent_id }] : group.members.filter((member) => member.agent_id !== agent.agent_id); if (members.length > 0) set_group({ ...group, members }); }} aria-label={translate("group_details.member_state", { name: agent.name })} /></SettingItem>;
       })}</SettingGroup>;
   return <div className={`h-full min-h-0 w-full ${section === "instruction" ? "" : "p-2"}`}>{content}</div>;
 }

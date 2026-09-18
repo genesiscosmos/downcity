@@ -96,7 +96,7 @@ const AgentSubject = memo(function AgentSubject({ agent, controller, active, act
   const status = resolve_chat_row_status(live, unread_attention);
   const new_chat = () => { if (workspace_id) void controller.actions.create_session(workspace_id, agent.agent_id); };
   return <ChatSubjectRow
-    avatar={<AgentAvatar agent={agent} class_name="size-8 rounded-md" />}
+    avatar={<AgentAvatar agent={agent} class_name="size-8" />}
     title={agent.name}
     description={agent.description || translate("sidebar.no_description")}
     active={Boolean(active)}
