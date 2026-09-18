@@ -7,10 +7,10 @@ import test from "node:test";
 import { MockModelClient } from "./ModelClientMock.mjs";
 
 import {
-  resolve_model_usage_ratio,
-  resolve_model_usage_tokens,
-  should_compact_after_usage,
-} from "../bin/session/runner/ContextUsagePressure.js";
+  resolve_usage_ratio,
+  resolve_usage_tokens,
+  is_context_pressured,
+} from "../bin/session/runner/ContextPressure.js";
 import { SessionExecutor } from "../bin/session/runner/SessionExecutor.js";
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 
@@ -49,18 +49,11 @@ function create_runner() {
   return new SessionExecutor({
     session_id: "compact-runner-session",
     logger: { log: async () => {} },
-    should_compact_on_error: () => false,
+    is_context_limit: () => false,
+    advance_context: async () => false,
   });
 }
 
-function create_context_error_runner() {
-  return new SessionExecutor({
-    session_id: "compact-runner-session",
-    logger: { log: async () => {} },
-    should_compact_on_error: (error) =>
-      String(error || "").includes("context length"),
-  });
-}
 
 function create_turn_input(model, messages, context_window = 100, warnings = []) {
   return {
@@ -82,7 +75,7 @@ function create_turn_input(model, messages, context_window = 100, warnings = [])
 
 test("usage 优先读取 totalTokens，并在缺失时回退 input + output", () => {
   assert.equal(
-    resolve_model_usage_tokens({
+    resolve_usage_tokens({
       totalTokens: 95,
       inputTokens: 80,
       outputTokens: 10,
@@ -90,16 +83,16 @@ test("usage 优先读取 totalTokens，并在缺失时回退 input + output", ()
     95,
   );
   assert.equal(
-    resolve_model_usage_tokens({ inputTokens: 80, outputTokens: 15 }),
+    resolve_usage_tokens({ inputTokens: 80, outputTokens: 15 }),
     95,
   );
-  assert.equal(resolve_model_usage_tokens({}), null);
+  assert.equal(resolve_usage_tokens({}), null);
 });
 
 test("真实 usage 达到 95% 时请求 Context Policy 恢复", () => {
-  assert.equal(resolve_model_usage_ratio({ totalTokens: 94 }, 100), 0.94);
-  assert.equal(should_compact_after_usage(0.94), false);
-  assert.equal(should_compact_after_usage(0.95), true);
+  assert.equal(resolve_usage_ratio({ totalTokens: 94 }, 100), 0.94);
+  assert.equal(is_context_pressured(0.94), false);
+  assert.equal(is_context_pressured(0.95), true);
 });
 
 test("最终 Step 达到 95% 时通过 Turn 结果请求 writer 收口后持久化 compact", async () => {
@@ -233,7 +226,8 @@ test("每个 Provider Step 使用 Composer 返回的最新 canonical history", a
   const runner = new SessionExecutor({
     session_id: "compact-runner-session",
     logger: { log: async () => {} },
-    should_compact_on_error: () => false,
+    is_context_limit: () => false,
+    advance_context: async () => false,
   });
   const model = new MockModelClient({
     modelId: "history-reload-model",
@@ -341,15 +335,29 @@ test("每个 Provider Step 只解析一次完整 Composer 输入", async () => {
   assert.equal(compose_count, 2);
 });
 
-test("Provider context-length error 交给外层 Composer 恢复策略", async () => {
+test("Provider context-length error 在执行器内推进上下文后重试，用尽后返回结构化失败", async () => {
   const model = new MockModelClient({
     modelId: "context-error-model",
     doStream: async () => { throw new Error("context length exceeded"); },
   });
-  await assert.rejects(create_context_error_runner().execute(
-    create_turn_input(model, [{
-      role: "user",
-      content: [{ type: "text", text: "latest request" }],
-    }]),
-  ), /context length exceeded/);
+  let advance_count = 0;
+  const runner = new SessionExecutor({
+    session_id: "compact-runner-session",
+    logger: { log: async () => {} },
+    is_context_limit: (error) => String(error || "").includes("context length"),
+    advance_context: async () => {
+      advance_count += 1;
+      // 始终声称已推进，验证重试次数上限与最终收口。
+      return true;
+    },
+  });
+
+  const result = await runner.execute(create_turn_input(model, [{
+    role: "user",
+    content: [{ type: "text", text: "latest request" }],
+  }]));
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /Context length exceeded and retries failed/);
+  assert.equal(advance_count, 3);
 });

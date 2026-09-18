@@ -59,7 +59,7 @@ import type {
   AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
 } from "@/types/session/SessionMessages.js";
-import { SessionComposition } from "@/session/SessionComposition.js";
+import { StepInput } from "@/session/StepInput.js";
 import {
   relocate_fork_message_files,
   resolve_session_fork_messages,
@@ -101,7 +101,7 @@ export class Session implements AgentSession {
   /** 当前 Session 的一次性初始化任务，避免缓存实例被重复恢复运行时状态。 */
   private initialize_promise: Promise<void> | null = null;
   /** 当前 Session 的 system snapshot 与 Step 组装边界。 */
-  private readonly session_composition: SessionComposition;
+  private readonly step_input: StepInput;
   private readonly state: SessionState;
   /** 当前 Session 独享的 Command FIFO。 */
   private readonly session_queue = new SessionQueue();
@@ -156,7 +156,7 @@ export class Session implements AgentSession {
       interactions: this.session_interactions,
     });
     this.local_state = create_session_local_state();
-    this.session_composition = new SessionComposition({
+    this.step_input = new StepInput({
       agent_id: this.agent_id,
       session_id: this.id,
       session_origin: this.origin,
@@ -196,15 +196,7 @@ export class Session implements AgentSession {
       session_id: this.id,
       session_origin: this.origin,
       workspace_path: this.workspace_path,
-      composer: this.composer,
-      get_compose_input: async (turn_context, advance_count) =>
-        await this.session_composition.create_compose_input(
-          turn_context,
-          advance_count,
-        ),
-      apply_system_snapshot: (input) =>
-        this.session_composition.apply_snapshot(input),
-      get_hooks: () => this.get_hooks(),
+      step_input: this.step_input,
       advance_context: async (trigger) => await this.advance_context(trigger),
       maintain_context: async () => {
         await this.advance_context("usage_pressure");
@@ -227,7 +219,7 @@ export class Session implements AgentSession {
     if (!this.initialize_promise) {
       this.initialize_promise = (async () => {
         await Promise.all([
-          this.session_composition.initialize(),
+          this.step_input.initialize(),
           this.session_messages.initialize(),
           this.state.initialize(),
         ]);
@@ -256,7 +248,7 @@ export class Session implements AgentSession {
    * - 多个 system block 按原顺序合并为一个 Markdown 文档。
    */
   async snapshot(): Promise<void> {
-    await this.session_composition.snapshot();
+    await this.step_input.snapshot();
   }
 
   /**
@@ -268,7 +260,7 @@ export class Session implements AgentSession {
    * - 当前已经发出的 provider 请求不受影响，后续 step 使用新 snapshot。
    */
   async syncshot(): Promise<void> {
-    await this.session_composition.syncshot();
+    await this.step_input.syncshot();
   }
 
   /**
@@ -367,7 +359,7 @@ export class Session implements AgentSession {
    * 追加一条新的 Session prompt。
    */
   async prompt(input: AgentSessionPromptInput): Promise<AgentSessionTurnHandle> {
-    await this.session_composition.initialize();
+    await this.step_input.initialize();
     return await this.session_loop.prompt(input);
   }
 
@@ -466,7 +458,7 @@ export class Session implements AgentSession {
    * 读取当前 session 生效的 system 快照。
    */
   async system(): Promise<AgentSessionSystemSnapshot> {
-    return await this.session_composition.read();
+    return await this.step_input.read_system();
   }
 
   /**
@@ -554,7 +546,7 @@ export class Session implements AgentSession {
    * 在执行前确保 session 已完成初始化与宿主装配。
    */
   async ensure_ready_for_execution(): Promise<void> {
-    await this.session_composition.initialize();
+    await this.step_input.initialize();
     await this.state.ensure_ready_for_execution();
   }
 
@@ -570,7 +562,7 @@ export class Session implements AgentSession {
       session_id: session_id,
       get_tools: this.get_tools,
       logger: this.logger,
-      instruction_system_blocks: this.session_composition.instruction_blocks(),
+      instruction_system_blocks: this.step_input.instruction_blocks(),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_workspace_env: this.get_workspace_env,
       get_hooks: this.get_hooks,
@@ -609,7 +601,7 @@ export class Session implements AgentSession {
     const action_id = `context-compaction:${this.id}:${generate_id()}`;
     try {
       const advanced = await this.composer.advance_context({
-        session: this.session_composition.compose_identity(),
+        session: this.step_input.identity(),
         model: this.get_model(),
         history: await this.store.list_messages(),
         derived: this.store.derived_store(this.composer.name),

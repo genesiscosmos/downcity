@@ -9,8 +9,8 @@
 - `Session` 拥有输入队列并创建 Command；`SessionLoop` 负责消费、Turn Handle 与 Assistant Message 收口。
 - `SessionTurnContext` 从 Turn 创建起唯一拥有取消信号、Step 快照和执行期资源。
 - `SessionComposer` 根据只读 Session 快照组装 system、messages 和 tools。
-- `StepInputAssembly` 是 SessionLoop 的「输入环境」：刷新 Hook、请求 Composer 组装、套用冻结 system snapshot、绑定工具执行上下文。
-- `SessionExecutor` 负责模型请求与 Tool Loop、续写恢复、上下文超限恢复和真实 usage 观测；它只对外提供 `execute()`，Step 输入由回调提供。
+- `StepInput` 是 SessionLoop 的「输入环境」：刷新 Hook、请求 Composer 组装、冻结并套用 system、绑定工具执行上下文。
+- `SessionExecutor` 负责模型请求、Tool Loop、续写恢复、上下文超限重试与真实 usage 观测；它只对外提供 `execute()`，Step 输入由回调提供。
 - `ModelRequestRunner` 唯一拥有普通模型请求的五次重试、退避和逐次失败通知。
 - `SessionMessages` 是 Message 唯一事实源；执行层不写文件、不持有 Store。
 
@@ -19,7 +19,7 @@
 ```mermaid
 flowchart LR
     Loop["SessionLoop"] --> Context["SessionTurnContext"]
-    Loop --> Assembly["StepInputAssembly"]
+    Loop --> Assembly["StepInput"]
     Assembly --> Composer["SessionComposer"]
     Composer --> Input["system + messages + tools"]
     Context --> Executor["SessionExecutor"]
@@ -34,12 +34,12 @@ flowchart LR
     Context --> Messages["SessionMessages"]
 ```
 
-每个模型 Step 前，`SessionLoop` 先消费排队的 Steer 和状态 Command。`StepInputAssembly` 随后捕获最新 effective state，并调用 Composer 生成完整 Step 输入。
+每个模型 Step 前，`SessionLoop` 先消费排队的 Steer 和状态 Command。`StepInput` 随后捕获最新 effective state，并调用 Composer 生成完整 Step 输入。
 
 ```text
 Session.prompt()
   -> SessionLoop 持久化 canonical User Message
-  -> StepInputAssembly 捕获只读 Session 快照
+  -> StepInput 捕获只读 Session 快照
   -> SessionComposer.compose()
   -> SessionModelMessages: SessionMessage -> ModelMessage
   -> SessionExecutor.execute()
@@ -56,8 +56,8 @@ Session.prompt()
 | --- | --- |
 | `SystemComposer` | `DefaultSessionComposer.compose()` + `SessionSystem` |
 | `HistoryComposer` | `SessionComposer.compose()` + `SessionModelMessages` |
-| `ContextComposer` 的 tools | `Session.create_compose_input()` + `SessionComposer.compose()` |
-| `ContextComposer` 的 Step Callback | `SessionLoop` + `StepInputAssembly` |
+| `ContextComposer` 的 tools | `Session` 装配 + `SessionComposer.compose()` |
+| `ContextComposer` 的 Step Callback | `SessionLoop` + `StepInput` |
 | `ContextComposer` 的 fallback Assistant | `SessionExecutor` + `ContextAdvanceRetry` |
 | `CompactionComposer` | `SessionComposer.advance_context()` + `session/composer/` 内的算法与派生表 |
 
@@ -93,12 +93,15 @@ model/
   prompts/                  默认 core system prompt 资产
   types/                    模型层内部类型
 
+session/
+  StepInput.ts             每步模型输入与冻结 system
+
 session/runner/
-  SessionExecutor.ts               模型请求与 Tool Loop 执行器
-  StepInputAssembly.ts             每个 Step 的模型输入装配
-  SessionExecutorSignals.ts        Step 上限、信号与诊断
-  SessionExecutorLoopDecision.ts   是否继续下一轮的纯决策
-  SessionExecutorError.ts          执行错误归一化
-  ContextUsagePressure.ts          usage 压力阈值判断
-  ContextAdvanceRetry.ts           推进上下文后重试整轮
+  SessionExecutor.ts               模型请求、Tool Loop 与上下文推进重试
+  ToolLoopLimits.ts                Step 上限与边界提示
+  ToolLoopDecision.ts              是否继续下一轮的纯决策
+  AssistantParts.ts                Assistant 产出读取与诊断
+  ModelFailure.ts                  模型调用错误归一化
+  ContextPressure.ts               usage 压力阈值判断
+  ContextRetry.ts                  推进上下文后重试整轮
 ```

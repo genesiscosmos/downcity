@@ -1,15 +1,15 @@
 /**
- * SessionExecutorLoopDecision：模型/tool-loop 循环的纯决策模块。
+ * ToolLoopDecision：工具循环的“是否继续下一轮”纯决策。
  *
  * 关键点（中文）
- * - 把“是否继续下一轮”的分支优先级从执行器主流程中拆出。
+ * - 把继续/停止的分支优先级从执行器主流程中拆出。
  * - 保持纯函数，不依赖模型、持久化或 logger，便于直接测试。
  */
 
 /**
  * 单轮 loop 决策输入。
  */
-export interface SessionLoopDecisionInput {
+export interface ToolLoopDecisionInput {
   /** 当前 step 是否检测到了不完整响应。 */
   hasIncompleteResponse: boolean;
   /** 当前已经执行过多少次不完整响应恢复。 */
@@ -23,7 +23,7 @@ export interface SessionLoopDecisionInput {
 /**
  * 单轮 loop 决策结果。
  */
-export interface SessionLoopDecision {
+export interface ToolLoopDecision {
   /** 本轮命中的主决策类型。 */
   kind:
     | "recover_incomplete"
@@ -42,7 +42,7 @@ export interface SessionLoopDecision {
  * - 用于处理“最后一个 step 结束后，恰好又有新的 user 消息写入”的窗口。
  * - 这里只关心是否真的合并到了新增 user message，不关心消息内容细节。
  */
-export interface SessionTailMergeContinuationInput {
+export interface TailMergeContinuationInput {
   /** stop 前最后一次 tail merge 实际合并到的 user message 数量。 */
   mergedUserMessageCount: number;
 }
@@ -55,9 +55,9 @@ export interface SessionTailMergeContinuationInput {
  * 2. 已发生的工具调用
  * 3. 停止
  */
-export function evaluate_executor_loop_decision(
-  input: SessionLoopDecisionInput,
-): SessionLoopDecision {
+export function decide_tool_loop(
+  input: ToolLoopDecisionInput,
+): ToolLoopDecision {
   if (
     input.hasIncompleteResponse &&
     input.incompleteRecoveryCount < input.maxIncompleteRecoveries
@@ -91,8 +91,8 @@ export function evaluate_executor_loop_decision(
  * - 只要最后一次 tail merge 真正并入了新的 user 消息，就必须续跑。
  * - 这样可以覆盖“最后一个 step 结束后，新消息才到达”的收尾窗口。
  */
-export function should_continue_for_tail_merged_user_messages(
-  input: SessionTailMergeContinuationInput,
+export function should_continue_after_tail_merge(
+  input: TailMergeContinuationInput,
 ): boolean {
   return input.mergedUserMessageCount > 0;
 }

@@ -108,7 +108,7 @@ test("Session 并发初始化共享完整初始化图", async () => {
   });
 });
 
-test("SessionComposition 恢复失败后允许 Session 重试", async () => {
+test("StepInput 初始化失败后允许 Session 重试", async () => {
   const { calls, session } = create_session({
     read_instruction: async (attempt) => {
       if (attempt === 1) throw new Error("instruction unavailable");

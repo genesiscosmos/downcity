@@ -1,5 +1,5 @@
 /**
- * SessionExecutorError：执行错误归一化工具。
+ * ModelFailure：模型调用错误归一化。
  *
  * 关键点（中文）
  * - 模型流的最终错误可能只是兜底包装，底层 Provider 错误应优先保留。
@@ -28,7 +28,7 @@ export function summarize_stream_error(error: unknown): JsonObject {
 /**
  * 提取实际应返回给上层的错误文本。
  */
-export function resolve_effective_executor_error(params: {
+export function resolve_model_error(params: {
   /**
    * 外层捕获到的执行错误。
    */

@@ -15,11 +15,9 @@ import type {
   SessionInteractionPort,
 } from "@downcity/type";
 import type {
-  SessionComposer,
-  SessionComposeInput,
   SessionContextAdvanceTrigger,
-  SessionStepInput,
 } from "@/types/session/SessionComposer.js";
+import type { StepInput } from "@/session/StepInput.js";
 import type { SessionExecutorPort } from "@/session/runner/SessionExecutor.js";
 import type { SessionQueue } from "@/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
@@ -59,25 +57,21 @@ export interface SessionLoopOptions {
   /**
    * 已装配的执行器。
    *
-   * 关键点（中文）：省略时由 `composer` 与 `get_compose_input` 现场装配；传入后本 Loop
-   * 不再需要 Composer 输入，只调用该执行器。
+   * 关键点（中文）：省略时本 Loop 自行创建默认 `SessionExecutor`；传入后只调用该实现。
    */
   executor?: SessionExecutorPort;
-  /** 当前 Session 使用的统一 Composer；注入执行器时可省略。 */
-  composer?: SessionComposer;
-  /** 为 Composer 创建当前 Step 的只读输入快照；注入执行器时可省略。 */
-  get_compose_input?: (
-    turn_context: SessionTurnContext,
-    advance_count: number,
-  ) => Promise<SessionComposeInput>;
-  /** 应用 Session 级冻结 system snapshot；省略时直接使用 Composer 结果。 */
-  apply_system_snapshot?: (input: SessionStepInput) => SessionStepInput;
-  /** 创建当前 Session effective City 扩展执行视图。 */
-  get_hooks?: () => SessionHookRuntime;
-  /** 请求当前 Composer 推进派生上下文状态。 */
-  advance_context: (trigger: SessionContextAdvanceTrigger) => Promise<boolean>;
-  /** Turn 结束后按需维护 Composer 派生上下文。 */
+  /**
+   * 每步的模型输入装配者。
+   *
+   * 关键点（中文）：省略时表示调用方注入了自带输入的 `executor`，本 Loop 不再装配输入。
+   */
+  step_input?: StepInput;
+  /** Turn 结束后按需推进 Composer 派生上下文。 */
   maintain_context: () => Promise<void>;
+  /** 请求推进派生上下文；Provider 上下文超限时由执行器调用。 */
+  advance_context: (
+    trigger: SessionContextAdvanceTrigger,
+  ) => Promise<boolean>;
   /** 当前 Session 的配置与 Metadata 状态。 */
   state: SessionState;
   /** 当前 Session 的 canonical Message 入口。 */

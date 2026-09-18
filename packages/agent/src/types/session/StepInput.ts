@@ -1,20 +1,23 @@
 /**
- * Session system 快照与模型输入组装的依赖类型。
+ * StepInput 的构造参数类型。
  *
- * 这些字段共同描述 composition 领域所需的最小只读资源；SessionComposition 不拥有
+ * 这些字段共同描述「为每个 Step 准备模型输入」所需的最小只读资源；StepInput 不拥有
  * Message、Store、Model 或 Power 生命周期。
  */
 
-import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
+import type {
+  ModelClient,
+  RuntimeTool as Tool,
+  SessionHookRuntime,
+  SessionOrigin,
+} from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionOrigin } from "@downcity/type";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
-import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 
-/** SessionComposition 构造参数。 */
-export interface SessionCompositionOptions {
+/** StepInput 构造参数。 */
+export interface StepInputOptions {
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
   /** 当前 Session 的稳定标识。 */
@@ -31,9 +34,9 @@ export interface SessionCompositionOptions {
   get_tools: () => Record<string, Tool>;
   /** 当前 Session 创建时捕获的 instruction system blocks。 */
   instruction_system_blocks: AgentSessionSystemBlock[];
-  /** 显式 syncshot 时读取 Agent 最新 instruction system blocks。 */
+  /** 显式刷新 system 时读取 Agent 最新 instruction system blocks。 */
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
-  /** 显式 syncshot 时读取当前配置的 Hook 执行视图。 */
+  /** 在每个 Step 检查点读取当前配置的 Hook 执行视图。 */
   get_hooks: () => SessionHookRuntime;
   /** 在每个 Step 检查点读取 Workspace env。 */
   get_workspace_env: () => Record<string, string>;

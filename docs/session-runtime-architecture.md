@@ -12,11 +12,10 @@ Agent
             ├─ SessionState        配置、标题与 Metadata
             ├─ SessionQueue        有序 Command
             ├─ SessionLoop         Queue 消费与 Turn 生命周期
-            ├─ SessionComposition  system snapshot 与宿主事实
+            ├─ StepInput           每步模型输入与冻结 system
             ├─ SessionMessages     canonical Message 领域规则与运行态投影
             ├─ SessionInteractions 运行时等待、超时与响应
             ├─ runner/SessionExecutor       模型请求与 Tool Step Loop
-            ├─ runner/StepInputAssembly     每个 Step 的模型输入装配
             └─ SessionEventHub     未来 Mutation 广播
 ```
 
@@ -25,8 +24,8 @@ Agent
 - `AgentSessions` 拥有 Session 集合，Workspace 只提供单个 Session 的执行资源。
 - `SessionLoop` 是 Queue 的唯一消费者，也是 Active Turn 的唯一所有者。
 - `session.db` 是 canonical Message 的唯一事实源；`SessionMessages` 只拥有领域规则、非终态恢复与有界运行态投影。
-- `SessionComposition` 拥有 system snapshot；Composer 读取 canonical history，只有 Composer 可写命名空间隔离的派生表。
-- `SessionExecutor` 只执行一个已经建立的 Turn，输入由 `StepInputAssembly` 回调提供；不创建 Session、不持有历史 Store。
+- `StepInput` 拥有冻结 system 与每步宿主事实；Composer 读取 canonical history，只有 Composer 可写命名空间隔离的派生表。
+- `SessionExecutor` 只执行一个已经建立的 Turn，输入由 `StepInput` 回调提供；不创建 Session、不持有历史 Store。
 - `SessionInteractions` 只拥有 Promise、Timer 等进程内资源，终态必须先由 `SessionMessages` 提交。
 
 ## 2. Command 与 Turn
@@ -67,7 +66,7 @@ prompt
   → SessionLoop 创建 TurnContext
   → SessionMessages 持久化 User Message
   → 每个 Provider Step 提交一次 Queue 检查点
-  → StepInputAssembly 从 session.db 组装一次 model、system、history 与 tools
+  → StepInput 从 session.db 组装一次 model、system、history 与 tools
   → SessionExecutor 执行单个模型与 Tool Step
   → AssistantOutputAdapter 把 Step 结果写入 SessionMessages
   → 下一 Step 重新 Compose canonical history

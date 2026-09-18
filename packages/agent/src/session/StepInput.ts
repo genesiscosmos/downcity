@@ -1,13 +1,22 @@
 /**
- * Session system 快照与模型输入组装边界。
+ * StepInput：为每个 Step 准备发给模型的输入。
  *
  * 关键点（中文）
- * - 拥有 Session 创建后固定的 system snapshot；env、Tool 与 Hook 在 Step 检查点读取。
- * - Composer 只读取本对象生成的不可变输入，不接触 Session 持久化编排。
- * - Power Hook 失败只降级对应扩展内容，不改变 canonical Message。
+ * - 同时拥有「冻结的 system 快照」与「每步宿主事实采集」，因为二者互为前提：首次组装
+ *   的结果就是快照，而快照一旦冻结就不再重新采集 Power system。
+ * - 只产出输入，不发请求、不判断是否继续；请求与循环归 `SessionExecutor`。
+ * - 不拥有 Message、Turn 或 Store 生命周期。
  */
 
-import type { JsonValue } from "@downcity/type";
+import type {
+  JsonValue,
+  ModelClient,
+  RuntimeTool as Tool,
+  RuntimeToolExecutionOptions as ToolExecutionOptions,
+  SessionHookContextBlock,
+  SessionHookRuntime,
+  SessionTurnContextHookValue,
+} from "@downcity/type";
 import type {
   AgentSessionSystemBlock,
   AgentSessionSystemSnapshot,
@@ -17,36 +26,35 @@ import type {
   SessionComposeInput,
   SessionStepInput,
 } from "@/types/session/SessionComposer.js";
-import type {
-  SessionHookContextBlock,
-  SessionTurnContextHookValue,
-} from "@downcity/type";
+import type { SessionStepExecutionInput } from "@/types/session/SessionExecution.js";
+import type { StepInputOptions } from "@/types/session/StepInput.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
-import type { SessionCompositionOptions } from "@/types/session/SessionComposition.js";
+import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
+import { is_action_result } from "@/types/action/ActionResult.js";
 import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
 import { resolve_session_power_system_blocks } from "@/session/SessionSystem.js";
 
-/** 管理当前 Session 的 system snapshot 与 Step 组装输入。 */
-export class SessionComposition {
-  private readonly options: SessionCompositionOptions;
+/** 当前 Session 的每步模型输入装配者。 */
+export class StepInput {
+  private readonly options: StepInputOptions;
   private effective_instruction_blocks: AgentSessionSystemBlock[];
-  /** 当前 Session 首次生成后固定的完整 system snapshot。 */
-  private snapshot_blocks: AgentSessionSystemBlock[] | null = null;
-  /** 当前 Session instruction 的一次性恢复任务。 */
+  /** 当前 Session 首次组装后冻结的完整 system；null 表示尚未冻结。 */
+  private frozen_blocks: AgentSessionSystemBlock[] | null = null;
+  /** 当前 Session 的一次性初始化任务。 */
   private initialize_promise: Promise<void> | null = null;
   /** 串行化 snapshot / syncshot 对 system 与 instruction.md 的修改。 */
   private mutation_chain: Promise<void> = Promise.resolve();
 
-  constructor(options: SessionCompositionOptions) {
+  constructor(options: StepInputOptions) {
     this.options = options;
     this.effective_instruction_blocks = options.instruction_system_blocks.map(
       (block) => ({ ...block }),
     );
   }
 
-  /** 恢复显式固化的完整 system snapshot。 */
+  /** 初始化派生 schema，并恢复显式固化的 system 快照。 */
   async initialize(): Promise<void> {
     if (!this.initialize_promise) {
       this.initialize_promise = (async () => {
@@ -56,7 +64,7 @@ export class SessionComposition {
         if (persisted_instruction === null) return;
 
         const instruction = persisted_instruction.trim();
-        this.snapshot_blocks = instruction
+        this.frozen_blocks = instruction
           ? [{
               source: "instruction" as const,
               name: "snapshot",
@@ -89,10 +97,41 @@ export class SessionComposition {
     }
   }
 
+  /**
+   * 为下一个 Provider Step 组装唯一一份输入。
+   *
+   * 关键点（中文）
+   * - 调用方必须先提交 Session 统一输入队列，再调用本方法。
+   * - 首次调用会把组装出的完整 system 冻结为当前 Session 的 system 快照。
+   */
+  async build(
+    turn_context: SessionTurnContext,
+    advance_count: number,
+  ): Promise<SessionStepExecutionInput> {
+    const compose_input = await this.gather(turn_context, advance_count);
+    const model = compose_input.state.model;
+    if (!model) throw new Error("requires a configured model.");
+    turn_context.step.commit({
+      workspace_env: compose_input.state.env,
+      agent_systems: compose_input.state.systems,
+    });
+    const composed = await this.options.composer.compose(compose_input);
+    const frozen = this.apply_frozen_system(composed);
+    return {
+      model,
+      system: frozen.system,
+      messages: frozen.messages,
+      tools: this.bind_turn_context_to_tools(frozen.tools, turn_context),
+      ...(compose_input.state.model_context_window !== undefined
+        ? { context_window: compose_input.state.model_context_window }
+        : {}),
+    };
+  }
+
   /** 把当前完整 system 显式固化到 instruction.md。 */
   async snapshot(): Promise<void> {
     await this.run_mutation(async () => {
-      const system_snapshot = await this.read();
+      const system_snapshot = await this.read_system();
       await this.write_snapshot(system_snapshot.blocks);
     });
   }
@@ -103,21 +142,23 @@ export class SessionComposition {
       await this.initialize();
       const should_persist = await this.options.store.has_instruction();
       const composed = await this.options.composer.compose(
-        await this.create_compose_input(undefined, 0, true),
+        await this.gather(undefined, 0, true),
       );
       const next_blocks = resolve_composed_system_blocks(composed);
 
       if (should_persist) await this.write_snapshot(next_blocks);
       this.effective_instruction_blocks =
         this.options.get_instruction_system_blocks().map((block) => ({ ...block }));
-      this.snapshot_blocks = next_blocks;
+      this.frozen_blocks = next_blocks;
     });
   }
 
   /** 读取当前 Session 生效的完整 system 快照。 */
-  async read(): Promise<AgentSessionSystemSnapshot> {
+  async read_system(): Promise<AgentSessionSystemSnapshot> {
     await this.initialize();
-    const composed = await this.compose_for_view();
+    const composed = await this.options.composer.compose(
+      await this.gather(undefined, 0),
+    );
     return {
       session_id: this.options.session_id,
       session: {
@@ -127,7 +168,7 @@ export class SessionComposition {
         created_at: new Date(this.options.get_created_at()).toISOString(),
         timezone: this.options.get_timezone(),
       },
-      blocks: resolve_composed_system_blocks(composed),
+      blocks: resolve_composed_system_blocks(this.apply_frozen_system(composed)),
     };
   }
 
@@ -137,7 +178,7 @@ export class SessionComposition {
   }
 
   /** 创建 Composer 共用的稳定 Session 身份快照。 */
-  compose_identity(): SessionComposeIdentity {
+  identity(): SessionComposeIdentity {
     return {
       agent_id: this.options.agent_id,
       session_id: this.options.session_id,
@@ -147,12 +188,13 @@ export class SessionComposition {
     };
   }
 
-  /** 为 Composer 创建当前 Step 的只读 Session 快照。 */
-  async create_compose_input(
+  /** 采集当前 Step 的宿主事实，交给 Composer 组装。 */
+  private async gather(
     turn_context: SessionTurnContext | undefined,
     advance_count: number,
     refresh_system = false,
   ): Promise<SessionComposeInput> {
+    await this.refresh_step_runtime(turn_context);
     const instruction_system_blocks = refresh_system
       ? this.options.get_instruction_system_blocks().map((block) => ({ ...block }))
       : this.instruction_blocks();
@@ -176,7 +218,7 @@ export class SessionComposition {
     const power_runtime = refresh_system
       ? this.options.get_hooks()
       : turn_context?.step.hooks || this.options.get_hooks();
-    const resolved_power_system_blocks = this.snapshot_blocks && !refresh_system
+    const resolved_power_system_blocks = this.frozen_blocks && !refresh_system
       ? []
       : await resolve_session_power_system_blocks({
           session_id: this.options.session_id,
@@ -224,7 +266,7 @@ export class SessionComposition {
         })
       : [];
     return {
-      session: this.compose_identity(),
+      session: this.identity(),
       state: {
         model: this.options.get_model(),
         model_context_window: this.options.get_model_context_window(),
@@ -235,7 +277,7 @@ export class SessionComposition {
         tools: Object.freeze({ ...this.options.get_tools() }),
         instruction_system_blocks,
         managed_power_system_blocks:
-          this.snapshot_blocks && !refresh_system
+          this.frozen_blocks && !refresh_system
             ? []
             : await this.options.get_managed_power_system_blocks(),
         power_system_blocks: resolved_power_system_blocks,
@@ -255,18 +297,23 @@ export class SessionComposition {
     return this.options.store.derived_store(this.options.composer.name);
   }
 
-  /** 固定或应用当前 Session 的 system snapshot。 */
-  apply_snapshot(input: SessionStepInput): SessionStepInput {
-    if (!this.snapshot_blocks) {
-      this.snapshot_blocks = resolve_composed_system_blocks(input);
+  /**
+   * 冻结或套用当前 Session 的 system 快照。
+   *
+   * 关键点（中文）：首次调用把组装结果记成快照；之后每次都覆盖为快照，保证同一 Session
+   * 的 system 不再漂移。
+   */
+  private apply_frozen_system(input: SessionStepInput): SessionStepInput {
+    if (!this.frozen_blocks) {
+      this.frozen_blocks = resolve_composed_system_blocks(input);
     }
     return {
       ...input,
-      system: this.snapshot_blocks.map((block) => ({
+      system: this.frozen_blocks.map((block) => ({
         role: "system" as const,
         content: block.content,
       })),
-      system_blocks: this.snapshot_blocks.map((block) => ({ ...block })),
+      system_blocks: this.frozen_blocks.map((block) => ({ ...block })),
     };
   }
 
@@ -288,14 +335,6 @@ export class SessionComposition {
     }
   }
 
-  /** 使用统一 Composer 生成只读 system/history 查询结果。 */
-  private async compose_for_view(): Promise<SessionStepInput> {
-    const composed = await this.options.composer.compose(
-      await this.create_compose_input(undefined, 0),
-    );
-    return this.apply_snapshot(composed);
-  }
-
   /** 串行执行一次 Session system 修改。 */
   private async run_mutation(operation: () => Promise<void>): Promise<void> {
     const next = this.mutation_chain.then(operation, operation);
@@ -310,6 +349,103 @@ export class SessionComposition {
     await this.options.store.write_instruction(
       blocks.map((block) => block.content).join("\n\n"),
     );
+  }
+
+  /** 刷新当前 Step 的 effective Hook 执行视图。 */
+  private async refresh_step_runtime(
+    turn_context: SessionTurnContext | undefined,
+  ): Promise<void> {
+    if (!turn_context) return;
+    const hooks = await this.options.get_hooks().open();
+    await turn_context.step.replace_hooks(hooks);
+  }
+
+  /**
+   * 为所有 tool execute callback 绑定显式 Session 运行上下文。
+   *
+   * 关键点（中文）
+   * - 每个 step 使用独立包装工具，不会在并行 Session 间共享可变指针。
+   * - Agent 与 Shell 工具通过 RuntimeToolExecutionOptions.context 读取显式快照。
+   */
+  private bind_turn_context_to_tools(
+    tools: Record<string, Tool>,
+    turn_context: SessionTurnContext,
+  ): Record<string, Tool> {
+    const wrapped: Record<string, Tool> = {};
+    for (const [name, tool] of Object.entries(tools)) {
+      const original_execute = tool.execute;
+      if (typeof original_execute !== "function") {
+        wrapped[name] = tool;
+        continue;
+      }
+      wrapped[name] = {
+        ...tool,
+        execute: async (args: unknown, options: ToolExecutionOptions) => {
+          const tool_call_id = String(options.tool_call_id || "").trim();
+          if (!tool_call_id) {
+            throw new Error(`Tool execution requires toolCallId: ${name}`);
+          }
+          if (tool_call_id && turn_context.output.assistant) {
+            await turn_context.output.assistant.prepare_tool_input({
+              tool_call_id,
+              tool_name: name,
+              input: args,
+            });
+          }
+          const abort_signal = options.abort_signal ||
+            turn_context.lifecycle.abort_signal;
+          const execution_context: SessionToolExecutionContext = {
+            session_turn_context: turn_context,
+            action_execution_context: {
+              call_id: tool_call_id,
+              abort_signal,
+              session: {
+                session_id: turn_context.session.session_id,
+                turn_id: turn_context.session.turn_id,
+                interactions: turn_context.interactions,
+              },
+              ...(turn_context.session.project_root
+                ? { workspace_path: turn_context.session.project_root }
+                : {}),
+              ...(turn_context.step.workspace_env
+                ? { workspace_env: turn_context.step.workspace_env }
+                : {}),
+            },
+            shell_execution_context: {
+              session: {
+                session_id: turn_context.session.session_id,
+                turn_id: turn_context.session.turn_id,
+              },
+              call_id: tool_call_id,
+              abort_signal,
+              ...(turn_context.step.workspace_env
+                ? { workspace_env: turn_context.step.workspace_env }
+                : {}),
+              ...(turn_context.shell.approval_gateway
+                ? { approval_gateway: turn_context.shell.approval_gateway }
+                : {}),
+            },
+          };
+          const output = await original_execute(args, {
+            ...options,
+            context: execution_context,
+          });
+          if (!is_action_result(output)) return output;
+          if (Array.isArray(output.effects)) {
+            turn_context.effects.append(output.effects);
+          }
+          for (const message of output.messages) {
+            if (message.role === "agent") {
+              turn_context.output.enqueue_assistant_parts(message.parts);
+              continue;
+            }
+            await turn_context.input.append_internal(message.parts);
+          }
+          return output.output;
+        },
+      };
+    }
+    return wrapped;
   }
 }
 

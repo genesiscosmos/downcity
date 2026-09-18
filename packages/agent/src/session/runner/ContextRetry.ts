@@ -1,5 +1,5 @@
 /**
- * ContextAdvanceRetry：推进上下文后重试整轮 Turn 的策略。
+ * ContextRetry：推进上下文后重试整轮 Turn 的策略。
  *
  * 关键点（中文）
  * - 统一封装「推进上下文后重试」和「普通失败兜底」逻辑。
@@ -15,7 +15,7 @@ import type { SessionTurnExecutionResult } from "@/types/session/SessionExecutio
  */
 const MAX_CONTEXT_ADVANCE_ATTEMPTS = 3;
 
-interface ContextAdvanceRetryOptions {
+interface ContextRetryOptions {
   /** 当前 Session 稳定标识。 */
   session_id: string;
 
@@ -28,7 +28,7 @@ interface ContextAdvanceRetryOptions {
   logger: Logger;
 }
 
-interface ExecutorRecoveryInput {
+interface ContextRetryInput {
   /** 按当前上下文推进次数执行完整 Turn。 */
   execute_turn: (advance_count: number) => Promise<SessionTurnExecutionResult>;
 }
@@ -36,16 +36,16 @@ interface ExecutorRecoveryInput {
 /**
  * 执行恢复与重试策略服务。
  */
-export class ContextAdvanceRetry {
-  private readonly advance_context: ContextAdvanceRetryOptions["advance_context"];
+export class ContextRetry {
+  private readonly advance_context: ContextRetryOptions["advance_context"];
   private readonly logger: Logger;
 
-  constructor(options: ContextAdvanceRetryOptions) {
+  constructor(options: ContextRetryOptions) {
     const session_id = String(options.session_id || "").trim();
     this.advance_context = options.advance_context;
     this.logger = options.logger;
     if (!session_id) {
-      throw new Error("ContextAdvanceRetry requires a non-empty session_id");
+      throw new Error("ContextRetry requires a non-empty session_id");
     }
   }
 
@@ -53,7 +53,7 @@ export class ContextAdvanceRetry {
    * 执行一次带恢复策略的 Session Turn。
    */
   async execute_with_retry(
-    input: ExecutorRecoveryInput,
+    input: ContextRetryInput,
   ): Promise<SessionTurnExecutionResult> {
     let advance_count = 0;
     while (true) {

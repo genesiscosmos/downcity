@@ -7,7 +7,7 @@ import test from "node:test";
 import { MockModelClient } from "./ModelClientMock.mjs";
 
 import { SessionExecutor } from "../bin/session/runner/SessionExecutor.js";
-import { ContextAdvanceRetry } from "../bin/session/runner/ContextAdvanceRetry.js";
+import { ContextRetry } from "../bin/session/runner/ContextRetry.js";
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 
 function create_turn_context(overrides = {}) {
@@ -84,7 +84,8 @@ test("SessionExecutor Provider 失败时只返回结构化错误", async () => {
   const runner = new SessionExecutor({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
-    should_compact_on_error: () => false,
+    is_context_limit: () => false,
+    advance_context: async () => false,
   });
   const messages = [{
     role: "user",
@@ -115,7 +116,8 @@ test("SessionExecutor 成功流按 start、chunks、finish 完成 canonical step
   const runner = new SessionExecutor({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
-    should_compact_on_error: () => false,
+    is_context_limit: () => false,
+    advance_context: async () => false,
   });
   const result = await runner.execute(create_execution_input(
     model,
@@ -147,7 +149,8 @@ test("SessionExecutor chunk 写入失败时中止 canonical step", async () => {
   const runner = new SessionExecutor({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
-    should_compact_on_error: () => false,
+    is_context_limit: () => false,
+    advance_context: async () => false,
   });
   const result = await runner.execute(create_execution_input(
     model,
@@ -169,7 +172,7 @@ test("SessionExecutor chunk 写入失败时中止 canonical step", async () => {
 });
 
 test("恢复策略捕获普通异常后只返回结构化错误", async () => {
-  const policy = new ContextAdvanceRetry({
+  const policy = new ContextRetry({
     session_id: "executor-failure-test",
     logger: { log: async () => {} },
     advance_context: async () => false,

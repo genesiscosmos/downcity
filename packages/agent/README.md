@@ -94,8 +94,8 @@ src/
   - `Session.ts` 是公开 facade 与 Session 对象装配入口
   - `SessionState.ts` 管理配置与 metadata
   - `SessionLoop.ts` 是 Command Queue 的唯一消费者与 Turn 生命周期所有者；Prompt Command 创建或加入 Turn，维护类 Command 在空闲期独立执行
-  - `SessionComposition.ts` 提供 Compose 所需的宿主事实：system snapshot、检查点 env/hook 与只读历史
-  - `runner/` 放 Session 级编排对象：`SessionExecutor`（模型请求与 Tool Loop）与 `StepInputAssembly`（每个 Step 的模型输入装配）
+  - `StepInput.ts` 提供每步模型输入：冻结 system、检查点 env/hook、只读历史与工具绑定
+  - `runner/` 放执行器与其纯逻辑：`SessionExecutor`（模型请求、Tool Loop、上下文推进重试）及上限、决策、诊断模块
   - `session.db` 是 canonical Message 唯一事实源，`SessionMessages.ts` 负责领域写入、恢复和有界运行态投影
   - `DefaultSessionComposer.ts` 负责 system/history/tools，并默认使用 Part 级 checkpoint 压缩
   - `messages/` 放 Assistant 状态转换与 writer、Message codec、Tool effect 投影与结构化文件编辑 Diff

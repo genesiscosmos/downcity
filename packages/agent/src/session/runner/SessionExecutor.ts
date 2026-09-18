@@ -17,20 +17,22 @@ import {
   build_incomplete_response_recovery_nudge,
   build_max_steps_error_text,
   build_max_steps_finalization_nudge,
+} from "@/session/runner/ToolLoopLimits.js";
+import {
   detect_incomplete_response,
   extract_assistant_text,
   merge_assistant_parts,
   summarize_assistant_parts_for_debug,
   summarize_step_for_debug,
   to_inline_preview,
-} from "@/session/runner/SessionExecutorSignals.js";
+} from "@/session/runner/AssistantParts.js";
 import {
-  evaluate_executor_loop_decision,
-  should_continue_for_tail_merged_user_messages,
-} from "@/session/runner/SessionExecutorLoopDecision.js";
+  decide_tool_loop,
+  should_continue_after_tail_merge,
+} from "@/session/runner/ToolLoopDecision.js";
 import {
-  resolve_effective_executor_error,
-} from "@/session/runner/SessionExecutorError.js";
+  resolve_model_error,
+} from "@/session/runner/ModelFailure.js";
 import {
   run_model_step,
   type ModelStepResult,
@@ -38,9 +40,13 @@ import {
 } from "@/model/ModelStepRunner.js";
 import { execute_model_request } from "@/model/ModelRequestRunner.js";
 import {
-  resolve_model_usage_ratio,
-  should_compact_after_usage,
-} from "@/session/runner/ContextUsagePressure.js";
+  resolve_usage_ratio,
+  is_context_pressured,
+} from "@/session/runner/ContextPressure.js";
+import type {
+  SessionContextAdvanceTrigger,
+} from "@/types/session/SessionComposer.js";
+import { ContextRetry } from "@/session/runner/ContextRetry.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
@@ -64,10 +70,17 @@ export interface SessionExecutorOptions {
    */
   logger: Logger;
 
+  /** 判断模型调用错误是否属于 Provider 上下文超限。 */
+  is_context_limit: (error: unknown) => boolean;
+
   /**
-   * 判断某次执行错误是否应该上抛给外层上下文推进重试。
+   * Provider 上下文超限时推进派生上下文。
+   *
+   * 关键点（中文）：返回 true 表示已有效推进，可以重试整轮。
    */
-  should_compact_on_error: (error: unknown) => boolean;
+  advance_context: (
+    trigger: SessionContextAdvanceTrigger,
+  ) => Promise<boolean>;
 }
 
 /**
@@ -80,9 +93,11 @@ export interface SessionExecutorInput {
   turn_context: SessionTurnContext;
 
   /**
-   * 在统一输入队列提交后解析当前 Session step 的 effective 配置。
+   * 在统一输入队列提交后按当前推进次数解析本 Step 输入。
    */
-  resolve_step_input: () => Promise<SessionStepExecutionInput>;
+  resolve_step_input: (
+    advance_count: number,
+  ) => Promise<SessionStepExecutionInput>;
 }
 
 /**
@@ -102,16 +117,25 @@ export interface SessionExecutorPort {
 export class SessionExecutor implements SessionExecutorPort {
   private readonly session_id: string;
   private readonly logger: Logger;
-  private readonly should_compact_on_error: SessionExecutorOptions["should_compact_on_error"];
+  private readonly is_context_limit: SessionExecutorOptions["is_context_limit"];
+  private readonly context_retry: ContextRetry;
   private executing = false;
 
   constructor(options: SessionExecutorOptions) {
     this.session_id = String(options.session_id || "").trim();
     this.logger = options.logger;
-    this.should_compact_on_error = options.should_compact_on_error;
+    this.is_context_limit = options.is_context_limit;
     if (!this.session_id) {
       throw new Error("SessionExecutor requires a non-empty session_id");
     }
+    this.context_retry = new ContextRetry({
+      session_id: this.session_id,
+      advance_context: async (error) =>
+        this.is_context_limit(error)
+          ? await options.advance_context("provider_context_limit")
+          : false,
+      logger: this.logger,
+    });
   }
 
   /** 返回当前 Session 是否正在执行模型请求。 */
@@ -122,7 +146,9 @@ export class SessionExecutor implements SessionExecutorPort {
   /**
    * 执行一次已装配完成的模型/tool-loop 运行。
    *
-   * 关键点（中文）：同一个 Session 只允许一个活跃执行，避免 step 回调与运行态互相污染。
+   * 关键点（中文）
+   * - 同一个 Session 只允许一个活跃执行，避免 step 回调与运行态互相污染。
+   * - Provider 拒绝上下文超限时，先推进派生上下文再重试整轮。
    */
   async execute(input: SessionExecutorInput): Promise<SessionTurnExecutionResult> {
     if (this.executing) {
@@ -130,14 +156,26 @@ export class SessionExecutor implements SessionExecutorPort {
     }
     this.executing = true;
     try {
-      return await this.run_tool_loop(input);
+      return await this.context_retry.execute_with_retry({
+        execute_turn: async (advance_count) =>
+          await this.run_tool_loop({
+            turn_context: input.turn_context,
+            resolve_step_input: async () =>
+              await input.resolve_step_input(advance_count),
+          }),
+      });
     } finally {
       this.executing = false;
     }
   }
 
   /** 运行模型与 tool-loop 主循环。 */
-  private async run_tool_loop(input: SessionExecutorInput): Promise<SessionTurnExecutionResult> {
+  private async run_tool_loop(input: {
+    /** 当前显式运行上下文。 */
+    turn_context: SessionTurnContext;
+    /** 已绑定当前推进次数的 Step 输入解析器。 */
+    resolve_step_input: () => Promise<SessionStepExecutionInput>;
+  }): Promise<SessionTurnExecutionResult> {
     const start_time = Date.now();
     const session_id = this.session_id;
     let last_observed_stream_error: unknown = undefined;
@@ -186,12 +224,12 @@ export class SessionExecutor implements SessionExecutorPort {
           step_assistant_parts,
         );
 
-        const usage_ratio = resolve_model_usage_ratio(
+        const usage_ratio = resolve_usage_ratio(
           step_result.usage,
           step_input.context_window,
         );
         if (usage_ratio !== null) {
-          const pressure_detected = should_compact_after_usage(usage_ratio);
+          const pressure_detected = is_context_pressured(usage_ratio);
           if (pressure_detected) compact_required = true;
           await this.logger.log("info", "[agent] context.usage", {
             session_id: session_id,
@@ -206,7 +244,7 @@ export class SessionExecutor implements SessionExecutorPort {
           step_result,
           assistant_parts: step_assistant_parts,
         });
-        const loop_decision = evaluate_executor_loop_decision({
+        const loop_decision = decide_tool_loop({
           hasIncompleteResponse: incomplete_response !== null,
           incompleteRecoveryCount: incomplete_response_recovery_count,
           maxIncompleteRecoveries: MAX_INCOMPLETE_RESPONSE_RECOVERIES,
@@ -272,7 +310,7 @@ export class SessionExecutor implements SessionExecutorPort {
           ? 1
           : 0;
         if (
-          should_continue_for_tail_merged_user_messages({
+          should_continue_after_tail_merge({
             mergedUserMessageCount: tail_merged_message_count,
           })
         ) {
@@ -370,11 +408,11 @@ export class SessionExecutor implements SessionExecutorPort {
         });
       }
 
-      if (this.should_compact_on_error(error)) {
+      if (this.is_context_limit(error)) {
         throw error;
       }
 
-      const error_text = resolve_effective_executor_error({
+      const error_text = resolve_model_error({
         error,
         streamError: last_observed_stream_error,
       });
@@ -445,9 +483,9 @@ export class SessionExecutor implements SessionExecutorPort {
     const result = await execute_model_request({
       request_kind: "turn",
       abort_signal: turn_context.lifecycle.abort_signal,
-      should_retry: (error) => !this.should_compact_on_error(error),
+      should_retry: (error) => !this.is_context_limit(error),
       on_failure: async (notice, error) => {
-        const is_compact_error = this.should_compact_on_error(error);
+        const is_compact_error = this.is_context_limit(error);
         turn_context.output.report_model_request_failure({
           ...notice,
           ...(is_compact_error

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - `SessionTurnExecutionInput` 表示上层 Turn 执行入口输入。
- * - `SessionStepExecutionInput` 表示 Executor 通过 Composer 装配后的 Step 输入。
+ * - `SessionStepExecutionInput` 表示执行器收到的、已装配完成的一步输入。
  * - 输出只返回执行结果；Assistant Message 通过显式输出端口写入唯一事实源。
  */
 
