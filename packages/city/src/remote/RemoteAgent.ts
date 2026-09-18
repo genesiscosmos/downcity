@@ -20,9 +20,9 @@ import type {
 import type { AgentSessions, RemoteAgentSession } from "@downcity/agent";
 import type { RemoteAgentOptions } from "@/types/remote/RemoteAgentOptions.js";
 import type {
-  RemoteAgentPluginActionInput,
-  RemoteAgentPluginActionResult,
-} from "@/types/remote/RemoteAgentPluginAction.js";
+  RemoteAgentPowerActionInput,
+  RemoteAgentPowerActionResult,
+} from "@/types/remote/RemoteAgentPowerAction.js";
 import type { RemoteAgentTransport } from "@/remote/RemoteTransport.js";
 import { RemoteSession } from "@/remote/RemoteSession.js";
 import { create_remote_agent_transport } from "@/remote/TransportFactory.js";
@@ -45,25 +45,25 @@ export class RemoteAgent {
   }
 
   /**
-   * 执行远程 Agent runtime 内的 plugin action。
+   * 执行远程 Agent runtime 内的 power action。
    *
    * 关键点（中文）
    * - 这是 RemoteAgent 顶层能力，不绑定某个 session。
    * - Shell approval 通过具体 RemoteSession 处理。
    */
-  async run_plugin_action(
-    input: RemoteAgentPluginActionInput,
-  ): Promise<RemoteAgentPluginActionResult> {
-    const plugin = String(input.plugin || "").trim();
+  async run_power_action(
+    input: RemoteAgentPowerActionInput,
+  ): Promise<RemoteAgentPowerActionResult> {
+    const power = String(input.power || "").trim();
     const action = String(input.action || "").trim();
-    if (!plugin) {
-      throw new Error("run_plugin_action requires a non-empty plugin");
+    if (!power) {
+      throw new Error("run_power_action requires a non-empty power");
     }
     if (!action) {
-      throw new Error("run_plugin_action requires a non-empty action");
+      throw new Error("run_power_action requires a non-empty action");
     }
-    return await this.transport.run_plugin_action({
-      plugin,
+    return await this.transport.run_power_action({
+      power,
       action,
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
     });

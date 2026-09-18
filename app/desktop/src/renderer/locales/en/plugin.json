@@ -1,7 +1,0 @@
-{
-  "catalog": "Plugins", "empty": "No Plugins", "loading": "Loading Plugin…", "missing_config": "This Plugin does not provide configuration.", "missing_slot": "This Plugin does not provide {{slot}}.", "missing_surface": "This Plugin does not provide a UI.", "cancel": "Cancel", "confirm": "Confirm",
-  "tree": { "expand": "Expand", "collapse": "Collapse" },
-  "profile": { "create": "New Profile", "remove": "Delete Profile", "empty": "Create a Profile to configure {{name}}", "create_description": "A Profile is an independent configuration space for {{name}}.", "remove_title": "Delete Profile?", "remove_description": "The configuration for {{id}} will be deleted." },
-  "config": { "not_required": "No configuration required", "not_required_description": "This Plugin does not declare Config and does not need a Profile." },
-  "runtime": { "unavailable": "Plugin unavailable", "initialize_failed": "Plugin initialization failed." }
-}

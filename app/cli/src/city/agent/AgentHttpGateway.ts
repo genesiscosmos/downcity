@@ -2,7 +2,7 @@
  * AgentHttpGateway：City 托管的 Agent HTTP 网关。
  *
  * 职责说明（中文）
- * - 作为 City 多 Agent Gateway 的单 Agent 子应用，承载控制面、Plugin 与 SDK 路由。
+ * - 作为 City 多 Agent Gateway 的单 Agent 子应用，承载控制面、Power 与 SDK 路由。
  * - HTTP Server 生命周期归 CLI City 管理。
  * - HTTP route 实现放在 City 内部，Agent 只提供 Agent / sessionCollection。
  */
@@ -12,7 +12,7 @@ import { logger } from "hono/logger";
 import type { Hono as HonoType } from "hono";
 import { createExecuteRouter } from "@/city/agent/http/execute/execute.js";
 import { healthRouter } from "@/city/agent/http/health/health.js";
-import { createPluginsRouter } from "@/city/agent/http/plugins/plugins.js";
+import { createPowersRouter } from "@/city/agent/http/powers/powers.js";
 import { createStaticRouter } from "@/city/agent/http/static/static.js";
 import { createControlRouter } from "@/city/agent/http/control/ControlRouter.js";
 import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";
@@ -51,7 +51,7 @@ export function create_agent_http_gateway_app(
     get_context: options.get_context,
   }));
   app.route("/", healthRouter);
-  app.route("/", createPluginsRouter({
+  app.route("/", createPowersRouter({
     get_context: options.get_context,
   }));
   app.route("/", createExecuteRouter({
@@ -63,7 +63,7 @@ export function create_agent_http_gateway_app(
   if (options.sdk_router) {
     app.route("/", options.sdk_router);
   }
-  options.get_context().register_plugin_http_routes(app);
+  options.get_context().register_power_http_routes(app);
 
   return app;
 }

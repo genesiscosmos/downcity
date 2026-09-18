@@ -1,7 +1,7 @@
 /**
  * CLI 专属本地 Schema。
  *
- * Agent、Workspace、Plugin 与安全设置由 `@downcity/city/local` 初始化；这里仅创建 CLI
+ * Agent、Workspace、Power 与安全设置由 `@downcity/city/local` 初始化；这里仅创建 CLI
  * HTTP Gateway 使用的 Bearer Token 表。
  */
 

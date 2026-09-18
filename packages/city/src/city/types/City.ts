@@ -11,14 +11,14 @@ import type { Embassy } from "@downcity/federation";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
 import type { Group } from "@downcity/agent";
-import type { CityPluginCollection, CityPluginHost } from "@/city/types/CityPlugin.js";
+import type { CityPowerCollection, CityPowerHost } from "@/city/types/CityPower.js";
 
 /** City 的资源容器构造参数。 */
 export interface CityOptions {
   /** City 为 Agent 提供的底层存储；省略时使用进程内存储。 */
   storage?: StorageProvider;
 
-  /** City 使用的 Federation Embassy；Plugin 只通过窄服务借用其能力。 */
+  /** City 使用的 Federation Embassy；Power 只通过窄服务借用其能力。 */
   embassy?: Embassy;
 
   /** City 持有的 Workspace 资源集合；每个 Workspace ID 必须唯一。 */
@@ -30,11 +30,11 @@ export interface CityOptions {
   /** City 启动时注册的 Group；成员 Agent 必须已经在当前 City 中。 */
   groups?: readonly Group[] | Readonly<Record<string, Group>>;
 
-  /** Plugin 生命周期使用的平台配置、通知与系统能力。 */
-  plugin_host?: CityPluginHost;
+  /** Power 生命周期使用的平台配置、通知与系统能力。 */
+  power_host?: CityPowerHost;
 
-  /** City 启动时登记的 Plugin catalog。 */
-  plugins?: CityPluginCollection;
+  /** City 启动时登记的 Power catalog。 */
+  powers?: CityPowerCollection;
 
   /** HTTP/RPC transport 与宿主扩展配置；仅供宿主装配层使用。 */
   runtime?: CityRuntimeOptions;

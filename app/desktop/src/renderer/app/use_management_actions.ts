@@ -1,7 +1,7 @@
 /**
  * Desktop 低频管理操作。
  *
- * 统一编排 Agent、Plugin、Workspace 基础信息、设置与账户操作；不处理 Chat、
+ * 统一编排 Agent、Power、Workspace 基础信息、设置与账户操作；不处理 Chat、
  * Session 或 Group 的运行态，从而让根控制器只关注跨领域装配。
  */
 
@@ -29,7 +29,7 @@ interface DesktopManagementDependencies {
   settings: ReturnType<typeof use_settings_store>;
 }
 
-/** 创建 Agent、Plugin、Workspace、设置与账户操作。 */
+/** 创建 Agent、Power、Workspace、设置与账户操作。 */
 export function use_desktop_management_actions({ catalog, navigation, session, settings }: DesktopManagementDependencies) {
   const refresh_models = useCallback(async () => {
     catalog.set_models_loading(true);
@@ -102,10 +102,10 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
   const remove_agent_avatar = useCallback((agent_id: string) => update_agent_avatar(agent_id, "remove"), [update_agent_avatar]);
   const generate_agent_avatar = useCallback((agent_id: string) => update_agent_avatar(agent_id, "generate"), [update_agent_avatar]);
 
-  const get_plugin = useCallback(async (plugin_id: string) => await window.downcity.plugin.get(plugin_id), []);
-  const invoke_plugin_action = useCallback(async (plugin_id: string, input: Parameters<typeof window.downcity.plugin.invoke>[1]) => {
+  const get_power = useCallback(async (power_id: string) => await window.downcity.power.get(power_id), []);
+  const invoke_power_action = useCallback(async (power_id: string, input: Parameters<typeof window.downcity.power.invoke>[1]) => {
     settings.set_error("");
-    try { return await window.downcity.plugin.invoke(plugin_id, input); }
+    try { return await window.downcity.power.invoke(power_id, input); }
     catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
   }, [settings]);
   const create_workspace = useCallback(async (value: CreateWorkspaceFormValue) => {
@@ -199,9 +199,9 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
 
   return useMemo(() => ({
     refresh_models, create_agent, get_agent, update_agent, remove_agent, choose_agent_avatar,
-    remove_agent_avatar, generate_agent_avatar, get_plugin,
-    invoke_plugin_action, create_workspace, update_workspace_name,
+    remove_agent_avatar, generate_agent_avatar, get_power,
+    invoke_power_action, create_workspace, update_workspace_name,
     write_workspace_readme, update_settings, list_global_env, update_global_env,
     list_login_providers, login, logout, switch_account, remove_account,
-  }), [choose_agent_avatar, create_agent, create_workspace, generate_agent_avatar, get_agent, get_plugin, invoke_plugin_action, list_global_env, list_login_providers, login, logout, refresh_models, remove_account, remove_agent, remove_agent_avatar, switch_account, update_agent, update_global_env, update_settings, update_workspace_name, write_workspace_readme]);
+  }), [choose_agent_avatar, create_agent, create_workspace, generate_agent_avatar, get_agent, get_power, invoke_power_action, list_global_env, list_login_providers, login, logout, refresh_models, remove_account, remove_agent, remove_agent_avatar, switch_account, update_agent, update_global_env, update_settings, update_workspace_name, write_workspace_readme]);
 }

@@ -404,7 +404,7 @@ test("样式表里的字号只能引用语义令牌，或使用 em 相对值", (
  * 每个渲染 `<Markdown>` 的文件都必须自己声明字号。
  *
  * `markdown.css` 的 `.markdown` 是 `font-size: inherit`：同一套 Markdown 要同时服务于
- * 消息正文（`sm`）、Workspace 文档预览（`sm`）与 Plugin 说明（Plugin 自己的 `xs`），
+ * 消息正文（`sm`）、Workspace 文档预览（`sm`）与 Power 说明（Power 自己的 `xs`），
  * 因此基准字号必须由宿主给出。
  *
  * 这是继承制的代价：新加一个 Markdown 宿主而忘了声明字号时，

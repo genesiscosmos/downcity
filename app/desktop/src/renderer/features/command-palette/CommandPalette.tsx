@@ -16,7 +16,7 @@ import { createPortal } from "react-dom";
 import { TbArrowLeft, TbCheck, TbSearch } from "react-icons/tb";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
-import { order_rail_plugins } from "@/features/navigation/lib/sidebar_shortcut";
+import { order_rail_powers } from "@/features/navigation/lib/sidebar_shortcut";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 import { is_chat_busy, type DesktopController, type NavigationTarget } from "@/types/DesktopView";
@@ -94,7 +94,7 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
   const sidebar_mode = use_desktop_selector(controller.stores.navigation, (state) => state.sidebar_mode);
   const active_workspace_id = use_desktop_selector(controller.stores.navigation, (state) => state.active_workspace_id);
   const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
-  const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
+  const powers = use_desktop_selector(controller.stores.catalog, (state) => state.powers);
 
   const context = useMemo<CommandContext>(
     () => ({
@@ -102,10 +102,10 @@ export function CommandPalette({ open, on_close, controller }: CommandPalettePro
       active_workspace_id,
       selection_kind: selection?.kind ?? null,
       active_session: resolve_active_session(selection, controller),
-      visible_plugin_count: order_rail_plugins(plugins).length,
+      visible_power_count: order_rail_powers(powers).length,
     }),
     // `open` 参与依赖：打开面板时重新解析运行态与历史游标，避免沿用上一次的陈旧投影。
-    [active_workspace_id, controller, open, plugins, selection, sidebar_mode],
+    [active_workspace_id, controller, open, powers, selection, sidebar_mode],
   );
 
   const group_labels = useMemo(

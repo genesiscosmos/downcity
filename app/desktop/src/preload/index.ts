@@ -39,10 +39,10 @@ const desktop_api: DesktopApi = {
     list_entries: (workspace_id, relative_path) => ipcRenderer.invoke("workspace:list-entries", workspace_id, relative_path),
     read_text_file: (workspace_id, relative_path) => ipcRenderer.invoke("workspace:read-text-file", workspace_id, relative_path),
   },
-  plugin: {
-    list: () => ipcRenderer.invoke("plugin:list"),
-    get: (plugin_id) => ipcRenderer.invoke("plugin:get", plugin_id),
-    invoke: (plugin_id, input) => ipcRenderer.invoke("plugin:invoke", plugin_id, input),
+  power: {
+    list: () => ipcRenderer.invoke("power:list"),
+    get: (power_id) => ipcRenderer.invoke("power:get", power_id),
+    invoke: (power_id, input) => ipcRenderer.invoke("power:invoke", power_id, input),
   },
   dialog: {
     open_directory: () => ipcRenderer.invoke("dialog:open-directory"),

@@ -3,15 +3,15 @@
  *
  * 关键点（中文）
  * - 这里走编译后的公开 SDK，覆盖宿主真实入口。
- * - plugin lifecycle 未完成前，session.prompt 不应进入模型执行。
+ * - power lifecycle 未完成前，session.prompt 不应进入模型执行。
  */
 
 import test from "node:test";
 import {
-  add_test_plugin,
-  create_plugin_registration,
-  create_test_plugin as create_plugin,
-} from "./helpers/CityPluginTestBinding.mjs";
+  add_test_power,
+  create_power_registration,
+  create_test_power as create_power,
+} from "./helpers/CityPowerTestBinding.mjs";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
@@ -99,7 +99,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   const lifecycle_ready = create_deferred();
   let model_stream_calls = 0;
 
-  const blocking_plugin = create_plugin({
+  const blocking_power = create_power({
     name: "blocking",
     title: "Blocking",
     description: "Blocks lifecycle initialization until the test releases it",
@@ -145,7 +145,7 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   const agent = new Agent({ id: "ready_agent", model });
   const workspace = new Workspace({ id: "ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_plugin(city, blocking_plugin);
+  add_test_power(city, blocking_power);
   city.agents.add(agent);
 
   try {
@@ -172,14 +172,14 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   }
 });
 
-test("city.plugins scope waits for lifecycle initialization before direct action execution", async () => {
+test("city.powers scope waits for lifecycle initialization before direct action execution", async () => {
   const agent_path = await fs.mkdtemp(
-    path.join(os.tmpdir(), "downcity-agent-plugin-ready-"),
+    path.join(os.tmpdir(), "downcity-agent-power-ready-"),
   );
   const lifecycle_ready = create_deferred();
   let lifecycle_started = false;
   let action_calls = 0;
-  const plugin = create_plugin({
+  const power = create_power({
     name: "direct-action",
     title: "Direct Action",
     description: "Waits for lifecycle before direct calls",
@@ -199,17 +199,17 @@ test("city.plugins scope waits for lifecycle initialization before direct action
       },
     },
   });
-  const agent = new Agent({ id: "plugin_ready_agent" });
-  const workspace = new Workspace({ id: "plugin_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const agent = new Agent({ id: "power_ready_agent" });
+  const workspace = new Workspace({ id: "power_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_plugin(city, plugin);
+  add_test_power(city, power);
   city.agents.add(agent);
   try {
-    const action_promise = city.plugins.scope({
+    const action_promise = city.powers.scope({
       agent_id: agent.id,
       workspace_id: workspace.id,
     }).run_action({
-      plugin: "direct-action",
+      power: "direct-action",
       action: "status",
     });
     assert.equal(await is_settled(action_promise), false);
@@ -227,12 +227,12 @@ test("city.plugins scope waits for lifecycle initialization before direct action
   }
 });
 
-test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 初始化失败", async () => {
+test("首次 Session 操作等待初始化并隔离 Power lifecycle 初始化失败", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-ready-isolation-"),
   );
   let healthy_started = false;
-  const failing_plugin = create_plugin({
+  const failing_power = create_power({
     name: "failing",
     lifecycle: {
       initialize: async () => {
@@ -240,7 +240,7 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 初始化�
       },
     },
   });
-  const healthy_plugin = create_plugin({
+  const healthy_power = create_power({
     name: "healthy",
     lifecycle: {
       initialize: async () => {
@@ -251,35 +251,35 @@ test("首次 Session 操作等待初始化并隔离 Plugin lifecycle 初始化�
   const agent = new Agent({ id: "ready_isolation_agent" });
   const workspace = new Workspace({ id: "isolation_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_plugin(city, failing_plugin);
-  add_test_plugin(city, healthy_plugin);
+  add_test_power(city, failing_power);
+  add_test_power(city, healthy_power);
   city.agents.add(agent);
   try {
     await agent.sessions.create({ session_id: "initial_barrier", workspace });
 
     assert.equal(healthy_started, true);
-    const failing_snapshot = city.plugins
+    const failing_snapshot = city.powers
       .snapshots()
       .find((item) => item.name === "failing");
     assert.equal(failing_snapshot?.status, "error");
     assert.equal(failing_snapshot?.last_error, "start failed");
-    assert.equal(city.plugins.snapshots(agent.id).find((item) => item.name === "healthy")?.status, "ready");
+    assert.equal(city.powers.snapshots(agent.id).find((item) => item.name === "healthy")?.status, "ready");
   } finally {
     await city.close();
   }
 });
 
-test("Agent registers PluginRegistry tools and removes them with the last action plugin", async () => {
+test("Agent registers PowerRegistry tools and removes them with the last action power", async () => {
   const agent_path = await fs.mkdtemp(
-    path.join(os.tmpdir(), "downcity-agent-state-plugin-tools-"),
+    path.join(os.tmpdir(), "downcity-agent-state-power-tools-"),
   );
   const agent = new Agent({
-    id: "state_plugin_tools_agent",
+    id: "state_power_tools_agent",
   });
-  const workspace = new Workspace({ id: "plugin_tools_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
+  const workspace = new Workspace({ id: "power_tools_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
   city.agents.add(agent);
-  const action_plugin = create_plugin({
+  const action_power = create_power({
     name: "dynamic_action",
     actions: {
       ping: {
@@ -290,30 +290,30 @@ test("Agent registers PluginRegistry tools and removes them with the last action
   });
 
   try {
-    const plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id });
-    assert.equal(plugins.list().some((item) => item.name === "dynamic_action"), false);
+    const powers = city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id });
+    assert.equal(powers.list().some((item) => item.name === "dynamic_action"), false);
 
-    add_test_plugin(city, action_plugin);
+    add_test_power(city, action_power);
     await agent.ensure_ready();
 
-    assert.equal(plugins.list().some((item) => item.name === "dynamic_action"), true);
+    assert.equal(powers.list().some((item) => item.name === "dynamic_action"), true);
 
-    await city.plugins.remove("dynamic_action");
+    await city.powers.remove("dynamic_action");
 
-    assert.equal(plugins.list().some((item) => item.name === "dynamic_action"), false);
+    assert.equal(powers.list().some((item) => item.name === "dynamic_action"), false);
   } finally {
     await city.close();
   }
 });
 
-test("初始化中的 City Plugin 发布后会刷新已创建 Workspace 的 tools", async () => {
+test("初始化中的 City Power 发布后会刷新已创建 Workspace 的 tools", async () => {
   const lifecycle_ready = create_deferred();
-  const agent = new Agent({ id: "pending_plugin_tools_agent" });
+  const agent = new Agent({ id: "pending_power_tools_agent" });
   const workspace = new Workspace({
-    id: "pending_plugin_tools_workspace",
+    id: "pending_power_tools_workspace",
     path: process.cwd(),
   });
-  const plugin = create_plugin({
+  const power = create_power({
     name: "pending_action",
     lifecycle: {
       initialize: async () => await lifecycle_ready.promise,
@@ -326,16 +326,16 @@ test("初始化中的 City Plugin 发布后会刷新已创建 Workspace 的 tool
     },
   });
   const city = new City({
-    plugins: [create_plugin_registration(plugin)],
+    powers: [create_power_registration(power)],
     workspaces: [workspace],
     agents: [agent],
   });
   try {
-    const plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id });
-    assert.equal(plugins.list().some((item) => item.name === "pending_action"), false);
+    const powers = city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id });
+    assert.equal(powers.list().some((item) => item.name === "pending_action"), false);
     lifecycle_ready.resolve();
     await agent.ensure_ready();
-    assert.equal(plugins.list().some((item) => item.name === "pending_action"), true);
+    assert.equal(powers.list().some((item) => item.name === "pending_action"), true);
   } finally {
     lifecycle_ready.resolve();
     await city.close();

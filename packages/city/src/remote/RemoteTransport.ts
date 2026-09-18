@@ -23,9 +23,9 @@ import type {
   RemoteSessionSetInput,
 } from "@downcity/agent";
 import type {
-  RemoteAgentPluginActionInput,
-  RemoteAgentPluginActionResult,
-} from "@/types/remote/RemoteAgentPluginAction.js";
+  RemoteAgentPowerActionInput,
+  RemoteAgentPowerActionResult,
+} from "@/types/remote/RemoteAgentPowerAction.js";
 import type { SessionMutation } from "@downcity/agent";
 import type {
   RespondSessionInteractionInput,
@@ -117,10 +117,10 @@ export type RemoteAgentTransport = RemoteSessionTransport & {
   archive_sessions(input?: AgentArchiveSessionsInput): Promise<AgentArchiveSessionsResult>;
   /** 清空归档 sessions。 */
   clean_archive(): Promise<AgentCleanArchiveResult>;
-  /** 执行远程 Agent runtime 内的 plugin action。 */
-  run_plugin_action(
-    input: RemoteAgentPluginActionInput,
-  ): Promise<RemoteAgentPluginActionResult>;
+  /** 执行远程 Agent runtime 内的 power action。 */
+  run_power_action(
+    input: RemoteAgentPowerActionInput,
+  ): Promise<RemoteAgentPowerActionResult>;
   /** 关闭 transport 持有的长期连接。 */
   close?(): Promise<void>;
 };

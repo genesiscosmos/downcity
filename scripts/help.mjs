@@ -36,7 +36,7 @@ const HELP_ITEMS = [
       "按 manifest package graph 完成全量构建并刷新全局 CLI，不修改 package version。",
   },
   {
-    name: "build:plugins",
+    name: "build:powers",
     summary: "只构建 Plugins 包。",
     detail: "从 manifest 自动补齐 Plugins 的运行时依赖，不修改 package version。",
   },
@@ -64,7 +64,7 @@ const HELP_ITEMS = [
     name: "patch:build",
     summary: "按 package 执行 patch bump + build。",
     detail:
-      "支持 `npm run patch:build -- --type --agent --city --plugins --services --cli`、`--ui`、`--all`、`--no-bump`。",
+      "支持 `npm run patch:build -- --type --agent --city --powers --services --cli`、`--ui`、`--all`、`--no-bump`。",
   },
   {
     name: "agent:patch:build",
@@ -77,9 +77,9 @@ const HELP_ITEMS = [
     detail: "等价于 `npm run patch:build -- --city`，依赖闭包和顺序从 package manifests 自动推导。",
   },
   {
-    name: "plugins:patch:build",
-    summary: "只对 @downcity/plugins 执行 patch bump + build。",
-    detail: "等价于 `npm run patch:build -- --plugins`，依赖闭包和顺序从 package manifests 自动推导。",
+    name: "powers:patch:build",
+    summary: "只对 @downcity/powers 执行 patch bump + build。",
+    detail: "等价于 `npm run patch:build -- --powers`，依赖闭包和顺序从 package manifests 自动推导。",
   },
   {
     name: "federation:patch:build",

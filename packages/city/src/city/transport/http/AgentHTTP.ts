@@ -12,7 +12,7 @@ import http from "node:http";
 import { Hono } from "hono";
 import type { Agent, AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
-import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
+import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import { register_sdk_session_routes } from "@/city/transport/http/routes/SessionRoutes.js";
 import { register_runtime_routes } from "@/city/transport/http/routes/RuntimeRoutes.js";
 import { create_node_http_server } from "@/city/transport/http/NodeHttpAdapter.js";
@@ -43,14 +43,14 @@ export interface AgentHttpServerHandle {
 export class AgentHTTP {
   private readonly agent: Agent;
   private readonly workspace?: WorkspaceRuntime;
-  private readonly plugins?: AgentPluginRuntime;
+  private readonly powers?: AgentPowerRuntime;
   private readonly session_collection: AgentSessionCollection;
   private readonly runtime_options: AgentHttpRuntimeOptions;
   private cached_router: Hono | null = null;
   private cached_server: AgentHttpServerHandle | null = null;
 
   constructor(
-    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceRuntime; plugins: AgentPluginRuntime },
+    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceRuntime; powers: AgentPowerRuntime },
     workspace_or_options?: WorkspaceRuntime | AgentHttpRuntimeOptions,
     runtime_options: AgentHttpRuntimeOptions = {},
   ) {
@@ -58,17 +58,17 @@ export class AgentHTTP {
       const agent = "agent" in agent_or_workspace ? agent_or_workspace.agent : agent_or_workspace;
       this.agent = agent;
       this.workspace = workspace_or_options;
-      this.plugins = "agent" in agent_or_workspace
-        ? agent_or_workspace.plugins
+      this.powers = "agent" in agent_or_workspace
+        ? agent_or_workspace.powers
         : undefined;
       this.session_collection = agent.sessions;
       this.runtime_options = runtime_options;
       return;
     }
-      const entry = agent_or_workspace as { agent?: Agent; workspace?: WorkspaceRuntime; plugins?: AgentPluginRuntime };
+      const entry = agent_or_workspace as { agent?: Agent; workspace?: WorkspaceRuntime; powers?: AgentPowerRuntime };
       this.agent = entry.agent || agent_or_workspace as Agent;
       this.workspace = entry.workspace;
-      this.plugins = entry.plugins;
+      this.powers = entry.powers;
       this.session_collection = this.agent.sessions;
     this.runtime_options = (workspace_or_options as AgentHttpRuntimeOptions | undefined) ?? {};
   }
@@ -86,7 +86,7 @@ export class AgentHTTP {
     register_sdk_session_routes(router, this.session_collection, this.workspace, {
       resolve_session_model: this.runtime_options.resolve_session_model,
     });
-    if (this.plugins) register_runtime_routes(router, this.plugins);
+    if (this.powers) register_runtime_routes(router, this.powers);
     this.cached_router = router;
     return router;
   }

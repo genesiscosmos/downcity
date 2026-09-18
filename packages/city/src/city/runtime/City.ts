@@ -2,15 +2,16 @@
  * City：Workspace、Embassy 与统一 transport 的资源容器。
  *
  * City 不创建 Agent 或 Session。应用创建 Agent 后通过 `city.agents.add(agent)` 加入
- * 当前容器；City 持有 Plugin 唯一实例、配置投影与生命周期，并管理 Agent 集合、
+ * 当前容器；City 持有 Power 唯一实例、配置投影与生命周期，并管理 Agent 集合、
  * Workspace/Embassy 资源和统一 transport。
  */
 
 import { Agent, Group } from "@downcity/agent";
 import { SessionHooks } from "@downcity/agent";
-import { CityPluginRuntime } from "@/city/plugin/CityPluginRuntime.js";
-import { CityTool } from "@/city/tool/CityTool.js";
-import type { CityPlugins } from "@/city/types/CityPlugin.js";
+import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
+import { create_city_power } from "@/city/power/builtin/CityPower.js";
+import { create_city_action_groups } from "@/city/power/builtin/groups/index.js";
+import type { CityPowers } from "@/city/types/CityPower.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
 import type { CityRuntime, RuntimeTool, SessionHookRuntime } from "@downcity/type";
@@ -32,14 +33,12 @@ export class City implements CityRuntime {
   /** City 持有的底层 Storage；默认是进程内存储。 */
   readonly storage: StorageProvider;
 
-  /** City 持有的 Plugin 查询入口。 */
-  readonly plugins: CityPlugins;
+  /** City 持有的 Power 查询入口。 */
+  readonly powers: CityPowers;
 
-  /** City 唯一的 Plugin 生命周期运行时。 */
-  private readonly plugin_runtime: CityPluginRuntime;
+  /** City 唯一的 Power 生命周期运行时。 */
+  private readonly power_runtime: CityPowerRuntime;
 
-  /** City 唯一的 city tool；按 Agent/Workspace 检查点生成 `city` 工具。 */
-  private readonly city_tool: CityTool;
 
   /** 仅供包内运行时组件使用的 City 事实源访问面。 */
   private readonly runtime_access: CityRuntimeAccess;
@@ -112,44 +111,42 @@ export class City implements CityRuntime {
         this.require_workspace(agent_id, workspace_id),
       enter_workspace: async (agent_id, workspace_id) =>
         await this.enter_workspace(agent_id, workspace_id),
-      plugin_scope: (agent_id, workspace_id) =>
-        this.plugin_runtime.public_api.scope({ agent_id, workspace_id }),
-      plugin_snapshots: () => this.plugin_runtime.public_api.snapshots(),
-      invoke_method: async (input) =>
-        await this.city_tool.invoke({
-          agent: this.require_agent(input.agent_id),
-          workspace: this.require_workspace(input.agent_id, input.workspace_id),
-          method: input.method,
+      power_scope: (agent_id, workspace_id) =>
+        this.power_runtime.public_api.scope({ agent_id, workspace_id }),
+      power_snapshots: () => this.power_runtime.public_api.snapshots(),
+      invoke_power_action: async (input) =>
+        await this.power_runtime.public_api.scope({
+          agent_id: input.agent_id,
+          workspace_id: input.workspace_id,
+        }).run_action({
+          power: input.power,
           action: input.action,
-          payload: input.payload,
-          ...(input.session_id || input.turn_id
-            ? {
-                scope: {
-                  session_id: input.session_id ?? null,
-                  turn_id: input.turn_id ?? null,
-                },
-              }
-            : {}),
+          payload: input.payload as never,
         }),
-      has_method: (method_id) => this.city_tool.has_method(method_id),
+      has_action: (action_id) => this.has_city_action(action_id),
     });
-    this.plugin_runtime = new CityPluginRuntime({
+    this.power_runtime = new CityPowerRuntime({
       storage: this.storage,
       ...(this.embassy ? { embassy: this.embassy } : {}),
       runtime_access: this.runtime_access,
-      ...(options.plugin_host ? { host: options.plugin_host } : {}),
+      ...(options.power_host ? { host: options.power_host } : {}),
     });
-    this.plugins = this.plugin_runtime.public_api;
-    this.city_tool = new CityTool({
-      access: this.runtime_access,
-      files_for: (agent_id, method_id) =>
-        this.storage.open_scope(["agents", agent_id, "methods", method_id]).files,
-      ...(this.embassy ? { embassy: this.embassy } : {}),
-    });
-    for (const plugin of collection_values(options.plugins)) {
-      // 构造函数不能等待异步 lifecycle；Agent ready、Plugin 调用与 snapshot
+    this.powers = this.power_runtime.public_api;
+    // city power 与其它 power 走同一条注册路径；特权依赖在这里注入。
+    void this.powers
+      .add(
+        create_city_power({
+          access: this.runtime_access,
+          files_for: (agent_id, group_id) =>
+            this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
+          ...(this.embassy ? { embassy: this.embassy } : {}),
+        }),
+      )
+      .catch(() => undefined);
+    for (const power of collection_values(options.powers)) {
+      // 构造函数不能等待异步 lifecycle；Agent ready、Power 调用与 snapshot
       // 会继续使用同一个受控 ready Promise。
-      void this.plugins.add(plugin).catch(() => undefined);
+      void this.powers.add(power).catch(() => undefined);
     }
     for (const workspace of collection_values(options.workspaces)) {
       const workspace_id = String(workspace?.id || "").trim();
@@ -190,9 +187,9 @@ export class City implements CityRuntime {
     }
   }
 
-  /** 等待当前 City 中 Agent 执行依赖的 Plugin 生命周期稳定。 */
+  /** 等待当前 City 中 Agent 执行依赖的 Power 生命周期稳定。 */
   async ensure_ready(): Promise<void> {
-    await this.plugin_runtime.ensure_ready();
+    await this.power_runtime.ensure_ready();
   }
 
   /** 返回当前 Agent/Workspace 在一个执行检查点可见的 City Tool。 */
@@ -201,50 +198,32 @@ export class City implements CityRuntime {
     workspace: WorkspaceRuntime,
   ): Record<string, RuntimeTool> {
     const agent = this.require_agent_workspace(agent_id, workspace);
-    return merge_session_tools(
-      this.plugin_runtime.tools(agent, workspace, agent.get_logger()),
-      this.city_tool.tools(agent, workspace),
-    );
+    return this.power_runtime.tools(agent, workspace, agent.get_logger());
   }
 
   /**
    * 返回当前 Agent/Workspace 在一个执行检查点可见的 Session Hook。
    *
    * 关键点（中文）
-   * - Plugin 提供 pipeline / effect，City Tool 提供 method 的 session system 说明。
-   * - 两者组成同一套 Hook，因此 Agent 包只看到“一套 hook”。
+   * - pipeline / effect 与 system 说明都来自已注册 power，包括 city power 自身。
+   * - Agent 包只看到“一套 hook”，不再区分 City 与其它 power。
    */
   get_session_hooks(
     agent_id: string,
     workspace: WorkspaceRuntime,
   ): SessionHookRuntime {
     const agent = this.require_agent_workspace(agent_id, workspace);
-    const base = this.plugin_runtime.hooks(agent, workspace, agent.get_logger());
-    const city_system_blocks = async () => await this.city_tool.system_blocks(agent, workspace);
-    return new SessionHooks({
-      system_blocks: async (hook_context) => [
-        ...await base.system_blocks(hook_context),
-        ...await city_system_blocks(),
-      ],
-      pipeline: async <TValue>(point_name: string, value: TValue) =>
-        await base.pipeline(point_name, value),
-      effect: async <TValue>(point_name: string, value: TValue) =>
-        await base.effect(point_name, value),
-      open: async () => {
-        const scope = await base.open();
-        return {
-          system_blocks: async (hook_context) => [
-            ...await scope.system_blocks(hook_context),
-            ...await city_system_blocks(),
-          ],
-          pipeline: async <TValue>(point_name: string, value: TValue) =>
-            await scope.pipeline(point_name, value),
-          effect: async <TValue>(point_name: string, value: TValue) =>
-            await scope.effect(point_name, value),
-          close: async () => await scope.close(),
-        };
-      },
-    });
+    return this.power_runtime.hooks(agent, workspace, agent.get_logger());
+  }
+
+  /**
+   * 判断某个动作 id 是否由 City 自有 power 提供。
+   *
+   * 关键点（中文）
+   * - 供宿主与 transport 在不构造工具的情况下确认能力是否登记。
+   */
+  private has_city_action(action_id: string): boolean {
+    return city_action_exists(action_id);
   }
 
   /** Agent 主动释放时清除 City 持有的运行时引用。 */
@@ -484,12 +463,12 @@ export class City implements CityRuntime {
     });
   }
 
-  /** 幂等关闭 City，并按依赖方向释放入口、主体、Plugin、Workspace 与 Storage。 */
+  /** 幂等关闭 City，并按依赖方向释放入口、主体、Power、Workspace 与 Storage。 */
   async close(): Promise<void> {
     if (this.city_status === "closed") return;
     if (!this.close_promise) {
       this.city_status = "closing";
-      this.plugin_runtime.begin_shutdown();
+      this.power_runtime.begin_shutdown();
       const close_operation = this.enqueue_transport_operation(async () => {
         const results: PromiseSettledResult<unknown>[] = [];
         results.push(...await Promise.allSettled([
@@ -504,9 +483,9 @@ export class City implements CityRuntime {
           [...this.groups_by_id.values()].map(async (group) => await this.release_group(group)),
         ));
         results.push(...await Promise.allSettled(this.agents.list().map(async (agent) => await agent.dispose())));
-        // Agent dispose 会先停止 Session 并释放 Hook execution lease；因此 Plugin
+        // Agent dispose 会先停止 Session 并释放 Hook execution lease；因此 Power
         // Runtime 必须在 Agent 之后释放 City 级实例。
-        results.push(...await Promise.allSettled([this.plugin_runtime.dispose()]));
+        results.push(...await Promise.allSettled([this.power_runtime.dispose()]));
         results.push(...await Promise.allSettled(
           [...this.workspaces_by_id.values()].map(async (workspace) => await workspace.dispose()),
         ));
@@ -652,22 +631,14 @@ function collection_values<TValue>(
 }
 
 /**
- * 合并当前检查点的 City 工具视图。
+ * 判断某个动作 id 是否由 City 自有 power 提供。
  *
  * 关键点（中文）
- * - Plugin 工具与 `city` 共用同一个 Tool 命名空间，冲突属于装配不变量，立即失败。
+ * - city power 的工具可以附带 `city:` 前缀写法，因此两种写法都要命中。
  */
-function merge_session_tools(
-  ...sources: readonly Record<string, RuntimeTool>[]
-): Record<string, RuntimeTool> {
-  const merged: Record<string, RuntimeTool> = {};
-  for (const source of sources) {
-    for (const [tool_name, tool] of Object.entries(source)) {
-      if (Object.prototype.hasOwnProperty.call(merged, tool_name)) {
-        throw new Error(`City tool name conflict: ${tool_name}`);
-      }
-      merged[tool_name] = tool;
-    }
-  }
-  return merged;
+function city_action_exists(action_id: string): boolean {
+  const name = String(action_id || "").trim();
+  if (!name) return false;
+  const groups = create_city_action_groups();
+  return groups.some((group) => group.action_ids().includes(name));
 }

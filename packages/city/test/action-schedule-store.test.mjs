@@ -7,7 +7,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ActionScheduleStore } from "../bin/plugin/index.js";
+import { ActionScheduleStore } from "../bin/power/index.js";
 import { LocalStorageProvider, Workspace } from "@downcity/city";
 
 /** 打开 City 提供的 Agent 存储作用域。 */
@@ -35,7 +35,7 @@ test("ActionScheduleStore persists through the Agent storage scope", async (t) =
   );
 
   const created = await store.create_job({
-    plugin_name: "demo",
+    power_name: "demo",
     action_name: "run",
     payload: { value: 1 },
     run_at_ms: Date.now() - 1,
@@ -67,7 +67,7 @@ test("ActionScheduleStore serializes cross-instance pending claims", async (t) =
   const first_store = new ActionScheduleStore(first_storage.files, first_storage.root_path, "schedule-test", "test_workspace");
   const second_store = new ActionScheduleStore(second_storage.files, second_storage.root_path, "schedule-test", "test_workspace");
   const created = await first_store.create_job({
-    plugin_name: "demo",
+    power_name: "demo",
     action_name: "run",
     payload: null,
     run_at_ms: Date.now(),
@@ -98,7 +98,7 @@ test("ActionScheduleStore only allows running jobs to enter terminal states", as
   const store = new ActionScheduleStore(storage.files, storage.root_path, "schedule-test", "test_workspace");
 
   const cancelled = await store.create_job({
-    plugin_name: "demo",
+    power_name: "demo",
     action_name: "cancelled",
     payload: null,
     run_at_ms: Date.now(),
@@ -108,7 +108,7 @@ test("ActionScheduleStore only allows running jobs to enter terminal states", as
   assert.equal((await store.get_job_by_id(cancelled.id))?.status, "cancelled");
 
   const running = await store.create_job({
-    plugin_name: "demo",
+    power_name: "demo",
     action_name: "running",
     payload: null,
     run_at_ms: Date.now(),
@@ -153,7 +153,7 @@ test("ActionScheduleStore filters shared Workspace jobs by Agent ownership", asy
     "test_workspace",
   );
   const created = await first_store.create_job({
-    plugin_name: "demo",
+    power_name: "demo",
     action_name: "run",
     payload: null,
     run_at_ms: Date.now(),

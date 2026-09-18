@@ -12,7 +12,7 @@ import {
   GroupRepository,
   ensure_local_schema,
   LocalSettingRepository,
-  PluginRepository,
+  PowerRepository,
   resolve_local_agent_env,
   WorkspaceRepository,
 } from "../../bin/local/index.js";
@@ -112,7 +112,7 @@ test("AgentRepository 与 WorkspaceRepository 独立维护产品配置", async (
       "utf8",
     ));
     assert.equal(agent_file.schema_version, 2);
-    assert.equal("plugins" in agent_file, false);
+    assert.equal("powers" in agent_file, false);
     assert.equal(
       (await fs.stat(path.join(root_path, "agents", "lucas_whitman"))).mode & 0o777,
       0o700,
@@ -169,11 +169,11 @@ test("GroupRepository 持久化并更新 Group 定义", async () => {
   }
 });
 
-test("PluginRepository 按 Plugin ID 保存唯一明文 TOML 配置", async () => {
-  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-config-"));
+test("PowerRepository 按 Power ID 保存唯一明文 TOML 配置", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-power-config-"));
   try {
-    const plugins = new PluginRepository(root_path);
-    plugins.set_config("chat", {
+    const powers = new PowerRepository(root_path);
+    powers.set_config("chat", {
       queue: { max_concurrency: 3 },
       channels: [{
         id: "telegram_main",
@@ -182,7 +182,7 @@ test("PluginRepository 按 Plugin ID 保存唯一明文 TOML 配置", async () =
         bot_token: "plain-token",
       }],
     });
-    assert.deepEqual(plugins.get_config("chat"), {
+    assert.deepEqual(powers.get_config("chat"), {
       queue: { max_concurrency: 3 },
       channels: [{
         id: "telegram_main",
@@ -191,7 +191,7 @@ test("PluginRepository 按 Plugin ID 保存唯一明文 TOML 配置", async () =
         bot_token: "plain-token",
       }],
     });
-    const config_path = path.join(root_path, "plugins", "chat", "config.toml");
+    const config_path = path.join(root_path, "powers", "chat", "config.toml");
     const content = await fs.readFile(config_path, "utf8");
     assert.match(content, /plain-token/u);
     assert.match(content, /\[config\.queue\]/u);
@@ -202,22 +202,22 @@ test("PluginRepository 按 Plugin ID 保存唯一明文 TOML 配置", async () =
   }
 });
 
-test("PluginRepository 从安装目录读取 Plugin README", async () => {
-  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-readme-"));
+test("PowerRepository 从安装目录读取 Power README", async () => {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-power-readme-"));
   try {
-    const plugins = new PluginRepository(root_path);
-    const plugin_path = path.join(root_path, "plugins", "example");
-    const readme_path = path.join(plugin_path, "docs", "plugin-guide.md");
+    const powers = new PowerRepository(root_path);
+    const power_path = path.join(root_path, "powers", "example");
+    const readme_path = path.join(power_path, "docs", "power-guide.md");
     await fs.mkdir(path.dirname(readme_path), { recursive: true });
-    await fs.writeFile(readme_path, "# Example\n\nPlugin guide.\n", "utf8");
+    await fs.writeFile(readme_path, "# Example\n\nPower guide.\n", "utf8");
 
     assert.equal(
-      plugins.read_installed_readme("example", "docs/plugin-guide.md"),
-      "# Example\n\nPlugin guide.\n",
+      powers.read_installed_readme("example", "docs/power-guide.md"),
+      "# Example\n\nPower guide.\n",
     );
     assert.throws(
-      () => plugins.read_installed_readme("example", "../outside.md"),
-      /README must stay inside the Plugin directory/u,
+      () => powers.read_installed_readme("example", "../outside.md"),
+      /README must stay inside the Power directory/u,
     );
   } finally {
     await fs.rm(root_path, { recursive: true, force: true });

@@ -1,0 +1,90 @@
+{
+  "name": "@downcity/powers",
+  "version": "1.0.315",
+  "type": "module",
+  "description": "Downcity 内建 power 集合包",
+  "files": [
+    "bin",
+    "readmes"
+  ],
+  "main": "./bin/index.js",
+  "types": "./bin/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./bin/index.d.ts",
+      "import": "./bin/index.js"
+    },
+    "./chat": {
+      "types": "./bin/chat.d.ts",
+      "import": "./bin/chat.js"
+    },
+    "./memory": {
+      "types": "./bin/memory.d.ts",
+      "import": "./bin/memory.js"
+    },
+    "./renderers": {
+      "types": "./bin/renderers.d.ts",
+      "import": "./bin/renderers.js"
+    },
+    "./skill": {
+      "types": "./bin/skill.d.ts",
+      "import": "./bin/skill.js"
+    },
+    "./task": {
+      "types": "./bin/task.d.ts",
+      "import": "./bin/task.js"
+    },
+    "./web": {
+      "types": "./bin/web.d.ts",
+      "import": "./bin/web.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test:chat-access": "pnpm build && node --test scripts/chat-access.test.mjs",
+    "test:chat-config": "pnpm build && node --test scripts/chat-channel-config.test.mjs",
+    "test:power-host": "pnpm build && node --test scripts/power-host-actions.test.mjs",
+    "test:chat-storage": "pnpm build && node --test scripts/chat-storage.test.mjs",
+    "test:chat-delivery": "pnpm build && node --test scripts/chat-delivery.test.mjs",
+    "test:chat-inbound-parts": "pnpm build && node --test scripts/chat-inbound-prompt-parts.test.mjs",
+    "test:chat-inbound-voice": "pnpm build && node --test scripts/chat-inbound-voice.test.mjs",
+    "test:exports": "pnpm build && node --test scripts/power-subpaths.test.mjs",
+    "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs",
+    "test:skill": "pnpm build && node --test scripts/skill-power.test.mjs",
+    "test:task": "pnpm build && node --test scripts/task-power.test.mjs",
+    "test:web": "pnpm build && node --test scripts/web-power.test.mjs scripts/web-data-providers.test.mjs && node --experimental-test-module-mocks --test scripts/playwright-browser-provider.test.mjs",
+    "prepack": "npm run build && node ../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
+    "postpack": "node ../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
+  },
+  "dependencies": {
+    "@downcity/agent": "workspace:^",
+    "@downcity/city": "workspace:^",
+    "@downcity/type": "workspace:*",
+    "@larksuiteoapi/node-sdk": "^1.73.3",
+    "commander": "^15.0.0",
+    "execa": "^9.6.1",
+    "fs-extra": "^11.3.5",
+    "js-yaml": "^4.1.1",
+    "node-cron": "^4.2.1",
+    "playwright-core": "^1.62.1",
+    "qrcode-generator": "^2.0.4",
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.9.1",
+    "@types/node-cron": "^3.0.11",
+    "@types/react": "^19.2.14",
+    "@types/ws": "^8.18.1",
+    "react": "^19.2.6",
+    "tsc-alias": "^1.8.17",
+    "typescript": "^6.0.3"
+  }
+}

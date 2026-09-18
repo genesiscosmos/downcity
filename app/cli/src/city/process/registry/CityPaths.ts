@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - Downcity 的用户级根目录固定在 `~/.downcity/`，测试可用 `DC_PLATFORM_ROOT` 覆盖。
- * - Agent 与 Plugin 配置由 `@downcity/city/local` 统一解析文件路径。
+ * - Agent 与 Power 配置由 `@downcity/city/local` 统一解析文件路径。
  * - 当前模块只拥有 CLI City 的环境和运行状态路径。
  */
 

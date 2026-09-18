@@ -1,7 +1,7 @@
 /**
  * Desktop 本地数据库与 Repository 组合入口。
  *
- * Electron main 显式拥有数据库连接；数据库 Adapter 不理解 Agent、Workspace 或 Plugin。
+ * Electron main 显式拥有数据库连接；数据库 Adapter 不理解 Agent、Workspace 或 Power。
  */
 
 import {
@@ -13,7 +13,7 @@ import {
   AgentRepository,
   ensure_local_schema,
   GroupRepository,
-  PluginRepository,
+  PowerRepository,
   LocalSettingRepository,
   WorkspaceRepository,
 } from "@downcity/city/local";
@@ -28,8 +28,8 @@ export interface DesktopLocalData {
   agents: AgentRepository;
   /** Workspace 配置仓储。 */
   workspaces: WorkspaceRepository;
-  /** Plugin 配置仓储。 */
-  plugins: PluginRepository;
+  /** Power 配置仓储。 */
+  powers: PowerRepository;
   /** Group 定义仓储。 */
   groups: GroupRepository;
   /** 平台明文设置仓储。 */
@@ -44,7 +44,7 @@ export function create_desktop_local_data(): DesktopLocalData {
   const settings = new LocalSettingRepository(database);
   const workspaces = new WorkspaceRepository(database);
   const agents = new AgentRepository(root_path);
-  const plugins = new PluginRepository(root_path);
+  const powers = new PowerRepository(root_path);
   const groups = new GroupRepository(database);
-  return { root_path, database, agents, workspaces, plugins, groups, settings };
+  return { root_path, database, agents, workspaces, powers, groups, settings };
 }

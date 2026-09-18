@@ -142,7 +142,7 @@ export function DesktopShell() {
         return;
       }
       if (modifier && !event.altKey && !event.shiftKey) {
-        const sidebar_mode = resolve_sidebar_shortcut_mode(event.key, stable_controller.stores.catalog.get_snapshot().plugins);
+        const sidebar_mode = resolve_sidebar_shortcut_mode(event.key, stable_controller.stores.catalog.get_snapshot().powers);
         if (sidebar_mode) {
           event.preventDefault();
           stable_controller.actions.set_sidebar_mode(sidebar_mode);

@@ -1,0 +1,394 @@
+/**
+ * Task Power 的宿主管理 actions。
+ *
+ * 只读与定义 mutation 直接访问 TaskPower 生命周期级统一 Store；只有真正执行 Task
+ * 时才通过 City 进入定义声明的 Agent/Workspace 动态执行范围。
+ */
+
+import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";
+import {
+  createTaskDefinition,
+  deleteTaskDefinition,
+  list_task_run_history,
+  read_task_run,
+  setTaskStatus,
+  updateTaskDefinition,
+} from "@/task/Action.js";
+import { deriveTaskIdFromTitle } from "@/task/runtime/Paths.js";
+import {
+  deleteTask,
+  inspect_task_definitions,
+  readTask,
+  resolveTaskIdByTitle,
+} from "@/task/runtime/Store.js";
+import type { TaskRunDetailView } from "@/task/types/TaskCommand.js";
+import type {
+  TaskMainviewActionInput,
+  TaskMainviewCreateInput,
+  TaskMainviewHistoryInput,
+  TaskMainviewHistorySnapshot,
+  TaskMainviewInvalidDeleteInput,
+  TaskMainviewInvalidDeleteResult,
+  TaskMainviewMutationResult,
+  TaskMainviewRunDetailInput,
+  TaskMainviewRunDetailSnapshot,
+  TaskMainviewSnapshot,
+  TaskMainviewStatusInput,
+  TaskMainviewUpdateInput,
+} from "@/task/types/TaskMainview.js";
+import type { TaskPowerHostRuntime } from "@/task/types/TaskPowerTypes.js";
+
+/** 注册 Task Power 的宿主管理 actions。 */
+export function register_task_power_host_actions(
+  context: PowerLifecycleContext,
+  runtime: TaskPowerHostRuntime,
+): void {
+  context.power.action({ id: "tasks.snapshot", run: async () => as_json(await create_snapshot(context, runtime)) });
+  context.power.action({ id: "tasks.history", run: async (input) => as_json(await read_history(runtime, read_history_input(input))) });
+  context.power.action({ id: "tasks.run_detail", run: async (input) => as_json(await read_run_detail(runtime, read_run_detail_input(input))) });
+  context.power.action({ id: "tasks.create", run: async (input) => as_json(await create_task(context, runtime, read_create_input(input))) });
+  context.power.action({ id: "tasks.update", run: async (input) => as_json(await update_task(context, runtime, read_update_input(input))) });
+  context.power.action({ id: "tasks.status", run: async (input) => as_json(await set_task_status(context, runtime, read_status_input(input))) });
+  context.power.action({ id: "tasks.run", run: async (input) => as_json(await run_task(context, runtime, read_action_input(input))) });
+  context.power.action({ id: "tasks.delete", run: async (input) => as_json(await delete_task(context, runtime, read_action_input(input))) });
+  context.power.action({ id: "tasks.invalid.delete", run: async (input) => as_json(await delete_invalid_task(context, runtime, read_invalid_delete_input(input))) });
+}
+
+/** 读取 TaskPower 统一 Task 列表与可选执行目标。 */
+async function create_snapshot(
+  context: PowerLifecycleContext,
+  runtime: TaskPowerHostRuntime,
+): Promise<TaskMainviewSnapshot> {
+  const [agents, workspaces, inspection] = await Promise.all([
+    context.system.list_agents(),
+    context.system.list_workspaces(),
+    inspect_task_definitions(runtime.storage),
+  ]);
+  return {
+    tasks: inspection.tasks.map((task) => ({
+      title: task.title,
+      description: task.description,
+      ...(task.body ? { body: task.body } : {}),
+      when: task.when,
+      status: task.status,
+      kind: task.kind || "agent",
+      review: Boolean(task.review),
+      agent_id: task.agent_id,
+      workspace_id: task.workspace_id,
+      ...(task.delivery_session ? { delivery_session: task.delivery_session } : {}),
+      ...(task.lastRunTimestamp ? { last_run_at: task.lastRunTimestamp } : {}),
+    })),
+    agents: agents.map((agent) => ({
+      agent_id: agent.agent_id,
+      name: agent.name,
+    })),
+    workspaces: workspaces.map((workspace) => ({
+      workspace_id: workspace.workspace_id,
+      name: workspace.name,
+    })),
+    issues: inspection.issues,
+  };
+}
+
+/** 直接从统一 Store 读取一个 Task 的执行记录列表。 */
+async function read_history(
+  runtime: TaskPowerHostRuntime,
+  input: TaskMainviewHistoryInput,
+): Promise<TaskMainviewHistorySnapshot> {
+  await read_existing_task(runtime.storage, input.task_title);
+  const result = await list_task_run_history({
+    storage: runtime.storage,
+    request: { title: input.task_title },
+  });
+  if (!result.success) throw new Error(result.error || `读取 ${input.task_title} 的执行记录失败`);
+  return { runs: result.runs ?? [] };
+}
+
+/** 直接从统一 Store 读取一条 Task 执行详情。 */
+async function read_run_detail(
+  runtime: TaskPowerHostRuntime,
+  input: TaskMainviewRunDetailInput,
+): Promise<TaskMainviewRunDetailSnapshot> {
+  await read_existing_task(runtime.storage, input.task_title);
+  const result = await read_task_run({
+    storage: runtime.storage,
+    request: { title: input.task_title, timestamp: input.timestamp },
+  });
+  if (!result.success || !result.run) {
+    throw new Error(result.error || `执行记录不存在: ${input.timestamp}`);
+  }
+  return { run: result.run as TaskRunDetailView };
+}
+
+/** 在统一 Store 创建一个显式绑定 Agent/Workspace 的 Task。 */
+async function create_task(
+  context: PowerLifecycleContext,
+  runtime: TaskPowerHostRuntime,
+  input: TaskMainviewCreateInput,
+): Promise<TaskMainviewMutationResult> {
+  await assert_execution_target(context, input.agent_id, input.workspace_id);
+  const result = await createTaskDefinition({
+    definitions: runtime.definitions,
+    agent_id: input.agent_id,
+    request: {
+      title: input.title,
+      description: input.description,
+      workspace_id: input.workspace_id,
+      when: input.when,
+      kind: input.kind,
+      review: input.review,
+      status: input.status,
+      body: input.body,
+    },
+  });
+  if (!result.success) throw new Error(result.error || `创建 ${input.title} 失败`);
+  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.title));
+  return { task_title: input.title, scheduler };
+}
+
+/** 原子更新一个 Task 定义，并按 task_id 更新 scheduler。 */
+async function update_task(
+  context: PowerLifecycleContext,
+  runtime: TaskPowerHostRuntime,
+  input: TaskMainviewUpdateInput,
+): Promise<TaskMainviewMutationResult> {
+  await assert_execution_target(context, input.agent_id, input.workspace_id);
+  await read_existing_task(runtime.storage, input.current_title);
+  const result = await updateTaskDefinition({
+    definitions: runtime.definitions,
+    request: {
+      title: input.current_title,
+      titleNext: input.title,
+      description: input.description,
+      agent_id: input.agent_id,
+      workspace_id: input.workspace_id,
+      when: input.when,
+      kind: input.kind,
+      review: input.review,
+      status: input.status,
+      body: input.body,
+    },
+  });
+  if (!result.success) throw new Error(result.error || `更新 ${input.current_title} 失败`);
+  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.current_title));
+  return { task_title: input.title, scheduler };
+}
+
+/** 修改 Task 启停状态。 */
+async function set_task_status(
+  context: PowerLifecycleContext,
+  runtime: TaskPowerHostRuntime,
+  input: TaskMainviewStatusInput,
+): Promise<TaskMainviewMutationResult> {
+  const task = await read_existing_task(runtime.storage, input.task_title);
+  if (input.status === "enabled") {
+    await assert_execution_target(
+      context,
+      task.frontmatter.agent_id,
+      task.frontmatter.workspace_id,
+    );
+  }
+  const result = await setTaskStatus({
+    definitions: runtime.definitions,
+    request: { title: input.task_title, status: input.status },
+  });
+  if (!result.success) throw new Error(result.error || `修改 ${input.task_title} 状态失败`);
+  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.task_title));
+  return { task_title: input.task_title, scheduler };
+}
+
+/** 进入 Task 自己声明的执行范围，并异步受理一次手动执行。 */
+async function run_task(
+  context: PowerLifecycleContext,
+  runtime: TaskPowerHostRuntime,
+  input: TaskMainviewActionInput,
+): Promise<TaskMainviewMutationResult> {
+  const task = await read_existing_task(runtime.storage, input.task_title);
+  await assert_execution_target(
+    context,
+    task.frontmatter.agent_id,
+    task.frontmatter.workspace_id,
+  );
+  const result = await invoke_task_action(
+    context,
+    task.frontmatter.agent_id,
+    task.frontmatter.workspace_id,
+    "run",
+    { title: input.task_title },
+  );
+  if (!result.success) throw new Error(result.error || `运行 ${input.task_title} 失败`);
+  return { task_title: input.task_title };
+}
+
+/** 从统一 Store 删除 Task 定义及其全部运行记录。 */
+async function delete_task(
+  context: PowerLifecycleContext,
+  runtime: TaskPowerHostRuntime,
+  input: TaskMainviewActionInput,
+): Promise<TaskMainviewMutationResult> {
+  await read_existing_task(runtime.storage, input.task_title);
+  const result = await deleteTaskDefinition({
+    definitions: runtime.definitions,
+    request: { title: input.task_title },
+  });
+  if (!result.success) throw new Error(result.error || `删除 ${input.task_title} 失败`);
+  const scheduler = await runtime.reconcile(deriveTaskIdFromTitle(input.task_title));
+  await dismiss_task_notification(context, input.task_title);
+  return { task_title: input.task_title, scheduler };
+}
+
+/** 删除一条无法解析的 Task 聚合目录，并同步移除其 scheduler 注册。 */
+async function delete_invalid_task(
+  context: PowerLifecycleContext,
+  runtime: TaskPowerHostRuntime,
+  input: TaskMainviewInvalidDeleteInput,
+): Promise<TaskMainviewInvalidDeleteResult> {
+  await runtime.definitions.mutate(async (storage) => {
+    if (runtime.definitions.is_running(input.task_id)) {
+      throw new Error(`Task is running and cannot be deleted: ${input.task_id}`);
+    }
+    await deleteTask({ storage, taskId: input.task_id });
+  });
+  const scheduler = await runtime.reconcile(input.task_id);
+  await dismiss_task_notification(context, input.task_id);
+  return { task_id: input.task_id, scheduler };
+}
+
+/** 删除 Task 后尽力清理未读通知，通知故障不改变已提交的定义变更。 */
+async function dismiss_task_notification(
+  context: PowerLifecycleContext,
+  task_title: string,
+): Promise<void> {
+  try {
+    await context.notifications.dismiss({
+      topic_key: `task:${deriveTaskIdFromTitle(task_title)}`,
+    });
+  } catch (error) {
+    context.logger.warn("[TASK] Task notification cleanup failed", {
+      task_title,
+      error: String(error),
+    });
+  }
+}
+
+/** 调用当前 City 中指定 Agent/Workspace 的 Task action。 */
+async function invoke_task_action(
+  context: PowerLifecycleContext,
+  agent_id: string,
+  workspace_id: string,
+  action_id: string,
+  action_input: PowerJsonValue,
+): Promise<{ success?: boolean; error?: string }> {
+  return await context.system.invoke_agent_power({
+    agent_id,
+    workspace_id,
+    power_id: "task",
+    action_id,
+    input: action_input,
+  }) as { success?: boolean; error?: string };
+}
+
+/** 验证 Agent 与 Workspace 仍属于当前 City。 */
+async function assert_execution_target(
+  context: PowerLifecycleContext,
+  agent_id: string,
+  workspace_id: string,
+): Promise<void> {
+  const [agents, workspaces] = await Promise.all([
+    context.system.list_agents(),
+    context.system.list_workspaces(),
+  ]);
+  if (!agents.some((agent) => agent.agent_id === agent_id)) {
+    throw new Error(`Agent 不存在: ${agent_id}`);
+  }
+  if (!workspaces.some((workspace) => workspace.workspace_id === workspace_id)) {
+    throw new Error(`Workspace 不存在: ${workspace_id}`);
+  }
+}
+
+/** 从统一 Store 读取目标 Task，供所有宿主管理入口共享。 */
+async function read_existing_task(
+  storage: PowerLifecycleContext["storage"],
+  task_title: string,
+) {
+  const task_id = await resolveTaskIdByTitle({ storage, title: task_title });
+  return await readTask({ storage, taskId: task_id });
+}
+
+/** 读取执行记录列表 action 输入。 */
+function read_history_input(input: PowerJsonValue | undefined): TaskMainviewHistoryInput {
+  return read_action_input(input);
+}
+
+/** 读取执行详情 action 输入。 */
+function read_run_detail_input(input: PowerJsonValue | undefined): TaskMainviewRunDetailInput {
+  return { ...read_history_input(input), timestamp: read_required_string(read_input_object(input).timestamp, "timestamp") };
+}
+
+/** 读取已有 Task 操作输入。 */
+function read_action_input(input: PowerJsonValue | undefined): TaskMainviewActionInput {
+  const value = read_input_object(input);
+  return {
+    task_title: read_required_string(value.task_title, "task_title"),
+  };
+}
+
+/** 校验损坏 Task 删除输入。 */
+function read_invalid_delete_input(
+  input: PowerJsonValue | undefined,
+): TaskMainviewInvalidDeleteInput {
+  const value = read_input_object(input);
+  const task_id = read_required_string(value.task_id, "task_id");
+  return { task_id };
+}
+
+/** 读取创建 Task 输入。 */
+function read_create_input(input: PowerJsonValue | undefined): TaskMainviewCreateInput {
+  const value = read_input_object(input);
+  return {
+    agent_id: read_required_string(value.agent_id, "agent_id"),
+    workspace_id: read_required_string(value.workspace_id, "workspace_id"),
+    title: read_required_string(value.title, "title"),
+    description: read_required_string(value.description, "description"),
+    when: read_required_string(value.when, "when"),
+    kind: value.kind === "script" ? "script" : "agent",
+    review: value.review === true,
+    status: read_status(value.status),
+    body: typeof value.body === "string" ? value.body : "",
+  };
+}
+
+/** 读取更新 Task 输入。 */
+function read_update_input(input: PowerJsonValue | undefined): TaskMainviewUpdateInput {
+  const value = read_input_object(input);
+  return { ...read_create_input(input), current_title: read_required_string(value.current_title, "current_title") };
+}
+
+/** 读取 Task 状态修改输入。 */
+function read_status_input(input: PowerJsonValue | undefined): TaskMainviewStatusInput {
+  const value = read_input_object(input);
+  return { ...read_action_input(input), status: read_status(value.status) };
+}
+
+/** 读取合法 Task 状态。 */
+function read_status(value: PowerJsonValue | undefined): "enabled" | "paused" | "disabled" {
+  if (value === "enabled" || value === "paused" || value === "disabled") return value;
+  throw new Error("status must be enabled, paused, or disabled");
+}
+
+/** 将 Power JSON 输入收窄为 object。 */
+function read_input_object(input: PowerJsonValue | undefined): Record<string, PowerJsonValue> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Task action input must be an object");
+  return input;
+}
+
+/** 读取一个必填非空字符串字段。 */
+function read_required_string(value: PowerJsonValue | undefined, field: string): string {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${field} is required`);
+  return value.trim();
+}
+
+/** 把结构化协议显式收敛到 Power JSON 边界。 */
+function as_json(value: unknown): PowerJsonValue {
+  return value as PowerJsonValue;
+}

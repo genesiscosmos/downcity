@@ -35,10 +35,10 @@ function create_transport_agent() {
         throw new Error("session list failed")
       },
     },
-    plugins: {
-      async run_action({ plugin, action, payload }) {
-        if (action === "throw") throw new Error("plugin failed")
-        return { success: true, data: { plugin, action, payload } }
+    powers: {
+      async run_action({ power, action, payload }) {
+        if (action === "throw") throw new Error("power failed")
+        return { success: true, data: { power, action, payload } }
       },
     },
   }
@@ -50,32 +50,32 @@ test("AgentHTTP exposes stable validation and domain error responses", async () 
   assert.equal(http.router(), router)
   assert.equal(http.server(), http.server())
 
-  const missing_plugin = await router.request("/api/plugins/action", {
+  const missing_power = await router.request("/api/powers/action", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ action_name: "run" }),
   })
-  assert.equal(missing_plugin.status, 400)
-  assert.deepEqual(await missing_plugin.json(), {
+  assert.equal(missing_power.status, 400)
+  assert.deepEqual(await missing_power.json(), {
     success: false,
-    error: "plugin_name is required",
+    error: "power_name is required",
   })
 
-  const missing_action = await router.request("/api/plugins/action", {
+  const missing_action = await router.request("/api/powers/action", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ plugin_name: "test" }),
+    body: JSON.stringify({ power_name: "test" }),
   })
   assert.equal(missing_action.status, 400)
   assert.equal((await missing_action.json()).error, "action_name is required")
 
-  const plugin_failure = await router.request("/api/plugins/action", {
+  const power_failure = await router.request("/api/powers/action", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ plugin_name: "test", action_name: "throw" }),
+    body: JSON.stringify({ power_name: "test", action_name: "throw" }),
   })
-  assert.equal(plugin_failure.status, 500)
-  assert.equal((await plugin_failure.json()).error, "plugin failed")
+  assert.equal(power_failure.status, 500)
+  assert.equal((await power_failure.json()).error, "power failed")
 
   const session_failure = await router.request("/api/sdk/sessions")
   assert.equal(session_failure.status, 500)

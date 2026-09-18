@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 这里描述的是 CLI 与 agent daemon 之间的远程访问契约，不包含具体 HTTP 实现。
- * - plugin runtime 等上层模块只依赖这些协议类型，不需要感知 City/daemon 的内部实现细节。
+ * - power runtime 等上层模块只依赖这些协议类型，不需要感知 City/daemon 的内部实现细节。
  * - 该文件属于 `main/city/daemon/*` 的协议边界，而不是通用 HTTP 类型目录。
  */
 
@@ -44,7 +44,7 @@ export type DaemonJsonApiCallParams = {
    *
    * 说明（中文）
    * - 当前 City Agent HTTP gateway client 会消费该参数。
-   * - 用于 `session execute`、`plugin action` 这类可能持续几十秒的请求，
+   * - 用于 `session execute`、`power action` 这类可能持续几十秒的请求，
    *   避免被默认短超时误判成“Agent runtime 未启动”。
    */
   timeoutMs?: number;

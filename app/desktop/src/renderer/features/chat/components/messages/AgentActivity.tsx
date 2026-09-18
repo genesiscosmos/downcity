@@ -19,7 +19,7 @@ const AGENT_ACTIVITY_ICONS: Record<AgentActivityVisualKind, ComponentType<{ clas
   find: TbFileSearch,
   shell: TbTerminal2,
   ask: TbMessageQuestion,
-  plugin: TbPuzzle,
+  power: TbPuzzle,
   command: TbCommand,
   fork: TbGitFork,
   compaction: TbArrowsMinimize,

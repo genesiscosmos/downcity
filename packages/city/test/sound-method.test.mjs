@@ -32,6 +32,8 @@ async function create_fixture(options = {}) {
     embassy: { user: { ai: current_sound_ai } },
   });
   city.agents.add(agent);
+  // power 注册是异步 lifecycle；执行前先等 City ready。
+  await city.ensure_ready();
   const tools = city.get_session_tools(agent.id, workspace);
   return {
     root,
@@ -40,9 +42,29 @@ async function create_fixture(options = {}) {
     agent,
     city,
     tools,
-    /** 调用一次 city 工具。 */
-    call: async (call_input) =>
-      await tools.city.execute(call_input, { tool_call_id: "call_1", messages: [], context: {} }),
+    /**
+     * 调用一次 city 工具。
+     *
+     * 关键点（中文）
+     * - 只接受 `{ action: "sound.asr", args }` 形式；工具层返回 ActionResult，
+     *   这里只暴露模型侧 output。
+     */
+    call: async ({ action, args } = {}) => {
+      const result = await tools.city.execute(
+        args === undefined ? { action } : { action, args },
+        {
+          tool_call_id: "call_1",
+          messages: [],
+          context: {
+            session_turn_context: {
+              session: { session_id: "session_test", turn_id: "turn_test", origin: { type: "chat" } },
+              step: { hook_context: () => ({ session_id: "session_test", turn_id: "turn_test" }) },
+            },
+          },
+        },
+      );
+      return result.output;
+    },
     close: async () => {
       await city.close();
       await workspace.dispose();
@@ -56,13 +78,13 @@ test("sound method 与 image method 同在一个 city 工具里", async () => {
   try {
     assert.deepEqual(Object.keys(fixture.tools), ["city"]);
     const index = await fixture.call({});
-    const methods = index.data.methods.map((item) => item.method);
-    assert.ok(methods.includes("sound"));
-    assert.ok(methods.includes("image"));
-    const sound_index = await fixture.call({ method: "sound" });
+    const action_ids = index.data.actions.map((item) => item.action);
+    assert.ok(action_ids.includes("sound.asr"));
+    assert.ok(action_ids.includes("image.create"));
+    const sound_actions = index.data.actions.filter((item) => item.action.startsWith("sound."));
     assert.deepEqual(
-      sound_index.data.actions.map((item) => item.action),
-      ["models", "asr", "tts"],
+      sound_actions.map((item) => item.action),
+      ["sound.asr", "sound.models", "sound.tts"],
     );
   } finally {
     await fixture.close();
@@ -80,21 +102,17 @@ test("sound models 按能力筛选", async () => {
     tts: () => ({}),
   });
   try {
-    const all = await fixture.call({ method: "sound", action: "models" });
+    const all = await fixture.call({ action: "sound.models" });
     assert.deepEqual(all.data.items.map((item) => item.id), ["asr-1", "tts-1"]);
-    const only_tts = await fixture.call({
-      method: "sound",
-      action: "models",
+    const only_tts = await fixture.call({ action: "sound.models",
       args: { capability: "tts" },
     });
     assert.deepEqual(only_tts.data.items.map((item) => item.id), ["tts-1"]);
-    const invalid = await fixture.call({
-      method: "sound",
-      action: "models",
+    const invalid = await fixture.call({ action: "sound.models",
       args: { capability: "image" },
     });
-    assert.equal(invalid.ok, false);
-    assert.match(invalid.error.message, /must be asr or tts/u);
+    assert.equal(invalid.success, false);
+    assert.match(invalid.error, /Invalid payload for city\.sound\.models/u);
   } finally {
     await fixture.close();
   }
@@ -111,9 +129,7 @@ test("sound asr 把本地音频转成 data URL", async () => {
   });
   try {
     await fs.writeFile(path.join(fixture.workspace_path, "input.mp3"), "audio-bytes");
-    const result = await fixture.call({
-      method: "sound",
-      action: "asr",
+    const result = await fixture.call({ action: "sound.asr",
       args: { model: "asr-1", audio_path: "./input.mp3", language: "en" },
     });
     assert.equal(result.data.text, "hello world");
@@ -128,16 +144,14 @@ test("sound asr 把本地音频转成 data URL", async () => {
 test("sound asr 要求且只接受一个音频来源", async () => {
   const fixture = await create_fixture({ asr: () => ({ text: "hi" }), tts: () => ({}) });
   try {
-    const none = await fixture.call({ method: "sound", action: "asr" });
-    assert.equal(none.ok, false);
-    assert.match(none.error.message, /exactly one of/u);
-    const both = await fixture.call({
-      method: "sound",
-      action: "asr",
+    const none = await fixture.call({ action: "sound.asr" });
+    assert.equal(none.success, false);
+    assert.match(none.error, /exactly one of/u);
+    const both = await fixture.call({ action: "sound.asr",
       args: { url: "https://a/b.mp3", data_url: "data:audio/mpeg;base64,AA" },
     });
-    assert.equal(both.ok, false);
-    assert.match(both.error.message, /exactly one of/u);
+    assert.equal(both.success, false);
+    assert.match(both.error, /exactly one of/u);
   } finally {
     await fixture.close();
   }
@@ -157,9 +171,7 @@ test("sound asr 未指定模型时取第一个可用 ASR 模型", async () => {
     tts: () => ({}),
   });
   try {
-    await fixture.call({
-      method: "sound",
-      action: "asr",
+    await fixture.call({ action: "sound.asr",
       args: { url: "https://example.com/a.mp3" },
     });
     assert.equal(received.model, "asr-1");
@@ -175,13 +187,11 @@ test("sound 没有可用模型时明确失败", async () => {
     tts: () => ({}),
   });
   try {
-    const result = await fixture.call({
-      method: "sound",
-      action: "asr",
+    const result = await fixture.call({ action: "sound.asr",
       args: { url: "https://example.com/a.mp3" },
     });
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /no asr model is available/u);
+    assert.equal(result.success, false);
+    assert.match(result.error, /no asr model is available/u);
   } finally {
     await fixture.close();
   }
@@ -196,9 +206,7 @@ test("sound tts 要求音频已落盘并只返回本地路径", async () => {
     }),
   });
   try {
-    const result = await fixture.call({
-      method: "sound",
-      action: "tts",
+    const result = await fixture.call({ action: "sound.tts",
       args: { model: "tts-1", text: "hello", voice: "alloy" },
     });
     assert.deepEqual(result.data, { files: ["/tmp/out.mp3"] });
@@ -216,13 +224,11 @@ test("sound tts 拒绝远程或 data URL 音频", async () => {
     }),
   });
   try {
-    const result = await fixture.call({
-      method: "sound",
-      action: "tts",
+    const result = await fixture.call({ action: "sound.tts",
       args: { model: "tts-1", text: "hello" },
     });
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /must be saved locally/u);
+    assert.equal(result.success, false);
+    assert.match(result.error, /must be saved locally/u);
   } finally {
     await fixture.close();
   }
@@ -234,13 +240,11 @@ test("sound tts 缺少音频 part 时失败", async () => {
     tts: () => ({ role: "agent", parts: [{ type: "text", text: "no audio" }] }),
   });
   try {
-    const result = await fixture.call({
-      method: "sound",
-      action: "tts",
+    const result = await fixture.call({ action: "sound.tts",
       args: { model: "tts-1", text: "hello" },
     });
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /must contain an audio file part/u);
+    assert.equal(result.success, false);
+    assert.match(result.error, /must contain an audio file part/u);
   } finally {
     await fixture.close();
   }
@@ -253,34 +257,38 @@ test("sound method 的程序化 transcribe 供插件调用", async () => {
     tts: () => ({}),
   });
   try {
-    await fixture.city.plugins.add({
+    await fixture.city.powers.add({
       readme: import.meta.filename,
       has_config: false,
       has_sidebar: false,
       has_mainview: false,
-      plugin: {
+      power: {
         name: "voice-probe",
         title: "Voice Probe",
         description: "test",
         actions: {
           run: {
-            description: "invoke sound transcribe",
-            execute: async ({ context, input }) => ({
-              success: true,
-              data: await context.city.methods.invoke({
-                method: "sound",
-                action: "transcribe",
-                input,
-              }),
-            }),
+            description: "invoke sound asr",
+            execute: async ({ context, input }) => {
+              const result = await context.city.powers.run_action({
+                power: "city",
+                action: "sound.asr",
+                payload: input,
+              });
+              return {
+                success: result.success,
+                ...(result.data === undefined ? {} : { data: result.data }),
+                ...(result.error ? { error: result.error } : {}),
+              };
+            },
           },
         },
       },
     });
     const run = async (payload) =>
-      await fixture.city.plugins
+      await fixture.city.powers
         .scope({ agent_id: fixture.agent.id, workspace_id: fixture.workspace.id })
-        .run_action({ plugin: "voice-probe", action: "run", payload });
+        .run_action({ power: "voice-probe", action: "run", payload });
 
     const ok = await run({ url: "https://example.com/a.mp3" });
     assert.equal(ok.success, true);

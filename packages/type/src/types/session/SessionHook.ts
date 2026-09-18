@@ -78,9 +78,9 @@ export interface SessionHookHandlers {
 
 /** Hook 在当前 Turn 中返回的一条低权限动态参考内容。 */
 export interface SessionHookContextBlock {
-  /** 产生当前内容块的 Plugin 稳定名称。 */
-  source_plugin: string;
-  /** Plugin 内稳定且非空的内容块名称。 */
+  /** 产生当前内容块的 Power 稳定名称。 */
+  source_power: string;
+  /** Power 内稳定且非空的内容块名称。 */
   name: string;
   /** 需要追加到当前 User 模型消息副本的完整文本。 */
   content: string;

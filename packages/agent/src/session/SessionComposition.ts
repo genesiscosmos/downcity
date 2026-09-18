@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 拥有 Session 创建后固定的 system snapshot；env、Tool 与 Hook 在 Step 检查点读取。
  * - Composer 只读取本对象生成的不可变输入，不接触 Session 持久化编排。
- * - Plugin Hook 失败只降级对应扩展内容，不改变 canonical Message。
+ * - Power Hook 失败只降级对应扩展内容，不改变 canonical Message。
  */
 
 import type { JsonValue } from "@downcity/type";
@@ -25,7 +25,7 @@ import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js"
 import type { SessionCompositionOptions } from "@/types/session/SessionComposition.js";
 import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
-import { resolve_session_plugin_system_blocks } from "@/session/SessionSystem.js";
+import { resolve_session_power_system_blocks } from "@/session/SessionSystem.js";
 
 /** 管理当前 Session 的 system snapshot 与 Step 组装输入。 */
 export class SessionComposition {
@@ -96,7 +96,7 @@ export class SessionComposition {
     });
   }
 
-  /** 使用 Agent 当前 instruction 与 Plugin 重新生成完整 system。 */
+  /** 使用 Agent 当前 instruction 与 Power 重新生成完整 system。 */
   async syncshot(): Promise<void> {
     await this.run_mutation(async () => {
       await this.initialize();
@@ -156,7 +156,7 @@ export class SessionComposition {
       ? this.options.get_instruction_system_blocks().map((block) => ({ ...block }))
       : this.instruction_blocks();
     const workspace_env = Object.freeze({ ...this.options.get_workspace_env() });
-    // Plugin system 参与 Compose，必须先看到当前检查点已确定的 env 与 instruction。
+    // Power system 参与 Compose，必须先看到当前检查点已确定的 env 与 instruction。
     turn_context?.step.commit({
       workspace_env,
       agent_systems: instruction_system_blocks.map((block) => block.content),
@@ -172,26 +172,26 @@ export class SessionComposition {
           (block) => block.content,
         ),
       });
-    const plugin_runtime = refresh_system
+    const power_runtime = refresh_system
       ? this.options.get_hooks()
       : turn_context?.step.hooks || this.options.get_hooks();
-    const resolved_plugin_system_blocks = this.snapshot_blocks && !refresh_system
+    const resolved_power_system_blocks = this.snapshot_blocks && !refresh_system
       ? []
-      : await resolve_session_plugin_system_blocks({
+      : await resolve_session_power_system_blocks({
           session_id: this.options.session_id,
           ...(turn_context?.session.turn_id
             ? { turn_id: turn_context.session.turn_id }
             : {}),
-          hooks: plugin_runtime,
+          hooks: power_runtime,
           context: hook_context,
-          on_error: async (error) => await this.log_plugin_hook_warning(
+          on_error: async (error) => await this.log_power_hook_warning(
             SESSION_HOOK_POINTS.system_context,
             error,
             turn_context?.session.turn_id,
           ),
         });
-    const plugin_context_blocks = turn_context
-      ? await turn_context.step.resolve_plugin_context_blocks(async () => {
+    const power_context_blocks = turn_context
+      ? await turn_context.step.resolve_power_context_blocks(async () => {
           const hooks = turn_context.step.hooks;
           if (!hooks) return [];
           const value: SessionTurnContextHookValue = {
@@ -211,9 +211,9 @@ export class SessionComposition {
               SESSION_HOOK_POINTS.turn_context,
               value as unknown as JsonValue,
             ) as unknown as SessionTurnContextHookValue;
-            return normalize_plugin_context_blocks(output?.blocks);
+            return normalize_power_context_blocks(output?.blocks);
           } catch (error) {
-            await this.log_plugin_hook_warning(
+            await this.log_power_hook_warning(
               SESSION_HOOK_POINTS.turn_context,
               error,
               turn_context.session.turn_id,
@@ -233,12 +233,12 @@ export class SessionComposition {
         ),
         tools: Object.freeze({ ...this.options.get_tools() }),
         instruction_system_blocks,
-        managed_plugin_system_blocks:
+        managed_power_system_blocks:
           this.snapshot_blocks && !refresh_system
             ? []
-            : await this.options.get_managed_plugin_system_blocks(),
-        plugin_system_blocks: resolved_plugin_system_blocks,
-        plugin_context_blocks,
+            : await this.options.get_managed_power_system_blocks(),
+        power_system_blocks: resolved_power_system_blocks,
+        power_context_blocks,
       },
       storage: this.options.store,
       turn: {
@@ -263,21 +263,21 @@ export class SessionComposition {
     };
   }
 
-  /** Plugin 上下文 Hook 失败只降级当前扩展内容。 */
-  private async log_plugin_hook_warning(
+  /** Power 上下文 Hook 失败只降级当前扩展内容。 */
+  private async log_power_hook_warning(
     point_name: string,
     error: unknown,
     turn_id?: string,
   ): Promise<void> {
     try {
-      await this.options.logger.log("warn", "[agent] session plugin hook failed", {
+      await this.options.logger.log("warn", "[agent] session power hook failed", {
         session_id: this.options.session_id,
         ...(turn_id ? { turn_id } : {}),
         point_name,
         error: error instanceof Error ? error.message : String(error),
       });
     } catch {
-      // Plugin 已经降级，日志失败不能反向阻断 Session。
+      // Power 已经降级，日志失败不能反向阻断 Session。
     }
   }
 
@@ -307,16 +307,16 @@ export class SessionComposition {
 }
 
 /** 把 Turn pipeline 输出限制为低权限动态参考内容块。 */
-function normalize_plugin_context_blocks(input: unknown): SessionHookContextBlock[] {
+function normalize_power_context_blocks(input: unknown): SessionHookContextBlock[] {
   if (!Array.isArray(input)) return [];
   return input.flatMap((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const record = item as Record<string, unknown>;
-    const source_plugin = String(record.source_plugin || "").trim();
+    const source_power = String(record.source_power || "").trim();
     const name = String(record.name || "").trim();
     const content = String(record.content || "").trim();
     if (
-      !source_plugin ||
+      !source_power ||
       !name ||
       !content ||
       record.trust_level !== "reference"
@@ -328,7 +328,7 @@ function normalize_plugin_context_blocks(input: unknown): SessionHookContextBloc
       : [];
     const version = String(record.version || "").trim();
     return [{
-      source_plugin,
+      source_power,
       name,
       content,
       trust_level: "reference" as const,

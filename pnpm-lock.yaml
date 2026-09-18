@@ -29,9 +29,9 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../../packages/federation
-      '@downcity/plugins':
+      '@downcity/powers':
         specifier: workspace:^
-        version: link:../../packages/implementations/plugins
+        version: link:../../packages/implementations/powers
       '@downcity/sandbox-microsandbox':
         specifier: workspace:^
         version: link:../../packages/implementations/sandboxes/microsandbox
@@ -129,9 +129,9 @@ importers:
       '@downcity/federation':
         specifier: workspace:^
         version: link:../../packages/federation
-      '@downcity/plugins':
+      '@downcity/powers':
         specifier: workspace:^
-        version: link:../../packages/implementations/plugins
+        version: link:../../packages/implementations/powers
       '@downcity/sandbox-microsandbox':
         specifier: workspace:^
         version: link:../../packages/implementations/sandboxes/microsandbox
@@ -171,9 +171,36 @@ importers:
       marked:
         specifier: ^16.4.2
         version: 16.4.2
+      mdast-util-gfm-footnote:
+        specifier: ^2.1.0
+        version: 2.1.0
+      mdast-util-gfm-strikethrough:
+        specifier: ^2.0.0
+        version: 2.0.0
+      mdast-util-gfm-table:
+        specifier: ^2.0.0
+        version: 2.0.0
+      mdast-util-gfm-task-list-item:
+        specifier: ^2.0.0
+        version: 2.0.0
       mermaid:
         specifier: ^11.15.0
         version: 11.15.0
+      micromark-extension-gfm-footnote:
+        specifier: ^2.1.0
+        version: 2.1.0
+      micromark-extension-gfm-strikethrough:
+        specifier: ^2.1.0
+        version: 2.1.0
+      micromark-extension-gfm-table:
+        specifier: ^2.1.1
+        version: 2.1.1
+      micromark-extension-gfm-task-list-item:
+        specifier: ^2.1.0
+        version: 2.1.0
+      micromark-util-combine-extensions:
+        specifier: ^2.0.1
+        version: 2.0.1
       react:
         specifier: ^19.2.6
         version: 19.2.6
@@ -610,7 +637,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/implementations/plugins:
+  packages/implementations/powers:
     dependencies:
       '@downcity/agent':
         specifier: workspace:^

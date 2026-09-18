@@ -38,7 +38,7 @@ export interface AgentMessageProjection {
 }
 
 /** Tool 的稳定视觉语义；按注册名识别。 */
-export type AgentToolVisualKind = "read" | "write" | "edit" | "grep" | "find" | "shell" | "ask" | "plugin" | "generic";
+export type AgentToolVisualKind = "read" | "write" | "edit" | "grep" | "find" | "shell" | "ask" | "power" | "generic";
 
 /** Session Action 的稳定视觉语义；按 action_type 识别，未知类别回落为 generic。 */
 export type AgentActionVisualKind = "command" | "fork" | "compaction" | "generic";

@@ -1,7 +1,7 @@
 /**
  * 前台 CLI City 进程入口。
  *
- * 信号处理只管理 City 宿主。具体 Agent 与 Plugin 资源由 CliCityRuntime 释放。
+ * 信号处理只管理 City 宿主。具体 Agent 与 Power 资源由 CliCityRuntime 释放。
  */
 
 import type { CityDaemonOptions } from "@/city/process/daemon/Types.js";

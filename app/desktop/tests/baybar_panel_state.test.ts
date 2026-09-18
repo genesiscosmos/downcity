@@ -65,7 +65,7 @@ test("没记录过分区时落在第一个", () => {
 });
 
 test("记录的分区消失时回退到第一个，而不是显示空面板", () => {
-  assert.equal(resolve_section(agent_tab, "plugins")?.id, "identity");
+  assert.equal(resolve_section(agent_tab, "powers")?.id, "identity");
 });
 
 test("标签页没有分区时不给出内容", () => {

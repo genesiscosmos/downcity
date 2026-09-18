@@ -8,10 +8,10 @@ import type { DesktopNavigationCatalog } from "../src/renderer/types/DesktopNavi
 import { get_group_draft_session_id, is_group_draft_session_id } from "../src/renderer/types/DesktopView.ts";
 
 const catalog: DesktopNavigationCatalog = {
-  agents: [{ agent_id: "writer", name: "Writer", description: "", model_id: "model", plugins: {}, created_at: "", updated_at: "" }],
+  agents: [{ agent_id: "writer", name: "Writer", description: "", model_id: "model", powers: {}, created_at: "", updated_at: "" }],
   workspaces: [{ workspace_id: "project", workspace_path: "/project", name: "Project", readme: "", created_at: "", updated_at: "" }],
   groups: [{ group_id: "team", name: "Team", description: "", model_id: "model", member_ids: ["writer"], active_session_id: "group-session", sessions: [{ session_id: "group-session", workspace_id: "project", title: "Group", created_at: 1, updated_at: 1, message_count: 0 }], created_at: 1, updated_at: 1 }],
-  plugins: [{ plugin_id: "tasks", name: "Tasks", description: "", version: "1.0.0", source: "builtin", profiles: [], has_agent: false, has_main: true, has_renderer: true, has_config: false, has_sidebar: true, has_mainview: true }],
+  powers: [{ power_id: "tasks", name: "Tasks", description: "", version: "1.0.0", source: "builtin", profiles: [], has_agent: false, has_main: true, has_renderer: true, has_config: false, has_sidebar: true, has_mainview: true }],
   sessions_by_workspace: { project: [{ agent_id: "writer", session: { session_id: "session", title: "Session", preview_text: "", created_at: 1, updated_at: 1, message_count: 0, executing: false } }] },
 };
 
@@ -44,11 +44,11 @@ test("存在的 Session 与 GroupSession 可以恢复", () => {
 test("已删除的子资源逐级退回所属页面", () => {
   assert.deepEqual(resolve_navigation_target({ kind: "session", workspace_id: "project", agent_id: "writer", session_id: "missing" }, catalog), { kind: "agent", agent_id: "writer" });
   assert.deepEqual(resolve_navigation_target({ kind: "group_session", group_id: "team", workspace_id: "project", session_id: "missing" }, catalog), { kind: "group", group_id: "team" });
-  assert.deepEqual(resolve_navigation_target({ kind: "plugin_workspace", plugin_id: "missing" }, catalog), { kind: "plugins" });
+  assert.deepEqual(resolve_navigation_target({ kind: "power_workspace", power_id: "missing" }, catalog), { kind: "powers" });
 });
 
 test("一级侧栏由恢复目标唯一推导", () => {
   assert.equal(get_sidebar_mode_for_navigation({ kind: "workspace_file", workspace_id: "project", relative_path: "README.md" }), "workspace");
-  assert.equal(get_sidebar_mode_for_navigation({ kind: "plugin_workspace", plugin_id: "tasks" }), "plugin:tasks");
+  assert.equal(get_sidebar_mode_for_navigation({ kind: "power_workspace", power_id: "tasks" }), "power:tasks");
   assert.equal(get_sidebar_mode_for_navigation({ kind: "agent", agent_id: "writer" }), "chat");
 });

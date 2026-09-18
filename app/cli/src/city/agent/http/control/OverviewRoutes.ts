@@ -2,7 +2,7 @@
  * Control 概览路由。
  *
  * 关键点（中文）
- * - 聚合 overview 与 plugin 运行态两块轻量只读接口。
+ * - 聚合 overview 与 power 运行态两块轻量只读接口。
  * - 只负责路由层拼装，不承载复杂业务状态机。
  */
 
@@ -33,7 +33,7 @@ const DC_VERSION = (() => {
 })();
 
 /**
- * 注册概览与运行态 plugin 路由。
+ * 注册概览与运行态 power 路由。
  */
 export function registerControlOverviewRoutes(
   params: ControlRouteRegistrationParams,
@@ -52,9 +52,9 @@ export function registerControlOverviewRoutes(
           runtime.sessions,
           sessionLimit,
         );
-        const runtimePlugins = runtime.list_plugin_states();
-        const taskResult = await params.get_context().plugins.run_action({
-          plugin: "task",
+        const runtimePowers = runtime.list_power_states();
+        const taskResult = await params.get_context().powers.run_action({
+          power: "task",
           action: "list",
         });
         const taskData =
@@ -85,7 +85,7 @@ export function registerControlOverviewRoutes(
             total: sessions.length,
             items: sessions,
           },
-          plugins: runtimePlugins,
+          powers: runtimePowers,
           tasks: {
             total: tasks.length,
             statusCount,
@@ -98,11 +98,11 @@ export function registerControlOverviewRoutes(
     });
   }
 
-  for (const routePath of buildControlRouteAliases("/plugins/list")) {
+  for (const routePath of buildControlRouteAliases("/powers/list")) {
     app.get(routePath, (c) => {
       return c.json({
         success: true,
-        plugins: params.get_context().list_plugin_states(),
+        powers: params.get_context().list_power_states(),
       });
     });
   }

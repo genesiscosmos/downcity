@@ -65,7 +65,7 @@ function create_session(overrides = {}) {
     get_instruction_system_blocks: () => [],
     get_workspace_env: () => ({}),
     get_hooks: () => ({}),
-    get_managed_plugin_system_blocks: async () => [],
+    get_managed_power_system_blocks: async () => [],
     get_agent_model: () => undefined,
   });
   return { calls, session };

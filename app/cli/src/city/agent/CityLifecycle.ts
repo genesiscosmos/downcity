@@ -96,7 +96,7 @@ export async function city_off(): Promise<void> {
   }
 }
 
-/** 重启 City daemon，并重新恢复最新 Agent/Plugin 配置。 */
+/** 重启 City daemon，并重新恢复最新 Agent/Power 配置。 */
 export async function city_restart(options: CityDaemonOptions): Promise<void> {
   await stop_daemon_process();
   await city_on(options);

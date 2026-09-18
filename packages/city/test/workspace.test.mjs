@@ -236,7 +236,7 @@ test("Workspace owns env and publishes only real changes", async (t) => {
   await workspace.dispose();
 });
 
-test("Agent rejects Workspace Tool conflicts and does not reserve Plugin Tool names", async (t) => {
+test("Agent rejects Workspace Tool conflicts and does not reserve Power Tool names", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-tools-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
 
@@ -249,13 +249,13 @@ test("Agent rejects Workspace Tool conflicts and does not reserve Plugin Tool na
     workspace_conflict_agent.sessions.create({ workspace }),
     /Agent tool name conflict: "read"/,
   );
-  const plugin_conflict_agent = new Agent({
-    id: "plugin-tool-conflict",
-    tools: { plugin_call: {} },
+  const power_conflict_agent = new Agent({
+    id: "power-tool-conflict",
+    tools: { power_call: {} },
   });
-  const plugin_named_workspace = new Workspace({ id: "plugin_name_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
-  const session = await plugin_conflict_agent.sessions.create({ workspace: plugin_named_workspace });
-  assert.equal(session.workspace_id, "plugin_name_workspace");
-  await Promise.all([workspace_conflict_agent.dispose(), plugin_conflict_agent.dispose()]);
-  await Promise.all([workspace.dispose(), plugin_named_workspace.dispose()]);
+  const power_named_workspace = new Workspace({ id: "power_name_workspace", path: root_path, data_root_path: path.join(root_path, "data") });
+  const session = await power_conflict_agent.sessions.create({ workspace: power_named_workspace });
+  assert.equal(session.workspace_id, "power_name_workspace");
+  await Promise.all([workspace_conflict_agent.dispose(), power_conflict_agent.dispose()]);
+  await Promise.all([workspace.dispose(), power_named_workspace.dispose()]);
 });

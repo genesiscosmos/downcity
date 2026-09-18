@@ -299,78 +299,78 @@ export interface DesktopUpdateAgentInput {
   instruction: string;
 }
 
-/** Renderer 可见的 Plugin 来源。 */
-export type DesktopPluginSource = "builtin" | "installed";
+/** Renderer 可见的 Power 来源。 */
+export type DesktopPowerSource = "builtin" | "installed";
 
-/** Renderer 可见的 Plugin catalog 摘要。 */
-export interface DesktopPluginSummary {
-  /** Plugin 的全局稳定 ID。 */
-  plugin_id: string;
-  /** Plugin 的用户可见标题。 */
+/** Renderer 可见的 Power catalog 摘要。 */
+export interface DesktopPowerSummary {
+  /** Power 的全局稳定 ID。 */
+  power_id: string;
+  /** Power 的用户可见标题。 */
   title: string;
-  /** Plugin 的用途说明。 */
+  /** Power 的用途说明。 */
   description: string;
-  /** Plugin 的可选语义化版本。 */
+  /** Power 的可选语义化版本。 */
   version?: string;
-  /** Plugin 自己声明的可选图标 URL。 */
+  /** Power 自己声明的可选图标 URL。 */
   icon_url?: string;
-  /** Plugin 来自官方内置集合或第三方安装。 */
-  source: DesktopPluginSource;
-  /** Plugin 是否提供由 City 持有的运行实例。 */
+  /** Power 来自官方内置集合或第三方安装。 */
+  source: DesktopPowerSource;
+  /** Power 是否提供由 City 持有的运行实例。 */
   has_main: boolean;
 
-  /** Plugin 是否提供专属 Sidebar。 */
+  /** Power 是否提供专属 Sidebar。 */
   has_sidebar: boolean;
 
-  /** Plugin 是否提供业务 Mainview。 */
+  /** Power 是否提供业务 Mainview。 */
   has_mainview: boolean;
 
-  /** Plugin 是否提供设置中心 Config。 */
+  /** Power 是否提供设置中心 Config。 */
   has_config: boolean;
 
-  /** City 中 Plugin main 的当前生命周期状态；纯 Renderer Plugin 不提供。 */
+  /** City 中 Power main 的当前生命周期状态；纯 Renderer Power 不提供。 */
   runtime_status?: "initializing" | "ready" | "error";
 
-  /** Plugin main 初始化失败时供用户定位问题的错误文本。 */
+  /** Power main 初始化失败时供用户定位问题的错误文本。 */
   runtime_error?: string;
 }
 
-/** Renderer 可读取和编辑的完整 Plugin 定义。 */
-export interface DesktopPluginDefinition extends DesktopPluginSummary {
-  /** Plugin 自己拥有并由宿主安全渲染的 Markdown 用户说明。 */
+/** Renderer 可读取和编辑的完整 Power 定义。 */
+export interface DesktopPowerDefinition extends DesktopPowerSummary {
+  /** Power 自己拥有并由宿主安全渲染的 Markdown 用户说明。 */
   readme?: string;
-  /** 第三方 Renderer ESM 的受控宿主 URL；内置 Plugin 由 Renderer registry 解析。 */
+  /** 第三方 Renderer ESM 的受控宿主 URL；内置 Power 由 Renderer registry 解析。 */
   renderer_url?: string;
 }
 
-/** Desktop 调用 Plugin Mainview action 的输入。 */
-export interface DesktopInvokePluginMainviewActionInput {
-  /** 明确标识调用来自 Plugin 业务工作区。 */
+/** Desktop 调用 Power Mainview action 的输入。 */
+export interface DesktopInvokePowerMainviewActionInput {
+  /** 明确标识调用来自 Power 业务工作区。 */
   surface: "mainview";
 
-  /** Plugin 注册的稳定宿主 action ID。 */
+  /** Power 注册的稳定宿主 action ID。 */
   action_id: string;
 
   /** Mainview 传给 action 的可选 JSON 输入。 */
-  input?: import("@downcity/city/plugin").PluginJsonValue;
+  input?: import("@downcity/city/power").PowerJsonValue;
 }
 
-/** Desktop 调用 Plugin Config action 的输入。 */
-export interface DesktopInvokePluginConfigActionInput {
+/** Desktop 调用 Power Config action 的输入。 */
+export interface DesktopInvokePowerConfigActionInput {
   /** 明确标识调用来自设置中心的 Config 界面。 */
   surface: "config";
 
-  /** Plugin 注册的稳定宿主 action ID。 */
+  /** Power 注册的稳定宿主 action ID。 */
   action_id: string;
 
   /** Config 传给 action 的可选 JSON 输入。 */
-  input?: import("@downcity/city/plugin").PluginJsonValue;
+  input?: import("@downcity/city/power").PowerJsonValue;
 }
 
-/** Desktop Renderer 调用 Plugin 宿主能力的两个互斥动作范围。 */
-export type DesktopInvokePluginActionInput =
-  | DesktopInvokePluginMainviewActionInput
-  | DesktopInvokePluginConfigActionInput;
+/** Desktop Renderer 调用 Power 宿主能力的两个互斥动作范围。 */
+export type DesktopInvokePowerActionInput =
+  | DesktopInvokePowerMainviewActionInput
+  | DesktopInvokePowerConfigActionInput;
 
 /** Renderer 可见的 Session 摘要。 */
 export interface DesktopSessionSummary {
@@ -862,14 +862,14 @@ export interface DesktopApi {
     /** 读取 Workspace 中的 UTF-8 文本文件用于只读预览。 */
     read_text_file(workspace_id: string, relative_path: string): Promise<DesktopWorkspaceTextFile>;
   };
-  /** 本地 Plugin catalog 能力。 */
-  plugin: {
-    /** 列出官方与第三方 Plugin。 */
-    list(): Promise<DesktopPluginSummary[]>;
-    /** 读取 Plugin manifest 与 Renderer 定义。 */
-    get(plugin_id: string): Promise<DesktopPluginDefinition>;
-    /** 按业务工作区或 Config 范围调用 Plugin 宿主 action。 */
-    invoke(plugin_id: string, input: DesktopInvokePluginActionInput): Promise<import("@downcity/city/plugin").PluginJsonValue>;
+  /** 本地 Power catalog 能力。 */
+  power: {
+    /** 列出官方与第三方 Power。 */
+    list(): Promise<DesktopPowerSummary[]>;
+    /** 读取 Power manifest 与 Renderer 定义。 */
+    get(power_id: string): Promise<DesktopPowerDefinition>;
+    /** 按业务工作区或 Config 范围调用 Power 宿主 action。 */
+    invoke(power_id: string, input: DesktopInvokePowerActionInput): Promise<import("@downcity/city/power").PowerJsonValue>;
   };
   /** Electron 原生文件选择能力。 */
   dialog: {

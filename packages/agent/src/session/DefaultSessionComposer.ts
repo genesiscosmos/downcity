@@ -15,18 +15,18 @@ import { AdaptivePartContextPolicy } from "@/session/composer/policies/AdaptiveP
 import type { SessionHookContextBlock } from "@downcity/type";
 import type { ModelMessage } from "@downcity/type";
 
-/** 把低权限 Plugin 内容渲染为与用户原文分离的模型参考区。 */
-function render_plugin_context_blocks(
+/** 把低权限 Power 内容渲染为与用户原文分离的模型参考区。 */
+function render_power_context_blocks(
   blocks: readonly SessionHookContextBlock[],
 ): string {
   return blocks.map((block) => [
-    `<extension-context extension="${escape_xml_attribute(block.source_plugin)}" name="${escape_xml_attribute(block.name)}" trust="reference">`,
+    `<extension-context extension="${escape_xml_attribute(block.source_power)}" name="${escape_xml_attribute(block.name)}" trust="reference">`,
     block.content,
     "</extension-context>",
   ].join("\n")).join("\n\n");
 }
 
-/** 转义模型上下文标签属性，避免 Plugin 名称破坏边界。 */
+/** 转义模型上下文标签属性，避免 Power 名称破坏边界。 */
 function escape_xml_attribute(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -36,7 +36,7 @@ function escape_xml_attribute(value: string): string {
 }
 
 /** 只修改模型消息副本，把动态参考信息前置到当前最后一条 User Message。 */
-function inject_plugin_context(
+function inject_power_context(
   messages: ModelMessage[],
   blocks: readonly SessionHookContextBlock[],
 ): ModelMessage[] {
@@ -46,7 +46,7 @@ function inject_plugin_context(
     if (!message || message.role !== "user") continue;
     messages[index] = {
       ...message,
-      content: [{ type: "text", text: render_plugin_context_blocks(blocks) }, ...message.content],
+      content: [{ type: "text", text: render_power_context_blocks(blocks) }, ...message.content],
     };
     break;
   }
@@ -85,11 +85,11 @@ export class DefaultSessionComposer implements SessionComposer {
       get_instruction_system_blocks: () => [
         ...(input.state.instruction_system_blocks ?? []),
       ],
-      get_managed_plugin_system_blocks: async () => [
-        ...(input.state.managed_plugin_system_blocks ?? []),
+      get_managed_power_system_blocks: async () => [
+        ...(input.state.managed_power_system_blocks ?? []),
       ],
-      get_plugin_system_blocks: async () => [
-        ...(input.state.plugin_system_blocks ?? []),
+      get_power_system_blocks: async () => [
+        ...(input.state.power_system_blocks ?? []),
       ],
     });
 
@@ -104,7 +104,7 @@ export class DefaultSessionComposer implements SessionComposer {
         content: block.content,
       })),
       system_blocks,
-      messages: inject_plugin_context(context.messages, input.state.plugin_context_blocks ?? []),
+      messages: inject_power_context(context.messages, input.state.power_context_blocks ?? []),
       tools: { ...input.state.tools },
       context_diagnostics: context.diagnostics,
     };

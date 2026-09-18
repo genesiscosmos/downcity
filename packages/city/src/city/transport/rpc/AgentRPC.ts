@@ -9,7 +9,7 @@
 
 import type { Agent, AgentSessionCollection } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
-import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
+import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import { start_rpc_server, type RpcServerInstance } from "@/city/transport/rpc/RpcServer.js";
 import type {
   AgentRpcBinding,
@@ -27,7 +27,7 @@ const DEFAULT_RPC_PORT = 15314;
 export class AgentRPC {
   private readonly agent: Agent;
   private readonly workspace?: WorkspaceRuntime;
-  private readonly plugins?: AgentPluginRuntime;
+  private readonly powers?: AgentPowerRuntime;
   private readonly session_collection: AgentSessionCollection;
   private readonly runtime_options: AgentRpcRuntimeOptions;
   /** 当前 Agent RPC Server 的唯一串行生命周期。 */
@@ -38,7 +38,7 @@ export class AgentRPC {
   >;
 
   constructor(
-    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceRuntime; plugins: AgentPluginRuntime },
+    agent_or_workspace: Agent | { agent: Agent; workspace: WorkspaceRuntime; powers: AgentPowerRuntime },
     workspace_or_options?: WorkspaceRuntime | AgentRpcRuntimeOptions,
     runtime_options: AgentRpcRuntimeOptions = {},
   ) {
@@ -46,15 +46,15 @@ export class AgentRPC {
       const agent = agent_or_workspace as Agent;
       this.agent = agent;
       this.workspace = workspace_or_options;
-      this.plugins = undefined;
+      this.powers = undefined;
       this.session_collection = agent.sessions;
       this.runtime_options = runtime_options;
     } else {
-      const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceRuntime; plugins: AgentPluginRuntime };
+      const entry = agent_or_workspace as { agent: Agent; workspace: WorkspaceRuntime; powers: AgentPowerRuntime };
       const agent = entry.agent;
       this.agent = agent;
       this.workspace = entry.workspace;
-      this.plugins = entry.plugins;
+      this.powers = entry.powers;
       this.session_collection = agent.sessions;
       this.runtime_options = (workspace_or_options as AgentRpcRuntimeOptions | undefined) ?? {};
     }

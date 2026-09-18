@@ -6,7 +6,7 @@
  * - 通过交互式问题收集 Agent 身份与默认模型
  *
  * 设计要点
- * - Plugin 由 City 统一持有，Agent 创建流程不识别具体 Plugin
+ * - Power 由 City 统一持有，Agent 创建流程不识别具体 Power
  * - 避免写入无意义的默认值：能省则省，保持配置简洁
  */
 
@@ -190,13 +190,13 @@ export async function initCommand(
   const nextSteps: string[] = [
     "Add reusable capabilities under .agents/skills",
     "Use downcity agent model --set <model-id> to update the Agent default model",
-    "Open Agent Config > Plugins to configure built-in or installed Plugins",
+    "Open Agent Config > Powers to configure built-in or installed Powers",
   ];
   if (primaryModelId) {
     nextSteps.push('Use "city agent chat <agent_id>" to confirm the Agent can reach its configured model');
   }
 
-  nextSteps.push('Run "city on" for long-running Plugin and remote transport lifecycle');
+  nextSteps.push('Run "city on" for long-running Power and remote transport lifecycle');
 
   emitCliList({
     tone: "accent",

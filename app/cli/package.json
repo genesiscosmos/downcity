@@ -33,7 +33,7 @@
     "@downcity/agent": "workspace:^",
     "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
-    "@downcity/plugins": "workspace:^",
+    "@downcity/powers": "workspace:^",
     "@downcity/sandbox-microsandbox": "workspace:^",
     "@downcity/type": "workspace:*",
     "@earendil-works/pi-tui": "^0.74.2",

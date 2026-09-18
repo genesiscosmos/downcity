@@ -22,7 +22,7 @@ ALL_PACKAGES=(
   "database-sqlite"
   "database-postgresql"
   "services"
-  "plugins"
+  "powers"
   "ui"
   "cli"
 )
@@ -36,7 +36,7 @@ usage() {
   echo "  --type --sandbox-microsandbox"
   echo "  --agent --city --workspace-cloudflare-computer --federation"
   echo "  --database-d1 --database-sqlite --database-postgresql"
-  echo "  --services --plugins --ui --cli --all"
+  echo "  --services --powers --ui --cli --all"
   echo ""
   echo "  --no-bump           只构建，不修改 package version"
   echo "  --no-global-install 不同步本机全局 Downcity CLI"
@@ -105,7 +105,7 @@ while [[ $# -gt 0 ]]; do
     --database-sqlite) add_package "database-sqlite" ;;
     --database-postgresql) add_package "database-postgresql" ;;
     --services) add_package "services" ;;
-    --plugins) add_package "plugins" ;;
+    --powers) add_package "powers" ;;
     --ui) add_package "ui" ;;
     --cli) add_package "cli" ;;
     --all) PACKAGES=("${ALL_PACKAGES[@]}") ;;
@@ -118,7 +118,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#PACKAGES[@]} -eq 0 ]]; then
-  echo "Error: 至少需要显式指定一个 package，例如 --agent 或 --agent --plugins。" >&2
+  echo "Error: 至少需要显式指定一个 package，例如 --agent 或 --agent --powers。" >&2
   usage
 fi
 

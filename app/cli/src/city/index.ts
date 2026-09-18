@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { Command, Option } from "commander";
 import { registerAgentCommands } from "@/city/command/AgentCommand.js";
 import { registerGatewayCommands } from "@/city/command/GatewayCommand.js";
-import { registerPluginsCommand } from "@/city/command/PluginCommand.js";
+import { registerPowersCommand } from "@/city/command/PowerCommand.js";
 import { runInteractiveCityManager } from "@/city/shared/CityManager.js";
 import { read_persisted_downcity_cli_locale } from "@/city/shared/DowncityConfigStore.js";
 import { setCliVerbosity } from "@/shared/CliReporter.js";
@@ -96,7 +96,7 @@ export function registerCityCommands(program: Command): void {
     agentVersion: installedAgentVersion,
     hiddenPortOption: Option,
   });
-  registerPluginsCommand(program);
+  registerPowersCommand(program);
 
   program.showHelpAfterError();
   program.showSuggestionAfterError();

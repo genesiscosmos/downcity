@@ -3,7 +3,7 @@
  *
  * 职责说明（中文）
  * - 统一创建当前 Workspace 的文件、搜索与可选 Shell 工具。
- * - 这里只组合 Workspace 资源，不注册 Plugin Tool 或调用方自定义 Tool。
+ * - 这里只组合 Workspace 资源，不注册 Power Tool 或调用方自定义 Tool。
  */
 
 import { create_file_tools } from "@/workspace/tool/FileTools.js";

@@ -20,7 +20,7 @@ import { AuthService } from "@/city/runtime/auth/AuthService.js";
 import {
   create_cli_agent,
   create_cli_workspace,
-  create_cli_plugin_loader,
+  create_cli_power_loader,
   reload_cli_workspace_env,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
@@ -83,20 +83,20 @@ export class CliCityRuntime {
     if (http_port === rpc_port) throw new Error("City HTTP and RPC ports must be different");
 
     const data = create_cli_local_data();
-    const plugin_loader = create_cli_plugin_loader({
-      plugin_repository: data.plugins,
+    const power_loader = create_cli_power_loader({
+      power_repository: data.powers,
     });
-    const plugin_registrations = await plugin_loader.list_registrations();
+    const power_registrations = await power_loader.list_registrations();
     const { embassy } = await new EmbassySessionResolver().create_user_client();
     const city = new City({
       storage: new LocalStorageProvider(data.root_path),
       embassy,
-      plugins: plugin_registrations,
-      plugin_host: {
-        config: (plugin_id) => ({
-          get: () => structuredClone(data.plugins.get_config(plugin_id)),
+      powers: power_registrations,
+      power_host: {
+        config: (power_id) => ({
+          get: () => structuredClone(data.powers.get_config(power_id)),
           set: async (config) => {
-            data.plugins.set_config(plugin_id, structuredClone(config));
+            data.powers.set_config(power_id, structuredClone(config));
           },
         }),
         notifications: () => ({
@@ -116,7 +116,7 @@ export class CliCityRuntime {
             model_id,
             workspace.get_env(),
           ),
-        create_agent_extension: ({ agent, workspace, plugins, sdk_router }) => {
+        create_agent_extension: ({ agent, workspace, powers, sdk_router }) => {
           const auth_service = new AuthService({
             agent_id: agent.id,
             repository: data.agent_tokens,
@@ -130,13 +130,13 @@ export class CliCityRuntime {
                 workspace_id: workspace.id,
                 data_path,
                 sessions: agent.sessions,
-                plugins,
+                powers,
                 id: agent.id,
-                list_plugin_states: () => city.plugins.snapshots(),
+                list_power_states: () => city.powers.snapshots(),
                 resolve_system_messages: (input) =>
                   agent.resolve_system_messages(workspace, input),
-                register_plugin_http_routes: (app) => {
-                  city.plugins.register_http_routes(app, {
+                register_power_http_routes: (app) => {
+                  city.powers.register_http_routes(app, {
                     agent_id: agent.id,
                     workspace_id: workspace.id,
                   });

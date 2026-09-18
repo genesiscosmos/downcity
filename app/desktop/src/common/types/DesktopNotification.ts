@@ -5,7 +5,7 @@
  * 产生通知，主进程负责持久化、聚合和已读生命周期。
  */
 
-import type { PluginJsonObject } from "@downcity/city/plugin";
+import type { PowerJsonObject } from "@downcity/city/power";
 
 /** Agent Session 通知所指向的稳定业务对象。 */
 export interface DesktopAgentSessionNotificationTarget {
@@ -29,21 +29,21 @@ export interface DesktopGroupSessionNotificationTarget {
   session_id: string;
 }
 
-/** Plugin 通知所指向的受控业务工作区路由。 */
-export interface DesktopPluginNotificationTarget {
+/** Power 通知所指向的受控业务工作区路由。 */
+export interface DesktopPowerNotificationTarget {
   /** 通知目标类型。 */
-  kind: "plugin";
-  /** 目标 Plugin 的稳定标识，由宿主绑定而不是由 Plugin 输入。 */
-  plugin_id: string;
-  /** 目标 Plugin 工作区内部的 JSON 路由。 */
-  route: PluginJsonObject;
+  kind: "power";
+  /** 目标 Power 的稳定标识，由宿主绑定而不是由 Power 输入。 */
+  power_id: string;
+  /** 目标 Power 工作区内部的 JSON 路由。 */
+  route: PowerJsonObject;
 }
 
 /** Desktop 通知可以关联的业务目标。 */
 export type DesktopNotificationTarget =
   | DesktopAgentSessionNotificationTarget
   | DesktopGroupSessionNotificationTarget
-  | DesktopPluginNotificationTarget;
+  | DesktopPowerNotificationTarget;
 
 /** Desktop 通知随业务对象结束而清理的生命周期作用域。 */
 export type DesktopNotificationScope =
@@ -60,10 +60,10 @@ export type DesktopNotificationScope =
     readonly group_id: string;
   }
   | {
-    /** Plugin 生命周期作用域。 */
-    readonly kind: "plugin";
-    /** 拥有该通知的 Plugin 稳定标识。 */
-    readonly plugin_id: string;
+    /** Power 生命周期作用域。 */
+    readonly kind: "power";
+    /** 拥有该通知的 Power 稳定标识。 */
+    readonly power_id: string;
   };
 
 /**
@@ -78,7 +78,7 @@ export type DesktopNotificationKind =
   | "session_turn_failed"
   | "group_interaction_pending"
   | "group_turn_failed"
-  | "plugin";
+  | "power";
 
 /** Renderer 可见的一条未读通知。 */
 export interface DesktopNotification {

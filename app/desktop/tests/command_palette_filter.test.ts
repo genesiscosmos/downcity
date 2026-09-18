@@ -11,7 +11,7 @@ const open_context: CommandContext = {
   active_workspace_id: "workspace-1",
   selection_kind: "session",
   active_session: null,
-  visible_plugin_count: 3,
+  visible_power_count: 3,
 };
 
 /** 构造一条命令，只覆盖测试关心的字段。 */

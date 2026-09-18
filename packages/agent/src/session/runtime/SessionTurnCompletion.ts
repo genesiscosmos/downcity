@@ -120,7 +120,7 @@ async function notify_turn_committed(
       value as unknown as JsonValue,
     );
   } catch (error) {
-    await log_turn_warning(options, active_turn, "session plugin effect failed", error, {
+    await log_turn_warning(options, active_turn, "session power effect failed", error, {
       point_name: SESSION_HOOK_POINTS.turn_committed,
     });
   }

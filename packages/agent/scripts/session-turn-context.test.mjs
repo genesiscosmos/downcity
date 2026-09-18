@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - 动态输入和输出只能通过领域行为读写。
- * - Step 切换和 Context dispose 都会闭合 Plugin Hook 作用域。
- * - Plugin 只获得独立的只读快照，不能访问根上下文能力。
+ * - Step 切换和 Context dispose 都会闭合 Power Hook 作用域。
+ * - Power 只获得独立的只读快照，不能访问根上下文能力。
  */
 
 import assert from "node:assert/strict";
@@ -74,7 +74,7 @@ test("SessionTurnContext 只按顺序收集当前 Turn 的 Tool effects", () => 
   );
 });
 
-test("SessionTurnContext 负责 Plugin Hook 作用域与只读投影生命周期", async () => {
+test("SessionTurnContext 负责 Power Hook 作用域与只读投影生命周期", async () => {
   const released = [];
   const create_scope = (name) => ({
     system_blocks: async () => [],
@@ -95,8 +95,8 @@ test("SessionTurnContext 负责 Plugin Hook 作用域与只读投影生命周期
   await context.step.replace_hooks(create_scope("first"));
   await context.step.replace_hooks(create_scope("second"));
 
-  const plugin_execution_context = context.step.hook_context("call-context-test");
-  assert.deepEqual(Object.keys(plugin_execution_context).sort(), [
+  const power_execution_context = context.step.hook_context("call-context-test");
+  assert.deepEqual(Object.keys(power_execution_context).sort(), [
     "abort_signal",
     "agent_systems",
     "call_id",
@@ -106,13 +106,13 @@ test("SessionTurnContext 负责 Plugin Hook 作用域与只读投影生命周期
     "turn_id",
     "workspace_env",
   ]);
-  assert.equal(Object.isFrozen(plugin_execution_context), true);
-  assert.equal(plugin_execution_context.call_id, "call-context-test");
-  assert.deepEqual(plugin_execution_context.session_origin, {
+  assert.equal(Object.isFrozen(power_execution_context), true);
+  assert.equal(power_execution_context.call_id, "call-context-test");
+  assert.deepEqual(power_execution_context.session_origin, {
     type: "group",
     group_id: "group-1",
   });
-  assert.deepEqual(plugin_execution_context.workspace_env, { REGION: "cn" });
+  assert.deepEqual(power_execution_context.workspace_env, { REGION: "cn" });
   assert.deepEqual(released, ["first"]);
 
   await context.lifecycle.dispose();
@@ -120,7 +120,7 @@ test("SessionTurnContext 负责 Plugin Hook 作用域与只读投影生命周期
   assert.deepEqual(released, ["first", "second"]);
 });
 
-test("SessionTurnContext 在整个 Turn 中只解析一次 Plugin Context", async () => {
+test("SessionTurnContext 在整个 Turn 中只解析一次 Power Context", async () => {
   const context = create_session_turn_context({
     session_id: "session-context-test",
     session_origin: { type: "chat" },
@@ -130,7 +130,7 @@ test("SessionTurnContext 在整个 Turn 中只解析一次 Plugin Context", asyn
   const resolver = async () => {
     resolve_count += 1;
     return [{
-      source_plugin: "memory",
+      source_power: "memory",
       name: "recall",
       content: "stable recall",
       trust_level: "reference",
@@ -138,12 +138,12 @@ test("SessionTurnContext 在整个 Turn 中只解析一次 Plugin Context", asyn
     }];
   };
 
-  const first = await context.step.resolve_plugin_context_blocks(resolver);
-  const second = await context.step.resolve_plugin_context_blocks(resolver);
+  const first = await context.step.resolve_power_context_blocks(resolver);
+  const second = await context.step.resolve_power_context_blocks(resolver);
 
   assert.equal(resolve_count, 1);
   assert.equal(first, second);
-  assert.equal(first, context.step.plugin_context_blocks);
+  assert.equal(first, context.step.power_context_blocks);
   assert.equal(Object.isFrozen(first), true);
   assert.equal(Object.isFrozen(first[0]), true);
   assert.equal(Object.isFrozen(first[0].citations), true);

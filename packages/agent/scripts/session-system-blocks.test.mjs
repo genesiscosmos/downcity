@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 测试编译后的 bin 输出，避免测试文件依赖 TS 源码加载器。
- * - 自定义 instruction 不能替代 Downcity core；core 必须包含 Shell 与 plugin 总规则。
+ * - 自定义 instruction 不能替代 Downcity core；core 必须包含 Shell 与 power 总规则。
  */
 
 import test from "node:test";
@@ -27,7 +27,7 @@ test("instruction blocks keep Downcity core after custom instruction", () => {
   assert.match(blocks[1].content, /human-owned workspace/);
   assert.match(blocks[1].content, /project structure is the control surface/);
   assert.match(blocks[1].content, /# Shell Commands/);
-  assert.match(blocks[1].content, /# Plugin System/);
+  assert.match(blocks[1].content, /# Power System/);
   assert.doesNotMatch(blocks[1].content, /\/tmp\/downcity-project/);
   assert.doesNotMatch(blocks[1].content, /current year/i);
   assert.doesNotMatch(blocks[1].content, /# Project Runtime/);
@@ -36,7 +36,7 @@ test("instruction blocks keep Downcity core after custom instruction", () => {
   assert.doesNotMatch(blocks[1].content, /\.downcity\/public/);
 });
 
-test("session system blocks are ordered as instruction, core, plugin, session", async () => {
+test("session system blocks are ordered as instruction, core, power, session", async () => {
   const blocks = await build_session_system_blocks({
     agent_id: "agent-test",
     project_root: "/tmp/downcity-project",
@@ -48,12 +48,12 @@ test("session system blocks are ordered as instruction, core, plugin, session", 
         ["使用中文回复。"],
         "/tmp/downcity-project",
       ),
-    get_managed_plugin_system_blocks: async () => [],
-    get_plugin_system_blocks: async () => [
+    get_managed_power_system_blocks: async () => [],
+    get_power_system_blocks: async () => [
       {
-        source: "plugin",
+        source: "power",
         name: "task",
-        content: "# Task Plugin\n\n任务插件说明。",
+        content: "# Task Power\n\n任务插件说明。",
       },
     ],
   });
@@ -63,12 +63,12 @@ test("session system blocks are ordered as instruction, core, plugin, session", 
     [
       "instruction:agent",
       "core:default",
-      "plugin:task",
+      "power:task",
       "session:context",
     ],
   );
   assert.equal(blocks[0].content, "使用中文回复。");
-  assert.match(blocks[1].content, /plugin_call/);
+  assert.match(blocks[1].content, /power_call/);
   assert.match(blocks[3].content, /^Current session context:/);
   assert.match(
     blocks[3].content,

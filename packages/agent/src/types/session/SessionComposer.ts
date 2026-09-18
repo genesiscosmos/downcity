@@ -44,12 +44,12 @@ export interface SessionComposeState {
   tools: Readonly<Record<string, Tool>>;
   /** 当前 Step 生效的 instruction system blocks。 */
   instruction_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 宿主注入的受托管 Plugin system blocks。 */
-  managed_plugin_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 当前 Step 捕获的 Plugin system blocks。 */
-  plugin_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 当前 Turn 冻结的 Plugin 动态上下文。 */
-  plugin_context_blocks: readonly SessionHookContextBlock[];
+  /** 宿主注入的受托管 Power system blocks。 */
+  managed_power_system_blocks: readonly AgentSessionSystemBlock[];
+  /** 当前 Step 捕获的 Power system blocks。 */
+  power_system_blocks: readonly AgentSessionSystemBlock[];
+  /** 当前 Turn 冻结的 Power 动态上下文。 */
+  power_context_blocks: readonly SessionHookContextBlock[];
 }
 
 /** Composer 可读取的当前 Turn 快照。 */

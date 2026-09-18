@@ -1,7 +1,7 @@
 /**
  * CLI 本地存储与 Repository 组合入口。
  *
- * Agent 与 Plugin 使用文件仓储，Workspace 等本地业务仍使用 SQLite。组合只发生在
+ * Agent 与 Power 使用文件仓储，Workspace 等本地业务仍使用 SQLite。组合只发生在
  * CLI 产品层，各 Repository 直接暴露自己拥有的领域查询和写入能力。
  */
 
@@ -13,7 +13,7 @@ import {
 import {
   AgentRepository,
   ensure_local_schema,
-  PluginRepository,
+  PowerRepository,
   LocalSettingRepository,
   WorkspaceRepository,
 } from "@downcity/city/local";
@@ -30,8 +30,8 @@ export interface CliLocalData {
   agents: AgentRepository;
   /** Workspace 配置仓储。 */
   workspaces: WorkspaceRepository;
-  /** Plugin 配置仓储。 */
-  plugins: PluginRepository;
+  /** Power 配置仓储。 */
+  powers: PowerRepository;
   /** 平台明文设置仓储。 */
   settings: LocalSettingRepository;
   /** CLI Agent HTTP Bearer Token 仓储。 */
@@ -47,9 +47,9 @@ export function create_cli_local_data(root_path_input?: string): CliLocalData {
   const settings = new LocalSettingRepository(database);
   const workspaces = new WorkspaceRepository(database);
   const agents = new AgentRepository(root_path);
-  const plugins = new PluginRepository(root_path);
+  const powers = new PowerRepository(root_path);
   const agent_tokens = new AgentTokenRepository(database);
-  return { root_path, database, agents, workspaces, plugins, settings, agent_tokens };
+  return { root_path, database, agents, workspaces, powers, settings, agent_tokens };
 }
 
 /** 在短连接本地数据依赖上执行同步操作。 */

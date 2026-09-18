@@ -2,7 +2,7 @@
  * Chat 消息标记语法类型。
  *
  * 关键点（中文）
- * - 统一描述 chat plugin runtime 中可见的消息协议：frontmatter metadata + `<file>` 标签。
+ * - 统一描述 chat power runtime 中可见的消息协议：frontmatter metadata + `<file>` 标签。
  * - direct 模式、`downcity chat send`、入站附件注入、渠道出站解析都应复用本类型。
  */
 

@@ -2,11 +2,11 @@
  * 导航领域 store。
  *
  * 承载主视图 selection / 一级 Sidebar 模式 / 当前 Workspace 上下文，
- * 以及功能型 Plugin 的 Sidebar 与 Mainview 共享路由。只做导航，不承载业务数据。
+ * 以及功能型 Power 的 Sidebar 与 Mainview 共享路由。只做导航，不承载业务数据。
  */
 
 import { useCallback, useMemo } from "react";
-import type { PluginJsonObject } from "@downcity/city/plugin";
+import type { PowerJsonObject } from "@downcity/city/power";
 import type { NavigationStoreState, NavigationTarget, SidebarMode } from "@/types/DesktopView";
 import { use_store } from "@/lib/store";
 
@@ -14,8 +14,8 @@ const initial_navigation_state: NavigationStoreState = {
   selection: null,
   sidebar_mode: "chat",
   active_workspace_id: "",
-  plugin_routes: {},
-  plugin_revisions: {},
+  power_routes: {},
+  power_revisions: {},
 };
 
 /** 创建导航领域 store。 */
@@ -40,22 +40,22 @@ export function use_navigation_store() {
     commit({ ...state_ref.current, active_workspace_id });
   }, [commit]);
 
-  /** 写入指定 Plugin 的工作区路由。 */
-  const navigate_plugin = useCallback((plugin_id: string, route: PluginJsonObject) => {
+  /** 写入指定 Power 的工作区路由。 */
+  const navigate_power = useCallback((power_id: string, route: PowerJsonObject) => {
     commit({
       ...state_ref.current,
-      plugin_routes: { ...state_ref.current.plugin_routes, [plugin_id]: structuredClone(route) },
+      power_routes: { ...state_ref.current.power_routes, [power_id]: structuredClone(route) },
     });
   }, [commit]);
 
-  /** 通知指定 Plugin 的 Sidebar 与 Mainview 重新读取业务快照。 */
-  const invalidate_plugin = useCallback((plugin_id: string) => {
+  /** 通知指定 Power 的 Sidebar 与 Mainview 重新读取业务快照。 */
+  const invalidate_power = useCallback((power_id: string) => {
     const current = state_ref.current;
     commit({
       ...current,
-      plugin_revisions: {
-        ...current.plugin_revisions,
-        [plugin_id]: (current.plugin_revisions[plugin_id] ?? 0) + 1,
+      power_revisions: {
+        ...current.power_revisions,
+        [power_id]: (current.power_revisions[power_id] ?? 0) + 1,
       },
     });
   }, [commit]);
@@ -66,7 +66,7 @@ export function use_navigation_store() {
     set_selection,
     set_sidebar_mode,
     set_active_workspace_id,
-    navigate_plugin,
-    invalidate_plugin,
-  }), [invalidate_plugin, navigate_plugin, set_active_workspace_id, set_selection, set_sidebar_mode, state_ref, store]);
+    navigate_power,
+    invalidate_power,
+  }), [invalidate_power, navigate_power, set_active_workspace_id, set_selection, set_sidebar_mode, state_ref, store]);
 }

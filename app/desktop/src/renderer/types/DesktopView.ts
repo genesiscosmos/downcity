@@ -1,9 +1,9 @@
 /** Downcity Desktop Renderer 的页面和交互状态类型。 */
 
 import type { RespondSessionInteractionInput, SessionAgentInteraction, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
-import type { PluginJsonObject } from "@downcity/city/plugin";
+import type { PowerJsonObject } from "@downcity/city/power";
 import type { JSONContent } from "@tiptap/core";
-import type { DesktopAgentSummary, DesktopAgentDefinition, DesktopAccountResources, DesktopAccountSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopCreateGroupInput, DesktopUpdateGroupInput, DesktopGroupMemberRuntime, DesktopGroupStatusPhase, DesktopGroupSummary, DesktopModelSummary, DesktopPluginSummary, DesktopPluginDefinition, DesktopInvokePluginActionInput, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopUserSummary, DesktopUpdateAgentInput, DesktopWorkspaceSummary } from "../../common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopAgentDefinition, DesktopAccountResources, DesktopAccountSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopCreateGroupInput, DesktopUpdateGroupInput, DesktopGroupMemberRuntime, DesktopGroupStatusPhase, DesktopGroupSummary, DesktopModelSummary, DesktopPowerSummary, DesktopPowerDefinition, DesktopInvokePowerActionInput, DesktopSessionConfiguration, DesktopSessionSummary, DesktopSettings, DesktopUserSummary, DesktopUpdateAgentInput, DesktopWorkspaceSummary } from "../../common/types/DesktopApi";
 import type { DesktopNotificationState } from "../../common/types/DesktopNotification";
 import type { GroupMessageProjection } from "./GroupProjection";
 import type { ChatAttention } from "@/lib/notification/attention";
@@ -11,17 +11,17 @@ import type { ChatAttention } from "@/lib/notification/attention";
 /** 设置主视图当前展示的分区。 */
 export type SettingsSection = "user" | "models" | "general" | "appearance" | "chat" | "shortcuts";
 
-/** 功能型 Plugin 在一级导航中的动态模式。 */
-export type PluginWorkspaceSidebarMode = `plugin:${string}`;
+/** 功能型 Power 在一级导航中的动态模式。 */
+export type PowerWorkspaceSidebarMode = `power:${string}`;
 
 /** 主导航侧边栏当前展示的业务集合。 */
-export type SidebarMode = "chat" | "workspace" | "plugins" | PluginWorkspaceSidebarMode;
+export type SidebarMode = "chat" | "workspace" | "powers" | PowerWorkspaceSidebarMode;
 
 /** 中间主视图当前展示的业务对象。 */
 export type NavigationTarget =
   | { /** Agent 创建页面。 */ kind: "create_agent" }
   | { /** Group 创建页面。 */ kind: "create_group" }
-  | { /** Plugin 工作区列表。 */ kind: "plugins" }
+  | { /** Power 工作区列表。 */ kind: "powers" }
   | { /** Workspace 管理页。 */ kind: "workspace"; /** Workspace 标识。 */ workspace_id: string }
   | { /** Workspace 文件只读预览。 */ kind: "workspace_file"; /** Workspace 标识。 */ workspace_id: string; /** Workspace 内的相对文件路径。 */ relative_path: string; /** 预览需要滚动并高亮的 1 基行号；未指定时按文件开头展示。 */ line?: number }
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
@@ -30,8 +30,8 @@ export type NavigationTarget =
   | { /** 尚未持久化的 Group 空对话。 */ kind: "group_draft"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** 具体 GroupSession Chat。 */ kind: "group_session"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** GroupSession 标识。 */ session_id: string }
   | { /** Group 配置页。 */ kind: "group"; /** Group 标识。 */ group_id: string }
-  | { /** Plugin 详情页。 */ kind: "plugin"; /** Plugin 标识。 */ plugin_id: string }
-  | { /** Plugin 独立功能工作区。 */ kind: "plugin_workspace"; /** Plugin 标识。 */ plugin_id: string }
+  | { /** Power 详情页。 */ kind: "power"; /** Power 标识。 */ power_id: string }
+  | { /** Power 独立功能工作区。 */ kind: "power_workspace"; /** Power 标识。 */ power_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
 /** 创建 Agent 表单的可序列化值。 */
@@ -117,10 +117,10 @@ export interface NavigationStoreState {
   sidebar_mode: SidebarMode;
   /** 当前主视图使用的 Workspace 上下文。 */
   active_workspace_id: string;
-  /** 各功能型 Plugin 的 Sidebar 与 Mainview 共享路由。 */
-  plugin_routes: Record<string, PluginJsonObject>;
-  /** 各功能型 Plugin 的快照刷新版本。 */
-  plugin_revisions: Record<string, number>;
+  /** 各功能型 Power 的 Sidebar 与 Mainview 共享路由。 */
+  power_routes: Record<string, PowerJsonObject>;
+  /** 各功能型 Power 的快照刷新版本。 */
+  power_revisions: Record<string, number>;
 }
 
 /** Catalog 领域的完整不可变快照。 */
@@ -133,8 +133,8 @@ export interface CatalogStoreState {
   groups: DesktopGroupSummary[];
   /** 按 Group 标识缓存的运行时 Group。 */
   groups_by_id: Record<string, DesktopGroupSummary>;
-  /** Desktop 当前可用的官方与第三方 Plugin。 */
-  plugins: DesktopPluginSummary[];
+  /** Desktop 当前可用的官方与第三方 Power。 */
+  powers: DesktopPowerSummary[];
   /** 当前 Federation 中可用于对话的模型。 */
   models: DesktopModelSummary[];
   /** 模型目录是否正在读取。 */
@@ -226,9 +226,9 @@ export interface SettingsStoreState {
 
 /** 组合层暴露的 7 个领域 store 句柄集合。 */
 export interface DesktopStores {
-  /** 导航领域 store（selection / sidebar_mode / active_workspace / plugin routes）。 */
+  /** 导航领域 store（selection / sidebar_mode / active_workspace / power routes）。 */
   navigation: StoreHandle<NavigationStoreState>;
-  /** Catalog 领域 store（agents / workspaces / groups / plugins / models）。 */
+  /** Catalog 领域 store（agents / workspaces / groups / powers / models）。 */
   catalog: StoreHandle<CatalogStoreState>;
   /** Session 导航索引领域 store。 */
   session: StoreHandle<SessionStoreState>;
@@ -248,16 +248,16 @@ export interface DesktopActions {
   select_agent(agent_id: string): void;
   /** 打开 Agent 固定 Workspace 与持久化 Session 对话。 */
   open_agent_chat(agent_id: string): Promise<void>;
-  /** 选择 Plugin 详情页。 */
-  select_plugin(plugin_id: string): void;
-  /** 返回完整 Plugin Catalog。 */
-  select_plugins(): void;
-  /** 打开 Plugin 独立功能工作区。 */
-  select_plugin_workspace(plugin_id: string): void;
-  /** 替换指定 Plugin 的工作区路由。 */
-  navigate_plugin(plugin_id: string, route: PluginJsonObject): void;
-  /** 通知指定 Plugin 的 Sidebar 与 Mainview 重新读取业务快照。 */
-  invalidate_plugin(plugin_id: string): void;
+  /** 选择 Power 详情页。 */
+  select_power(power_id: string): void;
+  /** 返回完整 Power Catalog。 */
+  select_powers(): void;
+  /** 打开 Power 独立功能工作区。 */
+  select_power_workspace(power_id: string): void;
+  /** 替换指定 Power 的工作区路由。 */
+  navigate_power(power_id: string, route: PowerJsonObject): void;
+  /** 通知指定 Power 的 Sidebar 与 Mainview 重新读取业务快照。 */
+  invalidate_power(power_id: string): void;
   /** 切换主导航侧边栏集合。 */
   set_sidebar_mode(mode: SidebarMode): void;
   /** 打开一个 Workspace，并将其设为 Chat 上下文。 */
@@ -338,10 +338,10 @@ export interface DesktopActions {
   remove_agent_avatar(agent_id: string): Promise<void>;
   /** 从 Desktop 内置头像池随机选择并保存一张头像。 */
   generate_agent_avatar(agent_id: string): Promise<void>;
-  /** 读取 Plugin manifest 与 Renderer 定义。 */
-  get_plugin(plugin_id: string): Promise<DesktopPluginDefinition>;
-  /** 调用当前 Plugin 的宿主管理 action。 */
-  invoke_plugin_action(plugin_id: string, input: DesktopInvokePluginActionInput): ReturnType<Window["downcity"]["plugin"]["invoke"]>;
+  /** 读取 Power manifest 与 Renderer 定义。 */
+  get_power(power_id: string): Promise<DesktopPowerDefinition>;
+  /** 调用当前 Power 的宿主管理 action。 */
+  invoke_power_action(power_id: string, input: DesktopInvokePowerActionInput): ReturnType<Window["downcity"]["power"]["invoke"]>;
   /** 独立登记并打开 Workspace。 */
   create_workspace(value: CreateWorkspaceFormValue): Promise<void>;
   /** 更新 Workspace 的 Registry 显示名称。 */

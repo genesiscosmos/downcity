@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 这是 agent 包核心运行时的稳定公开入口；可选 Tool 通过 `@downcity/agent/tools` 导出。
  * - 只导出 Agent SDK 与必要的 Session 协议类型。
- * - HTTP、RPC、Plugin、Workspace 与 Sandbox 实现不从根入口暴露。
+ * - HTTP、RPC、Power、Workspace 与 Sandbox 实现不从根入口暴露。
  */
 
 // Agent 入口

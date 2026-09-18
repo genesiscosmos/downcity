@@ -35,7 +35,7 @@ test("Renderer 不使用 Base UI 不存在的 data-state 选择器", () => {
 test("弹层触发器识别到的是 data-popup-open", () => {
   const trigger_sources = [
     "components/ui/button.tsx",
-    "features/plugin/lib/PluginRendererComponents.tsx",
+    "features/power/lib/PowerRendererComponents.tsx",
   ].map((relative_path) => ({ relative_path, source: fs.readFileSync(path.join(renderer_root, relative_path), "utf8") }));
   for (const { relative_path, source } of trigger_sources) {
     assert.match(source, /data-\[popup-open\]:/, `${relative_path} 应使用 data-[popup-open] 表达触发器展开态`);

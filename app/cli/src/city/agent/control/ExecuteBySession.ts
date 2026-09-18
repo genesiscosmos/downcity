@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - control 层只负责把请求转成 session prompt。
- * - chat / queue 等渠道语义由宿主显式注入的 plugin 自行实现。
+ * - chat / queue 等渠道语义由宿主显式注入的 power 自行实现。
  */
 
 import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";

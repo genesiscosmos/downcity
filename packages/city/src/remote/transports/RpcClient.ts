@@ -31,10 +31,10 @@ import type { JsonValue } from "@downcity/agent";
 import type { JsonObject } from "@downcity/agent";
 import type { AgentSessionStopResult } from "@downcity/agent";
 import type {
-  PluginActionResult,
-} from "@/plugin/index.js";
-import type { PluginAvailability, PluginView } from "@/plugin/index.js";
-import type { PluginSnapshot } from "@/plugin/index.js";
+  PowerActionResult,
+} from "@/power/index.js";
+import type { PowerAvailability, PowerView } from "@/power/index.js";
+import type { PowerSnapshot } from "@/power/index.js";
 import type { SessionMutation } from "@downcity/agent";
 import type {
   RespondSessionInteractionInput,
@@ -388,60 +388,60 @@ export class RpcClient {
   }
 
   /**
-   * 列出 Agent runtime 注册的 plugin catalog。
+   * 列出 Agent runtime 注册的 power catalog。
    */
-  async list_internal_plugin_catalog(): Promise<PluginView[]> {
-    const data = await this.request<{ plugins: PluginView[] }>({
-      method: "internal.plugins.catalog",
+  async list_internal_power_catalog(): Promise<PowerView[]> {
+    const data = await this.request<{ powers: PowerView[] }>({
+      method: "internal.powers.catalog",
     });
-    return Array.isArray(data.plugins) ? data.plugins : [];
+    return Array.isArray(data.powers) ? data.powers : [];
   }
 
   /**
-   * 列出 Agent runtime 内 plugin 状态。
+   * 列出 Agent runtime 内 power 状态。
    */
-  async list_internal_plugin_states(): Promise<PluginSnapshot[]> {
-    const data = await this.request<{ plugins: PluginSnapshot[] }>({
-      method: "internal.plugins.list",
+  async list_internal_power_states(): Promise<PowerSnapshot[]> {
+    const data = await this.request<{ powers: PowerSnapshot[] }>({
+      method: "internal.powers.list",
     });
-    return Array.isArray(data.plugins) ? data.plugins : [];
+    return Array.isArray(data.powers) ? data.powers : [];
   }
 
   /**
-   * 检查 Agent runtime 内 plugin 可用性。
+   * 检查 Agent runtime 内 power 可用性。
    */
-  async get_internal_plugin_availability(
-    plugin_name: string,
-  ): Promise<PluginAvailability> {
+  async get_internal_power_availability(
+    power_name: string,
+  ): Promise<PowerAvailability> {
     const data = await this.request<{
-      availability: PluginAvailability;
+      availability: PowerAvailability;
     }>({
-      method: "internal.plugins.availability",
+      method: "internal.powers.availability",
       params: {
-        plugin_name: plugin_name,
+        power_name: power_name,
       },
     });
     return data.availability;
   }
 
   /**
-   * 执行 Agent runtime 内 plugin action。
+   * 执行 Agent runtime 内 power action。
    */
-  async run_internal_plugin_action(params: {
-    plugin_name: string;
+  async run_internal_power_action(params: {
+    power_name: string;
     action_name: string;
     payload?: JsonValue;
-  }): Promise<PluginActionResult<JsonValue> & {
-    plugin_name?: string;
+  }): Promise<PowerActionResult<JsonValue> & {
+    power_name?: string;
     action_name?: string;
   }> {
-    return await this.request<PluginActionResult<JsonValue> & {
-      plugin_name?: string;
+    return await this.request<PowerActionResult<JsonValue> & {
+      power_name?: string;
       action_name?: string;
     }>({
-      method: "internal.plugins.action",
+      method: "internal.powers.action",
       params: {
-        plugin_name: params.plugin_name,
+        power_name: params.power_name,
         action_name: params.action_name,
         ...(params.payload !== undefined ? { payload: params.payload } : {}),
       },

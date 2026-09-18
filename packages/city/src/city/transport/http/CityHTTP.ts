@@ -22,7 +22,7 @@ import type { WorkspaceRuntime } from "@/workspace/index.js";
 /** CityHTTP 实际使用的 City 内部访问能力。 */
 type CityHttpAccess = Pick<
   CityRuntimeAccess,
-  "get_agent" | "list_agents" | "enter_workspace" | "plugin_scope"
+  "get_agent" | "list_agents" | "enter_workspace" | "power_scope"
 >;
 
 /** 在单一 HTTP 端口暴露 City 的多 Agent transport。 */
@@ -165,8 +165,8 @@ export class CityHTTP {
       }
 
       const resolve_session_model = this.runtime_options.resolve_session_model;
-      const plugins = this.runtime_access.plugin_scope(agent_id, workspace_id);
-      const sdk_router = new AgentHTTP({ agent, workspace, plugins }, {
+      const powers = this.runtime_access.power_scope(agent_id, workspace_id);
+      const sdk_router = new AgentHTTP({ agent, workspace, powers }, {
         resolve_session_model: resolve_session_model
           ? async (model_id) => await resolve_session_model({
               agent,
@@ -178,7 +178,7 @@ export class CityHTTP {
       const extension = this.runtime_options.create_agent_extension?.({
         agent,
         workspace,
-        plugins,
+        powers,
         sdk_router,
       });
       const router = extension?.router ?? sdk_router;

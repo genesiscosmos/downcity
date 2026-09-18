@@ -34,7 +34,7 @@ import {
 } from "react-icons/tb";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
-import { order_rail_plugins } from "@/features/navigation/lib/sidebar_shortcut";
+import { order_rail_powers } from "@/features/navigation/lib/sidebar_shortcut";
 import { detect_shortcut_platform, resolve_command_shortcut } from "./shortcut_display.ts";
 import type { ShellCommandEnvironment } from "./types.ts";
 import { use_register_commands } from "./use_commands.ts";
@@ -68,7 +68,7 @@ export function CommandProviders({ controller, shell }: CommandProvidersProps) {
 function use_navigation_commands(controller: DesktopController, shell: ShellCommandEnvironment) {
   const translate = use_translation("common");
   const platform = detect_shortcut_platform();
-  const plugin_count = use_desktop_selector(controller.stores.catalog, (state) => order_rail_plugins(state.plugins).length);
+  const power_count = use_desktop_selector(controller.stores.catalog, (state) => order_rail_powers(state.powers).length);
   const selection_kind = use_desktop_selector(controller.stores.navigation, (state) => state.selection?.kind ?? null);
   const actions = controller.actions;
 
@@ -95,24 +95,24 @@ function use_navigation_commands(controller: DesktopController, shell: ShellComm
         run: () => actions.set_sidebar_mode("workspace"),
       },
       {
-        id: "nav.open-plugins",
-        title: translate("command_palette.cmd.nav.open-plugins"),
+        id: "nav.open-powers",
+        title: translate("command_palette.cmd.nav.open-powers"),
         group: "navigation",
         order: 2,
         icon: <TbComponents className="size-4" />,
-        shortcut: resolve_command_shortcut("nav.open-plugins", platform),
-        keywords: ["plugin", "plugins", "extension", "插件", "扩展"],
-        run: () => actions.set_sidebar_mode("plugins"),
+        shortcut: resolve_command_shortcut("nav.open-powers", platform),
+        keywords: ["power", "powers", "extension", "插件", "扩展"],
+        run: () => actions.set_sidebar_mode("powers"),
       },
       {
-        id: "nav.open-plugin-view",
-        title: translate("command_palette.cmd.nav.open-plugin-view"),
+        id: "nav.open-power-view",
+        title: translate("command_palette.cmd.nav.open-power-view"),
         group: "navigation",
         order: 3,
         icon: <TbPlugConnected className="size-4" />,
         trailing: <TbChevronRight className="size-3.5 text-subtle-foreground" />,
-        keywords: ["plugin", "plugins", "extension", "插件", "扩展"],
-        when: () => plugin_count > 0,
+        keywords: ["power", "powers", "extension", "插件", "扩展"],
+        when: () => power_count > 0,
         // 子页面入口：面板在调用 run 之前已拦截并留在面板内，这里的返回值不会被使用。
         run: () => false,
       },
@@ -158,7 +158,7 @@ function use_navigation_commands(controller: DesktopController, shell: ShellComm
         run: () => actions.close_settings(),
       },
     ],
-    [actions, platform, plugin_count, selection_kind, shell.baybar_collapsed, shell.sidebar_collapsed, shell.toggle_baybar, shell.toggle_sidebar, translate],
+    [actions, platform, power_count, selection_kind, shell.baybar_collapsed, shell.sidebar_collapsed, shell.toggle_baybar, shell.toggle_sidebar, translate],
   );
 }
 

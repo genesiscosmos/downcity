@@ -6,15 +6,15 @@ import { AgentController } from "@/agent/AgentController.js";
 import { create_desktop_local_data } from "@/agent/DesktopLocalData.js";
 import { DesktopSettingsController } from "@/settings/DesktopSettingsController.js";
 import { DesktopUserController } from "@/user/DesktopUserController.js";
-import { PluginController } from "@/plugin/PluginController.js";
+import { PowerController } from "@/power/PowerController.js";
 import {
   register_local_file_protocol,
   register_local_file_scheme,
 } from "@/file/DesktopFileProtocol.js";
 import {
-  register_plugin_renderer_protocol,
-  register_plugin_renderer_scheme,
-} from "@/plugin/PluginRendererProtocol.js";
+  register_power_renderer_protocol,
+  register_power_renderer_scheme,
+} from "@/power/PowerRendererProtocol.js";
 import { DesktopGlobalEnvController } from "@/settings/DesktopGlobalEnvController.js";
 import {
   read_global_env_no_proxy,
@@ -44,7 +44,7 @@ let notification_center: DesktopNotificationCenter | undefined;
 const local_data = create_desktop_local_data();
 const settings_controller = new DesktopSettingsController(local_data);
 const global_env_controller = new DesktopGlobalEnvController(local_data);
-let plugin_controller: PluginController | undefined;
+let power_controller: PowerController | undefined;
 let user_controller: DesktopUserController;
 let quitting = false;
 /** 当前已应用到 Chromium Session 的代理配置，用于避免重复设置。 */
@@ -55,7 +55,7 @@ let system_proxy_watch_timer: ReturnType<typeof setInterval> | undefined;
 /** 系统代理变化检测周期。 */
 const SYSTEM_PROXY_WATCH_INTERVAL_MS = 30_000;
 
-register_plugin_renderer_scheme();
+register_power_renderer_scheme();
 register_local_file_scheme();
 
 /** 向全部仍存活的 Renderer 广播一条安全事件。 */
@@ -110,10 +110,10 @@ function require_notification_center(): DesktopNotificationCenter {
   return notification_center;
 }
 
-/** 返回 City ready 后创建的 Plugin catalog 门面。 */
-function require_plugin_controller(): PluginController {
-  if (!plugin_controller) throw new Error("Desktop Plugin controller is not ready");
-  return plugin_controller;
+/** 返回 City ready 后创建的 Power catalog 门面。 */
+function require_power_controller(): PowerController {
+  if (!power_controller) throw new Error("Desktop Power controller is not ready");
+  return power_controller;
 }
 
 ipcMain.handle("system:open-external-url", async (_event, value: string) => {
@@ -197,9 +197,9 @@ ipcMain.handle("chat:rebind-session-workspace", (_event, agent_id: string, sessi
 ipcMain.handle("chat:list-models", () => require_agent_controller().list_models());
 ipcMain.handle("chat:list-workspace-files", (_event, workspace_id: string) => require_agent_controller().list_workspace_files(workspace_id));
 ipcMain.handle("chat:read-workspace-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_file(workspace_id, relative_path));
-ipcMain.handle("plugin:list", () => require_plugin_controller().list());
-ipcMain.handle("plugin:get", (_event, plugin_id: string) => require_plugin_controller().get(plugin_id));
-ipcMain.handle("plugin:invoke", (_event, plugin_id: string, input: import("../common/types/DesktopApi.js").DesktopInvokePluginActionInput) => require_plugin_controller().invoke(plugin_id, input));
+ipcMain.handle("power:list", () => require_power_controller().list());
+ipcMain.handle("power:get", (_event, power_id: string) => require_power_controller().get(power_id));
+ipcMain.handle("power:invoke", (_event, power_id: string, input: import("../common/types/DesktopApi.js").DesktopInvokePowerActionInput) => require_power_controller().invoke(power_id, input));
 ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: string, configuration: import("../common/types/DesktopApi.js").DesktopSessionConfiguration) => require_agent_controller().create_session(agent_id, workspace_id, configuration));
 ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id));
 ipcMain.handle("chat:rewrite-session-message", (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput) => require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input));
@@ -320,14 +320,14 @@ async function apply_proxy_settings(): Promise<void> {
 
   const system_proxy = explicit_proxy ? { proxy_url: "", no_proxy: "" } : await read_system_proxy();
   const global_env = resolve_local_global_env(local_data.root_path);
-  const plugin_proxy = explicit_proxy
+  const power_proxy = explicit_proxy
     || system_proxy.proxy_url
     || read_global_env_proxy_url(global_env);
-  const plugin_no_proxy = explicit_proxy
+  const power_no_proxy = explicit_proxy
     ? ""
     : system_proxy.no_proxy || read_global_env_no_proxy(global_env);
 
-  if (!apply_plugin_proxy_env(plugin_proxy, plugin_no_proxy)) return;
+  if (!apply_power_proxy_env(power_proxy, power_no_proxy)) return;
   await reconnect_chat_accounts();
 }
 
@@ -338,7 +338,7 @@ async function apply_proxy_settings(): Promise<void> {
  * - 返回是否发生了变化；未变化时调用方不应触发重连。
  * - 先清理再写入，避免关闭代理后残留旧地址。
  */
-function apply_plugin_proxy_env(proxy_url: string, no_proxy: string): boolean {
+function apply_power_proxy_env(proxy_url: string, no_proxy: string): boolean {
   const previous = String(process.env.DOWNCITY_PROXY_URL || "").trim();
   const previous_no_proxy = String(process.env.DOWNCITY_NO_PROXY || "").trim();
   if (proxy_url) process.env.DOWNCITY_PROXY_URL = proxy_url;
@@ -347,7 +347,7 @@ function apply_plugin_proxy_env(proxy_url: string, no_proxy: string): boolean {
   else delete process.env.DOWNCITY_NO_PROXY;
   if (previous === proxy_url && previous_no_proxy === no_proxy) return false;
   console.log(
-    `Downcity plugin proxy ${proxy_url ? `set to ${proxy_url}` : "cleared"}`
+    `Downcity power proxy ${proxy_url ? `set to ${proxy_url}` : "cleared"}`
       + `${no_proxy ? ` (no_proxy: ${no_proxy})` : ""}`,
   );
   return true;
@@ -368,7 +368,7 @@ async function reconnect_chat_accounts(): Promise<void> {
   const controller = agent_controller;
   if (!controller) return;
   try {
-    await controller.invoke_plugin_main("chat", "accounts.refresh_network");
+    await controller.invoke_power_main("chat", "accounts.refresh_network");
   } catch (error) {
     // 关键点（中文）：插件尚未完成初始化时直接忽略，启动流程会使用已同步的代理环境变量。
     console.warn("Downcity chat accounts reconnect skipped", to_error_message(error));
@@ -381,7 +381,7 @@ function to_error_message(error: unknown): string {
 }
 
 app.whenReady().then(async () => {
-  register_plugin_renderer_protocol(local_data);
+  register_power_renderer_protocol(local_data);
   register_local_file_protocol(local_data);
   await apply_proxy_settings();
   start_system_proxy_watch();
@@ -402,23 +402,23 @@ app.whenReady().then(async () => {
       next_notification_center.handle_group_event(event);
       broadcast("group:event", event);
     },
-    plugin_notification: async (plugin_id, agent_id, input) => next_notification_center.publish_agent_plugin_notification(plugin_id, agent_id, input),
-    plugin_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
-    plugin_host_notification: async (plugin_id, input) => next_notification_center.publish_plugin_notification(plugin_id, input),
-    plugin_host_notification_dismiss: async (plugin_id, topic_key) => next_notification_center.dismiss_plugin_notification(plugin_id, topic_key),
+    power_notification: async (power_id, agent_id, input) => next_notification_center.publish_agent_power_notification(power_id, agent_id, input),
+    power_notification_dismiss: async (power_id, topic_key) => next_notification_center.dismiss_power_notification(power_id, topic_key),
+    power_host_notification: async (power_id, input) => next_notification_center.publish_power_notification(power_id, input),
+    power_host_notification_dismiss: async (power_id, topic_key) => next_notification_center.dismiss_power_notification(power_id, topic_key),
   });
   agent_controller = next_agent_controller;
-  plugin_controller = new PluginController(
+  power_controller = new PowerController(
     local_data,
-    async (plugin_id, action_id, input) =>
-      await next_agent_controller.invoke_plugin_main(plugin_id, action_id, input),
-    async (plugin_id, action_id, input) =>
-      await next_agent_controller.invoke_plugin_config(
-        plugin_id,
+    async (power_id, action_id, input) =>
+      await next_agent_controller.invoke_power_main(power_id, action_id, input),
+    async (power_id, action_id, input) =>
+      await next_agent_controller.invoke_power_config(
+        power_id,
         action_id,
         input,
       ),
-    () => next_agent_controller.list_plugin_states(),
+    () => next_agent_controller.list_power_states(),
   );
   user_controller = new DesktopUserController(local_data, () => next_agent_controller.has_active_sessions());
   await next_agent_controller.ready();

@@ -76,20 +76,20 @@ const AGENT_TOOL_RULES: Record<AgentToolVisualKind, AgentToolRule> = {
     detail: (part) => console_detail(part),
   },
   ask: plain_tool_rule,
-  plugin: {
+  power: {
     auto_open_while_streaming: false,
-    summary: (part) => first_text([join_text([read_input(part, ["plugin", "plugin_id"]), read_input(part, ["action", "action_name"])]), part.title, part.tool_name]),
-    // plugin 的调用参数在 payload 内，是唯一需要读一层嵌套输入的种类。
+    summary: (part) => first_text([join_text([part.tool_name, read_input(part, ["action"])]), part.title]),
+    // power 的参数在 `args` 内，是唯一需要读一层嵌套输入的种类。
     detail: (part) => code_detail(read_output(part, ["result", "output", "text", "message"])
-      || read_input(part, ["text", "query", "name", "title", "action"])
-      || pick_text(object_value(part.input)?.["payload"], ["text", "query", "name", "title"])),
+      || read_input(part, ["action"])
+      || pick_text(object_value(part.input)?.["args"], ["text", "query", "name", "title", "path", "url"])),
   },
   generic: plain_tool_rule,
 };
 
 /** 将 canonical Tool 映射为图标种类、生命周期文案、语气、摘要与展开详情。 */
 export function resolve_agent_tool_presentation(part: SessionAgentToolPart): AgentActivityPresentation {
-  const visual_kind = resolve_agent_tool_visual_kind(part.tool_name);
+  const visual_kind = resolve_agent_tool_visual_kind(part);
   const rule = AGENT_TOOL_RULES[visual_kind];
   return {
     visual_kind,
@@ -141,7 +141,7 @@ function resolve_action_tone(state: SessionAgentActionPart["state"]): AgentActiv
 
 /** Write 与 Edit 开始接收输入时自动展开一次；之后仍允许用户手动折叠。 */
 export function should_auto_open_agent_tool(part: SessionAgentToolPart): boolean {
-  return part.state === "input-streaming" && AGENT_TOOL_RULES[resolve_agent_tool_visual_kind(part.tool_name)].auto_open_while_streaming;
+  return part.state === "input-streaming" && AGENT_TOOL_RULES[resolve_agent_tool_visual_kind(part)].auto_open_while_streaming;
 }
 
 /** 流式文件内容或待响应交互出现时，活动组自动展开一次但不锁定。 */
@@ -339,9 +339,16 @@ function object_value(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-/** 根据注册名称识别 Tool 的稳定视觉种类。 */
-function resolve_agent_tool_visual_kind(tool_name: string): AgentToolVisualKind {
-  const normalized = tool_name.toLowerCase();
+/**
+ * 根据携带的输入识别 Tool 的稳定视觉种类。
+ *
+ * 关键点（中文）
+ * - 内置 Tool 按名字识别。
+ * - power 不按名字识别：power 名即工具名，第三方的名字无法枚举。
+ *   改按契约识别：输入带字符串 `action` 字段的工具就是 power 工具。
+ */
+function resolve_agent_tool_visual_kind(part: SessionAgentToolPart): AgentToolVisualKind {
+  const normalized = part.tool_name.toLowerCase();
   if (normalized === "read" || normalized.endsWith("_read")) return "read";
   if (normalized === "write" || normalized.endsWith("_write")) return "write";
   if (normalized === "edit" || normalized.endsWith("_edit")) return "edit";
@@ -349,7 +356,7 @@ function resolve_agent_tool_visual_kind(tool_name: string): AgentToolVisualKind 
   if (normalized === "find" || normalized.includes("glob")) return "find";
   if (normalized === "shell_exec" || normalized === "shell_session" || normalized.includes("terminal")) return "shell";
   if (normalized === "ask_question" || normalized.includes("question")) return "ask";
-  if (normalized === "plugin_call" || normalized.startsWith("plugin_")) return "plugin";
+  if (read_input(part, ["action"])) return "power";
   return "generic";
 }
 

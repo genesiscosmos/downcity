@@ -1,7 +1,0 @@
-{
-  "catalog": "Plugins", "empty": "暂无 Plugin", "loading": "正在加载 Plugin…", "missing_config": "Plugin 未提供 config。", "missing_slot": "Plugin 未提供 {{slot}}。", "missing_surface": "此 Plugin 未提供功能界面", "cancel": "取消", "confirm": "确认",
-  "tree": { "expand": "展开", "collapse": "折叠" },
-  "profile": { "create": "新建 Profile", "remove": "删除 Profile", "empty": "创建 Profile 后配置 {{name}}", "create_description": "Profile 是 {{name}} 的独立配置空间。", "remove_title": "删除 Profile？", "remove_description": "{{id}} 的配置将被删除。" },
-  "config": { "not_required": "无需配置", "not_required_description": "此 Plugin 没有声明 Config，也不需要 Profile。" },
-  "runtime": { "unavailable": "Plugin 当前不可用", "initialize_failed": "Plugin 初始化失败。" }
-}

@@ -1,8 +1,8 @@
 /**
- * @downcity/city — City 组合根、Plugin 生命周期与 HTTP/RPC transport。
+ * @downcity/city — City 组合根、Power 生命周期与 HTTP/RPC transport。
  *
  * City 维护多 Agent 运行时引用并提供可选 HTTP/RPC transport。根入口额外导出
- * 应用装配常用的 Agent、Workspace、Shell 与 Storage 构造器；Plugin、Workspace
+ * 应用装配常用的 Agent、Workspace、Shell 与 Storage 构造器；Power、Workspace
  * 和 Shell 的专业 API 由本 package 的稳定子路径提供。
  */
 
@@ -37,11 +37,11 @@ export type {
   CityWorkspaces,
 } from "./city/types/City.js";
 export type {
-  CityPluginCollection,
-  CityPluginHost,
-  CityPluginInput,
-  CityPlugins,
-} from "./city/types/CityPlugin.js";
+  CityPowerCollection,
+  CityPowerHost,
+  CityPowerInput,
+  CityPowers,
+} from "./city/types/CityPower.js";
 export {
   create_city_host_instance_id,
   get_city_host_state_path,

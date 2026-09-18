@@ -1,0 +1,14 @@
+/**
+ * Power 调用上下文工厂协议。
+ *
+ * Registry 只持有该工厂，不缓存 PowerContext。每次 Action、Hook、System 或
+ * Availability 调用都由 City 按当前执行范围投影一个新的上下文。
+ */
+
+import type { PowerContext } from "./PowerContext.js";
+
+/** 为当前执行范围中的指定 Power 创建一次性上下文。 */
+export type PowerContextFactory = (
+  /** 当前调用目标 Power 的稳定 ID。 */
+  power_id: string,
+) => PowerContext;

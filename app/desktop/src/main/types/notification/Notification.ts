@@ -7,7 +7,7 @@ import type {
   DesktopNotificationState,
   DesktopNotificationTarget,
 } from "../../../common/types/DesktopNotification.js";
-import type { PluginJsonObject } from "@downcity/city/plugin";
+import type { PowerJsonObject } from "@downcity/city/power";
 
 /** NotificationController 的可替换运行依赖。 */
 export interface NotificationControllerOptions {
@@ -33,16 +33,16 @@ export interface DesktopNotificationInput {
   created_at: number;
 }
 
-/** Plugin 发布入口可以提交的宿主无关通知内容。 */
-export interface DesktopPluginNotificationInput {
-  /** Plugin 内稳定的聚合键。 */
+/** Power 发布入口可以提交的宿主无关通知内容。 */
+export interface DesktopPowerNotificationInput {
+  /** Power 内稳定的聚合键。 */
   readonly topic_key: string;
   /** 简短的用户可见标题。 */
   readonly title: string;
   /** 可选的用户可见补充说明。 */
   readonly body?: string;
-  /** 当前 Plugin 工作区内的可选 JSON 路由。 */
-  readonly route?: PluginJsonObject;
+  /** 当前 Power 工作区内的可选 JSON 路由。 */
+  readonly route?: PowerJsonObject;
 }
 
 /** NotificationController 使用的持久化端口。 */

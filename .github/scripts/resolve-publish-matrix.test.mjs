@@ -32,7 +32,7 @@ test("当前 workspace 被解析为四个稳定发布层", () => {
       "@downcity/database-sqlite",
       "@downcity/services",
     ],
-    ["@downcity/plugins"],
+    ["@downcity/powers"],
   ]);
 
   const outputs = create_workflow_outputs(graph);

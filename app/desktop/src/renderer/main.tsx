@@ -8,10 +8,10 @@ import "./locales/i18n";
 import "./styles/base.css";
 
 declare global {
-  /** Plugin Renderer ESM 共享的宿主 React runtime。 */
+  /** Power Renderer ESM 共享的宿主 React runtime。 */
   var __DOWNCITY_REACT__: typeof React | undefined;
 
-  /** Plugin Renderer ESM 共享的宿主 JSX runtime。 */
+  /** Power Renderer ESM 共享的宿主 JSX runtime。 */
   var __DOWNCITY_JSX_RUNTIME__: typeof jsx_runtime | undefined;
 }
 

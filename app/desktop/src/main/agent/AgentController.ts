@@ -20,7 +20,7 @@ import {
   type SessionMutation,
 } from "@downcity/agent";
 import { City } from "@downcity/city";
-import type { PluginNotificationInput, PluginSnapshot } from "@downcity/city/plugin";
+import type { PowerNotificationInput, PowerSnapshot } from "@downcity/city/power";
 import { clipboard, shell } from "electron";
 import { LocalStorageProvider } from "@downcity/city";
 import path from "node:path";
@@ -78,7 +78,7 @@ import {
   create_desktop_group_model,
   create_desktop_embassy,
   create_desktop_agent_tools,
-  create_desktop_plugin_loader,
+  create_desktop_power_loader,
   create_desktop_workspace,
   configure_desktop_agent_model,
   list_desktop_agent_models,
@@ -86,11 +86,11 @@ import {
   resolve_desktop_city_env,
 } from "./DesktopAgentAssembly.js";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
-import type { LocalPluginLoader } from "@downcity/city/local";
+import type { LocalPowerLoader } from "@downcity/city/local";
 import { resolve_local_agent_env } from "@downcity/city/local";
 import { select_builtin_agent_avatar_path } from "./BuiltinAgentAvatar.js";
-import type { PluginJsonValue } from "@downcity/city/plugin";
-import { initialize_desktop_plugins } from "../plugin/PluginInitialization.js";
+import type { PowerJsonValue } from "@downcity/city/power";
+import { initialize_desktop_powers } from "../power/PowerInitialization.js";
 import { to_desktop_workspace_summary } from "./WorkspaceSummary.js";
 
 const session_model_settings_key = "desktop.session-models";
@@ -135,21 +135,21 @@ interface AgentControllerEvents {
   /** 广播 Group 共享消息。 */
   /** 广播 GroupSession 统一消息与状态事件。 */
   group_event(event: DesktopGroupEvent): void;
-  /** 发布一个 Plugin 在 Agent 执行范围内产生的宿主通知。 */
-  plugin_notification(plugin_id: string, agent_id: string, input: PluginNotificationInput): Promise<void>;
-  /** 清除一个 Plugin 在 Agent 执行范围内产生的未读通知。 */
-  plugin_notification_dismiss(plugin_id: string, topic_key: string): Promise<void>;
-  /** 发布一个 City Plugin 产生的宿主通知。 */
-  plugin_host_notification(plugin_id: string, input: PluginNotificationInput): Promise<void>;
-  /** 清除一个 City Plugin 宿主通知主题。 */
-  plugin_host_notification_dismiss(plugin_id: string, topic_key: string): Promise<void>;
+  /** 发布一个 Power 在 Agent 执行范围内产生的宿主通知。 */
+  power_notification(power_id: string, agent_id: string, input: PowerNotificationInput): Promise<void>;
+  /** 清除一个 Power 在 Agent 执行范围内产生的未读通知。 */
+  power_notification_dismiss(power_id: string, topic_key: string): Promise<void>;
+  /** 发布一个 City Power 产生的宿主通知。 */
+  power_host_notification(power_id: string, input: PowerNotificationInput): Promise<void>;
+  /** 清除一个 City Power 宿主通知主题。 */
+  power_host_notification_dismiss(power_id: string, topic_key: string): Promise<void>;
 }
 
 /** Electron main 内的 native Agent 生命周期控制器。 */
 export class AgentController {
   /** Desktop 与 CLI 共用的本地数据库和产品 Repository。 */
-  /** Desktop 读取本地 Plugin 定义与运行入口的 Loader。 */
-  private readonly plugin_loader: LocalPluginLoader;
+  /** Desktop 读取本地 Power 定义与运行入口的 Loader。 */
+  private readonly power_loader: LocalPowerLoader;
   /** Desktop 进程内的 Agent 索引与 transport 转发器。 */
   private readonly city: City;
   /** 当前 Desktop City 宿主实例标识。 */
@@ -178,39 +178,39 @@ export class AgentController {
     this.city = new City({
       embassy: create_desktop_embassy(data, process.env),
       storage: new LocalStorageProvider(data.root_path),
-      plugin_host: {
-        config: (plugin_id) => ({
-          get: () => structuredClone(this.data.plugins.get_config(plugin_id)),
+      power_host: {
+        config: (power_id) => ({
+          get: () => structuredClone(this.data.powers.get_config(power_id)),
           set: async (config) => {
-            this.data.plugins.set_config(plugin_id, structuredClone(config));
+            this.data.powers.set_config(power_id, structuredClone(config));
           },
         }),
-        notifications: (plugin_id, agent_id) => ({
+        notifications: (power_id, agent_id) => ({
           publish: async (input) => {
             if (agent_id) {
-              await this.events.plugin_notification(plugin_id, agent_id, input);
+              await this.events.power_notification(power_id, agent_id, input);
               return;
             }
-            await this.events.plugin_host_notification(plugin_id, input);
+            await this.events.power_host_notification(power_id, input);
           },
           dismiss: async (input) => {
             if (agent_id) {
-              await this.events.plugin_notification_dismiss(plugin_id, input.topic_key);
+              await this.events.power_notification_dismiss(power_id, input.topic_key);
               return;
             }
-            await this.events.plugin_host_notification_dismiss(plugin_id, input.topic_key);
+            await this.events.power_host_notification_dismiss(power_id, input.topic_key);
           },
         }),
         open_external: async (url) => {
           const target = new URL(url);
           if (target.protocol !== "http:" && target.protocol !== "https:") {
-            throw new Error(`Plugin external URL protocol is not supported: ${target.protocol}`);
+            throw new Error(`Power external URL protocol is not supported: ${target.protocol}`);
           }
           await shell.openExternal(target.toString());
         },
         show_item_in_folder: async (file_path) => {
           if (!path.isAbsolute(file_path)) {
-            throw new Error("Plugin show_item_in_folder requires an absolute path");
+            throw new Error("Power show_item_in_folder requires an absolute path");
           }
           shell.showItemInFolder(file_path);
         },
@@ -219,7 +219,7 @@ export class AgentController {
         },
       },
     });
-    this.plugin_loader = create_desktop_plugin_loader(this.data);
+    this.power_loader = create_desktop_power_loader(this.data);
     this.ready_promise = this.initialize_agents();
   }
 
@@ -228,52 +228,52 @@ export class AgentController {
     await this.ready_promise;
   }
 
-  /** 返回 City 持有的 Plugin 生命周期状态，包括不可执行的初始化失败记录。 */
-  list_plugin_states(): PluginSnapshot[] {
-    return this.city.plugins.snapshots();
+  /** 返回 City 持有的 Power 生命周期状态，包括不可执行的初始化失败记录。 */
+  list_power_states(): PowerSnapshot[] {
+    return this.city.powers.snapshots();
   }
 
-  /** 在指定 Agent 与 Workspace 上调用已注册的 Plugin action。 */
-  async invoke_plugin_action(input: {
+  /** 在指定 Agent 与 Workspace 上调用已注册的 Power action。 */
+  async invoke_power_action(input: {
     /** 目标 Agent ID。 */ readonly agent_id: string;
     /** 执行上下文 Workspace ID。 */ readonly workspace_id: string;
-    /** 目标 Plugin ID。 */ readonly plugin_id: string;
+    /** 目标 Power ID。 */ readonly power_id: string;
     /** 目标 action ID。 */ readonly action_id: string;
-    /** 可选 action 输入。 */ readonly input?: PluginJsonValue;
-  }): Promise<PluginJsonValue> {
+    /** 可选 action 输入。 */ readonly input?: PowerJsonValue;
+  }): Promise<PowerJsonValue> {
     await this.ready_promise;
     await this.require_workspace(input.agent_id, input.workspace_id);
-    const plugins = this.city.plugins.scope({
+    const powers = this.city.powers.scope({
       agent_id: input.agent_id,
       workspace_id: input.workspace_id,
     });
-    return await plugins.run_action({
-      plugin: input.plugin_id,
+    return await powers.run_action({
+      power: input.power_id,
       action: input.action_id,
       ...(input.input !== undefined ? { payload: input.input } : {}),
-    }) as unknown as PluginJsonValue;
+    }) as unknown as PowerJsonValue;
   }
 
-  /** 通过 City 调用 Plugin 宿主 action。 */
-  async invoke_plugin_main(
-    plugin_id: string,
+  /** 通过 City 调用 Power 宿主 action。 */
+  async invoke_power_main(
+    power_id: string,
     action_id: string,
-    input?: PluginJsonValue,
-  ): Promise<PluginJsonValue> {
+    input?: PowerJsonValue,
+  ): Promise<PowerJsonValue> {
     await this.ready_promise;
-    await this.provide_plugin(plugin_id);
-    return await this.city.plugins.invoke(plugin_id, action_id, input);
+    await this.provide_power(power_id);
+    return await this.city.powers.invoke(power_id, action_id, input);
   }
 
-  /** 通过 City 调用 Plugin 的唯一 Config action。 */
-  async invoke_plugin_config(
-    plugin_id: string,
+  /** 通过 City 调用 Power 的唯一 Config action。 */
+  async invoke_power_config(
+    power_id: string,
     action_id: string,
-    input?: PluginJsonValue,
-  ): Promise<PluginJsonValue> {
+    input?: PowerJsonValue,
+  ): Promise<PowerJsonValue> {
     await this.ready_promise;
-    await this.provide_plugin(plugin_id);
-    return await this.city.plugins.invoke_config(plugin_id, action_id, input);
+    await this.provide_power(power_id);
+    return await this.city.powers.invoke_config(power_id, action_id, input);
   }
 
   /** 重新加载当前 City 已持有的全部 Workspace Global Env。 */
@@ -1217,18 +1217,18 @@ export class AgentController {
     const initialized_agents: Agent[] = [];
     try {
       // 关键点（中文）：登记即存在。启动时把 Registry 中登记的 Workspace 全部
-      // 预载进 City 索引，使 Plugin 宿主能力（如 Skills）能稳定列出全部 Workspace，
+      // 预载进 City 索引，使 Power 宿主能力（如 Skills）能稳定列出全部 Workspace，
       // 而不是只显示当前已被 Agent 进入过的实例。
       for (const config of this.data.workspaces.list()) {
         await this.register_workspace_in_city(config);
       }
-      const plugin_registrations = await this.plugin_loader.list_registrations();
-      await initialize_desktop_plugins({
-        registrations: plugin_registrations,
-        add: async (registration) => await this.city.plugins.add(registration),
-        report_failure: (plugin_id, error) => {
+      const power_registrations = await this.power_loader.list_registrations();
+      await initialize_desktop_powers({
+        registrations: power_registrations,
+        add: async (registration) => await this.city.powers.add(registration),
+        report_failure: (power_id, error) => {
           console.error(
-            `Downcity Desktop Plugin initialize failed: ${plugin_id}`,
+            `Downcity Desktop Power initialize failed: ${power_id}`,
             to_error_message(error),
           );
         },
@@ -1267,11 +1267,11 @@ export class AgentController {
     this.city.workspaces.add(await create_desktop_workspace(this.data, config));
   }
 
-  /** 确保 Desktop catalog 中的 Plugin 已由 City 持有。 */
-  private async provide_plugin(plugin_id: string): Promise<void> {
-    const registration = await this.plugin_loader.load_plugin_registration(plugin_id);
-    if (!registration) throw new Error(`Plugin does not provide a City runtime: ${plugin_id}`);
-    await this.city.plugins.add(registration);
+  /** 确保 Desktop catalog 中的 Power 已由 City 持有。 */
+  private async provide_power(power_id: string): Promise<void> {
+    const registration = await this.power_loader.load_power_registration(power_id);
+    if (!registration) throw new Error(`Power does not provide a City runtime: ${power_id}`);
+    await this.city.powers.add(registration);
   }
 
   /** 显式装配一个 Desktop native Agent。 */

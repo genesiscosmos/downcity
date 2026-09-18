@@ -2,7 +2,7 @@
  * Session system 快照与模型输入组装的依赖类型。
  *
  * 这些字段共同描述 composition 领域所需的最小只读资源；SessionComposition 不拥有
- * Message、Store、Model 或 Plugin 生命周期。
+ * Message、Store、Model 或 Power 生命周期。
  */
 
 import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
@@ -37,8 +37,8 @@ export interface SessionCompositionOptions {
   get_hooks: () => SessionHookRuntime;
   /** 在每个 Step 检查点读取 Workspace env。 */
   get_workspace_env: () => Record<string, string>;
-  /** 读取宿主显式注入的受托管 Plugin system blocks。 */
-  get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
+  /** 读取宿主显式注入的受托管 Power system blocks。 */
+  get_managed_power_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
   /** 读取当前 Session 实际使用的模型。 */
   get_model: () => ModelClient | undefined;
   /** 读取当前模型声明的上下文窗口。 */
@@ -47,6 +47,6 @@ export interface SessionCompositionOptions {
   get_created_at: () => number;
   /** 读取当前 Session 的参考时区。 */
   get_timezone: () => string;
-  /** 记录 Plugin Hook 降级等可观察事件。 */
+  /** 记录 Power Hook 降级等可观察事件。 */
   logger: Logger;
 }

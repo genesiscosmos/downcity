@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 只处理 `internal.*` 方法。
  * - 这些方法服务 downcity 本机管理通道，不属于 RemoteAgent 的用户 SDK 面。
- * - Session 与 Plugin 数据通过 Agent 能力操作，不读取领域内部路径。
+ * - Session 与 Power 数据通过 Agent 能力操作，不读取领域内部路径。
  */
 
 import type { SessionSystemMessage } from "@downcity/agent";
@@ -86,8 +86,8 @@ export async function handle_internal_rpc_request(params: {
       const context = requireAgent(options);
       const session_id = String(request.params.session_id || "").trim();
       if (!session_id) throw new Error("Missing session_id");
-      const result = await context.plugins.run_action({
-        plugin: "chat",
+      const result = await context.powers.run_action({
+        power: "chat",
         action: "history_clear",
         payload: { session_id: session_id },
       });
@@ -116,41 +116,41 @@ export async function handle_internal_rpc_request(params: {
       });
       return true;
     }
-    case "internal.plugins.catalog": {
+    case "internal.powers.catalog": {
       const context = requireAgent(options);
       write_success(request.id, {
-        plugins: context.plugins.list(),
+        powers: context.powers.list(),
       });
       return true;
     }
-    case "internal.plugins.list": {
+    case "internal.powers.list": {
       const context = requireAgent(options);
       write_success(request.id, {
-        plugins: context.list_plugin_states(),
+        powers: context.list_power_states(),
       });
       return true;
     }
-    case "internal.plugins.availability": {
+    case "internal.powers.availability": {
       const context = requireAgent(options);
-      const availability = await context.plugins.availability(
-        request.params.plugin_name,
+      const availability = await context.powers.availability(
+        request.params.power_name,
       );
       write_success(request.id, {
-        plugin_name: request.params.plugin_name,
+        power_name: request.params.power_name,
         availability,
       });
       return true;
     }
-    case "internal.plugins.action": {
+    case "internal.powers.action": {
       const context = requireAgent(options);
-      const result = await context.plugins.run_action({
-        plugin: request.params.plugin_name,
+      const result = await context.powers.run_action({
+        power: request.params.power_name,
         action: request.params.action_name,
         payload: request.params.payload,
       });
       write_success(request.id, {
         ...result,
-        plugin_name: request.params.plugin_name,
+        power_name: request.params.power_name,
         action_name: request.params.action_name,
       });
       return true;

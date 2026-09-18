@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 统一承载 ShellActionRuntime 的内部共享逻辑：环境组装、持久化、waiter 协调、session 查找。
- * - 对外暴露给 ShellActionRuntime 的只有纯运行时辅助函数，不直接承担 plugin action 编排。
+ * - 对外暴露给 ShellActionRuntime 的只有纯运行时辅助函数，不直接承担 power action 编排。
  */
 
 import path from "node:path";

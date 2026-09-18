@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 面向 `Agent` SDK 的本地会话执行场景。
- * - 注入调用方显式传入的静态 instruction 与 Plugin system blocks。
+ * - 注入调用方显式传入的静态 instruction 与 Power system blocks。
  * - SDK 不在 system 中注入动态变量；动态上下文应由调用方放入 user message。
  */
 
@@ -13,7 +13,7 @@ import type {
 } from "@/types/agent/SessionTypes.js";
 import type {
   BuildSessionSystemBlocksInput,
-  ResolveSessionPluginSystemBlocksInput,
+  ResolveSessionPowerSystemBlocksInput,
 } from "@/types/session/SessionSystem.js";
 import type { JsonValue, SessionSystemContextHookValue } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
@@ -30,7 +30,7 @@ function normalize_system_blocks(
       if (
         source !== "core" &&
         source !== "instruction" &&
-        source !== "plugin" &&
+        source !== "power" &&
         source !== "session"
       ) {
         return null;
@@ -44,8 +44,8 @@ function normalize_system_blocks(
     .filter((block): block is AgentSessionSystemBlock => Boolean(block));
 }
 
-/** 把 system pipeline 输出限制为稳定的 Plugin 命名内容块。 */
-export function normalize_plugin_system_blocks(
+/** 把 system pipeline 输出限制为稳定的 Power 命名内容块。 */
+export function normalize_power_system_blocks(
   input: unknown,
 ): AgentSessionSystemBlock[] {
   if (!Array.isArray(input)) return [];
@@ -55,17 +55,17 @@ export function normalize_plugin_system_blocks(
     const name = String(record.name || "").trim();
     const content = String(record.content || "").trim();
     if (!name || !content) return [];
-    return [{ source: "plugin" as const, name, content }];
+    return [{ source: "power" as const, name, content }];
   });
 }
 
-/** 使用统一 Hook 检查点解析当前 Session 的 Plugin system blocks。 */
-export async function resolve_session_plugin_system_blocks(
-  input: ResolveSessionPluginSystemBlocksInput,
+/** 使用统一 Hook 检查点解析当前 Session 的 Power system blocks。 */
+export async function resolve_session_power_system_blocks(
+  input: ResolveSessionPowerSystemBlocksInput,
 ): Promise<AgentSessionSystemBlock[]> {
   let blocks: AgentSessionSystemBlock[];
   try {
-    blocks = normalize_plugin_system_blocks(
+    blocks = normalize_power_system_blocks(
       await input.hooks.system_blocks(input.context),
     );
   } catch (error) {
@@ -82,7 +82,7 @@ export async function resolve_session_plugin_system_blocks(
       SESSION_HOOK_POINTS.system_context,
       value as unknown as JsonValue,
     ) as unknown as SessionSystemContextHookValue;
-    return normalize_plugin_system_blocks(output?.blocks);
+    return normalize_power_system_blocks(output?.blocks);
   } catch (error) {
     await input.on_error?.(error);
     return blocks;
@@ -151,8 +151,8 @@ export async function build_session_system_blocks(
   }
   return [
     ...normalize_system_blocks(input.get_instruction_system_blocks()),
-    ...normalize_system_blocks(await input.get_managed_plugin_system_blocks()),
-    ...normalize_system_blocks(await input.get_plugin_system_blocks()),
+    ...normalize_system_blocks(await input.get_managed_power_system_blocks()),
+    ...normalize_system_blocks(await input.get_power_system_blocks()),
     // session block 放在最后，尽量保留前缀 system blocks 的跨 session 缓存命中。
     create_session_system_block(
       create_session_info({

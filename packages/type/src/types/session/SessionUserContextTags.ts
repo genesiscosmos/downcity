@@ -1,7 +1,7 @@
 /**
  * Chat 运行时注入的 User Context Tag 保留区。
  *
- * 运行时（当前是 Chat Plugin）会把「本轮请求的事实」作为 context part 写入 user message：
+ * 运行时（当前是 Chat Power）会把「本轮请求的事实」作为 context part 写入 user message：
  * 一条描述用户与消息元信息，一条描述 chat 路由环境。它们描述消息本身的来源与环境，
  * 不代表用户撰写的内容。
  *
@@ -9,7 +9,7 @@
  * 避免把运行时事实当成用户输入展示、或在下一次提交时原样带回。
  *
  * 注意（中文）
- * - tag 名由 Chat Plugin 的生产端与 Desktop 的消费端共同依赖，因此在这里定义唯一来源。
+ * - tag 名由 Chat Power 的生产端与 Desktop 的消费端共同依赖，因此在这里定义唯一来源。
  * - 这些 tag 属于保留区，业务侧不应把用户撰写的内容写成同名 tag。
  */
 

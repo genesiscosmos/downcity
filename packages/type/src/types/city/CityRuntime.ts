@@ -2,7 +2,7 @@
  * City 跨包最小运行协议。
  *
  * City 是 Agent 的可选组合根。Agent 只依赖这份能力投影，不依赖具体 City package，
- * 也不理解 Plugin、Transport 或其他 City 内部实现。
+ * 也不理解 Power、Transport 或其他 City 内部实现。
  */
 
 import type { StorageProvider, WorkspaceRuntime } from "../../workspace.js";

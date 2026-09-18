@@ -6,7 +6,7 @@ import { WelcomeView } from "@/app/WelcomeView";
 
 import { CreateAgentMainView } from "@/features/agent/CreateAgentPage";
 import { CreateGroupMainView } from "@/features/group/CreateGroupPage";
-import { PluginRouteMainView } from "@/features/plugin/PluginPage";
+import { PowerRouteMainView } from "@/features/power/PowerPage";
 import { WorkspaceRouteMainView } from "@/features/workspace/WorkspacePage";
 import { GroupRouteMainView } from "@/features/group/GroupPage";
 import { AgentRouteMainView } from "@/features/agent/AgentPage";
@@ -20,7 +20,7 @@ export function DesktopMainView({ selection, controller, sidebar_collapsed }: { 
   if (selection?.kind === "create_agent") return <CreateAgentMainView controller={controller} />;
   if (selection?.kind === "create_group") return <CreateGroupMainView controller={controller} />;
   if (selection?.kind === "settings") return <SettingsMainView key={`settings:${selection.section}`} controller={controller} section={selection.section} sidebar_collapsed={sidebar_collapsed} />;
-  if (selection?.kind === "plugin" || selection?.kind === "plugin_workspace") return <PluginRouteMainView selection={selection} controller={controller} />;
+  if (selection?.kind === "power" || selection?.kind === "power_workspace") return <PowerRouteMainView selection={selection} controller={controller} />;
   if (selection?.kind === "workspace" || selection?.kind === "workspace_file") return <WorkspaceRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
   if (selection?.kind === "group_session" || selection?.kind === "group_draft") return <GroupChatRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
   if (selection?.kind === "group") return <GroupRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;

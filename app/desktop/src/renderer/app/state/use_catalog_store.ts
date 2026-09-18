@@ -1,12 +1,12 @@
 /**
  * Catalog 领域 store（低频列表）。
  *
- * 承载共享 Registry 的 Agent / Workspace / Group / Plugin 摘要，以及
+ * 承载共享 Registry 的 Agent / Workspace / Group / Power 摘要，以及
  * Federation 模型目录。全部为低频列表数据，不做高频流式更新。
  */
 
 import { useCallback, useMemo } from "react";
-import type { DesktopAgentSummary, DesktopGroupSummary, DesktopModelSummary, DesktopPluginSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopGroupSummary, DesktopModelSummary, DesktopPowerSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import type { CatalogStoreState } from "@/types/DesktopView";
 import { use_store } from "@/lib/store";
 
@@ -15,7 +15,7 @@ const initial_catalog_state: CatalogStoreState = {
   workspaces: [],
   groups: [],
   groups_by_id: {},
-  plugins: [],
+  powers: [],
   models: [],
   models_loading: false,
 };
@@ -72,10 +72,10 @@ export function use_catalog_store() {
     });
   }, [commit]);
 
-  /** 替换 Plugin 摘要列表。 */
-  const set_plugins = useCallback((plugins: DesktopPluginSummary[]) => {
-    if (Object.is(state_ref.current.plugins, plugins)) return;
-    commit({ ...state_ref.current, plugins });
+  /** 替换 Power 摘要列表。 */
+  const set_powers = useCallback((powers: DesktopPowerSummary[]) => {
+    if (Object.is(state_ref.current.powers, powers)) return;
+    commit({ ...state_ref.current, powers });
   }, [commit]);
 
   /** 替换模型目录并更新加载态。 */
@@ -128,11 +128,11 @@ export function use_catalog_store() {
     set_groups,
     upsert_group,
     remove_group,
-    set_plugins,
+    set_powers,
     set_models,
     set_models_loading,
     add_workspace,
     replace_workspace,
     remove_workspace,
-  }), [add_workspace, remove_group, remove_workspace, replace_catalog, replace_workspace, set_agents, set_groups, set_models, set_models_loading, set_plugins, set_workspaces, state_ref, store, upsert_group]);
+  }), [add_workspace, remove_group, remove_workspace, replace_catalog, replace_workspace, set_agents, set_groups, set_models, set_models_loading, set_powers, set_workspaces, state_ref, store, upsert_group]);
 }

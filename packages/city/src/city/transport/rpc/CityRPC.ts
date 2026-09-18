@@ -18,7 +18,7 @@ import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 /** CityRPC 实际使用的 City 内部访问能力。 */
 type CityRpcAccess = Pick<
   CityRuntimeAccess,
-  "get_agent" | "list_agents" | "enter_workspace" | "plugin_scope" | "plugin_snapshots"
+  "get_agent" | "list_agents" | "enter_workspace" | "power_scope" | "power_snapshots"
 >;
 
 const DEFAULT_RPC_HOST = "127.0.0.1";
@@ -103,7 +103,7 @@ export class CityRPC {
           const agent = this.runtime_access.get_agent(agent_id);
           if (!agent) throw new Error(`Agent not found: ${agent_id}`);
           const sessions = agent.sessions;
-          const plugins = this.runtime_access.plugin_scope(agent_id, workspace_id);
+          const powers = this.runtime_access.power_scope(agent_id, workspace_id);
           const resolve_session_model = this.runtime_options.resolve_session_model;
           const reload_workspace_env = this.runtime_options.reload_workspace_env;
           return {
@@ -113,8 +113,8 @@ export class CityRPC {
               agent,
               workspace,
               sessions,
-              plugins,
-              list_plugin_states: () => this.runtime_access.plugin_snapshots(),
+              powers,
+              list_power_states: () => this.runtime_access.power_snapshots(),
               resolve_system_messages: async (input) =>
                 await agent.resolve_system_messages(workspace, input),
             }),

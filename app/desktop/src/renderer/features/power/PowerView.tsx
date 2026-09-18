@@ -1,0 +1,56 @@
+/** Power Catalog 中的描述与配置详情页。 */
+
+import { useCallback, useEffect, useState } from "react";
+import { TbChevronDown } from "react-icons/tb";
+import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
+import { Markdown } from "@/components/markdown/Markdown";
+import { PowerIcon } from "@/features/power/lib/PowerIcon";
+import { cn } from "@/lib/utils";
+import { PowerConfigPanel } from "@/views/PowerSettings";
+import type { DesktopActions } from "@/types/DesktopView";
+import type { DesktopPowerDefinition, DesktopPowerSummary } from "@common/types/DesktopApi";
+import { use_translation } from "@/locales/i18n";
+
+/** 所有 Power 都展示说明；只有声明 Config 时才展示唯一配置。 */
+export function PowerView({ power, controller }: {
+  /** 当前 Power。 */ readonly power: DesktopPowerSummary;
+  /** Renderer 稳定操作集合。 */ readonly controller: DesktopActions;
+}) {
+  const translate = use_translation("power");
+  const [definition, set_definition] = useState<DesktopPowerDefinition>();
+  const [error, set_error] = useState("");
+  const get_power = controller.get_power;
+  const load = useCallback(async () => {
+    set_definition(undefined);
+    set_error("");
+    try { set_definition(await get_power(power.power_id)); }
+    catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); }
+  }, [get_power, power.power_id]);
+  useEffect(() => { void load(); }, [load]);
+  return <MainViewLayout>
+    <MainViewHeader />
+    <MainViewBody><main className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto bg-background">
+      <div className="mx-auto flex min-h-full w-full max-w-[90rem] flex-col gap-5 px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
+        <PowerOverview power={definition ?? power} />
+        {power.runtime_status === "error" ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive"><div className="font-medium">{translate("runtime.unavailable")}</div><div className="mt-1 break-words">{power.runtime_error || translate("runtime.initialize_failed")}</div></div> : null}
+        {error ? <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
+        {power.runtime_status === "error" ? null : power.has_config ? <PowerConfigPanel controller={controller} power={power} definition={definition} /> : <section className="rounded-xl bg-surface-subtle px-5 py-10 text-center"><div className="text-base text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
+      </div>
+    </main></MainViewBody>
+  </MainViewLayout>;
+}
+
+/** 展示可折叠的 Power 身份与用户说明。 */
+function PowerOverview({ power }: {
+  /** 当前 Power 摘要与可选 README。 */ readonly power: DesktopPowerSummary & Partial<Pick<DesktopPowerDefinition, "readme">>;
+}) {
+  const [expanded, set_expanded] = useState(false);
+  return <section className="min-w-0 overflow-hidden rounded-xl bg-surface-subtle">
+    <div className="flex min-h-16 items-center gap-3 px-4 py-3.5">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-brand text-primary"><PowerIcon power_id={power.power_id} icon_url={power.icon_url} class_name="size-5" /></div>
+      <div className="min-w-0 flex-1"><div className="truncate text-base font-medium text-foreground">{power.title}</div><div className="mt-1 text-3xs text-muted-foreground">{power.description}</div></div>
+      {power.readme ? <button type="button" aria-expanded={expanded} onClick={() => set_expanded((current) => !current)} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbChevronDown className={cn("size-4 transition-transform", !expanded && "-rotate-90")} /></button> : null}
+    </div>
+    {expanded && power.readme ? <div className="max-w-[52rem] border-t border-divider px-4 py-4 text-xs leading-[1.65] text-muted-foreground"><Markdown text={power.readme} mode="static" /></div> : null}
+  </section>;
+}

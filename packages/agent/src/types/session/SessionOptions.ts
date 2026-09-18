@@ -116,8 +116,8 @@ export interface SessionOptions {
   /** 创建当前 City configured extension 的 Session Step 执行视图。 */
   get_hooks: () => SessionHookRuntime;
 
-  /** 读取当前 Agent 显式注入的受托管 Plugin system blocks。 */
-  get_managed_plugin_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
+  /** 读取当前 Agent 显式注入的受托管 Power system blocks。 */
+  get_managed_power_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
 
   /**
    * 在执行前确保当前 session 已完成宿主侧默认配置。

@@ -1,6 +1,6 @@
 /** Desktop 可恢复导航状态的校验上下文类型。 */
 
-import type { DesktopAgentSummary, DesktopGroupSummary, DesktopPluginSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
+import type { DesktopAgentSummary, DesktopGroupSummary, DesktopPowerSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import type { DesktopWorkspaceSession, NavigationTarget } from "./DesktopView";
 
 /** 校验持久化导航目标时使用的 Desktop 目录快照。 */
@@ -11,8 +11,8 @@ export interface DesktopNavigationCatalog {
   workspaces: DesktopWorkspaceSummary[];
   /** 当前可用的 Group 列表及其 Session 摘要。 */
   groups: DesktopGroupSummary[];
-  /** 当前可用的 Plugin 列表。 */
-  plugins: DesktopPluginSummary[];
+  /** 当前可用的 Power 列表。 */
+  powers: DesktopPowerSummary[];
   /** 按 Workspace 索引的 Agent Session 摘要。 */
   sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
 }

@@ -90,9 +90,8 @@ function resolve_tool_fields(part: SessionAgentToolPart): ToolActivityField[] {
       field("action", read_string(input, "action")),
     ]);
   }
-  if (tool_name === "plugin_read" || tool_name === "plugin_call") {
+  if (read_string(input, "action")) {
     return compact_fields([
-      field("plugin", read_string(input, "plugin")),
       field("action", read_string(input, "action")),
     ]);
   }

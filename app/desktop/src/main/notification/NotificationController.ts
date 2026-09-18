@@ -2,7 +2,7 @@
  * Desktop 未读通知的唯一事实源。
  *
  * 控制器负责聚合、持久化、已读生命周期和角标同步，不理解 Session、Task 或
- * Plugin 等具体通知生产者。
+ * Power 等具体通知生产者。
  */
 
 import { randomUUID } from "node:crypto";
@@ -21,7 +21,7 @@ import type {
   DesktopNotificationStorage,
   NotificationControllerOptions,
 } from "../types/notification/Notification.js";
-import type { PluginJsonObject, PluginJsonValue } from "@downcity/city/plugin";
+import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 
 const default_options: NotificationControllerOptions = { create_id: () => randomUUID() };
 
@@ -206,11 +206,11 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
       session_id: require_text(candidate.session_id, "target session_id"),
     };
   }
-  if (candidate.kind === "plugin") {
+  if (candidate.kind === "power") {
     return {
-      kind: "plugin",
-      plugin_id: require_text(candidate.plugin_id, "target plugin_id"),
-      route: normalize_plugin_route(candidate.route),
+      kind: "power",
+      power_id: require_text(candidate.power_id, "target power_id"),
+      route: normalize_power_route(candidate.route),
     };
   }
   throw new Error("notification target kind is invalid");
@@ -220,7 +220,7 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
 function get_notification_target_key(target: DesktopNotificationTarget): string {
   if (target.kind === "agent_session") return stable_json_stringify(["agent_session", target.agent_id, target.workspace_id, target.session_id]);
   if (target.kind === "group_session") return stable_json_stringify(["group_session", target.group_id, target.session_id]);
-  return stable_json_stringify(["plugin", target.plugin_id, target.route]);
+  return stable_json_stringify(["power", target.power_id, target.route]);
 }
 
 /** 校验、去重并复制通知的生命周期作用域。 */
@@ -242,7 +242,7 @@ function normalize_notification_scope(input: unknown): DesktopNotificationScope 
   const candidate = input as Partial<DesktopNotificationScope>;
   if (candidate.kind === "agent") return { kind: "agent", agent_id: require_text(candidate.agent_id, "scope agent_id") };
   if (candidate.kind === "group") return { kind: "group", group_id: require_text(candidate.group_id, "scope group_id") };
-  if (candidate.kind === "plugin") return { kind: "plugin", plugin_id: require_text(candidate.plugin_id, "scope plugin_id") };
+  if (candidate.kind === "power") return { kind: "power", power_id: require_text(candidate.power_id, "scope power_id") };
   throw new Error("notification scope kind is invalid");
 }
 
@@ -250,7 +250,7 @@ function normalize_notification_scope(input: unknown): DesktopNotificationScope 
 function get_notification_scope_key(scope: DesktopNotificationScope): string {
   if (scope.kind === "agent") return stable_json_stringify(["agent", scope.agent_id]);
   if (scope.kind === "group") return stable_json_stringify(["group", scope.group_id]);
-  return stable_json_stringify(["plugin", scope.plugin_id]);
+  return stable_json_stringify(["power", scope.power_id]);
 }
 
 /** 复制一条通知，避免调用者修改控制器持有的唯一事实源。 */
@@ -258,14 +258,14 @@ function copy_notification(notification: DesktopNotification): DesktopNotificati
   return {
     ...notification,
     scopes: notification.scopes.map((scope) => ({ ...scope })),
-    target: notification.target.kind === "plugin"
+    target: notification.target.kind === "power"
       ? { ...notification.target, route: structuredClone(notification.target.route) }
       : { ...notification.target },
   };
 }
 
-/** 校验并复制 Plugin 工作区 JSON 路由。 */
-function normalize_plugin_route(value: unknown): PluginJsonObject {
+/** 校验并复制 Power 工作区 JSON 路由。 */
+function normalize_power_route(value: unknown): PowerJsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("notification target route is invalid");
   }
@@ -274,7 +274,7 @@ function normalize_plugin_route(value: unknown): PluginJsonObject {
     if (serialized.length > 32 * 1024) throw new Error("notification target route is too large");
     const parsed = JSON.parse(serialized) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("notification target route is invalid");
-    return parsed as PluginJsonObject;
+    return parsed as PowerJsonObject;
   } catch (reason) {
     if (reason instanceof Error && reason.message.startsWith("notification target route")) throw reason;
     throw new Error("notification target route is not JSON-serializable", { cause: reason });
@@ -282,7 +282,7 @@ function normalize_plugin_route(value: unknown): PluginJsonObject {
 }
 
 /** 为 JSON 值生成不受 object 属性插入顺序影响的稳定文本。 */
-function stable_json_stringify(value: PluginJsonValue): string {
+function stable_json_stringify(value: PowerJsonValue): string {
   if (Array.isArray(value)) return `[${value.map(stable_json_stringify).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable_json_stringify(value[key] ?? null)}`).join(",")}}`;

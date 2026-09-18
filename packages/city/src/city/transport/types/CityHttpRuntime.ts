@@ -7,7 +7,7 @@
 
 import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 import type { Agent } from "@downcity/agent";
-import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
+import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { Hono } from "hono";
 
@@ -38,7 +38,7 @@ export interface CityHttpRuntimeOptions {
     agent: Agent;
     /** 当前路由对应的 Agent Workspace 执行作用域。 */
     workspace: WorkspaceRuntime;
-    plugins: AgentPluginRuntime;
+    powers: AgentPowerRuntime;
     /** City 提供的标准 RemoteAgent SDK Router。 */
     sdk_router: Hono;
   }) => CityAgentHttpExtension;

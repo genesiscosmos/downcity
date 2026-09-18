@@ -18,7 +18,7 @@ import {
   type AgentSessionSummary,
   type RemoteAgentSession,
 } from "@downcity/agent";
-import { City, LocalStorageProvider, RemoteAgent, type CityPluginHost } from "@downcity/city";
+import { City, LocalStorageProvider, RemoteAgent, type CityPowerHost } from "@downcity/city";
 import type { ModelClient } from "@downcity/type";
 import type { WorkspaceRuntime } from "@downcity/type/workspace";
 import { resolveDaemonRpcEndpoint } from "@/city/process/daemon/Client.js";
@@ -36,7 +36,7 @@ import type { AgentChatModelChoice } from "@/city/types/AgentChatModel.js";
 import {
   create_cli_agent,
   create_cli_workspace,
-  create_cli_plugin_loader,
+  create_cli_power_loader,
   resolve_cli_agent_model,
 } from "@/city/runtime/AgentAssembly.js";
 import { create_cli_local_data, type CliLocalData } from "@/city/runtime/LocalData.js";
@@ -102,7 +102,7 @@ export async function createRemoteAgent(params: {
   const target_config = await resolve_cli_agent_target(params.agent_id, params.workspace);
   if (!(await is_agent_held_by_daemon(params.agent_id))) {
     const data = create_cli_local_data();
-    const plugin_loader = create_cli_plugin_loader({ plugin_repository: data.plugins });
+    const power_loader = create_cli_power_loader({ power_repository: data.powers });
     let agent: Agent | undefined;
     try {
       const config = data.agents.get(params.agent_id);
@@ -116,8 +116,8 @@ export async function createRemoteAgent(params: {
       const city = new City({
         storage: new LocalStorageProvider(data.root_path),
         workspaces: [workspace],
-        plugins: await plugin_loader.list_registrations(),
-        plugin_host: create_local_plugin_host(data),
+        powers: await power_loader.list_registrations(),
+        power_host: create_local_power_host(data),
       });
       city.agents.add(agent);
       return {
@@ -170,13 +170,13 @@ export async function createAgentSessionReader(params: {
   return await create_local_agent_session_reader(agent_id);
 }
 
-/** 构造 CLI 本地 Plugin 宿主回调。 */
-function create_local_plugin_host(data: CliLocalData): CityPluginHost {
+/** 构造 CLI 本地 Power 宿主回调。 */
+function create_local_power_host(data: CliLocalData): CityPowerHost {
   return {
-    config: (plugin_id) => ({
-      get: () => structuredClone(data.plugins.get_config(plugin_id)),
+    config: (power_id) => ({
+      get: () => structuredClone(data.powers.get_config(power_id)),
       set: async (config) => {
-        data.plugins.set_config(plugin_id, structuredClone(config));
+        data.powers.set_config(power_id, structuredClone(config));
       },
     }),
     notifications: () => ({
@@ -189,7 +189,7 @@ function create_local_plugin_host(data: CliLocalData): CityPluginHost {
 /** 在不绑定 Workspace 的本地装配中打开 Agent 级 Session 读取器。 */
 async function create_local_agent_session_reader(agent_id: string): Promise<AgentChatClient> {
   const data = create_cli_local_data();
-  const plugin_loader = create_cli_plugin_loader({ plugin_repository: data.plugins });
+  const power_loader = create_cli_power_loader({ power_repository: data.powers });
   let agent: Agent | undefined;
   try {
     const config = data.agents.get(agent_id);
@@ -198,8 +198,8 @@ async function create_local_agent_session_reader(agent_id: string): Promise<Agen
     const city = new City({
       storage: new LocalStorageProvider(data.root_path),
       workspaces: [],
-      plugins: await plugin_loader.list_registrations(),
-      plugin_host: create_local_plugin_host(data),
+      powers: await power_loader.list_registrations(),
+      power_host: create_local_power_host(data),
     });
     city.agents.add(agent);
     return {

@@ -2,7 +2,7 @@
  * Agent Chat Access Control API。
  *
  * 关键点（中文）
- * - 路由只承担 HTTP 参数适配，数据和业务规则统一由 Chat Plugin Action 处理。
+ * - 路由只承担 HTTP 参数适配，数据和业务规则统一由 Chat Power Action 处理。
  * - City Auth 保护这些控制面接口，但 Chat Access 本身不是 City Auth 的一部分。
  */
 
@@ -10,7 +10,7 @@ import type { Hono } from "hono";
 import type { JsonValue } from "@downcity/agent";
 import type { CliAgentContext } from "@/city/agent/CliAgentContext.js";
 import type { AgentTokenPrincipal } from "@/city/types/auth/AgentToken.js";
-import { CHAT_ACCESS_ACTIONS } from "@downcity/plugins/chat";
+import { CHAT_ACCESS_ACTIONS } from "@downcity/powers/chat";
 import { buildControlRouteAliases } from "@/city/agent/control/CommonHelpers.js";
 import type {
   ChatAccessResolveRequestBody,
@@ -20,7 +20,7 @@ import type {
 } from "@/city/agent/http/control/types/ChatAccessRoutes.js";
 import { AUTH_PRINCIPAL_CONTEXT_KEY } from "@/city/runtime/auth/AuthMiddleware.js";
 
-const CHAT_PLUGIN_NAME = "chat";
+const CHAT_POWER_NAME = "chat";
 const CONTROL_OPERATOR = "city-control";
 
 function resolve_control_operator(context: unknown): string {
@@ -40,13 +40,13 @@ function normalize_scope(value: unknown): "direct" | "group" | "all" | undefined
 async function run_chat_access_action(input: {
   /** 当前 Agent Context。 */
   context: CliAgentContext;
-  /** Chat Plugin Action 名称。 */
+  /** Chat Power Action 名称。 */
   action: string;
   /** 传给 Action 的 JSON 数据。 */
   payload?: JsonValue;
 }): Promise<JsonValue | undefined> {
-  const result = await input.context.plugins.run_action({
-    plugin: CHAT_PLUGIN_NAME,
+  const result = await input.context.powers.run_action({
+    power: CHAT_POWER_NAME,
     action: input.action,
     ...(input.payload !== undefined ? { payload: input.payload } : {}),
   });

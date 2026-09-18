@@ -2,7 +2,7 @@
  * Workspace 内置 Shell 公开入口。
  *
  * 关键点（中文）
- * - Workspace 拥有 shell / sandbox 的领域能力，不依赖 Agent session 或 Plugin 系统。
+ * - Workspace 拥有 shell / sandbox 的领域能力，不依赖 Agent session 或 Power 系统。
  * - Agent 通过 Workspace 复用本地命令执行、shell session、approval 与 sandbox backend。
  */
 

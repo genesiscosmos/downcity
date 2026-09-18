@@ -1,13 +1,13 @@
 /**
  * City 包内运行时访问协议。
  *
- * transport 与 Plugin Runtime 只通过该协议访问 City 的内部索引和作用域创建能力，
+ * transport 与 Power Runtime 只通过该协议访问 City 的内部索引和作用域创建能力，
  * 避免为了内部协作把生命周期方法暴露到公开 City API。
  */
 
 import type { Agent } from "@downcity/agent";
-import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
-import type { PluginSnapshot } from "@/plugin/index.js";
+import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
+import type { PowerSnapshot } from "@/power/index.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 
 /** City 内部组件共享的最小事实源访问面。 */
@@ -36,24 +36,24 @@ export interface CityRuntimeAccess {
     workspace_id: string,
   ) => Promise<WorkspaceRuntime>;
 
-  /** 返回指定 Agent/Workspace 的 Plugin 直接调用面。 */
-  readonly plugin_scope: (
+  /** 返回指定 Agent/Workspace 的 Power 直接调用面。 */
+  readonly power_scope: (
     agent_id: string,
     workspace_id: string,
-  ) => AgentPluginRuntime;
+  ) => AgentPowerRuntime;
 
-  /** 返回 City 当前全部 Plugin 生命周期快照。 */
-  readonly plugin_snapshots: () => PluginSnapshot[];
+  /** 返回 City 当前全部 Power 生命周期快照。 */
+  readonly power_snapshots: () => PowerSnapshot[];
 
-  /** 调用 City Tool 的 method 程序化动作。 */
-  readonly invoke_method: (input: {
+  /** 调用当前注册 power 的动作；不经过模型工具面。 */
+  readonly invoke_power_action: (input: {
     /** 目标 Agent 标识。 */
     agent_id: string;
     /** 目标 Workspace 标识。 */
     workspace_id: string;
-    /** 目标 method 标识。 */
-    method: string;
-    /** 目标动作名。 */
+    /** 目标 power 标识。 */
+    power: string;
+    /** 目标动作 id，点号形式。 */
     action: string;
     /** 动作输入。 */
     payload: unknown;
@@ -63,6 +63,6 @@ export interface CityRuntimeAccess {
     turn_id?: string | null;
   }) => Promise<unknown>;
 
-  /** 判断某个 method 是否登记在当前 City。 */
-  readonly has_method: (method_id: string) => boolean;
+  /** 判断某个动作 id 是否登记在当前 City。 */
+  readonly has_action: (action_id: string) => boolean;
 }

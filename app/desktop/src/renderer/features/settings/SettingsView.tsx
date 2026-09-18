@@ -346,8 +346,8 @@ function ShortcutsSettings() {
       <SettingGroup>
         <SettingItem label={translate("shortcuts.open_chat")} description={translate("shortcuts.open_chat_description")}><ShortcutKeys keys={["⌘ / Ctrl", "1"]} /></SettingItem>
         <SettingItem label={translate("shortcuts.open_workspace")} description={translate("shortcuts.open_workspace_description")}><ShortcutKeys keys={["⌘ / Ctrl", "2"]} /></SettingItem>
-        <SettingItem label={translate("shortcuts.open_plugins")} description={translate("shortcuts.open_plugins_description")}><ShortcutKeys keys={["⌘ / Ctrl", "3"]} /></SettingItem>
-        <SettingItem label={translate("shortcuts.open_plugin_view")} description={translate("shortcuts.open_plugin_view_description")}><ShortcutKeys keys={["⌘ / Ctrl", "4–9"]} /></SettingItem>
+        <SettingItem label={translate("shortcuts.open_powers")} description={translate("shortcuts.open_powers_description")}><ShortcutKeys keys={["⌘ / Ctrl", "3"]} /></SettingItem>
+        <SettingItem label={translate("shortcuts.open_power_view")} description={translate("shortcuts.open_power_view_description")}><ShortcutKeys keys={["⌘ / Ctrl", "4–9"]} /></SettingItem>
       </SettingGroup>
     </SettingSection>
     <SettingSection title={translate("shortcuts.chat_input")}>

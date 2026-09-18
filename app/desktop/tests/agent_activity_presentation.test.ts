@@ -20,7 +20,7 @@ function create_interaction(sequence: number, status: SessionAgentInteraction["s
 
 test("Tool 名称映射为稳定视觉语义与摘要", () => {
   const cases: Array<[string, Record<string, string>, string, string]> = [
-    ["read", { file_path: "src/a.ts" }, "read", "src/a.ts"], ["write", { path: "src/b.ts" }, "write", "src/b.ts"], ["edit", { filename: "src/c.ts" }, "edit", "src/c.ts"], ["grep", { pattern: "TODO" }, "grep", "TODO"], ["find", { glob: "**/*.ts" }, "find", "**/*.ts"], ["shell_exec", { command: "pnpm test" }, "shell", "pnpm test"], ["shell_session", { action: "poll" }, "shell", "poll"], ["ask_question", {}, "ask", "ask_question"], ["plugin_call", { plugin: "github", action: "search" }, "plugin", "github · search"], ["custom_tool", {}, "generic", "custom_tool"],
+    ["read", { file_path: "src/a.ts" }, "read", "src/a.ts"], ["write", { path: "src/b.ts" }, "write", "src/b.ts"], ["edit", { filename: "src/c.ts" }, "edit", "src/c.ts"], ["grep", { pattern: "TODO" }, "grep", "TODO"], ["find", { glob: "**/*.ts" }, "find", "**/*.ts"], ["shell_exec", { command: "pnpm test" }, "shell", "pnpm test"], ["shell_session", { action: "poll" }, "shell", "poll"], ["ask_question", {}, "ask", "ask_question"], ["memory", { action: "search" }, "power", "memory · search"], ["custom_tool", {}, "generic", "custom_tool"],
   ];
   for (const [tool_name, input, visual_kind, summary] of cases) {
     const presentation = resolve_agent_tool_presentation(create_tool(tool_name, 1, input));

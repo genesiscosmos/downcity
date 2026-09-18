@@ -2,9 +2,9 @@
 
 import { Tooltip } from "@base-ui/react/tooltip";
 import { TbComponents, TbFolder, TbMoodNeutral } from "react-icons/tb";
-import { PluginIcon } from "@/features/plugin/lib/PluginIcon";
+import { PowerIcon } from "@/features/power/lib/PowerIcon";
 import { AttentionRailDot } from "@/components/AttentionRailDot";
-import type { DesktopPluginSummary } from "@common/types/DesktopApi";
+import type { DesktopPowerSummary } from "@common/types/DesktopApi";
 import { cn } from "@/lib/utils";
 import type { SidebarMode } from "@/types/DesktopView";
 import type { ChatAttention } from "@/lib/notification/attention";
@@ -17,27 +17,27 @@ interface SidebarNavigationItemsProps {
   active_mode?: SidebarMode;
   /** 切换一级导航。 */
   on_change(mode: SidebarMode): void;
-  /** 提供动态一级入口的 Plugin。 */
-  plugin_workspaces: DesktopPluginSummary[];
+  /** 提供动态一级入口的 Power。 */
+  power_workspaces: DesktopPowerSummary[];
   /** 各一级导航的未读注意力等级；不在其中的一级导航没有未读。 */
   unread_attention_by_mode: ReadonlyMap<SidebarMode, ChatAttention>;
 }
 
 /** 只负责渲染 Sidebar Rail 的垂直导航入口。 */
-export function SidebarNavigationItems({ active_mode, on_change, plugin_workspaces, unread_attention_by_mode }: SidebarNavigationItemsProps) {
+export function SidebarNavigationItems({ active_mode, on_change, power_workspaces, unread_attention_by_mode }: SidebarNavigationItemsProps) {
   const translate = use_translation("navigation");
   const translate_chat = use_translation("chat");
   const core_items = [
     { mode: "chat", label: translate("views.agent"), icon: <TbMoodNeutral /> },
     { mode: "workspace", label: translate("views.workspaces"), icon: <TbFolder /> },
-    { mode: "plugins", label: translate("views.plugins"), icon: <TbComponents /> },
+    { mode: "powers", label: translate("views.powers"), icon: <TbComponents /> },
   ] as const;
   const items = [
     ...core_items,
-    ...plugin_workspaces.map((plugin) => ({
-      mode: `plugin:${plugin.plugin_id}` as SidebarMode,
-      label: plugin.title,
-      icon: <PluginIcon plugin_id={plugin.plugin_id} icon_url={plugin.icon_url} />,
+    ...power_workspaces.map((power) => ({
+      mode: `power:${power.power_id}` as SidebarMode,
+      label: power.title,
+      icon: <PowerIcon power_id={power.power_id} icon_url={power.icon_url} />,
     })),
   ];
   return <nav aria-label={translate("view_switcher")} className="scrollbar-none flex min-h-0 w-8 flex-1 flex-col gap-1 overflow-y-auto">

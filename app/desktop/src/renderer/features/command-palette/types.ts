@@ -30,7 +30,7 @@ export const command_id_prefixes: Readonly<Record<CommandGroupId, string>> = {
 };
 
 /** 面板当前页面；深度固定为 2，不实现多层栈。 */
-export type CommandPage = "root" | "workspaces" | "agents" | "sessions" | "plugins";
+export type CommandPage = "root" | "workspaces" | "agents" | "sessions" | "powers";
 
 /** 面板关闭时复位到的页面。 */
 export const command_root_page: CommandPage = "root";
@@ -40,7 +40,7 @@ export const command_page_entry_ids: Readonly<Record<Exclude<CommandPage, "root"
   workspaces: "goto.workspace",
   agents: "goto.agent",
   sessions: "goto.session",
-  plugins: "nav.open-plugin-view",
+  powers: "nav.open-power-view",
 };
 
 /**
@@ -53,7 +53,7 @@ export const command_entry_pages: Readonly<Record<string, Exclude<CommandPage, "
   "goto.workspace": "workspaces",
   "goto.agent": "agents",
   "goto.session": "sessions",
-  "nav.open-plugin-view": "plugins",
+  "nav.open-power-view": "powers",
 };
 
 /** 子页面的搜索框占位文案 key 后缀。 */
@@ -62,7 +62,7 @@ export const command_page_placeholder_keys: Readonly<Record<CommandPage, string>
   workspaces: "command_palette.placeholder.workspaces",
   agents: "command_palette.placeholder.agents",
   sessions: "command_palette.placeholder.sessions",
-  plugins: "command_palette.placeholder.plugins",
+  powers: "command_palette.placeholder.powers",
 };
 
 /** 子页面的空状态文案 key；`sessions` 另有加载态 key。 */
@@ -71,7 +71,7 @@ export const command_page_empty_keys: Readonly<Record<CommandPage, string>> = {
   workspaces: "command_palette.empty.workspaces",
   agents: "command_palette.empty.agents",
   sessions: "command_palette.empty.sessions",
-  plugins: "command_palette.empty.plugins",
+  powers: "command_palette.empty.powers",
 };
 
 /** `sessions` 子页面在导航索引尚未水合时使用的加载文案 key。 */
@@ -122,8 +122,8 @@ export interface CommandContext {
   selection_kind: NavigationTarget["kind"] | null;
   /** 当前 Agent / Group 会话投影；不在会话上下文时为 null。 */
   active_session: CommandActiveSession | null;
-  /** 当前可见的一级 Plugin 入口数量，用于判断是否需要展示 Plugin 子页面入口。 */
-  visible_plugin_count: number;
+  /** 当前可见的一级 Power 入口数量，用于判断是否需要展示 Power 子页面入口。 */
+  visible_power_count: number;
 }
 
 /** 一条可注册命令。 */

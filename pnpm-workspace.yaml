@@ -6,7 +6,7 @@ packages:
   - packages/implementations/workspaces/*
   - packages/federation
   - packages/implementations/services
-  - packages/implementations/plugins
+  - packages/implementations/powers
   - packages/implementations/sandboxes/*
   - packages/type
   - app/cli

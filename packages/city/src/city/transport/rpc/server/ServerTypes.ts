@@ -8,8 +8,8 @@
 
 import type { AgentSessionCollection } from "@downcity/agent";
 import type { Agent } from "@downcity/agent";
-import type { AgentPluginRuntime } from "@/plugin/types/PluginExecutionRuntime.js";
-import type { PluginSnapshot } from "@/plugin/index.js";
+import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
+import type { PowerSnapshot } from "@/power/index.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { SessionSystemMessage } from "@downcity/agent";
 import type { RpcEventFrame } from "@/city/transport/types/RpcProtocol.js";
@@ -74,10 +74,10 @@ export interface RpcAgentContext {
   workspace: WorkspaceRuntime;
   /** 当前 Agent 唯一的 Session 集合。 */
   sessions: AgentSessionCollection;
-  /** 当前 Agent 在 Workspace 中可用的 Plugin 调用面。 */
-  plugins: AgentPluginRuntime;
-  /** 读取当前 Agent 的 Plugin 状态。 */
-  list_plugin_states: () => PluginSnapshot[];
+  /** 当前 Agent 在 Workspace 中可用的 Power 调用面。 */
+  powers: AgentPowerRuntime;
+  /** 读取当前 Agent 的 Power 状态。 */
+  list_power_states: () => PowerSnapshot[];
   /** 解析当前 Session 的 system messages。 */
   resolve_system_messages: (input: {
     /** 目标 Session ID。 */

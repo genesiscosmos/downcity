@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - Session 创建并拥有上下文，Executor 和 Tool 通过领域分区协作。
- * - 所有可变数组、Plugin lease 与取消监听都封装在本模块内。
- * - Plugin 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
+ * - 所有可变数组、Power lease 与取消监听都封装在本模块内。
+ * - Power 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
  */
 
 import type { RuntimeToolEffect } from "@downcity/type";
@@ -20,7 +20,7 @@ import type { SessionOrigin } from "@downcity/type";
 import { normalize_session_origin } from "@downcity/type";
 import type { SessionHookContextBlock } from "@downcity/type";
 
-/** 非 Turn 查询创建 Plugin 只读快照所需的稳定 Session 状态。 */
+/** 非 Turn 查询创建 Power 只读快照所需的稳定 Session 状态。 */
 export interface CreateSessionHookContextInput {
   /** 当前 Session 标识。 */
   session_id: string;
@@ -47,10 +47,10 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private workspace_env_snapshot?: Readonly<Record<string, string>>;
   private agent_systems_snapshot: readonly string[] = Object.freeze([]);
   private hook_scope?: SessionHookScopeRuntime;
-  /** 整个 Turn 共享的 Plugin 动态上下文，不随 Step lease 切换而失效。 */
-  private plugin_context_blocks_snapshot: readonly SessionHookContextBlock[] = Object.freeze([]);
+  /** 整个 Turn 共享的 Power 动态上下文，不随 Step lease 切换而失效。 */
+  private power_context_blocks_snapshot: readonly SessionHookContextBlock[] = Object.freeze([]);
   /** 并发或重复解析时复用的唯一 Promise。 */
-  private plugin_context_blocks_promise?: Promise<readonly SessionHookContextBlock[]>;
+  private power_context_blocks_promise?: Promise<readonly SessionHookContextBlock[]>;
   private observed_user_messages: SessionUserMessage[] = [];
   private pending_assistant_parts: SessionAgentContent[] = [];
   private turn_effects: RuntimeToolEffect[] = [];
@@ -121,8 +121,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       get hooks() {
         return context.hook_scope;
       },
-      get plugin_context_blocks() {
-        return context.plugin_context_blocks_snapshot;
+      get power_context_blocks() {
+        return context.power_context_blocks_snapshot;
       },
       commit: (input) => {
         context.workspace_env_snapshot = Object.freeze({
@@ -137,8 +137,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
         context.hook_scope = hooks;
         if (previous && previous !== hooks) await previous.close();
       },
-      resolve_plugin_context_blocks: async (resolver) =>
-        await context.resolve_plugin_context_blocks(resolver),
+      resolve_power_context_blocks: async (resolver) =>
+        await context.resolve_power_context_blocks(resolver),
       release: async () => await context.release_extensions(),
       hook_context: (call_id?: string) =>
         context.create_hook_context(call_id),
@@ -196,13 +196,13 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     });
   }
 
-  /** 每个 Turn 只执行一次 Plugin 动态上下文解析，并保存不可变快照。 */
-  private async resolve_plugin_context_blocks(
+  /** 每个 Turn 只执行一次 Power 动态上下文解析，并保存不可变快照。 */
+  private async resolve_power_context_blocks(
     resolver: () => Promise<readonly SessionHookContextBlock[]>,
   ): Promise<readonly SessionHookContextBlock[]> {
-    this.plugin_context_blocks_promise ??= (async () => {
+    this.power_context_blocks_promise ??= (async () => {
       const blocks = await resolver();
-      this.plugin_context_blocks_snapshot = Object.freeze(
+      this.power_context_blocks_snapshot = Object.freeze(
         (Array.isArray(blocks) ? blocks : []).map((block) => Object.freeze({
           ...block,
           ...(block.citations
@@ -210,9 +210,9 @@ class DefaultSessionTurnContext implements SessionTurnContext {
             : {}),
         })),
       );
-      return this.plugin_context_blocks_snapshot;
+      return this.power_context_blocks_snapshot;
     })();
-    return await this.plugin_context_blocks_promise;
+    return await this.power_context_blocks_promise;
   }
 
   /** 为 City 扩展生成不共享根对象引用的只读快照。 */
@@ -234,7 +234,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     });
   }
 
-  /** 释放当前 Step 捕获的 Plugin Hook 作用域。 */
+  /** 释放当前 Step 捕获的 Power Hook 作用域。 */
   private async release_extensions(): Promise<void> {
     const extensions = this.hook_scope;
     this.hook_scope = undefined;
@@ -260,7 +260,7 @@ export function create_session_turn_context(
   return new DefaultSessionTurnContext(init);
 }
 
-/** 为非 Turn 的 system 查询创建 Plugin 可读取的 Session 快照。 */
+/** 为非 Turn 的 system 查询创建 Power 可读取的 Session 快照。 */
 export function create_session_hook_context(
   input: CreateSessionHookContextInput,
 ): SessionHookContext {

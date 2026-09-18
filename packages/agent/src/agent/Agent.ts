@@ -3,7 +3,7 @@
  *
  * 职责说明（中文）
  * - Agent 不绑定 Workspace；调用方通过 `agent.sessions.create({ workspace })` 选择本次执行环境。
- * - Plugin 与 Transport 由 City 持有，Agent 只通过 CityRuntime 使用最小执行能力。
+ * - Power 与 Transport 由 City 持有，Agent 只通过 CityRuntime 使用最小执行能力。
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建时提供执行资源。
  */
 
@@ -35,7 +35,7 @@ import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import {
   build_session_system_blocks,
-  resolve_session_plugin_system_blocks,
+  resolve_session_power_system_blocks,
 } from "@/session/SessionSystem.js";
 import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
@@ -211,7 +211,7 @@ export class Agent {
       workspace_env: Object.freeze({ ...workspace.get_env() }),
       agent_systems: instruction_system_blocks.map((block) => block.content),
     });
-    const plugin_system_blocks = await resolve_session_plugin_system_blocks({
+    const power_system_blocks = await resolve_session_power_system_blocks({
       session_id,
       hooks,
       context: hook_context,
@@ -223,8 +223,8 @@ export class Agent {
       created_at: Date.now(),
       timezone: resolve_system_timezone(),
       get_instruction_system_blocks: () => instruction_system_blocks,
-      get_managed_plugin_system_blocks: async () => [],
-      get_plugin_system_blocks: async () => plugin_system_blocks,
+      get_managed_power_system_blocks: async () => [],
+      get_power_system_blocks: async () => power_system_blocks,
     });
     return blocks.map((block) => ({ role: "system", content: block.content }));
   }

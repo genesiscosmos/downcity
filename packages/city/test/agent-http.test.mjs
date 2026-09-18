@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - events 必须转发统一 SessionMutation，RemoteSession 的 turn.finished 才能结束。
- * - AgentHTTP 必须暴露 RemoteAgent 的 plugin action 路由，不能只提供 session 路由。
+ * - AgentHTTP 必须暴露 RemoteAgent 的 power action 路由，不能只提供 session 路由。
  */
 
 import assert from "node:assert/strict";
@@ -193,15 +193,15 @@ function create_fake_agent() {
         return { removed_session_ids: [] };
       },
     },
-    plugins: {
-      async run_action({ plugin, action, payload }) {
-        return { success: true, data: { plugin, action, payload } };
+    powers: {
+      async run_action({ power, action, payload }) {
+        return { success: true, data: { power, action, payload } };
       },
     },
   };
 }
 
-test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", {
+test("AgentHTTP resolves RemoteAgent turns and exposes power actions", {
   skip: !network_tests_enabled,
 }, async () => {
   const port = await reserve_port();
@@ -277,19 +277,19 @@ test("AgentHTTP resolves RemoteAgent turns and exposes plugin actions", {
         response: { type: "approval", payload: { decision: "approved" } },
       },
     );
-    const action = await remote_agent.run_plugin_action({
-      plugin: "demo",
+    const action = await remote_agent.run_power_action({
+      power: "demo",
       action: "echo",
       payload: { text: "hello" },
     });
     assert.deepEqual(action, {
       success: true,
       data: {
-        plugin: "demo",
+        power: "demo",
         action: "echo",
         payload: { text: "hello" },
       },
-      plugin_name: "demo",
+      power_name: "demo",
       action_name: "echo",
     });
     unsubscribe();

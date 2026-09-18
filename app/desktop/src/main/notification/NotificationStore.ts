@@ -3,7 +3,7 @@
 import type { LocalSettingRepository } from "@downcity/city/local";
 import type { DesktopNotification, DesktopNotificationScope, DesktopNotificationTarget } from "../../common/types/DesktopNotification.js";
 import type { DesktopNotificationStorage } from "../types/notification/Notification.js";
-import type { PluginJsonObject } from "@downcity/city/plugin";
+import type { PowerJsonObject } from "@downcity/city/power";
 
 const notification_settings_key = "desktop.notifications";
 
@@ -78,10 +78,10 @@ function normalize_notification_scopes(input: unknown): DesktopNotificationScope
       if (!group_id) throw new Error("notification scope is incomplete");
       return { kind: "group", group_id };
     }
-    if (candidate.kind === "plugin") {
-      const plugin_id = normalize_text(candidate.plugin_id);
-      if (!plugin_id) throw new Error("notification scope is incomplete");
-      return { kind: "plugin", plugin_id };
+    if (candidate.kind === "power") {
+      const power_id = normalize_text(candidate.power_id);
+      if (!power_id) throw new Error("notification scope is incomplete");
+      return { kind: "power", power_id };
     }
     throw new Error("notification scope kind is invalid");
   });
@@ -99,7 +99,7 @@ function is_supported_notification_kind(kind: unknown): kind is DesktopNotificat
     || kind === "session_turn_failed"
     || kind === "group_interaction_pending"
     || kind === "group_turn_failed"
-    || kind === "plugin";
+    || kind === "power";
 }
 
 /** 校验持久化通知所指向的业务目标。 */
@@ -119,18 +119,18 @@ function normalize_notification_target(input: unknown): DesktopNotificationTarge
     if (!group_id || !session_id) throw new Error("notification target is incomplete");
     return { kind: "group_session", group_id, session_id };
   }
-  if (candidate.kind === "plugin") {
-    const plugin_id = normalize_text(candidate.plugin_id);
-    if (!plugin_id) throw new Error("notification target is incomplete");
-    return { kind: "plugin", plugin_id, route: normalize_plugin_route(candidate.route) };
+  if (candidate.kind === "power") {
+    const power_id = normalize_text(candidate.power_id);
+    if (!power_id) throw new Error("notification target is incomplete");
+    return { kind: "power", power_id, route: normalize_power_route(candidate.route) };
   }
   throw new Error("notification target kind is invalid");
 }
 
-/** 读取持久化的 Plugin JSON 路由。 */
-function normalize_plugin_route(value: unknown): PluginJsonObject {
+/** 读取持久化的 Power JSON 路由。 */
+function normalize_power_route(value: unknown): PowerJsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("notification target route is invalid");
   const serialized = JSON.stringify(value);
   if (serialized.length > 32 * 1024) throw new Error("notification target route is too large");
-  return JSON.parse(serialized) as PluginJsonObject;
+  return JSON.parse(serialized) as PowerJsonObject;
 }

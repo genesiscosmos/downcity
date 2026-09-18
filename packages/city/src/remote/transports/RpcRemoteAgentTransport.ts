@@ -27,9 +27,9 @@ import type {
   SessionMessagePage,
 } from "@downcity/agent";
 import type {
-  RemoteAgentPluginActionInput,
-  RemoteAgentPluginActionResult,
-} from "@/types/remote/RemoteAgentPluginAction.js";
+  RemoteAgentPowerActionInput,
+  RemoteAgentPowerActionResult,
+} from "@/types/remote/RemoteAgentPowerAction.js";
 import type { SessionMutation } from "@downcity/agent";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type { AgentSessionStopResult } from "@downcity/agent";
@@ -152,11 +152,11 @@ export class RpcRemoteAgentTransport implements RemoteAgentTransport {
     return await this.client.clean_archive();
   }
 
-  async run_plugin_action(
-    input: RemoteAgentPluginActionInput,
-  ): Promise<RemoteAgentPluginActionResult> {
-    return await this.client.run_internal_plugin_action({
-      plugin_name: input.plugin,
+  async run_power_action(
+    input: RemoteAgentPowerActionInput,
+  ): Promise<RemoteAgentPowerActionResult> {
+    return await this.client.run_internal_power_action({
+      power_name: input.power,
       action_name: input.action,
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
     });

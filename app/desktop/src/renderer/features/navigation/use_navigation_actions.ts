@@ -24,7 +24,7 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
   const { catalog, navigation, settings, previous_selection_ref, selection_by_sidebar_mode_ref } = dependencies;
   useEffect(() => {
     const report_view_state = () => {
-      const target = notification_target_from_navigation(navigation.state_ref.current.selection, navigation.state_ref.current.plugin_routes);
+      const target = notification_target_from_navigation(navigation.state_ref.current.selection, navigation.state_ref.current.power_routes);
       void window.downcity.notification.set_view_state({
         ...(target ? { target } : {}),
         visible: Boolean(target && document.visibilityState === "visible" && document.hasFocus()),
@@ -54,15 +54,15 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
     persist_selection();
     return navigation.store.subscribe(persist_selection);
   }, [navigation, selection_by_sidebar_mode_ref]);
-  const select_plugin = useCallback((plugin_id: string) => { settings.set_error(""); navigation.set_sidebar_mode("plugins"); navigation.set_selection({ kind: "plugin", plugin_id }); }, [navigation, settings]);
-  const select_plugins = useCallback(() => { settings.set_error(""); navigation.set_sidebar_mode("plugins"); navigation.set_selection({ kind: "plugins" }); }, [navigation, settings]);
-  const select_plugin_workspace = useCallback((plugin_id: string) => {
-    const plugin = catalog.state_ref.current.plugins.find((item) => item.plugin_id === plugin_id);
-    if (!plugin?.has_sidebar || !plugin.has_mainview) return;
-    settings.set_error(""); navigation.set_sidebar_mode(`plugin:${plugin_id}`); navigation.set_selection({ kind: "plugin_workspace", plugin_id });
+  const select_power = useCallback((power_id: string) => { settings.set_error(""); navigation.set_sidebar_mode("powers"); navigation.set_selection({ kind: "power", power_id }); }, [navigation, settings]);
+  const select_powers = useCallback(() => { settings.set_error(""); navigation.set_sidebar_mode("powers"); navigation.set_selection({ kind: "powers" }); }, [navigation, settings]);
+  const select_power_workspace = useCallback((power_id: string) => {
+    const power = catalog.state_ref.current.powers.find((item) => item.power_id === power_id);
+    if (!power?.has_sidebar || !power.has_mainview) return;
+    settings.set_error(""); navigation.set_sidebar_mode(`power:${power_id}`); navigation.set_selection({ kind: "power_workspace", power_id });
   }, [catalog, navigation, settings]);
-  const navigate_plugin = useCallback((plugin_id: string, route: import("@downcity/city/plugin").PluginJsonObject) => navigation.navigate_plugin(plugin_id, route), [navigation]);
-  const invalidate_plugin = useCallback((plugin_id: string) => navigation.invalidate_plugin(plugin_id), [navigation]);
+  const navigate_power = useCallback((power_id: string, route: import("@downcity/city/power").PowerJsonObject) => navigation.navigate_power(power_id, route), [navigation]);
+  const invalidate_power = useCallback((power_id: string) => navigation.invalidate_power(power_id), [navigation]);
   const set_sidebar_mode = useCallback((mode: SidebarMode) => {
     navigation.set_sidebar_mode(mode);
     const remembered_selection = selection_by_sidebar_mode_ref.current[mode];
@@ -71,10 +71,10 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
       const workspace = catalog.state_ref.current.workspaces.find((item) => item.workspace_id === navigation.state_ref.current.active_workspace_id) ?? catalog.state_ref.current.workspaces[0];
       return navigation.set_selection(workspace ? { kind: "workspace", workspace_id: workspace.workspace_id } : null);
     }
-    if (mode === "plugins") return navigation.set_selection({ kind: "plugins" });
-    const plugin_id = mode.startsWith("plugin:") ? mode.slice("plugin:".length) : undefined;
-    const plugin = plugin_id ? catalog.state_ref.current.plugins.find((item) => item.plugin_id === plugin_id) : undefined;
-    if (plugin?.has_sidebar && plugin.has_mainview) return navigation.set_selection({ kind: "plugin_workspace", plugin_id: plugin.plugin_id });
+    if (mode === "powers") return navigation.set_selection({ kind: "powers" });
+    const power_id = mode.startsWith("power:") ? mode.slice("power:".length) : undefined;
+    const power = power_id ? catalog.state_ref.current.powers.find((item) => item.power_id === power_id) : undefined;
+    if (power?.has_sidebar && power.has_mainview) return navigation.set_selection({ kind: "power_workspace", power_id: power.power_id });
     navigation.set_selection(catalog.state_ref.current.agents[0] ? { kind: "agent", agent_id: catalog.state_ref.current.agents[0].agent_id } : null);
   }, [catalog, navigation, selection_by_sidebar_mode_ref]);
   const select_workspace = useCallback((workspace_id: string) => {
@@ -96,14 +96,14 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
     navigation.set_selection({ kind: "settings", section });
   }, [navigation, previous_selection_ref, settings]);
   const close_settings = useCallback(() => navigation.set_selection(previous_selection_ref.current ?? (catalog.state_ref.current.agents[0] ? { kind: "agent", agent_id: catalog.state_ref.current.agents[0].agent_id } : null)), [catalog, navigation, previous_selection_ref]);
-  return useMemo(() => ({ select_plugin, select_plugins, select_plugin_workspace, navigate_plugin, invalidate_plugin, set_sidebar_mode, select_workspace, select_workspace_file, select_agent, open_create_agent, select_group, open_settings, close_settings }), [close_settings, invalidate_plugin, navigate_plugin, open_create_agent, open_settings, select_agent, select_group, select_plugin, select_plugin_workspace, select_plugins, select_workspace, select_workspace_file, set_sidebar_mode]);
+  return useMemo(() => ({ select_power, select_powers, select_power_workspace, navigate_power, invalidate_power, set_sidebar_mode, select_workspace, select_workspace_file, select_agent, open_create_agent, select_group, open_settings, close_settings }), [close_settings, invalidate_power, navigate_power, open_create_agent, open_settings, select_agent, select_group, select_power, select_power_workspace, select_powers, select_workspace, select_workspace_file, set_sidebar_mode]);
 }
 
 /** 返回导航目标所属的一级 Sidebar。 */
 function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
   if (target.kind === "workspace" || target.kind === "workspace_file") return "workspace";
-  if (target.kind === "plugin" || target.kind === "plugins") return "plugins";
-  if (target.kind === "plugin_workspace") return `plugin:${target.plugin_id}`;
+  if (target.kind === "power" || target.kind === "powers") return "powers";
+  if (target.kind === "power_workspace") return `power:${target.power_id}`;
   if (target.kind === "settings") return undefined;
   return "chat";
 }

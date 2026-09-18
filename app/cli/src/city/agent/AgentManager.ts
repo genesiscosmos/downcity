@@ -20,7 +20,7 @@ import { run_agent_configuration } from "@/city/agent/AgentConfiguration.js";
 import type { tui_prompt_option } from "@/shared/types/TuiPrompt.js";
 
 /** Agents 首页中的 City 级动作。 */
-export type agent_list_city_action = "federation" | "plugins" | "language" | "help";
+export type agent_list_city_action = "federation" | "powers" | "language" | "help";
 
 /** Agent 列表页面的 City 级导航扩展。 */
 export interface interactive_agent_manager_options {
@@ -122,11 +122,11 @@ async function build_agent_options(
             }),
           },
           {
-            label: "Plugins",
-            value: "plugins",
+            label: "Powers",
+            value: "powers",
             hint: t({
-              zh: "安装、更新和管理全局 Plugin 与唯一配置",
-              en: "Install, update, and manage global Plugins and unique configuration",
+              zh: "安装、更新和管理全局 Power 与唯一配置",
+              en: "Install, update, and manage global Powers and unique configuration",
             }),
           },
           {
@@ -147,7 +147,7 @@ async function build_agent_options(
 
 function is_city_action(value: string): value is agent_list_city_action {
   return value === "federation"
-    || value === "plugins"
+    || value === "powers"
     || value === "language"
     || value === "help";
 }

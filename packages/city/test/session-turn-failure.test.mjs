@@ -69,7 +69,7 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
   return { messages, root_path, turn };
 }
 
-test("Plugin execution context 保留完整 Session origin", async () => {
+test("Power execution context 保留完整 Session origin", async () => {
   const origin = {
     type: "group",
     group_id: "review-team",
@@ -181,7 +181,7 @@ test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
   assert.equal(release_count, 1);
 });
 
-test("SessionLoop 在释放 Plugin Hook 作用域前触发 turn committed effect", async () => {
+test("SessionLoop 在释放 Power Hook 作用域前触发 turn committed effect", async () => {
   const effects = [];
   let released = false;
   const { turn } = await create_turn_harness(async (turn_context) => {

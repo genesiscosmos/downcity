@@ -1,7 +1,7 @@
 /**
  * Session 公开的稳定 Hook 检查点。
  *
- * 检查点由 Session 定义和触发，City Plugin 只选择是否注册处理器。
+ * 检查点由 Session 定义和触发，City Power 只选择是否注册处理器。
  */
 
 /** Session 运行时的 Hook point 目录。 */

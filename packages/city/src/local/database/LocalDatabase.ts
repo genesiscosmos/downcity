@@ -2,7 +2,7 @@
  * 本地 SQLite 数据库 Adapter。
  *
  * 本模块只提供 SQL 查询、写入、事务和连接生命周期，不创建表，也不理解 Agent、
- * Workspace、Plugin 或其他产品概念。
+ * Workspace、Power 或其他产品概念。
  */
 
 import fs from "fs-extra";

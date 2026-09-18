@@ -51,9 +51,9 @@ function create_input(model) {
         name: "agent",
         content: "Base instruction",
       }],
-      managed_plugin_system_blocks: [],
-      plugin_system_blocks: [],
-      plugin_context_blocks: [],
+      managed_power_system_blocks: [],
+      power_system_blocks: [],
+      power_context_blocks: [],
     },
     storage: {
       list_messages: async () => structuredClone(canonical_messages),
@@ -77,11 +77,11 @@ test("DefaultSessionComposer 从 canonical 快照组装 Step 输入", async () =
   assert.match(step.system.at(-1).content, /composer-session/);
 });
 
-test("DefaultSessionComposer 只把 Plugin Context 注入模型副本", async () => {
+test("DefaultSessionComposer 只把 Power Context 注入模型副本", async () => {
   const model = new MockModelClient({ modelId: "composer-context-model" });
   const input = create_input(model);
-  input.state.plugin_context_blocks = [{
-    source_plugin: "memory",
+  input.state.power_context_blocks = [{
+    source_power: "memory",
     name: "recall",
     content: "用户偏好使用中文。",
     trust_level: "reference",

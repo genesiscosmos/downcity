@@ -27,9 +27,9 @@ import type {
   SessionMessagePage,
 } from "@downcity/agent";
 import type {
-  RemoteAgentPluginActionInput,
-  RemoteAgentPluginActionResult,
-} from "@/types/remote/RemoteAgentPluginAction.js";
+  RemoteAgentPowerActionInput,
+  RemoteAgentPowerActionResult,
+} from "@/types/remote/RemoteAgentPowerAction.js";
 import type { SessionMutation } from "@downcity/agent";
 import type { AgentSessionPromptInput } from "@downcity/agent";
 import type { AgentSessionStopResult } from "@downcity/agent";
@@ -367,25 +367,25 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     };
   }
 
-  async run_plugin_action(
-    input: RemoteAgentPluginActionInput,
-  ): Promise<RemoteAgentPluginActionResult> {
-    const payload = await read_http_action_json<RemoteAgentPluginActionResult>(
-      `${this.base_url}/api/plugins/action`,
+  async run_power_action(
+    input: RemoteAgentPowerActionInput,
+  ): Promise<RemoteAgentPowerActionResult> {
+    const payload = await read_http_action_json<RemoteAgentPowerActionResult>(
+      `${this.base_url}/api/powers/action`,
       {
         method: "POST",
         headers: this.headers({
           "Content-Type": "application/json",
         }),
         body: JSON.stringify({
-          plugin_name: input.plugin,
+          power_name: input.power,
           action_name: input.action,
           ...(input.payload !== undefined ? { payload: input.payload } : {}),
         }),
       },
     );
     if (typeof payload.success !== "boolean") {
-      throw new Error("Remote plugin action returned an invalid response");
+      throw new Error("Remote power action returned an invalid response");
     }
     return payload;
   }

@@ -14,11 +14,11 @@ import type {
   DesktopNotificationBadge,
   DesktopNotificationEvents,
   DesktopNotificationStorage,
-  DesktopPluginNotificationInput,
+  DesktopPowerNotificationInput,
 } from "../types/notification/Notification.js";
 import { NotificationController } from "./NotificationController.js";
 import { GroupNotificationProducer } from "./GroupNotificationProducer.js";
-import { PluginNotificationProducer } from "./PluginNotificationProducer.js";
+import { PowerNotificationProducer } from "./PowerNotificationProducer.js";
 import { SessionTurnNotificationProducer } from "./SessionTurnNotificationProducer.js";
 
 /** Desktop 通知状态、生产与生命周期清理的唯一主进程入口。 */
@@ -29,8 +29,8 @@ export class DesktopNotificationCenter {
   private readonly session_turn_producer: SessionTurnNotificationProducer;
   /** GroupSession 待处理交互与失败事件生产者。 */
   private readonly group_producer: GroupNotificationProducer;
-  /** 受宿主身份约束的 Plugin 通知生产者。 */
-  private readonly plugin_producer: PluginNotificationProducer;
+  /** 受宿主身份约束的 Power 通知生产者。 */
+  private readonly power_producer: PowerNotificationProducer;
 
   constructor(
     storage: DesktopNotificationStorage,
@@ -40,7 +40,7 @@ export class DesktopNotificationCenter {
     this.controller = new NotificationController(storage, badge, events);
     this.session_turn_producer = new SessionTurnNotificationProducer(this.controller);
     this.group_producer = new GroupNotificationProducer(this.controller);
-    this.plugin_producer = new PluginNotificationProducer(this.controller);
+    this.power_producer = new PowerNotificationProducer(this.controller);
   }
 
   /** 返回当前完整未读状态。 */
@@ -68,23 +68,23 @@ export class DesktopNotificationCenter {
     this.group_producer.handle_event(event);
   }
 
-  /** 发布 Desktop City Plugin 产生的宿主通知。 */
-  publish_plugin_notification(plugin_id: string, input: DesktopPluginNotificationInput): void {
-    this.plugin_producer.publish(plugin_id, input);
+  /** 发布 Desktop City Power 产生的宿主通知。 */
+  publish_power_notification(power_id: string, input: DesktopPowerNotificationInput): void {
+    this.power_producer.publish(power_id, input);
   }
 
-  /** 发布 Plugin 在当前执行范围产生并由宿主绑定 Agent 身份的通知。 */
-  publish_agent_plugin_notification(
-    plugin_id: string,
+  /** 发布 Power 在当前执行范围产生并由宿主绑定 Agent 身份的通知。 */
+  publish_agent_power_notification(
+    power_id: string,
     agent_id: string,
-    input: DesktopPluginNotificationInput,
+    input: DesktopPowerNotificationInput,
   ): void {
-    this.plugin_producer.publish(plugin_id, input, agent_id);
+    this.power_producer.publish(power_id, input, agent_id);
   }
 
-  /** 清除一个 Plugin 本地主题对应的未读通知。 */
-  dismiss_plugin_notification(plugin_id: string, topic_key: string): void {
-    this.plugin_producer.dismiss(plugin_id, topic_key);
+  /** 清除一个 Power 本地主题对应的未读通知。 */
+  dismiss_power_notification(power_id: string, topic_key: string): void {
+    this.power_producer.dismiss(power_id, topic_key);
   }
 
   /** Session 被归档或删除后清理其精确目标通知。 */
@@ -97,7 +97,7 @@ export class DesktopNotificationCenter {
     this.controller.mark_target_read({ kind: "group_session", group_id, session_id });
   }
 
-  /** Agent 删除后清理其 Session 和 Plugin 执行范围产生的全部通知。 */
+  /** Agent 删除后清理其 Session 和 Power 执行范围产生的全部通知。 */
   handle_agent_removed(agent_id: string): void {
     this.controller.mark_scope_read({ kind: "agent", agent_id });
   }

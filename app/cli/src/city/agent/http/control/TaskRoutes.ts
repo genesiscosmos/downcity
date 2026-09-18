@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 聚合 tasks/runs/logs 相关接口。
- * - 任务动作统一复用 task plugin runtime command，不在 UI 层重复实现业务语义。
+ * - 任务动作统一复用 task power runtime command，不在 UI 层重复实现业务语义。
  */
 
 import fs from "fs-extra";
@@ -37,12 +37,12 @@ function resolveTaskIdFromTaskMdPath(taskMdPath: unknown): string {
   return basename(dirname(text));
 }
 
-async function listTasksViaPlugin(params: {
+async function listTasksViaPower(params: {
   routes: ControlRouteRegistrationParams;
   status?: string;
 }): Promise<TaskListItem[]> {
-  const result = await params.routes.get_context().plugins.run_action({
-    plugin: "task",
+  const result = await params.routes.get_context().powers.run_action({
+    power: "task",
     action: "list",
     payload: params.status ? { status: params.status } : undefined,
   });
@@ -56,12 +56,12 @@ async function listTasksViaPlugin(params: {
   return Array.isArray(data.tasks) ? data.tasks : [];
 }
 
-async function resolveTaskIdByTitleViaPlugin(params: {
+async function resolveTaskIdByTitleViaPower(params: {
   routes: ControlRouteRegistrationParams;
   title: string;
 }): Promise<string> {
   const title = String(params.title || "").trim();
-  const tasks = await listTasksViaPlugin({ routes: params.routes });
+  const tasks = await listTasksViaPower({ routes: params.routes });
   const matched = tasks.filter((task) => String(task.title || "").trim() === title);
   if (matched.length !== 1) throw new Error(`Task not found: ${title}`);
   const taskId = resolveTaskIdFromTaskMdPath(matched[0]?.taskMdPath);
@@ -84,7 +84,7 @@ async function readTaskRunningState(params: {
 
   let taskId = "";
   try {
-    taskId = await resolveTaskIdByTitleViaPlugin({
+    taskId = await resolveTaskIdByTitleViaPower({
       routes: params.routes,
       title,
     });
@@ -117,7 +117,7 @@ export function registerControlTaskRoutes(
       try {
         const runtime = params.get_context();
         const status = toOptionalString(c.req.query("status"));
-        const tasks = await listTasksViaPlugin({
+        const tasks = await listTasksViaPower({
           routes: params,
           ...(status ? { status } : {}),
         });
@@ -155,8 +155,8 @@ export function registerControlTaskRoutes(
         }
 
         const reason = toOptionalString(body.reason);
-        const result = await params.get_context().plugins.run_action({
-          plugin: "task",
+        const result = await params.get_context().powers.run_action({
+          power: "task",
           action: "run",
           payload: {
             title,
@@ -185,8 +185,8 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Invalid status" }, 400);
         }
 
-        const result = await params.get_context().plugins.run_action({
-          plugin: "task",
+        const result = await params.get_context().powers.run_action({
+          power: "task",
           action: "status",
           payload: {
             title,
@@ -221,8 +221,8 @@ export function registerControlTaskRoutes(
           return c.json({ success: false, error: "Invalid title" }, 400);
         }
 
-        const result = await params.get_context().plugins.run_action({
-          plugin: "task",
+        const result = await params.get_context().powers.run_action({
+          power: "task",
           action: "delete",
           payload: {
             title,
@@ -260,7 +260,7 @@ export function registerControlTaskRoutes(
 
         let taskId = "";
         try {
-          taskId = await resolveTaskIdByTitleViaPlugin({
+          taskId = await resolveTaskIdByTitleViaPower({
             routes: params,
             title,
           });
@@ -307,7 +307,7 @@ export function registerControlTaskRoutes(
 
         let taskId = "";
         try {
-          taskId = await resolveTaskIdByTitleViaPlugin({
+          taskId = await resolveTaskIdByTitleViaPower({
             routes: params,
             title,
           });

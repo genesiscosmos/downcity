@@ -72,7 +72,7 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
     const handle = await interactions.request({
       interaction_id: "interaction:deploy-confirm",
       turn_id: "turn-1",
-      type: "plugin:deployment/confirm",
+      type: "power:deployment/confirm",
       source: {
         type: "tool",
         tool_call_id: "call-deploy",
@@ -98,7 +98,7 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
     const result = await interactions.respond({
       interaction_id: handle.interaction_id,
       response: {
-        type: "plugin:deployment/confirm",
+        type: "power:deployment/confirm",
         outcome: "resolved",
         payload: { decision: "confirmed" },
       },

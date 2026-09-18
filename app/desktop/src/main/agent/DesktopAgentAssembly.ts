@@ -1,12 +1,12 @@
 /**
  * Desktop Agent 装配能力。
  *
- * Electron main 通过这些显式函数创建 Workspace、Model、Tool 与 Plugin Loader。
+ * Electron main 通过这些显式函数创建 Workspace、Model、Tool 与 Power Loader。
  * 该模块不依赖 CLI，也不创建或持有 Agent。
  */
 
 import {
-  LocalPluginLoader,
+  LocalPowerLoader,
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
   resolve_local_agent_env,
@@ -20,9 +20,9 @@ import { Shell, Workspace } from "@downcity/city";
 import type { DesktopLocalData } from "./DesktopLocalData.js";
 import { Embassy, type EmbassyUser } from "@downcity/federation";
 import {
-  create_builtin_plugin_registrations,
-  type BuiltinPluginRegistration,
-} from "@downcity/plugins";
+  create_builtin_power_registrations,
+  type BuiltinPowerRegistration,
+} from "@downcity/powers";
 import type { DesktopModelSummary } from "../../common/types/DesktopApi.js";
 import { create_desktop_sandbox_provider } from "./DesktopPlatformSandbox.js";
 
@@ -44,13 +44,13 @@ interface DesktopDowncityConfig {
   sessions?: Record<string, DesktopEmbassySession>;
 }
 
-/** 创建 Electron main 使用的本地 Plugin Loader。 */
-export function create_desktop_plugin_loader(
+/** 创建 Electron main 使用的本地 Power Loader。 */
+export function create_desktop_power_loader(
   data: DesktopLocalData,
-): LocalPluginLoader {
-  return new LocalPluginLoader({
-    plugin_repository: data.plugins,
-    plugin_registrations: create_desktop_builtin_plugin_registrations(data),
+): LocalPowerLoader {
+  return new LocalPowerLoader({
+    power_repository: data.powers,
+    power_registrations: create_desktop_builtin_power_registrations(data),
   });
 }
 
@@ -225,11 +225,11 @@ class DesktopReasoningModelClient implements ModelClient {
   }
 }
 
-/** 创建 Desktop 宿主提供的官方 Plugin 注册。 */
-export function create_desktop_builtin_plugin_registrations(
+/** 创建 Desktop 宿主提供的官方 Power 注册。 */
+export function create_desktop_builtin_power_registrations(
   data: DesktopLocalData,
-): BuiltinPluginRegistration[] {
-  return create_builtin_plugin_registrations();
+): BuiltinPowerRegistration[] {
+  return create_builtin_power_registrations();
 }
 
 

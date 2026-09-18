@@ -173,8 +173,8 @@ export function registerControlSessionRoutes(
           return c.json({ success: false, error: "Missing session_id" }, 400);
         }
 
-        const result = await runtime.plugins.run_action({
-          plugin: "chat",
+        const result = await runtime.powers.run_action({
+          power: "chat",
           action: "history_clear",
           payload: { session_id },
         });

@@ -7,8 +7,8 @@ import type {
   DesktopNotificationState,
   DesktopNotificationTarget,
 } from "../../../common/types/DesktopNotification";
-import type { PluginJsonObject } from "@downcity/city/plugin";
-import type { PluginRendererNotification } from "@downcity/city/plugin/react";
+import type { PowerJsonObject } from "@downcity/city/power";
+import type { PowerRendererNotification } from "@downcity/city/power/react";
 import type { NavigationTarget } from "../../types/DesktopView";
 import { attention_from_notification_kind, highest_attention, type ChatAttention } from "./attention.ts";
 
@@ -32,7 +32,7 @@ export function create_group_session_notification_target(
 /** 将当前页面导航投影为可被 Notification 识别的目标。 */
 export function notification_target_from_navigation(
   target: NavigationTarget | null,
-  plugin_routes: Readonly<Record<string, PluginJsonObject>> = {},
+  power_routes: Readonly<Record<string, PowerJsonObject>> = {},
 ): DesktopNotificationTarget | undefined {
   if (target?.kind === "session") {
     return create_agent_session_notification_target(target.workspace_id, target.agent_id, target.session_id);
@@ -40,11 +40,11 @@ export function notification_target_from_navigation(
   if (target?.kind === "group_session") {
     return create_group_session_notification_target(target.group_id, target.session_id);
   }
-  if (target?.kind === "plugin_workspace" || target?.kind === "plugin") {
+  if (target?.kind === "power_workspace" || target?.kind === "power") {
     return {
-      kind: "plugin",
-      plugin_id: target.plugin_id,
-      route: target.kind === "plugin_workspace" ? structuredClone(plugin_routes[target.plugin_id] ?? {}) : {},
+      kind: "power",
+      power_id: target.power_id,
+      route: target.kind === "power_workspace" ? structuredClone(power_routes[target.power_id] ?? {}) : {},
     };
   }
   return undefined;
@@ -89,19 +89,19 @@ export function get_chat_unread_attention(state: DesktopNotificationState): Chat
   return highest_session_attention(state, (target) => target.kind === "agent_session" || target.kind === "group_session");
 }
 
-/** 判断一个 Plugin 是否存在任意未读通知。 */
-export function has_unread_plugin_notification(state: DesktopNotificationState, plugin_id: string): boolean {
-  return state.notifications.some((notification) => notification.target.kind === "plugin" && notification.target.plugin_id === plugin_id);
+/** 判断一个 Power 是否存在任意未读通知。 */
+export function has_unread_power_notification(state: DesktopNotificationState, power_id: string): boolean {
+  return state.notifications.some((notification) => notification.target.kind === "power" && notification.target.power_id === power_id);
 }
 
-/** 将 Desktop 状态投影为当前 Plugin Renderer 可见的只读通知。 */
-export function plugin_renderer_notifications(
+/** 将 Desktop 状态投影为当前 Power Renderer 可见的只读通知。 */
+export function power_renderer_notifications(
   state: DesktopNotificationState,
-  plugin_id: string,
-): PluginRendererNotification[] {
-  const topic_prefix = `plugin:${plugin_id}:`;
+  power_id: string,
+): PowerRendererNotification[] {
+  const topic_prefix = `power:${power_id}:`;
   return state.notifications.flatMap((notification) => {
-    if (notification.target.kind !== "plugin" || notification.target.plugin_id !== plugin_id) return [];
+    if (notification.target.kind !== "power" || notification.target.power_id !== power_id) return [];
     return [{
       topic_key: notification.topic_key.startsWith(topic_prefix)
         ? notification.topic_key.slice(topic_prefix.length)

@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 该配置只属于 CLI/City 控制面，不进入 Agent SDK。
- * - Agent 只接收宿主已经装配好的 Workspace、Model 与 Plugin 实例。
+ * - Agent 只接收宿主已经装配好的 Workspace、Model 与 Power 实例。
  */
 import type { LlmConfig } from "@/city/types/config/LlmConfig.js";
 import type { ExecutionBindingConfig } from "@/city/types/config/ExecutionBinding.js";

@@ -2,7 +2,7 @@
  * Session Interaction 通用协议。
  *
  * Interaction 只定义可持久化的生命周期与通用信封；业务类型和 payload
- * 由 Tool、Plugin、Shell 或宿主应用动态定义，前端可以自由选择渲染方式。
+ * 由 Tool、Power、Shell 或宿主应用动态定义，前端可以自由选择渲染方式。
  *
  * Interaction 没有超时：它只能由用户响应，或随所属 Turn/Session 结束而被取消。
  */
@@ -24,7 +24,7 @@ export type SessionApprovalMode = "ask" | "always-allow";
  * 发起 Interaction 的调用来源。
  *
  * Interaction 必然属于一次具体的工具调用：Tool 在等待响应时阻塞，所以不存在
- * “不绑定具体调用”的 Interaction。plugin 是身份而非调用类别，不属于本维度。
+ * “不绑定具体调用”的 Interaction。power 是身份而非调用类别，不属于本维度。
  */
 export interface SessionInteractionSource {
   /** 发起交互的调用类别。 */
@@ -41,7 +41,7 @@ export interface SessionInteractionRequest {
   interaction_id: string;
   /** 当前 Interaction 所属 Turn 标识。 */
   turn_id: string;
-  /** 动态业务类型；核心类型使用 question、approval 等，Plugin 使用命名空间。 */
+  /** 动态业务类型；核心类型使用 question、approval 等，Power 使用命名空间。 */
   type: string;
   /** 当前 Interaction 的执行来源。 */
   source: SessionInteractionSource;

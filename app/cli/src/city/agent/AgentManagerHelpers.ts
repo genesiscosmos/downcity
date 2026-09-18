@@ -52,11 +52,11 @@ export function formatAgentConfigPanelDescription(agent: AgentManagerAgentSummar
   return t({
     zh: [
       `Agent ${label} · 模型 ${agent.execution_binding || "未配置"}`,
-      "配置默认模型、Env，以及内建或第三方 Plugin Binding。",
+      "配置默认模型、Env，以及内建或第三方 Power Binding。",
     ].join("\n"),
     en: [
       `Agent ${label} · Model ${agent.execution_binding || "not configured"}`,
-      "Configure the default model, Env, and built-in or installed Plugin bindings.",
+      "Configure the default model, Env, and built-in or installed Power bindings.",
     ].join("\n"),
   });
 }

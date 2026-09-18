@@ -1,4 +1,4 @@
-/** 验证一个 Agent 可以进入多个 Workspace，且 Plugin Context 与生命周期彼此隔离。 */
+/** 验证一个 Agent 可以进入多个 Workspace，且 Power Context 与生命周期彼此隔离。 */
 
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -9,16 +9,16 @@ import { Agent } from "@downcity/agent";
 import { City } from "../bin/index.js";
 import { Workspace } from "@downcity/city";
 import {
-  add_test_plugin,
-  create_plugin_registration,
-  create_test_plugin as create_plugin,
-} from "./helpers/CityPluginTestBinding.mjs";
+  add_test_power,
+  create_power_registration,
+  create_test_power as create_power,
+} from "./helpers/CityPowerTestBinding.mjs";
 
-test("one Agent enters multiple Workspaces with contextual Plugin execution", async () => {
+test("one Agent enters multiple Workspaces with contextual Power execution", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-workspaces-"));
   const lifecycle_events = [];
   const contexts = [];
-  const plugin = create_plugin({
+  const power = create_power({
     name: "context_probe",
     title: "Context Probe",
     description: "Records the current Workspace Context.",
@@ -57,21 +57,21 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [first_workspace, second_workspace] });
-  add_test_plugin(city, plugin);
+  add_test_power(city, power);
   city.agents.add(agent);
 
   try {
-    const first_plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: first_workspace.id });
-    const second_plugins = city.plugins.scope({ agent_id: agent.id, workspace_id: second_workspace.id });
+    const first_powers = city.powers.scope({ agent_id: agent.id, workspace_id: first_workspace.id });
+    const second_powers = city.powers.scope({ agent_id: agent.id, workspace_id: second_workspace.id });
     const [first_result, second_result] = await Promise.all([
-      first_plugins.run_action({ plugin: "context_probe", action: "inspect" }),
-      second_plugins.run_action({ plugin: "context_probe", action: "inspect" }),
+      first_powers.run_action({ power: "context_probe", action: "inspect" }),
+      second_powers.run_action({ power: "context_probe", action: "inspect" }),
     ]);
     assert.equal(first_result.data.workspace_id, "sdk");
     assert.equal(second_result.data.workspace_id, "homepage");
     assert.deepEqual(new Set(contexts.map((item) => item.workspace_id)), new Set(["sdk", "homepage"]));
     assert.equal(contexts[0].data_path, contexts[1].data_path);
-    assert.match(contexts[0].data_path, /\/memory\/agents\/coder\/plugins\/context_probe$/u);
+    assert.match(contexts[0].data_path, /\/memory\/agents\/coder\/powers\/context_probe$/u);
     assert.equal(lifecycle_events.filter((item) => item === "initialize").length, 1);
 
     assert.equal(await city.workspaces.remove("sdk"), first_workspace);
@@ -84,10 +84,10 @@ test("one Agent enters multiple Workspaces with contextual Plugin execution", as
 
 });
 
-test("PluginContext sessions keep the current Workspace binding", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-plugin-sessions-"));
+test("PowerContext sessions keep the current Workspace binding", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-power-sessions-"));
   let linked_session_id = "";
-  const plugin = create_plugin({
+  const power = create_power({
     name: "session_probe",
     title: "Session Probe",
     description: "Validates the current Workspace Session view.",
@@ -115,14 +115,14 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
       },
     },
   });
-  const agent = new Agent({ id: "plugin-session-agent" });
+  const agent = new Agent({ id: "power-session-agent" });
   const workspace = new Workspace({
-    id: "plugin-session-workspace",
+    id: "power-session-workspace",
     path: root,
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [workspace] });
-  add_test_plugin(city, plugin);
+  add_test_power(city, power);
   city.agents.add(agent);
 
   try {
@@ -132,11 +132,11 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
     const unsubscribe = linked_session.subscribe((mutation) => {
       mutations.push(mutation);
     });
-    const result = await city.plugins.scope({
+    const result = await city.powers.scope({
       agent_id: agent.id,
       workspace_id: workspace.id,
     }).run_action({
-      plugin: "session_probe",
+      power: "session_probe",
       action: "inspect",
       execution_context: {
         session_id: linked_session.id,
@@ -147,12 +147,12 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
     unsubscribe();
     assert.equal(result.success, true);
     assert.deepEqual(result.data, {
-      linked_workspace_id: "plugin-session-workspace",
-      task_workspace_id: "plugin-session-workspace",
+      linked_workspace_id: "power-session-workspace",
+      task_workspace_id: "power-session-workspace",
       direct_session_id: linked_session.id,
       direct_turn_id: "turn-direct-context",
-      direct_agent_id: "plugin-session-agent",
-      direct_workspace_id: "plugin-session-workspace",
+      direct_agent_id: "power-session-agent",
+      direct_workspace_id: "power-session-workspace",
     });
     const messages = await linked_session.messages();
     assert.equal(messages.items.at(-1)?.role, "agent");
@@ -170,10 +170,10 @@ test("PluginContext sessions keep the current Workspace binding", async () => {
   }
 });
 
-test("Plugin runtime data is isolated by Agent and shared across Workspaces", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-plugin-data-"));
+test("Power runtime data is isolated by Agent and shared across Workspaces", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-power-data-"));
   const contexts = [];
-  const plugin = create_plugin({
+  const power = create_power({
     name: "data_probe",
     title: "Data Probe",
     description: "Records its runtime data path.",
@@ -198,36 +198,36 @@ test("Plugin runtime data is isolated by Agent and shared across Workspaces", as
   const second_workspace = new Workspace({ id: "two", path: path.join(root, "two"), data_root_path: path.join(root, "data") });
   const third_workspace = new Workspace({ id: "three", path: path.join(root, "three"), data_root_path: path.join(root, "data") });
   const city = new City({ workspaces: [first_workspace, second_workspace, third_workspace] });
-  const registration = create_plugin_registration(plugin);
-  await city.plugins.add(registration);
+  const registration = create_power_registration(power);
+  await city.powers.add(registration);
   city.agents.add(agent_a);
   city.agents.add(agent_b);
   try {
     await Promise.all([
-      city.plugins.scope({ agent_id: agent_a.id, workspace_id: first_workspace.id })
-        .run_action({ plugin: "data_probe", action: "inspect" }),
-      city.plugins.scope({ agent_id: agent_a.id, workspace_id: second_workspace.id })
-        .run_action({ plugin: "data_probe", action: "inspect" }),
-      city.plugins.scope({ agent_id: agent_b.id, workspace_id: third_workspace.id })
-        .run_action({ plugin: "data_probe", action: "inspect" }),
+      city.powers.scope({ agent_id: agent_a.id, workspace_id: first_workspace.id })
+        .run_action({ power: "data_probe", action: "inspect" }),
+      city.powers.scope({ agent_id: agent_a.id, workspace_id: second_workspace.id })
+        .run_action({ power: "data_probe", action: "inspect" }),
+      city.powers.scope({ agent_id: agent_b.id, workspace_id: third_workspace.id })
+        .run_action({ power: "data_probe", action: "inspect" }),
     ]);
     const agent_a_paths = contexts.filter((item) => item.agent_id === "data_agent_a").map((item) => item.data_path);
     const agent_b_paths = contexts.filter((item) => item.agent_id === "data_agent_b").map((item) => item.data_path);
     assert.equal(new Set(agent_a_paths).size, 1);
     assert.equal(new Set(agent_b_paths).size, 1);
     assert.notEqual(agent_a_paths[0], agent_b_paths[0]);
-    assert.match(agent_a_paths[0], /\/memory\/agents\/data_agent_a\/plugins\/data_probe$/u);
-    assert.match(agent_b_paths[0], /\/memory\/agents\/data_agent_b\/plugins\/data_probe$/u);
+    assert.match(agent_a_paths[0], /\/memory\/agents\/data_agent_a\/powers\/data_probe$/u);
+    assert.match(agent_b_paths[0], /\/memory\/agents\/data_agent_b\/powers\/data_probe$/u);
   } finally {
     await city.close();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test("Plugin can ignore Workspace while still receiving its Context", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-global-plugin-"));
+test("Power can ignore Workspace while still receiving its Context", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-global-power-"));
   let calls = 0;
-  const plugin = create_plugin({
+  const power = create_power({
     name: "counter",
     title: "Counter",
     description: "Uses only Agent-level state.",
@@ -254,22 +254,22 @@ test("Plugin can ignore Workspace while still receiving its Context", async () =
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [first_workspace, second_workspace] });
-  add_test_plugin(city, plugin);
+  add_test_power(city, power);
   city.agents.add(agent);
   try {
-    assert.equal((await city.plugins.scope({ agent_id: agent.id, workspace_id: first_workspace.id })
-      .run_action({ plugin: "counter", action: "increment" })).data.value, 1);
-    assert.equal((await city.plugins.scope({ agent_id: agent.id, workspace_id: second_workspace.id })
-      .run_action({ plugin: "counter", action: "increment" })).data.value, 2);
+    assert.equal((await city.powers.scope({ agent_id: agent.id, workspace_id: first_workspace.id })
+      .run_action({ power: "counter", action: "increment" })).data.value, 1);
+    assert.equal((await city.powers.scope({ agent_id: agent.id, workspace_id: second_workspace.id })
+      .run_action({ power: "counter", action: "increment" })).data.value, 2);
   } finally {
     await city.close();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test("Workspace cleanup is independent from Plugin lifecycle", async () => {
+test("Workspace cleanup is independent from Power lifecycle", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-agent-cleanup-"));
-  const plugin = create_plugin({ name: "cleanup_observer" });
+  const power = create_power({ name: "cleanup_observer" });
   const agent = new Agent({ id: "cleanup_agent" });
   const workspace = new Workspace({
     id: "cleanup",
@@ -277,7 +277,7 @@ test("Workspace cleanup is independent from Plugin lifecycle", async () => {
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [workspace] });
-  add_test_plugin(city, plugin);
+  add_test_power(city, power);
   city.agents.add(agent);
 
   try {

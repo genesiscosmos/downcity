@@ -1,16 +1,16 @@
 /**
  * CLI Agent 装配能力。
  *
- * CLI 组合根通过这些显式函数创建 Workspace、Model、Tool 与 Plugin Loader。City
+ * CLI 组合根通过这些显式函数创建 Workspace、Model、Tool 与 Power Loader。City
  * 只接收已经创建完成的 Agent，不参与任何装配决策。
  */
 
 import {
-  LocalPluginLoader,
+  LocalPowerLoader,
   type LocalAgentConfig,
   type LocalWorkspaceConfig,
-  type PluginRepository,
-  type LocalPluginRegistration,
+  type PowerRepository,
+  type LocalPowerRegistration,
 } from "@downcity/city/local";
 import {
   Agent,
@@ -20,26 +20,26 @@ import type { ModelClient } from "@downcity/type";
 import { AskQuestionsTool } from "@downcity/agent/tools";
 import { Shell, Workspace } from "@downcity/city";
 import {
-  create_builtin_plugin_registrations,
-} from "@downcity/plugins";
+  create_builtin_power_registrations,
+} from "@downcity/powers";
 import { create_city_ai_model_client } from "@/city/runtime/city-model/CityAiServiceBinding.js";
 import { resolve_local_agent_env } from "@downcity/city/local";
 import { resolve_local_root_path } from "@downcity/city/local";
 import { create_sandbox_provider } from "@/city/sandbox/PlatformSandbox.js";
 
-/** 创建 CLI 与 Desktop 可共享语义的官方 Plugin 注册集合。 */
-export function create_cli_builtin_plugin_registrations(): LocalPluginRegistration[] {
-  return create_builtin_plugin_registrations();
+/** 创建 CLI 与 Desktop 可共享语义的官方 Power 注册集合。 */
+export function create_cli_builtin_power_registrations(): LocalPowerRegistration[] {
+  return create_builtin_power_registrations();
 }
 
-/** 创建 CLI 读取本地 Plugin 定义与入口的 Loader。 */
-export function create_cli_plugin_loader(input: {
-  /** 当前 CLI 进程读取 Plugin 数据使用的仓储。 */
-  plugin_repository: PluginRepository;
-}): LocalPluginLoader {
-  return new LocalPluginLoader({
-    plugin_repository: input.plugin_repository,
-    plugin_registrations: create_cli_builtin_plugin_registrations(),
+/** 创建 CLI 读取本地 Power 定义与入口的 Loader。 */
+export function create_cli_power_loader(input: {
+  /** 当前 CLI 进程读取 Power 数据使用的仓储。 */
+  power_repository: PowerRepository;
+}): LocalPowerLoader {
+  return new LocalPowerLoader({
+    power_repository: input.power_repository,
+    power_registrations: create_cli_builtin_power_registrations(),
   });
 }
 

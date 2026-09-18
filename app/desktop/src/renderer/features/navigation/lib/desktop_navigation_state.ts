@@ -14,8 +14,8 @@ export function is_restorable_navigation_target(target: NavigationTarget): targe
 /** 从稳定导航目标推导一级侧栏，避免持久化第二份可能漂移的状态。 */
 export function get_sidebar_mode_for_navigation(target: RestorableNavigationTarget): SidebarMode {
   if (target.kind === "workspace" || target.kind === "workspace_file") return "workspace";
-  if (target.kind === "plugin" || target.kind === "plugins") return "plugins";
-  if (target.kind === "plugin_workspace") return `plugin:${target.plugin_id}`;
+  if (target.kind === "power" || target.kind === "powers") return "powers";
+  if (target.kind === "power_workspace") return `power:${target.power_id}`;
   return "chat";
 }
 
@@ -25,7 +25,7 @@ export function parse_navigation_target(serialized: string | null): RestorableNa
   try {
     const value: unknown = JSON.parse(serialized);
     if (!is_record(value) || typeof value.kind !== "string") return undefined;
-    if (value.kind === "plugins") return { kind: "plugins" };
+    if (value.kind === "powers") return { kind: "powers" };
     if (value.kind === "workspace" && has_string(value, "workspace_id")) return { kind: "workspace", workspace_id: value.workspace_id };
     if (value.kind === "workspace_file" && has_string(value, "workspace_id") && has_string(value, "relative_path")) {
       const line = read_positive_integer(value.line);
@@ -35,8 +35,8 @@ export function parse_navigation_target(serialized: string | null): RestorableNa
     if (value.kind === "session" && has_string(value, "workspace_id") && has_string(value, "agent_id") && has_string(value, "session_id")) return { kind: "session", workspace_id: value.workspace_id, agent_id: value.agent_id, session_id: value.session_id };
     if (value.kind === "group" && has_string(value, "group_id")) return { kind: "group", group_id: value.group_id };
     if (value.kind === "group_session" && has_string(value, "group_id") && has_string(value, "workspace_id") && has_string(value, "session_id")) return { kind: "group_session", group_id: value.group_id, workspace_id: value.workspace_id, session_id: value.session_id };
-    if (value.kind === "plugin" && has_string(value, "plugin_id")) return { kind: "plugin", plugin_id: value.plugin_id };
-    if (value.kind === "plugin_workspace" && has_string(value, "plugin_id")) return { kind: "plugin_workspace", plugin_id: value.plugin_id };
+    if (value.kind === "power" && has_string(value, "power_id")) return { kind: "power", power_id: value.power_id };
+    if (value.kind === "power_workspace" && has_string(value, "power_id")) return { kind: "power_workspace", power_id: value.power_id };
   } catch {
     return undefined;
   }
@@ -47,7 +47,7 @@ export function parse_navigation_target(serialized: string | null): RestorableNa
 export function resolve_navigation_target(target: RestorableNavigationTarget | undefined, catalog: DesktopNavigationCatalog, default_workspace_id = ""): RestorableNavigationTarget | undefined {
   const fallback_workspace = catalog.workspaces.find((workspace) => workspace.workspace_id === default_workspace_id) ?? catalog.workspaces[0];
   if (!target) return fallback_workspace ? { kind: "workspace", workspace_id: fallback_workspace.workspace_id } : undefined;
-  if (target.kind === "plugins") return target;
+  if (target.kind === "powers") return target;
   if (target.kind === "workspace" || target.kind === "workspace_file") {
     return catalog.workspaces.some((workspace) => workspace.workspace_id === target.workspace_id)
       ? target
@@ -69,9 +69,9 @@ export function resolve_navigation_target(target: RestorableNavigationTarget | u
     if (target.kind === "group_session" && group.sessions.some((session) => session.session_id === target.session_id && session.workspace_id === target.workspace_id)) return target;
     return { kind: "group", group_id: group.group_id };
   }
-  const plugin = catalog.plugins.find((item) => item.plugin_id === target.plugin_id);
-  if (!plugin) return { kind: "plugins" };
-  if (target.kind === "plugin_workspace" && (!plugin.has_sidebar || !plugin.has_mainview)) return { kind: "plugins" };
+  const power = catalog.powers.find((item) => item.power_id === target.power_id);
+  if (!power) return { kind: "powers" };
+  if (target.kind === "power_workspace" && (!power.has_sidebar || !power.has_mainview)) return { kind: "powers" };
   return target;
 }
 

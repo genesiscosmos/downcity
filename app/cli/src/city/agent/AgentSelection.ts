@@ -43,7 +43,7 @@ export interface AgentExecutionTarget {
 /**
  * 解析只属于 Agent 的配置目标。
  *
- * Plugin 注册、Token 与默认模型等 Agent 级操作不能要求当前目录属于某个 Workspace。
+ * Power 注册、Token 与默认模型等 Agent 级操作不能要求当前目录属于某个 Workspace。
  */
 export async function resolve_cli_agent_id(agent_id_input?: string): Promise<string> {
   return (await resolve_agent(agent_id_input)).agent_id;

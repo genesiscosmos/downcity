@@ -3,7 +3,7 @@
  *
  * 关键点（中文）
  * - 只包含对当前 Workspace 文件、搜索和可选 Shell 的操作。
- * - Plugin Tool 与调用方自定义 Tool 不属于本类型，由 Agent 统一注册。
+ * - Power Tool 与调用方自定义 Tool 不属于本类型，由 Agent 统一注册。
  */
 
 import type { RuntimeTool } from "@downcity/type";

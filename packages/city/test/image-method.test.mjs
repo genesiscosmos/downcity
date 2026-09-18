@@ -38,6 +38,8 @@ async function create_fixture(options = {}) {
     embassy: { user: { ai: current_image_ai } },
   });
   city.agents.add(agent);
+  // power 注册是异步 lifecycle；执行前先等 City ready。
+  await city.ensure_ready();
   const tools = city.get_session_tools(agent.id, workspace);
   return {
     root,
@@ -46,9 +48,29 @@ async function create_fixture(options = {}) {
     agent,
     city,
     tools,
-    /** 调用一次 city 工具。 */
-    call: async (call_input) =>
-      await tools.city.execute(call_input, { tool_call_id: "call_1", messages: [], context: {} }),
+    /**
+     * 调用一次 city 工具。
+     *
+     * 关键点（中文）
+     * - 只接受 `{ action: "image.create", args }` 形式；工具层按 Runtime Tool 协议
+     *   返回 ActionResult，这里只暴露模型侧 output。
+     */
+    call: async ({ action, args } = {}) => {
+      const result = await tools.city.execute(
+        args === undefined ? { action } : { action, args },
+        {
+          tool_call_id: "call_1",
+          messages: [],
+          context: {
+            session_turn_context: {
+              session: { session_id: "session_test", turn_id: "turn_test", origin: { type: "chat" } },
+              step: { hook_context: () => ({ session_id: "session_test", turn_id: "turn_test" }) },
+            },
+          },
+        },
+      );
+      return result.output;
+    },
     close: async () => {
       await city.close();
       await workspace.dispose();
@@ -82,18 +104,19 @@ test("city 只暴露一个工具，image 是其中一个 method", async () => {
     assert.deepEqual(Object.keys(fixture.tools), ["city"]);
     assert.equal("image_create" in fixture.tools, false);
     const index = await fixture.call({});
-    assert.equal(index.ok, true);
+    assert.equal(index.success, true);
     assert.ok(
-      index.data.methods.some((item) => item.method === "image"),
-      "image appears in the method index",
+      index.data.actions.some((item) => item.action.startsWith("image.")),
+      "image actions appear in the power index",
     );
-    const image_index = await fixture.call({ method: "image" });
+    const image_actions = index.data.actions.filter((item) => item.action.startsWith("image."));
     assert.deepEqual(
-      image_index.data.actions.map((item) => item.action),
-      ["models", "create", "result"],
+      image_actions.map((item) => item.action),
+      ["image.create", "image.models", "image.result"],
     );
-    const create_spec = image_index.data.actions[1];
-    assert.equal(create_spec.capability, "write", "create declares that it consumes quota");
+    const create_spec = image_actions.find((item) => item.action === "image.create");
+    assert.equal(create_spec.access, "write", "create declares that it consumes quota");
+    assert.equal(create_spec.returns, "job_id, status, poll_after_ms");
   } finally {
     await fixture.close();
   }
@@ -108,10 +131,11 @@ test("image method 贡献一段 session system 说明", async () => {
     const blocks = await fixture.city
       .get_session_hooks(fixture.agent.id, fixture.workspace)
       .system_blocks({ session_id: "s1" });
-    const image_block = blocks.find((block) => block.name === "image");
-    assert.ok(image_block, "image method should inject one system block");
-    assert.match(image_block.content, /# Image method/u);
+    const image_block = blocks.find((block) => block.name === "city");
+    assert.ok(image_block, "city power should inject one system block covering its action groups");
+    assert.match(image_block.content, /# Image actions/u);
     assert.match(image_block.content, /explicitly confirm/u);
+    assert.match(image_block.content, /# Sound actions/u);
   } finally {
     await fixture.close();
   }
@@ -127,12 +151,10 @@ test("image create 返回任务并透传 prompt", async () => {
     image_result: () => ({ job_id: "img_1", status: "queued" }),
   });
   try {
-    const result = await fixture.call({
-      method: "image",
-      action: "create",
+    const result = await fixture.call({ action: "image.create",
       args: { model: "image-model-id", prompt: "a rainy city corner", aspect_ratio: "16:9" },
     });
-    assert.equal(result.ok, true);
+    assert.equal(result.success, true);
     assert.deepEqual(result.data, { job_id: "img_1", status: "queued", poll_after_ms: 1 });
     assert.equal(received.model, "image-model-id");
     assert.equal(received.prompt, "a rainy city corner");
@@ -153,7 +175,7 @@ test("image models 过滤非图片模型", async () => {
     image_result: () => ({ job_id: "img_1", status: "queued" }),
   });
   try {
-    const result = await fixture.call({ method: "image", action: "models" });
+    const result = await fixture.call({ action: "image.models" });
     assert.deepEqual(result.data.items.map((item) => item.id), ["img-a", "img-b"]);
   } finally {
     await fixture.close();
@@ -170,9 +192,7 @@ test("image result 默认只读一次", async () => {
     },
   });
   try {
-    const result = await fixture.call({
-      method: "image",
-      action: "result",
+    const result = await fixture.call({ action: "image.result",
       args: { job_id: "img_1" },
     });
     assert.equal(result.data.status, "running");
@@ -198,19 +218,17 @@ test("image result 成功时只返回本地路径", async () => {
     }),
   });
   try {
-    const result = await fixture.call({
-      method: "image",
-      action: "result",
+    const result = await fixture.call({ action: "image.result",
       args: { job_id: "img_remote" },
     });
-    assert.equal(result.ok, true);
+    assert.equal(result.success, true);
     assert.equal(result.data.status, "succeeded");
     assert.deepEqual(result.data.files, [
       path.join(
         fixture.root,
         "agents",
         "image_agent",
-        "methods",
+        "powers",
         "image",
         "image",
         "results",
@@ -236,9 +254,7 @@ test("image result 下载失败时保留远端地址并报告", async () => {
     }),
   });
   try {
-    const result = await fixture.call({
-      method: "image",
-      action: "result",
+    const result = await fixture.call({ action: "image.result",
       args: { job_id: "img_remote" },
     });
     assert.deepEqual(result.data.files, ["http://127.0.0.1:1/result.png"]);
@@ -258,13 +274,11 @@ test("image result 失败任务返回错误信封", async () => {
     }),
   });
   try {
-    const result = await fixture.call({
-      method: "image",
-      action: "result",
+    const result = await fixture.call({ action: "image.result",
       args: { job_id: "img_1" },
     });
-    assert.equal(result.ok, false);
-    assert.match(result.error.message, /provider rejected the prompt/u);
+    assert.equal(result.success, false);
+    assert.match(result.error, /provider rejected the prompt/u);
   } finally {
     await fixture.close();
   }
@@ -277,9 +291,7 @@ test("image create 把本地图片转为 data URL", async () => {
   });
   try {
     await fs.writeFile(path.join(fixture.workspace_path, "input.png"), "local-bytes");
-    const result = await fixture.call({
-      method: "image",
-      action: "create",
+    const result = await fixture.call({ action: "image.create",
       args: {
         model: "image-model-id",
         content: [
@@ -304,21 +316,17 @@ test("image create 拒绝未声明参数与非法图片地址", async () => {
     image_result: () => ({ job_id: "img_1", status: "queued" }),
   });
   try {
-    const unknown = await fixture.call({
-      method: "image",
-      action: "create",
+    const unknown = await fixture.call({ action: "image.create",
       args: { model: "m", messages: [{ role: "user" }] },
     });
-    assert.equal(unknown.ok, false);
-    assert.equal(unknown.error.code, "invalid_args");
+    assert.equal(unknown.success, false);
+    assert.match(unknown.error, /Invalid payload for city\.image\.create/u);
 
-    const data_url = await fixture.call({
-      method: "image",
-      action: "create",
+    const data_url = await fixture.call({ action: "image.create",
       args: { model: "m", content: [{ type: "image", url: "data:image/png;base64,AAAA" }] },
     });
-    assert.equal(data_url.ok, false);
-    assert.match(data_url.error.message, /does not accept data URLs/u);
+    assert.equal(data_url.success, false);
+    assert.match(data_url.error, /does not accept data URLs/u);
   } finally {
     await fixture.close();
   }
@@ -339,9 +347,7 @@ test("image result 在 until_done 时轮询到终态", async () => {
     },
   });
   try {
-    const result = await fixture.call({
-      method: "image",
-      action: "result",
+    const result = await fixture.call({ action: "image.result",
       args: { job_id: "img_1", until_done: true, max_wait_ms: 5_000, poll_interval_ms: 1 },
     });
     assert.equal(result.data.status, "succeeded");

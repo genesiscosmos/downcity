@@ -17,13 +17,13 @@
       "types": "./bin/local/index.d.ts",
       "import": "./bin/local/index.js"
     },
-    "./plugin": {
-      "types": "./bin/plugin/index.d.ts",
-      "import": "./bin/plugin/index.js"
+    "./power": {
+      "types": "./bin/power/index.d.ts",
+      "import": "./bin/power/index.js"
     },
-    "./plugin/react": {
-      "types": "./bin/plugin/react.d.ts",
-      "import": "./bin/plugin/react.js"
+    "./power/react": {
+      "types": "./bin/power/react.d.ts",
+      "import": "./bin/power/react.js"
     },
     "./workspace": {
       "types": "./bin/workspace/index.d.ts",
@@ -43,7 +43,7 @@
   },
   "scripts": {
     "build": "node ../../scripts/clean-package.mjs && tsc && tsc-alias -f && node scripts/rewrite-build-aliases.mjs && node scripts/verify-build-aliases.mjs",
-    "migrate:plugin-config-v2": "node scripts/migrate-plugin-config-v2.mjs",
+    "migrate:power-config-v2": "node scripts/migrate-power-config-v2.mjs",
     "typecheck": "tsc --noEmit",
     "test": "pnpm build && node --test test/*.test.mjs test/local/*.test.mjs",
     "prepack": "npm run build && node ../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",

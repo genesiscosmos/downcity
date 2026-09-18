@@ -119,8 +119,8 @@ export interface SessionTurnContext {
     /** 当前 Step 持有的稳定 Hook 作用域。 */
     readonly hooks?: SessionHookScopeRuntime;
 
-    /** 当前 Turn 首次解析后冻结的 Plugin 动态上下文。 */
-    readonly plugin_context_blocks: readonly SessionHookContextBlock[];
+    /** 当前 Turn 首次解析后冻结的 Power 动态上下文。 */
+    readonly power_context_blocks: readonly SessionHookContextBlock[];
 
     /** 原子提交当前 Step 使用的 env 与 instruction 快照。 */
     commit(input: {
@@ -135,14 +135,14 @@ export interface SessionTurnContext {
     replace_hooks(hooks?: SessionHookScopeRuntime): Promise<void>;
 
     /** 首次调用时解析并冻结动态上下文，后续 Step 与重试复用同一快照。 */
-    resolve_plugin_context_blocks(
+    resolve_power_context_blocks(
       resolver: () => Promise<readonly SessionHookContextBlock[]>,
     ): Promise<readonly SessionHookContextBlock[]>;
 
-    /** 释放当前 Step 持有的 Plugin Hook 作用域。 */
+    /** 释放当前 Step 持有的 Power Hook 作用域。 */
     release(): Promise<void>;
 
-    /** 为 City Plugin 生成只包含稳定、只读运行快照的新对象。 */
+    /** 为 City Power 生成只包含稳定、只读运行快照的新对象。 */
     hook_context(call_id?: string): SessionHookContext;
   };
 

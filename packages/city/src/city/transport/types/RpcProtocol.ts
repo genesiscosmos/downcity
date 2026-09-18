@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 该文件只描述本机 RPC 的线协议，不包含 socket 或业务执行逻辑。
  * - Client 与 Server 共享同一份 request/frame 类型，避免协议两边漂移。
- * - Plugin 控制协议与 RemoteAgent 传输都由 City 持有，Agent 不感知传输层。
+ * - Power 控制协议与 RemoteAgent 传输都由 City 持有，Agent 不感知传输层。
  */
 
 import type {
@@ -273,35 +273,35 @@ type RpcRequestPayload =
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 列出 plugin catalog。 */
-      method: "internal.plugins.catalog";
+      /** 列出 power catalog。 */
+      method: "internal.powers.catalog";
     }
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 列出 plugin 状态。 */
-      method: "internal.plugins.list";
+      /** 列出 power 状态。 */
+      method: "internal.powers.list";
     }
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 检查 plugin 可用性。 */
-      method: "internal.plugins.availability";
-      /** plugin 参数。 */
+      /** 检查 power 可用性。 */
+      method: "internal.powers.availability";
+      /** power 参数。 */
       params: {
-        /** plugin 名称。 */
-        plugin_name: string;
+        /** power 名称。 */
+        power_name: string;
       };
     }
   | {
       /** 请求 id，用于匹配响应。 */
       id: string;
-      /** 执行 plugin action。 */
-      method: "internal.plugins.action";
-      /** plugin action 参数。 */
+      /** 执行 power action。 */
+      method: "internal.powers.action";
+      /** power action 参数。 */
       params: {
-        /** plugin 名称。 */
-        plugin_name: string;
+        /** power 名称。 */
+        power_name: string;
         /** action 名称。 */
         action_name: string;
         /** action payload。 */

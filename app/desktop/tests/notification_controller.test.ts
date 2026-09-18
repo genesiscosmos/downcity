@@ -7,15 +7,15 @@ import { NotificationController } from "../src/main/notification/NotificationCon
 import { NotificationStore } from "../src/main/notification/NotificationStore.ts";
 import { SessionTurnNotificationProducer } from "../src/main/notification/SessionTurnNotificationProducer.ts";
 import { GroupNotificationProducer } from "../src/main/notification/GroupNotificationProducer.ts";
-import { PluginNotificationProducer } from "../src/main/notification/PluginNotificationProducer.ts";
+import { PowerNotificationProducer } from "../src/main/notification/PowerNotificationProducer.ts";
 import {
   get_agent_unread_attention,
   get_chat_unread_attention,
   get_group_session_unread_attention,
   get_group_unread_attention,
-  has_unread_plugin_notification,
+  has_unread_power_notification,
   notification_target_from_navigation,
-  plugin_renderer_notifications,
+  power_renderer_notifications,
 } from "../src/renderer/lib/notification/notification_state.ts";
 
 /** 创建一组完全内存化的 NotificationController 测试依赖。 */
@@ -219,8 +219,8 @@ test("聚合未读时优先展示最需要用户处理的落点", () => {
 
 test("Chat 一级导航汇总 Session 与 Group 未读通知", () => {
   const fixture = create_fixture();
-  const producer = new PluginNotificationProducer(fixture.controller);
-  producer.publish("task", { topic_key: "global", title: "Plugin 完成", route: {} });
+  const producer = new PowerNotificationProducer(fixture.controller);
+  producer.publish("task", { topic_key: "global", title: "Power 完成", route: {} });
 
   assert.equal(get_chat_unread_attention(fixture.controller.get_state()), null);
   fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session:writer", target, scopes: agent_scope, title: "Session 完成", created_at: 1 });
@@ -237,17 +237,17 @@ test("Chat 一级导航汇总 Session 与 Group 未读通知", () => {
   assert.deepEqual(notification_target_from_navigation({ kind: "group_session", group_id: "crew", workspace_id: "workspace", session_id: "group-session" }), group_target);
 });
 
-test("Plugin 发布由宿主绑定身份并按本地 topic 聚合", () => {
+test("Power 发布由宿主绑定身份并按本地 topic 聚合", () => {
   const fixture = create_fixture();
-  const producer = new PluginNotificationProducer(fixture.controller);
+  const producer = new PowerNotificationProducer(fixture.controller);
   producer.publish("task", { topic_key: "agent:writer:task:daily", title: "第一次完成", route: { agent_id: "writer", task_title: "daily", view: "run", run_timestamp: "first" } });
   producer.publish("task", { topic_key: "agent:writer:task:daily", title: "第二次完成", route: { agent_id: "writer", task_title: "daily", view: "run", run_timestamp: "second" } });
 
   const state = fixture.controller.get_state();
   assert.equal(state.unread_count, 1);
-  assert.equal(state.notifications[0]?.topic_key, "plugin:task:agent:writer:task:daily");
-  assert.equal(has_unread_plugin_notification(state, "task"), true);
-  assert.deepEqual(plugin_renderer_notifications(state, "task"), [{
+  assert.equal(state.notifications[0]?.topic_key, "power:task:agent:writer:task:daily");
+  assert.equal(has_unread_power_notification(state, "task"), true);
+  assert.deepEqual(power_renderer_notifications(state, "task"), [{
     topic_key: "agent:writer:task:daily",
     title: "第二次完成",
     route: { agent_id: "writer", task_title: "daily", view: "run", run_timestamp: "second" },
@@ -255,25 +255,25 @@ test("Plugin 发布由宿主绑定身份并按本地 topic 聚合", () => {
   }]);
 });
 
-test("Plugin 路由只有完全可见时才收口已读", () => {
+test("Power 路由只有完全可见时才收口已读", () => {
   const fixture = create_fixture();
-  const producer = new PluginNotificationProducer(fixture.controller);
+  const producer = new PowerNotificationProducer(fixture.controller);
   const unread_route = { agent_id: "writer", task_title: "daily", view: "run", run_timestamp: "run-1" };
   producer.publish("task", { topic_key: "agent:writer:task:daily", title: "已完成", route: unread_route });
 
-  fixture.controller.set_view_state(7, { target: { kind: "plugin", plugin_id: "task", route: { task_title: "daily", agent_id: "writer" } }, visible: true });
+  fixture.controller.set_view_state(7, { target: { kind: "power", power_id: "task", route: { task_title: "daily", agent_id: "writer" } }, visible: true });
   assert.equal(fixture.controller.get_state().unread_count, 1);
-  fixture.controller.set_view_state(7, { target: { kind: "plugin", plugin_id: "task", route: { ...unread_route } }, visible: true });
+  fixture.controller.set_view_state(7, { target: { kind: "power", power_id: "task", route: { ...unread_route } }, visible: true });
   assert.equal(fixture.controller.get_state().unread_count, 0);
   assert.deepEqual(notification_target_from_navigation(
-    { kind: "plugin_workspace", plugin_id: "task" },
+    { kind: "power_workspace", power_id: "task" },
     { task: unread_route },
-  ), { kind: "plugin", plugin_id: "task", route: unread_route });
+  ), { kind: "power", power_id: "task", route: unread_route });
 });
 
-test("Plugin 可以清除自身命名空间内的一个未读主题", () => {
+test("Power 可以清除自身命名空间内的一个未读主题", () => {
   const fixture = create_fixture();
-  const producer = new PluginNotificationProducer(fixture.controller);
+  const producer = new PowerNotificationProducer(fixture.controller);
   producer.publish("task", { topic_key: "agent:writer:task:daily", title: "已完成", route: {} });
   producer.dismiss("task", "agent:writer:task:daily");
   assert.equal(fixture.controller.get_state().unread_count, 0);
@@ -291,16 +291,16 @@ test("结构化目标键不会因业务 ID 包含分隔符而碰撞", () => {
   assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["second"]);
 });
 
-test("Agent 生命周期结束会清理 Session 与 Plugin 执行范围通知", () => {
+test("Agent 生命周期结束会清理 Session 与 Power 执行范围通知", () => {
   const fixture = create_fixture();
-  const producer = new PluginNotificationProducer(fixture.controller);
+  const producer = new PowerNotificationProducer(fixture.controller);
   fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session", target, scopes: agent_scope, title: "session", created_at: 1 });
   producer.publish("task", { topic_key: "agent:writer:task:daily", title: "task", route: {} }, "writer");
   producer.publish("task", { topic_key: "global", title: "global", route: {} });
 
   fixture.controller.mark_scope_read({ kind: "agent", agent_id: "writer" });
 
-  assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["plugin:task:global"]);
+  assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["power:task:global"]);
 });
 
 test("Group 成员等待输入时产生未读，并回到空闲后收回", () => {

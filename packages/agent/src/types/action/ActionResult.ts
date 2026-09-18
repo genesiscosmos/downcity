@@ -5,7 +5,7 @@
  * - `output` 是标准 Tool Result，原样交给模型执行器和 canonical Tool Part。
  * - `messages` 是执行后产生的运行期 User 输入或 canonical Agent 内容。
  * - `effects` 是当前 Turn 只追加收集、并在收口检查点解释的已发生副作用。
- * - Message Parts 复用 Downcity Session UI 协议，不再建立文件、图片或 Plugin 专用桥接。
+ * - Message Parts 复用 Downcity Session UI 协议，不再建立文件、图片或 Power 专用桥接。
  */
 
 import type { RuntimeToolEffect } from "@downcity/type";

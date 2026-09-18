@@ -87,7 +87,7 @@ test("临时 npm 配置限制文件权限并在生命周期结束后清理", () 
 
 test("指定 package 会自动补齐 scoped 运行时依赖并保持拓扑顺序", () => {
   const graph = resolve_publish_layers(process.cwd());
-  const selected = resolve_scoped_selection(graph, ["@downcity/plugins"]);
+  const selected = resolve_scoped_selection(graph, ["@downcity/powers"]);
   const plan = build_publish_plan(graph, selected, false);
 
   assert.deepEqual(plan.map((item) => item.name), [
@@ -95,7 +95,7 @@ test("指定 package 会自动补齐 scoped 运行时依赖并保持拓扑顺序
     "@downcity/agent",
     "@downcity/federation",
     "@downcity/city",
-    "@downcity/plugins",
+    "@downcity/powers",
   ]);
 });
 
@@ -108,7 +108,7 @@ test("CLI 发布计划包含 scoped 依赖和 CLI 本身", () => {
   assert.equal(plan.at(-1).name, "downcity");
   assert.ok(plan.some((item) => item.name === "@downcity/city"));
   assert.ok(plan.some((item) => item.name === "@downcity/type"));
-  assert.ok(plan.some((item) => item.name === "@downcity/plugins"));
+  assert.ok(plan.some((item) => item.name === "@downcity/powers"));
 });
 
 test("全部 public packages 发布计划以 CLI 收尾", () => {

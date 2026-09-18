@@ -85,7 +85,7 @@ export class Session implements AgentSession {
   private readonly register_forked_session: SessionOptions["register_forked_session"];
   private readonly get_tools: SessionOptions["get_tools"];
   private readonly logger: SessionOptions["logger"];
-  private readonly get_managed_plugin_system_blocks: SessionOptions["get_managed_plugin_system_blocks"];
+  private readonly get_managed_power_system_blocks: SessionOptions["get_managed_power_system_blocks"];
   private readonly ensure_configured_hook?: SessionOptions["ensure_configured"];
   private readonly composer: SessionComposer;
   private readonly create_composer: () => SessionComposer;
@@ -125,7 +125,7 @@ export class Session implements AgentSession {
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
-    this.get_managed_plugin_system_blocks = options.get_managed_plugin_system_blocks;
+    this.get_managed_power_system_blocks = options.get_managed_power_system_blocks;
     this.ensure_configured_hook = options.ensure_configured;
     this.create_composer = options.create_composer ||
       (() => new DefaultSessionComposer());
@@ -170,7 +170,7 @@ export class Session implements AgentSession {
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_hooks: this.get_hooks,
       get_workspace_env: this.get_workspace_env,
-      get_managed_plugin_system_blocks: this.get_managed_plugin_system_blocks,
+      get_managed_power_system_blocks: this.get_managed_power_system_blocks,
       get_model: () => this.get_model(),
       get_model_context_window: () => this.get_model_context_window(),
       get_created_at: () => this.local_state.created_at,
@@ -245,7 +245,7 @@ export class Session implements AgentSession {
    * 把当前 Session 首次生成后固定的完整 system 显式固化到 instruction.md。
    *
    * 关键点（中文）
-   * - 包含 instruction、SDK core、Plugin system 与 Session context。
+   * - 包含 instruction、SDK core、Power system 与 Session context。
    * - 多个 system block 按原顺序合并为一个 Markdown 文档。
    */
   async snapshot(): Promise<void> {
@@ -253,10 +253,10 @@ export class Session implements AgentSession {
   }
 
   /**
-   * 使用 Agent 当前 instruction 与 Plugin 重新生成一次完整 system。
+   * 使用 Agent 当前 instruction 与 Power 重新生成一次完整 system。
    *
    * 关键点（中文）
-   * - 只替换内存 snapshot，不改变 Plugin execution view。
+   * - 只替换内存 snapshot，不改变 Power execution view。
    * - instruction.md 已存在时同步覆盖；不存在时不自动创建。
    * - 当前已经发出的 provider 请求不受影响，后续 step 使用新 snapshot。
    */
@@ -568,7 +568,7 @@ export class Session implements AgentSession {
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_workspace_env: this.get_workspace_env,
       get_hooks: this.get_hooks,
-      get_managed_plugin_system_blocks: this.get_managed_plugin_system_blocks,
+      get_managed_power_system_blocks: this.get_managed_power_system_blocks,
       ensure_configured: this.ensure_configured_hook,
       get_agent_model: this.get_agent_model,
       create_composer: this.create_composer,

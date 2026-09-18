@@ -91,15 +91,15 @@ export function use_desktop_controller(): DesktopController {
       window.downcity.group.list(),
       window.downcity.settings.get(),
       window.downcity.settings.list_env(),
-      window.downcity.plugin.list(),
+      window.downcity.power.list(),
       composer.hydrate_composer(),
-    ]).then(async ([next_agents, next_workspaces, next_groups, next_settings, next_env, next_plugins]) => {
+    ]).then(async ([next_agents, next_workspaces, next_groups, next_settings, next_env, next_powers]) => {
       catalog.replace_catalog({
         agents: next_agents,
         workspaces: next_workspaces,
         groups: next_groups,
         groups_by_id: Object.fromEntries(next_groups.map((group) => [group.group_id, group])),
-        plugins: next_plugins,
+        powers: next_powers,
       });
       const stored_target = parse_navigation_target(localStorage.getItem(desktop_navigation_storage_key));
       const can_restore_session = stored_target?.kind === "session"
@@ -126,7 +126,7 @@ export function use_desktop_controller(): DesktopController {
         agents: next_agents,
         workspaces: next_workspaces,
         groups: next_groups,
-        plugins: next_plugins,
+        powers: next_powers,
         sessions_by_workspace: initial_sessions_by_workspace,
       }, initial_workspace?.workspace_id) : undefined;
       if (restored_target) {

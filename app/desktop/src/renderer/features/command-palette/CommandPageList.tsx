@@ -8,8 +8,8 @@
 import { useMemo } from "react";
 import { TbChevronRight, TbMoodNeutral, TbSphere2, TbScript } from "react-icons/tb";
 import { use_desktop_selector } from "@/app/use_desktop";
-import { order_rail_plugins } from "@/features/navigation/lib/sidebar_shortcut";
-import { PluginIcon } from "@/features/plugin/lib/PluginIcon";
+import { order_rail_powers } from "@/features/navigation/lib/sidebar_shortcut";
+import { PowerIcon } from "@/features/power/lib/PowerIcon";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
 import { format_date } from "@/locales/format";
 import { use_desktop_language } from "@/locales/i18n";
@@ -41,7 +41,7 @@ export function use_command_page_items(
   const language = use_desktop_language();
   const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
   const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
-  const plugins = use_desktop_selector(controller.stores.catalog, (state) => state.plugins);
+  const powers = use_desktop_selector(controller.stores.catalog, (state) => state.powers);
   const sessions_by_workspace = use_desktop_selector(controller.stores.session, (state) => state.sessions_by_workspace);
   const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
   const active_workspace_id = use_desktop_selector(controller.stores.navigation, (state) => state.active_workspace_id);
@@ -111,23 +111,23 @@ export function use_command_page_items(
       };
     }
 
-    if (page === "plugins") {
-      // 复用 Rail 顺序，保证面板里的 Plugin 顺序与侧栏图标顺序一致。
-      const items = order_rail_plugins(plugins)
-        .filter((plugin) => matches(plugin.title, plugin.description))
-        .map<CommandPageItem>((plugin) => ({
-          id: `plugin:${plugin.plugin_id}`,
-          title: plugin.title || plugin.plugin_id,
-          subtitle: plugin.description,
-          icon: <PluginIcon plugin_id={plugin.plugin_id} icon_url={plugin.icon_url} />,
-          is_current: selection?.kind === "plugin_workspace" && selection.plugin_id === plugin.plugin_id,
-          run: () => actions.select_plugin_workspace(plugin.plugin_id),
+    if (page === "powers") {
+      // 复用 Rail 顺序，保证面板里的 Power 顺序与侧栏图标顺序一致。
+      const items = order_rail_powers(powers)
+        .filter((power) => matches(power.title, power.description))
+        .map<CommandPageItem>((power) => ({
+          id: `power:${power.power_id}`,
+          title: power.title || power.power_id,
+          subtitle: power.description,
+          icon: <PowerIcon power_id={power.power_id} icon_url={power.icon_url} />,
+          is_current: selection?.kind === "power_workspace" && selection.power_id === power.power_id,
+          run: () => actions.select_power_workspace(power.power_id),
         }));
       return { items, status: items.length === 0 ? "empty" : "ready" };
     }
 
     return { items: [], status: "ready" };
-  }, [actions, active_workspace_id, agents, language, page, plugins, query, selection, sessions_by_workspace, workspaces]);
+  }, [actions, active_workspace_id, agents, language, page, powers, query, selection, sessions_by_workspace, workspaces]);
 }
 
 /** 子页面行的尾部装饰：当前项显示对勾，其余显示可进入箭头。 */

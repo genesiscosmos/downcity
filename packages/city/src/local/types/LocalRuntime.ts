@@ -1,12 +1,12 @@
-/** 本地 Plugin 注册与加载协议。 */
+/** 本地 Power 注册与加载协议。 */
 
-import type { PluginRepository } from "@/local/repositories/PluginRepository.js";
-import type { LocalPluginRegistration } from "@/local/types/LocalPlugin.js";
+import type { PowerRepository } from "@/local/repositories/PowerRepository.js";
+import type { LocalPowerRegistration } from "@/local/types/LocalPower.js";
 
-/** 本地 Plugin Loader 构造参数。 */
-export interface LocalPluginLoaderOptions {
-  /** Plugin 定义与唯一配置使用的文件仓储。 */
-  plugin_repository: PluginRepository;
-  /** 当前宿主提供的内置或应用级 Plugin 注册。 */
-  plugin_registrations?: readonly LocalPluginRegistration[];
+/** 本地 Power Loader 构造参数。 */
+export interface LocalPowerLoaderOptions {
+  /** Power 定义与唯一配置使用的文件仓储。 */
+  power_repository: PowerRepository;
+  /** 当前宿主提供的内置或应用级 Power 注册。 */
+  power_registrations?: readonly LocalPowerRegistration[];
 }

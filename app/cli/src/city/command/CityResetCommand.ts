@@ -34,6 +34,6 @@ export async function city_reset(options: { yes?: boolean }): Promise<void> {
       { label: "daemon", value: daemon.stopped ? "stopped" : "not running" },
       { label: "files", value: String(removed_files.length) },
     ],
-    note: "Environment, Agent/Plugin configuration, Workspace files and Session files were preserved.",
+    note: "Environment, Agent/Power configuration, Workspace files and Session files were preserved.",
   });
 }

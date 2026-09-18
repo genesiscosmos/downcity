@@ -2,7 +2,7 @@
  * 文件型 Agent 定义仓储。
  *
  * `agent.json` 保存身份与默认执行配置，`SOUL.md` 保存 Agent 主体指令。
- * Agent、Workspace 与 Plugin 配置各自只有一个事实源。
+ * Agent、Workspace 与 Power 配置各自只有一个事实源。
  */
 
 import path from "node:path";
@@ -285,13 +285,13 @@ function normalize_agent_description(input?: string): string {
   return String(input || "").trim();
 }
 
-/** 校验 Plugin 的公开稳定 ID。 */
-export function normalize_plugin_id(input: string): string {
-  const plugin_id = String(input || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(plugin_id)) {
-    throw new Error(`Invalid Plugin ID: ${input}`);
+/** 校验 Power 的公开稳定 ID。 */
+export function normalize_power_id(input: string): string {
+  const power_id = String(input || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]*$/u.test(power_id)) {
+    throw new Error(`Invalid Power ID: ${input}`);
   }
-  return plugin_id;
+  return power_id;
 }
 
 function is_json_object(value: unknown): value is JsonObject {

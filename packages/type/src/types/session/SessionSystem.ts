@@ -1,7 +1,7 @@
 /**
  * Session system block 中立协议。
  *
- * Agent 负责组合这些 block，City Plugin 只能提供新的 block，不能直接修改
+ * Agent 负责组合这些 block，City Power 只能提供新的 block，不能直接修改
  * Session 保存的 canonical system snapshot。
  */
 
@@ -9,7 +9,7 @@
 export type SessionSystemBlockSource =
   | "core"
   | "instruction"
-  | "plugin"
+  | "power"
   | "session";
 
 /** Session system prompt 的单个命名组成块。 */
