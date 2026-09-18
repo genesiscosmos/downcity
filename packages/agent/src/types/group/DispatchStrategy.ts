@@ -12,7 +12,7 @@ import type {
   ModelJsonValue,
   ModelMessage,
 } from "@downcity/type";
-import { generate_model } from "@executor/model/ModelGenerate.js";
+import { generate_model } from "@/model/ModelGenerate.js";
 import { z } from "zod";
 
 /** 本次调度的触发来源。 */

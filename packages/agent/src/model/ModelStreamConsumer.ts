@@ -17,7 +17,7 @@ import {
   ModelStreamFailure,
   normalize_model_invocation_failure,
   normalize_model_protocol_failure,
-} from "@executor/model/ModelStreamFailure.js";
+} from "@/model/ModelStreamFailure.js";
 
 /** 消费并校验一次完整模型事件流。 */
 export async function consume_model_stream(

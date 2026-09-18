@@ -13,8 +13,8 @@ import type {
   ModelToolCallContent,
   ModelUsage,
 } from "@downcity/type";
-import { execute_model_request } from "@executor/model/ModelRequestRunner.js";
-import { consume_model_stream } from "@executor/model/ModelStreamConsumer.js";
+import { execute_model_request } from "@/model/ModelRequestRunner.js";
+import { consume_model_stream } from "@/model/ModelStreamConsumer.js";
 import type {
   ModelRequestFailureReporter,
 } from "@/types/executor/ModelRequest.js";

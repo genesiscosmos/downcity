@@ -11,8 +11,8 @@ import type { ModelClient } from "@downcity/type";
 import {
   build_text_model_messages,
   generate_model,
-} from "@executor/model/ModelGenerate.js";
-import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
+} from "@/model/ModelGenerate.js";
+import type { SessionHistoryMeta } from "@/model/types/SessionHistoryMeta.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";

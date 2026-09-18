@@ -9,7 +9,7 @@
  */
 
 import type { RuntimeTool as Tool } from "@downcity/type";
-import { log_assistant_message_now } from "@executor/messages/SessionMessageLog.js";
+import { log_assistant_message_now } from "@/model/messages/SessionMessageLog.js";
 import {
   MAX_INCOMPLETE_RESPONSE_RECOVERIES,
   MAX_TOOL_LOOP_STEPS,
@@ -23,24 +23,24 @@ import {
   summarize_assistant_parts_for_debug,
   summarize_step_for_debug,
   to_inline_preview,
-} from "@executor/core-engine/CoreEngineSignals.js";
+} from "@/session/runner/SessionExecutorSignals.js";
 import {
-  evaluate_core_engine_loop_decision,
+  evaluate_executor_loop_decision,
   should_continue_for_tail_merged_user_messages,
-} from "@executor/core-engine/CoreEngineLoopDecision.js";
+} from "@/session/runner/SessionExecutorLoopDecision.js";
 import {
-  resolve_effective_core_engine_error,
-} from "@executor/core-engine/CoreEngineError.js";
+  resolve_effective_executor_error,
+} from "@/session/runner/SessionExecutorError.js";
 import {
   run_model_step,
   type ModelStepResult,
   type ModelStepToolCall,
-} from "@executor/model/ModelStepRunner.js";
-import { execute_model_request } from "@executor/model/ModelRequestRunner.js";
+} from "@/model/ModelStepRunner.js";
+import { execute_model_request } from "@/model/ModelRequestRunner.js";
 import {
   resolve_model_usage_ratio,
   should_compact_after_usage,
-} from "@executor/core-engine/CoreEngineContextCompaction.js";
+} from "@/session/runner/ContextUsagePressure.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
@@ -52,9 +52,9 @@ import type { SessionAgentMessagePart } from "@downcity/type";
 import { SESSION_APPROVAL_RESPONSE_SCHEMA } from "@downcity/type";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
 import { generate_id } from "@/utils/Id.js";
+import { TURN_STOPPED_MESSAGE } from "@/session/runtime/SessionTurnCompletion.js";
 
-const TURN_STOPPED_MESSAGE = "Turn stopped";
-
+/** 已经停止的 Turn 不再产出模型请求。 */
 export interface SessionExecutorOptions {
   /** 当前 Session 稳定标识。 */
   session_id: string;
@@ -206,7 +206,7 @@ export class SessionExecutor implements SessionExecutorPort {
           step_result,
           assistant_parts: step_assistant_parts,
         });
-        const loop_decision = evaluate_core_engine_loop_decision({
+        const loop_decision = evaluate_executor_loop_decision({
           hasIncompleteResponse: incomplete_response !== null,
           incompleteRecoveryCount: incomplete_response_recovery_count,
           maxIncompleteRecoveries: MAX_INCOMPLETE_RESPONSE_RECOVERIES,
@@ -333,13 +333,13 @@ export class SessionExecutor implements SessionExecutorPort {
           totalToolCallCount: total_tool_call_count,
           totalToolResultCount: total_tool_result_count,
         });
-        return {
+        return this.build_result({
           success: false,
           text: extract_assistant_text(final_parts),
           error: build_max_steps_error_text(MAX_TOOL_LOOP_STEPS),
           error_code: TOOL_LOOP_MAX_STEPS_ERROR_CODE,
-          ...(compact_required ? { compact_required: true } : {}),
-        };
+          compact_required,
+        });
       }
 
       const duration = Date.now() - start_time;
@@ -351,45 +351,72 @@ export class SessionExecutor implements SessionExecutorPort {
         totalToolResultCount: total_tool_result_count,
       });
 
-      return {
+      return this.build_result({
         success: true,
         text: extract_assistant_text(final_parts),
-        ...(compact_required ? { compact_required: true } : {}),
-      };
+        compact_required,
+      });
     } catch (error) {
       if (input.turn_context.lifecycle.abort_signal.aborted) {
         const error_text = TURN_STOPPED_MESSAGE;
         await this.logger.log("info", "[agent] stopped", {
           session_id: session_id,
         });
-        return {
+        return this.build_result({
           success: false,
           text: extract_assistant_text(final_assistant_parts),
           error: error_text,
-          ...(compact_required ? { compact_required: true } : {}),
-        };
+          compact_required,
+        });
       }
 
       if (this.should_compact_on_error(error)) {
         throw error;
       }
 
-      const error_text = resolve_effective_core_engine_error({
+      const error_text = resolve_effective_executor_error({
         error,
         streamError: last_observed_stream_error,
       });
 
-      await this.logger.log("error", "CoreEngine execution failed", {
+      await this.logger.log("error", "SessionExecutor execution failed", {
         error: error_text,
       });
 
-      return {
+      return this.build_result({
         success: false,
         text: extract_assistant_text(final_assistant_parts),
         error: error_text,
-        ...(compact_required ? { compact_required: true } : {}),
-      };
+        compact_required,
+      });
     }
+  }
+
+  /**
+   * 构造 Turn 执行结果。
+   *
+   * 关键点（中文）：`compact_required` 是「本轮结束后是否需要在 Turn 收口后推进上下文」，
+   * 只在真正需要时为 true，避免上层产生空操作。
+   */
+  private build_result(input: {
+    /** 本轮执行是否成功。 */
+    success: boolean;
+    /** 本轮最终用户可见文本。 */
+    text: string;
+    /** 失败时的错误信息。 */
+    error?: string;
+    /** 失败时的稳定错误码。 */
+    error_code?: string;
+    /** 本轮结束后是否需要推进上下文。 */
+    compact_required: boolean;
+  }): SessionTurnExecutionResult {
+    return {
+      success: input.success,
+      text: input.text,
+      ...(input.error ? { error: input.error } : {}),
+      ...(input.error_code ? { error_code: input.error_code } : {}),
+      ...(input.compact_required ? { compact_required: true } : {}),
+    };
   }
 
   /**

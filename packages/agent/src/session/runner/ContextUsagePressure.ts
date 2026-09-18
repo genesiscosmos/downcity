@@ -1,5 +1,5 @@
 /**
- * CoreEngine Downcity 模型上下文压缩模块。
+ * ContextUsagePressure：模型上下文压力阈值判断。
  *
  * 本模块只判断真实 Provider usage 是否达到恢复阈值；具体选择、摘要和持久化全部
  * 归属于 SessionComposer 的上下文推进实现。

@@ -1,9 +1,9 @@
 /**
- * CoreEngine 执行错误归一化工具。
+ * SessionExecutorError：执行错误归一化工具。
  *
  * 关键点（中文）
  * - 模型流的最终错误可能只是兜底包装，底层 Provider 错误应优先保留。
- * - Executor 内部 CoreEngine 流程只需要消费这里输出的日志字段与最终错误文本。
+ * - 执行器只需要消费这里输出的日志字段与最终错误文本。
  */
 
 import type { JsonObject } from "@downcity/type";
@@ -28,7 +28,7 @@ export function summarize_stream_error(error: unknown): JsonObject {
 /**
  * 提取实际应返回给上层的错误文本。
  */
-export function resolve_effective_core_engine_error(params: {
+export function resolve_effective_executor_error(params: {
   /**
    * 外层捕获到的执行错误。
    */

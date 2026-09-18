@@ -14,6 +14,14 @@ import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCo
 import type { SessionTurnCommittedHookValue } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
 
+/**
+ * Turn 被用户中止时的规范错误文本。
+ *
+ * 关键点（中文）：执行器产出该文本，Turn 收口处比对它未决定是否写入 Error Part，
+ * 因此两侧必须引用同一个常量。
+ */
+export const TURN_STOPPED_MESSAGE = "Turn stopped";
+
 /** 使用 Executor 结果完成当前 Turn。 */
 export async function complete_session_turn(
   options: SessionTurnCompletionOptions,

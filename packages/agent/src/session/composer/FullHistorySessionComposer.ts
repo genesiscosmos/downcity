@@ -5,7 +5,7 @@
  * 适用于短会话、测试或上下文窗口足够大的模型。
  */
 
-import { session_messages_to_model_messages } from "@/executor/messages/SessionModelMessages.js";
+import { session_messages_to_model_messages } from "@/model/messages/SessionModelMessages.js";
 import type {
   SessionComposer,
   SessionComposeInput,

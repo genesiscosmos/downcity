@@ -18,7 +18,7 @@ import {
   normalize_session_user_parts,
   SessionMessages,
 } from "../../agent/bin/session/SessionMessages.js";
-import { session_messages_to_model_messages } from "../../agent/bin/executor/messages/SessionModelMessages.js";
+import { session_messages_to_model_messages } from "../../agent/bin/model/messages/SessionModelMessages.js";
 import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
 import { DefaultSessionComposer } from "../../agent/bin/session/composer/DefaultSessionComposer.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";

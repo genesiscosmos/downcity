@@ -256,7 +256,7 @@ export type {
   SessionActionEvent,
   SessionActionStatus,
 } from "@downcity/type";
-export type { SessionSystemMessage } from "./executor/types/SessionPrompts.js";
+export type { SessionSystemMessage } from "./model/types/SessionPrompts.js";
 export {
   extract_session_message_text,
   extract_session_tool_calls,
@@ -267,13 +267,13 @@ export {
   build_chat_message_text,
   parse_chat_message_markup,
   render_chat_message_file_tag,
-} from "./executor/messages/ChatMessageMarkup.js";
+} from "./model/messages/ChatMessageMarkup.js";
 export type {
   ChatMessageFileTag,
   ChatMessageFileType,
   ChatMessageSegment,
   ChatMessageSendOptions,
-} from "./executor/messages/ChatMessageMarkupTypes.js";
+} from "./model/messages/ChatMessageMarkupTypes.js";
 
 // 日志
 export { get_logger, type Logger } from "./utils/logger/Logger.js";
@@ -287,4 +287,4 @@ export {
 // JSON 基础类型
 export type { JsonObject, JsonPrimitive, JsonValue } from "@downcity/type";
 
-export { resolve_session_id } from "./executor/ids/resolveSessionId.js";
+export { resolve_session_id } from "./session/ResolveSessionId.js";

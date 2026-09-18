@@ -5,14 +5,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { run_model_step } from "../bin/executor/model/ModelStepRunner.js";
-import { generate_model } from "../bin/executor/model/ModelGenerate.js";
+import { run_model_step } from "../bin/model/ModelStepRunner.js";
+import { generate_model } from "../bin/model/ModelGenerate.js";
 import { create_session_model_request_warning } from "../bin/session/runtime/SessionModelRequestWarning.js";
 import { is_session_mutation } from "@downcity/type";
 import {
   MAX_MODEL_REQUEST_ATTEMPTS,
   MAX_MODEL_REQUEST_RETRIES,
-} from "../bin/executor/model/ModelRequestRunner.js";
+} from "../bin/model/ModelRequestRunner.js";
 
 test("Agent 模型请求最多自动重试五次", () => {
   assert.equal(MAX_MODEL_REQUEST_RETRIES, 5);

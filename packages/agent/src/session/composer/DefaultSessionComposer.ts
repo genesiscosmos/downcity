@@ -10,8 +10,8 @@
  * - 自定义压缩算法可以继承本类并只覆盖 `advance_context()`。
  */
 
-import { build_text_model_messages, generate_model } from "@executor/model/ModelGenerate.js";
-import { session_messages_to_model_messages } from "@/executor/messages/SessionModelMessages.js";
+import { build_text_model_messages, generate_model } from "@/model/ModelGenerate.js";
+import { session_messages_to_model_messages } from "@/model/messages/SessionModelMessages.js";
 import type {
   SessionComposer,
   SessionComposeInput,

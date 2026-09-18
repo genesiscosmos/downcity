@@ -31,7 +31,7 @@ import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
 import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
 import { EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
-import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
+import type { SessionSystemMessage } from "@/model/types/SessionPrompts.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import {
   build_session_system_blocks,

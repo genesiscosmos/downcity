@@ -6,7 +6,7 @@
  * - 这里负责统一做 `trim()`，保证运行时行为稳定。
  */
 
-import coreSystemPromptText from "@executor/composer/system/default/assets/core.prompt.js";
+import coreSystemPromptText from "@/model/prompts/assets/core.prompt.js";
 
 /**
  * 默认 core system prompt。

@@ -1,6 +1,6 @@
 # Execution Module
 
-`executor/` 是模型请求与 Tool Loop 的低层执行内核；Session 级编排在 `session/runner/`。普通 SDK 用户只通过 `Session` 调用它。
+`model/` 是模型请求与 Tool Loop 的低层内核；Session 级编排在 `session/runner/`。普通 SDK 用户只通过 `Session` 调用它。
 
 完整 Session Runtime 设计见 [`docs/session-runtime-architecture.md`](../../../../docs/session-runtime-architecture.md)。
 
@@ -58,7 +58,7 @@ Session.prompt()
 | `HistoryComposer` | `SessionComposer.compose()` + `SessionModelMessages` |
 | `ContextComposer` 的 tools | `Session.create_compose_input()` + `SessionComposer.compose()` |
 | `ContextComposer` 的 Step Callback | `SessionLoop` + `StepInputAssembly` |
-| `ContextComposer` 的 fallback Assistant | `SessionExecutor` + `ExecutorRecoveryPolicy` |
+| `ContextComposer` 的 fallback Assistant | `SessionExecutor` + `ContextAdvanceRetry` |
 | `CompactionComposer` | `SessionComposer.advance_context()` + `session/composer/` 内的算法与派生表 |
 
 统一 Composer 只回答一个策略问题：
@@ -70,7 +70,7 @@ Queue 消费、Turn 控制、Message 写入和 Mutation 发布都不是 Composer
 ## Context advance
 
 ```text
-SessionLoop / ExecutorRecoveryPolicy
+SessionLoop / ContextAdvanceRetry
   -> Session.advance_context(trigger)
   -> SessionComposer.advance_context()
   -> 默认实现在自己的 checkpoint 派生表推进边界
@@ -83,15 +83,22 @@ Composer 只接收调用方读好的 canonical history 快照与命名空间派�
 ## 目录
 
 ```text
-executor/
-  core-engine/       模型与 Tool Loop 的纯逻辑（signals / loop decision / error）
-  composer/system/   可复用的默认 system prompt 领域实现
-  messages/          Session 与 Model Protocol 消息转换
-  services/          执行恢复策略
-  tools/             Tool 运行辅助
-  types/             Executor 内部类型
+model/
+  ModelGenerate.ts          共享的一次性模型生成入口
+  ModelRequestRunner.ts     单次模型请求的重试与失败通知
+  ModelStepRunner.ts        单个 Tool Loop Step 的模型调用
+  ModelStreamConsumer.ts    模型流消费
+  ModelStreamFailure.ts     模型流错误分类
+  messages/                 Session 与 Model Protocol 消息转换
+  prompts/                  默认 core system prompt 资产
+  types/                    模型层内部类型
 
 session/runner/
-  SessionExecutor.ts       模型请求与 Tool Loop 执行器
-  StepInputAssembly.ts     每个 Step 的模型输入装配
+  SessionExecutor.ts               模型请求与 Tool Loop 执行器
+  StepInputAssembly.ts             每个 Step 的模型输入装配
+  SessionExecutorSignals.ts        Step 上限、信号与诊断
+  SessionExecutorLoopDecision.ts   是否继续下一轮的纯决策
+  SessionExecutorError.ts          执行错误归一化
+  ContextUsagePressure.ts          usage 压力阈值判断
+  ContextAdvanceRetry.ts           推进上下文后重试整轮
 ```

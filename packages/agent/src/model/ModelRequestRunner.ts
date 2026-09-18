@@ -9,7 +9,7 @@ import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.
 import {
   ModelStreamFailure,
   is_retryable_empty_model_stream_failure,
-} from "@executor/model/ModelStreamFailure.js";
+} from "@/model/ModelStreamFailure.js";
 
 /** 首次模型调用失败后的最大自动重试次数。 */
 export const MAX_MODEL_REQUEST_RETRIES = 5;

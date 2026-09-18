@@ -1,5 +1,5 @@
 /**
- * CoreEngine Tool Loop 的纯信号与诊断模块。
+ * SessionExecutorSignals：Tool Loop 的纯信号与诊断模块。
  *
  * 所有消息判断都直接读取 canonical `SessionAgentMessagePart`，不依赖 UI 投影。
  */

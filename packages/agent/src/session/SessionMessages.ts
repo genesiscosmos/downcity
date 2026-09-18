@@ -39,7 +39,7 @@ import type {
   SessionInteractionResponse,
 } from "@downcity/type";
 import type { SessionActionEvent } from "@downcity/type";
-import { persist_user_prompt_file_parts } from "@executor/messages/SessionAttachmentMapper.js";
+import { persist_user_prompt_file_parts } from "@/model/messages/SessionAttachmentMapper.js";
 import type {
   AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,

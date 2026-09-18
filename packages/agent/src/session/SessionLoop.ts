@@ -26,7 +26,7 @@ import {
   type SessionExecutorPort,
 } from "@/session/runner/SessionExecutor.js";
 import { StepInputAssembly } from "@/session/runner/StepInputAssembly.js";
-import { ExecutorRecoveryPolicy } from "@executor/services/ExecutorRecoveryPolicy.js";
+import { ContextAdvanceRetry } from "@/session/runner/ContextAdvanceRetry.js";
 import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
 import { create_session_turn_context } from "@/session/runtime/SessionTurnContext.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
@@ -57,6 +57,7 @@ import { create_session_model_request_warning } from "@/session/runtime/SessionM
 import {
   complete_session_turn,
   fail_session_turn,
+  TURN_STOPPED_MESSAGE,
 } from "@/session/runtime/SessionTurnCompletion.js";
 import {
   append_session_turn_file_diff,
@@ -64,7 +65,6 @@ import {
 } from "@/session/runtime/SessionTurnFileDiff.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 
-const TURN_STOPPED_MESSAGE = "Turn stopped";
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
   "Prompt cancelled because session was stopped";
 
@@ -77,7 +77,7 @@ export class SessionLoop {
   private readonly workspace_path: string;
   private readonly step_input_assembly: StepInputAssembly | null;
   private readonly session_executor: SessionExecutorPort;
-  private readonly recovery_policy: ExecutorRecoveryPolicy;
+  private readonly context_advance_retry: ContextAdvanceRetry;
   private readonly maintain_context: SessionLoopOptions["maintain_context"];
   private readonly state: SessionState;
   private readonly messages: SessionMessages;
@@ -130,7 +130,7 @@ export class SessionLoop {
         should_compact_on_error: (error) =>
           is_provider_context_limit_error(error),
       });
-    this.recovery_policy = new ExecutorRecoveryPolicy({
+    this.context_advance_retry = new ContextAdvanceRetry({
       session_id: this.session_id,
       advance_context: async (error) =>
         is_provider_context_limit_error(error)
@@ -617,7 +617,7 @@ export class SessionLoop {
   private async run_turn_with_context_advance(
     turn_context: SessionTurnContext,
   ): Promise<SessionTurnExecutionResult> {
-    return await this.recovery_policy.execute_with_retry({
+    return await this.context_advance_retry.execute_with_retry({
       execute_turn: async (advance_count) =>
         await this.session_executor.execute({
           turn_context,

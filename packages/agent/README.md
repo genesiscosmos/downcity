@@ -71,7 +71,7 @@ src/
 ├── index.ts               # 包公开入口
 ├── agent/                 # Agent facade、状态、模型、环境与执行绑定
 ├── group/                 # Group 主体、GroupSession 和消息调度策略
-├── executor/              # LLM/Tool Loop、usage 观测与执行恢复
+├── model/                 # 模型请求与 Tool Loop 内核、消息转换与 prompt 资产
 ├── host/                  # Agent 宿主端口
 ├── internal/              # Agent 与 Group 的内部运行时装配
 ├── plugin/                # Agent 使用的 Plugin 执行协议辅助
@@ -106,11 +106,12 @@ src/
 - `src/group/`
   - `storage/` 负责 GroupSession 的 metadata、共享消息和调度记录持久化
 
-- `src/executor/`
-  - 模型请求与 Tool Loop 的低层内核
-  - `Executor` 只负责单轮 LLM/Tool Loop、Step 状态和上下文恢复
-  - 不持有 History Store，不负责 Message 或 metadata 持久化
-  - 默认 system block 只由 `session/SessionSystem.ts` 组装，不维护第二套 system composer
+- `src/model/`
+  - 模型协议与 Provider 请求的低层内核，不持有 History Store，也不负责 Message 或 metadata 持久化
+  - `ModelStepRunner` / `ModelRequestRunner` 负责单步模型请求与重试；`ModelGenerate` 是共享的一次性生成入口
+  - `messages/` 负责 Session Message 与 Model Protocol 之间的转换
+  - `prompts/` 放默认 core system prompt 资产及相关生成模块
+  - 模型请求与 Tool Loop 的执行编排在 `session/runner/`
 
 - `src/plugin/`
   - 只保留 Agent 公开的 Action schedule 与 Plugin 协议辅助
@@ -124,7 +125,7 @@ src/
   - 跨模块、跨包共享协议类型
   - `config/` 放 LLM、execution binding、plugin 配置、start options 等宿主配置契约
   - `runtime/` 放 auth、agent、host、platform 等运行时与控制面共享协议
-  - 领域内部类型仍保留在对应领域目录，例如 `plugin/types/`、`executor/types/`
+  - 领域内部类型仍保留在对应领域目录，例如 `plugin/types/`、`model/types/`
 
 - `src/utils/`
   - 包内通用工具、日志、CLI 输出与存储辅助

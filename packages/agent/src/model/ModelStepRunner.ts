@@ -18,13 +18,13 @@ import {
   type RuntimeToolExecutionOptions as ToolExecutionOptions,
 } from "@downcity/type";
 import { z } from "zod";
-import type { SessionSystemMessage } from "@/executor/types/SessionPrompts.js";
+import type { SessionSystemMessage } from "@/model/types/SessionPrompts.js";
 import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
 import type {
   SessionAgentMessagePart,
   SessionAgentToolPart,
 } from "@downcity/type";
-import { consume_model_stream } from "@/executor/model/ModelStreamConsumer.js";
+import { consume_model_stream } from "@/model/ModelStreamConsumer.js";
 
 /** 单个工具调用的执行事实。 */
 export interface ModelStepToolCall {

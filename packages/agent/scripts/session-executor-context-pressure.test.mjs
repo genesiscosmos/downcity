@@ -1,5 +1,5 @@
 /**
- * @file 验证 CoreEngine 只根据真实 usage 请求 Composer Context Policy 恢复。
+ * @file 验证 SessionExecutor 只根据真实 usage 判断是否需要推进上下文。
  */
 
 import assert from "node:assert/strict";
@@ -10,7 +10,7 @@ import {
   resolve_model_usage_ratio,
   resolve_model_usage_tokens,
   should_compact_after_usage,
-} from "../bin/executor/core-engine/CoreEngineContextCompaction.js";
+} from "../bin/session/runner/ContextUsagePressure.js";
 import { SessionExecutor } from "../bin/session/runner/SessionExecutor.js";
 import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
 

@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const package_root = path.resolve(__dirname, "..");
 const bin_root = path.join(package_root, "bin");
-const alias_literal_pattern = /(["'])(@\/|@executor\/)([^"']+)\1/g;
+const alias_literal_pattern = /(["'])@\/([^"']+)\1/g;
 
 async function collect_files(dir_path) {
   const entries = await fs.readdir(dir_path, { withFileTypes: true });
@@ -35,10 +35,9 @@ function to_posix_path(value) {
 let rewritten_count = 0;
 for (const file_path of await collect_files(bin_root)) {
   const content = await fs.readFile(file_path, "utf-8");
-  const rewritten = content.replace(alias_literal_pattern, (literal, quote, alias_prefix, alias_target) => {
+  const rewritten = content.replace(alias_literal_pattern, (literal, quote, alias_target) => {
     rewritten_count += 1;
-    const target_root = alias_prefix === "@executor/" ? path.join(bin_root, "executor") : bin_root;
-    const target_path = path.join(target_root, alias_target);
+    const target_path = path.join(bin_root, alias_target);
     const relative_path = to_posix_path(path.relative(path.dirname(file_path), target_path));
     const specifier = relative_path.startsWith(".") ? relative_path : `./${relative_path}`;
     return `${quote}${specifier}${quote}`;

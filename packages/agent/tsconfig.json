@@ -8,8 +8,7 @@
     "outDir": "./bin",
     "rootDir": "src",
     "paths": {
-      "@/*": ["./src/*"],
-      "@executor/*": ["./src/executor/*"]
+      "@/*": ["./src/*"]
     },
     "strict": true,
     "noImplicitAny": false,

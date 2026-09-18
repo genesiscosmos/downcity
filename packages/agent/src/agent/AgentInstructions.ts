@@ -8,7 +8,7 @@
  */
 
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import { CORE_SYSTEM_PROMPT } from "@executor/composer/system/default/SystemPromptAssets.js";
+import { CORE_SYSTEM_PROMPT } from "@/model/prompts/SystemPromptAssets.js";
 
 /**
  * 归一化调用方传入的静态 instruction。

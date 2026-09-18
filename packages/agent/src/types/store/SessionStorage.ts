@@ -5,7 +5,7 @@
  * 领域调用方不感知 SQLite 表、文件路径或连接实现。
  */
 
-import type { SessionHistoryMeta } from "@/executor/types/SessionHistoryMeta.js";
+import type { SessionHistoryMeta } from "@/model/types/SessionHistoryMeta.js";
 import type {
   SessionAgentMessage,
   SessionAgentMessagePart,

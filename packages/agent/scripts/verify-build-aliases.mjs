@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const bin_root = path.resolve(__dirname, "../bin");
-const alias_pattern = /(?:from\s+["'](?:@\/|@executor\/)|import\s*\(\s*["'](?:@\/|@executor\/)|["'](?:@\/|@executor\/))/;
+const alias_pattern = /(?:from\s+["']@\/|import\s*\(\s*["']@\/|["']@\/)/;
 
 async function collect_files(dir_path) {
   const entries = await fs.readdir(dir_path, { withFileTypes: true });

@@ -1,9 +1,9 @@
 /**
- * ExecutorRecoveryPolicy：执行恢复与重试策略。
+ * ContextAdvanceRetry：推进上下文后重试整轮 Turn 的策略。
  *
  * 关键点（中文）
  * - 统一封装「推进上下文后重试」和「普通失败兜底」逻辑。
- * - Executor 提供单次 Turn 行为，本模块只决定是否恢复并重试。
+ * - 执行器提供单次 Turn 行为，本模块只决定是否恢复并重试。
  * - 不改变外部行为，只把异常分流规则集中到一个地方。
  */
 
@@ -15,7 +15,7 @@ import type { SessionTurnExecutionResult } from "@/types/session/SessionExecutio
  */
 const MAX_CONTEXT_ADVANCE_ATTEMPTS = 3;
 
-interface ExecutorRecoveryPolicyOptions {
+interface ContextAdvanceRetryOptions {
   /** 当前 Session 稳定标识。 */
   session_id: string;
 
@@ -36,16 +36,16 @@ interface ExecutorRecoveryInput {
 /**
  * 执行恢复与重试策略服务。
  */
-export class ExecutorRecoveryPolicy {
-  private readonly advance_context: ExecutorRecoveryPolicyOptions["advance_context"];
+export class ContextAdvanceRetry {
+  private readonly advance_context: ContextAdvanceRetryOptions["advance_context"];
   private readonly logger: Logger;
 
-  constructor(options: ExecutorRecoveryPolicyOptions) {
+  constructor(options: ContextAdvanceRetryOptions) {
     const session_id = String(options.session_id || "").trim();
     this.advance_context = options.advance_context;
     this.logger = options.logger;
     if (!session_id) {
-      throw new Error("ExecutorRecoveryPolicy requires a non-empty session_id");
+      throw new Error("ContextAdvanceRetry requires a non-empty session_id");
     }
   }
 
