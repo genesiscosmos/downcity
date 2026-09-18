@@ -84,7 +84,7 @@ function create_language_paths(pathname: string, alternate_pathname?: string) {
  */
 export function create_page_meta(options: SeoPageMetaOptions): MetaDescriptor[] {
   const canonical_url = create_site_url(options.pathname);
-  const image_url = create_site_url(options.image_pathname ?? "/social-icon.png");
+  const image_url = create_site_url(options.image_pathname ?? "/og-image.png");
   const current_locale = get_path_locale(normalize_site_path(options.pathname));
   const open_graph_locale = current_locale === "zh" ? "zh_CN" : "en_US";
   const alternate_open_graph_locale = current_locale === "zh" ? "en_US" : "zh_CN";
@@ -102,7 +102,7 @@ export function create_page_meta(options: SeoPageMetaOptions): MetaDescriptor[] 
     { property: "og:locale", content: open_graph_locale },
     { property: "og:url", content: canonical_url },
     { property: "og:image", content: image_url },
-    { name: "twitter:card", content: options.twitter_card ?? "summary" },
+    { name: "twitter:card", content: options.twitter_card ?? "summary_large_image" },
     { name: "twitter:site", content: "@downcity_ai" },
     { name: "twitter:title", content: options.title },
     { name: "twitter:description", content: options.description },
@@ -124,9 +124,12 @@ export function create_page_meta(options: SeoPageMetaOptions): MetaDescriptor[] 
 
     meta.push(
       { property: "og:locale:alternate", content: alternate_open_graph_locale },
-      { tagName: "link", rel: "alternate", hrefLang: "en", href: english_url },
-      { tagName: "link", rel: "alternate", hrefLang: "zh-CN", href: chinese_url },
-      { tagName: "link", rel: "alternate", hrefLang: "x-default", href: english_url },
+      // hreflang 必须使用小写属性名：React Router 会把 meta 描述符的属性原样序列化进
+      // HTML，驼峰 hrefLang 会输出非法属性名，导致全站语言注解被搜索引擎忽略
+      // （React 19.2 SSR 实测：hrefLang 输出 <link hrefLang=...>，小写才输出合法属性）。
+      { tagName: "link", rel: "alternate", hreflang: "en", href: english_url },
+      { tagName: "link", rel: "alternate", hreflang: "zh-CN", href: chinese_url },
+      { tagName: "link", rel: "alternate", hreflang: "x-default", href: english_url },
     );
   }
 

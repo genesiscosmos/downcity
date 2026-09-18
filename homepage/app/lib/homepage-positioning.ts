@@ -28,7 +28,9 @@ export const homepage_positioning = {
     features_description:
       "按你的场景组合这些 Kit：先给 Agent 一个可靠的运行时，再补上产品边界、共享服务与用户界面，让它真正成为可以交付和持续运营的产品。",
     footer_tagline: "一套用于运行 Agent、交付 Agent 产品的开源 Kits。",
-    meta_title: "Downcity — Agent Harness + Agent Productization Kits",
+    // 中文 title 必须与英文差异化：zh 页面沿用英文 title 会在中文搜索中失去品类词
+    // 竞争力，并被判定为疑似重复内容。
+    meta_title: "Downcity — 开源 Agent Harness 与 Agent 产品化 Kit",
     meta_description:
       "Downcity 是一套开源 Agent Harness 与 Agent Productization Kits，用于运行 Agent，并将其产品化交付。",
   },

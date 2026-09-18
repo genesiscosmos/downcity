@@ -1,0 +1,26 @@
+# Downcity
+
+> Open-source Agent Harness and Agent Productization Kits for running agents and shipping reliable agent products. Downcity provides the runtime to run agents (Agent Harness), then packages them into deliverable products with City, Federation, SDKs, and UI kits.
+
+The website is available in English and Chinese. All product documentation is pre-rendered as static HTML at `/en/` (English) and `/zh/` (Chinese) paths.
+
+## Product
+
+- [Product overview](https://downcity.ai/product/): what Downcity is and how the kits compose into a product.
+- [Features](https://downcity.ai/features/): capabilities across the agent runtime and productization kits.
+- [Quick start](https://downcity.ai/start/): install Downcity and run your first agent.
+
+## Documentation
+
+- [Documentation home (English)](https://downcity.ai/en/docs/)
+- [Documentation home (Chinese)](https://downcity.ai/zh/docs/)
+- [Agent SDK docs](https://downcity.ai/en/agent-sdk-docs/): run agent sessions, tools, and harness configuration.
+- [City SDK docs](https://downcity.ai/en/city-sdk-docs/): build agent products on the City runtime.
+- [Payments docs](https://downcity.ai/en/payments/): monetize agent products.
+- [Plugins docs](https://downcity.ai/en/plugins-docs/): extend agents with plugin capabilities.
+- [UI SDK docs](https://downcity.ai/en/ui-sdk-docs/): build interfaces for agent products.
+
+## Community
+
+- [FAQ](https://downcity.ai/community/faq/): frequently asked questions about Downcity.
+- [GitHub repository](https://github.com/genesiscosmos/downcity): source code and issues.

@@ -16,6 +16,11 @@ async function read_build_file(relative_path) {
   return readFile(new URL(relative_path, build_root), "utf8");
 }
 
+/** 转义正则元字符，用于从固定 URL 构造精确匹配。 */
+function escape_regexp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** 从首页构建产物中读取 Downcity 实体 JSON-LD。 */
 function read_home_structured_data(html) {
   const match = html.match(
@@ -23,6 +28,26 @@ function read_home_structured_data(html) {
   );
 
   assert.ok(match, "首页必须输出 Downcity 实体 JSON-LD");
+  return JSON.parse(match[1]);
+}
+
+/** 从 FAQ 页构建产物中读取 FAQPage JSON-LD。 */
+function read_faq_structured_data(html) {
+  const match = html.match(
+    /<script type="application\/ld\+json" data-downcity-structured-data="faq">([\s\S]+?)<\/script>/,
+  );
+
+  assert.ok(match, "FAQ 页必须输出 FAQPage JSON-LD");
+  return JSON.parse(match[1]);
+}
+
+/** 从文档页构建产物中读取 BreadcrumbList JSON-LD。 */
+function read_breadcrumb_structured_data(html) {
+  const match = html.match(
+    /<script type="application\/ld\+json" data-downcity-structured-data="breadcrumb">([\s\S]+?)<\/script>/,
+  );
+
+  assert.ok(match, "文档页必须输出 BreadcrumbList JSON-LD");
   return JSON.parse(match[1]);
 }
 
@@ -80,9 +105,72 @@ test("营销页与文档页输出 self canonical 和双向 hreflang", async () =
 
   for (const [relative_path, canonical_url, alternate_url] of cases) {
     const html = await read_build_file(relative_path);
-    assert.match(html, new RegExp(`<link rel="canonical" href="${canonical_url}"`));
-    assert.ok(html.includes(`href="${alternate_url}"`));
+    assert.match(html, new RegExp(`<link rel="canonical" href="${escape_regexp(canonical_url)}"`));
+    // hreflang 必须以小写属性名出现在构建产物中：React meta 描述符写驼峰
+    // hrefLang 会被原样序列化成非法属性名，而宽松的 href 存在性断言无法发现
+    // 该问题（2026-09 回归：全站页面级 hreflang 因此失效）。
+    assert.match(
+      html,
+      new RegExp(`<link rel="alternate" hreflang="[^"}]+" href="${escape_regexp(alternate_url)}"`),
+      `${relative_path} 缺少小写 hreflang 语言注解`,
+    );
     assert.match(html, /<meta name="robots" content="index, follow"/);
+  }
+
+  const hreflang_pages = [
+    "index.html",
+    "zh/index.html",
+    "features/index.html",
+    "zh/features/index.html",
+    "start/index.html",
+    "zh/start/index.html",
+    "whitepaper/index.html",
+    "product/index.html",
+  ];
+
+  for (const relative_path of hreflang_pages) {
+    const html = await read_build_file(relative_path);
+    assert.doesNotMatch(
+      html,
+      /<link[^>]*hrefLang=/,
+      `${relative_path} 输出了驼峰 hrefLang 非法属性`,
+    );
+    assert.match(html, /<link rel="alternate" hreflang="x-default"/);
+  }
+});
+
+test("中英文首页 title 差异化输出", async () => {
+  const english_html = await read_build_file("index.html");
+  const chinese_html = await read_build_file("zh/index.html");
+  const english_title = english_html.match(/<title>([^<]+)<\/title>/)?.[1];
+  const chinese_title = chinese_html.match(/<title>([^<]+)<\/title>/)?.[1];
+
+  assert.ok(english_title, "英文首页必须输出 title");
+  assert.ok(chinese_title, "中文首页必须输出 title");
+  assert.notEqual(english_title, chinese_title, "中英文首页 title 不得完全相同");
+  assert.match(chinese_title, /[\u4e00-\u9fff]/, "zh 首页 title 必须包含中文品类词");
+});
+
+test("默认社交分享图使用 1200x630 横图并启用大图卡片", async () => {
+  const pages = ["index.html", "zh/index.html", "start/index.html", "whitepaper/index.html"];
+
+  for (const relative_path of pages) {
+    const html = await read_build_file(relative_path);
+    assert.match(
+      html,
+      /<meta property="og:image" content="https:\/\/downcity\.ai\/og-image\.png"/,
+      `${relative_path} 的 og:image 应使用 1200x630 横图 og-image.png`,
+    );
+    assert.doesNotMatch(
+      html,
+      /<meta property="og:image" content="[^"]*social-icon\.png"/,
+      `${relative_path} 不应再用 512x512 方形图作为分享图`,
+    );
+    assert.match(
+      html,
+      /<meta name="twitter:card" content="summary_large_image"/,
+      `${relative_path} 应启用大图分享卡片`,
+    );
   }
 });
 
@@ -194,4 +282,80 @@ test("静态 404 页面禁止索引", async () => {
 
   assert.match(html, /<title>Page not found - Downcity<\/title>/);
   assert.match(html, /<meta name="robots" content="noindex, nofollow"/);
+});
+
+test("FAQ 页预渲染完整问答文本并输出同源 FAQPage JSON-LD", async () => {
+  const english_html = await read_build_file("community/faq/index.html");
+  const chinese_html = await read_build_file("zh/community/faq/index.html");
+  const english_data = read_faq_structured_data(english_html);
+  const chinese_data = read_faq_structured_data(chinese_html);
+
+  // 问答内容必须进入预渲染 HTML（此前收起态答案完全不输出）。
+  assert.match(english_html, /Will the Agent modify my code/);
+  assert.match(english_html, /By default, no/);
+  assert.doesNotMatch(english_html, /Agent 会修改我的代码吗/);
+
+  // zh 页面 SSR 必须输出中文内容（此前 i18next 单例固定 en，zh 页面预渲染成英文）。
+  assert.match(chinese_html, /Agent 会修改我的代码吗/);
+  assert.match(chinese_html, /默认不会/);
+  assert.doesNotMatch(chinese_html, /Will the Agent modify my code/);
+
+  // JSON-LD 与可见文本同源同语言。
+  assert.equal(english_data["@type"], "FAQPage");
+  assert.equal(english_data.mainEntity.length, 8);
+  assert.equal(english_data.mainEntity[0].name, "Will the Agent modify my code?");
+  assert.equal(chinese_data.mainEntity[0].name, "Agent 会修改我的代码吗？");
+  assert.ok(chinese_data.mainEntity[0].acceptedAnswer.text.length > 10);
+});
+
+test("文档页输出 BreadcrumbList JSON-LD 且层级指向真实 URL", async () => {
+  const pages = [
+    "en/docs/agent/overview/index.html",
+    "zh/docs/agent/overview/index.html",
+    "en/city-sdk-docs/quickstart/create-city/index.html",
+    "en/payments/payment-dodo/index.html",
+  ];
+
+  for (const relative_path of pages) {
+    const html = await read_build_file(relative_path);
+    const data = read_breadcrumb_structured_data(html);
+
+    assert.equal(data["@type"], "BreadcrumbList");
+    assert.ok(data.itemListElement.length >= 2, `${relative_path} 面包屑至少两层`);
+
+    for (const [index, entry] of data.itemListElement.entries()) {
+      assert.equal(entry.position, index + 1);
+      assert.match(entry.item, /^https:\/\/downcity\.ai\//);
+      assert.ok(entry.name.length > 0);
+    }
+
+    const last = data.itemListElement.at(-1);
+    const canonical = html.match(
+      /<link rel="canonical" href="([^"]+)"/,
+    )?.[1];
+    assert.ok(canonical, `${relative_path} 必须有 canonical 可比对`);
+    assert.equal(
+      last.item,
+      canonical,
+      `${relative_path} 面包屑最后一层必须对应当前页面 canonical`,
+    );
+  }
+
+  // 集合根页输出单层面包屑指向自身，禁止空 itemListElement。
+  const root_html = await read_build_file("en/payments/index.html");
+  const root_data = read_breadcrumb_structured_data(root_html);
+  assert.equal(root_data.itemListElement.length, 1, "集合根页面包屑必须恰好单层");
+  assert.equal(root_data.itemListElement[0].name, "Payments");
+  const root_canonical = root_html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
+  assert.ok(root_canonical, "集合根页必须有 canonical 可比对");
+  assert.equal(root_data.itemListElement[0].item, root_canonical);
+});
+
+test("llms.txt 进入构建产物且包含文档地图", async () => {
+  const llms_txt = await read_build_file("llms.txt");
+
+  assert.match(llms_txt, /^# Downcity/);
+  assert.match(llms_txt, /https:\/\/downcity\.ai\/en\/docs\//);
+  assert.match(llms_txt, /https:\/\/downcity\.ai\/zh\/docs\//);
+  assert.match(llms_txt, /https:\/\/github\.com\/genesiscosmos\/downcity/);
 });

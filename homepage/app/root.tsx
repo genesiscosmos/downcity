@@ -85,6 +85,8 @@ export const meta: Route.MetaFunction = ({ location }) => {
     title: positioning.meta_title,
     description: positioning.meta_description,
     pathname: location.pathname,
+    // 路由未自定义 meta 时的兑底也要声明双语对，避免 zh 兑底页面丢失 hreflang。
+    localized: true,
     keywords:
       "agent harness, agent productization, agent product kits, AI agents, agent runtime, developer tools",
   });

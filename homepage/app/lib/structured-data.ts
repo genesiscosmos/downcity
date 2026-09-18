@@ -6,7 +6,11 @@
  */
 import { create_site_url } from "@/lib/seo";
 import { homepage_positioning } from "@/lib/homepage-positioning";
-import type { SeoHomeStructuredData } from "@/types/seo";
+import type {
+  SeoBreadcrumbStructuredData,
+  SeoFAQStructuredData,
+  SeoHomeStructuredData,
+} from "@/types/seo";
 
 const organization_id = "https://genesiscosmos.com/#organization";
 const website_id = `${create_site_url("/")}#website`;
@@ -65,8 +69,53 @@ export function create_home_structured_data(is_chinese: boolean): SeoHomeStructu
 }
 
 /**
+ * 创建 FAQ 页使用的 FAQPage JSON-LD。
+ *
+ * 问答内容必须与页面实际渲染的可见文本一致，否则不符合搜索引擎的富结果规范。
+ */
+export function create_faq_structured_data(
+  items: ReadonlyArray<{ question: string; answer: string }>,
+): SeoFAQStructuredData {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  };
+}
+
+/**
+ * 创建文档页使用的 BreadcrumbList JSON-LD。
+ *
+ * 层级必须从文档根开始按顺序排列，最后一层对应当前页面自身。
+ */
+export function create_breadcrumb_structured_data(
+  items: ReadonlyArray<{ name: string; pathname: string }>,
+): SeoBreadcrumbStructuredData {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      position: index + 1,
+      name: item.name,
+      item: create_site_url(item.pathname),
+    })),
+  };
+}
+
+/**
  * 把 JSON-LD 转换成可安全嵌入 HTML script 的文本。
  */
-export function serialize_structured_data(data: SeoHomeStructuredData): string {
+export function serialize_structured_data(
+  data: SeoHomeStructuredData | SeoFAQStructuredData | SeoBreadcrumbStructuredData,
+): string {
+  // 源码字面量 \\u003c 在运行时是单反斜杠 + u003c：JSON.parse 会还原为 <，
+  // 同时避免原始 </script> 出现在 HTML 内联脚本中导致提前闭合。
   return JSON.stringify(data).replaceAll("<", "\\u003c");
 }

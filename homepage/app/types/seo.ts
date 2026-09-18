@@ -122,3 +122,48 @@ export type SeoHomeStructuredData = {
     SeoSoftwareApplicationStructuredData,
   ];
 };
+
+/** FAQ 页输出的单个问答实体。 */
+export type SeoFAQQuestionStructuredData = {
+  /** Schema.org 问题实体类型。 */
+  "@type": "Question";
+  /** 用户可见的问题全文。 */
+  name: string;
+  /** 与页面可见内容一致的采纳答案。 */
+  acceptedAnswer: {
+    /** Schema.org 答案实体类型。 */
+    "@type": "Answer";
+    /** 答案全文，必须与页面实际渲染内容一致。 */
+    text: string;
+  };
+};
+
+/** FAQ 页输出的完整 FAQPage JSON-LD。 */
+export type SeoFAQStructuredData = {
+  /** JSON-LD 使用的 Schema.org 上下文。 */
+  "@context": "https://schema.org";
+  /** 声明当前页面为 FAQ 问答页。 */
+  "@type": "FAQPage";
+  /** 页面包含的全部问答。 */
+  mainEntity: readonly SeoFAQQuestionStructuredData[];
+};
+
+/** 文档页面包屑中的单个层级。 */
+export type SeoBreadcrumbItemStructuredData = {
+  /** 层级序号，从 1 开始。 */
+  position: number;
+  /** 层级显示名称，与页面可见导航一致。 */
+  name: string;
+  /** 层级对应的公开 URL。 */
+  item: string;
+};
+
+/** 文档页输出的完整 BreadcrumbList JSON-LD。 */
+export type SeoBreadcrumbStructuredData = {
+  /** JSON-LD 使用的 Schema.org 上下文。 */
+  "@context": "https://schema.org";
+  /** 声明当前页面为面包屑列表。 */
+  "@type": "BreadcrumbList";
+  /** 从文档根到当前页的有序层级。 */
+  itemListElement: readonly SeoBreadcrumbItemStructuredData[];
+};

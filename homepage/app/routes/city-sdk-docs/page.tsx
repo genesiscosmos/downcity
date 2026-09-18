@@ -19,6 +19,8 @@ import {
   RawMarkdownContext,
 } from "@/components/docs/copy-markdown-button";
 import { create_page_meta } from "@/lib/seo";
+import { create_doc_breadcrumb } from "@/lib/doc-breadcrumb";
+import { serialize_structured_data } from "@/lib/structured-data";
 
 type PageTreeNode = {
   type?: string;
@@ -86,9 +88,21 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     }
   }
 
+  // 面包屑 JSON-LD 在 loader 内序列化为最终字符串：页面树不进入 loader 返回值，
+  // 避免被 React Router 序列化进每个文档页的客户端载荷。
+  const breadcrumb_jsonld = serialize_structured_data(
+    create_doc_breadcrumb({
+      page_url: page.url,
+      page_title: page.data.title ?? "City SDK Docs",
+      lang,
+      tree: citySdkDocsSource.getPageTree(lang),
+    }),
+  );
+
   return {
     path: page.path,
     url: page.url,
+    breadcrumb_jsonld,
     alternate_url: alternate_page?.url,
     title: page.data.title ?? "City SDK Docs",
     description: page.data.description ?? "",
@@ -142,6 +156,13 @@ export default function Page({ loaderData }: Route.ComponentProps) {
   const Content: any = clientLoader.getComponent(path);
   return (
     <RawMarkdownContext.Provider value={rawMarkdown ?? ""}>
+      {loaderData.breadcrumb_jsonld ? (
+        <script
+          type="application/ld+json"
+          data-downcity-structured-data="breadcrumb"
+          dangerouslySetInnerHTML={{ __html: loaderData.breadcrumb_jsonld }}
+        />
+      ) : null}
       {React.createElement(Content)}
     </RawMarkdownContext.Provider>
   );
