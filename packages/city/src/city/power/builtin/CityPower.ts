@@ -96,7 +96,6 @@ function to_power_action(input: {
     description: input.action.description,
     returns: input.action.returns,
     access: input.action.access,
-    ...(input.action.approval ? { approval: true } : {}),
     ...(input.action.args_schema
       ? {
           input_schema: {

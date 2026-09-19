@@ -160,20 +160,8 @@ export interface PowerAction<TInput extends PowerJsonValue = PowerJsonValue, TRe
    * 关键点（中文）
    * - `read` 只读事实；`write` 会消耗额度、写文件或改变外部状态。
    * - 这是准确的元数据，供模型在调用前判断代价，**不**直接触发审批。
-   *   审批另由 `approval` 控制，因为任务等无人值守场景无法回应审批。
    */
   readonly access?: "read" | "write";
-  /**
-   * 是否在执行前请求调用方审批。
-   *
-   * 关键点（中文）
-   * - 只对消耗额度、不可逆或高风险的少量动作显式开启，默认关闭。
-   * - 与 `access` 分开是刻意的：`chat.send` 是 write，但任务通知依赖它，
-   *   把它当作审批条件会让无人值守的定时任务卡住。
-   * - 是否真进入人工队列由 Session 审批模式统一决定（见 SessionApprovalRuntime），
-   *   这里只声明「需不需要审批」。
-   */
-  readonly approval?: boolean;
   /** Action 输入 schema。 */
   readonly input_schema?: PowerActionInputSchema<TInput>;
   /** Action 示例。 */
