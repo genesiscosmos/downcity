@@ -173,6 +173,20 @@ test("find rejects parent glob segments and does not follow symlinks", async (t)
   assert.deepEqual(result.files, []);
 });
 
+test("grep 拒绝非数组 glob 而不是抛出运行时异常", async (t) => {
+  const fixture = await create_fixture(t);
+  await fs.writeFile(path.join(fixture.root_path, "main.ts"), "value\n", "utf8");
+
+  // 入参校验发生在 spawn ripgrep 之前，因此不依赖 rg 是否可用。
+  const result = await execute_tool(fixture.tools, "grep", {
+    query: "value",
+    glob: "*.ts",
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.error_code, "invalid_pattern");
+  assert.match(result.message, /glob must be an array/);
+});
+
 test("search tools expose aborted results", async (t) => {
   const fixture = await create_fixture(t);
   const controller = new AbortController();

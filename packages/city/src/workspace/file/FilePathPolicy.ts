@@ -3,6 +3,7 @@
  *
  * 关键点（中文）
  * - 所有相对路径基于 Shell 的项目根目录解析。
+ * - 沙箱内绝对路径（如 `/workspace/a.ts`）先按已成立挂载翻译为宿主路径，再参与边界判定。
  * - 词法路径和真实路径都必须位于项目根目录内。
  * - 最终目标不允许是符号链接，避免原子替换时产生歧义或逃逸。
  * - 词法边界与 city tool 的 `sandbox.explain_path` 共用 PathAccessRule。
@@ -10,8 +11,10 @@
 
 import path from "node:path";
 import { lstat, realpath } from "node:fs/promises";
+import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 import { FileToolRuntimeError } from "@/workspace/file/FileToolError.js";
 import { is_path_inside_root } from "@/workspace/file/PathAccessRule.js";
+import { translate_sandbox_path } from "@/workspace/file/SandboxPathTranslation.js";
 import type { ResolvedFileToolPath } from "@downcity/type/workspace";
 
 /** 返回最接近目标且已经存在的祖先目录。 */
@@ -48,6 +51,8 @@ async function resolve_project_tool_path(params: {
   allow_missing: boolean;
   /** 是否要求目标为普通文件。 */
   require_file: boolean;
+  /** 当前隔离环境已成立的挂载，用于翻译沙箱内绝对路径。 */
+  mounts?: readonly WorkspaceSandboxMount[];
 }): Promise<ResolvedFileToolPath> {
   const raw_root_path = String(params.root_path || "").trim();
   const raw_file_path = String(params.file_path || "").trim();
@@ -66,10 +71,16 @@ async function resolve_project_tool_path(params: {
 
   const root_path = path.resolve(raw_root_path);
   const root_real_path = await realpath(root_path);
+  // 关键点（中文）：沙箱内绝对路径先翻译成宿主路径，翻译后仍受项目根目录约束，
+  // 因此模型写 `/workspace/a.ts` 与写项目内相对路径等价，安全性不变。
+  const translated_path = translate_sandbox_path({
+    target_path: raw_file_path,
+    mounts: params.mounts ?? [],
+  }).host_path;
   const file_path = path.resolve(
-    path.isAbsolute(raw_file_path)
-      ? raw_file_path
-      : path.join(root_path, raw_file_path),
+    path.isAbsolute(translated_path)
+      ? translated_path
+      : path.join(root_path, translated_path),
   );
   if (!is_path_inside_root(root_path, file_path)) {
     throw new FileToolRuntimeError({
@@ -134,6 +145,8 @@ export async function resolve_file_tool_path(params: {
   file_path: string;
   /** 目标文件不存在时是否仍允许返回路径。 */
   allow_missing: boolean;
+  /** 当前隔离环境已成立的挂载，用于翻译沙箱内绝对路径。 */
+  mounts?: readonly WorkspaceSandboxMount[];
 }): Promise<ResolvedFileToolPath> {
   return await resolve_project_tool_path({ ...params, require_file: true });
 }
@@ -144,6 +157,8 @@ export async function resolve_search_tool_path(params: {
   root_path: string;
   /** 模型传入的相对路径或绝对路径。 */
   file_path: string;
+  /** 当前隔离环境已成立的挂载，用于翻译沙箱内绝对路径。 */
+  mounts?: readonly WorkspaceSandboxMount[];
 }): Promise<ResolvedFileToolPath> {
   return await resolve_project_tool_path({
     ...params,

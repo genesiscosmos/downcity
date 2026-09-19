@@ -16,7 +16,7 @@ export const grep_tool_input_schema = z.object({
     .min(1)
     .optional()
     .default(".")
-    .describe("Project-relative or absolute file/directory path. Defaults to the project root."),
+    .describe("Project-relative or absolute file/directory path. A sandbox-internal path such as /workspace is mapped back to the project root. Defaults to the project root."),
   glob: z
     .array(z.string().min(1))
     .max(20)
@@ -50,7 +50,7 @@ export const find_tool_input_schema = z.object({
     .min(1)
     .optional()
     .default(".")
-    .describe("Project-relative or absolute directory to search. Defaults to the project root."),
+    .describe("Project-relative or absolute directory to search. A sandbox-internal path such as /workspace is mapped back to the project root. Defaults to the project root."),
   max_results: z
     .number()
     .int()

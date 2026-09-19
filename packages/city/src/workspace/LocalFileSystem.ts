@@ -38,6 +38,7 @@ import {
 import { write_file_atomically } from "@/workspace/file/FileAtomicWriter.js";
 import type { LocalFileSystemOptions } from "@/types/workspace/LocalFileSystem.js";
 import type { WorkspaceFileMutationObserver } from "@downcity/type/workspace";
+import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 
 const FILE_LOCK_STALE_MS = 120_000;
 const FILE_LOCK_TIMEOUT_MS = FILE_LOCK_STALE_MS * 2;
@@ -61,11 +62,15 @@ export class LocalFileSystem implements FileSystem {
   /** 新建文件使用的可选权限。 */
   private readonly file_mode?: number;
 
+  /** 当前隔离环境已成立挂载的惰性提供者。 */
+  private readonly read_sandbox_mounts?: () => readonly WorkspaceSandboxMount[];
+
   constructor(input: string | LocalFileSystemOptions) {
     const options = typeof input === "string" ? { root_path: input } : input;
     this.root_path = path.resolve(options.root_path);
     this.directory_mode = options.directory_mode;
     this.file_mode = options.file_mode;
+    this.read_sandbox_mounts = options.read_sandbox_mounts;
   }
 
   /** 将相对路径安全解析到当前 Workspace 根目录。 */
@@ -234,6 +239,7 @@ export class LocalFileSystem implements FileSystem {
   ): Promise<FileToolActionResult> {
     return await run_file_action({
       root_path: this.root_path,
+      ...(this.mounts() ? { mounts: this.mounts() } : {}),
       ...(observer ? { mutation_observer: observer } : {}),
     }, request);
   }
@@ -242,6 +248,14 @@ export class LocalFileSystem implements FileSystem {
   async run_search_action(
     request: SearchToolActionRequest,
   ): Promise<SearchToolActionResult> {
-    return await run_search_action({ root_path: this.root_path }, request);
+    return await run_search_action({
+      root_path: this.root_path,
+      ...(this.mounts() ? { mounts: this.mounts() } : {}),
+    }, request);
+  }
+
+  /** 读取当前隔离环境已成立挂载；未接入沙箱时为空。 */
+  private mounts(): readonly WorkspaceSandboxMount[] {
+    return this.read_sandbox_mounts?.() ?? [];
   }
 }

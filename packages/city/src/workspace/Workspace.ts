@@ -74,10 +74,15 @@ export class Workspace implements WorkspaceRuntime {
     if (!this.id) throw new Error("Workspace requires a non-empty id");
     this.name = String(options.name || "").trim() || this.id;
     this.path = resolve_workspace_path(options.path);
-    this.files = new LocalFileSystem(this.path);
     this.env = resolve_workspace_env(this.path, options.env);
     this.shell = options.shell;
     this.shell?.set_env(this.env);
+    // 关键点（中文）：文件工具运行在宿主进程，模型却可能回传隔离环境内的绝对路径。
+    // 这里把当前 Shell 的挂载以惰性方式接入文件系统，让路径策略能把两者视为同一目标。
+    this.files = new LocalFileSystem({
+      root_path: this.path,
+      read_sandbox_mounts: () => this.shell?.describe_sandbox()?.mounts ?? [],
+    });
     this.tools = create_workspace_tools({
       files: this.files,
       ...(this.shell ? { shell: this.shell } : {}),

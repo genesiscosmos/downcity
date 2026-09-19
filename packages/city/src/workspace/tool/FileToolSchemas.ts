@@ -13,7 +13,7 @@ export const read_file_tool_input_schema = z.object({
   file_path: z
     .string()
     .min(1)
-    .describe("Project-relative or absolute file path. Paths outside the project root are rejected."),
+    .describe("Project-relative or absolute file path. A sandbox-internal path such as /workspace/a.ts is mapped back to the project root. Paths outside the project root are rejected."),
   offset: z
     .number()
     .int()
@@ -36,7 +36,7 @@ export const write_file_tool_input_schema = z.object({
   file_path: z
     .string()
     .min(1)
-    .describe("Project-relative or absolute file path. Paths outside the project root are rejected."),
+    .describe("Project-relative or absolute file path. A sandbox-internal path such as /workspace/a.ts is mapped back to the project root. Paths outside the project root are rejected."),
   content: z.string().describe("Complete UTF-8 text content to write."),
   overwrite: z
     .boolean()
@@ -63,7 +63,7 @@ export const edit_file_tool_input_schema = z.object({
   file_path: z
     .string()
     .min(1)
-    .describe("Project-relative or absolute file path. Paths outside the project root are rejected."),
+    .describe("Project-relative or absolute file path. A sandbox-internal path such as /workspace/a.ts is mapped back to the project root. Paths outside the project root are rejected."),
   edits: z
     .array(file_edit_operation_schema)
     .min(1)

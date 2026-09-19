@@ -9,6 +9,7 @@
 
 import { lstat, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 import type {
   EditFileToolInput,
   EditFileToolResult,
@@ -132,9 +133,19 @@ function split_text_lines(content: string): string[] {
   return lines;
 }
 
+/** 文件 action 共用的项目上下文。 */
+interface FileActionContext {
+  /** Shell 当前绑定的项目根目录。 */
+  readonly root_path: string;
+  /** 当前隔离环境已成立的挂载，用于翻译沙箱内绝对路径。 */
+  readonly mounts?: readonly WorkspaceSandboxMount[];
+  /** 成功提交的修改观察者。 */
+  readonly mutation_observer?: WorkspaceFileMutationObserver;
+}
+
 /** 执行文件读取。 */
 async function read_file_action(
-  context: { readonly root_path: string },
+  context: FileActionContext,
   input: ReadFileToolInput,
 ): Promise<ReadFileToolResult> {
   let file_path = "";
@@ -143,6 +154,7 @@ async function read_file_action(
       root_path: context.root_path,
       file_path: input.file_path,
       allow_missing: false,
+      ...(context.mounts ? { mounts: context.mounts } : {}),
     });
     file_path = resolved.file_path;
     const buffer = await read_limited_file(file_path);
@@ -235,10 +247,7 @@ async function read_file_action(
 
 /** 执行文件写入。 */
 async function write_file_action(
-  context: {
-    readonly root_path: string;
-    readonly mutation_observer?: WorkspaceFileMutationObserver;
-  },
+  context: FileActionContext,
   input: WriteFileToolInput,
 ): Promise<WriteFileToolResult> {
   let file_path = "";
@@ -247,6 +256,7 @@ async function write_file_action(
       root_path: context.root_path,
       file_path: input.file_path,
       allow_missing: true,
+      ...(context.mounts ? { mounts: context.mounts } : {}),
     });
     file_path = resolved.file_path;
     const normalized_content = normalize_text_to_lf(input.content);
@@ -329,10 +339,7 @@ function resolve_line_number(content: string, position: number): number {
 
 /** 执行文件精确编辑。 */
 async function edit_file_action(
-  context: {
-    readonly root_path: string;
-    readonly mutation_observer?: WorkspaceFileMutationObserver;
-  },
+  context: FileActionContext,
   input: EditFileToolInput,
 ): Promise<EditFileToolResult> {
   let file_path = "";
@@ -341,6 +348,7 @@ async function edit_file_action(
       root_path: context.root_path,
       file_path: input.file_path,
       allow_missing: false,
+      ...(context.mounts ? { mounts: context.mounts } : {}),
     });
     file_path = resolved.file_path;
     if (!Array.isArray(input.edits) || input.edits.length === 0) {
@@ -490,10 +498,7 @@ async function edit_file_action(
 
 /** 执行一个文件 action。 */
 export async function run_file_action(
-  context: {
-    readonly root_path: string;
-    readonly mutation_observer?: WorkspaceFileMutationObserver;
-  },
+  context: FileActionContext,
   request: FileToolActionRequest,
 ): Promise<FileToolActionResult> {
   switch (request.action) {

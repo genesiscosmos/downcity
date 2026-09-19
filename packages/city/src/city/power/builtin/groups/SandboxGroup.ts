@@ -4,13 +4,13 @@
  * 关键点（中文）
  * - 回答「我在什么隔离环境里跑」「哪些宿主目录被挂进来了」「这个路径为什么被拦」。
  * - `explain_path` 只做词法判定，不读文件也不写文件，因此文件不存在不会改变结论。
- * - 判定规则与文件工具共用 PathAccessRule，边界变化时结论自动跟着变。
+ * - 判定规则与文件工具共用 PathAccessRule，沙箱路径翻译共用 SandboxPathTranslation，边界变化时结论自动跟着变。
  */
 
-import path from "node:path";
 import { z } from "zod";
 import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 import { is_path_inside_root, judge_workspace_path_access } from "@/workspace/file/PathAccessRule.js";
+import { translate_sandbox_path } from "@/workspace/file/SandboxPathTranslation.js";
 import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
 import type {
   CityToolPathExplanation,
@@ -89,7 +89,10 @@ class ExplainPathAction extends CityAction<z.infer<typeof explain_path_input>> {
     args: z.infer<typeof explain_path_input>,
     context: CityPowerContext,
   ): Promise<CityToolPathExplanation> {
-    const resolved = resolve_host_path({ target_path: args.path, snapshot: context.sandbox });
+    const resolved = translate_sandbox_path({
+      target_path: args.path,
+      mounts: context.sandbox?.mounts ?? [],
+    });
     const verdict = judge_workspace_path_access({
       root_path: context.workspace_path,
       target_path: resolved.host_path,
@@ -117,31 +120,6 @@ export class SandboxGroup extends CityActionGroup {
     new ListMountsAction(),
     new ExplainPathAction(),
   ];
-}
-
-/**
- * 把沙箱内绝对路径映射回宿主路径。
- *
- * 关键点（中文）
- * - 相对路径不在这里处理：它必须由路径规则按 Workspace 根目录解析，否则会跟着进程 cwd 跑。
- * - 只有宿主绝对路径与沙箱内绝对路径才需要区分。
- */
-function resolve_host_path(input: {
-  /** 模型提交的路径。 */
-  target_path: string;
-  /** 当前隔离环境挂载；没有沙箱时为 null。 */
-  snapshot: CityPowerContext["sandbox"];
-}): { host_path: string; translocated: boolean } {
-  const target_path = input.target_path.trim();
-  if (!path.isAbsolute(target_path)) return { host_path: target_path, translocated: false };
-  const resolved_path = path.resolve(target_path);
-  const mount = input.snapshot?.mounts
-    .find((item) => is_path_inside_root(item.sandbox_path, resolved_path));
-  if (!mount) return { host_path: resolved_path, translocated: false };
-  return {
-    host_path: path.join(mount.host_path, path.relative(mount.sandbox_path, resolved_path)),
-    translocated: true,
-  };
 }
 
 /** 返回包含目标路径的挂载点。 */

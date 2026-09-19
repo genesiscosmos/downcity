@@ -12,7 +12,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { Workspace } from "@downcity/city";
+import { Workspace, Shell } from "@downcity/city";
+import { create_test_sandbox_provider } from "./PlatformSandbox.mjs";
 
 async function create_fixture(t) {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-file-tools-"));
@@ -32,6 +33,23 @@ async function create_fixture(t) {
     files: workspace.files,
     tools: workspace.tools,
   };
+}
+
+/** 构造一个已绑定持久 Sandbox 的 Workspace，用于验证沙箱内路径。 */
+async function create_sandbox_fixture(t) {
+  const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-file-tools-sandbox-"));
+  const runtime_path = path.join(root_path, "runtime");
+  const workspace = new Workspace({
+    id: "sandbox_workspace",
+    path: root_path,
+    runtime_path,
+    shell: new Shell({ sandbox_provider: create_test_sandbox_provider() }),
+  });
+  t.after(async () => {
+    await workspace.dispose();
+    await fs.rm(root_path, { recursive: true, force: true });
+  });
+  return { root_path, workspace };
 }
 
 async function execute_tool(tools, name, input) {
@@ -335,4 +353,32 @@ test("修改观察失败不会把已提交的 write 伪装成 Tool 失败", asyn
     await fs.readFile(path.join(fixture.root_path, "observer-error.txt"), "utf8"),
     "written\n",
   );
+});
+
+test("文件工具把沙箱内路径映射回项目根，越界路径仍被拒绝", async (t) => {
+  const fixture = await create_sandbox_fixture(t);
+  await fs.mkdir(path.join(fixture.root_path, "src"), { recursive: true });
+  await fs.writeFile(path.join(fixture.root_path, "src", "main.ts"), "sandbox value\n", "utf8");
+
+  const read_result = await execute_tool(fixture.workspace.tools, "read", {
+    file_path: "/workspace/src/main.ts",
+  });
+  assert.equal(read_result.success, true);
+  assert.equal(read_result.content, "sandbox value");
+  // 返回的仍是宿主侧真实路径，模型不会看到 guest 路径。
+  assert.equal(read_result.file_path, path.join(fixture.root_path, "src", "main.ts"));
+
+  const search_result = await execute_tool(fixture.workspace.tools, "find", {
+    pattern: "**/*.ts",
+    path: "/workspace/src",
+  });
+  assert.equal(search_result.success, true);
+  assert.deepEqual(search_result.files, ["src/main.ts"]);
+
+  // 沙箱根之外的绝对路径不属于任何挂载，不得被翻译成项目内路径。
+  const escaped = await execute_tool(fixture.workspace.tools, "read", {
+    file_path: "/etc/hosts",
+  });
+  assert.equal(escaped.success, false);
+  assert.equal(escaped.error_code, "sandbox_denied");
 });

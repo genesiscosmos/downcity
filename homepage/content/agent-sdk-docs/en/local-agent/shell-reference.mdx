@@ -63,6 +63,10 @@ shell_exec({
 
 There is no partial host-path allowlist, intermediate permission mode, or silent fallback. If the Sandbox is unavailable, execution fails instead of switching to the host.
 
+## Paths and the Workspace mount
+
+File and search tools run in the host process, while Shell commands run inside the Sandbox. Both accept a sandbox-internal path such as `/workspace/src/main.ts`: the sandbox path is mapped back to the project root before the path policy runs, so `/workspace/src/main.ts` and `src/main.ts` address the same file. Results always report host-side paths. Paths outside the mount, such as `/etc/hosts`, are still rejected.
+
 ## Tools and lifecycle
 
 `Shell` provides `shell_exec` for short non-interactive commands and `shell_session` for long-running or interactive processes. `shell_session` supports `start`, `send`, `read`, `wait`, `list`, and `stop`.

@@ -13,6 +13,7 @@ import path from "node:path";
 import readline from "node:readline";
 import type { Readable } from "node:stream";
 import globby from "globby";
+import type { WorkspaceSandboxMount } from "@downcity/type/shell";
 import type {
   FindToolInput,
   FindToolResult,
@@ -140,6 +141,26 @@ function resolve_find_pattern(raw_pattern: string): string {
   return pattern;
 }
 
+/** 校验并归一化 grep 使用的 glob 模式列表。 */
+function resolve_glob_patterns(raw_glob: unknown): string[] {
+  if (raw_glob === undefined || raw_glob === null) return [];
+  if (!Array.isArray(raw_glob)) {
+    throw new SearchToolRuntimeError({
+      error_code: "invalid_pattern",
+      message: "glob must be an array of ripgrep glob patterns",
+    });
+  }
+  return raw_glob.map((pattern) => {
+    if (typeof pattern !== "string" || !pattern.trim() || pattern.includes("\0")) {
+      throw new SearchToolRuntimeError({
+        error_code: "invalid_pattern",
+        message: "each glob pattern must be a non-empty string",
+      });
+    }
+    return pattern;
+  });
+}
+
 /** 把 ripgrep 输出路径归一化为项目相对路径。 */
 function resolve_rg_file_path(root_path: string, output_path: string): string {
   const absolute_path = path.isAbsolute(output_path)
@@ -148,9 +169,17 @@ function resolve_rg_file_path(root_path: string, output_path: string): string {
   return to_posix_path(path.relative(root_path, absolute_path));
 }
 
+/** 搜索 action 共用的项目上下文。 */
+interface SearchActionContext {
+  /** Shell 当前绑定的项目根目录。 */
+  readonly root_path: string;
+  /** 当前隔离环境已成立的挂载，用于翻译沙箱内绝对路径。 */
+  readonly mounts?: readonly WorkspaceSandboxMount[];
+}
+
 /** 执行 ripgrep 内容搜索。 */
 async function grep_action(
-  context: { readonly root_path: string },
+  context: SearchActionContext,
   input: GrepToolInput,
   abort_signal?: AbortSignal,
 ): Promise<GrepToolResult> {
@@ -172,6 +201,7 @@ async function grep_action(
     const resolved = await resolve_search_tool_path({
       root_path: context.root_path,
       file_path: input.path || ".",
+      ...(context.mounts ? { mounts: context.mounts } : {}),
     });
     search_path = resolved.file_path;
     const root_path = resolved.root_path;
@@ -185,7 +215,7 @@ async function grep_action(
       "!.git/**",
       ...(input.case_sensitive === true ? [] : ["--ignore-case"]),
       ...(input.literal === false ? [] : ["--fixed-strings"]),
-      ...((input.glob || []).flatMap((pattern) => ["--glob", pattern])),
+      ...resolve_glob_patterns(input.glob).flatMap((pattern) => ["--glob", pattern]),
       "--",
       query,
       target_path,
@@ -312,7 +342,7 @@ async function grep_action(
 
 /** 执行 glob 文件发现。 */
 async function find_action(
-  context: { readonly root_path: string },
+  context: SearchActionContext,
   input: FindToolInput,
   abort_signal?: AbortSignal,
 ): Promise<FindToolResult> {
@@ -328,6 +358,7 @@ async function find_action(
     const resolved = await resolve_search_tool_path({
       root_path: context.root_path,
       file_path: input.path || ".",
+      ...(context.mounts ? { mounts: context.mounts } : {}),
     });
     search_path = resolved.file_path;
     const metadata = await lstat(search_path);
@@ -420,7 +451,7 @@ async function find_action(
 
 /** 执行一个项目搜索 action。 */
 export async function run_search_action(
-  context: { readonly root_path: string },
+  context: SearchActionContext,
   request: SearchToolActionRequest,
 ): Promise<SearchToolActionResult> {
   switch (request.action) {
