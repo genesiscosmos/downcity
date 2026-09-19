@@ -17,7 +17,7 @@ import type {
 } from "@downcity/type";
 import { restore_session_origin } from "@downcity/type";
 import type { FileSystem, StorageDatabaseLocation } from "@downcity/type";
-import type { SessionHistoryMeta } from "@/model/types/SessionHistoryMeta.js";
+import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import { normalize_session_metadata, resolve_system_timezone } from "@/session/storage/Metadata.js";
 import { resolve_session_message_preview } from "@/session/preview/SessionMessagePreview.js";
 import {

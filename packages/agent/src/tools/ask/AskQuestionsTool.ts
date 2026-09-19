@@ -22,7 +22,7 @@ import type {
   AskQuestionsToolInput,
   AskQuestionsToolOutput,
 } from "@/types/tools/ask/AskQuestionsTool.js";
-import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
+import type { SessionToolExecutionContext } from "@/types/turn/SessionToolExecutionContext.js";
 import { generate_id } from "@/utils/Id.js";
 import type { ActionResult } from "@/types/action/ActionResult.js";
 import type { JsonValue } from "@downcity/type";

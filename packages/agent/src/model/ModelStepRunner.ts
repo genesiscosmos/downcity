@@ -18,8 +18,8 @@ import {
   type RuntimeToolExecutionOptions as ToolExecutionOptions,
 } from "@downcity/type";
 import { z } from "zod";
-import type { SessionSystemMessage } from "@/model/types/SessionPrompts.js";
-import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
+import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
+import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
 import type {
   SessionAgentMessagePart,
   SessionAgentToolPart,

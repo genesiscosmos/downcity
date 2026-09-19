@@ -28,8 +28,8 @@ import type {
 } from "@/types/session/SessionComposer.js";
 import type { SessionStepExecutionInput } from "@/types/session/SessionExecution.js";
 import type { StepInputOptions } from "@/types/session/StepInput.js";
-import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
-import type { SessionToolExecutionContext } from "@/types/executor/SessionToolExecutionContext.js";
+import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
+import type { SessionToolExecutionContext } from "@/types/turn/SessionToolExecutionContext.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 import { is_action_result } from "@/types/action/ActionResult.js";
 import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";

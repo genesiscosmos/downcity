@@ -25,7 +25,7 @@ import {
   type SessionExecutorPort,
 } from "@/session/runner/SessionExecutor.js";
 import type { StepInput } from "@/session/StepInput.js";
-import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
+import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import { create_session_turn_context } from "@/session/runtime/SessionTurnContext.js";
 import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import { SessionState } from "@/session/SessionState.js";
@@ -34,7 +34,7 @@ import {
   SessionMessages,
 } from "@/session/SessionMessages.js";
 import type { ShellApprovalGateway } from "@downcity/type";
-import type { SessionApprovalPort } from "@/types/executor/SessionTurnContext.js";
+import type { SessionApprovalPort } from "@/types/turn/SessionTurnContext.js";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,

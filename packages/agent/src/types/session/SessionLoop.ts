@@ -4,7 +4,7 @@
  * 这些类型描述 Turn 编排所依赖的领域对象，不实现任何调度行为。
  */
 
-import type { SessionApprovalPort } from "@/types/executor/SessionTurnContext.js";
+import type { SessionApprovalPort } from "@/types/turn/SessionTurnContext.js";
 import type { SessionHookRuntime, ShellApprovalGateway } from "@downcity/type";
 import type { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
 import type { SessionMessages } from "@/session/SessionMessages.js";
@@ -21,7 +21,7 @@ import type { StepInput } from "@/session/StepInput.js";
 import type { SessionExecutorPort } from "@/session/runner/SessionExecutor.js";
 import type { SessionQueue } from "@/session/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
+import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionOrigin } from "@downcity/type";
 
 /** Promise 延迟控制器。 */

@@ -21,7 +21,7 @@ import type {
   SessionApprovalHandle,
   SessionApprovalPort,
   SessionApprovalRequest,
-} from "@/types/executor/SessionTurnContext.js";
+} from "@/types/turn/SessionTurnContext.js";
 import { generate_id } from "@/utils/Id.js";
 
 /** Session 内统一的审批运行时。 */

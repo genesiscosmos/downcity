@@ -17,7 +17,7 @@ import { execute_model_request } from "@/model/ModelRequestRunner.js";
 import { consume_model_stream } from "@/model/ModelStreamConsumer.js";
 import type {
   ModelRequestFailureReporter,
-} from "@/types/executor/ModelRequest.js";
+} from "@/types/model/ModelRequest.js";
 
 /** 单次非交互模型生成结果。 */
 export interface ModelGenerateResult {

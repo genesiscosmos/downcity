@@ -12,13 +12,13 @@ import {
   build_text_model_messages,
   generate_model,
 } from "@/model/ModelGenerate.js";
-import type { SessionHistoryMeta } from "@/model/types/SessionHistoryMeta.js";
+import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionMessage } from "@downcity/type";
 import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
-import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
+import type { ModelRequestFailureReporter } from "@/types/model/ModelRequest.js";
 
 const GENERATED_SESSION_TITLE_MAX_CHARS = 24;
 

@@ -13,7 +13,7 @@ import type { SessionAgentContent } from "@downcity/type";
 import type {
   SessionTurnContext,
   SessionTurnContextInit,
-} from "@/types/executor/SessionTurnContext.js";
+} from "@/types/turn/SessionTurnContext.js";
 import type { SessionHookContext } from "@downcity/type";
 import type { SessionHookScopeRuntime } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";

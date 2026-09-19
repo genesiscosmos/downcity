@@ -6,8 +6,8 @@
  */
 
 import type { RuntimeToolEffect } from "@downcity/type";
-import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
-import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
+import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
+import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionMutation } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
 

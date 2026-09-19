@@ -48,7 +48,7 @@ import type {
 } from "@/types/session/SessionComposer.js";
 import { ContextRetry } from "@/session/runner/ContextRetry.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
+import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import { to_session_json_value } from "@/session/messages/SessionJsonValue.js";
 import type {
   SessionStepExecutionInput,

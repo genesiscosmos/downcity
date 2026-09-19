@@ -12,8 +12,8 @@ import type {
   ModelMessage,
   RuntimeTool as Tool,
 } from "@downcity/type";
-import type { SessionSystemMessage } from "@/model/types/SessionPrompts.js";
-import type { SessionTurnContext } from "@/types/executor/SessionTurnContext.js";
+import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
+import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 
 /**
  * Session 执行结果。

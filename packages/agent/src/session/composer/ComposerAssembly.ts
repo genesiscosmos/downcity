@@ -9,7 +9,7 @@
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionHookContextBlock } from "@downcity/type";
 import type { SessionComposeInput } from "@/types/session/SessionComposer.js";
-import type { SessionSystemMessage } from "@/model/types/SessionPrompts.js";
+import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
 import type { ModelMessage } from "@downcity/type";
 import { build_session_system_blocks } from "@/session/SessionSystem.js";
 

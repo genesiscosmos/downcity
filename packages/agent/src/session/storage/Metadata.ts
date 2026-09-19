@@ -6,7 +6,7 @@
  * - 不负责数据库连接、消息聚合或附件读写。
  */
 
-import type { SessionHistoryMeta } from "@/model/types/SessionHistoryMeta.js";
+import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import type { SessionOrigin } from "@downcity/type";
 import { restore_session_origin } from "@downcity/type";
 

@@ -12,7 +12,7 @@ import {
 } from "@/session/SessionMessages.js";
 import type { SessionAgentContent } from "@downcity/type";
 import type { SessionAgentMessagePart } from "@downcity/type";
-import type { SessionAssistantOutput } from "@/types/executor/SessionAssistantOutput.js";
+import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
 import type {
   SessionToolExecutionResult,
   SessionToolInputReady,

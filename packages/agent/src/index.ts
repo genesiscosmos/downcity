@@ -246,8 +246,8 @@ export { create_session_turn_context } from "./session/runtime/SessionTurnContex
 export type {
   SessionTurnContext,
   SessionTurnContextInit,
-} from "./types/executor/SessionTurnContext.js";
-export type { SessionToolExecutionContext } from "./types/executor/SessionToolExecutionContext.js";
+} from "./types/turn/SessionTurnContext.js";
+export type { SessionToolExecutionContext } from "./types/turn/SessionToolExecutionContext.js";
 export type {
   ToolActionExecutionContext,
   ToolSessionExecutionScope,
@@ -256,7 +256,7 @@ export type {
   SessionActionEvent,
   SessionActionStatus,
 } from "@downcity/type";
-export type { SessionSystemMessage } from "./model/types/SessionPrompts.js";
+export type { SessionSystemMessage } from "./types/session/SessionPrompts.js";
 export {
   extract_session_message_text,
   extract_session_tool_calls,

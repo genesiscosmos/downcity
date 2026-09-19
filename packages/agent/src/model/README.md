@@ -91,7 +91,14 @@ model/
   ModelStreamFailure.ts     模型流错误分类
   messages/                 Session 与 Model Protocol 消息转换
   prompts/                  默认 core system prompt 资产
-  types/                    模型层内部类型
+
+types/model/
+  ModelRequest.ts           模型请求失败上报契约
+
+types/turn/
+  SessionTurnContext.ts     一个 Turn 的执行上下文
+  SessionAssistantOutput.ts Turn 的 Assistant 输出端口
+  SessionToolExecutionContext.ts  Tool 执行上下文
 
 session/
   StepInput.ts             每步模型输入与冻结 system

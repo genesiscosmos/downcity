@@ -125,7 +125,7 @@ src/
   - 跨模块、跨包共享协议类型
   - `config/` 放 LLM、execution binding、plugin 配置、start options 等宿主配置契约
   - `runtime/` 放 auth、agent、host、platform 等运行时与控制面共享协议
-  - 领域内部类型仍保留在对应领域目录，例如 `plugin/types/`、`model/types/`
+  - 领域内部类型统一放在 `types/` 下的领域目录，例如 `types/session/`、`types/turn/`；实现目录不再自建 `types/` 子目录
 
 - `src/utils/`
   - 包内通用工具、日志、CLI 输出与存储辅助

@@ -5,7 +5,7 @@
  */
 
 import type { ModelRequestKind } from "@downcity/type";
-import type { ModelRequestFailureReporter } from "@/types/executor/ModelRequest.js";
+import type { ModelRequestFailureReporter } from "@/types/model/ModelRequest.js";
 import {
   ModelStreamFailure,
   is_retryable_empty_model_stream_failure,
