@@ -38,8 +38,6 @@ export interface CreateSessionHookContextInput {
 class DefaultSessionTurnContext implements SessionTurnContext {
   readonly session: SessionTurnContext["session"];
   readonly interactions: SessionTurnContext["interactions"];
-  readonly shell: SessionTurnContext["shell"];
-  readonly approval: SessionTurnContext["approval"];
 
   private readonly abort_controller = new AbortController();
   private readonly upstream_abort_signal?: AbortSignal;
@@ -79,12 +77,6 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       ...(project_root ? { project_root } : {}),
     });
     this.interactions = init.interactions;
-    this.shell = Object.freeze({
-      ...(init.shell_approval_gateway
-        ? { approval_gateway: init.shell_approval_gateway }
-        : {}),
-    });
-    this.approval = init.approval;
 
     this.upstream_abort_signal = init.abort_signal;
     this.abort_from_upstream = () => {

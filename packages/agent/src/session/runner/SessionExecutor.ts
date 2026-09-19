@@ -518,11 +518,6 @@ export class SessionExecutor implements SessionExecutorPort {
             ...(turn_context.output.assistant
               ? { assistant_output: turn_context.output.assistant }
               : {}),
-            approve_tool: async (call, tool) => await resolve_tool_approval({
-              call,
-              tool,
-              turn_context,
-            }),
           });
         } catch (error) {
           await turn_context.output.assistant?.abort_step();
@@ -608,44 +603,6 @@ export class SessionExecutor implements SessionExecutorPort {
       produced_text,
     };
   }
-}
-
-/**
- * 在工具执行前接入 Session 统一审批。
- *
- * 关键点（中文）
- * - 审批模式（ask / always-allow）由 Session 审批运行时统一生效，本函数不自判模式。
- * - 需不需要审批仍由工具自己的 `needs_approval` 声明。
- */
-async function resolve_tool_approval(input: {
-  call: ModelStepToolCall;
-  tool: Tool;
-  turn_context: SessionTurnContext;
-}): Promise<boolean> {
-  const needs_approval = input.tool.needs_approval;
-  const required = typeof needs_approval === "function"
-      ? await needs_approval(input.call.input as never, {
-        tool_call_id: input.call.tool_call_id,
-        messages: [],
-      })
-    : needs_approval === true;
-  if (!required) return true;
-
-  const approval = input.turn_context.approval;
-  if (!approval) {
-    throw new Error("Tool approval requires a Session approval port");
-  }
-  const handle = await approval.request_tool({
-    session_id: input.turn_context.session.session_id,
-    turn_id: input.turn_context.session.turn_id,
-    tool_call_id: input.call.tool_call_id,
-    tool_name: input.call.tool_name,
-    input: input.call.input,
-    ...(input.tool.description ? { tool_description: input.tool.description } : {}),
-  });
-  // always-allow 由运行时直接放行，不会创建 Interaction。
-  if (!handle.requires_user_decision) return true;
-  return (await handle.decision) === "approved";
 }
 
 /** 构造成功执行但缺少最终内容时使用的 canonical Assistant Parts。 */

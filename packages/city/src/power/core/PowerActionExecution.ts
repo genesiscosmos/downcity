@@ -13,9 +13,10 @@ import type { PowerContext } from "@/power/index.js";
 import type { PowerExecutionContext } from "@/power/index.js";
 import { normalize_session_origin } from "@downcity/type";
 import type { JsonValue } from "@downcity/agent";
-import type { SessionInteractionPort } from "@downcity/agent";
+import type { SessionInteractionPort } from "@downcity/type";
 import { generate_id } from "@downcity/agent";
 import { create_power_action_context } from "@/power/core/PowerContext.js";
+import { create_denied_interaction_port } from "@/power/core/PowerActionInteraction.js";
 
 /** Action 超时写入 abort_signal.reason 的内部错误。 */
 class PowerActionTimeoutError extends Error {
@@ -51,7 +52,12 @@ export interface ExecutePowerActionInput {
   payload: JsonValue;
   /** Session 或其他入口提供的可选执行快照。 */
   snapshot?: PowerExecutionContext;
-  /** 当前 Session 的 Interaction 端口。 */
+  /**
+   * 当前入口提供的交互端口。
+   *
+   * 关键点（中文）
+   * - Session 入口传入自身端口；非 Session 入口省略，由流水线注入拒绝式实现。
+   */
   interactions?: SessionInteractionPort;
 }
 
@@ -134,7 +140,7 @@ function create_abort_scope(input: {
 function create_action_execution_context(input: {
   context: PowerContext;
   snapshot?: PowerExecutionContext;
-  interactions?: SessionInteractionPort;
+  interactions: SessionInteractionPort;
   abort_signal: AbortSignal;
 }): PowerActionExecutionContext {
   const source = input.snapshot;
@@ -159,13 +165,12 @@ function create_action_execution_context(input: {
     ]),
     abort_signal: input.abort_signal,
     call_id,
-    // 宿主工具上下文原样透传：它不属于本模块解释的字段，丢掉会让需要宿主能力的动作失效。
-    ...(source?.tool_context !== undefined ? { tool_context: source.tool_context } : {}),
   });
   return Object.freeze({
     call_id,
     abort_signal: input.abort_signal,
     snapshot,
+    interactions: input.interactions,
     ...(session_id && turn_id && session_origin
       ? {
           session: Object.freeze({
@@ -203,13 +208,15 @@ export async function execute_power_action(
   const action_execution = create_action_execution_context({
     context: input.context,
     snapshot: input.snapshot,
-    interactions: input.interactions,
+    interactions: input.interactions ??
+      create_denied_interaction_port(`${input.power_name}.${input.action_name}`),
     abort_signal: abort_scope.signal,
   });
   const action_context = create_power_action_context(
     input.context,
     action_execution.snapshot,
     action_execution.abort_signal,
+    action_execution.interactions,
   );
 
   try {

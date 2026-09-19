@@ -11,6 +11,7 @@ import type { z } from "zod";
 import type {
   AuthRoutePolicy,
   SessionAgentContent,
+  SessionInteractionPort,
   SessionModelUserContent,
 } from "@downcity/type";
 import type { PowerContext } from "./PowerContext.js";
@@ -74,18 +75,15 @@ export interface PowerExecutionContext {
   readonly abort_signal?: AbortSignal;
   /** 当前 Action 调用标识。 */
   readonly call_id?: string;
-  /**
-   * Executor 为本次工具调用注入的宿主工具上下文。
-   *
-   * 关键点（中文）
-   * - 工具层创建 power 调用时透传，供需要宿主能力的动作读取，例如 shell 的 host 审批网关。
-   * - 非工具入口（CLI、定时任务、程序化调用）为空。
-   * - 类型保持 unknown：这是宿主上下文，不由 power 契约解释。
-   */
-  readonly tool_context?: unknown;
 }
 
-/** PowerDefinition Action 的单次执行上下文。 */
+/**
+ * PowerDefinition Action 的单次执行上下文。
+ *
+ * 关键点（中文）
+ * - 所有入口（模型工具、定时任务、HTTP、RPC）都提供同一个交互端口。
+ * - 无 Session 的入口注入拒绝式实现，因此动作不需要自己判断「有没有人在场」。
+ */
 export interface PowerActionExecutionContext {
   /** 当前 Action 调用标识。 */
   readonly call_id: string;
@@ -95,6 +93,8 @@ export interface PowerActionExecutionContext {
   readonly session?: PowerSessionExecutionScope;
   /** 当前调用开始时捕获的只读 Step 快照。 */
   readonly snapshot: PowerExecutionContext;
+  /** 当前调用创建用户交互的端口；无 Session 时为拒绝式实现。 */
+  readonly interactions: SessionInteractionPort;
 }
 
 /** PowerDefinition Action 命令输入。 */

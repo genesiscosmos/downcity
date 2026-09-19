@@ -30,8 +30,6 @@ export interface RuntimeTool<TInput = unknown, TOutput = unknown> {
   description?: string;
   /** JSON Schema 或可转换为 JSON Schema 的输入定义。 */
   input_schema: unknown;
-  /** 是否需要在执行前获得调用方审批。 */
-  needs_approval?: boolean | RuntimeToolHandler<TInput, boolean | Promise<boolean>>;
   /** 可选工具执行实现；缺少时该工具只向模型声明能力。 */
   execute?: RuntimeToolHandler<TInput, TOutput | Promise<TOutput>>;
 }

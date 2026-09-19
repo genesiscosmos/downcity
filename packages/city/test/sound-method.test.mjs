@@ -59,6 +59,16 @@ async function create_fixture(options = {}) {
             session_turn_context: {
               session: { session_id: "session_test", turn_id: "turn_test", origin: { type: "chat" } },
               step: { hook_context: () => ({ session_id: "session_test", turn_id: "turn_test" }) },
+              // 测试关注声音行为本身，因此提供一个直接放行的审批入口；
+              // 无审批入口时声明 approval 的动作会被拒绝，属于另一条用例。
+              interactions: {
+                request: async () => {
+                  throw new Error("sound tests do not expect a pending interaction");
+                },
+                approval: {
+                  request: async () => ({ approved: true, auto_approved: true }),
+                },
+              },
             },
           },
         },
@@ -250,7 +260,7 @@ test("sound tts 缺少音频 part 时失败", async () => {
   }
 });
 
-test("sound method 的程序化 transcribe 供插件调用", async () => {
+test("无 Session 的程序化调用被拒绝式审批端口拦下", async () => {
   const fixture = await create_fixture({
     list_models: () => [{ id: "asr-1", modalities: ["asr"] }],
     asr: () => ({ text: "transcribed", durationInSeconds: 1.5 }),
@@ -290,12 +300,11 @@ test("sound method 的程序化 transcribe 供插件调用", async () => {
         .scope({ agent_id: fixture.agent.id, workspace_id: fixture.workspace.id })
         .run_action({ power: "voice-probe", action: "run", payload });
 
-    const ok = await run({ url: "https://example.com/a.mp3" });
-    assert.equal(ok.success, true);
-    assert.equal(ok.data.text, "transcribed");
-    const invalid = await run({});
-    assert.equal(invalid.success, false);
-    assert.match(String(invalid.error), /exactly one of/u);
+    // `sound.asr` 声明了审批，而这条程序化入口没有 Session，
+    // 因此审批不可用，调用被拦下，而不是默默消耗额度。
+    const denied = await run({ url: "https://example.com/a.mp3" });
+    assert.equal(denied.success, false);
+    assert.match(String(denied.error), /no Session to ask/u);
   } finally {
     await fixture.close();
   }

@@ -19,6 +19,7 @@ import type {
 } from "@/power/index.js";
 import type { AgentSessionCollection, Logger } from "@downcity/agent";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
+import type { SessionInteractionPort } from "@downcity/type";
 import type { PowerExecutionContext } from "@/power/index.js";
 
 /** PowerContext 工厂输入。 */
@@ -132,11 +133,18 @@ function freeze_json_value(input: PowerJsonValue): PowerJsonValue {
   return input;
 }
 
-/** 为一次 Action 调用投影直接可通信的 Session 与 Turn 句柄。 */
+/**
+ * 为一次 Action 调用投影直接可通信的 Session、Turn 句柄与执行面。
+ *
+ * 关键点（中文）
+ * - 嵌套调用另一个 power 时沿用同一执行面：同一个 Session 身份与交互/审批端口。
+ * - 因此 `run_action` 被包装为默认携带当前调用的快照与端口，组合 power 不会丢掉交互能力。
+ */
 export function create_power_action_context(
   context: PowerContext,
   execution_context: PowerExecutionContext,
   abort_signal: AbortSignal,
+  interactions?: SessionInteractionPort,
 ): PowerContext {
   const session_id = String(execution_context.session_id || "").trim();
   const turn_id = String(execution_context.turn_id || "").trim();
@@ -149,8 +157,28 @@ export function create_power_action_context(
         context.workspace.id,
       )
     : undefined;
+  const nested_snapshot: PowerExecutionContext = Object.freeze({
+    ...(session_id ? { session_id } : {}),
+    ...(origin ? { session_origin: origin } : {}),
+    ...(turn_id ? { turn_id } : {}),
+    abort_signal,
+  });
   return Object.freeze({
     ...context,
+    city: Object.freeze({
+      ...context.city,
+      powers: Object.freeze({
+        ...context.city.powers,
+        run_action: async (action_input) =>
+          await context.city.powers.run_action({
+            ...action_input,
+            execution_context: action_input.execution_context ?? nested_snapshot,
+            ...(action_input.interactions ?? interactions
+              ? { interactions: action_input.interactions ?? interactions }
+              : {}),
+          }),
+      }),
+    }),
     ...(session ? { session } : {}),
     ...(turn_id ? { turn: Object.freeze({ id: turn_id, abort_signal }) } : {}),
     abort_signal,

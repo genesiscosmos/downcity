@@ -11,7 +11,7 @@ import type {
   PowerSnapshot,
   PowerView,
 } from "@/power/index.js";
-import type { SessionInteractionPort } from "@downcity/agent";
+import type { SessionInteractionPort } from "@downcity/type";
 import type { SessionSystemBlock } from "@downcity/type/session";
 
 /** 当前 Agent/Workspace 可用的只读 Power 调用面。 */
@@ -45,7 +45,12 @@ export interface AgentPowerRuntime {
     payload?: JsonValue;
     /** 当前 action 所属 Session Turn 的只读 Power 执行快照。 */
     execution_context?: PowerExecutionContext;
-    /** 当前 Session 的 Interaction 端口；非 Session 调用时为空。 */
+    /**
+     * 当前入口提供的交互端口。
+     *
+     * 关键点（中文）
+     * - Session 入口传入自身端口；非 Session 入口省略，由流水线注入拒绝式实现。
+     */
     interactions?: SessionInteractionPort;
   }): Promise<PowerActionResult<JsonValue>>;
   /** 读取当前生效的 power system blocks。 */
@@ -91,7 +96,12 @@ export interface AgentPowerExecutionView {
     payload?: JsonValue;
     /** 当前 action 所属 Session Turn 的只读 Power 执行快照。 */
     execution_context?: PowerExecutionContext;
-    /** 当前 Session 的 Interaction 端口；非 Session 调用时为空。 */
+    /**
+     * 当前入口提供的交互端口。
+     *
+     * 关键点（中文）
+     * - Session 入口传入自身端口；非 Session 入口省略，由流水线注入拒绝式实现。
+     */
     interactions?: SessionInteractionPort;
   }): Promise<PowerActionResult<JsonValue>>;
 

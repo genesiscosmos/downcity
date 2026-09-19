@@ -4,8 +4,7 @@
  * 这些类型描述 Turn 编排所依赖的领域对象，不实现任何调度行为。
  */
 
-import type { SessionApprovalPort } from "@/types/turn/SessionTurnContext.js";
-import type { SessionHookRuntime, ShellApprovalGateway } from "@downcity/type";
+import type { SessionHookRuntime } from "@downcity/type";
 import type { SessionEventHub } from "@/session/messages/SessionEventHub.js";
 import type { SessionMessages } from "@/session/messages/SessionMessages.js";
 import type { SessionState } from "@/session/loop/SessionState.js";
@@ -84,8 +83,4 @@ export interface SessionLoopOptions {
   queue: SessionQueue;
   /** 当前 Session 的用户异步交互运行时。 */
   interactions: SessionInteractionLifecycle & SessionInteractionPort;
-  /** Shell 高风险操作使用的协议适配器。 */
-  shell_approval_gateway: ShellApprovalGateway;
-  /** 当前 Session 的统一审批入口；工具审批与 Shell 审批共用。 */
-  approval: SessionApprovalPort;
 }

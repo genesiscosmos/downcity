@@ -152,7 +152,10 @@ export type {
 } from "@downcity/type";
 export type {
   RespondSessionInteractionInput,
+  SessionApprovalDecision,
   SessionApprovalMode,
+  SessionApprovalPort,
+  SessionApprovalRequestInput,
   SessionCancelledInteractionResult,
   SessionInteractionAnswer,
   SessionInteractionHandle,
@@ -162,6 +165,7 @@ export type {
   SessionInteractionQuestion,
   SessionInteractionQuestionType,
   SessionInteractionRequest,
+  SessionInteractionRequestInput,
   SessionInteractionResponse,
   SessionInteractionResult,
   SessionInteractionSource,

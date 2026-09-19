@@ -65,6 +65,16 @@ async function create_fixture(options = {}) {
             session_turn_context: {
               session: { session_id: "session_test", turn_id: "turn_test", origin: { type: "chat" } },
               step: { hook_context: () => ({ session_id: "session_test", turn_id: "turn_test" }) },
+              // 测试关注图片行为本身，因此提供一个直接放行的审批入口；
+              // 无审批入口时声明 approval 的动作会被拒绝，属于另一条用例。
+              interactions: {
+                request: async () => {
+                  throw new Error("image tests do not expect a pending interaction");
+                },
+                approval: {
+                  request: async () => ({ approved: true, auto_approved: true }),
+                },
+              },
             },
           },
         },

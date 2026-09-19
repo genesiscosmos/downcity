@@ -77,8 +77,6 @@ export interface RunModelStepInput {
   abort_signal: AbortSignal;
   /** canonical Assistant 输出端口。 */
   assistant_output?: SessionAssistantOutput;
-  /** 工具执行前的审批回调。 */
-  approve_tool?: (call: ModelStepToolCall, tool: Tool) => Promise<boolean>;
 }
 
 /** 执行一个 Downcity 模型 Step 并收敛工具结果。 */
@@ -262,7 +260,7 @@ async function execute_tools(
       });
       continue;
     }
-    // 关键点（中文）：模型输入先按工具自己的 schema 校验，非法输入在审批与执行之前
+    // 关键点（中文）：模型输入先按工具自己的 schema 校验，非法输入在执行之前
     // 就形成结构化失败，不会带着错误类型进入工具实现。
     const validated = validate_tool_input({
       tool,
@@ -274,17 +272,6 @@ async function execute_tools(
         ...call,
         success: false,
         output: { error: validated.error },
-      });
-      continue;
-    }
-    const approved = input.approve_tool
-      ? await input.approve_tool({ ...call, input: validated.input }, tool)
-      : true;
-    if (!approved) {
-      results.push({
-        ...call,
-        success: false,
-        output: { error: "Tool execution denied" },
       });
       continue;
     }

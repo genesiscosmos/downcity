@@ -210,11 +210,7 @@ test("shell_exec closes stdin so commands waiting for EOF can exit", async () =>
   const fixture = await create_context();
   const state = create_shell_runtime_state({ default_exec_timeout_ms: 2000 });
   fixture.context.approval_gateway = {
-    request: async () => ({
-      approval_id: "ap_stdin_eof_test",
-      requires_user_decision: false,
-      decision: Promise.resolve("approved"),
-    }),
+    request: async () => ({ approved: true, auto_approved: true }),
   };
   try {
     const result = await exec_shell_command(state, fixture.context, {
@@ -276,9 +272,9 @@ test("host shell waits for the injected Approval Gateway before execution", asyn
       approval_input = input;
       resolve_requested();
       return {
+        approved: await decision,
+        auto_approved: false,
         approval_id: "ap_gateway_test",
-        requires_user_decision: true,
-        decision,
       };
     },
   };
@@ -297,9 +293,10 @@ test("host shell waits for the injected Approval Gateway before execution", asyn
   await requested;
   assert.equal(await fs.stat(marker_path).then(() => true).catch(() => false), false);
   assert.equal(approval_input.tool_call_id, "call-1");
-  assert.equal(approval_input.command.includes("approved.txt"), true);
+  assert.equal(approval_input.source_type, "shell");
+  assert.equal(approval_input.payload.command.includes("approved.txt"), true);
 
-  resolve_decision("approved");
+  resolve_decision(true);
   const result = await execution;
   assert.equal(result.shell.approval_status, "approved");
   assert.equal(await fs.readFile(marker_path, "utf8"), "approved");

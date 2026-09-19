@@ -14,6 +14,7 @@ import { resolve_runtime_timezone } from "@downcity/agent";
 import type { Embassy } from "@downcity/federation";
 import type {
   PowerAction,
+  PowerActionExecutionContext,
   PowerDefinition,
   PowerContext,
   PowerExecutionContext,
@@ -110,7 +111,7 @@ function to_power_action(input: {
           action_id: input.action_id,
           group_id: input.group_id,
           power_context: params.context,
-          execution_context: params.execution.snapshot,
+          execution: params.execution,
         },
         input.options,
       );
@@ -155,13 +156,13 @@ function build_city_context(
     readonly group_id: string;
     /** 注册表投影的通用上下文。 */
     readonly power_context: PowerContext;
-    /** 执行期快照；无 Turn 场景为 undefined。 */
-    readonly execution_context: PowerExecutionContext | undefined;
+    /** 动作执行上下文；无 Turn 场景只有快照与端口。 */
+    readonly execution: PowerActionExecutionContext;
   },
   options: CityPowerOptions,
 ): CityPowerContext {
   const { power_context } = input;
-  const snapshot = input.execution_context;
+  const snapshot = input.execution.snapshot;
   const agents = options.access.list_agents();
   const workspaces = options.access.list_workspaces();
   const agent = agents.find((item) => item.id === power_context.agent.id);
@@ -183,6 +184,8 @@ function build_city_context(
     agents,
     workspaces,
     files: options.files_for(power_context.agent.id, input.group_id),
+    call_id: input.execution.call_id,
+    interactions: input.execution.interactions,
     ...(options.embassy ? { embassy: options.embassy } : {}),
     ...(abort_signal ? { abort_signal } : {}),
   };

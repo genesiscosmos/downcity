@@ -57,6 +57,34 @@ export interface SessionInteractionRequest {
   created_at: number;
 }
 
+/**
+ * 发起一次 Interaction 的语义输入。
+ *
+ * 关键点（中文）
+ * - 调用方只提供语义字段；`interaction_id`、`created_at` 与 `source` 由原语补齐。
+ * - `type` 是字符串，核心不解释它，只用于渲染分派与响应一致性校验。
+ */
+export interface SessionInteractionRequestInput {
+  /** 业务类型；核心类型使用 question、approval 等，Power 使用命名空间。 */
+  type: string;
+  /** 当前 Interaction 所属 Turn 标识。 */
+  turn_id: string;
+  /** 当前 Interaction 归属的 Tool Call 标识；交互必然属于一次具体调用。 */
+  tool_call_id: string;
+  /** 发起交互的工具注册名称；仅用于展示。 */
+  tool_name?: string;
+  /** 发起交互的调用类别；默认 tool。 */
+  source_type?: "tool" | "shell";
+  /** 前端可选展示标题。 */
+  title?: string;
+  /** 前端可选展示描述。 */
+  description?: string;
+  /** 业务请求数据，由 type 对应的生产者解释。 */
+  payload: JsonValue;
+  /** 响应数据的声明式校验结构；不包含可执行 UI 代码。 */
+  response_schema?: JsonValue;
+}
+
 /** Approval Interaction 的默认 payload 结构。 */
 export interface SessionApprovalPayload {
   /** 当前审批决定对应的操作。 */
@@ -217,12 +245,66 @@ export interface SessionInteractionCloseInput {
   reason: "turn_stopped" | "session_disposed" | "runtime_interrupted";
 }
 
-/** 执行面请求用户异步参与的最小端口。 */
+/**
+ * 一次审批的领域结果。
+ *
+ * 关键点（中文）
+ * - `auto_approved` 区分「用户批准」与「审批模式放行」，两者结果上都是放行。
+ */
+export interface SessionApprovalDecision {
+  /** 是否放行。 */
+  readonly approved: boolean;
+  /** 是否为审批模式自动放行，而非用户决定。 */
+  readonly auto_approved: boolean;
+  /** 用户参与时对应的 Interaction 标识；自动放行时为空。 */
+  readonly approval_id?: string;
+}
+
+/** 请求一次审批所需的语义输入。 */
+export interface SessionApprovalRequestInput {
+  /** 当前审批所属 Turn 标识。 */
+  readonly turn_id: string;
+  /** 当前审批归属的 Tool Call 标识。 */
+  readonly tool_call_id: string;
+  /** 发起审批的调用名称；仅用于展示。 */
+  readonly tool_name?: string;
+  /** 审批来源类别，决定 payload 形状与前端呈现。 */
+  readonly source_type?: "tool" | "shell";
+  /** 前端可选展示标题。 */
+  readonly title?: string;
+  /** 前端可选展示描述。 */
+  readonly description?: string;
+  /** 审批业务数据。 */
+  readonly payload: SessionApprovalPayload;
+}
+
+/**
+ * 审批专用入口。
+ *
+ * 关键点（中文）
+ * - 审批模式（ask / always-allow）在实现里生效，调用方不自己读模式。
+ * - Shell 与普通工具动作共用它，差异只在 payload。
+ */
+export interface SessionApprovalPort {
+  /** 请求一次审批，并返回领域决定。 */
+  request(input: SessionApprovalRequestInput): Promise<SessionApprovalDecision>;
+}
+
+/**
+ * 执行面请求用户异步参与的最小端口。
+ *
+ * 关键点（中文）
+ * - `request` 是唯一原语：调用方提供语义输入，信封字段由实现补齐。
+ * - `approval` 是审批专用入口；审批比提问多一层模式判断与决定解释。
+ * - 原语不认识业务类型：payload 的解释属于它的生产者。
+ */
 export interface SessionInteractionPort {
   /** 创建并持久化一次 Interaction，返回等待终态结果的句柄。 */
   request(
-    request: SessionInteractionRequest,
+    input: SessionInteractionRequestInput,
   ): Promise<SessionInteractionHandle>;
+  /** 审批专用入口；未提供时审批不可用。 */
+  readonly approval?: SessionApprovalPort;
 }
 
 /** 控制面结束 Turn 时使用的 Interaction 生命周期端口。 */

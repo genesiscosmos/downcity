@@ -13,7 +13,6 @@ import test from "node:test";
 
 import { LocalFileSystem } from "@downcity/city";
 import { SessionInteractions } from "../../agent/bin/session/messages/SessionInteractions.js";
-import { SessionApprovalRuntime } from "../../agent/bin/session/messages/SessionApprovalRuntime.js";
 import {
   normalize_session_user_parts,
   SessionMessages,
@@ -105,6 +104,16 @@ async function write_tool_call(writer, input) {
     content_id: input.content_id,
     input: input.tool_input,
   });
+}
+
+/** 等待审批入口登记 pending 项；避免直接假设时序。 */
+async function wait_for_pending(interactions) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const [pending] = interactions.list();
+    if (pending) return pending;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("approval interaction did not become pending");
 }
 
 /** 创建一条测试 User Message。 */
@@ -290,10 +299,6 @@ test("工具调用、审批、结果和后续文本保持 canonical 顺序", asy
     session_id: "tool-order-test",
     messages: recorder,
   });
-  const approval_adapter = new SessionApprovalRuntime({
-    session_id: "tool-order-test",
-    interactions,
-  });
   const writer = await recorder.open_agent_message({ turn_id: "turn-1" });
   await writer.begin_step();
   await write_text(writer, "text-1", "before");
@@ -305,27 +310,32 @@ test("工具调用、审批、结果和后续文本保持 canonical 顺序", asy
     tool_input: { cmd: "pwd" },
   });
 
-  const approval = await approval_adapter.request({
-    shell_id: "shell-1",
+  // 审批入口会等到用户响应才返回，因此先发起请求，再找到 pending 项并响应。
+  const approval_promise = interactions.approval.request({
+    turn_id: "turn-1",
     tool_call_id: "call-1",
     tool_name: "shell_exec",
-    session_id: "tool-order-test",
-    turn_id: "turn-1",
-    command: "pwd",
-    cwd: "/workspace",
-    reason: "Inspect directory",
-    operation: "exec",
-    timeout_ms: 60_000,
+    source_type: "shell",
+    description: "Inspect directory",
+    payload: {
+      operation: "exec",
+      command: "pwd",
+      cwd: "/workspace",
+      reason: "Inspect directory",
+    },
   });
+  const pending = await wait_for_pending(interactions);
   await interactions.respond({
-    interaction_id: approval.approval_id,
+    interaction_id: pending.interaction_id,
     response: {
       type: "approval",
       outcome: "resolved",
       payload: { decision: "approved" },
     },
   });
-  assert.equal(await approval.decision, "approved");
+  const approval = await approval_promise;
+  assert.equal(approval.approved, true);
+  assert.equal(approval.auto_approved, false);
 
   await writer.apply_tool_result({
     tool_call_id: "call-1",

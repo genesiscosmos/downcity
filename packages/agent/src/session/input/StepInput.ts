@@ -421,9 +421,6 @@ export class StepInput {
               ...(turn_context.step.workspace_env
                 ? { workspace_env: turn_context.step.workspace_env }
                 : {}),
-              ...(turn_context.shell.approval_gateway
-                ? { approval_gateway: turn_context.shell.approval_gateway }
-                : {}),
             },
           };
           const output = await original_execute(args, {

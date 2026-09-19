@@ -4,7 +4,7 @@
  * 设计目标（中文）
  * - 每个 Power 直接注册为一个模型工具，工具名即 power 名；不存在通用调用入口。
  * - 工具只负责 Downcity Runtime Tool 协议适配，不理解具体 power 的业务语义。
- * - 动作声明 `access: "write"` 时，工具在执行前请求调用方审批。
+ * - 需要审批的动作在执行时自行请求审批，工具层不做预判。
  */
 
 import {
@@ -63,34 +63,24 @@ export function describe_power_tool(power: PowerDefinition): string {
   ].join("\n");
 }
 
-/** 读取本次调用是否需要审批。 */
-function needs_approval(power: PowerDefinition, input: unknown): boolean {
-  const action_id = String((input as PowerToolInput | undefined)?.action || "").trim();
-  if (!action_id) return false;
-  return power.actions?.[action_id]?.approval === true;
-}
-
 /**
  * 创建一个 power 工具。
  *
  * 关键点（中文）
  * - 工具名由调用方以 power 名登记；本函数只构造工具定义。
- * - 动作仅当显式声明 `approval: true` 时才请求调用方审批。
+ * - 需要审批的动作由动作自己在执行时请求，工具层不再预判。
  */
 export function create_power_tool(options: CreatePowerToolOptions) {
   const power_name = String(options.power.name || "").trim();
   return define_runtime_tool<PowerToolInput>({
     description: describe_power_tool(options.power),
     input_schema: power_tool_input_schema,
-    needs_approval: (input) => needs_approval(options.power, input),
     execute: async (input, execution_options) =>
       await invoke_power_tool({
         powers: options.powers,
         power_name,
         turn_context: require_turn_context(execution_options),
         call_id: String(execution_options.tool_call_id || "").trim(),
-        // 透传 Executor 注入的工具上下文；只有需要的动作会读。
-        ...(execution_options.context ? { tool_context: execution_options.context } : {}),
         input: input as PowerToolInput,
       }),
   });

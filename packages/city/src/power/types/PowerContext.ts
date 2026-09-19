@@ -10,9 +10,10 @@
 import type { Embassy } from "@downcity/federation";
 import type { SessionUserContent } from "@downcity/type";
 import type { FileSystem, WorkspaceShell } from "@/workspace/index.js";
+import type { SessionInteractionPort } from "@downcity/type";
 import type { PowerJsonObject, PowerJsonValue } from "./Json.js";
 import type { PowerNotificationPublisher } from "./PowerNotification.js";
-import type { PowerActionResult, PowerSnapshot } from "./PowerRuntime.js";
+import type { PowerActionResult, PowerExecutionContext, PowerSnapshot } from "./PowerRuntime.js";
 
 /** Power 可以写入的日志等级。 */
 export type PowerLogLevel = "debug" | "info" | "warn" | "error" | "action";
@@ -175,6 +176,10 @@ export interface PowerCityPowers {
     /** Power ID。 */ readonly power: string;
     /** Action ID。 */ readonly action: string;
     /** 可选 JSON payload。 */ readonly payload?: PowerJsonValue;
+    /** 可选执行快照；嵌套调用时默认沿用当前调用的身份。 */
+    readonly execution_context?: PowerExecutionContext;
+    /** 可选交互端口；嵌套调用时默认沿用当前调用的端口。 */
+    readonly interactions?: SessionInteractionPort;
   }): Promise<PowerActionResult>;
   /** 在当前调用上下文中运行一个 pipeline hook。 */
   pipeline<TValue extends PowerJsonValue>(point_name: string, value: TValue): Promise<TValue>;

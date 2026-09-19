@@ -1,10 +1,10 @@
 /**
- * @file 验证 Downcity RuntimeTool 审批接入 Session Interaction。
+ * @file 验证工具在自己的执行里请求 Session 审批。
  *
  * 关键点（中文）
- * - Tool 自己声明审批意图，Agent 不持有审批配置。
+ * - Tool 从执行上下文的 Session 范围拿到审批端口，自己决定何时请求审批。
  * - Runtime 展示真实 Tool Call，用户响应后继续原 Turn。
- * - 拒绝时 Tool execute 不能产生副作用。
+ * - 拒绝时 Tool 不能产生副作用。
  */
 
 import test from "node:test";
@@ -108,8 +108,20 @@ async function run_approval_case(decision) {
       custom_approval: {
         description: "Execute a custom operation after approval.",
         input_schema: z.object({ value: z.string() }),
-        needs_approval: true,
-        execute: async () => {
+        execute: async (input, options) => {
+          // 工具自己请求审批：入口由 Session 注入，模式由入口统一生效。
+          const approval = options.context?.action_execution_context?.session.interactions?.approval;
+          if (!approval) throw new Error("missing approval port");
+          const session = options.context.action_execution_context.session;
+          const decision = await approval.request({
+            turn_id: session.turn_id,
+            tool_call_id: options.tool_call_id,
+            tool_name: "custom_approval",
+            payload: { operation: "tool", validated_input: input },
+          });
+          if (!decision.approved) {
+            return { success: false, error: "denied" };
+          }
           execution_count += 1;
           return "tool-result";
         },
@@ -150,10 +162,6 @@ async function run_approval_case(decision) {
     assert.deepEqual(pending_request.payload.validated_input, {
       value: "approval-value",
     });
-    assert.equal(
-      pending_request.payload.tool_description,
-      "Execute a custom operation after approval.",
-    );
     assert.equal("title" in pending_request, false);
     assert.equal("reason" in pending_request, false);
     assert.ok(response_promise);
@@ -164,10 +172,10 @@ async function run_approval_case(decision) {
   }
 }
 
-test("needs_approval 批准后执行 Tool 并恢复原 Turn", async () => {
+test("工具自请求审批，批准后执行并恢复原 Turn", async () => {
   await run_approval_case("approved");
 });
 
-test("needs_approval 拒绝后不执行 Tool 副作用", async () => {
+test("工具自请求审批，拒绝后不产生副作用", async () => {
   await run_approval_case("denied");
 });

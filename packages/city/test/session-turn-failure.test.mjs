@@ -9,7 +9,6 @@ import path from "node:path";
 import test from "node:test";
 
 import { SessionInteractions } from "../../agent/bin/session/messages/SessionInteractions.js";
-import { SessionApprovalRuntime } from "../../agent/bin/session/messages/SessionApprovalRuntime.js";
 import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
 import {
   create_workspace_file_mutation_effect,
@@ -41,10 +40,6 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
   });
   await messages.initialize();
   const interactions = new SessionInteractions({ session_id, messages });
-  const shell_approval_gateway = new SessionApprovalRuntime({
-    session_id,
-    interactions,
-  });
 
   const turn = new SessionLoop({
     session_id,
@@ -65,7 +60,6 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
     logger: { log: async () => {} },
     queue: new SessionQueue(),
     interactions,
-    shell_approval_gateway,
   });
 
   return { messages, root_path, turn };

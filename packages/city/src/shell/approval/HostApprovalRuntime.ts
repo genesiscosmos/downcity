@@ -2,8 +2,8 @@
  * Shell host 执行审批边界。
  *
  * 关键点（中文）
- * - Shell 负责危险命令校验、权限审计和等待宿主审批结果。
- * - pending approval、审批模式、超时与用户决定由注入的 Approval Gateway 所有。
+ * - Shell 负责危险命令校验、权限审计和等待审批结果。
+ * - 审批模式与 pending 状态由注入的审批入口所有，本模块不自己判断模式。
  */
 
 import fs from "fs-extra";
@@ -14,6 +14,7 @@ import type {
   ShellApprovalStatus,
   ShellApprovalToolName,
 } from "@downcity/type/shell";
+import type { SessionApprovalPayload } from "@downcity/type";
 import { now_ms } from "../session/ShellActionRuntimeSupport.js";
 
 const DANGEROUS_HOST_COMMAND_PATTERNS = [
@@ -143,41 +144,45 @@ export async function request_host_approval(params: {
     return { approval_id: fallback_approval_id, status: "denied" };
   }
 
-  const handle = await params.context.approval_gateway.request({
-    shell_id: params.shell_id,
+  const decision = await params.context.approval_gateway.request({
+    turn_id,
     tool_call_id,
     tool_name: params.tool_name,
-    session_id,
-    turn_id,
-    command: params.cmd,
-    cwd: params.cwd,
-    reason: params.reason,
-    operation,
-    ...(input_preview !== undefined ? { input_preview } : {}),
-    ...(typeof params.input_chars === "number" ? { input_chars: params.input_chars } : {}),
+    source_type: "shell",
+    title: `Approve ${params.tool_name}`,
+    ...(params.reason ? { description: params.reason } : {}),
+    payload: {
+      operation,
+      command: params.cmd,
+      cwd: params.cwd,
+      reason: params.reason,
+      ...(input_preview !== undefined ? { input_preview } : {}),
+      ...(typeof params.input_chars === "number" ? { input_chars: params.input_chars } : {}),
+    } as SessionApprovalPayload,
   });
+  const approval_id = decision.approval_id ?? fallback_approval_id;
   await append_audit({
     context: params.context,
     record: {
-      event: handle.requires_user_decision ? "approval_requested" : "approval_auto_approved",
-      approval_id: handle.approval_id,
+      event: decision.auto_approved ? "approval_auto_approved" : "approval_requested",
+      approval_id,
       ...base_record,
       created_at: new Date(now_ms()).toISOString(),
     },
   }).catch(() => undefined);
 
-  const status = await handle.decision;
-  if (handle.requires_user_decision) {
+  const status: ShellApprovalStatus = decision.approved ? "approved" : "denied";
+  if (!decision.auto_approved) {
     await append_audit({
       context: params.context,
       record: {
         event: "approval_resolved",
-        approval_id: handle.approval_id,
+        approval_id,
         ...base_record,
         decision: status,
         resolved_at: new Date(now_ms()).toISOString(),
       },
     }).catch(() => undefined);
   }
-  return { approval_id: handle.approval_id, status };
+  return { approval_id, status };
 }

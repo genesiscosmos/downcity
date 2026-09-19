@@ -7,7 +7,6 @@ export type {
   ShellExecutionTarget,
 } from "./types/shell/Shell.js";
 export type * from "./types/shell/ShellAction.js";
-export type * from "./types/shell/ShellApproval.js";
 export type * from "./types/shell/ShellCommand.js";
 export type * from "./types/shell/ShellHostContext.js";
 export type * from "./types/shell/ShellRuntime.js";

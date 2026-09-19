@@ -13,7 +13,13 @@ export interface ToolSessionExecutionScope {
   readonly session_id: string;
   /** 当前 Turn 标识。 */
   readonly turn_id: string;
-  /** 当前 Session 的用户交互端口；未启用 Interaction 时为空。 */
+  /**
+   * 当前 Session 的交互入口。
+   *
+   * 关键点（中文）
+   * - 需要用户参与的工具在自己的执行里发起交互，内核不预判。
+   * - 审批走 `interactions.approval`，提问直接走 `interactions.request`。
+   */
   readonly interactions?: SessionInteractionPort;
 }
 

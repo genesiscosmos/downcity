@@ -17,11 +17,11 @@
 | 输出适配 | `SessionAssistantOutputAdapter.ts` | 把模型事件转交给 Writer |
 | 文件 Diff | `SessionTurnFileDiffData.ts`、`SessionForkMessageFiles.ts` | 结构化文件修改的 canonical data part 与 fork 附件迁移 |
 | 通知 | `SessionEventHub.ts`、`SessionModelRequestWarning.ts` | Mutation 订阅广播；内部失败到公开 Mutation 的唯一转换 |
-| 用户交互 | `SessionInteractions.ts`、`SessionApprovalRuntime.ts` | pending waiter 与超时；工具与 Shell 审批的统一入口 |
+| 用户交互 | `SessionInteractions.ts`、`ApprovalInteraction.ts` | 通用交互原语；审批入口 |
 | 工具 | `SessionJsonValue.ts` | JSON 值窄化 |
 
 ## 关键约束
 
 - 任何终态都必须先提交 canonical Message，再兑现等待中的 Promise。
 - 内部模型请求失败不直接暴露：统一经 `SessionModelRequestWarning` 转成公开 Mutation。
-- `SessionInteractions` 不拥有 Interaction 状态，它只拥有进程内 waiter 与超时。
+- `SessionInteractions` 不拥有 Interaction 状态，它只拥有进程内 waiter。

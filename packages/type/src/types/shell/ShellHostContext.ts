@@ -6,7 +6,7 @@
  * - 不引用 agent 的 ShellHostContext，避免 shell 包反向绑定 agent session/runtime。
  */
 
-import type { ShellApprovalGateway } from "./ShellApproval.js";
+import type { SessionApprovalPort } from "../session/SessionInteraction.js";
 import type { WorkspaceSandbox } from "./Sandbox.js";
 
 export type ShellLogger = {
@@ -60,8 +60,8 @@ export type ShellHostContext = {
    * 可选日志器。
    */
   logger?: ShellLogger;
-  /** 当前 Tool 执行上下文注入的宿主执行审批网关。 */
-  approval_gateway?: ShellApprovalGateway;
+  /** 当前调用注入的统一审批端口；缺失时 host 执行按拒绝处理。 */
+  approval_gateway?: SessionApprovalPort;
   /**
    * 宿主注入的 shell 集成能力。
    */

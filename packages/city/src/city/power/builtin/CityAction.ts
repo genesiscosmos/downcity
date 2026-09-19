@@ -96,10 +96,33 @@ export abstract class CityAction<TArgs = Record<string, never>> implements AnyCi
    *
    * 关键点（中文）
    * - 先按 schema 归一化入参，再交给具体的 `run`，保证校验不被某个动作漏掉。
-   * - 未声明 schema 的动作只接受空入参对象。
+   * - 声明 `approval` 的动作在这里统一请求审批；拒绝或无人响应时不执行 `run`。
    */
   async execute(raw_args: unknown, context: CityPowerContext): Promise<unknown> {
-    return await this.run(this.parse_args(raw_args), context);
+    const args = this.parse_args(raw_args);
+    if (this.approval) {
+      const approval = context.interactions.approval;
+      if (!approval) {
+        throw new CityActionError({
+          code: "internal",
+          message: `Action "${this.action}" requires approval, but this call has no Session to ask.`,
+        });
+      }
+      const decision = await approval.request({
+        turn_id: context.turn_id || "",
+        tool_call_id: context.call_id,
+        tool_name: `city.${this.action}`,
+        description: this.description,
+        payload: { operation: "tool", validated_input: args as never },
+      });
+      if (!decision.approved) {
+        throw new CityActionError({
+          code: "internal",
+          message: `Action "${this.action}" was not approved by the user.`,
+        });
+      }
+    }
+    return await this.run(args, context);
   }
 
   /** 按 schema 归一化入参；失败时抛出面向模型的错误。 */

@@ -70,14 +70,10 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
 
   try {
     const handle = await interactions.request({
-      interaction_id: "interaction:deploy-confirm",
-      turn_id: "turn-1",
       type: "power:deployment/confirm",
-      source: {
-        type: "tool",
-        tool_call_id: "call-deploy",
-        tool_name: "deployment_confirm",
-      },
+      turn_id: "turn-1",
+      tool_call_id: "call-deploy",
+      tool_name: "deployment_confirm",
       title: "确认发布",
       payload: {
         environment: "production",
@@ -87,7 +83,6 @@ test("动态 Extension Interaction 使用通用 type/payload 完成恢复", asyn
         type: "object",
         required: ["decision"],
       },
-      created_at: Date.now(),
     });
 
     assert.deepEqual((await interactions.list())[0].payload, {

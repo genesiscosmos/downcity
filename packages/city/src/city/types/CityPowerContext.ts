@@ -10,6 +10,7 @@
  */
 
 import type { Agent } from "@downcity/agent";
+import type { SessionInteractionPort } from "@downcity/type";
 import type { WorkspaceRuntime, FileSystem } from "@/workspace/index.js";
 import type { WorkspaceSandboxSnapshot } from "@downcity/type/shell";
 import type { Embassy } from "@downcity/federation";
@@ -69,4 +70,14 @@ export interface CityPowerContext {
   readonly embassy?: Embassy;
   /** 当前 Turn 的取消信号。 */
   readonly abort_signal?: AbortSignal;
+  /** 当前调用的稳定标识，用于归属审批与交互。 */
+  readonly call_id: string;
+  /**
+   * 当前调用的交互入口。
+   *
+   * 关键点（中文）
+   * - 所有入口都提供它；无 Session 的入口提供拒绝式实现。
+   * - 声明 `approval` 的动作由基类通过 `interactions.approval` 统一请求。
+   */
+  readonly interactions: SessionInteractionPort;
 }

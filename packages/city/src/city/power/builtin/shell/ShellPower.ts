@@ -7,13 +7,15 @@
  *   取代此前 `shell_exec` + `shell_session({ action })` 两个工具与其中的动作开关。
  * - 真正的执行、输出游标与响应整理仍由 Workspace 持有的 Shell 负责：
  *   本 power 只是把已有 tool 适配成动作，不复制那套逻辑。
- * - host 目标仍走 Shell 自己的审批网关；该网关由工具上下文随调用下传，本次未改动审批语义。
+ * - host 目标仍走 Shell 自己的审批网关；网关由动作执行上下文直接提供，
+ *   与其它 power 动作使用同一个审批端口。
  */
 
 import { z } from "zod";
 import type { RuntimeTool } from "@downcity/type";
 import type {
   PowerAction,
+  PowerActionExecutionContext,
   PowerActionResult,
   PowerDefinition,
   PowerJsonObject,
@@ -169,13 +171,14 @@ function require_shell_tool(
  *
  * 关键点（中文）
  * - 工具返回的是面向模型的扁平 JSON；这里只做信封映射，不改字段。
- * - Shell 的审批与超时语义原样保留：host 审批网关随工具上下文下传。
+ * - Shell 所需的 Session 身份、取消信号与审批端口都从动作执行上下文直接构造，
+ *   不再依赖宿主透传的不透明上下文。
  */
 async function run_shell_tool(input: {
   /** City 投影的通用上下文。 */
   readonly context: PowerContext;
   /** 动作执行上下文。 */
-  readonly execution: { readonly call_id: string; readonly abort_signal: AbortSignal; readonly snapshot: unknown };
+  readonly execution: PowerActionExecutionContext;
   /** 目标工具名。 */
   readonly tool_name: string;
   /** 工具入参。 */
@@ -196,12 +199,29 @@ async function run_shell_tool(input: {
       message: `Shell tool "${input.tool_name}" has no executor.`,
     };
   }
-  const snapshot = input.execution.snapshot as { tool_context?: unknown } | null;
+  const session = input.execution.session;
   const output = await tool.execute(input.payload as never, {
     tool_call_id: input.execution.call_id,
     messages: [],
     abort_signal: input.execution.abort_signal,
-    context: snapshot?.tool_context ?? {},
+    context: {
+      shell_execution_context: {
+        ...(session
+          ? {
+              session: {
+                session_id: session.session_id,
+                turn_id: session.turn_id,
+              },
+            }
+          : {}),
+        call_id: input.execution.call_id,
+        abort_signal: input.execution.abort_signal,
+        approval_gateway: input.execution.interactions.approval,
+        ...(input.execution.snapshot.workspace_env
+          ? { workspace_env: input.execution.snapshot.workspace_env }
+          : {}),
+      },
+    },
   });
   const record = (output ?? {}) as PowerJsonObject;
   const success = record.success !== false;

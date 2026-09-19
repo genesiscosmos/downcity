@@ -136,7 +136,7 @@ Session 会把该 Tool 与 Question Interaction 原子提交为 `waiting-user` /
 
 ## 普通 Tool 审批
 
-需要在执行前获得用户许可的 RuntimeTool，使用 `needs_approval` 声明：
+需要用户许可的 RuntimeTool，在自己的执行里向 Session 的审批端口请求审批：
 
 ```ts
 import { define_runtime_tool } from "@downcity/type";
@@ -147,8 +147,18 @@ const delete_file = define_runtime_tool({
   input_schema: z.object({
     path: z.string(),
   }),
-  needs_approval: true,
-  execute: async ({ path }) => {
+  execute: async ({ path }, options) => {
+    // 审批入口由 Session 注入；ask 模式等待用户，always-allow 直接放行。
+    const session = options.context?.action_execution_context?.session;
+    const decision = await session.interactions.approval.request({
+      turn_id: session.turn_id,
+      tool_call_id: options.tool_call_id,
+      tool_name: "delete_file",
+      payload: { operation: "tool", validated_input: { path } },
+    });
+    if (!decision.approved) {
+      return { success: false, error: "denied" };
+    }
     await remove_workspace_file(path);
     return { deleted: path };
   },
@@ -162,16 +172,33 @@ const agent = new Agent({
 // Session 在创建时选择 Workspace。
 ```
 
-审批策略属于 Tool，不属于 Agent。模型产生 Tool Call 后，Agent 先完成 schema 校验；
-Session 再创建 `operation: "tool"` 的 Approval Interaction，并等待 `session.respond(...)`。
-批准后执行原 Tool Call，拒绝时 `execute` 不会运行。
+审批策略属于 Tool，不属于 Agent。模型产生 Tool Call 后，Agent 先完成 schema 校验，
+随后进入 Tool 自己的 `execute`；Tool 在这里通过审批入口创建 `operation: "tool"` 的
+Approval Interaction，并等待 `session.respond(...)`。批准后继续执行副作用，拒绝时不再执行。
 
-普通 Tool 审批请求向 UI 提供真实调用信息：
+内核不再有工具级审批钩子：工具自己决定「哪一步需要有人拍板」，Session 决定「这个拍板
+怎么回答」。审批模式（`ask` / `always-allow`）在审批入口内生效，Tool 不自己读模式；
+`always-allow` 时不创建 Interaction，直接返回放行。
+
+`interactions.request()` 是通用原语，`interactions.approval` 是审批专用入口。发起任意交互
+只需提供语义字段，`interaction_id` / `created_at` / `source` 由原语补齐：
+
+```ts
+const handle = await session.interactions.request({
+  type: "question",
+  turn_id,
+  tool_call_id,
+  payload: { questions },
+});
+const result = await handle.result;   // 生产者自己解释 payload
+```
+
+审批请求向 UI 提供真实调用信息：
 
 - `source.tool_name` 与 `source.tool_call_id`：实际 Tool 及调用标识。
-- `validated_input`：schema 校验通过后的结构化输入。
-- `tool_description`：Tool 定义中的稳定能力说明，可选。
-- `model_explanation`：模型在当前调用中生成的解释，可选，不能作为安全判断依据。
+- `payload.validated_input`：schema 校验通过后的结构化输入。
+- `payload.tool_description`：Tool 定义中的稳定能力说明，可选。
+- `payload.model_explanation`：模型在当前调用中生成的解释，可选，不能作为安全判断依据。
 
 调用方不需要配置审批 `title` 或 `reason`。UI 应根据 Tool、已校验输入和可选模型解释
 组织展示内容，不能用客户端生成的摘要替代真实输入。

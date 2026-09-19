@@ -69,8 +69,6 @@ export interface InvokePowerToolOptions {
   call_id: string;
   /** 模型提交的结构化输入。 */
   input: PowerToolInput;
-  /** Executor 注入的宿主工具上下文；需要宿主能力的动作读它。 */
-  tool_context?: unknown;
 }
 
 /** 一组 power 工具；键为 power 名。 */

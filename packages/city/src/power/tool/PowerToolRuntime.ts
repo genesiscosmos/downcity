@@ -98,11 +98,8 @@ export async function invoke_power_tool(
       power: power_name,
       action,
       payload: args as JsonValue,
-      // Executor 注入的工具上下文随快照下传，需要宿主能力的动作（如 shell 审批网关）读它。
-      execution_context: {
-        ...snapshot,
-        ...(params.tool_context ? { tool_context: params.tool_context } : {}),
-      },
+      execution_context: snapshot,
+      // Session 入口把自己的交互端口交给动作；非 Session 入口由流水线注入拒绝式实现。
       ...(turn_context.interactions ? { interactions: turn_context.interactions } : {}),
     });
     return {

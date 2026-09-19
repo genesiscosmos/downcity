@@ -33,8 +33,6 @@ import {
   normalize_session_user_parts,
   SessionMessages,
 } from "@/session/messages/SessionMessages.js";
-import type { ShellApprovalGateway } from "@downcity/type";
-import type { SessionApprovalPort } from "@/types/turn/SessionTurnContext.js";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
@@ -82,10 +80,7 @@ export class SessionLoop {
   private readonly logger: SessionLoopOptions["logger"];
   private readonly interactions:
     SessionInteractionLifecycle & SessionInteractionPort;
-  private readonly shell_approval_gateway: ShellApprovalGateway;
-  private readonly approval: SessionApprovalPort;
-  private readonly queue: SessionQueue;
-  private pending_prompt_count = 0;
+  private readonly queue: SessionQueue;  private pending_prompt_count = 0;
   private processing_promise: Promise<void> | null = null;
   private active_turn: ActiveSessionTurnState | null = null;
   /** 尚未完成 canonical 接收的幂等 Prompt，防止进程内并发重复入队。 */
@@ -102,8 +97,6 @@ export class SessionLoop {
     this.logger = options.logger;
     this.queue = options.queue;
     this.interactions = options.interactions;
-    this.shell_approval_gateway = options.shell_approval_gateway;
-    this.approval = options.approval;
     if (!this.session_id) {
       throw new Error("SessionLoop requires a non-empty session_id");
     }
@@ -626,8 +619,6 @@ export class SessionLoop {
       },
       has_pending_step_input: () => this.has_pending_prompt(),
       assistant_output,
-      shell_approval_gateway: this.shell_approval_gateway,
-      approval: this.approval,
       interactions: this.interactions,
       on_effects_changed: (effects) => {
         publish_session_turn_file_diff({

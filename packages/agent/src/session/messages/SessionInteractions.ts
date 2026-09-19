@@ -1,24 +1,35 @@
 /**
  * Session 用户异步交互运行时。
  *
- * 本模块只拥有 pending waiter、超时与恢复执行；Interaction 的权威状态由
- * SessionMessages 持久化。任何终态都必须先提交 canonical Message，再兑现等待 Promise。
+ * 关键点（中文）
+ * - 本模块只拥有 pending waiter 与恢复执行；Interaction 的权威状态由 SessionMessages 持久化。
+ *   任何终态都必须先提交 canonical Message，再兑现等待 Promise。
+ * - 原语只认识信封与 type 字符串：payload 的解释属于它的生产者。
+ * - 审批的专用入口（模式判断与决定解释）由 {@link ApprovalInteraction} 承担。
+ *
+ * Interaction 没有超时：它只能由用户响应，或随所属 Turn/Session 结束而被取消。
  */
 
 import type { SessionMessages } from "@/session/messages/SessionMessages.js";
+import { ApprovalInteraction } from "@/session/messages/ApprovalInteraction.js";
 import type {
   RespondSessionInteractionInput,
+  SessionApprovalMode,
   SessionInteractionHandle,
   SessionInteractionLifecycle,
   SessionInteractionPort,
   SessionInteractionRequest,
+  SessionInteractionRequestInput,
   SessionInteractionResponse,
   SessionInteractionResult,
 } from "@downcity/type";
 import type { SessionPendingInteractionRuntime } from "@/types/session/SessionInteractions.js";
+import { generate_id } from "@/utils/Id.js";
 
 /** 单个 Session 的异步用户交互入口。 */
 export class SessionInteractions implements SessionInteractionPort, SessionInteractionLifecycle {
+  /** 审批专用入口；长生命周期，每次调用只传身份与 payload。 */
+  readonly approval: ApprovalInteraction;
   private readonly session_id: string;
   private readonly messages: SessionMessages;
   private readonly pending_by_id = new Map<
@@ -31,18 +42,44 @@ export class SessionInteractions implements SessionInteractionPort, SessionInter
     session_id: string;
     /** 当前 Session 的 canonical Message 入口。 */
     messages: SessionMessages;
+    /** 读取当前 Session 审批模式；always-allow 在审批入口内生效。 */
+    read_approval_mode?: () => SessionApprovalMode;
   }) {
     this.session_id = String(options.session_id || "").trim();
     this.messages = options.messages;
     if (!this.session_id) {
       throw new Error("SessionInteractions requires a non-empty session_id");
     }
+    this.approval = new ApprovalInteraction({
+      interactions: this,
+      read_mode: options.read_approval_mode ?? (() => "ask"),
+    });
   }
 
-  /** 创建并持久化一次 Interaction，返回等待终态结果的句柄。 */
+  /**
+   * 创建并持久化一次 Interaction，返回等待终态结果的句柄。
+   *
+   * 关键点（中文）
+   * - 调用方只提供语义字段；`interaction_id`、`created_at` 与 `source` 在这里补齐。
+   */
   async request(
-    request: SessionInteractionRequest,
+    input: SessionInteractionRequestInput,
   ): Promise<SessionInteractionHandle> {
+    const request: SessionInteractionRequest = {
+      interaction_id: `interaction:${generate_id()}`,
+      turn_id: input.turn_id,
+      type: input.type,
+      source: {
+        type: input.source_type ?? "tool",
+        tool_call_id: input.tool_call_id,
+        ...(input.tool_name ? { tool_name: input.tool_name } : {}),
+      },
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.description ? { description: input.description } : {}),
+      payload: input.payload,
+      ...(input.response_schema ? { response_schema: input.response_schema } : {}),
+      created_at: Date.now(),
+    };
     this.validate_request(request);
     if (this.pending_by_id.has(request.interaction_id)) {
       throw new Error(`Session Interaction is already pending: ${request.interaction_id}`);

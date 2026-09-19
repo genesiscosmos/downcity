@@ -69,17 +69,12 @@ export const AskQuestionsTool = define_runtime_tool<AskQuestionsToolInput, Actio
     );
 
     const handle = await interaction_port.request({
-      interaction_id: `interaction:${generate_id()}`,
-      turn_id,
       type: "question",
-      source: {
-        type: "tool",
-        tool_call_id,
-        tool_name: "ask_question",
-      },
-      title: parsed.title,
+      turn_id,
+      tool_call_id,
+      tool_name: "ask_question",
+      ...(parsed.title ? { title: parsed.title } : {}),
       payload: { questions } as unknown as JsonValue,
-      created_at: Date.now(),
     });
     const result = await handle.result;
     if (result.status === "cancelled") {

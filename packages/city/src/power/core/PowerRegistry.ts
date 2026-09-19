@@ -27,7 +27,7 @@ import type { JsonValue } from "@downcity/agent";
 import type { PowerSnapshot } from "@/power/index.js";
 import type { PowerRuntimeRecord } from "@/power/types/PowerRuntimeRecord.js";
 import type { PowerExecutionContext } from "@/power/index.js";
-import type { SessionInteractionPort } from "@downcity/agent";
+import type { SessionInteractionPort } from "@downcity/type";
 import { execute_power_action } from "@/power/core/PowerActionExecution.js";
 import type { RuntimeTool as Tool } from "@downcity/type";
 import { create_power_tools } from "@/power/tool/PowerTools.js";

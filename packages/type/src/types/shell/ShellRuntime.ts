@@ -11,7 +11,7 @@ import type { RuntimeTool } from "@downcity/type";
 import type {
   ShellActionResponse,
 } from "./ShellAction.js";
-import type { ShellApprovalGateway } from "./ShellApproval.js";
+import type { SessionApprovalPort } from "../session/SessionInteraction.js";
 import type { SandboxProvider } from "./Sandbox.js";
 
 /**
@@ -37,8 +37,8 @@ export interface ShellExecutionContext {
   readonly call_id?: string;
   /** 当前调用的取消信号。 */
   readonly abort_signal?: AbortSignal;
-  /** 当前 Session 注入的宿主执行审批网关。 */
-  readonly approval_gateway?: ShellApprovalGateway;
+  /** 当前 Session 注入的统一审批端口；缺失时 host 执行按拒绝处理。 */
+  readonly approval_gateway?: SessionApprovalPort;
   /** 当前 Step 已提交生效的环境变量。 */
   readonly workspace_env?: Readonly<Record<string, string>>;
 }
