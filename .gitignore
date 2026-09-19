@@ -18,6 +18,9 @@ bun.lock
 # pnpm 的本地内容寻址存储：pnpm 在仓库根目录生成，不应入库
 .pnpm-store/
 
+.agents/
+.claude/
+
 *.db
 *.db-shm
 *.db-wal
