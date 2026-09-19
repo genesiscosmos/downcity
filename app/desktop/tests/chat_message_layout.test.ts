@@ -100,13 +100,22 @@ function read_body_type_token(): { size_rem: number; line_height: number } {
   return { size_rem: Number(size[1]), line_height: Number(line_height[1]) };
 }
 
-/** 读出 `markdown.css` 里段落之间的外边距（em 倍数，相邻段落折售后就是这个值）。 */
+/**
+ * 读出 `markdown.css` 里段落之间的外边距（em 倍数，相邻段落折售后就是这个值）。
+ *
+ * 段落间距不写在本规则里，而由 `.markdown` 上的 `--markdown-flow-gap` 给出：
+ * 同一份节奏要同时服务段落、列表、引用，以及各处块级表面（见 `markdown_spacing.test.ts`）。
+ * 因此这里要解析到令牌的真值，而不是就地找一个 em 字面量。
+ */
 function read_paragraph_margin_em(): number {
   const rule = /\.markdown :where\(p\)\s*\{([\s\S]*?)\}/.exec(markdown_styles);
   assert.ok(rule, "markdown.css 里找不到 .markdown :where(p) 规则");
-  const margin = /margin:\s*([\d.]+)em/.exec(rule[1]);
-  assert.ok(margin, "段落没有声明 em 外边距；段落间距必须随字号缩放");
-  return Number(margin[1]);
+  const margin = /margin:\s*var\(--markdown-flow-gap\)/.exec(rule[1]);
+  assert.ok(margin, "段落没有引用 --markdown-flow-gap；段落间距必须随字号缩放");
+
+  const token = /--markdown-flow-gap:\s*([\d.]+)em;/.exec(markdown_styles);
+  assert.ok(token, "markdown.css 里找不到 --markdown-flow-gap 的定义");
+  return Number(token[1]);
 }
 
 test("Agent 消息是上下两段，不再有头像列", () => {

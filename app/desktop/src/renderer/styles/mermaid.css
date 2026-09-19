@@ -4,12 +4,17 @@
  * 图表块与代码块共用一套表面语言（1px 描边、0.5em 圆角、muted 底色），但语义不同：
  * 图表是内容本身，代码块是可复制的文本。因此成功渲染时只给一层克制的描边，渲染失败或
  * 流式生成中才退回代码块外观，让用户至少能拿到原始源码。
+ *
+ * 纵向节奏与代码块共用同一档（`markdown.css` 的 `--markdown-block-gap`）：
+ * 两者都是块级表面，在正文里出现的时机也一样（「下面给你看一段代码/一张图」）。
+ * 本文件不再自行给 em 外边距——否则图表与代码块会在同一篇正文里给出两种间距。
+ * 由 `tests/markdown_spacing.test.ts` 守着。
  */
 
 .markdown .markdown-mermaid {
   position: relative;
   max-width: 100%;
-  margin: 0.75em 0;
+  margin: var(--markdown-block-gap) 0;
   border: 1px solid var(--border-subtle);
   border-radius: 0.625em;
   overflow: hidden;

@@ -11,6 +11,64 @@
  * 本文件内的 `em` 取值（标题 1.55em、行内码 0.92em 等）是**文档方言**：
  * 它们相对宿主正文字号缩放，因此正文一变它们跟着变。它们不参与 9 级档位收敛，
  * 这是有意保留的例外（详见 docs/desktop-type-scale-design.md 第六节）。
+ *
+ * ## 垂直节奏：三个间距档 + 标题上边距
+ *
+ * 块间距曾经是逐条拍出来的——代码块 0.7em、图表 0.75em、图片 0.8em、公式 0.9em、
+ * 表格与分隔线 1em、标题上方 1.1em——再叠上库自带的三处间距（根节点 `space-y-4` = 1rem、
+ * 列表项 `py-1`、图片容器 `my-4`）。
+ *
+ * 问题不在这些值本身，而在**摊开的范围**：段落 7.5px、列表项 9.5px、代码块 10.5px、
+ * 表格 16px、图片 28px、h1 上方 25.6px。最大的比最小的大三倍多，
+ * 于是「哪里都松一点」成了整体印象——用户看到的就是这个。
+ *
+ * 现在只有三个档，全部声明在 `.markdown` 上。写在根节点而不是 `tokens.css`，
+ * 是因为 em 在**使用处**解析（自定义属性只是原样替换），因此它们仍然随宿主正文字号缩放：
+ * 同一份节奏在会话正文（`base`）与 Plugin 说明（`xs`）下各自成立。
+ *
+ * | 令牌 | 值 | 15px 下 | 用在哪 |
+ * | --- | --- | --- | --- |
+ * | `--markdown-tight-gap` | 0.25em | 3.75px | 同一列表内相邻项、引用内的相邻段落 |
+ * | `--markdown-flow-gap` | 0.5em | 7.5px | 段落、列表块、引用块与前后内容之间 |
+ * | `--markdown-block-gap` | 0.7em | 10.5px | 块级表面：代码块、表格、图表、图片、分隔线、公式 |
+ * | `--markdown-heading-gap-before` | 0.9em | 随标题自身字号 | 标题上方 |
+ *
+ * 三档的取值各有依据，不是平均分配：
+ *
+ * - **正文档 0.5em 是唯一被验证过的值**（15px 下 7.5px，字号那一轮定下的）。
+ *   它同时是一条硬约束的下界：必须小于消息内的块间距（`message_layout.ts` 的 `gap-3` = 12px），
+ *   否则「另起一段」与「后面跟了工具活动」会看起来一样宽。由此得出正文字号上限 `xl`。
+ * - **块级档 0.7em 保留了原来的设计意图**（那些值原本就在 1.4–2 倍之间），只取最低的 1.4 倍：
+ *   显示型块（代码、图表、表格）在正文里是「插进来」的，留白比段落大一点是对的；
+ *   但原表里 1em / 0.9em 那几项与消息级间距只差 1px，会把一个代码块读成另一条消息。
+ *   与正文档相差 3px（> 本仓库的可感知下限 2px），两个层级确实分得开。
+ * - **紧档 0.25em 只服务并列结构**：同一列表里的相邻项、同一个引用里的相邻段落。
+ *   它们属于同一个块，不该拿到块与块之间的距离。
+ *
+ * 标题那一档相对**标题自身**的字号解析（h2 是 1.3em），所以 h2 上方 17.55px、
+ * 段落上方仍是 7.5px——这正是「标题起段」需要的落差。
+ *
+ * ## 标题为什么只给上边距
+ *
+ * 相邻块的外边距会**折叠**（取较大值），因此标题下方写一个小于正文档的值必然被吞掉、
+ * 写一个大于正文档的值又会让标题与它引出的正文反而更远——两个方向都不对。
+ * 所以这里只给上边距，标题与下方内容之间的距离就由下面那个块自己的上边距给出
+ *（段落/列表 7.5px，代码块/表格 10.5px），这也是排版惯例：标题靠上、内容靠下。
+ *
+ * 同理，`.markdown` 上**不要**再添新的间距令牌：新加一个块级元素时，
+ * 它必然属于「并列项 / 正文块 / 块级表面」三者之一。
+ *
+ * 三档的大小关系由 `tests/markdown_spacing.test.ts` 守着（紧 < 正文 < 块级），
+ * 且该文件禁止本文件与 `mermaid.css` 再出现字面量 em 外边距：
+ * 新加一个块级元素时只能复用这三档，不能就地拍一个「看着差不多」的值。
+ *
+ * ## 库自带的间距一律不参与排版
+ *
+ * Streamdown 在根节点写 `space-y-4`，在列表项写 `py-1`，在图片容器写 `my-4`。
+ * 它们不报错也不显眼，但会静默加进本文件已经声明过的节奏里：
+ * 列表项因此比段落还松（`py-1` 上下各 4px + 0.1em），表格与图片因此拿到 16px。
+ * 本文件在根节点给直接子元素统一兜底正文节奏，块级表面各自覆盖，
+ * 于是「库改版又加了什么间距」不再影响排版结果。
  */
 
 .markdown {
@@ -20,15 +78,31 @@
   font-size: inherit;
   line-height: inherit;
   overflow-wrap: anywhere;
+  --markdown-tight-gap: 0.25em;
+  --markdown-flow-gap: 0.5em;
+  --markdown-block-gap: 0.7em;
+  --markdown-heading-gap-before: 0.9em;
 }
 
-.markdown > :first-child { margin-top: 0 !important; }
-.markdown > :last-child { margin-bottom: 0 !important; }
+/*
+ * 直接子元素的兜底间距。
+ *
+ * 两个作用，缺一不可：
+ *
+ * 1. 覆盖 Streamdown 写在根节点上的 `space-y-4`（1rem）。它在本文件之外，
+ *    且位于 `@layer utilities`——本文件是无图层 CSS，优先级更高，所以这条能压住它。
+ * 2. 给没有单独声明的块（脚注区、正文里的裸 HTML 块）一个默认节奏，
+ *    而不是 0：默认 0 会让它们贴住上一段，而这类块最容易在 review 里被漏掉。
+ *
+ * 它排在本文件靠前的位置，因此后面每一条具体规则（段落、标题、列表、代码块…）
+ * 都按源码顺序覆盖它。
+ */
+.markdown > :where(*) { margin-block: var(--markdown-flow-gap); }
 
 /*
- * 正文块间距。
+ * 正文块：段落、列表块、引用块与前后内容之间都用这一档。
  *
- * 取值是 0.5em：随**承载它的正文字号**缩放，不钉死像素。
+ * 取值是 `--markdown-flow-gap`（0.5em）：随**承载它的正文字号**缩放，不钉死像素。
  * 在默认正文档 `base`（0.9375rem）下为 0.46875rem（= 7.5px），是段落之间的间隔；
  * 它必须小于消息内的块间距（`message_layout.ts` 的 `gap-3` = 0.75rem，即 12px），
  * 否则「同一段话的两段」和「两段话之间插了一段工具活动」会看起来一样宽。
@@ -36,17 +110,23 @@
  * 当前正文是 `base`，差值 0.28125rem（= 4.5px），还剩一档余量。
  * 这条约束由 `chat_message_layout.test.ts` 守着。
  *
- * 这条规则对 Workspace 文档预览、Plugin 说明同样生效——它们是同一套 Markdown 排版，
+ * 本文件对 Workspace 文档预览、Plugin 说明同样生效——它们是同一套 Markdown 排版，
  * 各自由宿主容器给出基准字号（见本文件顶部的注释）。
  */
 .markdown :where(p) {
   min-width: 0;
   max-width: 100%;
-  margin: 0.5em 0;
+  margin: var(--markdown-flow-gap) 0;
 }
 
+/*
+ * 标题：只给上边距，理由见本文件顶部「标题为什么只给上边距」。
+ *
+ * 取值相对标题自身字号，所以 h2（1.3em）上方 17.55px、h4（1em）上方 13.5px：
+ * 标题越大，起段需要的留白越多。若按正文档给，h1 与 h4 上方会一样宽。
+ */
 .markdown :where(h1, h2, h3, h4, h5, h6) {
-  margin: 1.1em 0 0.42em;
+  margin: var(--markdown-heading-gap-before) 0 0;
   color: var(--foreground);
   font-weight: 650;
   line-height: 1.3;
@@ -68,7 +148,7 @@
 .markdown :where(ul, ol),
 .markdown [data-streamdown="unordered-list"],
 .markdown [data-streamdown="ordered-list"] {
-  margin: 0.5em 0 !important;
+  margin: var(--markdown-flow-gap) 0 !important;
   padding-left: 1.4em !important;
   list-style-position: outside;
 }
@@ -93,17 +173,25 @@
   list-style-type: square;
 }
 
+/*
+ * 列表项：项间距由本文件给出，库的 `py-1` 必须清掉。
+ *
+ * Streamdown 给每个 `li` 写了 `py-1`（上下各 4px）。本文件原来只声明 `padding-left`，
+ * 于是那 4px 静默留了下来：相邻两项的实际间隔是 4 + 4 + 0.1em = 9.5px，
+ * 比段落之间的 7.5px 还大——一个「更紧凑的并列结构」看起来比正文还松。
+ * 现在用 `padding` 简写把纵向清零，间距只由下面那条 `li + li` 决定。
+ */
 .markdown :where(li),
 .markdown [data-streamdown="list-item"] {
   display: list-item;
   margin: 0 !important;
-  padding-left: 0.1em;
+  padding: 0 0 0 0.1em;
   line-height: inherit !important;
 }
 
 .markdown :where(li + li),
 .markdown [data-streamdown="list-item"] + [data-streamdown="list-item"] {
-  margin-top: 0.1em !important;
+  margin-top: var(--markdown-tight-gap) !important;
 }
 
 .markdown :where(li > p) { margin: 0; }
@@ -120,13 +208,13 @@
 .markdown :where(a:hover) { text-decoration-color: var(--primary); }
 
 .markdown :where(blockquote) {
-  margin: 0.7em 0;
+  margin: var(--markdown-block-gap) 0;
   padding: 0.18em 0 0.18em 0.7em;
   border-left: 2px solid color-mix(in srgb, var(--foreground) 24%, transparent);
   color: var(--muted-foreground);
 }
 
-.markdown :where(blockquote p) { margin: 0.25em 0; }
+.markdown :where(blockquote p) { margin: var(--markdown-tight-gap) 0; }
 
 /*
  * 行内码与块级代码共用一套「代码底色」语义，靠面积区分：
@@ -160,7 +248,7 @@
 .markdown [data-streamdown="code-block"] {
   position: relative;
   max-width: 100%;
-  margin: 0.7em 0 !important;
+  margin: var(--markdown-block-gap) 0 !important;
   padding: 0 !important;
   overflow: hidden;
   border: 0 !important;
@@ -310,7 +398,11 @@
 
 .markdown div[data-streamdown="table-wrapper"] {
   max-width: 100%;
-  margin: 1em 0 !important;
+  /*
+   * 只有块级表面一档：库在本元素上写了 `my-4`（1rem），
+   * 而它位于 `@layer utilities`——本文件是无图层 CSS，所以 !important 仍然压得住它。
+   */
+  margin: var(--markdown-block-gap) 0 !important;
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: 0.625em;
@@ -366,28 +458,68 @@
   background: var(--interaction-hover) !important;
 }
 
+/*
+ * 图片：外边距只给容器一次。
+ *
+ * 图片在 Streamdown 里被包在 `image-wrapper` 容器里（遮罩与下载按钮的定位基准），
+ * 库给那个容器写了 `my-4`（1rem）；本文件原来又给 `img` 写了 0.8em。
+ * 两者不会互相抵消：容器是 inline-block，内部的外边距不会折到外面，
+ * 于是图片上下各拿到 16 + 12 = 28px——比 h1 上方的留白还大，
+ * 而且因为两侧都很大，图片在正文里读起来像一块独立版面。
+ *
+ * 现在容器拿到块级档，容器内的 `img` 清零，外边距只算一次。
+ * 容器的 `display` 不动：它是 inline-block 才能缩到图片宽度，
+ * 改成 `block` 会让遮罩与下载按钮按整列宽定位。
+ */
+.markdown [data-streamdown="image-wrapper"] {
+  margin: var(--markdown-block-gap) 0 !important;
+}
+
+.markdown [data-streamdown="image-wrapper"] > :where(img) {
+  margin: 0 !important;
+}
+
 .markdown :where(img) {
   display: block;
   max-width: 100%;
   height: auto;
-  margin: 0.8em 0;
+  margin: var(--markdown-block-gap) 0;
 }
 
 .markdown :where(hr) {
-  margin: 1em 0;
+  margin: var(--markdown-block-gap) 0;
   border: 0;
   border-top: 1px solid var(--border);
 }
 
-/* 公式随正文颜色，并允许较宽的块级公式横向滚动而不撑破消息容器。 */
+/*
+ * 公式随正文颜色，并允许较宽的块级公式横向滚动而不撑破消息容器。 */
 .markdown :where(.katex) {
   color: inherit;
 }
 
 .markdown :where(.katex-display) {
   max-width: 100%;
-  margin: 0.9em 0;
+  margin: var(--markdown-block-gap) 0;
   overflow-x: auto;
   overflow-y: hidden;
   padding-block: 0.15em;
 }
+
+/*
+ * 首尾块的上下外边距清零：放在**文件末尾**。
+ *
+ * 容器（`agent_message_body_class_name`）已经是 flex 列 + `gap-3`，
+ * 首块的上外边距会在 flex 容器里与 gap 叠加（margin 不折叠），
+ * 于是「以代码块开头的消息」会在身份行下多出一段留白，看起来像排版事故。
+ *
+ * 位置是必须的：本文件里块级规则（代码块、表格、图片容器）的特异性与本规则**相同**
+ *（都是 `.markdown` + 一个选择器），因此只能靠源码顺序决出胜负。
+ * 它们曾经排在前面，于是这两条在那些元素上完全无效——而且因为只影响「消息首块恰好是块级元素」
+ * 这种情形，很难被归因。
+ *
+ * 不要把它们挪回文件开头，也不要删掉 `!important`。
+ * 由 `tests/markdown_spacing.test.ts` 守着（同时锁住「排在所有块级规则之后」）。
+ */
+.markdown > :first-child { margin-top: 0 !important; }
+.markdown > :last-child { margin-bottom: 0 !important; }
