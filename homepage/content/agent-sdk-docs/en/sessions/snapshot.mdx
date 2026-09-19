@@ -21,7 +21,7 @@ The file is stored at:
 
 When restoring the Session, the SDK reads this file first. If it does not exist, the Session regenerates its system from the Agent's current instruction and plugins. Deleting `instruction.md` cancels persistence and restores that behavior.
 
-`snapshot()` writes the complete system, including custom instruction, SDK core, plugin system, and Session context. It does not persist message history, model, or environment variables. Multiple system blocks are merged in order into one Markdown document, and later calls atomically replace the existing file.
+`snapshot()` writes the complete system, including the Agent identity block, custom instruction, SDK core, Power system, and Session context. It does not persist message history, model, or environment variables. Multiple system blocks are merged in order into one Markdown document, and later calls atomically replace the existing file.
 
 To regenerate from the Agent's current configuration before persisting, call `await session.syncshot()` followed by `await session.snapshot()`. If `instruction.md` already exists, `syncshot()` also overwrites it directly.
 

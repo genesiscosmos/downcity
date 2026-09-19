@@ -26,7 +26,7 @@ It returns a structured system snapshot:
     timezone: string;
   };
   blocks: Array<{
-    source: "core" | "instruction" | "plugin" | "session";
+    source: "core" | "instruction" | "power" | "session";
     name: string;
     content: string;
   }>;
@@ -35,10 +35,11 @@ It returns a structured system snapshot:
 
 The blocks can include:
 
+- the Agent identity block, carrying the Agent `name` and `id`
 - caller-provided static `instruction`
-- Downcity Agent core guidance, including Harness design, Shell command rules, and plugin system rules
-- registered and enabled plugin system text
-- stable session context, including `agent_id`, `session_id`, `project_root`, creation time, and timezone
+- Downcity Agent core guidance, including Harness design, Shell command rules, and power system rules
+- registered and enabled power system text
+- stable session context, including `session_id`, `project_root`, creation time, and timezone
 
 The returned blocks are the same stable system blocks used by `session.prompt()`. The first generated system is fixed in the Session's memory; later Agent instruction or plugin registry changes do not alter it. Newly created Sessions use the latest configuration.
 
@@ -50,12 +51,13 @@ The session creation time and timezone are the reference time context for the co
 
 `@downcity/agent` builds system blocks in a fixed order:
 
-1. `instruction`: the host-provided Agent role, business rules, and response preferences.
-2. `core`: fixed Downcity Agent runtime guidance, including Harness design, Shell command rules, and plugin system rules.
-3. `plugin`: each enabled, ready, and currently available plugin's own system prompt.
-4. `session`: stable context for the current session.
+1. `instruction` / `identity`: the Agent `name` and `id`, injected by the SDK. The Agent identity is stable across every Session of that Agent.
+2. `instruction` / `agent`: the host-provided Agent role, business rules, and response preferences.
+3. `core`: fixed Downcity Agent runtime guidance, including Harness design, Shell command rules, and power system rules.
+4. `power`: each enabled, ready, and currently available power's own system prompt.
+5. `session`: stable context for the current session.
 
-Even when the host provides `instruction`, `core` is still injected immediately after it.
+Even when the host provides `instruction`, `core` is still injected immediately after it. The `session` block describes the session itself and does not repeat the Agent identity.
 
 ## Example Snapshot
 
@@ -63,7 +65,7 @@ Even when the host provides `instruction`, `core` is still injected immediately 
 {
   "session_id": "design-review",
   "session": {
-    "agent_id": "city-dev",
+    "agent_id": "reviewer",
     "session_id": "design-review",
     "project_root": "/path/to/project",
     "created_at": "2026-05-19T14:16:25.048Z",
@@ -72,23 +74,28 @@ Even when the host provides `instruction`, `core` is still injected immediately 
   "blocks": [
     {
       "source": "instruction",
+      "name": "identity",
+      "content": "# Agent Identity\n\nYou are \"Code Reviewer\" (agent id: reviewer)."
+    },
+    {
+      "source": "instruction",
       "name": "agent",
       "content": "You are the Downcity project assistant."
     },
     {
       "source": "core",
       "name": "default",
-      "content": "# Downcity Agent\n\nYou are a Downcity Agent running inside the Downcity Agent runtime...\n\n# Harness Design\n\nDowncity Agent is a harness around an existing human-owned workspace, not a replacement platform...\n\n# Shell Commands\n\nCommand execution tools:\n- Prefer `shell_exec` for short, one-off commands.\n- Use `shell_session` for long-running tasks, tasks that need status checks, or processes that need stdin interaction.\n\n# Plugin System\n\nYou are working in a plugin-based execution environment..."
+      "content": "# Downcity Agent\n\nYou are a Downcity Agent running inside the Downcity Agent runtime...\n\n# Harness Design\n\nDowncity Agent is a harness around an existing human-owned workspace, not a replacement platform...\n\n# Shell Commands\n\nAll Shell work goes through the `shell` power...\n\n# Power System\n\nYou are working in a power-based execution environment..."
     },
     {
-      "source": "plugin",
+      "source": "power",
       "name": "task",
-      "content": "# Task Plugin\n\nThe task plugin manages scheduled and repeatable tasks..."
+      "content": "# Task Power\n\nYou can use the `task` power to manage task definitions, execution, scheduling, and status control..."
     },
     {
       "source": "session",
       "name": "context",
-      "content": "Current session context:\nYou are serving agent \"city-dev\" in session \"design-review\".\nThe current project root is \"/path/to/project\".\nThis session was created at 2026-05-19T14:16:25.048Z, with Asia/Shanghai as its reference timezone.\nThis creation time is a stable reference for the session and does not represent the current time for every run.\nIf the user message provides a newer current time, a relative time, or other dynamic context, prioritize the dynamic information from the user message."
+      "content": "Current session context:\nThis session is \"design-review\".\nThe current project root is \"/path/to/project\".\nThis session was created at 2026-05-19T14:16:25.048Z, with Asia/Shanghai as its reference timezone.\nThis creation time is a stable reference for the session and does not represent the current time for every run.\nIf the user message provides a newer current time, a relative time, or other dynamic context, prioritize the dynamic information from the user message."
     }
   ]
 }

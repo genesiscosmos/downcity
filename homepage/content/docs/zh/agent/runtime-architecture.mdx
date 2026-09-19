@@ -95,7 +95,7 @@ Agent 和 Session 都持有宿主传入的模型实例，SDK 不根据字符串 
 
 Session 提供三种 System 语义：
 
-- 默认：执行时使用 Agent 当前 instruction、Plugin system 和 Session context。
+- 默认：执行时使用 Agent 当前身份、instruction、Power system 和 Session context。
 - `snapshot()`：把当前完整 system 固化到 Session。
 - `syncshot()`：根据 Agent 当前状态重新生成并覆盖已有快照。
 

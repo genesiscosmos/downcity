@@ -59,6 +59,16 @@ const reviewer = new Agent({
 });
 ```
 
+`id` and `name` become the Agent Identity block at the top of every Session system prompt:
+
+```text
+# Agent Identity
+
+You are "Code Reviewer" (agent id: reviewer).
+```
+
+Both values are always given, so the model can use the readable name while hosts can still reconcile against the stable `id`.
+
 `description` does not become a regular AgentSession system instruction and does not replace `instruction`: the former says what the Agent is suited for, while the latter controls how it works. Group dispatch sees only member `id/name/description`, not the complete `instruction`.
 
 ## `workspace` and `agent.sessions.create({ workspace })`

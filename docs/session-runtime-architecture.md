@@ -92,11 +92,13 @@ User Message 与 Agent Message 的稳定语义检查点必须先提交 SQLite，
 `build_session_system_blocks()` 是默认 system block 的唯一组装入口，顺序固定为：
 
 ```text
-Agent instruction → Downcity core → Plugin system → Session context
+Agent identity → Agent instruction → Downcity core → Power system → Session context
 ```
 
-执行路径、`session.system()` 和控制面 system 预览都复用该入口。Plugin system 必须先经过
+执行路径、`session.system()` 和控制面 system 预览都复用该入口。Power system 必须先经过
 `session.system_context` Hook 检查点；旧的独立 `SessionSystemComposer/SystemDomain` 链路不再存在。
+
+Agent 身份（`name` 与 `id`）由 SDK 作为第一个 block 注入。`session` block 只描述 session 自身，使 Agent 身份固定在同一 Agent 所有 Session 的稳定前缀中。
 
 Session 首次执行会固定 system snapshot。`snapshot()` 和 `syncshot()` 将完整快照写入 `session.db` 的 `session_state.system_snapshot`；普通运行时变化不得静默重写已有 snapshot。
 

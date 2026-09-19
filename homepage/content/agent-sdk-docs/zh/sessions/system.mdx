@@ -26,7 +26,7 @@ const system = await session.system();
     timezone: string;
   };
   blocks: Array<{
-    source: "core" | "instruction" | "plugin" | "session";
+    source: "core" | "instruction" | "power" | "session";
     name: string;
     content: string;
   }>;
@@ -35,10 +35,11 @@ const system = await session.system();
 
 这些 blocks 可以包括：
 
+- Agent 身份块，携带 Agent 的 `name` 与 `id`
 - 调用方传入的静态 `instruction`
-- Downcity Agent core 说明，包括 Harness 设计思路、Shell command 规则和 plugin 系统总规则
-- 已注册并启用的 plugin system 文本
-- 稳定的 session 上下文，包括 `agent_id`、`session_id`、`project_root`、创建时间与时区
+- Downcity Agent core 说明，包括 Harness 设计思路、Shell command 规则和 power 系统总规则
+- 已注册并启用的 power system 文本
+- 稳定的 session 上下文，包括 `session_id`、`project_root`、创建时间与时区
 
 返回内容和 `session.prompt()` 使用的是同一套稳定 system blocks。system 第一次生成后会固定在当前 Session 内存中；后续 Agent instruction 或 plugin registry 变化不会修改它。新 Session 才会使用最新配置生成 system。
 
@@ -50,12 +51,13 @@ session 创建时间和时区是当前会话的参考时间上下文。当前时
 
 `@downcity/agent` 会按固定顺序构造 system blocks：
 
-1. `instruction`：宿主传入的 Agent 角色、业务规则和回复偏好。
-2. `core`：Downcity Agent 固定运行说明，包括 Harness 设计思路、Shell command 与 plugin 系统总规则。
-3. `plugin`：每个已经启用、已 ready 且当前可用的 plugin 自己的 system prompt。
-4. `session`：当前 session 的稳定上下文。
+1. `instruction` / `identity`：由 SDK 注入的 Agent `name` 与 `id`。同一个 Agent 的所有 Session 共享这份身份。
+2. `instruction` / `agent`：宿主传入的 Agent 角色、业务规则和回复偏好。
+3. `core`：Downcity Agent 固定运行说明，包括 Harness 设计思路、Shell command 与 power 系统总规则。
+4. `power`：每个已经启用、已 ready 且当前可用的 power 自己的 system prompt。
+5. `session`：当前 session 的稳定上下文。
 
-即使宿主传入了 `instruction`，`core` 也会继续注入，并紧跟在 `instruction` 后面。
+即使宿主传入了 `instruction`，`core` 也会继续注入，并紧跟在 `instruction` 后面。`session` 块只描述 session 自身，不重复 Agent 身份。
 
 ## 示例快照
 
@@ -63,7 +65,7 @@ session 创建时间和时区是当前会话的参考时间上下文。当前时
 {
   "session_id": "design-review",
   "session": {
-    "agent_id": "city-dev",
+    "agent_id": "reviewer",
     "session_id": "design-review",
     "project_root": "/path/to/project",
     "created_at": "2026-05-19T14:16:25.048Z",
@@ -72,23 +74,28 @@ session 创建时间和时区是当前会话的参考时间上下文。当前时
   "blocks": [
     {
       "source": "instruction",
+      "name": "identity",
+      "content": "# Agent Identity\n\nYou are \"代码审查员\" (agent id: reviewer)."
+    },
+    {
+      "source": "instruction",
       "name": "agent",
       "content": "你是 Downcity 的项目助手。"
     },
     {
       "source": "core",
       "name": "default",
-      "content": "# Downcity Agent\n\nYou are a Downcity Agent running inside the Downcity Agent runtime...\n\n# Harness Design\n\nDowncity Agent is a harness around an existing human-owned workspace, not a replacement platform...\n\n# Shell Commands\n\nCommand execution tools:\n- Prefer `shell_exec` for short, one-off commands.\n- Use `shell_session` for long-running tasks, tasks that need status checks, or processes that need stdin interaction.\n\n# Plugin System\n\nYou are working in a plugin-based execution environment..."
+      "content": "# Downcity Agent\n\nYou are a Downcity Agent running inside the Downcity Agent runtime...\n\n# Harness Design\n\nDowncity Agent is a harness around an existing human-owned workspace, not a replacement platform...\n\n# Shell Commands\n\nAll Shell work goes through the `shell` power...\n\n# Power System\n\nYou are working in a power-based execution environment..."
     },
     {
-      "source": "plugin",
+      "source": "power",
       "name": "task",
-      "content": "# Task Plugin\n\nThe task plugin manages scheduled and repeatable tasks..."
+      "content": "# Task Power\n\nYou can use the `task` power to manage task definitions, execution, scheduling, and status control..."
     },
     {
       "source": "session",
       "name": "context",
-      "content": "Current session context:\nYou are serving agent \"city-dev\" in session \"design-review\".\nThe current project root is \"/path/to/project\".\nThis session was created at 2026-05-19T14:16:25.048Z, with Asia/Shanghai as its reference timezone.\nThis creation time is a stable reference for the session and does not represent the current time for every run.\nIf the user message provides a newer current time, a relative time, or other dynamic context, prioritize the dynamic information from the user message."
+      "content": "Current session context:\nThis session is \"design-review\".\nThe current project root is \"/path/to/project\".\nThis session was created at 2026-05-19T14:16:25.048Z, with Asia/Shanghai as its reference timezone.\nThis creation time is a stable reference for the session and does not represent the current time for every run.\nIf the user message provides a newer current time, a relative time, or other dynamic context, prioritize the dynamic information from the user message."
     }
   ]
 }

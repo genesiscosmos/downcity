@@ -104,6 +104,7 @@ export class Agent {
       : {};
     this.session_manager = new AgentSessions({
       agent_id: this.id,
+      agent_name: this.name,
       logger: this.logger,
       get_instruction: () => [...this.get_instructions()],
       ensure_agent_ready: async () => await this.ensure_ready(),
@@ -198,10 +199,11 @@ export class Agent {
     if (!session_id) {
       throw new Error("resolve_system_messages requires a non-empty session_id");
     }
-    const instruction_system_blocks = create_instruction_system_blocks(
-      [...this.get_instructions()],
-      workspace.path,
-    );
+    const instruction_system_blocks = create_instruction_system_blocks({
+      agent_id: this.id,
+      agent_name: this.name,
+      instruction: [...this.get_instructions()],
+    });
     const hooks = this.city?.get_session_hooks(this.id, workspace)
       ?? EMPTY_SESSION_HOOKS;
     const hook_context = create_session_hook_context({

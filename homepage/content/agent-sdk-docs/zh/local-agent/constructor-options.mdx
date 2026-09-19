@@ -59,6 +59,16 @@ const reviewer = new Agent({
 });
 ```
 
+`id` 与 `name` 会组成每个 Session system prompt 最前面的 Agent 身份块：
+
+```text
+# Agent Identity
+
+You are "代码审查员" (agent id: reviewer).
+```
+
+两个值总是同时给出：模型用可读名称理解角色，宿主仍可用稳定 `id` 对账。
+
 `description` 不会进入普通 AgentSession 的 system 指令，也不替代 `instruction`：前者描述“这个 Agent 适合做什么”，后者约束“这个 Agent 应该如何工作”。Group 调度只读取成员的 `id/name/description`，不会读取完整 `instruction`。
 
 ## `workspace` 与 `agent.sessions.create({ workspace })`

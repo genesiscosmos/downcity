@@ -46,6 +46,11 @@ type AgentSessionsOptions = {
   agent_id: string;
 
   /**
+   * 当前 agent 用户可见名称；为空时回退到 agent_id。
+   */
+  agent_name: string;
+
+  /**
    * 按 Session 解析执行上下文。
    *
    * AgentSessions 是 Agent 唯一的 Session 集合；Workspace 相关能力不能
@@ -96,6 +101,7 @@ type AgentSessionsOptions = {
  */
 export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly agent_id: string;
+  private readonly agent_name: string;
   private readonly resolve_session_context: AgentSessionsOptions["resolve_session_context"];
   private readonly logger: Logger;
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
@@ -108,6 +114,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
+    this.agent_name = options.agent_name;
     this.resolve_session_context = options.resolve_session_context;
     this.logger = options.logger;
     this.get_instruction = options.get_instruction;
@@ -435,8 +442,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       session_id: resolved_session_id,
       get_tools: () => context.get_tools(),
       logger: context.logger,
-      instruction_system_blocks: this.load_instruction_system_blocks(context.workspace_path),
-      get_instruction_system_blocks: () => this.load_instruction_system_blocks(context.workspace_path),
+      instruction_system_blocks: this.load_instruction_system_blocks(),
+      get_instruction_system_blocks: () => this.load_instruction_system_blocks(),
       get_workspace_env: () => context.get_workspace_env(),
       get_agent_model: () => this.get_agent_model(),
       get_hooks: () => context.get_hooks(),
@@ -469,11 +476,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return `${origin_type}\u0000${session_id}`;
   }
 
-  private load_instruction_system_blocks(workspace_path: string): AgentSessionSystemBlock[] {
-    return create_instruction_system_blocks(
-      this.get_instruction(),
-      workspace_path,
-    );
+  private load_instruction_system_blocks(): AgentSessionSystemBlock[] {
+    return create_instruction_system_blocks({
+      agent_id: this.agent_id,
+      agent_name: this.agent_name,
+      instruction: this.get_instruction(),
+    });
   }
 
 }

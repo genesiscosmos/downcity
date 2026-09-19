@@ -110,7 +110,7 @@ function create_session_system_block(
 ): AgentSessionSystemBlock {
   const content = [
     "Current session context:",
-    `You are serving agent "${session.agent_id}" in session "${session.session_id}".`,
+    `This session is "${session.session_id}".`,
     `The current project root is "${session.project_root}".`,
     `This session was created at ${session.created_at}, with ${session.timezone} as its reference timezone.`,
     "This creation time is a stable reference for the session and does not represent the current time for every run.",

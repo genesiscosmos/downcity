@@ -21,7 +21,7 @@ await session.snapshot();
 
 恢复 Session 时，SDK 优先读取这个文件；文件不存在时使用 Agent 当前 instruction 和 plugin 重新生成。删除 `instruction.md` 即可取消持久化，后续恢复会重新生成。
 
-`snapshot()` 保存完整 system，包括自定义 instruction、SDK core、plugin system 和 Session context，但不包含消息历史、模型或环境变量。多个 system block 会按原顺序合并为一个 Markdown 文档；再次调用会原子覆盖现有文件。
+`snapshot()` 保存完整 system，包括 Agent 身份块、自定义 instruction、SDK core、Power system 和 Session context，但不包含消息历史、模型或环境变量。多个 system block 会按原顺序合并为一个 Markdown 文档；再次调用会原子覆盖现有文件。
 
 需要先从 Agent 当前配置重新生成再持久化时，依次调用 `await session.syncshot()` 和 `await session.snapshot()`。如果 `instruction.md` 已经存在，`syncshot()` 自身也会同步覆盖该文件。
 

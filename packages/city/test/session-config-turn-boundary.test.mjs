@@ -393,10 +393,14 @@ test("Session snapshot explicitly persists the complete system to instruction.md
       session_id,
     );
     const persisted_system = read_system_snapshot(database_path);
+    assert.match(persisted_system, /# Agent Identity/);
+    assert.match(persisted_system, /You are "instruction_restart_agent" \(agent id: instruction_restart_agent\)\./);
     assert.match(persisted_system, /instruction:old/);
     assert.match(persisted_system, /# Harness Design/);
     assert.match(persisted_system, /power-system:persisted/);
     assert.match(persisted_system, /Current session context:/);
+    // session block 只描述 session 自身，agent 身份由 instruction 层承担。
+    assert.doesNotMatch(persisted_system, /You are serving agent/);
 
     write_system_snapshot(database_path, "instruction:manual");
     await session.snapshot();
