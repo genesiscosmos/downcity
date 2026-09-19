@@ -3,6 +3,7 @@
 > 审计日期：2026-09-18（Asia/Shanghai）
 > 上一轮：[`homepage-seo-audit-2026-09-17.md`](./homepage-seo-audit-2026-09-17.md)
 > 审计方式：**线上实测**（`curl` 直读 https://downcity.ai 真实响应，非本地产物）+ 源码核对 + 本地重建逐项复验
+> 线上原件：[`live-snapshots/2026-09-18/`](./live-snapshots/2026-09-18/README.md)（当天抓到的原始 HTML 响应）
 > 站点：React Router 7 + Cloudflare Pages 预渲染，中英双语
 
 ---
