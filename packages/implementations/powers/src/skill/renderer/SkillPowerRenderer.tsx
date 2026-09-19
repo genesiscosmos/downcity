@@ -20,7 +20,7 @@ import type {
 /** Skill Power Renderer 定义。 */
 export const SKILL_POWER_RENDERER = define_power_renderer({
   sidebar: function SkillPowerSidebar({ power, navigation, ui }) {
-    const { Callout, ItemMenu, LoadingState, Sidebar, SidebarItem, SidebarSection, SidebarTreeItem } = ui.components;
+    const { Callout, ItemMenu, LoadingState, Sidebar, SidebarItem, SidebarSection, SidebarSubText, SidebarTreeItem } = ui.components;
     const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
     const [expanded_workspace_ids, set_expanded_workspace_ids] = useState<Set<string>>(new Set());
     const [personal_expanded, set_personal_expanded] = useState(false);
@@ -94,15 +94,15 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
           return <div key={workspace.workspace_id}>
             <SidebarTreeItem depth={0} kind="branch" label={workspace.name} trailing={workspace.skills.length} active={scope === "workspace" && selected_workspace_id === workspace.workspace_id && !selected_skill_id} expanded={expanded} on_toggle={() => set_expanded_workspace_ids((current) => toggle_key(current, workspace.workspace_id))} on_select={() => navigation.navigate(workspace_route(workspace.workspace_id))} />
             {expanded ? <div className="flex flex-col gap-0.5">{workspace.skills.map((skill) => <SidebarTreeItem key={skill.id} kind="leaf" depth={1} label={skill.name} trailing={skill_menu(skill)} active={scope === "workspace" && selected_workspace_id === workspace.workspace_id && selected_skill_id === skill.id} on_select={() => navigation.navigate(workspace_route(workspace.workspace_id, skill.id))} />)}</div> : null}
-            {expanded && workspace.skills.length === 0 ? <div style={{ paddingLeft: 24 }}><div className="flex min-h-8 items-center rounded-lg py-0.5 pl-2 pr-1 text-[10px] text-muted-foreground/50">没有已安装的 Skill</div></div> : null}
+            {expanded && workspace.skills.length === 0 ? <SidebarSubText indent={1}>没有已安装的 Skill</SidebarSubText> : null}
           </div>;
         })}
-        {!snapshot.workspaces.length ? <div className="px-2 py-1 text-[10px] text-muted-foreground/55">还没有 Workspace</div> : null}
+        {!snapshot.workspaces.length ? <SidebarSubText>还没有 Workspace</SidebarSubText> : null}
       </SidebarSection>
       <SidebarSection label="Personal">
         <SidebarTreeItem depth={0} kind="branch" label="Personal Skills" trailing={snapshot.home_skills.length} active={scope === "home" && !selected_skill_id} expanded={personal_expanded} on_toggle={() => set_personal_expanded((current) => !current)} on_select={() => navigation.navigate({ scope: "home" })} />
         {personal_expanded ? <div className="flex flex-col gap-0.5">{snapshot.home_skills.map((skill) => <SidebarTreeItem key={skill.id} kind="leaf" depth={1} label={skill.name} trailing={skill_menu(skill)} active={scope === "home" && selected_skill_id === skill.id} on_select={() => navigation.navigate({ scope: "home", skill_id: skill.id })} />)}</div> : null}
-        {personal_expanded && snapshot.home_skills.length === 0 ? <div style={{ paddingLeft: 24 }}><div className="flex min-h-8 items-center rounded-lg py-0.5 pl-2 pr-1 text-[10px] text-muted-foreground/50">没有已安装的 Skill</div></div> : null}
+        {personal_expanded && snapshot.home_skills.length === 0 ? <SidebarSubText indent={1}>没有已安装的 Skill</SidebarSubText> : null}
       </SidebarSection>
       <SidebarSection label="Discover"><SidebarItem label="发现 Skills" active={scope === "discover"} on_select={() => navigation.navigate({ scope: "discover" })} /></SidebarSection>
       {error ? <Callout tone="danger">{error}</Callout> : null}

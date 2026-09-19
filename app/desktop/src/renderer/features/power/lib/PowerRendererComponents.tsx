@@ -3,10 +3,17 @@
  *
  * Power Renderer 只组合这些语义组件，不复制宿主 Tailwind 样式、主题令牌或交互实现。
  * 所有组件直接复用 Desktop 基础控件，因此主题、尺寸、焦点和禁用状态与宿主一致。
+ *
+ * ## Sidebar 组件是**适配层**，不是重写
+ *
+ * 这里的 `SidebarItem` / `SidebarTreeItem` / `SidebarSubText` 直接把 Power 传进来的数据交给
+ * 宿主的同名组件（`layouts/sidebar/SidebarItem`），因此一个 Power 在目录页与它自己的侧栏里
+ * 是**同一个行**。以前这里是宿主自己拼的一段 DOM，于是两处“差不多但差一点”——
+ * 那些差异正是侧栏乱的来源。
  */
 
-import { Fragment, useState, type KeyboardEvent } from "react";
-import { TbChevronDown, TbChevronRight, TbDots, TbLoader2, TbPlus } from "react-icons/tb";
+import { Fragment, useState, type KeyboardEvent, type ReactNode } from "react";
+import { TbChevronDown, TbDots, TbLoader2, TbPlus } from "react-icons/tb";
 import type { PowerRendererUiComponents } from "@downcity/city/power/react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
@@ -15,6 +22,7 @@ import { Switch } from "@/components/ui/switch";
 import { Markdown } from "@/components/markdown/Markdown";
 import { SidebarHeader } from "@/layouts/sidebar/SidebarHeader";
 import { SidebarContent } from "@/layouts/sidebar/SidebarPanel";
+import { SidebarItem, SidebarSubText } from "@/layouts/sidebar/SidebarItem";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 
@@ -30,25 +38,41 @@ interface PowerRendererUiComponentOptions {
   readonly sidebar_title?: string;
 }
 
+/**
+ * 转出 Tree Item 的右侧内容。
+ *
+ * 数字要包成一个计数胶囊——Power 只该交出一个数，而不是自己拼一个圆角方块：
+ * 那样它的圆角、底色与字号就会与宿主的行分叉（而这正是本文件存在的理由）。
+ * 非数字（菜单、状态、自定义节点）原样透传。
+ */
+function tree_trailing(trailing: ReactNode): ReactNode {
+  if (typeof trailing !== "number") return trailing;
+  return <span className="flex size-5 shrink-0 items-center justify-center rounded-chip bg-surface-emphasis text-3xs tabular-nums">{trailing}</span>;
+}
+
 /** 创建稳定的宿主 Power UI Components 集合。 */
 export function create_power_renderer_ui_components(options: PowerRendererUiComponentOptions): PowerRendererUiComponents {
   return {
     Sidebar: ({ children, actions }) => <><SidebarHeader title={options.sidebar_title ?? options.power_id} actions={actions} /><SidebarContent class_name="flex flex-col">{children}</SidebarContent></>,
+    // 分组标签与面板标题、行的文字共用 sidebarRow 里的两条线：
+    // 标签左缘与面板标题同线，条目本身是 agent 行（与 Power 目录条目同一档）。
+    // 这里以前是 `text-3xs` + `uppercase tracking-[0.08em]`：字号再小一档、
+    // 且对中文而言大写与字距都没有效果，于是同一个“分组标签”在设置面板与 Power 侧栏长得不一样。
     SidebarSection: ({ label, children }) => <section className="mb-4 min-w-0">
-      {label ? <h3 className="px-2 pb-1.5 pt-1 text-3xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</h3> : null}
+      {label ? <h3 className="px-2 pb-1 text-2xs text-muted-foreground">{label}</h3> : null}
       <div className="space-y-0.5">{children}</div>
     </section>,
-    SidebarItem: ({ label, description, leading, trailing, active, disabled, on_select }) => <button
-      type="button"
-      aria-current={active ? "page" : undefined}
+    // **同一个 SidebarItem**，只是换成 Power 传进来的数据。
+    SidebarItem: ({ label, description, leading, trailing, active, disabled, on_select }) => <SidebarItem
+      variant="agent"
+      active={active}
       disabled={disabled}
-      onClick={on_select}
-      className={cn("flex min-h-10 w-full items-center gap-2 rounded-control px-2 py-1.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30", active ? "bg-interaction-selected text-foreground" : "text-foreground hover:bg-interaction-hover", disabled && "opacity-45")}
-    >
-      {leading ? <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">{leading}</span> : null}
-      <span className="min-w-0 flex-1"><span className="block truncate text-xs">{label}</span>{description ? <span className="mt-0.5 block truncate text-3xs text-muted-foreground">{description}</span> : null}</span>
-      {trailing ? <span className="shrink-0 text-3xs text-muted-foreground">{trailing}</span> : null}
-    </button>,
+      leading={leading}
+      title={label}
+      description={description}
+      trailing={trailing}
+      onSelect={on_select}
+    />,
     SidebarTreeItem: ({ label, leading, trailing, depth, kind, active, expanded, on_toggle, disabled, on_select }) => {
       // 这些组件由宿主与 Power 以 JSX 引用，React 会以组件身份挂载它们，因此可以使用 hook。
       const translate = use_translation("power");
@@ -57,25 +81,29 @@ export function create_power_renderer_ui_components(options: PowerRendererUiComp
       // 因此只有字符串才并入名称；其余情况靠行内文本自身表达。
       const toggle_label = translate(expanded ? "tree.collapse" : "tree.expand");
       const toggle_accessible_label = typeof label === "string" ? `${toggle_label} ${label}` : toggle_label;
-      const aligns_with_parent_text = depth > 0 && !is_branch && !leading;
-      const indentation = aligns_with_parent_text ? 24 + (depth - 1) * 12 : depth * 12;
-      return <div
-        style={indentation === 0 ? undefined : { paddingLeft: indentation }}
-      >
-        <div className={cn("group/item flex min-h-8 w-full items-center gap-1 rounded-control py-0.5 pr-1 text-left transition-colors duration-150", aligns_with_parent_text ? "pl-2" : "pl-1", active ? "bg-interaction-selected text-foreground" : "text-foreground hover:bg-interaction-hover", disabled && "opacity-45")}>
-          {is_branch ? <button type="button" aria-label={toggle_accessible_label} aria-expanded={expanded} disabled={disabled} onClick={(event) => { event.stopPropagation(); on_toggle?.(); }} className="flex size-6 shrink-0 items-center justify-center rounded-control bg-transparent p-0 text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30"><TbChevronRight className={cn("size-3.5 transition-transform duration-150 motion-reduce:transition-none", expanded && "rotate-90")} /></button> : leading ? <span className={cn("flex size-6 shrink-0 items-center justify-center", active ? "text-primary" : "text-muted-foreground")} aria-hidden="true">{leading}</span> : null}
-          <button type="button" aria-current={active ? "page" : undefined} disabled={disabled} onClick={on_select} className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
-            {is_branch && leading ? <span className={cn("flex size-4 shrink-0 items-center justify-center", active ? "text-primary" : "text-muted-foreground")}>{leading}</span> : null}
-            <span className="min-w-0 flex-1 truncate text-xs">{label}</span>
-          </button>
-          {trailing != null ? <span className="flex min-w-6 shrink-0 items-center justify-end gap-1 text-3xs text-muted-foreground">{typeof trailing === "number" ? <span className="flex size-6 shrink-0 items-center justify-center rounded-chip bg-surface-emphasis tabular-nums">{trailing}</span> : trailing}</span> : null}
-        </div>
-      </div>;
+      return <SidebarItem
+        variant="default"
+        active={active}
+        disabled={disabled}
+        title={label}
+        trailing={tree_trailing(trailing)}
+        tree={{
+          indent: depth,
+          // 图标位**原样透传**：Power 不传 `leading` 时就不留空位。
+          // 以前这里写死了 `reserve_icon: true`，而 Skill / Task 整列都没有图标——
+          // 于是每行名字前都多出一段 20px 的空白，而它们本来应该是紧凑的树。
+          icon: leading,
+          disclosure: is_branch ? { expanded: Boolean(expanded), label: toggle_accessible_label, onToggle: () => on_toggle?.() } : undefined,
+        }}
+        onSelect={on_select}
+      />;
     },
     ItemMenu: ({ label, actions, reveal_on_hover = false }) => <DropdownMenu>
       <DropdownMenuTrigger asChild><button type="button" aria-label={label} title={label} onClick={(event) => event.stopPropagation()} className={cn("flex size-6 shrink-0 items-center justify-center rounded-control text-muted-foreground outline-none transition-[background-color,color,opacity] duration-150 hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:bg-interaction-hover data-[popup-open]:text-foreground", reveal_on_hover && "pointer-events-none opacity-0 group-hover/item:pointer-events-auto group-hover/item:opacity-100 group-focus-within/item:pointer-events-auto group-focus-within/item:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:opacity-100")}><TbDots className="size-3.5" /></button></DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>{actions.map((action) => <Fragment key={action.action_id}>{action.separator_before ? <DropdownMenuSeparator /> : null}<DropdownMenuItem disabled={action.disabled} className={action.destructive ? "text-destructive" : undefined} onClick={() => void action.on_select()}>{action.leading}<span>{action.label}</span></DropdownMenuItem></Fragment>)}</DropdownMenuContent>
     </DropdownMenu>,
+    // 行外副文本：左缘对齐到同级行的文字线，字号与颜色取宿主令牌。
+    SidebarSubText: ({ indent, children }) => <SidebarSubText indent={indent}>{children}</SidebarSubText>,
     SidebarCreateMenu: ({ label, actions }) => <DropdownMenu>
       <DropdownMenuTrigger asChild><Button size="icon" title={label} aria-label={label}><TbPlus /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end">{actions.map((action) => <Fragment key={action.action_id}>{action.separator_before ? <DropdownMenuSeparator /> : null}<DropdownMenuItem disabled={action.disabled} className={action.destructive ? "text-destructive" : undefined} onClick={() => void action.on_select()}>{action.leading}<span>{action.label}</span></DropdownMenuItem></Fragment>)}</DropdownMenuContent>
@@ -198,7 +226,23 @@ export function create_power_renderer_ui_components(options: PowerRendererUiComp
     />,
     Select: ({ value, options, on_value_change, disabled, fill = false }) => <Select value={value} options={[...options]} on_value_change={on_value_change} disabled={disabled} className={fill ? "w-full" : undefined} align="end" />,
     Switch: ({ checked, on_checked_change, disabled, aria_label }) => <Switch checked={checked} onCheckedChange={on_checked_change} disabled={disabled} aria-label={aria_label} />,
-    EmptyState: ({ title, description, icon, action, size = "default" }) => <div className={cn("flex flex-col items-center justify-center px-4 text-center", size === "compact" ? "py-8" : "min-h-64 py-12")}>{icon ? <div className="mb-3 flex size-9 items-center justify-center rounded-lg bg-muted/55 text-muted-foreground">{icon}</div> : null}<div className="text-base text-foreground">{title}</div>{description ? <div className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">{description}</div> : null}{action ? <div className="mt-4">{action}</div> : null}</div>,
+    /**
+     * 空态：图标 + 标题 + 说明 + 可选动作。
+     *
+     * ## 字号按**插入位置**分档，不是一刀切
+     *
+     * 同一个组件在侧栏与主区域里的合适字号不同：侧栏只有 232–400px 宽，
+     * 而它旁边就是一列 12px 的行——空态标题写 15px（`base`）会比列表本身还重，
+     * 看起来像一条“内容”。主区域才用 `base`。
+     *
+     * 以前这里写死了 `text-base`，于是 Power 侧栏的空态比它上面的行大一整档。
+     */
+    EmptyState: ({ title, description, icon, action, size = "default" }) => <div className={cn("flex flex-col items-center justify-center px-4 text-center", size === "compact" ? "py-8" : "min-h-64 py-12")}>
+      {icon ? <div className={cn("mb-3 flex size-9 items-center justify-center bg-surface-subtle text-muted-foreground", "rounded-tile")}>{icon}</div> : null}
+      <div className={cn(options.surface === "sidebar" ? "text-xs" : "text-base", "text-foreground")}>{title}</div>
+      {description ? <div className={cn("mt-1 max-w-md text-xs leading-5", options.surface === "sidebar" ? "text-subtle-foreground" : "text-muted-foreground")}>{description}</div> : null}
+      {action ? <div className="mt-4">{action}</div> : null}
+    </div>,
     LoadingState: ({ label }) => <div className="flex min-h-40 items-center justify-center gap-2 text-xs text-muted-foreground"><TbLoader2 className="size-4 animate-spin" />{label}</div>,
     Callout: ({ children, tone = "default" }) => <div className={cn("rounded-item px-3 py-2 text-xs leading-5", tone === "default" && "bg-surface-subtle text-muted-foreground", tone === "warning" && "bg-amber-500/10 text-amber-700 dark:text-amber-400", tone === "danger" && "bg-destructive/10 text-destructive")}>{children}</div>,
     Status: ({ children, tone = "muted" }) => <span className={cn("text-2xs", tone === "muted" && "text-muted-foreground", tone === "success" && "text-emerald-600 dark:text-emerald-400", tone === "warning" && "text-amber-600 dark:text-amber-400", tone === "danger" && "text-destructive")}>{children}</span>,

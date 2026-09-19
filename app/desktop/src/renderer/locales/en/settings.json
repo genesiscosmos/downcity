@@ -1,6 +1,7 @@
 {
   "login_errors": { "input_unsupported": "This Desktop version does not support sign-in methods that require additional input", "failed": "Sign-in failed", "timeout": "Sign-in authorization timed out. Try again." },
   "title": "Settings",
+  "groups": { "account_models": "Account & models", "preferences": "Preferences" },
   "sections": { "account": "Account", "models": "Models", "general": "General", "appearance": "Appearance", "chat": "Chat", "shortcuts": "Shortcuts" },
   "language": { "title": "Language", "description": "Choose the language used by the Desktop interface.", "english": "English", "chinese": "简体中文" },
   "general": { "title": "General", "description": "Configure Desktop startup and default navigation.", "startup": "Startup", "default_agent": "Default Agent", "default_agent_description": "Prefer this Agent when Desktop starts.", "first_agent": "First in the list", "global_env": "Environment variables", "global_env_description": "Manage default environment variables shared by all Workspaces.", "open_env": "Edit Global Env", "open_empty_chat": "Open an empty chat at startup", "open_empty_chat_description": "Show a new, unsaved conversation after opening the default Agent." },

@@ -26,6 +26,22 @@
     background-color: var(--background);
     color: var(--primary);
   }
+  /*
+   * 可点元素的光标。
+   *
+   * Tailwind v4 的 preflight 不再给 button 加 `cursor: pointer`（它只设 appearance），
+   * 于是本应用里按钮默认是箭头，而少数地方各自手写了 `cursor-pointer`——
+   * 同一个动作在不同位置给出不同的第一反馈（侧栏列表行是手型、工具栏按钮是箭头）。
+   * 它与主题、字号一样属于全局视觉语言，因此在这里写一次，不在调用点各自决定。
+   *
+   * 不要按业务状态去改它（比如「展开后就不再是可点的」）：能不能点与它当前展开到哪一步无关。
+   * 需要保留箭头的场合（菜单项、标签页等）用工具类 `cursor-default` 覆盖，
+   * 工具类在后面那层，优先级高于这里。
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
   body {
     overflow: hidden;
     min-height: 100vh;
@@ -99,13 +115,6 @@
   .shell-inline-reserve {
     transition: none;
   }
-}
-
-.sidebar-header-actions,
-.sidebar-header-actions button,
-.sidebar-header-actions [role="button"] {
-  -webkit-app-region: no-drag !important;
-  pointer-events: auto !important;
 }
 
 .shell-panel-controls,

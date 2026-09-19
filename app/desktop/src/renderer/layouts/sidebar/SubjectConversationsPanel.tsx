@@ -6,18 +6,33 @@
  * 会话列表**不是**浮动层：卡片就长在列表里（浮动态绝对定位、嵌入态留在流里，见 subjectCard），
  * 因此这里不需要描边、底色、圆角，也不需要外壳。
  *
- * 内边距由卡片提供（行与面板共用同一份，两段内容才对得齐）；高度上限与滚动留在本层。
+ * 高度上限与滚动留在本层；左右内边距**不给**（见下）。
  *
  * 早期它曾是一个下拉**菜单**，问题不在「浮层」而在「菜单」：菜单项只有一种动作与一种外观，
  * 于是会话行只能是纯文字，也放不下自己的当前项高亮与操作入口。现在会话是**真的行**。
  *
+ * ## 三种行都是 `default`，而且都没有行首槽
+ *
+ * ```text
+ * [新建对话                    ]  ← 无槽，文字在 56
+ * [会话标题                    ]
+ * [全部 N 个对话               ]
+ * ```
+ *
+ * 「新建对话」「会话」「全部对话」原先各带一个 14px 图标，会话行没有——于是同一张卡片里
+ * 标题落在两个不同的横坐标上，而它们看上去本该是一列。**图标全部去掉**才是这一段的正解：
+ * 三者都是「对整列做点什么」或「一条会话」，位置与文案已经说清了身份，
+ * 图标只是在给同一列制造第二条文字线。
+ *
+ * 文字线因此是卡片外的 56（卡片内 57，差的是卡片那 1px 描边，见 `sidebarRow.ts`）——
+ * 与目录树、设置、Power 条目各自在自己的容器里保持一条线。
+ *
  * ## 两层结构：表面负责裁剪，滚动区负责滚动
  *
  * ```text
- * [滚动容器]  铺满卡片宽度、**不带内边距** —— 滚动条的横向位置由它自己的盒子决定，
- *             带内边距就会把滚动条从卡片右缘推到列表中间
- *   └ [列表内边距] p-1
- *       └ [会话行]  自己再带 px-2 做文字内缩
+ * [卡片]        rounded-surface + border + overflow-hidden  ← 只裁剪
+ *   └ [滚动容器] max-h-80 + overflow-y-auto（仅浮动）        ← 只滚动，无内边距
+ *       └ [行]   px-2                                       ← 文字内缩在这里
  * ```
  *
  * 即：**内边距要给内容，不要给滚动容器**。高度上限只能写在滚动层（见 ui/menu-styles，
@@ -39,15 +54,15 @@
  * 由 `RowMenuButton` 自己根据状态决定；行上的 `group/item` 就是它显隐的钩子。
  */
 
-import { TbDots, TbPin, TbPinFilled, TbPlus } from "react-icons/tb";
+import { TbPin, TbPinFilled } from "react-icons/tb";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { ChatStatusIcon } from "@/components/ChatStatusIcon";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import type { ChatRowStatus } from "@/features/chat/lib/chat_row_status";
-import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
-import { split_visible_sessions } from "./subjectCard";
+import { SidebarItem } from "./SidebarItem";
+import { split_visible_sessions, subject_panel_padding_class_name } from "./subjectCard";
 
 /**
  * 面板里的一条会话。
@@ -114,14 +129,6 @@ export const all_sessions_menu_class_name = "min-w-80 max-w-md";
  */
 export const subject_panel_scroll_class_name = "max-h-80 overflow-y-auto overscroll-contain";
 
-/**
- * 会话行与新建行的共同骨架：同一套高度、圆角与交互态，差别只在内容与选中态。
- *
- * 提到模块级而不是写在组件里：一是每次渲染不必重建字符串，二是这份类名带了键盘焦点指示，
- * 需要能被 tests/design_token_drift.test.ts 的焦点名单识别到。
- */
-export const subject_session_row_class_name = "flex min-h-7 w-full items-center gap-1.5 rounded-control px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30";
-
 /** 主体会话列表属性。 */
 export interface SubjectConversationsPanelProps {
   /** 该主体的会话，已按当前顺序排好。 */
@@ -175,12 +182,12 @@ export interface SubjectConversationsPanelProps {
  * 远不到 320px）所以一像素都不动，而 `overscroll-contain` 又明确禁止把滚动传给侧栏，
  * 于是整个手势被吃掉。用户看到的正是“固定在列表里的面板把侧栏的滚动卡住了”。
  *
- * 修法不是去掉 `overscroll-contain`，而是**嵌入态不要那个滚动容器**：
- * 嵌入的卡片就在列表流里，与它后面的主体是同一份内容，本来就该一起滚——
- * 两个滚动容器嵌套在这里没有任何好处，只会制造一个“滚不动”的死区。
+ * 修法不是去掉 `overscroll-contain`，而是**嵌入态不要那个滚动容器**：嵌入的卡片就在列表流里，
+ * 与它后面的主体是同一份内容，本来就该一起滚——两个滚动容器嵌套在这里没有任何好处，
+ * 只会制造一个“滚不动”的死区。
  *
  * 高度不会因此失控：条数上限（`docked_visible_session_count`）已经把嵌入态封在
- * 新建行 + 4 条会话 + 「全部」行，约 176px；那个上限现在承担两件事——
+ * 新建行 + 4 条会话 + 「全部」行，约 192px；那个上限现在承担两件事——
  * 一是别把后面主体推出屏幕，二是让“不自己滚”成立。两者是同一个约束。
  *
  * 判定就落在 `max_visible` 上，因为它的含义恰好是“调用方已经把我的高度封顶了”：
@@ -194,21 +201,22 @@ export function SubjectConversationsPanel({ conversations, on_new_chat, close, p
   const scrolls_itself = max_visible === undefined;
 
   // 内边距与滚动分成两层，这是滚动条能贴边的唯一办法（见文件头）。
-  // 嵌入态不包外层：内边距留在内容上，滚动归侧栏。
-  const content = <div className="p-1">
+  // 嵌入态不包外层：滚动归侧栏。
+  const content = <div className={subject_panel_padding_class_name}>
       {/* 顶部：新建对话（主操作）+ 保持展开（面板开关）。
-          两个按钮同行，因此高度与下面的会话行一致，整列节奏不断。 */}
-      <div className="flex items-center gap-0.5">
-        <button
-          type="button"
+          两者同行，因此高度与下面的会话行一致，整列节奏不断。
+          容器右侧只留行内边距那一档（4）：固定开关与下面各行的操作位因此落在同一列上。 */}
+      <div className="flex items-center gap-2 pr-1">
+        <SidebarItem
+          variant="default"
+          // 卡片里的行：卡片已经抱住了行，左右内边距收窄到与纵向同值。
+          compact
+          tone="secondary"
+          className="min-w-0 flex-1"
           disabled={!on_new_chat}
-          onClick={() => { on_new_chat?.(); close?.(); }}
           title={translate("sidebar.new_chat")}
-          className={cn(subject_session_row_class_name, "min-w-0 flex-1 text-muted-foreground enabled:hover:bg-interaction-hover enabled:hover:text-foreground disabled:opacity-50")}
-        >
-          <TbPlus className="size-3.5 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-xs">{translate("sidebar.new_chat")}</span>
-        </button>
+          onSelect={() => { on_new_chat?.(); close?.(); }}
+        />
         <Button
           size="icon"
           actived={pinned}
@@ -218,32 +226,24 @@ export function SubjectConversationsPanel({ conversations, on_new_chat, close, p
         >{pinned ? <TbPinFilled /> : <TbPin />}</Button>
       </div>
       {conversations.length === 0
-        // 空态直接说结果；新建入口就在上面一行。
-        ? <p className="px-2 py-1.5 text-3xs leading-4 text-muted-foreground">{translate("sidebar.no_sessions")}</p>
+        // 空态直接说结果，并且与上面的标题同列；新建入口就在上一行。
+        ? <p className="px-1 py-1.5 text-2xs leading-4 text-muted-foreground">{translate("sidebar.no_sessions")}</p>
         : <>
           {visible_conversations.map((conversation) => (
-            // `group/item` 是 RowMenuButton 显隐入口的钩子（见 chat_row_status）。
-            <div
+            // 行带自己的操作菜单，因此 `SidebarItem` 自动采用「行底 + 标签按钮 + 操作位」；
+            // 状态（未读 / 失败 / 正在回复）就画在那个入口上，所以标题旁边不再放第二个图标。
+            <SidebarItem
               key={conversation.key}
-              className={cn(
-                "group/item flex items-center gap-0.5 rounded-control transition-colors duration-150",
-                conversation.active ? "bg-interaction-selected hover:bg-interaction-active" : "hover:bg-interaction-hover",
-              )}
-            >
-              <button
-                type="button"
-                onClick={() => { conversation.select(); close?.(); }}
-                // 「当前所在的会话」用 aria-current 表达；它不是导航到另一个页面，因此不用 page。
-                aria-current={conversation.active ? "true" : undefined}
-                title={conversation.title}
-                className={cn(subject_session_row_class_name, "min-w-0 flex-1")}
-              >
-                <span className="min-w-0 flex-1 truncate text-xs text-foreground">{conversation.title}</span>
-              </button>
-              {/* 操作入口与主体行同宽同位。状态（未读 / 失败 / 正在回复）就画在这个入口上，
-                  因此不需要在标题旁边再放一个状态图标——那会让同一件事在一行里出现两次。 */}
-              {conversation.menu ? <span className="flex size-6 shrink-0 items-center justify-center">{conversation.menu}</span> : null}
-            </div>
+              variant="default"
+              // 卡片里的行：见 `SIDEBAR_COMPACT_ROW_PADDING`。
+              compact
+              // 「当前所在的会话」不是导航到另一个页面，因此用 true 而不是 page。
+              currentKind="true"
+              active={conversation.active}
+              title={conversation.title}
+              onSelect={() => { conversation.select(); close?.(); }}
+              menu={conversation.menu}
+            />
           ))}
           {/* 超出的部分：一条与「新建对话」同构的行，点开是全部会话。
               它自己也占一行、也在同一个列表里，因此不是“列表之外的补充入口”。 */}
@@ -284,16 +284,13 @@ function MoreSessionsRow({ conversations, close }: {
   const translate = use_translation("navigation");
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      {/* 与「新建对话」同一套骨架与文案档位：两者都是“对整列做点什么”，不是某一条会话。 */}
-      <button
-        type="button"
-        className={cn(subject_session_row_class_name, "text-muted-foreground hover:bg-interaction-hover hover:text-foreground")}
-      >
-        <TbDots className="size-3.5 shrink-0" aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate text-xs">
-          {translate("sidebar.all_sessions", { count: conversations.length })}
-        </span>
-      </button>
+      {/* 与「新建对话」同一套骨架与文案档位：两者都是“对整列做点什么”，不是某一条会话。
+          触发器会把 onClick 与 ref 合并到这个元素上，因此它必须是一个真按钮。 */}
+      <SidebarItem
+        variant="default"
+        tone="secondary"
+        title={translate("sidebar.all_sessions", { count: conversations.length })}
+      />
     </DropdownMenuTrigger>
     {/* 向右展开，与被点的那一行顶端对齐，并留出与 Rail tooltip 同档的间距（8）。
         菜单比侧栏宽得多，因此对齐方向是“从行向右延伸”，没有右边缘对齐这回事。 */}

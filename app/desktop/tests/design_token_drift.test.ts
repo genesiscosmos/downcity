@@ -134,6 +134,12 @@ const focus_visible_idioms = [
   "menu_item_highlighted_class_name",
   "menu_item_interaction_class_name",
   "subject_session_row_class_name",
+  // 侧栏的行几何与焦点指示收在 sidebarRow.ts 的契约里；引用契约的行同样算已声明。
+  // 注意 `sidebar_item_base_class_name` **不在**名单里：它只提供行底（底色、高度、排版），
+  // 环要由行内真正的按钮自己声明；引它不足以说明“这个按钮能有焦点”。
+  "sidebar_item_class_name",
+  "sidebar_row_focus_class_name",
+  "sidebar_disclosure_class_name",
   "button_variants",
   "approval-action",
   "question-submit",
@@ -164,7 +170,9 @@ test("渲染层的每个 button 都声明了自己的键盘焦点指示", () => 
   const missing: string[] = [];
   for (const file of collect_files(renderer_root)) {
     if (!file.endsWith(".tsx")) continue;
-    const source = fs.readFileSync(file, "utf8");
+    // 先去掉注释：组件文档里会写 `<button>` 举例（占位、嵌套限制…），
+    // 但那是说明，不是真实代码。它会把这条断言变成一条只能靠“小心别在注释里提 button”来维系的规则。
+    const source = strip_comments(fs.readFileSync(file, "utf8"));
     const relative = path.relative(renderer_root, file);
     let index = source.indexOf("<button");
     while (index !== -1) {
@@ -177,4 +185,18 @@ test("渲染层的每个 button 都声明了自己的键盘焦点指示", () => 
     }
   }
   assert.deepEqual(missing, [], `发现 ${missing.length} 个 button 没有焦点指示：\n  ${missing.join("\n  ")}`);
+});
+
+/**
+ * 组件自己的 `<button>` 不能把环只写在调用点的类名常量里。
+ *
+ * `SidebarItem` 这类组件把行封装成了一件东西，于是它的焦点环必须由**组件自己**提供；
+ * 上面那条按标签文本扫描的规则对这一点靠不住（它只看到类名常量的名字）。
+ * 这里直接问：那个常量里到底有没有焦点样式。
+ */
+test("侧栏行组件自己提供了键盘焦点指示", () => {
+  const row_source = fs.readFileSync(path.join(renderer_root, "layouts/sidebar/sidebarRow.ts"), "utf8");
+  const focus = /sidebar_row_focus_class_name = "([^"]*)"/.exec(row_source);
+  assert.ok(focus, "行契约里找不到 sidebar_row_focus_class_name");
+  assert.ok(/focus-visible:ring-/.test(focus![1]!), `行契约的焦点常量没有焦点环：${focus![1]}`);
 });

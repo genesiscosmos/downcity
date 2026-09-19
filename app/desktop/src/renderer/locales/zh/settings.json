@@ -1,6 +1,7 @@
 {
   "login_errors": { "input_unsupported": "当前 Desktop 暂不支持需要输入信息的登录方式", "failed": "登录失败", "timeout": "登录授权已超时，请重试" },
   "title": "设置",
+  "groups": { "account_models": "账户与模型", "preferences": "偏好设置" },
   "sections": { "account": "账户", "models": "模型", "general": "通用", "appearance": "外观", "chat": "聊天", "shortcuts": "快捷键" },
   "language": { "title": "语言", "description": "选择 Desktop 界面使用的语言。", "english": "English", "chinese": "简体中文" },
   "general": { "title": "通用", "description": "配置 Desktop 启动和默认导航偏好。", "startup": "启动", "default_agent": "默认 Agent", "default_agent_description": "启动时优先打开该 Agent。", "first_agent": "列表中的第一个", "global_env": "环境变量", "global_env_description": "管理所有 Workspace 共用的默认环境变量。", "open_env": "编辑 Global Env", "open_empty_chat": "启动时打开空对话", "open_empty_chat_description": "进入默认 Agent 后显示尚未创建的新对话。" },

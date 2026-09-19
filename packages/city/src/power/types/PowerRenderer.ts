@@ -94,6 +94,28 @@ export interface PowerRendererSidebarSectionProps {
   readonly children: ReactNode;
 }
 
+/**
+ * Power Sidebar 行外副文本属性。
+ *
+ * 用于「正在读取…」「暂无执行记录」「还没有 Workspace」这类挂在行旁边、不可点的说明。
+ *
+ * **必须用它，而不是自己拼一个 `<div>` 配字号与颜色**：它的左缘会对齐到同级行的文字线，
+ * 字号与颜色取宿主语义令牌。自己写会在同一个侧栏里出现第二套字号与第二套弱化程度，
+ * 而这两件事用户一眼就能看出“不是一个东西”。
+ */
+export interface PowerRendererSidebarSubTextProps {
+  /**
+   * 与同级行相同的缩进层数。
+   *
+   * 只在树里需要：树行有层进，副文本要跟着才能对齐到它要说明的那一层。
+   * 不在树里（如分区下的空态）不传，落在面板的内容线上。
+   */
+  readonly indent?: number;
+
+  /** 说明内容。 */
+  readonly children: ReactNode;
+}
+
 /** Power Sidebar 导航项属性。 */
 export interface PowerRendererSidebarItemProps {
   /** 导航项名称。 */
@@ -494,6 +516,8 @@ export interface PowerRendererUiComponents {
   readonly SidebarItem: (props: PowerRendererSidebarItemProps) => ReactNode;
   /** Power Sidebar 的标准树节点。 */
   readonly SidebarTreeItem: (props: PowerRendererSidebarTreeItemProps) => ReactNode;
+  /** Power Sidebar 的行外副文本（「正在读取…」这类不可点的说明）。 */
+  readonly SidebarSubText: (props: PowerRendererSidebarSubTextProps) => ReactNode;
   /** Item 的统一操作菜单。 */
   readonly ItemMenu: (props: PowerRendererItemMenuProps) => ReactNode;
   /** Sidebar Header 中由加号触发的统一创建菜单。 */

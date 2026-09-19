@@ -51,6 +51,7 @@
     "test:chat-inbound-parts": "pnpm build && node --test scripts/chat-inbound-prompt-parts.test.mjs",
     "test:chat-inbound-voice": "pnpm build && node --test scripts/chat-inbound-voice.test.mjs",
     "test:exports": "pnpm build && node --test scripts/power-subpaths.test.mjs",
+    "test:renderer": "node --test scripts/power-renderer-tokens.test.mjs",
     "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs",
     "test:skill": "pnpm build && node --test scripts/skill-power.test.mjs",
     "test:task": "pnpm build && node --test scripts/task-power.test.mjs",

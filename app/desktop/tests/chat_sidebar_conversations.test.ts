@@ -42,6 +42,7 @@ function read_without_comments(file_path: string): string {
 const subject_list = read_without_comments(path.join(sidebar_root, "ChatSubjectList.tsx"));
 const chat_sidebar = read_without_comments(path.join(sidebar_root, "ChatSidebar.tsx"));
 const sessions_panel = read_without_comments(path.join(sidebar_root, "SubjectConversationsPanel.tsx"));
+const row_contract = read_without_comments(path.join(sidebar_root, "sidebarRow.ts"));
 
 test("旧的面板式与下拉式入口都已移除", () => {
   // 留着它们就等于留下第二套会话入口，且两条路径会各自演化。
@@ -73,17 +74,17 @@ test("三个动作各占一处：头像推展开方式、名称+描述开主体�
   assert.ok(/title=\{trigger_label\}[\s\S]{0,80}?aria-label=\{trigger_label\}/.test(subject_list), "头像开关没有可访问名称");
 
   // 名称 + 描述 → 打开主体。两者必须在同一个按钮里（原本的实现）。
-  const open_block = /onClick=\{on_select\}[\s\S]{0,2000}?\{status_text \? <StatusText status=\{status\} text=\{status_text\} \/> : description\}/.exec(subject_list);
-  assert.ok(open_block, "名称与描述不在同一个「打开主体」按钮里");
-  assert.ok(/aria-current=\{active \? "page" : undefined\}/.test(subject_list), "该按钮没有表达当前项");
+  const open_block = /onSelect=\{on_select\}[\s\S]{0,200}?\/>/.exec(subject_list);
+  assert.ok(open_block, "找不到「打开主体」的标签区");
+  assert.ok(/<SidebarRowLabel/.test(subject_list), "标签区不是 SidebarRowLabel：它会与侧栏其它行分叉");
+  assert.ok(/current=\{active\}/.test(subject_list), "标签区没有表达当前项");
 
   // 右侧 → 主体操作菜单，且仍带行状态。
   assert.ok(/<RowMenuButton status=\{status\} label=\{menu_label\} \/>/.test(subject_list), "主体操作菜单不在行右端，或丢了行状态");
 
-  // 行内只应有两个字面 button（头像、名称+描述），第三个目标是 RowMenuButton。
-  // 数量多一个就说明描述又变成了独立控件（或被拆成了两个按钮）。
+  // 行内只剩一个字面 button：头像。标签区与操作菜单都是组件（各自在里面声明自己的环）。
   const button_count = (subject_list.match(/<button\b/g) ?? []).length;
-  assert.equal(button_count, 2, `行内字面 button 应为 2 个（头像 + 名称/描述），实际 ${button_count}`);
+  assert.equal(button_count, 1, `行内字面 button 应为 1 个（头像），实际 ${button_count}`);
 });
 
 /**
@@ -100,11 +101,15 @@ test("展开卡片是一个元素，不是浮层拼装", () => {
     assert.ok(!subject_list.includes(forbidden), `主体行又用上了 ${forbidden}：展开态会退回两棵子树`);
   }
   // 卡片、行、面板都是卡片元素的直接子节点；面板不是绝对定位的浮层。
-  assert.ok(/<div ref=\{card_ref\} className=\{mode === "floating" \? subject_item_floating_class_name : subject_item_docked_class_name\}>/.test(subject_list), "找不到唯一的卡片元素（或它没有 ref，点外部判定就没有边界）");
+  assert.ok(/<div ref=\{card_ref\} className=\{mode === "floating" \? subject_item_floating_class_name\(multi_line\) : subject_item_docked_class_name\}>/.test(subject_list), "找不到唯一的卡片元素（或它没有 ref，点外部判定就没有边界）");
   // 行内容在三个状态之间必须原样复用：各写一份迟早会走形。
+  // 标签区同理：它现在由 SidebarRowLabel 提供，而不是行自己拼一个按钮。
   assert.ok(/const row_content = <>/.test(subject_list) && /\{row_content\}/.test(subject_list), "行内容没有在状态之间复用");
+  assert.ok(/<SidebarRowLabel[\s\S]{0,400}?onSelect=\{on_select\}/.test(subject_list), "名称与描述不在同一个「打开主体」标签区里");
   const card = read_without_comments(path.join(sidebar_root, "subjectCard.ts"));
-  assert.ok(/const card_class_name = `flex \$\{subject_row_height_class_name\} flex-col overflow-hidden rounded-surface border border-border bg-background`/.test(card), "卡片本体不是单个纵向容器，或丢了边框");
+  // 卡片**不再自己写 min-height**：高度由两个子节点（行 + 会话面板）决定。
+  // 卡片再拄一份就等于把行高定义了两遍，而行高分两档（单行 / 双行），两处必然对不上。
+  assert.ok(/const card_class_name = "flex flex-col overflow-hidden rounded-surface border border-border bg-background"/.test(card), "卡片本体不是单个纵向容器，或丢了边框（或又给自己加了 min-height）");
   assert.ok(/subject_card_panel_class_name = "shrink-0"/.test(card), "卡片下半不是卡片内的普通流子节点");
   // 卡片两半在同一个流里，因此不存在“接缝对齐”这件事。
   assert.ok(!/subject_card_(top|bottom)_style/.test(subject_list + card), "又出现了拆分接缝的样式辅助：说明卡片又被拆成两个盒子了");
@@ -121,14 +126,14 @@ test("展开卡片是一个元素，不是浮层拼装", () => {
  */
 test("浮动压在列表上，嵌入留在列表流里", () => {
   const card = read_without_comments(path.join(sidebar_root, "subjectCard.ts"));
-  assert.ok(/subject_slot_class_name = `relative \$\{subject_row_height_class_name\}`/.test(card), "槽位没有占住行高，浮动时后面的主体会被挤走");
-  assert.ok(/subject_item_floating_class_name = `absolute inset-x-0 top-0 z-20 \$\{card_class_name\} shadow-lg`/.test(card), "浮动态不是相对槽位绝对定位，或没有抬到后续行之上");
+  assert.ok(/return `relative \$\{subject_row_height_class_name\(multi_line\)\}`;/.test(card), "槽位没有占住行高，浮动时后面的主体会被挤走");
+  assert.ok(/return `absolute inset-x-0 top-0 z-20 \$\{subject_row_height_class_name\(multi_line\)\} \$\{card_class_name\} shadow-lg`;/.test(card), "浮动态不是相对槽位绝对定位，或没有抬到后续行之上");
   assert.ok(/subject_item_docked_class_name = card_class_name;/.test(card), "嵌入态与浮动态不是同一个卡片盒子，两态之间行内容会跳");
   assert.ok(!/subject_item_docked_class_name = `[^`]*absolute/.test(card), "嵌入态还在绝对定位：它会脱离列表流，后续主体不会被推开");
   // 阴影是两种展开态唯一的即时区别，不能省也不能反过来给。
   assert.ok(/subject_item_docked_class_name = card_class_name;/.test(card) && !/subject_item_docked_class_name = `[^`]*shadow/.test(card), "嵌入态带上了阴影：它与浮动态在视觉上无从分辨");
-  // 槽位与边框盒共用一个高度常量；两处各写一遍就会错位。
-  assert.ok(/subject_row_height_class_name = "min-h-12"/.test(card), "行高没有集中定义");
+  // 槽位与边框盒共用同一个高度来源（agent 变体）；两处各写一遍就会错位。
+  assert.ok(/function subject_row_height_class_name\(multi_line: boolean\): string \{[\s\S]{0,120}?sidebar_item_height_class_name\("agent", multi_line\)/.test(card), "行高没有集中定义：它必须来自 agent 变体");
 });
 
 /**
@@ -240,17 +245,22 @@ test("新建对话在列表顶部", () => {
  */
 test("折叠与展开的内容盒同高，内容居中在同一位置", () => {
   const card = read_without_comments(path.join(sidebar_root, "subjectCard.ts"));
-  // 边框两个状态是同一条：折叠透明、展开可见。只剩一边会让内容盒高度不同。
-  assert.ok(/subject_item_collapsed_class_name = `[^`]*border border-transparent/.test(card), "折叠态没有占位的透明边框");
-  assert.ok(/const card_class_name = `[^`]*border border-border/.test(card), "展开的卡片没有边框");
+  // 边框两个状态是同一条：折叠透明、展开可见。折叠行上那 1px 在展开时会**搬到卡片上**。
+  assert.ok(/const card_class_name = "flex flex-col overflow-hidden rounded-surface border border-border bg-background"/.test(card), "展开的卡片没有边框");
+  // 折叠态的行底来自 agent 变体：那 1px 透明边框与文字线就在契约里，
+  // 本文件不再自己拄一份（自拄一份就会与契约分叉，而那正是这轮要修的事）。
+  assert.ok(/<SidebarRow variant="agent" active=\{row_active\} multiLine=\{multi_line\}>/.test(subject_list), "折叠态没有复用 agent 变体的行底（透明边框与文字线在那里）");
+  assert.ok(!/subject_item_collapsed_class_name/.test(card + subject_list), "又出现了第二个折叠态行盒定义：它必须唯一来自 sidebarRow");
   assert.ok(!card.includes("inset-ring"), "卡片又画上了 ring");
 
-  // 带子 48px；展开时行在卡片内部，退回 46px（缩放后的带高 − 两条钉住的边框线）。
-  assert.ok(/subject_row_height_class_name = "min-h-12"/.test(card), "带子总高没有集中定义");
-  assert.ok(/subject_row_expanded_height_class_name = "min-h-\[calc\(3rem-2px\)\]"/.test(card), "展开态的行没有退回卡片内容盒高度，内容会被推低 2px");
-  assert.ok(/subject_row_class_name = `\$\{row_layout_class_name\} \$\{subject_row_expanded_height_class_name\} shrink-0`/.test(card), "展开态的行没有引用那份高度");
-  // 纵向内边距不能省：它是居中计算的一部分（内容 34px + py-1 = 42px，居中在 46px 里）。
-  assert.ok(/const row_layout_class_name = "group\/item flex items-center gap-2\.5 px-1\.5 py-1"/.test(card), "行内容丢了纵向内边距或间距");
+  // 带高与「展开态退回 2px」必须成对：这是内容不跳的唯一依据。
+  // 逐对验算而不是抄一遍字符串：数值一改，这对关系就会失效。
+  for (const [name, units, rem] of [["single", "11", "2.75"], ["multi", "12", "3"]] as const) {
+    // 带高来自 agent 变体（sidebarRow 里定义），这里只校验「展开态 = 带高 − 2px」。
+    assert.ok(new RegExp(`subject_row_expanded_height_${name}_class_name = "min-h-\\[calc\\(${rem}rem-2px\\)\\]"`).test(card), `展开态的行没有退回卡片内容盒高度（${name}）：内容会被推低 2px`);
+    assert.equal(Number(rem) * 16, Number(units) * 4, `${name} 的展开态高度不是「带高 − 2px」`);
+  }
+  assert.ok(/return `\$\{sidebar_row_layout_class_name\} \$\{subject_row_expanded_height_class_name\(multi_line\)\} shrink-0`;/.test(card), "展开态的行没有引用那份高度");
   // 名称/描述不做成撑满的两行（那会改掉行的纵向节奏）。
   assert.ok(!card.includes("min-h-6"), "又出现了把两行撑满的写法");
 });
@@ -264,10 +274,10 @@ test("折叠与展开的内容盒同高，内容居中在同一位置", () => {
  * 后来又把卡片常驻给每一行（每行多背一层绝对定位 + overflow-hidden 的包裹）。
  */
 test("折叠态不渲染卡片与列表，但保留行盒子", () => {
-  assert.ok(/if \(mode === null\) return <div className=\{cn\(subject_item_collapsed_class_name/.test(subject_list), "折叠态没有提前返回：会多渲染卡片与列表");
+  assert.ok(/if \(mode === null\) return <SidebarRow variant="agent" active=\{row_active\} multiLine=\{multi_line\}>/.test(subject_list), "折叠态没有提前返回：会多渲染卡片与列表");
   assert.ok(/\{row_content\}<\/div>\s*<div id=\{panel_id\}/.test(subject_list), "展开态没有把行内容与列表放进同一个卡片里");
   // 槽位只服务于浮动：嵌入时卡片自己就占着那一行，再包一层只是白多一层布局。
-  assert.ok(/return mode === "floating" \? <div className=\{subject_slot_class_name\}>\{card\}<\/div> : card;/.test(subject_list), "槽位没有限定在浮动态");
+  assert.ok(/return mode === "floating" \? <div className=\{subject_slot_class_name\(multi_line\)\}>\{card\}<\/div> : card;/.test(subject_list), "槽位没有限定在浮动态");
 });
 
 /**
@@ -333,16 +343,19 @@ test("内边距给列表内容而不是滚动容器：滚动条因此贴边", ()
   assert.ok(scroll_tag, `找不到浮动态的滚动容器，或它带上了额外样式：${sessions_panel.slice(0, 200)}`);
   assert.ok(!/\b(p[xltrby]?|pl|pr|pt|pb)-/.test(scroll_tag[1]!), `滚动容器带上了内边距，滚动条不会贴边：${scroll_tag[1]}`);
 
-  // 列表内边距在滚动容器**内部**的包装层上。嵌入态没有滚动容器，但它仍在内容那一层。
-  assert.ok(/<div className="p-1">/.test(sessions_panel), "列表内容没有自己的内边距，或它不在滚动容器内部");
-  // 行的文字内缩仍由行自己承担。
-  //
-  // 只断言「行类名里带 px-2」这个意图，不把整串类名抄进来：
-  // 圆角从 `rounded-md` 改名为 `rounded-control`（角色令牌，等值）时，
-  // 抄全串的写法会失败，而它想守的「内缩在行自己身上」其实没变。
-  const row_class = /subject_session_row_class_name = "([^"]*)"/.exec(sessions_panel);
-  assert.ok(row_class, "找不到会话行的类名常量");
-  assert.ok(/\bpx-2\b/.test(row_class[1]!), `会话行没有自己的文字内缩：${row_class[1]}`);
+  // 列表容器带内边距（左右上下各 4），且在滚动容器**内部**。
+  // 这 4px 与行自己的 4px 相加正好等于卡片外那一档 8：文字线不变，
+  // 但底色缩回卡片内 4、文字离底色左缘也只有 4（见 sidebarRow 的等式）。
+  assert.ok(/<div className=\{subject_panel_padding_class_name\}>/.test(sessions_panel), "列表容器不在滚动容器内部");
+  assert.ok(/subject_panel_padding_class_name = "p-1"/.test(card), "卡片下半的内边距不在契约里集中定义，或不再是 4");
+  assert.ok(/SIDEBAR_PANEL_PADDING = 4;/.test(row_contract), "卡片下半的左右内边距不再是 4：底色会贴边而内容离边很远");
+  // 卡片内的行自愿窄一档（`compact`）：卡片已经抱住了行。
+  assert.ok(/SIDEBAR_COMPACT_ROW_PADDING = 4;/.test(row_contract), "紧凑行的左右内边距不再是 4");
+  // 会话行带上自己的菜单 → `SidebarItem` 自动采用「行底 + 标签 + 操作位」；
+  // 它不带行首槽（带了文字就从 56 推到 80/96）。
+  assert.ok(/<SidebarItem[\s\S]{0,300}?variant="default"[\s\S]{0,160}?compact/.test(sessions_panel), "会话行没有走「卡片内紧凑行」：左右内边距会与卡片外一样宽");
+  assert.ok(/menu=\{conversation\.menu\}/.test(sessions_panel), "会话行没有把逐条菜单交给 SidebarItem");
+  assert.ok(!/leading(Slot)?=/.test(sessions_panel), "会话列表给行加了行首槽：文字线不再落在 56");
 });
 
 /**
@@ -358,15 +371,18 @@ test("内边距给列表内容而不是滚动容器：滚动条因此贴边", ()
 test("展开后上下两半同底色：行内不再上选中底色", () => {
   const card = read_without_comments(path.join(sidebar_root, "subjectCard.ts"));
   // 卡片负责铺底。
-  assert.ok(/const card_class_name = `[^`]*bg-background`/.test(card), "展开的卡片没有铺底色");
+  assert.ok(/const card_class_name = "flex flex-col overflow-hidden rounded-surface border border-border bg-background"/.test(card), "展开的卡片没有铺底色");
 
-  // 行内容的底色必须按展开态分流。
-  const branch = /const interaction_class_name = expanded\s*\n?\s*\? "([^"]*)"\s*\n?\s*: active \? "([^"]*)"/.exec(subject_list);
-  assert.ok(branch, `行内容底色没有按展开态分流：${subject_list.slice(subject_list.indexOf("interaction_class_name ="), subject_list.indexOf("interaction_class_name =") + 160)}`);
-  assert.ok(!branch[1]!.includes("bg-interaction-selected"), `展开态的行仍在上选中底色，会在卡片内切出色差：${branch[1]}`);
-  assert.ok(branch[1]!.includes("hover:bg-interaction-hover"), `展开态的行丢了悬停反馈：${branch[1]}`);
-  // 折叠态保留选中底色。
-  assert.ok(branch[2]!.includes("bg-interaction-selected"), `折叠态丢了选中底色：${branch[2]}`);
+  // 行底底色必须按展开态分流：展开态一律不给选中色。
+  // 判定落在 `row_active` 上（= 未展开且是当前项），卡片内那份写死 false。
+  assert.ok(/const row_active = !expanded && active;/.test(subject_list), "行底底色没有按展开态分流");
+  assert.ok(/<SidebarRow variant="agent" active=\{row_active\}/.test(subject_list), "折叠态的行底没有用 row_active");
+  assert.ok(/sidebar_row_interaction_class_name\(false\)/.test(subject_list), "展开态的行仍在上选中底色，会在卡片内切出色差");
+  // 两种底色的定义在行契约里，且只有 active 一支带选中色。
+  const interaction = /sidebar_row_interaction_class_name\(active: boolean\): string \{\s*return active \? "([^"]*)" : "([^"]*)";/.exec(row_contract);
+  assert.ok(interaction, "行契约里找不到状态底色的定义");
+  assert.ok(interaction[1]!.includes("bg-interaction-selected"), `选中底色不在 active 一支：${interaction[1]}`);
+  assert.ok(interaction[2]!.includes("hover:bg-interaction-hover"), `常态丢了悬停反馈：${interaction[2]}`);
 
   // 面板自己不铺底（否则又会与卡片叠一层，深浅不一）。
   assert.ok(!/bg-(background|muted|surface-subtle)/.test(sessions_panel), "面板自己铺了底色，会与卡片叠成两层");
@@ -377,15 +393,17 @@ test("会话行的切换与菜单各管一件事", () => {
   assert.ok(/conversation\.select\(\); close\?\.\(\)/.test(sessions_panel), "会话行不再一键切换");
   assert.ok(sessions_panel.includes("sidebar.new_chat"), "会话列表缺少新建入口：空列表会变成死路");
   assert.ok(sessions_panel.includes("sidebar.no_sessions"), "会话列表缺少空态文案");
-  assert.ok(sessions_panel.includes('aria-current={conversation.active ? "true" : undefined}'), "会话行没有表达当前项");
-  // 菜单由调用方构造，面板只给它一个位置：面板因此不需要认识 Session 目录，
+  // 「当前所在的会话」用 `true` 而不是 `page`：它不是另一个页面，只是同一页里的一个位置。
+  assert.ok(/currentKind="true"/.test(sessions_panel), "会话行没有表达当前项，或用的是页面语义");
+  // 菜单由调用方构造，面板只把它交给行：面板因此不需要认识 Session 目录，
   // 也不需要知道两个主体的菜单不一样（Agent 有归档与复制路径，Group 没有）。
   assert.ok(sessions_panel.includes("conversation.menu"), "会话行没有渲染逐条菜单");
   for (const forbidden of ["SessionActionsMenu", "GroupSessionActionsMenu"]) {
     assert.ok(!sessions_panel.includes(forbidden), `面板自己构造了 ${forbidden}：职责应留给调用方`);
   }
   // `group/item` 是 RowMenuButton 显隐入口的钩子；少了它菜单永远不出现。
-  assert.ok(sessions_panel.includes("group/item"), "会话行缺少 group/item：菜单入口不会随 hover 显隐");
+  // 它现在住在行契约里，因此查契约而不是查这一处调用点。
+  assert.ok(row_contract.includes("group/item"), "行契约缺少 group/item：会话行的菜单入口不会随 hover 显隐");
 });
 
 test("两个主体的会话菜单各自完整，且都由 ChatSidebar 提供", () => {
@@ -522,8 +540,8 @@ test("嵌入态不自带滚动容器，滚动归侧栏", () => {
   assert.ok(/return scrolls_itself \? <div className=\{subject_panel_scroll_class_name\}>\{content\}<\/div> : content;/.test(sessions_panel), "嵌入态还包着滚动容器：鼠标停在固定面板上会滚不动侧栏");
   // 高度上限 + 滚动 + 不传递，三个必须同进同出：只剩 overflow 会让滚动传给侧栏。
   assert.ok(/subject_panel_scroll_class_name = "max-h-80 overflow-y-auto overscroll-contain"/.test(sessions_panel), "浮动态滚动层的三个类名不完整");
-  // 内边距在内容上，两种形态一致（嵌动态没有外层，但那不能变成“内边距也取消”）。
-  assert.ok(/<div className="p-1">/.test(sessions_panel), "列表内容丢了内边距");
+  // 内边距在内容上，两种形态一致（嵌入态没有外层，但那不能变成“内边距也取消”）。
+  assert.ok(/<div className=\{subject_panel_padding_class_name\}>/.test(sessions_panel), "列表内容丢了纵向留白");
 });
 
 /** 行的 memo 依赖 props 引用稳定；这两处最容易在重构里被写成每次新建。 */

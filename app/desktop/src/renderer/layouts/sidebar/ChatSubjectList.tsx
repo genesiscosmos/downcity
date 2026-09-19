@@ -1,7 +1,7 @@
 /** Chat Sidebar 的 Agent 与 Group 主体列表。 */
 
 import { memo, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { TbEdit, TbGhost3, TbPlus, TbTrash } from "react-icons/tb";
+import { TbEdit, TbGhost3, TbLoader2, TbPlus, TbTrash } from "react-icons/tb";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { GroupAvatar } from "@/components/GroupAvatar";
 import { RowMenuButton } from "@/components/RowMenuButton";
@@ -20,8 +20,11 @@ import type { DesktopAgentSummary, DesktopGroupSummary, DesktopWorkspaceSummary 
 import type { DesktopNotificationState } from "@common/types/DesktopNotification";
 import type { ChatSubject } from "@/features/navigation/lib/chat_subject_order";
 import { SidebarContent } from "./SidebarPanel";
+import { SidebarEmptyState } from "./SidebarEmptyState";
+import { sidebar_avatar_slot_class_name, sidebar_row_interaction_class_name } from "./sidebarRow";
+import { SidebarRow, SidebarRowAction, SidebarRowLabel } from "./SidebarItem";
 import { empty_conversations, SubjectConversationsPanel, type SubjectConversation } from "./SubjectConversationsPanel";
-import { docked_visible_session_count, panel_mode_of, subject_card_panel_class_name, subject_item_collapsed_class_name, subject_item_docked_class_name, subject_item_floating_class_name, subject_row_class_name, subject_slot_class_name, type OpenPanels, type SubjectPanelMode } from "./subjectCard";
+import { docked_visible_session_count, panel_mode_of, subject_card_panel_class_name, subject_item_docked_class_name, subject_item_floating_class_name, subject_row_class_name, subject_slot_class_name, type OpenPanels, type SubjectPanelMode } from "./subjectCard";
 /** Chat 主体列表属性。 */
 interface ChatSubjectListProps {
   /** Renderer 根控制器。 */
@@ -59,7 +62,7 @@ interface ChatSubjectListProps {
 }
 
 /**
- * 渲染 Chat 主体列表及其空状态。
+ * 渲染 Chat 主体列表及其空态。
  *
  * 开合状态与它的投影都在 ChatSidebar：那个投影必须知道展开了哪几个（只为它们建会话列表），
  * 而“浮动至多一个、嵌入可多个”也是列表级不变量，两者共用同一个信号。
@@ -70,7 +73,8 @@ interface ChatSubjectListProps {
  */
 export function ChatSubjectList(props: ChatSubjectListProps) {
   const translate = use_translation("navigation");
-  return <SidebarContent class_name="space-y-1">
+  const translate_common = use_translation();
+  return <SidebarContent class_name="space-y-0.5">
     {props.hydrated ? props.subjects.map((subject) => {
       // 每一行各自读出自己的展开方式；没展开的行一律 null，不会拿到别人展开到哪一步。
       const mode = panel_mode_of(props.open_panels, subject.key);
@@ -79,8 +83,12 @@ export function ChatSubjectList(props: ChatSubjectListProps) {
       return subject.kind === "agent"
         ? <AgentSubject key={subject.key} agent={subject.agent} controller={props.controller} active={subject.agent.agent_id === props.selected_agent_id} active_workspace_id={props.active_workspace_id} workspaces={props.workspaces} unread_attention={get_agent_unread_attention(props.notification_state, subject.agent.agent_id)} subject_key={subject.key} mode={mode} conversations={conversations} advance_panel={props.advance_panel} set_panel_mode={props.set_panel_mode} />
         : <GroupSubject key={subject.key} group={subject.group} controller={props.controller} active={subject.group.group_id === props.selected_group_id} active_workspace_id={props.active_workspace_id} workspaces={props.workspaces} agents={props.agents} unread_attention={get_group_unread_attention(props.notification_state, subject.group.group_id)} open_group_config={props.open_group_config} subject_key={subject.key} mode={mode} conversations={conversations} advance_panel={props.advance_panel} set_panel_mode={props.set_panel_mode} />;
-    }) : null}
-    {props.hydrated && !props.loading && props.subjects.length === 0 ? <div className="flex flex-col items-center px-4 py-10 text-center"><TbGhost3 className="mb-2 size-5 text-muted-foreground" /><div className="text-xs text-foreground">{translate("sidebar.no_subjects")}</div><Button className="mt-3" variant="primary" onClick={props.open_create_agent}>{translate("sidebar.new_agent")}</Button></div> : null}
+    }) : <SidebarEmptyState icon={<TbLoader2 className="animate-spin" />} title={translate_common("state.loading")} />}
+    {props.hydrated && !props.loading && props.subjects.length === 0 ? <SidebarEmptyState
+      icon={<TbGhost3 />}
+      title={translate("sidebar.no_subjects")}
+      action={<Button variant="primary" onClick={props.open_create_agent}>{translate("sidebar.new_agent")}</Button>}
+    /> : null}
   </SidebarContent>;
 }
 
@@ -98,7 +106,10 @@ const AgentSubject = memo(function AgentSubject({ agent, controller, active, act
   return <ChatSubjectRow
     avatar={<AgentAvatar agent={agent} class_name="size-8" />}
     title={agent.name}
-    description={agent.description || translate("sidebar.no_description")}
+    // 空描述不再兜底成「暂无描述」：那句话会在新建几个 Agent 之后铺满整列，
+    // 而行高随之退回单行档。真正需要用户知道的只有「这个 Agent 是什么」，
+    // 而它没有描述时，静默比复述一遍「没有」更诚实。
+    description={agent.description || undefined}
     active={Boolean(active)}
     status={status}
     mode={mode}
@@ -140,7 +151,7 @@ const GroupSubject = memo(function GroupSubject({ group, controller, active, act
     avatar={<GroupAvatar group={group} agents={agents} />}
     title={group.name}
     tag={translate("sidebar.members", { count: group.members.length })}
-    description={group.instruction || translate("sidebar.no_description")}
+    description={group.instruction || undefined}
     active={active}
     status={status}
     mode={mode}
@@ -175,16 +186,23 @@ const GroupSubject = memo(function GroupSubject({ group, controller, active, act
  *
  * 头像与名称原本在同一个按钮里，头像因此不能单独成为入口——按钮不能嵌套按钮。
  * 改成两兄弟后中间的选择区反而更大了（名称 + 描述整块都可点）。
+ *
+ * ## 行高由「有没有描述」决定，不由瞬时状态决定
+ *
+ * 描述存在 → 双行 48；不存在 → 单行 44。**不按 `status_text` 决定**：
+ * 那会让行在 Agent 开始回复的瞬间长高 4px、回复完再缩回去，
+ * 一列主体随之上下滑动——用一次高度跳动去表达一次状态变化并不划算，
+ * 状态本来就由右侧入口的图标、以及 Rail 上的未读点表达。
  */
 function ChatSubjectRow({ avatar, title, tag, description, active, status, subject_menu, subject_menu_open_label, mode, on_advance, on_open_change, conversations, on_new_chat, on_select, delete_confirm }: {
-  /** 主体头像，作为主体级操作菜单的触发器内容。 */
+  /** 主体头像，作为行首槽的内容与展开开关的触发器。 */
   avatar: ReactNode;
   /** 主体名称。 */
   title: string;
   /** 可选分类信息。 */
   tag?: string;
-  /** 无状态时的行描述。 */
-  description: string;
+  /** 行描述；**为空时整个描述行不渲染**（行高也随之退回单行档）。 */
+  description?: string;
   /** 是否为当前主体。 */
   active: boolean;
   /** 当前行状态。 */
@@ -220,6 +238,7 @@ function ChatSubjectRow({ avatar, title, tag, description, active, status, subje
       active={active}
       status={status}
       on_select={on_select}
+      multi_line={Boolean(description)}
       mode={mode}
       on_advance={on_advance}
       on_open_change={on_open_change}
@@ -267,35 +286,22 @@ function subject_panel_trigger_label_key(mode: SubjectPanelMode | null): string 
 }
 
 /** Agent 与 Group 共用的主体行；状态文案与动效由行状态唯一决定。 */
-function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, active, status, on_select, mode, on_advance, on_open_change, conversations, on_new_chat }: {
-  /** 主体头像。 */
-  avatar: ReactNode;
-  /** 头像入口的可访问名称。 */
-  menu_label: string;
-  /** 主体级操作项。 */
-  menu: ReactNode;
-  /** 主体名称。 */
-  title: string;
-  /** 可选分类信息。 */
-  tag?: string;
-  /** 无状态时的行描述。 */
-  description: ReactNode;
-  /** 是否为当前主体。 */
-  active: boolean;
-  /** 当前行状态。 */
-  status: ChatRowStatus;
-  /** 打开主体。 */
-  on_select(): void;
-  /** 会话面板的展开方式；null 为折叠。 */
-  mode: SubjectPanelMode | null;
-  /** 头像点击：推进展开循环（折叠 → 浮动 → 嵌入 → 折叠）。 */
-  on_advance(): void;
-  /** 显式设置展开方式；null 收起。 */
-  on_open_change(next: SubjectPanelMode | null): void;
-  /** 该主体的会话。 */
-  conversations: readonly SubjectConversation[];
-  /** 新建对话；不提供时该项禁用（例如还没有可用 Workspace）。 */
-  on_new_chat?(): void;
+function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, active, status, on_select, multi_line, mode, on_advance, on_open_change, conversations, on_new_chat }: {
+  /** 主体头像。 */ avatar: ReactNode;
+  /** 头像入口的可访问名称。 */ menu_label: string;
+  /** 主体级操作项。 */ menu: ReactNode;
+  /** 主体名称。 */ title: string;
+  /** 可选分类信息。 */ tag?: string;
+  /** 行描述；为空时整个描述行不渲染。 */ description?: string;
+  /** 是否为当前主体。 */ active: boolean;
+  /** 当前行状态。 */ status: ChatRowStatus;
+  /** 打开主体。 */ on_select(): void;
+  /** 行高是否按双行档（= 有描述）。 */ multi_line: boolean;
+  /** 会话面板的展开方式；null 为折叠。 */ mode: SubjectPanelMode | null;
+  /** 头像点击：推进展开循环（折叠 → 浮动 → 嵌入 → 折叠）。 */ on_advance(): void;
+  /** 显式设置展开方式；null 收起。 */ on_open_change(next: SubjectPanelMode | null): void;
+  /** 该主体的会话。 */ conversations: readonly SubjectConversation[];
+  /** 新建对话；不提供时该项禁用（例如还没有可用 Workspace）。 */ on_new_chat?(): void;
 }) {
   const translate_chat = use_translation("chat");
   const translate_navigation = use_translation("navigation");
@@ -404,6 +410,12 @@ function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, ac
    * 每次点击都会变的可访问名称（说清下一步会怎样）、以及悬停反馈
    * （与 GroupView 里的头像按钮同一套写法）。
    *
+   * 这是侧栏里唯一一个**不能**交给 `SidebarItem` 的行：它的行首槽本身就是个开关
+   * （推展开方式，带 `aria-expanded` / `aria-controls`），而 `SidebarItem` 的槽是装饰。
+   * 其余部分（行底、标签区、操作位）仍走同一套组件。
+   *
+   * 头像的 32px 就是 `SIDEBAR_ROW_LEADING`：它自己就是行首槽，行的文字列由它决定。
+   *
    * 描述行是**纯文字**：它本来只是说明，不是控件；
    * 把开关挂在一段说明上，读屏会把描述读成按钮名，反而听不出按钮要干什么。
    */
@@ -419,49 +431,39 @@ function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, ac
       onClick={on_advance}
       title={trigger_label}
       aria-label={trigger_label}
-      className="flex size-8 shrink-0 items-center justify-center rounded-control outline-none transition-opacity duration-150 hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/30"
+      className={cn(sidebar_avatar_slot_class_name, "rounded-control outline-none transition-opacity duration-150 hover:opacity-75 focus-visible:ring-2 focus-visible:ring-ring/30")}
     >{avatar}</button>
-    {/* 名称 + 描述：整块都是「打开主体」的入口（沿用原本的实现）。
-        描述不是独立控件，因此这里也没有第二个按钮——行的三个动作分别是
-        头像（开关）、这一块（打开主体）、右端菜单（主体操作）。 */}
-    <button
-      type="button"
-      aria-current={active ? "page" : undefined}
-      onClick={on_select}
-      className="flex min-w-0 flex-1 items-center gap-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-    >
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className={cn("min-w-0 truncate text-xs font-medium text-foreground", tag ? "max-w-[55%] shrink" : "flex-1")}>{title}</span>
-          {tag ? <span className="max-w-36 shrink truncate rounded-full bg-surface-subtle px-1.5 py-0.5 text-3xs font-normal leading-none text-muted-foreground opacity-0 transition-opacity duration-150 group-hover/item:opacity-100">{tag}</span> : null}
-        </span>
-        <span className={cn("mt-1 flex h-3.5 min-w-0 items-center truncate text-3xs leading-3.5", status_text ? "font-medium text-muted-foreground" : "text-muted-foreground")}>
-          {status_text ? <StatusText status={status} text={status_text} /> : description}
-        </span>
-      </span>
-    </button>
+    {/* 名称 + 描述：整块都是「打开主体」的入口。
+        状态优先于描述：正在回复时，那句话比简介更该被看到；而**行高**只看有没有描述（见 ChatSubjectRow）。 */}
+    <SidebarRowLabel
+      title={title}
+      tag={tag}
+      current={active}
+      description={status_text ? <StatusText status={status} text={status_text} /> : description}
+      onSelect={on_select}
+    />
     {/* 主体级操作菜单：行右端。图标仍由行状态决定：失败与完成不占用描述位，
         只靠这个图标表达，所以它不能换成通用的省略号。 */}
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild><RowMenuButton status={status} label={menu_label} /></DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={4}>{menu}</DropdownMenuContent>
-    </DropdownMenu>
+    <SidebarRowAction>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild><RowMenuButton status={status} label={menu_label} /></DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={4}>{menu}</DropdownMenuContent>
+      </DropdownMenu>
+    </SidebarRowAction>
   </>;
   /**
-   * 行内容的交互底色。
+   * 行底底色：**展开态一律不给选中色**。
    *
-   * 两个展开态都**不给选中底色**：卡片已经铺了 `bg-background`，行内容再上一次选中底色，
-   * 就会在一张卡内部切出一道色差（上半灰、下半白），读起来又是两块。
-   * 展开态不需要选中底色——“卡片开着”本身就是它在当前主体的证据；
-   * 悬停反馈仍保留（它是瞬时反馈，且只落在行上、不会染到列表）。
+   * 卡片已经铺了 `bg-background`，行内容再上一次选中底色，就会在一张卡内部切出一道色差
+   * （上半灰、下半白），读起来又是两块。展开态不需要选中底色——“卡片开着”本身就是它在
+   * 当前主体的证据；悬停反馈仍保留（瞬时反馈，且只落在行上、不会染到列表）。
    *
    * 折叠时保留选中底色：那是列表里一直以来的语言，也是用户判断“我在哪个 Agent”的依据。
+   * 两者都取自行契约，因此行高、内边距与文字线不会跟别处分叉。
    */
-  const interaction_class_name = expanded
-    ? "hover:bg-interaction-hover"
-    : active ? "bg-interaction-selected hover:bg-interaction-active" : "hover:bg-interaction-hover";
-  // 折叠：行自己就是边框盒（边框透明，与展开态同一份占位）。
-  if (mode === null) return <div className={cn(subject_item_collapsed_class_name, interaction_class_name)}>{row_content}</div>;
+  const row_active = !expanded && active;
+  // 折叠：行自己就是那个边框盒（边框透明，与展开态同一份占位）。
+  if (mode === null) return <SidebarRow variant="agent" active={row_active} multiLine={multi_line}>{row_content}</SidebarRow>;
   /**
    * 展开：同一个边框盒变成卡片，行内容与列表都住在里面。
    *
@@ -470,8 +472,9 @@ function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, ac
    * 槽位只服务于浮动（它要占住那一行），嵌入时卡片自己就是那一行，多包一层只会多一层布局。
    */
   const card = (
-    <div ref={card_ref} className={mode === "floating" ? subject_item_floating_class_name : subject_item_docked_class_name}>
-      <div className={cn(subject_row_class_name, interaction_class_name)}>{row_content}</div>
+    <div ref={card_ref} className={mode === "floating" ? subject_item_floating_class_name(multi_line) : subject_item_docked_class_name}>
+      {/* 展开态的行内容：不带边框（那 1px 已经搬到卡片上），也不给选中底色（见 row_active）。 */}
+      <div className={cn(subject_row_class_name(multi_line), sidebar_row_interaction_class_name(false))}>{row_content}</div>
       <div id={panel_id} className={subject_card_panel_class_name}>
         {/* 固定开关与展开方式是同一个信号：按下去 = 嵌入，抬起来 = 回到浮动。
             把这件事放在这里而不是面板内部，是因为面板只需要知道「现在固不固定」。
@@ -482,7 +485,7 @@ function ChatSubjectItem({ avatar, menu_label, menu, title, tag, description, ac
       </div>
     </div>
   );
-  return mode === "floating" ? <div className={subject_slot_class_name}>{card}</div> : card;
+  return mode === "floating" ? <div className={subject_slot_class_name(multi_line)}>{card}</div> : card;
 }
 
 /** 行状态文案；只有正在推进的状态附带循环动效，其余保持静态。 */

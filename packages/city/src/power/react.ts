@@ -47,6 +47,7 @@ export type {
   PowerRendererSidebarProps,
   PowerRendererSidebarCreateMenuProps,
   PowerRendererSidebarSectionProps,
+  PowerRendererSidebarSubTextProps,
   PowerRendererSidebarTreeItemProps,
   PowerRendererStackProps,
   PowerRendererStatusProps,

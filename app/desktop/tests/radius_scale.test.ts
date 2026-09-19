@@ -470,8 +470,6 @@ test("命名档位只允许出现在待定的站点（延后清单不得变长�
     "features/group/CreateGroupView.tsx",
     "features/chat/composer/ChatModelSelector.tsx",
     "features/power/PowerView.tsx",
-    "features/power/lib/PowerRendererComponents.tsx",
-    "layouts/sidebar/PowerSidebar.tsx",
   ];
 
   const collect = (directory: string): string[] => fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

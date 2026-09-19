@@ -20,22 +20,37 @@
  * 嵌入留在文档流里、不带阴影。几何、描边、底色、圆角全部同源，所以两态之间切换
  * 不会出现行内容位移。
  *
+ * ## 几何全部来自 `sidebarRow.ts`
+ *
+ * 行高、内边距、槽位与圆角都不在这里定义，只从这里转发。原因见那个文件的开头：
+ * 侧栏此前有 8 套各自决定几何的行，同一类东西落在五条不同的文字线上。
+ *
+ * 本文件只保留**这一行特有的**两件事：
+ *
+ * 1. **带高按有无描述行分档**（无描述 44 / 有描述 48）。描述为空时不再占用一行，
+ *    因此没有描述的 Agent 不再顶着一句「暂无描述」白占 8px。
+ * 2. **展开态的行高 = 带高 − 2px**：卡片自己画那 1px 边框，行在卡片内部要显式退回，
+ *    否则内容被推低 2px（见下）。
+ *
  * ## 位置由「居中」决定，不由高度撑满
  *
- * 行内容是「名称一行 + 描述一行」这么一个块（约 34px），它**居中**在那个 48px 的带子里。
+ * 行内容是「名称一行 +（可选）描述一行」这么一个块，它**居中**在那个带子里。
  * 三个状态必须以完全相同的方式得到同一个居中结果，否则内容会跳。
  *
  * 关键在于带子的「内容盒」高度：
  *
- * ```
- * 折叠态：[行 min-h-12][1px 透明边框]              …内容盒 46px… 内容居中
- * 展开态：[卡片 1px 边框] [行 min-h-(3rem−2px) = 46px][…内容盒 46px…] 内容居中
+ * ```text
+ * 折叠态：[行 min-h-11][1px 透明边框]                    …内容盒 34px… 内容居中
+ * 展开态：[卡片 1px 边框][行 min-h-(2.75rem−2px) = 42px]  …内容盒 34px… 内容居中
  * ```
  *
- * 折叠时行自己就是那个盒子，它的边框吃掉 2px，内容盒是 46px；
- * 展开时卡片把边框画在外层，行在卡片**内部**，所以行要显式退回 46px——
- * 写回 48px 会多出 2px，内容被推低。`calc(3rem − 2px)` 正是「缩放后的带高 − 钉在物理像素上的两条边框线」，
+ * 折叠时行自己就是那个盒子，它的边框吃掉 2px，内容盒是 34px；
+ * 展开时卡片把边框画在外层，行在卡片**内部**，所以行要显式退回 42px——
+ * 写回 44px 会多出 2px，内容被推低。`calc(2.75rem − 2px)` 正是「缩放后的带高 − 钉在物理像素上的两条边框线」，
  * 与仓库的单位约定一致（rem 跟随缩放，px 不跟随）。
+ *
+ * 卡片本身**不再设 min-height**：高度由两个子节点（行 + 会话面板）决定，
+ * 卡片再写一份就等于把行高抄了两遍——行高一分档，两处必然对不上。
  *
  * 早期版本除此之外还把内容**撑满**整条带子（名称 24px + 描述 22px），
  * 那会改掉行的纵向节奏，也让名称与描述贴在带子的上下缘，反而更难看。
@@ -44,42 +59,63 @@
  *
  * 边框是这张卡的视觉语言。两个展开态都画**同一条边框**（折叠透明、展开可见），
  * 否则内容盒高度不同，又会回到上面那个 2px 问题。
+ * 那 1px 是「从行搬到卡片上」的，因此**只有**不展开成卡片时它才留在行上；
+ * 完整推导见 `sidebarRow.ts` 文件头。
  * `inset-ring` 试过（不占布局），但多一圈线，在一列表里反复出现就是噪音，已弃用。
  *
  * 阴影则是**浮动与嵌入之间唯一的即时区别**，因此不能省：浮动压在别的行上，
  * 需要 `shadow-lg`（应用既有的浮层级别）把事情说清楚；嵌入没有压在谁上面，
  * 就不该有阴影——否则两种状态在视觉上无从分辨，用户只能靠「下面的行有没有动」去猜。
- */
-
-/** 带子总高，**含上下 1px 边框**（border-box），设计值 3rem = 48px。 */
-export const subject_row_height_class_name = "min-h-12";
-
-/**
- * 展开态行内容的高度：卡片内容盒的高度（卡片有上下各 1px 边框）。
  *
- * 只有 46px 才能让内容与折叠态落在同一位置，见文件头。
+ * ## 卡片下半为什么没有左右内边距
+ *
+ * 卡片自己有 1px 描边，因此卡片内的行盒起点 = 48 + 1 + 0 = 49，
+ * 行内容起点 57 —— 与卡片外 `default` 行的 56 只差那 1px 描边。
+ * 给面板加内边距会让卡片内的会话行整体右移，与目录树那一列分叉。
+ * `subject_panel_padding_class_name` 只留纵向的一点收尾留白。
  */
-export const subject_row_expanded_height_class_name = "min-h-[calc(3rem-2px)]";
 
-/** 行内容的排版与内边距；三种状态共用同一份，保证内部元素位置一致。 */
-const row_layout_class_name = "group/item flex items-center gap-2.5 px-1.5 py-1";
+import { sidebar_item_height_class_name, sidebar_row_layout_class_name } from "./sidebarRow.ts";
 
 /**
- * 折叠态：行自己就是这个带子。边框透明——看不见，但占住那 1px。
+ * 行内容的排版骨架（行盒内缩、竖向内边距、行内间距）。
+ *
+ * 转出给展开态的行：它不带边框（那 1px 由卡片画），但其余排版必须与折叠态同源。
  */
-export const subject_item_collapsed_class_name = `${row_layout_class_name} ${subject_row_height_class_name} rounded-item border border-transparent cursor-pointer transition-colors duration-150 [&_button]:cursor-pointer`;
+export { sidebar_row_layout_class_name };
+
+/** 带高（含上下各 1px 边框）：单行 44，双行 48；两者都来自行契约。 */
+export const subject_row_height_single_class_name = sidebar_item_height_class_name("agent", false);
+export const subject_row_height_multi_class_name = sidebar_item_height_class_name("agent", true);
+
+/** 带高：按有没有描述行二选一。 */
+export function subject_row_height_class_name(multi_line: boolean): string {
+  return sidebar_item_height_class_name("agent", multi_line);
+}
+
+/**
+ * 展开态行内容的高度：卡片内容盒的高度（卡片有上下各 1px 边框），即带高 − 2px。
+ *
+ * 只有退回这 2px 才能让内容与折叠态落在同一位置，见文件头。
+ */
+export const subject_row_expanded_height_single_class_name = "min-h-[calc(2.75rem-2px)]";
+export const subject_row_expanded_height_multi_class_name = "min-h-[calc(3rem-2px)]";
+
+/** 展开态行高：按有没有描述行二选一。 */
+export function subject_row_expanded_height_class_name(multi_line: boolean): string {
+  return multi_line ? subject_row_expanded_height_multi_class_name : subject_row_expanded_height_single_class_name;
+}
 
 /**
  * 卡片本体：两个展开态共用的盒子。
  *
  * - `flex-col`：内容纵向排列在同一个盒子里，边框只画这一次；
- * - `min-h-12`：与折叠态同高；
- * - `overflow-hidden`：把列表的滚动条裁在圆角内（卡圆角 12px、列表内缩 4px、
- *   滚动条宽 5px）。圆角从 8px 提到 12px 后，滚动条落在圆角弧内的部分变多，
- *   即顶部/底部各多裁掉约 1px；意图不变（滚动条只该出现在直边段），
- *   但这一条是从数值推出来的，**实施后需要目检**侧栏卡片的滚动条两端。
+ * - `overflow-hidden`：把列表的滚动条裁在圆角内（卡圆角 12px、面板内缩 0、滚动条宽 5px）。
+ *   圆角从 8px 提到 12px 后，滚动条落在圆角弧内的部分变多，即顶部/底部各多裁掉约 1px；
+ *   意图不变（滚动条只该出现在直边段），但这一条是从数值推出来的，
+ *   **实施后需要目检**侧栏卡片的滚动条两端。
  */
-const card_class_name = `flex ${subject_row_height_class_name} flex-col overflow-hidden rounded-surface border border-border bg-background`;
+const card_class_name = "flex flex-col overflow-hidden rounded-surface border border-border bg-background";
 
 /**
  * 浮动态：卡片相对槽位绝对定位，向下浮在后续行之上，后续主体**不动**。
@@ -87,17 +123,22 @@ const card_class_name = `flex ${subject_row_height_class_name} flex-col overflow
  * `absolute` + `inset-x-0 top-0` 与槽位同宽同位；`z-20` 抬到后续行之上；
  * `shadow-lg` 是它「压着别人」的唯一提示。
  */
-export const subject_item_floating_class_name = `absolute inset-x-0 top-0 z-20 ${card_class_name} shadow-lg`;
+export function subject_item_floating_class_name(multi_line: boolean): string {
+  return `absolute inset-x-0 top-0 z-20 ${subject_row_height_class_name(multi_line)} ${card_class_name} shadow-lg`;
+}
 
-/**
- * 嵌入态：卡片就是这一行在列表里的盒子，占自己的高度，后续主体被推开。
- *
- * 与浮动共用同一个盒子，只是回到文档流、去掉阴影——它没有浮在谁上面。
- */
+/** 嵌入态：卡片就是这一行在列表里的盒子，占自己的高度，后续主体被推开。 */
 export const subject_item_docked_class_name = card_class_name;
 
-/** 展开态的行内容：卡片里的第一段，排版与折叠态一致，高度退回卡片内容盒。 */
-export const subject_row_class_name = `${row_layout_class_name} ${subject_row_expanded_height_class_name} shrink-0`;
+/**
+ * 展开态的行内容：卡片里的第一段。
+ *
+ * 排版与折叠态同源（`sidebar_row_layout_class_name`），但**不带边框**——
+ * 那 1px 已经在卡片上了，行再画一次内容盒就会多 2px。
+ */
+export function subject_row_class_name(multi_line: boolean): string {
+  return `${sidebar_row_layout_class_name} ${subject_row_expanded_height_class_name(multi_line)} shrink-0`;
+}
 
 /**
  * 槽位：只在**浮动**时出现，占住这一行在列表里的位置（后面的主体不会因浮动而移动）。
@@ -105,24 +146,38 @@ export const subject_row_class_name = `${row_layout_class_name} ${subject_row_ex
  * 与折叠态的行同高，因此浮动前后列表的其余部分完全不动。
  * 嵌入态不需要它——卡片自己就占着那一行。
  */
-export const subject_slot_class_name = `relative ${subject_row_height_class_name}`;
+export function subject_slot_class_name(multi_line: boolean): string {
+  return `relative ${subject_row_height_class_name(multi_line)}`;
+}
 
 /**
- * 卡片下半（会话列表）的容器。
+ * 卡片下半的容器（会话列表）。
  *
- * **不带内边距**：内边距属于列表内容，不属于滚动容器。
+ * **不带左右内边距**：内边距属于行与面板，不属于滚动容器。
  *
  * 滚动条的横向位置由滚动容器自身的盒子决定，所以任何放在这一层的内边距都会把它从卡片右缘向内推开，
  * 看上去像悬浮在列表中间。正确分层是：
  *
- * ```
- * [滚动容器]      铺满卡片宽度、无内边距  ← 滚动条因此贴着卡片右缘
- *   └ [列表内边距] p-1                    ← 内容的内缩在这里
+ * ```text
+ * [滚动容器]  铺满卡片宽度、无内边距   ← 滚动条因此贴着卡片右缘
+ *   └ [面板]  p-1（左右 4）              ← 行块（选中/hover 底色）缩回卡片内 4
+ *       └ [行] px-1（左右 4）           ← 文字再内缩 4，与卡片外的行同一条文字线
  * ```
  *
- * 即：**内边距要给内容，不要给滚动容器**。（见 SubjectConversationsPanel）
+ * 即：**内边距要给内容，不要给滚动容器**。
  */
 export const subject_card_panel_class_name = "shrink-0";
+
+/**
+ * 卡片下半的内边距：左右上下各 4。
+ *
+ * 它和行自己的内边距（也是 4）共同凑出卡片外那一档 8——
+ * 因此行块（底色）缩回卡片内 4、文字离底色左缘也只有 4，而文字线仍然与卡片外的行同位。
+ * 把这一项改成 0（让行自己背全部 8px）会得到「底色贴边 + 内容离边很远」的双层皮。
+ *
+ * 上下各 4 是重构前的原值（`p-1`）：列表与上方主体行之间留一段呼吸。
+ */
+export const subject_panel_padding_class_name = "p-1";
 
 /**
  * 嵌入态里直接列出的会话条数上限；超出的部分收进「全部对话」菜单。
@@ -135,7 +190,8 @@ export const subject_card_panel_class_name = "shrink-0";
  * 多显示几条不多占任何人的位置；现在靠 `max-h-80` 滚动兜住。
  *
  * 4 的来历：嵌入式面板本身是「同时盯着几个 Agent」的工作台，真正需要一眼看到的对话
- * 通常在 3~5 条；4 条 + 新建行 + 更多行 ≈ 6 行，是侧栏里一块既看得清又不喧宾夺主的尺寸。
+ * 通常在 3~5 条；4 条 + 新建行 + 更多行 = 6 行 × 32px ≈ 192px，
+ * 是侧栏里一块既看得清又不喧宾夺主的尺寸。
  */
 export const docked_visible_session_count = 4;
 
@@ -151,10 +207,8 @@ export const docked_visible_session_count = 4;
  * 等于把上限这件事泄漏给了用户。
  */
 export function split_visible_sessions<T>(conversations: readonly T[], max_visible?: number): {
-  /** 直接列在面板里的。 */
-  visible: readonly T[];
-  /** 是否需要用「全部对话」菜单兜住剩下的。 */
-  has_more: boolean;
+  /** 直接列在面板里的。 */ visible: readonly T[];
+  /** 是否需要用「全部对话」菜单兜住剩下的。 */ has_more: boolean;
 } {
   if (max_visible === undefined || conversations.length <= max_visible) {
     return { visible: conversations, has_more: false };

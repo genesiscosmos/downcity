@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { sidebar_content_class_name } from "./sidebarRow";
 
 /** Sidebar Panel 属性。 */
 interface SidebarPanelProps {
@@ -24,7 +25,12 @@ interface SidebarContentProps {
   class_name?: string;
 }
 
-/** 统一 Sidebar Panel 的滚动、尺寸约束与基础间距。 */
+/**
+ * 统一 Sidebar Panel 的滚动、尺寸约束与基础间距。
+ *
+ * 左右内边距取自契约（`sidebar_content_class_name`）而不是写 `px-2`：它是三条文字线的第一段，
+ * 写死的话改契约时它不会跟着动，整个侧栏的文字会静默错开。
+ */
 export function SidebarContent({ children, class_name }: SidebarContentProps) {
-  return <div data-sidebar-scrollable="true" className={cn("sidebar-body-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2", class_name)}>{children}</div>;
+  return <div data-sidebar-scrollable="true" className={cn("sidebar-body-scroll min-h-0 flex-1 overflow-y-auto pb-2", sidebar_content_class_name, class_name)}>{children}</div>;
 }

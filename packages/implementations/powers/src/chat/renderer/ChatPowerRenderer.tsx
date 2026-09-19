@@ -13,7 +13,7 @@ const create_route = (provider: ChatProvider) => ({ view: "create", provider });
 /** Chat Power Renderer 定义。 */
 export const CHAT_POWER_RENDERER = define_power_renderer({
   sidebar: function ChatPowerSidebar({ power, navigation, ui }) {
-    const { Callout, LoadingState, Sidebar, SidebarCreateMenu, SidebarItem, SidebarSection, Status } = ui.components;
+    const { Callout, LoadingState, Sidebar, SidebarCreateMenu, SidebarItem, SidebarSection, SidebarSubText, Status } = ui.components;
     const [snapshot, set_snapshot] = useState<ChatDesktopSnapshot>();
     const [error, set_error] = useState("");
     const selected_account_id = read_route(navigation.route.account_id);
@@ -46,7 +46,7 @@ export const CHAT_POWER_RENDERER = define_power_renderer({
           on_select={() => navigation.navigate(account_route(account.account_id))}
         />)}
         {!snapshot ? <LoadingState label="正在读取 Channels…" /> : null}
-        {snapshot && snapshot.accounts.length === 0 ? <div className="px-2 py-2 text-[11px] text-muted-foreground/60">还没有 Bot Account</div> : null}
+        {snapshot && snapshot.accounts.length === 0 ? <SidebarSubText>还没有 Bot Account</SidebarSubText> : null}
       </SidebarSection>
       {error ? <Callout tone="danger">{error}</Callout> : null}
     </Sidebar>;
@@ -211,10 +211,10 @@ export const CHAT_POWER_RENDERER = define_power_renderer({
                   <img
                     src={feishu_registration.qr_data_url}
                     alt="飞书扫码创建应用"
-                    className="h-44 w-44 rounded-lg bg-white p-2"
+                    className="size-44 shrink-0 rounded-item bg-white p-2 object-contain"
                   />
-                  <div className="text-[0.8125rem] text-foreground">用飞书扫描二维码，并在手机上确认创建</div>
-                  <div className="max-w-md break-all text-center text-[0.6875rem] leading-5 text-muted-foreground">{feishu_registration.verification_url}</div>
+                  <div className="text-xs text-foreground">用飞书扫描二维码，并在手机上确认创建</div>
+                  <div className="max-w-md break-all text-center text-2xs leading-4 text-muted-foreground">{feishu_registration.verification_url}</div>
                 </div>
                 <Row label="操作" trailing={<Inline><Button disabled={busy} on_click={() => void cancel_feishu_registration()}>取消</Button><Button disabled={busy} on_click={() => void start_feishu_registration()}>重新生成</Button></Inline>} />
               </Group>

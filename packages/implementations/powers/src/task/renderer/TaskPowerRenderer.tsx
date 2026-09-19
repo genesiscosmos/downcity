@@ -15,7 +15,7 @@ import { TaskEditor } from "@/task/renderer/TaskEditor.js";
 /** Task Power Renderer 定义。 */
 export const TASK_POWER_RENDERER = define_power_renderer({
   sidebar: function TaskPowerSidebar({ power, navigation, notifications, ui }) {
-    const { Callout, ItemMenu, LoadingState, Sidebar, SidebarSection, SidebarTreeItem } = ui.components;
+    const { Callout, ItemMenu, LoadingState, Sidebar, SidebarSection, SidebarSubText, SidebarTreeItem } = ui.components;
     const [snapshot, set_snapshot] = useState<TaskMainviewSnapshot>();
     const [loaded_revision, set_loaded_revision] = useState(-1);
     const [expanded_task_keys, set_expanded_task_keys] = useState<Set<string>>(new Set());
@@ -23,6 +23,8 @@ export const TASK_POWER_RENDERER = define_power_renderer({
     const [loading_task_keys, set_loading_task_keys] = useState<Set<string>>(new Set());
     const [error, set_error] = useState("");
     const [busy_task_key, set_busy_task_key] = useState("");
+    /** 已经自动展开过的 Task；见下面那个 effect 的说明。 */
+    const auto_expanded_ref = useRef("");
     const task_title = read_route(navigation.route.task_title);
     const view = read_route(navigation.route.view);
 
@@ -50,6 +52,16 @@ export const TASK_POWER_RENDERER = define_power_renderer({
       if (!snapshot || !task_title) return;
       const selected_task = snapshot.tasks.find((task) => task.title === task_title);
       if (!selected_task) return;
+      // 只在**选中项变化时**自动展开一次。
+      //
+      // 早先这里只看 `!expanded_task_keys.has(task_title)`，而依赖里带着 `expanded_task_keys`：
+      // 用户收起当前选中的 Task 时，这个 effect 会看到“它没展开”→ 立刻又把它展开——
+      // 表现为“这个 Task 折叠不了”，而且只在选中项上出现（其他 Task 能收）。
+      //
+      // 用 ref 记住已经自动展开过哪一个：展开是“跟随选中”的一次性动作，
+      // 不是一个持续成立的不变量（用户有权收起自己正在看的那一项）。
+      if (auto_expanded_ref.current === task_title) return;
+      auto_expanded_ref.current = task_title;
       if (!expanded_task_keys.has(task_title)) void toggle_task(selected_task);
     }, [expanded_task_keys, snapshot, task_title]);
 
@@ -112,12 +124,12 @@ export const TASK_POWER_RENDERER = define_power_renderer({
             <SidebarTreeItem kind="branch" depth={0} label={task.title} trailing={<span className="flex items-center gap-0.5">{notification ? <UnreadDot /> : null}{task_menu(task)}</span>} active={task.title === task_title && view !== "run"} expanded={task_expanded} on_toggle={() => void toggle_task(task)} on_select={() => navigation.navigate(task_definition_route(task.title))} />
             {task_expanded ? <div className="flex flex-col gap-0.5">
               {runs.map((run) => <SidebarTreeItem key={run.timestamp} kind="leaf" depth={1} label={<span className="flex min-w-0 items-center gap-1.5"><span className="truncate">{format_run_time(run.started_at)}</span>{find_task_notification(notifications, task, run.timestamp) ? <UnreadDot /> : null}</span>} trailing={run.status === "running" ? "运行中" : undefined} active={task.title === task_title && view === "run" && read_route(navigation.route.run_timestamp) === run.timestamp} on_select={() => navigation.navigate(task_run_route(task.title, run.timestamp))} />)}
-              {loading_task_keys.has(task.title) ? <div className="py-1 pl-9 text-[10px] text-muted-foreground/55">正在读取…</div> : null}
-              {!loading_task_keys.has(task.title) && runs.length === 0 ? <div className="py-1 pl-9 text-[10px] text-muted-foreground/55">暂无执行记录</div> : null}
+              {loading_task_keys.has(task.title) ? <SidebarSubText indent={1}>正在读取…</SidebarSubText> : null}
+              {!loading_task_keys.has(task.title) && runs.length === 0 ? <SidebarSubText indent={1}>暂无执行记录</SidebarSubText> : null}
             </div> : null}
           </div>;
         })}
-        {!snapshot.tasks.length ? <div className="px-2 py-1 text-[10px] text-muted-foreground/55">还没有 Task</div> : null}
+        {!snapshot.tasks.length ? <SidebarSubText>还没有 Task</SidebarSubText> : null}
       </SidebarSection>
       {snapshot.issues.length > 0 ? <Callout tone="warning">{snapshot.issues.length} 个 Task 定义损坏，已停止调度；请在 Task 主页面处理。</Callout> : null}
       {error ? <Callout tone="danger">{error}</Callout> : null}
