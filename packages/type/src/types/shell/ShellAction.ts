@@ -7,7 +7,6 @@
  */
 
 import type { ShellExecutionTarget } from "./Shell.js";
-import type { SessionApprovalMode } from "../session/SessionInteraction.js";
 
 export type ShellSessionStatus =
   | "starting"
@@ -17,21 +16,13 @@ export type ShellSessionStatus =
   | "killed";
 
 /**
- * host 执行审批状态。
- *
- * 审批没有超时：它只能由用户裁定，或随 Turn/Session 结束而终止。
- */
-export type ShellApprovalStatus = "approved" | "denied";
-
-/**
- * shell approval 模式。
+ * shell host 执行审批状态。
  *
  * 说明（中文）
- * - 与 `SessionApprovalMode` 同一枚举；审批模式只有一处事实源，见 Session 审批运行时。
- * - `ask` 是默认模式，host 操作前需要用户审批。
- * - `always-allow` 只作用于当前 Session，会自动通过本应进入审批队列的 host 请求。
+ * - 这是 Shell 快照上的审计字段，与 Interaction 的终态枚举不同：它只记录 host 操作最终是否放行。
+ * - 审批没有超时：它只能由用户裁定，或随 Turn/Session 结束而终止。
  */
-export type ShellApprovalMode = SessionApprovalMode;
+export type ShellApprovalStatus = "approved" | "denied";
 
 /**
  * shell host 执行审批来源工具。
