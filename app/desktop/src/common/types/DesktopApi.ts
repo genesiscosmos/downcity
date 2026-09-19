@@ -513,20 +513,6 @@ export interface DesktopWorkspaceFile {
   modified_at: number;
 }
 
-/** Workspace 文件树中的一个直接子节点。 */
-export interface DesktopWorkspaceEntry {
-  /** 相对于 Workspace 根目录的规范化路径；统一使用正斜杠。 */
-  relative_path: string;
-  /** 节点的文件或目录名称。 */
-  name: string;
-  /** 节点是否为可继续展开的目录。 */
-  kind: "directory" | "file";
-  /** 文件大小，单位为字节；目录不提供该字段。 */
-  size?: number;
-  /** 节点最近修改时间戳，单位为毫秒。 */
-  modified_at: number;
-}
-
 /** Workspace 文本文件的只读内容。 */
 export interface DesktopWorkspaceTextFile {
   /** 相对于 Workspace 根目录的规范化路径。 */
@@ -857,8 +843,6 @@ export interface DesktopApi {
     remove(workspace_id: string): Promise<boolean>;
     /** 将内容写入 Workspace 根目录 README.md。 */
     write_readme(workspace_id: string, content: string): Promise<DesktopWorkspaceSummary>;
-    /** 列出 Workspace 指定目录的直接子节点。 */
-    list_entries(workspace_id: string, relative_path?: string): Promise<DesktopWorkspaceEntry[]>;
     /** 读取 Workspace 中的 UTF-8 文本文件用于只读预览。 */
     read_text_file(workspace_id: string, relative_path: string): Promise<DesktopWorkspaceTextFile>;
   };

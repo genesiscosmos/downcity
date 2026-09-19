@@ -413,7 +413,7 @@ test("三个变体各有归属，且用途与设计一致", () => {
   expect_variant("PowerSidebar.tsx", "agent", "Power 条目与 Chat 主体行同一档");
   expect_variant("SettingsSidebarPanel.tsx", "settings", "设置条目比 default 高一档");
   expect_variant("SubjectConversationsPanel.tsx", "default", "会话行是 default");
-  expect_variant("WorkspaceTree.tsx", "default", "目录树是 default，带 32 槽");
+  expect_variant("WorkspaceSessionList.tsx", "default", "Workspace 会话列表是 default，带 32 槽");
   // 注入给 Power 的两个组件也要落在同一套变体上，否则同一个 Power 在两处会长得不一样。
   const injected = fs.readFileSync(path.join(renderer_root, "features/power/lib/PowerRendererComponents.tsx"), "utf8");
   assert.ok(/variant="agent"/.test(injected), "注入的 SidebarItem 不是 agent 变体：它会与 Power 目录页分叉");

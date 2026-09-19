@@ -37,6 +37,26 @@ export function chat_row_status_label_key(status: ChatRowAttentionStatus): strin
 }
 
 /**
+ * 从一组行状态里挑出最需要被看到的那一个；全为 idle 时返回 idle。
+ *
+ * 用于**父行汇总它下面的子行**：Workspace 根行在折叠时也要能说“这一层里有事正在发生”。
+ * 汇总必须用与子行完全相同的取值，否则同一时刻子行在转圈而父行安静。
+ *
+ * 顺序就是这一条：**等待你 > 正在推进 > 失败 > 有新结果 > idle**。
+ * 它的依据是 `resolve_chat_row_status` 的那条规则：实时优先于未读。
+ * 「等待你」与「正在推进」是此刻正在发生的事（前者更急，与
+ * `chat_runtime_projection.is_more_urgent` 同序）；后面两项只是已经落地的结果。
+ *
+ * 写成一个显式数组而不是一张新的排名表：只有五个取值，顺序就是它的全部含义。
+ */
+const chat_row_status_order: readonly ChatRowStatus[] = ["action_required", "working", "failed", "completed", "idle"];
+
+/** 按上面的顺序汇总一组行状态。 */
+export function pick_chat_row_status(statuses: readonly ChatRowStatus[]): ChatRowStatus {
+  return chat_row_status_order.find((candidate) => statuses.includes(candidate)) ?? "idle";
+}
+
+/**
  * 状态在行描述位要使用的文案 key；不占用描述位时返回 null。
  *
  * 只有解释「此刻为什么是这样」的状态才值得替换数据描述：正在推进与等待用户行动属于这一类；

@@ -7,18 +7,29 @@ import { RowMenuButton } from "@/components/RowMenuButton";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { use_translation } from "@/locales/i18n";
+import type { ChatRowStatus } from "@/features/chat/lib/chat_row_status";
 import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Workspace 根行操作菜单属性。 */
 interface WorkspaceRowMenuProps {
   /** 当前 Workspace。 */
   workspace: DesktopWorkspaceSummary;
+  /**
+   * 这个 Workspace 下面会话的汇总状态。
+   *
+   * 它直接落在**菜单入口按钮**上，与会话行完全同一套做法（`RowMenuButton` 的 `status`）：
+   * 需要用户注意的状态常显、其余随行 hover / 聚焦 / 展开显形，
+   * 而图标本身（旋转 / 警告 / 圆点）已经把状态说清了，不需要第二个图形。
+   *
+   * 行右端因此仍然只有**一个**交互目标，而不是“状态图标 + 菜单”两个。
+   */
+  status?: ChatRowStatus;
   /** 从 Registry 移除 Workspace。 */
   on_remove(workspace_id: string): Promise<void>;
 }
 
 /** 提供复制路径、Finder 打开和移除 Workspace，并闭合移除确认状态。 */
-export function WorkspaceRowMenu({ workspace, on_remove }: WorkspaceRowMenuProps) {
+export function WorkspaceRowMenu({ workspace, status, on_remove }: WorkspaceRowMenuProps) {
   const translate_common = use_translation("common");
   const translate = use_translation("resources");
   const [copied, set_copied] = useState(false);
@@ -47,7 +58,7 @@ export function WorkspaceRowMenu({ workspace, on_remove }: WorkspaceRowMenuProps
 
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger asChild><RowMenuButton label={translate("workspace.item_actions", { name: workspace.name })} /></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><RowMenuButton status={status} label={translate("workspace.item_actions", { name: workspace.name })} /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={5} onClick={(event) => event.stopPropagation()}>
         <DropdownMenuItem onClick={() => void copy_path()}><TbCopy /><span>{translate(copied ? "workspace.copied" : "workspace.copy_path")}</span></DropdownMenuItem>
         <DropdownMenuItem onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbExternalLink /><span>{translate("workspace.open_finder")}</span></DropdownMenuItem>

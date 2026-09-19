@@ -57,7 +57,6 @@ import type {
   DesktopSessionSummary,
   DesktopWorkspaceSummary,
   DesktopWorkspaceFile,
-  DesktopWorkspaceEntry,
   DesktopWorkspaceTextFile,
   DesktopChatFileInput,
   DesktopCreateGroupInput,
@@ -96,7 +95,6 @@ import { to_desktop_workspace_summary } from "./WorkspaceSummary.js";
 const session_model_settings_key = "desktop.session-models";
 const session_reasoning_settings_key = "desktop.session-reasoning";
 const workspace_preview_max_bytes = 2 * 1024 * 1024;
-const hidden_workspace_entry_names = new Set([".git", ".DS_Store", "node_modules", "dist", "build", "out"]);
 
 /** 解析并约束模型返回的 Agent 草稿。 */
 function parse_agent_draft(text: string): DesktopAgentDraft {
@@ -1012,30 +1010,6 @@ export class AgentController {
         return { relative_path: entry.name, filename: entry.name, modified_at: file_stat.mtimeMs };
       }));
     return files.sort((left, right) => right.modified_at - left.modified_at || left.relative_path.localeCompare(right.relative_path));
-  }
-
-  /** 列出 Workspace 内一个目录的直接子节点，目录树由 Renderer 按需展开。 */
-  async list_workspace_entries(workspace_id: string, relative_path = ""): Promise<DesktopWorkspaceEntry[]> {
-    const { target_path } = await this.resolve_workspace_path(workspace_id, relative_path);
-    const target_stat = await stat(target_path);
-    if (!target_stat.isDirectory()) throw new Error("Workspace path is not a directory");
-    const entries = await readdir(target_path, { withFileTypes: true });
-    const visible_entries = entries.filter((entry) => !entry.name.startsWith(".") && !hidden_workspace_entry_names.has(entry.name));
-    const result = await Promise.all(visible_entries.map(async (entry): Promise<DesktopWorkspaceEntry | undefined> => {
-      if (!entry.isDirectory() && !entry.isFile()) return undefined;
-      const entry_relative_path = path.posix.join(normalize_workspace_relative_path(relative_path), entry.name);
-      const entry_stat = await stat(path.join(target_path, entry.name));
-      return {
-        relative_path: entry_relative_path,
-        name: entry.name,
-        kind: entry.isDirectory() ? "directory" : "file",
-        ...(entry.isFile() ? { size: entry_stat.size } : {}),
-        modified_at: entry_stat.mtimeMs,
-      };
-    }));
-    return result
-      .filter((entry): entry is DesktopWorkspaceEntry => Boolean(entry))
-      .sort((left, right) => Number(left.kind === "file") - Number(right.kind === "file") || left.name.localeCompare(right.name));
   }
 
   /** 读取 Workspace 内的小型 UTF-8 文本文件，供 Desktop 主视图只读预览。 */
