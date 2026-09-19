@@ -9,8 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
 import { LocalFileSystem } from "@downcity/city";
-import { SessionMessages } from "../../agent/bin/session/SessionMessages.js";
-import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";
+import { SessionMessages } from "../../agent/bin/session/messages/SessionMessages.js";
+import { SessionInteractions } from "../../agent/bin/session/messages/SessionInteractions.js";
 
 /** 写入一个完整的标准模型工具调用事件序列。 */
 async function write_tool_call(writer, input) {

@@ -11,7 +11,7 @@ import type { SessionHookContextBlock } from "@downcity/type";
 import type { SessionComposeInput } from "@/types/session/SessionComposer.js";
 import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
 import type { ModelMessage } from "@downcity/type";
-import { build_session_system_blocks } from "@/session/SessionSystem.js";
+import { build_session_system_blocks } from "@/session/input/SessionSystem.js";
 
 /** 把当前 Step 生效的 instruction 与 Power blocks 组装成 system blocks。 */
 export async function build_composer_system_blocks(

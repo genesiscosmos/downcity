@@ -13,7 +13,7 @@ import {
   read_model_label,
   type RuntimeTool as Tool,
 } from "@downcity/type";
-import { SessionMessages } from "@/session/SessionMessages.js";
+import { SessionMessages } from "@/session/messages/SessionMessages.js";
 import type {
   AgentSessionConfigSnapshot,
   AgentSessionForkInput,
@@ -37,34 +37,34 @@ import type { ListSessionMessagesInput, SessionMessagePage } from "@downcity/typ
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
-import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
+import { SessionEventHub } from "@/session/messages/SessionEventHub.js";
 import {
   create_session_local_state,
   SessionState,
-} from "@/session/SessionState.js";
-import { SessionLoop } from "@/session/SessionLoop.js";
-import { SessionQueue } from "@/session/SessionQueue.js";
+} from "@/session/loop/SessionState.js";
+import { SessionLoop } from "@/session/loop/SessionLoop.js";
+import { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
 import type { SessionHookRuntime } from "@downcity/type";
-import { SessionInteractions } from "@/session/control/SessionInteractions.js";
-import { SessionApprovalRuntime } from "@/session/execution/tools/SessionApprovalRuntime.js";
-import { DefaultSessionComposer } from "@/session/composer/DefaultSessionComposer.js";
+import { SessionInteractions } from "@/session/messages/SessionInteractions.js";
+import { SessionApprovalRuntime } from "@/session/messages/SessionApprovalRuntime.js";
+import { DefaultSessionComposer } from "@/session/input/composer/DefaultSessionComposer.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { generate_id } from "@/utils/Id.js";
 import { nanoid } from "nanoid";
-import { build_session_info } from "@/session/browse/Browse.js";
+import { build_session_info } from "@/session/storage/Browse.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type {
   AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
 } from "@/types/session/SessionMessages.js";
-import { StepInput } from "@/session/StepInput.js";
+import { StepInput } from "@/session/input/StepInput.js";
 import {
   relocate_fork_message_files,
   resolve_session_fork_messages,
 } from "@/session/messages/SessionForkMessageFiles.js";
-import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
+import { create_session_model_request_warning } from "@/session/messages/SessionModelRequestWarning.js";
 import type { SessionContextAdvanceTrigger } from "@/types/session/SessionComposer.js";
 
 /**

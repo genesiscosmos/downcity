@@ -32,9 +32,9 @@ import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/turn/SessionToolExecutionContext.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 import { is_action_result } from "@/types/action/ActionResult.js";
-import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
-import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
-import { resolve_session_power_system_blocks } from "@/session/SessionSystem.js";
+import { create_session_hook_context } from "@/session/loop/SessionTurnContext.js";
+import { SESSION_HOOK_POINTS } from "@/session/input/SessionHookPoints.js";
+import { resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 
 /** 当前 Session 的每步模型输入装配者。 */
 export class StepInput {

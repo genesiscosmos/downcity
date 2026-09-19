@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SessionMessages } from "../bin/session/SessionMessages.js";
+import { SessionMessages } from "../bin/session/messages/SessionMessages.js";
 
 /** 创建支持聚合创建和 expected revision 更新的最小内存 SessionStorage。 */
 function create_fixture(initial_messages = []) {

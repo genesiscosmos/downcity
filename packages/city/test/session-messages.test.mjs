@@ -12,15 +12,15 @@ import path from "node:path";
 import test from "node:test";
 
 import { LocalFileSystem } from "@downcity/city";
-import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";
-import { SessionApprovalRuntime } from "../../agent/bin/session/execution/tools/SessionApprovalRuntime.js";
+import { SessionInteractions } from "../../agent/bin/session/messages/SessionInteractions.js";
+import { SessionApprovalRuntime } from "../../agent/bin/session/messages/SessionApprovalRuntime.js";
 import {
   normalize_session_user_parts,
   SessionMessages,
-} from "../../agent/bin/session/SessionMessages.js";
+} from "../../agent/bin/session/messages/SessionMessages.js";
 import { session_messages_to_model_messages } from "../../agent/bin/model/messages/SessionModelMessages.js";
 import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
-import { DefaultSessionComposer } from "../../agent/bin/session/composer/DefaultSessionComposer.js";
+import { DefaultSessionComposer } from "../../agent/bin/session/input/composer/DefaultSessionComposer.js";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 
 /** 可让下一次 Assistant 草稿更新失败的测试 Store。 */

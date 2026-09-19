@@ -5,8 +5,8 @@
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SessionLoop } from "../bin/session/SessionLoop.js";
-import { SessionQueue } from "../bin/session/SessionQueue.js";
+import { SessionLoop } from "../bin/session/loop/SessionLoop.js";
+import { SessionQueue } from "../bin/session/loop/SessionQueue.js";
 
 /** 创建只覆盖已完成幂等请求读取路径的最小 SessionLoop。 */
 function create_loop(request_id) {

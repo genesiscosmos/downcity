@@ -9,7 +9,7 @@ import { nanoid } from "nanoid";
 import {
   build_session_turn_file_diff,
   build_session_turn_file_diff_summary,
-} from "@/session/messages/SessionTurnFileDiffBuilder.js";
+} from "@/session/loop/SessionTurnFileDiffBuilder.js";
 import { SESSION_TURN_FILE_DIFF_DATA_TYPE } from "@/session/messages/SessionTurnFileDiffData.js";
 import type {
   AppendSessionTurnFileDiffInput,

@@ -19,7 +19,7 @@ import { restore_session_origin } from "@downcity/type";
 import type { FileSystem, StorageDatabaseLocation } from "@downcity/type";
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
 import { normalize_session_metadata, resolve_system_timezone } from "@/session/storage/Metadata.js";
-import { resolve_session_message_preview } from "@/session/preview/SessionMessagePreview.js";
+import { resolve_session_message_preview } from "@/session/storage/SessionMessagePreview.js";
 import {
   decode_session_message,
   encode_session_message_row,

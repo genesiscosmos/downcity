@@ -10,7 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { create_instruction_system_blocks } from "../bin/agent/AgentInstructions.js";
-import { build_session_system_blocks } from "../bin/session/SessionSystem.js";
+import { build_session_system_blocks } from "../bin/session/input/SessionSystem.js";
 
 test("instruction blocks keep Downcity core after custom instruction", () => {
   const blocks = create_instruction_system_blocks(

@@ -16,18 +16,18 @@ import {
   normalize_session_title,
   resolve_system_timezone,
 } from "@/session/storage/Metadata.js";
-import { ensure_session_title } from "@/session/SessionTitle.js";
+import { ensure_session_title } from "@/session/loop/SessionTitle.js";
 import type {
   AgentSessionConfigSnapshot,
 } from "@/types/agent/SessionTypes.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import { generate_id } from "@/utils/Id.js";
 import type { Logger } from "@/utils/logger/Logger.js";
-import { SessionTitleTask } from "@/session/runtime/SessionTitleTask.js";
+import { SessionTitleTask } from "@/session/loop/SessionTitleTask.js";
 import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionApprovalMode } from "@downcity/type";
-import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
+import { create_session_model_request_warning } from "@/session/messages/SessionModelRequestWarning.js";
 
 /** 创建单个 Session 唯一的可变内存状态。 */
 export function create_session_local_state(): SessionLocalState {

@@ -12,7 +12,7 @@ import type { SessionTurnExecutionResult } from "@/types/session/SessionExecutio
 import type { ActiveSessionTurnState } from "@/types/session/SessionLoop.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 import type { SessionTurnCommittedHookValue } from "@downcity/type";
-import { SESSION_HOOK_POINTS } from "@/session/SessionHookPoints.js";
+import { SESSION_HOOK_POINTS } from "@/session/input/SessionHookPoints.js";
 
 /**
  * Turn 被用户中止时的规范错误文本。

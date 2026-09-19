@@ -5,7 +5,7 @@
  * SessionMessages 持久化。任何终态都必须先提交 canonical Message，再兑现等待 Promise。
  */
 
-import type { SessionMessages } from "@/session/SessionMessages.js";
+import type { SessionMessages } from "@/session/messages/SessionMessages.js";
 import type {
   RespondSessionInteractionInput,
   SessionInteractionHandle,

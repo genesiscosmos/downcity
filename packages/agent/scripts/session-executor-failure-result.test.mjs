@@ -8,7 +8,7 @@ import { MockModelClient } from "./ModelClientMock.mjs";
 
 import { SessionExecutor } from "../bin/session/runner/SessionExecutor.js";
 import { ContextRetry } from "../bin/session/runner/ContextRetry.js";
-import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
+import { create_session_turn_context } from "../bin/session/loop/SessionTurnContext.js";
 
 function create_turn_context(overrides = {}) {
   return create_session_turn_context({

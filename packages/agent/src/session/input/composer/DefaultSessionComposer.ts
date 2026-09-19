@@ -24,25 +24,25 @@ import {
   build_composer_system_blocks,
   inject_power_context,
   to_system_messages,
-} from "@/session/composer/ComposerAssembly.js";
+} from "@/session/input/composer/ComposerAssembly.js";
 import {
   initialize_checkpoint_schema,
   insert_checkpoint,
   read_latest_checkpoint,
-} from "@/session/composer/AdaptiveContextCheckpoint.js";
+} from "@/session/input/composer/AdaptiveContextCheckpoint.js";
 import {
   candidate_to_summary_text,
   collect_stable_parts,
   compare_position,
   select_compact_parts,
   slice_messages_after_checkpoint,
-} from "@/session/composer/AdaptiveContextParts.js";
+} from "@/session/input/composer/AdaptiveContextParts.js";
 import {
   build_initial_session_summary_prompt,
   build_updated_session_summary_prompt,
   CONTEXT_SUMMARY_MAX_OUTPUT_TOKENS,
   CONTEXT_SUMMARY_SYSTEM_PROMPT,
-} from "@/session/composer/ContextSummaryPrompts.js";
+} from "@/session/input/composer/ContextSummaryPrompts.js";
 
 /** 基于 Part 级 checkpoint 的默认 Composer。 */
 export class DefaultSessionComposer implements SessionComposer {

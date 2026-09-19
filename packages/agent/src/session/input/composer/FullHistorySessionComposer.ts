@@ -15,7 +15,7 @@ import {
   build_composer_system_blocks,
   inject_power_context,
   to_system_messages,
-} from "@/session/composer/ComposerAssembly.js";
+} from "@/session/input/composer/ComposerAssembly.js";
 
 /** 直接投影全部 canonical history 的 Composer。 */
 export class FullHistorySessionComposer implements SessionComposer {

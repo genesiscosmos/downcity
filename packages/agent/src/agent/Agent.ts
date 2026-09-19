@@ -29,15 +29,15 @@ import { Logger } from "@/utils/logger/Logger.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
 import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
-import { EMPTY_SESSION_HOOKS } from "@/session/SessionHooks.js";
+import { EMPTY_SESSION_HOOKS } from "@/session/input/SessionHooks.js";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import {
   build_session_system_blocks,
   resolve_session_power_system_blocks,
-} from "@/session/SessionSystem.js";
-import { create_session_hook_context } from "@/session/runtime/SessionTurnContext.js";
+} from "@/session/input/SessionSystem.js";
+import { create_session_hook_context } from "@/session/loop/SessionTurnContext.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 
 /** SDK Agent 主体。 */

@@ -16,7 +16,7 @@ import type {
   SessionApprovalMode,
 } from "@downcity/type";
 import { SESSION_APPROVAL_RESPONSE_SCHEMA } from "@downcity/type";
-import type { SessionInteractions } from "@/session/control/SessionInteractions.js";
+import type { SessionInteractions } from "@/session/messages/SessionInteractions.js";
 import type {
   SessionApprovalHandle,
   SessionApprovalPort,

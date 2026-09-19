@@ -9,7 +9,7 @@ import path from "node:path";
 import test from "node:test";
 import { LocalFileSystem } from "@downcity/city";
 import { LocalSessionDataStore } from "../../agent/bin/session/storage/LocalSessionDataStore.js";
-import { SessionMessages } from "../../agent/bin/session/SessionMessages.js";
+import { SessionMessages } from "../../agent/bin/session/messages/SessionMessages.js";
 
 async function create_harness() {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-attachment-"));

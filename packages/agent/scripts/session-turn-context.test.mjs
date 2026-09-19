@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
+import { create_session_turn_context } from "../bin/session/loop/SessionTurnContext.js";
 
 test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async () => {
   let commit_count = 0;

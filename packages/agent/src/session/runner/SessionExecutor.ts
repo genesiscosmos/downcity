@@ -58,7 +58,7 @@ import type { SessionAgentMessagePart } from "@downcity/type";
 import { SESSION_APPROVAL_RESPONSE_SCHEMA } from "@downcity/type";
 import { create_session_agent_content_part } from "@/session/messages/SessionAgentContent.js";
 import { generate_id } from "@/utils/Id.js";
-import { TURN_STOPPED_MESSAGE } from "@/session/runtime/SessionTurnCompletion.js";
+import { TURN_STOPPED_MESSAGE } from "@/session/loop/SessionTurnCompletion.js";
 
 /** 已经停止的 Turn 不再产出模型请求。 */
 export interface SessionExecutorOptions {

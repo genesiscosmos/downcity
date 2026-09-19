@@ -5,8 +5,8 @@
  * Executor，避免 Turn 结果提交反向理解调度过程。
  */
 
-import type { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
-import type { SessionMessages } from "@/session/SessionMessages.js";
+import type { SessionEventHub } from "@/session/messages/SessionEventHub.js";
+import type { SessionMessages } from "@/session/messages/SessionMessages.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 
 /** Turn 收口函数的稳定依赖。 */

@@ -28,8 +28,8 @@ import {
 } from "@/group/GroupDispatchRuntime.js";
 import type { GroupDispatchResult } from "@/types/group/GroupDispatch.js";
 import { normalize_session_title } from "@/session/storage/Metadata.js";
-import { generate_session_title } from "@/session/SessionTitle.js";
-import { SessionTitleTask } from "@/session/runtime/SessionTitleTask.js";
+import { generate_session_title } from "@/session/loop/SessionTitle.js";
+import { SessionTitleTask } from "@/session/loop/SessionTitleTask.js";
 
 const max_auto_dispatch_count = 32;
 

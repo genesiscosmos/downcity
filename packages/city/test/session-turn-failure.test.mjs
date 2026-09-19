@@ -8,17 +8,17 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { SessionInteractions } from "../../agent/bin/session/control/SessionInteractions.js";
-import { SessionApprovalRuntime } from "../../agent/bin/session/execution/tools/SessionApprovalRuntime.js";
+import { SessionInteractions } from "../../agent/bin/session/messages/SessionInteractions.js";
+import { SessionApprovalRuntime } from "../../agent/bin/session/messages/SessionApprovalRuntime.js";
 import { SqliteSessionStorage } from "../../agent/bin/session/storage/SqliteSessionStorage.js";
 import {
   create_workspace_file_mutation_effect,
 } from "@downcity/type/workspace";
 import { LocalFileSystem } from "@downcity/city";
-import { SessionMessages } from "../../agent/bin/session/SessionMessages.js";
-import { SessionEventHub } from "../../agent/bin/session/runtime/SessionEventHub.js";
-import { SessionLoop } from "../../agent/bin/session/SessionLoop.js";
-import { SessionQueue } from "../../agent/bin/session/SessionQueue.js";
+import { SessionMessages } from "../../agent/bin/session/messages/SessionMessages.js";
+import { SessionEventHub } from "../../agent/bin/session/messages/SessionEventHub.js";
+import { SessionLoop } from "../../agent/bin/session/loop/SessionLoop.js";
+import { SessionQueue } from "../../agent/bin/session/loop/SessionQueue.js";
 
 async function create_turn_harness(execute_turn, session_origin = { type: "chat" }) {
   const session_id = "session-turn-failure-test";

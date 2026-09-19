@@ -57,10 +57,10 @@ export type {
 export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStore.js";
 export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { Session } from "./session/Session.js";
-export { SessionHooks, SessionHookScope } from "./session/SessionHooks.js";
+export { SessionHooks, SessionHookScope } from "./session/input/SessionHooks.js";
 export type { SessionOptions } from "./types/session/SessionOptions.js";
 export type { SessionOrigin } from "@downcity/type";
-export { SESSION_HOOK_POINTS } from "./session/SessionHookPoints.js";
+export { SESSION_HOOK_POINTS } from "./session/input/SessionHookPoints.js";
 export type {
   SessionCommittedTurnStatus,
   SessionHookContextBlock,
@@ -128,8 +128,8 @@ export {
   read_session_turn_file_diff_data,
   SESSION_TURN_FILE_DIFF_DATA_TYPE,
 } from "./session/messages/SessionTurnFileDiffData.js";
-export { to_session_message_timeline_events } from "./session/browse/SessionMessageTimeline.js";
-export { SessionAssistantOutputAdapter } from "./session/execution/SessionAssistantOutputAdapter.js";
+export { to_session_message_timeline_events } from "./session/messages/SessionMessageTimeline.js";
+export { SessionAssistantOutputAdapter } from "./session/messages/SessionAssistantOutputAdapter.js";
 export {
   is_session_mutation,
 } from "@downcity/type";
@@ -215,9 +215,9 @@ export type {
 
 // Session 与即时执行集成
 export { SessionExecutor } from "./session/runner/SessionExecutor.js";
-export { DefaultSessionComposer } from "./session/composer/DefaultSessionComposer.js";
-export { FullHistorySessionComposer } from "./session/composer/FullHistorySessionComposer.js";
-export { SessionMessages } from "./session/SessionMessages.js";
+export { DefaultSessionComposer } from "./session/input/composer/DefaultSessionComposer.js";
+export { FullHistorySessionComposer } from "./session/input/composer/FullHistorySessionComposer.js";
+export { SessionMessages } from "./session/messages/SessionMessages.js";
 export type {
   AppendExternalSessionAgentMessageInput,
   AppendExternalSessionUserMessageInput,
@@ -242,7 +242,7 @@ export type {
 export type {
   SessionTurnExecutionResult,
 } from "./types/session/SessionExecution.js";
-export { create_session_turn_context } from "./session/runtime/SessionTurnContext.js";
+export { create_session_turn_context } from "./session/loop/SessionTurnContext.js";
 export type {
   SessionTurnContext,
   SessionTurnContextInit,
@@ -287,4 +287,4 @@ export {
 // JSON 基础类型
 export type { JsonObject, JsonPrimitive, JsonValue } from "@downcity/type";
 
-export { resolve_session_id } from "./session/ResolveSessionId.js";
+export { resolve_session_id } from "./utils/ResolveSessionId.js";

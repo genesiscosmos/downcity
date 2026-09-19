@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SessionQueue } from "../bin/session/SessionQueue.js";
+import { SessionQueue } from "../bin/session/loop/SessionQueue.js";
 
 function create_command(name, executed, cancel) {
   return {

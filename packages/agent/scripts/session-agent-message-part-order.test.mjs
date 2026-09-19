@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SessionAgentMessageWriter } from "../bin/session/SessionMessages.js";
+import { SessionAgentMessageWriter } from "../bin/session/messages/SessionMessages.js";
 
 /** 使用最小内存 Recorder 验证 Writer 的 Part 顺序能力。 */
 test("Error Part 在后续 Turn 结果 Data Part 之前写入", async () => {

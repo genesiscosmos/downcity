@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SessionMessages } from "../bin/session/SessionMessages.js";
+import { SessionMessages } from "../bin/session/messages/SessionMessages.js";
 
 function create_messages(store) {
   return new SessionMessages({

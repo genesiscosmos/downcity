@@ -33,7 +33,7 @@ import {
   list_archived_agent_session_summary_page,
   list_agent_session_summary_page,
   read_session_metadata_from_database,
-} from "@/session/browse/Browse.js";
+} from "@/session/storage/Browse.js";
 import type { FileSystem } from "@downcity/type";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
 import type { SessionOrigin } from "@downcity/type";

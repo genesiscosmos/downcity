@@ -9,7 +9,7 @@ import type { ModelStreamEvent } from "@downcity/type";
 import {
   SessionAgentMessageWriter,
   SessionMessages,
-} from "@/session/SessionMessages.js";
+} from "@/session/messages/SessionMessages.js";
 import type { SessionAgentContent } from "@downcity/type";
 import type { SessionAgentMessagePart } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";

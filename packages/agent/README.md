@@ -91,16 +91,23 @@ src/
   - `ExecutionBinding.ts` 负责 Agent 执行目标绑定
 
 - `src/session/`
-  - `Session.ts` 是公开 facade 与 Session 对象装配入口
-  - `SessionState.ts` 管理配置与 metadata
-  - `SessionLoop.ts` 是 Command Queue 的唯一消费者与 Turn 生命周期所有者；Prompt Command 创建或加入 Turn，维护类 Command 在空闲期独立执行
-  - `StepInput.ts` 提供每步模型输入：冻结 system、检查点 env/hook、只读历史与工具绑定
-  - `runner/` 放执行器与其纯逻辑：`SessionExecutor`（模型请求、Tool Loop、上下文推进重试）及上限、决策、诊断模块
-  - `session.db` 是 canonical Message 唯一事实源，`SessionMessages.ts` 负责领域写入、恢复和有界运行态投影
-  - `DefaultSessionComposer.ts` 负责 system/history/tools，并默认使用 Part 级 checkpoint 压缩
-  - `messages/` 放 Assistant 状态转换与 writer、Message codec、Tool effect 投影与结构化文件编辑 Diff
-  - `composer/` 放 Composer 实现与共用组装原语；压缩算法为纯函数，checkpoint 表读写归 Composer 自己
-  - `storage/` 负责 Session SQLite、附件和事务；只使用 AgentStorage，不访问项目 Workspace
+  - 目录分两类：执行链（`loop` → `input` → `runner`）与支撑层（`messages`、`storage`）
+  - `Session.ts` 是公开 facade 与 Session 对象装配入口（顶层）
+  - `loop/` 轮次编排：`SessionLoop`（队列消费与 Turn 生命周期）、`SessionQueue`、
+    `SessionTurnContext`、`SessionTurnCompletion`、`SessionTurnFileDiff`，以及驱动它
+    所需的跨轮配置状态（`SessionState`、`SessionTitle`、`SessionTitleTask`）
+  - `input/` 组装模型输入：`StepInput`（每步输入与冻结 system）、`SessionSystem`、
+    `SessionHooks`、`SessionHookPoints`，以及 `composer/`（Composer 实现、组装原语、
+    压缩算法与 checkpoint 表读写）
+  - `runner/` 发请求与跑工具：`SessionExecutor` 及上限、决策、诊断、错误归一、
+    usage 阈值与上下文重试等纯逻辑
+  - `messages/` 消息领域：`SessionMessages` 领域入口、Assistant 状态转换与 writer、
+    Message codec、Tool effect 投影、文件 Diff、Mutation 广播、用户交互、时间线投影
+    （见目录 README）
+  - `storage/` 持久化与列表读取：Session SQLite、codec、schema、本地存储、附件，
+    以及 `Browse`（列表页轻量状态）与 `SessionMessagePreview`；只使用 AgentStorage，
+    不访问项目 Workspace
+  - `session.db` 是 canonical Message 唯一事实源
   - Session 由 `AgentSessions` 统一持有；Workspace 只作为 `agent.sessions.create({ workspace })` 或 `agent.sessions.get(session_id, origin_type, { workspace })` 的单次执行输入
 
 - `src/group/`
@@ -111,7 +118,7 @@ src/
   - `ModelStepRunner` / `ModelRequestRunner` 负责单步模型请求与重试；`ModelGenerate` 是共享的一次性生成入口
   - `messages/` 负责 Session Message 与 Model Protocol 之间的转换
   - `prompts/` 放默认 core system prompt 资产及相关生成模块
-  - 模型请求与 Tool Loop 的执行编排在 `session/runner/`
+  - 模型请求与 Tool Loop 的执行编排在 `session/runner/`；模型输入组装在 `session/input/`
 
 - `src/plugin/`
   - 只保留 Agent 公开的 Action schedule 与 Plugin 协议辅助

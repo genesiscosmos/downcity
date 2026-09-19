@@ -17,7 +17,7 @@ import test from "node:test";
 import { Agent } from "../../agent/bin/index.js";
 import {
   build_session_turn_file_diff,
-} from "../../agent/bin/session/messages/SessionTurnFileDiffBuilder.js";
+} from "../../agent/bin/session/loop/SessionTurnFileDiffBuilder.js";
 import { Workspace } from "@downcity/city";
 import { create_workspace_file_mutation_effect } from "@downcity/type/workspace";
 

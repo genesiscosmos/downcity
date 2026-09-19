@@ -6,9 +6,9 @@
 
 import type { SessionApprovalPort } from "@/types/turn/SessionTurnContext.js";
 import type { SessionHookRuntime, ShellApprovalGateway } from "@downcity/type";
-import type { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
-import type { SessionMessages } from "@/session/SessionMessages.js";
-import type { SessionState } from "@/session/SessionState.js";
+import type { SessionEventHub } from "@/session/messages/SessionEventHub.js";
+import type { SessionMessages } from "@/session/messages/SessionMessages.js";
+import type { SessionState } from "@/session/loop/SessionState.js";
 import type { AgentSessionTurnResult } from "@/types/sdk/AgentSessionTurn.js";
 import type {
   SessionInteractionLifecycle,
@@ -17,9 +17,9 @@ import type {
 import type {
   SessionContextAdvanceTrigger,
 } from "@/types/session/SessionComposer.js";
-import type { StepInput } from "@/session/StepInput.js";
+import type { StepInput } from "@/session/input/StepInput.js";
 import type { SessionExecutorPort } from "@/session/runner/SessionExecutor.js";
-import type { SessionQueue } from "@/session/SessionQueue.js";
+import type { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionOrigin } from "@downcity/type";

@@ -59,7 +59,7 @@ Session.prompt()
 | `ContextComposer` 的 tools | `Session` 装配 + `SessionComposer.compose()` |
 | `ContextComposer` 的 Step Callback | `SessionLoop` + `StepInput` |
 | `ContextComposer` 的 fallback Assistant | `SessionExecutor` + `ContextAdvanceRetry` |
-| `CompactionComposer` | `SessionComposer.advance_context()` + `session/composer/` 内的算法与派生表 |
+| `CompactionComposer` | `SessionComposer.advance_context()` + `session/input/composer/` 内的算法与派生表 |
 
 统一 Composer 只回答一个策略问题：
 
@@ -100,8 +100,12 @@ types/turn/
   SessionAssistantOutput.ts Turn 的 Assistant 输出端口
   SessionToolExecutionContext.ts  Tool 执行上下文
 
-session/
+session/input/
   StepInput.ts             每步模型输入与冻结 system
+  SessionSystem.ts         默认 system block 组装
+  SessionHooks.ts          Hook 运行类
+  SessionHookPoints.ts     Hook 检查点目录
+  composer/                Composer 实现与压缩算法
 
 session/runner/
   SessionExecutor.ts               模型请求、Tool Loop 与上下文推进重试

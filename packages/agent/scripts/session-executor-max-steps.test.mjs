@@ -11,7 +11,7 @@ import {
   TOOL_LOOP_MAX_STEPS_ERROR_CODE,
   build_max_steps_error_text,
 } from "../bin/session/runner/ToolLoopLimits.js";
-import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
+import { create_session_turn_context } from "../bin/session/loop/SessionTurnContext.js";
 
 const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 };
 

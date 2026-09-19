@@ -12,7 +12,7 @@ import {
   is_context_pressured,
 } from "../bin/session/runner/ContextPressure.js";
 import { SessionExecutor } from "../bin/session/runner/SessionExecutor.js";
-import { create_session_turn_context } from "../bin/session/runtime/SessionTurnContext.js";
+import { create_session_turn_context } from "../bin/session/loop/SessionTurnContext.js";
 
 function create_stream_text_result(text, input_tokens, output_tokens) {
   return {

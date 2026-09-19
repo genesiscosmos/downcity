@@ -9,14 +9,20 @@ Session Runtime 的上位设计规则遵循
 Agent
   └─ AgentSessions                 Session 集合、创建、恢复与归档
        └─ Session                  对外 facade 与单 Session 组合根
-            ├─ SessionState        配置、标题与 Metadata
-            ├─ SessionQueue        有序 Command
-            ├─ SessionLoop         Queue 消费与 Turn 生命周期
-            ├─ StepInput           每步模型输入与冻结 system
-            ├─ SessionMessages     canonical Message 领域规则与运行态投影
-            ├─ SessionInteractions 运行时等待、超时与响应
-            ├─ runner/SessionExecutor       模型请求与 Tool Step Loop
-            └─ SessionEventHub     未来 Mutation 广播
+            │  执行链
+            ├─ loop/              轮次编排
+            │   ├─ SessionLoop     Queue 消费与 Turn 生命周期
+            │   ├─ SessionQueue    有序 Command
+            │   ├─ SessionTurnContext / TurnCompletion / TurnFileDiff
+            │   └─ SessionState / SessionTitle / SessionTitleTask（跨轮配置状态）
+            ├─ input/             组装模型输入
+            │   ├─ StepInput       每步模型输入与冻结 system
+            │   └─ composer/       Composer 实现与压缩算法
+            ├─ runner/            发请求与跑工具
+            │   └─ SessionExecutor 模型请求与 Tool Step Loop
+            │  支撑层
+            ├─ messages/          canonical Message、派生通知与用户交互
+            └─ storage/           持久化与列表读取
 ```
 
 稳定所有权如下：

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { SessionAgentMessageState } from "../bin/session/messages/SessionAgentMessageState.js";
 import { SessionMessageCache } from "../bin/session/messages/SessionMessageCache.js";
-import { SessionMessages } from "../bin/session/SessionMessages.js";
+import { SessionMessages } from "../bin/session/messages/SessionMessages.js";
 
 /** 构造一条含 ready 状态 Tool Part 的流式 Assistant Message fixture。 */
 function create_writer_fixture() {

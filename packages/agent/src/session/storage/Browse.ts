@@ -13,7 +13,7 @@ import type {
   AgentSessionSummaryPage,
 } from "@/types/agent/SessionTypes.js";
 import type { SessionHistoryMeta } from "@/types/store/SessionHistoryMeta.js";
-import { resolve_session_message_preview } from "@/session/preview/SessionMessagePreview.js";
+import { resolve_session_message_preview } from "@/session/storage/SessionMessagePreview.js";
 import {
   get_agent_archived_session_database_path,
   get_agent_archived_sessions_path,

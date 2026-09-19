@@ -24,23 +24,23 @@ import {
   SessionExecutor,
   type SessionExecutorPort,
 } from "@/session/runner/SessionExecutor.js";
-import type { StepInput } from "@/session/StepInput.js";
+import type { StepInput } from "@/session/input/StepInput.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
-import { create_session_turn_context } from "@/session/runtime/SessionTurnContext.js";
-import { SessionEventHub } from "@/session/runtime/SessionEventHub.js";
-import { SessionState } from "@/session/SessionState.js";
+import { create_session_turn_context } from "@/session/loop/SessionTurnContext.js";
+import { SessionEventHub } from "@/session/messages/SessionEventHub.js";
+import { SessionState } from "@/session/loop/SessionState.js";
 import {
   normalize_session_user_parts,
   SessionMessages,
-} from "@/session/SessionMessages.js";
+} from "@/session/messages/SessionMessages.js";
 import type { ShellApprovalGateway } from "@downcity/type";
 import type { SessionApprovalPort } from "@/types/turn/SessionTurnContext.js";
 import type {
   SessionInteractionLifecycle,
   SessionInteractionPort,
 } from "@downcity/type";
-import { SessionAssistantOutputAdapter } from "@/session/execution/SessionAssistantOutputAdapter.js";
-import { SessionQueue } from "@/session/SessionQueue.js";
+import { SessionAssistantOutputAdapter } from "@/session/messages/SessionAssistantOutputAdapter.js";
+import { SessionQueue } from "@/session/loop/SessionQueue.js";
 import { extract_session_message_text } from "@/session/messages/SessionMessageText.js";
 import type {
   ActiveSessionTurnState,
@@ -51,16 +51,16 @@ import type {
   SessionCommand,
   SessionCommandCompletion,
 } from "@/types/session/SessionCommand.js";
-import { create_session_model_request_warning } from "@/session/runtime/SessionModelRequestWarning.js";
+import { create_session_model_request_warning } from "@/session/messages/SessionModelRequestWarning.js";
 import {
   complete_session_turn,
   fail_session_turn,
   TURN_STOPPED_MESSAGE,
-} from "@/session/runtime/SessionTurnCompletion.js";
+} from "@/session/loop/SessionTurnCompletion.js";
 import {
   append_session_turn_file_diff,
   publish_session_turn_file_diff,
-} from "@/session/runtime/SessionTurnFileDiff.js";
+} from "@/session/loop/SessionTurnFileDiff.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 
 const QUEUED_PROMPT_CANCELLED_MESSAGE =
