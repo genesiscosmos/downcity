@@ -601,9 +601,19 @@ export function use_desktop_controller(): DesktopController {
     }
   }, [chat_stream, navigation, settings]);
 
+  /**
+   * 关闭孤儿 Session 的 Workspace 绑定弹窗。
+   *
+   * 输入框在提交时已经清空，而这条路径没有真正发出消息，因此必须把待发送输入还原成草稿；
+   * 否则用户点「取消」会直接丢掉刚写的内容。
+   */
   const clear_session_attach_request = useCallback(() => {
+    const request = session.state_ref.current.session_attach_request;
+    if (request?.pending_input) {
+      composer.set_draft(get_session_key(request.workspace_id, request.agent_id, request.session_id), request.pending_input);
+    }
     session.set_session_attach_request(null);
-  }, [session]);
+  }, [composer, session]);
 
   /** 把孤儿 Session 重新绑定到用户选择的 Workspace，并进入该 Session。 */
   const rebind_session_workspace = useCallback(async (agent_id: string, session_id: string, workspace_id: string) => {

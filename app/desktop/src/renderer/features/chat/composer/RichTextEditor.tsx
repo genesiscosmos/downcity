@@ -14,6 +14,7 @@ import type { RichTextEditorProps } from "@/types/ChatComponents";
 import { create_chat_composer_extensions } from "@/features/chat/composer/editor/chatComposerExtensions";
 import { ChatSlashMenu } from "@/features/chat/composer/editor/ChatSlashMenu";
 import { is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
+import { empty_chat_content } from "@/features/chat/lib/chat_view_defaults";
 import { should_apply_composer_focus } from "@/features/chat/composer/editor/composerFocus";
 import { should_restore_editor_draft } from "@/features/chat/composer/editor/draftSync";
 import { add_chat_reference_listener } from "@/features/chat/composer/editor/chatReferenceEvent";
@@ -169,6 +170,28 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     }
   }
 
+  /**
+   * 输入被发送流程接管后，由编辑器自己同步清空。
+   *
+   * 清空必须发生在这里，不能依赖 composer store 删除草稿后的回灌：草稿写入 store 有 300ms
+   * 防抖，快速输入后立即发送时 store 里根本没有该键，删除不产生任何状态变化，编辑器也就收不到
+   * 清空信号，输入框会留下已经发出去的内容。
+   *
+   * 清空时禁止派发 update，否则「清空」会被当成一次用户输入重新写回 store。
+   */
+  const clear_editor_after_submit = useCallback(() => {
+    const current_editor = editor_ref.current;
+    if (!current_editor) return;
+    current_editor.commands.clearContent(false);
+    // 编辑器此刻的文档就是 store 中该 Session 的文档（键不存在等同于空文档），
+    // 因此记录为本地已发布草稿，避免 store 的删除动作再触发一次无意义的回灌。
+    locally_published_draft_ref.current = empty_chat_content;
+    set_input_empty(true);
+    set_slash_query(undefined);
+    set_file_query(undefined);
+    set_member_query(undefined);
+  }, []);
+
   const submit_message = useCallback(async (mode: ChatSubmitMode = "send") => {
     const current_editor = editor_ref.current;
     if (!current_editor || submitting_ref.current) return;
@@ -178,13 +201,15 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     submitting_ref.current = true;
     try {
       discard_pending_draft();
-      await props_ref.current.send_message(input, mode);
-      current_editor.commands.focus();
+      clear_editor_after_submit();
+      // 发送失败时 store 会把输入还原成草稿，编辑器由 store 回灌恢复；用户可见错误同样由 store 呈现。
+      await props_ref.current.send_message(input, mode).catch(() => undefined);
+      editor_ref.current?.commands.focus();
     } finally {
       submitting_ref.current = false;
       set_submitting(false);
     }
-  }, [discard_pending_draft]);
+  }, [clear_editor_after_submit, discard_pending_draft]);
 
   const editor = useEditor({
     immediatelyRender: false,
