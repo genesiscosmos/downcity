@@ -25,6 +25,7 @@ import type {
   SessionAgentToolPart,
 } from "@downcity/type";
 import { consume_model_stream } from "@/model/ModelStreamConsumer.js";
+import { validate_tool_input } from "@/model/ToolInputValidation.js";
 
 /** 单个工具调用的执行事实。 */
 export interface ModelStepToolCall {
@@ -261,8 +262,23 @@ async function execute_tools(
       });
       continue;
     }
+    // 关键点（中文）：模型输入先按工具自己的 schema 校验，非法输入在审批与执行之前
+    // 就形成结构化失败，不会带着错误类型进入工具实现。
+    const validated = validate_tool_input({
+      tool,
+      tool_name: call.tool_name,
+      input: call.input,
+    });
+    if ("error" in validated) {
+      results.push({
+        ...call,
+        success: false,
+        output: { error: validated.error },
+      });
+      continue;
+    }
     const approved = input.approve_tool
-      ? await input.approve_tool(call, tool)
+      ? await input.approve_tool({ ...call, input: validated.input }, tool)
       : true;
     if (!approved) {
       results.push({
@@ -278,9 +294,10 @@ async function execute_tools(
         messages,
         abort_signal: input.abort_signal,
       };
-      const output = await tool.execute(call.input, options);
+      const output = await tool.execute(validated.input, options);
       results.push({
         ...call,
+        input: validated.input,
         success: !is_structured_tool_failure(output),
         output,
       });

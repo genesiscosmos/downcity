@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { z } from "zod";
 
 import { run_model_step } from "../bin/model/ModelStepRunner.js";
 import { generate_model } from "../bin/model/ModelGenerate.js";
@@ -214,6 +215,98 @@ test("模型生成无效工具输入时向下一 Step 返回 failed tool_result"
   assert.equal(result.step_result.tool_results[0].success, false);
   assert.match(result.step_result.tool_results[0].output.error, /invalid JSON/);
   assert.equal(result.assistant_parts[0].state, "failed");
+});
+
+test("Tool 输入不符合自己的 schema 时拒绝执行并返回结构化失败", async () => {
+  let executed = false;
+  const model = {
+    id: "schema-invalid-input-model",
+    async stream() {
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: "model_start", request_id: "request_1", model_id: "schema-invalid-input-model" });
+          controller.enqueue({ type: "tool_call_start", content_id: "tool_1", tool_call_id: "call_1", tool_name: "grep" });
+          controller.enqueue({
+            type: "tool_call_finish",
+            content_id: "tool_1",
+            // glob 契约是字符串数组；传字符串必须在派发前被拦住。
+            input: { query: "value", glob: "*.ts" },
+          });
+          controller.enqueue({ type: "model_usage", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } });
+          controller.enqueue({ type: "model_finish", finish_reason: "tool_call" });
+          controller.close();
+        },
+      });
+    },
+  };
+  const grep_input_schema = z.object({
+    query: z.string().min(1),
+    glob: z.array(z.string().min(1)).optional(),
+  });
+
+  const result = await run_model_step({
+    model,
+    system: [],
+    messages: [{ role: "user", content: [{ type: "text", text: "search" }] }],
+    tools: {
+      grep: {
+        input_schema: grep_input_schema,
+        execute: async () => {
+          executed = true;
+          return { success: true };
+        },
+      },
+    },
+    abort_signal: new AbortController().signal,
+  });
+
+  assert.equal(executed, false);
+  assert.equal(result.step_result.tool_results[0].success, false);
+  assert.match(result.step_result.tool_results[0].output.error, /Invalid input for tool "grep"/);
+  assert.match(result.step_result.tool_results[0].output.error, /glob/);
+  assert.equal(result.assistant_parts[0].state, "failed");
+});
+
+test("Tool 输入通过 schema 校验后使用规范化结果执行", async () => {
+  let received_input;
+  const model = {
+    id: "schema-normalized-input-model",
+    async stream() {
+      return new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: "model_start", request_id: "request_1", model_id: "schema-normalized-input-model" });
+          controller.enqueue({ type: "tool_call_start", content_id: "tool_1", tool_call_id: "call_1", tool_name: "find" });
+          controller.enqueue({ type: "tool_call_finish", content_id: "tool_1", input: { pattern: "*.ts" } });
+          controller.enqueue({ type: "model_usage", usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } });
+          controller.enqueue({ type: "model_finish", finish_reason: "tool_call" });
+          controller.close();
+        },
+      });
+    },
+  };
+  const find_input_schema = z.object({
+    pattern: z.string().min(1),
+    path: z.string().min(1).default("."),
+  });
+
+  await run_model_step({
+    model,
+    system: [],
+    messages: [{ role: "user", content: [{ type: "text", text: "find" }] }],
+    tools: {
+      find: {
+        input_schema: find_input_schema,
+        execute: async (input) => {
+          received_input = input;
+          return { success: true };
+        },
+      },
+    },
+    abort_signal: new AbortController().signal,
+  });
+
+  // zod 默认值在派发前生效，工具实现拿到的是规范化输入。
+  assert.deepEqual(received_input, { pattern: "*.ts", path: "." });
 });
 
 test("Tool 返回 success false 时不会被标记为成功", async () => {
