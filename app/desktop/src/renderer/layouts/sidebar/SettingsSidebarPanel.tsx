@@ -16,6 +16,15 @@
  * 行首槽 16、文字线 80 —— 与目录树同一条线，但行高不同：**层级用缩进表达，密度用行高表达**，
  * 两者不互相顶替。
  *
+ * ## 分区图标取自 Duobox 的同一套语义
+ *
+ * 设置分区图标不是自由插画，而是 Duobox 设置面板已经在用的那套 Tabler 图标：
+ * 账户 `TbUser`、模型 `TbCube`、通用 `TbSettings`、外观 `TbTypography`、快捷键 `TbKeyboard`。
+ * 其中「模型」与「外观」此前各用了 `TbCpu` / `TbBrush`——两个 Duobox 从未使用过的图标，
+ * 于是同一件事在两个 App 里长得不一样，而且「外观 = 画刷」把界面配色说成了绘画工具。
+ * 新增分区时先在 Duobox 的 `lib/settings/constants.ts` 里找对应语义的图标，
+ * 找不到再自选，不要就地挑一个「看起来差不多」的。
+ *
  * ## 分组卡片去掉，改用分组标签
  *
  * 条目此前装在一块 `rounded-surface bg-surface-subtle` 的卡片里，于是卡内条目的文字
@@ -24,7 +33,7 @@
  */
 
 import { memo } from "react";
-import { TbAdjustments, TbArrowLeft, TbBrush, TbCpu, TbKeyboard, TbMessageCircle, TbUser } from "react-icons/tb";
+import { TbArrowLeft, TbCube, TbKeyboard, TbMessageCircle, TbSettings, TbTypography, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
@@ -55,11 +64,11 @@ export const SettingsSidebarPanel = memo(function SettingsSidebarPanel({ control
   const settings_groups: Array<{ label: string; items: Array<{ section: SettingsSection; label: string; icon: typeof TbUser }> }> = [
     { label: translate("groups.account_models"), items: [
       { section: "user", label: translate("sections.account"), icon: TbUser },
-      { section: "models", label: translate("sections.models"), icon: TbCpu },
+      { section: "models", label: translate("sections.models"), icon: TbCube },
     ] },
     { label: translate("groups.preferences"), items: [
-      { section: "general", label: translate("sections.general"), icon: TbAdjustments },
-      { section: "appearance", label: translate("sections.appearance"), icon: TbBrush },
+      { section: "general", label: translate("sections.general"), icon: TbSettings },
+      { section: "appearance", label: translate("sections.appearance"), icon: TbTypography },
       { section: "chat", label: translate("sections.chat"), icon: TbMessageCircle },
       { section: "shortcuts", label: translate("sections.shortcuts"), icon: TbKeyboard },
     ] },

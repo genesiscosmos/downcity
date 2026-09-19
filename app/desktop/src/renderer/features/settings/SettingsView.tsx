@@ -1,7 +1,7 @@
 /** Downcity Desktop 设置与 Federation 用户视图。 */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { TbArrowLeft, TbArrowRight, TbBrandGithub, TbBrandGoogle, TbBrandWechat, TbCheck, TbChevronDown, TbChevronRight, TbCode, TbCoin, TbCopy, TbCurrencyDollar, TbInfoCircle, TbLoader2, TbLogin2, TbLogout, TbMail, TbPlugConnected, TbPlus, TbRefresh, TbRotate, TbSwitchHorizontal, TbTicket, TbUser } from "react-icons/tb";
+import { TbArrowLeft, TbArrowRight, TbBrandGithub, TbBrandGoogle, TbBrandWechat, TbCheck, TbChevronDown, TbChevronRight, TbCoin, TbCopy, TbCurrencyDollar, TbInfoCircle, TbLoader2, TbLogin2, TbLogout, TbMail, TbPlugConnected, TbPlus, TbRefresh, TbRotate, TbSwitchHorizontal, TbTicket, TbUser, TbVariable } from "react-icons/tb";
 import type { IconType } from "react-icons";
 import { LLMModelIcon } from "@/components/model";
 import { ModelPricingChart } from "@/components/model/ModelPricingChart";
@@ -262,7 +262,8 @@ function GeneralSettings({ controller, open_global_env }: { /** Renderer 稳定�
     </SettingSection>
     <SettingSection title={translate("general.global_env")} description={translate("general.global_env_description")}>
       <SettingGroup>
-        <SettingActionItemExact label={translate("general.open_env")} icon={<TbCode />} trailing={<TbArrowRight className="text-muted-foreground" />} onClick={open_global_env} />
+        {/* 图标与它打开的那个 BayBar 标签页一致（都是 `TbVariable`）：同一个目的地不该有两个图标。 */}
+        <SettingActionItemExact label={translate("general.open_env")} icon={<TbVariable />} trailing={<TbArrowRight className="text-muted-foreground" />} onClick={open_global_env} />
       </SettingGroup>
     </SettingSection>
   </SettingsContainer>;
