@@ -131,12 +131,21 @@ class ExplainPathAction extends CityAction<z.infer<typeof explain_path_input>> {
           : verdict.reason,
       };
     }
-    return judge_sandbox_boundary({
+    const explanation = judge_sandbox_boundary({
       intent: args.intent,
       resolved_path: verdict.resolved_path,
       mounts,
       snapshot: context.sandbox,
     });
+    // 关键点（中文）：输入是沙箱内路径时必须告知已做翻译，
+    // 否则模型会把「宿主路径可达」误读成「沙箱路径本身可达」。
+    return resolved.translocated
+      ? {
+        ...explanation,
+        reason:
+          `${explanation.reason} The input was a sandbox path and was mapped to the host path first.`,
+      }
+      : explanation;
   }
 }
 
