@@ -4,7 +4,8 @@ import { RichTextEditor } from "./RichTextEditor";
 import { ComposerExpandButton, GroupComposerPanel, composer_tab_id } from "./ComposerPanel";
 import { use_group_composer } from "./use_group_composer";
 import { get_group_chat_key } from "../lib/chat_cache_key";
-import { use_baybar_tab_active, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
+import { use_baybar_set_tab_label, use_baybar_tab_active, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
+import { useEffect } from "react";
 import { use_translation } from "@/locales/i18n";
 import type { GroupComposerProps } from "@/types/ChatComponents";
 
@@ -15,7 +16,12 @@ export function GroupComposer(props: GroupComposerProps) {
   const session_id = props.selection.kind === "group_draft" ? props.selection.draft_id : props.selection.session_id;
   const chat_key = get_group_chat_key(workspace_id, group_id, session_id);
   // 与单聊同一条规则：面板打开时正文那一份卸载，避免两个编辑器争同一份草稿。
-  const expanded = use_baybar_tab_active(composer_tab_id(chat_key));
+  const tab_id = composer_tab_id(chat_key);
+  const expanded = use_baybar_tab_active(tab_id);
+  // 与单聊同理：会话标题异步产生，展开后持续同步回标签页（本组件展开时仍然挂载）。
+  const set_tab_label = use_baybar_set_tab_label();
+  const label = props.session_label || translate("conversation.new");
+  useEffect(() => { set_tab_label(tab_id, label); }, [label, set_tab_label, tab_id]);
   if (expanded) return null;
   return <RichTextEditor
     {...editor}
@@ -26,17 +32,15 @@ export function GroupComposer(props: GroupComposerProps) {
 /**
  * 构造群聊的输入区标签页。
  *
- * 标题用 **Group 名**：群聊会话名对用户没有区分度，而 Group 名是用户自己起的。
+ * 标题用**群聊会话名**，与单聊保持同一口径：标签行上可能同时开着多个会话的输入区，
+ * 能区分它们的只有会话名。草稿还没有名字时由调用方给兜底文案。
  */
 export function group_composer_tab(props: GroupComposerProps, t: BayBarTranslate): BayBarTab {
   const { group_id, workspace_id } = props.selection;
   const session_id = props.selection.kind === "group_draft" ? props.selection.draft_id : props.selection.session_id;
-  // Group 名在目录 store 里可以同步读到（`get_snapshot`），因此标签页标题在点击处就能算好，
-  // 不需要让内容组件反向去猜自己叫什么。
-  const group_name = props.stores.catalog.get_snapshot().groups_by_id[group_id]?.name;
   return {
     id: composer_tab_id(get_group_chat_key(workspace_id, group_id, session_id)),
-    label: group_name || t("conversation.new"),
+    label: props.session_label || t("conversation.new"),
     icon: <TbArrowsDiagonal />,
     sections: [{
       id: "composer",

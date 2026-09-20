@@ -73,6 +73,7 @@ export { baybar_tab_id } from "./baybarPanelState";
 /** 兜底的空 store：不在壳内渲染时（单测、独立组件）使用。 */
 const noop_open_tab = () => undefined;
 const noop_close_tab = () => undefined;
+const noop_set_tab_label = () => undefined;
 
 /**
  * 壳层提供的 store 句柄。
@@ -121,6 +122,11 @@ export function use_baybar_tab_active(tab_id: string): boolean {
 /** 关闭一个标签页；不在壳内时为空操作。 */
 export function use_baybar_close_tab(): (tab_id: string) => void {
   return useContext(BayBarContext)?.close_tab ?? noop_close_tab;
+}
+
+/** 刷新一个已打开标签页的标题；不在壳内时为空操作。 */
+export function use_baybar_set_tab_label(): (tab_id: string, label: string) => void {
+  return useContext(BayBarContext)?.set_tab_label ?? noop_set_tab_label;
 }
 
 /**

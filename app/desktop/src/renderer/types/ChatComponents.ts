@@ -119,6 +119,9 @@ export interface AgentComposerProps {
    * 由调用方算好，不让输入区去订阅 Session 目录：
    * 标签页标题只需要一个字符串，而输入区不该因此认识对话列表的形状。
    * 未提供时标签页使用「新对话」这类兜底文案。
+   *
+   * 它是**会变的**（标题由首条消息异步生成，之后还可重命名），因此展开后
+   * 由输入区把它同步回已打开的标签页（见 `SessionComposer` 的 label 同步）。
    */
   session_label?: string;
 }
@@ -131,4 +134,11 @@ export interface GroupComposerProps {
   stores: AgentComposerProps["stores"];
   /** 群聊输入、发送、停止与切换会话操作。 */
   actions: Pick<import("./DesktopView").DesktopActions, "update_group_draft" | "send_group_message" | "stop_group" | "open_group">;
+  /**
+   * 当前群聊会话名，用于展开后侧栏标签页的标题。
+   *
+   * 与单聊同一个理由：标签页标题只需要一个字符串，由调用方算好，
+   * 不让输入区去订阅 Group 目录。它是会变的，展开后由输入区同步回标签页。
+   */
+  session_label?: string;
 }

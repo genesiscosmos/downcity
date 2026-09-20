@@ -18,8 +18,9 @@ import { AgentComposerPanel, ComposerExpandButton, composer_tab_id } from "./Com
 import { use_agent_composer } from "./use_agent_composer";
 import { MessageQueue } from "../components/MessageQueue";
 import { TbArrowsDiagonal } from "react-icons/tb";
+import { useEffect } from "react";
 import { use_store_selector } from "@/lib/store";
-import { use_baybar_tab_active, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
+import { use_baybar_set_tab_label, use_baybar_tab_active, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
 import { is_chat_busy } from "@/types/DesktopView";
 import { get_session_key } from "../lib/chat_cache_key";
 import { use_translation } from "@/locales/i18n";
@@ -34,7 +35,25 @@ export function SessionComposer(props: AgentComposerProps) {
   const busy = use_store_selector(stores.chat_stream, (state) => is_chat_busy(state.chat_runtime_by_session[session_key]));
   const has_pending_queue = use_store_selector(stores.composer, (state) => Boolean(state.queued_messages_by_session[session_key]?.length));
   // 展开状态直接读标签页本身：它是唯一真相，不再另存一份「谁展开了」的标记。
-  const expanded = use_baybar_tab_active(composer_tab_id(session_key));
+  const tab_id = composer_tab_id(session_key);
+  const expanded = use_baybar_tab_active(tab_id);
+  const set_tab_label = use_baybar_set_tab_label();
+  /**
+   * 把当前对话名同步到已展开的标签页。
+   *
+   * 标签页只在打开那一刻收下标题，而 Session 标题是**异步**产生的：首条消息落盘后
+   * 才由模型生成，之后还可能被重命名。没有这条同步，一个在标题生成前展开的输入区
+   * 会永远停在「新对话」上。
+   *
+   * 为什么放在这里而不是面板内容里：标签页内容只收 selection / stores / actions
+   * 这类稳定引用（它会被长期保留，塞入会变的属性就会停在构造那一刻的旧值），
+   * 因此拿不到实时标题。而本组件在展开时**依然挂载**（只是返回 null），
+   * 是唯一同时看得到「实时标题」与「标签页 id」的地方。
+   *
+   * store 在标题未变或标签页不存在时不提交，不会因此产生多余渲染。
+   */
+  const label = props.session_label || translate_chat("conversation.new");
+  useEffect(() => { set_tab_label(tab_id, label); }, [label, set_tab_label, tab_id]);
   if (expanded) return null;
   return <RichTextEditor
     {...editor}

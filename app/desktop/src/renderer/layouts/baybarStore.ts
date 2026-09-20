@@ -27,7 +27,7 @@ import { useCallback, useMemo } from "react";
 import { use_store } from "@/lib/store";
 import type { Store } from "@/types/DesktopStore";
 import type { BayBarTab } from "./baybarPanelState";
-import { baybar_open_storage_key, parse_stored_flag, resolve_active_after_close } from "./baybarPanelState";
+import { baybar_open_storage_key, parse_stored_flag, resolve_active_after_close, apply_tab_label } from "./baybarPanelState";
 
 /** BayBar 的完整不可变快照。 */
 export interface BayBarStoreState {
@@ -57,6 +57,17 @@ export interface BayBarStore {
   open_tab(tab: BayBarTab, section_id?: string): void;
   /** 关闭一个标签页。**不会收起面板**；关掉最后一个的结果是空白标签页。 */
   close_tab(tab_id: string): void;
+  /**
+   * 刷新一个已打开标签页的标题。
+   *
+   * 供标签页内容的宿主同步**外部会变**的标题（如 Session 标题由首条消息异步生成、
+   * 之后还可能被重命名）。标签页只在打开时收下一次标题，所以没有这条通路时，
+   * 打开得早的标签页会永远停在当时那个值上。
+   *
+   * 只改 `label`：`icon` 与 `sections` 保持不动，后者换掉会重新挂载内容、
+   * 丢掉用户正在编辑的东西。标签页不存在或标题未变时不做任何提交。
+   */
+  set_tab_label(tab_id: string, label: string): void;
   /** 切换当前标签页。 */
   activate(tab_id: string): void;
   /** 切换某个标签页内的分区。 */
@@ -133,6 +144,20 @@ export function use_baybar_store(): BayBarStore {
     commit({ ...current, open: true, active_id: tab_id });
   }, [commit, state_ref]);
 
+  /**
+   * 刷新一个已打开标签页的标题。
+   *
+   * 只改 `label`，**不碰 icon / sections**：sections 换新元素会让 React 重新挂载
+   * 内容组件，正在编辑的东西就丢了（与 `open_tab` 里重复打开时的取舍一致）。
+   * 标题未变或标签页不存在时直接返回，不产生无意义提交。
+   */
+  const set_tab_label = useCallback((tab_id: string, label: string) => {
+    const current = state_ref.current;
+    const tabs = apply_tab_label(current.tabs, tab_id, label);
+    if (tabs === current.tabs) return;
+    commit({ ...current, tabs });
+  }, [commit, state_ref]);
+
   const select_section = useCallback((tab_id: string, section_id: string) => {
     const current = state_ref.current;
     if (current.section_by_tab[tab_id] === section_id) return;
@@ -177,10 +202,11 @@ export function use_baybar_store(): BayBarStore {
     state_ref,
     open_tab,
     close_tab,
+    set_tab_label,
     activate,
     select_section,
     expand,
     collapse,
     toggle,
-  }), [activate, close_tab, collapse, expand, open_tab, select_section, state_ref, store, toggle]);
+  }), [activate, close_tab, collapse, expand, open_tab, select_section, set_tab_label, state_ref, store, toggle]);
 }

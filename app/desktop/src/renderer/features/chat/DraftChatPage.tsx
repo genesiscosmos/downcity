@@ -48,6 +48,6 @@ export function AgentDraftChatSurface({ selection, agent, workspaces, agents, se
     messages={empty_items}
     settings={settings}
     switch_draft_context={controller.actions.switch_draft_context}
-    composer={<DraftComposer selection={selection} stores={controller.stores} actions={controller.actions} />}
+    composer={<DraftComposer selection={selection} stores={controller.stores} actions={controller.actions} session_label={draft_session.title} />}
   />;
 }

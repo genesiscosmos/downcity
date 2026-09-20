@@ -11,6 +11,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  apply_tab_label,
   baybar_open_storage_key,
   baybar_tab_id,
   parse_stored_flag,
@@ -70,6 +71,26 @@ test("记录的分区消失时回退到第一个，而不是显示空面板", ()
 
 test("标签页没有分区时不给出内容", () => {
   assert.equal(resolve_section(tab("empty", []), null), null);
+});
+
+test("刷新标题只改 label，sections 与 icon 原样保留", () => {
+  // 这条守的是一个真实约束：sections 换新元素会让 React 重新挂载内容组件，
+  // 而输入区展开后正在编辑的草稿就在那些组件里——标题同步不该把输入内容冲掉。
+  const content = null;
+  const original: BayBarTab = { id: "composer:s1", label: "新对话", icon: null, sections: [{ id: "composer", label: "输入", content }] };
+  const [next] = apply_tab_label([original], "composer:s1", "修复登录超时");
+
+  assert.equal(next?.label, "修复登录超时");
+  assert.equal(next?.sections, original.sections, "sections 引用变了：内容组件会被重新挂载");
+  assert.equal(next?.sections[0]?.content, content, "内容元素被重建：编辑中的状态会丢");
+  assert.equal(next?.icon, original.icon);
+});
+
+test("标题未变或标签页不存在时返回原数组，供调用方跳过提交", () => {
+  const tabs: BayBarTab[] = [tab("composer:s1", ["composer"])];
+  // 返回原引用是「无需提交」的表达方式；store 据此不再通知订阅者，避免多余渲染。
+  assert.equal(apply_tab_label(tabs, "composer:s1", "composer:s1"), tabs);
+  assert.equal(apply_tab_label(tabs, "composer:missing", "新标题"), tabs);
 });
 
 test("开合状态只有明确存过 true 才算展开", () => {

@@ -76,6 +76,23 @@ export function resolve_section(tab: BayBarTab, section_id: string | null | unde
 }
 
 /**
+ * 更新一个已打开标签页的标题，返回新的标签页列表。
+ *
+ * 供标签页内容的宿主同步**外部会变**的标题（Session 标题由首条消息异步生成，
+ * 之后还可能被重命名）。标签页只在打开那一刻收下标题，没有这条通路时，
+ * 打开得早的标签页会永远停在当时那个值上。
+ *
+ * **只改 `label`**，`icon` 与 `sections` 原样保留：sections 换新元素会让 React
+ * 重新挂载内容组件，正在编辑的东西就丢了（与 `open_tab` 重复打开时的取舍一致）。
+ * 标题未变或标签页不存在时返回原数组引用，调用方可据此跳过提交。
+ */
+export function apply_tab_label(tabs: readonly BayBarTab[], tab_id: string, label: string): readonly BayBarTab[] {
+  const existing = tabs.find((item) => item.id === tab_id);
+  if (!existing || existing.label === label) return tabs;
+  return tabs.map((item) => (item.id === tab_id ? { ...item, label } : item));
+}
+
+/**
  * 关闭一个标签页之后应当显示哪一个。
  *
  * 规则：关的不是当前页 → 当前页不变；关的是当前页 → 优先接右侧邻居，其次左侧；

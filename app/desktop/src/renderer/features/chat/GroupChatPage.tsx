@@ -62,7 +62,7 @@ export function GroupChatSurface({ selection, group, session, workspaces, agents
     group_phase={group_phase ?? "idle"}
     interactions={interactions ?? empty_items}
     respond_interaction={respond_interaction}
-    composer={<GroupComposer selection={selection} stores={controller.stores} actions={controller.actions} />}
+    composer={<GroupComposer selection={selection} stores={controller.stores} actions={controller.actions} session_label={session.title} />}
     remove_session={remove_session}
     rename_session={rename_session}
   />;
