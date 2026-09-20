@@ -22,7 +22,7 @@
     "@downcity/city": "workspace:^",
     "@downcity/federation": "workspace:^",
     "@downcity/powers": "workspace:^",
-    "@downcity/sandbox-microsandbox": "workspace:^",
+    "@downcity/sandbox-native": "workspace:^",
     "@downcity/type": "workspace:*",
     "@tiptap/core": "3.29.2",
     "@tiptap/extension-placeholder": "3.29.2",

@@ -1,20 +1,18 @@
 /**
  * 已审批宿主进程执行后端。
  *
- * 关键点（中文）：本模块不实现部分宿主权限；调用到这里意味着宿主已经明确批准完整 host 执行。
+ * 关键点（中文）
+ * - 本模块不实现部分宿主权限；调用到这里意味着宿主已经明确批准完整 host 执行。
+ * - 进程创建统一交给 SandboxProcessLauncher，与原生隔离共用同一份进程语义。
  */
 
-import { spawn } from "node:child_process";
-import fs from "fs-extra";
-import type { ShellProcessResult } from "@downcity/type/shell";
-import {
-  create_pipe_process_handle,
-  spawn_pty_process_handle,
-} from "@/shell/sandbox/ShellProcessHandle.js";
+import type { SandboxProcessLauncher, ShellProcessResult } from "@downcity/type/shell";
 import { build_shell_command_invocation } from "@/shell/session/ShellCommandModel.js";
 
 /** 已审批宿主进程的启动参数。 */
 export interface HostProcessRequest {
+  /** 宿主提供的进程启动器。 */
+  launcher: SandboxProcessLauncher;
   /** 当前 Shell Session 标识。 */
   execution_id: string;
   /** 当前执行记录目录。 */
@@ -41,27 +39,25 @@ export interface HostProcessRequest {
 export async function spawn_host_process(
   request: HostProcessRequest,
 ): Promise<ShellProcessResult> {
-  await fs.ensureDir(request.execution_dir);
   const invocation = build_shell_command_invocation({
     shell_path: request.shell_path,
     cmd: request.cmd,
     login: request.login,
   });
-  const child = request.terminal
-    ? spawn_pty_process_handle({
-        command: invocation.command,
-        args: invocation.args,
-        cwd: request.cwd,
-        env: request.env,
-        terminal: { cols: request.cols, rows: request.rows },
-      })
-    : create_pipe_process_handle(
-        spawn(invocation.command, invocation.args, {
-          cwd: request.cwd,
-          stdio: "pipe",
-          env: request.env,
-        }),
-      );
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(request.env)) {
+    if (typeof value === "string") env[key] = value;
+  }
+  const child = await request.launcher.launch({
+    command: invocation.command,
+    args: invocation.args,
+    cwd: request.cwd,
+    env,
+    execution_dir: request.execution_dir,
+    terminal: request.terminal,
+    cols: request.cols,
+    rows: request.rows,
+  });
   return {
     child,
     cwd: request.cwd,

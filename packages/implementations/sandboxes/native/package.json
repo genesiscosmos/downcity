@@ -1,0 +1,39 @@
+{
+  "name": "@downcity/sandbox-native",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Downcity native OS sandbox provider using seatbelt on macOS and bubblewrap on Linux",
+  "main": "./bin/index.js",
+  "types": "./bin/index.d.ts",
+  "files": [
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./bin/index.d.ts",
+      "import": "./bin/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../../../scripts/clean-package.mjs && tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm build && node --test scripts/*.test.mjs",
+    "prepack": "npm run build && node ../../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
+    "postpack": "node ../../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json",
+    "version:patch": "node ../../../../scripts/bump-package-version.mjs ./package.json"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@downcity/type": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

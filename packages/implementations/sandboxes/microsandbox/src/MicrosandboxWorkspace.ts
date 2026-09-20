@@ -8,11 +8,13 @@
  */
 
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type {
   SandboxProcessRequest,
   ShellProcessResult,
   WorkspaceSandbox,
   WorkspaceSandboxBinding,
+  WorkspaceSandboxSnapshot,
 } from "@downcity/type/shell";
 import { Sandbox, type SandboxConfig } from "microsandbox";
 import { MicrosandboxProcessHandle } from "./MicrosandboxProcessHandle.js";
@@ -96,6 +98,34 @@ export class MicrosandboxWorkspace implements WorkspaceSandbox {
       cwd: request.cwd,
       sandbox_id: sandbox.id,
       backend: this.backend,
+    };
+  }
+
+  /** 返回当前 microVM 生效的隔离事实。 */
+  describe(): WorkspaceSandboxSnapshot {
+    const workspace_path = path.resolve(this.options.binding.workspace_path);
+    return {
+      backend: this.backend,
+      sandbox_id: this.id,
+      workdir: GUEST_WORKSPACE_PATH,
+      mounts: [
+        {
+          host_path: workspace_path,
+          sandbox_path: GUEST_WORKSPACE_PATH,
+          mode: "rw",
+        },
+      ],
+      network: this.options.binding.network ?? "allow",
+      // microVM 只挂载 Workspace，读范围由挂载决定。
+      read_scope: "mounts",
+      writable_roots: [workspace_path],
+      denied_read_paths: [],
+      policy_digest: createHash("sha256")
+        .update(`${this.id}\0${workspace_path}\0rw`)
+        .digest("hex")
+        .slice(0, 16),
+      // microVM 停止只释放计算资源，文件系统按协议保持，因此恒为持久。
+      persistent: true,
     };
   }
 

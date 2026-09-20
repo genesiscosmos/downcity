@@ -14,6 +14,7 @@ BUILD_PACKAGES=()
 ALL_PACKAGES=(
   "type"
   "sandbox-microsandbox"
+  "sandbox-native"
   "workspace-cloudflare-computer"
   "federation"
   "agent"
@@ -33,7 +34,7 @@ usage() {
   echo "Usage: pnpm patch:build -- [packages] [--no-bump] [--no-global-install]"
   echo ""
   echo "Package options:"
-  echo "  --type --sandbox-microsandbox"
+  echo "  --type --sandbox-microsandbox --sandbox-native"
   echo "  --agent --city --workspace-cloudflare-computer --federation"
   echo "  --database-d1 --database-sqlite --database-postgresql"
   echo "  --services --powers --ui --cli --all"
@@ -97,6 +98,7 @@ while [[ $# -gt 0 ]]; do
     --) shift; continue ;;
     --type) add_package "type" ;;
     --sandbox-microsandbox) add_package "sandbox-microsandbox" ;;
+    --sandbox-native) add_package "sandbox-native" ;;
     --agent) add_package "agent" ;;
     --city) add_package "city" ;;
     --workspace-cloudflare-computer) add_package "workspace-cloudflare-computer" ;;

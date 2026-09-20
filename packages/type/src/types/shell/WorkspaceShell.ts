@@ -1,7 +1,12 @@
 /** Workspace 可选 Shell 能力协议。 */
 
 import type { RuntimeTool } from "@downcity/type";
-import type { ShellProcessResult, WorkspaceSandboxSnapshot } from "./Sandbox.js";
+import type {
+  SandboxNetworkMode,
+  ShellProcessResult,
+  WorkspaceSandboxMountRequest,
+  WorkspaceSandboxSnapshot,
+} from "./Sandbox.js";
 
 /** Workspace Shell 执行一次受控命令的输入。 */
 export interface WorkspaceShellSandboxCommandInput {
@@ -61,6 +66,10 @@ export interface WorkspaceShell {
     root_path: string;
     /** Agent private runtime directory 私有数据根路径。 */
     data_path: string;
+    /** 除 Workspace 之外显式授权给隔离环境的宿主目录。 */
+    granted_mounts?: readonly WorkspaceSandboxMountRequest[];
+    /** 隔离环境出网策略。 */
+    network?: SandboxNetworkMode;
   }): void;
 
   /** 更新后续进程使用的 Workspace 环境变量。 */

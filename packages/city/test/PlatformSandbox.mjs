@@ -43,6 +43,22 @@ export function create_test_workspace_sandbox(binding, backend = "test-sandbox")
     get stopped() {
       return stopped;
     },
+    describe() {
+      return {
+        backend,
+        sandbox_id,
+        workdir: guest_workspace_path,
+        mounts: [
+          { host_path: workspace_path, sandbox_path: guest_workspace_path, mode: "rw" },
+        ],
+        network: binding.network ?? "allow",
+        read_scope: "mounts",
+        writable_roots: [workspace_path],
+        denied_read_paths: [],
+        policy_digest: `test:${binding.workspace_id}`,
+        persistent: true,
+      };
+    },
     async spawn(request) {
       stopped = false;
       const cwd = resolve_host_cwd(workspace_path, request.cwd);

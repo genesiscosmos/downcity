@@ -16,6 +16,7 @@ import type {
   ShellOptions,
   ShellToolAction,
   ShellToolSet,
+  SandboxProcessLauncher,
   SandboxProvider,
   WorkspaceSandbox,
   WorkspaceSandboxSnapshot,
@@ -36,6 +37,7 @@ import {
 } from "@/shell/session/ShellActionRuntime.js";
 import { create_shell_tools } from "@/shell/tool/ShellTools.js";
 import { run_sandbox_command } from "@/shell/sandbox/Sandbox.js";
+import { create_sandbox_process_launcher } from "@/shell/sandbox/SandboxLauncher.js";
 
 /** Workspace 命令与长期进程服务。 */
 export class Shell {
@@ -45,6 +47,8 @@ export class Shell {
   private readonly options: ShellOptions;
   /** 为当前 Shell 创建具体 Workspace Sandbox 的 Provider。 */
   private readonly sandbox_provider: SandboxProvider;
+  /** 宿主进程启动器；原生隔离 Provider 依赖它创建本地进程。 */
+  private readonly launcher: SandboxProcessLauncher;
   /** Workspace env 的最新快照。 */
   private env: Record<string, string | undefined>;
   /** 当前 Shell 的一次性 Workspace 绑定。 */
@@ -62,6 +66,7 @@ export class Shell {
     }
     this.options = { ...options };
     this.sandbox_provider = options.sandbox_provider;
+    this.launcher = create_sandbox_process_launcher();
     this.env = { ...(options.env || {}) };
     this.state = create_shell_runtime_state();
     this.tools = create_shell_tools({
@@ -99,6 +104,9 @@ export class Shell {
       workspace_id: next_binding.workspace_id,
       workspace_path: next_binding.root_path,
       runtime_path: next_binding.data_path,
+      ...(input.granted_mounts ? { granted_mounts: input.granted_mounts } : {}),
+      ...(input.network ? { network: input.network } : {}),
+      launcher: this.launcher,
     });
     this.sandbox = sandbox;
     this.binding = next_binding;
@@ -151,26 +159,11 @@ export class Shell {
    *
    * 关键点（中文）
    * - 只读取已经成立的绑定与 Sandbox 实例，不创建也不启动 Sandbox。
-   * - 当前协议下每个 Workspace 只有一条可写 Workspace 挂载。
+   * - 生效事实由 Provider 回答，Shell 不再自行拼装挂载列表。
    */
   describe_sandbox(): WorkspaceSandboxSnapshot | null {
-    const sandbox = this.sandbox;
-    const binding = this.binding;
-    if (!sandbox || !binding) return null;
-    return {
-      backend: sandbox.backend,
-      sandbox_id: sandbox.id,
-      workdir: sandbox.workspace_path,
-      mounts: [
-        {
-          host_path: binding.root_path,
-          sandbox_path: sandbox.workspace_path,
-          mode: "rw",
-        },
-      ],
-      // Sandbox 停止只释放计算资源，文件系统按协议保持，因此恒为持久。
-      persistent: true,
-    };
+    if (!this.sandbox || !this.binding) return null;
+    return this.sandbox.describe();
   }
 
   /** 在当前 Workspace 的持久 Sandbox 中执行一次短命令。 */
@@ -241,6 +234,7 @@ export class Shell {
     const turn_id = execution.session?.turn_id || "";
     return {
       sandbox,
+      launcher: this.launcher,
       root_path: binding.root_path,
       data_path: binding.data_path,
       env: execution.workspace_env || this.env,

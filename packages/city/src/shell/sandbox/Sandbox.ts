@@ -14,6 +14,7 @@ import type {
 } from "@downcity/type/shell";
 import { spawn_host_process } from "@/shell/sandbox/backends/Host.js";
 import { resolve_sandbox_cwd } from "@/shell/session/ShellRuntimeEnvironment.js";
+import { create_sandbox_process_launcher } from "@/shell/sandbox/SandboxLauncher.js";
 
 /** 单次 Shell 进程启动输入。 */
 export interface ShellProcessStartInput {
@@ -49,6 +50,7 @@ export async function spawn_shell_process(
 ): Promise<ShellProcessResult> {
   if (input.target === "host") {
     return await spawn_host_process({
+      launcher: input.context.launcher ?? create_sandbox_process_launcher(),
       execution_id: input.execution_id,
       execution_dir: input.execution_dir,
       cmd: input.cmd,

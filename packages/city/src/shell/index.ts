@@ -9,6 +9,7 @@
 export type * from "@downcity/type/shell";
 export * from "./Shell.js";
 export * from "./sandbox/Sandbox.js";
+export * from "./sandbox/SandboxLauncher.js";
 export * from "./sandbox/ShellProcessHandle.js";
 export * from "./session/ShellActionRuntime.js";
 export * from "./session/ShellActionResponse.js";

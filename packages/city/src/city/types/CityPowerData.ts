@@ -7,7 +7,11 @@
  * - image 与 sound 的领域类型跟各自的 method 放在一起，不集中到这里。
  */
 
-import type { WorkspaceSandboxMount } from "@downcity/type/shell";
+import type {
+  SandboxNetworkMode,
+  SandboxReadScope,
+  WorkspaceSandboxMount,
+} from "@downcity/type/shell";
 
 /** `env.get` 返回的当前执行环境。 */
 export interface CityToolEnv {
@@ -39,27 +43,52 @@ export interface CityToolEnv {
 export interface CityToolSandbox {
   /** 当前 Workspace 是否提供命令执行能力。 */
   readonly available: boolean;
-  /** 执行后端标识，例如 microsandbox；不可用时为 null。 */
+  /** 执行后端标识，例如 native；不可用时为 null。 */
   readonly backend: string | null;
   /** 沙箱实例标识，用于跨进程定位同一个 Sandbox；不可用时为 null。 */
   readonly sandbox_id: string | null;
   /** 沙箱内的工作目录；不可用时为 null。 */
   readonly workdir: string | null;
-  /** 当前沙箱的全部挂载点。 */
+  /** 当前语义授权给沙箱的宿主目录；不枚举后端派生的系统规则。 */
   readonly mounts: readonly WorkspaceSandboxMount[];
+  /** 当前生效的出网策略；不可用时为 null。 */
+  readonly network: SandboxNetworkMode | null;
+  /** 当前生效的读取范围模型；不可用时为 null。 */
+  readonly read_scope: SandboxReadScope | null;
+  /** 当前允许写入的宿主根路径；不可用时为空数组。 */
+  readonly writable_roots: readonly string[];
+  /** 当前强制拒绝读取的宿主路径；不可用时为空数组。 */
+  readonly denied_read_paths: readonly string[];
+  /** 当前生效策略的稳定摘要，用于审计还原与变更比对；不可用时为 null。 */
+  readonly policy_digest: string | null;
   /** 沙箱状态是否跨轮持久。 */
   readonly persistent: boolean;
 }
 
 /** `sandbox.explain_path` 的路径判定结果码。 */
-export type CityToolPathReasonCode = "allowed" | "outside_workspace" | "invalid_path";
+export type CityToolPathReasonCode =
+  /** 请求的意图在生效边界内。 */
+  | "allowed"
+  /** 路径在 Workspace 与授权目录之外。 */
+  | "outside_workspace"
+  /** 路径命中强制读取排除列表。 */
+  | "read_denied"
+  /** 路径可读但不在写入白名单内。 */
+  | "write_denied"
+  /** 路径本身非法。 */
+  | "invalid_path";
+
+/** `sandbox.explain_path` 支持的访问意图。 */
+export type CityToolPathIntent = "read" | "write";
 
 /** `sandbox.explain_path` 返回的路径判定结果。 */
 export interface CityToolPathExplanation {
-  /** 是否允许访问。 */
+  /** 是否允许该意图的访问。 */
   readonly allowed: boolean;
   /** 归一化后的宿主绝对路径；输入为沙箱内路径时会先映射回宿主路径。 */
   readonly resolved_path: string;
+  /** 请求判定的访问意图。 */
+  readonly intent: CityToolPathIntent;
   /** 允许访问时给出它落在哪个挂载点内，否则为 null。 */
   readonly matched_mount: WorkspaceSandboxMount | null;
   /** 机器可读判定结果码。 */

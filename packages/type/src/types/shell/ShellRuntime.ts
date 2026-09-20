@@ -12,7 +12,11 @@ import type {
   ShellActionResponse,
 } from "./ShellAction.js";
 import type { SessionApprovalPort } from "../session/SessionInteraction.js";
-import type { SandboxProvider } from "./Sandbox.js";
+import type {
+  SandboxNetworkMode,
+  SandboxProvider,
+  WorkspaceSandboxMountRequest,
+} from "./Sandbox.js";
 
 /**
  * Shell 运行时日志器。
@@ -88,6 +92,11 @@ export interface ShellBinding {
   /** Shell、Sandbox 与审计产物使用的内部数据根目录。 */
   data_path: string;
 
+  /** 除 Workspace 之外显式授权给隔离环境的宿主目录。 */
+  granted_mounts?: readonly WorkspaceSandboxMountRequest[];
+
+  /** 隔离环境出网策略；默认由 Provider 决定。 */
+  network?: SandboxNetworkMode;
 }
 
 /**

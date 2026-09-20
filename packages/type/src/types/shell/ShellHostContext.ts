@@ -7,7 +7,7 @@
  */
 
 import type { SessionApprovalPort } from "../session/SessionInteraction.js";
-import type { WorkspaceSandbox } from "./Sandbox.js";
+import type { SandboxProcessLauncher, WorkspaceSandbox } from "./Sandbox.js";
 
 export type ShellLogger = {
   /**
@@ -37,6 +37,8 @@ export type ShellHostIntegration = {
 export type ShellHostContext = {
   /** 当前 Workspace 独享的持久 Sandbox。 */
   sandbox: WorkspaceSandbox;
+  /** 宿主提供的进程启动器；已审批的 host 执行与原生隔离共用同一份进程语义。 */
+  launcher?: SandboxProcessLauncher;
   /**
    * 当前项目根目录。
    */
