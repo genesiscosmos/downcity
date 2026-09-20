@@ -12,6 +12,7 @@ import { Archive, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRi
 import { TbArrowUp, TbCheck, TbChevronDown, TbChevronRight, TbFile as TbFileIcon, TbLoader2, TbLock, TbPaperclip, TbPlus, TbRobot, TbShieldCheck, TbSquare, TbTerminal } from "./chat-icons";
 import { cn } from "../lib/utils";
 import { resolve_chat_composer_enter_action } from "../lib/chat-composer-keymap";
+import { ChatComposerNewline } from "../lib/chat-composer-newline";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu";
 import type { DowncityChatApprovalMode, DowncityChatChangedFile, DowncityChatMessage, DowncityChatMessagePart, DowncityChatModelOption, DowncityChatPanelProps, DowncityChatQuestion, DowncityChatSubmitInput, DowncityChatSubmitMode, DowncityChatThread } from "../types/chat";
 import type { DowncityChatQueuedInput } from "../types/chat-runtime";
@@ -195,7 +196,7 @@ type ChatComposerProps = Pick<DowncityChatPanelProps, "status" | "input_placehol
 /** 与 Duobox 输入壳结构一致的受控 Chat 输入组件。 */
 export function ChatComposer({ status = "ready", input_placeholder, on_submit, on_stop, on_attach, model_options = [{ id: "default", label: "Default model" }], model_id = "default", on_model_change, approval_mode = "ask", on_approval_mode_change, queued_inputs = [], on_remove_queued, on_move_queued }: ChatComposerProps) {
   const [text, set_text] = useState("");
-  const editor = useEditor({ extensions: [StarterKit.configure({ heading: false, codeBlock: false }), Placeholder.configure({ placeholder: input_placeholder ?? "输入消息…", emptyEditorClass: "is-editor-empty" })], editorProps: { attributes: { class: "chat-input-editor dc-chat-input-editor", "data-chat-input": "true", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } }, onUpdate: ({ editor: current_editor }) => set_text(current_editor.getText()) });
+  const editor = useEditor({ extensions: [StarterKit.configure({ heading: false, codeBlock: false }), ChatComposerNewline, Placeholder.configure({ placeholder: input_placeholder ?? "输入消息…", emptyEditorClass: "is-editor-empty" })], editorProps: { attributes: { class: "chat-input-editor dc-chat-input-editor", "data-chat-input": "true", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } }, onUpdate: ({ editor: current_editor }) => set_text(current_editor.getText()) });
   const is_streaming = status === "submitted" || status === "streaming" || status === "building-context";
   const submit = useCallback(async (mode: DowncityChatSubmitMode = "send") => {
     const normalized_text = text.trim();

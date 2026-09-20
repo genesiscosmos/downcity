@@ -29,7 +29,7 @@ export function is_single_plain_text_paragraph(document: JSONContent | undefined
 
 /**
  * Enter：单个纯文本段落发送，否则原生换行。
- * Shift + Enter：原生 hardBreak。
+ * Shift + Enter：插入新段落（与 Enter 一致），由 chatComposerNewline 扩展接管。
  * Cmd/Ctrl + Enter：按常规发送策略提交（运行中或已有队列时会排队）。
  * Option/Alt + Cmd/Ctrl + Enter：创建或插入暂停队列。
  * Cmd/Ctrl + Shift + Enter：绕过队列立即提交。

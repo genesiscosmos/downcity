@@ -3,11 +3,13 @@
 import Placeholder from "@tiptap/extension-placeholder";
 import StarterKit from "@tiptap/starter-kit";
 import { ChatAttachmentNode, ChatDataNode, ChatReferenceNode } from "./ChatComposerNodes";
+import { ChatComposerNewline } from "./chatComposerNewline";
 
 /** 创建一组彼此隔离、语义一致的 Chat Composer extensions。 */
 export function create_chat_composer_extensions(placeholder?: string) {
   return [
     StarterKit.configure({ heading: false, codeBlock: false, blockquote: false, horizontalRule: false }),
+    ChatComposerNewline,
     ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
     ChatAttachmentNode,
     ChatReferenceNode,

@@ -47,6 +47,8 @@ export { session_jsonl_to_chat_messages, session_message_to_chat_message, sessio
 export { DowncityChatRuntime, create_chat_runtime } from "./lib/chat-runtime";
 export { is_single_plain_text_paragraph, resolve_chat_composer_enter_action } from "./lib/chat-composer-keymap";
 export type { DowncityChatComposerEnterAction, DowncityChatComposerEnterKey } from "./lib/chat-composer-keymap";
+export { build_chat_composer_newline_commands, ChatComposerNewline } from "./lib/chat-composer-newline";
+export type { DowncityChatComposerNewlineCommands } from "./lib/chat-composer-newline";
 export type { DowncityChatQueuedInput, DowncityChatRuntimeListener, DowncityChatRuntimeOptions, DowncityChatRuntimeSnapshot } from "./types/chat-runtime";
 export type {
   DowncityAnnotationProps,

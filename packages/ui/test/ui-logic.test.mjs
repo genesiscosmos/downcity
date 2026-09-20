@@ -2,13 +2,15 @@
 
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildWorkboardGameMapConfig, ChatPanel, ChatComposer, ChatHistory, ChatMessage, cn, create_chat_runtime, resolve_chat_composer_enter_action, session_message_to_chat_message } from "../dist/index.js"
+import { buildWorkboardGameMapConfig, build_chat_composer_newline_commands, ChatComposer, ChatComposerNewline, ChatHistory, ChatMessage, ChatPanel, cn, create_chat_runtime, resolve_chat_composer_enter_action, session_message_to_chat_message } from "../dist/index.js"
 
 test("Chat UI 公开导出保持可用", () => {
   assert.equal(typeof ChatPanel, "function")
   assert.equal(typeof ChatComposer, "function")
   assert.equal(typeof ChatHistory, "function")
   assert.equal(typeof ChatMessage, "function")
+  assert.equal(typeof ChatComposerNewline, "object")
+  assert.equal(typeof build_chat_composer_newline_commands, "function")
 })
 
 test("canonical Agent Action 与 Error Part 投影为 UI operation", () => {
