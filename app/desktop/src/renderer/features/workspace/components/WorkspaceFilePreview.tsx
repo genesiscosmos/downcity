@@ -1,24 +1,39 @@
 /**
  * Workspace 文本文件预览的共享构件。
  *
- * Workspace 页与 Chat 侧栏「文件」域展示同一份文件内容，差别只在页面外壳：
- * 前者用 MainView Header 承担文件路径与阅读模式切换，后者在窄栏里自己排一行。
+ * Workspace 主视图与 Chat 右侧「文件」面板展示同一份文件内容，差别只在页面外壳：
+ * 前者用 MainView Header 承担文件路径，后者在窄栏里自己排一行。
  * 因此这里只保留与外壳无关的部分——读取、加载/失败占位、源码逐行渲染与行号定位、
- * Markdown 渲染，以及 Markdown 的「预览 / 源码」切换控件。
+ * Markdown 渲染。文件操作菜单与元数据卡片各自独立成模块
+ * （`WorkspaceFileActionsMenu` / `WorkspaceFileMetadata`），它们与外壳无关，但自成一体。
+ *
+ * ## 阅读模式：预览是默认，源码在菜单里
+ *
+ * 此前顶栏常驻一个「预览 / 源码」分段控件：绝大多数阅读发生在预览里，
+ * 而它是 Markdown 专属却常驻顶栏，非 Markdown 文件没有它，顶栏形状在两类文件之间变化。
+ * 现在顶栏右侧只有一个文件操作菜单，源码模式是其中一项开关，两类文件共用同一形状。
+ * 初始模式由 `resolve_default_view_mode` 决定（带行号的链接先进源码）。
+ *
+ * ## 元数据为什么单独一套样式
+ *
+ * Markdown 文档起始的 `---` 头块此前被当成正文渲染：一条分隔线加若干段落，
+ * 文件身份与内容混在一起。现在它由 `lib/workspace/workspace_frontmatter` 解析成键值数据，
+ * 交给 `WorkspaceFileMetadataCard` 呈现，正文从 frontmatter 之后开始。
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TbLoader2 } from "react-icons/tb";
 import { Markdown } from "@/components/markdown/Markdown";
-import { SegmentedControl, type SegmentedControlOption } from "@/components/ui/segmented-control";
 import { cn } from "@/lib/utils";
+import { parse_workspace_document } from "@/lib/workspace/workspace_frontmatter";
 import { highlight_code_lines, type HighlightedToken } from "@/lib/workspace/workspace_code_highlighter";
 import { resolve_workspace_language, type WorkspaceLanguage } from "@/lib/workspace/workspace_file_language";
+import { resolve_default_view_mode, type WorkspaceFileViewMode } from "@/lib/workspace/workspace_file_preview";
 import { use_translation } from "@/locales/i18n";
+import { WorkspaceFileMetadataCard } from "./WorkspaceFileMetadata";
 import type { DesktopWorkspaceTextFile } from "@common/types/DesktopApi";
 
-/** Workspace 文件内容的阅读模式。 */
-export type WorkspaceFileViewMode = "preview" | "source";
+export type { WorkspaceFileViewMode };
 
 /** 读取 Workspace 文本文件的实时状态。 */
 export interface WorkspaceTextFileState {
@@ -52,6 +67,18 @@ export function use_workspace_text_file(workspace_id: string, relative_path: str
     return () => { active = false; };
   }, [workspace_id, relative_path]);
   return { file, error };
+}
+
+/**
+ * 当前阅读模式。
+ *
+ * 打开新文件时回到初始模式（带行号的链接先进源码），用户随后的手动切换不被覆盖：
+ * 切换动作只改状态，重算只发生在 `relative_path` / `line` 变化时。
+ */
+export function use_workspace_file_view_mode(relative_path: string, line?: number): [WorkspaceFileViewMode, (mode: WorkspaceFileViewMode) => void] {
+  const [mode, set_mode] = useState<WorkspaceFileViewMode>(() => resolve_default_view_mode(relative_path, line));
+  useEffect(() => set_mode(resolve_default_view_mode(relative_path, line)), [relative_path, line]);
+  return [mode, set_mode];
 }
 
 /** 文件读取中的加载态与读取失败占位，两处宿主共用。 */
@@ -127,29 +154,21 @@ function use_highlighted_lines(content: string, language: WorkspaceLanguage | un
   return tokens;
 }
 
-/** Markdown 渲染视图。 */
+/**
+ * Markdown 渲染视图：元数据卡片在前，正文在后。
+ *
+ * 内边距由宿主通过 `class_name` 给出（主视图与窄面板不同），本组件只管文档内部节奏。
+ * 卡片与正文之间不写间距：卡片自己带 `mb-3`，理由见 `WorkspaceFileMetadataCard`。
+ */
 export function WorkspaceFileMarkdownBody({ content, class_name }: {
   /** Markdown 原文。 */
   content: string;
   /** 宿主自己的排版样式。 */
   class_name?: string;
 }) {
-  return <article className={cn("min-h-full w-full px-5 py-5 text-base leading-[1.7] text-foreground md:px-6 md:py-6", class_name)}><Markdown text={content} mode="static" /></article>;
-}
-
-/** Markdown 文档的阅读模式切换控件。 */
-export function WorkspaceFileViewModeControl({ value, on_value_change, class_name }: {
-  /** 当前阅读模式。 */
-  value: WorkspaceFileViewMode;
-  /** 切换阅读模式。 */
-  on_value_change(mode: WorkspaceFileViewMode): void;
-  /** 附加样式。 */
-  class_name?: string;
-}) {
-  const translate_resources = use_translation("resources");
-  const options: readonly SegmentedControlOption<WorkspaceFileViewMode>[] = [
-    { value: "preview", label: translate_resources("workspace.preview") },
-    { value: "source", label: translate_resources("workspace.source") },
-  ];
-  return <SegmentedControl<WorkspaceFileViewMode> value={value} options={options} on_value_change={on_value_change} aria_label={translate_resources("workspace.document_view_mode")} class_name={cn("h-7", class_name)} />;
+  const document = useMemo(() => parse_workspace_document(content), [content]);
+  return <article className={cn("min-h-full w-full text-base leading-[1.7] text-foreground", class_name)}>
+    {document.entries.length > 0 ? <WorkspaceFileMetadataCard entries={document.entries} partial={document.partial} /> : null}
+    <Markdown text={document.body} mode="static" />
+  </article>;
 }

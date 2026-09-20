@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Menu } from "@base-ui/react/menu";
+import { TbCheck } from "react-icons/tb";
 import { cn } from "@/lib/utils";
 import { MenuItemShell } from "./item";
 import { MenuSurface } from "./menu";
@@ -76,6 +77,38 @@ const DropdownMenuItem = React.forwardRef<HTMLDivElement, DropdownMenuItemProps>
 );
 DropdownMenuItem.displayName = "DropdownMenuItem";
 
+/** 下拉菜单开关项属性。 */
+interface DropdownMenuCheckboxItemProps extends Omit<Menu.CheckboxItem.Props, "className" | "render"> {
+  /** 附加样式。 */
+  className?: string;
+}
+
+/**
+ * 菜单里的开关项：勾选态由前导对勾表达，不叠选中底色。
+ *
+ * 四点都不能省：
+ *
+ * 1. **对勾位固定占宽**（`keepMounted` + 未勾选时透明）。Base UI 默认在未勾选时卸载
+ *    指示器，那样这一项的文字会左移，与相邻带图标的项错开。
+ * 2. **不额外给图标**：对勾占的就是相邻项图标那一个前导位（与 macOS 菜单同做法），
+ *    再加一个图标就变成两个前导符，而两者说的是同一件事。
+ * 3. **不传 `is_selected`**：勾选态已经有对勾这一个信号，再加底色等于同一件事说两遍，
+ *    而且会与「当前所在项」那类真正的选中态混淆。
+ * 4. **`closeOnClick` 沿用 Base UI 默认的 false**：开关是「就地改设置」，关掉菜单会让
+ *    用户无法接着执行同一组里的动作（例如切到源码模式后立刻复制全文）。
+ */
+const DropdownMenuCheckboxItem = React.forwardRef<HTMLDivElement, DropdownMenuCheckboxItemProps>(
+  ({ className, children, ...props }, ref) => (
+    <Menu.CheckboxItem ref={ref} render={<MenuItemShell className={className} />} {...props}>
+      <Menu.CheckboxItemIndicator keepMounted className="flex size-3.5 shrink-0 items-center justify-center data-[unchecked]:opacity-0">
+        <TbCheck className="size-3.5" aria-hidden />
+      </Menu.CheckboxItemIndicator>
+      {children}
+    </Menu.CheckboxItem>
+  ),
+);
+DropdownMenuCheckboxItem.displayName = "DropdownMenuCheckboxItem";
+
 const DropdownMenuGroup = Menu.Group;
 const DropdownMenuLabel = React.forwardRef<HTMLDivElement, Menu.GroupLabel.Props>(({ className, ...props }, ref) => <Menu.GroupLabel ref={ref} className={cn(menu_label_class_name, className)} {...props} />);
 DropdownMenuLabel.displayName = "DropdownMenuLabel";
@@ -85,6 +118,7 @@ const DropdownMenuShortcut = ({ className, ...props }: React.HTMLAttributes<HTML
 
 export {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,

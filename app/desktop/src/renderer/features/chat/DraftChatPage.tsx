@@ -22,7 +22,7 @@ export function AgentDraftRouteMainView({ selection, controller, sidebar_collaps
   const workspaces = use_desktop_selector(controller.stores.catalog, (state) => state.workspaces);
   const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
   if (!agent) return <WelcomeView />;
-  return <AgentChatMainView agent={agent} controller={controller} workspace_id={selection.workspace_id} view_key={`agent-draft:${agent.agent_id}:${selection.draft_id}`} session_key={get_session_key(selection.workspace_id, agent.agent_id, selection.draft_id)}>
+  return <AgentChatMainView agent={agent} controller={controller} workspace_id={selection.workspace_id} workspace_path={workspaces.find((item) => item.workspace_id === selection.workspace_id)?.workspace_path} view_key={`agent-draft:${agent.agent_id}:${selection.draft_id}`} session_key={get_session_key(selection.workspace_id, agent.agent_id, selection.draft_id)}>
     <AgentDraftChatSurface selection={selection} agent={agent} workspaces={workspaces} agents={agents} settings={settings} controller={controller} />
   </AgentChatMainView>;
 }

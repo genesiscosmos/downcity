@@ -36,6 +36,8 @@ interface AgentChatMainViewProps {
   controller: DesktopController;
   /** 当前对话所属 Workspace；决定「文件」标签页能预览哪个工作区。 */
   workspace_id: string;
+  /** 当前 Workspace 的绝对路径；用于文件操作菜单的链接与系统打开。 */
+  workspace_path?: string;
   /** 当前 Chat 的稳定标识，用于按会话隔离打开的文件。 */
   view_key: string;
   /** chat_stream 的会话缓存键；「本轮」标签页靠它订阅本轮改动摘要。 */
@@ -54,7 +56,7 @@ interface AgentChatMainViewProps {
  * 面板因此不需要提前知道有哪些标签页，切换会话也不会换掉已打开的那些。
  * 这里只提供三样东西：打开 Agent 配置的动作、打开文件的动作、选中某一轮的动作。
  */
-export function AgentChatMainView({ agent, controller, workspace_id, view_key, session_key, session_title, children }: AgentChatMainViewProps) {
+export function AgentChatMainView({ agent, controller, workspace_id, workspace_path, view_key, session_key, session_title, children }: AgentChatMainViewProps) {
   const translate_resources = useTranslation_resources();
   const open_baybar = use_baybar_open();
   const open_agent_config = useCallback<OpenAgentConfig>(() => {
@@ -64,7 +66,7 @@ export function AgentChatMainView({ agent, controller, workspace_id, view_key, s
 
   return <MainView>
     <OpenAgentConfigContext.Provider value={agent_config_value}>
-      <ChatFilePanelProvider view_key={view_key} workspace_id={workspace_id}>
+      <ChatFilePanelProvider view_key={view_key} workspace_id={workspace_id} workspace_path={workspace_path}>
         <TurnFileDiffReviewProvider session_key={session_key} session_title={session_title} controller={controller}>{children}</TurnFileDiffReviewProvider>
       </ChatFilePanelProvider>
     </OpenAgentConfigContext.Provider>

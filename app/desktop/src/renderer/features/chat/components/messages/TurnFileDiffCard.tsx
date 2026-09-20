@@ -9,6 +9,7 @@ import type { SessionTurnFileDiff, SessionTurnFileDiffData, SessionTurnFileDiffS
 import { TbCheck, TbChevronDown, TbChevronRight, TbChevronUp, TbDots, TbExternalLink, TbFileDiff, TbGitCompare, TbLink } from "react-icons/tb";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { message_action_button_class_name } from "@/features/chat/components/messages/MessageActionButton";
+import { build_workspace_file_link } from "@/lib/workspace/workspace_file_link";
 import { use_baybar_open, baybar_tab_id, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
 import { use_desktop_selector } from "@/app/use_desktop";
 import type { DesktopController } from "@/types/DesktopView";
@@ -43,14 +44,6 @@ export function TurnFileOpenProvider({ open_file, workspace_path, children }: { 
 /** 读取 diff 文件项的打开动作；未注入时为空。 */
 function use_turn_file_open(): TurnFileOpenAction | undefined {
   return useContext(TurnFileOpenContext) ?? undefined;
-}
-
-/** 构造可在输入框粘贴并解析回 Workspace 文件的 file 链接。 */
-function build_file_link(workspace_path: string | undefined, relative_path: string): string {
-  if (!workspace_path) return relative_path;
-  const root = workspace_path.replace(/\\/g, "/").replace(/\/+$/, "");
-  const absolute_path = root.startsWith("/") ? `${root}/${relative_path}` : `/${root}/${relative_path}`;
-  return `file://${encodeURI(absolute_path)}`;
 }
 
 /**
@@ -207,7 +200,7 @@ function FilePatch({ file, variant, default_open = false }: { /** 单个文件�
   const rows = file.patch ? parse_unified_diff(file.patch) : [{ type: "meta", text: translate_chat("file_diff.binary") } satisfies DiffRow];
   const copy_link = async () => {
     if (!open_action) return;
-    await navigator.clipboard.writeText(build_file_link(open_action.workspace_path, file.file));
+    await navigator.clipboard.writeText(build_workspace_file_link(open_action.workspace_path, file.file));
     set_copied(true);
     window.setTimeout(() => set_copied(false), 1200);
   };

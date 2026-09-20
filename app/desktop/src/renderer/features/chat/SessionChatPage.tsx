@@ -28,7 +28,7 @@ export function AgentSessionRouteMainView({ selection, controller, sidebar_colla
   const session_key = get_session_key(selection.workspace_id, selection.agent_id, selection.session_id);
   const session = use_desktop_selector(controller.stores.session, (state) => (state.sessions_by_workspace[selection.workspace_id] ?? []).find((item) => item.agent_id === selection.agent_id && item.session.session_id === selection.session_id)?.session);
   if (!agent || !session) return <WelcomeView />;
-  return <AgentChatMainView agent={agent} controller={controller} workspace_id={selection.workspace_id} view_key={`agent-session:${agent.agent_id}:${session.session_id}`} session_key={session_key} session_title={session.title}>
+  return <AgentChatMainView agent={agent} controller={controller} workspace_id={selection.workspace_id} workspace_path={workspaces.find((item) => item.workspace_id === selection.workspace_id)?.workspace_path} view_key={`agent-session:${agent.agent_id}:${session.session_id}`} session_key={session_key} session_title={session.title}>
     <AgentSessionChatSurface selection={selection} agent={agent} session={session} workspaces={workspaces} agents={agents} settings={settings} controller={controller} />
   </AgentChatMainView>;
 }
