@@ -10,8 +10,8 @@
  */
 
 import {
-  define_runtime_tool,
-  type RuntimeToolExecutionOptions as ToolExecutionOptions,
+  define_agent_tool,
+  type ToolCallContext,
 } from "@downcity/type";
 import { ask_questions_input_schema } from "./AskQuestionsToolSchemas.js";
 import {
@@ -22,9 +22,8 @@ import type {
   AskQuestionsToolInput,
   AskQuestionsToolOutput,
 } from "@/types/tools/ask/AskQuestionsTool.js";
-import type { SessionToolExecutionContext } from "@/types/turn/SessionToolExecutionContext.js";
-import { generate_id } from "@/utils/Id.js";
 import type { ActionResult } from "@/types/action/ActionResult.js";
+import { generate_id } from "@/utils/Id.js";
 import type { JsonValue } from "@downcity/type";
 import type { SessionInteractionQuestion } from "@downcity/type";
 
@@ -40,21 +39,17 @@ import type { SessionInteractionQuestion } from "@downcity/type";
  * });
  * ```
  */
-export const AskQuestionsTool = define_runtime_tool<AskQuestionsToolInput, ActionResult<AskQuestionsToolOutput>>({
+export const AskQuestionsTool = define_agent_tool<AskQuestionsToolInput, ActionResult<AskQuestionsToolOutput>>({
   description:
     "Ask the user one or more questions when missing information would materially change the outcome. The call waits for every answer, then returns them so you can continue the same task. Do not use it for information that can be inferred safely. For single_select and multi_select questions, every option MUST contain both a machine-readable value and a user-visible label; never omit value or use label as value. Example: { value: 'cn', label: '中国' }.",
   input_schema: ask_questions_input_schema,
   execute: async (
     input: AskQuestionsToolInput,
-    execution_options: ToolExecutionOptions,
+    context: ToolCallContext,
   ): Promise<ActionResult<AskQuestionsToolOutput>> => {
-    const execution_context = execution_options.context as
-      | Partial<SessionToolExecutionContext>
-      | undefined;
-    const action_execution = execution_context?.action_execution_context;
-    const interaction_port = action_execution?.session.interactions;
-    const turn_id = String(action_execution?.session.turn_id || "").trim();
-    const tool_call_id = String(action_execution?.call_id || "").trim();
+    const interaction_port = context.interactions;
+    const turn_id = String(context.turn_id || "").trim();
+    const tool_call_id = String(context.tool_call_id || "").trim();
     if (!interaction_port || !turn_id || !tool_call_id) {
       throw new Error(
         "ask_question requires an active Session tool execution context",

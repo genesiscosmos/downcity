@@ -137,7 +137,7 @@ test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
   // shell 属于 Workspace，但只在模型面以 City 注册的 `shell` power 暴露。
   const city = new City({ workspaces: [workspace] });
   city.agents.add(agent);
-  await city.ensure_ready();
+  await city.powers.settled();
 
   try {
     const session = await agent.sessions.create({

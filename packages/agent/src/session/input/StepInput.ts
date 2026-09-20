@@ -11,12 +11,12 @@
 import type {
   JsonValue,
   ModelClient,
-  RuntimeTool as Tool,
-  RuntimeToolExecutionOptions as ToolExecutionOptions,
+  AgentTool as Tool,
   SessionHookContextBlock,
-  SessionHookRuntime,
   SessionTurnContextHookValue,
+  ToolCallContext,
 } from "@downcity/type";
+import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
 import type {
   AgentSessionSystemBlock,
   AgentSessionSystemSnapshot,
@@ -32,8 +32,8 @@ import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/turn/SessionToolExecutionContext.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 import { is_action_result } from "@/types/action/ActionResult.js";
-import { create_session_hook_context } from "@/session/loop/SessionTurnContext.js";
 import { SESSION_HOOK_POINTS } from "@/session/input/SessionHookPoints.js";
+import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 import { resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 
 /** 当前 Session 的每步模型输入装配者。 */
@@ -194,7 +194,6 @@ export class StepInput {
     advance_count: number,
     refresh_system = false,
   ): Promise<SessionComposeInput> {
-    await this.refresh_step_runtime(turn_context);
     const instruction_system_blocks = refresh_system
       ? this.options.get_instruction_system_blocks().map((block) => ({ ...block }))
       : this.instruction_blocks();
@@ -204,20 +203,13 @@ export class StepInput {
       workspace_env,
       agent_systems: instruction_system_blocks.map((block) => block.content),
     });
-    const hook_context =
-      turn_context?.step.hook_context() ||
-      create_session_hook_context({
-        session_id: this.options.session_id,
-        session_origin: this.options.session_origin,
-        project_root: this.options.workspace_path,
-        workspace_env,
-        agent_systems: this.effective_instruction_blocks.map(
-          (block) => block.content,
-        ),
-      });
-    const power_runtime = refresh_system
-      ? this.options.get_hooks()
-      : turn_context?.step.hooks || this.options.get_hooks();
+    const call_context = turn_context
+      ? this.create_tool_call_context(turn_context, {
+          tool_call_id: "",
+          messages: [],
+        })
+      : this.create_session_call_context(workspace_env);
+    const hooks = this.options.get_hooks();
     const resolved_power_system_blocks = this.frozen_blocks && !refresh_system
       ? []
       : await resolve_session_power_system_blocks({
@@ -225,8 +217,8 @@ export class StepInput {
           ...(turn_context?.session.turn_id
             ? { turn_id: turn_context.session.turn_id }
             : {}),
-          hooks: power_runtime,
-          context: hook_context,
+          hooks,
+          context: call_context,
           on_error: async (error) => await this.log_power_hook_warning(
             SESSION_HOOK_POINTS.system_context,
             error,
@@ -235,8 +227,6 @@ export class StepInput {
         });
     const power_context_blocks = turn_context
       ? await turn_context.step.resolve_power_context_blocks(async () => {
-          const hooks = turn_context.step.hooks;
-          if (!hooks) return [];
           const value: SessionTurnContextHookValue = {
             session_id: this.options.session_id,
             turn_id: turn_context.session.turn_id,
@@ -250,11 +240,15 @@ export class StepInput {
             blocks: [],
           };
           try {
-            const output = await hooks.pipeline(
-              SESSION_HOOK_POINTS.turn_context,
-              value as unknown as JsonValue,
-            ) as unknown as SessionTurnContextHookValue;
-            return normalize_power_context_blocks(output?.blocks);
+            const output = await run_pipeline_point({
+              hooks,
+              point_name: SESSION_HOOK_POINTS.turn_context,
+              value: value as unknown as JsonValue,
+              context: call_context,
+            });
+            return normalize_power_context_blocks(
+              (output as unknown as SessionTurnContextHookValue)?.blocks,
+            );
           } catch (error) {
             await this.log_power_hook_warning(
               SESSION_HOOK_POINTS.turn_context,
@@ -276,10 +270,6 @@ export class StepInput {
         ),
         tools: Object.freeze({ ...this.options.get_tools() }),
         instruction_system_blocks,
-        managed_power_system_blocks:
-          this.frozen_blocks && !refresh_system
-            ? []
-            : await this.options.get_managed_power_system_blocks(),
         power_system_blocks: resolved_power_system_blocks,
         power_context_blocks,
       },
@@ -351,82 +341,45 @@ export class StepInput {
     );
   }
 
-  /** 刷新当前 Step 的 effective Hook 执行视图。 */
-  private async refresh_step_runtime(
-    turn_context: SessionTurnContext | undefined,
-  ): Promise<void> {
-    if (!turn_context) return;
-    const hooks = await this.options.get_hooks().open();
-    await turn_context.step.replace_hooks(hooks);
-  }
-
   /**
-   * 为所有 tool execute callback 绑定显式 Session 运行上下文。
+   * 把工具包装为已绑定调用环境的工具。
    *
    * 关键点（中文）
-   * - 每个 step 使用独立包装工具，不会在并行 Session 间共享可变指针。
-   * - Agent 与 Shell 工具通过 RuntimeToolExecutionOptions.context 读取显式快照。
+   * - 包装层是上下文注入的唯一位置：捕获 Session 级信息，并在每次调用时
+   *   合并模型 Step 提供的调用身份与消息快照。
+   * - 每个 step 使用独立包装，不会在并行 Session 间共享可变指针。
    */
   private bind_turn_context_to_tools(
     tools: Record<string, Tool>,
     turn_context: SessionTurnContext,
-  ): Record<string, Tool> {
-    const wrapped: Record<string, Tool> = {};
+  ): Record<string, BoundAgentTool> {
+    const wrapped: Record<string, BoundAgentTool> = {};
     for (const [name, tool] of Object.entries(tools)) {
       const original_execute = tool.execute;
       if (typeof original_execute !== "function") {
-        wrapped[name] = tool;
+        wrapped[name] = tool as unknown as BoundAgentTool;
         continue;
       }
       wrapped[name] = {
         ...tool,
-        execute: async (args: unknown, options: ToolExecutionOptions) => {
-          const tool_call_id = String(options.tool_call_id || "").trim();
+        execute: async (args: unknown, site: ToolCallSite) => {
+          const tool_call_id = String(site.tool_call_id || "").trim();
           if (!tool_call_id) {
             throw new Error(`Tool execution requires toolCallId: ${name}`);
           }
-          if (tool_call_id && turn_context.output.assistant) {
+          if (turn_context.output.assistant) {
             await turn_context.output.assistant.prepare_tool_input({
               tool_call_id,
               tool_name: name,
               input: args,
             });
           }
-          const abort_signal = options.abort_signal ||
-            turn_context.lifecycle.abort_signal;
-          const execution_context: SessionToolExecutionContext = {
-            session_turn_context: turn_context,
-            action_execution_context: {
-              call_id: tool_call_id,
-              abort_signal,
-              session: {
-                session_id: turn_context.session.session_id,
-                turn_id: turn_context.session.turn_id,
-                interactions: turn_context.interactions,
-              },
-              ...(turn_context.session.project_root
-                ? { workspace_path: turn_context.session.project_root }
-                : {}),
-              ...(turn_context.step.workspace_env
-                ? { workspace_env: turn_context.step.workspace_env }
-                : {}),
-            },
-            shell_execution_context: {
-              session: {
-                session_id: turn_context.session.session_id,
-                turn_id: turn_context.session.turn_id,
-              },
-              call_id: tool_call_id,
-              abort_signal,
-              ...(turn_context.step.workspace_env
-                ? { workspace_env: turn_context.step.workspace_env }
-                : {}),
-            },
-          };
-          const output = await original_execute(args, {
-            ...options,
-            context: execution_context,
+          const context = this.create_tool_call_context(turn_context, {
+            tool_call_id,
+            abort_signal: site.abort_signal || turn_context.lifecycle.abort_signal,
+            messages: site.messages,
           });
+          const output = await original_execute(args, context);
           if (!is_action_result(output)) return output;
           if (Array.isArray(output.effects)) {
             turn_context.effects.append(output.effects);
@@ -443,6 +396,51 @@ export class StepInput {
       };
     }
     return wrapped;
+  }
+
+  /** 构造不属任何 Turn 的调用环境；用于 system 查询。 */
+  private create_session_call_context(
+    workspace_env: Readonly<Record<string, string>>,
+  ): ToolCallContext {
+    const workspace = this.options.get_workspace?.();
+    return Object.freeze({
+      agent_id: this.options.agent_id,
+      agent_name: this.options.agent_name,
+      agent_description: this.options.agent_description,
+      agent_instructions: Object.freeze(
+        this.effective_instruction_blocks.map((block) => block.content),
+      ),
+      session_id: this.options.session_id,
+      session_origin: this.options.session_origin,
+      ...(workspace ? { workspace } : {}),
+      messages: Object.freeze([]),
+      workspace_env,
+    });
+  }
+
+  /** 构造一次工具调用获得的值快照。 */
+  private create_tool_call_context(
+    turn_context: SessionTurnContext,
+    site: ToolCallSite,
+  ): ToolCallContext {
+    const workspace_env = turn_context.step.workspace_env;
+    const agent_systems = turn_context.step.agent_systems;
+    const workspace = this.options.get_workspace?.();
+    return Object.freeze({
+      agent_id: this.options.agent_id,
+      agent_name: this.options.agent_name,
+      agent_description: this.options.agent_description,
+      agent_instructions: Object.freeze([...(agent_systems ?? [])]),
+      session_id: this.options.session_id,
+      session_origin: this.options.session_origin,
+      ...(workspace ? { workspace } : {}),
+      turn_id: turn_context.session.turn_id,
+      abort_signal: site.abort_signal,
+      tool_call_id: site.tool_call_id,
+      messages: site.messages,
+      interactions: turn_context.interactions,
+      ...(workspace_env ? { workspace_env } : {}),
+    });
   }
 }
 

@@ -10,8 +10,8 @@
 import type {
   ModelClient,
   ModelMessage,
-  RuntimeTool as Tool,
 } from "@downcity/type";
+import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
 import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 
@@ -81,9 +81,9 @@ export interface SessionStepExecutionInput {
   messages: ModelMessage[];
 
   /**
-   * 当前轮可用工具集合。
+   * 当前轮可用工具集合；上下文已在包装层绑定。
    */
-  tools: Record<string, Tool>;
+  tools: Record<string, BoundAgentTool>;
 
   /** 当前模型支持的上下文窗口长度。 */
   context_window?: number;

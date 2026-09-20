@@ -7,8 +7,8 @@
  */
 
 import {
-  define_runtime_tool,
-  type RuntimeToolExecutionOptions,
+  define_agent_tool,
+  type ToolCallContext,
 } from "@downcity/type";
 import type {
   ShellExecInput,
@@ -23,7 +23,6 @@ import { validate_chat_send_command } from "@/shell/tool/ShellToolFormatting.js"
 import type {
   ShellToolAction,
   ShellExecutionContext,
-  ShellToolExecutionContext,
   ShellToolRunner,
   ShellToolSet,
 } from "@downcity/type/shell";
@@ -31,14 +30,24 @@ import type {
 type JsonObject = Record<string, unknown>;
 
 /**
- * 从 RuntimeTool 显式上下文中读取 Shell 运行快照。
+ * 从调用环境构造 Shell 运行快照。
+ *
+ * 关键点（中文）：Shell 工具与其他工具共享同一份 ToolCallContext，不再有嵌套的
+ * Shell 专用上下文；缺少 Session 或 Turn 时按无身份调用处理。
  */
-function resolve_shell_execution_context(value: unknown): ShellExecutionContext {
-  if (!value || typeof value !== "object") return {};
-  const context = value as Partial<ShellToolExecutionContext>;
-  const execution_context = context.shell_execution_context;
-  if (!execution_context || typeof execution_context !== "object") return {};
-  return execution_context;
+function resolve_shell_execution_context(
+  context: ToolCallContext,
+): ShellExecutionContext {
+  const turn_id = String(context.turn_id || "").trim();
+  return {
+    ...(turn_id
+      ? { session: { session_id: context.session_id, turn_id } }
+      : {}),
+    ...(context.tool_call_id ? { call_id: context.tool_call_id } : {}),
+    ...(context.abort_signal ? { abort_signal: context.abort_signal } : {}),
+    approval_gateway: context.interactions?.approval,
+    ...(context.workspace_env ? { workspace_env: context.workspace_env } : {}),
+  };
 }
 
 function flatten_shell_action_response(params: {
@@ -214,21 +223,17 @@ export function create_shell_tools(runner: ShellToolRunner): ShellToolSet {
   function run_action_with_context(
     action: ShellToolAction,
     payload: JsonObject,
-    options: RuntimeToolExecutionOptions,
+    context: ToolCallContext,
   ): Promise<ShellActionResponse> {
-    const execution_context = resolve_shell_execution_context(options.context);
+    const execution_context = resolve_shell_execution_context(context);
     return runner.run_action({
       action,
       payload,
-      execution: {
-        ...execution_context,
-        call_id: options.tool_call_id || execution_context.call_id,
-        abort_signal: options.abort_signal || execution_context.abort_signal,
-      },
+      execution: execution_context,
     });
   }
 
-  const shell_exec = define_runtime_tool<ShellExecInput>({
+  const shell_exec = define_agent_tool<ShellExecInput>({
     description:
       "Execute a short non-interactive shell command and wait for completion. Prefer shell_session for long-running or interactive commands.",
     input_schema: shell_exec_input_schema,
@@ -243,7 +248,7 @@ export function create_shell_tools(runner: ShellToolRunner): ShellToolSet {
         target = "sandbox",
         reason,
       }: ShellExecInput,
-      options: RuntimeToolExecutionOptions,
+      options: ToolCallContext,
     ) => {
       const started_at = Date.now();
       try {
@@ -278,13 +283,13 @@ export function create_shell_tools(runner: ShellToolRunner): ShellToolSet {
     },
   });
 
-  const shell_session = define_runtime_tool<ShellSessionInput>({
+  const shell_session = define_agent_tool<ShellSessionInput>({
     description:
       "Operate an interactive PTY shell session. Use action=start for long-running or interactive commands, send for stdin, read for latest output, list for sessions, and stop to close.",
     input_schema: shell_session_input_schema,
     execute: async (
       input: ShellSessionInput,
-      options: RuntimeToolExecutionOptions,
+      options: ToolCallContext,
     ) => {
       const started_at = Date.now();
       try {

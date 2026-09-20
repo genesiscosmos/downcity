@@ -95,9 +95,6 @@ export type {
 export type { PowerContextFactory } from "./types/PowerContextFactory.js";
 
 export type {
-  AgentPowerExecutionLease,
-  AgentPowerExecutionRuntime,
-  AgentPowerExecutionView,
   AgentPowerRuntime,
 } from "./types/PowerExecutionRuntime.js";
 

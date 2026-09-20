@@ -57,7 +57,7 @@ test("one Agent enters multiple Workspaces with contextual Power execution", asy
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [first_workspace, second_workspace] });
-  add_test_power(city, power);
+  await add_test_power(city, power);
   city.agents.add(agent);
 
   try {
@@ -122,7 +122,7 @@ test("PowerContext sessions keep the current Workspace binding", async () => {
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, power);
+  await add_test_power(city, power);
   city.agents.add(agent);
 
   try {
@@ -254,7 +254,7 @@ test("Power can ignore Workspace while still receiving its Context", async () =>
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [first_workspace, second_workspace] });
-  add_test_power(city, power);
+  await add_test_power(city, power);
   city.agents.add(agent);
   try {
     assert.equal((await city.powers.scope({ agent_id: agent.id, workspace_id: first_workspace.id })
@@ -277,7 +277,7 @@ test("Workspace cleanup is independent from Power lifecycle", async () => {
     data_root_path: path.join(root, "data"),
   });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, power);
+  await add_test_power(city, power);
   city.agents.add(agent);
 
   try {

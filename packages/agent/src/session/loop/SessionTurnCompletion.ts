@@ -13,6 +13,7 @@ import type { ActiveSessionTurnState } from "@/types/session/SessionLoop.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 import type { SessionTurnCommittedHookValue } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@/session/input/SessionHookPoints.js";
+import { run_effect_point } from "@/session/input/SessionHookRunner.js";
 
 /**
  * Turn 被用户中止时的规范错误文本。
@@ -111,8 +112,7 @@ async function notify_turn_committed(
   active_turn: ActiveSessionTurnState,
   status: SessionTurnCommittedHookValue["status"],
 ): Promise<void> {
-  const hooks = active_turn.turn_context?.step.hooks;
-  if (!hooks) return;
+  const hooks = options.get_hooks();
   try {
     const messages = (await options.messages.list_history_messages())
       .filter((message) => message.turn_id === active_turn.turn_id)
@@ -123,10 +123,21 @@ async function notify_turn_committed(
       status,
       messages: messages as SessionMessage[],
     };
-    await hooks.effect(
-      SESSION_HOOK_POINTS.turn_committed,
-      value as unknown as JsonValue,
-    );
+    const context = options.create_call_context({
+      turn_id: active_turn.turn_id,
+      abort_signal: active_turn.turn_context?.lifecycle.abort_signal
+        ?? new AbortController().signal,
+    });
+    await run_effect_point({
+      hooks,
+      point_name: SESSION_HOOK_POINTS.turn_committed,
+      value: value as unknown as JsonValue,
+      context,
+      on_error: async (point_name, error) =>
+        await log_turn_warning(options, active_turn, "session power effect failed", error, {
+          point_name,
+        }),
+    });
   } catch (error) {
     await log_turn_warning(options, active_turn, "session power effect failed", error, {
       point_name: SESSION_HOOK_POINTS.turn_committed,

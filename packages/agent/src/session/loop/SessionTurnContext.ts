@@ -7,32 +7,16 @@
  * - Power 每次只获得新建的只读快照，不能越过扩展边界访问内核运行能力。
  */
 
-import type { RuntimeToolEffect } from "@downcity/type";
+import type { ToolEffect } from "@downcity/type";
 import type { SessionUserMessage } from "@downcity/type";
 import type { SessionAgentContent } from "@downcity/type";
 import type {
   SessionTurnContext,
   SessionTurnContextInit,
 } from "@/types/turn/SessionTurnContext.js";
-import type { SessionHookContext } from "@downcity/type";
-import type { SessionHookScopeRuntime } from "@downcity/type";
+import type { SessionHookContextBlock } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
 import { normalize_session_origin } from "@downcity/type";
-import type { SessionHookContextBlock } from "@downcity/type";
-
-/** 非 Turn 查询创建 Power 只读快照所需的稳定 Session 状态。 */
-export interface CreateSessionHookContextInput {
-  /** 当前 Session 标识。 */
-  session_id: string;
-  /** 当前 Session 的完整来源元数据。 */
-  session_origin: SessionOrigin;
-  /** 当前 Session 所属项目根目录。 */
-  project_root: string;
-  /** 当前 Session 已生效的 Workspace 环境变量。 */
-  workspace_env: Readonly<Record<string, string>>;
-  /** 当前 Session 已生效的 Agent instruction 文本。 */
-  agent_systems: readonly string[];
-}
 
 /** SessionTurnContext 的唯一内置实现。 */
 class DefaultSessionTurnContext implements SessionTurnContext {
@@ -45,14 +29,13 @@ class DefaultSessionTurnContext implements SessionTurnContext {
   private disposed = false;
   private workspace_env_snapshot?: Readonly<Record<string, string>>;
   private agent_systems_snapshot: readonly string[] = Object.freeze([]);
-  private hook_scope?: SessionHookScopeRuntime;
-  /** 整个 Turn 共享的 Power 动态上下文，不随 Step lease 切换而失效。 */
+  /** 整个 Turn 共享的扩展动态上下文。 */
   private power_context_blocks_snapshot: readonly SessionHookContextBlock[] = Object.freeze([]);
   /** 并发或重复解析时复用的唯一 Promise。 */
   private power_context_blocks_promise?: Promise<readonly SessionHookContextBlock[]>;
   private observed_user_messages: SessionUserMessage[] = [];
   private pending_assistant_parts: SessionAgentContent[] = [];
-  private turn_effects: RuntimeToolEffect[] = [];
+  private turn_effects: ToolEffect[] = [];
 
   readonly lifecycle: SessionTurnContext["lifecycle"];
   readonly step: SessionTurnContext["step"];
@@ -113,7 +96,7 @@ class DefaultSessionTurnContext implements SessionTurnContext {
         return context.agent_systems_snapshot;
       },
       get hooks() {
-        return context.hook_scope;
+        return undefined;
       },
       get power_context_blocks() {
         return context.power_context_blocks_snapshot;
@@ -126,16 +109,8 @@ class DefaultSessionTurnContext implements SessionTurnContext {
           ...input.agent_systems,
         ]);
       },
-      replace_hooks: async (hooks) => {
-        const previous = context.hook_scope;
-        context.hook_scope = hooks;
-        if (previous && previous !== hooks) await previous.close();
-      },
       resolve_power_context_blocks: async (resolver) =>
         await context.resolve_power_context_blocks(resolver),
-      release: async () => await context.release_extensions(),
-      hook_context: (call_id?: string) =>
-        context.create_hook_context(call_id),
     });
 
     this.input = Object.freeze({
@@ -209,32 +184,6 @@ class DefaultSessionTurnContext implements SessionTurnContext {
     return await this.power_context_blocks_promise;
   }
 
-  /** 为 City 扩展生成不共享根对象引用的只读快照。 */
-  private create_hook_context(call_id?: string): SessionHookContext {
-    const normalized_call_id = String(call_id || "").trim();
-    return Object.freeze({
-      session_id: this.session.session_id,
-      session_origin: this.session.origin,
-      turn_id: this.session.turn_id,
-      ...(normalized_call_id ? { call_id: normalized_call_id } : {}),
-      ...(this.session.project_root
-        ? { project_root: this.session.project_root }
-        : {}),
-      ...(this.workspace_env_snapshot
-        ? { workspace_env: this.workspace_env_snapshot }
-        : {}),
-      agent_systems: this.agent_systems_snapshot,
-      abort_signal: this.abort_controller.signal,
-    });
-  }
-
-  /** 释放当前 Step 捕获的 Power Hook 作用域。 */
-  private async release_extensions(): Promise<void> {
-    const extensions = this.hook_scope;
-    this.hook_scope = undefined;
-    await extensions?.close();
-  }
-
   /** 闭合当前运行拥有的全部资源。 */
   private async dispose(): Promise<void> {
     if (this.disposed) return;
@@ -243,7 +192,6 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       "abort",
       this.abort_from_upstream,
     );
-    await this.release_extensions();
   }
 }
 
@@ -252,17 +200,4 @@ export function create_session_turn_context(
   init: SessionTurnContextInit,
 ): SessionTurnContext {
   return new DefaultSessionTurnContext(init);
-}
-
-/** 为非 Turn 的 system 查询创建 Power 可读取的 Session 快照。 */
-export function create_session_hook_context(
-  input: CreateSessionHookContextInput,
-): SessionHookContext {
-  return Object.freeze({
-    session_id: input.session_id,
-    session_origin: Object.freeze(normalize_session_origin(input.session_origin)),
-    project_root: input.project_root,
-    workspace_env: Object.freeze({ ...input.workspace_env }),
-    agent_systems: Object.freeze([...input.agent_systems]),
-  });
 }

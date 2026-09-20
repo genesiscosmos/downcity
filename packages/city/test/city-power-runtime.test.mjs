@@ -95,7 +95,7 @@ test("City dynamically adds and removes one Power for every Agent", async () => 
   await scope.agent.sessions.create({ workspace: scope.workspace });
 
   await city.powers.add(power);
-  await scope.agent.ensure_ready();
+  await city.powers.settled();
   assert.equal(city.powers.scope({
     agent_id: scope.agent.id,
     workspace_id: scope.workspace.id,
@@ -245,7 +245,7 @@ test("Agent removal does not own or dispose the City Power", async () => {
   assert.deepEqual(events.at(-1), "dispose");
 });
 
-test("City waits for a direct Power hook before disposing it", async () => {
+test("City 移除 Power 时不再等待进行中的 hook", async () => {
   const events = [];
   let release_hook;
   const hook_released = new Promise((resolve) => {
@@ -281,13 +281,16 @@ test("City waits for a direct Power hook before disposing it", async () => {
 
   const hook = runtime.pipeline("wait", { ready: true });
   await hook_started;
-  const removal = city.powers.remove(power.name);
-  await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(events.includes("dispose"), false);
+  // 关键点（中文）：新契约下移除立即收口，不再持有 execution lease；
+  // 已经在执行的 hook 自行跑完，City 不等待它。
+  await city.powers.remove(power.name);
+  assert.equal(city.powers.get(power.name), null);
+  assert.equal(events.includes("dispose"), true);
+
   release_hook();
-  await Promise.all([hook, removal]);
-  assert.deepEqual(events.slice(-2), ["hook:finish", "dispose"]);
+  await hook;
+  assert.equal(events.includes("hook:finish"), true);
   await city.close();
 });
 
@@ -358,7 +361,7 @@ test("City never publishes a Power whose initialization fails", async () => {
     workspace_id: scope_b.workspace.id,
   }).has(power.name), false);
   assert.deepEqual(events, ["initialize:failed", "dispose"]);
-  await Promise.all([scope_a.agent.ensure_ready(), scope_b.agent.ensure_ready()]);
+  await city.powers.settled();
 
   power.initialize = () => {
     events.push("initialize:retry");

@@ -108,14 +108,13 @@ async function run_approval_case(decision) {
       custom_approval: {
         description: "Execute a custom operation after approval.",
         input_schema: z.object({ value: z.string() }),
-        execute: async (input, options) => {
-          // 工具自己请求审批：入口由 Session 注入，模式由入口统一生效。
-          const approval = options.context?.action_execution_context?.session.interactions?.approval;
+        execute: async (input, context) => {
+          // 工具自己请求审批：端口与执行身份都来自 Agent 注入的调用环境。
+          const approval = context?.interactions?.approval;
           if (!approval) throw new Error("missing approval port");
-          const session = options.context.action_execution_context.session;
           const decision = await approval.request({
-            turn_id: session.turn_id,
-            tool_call_id: options.tool_call_id,
+            turn_id: context.turn_id,
+            tool_call_id: context.tool_call_id,
             tool_name: "custom_approval",
             payload: { operation: "tool", validated_input: input },
           });

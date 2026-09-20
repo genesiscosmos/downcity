@@ -17,6 +17,7 @@ import type {
 } from "@/types/session/SessionSystem.js";
 import type { JsonValue, SessionSystemContextHookValue } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@/session/input/SessionHookPoints.js";
+import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 
 function normalize_system_blocks(
   blocks: AgentSessionSystemBlock[],
@@ -59,33 +60,35 @@ export function normalize_power_system_blocks(
   });
 }
 
-/** 使用统一 Hook 检查点解析当前 Session 的 Power system blocks。 */
+/**
+ * 使用统一检查点解析当前 Session 的扩展 system blocks。
+ *
+ * 关键点（中文）
+ * - 只有一个入口：`session.system_context` pipeline。扩展能力不再有独立的
+ *   `system()` 通道，因此不需要判断「静态说明写哪里」。
+ * - 处理器失败降级为空集合，不阻断 Session 主链路。
+ */
 export async function resolve_session_power_system_blocks(
   input: ResolveSessionPowerSystemBlocksInput,
 ): Promise<AgentSessionSystemBlock[]> {
-  let blocks: AgentSessionSystemBlock[];
+  const value: SessionSystemContextHookValue = {
+    session_id: input.session_id,
+    ...(input.turn_id ? { turn_id: input.turn_id } : {}),
+    blocks: [],
+  };
   try {
-    blocks = normalize_power_system_blocks(
-      await input.hooks.system_blocks(input.context),
+    const output = await run_pipeline_point({
+      hooks: input.hooks,
+      point_name: SESSION_HOOK_POINTS.system_context,
+      value: value as unknown as JsonValue,
+      context: input.context,
+    });
+    return normalize_power_system_blocks(
+      (output as unknown as SessionSystemContextHookValue)?.blocks,
     );
   } catch (error) {
     await input.on_error?.(error);
     return [];
-  }
-  const value: SessionSystemContextHookValue = {
-    session_id: input.session_id,
-    ...(input.turn_id ? { turn_id: input.turn_id } : {}),
-    blocks,
-  };
-  try {
-    const output = await input.hooks.pipeline(
-      SESSION_HOOK_POINTS.system_context,
-      value as unknown as JsonValue,
-    ) as unknown as SessionSystemContextHookValue;
-    return normalize_power_system_blocks(output?.blocks);
-  } catch (error) {
-    await input.on_error?.(error);
-    return blocks;
   }
 }
 
@@ -151,7 +154,6 @@ export async function build_session_system_blocks(
   }
   return [
     ...normalize_system_blocks(input.get_instruction_system_blocks()),
-    ...normalize_system_blocks(await input.get_managed_power_system_blocks()),
     ...normalize_system_blocks(await input.get_power_system_blocks()),
     // session block 放在最后，尽量保留前缀 system blocks 的跨 session 缓存命中。
     create_session_system_block(

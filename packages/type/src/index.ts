@@ -60,11 +60,20 @@ export type {
 } from "./types/model/index.js";
 
 export {
-  define_runtime_tool,
-  type RuntimeTool,
-  type RuntimeToolEffect,
-  type RuntimeToolExecutionOptions,
+  define_agent_tool,
+  EMPTY_TOOL_HOOK_SET,
+  type AgentTool,
+  type EffectHook,
+  type GuardHook,
+  type PipelineHook,
+  type ToolEffect,
+  type ToolHookSet,
 } from "./types/tool/index.js";
+
+export type {
+  ToolCallContext,
+  ToolCallUserMessage,
+} from "./types/session/ToolCallContext.js";
 
 export * from "./workspace.js";
 export * from "./shell.js";

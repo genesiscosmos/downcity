@@ -4,7 +4,7 @@
  * 这些类型描述 Turn 编排所依赖的领域对象，不实现任何调度行为。
  */
 
-import type { SessionHookRuntime } from "@downcity/type";
+import type { ToolCallContext, ToolHookSet } from "@downcity/type";
 import type { SessionEventHub } from "@/session/messages/SessionEventHub.js";
 import type { SessionMessages } from "@/session/messages/SessionMessages.js";
 import type { SessionState } from "@/session/loop/SessionState.js";
@@ -83,4 +83,13 @@ export interface SessionLoopOptions {
   queue: SessionQueue;
   /** 当前 Session 的用户异步交互运行时。 */
   interactions: SessionInteractionLifecycle & SessionInteractionPort;
+  /** 读取当前生效的扩展处理器集合。 */
+  get_hooks: () => ToolHookSet;
+  /** 构造当前 Turn 的调用环境快照。 */
+  create_call_context: (input: {
+    /** 当前 Turn 稳定标识。 */
+    readonly turn_id: string;
+    /** 当前 Turn 的取消信号。 */
+    readonly abort_signal: AbortSignal;
+  }) => ToolCallContext;
 }

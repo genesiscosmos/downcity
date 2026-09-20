@@ -8,7 +8,7 @@
  */
 
 import { nanoid } from "nanoid";
-import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
+import type { ModelClient, AgentTool as Tool } from "@downcity/type";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type {
   AgentCreateSessionInput,
@@ -32,7 +32,7 @@ import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import { create_instruction_system_blocks } from "@/agent/AgentInstructions.js";
 import { DefaultSessionComposer } from "@/session/input/composer/DefaultSessionComposer.js";
-import type { SessionHookRuntime } from "@downcity/type";
+import type { ToolHookSet } from "@downcity/type";
 import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { WorkspaceRuntime } from "@downcity/type";
@@ -51,6 +51,11 @@ type AgentSessionsOptions = {
   agent_name: string;
 
   /**
+   * 当前 agent 一句话能力描述；进入工具与扩展的调用环境。
+   */
+  agent_description: string;
+
+  /**
    * 按 Session 解析执行上下文。
    *
    * AgentSessions 是 Agent 唯一的 Session 集合；Workspace 相关能力不能
@@ -62,7 +67,8 @@ type AgentSessionsOptions = {
     logger: Logger;
     get_tools: () => Record<string, Tool>;
     get_workspace_env: () => Record<string, string>;
-    get_hooks: () => SessionHookRuntime;
+    get_workspace: () => WorkspaceRuntime | undefined;
+    get_hooks: () => ToolHookSet;
     store: SessionStore;
   };
 
@@ -75,11 +81,6 @@ type AgentSessionsOptions = {
    * 当前静态 instruction 文本集合。
    */
   get_instruction: () => string[];
-
-  /**
-   * 等待当前 Agent 持有的长期运行时启动完成。
-   */
-  ensure_agent_ready: () => Promise<void>;
 
   /**
    * 当前 agent 使用的本地 Session 类。
@@ -102,10 +103,10 @@ type AgentSessionsOptions = {
 export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly agent_id: string;
   private readonly agent_name: string;
+  private readonly agent_description: string;
   private readonly resolve_session_context: AgentSessionsOptions["resolve_session_context"];
   private readonly logger: Logger;
   private readonly get_instruction: AgentSessionsOptions["get_instruction"];
-  private readonly ensure_agent_ready: AgentSessionsOptions["ensure_agent_ready"];
   private readonly session_class: AgentSessionConstructor;
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
@@ -115,10 +116,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
     this.agent_name = options.agent_name;
+    this.agent_description = options.agent_description;
     this.resolve_session_context = options.resolve_session_context;
     this.logger = options.logger;
     this.get_instruction = options.get_instruction;
-    this.ensure_agent_ready = options.ensure_agent_ready;
     this.session_class = options.session_class || Session;
     this.session_composer = options.session_composer ?? new DefaultSessionComposer();
     this.get_agent_model = options.get_agent_model;
@@ -433,6 +434,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const context = this.resolve_session_context(input?.workspace);
     const created = new this.session_class({
       agent_id: this.agent_id,
+      agent_name: this.agent_name,
+      agent_description: this.agent_description,
       workspace_path: context.workspace_path,
       ...(context.workspace_id ? { workspace_id: context.workspace_id } : {}),
       origin,
@@ -445,13 +448,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       instruction_system_blocks: this.load_instruction_system_blocks(),
       get_instruction_system_blocks: () => this.load_instruction_system_blocks(),
       get_workspace_env: () => context.get_workspace_env(),
+      get_workspace: () => context.get_workspace(),
       get_agent_model: () => this.get_agent_model(),
       get_hooks: () => context.get_hooks(),
-      get_managed_power_system_blocks: async () => [],
       composer: this.session_composer,
-      ensure_configured: async (session) => {
-        await this.ensure_agent_ready();
-      },
     });
     this.sessions_by_id.set(cache_key, created);
     return created;

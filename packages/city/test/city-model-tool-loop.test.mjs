@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { define_runtime_tool } from "@downcity/type";
+import { define_agent_tool } from "@downcity/type";
 import { z } from "zod";
 import { Agent } from "../../agent/bin/index.js";
 import { Workspace } from "@downcity/city";
@@ -18,7 +18,7 @@ function event_stream(events) {
   } });
 }
 
-test("Agent executes a RuntimeTool and sends tool_result into the next ModelCall", async () => {
+test("Agent executes an AgentTool and sends tool_result into the next ModelCall", async () => {
   const calls = [];
   let tool_executed = false;
   const model = {
@@ -60,13 +60,13 @@ test("Agent executes a RuntimeTool and sends tool_result into the next ModelCall
     id: "tool_loop_agent",
     model,
     tools: {
-      ping: define_runtime_tool({
+      ping: define_agent_tool({
         description: "ping tool",
         input_schema: z.object({ value: z.string() }),
-        execute: async ({ value }, options) => {
+        execute: async ({ value }, context) => {
           tool_executed = true;
-          assert.equal(options.tool_call_id, "call_1");
-          assert.equal(options.abort_signal instanceof AbortSignal, true);
+          assert.equal(context.tool_call_id, "call_1");
+          assert.equal(context.abort_signal instanceof AbortSignal, true);
           return { echoed: value };
         },
       }),

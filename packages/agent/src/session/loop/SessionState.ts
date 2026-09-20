@@ -38,7 +38,6 @@ export function create_session_local_state(): SessionLocalState {
     created_at: Date.now(),
     timezone: resolve_system_timezone(),
     initialize_promise: null,
-    ensure_configured_promise: null,
   };
 }
 
@@ -60,7 +59,6 @@ export class SessionState {
   private readonly store: SessionStorage;
   private readonly state: SessionLocalState;
   private readonly logger: Logger;
-  private readonly ensure_configured_hook?: SessionStateOptions["ensure_configured_hook"];
   private readonly get_model: SessionStateOptions["get_model"];
   private readonly publish_event: SessionStateOptions["publish_event"];
   private readonly title_task: SessionTitleTask;
@@ -73,7 +71,6 @@ export class SessionState {
     this.store = options.store;
     this.state = options.state;
     this.logger = options.logger;
-    this.ensure_configured_hook = options.ensure_configured_hook;
     this.get_model = options.get_model;
     this.publish_event = options.publish_event;
     this.title_task = new SessionTitleTask({
@@ -153,24 +150,10 @@ export class SessionState {
   }
 
   /**
-   * 在执行前确保当前 session 已完成初始化与宿主装配。
+   * 在执行前确保当前 session 已完成初始化。
    */
   async ensure_ready_for_execution(): Promise<void> {
     await this.initialize();
-    if (this.state.ensure_configured_promise) {
-      await this.state.ensure_configured_promise;
-      return;
-    }
-    this.state.ensure_configured_promise = (async () => {
-      if (!this.ensure_configured_hook) return;
-      await this.ensure_configured_hook();
-    })();
-    try {
-      await this.state.ensure_configured_promise;
-    } catch (error) {
-      this.state.ensure_configured_promise = null;
-      throw error;
-    }
   }
 
   /**

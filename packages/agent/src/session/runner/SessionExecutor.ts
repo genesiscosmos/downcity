@@ -8,7 +8,7 @@
  * - 不持有历史副本，也不修改 canonical Message。
  */
 
-import type { RuntimeTool as Tool } from "@downcity/type";
+import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
 import { log_assistant_message_now } from "@/model/messages/SessionMessageLog.js";
 import {
   MAX_INCOMPLETE_RESPONSE_RECOVERIES,
@@ -470,7 +470,7 @@ export class SessionExecutor implements SessionExecutorPort {
     /** 当前 Step 已装配完成的模型输入。 */
     step_input: SessionStepExecutionInput;
     /** 覆盖本 Step 的工具集合；撞顶收尾时传空表以禁止继续调用工具。 */
-    tools_override?: Record<string, Tool>;
+    tools_override?: Record<string, BoundAgentTool>;
     /** 合并本 Step 的计数与诊断日志。 */
     on_step_finish: (step_result: ModelStepResult) => Promise<void>;
   }): Promise<{

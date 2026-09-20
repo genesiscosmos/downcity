@@ -2,24 +2,27 @@
  * City 唯一 Power Registry 与生命周期运行时。
  *
  * 一个 City 中每个 Power ID 只有一个实例和一套 initialize/dispose 生命周期。
- * Agent 不保存 Registry，Workspace 也不形成 Power 生命周期；City 只在具体调用时
- * 根据 Agent、Workspace 与目标 Power 即时投影 PowerContext。
+ * Agent 不保存 Registry；City 在 Power 集合变化时把编译产物推送给全部 Agent，
+ * 具体调用由 Agent 在执行时注入调用环境。
+ *
+ * 关键点（中文）
+ * - 不存在全局生命周期屏障：单个 Power 的初始化只影响它自己。
+ * - 不存在 execution lease：Power 被移除时正在执行的调用按各自实现收口。
  */
 
 import type { Hono } from "hono";
 import type { Agent, Logger } from "@downcity/agent";
-import { get_logger, SessionHooks } from "@downcity/agent";
-import type { RuntimeTool } from "@downcity/type";
+import { get_logger } from "@downcity/agent";
+import type { AgentTool, ToolCallContext, ToolHookSet } from "@downcity/type";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
-import type {
-  AgentPowerExecutionLease,
-  AgentPowerRuntime,
-} from "@/power/types/PowerExecutionRuntime.js";
+import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type {
   CityPowerRegistration,
   PowerConfigAction,
+  PowerContext,
   PowerContextFactory,
   PowerDefinition,
+  PowerExecutionContext,
   PowerHostAction,
   PowerJsonValue,
   PowerLifecycleContext,
@@ -48,10 +51,12 @@ export class CityPowerRuntime {
   /** 按 Power ID 串行化动态添加与移除，避免同一实例生命周期交叉。 */
   private readonly power_lifecycle_chains = new Map<string, Promise<void>>();
 
-  /** 新执行等待的 Power 初始化完成屏障。 */
-  private lifecycle_stability: Promise<void> = Promise.resolve();
-
-  /** City 关闭前需要等待的全部生命周期操作完成屏障。 */
+  /**
+   * City 关闭前需要等待的全部生命周期操作。
+   *
+   * 关键点（中文）：它只用于关闭收口，不会阻塞任何 Power 的执行；
+   * 单个 Power 初始化慢不会影响其他 Power 或 Session。
+   */
   private lifecycle_settlement: Promise<void> = Promise.resolve();
 
   /** Power Runtime 自身的关闭状态，用于拒绝关闭期间的新执行。 */
@@ -59,6 +64,9 @@ export class CityPowerRuntime {
 
   /** 并发关闭调用共享的唯一释放流程。 */
   private dispose_promise?: Promise<void>;
+
+  /** 编译产物变化订阅器；宿主用它把新产物推送给 Agent。 */
+  private readonly surface_subscribers = new Set<() => void>();
 
   /** City 向应用提供的 Power 集合入口。 */
   readonly public_api: CityPowers;
@@ -77,7 +85,30 @@ export class CityPowerRuntime {
         await this.invoke_host_action(power_id, action_id, input),
       invoke_config: async (power_id, action_id, input) =>
         await this.invoke_config(power_id, action_id, input),
+      subscribe_surface: (subscriber) => {
+        this.surface_subscribers.add(subscriber);
+        return () => {
+          this.surface_subscribers.delete(subscriber);
+        };
+      },
+      settled: async () => await this.lifecycle_settlement,
     });
+  }
+
+  /**
+   * 为指定 Agent 编译当前 Power 产物。
+   *
+   * 关键点（中文）
+   * - 产物是普通值与普通函数，Agent 持有后执行时不再回查 City。
+   * - Workspace 不属于编译输入：同一个 Agent 可以进入多个 Workspace，
+   *   执行时由 Agent 通过调用环境注入，City 在调用点解析出对应 Workspace。
+   */
+  compile_surface(agent: Agent): { tools: Record<string, AgentTool>; hooks: ToolHookSet } {
+    const context_factory = this.context_factory(agent);
+    return {
+      tools: this.registry.tools(context_factory),
+      hooks: this.registry.hooks(context_factory),
+    };
   }
 
   /** 向 City 添加一个唯一 Power 实例。 */
@@ -139,11 +170,12 @@ export class CityPowerRuntime {
     try {
       await record.ready;
       await this.registry.register(record.power);
+      this.publish_surface_change();
     } catch (error) {
       if (this.powers_by_id.get(power_id) === record) {
         this.powers_by_id.delete(power_id);
       }
-      await this.registry.unregister_and_wait(power_id);
+      await this.registry.unregister(power_id);
       let lifecycle_error = error;
       try {
         await this.dispose_power(record);
@@ -158,11 +190,16 @@ export class CityPowerRuntime {
         status: "error",
         last_error: to_error_message(lifecycle_error),
       });
+      this.publish_surface_change();
       throw lifecycle_error;
     }
   }
 
-  /** 从 City 立即隐藏 Power，等待既有 execution lease 后再释放实例。 */
+  /**
+   * 从 City 移除 Power，并在宿主管理调用收口后释放实例。
+   *
+   * 关键点（中文）：不存在 execution lease；Power 内部的长任务由实现自行收口。
+   */
   private remove(power_id_input: string): Promise<boolean> {
     this.assert_active();
     const power_id = normalize_id(power_id_input, "power_id");
@@ -173,10 +210,11 @@ export class CityPowerRuntime {
       this.failed_power_snapshots.delete(power_id);
       const errors: unknown[] = [];
       try {
-        await this.registry.unregister_and_wait(power_id);
+        await this.registry.unregister(power_id);
       } catch (error) {
         errors.push(error);
       }
+      this.publish_surface_change();
       await this.wait_record_idle(record);
       try {
         await this.dispose_power(record);
@@ -188,26 +226,17 @@ export class CityPowerRuntime {
       }
       return true;
     });
-    this.track_lifecycle(operation, false);
+    this.track_lifecycle(operation);
     return operation;
   }
 
-  /** 把一次生命周期操作加入 City 稳定性屏障，失败不会污染其他 Power。 */
-  private track_lifecycle(
-    operation: Promise<unknown>,
-    blocks_execution = true,
-  ): void {
+  /** 把一次生命周期操作加入关闭收口屏障，失败不会污染其他 Power。 */
+  private track_lifecycle(operation: Promise<unknown>): void {
     const settled = operation.then(() => undefined, () => undefined);
     this.lifecycle_settlement = Promise.all([
       this.lifecycle_settlement,
       settled,
     ]).then(() => undefined);
-    if (blocks_execution) {
-      this.lifecycle_stability = Promise.all([
-        this.lifecycle_stability,
-        settled,
-      ]).then(() => undefined);
-    }
   }
 
   /** 按 Power ID 串行执行一次完整生命周期修改。 */
@@ -239,23 +268,6 @@ export class CityPowerRuntime {
   /** 返回 City 当前持有的唯一 Power 实例。 */
   private get(power_id_input: string): PowerDefinition | null {
     return this.powers_by_id.get(String(power_id_input || "").trim())?.power ?? null;
-  }
-
-  /** 等待当前已提交的 Power 生命周期操作稳定。 */
-  async ensure_ready(): Promise<void> {
-    await this.lifecycle_stability;
-  }
-
-  /** 为明确的 Agent/Workspace 执行检查点创建 Tool 视图。 */
-  tools(agent: Agent, workspace: WorkspaceRuntime, logger: Logger): Record<string, RuntimeTool> {
-    const context_factory = this.context_factory(agent, workspace, logger);
-    const runtime = this.ready_contextual(context_factory);
-    return this.registry.tools(context_factory, runtime);
-  }
-
-  /** 为明确的 Agent/Workspace 执行检查点创建 Hook 视图。 */
-  hooks(agent: Agent, workspace: WorkspaceRuntime, logger: Logger): SessionHooks {
-    return this.session_hooks(this.context_factory(agent, workspace, logger));
   }
 
   /** City 开始关闭时立即封闭新的 Power 生命周期操作与直接执行。 */
@@ -297,6 +309,7 @@ export class CityPowerRuntime {
         errors.push(error);
       }
     }
+    this.surface_subscribers.clear();
     if (errors.length > 0) {
       throw new AggregateError(errors, "City Power Runtime shutdown failed");
     }
@@ -328,15 +341,31 @@ export class CityPowerRuntime {
     }
   }
 
-  /** 为一次 Power 调用创建动态上下文工厂，不缓存 Workspace 或 Power Context。 */
-  private context_factory(
-    agent: Agent,
-    workspace: WorkspaceRuntime,
-    logger: Logger,
-  ): PowerContextFactory {
-    let contextual_powers: AgentPowerRuntime | undefined;
-    const context_factory: PowerContextFactory = (power_id_input) => {
-      const power_id = normalize_id(power_id_input, "power_id");
+  /** 通知订阅者重新编译并推送产物。 */
+  private publish_surface_change(): void {
+    for (const subscriber of this.surface_subscribers) {
+      try {
+        subscriber();
+      } catch {
+        // 观察者失败不能回滚已经完成的 Power 集合修改。
+      }
+    }
+  }
+
+  /**
+   * 为一次 Power 调用创建动态上下文工厂。
+   *
+   * 关键点（中文）
+   * - 工厂只在调用发生时使用，不缓存 Workspace 或 PowerContext。
+   * - Agent 注入的 ToolCallContext 同时提供执行身份与 Workspace，
+   *   City 在此之上补齐自身句柄。
+   */
+  private context_factory(agent: Agent): PowerContextFactory {
+    const build_context = (
+      power_id: string,
+      call_context: ToolCallContext,
+    ): PowerContext => {
+      const workspace = this.require_call_workspace(agent.id, call_context);
       const power_storage = this.options.storage.open_scope([
         "agents",
         agent.id,
@@ -355,139 +384,33 @@ export class CityPowerRuntime {
         data_files: power_storage.files,
         get_config: () => this.options.host?.config?.(power_id).get() ?? {},
         ...(workspace.shell ? { shell: workspace.shell } : {}),
-        logger,
+        logger: agent.get_logger(),
         embassy: this.options.embassy,
         ...(this.options.host
           ? { notifications: this.options.host.notifications(power_id, agent.id) }
           : {}),
         get_workspace_env: () => workspace.get_env(),
         get_instructions: () => agent.get_instructions(),
-        get_powers: () => {
-          contextual_powers ??= this.ready_contextual(context_factory);
-          return contextual_powers;
-        },
+        get_powers: () => this.registry.contextual(
+          build_context,
+          (execution_context) => merge_call_context(call_context, execution_context),
+        ),
         get_sessions: () => agent.sessions,
       });
     };
-    return context_factory;
+    return build_context;
   }
 
-  /** 在当前 Registry 快照上运行操作，并始终释放 execution lease。 */
-  private async with_execution_lease<TResult>(
-    context_factory: PowerContextFactory,
-    operation: (lease: AgentPowerExecutionLease) => Promise<TResult>,
-  ): Promise<TResult> {
-    this.assert_active();
-    const lease = this.registry.execution_view(context_factory).acquire();
-    try {
-      return await operation(lease);
-    } finally {
-      await lease.release();
+  /** 解析一次调用所属的 Workspace；缺少绑定时报出装配错误。 */
+  private require_call_workspace(
+    agent_id: string,
+    call_context: ToolCallContext,
+  ): WorkspaceRuntime {
+    const workspace = call_context.workspace;
+    if (!workspace) {
+      throw new Error(`Power call requires a Workspace: ${agent_id}`);
     }
-  }
-
-  /** 创建等待 City 生命周期稳定后再执行的 Power 调用面。 */
-  private ready_contextual(context_factory: PowerContextFactory): AgentPowerRuntime {
-    const runtime = this.registry.contextual(context_factory);
-    const wait_ready = async () => await this.lifecycle_stability;
-    return Object.freeze({
-      has: (power_name) => runtime.has(power_name),
-      get: (power_name) => runtime.get(power_name),
-      status: (power_name) => runtime.status(power_name),
-      snapshots: () => runtime.snapshots(),
-      list: () => runtime.list(),
-      read: (params) => runtime.read(params),
-      availability: async (power_name) => {
-        await wait_ready();
-        return await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.availability(power_name),
-        );
-      },
-      run_action: async (params) => {
-        await wait_ready();
-        return await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.run_action(params),
-        );
-      },
-      system_blocks: async (execution_context) => {
-        await wait_ready();
-        return await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.system_blocks(execution_context),
-        );
-      },
-      pipeline: async <TValue>(point_name: string, value: TValue) => {
-        await wait_ready();
-        return await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.pipeline(point_name, value),
-        );
-      },
-      guard: async <TValue>(point_name: string, value: TValue) => {
-        await wait_ready();
-        await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.guard(point_name, value),
-        );
-      },
-      effect: async <TValue>(point_name: string, value: TValue) => {
-        await wait_ready();
-        await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.effect(point_name, value),
-        );
-      },
-      resolve: async <TInput, TOutput>(point_name: string, value: TInput) => {
-        await wait_ready();
-        return await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.resolve<TInput, TOutput>(point_name, value),
-        );
-      },
-    });
-  }
-
-  /** 创建 Agent/Workspace 对应的 Session Hook 集合。 */
-  private session_hooks(context_factory: PowerContextFactory): SessionHooks {
-    const wait_ready = async () => await this.lifecycle_stability;
-    return new SessionHooks({
-      system_blocks: async (hook_context) => {
-        await wait_ready();
-        return await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.system_blocks(hook_context),
-        );
-      },
-      pipeline: async <TValue>(point_name: string, value: TValue) => {
-        await wait_ready();
-        return await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.pipeline(point_name, value),
-        );
-      },
-      effect: async <TValue>(point_name: string, value: TValue) => {
-        await wait_ready();
-        await this.with_execution_lease(
-          context_factory,
-          async (lease) => await lease.effect(point_name, value),
-        );
-      },
-      open: async () => {
-        await wait_ready();
-        this.assert_active();
-        const lease = this.registry.execution_view(context_factory).acquire();
-        return {
-          system_blocks: async (hook_context) => await lease.system_blocks(hook_context),
-          pipeline: async <TValue>(point_name: string, value: TValue) =>
-            await lease.pipeline(point_name, value),
-          effect: async <TValue>(point_name: string, value: TValue) =>
-            await lease.effect(point_name, value),
-          close: async () => await lease.release(),
-        };
-      },
-    });
+    return this.options.runtime_access.require_workspace(agent_id, workspace.id);
   }
 
   /** 返回一个 Agent/Workspace 的直接 Power 执行面。 */
@@ -496,8 +419,16 @@ export class CityPowerRuntime {
     const agent = this.options.runtime_access.get_agent(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     const workspace = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
-    return this.ready_contextual(
-      this.context_factory(agent, workspace, agent.get_logger()),
+    return this.registry.contextual(
+      this.context_factory(agent),
+      (execution_context) => create_call_context({
+        agent_id: agent.id,
+        agent_name: agent.name,
+        agent_description: agent.description,
+        agent_instructions: agent.get_instructions(),
+        workspace,
+        execution_context,
+      }),
     );
   }
 
@@ -511,14 +442,19 @@ export class CityPowerRuntime {
     const agent = this.options.runtime_access.get_agent(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     const workspace = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
-    const context_factory = this.context_factory(
-      agent,
-      workspace,
-      agent.get_logger(),
-    );
+    const context_factory = this.context_factory(agent);
     register_power_http_routes({
       app,
-      get_context: context_factory,
+      get_context: (power_id) => context_factory(
+        power_id,
+        create_call_context({
+          agent_id: agent.id,
+          agent_name: agent.name,
+          agent_description: agent.description,
+          agent_instructions: agent.get_instructions(),
+          workspace,
+        }),
+      ),
       powers: this.registry.snapshots()
         .map((snapshot) => this.registry.get(snapshot.name))
         .filter((power): power is PowerDefinition => power !== null),
@@ -573,7 +509,7 @@ export class CityPowerRuntime {
     });
   }
 
-  /** 在 Power 仍属于 City 时持有一次宿主管理调用租约。 */
+  /** 在 Power 仍属于 City 时持有一次宿主管理调用。 */
   private async with_record_execution<TResult>(
     power_id: string,
     operation: (record: CityPowerRecord) => Promise<TResult>,
@@ -735,6 +671,60 @@ export class CityPowerRuntime {
       }),
     });
   }
+}
+
+/** 用一次嵌套调用的执行快照覆盖外层调用环境的可变部分。 */
+function merge_call_context(
+  base: ToolCallContext,
+  execution_context?: PowerExecutionContext,
+): ToolCallContext {
+  if (!execution_context) return base;
+  return Object.freeze({
+    ...base,
+    ...(execution_context.session_id
+      ? { session_id: execution_context.session_id }
+      : {}),
+    ...(execution_context.session_origin
+      ? { session_origin: execution_context.session_origin }
+      : {}),
+    ...(execution_context.turn_id ? { turn_id: execution_context.turn_id } : {}),
+    ...(execution_context.abort_signal
+      ? { abort_signal: execution_context.abort_signal }
+      : {}),
+    ...(execution_context.workspace_env
+      ? { workspace_env: execution_context.workspace_env }
+      : {}),
+  });
+}
+
+/** 构造不属任何 Turn 的调用环境。 */
+function create_call_context(input: {
+  /** 当前 Agent 稳定标识。 */
+  readonly agent_id: string;
+  /** 当前 Agent 用户可见名称。 */
+  readonly agent_name: string;
+  /** 当前 Agent 能力描述。 */
+  readonly agent_description: string;
+  /** 当前 Agent 指令快照。 */
+  readonly agent_instructions: readonly string[];
+  /** 当前 Workspace 实例。 */
+  readonly workspace: WorkspaceRuntime;
+  /** 可选执行快照。 */
+  readonly execution_context?: PowerExecutionContext;
+}): ToolCallContext {
+  return merge_call_context(
+    Object.freeze({
+      agent_id: input.agent_id,
+      agent_name: input.agent_name,
+      agent_description: input.agent_description,
+      agent_instructions: Object.freeze([...input.agent_instructions]),
+      session_id: "",
+      session_origin: { type: "chat" },
+      workspace: input.workspace,
+      messages: Object.freeze([]),
+    }),
+    input.execution_context,
+  );
 }
 
 /** 把 City 内部生命周期记录投影为稳定公开快照。 */

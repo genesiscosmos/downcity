@@ -78,6 +78,10 @@ export class SessionLoop {
   private readonly messages: SessionMessages;
   private readonly events: SessionEventHub;
   private readonly logger: SessionLoopOptions["logger"];
+  /** 读取当前生效的扩展处理器集合。 */
+  private readonly get_hooks: SessionLoopOptions["get_hooks"];
+  /** 构造当前 Turn 的调用环境快照。 */
+  private readonly create_call_context: SessionLoopOptions["create_call_context"];
   private readonly interactions:
     SessionInteractionLifecycle & SessionInteractionPort;
   private readonly queue: SessionQueue;  private pending_prompt_count = 0;
@@ -95,6 +99,8 @@ export class SessionLoop {
     this.messages = options.messages;
     this.events = options.events;
     this.logger = options.logger;
+    this.get_hooks = options.get_hooks;
+    this.create_call_context = options.create_call_context;
     this.queue = options.queue;
     this.interactions = options.interactions;
     if (!this.session_id) {
@@ -692,6 +698,8 @@ export class SessionLoop {
       events: this.events,
       logger: this.logger,
       stopped_message: TURN_STOPPED_MESSAGE,
+      get_hooks: this.get_hooks,
+      create_call_context: this.create_call_context,
     };
   }
 }

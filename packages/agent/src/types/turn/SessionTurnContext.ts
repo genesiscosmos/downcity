@@ -7,15 +7,13 @@
  * - 可变状态只能通过行为方法更新，消费者不能直接操作内部数组、lease 或 callback。
  */
 
-import type { RuntimeToolEffect } from "@downcity/type";
+import type { ToolEffect } from "@downcity/type";
 import type {
   SessionModelUserContent,
   SessionUserMessage,
 } from "@downcity/type";
 import type { SessionAgentContent } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
-import type { SessionHookContext } from "@downcity/type";
-import type { SessionHookScopeRuntime } from "@downcity/type";
 import type {
   AgentSessionActionCallback,
   AgentSessionActionEvent,
@@ -64,7 +62,7 @@ export interface SessionTurnContextInit {
   interactions?: SessionInteractionPort;
 
   /** 当前 Turn effects 追加后触发的实时观测回调，宿主可据此广播文件改动摘要。 */
-  on_effects_changed?: (effects: readonly RuntimeToolEffect[]) => void;
+  on_effects_changed?: (effects: readonly ToolEffect[]) => void;
 
   /** 把辅助 Action 持久化并发布为 Session 事件的回调。 */
   publish_action?: AgentSessionActionCallback;
@@ -112,10 +110,7 @@ export interface SessionTurnContext {
     /** 当前 Step 已提交生效的 Agent instruction 快照。 */
     readonly agent_systems: readonly string[];
 
-    /** 当前 Step 持有的稳定 Hook 作用域。 */
-    readonly hooks?: SessionHookScopeRuntime;
-
-    /** 当前 Turn 首次解析后冻结的 Power 动态上下文。 */
+    /** 当前 Turn 首次解析后冻结的扩展动态上下文。 */
     readonly power_context_blocks: readonly SessionHookContextBlock[];
 
     /** 原子提交当前 Step 使用的 env 与 instruction 快照。 */
@@ -127,19 +122,10 @@ export interface SessionTurnContext {
       agent_systems: readonly string[];
     }): void;
 
-    /** 切换当前 Step 的 Hook 作用域，并先关闭前一个作用域。 */
-    replace_hooks(hooks?: SessionHookScopeRuntime): Promise<void>;
-
     /** 首次调用时解析并冻结动态上下文，后续 Step 与重试复用同一快照。 */
     resolve_power_context_blocks(
       resolver: () => Promise<readonly SessionHookContextBlock[]>,
     ): Promise<readonly SessionHookContextBlock[]>;
-
-    /** 释放当前 Step 持有的 Power Hook 作用域。 */
-    release(): Promise<void>;
-
-    /** 为 City Power 生成只包含稳定、只读运行快照的新对象。 */
-    hook_context(call_id?: string): SessionHookContext;
   };
 
   /** 当前运行的动态 User 输入。 */
@@ -184,10 +170,10 @@ export interface SessionTurnContext {
   /** 当前 Turn 已经发生、等待在收口检查点投影的 Tool 副作用。 */
   readonly effects: {
     /** 按实际发生顺序追加 Tool 副作用。 */
-    append(effects: readonly RuntimeToolEffect[]): void;
+    append(effects: readonly ToolEffect[]): void;
 
     /** 返回当前 Turn 已收集副作用的不可变快照。 */
-    snapshot(): readonly RuntimeToolEffect[];
+    snapshot(): readonly ToolEffect[];
   };
 
   /** 当前 Session 执行面创建用户异步交互的端口。 */

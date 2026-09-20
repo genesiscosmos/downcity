@@ -19,16 +19,28 @@ import { City, Workspace } from "../bin/index.js";
 const GUEST_WORKSPACE_PATH = "/workspace";
 
 /**
- * 单次 city 调用绑定的 Session Turn 上下文。
+ * 单次 city 调用绑定的工具调用环境。
  *
- * 工具层会从 `step.hook_context()` 取本次调用的执行快照，因此测试必须提供同形结构。
+ * 工具层直接接收 `ToolCallContext`；City 侧句柄由上下文工厂补齐。
  */
-const turn_context = {
-  session: { session_id: "session-1", turn_id: "turn-1", origin: { type: "chat" } },
-  step: {
-    hook_context: () => ({ session_id: "session-1", turn_id: "turn-1" }),
-  },
+/**
+ * 单次 city 调用绑定的工具调用环境。
+ *
+ * 工具层直接接收 `ToolCallContext`；City 侧句柄由上下文工厂补齐。
+ * `session_id` 由夹具创建真实 Session 后回填，因为动作执行时会用它解析句柄。
+ */
+let tool_call_context = {
+  agent_id: "test-agent",
+  agent_name: "test-agent",
+  agent_description: "",
+  agent_instructions: [],
+  session_id: "",
+  session_origin: { type: "chat" },
+  turn_id: "turn-1",
 };
+
+/** 当前测试用例使用的 Workspace；City 用它解析一次调用的执行作用域。 */
+let current_workspace;
 
 /** 创建只提供沙箱自省能力的测试 Shell。 */
 function create_test_shell(workspace_path) {
@@ -75,16 +87,15 @@ function create_test_agent(agent_id) {
 }
 
 /**
- * 调用一次 city power 工具，并携带显式 Session Turn 上下文。
+ * 调用一次 city power 工具，并携带显式调用环境。
  *
- * 工具层按 Runtime Tool 协议返回 `ActionResult`，其中 `output` 才是模型侧结果；
+ * 工具按 AgentTool 协议返回 `ActionResult`，其中 `output` 才是模型侧结果；
  * messages / effects 由 Executor 分流，这里只断言 output。
  */
 async function call_city_tool(tool, input) {
   const result = await tool.execute(input, {
-    tool_call_id: "call-1",
-    messages: [],
-    context: { session_turn_context: turn_context },
+    ...tool_call_context,
+    ...(current_workspace ? { workspace: current_workspace } : {}),
   });
   return result.output;
 }
@@ -94,11 +105,16 @@ async function create_city_tool_fixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-power-"));
   const agent = create_test_agent("test-agent");
   const workspace = await create_test_workspace(root, "test-workspace");
+  current_workspace = workspace;
   const city = new City({ workspaces: [workspace] });
   city.agents.add(agent);
-  // power 注册是异步 lifecycle；执行前必须先等 City ready（Agent 执行路径同此约定）。
-  await city.ensure_ready();
-  const tools = city.get_session_tools(agent.id, workspace);
+  // power 注册是异步 lifecycle；这里等它稳定后读取 Agent 持有的编译产物。
+  await city.powers.settled();
+  // 动作执行时会用调用环境里的 session_id 解析真实 Session 句柄，
+  // 因此夹具必须创建真实 Session，并把它的标识回填到调用环境。
+  const session = await agent.sessions.create({ workspace });
+  tool_call_context = { ...tool_call_context, session_id: session.id };
+  const tools = agent.get_power_tools();
   const tool = tools.city;
   assert.ok(tool, "city power should be assembled for every Agent/Workspace");
   return {
@@ -106,6 +122,7 @@ async function create_city_tool_fixture() {
     agent,
     workspace,
     city,
+    session,
     tool,
     tools,
     close: async () => {
@@ -171,7 +188,7 @@ test("city power env.get 返回当前 Agent、Session 与 Workspace 事实", asy
     assert.equal(env.success, true);
     assert.equal(env.action, "env.get");
     assert.equal(env.data.agent_id, "test-agent");
-    assert.equal(env.data.session_id, "session-1");
+    assert.equal(env.data.session_id, fixture.session.id);
     assert.equal(env.data.turn_id, "turn-1");
     assert.equal(env.data.workspace_id, "test-workspace");
     assert.equal(env.data.workspace_path, fixture.workspace.path);
@@ -276,11 +293,14 @@ test("city power 在 Workspace 没有 Shell 时明确回答沙箱不可用", asy
   const workspace_path = path.join(root, "no-shell-workspace");
   await fs.mkdir(workspace_path, { recursive: true });
   const workspace = new Workspace({ id: "no-shell-workspace", path: workspace_path });
+  current_workspace = workspace;
   const city = new City({ workspaces: [workspace] });
   city.agents.add(agent);
   try {
-    await city.ensure_ready();
-    const tool = city.get_session_tools(agent.id, workspace).city;
+    await city.powers.settled();
+    const session = await agent.sessions.create({ workspace });
+    tool_call_context = { ...tool_call_context, session_id: session.id };
+    const tool = agent.get_power_tools().city;
     const sandbox = await call_city_tool(tool, { action: "sandbox.get" });
     assert.equal(sandbox.success, true);
     assert.equal(sandbox.data.available, false);

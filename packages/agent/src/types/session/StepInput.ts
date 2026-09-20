@@ -7,9 +7,10 @@
 
 import type {
   ModelClient,
-  RuntimeTool as Tool,
-  SessionHookRuntime,
+  AgentTool as Tool,
   SessionOrigin,
+  ToolHookSet,
+  WorkspaceRuntime,
 } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
@@ -20,6 +21,10 @@ import type { Logger } from "@/utils/logger/Logger.js";
 export interface StepInputOptions {
   /** 当前 Session 所属 Agent 的稳定标识。 */
   agent_id: string;
+  /** 当前 Agent 的用户可见名称。 */
+  agent_name: string;
+  /** 当前 Agent 的一句话能力描述。 */
+  agent_description: string;
   /** 当前 Session 的稳定标识。 */
   session_id: string;
   /** 当前 Session 的创建来源。 */
@@ -32,16 +37,16 @@ export interface StepInputOptions {
   composer: SessionComposer;
   /** 在每个 Step 检查点读取当前可用 Tool 集合。 */
   get_tools: () => Record<string, Tool>;
+  /** 读取当前 Session 绑定的 Workspace 实例；未绑定时返回 undefined。 */
+  get_workspace?: () => WorkspaceRuntime | undefined;
   /** 当前 Session 创建时捕获的 instruction system blocks。 */
   instruction_system_blocks: AgentSessionSystemBlock[];
   /** 显式刷新 system 时读取 Agent 最新 instruction system blocks。 */
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
-  /** 在每个 Step 检查点读取当前配置的 Hook 执行视图。 */
-  get_hooks: () => SessionHookRuntime;
+  /** 在每个 Step 检查点读取当前生效的扩展处理器集合。 */
+  get_hooks: () => ToolHookSet;
   /** 在每个 Step 检查点读取 Workspace env。 */
   get_workspace_env: () => Record<string, string>;
-  /** 读取宿主显式注入的受托管 Power system blocks。 */
-  get_managed_power_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
   /** 读取当前 Session 实际使用的模型。 */
   get_model: () => ModelClient | undefined;
   /** 读取当前模型声明的上下文窗口。 */

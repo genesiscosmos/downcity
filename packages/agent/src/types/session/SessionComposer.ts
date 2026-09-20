@@ -10,7 +10,7 @@
  * - Composer 不拥有 Message、Turn 或数据库连接生命周期，也不修改 canonical history。
  */
 
-import type { ModelClient, ModelMessage, RuntimeTool as Tool } from "@downcity/type";
+import type { ModelClient, ModelMessage, AgentTool } from "@downcity/type";
 import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionHookContextBlock, SessionMessage } from "@downcity/type";
@@ -42,12 +42,10 @@ export interface SessionComposeState {
   /** 当前 Step 生效的 Agent instruction 文本。 */
   systems: readonly string[];
   /** 当前 Step 可使用的工具集合。 */
-  tools: Readonly<Record<string, Tool>>;
+  tools: Readonly<Record<string, AgentTool>>;
   /** 当前 Step 生效的 instruction system blocks。 */
   instruction_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 宿主注入的受托管 Power system blocks。 */
-  managed_power_system_blocks: readonly AgentSessionSystemBlock[];
-  /** 当前 Step 捕获的 Power system blocks。 */
+  /** 当前 Step 捕获的扩展 system blocks。 */
   power_system_blocks: readonly AgentSessionSystemBlock[];
   /** 当前 Turn 冻结的 Power 动态上下文。 */
   power_context_blocks: readonly SessionHookContextBlock[];
@@ -126,8 +124,8 @@ export interface SessionStepInput {
   system_blocks?: AgentSessionSystemBlock[];
   /** 当前 Step 已转换完成的标准模型消息。 */
   messages: ModelMessage[];
-  /** 当前 Step 可调用的工具集合。 */
-  tools: Record<string, Tool>;
+  /** 当前 Step 可调用的工具集合；执行前由 StepInput 绑定调用环境。 */
+  tools: Record<string, AgentTool>;
   /** 本次上下文组装诊断。 */
   context_diagnostics?: SessionContextDiagnostics;
 }

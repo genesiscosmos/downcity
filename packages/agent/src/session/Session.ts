@@ -11,7 +11,7 @@ import {
   type ModelClient,
   read_model_context_window,
   read_model_label,
-  type RuntimeTool as Tool,
+  type AgentTool as Tool,
 } from "@downcity/type";
 import { SessionMessages } from "@/session/messages/SessionMessages.js";
 import type {
@@ -46,7 +46,7 @@ import { SessionLoop } from "@/session/loop/SessionLoop.js";
 import { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
-import type { SessionHookRuntime } from "@downcity/type";
+import type { ToolCallContext, ToolHookSet } from "@downcity/type";
 import { SessionInteractions } from "@/session/messages/SessionInteractions.js";
 import { DefaultSessionComposer } from "@/session/input/composer/DefaultSessionComposer.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
@@ -72,6 +72,10 @@ import type { SessionContextAdvanceTrigger } from "@/types/session/SessionCompos
 export class Session implements AgentSession {
   readonly id: string;
   readonly agent_id: string;
+  /** 当前 Agent 用户可见名称；进入工具与扩展的调用环境。 */
+  readonly agent_name: string;
+  /** 当前 Agent 一句话能力描述；进入工具与扩展的调用环境。 */
+  readonly agent_description: string;
   /** 当前 Session 创建时绑定的 Workspace ID。 */
   readonly workspace_id?: string;
   /** 当前 Session 的创建来源。 */
@@ -83,8 +87,6 @@ export class Session implements AgentSession {
   private readonly register_forked_session: SessionOptions["register_forked_session"];
   private readonly get_tools: SessionOptions["get_tools"];
   private readonly logger: SessionOptions["logger"];
-  private readonly get_managed_power_system_blocks: SessionOptions["get_managed_power_system_blocks"];
-  private readonly ensure_configured_hook?: SessionOptions["ensure_configured"];
   private readonly composer: SessionComposer;
   private readonly session_messages: SessionMessages;
   private readonly events: SessionEventHub;
@@ -93,6 +95,8 @@ export class Session implements AgentSession {
   private effective_approval_mode: SessionApprovalMode = "ask";
   private readonly local_state: SessionLocalState;
   private readonly get_workspace_env: SessionOptions["get_workspace_env"];
+  /** 读取当前 Session 绑定的 Workspace 实例。 */
+  private readonly get_workspace: SessionOptions["get_workspace"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
   private readonly get_hooks: SessionOptions["get_hooks"];
   private readonly get_instruction_system_blocks:
@@ -110,6 +114,8 @@ export class Session implements AgentSession {
   constructor(options: SessionOptions) {
     this.id = String(options.session_id || "").trim();
     this.agent_id = String(options.agent_id || "").trim();
+    this.agent_name = String(options.agent_name || "").trim() || this.agent_id;
+    this.agent_description = String(options.agent_description || "").trim();
     this.workspace_id = String(options.workspace_id || "").trim() || undefined;
     this.origin = options.origin;
     this.workspace_path = String(options.workspace_path || "").trim();
@@ -119,11 +125,10 @@ export class Session implements AgentSession {
     this.get_tools = options.get_tools;
     this.logger = options.logger;
     this.get_workspace_env = options.get_workspace_env;
+    this.get_workspace = options.get_workspace;
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
-    this.get_managed_power_system_blocks = options.get_managed_power_system_blocks;
-    this.ensure_configured_hook = options.ensure_configured;
     this.composer = options.composer ?? new DefaultSessionComposer();
     if (!this.id) {
       throw new Error("Session requires a non-empty session_id");
@@ -153,6 +158,8 @@ export class Session implements AgentSession {
     this.local_state = create_session_local_state();
     this.step_input = new StepInput({
       agent_id: this.agent_id,
+      agent_name: this.agent_name,
+      agent_description: this.agent_description,
       session_id: this.id,
       session_origin: this.origin,
       workspace_path: this.workspace_path,
@@ -163,7 +170,7 @@ export class Session implements AgentSession {
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_hooks: this.get_hooks,
       get_workspace_env: this.get_workspace_env,
-      get_managed_power_system_blocks: this.get_managed_power_system_blocks,
+      get_workspace: this.get_workspace,
       get_model: () => this.get_model(),
       get_model_context_window: () => this.get_model_context_window(),
       get_created_at: () => this.local_state.created_at,
@@ -177,11 +184,6 @@ export class Session implements AgentSession {
       store: this.store,
       state: this.local_state,
       logger: this.logger,
-      ensure_configured_hook: this.ensure_configured_hook
-        ? async () => {
-            await this.ensure_configured_hook?.(this);
-          }
-        : undefined,
       get_model: () => this.get_model(),
       publish_event: (event) => {
         this.events.publish(event);
@@ -202,6 +204,8 @@ export class Session implements AgentSession {
       messages: this.session_messages,
       interactions: this.session_interactions,
       queue: this.session_queue,
+      get_hooks: this.get_hooks,
+      create_call_context: (input) => this.create_turn_call_context(input),
     });
   }
 
@@ -541,9 +545,36 @@ export class Session implements AgentSession {
     await this.state.ensure_ready_for_execution();
   }
 
+  /** 构造当前 Turn 的调用环境快照。 */
+  private create_turn_call_context(input: {
+    /** 当前 Turn 稳定标识。 */
+    readonly turn_id: string;
+    /** 当前 Turn 的取消信号。 */
+    readonly abort_signal: AbortSignal;
+  }): ToolCallContext {
+    const workspace = this.get_workspace();
+    return Object.freeze({
+      agent_id: this.agent_id,
+      agent_name: this.agent_name,
+      agent_description: this.agent_description,
+      agent_instructions: Object.freeze(
+        this.get_instruction_system_blocks().map((block) => block.content),
+      ),
+      session_id: this.id,
+      session_origin: this.origin,
+      ...(workspace ? { workspace } : {}),
+      turn_id: input.turn_id,
+      abort_signal: input.abort_signal,
+      interactions: this.session_interactions,
+      workspace_env: Object.freeze({ ...this.get_workspace_env() }),
+    });
+  }
+
   private create_fork_session(session_id: string): this {
     return this.create_child_session({
       agent_id: this.agent_id,
+      agent_name: this.agent_name,
+      agent_description: this.agent_description,
       workspace_path: this.workspace_path,
       ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
       origin: this.origin,
@@ -556,9 +587,8 @@ export class Session implements AgentSession {
       instruction_system_blocks: this.step_input.instruction_blocks(),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_workspace_env: this.get_workspace_env,
+      get_workspace: this.get_workspace,
       get_hooks: this.get_hooks,
-      get_managed_power_system_blocks: this.get_managed_power_system_blocks,
-      ensure_configured: this.ensure_configured_hook,
       get_agent_model: this.get_agent_model,
       composer: this.composer,
     });

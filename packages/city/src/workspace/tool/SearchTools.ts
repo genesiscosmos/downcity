@@ -7,8 +7,8 @@
  */
 
 import {
-  define_runtime_tool,
-  type RuntimeToolExecutionOptions,
+  define_agent_tool,
+  type ToolCallContext,
 } from "@downcity/type";
 import type { WorkspaceToolActionResult } from "@downcity/type/workspace";
 import type {
@@ -26,13 +26,13 @@ import {
 
 /** 创建 Workspace 持有的结构化搜索工具。 */
 export function create_search_tools(runner: SearchToolRunner): SearchToolSet {
-  const grep = define_runtime_tool<GrepToolInput, WorkspaceToolActionResult<GrepToolResult>>({
+  const grep = define_agent_tool<GrepToolInput, WorkspaceToolActionResult<GrepToolResult>>({
     description:
       "Search project file contents with ripgrep instead of running rg through the shell. Returns structured file, line, column, and matched text data; respects ignore files by default.",
     input_schema: grep_tool_input_schema,
     execute: async (
       input: GrepToolInput,
-      options: RuntimeToolExecutionOptions,
+      options: ToolCallContext,
     ): Promise<WorkspaceToolActionResult<GrepToolResult>> => {
       const output = await runner.run_search_action({
         action: "grep",
@@ -43,13 +43,13 @@ export function create_search_tools(runner: SearchToolRunner): SearchToolSet {
     },
   });
 
-  const find = define_runtime_tool<FindToolInput, WorkspaceToolActionResult<FindToolResult>>({
+  const find = define_agent_tool<FindToolInput, WorkspaceToolActionResult<FindToolResult>>({
     description:
       "Find project files with a POSIX glob pattern instead of running shell find. Respects .gitignore, includes dotfiles, and does not follow symbolic links.",
     input_schema: find_tool_input_schema,
     execute: async (
       input: FindToolInput,
-      options: RuntimeToolExecutionOptions,
+      options: ToolCallContext,
     ): Promise<WorkspaceToolActionResult<FindToolResult>> => {
       const output = await runner.run_search_action({
         action: "find",

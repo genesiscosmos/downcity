@@ -7,15 +7,14 @@
  * - Composer 仍然是 Session 级能力，不向 Agent 的执行策略层泄漏。
  */
 
-import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
+import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
 import type { SessionPort } from "@/types/session/SessionPort.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
-import type { SessionHookRuntime } from "@downcity/type";
+import type { SessionOrigin } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import type { Logger } from "@/utils/logger/Logger.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
-import type { SessionOrigin } from "@downcity/type";
 
 /**
  * Agent 可管理的本地 Session 实例。
@@ -49,6 +48,12 @@ export interface SessionOptions {
    * 当前 agent 稳定标识。
    */
   agent_id: string;
+
+  /** 当前 Agent 用户可见名称；进入工具与扩展的调用环境。 */
+  agent_name: string;
+
+  /** 当前 Agent 一句话能力描述；进入工具与扩展的调用环境。 */
+  agent_description: string;
 
   /** 当前 Session 所属 Workspace 的绝对根目录。 */
   workspace_path: string;
@@ -113,16 +118,12 @@ export interface SessionOptions {
    */
   get_workspace_env: () => Record<string, string>;
 
-  /** 创建当前 City configured extension 的 Session Step 执行视图。 */
-  get_hooks: () => SessionHookRuntime;
+  /** 读取当前 Session 绑定的 Workspace 实例；未绑定时返回 undefined。 */
+  get_workspace: () => WorkspaceRuntime | undefined;
 
-  /** 读取当前 Agent 显式注入的受托管 Power system blocks。 */
-  get_managed_power_system_blocks: () => Promise<AgentSessionSystemBlock[]>;
+  /** 在每个 Step 检查点读取当前生效的扩展处理器集合。 */
+  get_hooks: () => ToolHookSet;
 
-  /**
-   * 在执行前确保当前 session 已完成宿主侧默认配置。
-   */
-  ensure_configured?: (session: AgentManagedSession) => Promise<void>;
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;

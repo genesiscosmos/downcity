@@ -25,9 +25,14 @@ export function create_test_power(definition) {
   }, power, lifecycle || {});
 }
 
-/** 向 City 登记测试 Power。 */
-export function add_test_power(city, power) {
-  city.powers.add(create_power_registration(power));
+/**
+ * 向 City 登记测试 Power，并等待初始化完成。
+ *
+ * 关键点（中文）：City 不再提供全局就绪屏障，注册是异步的；调用方必须 await
+ * 本函数，否则后续调用会看到未注册的 Power。
+ */
+export async function add_test_power(city, power) {
+  await city.powers.add(create_power_registration(power));
   return power;
 }
 

@@ -7,7 +7,7 @@
  * - Sandbox Provider 在 Shell 构造时显式注入，具体 Sandbox 随 Shell 生命周期释放。
  */
 
-import type { RuntimeTool } from "@downcity/type";
+import type { AgentTool } from "@downcity/type";
 import type {
   ShellActionResponse,
 } from "./ShellAction.js";
@@ -116,7 +116,7 @@ export type ShellToolAction =
  * Shell tool 执行器协议。
  *
  * 关键点（中文）
- * - tool 从 `RuntimeToolExecutionOptions.context` 读取显式运行上下文。
+ * - tool 从 `ToolCallContext.context` 读取显式运行上下文。
  * - `run_action` 显式携带 session、turn 与 env，Shell 内部不读取隐式全局状态。
  */
 export interface ShellToolRunner {
@@ -142,4 +142,4 @@ type JsonObject = Record<string, unknown>;
 /**
  * Shell 工具集合。
  */
-export type ShellToolSet = Record<string, RuntimeTool>;
+export type ShellToolSet = Record<string, AgentTool>;

@@ -2,10 +2,11 @@
  * Power 工具运行时。
  *
  * 关键点（中文）
- * - 一个工具只服务一个 power，因此不再需要跨 power 的名称解析。
+ * - 一个工具只服务一个 power，直接持有 Power 定义，执行时不再经过 Registry 二次解析。
  * - 省略 action 返回该 power 的动作索引，替代此前独立的 metadata 读取往返。
  * - Power Action 自己完成业务输出和本地文件保存；本模块不猜测 data 形状，
  *   也不下载、复制或挂载文件。Action 的 messages 交给统一 Session Tool 边界。
+ * - 失败永远返回结果而不是抛错，保证模型能看到可读边界说明。
  */
 
 import type { JsonObject, JsonValue, ActionResult } from "@downcity/agent";
@@ -14,7 +15,8 @@ import type {
   PowerToolResult,
   InvokePowerToolOptions,
 } from "@/power/types/PowerTool.js";
-import type { PowerReadView } from "@/power/types/PowerRuntime.js";
+import type { PowerActionReadView } from "@/power/types/PowerRuntime.js";
+import { execute_power_action } from "@/power/core/PowerActionExecution.js";
 
 /** 判断值是否为普通 JSON 对象。 */
 function to_json_object(value: unknown): JsonObject | null {
@@ -22,13 +24,36 @@ function to_json_object(value: unknown): JsonObject | null {
   return value as JsonObject;
 }
 
-/** 把动作索引视图转换为工具结果数据。 */
-function to_index_data(view: PowerReadView): JsonObject {
+/** 把一个 action 定义投影为索引条目。 */
+function to_action_summary(
+  action_id: string,
+  action: NonNullable<InvokePowerToolOptions["power"]["actions"]>[string],
+): PowerActionReadView {
   return {
-    power: view.name,
-    title: view.title,
-    description: view.description,
-    actions: view.actions.map((action) => ({
+    name: action_id,
+    description: String(action.description || "").trim(),
+    access: action.access === "write" ? "write" : "read",
+    returns: String(action.returns || "").trim(),
+    has_input_schema: Boolean(action.input_schema),
+    ...(action.input_schema?.json_schema
+      ? { input_schema: action.input_schema.json_schema }
+      : {}),
+    ...(action.examples ? { examples: action.examples } : {}),
+    has_command: Boolean(action.command),
+    has_api: Boolean(action.api),
+  };
+}
+
+/** 构造动作索引数据。 */
+function build_index_data(power: InvokePowerToolOptions["power"]): JsonObject {
+  const actions = Object.entries(power.actions || {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([action_id, action]) => to_action_summary(action_id, action));
+  return {
+    power: power.name,
+    title: String(power.title || power.name || "").trim(),
+    description: String(power.description || "").trim(),
+    actions: actions.map((action) => ({
       action: action.name,
       description: action.description,
       access: action.access,
@@ -38,75 +63,97 @@ function to_index_data(view: PowerReadView): JsonObject {
   };
 }
 
+/** 构造一次失败结果。 */
+function failure_result(
+  power_name: string,
+  action: string | null,
+  message: string,
+): ActionResult<PowerToolResult> {
+  return {
+    output: {
+      success: false,
+      power: power_name,
+      action,
+      message,
+      error: message,
+    },
+    messages: [],
+  };
+}
+
 /**
  * 执行一次 power 工具调用。
  *
  * 关键点（中文）
  * - 省略 action 时返回动作索引，成功语义与索引调用一致。
- * - 失败永远返回结果而不是抛错，保证模型能看到可读边界说明。
+ * - action 直接取自工具持有的定义，不存在「power 到 action」的二次查找。
  */
 export async function invoke_power_tool(
   params: InvokePowerToolOptions,
 ): Promise<ActionResult<PowerToolResult>> {
-  const power_name = String(params.power_name || "").trim();
-  const action = typeof params.input?.action === "string" ? params.input.action.trim() : "";
+  const power_name = String(params.power.name || "").trim();
+  const action_id = typeof params.input?.action === "string"
+    ? params.input.action.trim()
+    : "";
   const args = to_json_object(params.input?.args ?? {}) ?? {};
 
+  if (!action_id) {
+    return {
+      output: {
+        success: true,
+        power: power_name,
+        action: null,
+        message: `${Object.keys(params.power.actions || {}).length} action(s) available on power "${power_name}"`,
+        data: build_index_data(params.power),
+      },
+      messages: [],
+    };
+  }
+
+  const action = params.power.actions?.[action_id];
   if (!action) {
-    try {
-      const view = params.powers.read({ power: power_name });
-      if ("powers" in view) {
-        return {
-          output: {
-            success: false,
-            power: power_name,
-            action: null,
-            message: `Unknown power: ${power_name}`,
-            error: `Unknown power: ${power_name}`,
-          },
-          messages: [],
-        };
-      }
-      return {
-        output: {
-          success: true,
-          power: power_name,
-          action: null,
-          message: `${view.actions.length} action(s) available on power "${power_name}"`,
-          data: to_index_data(view),
-        },
-        messages: [],
-      };
-    } catch (error) {
-      return {
-        output: {
-          success: false,
-          power: power_name,
-          action: null,
-          message: String(error),
-          error: String(error),
-        },
-        messages: [],
-      };
-    }
+    return failure_result(
+      power_name,
+      action_id,
+      `Power "${power_name}" does not implement action "${action_id}"`,
+    );
   }
 
   try {
-    const turn_context = params.turn_context;
-    const snapshot = turn_context.step.hook_context(params.call_id);
-    const result = await params.powers.run_action({
-      power: power_name,
+    // 上下文在调用时创建：此刻才读取 workspace、storage、config。
+    const context = params.context_factory(power_name, params.call_context);
+    const result = await execute_power_action({
+      context,
+      power_name,
+      action_name: action_id,
       action,
       payload: args as JsonValue,
-      execution_context: snapshot,
+      snapshot: {
+        session_id: params.call_context.session_id,
+        session_origin: params.call_context.session_origin,
+        ...(params.call_context.turn_id
+          ? { turn_id: params.call_context.turn_id }
+          : {}),
+        ...(params.call_context.abort_signal
+          ? { abort_signal: params.call_context.abort_signal }
+          : {}),
+        ...(params.call_context.workspace_env
+          ? { workspace_env: params.call_context.workspace_env }
+          : {}),
+        ...(params.call_context.tool_call_id
+          ? { call_id: params.call_context.tool_call_id }
+          : {}),
+      },
       // Session 入口把自己的交互端口交给动作；非 Session 入口由流水线注入拒绝式实现。
-      ...(turn_context.interactions ? { interactions: turn_context.interactions } : {}),
+      ...(params.call_context.interactions
+        ? { interactions: params.call_context.interactions }
+        : {}),
     });
     return {
       output: {
         success: result.success,
         power: power_name,
-        action,
+        action: action_id,
         message:
           String(result.message || result.error || "").trim() ||
           (result.success ? "power action completed" : "power action failed"),
@@ -123,15 +170,6 @@ export async function invoke_power_tool(
       messages: result.messages || [],
     };
   } catch (error) {
-    return {
-      output: {
-        success: false,
-        power: power_name,
-        action,
-        message: String(error),
-        error: String(error),
-      },
-      messages: [],
-    };
+    return failure_result(power_name, action_id, String(error));
   }
 }

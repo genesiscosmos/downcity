@@ -10,8 +10,10 @@
 import type {
   CityRuntime,
   ModelClient,
-  RuntimeTool as Tool,
+  AgentTool as Tool,
   StorageProvider,
+  ToolCallContext,
+  ToolHookSet,
   WorkspaceRuntime,
 } from "@downcity/type";
 import {
@@ -29,7 +31,7 @@ import { Logger } from "@/utils/logger/Logger.js";
 import { AgentSessions } from "@/agent/AgentSessions.js";
 import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
 import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
-import { EMPTY_SESSION_HOOKS } from "@/session/input/SessionHooks.js";
+import { EMPTY_TOOL_HOOK_SET } from "@downcity/type";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
 import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
@@ -37,7 +39,7 @@ import {
   build_session_system_blocks,
   resolve_session_power_system_blocks,
 } from "@/session/input/SessionSystem.js";
-import { create_session_hook_context } from "@/session/loop/SessionTurnContext.js";
+import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
 
 /** SDK Agent 主体。 */
@@ -72,6 +74,12 @@ export class Agent {
   /** 当前 Agent configured instruction。 */
   private readonly instruction: string[];
 
+  /** 当前生效的扩展工具；键为扩展名，由宿主推送。 */
+  private power_tools: Readonly<Record<string, Tool>> = Object.freeze({});
+
+  /** 当前生效的扩展处理器集合，由宿主推送。 */
+  private power_hooks: ToolHookSet = EMPTY_TOOL_HOOK_SET;
+
   /** Agent 释放状态。 */
   private dispose_promise?: Promise<void>;
 
@@ -105,9 +113,9 @@ export class Agent {
     this.session_manager = new AgentSessions({
       agent_id: this.id,
       agent_name: this.name,
+      agent_description: this.description,
       logger: this.logger,
       get_instruction: () => [...this.get_instructions()],
-      ensure_agent_ready: async () => await this.ensure_ready(),
       get_agent_model: () => this.model,
       session_class: this.session_class,
       session_composer: this.session_composer,
@@ -121,7 +129,8 @@ export class Agent {
           logger: this.logger,
           get_tools: () => ({ ...this.custom_tools }),
           get_workspace_env: () => ({}),
-          get_hooks: () => EMPTY_SESSION_HOOKS,
+          get_workspace: () => undefined,
+          get_hooks: () => this.power_hooks,
           store: storage.sessions,
         };
         this.assert_workspace(workspace);
@@ -134,8 +143,8 @@ export class Agent {
           logger: this.logger,
           get_tools: () => this.resolve_tools(workspace),
           get_workspace_env: () => workspace.get_env(),
-          get_hooks: () => this.city?.get_session_hooks(this.id, workspace)
-            ?? EMPTY_SESSION_HOOKS,
+          get_workspace: () => workspace,
+          get_hooks: () => this.power_hooks,
           store: storage.sessions,
         };
       },
@@ -152,6 +161,34 @@ export class Agent {
   /** 返回 Agent 指令快照。 */
   get_instructions(): readonly string[] {
     return [...this.instruction];
+  }
+
+  /**
+   * 接收宿主编译出的扩展产物。
+   *
+   * 关键点（中文）
+   * - 传入的是普通值，不持有宿主引用，也不存在按 Agent/Workspace 回查。
+   * - 工具与处理器一次性替换，保证两者来自同一份编译快照。
+   * - 生效时机：工具集在 Session 创建时求值，因此新产物在下一个 Turn 生效。
+   */
+  apply_powers(input: {
+    /** 扩展工具；键为扩展名。 */
+    readonly tools: Readonly<Record<string, Tool>>;
+    /** 扩展处理器集合。 */
+    readonly hooks: ToolHookSet;
+  }): void {
+    this.power_tools = Object.freeze({ ...input.tools });
+    this.power_hooks = input.hooks;
+  }
+
+  /** 返回当前生效的扩展工具快照；未加入宿主时为空。 */
+  get_power_tools(): Readonly<Record<string, Tool>> {
+    return this.power_tools;
+  }
+
+  /** 返回当前生效的扩展处理器集合。 */
+  get_power_hooks(): ToolHookSet {
+    return this.power_hooks;
   }
 
   /** 返回 Agent 级日志器。 */
@@ -204,19 +241,16 @@ export class Agent {
       agent_name: this.name,
       instruction: [...this.get_instructions()],
     });
-    const hooks = this.city?.get_session_hooks(this.id, workspace)
-      ?? EMPTY_SESSION_HOOKS;
-    const hook_context = create_session_hook_context({
+    const hooks = this.power_hooks;
+    const context = this.create_session_call_context({
       session_id,
-      session_origin: { type: "chat" },
-      project_root: workspace.path,
-      workspace_env: Object.freeze({ ...workspace.get_env() }),
-      agent_systems: instruction_system_blocks.map((block) => block.content),
+      workspace,
+      instruction_system_blocks,
     });
     const power_system_blocks = await resolve_session_power_system_blocks({
       session_id,
       hooks,
-      context: hook_context,
+      context,
     });
     const blocks = await build_session_system_blocks({
       agent_id: this.id,
@@ -225,10 +259,33 @@ export class Agent {
       created_at: Date.now(),
       timezone: resolve_system_timezone(),
       get_instruction_system_blocks: () => instruction_system_blocks,
-      get_managed_power_system_blocks: async () => [],
       get_power_system_blocks: async () => power_system_blocks,
     });
     return blocks.map((block) => ({ role: "system", content: block.content }));
+  }
+
+  /** 构造不属任何 Turn 的调用环境；用于 system 查询。 */
+  private create_session_call_context(input: {
+    /** 目标 Session 稳定标识。 */
+    readonly session_id: string;
+    /** 当前使用的 Workspace 实例。 */
+    readonly workspace: WorkspaceRuntime;
+    /** 当前 Agent 指令快照。 */
+    readonly instruction_system_blocks: readonly AgentSessionSystemBlock[];
+  }): ToolCallContext {
+    return Object.freeze({
+      agent_id: this.id,
+      agent_name: this.name,
+      agent_description: this.description,
+      agent_instructions: Object.freeze(
+        input.instruction_system_blocks.map((block) => block.content),
+      ),
+      session_id: input.session_id,
+      session_origin: { type: "chat" },
+      workspace: input.workspace,
+      messages: Object.freeze([]),
+      workspace_env: Object.freeze({ ...input.workspace.get_env() }),
+    });
   }
 
   /** 释放 Agent 的 Session 后台任务、存储与宿主引用。 */
@@ -250,11 +307,6 @@ export class Agent {
       if (errors.length > 0) throw new AggregateError(errors, "Agent dispose failed");
     })();
     await this.dispose_promise;
-  }
-
-  /** 等待 Agent 自身运行时 ready，供内部运行时使用。 */
-  async ensure_ready(): Promise<void> {
-    await this.city?.ensure_ready();
   }
 
   /** 获取或创建 Agent 唯一的 Session 存储。 */
@@ -285,15 +337,11 @@ export class Agent {
     }
   }
 
-  /** 在明确检查点合并 Workspace、宿主扩展和 Agent Tool。 */
+  /** 在明确检查点合并 Workspace、扩展与 Agent Tool。 */
   private resolve_tools(workspace: WorkspaceRuntime): Record<string, Tool> {
     const tools: Record<string, Tool> = {};
     register_tools(tools, workspace.tools, "WorkspaceTools");
-    register_tools(
-      tools,
-      this.city?.get_session_tools(this.id, workspace) ?? {},
-      "City",
-    );
+    register_tools(tools, this.power_tools, "Power");
     register_tools(tools, this.custom_tools, "AgentOptions.tools");
     return tools;
   }

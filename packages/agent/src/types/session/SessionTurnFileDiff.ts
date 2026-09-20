@@ -5,7 +5,7 @@
  * 读取 Turn effects、写入 Assistant 输出并发布摘要 Mutation。
  */
 
-import type { RuntimeToolEffect } from "@downcity/type";
+import type { ToolEffect } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionMutation } from "@downcity/type";
@@ -36,7 +36,7 @@ export interface PublishSessionTurnFileDiffInput {
   /** 当前 Workspace 的绝对根路径。 */
   workspace_path: string;
   /** 当前检查点已经发生的 Tool effects。 */
-  effects: readonly RuntimeToolEffect[];
+  effects: readonly ToolEffect[];
   /** 发布公开 Session Mutation 的函数。 */
   publish: (mutation: SessionMutation) => void;
   /** 当前 Session 的统一日志器。 */

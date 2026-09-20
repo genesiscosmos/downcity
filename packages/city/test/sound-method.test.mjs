@@ -32,43 +32,49 @@ async function create_fixture(options = {}) {
     embassy: { user: { ai: current_sound_ai } },
   });
   city.agents.add(agent);
-  // power 注册是异步 lifecycle；执行前先等 City ready。
-  await city.ensure_ready();
-  const tools = city.get_session_tools(agent.id, workspace);
+  // power 注册是异步 lifecycle；这里等它稳定后读取 Agent 持有的编译产物。
+  await city.powers.settled();
+  // 动作执行时会用调用环境里的 session_id 解析真实 Session 句柄，
+  // 因此夹具必须创建真实 Session，并把它的标识回填到调用环境。
+  const session = await agent.sessions.create({ workspace });
+  const tools = agent.get_power_tools();
   return {
     root,
     workspace_path,
     workspace,
     agent,
+    session,
     city,
     tools,
     /**
      * 调用一次 city 工具。
      *
      * 关键点（中文）
-     * - 只接受 `{ action: "sound.asr", args }` 形式；工具层返回 ActionResult，
+     * - 只接受 `{ action: "sound.asr", args }` 形式；工具返回 ActionResult，
      *   这里只暴露模型侧 output。
      */
     call: async ({ action, args } = {}) => {
       const result = await tools.city.execute(
         args === undefined ? { action } : { action, args },
         {
+          agent_id: agent.id,
+          agent_name: agent.id,
+          agent_description: "",
+          agent_instructions: [],
+          session_id: session.id,
+          session_origin: session.origin,
+          workspace,
+          turn_id: "turn_test",
           tool_call_id: "call_1",
           messages: [],
-          context: {
-            session_turn_context: {
-              session: { session_id: "session_test", turn_id: "turn_test", origin: { type: "chat" } },
-              step: { hook_context: () => ({ session_id: "session_test", turn_id: "turn_test" }) },
-              // 测试关注声音行为本身，因此提供一个直接放行的审批入口；
-              // 无审批入口时声明 approval 的动作会被拒绝，属于另一条用例。
-              interactions: {
-                request: async () => {
-                  throw new Error("sound tests do not expect a pending interaction");
-                },
-                approval: {
-                  request: async () => ({ approved: true, auto_approved: true }),
-                },
-              },
+          // 测试关注声音行为本身，因此提供一个直接放行的审批入口；
+          // 无审批入口时声明 approval 的动作会被拒绝，属于另一条用例。
+          interactions: {
+            request: async () => {
+              throw new Error("sound tests do not expect a pending interaction");
+            },
+            approval: {
+              request: async () => ({ approved: true, auto_approved: true }),
             },
           },
         },

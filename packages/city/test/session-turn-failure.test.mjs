@@ -19,7 +19,8 @@ import { SessionEventHub } from "../../agent/bin/session/messages/SessionEventHu
 import { SessionLoop } from "../../agent/bin/session/loop/SessionLoop.js";
 import { SessionQueue } from "../../agent/bin/session/loop/SessionQueue.js";
 
-async function create_turn_harness(execute_turn, session_origin = { type: "chat" }) {
+async function create_turn_harness(execute_turn, options = {}) {
+  const session_origin = options.session_origin ?? { type: "chat" };
   const session_id = "session-turn-failure-test";
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-turn-failure-"));
   const files = new LocalFileSystem(root_path);
@@ -41,6 +42,9 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
   await messages.initialize();
   const interactions = new SessionInteractions({ session_id, messages });
 
+  // 关键点（中文）：扩展处理器由 Loop 注入，不再是 SessionTurnContext 上的作用域；
+  // 调用环境也由 Loop 构造，与 Session 中的生产路径保持同一形状。
+  const hooks = options.hooks ?? { pipeline: {}, guard: {}, effect: {} };
   const turn = new SessionLoop({
     session_id,
     session_origin,
@@ -60,32 +64,54 @@ async function create_turn_harness(execute_turn, session_origin = { type: "chat"
     logger: { log: async () => {} },
     queue: new SessionQueue(),
     interactions,
+    get_hooks: () => hooks,
+    create_call_context: ({ turn_id, abort_signal }) => Object.freeze({
+      agent_id: "test-agent",
+      agent_name: "test-agent",
+      agent_description: "",
+      agent_instructions: [],
+      session_id,
+      session_origin,
+      turn_id,
+      abort_signal,
+      messages: [],
+    }),
   });
 
-  return { messages, root_path, turn };
+  return { messages, root_path, turn, hooks };
 }
 
-test("Power execution context 保留完整 Session origin", async () => {
+test("Power 调用环境保留完整 Session origin", async () => {
   const origin = {
     type: "group",
     group_id: "review-team",
     group_session_id: "group-session-1",
   };
   let execution_context;
-  const { turn } = await create_turn_harness(async (turn_context) => {
-    execution_context = turn_context.step.hook_context("call-1");
-    return {
-      success: true,
-      text: "done",
-    };
-  }, origin);
+  // 用 turn_committed 检查点捕获调用环境：它在每个 Turn 收口时都会触发，
+  // 且与生产路径使用同一个 create_call_context。
+  const { turn } = await create_turn_harness(async () => ({
+    success: true,
+    text: "done",
+  }), {
+    session_origin: origin,
+    hooks: {
+      pipeline: {},
+      guard: {},
+      effect: {
+        "session.turn_committed": [async (_value, context) => {
+          execution_context = context;
+        }],
+      },
+    },
+  });
 
   const handle = await turn.prompt({ query: "hello" });
   await handle.finished;
 
   assert.equal(execution_context.session_id, "session-turn-failure-test");
   assert.deepEqual(execution_context.session_origin, origin);
-  assert.equal(execution_context.call_id, "call-1");
+  assert.equal(execution_context.turn_id, handle.id);
 });
 
 /** 通过 Downcity Model Protocol 写入一个完整文本 part。 */
@@ -155,43 +181,22 @@ test("SessionLoop 只在 canonical 用户消息写入后返回 prompt 句柄", a
 });
 
 test("SessionLoop 在 Turn 收口后释放其 SessionTurnContext", async () => {
-  let release_count = 0;
-  const { turn } = await create_turn_harness(async (turn_context) => {
-    await turn_context.step.replace_hooks({
-      system_blocks: async () => [],
-      pipeline: async (_point_name, value) => value,
-      effect: async () => {},
-      close: async () => {
-        release_count += 1;
-      },
-    });
-    return {
-      success: true,
-      text: "done",
-    };
-  });
+  const { turn } = await create_turn_harness(async () => ({
+    success: true,
+    text: "done",
+  }));
 
   const handle = await turn.prompt({ query: "hello" });
   await handle.finished;
 
-  assert.equal(release_count, 1);
+  // 关键点（中文）：收口后不再持有 Active Turn；这是旧版「释放 Hook 作用域」
+  // 在无作用域契约下可观察到的等价事实。
+  assert.equal(turn.current_turn_id(), undefined);
 });
 
-test("SessionLoop 在释放 Power Hook 作用域前触发 turn committed effect", async () => {
+test("SessionLoop 在 Turn 收口时触发 turn committed effect", async () => {
   const effects = [];
-  let released = false;
   const { turn } = await create_turn_harness(async (turn_context) => {
-    await turn_context.step.replace_hooks({
-      system_blocks: async () => [],
-      pipeline: async (_point_name, value) => value,
-      effect: async (point_name, value) => {
-        assert.equal(released, false);
-        effects.push({ point_name, value });
-      },
-      close: async () => {
-        released = true;
-      },
-    });
     await turn_context.output.assistant.begin_step();
     await write_text(turn_context.output.assistant, "text-committed", "完成");
     await turn_context.output.assistant.finish_step([{ type: "text", text: "完成" }]);
@@ -199,12 +204,21 @@ test("SessionLoop 在释放 Power Hook 作用域前触发 turn committed effect"
       success: true,
       text: "完成",
     };
+  }, {
+    hooks: {
+      pipeline: {},
+      guard: {},
+      effect: {
+        "session.turn_committed": [async (value) => {
+          effects.push({ point_name: "session.turn_committed", value });
+        }],
+      },
+    },
   });
 
   const handle = await turn.prompt({ query: "记录这轮" });
   await handle.finished;
 
-  assert.equal(released, true);
   assert.equal(effects.length, 1);
   assert.equal(effects[0].point_name, "session.turn_committed");
   assert.equal(effects[0].value.status, "completed");

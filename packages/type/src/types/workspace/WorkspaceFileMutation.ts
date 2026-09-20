@@ -5,7 +5,7 @@
  * 文件内容只在体积受控且可解码为文本时保留，供上层生成稳定 Diff。
  */
 
-import type { RuntimeToolEffect } from "@downcity/type";
+import type { ToolEffect } from "@downcity/type";
 
 /** Workspace 文件修改使用的稳定 Runtime Tool effect 类型。 */
 export const WORKSPACE_FILE_MUTATION_EFFECT_TYPE = "workspace.file_mutation";
@@ -38,7 +38,7 @@ export interface WorkspaceFileMutationObserver {
 
 /** Workspace 文件修改向 Turn 报告的结构化副作用。 */
 export interface WorkspaceFileMutationEffect
-  extends RuntimeToolEffect<WorkspaceFileMutation> {
+  extends ToolEffect<WorkspaceFileMutation> {
   /** 副作用类型固定为 Workspace 文件修改。 */
   readonly type: typeof WORKSPACE_FILE_MUTATION_EFFECT_TYPE;
 

@@ -105,7 +105,7 @@ const enriched = await city.plugins.scope({ agent_id: agent.id, workspace_id: wo
 await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", enriched);
 ```
 
-存在 Action 时，Session 会获得 `plugin_read` 和 `plugin_call` Tool。模型先读取 Action schema，再执行经过校验的 payload。Plugin 的 `system(context, execution_context)` 也会在 Session prompt 检查点注入。
+Power 声明 Action 时，宿主为它推送一个以 Power 名命名的 AgentTool。模型用 `{ action, args }` 调用；省略 `action` 时返回动作索引及其 schema。Power 的 `system()` 文本在 `session.system_context` 检查点贡献。
 
 ## PluginContext 直接通信
 

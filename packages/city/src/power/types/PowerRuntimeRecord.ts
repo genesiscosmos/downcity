@@ -12,12 +12,6 @@ export interface PowerRuntimeRecord {
   power: PowerDefinition;
   /** Power 注册时间。 */
   registered_at: number;
-  /** 当前活跃 Session execution lease 数量。 */
-  active_execution_leases: number;
   /** 当前记录是否已经从可见集合移除。 */
   retired: boolean;
-  /** 全部 execution lease 释放完成的 Promise。 */
-  retirement_promise?: Promise<void>;
-  /** 完成 execution lease 等待的内部回调。 */
-  resolve_retirement?: () => void;
 }

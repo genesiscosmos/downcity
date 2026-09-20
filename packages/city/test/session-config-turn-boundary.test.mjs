@@ -153,7 +153,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
     instruction: ["instruction:old"],
   });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, runtime_power);
+  await add_test_power(city, runtime_power);
   city.agents.add(agent);
 
   try {
@@ -244,8 +244,8 @@ test("Power registry changes do not rewrite an existing Session system", async (
     });
     const existing_before = await existing_session.system();
 
-    add_test_power(city, runtime_power);
-    await agent.ensure_ready();
+    await add_test_power(city, runtime_power);
+    await city.powers.settled();
     const existing_after_register = await existing_session.system();
     assert.deepEqual(existing_after_register, existing_before);
 
@@ -298,7 +298,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   });
   const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, create_system_power("power-system:initial"));
+  await add_test_power(city, create_system_power("power-system:initial"));
   city.agents.add(agent);
   const instruction_path = path.join(
     city.storage.open_scope(["agents", agent.id]).root_path,
@@ -318,8 +318,8 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
 
     agent.set_instruction(["instruction:refreshed"]);
     await city.powers.remove("syncshot-system");
-    add_test_power(city, create_system_power("power-system:refreshed"));
-    await agent.ensure_ready();
+    await add_test_power(city, create_system_power("power-system:refreshed"));
+    await city.powers.settled();
     await session.syncshot();
 
     const refreshed_text = (await session.system()).blocks
@@ -333,8 +333,8 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
     await session.snapshot();
     agent.set_instruction(["instruction:latest"]);
     await city.powers.remove("syncshot-system");
-    add_test_power(city, create_system_power("power-system:latest"));
-    await agent.ensure_ready();
+    await add_test_power(city, create_system_power("power-system:latest"));
+    await city.powers.settled();
     await Promise.all([session.snapshot(), session.syncshot()]);
 
     const latest_system = await session.system();
@@ -368,7 +368,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     model,
     instruction: ["instruction:old"],
   });
-  add_test_power(city, create_power({
+  await add_test_power(city, create_power({
     name: "snapshot-system",
     title: "Snapshot System",
     description: "Provides system text persisted by session.snapshot()",
@@ -559,7 +559,7 @@ test("running session model changes apply with steer at the next Session step", 
   });
   const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, runtime_power);
+  await add_test_power(city, runtime_power);
   city.agents.add(agent);
 
   try {
@@ -664,7 +664,7 @@ test("running session approval mode changes stay queued until the next Session s
   });
   const workspace = new Workspace({ id: "test_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, runtime_power);
+  await add_test_power(city, runtime_power);
   city.agents.add(agent);
 
   try {

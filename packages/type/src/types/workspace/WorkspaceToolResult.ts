@@ -5,7 +5,7 @@
  * 约定兼容的 `output/messages` 形状，便于 Workspace Tool 被任意 Agent 消费。
  */
 
-import type { RuntimeToolEffect } from "@downcity/type";
+import type { ToolEffect } from "@downcity/type";
 
 /** Workspace Tool 产生的文本消息内容。 */
 export interface WorkspaceToolTextPart {
@@ -48,5 +48,5 @@ export interface WorkspaceToolActionResult<TOutput = unknown> {
   messages: WorkspaceToolActionMessage[];
 
   /** 已经发生且需要由当前 Turn 收集的副作用；不会作为 Tool output 发送给模型。 */
-  effects?: readonly RuntimeToolEffect[];
+  effects?: readonly ToolEffect[];
 }

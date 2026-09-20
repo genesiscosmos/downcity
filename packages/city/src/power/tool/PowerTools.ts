@@ -8,8 +8,8 @@
  */
 
 import {
-  define_runtime_tool,
-  type RuntimeToolExecutionOptions as ToolExecutionOptions,
+  define_agent_tool,
+  type ToolCallContext,
 } from "@downcity/type";
 import type {
   AgentPowerTools,
@@ -19,21 +19,6 @@ import type {
 import type { PowerDefinition } from "@/power/types/PowerRuntime.js";
 import { invoke_power_tool } from "./PowerToolRuntime.js";
 import { power_tool_input_schema } from "./PowerToolSchemas.js";
-import type { SessionToolExecutionContext, SessionTurnContext } from "@downcity/agent";
-
-/**
- * 要求当前 power 工具具有 Executor 显式绑定的 Session 上下文。
- */
-function require_turn_context(options: ToolExecutionOptions): SessionTurnContext {
-  const execution_context = options.context as
-    | Partial<SessionToolExecutionContext>
-    | undefined;
-  const turn_context = execution_context?.session_turn_context;
-  if (!turn_context) {
-    throw new Error("power tool requires an explicit Session Turn context");
-  }
-  return turn_context;
-}
 
 /** 取描述文本首行，用于工具描述中的动作摘要。 */
 function first_line(text: string | undefined): string {
@@ -72,16 +57,15 @@ export function describe_power_tool(power: PowerDefinition): string {
  */
 export function create_power_tool(options: CreatePowerToolOptions) {
   const power_name = String(options.power.name || "").trim();
-  return define_runtime_tool<PowerToolInput>({
+  return define_agent_tool<PowerToolInput>({
     description: describe_power_tool(options.power),
     input_schema: power_tool_input_schema,
-    execute: async (input, execution_options) =>
+    execute: async (input: PowerToolInput, call_context: ToolCallContext) =>
       await invoke_power_tool({
-        powers: options.powers,
-        power_name,
-        turn_context: require_turn_context(execution_options),
-        call_id: String(execution_options.tool_call_id || "").trim(),
-        input: input as PowerToolInput,
+        power: options.power,
+        context_factory: options.context_factory,
+        call_context,
+        input,
       }),
   });
 }
@@ -96,15 +80,18 @@ export function create_power_tool(options: CreatePowerToolOptions) {
 export function create_power_tools(options: {
   /** 当前检查点可见的 power 定义。 */
   definitions: readonly PowerDefinition[];
-  /** 当前 Agent 自己的 power 调用面。 */
-  powers: CreatePowerToolOptions["powers"];
+  /** 把工具调用环境扩展为插件侧完整上下文。 */
+  context_factory: CreatePowerToolOptions["context_factory"];
 }): AgentPowerTools {
   const tools: AgentPowerTools = {};
   for (const power of options.definitions) {
     const power_name = String(power.name || "").trim();
     if (!power_name) continue;
     if (Object.keys(power.actions || {}).length === 0) continue;
-    tools[power_name] = create_power_tool({ power, powers: options.powers });
+    tools[power_name] = create_power_tool({
+      power,
+      context_factory: options.context_factory,
+    });
   }
   return tools;
 }

@@ -8,7 +8,7 @@
  * - Message Parts 复用 Downcity Session UI 协议，不再建立文件、图片或 Power 专用桥接。
  */
 
-import type { RuntimeToolEffect } from "@downcity/type";
+import type { ToolEffect } from "@downcity/type";
 import type {
   SessionAgentContent,
   SessionModelUserContent,
@@ -38,7 +38,7 @@ export interface ActionResult<TOutput = unknown> {
   messages: ActionResultMessage[];
 
   /** 已经发生且需要由当前 Turn 收集的副作用；不会发送给模型或直接持久化。 */
-  effects?: readonly RuntimeToolEffect[];
+  effects?: readonly ToolEffect[];
 }
 
 /** 判断未知 Tool 输出是否使用统一 ActionResult 协议。 */

@@ -7,7 +7,7 @@
  */
 
 import path from "node:path";
-import { define_runtime_tool, type RuntimeToolEffect } from "@downcity/type";
+import { define_agent_tool, type ToolEffect } from "@downcity/type";
 import type { WorkspaceToolActionResult } from "@downcity/type/workspace";
 import { create_workspace_file_mutation_effect } from "@downcity/type/workspace";
 import type {
@@ -28,7 +28,7 @@ import {
 
 /** 创建 Workspace 持有的结构化文件工具。 */
 export function create_file_tools(runner: FileToolRunner): FileToolSet {
-  const read = define_runtime_tool<ReadFileToolInput, WorkspaceToolActionResult<ReadFileToolResult>>({
+  const read = define_agent_tool<ReadFileToolInput, WorkspaceToolActionResult<ReadFileToolResult>>({
     description:
       "Read a project file instead of using cat or sed. Chat attachments are hydrated by the Session and are not project file paths. Images and PDFs are attached to the next model step as local file parts. Text output is limited to 500 lines and 256KB by default; use offset and limit to continue. Other binary files return metadata only.",
     input_schema: read_file_tool_input_schema,
@@ -58,14 +58,14 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
     },
   });
 
-  const write = define_runtime_tool<WriteFileToolInput, WorkspaceToolActionResult<WriteFileToolResult>>({
+  const write = define_agent_tool<WriteFileToolInput, WorkspaceToolActionResult<WriteFileToolResult>>({
     description:
       "Create a new UTF-8 text file or atomically replace an existing file when overwrite=true. Parent directories are created automatically. Use edit for partial changes.",
     input_schema: write_file_tool_input_schema,
     execute: async (
       input: WriteFileToolInput,
     ): Promise<WorkspaceToolActionResult<WriteFileToolResult>> => {
-      const effects: RuntimeToolEffect[] = [];
+      const effects: ToolEffect[] = [];
       const output = await runner.run_file_action({
         action: "write",
         input,
@@ -78,14 +78,14 @@ export function create_file_tools(runner: FileToolRunner): FileToolSet {
     },
   });
 
-  const edit = define_runtime_tool<EditFileToolInput, WorkspaceToolActionResult<EditFileToolResult>>({
+  const edit = define_agent_tool<EditFileToolInput, WorkspaceToolActionResult<EditFileToolResult>>({
     description:
       "Atomically edit one text file using exact replacements. Every edits[].old_text must match exactly once in the original file, and edit regions must not overlap. Combine separate changes to one file in a single call.",
     input_schema: edit_file_tool_input_schema,
     execute: async (
       input: EditFileToolInput,
     ): Promise<WorkspaceToolActionResult<EditFileToolResult>> => {
-      const effects: RuntimeToolEffect[] = [];
+      const effects: ToolEffect[] = [];
       const output = await runner.run_file_action({
         action: "edit",
         input,

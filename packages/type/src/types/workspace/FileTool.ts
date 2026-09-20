@@ -7,7 +7,7 @@
  * - 成功与失败均返回结构化结果，避免依赖异常文本判断执行状态。
  */
 
-import type { RuntimeTool } from "@downcity/type";
+import type { AgentTool } from "@downcity/type";
 import type { WorkspaceFileMutationObserver } from "./WorkspaceFileMutation.js";
 
 /** 文件工具支持的结构化错误码。 */
@@ -213,11 +213,11 @@ export interface FileToolRunner {
 /** `@downcity/city/workspace` 对模型暴露的文件工具集合。 */
 export interface FileToolSet {
   /** 分页读取文本并识别二进制文件。 */
-  read: RuntimeTool;
+  read: AgentTool;
   /** 创建或显式覆盖 UTF-8 文本文件。 */
-  write: RuntimeTool;
+  write: AgentTool;
   /** 通过唯一文本匹配原子编辑单个文件。 */
-  edit: RuntimeTool;
+  edit: AgentTool;
 }
 
 /** 已通过项目根目录约束的文件工具路径。 */

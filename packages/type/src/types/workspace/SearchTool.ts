@@ -7,7 +7,7 @@
  * - 两个工具都受 Shell 项目根目录约束，不允许搜索根目录之外的路径。
  */
 
-import type { RuntimeTool } from "@downcity/type";
+import type { AgentTool } from "@downcity/type";
 
 /** 搜索工具支持的结构化错误码。 */
 export type SearchToolErrorCode =
@@ -150,7 +150,7 @@ export interface SearchToolRunner {
 /** `@downcity/city/workspace` 对模型暴露的项目搜索工具集合。 */
 export interface SearchToolSet {
   /** 通过 ripgrep 搜索项目文件内容。 */
-  grep: RuntimeTool;
+  grep: AgentTool;
   /** 通过 glob 模式发现项目文件。 */
-  find: RuntimeTool;
+  find: AgentTool;
 }

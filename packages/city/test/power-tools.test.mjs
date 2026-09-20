@@ -1,9 +1,10 @@
 /**
- * @file 验证 Power 工具层的 ActionResult 转换与 Session 执行上下文。
+ * @file 验证 Power 工具层的 ActionResult 转换与调用环境注入。
  *
  * 关键点（中文）
  * - 每个 power 注册为一个工具；工具输入只有 `{ action, args }`。
  * - 省略 action 返回动作索引，替代此前的独立 metadata 读取工具。
+ * - 工具直接持有 power 定义与上下文工厂，执行时不经过 Registry 二次解析。
  * - action 的 messages 与 output 分开返回，由 Executor 的统一边界分流。
  */
 
@@ -13,36 +14,32 @@ import { invoke_power_tool } from "../bin/power/tool/PowerToolRuntime.js";
 import { create_power_tools } from "../bin/power/tool/PowerTools.js";
 import { power_tool_input_schema } from "../bin/power/tool/PowerToolSchemas.js";
 import { create_action } from "@downcity/city/power";
-import { PowerRegistry } from "../bin/power/core/PowerRegistry.js";
-import { create_session_turn_context } from "@downcity/agent";
 import {
   create_test_power as create_power,
   create_test_power_context,
 } from "./helpers/CityPowerTestBinding.mjs";
 
-/** 创建绑定测试 project root 的 Session Turn Context。 */
-function create_turn_context(project_root) {
-  return create_session_turn_context({
+/** 创建一次调用使用的工具调用环境。 */
+function create_call_context(workspace_path = process.cwd()) {
+  return {
+    agent_id: "power_tools_agent",
+    agent_name: "power_tools_agent",
+    agent_description: "",
+    agent_instructions: [],
     session_id: "session_test",
     session_origin: { type: "chat" },
     turn_id: "turn_test",
-    project_root,
-  });
+    tool_call_id: "call_test",
+    messages: [],
+  };
 }
 
-/** 创建绑定测试 PowerContext 的 Registry 调用面。 */
-function create_registry(power) {
-  const registry = new PowerRegistry([power]);
-  const context_factory = () => create_test_power_context({
+/** 创建绑定测试 PowerContext 的上下文工厂。 */
+function create_context_factory() {
+  return () => create_test_power_context({
     agent_id: "power_tools_agent",
     workspace_id: "power_tools_workspace",
     workspace_path: process.cwd(),
-  });
-  return Object.assign(registry.contextual(context_factory), {
-    execution_view: () => registry.execution_view(context_factory),
-    register: (next_power) => registry.register(next_power),
-    unregister: (power_name) => registry.unregister(power_name),
-    unregister_and_wait: (power_name) => registry.unregister_and_wait(power_name),
   });
 }
 
@@ -68,7 +65,7 @@ test("每个 power 生成一个以 power 名命名的工具，并派生动作描
   });
   const tools = create_power_tools({
     definitions: [power],
-    powers: create_registry(power),
+    context_factory: create_context_factory(),
   });
   assert.deepEqual(Object.keys(tools), ["catalog"]);
   assert.match(tools.catalog.description, /- env\.get: Read env\./u);
@@ -84,7 +81,7 @@ test("没有动作的 power 不产生空壳工具", async () => {
   });
   const tools = create_power_tools({
     definitions: [power],
-    powers: create_registry(power),
+    context_factory: create_context_factory(),
   });
   assert.deepEqual(Object.keys(tools), []);
 });
@@ -109,17 +106,10 @@ test("工具省略 action 时返回动作索引，包含 access 与 returns", as
       }),
     },
   });
-  const context = create_test_power_context({
-    agent_id: "power_tools_agent",
-    workspace_id: "power_tools_workspace",
-    workspace_path: process.cwd(),
-  });
-  const registry = create_registry(power);
   const result = await invoke_power_tool({
-    powers: registry,
-    power_name: "indexed",
-    turn_context: create_turn_context(process.cwd()),
-    call_id: "call_index",
+    power,
+    context_factory: create_context_factory(),
+    call_context: create_call_context(),
     input: {},
   });
   assert.equal(result.output.success, true);
@@ -130,7 +120,6 @@ test("工具省略 action 时返回动作索引，包含 access 与 returns", as
   const search = actions.find((item) => item.action === "search");
   assert.equal(search.access, "read");
   assert.equal(search.returns, "{ hits }");
-  assert.equal(typeof context.logger, "object");
 });
 
 test("power action 的 messages 原样交给统一 Tool Result 边界", async () => {
@@ -153,12 +142,10 @@ test("power action 的 messages 原样交给统一 Tool Result 边界", async ()
       }),
     },
   });
-  const registry = create_registry(power);
   const result = await invoke_power_tool({
-    powers: registry,
-    power_name: "messaging",
-    turn_context: create_turn_context(process.cwd()),
-    call_id: "call_msg",
+    power,
+    context_factory: create_context_factory(),
+    call_context: create_call_context(),
     input: { action: "emit", args: { text: "hi" } },
   });
   assert.equal(result.output.success, true);
@@ -176,12 +163,10 @@ test("未知动作返回可读失败而不是抛错", async () => {
       only: create_action({ description: "Only.", returns: "{}", execute: async () => ({ success: true }) }),
     },
   });
-  const registry = create_registry(power);
   const result = await invoke_power_tool({
-    powers: registry,
-    power_name: "narrow",
-    turn_context: create_turn_context(process.cwd()),
-    call_id: "call_missing",
+    power,
+    context_factory: create_context_factory(),
+    call_context: create_call_context(),
     input: { action: "absent" },
   });
   assert.equal(result.output.success, false);

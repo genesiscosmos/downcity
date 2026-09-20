@@ -136,23 +136,22 @@ Session 会把该 Tool 与 Question Interaction 原子提交为 `waiting-user` /
 
 ## 普通 Tool 审批
 
-需要用户许可的 RuntimeTool，在自己的执行里向 Session 的审批端口请求审批：
+需要用户许可的 AgentTool，在自己的执行里向 Session 的审批端口请求审批：
 
 ```ts
-import { define_runtime_tool } from "@downcity/type";
+import { define_agent_tool } from "@downcity/type";
 import { z } from "zod";
 
-const delete_file = define_runtime_tool({
+const delete_file = define_agent_tool({
   description: "删除工作区内的指定文件。",
   input_schema: z.object({
     path: z.string(),
   }),
-  execute: async ({ path }, options) => {
-    // 审批入口由 Session 注入；ask 模式等待用户，always-allow 直接放行。
-    const session = options.context?.action_execution_context?.session;
-    const decision = await session.interactions.approval.request({
-      turn_id: session.turn_id,
-      tool_call_id: options.tool_call_id,
+  execute: async ({ path }, context) => {
+    // 审批端口由 Agent 在执行时注入；ask 模式等待用户，always-allow 直接放行。
+    const decision = await context.interactions.approval.request({
+      turn_id: context.turn_id,
+      tool_call_id: context.tool_call_id,
       tool_name: "delete_file",
       payload: { operation: "tool", validated_input: { path } },
     });

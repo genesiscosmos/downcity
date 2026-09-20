@@ -154,7 +154,7 @@ test("multiple session prompts use only their owning Agent power registry", asyn
   city.agents.add(agent_b);
 
   try {
-    await Promise.all([agent_a.ensure_ready(), agent_b.ensure_ready()]);
+    await city.powers.settled();
     const session_a = await agent_a.sessions.create({ session_id: "session_a", workspace: workspace_a });
     const session_b = await agent_b.sessions.create({ session_id: "session_b", workspace: workspace_b });
     const [turn_a, turn_b] = await Promise.all([

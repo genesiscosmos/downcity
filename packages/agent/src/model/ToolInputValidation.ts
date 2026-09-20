@@ -8,7 +8,8 @@
  */
 
 import { z } from "zod";
-import type { ModelJsonValue, RuntimeTool } from "@downcity/type";
+import type { ModelJsonValue } from "@downcity/type";
+import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
 
 /** 单次工具输入校验的结果。 */
 export type ToolInputValidationResult =
@@ -41,7 +42,7 @@ function format_zod_error(error: z.ZodError): string {
 /** 按工具自己的 schema 校验一次模型输入。 */
 export function validate_tool_input(input: {
   /** 目标工具定义。 */
-  tool: RuntimeTool;
+  tool: BoundAgentTool;
   /** 面向模型的工具名，用于错误说明。 */
   tool_name: string;
   /** 模型返回的原始输入。 */

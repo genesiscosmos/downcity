@@ -14,9 +14,8 @@ import {
   type ModelStreamEvent,
   type ModelTool,
   type ModelUsage,
-  type RuntimeTool as Tool,
-  type RuntimeToolExecutionOptions as ToolExecutionOptions,
 } from "@downcity/type";
+import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
 import { z } from "zod";
 import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
 import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
@@ -71,8 +70,8 @@ export interface RunModelStepInput {
   system: SessionSystemMessage[];
   /** 当前模型上下文。 */
   messages: ModelMessage[];
-  /** 当前可用工具运行时。 */
-  tools: Record<string, Tool>;
+  /** 当前可用工具运行时；上下文已在包装层绑定。 */
+  tools: Record<string, BoundAgentTool>;
   /** 当前取消信号。 */
   abort_signal: AbortSignal;
   /** canonical Assistant 输出端口。 */
@@ -276,12 +275,12 @@ async function execute_tools(
       continue;
     }
     try {
-      const options: ToolExecutionOptions = {
+      const site: ToolCallSite = {
         tool_call_id: call.tool_call_id,
         messages,
-        abort_signal: input.abort_signal,
+        ...(input.abort_signal ? { abort_signal: input.abort_signal } : {}),
       };
-      const output = await tool.execute(validated.input, options);
+      const output = await tool.execute(validated.input, site);
       results.push({
         ...call,
         input: validated.input,
@@ -318,8 +317,8 @@ function convert_system_messages(messages: SessionSystemMessage[]): ModelMessage
   }));
 }
 
-/** 把 Agent 工具定义转换为只含 JSON Schema 的模型协议。 */
-function convert_tools(tools: Record<string, Tool>): ModelTool[] {
+/** 把已绑定工具定义转换为只含 JSON Schema 的模型协议。 */
+function convert_tools(tools: Record<string, BoundAgentTool>): ModelTool[] {
   return Object.entries(tools).map(([name, tool]) => ({
     name,
     description: tool.description ?? "",

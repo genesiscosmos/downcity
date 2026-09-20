@@ -26,9 +26,6 @@ export async function build_composer_system_blocks(
     get_instruction_system_blocks: () => [
       ...(input.state.instruction_system_blocks ?? []),
     ],
-    get_managed_power_system_blocks: async () => [
-      ...(input.state.managed_power_system_blocks ?? []),
-    ],
     get_power_system_blocks: async () => [
       ...(input.state.power_system_blocks ?? []),
     ],

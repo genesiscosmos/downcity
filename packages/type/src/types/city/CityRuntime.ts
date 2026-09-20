@@ -3,11 +3,15 @@
  *
  * City 是 Agent 的可选组合根。Agent 只依赖这份能力投影，不依赖具体 City package，
  * 也不理解 Power、Transport 或其他 City 内部实现。
+ *
+ * 关键点（中文）
+ * - 这里只描述 Agent 需要「向 City 取用」的能力。
+ * - 反向推送（City 把编译后的 Power 产物交给 Agent）不需要进入本协议：City 持有
+ *   Agent 实例，直接调用 Agent 的公开方法即可。
  */
 
-import type { StorageProvider, WorkspaceRuntime } from "../../workspace.js";
-import type { RuntimeTool } from "../tool/index.js";
-import type { SessionHookRuntime } from "../session/SessionHook.js";
+import type { StorageProvider } from "../storage/Storage.js";
+import type { WorkspaceRuntime } from "../workspace/WorkspaceRuntime.js";
 
 /** Agent 加入 City 后可以使用的最小 City 运行能力。 */
 export interface CityRuntime {
@@ -19,21 +23,6 @@ export interface CityRuntime {
     /** 按稳定 ID 读取 Workspace；不存在或正在移除时返回 null。 */
     get(workspace_id: string): WorkspaceRuntime | null;
   };
-
-  /** 等待 Agent 执行依赖的 City 能力完成初始化。 */
-  ensure_ready(): Promise<void>;
-
-  /** 返回当前 Agent/Workspace 在一个执行检查点可见的 City Tool。 */
-  get_session_tools(
-    agent_id: string,
-    workspace: WorkspaceRuntime,
-  ): Record<string, RuntimeTool>;
-
-  /** 返回当前 Agent/Workspace 在一个执行检查点可见的 Session Hook。 */
-  get_session_hooks(
-    agent_id: string,
-    workspace: WorkspaceRuntime,
-  ): SessionHookRuntime;
 
   /** Agent 主动释放时清除 City 持有的运行时引用。 */
   release_agent(agent: {

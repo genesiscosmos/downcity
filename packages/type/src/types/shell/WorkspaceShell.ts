@@ -1,6 +1,6 @@
 /** Workspace 可选 Shell 能力协议。 */
 
-import type { RuntimeTool } from "@downcity/type";
+import type { AgentTool } from "@downcity/type";
 import type {
   SandboxNetworkMode,
   ShellProcessResult,
@@ -56,7 +56,7 @@ export interface WorkspaceShellSandboxCommandResult {
 /** 由 Workspace 持有并绑定到项目边界的命令执行能力。 */
 export interface WorkspaceShell {
   /** 当前 Shell 向 Agent 暴露的命令与进程工具。 */
-  readonly tools: Record<string, RuntimeTool>;
+  readonly tools: Record<string, AgentTool>;
 
   /** 将 Shell 绑定到一个 Workspace 项目和私有数据作用域。 */
   bind(input: {

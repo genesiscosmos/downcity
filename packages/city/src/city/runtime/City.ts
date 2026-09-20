@@ -7,7 +7,6 @@
  */
 
 import { Agent, Group } from "@downcity/agent";
-import { SessionHooks } from "@downcity/agent";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { create_city_power } from "@/city/power/builtin/CityPower.js";
 import { create_shell_power } from "@/city/power/builtin/shell/ShellPower.js";
@@ -15,7 +14,7 @@ import { create_city_action_groups } from "@/city/power/builtin/groups/index.js"
 import type { CityPowers } from "@/city/types/CityPower.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
-import type { CityRuntime, RuntimeTool, SessionHookRuntime } from "@downcity/type";
+import type { CityRuntime } from "@downcity/type";
 import { MemoryStorageProvider } from "@/workspace/index.js";
 import { CityHTTP } from "@/city/transport/http/CityHTTP.js";
 import { CityRPC } from "@/city/transport/rpc/CityRPC.js";
@@ -133,6 +132,10 @@ export class City implements CityRuntime {
       ...(options.power_host ? { host: options.power_host } : {}),
     });
     this.powers = this.power_runtime.public_api;
+    // Power 集合变化时重新编译并推送给全部 Agent；Agent 不参与拉取。
+    this.power_runtime.public_api.subscribe_surface(() => {
+      this.push_power_surface_to_all();
+    });
     // city power 与其它 power 走同一条注册路径；特权依赖在这里注入。
     void this.powers
       .add(
@@ -190,33 +193,23 @@ export class City implements CityRuntime {
     }
   }
 
-  /** 等待当前 City 中 Agent 执行依赖的 Power 生命周期稳定。 */
-  async ensure_ready(): Promise<void> {
-    await this.power_runtime.ensure_ready();
-  }
-
-  /** 返回当前 Agent/Workspace 在一个执行检查点可见的 City Tool。 */
-  get_session_tools(
-    agent_id: string,
-    workspace: WorkspaceRuntime,
-  ): Record<string, RuntimeTool> {
-    const agent = this.require_agent_workspace(agent_id, workspace);
-    return this.power_runtime.tools(agent, workspace, agent.get_logger());
-  }
-
   /**
-   * 返回当前 Agent/Workspace 在一个执行检查点可见的 Session Hook。
+   * 把当前 Power 编译产物推送给指定 Agent。
    *
    * 关键点（中文）
-   * - pipeline / effect 与 system 说明都来自已注册 power，包括 city power 自身。
-   * - Agent 包只看到“一套 hook”，不再区分 City 与其它 power。
+   * - 推送的是普通值与普通函数，Agent 持有后执行时不再回查 City。
+   * - 同一份产物只包含 Power 集合，不含 Workspace：Workspace 在执行时由
+   *   Agent 通过调用环境注入。
    */
-  get_session_hooks(
-    agent_id: string,
-    workspace: WorkspaceRuntime,
-  ): SessionHookRuntime {
-    const agent = this.require_agent_workspace(agent_id, workspace);
-    return this.power_runtime.hooks(agent, workspace, agent.get_logger());
+  private push_power_surface(agent: Agent): void {
+    agent.apply_powers(this.power_runtime.compile_surface(agent));
+  }
+
+  /** 把新的 Power 产物推送给当前全部 Agent。 */
+  private push_power_surface_to_all(): void {
+    for (const agent of this.agents_by_id.values()) {
+      this.push_power_surface(agent);
+    }
   }
 
   /**
@@ -524,6 +517,7 @@ export class City implements CityRuntime {
     }
     agent.attach(this);
     this.agents_by_id.set(agent.id, agent);
+    this.push_power_surface(agent);
     return agent;
   }
 

@@ -3,8 +3,14 @@
  */
 
 export {
-  define_runtime_tool,
-  type RuntimeTool,
-  type RuntimeToolExecutionOptions,
-} from "./RuntimeTool.js";
-export type { RuntimeToolEffect } from "./RuntimeToolEffect.js";
+  define_agent_tool,
+  type AgentTool,
+} from "./AgentTool.js";
+export type { ToolEffect } from "./ToolEffect.js";
+export {
+  EMPTY_TOOL_HOOK_SET,
+  type EffectHook,
+  type GuardHook,
+  type PipelineHook,
+  type ToolHookSet,
+} from "./ToolHook.js";

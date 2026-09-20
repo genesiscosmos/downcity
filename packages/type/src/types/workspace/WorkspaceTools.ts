@@ -6,12 +6,12 @@
  * - Power Tool 与调用方自定义 Tool 不属于本类型，由 Agent 统一注册。
  */
 
-import type { RuntimeTool } from "@downcity/type";
+import type { AgentTool } from "@downcity/type";
 import type { FileSystem } from "./FileSystem.js";
 import type { WorkspaceShell } from "../shell/WorkspaceShell.js";
 
 /** 当前 Workspace 向 Agent 提供的模型工具集合。 */
-export type WorkspaceTools = Record<string, RuntimeTool>;
+export type WorkspaceTools = Record<string, AgentTool>;
 
 /** Workspace Tools 构造参数。 */
 export interface CreateWorkspaceToolsOptions {

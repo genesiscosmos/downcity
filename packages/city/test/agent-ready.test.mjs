@@ -1,9 +1,9 @@
 /**
- * @file 验证 session.prompt 会等待当前 Agent runtime ready。
+ * @file 验证 Power 初始化不影响 Agent 主流程，且未就绪的 Power 不会被暴露。
  *
  * 关键点（中文）
  * - 这里走编译后的公开 SDK，覆盖宿主真实入口。
- * - power lifecycle 未完成前，session.prompt 不应进入模型执行。
+ * - Power 各自独立启动：初始化未完成既不阻塞 session.prompt，也不进入执行 Registry。
  */
 
 import test from "node:test";
@@ -92,7 +92,7 @@ function create_stream_text_result(text) {
   };
 }
 
-test("session.prompt waits for agent runtime ready before model execution", async () => {
+test("pending Power 初始化不阻塞 session.prompt", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-ready-"),
   );
@@ -145,7 +145,9 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
   const agent = new Agent({ id: "ready_agent", model });
   const workspace = new Workspace({ id: "ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, blocking_power);
+  // 关键点（中文）：这个 Power 的 initialize 会一直挂起，必须不等待注册；
+  // 本用例验证的正是「Power 未就绪不阻塞主流程」。
+  void city.powers.add(create_power_registration(blocking_power)).catch(() => undefined);
   city.agents.add(agent);
 
   try {
@@ -153,26 +155,28 @@ test("session.prompt waits for agent runtime ready before model execution", asyn
       session_id: "ready_session",
       workspace,
     });
-    const prompt_promise = session.prompt({
+    const turn = await session.prompt({
       query: "hello",
     });
-
-    assert.equal(await is_settled(prompt_promise), false);
-    assert.equal(model_stream_calls, 0);
-
-    lifecycle_ready.resolve();
-    const turn = await prompt_promise;
     const result = await turn.finished;
 
+    // 关键点：Power 还在初始化，但主流程已经跑完一轮模型调用。
     assert.equal(result.success, true);
     assert.equal(model_stream_calls, 1);
+    const pending = city.powers.snapshots().find((item) => item.name === "blocking");
+    assert.equal(pending?.status, "initializing");
+
+    lifecycle_ready.resolve();
+    await city.powers.settled();
+    const ready = city.powers.snapshots().find((item) => item.name === "blocking");
+    assert.equal(ready?.status, "ready");
   } finally {
     lifecycle_ready.resolve();
     await city.close();
   }
 });
 
-test("city.powers scope waits for lifecycle initialization before direct action execution", async () => {
+test("未就绪的 Power 直接调用立即失败，不等待初始化", async () => {
   const agent_path = await fs.mkdtemp(
     path.join(os.tmpdir(), "downcity-agent-power-ready-"),
   );
@@ -202,21 +206,29 @@ test("city.powers scope waits for lifecycle initialization before direct action 
   const agent = new Agent({ id: "power_ready_agent" });
   const workspace = new Workspace({ id: "power_ready_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, power);
+  // 关键点（中文）：initialize 挂起，因此不能等待注册；未就绪的 Power 不进入 Registry。
+  void city.powers.add(create_power_registration(power)).catch(() => undefined);
   city.agents.add(agent);
   try {
-    const action_promise = city.powers.scope({
+    const scope = city.powers.scope({
       agent_id: agent.id,
       workspace_id: workspace.id,
-    }).run_action({
+    });
+    const pending_result = await scope.run_action({
       power: "direct-action",
       action: "status",
     });
-    assert.equal(await is_settled(action_promise), false);
+    // 关键点：未注册的 Power 不进入 Registry，调用立即失败而不是挂起。
+    assert.equal(pending_result.success, false);
+    assert.match(pending_result.error, /Unknown power/u);
     assert.equal(action_calls, 0);
 
     lifecycle_ready.resolve();
-    const result = await action_promise;
+    await city.powers.settled();
+    const result = await scope.run_action({
+      power: "direct-action",
+      action: "status",
+    });
     assert.equal(result.success, true);
     assert.equal(result.data.lifecycle_started, true);
     assert.equal(action_calls, 1);
@@ -251,8 +263,9 @@ test("首次 Session 操作等待初始化并隔离 Power lifecycle 初始化失
   const agent = new Agent({ id: "ready_isolation_agent" });
   const workspace = new Workspace({ id: "isolation_workspace", path: agent_path, data_root_path: path.join(agent_path, "data") });
   const city = new City({ workspaces: [workspace] });
-  add_test_power(city, failing_power);
-  add_test_power(city, healthy_power);
+  // 关键点（中文）：一个 Power 初始化失败、一个成功；两个都独立启动，不互相影响。
+  void city.powers.add(create_power_registration(failing_power)).catch(() => undefined);
+  await add_test_power(city, healthy_power);
   city.agents.add(agent);
   try {
     await agent.sessions.create({ session_id: "initial_barrier", workspace });
@@ -293,8 +306,8 @@ test("Agent registers PowerRegistry tools and removes them with the last action 
     const powers = city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id });
     assert.equal(powers.list().some((item) => item.name === "dynamic_action"), false);
 
-    add_test_power(city, action_power);
-    await agent.ensure_ready();
+    await add_test_power(city, action_power);
+    await city.powers.settled();
 
     assert.equal(powers.list().some((item) => item.name === "dynamic_action"), true);
 
@@ -334,7 +347,7 @@ test("初始化中的 City Power 发布后会刷新已创建 Workspace 的 tools
     const powers = city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id });
     assert.equal(powers.list().some((item) => item.name === "pending_action"), false);
     lifecycle_ready.resolve();
-    await agent.ensure_ready();
+    await city.powers.settled();
     assert.equal(powers.list().some((item) => item.name === "pending_action"), true);
   } finally {
     lifecycle_ready.resolve();

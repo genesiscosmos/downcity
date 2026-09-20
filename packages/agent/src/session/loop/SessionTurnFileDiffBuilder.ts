@@ -13,7 +13,7 @@ import {
   formatPatch,
   structuredPatch,
 } from "diff";
-import type { RuntimeToolEffect } from "@downcity/type";
+import type { ToolEffect } from "@downcity/type";
 import {
   WORKSPACE_FILE_MUTATION_EFFECT_TYPE,
   type WorkspaceFileMutation,
@@ -40,7 +40,7 @@ interface CollectedFileMutation {
 /** 把当前 Turn effects 中的结构化文件修改收敛为可持久化 Diff。 */
 export function build_session_turn_file_diff(
   workspace_path: string,
-  effects: readonly RuntimeToolEffect[],
+  effects: readonly ToolEffect[],
 ): SessionTurnFileDiffData | undefined {
   const files = collect_session_turn_file_diffs(workspace_path, effects);
   if (files.length === 0) return undefined;
@@ -54,7 +54,7 @@ export function build_session_turn_file_diff(
 /** 从当前 Turn effects 收敛只含统计的实时摘要，供 Thinking 状态行轻量展示。 */
 export function build_session_turn_file_diff_summary(
   workspace_path: string,
-  effects: readonly RuntimeToolEffect[],
+  effects: readonly ToolEffect[],
 ): SessionTurnFileDiffSummary {
   const files = collect_session_turn_file_diffs(workspace_path, effects);
   return {
@@ -67,7 +67,7 @@ export function build_session_turn_file_diff_summary(
 /** 把 effects 收敛为稳定排序的文件 Diff 列表；空列表表示当前没有结构化修改。 */
 function collect_session_turn_file_diffs(
   workspace_path: string,
-  effects: readonly RuntimeToolEffect[],
+  effects: readonly ToolEffect[],
 ): SessionTurnFileDiff[] {
   const mutations = effects.flatMap((effect) => {
     const mutation = read_workspace_file_mutation_effect(effect);

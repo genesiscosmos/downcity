@@ -6,7 +6,7 @@
  * - RemoteAgent 与 Session 数据结构拆到独立类型文件。
  */
 
-import type { ModelClient, RuntimeTool as Tool } from "@downcity/type";
+import type { ModelClient, AgentTool as Tool } from "@downcity/type";
 import type {
   AgentManagedSession,
   SessionOptions,
