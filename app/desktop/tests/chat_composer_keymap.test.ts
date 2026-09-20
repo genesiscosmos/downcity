@@ -54,6 +54,17 @@ test("修饰键行为与文档结构及队列状态无关", () => {
   assert.equal(resolve_chat_composer_enter_action(key({ ctrlKey: true, shiftKey: true }), complex_document), "submit-immediately");
 });
 
+test("多行模式下裸 Enter 只换行，显式提交键仍然生效", () => {
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, true), "native");
+  assert.equal(resolve_chat_composer_enter_action(key({ shiftKey: true }), plain_paragraph, true), "native");
+  assert.equal(resolve_chat_composer_enter_action(key({ metaKey: true }), plain_paragraph, true), "submit");
+  assert.equal(resolve_chat_composer_enter_action(key({ ctrlKey: true }), plain_paragraph, true), "submit");
+  assert.equal(resolve_chat_composer_enter_action(key({ metaKey: true, shiftKey: true }), plain_paragraph, true), "submit-immediately");
+  assert.equal(resolve_chat_composer_enter_action(key({ metaKey: true, altKey: true }), plain_paragraph, true), "queue-paused");
+  // 默认行为不变：多行模式不能反过来影响正文里的普通输入框。
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph), "submit");
+});
+
 test("IME 合成和 Alt + Enter 保留原生行为", () => {
   assert.equal(resolve_chat_composer_enter_action(key({ isComposing: true }), plain_paragraph), "native");
   assert.equal(resolve_chat_composer_enter_action(key({ altKey: true }), plain_paragraph), "native");

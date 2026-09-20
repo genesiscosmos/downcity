@@ -244,7 +244,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
             return true;
           }
         }
-        const action = resolve_chat_composer_enter_action(event, view.state.doc.toJSON());
+        const action = resolve_chat_composer_enter_action(event, view.state.doc.toJSON(), props_ref.current.multiline_enter);
         if (action === "native" || (action === "queue-paused" && !props_ref.current.can_queue)) return false;
         event.preventDefault();
         void submit_message(action === "submit-immediately" ? "steer" : action === "queue-paused" ? "queue" : "send");
@@ -286,6 +286,17 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     applied_focus_request_ref.current = focus_request;
     editor.commands.focus("end");
   }, [editor, props.focus_request]);
+
+  /**
+   * 展开到面板后直接接管键盘焦点。
+   *
+   * 只在挂载时做一次：依赖数组保持为空，之后重渲染不再抢焦点。
+   * 光标落在文末，接着上次的位置继续写。
+   */
+  useEffect(() => {
+    if (!editor || !props_ref.current.auto_focus_on_mount) return;
+    editor.commands.focus("end");
+  }, [editor]);
 
   useEffect(() => add_chat_reference_listener((reference) => {
     const current_editor = editor_ref.current;
@@ -352,7 +363,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     <input ref={image_input_ref} type="file" multiple hidden accept="image/*" onChange={(event) => { void insert_files(event.target.files ?? []); event.currentTarget.value = ""; }} />
     {props.queue}
     {attachment_error ? <div className="px-2 text-2xs text-destructive">{attachment_error}</div> : null}
-    {member_query && member_candidates.length > 0 ? <div className="absolute bottom-full left-1 z-30 mb-2 w-56 overflow-hidden rounded-surface border border-border bg-background p-1 text-popover-foreground outline-none">{member_candidates.map((member) => <button key={member.agent_id} type="button" className="flex w-full items-center gap-2 rounded-chip px-2 py-1.5 text-left text-xs outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30" onMouseDown={(event) => event.preventDefault()} onClick={() => select_group_member(member)}><AgentAvatar agent={member} class_name="size-5" /><span className="min-w-0 flex-1 truncate">@{member.name}</span></button>)}</div> : slash_query ? <ChatSlashMenu commands={slash_commands} select_command={select_slash_command} /> : file_query && file_candidates.length > 0 ? <div className="absolute bottom-full left-1 z-30 mb-2 w-72 overflow-hidden rounded-surface border border-border bg-background p-1 text-popover-foreground outline-none">{file_candidates.map((file) => <button key={file.relative_path} type="button" className="flex w-full items-center gap-2 rounded-chip px-2 py-1.5 text-left text-xs outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30" onMouseDown={(event) => event.preventDefault()} onClick={() => void select_workspace_file(file)}><TbPaperclip className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{file.relative_path}</span></button>)}</div> : null}
+    {member_query && member_candidates.length > 0 ? <div className="chat-composer-candidate-menu absolute bottom-full left-1 z-30 mb-2 w-56 overflow-hidden rounded-surface border border-border bg-background p-1 text-popover-foreground outline-none">{member_candidates.map((member) => <button key={member.agent_id} type="button" className="flex w-full items-center gap-2 rounded-chip px-2 py-1.5 text-left text-xs outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30" onMouseDown={(event) => event.preventDefault()} onClick={() => select_group_member(member)}><AgentAvatar agent={member} class_name="size-5" /><span className="min-w-0 flex-1 truncate">@{member.name}</span></button>)}</div> : slash_query ? <ChatSlashMenu commands={slash_commands} select_command={select_slash_command} /> : file_query && file_candidates.length > 0 ? <div className="chat-composer-candidate-menu absolute bottom-full left-1 z-30 mb-2 w-72 overflow-hidden rounded-surface border border-border bg-background p-1 text-popover-foreground outline-none">{file_candidates.map((file) => <button key={file.relative_path} type="button" className="flex w-full items-center gap-2 rounded-chip px-2 py-1.5 text-left text-xs outline-none hover:bg-interaction-hover focus-visible:ring-2 focus-visible:ring-ring/30" onMouseDown={(event) => event.preventDefault()} onClick={() => void select_workspace_file(file)}><TbPaperclip className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{file.relative_path}</span></button>)}</div> : null}
     <div className="chat-composer-editor min-h-20 max-h-60 w-full overflow-y-auto p-1">
       <EditorContent editor={editor} className="chat-composer-content" />
     </div>
@@ -369,7 +380,15 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
         </> : null}
         {props.toolbar}
       </div>
-      <Button type="button" onClick={() => void (show_stop ? props.stop_session?.() : submit_message("send"))} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={translate_chat(show_stop ? "composer.stop" : queues_submission ? "composer.queue_message" : "composer.send_message")} title={translate_chat(show_stop ? "composer.stop" : queues_submission ? "composer.queue_message_hint" : "composer.send_message")}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
+      <div className="flex shrink-0 items-center gap-1">
+        {/*
+          展开/收起入口的显示时机由场景决定（见 `expand_visibility`）。
+          判空用编辑器自己的 `input_empty` 而不是草稿快照：草稿写入 store 有 300ms 防抖，
+          读快照会让按钮晚一拍才出现。
+        */}
+        {input_empty && props.expand_visibility !== "always" ? null : props.expand}
+        <Button type="button" onClick={() => void (show_stop ? props.stop_session?.() : submit_message("send"))} disabled={submitting || (!show_stop && input_empty)} size="icon" variant="primary" className="rounded-full" aria-label={translate_chat(show_stop ? "composer.stop" : queues_submission ? "composer.queue_message" : "composer.send_message")} title={translate_chat(show_stop ? "composer.stop" : queues_submission ? "composer.queue_message_hint" : "composer.send_message")}>{show_stop ? <TbSquare className="size-4 stroke-3" /> : submitting ? <TbLoader2 className="size-4 animate-spin" /> : <TbArrowUp className="size-4 stroke-3" />}</Button>
+      </div>
     </div>
   </div>);
 });

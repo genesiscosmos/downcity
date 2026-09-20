@@ -1,33 +1,47 @@
 /** 群聊输入只提供成员引用、会话切换和群聊提交能力。 */
-import { useMemo } from "react";
+import { TbArrowsDiagonal } from "react-icons/tb";
 import { RichTextEditor } from "./RichTextEditor";
-import { use_store_selector } from "@/lib/store";
+import { ComposerExpandButton, GroupComposerPanel, composer_tab_id } from "./ComposerPanel";
+import { use_group_composer } from "./use_group_composer";
 import { get_group_chat_key } from "../lib/chat_cache_key";
-import { read_composer_focus_request } from "./editor/composerFocus";
-import { empty_chat_content } from "../lib/chat_view_defaults";
-import { is_group_phase_running } from "../lib/group/group_runtime_projection";
-import type { GroupComposerProps } from "@/types/ChatComponents";
+import { use_baybar_tab_active, type BayBarTab, type BayBarTranslate } from "@/layouts/BayBar";
 import { use_translation } from "@/locales/i18n";
+import type { GroupComposerProps } from "@/types/ChatComponents";
 
-export function GroupComposer({ selection, stores, actions }: GroupComposerProps) {
+export function GroupComposer(props: GroupComposerProps) {
   const translate = use_translation("chat");
-  const { group_id, workspace_id } = selection;
-  const session_id = selection.kind === "group_draft" ? selection.draft_id : selection.session_id;
+  const editor = use_group_composer(props);
+  const { group_id, workspace_id } = props.selection;
+  const session_id = props.selection.kind === "group_draft" ? props.selection.draft_id : props.selection.session_id;
   const chat_key = get_group_chat_key(workspace_id, group_id, session_id);
-  const draft = use_store_selector(stores.composer, state => state.draft_content_by_session[chat_key]);
-  const focus_request = use_store_selector(stores.composer, state => read_composer_focus_request(state.focus_request_by_session, chat_key));
-  const group = use_store_selector(stores.catalog, state => state.groups_by_id[group_id]);
-  const agents = use_store_selector(stores.catalog, state => state.agents);
-  const busy = use_store_selector(stores.chat_stream, state =>
-    selection.kind === "group_session" && is_group_phase_running(state.group_phase_by_group[group_id]));
-  const spellcheck_enabled = use_store_selector(stores.settings, state => state.settings.spellcheck_enabled);
-  const members = useMemo(() => agents.filter(agent => group?.members.some(member => member.agent_id === agent.agent_id)), [agents, group?.members]);
-  const commands = useMemo(() => (group?.sessions ?? []).map(session => ({ command_id: `sessions:${session.session_id}`, title: `/sessions ${session.session_id.slice(0, 8)}`, description: translate("commands.switch_group_session"), keywords: ["session", "sessions", session.session_id], run: () => actions.open_group(group_id, session.session_id) })), [actions, group?.sessions, group_id, translate]);
-  return <RichTextEditor editor_key={chat_key} draft_content={draft ?? empty_chat_content}
-    focus_request={focus_request}
-    placeholder={translate("composer.group_placeholder")} busy={busy} spellcheck_enabled={spellcheck_enabled}
-    members={members} commands={commands}
-    update_draft={input => actions.update_group_draft(workspace_id, group_id, session_id, input)}
-    send_message={async input => { await actions.send_group_message(group_id, workspace_id, session_id, input); }}
-    stop_session={selection.kind === "group_session" ? () => actions.stop_group(group_id, session_id) : undefined} />;
+  // 与单聊同一条规则：面板打开时正文那一份卸载，避免两个编辑器争同一份草稿。
+  const expanded = use_baybar_tab_active(composer_tab_id(chat_key));
+  if (expanded) return null;
+  return <RichTextEditor
+    {...editor}
+    expand={<ComposerExpandButton build_tab={() => group_composer_tab(props, translate)} />}
+  />;
+}
+
+/**
+ * 构造群聊的输入区标签页。
+ *
+ * 标题用 **Group 名**：群聊会话名对用户没有区分度，而 Group 名是用户自己起的。
+ */
+export function group_composer_tab(props: GroupComposerProps, t: BayBarTranslate): BayBarTab {
+  const { group_id, workspace_id } = props.selection;
+  const session_id = props.selection.kind === "group_draft" ? props.selection.draft_id : props.selection.session_id;
+  // Group 名在目录 store 里可以同步读到（`get_snapshot`），因此标签页标题在点击处就能算好，
+  // 不需要让内容组件反向去猜自己叫什么。
+  const group_name = props.stores.catalog.get_snapshot().groups_by_id[group_id]?.name;
+  return {
+    id: composer_tab_id(get_group_chat_key(workspace_id, group_id, session_id)),
+    label: group_name || t("conversation.new"),
+    icon: <TbArrowsDiagonal />,
+    sections: [{
+      id: "composer",
+      label: t("composer.panel_section"),
+      content: <GroupComposerPanel selection={props.selection} stores={props.stores} actions={props.actions} />,
+    }],
+  };
 }

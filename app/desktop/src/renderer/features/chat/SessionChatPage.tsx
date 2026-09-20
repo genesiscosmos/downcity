@@ -73,7 +73,7 @@ export function AgentSessionChatSurface({ selection, agent, session, workspaces,
     archive_session={archive_session}
     remove_session={remove_session}
     switch_draft_context={controller.actions.switch_draft_context}
-    composer={<SessionComposer selection={selection} stores={controller.stores} actions={controller.actions} />}
+    composer={<SessionComposer selection={selection} stores={controller.stores} actions={controller.actions} session_label={session.title} />}
     respond_interaction={respond_interaction}
     fork_message={fork_message}
     rewrite_message={rewrite_message}

@@ -183,6 +183,58 @@ a,
   border-radius: var(--radius-surface);
 }
 
+/*
+ * 展开到右侧面板的输入区。
+ *
+ * 面板宽度只有 360~400px 且可以拖宽，输入区必须随之伸缩：
+ * `.chat-composer` 自带 840px 上限与居中边距，那是对齐消息列的规则，
+ * 在面板里会让输入框缩成一条、两边留白，因此这里覆盖为铺满。
+ *
+ * 高度上让编辑器吃掉整个面板：面板是专门为写长内容打开的，
+ * 保留正文里那个 200px 的可视高度上限就失去意义了。
+ * 因此这里要让 composer 自己先能伸展（它默认是 `flex-none`，高度由内容决定，
+ * 内层编辑器再写 `flex: 1` 也没有可分配的空间）。
+ */
+.composer-panel .chat-composer {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  background: transparent;
+}
+
+/* 面板里没有悬浮卡片的语义，焦点底色反而会在整列上形成大片色块。 */
+.composer-panel .chat-composer:focus-within {
+  background: transparent;
+}
+
+.composer-panel .chat-composer-editor {
+  min-height: 0;
+  max-height: none;
+  flex: 1 1 auto;
+}
+
+.composer-panel .chat-input-editor,
+.composer-panel .chat-input-editor.ProseMirror {
+  max-height: none;
+}
+
+/*
+ * 面板里的候选菜单改贴工具栏上方。
+ *
+ * 非面板时编辑器就是输入框本身，`bottom-full`（浮在整个输入区上方）等于「光标附近」；
+ * 面板里输入区高达整列，`bottom-full` 会把菜单推到面板外、被裁掉。
+ * 工具栏上方是两种尺寸下都成立的位置：它永远紧邻用户正在输入的地方。
+ */
+.composer-panel .chat-composer-candidate-menu {
+  top: auto;
+  bottom: 2.25rem;
+  margin-bottom: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
 .chat-composer-content {
   display: block;
   width: 100%;

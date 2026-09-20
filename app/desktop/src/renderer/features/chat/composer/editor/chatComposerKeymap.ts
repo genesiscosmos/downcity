@@ -33,12 +33,19 @@ export function is_single_plain_text_paragraph(document: JSONContent | undefined
  * Cmd/Ctrl + Enter：按常规发送策略提交（运行中或已有队列时会排队）。
  * Option/Alt + Cmd/Ctrl + Enter：创建或插入暂停队列。
  * Cmd/Ctrl + Shift + Enter：绕过队列立即提交。
+ *
+ * `multiline` 下裸 Enter 不再发送：面板里的大输入区就是为写长内容准备的，
+ * 回车必须始终是换行，提交只剩显式修饰键这一条路。规则写在这里而不是组件里，
+ * 因为它是「按键 → 行为」的纯映射，可以被单测直接钉住。
  */
 export function resolve_chat_composer_enter_action(
   event: ChatComposerEnterKey,
   document: JSONContent | undefined,
+  /** 当前输入区是否以多行书写为主（展开在右侧面板时）。 */
+  multiline = false,
 ): ChatComposerEnterAction {
   if (event.key !== "Enter" || event.isComposing) return "native";
+  if (multiline && is_plain_enter(event)) return "native";
   const has_command_modifier = event.metaKey || event.ctrlKey;
   if (has_command_modifier && event.shiftKey) return "submit-immediately";
   if (has_command_modifier && event.altKey) return "queue-paused";

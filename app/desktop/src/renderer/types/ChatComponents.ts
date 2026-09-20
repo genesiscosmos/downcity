@@ -45,8 +45,30 @@ export interface RichTextEditorProps {
   commands?: ChatSlashCommand[];
   /** 输入工具栏，由场景组合模型、审批等控制项。 */
   toolbar?: ReactNode;
+  /** 发送按钮左侧的展开/收起入口，由场景决定打开或关闭哪个面板。 */
+  expand?: ReactNode;
+  /**
+   * `expand` 入口的显示时机。
+   *
+   * 正文里用 `when-non-empty`：空输入框展开没有好处，常驻一个图标只是噪声。
+   * 面板里用 `always`：那里的收起入口是退出面板的唯一可见入口，不能随内容一起消失。
+   */
+  expand_visibility?: "when-non-empty" | "always";
+  /**
+   * 是否以多行书写为主（展开在右侧面板时）。
+   *
+   * 开启后裸 Enter 只换行，提交必须用修饰键——大输入区的意义就是写长内容。
+   */
+  multiline_enter?: boolean;
   /** 编辑器上方的队列区域，由队列组件独立订阅状态。 */
   queue?: ReactNode;
+  /**
+   * 挂载后是否直接把键盘焦点交给输入框。
+   *
+   * 展开到面板时开启：用户点展开就是为了打字，进来还要再点一下才能输入是多余的。
+   * 正文里的输入框不开：那是页面的一部分，抢焦点会打断用户正在做的其它事。
+   */
+  auto_focus_on_mount?: boolean;
 }
 
 /** 历史用户消息富文本编辑器的交互契约。 */
@@ -91,6 +113,14 @@ export interface AgentComposerProps {
   stores: Pick<import("./DesktopView").DesktopController["stores"], "catalog" | "composer" | "chat_stream" | "settings">;
   /** 输入配置与消息提交能力。 */
   actions: Pick<import("./DesktopView").DesktopActions, "update_draft" | "send_message" | "set_session_model" | "set_session_reasoning_effort" | "set_session_approval_mode" | "stop_session" | "remove_queued_message" | "send_queued_message" | "update_queued_message" | "toggle_queued_message_paused" | "set_queue_paused" | "move_queued_message">;
+  /**
+   * 当前对话名，用于展开后侧栏标签页的标题。
+   *
+   * 由调用方算好，不让输入区去订阅 Session 目录：
+   * 标签页标题只需要一个字符串，而输入区不该因此认识对话列表的形状。
+   * 未提供时标签页使用「新对话」这类兜底文案。
+   */
+  session_label?: string;
 }
 
 /** 群聊输入区域的精确领域依赖。 */

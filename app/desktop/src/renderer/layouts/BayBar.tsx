@@ -72,6 +72,7 @@ export { baybar_tab_id } from "./baybarPanelState";
 
 /** 兜底的空 store：不在壳内渲染时（单测、独立组件）使用。 */
 const noop_open_tab = () => undefined;
+const noop_close_tab = () => undefined;
 
 /**
  * 壳层提供的 store 句柄。
@@ -102,6 +103,24 @@ export function use_baybar_open(): (tab: BayBarTab, section_id?: string) => void
   // 直接返回 store 上那个稳定引用，不要包一层箭头函数：
   // 调用方会把它放进 useCallback 依赖，每次渲染新建函数会让下游 memo 全部失效。
   return useContext(BayBarContext)?.open_tab ?? noop_open_tab;
+}
+
+/**
+ * 某个标签页是否正被展示（面板展开且它就是当前页）。
+ *
+ * 正文里的入口需要知道自己对应的面板是否已经接管：例如输入区展开后，
+ * 正文里那一份必须让位——两个编辑器同时持有同一份草稿会互相覆盖。
+ * 这里读的是**派生状态**（open + active_id），不额外维护一份“谁展开了”的标记：
+ * 两份状态一旦并存就会不同步，而标签页本身就是唯一的真相。
+ */
+export function use_baybar_tab_active(tab_id: string): boolean {
+  const store = useContext(BayBarContext)?.store ?? empty_baybar_store;
+  return use_store_selector(store, (state) => state.open && state.active_id === tab_id);
+}
+
+/** 关闭一个标签页；不在壳内时为空操作。 */
+export function use_baybar_close_tab(): (tab_id: string) => void {
+  return useContext(BayBarContext)?.close_tab ?? noop_close_tab;
 }
 
 /**
