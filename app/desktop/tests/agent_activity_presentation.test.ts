@@ -244,25 +244,48 @@ test("未知 Tool 输出仍给出可展开正文", () => {
   assert.deepEqual(presentation.detail, { type: "code", text: "nested: value: x\ncount: 2" });
 });
 
-test("只有内置 write / edit 带写盘标记，失败时不算写盘", () => {
-  const write = resolve_agent_tool_presentation(create_tool("write", 1, { path: "a.ts" }), power_names);
-  const edit = resolve_agent_tool_presentation(create_tool("edit", 2, { file_path: "a.ts" }), power_names);
-  assert.equal(write.mutation, true);
-  assert.equal(edit.mutation, true);
+test("只有内置 write / edit 带改动行数，且只在成功终态给出", () => {
+  // write 的 `lines_written` 就是新增行数；它不删行。
+  const write = resolve_agent_tool_presentation({ ...create_tool("write", 1, { file_path: "a.ts" }), output: { success: true, lines_written: 12 } }, power_names);
+  assert.deepEqual(write.diff_stat, { additions: 12, deletions: 0 });
 
-  // 只读工具不染。
+  // edit 逐项按 old_text / new_text 的行数相加，只算真正应用的项。
+  const edit = resolve_agent_tool_presentation({
+    ...create_tool("edit", 2, { file_path: "a.ts", edits: [
+      { old_text: "a\nb", new_text: "c" },
+      { old_text: "d", new_text: "e\nf\ng" },
+      { old_text: "未应用", new_text: "未应用" },
+    ] }),
+    output: { success: true, applied: 2, details: [
+      { index: 0, status: "applied", match_count: 1 },
+      { index: 1, status: "applied", match_count: 1 },
+      { index: 2, status: "not_found", match_count: 0 },
+    ] },
+  }, power_names);
+  assert.deepEqual(edit.diff_stat, { additions: 4, deletions: 3 });
+});
+
+test("只读工具、失败、未收口与非内置工具都不给改动行数", () => {
+  // 只读工具不改文件。
   for (const [name, input] of [["read", { file_path: "a.ts" }], ["grep", { pattern: "x" }], ["find", { glob: "*" }], ["ask_question", { title: "t" }]] as const) {
-    assert.equal(resolve_agent_tool_presentation(create_tool(name, 3, input), power_names).mutation, false, name);
+    assert.equal(resolve_agent_tool_presentation({ ...create_tool(name, 3, input), output: { lines_written: 5 } }, power_names).diff_stat, null, name);
   }
 
-  // 失败的写入没有真正发生，且行内已有一条红色错误要读。
-  assert.equal(resolve_agent_tool_presentation({ ...create_tool("write", 4, { path: "a.ts" }), state: "failed", error: "EACCES" }, power_names).mutation, false);
+  // 失败没有产生任何改动。
+  assert.equal(resolve_agent_tool_presentation({ ...create_tool("write", 4, { file_path: "a.ts" }), state: "failed", error: "EACCES", output: { lines_written: 5 } }, power_names).diff_stat, null);
+
+  // 输入未收口时还不知道会写多少。
+  assert.equal(resolve_agent_tool_presentation({ ...create_tool("write", 5), state: "input-streaming", input: undefined, input_text: "{\"file_path\":\"a.ts\"" }, power_names).diff_stat, null);
 
   // Power 的写盘与否无法从名称判定，不猜。
-  assert.equal(resolve_agent_tool_presentation(create_tool("shell", 5, { action: "exec" }), power_names).mutation, false);
+  assert.equal(resolve_agent_tool_presentation({ ...create_tool("shell", 6, { action: "exec" }), output: { lines_written: 5 } }, power_names).diff_stat, null);
+
+  // 输出缺失或字段不可用时不给标签，而不是显示 +0 -0。
+  assert.equal(resolve_agent_tool_presentation(create_tool("write", 7, { file_path: "a.ts" }), power_names).diff_stat, null);
+  assert.equal(resolve_agent_tool_presentation({ ...create_tool("edit", 8, { file_path: "a.ts" }), output: { success: true, applied: 0, details: [] } }, power_names).diff_stat, null);
 
   // Action 不是文件写入。
-  assert.equal(resolve_agent_action_presentation(create_action("command", 6)).mutation, false);
+  assert.equal(resolve_agent_action_presentation(create_action("command", 9)).diff_stat, null);
 });
 
 test("Action 类别映射为稳定视觉语义", () => {

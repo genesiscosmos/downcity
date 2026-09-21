@@ -8,7 +8,7 @@ import { use_chat_power_lookup } from "@/features/chat/components/messages/ChatP
 import { use_open_interaction_tab } from "@/features/chat/panel/InteractionPanel";
 import { PowerIcon } from "@/features/power/lib/PowerIcon";
 import { chat_power_names, resolve_agent_action_presentation, resolve_agent_tool_presentation, resolve_power_identity_text, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_activity_presentation";
-import type { AgentActivityDetail, AgentActivityEditPair, AgentActivityPart, AgentActivityPresentation, AgentActivityTone, AgentActivityVisualKind, ChatPowerLookup } from "@/features/chat/types/AgentMessage";
+import type { AgentActivityDetail, AgentActivityDiffStat, AgentActivityEditPair, AgentActivityPart, AgentActivityPresentation, AgentActivityTone, AgentActivityVisualKind, ChatPowerLookup } from "@/features/chat/types/AgentMessage";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 
@@ -95,7 +95,7 @@ function AgentReasoning({ part, message_streaming }: { part: SessionAgentReasoni
   return <ActivityRow
     icon={<ActivityIcon visual_kind="reasoning" />}
     tone={running ? "running" : "complete"}
-    mutation={false}
+    diff_stat={null}
     state={translate_chat(running ? "activity.thinking" : "activity.thought")}
     identity={reasoning_preview(text)}
     identity_action=""
@@ -156,8 +156,8 @@ interface ActivityRowSummary {
   icon: ReactNode;
   /** 行样式语气。 */
   tone: AgentActivityTone;
-  /** 是否对文件产生修改；为真时行内文字与图标用强调色。 */
-  mutation: boolean;
+  /** 改动行数标签；为 null 时不渲染。 */
+  diff_stat: AgentActivityDiffStat | null;
   /** 本地化后的状态文案。 */
   state: string;
   /** 身份主文案；永不截断。 */
@@ -186,7 +186,7 @@ function row_from_presentation(presentation: AgentActivityPresentation, translat
   return {
     icon: <ActivityIcon visual_kind={presentation.visual_kind} power_name={power?.power_name} />,
     tone: presentation.tone,
-    mutation: presentation.mutation,
+    diff_stat: presentation.diff_stat,
     state: translate(presentation.state_key),
     identity: identity.label,
     identity_action: identity.action,
@@ -205,7 +205,7 @@ function summarize_activity(part: AgentActivityPart, message_streaming: boolean,
   return {
     icon: <ActivityIcon visual_kind="reasoning" />,
     tone: running ? "running" : "complete",
-    mutation: false,
+    diff_stat: null,
     state: translate(running ? "activity.thinking" : "activity.thought"),
     identity: reasoning_preview(part.text),
     identity_action: "",
@@ -222,10 +222,10 @@ function summarize_activity(part: AgentActivityPart, message_streaming: boolean,
  * 身份与参数之间的 `·` 是真实文本节点，不是 CSS 造的视觉间距：读屏要能听出
  * 「Shell · 执行命令 · pnpm test」的停顿，靠 `gap` 会连读成一个词。
  */
-function ActivityRow({ icon, tone, mutation, state, identity, identity_action, summary, badge, body, extra_body, auto_open, auto_open_key = "", summary_class_name }: {
+function ActivityRow({ icon, tone, diff_stat, state, identity, identity_action, summary, badge, body, extra_body, auto_open, auto_open_key = "", summary_class_name }: {
   /** 行首图标。 */ icon: ReactNode;
   /** 行样式语气。 */ tone: AgentActivityTone;
-  /** 是否对文件产生修改。 */ mutation: boolean;
+  /** 改动行数标签；为 null 时不渲染。 */ diff_stat: AgentActivityDiffStat | null;
   /** 本地化后的状态文案。 */ state: string;
   /** 身份主文案；永不截断。 */ identity: string;
   /** 身份次要文案（power 的 action）。 */ identity_action: string;
@@ -258,10 +258,11 @@ function ActivityRow({ icon, tone, mutation, state, identity, identity_action, s
       <span className="activity-tool-identity">{identity_action}</span>
     </> : null}
     {summary ? <span className="activity-tool-target" title={summary}>{summary}</span> : null}
-    {badge ? <span className="activity-tool-count">{badge}</span> : null}
+    {badge ? <span className="activity-tool-pill activity-tool-count">{badge}</span> : null}
+    {diff_stat ? <DiffStatTag stat={diff_stat} /> : null}
     {has_expandable ? <TbChevronRight className="activity-tool-chevron" aria-hidden /> : null}
   </span>;
-  const row_class = cn("activity-tool-row", AGENT_ACTIVITY_TONE_CLASS[tone], mutation && "is-mutation");
+  const row_class = cn("activity-tool-row", AGENT_ACTIVITY_TONE_CLASS[tone]);
   const summary_class = cn("activity-tool-summary", summary_class_name);
   if (!has_expandable) return <div className={row_class}><div className={summary_class}>{summary_content}</div></div>;
   return <details open={open} onToggle={(event) => set_open(event.currentTarget.open)} className={row_class}>
@@ -269,6 +270,25 @@ function ActivityRow({ icon, tone, mutation, state, identity, identity_action, s
     {body}
     {extra_body}
   </details>;
+}
+
+/**
+ * 改动行数标签：`+N` / `-M`。
+ *
+ * 与分组计数（`+N`）共用 `.activity-tool-pill` 基类：两者都是“行尾的小数字标签”，
+ * 几何必须一致。位置在摘要行最右端、折叠箭头左侧（`margin-left: auto`）。
+ *
+ * 配色直接引用与 `TurnFileDiffCard` 相同的 Tailwind 类（`text-emerald-600 dark:text-emerald-400` /
+ * `text-red-500 dark:text-red-400`），而不是另写一组 rgb：
+ * 同色不同值比“没有颜色”更难发现，引用同一套类才能保证它们不会各自漂移。
+ *
+ * 零的那一侧不渲染：`+3` 比 `+3 -0` 干净。
+ */
+function DiffStatTag({ stat }: { stat: AgentActivityDiffStat }) {
+  return <span className="activity-tool-pill activity-tool-diff-stat">
+    {stat.additions > 0 ? <span className="text-emerald-600 dark:text-emerald-400">+{stat.additions}</span> : null}
+    {stat.deletions > 0 ? <span className="ml-1 text-red-500 dark:text-red-400">-{stat.deletions}</span> : null}
+  </span>;
 }
 
 /** 活动展开详情：正文或编辑对照，失败时补一行可读原因。 */

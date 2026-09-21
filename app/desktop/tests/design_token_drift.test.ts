@@ -202,3 +202,32 @@ test("侧栏行组件自己提供了键盘焦点指示", () => {
   assert.ok(focus, "行契约里找不到 sidebar_row_focus_class_name");
   assert.ok(/focus-visible:ring-/.test(focus![1]!), `行契约的焦点常量没有焦点环：${focus![1]}`);
 });
+
+/**
+ * 活动行里的两个数字标签共用同一个胶囊基类。
+ *
+ * 分组计数（`+N`）与改动行数（`+N -M`）在视觉上是同一种东西——“行尾的一个小数字标签”，
+ * 几何必须一致。历史上它们各自写过一套属性，于是同一个胶囊有两组内边距与字号；
+ * 本断言直接问：两边是否都引用了 `activity-tool-pill`。
+ */
+test("活动行的计数与改动标签共用同一个胶囊基类", () => {
+  const activity = fs.readFileSync(path.join(renderer_root, "features/chat/components/messages/AgentActivity.tsx"), "utf8");
+  const styles = fs.readFileSync(path.join(renderer_root, "styles/chat.css"), "utf8");
+  // 两个标签都必须带上基类，否则几何会各自漂移。
+  assert.ok(activity.includes("activity-tool-pill activity-tool-count"), "分组计数没有引用胶囊基类");
+  assert.ok(activity.includes("activity-tool-pill activity-tool-diff-stat"), "改动行数没有引用胶囊基类");
+  // 基类必须真的提供胶囊几何，否则“引用”毫无意义。
+  const base = /\.activity-tool-pill \{([^}]*)\}/.exec(styles);
+  assert.ok(base, "chat.css 里找不到 .activity-tool-pill 的定义");
+  for (const declaration of ["border-radius: 999px", "font-size: var(--text-3xs)", "padding:"]) {
+    assert.ok(base![1]!.includes(declaration), `胶囊基类缺少 ${declaration}`);
+  }
+  // 修饰类不得再重复定义基类的几何（那正是漂移的起点）。
+  for (const modifier of ["activity-tool-count", "activity-tool-diff-stat"]) {
+    const rule = new RegExp(`\\.${modifier} \\{([^}]*)\\}`).exec(styles);
+    if (!rule) continue;
+    for (const duplicated of ["border-radius", "font-size", "padding:"]) {
+      assert.ok(!rule[1]!.includes(duplicated), `.${modifier} 重复定义了基类的 ${duplicated}`);
+    }
+  }
+});

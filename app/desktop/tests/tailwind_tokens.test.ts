@@ -58,7 +58,6 @@ async function compile_app_styles() {
 /** 需要产出的类名 → 期望出现在该规则块里的声明片段。 */
 const expected: readonly [string, string][] = [
   ["text-subtle-foreground", "color: var(--subtle-foreground)"],
-  ["text-activity-mutation", "color: var(--activity-mutation-foreground)"],
   // 语义字号（--text-size-*）的可生成性由 `font_scale.test.ts` 负责：
   // 它不但确认 9 级都产出规则，还确认 4xl 及以上一个都不产出。
   ["bg-control-track", "background-color: var(--control-track)"],

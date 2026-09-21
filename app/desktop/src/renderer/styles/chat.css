@@ -183,17 +183,46 @@
 }
 
 /*
- * 会修改文件的 Tool（write / edit）整行用克莱茵蓝。
+ * 会修改文件的 Tool（write / edit）不再用颜色区分。
  *
- * 整行而不是只染图标：只染图标时，后面的参数（改的是哪个文件）仍是灰色，
- * 视觉上会断成两截，看起来像两个不相关的元素。
- * 这里连同状态词、身份、参数与展开箭头一起染色，读起来才是“一整次写入动作”。
- *
- * 悬停时维持强调色（不参与 .activity-tool-summary:hover 的提亮规则），
- * 否则鼠标一移到行上，唯一表达“这步改了东西”的线索就消失了。
+ * 曾经整行染成克莱茵蓝，但那与行右端的 `+N -M` 标签在表达同一件事，
+ * 而颜色会与主题调色板相互干扰（跨 18 种主题组合调平衡很费力）。
+ * 现在只靠标签：数字比颜色更准确，也不需要任何色相。
  */
-.activity-tool-row.is-mutation > .activity-tool-summary :is(.activity-tool-icon, .activity-tool-state, .activity-tool-identity, .activity-tool-identity-separator, .activity-tool-target, .activity-tool-count, .activity-tool-chevron) {
-  color: var(--activity-mutation-foreground);
+
+/*
+ * 活动行内的计数 / 标签胶囊。
+ *
+ * 分组计数（`+N`）与改动行数（`+N -M`）共用这一个基类：两者都是“行尾的一个小数字标签”，
+ * 几何（内边距、胶囊圆角、字号、等宽数字）必须一致。
+ * 属性写两遍就会漂移，因此只在这里定义一次；各自的差异用修饰类表达。
+ * 胶囊圆角是它的识别特征，不参与圆角档位收敛（见 desktop-dimension-scale-design）。
+ */
+.activity-tool-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0.06rem 0.28rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 52%, transparent);
+  font-size: var(--text-3xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* 分组计数：中性色，跟在分组摘要后面。 */
+.activity-tool-count {
+  color: color-mix(in srgb, var(--foreground) 46%, transparent);
+}
+
+/*
+ * 改动行数：推到摘要行最右端（折叠箭头左侧）。
+ *
+ * `margin-left: auto` 让它与行内容无关地对齐到同一条竖线上。
+ * 新增/删除的绿与红不在这里定义：与 `TurnFileDiffCard` 共用同一套 Tailwind 类，避免同色不同值。
+ */
+.activity-tool-diff-stat {
+  margin-left: auto;
 }
 
 .activity-tool-row[open] > .activity-tool-summary .activity-tool-chevron {
@@ -268,16 +297,6 @@
 
 @keyframes activity-tool-input-caret-blink {
   50% { opacity: 0; }
-}
-
-.activity-tool-count {
-  flex: 0 0 auto;
-  padding: 0.06rem 0.28rem;
-  border-radius: 999px;
-  color: color-mix(in srgb, var(--foreground) 46%, transparent);
-  background: color-mix(in srgb, var(--muted) 52%, transparent);
-  font-size: var(--text-3xs);
-  line-height: 1.2;
 }
 
 .activity-tool-detail {

@@ -102,6 +102,19 @@ export type AgentActivityDetail =
 export type AgentActivityTone = "running" | "complete" | "failed";
 
 /**
+ * 一次文件写入的改动行数。
+ *
+ * 与 git diff 的 `+N -M` 同一语义，也是 `TurnFileDiffCard` 已经在用的那种计数：
+ * 用户不必展开详情就能判断“这一步改了多少”。
+ */
+export interface AgentActivityDiffStat {
+  /** 新增行数。 */
+  additions: number;
+  /** 删除行数。 */
+  deletions: number;
+}
+
+/**
  * 活动行与展开详情的完整展示信息。
  *
  * Tool 与 Action 都由纯映射产出这一结构，组件只渲染结果，不按 Tool 名或 action_type 分支。
@@ -122,14 +135,13 @@ export interface AgentActivityPresentation {
   /** 活动行样式语气。 */
   tone: AgentActivityTone;
   /**
-   * 本次调用是否会修改项目文件。
+   * 本次调用的改动行数；非文件写入时为 null。
    *
-   * 只对确定会写盘的 Tool 为真（write / edit）。read、grep、find 是只读的，
-   * 两者在时间线上长得一样时，用户只能靠读文字才知道哪一步改了文件。
-   *
-   * 组件只据此加一个强调色类，不自己判断哪些 Tool 会写盘。
+   * 只有 write / edit 且成功时才有值：写入失败没有产生任何改动，
+   * 输入未收口时还不知道会写多少。数据来自 Tool 自己的结构化输出
+   *（write 的 `lines_written`、edit 的逐项 `old_text` / `new_text`），不猜。
    */
-  mutation: boolean;
+  diff_stat: AgentActivityDiffStat | null;
   /**
    * 活动行的弱化摘要：目标对象或参数预览，可截断。
    *

@@ -207,7 +207,7 @@ radius ≤ 短边 × 1/4
 | `var(--radius)`（`.markdown` 的代码块） | 1 | `var(--radius-surface)`（12px），并删除 `--radius` | 名实相符；10→12px |
 | `1rem` / `0.75rem` / `0.375rem`（`.chat-composer` / 重写编辑器 / 复制按钮） | 3 | `var(--radius-*)` | 走令牌（已跟随缩放，非缺陷） |
 | `0`（`.agent-process-body` / `.activity-tool-row` / mermaid 失败态） | 3 | 不变（`rounded-none` 语义） | — |
-| `999px` / `50%`（`.activity-tool-count` / `.thinking-dot` / mermaid spinner） | 3 | 不变（胶囊与圆点，见 §4.6） | — |
+| `999px` / `50%`（`.activity-tool-pill` / `.thinking-dot` / mermaid spinner） | 3 | 不变（胶囊与圆点，见 §4.6） | — |
 | `0.3em` / `0.625em` ×2 / `0.3125em` / `0.5em` | 5 | **不变** | 文档方言，相对宿主缩放（与字号同理） |
 
 **CSS 层的视觉变化只有 4 处**：`5px`→4px 三处、代码块 10px→12px 一处。加上 tsx 层「容器用了 `item` 值」的约 17 处（`rounded-lg` → `rounded-surface`），**需要目检的共约 21 处**。其余（15 处 px→rem、改名、删除死基座）是等值修正。
@@ -239,7 +239,7 @@ radius ≤ 短边 × 1/4
 | 元素 | 值 | 为什么不参与 |
 | --- | --- | --- |
 | 滚动条（`::-webkit-scrollbar-*`） | `999px` | 它是一条**细长胶囊**：宽 5px、圆角超过一半即被 clamp 成满圆。当前写 `10px` 在视觉上已等价于 `full` 且**不跟随缩放**，因此改 `999px` 是纯语义修正 |
-| 计数/标签胶囊（`.activity-tool-count`） | `999px` | 胶囊形状是它的识别特征，与层级无关 |
+| 计数/标签胶囊（`.activity-tool-pill`） | `999px` | 胶囊形状是它的识别特征，与层级无关 |
 | 圆点（`.thinking-dot`） | `50%` | 3×3px 的圆点 |
 | 加载环（`.markdown-mermaid-spinner`） | `999px` | 环形，形状自带 |
 

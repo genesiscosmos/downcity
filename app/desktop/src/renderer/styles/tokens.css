@@ -297,5 +297,4 @@
   --color-scrim: var(--scrim);
   --color-scrim-strong: var(--scrim-strong);
   --color-subtle-foreground: var(--subtle-foreground);
-  --color-activity-mutation: var(--activity-mutation-foreground);
 }

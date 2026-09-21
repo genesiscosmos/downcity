@@ -19,6 +19,7 @@ import type { SessionAgentActionPart, SessionAgentToolPart } from "@downcity/age
 import type {
   AgentActionVisualKind,
   AgentActivityDetail,
+  AgentActivityDiffStat,
   AgentActivityEditPair,
   AgentActivityPart,
   AgentActivityPresentation,
@@ -50,9 +51,14 @@ const BUILTIN_TOOL_KINDS: ReadonlyMap<string, Exclude<AgentToolVisualKind, "powe
  * 会修改项目文件的内置工具。
  *
  * 关键点（中文）：只有这两个会写盘；read / grep / find / ask_question 都不改项目内容。
- * 它只影响活动行的强调色，不改变任何判定或图标。
+ * 它决定活动行右侧是否出现改动行数标签，不改变任何判定或图标。
  */
 const MUTATING_BUILTIN_TOOLS: ReadonlySet<string> = new Set(["write", "edit"]);
+
+/** 统计文本的行数；空文本算 0 行，不是 1 行。 */
+function count_text_lines(text: string): number {
+  return text ? text.split("\n").length : 0;
+}
 
 
 /**
@@ -211,15 +217,49 @@ export function resolve_agent_tool_presentation(
     tool_identity: identity,
     state_key: resolve_tool_state_key(visual_kind, part.state),
     tone: resolve_tool_tone(part.state),
-    // 只有内置的 write / edit 确定会写盘；power 的写盘与否无法从名称判定，因此不猜。
-    // 失败时不算写盘：那次写入没有发生，而且行内已经有一条红色错误要读，
-    // 再用写入色会与“失败”互相抵消。
-    mutation: identity.kind === "builtin" && MUTATING_BUILTIN_TOOLS.has(part.tool_name) && part.state !== "failed",
+    diff_stat: resolve_diff_stat(part, identity),
     summary: summarize_by_identity(part, identity),
     detail: detail_by_identity(part, identity),
     error: part.error?.trim() ?? "",
     input_streaming: part.state === "input-streaming",
   };
+}
+
+/**
+ * 从 Tool 自己的结构化输出算出改动行数。
+ *
+ * 关键点（中文）：**只读 Tool 的输出，不猜**。
+ * - write：`lines_written` 就是新增行数；它不删行，因此 deletions 恒为 0。
+ * - edit：逐项把 `old_text` / `new_text` 按行拆开相加，与 diff 的 `+N -M` 同语义。
+ *
+ * 三个前提：内置的 write / edit、成功终态、输出已经到达。
+ * 失败没有产生任何改动；输入未收口时还不知道会写多少；power 不猜。
+ */
+function resolve_diff_stat(part: SessionAgentToolPart, identity: AgentToolIdentity): AgentActivityDiffStat | null {
+  if (identity.kind !== "builtin") return null;
+  if (!MUTATING_BUILTIN_TOOLS.has(part.tool_name)) return null;
+  if (part.state !== "completed") return null;
+  const output = object_value(part.output);
+  if (!output) return null;
+  if (part.tool_name === "write") {
+    const additions = number_value(output["lines_written"]);
+    return additions === null ? null : { additions, deletions: 0 };
+  }
+  const edits = Array.isArray(output["details"]) ? output["details"] : [];
+  let additions = 0;
+  let deletions = 0;
+  for (const entry of edits) {
+    const detail = object_value(entry);
+    // 只有真正应用的项才算改动。
+    if (detail?.["status"] !== "applied") continue;
+    const index = number_value(detail["index"]);
+    const pair = edit_pairs(part)[index ?? -1];
+    if (!pair) continue;
+    additions += count_text_lines(pair.new_text);
+    deletions += count_text_lines(pair.old_text);
+  }
+  // 一项都没应用时不给标签，而不是显示 +0 -0。
+  return additions === 0 && deletions === 0 ? null : { additions, deletions };
 }
 
 /**
@@ -237,8 +277,8 @@ export function resolve_agent_action_presentation(part: SessionAgentActionPart):
     // Action 的生命周期已经是 canonical 终态词汇，不经过 Tool 的六态收敛。
     state_key: `activity.action.${part.state}`,
     tone: resolve_action_tone(part.state),
-    // Session Action 不是文件写入，不参与写盘强调色。
-    mutation: false,
+    // Session Action 不是文件写入，没有改动行数。
+    diff_stat: null,
     summary: part.title.trim() || part.action_type,
     detail: code_detail(detail_text),
     error: failed ? description : "",
@@ -448,6 +488,11 @@ function pick_text(value: unknown, fields: FieldNames): string {
     if (typeof item === "number" || typeof item === "boolean") return String(item);
   }
   return "";
+}
+
+/** 读取有限数值；缺失或不是数值时返回 null。 */
+function number_value(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 /** 把没有稳定字段的结构化结果压成可读文本；未知结构不隐藏。 */

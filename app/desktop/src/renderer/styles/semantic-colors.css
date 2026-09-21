@@ -60,32 +60,9 @@
   --subtle-foreground: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
   /* 占位符是文本而不是装饰，因此不靠透明度表达层级，直接用可读的下限色。 */
   --text-placeholder: var(--muted-foreground);
-  /*
-   * 会修改文件的 Tool（write / edit）在活动行上的强调色：克莱茵蓝。
-   *
-   * 为什么需要它：read / grep / find 是只读的，write / edit 会改变项目内容，
-   * 两者在时间线上长得一模一样，用户只能靠读文字才知道“这一步改了什么”。
-   * 整行（图标、状态词、身份、参数）统一用克莱茵蓝后，“哪些步骤动了文件”一眼可辨。
-   *
-   * 为什么是蓝而不是红/绿/琥珀：红已经是失败态（--destructive），
-   * 绿已经是 diff 新增行，再用它们会让“写文件”被误读为出错或成功；
-   * 蓝在这套色盘里未被占用，语义是“这是一次写入动作”。
-   *
-   * 取值是跨主题的固定语义色（同 diff 红绿的做法），不是 color-mix：
-   * 它必须在 9 套主题下都是同一个可辨识的蓝。
-   *
-   * 取值偏低饱和：克莱茵蓝本尊（#002fa7）在这套界面上过于艳，
-   * 与周围的中性色抢注意力，且浅色主题下大面积蓝字会显得刺眼。
-   * 因此保留克莱茵的色相（约 224°），降低饱和度到约一半，得到 #263c78：
-   * 色相还是那个蓝，但沉下来了。深色同理（#b8c2e0，饱和度 39%）。
-   * 两者由 theme_contrast.test.ts 逐套主题验算（最差 9.49:1 / 5.13:1）。
-   */
-  --activity-mutation-foreground: #263c78;
 }
 
 :where(.dark) {
   --surface-subtle: color-mix(in srgb, var(--foreground) 8%, transparent);
   --surface-emphasis: color-mix(in srgb, var(--foreground) 11%, transparent);
-  /* 深色下同色相提亮，并同样压低饱和度；再暗会撞上 forest 主题的下限。 */
-  --activity-mutation-foreground: #b8c2e0;
 }
