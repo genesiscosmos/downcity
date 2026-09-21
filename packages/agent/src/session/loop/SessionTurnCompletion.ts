@@ -12,7 +12,7 @@ import type { SessionTurnExecutionResult } from "@/types/session/SessionExecutio
 import type { ActiveSessionTurnState } from "@/types/session/SessionLoop.js";
 import type { SessionTurnCompletionOptions } from "@/types/session/SessionTurnCompletion.js";
 import type { SessionTurnCommittedHookValue } from "@downcity/type";
-import { SESSION_HOOK_POINTS } from "@/session/input/SessionHookPoints.js";
+import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { run_effect_point } from "@/session/input/SessionHookRunner.js";
 
 /**

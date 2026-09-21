@@ -57,7 +57,6 @@ Power call rules:
 - Action ids are dot-separated when a power groups its capabilities, for example `env.get` on the `city` power. Call them with the full id: `city({ action: "env.get" })`.
 - `args` is a structured JSON object. Pass `{}` when there are no arguments. If the action declares an input schema, `args` must conform to that schema.
 - Actions marked `write` change external state, spend quota, or write files. They may require approval before they run.
-- `ActionSchedule` is an internal Agent capability for delayed power actions. It is not a standalone power.
 
 Specific power capabilities are defined by each power's own tool description and system prompt, not by a central index.
 

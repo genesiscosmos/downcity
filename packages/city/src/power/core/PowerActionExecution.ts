@@ -12,9 +12,9 @@ import type { PowerActionExecutionContext } from "@/power/index.js";
 import type { PowerContext } from "@/power/index.js";
 import type { PowerExecutionContext } from "@/power/index.js";
 import { normalize_session_origin } from "@downcity/type";
-import type { JsonValue } from "@downcity/agent";
+import type { JsonValue } from "@downcity/type";
 import type { SessionInteractionPort } from "@downcity/type";
-import { generate_id } from "@downcity/agent";
+import { generate_id } from "@/utils/Id.js";
 import { create_power_action_context } from "@/power/core/PowerContext.js";
 import { create_denied_interaction_port } from "@/power/core/PowerActionInteraction.js";
 

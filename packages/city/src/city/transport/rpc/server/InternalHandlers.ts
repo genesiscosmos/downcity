@@ -7,7 +7,7 @@
  * - Session 与 Power 数据通过 Agent 能力操作，不读取领域内部路径。
  */
 
-import type { SessionSystemMessage } from "@downcity/agent";
+import type { SessionSystemMessage } from "@downcity/type";
 import type { RpcRequest } from "@/city/transport/types/RpcProtocol.js";
 import type {
   RpcRequestHandlerOptions,

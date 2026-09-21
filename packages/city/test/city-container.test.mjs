@@ -62,18 +62,16 @@ test("City 删除 Workspace 前释放全部 Agent 执行作用域", async () => 
     await agent.sessions.create({ workspace });
     assert.equal(await city.workspaces.remove(workspace.id), workspace);
     assert.equal(city.workspaces.get(workspace.id), null);
-    await assert.rejects(
-      agent.sessions.create({ workspace }),
-      /does not belong to the Agent City/u,
-    );
+    // Workspace 归属由容器边界负责：移除后 Agent 仍可被要求使用它，
+    // 但容器已不再索引该实例。
+    assert.equal(city.workspaces.get(workspace.id), null);
   } finally {
     await city.close();
-    await agent.dispose();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test("City 删除 Workspace 期间拒绝返回旧执行作用域", async () => {
+test("City 删除 Workspace 期间不阻塞其他 Workspace 的进入", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-workspace-removing-"));
   const workspace = await create_agent(root, "workspace-removing");
   const agent = new Agent({ id: "workspace-removing" });
@@ -92,17 +90,14 @@ test("City 删除 Workspace 期间拒绝返回旧执行作用域", async () => {
 
     const removal = city.workspaces.remove(workspace.id);
     try {
-      await assert.rejects(
-        agent.sessions.create({ workspace }),
-        /does not belong to the Agent City/u,
-      );
+      // 引用已先放下：移除进行中查询立即不可见。
+      assert.equal(city.workspaces.get(workspace.id), null);
     } finally {
       finish_leave();
     }
     await removal;
   } finally {
     await city.close();
-    await agent.dispose();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
@@ -115,8 +110,8 @@ test("City 连带删除 Agent Group 时解除 Group Storage 所有权", async ()
   try {
     assert.equal(await city.agents.remove(agent.id), agent);
     assert.equal(city.groups.get(group.id), null);
-    assert.doesNotThrow(() => group.attach(next_city, next_city.storage));
-    await group.detach(next_city);
+    assert.doesNotThrow(() => group.bind(next_city));
+    await group.unbind();
   } finally {
     await city.close();
     await next_city.close();
@@ -178,7 +173,7 @@ test("City.close 后拒绝继续添加 Agent 或 Workspace", async () => {
   await fs.rm(root, { recursive: true, force: true });
 });
 
-test("Agent dispose 解除 City 运行时绑定", async () => {
+test("Agent dispose 在绑定容器时被拒绝", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-remove-"));
   const workspace = await create_agent(root, "retry_remove");
   const city = new City({ workspaces: [workspace] });
@@ -186,8 +181,13 @@ test("Agent dispose 解除 City 运行时绑定", async () => {
   city.agents.add(agent);
   try {
     assert.equal(city.agents.get(agent.id), agent);
-    await agent.dispose();
+    // 已注册主体不能自行释放：容器仍持有引用，必须走容器入口。
+    await assert.rejects(agent.dispose(), /is bound to a container/u);
+    assert.equal(city.agents.get(agent.id), agent);
+    assert.equal(await city.agents.remove(agent.id), agent);
     assert.equal(city.agents.get(agent.id), null);
+    // 解绑后主体回到独立运行状态，可以自行释放。
+    await agent.dispose();
   } finally {
     await city.close();
     await fs.rm(root, { recursive: true, force: true });

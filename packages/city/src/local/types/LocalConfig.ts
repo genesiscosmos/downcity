@@ -1,6 +1,6 @@
 /** Downcity 本地 Agent 与 Workspace 配置管理视图。 */
 
-import type { JsonObject } from "@downcity/agent";
+import type { JsonObject } from "@downcity/type";
 
 /** 本地 Workspace 的持久化配置。 */
 export interface LocalWorkspaceConfig {

@@ -104,6 +104,7 @@ export async function createRemoteAgent(params: {
     const data = create_cli_local_data();
     const power_loader = create_cli_power_loader({ power_repository: data.powers });
     let agent: Agent | undefined;
+    let city: City | undefined;
     try {
       const config = data.agents.get(params.agent_id);
       if (!config) throw new Error(`Agent not found: ${params.agent_id}`);
@@ -113,13 +114,14 @@ export async function createRemoteAgent(params: {
         config,
       });
       const workspace = await create_cli_workspace(workspace_config, data.root_path);
-      const city = new City({
+      const current_city = new City({
         storage: new LocalStorageProvider(data.root_path),
         workspaces: [workspace],
         powers: await power_loader.list_registrations(),
         power_host: create_local_power_host(data),
       });
-      city.agents.add(agent);
+      city = current_city;
+      current_city.agents.add(agent);
       return {
         sessions: create_local_chat_sessions(
           agent.sessions,
@@ -127,11 +129,13 @@ export async function createRemoteAgent(params: {
           async (model_id) => await resolve_cli_agent_model(model_id, workspace.get_env()),
         ),
         close: async () => {
-          await city.close();
+          await current_city.close();
           data.database.close();
         },
       };
     } catch (error) {
+      // 关键点（中文）：add 成功后失败也要走容器入口，主体在绑定期不能自行释放。
+      if (city && agent) await city.agents.remove(agent.id).catch(() => null);
       await agent?.dispose().catch(() => undefined);
       data.database.close();
       throw error;
@@ -191,25 +195,28 @@ async function create_local_agent_session_reader(agent_id: string): Promise<Agen
   const data = create_cli_local_data();
   const power_loader = create_cli_power_loader({ power_repository: data.powers });
   let agent: Agent | undefined;
+  let city: City | undefined;
   try {
     const config = data.agents.get(agent_id);
     if (!config) throw new Error(`Agent not found: ${agent_id}`);
     agent = await create_cli_agent({ config });
-    const city = new City({
+    const current_city = new City({
       storage: new LocalStorageProvider(data.root_path),
       workspaces: [],
       powers: await power_loader.list_registrations(),
       power_host: create_local_power_host(data),
     });
-    city.agents.add(agent);
+    city = current_city;
+    current_city.agents.add(agent);
     return {
       sessions: create_local_session_reader(agent.sessions),
       close: async () => {
-        await city.close();
+        await current_city.close();
         data.database.close();
       },
     };
   } catch (error) {
+    if (city && agent) await city.agents.remove(agent.id).catch(() => null);
     await agent?.dispose().catch(() => undefined);
     data.database.close();
     throw error;

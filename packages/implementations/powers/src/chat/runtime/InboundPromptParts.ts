@@ -8,11 +8,12 @@
  */
 
 import type { PowerSessionPromptContent } from "@downcity/city/power";
-import { CHAT_ENVIRONMENT_CONTEXT_TAG, CHAT_INFO_CONTEXT_TAG } from "@downcity/type";
 import {
+  CHAT_ENVIRONMENT_CONTEXT_TAG,
+  CHAT_INFO_CONTEXT_TAG,
   format_date_time_in_timezone,
   resolve_runtime_timezone,
-} from "@downcity/agent";
+} from "@downcity/type";
 import type {
   ChatEnvironmentPromptInput,
   InboundUserInfoInput,

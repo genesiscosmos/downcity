@@ -2,7 +2,7 @@
 
 import { AiDispatchStrategy } from "@/types/group/DispatchStrategy.js";
 import type { DispatchStrategy } from "@/types/group/DispatchStrategy.js";
-import type { ModelClient, StorageProvider } from "@downcity/type";
+import type { ModelClient, StorageProvider, CityRuntime } from "@downcity/type";
 import type { GroupContract, GroupOptions } from "@/types/group/Group.js";
 import type { Agent } from "@/agent/Agent.js";
 import { GroupSessions } from "@/group/GroupSessions.js";
@@ -20,14 +20,12 @@ export class Group implements GroupContract {
   readonly dispatch_strategy: DispatchStrategy;
   readonly sessions: GroupSessions;
 
-  /** 未加入宿主时使用的隔离进程内存储。 */
+  /** 未加入容器时使用的隔离进程内存储。 */
   private storage_provider: StorageProvider = new AgentMemoryStorageProvider();
-  /** 当前 Group 所属宿主。 */
-  private storage_owner?: object;
+  /** 当前绑定的容器运行环境；独立运行时为空。 */
+  private host?: CityRuntime;
   /** 延迟创建的 GroupSession 持久化 Store。 */
   private session_store?: GroupSessionStore;
-  /** 是否已经在无宿主存储中创建或恢复过 Session。 */
-  private memory_session_started = false;
 
   constructor(options: GroupOptions) {
     this.id = String(options.id || "").trim();
@@ -47,26 +45,31 @@ export class Group implements GroupContract {
     this.sessions = new GroupSessions(this);
   }
 
-  /** 将宿主存储装配到 Group；必须在使用 GroupSessions 前完成。 */
-  attach(owner: object, storage_provider: StorageProvider): void {
-    if (this.storage_owner) {
-      if (this.storage_owner === owner) return;
-      throw new Error(`Group "${this.id}" already belongs to another host`);
+  /**
+   * 绑定容器运行环境；必须在创建或恢复 GroupSession 前完成。
+   *
+   * 关键点（中文）
+   * - 与 Agent 使用同一套绑定语义：只收下容器推送的存储能力，不持有容器引用。
+   */
+  bind(host: CityRuntime): void {
+    if (this.host) {
+      if (this.host === host) return;
+      throw new Error(`Group "${this.id}" is already bound to another container`);
     }
-    if (this.memory_session_started || this.session_store) {
+    if (this.session_store) {
       throw new Error(
-        `Group "${this.id}" already used standalone storage; attach it before using GroupSessions`,
+        `Group "${this.id}" already used standalone storage; bind it before using GroupSessions`,
       );
     }
-    this.storage_owner = owner;
-    this.storage_provider = storage_provider;
+    this.host = host;
+    this.storage_provider = host.storage;
   }
 
-  /** 解除指定宿主的存储装配并释放当前 Store。 */
-  async detach(owner: object): Promise<void> {
-    if (this.storage_owner !== owner) return;
+  /** 解除容器绑定并释放当前 Store，主体回到独立运行状态。 */
+  async unbind(): Promise<void> {
+    if (!this.host) return;
     await this.dispose_session_store();
-    this.storage_owner = undefined;
+    this.host = undefined;
     this.storage_provider = new AgentMemoryStorageProvider();
   }
 
@@ -82,11 +85,6 @@ export class Group implements GroupContract {
     return this.session_store;
   }
 
-  /** 标记 Group 已经创建或恢复过 Session。 */
-  mark_session_started(): void {
-    if (!this.storage_owner) this.memory_session_started = true;
-  }
-
   /** 释放当前 GroupSession Store。 */
   async dispose_session_store(): Promise<void> {
     await this.session_store?.dispose();
@@ -95,6 +93,11 @@ export class Group implements GroupContract {
 
   /** 释放 Group 所拥有的全部群聊上下文。 */
   async dispose(): Promise<void> {
+    if (this.host) {
+      throw new Error(
+        `Group "${this.id}" is bound to a container; release it with city.groups.remove(id)`,
+      );
+    }
     await this.sessions.dispose();
   }
 }

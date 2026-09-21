@@ -2,25 +2,27 @@
  * City Power：Agent 触碰 City 的具名 power。
  *
  * 关键点（中文）
- * - 与其它 power 走同一条注册与工具生成路径，`name` 即模型侧工具名 `city`。
+ * - 继承 `Power` 基类，与其它 power 同构；`name` 即模型侧工具名 `city`。
  * - 动作 id 是点号形式（`env.get`、`image.create`），由动作组拼成；
  *   模型只看到一层 action，不再有 method 概念。
  * - City 内部事实源（Agent / Workspace 快照）与 Embassy 由构造期注入，
  *   不进入通用 `PowerContext`，因此外部 power 拿不到这些能力。
  * - 动作组私有文件按 Agent + 组隔离，不跨组共享。
+ * - 动作 id 在构造期一次性展开，注册后不再变化。
  */
 
-import { resolve_runtime_timezone } from "@downcity/agent";
+import { resolve_runtime_timezone } from "@downcity/type";
 import type { Embassy } from "@downcity/federation";
 import type {
   PowerAction,
   PowerActionExecutionContext,
-  PowerDefinition,
+  PowerActions,
   PowerContext,
   PowerExecutionContext,
   PowerJsonObject,
   PowerJsonValue,
 } from "@/power/index.js";
+import { Power } from "@/power/index.js";
 import type { FileSystem } from "@/workspace/index.js";
 import type { CityRuntimeAccess } from "@/city/types/CityRuntimeAccess.js";
 import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
@@ -39,43 +41,50 @@ export interface CityPowerOptions {
   readonly embassy?: Embassy;
 }
 
-/**
- * 构造 `city` power 定义。
- *
- * 关键点（中文）
- * - 返回普通 `PowerDefinition`，由 City 与其它 power 一起注册。
- * - 动作 id 在构造期一次性展开，注册后不再变化。
- */
-export function create_city_power(options: CityPowerOptions): PowerDefinition {
-  const groups = create_city_action_groups();
-  const actions: Record<string, PowerAction> = {};
+/** City 自有 power：把动作组装配为一个模型可见工具。 */
+export class CityPower extends Power {
+  /** Power 稳定名称，即模型侧工具名。 */
+  readonly name = "city";
 
-  for (const group of groups) {
-    for (const action of group.action_list()) {
-      const action_id = `${group.group}.${action.action}`;
-      actions[action_id] = to_power_action({
-        action_id,
-        group_id: group.group,
-        action,
-        options,
-      });
+  /** Power 用户可见标题。 */
+  readonly title = "City";
+
+  /** Power 用途说明。 */
+  readonly description =
+    "The single entry point for City capabilities: read-only runtime facts and City-owned "
+    + "capabilities such as image generation and speech.";
+
+  /** 当前 power 的动作组集合。 */
+  private readonly groups: readonly CityActionGroup[];
+
+  /** 构造期一次性展开的动作集合，键为点号 action id。 */
+  readonly actions: PowerActions;
+
+  constructor(private readonly options: CityPowerOptions) {
+    super();
+    this.groups = create_city_action_groups();
+    const actions: PowerActions = {};
+    for (const group of this.groups) {
+      for (const action of group.action_list()) {
+        const action_id = `${group.group}.${action.action}`;
+        actions[action_id] = to_power_action({
+          action_id,
+          group_id: group.group,
+          action,
+          options,
+        });
+      }
     }
+    this.actions = actions;
   }
 
-  return {
-    name: "city",
-    title: "City",
-    description:
-      "The single entry point for City capabilities: read-only runtime facts and City-owned "
-      + "capabilities such as image generation and speech.",
-    actions,
-    system() {
-      return groups
-        .map((group) => String(group.system() || "").trim())
-        .filter(Boolean)
-        .join("\n\n");
-    },
-  };
+  /** 合并全部动作组的说明文本。 */
+  system(): string {
+    return this.groups
+      .map((group) => String(group.system() || "").trim())
+      .filter(Boolean)
+      .join("\n\n");
+  }
 }
 
 /** 把一个组内动作适配为通用 `PowerAction`。 */

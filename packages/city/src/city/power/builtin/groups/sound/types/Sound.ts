@@ -7,7 +7,7 @@
  * - 字段保持 JSON 可序列化，便于通过工具输入与 ActionResult 传递。
  */
 
-import type { ActionResultMessage } from "@downcity/agent";
+import type { ActionResultMessage } from "@downcity/type";
 import type { PowerJsonObject, PowerJsonValue } from "@/power/index.js";
 
 /** Sound capability 使用的最小语音 AI 服务协议。 */

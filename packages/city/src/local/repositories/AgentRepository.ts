@@ -8,7 +8,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { pinyin } from "pinyin-pro";
-import type { JsonObject } from "@downcity/agent";
+import type { JsonObject } from "@downcity/type";
 import type { LocalAgentConfig } from "@/local/types/LocalConfig.js";
 import {
   get_local_agent_path,

@@ -16,7 +16,7 @@ import type {
   ResolveSessionPowerSystemBlocksInput,
 } from "@/types/session/SessionSystem.js";
 import type { JsonValue, SessionSystemContextHookValue } from "@downcity/type";
-import { SESSION_HOOK_POINTS } from "@/session/input/SessionHookPoints.js";
+import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 
 function normalize_system_blocks(

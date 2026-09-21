@@ -11,7 +11,7 @@ import type { Agent } from "@downcity/agent";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type { PowerSnapshot } from "@/power/index.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
-import type { SessionSystemMessage } from "@downcity/agent";
+import type { SessionSystemMessage } from "@downcity/type";
 import type { RpcEventFrame } from "@/city/transport/types/RpcProtocol.js";
 import type { AgentSessionModelResolver } from "@/city/transport/types/AgentSessionModelResolver.js";
 

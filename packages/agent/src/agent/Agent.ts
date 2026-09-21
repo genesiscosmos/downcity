@@ -3,7 +3,7 @@
  *
  * 职责说明（中文）
  * - Agent 不绑定 Workspace；调用方通过 `agent.sessions.create({ workspace })` 选择本次执行环境。
- * - Power 与 Transport 由 City 持有，Agent 只通过 CityRuntime 使用最小执行能力。
+ * - 能力与 Transport 由容器持有，Agent 只收下容器在绑定时推送的能力，不持有容器引用。
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建时提供执行资源。
  */
 
@@ -33,7 +33,7 @@ import { AgentMemoryStorageProvider } from "@/agent/AgentMemoryStorage.js";
 import { LocalSessionStore } from "@/session/storage/LocalSessionStore.js";
 import { EMPTY_TOOL_HOOK_SET } from "@downcity/type";
 import type { AgentStorage } from "@/types/agent/AgentStorage.js";
-import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
+import type { SessionSystemMessage } from "@downcity/type";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
 import {
   build_session_system_blocks,
@@ -86,17 +86,14 @@ export class Agent {
   /** Agent 唯一的 Session 集合。 */
   private readonly session_manager: AgentSessions;
 
-  /** 未加入宿主时使用的隔离进程内存储。 */
+  /** 未加入容器时使用的隔离进程内存储。 */
   private storage_provider: StorageProvider = new AgentMemoryStorageProvider();
 
-  /** Agent 当前所属的唯一 City；独立运行时为空。 */
-  private city?: CityRuntime;
+  /** 当前绑定的容器运行环境；独立运行时为空。 */
+  private host?: CityRuntime;
 
   /** 延迟创建的 Agent 私有持久化视图。 */
   private agent_storage?: AgentStorage;
-
-  /** 是否已经在无宿主存储中创建或恢复过 Session。 */
-  private memory_session_started = false;
 
   constructor(options: AgentOptions) {
     this.id = String(options.id || "").trim();
@@ -119,9 +116,6 @@ export class Agent {
       get_agent_model: () => this.model,
       session_class: this.session_class,
       session_composer: this.session_composer,
-      on_session_routed: () => {
-        if (!this.city) this.memory_session_started = true;
-      },
       resolve_session_context: (workspace) => {
         const storage = this.resolve_storage();
         if (!workspace) return {
@@ -133,7 +127,6 @@ export class Agent {
           get_hooks: () => this.power_hooks,
           store: storage.sessions,
         };
-        this.assert_workspace(workspace);
         // 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，
         // 在装配时立即失败；执行时仍通过 getter 读取最新宿主扩展。
         this.resolve_tools(workspace);
@@ -196,25 +189,38 @@ export class Agent {
     return this.logger;
   }
 
-  /** 将 Agent 加入 City；必须在创建或恢复 Session 前完成。 */
-  attach(city: CityRuntime): void {
-    if (this.dispose_promise) throw new Error(`Agent "${this.id}" is disposing`);
-    if (this.city) {
-      if (this.city === city) return;
-      throw new Error(`Agent "${this.id}" already belongs to another City`);
+  /**
+   * 绑定容器运行环境；必须在创建或恢复 Session 前完成。
+   *
+   * 关键点（中文）
+   * - 主体只收下容器推送的存储能力，不持有容器引用。
+   * - 存储一旦在独立模式下被使用就不能再切换，否则已有 Session 会写入两个事实源。
+   */
+  bind(host: CityRuntime): void {
+    if (this.host) {
+      if (this.host === host) return;
+      throw new Error(`Agent "${this.id}" is already bound to another container`);
     }
-    if (this.memory_session_started || this.agent_storage) {
+    if (this.agent_storage) {
       throw new Error(
-        `Agent "${this.id}" already used standalone storage; attach it before using Sessions`,
+        `Agent "${this.id}" already used standalone storage; bind it before using Sessions`,
       );
     }
-    this.city = city;
-    this.storage_provider = city.storage;
+    this.host = host;
+    this.storage_provider = host.storage;
   }
 
-  /** 解除指定 City 关系；其他 City 不能解除当前绑定。 */
-  detach(city: CityRuntime): void {
-    if (this.city === city) this.city = undefined;
+  /**
+   * 解除容器绑定，主体回到独立运行状态。
+   *
+   * 关键点（中文）
+   * - 由容器在放下引用后调用；主体不反向通知容器。
+   * - 已解析的存储视图同时丢弃，避免解绑后继续写旧容器存储。
+   */
+  unbind(): void {
+    this.host = undefined;
+    this.storage_provider = new AgentMemoryStorageProvider();
+    this.agent_storage = undefined;
   }
 
   /** 停止绑定到指定 Workspace 的运行中 Session，并释放后台标题任务。 */
@@ -231,7 +237,6 @@ export class Agent {
       session_id: string;
     },
   ): Promise<SessionSystemMessage[]> {
-    this.assert_workspace(workspace);
     const session_id = String(input.session_id || "").trim();
     if (!session_id) {
       throw new Error("resolve_system_messages requires a non-empty session_id");
@@ -288,21 +293,29 @@ export class Agent {
     });
   }
 
-  /** 释放 Agent 的 Session 后台任务、存储与宿主引用。 */
+  /**
+   * 释放 Agent 的 Session 后台任务、存储与运行环境。
+   *
+   * 关键点（中文）
+   * - 已绑定的 Agent 不能自行释放：容器仍持有引用，必须走 `city.agents.remove(id)`。
+   * - 这把「已注册主体不能自行释放」变成可检查的不变量，而不是靠时序掩盖。
+   */
   async dispose(): Promise<void> {
+    if (this.host) {
+      throw new Error(
+        `Agent "${this.id}" is bound to a container; release it with city.agents.remove(id)`,
+      );
+    }
     this.dispose_promise ??= (async () => {
       const results = await Promise.allSettled([
         this.session_manager.stop_executing_sessions(),
       ]);
       this.session_manager.dispose_title_generation();
-      const city = this.city;
       results.push(...await Promise.allSettled([
-        city?.release_agent(this) ?? Promise.resolve(),
         this.agent_storage?.sessions.dispose() ?? Promise.resolve(),
         this.logger.save_all_logs(),
       ]));
       const errors = results.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
-      this.city = undefined;
       this.agent_storage = undefined;
       if (errors.length > 0) throw new AggregateError(errors, "Agent dispose failed");
     })();
@@ -326,15 +339,6 @@ export class Agent {
       }),
     };
     return this.agent_storage;
-  }
-
-  /** 校验宿主模式下使用的 Workspace 来自当前宿主事实源。 */
-  private assert_workspace(workspace: WorkspaceRuntime): void {
-    const workspace_id = String(workspace?.id || "").trim();
-    if (!workspace_id) throw new Error("Agent sessions require a Workspace with a stable id");
-    if (this.city && this.city.workspaces.get(workspace_id) !== workspace) {
-      throw new Error(`Workspace "${workspace_id}" does not belong to the Agent City`);
-    }
   }
 
   /** 在明确检查点合并 Workspace、扩展与 Agent Tool。 */

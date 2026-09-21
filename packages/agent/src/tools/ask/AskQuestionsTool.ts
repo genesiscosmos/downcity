@@ -22,7 +22,7 @@ import type {
   AskQuestionsToolInput,
   AskQuestionsToolOutput,
 } from "@/types/tools/ask/AskQuestionsTool.js";
-import type { ActionResult } from "@/types/action/ActionResult.js";
+import type { ActionResult } from "@downcity/type";
 import { generate_id } from "@/utils/Id.js";
 import type { JsonValue } from "@downcity/type";
 import type { SessionInteractionQuestion } from "@downcity/type";

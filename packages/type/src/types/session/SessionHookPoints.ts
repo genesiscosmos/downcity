@@ -1,7 +1,10 @@
 /**
  * Session 公开的稳定 Hook 检查点。
  *
- * 检查点由 Session 定义和触发，City Power 只选择是否注册处理器。
+ * 关键点（中文）
+ * - 检查点由 Session 定义并触发；Power 只选择是否注册处理器。
+ * - 该常量是 Agent 与 Power 必须就同一组名字达成一致的协议，因此定义在
+ *   共享定义层，不归属任何实现包。
  */
 
 /** Session 运行时的 Hook point 目录。 */

@@ -8,7 +8,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { parse, stringify } from "smol-toml";
-import type { JsonObject, JsonValue } from "@downcity/agent";
+import type { JsonObject, JsonValue } from "@downcity/type";
 import {
   get_local_power_path,
   get_local_powers_path,

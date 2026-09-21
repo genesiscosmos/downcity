@@ -27,7 +27,6 @@ export class GroupSessions implements GroupSessionsContract {
     const session = this.create_runtime_session(`group-session-${Date.now()}-${nanoid(8)}`, input?.workspace);
     const store = this.group.get_session_store();
     await session.initialize(store.session(session.id));
-    this.group.mark_session_started();
     this.sessions_by_id.set(session.id, session);
     return session;
   }
@@ -46,7 +45,6 @@ export class GroupSessions implements GroupSessionsContract {
     if (!(await store.has_session(resolved_session_id))) return null;
     const session = this.create_runtime_session(resolved_session_id, input?.workspace);
     await session.initialize(store.session(resolved_session_id));
-    this.group.mark_session_started();
     this.sessions_by_id.set(session.id, session);
     return session;
   }
@@ -55,7 +53,6 @@ export class GroupSessions implements GroupSessionsContract {
   async list(input?: GroupSessionListInput): Promise<readonly GroupSessionSummary[]> {
     const store = this.group.get_session_store();
     const metadata = await store.list_session_metadata();
-    if (metadata.length > 0) this.group.mark_session_started();
     const workspace_id = String(input?.workspace_id || "").trim() || undefined;
     const filtered_metadata = workspace_id
       ? metadata.filter((item) => item.workspace_id === workspace_id)

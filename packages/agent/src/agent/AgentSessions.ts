@@ -92,9 +92,6 @@ type AgentSessionsOptions = {
 
   /** 读取 Agent 当前持有的运行时模型实例。 */
   get_agent_model: () => ModelClient | undefined;
-
-  /** Session 创建或恢复后的内部路由登记回调。 */
-  on_session_routed?: (session_id: string, sessions: AgentSessions) => void;
 };
 
 /**
@@ -110,7 +107,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly session_class: AgentSessionConstructor;
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
-  private readonly on_session_routed?: AgentSessionsOptions["on_session_routed"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
 
   constructor(options: AgentSessionsOptions) {
@@ -123,7 +119,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     this.session_class = options.session_class || Session;
     this.session_composer = options.session_composer ?? new DefaultSessionComposer();
     this.get_agent_model = options.get_agent_model;
-    this.on_session_routed = options.on_session_routed;
   }
 
   /**
@@ -208,7 +203,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
         context.workspace_id,
       ),
     });
-    this.on_session_routed?.(session.id, this);
     await session.initialize();
     return session;
   }
@@ -261,7 +255,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       origin: persisted_origin,
       storage,
     });
-    this.on_session_routed?.(resolved_session_id, this);
     await session.initialize();
     return session;
   }
@@ -468,7 +461,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       throw new Error(`Session "${session.id}" already has another runtime instance`);
     }
     this.sessions_by_id.set(cache_key, session);
-    this.on_session_routed?.(session.id, this);
   }
 
   /** 返回来源分区内唯一的 Session 运行时缓存键。 */

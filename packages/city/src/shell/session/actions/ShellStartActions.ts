@@ -14,7 +14,7 @@ import type {
   ShellSessionRuntimeState,
   ShellSessionWaiter,
 } from "@/shell/session/ShellRuntimeTypes.js";
-import { generate_id } from "@/shell/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import type {
   ShellActionResponse,
   ShellApprovalStatus,

@@ -6,7 +6,7 @@
  * - 全部字段来自当前执行上下文，不读取文件系统、不访问网络。
  */
 
-import { format_date_in_timezone } from "@downcity/agent";
+import { format_date_in_timezone } from "@downcity/type";
 import type { CityPowerContext } from "@/city/types/CityPowerContext.js";
 import type { CityToolEnv } from "@/city/types/CityPowerData.js";
 import { CityAction } from "@/city/power/builtin/CityAction.js";

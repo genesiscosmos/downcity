@@ -7,7 +7,7 @@
  */
 
 import type { PowerLifecycleContext } from "@downcity/city/power";
-import { resolve_runtime_timezone } from "@downcity/agent";
+import { resolve_runtime_timezone } from "@downcity/type";
 import {
   isTaskWhenManual,
   resolveTaskWhenCronExpression,

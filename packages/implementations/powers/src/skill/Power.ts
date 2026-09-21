@@ -11,8 +11,14 @@
 import { Power } from "@downcity/city/power";
 import { create_action } from "@downcity/city/power";
 import { z } from "zod";
-import type { PowerDefinition } from "@downcity/city/power";
-import type { PowerJsonObject, PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";
+import type {
+  PowerActions,
+  PowerContext,
+  PowerExecutionContext,
+  PowerJsonObject,
+  PowerJsonValue,
+  PowerLifecycleContext,
+} from "@downcity/city/power";
 import type { PowerActionResult } from "@downcity/city/power";
 import type {
   SkillPowerFindPayload,
@@ -55,22 +61,9 @@ function sanitizeXmlAttr(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
-function createSkillPowerDefinition(options: SkillPowerOptions): PowerDefinition {
+/** 构造 Skill Power 的完整动作集合。 */
+function createSkillPowerActions(options: SkillPowerOptions): PowerActions {
   return {
-    name: "skill",
-    title: "Skills",
-    description:
-      "Lists and reads local skills, and injects scan-aware discovery and installation guidance into system prompts.",
-    async system(context, execution_context) {
-      const dynamicText = String(
-        await buildSkillsSystemText({
-          rootPath: context.workspace.path,
-          options,
-        }, execution_context),
-      ).trim();
-      return [SKILL_POWER_PROMPT, dynamicText].filter(Boolean).join("\n\n");
-    },
-    actions: {
       [SKILL_POWER_ACTIONS.find]: create_action({
         description:
           "Return shell instructions for finding a skill. This action does not execute the search.",
@@ -302,20 +295,48 @@ function createSkillPowerDefinition(options: SkillPowerOptions): PowerDefinition
           };
         },
       }),
-    },
   };
 }
 
 /**
  * SkillPower：技能发现、读取与扫描感知的 system 注入。
+ *
+ * 关键点（中文）
+ * - 继承 `Power` 基类，与其它 power 同构。
+ * - `actions` 与 `system` 在构造期一次性装配，不依赖 `Object.assign` 覆盖基类字段。
  */
 export class SkillPower extends Power {
+  /** Power 稳定名称，即模型侧工具名。 */
   readonly name = "skill";
+
+  /** Power 用户可见标题。 */
+  readonly title = "Skills";
+
+  /** Power 用途说明。 */
+  readonly description =
+    "Lists and reads local skills, and injects scan-aware discovery and installation guidance into system prompts.";
+
+  /** 构造期解析后的选项，供 system 与动作共享。 */
+  private readonly options: SkillPowerOptions;
+
+  /** 当前 power 的完整动作集合。 */
+  readonly actions: PowerActions;
 
   constructor(options: SkillPowerOptions = {}) {
     super();
-    const resolvedOptions = resolveSkillPowerOptions(options);
-    Object.assign(this, createSkillPowerDefinition(resolvedOptions));
+    this.options = resolveSkillPowerOptions(options);
+    this.actions = createSkillPowerActions(this.options);
+  }
+
+  /** 合并静态提示与当前项目可发现的技能说明。 */
+  async system(context: PowerContext, execution_context?: PowerExecutionContext): Promise<string> {
+    const dynamicText = String(
+      await buildSkillsSystemText({
+        rootPath: context.workspace.path,
+        options: this.options,
+      }, execution_context),
+    ).trim();
+    return [SKILL_POWER_PROMPT, dynamicText].filter(Boolean).join("\n\n");
   }
 
   /** 注册 Skill Power 的宿主管理 actions。 */

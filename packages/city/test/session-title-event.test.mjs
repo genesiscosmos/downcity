@@ -241,7 +241,6 @@ test("Session logs title generation failure without blocking the session", async
       "Diagnose why session title generation is flaky".length,
     );
   } finally {
-    await agent.dispose();
     await city.close();
   }
 });

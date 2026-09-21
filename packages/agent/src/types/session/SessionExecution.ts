@@ -12,7 +12,7 @@ import type {
   ModelMessage,
 } from "@downcity/type";
 import type { BoundAgentTool } from "@/types/tool/BoundAgentTool.js";
-import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
+import type { SessionSystemMessage } from "@downcity/type";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 
 /**

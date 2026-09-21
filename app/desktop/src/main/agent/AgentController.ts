@@ -425,15 +425,12 @@ export class AgentController {
     };
     const agent = await this.create_native_agent(candidate);
     let config: LocalAgentConfig | null = null;
-    let registered = false;
     try {
       config = this.data.agents.create(candidate);
       // 关键点（中文）：创建时即保存独立头像，后续扩充内置池不会改变既有 Agent 身份。
       this.data.agents.set_avatar(config.agent_id, select_builtin_agent_avatar_path());
       this.city.agents.add(agent);
-      registered = true;
     } catch (error) {
-      if (registered) await this.city.agents.remove(agent.id).catch(() => null);
       if (config) this.data.agents.remove(config.agent_id);
       await agent.dispose().catch(() => undefined);
       throw error;
@@ -496,6 +493,7 @@ export class AgentController {
       this.data.agents.save(candidate);
       saved = true;
       previous_agent = this.city.agents.get(current.agent_id);
+      // 关键点（中文）：city.agents.remove 已完成旧实例的解绑与释放。
       if (previous_agent) await this.city.agents.remove(previous_agent.id);
       this.city.agents.add(replacement);
     } catch (error) {
@@ -525,7 +523,6 @@ export class AgentController {
       this.city.groups.add(rebuilt_group);
       if (had_group_subscription) this.subscribe_group(await this.require_group_session(rebuilt_group));
     }
-    await previous_agent?.dispose();
     return to_desktop_agent_summary(this.data.agents.get(current.agent_id)!, this.data.agents.get_avatar_url(current.agent_id));
   }
 
@@ -1210,12 +1207,7 @@ export class AgentController {
       for (const config of this.data.agents.list()) {
         const agent = await this.create_native_agent(config);
         this.city.agents.add(agent);
-        try {
-          initialized_agents.push(agent);
-        } catch (error) {
-          await agent.dispose().catch(() => undefined);
-          throw error;
-        }
+        initialized_agents.push(agent);
       }
       for (const config of this.data.groups.list()) {
         const group = this.create_runtime_group(config);
@@ -1229,7 +1221,7 @@ export class AgentController {
       });
     } catch (error) {
       await Promise.allSettled(initialized_agents.map(async (agent) => {
-        await agent.dispose();
+        await this.city.agents.remove(agent.id);
       }));
       throw error;
     }

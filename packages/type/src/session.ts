@@ -25,6 +25,13 @@ export {
 } from "./types/session/SessionUserContextTags.js";
 export * from "./types/session/SessionInteraction.js";
 export type * from "./types/session/SessionAction.js";
+export { SESSION_HOOK_POINTS } from "./types/session/SessionHookPoints.js";
+export {
+  is_action_result,
+  type ActionResult,
+  type ActionResultMessage,
+  type SessionSystemMessage,
+} from "./types/session/SessionActionContract.js";
 export type * from "./types/session/SessionTurnFileDiff.js";
 export * from "./types/session/SessionMutation.js";
 export type {

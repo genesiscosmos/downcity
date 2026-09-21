@@ -35,6 +35,7 @@ import type {
 } from "@/city/types/CityPowerRuntime.js";
 import { PowerRegistry } from "@/power/core/PowerRegistry.js";
 import { create_power_context } from "@/power/core/PowerContext.js";
+import { create_power_session_collection } from "@/city/power/PowerSessionBridge.js";
 import { register_power_http_routes } from "@/power/core/PowerHttpRoutes.js";
 
 /** City 唯一的 Power Runtime。 */
@@ -395,7 +396,10 @@ export class CityPowerRuntime {
           build_context,
           (execution_context) => merge_call_context(call_context, execution_context),
         ),
-        get_sessions: () => agent.sessions,
+        sessions: create_power_session_collection({
+          get_sessions: () => agent.sessions,
+          workspace,
+        }),
       });
     };
     return build_context;

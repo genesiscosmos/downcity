@@ -9,7 +9,7 @@
  * - 失败永远返回结果而不是抛错，保证模型能看到可读边界说明。
  */
 
-import type { JsonObject, JsonValue, ActionResult } from "@downcity/agent";
+import type { JsonObject, JsonValue, ActionResult } from "@downcity/type";
 import type {
   PowerToolInput,
   PowerToolResult,

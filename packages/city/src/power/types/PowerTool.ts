@@ -9,7 +9,7 @@
  */
 
 import type { AgentTool, ToolCallContext } from "@downcity/type";
-import type { JsonObject } from "@downcity/agent";
+import type { JsonObject } from "@downcity/type";
 import type { PowerContextFactory } from "@/power/types/PowerContextFactory.js";
 import type { PowerDefinition } from "@/power/types/PowerRuntime.js";
 

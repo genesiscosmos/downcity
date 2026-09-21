@@ -8,7 +8,7 @@
 
 import fs from "fs-extra";
 import path from "node:path";
-import { generate_id } from "@/shell/utils/Id.js";
+import { generate_id } from "@/utils/Id.js";
 import type { ShellHostContext } from "@downcity/type/shell";
 import type {
   ShellApprovalStatus,

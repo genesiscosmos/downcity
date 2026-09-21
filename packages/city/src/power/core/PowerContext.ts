@@ -17,7 +17,7 @@ import type {
   PowerSessionMutation,
   PowerSessionOrigin,
 } from "@/power/index.js";
-import type { AgentSessionCollection, Logger } from "@downcity/agent";
+import type { PowerLogger } from "@/power/types/PowerContext.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type { SessionInteractionPort } from "@downcity/type";
 import type { PowerExecutionContext } from "@/power/index.js";
@@ -47,13 +47,13 @@ export interface CreatePowerContextInput {
   /** 当前 Workspace 可选 Shell。 */
   readonly shell?: WorkspaceShell;
   /** 当前执行范围日志器。 */
-  readonly logger: Logger;
+  readonly logger: PowerLogger;
   /** City 可选 Embassy。 */
   readonly embassy?: Embassy;
   /** 当前 Power 可选通知端口。 */
   readonly notifications?: PowerNotificationPublisher;
-  /** 延迟读取当前 Workspace 绑定的 Session 集合。 */
-  readonly get_sessions: () => AgentSessionCollection;
+  /** 当前 Agent 的 Session 集合端口，由 City 在调用点投影。 */
+  readonly sessions: PowerSessionCollection;
   /** 延迟读取 City 提供给当前 Agent 的 Power 执行面。 */
   readonly get_powers: () => AgentPowerRuntime;
   /** 延迟读取 Workspace env。 */
@@ -65,7 +65,7 @@ export interface CreatePowerContextInput {
 /** 创建一个不复制动态领域状态的 PowerContext。 */
 export function create_power_context(input: CreatePowerContextInput): PowerContext {
   const abort_controller = new AbortController();
-  const sessions = create_session_collection(input.get_sessions, input.workspace);
+  const sessions = input.sessions;
   // 配置只在 Context 创建检查点读取一次，确保同一次 Action、Hook、System 或
   // Availability 调用不会因并发保存而观察到中途变化。
   const config = freeze_json_object(input.get_config?.() ?? {});
@@ -183,81 +183,6 @@ export function create_power_action_context(
     ...(turn_id ? { turn: Object.freeze({ id: turn_id, abort_signal }) } : {}),
     abort_signal,
   });
-}
-
-/** 把 AgentSessionCollection 收窄为 Power 可直接使用的集合端口。 */
-function create_session_collection(
-  get_sessions: () => AgentSessionCollection,
-  workspace: WorkspaceRuntime,
-): PowerSessionCollection {
-  const collection: PowerSessionCollection = {
-    create: async (input) => {
-      const session = await get_sessions().create({
-        ...(input?.origin ? { origin: input.origin } : {}),
-        workspace,
-      });
-      if (input?.inherit_model_from) {
-        const source = await get_sessions().get(
-          input.inherit_model_from.session_id,
-          input.inherit_model_from.origin_type,
-          { workspace },
-        );
-        if (source.config.model) {
-          await session.set(
-            { model: source.config.model },
-            { persist_action: false, publish_mutation: false },
-          );
-        }
-      }
-      return create_session_handle(
-        collection,
-        session.id,
-        session.origin,
-        session.workspace_id,
-      );
-    },
-    get: async (session_id, origin_type = "chat") => {
-      const session = await get_sessions().get(session_id, origin_type, { workspace });
-      return create_session_handle(
-        collection,
-        session.id,
-        session.origin,
-        session.workspace_id,
-      );
-    },
-    runtime: (session_id, origin_type = "chat") => create_session_handle(
-      collection,
-      session_id,
-      { type: origin_type },
-      undefined,
-    ),
-    remove: async (session_id, origin_type) => {
-      await get_sessions().get(session_id, origin_type, { workspace });
-      return await get_sessions().remove(session_id, origin_type);
-    },
-  };
-  return Object.freeze(collection);
-
-  function create_session_handle(
-    _collection: PowerSessionCollection,
-    session_id: string,
-    origin: PowerSessionOrigin,
-    workspace_id: string | undefined,
-  ): PowerSessionHandle {
-    const runtime = get_sessions().runtime(session_id, origin.type);
-    return Object.freeze({
-      id: session_id,
-      origin,
-      ...(workspace_id ? { workspace_id } : {}),
-      prompt: async (prompt_input) => await runtime.prompt(prompt_input),
-      stop: async () => await runtime.stop() as unknown as PowerJsonObject,
-      subscribe: (subscriber) => runtime.subscribe((mutation) =>
-        subscriber(mutation as unknown as PowerSessionMutation)),
-      messages: async () => await runtime.messages() as unknown as import("@/power/index.js").PowerJsonObject[],
-      append_agent_message: async (message_input) =>
-        await runtime.append_agent_message(message_input),
-    });
-  }
 }
 
 /** 从已有 Power Session 集合创建当前 Action 的 Session 句柄。 */

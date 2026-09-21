@@ -28,7 +28,7 @@ import type {
   SessionTurnCommittedHookValue,
   SessionTurnContextHookValue,
 } from "@downcity/agent";
-import { SESSION_HOOK_POINTS } from "@downcity/agent";
+import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { z } from "zod";
 import {
   digest_memory_action,

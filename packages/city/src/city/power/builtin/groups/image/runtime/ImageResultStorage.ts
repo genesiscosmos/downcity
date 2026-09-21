@@ -9,7 +9,7 @@
 
 import path from "node:path";
 import { outbound_http_fetch } from "@/http/OutboundHttp.js";
-import type { SessionAgentContent } from "@downcity/agent";
+import type { SessionAgentContent } from "@downcity/type";
 import type {
   ImageResultStorageInput,
   ImageResultStorageResult,

@@ -2,7 +2,7 @@
  * Shell Power：Workspace 命令与长期进程能力在模型侧的具名 power。
  *
  * 关键点（中文）
- * - 与 `city` 一样是普通 `PowerDefinition`，由 City 注册，工具名即 `shell`。
+ * - 继承 `Power` 基类，与 `city` 同构，由 City 注册，工具名即 `shell`。
  * - 动作 id 是点号形式（`shell.exec`、`shell.session_start`），
  *   取代此前 `shell_exec` + `shell_session({ action })` 两个工具与其中的动作开关。
  * - 真正的执行、输出游标与响应整理仍由 Workspace 持有的 Shell 负责：
@@ -17,11 +17,12 @@ import type {
   PowerAction,
   PowerActionExecutionContext,
   PowerActionResult,
-  PowerDefinition,
+  PowerActions,
   PowerJsonObject,
   PowerJsonValue,
   PowerContext,
 } from "@/power/index.js";
+import { Power } from "@/power/index.js";
 
 /** shell 工具在 Shell 持有的工具集中的稳定名字。 */
 const SHELL_EXEC_TOOL = "shell_exec";
@@ -271,94 +272,101 @@ function create_shell_action(input: {
 }
 
 /**
- * 构造 `shell` power 定义。
+ * Shell 自有 power：把 Workspace Shell 工具装配为模型可见动作。
  *
  * 关键点（中文）
  * - Shell 本身属于 Workspace；本 power 是它在模型面的唯一入口。
  * - 动作与已注册 power 同构：省略 action 返回索引，参数由 Zod 声明。
  */
-export function create_shell_power(): PowerDefinition {
-  return {
-    name: "shell",
-    title: "Shell",
-    description:
-      "Run commands and manage interactive sessions in the Workspace's isolated Sandbox. "
-      + "Host execution is not the default and requires approval.",
-    actions: {
-      exec: create_shell_action({
-        action: "exec",
-        description:
-          "Execute a short non-interactive shell command and wait for completion. Prefer shell.session_start for long-running or interactive commands.",
-        returns:
-          "success, status, cmd, cwd, target, approval_status, execution_backend, sandbox_id, "
-          + "exit_code, output, original_chars, original_lines, wall_time_seconds",
-        access: "write",
-        tool_name: SHELL_EXEC_TOOL,
-        args_schema: exec_input,
-      }),
-      session_start: create_shell_action({
-        action: "session_start",
-        description:
-          "Start an interactive PTY shell session for a long-running or interactive command.",
-        returns:
-          "success, shell_id, status, cmd, cwd, target, approval_status, terminal, pid, "
-          + "output, output_chars, wall_time_seconds",
-        access: "write",
-        tool_name: SHELL_SESSION_TOOL,
-        args_schema: session_start_input,
-        to_payload: (args) => ({ ...args, action: "start" }) as PowerJsonObject,
-      }),
-      session_send: create_shell_action({
-        action: "session_send",
-        description: "Send text to the stdin of an existing shell session and read the new output.",
-        returns: "success, shell_id, status, output, output_chars, exit_code, wall_time_seconds",
-        access: "write",
-        tool_name: SHELL_SESSION_TOOL,
-        args_schema: session_send_input,
-        to_payload: (args) => ({ ...args, action: "send" }) as PowerJsonObject,
-      }),
-      session_read: create_shell_action({
-        action: "session_read",
-        description: "Read the latest output of an existing shell session without sending input.",
-        returns: "success, shell_id, status, output, output_chars, exit_code, wall_time_seconds",
-        access: "read",
-        tool_name: SHELL_SESSION_TOOL,
-        args_schema: session_read_input,
-        to_payload: (args) => ({ ...args, action: "read" }) as PowerJsonObject,
-      }),
-      session_list: create_shell_action({
-        action: "session_list",
-        description: "List the shell sessions that belong to this Workspace.",
-        returns: "success, sessions(shell_id, status, cmd, cwd, terminal, exit_code, output_chars), wall_time_seconds",
-        access: "read",
-        tool_name: SHELL_SESSION_TOOL,
-        args_schema: session_list_input,
-        to_payload: (args) => ({ ...args, action: "list" }) as PowerJsonObject,
-      }),
-      session_stop: create_shell_action({
-        action: "session_stop",
-        description: "Close an existing shell session and release its process resources.",
-        returns: "success, shell_id, status, exit_code, wall_time_seconds",
-        access: "write",
-        tool_name: SHELL_SESSION_TOOL,
-        args_schema: session_stop_input,
-        to_payload: (args) => ({ ...args, action: "stop" }) as PowerJsonObject,
-      }),
-    },
-    system() {
-      return [
-        "# Shell",
-        "",
-        "One-shot commands: `shell({ action: \"exec\", args: { cmd } })`.",
-        "Interactive or long-running work: `session_start`, then `session_send` / `session_read` /",
-        "`session_list` / `session_stop`.",
-        "",
-        "Commands run in the Workspace's persistent isolated Sandbox by default.",
-        "`target: \"host\"` runs on the real machine and requires approval; pass `reason` when using it.",
-        "Do not ask for a separate chat confirmation before a host call whose command and reason are already clear.",
-      ].join("\n");
-    },
+export class ShellPower extends Power {
+  /** Power 稳定名称，即模型侧工具名。 */
+  readonly name = "shell";
+
+  /** Power 用户可见标题。 */
+  readonly title = "Shell";
+
+  /** Power 用途说明。 */
+  readonly description =
+    "Run commands and manage interactive sessions in the Workspace's isolated Sandbox. "
+    + "Host execution is not the default and requires approval.";
+
+  /** 当前 power 的完整动作集合。 */
+  readonly actions: PowerActions = {
+    exec: create_shell_action({
+      action: "exec",
+      description:
+        "Execute a short non-interactive shell command and wait for completion. Prefer shell.session_start for long-running or interactive commands.",
+      returns:
+        "success, status, cmd, cwd, target, approval_status, execution_backend, sandbox_id, "
+        + "exit_code, output, original_chars, original_lines, wall_time_seconds",
+      access: "write",
+      tool_name: SHELL_EXEC_TOOL,
+      args_schema: exec_input,
+    }),
+    session_start: create_shell_action({
+      action: "session_start",
+      description:
+        "Start an interactive PTY shell session for a long-running or interactive command.",
+      returns:
+        "success, shell_id, status, cmd, cwd, target, approval_status, terminal, pid, "
+        + "output, output_chars, wall_time_seconds",
+      access: "write",
+      tool_name: SHELL_SESSION_TOOL,
+      args_schema: session_start_input,
+      to_payload: (args) => ({ ...args, action: "start" }) as PowerJsonObject,
+    }),
+    session_send: create_shell_action({
+      action: "session_send",
+      description: "Send text to the stdin of an existing shell session and read the new output.",
+      returns: "success, shell_id, status, output, output_chars, exit_code, wall_time_seconds",
+      access: "write",
+      tool_name: SHELL_SESSION_TOOL,
+      args_schema: session_send_input,
+      to_payload: (args) => ({ ...args, action: "send" }) as PowerJsonObject,
+    }),
+    session_read: create_shell_action({
+      action: "session_read",
+      description: "Read the latest output of an existing shell session without sending input.",
+      returns: "success, shell_id, status, output, output_chars, exit_code, wall_time_seconds",
+      access: "read",
+      tool_name: SHELL_SESSION_TOOL,
+      args_schema: session_read_input,
+      to_payload: (args) => ({ ...args, action: "read" }) as PowerJsonObject,
+    }),
+    session_list: create_shell_action({
+      action: "session_list",
+      description: "List the shell sessions that belong to this Workspace.",
+      returns: "success, sessions(shell_id, status, cmd, cwd, terminal, exit_code, output_chars), wall_time_seconds",
+      access: "read",
+      tool_name: SHELL_SESSION_TOOL,
+      args_schema: session_list_input,
+      to_payload: (args) => ({ ...args, action: "list" }) as PowerJsonObject,
+    }),
+    session_stop: create_shell_action({
+      action: "session_stop",
+      description: "Close an existing shell session and release its process resources.",
+      returns: "success, shell_id, status, exit_code, wall_time_seconds",
+      access: "write",
+      tool_name: SHELL_SESSION_TOOL,
+      args_schema: session_stop_input,
+      to_payload: (args) => ({ ...args, action: "stop" }) as PowerJsonObject,
+    }),
   };
+
+  /** Shell 能力的模型侧使用说明。 */
+  system(): string {
+    return [
+      "# Shell",
+      "",
+      "One-shot commands: `shell({ action: \"exec\", args: { cmd } })`.",
+      "Interactive or long-running work: `session_start`, then `session_send` / `session_read` /",
+      "`session_list` / `session_stop`.",
+      "",
+      "Commands run in the Workspace's persistent isolated Sandbox by default.",
+      "`target: \"host\"` runs on the real machine and requires approval; pass `reason` when using it.",
+      "Do not ask for a separate chat confirmation before a host call whose command and reason are already clear.",
+    ].join("\n");
+  }
 }
 
 /** 尽力把 Zod schema 转为 JSON Schema；失败时返回 null。 */

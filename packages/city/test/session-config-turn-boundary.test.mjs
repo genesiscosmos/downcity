@@ -406,7 +406,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     await session.snapshot();
     assert.equal(read_system_snapshot(database_path), persisted_system);
   } finally {
-    await first_agent.dispose();
+    await city.agents.remove(first_agent.id);
   }
 
   const restarted_agent = new Agent({
@@ -429,7 +429,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     assert.match(restored_system_text, /power-system:persisted/);
     assert.doesNotMatch(restored_system_text, /instruction:new/);
   } finally {
-    await restarted_agent.dispose();
+    await city.agents.remove(restarted_agent.id);
   }
 
   const database_path = get_agent_session_database_path(
@@ -458,7 +458,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
     assert.match(fallback_system_text, /instruction:new/);
     assert.doesNotMatch(fallback_system_text, /instruction:old/);
   } finally {
-    await fallback_agent.dispose();
+    await city.agents.remove(fallback_agent.id);
     await city.close();
     await fs.rm(agent_path, { recursive: true, force: true });
   }
@@ -489,7 +489,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
     session_id = session.id;
     await session.snapshot();
   } finally {
-    await first_agent.dispose();
+    await city.agents.remove(first_agent.id);
   }
 
   const restarted_agent = new Agent({
@@ -508,7 +508,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
       /instruction:must-not-appear/,
     );
   } finally {
-    await restarted_agent.dispose();
+    await city.agents.remove(restarted_agent.id);
     await city.close();
     await fs.rm(agent_path, { recursive: true, force: true });
   }
@@ -866,7 +866,7 @@ test("restored Session rebinds the same model without emitting a configuration M
     });
     assert.equal((await (await session.prompt({ query: "persist" })).finished).success, true);
   } finally {
-    await first_agent.dispose();
+    await city.agents.remove(first_agent.id);
   }
 
   const restored_agent = new Agent({
@@ -918,7 +918,7 @@ test("restored Session rebinds the same model without emitting a configuration M
     );
     unsubscribe();
   } finally {
-    await restored_agent.dispose();
+    await city.agents.remove(restored_agent.id);
     await city.close();
     await fs.rm(agent_path, { recursive: true, force: true });
   }

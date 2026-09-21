@@ -17,7 +17,7 @@ import {
 } from "@downcity/type";
 import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
 import { z } from "zod";
-import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
+import type { SessionSystemMessage } from "@downcity/type";
 import type { SessionAssistantOutput } from "@/types/turn/SessionAssistantOutput.js";
 import type {
   SessionAgentMessagePart,

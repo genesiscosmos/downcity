@@ -174,7 +174,7 @@ export class CliCityRuntime {
         city.agents.add(agent);
       }
     } catch (error) {
-      await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));
+      await Promise.allSettled(agents.map(async (agent) => await city.agents.remove(agent.id)));
       data.database.close();
       throw error;
     }
@@ -203,7 +203,6 @@ export class CliCityRuntime {
       return new CliCityRuntime({ city, http_port, rpc_port, data, host_instance_id });
     } catch (error) {
       await city.close().catch(() => undefined);
-      await Promise.allSettled(agents.map(async (agent) => await agent.dispose()));
       data.database.close();
       throw error;
     }

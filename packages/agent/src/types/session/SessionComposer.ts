@@ -11,7 +11,7 @@
  */
 
 import type { ModelClient, ModelMessage, AgentTool } from "@downcity/type";
-import type { SessionSystemMessage } from "@/types/session/SessionPrompts.js";
+import type { SessionSystemMessage } from "@downcity/type";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import type { SessionHookContextBlock, SessionMessage } from "@downcity/type";
 import type { ModelRequestFailureReporter } from "@/types/model/ModelRequest.js";

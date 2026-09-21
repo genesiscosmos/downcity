@@ -97,12 +97,3 @@ export type { PowerContextFactory } from "./types/PowerContextFactory.js";
 export type {
   AgentPowerRuntime,
 } from "./types/PowerExecutionRuntime.js";
-
-export { ActionScheduleStore } from "./schedule/ActionScheduleStore.js";
-export { parse_action_schedule_run_at_ms_or_throw } from "./schedule/ActionScheduleTime.js";
-export type {
-  ActionScheduleJobRecord,
-  ActionScheduleJobStatus,
-  CreateActionScheduleJobInput,
-  PowerActionScheduleInput,
-} from "./schedule/ActionSchedule.js";

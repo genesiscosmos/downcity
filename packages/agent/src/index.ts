@@ -58,7 +58,7 @@ export type { SessionAttachmentStore } from "./types/store/SessionAttachmentStor
 export type { AgentStorage } from "./types/agent/AgentStorage.js";
 export { Session } from "./session/Session.js";
 export type { SessionOrigin } from "@downcity/type";
-export { SESSION_HOOK_POINTS } from "./session/input/SessionHookPoints.js";
+export { SESSION_HOOK_POINTS } from "@downcity/type";
 export type {
   SessionCommittedTurnStatus,
   SessionHookContextBlock,
@@ -208,10 +208,12 @@ export type {
   AgentSessionTurnResult,
 } from "./types/sdk/AgentSessionTurn.js";
 export type { SessionPort } from "./types/session/SessionPort.js";
-export type {
-  ActionResult,
-  ActionResultMessage,
-} from "./types/action/ActionResult.js";
+export {
+  is_action_result,
+  type ActionResult,
+  type ActionResultMessage,
+  type SessionSystemMessage,
+} from "@downcity/type";
 
 // Session 与即时执行集成
 export { SessionExecutor } from "./session/runner/SessionExecutor.js";
@@ -252,11 +254,7 @@ export type {
   ToolActionExecutionContext,
   ToolSessionExecutionScope,
 } from "./types/tools/ToolActionExecutionContext.js";
-export type {
-  SessionActionEvent,
-  SessionActionStatus,
-} from "@downcity/type";
-export type { SessionSystemMessage } from "./types/session/SessionPrompts.js";
+export type { SessionActionEvent, SessionActionStatus } from "@downcity/type";
 export {
   extract_session_message_text,
   extract_session_tool_calls,

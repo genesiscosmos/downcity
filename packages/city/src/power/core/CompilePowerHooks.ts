@@ -18,7 +18,7 @@ import type {
   ToolCallContext,
   ToolHookSet,
 } from "@downcity/type";
-import { SESSION_HOOK_POINTS } from "@downcity/agent";
+import { SESSION_HOOK_POINTS } from "@downcity/type";
 import type { PowerContextFactory } from "@/power/types/PowerContextFactory.js";
 import type {
   PowerDefinition,

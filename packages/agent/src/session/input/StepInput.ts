@@ -31,8 +31,8 @@ import type { StepInputOptions } from "@/types/session/StepInput.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
 import type { SessionToolExecutionContext } from "@/types/turn/SessionToolExecutionContext.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
-import { is_action_result } from "@/types/action/ActionResult.js";
-import { SESSION_HOOK_POINTS } from "@/session/input/SessionHookPoints.js";
+import { is_action_result } from "@downcity/type";
+import { SESSION_HOOK_POINTS } from "@downcity/type";
 import { run_pipeline_point } from "@/session/input/SessionHookRunner.js";
 import { resolve_session_power_system_blocks } from "@/session/input/SessionSystem.js";
 
