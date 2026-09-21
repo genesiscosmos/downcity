@@ -1,17 +1,16 @@
 /**
- * City Power 类与 Action 类型辅助。
+ * Power Action 类型辅助。
  *
  * 这些函数只保留输入的精确类型，不创建隐藏容器或额外生命周期。
+ * Power 基类在 `./Power.js`。
  */
 
 import type { z } from "zod";
 import type { PowerJsonValue } from "./types/Json.js";
 import type {
-  PowerDefinition,
   PowerAction,
   PowerActionInputSchema,
   PowerActionResult,
-  PowerActions,
 } from "./types/PowerRuntime.js";
 
 /** 从 Zod schema 推导 JSON 输入。 */
@@ -58,18 +57,6 @@ export function create_action(
     ...definition,
     ...(input_schema ? { input_schema: normalize_input_schema(input_schema) } : {}),
   };
-}
-
-/** City 持有的 Power 基类；一个 City 中每个 ID 只存在一个实例。 */
-export abstract class Power implements PowerDefinition {
-  /** Power 稳定 ID。 */
-  abstract readonly name: string;
-  /** Power 用户可见标题。 */
-  readonly title: string = "";
-  /** Power 用途说明。 */
-  readonly description: string = "";
-  /** Power Action。 */
-  readonly actions: PowerActions = {};
 }
 
 /** Action 执行器常用返回类型别名。 */

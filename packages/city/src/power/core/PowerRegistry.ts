@@ -83,7 +83,9 @@ export class PowerRegistry {
   /**
    * 把当前 Power 集合编译为 Agent 可直接调用的工具。
    *
-   * 关键点（中文）：工具闭包持有 power 定义与容器运行时端口，执行时不再回到 Registry。
+   * 关键点（中文）
+   * - 编译实现只有一份（`PowerTools`）；`Power.compile_tool` 只是它的实例入口。
+   * - 这里用自由函数，因此普通对象形式的 Power 定义同样可编译。
    */
   tools(host: PowerRuntimeHost): Record<string, Tool> {
     return create_power_tools({

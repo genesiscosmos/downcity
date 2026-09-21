@@ -19,7 +19,6 @@ import type {
 import type { PowerDefinition } from "@/power/types/PowerRuntime.js";
 import { invoke_power_tool } from "./PowerToolRuntime.js";
 import { power_tool_input_schema } from "./PowerToolSchemas.js";
-
 /** 取描述文本首行，用于工具描述中的动作摘要。 */
 function first_line(text: string | undefined): string {
   return String(text || "").trim().split("\n")[0].trim();
@@ -54,9 +53,12 @@ export function describe_power_tool(power: PowerDefinition): string {
  * 关键点（中文）
  * - 工具名由调用方以 power 名登记；本函数只构造工具定义。
  * - 需要审批的动作由动作自己在执行时请求，工具层不再预判。
+ * - 没有动作的 power 返回 null，不产生空壳工具。
  */
 export function create_power_tool(options: CreatePowerToolOptions) {
   const power_name = String(options.power.name || "").trim();
+  if (!power_name) return null;
+  if (Object.keys(options.power.actions || {}).length === 0) return null;
   return define_agent_tool<PowerToolInput>({
     description: describe_power_tool(options.power),
     input_schema: power_tool_input_schema,
@@ -88,10 +90,7 @@ export function create_power_tools(options: {
     const power_name = String(power.name || "").trim();
     if (!power_name) continue;
     if (Object.keys(power.actions || {}).length === 0) continue;
-    tools[power_name] = create_power_tool({
-      power,
-      host: options.host,
-    });
+    tools[power_name] = create_power_tool({ power, host: options.host })!;
   }
   return tools;
 }

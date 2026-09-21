@@ -5,10 +5,8 @@
  * Power 包直接导出一个实例，由 City 统一管理完整生命周期。
  */
 
-export {
-  Power,
-  create_action,
-} from "./runtime.js";
+export { create_action } from "./runtime.js";
+export { Power } from "./Power.js";
 
 export type {
   PowerJsonObject,
