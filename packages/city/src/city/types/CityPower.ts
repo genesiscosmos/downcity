@@ -71,14 +71,6 @@ export interface CityPowers {
   ): Promise<PowerJsonValue>;
 
   /**
-   * 订阅 Power 集合变化。
-   *
-   * 关键点（中文）：宿主在收到通知后重新编译产物并推送给 Agent；
-   * Registry 不直接修改 Agent 持有的集合。
-   */
-  subscribe_surface(subscriber: () => void): () => void;
-
-  /**
    * 等待当前已提交的 Power 激活与移除操作全部结束。
    *
    * 关键点（中文）：这是观察入口，不是执行屏障；它不阻塞任何 Power 调用，

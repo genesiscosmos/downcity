@@ -37,7 +37,7 @@ async function create_fixture(options = {}) {
   // 动作执行时会用调用环境里的 session_id 解析真实 Session 句柄，
   // 因此夹具必须创建真实 Session，并把它的标识回填到调用环境。
   const session = await agent.sessions.create({ workspace });
-  const tools = agent.get_power_tools();
+  const tools = city.power_tools;
   return {
     root,
     workspace_path,

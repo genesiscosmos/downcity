@@ -74,11 +74,8 @@ export class Agent {
   /** 当前 Agent configured instruction。 */
   private readonly instruction: string[];
 
-  /** 当前生效的扩展工具；键为扩展名，由宿主推送。 */
-  private power_tools: Readonly<Record<string, Tool>> = Object.freeze({});
-
-  /** 当前生效的扩展处理器集合，由宿主推送。 */
-  private power_hooks: ToolHookSet = EMPTY_TOOL_HOOK_SET;
+  /** Agent 自有检查点处理器；与容器提供的 Power hooks 合并使用。 */
+  private readonly custom_hooks: ToolHookSet;
 
   /** Agent 释放状态。 */
   private dispose_promise?: Promise<void>;
@@ -107,6 +104,7 @@ export class Agent {
     this.custom_tools = options.tools && typeof options.tools === "object"
       ? { ...options.tools }
       : {};
+    this.custom_hooks = options.hooks ?? EMPTY_TOOL_HOOK_SET;
     this.session_manager = new AgentSessions({
       agent_id: this.id,
       agent_name: this.name,
@@ -121,10 +119,10 @@ export class Agent {
         if (!workspace) return {
           workspace_path: ".",
           logger: this.logger,
-          get_tools: () => ({ ...this.custom_tools }),
+          get_tools: () => this.resolve_tools(),
           get_workspace_env: () => ({}),
           get_workspace: () => undefined,
-          get_hooks: () => this.power_hooks,
+          get_hooks: () => this.resolve_hooks(),
           store: storage.sessions,
         };
         // 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，
@@ -137,7 +135,7 @@ export class Agent {
           get_tools: () => this.resolve_tools(workspace),
           get_workspace_env: () => workspace.get_env(),
           get_workspace: () => workspace,
-          get_hooks: () => this.power_hooks,
+          get_hooks: () => this.resolve_hooks(),
           store: storage.sessions,
         };
       },
@@ -154,34 +152,6 @@ export class Agent {
   /** 返回 Agent 指令快照。 */
   get_instructions(): readonly string[] {
     return [...this.instruction];
-  }
-
-  /**
-   * 接收宿主编译出的扩展产物。
-   *
-   * 关键点（中文）
-   * - 传入的是普通值，不持有宿主引用，也不存在按 Agent/Workspace 回查。
-   * - 工具与处理器一次性替换，保证两者来自同一份编译快照。
-   * - 生效时机：工具集在 Session 创建时求值，因此新产物在下一个 Turn 生效。
-   */
-  apply_powers(input: {
-    /** 扩展工具；键为扩展名。 */
-    readonly tools: Readonly<Record<string, Tool>>;
-    /** 扩展处理器集合。 */
-    readonly hooks: ToolHookSet;
-  }): void {
-    this.power_tools = Object.freeze({ ...input.tools });
-    this.power_hooks = input.hooks;
-  }
-
-  /** 返回当前生效的扩展工具快照；未加入宿主时为空。 */
-  get_power_tools(): Readonly<Record<string, Tool>> {
-    return this.power_tools;
-  }
-
-  /** 返回当前生效的扩展处理器集合。 */
-  get_power_hooks(): ToolHookSet {
-    return this.power_hooks;
   }
 
   /** 返回 Agent 级日志器。 */
@@ -246,7 +216,7 @@ export class Agent {
       agent_name: this.name,
       instruction: [...this.get_instructions()],
     });
-    const hooks = this.power_hooks;
+    const hooks = this.resolve_hooks();
     const context = this.create_session_call_context({
       session_id,
       workspace,
@@ -341,15 +311,48 @@ export class Agent {
     return this.agent_storage;
   }
 
-  /** 在明确检查点合并 Workspace、扩展与 Agent Tool。 */
-  private resolve_tools(workspace: WorkspaceRuntime): Record<string, Tool> {
+  /**
+   * 返回当前生效的工具集合：Workspace 工具 + 容器 Power 工具 + Agent 自有工具。
+   *
+   * 关键点（中文）
+   * - 容器 Power 工具从环境句柄实时读取，不缓存；容器增删 Power 后下一次求值即生效。
+   * - 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，装配时立即失败。
+   */
+  private resolve_tools(workspace?: WorkspaceRuntime): Record<string, Tool> {
     const tools: Record<string, Tool> = {};
-    register_tools(tools, workspace.tools, "WorkspaceTools");
-    register_tools(tools, this.power_tools, "Power");
+    if (workspace) register_tools(tools, workspace.tools, "WorkspaceTools");
+    register_tools(tools, this.host?.power_tools ?? {}, "Power");
     register_tools(tools, this.custom_tools, "AgentOptions.tools");
     return tools;
   }
 
+  /** 合并容器 Power hooks 与 Agent 自有 hooks。 */
+  private resolve_hooks(): ToolHookSet {
+    const power_hooks = this.host?.power_hooks;
+    if (!power_hooks) return this.custom_hooks;
+    if (this.custom_hooks === EMPTY_TOOL_HOOK_SET) return power_hooks;
+    return merge_tool_hook_sets(power_hooks, this.custom_hooks);
+  }
+
+}
+
+/** 按检查点合并两组 hooks；同名检查点按容器在前、自有在后的顺序拼接。 */
+function merge_tool_hook_sets(base: ToolHookSet, extra: ToolHookSet): ToolHookSet {
+  const merge_points = <THandler>(
+    left: Readonly<Record<string, readonly THandler[]>>,
+    right: Readonly<Record<string, readonly THandler[]>>,
+  ): Readonly<Record<string, readonly THandler[]>> => {
+    const merged: Record<string, readonly THandler[]> = { ...left };
+    for (const [point_name, handlers] of Object.entries(right)) {
+      merged[point_name] = [...(merged[point_name] ?? []), ...handlers];
+    }
+    return merged;
+  };
+  return {
+    pipeline: merge_points(base.pipeline, extra.pipeline),
+    guard: merge_points(base.guard, extra.guard),
+    effect: merge_points(base.effect, extra.effect),
+  };
 }
 
 /** 注册 Tool 集合，并拒绝不同来源静默覆盖。 */

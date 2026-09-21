@@ -14,7 +14,8 @@ import { create_city_action_groups } from "@/city/power/builtin/groups/index.js"
 import type { CityPowers } from "@/city/types/CityPower.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
-import type { CityRuntime } from "@downcity/type";
+import type { CityRuntime, PowerSurface } from "@downcity/type";
+import type { AgentTool, ToolHookSet } from "@downcity/type";
 import { MemoryStorageProvider } from "@/workspace/index.js";
 import { CityHTTP } from "@/city/transport/http/CityHTTP.js";
 import { CityRPC } from "@/city/transport/rpc/CityRPC.js";
@@ -117,10 +118,6 @@ export class City implements CityRuntime {
       ...(options.power_host ? { host: options.power_host } : {}),
     });
     this.powers = this.power_runtime.public_api;
-    // Power 集合变化时重新编译并推送给全部 Agent；Agent 不参与拉取。
-    this.power_runtime.public_api.subscribe_surface(() => {
-      this.push_power_surface_to_all();
-    });
     // city power 与其它 power 走同一条注册路径；特权依赖在这里注入。
     void this.powers
       .add(
@@ -179,22 +176,19 @@ export class City implements CityRuntime {
   }
 
   /**
-   * 把当前 Power 编译产物推送给指定 Agent。
+   * 容器当前生效的 Power 工具集合（`CityRuntime` 环境句柄的一部分）。
    *
    * 关键点（中文）
-   * - 推送的是普通值与普通函数，Agent 持有后执行时不再回查 City。
-   * - 同一份产物只包含 Power 集合，不含 Workspace：Workspace 在执行时由
-   *   Agent 通过调用环境注入。
+   * - 与 `powers` 应用入口不同：这是主体只读的环境视图，不含生命周期操作。
+   * - 每次读取都取运行时最新视图，主体持有引用即可看到 Power 增删。
    */
-  private push_power_surface(agent: Agent): void {
-    agent.apply_powers(this.power_runtime.compile_surface(agent));
+  get power_tools(): Readonly<Record<string, AgentTool>> {
+    return this.power_runtime.surface_view().tools;
   }
 
-  /** 把新的 Power 产物推送给当前全部 Agent。 */
-  private push_power_surface_to_all(): void {
-    for (const agent of this.agents_by_id.values()) {
-      this.push_power_surface(agent);
-    }
+  /** 容器当前生效的 Power 检查点处理器。 */
+  get power_hooks(): ToolHookSet {
+    return this.power_runtime.surface_view().hooks;
   }
 
   /**
@@ -474,7 +468,6 @@ export class City implements CityRuntime {
     agent.bind(this);
     try {
       this.agents_by_id.set(agent.id, agent);
-      this.push_power_surface(agent);
     } catch (error) {
       this.agents_by_id.delete(agent.id);
       agent.unbind();

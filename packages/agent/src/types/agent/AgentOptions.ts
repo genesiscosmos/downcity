@@ -6,7 +6,7 @@
  * - RemoteAgent 与 Session 数据结构拆到独立类型文件。
  */
 
-import type { ModelClient, AgentTool as Tool } from "@downcity/type";
+import type { ModelClient, AgentTool as Tool, ToolHookSet } from "@downcity/type";
 import type {
   AgentManagedSession,
   SessionOptions,
@@ -52,13 +52,22 @@ export interface AgentOptions {
   description?: string;
 
   /**
-   * 当前 agent 默认可用的工具集合。
+   * 当前 agent 自有的工具集合。
    *
    * 关键点（中文）
    * - tools 归属于 agent 级，而不是 session 级。
-   * - session 运行时会直接复用这份工具集合。
+   * - 与 Workspace 工具、容器 Power 工具在 Session 创建时合并；同名冲突立即失败。
    */
   tools?: Record<string, Tool>;
+
+  /**
+   * 当前 agent 自有的检查点处理器集合。
+   *
+   * 关键点（中文）
+   * - 与容器提供的 Power hooks 合并；同名检查点按「容器在前、自有在后」顺序执行。
+   * - 不传入时只使用容器提供的 hooks。
+   */
+  hooks?: ToolHookSet;
 
   /**
    * 调用方显式传入的静态基础指令。

@@ -20,7 +20,7 @@ export type {
 
 export type { AuthRoutePolicy } from "./types/auth/AuthRoute.js";
 
-export type { CityRuntime } from "./types/city/CityRuntime.js";
+export type { CityRuntime, PowerSurface } from "./types/city/CityRuntime.js";
 
 export {
   MODEL_PROTOCOL_VERSION,

@@ -2,8 +2,8 @@
  * City 唯一 Power Registry 与生命周期运行时。
  *
  * 一个 City 中每个 Power ID 只有一个实例和一套 initialize/dispose 生命周期。
- * Agent 不保存 Registry；City 在 Power 集合变化时把编译产物推送给全部 Agent，
- * 具体调用由 Agent 在执行时注入调用环境。
+ * City 编译一次能力产物并以活视图形式交给 Agent；Agent 不缓存，也不参与拉取。
+ * 具体调用由 Agent 在执行时注入调用环境，容器在调用点反查 Agent 身份。
  *
  * 关键点（中文）
  * - 不存在全局生命周期屏障：单个 Power 的初始化只影响它自己。
@@ -13,7 +13,9 @@
 import type { Hono } from "hono";
 import type { Agent, Logger } from "@downcity/agent";
 import { get_logger } from "@downcity/agent";
-import type { AgentTool, ToolCallContext, ToolHookSet } from "@downcity/type";
+import { EMPTY_TOOL_HOOK_SET } from "@downcity/type";
+import type { ToolCallContext } from "@downcity/type";
+import type { PowerSurface } from "@downcity/type";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type {
@@ -66,11 +68,11 @@ export class CityPowerRuntime {
   /** 并发关闭调用共享的唯一释放流程。 */
   private dispose_promise?: Promise<void>;
 
-  /** 编译产物变化订阅器；宿主用它把新产物推送给 Agent。 */
-  private readonly surface_subscribers = new Set<() => void>();
-
   /** City 向应用提供的 Power 集合入口。 */
   readonly public_api: CityPowers;
+
+  /** 当前生效的能力产物；Power 集合变化时原子替换。 */
+  private surface: PowerSurface = Object.freeze({ tools: {}, hooks: EMPTY_TOOL_HOOK_SET });
 
   constructor(private readonly options: CityPowerRuntimeOptions) {
     this.public_api = Object.freeze({
@@ -86,32 +88,29 @@ export class CityPowerRuntime {
         await this.invoke_host_action(power_id, action_id, input),
       invoke_config: async (power_id, action_id, input) =>
         await this.invoke_config(power_id, action_id, input),
-      subscribe_surface: (subscriber) => {
-        this.surface_subscribers.add(subscriber);
-        return () => {
-          this.surface_subscribers.delete(subscriber);
-        };
-      },
       settled: async () => await this.lifecycle_settlement,
     });
   }
 
   /**
-   * 为指定 Agent 编译当前 Power 产物。
+   * 返回容器当前生效的能力产物。
    *
    * 关键点（中文）
-   * - 产物是普通值与普通函数，Agent 持有后执行时不再回查 City。
-   * - Workspace 不属于编译输入：同一个 Agent 可以进入多个 Workspace，
-   *   执行时由 Agent 通过调用环境注入，City 在调用点解析出对应 Workspace。
+   * - 返回的是同一个活对象；主体持有引用后不需要失效通知。
+   * - 编译输入不含 Agent：调用上下文已携带 Agent 身份，容器在执行点反查。
    */
-  compile_surface(agent: Agent): { tools: Record<string, AgentTool>; hooks: ToolHookSet } {
-    const context_factory = this.context_factory(agent);
-    return {
-      tools: this.registry.tools(context_factory),
-      hooks: this.registry.hooks(context_factory),
-    };
+  surface_view(): PowerSurface {
+    return this.surface;
   }
 
+  /** 重新编译当前 Power 集合，并原子替换活视图。 */
+  private recompile_surface(): void {
+    const context_factory = this.context_factory();
+    this.surface = Object.freeze({
+      tools: this.registry.tools(context_factory),
+      hooks: this.registry.hooks(context_factory),
+    });
+  }
   /** 向 City 添加一个唯一 Power 实例。 */
   private add(input: CityPowerInput): Promise<void> {
     this.assert_active();
@@ -310,7 +309,7 @@ export class CityPowerRuntime {
         errors.push(error);
       }
     }
-    this.surface_subscribers.clear();
+    this.surface = Object.freeze({ tools: {}, hooks: EMPTY_TOOL_HOOK_SET });
     if (errors.length > 0) {
       throw new AggregateError(errors, "City Power Runtime shutdown failed");
     }
@@ -342,39 +341,44 @@ export class CityPowerRuntime {
     }
   }
 
-  /** 通知订阅者重新编译并推送产物。 */
+  /**
+   * 重新编译当前 Power 集合，并原子替换活视图。
+   *
+   * 关键点（中文）：主体持有的是同一个活对象引用，替换内部值即对它可见，
+   * 因此不需要失效通知。
+   */
   private publish_surface_change(): void {
-    for (const subscriber of this.surface_subscribers) {
-      try {
-        subscriber();
-      } catch {
-        // 观察者失败不能回滚已经完成的 Power 集合修改。
-      }
-    }
+    const context_factory = this.context_factory();
+    this.surface = Object.freeze({
+      tools: this.registry.tools(context_factory),
+      hooks: this.registry.hooks(context_factory),
+    });
   }
 
   /**
    * 为一次 Power 调用创建动态上下文工厂。
    *
    * 关键点（中文）
-   * - 工厂只在调用发生时使用，不缓存 Workspace 或 PowerContext。
-   * - Agent 注入的 ToolCallContext 同时提供执行身份与 Workspace，
-   *   City 在此之上补齐自身句柄。
+   * - 工厂只在调用发生时使用，不缓存 Workspace、Agent 或 PowerContext。
+   * - Agent 身份从调用环境读取，容器在调用点反查自己的索引。
    */
-  private context_factory(agent: Agent): PowerContextFactory {
+  private context_factory(): PowerContextFactory {
     const build_context = (
       power_id: string,
       call_context: ToolCallContext,
     ): PowerContext => {
-      const workspace = this.require_call_workspace(agent.id, call_context);
+      const agent_id = String(call_context.agent_id || "").trim();
+      const agent = this.options.runtime_access.get_agent(agent_id);
+      if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
+      const workspace = this.require_call_workspace(agent_id, call_context);
       const power_storage = this.options.storage.open_scope([
         "agents",
-        agent.id,
+        agent_id,
         "powers",
         power_id,
       ]);
       return create_power_context({
-        agent_id: agent.id,
+        agent_id,
         agent_name: agent.name,
         agent_description: agent.description,
         workspace_id: workspace.id,
@@ -388,7 +392,7 @@ export class CityPowerRuntime {
         logger: agent.get_logger(),
         embassy: this.options.embassy,
         ...(this.options.host
-          ? { notifications: this.options.host.notifications(power_id, agent.id) }
+          ? { notifications: this.options.host.notifications(power_id, agent_id) }
           : {}),
         get_workspace_env: () => workspace.get_env(),
         get_instructions: () => agent.get_instructions(),
@@ -424,7 +428,7 @@ export class CityPowerRuntime {
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     const workspace = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
     return this.registry.contextual(
-      this.context_factory(agent),
+      this.context_factory(),
       (execution_context) => create_call_context({
         agent_id: agent.id,
         agent_name: agent.name,
@@ -446,7 +450,7 @@ export class CityPowerRuntime {
     const agent = this.options.runtime_access.get_agent(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     const workspace = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
-    const context_factory = this.context_factory(agent);
+    const context_factory = this.context_factory();
     register_power_http_routes({
       app,
       get_context: (power_id) => context_factory(

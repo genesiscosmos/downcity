@@ -114,7 +114,7 @@ async function create_city_tool_fixture() {
   // 因此夹具必须创建真实 Session，并把它的标识回填到调用环境。
   const session = await agent.sessions.create({ workspace });
   tool_call_context = { ...tool_call_context, session_id: session.id };
-  const tools = agent.get_power_tools();
+  const tools = city.power_tools;
   const tool = tools.city;
   assert.ok(tool, "city power should be assembled for every Agent/Workspace");
   return {
@@ -299,8 +299,14 @@ test("city power 在 Workspace 没有 Shell 时明确回答沙箱不可用", asy
   try {
     await city.powers.settled();
     const session = await agent.sessions.create({ workspace });
-    tool_call_context = { ...tool_call_context, session_id: session.id };
-    const tool = agent.get_power_tools().city;
+    // 调用环境必须携带真实 Agent 身份：容器在执行点用它反查索引。
+    tool_call_context = {
+      ...tool_call_context,
+      agent_id: agent.id,
+      agent_name: agent.name,
+      session_id: session.id,
+    };
+    const tool = city.power_tools.city;
     const sandbox = await call_city_tool(tool, { action: "sandbox.get" });
     assert.equal(sandbox.success, true);
     assert.equal(sandbox.data.available, false);
