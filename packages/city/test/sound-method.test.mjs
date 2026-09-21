@@ -10,6 +10,10 @@ import path from "node:path";
 
 import { Agent } from "@downcity/agent";
 import { City, LocalStorageProvider, Workspace } from "../bin/index.js";
+import {
+  add_test_power,
+  create_test_power,
+} from "./helpers/CityPowerTestBinding.mjs";
 
 /** 当前测试注入的语音 AI 服务实现。 */
 let current_sound_ai;
@@ -273,34 +277,28 @@ test("无 Session 的程序化调用被拒绝式审批端口拦下", async () =>
     tts: () => ({}),
   });
   try {
-    await fixture.city.powers.add({
-      readme: import.meta.filename,
-      has_config: false,
-      has_sidebar: false,
-      has_mainview: false,
-      power: {
-        name: "voice-probe",
-        title: "Voice Probe",
-        description: "test",
-        actions: {
-          run: {
-            description: "invoke sound asr",
-            execute: async ({ context, input }) => {
-              const result = await context.city.powers.run_action({
-                power: "city",
-                action: "sound.asr",
-                payload: input,
-              });
-              return {
-                success: result.success,
-                ...(result.data === undefined ? {} : { data: result.data }),
-                ...(result.error ? { error: result.error } : {}),
-              };
-            },
+    await add_test_power(fixture.city, create_test_power({
+      name: "voice-probe",
+      title: "Voice Probe",
+      description: "test",
+      actions: {
+        run: {
+          description: "invoke sound asr",
+          execute: async ({ context, input }) => {
+            const result = await context.city.powers.run_action({
+              power: "city",
+              action: "sound.asr",
+              payload: input,
+            });
+            return {
+              success: result.success,
+              ...(result.data === undefined ? {} : { data: result.data }),
+              ...(result.error ? { error: result.error } : {}),
+            };
           },
         },
       },
-    });
+    }));
     const run = async (payload) =>
       await fixture.city.powers
         .scope({ agent_id: fixture.agent.id, workspace_id: fixture.workspace.id })

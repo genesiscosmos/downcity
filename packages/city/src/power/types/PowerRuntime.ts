@@ -10,13 +10,16 @@ import type { Context as HonoContext } from "hono";
 import type { z } from "zod";
 import type {
   AuthRoutePolicy,
+  AgentTool,
   SessionAgentContent,
   SessionModelUserContent,
+  ToolHookSet,
 } from "@downcity/type";
 import type { PowerContext } from "./PowerContext.js";
 import type { PowerJsonObject, PowerJsonValue } from "./Json.js";
 import type { PowerLifecycleContext } from "./PowerHost.js";
 import type { StepSnapshot } from "./StepSnapshot.js";
+import type { PowerRuntimeHost } from "./PowerCallSite.js";
 
 /** Action 可以追加到 Session 的一条消息。 */
 export type PowerActionMessage =
@@ -235,6 +238,17 @@ export interface PowerDefinition {
   readonly availability?: (context: PowerContext) => PowerAvailability | Promise<PowerAvailability>;
   /** PowerDefinition 的可选 HTTP 路由声明。 */
   readonly http?: PowerHttpDefinition;
+
+  /**
+   * 编译为模型侧工具。
+   *
+   * 关键点（中文）：工具闭包持有本实例与容器端口，执行时不再回到 Registry；
+   * 没有动作的 Power 返回 null，不产生空壳工具。
+   */
+  compile_tool(host: PowerRuntimeHost): AgentTool | null;
+
+  /** 编译为按检查点索引的处理器集合。 */
+  compile_hooks(host: PowerRuntimeHost): ToolHookSet;
 }
 
 /** City 可注册的 PowerDefinition 静态定义与入口。 */

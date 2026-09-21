@@ -8,6 +8,15 @@ import { Agent } from "@downcity/agent";
 import { City, Workspace } from "@downcity/city";
 import { Power, create_action } from "@downcity/city/power";
 
+/** 用基类语义创建一个无隐藏生命周期的测试 Power。 */
+function make_power(definition) {
+  const { lifecycle, ...fields } = definition;
+  class TestPower extends Power {
+    name = definition.name;
+  }
+  return Object.assign(new TestPower(), fields, lifecycle || {});
+}
+
 /** 创建一个 Agent/Workspace 测试范围。 */
 function create_scope(id) {
   return {
@@ -382,7 +391,7 @@ test("City initializes one Power instance and disposes it on close", async () =>
     has_config: false,
     has_sidebar: true,
     has_mainview: true,
-    power: {
+    power: make_power({
       name: "main-test",
       title: "Main Test",
       description: "Verifies Power ownership",
@@ -393,7 +402,7 @@ test("City initializes one Power instance and disposes it on close", async () =>
       dispose() {
         events.push("dispose");
       },
-    },
+    }),
   };
   const city = new City({ powers: [registration] });
 
@@ -423,7 +432,7 @@ test("City waits for an active Power host action before disposal", async () => {
       has_config: false,
       has_sidebar: true,
       has_mainview: false,
-      power: {
+      power: make_power({
         name: "host-lease",
         title: "Host Lease",
         description: "Verifies host action lifecycle leases",
@@ -442,7 +451,7 @@ test("City waits for an active Power host action before disposal", async () => {
         dispose() {
           events.push("dispose");
         },
-      },
+      }),
     }],
   });
 
@@ -491,7 +500,7 @@ test("City config actions use the Power-owned config store", async () => {
       has_config: true,
       has_sidebar: false,
       has_mainview: false,
-      power: {
+      power: make_power({
         name: "config-main",
         title: "Config Main",
         description: "Verifies config actions",
@@ -501,7 +510,7 @@ test("City config actions use the Power-owned config store", async () => {
             run: async (_input, action_context) => await action_context.config.get(),
           });
         },
-      },
+      }),
     }],
   });
 

@@ -10,8 +10,6 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { invoke_power_tool } from "../bin/power/tool/PowerToolRuntime.js";
-import { create_power_tools } from "../bin/power/tool/PowerTools.js";
 import { power_tool_input_schema } from "../bin/power/tool/PowerToolSchemas.js";
 import { create_action } from "@downcity/city/power";
 import {
@@ -78,10 +76,7 @@ test("每个 power 生成一个以 power 名命名的工具，并派生动作描
       "env.list": create_action({ description: "List env.", returns: "{ b }", execute: async () => ({ success: true }) }),
     },
   });
-  const tools = create_power_tools({
-    definitions: [power],
-    host: create_host(),
-  });
+  const tools = { [power.name]: power.compile_tool(create_host()) };
   assert.deepEqual(Object.keys(tools), ["catalog"]);
   assert.match(tools.catalog.description, /- env\.get: Read env\./u);
   assert.match(tools.catalog.description, /- env\.list: List env\./u);
@@ -94,11 +89,7 @@ test("没有动作的 power 不产生空壳工具", async () => {
     description: "No actions.",
     actions: {},
   });
-  const tools = create_power_tools({
-    definitions: [power],
-    host: create_host(),
-  });
-  assert.deepEqual(Object.keys(tools), []);
+  assert.equal(power.compile_tool(create_host()), null);
 });
 
 test("工具省略 action 时返回动作索引，包含 access 与 returns", async () => {
@@ -121,12 +112,8 @@ test("工具省略 action 时返回动作索引，包含 access 与 returns", as
       }),
     },
   });
-  const result = await invoke_power_tool({
-    power,
-    host: create_host(),
-    call_context: create_call_context(),
-    input: {},
-  });
+  const tool = power.compile_tool(create_host());
+  const result = await tool.execute({}, create_call_context());
   assert.equal(result.output.success, true);
   assert.equal(result.output.action, null);
   assert.equal(result.output.data.power, "indexed");
@@ -157,12 +144,8 @@ test("power action 的 messages 原样交给统一 Tool Result 边界", async ()
       }),
     },
   });
-  const result = await invoke_power_tool({
-    power,
-    host: create_host(),
-    call_context: create_call_context(),
-    input: { action: "emit", args: { text: "hi" } },
-  });
+  const tool = power.compile_tool(create_host());
+  const result = await tool.execute({ action: "emit", args: { text: "hi" } }, create_call_context());
   assert.equal(result.output.success, true);
   assert.deepEqual(result.output.data, { ok: true });
   assert.equal(result.messages.length, 1);
@@ -178,12 +161,8 @@ test("未知动作返回可读失败而不是抛错", async () => {
       only: create_action({ description: "Only.", returns: "{}", execute: async () => ({ success: true }) }),
     },
   });
-  const result = await invoke_power_tool({
-    power,
-    host: create_host(),
-    call_context: create_call_context(),
-    input: { action: "absent" },
-  });
+  const tool = power.compile_tool(create_host());
+  const result = await tool.execute({ action: "absent" }, create_call_context());
   assert.equal(result.output.success, false);
   assert.match(result.output.error, /does not implement action/u);
 });

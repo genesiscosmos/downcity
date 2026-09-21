@@ -22,9 +22,12 @@ import type { PowerCallSite, PowerCallSiteOverride, PowerRuntimeHost } from "@/p
 import type { PowerSnapshot } from "@/power/index.js";
 import type { PowerRuntimeRecord } from "@/power/types/PowerRuntimeRecord.js";
 import type { AgentTool as Tool, JsonValue, ToolHookSet } from "@downcity/type";
+import type {
+  EffectHook,
+  GuardHook,
+  PipelineHook,
+} from "@downcity/type";
 import { execute_power_action } from "@/power/core/PowerActionExecution.js";
-import { create_power_tools } from "@/power/tool/PowerTools.js";
-import { compile_power_hooks } from "@/power/core/CompilePowerHooks.js";
 import type {
   PowerRegistryChange,
   PowerRegistrySubscriber,
@@ -33,6 +36,31 @@ import type {
 
 function normalize_power_name(power_name: string): string {
   return String(power_name || "").trim();
+}
+
+/** 按检查点合并多个 Power 的处理器；顺序由输入顺序决定。 */
+function merge_tool_hook_sets(sets: readonly ToolHookSet[]): ToolHookSet {
+  const pipeline: Record<string, readonly PipelineHook[]> = {};
+  const guard: Record<string, readonly GuardHook[]> = {};
+  const effect: Record<string, readonly EffectHook[]> = {};
+  const append = <THandler>(
+    target: Record<string, readonly THandler[]>,
+    source: Readonly<Record<string, readonly THandler[]>>,
+  ): void => {
+    for (const [point_name, handlers] of Object.entries(source)) {
+      target[point_name] = [...(target[point_name] ?? []), ...handlers];
+    }
+  };
+  for (const set of sets) {
+    append(pipeline, set.pipeline);
+    append(guard, set.guard);
+    append(effect, set.effect);
+  }
+  return Object.freeze({
+    pipeline: Object.freeze(pipeline),
+    guard: Object.freeze(guard),
+    effect: Object.freeze(effect),
+  });
 }
 
 function create_record(power: PowerDefinition): PowerRuntimeRecord {
@@ -83,23 +111,23 @@ export class PowerRegistry {
   /**
    * 把当前 Power 集合编译为 Agent 可直接调用的工具。
    *
-   * 关键点（中文）
-   * - 编译实现只有一份（`PowerTools`）；`Power.compile_tool` 只是它的实例入口。
-   * - 这里用自由函数，因此普通对象形式的 Power 定义同样可编译。
+   * 关键点（中文）：编译由各 Power 自己完成；Registry 只负责集合与查询。
    */
   tools(host: PowerRuntimeHost): Record<string, Tool> {
-    return create_power_tools({
-      definitions: this.active_definitions(),
-      host,
-    });
+    const tools: Record<string, Tool> = {};
+    for (const power of this.active_definitions()) {
+      const tool = power.compile_tool(host);
+      if (!tool) continue;
+      tools[String(power.name || "").trim()] = tool;
+    }
+    return tools;
   }
 
   /** 把当前 Power 集合编译为按检查点索引的处理器。 */
   hooks(host: PowerRuntimeHost): ToolHookSet {
-    return compile_power_hooks({
-      definitions: this.active_definitions(),
-      host,
-    });
+    return merge_tool_hook_sets(
+      this.active_definitions().map((power) => power.compile_hooks(host)),
+    );
   }
 
   /** 返回当前仍然有效的 power 定义，顺序稳定。 */

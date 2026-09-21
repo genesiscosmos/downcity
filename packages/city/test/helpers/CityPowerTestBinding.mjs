@@ -4,6 +4,8 @@
  * 测试通过真实 City 注册协议装配 Power，避免重新引入已删除的 raw Power 兼容入口。
  */
 
+import { Power } from "../../bin/power/index.js";
+
 /** 把一个测试 Power 实例包装成 City 可解释的统一注册。 */
 export function create_power_registration(power) {
   return {
@@ -15,14 +17,18 @@ export function create_power_registration(power) {
   };
 }
 
-/** 用类语义创建无隐藏生命周期的测试 Power。 */
+/**
+ * 创建测试 Power 实例。
+ *
+ * 关键点（中文）：测试 Power 与生产 Power 继承同一个基类，因此拥有相同的
+ * 编译入口（`compile_tool` / `compile_hooks`），不存在测试专用兼容分支。
+ */
 export function create_test_power(definition) {
-  const { lifecycle, ...power } = definition;
-  return Object.assign({
-    title: definition.name,
-    description: "Test Power",
-    actions: {},
-  }, power, lifecycle || {});
+  const { lifecycle, ...fields } = definition;
+  class TestPower extends Power {
+    name = definition.name;
+  }
+  return Object.assign(new TestPower(), fields, lifecycle || {});
 }
 
 /**
