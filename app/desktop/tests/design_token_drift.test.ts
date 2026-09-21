@@ -144,6 +144,8 @@ const focus_visible_idioms = [
   "approval-action",
   "question-submit",
   "question-back",
+  // 把交互挪到右侧面板的入口：焦点环在 chat.css 的 .interaction-panel-open:focus-visible。
+  "interaction-panel-open",
   // 用户气泡的折叠开关：焦点环在共享常量里，不在 JSX 标签上。
   "user_message_collapse_button_class_name",
 ];

@@ -2,14 +2,22 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import type { RespondSessionInteractionInput, SessionAgentInteraction, SessionInteractionQuestion } from "@downcity/agent";
-import { TbCheck, TbChevronLeft, TbChevronRight, TbLoader2, TbSend, TbX } from "react-icons/tb";
+import { TbCheck, TbChevronLeft, TbChevronRight, TbLayoutSidebarRightExpand, TbLoader2, TbSend, TbX } from "react-icons/tb";
 import { cn } from "@/lib/utils";
-import { translate } from "@/locales/i18n";
+import { translate, use_translation } from "@/locales/i18n";
 
 /** 根据 canonical Interaction 类型选择对应交互界面。 */
-export function AgentInteraction({ part, respond }: { /** canonical Interaction Part。 */ part: SessionAgentInteraction; /** 提交结构化响应。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
-  if (part.request.type === "approval") return <ApprovalCard key={part.interaction_id} part={part} respond={respond} />;
-  if (part.request.type === "question") return <QuestionCard key={part.interaction_id} part={part} respond={respond} />;
+export function AgentInteraction({ part, respond, open_in_panel }: {
+  /** canonical Interaction Part。 */ part: SessionAgentInteraction;
+  /** 提交结构化响应。 */ respond(input: RespondSessionInteractionInput): Promise<void>;
+  /**
+   * 在右侧面板里打开这条交互；不提供时不显示入口。
+   *
+   * 内联卡片宽度受消息列约束，长问题或长回答（补充说明）在面板里更好填。
+   */ open_in_panel?(): void;
+}) {
+  if (part.request.type === "approval") return <ApprovalCard key={part.interaction_id} part={part} respond={respond} open_in_panel={open_in_panel} />;
+  if (part.request.type === "question") return <QuestionCard key={part.interaction_id} part={part} respond={respond} open_in_panel={open_in_panel} />;
   return <GenericInteractionCard part={part} />;
 }
 
@@ -23,7 +31,7 @@ export function resolve_agent_interaction_title(part: SessionAgentInteraction): 
 }
 
 /** 高风险操作审批卡片。 */
-function ApprovalCard({ part, respond }: { /** Approval Interaction。 */ part: SessionAgentInteraction; /** 提交审批。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
+function ApprovalCard({ part, respond, open_in_panel }: { /** Approval Interaction。 */ part: SessionAgentInteraction; /** 提交审批。 */ respond(input: RespondSessionInteractionInput): Promise<void>; /** 在右侧面板打开；不提供时不显示入口。 */ open_in_panel?(): void }) {
   const [submitting, set_submitting] = useState<"approve" | "deny">();
   const [note, set_note] = useState(() => read_interaction_note(part));
   const [submit_error, set_submit_error] = useState("");
@@ -51,14 +59,14 @@ function ApprovalCard({ part, respond }: { /** Approval Interaction。 */ part: 
   const detail = operation === "tool" ? format_value(payload.validated_input) : string_value(payload.command);
   const description = operation === "tool" ? string_value(payload.model_explanation) || string_value(payload.tool_description) : request.description || string_value(payload.reason);
   return <section className="interaction-card approval-interaction" aria-labelledby={`${part.interaction_id}-title`} aria-busy={Boolean(submitting)}>
-    <header className="interaction-card-header"><span id={`${part.interaction_id}-title`} className="interaction-card-title">{translate("chat:activity.confirmation")}</span><span className="interaction-card-meta">{interaction_status_label(part)}</span></header>
+    <header className="interaction-card-header"><span id={`${part.interaction_id}-title`} className="interaction-card-title">{translate("chat:activity.confirmation")}</span><span className="interaction-card-head-right"><span className="interaction-card-meta">{interaction_status_label(part)}</span><InteractionPanelButton open_in_panel={open_in_panel} /></span></header>
     <div className="interaction-card-body"><div className="approval-card-detail">{detail}</div>{description ? <p className="approval-card-message">{description}</p> : null}<InteractionNote value={note} disabled={!pending || Boolean(submitting)} set_value={set_note} />{submit_error ? <p role="alert" className="mt-1 text-2xs text-destructive">{submit_error}</p> : null}</div>
     <footer className="interaction-card-actions"><div className="approval-actions">{pending ? <><button type="button" className="approval-action reject" disabled={Boolean(submitting)} onClick={() => void submit("denied")}>{submitting === "deny" ? <TbLoader2 className="animate-spin" /> : <TbX />}<span>{translate("chat:activity.deny")}</span></button><button type="button" className="approval-action approve" disabled={Boolean(submitting)} onClick={() => void submit("approved")}>{submitting === "approve" ? <TbLoader2 className="animate-spin" /> : <TbCheck />}<span>{translate("chat:activity.allow")}</span></button></> : <span className="interaction-terminal-label">{approval_result_label(part)}</span>}</div></footer>
   </section>;
 }
 
 /** 多问题逐题导航卡片。 */
-function QuestionCard({ part, respond }: { /** Question Interaction。 */ part: SessionAgentInteraction; /** 提交回答。 */ respond(input: RespondSessionInteractionInput): Promise<void> }) {
+function QuestionCard({ part, respond, open_in_panel }: { /** Question Interaction。 */ part: SessionAgentInteraction; /** 提交回答。 */ respond(input: RespondSessionInteractionInput): Promise<void>; /** 在右侧面板打开；不提供时不显示入口。 */ open_in_panel?(): void }) {
   const [answers, set_answers] = useState<Record<string, string | string[]>>(() => read_question_answers(part));
   const [note, set_note] = useState(() => read_interaction_note(part));
   const [current_index, set_current_index] = useState(0);
@@ -94,7 +102,7 @@ function QuestionCard({ part, respond }: { /** Question Interaction。 */ part: 
     }
   };
   return <form className="interaction-card question-interaction" aria-labelledby={`${part.interaction_id}-title`} aria-busy={submitting} onSubmit={(event) => void submit(event)}>
-    <header className="interaction-card-header"><span id={`${part.interaction_id}-title`} className="interaction-card-title">{request.title || translate("chat:activity.input_required")}</span><span className="interaction-card-meta">{pending ? `${current_index + 1} / ${questions.length}` : interaction_status_label(part)}</span></header>
+    <header className="interaction-card-header"><span id={`${part.interaction_id}-title`} className="interaction-card-title">{request.title || translate("chat:activity.input_required")}</span><span className="interaction-card-head-right"><span className="interaction-card-meta">{pending ? `${current_index + 1} / ${questions.length}` : interaction_status_label(part)}</span><InteractionPanelButton open_in_panel={open_in_panel} /></span></header>
     <div className="interaction-card-body question-stage"><div className="question-prompt" id={`${question.question_id}-prompt`}>{question.question}</div><QuestionField question={question} value={answers[question.question_id]} disabled={!pending || submitting} labelled_by={`${question.question_id}-prompt`} set_value={(value) => set_answers((current) => ({ ...current, [question.question_id]: value }))} />{last ? <InteractionNote value={note} disabled={!pending || submitting} set_value={set_note} /> : null}{submit_error ? <p role="alert" className="text-2xs text-destructive">{submit_error}</p> : null}</div>
     <footer className="interaction-card-actions"><span className="question-footer-hint">{question.type === "single_select" ? translate("chat:activity.single_select") : question.type === "multi_select" ? translate("chat:activity.multi_select") : ""}</span>{pending ? <div className="question-navigation">{current_index > 0 ? <button type="button" className="question-back" disabled={submitting} onClick={() => set_current_index((value) => value - 1)}><TbChevronLeft />{translate("chat:activity.previous")}</button> : null}<button type="submit" className="question-submit" disabled={!current_complete || submitting}>{submitting ? <TbLoader2 className="animate-spin" /> : last ? <TbSend /> : <TbChevronRight />}{translate(submitting ? "chat:activity.submitting" : last ? "chat:activity.submit" : "chat:activity.next")}</button></div> : <span className="interaction-terminal-label">{question_result_label(part)}</span>}</footer>
   </form>;
@@ -115,6 +123,20 @@ function QuestionField({ question, value, disabled, labelled_by, set_value }: { 
 /** Interaction 提交前可选的补充说明。 */
 function InteractionNote({ value, disabled, set_value }: { value: string; disabled: boolean; set_value(value: string): void }) {
   return <textarea className="interaction-note-input" aria-label={translate("chat:activity.additional_note")} placeholder={translate("chat:activity.additional_note_placeholder")} rows={2} disabled={disabled} value={value} onChange={(event) => set_value(event.target.value)} />;
+}
+
+/**
+ * 把这条交互挪到右侧面板作答。
+ *
+ * 内联卡片的宽度受消息列约束，长问题或多选列表在面板里更好填；
+ * 面板与正文共用同一份 canonical 状态与同一个 respond，因此两边提交的是同一条交互。
+ */
+function InteractionPanelButton({ open_in_panel }: { open_in_panel?(): void }) {
+  const translate_chat = use_translation("chat");
+  if (!open_in_panel) return null;
+  return <button type="button" className="interaction-panel-open" onClick={open_in_panel} title={translate_chat("activity.open_in_panel")} aria-label={translate_chat("activity.open_in_panel")}>
+    <TbLayoutSidebarRightExpand />
+  </button>;
 }
 
 /** 未注册业务类型的只读终态或占位卡片。 */

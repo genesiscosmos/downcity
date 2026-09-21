@@ -45,6 +45,8 @@ export function AgentSessionChatSurface({ selection, agent, session, workspaces,
   const file_diff = project_active_turn_file_diff(runtime, latest_file_diff);
   const history = use_desktop_selector(controller.stores.chat_stream, (state) => state.history_by_session[session_key]);
   const has_queued_messages = use_desktop_selector(controller.stores.composer, (state) => (state.queued_messages_by_session[session_key]?.length ?? 0) > 0);
+  // Power 目录是全局事实，订阅一次后交给 SessionView 注入活动行。
+  const powers = use_desktop_selector(controller.stores.catalog, (state) => state.powers);
   const switch_workspace = useCallback((target_workspace_id: string) => controller.actions.create_session(target_workspace_id, agent_id), [agent_id, controller.actions]);
   const rename_session = useCallback((title: string) => controller.actions.rename_session(workspace_id, agent_id, session_id, title), [agent_id, controller.actions, session_id, workspace_id]);
   const archive_session = useCallback(() => controller.actions.archive_session(workspace_id, agent_id, session_id), [agent_id, controller.actions, session_id, workspace_id]);
@@ -79,5 +81,6 @@ export function AgentSessionChatSurface({ selection, agent, session, workspaces,
     rewrite_message={rewrite_message}
     can_replace_session={!has_queued_messages}
     load_earlier_history={load_earlier_history}
+    powers={powers}
   />;
 }

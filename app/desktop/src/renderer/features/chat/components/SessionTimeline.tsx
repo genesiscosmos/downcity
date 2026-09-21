@@ -13,6 +13,7 @@ import { ChatWorkspaceSelector } from "@/features/chat/components/ChatWorkspaceS
 import { JumpToLatest } from "@/features/chat/components/JumpToLatest";
 import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
 import { SessionMessageList } from "@/features/chat/components/SessionMessageList";
+import { ChatPowerLookupProvider } from "@/features/chat/components/messages/ChatPowerLookup";
 import { TurnFileOpenProvider } from "@/features/chat/components/messages/TurnFileDiffCard";
 import { WorkspaceTagMenu } from "@/features/chat/components/WorkspaceTagMenu";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
@@ -78,9 +79,14 @@ interface SessionViewProps {
   can_replace_session?: boolean;
   /** 读取一个更早历史 Segment。 */
   load_earlier_history?(): Promise<void>;
+  /** 当前可见 Power 的摘要集合；活动行据此显示 Power 标题与图标。 */
+  powers?: readonly { power_id: string; title: string; icon_url?: string }[];
 }
 
 /** 草稿没有历史消息能力；仅作为消息渲染器的内部空实现。 */async function ignore_unavailable_history_action(): Promise<void> {}
+
+/** 未提供 Power 目录时的空集合；活动行身份降级为注册名。 */
+const empty_powers: readonly { power_id: string; title: string; icon_url?: string }[] = [];
 
 /** Session 对话主视图。 */
 export function SessionView(props: SessionViewProps) {
@@ -131,7 +137,7 @@ export function SessionView(props: SessionViewProps) {
         <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
         <div ref={content_ref} className="chat-scroll-content mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
           {messages.length === 0 ? <EmptyPrompts surface={props.chat_surface} agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} switch_context={props.switch_draft_context} /> : null}
-          <TurnFileOpenProvider open_file={props.open_file} workspace_path={props.workspace.workspace_path || undefined}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></TurnFileOpenProvider>
+          <TurnFileOpenProvider open_file={props.open_file} workspace_path={props.workspace.workspace_path || undefined}><ChatPowerLookupProvider powers={props.powers ?? empty_powers}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></ChatPowerLookupProvider></TurnFileOpenProvider>
         </div>
       </div>
         <JumpToLatest visible={follow_indicator.visible && messages.length > 0} new_message_count={follow_indicator.new_message_count} on_click={scroll_to_bottom} />

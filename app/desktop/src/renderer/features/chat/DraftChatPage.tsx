@@ -34,6 +34,8 @@ export function AgentDraftChatSurface({ selection, agent, workspaces, agents, se
   const { workspace_id, agent_id, draft_id } = selection;
   const draft_session = useMemo<DesktopSessionSummary>(() => ({ session_id: draft_id, session_path: "", title: translate("conversation.new"), preview_text: "", created_at: 0, updated_at: 0, message_count: 0, executing: false }), [draft_id, translate]);
   const switch_workspace = useCallback((target_workspace_id: string) => controller.actions.switch_draft_context(target_workspace_id, agent_id), [agent_id, controller.actions]);
+  // Power 目录是全局事实，订阅一次后交给 SessionView 注入活动行。
+  const powers = use_desktop_selector(controller.stores.catalog, (state) => state.powers);
   return <SessionView
     chat_surface="agent"
     open_file={open_file}
@@ -49,5 +51,6 @@ export function AgentDraftChatSurface({ selection, agent, workspaces, agents, se
     settings={settings}
     switch_draft_context={controller.actions.switch_draft_context}
     composer={<DraftComposer selection={selection} stores={controller.stores} actions={controller.actions} session_label={draft_session.title} />}
+    powers={powers}
   />;
 }

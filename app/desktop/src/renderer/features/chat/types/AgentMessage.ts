@@ -37,8 +37,43 @@ export interface AgentMessageProjection {
   /** 当前完成态消息是否具备文本结尾的操作栏资格。 */ show_actions: boolean;
 }
 
-/** Tool 的稳定视觉语义；按注册名识别。 */
-export type AgentToolVisualKind = "read" | "write" | "edit" | "grep" | "find" | "shell" | "ask" | "power" | "generic";
+/**
+ * Tool 的稳定视觉语义。
+ *
+ * 关键点（中文）
+ * - 内置 Tool 是闭集：Workspace 的 read/write/edit/grep/find 与 Agent 的 ask。
+ * - `power` 覆盖全部 power，不区分具体是哪一个：power 名无法枚举，图标由 PowerIcon 解析。
+ * - 不存在 `shell`：Shell 已收敛为 power，它的图标与状态词都走 power 那一套。
+ */
+export type AgentToolVisualKind = "read" | "write" | "edit" | "grep" | "find" | "ask" | "power" | "generic";
+
+/**
+ * 一次 Tool 调用的稳定身份。
+ *
+ * 关键点（中文）：身份是「谁在做这件事」，与「对什么做」（摘要/参数）分开。
+ * 它替代了此前按 tool_name 子串猜测种类的启发式——上游本来就知道来源，不该在展示层猜。
+ */
+export type AgentToolIdentity =
+  | { /** 内置 Tool；工具名是闭集。 */ kind: "builtin"; /** 内置工具种类。 */ tool: Exclude<AgentToolVisualKind, "power" | "generic"> }
+  | { /** Power 工具；power 名即工具名。 */ kind: "power"; /** Power 名，即模型侧工具名。 */ power_name: string; /** Action id；输入尚未收口时为空串。 */ action_name: string }
+  | { /** 无法判定来源的工具。 */ kind: "unknown"; /** 原始工具名。 */ tool_name: string };
+
+/** 一个 Power 在活动行展示所需的最小事实。 */
+export interface ChatPowerFacts {
+  /** Power 的用户可见标题；为空时回退为 power 名。 */
+  title: string;
+  /** Power 自己声明的可选图标 URL；缺失时由 PowerIcon 回退为语义图标。 */
+  icon_url?: string;
+}
+
+/**
+ * 当前可见 Power 的展示事实表，键为 power 名。
+ *
+ * 它是「当前有哪些 power」的事实源：命中即 power，不需要猜。
+ * 注意 `city` 与 `shell` 由 City 直接注册、不经过 Desktop Power catalog，
+ * 因此这张表不一定包含它们；身份判定另有一份显式登记（见 agent_activity_presentation）。
+ */
+export type ChatPowerLookup = ReadonlyMap<string, ChatPowerFacts>;
 
 /** Session Action 的稳定视觉语义；按 action_type 识别，未知类别回落为 generic。 */
 export type AgentActionVisualKind = "command" | "fork" | "compaction" | "generic";
@@ -74,11 +109,33 @@ export type AgentActivityTone = "running" | "complete" | "failed";
 export interface AgentActivityPresentation {
   /** 图表种类，决定行首图标。 */
   visual_kind: AgentToolVisualKind | AgentActionVisualKind;
+  /**
+   * Tool 调用的身份；只有 Tool Part 有。
+   *
+   * 存在时行首图标改由 `PowerIcon` 解析（与 Sidebar、命令面板同一份图标事实源），
+   * 且身份文案由它给出（内置工具是「读取文件」，Power 是「Shell · 执行命令」）。
+   * Action 与 Reasoning 没有工具身份，它们的主文案就是摘要本身。
+   */
+  tool_identity?: AgentToolIdentity;
   /** 当前生命周期对应的翻译 key。 */
   state_key: string;
   /** 活动行样式语气。 */
   tone: AgentActivityTone;
-  /** 活动行的单行摘要。 */
+  /**
+   * 本次调用是否会修改项目文件。
+   *
+   * 只对确定会写盘的 Tool 为真（write / edit）。read、grep、find 是只读的，
+   * 两者在时间线上长得一样时，用户只能靠读文字才知道哪一步改了文件。
+   *
+   * 组件只据此加一个强调色类，不自己判断哪些 Tool 会写盘。
+   */
+  mutation: boolean;
+  /**
+   * 活动行的弱化摘要：目标对象或参数预览，可截断。
+   *
+   * 内置 Tool 的状态词已经说明了「在做什么」，因此这里只放目标；
+   * Power 的「谁在做」由身份文案表达，这里放参数预览。
+   */
   summary: string;
   /** 展开详情；null 表示没有可展开内容。 */
   detail: AgentActivityDetail | null;

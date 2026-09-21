@@ -1,9 +1,15 @@
-/** Power 语义图标映射，供 Sidebar 与 Mainview Overview 共享。 */
+/** Power 语义图标映射，供 Sidebar、命令面板与 Chat 活动行共享。 */
 
 import { useEffect, useState } from "react";
-import { TbChecklist, TbDatabase, TbMessageCircle, TbPhoto, TbPillFilled, TbPlugConnected, TbVolume, TbWorld } from "react-icons/tb";
+import { TbBuildingCommunity, TbChecklist, TbDatabase, TbMessageCircle, TbPhoto, TbPillFilled, TbPlugConnected, TbTerminal2, TbVolume, TbWorld } from "react-icons/tb";
 
-/** 展示 Power 声明的图标，并在加载失败时回退到稳定语义图标。 */
+/**
+ * 展示 Power 声明的图标，并在加载失败时回退到稳定语义图标。
+ *
+ * 关键点（中文）：这是 Power 图标的唯一事实源。Sidebar、命令面板与 Chat 活动行都走它，
+ * 因此同一个 Power 在三处长得一样。`city` 与 `shell` 虽然不在 Desktop Power catalog 里
+ * （它们由 City 直接注册），但同样出现在活动行上，所以它们的语义图标登记在这里。
+ */
 export function PowerIcon({ power_id, icon_url, class_name = "size-4" }: {
   /** Power 的全局稳定 ID。 */
   power_id: string;
@@ -34,5 +40,7 @@ function render_fallback_power_icon(power_id: string, class_name: string) {
   if (power_id === "web") return <TbWorld className={class_name} />;
   if (power_id === "image") return <TbPhoto className={class_name} />;
   if (power_id === "sound") return <TbVolume className={class_name} />;
+  if (power_id === "city") return <TbBuildingCommunity className={class_name} />;
+  if (power_id === "shell") return <TbTerminal2 className={class_name} />;
   return <TbPlugConnected className={class_name} />;
 }

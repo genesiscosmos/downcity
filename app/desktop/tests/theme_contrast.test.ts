@@ -111,6 +111,24 @@ test("装饰文字在全部主题下不低于非文本下限 3:1", () => {
   assert.deepEqual(failures, [], `对比度不达标：\n  ${failures.join("\n  ")}`);
 });
 
+test("写文件强调色在全部主题下都达到文字对比度下限", () => {
+  // 这一档色只在 write / edit 的活动行上出现，行本身位于 MainView 卡片（--theme-bg）上。
+  // 它是跨主题的固定语义色（同 diff 红绿的做法），因此必须逐套主题验算：
+  // 任一套调色板的背景一变浅/变深，它就可能在那一套里变得不可读，而单看截图很难发现。
+  const source = fs.readFileSync(path.join(styles_root, "semantic-colors.css"), "utf8");
+  const light = source.match(/--activity-mutation-foreground:\s*(#[0-9a-fA-F]{6})/);
+  const dark = source.match(/:where\(\.dark\)\s*\{[\s\S]*?--activity-mutation-foreground:\s*(#[0-9a-fA-F]{6})/);
+  assert.ok(light, "无法从 semantic-colors.css 解析 --activity-mutation-foreground 的浅色取值");
+  assert.ok(dark, "无法从 semantic-colors.css 解析 --activity-mutation-foreground 的深色取值");
+
+  const failures: string[] = [];
+  for (const { name, mode, variables } of palettes) {
+    const ratio = contrast(parse_hex(mode === "dark" ? dark[1]! : light[1]!), parse_hex(variables.bg!));
+    if (ratio < 4.5) failures.push(`${name} ${mode} 写文件强调色 ${ratio.toFixed(2)}:1 < 4.5:1`);
+  }
+  assert.deepEqual(failures, [], `写文件强调色对比度不达标：\n  ${failures.join("\n  ")}`);
+});
+
 test("次要文字落在次级容器上不低于 3.9:1（已知未达 AA，此处防止继续恶化）", () => {
   // 实测：6 套浅色主题下，次要文字落在 --theme-muted 上只有 3.99:1 ~ 4.35:1，低于 AA 4.5:1。
   // 修它需要整体调深 6 套调色板的 muted-fg，属于视觉改版，因此此处只设一条防退化下限，
