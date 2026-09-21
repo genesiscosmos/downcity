@@ -11,12 +11,12 @@ import type { z } from "zod";
 import type {
   AuthRoutePolicy,
   SessionAgentContent,
-  SessionInteractionPort,
   SessionModelUserContent,
 } from "@downcity/type";
 import type { PowerContext } from "./PowerContext.js";
 import type { PowerJsonObject, PowerJsonValue } from "./Json.js";
 import type { PowerLifecycleContext } from "./PowerHost.js";
+import type { StepSnapshot } from "./StepSnapshot.js";
 
 /** Action 可以追加到 Session 的一条消息。 */
 export type PowerActionMessage =
@@ -55,45 +55,6 @@ export interface PowerSessionExecutionScope {
   readonly origin: { readonly type: string; readonly [key: string]: PowerJsonValue };
   /** Turn 稳定标识。 */
   readonly turn_id: string;
-}
-
-/** PowerDefinition 可读取的当前 Step 快照。 */
-export interface PowerExecutionContext {
-  /** 当前 Session 标识。 */
-  readonly session_id?: string;
-  /** 当前 Session 来源。 */
-  readonly session_origin?: { readonly type: string; readonly [key: string]: PowerJsonValue };
-  /** 当前 Turn 标识。 */
-  readonly turn_id?: string;
-  /** 当前 Workspace 根目录。 */
-  readonly project_root?: string;
-  /** 当前 Step 的 Workspace 环境快照。 */
-  readonly workspace_env?: Readonly<Record<string, string>>;
-  /** 当前 Step 的 Agent 指令快照。 */
-  readonly agent_systems?: readonly string[];
-  /** 当前 Turn 的取消信号。 */
-  readonly abort_signal?: AbortSignal;
-  /** 当前 Action 调用标识。 */
-  readonly call_id?: string;
-}
-
-/**
- * 一次 Power 调用的身份与执行面。
- *
- * 关键点（中文）
- * - 所有入口（模型工具、定时任务、HTTP、RPC）都提供同一个交互端口。
- * - 无 Session 的入口注入拒绝式实现，因此动作不需要自己判断「有没有人在场」。
- * - `session` 是本次调用的纯数据身份；可直接通信的 Session 句柄在 `PowerContext.session`。
- */
-export interface PowerCallScope {
-  /** 当前 Action 调用标识。 */
-  readonly id: string;
-  /** 当前调用所属 Session 身份；非 Session 入口时为空。 */
-  readonly session?: PowerSessionExecutionScope;
-  /** 当前调用创建用户交互的端口；无 Session 时为拒绝式实现。 */
-  readonly interactions: SessionInteractionPort;
-  /** 当前调用开始时捕获的只读 Step 快照。 */
-  readonly snapshot: PowerExecutionContext;
 }
 
 /** PowerDefinition Action 命令输入。 */
@@ -262,7 +223,10 @@ export interface PowerDefinition {
   /** PowerDefinition Hook 集合。 */ readonly hooks?: PowerHooks;
   /** PowerDefinition Resolve 点集合。 */ readonly resolves?: PowerResolves;
   /** 构建当前执行范围的 system 文本。 */
-  readonly system?: (context: PowerContext, execution_context?: PowerExecutionContext) => string | Promise<string>;
+  readonly system?: (
+    context: PowerContext,
+    snapshot: StepSnapshot,
+  ) => string | Promise<string>;
   /** Power 加入 City 时初始化自身拥有的长期资源；每个 City 只执行一次。 */
   readonly initialize?: (context: PowerLifecycleContext) => void | Promise<void>;
   /** Power 离开 City且已有调用收口后释放自身拥有的长期资源。 */

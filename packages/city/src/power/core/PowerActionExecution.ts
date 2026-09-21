@@ -2,20 +2,15 @@
  * Power Action 统一执行流水线。
  *
  * 关键点（中文）
- * - Registry 负责解析 Action，本模块统一处理 payload、执行身份、取消、超时与错误结果。
+ * - Registry 负责解析 Action，本模块统一处理 payload、调用身份、取消、超时与错误结果。
  * - 超时采用协作式取消：运行时触发 abort_signal，Action 必须把信号传给网络、轮询和长任务。
+ * - 环境组装交给 `PowerContextProvider`：本模块只负责「造出 call，然后请容器补齐环境」。
  * - Action 普通失败只返回业务结果，不修改 Power 生命周期状态。
  */
 
-import type { PowerAction, PowerActionResult, PowerCallScope } from "@/power/index.js";
-import type { PowerContext } from "@/power/index.js";
-import type { PowerExecutionContext } from "@/power/index.js";
-import { normalize_session_origin } from "@downcity/type";
+import type { PowerAction, PowerActionResult } from "@/power/index.js";
+import type { PowerCallSite, PowerRuntimeHost } from "@/power/index.js";
 import type { JsonValue } from "@downcity/type";
-import type { SessionInteractionPort } from "@downcity/type";
-import { generate_id } from "@/utils/Id.js";
-import { create_power_action_context } from "@/power/core/PowerContext.js";
-import { create_denied_interaction_port } from "@/power/core/PowerActionInteraction.js";
 
 /** Action 超时写入 abort_signal.reason 的内部错误。 */
 class PowerActionTimeoutError extends Error {
@@ -39,8 +34,8 @@ interface PowerActionAbortScope {
 
 /** Action 执行流水线输入。 */
 export interface ExecutePowerActionInput {
-  /** 当前 Power Workspace 上下文。 */
-  context: PowerContext;
+  /** 容器运行时端口；用于组装本次调用的环境。 */
+  host: PowerRuntimeHost;
   /** 当前 Power 稳定名称。 */
   power_name: string;
   /** 当前 Action 稳定名称。 */
@@ -49,15 +44,8 @@ export interface ExecutePowerActionInput {
   action: PowerAction<JsonValue, JsonValue>;
   /** 未校验的调用 payload。 */
   payload: JsonValue;
-  /** Session 或其他入口提供的可选执行快照。 */
-  snapshot?: PowerExecutionContext;
-  /**
-   * 当前入口提供的交互端口。
-   *
-   * 关键点（中文）
-   * - Session 入口传入自身端口；非 Session 入口省略，由流水线注入拒绝式实现。
-   */
-  interactions?: SessionInteractionPort;
+  /** 本次调用的来源身份。 */
+  site: PowerCallSite;
 }
 
 /** 读取异常的稳定可读文本。 */
@@ -135,52 +123,6 @@ function create_abort_scope(input: {
   };
 }
 
-/** 把可选入口快照归一化为一次调用必定可用的完整身份。 */
-function create_call_scope(input: {
-  context: PowerContext;
-  snapshot?: PowerExecutionContext;
-  interactions: SessionInteractionPort;
-  abort_signal: AbortSignal;
-}): PowerCallScope {
-  const source = input.snapshot;
-  const session_id = String(source?.session_id || "").trim();
-  const turn_id = String(source?.turn_id || "").trim();
-  const session_origin = source?.session_origin
-    ? Object.freeze(normalize_session_origin(source.session_origin))
-    : undefined;
-  const call_id = String(source?.call_id || "").trim() || `power:${generate_id()}`;
-  const snapshot: PowerExecutionContext = Object.freeze({
-    ...(session_id ? { session_id } : {}),
-    ...(session_origin
-      ? { session_origin }
-      : {}),
-    ...(turn_id ? { turn_id } : {}),
-    project_root: input.context.workspace.path,
-    workspace_env: Object.freeze({
-      ...(source?.workspace_env ?? input.context.workspace.env ?? {}),
-    }),
-    agent_systems: Object.freeze([
-      ...(source?.agent_systems ?? input.context.agent.instructions ?? []),
-    ]),
-    abort_signal: input.abort_signal,
-    call_id,
-  });
-  return Object.freeze({
-    id: call_id,
-    snapshot,
-    interactions: input.interactions,
-    ...(session_id && turn_id && session_origin
-      ? {
-          session: Object.freeze({
-            session_id,
-            origin: session_origin,
-            turn_id,
-          }),
-        }
-      : {}),
-  });
-}
-
 /** 运行一个已经解析到具体 Power 的 Action。 */
 export async function execute_power_action(
   input: ExecutePowerActionInput,
@@ -200,17 +142,9 @@ export async function execute_power_action(
   const abort_scope = create_abort_scope({
     power_name: input.power_name,
     action_name: input.action_name,
-    source_signal: input.snapshot?.abort_signal,
+    source_signal: input.site.abort_signal,
     timeout_ms,
   });
-  const call_scope = create_call_scope({
-    context: input.context,
-    snapshot: input.snapshot,
-    interactions: input.interactions ??
-      create_denied_interaction_port(`${input.power_name}.${input.action_name}`),
-    abort_signal: abort_scope.signal,
-  });
-  const action_context = create_power_action_context(input.context, call_scope);
 
   try {
     if (abort_scope.signal.aborted) {
@@ -218,8 +152,13 @@ export async function execute_power_action(
         error_message(abort_scope.signal.reason || "Power action cancelled"),
       );
     }
+    // 超时信号必须传给动作，因此以覆盖后的来源身份交给容器组装环境。
+    const context = input.host.context_for(input.power_name, {
+      ...input.site,
+      abort_signal: abort_scope.signal,
+    });
     const result = await input.action.execute({
-      context: action_context,
+      context,
       input: parsed_payload.input,
       power_name: input.power_name,
       action_name: input.action_name,

@@ -197,23 +197,22 @@ async function run_shell_tool(input: {
     };
   }
   // Shell 工具与其他工具共享同一份 ToolCallContext；这里把 Power 侧调用身份
-  // 投影为调用环境。调用身份统一取自 `context.call`，无兼底链。
-  const call = input.context.call;
-  const session = call.session;
+  // 投影为调用环境。Session 身份统一取自快照，不再有兼底链。
+  const { call, snapshot } = input.context;
   const output = await tool.execute(input.payload as never, {
     agent_id: input.context.agent.id,
     agent_name: input.context.agent.name,
     agent_description: input.context.agent.description,
     agent_instructions: input.context.agent.instructions,
-    session_id: session?.session_id ?? "",
-    session_origin: session?.origin ?? { type: "chat" },
-    ...(session ? { turn_id: session.turn_id } : {}),
-    abort_signal: input.context.abort_signal,
+    session_id: snapshot.session_id ?? "",
+    session_origin: snapshot.session_origin ?? { type: "chat" },
+    ...(snapshot.turn_id ? { turn_id: snapshot.turn_id } : {}),
+    abort_signal: call.abort_signal,
     tool_call_id: call.id,
     messages: [],
     interactions: call.interactions,
-    ...(call.snapshot.workspace_env
-      ? { workspace_env: call.snapshot.workspace_env }
+    ...(snapshot.workspace_env
+      ? { workspace_env: snapshot.workspace_env }
       : {}),
   });
   const record = (output ?? {}) as PowerJsonObject;

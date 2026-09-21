@@ -13,35 +13,41 @@
 import type { Hono } from "hono";
 import type { Agent, Logger } from "@downcity/agent";
 import { get_logger } from "@downcity/agent";
-import { EMPTY_TOOL_HOOK_SET } from "@downcity/type";
-import type { ToolCallContext } from "@downcity/type";
+import { EMPTY_TOOL_HOOK_SET, normalize_session_origin } from "@downcity/type";
 import type { PowerSurface } from "@downcity/type";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type {
   CityPowerRegistration,
+  PowerActionResult,
+  PowerCallSite,
   PowerConfigAction,
   PowerContext,
-  PowerContextFactory,
   PowerDefinition,
-  PowerExecutionContext,
   PowerHostAction,
   PowerJsonValue,
   PowerLifecycleContext,
+  PowerRuntimeHost,
+  PowerSessionHandle,
   PowerSnapshot,
 } from "@/power/index.js";
+import { create_power_call, StepSnapshot } from "@/power/index.js";
 import type { CityPowerInput, CityPowers } from "@/city/types/CityPower.js";
 import type {
   CityPowerRecord,
   CityPowerRuntimeOptions,
 } from "@/city/types/CityPowerRuntime.js";
 import { PowerRegistry } from "@/power/core/PowerRegistry.js";
-import { create_power_context } from "@/power/core/PowerContext.js";
+import {
+  create_power_context,
+  create_power_session_handle,
+  freeze_power_config,
+} from "@/power/core/PowerContext.js";
 import { create_power_session_collection } from "@/city/power/PowerSessionBridge.js";
 import { register_power_http_routes } from "@/power/core/PowerHttpRoutes.js";
 
 /** City 唯一的 Power Runtime。 */
-export class CityPowerRuntime {
+export class CityPowerRuntime implements PowerRuntimeHost {
   /** City 当前持有的唯一 Power 实例。 */
   private readonly powers_by_id = new Map<string, CityPowerRecord>();
 
@@ -78,8 +84,8 @@ export class CityPowerRuntime {
     this.public_api = Object.freeze({
       add: (input) => this.add(input),
       remove: async (power_id) => await this.remove(power_id),
-      snapshots: () => this.snapshots(),
-      get: (power_id) => this.get(power_id),
+      snapshots: () => this.all_power_snapshots(),
+      get: (power_id) => this.require_power(power_id),
       scope: (input) => this.scope(input.agent_id, input.workspace_id),
       register_http_routes: (app, input) => {
         this.register_http_routes(app, input.agent_id, input.workspace_id);
@@ -105,10 +111,9 @@ export class CityPowerRuntime {
 
   /** 重新编译当前 Power 集合，并原子替换活视图。 */
   private recompile_surface(): void {
-    const context_factory = this.context_factory();
     this.surface = Object.freeze({
-      tools: this.registry.tools(context_factory),
-      hooks: this.registry.hooks(context_factory),
+      tools: this.registry.tools(this),
+      hooks: this.registry.hooks(this),
     });
   }
   /** 向 City 添加一个唯一 Power 实例。 */
@@ -256,8 +261,8 @@ export class CityPowerRuntime {
     return result;
   }
 
-  /** 返回 City 当前全部 Power 快照。 */
-  private snapshots(): PowerSnapshot[] {
+  /** 返回 City 当前全部 Power 快照（含初始化失败项）。 */
+  private all_power_snapshots(): PowerSnapshot[] {
     return [
       ...[...this.powers_by_id.values()].map(to_power_snapshot),
       ...this.failed_power_snapshots.values(),
@@ -266,7 +271,7 @@ export class CityPowerRuntime {
   }
 
   /** 返回 City 当前持有的唯一 Power 实例。 */
-  private get(power_id_input: string): PowerDefinition | null {
+  private require_power(power_id_input: string): PowerDefinition | null {
     return this.powers_by_id.get(String(power_id_input || "").trim())?.power ?? null;
   }
 
@@ -348,10 +353,9 @@ export class CityPowerRuntime {
    * 因此不需要失效通知。
    */
   private publish_surface_change(): void {
-    const context_factory = this.context_factory();
     this.surface = Object.freeze({
-      tools: this.registry.tools(context_factory),
-      hooks: this.registry.hooks(context_factory),
+      tools: this.registry.tools(this),
+      hooks: this.registry.hooks(this),
     });
   }
 
@@ -359,62 +363,173 @@ export class CityPowerRuntime {
    * 为一次 Power 调用创建动态上下文工厂。
    *
    * 关键点（中文）
-   * - 工厂只在调用发生时使用，不缓存 Workspace、Agent 或 PowerContext。
-   * - Agent 身份从调用环境读取，容器在调用点反查自己的索引。
+   * - 每次调用都重新反查，不缓存 Workspace、Agent 或 PowerContext。
+   * - Agent 身份从来源身份读取，容器在调用点反查自己的索引。
    */
-  private context_factory(): PowerContextFactory {
-    const build_context = (
-      power_id: string,
-      call_context: ToolCallContext,
-    ): PowerContext => {
-      const agent_id = String(call_context.agent_id || "").trim();
-      const agent = this.options.runtime_access.get_agent(agent_id);
-      if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
-      const workspace = this.require_call_workspace(agent_id, call_context);
-      const power_storage = this.options.storage.open_scope([
-        "agents",
-        agent_id,
-        "powers",
-        power_id,
-      ]);
-      return create_power_context({
-        agent_id,
-        agent_name: agent.name,
-        agent_description: agent.description,
-        workspace_id: workspace.id,
-        workspace_path: workspace.path,
+  context_for(power_id: string, site: PowerCallSite): PowerContext {
+    const agent_id = String(site.agent_id || "").trim();
+    const agent = this.options.runtime_access.get_agent(agent_id);
+    if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
+    const workspace = this.require_call_workspace(agent_id, site);
+    const power_storage = this.options.storage.open_scope([
+      "agents",
+      agent_id,
+      "powers",
+      power_id,
+    ]);
+    const call = create_power_call({
+      ...(site.call_id ? { call_id: site.call_id } : {}),
+      ...(site.interactions ? { interactions: site.interactions } : {}),
+      abort_signal: site.abort_signal ?? new AbortController().signal,
+      label: `power:${power_id}`,
+    });
+    return create_power_context({
+      host: this,
+      site,
+      agent_id,
+      agent_name: agent.name,
+      agent_description: agent.description,
+      workspace_id: workspace.id,
+      workspace_path: workspace.path,
+      workspace,
+      data_path: power_storage.root_path,
+      data_files: power_storage.files,
+      ...(workspace.shell ? { shell: workspace.shell } : {}),
+      sessions: create_power_session_collection({
+        get_sessions: () => agent.sessions,
         workspace,
-        data_path: power_storage.root_path,
-        files: workspace.files,
-        data_files: power_storage.files,
-        get_config: () => this.options.host?.config?.(power_id).get() ?? {},
-        ...(workspace.shell ? { shell: workspace.shell } : {}),
-        logger: agent.get_logger(),
-        embassy: this.options.embassy,
-        ...(this.options.host
-          ? { notifications: this.options.host.notifications(power_id, agent_id) }
-          : {}),
-        get_workspace_env: () => workspace.get_env(),
-        get_instructions: () => agent.get_instructions(),
-        get_powers: () => this.registry.contextual(
-          build_context,
-          (execution_context) => merge_call_context(call_context, execution_context),
-        ),
-        sessions: create_power_session_collection({
-          get_sessions: () => agent.sessions,
-          workspace,
-        }),
-      });
-    };
-    return build_context;
+      }),
+      session: this.resolve_session_handle(agent, workspace, site),
+      ...(site.turn_id ? { turn: Object.freeze({ id: site.turn_id, abort_signal: call.abort_signal }) } : {}),
+      snapshot: this.resolve_snapshot(site, workspace, agent),
+      call,
+      config: freeze_power_config(this.options.host?.config?.(power_id).get() ?? {}),
+      logger: agent.get_logger(),
+      embassy: this.options.embassy,
+      ...(this.options.host
+        ? { notifications: this.options.host.notifications(power_id, agent_id) }
+        : {}),
+      get_workspace_env: () => workspace.get_env(),
+      get_instructions: () => agent.get_instructions(),
+    });
+  }
+
+  /**
+   * 由来源身份与 Agent 解析本次调用可见的 Session 句柄。
+   *
+   * 关键点（中文）：句柄只在 Session 已加载时提供；system 查询等入口可能携带
+   * 尚未加载的 Session 标识，此时返回 undefined，不阻断调用。
+   */
+  private resolve_session_handle(
+    agent: Agent,
+    workspace: WorkspaceRuntime,
+    site: PowerCallSite,
+  ): PowerContext["session"] {
+    const session_id = String(site.session_id || "").trim();
+    if (!session_id) return undefined;
+    const origin = normalize_session_origin(site.session_origin ?? { type: "chat" });
+    try {
+      const runtime = agent.sessions.runtime(session_id, origin.type);
+      return create_power_session_handle(
+        runtime as unknown as PowerSessionHandle,
+        session_id,
+        origin,
+        workspace.id,
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** 由来源身份组装本步冻结的事实。 */
+  private resolve_snapshot(
+    site: PowerCallSite,
+    workspace: WorkspaceRuntime,
+    agent: Agent,
+  ): StepSnapshot {
+    const session_id = String(site.session_id || "").trim();
+    const turn_id = String(site.turn_id || "").trim();
+    return new StepSnapshot({
+      ...(session_id ? { session_id } : {}),
+      ...(site.session_origin ? { session_origin: site.session_origin } : {}),
+      ...(turn_id ? { turn_id } : {}),
+      project_root: workspace.path,
+      workspace_env: site.workspace_env ?? workspace.get_env(),
+      agent_systems: site.agent_instructions ?? agent.get_instructions(),
+    });
+  }
+
+  /** 为指定来源构造 Power 之间的调用面。 */
+  powers_for(site: PowerCallSite): PowerContext["city"]["powers"] {
+    const registry = this.registry;
+    const host = this;
+    return Object.freeze({
+      get: (power_id: string) => registry.get(power_id),
+      snapshots: () => registry.snapshots(),
+      run_action: async (input) => await registry.run_action({
+        host,
+        site,
+        power: input.power,
+        action: input.action,
+        ...(input.payload === undefined ? {} : { payload: input.payload }),
+      }),
+      pipeline: async <TValue extends PowerJsonValue>(point_name: string, value: TValue) =>
+        await registry.pipeline(host, site, point_name, value),
+      effect: async <TValue extends PowerJsonValue>(point_name: string, value: TValue) =>
+        await registry.effect(host, site, point_name, value),
+    });
+  }
+
+  /** 读取指定 power 定义。 */
+  get_power(power_id: string): unknown | null {
+    return this.registry.get(power_id);
+  }
+
+  /** 列出当前全部 power 快照。 */
+  snapshots(): PowerSnapshot[] {
+    return this.registry.snapshots();
+  }
+
+  /** 执行一次 power action。 */
+  async run_action(input: {
+    power: string;
+    action: string;
+    payload?: PowerJsonValue;
+    site: PowerCallSite;
+  }): Promise<PowerActionResult<PowerJsonValue>> {
+    return await this.registry.run_action({
+      host: this,
+      site: input.site,
+      power: input.power,
+      action: input.action,
+      ...(input.payload === undefined ? {} : { payload: input.payload }),
+    });
+  }
+
+  /** 在指定来源身份下运行一个 pipeline 点。 */
+  async pipeline<TValue extends PowerJsonValue>(
+    point_name: string,
+    value: TValue,
+    site: PowerCallSite,
+  ): Promise<TValue> {
+    return await this.registry.pipeline(this, site, point_name, value);
+  }
+
+  /** 在指定来源身份下运行一个 effect 点。 */
+  async effect<TValue extends PowerJsonValue>(
+    point_name: string,
+    value: TValue,
+    site: PowerCallSite,
+  ): Promise<void> {
+    await this.registry.effect(this, site, point_name, value);
   }
 
   /** 解析一次调用所属的 Workspace；缺少绑定时报出装配错误。 */
   private require_call_workspace(
     agent_id: string,
-    call_context: ToolCallContext,
+    site: PowerCallSite,
   ): WorkspaceRuntime {
-    const workspace = call_context.workspace;
+    const workspace = site.workspace;
     if (!workspace) {
       throw new Error(`Power call requires a Workspace: ${agent_id}`);
     }
@@ -427,17 +542,12 @@ export class CityPowerRuntime {
     const agent = this.options.runtime_access.get_agent(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     const workspace = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
-    return this.registry.contextual(
-      this.context_factory(),
-      (execution_context) => create_call_context({
-        agent_id: agent.id,
-        agent_name: agent.name,
-        agent_description: agent.description,
-        agent_instructions: agent.get_instructions(),
-        workspace,
-        execution_context,
-      }),
-    );
+    return this.registry.powers_for(this, {
+      agent_id: agent.id,
+      workspace,
+      workspace_env: workspace.get_env(),
+      agent_instructions: agent.get_instructions(),
+    });
   }
 
   /** 注册当前 Agent/Workspace 下全部 Power HTTP 路由。 */
@@ -450,19 +560,16 @@ export class CityPowerRuntime {
     const agent = this.options.runtime_access.get_agent(agent_id);
     if (!agent) throw new Error(`Agent not found in City: ${agent_id}`);
     const workspace = this.options.runtime_access.require_workspace(agent_id, workspace_id_input);
-    const context_factory = this.context_factory();
+    const host = this;
+    const site: PowerCallSite = {
+      agent_id: agent.id,
+      workspace,
+      workspace_env: workspace.get_env(),
+      agent_instructions: agent.get_instructions(),
+    };
     register_power_http_routes({
       app,
-      get_context: (power_id) => context_factory(
-        power_id,
-        create_call_context({
-          agent_id: agent.id,
-          agent_name: agent.name,
-          agent_description: agent.description,
-          agent_instructions: agent.get_instructions(),
-          workspace,
-        }),
-      ),
+      get_context: (power_id) => host.context_for(power_id, site),
       powers: this.registry.snapshots()
         .map((snapshot) => this.registry.get(snapshot.name))
         .filter((power): power is PowerDefinition => power !== null),
@@ -679,60 +786,6 @@ export class CityPowerRuntime {
       }),
     });
   }
-}
-
-/** 用一次嵌套调用的执行快照覆盖外层调用环境的可变部分。 */
-function merge_call_context(
-  base: ToolCallContext,
-  execution_context?: PowerExecutionContext,
-): ToolCallContext {
-  if (!execution_context) return base;
-  return Object.freeze({
-    ...base,
-    ...(execution_context.session_id
-      ? { session_id: execution_context.session_id }
-      : {}),
-    ...(execution_context.session_origin
-      ? { session_origin: execution_context.session_origin }
-      : {}),
-    ...(execution_context.turn_id ? { turn_id: execution_context.turn_id } : {}),
-    ...(execution_context.abort_signal
-      ? { abort_signal: execution_context.abort_signal }
-      : {}),
-    ...(execution_context.workspace_env
-      ? { workspace_env: execution_context.workspace_env }
-      : {}),
-  });
-}
-
-/** 构造不属任何 Turn 的调用环境。 */
-function create_call_context(input: {
-  /** 当前 Agent 稳定标识。 */
-  readonly agent_id: string;
-  /** 当前 Agent 用户可见名称。 */
-  readonly agent_name: string;
-  /** 当前 Agent 能力描述。 */
-  readonly agent_description: string;
-  /** 当前 Agent 指令快照。 */
-  readonly agent_instructions: readonly string[];
-  /** 当前 Workspace 实例。 */
-  readonly workspace: WorkspaceRuntime;
-  /** 可选执行快照。 */
-  readonly execution_context?: PowerExecutionContext;
-}): ToolCallContext {
-  return merge_call_context(
-    Object.freeze({
-      agent_id: input.agent_id,
-      agent_name: input.agent_name,
-      agent_description: input.agent_description,
-      agent_instructions: Object.freeze([...input.agent_instructions]),
-      session_id: "",
-      session_origin: { type: "chat" },
-      workspace: input.workspace,
-      messages: Object.freeze([]),
-    }),
-    input.execution_context,
-  );
 }
 
 /** 把 City 内部生命周期记录投影为稳定公开快照。 */

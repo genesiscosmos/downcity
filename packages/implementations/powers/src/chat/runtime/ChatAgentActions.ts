@@ -22,7 +22,7 @@ export function create_chat_agent_actions(
       access: "read",
       input_schema: session_input,
       execute: async ({ context, input }) => {
-        const session_id = input.session_id || context.call.snapshot.session_id || "";
+        const session_id = input.session_id || context.snapshot.session_id || "";
         const conversation = session_id
           ? resolve_runtime().store.get_conversation_by_session(session_id)
           : null;
@@ -49,7 +49,7 @@ export function create_chat_agent_actions(
       access: "read",
       input_schema: session_input,
       execute: async ({ context, input }) => {
-        const session_id = input.session_id || context.call.snapshot.session_id || "";
+        const session_id = input.session_id || context.snapshot.session_id || "";
         const conversation = session_id
           ? resolve_runtime().store.get_conversation_by_session(session_id)
           : null;
@@ -70,7 +70,7 @@ export function create_chat_agent_actions(
         available_at: z.number().int().nonnegative().optional(),
       }).strict(),
       execute: async ({ context, input }) => {
-        const session_id = input.session_id || context.call.snapshot.session_id || "";
+        const session_id = input.session_id || context.snapshot.session_id || "";
         if (!session_id) return { success: false, error: "session_id is required" };
         const delivery = resolve_runtime().send_from_agent({
           agent_id: context.agent.id,
@@ -100,7 +100,7 @@ export function create_chat_agent_actions(
         is_big: z.boolean().optional(),
       }).strict(),
       execute: async ({ context, input }) => {
-        const session_id = input.session_id || context.call.snapshot.session_id || "";
+        const session_id = input.session_id || context.snapshot.session_id || "";
         if (!session_id) return { success: false, error: "session_id is required" };
         try {
           const delivery = resolve_runtime().react_from_agent({

@@ -9,16 +9,14 @@
 
 import type { Embassy } from "@downcity/federation";
 import type { SessionUserContent } from "@downcity/type";
-import type { FileSystem, WorkspaceShell } from "@/workspace/index.js";
+import type { WorkspaceShell } from "@/workspace/index.js";
+import type { FileSystem } from "@downcity/type";
 import type { SessionInteractionPort } from "@downcity/type";
 import type { PowerJsonObject, PowerJsonValue } from "./Json.js";
 import type { PowerNotificationPublisher } from "./PowerNotification.js";
-import type {
-  PowerActionResult,
-  PowerCallScope,
-  PowerExecutionContext,
-  PowerSnapshot,
-} from "./PowerRuntime.js";
+import type { PowerCall } from "./PowerCall.js";
+import type { StepSnapshot } from "./StepSnapshot.js";
+import type { PowerActionResult, PowerSnapshot } from "./PowerRuntime.js";
 
 /** Power 可以写入的日志等级。 */
 export type PowerLogLevel = "debug" | "info" | "warn" | "error" | "action";
@@ -146,11 +144,9 @@ export interface PowerWorkspaceHandle {
   readonly id: string;
   /** Workspace 绝对根目录。 */
   readonly path: string;
-  /** Workspace 受根目录约束的文件端口。 */
-  readonly files: FileSystem;
   /** Workspace 可选 Shell 端口。 */
   readonly shell?: WorkspaceShell;
-  /** 当前 Workspace 环境变量快照。 */
+  /** 当前 Workspace 环境变量；读当前值，与快照不同。 */
   readonly env: Readonly<Record<string, string>>;
 }
 
@@ -170,7 +166,12 @@ export interface PowerStorage {
   readonly files: FileSystem;
 }
 
-/** Power 可调用的 City Power 端口。 */
+/**
+ * Power 之间的嵌套调用端口。
+ *
+ * 关键点（中文）：来源身份（Session、Turn、交互端口、取消信号）由容器在构造时闭合，
+ * 因此调用方只能指定目标与 payload，无法伪造或丢失调用身份。
+ */
 export interface PowerCityPowers {
   /** 读取 City 提供给当前 Agent 的指定 Power 定义。 */
   get(power_id: string): unknown | null;
@@ -181,10 +182,6 @@ export interface PowerCityPowers {
     /** Power ID。 */ readonly power: string;
     /** Action ID。 */ readonly action: string;
     /** 可选 JSON payload。 */ readonly payload?: PowerJsonValue;
-    /** 可选执行快照；嵌套调用时默认沿用当前调用的身份。 */
-    readonly execution_context?: PowerExecutionContext;
-    /** 可选交互端口；嵌套调用时默认沿用当前调用的端口。 */
-    readonly interactions?: SessionInteractionPort;
   }): Promise<PowerActionResult>;
   /** 在当前调用上下文中运行一个 pipeline hook。 */
   pipeline<TValue extends PowerJsonValue>(point_name: string, value: TValue): Promise<TValue>;
@@ -200,28 +197,92 @@ export interface PowerCityHandle {
   readonly powers: PowerCityPowers;
 }
 
-/** Power Action、Hook 与 system provider 共用的动态上下文。 */
-export interface PowerContext {
+/**
+ * 一次 Power 调用的完整环境。
+ *
+ * 关键点（中文）
+ * - 字段按「Power 代码要回答的问题」组织：为谁运行、在哪个工作区、
+ *   属于哪次对话与轮次、模型当时看到什么、我现在在做什么、我的私有资源在哪。
+ * - `snapshot` 是本步冻结的事实；`call` 是本次调用的身份。两者分开，
+ *   因为一个 Step 可以发起多次调用。
+ * - 句柄读活值（`workspace.env`），快照读冻结值（`snapshot.workspace_env`），
+ *   两者语义不同，都保留。
+ * - 由 `PowerContextProvider` 构造；Power 代码只读。
+ */
+export class PowerContext {
   /** 当前 City 的受限句柄。 */
   readonly city: PowerCityHandle;
-  /** 当前 Agent 的受限句柄。 */
+
+  /** 当前 Agent 的受限句柄；`instructions` 是 Agent 身份，不是某一步的快照。 */
   readonly agent: PowerAgentHandle;
+
   /** 当前 Workspace 的受限句柄。 */
   readonly workspace: PowerWorkspaceHandle;
-  /** 当前调用所属 Session；非 Session 调用时为空。 */
+
+  /** 当前调用所属 Session 句柄；非 Session 调用时为空。 */
   readonly session?: PowerSessionHandle;
-  /** 当前调用所属 Turn；非 Turn 调用时为空。 */
+
+  /** 当前调用所属 Turn 句柄；非 Turn 调用时为空。 */
   readonly turn?: PowerTurnHandle;
-  /** 本次调用的身份与执行面；Action 直接读这里，不需要第二个参数。 */
-  readonly call: PowerCallScope;
+
+  /** 本步冻结的事实。 */
+  readonly snapshot: StepSnapshot;
+
+  /** 本次调用的身份与执行面。 */
+  readonly call: PowerCall;
+
   /** 当前 Power 在当前 Agent 范围内的私有存储。 */
   readonly storage: PowerStorage;
+
   /** City 为当前 Agent/Power 作用域解析出的只读业务配置。 */
   readonly config: PowerJsonObject;
+
   /** 当前执行范围的结构化日志器。 */
   readonly logger: PowerLogger;
+
   /** 当前 Power 的通知发布端口。 */
   readonly notifications?: PowerNotificationPublisher;
-  /** 当前调用取消信号；非 Turn 调用由 City 创建。 */
-  readonly abort_signal: AbortSignal;
+
+  constructor(input: {
+    /** 当前 City 的受限句柄。 */
+    readonly city: PowerCityHandle;
+    /** 当前 Agent 的受限句柄。 */
+    readonly agent: PowerAgentHandle;
+    /** 当前 Workspace 的受限句柄。 */
+    readonly workspace: PowerWorkspaceHandle;
+    /** 当前调用所属 Session 句柄。 */
+    readonly session?: PowerSessionHandle;
+    /** 当前调用所属 Turn 句柄。 */
+    readonly turn?: PowerTurnHandle;
+    /** 本步冻结的事实。 */
+    readonly snapshot: StepSnapshot;
+    /** 本次调用的身份与执行面。 */
+    readonly call: PowerCall;
+    /** 当前 Power 私有存储。 */
+    readonly storage: PowerStorage;
+    /** 当前 Power 业务配置。 */
+    readonly config: PowerJsonObject;
+    /** 当前执行范围日志器。 */
+    readonly logger: PowerLogger;
+    /** 当前 Power 通知端口。 */
+    readonly notifications?: PowerNotificationPublisher;
+  }) {
+    this.city = input.city;
+    this.agent = input.agent;
+    this.workspace = input.workspace;
+    this.snapshot = input.snapshot;
+    this.call = input.call;
+    this.storage = input.storage;
+    this.config = input.config;
+    this.logger = input.logger;
+    if (input.session) this.session = input.session;
+    if (input.turn) this.turn = input.turn;
+    if (input.notifications) this.notifications = input.notifications;
+    Object.freeze(this);
+  }
+
+  /** 本次调用的取消信号；唯一来源，不再与快照重复。 */
+  get abort_signal(): AbortSignal {
+    return this.call.abort_signal;
+  }
 }

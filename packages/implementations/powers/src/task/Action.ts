@@ -8,7 +8,7 @@
 
 import type { ShipTaskStatus, TaskDeliverySession } from "./types/Task.js";
 import type { PowerContext } from "@downcity/city/power";
-import type { PowerExecutionContext } from "@downcity/city/power";
+import type { StepSnapshot } from "@downcity/city/power";
 import type { PowerJsonValue } from "@downcity/city/power";
 import type { PowerStorage } from "@downcity/city/power";
 import {
@@ -414,7 +414,7 @@ export async function runTaskDefinition(params: {
   request: TaskRunRequest;
   executions: TaskExecutionCoordinator;
   notifications?: import("@downcity/city/power").PowerNotificationPublisher;
-  execution_context?: PowerExecutionContext;
+  execution_context?: StepSnapshot;
   delivery: TaskCompletionDeliveryPort;
 }): Promise<TaskRunResponse> {
   const title = String(params.request.title || "").trim();

@@ -4,7 +4,7 @@ import { Power } from "@downcity/city/power";
 import type {
   PowerActions,
   PowerContext,
-  PowerExecutionContext,
+  StepSnapshot,
   PowerLifecycleContext,
 } from "@downcity/city/power";
 import { read_chat_accounts_config } from "./accounts/ChatAccountConfig.js";
@@ -43,7 +43,7 @@ export class ChatPower extends Power {
   /** System Provider 只投影静态提示资产，不产生启动副作用。 */
   readonly system = async (
     _context: PowerContext,
-    execution_context?: PowerExecutionContext,
+    execution_context?: StepSnapshot,
   ): Promise<string> => buildChatPowerSystem(execution_context);
 
   /** 从 City 唯一配置恢复全部 enabled Bot Account 和可靠 Worker。 */

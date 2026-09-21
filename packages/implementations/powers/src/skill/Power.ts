@@ -14,7 +14,7 @@ import { z } from "zod";
 import type {
   PowerActions,
   PowerContext,
-  PowerExecutionContext,
+  StepSnapshot,
   PowerJsonObject,
   PowerJsonValue,
   PowerLifecycleContext,
@@ -329,7 +329,7 @@ export class SkillPower extends Power {
   }
 
   /** 合并静态提示与当前项目可发现的技能说明。 */
-  async system(context: PowerContext, execution_context?: PowerExecutionContext): Promise<string> {
+  async system(context: PowerContext, execution_context?: StepSnapshot): Promise<string> {
     const dynamicText = String(
       await buildSkillsSystemText({
         rootPath: context.workspace.path,

@@ -7,7 +7,7 @@
  * - 只读取 Session origin 与 Conversation 的路由元信息，不承载用户身份字段。
  */
 
-import type { PowerExecutionContext } from "@downcity/city/power";
+import type { StepSnapshot } from "@downcity/city/power";
 import type { ChatConversationRecord } from "@/chat/types/ChatReliability.js";
 import type { ChatEnvironmentPromptInput } from "@/chat/types/ChatPromptContext.js";
 
@@ -34,7 +34,7 @@ export function normalize_chat_channel(
  * - 非 chat session、尚无 route、或操作者不是 chat 平台时返回 `null`。
  */
 export function resolve_current_chat_channel(
-  execution_context?: PowerExecutionContext,
+  execution_context?: StepSnapshot,
 ): ChatEnvironmentPromptInput["channel"] | null {
   const origin = execution_context?.session_origin;
   if (origin?.type !== "chat") return null;

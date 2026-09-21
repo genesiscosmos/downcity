@@ -8,7 +8,7 @@
  *   不在这里注入，避免同一事实出现两份来源。
  * - 该模块只负责 prompt 解析与拼装，不承担运行态控制职责。
  */
-import type { PowerExecutionContext } from "@downcity/city/power";
+import type { StepSnapshot } from "@downcity/city/power";
 import { resolve_current_chat_channel } from "@/chat/runtime/ChatEnvironment.js";
 import {
   CHAT_POWER_PROMPT,
@@ -29,7 +29,7 @@ const CHAT_CHANNEL_PROMPTS: Record<"telegram" | "feishu", string> = {
  * - 若当前 context 不是 chat platform（如 Console UI）或尚无路由元信息，则不注入 platform prompt。
  */
 export function buildCurrentChannelPrompts(
-  execution_context?: PowerExecutionContext,
+  execution_context?: StepSnapshot,
 ): string[] {
   const channel = resolve_current_chat_channel(execution_context);
   if (!channel) return [];
@@ -40,7 +40,7 @@ export function buildCurrentChannelPrompts(
  * 构建 chat power 注入到 session 的 system 文本。
  */
 export function buildChatPowerSystem(
-  execution_context?: PowerExecutionContext,
+  execution_context?: StepSnapshot,
 ): string {
   return [CHAT_POWER_PROMPT, ...buildCurrentChannelPrompts(execution_context)]
     .filter(Boolean)

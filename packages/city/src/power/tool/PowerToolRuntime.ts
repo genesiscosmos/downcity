@@ -120,34 +120,14 @@ export async function invoke_power_tool(
   }
 
   try {
-    // 上下文在调用时创建：此刻才读取 workspace、storage、config。
-    const context = params.context_factory(power_name, params.call_context);
+    // 调用身份取自工具调用环境；环境组装交给容器运行时端口。
     const result = await execute_power_action({
-      context,
+      host: params.host,
       power_name,
       action_name: action_id,
       action,
       payload: args as JsonValue,
-      snapshot: {
-        session_id: params.call_context.session_id,
-        session_origin: params.call_context.session_origin,
-        ...(params.call_context.turn_id
-          ? { turn_id: params.call_context.turn_id }
-          : {}),
-        ...(params.call_context.abort_signal
-          ? { abort_signal: params.call_context.abort_signal }
-          : {}),
-        ...(params.call_context.workspace_env
-          ? { workspace_env: params.call_context.workspace_env }
-          : {}),
-        ...(params.call_context.tool_call_id
-          ? { call_id: params.call_context.tool_call_id }
-          : {}),
-      },
-      // Session 入口把自己的交互端口交给动作；非 Session 入口由流水线注入拒绝式实现。
-      ...(params.call_context.interactions
-        ? { interactions: params.call_context.interactions }
-        : {}),
+      site: params.call_context,
     });
     return {
       output: {

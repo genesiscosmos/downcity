@@ -7,7 +7,7 @@
  * - `lookup` 行为为无状态：由 action 读取 SKILL.md 后通过协议注入 user message
  */
 
-import type { PowerExecutionContext } from "@downcity/city/power";
+import type { StepSnapshot } from "@downcity/city/power";
 import { discoverSkillsSync } from "./Discovery.js";
 import { render_skills_prompt_section } from "./Prompt.js";
 import { setSessionAvailableSkills } from "./Store.js";
@@ -28,7 +28,7 @@ type SkillSystemRuntime = {
  */
 export async function buildSkillsSystemText(
   runtime: SkillSystemRuntime,
-  execution_context?: PowerExecutionContext,
+  execution_context?: StepSnapshot,
 ): Promise<string> {
   const session_id = String(execution_context?.session_id || "").trim();
   const discoveredSkills = discoverSkillsSync(

@@ -7,8 +7,8 @@
  */
 
 import type { PowerContext } from "@downcity/city/power";
-import type { PowerCallScope } from "@downcity/city/power";
-import type { PowerExecutionContext } from "@downcity/city/power";
+import type { PowerCallSite } from "@downcity/city/power";
+import type { StepSnapshot } from "@downcity/city/power";
 import type { PowerNotificationPublisher } from "@downcity/city/power";
 import type { PowerJsonValue } from "@downcity/city/power";
 import type { PowerStorage } from "@downcity/city/power";
@@ -185,7 +185,6 @@ export async function executeTaskCreateAction(params: {
   context: PowerContext;
   definitions: TaskDefinitionRepository;
   payload: TaskCreateRequest;
-  call: PowerCallScope;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
@@ -196,13 +195,13 @@ export async function executeTaskCreateAction(params: {
       ...payload,
       workspace_id: payload.workspace_id || params.context.workspace.id,
     },
-    ...(params.call.session
+    ...(params.context.session
       ? {
           delivery_session: {
             agent_id: params.context.agent.id,
             workspace_id: params.context.workspace.id,
-            session_id: params.call.session.session_id,
-            origin_type: params.call.session.origin.type,
+            session_id: params.context.session.id,
+            origin_type: params.context.session.origin.type,
           },
         }
       : {}),
@@ -237,7 +236,7 @@ export async function executeTaskRunAction(params: {
   payload: TaskRunRequest;
   executions: TaskExecutionCoordinator;
   notifications?: PowerNotificationPublisher;
-  execution_context?: PowerExecutionContext;
+  execution_context?: StepSnapshot;
   delivery: TaskCompletionDeliveryPort;
 }) {
   const result = await runTaskDefinition({

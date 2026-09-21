@@ -5,7 +5,7 @@
  * - Registry 只持有 City Power 唯一实例，不拥有实例生命周期。
  * - 不存在 execution lease：调用是一次性的，不持有实例引用计数。
  * - 工具与 Hook 在这里编译成 Agent 可直接调用的产物；执行时只有编译产物与
- *   上下文工厂参与，不再回到 Registry 做二次查找。
+ *   容器运行时端口参与，不再回到 Registry 做二次查找。
  */
 
 import { to_power_view } from "@/power/core/PowerCatalog.js";
@@ -14,22 +14,14 @@ import type {
   PowerActionResult,
   PowerAvailability,
   PowerDefinition,
-  PowerExecutionContext,
   PowerReadView,
   PowerView,
 } from "@/power/index.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
-import type { PowerContext } from "@/power/types/PowerContext.js";
-import type { PowerContextFactory } from "@/power/types/PowerContextFactory.js";
+import type { PowerCallSite, PowerCallSiteOverride, PowerRuntimeHost } from "@/power/types/PowerCallSite.js";
 import type { PowerSnapshot } from "@/power/index.js";
 import type { PowerRuntimeRecord } from "@/power/types/PowerRuntimeRecord.js";
-import type {
-  AgentTool as Tool,
-  JsonValue,
-  SessionInteractionPort,
-  ToolCallContext,
-  ToolHookSet,
-} from "@downcity/type";
+import type { AgentTool as Tool, JsonValue, ToolHookSet } from "@downcity/type";
 import { execute_power_action } from "@/power/core/PowerActionExecution.js";
 import { create_power_tools } from "@/power/tool/PowerTools.js";
 import { compile_power_hooks } from "@/power/core/CompilePowerHooks.js";
@@ -38,16 +30,6 @@ import type {
   PowerRegistrySubscriber,
   PowerRegistryUnsubscribe,
 } from "@/power/types/PowerRegistry.js";
-
-/**
- * 把一次调用的执行快照解析为完整调用环境。
- *
- * Power 之间的嵌套调用只携带 `PowerExecutionContext`；Registry 用它补出
- * `ToolCallContext`，再交给上下文工厂创建插件侧上下文。
- */
-export type ResolveCallContext = (
-  execution_context?: PowerExecutionContext,
-) => ToolCallContext;
 
 function normalize_power_name(power_name: string): string {
   return String(power_name || "").trim();
@@ -101,20 +83,20 @@ export class PowerRegistry {
   /**
    * 把当前 Power 集合编译为 Agent 可直接调用的工具。
    *
-   * 关键点（中文）：工具闭包持有 power 定义与上下文工厂，执行时不再回到 Registry。
+   * 关键点（中文）：工具闭包持有 power 定义与容器运行时端口，执行时不再回到 Registry。
    */
-  tools(context_factory: PowerContextFactory): Record<string, Tool> {
+  tools(host: PowerRuntimeHost): Record<string, Tool> {
     return create_power_tools({
       definitions: this.active_definitions(),
-      context_factory,
+      host,
     });
   }
 
   /** 把当前 Power 集合编译为按检查点索引的处理器。 */
-  hooks(context_factory: PowerContextFactory): ToolHookSet {
+  hooks(host: PowerRuntimeHost): ToolHookSet {
     return compile_power_hooks({
       definitions: this.active_definitions(),
-      context_factory,
+      host,
     });
   }
 
@@ -127,14 +109,12 @@ export class PowerRegistry {
   }
 
   /**
-   * 创建绑定当前 Agent/Workspace 执行范围的 Power 调用面。
+   * 创建绑定当前调用来源的 Power 调用面。
    *
-   * 关键点（中文）：只服务 Power 之间的嵌套调用，不进入 Agent。
+   * 关键点（中文）：只服务 Power 之间的嵌套调用，不进入 Agent；
+   * 来源身份由容器闭合，调用方无法伪造或丢失。
    */
-  contextual(
-    context_factory: PowerContextFactory,
-    resolve_call_context: ResolveCallContext,
-  ): AgentPowerRuntime {
+  powers_for(host: PowerRuntimeHost, site: PowerCallSite): AgentPowerRuntime {
     return {
       has: (power_name) => this.has(power_name),
       get: (power_name) => this.get(power_name),
@@ -143,45 +123,23 @@ export class PowerRegistry {
       list: () => this.list(),
       read: (params) => this.read(params),
       availability: async (power_name) =>
-        await this.availability(
-          context_factory,
-          resolve_call_context(),
-          power_name,
-        ),
-      run_action: async (params) =>
-        await this.run_action({
-          context_factory,
-          call_context: resolve_call_context(params.execution_context),
-          ...params,
-        }),
+        await this.availability(host, site, power_name),
+      run_action: async (params) => await this.run_action({
+        host,
+        site,
+        power: params.power,
+        action: params.action,
+        ...(params.payload === undefined ? {} : { payload: params.payload }),
+        ...(params.execution_context ? { execution_context: params.execution_context } : {}),
+      }),
       pipeline: async (point_name, value) =>
-        await this.pipeline(
-          context_factory,
-          resolve_call_context(),
-          point_name,
-          value,
-        ),
+        await this.pipeline(host, site, point_name, value),
       guard: async (point_name, value) =>
-        await this.guard(
-          context_factory,
-          resolve_call_context(),
-          point_name,
-          value,
-        ),
+        await this.guard(host, site, point_name, value),
       effect: async (point_name, value) =>
-        await this.effect(
-          context_factory,
-          resolve_call_context(),
-          point_name,
-          value,
-        ),
+        await this.effect(host, site, point_name, value),
       resolve: async (point_name, value) =>
-        await this.resolve(
-          context_factory,
-          resolve_call_context(),
-          point_name,
-          value,
-        ),
+        await this.resolve(host, site, point_name, value),
     };
   }
 
@@ -269,8 +227,8 @@ export class PowerRegistry {
 
   /** 运行 pipeline 点。 */
   async pipeline<T = JsonValue>(
-    context_factory: PowerContextFactory,
-    call_context: ToolCallContext,
+    host: PowerRuntimeHost,
+    site: PowerCallSite,
     point_name: string,
     value: T,
   ): Promise<T> {
@@ -281,7 +239,7 @@ export class PowerRegistry {
       const handlers = record.power.hooks?.pipeline?.[key] || [];
       for (const handler of handlers) {
         current = await handler({
-          context: context_factory(record.power.name, call_context),
+          context: host.context_for(record.power.name, site),
           value: current,
           power: record.power.name,
         });
@@ -292,8 +250,8 @@ export class PowerRegistry {
 
   /** 运行 guard 点。 */
   async guard<T = JsonValue>(
-    context_factory: PowerContextFactory,
-    call_context: ToolCallContext,
+    host: PowerRuntimeHost,
+    site: PowerCallSite,
     point_name: string,
     value: T,
   ): Promise<void> {
@@ -303,7 +261,7 @@ export class PowerRegistry {
       const handlers = record.power.hooks?.guard?.[key] || [];
       for (const handler of handlers) {
         await handler({
-          context: context_factory(record.power.name, call_context),
+          context: host.context_for(record.power.name, site),
           value: value as JsonValue,
           power: record.power.name,
         });
@@ -313,8 +271,8 @@ export class PowerRegistry {
 
   /** 运行 effect 点。 */
   async effect<T = JsonValue>(
-    context_factory: PowerContextFactory,
-    call_context: ToolCallContext,
+    host: PowerRuntimeHost,
+    site: PowerCallSite,
     point_name: string,
     value: T,
   ): Promise<void> {
@@ -324,7 +282,7 @@ export class PowerRegistry {
       const handlers = record.power.hooks?.effect?.[key] || [];
       for (const handler of handlers) {
         await handler({
-          context: context_factory(record.power.name, call_context),
+          context: host.context_for(record.power.name, site),
           value: value as JsonValue,
           power: record.power.name,
         });
@@ -334,8 +292,8 @@ export class PowerRegistry {
 
   /** 运行 resolve 点；要求存在且仅存在一个处理器。 */
   async resolve<TInput = JsonValue, TOutput = JsonValue>(
-    context_factory: PowerContextFactory,
-    call_context: ToolCallContext,
+    host: PowerRuntimeHost,
+    site: PowerCallSite,
     point_name: string,
     value: TInput,
   ): Promise<TOutput> {
@@ -345,7 +303,7 @@ export class PowerRegistry {
       const handler = record.power.resolves?.[key];
       if (!handler) continue;
       return await handler({
-        context: context_factory(record.power.name, call_context),
+        context: host.context_for(record.power.name, site),
         value: value as JsonValue,
         power: record.power.name,
       }) as TOutput;
@@ -423,8 +381,8 @@ export class PowerRegistry {
 
   /** 检查 power 可用性。 */
   async availability(
-    context_factory: PowerContextFactory,
-    call_context: ToolCallContext,
+    host: PowerRuntimeHost,
+    site: PowerCallSite,
     power_name: string,
   ): Promise<PowerAvailability> {
     const key = normalize_power_name(power_name);
@@ -438,7 +396,7 @@ export class PowerRegistry {
     }
     if (record.power.availability) {
       return await record.power.availability(
-        context_factory(key, call_context),
+        host.context_for(key, site),
       );
     }
     return { enabled: true, available: true, reasons: [] };
@@ -446,13 +404,13 @@ export class PowerRegistry {
 
   /** 运行 power action。 */
   async run_action(params: {
-    context_factory: PowerContextFactory;
-    call_context: ToolCallContext;
+    host: PowerRuntimeHost;
+    site: PowerCallSite;
+    /** 调用身份覆盖；与 site 合并后使用。 */
+    execution_context?: PowerCallSiteOverride;
     power: string;
     action: string;
     payload?: JsonValue;
-    execution_context?: PowerExecutionContext;
-    interactions?: SessionInteractionPort;
   }): Promise<PowerActionResult<JsonValue>> {
     const key = normalize_power_name(params.power);
     const record = this.records.get(key);
@@ -483,15 +441,14 @@ export class PowerRegistry {
     }
 
     return await execute_power_action({
-      context: params.context_factory(record.power.name, params.call_context),
+      host: params.host,
       power_name: record.power.name,
       action_name,
       action,
       payload: (params.payload ?? {}) as JsonValue,
-      ...(params.execution_context
-        ? { snapshot: params.execution_context }
-        : {}),
-      ...(params.interactions ? { interactions: params.interactions } : {}),
+      site: params.execution_context
+        ? { ...params.site, ...params.execution_context }
+        : params.site,
     });
   }
 }

@@ -19,40 +19,14 @@ import type {
   ToolHookSet,
 } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@downcity/type";
-import type { PowerContextFactory } from "@/power/types/PowerContextFactory.js";
-import type {
-  PowerDefinition,
-  PowerExecutionContext,
-} from "@/power/types/PowerRuntime.js";
-
-/**
- * 把工具调用环境投影为插件可见的执行快照。
- *
- * 关键点（中文）：`power.system()` 的第二个参数是 City 的执行快照；
- * 它只暴露当前 Step 已提交的事实，不暴露 Session 对象本身。
- */
-function to_execution_context(call_context: ToolCallContext): PowerExecutionContext {
-  return Object.freeze({
-    session_id: call_context.session_id,
-    session_origin: call_context.session_origin,
-    ...(call_context.turn_id ? { turn_id: call_context.turn_id } : {}),
-    ...(call_context.workspace ? { project_root: call_context.workspace.path } : {}),
-    ...(call_context.workspace_env
-      ? { workspace_env: call_context.workspace_env }
-      : {}),
-    ...(call_context.agent_instructions?.length
-      ? { agent_systems: call_context.agent_instructions }
-      : {}),
-    ...(call_context.abort_signal ? { abort_signal: call_context.abort_signal } : {}),
-    ...(call_context.tool_call_id ? { call_id: call_context.tool_call_id } : {}),
-  });
-}
+import type { PowerRuntimeHost } from "@/power/types/PowerCallSite.js";
+import type { PowerDefinition } from "@/power/types/PowerRuntime.js";
 
 export function compile_power_hooks(input: {
   /** 当前生效的 Power 定义。 */
   readonly definitions: readonly PowerDefinition[];
-  /** 把调用环境扩展为插件侧完整上下文。 */
-  readonly context_factory: PowerContextFactory;
+  /** 容器运行时端口；用于组装调用环境。 */
+  readonly host: PowerRuntimeHost;
 }): ToolHookSet {
   const pipeline: Record<string, readonly PipelineHook[]> = {};
   const guard: Record<string, readonly GuardHook[]> = {};
@@ -74,13 +48,13 @@ export function compile_power_hooks(input: {
     // 不再需要判断「静态说明写 system() 还是 pipeline」。
     if (typeof power.system === "function") {
       const system_handler: PipelineHook = async (value, call_context: ToolCallContext) => {
-        const context = input.context_factory(power_name, call_context);
+        const context = input.host.context_for(power_name, call_context);
         if (typeof power.availability === "function") {
           const availability = await power.availability(context);
           if (!availability.available) return value;
         }
         const text = String(
-          await power.system?.(context, to_execution_context(call_context)) ?? "",
+          await power.system?.(context, context.snapshot) ?? "",
         ).trim();
         if (!text) return value;
         const current = value as { blocks?: SessionSystemBlock[] };
@@ -99,7 +73,7 @@ export function compile_power_hooks(input: {
       for (const handler of handlers) {
         const compiled: PipelineHook = async (value, call_context: ToolCallContext) =>
           await handler({
-            context: input.context_factory(power_name, call_context),
+            context: input.host.context_for(power_name, call_context),
             value,
             power: power_name,
           });
@@ -111,7 +85,7 @@ export function compile_power_hooks(input: {
       for (const handler of handlers) {
         const compiled: GuardHook = async (value, call_context: ToolCallContext) => {
           await handler({
-            context: input.context_factory(power_name, call_context),
+            context: input.host.context_for(power_name, call_context),
             value,
             power: power_name,
           });
@@ -124,7 +98,7 @@ export function compile_power_hooks(input: {
       for (const handler of handlers) {
         const compiled: EffectHook = async (value, call_context: ToolCallContext) => {
           await handler({
-            context: input.context_factory(power_name, call_context),
+            context: input.host.context_for(power_name, call_context),
             value,
             power: power_name,
           });

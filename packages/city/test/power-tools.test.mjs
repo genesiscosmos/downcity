@@ -34,13 +34,28 @@ function create_call_context(workspace_path = process.cwd()) {
   };
 }
 
-/** 创建绑定测试 PowerContext 的上下文工厂。 */
-function create_context_factory() {
-  return () => create_test_power_context({
-    agent_id: "power_tools_agent",
+/** 创建绑定测试 PowerContext 的容器运行时端口替身。 */
+function create_host() {
+  const context_for = (_power_id, site) => create_test_power_context({
+    agent_id: site.agent_id,
     workspace_id: "power_tools_workspace",
     workspace_path: process.cwd(),
   });
+  return {
+    context_for,
+    powers_for: () => ({
+      get: () => null,
+      snapshots: () => [],
+      run_action: async () => ({ success: true }),
+      pipeline: async (_point, value) => value,
+      effect: async () => {},
+    }),
+    get_power: () => null,
+    snapshots: () => [],
+    run_action: async () => ({ success: true }),
+    pipeline: async (_point, value) => value,
+    effect: async () => {},
+  };
 }
 
 test("power tool input schema 只暴露 action 与开放 args", async () => {
@@ -65,7 +80,7 @@ test("每个 power 生成一个以 power 名命名的工具，并派生动作描
   });
   const tools = create_power_tools({
     definitions: [power],
-    context_factory: create_context_factory(),
+    host: create_host(),
   });
   assert.deepEqual(Object.keys(tools), ["catalog"]);
   assert.match(tools.catalog.description, /- env\.get: Read env\./u);
@@ -81,7 +96,7 @@ test("没有动作的 power 不产生空壳工具", async () => {
   });
   const tools = create_power_tools({
     definitions: [power],
-    context_factory: create_context_factory(),
+    host: create_host(),
   });
   assert.deepEqual(Object.keys(tools), []);
 });
@@ -108,7 +123,7 @@ test("工具省略 action 时返回动作索引，包含 access 与 returns", as
   });
   const result = await invoke_power_tool({
     power,
-    context_factory: create_context_factory(),
+    host: create_host(),
     call_context: create_call_context(),
     input: {},
   });
@@ -144,7 +159,7 @@ test("power action 的 messages 原样交给统一 Tool Result 边界", async ()
   });
   const result = await invoke_power_tool({
     power,
-    context_factory: create_context_factory(),
+    host: create_host(),
     call_context: create_call_context(),
     input: { action: "emit", args: { text: "hi" } },
   });
@@ -165,7 +180,7 @@ test("未知动作返回可读失败而不是抛错", async () => {
   });
   const result = await invoke_power_tool({
     power,
-    context_factory: create_context_factory(),
+    host: create_host(),
     call_context: create_call_context(),
     input: { action: "absent" },
   });

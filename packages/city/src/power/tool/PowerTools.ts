@@ -63,7 +63,7 @@ export function create_power_tool(options: CreatePowerToolOptions) {
     execute: async (input: PowerToolInput, call_context: ToolCallContext) =>
       await invoke_power_tool({
         power: options.power,
-        context_factory: options.context_factory,
+        host: options.host,
         call_context,
         input,
       }),
@@ -80,8 +80,8 @@ export function create_power_tool(options: CreatePowerToolOptions) {
 export function create_power_tools(options: {
   /** 当前检查点可见的 power 定义。 */
   definitions: readonly PowerDefinition[];
-  /** 把工具调用环境扩展为插件侧完整上下文。 */
-  context_factory: CreatePowerToolOptions["context_factory"];
+  /** 容器运行时端口；用于组装调用环境与嵌套调用。 */
+  host: CreatePowerToolOptions["host"];
 }): AgentPowerTools {
   const tools: AgentPowerTools = {};
   for (const power of options.definitions) {
@@ -90,7 +90,7 @@ export function create_power_tools(options: {
     if (Object.keys(power.actions || {}).length === 0) continue;
     tools[power_name] = create_power_tool({
       power,
-      context_factory: options.context_factory,
+      host: options.host,
     });
   }
   return tools;

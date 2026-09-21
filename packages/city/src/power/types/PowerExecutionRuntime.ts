@@ -11,12 +11,12 @@ import type {
   PowerActionResult,
   PowerAvailability,
   PowerDefinition,
-  PowerExecutionContext,
   PowerJsonValue as JsonValue,
   PowerReadView,
   PowerSnapshot,
   PowerView,
 } from "@/power/index.js";
+import type { PowerCallSite, PowerCallSiteOverride } from "./PowerCallSite.js";
 import type { SessionInteractionPort } from "@downcity/type";
 
 /** 当前 Agent/Workspace 可用的 Power 调用面。 */
@@ -48,14 +48,13 @@ export interface AgentPowerRuntime {
     action: string;
     /** Action Payload（可选）。 */
     payload?: JsonValue;
-    /** 当前 action 所属 Session Turn 的只读执行快照。 */
-    execution_context?: PowerExecutionContext;
     /**
-     * 当前入口提供的交互端口。
+     * 调用身份覆盖（可选）。
      *
-     * 关键点（中文）：Session 入口传入自身端口；非 Session 入口省略，由流水线注入拒绝式实现。
+     * 关键点（中文）：直连入口（`city.powers.scope`）没有 Session 环境，
+     * 需要显式声明本次调用属于哪个 Session / Turn。
      */
-    interactions?: SessionInteractionPort;
+    execution_context?: PowerCallSiteOverride;
   }): Promise<PowerActionResult<JsonValue>>;
   /** 运行 pipeline 点，按顺序链式变换值。 */
   pipeline<T = JsonValue>(point_name: string, value: T): Promise<T>;

@@ -56,14 +56,13 @@ export type {
   PowerActionCommand,
   PowerActionCommandInput,
   PowerActionExample,
-  PowerCallScope,  PowerActionInputSchema,
+  PowerActionInputSchema,
   PowerActionMessage,
   PowerActionReadView,
   PowerActionResult,
   PowerActions,
   PowerAvailability,
   PowerEffectHook,
-  PowerExecutionContext,
   PowerGuardHook,
   PowerHooks,
   PowerHttpDefinition,
@@ -77,6 +76,12 @@ export type {
   PowerState,
   PowerView,
 } from "./types/PowerRuntime.js";
+export { PowerCall, create_power_call } from "./types/PowerCall.js";
+export { StepSnapshot } from "./types/StepSnapshot.js";
+export type {
+  PowerCallSite,
+  PowerRuntimeHost,
+} from "./types/PowerCallSite.js";
 
 export type {
   PowerConfigAction,
@@ -91,7 +96,6 @@ export type {
   PowerLifecycleContext,
 } from "./types/PowerHost.js";
 
-export type { PowerContextFactory } from "./types/PowerContextFactory.js";
 
 export type {
   AgentPowerRuntime,

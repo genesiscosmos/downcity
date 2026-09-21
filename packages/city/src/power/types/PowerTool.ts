@@ -8,9 +8,9 @@
  * - 工具闭包直接持有 Power 定义与上下文工厂，执行时不经过 Registry 二次解析。
  */
 
-import type { AgentTool, ToolCallContext } from "@downcity/type";
+import type { AgentTool } from "@downcity/type";
 import type { JsonObject } from "@downcity/type";
-import type { PowerContextFactory } from "@/power/types/PowerContextFactory.js";
+import type { PowerCallSite, PowerRuntimeHost } from "@/power/types/PowerCallSite.js";
 import type { PowerDefinition } from "@/power/types/PowerRuntime.js";
 
 /** 单个 power 工具的输入。 */
@@ -53,18 +53,18 @@ export interface PowerToolResult {
 export interface CreatePowerToolOptions {
   /** 目标 power 定义；工具名与描述都由它派生。 */
   power: PowerDefinition;
-  /** 把调用环境扩展为插件侧完整上下文。 */
-  context_factory: PowerContextFactory;
+  /** 容器运行时端口；用于组装调用环境与嵌套调用。 */
+  host: PowerRuntimeHost;
 }
 
 /** 执行一次 power 工具调用的依赖。 */
 export interface InvokePowerToolOptions {
   /** 目标 power 定义。 */
   power: PowerDefinition;
-  /** 把调用环境扩展为插件侧完整上下文。 */
-  context_factory: PowerContextFactory;
+  /** 容器运行时端口；用于组装调用环境与嵌套调用。 */
+  host: PowerRuntimeHost;
   /** Agent 注入的工具调用环境。 */
-  call_context: ToolCallContext;
+  call_context: PowerCallSite;
   /** 模型提交的结构化输入。 */
   input: PowerToolInput;
 }
