@@ -1,6 +1,6 @@
 {
   "name": "@downcity/powers",
-  "version": "1.0.315",
+  "version": "1.0.316",
   "type": "module",
   "description": "Downcity 内建 power 集合包",
   "files": [
@@ -41,7 +41,7 @@
   },
   "scripts": {
     "build": "node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
-    "dev": "tsc --watch",
+    "dev": "pnpm build && concurrently -k -n tsc,alias \"tsc --watch --preserveWatchOutput\" \"tsc-alias -f --watch\"",
     "typecheck": "tsc --noEmit",
     "test:chat-access": "pnpm build && node --test scripts/chat-access.test.mjs",
     "test:chat-config": "pnpm build && node --test scripts/chat-channel-config.test.mjs",
@@ -52,10 +52,10 @@
     "test:chat-inbound-voice": "pnpm build && node --test scripts/chat-inbound-voice.test.mjs",
     "test:exports": "pnpm build && node --test scripts/power-subpaths.test.mjs",
     "test:renderer": "node --test scripts/power-renderer-tokens.test.mjs",
-    "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs",
+    "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs scripts/memory-web-host-actions.test.mjs",
     "test:skill": "pnpm build && node --test scripts/skill-power.test.mjs",
     "test:task": "pnpm build && node --test scripts/task-power.test.mjs",
-    "test:web": "pnpm build && node --test scripts/web-power.test.mjs scripts/web-data-providers.test.mjs && node --experimental-test-module-mocks --test scripts/playwright-browser-provider.test.mjs",
+    "test:web": "pnpm build && node --test scripts/web-power.test.mjs scripts/web-data-providers.test.mjs scripts/memory-web-host-actions.test.mjs && node --experimental-test-module-mocks --test scripts/playwright-browser-provider.test.mjs",
     "prepack": "npm run build && node ../../../scripts/rewrite-workspace-dependencies.mjs prepare ./package.json",
     "postpack": "node ../../../scripts/rewrite-workspace-dependencies.mjs restore ./package.json"
   },
@@ -84,6 +84,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/react": "^19.2.14",
     "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.5",
     "react": "^19.2.6",
     "tsc-alias": "^1.8.17",
     "typescript": "^6.0.3"

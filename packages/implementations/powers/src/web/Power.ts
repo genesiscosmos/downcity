@@ -39,6 +39,7 @@ import { ExaSearchProvider } from "@/web/providers/ExaSearchProvider.js";
 import { FetchDocumentProvider } from "@/web/providers/FetchDocumentProvider.js";
 import { FirecrawlDocumentProvider } from "@/web/providers/FirecrawlDocumentProvider.js";
 import { register_web_power_config_actions } from "@/web/host/WebPowerConfigActions.js";
+import { register_web_power_host_actions } from "@/web/host/WebPowerHostActions.js";
 
 const URL_SCHEMA = z.string().url();
 const SESSION_ID_SCHEMA = z.string().trim().min(1);
@@ -132,11 +133,12 @@ export class WebPower extends Power {
     this.browser_provider_factory = options.browser_provider_factory;
   }
 
-  /** 注册 Web Power 的唯一配置 actions。 */
+  /** 注册 Web Power 的唯一配置 actions 与界面只读 actions。 */
   initialize(context: import("@downcity/city/power").PowerLifecycleContext): void {
     register_web_power_config_actions(context, {
       after_save: async () => await this.dispose_all_browser_providers(),
     });
+    register_web_power_host_actions(context);
   }
 
   /** 释放当前 Power 实例持有的全部浏览器资源。 */
@@ -274,6 +276,12 @@ export class WebPower extends Power {
     };
   }
 
+  /** 返回当前配置实际选择的浏览器 Provider 类型；未配置时为空。 */
+  private resolve_browser_provider_type(config: WebPowerConfig): string {
+    if (this.browser_provider_factory) return "injected";
+    return config.browser_provider === "disabled" ? "" : config.browser_provider ?? "local";
+  }
+
   /** 给模型注入最小且与当前已配置能力一致的使用说明。 */
   system(context: import("@downcity/city/power").PowerContext): string {
     const config = this.resolve_config(context);
@@ -303,6 +311,29 @@ export class WebPower extends Power {
 
   /** WebPower 结构化 actions。 */
   readonly actions = {
+    [WEB_POWER_ACTIONS.status]: create_action({
+      description: "Inspect which Web providers are active for the current scope.",
+      returns: "provider, search_provider, document_provider, browser_provider, available, reasons",
+      access: "read",
+      input_schema: z.object({}).passthrough(),
+      execute: async ({ context }) => {
+        const config = this.resolve_config(context);
+        const availability = this.availability(context);
+        return {
+          success: true,
+          data: {
+            provider: this.name,
+            search_provider: this.resolve_search_provider(context, config)?.name ?? "",
+            document_provider: this.resolve_document_provider(context, config)?.name ?? "",
+            browser_provider: this.resolve_browser_provider_type(config),
+            available: availability.available,
+            reasons: availability.reasons,
+          },
+          message: "web status read",
+        };
+      },
+    }),
+
     [WEB_POWER_ACTIONS.search]: create_action({
       description: "Search the web with the configured search provider.",
       returns: "results(title, url, snippet, published_at)",
@@ -533,6 +564,27 @@ export class WebPower extends Power {
             data: { session_id: input.session_id, closed: true },
             message: "browser session closed",
           };
+        } catch (error) {
+          return failure_result(error);
+        }
+      },
+    }),
+
+    [WEB_POWER_ACTIONS.browser_list_sessions]: create_action({
+      description: "List the browser sessions the configured provider still owns.",
+      returns: "provider, sessions(session_id, url, title, observation_generation)",
+      access: "read",
+      input_schema: z.object({}).passthrough(),
+      execute: async ({ context }) => {
+        const browser_provider = await this.ensure_browser_provider(context);
+        if (!browser_provider) {
+          return failure_result("WebPower browser provider is not configured");
+        }
+        try {
+          const result = browser_provider.list_sessions
+            ? await browser_provider.list_sessions()
+            : { provider: browser_provider.name, sessions: [] };
+          return { success: true, data: result, message: "browser sessions listed" };
         } catch (error) {
           return failure_result(error);
         }

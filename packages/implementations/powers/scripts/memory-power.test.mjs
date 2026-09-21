@@ -277,7 +277,69 @@ test("MemoryPower 使用显式运行时目录并公开完整 Action", async (con
     true,
   );
   assert.equal("files" in power_context, false);
+  assert.deepEqual(Object.keys(power.actions).sort(), [
+    "digest",
+    "forget",
+    "list",
+    "read",
+    "remember",
+    "revise",
+    "search",
+    "status",
+  ]);
   await power.dispose();
+});
+
+test("Builtin Provider 枚举记忆并区分证据与投影", async (context) => {
+  const memory_root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-memory-list-"));
+  context.after(async () => await fs.rm(memory_root, { recursive: true, force: true }));
+  const provider = new BuiltinMemoryProvider({
+    storage: new FileMemoryStorageAdapter({ root_path: memory_root }),
+  });
+  await provider.initialize();
+  const access = create_access("memory_list_workspace");
+  await provider.remember({
+    access,
+    target: "agent",
+    content: "User prefers concise answers.",
+    topic: "user-preferences",
+    memory_type: "preference",
+  });
+  await provider.remember({
+    access,
+    target: "agent",
+    content: "Deploy uses the native sandbox backend.",
+    topic: "deploy-notes",
+    memory_type: "decision",
+  });
+
+  const listed = await provider.list({ access });
+  assert.equal(listed.provider, "builtin");
+  // 索引与两条投影都是 wiki 条目；证据条目默认不进入列表。
+  assert.equal(listed.items.some((item) => item.is_evidence), false);
+  assert.equal(listed.items.every((item) => item.subject.kind === "agent"), true);
+  assert.equal(listed.subject_counts.agent, listed.total);
+  assert.equal(listed.subject_counts.user, 0);
+  assert.equal(listed.items.some((item) => item.title === "user-preferences"), true);
+
+  const filtered = await provider.list({
+    access,
+    memory_types: ["decision"],
+  });
+  assert.equal(filtered.items.length, 1);
+  assert.equal(filtered.items[0].memory_type, "decision");
+  // 过滤只影响 items，subject_counts 仍描述未过滤前的可读总量。
+  assert.equal(filtered.subject_counts.agent, listed.total);
+
+  const paged = await provider.list({ access, limit: 1, offset: 1 });
+  assert.equal(paged.items.length, 1);
+  assert.equal(paged.total, listed.total);
+  assert.notEqual(paged.items[0].memory_id, listed.items[0].memory_id);
+
+  const with_evidence = await provider.list({ access, include_evidence: true });
+  assert.equal(with_evidence.items.some((item) => item.is_evidence), true);
+  assert.ok(with_evidence.total > listed.total);
+  await provider.dispose();
 });
 
 test("MemoryPower 通过现有 Session Hook points 分离 Usage、Core 与 Recall", async (context) => {

@@ -13,11 +13,15 @@ import type {
   BuiltinMemoryReviseHandlerOutput,
 } from "@/memory/types/BuiltinMemoryProvider.js";
 import type {
+  MemoryListItem,
   MemoryRecord,
   MemorySourceReference,
   MemoryType,
 } from "@/memory/types/Memory.js";
-import type { MemoryAccessContext } from "@/memory/types/MemoryAccess.js";
+import type {
+  MemoryAccessContext,
+  MemorySubjectKind,
+} from "@/memory/types/MemoryAccess.js";
 import type { MemoryStorageEntry } from "@/memory/types/MemoryStorage.js";
 import {
   resolve_readable_memory_address,
@@ -28,6 +32,100 @@ import {
 export function clamp_number(value: number, minimum: number, maximum: number): number {
   if (!Number.isFinite(value)) return minimum;
   return Math.max(minimum, Math.min(maximum, value));
+}
+
+/** 全部合法的 Subject 类别。 */
+const MEMORY_SUBJECT_KINDS: readonly MemorySubjectKind[] = [
+  "agent",
+  "user",
+  "workspace",
+  "city",
+];
+
+/** 全部合法的记忆领域分类。 */
+const MEMORY_TYPES: readonly MemoryType[] = [
+  "fact",
+  "preference",
+  "decision",
+  "episode",
+  "procedure",
+  "document",
+];
+
+/** 列表摘要的最大字符数。 */
+const LIST_SNIPPET_MAX_CHARS = 240;
+
+/** 默认的枚举分页大小。 */
+const DEFAULT_LIST_LIMIT = 50;
+
+/** 允许的最大枚举分页大小。 */
+const MAX_LIST_LIMIT = 500;
+
+/** 把可选 Subject 过滤条件归一化为集合并丢弃未知值。 */
+export function normalize_subject_kinds(
+  value: MemorySubjectKind[] | undefined,
+): Set<MemorySubjectKind> {
+  return new Set(
+    (Array.isArray(value) ? value : [])
+      .filter((kind) => MEMORY_SUBJECT_KINDS.includes(kind)),
+  );
+}
+
+/** 把可选领域分类过滤条件归一化为集合并丢弃未知值。 */
+export function normalize_memory_types(value: MemoryType[] | undefined): Set<MemoryType> {
+  return new Set(
+    (Array.isArray(value) ? value : []).filter((type) => MEMORY_TYPES.includes(type)),
+  );
+}
+
+/** 约束枚举分页大小。 */
+export function normalize_list_limit(value: number | undefined): number {
+  const limit = Number(value);
+  if (!Number.isFinite(limit)) return DEFAULT_LIST_LIMIT;
+  return Math.max(1, Math.min(MAX_LIST_LIMIT, Math.floor(limit)));
+}
+
+/** 约束枚举分页偏移。 */
+export function normalize_list_offset(value: number | undefined): number {
+  const offset = Number(value);
+  if (!Number.isFinite(offset)) return 0;
+  return Math.max(0, Math.floor(offset));
+}
+
+/** 把领域记录转换为列表摘要。 */
+export function to_memory_list_item(
+  memory: MemoryRecord,
+  key: string,
+): MemoryListItem {
+  const title = String(memory.metadata?.title || "").trim();
+  const snippet = memory.content
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, LIST_SNIPPET_MAX_CHARS);
+  return {
+    memory_id: memory.memory_id,
+    memory_type: memory.memory_type,
+    subject: memory.subject,
+    title: title || memory.memory_id.split("/").pop() || memory.memory_id,
+    snippet,
+    observed_at: memory.observed_at,
+    is_evidence: key.includes("/evidence/"),
+    ...(memory.citation ? { citation: memory.citation } : {}),
+  };
+}
+
+/** 统计各 Subject 类别当前可读的条目数量。 */
+export function count_memory_subjects(
+  items: MemoryListItem[],
+): Record<MemorySubjectKind, number> {
+  const counts: Record<MemorySubjectKind, number> = {
+    agent: 0,
+    user: 0,
+    workspace: 0,
+    city: 0,
+  };
+  for (const item of items) counts[item.subject.kind] += 1;
+  return counts;
 }
 
 /** 生成用于文件实现内部组织的稳定 slug。 */

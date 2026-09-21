@@ -562,11 +562,15 @@ test("内建 Power Catalog 暴露统一运行与 Renderer 能力", async () => {
     const memory = await catalog.resolve_power_catalog_item("memory");
     assert.equal(memory.has_main, true);
     assert.equal(memory.has_config, false);
-    assert.equal(memory.has_mainview, false);
+    // Memory 现在自带 Mainview（浏览、详情与写入），与 BuiltinPowerTypes 一致。
+    assert.equal(memory.has_sidebar, true);
+    assert.equal(memory.has_mainview, true);
     const web = await catalog.resolve_power_catalog_item("web");
     assert.equal(web.has_main, true);
     assert.equal(web.has_config, true);
-    assert.equal(web.has_mainview, false);
+    // Web 的 Mainview 是只读状态页，同时保留独立 Config。
+    assert.equal(web.has_sidebar, true);
+    assert.equal(web.has_mainview, true);
     const skill = await catalog.resolve_power_catalog_item("skill");
     assert.equal(skill.has_main, true);
     assert.equal(skill.has_config, false);

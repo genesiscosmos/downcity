@@ -32,6 +32,15 @@ FIRECRAWL_API_KEY=...
 Web 配置页中的 Key 优先于 Global Env。每个能力区都提供测试按钮；测试会先保存当前
 配置，再通过一个真实 Agent 和 Workspace 执行最小调用。
 
+## Desktop 工作区
+
+Web 在一级导航条贡献独立入口，提供 Sidebar 与只读的 Mainview 状态页；配置仍留在独立的 Config 面板。
+
+- **Sidebar**：汇总搜索、网页读取与浏览器是否可用，并列出 Provider 当前拥有的浏览器会话。
+- **Mainview**：展示所选 Agent 与 Workspace 上实际解析出的 Provider、脱敏配置摘要与全部活跃会话。API Key 不会被返回，界面只显示是否已配置。
+
+创建、观察与关闭浏览器会话仍由 Agent 的 action 完成，页面不会自己持有浏览器。
+
 ## 默认行为
 
 ```ts
@@ -72,6 +81,7 @@ const web = new WebPlugin({
 
 | Action | 用途 |
 |---|---|
+| `status` | 读取当前执行范围实际生效的搜索、文档与浏览器 Provider |
 | `search` | 使用 Tavily、Exa 或注入的搜索 Provider |
 | `open` | 使用安全 Fetch、Firecrawl 或注入的文档 Provider |
 | `browser_create_session` | 创建浏览器 Session |
@@ -81,6 +91,7 @@ const web = new WebPlugin({
 | `browser_extract` | 按 CSS selector 或 body 抽取文本 |
 | `browser_semantic_extract` | 通过可选语义 Adapter 抽取内容 |
 | `browser_close_session` | 关闭 Session 并释放页面 |
+| `browser_list_sessions` | 列出 Provider 当前仍拥有的浏览器 Session |
 
 先观察，再使用该代观察中的 ref：
 

@@ -9,7 +9,7 @@ import type { DesktopPowerSummary } from "@common/types/DesktopApi";
 import type { SidebarMode } from "@/types/DesktopView";
 
 /** 官方功能型 Power 在 Rail 上的固定展示优先级；越靠前越靠近固定一级入口。 */
-const rail_power_priority = ["skill", "chat", "task"] as const;
+const rail_power_priority = ["skill", "chat", "task", "memory", "web"] as const;
 
 /** 固定一级导航入口的快捷键顺序。 */
 const core_sidebar_modes: SidebarMode[] = ["chat", "workspace", "powers"];

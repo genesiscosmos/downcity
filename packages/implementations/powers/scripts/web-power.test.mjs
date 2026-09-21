@@ -17,6 +17,7 @@ function create_context(workspace_id = "workspace-a", config = {}) {
 test("WebPower 允许空配置并暴露稳定 actions", () => {
   const power = new WebPower();
   assert.deepEqual(Object.keys(power.actions), [
+    "status",
     "search",
     "open",
     "browser_create_session",
@@ -26,6 +27,7 @@ test("WebPower 允许空配置并暴露稳定 actions", () => {
     "browser_extract",
     "browser_semantic_extract",
     "browser_close_session",
+    "browser_list_sessions",
   ]);
   assert.deepEqual(power.availability(create_context()), {
     enabled: true,
@@ -68,6 +70,7 @@ test("配置读取不回显 API Key，空输入保留密钥，显式清除才删
   power.initialize({
     power: {
       id: "web",
+      action() {},
       config_action(action) { config_actions.set(action.id, action); },
     },
     system: {},
@@ -252,6 +255,7 @@ test("保存配置后释放旧浏览器 Provider，并在下一次调用惰性�
   power.initialize({
     power: {
       id: "web",
+      action() {},
       config_action(action) {
         config_actions.set(action.id, action);
       },

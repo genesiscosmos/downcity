@@ -18,6 +18,7 @@ import type {
   BrowserExtractInput,
   BrowserExtractResult,
   BrowserElementReference,
+  BrowserListSessionsResult,
   BrowserObservation,
   BrowserObserveInput,
   BrowserProvider,
@@ -54,6 +55,10 @@ interface PlaywrightBrowserSession {
   observation_generation: number;
   /** 最近一次 observation 生成的元素引用。 */
   element_refs: Map<string, Locator>;
+  /** 最近一次 observation 记录的页面 URL。 */
+  last_url: string;
+  /** 最近一次 observation 记录的页面标题。 */
+  last_title: string;
 }
 
 /** 从页面一次性读取的可交互元素元数据。 */
@@ -202,6 +207,8 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
         page,
         observation_generation: 0,
         element_refs: new Map<string, Locator>(),
+        last_url: "",
+        last_title: "",
       };
       const observation = await this.read_observation(
         session,
@@ -285,6 +292,22 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
     await session.page.close().catch(() => undefined);
   }
 
+  /**
+   * 列出当前仍由 provider 拥有的 session。
+   *
+   * 关键点（中文）：URL 与标题取最近一次观察的快照，因此读取本身不会触碰页面；
+   * 未观察过的新 session 回退到页面当前状态。
+   */
+  async list_sessions(): Promise<BrowserListSessionsResult> {
+    const sessions = await Promise.all([...this.sessions.values()].map(async (session) => ({
+      session_id: session.session_id,
+      url: session.last_url || session.page.url(),
+      title: session.last_title,
+      observation_generation: session.observation_generation,
+    })));
+    return { provider: this.name, sessions };
+  }
+
   /** 关闭所有页面和 CDP 连接。 */
   async dispose(): Promise<void> {
     if (this.disposed) return;
@@ -356,19 +379,22 @@ export class PlaywrightBrowserProvider implements BrowserProvider {
   ): Promise<BrowserObservation> {
     const page = session.page;
     const body = page.locator("body");
-    const [text, accessibility_snapshot] = await Promise.all([
+    const [text, accessibility_snapshot, title] = await Promise.all([
       body.innerText().catch(() => ""),
       body.ariaSnapshot().catch(() => ""),
+      page.title().catch(() => ""),
     ]);
     const elements = await this.read_element_references(session);
     const screenshot_data_url = include_screenshot
       ? `data:image/png;base64,${(await page.screenshot({ type: "png" })).toString("base64")}`
       : undefined;
+    session.last_url = page.url();
+    session.last_title = title;
     return {
       provider: this.name,
       session_id: session.session_id,
-      url: page.url(),
-      title: await page.title().catch(() => ""),
+      url: session.last_url,
+      title,
       observation_generation: session.observation_generation,
       accessibility_snapshot: accessibility_snapshot.slice(
         0,

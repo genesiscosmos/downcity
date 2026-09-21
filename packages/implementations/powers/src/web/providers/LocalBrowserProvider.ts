@@ -17,6 +17,7 @@ import type {
   BrowserCreateSessionInput,
   BrowserExtractInput,
   BrowserExtractResult,
+  BrowserListSessionsResult,
   BrowserObservation,
   BrowserObserveInput,
   BrowserProvider,
@@ -64,6 +65,11 @@ export class LocalBrowserProvider implements BrowserProvider {
 
   async close_session(input: BrowserCloseSessionInput): Promise<void> {
     await (await this.ensure_delegate()).close_session(input);
+  }
+
+  /** 委托 CDP Provider 列出 session，不复制 session 状态。 */
+  async list_sessions(): Promise<BrowserListSessionsResult> {
+    return await (await this.ensure_delegate()).list_sessions();
   }
 
   async dispose(): Promise<void> {

@@ -27,7 +27,11 @@ User Memory only accepts an authenticated identity returned by Embassy. Without 
 
 ## Actions
 
-The Plugin exposes `status`, `search`, `read`, `remember`, `digest`, `revise`, and `forget`.
+The Plugin exposes `status`, `list`, `search`, `read`, `remember`, `digest`, `revise`, and `forget`.
+
+`list` enumerates readable memories for the current access context without a query; the optional
+`subject_kinds`, `memory_types`, `include_evidence`, `limit`, and `offset` inputs filter and page the
+result. `search` requires a query and ranks by relevance.
 
 Explicit memory writes require a bounded semantic target:
 
@@ -41,6 +45,18 @@ Explicit memory writes require a bounded semantic target:
 ```
 
 `remember` returns a complete logical `memory_id`. Pass that ID unchanged to `read`, `revise`, or `forget`; do not interpret it as a physical path.
+
+## Desktop workspace
+
+Memory declares no Config. It contributes a first-class entry to the Desktop navigation rail with a
+Sidebar and Mainview:
+
+- **Agents** lists every registered Agent; selecting one binds the workspace to that Agent and its first Workspace.
+- **Scopes** lists all readable memories plus per-subject counts (`Agent`, `User`, `Workspace`, `City`). Selecting a scope filters the list and decides the write target of new memories.
+- **Mainview** filters by keyword and memory type, recalls by query, and opens any memory as a Markdown detail page showing `memory_id`, type, subject, observed time, citation, and evidence references. New, revise, and delete are available in place.
+
+Every read and write goes through the host action on the selected Agent and Workspace, so the
+workspace shows exactly what the Agent can read.
 
 ## Storage
 

@@ -12,6 +12,7 @@ import type {
   MemoryAccessContext,
   MemoryOwner,
   MemorySubject,
+  MemorySubjectKind,
   MemoryWriteTarget,
 } from "@/memory/types/MemoryAccess.js";
 
@@ -88,6 +89,9 @@ export interface MemoryProviderCapabilities {
 
   /** Provider 是否支持按 memory_id 精确读取。 */
   read: boolean;
+
+  /** Provider 是否支持按作用域枚举记忆。 */
+  list: boolean;
 
   /** Provider 是否支持修订既有记忆。 */
   revise: boolean;
@@ -226,6 +230,72 @@ export interface MemoryReadResult {
 
   /** 匹配到的记忆记录；不存在时为空。 */
   memory: MemoryRecord | null;
+}
+
+/** 枚举长期记忆的输入。 */
+export interface MemoryListInput {
+  /** 当前枚举请求使用的可信访问上下文。 */
+  access: MemoryAccessContext;
+
+  /** 只返回这些 Subject 类别的记忆；不传时返回全部可读 Subject。 */
+  subject_kinds?: MemorySubjectKind[];
+
+  /** 只返回这些领域分类的记忆；不传时返回全部分类。 */
+  memory_types?: MemoryType[];
+
+  /** 是否把原始证据记录一并列出。 */
+  include_evidence?: boolean;
+
+  /** 最多返回的条目数量。 */
+  limit?: number;
+
+  /** 跳过的条目数量，用于分页。 */
+  offset?: number;
+}
+
+/** 枚举结果中的一条记忆摘要。 */
+export interface MemoryListItem {
+  /** 稳定且不依赖物理文件名的记忆标识。 */
+  memory_id: string;
+
+  /** 当前记忆的领域分类。 */
+  memory_type: MemoryType;
+
+  /** 当前记忆实际描述的主体。 */
+  subject: MemorySubject;
+
+  /** 由 Provider 标题或记忆标识推导的展示名称。 */
+  title: string;
+
+  /** 适合列表展示的有界内容片段。 */
+  snippet: string;
+
+  /** 当前内容被观察或形成的 ISO 8601 时间。 */
+  observed_at: string;
+
+  /** Provider 生成的可审计逻辑引用。 */
+  citation?: string;
+
+  /** 当前条目是原始证据记录，而不是长期记忆投影。 */
+  is_evidence: boolean;
+}
+
+/** 枚举长期记忆的结果。 */
+export interface MemoryListResult {
+  /** 执行本次枚举的 Provider 名称。 */
+  provider: string;
+
+  /** 应用全部过滤条件后的分页条目。 */
+  items: MemoryListItem[];
+
+  /** 应用全部过滤条件后的条目总数。 */
+  total: number;
+
+  /** 忽略过滤条件时，各 Subject 类别当前可读的条目数量。 */
+  subject_counts: Record<MemorySubjectKind, number>;
+
+  /** Provider 当前需要提示给调用方的非致命警告。 */
+  warnings?: string[];
 }
 
 /** 显式形成长期记忆的输入。 */
@@ -398,6 +468,9 @@ export interface MemoryProvider {
   /** 按稳定标识精确读取一条记忆。 */
   read(input: MemoryReadInput): Promise<MemoryReadResult>;
 
+  /** 按当前访问上下文枚举可读记忆，供目录浏览与界面展示。 */
+  list(input: MemoryListInput): Promise<MemoryListResult>;
+
   /** 显式形成或更新一条长期记忆。 */
   remember(input: MemoryRememberInput): Promise<MemoryRememberResult>;
 
@@ -436,6 +509,7 @@ export interface MemoryPowerOptions {
 export type MemoryActionPayload =
   | Omit<MemoryRecallInput, "access">
   | Omit<MemoryReadInput, "access">
+  | Omit<MemoryListInput, "access">
   | Omit<MemoryRememberInput, "access">
   | Omit<MemoryDigestInput, "access" | "transcript" | "message_count">
   | Omit<MemoryReviseInput, "access">

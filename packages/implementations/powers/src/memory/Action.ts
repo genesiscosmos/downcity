@@ -11,6 +11,7 @@ import type { SessionMessage } from "@downcity/agent";
 import type { PowerActionResult, PowerContext, PowerJsonValue } from "@downcity/city/power";
 import type {
   MemoryForgetInput,
+  MemoryListInput,
   MemoryProvider,
   MemoryReadInput,
   MemoryRecallInput,
@@ -71,6 +72,18 @@ export async function read_memory_action(
   input: Omit<MemoryReadInput, "access">,
 ): Promise<PowerActionResult<PowerJsonValue>> {
   return await run_provider_action(async () => await provider.read({
+    ...input,
+    access,
+  }) as unknown as PowerJsonValue);
+}
+
+/** list action，按作用域枚举可读记忆。 */
+export async function list_memory_action(
+  provider: MemoryProvider,
+  access: MemoryAccessContext,
+  input: Omit<MemoryListInput, "access">,
+): Promise<PowerActionResult<PowerJsonValue>> {
+  return await run_provider_action(async () => await provider.list({
     ...input,
     access,
   }) as unknown as PowerJsonValue);

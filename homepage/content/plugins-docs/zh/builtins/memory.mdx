@@ -27,7 +27,10 @@ User Memory 只使用 Embassy 返回的认证用户身份。没有认证身份�
 
 ## Actions
 
-Plugin 提供：`status`、`search`、`read`、`remember`、`digest`、`revise` 和 `forget`。
+Plugin 提供：`status`、`list`、`search`、`read`、`remember`、`digest`、`revise` 和 `forget`。
+
+`list` 按当前访问上下文枚举可读记忆，无需关键词；可选的 `subject_kinds`、`memory_types`、
+`include_evidence`、`limit` 与 `offset` 用于过滤和分页。`search` 需要关键词，适合按相关性召回。
 
 显式记忆必须选择有限语义目标：
 
@@ -41,6 +44,16 @@ Plugin 提供：`status`、`search`、`read`、`remember`、`digest`、`revise` 
 ```
 
 `remember` 返回完整逻辑 `memory_id`。后续 `read`、`revise` 和 `forget` 应原样使用该 ID，不要解析为物理路径。
+
+## Desktop 工作区
+
+Memory 不声明 Config。它会在一级导航条贡献独立入口，提供 Sidebar 与 Mainview：
+
+- **Agents**：列出所有已登记 Agent；选择后工作区绑定到该 Agent 及其首个 Workspace。
+- **范围**：列出全部可读记忆与各 Subject 的数量（`Agent`、`User`、`Workspace`、`City`）；选择范围会过滤列表，并决定新记忆的写入目标。
+- **Mainview**：按关键词与类型筛选，可按查询召回，并把任意记忆打开为 Markdown 详情页，展示 `memory_id`、类型、Subject、观察时间、引用与证据来源；新建、修订与删除都在同一处完成。
+
+所有读写都通过宿主 action 在所选 Agent 与 Workspace 上执行，因此工作区展示的内容与 Agent 实际可读的内容一致。
 
 ## 存储
 

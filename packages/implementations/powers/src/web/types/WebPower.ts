@@ -11,6 +11,8 @@ import type { PowerJsonObject } from "@downcity/city/power";
 
 /** WebPower 对外 action 名称。 */
 export const WEB_POWER_ACTIONS = {
+  /** 读取当前执行范围的 Provider 解析结果。 */
+  status: "status",
   /** 搜索公开网页或索引。 */
   search: "search",
   /** 打开已知 URL 并读取文档。 */
@@ -29,11 +31,29 @@ export const WEB_POWER_ACTIONS = {
   browser_semantic_extract: "browser_semantic_extract",
   /** 关闭浏览器 session。 */
   browser_close_session: "browser_close_session",
+  /** 列出当前 provider 拥有的浏览器 session。 */
+  browser_list_sessions: "browser_list_sessions",
 } as const;
 
 /** WebPower action 名称联合类型。 */
 export type WebPowerActionName =
   (typeof WEB_POWER_ACTIONS)[keyof typeof WEB_POWER_ACTIONS];
+
+/** WebPower 当前执行范围的 Provider 解析结果。 */
+export interface WebPowerStatusResult extends PowerJsonObject {
+  /** 当前 Power 稳定名称。 */
+  provider: string;
+  /** 当前实际生效的搜索 Provider 名称；未配置时为空。 */
+  search_provider: string;
+  /** 当前实际生效的文档 Provider 名称；未配置时为空。 */
+  document_provider: string;
+  /** 当前实际生效的浏览器 Provider 类型；未配置时为空。 */
+  browser_provider: string;
+  /** 当前是否至少有一种 Web 能力可用。 */
+  available: boolean;
+  /** 当前不可用或需要注意的原因。 */
+  reasons: string[];
+}
 
 /** 搜索 action 输入。 */
 export interface WebSearchInput {
@@ -255,6 +275,26 @@ export interface BrowserExtractResult extends PowerJsonObject {
   content: string;
 }
 
+/** 一个活跃浏览器 session 的可序列化摘要。 */
+export interface BrowserSessionSummary extends PowerJsonObject {
+  /** session 稳定标识。 */
+  session_id: string;
+  /** 当前页面 URL。 */
+  url: string;
+  /** 当前页面标题。 */
+  title: string;
+  /** 最近一次 observation 的代次。 */
+  observation_generation: number;
+}
+
+/** 列出浏览器 session 的结果。 */
+export interface BrowserListSessionsResult extends PowerJsonObject {
+  /** 实际使用的 provider 名称。 */
+  provider: string;
+  /** 当前仍由 provider 拥有的 session。 */
+  sessions: BrowserSessionSummary[];
+}
+
 /** 浏览器 session 关闭输入。 */
 export interface BrowserCloseSessionInput {
   /** 要关闭的浏览器 session 标识。 */
@@ -283,6 +323,8 @@ export interface BrowserProvider {
   ): Promise<BrowserExtractResult>;
   /** 关闭指定 session。 */
   close_session(input: BrowserCloseSessionInput): Promise<void>;
+  /** 列出当前仍由 provider 拥有的 session；未实现时界面只能显示已关闭状态。 */
+  list_sessions?(): Promise<BrowserListSessionsResult>;
   /** 释放 provider 持有的浏览器连接和剩余 session。 */
   dispose(): Promise<void>;
 }

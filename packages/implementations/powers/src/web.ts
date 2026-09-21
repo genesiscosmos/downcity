@@ -22,6 +22,7 @@ export type {
   BrowserElementReference,
   BrowserExtractInput,
   BrowserExtractResult,
+  BrowserListSessionsResult,
   BrowserObservation,
   BrowserObserveInput,
   BrowserProvider,
@@ -29,17 +30,29 @@ export type {
   BrowserProviderScope,
   BrowserSemanticActInput,
   BrowserSemanticExtractInput,
+  BrowserSessionSummary,
   WebOpenInput,
   WebOpenResult,
   WebDocumentProvider,
   WebPowerActionName,
   WebPowerOptions,
   WebPowerConfig,
+  WebPowerStatusResult,
   WebSearchInput,
   WebSearchItem,
   WebSearchResult,
   WebSearchProvider,
 } from "./web/types/WebPower.js";
+export type {
+  WebMainviewAgent,
+  WebMainviewCapabilityStatus,
+  WebMainviewSession,
+  WebMainviewSessionsInput,
+  WebMainviewSessionsResult,
+  WebMainviewSnapshot,
+  WebMainviewSnapshotInput,
+  WebMainviewWorkspace,
+} from "./web/types/WebMainview.js";
 export type { PlaywrightBrowserProviderOptions } from "./web/types/PlaywrightBrowserProvider.js";
 export type {
   ExaSearchProviderOptions,

@@ -46,15 +46,15 @@ export function create_builtin_power_registrations(): BuiltinPowerRegistration[]
     {
       readme: builtin_readme_path("memory"),
       has_config: false,
-      has_sidebar: false,
-      has_mainview: false,
+      has_sidebar: true,
+      has_mainview: true,
       power: new MemoryPower(),
     },
     {
       readme: builtin_readme_path("web"),
       has_config: true,
-      has_sidebar: false,
-      has_mainview: false,
+      has_sidebar: true,
+      has_mainview: true,
       power: new WebPower(),
     },
   ];

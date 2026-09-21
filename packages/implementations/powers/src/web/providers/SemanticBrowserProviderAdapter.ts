@@ -12,6 +12,7 @@ import type {
   BrowserCloseSessionInput,
   BrowserCreateSessionInput,
   BrowserExtractInput,
+  BrowserListSessionsResult,
   BrowserObservation,
   BrowserObserveInput,
   BrowserProvider,
@@ -83,6 +84,14 @@ export class SemanticBrowserProviderAdapter implements BrowserProvider {
   /** 委托基础 provider 关闭 session。 */
   async close_session(input: BrowserCloseSessionInput): Promise<void> {
     await this.browser.close_session(input);
+  }
+
+  /** 委托基础 provider 列出 session，session 状态只由基础 provider 持有。 */
+  async list_sessions(): Promise<BrowserListSessionsResult> {
+    if (!this.browser.list_sessions) {
+      return { provider: this.name, sessions: [] };
+    }
+    return await this.browser.list_sessions();
   }
 
   /** 委托基础 provider 释放全部浏览器资源。 */

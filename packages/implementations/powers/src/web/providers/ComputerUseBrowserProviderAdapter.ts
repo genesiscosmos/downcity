@@ -13,6 +13,7 @@ import type {
   BrowserCreateSessionInput,
   BrowserExtractInput,
   BrowserExtractResult,
+  BrowserListSessionsResult,
   BrowserObservation,
   BrowserObserveInput,
   BrowserProvider,
@@ -84,6 +85,14 @@ export class ComputerUseBrowserProviderAdapter
   /** Computer Use adapter 不提供结构化语义抽取。 */
   async close_session(input: BrowserCloseSessionInput): Promise<void> {
     await this.browser.close_session(input);
+  }
+
+  /** 委托基础 provider 列出 session。 */
+  async list_sessions(): Promise<BrowserListSessionsResult> {
+    if (!this.browser.list_sessions) {
+      return { provider: this.name, sessions: [] };
+    }
+    return await this.browser.list_sessions();
   }
 
   /** 释放基础浏览器资源。 */

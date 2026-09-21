@@ -17,6 +17,8 @@ import type {
   MemoryDigestResult,
   MemoryForgetInput,
   MemoryForgetResult,
+  MemoryListInput,
+  MemoryListResult,
   MemoryProvider,
   MemoryProviderCapabilities,
   MemoryReadInput,
@@ -37,7 +39,10 @@ import type {
   MemoryCaptureTurnInput,
   MemoryCaptureTurnResult,
 } from "@/memory/types/Memory.js";
-import type { MemoryAccessContext, MemoryWriteTarget } from "@/memory/types/MemoryAccess.js";
+import type {
+  MemoryAccessContext,
+  MemoryWriteTarget,
+} from "@/memory/types/MemoryAccess.js";
 import type {
   MemoryStorageAdapter,
 } from "@/memory/types/MemoryStorage.js";
@@ -54,17 +59,23 @@ import {
 } from "@/memory/runtime/MemoryRecall.js";
 import {
   clamp_number,
+  count_memory_subjects,
   create_citation,
   create_markdown_record,
   create_subject_memory_id,
   memory_id_to_key,
   normalize_digest_output,
+  normalize_list_limit,
+  normalize_list_offset,
   normalize_memory_id,
+  normalize_memory_types,
   normalize_revise_output,
+  normalize_subject_kinds,
   parse_metadata,
   slugify,
   storage_entry_to_record,
   strip_frontmatter,
+  to_memory_list_item,
 } from "@/memory/runtime/BuiltinMemoryDocument.js";
 
 const DEFAULT_MAX_RESULTS = 6;
@@ -83,6 +94,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     remember: true,
     recall: true,
     read: true,
+    list: true,
     revise: true,
     forget: true,
     digest: true,
@@ -249,6 +261,44 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         content: lines.slice(start - 1, end).join("\n"),
         citation: create_citation(memory_id, start, end),
       },
+    };
+  }
+
+  /** 按当前访问上下文枚举可读记忆。 */
+  async list(input: MemoryListInput): Promise<MemoryListResult> {
+    this.assert_access(input.access);
+    await this.ensure_agent_index(input.access);
+    const subject_kinds = normalize_subject_kinds(input.subject_kinds);
+    const memory_types = normalize_memory_types(input.memory_types);
+    const include_evidence = input.include_evidence === true;
+    const addresses = resolve_readable_memory_addresses(input.access);
+    const collected = (await Promise.all(addresses.map(async (address) => {
+      const [wiki_entries, evidence_entries] = await Promise.all([
+        this.active_storage.list(`${address.prefix}/wiki`),
+        include_evidence
+          ? this.active_storage.list(`${address.prefix}/evidence`)
+          : Promise.resolve([]),
+      ]);
+      return [...wiki_entries, ...evidence_entries]
+        .map((entry) => to_memory_list_item(storage_entry_to_record(entry, input.access), entry.key));
+    }))).flat();
+    const subject_counts = count_memory_subjects(collected);
+    const filtered = collected
+      .filter((item) => subject_kinds.size === 0 || subject_kinds.has(item.subject.kind))
+      .filter((item) => memory_types.size === 0 || memory_types.has(item.memory_type))
+      .sort((left, right) => {
+        if (left.observed_at !== right.observed_at) {
+          return right.observed_at.localeCompare(left.observed_at);
+        }
+        return left.memory_id.localeCompare(right.memory_id);
+      });
+    const limit = normalize_list_limit(input.limit);
+    const offset = normalize_list_offset(input.offset);
+    return {
+      provider: this.name,
+      items: filtered.slice(offset, offset + limit),
+      total: filtered.length,
+      subject_counts,
     };
   }
 

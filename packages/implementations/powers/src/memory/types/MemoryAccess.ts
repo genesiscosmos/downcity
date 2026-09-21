@@ -45,6 +45,9 @@ export type MemorySubject =
       kind: "city";
     };
 
+/** MemorySubject 的类别判别值，用于过滤与分组。 */
+export type MemorySubjectKind = MemorySubject["kind"];
+
 /** 模型和调用方可选择的有限写入目标。 */
 export type MemoryWriteTarget = "current_user" | "current_workspace" | "agent";
 

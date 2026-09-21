@@ -33,6 +33,7 @@ import { z } from "zod";
 import {
   digest_memory_action,
   forget_memory_action,
+  list_memory_action,
   read_memory_action,
   remember_memory_action,
   revise_memory_action,
@@ -48,12 +49,16 @@ import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.
 import { FileMemoryStorageAdapter } from "@/memory/adapters/FileMemoryStorageAdapter.js";
 import { select_memory_capture_messages } from "@/memory/runtime/CapturePolicy.js";
 import { MemoryAccessResolver } from "@/memory/runtime/AccessResolver.js";
+import { register_memory_power_host_actions } from "@/memory/host/MemoryPowerHostActions.js";
 import type {
   MemoryPowerOptions,
   MemoryProvider,
   MemoryType,
 } from "@/memory/types/Memory.js";
-import type { MemoryWriteTarget } from "@/memory/types/MemoryAccess.js";
+import type {
+  MemorySubjectKind,
+  MemoryWriteTarget,
+} from "@/memory/types/MemoryAccess.js";
 
 const memory_type_schema = z.enum([
   "fact",
@@ -70,6 +75,13 @@ const memory_write_target_schema = z.enum([
   "agent",
 ]);
 
+const memory_subject_kind_schema = z.enum([
+  "agent",
+  "user",
+  "workspace",
+  "city",
+]);
+
 /** 解析正整数 CLI 参数。 */
 function parse_positive_integer(value: string): number {
   const text = String(value || "").trim();
@@ -79,6 +91,13 @@ function parse_positive_integer(value: string): number {
     throw new Error(`Invalid positive integer: ${value}`);
   }
   return number_value;
+}
+
+/** 解析非负整数 CLI 参数。 */
+function parse_non_negative_integer(value: string): number {
+  const text = String(value || "").trim();
+  if (!/^\d+$/u.test(text)) throw new Error(`Invalid non-negative integer: ${value}`);
+  return Number(text);
 }
 
 /** 解析任意有限数值 CLI 参数。 */
@@ -127,6 +146,22 @@ function read_memory_write_target(body: PowerJsonObject): MemoryWriteTarget {
   const result = memory_write_target_schema.safeParse(body.target);
   if (!result.success) throw new Error("Memory remember requires target");
   return result.data;
+}
+
+/** 读取可选 MemoryType 列表字段。 */
+function read_optional_memory_type_list(body: PowerJsonObject): MemoryType[] | undefined {
+  if (!Array.isArray(body.memory_types)) return undefined;
+  return body.memory_types
+    .map((value) => memory_type_schema.safeParse(value))
+    .flatMap((result) => (result.success ? [result.data] : []));
+}
+
+/** 读取可选 Subject 类别列表字段。 */
+function read_optional_subject_kind_list(body: PowerJsonObject): MemorySubjectKind[] | undefined {
+  if (!Array.isArray(body.subject_kinds)) return undefined;
+  return body.subject_kinds
+    .map((value) => memory_subject_kind_schema.safeParse(value))
+    .flatMap((result) => (result.success ? [result.data] : []));
 }
 
 /** Agent 长期记忆 Power。 */
@@ -240,10 +275,11 @@ export class MemoryPower extends Power {
     });
   }
 
-  /** 启动当前 City 唯一的 Memory Provider。 */
+  /** 启动当前 City 唯一的 Memory Provider，并注册界面管理 actions。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
     this.provider_instance ??= create_memory_provider(context.storage.path);
     await this.provider.initialize();
+    register_memory_power_host_actions(context);
   }
 
   /** 释放当前 City 唯一的 Memory Provider。 */
@@ -380,6 +416,81 @@ export class MemoryPower extends Power {
           memory_id: read_string(body, "memory_id"),
           from_line: read_optional_number(body, "from_line"),
           line_count: read_optional_number(body, "line_count"),
+          },
+        );
+      },
+    }),
+
+    list: create_action({
+      description: "List scoped long-term memories without a query.",
+      returns: "provider, items(memory_id, memory_type, subject, title, snippet, observed_at, is_evidence), total, subject_counts",
+      access: "read",
+      input_schema: {
+        zod: z.object({
+          subject_kinds: z.array(memory_subject_kind_schema).optional(),
+          memory_types: z.array(memory_type_schema).optional(),
+          include_evidence: z.boolean().optional(),
+          limit: z.number().optional(),
+          offset: z.number().optional(),
+        }),
+        json_schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            subject_kinds: {
+              type: "array",
+              items: { type: "string", enum: ["agent", "user", "workspace", "city"] },
+              description: "Restrict results to these memory subjects.",
+            },
+            memory_types: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: ["fact", "preference", "decision", "episode", "procedure", "document"],
+              },
+              description: "Restrict results to these memory types.",
+            },
+            include_evidence: {
+              type: "boolean",
+              description: "Include raw evidence records.",
+            },
+            limit: { type: "number", minimum: 1, maximum: 500 },
+            offset: { type: "number", minimum: 0 },
+          },
+        },
+      },
+      examples: [{ title: "List stored memories", payload: { limit: 20 } }],
+      command: {
+        description: "List scoped long-term memories.",
+        configure(command: Command) {
+          command
+            .option("--subject <kind>", "Restrict to agent, user, workspace, or city.")
+            .option("--memory-type <type>", "Restrict to one memory type.")
+            .option("--include-evidence", "Include raw evidence records.")
+            .option("--limit <number>", "Maximum result count.", parse_positive_integer)
+            .option("--offset <number>", "Skip the first N results.", parse_non_negative_integer);
+        },
+        map_input({ opts }) {
+          return {
+            ...(typeof opts.subject === "string" ? { subject_kinds: [opts.subject] } : {}),
+            ...(typeof opts.memoryType === "string" ? { memory_types: [opts.memoryType] } : {}),
+            ...(opts.includeEvidence === true ? { include_evidence: true } : {}),
+            ...(typeof opts.limit === "number" ? { limit: opts.limit } : {}),
+            ...(typeof opts.offset === "number" ? { offset: opts.offset } : {}),
+          };
+        },
+      },
+      execute: async ({ context, input }) => {
+        const body = read_body_object(input);
+        return await list_memory_action(
+          this.provider,
+          await this.access_resolver.resolve(context),
+          {
+            subject_kinds: read_optional_subject_kind_list(body),
+            memory_types: read_optional_memory_type_list(body),
+            include_evidence: read_optional_boolean(body, "include_evidence"),
+            limit: read_optional_number(body, "limit"),
+            offset: read_optional_number(body, "offset"),
           },
         );
       },
