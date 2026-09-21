@@ -3,11 +3,18 @@
  *
  * Renderer 负责维护编辑文档，Main 负责提交 Session；两端共同使用本模块把
  * 支持的编辑器结构序列化为 Markdown、引用与附件，避免格式规则在 IPC 两侧漂移。
+ *
+ * ## 代码块为什么在序列化里单独成一支
+ *
+ * 代码块是唯一「内容不能转义」的结构。曾经它落进普通段落的路径，于是代码里的
+ * `*`、`_`、`$`、`~`、`|` 全被写成反斜杠形式，每行之间还被插入空行，
+ * 模型收到的不再是代码。代码体必须原样送达，围栏长度必须按内容自适应。
  */
 
 import type { JSONContent } from "@tiptap/core";
 import type { JsonValue } from "@downcity/agent";
 import type { ChatComposerContextPart, ChatComposerDataPart, ChatComposerFilePart, ChatComposerPart, ChatComposerProjectionOptions } from "../types/ChatComposer";
+import { read_chat_composer_code_language, serialize_chat_composer_code_block } from "./chatComposerCodeFence.ts";
 
 /** 引用节点进入 Session Context 时使用的稳定语义标签。 */
 const CHAT_REFERENCE_CONTEXT_TAG = "reference" as const;
@@ -78,6 +85,19 @@ function write_blocks(nodes: JSONContent[], writer: ChatComposerProjectionWriter
 function write_block(node: JSONContent, writer: ChatComposerProjectionWriter, options: ChatComposerProjectionOptions): void {
   if (node.type === "paragraph") {
     write_inline_nodes(node.content || [], writer, "", options);
+    return;
+  }
+  if (node.type === "codeBlock") {
+    /*
+     * 代码体走 `append_content` 而不是 `append_structure`：前者会标记「这里有真实内容」，
+     * 后者不会。若误用后者，只有代码块的消息会在 `flush_text` 里被判成空正文而整块丢弃。
+     *
+     * 空围栏（只有三个反引号、没有代码）不产生任何内容，也不应被当成可发送的正文；
+     * 这里直接跳过，与 `is_chat_composer_empty` 的判空口径保持一致。
+     */
+    const code = (node.content || []).map((child) => String(child.text ?? "")).join("");
+    if (!code.trim()) return;
+    writer.append_content(serialize_chat_composer_code_block(read_chat_composer_code_language(node.attrs), code));
     return;
   }
   if (node.type === "bulletList" || node.type === "orderedList") {

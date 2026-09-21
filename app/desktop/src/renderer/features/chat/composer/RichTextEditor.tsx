@@ -14,6 +14,7 @@ import type { RichTextEditorProps } from "@/types/ChatComponents";
 import { create_chat_composer_extensions } from "@/features/chat/composer/editor/chatComposerExtensions";
 import { ChatSlashMenu } from "@/features/chat/composer/editor/ChatSlashMenu";
 import { is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
+import { parse_fenced_paste, read_chat_composer_code_fence } from "@/features/chat/composer/editor/chatComposerCodeFence";
 import { empty_chat_content } from "@/features/chat/lib/chat_view_defaults";
 import { should_apply_composer_focus } from "@/features/chat/composer/editor/composerFocus";
 import { should_restore_editor_draft } from "@/features/chat/composer/editor/draftSync";
@@ -106,7 +107,8 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
 
   const update_slash_query = useCallback((current_editor: Editor) => {
     const { $from } = current_editor.state.selection;
-    if (!$from.parent.isTextblock) { set_slash_query(undefined); set_file_query(undefined); return; }
+    // 代码块里 `/` 是字面量（注释、正则、除号），不该弹出命令菜单。
+    if (!$from.parent.isTextblock || $from.parent.type.spec.code) { set_slash_query(undefined); set_file_query(undefined); return; }
     const before_cursor = $from.parent.textBetween(0, $from.parentOffset, "\n", "\0");
     const match = before_cursor.match(/(?:^|\s)\/([^\s/]*)$/);
     if (!match) { set_slash_query(undefined); return; }
@@ -118,7 +120,8 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
   const update_file_query = useCallback((current_editor: Editor) => {
     if (!props_ref.current.attachments) { set_file_query(undefined); return; }
     const { $from } = current_editor.state.selection;
-    if (!$from.parent.isTextblock) return set_file_query(undefined);
+    // 代码块里的 `@` 是装饰器、邮箱、注解，不是 Workspace 文件引用。
+    if (!$from.parent.isTextblock || $from.parent.type.spec.code) return set_file_query(undefined);
     const before_cursor = $from.parent.textBetween(0, $from.parentOffset, "\n", "\0");
     const match = before_cursor.match(/(?:^|\s)@([^\s@]*)$/);
     if (!match) return set_file_query(undefined);
@@ -130,7 +133,8 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
   const update_member_query = useCallback((current_editor: Editor) => {
     if (!props_ref.current.members) { set_member_query(undefined); return; }
     const { $from } = current_editor.state.selection;
-    if (!$from.parent.isTextblock) return set_member_query(undefined);
+    // 同上：Group 的 @ 成员与代码里的 @ 语义不同。
+    if (!$from.parent.isTextblock || $from.parent.type.spec.code) return set_member_query(undefined);
     const before_cursor = $from.parent.textBetween(0, $from.parentOffset, "\n", "\0");
     const match = before_cursor.match(/(?:^|\s)@([^\s@]*)$/);
     if (!match) return set_member_query(undefined);
@@ -164,7 +168,8 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     set_attachment_error("");
     try {
       const nodes = await Promise.all(selected_files.map(async (file) => ({ type: "chatAttachment", attrs: { attachment_id: crypto.randomUUID(), filename: file.name, media_type: file.type || "application/octet-stream", data_url: await read_file_as_data_url(file) } })));
-      editor_ref.current?.chain().focus().insertContent(nodes).run();
+      const current_editor = editor_ref.current;
+      if (current_editor) insert_content_outside_code(current_editor, nodes);
     } catch (reason) {
       set_attachment_error(reason instanceof Error ? reason.message : String(reason));
     }
@@ -217,11 +222,23 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     content: props.draft_content,
       editorProps: {
       attributes: { class: "chat-input-editor", "data-chat-input": "true", spellcheck: String(props.spellcheck_enabled) },
-      handlePaste: (_view, event) => {
+      handlePaste: (view, event) => {
+        /*
+         * 代码块内交给 ProseMirror 原生行为：它对 `inCode` 上下文会把剪贴板纯文本
+         * 原样插入（只把 CRLF 归一为 LF），正是写代码需要的语义。
+         */
+        if (view.state.selection.$from.parent.type.spec.code) return false;
         const files = event.clipboardData?.files;
-        if (!files?.length || !props_ref.current.attachments) return false;
+        if (files?.length && props_ref.current.attachments) {
+          event.preventDefault();
+          void insert_files(files);
+          return true;
+        }
+        // 成对的围栏代码块整段恢复成 codeBlock；其余一律交回默认粘贴。
+        const fenced_nodes = parse_fenced_paste(event.clipboardData?.getData("text/plain") ?? "");
+        if (!fenced_nodes) return false;
         event.preventDefault();
-        void insert_files(files);
+        editor_ref.current?.chain().focus().insertContent(fenced_nodes).run();
         return true;
       },
       handleDrop: (_view, event) => {
@@ -244,9 +261,18 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
             return true;
           }
         }
-        const action = resolve_chat_composer_enter_action(event, view.state.doc.toJSON(), props_ref.current.multiline_enter);
+        const { $from } = view.state.selection;
+        const action = resolve_chat_composer_enter_action(event, view.state.doc.toJSON(), props_ref.current.multiline_enter, {
+          in_code: Boolean($from.parent.type.spec.code),
+          block_text: $from.parent.isTextblock ? $from.parent.textBetween(0, $from.parentOffset, "\n", "\0") : undefined,
+        });
         if (action === "native" || (action === "queue-paused" && !props_ref.current.can_queue)) return false;
         event.preventDefault();
+        // 围栏动作不提交：它只把当前段落转成代码块，让用户接着写代码。
+        if (action === "code-fence") {
+          apply_code_fence(editor_ref.current!);
+          return true;
+        }
         void submit_message(action === "submit-immediately" ? "steer" : action === "queue-paused" ? "queue" : "send");
         return true;
       },
@@ -344,7 +370,7 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     set_file_query(undefined);
     try {
       const attachment = await props.attachments!.read_file(file.relative_path);
-      current_editor.chain().focus().insertContent({ type: "chatAttachment", attrs: { attachment_id: crypto.randomUUID(), ...attachment } }).run();
+      insert_content_outside_code(current_editor, { type: "chatAttachment", attrs: { attachment_id: crypto.randomUUID(), ...attachment } });
     } catch (reason) {
       set_attachment_error(reason instanceof Error ? reason.message : String(reason));
     }
@@ -392,6 +418,31 @@ export const RichTextEditor = memo(function RichTextEditor(props: RichTextEditor
     </div>
   </div>);
 });
+
+/**
+ * 把当前段落开头到光标之间的围栏行换成空代码块。
+ *
+ * 必须显式 `deleteRange` 再 `setCodeBlock`，不能只调 `setCodeBlock`：
+ * `setBlockType` 会保留块内文本，那三个反引号与语言会留在代码的第一行。
+ *
+ * 位置从段落起点算而不是从光标回退固定长度：段落里可能还有前导空格，
+ * 回退会漏掉它们，在代码里留下空格。
+ */
+function apply_code_fence(current_editor: Editor): void {
+  const { $from } = current_editor.state.selection;
+  const fence = read_chat_composer_code_fence($from.parent.textBetween(0, $from.parentOffset, "\n", "\0"));
+  if (!fence) return;
+  const chain = current_editor.chain().focus().deleteRange({ from: $from.start(), to: $from.pos });
+  // 无语言的围栏不传 attrs：`setCodeBlock` 的参数类型要求 language 必填，但空对象会被 schema 默认值接管。
+  if (fence.language) chain.setCodeBlock({ language: fence.language }).run();
+  else chain.setCodeBlock().run();
+}
+
+/** 在代码块外插入内容：代码块的内容模型是 `text*`，放不下原子节点。 */
+function insert_content_outside_code(current_editor: Editor, content: Parameters<Editor["commands"]["insertContent"]>[0]): void {
+  const in_code = current_editor.state.selection.$from.parent.type.spec.code;
+  current_editor.chain().focus(in_code ? "end" : undefined).insertContent(content).run();
+}
 
 /** 把浏览器文件读取成可跨 IPC 传递的 Data URL。 */
 function read_file_as_data_url(file: File): Promise<string> {

@@ -27,6 +27,11 @@ export function is_chat_composer_empty(document: JSONContent | null | undefined)
     if (node.type === "chatReference" && String(node.attrs?.text || "").trim()) has_content = true;
     if (node.type === "chatData" && String(node.attrs?.data_type || "").trim()) has_content = true;
   });
+  /*
+   * 代码块里的文本通过 text 节点计入 has_content，与序列化口径一致：
+   * 投影会跳过「只有围栏、没有代码」的空块，所以空围栏不能算可发送内容。
+   * 语言属性不构成内容——否则 `ts` 两个字就能把空代码块变成可发送的消息。
+   */
   return !has_content;
 }
 
@@ -55,7 +60,7 @@ export function read_chat_composer_visible_text(document: JSONContent): string {
     }
     if (node.type === "chatAttachment" || node.type === "chatReference" || node.type === "chatData") return;
     node.content?.forEach(visit);
-    if (node.type === "paragraph") text += "\n";
+    if (node.type === "paragraph" || node.type === "codeBlock") text += "\n";
   };
   visit(document);
   return text.trim();
@@ -70,11 +75,16 @@ export function has_chat_composer_atoms(document: JSONContent): boolean {
   return has_atoms;
 }
 
-/** 判断文档是否包含 textarea 无法无损往返的 marks 或列表结构。 */
+/**
+ * 判断文档是否包含 textarea 无法无损往返的结构。
+ *
+ * 代码块必须算在内：队列里的「编辑」是一个单行 textarea，它只能改纯文本，
+ * 拿不到围栏与语言。若把它当成可编辑，用户保存后代码块会被压成一行普通文字。
+ */
 export function has_chat_composer_rich_formatting(document: JSONContent): boolean {
   let has_formatting = false;
   walk_chat_composer(document, (node) => {
-    if ((node.marks?.length || 0) > 0 || node.type === "bulletList" || node.type === "orderedList") has_formatting = true;
+    if ((node.marks?.length || 0) > 0 || node.type === "bulletList" || node.type === "orderedList" || node.type === "codeBlock") has_formatting = true;
   });
   return has_formatting;
 }

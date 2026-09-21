@@ -69,3 +69,34 @@ test("IME 合成和 Alt + Enter 保留原生行为", () => {
   assert.equal(resolve_chat_composer_enter_action(key({ isComposing: true }), plain_paragraph), "native");
   assert.equal(resolve_chat_composer_enter_action(key({ altKey: true }), plain_paragraph), "native");
 });
+
+/**
+ * 围栏动作的回归。
+ *
+ * 这条规则修的是一个真实缺陷：``` 本身是一个纯文本段落，会撞上「单个纯文本段落就发送」，
+ * 于是用户敲 ``` 再回车，消息被直接发出去（发的是三个反引号）。
+ */
+test("段落恰好是围栏起始行时，Enter 转成代码块而不是发送", () => {
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, false, { block_text: "```" }), "code-fence");
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, false, { block_text: "```ts" }), "code-fence");
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, false, { block_text: "~~~python" }), "code-fence");
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, false, { block_text: "  ```" }), "code-fence");
+  // 围栏只是段落的一部分时不算：否则「请看 ``` 这个符号」会开出一个代码块。
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, false, { block_text: "请看 ```" }), "submit");
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, false, { block_text: "" }), "submit");
+});
+
+test("展开面板里围栏仍然生效，因为代码块不提交", () => {
+  // multiline 下裸 Enter 只换行，但围栏动作不提交，因此排在它之前不会破坏「回车只换行」。
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, true, { block_text: "```ts" }), "code-fence");
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, true, { block_text: "普通文字" }), "native");
+});
+
+test("代码块内的 Enter 与修饰键优先于围栏识别", () => {
+  // 块内回车必须是换行，否则写不了多行代码。
+  assert.equal(resolve_chat_composer_enter_action(key(), plain_paragraph, false, { block_text: "```", in_code: true }), "native");
+  // 显式提交永远优先于文档结构，否则在代码块里发不出去。
+  assert.equal(resolve_chat_composer_enter_action(key({ metaKey: true }), plain_paragraph, false, { block_text: "```", in_code: true }), "submit");
+  assert.equal(resolve_chat_composer_enter_action(key({ metaKey: true, shiftKey: true }), plain_paragraph, false, { in_code: true }), "submit-immediately");
+  assert.equal(resolve_chat_composer_enter_action(key({ metaKey: true, altKey: true }), plain_paragraph, false, { in_code: true }), "queue-paused");
+});

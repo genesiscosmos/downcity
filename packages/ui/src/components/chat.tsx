@@ -13,6 +13,7 @@ import { TbArrowUp, TbCheck, TbChevronDown, TbChevronRight, TbFile as TbFileIcon
 import { cn } from "../lib/utils";
 import { resolve_chat_composer_enter_action } from "../lib/chat-composer-keymap";
 import { ChatComposerNewline } from "../lib/chat-composer-newline";
+import { ChatComposerCodeLanguage, chat_composer_document_to_text, parse_fenced_paste, read_chat_composer_code_fence } from "../lib/chat-composer-code-fence";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./dropdown-menu";
 import type { DowncityChatApprovalMode, DowncityChatChangedFile, DowncityChatMessage, DowncityChatMessagePart, DowncityChatModelOption, DowncityChatPanelProps, DowncityChatQuestion, DowncityChatSubmitInput, DowncityChatSubmitMode, DowncityChatThread } from "../types/chat";
 import type { DowncityChatQueuedInput } from "../types/chat-runtime";
@@ -196,7 +197,20 @@ type ChatComposerProps = Pick<DowncityChatPanelProps, "status" | "input_placehol
 /** 与 Duobox 输入壳结构一致的受控 Chat 输入组件。 */
 export function ChatComposer({ status = "ready", input_placeholder, on_submit, on_stop, on_attach, model_options = [{ id: "default", label: "Default model" }], model_id = "default", on_model_change, approval_mode = "ask", on_approval_mode_change, queued_inputs = [], on_remove_queued, on_move_queued }: ChatComposerProps) {
   const [text, set_text] = useState("");
-  const editor = useEditor({ extensions: [StarterKit.configure({ heading: false, codeBlock: false }), ChatComposerNewline, Placeholder.configure({ placeholder: input_placeholder ?? "输入消息…", emptyEditorClass: "is-editor-empty" })], editorProps: { attributes: { class: "chat-input-editor dc-chat-input-editor", "data-chat-input": "true", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } }, onUpdate: ({ editor: current_editor }) => set_text(current_editor.getText()) });
+  const editor = useEditor({ extensions: [
+    StarterKit.configure({
+      heading: false,
+      /*
+       * 与 Desktop Composer 同配置：代码块必须开，否则围栏 input rule 不生效，
+       * 敲 ``` 只是三个字符，而且会撞上「单个纯文本段落就发送」的规则被直接发出去。
+       * 四个选项的理由见 Desktop 的 `chatComposerExtensions`。
+       */
+      codeBlock: { defaultLanguage: null, enableTabIndentation: false, exitOnTripleEnter: true, exitOnArrowDown: true, exitOnArrowUp: true },
+    }),
+    ChatComposerNewline,
+    ChatComposerCodeLanguage,
+    Placeholder.configure({ placeholder: input_placeholder ?? "输入消息…", emptyEditorClass: "is-editor-empty" }),
+  ], editorProps: { attributes: { class: "chat-input-editor dc-chat-input-editor", "data-chat-input": "true", autocapitalize: "off", autocorrect: "off", spellcheck: "false" } }, onUpdate: ({ editor: current_editor }) => set_text(chat_composer_document_to_text(current_editor.getJSON())) });
   const is_streaming = status === "submitted" || status === "streaming" || status === "building-context";
   const submit = useCallback(async (mode: DowncityChatSubmitMode = "send") => {
     const normalized_text = text.trim();
@@ -212,6 +226,7 @@ export function ChatComposer({ status = "ready", input_placeholder, on_submit, o
     {queued_inputs.length ? <div className="dc-chat-queue">{queued_inputs.map((item, index) => <div key={item.id}><ArrowDown /><span>{item.text}</span><button type="button" title="上移" disabled={index === 0} onClick={() => on_move_queued?.(item.id, "up")}><ArrowUp /></button><button type="button" title="下移" disabled={index === queued_inputs.length - 1} onClick={() => on_move_queued?.(item.id, "down")}><ArrowDown /></button><button type="button" title="取消排队" onClick={() => on_remove_queued?.(item.id)}><X /></button></div>)}</div> : null}
     <div className="dc-chat-input-shell" aria-busy={is_streaming && !text.trim()}>
       <EditorContent editor={editor} onKeyDown={(event) => {
+        const { $from } = editor?.state.selection ?? {};
         const action = resolve_chat_composer_enter_action({
           key: event.key,
           shiftKey: event.shiftKey,
@@ -219,10 +234,36 @@ export function ChatComposer({ status = "ready", input_placeholder, on_submit, o
           ctrlKey: event.ctrlKey,
           altKey: event.altKey,
           isComposing: event.nativeEvent.isComposing,
-        }, editor?.getJSON());
+        }, editor?.getJSON(), {
+          in_code: Boolean($from?.parent.type.spec.code),
+          block_text: $from?.parent.isTextblock ? $from.parent.textBetween(0, $from.parentOffset, "\n", "\0") : undefined,
+        });
         if (action === "native") return;
         event.preventDefault();
+        // 围栏动作不提交：它只把当前段落转成代码块，让用户接着写代码。
+        if (action === "code-fence") {
+          const selection = editor?.state.selection;
+          const fence = selection && read_chat_composer_code_fence(selection.$from.parent.textBetween(0, selection.$from.parentOffset, "\n", "\0"));
+          if (selection && fence) {
+            const chain = editor!.chain().focus().deleteRange({ from: selection.$from.start(), to: selection.$from.pos });
+            // 无语言的围栏不传 attrs：`setCodeBlock` 的参数类型要求 language 必填，空对象会走 schema 默认值。
+            if (fence.language) chain.setCodeBlock({ language: fence.language }).run();
+            else chain.setCodeBlock().run();
+          }
+          return;
+        }
         void submit(action === "submit-immediately" ? "steer" : action === "queue-paused" ? "queue" : "send");
+      }} onPaste={(event) => {
+        /*
+         * 代码块内交给 ProseMirror 原生行为：它对 `inCode` 上下文会把剪贴板纯文本
+         * 原样插入（只把 CRLF 归一为 LF），正是写代码需要的语义。
+         */
+        const selection = editor?.state.selection;
+        if (selection?.$from.parent.type.spec.code) return;
+        const fenced_nodes = parse_fenced_paste(event.clipboardData.getData("text/plain"));
+        if (!fenced_nodes) return;
+        event.preventDefault();
+        editor?.chain().focus().insertContent(fenced_nodes).run();
       }} />
       <div className="dc-chat-input-toolbar"><div><button type="button" onClick={on_attach} title="添加附件"><TbPlus /></button><DropdownMenu><DropdownMenuTrigger render={<button type="button" className="dc-chat-input-chip" />}><TbRobot /><span>{model_options.find((option) => option.id === model_id)?.label ?? "Default model"}</span><TbChevronDown /></DropdownMenuTrigger><DropdownMenuContent side="top" align="start">{model_options.map((option) => <DropdownMenuItem key={option.id} onClick={() => void on_model_change?.(option.id)}>{option.id === model_id ? "✓" : ""}<span>{option.label}</span></DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu><DropdownMenu><DropdownMenuTrigger render={<button type="button" className="dc-chat-input-chip" />}>{approval_mode === "ask" ? <TbLock /> : <TbShieldCheck />}<span>{approval_mode === "ask" ? "Ask" : "Always allow"}</span><TbChevronDown /></DropdownMenuTrigger><DropdownMenuContent side="top" align="start"><DropdownMenuItem onClick={() => void on_approval_mode_change?.("ask")}><TbLock /><span>Ask</span></DropdownMenuItem><DropdownMenuItem onClick={() => void on_approval_mode_change?.("always-allow")}><TbShieldCheck /><span>Always allow</span></DropdownMenuItem></DropdownMenuContent></DropdownMenu></div><button type="button" className="dc-chat-send" disabled={!is_streaming && !text.trim()} onClick={() => is_streaming && !text.trim() ? void on_stop?.() : void submit("send")} title={is_streaming && !text.trim() ? "停止生成" : is_streaming || queued_inputs.length > 0 ? "加入队列" : "发送消息"}>{is_streaming && !text.trim() ? <TbSquare /> : <TbArrowUp />}</button></div>
     </div>

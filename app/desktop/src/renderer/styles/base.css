@@ -319,6 +319,81 @@ a,
   word-break: break-word;
 }
 
+/*
+ * Composer 里的围栏代码块。
+ *
+ * ## 为什么不复用消息侧的规则
+ *
+ * 消息侧（`styles/markdown.css`）覆写的是 Streamdown 输出的 DOM
+ *（`[data-streamdown="code-block"]`）；Composer 里是 Tiptap 直接产出的
+ * `<pre><code>`，两边没有共同选择器。强行合并只能靠给 Composer 也套上
+ * `data-streamdown`，那会引入一个假属性——样式反而更难追。
+ *
+ * 因此这里**共用的是结论，不是选择器**：
+ *
+ * - 底色用 `--surface-subtle`（一档中性填充，不按主题色现算）。
+ *   `markdown_code_block.test.ts` 已经锁死这条：`color-mix(muted…)` 在 ocean、
+ *   forest 这类主题下会把整块染成蓝底、绿底，并压掉语法色。
+ * - 不画边框：填充本身已经界定边界，再描一圈就变成双层边界。
+ * - `white-space: pre` + 横向滚动：代码不折行。消息侧同样不折行，
+ *   否则同一段代码在发送前后断行位置会变。
+ * - 字号 `0.92em` 与上面的行内码同档：两者是同一族内容，
+ *   差一档会让人以为代码块是另一种东西。
+ * - 行高沿用 `--leading-chat`，与输入框正文同源（见 `.chat-input-editor` 的注释）。
+ *
+ * `tab-size: 2` 只影响 `\t` 的呈现宽度，不改变字符本身。
+ * 不在这里做 Tab 缩进：Tab 必须能移出输入框（WCAG 2.1.2），
+ * 把 Tab 变成缩进会形成键盘陷阱。缩进用空格。
+ */
+.chat-input-editor pre {
+  margin: 0.4em 0;
+  padding: 0.375rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--surface-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  line-height: var(--leading-chat);
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* 行内码的底色、内边距与圆角不得渗进块内代码，否则块里会出现一排小胶囊。 */
+.chat-input-editor pre code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-size: inherit;
+  white-space: inherit;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+/*
+ * 语言标签。
+ *
+ * 它回答的是「我敲的 ts 去哪了」：语言进入 Tiptap 后只是节点属性，
+ * 不写回 DOM 就会在输入框里凭空消失，用户会以为没生效并重复输入。
+ *
+ * 取值与消息侧元信息行一致（`--text-2xs` / mono / `--muted-foreground`），
+ * 因为两者说的是同一件事（这段代码是什么语言），只是位置不同：
+ * 消息侧在头部行，输入框里没有头部行，因此贴在块首。
+ *
+ * 对比度说明：`--muted-foreground` 在 `--surface-subtle` 上约 4.2:1，
+ * 低于普通文本的 4.5:1 下限。这不是新引入的问题——消息侧的语言标签是同一档，
+ * 要提就两处一起提（见 `markdown.css` 的元信息行规则）。
+ */
+.chat-input-editor pre[data-code-language]:not([data-code-language=""])::before {
+  display: block;
+  content: attr(data-code-language);
+  margin-bottom: 0.125rem;
+  color: var(--muted-foreground);
+  font-size: var(--text-2xs);
+  line-height: 1;
+  text-transform: lowercase;
+}
+
 .chat-input-editor.is-editor-empty > p:first-child::before,
 .chat-input-editor > p.is-empty:first-child::before {
   content: attr(data-placeholder);

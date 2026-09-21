@@ -46,9 +46,18 @@ export { ChatComposer, ChatHistory, ChatMessage, ChatMessageList, ChatPanel } fr
 export { session_jsonl_to_chat_messages, session_message_to_chat_message, session_part_to_chat_part } from "./lib/session-message";
 export { DowncityChatRuntime, create_chat_runtime } from "./lib/chat-runtime";
 export { is_single_plain_text_paragraph, resolve_chat_composer_enter_action } from "./lib/chat-composer-keymap";
-export type { DowncityChatComposerEnterAction, DowncityChatComposerEnterKey } from "./lib/chat-composer-keymap";
+export type { DowncityChatComposerEnterAction, DowncityChatComposerEnterContext, DowncityChatComposerEnterKey } from "./lib/chat-composer-keymap";
 export { build_chat_composer_newline_commands, ChatComposerNewline } from "./lib/chat-composer-newline";
 export type { DowncityChatComposerNewlineCommands } from "./lib/chat-composer-newline";
+export {
+  ChatComposerCodeLanguage,
+  chat_composer_code_fence_line,
+  chat_composer_document_to_text,
+  parse_fenced_paste,
+  read_chat_composer_code_fence,
+  read_chat_composer_code_language,
+  serialize_chat_composer_code_block,
+} from "./lib/chat-composer-code-fence";
 export type { DowncityChatQueuedInput, DowncityChatRuntimeListener, DowncityChatRuntimeOptions, DowncityChatRuntimeSnapshot } from "./types/chat-runtime";
 export type {
   DowncityAnnotationProps,

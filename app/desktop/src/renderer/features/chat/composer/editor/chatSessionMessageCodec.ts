@@ -66,7 +66,23 @@ function markdown_token_to_blocks(token: Token): JSONContent[] {
   }
   if (is_list_token(token)) return [list_token_to_node(token)];
   if (token.type === "blockquote") return (token.tokens || []).flatMap(markdown_token_to_blocks);
-  if (token.type === "code") return [{ type: "paragraph", content: [{ type: "text", text: token.text, marks: [{ type: "code" }] }] }];
+  /*
+   * 围栏代码块恢复成真的 codeBlock 节点。
+   *
+   * 曾经这里把 code token 降级成「带 code mark 的段落」，且把多行用 \n 挤在一个
+   * text 节点里。后果是双向损坏：编辑一条含代码块的历史消息时，代码块静默变成
+   * 行内码，语言标签消失，再发送时围栏也没了。
+   *
+   * 语言只保留合法字符，与序列化端的清洗同口径；空语言不写 attrs。
+   */
+  if (token.type === "code") {
+    const language = String(token.lang ?? "").trim().toLowerCase().replace(/[^a-z0-9_+#.-]/gu, "");
+    return [{
+      type: "codeBlock",
+      ...(language ? { attrs: { language } } : {}),
+      ...(token.text ? { content: [{ type: "text", text: token.text }] } : {}),
+    }];
+  }
   if (token.type === "hr") return [{ type: "paragraph", content: [{ type: "text", text: "---" }] }];
   if (token.type === "table") return [{ type: "paragraph", content: [{ type: "text", text: token.raw }] }];
   return [{ type: "paragraph", content: [{ type: "text", text: token.raw }] }];

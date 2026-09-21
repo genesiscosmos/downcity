@@ -511,6 +511,58 @@
 .dc-chat-input-editor ol { margin: .2rem 0; padding-left: 1.35rem; }
 .dc-chat-input-editor.is-editor-empty > p:first-child::before,
 .dc-chat-input-editor > p.is-empty:first-child::before { content: attr(data-placeholder); color: color-mix(in srgb, var(--muted-foreground) 70%, transparent); opacity: .7; pointer-events: none; float: left; height: 0; }
+
+/*
+ * 输入框里的围栏代码块。
+ *
+ * 与 Desktop Composer（`app/desktop/src/renderer/styles/base.css` 的 `.chat-input-editor pre`）
+ * 同源：同一段代码在发送前后的两种状态，形状不一致就会在发送那一下看出来。
+ *
+ * - 底色用 `--surface-subtle`（一档中性填充，不按主题色现算）：
+ *   `color-mix(muted…)` 在饱和主题下会把整块染成蓝底、绿底。
+ * - 不画边框：填充本身已经界定边界。
+ * - `white-space: pre` + 横向滚动：代码不折行，否则同一段代码在发送前后断行位置会变。
+ * - 行高 1.34 与上面的编辑器正文同值。
+ * - `tab-size: 2` 只影响 `\t` 的呈现宽度，不改变字符本身。
+ *   不做 Tab 缩进：Tab 必须能移出输入框（WCAG 2.1.2）。
+ */
+.dc-chat-input-editor pre {
+  margin: .4em 0;
+  padding: .375rem .5rem;
+  border: 0;
+  border-radius: .375rem;
+  background: var(--surface-subtle, color-mix(in srgb, var(--foreground) 4%, transparent));
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: .92em;
+  line-height: 1.34;
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* 行内码的底色、内边距与圆角不得渗进块内代码，否则块里会出现一排小胶囊。 */
+.dc-chat-input-editor pre code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-size: inherit;
+  white-space: inherit;
+}
+
+/*
+ * 语言标签：回答「我敲的 ts 去哪了」。
+ * 语言进入 Tiptap 后只是节点属性，不写回 DOM 就会在输入框里凭空消失。
+ * 取值与消息侧元信息行一致（`--text-2xs` / mono / `--muted-foreground`）。
+ */
+.dc-chat-input-editor pre[data-code-language]:not([data-code-language=""])::before {
+  display: block;
+  content: attr(data-code-language);
+  margin-bottom: .125rem;
+  color: var(--muted-foreground);
+  font-size: .6875rem;
+  line-height: 1;
+  text-transform: lowercase;
+}
 @keyframes dc-chat-caret { 50% { opacity: 0; } }
 
 /* Shiki 双主题输出在 ThemeContainer 暗色模式下切换为 One Dark Pro。 */

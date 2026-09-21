@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict"
 import test from "node:test"
-import { buildWorkboardGameMapConfig, build_chat_composer_newline_commands, ChatComposer, ChatComposerNewline, ChatHistory, ChatMessage, ChatPanel, cn, create_chat_runtime, resolve_chat_composer_enter_action, session_message_to_chat_message } from "../dist/index.js"
+import { buildWorkboardGameMapConfig, build_chat_composer_newline_commands, ChatComposer, ChatComposerNewline, ChatComposerCodeLanguage, ChatHistory, ChatMessage, ChatPanel, chat_composer_document_to_text, cn, create_chat_runtime, parse_fenced_paste, resolve_chat_composer_enter_action, serialize_chat_composer_code_block, session_message_to_chat_message } from "../dist/index.js"
 
 test("Chat UI 公开导出保持可用", () => {
   assert.equal(typeof ChatPanel, "function")
@@ -11,6 +11,10 @@ test("Chat UI 公开导出保持可用", () => {
   assert.equal(typeof ChatMessage, "function")
   assert.equal(typeof ChatComposerNewline, "object")
   assert.equal(typeof build_chat_composer_newline_commands, "function")
+  assert.equal(typeof ChatComposerCodeLanguage, "object")
+  assert.equal(typeof serialize_chat_composer_code_block, "function")
+  assert.equal(typeof parse_fenced_paste, "function")
+  assert.equal(typeof chat_composer_document_to_text, "function")
 })
 
 test("canonical Agent Action 与 Error Part 投影为 UI operation", () => {
@@ -44,6 +48,28 @@ test("Chat Composer 使用统一 Enter 矩阵", () => {
   assert.equal(resolve_chat_composer_enter_action(enter_key({ ctrlKey: true, altKey: true }), undefined), "queue-paused")
   assert.equal(resolve_chat_composer_enter_action(enter_key({ ctrlKey: true, shiftKey: true }), undefined), "submit-immediately")
   assert.equal(resolve_chat_composer_enter_action(enter_key({ isComposing: true }), plain_paragraph), "native")
+})
+
+/**
+ * 围栏动作与代码块投影：与 Desktop 同一套规则。
+ * 若不修，SDK 内嵌聊天与桌面端会在同一个动作上表现不一致。
+ */
+test("Chat Composer 的围栏动作与代码块投影", () => {
+  // 围栏行：Enter 转代码块，而不是把 ``` 当消息发出去。
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, { block_text: "```ts" }), "code-fence")
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, { block_text: "请看 ```" }), "submit")
+  // 代码块内回车是换行，修饰键提交仍然优先。
+  assert.equal(resolve_chat_composer_enter_action(enter_key(), plain_paragraph, { in_code: true }), "native")
+  assert.equal(resolve_chat_composer_enter_action(enter_key({ metaKey: true }), plain_paragraph, { in_code: true }), "submit")
+
+  // 提交文本必须保留围栏，否则接收端分不出哪部分是代码。
+  const document = { type: "doc", content: [
+    { type: "paragraph", content: [{ type: "text", text: "说明" }] },
+    { type: "codeBlock", attrs: { language: "ts" }, content: [{ type: "text", text: "const a = 1;" }] },
+  ] }
+  assert.equal(chat_composer_document_to_text(document), "说明\n\n```ts\nconst a = 1;\n```")
+  // 代码里的 Markdown 符号不得被转义。
+  assert.equal(serialize_chat_composer_code_block("sql", "SELECT * FROM t"), "```sql\nSELECT * FROM t\n```")
 })
 
 test("steer 绕过 busy 和已有队列，常规发送保持排队", async () => {
