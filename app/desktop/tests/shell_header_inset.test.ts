@@ -47,9 +47,10 @@ import {
   SHELL_MAIN_VIEW_BORDER,
   SHELL_MAIN_VIEW_GUTTER,
   SHELL_MAIN_VIEW_INSET,
+  SHELL_BAYBAR_MIN_WIDTH,
   SHELL_MAIN_VIEW_MIN_REGION,
+  SHELL_MAIN_VIEW_MIN_REGION_CSS,
   SHELL_MAIN_VIEW_MIN_WIDTH,
-  SHELL_MAIN_VIEW_MIN_WIDTH_CSS,
   SHELL_MAIN_VIEW_OFFSET,
   SHELL_RESIZE_HANDLE_BLEED,
   SHELL_RESIZE_HANDLE_BLEED_CSS,
@@ -262,7 +263,82 @@ test("正文保留量由卡片最小宽度与正文区留白共同构成", () =>
   // 右栏宽度上限与窄窗口断点都扣除这个值；它算错时两处会一起错，只能在这里锁住。
   assert.equal(SHELL_MAIN_VIEW_GUTTER, SHELL_MAIN_VIEW_OFFSET * 2);
   assert.equal(SHELL_MAIN_VIEW_MIN_REGION, SHELL_MAIN_VIEW_MIN_WIDTH + SHELL_MAIN_VIEW_GUTTER);
-  assert.equal(SHELL_MAIN_VIEW_MIN_WIDTH, 450);
+  // 与右栏最小宽度同档：两者都是「一块内容区最少占多宽」。
+  assert.equal(SHELL_MAIN_VIEW_MIN_WIDTH, 360);
+  assert.equal(SHELL_MAIN_VIEW_MIN_WIDTH, SHELL_BAYBAR_MIN_WIDTH);
+});
+
+/**
+ * 正文下限必须落在行内元素（main）上，而且只有一处。
+ *
+ * 两条都会静默失效，所以各配一条守卫：
+ *
+ * 1. **下限只能有一处。** 卡片是 flex 项，自己写 min-width 只能让它溢出、撑不开父层；
+ *    两处同时写会让「谁在限制」变得不可回答（曾经就是两处，删掉卡片那份后实测几何完全一致）。
+ * 2. **不能写 `min(360px, 100%)`。** 父层被压窄时 `100%` 跟着变小，下限等于被取消：
+ *    正文被压到无法阅读，而样式里看上去“写了 360”。
+ */
+test("正文下限只落在正文区上，卡片自己不写 min-width", () => {
+  const renderer_root = path.join(import.meta.dirname, "../src/renderer");
+  const shell = fs.readFileSync(path.join(renderer_root, "app/DesktopShell.tsx"), "utf8");
+  const baybar = fs.readFileSync(path.join(renderer_root, "layouts/BayBar.tsx"), "utf8");
+  // 下限落在 main 上，且跟随缩放（走 rem 出口）。
+  assert.ok(shell.includes("style={{ minWidth: SHELL_MAIN_VIEW_MIN_REGION_CSS }}"), "正文区的最小宽度没有落在 main 上");
+  assert.ok(SHELL_MAIN_VIEW_MIN_REGION_CSS.includes("rem"), `正文区最小宽度没跟随缩放：${SHELL_MAIN_VIEW_MIN_REGION_CSS}`);
+  // MainView 组件体里不得出现 min-width（下限只能有一处）。
+  // 只看这个函数的源码：BayBar 会读 main 的 computed minWidth，那是读取不是声明。
+  const main_view = /export function MainView\b[\s\S]*?\n}/.exec(baybar)?.[0] ?? "";
+  assert.ok(main_view, "找不到 MainView 组件");
+  assert.ok(!main_view.includes("minWidth"), "MainView 又自己写了 min-width，下限变成两处");
+  assert.ok(!main_view.includes("min("), "MainView 又出现 min(...)，下限会被父层宽度抵消");
+});
+
+/**
+ * BayBar 量宽度的那一层必须**不含 Sidebar**。
+ *
+ * 右栏宽度上限 = 「可用宽度 − 正文保留量」。量到含 Sidebar 的那一行时，上限会多出
+ * 一个 Sidebar 的宽度，用户能把右栏拖到把正文压到下限以下。
+ * 这条依赖 DOM 结构，而结构不在纯函数里，只能在源码级守住：
+ * Sidebar 与正文区必须是两个并列的子层，main 与 BayBar 同住正文区那一层。
+ */
+test("Sidebar 与正文区分属两层，BayBar 量到的那一层不含 Sidebar", () => {
+  const renderer_root = path.join(import.meta.dirname, "../src/renderer");
+  const shell = fs.readFileSync(path.join(renderer_root, "app/DesktopShell.tsx"), "utf8");
+  // 只看 JSX：import 行里也会出现组件名，会把位置比较带偏。
+  const jsx = shell.slice(shell.indexOf("return <div className=\"fixed inset-0"));
+  const region_tag = /<div className=\"flex h-full min-h-0 min-w-0 flex-1\">/.exec(jsx)?.[0] ?? "";
+  assert.ok(region_tag, "找不到正文区那一层");
+  const region_index = jsx.indexOf(region_tag);
+  const sidebar_index = jsx.indexOf("<DesktopSidebar");
+  const main_tag = /<main\b[^>]*>/.exec(jsx)?.[0] ?? "";
+  const main_index = jsx.indexOf(main_tag);
+  const baybar_index = jsx.indexOf("<BayBar />");
+  assert.ok(sidebar_index !== -1 && main_index !== -1 && baybar_index !== -1, "行结构不完整");
+  // 正文区的最小宽度必须落在 main 自己的标签上（不是父层、也不是卡片）。
+  assert.ok(main_tag.includes("SHELL_MAIN_VIEW_MIN_REGION_CSS"), `正文区下限没落在 main 上：${main_tag.slice(0, 120)}`);
+  // Sidebar 在正文区之前、且在正文区之外；main 与 BayBar 同在正文区之内。
+  assert.ok(sidebar_index < region_index, "Sidebar 不在正文区之前");
+  assert.ok(region_index < main_index && main_index < baybar_index, "main 与 BayBar 不在同一个正文区内");
+  // Sidebar 不得与 main 同级：同级就意味着 BayBar 量到的那一层包含了 Sidebar。
+  const between = jsx.slice(sidebar_index, region_index);
+  assert.ok(!between.includes("<main"), "main 与 Sidebar 同级，BayBar 量到的可用宽度会多出一个 Sidebar");
+});
+
+/**
+ * 正文区必须带 `min-w-0`。
+ *
+ * flex 项默认 `min-width: auto`（即 min-content），而 main 带下限——本层于是拒绝缩到
+ * 「下限 + 面板」以下：行被撑破、面板被推出窗口，而且量到的可用宽度反过来取决于
+ * 面板自己有多宽，拖拽会自激（拖 400 → 399 时直接跳到 360，内容看起来在乱飘）。
+ * 这是一条纯 CSS 不变量，源码级守住。
+ */
+test("正文区带 min-w-0，否则行被撑破且拖拽自激", () => {
+  const renderer_root = path.join(import.meta.dirname, "../src/renderer");
+  const shell = fs.readFileSync(path.join(renderer_root, "app/DesktopShell.tsx"), "utf8");
+  const jsx = shell.slice(shell.indexOf("return <div className=\"fixed inset-0"));
+  const region_tag = /<div className=\"[^\"]*\">/.exec(jsx.slice(jsx.indexOf("BayBarProvider")))?.[0] ?? "";
+  assert.ok(region_tag, "找不到正文区那一层");
+  assert.ok(/\bmin-w-0\b/.test(region_tag), `正文区缺 min-w-0，行会被撑破且拖拽自激：${region_tag}`);
 });
 
 /**
@@ -299,7 +375,7 @@ test("跟随缩放的长度出口必须使用 rem", () => {
   for (const [name, value] of [
     ["MainView 顶栏高度", SHELL_MAIN_VIEW_BAND_HEIGHT_CSS],
     ["MainView 顶栏底距", SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS],
-    ["正文卡片最小宽度", SHELL_MAIN_VIEW_MIN_WIDTH_CSS],
+    ["正文区最小宽度", SHELL_MAIN_VIEW_MIN_REGION_CSS],
     ["侧栏顶栏高度", SHELL_HEADER_HEIGHT_CSS],
     ["折叠按钮 top", SHELL_CONTROL_TOP_CSS],
     ["右侧 rail 宽度", SHELL_BAYBAR_CONTROL_RIGHT_CSS],

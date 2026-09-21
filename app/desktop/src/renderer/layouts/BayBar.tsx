@@ -4,14 +4,19 @@
  * ## 结构
  *
  * ```
- * DesktopShell（一行）
- * ├── Sidebar（贴窗口左缘、整窗高）
- * ├── main（p-1）
- * │   └── MainView 卡片（圆角 + 边框 + bg-background）
- * └── BayBar（贴窗口右缘、整窗高）
- *     └── 面板：顶栏一行标签页 + 内容区
+ * DesktopShell
+ * └── 一行：Sidebar + 正文区
+ *     ├── Sidebar（贴窗口左缘、整窗高）
+ *     └── 正文区（一行：main + BayBar）
+ *         ├── main（p-1）
+ *         │   └── MainView 卡片（圆角 + 边框 + bg-background）
+ *         └── BayBar（贴窗口右缘、整窗高）
+ *             └── 面板：顶栏一行标签页 + 内容区
  *
  * 窗口右上角另有一个固定的折叠按钮（ShellBayBarControl），与左侧 Sidebar 控件镜像。
+ *
+ * 正文区为什么单独一层：它是本面板量宽度的基准，而宽度上限 = 本层宽度 − 正文保留量。
+ * 与 Sidebar 同级时会多量进一个 Sidebar，用户能把右栏拖到把正文压到下限以下。
  *
  * ## 与卡片留白的关系
  *
@@ -61,10 +66,7 @@ import {
   SHELL_BAYBAR_DEFAULT_WIDTH,
   SHELL_BAYBAR_MIN_WIDTH,
   SHELL_HEADER_HEIGHT_CSS,
-  SHELL_MAIN_VIEW_MIN_REGION,
-  SHELL_MAIN_VIEW_MIN_WIDTH_CSS,
   SHELL_PANEL_TRANSITION,
-  read_shell_scale,
 } from "./shellMotion";
 
 export type { BayBarSection, BayBarTab, BayBarTranslate } from "./baybarPanelState";
@@ -133,12 +135,12 @@ export function use_baybar_set_tab_label(): (tab_id: string, label: string) => v
  * MainView：正文卡片。
  *
  * 只是一张卡：不接收标签页、不提供打开面板的动作，也不知道面板里显示什么。
+ *
+ * 它不写 min-width：正文下限由外层 main 承担（见 SHELL_MAIN_VIEW_MIN_REGION_CSS）。
+ * 卡片是 flex 项，自己写 min-width 只能让它溢出、撑不开父层，下限要落在行内元素上。
  */
 export function MainView({ children }: { /** 页面 Header 与 Body。 */ children: ReactNode }) {
-  // min-width 用 min(450px, 100%)：正文区本身容不下 450 时不溢出到右栏下面。
-  // 它是「有位置就给 450」的下限，也是右栏宽度上限的来源（同一约束的两面）。
   return <div
-    style={{ minWidth: `min(${SHELL_MAIN_VIEW_MIN_WIDTH_CSS}, 100%)` }}
     className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-surface border border-border-subtle bg-background"
   >{children}</div>;
 }
@@ -157,26 +159,27 @@ export function BayBar() {
   const active = open ? tabs.find((item) => item.id === active_id) ?? null : null;
   const section_id = active ? section_by_tab[active.id] ?? null : null;
 
-  // 可用宽度：量本组件的**父层**，也就是 Shell 里那一行（main + BayBar）。
+  // 可用宽度：量本组件的**父层**，也就是 Shell 里那个正文区（main + BayBar）。
   //
-  // 必须挂在这一层、不能挂在面板上：量到面板的宽度时它会随面板变宽而变宽，
-  // 而上限又等于可用宽度减保留量，结果上限永远跟着当前宽度走，
-  // 拖拽会自己把边界往前推（历史上已经因此坏过两次）。
-  // 这一行的宽度只由窗口与 Sidebar 决定，与面板宽度无关，是唯一稳定的基准。
+  // 必须挂在这一层：量到面板自己，上限就会跟着当前宽度走，拖拽会自己把边界往前推；
+  // 量到含 Sidebar 的那一行，上限又会多出一个 Sidebar 的宽度。
+  // 这一层的宽度只由窗口与 Sidebar 决定，是唯一稳定的基准。
+  //
+  // 正文下限直接读 main 的 computed min-width，而不是自己用设计值 × 缩放算：
+  // 这样 JS 与 CSS 只有一份事实，缩放后不可能各算各的。
   const root_ref = useRef<HTMLDivElement>(null);
-  const [range, set_range] = useState({ available: 0, reserve: 0 });
+  const [range, set_range] = useState({ available: 0, floor: 0 });
   useLayoutEffect(() => {
     const region = root_ref.current?.parentElement;
-    if (!region) return;
+    const content = region?.querySelector<HTMLElement>("main");
+    if (!region || !content) return;
     const measure = () => {
       const next = {
         available: Math.round(region.getBoundingClientRect().width),
-        // 保留量是设计 px，而可用宽度是实际像素，必须按当前缩放换算后再相减；
-        // 否则 120% 下会把正文夹到不足 450 设计像素。
-        reserve: Math.round(SHELL_MAIN_VIEW_MIN_REGION * read_shell_scale()),
+        floor: Math.round(Number.parseFloat(getComputedStyle(content).minWidth)),
       };
       // 返回同一个引用让 React 跳过无意义的重渲染。
-      set_range((current) => current.available === next.available && current.reserve === next.reserve ? current : next);
+      set_range((current) => current.available === next.available && current.floor === next.floor ? current : next);
     };
     // 在布局阶段同步量一次：拖拽上限依赖它，等普通 effect 就已经晚了一帧。
     measure();
@@ -255,8 +258,8 @@ function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
   tabs: readonly BayBarTab[];
   /** 当前标签页内选择的分区。 */
   section_id: string | null;
-  /** 由 BayBar 量得的可用宽度与保留量；available 为 0 表示尚未测量。 */
-  range: { available: number; reserve: number };
+  /** 由 BayBar 量得的可用宽度与正文下限；available 为 0 表示尚未测量。 */
+  range: { available: number; floor: number };
 }) {
   const baybar = useContext(BayBarContext);
   const translate = use_translation("navigation");
@@ -266,25 +269,28 @@ function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
   const collapsed = !open;
 
   const [stored_width, set_stored_width] = useState(() => Number(localStorage.getItem("downcity.baybar_width")) || SHELL_BAYBAR_DEFAULT_WIDTH);
-  // BayBar 没有自己的最大宽度：这里扣掉的 reserve 是 MainView 的最小占宽。
-  // 换言之限制来自「正文不得小于 450px」，不是给右栏设上限。
-  //
-  // available 为 0 表示还没测量到（首帧布局阶段前的初次渲染）。此时不能拿它算上限：
-  // 结果会是 max(最小值, 0-保留量) = 最小值，而 use_horizontal_resize 会拿这个上限
-  // 去夹取从 localStorage 读回的宽度，把用户上次的宽度截成最小值——
-  // 表面现象就是「宽度没有持久化」。未测量时改为回到已存宽度本身，不夹取。
+  // 上限 = 可用宽度 − 正文下限，剩下的都归右栏。
+  // 未测量到（首帧）时不能夹取：那会把用户存下的宽度截成 0，看起来像「宽度没有持久化」。
   const max_width = range.available > 0
-    ? resolve_baybar_max_width(range.available, SHELL_BAYBAR_MIN_WIDTH, range.reserve)
+    ? resolve_baybar_max_width(range.available, range.floor)
     : Math.max(SHELL_BAYBAR_MIN_WIDTH, Math.round(stored_width));
+  // 装不下「正文下限 + 右栏下限」时让位的是右栏：下限退到上限，否则 min > max、夹取无解。
+  const squeezed = max_width < SHELL_BAYBAR_MIN_WIDTH;
+  const min_width = squeezed ? max_width : SHELL_BAYBAR_MIN_WIDTH;
 
   const { current_width, is_resizing, handle_resize_start, resize_handle_props } = use_horizontal_resize({
     stored_width,
-    min_width: SHELL_BAYBAR_MIN_WIDTH,
+    min_width,
     max_width,
     default_width: SHELL_BAYBAR_DEFAULT_WIDTH,
     // 面板在右栏最左侧，左边缘贴着正文，因此拖动左边缘、向左为增宽。
     resize_edge: "left",
-    on_width_change: (width) => { set_stored_width(width); localStorage.setItem("downcity.baybar_width", String(width)); },
+    // 被窗口挤窄时用户并没选过这个宽度，不写回偏好（否则缩一次窗口就丢了原宽度）。
+    on_width_change: (width) => {
+      if (squeezed) return;
+      set_stored_width(width);
+      localStorage.setItem("downcity.baybar_width", String(width));
+    },
   });
 
   // 收起动画期间保留内容：否则收起会先清空内容再收缩，看起来像闪一下。

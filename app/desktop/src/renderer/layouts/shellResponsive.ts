@@ -20,7 +20,7 @@ export const SIDEBAR_AUTO_COLLAPSE_WIDTH = 860;
  *
  * 由「正文保留量」推导：可用正文区域至少要同时容得下正文下限与右栏最小宽度，
  * 再加上左侧最窄的 Sidebar 占地。低于这条线时两者无法并存，
- * 与其把正文压到 450 以下，不如收起右栏。
+ * 与其把正文压到下限以下，不如收起右栏。
  *
  * 收起态右栏不占宽（开关是浮动按钮），因此右侧只计面板本身的最小宽度。
  *
@@ -33,20 +33,16 @@ export const BAYBAR_AUTO_COLLAPSE_WIDTH = SHELL_SIDEBAR_RAIL_WIDTH
   + SHELL_BAYBAR_MIN_WIDTH;
 
 /**
- * 计算当前可用宽度下 BayBar 的最大宽度。
+ * 右栏宽度上限：可用宽度减去正文下限，剩下的都归右栏。
  *
- * `available_width` 取承载正文与 BayBar 的那一行的宽度，**不是**正文卡片本身：
- * 行宽由窗口与 Sidebar 决定、与 BayBar 宽度无关，因此面板变宽不会反过来改小上限；
- * 若按正文卡片算，卡片会随面板变宽而变窄、上限跟着缩水，拖拽会自己把边界往回推。
+ * 两个入参都是**实测像素**：可用宽度量自正文区那一层（不含 Sidebar），
+ * 正文下限直接读 main 的 computed min-width（所以缩放已经包含在内）。
  *
- * BayBar 没有自己的最大宽度，这里扣除的 `reserve_width` 是「给正文保留的最小总占宽」。
- * 下限取整是为了不让右栏蚕食到保留量里的小数位。
- *
- * 结果不得低于最小宽度，否则可用区域太小时会出现 min > max，宽度无法夹取。
- * 此时卡片自己的 min-width 会成为兼底：两者不可能同时成立，那是窗口本身容不下的情形。
+ * 结果可能低于右栏自己的最小宽度（窗口太窄或 Sidebar 太宽），也可能为 0：
+ * 装不下时让步的是右栏。调用方据此把下限一起放低——min 不能大于 max，否则夹取无解。
  */
-export function resolve_baybar_max_width(available_width: number, min_width: number, reserve_width: number = SHELL_MAIN_VIEW_MIN_REGION): number {
-  return Math.max(min_width, Math.floor(available_width - reserve_width));
+export function resolve_baybar_max_width(available_width: number, content_floor: number): number {
+  return Math.max(0, Math.floor(available_width - content_floor));
 }
 
 /** 一次自适应决策的结果。 */

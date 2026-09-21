@@ -57,13 +57,16 @@ export const SHELL_BAYBAR_MIN_WIDTH = 360;
 export const SHELL_BAYBAR_DEFAULT_WIDTH = 400;
 
 /**
- * 正文卡片的最小宽度。
+ * 正文卡片的最小宽度（设计 px）。
  *
- * 这是「给正文保留多少」的唯一来源。BayBar 没有自己的最大宽度：
- * 它的上限由「可用区域 − 本值」隐式给出（见 shellResponsive.resolve_baybar_max_width）。
- * 因此拖宽右栏时被限制的是正文的下限，而不是右栏的上限。
+ * 这是「给正文保留多少」的唯一来源：拖宽右栏时被限制的是正文的下限，不是右栏的上限。
+ * 它不在 DOM 里直接用（落点是 SHELL_MAIN_VIEW_MIN_REGION_CSS），
+ * 但右栏上限与窄窗口断点都从它推导。
+ *
+ * 取 360 与右栏最小宽度同档：两者都是「一块内容区最少占多宽」，没有理由不一样。
+ * 比这更窄时消息列会开始频繁折行；再宽则白白挤走右栏，而消息列本来就有 840px 上限。
  */
-export const SHELL_MAIN_VIEW_MIN_WIDTH = 450;
+export const SHELL_MAIN_VIEW_MIN_WIDTH = 360;
 
 /** 正文区（main）左右内边距之和；卡片最小宽度之外还要为它让出空间。 */
 export const SHELL_MAIN_VIEW_GUTTER = SHELL_MAIN_VIEW_OFFSET * 2;
@@ -71,12 +74,17 @@ export const SHELL_MAIN_VIEW_GUTTER = SHELL_MAIN_VIEW_OFFSET * 2;
 /**
  * 正文需要的最小总占宽（设计 px）：卡片最小宽度 + 两侧留白。
  *
- * 这是右栏宽度上限与窄窗口断点共同的扣除项。
+ * 右栏宽度上限与窄窗口断点共同的扣除项，也是正文下限在 DOM 里的落点。
  */
 export const SHELL_MAIN_VIEW_MIN_REGION = SHELL_MAIN_VIEW_MIN_WIDTH + SHELL_MAIN_VIEW_GUTTER;
 
-/** 卡片最小宽度的 CSS 值；跟随界面缩放，走 rem 出口。 */
-export const SHELL_MAIN_VIEW_MIN_WIDTH_CSS = shell_length_css(shell_scaled_length(SHELL_MAIN_VIEW_MIN_WIDTH));
+/**
+ * 正文区最小总占宽的 CSS 值（DesktopShell 的 main 使用）。
+ *
+ * 正文下限在 DOM 里只落这一处：同一个常量同时决定「正文占多宽」与「右栏最多能拖多宽」。
+ * 必须落在 main 而不是卡片上：卡片是 flex 项，自己的 min-width 只能让它溢出、撑不开父层。
+ */
+export const SHELL_MAIN_VIEW_MIN_REGION_CSS = shell_length_css(shell_scaled_length(SHELL_MAIN_VIEW_MIN_REGION));
 
 /**
  * 两侧面板缩放把手的几何。
@@ -132,19 +140,6 @@ export const SHELL_PANEL_TRANSITION = {
   duration: 0.3,
   ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
 };
-
-/**
- * 读取当前的界面缩放比例。
- *
- * 界面缩放是通过改写根元素 font-size 实现的，所以 1rem 的实际像素值就是缩放本身。
- * 右栏宽度上限要把「给正文保留的宽度」按缩放换算成实际像素：保留量在 CSS 里是 rem，
- * 而测量得到的可用宽度是实际像素，直接相减会让 120% 下的正文被夹到不足 450 设计像素。
- */
-export function read_shell_scale(): number {
-  if (typeof document === "undefined") return 1;
-  const root_font_size = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
-  return Number.isFinite(root_font_size) && root_font_size > 0 ? root_font_size / SHELL_REM_BASE : 1;
-}
 
 /**
  * 两侧面板开关相对各自窗口边缘的偏移。

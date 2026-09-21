@@ -14,6 +14,7 @@ import type { DesktopController } from "@/types/DesktopView";
 import { ShellLayoutProvider } from "@/layouts/MainViewLayout";
 import { ShellSidebarControl } from "@/layouts/ShellSidebarControl";
 import { SIDEBAR_AUTO_COLLAPSE_WIDTH, resolve_shell_auto_collapse } from "@/layouts/shellResponsive";
+import { SHELL_MAIN_VIEW_MIN_REGION_CSS } from "@/layouts/shellMotion";
 import { use_media_query } from "@/hooks/use_media_query";
 import { resolve_desktop_link } from "@/features/navigation/lib/desktop_link";
 import { resolve_sidebar_shortcut_mode } from "@/features/navigation/lib/sidebar_shortcut";
@@ -204,15 +205,25 @@ export function DesktopShell() {
         open_group_config={open_group_from_sidebar}
         collapsed={sidebar_collapsed}
       />
-      {/* 右侧 BayBar 与左侧 Sidebar 平级，同属窗口级面板。
-          Provider 同时包住正文与面板：正文里的入口靠同一份 context 打开面板。 */}
+      {/* 右侧 BayBar 与左侧 Sidebar 平级，同属窗口级面板；
+          Provider 同时包住正文与面板，正文里的入口靠同一份 context 打开面板。
+
+          这一层（正文区）是 BayBar 量宽度的基准，必须**不含 Sidebar**：
+          宽度上限 = 本层宽度 − 正文下限，把 Sidebar 算进去就会多出一个 Sidebar 的宽度，
+          用户能把右栏拖到把正文压到下限以下。main 上的最小宽度就是正文下限的落点。
+
+          `min-w-0` 不能省：flex 项默认 `min-width: auto`（即 min-content），
+          而 main 带下限，本层就会拒绝缩到「下限 + 面板」以下——行被撑破、面板被推出窗口，
+          而且量到的宽度反过来取决于面板自己有多宽，拖拽会自激（400 拖到 399 直接跳到 360）。 */}
       <BayBarProvider value={baybar}>
-        <main className="relative flex h-full min-w-0 flex-1 bg-muted p-1">
-          <ShellLayoutProvider value={shell_layout}>
-            <DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} />
-          </ShellLayoutProvider>
-        </main>
-        <BayBar />
+        <div className="flex h-full min-h-0 min-w-0 flex-1">
+          <main style={{ minWidth: SHELL_MAIN_VIEW_MIN_REGION_CSS }} className="relative flex h-full flex-1 bg-muted p-1">
+            <ShellLayoutProvider value={shell_layout}>
+              <DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} />
+            </ShellLayoutProvider>
+          </main>
+          <BayBar />
+        </div>
       </BayBarProvider>
     </div>
     <ShellSidebarControl collapsed={sidebar_collapsed} toggle_sidebar={toggle_sidebar} />
