@@ -122,9 +122,9 @@ test("三档的大小关系成立：紧 < 正文 < 块级", () => {
   /*
    * 光「大于」不够：块级档与正文档只差 0.1em（1.5px）时，两个层级已经抹平。
    * 用与 `chat_message_layout.test.ts` 同一个可感知下限（0.125rem = 2px）衡量。
-   * 按默认正文档 `base`（0.9375rem）换算，这条等价于块级档不得小于 0.5em + 0.133em。
+   * 按默认正文档 `base`（0.875rem）换算，这条等价于块级档不得小于 0.5em + 0.143em。
    */
-  const body_size_rem = 0.9375;
+  const body_size_rem = 0.875;
   const difference_px = (block! - flow!) * body_size_rem * 16;
   assert.ok(
     difference_px >= 2,

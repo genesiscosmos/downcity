@@ -15,11 +15,11 @@
  * ## 这里最关键的一条：档名与数值的对应关系
  *
  * 档名沿用前端传统命名，但**数值是本应用自有的阶梯，与 Tailwind 同名档位不等值**：
- * 从 `sm` 到 `lg` 三档都比 Tailwind 小一档左右（本应用 `base` = 0.9375rem，Tailwind = 1rem），
+ * 从 `sm` 到 `lg` 三档都比 Tailwind 小一档左右（本应用 `base` = 0.875rem，Tailwind = 1rem），
  * `xs` 与 `xl` 及以上四档与 Tailwind 相同。原因是本应用是密集的桌面工具，
  * Tailwind 的 `base` = 1rem（16px）对默认正文偏大。
  *
- * 代价是「凭 Tailwind 文档的记忆写代码」会拿到错误尺寸（写 `text-base` 得到 0.9375rem）。
+ * 代价是「凭 Tailwind 文档的记忆写代码」会拿到错误尺寸（写 `text-base` 得到 0.875rem）。
  * 因此下面把「档名 → rem」**硬编码**成断言，而不是从源码读出来再自比：
  * 从源码读出来的话，值被改成什么都测不出来；硬编码才能把这件事钉住。
  *
@@ -39,8 +39,8 @@
  * | `2xs` | 0.6875rem | 0.9375rem | 11 / 15px |
  * | `xs` | 0.75rem | 1rem | 12 / 16px |
  * | `sm` | 0.8125rem | 1.1875rem | 13 / 19px |
- * | `base` | 0.9375rem | 1.25rem | 15 / 20px |
- * | `lg` | 1.0625rem | 1.5rem | 17 / 24px |
+ * | `base` | 0.875rem | 1.25rem | 14 / 20px |
+ * | `lg` | 1rem | 1.5rem | 16 / 24px |
  * | `xl` | 1.25rem | 1.75rem | 20 / 28px |
  * | `2xl` | 1.5rem | 2rem | 24 / 32px |
  * | `3xl` | 1.875rem | 2.25rem | 30 / 36px |
@@ -84,8 +84,8 @@ const expected_scale: readonly (readonly [string, string, string])[] = [
   ["2xs", "0.6875rem", "0.9375rem"],
   ["xs", "0.75rem", "1rem"],
   ["sm", "0.8125rem", "1.1875rem"],
-  ["base", "0.9375rem", "1.25rem"],
-  ["lg", "1.0625rem", "1.5rem"],
+  ["base", "0.875rem", "1.25rem"],
+  ["lg", "1rem", "1.5rem"],
   ["xl", "1.25rem", "1.75rem"],
   ["2xl", "1.5rem", "2rem"],
   ["3xl", "1.875rem", "2.25rem"],
@@ -265,7 +265,7 @@ test("默认档 base 是正文用的那一档，且在正文约束之内", () =>
   const declared = read_declared_scale();
   const base = declared.get(default_level)!.size_rem;
   // 它是全应用最常用的档，动了就是全局字号变动。
-  assert.equal(base, 0.9375, `默认档 base 不是 0.9375rem（15px）：${base}rem`);
+  assert.equal(base, 0.875, `默认档 base 不是 0.875rem（14px）：${base}rem`);
   /*
    * `.markdown` 的段落间距是 0.5em，必须比消息块间距（gap-3 = 0.75rem）小至少 0.125rem：
    * `0.5 × 字号 ≤ 0.75 − 0.125` ⇒ 字号 ≤ 1.25rem。

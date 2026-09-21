@@ -60,7 +60,7 @@ export const agent_identity_row_class_name = "flex min-w-0 items-center gap-1.5 
 /**
  * 身份行头像：`size-6`（24px）。
  *
- * 从 20px 提到 24px 是为了与 `base`（15px）正文的比例：头像略高于一行文字。
+ * 从 20px 提到 24px 是为了与 `base`（14px）正文的比例：头像略高于一行文字。
  * 20px 在这个比例下更像「一个图标」，24px 才读得出「一个人」。
  */
 export const agent_identity_avatar_class_name = "size-6 rounded-chip";
@@ -88,7 +88,7 @@ export const agent_identity_name_class_name = "min-w-0 truncate text-sm font-med
  *
  * | 层级 | 值 | 来源 |
  * | --- | --- | --- |
- * | Markdown 段落之间 | 0.5em = 0.46875rem（`base` 正文） | `styles/markdown.css` |
+ * | Markdown 段落之间 | 0.5em = 0.4375rem（`base` 正文） | `styles/markdown.css` |
  * | 消息内的块之间 | `gap-3` = 0.75rem | 这里 |
  * | 两条消息之间 | 根容器 `py-2`，合计 1rem | `agent_message_root_class_name` |
  *
@@ -99,8 +99,8 @@ export const agent_identity_name_class_name = "min-w-0 truncate text-sm font-med
  * 但注意：段落间距随**字号**走（0.5em），而字号是会被反复调的值。
  *
  * 块间距从 0.625rem 抬到 0.75rem，是为了给「默认档定在 `base`」留出余量：
- * 在 `base`（0.9375rem）下段落间距是 0.46875rem，与块间距差 0.28125rem（= 4.5px）；
- * 若沿用 0.625rem，差值只有 0.15625rem（= 2.5px），两个层级会几乎分不出来。
+ * 在 `base`（0.875rem）下段落间距是 0.4375rem，与块间距差 0.3125rem（= 5px）；
+ * 若沿用 0.625rem，差值只有 0.1875rem（= 3px），两个层级会几乎分不出来。
  * 由此得出正文的**字号上限**：`0.5 × 字号 ≤ 0.75 − 0.125` ⇒ 不得超过 `xl`（1.25rem）。
  * 这条约束由 `chat_message_layout.test.ts` 以「同一根字号下的换算」守着。
  *
@@ -125,15 +125,15 @@ export const agent_message_body_class_name = "flex min-w-0 w-full flex-col gap-3
  * 以及 `base.css` 的 `.chat-input-editor`（Composer）。前四处用本常量，
  * Composer 用 `var()`；两边都指向 `tokens.css` 的 `--text-base` + `--leading-reading`。
  *
- * ## 为什么用 `base`（0.9375rem = 15px）
+ * ## 为什么用 `base`（0.875rem = 14px）
  *
  * 它是全应用「普通文字」的**默认档**：不特别说明就用它。
- * 0.9375rem 是本应用自有的数值（Tailwind 的 `base` 是 1rem）——默认档定在 `base`
+ * 0.875rem 是本应用自有的数值（Tailwind 的 `base` 是 1rem）——默认档定在 `base`
  * （名字语义正确）与「正文尺寸适合密集桌面工具」（尺寸合适）两个要求相交处。
  * 档位对照见 `tokens.css`。
  *
- * 与块间距的关系是硬约束：段落间距 0.5em（= 0.46875rem）与块间距（`gap-3` = 0.75rem）
- * 差 0.28125rem（= 4.5px），在两个层级之间留出了可感知的差值，
+ * 与块间距的关系是硬约束：段落间距 0.5em（= 0.4375rem）与块间距（`gap-3` = 0.75rem）
+ * 差 0.3125rem（= 5px），在两个层级之间留出了可感知的差值，
  * 同时也给出正文字号的**上限 `xl`**（1.25rem）。
  *
  * `--leading-reading` 只被 Agent 侧引用；Composer 与用户气泡用 `--leading-chat`（见下）。
@@ -165,7 +165,7 @@ export const chat_message_text_class_name = "text-base leading-reading text-fore
  * | 属性 | Agent 正文 | 用户气泡 |
  * | --- | --- | --- |
  * | 字号 | `base` | `base`（同值） |
- * | 行高 | `--leading-reading`（1.8 / 27px） | `--leading-chat`（1.6 / 24px） |
+ * | 行高 | `--leading-reading`（1.8 / 25.2px） | `--leading-chat`（1.6 / 22.4px） |
  * | 理由 | 机器产出的长文，要连续阅读 | 人敲的短句，多在紧凑气泡里 |
  *
  * **字号必须一致**：曾经两侧各设一档（13px / 15.5px），用户的反馈是
@@ -174,7 +174,7 @@ export const chat_message_text_class_name = "text-base leading-reading text-fore
  * 所以那条结论仍然成立。
  *
  * **行高可以不同**：1.8 是给长段落读的节奏，而用户气泡里通常只有一两行。
- * 这不是拍脑袋——15px 下 1.7 曾被用户否过（「行内间距大一点」），
+ * 这不是拍脑袋——1.7 曾被用户否过（「行内间距大一点」），
  * 但那是在 Agent 正文的上下文里得出的，不能直接套到气泡。
  * 两个值各自的依据写在 `tokens.css`。
  *

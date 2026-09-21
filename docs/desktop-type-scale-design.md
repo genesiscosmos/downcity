@@ -76,9 +76,9 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 | `text-3xs` | 0.625rem | 0.875rem | 10 / 14px | 无此名 | 极短标签、角标 | 49 |
 | `text-2xs` | 0.6875rem | 0.9375rem | 11 / 15px | 无此名 | 元信息 | 61 |
 | `text-xs` | 0.75rem | 1rem | 12 / 16px | 0.75rem（相同） | 辅助正文 | 153 |
-| `text-sm` | 0.8125rem | 1.1875rem | 13 / 19px | 0.875rem | （空，见下） | **0** |
-| **`text-base`** | **0.9375rem** | **1.25rem** | **15 / 20px** | 1rem | **默认正文** | 36 |
-| `text-lg` | 1.0625rem | 1.5rem | 17 / 24px | 1.125rem | 强调正文 + 区块标题 | 7 |
+| `text-sm` | 0.8125rem | 1.1875rem | 13 / 19px | 0.875rem | 紧凑正文（消息身份行） | 1 |
+| **`text-base`** | **0.875rem** | **1.25rem** | **14 / 20px** | 1rem | **默认正文** | 36 |
+| `text-lg` | 1rem | 1.5rem | 16 / 24px | 1.125rem | 强调正文 + 区块标题 | 7 |
 | `text-xl` | 1.25rem | 1.75rem | 20 / 28px | 相同 | 面板标题与主数值（也是正文的字号上限） | 2 |
 | `text-2xl` | 1.5rem | 2rem | 24 / 32px | 相同 | 页面主标题 | 3 |
 | `text-3xl` | 1.875rem | 2.25rem | 30 / 36px | 相同 | （空，预留） | **0** |
@@ -90,8 +90,10 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 1. **`base` 是默认档。** 任何「普通文字」默认用它；需要偏离时必须能说清它属于哪一档角色。
 2. **行高与字号成对，但可以单独覆盖。** Tailwind 生成的声明是 `line-height: var(--tw-leading, var(--text-base--line-height))`，因此显式 `leading-*` 永远优先。只有消息正文这么做（§五）。
 3. **不加第 10 级。** 需要「比 `xs` 大一点、比 `base` 小一点」时，用现成的 `sm`（见下），而不是插一级。
-4. **`sm`（0.8125rem = 13px）目前没有调用点，但档位保留。** 它是「比 `xs` 大、比 `base` 小」的现成档位：将来需要紧凑正文（例如把工具活动行从正文里拉开一档）时直接用它。注意 14px **不在**阶梯里：`sm` 到 `base` 直接跳 13 → 15px。
-5. **`3xl`（30px）同样没有调用点**，为将来可能的全屏引导页保留。
+4. **`sm`（0.8125rem = 13px）只服务一处：消息身份行名称**（`agent_identity_name_class_name`）。它是「比 `xs` 大、比 `base` 小」的现成档位，将来需要紧凑正文（例如把工具活动行从正文里拉开一档）时也可用它。
+   注意它与 `base`（14px）**只差 1px**，是全阶梯唯一一处 1px 相邻档。那是有意的：身份行靠字号 + `font-medium` 与正文拉开，而它不属于「正文」，不能直接跳到 `base`。
+   **不要照此再插新档**：不可见的相邻档正是引入这套规范之前的问题（§1.1）。
+5. **`3xl`（30px）没有调用点**，为将来可能的全屏引导页保留。
 
 ---
 
@@ -106,18 +108,22 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 | `3xs` / `2xs` | 0.625 / 0.6875rem | 无此名 | — |
 | `xs` | 0.75rem | 0.75rem | 相同 |
 | `sm` | 0.8125rem | 0.875rem | 小 0.0625rem（1px） |
-| `base` | 0.9375rem | 1rem | 小 0.0625rem（1px） |
-| `lg` | 1.0625rem | 1.125rem | 小 0.0625rem（1px） |
+| `base` | 0.875rem | 1rem | 小 0.0625rem（1px） |
+| `lg` | 1rem | 1.125rem | 小 0.125rem（2px） |
 | `xl` / `2xl` / `3xl` | 1.25 / 1.5 / 1.875rem | 相同 | 无 |
 
-**明确的代价：** 从 Tailwind 文档或其他项目复制类名会拿到错误的尺寸——写 `text-base` 得到 0.9375rem 而不是 1rem。`sm` 到 `lg` 三档都小一档左右；`xs` 与 `xl` 及以上四档与 Tailwind 相同（所以标题类复制不会出错）。
+**明确的代价：** 从 Tailwind 文档或其他项目复制类名会拿到错误的尺寸——写 `text-base` 得到 0.875rem 而不是 1rem。`sm` 到 `lg` 三档都小一档左右；`xs` 与 `xl` 及以上四档与 Tailwind 相同（所以标题类复制不会出错）。
+
+注意 `base`（0.875rem）与 Tailwind 的 `sm` 数值相同、`lg`（1rem）与 Tailwind 的 `base` 相同：**错位一格**，这正是「按名字找尺寸」会出错的原因。
 
 **为什么接受这个代价：** Tailwind 的 `base` 是 1rem（16px），而本应用的默认正文需要更小。它是密集的桌面工具：
 
 1. 16px 正文会把消息列的行长压得过短，正文与工具活动的体量比也会失去平衡。
 2. 1rem 正文下段落间距（0.5em = 8px）与块间距只差 4px，余量只剩一档；而设计上希望正文再小一点，以留出更多层次空间。
 
-默认档定在 `base`（名字语义正确）与「正文适合密集桌面工具」（尺寸合适）两个要求相交处，就是 0.9375rem（15px）。
+默认档定在 `base`（名字语义正确）与「正文适合密集桌面工具」（尺寸合适）两个要求相交处，就是 0.875rem（14px）。
+
+这个值还有一条独立的依据：它是**消息正文的历史结论**。在字号收敛之前，消息正文曾单独走过一轮调整，13px 被「Agent 正文有点小」否、15px 被「user 还是很很大」否，最终定在 14px（见 `docs/desktop-agent-message-rendering-redesign-prd.md` 第 24 节）。默认档取 14px 后，那一轮结论与全应用默认档合流，不再需要一处例外。
 
 ### 3.2 代价由测试看住
 
@@ -135,8 +141,8 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 | `2xs` | 0.6875 / 11 | 0.9375 / 15 |
 | `xs` | 0.75 / 12 | 1 / 16 |
 | `sm` | 0.8125 / 13 | 1.1875 / 19 |
-| `base` | 0.9375 / 15 | 1.25 / 20 |
-| `lg` | 1.0625 / 17 | 1.5 / 24 |
+| `base` | 0.875 / 14 | 1.25 / 20 |
+| `lg` | 1 / 16 | 1.5 / 24 |
 | `xl` | 1.25 / 20 | 1.75 / 28 |
 | `2xl` | 1.5 / 24 | 2 / 32 |
 | `3xl` | 1.875 / 30 | 2.25 / 36 |
@@ -154,9 +160,9 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 
 上一版曾把 `xs` … `3xl` 七档与 Tailwind 默认主题调成逐字节等值（那时 `base` = 1rem），验证方式是编译一份 Tailwind 默认主题、读出真值再逐项对照。那个方案解决了一个真问题（档名可预测），但它把默认正文锁在 16px。
 
-现在的取舍相反：**默认正文取 0.9375rem（15px），代价是 `sm`–`lg` 三档不再与 Tailwind 同名同值。** 这是一次明确的产品决定，不是遗漏。若将来要回到等值，需要同时接受 16px 的默认正文，或把默认档从 `base` 挪回 `sm`（那时“默认档不叫 base”的不一致会回来）。
+现在的取舍相反：**默认正文取 0.875rem（14px），代价是 `sm`–`lg` 三档不再与 Tailwind 同名同值。** 这是一次明确的产品决定，不是遗漏。若将来要回到等值，需要同时接受 16px 的默认正文，或把默认档从 `base` 挪回 `sm`（那时“默认档不叫 base”的不一致会回来）。
 
-**13px 是可保留的，但只能靠自有阶梯。** Tailwind 的档位表里没有 13px（也没有 15px）；本应用因为采用自有数值，才能把 0.8125rem 作为 `sm`、0.9375rem 作为 `base` 同时保留下来（§二.4）。
+**13px 是可保留的，但只能靠自有阶梯。** Tailwind 的档位表里没有 13px（也没有 14px）；本应用因为采用自有数值，才能把 0.8125rem 作为 `sm`、0.875rem 作为 `base` 同时保留下来（§二.4）。
 
 
 ---
@@ -170,12 +176,13 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 | `3xs` | 不承载阅读的位置：图表坐标轴刻度、头像首字母、计数角标、极短的状态标签 | `UsageLineChart` / `ModelPricingChart` 的轴标签、`AccountSwitchList` 的首字母、`CollapsibleModelGroup` 的计数 |
 | `2xs` | 元信息：时间戳、文件名、chip、字段键名、工具行细节、快捷键提示 | `ChatMessageTimestamp`、`WorkspaceTagMenu`、`ActivityToolState` 的细节行、`button.tsx` 的 `default/small` 档 |
 | `xs` | 辅助正文：列表项的次要行、帮助文案、空态说明、提示与错误 | `SettingComponents` 的描述行、`ChatSubjectList` 的会话摘要、`SessionTimeline` 的 Agent 描述、消息的失败提示条 |
+| `sm` | 紧凑正文：**只服务消息身份行名称**（比 `xs` 大、比 `base` 小，且靠 `font-medium` 与正文区分） | `agent_identity_name_class_name` |
 | **`base`** | **默认正文与常规控件：消息正文、通用段落、按钮标签、标准输入、列表行主标签** | `message_layout` 的正文与容器兜底、`button.tsx` 的 `large`、`SettingComponents` 的标签、Workspace README |
 | `lg` | 强调正文 + 区块标题、关键数值 | `CreateAgentView` / `CreateGroupView` 的 prompt 输入、`SettingComponents` 的页标题、`SettingsView` 的额度金额 |
 | `xl` | 面板标题、主数值 | `SettingsView` 的账号名与用量数值 |
 | `2xl` | 页面主标题：**每屏至多一个** | `CreateAgentView` / `CreateGroupView` 的问题标题、`WorkspaceView` 的 Workspace 名 |
 | `xs`（紧凑导航） | **侧栏的行与标题**：行主标签、面板标题（12px）；行描述用 `2xs`（11px） | `ChatSubjectList`、`PowerSidebar`、`SettingsSidebarPanel`、`WorkspaceTree` |
-| `sm` / `3xl` | 空档：`sm` 是预留的紧凑正文，`3xl` 是预留的页面大标题 | —（当前无调用点） |
+| `3xl` | 空档：预留的页面大标题 | —（当前无调用点） |
 
 > `lg` 同时承担「强调正文」与「区块标题」两个角色，它们用字重（`font-semibold`）与上下文区分。
 > 默认档定在 `base` 后，上一档（原 `base`）被顶到 `lg`，与原有的区块标题合流——这是选档顺序的必然结果，不是遗忘。
@@ -183,7 +190,7 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 > **侧栏的紧凑导航档（`xs`）是唯一一处允许整片用 `xs`/`2xs` 的业务表面**，理由与反例不同：
 > 它不是一个「列表行主标签」，而是**导航**——侧栏的作用是让人一眼扫完有哪些主体，
 > 主区域才是阅读面。同一屏里侧栏行比消息正文小一档，层级才读得出来；
-> 而且侧栏宽度下限只有 232px，`base`（15px）会让名称在默认宽度下就被截断。
+> 而且侧栏宽度下限只有 232px，`base`（14px）会让名称在默认宽度下就被截断。
 > 这条是**收敛后的结论**，不是允许各面板自行选档：侧栏内部仍只有一个出口
 > （见 `docs/desktop-sidebar-design.md` 的行契约表），行描述固定 `2xs`、行主标签固定 `xs`。
 
@@ -210,10 +217,10 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 
 消息排版是例外：`base` 的配对行高是 1.25rem（UI 密度），对长文太挤。这里有两个行高，对应两种阅读节奏：
 
-| 令牌 | 值 | 15px 下 | 用在哪 |
+| 令牌 | 值 | 14px 下 | 用在哪 |
 | --- | --- | --- | --- |
-| `--leading-reading` | 1.8 | 27px | Agent 正文（机器产出的长文） |
-| `--leading-chat` | 1.6 | 24px | 用户气泡与 Composer（人敲的短句） |
+| `--leading-reading` | 1.8 | 25.2px | Agent 正文（机器产出的长文） |
+| `--leading-chat` | 1.6 | 22.4px | 用户气泡与 Composer（人敲的短句） |
 
 ```ts
 // message_layout.ts
@@ -221,9 +228,10 @@ export const chat_message_text_class_name = "text-base leading-reading text-fore
 export const user_message_text_class_name = "text-base leading-chat text-foreground";         // 用户气泡
 ```
 
-- 两侧都用**默认档** `base`（0.9375rem），**不另外开一级字号**。
-- `--leading-reading` = 1.8 不是随手取的：15px 下 1.7 被用户直接否过（「行内间距大一点」），才提到 1.8。**不要为了全局统一而把它改小**。
-- `--leading-chat` = 1.6 给短句：用户气泡里多是一两行，1.8 在紧凑气泡里显松。不取 1.5 是因为 1.5 × 0.9375rem = 22.5px，不在 1/16rem 网格上；1.6 正好是 24px。
+- 两侧都用**默认档** `base`（0.875rem），**不另外开一级字号**。
+- `--leading-reading` = 1.8 不是随手取的：1.7 在当时的 15px 正文下被用户直接否过（「行内间距大一点」），才提到 1.8。那是一条**比例**结论，所以正文降到 14px 时保持 1.8。**不要为了全局统一而把它改小**。
+- `--leading-chat` = 1.6 给短句：用户气泡里多是一两行，1.8 在紧凑气泡里显松。
+- 两个值都是无单位倍数，乘 `base`（0.875rem）后是 25.2 / 22.4px，**不落在 1/16rem 网格上**。「整数像素」要求针对的是字形（半像素会发虚），行高的小数部分由浏览器按行处理，不影响字形清晰度，因此有意保留。
 
 ### 5.1 字号必须同值，行高按角色分开
 
@@ -248,9 +256,9 @@ export const user_message_text_class_name = "text-base leading-chat text-foregro
 0.5 × 字号 ≤ 0.75rem − 0.125rem  ⇒  字号 ≤ 1.25rem
 ```
 
-也就是说**消息正文不得超过 `xl`**。当前正文是 `base`（0.9375rem），段落间距 0.46875rem（= 7.5px），差值 0.28125rem（= 4.5px），还剩一档余量。
+也就是说**消息正文不得超过 `xl`**。当前正文是 `base`（0.875rem），段落间距 0.4375rem（= 7px），差值 0.3125rem（= 5px），还剩一档余量。
 
-**块间距从 `gap-2.5`（0.625rem）抬到 `gap-3`（0.75rem）正是为了这一步。** 默认档取 `base`（0.9375rem）后，若沿用 0.625rem，差值只剩 0.15625rem（= 2.5px）——几乎贴到下限，以后再也不能加字号。抬到 `gap-3` 后差值 4.5px，与段落/块/消息三个量级的比例（0.46875 / 0.75 / 1rem）也比原来均匀。
+**块间距从 `gap-2.5`（0.625rem）抬到 `gap-3`（0.75rem）正是为了这一步。** 默认档取 `base`（0.875rem）后，若沿用 0.625rem，差值只剩 0.1875rem（= 3px）——仍高于下限但余量不大；抬到 `gap-3` 后差值 5px，与段落/块/消息三个量级的比例（0.4375 / 0.75 / 1rem）也比原来均匀。
 
 这条约束由 `chat_message_layout.test.ts` 守着——它把三个量级都换算成 rem 再比较，因此**不需要知道根字号是多少**，与界面缩放无关。调大正文字号时它会失败，这是有意的：加字号必须同时加块间距，否则正文与工具活动会粘在一起。
 
@@ -357,7 +365,7 @@ themeCSS 里的 `14px` / `12px` / `12.5px`），不用 9 级档位。
 1. **默认档定在 `base`。** 阶段二之后默认档是 `sm`，但 `sm` 的名字不是 base，
    每份文档都得解释一次「名为 base 的档不是默认」。
 2. **数值改为自有阶梯。** 阶段二为了让 `base` = 1rem（Tailwind 等值），正文被锁在 16px，
-   对密集的桌面工具偏大（§三.1）。现在 `base` = 0.9375rem（15px），
+   对密集的桌面工具偏大（§三.1）。现在 `base` = 0.875rem（14px），
    代价是 `xs`–`lg` 四档不再与 Tailwind 同名同值。
 
 两个决定相交的结果就是 §二 的表。调用点的**档名没变**（仍然是 `sm` → `base` → `lg` ——），
@@ -367,7 +375,7 @@ themeCSS 里的 `14px` / `12px` / `12.5px`），不用 9 级档位。
 
 ```text
 引入前  9px×10  10px×39  11px×61  12px×152  12.5px×1  13px×12  14px×23  16px×4  18px×3  20px×2  24px×3   合计 310
-现在          10px×49  11px×61  12px×153            15px×36  17px×7  20px×2  24px×3                     合计 311
+现在          10px×49  11px×61  12px×153            14px×36  16px×7  20px×2  24px×3                     合计 311
 ```
 
 （总数 +1：消息正文字号从普通 CSS 类搬进了类名列表，多出一处显式声明。）
@@ -376,10 +384,10 @@ themeCSS 里的 `14px` / `12px` / `12.5px`），不用 9 级档位。
 | --- | --- | --- |
 | 9px → 10px（图表轴标签与图例） | 10 | 并入 `3xs` |
 | 12.5px → 12px（消息失败提示条） | 1 | 并入 `xs` |
-| 13px → 15px（列表主标签、活动行） | 12 | 并入 `base` |
-| 14px → 15px（普通文字、按钮、输入） | 23 + 4（CSS） | 默认档 `base` |
+| 13px → 14px（列表主标签、活动行） | 12 | 并入 `base` |
+| 14px → 14px（普通文字、按钮、输入） | 23 + 4（CSS） | 默认档 `base`，数值不变 |
 | 10.5px → 11px、11.5px → 11px（样式表） | 5 | 并入 `2xs` |
-| 16px 与 18px → 17px | 7 | 收容到 `lg`（创作向导输入、Agent 名称、页标题、额度金额） |
+| 16px 与 18px → 16px | 7 | 收容到 `lg`（创作向导输入、Agent 名称、页标题、额度金额） |
 | 20px / 24px | 5 | 收容到 `xl` / `2xl`，数值不变 |
 
 **也就是说：除标题档外，全应用的字号都动了，但幅度在 ±2px 以内**——
@@ -403,7 +411,7 @@ themeCSS 里的 `14px` / `12px` / `12.5px`），不用 9 级档位。
 | `tests/font_scale.test.ts` | **档名 → 字号 + 配对行高的硬编码契约**（`expected_scale`）；9 级、递增、全 rem、成对行高；**每一级都落在 1/16rem 网格上**（并带反向断言证明它不是恒真）；默认档 `base` 在正文约束之内；代码里无 `4xl` 及以上、无任意值；**源码里每一个 `text-*` 类名都能被 Tailwind 生成规则**；样式表字号只引令牌或 em；**每个渲染 Markdown 的文件都自己声明了字号**；`lib/utils.ts` 与 `tokens.css` 两份清单一致；9 级都真的生成规则；`4xl` 及以上一个都不生成 |
 | `tests/tailwind_merge_classes.test.ts` | 跑真正的 `cn()`：四个真实调用点保留字号；**逐级**验证 9 个档位都能穿过 `cn()`；反向断言未注册的档名确实被删除（证明守卫不是恒真）；字号之间后者覆盖前者；消息正文不再依赖普通类 |
 | `tests/design_token_drift.test.ts` | 渲染层不出现 `text-4xl` 及以上与 `text-[…rem]` 这类任意值 |
-| `tests/chat_message_layout.test.ts` | 消息正文档位（`base`，0.9375rem）与行高同行同源；块间距 > 段落间距且差值 ≥ 0.125rem（等价于正文 ≤ `xl`） |
+| `tests/chat_message_layout.test.ts` | 消息正文档位（`base`，0.875rem）与行高同行同源；块间距 > 段落间距且差值 ≥ 0.125rem（等价于正文 ≤ `xl`） |
 | `tests/tailwind_tokens.test.ts` | 语义颜色 / 圆角令牌能生成工具类（字号部分已移交 `font_scale.test.ts`） |
 
 两条值得单独说明的实现细节，都是「假保护」的常见来源：
@@ -430,7 +438,7 @@ cd app/desktop && ./node_modules/.bin/tsc -p tsconfig.web.json --noEmit && ./nod
 - **Plugin 自带的 Markdown 仍是 `xs`**（`PluginRendererComponents` 的默认正文与 CodeBlock）。它们是 Plugin 自己的 UI，宿主不应单方面改其密度。
 - **Mermaid 图表内文字仍是固定 px**（`mermaid_theme.ts`），理由与实际行为见 §6.2。它不跟随界面缩放，也不取 9 级档位；本次未改变它。
 - **`markdown.css` 的 `em` 比值未重算**（`h1` 1.55em、`code` 0.92em）。它们在 `base` 下的取值与改动前一致，重算属于排版审美调整，不属于字号收敛。
-- **`sm`（0.8125rem）与 `3xl`（1.875rem）当前无调用点。** 两者都是 9 级阶梯的成员，保留定义并在此记录，避免被误认为「死令牌」而删除或改值。
-- **消息列宽仍是 `max-w-[840px]`。** 正文 15px 下每行约 55 个汉字。本次未同步调宽，因为宽度会连带影响 Composer、表格与代码块。
+- **`3xl`（1.875rem）当前无调用点。** 它是 9 级阶梯的成员，保留定义并在此记录，避免被误认为「死令牌」而删除或改值。
+- **消息列宽仍是 `max-w-[840px]`。** 正文 14px 下每行约 59 个汉字（15px 时约 55）。本次未同步调宽，因为宽度会连带影响 Composer、表格与代码块。
 - **`homepage/` 与 `packages/ui/` 不在范围内。** homepage 是 Tailwind v3 + 自带 `tailwind.config.ts` 的营销站，`packages/ui` 尚未被 desktop 引用（desktop 的 `package.json` 里没有 `@downcity/ui`）。等 desktop 开始消费 `packages/ui` 时，需要让它在 `packages/ui/src/styles.css` 里声明同一套 `--text-*`，否则会出现第二套字号体系。
-- **没有做视觉回归截图对比。** 除标题档外全应用字号都动了（幅度 ±2px 以内），建议在真实构建后用关键界面（会话正文与工具活动行、设置-模型列表、用量图表、命令面板、创作向导）做一次目视确认。
+- **没有做视觉回归截图对比。** 除标题档外全应用字号都动了（幅度 ±1px 以内），建议在真实构建后用关键界面（会话正文与工具活动行、设置-模型列表、用量图表、命令面板、创作向导）做一次目视确认。

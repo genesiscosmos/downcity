@@ -232,7 +232,7 @@ export function create_power_renderer_ui_components(options: PowerRendererUiComp
      * ## 字号按**插入位置**分档，不是一刀切
      *
      * 同一个组件在侧栏与主区域里的合适字号不同：侧栏只有 232–400px 宽，
-     * 而它旁边就是一列 12px 的行——空态标题写 15px（`base`）会比列表本身还重，
+     * 而它旁边就是一列 12px 的行——空态标题写 14px（`base`）会比列表本身还重，
      * 看起来像一条“内容”。主区域才用 `base`。
      *
      * 以前这里写死了 `text-base`，于是 Power 侧栏的空态比它上面的行大一整档。
