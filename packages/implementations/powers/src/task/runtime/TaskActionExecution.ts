@@ -7,7 +7,7 @@
  */
 
 import type { PowerContext } from "@downcity/city/power";
-import type { PowerActionExecutionContext } from "@downcity/city/power";
+import type { PowerCallScope } from "@downcity/city/power";
 import type { PowerExecutionContext } from "@downcity/city/power";
 import type { PowerNotificationPublisher } from "@downcity/city/power";
 import type { PowerJsonValue } from "@downcity/city/power";
@@ -185,7 +185,7 @@ export async function executeTaskCreateAction(params: {
   context: PowerContext;
   definitions: TaskDefinitionRepository;
   payload: TaskCreateRequest;
-  execution: PowerActionExecutionContext;
+  call: PowerCallScope;
   reloadSchedulerAfterMutation: TaskSchedulerReloadPort;
 }) {
   const payload = params.payload;
@@ -196,13 +196,13 @@ export async function executeTaskCreateAction(params: {
       ...payload,
       workspace_id: payload.workspace_id || params.context.workspace.id,
     },
-    ...(params.execution.session
+    ...(params.call.session
       ? {
           delivery_session: {
             agent_id: params.context.agent.id,
             workspace_id: params.context.workspace.id,
-            session_id: params.execution.session.session_id,
-            origin_type: params.execution.session.origin.type,
+            session_id: params.call.session.session_id,
+            origin_type: params.call.session.origin.type,
           },
         }
       : {}),

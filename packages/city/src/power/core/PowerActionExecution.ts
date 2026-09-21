@@ -7,8 +7,7 @@
  * - Action 普通失败只返回业务结果，不修改 Power 生命周期状态。
  */
 
-import type { PowerAction, PowerActionResult } from "@/power/index.js";
-import type { PowerActionExecutionContext } from "@/power/index.js";
+import type { PowerAction, PowerActionResult, PowerCallScope } from "@/power/index.js";
 import type { PowerContext } from "@/power/index.js";
 import type { PowerExecutionContext } from "@/power/index.js";
 import { normalize_session_origin } from "@downcity/type";
@@ -136,13 +135,13 @@ function create_abort_scope(input: {
   };
 }
 
-/** 把可选入口快照归一化为 Action 必定可用的完整执行上下文。 */
-function create_action_execution_context(input: {
+/** 把可选入口快照归一化为一次调用必定可用的完整身份。 */
+function create_call_scope(input: {
   context: PowerContext;
   snapshot?: PowerExecutionContext;
   interactions: SessionInteractionPort;
   abort_signal: AbortSignal;
-}): PowerActionExecutionContext {
+}): PowerCallScope {
   const source = input.snapshot;
   const session_id = String(source?.session_id || "").trim();
   const turn_id = String(source?.turn_id || "").trim();
@@ -167,8 +166,7 @@ function create_action_execution_context(input: {
     call_id,
   });
   return Object.freeze({
-    call_id,
-    abort_signal: input.abort_signal,
+    id: call_id,
     snapshot,
     interactions: input.interactions,
     ...(session_id && turn_id && session_origin
@@ -205,19 +203,14 @@ export async function execute_power_action(
     source_signal: input.snapshot?.abort_signal,
     timeout_ms,
   });
-  const action_execution = create_action_execution_context({
+  const call_scope = create_call_scope({
     context: input.context,
     snapshot: input.snapshot,
     interactions: input.interactions ??
       create_denied_interaction_port(`${input.power_name}.${input.action_name}`),
     abort_signal: abort_scope.signal,
   });
-  const action_context = create_power_action_context(
-    input.context,
-    action_execution.snapshot,
-    action_execution.abort_signal,
-    action_execution.interactions,
-  );
+  const action_context = create_power_action_context(input.context, call_scope);
 
   try {
     if (abort_scope.signal.aborted) {
@@ -226,7 +219,6 @@ export async function execute_power_action(
       );
     }
     const result = await input.action.execute({
-      execution: action_execution,
       context: action_context,
       input: parsed_payload.input,
       power_name: input.power_name,

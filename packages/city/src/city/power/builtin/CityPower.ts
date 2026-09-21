@@ -15,10 +15,8 @@ import { resolve_runtime_timezone } from "@downcity/type";
 import type { Embassy } from "@downcity/federation";
 import type {
   PowerAction,
-  PowerActionExecutionContext,
   PowerActions,
   PowerContext,
-  PowerExecutionContext,
   PowerJsonObject,
   PowerJsonValue,
 } from "@/power/index.js";
@@ -119,7 +117,6 @@ function to_power_action(input: {
           action_id: input.action_id,
           group_id: input.group_id,
           power_context: params.context,
-          execution: params.execution,
         },
         input.options,
       );
@@ -153,8 +150,8 @@ function to_power_action(input: {
  * 从通用 PowerContext 组装 city 动作上下文。
  *
  * 关键点（中文）
- * - `execution_context` 是 `step.hook_context()` 返回的 Power 执行快照，字段是平铺的。
- * - Session / Turn 先取快照，再回退到通用上下文，覆盖无 Turn 的调用场景。
+ * - 调用身份统一读 `power_context.call`，不再有第二个参数与兜底链。
+ * - Session / Turn 句柄取 `PowerContext.session`，与 `call.session` 同一来源。
  */
 function build_city_context(
   input: {
@@ -164,13 +161,10 @@ function build_city_context(
     readonly group_id: string;
     /** 注册表投影的通用上下文。 */
     readonly power_context: PowerContext;
-    /** 动作执行上下文；无 Turn 场景只有快照与端口。 */
-    readonly execution: PowerActionExecutionContext;
   },
   options: CityPowerOptions,
 ): CityPowerContext {
   const { power_context } = input;
-  const snapshot = input.execution.snapshot;
   const agents = options.access.list_agents();
   const workspaces = options.access.list_workspaces();
   const agent = agents.find((item) => item.id === power_context.agent.id);
@@ -180,8 +174,8 @@ function build_city_context(
     action_id: input.action_id,
     agent_id: power_context.agent.id,
     agent_name: power_context.agent.name,
-    session_id: snapshot?.session_id ?? power_context.session?.id ?? null,
-    turn_id: snapshot?.turn_id ?? power_context.turn?.id ?? null,
+    session_id: power_context.session?.id ?? null,
+    turn_id: power_context.turn?.id ?? null,
     workspace_id: power_context.workspace.id,
     workspace_name: workspace?.name || power_context.workspace.id,
     workspace_path: power_context.workspace.path,
@@ -192,8 +186,8 @@ function build_city_context(
     agents,
     workspaces,
     files: options.files_for(power_context.agent.id, input.group_id),
-    call_id: input.execution.call_id,
-    interactions: input.execution.interactions,
+    call_id: power_context.call.id,
+    interactions: power_context.call.interactions,
     ...(options.embassy ? { embassy: options.embassy } : {}),
     ...(abort_signal ? { abort_signal } : {}),
   };

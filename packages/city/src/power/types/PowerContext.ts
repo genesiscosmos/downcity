@@ -13,7 +13,12 @@ import type { FileSystem, WorkspaceShell } from "@/workspace/index.js";
 import type { SessionInteractionPort } from "@downcity/type";
 import type { PowerJsonObject, PowerJsonValue } from "./Json.js";
 import type { PowerNotificationPublisher } from "./PowerNotification.js";
-import type { PowerActionResult, PowerExecutionContext, PowerSnapshot } from "./PowerRuntime.js";
+import type {
+  PowerActionResult,
+  PowerCallScope,
+  PowerExecutionContext,
+  PowerSnapshot,
+} from "./PowerRuntime.js";
 
 /** Power 可以写入的日志等级。 */
 export type PowerLogLevel = "debug" | "info" | "warn" | "error" | "action";
@@ -207,6 +212,8 @@ export interface PowerContext {
   readonly session?: PowerSessionHandle;
   /** 当前调用所属 Turn；非 Turn 调用时为空。 */
   readonly turn?: PowerTurnHandle;
+  /** 本次调用的身份与执行面；Action 直接读这里，不需要第二个参数。 */
+  readonly call: PowerCallScope;
   /** 当前 Power 在当前 Agent 范围内的私有存储。 */
   readonly storage: PowerStorage;
   /** City 为当前 Agent/Power 作用域解析出的只读业务配置。 */

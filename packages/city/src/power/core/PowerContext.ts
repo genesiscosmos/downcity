@@ -18,6 +18,8 @@ import type {
   PowerSessionOrigin,
 } from "@/power/index.js";
 import type { PowerLogger } from "@/power/types/PowerContext.js";
+import type { PowerCallScope } from "@/power/types/PowerRuntime.js";
+import { create_denied_interaction_port } from "@/power/core/PowerActionInteraction.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
 import type { SessionInteractionPort } from "@downcity/type";
 import type { PowerExecutionContext } from "@/power/index.js";
@@ -111,9 +113,19 @@ export function create_power_context(input: CreatePowerContextInput): PowerConte
     config,
     logger: input.logger,
     ...(input.notifications ? { notifications: input.notifications } : {}),
+    // 调用身份由 `create_power_action_context` 在进入 Action 时注入；
+    // 未进入调用的读取（如 system / availability）得到空身份。
+    call: EMPTY_POWER_CALL_SCOPE,
     abort_signal: abort_controller.signal,
   });
 }
+
+/** 未进入具体调用时使用的空调用身份。 */
+const EMPTY_POWER_CALL_SCOPE: PowerCallScope = Object.freeze({
+  id: "",
+  interactions: create_denied_interaction_port("power context"),
+  snapshot: Object.freeze({}),
+});
 
 /** 深拷贝并冻结 Power 配置，避免调用方修改当前执行快照。 */
 function freeze_json_object(input: PowerJsonObject): PowerJsonObject {
@@ -142,13 +154,11 @@ function freeze_json_value(input: PowerJsonValue): PowerJsonValue {
  */
 export function create_power_action_context(
   context: PowerContext,
-  execution_context: PowerExecutionContext,
-  abort_signal: AbortSignal,
-  interactions?: SessionInteractionPort,
+  call: PowerCallScope,
 ): PowerContext {
-  const session_id = String(execution_context.session_id || "").trim();
-  const turn_id = String(execution_context.turn_id || "").trim();
-  const origin = execution_context.session_origin;
+  const session_id = String(call.snapshot.session_id || "").trim();
+  const turn_id = String(call.snapshot.turn_id || "").trim();
+  const origin = call.snapshot.session_origin;
   const session = session_id && origin
     ? create_session_handle(
         context.agent.sessions,
@@ -161,8 +171,9 @@ export function create_power_action_context(
     ...(session_id ? { session_id } : {}),
     ...(origin ? { session_origin: origin } : {}),
     ...(turn_id ? { turn_id } : {}),
-    abort_signal,
+    abort_signal: call.snapshot.abort_signal,
   });
+  const abort_signal = call.snapshot.abort_signal ?? context.abort_signal;
   return Object.freeze({
     ...context,
     city: Object.freeze({
@@ -173,12 +184,13 @@ export function create_power_action_context(
           await context.city.powers.run_action({
             ...action_input,
             execution_context: action_input.execution_context ?? nested_snapshot,
-            ...(action_input.interactions ?? interactions
-              ? { interactions: action_input.interactions ?? interactions }
+            ...(action_input.interactions ?? call.interactions
+              ? { interactions: action_input.interactions ?? call.interactions }
               : {}),
           }),
       }),
     }),
+    call,
     ...(session ? { session } : {}),
     ...(turn_id ? { turn: Object.freeze({ id: turn_id, abort_signal }) } : {}),
     abort_signal,

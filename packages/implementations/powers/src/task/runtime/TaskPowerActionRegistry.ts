@@ -264,7 +264,7 @@ export function createTaskPowerActions(params: {
           context: actionParams.context,
           definitions: params.resolve_definitions(),
           payload: actionParams.input as TaskCreateRequest,
-          execution: actionParams.execution,
+          call: actionParams.context.call,
           reloadSchedulerAfterMutation: params.reloadSchedulerAfterMutation,
         });
       },
@@ -301,7 +301,7 @@ export function createTaskPowerActions(params: {
           payload: actionParams.input as TaskRunRequest,
           executions: params.executions,
           notifications: params.resolve_notifications(),
-          execution_context: actionParams.execution.snapshot,
+          execution_context: actionParams.context.call.snapshot,
           delivery: params.resolve_delivery(),
         });
       },

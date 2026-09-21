@@ -78,23 +78,22 @@ export interface PowerExecutionContext {
 }
 
 /**
- * PowerDefinition Action 的单次执行上下文。
+ * 一次 Power 调用的身份与执行面。
  *
  * 关键点（中文）
  * - 所有入口（模型工具、定时任务、HTTP、RPC）都提供同一个交互端口。
  * - 无 Session 的入口注入拒绝式实现，因此动作不需要自己判断「有没有人在场」。
+ * - `session` 是本次调用的纯数据身份；可直接通信的 Session 句柄在 `PowerContext.session`。
  */
-export interface PowerActionExecutionContext {
+export interface PowerCallScope {
   /** 当前 Action 调用标识。 */
-  readonly call_id: string;
-  /** 当前 Action 必须监听的取消信号。 */
-  readonly abort_signal: AbortSignal;
-  /** 当前调用所属 Session；非 Session 入口时为空。 */
+  readonly id: string;
+  /** 当前调用所属 Session 身份；非 Session 入口时为空。 */
   readonly session?: PowerSessionExecutionScope;
-  /** 当前调用开始时捕获的只读 Step 快照。 */
-  readonly snapshot: PowerExecutionContext;
   /** 当前调用创建用户交互的端口；无 Session 时为拒绝式实现。 */
   readonly interactions: SessionInteractionPort;
+  /** 当前调用开始时捕获的只读 Step 快照。 */
+  readonly snapshot: PowerExecutionContext;
 }
 
 /** PowerDefinition Action 命令输入。 */
@@ -172,12 +171,10 @@ export interface PowerAction<TInput extends PowerJsonValue = PowerJsonValue, TRe
   readonly command?: PowerActionCommand<TInput>;
   /** 可选 HTTP 适配。 */
   readonly api?: PowerActionApi<TInput>;
-  /** 执行 Action。 */
+  /** 执行 Action；调用身份与句柄都在 `context` 内。 */
   readonly execute: (input: {
     /** City 创建的动态 PowerDefinition 上下文。 */
     readonly context: PowerContext;
-    /** 单次 Action 执行身份。 */
-    readonly execution: PowerActionExecutionContext;
     /** 已校验的 Action payload。 */
     readonly input: TInput;
     /** 当前 PowerDefinition ID。 */

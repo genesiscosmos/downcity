@@ -15,7 +15,6 @@ import { z } from "zod";
 import type { AgentTool } from "@downcity/type";
 import type {
   PowerAction,
-  PowerActionExecutionContext,
   PowerActionResult,
   PowerActions,
   PowerJsonObject,
@@ -172,14 +171,11 @@ function require_shell_tool(
  *
  * 关键点（中文）
  * - 工具返回的是面向模型的扁平 JSON；这里只做信封映射，不改字段。
- * - Shell 所需的 Session 身份、取消信号与审批端口都从动作执行上下文直接构造，
- *   不再依赖宿主透传的不透明上下文。
+ * - Shell 所需的调用身份、取消信号与审批端口都从 `context.call` 直接构造。
  */
 async function run_shell_tool(input: {
   /** City 投影的通用上下文。 */
   readonly context: PowerContext;
-  /** 动作执行上下文。 */
-  readonly execution: PowerActionExecutionContext;
   /** 目标工具名。 */
   readonly tool_name: string;
   /** 工具入参。 */
@@ -200,26 +196,24 @@ async function run_shell_tool(input: {
       message: `Shell tool "${input.tool_name}" has no executor.`,
     };
   }
-  const session = input.execution.session;
-  // Shell 工具与其他工具共享同一份 ToolCallContext；这里把 Power 侧执行身份
-  // 投影为调用环境，Shell 不再有专用嵌套上下文。Shell 不需要 Workspace 实例，
-  // 它的 cwd 与 root 已在 bind 阶段固定。
+  // Shell 工具与其他工具共享同一份 ToolCallContext；这里把 Power 侧调用身份
+  // 投影为调用环境。调用身份统一取自 `context.call`，无兼底链。
+  const call = input.context.call;
+  const session = call.session;
   const output = await tool.execute(input.payload as never, {
     agent_id: input.context.agent.id,
     agent_name: input.context.agent.name,
     agent_description: input.context.agent.description,
     agent_instructions: input.context.agent.instructions,
-    session_id: session?.session_id || input.execution.snapshot.session_id || "",
-    session_origin: session?.origin
-      ?? input.execution.snapshot.session_origin
-      ?? { type: "chat" },
+    session_id: session?.session_id ?? "",
+    session_origin: session?.origin ?? { type: "chat" },
     ...(session ? { turn_id: session.turn_id } : {}),
-    abort_signal: input.execution.abort_signal,
-    tool_call_id: input.execution.call_id,
+    abort_signal: input.context.abort_signal,
+    tool_call_id: call.id,
     messages: [],
-    interactions: input.execution.interactions,
-    ...(input.execution.snapshot.workspace_env
-      ? { workspace_env: input.execution.snapshot.workspace_env }
+    interactions: call.interactions,
+    ...(call.snapshot.workspace_env
+      ? { workspace_env: call.snapshot.workspace_env }
       : {}),
   });
   const record = (output ?? {}) as PowerJsonObject;
@@ -263,7 +257,6 @@ function create_shell_action(input: {
       const payload = input.to_payload ? input.to_payload(args) : (args as PowerJsonObject);
       return await run_shell_tool({
         context: params.context,
-        execution: params.execution,
         tool_name: input.tool_name,
         payload: payload as PowerJsonValue,
       });
