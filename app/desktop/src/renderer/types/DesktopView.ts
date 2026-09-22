@@ -301,14 +301,14 @@ export interface DesktopActions {
   /**
    * 在指定 Workspace 切换到尚未持久化的空对话。
    *
-   * `preserve_sidebar` 为真时保留当前侧栏：从 Works 侧栏新建时，新对话落在那个 Workspace 里，
-   * 把用户切到 Agents 面板等于把他刚点的那棵树拿走。默认行为仍是切到会话所属的一级导航。
+   * 侧栏由目标自身决定（草稿属于它所在的 Workspace，因此落到 Works 树），
+   * 调用方不需要声明要不要保留当前侧栏。
    */
-  create_session(workspace_id: string, agent_id: string, preserve_sidebar?: boolean): Promise<void>;
+  create_session(workspace_id: string, agent_id: string): Promise<void>;
   /** 迁移当前空对话草稿并切换 Workspace 或 Agent 上下文。 */
   switch_draft_context(workspace_id: string, agent_id: string): void;
-  /** 切换到 Session Chat 并读取快照；可保持当前 Sidebar 集合。 */
-  select_session(workspace_id: string, agent_id: string, session_id: string, preserve_sidebar?: boolean): Promise<void>;
+  /** 切换到 Session Chat 并读取快照；侧栏跟随会话所属的一级导航。 */
+  select_session(workspace_id: string, agent_id: string, session_id: string): Promise<void>;
   /** 从指定 canonical Message 创建分支 Session 并打开。 */
   fork_session(workspace_id: string, agent_id: string, session_id: string, message_id: string): Promise<void>;
   /** 重写历史用户消息，并按操作创建分支或替换当前 Session。 */

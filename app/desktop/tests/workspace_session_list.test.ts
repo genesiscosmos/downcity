@@ -19,7 +19,7 @@
  * 3. **会话行的归属必须常显**：同一个 Workspace 里会有多个 Agent 与 Group 的会话，
  *    而没有自定义头像的 Agent 默认都是同一个幽灵图标——归属只能靠文字。
  * 4. **加载态与空态分开**：Session 目录尚未水合时不能说「暂无对话」。
- * 5. **点击保留 Works 侧栏**：点一条会话不该把用户弹到另一个一级导航。
+ * 5. **点击留在 Works 树上**：会话属于 Workspace，因此点一条会话后侧栏仍在这棵树里。
  *
  * ## 为什么用源码断言
  *
@@ -107,7 +107,8 @@ test("新建对话入口在 Workspace 行右端、菜单左边，且直接开当
   assert.ok(expanded_guard > 0 && actions_index < expanded_guard, "新建入口被放进了展开分支：折叠时开不了新对话");
 
   // 点它直接进空对话（draft），默认联系人取该 Workspace 最近聊过的 Agent。
-  assert.ok(/void controller\.actions\.create_session\(workspace_id, agent_id, true\)/.test(read_without_comments(path.join(sidebar_root, "WorkspaceSidebar.tsx"))), "新建对话没有打开当前 Workspace 的空对话");
+  // 调用不带侧栏参数：侧栏由目标自身推导（草稿属于这个 Workspace，因此落 Works）。
+  assert.ok(/void controller\.actions\.create_session\(workspace_id, agent_id\)/.test(read_without_comments(path.join(sidebar_root, "WorkspaceSidebar.tsx"))), "新建对话没有打开当前 Workspace 的空对话");
   const projection = read_without_comments(path.join(sidebar_root, "workspaceSessionRows.ts"));
   assert.ok(/export function project_default_agent_ids/.test(projection), "没有为每个 Workspace 算默认联系人");
   assert.ok(/sort\(\(left, right\) => right\.session\.updated_at - left\.session\.updated_at\)\[0\]/.test(projection), "默认联系人不是该 Workspace 最近更新的那条会话的 Agent");
@@ -235,10 +236,12 @@ test("加载态与空态分开，且都不冒充“没有会话”", () => {
   assert.ok(/<SidebarSubText indent=\{1\}/.test(session_list), "副文本没有对齐到会话行的文字线");
 });
 
-test("点会话保留 Works 侧栏，且当前项两级都认得出", () => {
-  // 第四个参数 `true` = 保留当前侧栏。缺了它，在 Works 侧栏点一条会话会把用户
-  // 弹回另一个一级导航——而他刚才正在看这棵会话树。
-  assert.ok(/controller\.actions\.select_session\(entry\.workspace_id, entry\.agent_id, entry\.session\.session_id, true\)/.test(session_list), "点 Agent 会话没有保留当前侧栏");
+test("点会话留在 Works 树上，且当前项两级都认得出", () => {
+  // 侧栏由目标自身推导（见 desktop_navigation_state 的 get_sidebar_mode_for_target）：
+  // 会话属于 Workspace，因此点一条会话后侧栏仍在 Works，与用户刚才看的是同一棵树。
+  // 调用不再声明侧栏参数——那份声明就是上一版导航模型的遗留。
+  assert.ok(/controller\.actions\.select_session\(entry\.workspace_id, entry\.agent_id, entry\.session\.session_id\)/.test(session_list), "点 Agent 会话没有走会话导航");
+  assert.ok(!/select_session\([^)]*, true\)/.test(session_list), "点会话又传了侧栏参数：侧栏改由目标推导");
   // Group 会话走 Group 的打开动作：它不是 Agent Session，不能被塞进同一个调用。
   assert.ok(/controller\.actions\.open_group\(entry\.group_id, entry\.session\.session_id\)/.test(session_list), "Group 会话没有走 Group 的打开动作");
   // 父行的高亮必须认「任何带 workspace_id 的目标」，否则在 Workspace 里打开一条会话时
@@ -251,6 +254,22 @@ test("点会话保留 Works 侧栏，且当前项两级都认得出", () => {
   assert.ok(/resolve_initial_expanded_ids\(\{/.test(session_list), "当前 Workspace 没有初始展开：切回侧栏看不到当前会话");
   const expansion = read_without_comments(path.join(sidebar_root, "workspaceExpansion.ts"));
   assert.ok(/if \(selected_workspace_id && workspace_ids\.includes\(selected_workspace_id\)\) next\.add\(selected_workspace_id\);/.test(expansion), "初始展开没有补上当前 Workspace");
+});
+
+/**
+ * 导航入口不再自己声明侧栏。
+ *
+ * 逐个调用点传 `preserve_sidebar` 才能避开错误默认值，本身就是一份会漂移的第二事实源：
+ * 新加的入口很容易漏传。现在它们都走同一个推导函数。
+ */
+test("导航入口从目标推导侧栏，不再硬编码 chat", () => {
+  const sources = ["app/use_desktop.ts", "features/chat/hooks/use_group_actions.ts"]
+    .map((file) => read_without_comments(path.join(renderer_root, file)));
+  for (const source of sources) {
+    assert.ok(!source.includes('set_sidebar_mode("chat")'), "导航入口仍在硬编码切到 Agents 面板");
+  }
+  assert.ok(sources[0].includes("get_sidebar_mode_for_target(selection)"), "打开会话/草稿时没有从目标推导侧栏");
+  assert.ok(sources[1].includes("get_sidebar_mode_for_target(selection)"), "Group 会话/草稿没有从目标推导侧栏");
 });
 
 /**
@@ -326,7 +345,7 @@ test("会话投影只有一处，且两类会话共用一条排序", () => {
 
 test("多选：Shift 点击进入，普通点击仍是打开会话", () => {
   // 普通点击必须仍然是「打开会话」：多选不能把最常用的那个动作挤走。
-  assert.ok(/if \(entry\.kind === "agent"\) void controller\.actions\.select_session\(entry\.workspace_id, entry\.agent_id, entry\.session\.session_id, true\)/.test(session_list), "普通点击不再打开会话");
+  assert.ok(/if \(entry\.kind === "agent"\) void controller\.actions\.select_session\(entry\.workspace_id, entry\.agent_id, entry\.session\.session_id\)/.test(session_list), "普通点击不再打开会话");
   // Shift 点击进入多选，且带上这一组的行序（范围只看看得见的行）。
   assert.ok(/if \(event\.shiftKey\) \{\s*session_selection\.select\(entry\.key, \{ range: true, ordered_keys \}\);/.test(session_list), "Shift 点击没有进入多选");
   // 多选模式下普通点击改为选择。

@@ -28,6 +28,24 @@ export function get_sidebar_mode_for_navigation(target: RestorableNavigationTarg
   return "workspace";
 }
 
+/**
+ * 推导任意导航目标所属的一级侧栏；设置页不属于任何业务入口，返回 `undefined`。
+ *
+ * 规则是「侧栏切到能看见这个目标的那张面板」。以今天的布局，会话条目只长在 Works 树里，
+ * 因此所有会话类目标（会话、草稿、GroupSession、Group 草稿）都落 Works——
+ * 把用户留在一张不列会话的面板上，等于让他在侧栏里找不到自己刚打开的那一条。
+ *
+ * 可恢复目标直接走 `get_sidebar_mode_for_navigation`（那条对应只写一份）；
+ * 这里只补上刷新后不再有语义、因而不参与恢复的那几个目标：草稿属于它所在的 Workspace，
+ * 创建页属于它将要创建的对象。
+ */
+export function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
+  if (target.kind === "settings") return undefined;
+  if (target.kind === "draft" || target.kind === "group_draft") return "workspace";
+  if (target.kind === "create_agent" || target.kind === "create_group") return "chat";
+  return get_sidebar_mode_for_navigation(target);
+}
+
 /** 把 localStorage 中的不可信 JSON 解析为结构合法的稳定导航目标。 */
 export function parse_navigation_target(serialized: string | null): RestorableNavigationTarget | undefined {
   if (!serialized) return undefined;

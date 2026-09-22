@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
 import type { RespondSessionInteractionInput } from "@downcity/agent";
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopCreateGroupInput, DesktopUpdateGroupInput } from "@common/types/DesktopApi";
+import type { NavigationTarget } from "@/types/DesktopView";
+import { get_sidebar_mode_for_target } from "@/features/navigation/lib/desktop_navigation_state";
 import { read_chat_composer_text } from "@/features/chat/composer/editor/chatComposerCodec";
 import { update_group_session_title } from "@/features/chat/lib/group/group_session_projection";
 import { get_group_chat_key } from "@/features/chat/lib/chat_cache_key";
@@ -51,11 +53,16 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
     if (group_navigation_request_ref.current !== request_id || navigation.state_ref.current.selection !== initial_selection) return;
     const draft_id = get_group_draft_session_id(group_id);
     active_group_session_ids_ref.current.delete(group_id);
-    navigation.set_sidebar_mode("chat");
+    const selection: NavigationTarget = { kind: "group_draft", group_id, workspace_id: workspace.workspace_id, draft_id };
+    // 侧栏切到能看见这个草稿的一级导航（Works）：Group 草稿也是一条会话。
+    // 这里必须用 store 层方法，不能用 controller 的同名 action——后者会把该模式上次记住的
+    // selection 一并写回，覆盖掉下面刚设好的 Group 草稿目标。
+    const sidebar_mode = get_sidebar_mode_for_target(selection);
+    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
     chat_stream.reset_group_chat(group_id);
     navigation.set_active_workspace_id(workspace.workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace.workspace_id);
-    navigation.set_selection({ kind: "group_draft", group_id, workspace_id: workspace.workspace_id, draft_id });
+    navigation.set_selection(selection);
     // Group 新对话的输入框随后才挂载，因此先登记一次聚焦请求，键盘焦点直接进入输入框。
     composer.request_focus(get_group_chat_key(workspace.workspace_id, group_id, draft_id));
   }, [active_group_session_ids_ref, chat_stream, composer, navigation, resolve_chat_workspace]);
@@ -81,7 +88,10 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
       navigation.set_active_workspace_id(active_session.workspace_id);
       localStorage.setItem(active_workspace_storage_key, active_session.workspace_id);
       hydrated_navigation_keys_ref.current.add(`group:${group_id}:${group.active_session_id}`);
-      navigation.set_selection({ kind: "group_session", group_id, workspace_id: active_session.workspace_id, session_id: group.active_session_id });
+      const selection: NavigationTarget = { kind: "group_session", group_id, workspace_id: active_session.workspace_id, session_id: group.active_session_id };
+      const sidebar_mode = get_sidebar_mode_for_target(selection);
+      if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
+      navigation.set_selection(selection);
     } catch (reason) {
       if (group_navigation_request_ref.current === request_id) settings.set_error(to_error_message(reason));
     }
@@ -197,10 +207,19 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
     try {
       const group = await window.downcity.group.create(input);
       catalog.upsert_group(group);
-      navigation.set_sidebar_mode("chat"); navigation.set_selection({ kind: "group", group_id: group.group_id });
+      const selection: NavigationTarget = { kind: "group", group_id: group.group_id };
+      const sidebar_mode = get_sidebar_mode_for_target(selection);
+      if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
+      navigation.set_selection(selection);
     } catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
   }, [catalog, navigation, settings]);
-  const open_create_group = useCallback(() => { settings.set_error(""); navigation.set_sidebar_mode("chat"); navigation.set_selection({ kind: "create_group" }); }, [navigation, settings]);
+  const open_create_group = useCallback(() => {
+    settings.set_error("");
+    const selection: NavigationTarget = { kind: "create_group" };
+    const sidebar_mode = get_sidebar_mode_for_target(selection);
+    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
+    navigation.set_selection(selection);
+  }, [navigation, settings]);
   const update_group = useCallback(async (group_id: string, input: DesktopUpdateGroupInput) => {
     settings.set_error("");
     try { const group = await window.downcity.group.update(group_id, input); catalog.upsert_group(group); chat_stream.reset_group_chat(group_id); }

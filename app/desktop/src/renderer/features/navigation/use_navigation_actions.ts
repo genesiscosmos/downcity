@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, type RefObject } from "react";
 import type { NavigationTarget, SettingsSection, SidebarMode } from "@/types/DesktopView";
-import { desktop_navigation_storage_key, get_sidebar_mode_for_navigation, is_restorable_navigation_target } from "@/features/navigation/lib/desktop_navigation_state";
+import { desktop_navigation_storage_key, get_sidebar_mode_for_target, is_restorable_navigation_target } from "@/features/navigation/lib/desktop_navigation_state";
 import { notification_target_from_navigation } from "@/lib/notification/notification_state";
 import type { use_catalog_store } from "@/app/state/use_catalog_store";
 import type { use_navigation_store } from "@/features/navigation/state/use_navigation_store";
@@ -87,9 +87,27 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
     settings.set_error(""); navigation.set_sidebar_mode("workspace"); navigation.set_active_workspace_id(workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace_id); navigation.set_selection({ kind: "workspace_file", workspace_id, relative_path, ...(line ? { line } : {}) });
   }, [catalog, navigation, settings]);
-  const select_agent = useCallback((agent_id: string) => { settings.set_error(""); navigation.set_selection({ kind: "agent", agent_id }); }, [navigation, settings]);
-  const open_create_agent = useCallback(() => { settings.set_error(""); navigation.set_sidebar_mode("chat"); navigation.set_selection({ kind: "create_agent" }); }, [navigation, settings]);
-  const select_group = useCallback((group_id: string) => { settings.set_error(""); navigation.set_selection({ kind: "group", group_id }); }, [navigation, settings]);
+  const select_agent = useCallback((agent_id: string) => {
+    settings.set_error("");
+    const selection: NavigationTarget = { kind: "agent", agent_id };
+    const sidebar_mode = get_sidebar_mode_for_target(selection);
+    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
+    navigation.set_selection(selection);
+  }, [navigation, settings]);
+  const open_create_agent = useCallback(() => {
+    settings.set_error("");
+    const selection: NavigationTarget = { kind: "create_agent" };
+    const sidebar_mode = get_sidebar_mode_for_target(selection);
+    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
+    navigation.set_selection(selection);
+  }, [navigation, settings]);
+  const select_group = useCallback((group_id: string) => {
+    settings.set_error("");
+    const selection: NavigationTarget = { kind: "group", group_id };
+    const sidebar_mode = get_sidebar_mode_for_target(selection);
+    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
+    navigation.set_selection(selection);
+  }, [navigation, settings]);
   const open_settings = useCallback((section: SettingsSection = "user") => {
     settings.set_error("");
     if (navigation.state_ref.current.selection?.kind !== "settings") previous_selection_ref.current = navigation.state_ref.current.selection;
@@ -97,18 +115,4 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
   }, [navigation, previous_selection_ref, settings]);
   const close_settings = useCallback(() => navigation.set_selection(previous_selection_ref.current ?? (catalog.state_ref.current.agents[0] ? { kind: "agent", agent_id: catalog.state_ref.current.agents[0].agent_id } : null)), [catalog, navigation, previous_selection_ref]);
   return useMemo(() => ({ select_power, select_powers, select_power_workspace, navigate_power, invalidate_power, set_sidebar_mode, select_workspace, select_workspace_file, select_agent, open_create_agent, select_group, open_settings, close_settings }), [close_settings, invalidate_power, navigate_power, open_create_agent, open_settings, select_agent, select_group, select_power, select_power_workspace, select_powers, select_workspace, select_workspace_file, set_sidebar_mode]);
-}
-
-/**
- * 返回导航目标所属的一级 Sidebar。
- *
- * 可恢复目标直接走 `get_sidebar_mode_for_navigation`（那条对应只写一份）；
- * 这里只补上刷新后不再有语义、因而不参与恢复的那几个目标：草稿属于它所在的 Workspace，
- * 创建页属于它将要创建的对象。设置页不选中任何业务入口。
- */
-function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
-  if (target.kind === "settings") return undefined;
-  if (target.kind === "draft" || target.kind === "group_draft") return "workspace";
-  if (target.kind === "create_agent" || target.kind === "create_group") return "chat";
-  return get_sidebar_mode_for_navigation(target);
 }

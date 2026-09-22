@@ -298,6 +298,7 @@ Chat 顶栏的 `WorkspaceTagMenu` 里两个去向仍然直接铺开——那个�
 | B24 | Workspace 行的菜单里加上「新建对话」并排在第一项（与目录操作用分隔线分开）；行内加号是快路径，菜单里这条是可发现的那一份 | 小 |
 | B25 | 会话列表分页：一个 Workspace 默认只列最近 10 条，其余点「更多」继续加载；窗口覆盖当前打开项与已选项 | 小 |
 | B26 | **群聊归档能力**：`packages/agent` 的 `GroupSessions` 加 `archive` / `archived` / `clean_archive` / `purge`（目录搬迁，与 Agent Session 同形）；主进程 + IPC + 渲染层依次接上；侧栏的批量归档不再有「跳过群聊」分支；删 Group 时连同群聊数据一起清掉 | 中（见 `group-session-archive-design.md`） |
+| B27 | **侧栏改由目标推导**：导航入口不再硬编码切到 Agents 面板，也不再逐个调用点传 `preserve_sidebar` 才能避开它；会话类目标（会话 / 草稿 / GroupSession / Group 草稿）一律落 Works，推导函数上提到 `desktop_navigation_state` 与恢复共用同一份（修掉 ⌘R 新建对话把侧栏从 Works 拽到 Agents） | 小 |
 
 ### 7.1 需要目检的清单
 

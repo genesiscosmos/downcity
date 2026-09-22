@@ -17,7 +17,7 @@
  *
  * | 来源 | 取数 | 归属 | 点击去向 |
  * | --- | --- | --- | --- |
- * | Agent Session | `sessions_by_workspace` | Agent 头像 | `select_session`（保留当前侧栏） |
+ * | Agent Session | `sessions_by_workspace` | Agent 头像 | `select_session` |
  * | GroupSession | `group.sessions`（自带 `workspace_id`） | Group 头像 | `open_group` |
  *
  * 两类都按「实时优先、其次最近更新」排在同一条时间轴上（规则在 `session_list_projection`）。
@@ -295,7 +295,7 @@ function WorkspaceSessions({ controller, agents, rows, hydrated, selected_sessio
           workspace_id={entry.workspace_id}
           subject_label={label ?? translate("sidebar.unknown_subject")}
           on_new_session={() => {
-            if (entry.kind === "agent") void controller.actions.create_session(entry.workspace_id, entry.agent_id, true);
+            if (entry.kind === "agent") void controller.actions.create_session(entry.workspace_id, entry.agent_id);
             else void controller.actions.create_group_session(entry.group_id, entry.workspace_id);
           }}
         />,
@@ -315,9 +315,8 @@ function WorkspaceSessions({ controller, agents, rows, hydrated, selected_sessio
           session_selection.select(entry.key, { range: true, ordered_keys });
           return;
         }
-        // 点击保留当前侧栏：Workspace 侧栏里的会话是这个 Workspace 的入口，
-        // 点一条就跳走等于把用户从他刚才看的那棵树上扯走。
-        if (entry.kind === "agent") void controller.actions.select_session(entry.workspace_id, entry.agent_id, entry.session.session_id, true);
+        // 点击进入会话：侧栏由目标自身决定，会话属于这个 Workspace，因此仍留在 Works 树上。
+        if (entry.kind === "agent") void controller.actions.select_session(entry.workspace_id, entry.agent_id, entry.session.session_id);
         else void controller.actions.open_group(entry.group_id, entry.session.session_id);
       }}
       // 多选模式下右端换成勾选按钮，且**不提供** ⋯ 菜单：那一层是「对这条会话做什么」，

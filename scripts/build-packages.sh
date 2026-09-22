@@ -122,7 +122,7 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if [[ ${#PACKAGES[@]:-0} -eq 0 ]]; then
+if [[ ${#PACKAGES[@]} -eq 0 ]]; then
   echo "Error: 至少需要显式指定一个 package，例如 --agent 或 --agent --powers。" >&2
   usage
 fi

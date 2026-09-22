@@ -14,7 +14,7 @@ import type { JSONContent } from "@tiptap/core";
 import type { DesktopChatRewriteInput, DesktopSessionConfiguration, DesktopSessionSummary } from "../../common/types/DesktopApi.ts";
 import { get_session_key, is_workspace_chat_key } from "@/features/chat/lib/chat_cache_key";
 import { is_chat_busy, get_draft_session_id, is_draft_session_id, type ChatSubmitMode, type CreateWorkspaceFormValue, type DesktopActions, type DesktopController, type DesktopWorkspaceSession, type NavigationTarget, type QueuedChatMessage, type SidebarMode } from "@/types/DesktopView";
-import { desktop_navigation_storage_key, get_sidebar_mode_for_navigation, parse_navigation_target, resolve_navigation_target } from "@/features/navigation/lib/desktop_navigation_state";
+import { desktop_navigation_storage_key, get_sidebar_mode_for_navigation, get_sidebar_mode_for_target, parse_navigation_target, resolve_navigation_target } from "@/features/navigation/lib/desktop_navigation_state";
 import { use_store_selector } from "@/lib/store";
 import type { Store } from "@/types/DesktopStore";
 import { use_chat_stream_store } from "@/features/chat/state/use_chat_stream_store";
@@ -344,22 +344,31 @@ export function use_desktop_controller(): DesktopController {
     return loading;
   }, [chat_lifecycle, chat_stream, navigation, settings]);
 
-  /** 打开 Session 并读取快照；不检查 Workspace 归属，供 rebind 完成后直接进入。 */
-  const open_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
+  /**
+   * 打开 Session 并读取快照；不检查 Workspace 归属，供 rebind 完成后直接进入。
+   *
+   * 侧栏切到会话所属的一级导航（Works）：会话条目只长在那棵树里，把用户留在一张不列会话的
+   * 面板上，他在侧栏里就找不到自己刚打开的那一条。这里必须用 store 层的 `set_sidebar_mode`，
+   * 不能用 controller 的同名 action——后者会把该模式上次记住的 selection 一并写回，
+   * 覆盖掉下面刚设好的会话目标。
+   */
+  const open_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
     if (chat_lifecycle.is_session_unavailable(session_key)) return;
     hydrated_navigation_keys_ref.current.add(`session:${session_key}`);
     settings.set_error("");
-    if (!preserve_sidebar) navigation.set_sidebar_mode("chat");
+    const selection: NavigationTarget = { kind: "session", workspace_id, agent_id, session_id };
+    const sidebar_mode = get_sidebar_mode_for_target(selection);
+    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
     navigation.set_active_workspace_id(workspace_id);
-    navigation.set_selection({ kind: "session", workspace_id, agent_id, session_id });
+    navigation.set_selection(selection);
     await load_session_snapshot(workspace_id, agent_id, session_id);
   }, [chat_lifecycle, load_session_snapshot, navigation, settings]);
 
-  const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string, preserve_sidebar = false) => {
+  const select_session = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {
     const session_key = get_session_key(workspace_id, agent_id, session_id);
     if (chat_lifecycle.is_session_unavailable(session_key)) return;
-    await open_session(workspace_id, agent_id, session_id, preserve_sidebar);
+    await open_session(workspace_id, agent_id, session_id);
   }, [chat_lifecycle, open_session]);
 
   /** 刷新恢复 Session 时，通过既有快照入口补齐消息、配置与运行态。 */
@@ -371,7 +380,7 @@ export function use_desktop_controller(): DesktopController {
       const navigation_key = `session:${session_key}`;
       if (hydrated_navigation_keys_ref.current.has(navigation_key)) return;
       hydrated_navigation_keys_ref.current.add(navigation_key);
-      void select_session(selection.workspace_id, selection.agent_id, selection.session_id, true);
+      void select_session(selection.workspace_id, selection.agent_id, selection.session_id);
     };
     hydrate_session();
     return navigation.store.subscribe(hydrate_session);
@@ -413,16 +422,18 @@ export function use_desktop_controller(): DesktopController {
     chat_stream.set_configuration(session_key, { model_id: agent?.model_id || "", approval_mode: previous_configuration?.approval_mode ?? "ask" });
   }, [catalog, chat_stream]);
 
-  const create_session = useCallback(async (workspace_id: string, agent_id: string, preserve_sidebar = false) => {
+  const create_session = useCallback(async (workspace_id: string, agent_id: string) => {
     settings.set_error("");
-    // 从 Works 侧栏新建时保留当前侧栏：新对话落在那个 Workspace 里，
-    // 把用户切到 Agents 面板等于把他刚点的那棵树拿走。
-    if (!preserve_sidebar) navigation.set_sidebar_mode("chat");
     const draft_id = get_draft_session_id(agent_id);
     // 新对话的模型始终跟随 Agent 当前配置；上一次 Draft 临时选择的模型不带入新对话。
     reset_draft_configuration(get_session_key(workspace_id, agent_id, draft_id), agent_id);
+    // 侧栏切到能看见这个草稿的一级导航（Works）；理由与 `open_session` 相同，
+    // 也必须走 store 层方法以免覆盖下面的 draft 目标。
+    const selection: NavigationTarget = { kind: "draft", workspace_id, agent_id, draft_id };
+    const sidebar_mode = get_sidebar_mode_for_target(selection);
+    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
     navigation.set_active_workspace_id(workspace_id);
-    navigation.set_selection({ kind: "draft", workspace_id, agent_id, draft_id });
+    navigation.set_selection(selection);
     // 新对话的输入框随后才挂载，因此先登记一次聚焦请求，键盘焦点直接进入输入框。
     composer.request_focus(get_session_key(workspace_id, agent_id, draft_id));
   }, [composer, navigation, reset_draft_configuration, settings]);
@@ -558,7 +569,7 @@ export function use_desktop_controller(): DesktopController {
         recent_agent_chat_targets_ref.current.get(agent_id),
       );
       if (target?.kind === "session") {
-        await select_session(target.workspace_id, agent_id, target.session_id, true);
+        await select_session(target.workspace_id, agent_id, target.session_id);
         return;
       }
       if (target?.kind === "draft") {

@@ -7,7 +7,8 @@
 
 import { useCallback, useMemo } from "react";
 import type { DesktopSettings } from "@common/types/DesktopApi";
-import type { CreateAgentFormValue, CreateWorkspaceFormValue } from "@/types/DesktopView";
+import type { CreateAgentFormValue, CreateWorkspaceFormValue, NavigationTarget } from "@/types/DesktopView";
+import { get_sidebar_mode_for_target } from "@/features/navigation/lib/desktop_navigation_state";
 import type { use_catalog_store } from "@/app/state/use_catalog_store";
 import type { use_navigation_store } from "@/features/navigation/state/use_navigation_store";
 import type { use_session_store } from "@/features/chat/state/use_session_store";
@@ -45,8 +46,11 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
     settings.set_error("");
     const result = await window.downcity.agent.create(value);
     catalog.set_agents([...catalog.state_ref.current.agents.filter((item) => item.agent_id !== result.agent.agent_id), result.agent]);
-    navigation.set_sidebar_mode("chat");
-    navigation.set_selection({ kind: "agent", agent_id: result.agent.agent_id });
+    // Agent profile 回答「有哪些 Agent」，因此侧栏切到 Agents；与导航入口共用同一份推导。
+    const selection: NavigationTarget = { kind: "agent", agent_id: result.agent.agent_id };
+    const sidebar_mode = get_sidebar_mode_for_target(selection);
+    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
+    navigation.set_selection(selection);
   }, [catalog, navigation, settings]);
 
   const get_agent = useCallback(async (agent_id: string) => await window.downcity.agent.get(agent_id), []);

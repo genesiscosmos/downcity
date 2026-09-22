@@ -125,11 +125,11 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
   /**
    * 在一个 Workspace 里打开空对话。
    *
-   * `preserve_sidebar` 为真：新对话落在那个 Workspace 里，把用户切到 Agents 面板
-   * 等于把他刚点的那棵树拿走。
+   * 侧栏由目标自身决定：草稿属于这个 Workspace，因此落在 Works 树上——
+   * 与用户此刻看的是同一棵树，不需要调用方额外声明。
    */
   const open_draft = useCallback((workspace_id: string, agent_id: string) => {
-    void controller.actions.create_session(workspace_id, agent_id, true);
+    void controller.actions.create_session(workspace_id, agent_id);
   }, [controller.actions]);
 
   /**

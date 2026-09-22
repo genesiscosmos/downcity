@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { get_group_chat_key } from "../src/renderer/features/chat/lib/chat_cache_key.ts";
-import { get_sidebar_mode_for_navigation, is_restorable_navigation_target, parse_navigation_target, resolve_navigation_target } from "../src/renderer/features/navigation/lib/desktop_navigation_state.ts";
+import { get_sidebar_mode_for_navigation, get_sidebar_mode_for_target, is_restorable_navigation_target, parse_navigation_target, resolve_navigation_target } from "../src/renderer/features/navigation/lib/desktop_navigation_state.ts";
 import type { DesktopNavigationCatalog } from "../src/renderer/types/DesktopNavigation.ts";
 import { get_group_draft_session_id, is_group_draft_session_id } from "../src/renderer/types/DesktopView.ts";
 
@@ -51,4 +51,19 @@ test("一级侧栏由恢复目标唯一推导", () => {
   assert.equal(get_sidebar_mode_for_navigation({ kind: "workspace_file", workspace_id: "project", relative_path: "README.md" }), "workspace");
   assert.equal(get_sidebar_mode_for_navigation({ kind: "power_workspace", power_id: "tasks" }), "power:tasks");
   assert.equal(get_sidebar_mode_for_navigation({ kind: "agent", agent_id: "writer" }), "chat");
+});
+
+/**
+ * 导航目标与侧栏的对应只有一份。
+ *
+ * 会话条目只长在 Works 树里，因此所有会话类目标都必须落 Works——把用户留在一张不列会话的
+ * 面板上，他在侧栏里就找不到自己刚打开的那一条。此前导航入口硬编码 `"chat"`，而 `"chat"`
+ * 是 Agents 面板，于是按 ⌘R 新建对话会把侧栏从 Works 拽走。
+ */
+test("会话类目标都落 Works，设置页不属于任何业务入口", () => {
+  assert.equal(get_sidebar_mode_for_target({ kind: "session", workspace_id: "project", agent_id: "writer", session_id: "session" }), "workspace");
+  assert.equal(get_sidebar_mode_for_target({ kind: "draft", workspace_id: "project", agent_id: "writer", draft_id: "draft" }), "workspace");
+  assert.equal(get_sidebar_mode_for_target({ kind: "group_session", group_id: "team", workspace_id: "project", session_id: "group-session" }), "workspace");
+  assert.equal(get_sidebar_mode_for_target({ kind: "group_draft", group_id: "team", workspace_id: "project", draft_id: "group-draft:team" }), "workspace");
+  assert.equal(get_sidebar_mode_for_target({ kind: "settings", section: "shortcuts" }), undefined);
 });
