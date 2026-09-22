@@ -233,6 +233,9 @@ Agents 主体  [ 32 头像            ] ──8── 名称 / 描述         �
 - **Workspace 展开状态是持久化的显示偏好**（`localStorage`，与侧栏宽度同一层）：
   切走再切回来与重启都能保持。当前所在的 Workspace 在初始值里总是展开的，
   代价是手动折叠它后重新挂载会重新展开——「我在哪」比「我折过它」更需要被看到。
+- **会话列表默认只列一页（10 条）**，其余点行尾的「更多」继续加载（`workspaceSessionPaging`）。
+  窗口不按「最近 N 条」硬截：当前打开项与已选项必须在窗口内——否则重启后恢复到第 30 条时
+  侧栏看不到自己在哪一条，多选也会把看不见的行算进去。分页进度不持久化（它是浏览进度，不是偏好）。
 - 窗口宽度到 760 以下时侧栏自动折叠（`shellResponsive`），此时侧栏规则不再参与布局。
 - 行内文字一律 `truncate`；行首槽、状态图标、操作入口都不参与收缩（`shrink-0`），
   被截断的永远是名称与描述。
@@ -282,9 +285,11 @@ Agents 主体  [ 32 头像            ] ──8── 名称 / 描述         �
 | B19 | 根行的**状态落在菜单入口上**（与会话行同一套 `RowMenuButton status`），汇总走共享的 `pick_chat_row_status` | 小（见 §7.1 第 4 条） |
 | B20 | **会话入口收敛到 Works**：删掉整套展开卡片（`ChatSidebar` / `ChatSubjectList` / `SubjectConversationsPanel` / `subjectCard`）与它专属的几何；Agents 面板只列主体、点击进 profile；Works 树同时收 Agent Session 与 GroupSession；导航顺序改为 Works / Agents / Powers（⌘1 = Works）；未读圆点只落在 Works | 中（见 §7.1） |
 | B21 | 新建入口落到 **Workspace 行右端、菜单左边**：点它直接进该 Workspace 的空对话；空对话页换的是**联系人**而不是 Workspace（`ChatAgentSelector`）；修掉 `SidebarItem` 丢弃 `ref`/`...rest` 导致 `asChild` 菜单打不开的缺陷 | 中（见 §7.1） |
-| B22 | 会话行改成**归属头像 + 多选**：行尾归属文字换成行首头像按钮（带归属名与「新建会话」菜单）；Shift 点击进入多选、普通点击仍是打开会话；批量归档（仅 Agent 会话）+ 批量删除；会话投影上提到容器层，让范围选择与渲染共用同一份行序 | 中（见 §7.1） |
+| B22 | 会话行改成**归属头像 + 多选**：行尾归属文字换成行首头像按钮（带归属名与「新建会话」菜单）；Shift 点击进入多选、普通点击仍是打开会话；批量归档 + 批量删除；会话投影上提到容器层，让范围选择与渲染共用同一份行序 | 中（见 §7.1） |
 | B23 | Workspace 展开状态持久化到 `localStorage`（`downcity.workspace_expanded_ids`）；初始值 = 存储那一份 ∪ 当前所在 | 小 |
 | B24 | Workspace 行的菜单里加上「新建对话」并排在第一项（与目录操作用分隔线分开）；行内加号是快路径，菜单里这条是可发现的那一份 | 小 |
+| B25 | 会话列表分页：一个 Workspace 默认只列最近 10 条，其余点「更多」继续加载；窗口覆盖当前打开项与已选项 | 小 |
+| B26 | **群聊归档能力**：`packages/agent` 的 `GroupSessions` 加 `archive` / `archived` / `clean_archive` / `purge`（目录搬迁，与 Agent Session 同形）；主进程 + IPC + 渲染层依次接上；侧栏的批量归档不再有「跳过群聊」分支；删 Group 时连同群聊数据一起清掉 | 中（见 `group-session-archive-design.md`） |
 
 ### 7.1 需要目检的清单
 
@@ -485,6 +490,7 @@ Workspace A  [▶ 24]─4─名称                    ⏳  ⋯   根：箭头 + 
 因为组件文档会举例写 `<button>`）、`workspace_session_list.test.ts`（Works 树、两类会话、卡片删除、
 新建入口、归属头像与多选）、`session_selection.test.ts`（多选纯函数的边界）、
 `workspace_expansion.test.ts`（折叠状态与不可信存储输入）、
+`workspace_session_paging.test.ts`（分页窗口与覆盖规则）、
 `popup_scroll_region.test.ts`（浮层裁剪与滚动分层）、`radius_scale.test.ts`（圆角角色）。
 
 **同源背景**：`desktop-dimension-scale-design.md`（圆角角色与嵌套公式）、

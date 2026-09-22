@@ -136,6 +136,29 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
       }
     } catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
   }, [catalog, chat_stream, composer, navigation, open_group, open_group_draft, settings]);
+
+  /**
+   * 归档一个 GroupSession：从侧栏收起，数据保留在归档区。
+   *
+   * 与删除同形，但少做两件事：**不删草稿**（归档可逆，用户可能回来），
+   * 也不动 `group_main_sessions`（那不是「这条会话被移除了」）。
+   * 仍要重选活动会话：被归档的那条已经不在活动列表里了。
+   */
+  const archive_group_session = useCallback(async (group_id: string, session_id: string) => {
+    settings.set_error("");
+    try {
+      const group = await window.downcity.group.archive_session(group_id, session_id);
+      catalog.upsert_group(group);
+      chat_stream.reset_group_chat(group_id);
+      const next_session = group.sessions.find((item) => item.session_id === group.active_session_id);
+      const selection = navigation.state_ref.current.selection;
+      if (selection?.kind === "group_session" && selection.group_id === group_id && selection.session_id === session_id) {
+        if (next_session?.workspace_id && group.active_session_id) await open_group(group.group_id, group.active_session_id);
+        else await open_group_draft(group_id, selection.workspace_id);
+      }
+    } catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
+  }, [catalog, chat_stream, navigation, open_group, open_group_draft, settings]);
+
   const send_group_message = useCallback(async (group_id: string, workspace_id: string, session_id: string, input: JSONContent) => {
     const normalized_text = read_chat_composer_text(input, true);
     if (!normalized_text) return undefined;
@@ -192,5 +215,5 @@ export function use_desktop_group_actions(dependencies: DesktopGroupDependencies
       if ((selection?.kind === "group" || selection?.kind === "group_session" || selection?.kind === "group_draft") && selection.group_id === group_id) navigation.set_selection(null);
     } catch (reason) { settings.set_error(to_error_message(reason)); throw reason; }
   }, [active_group_session_ids_ref, catalog, chat_stream, navigation, settings]);
-  return useMemo(() => ({ open_group, create_group_session, switch_group_draft_context, rename_group_session, remove_group_session, send_group_message, update_group_draft, stop_group, respond_group_interaction, create_group, open_create_group, update_group, remove_group }), [create_group, create_group_session, open_create_group, open_group, remove_group, remove_group_session, rename_group_session, respond_group_interaction, send_group_message, stop_group, switch_group_draft_context, update_group, update_group_draft]);
+  return useMemo(() => ({ open_group, create_group_session, switch_group_draft_context, rename_group_session, remove_group_session, archive_group_session, send_group_message, update_group_draft, stop_group, respond_group_interaction, create_group, open_create_group, update_group, remove_group }), [archive_group_session, create_group, create_group_session, open_create_group, open_group, remove_group, remove_group_session, rename_group_session, respond_group_interaction, send_group_message, stop_group, switch_group_draft_context, update_group, update_group_draft]);
 }

@@ -84,6 +84,31 @@ export interface GroupSessionListInput {
   readonly workspace_id?: string;
 }
 
+/**
+ * 归档一个 GroupSession 的结果。
+ *
+ * 归档是一次**目录搬迁**（活动区 → 归档区），不是打标记：
+ * 它让「活动列表」天然只含活动项，不需要在每次查询里过滤。
+ */
+export interface GroupSessionArchiveResult {
+  /** 被归档的 GroupSession 标识。 */
+  readonly session_id: string;
+  /** 归档发生的时间戳。 */
+  readonly archived_at: number;
+}
+
+/** 列出已归档 GroupSession 的过滤条件。 */
+export interface GroupSessionArchiveListInput {
+  /** 只返回绑定到指定 Workspace 的归档群聊。 */
+  readonly workspace_id?: string;
+}
+
+/** 清空归档后的结果。 */
+export interface GroupSessionCleanArchiveResult {
+  /** 被永久删除的归档 GroupSession 标识。 */
+  readonly removed_session_ids: readonly string[];
+}
+
 /** GroupSession 公开能力。 */
 export interface GroupSessionContract {
   /** 当前群聊上下文的稳定标识。 */
@@ -117,10 +142,28 @@ export interface GroupSessions {
   create(input?: GroupSessionCreateInput): Promise<GroupSession>;
   /** 从 Storage 恢复当前 Group 的一个群聊上下文。 */
   get(session_id: string, input?: GroupSessionGetInput): Promise<GroupSession | null>;
-  /** 从 Storage 恢复当前 Group 的全部群聊上下文。 */
+  /** 从 Storage 恢复当前 Group 的全部群聊上下文（不含已归档）。 */
   list(input?: GroupSessionListInput): Promise<readonly GroupSessionSummary[]>;
   /** 释放并移除指定群聊上下文。 */
   remove(session_id: string, input?: GroupSessionGetInput): Promise<GroupSession | null>;
+  /**
+   * 归档指定群聊上下文：从活动区迁入归档区。
+   *
+   * 与 `remove` 的区别是**可逆性**：归档只是收起来，数据仍在归档区；
+   * 而 `remove` 是永久删除。因此正在执行的群聊不能归档（先停再归档）。
+   */
+  archive(session_id: string): Promise<GroupSessionArchiveResult>;
+  /** 列出已归档的群聊上下文摘要。 */
+  archived(input?: GroupSessionArchiveListInput): Promise<readonly GroupSessionSummary[]>;
+  /** 永久清空当前 Group 的全部归档。 */
+  clean_archive(): Promise<GroupSessionCleanArchiveResult>;
+  /**
+   * 永久删除当前 Group 的全部群聊数据（活动区 + 归档区）。
+   *
+   * 它服务于「Group 被删除」：Group 是群聊的**所有者**，所有者消失时它拥有的数据
+   * 不该继续存在。与 `dispose` 的区别：那个只释放运行时实例，数据仍在磁盘上。
+   */
+  purge(): Promise<void>;
 }
 
 /** GroupSession 的内部依赖快照。 */

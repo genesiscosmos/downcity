@@ -290,6 +290,8 @@ export interface DesktopActions {
   update_group_draft(workspace_id: string, group_id: string, session_id: string, input: JSONContent): void;
   /** 停止 Group 当前执行。 */
   stop_group(group_id: string, session_id: string): Promise<void>;
+  /** 归档一个 GroupSession：从侧栏收起，数据保留在归档区。 */
+  archive_group_session(group_id: string, session_id: string): Promise<void>;
   /** 响应 Group 成员交互。 */
   respond_group_interaction(group_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
   /** 打开设置分区。 */

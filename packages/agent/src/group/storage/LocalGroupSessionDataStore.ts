@@ -35,6 +35,14 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     session_id: string;
     /** 所属 Group 标识。 */
     group_id: string;
+    /**
+     * 当前 Session 所在的存储区。
+     *
+     * 默认 `active`（`sessions/`）；归档后的 Session 住在 `archived-sessions/`。
+     * 区由调用方给而不是在这里判断：DataStore 只负责“某个目录里的一个 Session”，
+     * 该在哪个区是集合层的事。
+     */
+    area?: "active" | "archived";
   }) {
     this.files = options.files;
     this.group_id = options.group_id;
@@ -42,7 +50,7 @@ export class LocalGroupSessionDataStore implements GroupSessionDataStore {
     if (!this.session_id) throw new Error("GroupSession store requires a non-empty session_id");
     this.session_root_path = path.join(
       path.resolve(options.storage_root_path),
-      "sessions",
+      options.area === "archived" ? "archived-sessions" : "sessions",
       encodeURIComponent(this.session_id),
     );
     this.metadata_file_path = path.join(this.session_root_path, "meta.json");

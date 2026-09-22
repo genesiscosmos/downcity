@@ -692,11 +692,31 @@ export class AgentController {
   }
 
   /** 删除 Group 定义和 City 中的运行时主体。 */
+  /**
+   * 删除一个 Group，并连同它的全部群聊数据一起清掉。
+   *
+   * ## 为什么要显式清数据
+   *
+   * Group 是群聊的**所有者**。此前这里只删注册表条目与进程内缓存，磁盘上的群聊目录
+   * 会留下来成为孤儿——没有入口能再访问它们，只是磁盘泄漏。
+   * 归档能力加上后这一点更明显：归档区会永久积累无人认领的数据。
+   *
+   * 清理在**移除注册之前**做：移除后就拿不到那个 Group 对象，也就拿不到它的存储作用域了。
+   * 清理失败不阻止删除：用户想删的是这个 Group，而残留数据只占空间、不阻碍使用。
+   */
   async remove_group(group_id: string): Promise<boolean> {
     await this.ready_promise;
     const resolved_group_id = String(group_id || "").trim();
+    const group = this.city.groups.get(resolved_group_id);
+    if (group) {
+      try {
+        await group.sessions.purge();
+      } catch {
+        // 数据清理失败不阻断删除，理由见上。
+      }
+    }
     const existed = this.data.groups.remove(resolved_group_id);
-    if (this.city.groups.get(resolved_group_id)) await this.city.groups.remove(resolved_group_id);
+    if (group) await this.city.groups.remove(resolved_group_id);
     this.remove_group_session_cache(resolved_group_id);
     return existed;
   }
@@ -766,6 +786,33 @@ export class AgentController {
     await (await this.require_group_session(this.require_group(group_id), session_id)).respond_interaction(input);
   }
 
+  /**
+   * 归档一个 GroupSession：从活动区迁入归档区。
+   *
+   * 与 `remove_group_session` 的区别是**可逆性**：归档只是收起来，数据仍在归档区。
+   * 归档后同样要重选活动会话——被归档的那条已经不在活动列表里了。
+   */
+  async archive_group_session(group_id: string, session_id: string): Promise<DesktopGroupSummary> {
+    await this.ready_promise;
+    const group = this.require_group(group_id);
+    await group.sessions.archive(session_id);
+    this.remove_group_session_cache(group_id, session_id);
+    return await this.refresh_group_after_session_change(group);
+  }
+
+  /** 列出一个 Group 已归档的 GroupSession。 */
+  async list_archived_group_sessions(group_id: string): Promise<DesktopGroupSessionSummary[]> {
+    await this.ready_promise;
+    return (await this.require_group(group_id).sessions.archived()).map(to_desktop_group_session_summary);
+  }
+
+  /** 永久清空一个 Group 的全部归档，返回被删的条数。 */
+  async clean_group_session_archive(group_id: string): Promise<number> {
+    await this.ready_promise;
+    const result = await this.require_group(group_id).sessions.clean_archive();
+    return result.removed_session_ids.length;
+  }
+
   async remove_group_session(group_id: string, session_id: string): Promise<DesktopGroupSummary> {
     await this.ready_promise;
     const group = this.require_group(group_id);
@@ -775,10 +822,20 @@ export class AgentController {
       : undefined;
     await group.sessions.remove(session_id, workspace ? { workspace } : undefined);
     this.remove_group_session_cache(group_id, session_id);
+    return await this.refresh_group_after_session_change(group);
+  }
+
+  /**
+   * 会话集合变化（删除 / 归档）后重选活动会话，并返回新的 Group 摘要。
+   *
+   * 删除与归档共用这一段：两者都要处理「当前活动会话不在了，就落到剩下的第一条」。
+   * 各写一遍必然分叉，而分叉的表现是「归档后侧栏还高亮着一条已经不存在的会话」。
+   */
+  private async refresh_group_after_session_change(group: Group): Promise<DesktopGroupSummary> {
     const summaries = await group.sessions.list();
     const next_session_id = summaries[0]?.id;
-    if (next_session_id) this.active_group_session_ids.set(group_id, next_session_id);
-    else this.active_group_session_ids.delete(group_id);
+    if (next_session_id) this.active_group_session_ids.set(group.id, next_session_id);
+    else this.active_group_session_ids.delete(group.id);
     return await to_desktop_group_summary(group, this.require_group_config(group.id).model_id, summaries, next_session_id);
   }
 

@@ -191,6 +191,14 @@ ipcMain.handle("group:remove-session", async (_event, group_id: string, session_
   require_notification_center().handle_group_session_closed(group_id, session_id);
   return result;
 });
+ipcMain.handle("group:archive-session", async (_event, group_id: string, session_id: string) => {
+  const result = await require_agent_controller().archive_group_session(group_id, session_id);
+  // 归档后那条群聊不再出现在活动列表里，未读通知也该一并收掉：
+  // 留着一个指向看不见会话的未读，用户会找不到它在哪里。
+  require_notification_center().handle_group_session_closed(group_id, session_id);
+  return result;
+});
+ipcMain.handle("group:list-archived-sessions", (_event, group_id: string) => require_agent_controller().list_archived_group_sessions(group_id));
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id?: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
 ipcMain.handle("chat:rebind-session-workspace", (_event, agent_id: string, session_id: string, workspace_id: string) => require_agent_controller().rebind_session_workspace(agent_id, session_id, workspace_id));
 ipcMain.handle("chat:list-models", () => require_agent_controller().list_models());

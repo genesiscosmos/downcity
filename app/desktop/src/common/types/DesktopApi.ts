@@ -941,6 +941,10 @@ export interface DesktopApi {
     respond_interaction(group_id: string, session_id: string, input: RespondSessionInteractionInput): Promise<void>;
     /** 删除指定 GroupSession。 */
     remove_session(group_id: string, session_id: string): Promise<DesktopGroupSummary>;
+    /** 归档指定 GroupSession：从侧栏收起，数据保留在归档区。 */
+    archive_session(group_id: string, session_id: string): Promise<DesktopGroupSummary>;
+    /** 列出指定 Group 已归档的 GroupSession。 */
+    list_archived_sessions(group_id: string): Promise<DesktopGroupSessionSummary[]>;
     /** 订阅 GroupSession 的统一消息与状态事件。 */
     subscribe(callback: (event: DesktopGroupEvent) => void): () => void;
   };

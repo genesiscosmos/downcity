@@ -56,7 +56,10 @@ contains() {
 
 add_package() {
   local package_name="$1"
-  if ! contains "$package_name" "${PACKAGES[@]}"; then
+  # `${PACKAGES[@]}` 在空数组 + `set -u` 下会被 bash 3.2（macOS 自带）视为未绑定变量，
+  # 因此两个解引用都带 `:-` 默认值。这不是防御性写法：不修的话任何 `patch:build` 调用
+  # 都会在第一次 add_package 时直接退出。
+  if ! contains "$package_name" "${PACKAGES[@]:-}"; then
     PACKAGES+=("$package_name")
   fi
 }
@@ -65,11 +68,11 @@ normalize_selected_packages() {
   local ordered=()
   local package_name
   for package_name in "${ALL_PACKAGES[@]}"; do
-    if contains "$package_name" "${PACKAGES[@]}"; then
+    if contains "$package_name" "${PACKAGES[@]:-}"; then
       ordered+=("$package_name")
     fi
   done
-  PACKAGES=("${ordered[@]}")
+  PACKAGES=("${ordered[@]:-}")
 }
 
 run_build() {
@@ -88,7 +91,7 @@ run_build() {
 should_sync_global_cli() {
   local dependency_name
   while IFS= read -r dependency_name; do
-    if contains "$dependency_name" "${PACKAGES[@]}"; then return 0; fi
+    if contains "$dependency_name" "${PACKAGES[@]:-}"; then return 0; fi
   done < <(node "$ROOT_DIR/scripts/resolve-package-build-order.mjs" cli)
   return 1
 }
@@ -119,7 +122,7 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if [[ ${#PACKAGES[@]} -eq 0 ]]; then
+if [[ ${#PACKAGES[@]:-0} -eq 0 ]]; then
   echo "Error: 至少需要显式指定一个 package，例如 --agent 或 --agent --powers。" >&2
   usage
 fi
@@ -127,11 +130,11 @@ fi
 normalize_selected_packages
 while IFS= read -r package_name; do
   BUILD_PACKAGES+=("$package_name")
-done < <(node "$ROOT_DIR/scripts/resolve-package-build-order.mjs" "${PACKAGES[@]}")
+done < <(node "$ROOT_DIR/scripts/resolve-package-build-order.mjs" "${PACKAGES[@]:-}")
 
 if $BUMP; then
   echo "==> patch bump: ${PACKAGES[*]}"
-  for package_name in "${PACKAGES[@]}"; do
+  for package_name in "${PACKAGES[@]:-}"; do
     package_path="$(node "$ROOT_DIR/scripts/resolve-package-path.mjs" "$package_name")"
     node "$ROOT_DIR/scripts/bump-package-version.mjs" "$ROOT_DIR/$package_path/package.json"
   done
@@ -140,7 +143,7 @@ else
 fi
 
 echo "==> 构建 ${BUILD_PACKAGES[*]} ..."
-for package_name in "${BUILD_PACKAGES[@]}"; do
+for package_name in "${BUILD_PACKAGES[@]:-}"; do
   run_build "$package_name"
 done
 
@@ -148,7 +151,7 @@ echo ""
 echo "==> 完成"
 
 if $SYNC_GLOBAL_CLI && should_sync_global_cli; then
-  if ! contains "cli" "${BUILD_PACKAGES[@]}"; then
+  if ! contains "cli" "${BUILD_PACKAGES[@]:-}"; then
     echo ""
     echo "==> 刷新 Downcity CLI 交付产物 ..."
     run_build "cli"

@@ -2,6 +2,7 @@
 
 import type { GroupMessage } from "@/types/group/Group.js";
 import type { GroupDispatchTurnRecord } from "@/types/group/GroupDispatch.js";
+import type { GroupSessionArchiveResult, GroupSessionCleanArchiveResult } from "@/types/group/GroupSession.js";
 import type { FileSystem } from "@downcity/type";
 
 /** GroupSession 的持久化元数据。 */
@@ -70,12 +71,38 @@ export interface GroupSessionDataStore {
 export interface GroupSessionStore {
   /** 返回指定 GroupSession 的持久化视图。 */
   session(session_id: string): GroupSessionDataStore;
-  /** 判断指定 GroupSession 是否存在。 */
+  /** 判断指定 GroupSession 是否存在（活动区）。 */
   has_session(session_id: string): Promise<boolean>;
-  /** 列出当前 Group 的持久化 Session metadata。 */
+  /** 列出当前 Group 活动区的 Session metadata（不含已归档）。 */
   list_session_metadata(): Promise<GroupSessionHistoryMeta[]>;
-  /** 删除指定 GroupSession 的全部数据。 */
+  /** 删除指定 GroupSession 的全部数据（活动区）。 */
   remove_session(session_id: string): Promise<boolean>;
+  /**
+   * 把一个活动 GroupSession 迁入归档区。
+   *
+   * 与 Agent Session 的归档同形（`LocalSessionStore.archive_session`），只有一处差别：
+   * **不接受 `origin_type`**——群聊的来源只有一种，多一个参数只会让人猜该传什么。
+   *
+   * 不变量（两个方向都不允许静默成功）：
+   *
+   * - 源不存在 → 报错；
+   * - 目标已存在 → 报错（覆盖会丢掉一份真实数据）。
+   */
+  archive_session(session_id: string): Promise<GroupSessionArchiveResult>;
+  /** 列出归档区的 Session metadata。 */
+  list_archived_session_metadata(): Promise<GroupSessionHistoryMeta[]>;
+  /** 删除归档区中的指定 Session。 */
+  remove_archived_session(session_id: string): Promise<boolean>;
+  /** 永久清空归档区。 */
+  clean_archive(): Promise<GroupSessionCleanArchiveResult>;
+  /**
+   * 永久删除当前 Group 的**全部** GroupSession 数据（活动区 + 归档区）。
+   *
+   * 与 `clean_archive` 的区别：那个只动归档区，这个连活动区一起删。
+   * 它服务于「Group 被删除」——Group 是群聊的**所有者**，所有者消失时它拥有的数据不该继续存在。
+   * 没有它时删掉一个 Group 会在磁盘上留下无人认领的孤儿目录。
+   */
+  purge(): Promise<void>;
   /** 释放当前 Store 持有的资源。 */
   dispose(): Promise<void>;
 }

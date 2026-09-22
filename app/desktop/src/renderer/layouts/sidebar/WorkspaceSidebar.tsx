@@ -110,7 +110,17 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
     return map;
   }, [rows_by_workspace]);
   const session_selection = use_session_selection({ ordered_keys, targets_by_key });
-  const has_group_sessions = session_selection.selected_targets.some((target) => target.kind === "group");
+  /**
+   * 当前打开的会话 key。
+   *
+   * 与行内的 `entry.key` 同一套拼法（见 `session_list_projection`）。分页窗口用它保证
+   * 「我在哪一条」始终可见：重启后可能恢复到第 30 条，而默认窗口只有一页。
+   */
+  const active_session_key = selection && (selection.kind === "session" || selection.kind === "group_session")
+    ? selection.kind === "session"
+      ? `agent:${selection.agent_id}:${selection.session_id}`
+      : `group:${selection.group_id}:${selection.session_id}`
+    : undefined;
 
   /**
    * 在一个 Workspace 里打开空对话。
@@ -123,21 +133,25 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
   }, [controller.actions]);
 
   /**
-   * 批量归档选中的 Agent 会话。
+   * 批量归档选中的会话。
    *
-   * 逐条调用已有的 `archive_session`，而不是新写一个批量领域动作：那个动作带着导航回退、
+   * 逐条调用已有的归档动作，而不是新写一个批量领域动作：那些动作带着导航回退、
    * 渲染缓存清理等副作用，重写一遍必然分叉。失败的条目收集起来一次性报告——
    * 中途停下会让用户不知道剩下几条到底动没动。
+   *
+   * 两类会话都能归档（`archive_session` 与 `archive_group_session`），
+   * 因此这里不再有「跳过群聊」的分支——那是群聊归档实现前的补丁。
    */
   const archive_selected = useCallback(async () => {
-    const targets = session_selection.selected_targets.filter((target) => target.kind === "agent");
+    const targets = session_selection.selected_targets;
     if (targets.length === 0 || batch_pending) return;
     set_batch_pending(true);
     set_batch_error("");
     const failed: string[] = [];
     for (const target of targets) {
       try {
-        await controller.actions.archive_session(target.workspace_id, target.agent_id ?? "", target.session_id);
+        if (target.kind === "agent") await controller.actions.archive_session(target.workspace_id, target.agent_id ?? "", target.session_id);
+        else await controller.actions.archive_group_session(target.group_id ?? "", target.session_id);
       } catch {
         failed.push(target.session_id);
       }
@@ -172,7 +186,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
     {session_selection.selection_mode
       ? <SessionSelectionBar
         selected_count={session_selection.selected_keys.length}
-        has_group_sessions={has_group_sessions}
         pending={batch_pending}
         on_exit={session_selection.exit}
         on_archive={() => void archive_selected()}
@@ -189,6 +202,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
       default_agent_ids={default_agent_ids}
       selected_workspace_id={selected_workspace_id}
       selected_session_id={selected_session_id}
+      active_session_key={active_session_key}
       loading={loading}
       hydrated={hydrated}
       open_create_workspace={open_create_workspace}

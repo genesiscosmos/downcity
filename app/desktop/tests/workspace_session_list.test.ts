@@ -255,6 +255,26 @@ test("点会话保留 Works 侧栏，且当前项两级都认得出", () => {
  * 它是壳的显示偏好（与侧栏宽度同一层），因此两件事都要成立：**切走再切回来**
  *（侧栏重新挂载）与**重启**。只存在内存里只能满足前者。
  */
+/**
+ * 会话列表默认只列一页，其余通过「更多」继续加载。
+ *
+ * 关键是窗口不能只按「最近 N 条」算：当前打开项与已选项必须在窗口内，
+ * 否则侧栏会看不到自己在哪一条，工具条的计数也会比看得见的勾选多。
+ */
+test("会话列表分页，且窗口覆盖当前项与已选项", () => {
+  // 截断与窗口计算都在一处，不在这里写 slice(0, 10)。
+  assert.ok(/resolve_visible_count\(\{/.test(session_list), "列表没有按分页窗口截断");
+  assert.ok(/resolve_must_include_index\(\{ ordered_keys, active_key: active_session_key, selected_keys: session_selection\.selected_keys \}\)/.test(session_list), "窗口没有覆盖当前打开项与已选项");
+  assert.ok(/const visible_rows = visible_count >= rows\.length \? rows : rows\.slice\(0, visible_count\)/.test(session_list), "截断不是按算出来的窗口做的");
+  // 「更多」只在确实还有未列出的时候出现，且多选时不再收新行。
+  assert.ok(/\{hidden_count > 0 \? <SidebarItem/.test(session_list), "「更多」在还有未列出时没有出现");
+  assert.ok(/disabled=\{session_selection\.selection_mode\}/.test(session_list), "多选时仍能加载新行：选了多少会变得难以核对");
+  assert.ok(/onSelect=\{on_load_more\}/.test(session_list), "「更多」没有接到加载动作");
+  // 一页的条数与窗口规则在纯函数模块里，可单测。
+  const paging = read_without_comments(path.join(sidebar_root, "workspaceSessionPaging.ts"));
+  assert.ok(/export const session_page_size = 10;/.test(paging), "一页不是 10 条");
+});
+
 test("Workspace 展开状态持久化到 localStorage", () => {
   // 惰性初始化：直接写在 useState 参数里会每次渲染都读一次 localStorage。
   assert.ok(/useState<ReadonlySet<string>>\(\(\) => resolve_initial_expanded_ids\(\{/.test(session_list), "展开状态不是从存储惰性恢复的");
@@ -355,19 +375,34 @@ test("多选：状态在容器层，工具条与列表读同一份", () => {
   assert.ok(/prune_session_selection\(stored_keys, ordered_keys\)/.test(selection_hook), "选择里的失效 key 没有被剔除");
 });
 
-test("多选：批量归档只作用于 Agent 会话，且含群聊时禁用并说明", () => {
+test("多选：批量归档与删除都作用于全部选中项", () => {
   const sidebar_source = read_without_comments(path.join(sidebar_root, "WorkspaceSidebar.tsx"));
   const bar = read_without_comments(path.join(sidebar_root, "SessionSelectionBar.tsx"));
-  // 归档只存在于 Agent Session，Group 群聊没有这个语义（见 GroupSessionActionsMenu）。
-  assert.ok(/filter\(\(target\) => target\.kind === "agent"\)/.test(sidebar_source), "批量归档没有只作用于 Agent 会话");
-  assert.ok(/disabled=\{pending \|\| has_group_sessions \|\| selected_count === 0\}/.test(bar), "含群聊时归档没有禁用");
-  // 禁用必须带原因：静默跳过等于告诉用户「归档了」但实际没动。
-  assert.ok(/archive_group_unsupported/.test(bar), "归档禁用时没有说明原因");
-  // 删除对两类都成立。
+  // 两类会话都能归档：群聊归档补上之后，「跳过群聊」那段补丁应该整体消失。
+  assert.ok(/if \(target\.kind === "agent"\) await controller\.actions\.archive_session/.test(sidebar_source), "批量归档没有分支到 Agent 归档动作");
+  assert.ok(/await controller\.actions\.archive_group_session/.test(sidebar_source), "批量归档没有接上群聊归档");
+  assert.ok(!/archive_group_unsupported|batch_archived_skipped|archivable_count/.test(sidebar_source + bar), "「含群聊就跳过 / 禁用」的补丁仍在：能力已补上，它该消失");
+  // 归档按钮只看有没有选中项，不再区分两类。
+  assert.ok(/disabled=\{pending \|\| selected_count === 0\}/.test(bar), "归档按钮仍在按会话类型禁用");
+  // 删除同样作用于两类。
   assert.ok(/if \(target\.kind === "agent"\) await controller\.actions\.remove_session/.test(sidebar_source), "批量删除没有区分两类会话");
   assert.ok(/await controller\.actions\.remove_group_session/.test(sidebar_source), "批量删除漏了群聊");
   // 不可逆的批量删除有确认；可逆的归档不打扰。
   assert.ok(/sidebar\.delete_selected_title/.test(sidebar_source), "批量删除没有确认步骤");
   // 批量执行复用已有领域动作，而不是新写一套：那套带着导航回退与缓存清理。
   assert.ok(/await controller\.actions\.archive_session\(target\.workspace_id/.test(sidebar_source), "批量归档没有复用已有的归档动作");
+});
+
+/**
+ * 群聊菜单里也要有归档入口。
+ *
+ * 批量归档能用而单条不能，是很典型的缺口：用户会先发现“这个菜单里怎么没有”。
+ */
+test("群聊单条菜单里有归档", () => {
+  const group_menu = read_without_comments(path.join(renderer_root, "features/chat/components/GroupSessionActionsMenu.tsx"));
+  assert.ok(/on_archive\?\(\): Promise<void>/.test(group_menu), "群聊菜单没有归档入口属性");
+  assert.ok(/on_archive \? <DropdownMenuItem onClick=\{\(\) => void on_archive\(\)\}/.test(group_menu), "群聊菜单没有渲染归档项");
+  // 与 Agent 会话菜单同形：归档是可逆动作，排在删除之前。
+  assert.ok(group_menu.indexOf("on_archive") < group_menu.indexOf("set_remove_open(true)"), "归档排在删除之后");
+  assert.ok(/on_archive=\{\(\) => controller\.actions\.archive_group_session/.test(session_list), "列表没有把群聊归档接到菜单上");
 });

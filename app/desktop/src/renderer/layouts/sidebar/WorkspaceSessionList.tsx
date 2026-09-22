@@ -46,7 +46,7 @@
  */
 
 import { useState } from "react";
-import { TbCircle, TbCircleCheckFilled, TbFolderPlus, TbLoader2 } from "react-icons/tb";
+import { TbChevronDown, TbCircle, TbCircleCheckFilled, TbFolderPlus, TbLoader2 } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { RowMenuButton } from "@/components/RowMenuButton";
 import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
@@ -63,6 +63,7 @@ import { NewChatButton } from "./NewChatRow";
 import { SessionSubjectAvatar } from "./SessionSubjectAvatar";
 import type { SessionSelection } from "./use_session_selection";
 import { format_expanded_ids, parse_expanded_ids, resolve_initial_expanded_ids, workspace_expanded_storage_key } from "./workspaceExpansion";
+import { next_page_count, resolve_must_include_index, resolve_visible_count } from "./workspaceSessionPaging";
 import { WorkspaceRowMenu } from "./WorkspaceRowMenu";
 
 /** Works 侧栏属性。 */
@@ -81,6 +82,8 @@ interface WorkspaceSidebarListProps {
   selected_workspace_id?: string;
   /** 当前 MainView 打开的会话；用于标记当前项。 */
   selected_session_id?: string;
+  /** 当前打开的会话 key（与行内 `entry.key` 同套）；分页窗口用它保证当前项可见。 */
+  active_session_key?: string;
   /** Catalog 是否仍在加载。 */
   loading: boolean;
   /** Session 目录是否已水合；未水合时不能把「还没读到」说成「没有会话」。 */
@@ -122,6 +125,18 @@ export function WorkspaceSessionList(props: WorkspaceSidebarListProps) {
     if (!next.delete(workspace_id)) next.add(workspace_id);
     // 写回存储：包括「全部折叠」——那是用户做过的选择，不该在重新挂载后回到默认。
     localStorage.setItem(workspace_expanded_storage_key, format_expanded_ids(next));
+    return next;
+  });
+  /**
+   * 每个 Workspace 已经加载了几条会话。
+   *
+   * 不持久化：它是**本次浏览的进度**，不是偏好。重启后回到一页更符合「最近 10 条」的初衷；
+   * 而用户真正关心的「我在哪一条」由窗口覆盖规则保证可见（见 `workspaceSessionPaging`）。
+   */
+  const [loaded_counts, set_loaded_counts] = useState<ReadonlyMap<string, number>>(() => new Map());
+  const load_more = (workspace_id: string, current_count: number, total_count: number) => set_loaded_counts((current) => {
+    const next = new Map(current);
+    next.set(workspace_id, next_page_count(current_count, total_count));
     return next;
   });
 
@@ -178,6 +193,16 @@ export function WorkspaceSessionList(props: WorkspaceSidebarListProps) {
           hydrated={props.hydrated}
           selected_session_id={props.selected_session_id}
           session_selection={props.session_selection}
+          loaded_count={loaded_counts.get(workspace.workspace_id) ?? 0}
+          on_load_more={() => load_more(workspace.workspace_id, resolve_visible_count({
+            loaded_count: loaded_counts.get(workspace.workspace_id) ?? 0,
+            total_count: rows.length,
+            must_include_index: resolve_must_include_index({
+              ordered_keys: rows.map((row) => row.entry.key),
+              active_key: props.active_session_key,
+              selected_keys: props.session_selection.selected_keys,
+            }),
+          }), rows.length)}
         /> : null}
       </section>;
     })}
@@ -208,7 +233,7 @@ const empty_rows: readonly WorkspaceSessionRow[] = [];
  * | 确实没有会话 | 副文本 +「暂无对话」 |
  * | 会话所属对象已删除 | 行照常渲染，只是归属头像退化成中性图标 |
  */
-function WorkspaceSessions({ controller, agents, rows, hydrated, selected_session_id, session_selection }: {
+function WorkspaceSessions({ controller, agents, rows, hydrated, selected_session_id, session_selection, loaded_count, on_load_more, active_session_key }: {
   /** Renderer 根状态与操作入口。 */
   controller: DesktopController;
   /** 全部 Agent；Group 头像用它拼成员。 */
@@ -221,6 +246,12 @@ function WorkspaceSessions({ controller, agents, rows, hydrated, selected_sessio
   selected_session_id?: string;
   /** 多选状态与动作。 */
   session_selection: SessionSelection;
+  /** 用户已经加载到几条（含默认那一页）；未记录时为 0。 */
+  loaded_count: number;
+  /** 再加载一页。 */
+  on_load_more(): void;
+  /** 当前打开的会话 key；用于保证它在窗口内。 */
+  active_session_key?: string;
 }) {
   const translate = use_translation("navigation");
   const translate_common = use_translation();
@@ -233,7 +264,20 @@ function WorkspaceSessions({ controller, agents, rows, hydrated, selected_sessio
    * 而用户看不见它们。这与「层级里的一次选择」是同一件事。
    */
   const ordered_keys = rows.map((row) => row.entry.key);
-  return <div className="space-y-0.5">{rows.map(({ entry, agent, group, label, status }) => {
+  /**
+   * 现在该显示几条。
+   *
+   * 窗口必须覆盖当前打开项与已选项（见 `workspaceSessionPaging`）：否则重启后恢复到第 30 条时
+   * 侧栏里看不到自己在哪一条，多选也会把看不见的行算进去。
+   */
+  const visible_count = resolve_visible_count({
+    loaded_count,
+    total_count: rows.length,
+    must_include_index: resolve_must_include_index({ ordered_keys, active_key: active_session_key, selected_keys: session_selection.selected_keys }),
+  });
+  const visible_rows = visible_count >= rows.length ? rows : rows.slice(0, visible_count);
+  const hidden_count = rows.length - visible_rows.length;
+  return <div className="space-y-0.5">{visible_rows.map(({ entry, agent, group, label, status }) => {
     const selected = session_selection.selected_keys.includes(entry.key);
     const in_selection = session_selection.selection_mode;
     return <SidebarItem
@@ -301,9 +345,23 @@ function WorkspaceSessions({ controller, agents, rows, hydrated, selected_sessio
             session={entry.session}
             status={status}
             on_rename={(title) => controller.actions.rename_group_session(entry.group_id, entry.session.session_id, title)}
+            on_archive={() => controller.actions.archive_group_session(entry.group_id, entry.session.session_id)}
             on_remove={() => controller.actions.remove_group_session(entry.group_id, entry.session.session_id)}
             on_enter_selection={() => session_selection.select(entry.key)}
           />}
     />;
-  })}</div>;
+  })}
+  {/* 「更多」只在确实还有未列出的时候出现：它是一条**加载**入口，不是“全部对话”菜单——
+      这里没有上限可绕过，所以直接再取一页比弹一个列表更直接。
+      它住在会话列表的最后一行，与「新建对话」在根行上一样，都属于“对这一列做点什么”。 */}
+  {hidden_count > 0 ? <SidebarItem
+    variant="default"
+    tree={{ indent: 1, icon: <TbChevronDown /> }}
+    tone="secondary"
+    // 多选时不收新行：已选项已经保证可见，再展开会让“选了多少”变得难以核对。
+    disabled={session_selection.selection_mode}
+    title={translate("sidebar.show_more_sessions", { count: hidden_count })}
+    onSelect={on_load_more}
+  /> : null}
+</div>;
 }

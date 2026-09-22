@@ -95,6 +95,8 @@ const desktop_api: DesktopApi = {
     stop: (group_id, session_id) => ipcRenderer.invoke("group:stop", group_id, session_id),
     respond_interaction: (group_id, session_id, input) => ipcRenderer.invoke("group:respond-interaction", group_id, session_id, input),
     remove_session: (group_id, session_id) => ipcRenderer.invoke("group:remove-session", group_id, session_id),
+    archive_session: (group_id, session_id) => ipcRenderer.invoke("group:archive-session", group_id, session_id),
+    list_archived_sessions: (group_id) => ipcRenderer.invoke("group:list-archived-sessions", group_id),
     subscribe: (callback) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
       ipcRenderer.on("group:event", handler);
