@@ -7,7 +7,7 @@
  * - Runtime 执行由调用方通过 Cloudflare Computer tools 配置；本适配器不伪造本地 Shell。
  */
 
-import { define_runtime_tool } from "@downcity/type";
+import { define_agent_tool } from "@downcity/type";
 import type {
   FileSystem,
   WorkspaceDirectoryEntry,
@@ -207,7 +207,7 @@ export class CloudflareComputerWorkspace implements WorkspaceRuntime {
 function create_cloudflare_exec_tool(
   computer: CloudflareComputerWorkspaceOptions["computer"],
 ) {
-  return define_runtime_tool<z.infer<typeof cloudflare_exec_input_schema>>({
+  return define_agent_tool<z.infer<typeof cloudflare_exec_input_schema>>({
     description:
       "Run a command in the Cloudflare Computer Workspace. The configured default runtime backend is used unless backend is provided.",
     input_schema: cloudflare_exec_input_schema,
@@ -271,7 +271,7 @@ const cloudflare_list_input_schema = z.object({
 /** 创建不依赖第三方模型 SDK 的 Cloudflare 文件工具。 */
 function create_cloudflare_file_tools(files: FileSystem): WorkspaceTools {
   return {
-    read: define_runtime_tool<z.infer<typeof cloudflare_read_input_schema>>({
+    read: define_agent_tool<z.infer<typeof cloudflare_read_input_schema>>({
       description: "Read a UTF-8 file from the Cloudflare Computer Workspace.",
       input_schema: cloudflare_read_input_schema,
       execute: async (input) => {
@@ -289,7 +289,7 @@ function create_cloudflare_file_tools(files: FileSystem): WorkspaceTools {
         };
       },
     }),
-    write: define_runtime_tool<z.infer<typeof cloudflare_write_input_schema>>({
+    write: define_agent_tool<z.infer<typeof cloudflare_write_input_schema>>({
       description: "Write a complete UTF-8 file in the Cloudflare Computer Workspace.",
       input_schema: cloudflare_write_input_schema,
       execute: async (input) => {
@@ -298,7 +298,7 @@ function create_cloudflare_file_tools(files: FileSystem): WorkspaceTools {
         return { path: input.path, bytes_written: Buffer.byteLength(input.content) };
       },
     }),
-    edit: define_runtime_tool<z.infer<typeof cloudflare_edit_input_schema>>({
+    edit: define_agent_tool<z.infer<typeof cloudflare_edit_input_schema>>({
       description: "Apply ordered exact replacements to a UTF-8 Workspace file.",
       input_schema: cloudflare_edit_input_schema,
       execute: async (input) => {
@@ -314,7 +314,7 @@ function create_cloudflare_file_tools(files: FileSystem): WorkspaceTools {
         return { path: input.path, edits_applied: input.edits.length };
       },
     }),
-    ls: define_runtime_tool<z.infer<typeof cloudflare_list_input_schema>>({
+    ls: define_agent_tool<z.infer<typeof cloudflare_list_input_schema>>({
       description: "List a directory in the Cloudflare Computer Workspace.",
       input_schema: cloudflare_list_input_schema,
       execute: async (input) => ({

@@ -95,9 +95,6 @@ class DefaultSessionTurnContext implements SessionTurnContext {
       get agent_systems() {
         return context.agent_systems_snapshot;
       },
-      get hooks() {
-        return undefined;
-      },
       get power_context_blocks() {
         return context.power_context_blocks_snapshot;
       },
