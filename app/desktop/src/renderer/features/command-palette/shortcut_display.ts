@@ -15,8 +15,8 @@ export type ShortcutPlatform = "mac" | "windows" | "linux";
  * 表项只允许覆盖 Desktop 现有键盘分支已经实现的键位，面板不发明新快捷键。
  */
 export const command_shortcuts: Readonly<Record<string, readonly string[]>> = {
-  "nav.open-chat": ["Mod+1"],
-  "nav.open-workspace": ["Mod+2"],
+  "nav.open-workspace": ["Mod+1"],
+  "nav.open-chat": ["Mod+2"],
   "nav.open-powers": ["Mod+3"],
   "nav.toggle-sidebar": ["Mod+B"],
   "nav.toggle-baybar": ["Mod+L"],

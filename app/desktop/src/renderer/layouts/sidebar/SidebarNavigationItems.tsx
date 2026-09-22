@@ -1,7 +1,7 @@
 /** Sidebar Rail 中的一级导航入口。 */
 
 import { Tooltip } from "@base-ui/react/tooltip";
-import { TbComponents, TbFolder, TbMoodNeutral } from "react-icons/tb";
+import { TbComponents, TbGridDots, TbMoodNeutral } from "react-icons/tb";
 import { PowerIcon } from "@/features/power/lib/PowerIcon";
 import { AttentionRailDot } from "@/components/AttentionRailDot";
 import type { DesktopPowerSummary } from "@common/types/DesktopApi";
@@ -27,9 +27,13 @@ interface SidebarNavigationItemsProps {
 export function SidebarNavigationItems({ active_mode, on_change, power_workspaces, unread_attention_by_mode }: SidebarNavigationItemsProps) {
   const translate = use_translation("navigation");
   const translate_chat = use_translation("chat");
+  // 顺序即 Rail 顺序，也即 ⌘1 / ⌘2 / ⌘3 的映射（见 sidebar_shortcut）：
+  // Works 在前，因为会话是这里最常去的地方；Agents 回答「有哪些 Agent」。
   const core_items = [
+    // Works 的图标是点阵而不是文件夹：这一列装的是**对话**，不是目录树。
+    // 文件夹图标会让人先想到「浏览文件」，而文件浏览已经在对话里的链接与右侧「文件」域里。
+    { mode: "workspace", label: translate("views.workspaces"), icon: <TbGridDots /> },
     { mode: "chat", label: translate("views.agent"), icon: <TbMoodNeutral /> },
-    { mode: "workspace", label: translate("views.workspaces"), icon: <TbFolder /> },
     { mode: "powers", label: translate("views.powers"), icon: <TbComponents /> },
   ] as const;
   const items = [

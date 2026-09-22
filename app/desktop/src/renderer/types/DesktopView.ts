@@ -296,8 +296,13 @@ export interface DesktopActions {
   open_settings(section?: SettingsSection): void;
   /** 离开设置并返回之前的业务视图。 */
   close_settings(): void;
-  /** 在指定 Workspace 切换到尚未持久化的空对话。 */
-  create_session(workspace_id: string, agent_id: string): Promise<void>;
+  /**
+   * 在指定 Workspace 切换到尚未持久化的空对话。
+   *
+   * `preserve_sidebar` 为真时保留当前侧栏：从 Works 侧栏新建时，新对话落在那个 Workspace 里，
+   * 把用户切到 Agents 面板等于把他刚点的那棵树拿走。默认行为仍是切到会话所属的一级导航。
+   */
+  create_session(workspace_id: string, agent_id: string, preserve_sidebar?: boolean): Promise<void>;
   /** 迁移当前空对话草稿并切换 Workspace 或 Agent 上下文。 */
   switch_draft_context(workspace_id: string, agent_id: string): void;
   /** 切换到 Session Chat 并读取快照；可保持当前 Sidebar 集合。 */

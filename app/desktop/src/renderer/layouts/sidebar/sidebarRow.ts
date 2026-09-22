@@ -11,40 +11,39 @@
  *
  * | 变体 | 行首槽 | 行高 | 文字线 | 用在哪 |
  * | --- | --- | --- | --- | --- |
- * | `agent` | 32（头像；图标 16 居中） | 44 / 48 | 97 | Chat 主体行、Power 条目 |
- * | `default` | 无、16 或 32 | 32 | 56 / 80 / 96 | 会话行、新建行、目录树 |
+ * | `agent` | 32（头像；图标 16 居中） | 44 / 48 | 96 | Agents 主体行、Power 条目 |
+ * | `default` | 无、16 或 32 | 32 | 56 / 80 / 96 | 会话行、新建行、树行 |
  * | `settings` | 16 | 40 | 80 | 设置导航 |
  *
- * ## 为什么 `agent` 的文字线是 97，`default` 的却是 56
+ * ## 两条线各自回答一件事
  *
- * 这两条线回答的是两件事，差值本身是有意的：
- *
- * - **97 是身份线**：行首是一个 32px 的头像，「这是谁」先于「它叫什么」。
+ * - **96 是身份线**：行首是一个 32px 的头像，「这是谁」先于「它叫什么」。
  * - **56 是内容线**：行首没有头像，文字直接落在内容起点上，与面板标题同一条线。
  *
  * 之前的问题不是这两条线不同，而是**同一类东西落在五条线上**——以侧栏左缘起算，
  * 行文字分布在 80 / 84 / 88 / 94 / 96，行首图标分布在 64 / 66 / 70 / 72。
  * 现在同类东西只有一条线，差别只来自「这一行要不要行首槽」，而槽宽只有三档。
  *
- * ## 56 是怎么来的，以及那 1px
+ * 而 96 正是「内容起点 56 + 32 槽 + 8 间距」——身份行与「带 32 槽的条目行」同线，
+ * 这是有意的：两者的行首都是 32px 的实物，文字自然落在同一列。
+ *
+ * ## 文字线是怎么来的
  *
  * ```text
- * 行盒起点 = Rail 40 + 内容内边距 8                       = 48
- * 无边框变体：内容起点 = 48 + 行内边距 8                   = 56
- * agent 变体：内容起点 = 48 + 透明边框 1 + 行内边距 8      = 57
- * 文字线   = 内容起点 + 行首槽 + （有槽时再加 8 的间距）
+ * 行盒起点 = Rail 40 + 内容内边距 8      = 48
+ * 内容起点 = 48 + 行内边距 8             = 56
+ * 文字线   = 内容起点 + 行首槽 +（有槽时再加 8 的间距）
  * ```
  *
- * `agent` 那 1px 透明边框**必须存在**：折叠态它画在行上，展开态由卡片接管，
- * 两个状态的内容盒因此重合。少写它，展开那一刻内容会横竖各跳 1px——
- * 只在那一下可见，事后极难归因。其余两个变体不展开成卡片，因此不带边框，
- * 也正因如此它们的文字线才是 56 而不是 57。
+ * 三个变体共用同一份内容起点：`agent` 行曾经带一条 1px 透明边框，
+ * 那是为了让它在展开成卡片时内容盒与折叠态重合。卡片没了之后，
+ * 这条边框（以及它带来的 97）也就没有存在的理由了。
  *
  * ## 为什么行高不写死，而要能推出来
  *
  * | 行 | 槽 | 高 | 推导 |
  * | --- | --- | --- | --- |
- * | `agent` 单行 | 32 | 44 | 槽 32 + 上下内边距 8 + 边框 2 = 42 → 取网格上不小于它的档 |
+ * | `agent` 单行 | 32 | 44 | 槽 32 + 上下内边距 8 = 40 → 取网格上不小于它的档 |
  * | `agent` 双行 | 32 | 48 | 名称 16 + 间距 4 + 描述 15 = 35 → 45 → 取 48 |
  * | `default` | 32 | 32 | 槽 32 + 内边距 8 − 4 = 36 → 取 32（槽本身就够撑住一行） |
  * | `settings` | 32 | 40 | 比 default 高一档，留出呼吸 |
@@ -77,22 +76,15 @@ export const SIDEBAR_ROW_PADDING = 8;
 export const SIDEBAR_ROW_VERTICAL_PADDING = 4;
 
 /**
- * 紧凑行的左右内边距：**与纵向同值（4）**。
+ * 树行的左右内边距：**与纵向同值（4）**。
  *
- * 用它的是行首元素很小的那两类行：
- *
- * - **卡片里的行**（会话行、新建行）：外层卡片已经把它抱住了，行再抩完整的内缩
- *   就会变成「底色贴边 + 内容离边很远」；
- * - **树行**：行首是 24px 的箭头，它在 32px 高的行里上下各 4——左右也必须 4，
- *   否则箭头在小方框里看上去偏右（同一元素到四边的距离不等）。
+ * 树行的行首是一个 24px 的箭头，它在 32px 高的行里上下各 4——左右也必须 4，
+ * 否则箭头在小方框里看上去偏右（同一元素到四边的距离不等）。
  *
  * 判断依据不是“这一行在哪”，而是“行首那个东西多大”：
- * 32px 的头像需要 8px 才不显拥挤，24px 的箭头与卡片里的文字只需要 4px。
+ * 32px 的头像需要 8px 才不显拥挤，24px 的箭头只需要 4px。
  */
-export const SIDEBAR_COMPACT_ROW_PADDING = 4;
-
-/** 行的 1px 透明边框；只有会展开成卡片的 `agent` 变体带它。 */
-export const SIDEBAR_ROW_BORDER = 1;
+export const SIDEBAR_TREE_ROW_PADDING = 4;
 
 /** 行首槽宽：不放槽。 */
 export const SIDEBAR_LEADING_NONE = 0;
@@ -152,28 +144,6 @@ export const SIDEBAR_TREE_ICON = 16;
 /** 节点图标与名字之间的间距（图标在名字同一个按钮里，不另立槽）。 */
 export const SIDEBAR_TREE_ICON_GAP = 4;
 
-/**
- * 卡片下半的左右内边距（4）。
- *
- * 卡片内的行**不是把自己的 8px 内边距吃掉**，而是与卡片下半一起分：
- *
- * ```text
- * 卡片外：  [行盒 48][内边距 8]                     文字 56（无边框变体）
- * 卡片内：  [卡片 48][描边 1][面板内边距 4][行内边距 4]  文字 57
- *            └─ 底色从这里开始 ─┘
- * ```
- *
- * 两层相加 = 9，正好是卡片外那个「边框 1 + 内边距 8」——因此文字仍落在同一条线上，
- * 而**底色（选中/hover）缩回卡片内 4**、文字离底色左缘也只剩 4。
- *
- * 反过来（把这个值改成 0、让行自己背 8px）会得到：底色贴到卡片描边，
- * 文字离底色左缘 8px——两层皮都不对。那是这一项存在的唯一理由。
- */
-export const SIDEBAR_PANEL_PADDING = 4;
-
-/** 卡片自己的描边宽度；卡片内的行比卡片外右移这么多。 */
-export const SIDEBAR_CARD_BORDER = 1;
-
 /** 行盒起点相对侧栏左缘的距离：`40 + 8 = 48`。 */
 export const SIDEBAR_ROW_ORIGIN = SHELL_SIDEBAR_RAIL_WIDTH + SIDEBAR_CONTENT_PADDING;
 
@@ -217,18 +187,18 @@ export type SidebarLeadingWidth = typeof SIDEBAR_LEADING_NONE | typeof SIDEBAR_L
 export type SidebarLeadingShape = "icon" | "avatar" | "tile";
 
 /**
- * 行内容起点：`agent` 变体多那 1px 透明边框。
+ * 行内容起点。
  *
  * 由常量算出，不写死——它是三条文字线共同的基准，改任何一项都会同步改变它们，
  * `sidebar_row_contract.test.ts` 会盯着这条等式。
  */
-export function sidebar_item_content_inset(variant: SidebarItemVariant): number {
-  return SIDEBAR_ITEM_CONTENT_INSET + (variant === "agent" ? SIDEBAR_ROW_BORDER : 0);
+export function sidebar_item_content_inset(): number {
+  return SIDEBAR_ITEM_CONTENT_INSET;
 }
 
 /** 行内文字左缘相对侧栏左缘的距离。 */
 export function sidebar_item_text_inset(variant: SidebarItemVariant, leading: SidebarLeadingWidth): number {
-  return sidebar_item_content_inset(variant) + leading + (leading === SIDEBAR_LEADING_NONE ? 0 : SIDEBAR_ROW_TEXT_GAP);
+  return sidebar_item_content_inset() + leading + (leading === SIDEBAR_LEADING_NONE ? 0 : SIDEBAR_ROW_TEXT_GAP);
 }
 
 /**
@@ -237,7 +207,7 @@ export function sidebar_item_text_inset(variant: SidebarItemVariant, leading: Si
  * 硬编码而不是从上面的函数读出来自比：从函数读的话，公式被改成什么都测不出来。
  */
 export const SIDEBAR_TEXT_INSETS: Readonly<Record<SidebarItemVariant, number>> = {
-  agent: 97,
+  agent: 96,
   default: 56,
   settings: 80,
 };
@@ -249,16 +219,7 @@ export const SIDEBAR_TEXT_INSETS: Readonly<Record<SidebarItemVariant, number>> =
  * 图标与图标到文字的间距（4）相加得到，再加 `12 × depth`。
  * 它不是一条新的对齐基准：树行就是 `default` 行，只是行首多了箭头与图标两件东西。
  */
-export const SIDEBAR_TREE_TEXT_INSET = SIDEBAR_ROW_ORIGIN + SIDEBAR_COMPACT_ROW_PADDING + SIDEBAR_TREE_CHEVRON + SIDEBAR_TREE_CHEVRON_GAP + SIDEBAR_TREE_ICON + SIDEBAR_TREE_ICON_GAP;
-
-/**
- * 卡片内 `default` 行的文字线（57）。
- *
- * = 卡片描边 1 + 面板内边距 4 + 行内边距 4 —— 两层加起来正好等于卡片外那个
- * 「边框 1 + 内边距 8」，所以卡片内外的文字仍落在同一条线上。
- * 守卫盯着这条等式：把它写成 57 只会让下一个人改坏它。
- */
-export const SIDEBAR_PANEL_TEXT_INSET = SIDEBAR_ROW_ORIGIN + SIDEBAR_CARD_BORDER + SIDEBAR_PANEL_PADDING + SIDEBAR_COMPACT_ROW_PADDING;
+export const SIDEBAR_TREE_TEXT_INSET = SIDEBAR_ROW_ORIGIN + SIDEBAR_TREE_ROW_PADDING + SIDEBAR_TREE_CHEVRON + SIDEBAR_TREE_CHEVRON_GAP + SIDEBAR_TREE_ICON + SIDEBAR_TREE_ICON_GAP;
 
 /**
  * 行高。
@@ -273,10 +234,7 @@ export function sidebar_item_height_class_name(variant: SidebarItemVariant, mult
 }
 
 /**
- * 行的排版骨架：变体之间唯一共有的部分（行首是 32px 大槽的行）。
- *
- * 转出给展开态的卡片内行（`subjectCard`）：那一行不带边框（那 1px 由卡片画），
- * 但行盒内缩、竖向内边距与行内间距必须与折叠态严格同源。
+ * 常规行的排版骨架：行首是 32px 大槽的行（头像、单图标）。
  *
  * ## `w-full` 必须有
  *
@@ -289,16 +247,16 @@ export function sidebar_item_height_class_name(variant: SidebarItemVariant, mult
  */
 export const sidebar_row_layout_class_name = `group/item flex w-full items-center gap-2 py-1 text-left ${sidebar_row_padding_class_name(SIDEBAR_ROW_PADDING)}`;
 
-/** 紧凑行的排版骨架：只有左右内边距不同（见 `SIDEBAR_COMPACT_ROW_PADDING`）。 */
-export const sidebar_compact_row_layout_class_name = `group/item flex w-full items-center gap-2 py-1 text-left ${sidebar_row_padding_class_name(SIDEBAR_COMPACT_ROW_PADDING)}`;
-
 /**
  * 树行的排版骨架：行内间距也窄一档（`gap-1` = 4）。
  *
  * 两个都要窄：左右 4（箭头到四边等距），行内间距 4（箭头按钮自带 5px 内边距，
  * 再给一整份 8 就会在箭头和图标之间留出一大段空白）。
+ *
+ * 树行是唯一用 4px 左右内边距的行：它的行首是一个 24px 的箭头，而 32px 高的行上下各 4，
+ * 左右也必须 4，箭头到四边的距离才相等。
  */
-export const sidebar_tree_row_layout_class_name = `group/item flex w-full items-center gap-1 py-1 text-left ${sidebar_row_padding_class_name(SIDEBAR_COMPACT_ROW_PADDING)}`;
+export const sidebar_tree_row_layout_class_name = `group/item flex w-full items-center gap-1 py-1 text-left ${sidebar_row_padding_class_name(SIDEBAR_TREE_ROW_PADDING)}`;
 
 /** 行的圆角：三个变体一律 `item`（列表项角色）。 */
 const row_shape_class_name = "rounded-item";
@@ -316,25 +274,11 @@ export function sidebar_row_interaction_class_name(active: boolean): string {
  *
  * 侧栏的行有两种结构，这里的拆分就是为了它们：
  *
- * 1. **单一控件行**：整行就是一个 `<button>`（Power 条目、设置条目、目录树行、会话行）。
+ * 1. **单一控件行**：整行就是一个 `<button>`（Power 条目、设置条目、树行的叶子）。
  *    用 `sidebar_item_class_name`，焦点环落在整行上。
- * 2. **复合行**：行底是 `<div>`，里面还有多个可聚焦元素（主体行的头像 + 名称 + 菜单）。
+ * 2. **复合行**：行底是 `<div>`，里面还有多个可聚焦元素（树行的箭头 + 标签 + 操作菜单）。
  *    底色必须在行底上，而焦点环必须落在**每一个**能聚焦的元素上——这是两件事，
  *    因此用 `sidebar_item_base_class_name`，环由行内各按钮自己声明。
- *
- * 之前把这两件事煳在一起：目录树行是「整行一个环」，而主体行、会话行是「行内两个环」，
- * 同一种交互在 Tab 行进时给出完全不同的视觉节奏。
- */
-/**
- * 行底：排版 + 高度 + 形状 + 底色。**不带键盘焦点环。**
- *
- * 侧栏的行有两种结构，这里的拆分就是为了它们：
- *
- * 1. **单一控件行**：整行就是一个 `<button>`（Power 条目、设置条目、目录树叶子）。
- *    用 `sidebar_item_class_name`，焦点环落在整行上。
- * 2. **复合行**：行底是 `<div>`，里面还有多个可聚焦元素（主体行的头像 + 名称 + 菜单；
- *    目录行的箭头 + 标签）。底色必须在行底上，而焦点环必须落在**每一个**能聚焦的元素上
- *    ——这是两件事，因此用 `sidebar_item_base_class_name`，环由行内各按钮自己声明。
  */
 export function sidebar_item_base_class_name(options: {
   /** 行变体。 */
@@ -343,23 +287,15 @@ export function sidebar_item_base_class_name(options: {
   active?: boolean;
   /** 是否有描述行；只影响 `agent` 变体的行高。 */
   multi_line?: boolean;
-  /**
-   * 是否是紧凑行：左右内边距与纵向同值（见 `SIDEBAR_COMPACT_ROW_PADDING`），且不带透明边框。
-   *
-   * 树行用 `tree` 而不是它：树行还要把**行内间距**也收窄（见 `sidebar_tree_row_layout_class_name`）。
-   */
-  compact?: boolean;
-  /** 是否是树行：紧凑 + 行内间距 4。 */
+  /** 是否是树行：左右内边距 4（与纵向同值）+ 行内间距 4。 */
   tree?: boolean;
   /** 附加样式。 */
   class_name?: string;
 }): string {
   return cn(
-    options.tree ? sidebar_tree_row_layout_class_name : options.compact ? sidebar_compact_row_layout_class_name : sidebar_row_layout_class_name,
+    options.tree ? sidebar_tree_row_layout_class_name : sidebar_row_layout_class_name,
     sidebar_item_height_class_name(options.variant, options.multi_line),
     row_shape_class_name,
-    // 只有会展开成卡片的 agent 行需要那 1px 透明边框（见文件头）；紧凑行与树行都不展开成卡片。
-    !options.compact && !options.tree && options.variant === "agent" && "border border-transparent",
     "transition-colors duration-150",
     sidebar_row_interaction_class_name(Boolean(options.active)),
     options.class_name,
@@ -374,8 +310,6 @@ export function sidebar_item_class_name(options: {
   active?: boolean;
   /** 是否有描述行；只影响 `agent` 变体的行高。 */
   multi_line?: boolean;
-  /** 是否是紧凑行；见 `sidebar_item_base_class_name`。 */
-  compact?: boolean;
   /** 是否是树行；见 `sidebar_item_base_class_name`。 */
   tree?: boolean;
   /** 附加样式。 */
@@ -501,5 +435,5 @@ export function sidebar_tree_indent_style(depth: number): { marginLeft: number }
  * 而图标从“必需”变成“可选”之后，它就把副文本推到了描述对象右边 20px。
  */
 export function sidebar_text_indent_style(depth: number): { marginLeft: number } {
-  return { marginLeft: depth * SIDEBAR_TREE_INDENT + SIDEBAR_COMPACT_ROW_PADDING + SIDEBAR_TREE_CHEVRON + SIDEBAR_TREE_CHEVRON_GAP };
+  return { marginLeft: depth * SIDEBAR_TREE_INDENT + SIDEBAR_TREE_ROW_PADDING + SIDEBAR_TREE_CHEVRON + SIDEBAR_TREE_CHEVRON_GAP };
 }

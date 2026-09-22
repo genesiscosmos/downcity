@@ -11,8 +11,13 @@ import type { SidebarMode } from "@/types/DesktopView";
 /** 官方功能型 Power 在 Rail 上的固定展示优先级；越靠前越靠近固定一级入口。 */
 const rail_power_priority = ["skill", "chat", "task", "memory", "web"] as const;
 
-/** 固定一级导航入口的快捷键顺序。 */
-const core_sidebar_modes: SidebarMode[] = ["chat", "workspace", "powers"];
+/**
+ * 固定一级导航入口的快捷键顺序。
+ *
+ * 与 `SidebarNavigationItems` 的渲染顺序必须逐项一致：那张表就是 ⌘1 / ⌘2 / ⌘3 的映射，
+ * 两边一分叉，用户按 ⌘1 就会落到 Rail 上的第二个图标。
+ */
+const core_sidebar_modes: SidebarMode[] = ["workspace", "chat", "powers"];
 
 /**
  * 按用户可见顺序排列 Rail 上的一级功能入口。

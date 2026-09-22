@@ -1,98 +1,82 @@
 /**
- * Sidebar 中以 Workspace 为根节点的会话列表。
+ * Works 侧栏：以 Workspace 为根节点、会话为叶子的列表。
  *
- * ## 根节点是 Workspace，叶子是会话
+ * ## 根是 Workspace，叶子是会话
  *
  * ```text
- * Workspace A  [▶ 24]─4─名称                    ⏳  ⋯   根：箭头 + 名称 + 菜单（状态落在它上面）
- *   └ 会话标题                  Agent 名  ⋯     叶子：缩进 12，标题 + 归属 + 菜单
+ * Workspace A  [▶ 24]─4─名称                    [＋] [⋯]   根：箭头 + 名称 + 新建 + 菜单
+ *   └ [头像▾] 会话标题                            [⋯]     叶子：缩进 12，归属头像 + 标题 + 菜单
  * ```
  *
- * 两种行都是 `default` 变体——与会话行同一套壳（行高 32、圆角、文字档位），
- * 差别只有根节点带一个展开箭头、叶子多一层缩进。层级**只由缩进表达**，
- * 行高不随层数变，字号也不变（每层 12，见 `SIDEBAR_TREE_INDENT`）。
+ * 两种行都是 `default` 变体——同一套壳（行高 32、圆角、文字档位），差别只有根节点带展开箭头、
+ * 子行多一层缩进。层级**只由缩进表达**，行高不随层数变，字号也不变（每层 12）。
  *
- * ## 为什么叶子上要写出 Agent 名
+ * ## 会话的入口只在这里
  *
- * 一个 Workspace 里通常有多个 Agent 的会话：Workspace 是共享资源容器，不是某个 Agent 的私产
- * （见 `docs/city-sdk-call-design.md`）。而**没有自定义头像的 Agent 默认都是同一个幽灵图标**，
- * 所以只靠头像分不出谁是谁——归属必须用文字表达。
+ * Agents 侧栏不再列会话，因此这一棵树是唯一的会话视图，它同时收两类会话：
  *
- * 归属放在**尾随元信息**而不是悬停才显形的 `tag`：`tag` 会让标题被永久压到 55% 宽
- * （那个上限与悬停无关），而会话标题恰恰是这一行最该读全的东西。
- * 尾随位是 `shrink-0`，标题因此保住 `flex-1`，两者按各自该有的优先级分空间。
+ * | 来源 | 取数 | 归属 | 点击去向 |
+ * | --- | --- | --- | --- |
+ * | Agent Session | `sessions_by_workspace` | Agent 头像 | `select_session`（保留当前侧栏） |
+ * | GroupSession | `group.sessions`（自带 `workspace_id`） | Group 头像 | `open_group` |
+ *
+ * 两类都按「实时优先、其次最近更新」排在同一条时间轴上（规则在 `session_list_projection`）。
+ *
+ * ## 归属是行首的头像，不是行尾的文字
+ *
+ * 归属原本写在行右端，那个位置一直在跟标题抢宽度，而标题才是这一行最该读全的东西。
+ * 改成行首头像后，归属只占一格（与根节点的箭头同格，因此文字线不变），标题拿到整行。
+ * 代价是**没有自定义头像的 Agent 都是同一张幽灵脸**，这一点由头像的 tooltip 与
+ * 可访问名称补上（见 `SessionSubjectAvatar`）。
+ *
+ * ## 这一层只渲染，投影在容器里
+ *
+ * 会话行的投影（取数、排序、归属、状态）由 `WorkspaceSidebar` 算好传下来。原因不是分层洁癖：
+ * 多选的范围选择必须按**用户看到的行序**取连续段，而那份顺序只存在于投影里。
+ * 两处各算一遍，范围选择就会选中与看到的不一致的行。
  *
  * ## 根行为什么也带状态
  *
- * 折叠着的 Workspace 也必须能说“这一层里有事正在发生”，否则用户只能靠逐个展开去找
+ * 折叠着的 Workspace 也必须能说「这一层里有事正在发生」，否则用户只能靠逐个展开去找
  * 哪个 Workspace 在跑。状态直接落在**行右端的菜单入口**上，与会话行完全同一套
  *（`RowMenuButton` 的 `status`）：需要用户注意的状态常显、其余随行 hover / 聚焦 / 展开显形。
  *
- * 因此行右端仍然只有**一个**交互目标——“状态”与“操作入口”是同一个按钮的两面，
- * 而不是并排两个图形。汇总规则同源（`pick_chat_row_status`），
- * 所以父行与子行不可能互相矛盾。
- *
- * ## 会话从哪来：只读目录，不读磁盘
- *
- * 数据源是 Session 目录（`sessions_by_workspace`），不再是文件系统。文件树已从侧栏移除，
- * 文件浏览保留在**对话里的文件链接**（就地在右侧「文件」域打开，见 `ChatFilePanel`）
- * 与 Markdown 链接的跨 Workspace 路由。因此这一层没有懒加载、没有 IPC，
- * 也没有“读到一半”的中间态——只有「还没水合」与「确实没有」两种，且必须分开表达。
- *
- * ## 投影为什么是“一次算全部”，而不是只算展开的
- *
- * Chat 侧栏只为**展开的那几个**主体建会话列表（见 `ChatSidebar` 的 `build_subject_conversations`），
- * 这里做不到：父行的汇总状态要求折叠的 Workspace 也有结果。
- *
- * 代价可控，因为投影只产出**数据**（Agent 摘要 + 状态），不含任何 React 元素：
- * 菜单元素仍然只在展开时按行构造，而菜单才是那份投影里真正贵的部分。
- * 收益是父行与子行共用同一份投影，不可能出现“父行安静而子行在转圈”。
+ * 因此行右端仍然只有**一个**交互目标——“状态”与“操作入口”是同一个按钮的两面。
+ * 汇总规则同源（`pick_chat_row_status`），所以父行与子行不可能互相矛盾。
  */
 
-import { useMemo, useState } from "react";
-import { TbFolderPlus, TbLoader2 } from "react-icons/tb";
+import { useState } from "react";
+import { TbCircle, TbCircleCheckFilled, TbFolderPlus, TbLoader2 } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { RowMenuButton } from "@/components/RowMenuButton";
 import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMenu";
-import { get_session_key } from "@/features/chat/lib/chat_cache_key";
-import { pick_chat_row_status, resolve_chat_row_status, type ChatRowStatus } from "@/features/chat/lib/chat_row_status";
-import { resolve_chat_session_live_status } from "@/features/chat/lib/chat_runtime_projection";
-import { select_workspace_sessions } from "@/features/chat/lib/session_list_projection";
-import { get_session_unread_attention } from "@/lib/notification/notification_state";
+import { GroupSessionActionsMenu } from "@/features/chat/components/GroupSessionActionsMenu";
+import { pick_chat_row_status } from "@/features/chat/lib/chat_row_status";
 import { use_translation } from "@/locales/i18n";
-import type { DesktopController, DesktopWorkspaceSession } from "@/types/DesktopView";
-import type { DesktopAgentSummary, DesktopChatRuntime, DesktopSessionSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
-import type { DesktopNotificationState } from "@common/types/DesktopNotification";
+import type { DesktopController } from "@/types/DesktopView";
+import type { DesktopAgentSummary, DesktopGroupSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
+import type { WorkspaceSessionRow } from "./workspaceSessionRows";
 import { SidebarContent } from "./SidebarPanel";
 import { SidebarEmptyState } from "./SidebarEmptyState";
 import { SidebarItem, SidebarSubText } from "./SidebarItem";
+import { NewChatButton } from "./NewChatRow";
+import { SessionSubjectAvatar } from "./SessionSubjectAvatar";
+import type { SessionSelection } from "./use_session_selection";
+import { format_expanded_ids, parse_expanded_ids, resolve_initial_expanded_ids, workspace_expanded_storage_key } from "./workspaceExpansion";
 import { WorkspaceRowMenu } from "./WorkspaceRowMenu";
 
-/**
- * 一条已解析的 Workspace 会话行。
- *
- * `agent` 与 `status` 都在这里算好：父行只读 `status`，子行两个都读，
- * 两边共用同一份结果。
- */
-interface WorkspaceSessionRow {
-  /** 执行该会话的 Agent 标识。 */
-  agent_id: string;
-  /** 会话摘要。 */
-  session: DesktopSessionSummary;
-  /** 归属 Agent；已被删除时为空。 */
-  agent?: DesktopAgentSummary;
-  /** 这一行的完整状态。 */
-  status: ChatRowStatus;
-}
-
-/** Workspace 会话列表属性。 */
-interface WorkspaceSessionListProps {
+/** Works 侧栏属性。 */
+interface WorkspaceSidebarListProps {
   /** Renderer 根状态与操作入口。 */
   controller: DesktopController;
   /** 已登记的 Workspace。 */
   workspaces: DesktopWorkspaceSummary[];
-  /** 全部 Agent；用于把会话的 `agent_id` 变成可读名字。 */
+  /** 全部 Agent；用于 Group 头像拼成员。 */
   agents: DesktopAgentSummary[];
+  /** 已投影的会话行，按 Workspace 索引；父行汇总与子行渲染共用这一份。 */
+  rows_by_workspace: ReadonlyMap<string, readonly WorkspaceSessionRow[]>;
+  /** 每个 Workspace 新建对话时的默认联系人。 */
+  default_agent_ids: ReadonlyMap<string, string>;
   /** 当前 MainView 打开的 Workspace。 */
   selected_workspace_id?: string;
   /** 当前 MainView 打开的会话；用于标记当前项。 */
@@ -101,60 +85,45 @@ interface WorkspaceSessionListProps {
   loading: boolean;
   /** Session 目录是否已水合；未水合时不能把「还没读到」说成「没有会话」。 */
   hydrated: boolean;
-  /** 各 Workspace 的 Session 目录。 */
-  sessions_by_workspace: Record<string, DesktopWorkspaceSession[]>;
-  /** 实时运行态，用于逐条状态。 */
-  chat_runtimes: Record<string, DesktopChatRuntime>;
-  /** 当前通知快照。 */
-  notification_state: DesktopNotificationState;
   /** 打开添加 Workspace 对话框。 */
   open_create_workspace(): void;
+  /** 在一个 Workspace 里打开空对话（草稿）；`agent_id` 是默认联系人。 */
+  on_open_draft(workspace_id: string, agent_id: string): void;
+  /** 多选状态与动作。 */
+  session_selection: SessionSelection;
 }
 
 /**
  * 渲染 Workspace 会话树。
  *
  * 展开状态由本层持有（每行只上报意图）：一次能展开几个没有物理约束——
- * 它们是嵌在列表流里的普通子节点，互不遮挡，因此不像 Chat 主体行那样需要
- * 「浮动至多一个」的限制（见 `subjectCard.ts` 的 `OpenPanels`）。
+ * 它们是嵌在列表流里的普通子节点，互不遮挡。
  *
- * **当前所在的那个 Workspace 初始就是展开的**：侧栏切走再切回来会重新挂载，
- * 若一律从“全部折叠”开始，用户在会话里点一下 Workspace 图标就看不到自己刚才在哪一条。
- * 只做初始值而不做成派生值：派生会让“手动折叠当前 Workspace”变得做不到。
+ * ## 展开状态是持久化的显示偏好
+ *
+ * 它存在 `localStorage`（与侧栏宽度同一层，见 `workspaceExpansion`），因为它是壳的显示偏好、
+ * 不是业务数据。两件事因此都能保持：**切走再切回来**（侧栏重新挂载）与**重启**。
+ *
+ * 当前所在的 Workspace 在初始值里总是展开的（见 `resolve_initial_expanded_ids`）——
+ * 用户在会话里点一下 Workspace 图标切回侧栏时，必须能看到自己刚才在哪一条。
+ * 代价是手动折叠当前 Workspace 后重新挂载会重新展开；这是有意的取舍。
  */
-export function WorkspaceSessionList(props: WorkspaceSessionListProps) {
+export function WorkspaceSessionList(props: WorkspaceSidebarListProps) {
   const translate = use_translation();
   const translate_resources = use_translation("resources");
-  const [expanded_ids, set_expanded_ids] = useState<ReadonlySet<string>>(() => new Set(props.selected_workspace_id ? [props.selected_workspace_id] : []));
+  // 惰性初始化：直接写在 useState 参数里会每次渲染都读一次 localStorage。
+  const [expanded_ids, set_expanded_ids] = useState<ReadonlySet<string>>(() => resolve_initial_expanded_ids({
+    stored_ids: parse_expanded_ids(localStorage.getItem(workspace_expanded_storage_key)),
+    workspace_ids: props.workspaces.map((workspace) => workspace.workspace_id),
+    selected_workspace_id: props.selected_workspace_id,
+  }));
   const toggle_workspace = (workspace_id: string) => set_expanded_ids((current) => {
     const next = new Set(current);
     if (!next.delete(workspace_id)) next.add(workspace_id);
+    // 写回存储：包括「全部折叠」——那是用户做过的选择，不该在重新挂载后回到默认。
+    localStorage.setItem(workspace_expanded_storage_key, format_expanded_ids(next));
     return next;
   });
-  const { agents, chat_runtimes, hydrated, notification_state, sessions_by_workspace, workspaces } = props;
-
-  /**
-   * 每个 Workspace 的会话行（含已解析状态）。父行汇总与子行渲染共用这一份。
-   *
-   * 未水合时返回空表：那时候一个会话都还没读到，汇总结果会是“没事发生”——
-   * 而真实情况是“还不知道”，两者不能混为一谈（与空态同一个道理）。
-   */
-  const rows_by_workspace = useMemo(() => {
-    const map = new Map<string, WorkspaceSessionRow[]>();
-    if (!hydrated) return map;
-    for (const workspace of workspaces) {
-      map.set(workspace.workspace_id, select_workspace_sessions(sessions_by_workspace, workspace.workspace_id, (workspace_id, agent_id, session) => (
-        resolve_chat_session_live_status(chat_runtimes[get_session_key(workspace_id, agent_id, session.session_id)], session.executing)
-      )).map((row) => ({
-        agent_id: row.agent_id,
-        session: row.session,
-        agent: agents.find((item) => item.agent_id === row.agent_id),
-        // 实时优先于未读：Runtime 描述此刻正在发生的事，未读只是过去的结果（见 chat_row_status）。
-        status: resolve_chat_row_status(row.live_status, get_session_unread_attention(notification_state, workspace.workspace_id, row.agent_id, row.session.session_id)),
-      })));
-    }
-    return map;
-  }, [agents, chat_runtimes, hydrated, notification_state, sessions_by_workspace, workspaces]);
 
   // 加载中就只显示「正在加载」：先把「还没有 Workspace」摆出来再换成列表，
   // 是把「还没读到」说成了「没有」——两句话的含义完全相反。
@@ -168,7 +137,7 @@ export function WorkspaceSessionList(props: WorkspaceSessionListProps) {
     {props.workspaces.map((workspace) => {
       const expanded = expanded_ids.has(workspace.workspace_id);
       const toggle = () => toggle_workspace(workspace.workspace_id);
-      const rows = rows_by_workspace.get(workspace.workspace_id) ?? empty_rows;
+      const rows = props.rows_by_workspace.get(workspace.workspace_id) ?? empty_rows;
       // 折叠时也显示：那正是它存在的理由（展开时子行已经各自表达过了）。
       const status = pick_chat_row_status(rows.map((row) => row.status));
       return <section key={workspace.workspace_id} className="space-y-0.5">
@@ -182,10 +151,21 @@ export function WorkspaceSessionList(props: WorkspaceSessionListProps) {
           tree={{
             disclosure: { expanded, label: translate_resources(expanded ? "workspace.collapse" : "workspace.expand"), onToggle: toggle },
           }}
+          // 新建入口在**菜单左边**：开一条新对话比管理这个 Workspace 更常用，常用的排外侧。
+          // 它不属于会话列表，因此展开与否都显示——折叠时也能直接开一条。
+          actions={<NewChatButton workspace_id={workspace.workspace_id} agent_id={props.default_agent_ids.get(workspace.workspace_id) ?? ""} on_open_draft={props.on_open_draft} />}
           // 汇总状态交给**菜单入口本身**（与会话行完全同一套）：
           // 需要用户注意的状态常显、其余随行 hover / 聚焦 / 展开显形，
           // 行右端因此仍然只有一个交互目标。
-          menu={<WorkspaceRowMenu workspace={workspace} status={status} on_remove={props.controller.actions.remove_workspace} />}
+          // 「新建对话」也在这里给一份：行内的加号是 hover 才显形的快路径，
+          // 菜单里这一条是可发现的那一份。
+          menu={<WorkspaceRowMenu
+            workspace={workspace}
+            status={status}
+            default_agent_id={props.default_agent_ids.get(workspace.workspace_id)}
+            on_open_draft={props.on_open_draft}
+            on_remove={props.controller.actions.remove_workspace}
+          />}
           // 双击标题才折叠/展开：挂在整行上的话，双击箭头会先切换一次、
           // 再冒泡上来切回原状，看起来像“双击没反应”。
           onDoubleClick={toggle}
@@ -193,10 +173,11 @@ export function WorkspaceSessionList(props: WorkspaceSessionListProps) {
         />
         {expanded ? <WorkspaceSessions
           controller={props.controller}
-          workspace_id={workspace.workspace_id}
+          agents={props.agents}
           rows={rows}
           hydrated={props.hydrated}
           selected_session_id={props.selected_session_id}
+          session_selection={props.session_selection}
         /> : null}
       </section>;
     })}
@@ -211,8 +192,8 @@ export function WorkspaceSessionList(props: WorkspaceSessionListProps) {
 /**
  * 空行表的共享引用。
  *
- * 与 `empty_conversations` 同理：每次渲染新建一个 `[]` 会让下游按引用比较的
- * memo 全部失效。没有会话的 Workspace 是常见情形，不能每帧现造。
+ * 每次渲染新建一个 `[]` 会让下游按引用比较的 memo 全部失效。没有会话的 Workspace 是常见情形，
+ * 不能每帧现造。
  */
 const empty_rows: readonly WorkspaceSessionRow[] = [];
 
@@ -225,47 +206,104 @@ const empty_rows: readonly WorkspaceSessionRow[] = [];
  * | --- | --- |
  * | 目录尚未水合 | 副文本 + 旋转图标 +「加载中…」 |
  * | 确实没有会话 | 副文本 +「暂无对话」 |
- * | 会话所属 Agent 已删除 | 行照常渲染，只是没有归属文字 |
- *
- * 第三种不额外说明：会话本身还在、还能打开，Agent 名字缺失不影响“这是哪条对话”，
- * 而多一句解释会把一行文字变成一段说明。
+ * | 会话所属对象已删除 | 行照常渲染，只是归属头像退化成中性图标 |
  */
-function WorkspaceSessions({ controller, workspace_id, rows, hydrated, selected_session_id }: {
+function WorkspaceSessions({ controller, agents, rows, hydrated, selected_session_id, session_selection }: {
   /** Renderer 根状态与操作入口。 */
   controller: DesktopController;
-  /** 当前 Workspace 标识。 */
-  workspace_id: string;
+  /** 全部 Agent；Group 头像用它拼成员。 */
+  agents: DesktopAgentSummary[];
   /** 已解析的会话行。 */
   rows: readonly WorkspaceSessionRow[];
   /** Session 目录是否已水合。 */
   hydrated: boolean;
   /** 当前打开的会话标识。 */
   selected_session_id?: string;
+  /** 多选状态与动作。 */
+  session_selection: SessionSelection;
 }) {
   const translate = use_translation("navigation");
   const translate_common = use_translation();
   if (!hydrated) return <SidebarSubText indent={1}><TbLoader2 className="size-3 animate-spin" />{translate_common("state.loading")}</SidebarSubText>;
   if (rows.length === 0) return <SidebarSubText indent={1}>{translate("sidebar.no_sessions")}</SidebarSubText>;
-  return <div className="space-y-0.5">{rows.map(({ agent_id, agent, session, status }) => <SidebarItem
-    key={`${agent_id}:${session.session_id}`}
-    variant="default"
-    tree={{ indent: 1 }}
-    // 「当前所在的会话」不是导航到另一个页面，因此用 true 而不是 page。
-    currentKind="true"
-    active={selected_session_id === session.session_id}
-    title={session.title || translate("sidebar.new_chat")}
-    // 归属文字常显：默认头像全都一样，没有它就无法在同一个 Workspace 里分辨会话属于谁。
-    // 宽度封在 6rem：再长的 Agent 名也不该把标题挤没，截断后仍有原生 title 兜住全名。
-    trailing={agent ? <span className="block max-w-24 truncate">{agent.name}</span> : undefined}
-    // `true` = 保留当前侧栏。Workspace 侧栏里的会话是这个 Workspace 的入口，
-    // 点一条就跳到 Chat 侧栏等于把用户从他刚才看的那棵树上扯走（与 Chat 侧栏自己的行为一致）。
-    onSelect={() => void controller.actions.select_session(workspace_id, agent_id, session.session_id, true)}
-    menu={<SessionActionsMenu
-      session={session}
-      trigger={<RowMenuButton status={status} label={translate_common("actions.more")} />}
-      on_rename={(title) => controller.actions.rename_session(workspace_id, agent_id, session.session_id, title)}
-      on_archive={() => controller.actions.archive_session(workspace_id, agent_id, session.session_id)}
-      on_remove={() => controller.actions.remove_session(workspace_id, agent_id, session.session_id)}
-    />}
-  />)}</div>;
+  /**
+   * 这一组会话的顺序，用于范围选择。
+   *
+   * 只在本 Workspace 的会话之间取连续段：跨 Workspace 的范围会把折叠着的那些行也选中，
+   * 而用户看不见它们。这与「层级里的一次选择」是同一件事。
+   */
+  const ordered_keys = rows.map((row) => row.entry.key);
+  return <div className="space-y-0.5">{rows.map(({ entry, agent, group, label, status }) => {
+    const selected = session_selection.selected_keys.includes(entry.key);
+    const in_selection = session_selection.selection_mode;
+    return <SidebarItem
+      key={entry.key}
+      variant="default"
+      tree={{
+        indent: 1,
+        // 行首是归属头像（与根节点的箭头同格）；归属对象已删除时它是一个中性图标。
+        leading: <SessionSubjectAvatar
+          kind={entry.kind}
+          agent={agent}
+          group={group}
+          agents={agents}
+          workspace_id={entry.workspace_id}
+          subject_label={label ?? translate("sidebar.unknown_subject")}
+          on_new_session={() => {
+            if (entry.kind === "agent") void controller.actions.create_session(entry.workspace_id, entry.agent_id, true);
+            else void controller.actions.create_group_session(entry.group_id, entry.workspace_id);
+          }}
+        />,
+      }}
+      // 「当前所在的会话」不是导航到另一个页面，因此用 true 而不是 page。
+      currentKind="true"
+      // 多选时「当前打开」让位给「已勾选」：同时亮两种底色读不出哪个是在选中的。
+      active={in_selection ? selected : selected_session_id === entry.session.session_id}
+      title={entry.session.title || translate("sidebar.new_chat")}
+      // 多选模式下点击改为选择；Shift 点击取「锚点到这里」的连续段。
+      onSelect={(event) => {
+        if (in_selection) {
+          session_selection.select(entry.key, { range: event.shiftKey, ordered_keys });
+          return;
+        }
+        if (event.shiftKey) {
+          session_selection.select(entry.key, { range: true, ordered_keys });
+          return;
+        }
+        // 点击保留当前侧栏：Workspace 侧栏里的会话是这个 Workspace 的入口，
+        // 点一条就跳走等于把用户从他刚才看的那棵树上扯走。
+        if (entry.kind === "agent") void controller.actions.select_session(entry.workspace_id, entry.agent_id, entry.session.session_id, true);
+        else void controller.actions.open_group(entry.group_id, entry.session.session_id);
+      }}
+      // 多选模式下右端换成勾选按钮，且**不提供** ⋯ 菜单：那一层是「对这条会话做什么」，
+      // 而此刻用户已经在做一件更大的事（对一批会话做什么），两个操作层叠在一起只会互相干扰。
+      menu={in_selection
+        ? <Button
+          size="icon"
+          aria-pressed={selected}
+          title={translate(selected ? "sidebar.deselect_session" : "sidebar.select_session")}
+          aria-label={translate(selected ? "sidebar.deselect_session" : "sidebar.select_session")}
+          onClick={(event) => {
+            event.stopPropagation();
+            session_selection.select(entry.key, { range: event.shiftKey, ordered_keys });
+          }}
+        >{selected ? <TbCircleCheckFilled className="text-primary" /> : <TbCircle />}</Button>
+        : entry.kind === "agent"
+          ? <SessionActionsMenu
+            session={entry.session}
+            trigger={<RowMenuButton status={status} label={translate_common("actions.more")} />}
+            on_rename={(title) => controller.actions.rename_session(entry.workspace_id, entry.agent_id, entry.session.session_id, title)}
+            on_archive={() => controller.actions.archive_session(entry.workspace_id, entry.agent_id, entry.session.session_id)}
+            on_remove={() => controller.actions.remove_session(entry.workspace_id, entry.agent_id, entry.session.session_id)}
+            on_enter_selection={() => session_selection.select(entry.key)}
+          />
+          : <GroupSessionActionsMenu
+            session={entry.session}
+            status={status}
+            on_rename={(title) => controller.actions.rename_group_session(entry.group_id, entry.session.session_id, title)}
+            on_remove={() => controller.actions.remove_group_session(entry.group_id, entry.session.session_id)}
+            on_enter_selection={() => session_selection.select(entry.key)}
+          />}
+    />;
+  })}</div>;
 }

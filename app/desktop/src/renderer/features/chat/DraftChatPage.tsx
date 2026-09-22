@@ -37,7 +37,6 @@ export function AgentDraftChatSurface({ selection, agent, workspaces, agents, se
   // Power 目录是全局事实，订阅一次后交给 SessionView 注入活动行。
   const powers = use_desktop_selector(controller.stores.catalog, (state) => state.powers);
   return <SessionView
-    chat_surface="agent"
     open_file={open_file}
     workspace_id={workspace_id}
     agent={agent}

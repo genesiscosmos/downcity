@@ -11,12 +11,21 @@ export function is_restorable_navigation_target(target: NavigationTarget): targe
   return target.kind !== "create_agent" && target.kind !== "create_group" && target.kind !== "draft" && target.kind !== "group_draft" && target.kind !== "settings";
 }
 
-/** 从稳定导航目标推导一级侧栏，避免持久化第二份可能漂移的状态。 */
+/**
+ * 从稳定导航目标推导一级侧栏，避免持久化第二份可能漂移的状态。
+ *
+ * 判据是**这个页面属于谁**：会话（含草稿与 GroupSession）住在某个 Workspace 里，
+ * 因此归 Works；Agent profile 与 Group 配置回答「有哪些 Agent」，归 Agents；
+ * Power 相关页面归 Powers 或该 Power 自己的入口。
+ *
+ * 这个函数是这条对应的唯一事实源：`use_navigation_actions` 里那份按目标推导模式
+ * 的逻辑也走它，因此「打开一个页面时侧栏跳到哪」与「刷新后恢复到哪」不可能分叉。
+ */
 export function get_sidebar_mode_for_navigation(target: RestorableNavigationTarget): SidebarMode {
-  if (target.kind === "workspace" || target.kind === "workspace_file") return "workspace";
+  if (target.kind === "agent" || target.kind === "group") return "chat";
   if (target.kind === "power" || target.kind === "powers") return "powers";
   if (target.kind === "power_workspace") return `power:${target.power_id}`;
-  return "chat";
+  return "workspace";
 }
 
 /** 把 localStorage 中的不可信 JSON 解析为结构合法的稳定导航目标。 */

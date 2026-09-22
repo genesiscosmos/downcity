@@ -75,24 +75,24 @@ function use_navigation_commands(controller: DesktopController, shell: ShellComm
   use_register_commands(
     () => [
       {
-        id: "nav.open-chat",
-        title: translate("command_palette.cmd.nav.open-chat"),
-        group: "navigation",
-        order: 0,
-        icon: <TbMoodNeutral className="size-4" />,
-        shortcut: resolve_command_shortcut("nav.open-chat", platform),
-        keywords: ["chat", "agent", "conversation", "聊天", "对话", "智能体"],
-        run: () => actions.set_sidebar_mode("chat"),
-      },
-      {
         id: "nav.open-workspace",
         title: translate("command_palette.cmd.nav.open-workspace"),
         group: "navigation",
-        order: 1,
+        order: 0,
         icon: <TbFolder className="size-4" />,
         shortcut: resolve_command_shortcut("nav.open-workspace", platform),
-        keywords: ["workspace", "folder", "files", "工作区", "空间", "目录", "文件"],
+        keywords: ["workspace", "session", "chat", "conversation", "工作区", "空间", "会话", "对话"],
         run: () => actions.set_sidebar_mode("workspace"),
+      },
+      {
+        id: "nav.open-chat",
+        title: translate("command_palette.cmd.nav.open-chat"),
+        group: "navigation",
+        order: 1,
+        icon: <TbMoodNeutral className="size-4" />,
+        shortcut: resolve_command_shortcut("nav.open-chat", platform),
+        keywords: ["agent", "group", "assistant", "智能体", "助手", "群组"],
+        run: () => actions.set_sidebar_mode("chat"),
       },
       {
         id: "nav.open-powers",

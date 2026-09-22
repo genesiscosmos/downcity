@@ -9,7 +9,7 @@
  */
 
 import { useState, type FormEvent } from "react";
-import { TbPencil, TbTrash } from "react-icons/tb";
+import { TbCheckbox, TbPencil, TbTrash } from "react-icons/tb";
 import { RowMenuButton } from "@/components/RowMenuButton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,7 +19,7 @@ import { use_translation } from "@/locales/i18n";
 import type { DesktopGroupSessionSummary } from "@common/types/DesktopApi";
 
 /** 渲染 GroupSession 的重命名与删除流程。 */
-export function GroupSessionActionsMenu({ session, status, on_rename, on_remove }: {
+export function GroupSessionActionsMenu({ session, status, on_rename, on_remove, on_enter_selection }: {
   /** 当前 GroupSession 摘要。 */
   session: DesktopGroupSessionSummary;
   /** 当前 GroupSession 的行状态；决定入口图标与显隐。 */
@@ -28,9 +28,12 @@ export function GroupSessionActionsMenu({ session, status, on_rename, on_remove 
   on_rename(title: string): Promise<void>;
   /** 永久删除当前 GroupSession。 */
   on_remove(): Promise<void>;
+  /** 进入多选模式并选中这一条；不传则不给这个入口。 */
+  on_enter_selection?(): void;
 }) {
   const translate_common = use_translation("common");
   const translate_chat = use_translation("chat");
+  const translate_navigation = use_translation("navigation");
   const [rename_open, set_rename_open] = useState(false);
   const [remove_open, set_remove_open] = useState(false);
   const [title, set_title] = useState(session.title || "");
@@ -65,6 +68,8 @@ export function GroupSessionActionsMenu({ session, status, on_rename, on_remove 
       {/* 菜单里的点击不要冒泡到所在行，否则会顺带选中这个会话。 */}
       <DropdownMenuContent align="end" sideOffset={5} onClick={(event) => event.stopPropagation()}>
         <DropdownMenuItem onClick={() => { set_title(session.title || ""); set_rename_open(true); }}><TbPencil /><span>{translate_chat("conversation.rename")}</span></DropdownMenuItem>
+        {/* 多选入口：Shift 点击是快路径，这里是可发现的那一条（鼠标用户不会去猜修饰键）。 */}
+        {on_enter_selection ? <DropdownMenuItem onClick={on_enter_selection}><TbCheckbox /><span>{translate_navigation("sidebar.enter_selection")}</span></DropdownMenuItem> : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive" onClick={() => set_remove_open(true)}><TbTrash /><span>{translate_common("actions.delete")}</span></DropdownMenuItem>
       </DropdownMenuContent>

@@ -1,7 +1,21 @@
-/** Workspace 根行的本地目录操作菜单。 */
+/**
+ * Workspace 根行的菜单。
+ *
+ * ```text
+ * ＋ 新建对话          ← 对**这个 Workspace 里的会话**做的事
+ * ─────────────
+ *   复制路径          ← 对**目录本身**做的事
+ *   在 Finder 中打开
+ * ─────────────
+ *   移除工作区
+ * ```
+ *
+ * 两类动作用分隔线分开：「开一条新对话」与「这个目录在哪」不是同一件事，
+ * 排在一起会让人以为它们是一组。
+ */
 
 import { useState } from "react";
-import { TbCopy, TbExternalLink, TbTrash } from "react-icons/tb";
+import { TbCopy, TbExternalLink, TbPlus, TbTrash } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { RowMenuButton } from "@/components/RowMenuButton";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,14 +38,24 @@ interface WorkspaceRowMenuProps {
    * 行右端因此仍然只有**一个**交互目标，而不是“状态图标 + 菜单”两个。
    */
   status?: ChatRowStatus;
+  /**
+   * 这个 Workspace 新建对话时的默认联系人。
+   *
+   * 为空时不给「新建对话」项：没有可用 Agent 时点下去只会落进一个没有联系人的空对话，
+   * 而一个点了没反应的菜单项比看不到它更糟（与 `NewChatButton` 同一条原则）。
+   */
+  default_agent_id?: string;
+  /** 在这个 Workspace 为默认联系人打开空对话。 */
+  on_open_draft?(workspace_id: string, agent_id: string): void;
   /** 从 Registry 移除 Workspace。 */
   on_remove(workspace_id: string): Promise<void>;
 }
 
-/** 提供复制路径、Finder 打开和移除 Workspace，并闭合移除确认状态。 */
-export function WorkspaceRowMenu({ workspace, status, on_remove }: WorkspaceRowMenuProps) {
+/** 提供新建对话、复制路径、Finder 打开和移除 Workspace，并闭合移除确认状态。 */
+export function WorkspaceRowMenu({ workspace, status, default_agent_id, on_open_draft, on_remove }: WorkspaceRowMenuProps) {
   const translate_common = use_translation("common");
   const translate = use_translation("resources");
+  const translate_navigation = use_translation("navigation");
   const [copied, set_copied] = useState(false);
   const [remove_open, set_remove_open] = useState(false);
   const [removing, set_removing] = useState(false);
@@ -60,6 +84,13 @@ export function WorkspaceRowMenu({ workspace, status, on_remove }: WorkspaceRowM
     <DropdownMenu>
       <DropdownMenuTrigger asChild><RowMenuButton status={status} label={translate("workspace.item_actions", { name: workspace.name })} /></DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={5} onClick={(event) => event.stopPropagation()}>
+        {/* 「开一条新对话」排在最前：它是这个 Workspace 最常用的动作，而菜单入口又比行内的加号
+            更好找（加号是 hover 才显形的）。它与下面的目录操作用分隔线分开，
+            因为两者不是同一类事。 */}
+        {default_agent_id && on_open_draft ? <>
+          <DropdownMenuItem onClick={() => on_open_draft(workspace.workspace_id, default_agent_id)}><TbPlus /><span>{translate_navigation("sidebar.new_chat")}</span></DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </> : null}
         <DropdownMenuItem onClick={() => void copy_path()}><TbCopy /><span>{translate(copied ? "workspace.copied" : "workspace.copy_path")}</span></DropdownMenuItem>
         <DropdownMenuItem onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbExternalLink /><span>{translate("workspace.open_finder")}</span></DropdownMenuItem>
         <DropdownMenuSeparator />

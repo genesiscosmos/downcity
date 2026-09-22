@@ -38,8 +38,8 @@ test("无键位的命令返回 undefined", () => {
  */
 test("键位展示映射与 DesktopShell 现有键盘分支一一对应", () => {
   assert.deepEqual(command_shortcuts, {
-    "nav.open-chat": ["Mod+1"],
-    "nav.open-workspace": ["Mod+2"],
+    "nav.open-workspace": ["Mod+1"],
+    "nav.open-chat": ["Mod+2"],
     "nav.open-powers": ["Mod+3"],
     "nav.toggle-sidebar": ["Mod+B"],
     "nav.toggle-baybar": ["Mod+L"],

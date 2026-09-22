@@ -78,7 +78,8 @@ export function use_command_page_items(
           subtitle: agent.description,
           icon: <TbMoodNeutral className="size-4" />,
           is_current: selection?.kind === "agent" && selection.agent_id === agent.agent_id,
-          run: () => actions.open_agent_chat(agent.agent_id),
+          // 与 Agents 侧栏的行一致：点一个 Agent 进它的 profile，而不是直接开一条对话。
+          run: () => actions.select_agent(agent.agent_id),
         }));
       return { items, status: agents.length === 0 ? "empty" : "ready" };
     }

@@ -56,7 +56,6 @@ export function AgentSessionChatSurface({ selection, agent, session, workspaces,
   const rewrite_message = useCallback((input: DesktopChatRewriteInput) => controller.actions.rewrite_session_message(workspace_id, agent_id, session_id, input), [agent_id, controller.actions, session_id, workspace_id]);
   const load_earlier_history = useCallback(() => controller.actions.load_earlier_history(workspace_id, agent_id, session_id), [agent_id, controller.actions, session_id, workspace_id]);
   return <SessionView
-    chat_surface="agent"
     open_file={open_file}
     workspace_id={workspace_id}
     agent={agent}

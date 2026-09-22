@@ -4,7 +4,7 @@ import { memo, useMemo } from "react";
 import { SidebarFrame } from "./sidebar/SidebarFrame";
 import type { DesktopController, SidebarMode } from "@/types/DesktopView";
 import { use_desktop_selector } from "@/app/use_desktop";
-import { ChatSidebar } from "./sidebar/ChatSidebar";
+import { AgentsSidebar } from "./sidebar/AgentsSidebar";
 import { PowerSidebar } from "./sidebar/PowerSidebar";
 import { PowerWorkspaceSidebar } from "./sidebar/PowerWorkspaceSidebar";
 import { WorkspaceSidebar } from "./sidebar/WorkspaceSidebar";
@@ -40,8 +40,10 @@ export const DesktopSidebar = memo(function DesktopSidebar({ controller, open_cr
   const power_workspaces = useMemo(() => order_rail_powers(powers), [powers]);
   const unread_attention_by_mode = useMemo(() => {
     const entries: [SidebarMode, ChatAttention][] = [];
+    // 未读圆点只落在 Works 上：会话（含 Group 群聊）现在只有那一个入口，
+    // 在那里亮一次就等于说清了“哪里有事”；Agents 面板的行内仍各自显示状态图标。
     const chat_attention = get_chat_unread_attention(notification_state);
-    if (chat_attention) entries.push(["chat", chat_attention]);
+    if (chat_attention) entries.push(["workspace", chat_attention]);
     for (const power of power_workspaces) {
       // Power 通知不区分注意力等级；有未读时统一按「有新结果」展示。
       if (has_unread_power_notification(notification_state, power.power_id)) entries.push([`power:${power.power_id}`, "completed"]);
@@ -54,8 +56,8 @@ export const DesktopSidebar = memo(function DesktopSidebar({ controller, open_cr
   return <SidebarFrame collapsed={collapsed}>
     <SidebarRail active_mode={settings_active ? undefined : sidebar_mode} on_change={controller.actions.set_sidebar_mode} power_workspaces={power_workspaces} unread_attention_by_mode={unread_attention_by_mode} settings_active={settings_active} open_settings={() => controller.actions.open_settings("user")} />
     {settings_active ? <SettingsSidebarPanel controller={controller} /> : <>
-      {sidebar_mode === "chat" ? <ChatSidebar controller={controller} notification_state={notification_state} open_create_agent={() => open_create_agent()} open_create_group={open_create_group} open_group_config={open_group_config} /> : null}
       {sidebar_mode === "workspace" ? <WorkspaceSidebar controller={controller} open_create_workspace={open_create_workspace} /> : null}
+      {sidebar_mode === "chat" ? <AgentsSidebar controller={controller} open_create_agent={() => open_create_agent()} open_create_group={open_create_group} open_group_config={open_group_config} /> : null}
       {sidebar_mode === "powers" ? <PowerSidebar controller={controller} /> : null}
       {workspace_power_id ? <PowerWorkspaceSidebar controller={controller} power_id={workspace_power_id} notification_state={notification_state} /> : null}
     </>}

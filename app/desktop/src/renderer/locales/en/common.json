@@ -13,7 +13,7 @@
     "page": { "sessions_scope": "Current workspace: {{name}}" },
     "group": { "navigation": "Navigation", "goto": "Go to", "create": "Create", "chat": "Current session", "appearance": "Appearance", "account": "Account and models" },
     "cmd": {
-      "nav": { "open-chat": "Open Chat", "open-workspace": "Open Workspace", "open-powers": "Open Powers", "open-power-view": "Open a power…", "toggle-sidebar-show": "Show sidebar", "toggle-sidebar-hide": "Hide sidebar", "toggle-baybar-show": "Show right panel", "toggle-baybar-hide": "Hide right panel", "open-settings": "Open settings", "back-from-settings": "Go back" },
+      "nav": { "open-chat": "Open Agents", "open-workspace": "Open Works", "open-powers": "Open Powers", "open-power-view": "Open a power…", "toggle-sidebar-show": "Show sidebar", "toggle-sidebar-hide": "Hide sidebar", "toggle-baybar-show": "Show right panel", "toggle-baybar-hide": "Hide right panel", "open-settings": "Open settings", "back-from-settings": "Go back" },
       "goto": { "workspace": "Switch workspace…", "session": "Switch session…", "agent": "Open an agent…" },
       "create": { "conversation": "New conversation", "agent": "New agent", "group": "New group", "workspace": "New workspace" },
       "chat": { "stop": "Stop the current run", "archive": "Archive the current session", "load-earlier": "Load earlier history" },

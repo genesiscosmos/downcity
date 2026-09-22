@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, type RefObject } from "react";
 import type { NavigationTarget, SettingsSection, SidebarMode } from "@/types/DesktopView";
-import { desktop_navigation_storage_key, is_restorable_navigation_target } from "@/features/navigation/lib/desktop_navigation_state";
+import { desktop_navigation_storage_key, get_sidebar_mode_for_navigation, is_restorable_navigation_target } from "@/features/navigation/lib/desktop_navigation_state";
 import { notification_target_from_navigation } from "@/lib/notification/notification_state";
 import type { use_catalog_store } from "@/app/state/use_catalog_store";
 import type { use_navigation_store } from "@/features/navigation/state/use_navigation_store";
@@ -99,11 +99,16 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
   return useMemo(() => ({ select_power, select_powers, select_power_workspace, navigate_power, invalidate_power, set_sidebar_mode, select_workspace, select_workspace_file, select_agent, open_create_agent, select_group, open_settings, close_settings }), [close_settings, invalidate_power, navigate_power, open_create_agent, open_settings, select_agent, select_group, select_power, select_power_workspace, select_powers, select_workspace, select_workspace_file, set_sidebar_mode]);
 }
 
-/** 返回导航目标所属的一级 Sidebar。 */
+/**
+ * 返回导航目标所属的一级 Sidebar。
+ *
+ * 可恢复目标直接走 `get_sidebar_mode_for_navigation`（那条对应只写一份）；
+ * 这里只补上刷新后不再有语义、因而不参与恢复的那几个目标：草稿属于它所在的 Workspace，
+ * 创建页属于它将要创建的对象。设置页不选中任何业务入口。
+ */
 function get_sidebar_mode_for_target(target: NavigationTarget): SidebarMode | undefined {
-  if (target.kind === "workspace" || target.kind === "workspace_file") return "workspace";
-  if (target.kind === "power" || target.kind === "powers") return "powers";
-  if (target.kind === "power_workspace") return `power:${target.power_id}`;
   if (target.kind === "settings") return undefined;
-  return "chat";
+  if (target.kind === "draft" || target.kind === "group_draft") return "workspace";
+  if (target.kind === "create_agent" || target.kind === "create_group") return "chat";
+  return get_sidebar_mode_for_navigation(target);
 }

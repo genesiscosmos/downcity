@@ -413,9 +413,11 @@ export function use_desktop_controller(): DesktopController {
     chat_stream.set_configuration(session_key, { model_id: agent?.model_id || "", approval_mode: previous_configuration?.approval_mode ?? "ask" });
   }, [catalog, chat_stream]);
 
-  const create_session = useCallback(async (workspace_id: string, agent_id: string) => {
+  const create_session = useCallback(async (workspace_id: string, agent_id: string, preserve_sidebar = false) => {
     settings.set_error("");
-    navigation.set_sidebar_mode("chat");
+    // 从 Works 侧栏新建时保留当前侧栏：新对话落在那个 Workspace 里，
+    // 把用户切到 Agents 面板等于把他刚点的那棵树拿走。
+    if (!preserve_sidebar) navigation.set_sidebar_mode("chat");
     const draft_id = get_draft_session_id(agent_id);
     // 新对话的模型始终跟随 Agent 当前配置；上一次 Draft 临时选择的模型不带入新对话。
     reset_draft_configuration(get_session_key(workspace_id, agent_id, draft_id), agent_id);

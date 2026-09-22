@@ -95,23 +95,21 @@ function SidebarRowTitleArea({ title, tag, description, tone = "default", titleC
  * `SidebarItem` 用它；需要自建行的场合（如主体行的行首是个开关）也用它，
  * 这样两条路径的底色、行高、圆角仍然同源。
  */
-export function SidebarRow({ variant, active = false, multiLine, compact = false, tree = false, className, children }: {
+export function SidebarRow({ variant, active = false, multiLine, tree = false, className, children }: {
   /** 行变体。 */
   readonly variant: SidebarItemVariant;
   /** 是否是当前项。 */
   readonly active?: boolean;
   /** 是否有第二行；只有 `agent` 变体的行高受它影响。 */
   readonly multiLine?: boolean;
-  /** 是否是紧凑行。 */
-  readonly compact?: boolean;
-  /** 是否是树行（紧凑 + 行内间距 4）。 */
+  /** 是否是树行（左右内边距 4 + 行内间距 4）。 */
   readonly tree?: boolean;
   /** 附加样式。 */
   readonly className?: string;
   /** 行内容。 */
   readonly children: React.ReactNode;
 }) {
-  return <div className={cn(sidebar_item_base_class_name({ variant, active, multi_line: multiLine, compact, tree }), className)}>{children}</div>;
+  return <div className={cn(sidebar_item_base_class_name({ variant, active, multi_line: multiLine, tree }), className)}>{children}</div>;
 }
 
 /**
@@ -123,7 +121,7 @@ export function SidebarRow({ variant, active = false, multiLine, compact = false
  * `icon` 是名字前的图标（树行的节点图标），它**住在这个按钮里**：点文件夹图标也展开/打开，
  * 与重构前的行为一致——把图标做成不可点的装饰槽，会让行的左半部分看似可点而实际不是。
  */
-export function SidebarRowLabel({ title, tag, icon, description, current = false, currentKind = "page", tone = "default", disabled = false, titleClassName, onSelect, onDoubleClick }: SidebarRowLabelProps) {
+export const SidebarRowLabel = React.forwardRef<HTMLButtonElement, SidebarRowLabelProps>(function SidebarRowLabel({ title, tag, icon, description, current = false, currentKind = "page", tone = "default", disabled = false, titleClassName, onSelect, onDoubleClick, ...rest }, ref) {
   return <button
     type="button"
     disabled={disabled}
@@ -132,14 +130,16 @@ export function SidebarRowLabel({ title, tag, icon, description, current = false
     onDoubleClick={onDoubleClick}
     title={typeof title === "string" ? title : undefined}
     className={cn("flex min-w-0 flex-1 items-center gap-1 self-stretch text-left", sidebar_row_focus_class_name)}
+    {...rest}
+    ref={ref}
   >
     {icon ? <>{icon}</> : null}
     <SidebarRowTitleArea title={title} tag={tag} description={description} tone={tone} titleClassName={titleClassName} />
   </button>;
-}
+});
 
 /** 标题区参数；`SidebarRowLabel` 与 `SidebarItem` 共用。 */
-interface SidebarRowLabelProps {
+interface SidebarRowLabelProps extends Omit<React.ComponentPropsWithoutRef<"button">, "title" | "children" | "className" | "onSelect" | "disabled" | "onDoubleClick"> {
   /** 主标签；字符串时会自动成为行的 `title` 属性。 */
   readonly title: React.ReactNode;
   /** 附属分类信息（如成员数）；悬停时才显形。 */
@@ -158,8 +158,13 @@ interface SidebarRowLabelProps {
   readonly disabled?: boolean;
   /** 标题附加样式。 */
   readonly titleClassName?: string;
-  /** 主操作。 */
-  onSelect?(): void;
+  /**
+   * 主操作。
+   *
+   * 带鼠标事件：调用方靠 `shiftKey` 区分「打开」与「多选」（见 Works 会话树），
+   * 而这个修饰键只有原生事件里才有。
+   */
+  onSelect?(event: React.MouseEvent<HTMLButtonElement>): void;
   /** 双击；拿到原生事件。 */
   onDoubleClick?: React.MouseEventHandler<HTMLButtonElement>;
 }
@@ -170,7 +175,6 @@ interface SidebarRowLabelProps {
 export function SidebarRowAction({ children }: { /** 操作入口（通常是菜单触发器）。 */ readonly children: React.ReactNode }) {
   return <span className={sidebar_row_action_class_name}>{children}</span>;
 }
-
 /**
  * 行外副文本：「正在读取」「空目录」这类挂在行旁边的说明。
  *
@@ -199,6 +203,16 @@ export interface SidebarTreeProps {
   readonly indent?: number;
   /** 节点图标（文件夹 / 文件）。**不传就不留图标位**。 */
   readonly icon?: React.ReactNode;
+  /**
+   * 行首列的自定义节点，占的正是展开箭头那一格（`size-6`）。
+   *
+   * 树行的行首列只放**一样**东西：分支放展开箭头，叶子放自己的入口（如会话的归属头像）。
+   * 两者占同一格，因此根节点与叶子的文字仍在同一条线上——这也正是它不叫 `leading`
+   * 之外另开一个槽的理由：再多一个槽就会多推出一条文字线。
+   *
+   * 与 `disclosure` 互斥：同时给两者时以 `disclosure` 为准（展开比归属更要紧）。
+   */
+  readonly leading?: React.ReactNode;
   /**
    * 展开箭头。
    *
@@ -232,23 +246,28 @@ interface SidebarItemProps extends Omit<React.ComponentPropsWithoutRef<"button">
   readonly leading_shape?: SidebarLeadingShape;
   /** 树形行。 */
   readonly tree?: SidebarTreeProps;
-  /**
-   * 紧凑行：左右内边距与纵向同值（4），而不是 8。
-   *
-   * 用在卡片里的行（会话行、新建行）：外层卡片已经把它抱住了，行再抩完整的内缩
-   * 就会变成「底色贴边 + 内容离边很远」。树行**不需要传**：`tree` 会自动让它紧凑。
-   */
-  readonly compact?: boolean;
   /** 第二行；不传则整个描述行不渲染，行高随之退回单档。 */
   readonly description?: React.ReactNode;
   /** 尾随元信息（计数、状态文字）。 */
   readonly trailing?: React.ReactNode;
   /** 行自己的操作入口（菜单触发器）；不传则右端不留位置。 */
   readonly menu?: React.ReactNode;
+  /**
+   * 菜单入口**左侧**的次要动作（通常是图标按钮）。
+   *
+   * 它排在菜单外面：越常用的动作越靠外，不必瞄内层。两个槽都在右侧固定列里，
+   * 因此各行的动作入口仍然对得齐；只给一个时不白占位置。
+   */
+  readonly actions?: React.ReactNode;
   /** 附属分类信息（如成员数）；悬停时才显形。 */
   readonly tag?: string;
-  /** 主操作。 */
-  onSelect?(): void;
+  /**
+   * 主操作。
+   *
+   * 带鼠标事件：调用方靠 `shiftKey` 区分「打开」与「多选」（见 Works 会话树），
+   * 而这个修饰键只有原生事件里才有。
+   */
+  onSelect?(event: React.MouseEvent<HTMLButtonElement>): void;
   /** 双击；拿到原生事件，目录树用它做展开/折叠。 */
   onDoubleClick?: React.MouseEventHandler<HTMLButtonElement>;
   /**
@@ -269,6 +288,12 @@ interface SidebarItemProps extends Omit<React.ComponentPropsWithoutRef<"button">
  *
  * 三种变体（`agent` / `default` / `settings`）× 两种内容（有无行内菜单、有无树形箭头），
  * 都由这一个组件覆盖；调用方只描述内容，不描述几何。
+ *
+ * ## `ref` 与其余 button 属性必须真的落到标签按钮上
+ *
+ * 它们不是可选装饰：`<DropdownMenuTrigger asChild><SidebarItem /></DropdownMenuTrigger>`
+ * 会把自己的 `onClick` 与 `ref` 合并到子元素上（Base UI 靠这个拿锚点、靠那个开合菜单）。
+ * 早先这里把它们解构出来后没再用，菜单因此永远打不开——而界面上看不出任何异常。
  */
 export const SidebarItem = React.forwardRef<HTMLButtonElement, SidebarItemProps>(function SidebarItem({
   variant,
@@ -279,10 +304,10 @@ export const SidebarItem = React.forwardRef<HTMLButtonElement, SidebarItemProps>
   leading,
   leading_shape,
   tree,
-  compact = false,
   description,
   trailing,
   menu,
+  actions,
   tag,
   onSelect,
   onDoubleClick,
@@ -293,8 +318,6 @@ export const SidebarItem = React.forwardRef<HTMLButtonElement, SidebarItemProps>
 }, ref) {
   // 只有 `agent` 变体的行高受第二行影响；`default` / `settings` 永远是单行。
   const multi_line = variant === "agent" && description != null && description !== "";
-  // 树行总是紧凑的：它的行首是 24px 的箭头，左右也必须是 4，否则箭头在小方框里偏右。
-  const compact_row = compact || tree !== undefined;
 
   /**
    * 行首：树行的箭头 / 普通行的节点。
@@ -305,7 +328,9 @@ export const SidebarItem = React.forwardRef<HTMLButtonElement, SidebarItemProps>
   const leading_node = tree
     ? (tree.disclosure
       ? <SidebarDisclosure expanded={tree.disclosure.expanded} label={tree.disclosure.label} onToggle={tree.disclosure.onToggle} disabled={disabled} />
-      : <span aria-hidden="true" className={sidebar_tree_chevron_placeholder_class_name} />)
+      : tree.leading !== undefined
+        ? tree.leading
+        : <span aria-hidden="true" className={sidebar_tree_chevron_placeholder_class_name} />)
     : leading !== undefined
       ? <SidebarLeading shape={leading_shape ?? (variant === "agent" ? "avatar" : "icon")}>{leading}</SidebarLeading>
       : null;
@@ -340,12 +365,19 @@ export const SidebarItem = React.forwardRef<HTMLButtonElement, SidebarItemProps>
       titleClassName={titleClassName}
       onSelect={onSelect}
       onDoubleClick={onDoubleClick}
+      // 原生 button 属性与 ref 转给标签按钮：它才是行里那个可聚焦元素，
+      // 也是 `asChild` 合并 onClick / ref 的目标。
+      {...rest}
+      ref={ref}
     />
     {trailing != null ? <span className="shrink-0 text-2xs text-muted-foreground">{trailing}</span> : null}
-    {menu !== undefined ? <SidebarRowAction>{menu}</SidebarRowAction> : null}
+    {actions !== undefined || menu !== undefined ? <span className="flex shrink-0 items-center gap-0.5">
+      {actions}
+      {menu !== undefined ? <SidebarRowAction>{menu}</SidebarRowAction> : null}
+    </span> : null}
   </>;
 
-  const row = <SidebarRow variant={variant} active={active} multiLine={multi_line} compact={compact_row} tree={tree !== undefined} className={cn(disabled && "opacity-50", className)}>{content}</SidebarRow>;
+  const row = <SidebarRow variant={variant} active={active} multiLine={multi_line} tree={tree !== undefined} className={cn(disabled && "opacity-50", className)}>{content}</SidebarRow>;
   /**
    * 树行的缩进包在外面。
    *

@@ -175,13 +175,13 @@ twMerge("text-message text-foreground") → "text-foreground"   // 字号类被�
 | --- | --- | --- |
 | `3xs` | 不承载阅读的位置：图表坐标轴刻度、头像首字母、计数角标、极短的状态标签 | `UsageLineChart` / `ModelPricingChart` 的轴标签、`AccountSwitchList` 的首字母、`CollapsibleModelGroup` 的计数 |
 | `2xs` | 元信息：时间戳、文件名、chip、字段键名、工具行细节、快捷键提示 | `ChatMessageTimestamp`、`WorkspaceTagMenu`、`ActivityToolState` 的细节行、`button.tsx` 的 `default/small` 档 |
-| `xs` | 辅助正文：列表项的次要行、帮助文案、空态说明、提示与错误 | `SettingComponents` 的描述行、`ChatSubjectList` 的会话摘要、`SessionTimeline` 的 Agent 描述、消息的失败提示条 |
+| `xs` | 辅助正文：列表项的次要行、帮助文案、空态说明、提示与错误 | `SettingComponents` 的描述行、`AgentsSidebar` 的主体描述、`SessionTimeline` 的 Agent 描述、消息的失败提示条 |
 | `sm` | 紧凑正文：**只服务消息身份行名称**（比 `xs` 大、比 `base` 小，且靠 `font-medium` 与正文区分） | `agent_identity_name_class_name` |
 | **`base`** | **默认正文与常规控件：消息正文、通用段落、按钮标签、标准输入、列表行主标签** | `message_layout` 的正文与容器兜底、`button.tsx` 的 `large`、`SettingComponents` 的标签、Workspace README |
 | `lg` | 强调正文 + 区块标题、关键数值 | `CreateAgentView` / `CreateGroupView` 的 prompt 输入、`SettingComponents` 的页标题、`SettingsView` 的额度金额 |
 | `xl` | 面板标题、主数值 | `SettingsView` 的账号名与用量数值 |
 | `2xl` | 页面主标题：**每屏至多一个** | `CreateAgentView` / `CreateGroupView` 的问题标题、`WorkspaceView` 的 Workspace 名 |
-| `xs`（紧凑导航） | **侧栏的行与标题**：行主标签、面板标题（12px）；行描述用 `2xs`（11px） | `ChatSubjectList`、`PowerSidebar`、`SettingsSidebarPanel`、`WorkspaceTree` |
+| `xs`（紧凑导航） | **侧栏的行与标题**：行主标签、面板标题（12px）；行描述用 `2xs`（11px） | `AgentsSidebar`、`PowerSidebar`、`SettingsSidebarPanel`、`WorkspaceSessionList` |
 | `3xl` | 空档：预留的页面大标题 | —（当前无调用点） |
 
 > `lg` 同时承担「强调正文」与「区块标题」两个角色，它们用字重（`font-semibold`）与上下文区分。

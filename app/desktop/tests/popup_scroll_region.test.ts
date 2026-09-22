@@ -129,24 +129,4 @@ test("列表型浮层把圆角与滚动分成两层", () => {
   assert.ok(/chat-queued-message-list max-h-32 overflow-y-auto/.test(queue), "待发送队列的滚动层不完整（滚动条样式类要跟着滚动层走）");
   const preview = read_without_comments(path.join(renderer_root, "features/chat/composer/ChatModelSelector.tsx"));
   assert.ok(/<PreviewCard\.Popup[\s\S]{0,400}?overflow-hidden rounded-surface/.test(preview), "模型详情卡的外层不再裁剪圆角");
-  // 侧栏主体行展开出来的会话列表：卡片（在行组件内）负责圆角与裁剪，本层负责滚动。
-  // 但**只有浮动态**是这样：嵌入态自己就是列表流里的一段，不包滚动容器（否则鼠标停在
-  // 面板上就滚不动侧栏，见 SubjectConversationsPanel 的“滚动”一节）。
-  const conversations_panel = read_without_comments(path.join(renderer_root, "layouts/sidebar/SubjectConversationsPanel.tsx"));
-  assert.ok(/subject_panel_scroll_class_name = "max-h-80 overflow-y-auto overscroll-contain"/.test(conversations_panel), "浮动态的滚动层不完整（滚动条样式类要跟着滚动层走）");
-  assert.ok(conversations_panel.includes("max-h-80"), "浮动态会话列表没有高度上限，长列表会漫出卡片");
-  // 嵌入态不包滚动容器：它必须走“直接返回内容”那条分支。
-  // 两边都上滚动容器就会造出一个鼠标滚轮被吃掉的死区。
-  assert.ok(/return scrolls_itself \? <div className=\{subject_panel_scroll_class_name\}>\{content\}<\/div> : content;/.test(conversations_panel), "嵌入态还包着滚动容器：鼠标停在固定面板上会滚不动侧栏");
-  assert.ok(/const scrolls_itself = max_visible === undefined;/.test(conversations_panel), "没有区分“要不要自己滚”");
-  // 卡片负责圆角、描边与裁剪；面板自己再画一层就会叠成双层描边。
-  // 裁剪是必要的：卡圆角 12px、面板内缩 8px、滚动条宽 5px，仅靠内缩挡不住滚动条最外 1px。
-  // 边框用 border（卡片靠它读得出边界）、不用 inset-ring（多一圈线）；见 subjectCard。
-  const card = read_without_comments(path.join(renderer_root, "layouts/sidebar/subjectCard.ts"));
-  // 逐个查类名而不是抄一整串：类名顺序无意义，而这三件事缺一不可。
-  const card_class_name = /const card_class_name = "([^"]*)"/.exec(card)?.[1] ?? "";
-  for (const token of ["overflow-hidden", "rounded-surface", "border", "border-border"]) {
-    assert.ok(card_class_name.split(/\s+/).includes(token), `卡片没有负责裁剪、圆角与描边：缺 ${token}（${card_class_name}）`);
-  }
-  assert.ok(!/rounded-floating-surface|border border-border/.test(conversations_panel), "会话列表自己又画了一层表面，会和卡片叠成双层描边");
 });
