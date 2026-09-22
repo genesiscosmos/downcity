@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Menu } from "@base-ui/react/menu";
-import { TbCheck } from "react-icons/tb";
+import { TbCheck, TbChevronRight } from "react-icons/tb";
 import { cn } from "@/lib/utils";
 import { MenuItemShell } from "./item";
 import { MenuSurface } from "./menu";
@@ -39,13 +39,19 @@ interface DropdownMenuContentProps extends Omit<Menu.Popup.Props, "className" | 
   sideOffset?: number;
   /** 水平对齐方向。 */
   align?: "start" | "center" | "end";
-  /** 展开方向。 */
+  /**
+   * 展开方向。不传时交给 Base UI 决定。
+   *
+   * 这个默认值不能写死：Base UI 在子菜单里会把方向落到 `inline-end`（贴着父菜单的那一侧），
+   * 而写死的 `bottom` 会把子菜单铺到父菜单正下方，看起来不像子菜单。顶层菜单不传时
+   * 仍由 Base UI 回退到 `bottom`，与写死时完全一致。
+   */
   side?: "top" | "right" | "bottom" | "left";
 }
 
 /** 带 Portal 和碰撞定位的下拉菜单浮层。 */
 const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContentProps>(
-  ({ className, scroll_class_name, sideOffset = 4, align = "start", side = "bottom", ...props }, ref) => (
+  ({ className, scroll_class_name, sideOffset = 4, align = "start", side, ...props }, ref) => (
     <Menu.Portal>
       <Menu.Positioner sideOffset={sideOffset} align={align} side={side} className="z-50 outline-none">
         <Menu.Popup ref={ref} render={<MenuSurface className={className} scroll_class_name={scroll_class_name} />} {...props} />
@@ -109,6 +115,42 @@ const DropdownMenuCheckboxItem = React.forwardRef<HTMLDivElement, DropdownMenuCh
 );
 DropdownMenuCheckboxItem.displayName = "DropdownMenuCheckboxItem";
 
+const DropdownMenuSubmenu = Menu.SubmenuRoot;
+
+/** 子菜单触发器属性。 */
+interface DropdownMenuSubmenuTriggerProps extends Omit<Menu.SubmenuTrigger.Props, "className" | "render"> {
+  /** 附加样式。 */
+  className?: string;
+}
+
+/**
+ * 打开子菜单的菜单项。
+ *
+ * 它就是一条**普通菜单项**：同一套 `MenuItemShell`、同一套 hover / 键盘高亮态，
+ * 只是右端多一个指向子菜单的箭头。箭头固定占位，因此带子菜单的项与相邻普通项的文字线一致。
+ *
+ * 用法是把子菜单的项包在 `DropdownMenuSubmenu` 里，触发器与浮层仍是这两个组件：
+ *
+ * ```tsx
+ * <DropdownMenuSubmenu>
+ *   <DropdownMenuSubmenuTrigger>在外部打开</DropdownMenuSubmenuTrigger>
+ *   <DropdownMenuContent>…</DropdownMenuContent>
+ * </DropdownMenuSubmenu>
+ * ```
+ *
+ * 子菜单默认**悬停即展开**（Base UI 的 `openOnHover`），与桌面端菜单的习惯一致；
+ * 键盘上右方向键同样可以进入。
+ */
+const DropdownMenuSubmenuTrigger = React.forwardRef<HTMLDivElement, DropdownMenuSubmenuTriggerProps>(
+  ({ className, children, ...props }, ref) => (
+    <Menu.SubmenuTrigger ref={ref} render={<MenuItemShell className={className} />} {...props}>
+      {children}
+      <TbChevronRight className="ml-auto text-subtle-foreground" aria-hidden />
+    </Menu.SubmenuTrigger>
+  ),
+);
+DropdownMenuSubmenuTrigger.displayName = "DropdownMenuSubmenuTrigger";
+
 const DropdownMenuGroup = Menu.Group;
 const DropdownMenuLabel = React.forwardRef<HTMLDivElement, Menu.GroupLabel.Props>(({ className, ...props }, ref) => <Menu.GroupLabel ref={ref} className={cn(menu_label_class_name, className)} {...props} />);
 DropdownMenuLabel.displayName = "DropdownMenuLabel";
@@ -125,5 +167,7 @@ export {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSubmenu,
+  DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
 };

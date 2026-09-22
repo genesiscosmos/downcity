@@ -5,21 +5,30 @@
  * ＋ 新建对话          ← 对**这个 Workspace 里的会话**做的事
  * ─────────────
  *   复制路径          ← 对**目录本身**做的事
- *   在 Finder 中打开
+ *   在外部打开 ▸      ← 行首是外部打开图标，与两项去向同构
+ *     ├ 在 VS Code 中打开
+ *     └ 在 Finder 中打开
  * ─────────────
  *   移除工作区
  * ```
  *
  * 两类动作用分隔线分开：「开一条新对话」与「这个目录在哪」不是同一件事，
  * 排在一起会让人以为它们是一组。
+ *
+ * ## 两个「打开目录」的去向收进子菜单
+ *
+ * 它们说的是同一件事（把目录交给外部程序），差别只有交给谁，因此排在一个子菜单里，
+ * 而不是并排占两行。子菜单项与 Chat 里的 `WorkspaceTagMenu` 同顺序：编辑器在前、
+ * 文件管理器在后；那个菜单里目录是主角，两个去向直接铺开是对的，这里菜单还要承载
+ * 会话与移除操作，展开成子菜单才能把主菜单留在「一类事一行」的粒度上。
  */
 
 import { useState } from "react";
-import { TbCopy, TbExternalLink, TbPlus, TbTrash } from "react-icons/tb";
+import { TbBrandFinder, TbBrandVscode, TbCopy, TbExternalLink, TbPlus, TbTrash } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { RowMenuButton } from "@/components/RowMenuButton";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSubmenu, DropdownMenuSubmenuTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { use_translation } from "@/locales/i18n";
 import type { ChatRowStatus } from "@/features/chat/lib/chat_row_status";
 import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
@@ -51,7 +60,7 @@ interface WorkspaceRowMenuProps {
   on_remove(workspace_id: string): Promise<void>;
 }
 
-/** 提供新建对话、复制路径、Finder 打开和移除 Workspace，并闭合移除确认状态。 */
+/** 提供新建对话、复制路径、在外部打开（VS Code / Finder）和移除 Workspace，并闭合移除确认状态。 */
 export function WorkspaceRowMenu({ workspace, status, default_agent_id, on_open_draft, on_remove }: WorkspaceRowMenuProps) {
   const translate_common = use_translation("common");
   const translate = use_translation("resources");
@@ -92,7 +101,15 @@ export function WorkspaceRowMenu({ workspace, status, default_agent_id, on_open_
           <DropdownMenuSeparator />
         </> : null}
         <DropdownMenuItem onClick={() => void copy_path()}><TbCopy /><span>{translate(copied ? "workspace.copied" : "workspace.copy_path")}</span></DropdownMenuItem>
-        <DropdownMenuItem onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbExternalLink /><span>{translate("workspace.open_finder")}</span></DropdownMenuItem>
+        {/* 子菜单浮层同样要停住冒泡：它虽然挂在 Portal 上，React 事件仍沿组件树冒到整行，
+            不停住就会顺带触发行的「打开 Workspace」。 */}
+        <DropdownMenuSubmenu>
+          <DropdownMenuSubmenuTrigger><TbExternalLink /><span>{translate("workspace.open_external")}</span></DropdownMenuSubmenuTrigger>
+          <DropdownMenuContent onClick={(event) => event.stopPropagation()}>
+            <DropdownMenuItem onClick={() => void window.downcity.system.open_in_vscode(workspace.workspace_path)}><TbBrandVscode /><span>{translate("workspace.open_vscode")}</span></DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void window.downcity.system.open_local_file(workspace.workspace_path)}><TbBrandFinder /><span>{translate("workspace.open_finder")}</span></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenuSubmenu>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive" onClick={() => { set_remove_error(""); set_remove_open(true); }}><TbTrash /><span>{translate("workspace.remove")}</span></DropdownMenuItem>
       </DropdownMenuContent>
