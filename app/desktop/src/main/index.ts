@@ -165,7 +165,12 @@ ipcMain.handle("workspace:list", () => require_agent_controller().list_workspace
 ipcMain.handle("workspace:get-default", () => require_agent_controller().get_default_workspace());
 ipcMain.handle("workspace:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateWorkspaceInput) => require_agent_controller().create_workspace(input));
 ipcMain.handle("workspace:update-name", (_event, workspace_id: string, name: string) => require_agent_controller().update_workspace_name(workspace_id, name));
-ipcMain.handle("workspace:remove", (_event, workspace_id: string) => require_agent_controller().remove_workspace(workspace_id));
+ipcMain.handle("workspace:remove", async (_event, workspace_id: string) => {
+  const removed = await require_agent_controller().remove_workspace(workspace_id);
+  // Workspace 从侧栏消失后，它下面会话的通知已经无处可看，必须一并收掉。
+  if (removed) require_notification_center().handle_workspace_removed(workspace_id);
+  return removed;
+});
 ipcMain.handle("workspace:write-readme", (_event, workspace_id: string, content: string) => require_agent_controller().write_workspace_readme(workspace_id, content));
 ipcMain.handle("workspace:read-text-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_text_file(workspace_id, relative_path));
 ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => require_agent_controller().connect_agent(agent_id, workspace_id));
@@ -200,7 +205,12 @@ ipcMain.handle("group:archive-session", async (_event, group_id: string, session
 });
 ipcMain.handle("group:list-archived-sessions", (_event, group_id: string) => require_agent_controller().list_archived_group_sessions(group_id));
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id?: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
-ipcMain.handle("chat:rebind-session-workspace", (_event, agent_id: string, session_id: string, workspace_id: string) => require_agent_controller().rebind_session_workspace(agent_id, session_id, workspace_id));
+ipcMain.handle("chat:rebind-session-workspace", async (_event, agent_id: string, session_id: string, workspace_id: string) => {
+  const result = await require_agent_controller().rebind_session_workspace(agent_id, session_id, workspace_id);
+  // 换绑后旧通知里的 workspace_id 已失效，行内不再显示它；不清掉就会只剩图标在报警。
+  require_notification_center().handle_agent_session_rebound(agent_id, session_id);
+  return result;
+});
 ipcMain.handle("chat:list-models", () => require_agent_controller().list_models());
 ipcMain.handle("chat:list-workspace-files", (_event, workspace_id: string) => require_agent_controller().list_workspace_files(workspace_id));
 ipcMain.handle("chat:read-workspace-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_file(workspace_id, relative_path));
@@ -209,7 +219,15 @@ ipcMain.handle("power:get", (_event, power_id: string) => require_power_controll
 ipcMain.handle("power:invoke", (_event, power_id: string, input: import("../common/types/DesktopApi.js").DesktopInvokePowerActionInput) => require_power_controller().invoke(power_id, input));
 ipcMain.handle("chat:create-session", (_event, agent_id: string, workspace_id: string, configuration: import("../common/types/DesktopApi.js").DesktopSessionConfiguration) => require_agent_controller().create_session(agent_id, workspace_id, configuration));
 ipcMain.handle("chat:fork-session", (_event, agent_id: string, workspace_id: string, session_id: string, message_id: string) => require_agent_controller().fork_session(agent_id, workspace_id, session_id, message_id));
-ipcMain.handle("chat:rewrite-session-message", (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput) => require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input));
+ipcMain.handle("chat:rewrite-session-message", async (_event, agent_id: string, workspace_id: string, session_id: string, input: import("../common/types/DesktopApi.js").DesktopChatRewriteInput) => {
+  const result = await require_agent_controller().rewrite_session_message(agent_id, workspace_id, session_id, input);
+  // replace 会把源 Session 归档出活动列表，未读通知必须同步收掉：
+  // 否则 Rail 与 Agent 图标继续报警，而用户在任何会话列表里都找不到它。
+  if (result.source_disposition === "archived") {
+    require_notification_center().handle_agent_session_closed(agent_id, workspace_id, session_id);
+  }
+  return result;
+});
 ipcMain.handle("chat:rename-session", (_event, agent_id: string, workspace_id: string, session_id: string, title: string) => require_agent_controller().rename_session(agent_id, workspace_id, session_id, title));
 ipcMain.handle("chat:archive-session", async (_event, agent_id: string, workspace_id: string, session_id: string) => {
   await require_agent_controller().archive_session(agent_id, workspace_id, session_id);
@@ -387,6 +405,24 @@ function to_error_message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * 启动时用当前真实目录对账未读通知，清除指向已不可见会话的残留。
+ *
+ * 对账失败不能阻断启动：最坏情况只是多留几条旧通知，比开不了应用轻得多。
+ */
+async function reconcile_notifications(
+  center: DesktopNotificationCenter,
+  controller: AgentController,
+): Promise<void> {
+  try {
+    const reachable = await controller.list_reachable_session_keys();
+    const removed = center.reconcile_existing_targets(reachable);
+    if (removed > 0) console.info(`Downcity Desktop pruned ${removed} stale notifications`);
+  } catch (error) {
+    console.warn("Downcity Desktop notification reconcile skipped", to_error_message(error));
+  }
+}
+
 app.whenReady().then(async () => {
   register_power_renderer_protocol(local_data);
   register_local_file_protocol(local_data);
@@ -429,6 +465,9 @@ app.whenReady().then(async () => {
   );
   user_controller = new DesktopUserController(local_data, () => next_agent_controller.has_active_sessions());
   await next_agent_controller.ready();
+  // 启动时用真实目录对账一次未读通知：应用未运行期间发生的归档、删除或换绑不会补发事件，
+  // 只靠事件收口会让这些历史通知永远留着，变成“图标在报警、会话却找不到”的幽灵红点。
+  await reconcile_notifications(next_notification_center, next_agent_controller);
   configure_development_icon();
   create_window();
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) create_window(); });

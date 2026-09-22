@@ -105,6 +105,46 @@ export class NotificationController implements DesktopNotificationPublisher {
     this.commit(next);
   }
 
+  /**
+   * 清除某条 Agent Session 的未读通知，不依赖它当前挂在哪个 Workspace。
+   *
+   * Session 换绑 Workspace 后，通知里记的 `workspace_id` 会变成旧值，
+   * 用完整目标匹配将永远失配，因此这里按 `agent_id + session_id` 收口。
+   */
+  mark_agent_session_read(agent_id_input: string, session_id_input: string): void {
+    const agent_id = require_text(agent_id_input, "agent_id");
+    const session_id = require_text(session_id_input, "session_id");
+    this.filter_out((target) => target.kind === "agent_session"
+      && target.agent_id === agent_id
+      && target.session_id === session_id);
+  }
+
+  /** 清除指向某个 Workspace 内全部 Agent Session 的未读通知。 */
+  mark_workspace_read(workspace_id_input: string): void {
+    const workspace_id = require_text(workspace_id_input, "workspace_id");
+    this.filter_out((target) => target.kind === "agent_session" && target.workspace_id === workspace_id);
+  }
+
+  /** 按目标谓词清除通知；无匹配时不产生状态变更。 */
+  private filter_out(match: (target: DesktopNotificationTarget) => boolean): void {
+    const next = this.notifications.filter((notification) => !match(notification.target));
+    if (next.length === this.notifications.length) return;
+    this.commit(next);
+  }
+
+  /**
+   * 按“目标是否仍可达”对账，清除不可达的未读通知，返回清除数量。
+   *
+   * 事件驱动的清理只覆盖用户此刻正在操作的路径；应用关闭期间发生的归档、删除
+   * 或换绑不会补发事件，因此启动时必须用当前真实目录对账一次，否则会积下幽灵红点。
+   */
+  prune_targets(keep: (target: DesktopNotificationTarget) => boolean): number {
+    const next = this.notifications.filter((notification) => keep(notification.target));
+    const removed = this.notifications.length - next.length;
+    if (removed > 0) this.commit(next);
+    return removed;
+  }
+
   /** 将一个宿主生命周期作用域内的全部通知标记为已读。 */
   mark_scope_read(scope_input: DesktopNotificationScope): void {
     const scope_key = get_notification_scope_key(normalize_notification_scope(scope_input));

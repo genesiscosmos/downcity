@@ -35,6 +35,7 @@ import {
   type LocalWorkspaceConfig,
   create_agent_id,
 } from "@downcity/city/local";
+import { get_agent_session_target_key, get_group_session_target_key } from "@/notification/notification_target_key.js";
 import type {
   DesktopAgentConnection,
   DesktopAgentSummary,
@@ -845,6 +846,61 @@ export class AgentController {
       workspace_id ? { workspace_id } : undefined,
     );
     return page.items.map((session) => to_desktop_session_summary(this.data.root_path, session));
+  }
+
+  /**
+   * 枚举当前全部可达的 Session 标识，供启动时对账未读通知。
+   *
+   * 只包含活动 Session：归档与已删除的会话在 UI 中不可见，指向它们的未读通知无处可查，
+   * 因此不应被计入可达集合。
+   *
+   * 读取失败的 Agent / Group 会被列入 `unresolved` 而不是当作“没有会话”：
+   * 把失败当成空集合会让对账误删该对象下全部正常通知，宁可少清不可误清。
+   */
+  async list_reachable_session_keys(): Promise<{
+    agent_session_keys: Set<string>;
+    group_session_keys: Set<string>;
+    unresolved_agent_ids: Set<string>;
+    unresolved_group_ids: Set<string>;
+  }> {
+    await this.ready_promise;
+    const agent_session_keys = new Set<string>();
+    const unresolved_agent_ids = new Set<string>();
+    await Promise.all(this.data.agents.list().map(async (config) => {
+      const agent = this.city.agents.get(config.agent_id);
+      // 本地有定义但运行时未装配：本轮无法判断，交给下一轮。
+      if (!agent) {
+        unresolved_agent_ids.add(config.agent_id);
+        return;
+      }
+      let items: AgentSessionSummary[];
+      try {
+        items = (await agent.sessions.list()).items;
+      } catch {
+        unresolved_agent_ids.add(config.agent_id);
+        return;
+      }
+      for (const session of items) {
+        // 未绑定 Workspace 的孤儿 Session 在侧栏里也不可见，与归档同类处理。
+        if (!session.workspace_id) continue;
+        agent_session_keys.add(get_agent_session_target_key(config.agent_id, session.workspace_id, session.session_id));
+      }
+    }));
+    const group_session_keys = new Set<string>();
+    const unresolved_group_ids = new Set<string>();
+    await Promise.all(this.city.groups.list().map(async (group) => {
+      let summaries: readonly GroupSessionSummary[];
+      try {
+        summaries = await group.sessions.list();
+      } catch {
+        unresolved_group_ids.add(group.id);
+        return;
+      }
+      for (const session of summaries) {
+        group_session_keys.add(get_group_session_target_key(group.id, session.id));
+      }
+    }));
+    return { agent_session_keys, group_session_keys, unresolved_agent_ids, unresolved_group_ids };
   }
 
   /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的摘要。 */

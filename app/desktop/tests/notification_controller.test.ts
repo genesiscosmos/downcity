@@ -17,6 +17,10 @@ import {
   notification_target_from_navigation,
   power_renderer_notifications,
 } from "../src/renderer/lib/notification/notification_state.ts";
+import {
+  get_agent_session_target_key,
+  get_group_session_target_key,
+} from "../src/main/notification/notification_target_key.ts";
 
 /** 创建一组完全内存化的 NotificationController 测试依赖。 */
 function create_fixture(initial: DesktopNotification[] = []) {
@@ -364,4 +368,111 @@ test("GroupSession 通知可以持久化恢复", () => {
   } as never);
 
   assert.deepEqual(store.read().map((notification) => notification.kind), ["group_interaction_pending"]);
+});
+
+test("按 agent + session 清理不依赖通知里记的 workspace_id", () => {
+  const fixture = create_fixture();
+  fixture.controller.publish({ kind: "session_turn_failed", topic_key: "session:writer", target, scopes: agent_scope, title: "执行失败", created_at: 1 });
+  fixture.controller.publish({
+    kind: "session_turn_completed",
+    topic_key: "session:other",
+    target: { ...target, session_id: "other-session" },
+    scopes: agent_scope,
+    title: "已完成",
+    created_at: 2,
+  });
+
+  // 换绑 Workspace 后 target 里的 workspace_id 已失效，完整目标匹配会失配。
+  fixture.controller.mark_agent_session_read("writer", "session");
+
+  assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["session:other"]);
+});
+
+test("按 Workspace 清理只影响该 Workspace 下的 Session 通知", () => {
+  const fixture = create_fixture();
+  fixture.controller.publish({ kind: "session_turn_failed", topic_key: "session:in", target, scopes: agent_scope, title: "执行失败", created_at: 1 });
+  fixture.controller.publish({
+    kind: "session_turn_failed",
+    topic_key: "session:out",
+    target: { ...target, workspace_id: "workspace-2" },
+    scopes: agent_scope,
+    title: "执行失败",
+    created_at: 2,
+  });
+
+  fixture.controller.mark_workspace_read("workspace");
+
+  assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["session:out"]);
+});
+
+test("对账清除指向已不可见会话的未读，保留仍可达的与 Power 通知", () => {
+  const fixture = create_fixture();
+  // 归档会话留下的幽灵通知：它已不在活动目录里。
+  fixture.controller.publish({ kind: "session_turn_failed", topic_key: "session:gone", target, scopes: agent_scope, title: "执行失败", created_at: 1 });
+  fixture.controller.publish({
+    kind: "session_turn_completed",
+    topic_key: "session:alive",
+    target: { ...target, session_id: "alive" },
+    scopes: agent_scope,
+    title: "已完成",
+    created_at: 2,
+  });
+  fixture.controller.publish({
+    kind: "power",
+    topic_key: "power:clock:ring",
+    target: { kind: "power", power_id: "clock", route: {} },
+    scopes: [{ kind: "power", power_id: "clock" }],
+    title: "提醒",
+    created_at: 3,
+  });
+
+  const removed = fixture.controller.prune_targets((candidate) => candidate.kind === "power"
+    || (candidate.kind === "agent_session" && candidate.session_id === "alive"));
+
+  assert.equal(removed, 1);
+  assert.deepEqual(
+    fixture.controller.get_state().notifications.map((notification) => notification.topic_key),
+    ["power:clock:ring", "session:alive"],
+  );
+});
+
+test("对账无残留时不产生状态变更", () => {
+  const fixture = create_fixture();
+  fixture.controller.publish({ kind: "session_turn_completed", topic_key: "session:alive", target, scopes: agent_scope, title: "已完成", created_at: 1 });
+  const states_before = fixture.states.length;
+
+  assert.equal(fixture.controller.prune_targets(() => true), 0);
+  assert.equal(fixture.states.length, states_before);
+});
+
+test("枚举失败的 Agent 下通知不被误删", () => {
+  const fixture = create_fixture();
+  fixture.controller.publish({ kind: "session_turn_failed", topic_key: "session:writer", target, scopes: agent_scope, title: "执行失败", created_at: 1 });
+  fixture.controller.publish({
+    kind: "session_turn_failed",
+    topic_key: "session:other-agent",
+    target: { ...target, agent_id: "other" },
+    scopes: [{ kind: "agent", agent_id: "other" }],
+    title: "执行失败",
+    created_at: 2,
+  });
+
+  // writer 本轮读不到会话（unresolved），other 确认已无任何会话。
+  const removed = fixture.controller.prune_targets((candidate) => candidate.kind !== "agent_session"
+    || candidate.agent_id === "writer");
+
+  assert.equal(removed, 1);
+  assert.deepEqual(fixture.controller.get_state().notifications.map((notification) => notification.topic_key), ["session:writer"]);
+});
+
+test("可达键把三类标识完整区分开，不因分隔符碰撞", () => {
+  // Agent / Workspace / Session 标识都可能含冒号，用冒号拼合会让不同目标碰撞。
+  assert.notEqual(
+    get_agent_session_target_key("a:b", "c", "d"),
+    get_agent_session_target_key("a", "b:c", "d"),
+  );
+  assert.notEqual(
+    get_group_session_target_key("g", "s1"),
+    get_group_session_target_key("g", "s2"),
+  );
 });

@@ -20,6 +20,7 @@ import { NotificationController } from "./NotificationController.js";
 import { GroupNotificationProducer } from "./GroupNotificationProducer.js";
 import { PowerNotificationProducer } from "./PowerNotificationProducer.js";
 import { SessionTurnNotificationProducer } from "./SessionTurnNotificationProducer.js";
+import { get_agent_session_target_key, get_group_session_target_key } from "./notification_target_key.js";
 
 /** Desktop 通知状态、生产与生命周期清理的唯一主进程入口。 */
 export class DesktopNotificationCenter {
@@ -92,6 +93,21 @@ export class DesktopNotificationCenter {
     this.controller.mark_target_read({ kind: "agent_session", agent_id, workspace_id, session_id });
   }
 
+  /**
+   * Session 换绑 Workspace 后清理它的旧目标通知。
+   *
+   * 换绑后通知里记录的 `workspace_id` 已成旧值，完整目标匹配不再成立，
+   * 因此按 `agent_id + session_id` 定位；否则会留下一个“图标在报警、行内却安静”的幽灵通知。
+   */
+  handle_agent_session_rebound(agent_id: string, session_id: string): void {
+    this.controller.mark_agent_session_read(agent_id, session_id);
+  }
+
+  /** Workspace 移除后清理其下全部 Session 通知，避免 Rail 红点指向看不见的会话。 */
+  handle_workspace_removed(workspace_id: string): void {
+    this.controller.mark_workspace_read(workspace_id);
+  }
+
   /** GroupSession 被删除后清理其精确目标通知。 */
   handle_group_session_closed(group_id: string, session_id: string): void {
     this.controller.mark_target_read({ kind: "group_session", group_id, session_id });
@@ -105,5 +121,36 @@ export class DesktopNotificationCenter {
   /** Group 删除后清理其全部 GroupSession 通知。 */
   handle_group_removed(group_id: string): void {
     this.controller.mark_scope_read({ kind: "group", group_id });
+  }
+
+  /**
+   * 用当前真实目录对账，清除指向已不存在对象的未读通知，返回清除数量。
+   *
+   * 事件驱动的收口只能覆盖用户此刻正在操作的路径：应用未运行时发生的归档、
+   * 删除或换绑不会补发事件。启动时对账一次，历史幽灵红点才会自己消失。
+   * Power 通知由各自插件自己负责，不在这里判断。
+   */
+  reconcile_existing_targets(existing: {
+    /** 仍存在的 Agent Session：`agent_id` + `workspace_id` + `session_id` 的拼合键集合。 */
+    agent_session_keys: ReadonlySet<string>;
+    /** 仍存在的 GroupSession：`group_id` + `session_id` 的拼合键集合。 */
+    group_session_keys: ReadonlySet<string>;
+    /** 本轮无法枚举的 Agent；指向它们的通知一律保留，宁漏不误删。 */
+    unresolved_agent_ids: ReadonlySet<string>;
+    /** 本轮无法枚举的 Group；指向它们的通知一律保留。 */
+    unresolved_group_ids: ReadonlySet<string>;
+  }): number {
+    return this.controller.prune_targets((target) => {
+      if (target.kind === "agent_session") {
+        if (existing.unresolved_agent_ids.has(target.agent_id)) return true;
+        return existing.agent_session_keys.has(get_agent_session_target_key(target.agent_id, target.workspace_id, target.session_id));
+      }
+      if (target.kind === "group_session") {
+        if (existing.unresolved_group_ids.has(target.group_id)) return true;
+        return existing.group_session_keys.has(get_group_session_target_key(target.group_id, target.session_id));
+      }
+      // Power 通知由各自插件自己负责，不在这里判断。
+      return true;
+    });
   }
 }
