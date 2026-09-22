@@ -216,7 +216,11 @@ test("会话行的归属是行首头像，行尾不再有归属文字", () => {
   assert.ok(/<GroupSessionActionsMenu/.test(session_list), "Group 会话没有复用共享的群聊操作菜单");
   // 头像自己：菜单里给出归属名称与「新建会话」，且新建落在同一个归属下。
   const avatar = read_without_comments(path.join(sidebar_root, "SessionSubjectAvatar.tsx"));
-  assert.ok(/<DropdownMenuLabel className="max-w-56 truncate">\{subject_label\}<\/DropdownMenuLabel>/.test(avatar), "头像菜单没有给出归属名称");
+  // 第一项是归属说明，带头像 + 名字；且用 Label 而非 MenuItem：
+  // 菜单项的 `[&>svg]:size-3.5` 是直接子元素选择器，会把 AgentAvatar 的 size-5 压小。
+  assert.ok(/<DropdownMenuLabel className="flex items-center gap-2\.5 py-1\.5">/.test(avatar), "归属说明没有排成「头像 + 名字」一行");
+  assert.ok(/<DropdownMenuLabel[\s\S]{0,120}?\{avatar\}[\s\S]{0,200}?\{subject_label\}/.test(avatar), "归属说明里没有同时给出头像与名字");
+  assert.ok(!/<DropdownMenuItem[^>]*>\{avatar\}/.test(avatar), "归属说明做成了可点项：它只是说明，不该看起来能点");
   assert.ok(/sidebar\.new_session_here/.test(avatar), "头像菜单没有「新建会话」入口");
   assert.ok(/title=\{trigger_label\}["\s\S]{0,80}?aria-label=\{trigger_label\}/.test(avatar), "头像没有可访问名称：默认头像都长一样，读屏分不出是谁");
 });

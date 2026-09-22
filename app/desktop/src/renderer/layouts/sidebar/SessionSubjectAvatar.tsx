@@ -17,7 +17,7 @@
  *
  * ```text
  * [头像 ▾]  会话标题                                  ⋯
- *            ├ Agent 名（当前归属，仅作说明）
+ *            ├ [头像] Agent 名（当前归属，仅作说明）
  *            └ 新建会话
  * ```
  *
@@ -81,11 +81,19 @@ export function SessionSubjectAvatar({ kind, agent, group, agents, subject_label
     <DropdownMenuContent align="start" sideOffset={4} onClick={(event) => event.stopPropagation()}>
       {/* `DropdownMenuLabel` 就是 Base UI 的 `Menu.GroupLabel`，**必须**住在 `Menu.Group` 里：
           不包就会在打开菜单时直接抛 `MenuGroupContext is missing`（类型检查抓不到）。
-          这个菜单本来也就是一个对象菜单：归属名是这一组的标题，新建会话是组内动作。 */}
+          这个菜单本来也就是一个对象菜单：归属是这一组的标题，新建会话是组内动作。 */}
       <DropdownMenuGroup>
-        {/* 当前归属只作说明，不是可执行项：它回答「这是谁的会话」，而那个问题
-            已经由头像回答了，这里再给一遍文字只是为了确认。 */}
-        <DropdownMenuLabel className="max-w-56 truncate">{subject_label}</DropdownMenuLabel>
+        {/* 第一项是**说明**，不是可执行项：它回答「这是谁的会话」，而那个问题已经由头像
+            回答了，这里再给一遍头像与名字只是为了确认。因此它是 Label 而不是 MenuItem——
+            做成可点项会让用户以为点它能做什么。
+
+            保留 Label 还有一个必要原因：菜单项的 `[&>svg]:size-3.5` 是**直接子元素**选择器，
+            权重高于 `AgentAvatar` 自己的 `size-5`，会把头像压成 14px。
+            Label 不带这个规则，头像因此能保持与行内同一尺寸。 */}
+        <DropdownMenuLabel className="flex items-center gap-2.5 py-1.5">
+          {avatar}
+          <span className="min-w-0 flex-1 truncate text-xs font-normal text-foreground">{subject_label}</span>
+        </DropdownMenuLabel>
         <DropdownMenuItem disabled={!agent && !group} onClick={on_new_session}>
           <TbPlus /><span>{translate("sidebar.new_session_here")}</span>
         </DropdownMenuItem>
