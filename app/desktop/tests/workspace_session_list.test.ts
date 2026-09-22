@@ -270,6 +270,12 @@ test("会话列表分页，且窗口覆盖当前项与已选项", () => {
   assert.ok(/\{hidden_count > 0 \? <SidebarItem/.test(session_list), "「更多」在还有未列出时没有出现");
   assert.ok(/disabled=\{session_selection\.selection_mode\}/.test(session_list), "多选时仍能加载新行：选了多少会变得难以核对");
   assert.ok(/onSelect=\{on_load_more\}/.test(session_list), "「更多」没有接到加载动作");
+  // 「更多」的箭头必须与归属头像同格（`tree.leading`），否则它的文字比上面那些会话多缩进一列。
+  // 它也不是会话：靠 `tone="secondary"` 的灰字区分，而不是靠错开的位置。
+  const more_row = session_list.slice(session_list.indexOf("{hidden_count > 0 ? <SidebarItem"));
+  assert.ok(/leading: <span className=\{sidebar_tree_leading_icon_class_name\}>/.test(more_row), "「更多」的箭头不在行首槽：它的文字会与上面的会话错开一列");
+  assert.ok(!/icon: <TbChevronDown/.test(more_row), "「更多」又把箭头放回了名字前的图标位");
+  assert.ok(/tone="secondary"/.test(more_row), "「更多」没有弱化文字：它会被读成又一条会话");
   // 一页的条数与窗口规则在纯函数模块里，可单测。
   const paging = read_without_comments(path.join(sidebar_root, "workspaceSessionPaging.ts"));
   assert.ok(/export const session_page_size = 10;/.test(paging), "一页不是 10 条");

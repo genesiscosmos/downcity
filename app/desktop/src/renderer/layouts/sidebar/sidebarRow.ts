@@ -372,6 +372,18 @@ export const sidebar_tree_chevron_placeholder_class_name = "size-6 shrink-0";
 export const sidebar_tree_icon_placeholder_class_name = "size-4 shrink-0";
 
 /**
+ * 树行行首的**静态图标**：叶子行自己带的一个图标（如「更多」的下箭头）。
+ *
+ * 它与展开箭头、归属头像**同格**（`size-6`），因此这类行的文字与同层其它树行落在同一条线上；
+ * 字形取 `size-3.5`——与展开箭头里的字形同尺寸，两种行首在同一格里重量一致。
+ *
+ * 它**不是按钮**：整行已经是可点的标签按钮，再放一个按钮就成了嵌套。
+ * 这也是它不复用 `sidebar_disclosure_class_name` 的原因——那个类自带 hover 与焦点环，
+ * 属于「自己就是一个动作」的箭头；这里的图标不承担任何动作，只是给这一行一个可辨认的行首。
+ */
+export const sidebar_tree_leading_icon_class_name = "flex size-6 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-3.5";
+
+/**
  * 树行的展开箭头：一个**完整的小按钮**（`size-6`、可悬停、带焦点环）。
  *
  * 尺寸与样式与重构前一致：它是行内唯一“自己就是一个动作”的元素，

@@ -56,6 +56,7 @@ import { use_translation } from "@/locales/i18n";
 import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopAgentSummary, DesktopGroupSummary, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 import type { WorkspaceSessionRow } from "./workspaceSessionRows";
+import { sidebar_tree_leading_icon_class_name } from "./sidebarRow";
 import { SidebarContent } from "./SidebarPanel";
 import { SidebarEmptyState } from "./SidebarEmptyState";
 import { SidebarItem, SidebarSubText } from "./SidebarItem";
@@ -354,9 +355,12 @@ function WorkspaceSessions({ controller, agents, rows, hydrated, selected_sessio
   {/* 「更多」只在确实还有未列出的时候出现：它是一条**加载**入口，不是“全部对话”菜单——
       这里没有上限可绕过，所以直接再取一页比弹一个列表更直接。
       它住在会话列表的最后一行，与「新建对话」在根行上一样，都属于“对这一列做点什么”。 */}
+  {/* 箭头走 `tree.leading`（与归属头像同格）而不是 `tree.icon`：后者会把文字往右推
+      「图标 16 + 间距 4」，使这一行比上面的会话行多缩进一列。它在这一层是**行首图标**，
+      不是名字的一部分；`tone="secondary"` 再把它弱化一档，与上面那些会话行区分开。 */}
   {hidden_count > 0 ? <SidebarItem
     variant="default"
-    tree={{ indent: 1, icon: <TbChevronDown /> }}
+    tree={{ indent: 1, leading: <span className={sidebar_tree_leading_icon_class_name}><TbChevronDown /></span> }}
     tone="secondary"
     // 多选时不收新行：已选项已经保证可见，再展开会让“选了多少”变得难以核对。
     disabled={session_selection.selection_mode}
