@@ -186,7 +186,7 @@ function build_city_context(
     agents,
     workspaces,
     files: options.files_for(power_context.agent.id, input.group_id),
-    call_id: power_context.call.id,
+    tool_call_id: power_context.call.tool_call_id ?? null,
     interactions: power_context.call.interactions,
     ...(options.embassy ? { embassy: options.embassy } : {}),
     ...(abort_signal ? { abort_signal } : {}),

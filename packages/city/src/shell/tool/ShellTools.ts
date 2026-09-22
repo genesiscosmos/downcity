@@ -43,7 +43,7 @@ function resolve_shell_execution_context(
     ...(turn_id
       ? { session: { session_id: context.session_id, turn_id } }
       : {}),
-    ...(context.tool_call_id ? { call_id: context.tool_call_id } : {}),
+    ...(context.tool_call_id ? { tool_call_id: context.tool_call_id } : {}),
     ...(context.abort_signal ? { abort_signal: context.abort_signal } : {}),
     approval_gateway: context.interactions?.approval,
     ...(context.workspace_env ? { workspace_env: context.workspace_env } : {}),

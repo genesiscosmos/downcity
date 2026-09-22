@@ -37,8 +37,12 @@ export interface ShellExecutionContext {
     /** 当前 Turn 标识。 */
     readonly turn_id: string;
   };
-  /** 当前 Shell Tool Call 标识。 */
-  readonly call_id?: string;
+  /**
+   * 当前 Shell Tool Call 标识。
+   *
+   * 关键点（中文）：与模型协议的 `tool_call_id` 同名同义，审批事件据此关联 Tool Part。
+   */
+  readonly tool_call_id?: string;
   /** 当前调用的取消信号。 */
   readonly abort_signal?: AbortSignal;
   /** 当前 Session 注入的统一审批端口；缺失时 host 执行按拒绝处理。 */

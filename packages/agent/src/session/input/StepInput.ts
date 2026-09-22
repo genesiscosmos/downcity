@@ -29,7 +29,6 @@ import type {
 import type { SessionStepExecutionInput } from "@/types/session/SessionExecution.js";
 import type { StepInputOptions } from "@/types/session/StepInput.js";
 import type { SessionTurnContext } from "@/types/turn/SessionTurnContext.js";
-import type { SessionToolExecutionContext } from "@/types/turn/SessionToolExecutionContext.js";
 import type { SessionDerivedStore } from "@/types/store/SessionStorage.js";
 import { is_action_result } from "@downcity/type";
 import { SESSION_HOOK_POINTS } from "@downcity/type";

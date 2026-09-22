@@ -202,7 +202,7 @@ export class Shell {
       ...payload,
       ...(session_id ? { owner_context_id: session_id } : {}),
       ...(turn_id ? { turn_id } : {}),
-      ...(execution.call_id ? { tool_call_id: execution.call_id } : {}),
+      ...(execution.tool_call_id ? { tool_call_id: execution.tool_call_id } : {}),
     };
     switch (action) {
       case "start":

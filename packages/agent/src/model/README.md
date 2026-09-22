@@ -98,7 +98,6 @@ types/model/
 types/turn/
   SessionTurnContext.ts     一个 Turn 的执行上下文
   SessionAssistantOutput.ts Turn 的 Assistant 输出端口
-  SessionToolExecutionContext.ts  Tool 执行上下文
 
 session/input/
   StepInput.ts             每步模型输入与冻结 system

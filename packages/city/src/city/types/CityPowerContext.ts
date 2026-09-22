@@ -70,8 +70,8 @@ export interface CityPowerContext {
   readonly embassy?: Embassy;
   /** 当前 Turn 的取消信号。 */
   readonly abort_signal?: AbortSignal;
-  /** 当前调用的稳定标识，用于归属审批与交互。 */
-  readonly call_id: string;
+  /** 当前调用的工具调用标识，用于归属审批与交互；非工具入口为空。 */
+  readonly tool_call_id: string | null;
   /**
    * 当前调用的交互入口。
    *

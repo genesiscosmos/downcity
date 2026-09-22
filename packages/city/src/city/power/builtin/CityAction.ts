@@ -108,9 +108,16 @@ export abstract class CityAction<TArgs = Record<string, never>> implements AnyCi
           message: `Action "${this.action}" requires approval, but this call has no Session to ask.`,
         });
       }
+      // 审批必须归属到真实的模型工具调用；无工具身份的入口（HTTP/RPC）不能凭空批准。
+      if (!context.tool_call_id) {
+        throw new CityActionError({
+          code: "internal",
+          message: `Action "${this.action}" requires approval, but this call has no Tool Call identity.`,
+        });
+      }
       const decision = await approval.request({
         turn_id: context.turn_id || "",
-        tool_call_id: context.call_id,
+        tool_call_id: context.tool_call_id,
         tool_name: `city.${this.action}`,
         description: this.description,
         payload: { operation: "tool", validated_input: args as never },

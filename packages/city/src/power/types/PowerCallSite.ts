@@ -41,8 +41,14 @@ export interface PowerCallSite {
   /** 当前 Step 提交的 Agent 指令快照。 */
   readonly agent_instructions?: readonly string[];
 
-  /** 上游调用标识；缺失时由容器生成。 */
-  readonly call_id?: string;
+  /**
+   * 上游模型协议分配的工具调用标识。
+   *
+   * 关键点（中文）
+   * - 与 `ToolCallContext.tool_call_id` 同名同义；非工具入口（HTTP/RPC/hook）为空。
+   * - 它必须来自上游，容器不得自行合成：审批需要用它回查真实 Tool Part。
+   */
+  readonly tool_call_id?: string;
 
   /** 上游取消信号。 */
   readonly abort_signal?: AbortSignal;
@@ -60,7 +66,7 @@ export interface PowerCallSite {
  */
 export type PowerCallSiteOverride = Pick<
   PowerCallSite,
-  "session_id" | "session_origin" | "turn_id" | "workspace_env" | "agent_instructions" | "call_id"
+  "session_id" | "session_origin" | "turn_id" | "workspace_env" | "agent_instructions" | "tool_call_id"
 >;
 
 /**

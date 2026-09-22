@@ -208,7 +208,7 @@ async function run_shell_tool(input: {
     session_origin: snapshot.session_origin ?? { type: "chat" },
     ...(snapshot.turn_id ? { turn_id: snapshot.turn_id } : {}),
     abort_signal: call.abort_signal,
-    tool_call_id: call.id,
+    ...(call.tool_call_id ? { tool_call_id: call.tool_call_id } : {}),
     messages: [],
     interactions: call.interactions,
     ...(snapshot.workspace_env

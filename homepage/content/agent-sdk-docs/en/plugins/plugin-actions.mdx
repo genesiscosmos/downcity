@@ -16,25 +16,25 @@ const status = create_action({
   description: "Read the current execution scope.",
   input_schema: { zod: z.object({}) },
   timeout_ms: 30_000,
-  execute: async ({ context, execution }) => ({
+  execute: async ({ context }) => ({
     success: true,
     data: {
       agent_id: context.agent.id,
       workspace_id: context.workspace.id,
       session_id: context.session?.id ?? null,
       turn_id: context.turn?.id ?? null,
-      call_id: execution.call_id,
+      tool_call_id: context.call.tool_call_id ?? null,
     },
   }),
 });
 ```
 
-Each call receives two read-only inputs:
+Each call receives one read-only input, `context`. It carries the restricted City, Agent,
+Workspace, Session, Turn, Config, and Storage handles along with the call identity.
+`context.call.tool_call_id` is the model-assigned Tool Call ID (empty for non-tool entries), and
+`context.abort_signal` is the cancellation signal for this call.
 
-- `context` is the City-created scope capability with restricted City, Agent, Workspace, Session, Turn, Config, and Storage handles.
-- `execution` is the call identity with `call_id`, `abort_signal`, optional Session scope, and Step snapshot.
-
-Actions should pass `execution.abort_signal` to network requests, polling, and long-running work.
+Actions should pass `context.abort_signal` to network requests, polling, and long-running work.
 `timeout_ms` only triggers cooperative cancellation; underlying operations must observe the signal.
 The returned `PluginActionResult` must be JSON-serializable.
 

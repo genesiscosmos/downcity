@@ -378,7 +378,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       power_id,
     ]);
     const call = create_power_call({
-      ...(site.call_id ? { call_id: site.call_id } : {}),
+      ...(site.tool_call_id ? { tool_call_id: site.tool_call_id } : {}),
       ...(site.interactions ? { interactions: site.interactions } : {}),
       abort_signal: site.abort_signal ?? new AbortController().signal,
       label: `power:${power_id}`,

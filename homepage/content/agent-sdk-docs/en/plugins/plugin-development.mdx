@@ -27,13 +27,13 @@ class ExamplePlugin extends Plugin {
     status: create_action({
       description: "Return the current scope.",
       input_schema: { zod: z.object({}) },
-      execute: async ({ context, execution }) => ({
+      execute: async ({ context }) => ({
         success: true,
         data: {
           agent_id: context.agent.id,
           workspace_id: context.workspace.id,
           session_id: context.session?.id ?? null,
-          call_id: execution.call_id,
+          tool_call_id: context.call.tool_call_id ?? null,
         },
       }),
     }),

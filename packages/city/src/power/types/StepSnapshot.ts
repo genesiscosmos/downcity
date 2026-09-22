@@ -4,7 +4,7 @@
  * 关键点（中文）
  * - 快照每 Step 冻结一次，表达「模型这一步看到了什么」，不是「现在是什么」。
  * - 与活句柄的区别：`PowerContext.workspace.env` 读当前值，本快照读 Step 开始时提交的值。
- * - 不含 `call_id`：一个 Step 可以发起多次调用，调用身份属于 `PowerCall`。
+ * - 不含 `tool_call_id`：一个 Step 可以发起多次调用，调用身份属于 `PowerCall`。
  */
 
 import type { PowerJsonValue } from "./Json.js";

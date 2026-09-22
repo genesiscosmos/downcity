@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { MockModelClient } from "../../agent/scripts/ModelClientMock.mjs";
 import { Agent } from "@downcity/agent";
-import { City, Workspace } from "@downcity/city";
+import { City, LocalStorageProvider, Workspace } from "@downcity/city";
 import { Shell } from "@downcity/city";
 import { create_test_sandbox_provider } from "./PlatformSandbox.mjs";
 
@@ -135,7 +135,11 @@ test("host Shell 审批保留当前 Turn 并等待用户决定", async () => {
     shell: new Shell({ sandbox_provider }),
   });
   // shell 属于 Workspace，但只在模型面以 City 注册的 `shell` power 暴露。
-  const city = new City({ workspaces: [workspace] });
+  // 存储必须落到临时目录：Shell 会在 data_path 下创建真实执行目录。
+  const city = new City({
+    workspaces: [workspace],
+    storage: new LocalStorageProvider(path.join(project_root, "city-data")),
+  });
   city.agents.add(agent);
   await city.powers.settled();
 

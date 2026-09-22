@@ -249,11 +249,6 @@ export type {
   SessionTurnContext,
   SessionTurnContextInit,
 } from "./types/turn/SessionTurnContext.js";
-export type { SessionToolExecutionContext } from "./types/turn/SessionToolExecutionContext.js";
-export type {
-  ToolActionExecutionContext,
-  ToolSessionExecutionScope,
-} from "./types/tools/ToolActionExecutionContext.js";
 export type { SessionActionEvent, SessionActionStatus } from "@downcity/type";
 export {
   extract_session_message_text,
