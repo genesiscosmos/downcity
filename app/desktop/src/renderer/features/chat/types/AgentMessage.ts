@@ -132,6 +132,14 @@ export interface AgentActivityPresentation {
   tool_identity?: AgentToolIdentity;
   /** 当前生命周期对应的翻译 key。 */
   state_key: string;
+  /**
+   * canonical Tool 生命周期状态。
+   *
+   * Power 的状态文案需要在模板里插入动作词（`已{{action}}`），
+   * 而 `state_key` 已经是收敛后的翻译 key（六态压成三态），无法反推出原状态，
+   * 因此这里保留一份原始状态。Action 没有这个概念，固定为 undefined。
+   */
+  state?: SessionAgentToolPart["state"];
   /** 活动行样式语气。 */
   tone: AgentActivityTone;
   /**

@@ -216,6 +216,7 @@ export function resolve_agent_tool_presentation(
     visual_kind,
     tool_identity: identity,
     state_key: resolve_tool_state_key(visual_kind, part.state),
+    state: part.state,
     tone: resolve_tool_tone(part.state),
     diff_stat: resolve_diff_stat(part, identity),
     summary: summarize_by_identity(part, identity),
@@ -541,29 +542,36 @@ export function chat_power_names(lookup: ChatPowerLookup): ReadonlySet<string> {
 }
 
 /**
- * 把一次 Power 调用解析为行内两段文案。
+ * 把一次 Power 调用解析为**一整句状态文案**。
  *
- * 关键点（中文）：**只有 Power 有身份槽**。内置工具的状态词本身就是动词（「已读取」），
- * 再补一层「读取文件」就是把同一件事说两遍；未知工具则原样显示注册名。
- * 因此这里只接受 Power 身份，不接收整个联合类型。
+ * 关键点（中文）：Power 行不拆成「状态 + 名字 + 动作」三段。
  *
- * - 标题取自 catalog 或 City 登记（`city` / `shell` 不在 catalog，走登记）。
- * - 动作取自 i18n 字典；未命中时**原样显示 action id**——那是契约里的名字，
- *   拆点号或改写会误导。
- * - 输入未收口时 action 为空，此时只有标题（如「Shell」），不显示分隔符。
+ * 此前的行是 `已调用 Shell · 执行命令`：状态词说“调用”、名字说“谁”、动作说“做什么”，
+ * 三件事说了一件事；用户需要的是“这一步做了什么”，而不是它属于哪个模块。
+ * 现在状态模板直接吸收动作，得到 `已执行命令`——一句话，一个动词短语。
+ *
+ * 两处降级：
+ * - **动作没有中文标签**（第三方 power）：无法拼出“已搜索记忆”这种句子，
+ *   回退到 `已调用 <power 名>`，至少说清是哪个模块。
+ * - **输入未收口**（还不知道要做什么）：同上回退。
+ *
+ * 失败态用 `{{action}}失败` 而不是“调用失败”：`读取环境失败` 比 `调用失败` 更能定位问题。
  */
-export function resolve_power_identity_text(
+export function resolve_power_state_text(
   power_name: string,
   action_name: string,
+  state: SessionAgentToolPart["state"],
   lookup: ChatPowerLookup,
   translate: (key: string, options?: Record<string, string>) => string,
-): { label: string; action: string } {
-  const label = lookup.get(power_name)?.title || power_name;
-  if (!action_name) return { label, action: "" };
+): string {
+  const phase = state === "failed" ? "failed" : state === "completed" ? "completed" : "running";
+  const title = lookup.get(power_name)?.title || power_name;
   const key = `activity.action_label.${power_name}.${action_name}`;
-  const translated = translate(key);
-  // i18next 未命中时返回 key 本身；此时回退到 action id 原文，而不是把 key 渲染给用户。
-  return { label, action: translated === key ? action_name : translated };
+  const label = action_name ? translate(key) : "";
+  // i18next 未命中时返回 key 本身；那不是可读文案，不能拼进句子。
+  const known = Boolean(action_name) && label !== key;
+  if (!known) return translate(`activity.power_call.${phase}`, { name: title });
+  return translate(`activity.power.${phase}`, { action: label });
 }
 /** 将 Tool 生命周期收敛为对应视觉种类的翻译 key。 */
 function resolve_tool_state_key(visual_kind: AgentToolVisualKind, state: SessionAgentToolPart["state"]): string {

@@ -7,7 +7,7 @@ import { AgentInteraction } from "@/features/chat/components/messages/AgentInter
 import { use_chat_power_lookup } from "@/features/chat/components/messages/ChatPowerLookup";
 import { use_open_interaction_tab } from "@/features/chat/panel/InteractionPanel";
 import { PowerIcon } from "@/features/power/lib/PowerIcon";
-import { chat_power_names, resolve_agent_action_presentation, resolve_agent_tool_presentation, resolve_power_identity_text, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_activity_presentation";
+import { chat_power_names, resolve_agent_action_presentation, resolve_agent_tool_presentation, resolve_power_state_text, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "@/features/chat/lib/message/agent_activity_presentation";
 import type { AgentActivityDetail, AgentActivityDiffStat, AgentActivityEditPair, AgentActivityPart, AgentActivityPresentation, AgentActivityTone, AgentActivityVisualKind, ChatPowerLookup } from "@/features/chat/types/AgentMessage";
 import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
@@ -98,7 +98,6 @@ function AgentReasoning({ part, message_streaming }: { part: SessionAgentReasoni
     diff_stat={null}
     state={translate_chat(running ? "activity.thinking" : "activity.thought")}
     identity={reasoning_preview(text)}
-    identity_action=""
     summary=""
     body={<div className="reasoning-activity-content"><div className="reasoning-block">{text}</div></div>}
   />;
@@ -162,8 +161,6 @@ interface ActivityRowSummary {
   state: string;
   /** 身份主文案；永不截断。 */
   identity: string;
-  /** 身份次要文案（power 的 action）；为空时整段不渲染。 */
-  identity_action: string;
   /** 弱化摘要（目标对象或参数预览）；为空时整段不渲染。 */
   summary: string;
   /** 展开内容；为空时该行不可展开。 */
@@ -173,24 +170,36 @@ interface ActivityRowSummary {
 /**
  * 由展示映射生成活动行内容；Tool 与 Action 共用它，两者只有映射来源不同。
  *
- * 关键点（中文）：**只有 Power 有独立身份槽**。内置工具的状态词本身就是动词（「已读取」），
- * 摘要就是它的目标；Action 的主文案就是标题；未知工具原样显示注册名。
- * 三者都直接占身份位、摘要位留空——否则会渲染成「已读取 读取文件 src/a.ts」
- * 或「custom_tool custom_tool」这种把同一件事说两遍的行。
+ * 关键点（中文）：**行内只有一段主文案**，它放在身份槽（永不截断）。
+ *
+ * - Power：文案是“一句话动词短语”（`已执行命令`），由 `resolve_power_state_text` 拼出，
+ *   它已经吸收了状态与动作，因此状态槽留空——否则会渲染成 `已调用 已执行命令`。
+ * - 内置工具：状态槽是动词（`已读取`），身份槽是目标（`src/a.ts`）。
+ * - Action：状态槽是生命周期，身份槽是标题。
  */
 function row_from_presentation(presentation: AgentActivityPresentation, translate: (key: string, options?: Record<string, string>) => string, lookup: ChatPowerLookup): ActivityRowSummary {
   const power = presentation.tool_identity?.kind === "power" ? presentation.tool_identity : undefined;
-  const identity = power
-    ? resolve_power_identity_text(power.power_name, power.action_name, lookup, translate)
-    : { label: presentation.summary, action: "" };
+  if (power) {
+    return {
+      icon: <ActivityIcon visual_kind={presentation.visual_kind} power_name={power.power_name} />,
+      tone: presentation.tone,
+      diff_stat: presentation.diff_stat,
+      // 状态槽留空：power 的完整语义都在下面这句里。
+      state: "",
+      identity: resolve_power_state_text(power.power_name, power.action_name, presentation.state ?? "running", lookup, translate),
+      summary: presentation.summary,
+      body: presentation.detail || presentation.error
+        ? <ActivityDetail detail={presentation.detail} error={presentation.error} input_streaming={presentation.input_streaming} />
+        : undefined,
+    };
+  }
   return {
-    icon: <ActivityIcon visual_kind={presentation.visual_kind} power_name={power?.power_name} />,
+    icon: <ActivityIcon visual_kind={presentation.visual_kind} />,
     tone: presentation.tone,
     diff_stat: presentation.diff_stat,
     state: translate(presentation.state_key),
-    identity: identity.label,
-    identity_action: identity.action,
-    summary: power ? presentation.summary : "",
+    identity: presentation.summary,
+    summary: "",
     body: presentation.detail || presentation.error
       ? <ActivityDetail detail={presentation.detail} error={presentation.error} input_streaming={presentation.input_streaming} />
       : undefined,
@@ -208,7 +217,6 @@ function summarize_activity(part: AgentActivityPart, message_streaming: boolean,
     diff_stat: null,
     state: translate(running ? "activity.thinking" : "activity.thought"),
     identity: reasoning_preview(part.text),
-    identity_action: "",
     summary: "",
   };
 }
@@ -222,13 +230,12 @@ function summarize_activity(part: AgentActivityPart, message_streaming: boolean,
  * 身份与参数之间的 `·` 是真实文本节点，不是 CSS 造的视觉间距：读屏要能听出
  * 「Shell · 执行命令 · pnpm test」的停顿，靠 `gap` 会连读成一个词。
  */
-function ActivityRow({ icon, tone, diff_stat, state, identity, identity_action, summary, badge, body, extra_body, auto_open, auto_open_key = "", summary_class_name }: {
+function ActivityRow({ icon, tone, diff_stat, state, identity, summary, badge, body, extra_body, auto_open, auto_open_key = "", summary_class_name }: {
   /** 行首图标。 */ icon: ReactNode;
   /** 行样式语气。 */ tone: AgentActivityTone;
   /** 改动行数标签；为 null 时不渲染。 */ diff_stat: AgentActivityDiffStat | null;
-  /** 本地化后的状态文案。 */ state: string;
+  /** 本地化后的状态文案；为空时整段不渲染（power 把状态并入了主文案）。 */ state: string;
   /** 身份主文案；永不截断。 */ identity: string;
-  /** 身份次要文案（power 的 action）。 */ identity_action: string;
   /** 弱化摘要。 */ summary: string;
   /** 可选的计数徽标。 */ badge?: string;
   /** 展开内容；为空时该行不可展开。 */ body?: ReactNode;
@@ -251,12 +258,8 @@ function ActivityRow({ icon, tone, diff_stat, state, identity, identity_action, 
   const has_expandable = Boolean(body) || Boolean(extra_body);
   const summary_content = <span className="activity-tool-main">
     {icon}
-    <span className="activity-tool-state">{state}</span>
+    {state ? <span className="activity-tool-state">{state}</span> : null}
     <span className="activity-tool-identity">{identity}</span>
-    {identity_action ? <>
-      <span className="activity-tool-identity-separator" aria-hidden>·</span>
-      <span className="activity-tool-identity">{identity_action}</span>
-    </> : null}
     {summary ? <span className="activity-tool-target" title={summary}>{summary}</span> : null}
     {badge ? <span className="activity-tool-pill activity-tool-count">{badge}</span> : null}
     {diff_stat ? <DiffStatTag stat={diff_stat} /> : null}

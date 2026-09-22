@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionAgentActionPart, SessionAgentInteraction, SessionAgentMessagePart, SessionAgentToolPart } from "@downcity/agent";
-import { chat_power_names, read_streaming_input_values, resolve_agent_action_presentation, resolve_agent_tool_identity, resolve_agent_tool_presentation, resolve_chat_power_lookup, resolve_power_identity_text, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "../src/renderer/features/chat/lib/message/agent_activity_presentation.ts";
+import { chat_power_names, read_streaming_input_values, resolve_agent_action_presentation, resolve_agent_tool_identity, resolve_agent_tool_presentation, resolve_chat_power_lookup, resolve_power_state_text, select_activity_summary_part, should_auto_open_agent_activity, should_auto_open_agent_tool } from "../src/renderer/features/chat/lib/message/agent_activity_presentation.ts";
 import type { AgentActivityPart, AgentActivityTone } from "../src/renderer/features/chat/types/AgentMessage.ts";
 
 function create_tool(tool_name: string, sequence: number, input: Record<string, unknown> = {}): SessionAgentToolPart {
@@ -64,38 +64,41 @@ test("子串相似的名字不再被误判", () => {
   }
 });
 
-test("Power 身份文案为「标题 · 动作」，未命中字典时回退到 action id", () => {
-  const translate = (key: string) => {
+/**
+ * Power 行是一整句动词短语，而不是「状态 + 名字 + 动作」三段。
+ *
+ * 这里用与 zh/chat.json 等价的模板复现 `已{{action}}` 的拼法：
+ * 状态模板吸收动作，power 名不再出现在行内。
+ */
+test("Power 状态文案吸收动作，不再显示 power 名", () => {
+  const translate = (key: string, options?: Record<string, string>) => {
     const table: Record<string, string> = {
+      "activity.power.running": "正在{{action}}",
+      "activity.power.completed": "已{{action}}",
+      "activity.power.failed": "{{action}}失败",
+      "activity.power_call.running": "正在调用 {{name}}",
+      "activity.power_call.completed": "已调用 {{name}}",
+      "activity.power_call.failed": "{{name}} 调用失败",
       "activity.action_label.shell.exec": "执行命令",
-      "activity.action_label.city.env.get": "读取环境",
+      "activity.action_label.shell.session_read": "读取输出",
+      "activity.action_label.memory.search": "搜索记忆",
     };
-    return table[key] ?? key;
+    const template = table[key];
+    if (template === undefined) return key;
+    return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) => options?.[name] ?? "");
   };
-  // catalog 命中：用标题；字典未命中的 action 原样显示 id。
-  assert.deepEqual(
-    resolve_power_identity_text("memory", "search", power_lookup, translate),
-    { label: "Memory", action: "search" },
-  );
-  // City 直接注册的 power：用登记标题。
-  assert.deepEqual(
-    resolve_power_identity_text("shell", "exec", power_lookup, translate),
-    { label: "Shell", action: "执行命令" },
-  );
-  assert.deepEqual(
-    resolve_power_identity_text("city", "env.get", power_lookup, translate),
-    { label: "City", action: "读取环境" },
-  );
-  // 第三方 power 的 action 不拆点号：那是契约里的名字。
-  assert.deepEqual(
-    resolve_power_identity_text("custom_power", "accounts.snapshot", power_lookup, translate),
-    { label: "custom_power", action: "accounts.snapshot" },
-  );
-  // 输入未收口：只有标题，没有分隔符。
-  assert.deepEqual(
-    resolve_power_identity_text("shell", "", power_lookup, translate),
-    { label: "Shell", action: "" },
-  );
+
+  // 核心：一句话，且不含 power 名。
+  assert.equal(resolve_power_state_text("shell", "exec", "completed", power_lookup, translate), "已执行命令");
+  assert.equal(resolve_power_state_text("shell", "session_read", "running", power_lookup, translate), "正在读取输出");
+  assert.equal(resolve_power_state_text("memory", "search", "completed", power_lookup, translate), "已搜索记忆");
+  // 失败态说清是哪一步失败，而不是笼统的“调用失败”。
+  assert.equal(resolve_power_state_text("shell", "exec", "failed", power_lookup, translate), "执行命令失败");
+
+  // 第三方 power 没有中文标签：无法拼出句子，回退到“已调用 <power 名>”。
+  assert.equal(resolve_power_state_text("custom_power", "accounts.snapshot", "completed", power_lookup, translate), "已调用 custom_power");
+  // 输入未收口（还不知道要做什么）：同上回退。
+  assert.equal(resolve_power_state_text("shell", "", "running", power_lookup, translate), "正在调用 Shell");
 });
 
 /**

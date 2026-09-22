@@ -231,3 +231,23 @@ test("活动行的计数与改动标签共用同一个胶囊基类", () => {
     }
   }
 });
+
+/**
+ * 活动行图标容器不得统一写 `stroke-width`。
+ *
+ * Tabler 有两类图形语言：描边图标（`fill:none` + `stroke-width:2`）与实心图标
+ * （只有 `fill:currentColor`，没有 stroke）。容器上写 `stroke-width` 对两者效果相反：
+ * 描边图标变细，而实心图标因为“描边变得可绘制”反而多套一圈线、变得更粗。
+ *
+ * skill 的 `TbPillFilled` 是图标表里唯一的实心项，因此这条断言直接锁容器，
+ * 而不是锁某个具体图标。
+ */
+test("活动行图标容器不统一改线宽", () => {
+  const styles = fs.readFileSync(path.join(renderer_root, "styles/chat.css"), "utf8");
+  const rule = /\.activity-tool-icon \{([^}]*)\}/.exec(styles);
+  assert.ok(rule, "chat.css 里找不到 .activity-tool-icon 的定义");
+  assert.ok(
+    !rule![1]!.includes("stroke-width"),
+    "活动行图标容器又写了 stroke-width：它会让实心图标（如 skill 的 TbPillFilled）反而变粗；要收细单个图标请写它自己的类",
+  );
+});
