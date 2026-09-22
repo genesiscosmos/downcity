@@ -42,7 +42,8 @@ export async function close_all_shell_sessions(
     .map((result) => result.shell_id);
   if (failed_shell_ids.length > 0) {
     throw new Error(
-      `Shell processes did not exit after termination: ${failed_shell_ids.join(", ")}`,
+      "Shell processes did not report exit after SIGTERM and SIGKILL: "
+      + `${failed_shell_ids.join(", ")}`,
     );
   }
 }

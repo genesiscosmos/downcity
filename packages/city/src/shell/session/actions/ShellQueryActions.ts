@@ -211,7 +211,12 @@ export async function close_shell_session(
       request.force === true,
     );
     if (!process_exited) {
-      throw new Error(`Shell process did not exit after termination: ${shell_id}`);
+      // 走到这里说明 SIGTERM 与 SIGKILL 都已发出，但平台句柄仍未上报退出。
+      // 此时不伪造终态：进程可能真的还活着，谎报 killed 会掩盖真实状况。
+      throw new Error(
+        `Shell process did not report exit after SIGTERM and SIGKILL: ${shell_id}. `
+        + "The session stays running until the process actually exits.",
+      );
     }
   }
 
