@@ -8,6 +8,9 @@
  * 这里【不要】加 `content-visibility` 一类的离屏布局跳过：离屏行按占位高度记账、
  * 进入视口后再换成真实高度，而行高普遍相差一个数量级，会让用户向上浏览时
  * 反复看到内容被推走又弹回。原因与取舍见 `use_chat_scroll` 顶部注释。
+ *
+ * 分段级的离屏回收在更外层（`ChatRetainedSegment`）：它按实测高度做等高替换，
+ * 不动单行的布局语义；因此本组件始终渲染完整消息 DOM。
  */
 
 import type { ReactNode } from "react";

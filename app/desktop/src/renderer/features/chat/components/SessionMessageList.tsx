@@ -5,6 +5,7 @@ import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDif
 import { TbArrowUp } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { ChatMessageViewportRow } from "@/features/chat/components/ChatMessageViewportRow";
+import { ChatRetainedSegment } from "@/features/chat/components/ChatRetainedSegment";
 import { AgentMessage } from "@/features/chat/components/messages/AgentMessage";
 import { AgentRuntimeIndicator } from "@/features/chat/components/messages/AgentRuntimeIndicator";
 import { UserMessage } from "@/features/chat/components/messages/UserMessage";
@@ -13,6 +14,15 @@ import { use_translation } from "@/locales/i18n";
 import type { ChatHistoryState } from "@/types/DesktopView";
 import type { SessionMessageProjection, SessionMessageSegment as SessionMessageSegmentProjection } from "@/types/SessionProjection";
 import type { DesktopAgentSummary, DesktopChatRewriteInput, DesktopChatRuntime } from "@common/types/DesktopApi";
+
+/**
+ * 启用离屏分段回收所需的最小分段数。
+ *
+ * 卸载离屏内容会让它不再参与浏览器 Ctrl+F 查找与跨分段文本选择，这是实打实的功能损失；
+ * 短会话的 DOM 本来就不大，不值得为此付费。分段固定容纳 32 条消息，因此这里等价于
+ * 「约 96 条以上消息才启用」。
+ */
+const offscreen_recycle_min_segments = 3;
 
 /** 投影并渲染当前 Session 消息，同时保留分段、渐进挂载和单消息 memo 边界。 */
 export function SessionMessageList({ session_id, messages, agent, show_reasoning, respond_interaction, fork_message, rewrite_message, file_diff, runtime, history, load_earlier_history, can_use_history_actions, can_replace_session }: { /** 当前 Session 稳定标识。 */ session_id: string; /** canonical 消息集合。 */ messages: SessionMessage[]; /** Session 所属 Agent。 */ agent: DesktopAgentSummary; /** 是否展示 Reasoning。 */ show_reasoning: boolean; /** 响应 Interaction。 */ respond_interaction(input: RespondSessionInteractionInput): Promise<void>; /** 从消息创建分支 Session。 */ fork_message(message_id: string): Promise<void>; /** 重写 User Message。 */ rewrite_message?(input: DesktopChatRewriteInput): Promise<void>; /** 最新实时文件改动摘要。 */ file_diff?: SessionTurnFileDiffSummary; /** 当前 Session 运行态。 */ runtime?: DesktopChatRuntime; /** 更早历史分页状态。 */ history?: ChatHistoryState; /** 在保持滚动位置的前提下加载更早历史。 */ load_earlier_history?(): Promise<void>; /** 当前是否允许历史操作。 */ can_use_history_actions: boolean; /** 当前 Session 是否允许替换。 */ can_replace_session: boolean }) {
@@ -29,7 +39,7 @@ export function SessionMessageList({ session_id, messages, agent, show_reasoning
 
   return <>
     {history?.has_more && load_earlier_history ? <div className="flex justify-center py-1"><Button disabled={history.loading} onClick={() => void load_earlier_history()}><TbArrowUp />{translate_chat(history.loading ? "message.loading_earlier" : "message.load_earlier")}</Button></div> : null}
-    <ProgressiveMessageSegments key={session_id} segments={projection.segments}>{(segment) => <SessionMessageSegment key={segment.segment_id} segment={segment} agent={agent} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} rewrite_message={rewrite_message} file_diff={segment.has_streaming_message ? file_diff : undefined} can_use_history_actions={can_use_history_actions} can_replace_session={can_replace_session} />}</ProgressiveMessageSegments>
+    <ProgressiveMessageSegments key={session_id} segments={projection.segments} recycle_offscreen={projection.segments.length >= offscreen_recycle_min_segments}>{(segment, recycle_offscreen) => <ChatRetainedSegment key={segment.segment_id} segment_id={segment.segment_id} enabled={recycle_offscreen} streaming={segment.has_streaming_message}><SessionMessageSegment segment={segment} agent={agent} show_reasoning={show_reasoning} respond_interaction={respond_interaction} fork_message={fork_message} rewrite_message={rewrite_message} file_diff={segment.has_streaming_message ? file_diff : undefined} can_use_history_actions={can_use_history_actions} can_replace_session={can_replace_session} /></ChatRetainedSegment>}</ProgressiveMessageSegments>
     {runtime && !projection.has_streaming_message ? <AgentRuntimeIndicator agent={agent} status={runtime.status} file_diff={file_diff} /> : null}
   </>;
 }
@@ -66,7 +76,7 @@ const SessionMessageSegment = memo(function SessionMessageSegment({ segment, age
   && (!next.segment.has_streaming_message || previous.file_diff === next.file_diff));
 
 /** 切换 Session 时先挂载最新分段，再逐帧向前补齐历史。 */
-function ProgressiveMessageSegments({ segments, children }: { /** 按时间排序的消息分段。 */ segments: readonly SessionMessageSegmentProjection[]; /** 渲染一个已进入视图树的分段。 */ children(segment: SessionMessageSegmentProjection): ReactNode }) {
+function ProgressiveMessageSegments({ segments, recycle_offscreen, children }: { /** 按时间排序的消息分段。 */ segments: readonly SessionMessageSegmentProjection[]; /** 本会话是否启用离屏分段回收。 */ recycle_offscreen: boolean; /** 渲染一个已进入视图树的分段。 */ children(segment: SessionMessageSegmentProjection, recycle_offscreen: boolean): ReactNode }) {
   const [first_visible_segment_id, set_first_visible_segment_id] = useState<number>();
   const stored_start_index = first_visible_segment_id === undefined ? -1 : segments.findIndex((segment) => segment.segment_id === first_visible_segment_id);
   const start_index = stored_start_index >= 0 ? stored_start_index : Math.max(0, segments.length - 1);
@@ -76,7 +86,7 @@ function ProgressiveMessageSegments({ segments, children }: { /** 按时间排�
     const timer = window.setTimeout(() => set_first_visible_segment_id(next_segment_id), 24);
     return () => window.clearTimeout(timer);
   }, [next_segment_id]);
-  return <>{segments.slice(start_index).map(children)}</>;
+  return <>{segments.slice(start_index).map((segment) => children(segment, recycle_offscreen))}</>;
 }
 
 function assert_never(value: never): never { throw new Error(`不支持的 Session Message：${String((value as { role?: unknown }).role)}`); }

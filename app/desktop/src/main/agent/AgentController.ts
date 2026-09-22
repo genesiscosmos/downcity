@@ -96,6 +96,23 @@ const session_model_settings_key = "desktop.session-models";
 const session_reasoning_settings_key = "desktop.session-reasoning";
 const workspace_preview_max_bytes = 2 * 1024 * 1024;
 
+/**
+ * Desktop 在 Main 进程保留的 Session 运行时实例上限。
+ *
+ * Session 实例持有消息缓存、运行态与模型客户端引用；长列表里逐个点开过的会话会一直留在内存中。
+ * 超过该上限后按最久未打开优先释放，下次打开再从 Store 恢复。
+ */
+const max_idle_session_runtimes = 32;
+
+/**
+ * 判断一个 Session 运行态是否仍在执行。
+ *
+ * 执行中的 Session 不能被释放：取消信号、队列与 turn 归属都在实例上。
+ */
+function is_runtime_executing(runtime: DesktopChatRuntime | undefined): boolean {
+  return runtime?.status === "submitted" || runtime?.status === "streaming" || runtime?.status === "waiting_input";
+}
+
 /** 解析并约束模型返回的 Agent 草稿。 */
 function parse_agent_draft(text: string): DesktopAgentDraft {
   const json_text = text.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
@@ -290,7 +307,7 @@ export class AgentController {
 
   /** 当前是否存在仍在执行的对话，用于保护账户切换。 */
   has_active_sessions(): boolean {
-    return [...this.runtimes.values()].some((runtime) => runtime.status === "submitted" || runtime.status === "streaming" || runtime.status === "waiting_input");
+    return [...this.runtimes.values()].some((runtime) => is_runtime_executing(runtime));
   }
 
   /** 列出 CLI 与 Desktop 共用的 Agent 注册记录。 */
@@ -469,7 +486,7 @@ export class AgentController {
     await this.ready_promise;
     const current = this.data.agents.get(agent_id);
     if (!current) throw new Error(`Agent not found: ${agent_id}`);
-    if ([...this.runtimes.values()].some((runtime) => runtime.agent_id === current.agent_id && (runtime.status === "submitted" || runtime.status === "streaming" || runtime.status === "waiting_input"))) {
+    if ([...this.runtimes.values()].some((runtime) => runtime.agent_id === current.agent_id && is_runtime_executing(runtime))) {
       throw new Error("Agent 正在执行 Session，请等待执行结束后再编辑");
     }
     const model_id = String(input.model_id || "").trim();
@@ -531,7 +548,7 @@ export class AgentController {
     await this.ready_promise;
     const current = this.data.agents.get(agent_id);
     if (!current) return false;
-    if ([...this.runtimes.values()].some((runtime) => runtime.agent_id === current.agent_id && (runtime.status === "submitted" || runtime.status === "streaming" || runtime.status === "waiting_input"))) {
+    if ([...this.runtimes.values()].some((runtime) => runtime.agent_id === current.agent_id && is_runtime_executing(runtime))) {
       throw new Error("Agent 正在执行 Session，请等待执行结束后再删除");
     }
     const dependent_groups = this.data.groups.list().filter((group) => group.member_agent_ids.includes(current.agent_id));
@@ -969,6 +986,8 @@ export class AgentController {
   async get_chat_snapshot(agent_id: string, workspace_id: string, session_id: string): Promise<DesktopChatSnapshot> {
     const session = await this.get_session(agent_id, workspace_id, session_id);
     const page = await session.messages();
+    // 打开会话是用户访问的明确信号：在这里回收其他空闲实例，当前会话作为保护项。
+    this.trim_idle_session_runtimes(get_session_key(agent_id, workspace_id, session_id));
     return {
       messages: page.items.filter((message: SessionMessage) => message.visibility === "visible"),
       runtime: await this.read_runtime(agent_id, workspace_id, session),
@@ -1386,6 +1405,37 @@ export class AgentController {
     if (session_key in reasoning) {
       delete reasoning[session_key];
       this.data.settings.set(session_reasoning_settings_key, reasoning);
+    }
+  }
+
+  /**
+   * 释放空闲 Session 的订阅、运行态投影与 Main 进程实例，把缓存裁剪到上限内。
+   *
+   * 关键点（中文）
+   * - 只用于「空闲回收」：订阅必须先解除再释放实例，否则重新 `get()` 拿到的新实例不会被订阅，
+   *   后续 mutation 会静默丢失。
+   * - 不能复用 `release_session_projection`：那个方法同时删除持久化的模型与推理档位设置，
+   *   属于删除/归档语义；空闲回收后用户再打开同一会话，模型选择必须原样保留。
+   * - 执行中的会话不会被释放：取消信号、队列与 turn 归属都在实例上。
+   * - 淘汰顺序是「最早建立订阅」优先。`session_unsubscribes` 按插入顺序保存，而
+   *   `observe_session` 对已订阅的 key 会提前返回，因此重访旧会话不会刷新它的位置。
+   *   这比严格 LRU 保守，但能保证长期未碰的会话先离开。
+   * - `protected_session_key` 是当前正在查看的会话，永不释放。
+   */
+  private trim_idle_session_runtimes(protected_session_key?: string): void {
+    const idle_keys = [...this.session_unsubscribes.keys()].filter((session_key) =>
+      session_key !== protected_session_key && !is_runtime_executing(this.runtimes.get(session_key)),
+    );
+    const overflow = idle_keys.length - max_idle_session_runtimes;
+    if (overflow <= 0) return;
+    for (const session_key of idle_keys.slice(0, overflow)) {
+      // 先解除订阅：释放后实例会被丢弃，残留订阅只会让下一次打开不再收到事件。
+      this.session_unsubscribes.get(session_key)?.();
+      this.session_unsubscribes.delete(session_key);
+      this.runtimes.delete(session_key);
+      this.restored_session_models.delete(session_key);
+      const agent = this.city.agents.get(session_key.split(":")[0] ?? "");
+      agent?.sessions.release(session_key.split(":")[2] ?? "");
     }
   }
 
