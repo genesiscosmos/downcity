@@ -3,8 +3,6 @@
     "diagram": "Mermaid 图表",
     "rendering": "正在渲染图表…",
     "render_failed": "这张图表渲染失败",
-    "render_limited": "本会话已渲染 {{count}} 张图表，为控制内存占用不再自动渲染",
-    "render_limited_action": "仍然渲染这张图表",
     "retry": "重试",
     "copy_source": "复制 Mermaid 源码",
     "copied": "已复制",

@@ -1,11 +1,12 @@
 # Desktop 渲染进程性能优化 PRD
 
-> 状态：**全部阶段已实施（A1 / B / C1 / C2 / D1 已落地；A2 完成评估）**
+> 状态：**全部阶段已实施（A1 / B / C1 / D1 已落地；C2 实施后已移除；A2 完成评估）**
 > 目标版本：`@downcity/desktop` 0.1.0（Electron 40.10.6 / React 19.2.6 / Vite 7.1.6）
 > 关联代码：`app/desktop/`
 > 实测基线：2026-09-21，渲染进程 RSS 约 1.8 GB，主进程约 538 MB，应用合计约 2.4 GB
 > 修订：2026-09-21 二次评审。对 `out/renderer/assets` 产物与相关源码逐条复核后，修正了三处事实错误（P1 根因、P4 判断、`optimizeDeps` 作用范围）与一处内存归因偏差。修正依据见 4.6，变更明细见 11。
 > 实施：2026-09-21。已完成阶段 A1、B、C1、C2、D1，A2 完成评估；包体基线与预算见 `docs/desktop-performance-budget.md`。
+> 变更：2026-09-22 移除 C2 的图表渲染上限（见 5.3.2）。
 > 待验证：B 的回收效果与全部运行时 RSS 指标需在生产构建中手动测量（见 `docs/desktop-performance-budget.md` 第三、四节）。
 
 ---
@@ -29,7 +30,7 @@
 
 1. **主包减重**：把 mermaid 由静态导入改为动态导入，使 mermaid 核心离开主包；评估把 tiptap、katex、streamdown 等仅在特定交互中使用的重库改为延迟加载。
 2. **长会话 DOM 回收**：为消息列表引入窗口化渲染，离屏消息只保留占位高度，进入视口才挂载真实内容。前提是先解决与原生滚动锚定的冲突（见 5.2）。
-3. **重计算离屏化**：shiki 高亮迁移到 Web Worker；mermaid 渲染保持串行队列并增加单会话渲染上限。
+3. **重计算离屏化**：shiki 高亮迁移到 Web Worker；mermaid 渲染保持串行队列，靠滚动懒渲染与 LRU 缓存控制内存。
 4. **数据面治理**：为 Main 进程的会话投影 Map 增加容量上限与空闲释放。会话快照分页**已经在位**，不再作为交付项。
 5. **观测与回归**：先建立可信基线，再新增内存/包体预算测试。
 
@@ -346,11 +347,11 @@ function get_mermaid() {
 - Worker 创建方式：`new Worker(new URL("./highlight.worker.ts", import.meta.url), { type: "module" })`；
 - 保留主线程实现作为 CSP 不可用时的 fallback。
 
-#### 5.3.2 mermaid 渲染上限保护
+#### 5.3.2 mermaid 渲染上限保护（已取消）
 
-- 单 Session 已渲染图表数阈值默认 20；
-- 达到上限后新图表显示「图表超出单会话渲染上限」，用户可手动点按渲染单张；
-- 配置项放入 `settings`（可选）。
+原计划给单 Session 的已渲染图表数设 20 张上限，超出后新图表转占位、由用户手动点按渲染。该机制已实现后又移除：它拦住的正是用户在长会话里真正想看的图，而实际收益只是少渲染若干张 SVG。
+
+图表内存改由两条既有机制控制：滚动懒渲染（`render_root_margin` 320px）与按「源码 + 主题令牌」的 LRU 渲染缓存（32 项）。若后续重新引入数量限制，需先用第三节的 RSS 基线证明图表是内存主要来源。
 
 ### 5.4 数据面治理
 
@@ -443,7 +444,7 @@ function get_mermaid() {
 | 任务 | 改动 | 验收 |
 |---|---|---|
 | C1 shiki Worker | 新增 `highlight.worker.ts` | 打开大文件不阻塞 UI；降级路径可用 |
-| C2 mermaid 上限 | `MermaidDiagram.tsx` | 超限图表显示占位并可手动渲染 |
+| C2 mermaid 上限 | `MermaidDiagram.tsx` | ~~超限图表显示占位并可手动渲染~~ **已移除**，图表不设数量上限（见 5.3.2） |
 
 ### 阶段 D：Main 进程缓存治理
 
@@ -496,7 +497,7 @@ function get_mermaid() {
 | 文件 | 作用 | 本轮动作 |
 |---|---|---|
 | `app/desktop/src/renderer/components/markdown/mermaid/render_mermaid.ts` | mermaid 渲染管线 | **静态导入改动态（A1）** |
-| `app/desktop/src/renderer/components/markdown/mermaid/MermaidDiagram.tsx` | 图表懒渲染组件 | 增加渲染上限（C2） |
+| `app/desktop/src/renderer/components/markdown/mermaid/MermaidDiagram.tsx` | 图表懒渲染组件 | 无渲染上限（C2 已移除） |
 | `app/desktop/src/renderer/lib/workspace/workspace_code_highlighter.ts` | shiki 高亮（主线程，40 语言） | 迁移 Worker（C1）；**语言清单不改** |
 | `app/desktop/src/renderer/features/chat/components/SessionMessageList.tsx` | 消息分段投影与渐进挂载 | 长会话回收（B2） |
 | `app/desktop/src/renderer/features/chat/components/ChatMessageViewportRow.tsx` | 消息行容器 | 随 B 调整 |
@@ -542,7 +543,7 @@ function get_mermaid() {
 1. **长会话 DOM 回收走哪条路径**：5.2.1 的方案 1（接管锚定）/ 2（超阈值启用）/ 3（分段卸载）需产品与前端共同拍板。方案 3 与现有架构冲突最小。
 2. **主包减重的终点在哪**：只做 mermaid 动态化，还是把 tiptap / katex / streamdown 一并延迟加载？后者才能显著降低首屏同步代码量，但改动面大且需评估编辑器懒加载对首屏交互的影响。
 3. **300 个 shiki 语言/主题分块是否处理**：接受现状（推荐）/ alias stub / 复用自管 shiki 集成替换 streamdown 代码块。
-4. **mermaid 单会话渲染上限**：默认 20 是否合适？是否需要用户设置？
+4. ~~**mermaid 单会话渲染上限**：默认 20 是否合适？是否需要用户设置？~~ 已决议：不设上限，机制已移除（见 5.3.2）。
 5. **会话快照默认页大小**：当前 50 条是否合适？若调整，直接改 `get_chat_snapshot` 传入的 `limit` 即可。
 6. **性能预算是否纳入 CI**：若纳入，检查点定在 `pnpm build` 之后。
 

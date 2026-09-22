@@ -15,7 +15,6 @@ import { SessionActionsMenu } from "@/features/chat/components/SessionActionsMen
 import { SessionMessageList } from "@/features/chat/components/SessionMessageList";
 import { ChatPowerLookupProvider } from "@/features/chat/components/messages/ChatPowerLookup";
 import { TurnFileOpenProvider } from "@/features/chat/components/messages/TurnFileDiffCard";
-import { MermaidRenderBudgetProvider, use_mermaid_render_budget_value } from "@/components/markdown/mermaid/mermaid_render_budget";
 import { WorkspaceTagMenu } from "@/features/chat/components/WorkspaceTagMenu";
 import { get_session_key } from "@/features/chat/lib/chat_cache_key";
 import { resolve_workspace_file_link } from "@/features/navigation/lib/desktop_link";
@@ -94,8 +93,6 @@ export function SessionView(props: SessionViewProps) {
   const scroll_surface_id = get_session_key(props.workspace_id, props.agent.agent_id, session.session_id);
   // 滚动锚点以「首条消息 ID」为内容标识：只有历史前插会改变它，追加消息不会。
   const { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, is_following, latest_visible, scroll_to_bottom } = use_chat_scroll(scroll_surface_id, settings.auto_scroll, messages[0]?.message_id ?? "");
-  // 图表渲染预算：限制单个会话内自动渲染的图表数量，避免长会话把几十张 SVG 长期留在内存里。
-  const mermaid_render_budget = use_mermaid_render_budget_value();
   const busy = is_chat_busy(runtime);
   // 「回到最新」的计数基线：仍在底部时基线跟着当前消息数走，离开底部后才开始累积。
   // 这样用户只是上滑回看、没有新内容时不会报出一个凭空的数字。
@@ -138,7 +135,7 @@ export function SessionView(props: SessionViewProps) {
         <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
         <div ref={content_ref} className="chat-scroll-content mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
           {messages.length === 0 ? <EmptyPrompts agent={props.agent} workspace={props.workspace} workspaces={props.workspaces} agents={props.agents} workspace_draft_mode={props.workspace_draft_mode} switch_workspace={props.switch_workspace} switch_context={props.switch_draft_context} /> : null}
-          <TurnFileOpenProvider open_file={props.open_file} workspace_path={props.workspace.workspace_path || undefined}><ChatPowerLookupProvider powers={props.powers ?? empty_powers}><MermaidRenderBudgetProvider value={mermaid_render_budget}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></MermaidRenderBudgetProvider></ChatPowerLookupProvider></TurnFileOpenProvider>
+          <TurnFileOpenProvider open_file={props.open_file} workspace_path={props.workspace.workspace_path || undefined}><ChatPowerLookupProvider powers={props.powers ?? empty_powers}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></ChatPowerLookupProvider></TurnFileOpenProvider>
         </div>
       </div>
         <JumpToLatest visible={follow_indicator.visible && messages.length > 0} new_message_count={follow_indicator.new_message_count} on_click={scroll_to_bottom} />

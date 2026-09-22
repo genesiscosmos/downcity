@@ -3,8 +3,6 @@
     "diagram": "Mermaid diagram",
     "rendering": "Rendering diagram…",
     "render_failed": "Unable to render this diagram",
-    "render_limited": "This session already rendered {{count}} diagrams; auto-rendering is paused to limit memory use",
-    "render_limited_action": "Render this diagram anyway",
     "retry": "Retry",
     "copy_source": "Copy Mermaid source",
     "copied": "Copied",
