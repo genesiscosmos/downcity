@@ -64,6 +64,14 @@ export interface AgentSessions<TSession extends AgentSessionActor = AgentSession
   /** 永久清空已归档 session。 */
   clean_archive(): Promise<AgentCleanArchiveResult>;
 
+  /**
+   * 释放一个空闲 Session 的运行时实例。
+   *
+   * 只影响内存缓存；消息与元数据仍在 Store 中，下次 `get()` 会重新恢复。
+   * 正在执行的 Session 不会被释放，返回是否真的释放。
+   */
+  release(session_id: string, origin_type?: string): boolean;
+
 }
 
 /**

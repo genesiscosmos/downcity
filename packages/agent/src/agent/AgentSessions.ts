@@ -450,6 +450,29 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     return created;
   }
 
+  /**
+   * 释放一个空闲 Session 的运行时实例。
+   *
+   * 关键点（中文）
+   * - 只释放内存实例；消息与元数据都在 Store 中，下次 `get()` 会重新恢复。
+   * - 正在执行的 Session 不释放：执行上下文与取消信号都在实例上，丢掉会让 Turn 失去归属。
+   * - 返回是否真的释放。调用方必须先自行解除对该实例的订阅，否则重新 `get()` 会拿到新实例
+   *   而旧订阅仍然挂在被丢弃的实例上。
+   */
+  release(session_id: string, origin_type = "chat"): boolean {
+    const resolved_session_id = String(session_id || "").trim();
+    if (!resolved_session_id) return false;
+    const cache_key = this.session_cache_key(
+      resolved_session_id,
+      normalize_session_origin_type(origin_type),
+    );
+    const cached = this.sessions_by_id.get(cache_key);
+    if (!cached || cached.is_executing()) return false;
+    cached.dispose_title_generation?.();
+    this.sessions_by_id.delete(cache_key);
+    return true;
+  }
+
   /** 接管 fork 产生的 Session，确保后续读取与执行使用同一运行时实例。 */
   private register_forked_session(session: AgentManagedSession): void {
     if (session.agent_id !== this.agent_id) {

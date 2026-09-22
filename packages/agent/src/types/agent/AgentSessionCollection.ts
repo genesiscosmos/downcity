@@ -68,4 +68,13 @@ export interface AgentSessionCollection {
 
   /** 清空 Session 消息。 */
   clear_messages(session_id: string, origin_type?: string): Promise<boolean>;
+
+  /**
+   * 释放一个空闲 Session 的运行时实例。
+   *
+   * 只影响内存缓存；消息与元数据仍在 Store 中，下次 `get()` 会重新恢复。
+   * 正在执行的 Session 不会被释放，返回是否真的释放。
+   * 调用方必须先解除对该实例的订阅，否则重新 `get()` 得到的新实例不会再被订阅。
+   */
+  release(session_id: string, origin_type?: string): boolean;
 }
