@@ -37,14 +37,15 @@
  *
  * 差别只有一处：BayBar 的顶栏是标签行，而 Sidebar 的顶栏是模式标题。
  *
- * ## 三条边界规则
+ * ## 四条边界规则
  *
- * 1. **折叠只看 `open`。** 不用「有没有标签页」反推——展开着但一个标签页都没有
- *    是合法状态（空白标签页）。曾经用 `active === null` 当作「已收起」，
- *    结果空白标签页状态下按钮只能展开、永远收不起来。
- * 2. **面板与按钮始终渲染。** 面板是壳层的一列（与 Sidebar 同性质），
+ * 1. **折叠状态只看 `open`。** 不用「有没有标签页」反推。
+ *    曾经用 `active === null` 当作「已收起」，结果空白标签页状态下按钮只能展开、永远收不起来。
+ * 2. **关掉最后一个标签页会收起面板**（规则在 store 的 `close_tab` 里），
+ *    但手动展开一个没有标签页的面板仍是合法状态（空白标签页）：按钮可以把它拉出来看说明。
+ * 3. **面板与按钮始终渲染。** 面板是壳层的一列（与 Sidebar 同性质），
  *    「里面有没有东西」不影响它存在；没有任何早期 return。
- * 3. **Provider 必须包住正文与面板两者。** 正文里的入口与面板共用同一份 context。
+ * 4. **Provider 必须包住正文与面板两者。** 正文里的入口与面板共用同一份 context。
  */
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
@@ -190,8 +191,14 @@ export function BayBar() {
 
   // 窗口窄到正文会被挤没时自动收起。与左侧 Sidebar 共用同一套决策：
   // 只响应「窗口跨越断点」，用户手动展开不会被覆盖。
+  //
+  // 恢复展开前还要看标签页是否为空：关掉最后一个标签页会收起面板，
+  // 而这里只认「是不是我收的」——不判断的话，关空标签页后把窗口拉宽一次，
+  // 那条空列会自己回来，看起来像刚关掉的东西又回来了。
   const open_ref = useRef(open);
   open_ref.current = open;
+  const tabs_ref = useRef(tabs);
+  tabs_ref.current = tabs;
   const narrow_window = use_media_query(`(max-width: ${BAYBAR_AUTO_COLLAPSE_WIDTH}px)`);
   const auto_collapsed_ref = useRef(false);
   const collapse = baybar?.collapse;
@@ -205,7 +212,7 @@ export function BayBar() {
     });
     auto_collapsed_ref.current = next.auto_collapsed;
     if (next.collapsed) collapse();
-    else expand();
+    else if (tabs_ref.current.length > 0) expand();
     // 依赖里刻意不放 open：本效果只响应「窗口跨越断点」。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [narrow_window]);
@@ -222,8 +229,8 @@ export function BayBar() {
 /**
  * 空白标签页的提示。
  *
- * 面板展开着但没有任何标签页时，右边一整列都是空的（约 400px 宽），
- * 什么都不放会让人以为加载失败。这里给的是**功能说明**而不是装饰：
+ * 关掉最后一个标签页会直接收起面板，所以这里只在用户**手动**展开一个空面板时出现：
+ * 右边一整列都是空的（约 400px 宽），什么都不放会让人以为加载失败。这里给的是**功能说明**而不是装饰：
  * 这个区域是怎么被填满的、从哪里触发。
  *
  * 尺寸与颜色取应用内既有的次要文字档（text-xs / text-muted-foreground / text-subtle-foreground），
@@ -244,8 +251,8 @@ function BayBarEmptyState() {
 /**
  * 面板本体：宽度、缩放把手、标签行与内容。
  *
- * `open` 与「有没有标签页」无关：展开但 `active` 为空时就是一张空白标签页
- * （标签行为空、内容区为空），而不是不渲染。
+ * 关掉最后一个标签页时面板已经在收起动画中（`open` 变假），
+ * 而收起动画期间沿用的仍是那最后一个标签页，因此收起过程不会闪成空内容。
  */
 function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
   /** 面板是否展开。 */
@@ -403,7 +410,7 @@ function BayBarPanel({ open, active, active_id, tabs, section_id, range }: {
                   tabIndex={-1}
                   title={translate("panels.close_right")}
                   aria-label={`${translate("panels.close_right")}：${item.label}`}
-                  // 只关这一个标签页；关掉当前页会接到相邻的一个，关掉最后一个则是空白标签页。
+                  // 只关这一个标签页；关掉当前页会接到相邻的一个，关掉最后一个则收起面板。
                   onClick={(event) => { event.stopPropagation(); close_tab?.(item.id); }}
                   className="flex size-5 shrink-0 items-center justify-center rounded-control text-muted-foreground outline-none transition-colors hover:bg-interaction-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
                 ><TbX className="size-3.5" /></button> : null}

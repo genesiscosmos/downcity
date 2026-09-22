@@ -4,7 +4,9 @@
  * ## 一句话模型
  *
  * BayBar = **一个可开关的面板** + **一组标签页**。
- * 面板的开合与标签页的数量互相独立：没有标签页时展开就是一张空白标签页。
+ * 面板的开合基本独立于标签页数量：用户手动展开一个没有标签页的面板时，
+ * 看到的是一张空白标签页。唯一的联动是**关掉最后一个标签页会收起面板**——
+ * 右侧这一列是为标签页存在的，没有标签页时它只是一条占宽度的空列。
  *
  * ## 标签页从哪来
  *
@@ -92,20 +94,43 @@ export function apply_tab_label(tabs: readonly BayBarTab[], tab_id: string, labe
   return tabs.map((item) => (item.id === tab_id ? { ...item, label } : item));
 }
 
+/** 关闭一个标签页之后的面板状态。 */
+export interface BayBarAfterClose {
+  /** 关闭后应当显示的标签页；为空表示已没有标签页可显示。 */
+  active_id: string | null;
+  /** 关闭后面板是否展开。 */
+  open: boolean;
+}
+
 /**
- * 关闭一个标签页之后应当显示哪一个。
+ * 关闭一个标签页之后面板应当处于什么状态。
  *
- * 规则：关的不是当前页 → 当前页不变；关的是当前页 → 优先接右侧邻居，其次左侧；
- * 都没有则返回 null，此时面板保持展开并显示空白标签页。
+ * 两条规则：
+ * 1. **关掉最后一个标签页时收起面板。** 面板是壳层里的一列，它存在的理由是承载标签页；
+ *    没有标签页时继续占着宽度只是浪费正文空间。收起时 `active_id` 一起清空，
+ *    留一个已失效的 id 只会让下次展开先渲染一帧空内容。
+ * 2. 其余情况只决定「接着显示哪一个」：关的不是当前页 → 当前页不变；
+ *    关的是当前页 → 优先接右侧邻居，其次左侧。
  *
- * **刻意只回答「显示哪一个」**：关标签页与开关面板是两个正交的维度，
- * 面板是壳层的一列，不会因为里面没有标签页而消失。
- * 曾经把「关掉最后一个」写成「收起面板」，于是关标签页会连带关掉整个 BayBar；
- * 把规则做成这个签名（返回值里根本没有面板状态），它在类型上就无法再犯那个错。
+ * 前置条件：`closing_id` 必须是 `tab_ids` 里已有的一个（调用方先判存在性）。
+ *
+ * 返回值是**完整的面板状态**（而不是「要不要收起」这类指令）：调用方一次提交即可，
+ * 面板状态与当前标签页也不可能各改一半。
  */
-export function resolve_active_after_close(tab_ids: readonly string[], active_id: string | null, closing_id: string): string | null {
-  if (active_id !== closing_id) return active_id;
+export function resolve_after_close(options: {
+  /** 关闭前的全部标签页 id，按打开顺序。 */
+  tab_ids: readonly string[];
+  /** 关闭前显示的标签页；为空表示空白标签页。 */
+  active_id: string | null;
+  /** 关闭前面板是否展开。 */
+  open: boolean;
+  /** 正在关闭的标签页 id；必须是 `tab_ids` 里的一个。 */
+  closing_id: string;
+}): BayBarAfterClose {
+  const { tab_ids, active_id, open, closing_id } = options;
+  const remaining = tab_ids.filter((id) => id !== closing_id);
+  if (remaining.length === 0) return { active_id: null, open: false };
+  if (active_id !== closing_id) return { active_id, open };
   const index = tab_ids.indexOf(closing_id);
-  if (index === -1) return active_id;
-  return tab_ids[index + 1] ?? tab_ids[index - 1] ?? null;
+  return { active_id: tab_ids[index + 1] ?? tab_ids[index - 1] ?? null, open };
 }

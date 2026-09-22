@@ -5,15 +5,16 @@
  *
  * | 字段 | 含义 | 谁改它 |
  * |---|---|---|
- * | `open` | 面板这一列显示不显示 | 开关按钮、窄窗口自动收起、打开内容时自动展开 |
+ * | `open` | 面板这一列显示不显示 | 开关按钮、窄窗口自动收起、打开内容时自动展开、**关掉最后一个标签页时收起** |
  * | `tabs` | 已打开的标签页（含描述与内容） | 打开新标签页、关闭标签页 |
  * | `active_id` | 当前显示哪一个 | 切换、打开、关闭（接替邻居） |
  * | `section_by_tab` | 各标签页当前的分区 | 点击分区按钮 |
  *
  * ## 三条不变量
  *
- * 1. **`open` 与 `tabs` 无关。** 展开着但一个标签页都没有是合法状态（空白标签页）。
- *    `close_tab` 只允许改 `tabs` 与 `active_id`，**永远不碰 `open`**。
+ * 1. **`open` 基本独立于 `tabs`。** 手动展开一个没有标签页的面板是合法状态（空白标签页）。
+ *    唯一的联动是：**关掉最后一个标签页收起面板**——面板存在的理由就是承载标签页，
+ *    没有标签页时继续占着宽度只会挤正文。其余关闭操作只换当前页，不碰 `open`。
  * 2. **标签页自包含。** 打开时收下完整的描述与内容，之后不依赖任何视图是否还活着。
  * 3. **重复打开不重建内容。** 已经打开过的标签页再次被打开时，
  *    只刷新标题与图标，**保留原来的 sections**——sections 换成新元素会让 React
@@ -27,7 +28,7 @@ import { useCallback, useMemo } from "react";
 import { use_store } from "@/lib/store";
 import type { Store } from "@/types/DesktopStore";
 import type { BayBarTab } from "./baybarPanelState";
-import { baybar_open_storage_key, parse_stored_flag, resolve_active_after_close, apply_tab_label } from "./baybarPanelState";
+import { baybar_open_storage_key, parse_stored_flag, resolve_after_close, apply_tab_label } from "./baybarPanelState";
 
 /** BayBar 的完整不可变快照。 */
 export interface BayBarStoreState {
@@ -55,7 +56,7 @@ export interface BayBarStore {
    * `section_id` 可选：正文里的入口（「Model」行、diff 卡片）用它直接落到具体分区。
    */
   open_tab(tab: BayBarTab, section_id?: string): void;
-  /** 关闭一个标签页。**不会收起面板**；关掉最后一个的结果是空白标签页。 */
+  /** 关闭一个标签页。关掉最后一个时一并收起面板。 */
   close_tab(tab_id: string): void;
   /**
    * 刷新一个已打开标签页的标题。
@@ -72,7 +73,13 @@ export interface BayBarStore {
   activate(tab_id: string): void;
   /** 切换某个标签页内的分区。 */
   select_section(tab_id: string, section_id: string): void;
-  /** 展开面板（`open` 置真，并修正失效的当前标签页）。 */
+  /**
+   * 展开面板（`open` 置真，并修正失效的当前标签页）。
+   *
+   * 它不创建标签页：没有标签页时展开得到的是一张空白标签页。
+   * 自动恢复（离开窄窗口）不应当把用户刚清空的空列再拉出来，
+   * 那条路径的调用方自己按标签页是否为空判断（见 BayBar）。
+   */
   expand(): void;
   /** 收起面板。保留 `active_id`，下次展开回到同一处。 */
   collapse(): void;
@@ -129,11 +136,18 @@ export function use_baybar_store(): BayBarStore {
   const close_tab = useCallback((tab_id: string) => {
     const current = state_ref.current;
     if (!current.tabs.some((item) => item.id === tab_id)) return;
+    const next = resolve_after_close({
+      tab_ids: current.tabs.map((item) => item.id),
+      active_id: current.active_id,
+      open: current.open,
+      closing_id: tab_id,
+    });
     const tabs = current.tabs.filter((item) => item.id !== tab_id);
-    const active_id = resolve_active_after_close(current.tabs.map((item) => item.id), current.active_id, tab_id);
     const section_by_tab = Object.fromEntries(Object.entries(current.section_by_tab).filter(([id]) => id !== tab_id));
-    // 只改 tabs / active_id / section_by_tab，**不碰 open**：关标签页不会关掉面板。
-    commit({ ...current, tabs, active_id, section_by_tab });
+    // 关掉最后一个标签页时 `open` 为假，与手动收起一样写回偏好：下次启动也不该凭空占一列。
+    if (next.open !== current.open) persist_open(next.open);
+    // 一次提交：面板收起与内容清空必须同一帧生效，否则会先闪一帧空白标签页。
+    commit({ ...current, tabs, active_id: next.active_id, open: next.open, section_by_tab });
   }, [commit, state_ref]);
 
   const activate = useCallback((tab_id: string) => {
