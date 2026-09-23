@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { TbChevronDown } from "react-icons/tb";
-import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
+import { MainView, MainViewBody, MainViewHeader } from "@/layouts/MainViewLayout";
 import { Markdown } from "@/components/markdown/Markdown";
 import { PowerIcon } from "@/features/power/lib/PowerIcon";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,7 @@ export function PowerView({ power, controller }: {
     catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); }
   }, [get_power, power.power_id]);
   useEffect(() => { void load(); }, [load]);
-  return <MainViewLayout>
+  return <MainView>
     <MainViewHeader />
     <MainViewBody><main className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto bg-background">
       <div className="mx-auto flex min-h-full w-full max-w-[90rem] flex-col gap-5 px-4 pb-8 pt-3 md:px-6 md:pb-10 md:pt-4">
@@ -36,8 +36,7 @@ export function PowerView({ power, controller }: {
         {error ? <div className="rounded-item bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
         {power.runtime_status === "error" ? null : power.has_config ? <PowerConfigPanel controller={controller} power={power} definition={definition} /> : <section className="rounded-surface bg-surface-subtle px-5 py-10 text-center"><div className="text-base text-foreground">{translate("config.not_required")}</div><div className="mt-1 text-xs text-muted-foreground">{translate("config.not_required_description")}</div></section>}
       </div>
-    </main></MainViewBody>
-  </MainViewLayout>;
+    </main></MainViewBody></MainView>;
 }
 
 /** 展示可折叠的 Power 身份与用户说明。 */

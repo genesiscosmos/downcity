@@ -197,27 +197,33 @@ export function DesktopShell() {
     <DesktopAppearanceSync controller={stable_controller} />
     <DesktopLanguageSync controller={stable_controller} />
     <div className="flex h-full min-h-0 w-full flex-1 overflow-hidden">
-      <DesktopSidebar
-        controller={stable_controller}
-        open_create_agent={controller.actions.open_create_agent}
-        open_create_group={controller.actions.open_create_group}
-        open_create_workspace={open_create_workspace}
-        open_group_config={open_group_from_sidebar}
-        collapsed={sidebar_collapsed}
-      />
-      {/* 右侧 BayBar 与左侧 Sidebar 平级，同属窗口级面板；
-          Provider 同时包住正文与面板，正文里的入口靠同一份 context 打开面板。
+      {/* 三列同行：Sidebar、正文、BayBar。两侧面板是窗口级的一列，与正文平级；
+          正文铺满中间，不留内边距，面板内缘与正文边缘重合。
 
-          这一层（正文区）是 BayBar 量宽度的基准，必须**不含 Sidebar**：
-          宽度上限 = 本层宽度 − 正文下限，把 Sidebar 算进去就会多出一个 Sidebar 的宽度，
-          用户能把右栏拖到把正文压到下限以下。main 上的最小宽度就是正文下限的落点。
+          这一行也是右栏量宽度的基准：它不含面板自身，右栏的可用宽度 = 行宽 − 侧栏宽
+          （见 BayBar）。把侧栏放进 main 的父层会让右栏量到一个含侧栏的宽度，
+          上限因此多出一个侧栏的宽度，用户能把右栏拖到把正文压到下限以下。
 
           `min-w-0` 不能省：flex 项默认 `min-width: auto`（即 min-content），
           而 main 带下限，本层就会拒绝缩到「下限 + 面板」以下——行被撑破、面板被推出窗口，
           而且量到的宽度反过来取决于面板自己有多宽，拖拽会自激（400 拖到 399 直接跳到 360）。 */}
       <BayBarProvider value={baybar}>
-        <div className="flex h-full min-h-0 min-w-0 flex-1">
-          <main style={{ minWidth: SHELL_MAIN_VIEW_MIN_REGION_CSS }} className="relative flex h-full flex-1 bg-muted p-1">
+        <div className="flex h-full min-h-0 min-w-0 w-full flex-1">
+          <DesktopSidebar
+            controller={stable_controller}
+            open_create_agent={controller.actions.open_create_agent}
+            open_create_group={controller.actions.open_create_group}
+            open_create_workspace={open_create_workspace}
+            open_group_config={open_group_from_sidebar}
+            collapsed={sidebar_collapsed}
+          />
+          {/* 正文区铺满中间：没有内边距、没有底色，面板内缘就是它的边缘。
+              留白在两种折叠状态下总有一边是错的——面板展开时它与正文底色不同，
+              那段留白就是一条看得见的缝；折叠时则是一段无人认领的空档。 */}
+          <main
+            style={{ minWidth: SHELL_MAIN_VIEW_MIN_REGION_CSS }}
+            className="relative flex h-full min-w-0 flex-1"
+          >
             <ShellLayoutProvider value={shell_layout}>
               <DesktopMainView selection={current_selection} controller={stable_controller} sidebar_collapsed={sidebar_collapsed} />
             </ShellLayoutProvider>

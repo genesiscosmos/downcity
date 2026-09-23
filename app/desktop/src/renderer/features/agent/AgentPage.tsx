@@ -8,7 +8,7 @@ import type { DesktopAgentSummary, DesktopSessionSummary } from "@common/types/D
 
 import { WelcomeView } from "@/app/WelcomeView";
 
-import { MainView } from "@/layouts/BayBar";
+import { MainView } from "@/layouts/MainViewLayout";
 
 import { AgentView } from "@/features/agent/AgentView";
 import { use_translation } from "@/locales/i18n";

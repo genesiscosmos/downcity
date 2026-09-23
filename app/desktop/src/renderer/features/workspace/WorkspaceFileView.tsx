@@ -1,7 +1,7 @@
 /** Workspace 文本文件只读预览主视图。 */
 
 import { TbFile } from "react-icons/tb";
-import { MainViewBody, MainViewHeader, MainViewLayout } from "@/layouts/MainViewLayout";
+import { MainView, MainViewBody, MainViewHeader } from "@/layouts/MainViewLayout";
 import { is_markdown_document } from "@/lib/workspace/workspace_file_preview";
 import { WorkspaceFileActionsMenu } from "./components/WorkspaceFileActionsMenu";
 import { WorkspaceFileMarkdownBody, WorkspaceFilePlaceholder, WorkspaceFileSourceBody, use_workspace_file_view_mode, use_workspace_text_file } from "./components/WorkspaceFilePreview";
@@ -30,7 +30,7 @@ export function WorkspaceFileView({ workspace, relative_path, line }: WorkspaceF
   const markdown_document = is_markdown_document(relative_path);
   const show_source = !markdown_document || view_mode === "source";
 
-  return <MainViewLayout>
+  return <MainView>
     <MainViewHeader
       title={<span className="flex min-w-0 items-center gap-2">
         <TbFile className="shrink-0 text-muted-foreground" />
@@ -49,5 +49,5 @@ export function WorkspaceFileView({ workspace, relative_path, line }: WorkspaceF
     <MainViewBody><div className="min-h-0 min-w-0 flex-1 overflow-auto bg-background">
       {!file ? <WorkspaceFilePlaceholder error={error} /> : show_source ? <WorkspaceFileSourceBody file={file} relative_path={relative_path} line={line} class_name="p-5" /> : <WorkspaceFileMarkdownBody content={file.content} class_name="px-5 py-5 md:px-6 md:py-6" />}
     </div></MainViewBody>
-  </MainViewLayout>;
+  </MainView>;
 }

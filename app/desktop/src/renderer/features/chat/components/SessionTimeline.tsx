@@ -128,9 +128,9 @@ export function SessionView(props: SessionViewProps) {
     header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={session_title}>{session_title}</span>{workspace_tag}</div>}
     header_right={props.rename_session && props.archive_session && props.remove_session ? <div className="flex shrink-0 items-center gap-1"><SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<Button size="icon" title={translate_chat("conversation.actions")} aria-label={translate_chat("conversation.actions")}><TbDots /></Button>} /></div> : null}
   >
-    <div className="relative flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
-      {/* 视口外层保持 relative，供「回到最新」浮在列表底部之上、又不被滚动带走。 */}
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    {/* MainViewBody 已经是纵向 flex 列，因此这里直接从视口开始，不再套一层同义的容器。
+        视口外层保持 relative，供「回到最新」浮在列表底部之上、又不被滚动带走。 */}
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <div ref={scroll_ref} data-chat-scroll-viewport className="chat-scroll-viewport relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto" role="log" aria-busy={busy} onClick={handle_link_click} onScroll={handle_scroll}>
         <ChatTextSelectionQuote container_ref={scroll_ref} session_id={session.session_id} />
         <div ref={content_ref} className="chat-scroll-content mx-auto flex min-h-full min-w-0 w-full max-w-[840px] flex-col p-2">
@@ -138,10 +138,9 @@ export function SessionView(props: SessionViewProps) {
           <TurnFileOpenProvider open_file={props.open_file} workspace_path={props.workspace.workspace_path || undefined}><ChatPowerLookupProvider powers={props.powers ?? empty_powers}><SessionMessageList session_id={session.session_id} messages={messages} agent={props.agent} show_reasoning={settings.show_reasoning} respond_interaction={props.respond_interaction ?? ignore_unavailable_history_action} fork_message={props.fork_message ?? ignore_unavailable_history_action} rewrite_message={props.rewrite_message} file_diff={props.file_diff_by_session} runtime={busy ? runtime : undefined} history={props.history} load_earlier_history={props.load_earlier_history ? load_earlier : undefined} can_use_history_actions={!busy} can_replace_session={props.can_replace_session ?? true} /></ChatPowerLookupProvider></TurnFileOpenProvider>
         </div>
       </div>
-        <JumpToLatest visible={follow_indicator.visible && messages.length > 0} new_message_count={follow_indicator.new_message_count} on_click={scroll_to_bottom} />
-      </div>
-      <div className="flex w-full flex-none flex-col">{props.composer}</div>
+      <JumpToLatest visible={follow_indicator.visible && messages.length > 0} new_message_count={follow_indicator.new_message_count} on_click={scroll_to_bottom} />
     </div>
+    <div className="flex w-full flex-none flex-col">{props.composer}</div>
   </ChatSurfaceLayout>;
 }
 

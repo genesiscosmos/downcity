@@ -10,7 +10,7 @@ import { SHELL_BAYBAR_CONTROL_RIGHT_CSS, SHELL_CONTROL_TOP_CSS } from "./shellMo
  * 右侧面板的固定展开折叠按钮。
  *
  * 与左侧 Sidebar 控件是镜像关系：同一个纵向偏移、同一档尺寸与图标、距各自窗口边缘同宽。
- * 它是切换右侧可见性的唯一常驻入口——展开时浮在面板自己的 tab 行上，收起时浮在正文卡片上。
+ * 它是切换右侧可见性的唯一常驻入口——展开时浮在面板自己的 tab 行上，收起时浮在正文上。
  *
  * 位置必须走 shellMotion 的 CSS 长度出口：它属于应用密度，要跟随界面缩放。
  */

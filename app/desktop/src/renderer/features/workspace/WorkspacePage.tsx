@@ -9,7 +9,7 @@ import type { DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 import { WelcomeView } from "@/app/WelcomeView";
 
-import { MainView } from "@/layouts/BayBar";
+import { MainView } from "@/layouts/MainViewLayout";
 
 import { WorkspaceView } from "@/features/workspace/WorkspaceView";
 import { WorkspaceFileView } from "@/features/workspace/WorkspaceFileView";

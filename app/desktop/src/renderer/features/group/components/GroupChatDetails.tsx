@@ -3,7 +3,7 @@ import { type ReactNode } from "react";
 import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopGroupSummary } from "@common/types/DesktopApi";
 
-import { MainView } from "@/layouts/BayBar";
+import { MainView } from "@/layouts/MainViewLayout";
 
 /** Group Chat MainView 属性。 */
 interface GroupChatMainViewProps {

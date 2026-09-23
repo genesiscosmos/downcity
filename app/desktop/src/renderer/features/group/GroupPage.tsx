@@ -9,7 +9,7 @@ import type { DesktopGroupSummary } from "@common/types/DesktopApi";
 
 import { WelcomeView } from "@/app/WelcomeView";
 
-import { MainView } from "@/layouts/BayBar";
+import { MainView } from "@/layouts/MainViewLayout";
 
 import { GroupConfigView } from "@/features/group/GroupView";
 import { use_translation } from "@/locales/i18n";

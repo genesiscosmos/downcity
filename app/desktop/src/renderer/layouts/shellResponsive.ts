@@ -33,16 +33,35 @@ export const BAYBAR_AUTO_COLLAPSE_WIDTH = SHELL_SIDEBAR_RAIL_WIDTH
   + SHELL_BAYBAR_MIN_WIDTH;
 
 /**
- * 右栏宽度上限：可用宽度减去正文下限，剩下的都归右栏。
+ * 一侧面板能拖多宽：窗口行宽 − 正文下限 − 另一侧占宽。
  *
- * 两个入参都是**实测像素**：可用宽度量自正文区那一层（不含 Sidebar），
- * 正文下限直接读 main 的 computed min-width（所以缩放已经包含在内）。
+ * 两侧共用同一条规则，因为它们面对的是同一个约束：
+ * 拖宽任意一侧都会从正文那里拿宽度，而正文与另一侧都不能被挤没。
  *
- * 结果可能低于右栏自己的最小宽度（窗口太窄或 Sidebar 太宽），也可能为 0：
- * 装不下时让步的是右栏。调用方据此把下限一起放低——min 不能大于 max，否则夹取无解。
+ * `other_width` 取 **max(另一侧实际宽, 另一侧最小宽)**，两个值各管一件事：
+ *
+ * | 取哪个 | 管什么 |
+ * | --- | --- |
+ * | 实际宽 | 不溢出：另一侧已拖宽时，本侧上限必须跟着变小 |
+ * | 最小宽 | 不被压成 0：另一侧当前折叠（实际宽 0）或很窄时，仍要为它展开预留位置 |
+ *
+ * 两者取大而不是相加：它们描述的是同一个「另一侧占多宽」的下界，相加会双重扣除。
+ *
+ * 结果可能低于本侧最小宽度，也可能为 0（窗口太窄）。调用方据此把下限一起放低——
+ * min 不能大于 max，否则夹取无解。
  */
-export function resolve_baybar_max_width(available_width: number, content_floor: number): number {
-  return Math.max(0, Math.floor(available_width - content_floor));
+export function resolve_panel_max_width(options: {
+  /** 窗口行宽（实测像素）。 */
+  row_width: number;
+  /** 正文下限（实测像素，读 main 的 computed min-width）。 */
+  content_floor: number;
+  /** 另一侧当前实际占宽；折叠时为 0。 */
+  other_width: number;
+  /** 另一侧的最小宽度（设计值，含面板本身）。 */
+  other_min_width: number;
+}): number {
+  const reserved_other = Math.max(options.other_width, options.other_min_width);
+  return Math.max(0, Math.floor(options.row_width - options.content_floor - reserved_other));
 }
 
 /** 一次自适应决策的结果。 */

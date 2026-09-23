@@ -25,23 +25,16 @@
 export const SHELL_REM_BASE = 16;
 
 export const SHELL_SIDEBAR_MIN_WIDTH = 232;
-export const SHELL_SIDEBAR_MAX_WIDTH = 400;
 export const SHELL_SIDEBAR_DEFAULT_WIDTH = 280;
 export const SHELL_HEADER_DEFAULT_PADDING = 8;
 export const SHELL_CONTROL_SIZE = 24;
 export const SHELL_CONTROL_GAP = 8;
-/** MainView 卡片相对窗口边缘的留白。 */
-export const SHELL_MAIN_VIEW_OFFSET = 4;
-/** MainView 卡片的边框宽度；它与 offset 一起把卡片内容推离窗口边缘。 */
-export const SHELL_MAIN_VIEW_BORDER = 1;
 /**
- * 窗口边缘到 MainView 卡片内容盒的距离。
+ * 侧栏顶栏（窗口顶部拖拽带）的高度；两侧内容都从这条线开始。
  *
- * 卡片有 offset，边框又占 1px，卡片内的一切定位都要以这个值为基准。
- * 只减 offset 会留下 1px 偏差——顶栏内容会比侧栏低 1px、标题与折叠按钮的间距会多 1px。
+ * 顶栏高度两侧共用：正文与窗口坐标重合（无留白、无边框），两侧顶栏天然同高、同基准线。
+ * 两侧顶栏因此天然同高、同基准线，不需要任何补偿量。
  */
-export const SHELL_MAIN_VIEW_INSET = SHELL_MAIN_VIEW_OFFSET + SHELL_MAIN_VIEW_BORDER;
-/** 侧栏顶栏（窗口顶部拖拽带）的高度；两侧内容都从这条线开始。 */
 export const SHELL_HEADER_HEIGHT = 40;
 
 /**
@@ -52,12 +45,12 @@ export const SHELL_HEADER_HEIGHT = 40;
  */
 export const SHELL_SIDEBAR_RAIL_WIDTH = 40;
 
-/** 右侧 BayBar 的宽度范围；与左侧 Sidebar 同为窗口级面板，不随卡片 offset 变化。 */
+/** 右侧 BayBar 的宽度：最小与默认值；上限同侧栏一样由窗口实时算出来。 */
 export const SHELL_BAYBAR_MIN_WIDTH = 360;
 export const SHELL_BAYBAR_DEFAULT_WIDTH = 400;
 
 /**
- * 正文卡片的最小宽度（设计 px）。
+ * 正文的最小宽度（设计 px）。
  *
  * 这是「给正文保留多少」的唯一来源：拖宽右栏时被限制的是正文的下限，不是右栏的上限。
  * 它不在 DOM 里直接用（落点是 SHELL_MAIN_VIEW_MIN_REGION_CSS），
@@ -68,48 +61,33 @@ export const SHELL_BAYBAR_DEFAULT_WIDTH = 400;
  */
 export const SHELL_MAIN_VIEW_MIN_WIDTH = 360;
 
-/** 正文区（main）左右内边距之和；卡片最小宽度之外还要为它让出空间。 */
-export const SHELL_MAIN_VIEW_GUTTER = SHELL_MAIN_VIEW_OFFSET * 2;
-
 /**
- * 正文需要的最小总占宽（设计 px）：卡片最小宽度 + 两侧留白。
+ * 正文需要的最小占宽（设计 px）。
  *
- * 右栏宽度上限与窄窗口断点共同的扣除项，也是正文下限在 DOM 里的落点。
+ * 正文与窗口坐标重合（无留白、无边框），因此它就是正文最小宽度本身。
+ * 右栏宽度上限与窄窗口断点共同的扣除项。
  */
-export const SHELL_MAIN_VIEW_MIN_REGION = SHELL_MAIN_VIEW_MIN_WIDTH + SHELL_MAIN_VIEW_GUTTER;
+export const SHELL_MAIN_VIEW_MIN_REGION = SHELL_MAIN_VIEW_MIN_WIDTH;
 
 /**
- * 正文区最小总占宽的 CSS 值（DesktopShell 的 main 使用）。
+ * 正文最小宽度的 CSS 值（DesktopShell 的 main 使用）。
  *
  * 正文下限在 DOM 里只落这一处：同一个常量同时决定「正文占多宽」与「右栏最多能拖多宽」。
- * 必须落在 main 而不是卡片上：卡片是 flex 项，自己的 min-width 只能让它溢出、撑不开父层。
+ * 必须落在 main 而不是 MainView 上：MainView 是 flex 项，自己的 min-width 只能让它溢出、
+ * 撑不开父层。
  */
 export const SHELL_MAIN_VIEW_MIN_REGION_CSS = shell_length_css(shell_scaled_length(SHELL_MAIN_VIEW_MIN_REGION));
 
 /**
- * 两侧面板缩放把手的几何。
+ * 两侧面板缩放把手的宽度。
  *
- * 面板是窗口级的一列，卡片却整体内缩 SHELL_MAIN_VIEW_OFFSET（也就是 main 的 p-1）：
- * 面板边缘与卡片边缘之间必然隔着这段留白，而用户看到的边界是**卡片边缘**。
- * 把手只覆盖面板内侧时，抓取区就比视觉边界向外偏了 4px——手感上表现为
- * 「把手没贴住正文卡片」，其间那段留白还成了拖不动的死区。
- *
- * 所以把手要跨过这段留白：外缘与卡片边缘重合，内侧保留抓握宽度。
- * BLEED 必须恒等于 SHELL_MAIN_VIEW_OFFSET；两者一旦不一致就会重新错开。
+ * 正文不留白，面板内缘就是正文边缘，因此把手贴在面板朝正文的那条内缘上即可，
+ * 外缘正好落在两者公共边界，不需要任何外扩。
  */
-export const SHELL_RESIZE_HANDLE_GRIP = 6;
-export const SHELL_RESIZE_HANDLE_BLEED = SHELL_MAIN_VIEW_OFFSET;
-export const SHELL_RESIZE_HANDLE_WIDTH = SHELL_RESIZE_HANDLE_BLEED + SHELL_RESIZE_HANDLE_GRIP;
+export const SHELL_RESIZE_HANDLE_WIDTH = 6;
 
-/** 把手总宽的 CSS 值。 */
+/** 把手宽度的 CSS 值。 */
 export const SHELL_RESIZE_HANDLE_WIDTH_CSS = shell_length_css(shell_scaled_length(SHELL_RESIZE_HANDLE_WIDTH));
-
-/**
- * 把手向卡片一侧外扩的 CSS 值。
- *
- * 这是「面板边缘 → 卡片边缘」的距离，渲染时按边缘方向取负；见 layouts/PanelResizeHandle。
- */
-export const SHELL_RESIZE_HANDLE_BLEED_CSS = shell_length_css(shell_scaled_length(SHELL_RESIZE_HANDLE_BLEED));
 
 /** 两侧顶栏内容共同的垂直中心（绝对坐标）：左侧折叠按钮与 macOS 红绿灯同高。 */
 export const SHELL_BAND_CENTER = SHELL_HEADER_DEFAULT_PADDING + SHELL_CONTROL_SIZE / 2;
@@ -121,21 +99,6 @@ export const SHELL_BAND_CENTER = SHELL_HEADER_DEFAULT_PADDING + SHELL_CONTROL_SI
  */
 export const SHELL_WINDOW_CHROME_LEFT = 80;
 
-/**
- * MainView 卡片内顶栏的高度。
- *
- * 卡片内容盒从 inset 处开始，而基准线是窗口坐标，因此卡内顶栏要相应变矮，
- * 内容中心才能回到基准线。
- */
-export const SHELL_MAIN_VIEW_BAND_HEIGHT = SHELL_HEADER_HEIGHT - SHELL_MAIN_VIEW_INSET;
-
-/**
- * MainView 卡片内顶栏的底部内边距：补齐 inset。
- *
- * 高度减 inset、底距加 inset，两者抵消后顶栏下沿仍在侧栏内容起点（SHELL_HEADER_HEIGHT），
- * 而内容中心被抬回基准线。
- */
-export const SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM = SHELL_MAIN_VIEW_INSET;
 export const SHELL_PANEL_TRANSITION = {
   duration: 0.3,
   ease: [0.4, 0, 0.2, 1] as [number, number, number, number],
@@ -159,7 +122,8 @@ export const SHELL_BAYBAR_CONTROL_RIGHT_CSS = shell_length_css(shell_scaled_leng
  * 返回面板收起时，MainView Header 需要为对应的浮动按钮预留的宽度。
  *
  * 两侧共用同一套推导：按钮以窗口定位，而 Header 内容在卡片内容盒内，
- * 两者基准相差一个 inset，预留量要同时补上这个 inset、按钮自身占宽与间距。
+ * 两者基准相差卡片自身的 inset。卡片没有留白也没有边框，inset 为 0，
+ * 因此预留量只需补上按钮自身占宽与间距。
  * 左、右的唯一区别是按钮的起始位置（左侧含 macOS 红绿灯留白，右侧没有）。
  *
  * 不预留的后果是：面板收起后按钮会盖住 Header 右侧的页面操作。
@@ -167,9 +131,8 @@ export const SHELL_BAYBAR_CONTROL_RIGHT_CSS = shell_length_css(shell_scaled_leng
 export function shell_collapsed_panel_reserve_length(side: "left" | "right"): ShellLength {
   const control = side === "left" ? shell_control_left_length() : shell_scaled_length(SHELL_HEADER_DEFAULT_PADDING);
   return {
-    // 控件左缘含窗口 chrome 的固定留白；卡片边框也是 1px 细线，同样不随缩放变化。
-    pinned_px: control.pinned_px - main_view_inset_length.pinned_px,
-    scaled_px: control.scaled_px + SHELL_CONTROL_SIZE + SHELL_CONTROL_GAP - main_view_inset_length.scaled_px - SHELL_HEADER_DEFAULT_PADDING,
+    pinned_px: control.pinned_px,
+    scaled_px: control.scaled_px + SHELL_CONTROL_SIZE + SHELL_CONTROL_GAP - SHELL_HEADER_DEFAULT_PADDING,
   };
 }
 
@@ -222,31 +185,14 @@ export function shell_px(value: number): ShellLength {
 }
 
 /**
- * 窗口边缘到卡片内容盒的距离。
+ * 顶栏高度；两侧共用同一来源（侧栏拖拽带与卡内顶栏）。
  *
- * 它不是一整段应用密度：offset 跟随缩放，1px 边框始终是物理像素。
- * 两者混在一起按整体缩放算，预留量就会差 1px ×（缩放 - 1）——
- * 在 120% 下表现为 Header 内容与折叠按钮的间距多出 0.2px 级别的误差。
+ * 必须走 rem 出口：写 h-10 只在 100% 缩放下恰好等于 40px，缩放后两侧就会错位。
  */
-const main_view_inset_length: ShellLength = { pinned_px: SHELL_MAIN_VIEW_BORDER, scaled_px: SHELL_MAIN_VIEW_OFFSET };
-
-/** 侧栏顶栏高度；与 SidebarFrame 的拖拽带共用同一来源。 */
 export const SHELL_HEADER_HEIGHT_LENGTH: ShellLength = shell_scaled_length(SHELL_HEADER_HEIGHT);
 
-/** 侧栏顶栏高度的 CSS 值；SidebarFrame 必须用它，不能写 h-10（两者只在 100% 缩放下偶然相等）。 */
+/** 顶栏高度的 CSS 值；两侧都必须用它，不能写 h-10。 */
 export const SHELL_HEADER_HEIGHT_CSS = shell_length_css(SHELL_HEADER_HEIGHT_LENGTH);
-
-/** 卡内顶栏高度。 */
-const main_view_band_height_length: ShellLength = {
-  pinned_px: -main_view_inset_length.pinned_px,
-  scaled_px: SHELL_HEADER_HEIGHT - main_view_inset_length.scaled_px,
-};
-const main_view_band_padding_bottom_length: ShellLength = { ...main_view_inset_length };
-
-/** 卡内顶栏高度的 CSS 值；高度与底距必须成对使用，否则内容中心会偏离基准线。 */
-export const SHELL_MAIN_VIEW_BAND_HEIGHT_CSS = shell_length_css(main_view_band_height_length);
-/** 卡内顶栏底距的 CSS 值。 */
-export const SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS = shell_length_css(main_view_band_padding_bottom_length);
 
 /** 左侧折叠按钮距窗口左缘的长度。 */
 export function shell_control_left_length(): ShellLength {
@@ -278,8 +224,8 @@ export function shell_control_left_css(): string {
  * 基准是 macOS 原生窗口按钮（红绿灯）：左侧折叠按钮与它们同高，
  * 这也是窗口外壳的视觉线。右侧按钮向它看齐，两侧保持同一水平线。
  *
- * 因此这里不能跟 MainView 卡片对齐——卡片有 offset，
- * 而窗口按钮不受卡片影响（曾经改成按 Header 行居中，导致左按钮位置被抬高）。
+ * 因此这里不能跟 MainView 卡片对齐：卡片内容盒虽然与窗口坐标重合，
+ * 但折叠按钮是窗口级控件，位置只能由窗口决定。
  */
 export function get_shell_control_top(): number {
   return SHELL_HEADER_DEFAULT_PADDING;
@@ -296,7 +242,8 @@ export const SHELL_CONTROL_TOP_CSS = shell_length_css(shell_scaled_length(SHELL_
  * 因此 Header 内容必须右移「控件宽度 + 间距」。
  *
  * 注意：控件以窗口左缘定位，而 Header 内容在卡片内容盒内，
- * 所以要一并减去 inset 与 Header 自身的内边距。
+ * 两者基准相差卡片自身的 inset（卡片无留白无边框，故为 0），
+ * 另要减去 Header 自身的内边距。
  *
  * 推导与右侧共用同一函数：两侧唯一的区别是按钮的起始位置。
  */

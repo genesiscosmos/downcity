@@ -5,7 +5,8 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 import type { DesktopController } from "@/types/DesktopView";
 import type { DesktopAgentSummary } from "@common/types/DesktopApi";
 
-import { MainView, use_baybar_open } from "@/layouts/BayBar";
+import { MainView } from "@/layouts/MainViewLayout";
+import { use_baybar_open } from "@/layouts/BayBar";
 
 import { agent_config_tab } from "@/features/agent/AgentView";
 import { ChatFilePanelProvider } from "@/features/chat/panel/ChatFilePanel";

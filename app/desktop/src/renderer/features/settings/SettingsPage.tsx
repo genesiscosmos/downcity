@@ -9,7 +9,8 @@ import type { DesktopController, SettingsSection } from "@/types/DesktopView";
 
 import { SettingsView } from "@/features/settings/SettingsView";
 
-import { MainView, use_baybar_open, baybar_tab_id, type BayBarTab } from "@/layouts/BayBar";
+import { MainView } from "@/layouts/MainViewLayout";
+import { baybar_tab_id, use_baybar_open, type BayBarTab } from "@/layouts/BayBar";
 import { use_translation } from "@/locales/i18n";
 
 /** Global Env 的标签页种类、分区标识与文案。 */

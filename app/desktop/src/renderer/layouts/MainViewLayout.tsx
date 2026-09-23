@@ -1,8 +1,7 @@
-/** Desktop MainView 的页面框架与统一 Header。 */
+/** Desktop MainView 卡片的页面框架、统一 Header 与正文列。 */
 
 import { createContext, useContext, type ReactNode } from "react";
-import { MainView } from "./BayBar";
-import { SHELL_BAYBAR_COLLAPSED_HEADER_RESERVE_CSS, shell_collapsed_header_inset_css, SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS } from "./shellMotion";
+import { shell_collapsed_header_inset_css, SHELL_BAYBAR_COLLAPSED_HEADER_RESERVE_CSS, SHELL_HEADER_HEIGHT_CSS } from "./shellMotion";
 
 /** 两侧面板的折叠状态；两个面板都是窗口级的一列，与卡片无关。 */
 interface ShellLayoutControls {
@@ -30,12 +29,17 @@ export function use_shell_layout(): ShellLayoutControls | undefined {
 }
 
 /**
- * MainView 卡片：所有页面共用同一张外壳，保证视觉一致。
+ * MainView：正文区本身，不是一张卡片。
  *
- * 它不关心右侧面板里显示什么，只需要知道面板收没收起（用于给浮动按钮让位）。
+ * 没有圆角、没有边框、没有留白：面板内缘就是它的边缘。
+ * 它只提供三件东西：纵向 flex 容器、内容面的底色、以及撑满正文区的能力。
+ * 与面板的分层靠底色差（面板 bg-muted / 正文 bg-background），不靠描边与圆角。
+ *
+ * 这里不写 min-width：它是 flex 项，自己写只能让它溢出、撑不开父层，
+ * 正文下限必须落在行内的 main 上（见 DesktopShell）。两处同时写会让「谁在限制」无法回答。
  */
-export function MainViewLayout({ children }: { /** 页面 Header 与 Body。 */ children: ReactNode }) {
-  return <MainView>{children}</MainView>;
+export function MainView({ children }: { /** 页面 Header 与正文。 */ children: ReactNode }) {
+  return <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">{children}</div>;
 }
 
 /** MainView 顶部固定区域，展示页面身份、窗口拖拽空间与页面操作。 */
@@ -54,9 +58,9 @@ export function MainViewHeader({ title, left_actions, right_actions, bordered = 
   const sidebar_reserved = Boolean(controls?.sidebar_collapsed);
   const baybar_reserved = Boolean(controls?.baybar_collapsed);
 
-  // 卡片内顶栏：高度与底部内边距均由基准线推导，保证内容与侧栏顶栏同处一线。
-  // 这里必须是 CSS 长度（rem），写 px 会让界面缩放后与侧栏顶栏错位。
-  return <header className={`flex w-full flex-none items-center bg-background px-2 ${bordered ? "border-b border-divider" : ""}`} style={{ height: SHELL_MAIN_VIEW_BAND_HEIGHT_CSS, paddingBottom: SHELL_MAIN_VIEW_BAND_PADDING_BOTTOM_CSS }}>
+  // 顶栏：高度与两侧共用同一来源，保证内容与侧栏顶栏同处一线。
+  // 必须走 CSS 长度出口（rem），写 px 会在界面缩放后与侧栏顶栏错位。
+  return <header className={`flex w-full flex-none items-center bg-background px-2 ${bordered ? "border-b border-divider" : ""}`} style={{ height: SHELL_HEADER_HEIGHT_CSS }}>
     {/* 预留宽度含窗口 chrome 的固定部分（macOS 红绿灯留白），因此用 CSS 长度而非动画数值。 */}
     <span style={{ width: sidebar_reserved ? shell_collapsed_header_inset_css() : 0 }} className="shell-inline-reserve shrink-0" aria-hidden="true" />
     {left_actions ? <div className="flex shrink-0 items-center gap-1">{left_actions}</div> : null}
@@ -67,7 +71,16 @@ export function MainViewHeader({ title, left_actions, right_actions, bordered = 
   </header>;
 }
 
-/** MainView Header 下方的可增长内容区域。 */
+/**
+ * MainView Header 下方的可增长内容区：正文列。
+ *
+ * 它自己就是纵向 flex 列（`min-h-0` + `overflow-hidden`），因此页面不必再套一层
+ * 「flex flex-col」的中间容器：内容多段纵向排列时（Chat 的视口 + 输入区、
+ * 设置页的分栏）直接作为它的 children 即可，纵向分配由它负责。
+ *
+ * 纵向超出由内容自己滚动（各页面在自己的滚动容器上声明 overflow-y-auto），
+ * 这一层不滚动——Header 与输入区这类固定段必须留在滚动之外。
+ */
 export function MainViewBody({ children }: { /** 页面主要内容。 */ children: ReactNode }) {
-  return <div className="flex min-h-0 min-w-0 flex-1">{children}</div>;
+  return <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>;
 }
