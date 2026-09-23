@@ -152,8 +152,6 @@ class ExplainPathAction extends CityAction<z.infer<typeof explain_path_input>> {
 /** `sandbox` 动作组。 */
 export class SandboxGroup extends CityActionGroup {
   readonly group = "sandbox";
-  readonly summary =
-    "The isolated environment this session runs in, which host paths are granted, and why a path is blocked.";
   protected readonly actions = [
     new GetSandboxAction(),
     new ListMountsAction(),

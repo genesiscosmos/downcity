@@ -38,8 +38,10 @@ test("Tool 身份按白名单、Power 目录与输入契约判定，不做子串
     // Power 目录命中：首帧就能确定身份。
     ["memory", { action: "search" }, "power"],
     ["task", { action: "list" }, "power"],
-    // city / shell 不在 catalog，按输入契约判定。
-    ["city", { action: "env.get" }, "power"],
+    // City 直接注册的三个领域 power 与 shell 不在 catalog，按输入契约判定。
+    ["context", { action: "env.get" }, "power"],
+    ["ai", { action: "image.create" }, "power"],
+    ["agent", { action: "agent.list" }, "power"],
     ["shell", { action: "exec" }, "power"],
     // 第三方 power 同理。
     ["custom_power", { action: "do.thing" }, "power"],
@@ -379,7 +381,9 @@ test("Action 展示信息可直接驱动活动行，不需要组件按 action_ty
 test("Power 事实表合并 catalog 与 City 直接注册的 power", () => {
   const lookup = resolve_chat_power_lookup([{ power_id: "memory", title: "Memory", icon_url: "https://example.com/m.png" }]);
   assert.deepEqual(lookup.get("memory"), { title: "Memory", icon_url: "https://example.com/m.png" });
-  // city / shell 不在 catalog，但活动行必须能给出标题与语义图标。
-  assert.deepEqual(lookup.get("city"), { title: "City" });
+  // context / ai / agent / shell 不在 catalog，但活动行必须能给出标题与语义图标。
+  assert.deepEqual(lookup.get("context"), { title: "Context" });
+  assert.deepEqual(lookup.get("ai"), { title: "AI" });
+  assert.deepEqual(lookup.get("agent"), { title: "Agent" });
   assert.deepEqual(lookup.get("shell"), { title: "Shell" });
 });

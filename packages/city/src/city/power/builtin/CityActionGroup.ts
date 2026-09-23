@@ -6,7 +6,7 @@
  * - 组只负责把内部动作组织成点号 id，并向模型提供一段组说明；
  *   它不参与分发，也不感知结果信封。
  * - 组说明是静态文本，不依赖执行上下文，因此注册期即可确定。
- * - 新增一个组就是新增一个子类文件，并在 `groups/index.ts` 注册一次。
+ * - 新增一个组就是新增一个子类文件，并在所属领域 power 的动作组列表里登记一次。
  */
 
 import type { AnyCityAction } from "@/city/power/builtin/CityAction.js";
@@ -15,9 +15,6 @@ import type { AnyCityAction } from "@/city/power/builtin/CityAction.js";
 export abstract class CityActionGroup {
   /** 组名，snaker；同时是动作 id 的前缀。 */
   abstract readonly group: string;
-
-  /** 组用途的一行摘要，进入模型侧描述。 */
-  abstract readonly summary: string;
 
   /** 当前组的全部动作，顺序即模型侧索引顺序。 */
   protected abstract readonly actions: readonly AnyCityAction[];

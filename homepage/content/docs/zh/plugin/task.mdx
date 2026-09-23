@@ -39,10 +39,10 @@ Task 成功或失败并完成执行记录持久化后，会通过统一 Notifica
 - 后台文件处理
 - 定时通知
 
-任务执行时会创建独立的 task Session，并复用执行 Agent 的能力。从 Agent Session 调用 `create` 时，运行时会同时固化当前 Agent、Workspace、`session_id` 与 `origin.type` 作为交付目标。此后重新绑定执行 Agent 或 Workspace 只会改变执行目标，完成结果仍由 City 追加回原始 Session；只有执行目标与交付目标仍属于同一 Agent/Workspace 时，task Session 才继承原 Session 的模型。模型无需也不能填写 Session 路由。通过 CLI、HTTP 或宿主管理界面等无 Session 上下文入口创建的 Task 不绑定交付目标，结果保留在执行历史。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Chat 插件。
+任务执行时会创建独立的 task Session，并复用执行 Agent 的能力。从 Agent Session 调用 `create` 时，运行时会同时固化当前 Agent、Workspace、`session_id` 与 `origin.type` 作为交付目标。此后重新绑定执行 Agent 或 Workspace 只会改变执行目标，完成结果仍由 City 追加回原始 Session；只有执行目标与交付目标仍属于同一 Agent/Workspace 时，task Session 才继承原 Session 的模型。模型无需也不能填写 Session 路由。通过 CLI、HTTP 或宿主管理界面等无 Session 上下文入口创建的 Task 不绑定交付目标，结果保留在执行历史。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Messenger Power。
 
 继续阅读：
 
-- [Chat 插件](/zh/docs/plugin/chat)
+- [Messenger Power](/zh/docs/plugin/messenger)
 - [Memory 插件](/zh/docs/plugin/memory)
 - [Agent Plugins Docs](/zh/plugins-docs)

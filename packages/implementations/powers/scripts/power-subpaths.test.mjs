@@ -12,7 +12,7 @@ import path from "node:path";
 import test from "node:test";
 
 const power_entries = [
-  ["chat", "ChatPower"],
+  ["messenger", "MessengerPower"],
   ["memory", "MemoryPower"],
   ["skill", "SkillPower"],
   ["task", "TaskPower"],
@@ -77,8 +77,8 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
   const renderers = await import("@downcity/powers/renderers");
   assert.equal(typeof power_react.define_power_renderer, "function");
   assert.deepEqual(Object.keys(renderers.BUILTIN_POWER_RENDERERS).sort(), [
-    "chat",
     "memory",
+    "messenger",
     "skill",
     "task",
     "web",
@@ -94,7 +94,7 @@ test("Renderer 子路径统一导出 React Surface registry", async () => {
 
 test("内建 Power 子路径不再公开宿主通用配置 Schema", async () => {
   const schema_exports = [
-    ["chat", "CHAT_POWER_CONFIG_JSON_SCHEMA"],
+    ["messenger", "MESSENGER_POWER_CONFIG_JSON_SCHEMA"],
     ["web", "WEB_POWER_CONFIG_JSON_SCHEMA"],
   ];
   for (const [power_name, export_name] of schema_exports) {

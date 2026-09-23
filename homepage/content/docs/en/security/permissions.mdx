@@ -5,9 +5,9 @@ description: "Understand the admission model for Chat users entering an Agent"
 
 # Chat Access
 
-Chat Access is an admission capability of the Chat Plugin. It answers one question: may a direct or group message from an external Chat user enter a specific Agent?
+Chat Access is an admission capability of the Messenger Power. It answers one question: may a direct or group message from an external Chat user enter a specific Agent?
 
-It is not an Agent Core permission system or a general Role/Permission model. After admission, the Chat Plugin passes the message to the Agent without propagating roles or permissions into Sessions or other Plugins.
+It is not an Agent Core permission system or a general Role/Permission model. After admission, the Messenger Power passes the message to the Agent without propagating roles or permissions into Sessions or other Plugins.
 
 ## Core rules
 
@@ -19,7 +19,7 @@ It is not an Agent Core permission system or a general Role/Permission model. Af
 
 ## Approval flow
 
-When an unapproved user sends a direct message, the Chat Plugin creates or reuses a pending request and returns a command like:
+When an unapproved user sends a direct message, the Messenger Power creates or reuses a pending request and returns a command like:
 
 ```bash
 city plugin action chat access-approve assistant --input '{"request_id":"req_xxx"}' --token <token>
@@ -38,10 +38,10 @@ Unapproved group messages are silent by default, but their pending requests appe
 Each Agent stores its own data at:
 
 ```text
-~/.downcity/agents/<agent_id>/plugins/chat/access.db
+~/.downcity/agents/<agent_id>/powers/messenger/messenger/access.db
 ```
 
-The Chat Access database contains principals, requests, allow/deny grants, and audit events. It does not contain bot tokens, app secrets, or message bodies. Chat channel credentials belong to the unique plaintext configuration in `~/.downcity/plugins/chat/config.toml`; the Chat Config UI never returns their plaintext values when reading configuration.
+The Chat Access database contains principals, requests, allow/deny grants, and audit events. It does not contain bot tokens, app secrets, or message bodies. Messenger channel credentials belong to the unique plaintext configuration in `~/.downcity/powers/messenger/config.toml`; the Messenger Config UI never returns their plaintext values when reading configuration.
 
 ## Difference from City Auth
 
@@ -50,5 +50,5 @@ An Agent Token protects the HTTP control plane. Each token belongs to one Agent 
 ## Related docs
 
 - [CLI Commands](/en/docs/cli/commands)
-- [Chat Plugin](/en/docs/plugin/chat)
+- [Messenger Power](/en/docs/plugin/messenger)
 - [`.downcity` Directory](/en/docs/reference/dot-downcity)

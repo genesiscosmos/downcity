@@ -163,7 +163,7 @@ export type PowerActions = Record<string, PowerAction>;
 
 三点说明。
 
-`returns` 与 `access` 来自 `CityAction`。此前只有 city 动作声明它们，`plugin_call` 通过 `plugin_read` 间接暴露同类信息。统一后两者都进模型侧动作索引。
+`returns` 与 `access` 来自 `CityAction`。此前只有 City 动作声明它们，`plugin_call` 通过 `plugin_read` 间接暴露同类信息。统一后两者都进模型侧动作索引。
 
 `execute` 统一返回 `ActionResult`。Agent 侧已经支持这条通道：`Executor` 用 `is_action_result()` 判断输出，把 `messages[].role === "agent"` 的内容追加进当前 canonical 回复，`role === "user"` 的内容作为下一 Step 输入，`effects` 交给 Turn 收集。city 动作此前只返回惰性 JSON，改造后 `image.create` 生成完直接把图片挂到回复上成为自然用法。
 
@@ -180,7 +180,7 @@ export type PowerActions = Record<string, PowerAction>;
 | `plugin_call({ plugin: "task", action: "create" })` | `task({ action: "create" })` |
 | `plugin_call({ plugin: "web", action: "browser_act" })` | `web({ action: "browser_act" })` |
 
-不带点的动作 id 直接作为顶层 id 使用。`city` 保留点号前缀是因为它内部确实存在 7 类能力，共 15 个动作。
+不带点的动作 id 直接作为顶层 id 使用。City 自有能力保留点号前缀是因为它内部确实存在 7 类动作组，共 15 个动作。
 
 `CityMethod` 抽象随之删除。文件目录可按前缀分组以便阅读，但运行期只存在 `action_id → PowerAction` 一张表。
 
@@ -325,12 +325,16 @@ flowchart LR
 
 | 工具名 | 动作数 | 动作 id |
 | --- | --- | --- |
-| `city` | 15 | `env.get`、`sandbox.get`、`sandbox.list_mounts`、`sandbox.explain_path`、`workspaces.list`、`workspaces.get`、`agent.list`、`agent.get`、`usage.get`、`image.models`、`image.create`、`image.result`、`sound.models`、`sound.asr`、`sound.tts` |
+| `context` | 7 | `env.get`、`sandbox.get`、`sandbox.list_mounts`、`sandbox.explain_path`、`workspaces.list`、`workspaces.get`、`usage.get` |
+| `ai` | 6 | `image.models`、`image.create`、`image.result`、`sound.models`、`sound.asr`、`sound.tts` |
+| `agent` | 2 | `agent.list`、`agent.get` |
 | `chat` | 5 | `context`、`list`、`history`、`send`、`react` |
 | `memory` | 7 | `status`、`search`、`read`、`remember`、`digest`、`revise`、`forget` |
 | `skill` | 4 | `find`、`install`、`list`、`lookup` |
 | `task` | 11 | `list`、`history`、`run_detail`、`create`、`run`、`delete`、`update`、`status`、`enable`、`disable`、`reload` |
 | `web` | 9 | `search`、`open`、`browser_create_session`、`browser_observe`、`browser_act`、`browser_semantic_act`、`browser_extract`、`browser_semantic_extract`、`browser_close_session` |
+
+City 自有能力已拆为 `context` / `ai` / `agent` 三个领域 power，详见 [City Power 设计](./city-tool-design.md)。动作 id 仍是 `组名.动作名`，与所属 power 名无关。
 
 `plugin_call` 与 `plugin_read` 从工具面移除。
 
@@ -604,23 +608,23 @@ flowchart TB
 
 ### 17.6 city power 化完成
 
-city 已改为普通 `PowerDefinition`，与其它 power 走同一条注册与工具生成路径。工具面不再有两套形态。
+City 自有能力已改为普通 `PowerDefinition`，与其它 power 走同一条注册与工具生成路径。工具面不再有两套形态。
 
 完成项：
 
-1. **契约层。** 删除 `CityTool` / `CityMethod` / `CityToolResult` / `CityToolContext` / `CityToolArgSpec`，代之以 `CityPower`＋`CityAction`＋`CityActionGroup`＋`CityPowerContext`。`city/types/CityTool.ts` 重写为 `CityPowerContext.ts`，`CityToolMethods.ts` 改名 `CityPowerData.ts`。
+1. **契约层。** 删除 `CityTool` / `CityMethod` / `CityToolResult` / `CityToolContext` / `CityToolArgSpec`，代之以 `CityAction`＋`CityActionGroup`＋`CityPowerContext`。`city/types/CityTool.ts` 重写为 `CityPowerContext.ts`，`CityToolMethods.ts` 改名 `CityPowerData.ts`。
 2. **动作 id。** 15 个动作全部改为点号 id：`env.get`、`sandbox.get`、`sandbox.list_mounts`、`sandbox.explain_path`、`workspaces.list`、`workspaces.get`、`agent.list`、`agent.get`、`usage.get`、`image.models`、`image.create`、`image.result`、`sound.models`、`sound.asr`、`sound.tts`。
 3. **Zod 统一。** 手写的 `CityToolArgSpec` 与 `require_string` / `optional_enum` / `assert_known_args` 全部退场；9 个带参动作改用 Zod schema，作为参数说明与运行期校验的唯一来源。未声明 schema 的动作仍严格拒绝任何入参（不再静默忽略）。
-4. **特权上下文。** `CityRuntimeAccess` 与 `embassy` 由 City 在构造 `create_city_power()` 时注入，不进入通用 `PowerContext`；`PowerContext.city.methods` 整个删除。
-5. **`invoke` 退场。** `CityMethod.invoke()` 与 `sound.transcribe` 删除；chat 入站转写改为 `context.city.powers.run_action({ power: "sound", action: "asr" })`，验证了「动作同时可被模型与程序化调用」这条规则。
-6. **组合根简化。** `City.get_session_tools()` 不再合并两套工具，`get_session_hooks()` 不再拼接 city 专属 system block：city power 与其他 power 一样经 `PowerRegistry` 进入 tools 与 system，`merge_session_tools` 与 `SessionHooks` 的手工拼装随之删除。
-7. **私有文件分区。** 由 `agents/<id>/methods/<m>/` 改为 `agents/<id>/powers/<group>/`，不再与旧的 method 概念挂钩。
+4. **特权上下文。** `CityRuntimeAccess` 与 `embassy` 由 City 在构造领域 power 时注入，不进入通用 `PowerContext`；`PowerContext.city.methods` 整个删除。
+5. **`invoke` 退场。** `CityMethod.invoke()` 与 `sound.transcribe` 删除；messenger 入站转写改为 `context.city.powers.run_action({ power: "ai", action: "sound.asr" })`，验证了「动作同时可被模型与程序化调用」这条规则。
+6. **组合根简化。** `City.get_session_tools()` 不再合并两套工具，`get_session_hooks()` 不再拼接 city 专属 system block：三个领域 power 与其他 power 一样经 `PowerRegistry` 进入 tools 与 system，`merge_session_tools` 与 `SessionHooks` 的手工拼装随之删除。
+7. **私有文件分区。** 由 `agents/<id>/methods/<m>/` 改为 `agents/<id>/powers/<group>/`，不再与旧的 method 概念挂钩；分区键是组名，因此组在 power 之间搬迁不改变落盘路径。
 
 验证：`packages/type`、`packages/agent`、`packages/city`、`packages/implementations/powers`、`app/cli`、`app/fedman`、`app/desktop`（node + web）全部 `tsc --noEmit` 零错误。另以一个临时脚本对构建产物做了行为验证（已删除）：7 个组、15 个动作 id 全部为合法点号形式、`returns` 无缺失、9 个动作可转出 JSON Schema、四个写动作归为 `write`、未知参数被拒绝、无 shell 时 `sandbox.get` 返回 `available: false`、`usage.get` 返回 `not available` 且拒绝非法枚举值。
 
 新增待确认项：
 
-- `CITY_POWER_NAME` 与保留工具名的关系。power 名进入扁平工具命名空间，若外部注册名为 `city` 的 power，会在注册期冲突。当前行为是注册期报错，尚未补专门的保留名清单校验（见 5.3）。
+- 保留工具名的关系。power 名进入扁平工具命名空间，若外部注册名为 `context` / `ai` / `agent` / `shell` 的 power，会在注册期冲突。当前行为是注册期报错，尚未补专门的保留名清单校验（见 5.3）。
 
 ### 17.7 内建 power 动作标注完成
 

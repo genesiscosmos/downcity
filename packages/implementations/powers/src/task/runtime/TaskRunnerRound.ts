@@ -10,7 +10,7 @@ import type { PowerContext } from "@downcity/city/power";
 import type { SessionTurnExecutionResult } from "@downcity/agent";
 import type { PowerJsonObject } from "@downcity/city/power";
 import type {
-  ChatSendOutputPick,
+  MessengerSendOutputPick,
   ScriptExecutionResult,
   TaskResultValidation,
   TaskSessionRuntimePort,
@@ -69,7 +69,7 @@ export function tryExtractJsonObject(text: string): PowerJsonObject | null {
  */
 export function pickAgentOutput(
   text: string,
-): ChatSendOutputPick {
+): MessengerSendOutputPick {
   return {
     text: String(text || "").trim(),
     delivered: false,

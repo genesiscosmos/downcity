@@ -60,9 +60,10 @@ async function list_files_recursively(directory_path: string): Promise<string[]>
 }
 
 /**
- * 返回 Builtin File Adapter 的默认 Agent 级存储目录。
+ * 返回 Builtin File Adapter 的默认 Agent 私有存储目录。
  *
- * 关键点（中文）：该路径规则属于 Memory Power 的本地 Adapter，不属于 Agent SDK。
+ * 关键点（中文）：Agent 私有记忆与共享记忆物理分离，该路径规则属于 Memory Power
+ * 的本地 Adapter，不属于 Agent SDK，也不由 City 生命周期存储分配。
  */
 export function get_default_file_memory_root_path(
   input: DefaultFileMemoryRootInput,
@@ -76,7 +77,7 @@ export function get_default_file_memory_root_path(
   if (!agent_id || !/^[a-z0-9_]+$/u.test(agent_id)) {
     throw new Error(`Invalid Memory agent_id: ${input.agent_id}`);
   }
-  return path.join(platform_root_path, "agents", agent_id, "powers", "memory");
+  return path.join(platform_root_path, "agents", agent_id, "memory");
 }
 
 /** 基于本地文件的 Memory Storage Adapter。 */

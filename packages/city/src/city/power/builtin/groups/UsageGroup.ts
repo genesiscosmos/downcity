@@ -45,6 +45,5 @@ class GetUsageAction extends CityAction<z.infer<typeof get_usage_input>> {
 /** `usage` 动作组。 */
 export class UsageGroup extends CityActionGroup {
   readonly group = "usage";
-  readonly summary = "User-level token usage for this Downcity user.";
   protected readonly actions = [new GetUsageAction()];
 }

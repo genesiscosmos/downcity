@@ -1,10 +1,12 @@
 /**
- * 验证 city power 的工具装配、动作索引与数据分发。
+ * 验证 City 三个领域 power 的工具装配、动作索引与数据分发。
  *
  * 关键点（中文）
  * - 用真实 City/Agent/Workspace 装配，只把沙箱自省替换为测试 Shell。
  * - 断言范围是模型可见契约：工具名、点号动作 id、索引、成功数据与错误。
- * - city 与其它 power 走同一条注册路径，因此这里也覆盖「以 power 名命名工具」这条不变量。
+ * - 动作 id 是 `组名.动作名`，与所属 power 名无关；这里同时固定两件事：
+ *   三个 power 的划分，以及拆分前后动作 id 不变。
+ * - 领域 power 与其它 power 走同一条注册路径，因此这里也覆盖「以 power 名命名工具」这条不变量。
  */
 
 import assert from "node:assert/strict";
@@ -18,11 +20,28 @@ import { City, Workspace } from "../bin/index.js";
 /** 当前 Workspace 在隔离环境中的固定挂载路径。 */
 const GUEST_WORKSPACE_PATH = "/workspace";
 
-/**
- * 单次 city 调用绑定的工具调用环境。
- *
- * 工具层直接接收 `ToolCallContext`；City 侧句柄由上下文工厂补齐。
- */
+/** City 自有的三个领域 power 及其动作 id；动作 id 与拆分前完全一致。 */
+const CITY_POWER_ACTIONS = {
+  context: [
+    "env.get",
+    "sandbox.explain_path",
+    "sandbox.get",
+    "sandbox.list_mounts",
+    "usage.get",
+    "workspaces.get",
+    "workspaces.list",
+  ],
+  ai: [
+    "image.create",
+    "image.models",
+    "image.result",
+    "sound.asr",
+    "sound.models",
+    "sound.tts",
+  ],
+  agent: ["agent.get", "agent.list"],
+};
+
 /**
  * 单次 city 调用绑定的工具调用环境。
  *
@@ -87,7 +106,7 @@ function create_test_agent(agent_id) {
 }
 
 /**
- * 调用一次 city power 工具，并携带显式调用环境。
+ * 调用一次领域 power 工具，并携带显式调用环境。
  *
  * 工具按 AgentTool 协议返回 `ActionResult`，其中 `output` 才是模型侧结果；
  * messages / effects 由 Executor 分流，这里只断言 output。
@@ -100,7 +119,7 @@ async function call_city_tool(tool, input) {
   return result.output;
 }
 
-/** 创建一套 City、Agent 与 Workspace，并返回 city power 工具。 */
+/** 创建一套 City、Agent 与 Workspace，并返回三个领域 power 工具。 */
 async function create_city_tool_fixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-power-"));
   const agent = create_test_agent("test-agent");
@@ -115,15 +134,13 @@ async function create_city_tool_fixture() {
   const session = await agent.sessions.create({ workspace });
   tool_call_context = { ...tool_call_context, session_id: session.id };
   const tools = city.power_tools;
-  const tool = tools.city;
-  assert.ok(tool, "city power should be assembled for every Agent/Workspace");
+  assert.ok(tools.context, "context power should be assembled for every Agent/Workspace");
   return {
     root,
     agent,
     workspace,
     city,
     session,
-    tool,
     tools,
     close: async () => {
       await city.close();
@@ -133,58 +150,65 @@ async function create_city_tool_fixture() {
   };
 }
 
-test("city power 以 power 名注册工具，并从动作自描述派生描述与索引", async () => {
+test("三个领域 power 各自以 power 名注册工具，并从动作自描述派生描述与索引", async () => {
   const fixture = await create_city_tool_fixture();
   try {
-    // 工具名即 power 名；不含组前缀的动作 id 只出现在索引里。
-    assert.ok(Object.prototype.hasOwnProperty.call(fixture.tools, "city"));
-    assert.equal(fixture.tools.city, fixture.tool);
+    // 工具名即 power 名；动作 id 仍是 `组名.动作名`，与所属 power 名无关。
+    for (const power_name of Object.keys(CITY_POWER_ACTIONS)) {
+      const tool = fixture.tools[power_name];
+      assert.ok(tool, `missing tool for power: ${power_name}`);
 
-    const index = await call_city_tool(fixture.tool, {});
-    assert.equal(index.success, true);
-    assert.equal(index.power, "city");
-    assert.equal(index.action, null);
-    const action_ids = index.data.actions.map((item) => item.action);
-    assert.deepEqual(action_ids, [
-      "agent.get",
-      "agent.list",
-      "env.get",
-      "image.create",
-      "image.models",
-      "image.result",
-      "sandbox.explain_path",
-      "sandbox.get",
-      "sandbox.list_mounts",
-      "sound.asr",
-      "sound.models",
-      "sound.tts",
-      "usage.get",
-      "workspaces.get",
-      "workspaces.list",
-    ]);
-    for (const item of index.data.actions) {
-      assert.ok(String(item.description || "").trim(), `missing description: ${item.action}`);
-      assert.ok(String(item.returns || "").trim(), `missing returns: ${item.action}`);
-      assert.ok(item.access === "read" || item.access === "write", `bad access: ${item.action}`);
+      const index = await call_city_tool(tool, {});
+      assert.equal(index.success, true);
+      assert.equal(index.power, power_name);
+      assert.equal(index.action, null);
+      const action_ids = index.data.actions.map((item) => item.action);
+      assert.deepEqual(action_ids, CITY_POWER_ACTIONS[power_name]);
+
+      for (const item of index.data.actions) {
+        assert.ok(String(item.description || "").trim(), `missing description: ${item.action}`);
+        assert.ok(String(item.returns || "").trim(), `missing returns: ${item.action}`);
+        assert.ok(item.access === "read" || item.access === "write", `bad access: ${item.action}`);
+        // 描述里逐条列出动作 id，模型无需先发现就能直接调用。
+        assert.match(tool.description, new RegExp(`- ${item.action}: `, "u"));
+      }
+
+      const unknown = await call_city_tool(tool, { action: "secret.get" });
+      assert.equal(unknown.success, false);
+      assert.match(unknown.error, /does not implement action/u);
     }
-
-    // 描述里逐条列出动作 id，模型无需先发现就能直接调用。
-    for (const action_id of action_ids) {
-      assert.match(fixture.tool.description, new RegExp(`- ${action_id}: `, "u"));
-    }
-
-    const unknown = await call_city_tool(fixture.tool, { action: "secret.get" });
-    assert.equal(unknown.success, false);
-    assert.match(unknown.error, /does not implement action/u);
   } finally {
     await fixture.close();
   }
 });
 
-test("city power env.get 返回当前 Agent、Session 与 Workspace 事实", async () => {
+test("动作 id 按组前缀归属，与所属 power 名解耦", async () => {
   const fixture = await create_city_tool_fixture();
   try {
-    const env = await call_city_tool(fixture.tool, { action: "env.get" });
+    // `env.get` 属于 context power，而不是某个叫 env 的 power。
+    assert.equal(fixture.tools.env, undefined);
+    assert.equal(fixture.tools.image, undefined);
+    assert.equal(fixture.tools.sound, undefined);
+    assert.equal(fixture.tools.city, undefined);
+
+    const env = await call_city_tool(fixture.tools.context, { action: "env.get" });
+    assert.equal(env.success, true);
+    assert.equal(env.power, "context");
+    assert.equal(env.action, "env.get");
+
+    // 同一个 power 内的组互不干扰：image 与 sound 都归 ai。
+    const models = await call_city_tool(fixture.tools.ai, { action: "image.models" });
+    assert.equal(models.power, "ai");
+    assert.equal(models.action, "image.models");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("context power env.get 返回当前 Agent、Session 与 Workspace 事实", async () => {
+  const fixture = await create_city_tool_fixture();
+  try {
+    const env = await call_city_tool(fixture.tools.context, { action: "env.get" });
     assert.equal(env.success, true);
     assert.equal(env.action, "env.get");
     assert.equal(env.data.agent_id, "test-agent");
@@ -196,7 +220,7 @@ test("city power env.get 返回当前 Agent、Session 与 Workspace 事实", asy
     assert.match(env.data.now, /^\d{4}-\d{2}-\d{2}T/u);
     assert.match(env.data.current_date, /^\d{4}-\d{2}-\d{2}$/u);
 
-    const unknown_args = await call_city_tool(fixture.tool, {
+    const unknown_args = await call_city_tool(fixture.tools.context, {
       action: "env.get",
       args: { keys: ["agent_id"] },
     });
@@ -207,20 +231,20 @@ test("city power env.get 返回当前 Agent、Session 与 Workspace 事实", asy
   }
 });
 
-test("city power sandbox 动作回答沙箱事实并按 Workspace 边界判定路径", async () => {
+test("context power sandbox 动作回答沙箱事实并按 Workspace 边界判定路径", async () => {
   const fixture = await create_city_tool_fixture();
   try {
-    const sandbox = await call_city_tool(fixture.tool, { action: "sandbox.get" });
+    const sandbox = await call_city_tool(fixture.tools.context, { action: "sandbox.get" });
     assert.equal(sandbox.data.backend, "test-backend");
     assert.equal(sandbox.data.sandbox_id, "test-sandbox");
     assert.equal(sandbox.data.workdir, GUEST_WORKSPACE_PATH);
     assert.equal(sandbox.data.mounts[0].host_path, fixture.workspace.path);
     assert.equal(sandbox.data.persistent, true);
 
-    const mounts = await call_city_tool(fixture.tool, { action: "sandbox.list_mounts" });
+    const mounts = await call_city_tool(fixture.tools.context, { action: "sandbox.list_mounts" });
     assert.equal(mounts.data.mounts.length, 1);
 
-    const inside = await call_city_tool(fixture.tool, {
+    const inside = await call_city_tool(fixture.tools.context, {
       action: "sandbox.explain_path",
       args: { path: "packages/city/src/index.ts" },
     });
@@ -232,7 +256,7 @@ test("city power sandbox 动作回答沙箱事实并按 Workspace 边界判定�
     );
     assert.equal(inside.data.matched_mount.host_path, fixture.workspace.path);
 
-    const outside = await call_city_tool(fixture.tool, {
+    const outside = await call_city_tool(fixture.tools.context, {
       action: "sandbox.explain_path",
       args: { path: path.join(fixture.root, "outside.txt") },
     });
@@ -240,7 +264,7 @@ test("city power sandbox 动作回答沙箱事实并按 Workspace 边界判定�
     assert.equal(outside.data.reason_code, "outside_workspace");
     assert.equal(outside.data.matched_mount, null);
 
-    const guest = await call_city_tool(fixture.tool, {
+    const guest = await call_city_tool(fixture.tools.context, {
       action: "sandbox.explain_path",
       args: { path: `${GUEST_WORKSPACE_PATH}/README.md` },
     });
@@ -248,46 +272,72 @@ test("city power sandbox 动作回答沙箱事实并按 Workspace 边界判定�
     assert.equal(guest.data.resolved_path, path.join(fixture.workspace.path, "README.md"));
     assert.match(guest.data.reason, /mapped to the host path/u);
 
-    const missing_arg = await call_city_tool(fixture.tool, {
+    const missing_arg = await call_city_tool(fixture.tools.context, {
       action: "sandbox.explain_path",
       args: {},
     });
     assert.equal(missing_arg.success, false);
-    assert.match(missing_arg.error, /Invalid payload for city\.sandbox\.explain_path/u);
+    assert.match(missing_arg.error, /Invalid payload for context\.sandbox\.explain_path/u);
 
-    const unknown_arg = await call_city_tool(fixture.tool, {
+    const unknown_arg = await call_city_tool(fixture.tools.context, {
       action: "sandbox.explain_path",
       args: { path: "a", extra: "b" },
     });
     assert.equal(unknown_arg.success, false);
-    assert.match(unknown_arg.error, /Invalid payload for city\.sandbox\.explain_path/u);
+    assert.match(unknown_arg.error, /Invalid payload for context\.sandbox\.explain_path/u);
   } finally {
     await fixture.close();
   }
 });
 
-test("city power usage.get 在 bureau 未暴露用户用量前明确失败", async () => {
+test("context power usage.get 在 bureau 未暴露用户用量前明确失败", async () => {
   const fixture = await create_city_tool_fixture();
   try {
-    const usage = await call_city_tool(fixture.tool, {
+    const usage = await call_city_tool(fixture.tools.context, {
       action: "usage.get",
       args: { scope: "month" },
     });
     assert.equal(usage.success, false);
     assert.match(usage.error, /not available yet/u);
 
-    const bad_scope = await call_city_tool(fixture.tool, {
+    const bad_scope = await call_city_tool(fixture.tools.context, {
       action: "usage.get",
       args: { scope: "year" },
     });
     assert.equal(bad_scope.success, false);
-    assert.match(bad_scope.error, /Invalid payload for city\.usage\.get/u);
+    assert.match(bad_scope.error, /Invalid payload for context\.usage\.get/u);
   } finally {
     await fixture.close();
   }
 });
 
-test("city power 在 Workspace 没有 Shell 时明确回答沙箱不可用", async () => {
+test("agent power 只列出当前 City 的 Agent，并在找不到时明确失败", async () => {
+  const fixture = await create_city_tool_fixture();
+  try {
+    const list = await call_city_tool(fixture.tools.agent, { action: "agent.list" });
+    assert.equal(list.success, true);
+    assert.equal(list.data.agents.length, 1);
+    assert.equal(list.data.agents[0].agent_id, "test-agent");
+    assert.equal(list.data.agents[0].is_current, true);
+
+    const current = await call_city_tool(fixture.tools.agent, {
+      action: "agent.get",
+      args: { agent_id: "test-agent" },
+    });
+    assert.equal(current.data.agent.is_current, true);
+
+    const missing = await call_city_tool(fixture.tools.agent, {
+      action: "agent.get",
+      args: { agent_id: "ghost-agent" },
+    });
+    assert.equal(missing.success, false);
+    assert.match(missing.error, /not visible in this City/u);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("领域 power 在 Workspace 没有 Shell 时明确回答沙箱不可用", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-city-power-noshell-"));
   const agent = create_test_agent("no-shell-agent");
   const workspace_path = path.join(root, "no-shell-workspace");
@@ -306,8 +356,7 @@ test("city power 在 Workspace 没有 Shell 时明确回答沙箱不可用", asy
       agent_name: agent.name,
       session_id: session.id,
     };
-    const tool = city.power_tools.city;
-    const sandbox = await call_city_tool(tool, { action: "sandbox.get" });
+    const sandbox = await call_city_tool(city.power_tools.context, { action: "sandbox.get" });
     assert.equal(sandbox.success, true);
     assert.equal(sandbox.data.available, false);
     assert.equal(sandbox.data.backend, null);

@@ -518,6 +518,9 @@ test("City config actions use the Power-owned config store", async () => {
     await city.powers.invoke_config("config-main", "read"),
     { token: "secret" },
   );
-  assert.deepEqual(requests.filter((id) => id !== "city" && id !== "shell"), ["config-main"]);
+  assert.deepEqual(
+    requests.filter((id) => !["context", "ai", "agent", "shell"].includes(id)),
+    ["config-main"],
+  );
   await city.close();
 });

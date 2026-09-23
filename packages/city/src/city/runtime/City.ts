@@ -9,9 +9,11 @@
 import { Agent, Group } from "@downcity/agent";
 import path from "node:path";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
-import { CityPower } from "@/city/power/builtin/CityPower.js";
+import { AiPower } from "@/city/power/builtin/AiPower.js";
+import { AgentPower } from "@/city/power/builtin/AgentPower.js";
+import { ContextPower } from "@/city/power/builtin/ContextPower.js";
 import { ShellPower } from "@/city/power/builtin/shell/ShellPower.js";
-import { create_city_action_groups } from "@/city/power/builtin/groups/index.js";
+import type { Power } from "@/power/index.js";
 import type { CityPowers } from "@/city/types/CityPower.js";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { StorageProvider } from "@/workspace/index.js";
@@ -119,17 +121,10 @@ export class City implements CityRuntime {
       ...(options.power_host ? { host: options.power_host } : {}),
     });
     this.powers = this.power_runtime.public_api;
-    // city power 与其它 power 走同一条注册路径；特权依赖在这里注入。
-    void this.powers
-      .add(
-        new CityPower({
-          access: this.runtime_access,
-          files_for: (agent_id, group_id) =>
-            this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
-          ...(this.embassy ? { embassy: this.embassy } : {}),
-        }),
-      )
-      .catch(() => undefined);
+    // 三个领域 power 与 shell 一样走同一条注册路径；特权依赖在这里注入。
+    for (const power of this.create_city_powers()) {
+      void this.powers.add(power).catch(() => undefined);
+    }
     // Shell 属于 Workspace，但只在模型面以 power 形式暴露一次。
     void this.powers.add(new ShellPower()).catch(() => undefined);
     for (const power of collection_values(options.powers)) {
@@ -193,10 +188,26 @@ export class City implements CityRuntime {
   }
 
   /**
+   * 创建 City 自有的领域 power。
+   *
+   * 关键点（中文）：三个 power 共享同一份特权依赖；动作组私有文件按 Agent + 组名隔离，
+   * 因此组在 power 之间搬迁不会改变落盘路径。
+   */
+  private create_city_powers(): Power[] {
+    const options = {
+      access: this.runtime_access,
+      files_for: (agent_id: string, group_id: string) =>
+        this.storage.open_scope(["agents", agent_id, "powers", group_id]).files,
+      ...(this.embassy ? { embassy: this.embassy } : {}),
+    };
+    return [new ContextPower(options), new AiPower(options), new AgentPower(options)];
+  }
+
+  /**
    * 判断某个动作 id 是否由 City 自有 power 提供。
    *
-   * 关键点（中文）
-   * - 供宿主与 transport 在不构造工具的情况下确认能力是否登记。
+   * 关键点（中文）：动作 id 是 `组名.动作名`，与所属 power 名无关，
+   * 因此按组前缀判定，不依赖 power 名与组名的对应关系。
    */
   private has_city_action(action_id: string): boolean {
     return city_action_exists(action_id);
@@ -591,14 +602,24 @@ function collection_values<TValue>(
 }
 
 /**
- * 判断某个动作 id 是否由 City 自有 power 提供。
+ * City 自有 power 的动作组前缀。
  *
- * 关键点（中文）
- * - city power 的工具可以附带 `city:` 前缀写法，因此两种写法都要命中。
+ * 关键点（中文）：动作 id 是 `组名.动作名`，因此按组前缀归类，
+ * 不依赖 power 名与组名的对应关系。
  */
+const CITY_ACTION_PREFIXES: readonly string[] = [
+  "env",
+  "sandbox",
+  "workspaces",
+  "usage",
+  "agent",
+  "image",
+  "sound",
+];
+
+/** 判断某个动作 id 是否由 City 自有 power 提供。 */
 function city_action_exists(action_id: string): boolean {
   const name = String(action_id || "").trim();
   if (!name) return false;
-  const groups = create_city_action_groups();
-  return groups.some((group) => group.action_ids().includes(name));
+  return CITY_ACTION_PREFIXES.some((prefix) => name.startsWith(`${prefix}.`));
 }

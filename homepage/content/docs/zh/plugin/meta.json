@@ -1,4 +1,4 @@
 {
   "title": "Plugin",
-  "pages": ["overview", "chat", "task", "memory", "shell", "custom"]
+  "pages": ["overview", "messenger", "task", "memory", "shell", "custom"]
 }

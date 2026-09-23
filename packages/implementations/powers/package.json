@@ -14,9 +14,9 @@
       "types": "./bin/index.d.ts",
       "import": "./bin/index.js"
     },
-    "./chat": {
-      "types": "./bin/chat.d.ts",
-      "import": "./bin/chat.js"
+    "./messenger": {
+      "types": "./bin/messenger.d.ts",
+      "import": "./bin/messenger.js"
     },
     "./memory": {
       "types": "./bin/memory.d.ts",
@@ -43,13 +43,13 @@
     "build": "node ../../../scripts/clean-package.mjs && tsc && tsc-alias -f",
     "dev": "pnpm build && concurrently -k -n tsc,alias \"tsc --watch --preserveWatchOutput\" \"tsc-alias -f --watch\"",
     "typecheck": "tsc --noEmit",
-    "test:chat-access": "pnpm build && node --test scripts/chat-access.test.mjs",
-    "test:chat-config": "pnpm build && node --test scripts/chat-channel-config.test.mjs",
+    "test:messenger-access": "pnpm build && node --test scripts/messenger-access.test.mjs",
+    "test:messenger-config": "pnpm build && node --test scripts/messenger-channel-config.test.mjs",
     "test:power-host": "pnpm build && node --test scripts/power-host-actions.test.mjs",
-    "test:chat-storage": "pnpm build && node --test scripts/chat-storage.test.mjs",
-    "test:chat-delivery": "pnpm build && node --test scripts/chat-delivery.test.mjs",
-    "test:chat-inbound-parts": "pnpm build && node --test scripts/chat-inbound-prompt-parts.test.mjs",
-    "test:chat-inbound-voice": "pnpm build && node --test scripts/chat-inbound-voice.test.mjs",
+    "test:messenger-storage": "pnpm build && node --test scripts/messenger-storage.test.mjs",
+    "test:messenger-delivery": "pnpm build && node --test scripts/messenger-delivery.test.mjs",
+    "test:messenger-inbound-parts": "pnpm build && node --test scripts/messenger-inbound-prompt-parts.test.mjs",
+    "test:messenger-inbound-voice": "pnpm build && node --test scripts/messenger-inbound-voice.test.mjs",
     "test:exports": "pnpm build && node --test scripts/power-subpaths.test.mjs",
     "test:renderer": "node --test scripts/power-renderer-tokens.test.mjs",
     "test:memory": "pnpm build && node --test scripts/memory-power.test.mjs scripts/memory-web-host-actions.test.mjs",

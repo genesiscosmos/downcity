@@ -17,11 +17,11 @@ export {
 export type * from "./types/session/SessionContent.js";
 export type * from "./types/session/SessionMessage.js";
 export {
-  CHAT_ENVIRONMENT_CONTEXT_TAG,
-  CHAT_INFO_CONTEXT_TAG,
-  CHAT_RUNTIME_CONTEXT_TAGS,
-  is_chat_runtime_context_tag,
-  type ChatRuntimeContextTag,
+  MESSENGER_ENVIRONMENT_CONTEXT_TAG,
+  MESSENGER_INFO_CONTEXT_TAG,
+  MESSENGER_RUNTIME_CONTEXT_TAGS,
+  is_messenger_runtime_context_tag,
+  type MessengerRuntimeContextTag,
 } from "./types/session/SessionUserContextTags.js";
 export * from "./types/session/SessionInteraction.js";
 export type * from "./types/session/SessionAction.js";

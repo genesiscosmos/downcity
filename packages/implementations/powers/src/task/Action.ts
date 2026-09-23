@@ -84,7 +84,7 @@ function buildDefaultTaskBody(): string {
     "",
     "- 最终输出直接写结果本身，不要包多余寒暄，不要粘贴冗长日志。",
     "- 需要结构时，优先使用短标题、要点列表、表格或 JSON 等稳定格式。",
-    "- 如果任务需要通知外部渠道，由执行任务的 Agent 自己调用 chat power。",
+    "- 如果任务需要通知外部渠道，由执行任务的 Agent 自己调用 messenger power。",
     "",
     "# 触发与状态建议",
     "",
@@ -96,7 +96,7 @@ function buildDefaultTaskBody(): string {
     "",
     "- 当前是独立 task 上下文，不要假设仍处在原始聊天回合里。",
     "- 任务运行记录由 Task Power 统一保存；需要交付给用户的文件应明确写入项目目录。",
-    "- 任务完成结果写入关联 Session 的 assistant 消息，不会替 Agent 调用 chat power。",
+    "- 任务完成结果写入关联 Session 的 assistant 消息，不会替 Agent 调用 messenger power。",
     "",
   ].join("\n");
 }

@@ -192,7 +192,7 @@ export type TaskSessionRuntimePort = {
 /**
  * 从 assistant 输出中提取的文本结果。
  */
-export type ChatSendOutputPick = {
+export type MessengerSendOutputPick = {
   /**
    * 最终提取到的文本内容。
    */

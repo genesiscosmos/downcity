@@ -1,5 +1,5 @@
 /**
- * @file 验证 city tool `sound` method 的模型发现、ASR/TTS 调用与程序化转写入口。
+ * @file 验证 ai power `sound` 动作组的模型发现、ASR/TTS 调用与程序化调用入口。
  */
 
 import test from "node:test";
@@ -51,14 +51,14 @@ async function create_fixture(options = {}) {
     city,
     tools,
     /**
-     * 调用一次 city 工具。
+     * 调用一次 ai 工具。
      *
      * 关键点（中文）
      * - 只接受 `{ action: "sound.asr", args }` 形式；工具返回 ActionResult，
      *   这里只暴露模型侧 output。
      */
     call: async ({ action, args } = {}) => {
-      const result = await tools.city.execute(
+      const result = await tools.ai.execute(
         args === undefined ? { action } : { action, args },
         {
           agent_id: agent.id,
@@ -93,11 +93,12 @@ async function create_fixture(options = {}) {
   };
 }
 
-test("sound method 与 image method 同在一个 city 工具里", async () => {
+test("ai power 同时承载 image 与 sound 两个动作组", async () => {
   const fixture = await create_fixture({ asr: () => ({ text: "hi" }), tts: () => ({}) });
   try {
-    assert.deepEqual(Object.keys(fixture.tools).sort(), ["city", "shell"]);
+    assert.deepEqual(Object.keys(fixture.tools).sort(), ["agent", "ai", "context", "shell"]);
     const index = await fixture.call({});
+    assert.equal(index.power, "ai");
     const action_ids = index.data.actions.map((item) => item.action);
     assert.ok(action_ids.includes("sound.asr"));
     assert.ok(action_ids.includes("image.create"));
@@ -132,7 +133,7 @@ test("sound models 按能力筛选", async () => {
       args: { capability: "image" },
     });
     assert.equal(invalid.success, false);
-    assert.match(invalid.error, /Invalid payload for city\.sound\.models/u);
+    assert.match(invalid.error, /Invalid payload for ai\.sound\.models/u);
   } finally {
     await fixture.close();
   }
@@ -286,7 +287,7 @@ test("无 Session 的程序化调用被拒绝式审批端口拦下", async () =>
           description: "invoke sound asr",
           execute: async ({ context, input }) => {
             const result = await context.city.powers.run_action({
-              power: "city",
+              power: "ai",
               action: "sound.asr",
               payload: input,
             });

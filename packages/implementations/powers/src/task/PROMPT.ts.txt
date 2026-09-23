@@ -124,7 +124,7 @@ The body should include at least these headings:
 - `# Output Requirements` must clearly specify the final artifact's format, structure, tone, length, and excluded content.
 - Explicitly state that the final assistant message will be written directly to `output.md`. When the Task has a captured `delivery_session`, it is also appended to that Session. Therefore, the final answer must be exactly the deliverable content.
 - Content-generation tasks such as daily reports, reminders, morning briefings, summaries, and reports must explicitly require "the final output is the deliverable body itself". Do not let the executor output process notes.
-- If the task itself should notify a user or external channel, the body should require the task Agent to call the chat power directly.
+- If the task itself should notify a user or external channel, the body should require the task Agent to call the messenger power directly.
 - Unless truly needed, do not ask the executor to repeat the task title, execution time, status, or other metadata in the body.
 - Constraints in the body must be executable and checkable. Avoid weak phrases such as "appropriately", "as much as possible", or "depending on the situation".
 - Do not put task creation, task update, task status lookup, or same-title existence checks into the body. Those belong to the task power, not to the task deliverable.
@@ -174,7 +174,7 @@ The body should include at least these headings:
 - Therefore, the "Output Requirements" section must be written for the final user, not only for developers.
 - For user-facing agent tasks, the body should require "the final assistant message directly outputs the deliverable itself". Do not let the executor explain how it created, checked, updated, triggered, or sent the task.
 - For content-generation tasks such as daily reports, reminders, morning briefings, and summaries, the final output should be exactly that content. It should not include process language such as "I will handle this", "task sent", or "task status summary".
-- The task execution Agent may call the chat power itself when the task body explicitly requires a notification. Task completion delivery to the associated Session does not call the chat power.
+- The task execution Agent may call the messenger power itself when the task body explicitly requires a notification. Task completion delivery to the associated Session does not call the messenger power.
 
 ### Choosing `when` And `status`
 
@@ -208,7 +208,7 @@ The body should include at least these headings:
 - The final assistant message is the final result. Do not include long logs.
 - The final assistant message must output the deliverable itself. Do not output task-management process, sending process, or status reports.
 - Do not use meta language such as "I will help you...", "First, let me...", or "sent".
-- Call the chat power send action from this task Session when the task explicitly requires a notification.
+- Call the messenger power send action from this task Session when the task explicitly requires a notification.
 
 # Trigger And Status Recommendation
 
@@ -216,7 +216,7 @@ The body should include at least these headings:
 
 # Notes
 
-- Call chat power send actions when the task explicitly requires notifying a user or external channel.
+- Call messenger power send actions when the task explicitly requires notifying a user or external channel.
 ```
 
 ### Script Template

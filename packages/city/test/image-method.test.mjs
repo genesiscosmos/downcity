@@ -1,9 +1,9 @@
 /**
- * @file 验证 city tool `image` method 的两步式任务协议。
+ * @file 验证 ai power `image` 动作组的两步式任务协议。
  *
  * 关键点（中文）
- * - 全部能力都在唯一的 `city` 工具里，按 `{ method, action, args }` 调用。
- * - `result` 默认只读一次；`until_done=true` 时在 method 内等待终态。
+ * - 图像能力位于 `ai` 工具的 `image.*` 动作里，按 `{ action, args }` 调用。
+ * - `result` 默认只读一次；`until_done=true` 时在动作内等待终态。
  * - 成功结果只返回已保存的本地路径，不注入 Agent 消息。
  */
 
@@ -20,7 +20,7 @@ import { City, LocalStorageProvider, Workspace } from "../bin/index.js";
 /** 当前测试注入的图片 AI 服务实现。 */
 let current_image_ai;
 
-/** 创建绑定测试图片服务的 City，并返回其 Agent、Workspace 与 city 工具。 */
+/** 创建绑定测试图片服务的 City，并返回其 Agent、Workspace 与 ai 工具。 */
 async function create_fixture(options = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-image-method-"));
   const workspace_path = path.join(root, "workspace");
@@ -53,14 +53,14 @@ async function create_fixture(options = {}) {
     city,
     tools,
     /**
-     * 调用一次 city 工具。
+     * 调用一次 ai 工具。
      *
      * 关键点（中文）
      * - 只接受 `{ action: "image.create", args }` 形式；工具按 AgentTool 协议
      *   返回 ActionResult，这里只暴露模型侧 output。
      */
     call: async ({ action, args } = {}) => {
-      const result = await tools.city.execute(
+      const result = await tools.ai.execute(
         args === undefined ? { action } : { action, args },
         {
           agent_id: agent.id,
@@ -111,16 +111,17 @@ function create_image_message(url = "https://storage.example.com/result.png") {
   };
 }
 
-test("city 只暴露一个工具，image 是其中一个 method", async () => {
+test("ai power 同时暴露 image 与 sound 动作组，image 是其中一个组", async () => {
   const fixture = await create_fixture({
     image_create: () => ({ job_id: "img_1", status: "queued" }),
     image_result: () => ({ job_id: "img_1", status: "queued" }),
   });
   try {
-    assert.deepEqual(Object.keys(fixture.tools).sort(), ["city", "shell"]);
+    assert.deepEqual(Object.keys(fixture.tools).sort(), ["agent", "ai", "context", "shell"]);
     assert.equal("image_create" in fixture.tools, false);
     const index = await fixture.call({});
     assert.equal(index.success, true);
+    assert.equal(index.power, "ai");
     assert.ok(
       index.data.actions.some((item) => item.action.startsWith("image.")),
       "image actions appear in the power index",
@@ -138,7 +139,7 @@ test("city 只暴露一个工具，image 是其中一个 method", async () => {
   }
 });
 
-test("image method 贡献一段 session system 说明", async () => {
+test("image 动作组贡献一段 session system 说明", async () => {
   const fixture = await create_fixture({
     image_create: () => ({ job_id: "img_1", status: "queued" }),
     image_result: () => ({ job_id: "img_1", status: "queued" }),
@@ -151,7 +152,7 @@ test("image method 贡献一段 session system 说明", async () => {
     const image_block = messages.find((message) =>
       String(message.content || "").includes("# Image actions")
     );
-    assert.ok(image_block, "city power should inject one system block covering its action groups");
+    assert.ok(image_block, "ai power should inject one system block covering its action groups");
     assert.match(image_block.content, /# Image actions/u);
     assert.match(image_block.content, /explicitly confirm/u);
     assert.match(image_block.content, /# Sound actions/u);
@@ -339,7 +340,7 @@ test("image create 拒绝未声明参数与非法图片地址", async () => {
       args: { model: "m", messages: [{ role: "user" }] },
     });
     assert.equal(unknown.success, false);
-    assert.match(unknown.error, /Invalid payload for city\.image\.create/u);
+    assert.match(unknown.error, /Invalid payload for ai\.image\.create/u);
 
     const data_url = await fixture.call({ action: "image.create",
       args: { model: "m", content: [{ type: "image", url: "data:image/png;base64,AAAA" }] },

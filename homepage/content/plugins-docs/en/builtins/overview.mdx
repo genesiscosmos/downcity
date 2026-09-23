@@ -10,7 +10,7 @@ The current built-in plugin capabilities in code include:
 - `skill`
 - `web`
 - `sound`
-- `chat`
+- `messenger`
 - `schedule`
 - `task`
 - `memory`
@@ -22,7 +22,7 @@ Each SDK-facing built-in has an isolated package subpath:
 
 | Plugin | Import path |
 | --- | --- |
-| `chat` | `@downcity/plugins/chat` |
+| `messenger` | `@downcity/powers/messenger` |
 | `image` | `@downcity/plugins/image` |
 | `memory` | `@downcity/plugins/memory` |
 | `skill` | `@downcity/plugins/skill` |
@@ -42,7 +42,7 @@ These are the ones most developers are likely to read first:
 - `skill`
 - `web`
 - `sound`
-- `chat`
+- `messenger`
 
 `sound` requires the FED model catalog plus ASR and TTS functions through its constructor. Built-in plugins are assembled explicitly from their individual package subpaths.
 
@@ -66,8 +66,8 @@ These plugins are usually read to understand how the platform is assembled, not 
 
 ## How to read this section
 
-- If you want user-facing capability plugins, start with `skill`, `web`, `sound`, and `chat`
-- If you want platform rule layers, read the built-in authorization capability in `chat`
+- If you want user-facing capability plugins, start with `skill`, `web`, `sound`, and `messenger`
+- If you want platform rule layers, read the built-in authorization capability in `messenger`
 - If you want infrastructure patterns, read `schedule`, `task`, `memory`, and `shell`
 
 ## Responsibility map
@@ -77,7 +77,7 @@ These plugins are usually read to understand how the platform is assembled, not 
 | `skill` | skill discovery, installation guidance, and content loading | action + system |
 | `web` | web methodology injection and dependency preparation | action + system |
 | `sound` | FED speech-model discovery, ASR, TTS, and inbound auto-transcription | action + pipeline + system |
-| `chat` | channel runtime, queue worker, chat authorization, and role resolution | lifecycle + actions + hooks + resolves + system |
+| `messenger` | channel runtime, queue worker, messenger authorization, and role resolution | lifecycle + actions + hooks + resolves + system |
 | `schedule` | plugin action scheduling infrastructure | lifecycle-only infrastructure |
 | `task` | task scheduler and cron execution | lifecycle + actions + system |
 | `memory` | provider-neutral long-term memory and recall | lifecycle + actions + system |

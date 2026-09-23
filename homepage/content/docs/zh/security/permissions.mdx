@@ -5,9 +5,9 @@ description: "了解 Chat 用户进入 Agent 前的准入模型"
 
 # Chat Access
 
-Chat Access 是 Chat Plugin 的准入能力，只回答一个问题：某个外部 Chat 用户的私聊或群聊消息，是否可以进入指定 Agent。
+Chat Access 是 Messenger Power 的准入能力，只回答一个问题：某个外部 Chat 用户的私聊或群聊消息，是否可以进入指定 Agent。
 
-它不是 Agent Core 权限，也不是通用 Role/Permission 系统。用户通过准入后，Chat Plugin 只把消息交给 Agent，不会向 Session 或其他 Plugin 传播角色和权限。
+它不是 Agent Core 权限，也不是通用 Role/Permission 系统。用户通过准入后，Messenger Power 只把消息交给 Agent，不会向 Session 或其他 Plugin 传播角色和权限。
 
 ## 核心规则
 
@@ -19,7 +19,7 @@ Chat Access 是 Chat Plugin 的准入能力，只回答一个问题：某个外�
 
 ## 批准流程
 
-未批准用户发送私聊消息时，Chat Plugin 会创建或复用一个 pending Request，并返回类似命令：
+未批准用户发送私聊消息时，Messenger Power 会创建或复用一个 pending Request，并返回类似命令：
 
 ```bash
 city plugin action chat access-approve assistant --input '{"request_id":"req_xxx"}' --token <token>
@@ -38,10 +38,10 @@ city plugin action chat access-snapshot assistant --input '{}' --token <token>
 每个 Agent 独立保存：
 
 ```text
-~/.downcity/agents/<agent_id>/plugins/chat/access.db
+~/.downcity/agents/<agent_id>/powers/messenger/messenger/access.db
 ```
 
-Chat Access 数据库包含 Principal、Request、Allow/Deny Grant 和审计事件，不包含 Bot Token、App Secret 或消息正文。Chat 渠道凭据属于 `~/.downcity/plugins/chat/config.toml` 中的唯一明文配置；Chat Config UI 读取时不会返回凭据原文。
+Chat Access 数据库包含 Principal、Request、Allow/Deny Grant 和审计事件，不包含 Bot Token、App Secret 或消息正文。Messenger 渠道凭据属于 `~/.downcity/powers/messenger/config.toml` 中的唯一明文配置；Messenger Config UI 读取时不会返回凭据原文。
 
 ## 与 City Auth 的区别
 
@@ -50,5 +50,5 @@ Agent Token 负责 HTTP 控制面认证。一个 Token 只属于一个 Agent，�
 ## 相关文档
 
 - [CLI 命令](/zh/docs/cli/commands)
-- [Chat 插件](/zh/docs/plugin/chat)
+- [Messenger Power](/zh/docs/plugin/messenger)
 - [`.downcity` 目录](/zh/docs/reference/dot-downcity)

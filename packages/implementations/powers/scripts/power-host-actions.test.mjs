@@ -256,6 +256,7 @@ test("Messenger Power 拒绝没有凭据的新 Channel", async () => {
 
 test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
   const base_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-skill-main-"));
+  const lifecycle_path = path.join(base_path, "powers", "skill");
   const workspace_path = path.join(base_path, "workspace");
   const home_path = path.join(base_path, "home");
   const skill_path = path.join(workspace_path, ".agents", "skills", "demo");
@@ -268,13 +269,13 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
   const previous_home = process.env.HOME;
   process.env.HOME = home_path;
   try {
-    const actions = await start_skill_power(base_path, workspace_path);
+    const actions = await start_skill_power(lifecycle_path, workspace_path);
 
     // 初始状态：Agent 目录为空，但全局目录已能看到 Workspace 与用户目录 Skill。
     const before = await actions.get("skill.catalog").run({ agent_id: "test-agent" });
     assert.deepEqual(before.agents[0].skills, []);
     // 界面必须能回答「装到哪」：目录由 Agent ID 派生并以 ~ 折叠。
-    assert.match(before.agents[0].directory, /\/agents\/test-agent$/);
+    assert.match(before.agents[0].directory, /\/agents\/test-agent\/skills$/);
     const before_demo = before.catalog.find((item) => item.id === "demo");
     assert.ok(before_demo, "全局目录未包含 Workspace Skill");
     assert.equal(before_demo.linked, false);

@@ -151,25 +151,21 @@ PluginRegistry projection changes take effect at Session checkpoints. A Plugin i
 
 ActionSchedule is a local delayed Plugin Action scheduler owned by the Agent. Events are stored in the Agent's storage scope; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
 
-## City Tool
+## City Powers
 
-Every Agent receives one read-only `city` Tool: the single entry point for City capabilities. It is organised as **methods**, and one call looks like:
+Every Agent receives three City-owned powers. They are the single entry point for "what only the harness knows" plus the generation models City itself holds.
 
 ```jsonc
-{ "method": "sandbox", "action": "explain_path", "args": { "path": "~/.downcity/plugins/chat" } }
+{ "action": "sandbox.explain_path", "args": { "path": "~/.downcity/powers/messenger" } }
 ```
 
-| Method | Answers |
-| --- | --- |
-| `env` | Which Agent, Session, Workspace, model, timezone and local date this turn runs under |
-| `sandbox` | Which sandbox backend and instance this Session runs in, which host directories are mounted, and why a path is blocked |
-| `workspaces` | Every Workspace registered in this City |
-| `agent` | Every Agent registered in this City |
-| `usage` | User-level token usage; answers `unsupported_action` until bureau exposes it |
-| `image` | `models`, `create`, `result` — generate images |
-| `sound` | `models`, `asr`, `tts` — transcribe audio and synthesize speech |
+| Power | Action groups | Answers |
+| --- | --- | --- |
+| `context` | `env`, `sandbox`, `workspaces`, `usage` | Which Agent, Session, Workspace, model, timezone and local date this turn runs under; which sandbox backend and instance this Session runs in, which host directories are mounted, and why a path is blocked; every Workspace registered in this City; user-level token usage |
+| `ai` | `image`, `sound` | Generate images; transcribe audio and synthesize speech |
+| `agent` | `agent` | Every Agent registered in this City |
 
-Calling `city` with no arguments lists the methods. Omitting `action` lists one method's actions with their arguments, return shape and whether they write. Nothing here returns credential values, and each action declares `read` or `write` so you can see which ones consume quota or change state before calling them.
+An action id is `group.action`, independent of which power owns it: `env.get` belongs to `context`, and both `image.*` and `sound.*` belong to `ai`. Calling a power with no arguments lists its actions; nothing here returns credential values, and each action declares `read` or `write` so you can see which ones consume quota or change state before calling them.
 
 Availability follows the same rule as Plugins: everything City registers is available to every Agent, with no per-Agent gating and no configuration file.
 
@@ -177,9 +173,9 @@ Availability follows the same rule as Plugins: everything City registers is avai
 
 Both use the models available to your Federation account, so there is no separate configuration and nothing to set up. Because there is no configured default, pass `model` explicitly or take it from `image.models` / `sound.models`; `asr` and `tts` fall back to the first suitable model when none is given.
 
-Image generation is a two-step job: `create` returns a `job_id`, `result` reads it. Creating an image consumes quota, so the model must confirm with you first. `result` writes the generated images into the Agent's private directory and returns their local paths; render them with `![](path)`.
+Image generation is a two-step job: `create` returns a `job_id`, `result` reads it. Creating an image consumes quota, so the model must confirm with you first. `result` writes the generated images into the power's private directory and returns their local paths; render them with `![](path)`.
 
-Automatic transcription of inbound voice messages belongs to the Chat plugin, which calls the `sound` method when a channel delivers a voice or audio attachment. If transcription fails for one attachment, the message still arrives.
+Automatic transcription of inbound voice messages belongs to the Messenger power, which calls the `ai` power's `sound.asr` when a channel delivers a voice or audio attachment. If transcription fails for one attachment, the message still arrives.
 
 ## Security model
 
@@ -191,7 +187,7 @@ Security is enforced at distinct capability boundaries:
 | Sandbox Shell | Workspace Sandbox | Commands run in the Workspace's isolated, persistent environment |
 | Host Shell | Approval gateway | The user explicitly authorizes one host command with a recorded reason |
 | Plugin | Plugin business authorization | Workspace does not own all Plugin resource access |
-| City Tool | Read-only by construction | Answers runtime facts and runs declared `read` actions; `write` actions consume quota or write files under the Agent's directory |
+| City Power | Declared per action | Answers runtime facts and runs declared `read` actions; `write` actions consume quota or write files under the Agent's directory |
 | Custom Tool | Registering host | Agent Core does not infer business permissions |
 
 Explicit attachments may use an absolute path selected by the host because they are declared Prompt inputs. This does not expand where model-driven File/Search Tools may browse.

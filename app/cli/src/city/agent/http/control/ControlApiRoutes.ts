@@ -8,7 +8,7 @@
  */
 
 import type { ControlRouteRegistrationParams } from "@/city/agent/http/control/types/ControlRoutes.js";
-import { register_control_chat_access_routes } from "@/city/agent/http/control/ControlChatAccessRoutes.js";
+import { register_control_messenger_access_routes } from "@/city/agent/http/control/ControlMessengerAccessRoutes.js";
 import { registerControlSessionRoutes } from "@/city/agent/http/control/SessionRoutes.js";
 import { registerControlOverviewRoutes } from "@/city/agent/http/control/OverviewRoutes.js";
 import { registerControlTaskRoutes } from "@/city/agent/http/control/TaskRoutes.js";
@@ -19,7 +19,7 @@ import { registerControlTaskRoutes } from "@/city/agent/http/control/TaskRoutes.
 export function registerControlApiRoutes(
   params: ControlRouteRegistrationParams,
 ): void {
-  register_control_chat_access_routes({
+  register_control_messenger_access_routes({
     app: params.app,
     get_context: params.get_context,
   });

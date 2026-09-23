@@ -151,41 +151,34 @@ PluginRegistry 的投影变化在 Session 检查点生效。单个 Plugin 初始
 
 ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件存放在 Agent 的存储作用域中，Agent 重启时会把遗留的 running 状态恢复为 pending。它不是分布式调度系统，也不提供跨机器选主。
 
-## City Tool
+## City Power
 
-每个 Agent 都会获得一个只读的 `city` Tool：它是「harness 自己知道、模型无法从文件或命令读到」那类运行时事实的统一出口。
+每个 Agent 都会获得三个 City 自有 power。它们既是「harness 自己知道、模型无法从文件或命令读到」那类运行时事实的出口，也承载 City 自己持有的生成能力。
 
 ```jsonc
-{ "namespace": "sandbox", "action": "explain_path", "args": { "path": "~/.downcity/plugins/chat" } }
+{ "action": "sandbox.explain_path", "args": { "path": "~/.downcity/powers/messenger" } }
 ```
 
-| Namespace | 回答什么 |
-| --- | --- |
-| `env` | 本轮跑在哪个 Agent、Session、Workspace、模型、时区与本地日期下 |
-| `sandbox` | 这个 Session 跑在哪个沙箱后端与实例里、挂了哪些宿主目录、某个路径为什么被拦 |
-| `workspaces` | 当前 City 中登记的全部 Workspace |
-| `agent` | 当前 City 中登记的全部 Agent |
-| `usage` | user 级 token 用量；bureau 尚未提供接口前返回 `unsupported_action` |
+| Power | 动作组 | 回答什么 |
+| --- | --- | --- |
+| `context` | `env`、`sandbox`、`workspaces`、`usage` | 本轮跑在哪个 Agent、Session、Workspace、模型、时区与本地日期下；这个 Session 跑在哪个沙箱后端与实例里、挂了哪些宿主目录、某个路径为什么被拦；当前 City 中登记的全部 Workspace；user 级 token 用量 |
+| `ai` | `image`、`sound` | 生成图片；转写音频与合成语音 |
+| `agent` | `agent` | 当前 City 中登记的全部 Agent |
 
-不带参数调用 `city` 会列出当前 Agent 可用的 namespace；省略 `action` 会列出该 namespace 的动作、参数与返回结构。这个 Tool 不执行任何写操作，也不会返回凭据的值。
+动作 id 是 `组名.动作名`，与所属 power 名无关：`env.get` 属于 `context`，`image.*` 与 `sound.*` 同属 `ai`。不带参数调用一个 power 会列出它的全部动作；这里不会返回凭据的值，而且每个动作都声明了 `read` 或 `write`，因此调用前就能看出哪些会消耗额度或改变状态。
 
 可用性与 Plugin 同一口径：City 注册了什么，每个 Agent 就都能用，没有 per-agent 门控，也没有配置文件。
 
-## City 能力
-
-有一类能力既不是外部集成也不是插件：它的全部能力来自 City 已持有的资源。它们登记为 City
-capability，并以顶层工具的形式交给模型，而不是走 `plugin_call`。
-
-| 能力 | 工具 | 说明 |
-| --- | --- | --- |
-| Image | `image_models`、`image_create`、`image_result` | 两步式任务协议。生图会消耗额度，所以模型必须先与你确认。结果落在 Agent 私有目录并附到下一条回复。 |
-| Sound | `sound_models`、`asr`、`tts` | `asr` 转写音频，`tts` 合成语音并把音频文件附到回复。 |
+### Image 与 Sound
 
 两者都使用你的 Federation 账号可用的模型，因此没有单独配置，也不需要设置。因为没有预设默认模型，
-要么显式传 `model`，要么让模型从 `image_models` / `sound_models` 里选；`asr` 与 `tts` 在未指定时
+要么显式传 `model`，要么让模型从 `image.models` / `sound.models` 里选；`asr` 与 `tts` 在未指定时
 会取第一个可用模型。
 
-入站语音消息的自动转写属于 Chat 插件：当渠道送来语音或音频附件时，由它调用 Sound 能力。
+生图是两步式任务：`create` 返回 `job_id`，`result` 读取它。生图会消耗额度，所以模型必须先与你确认。
+`result` 把生成的图片写入 power 私有目录并返回本地路径，在回复里用 `![](path)` 引用即可。
+
+入站语音消息的自动转写属于 Messenger Power：当渠道送来语音或音频附件时，由它调用 `ai` power 的 `sound.asr`。
 单个附件转写失败不影响消息送达。
 
 ## 安全模型
@@ -198,7 +191,7 @@ capability，并以顶层工具的形式交给模型，而不是走 `plugin_call
 | Sandbox Shell | Workspace Sandbox | 命令在当前 Workspace 独享、持久的隔离环境中执行 |
 | Host Shell | 审批网关 | 用户基于已记录的原因显式授权一次宿主命令 |
 | Plugin | Plugin 自身业务授权 | Workspace 不替 Plugin 负责全部资源访问 |
-| City Tool | 按动作声明区分 | 只读事实查询与已声明 `read` 的动作；`write` 动作会消耗额度或在 Agent 目录下写文件 |
+| City Power | 按动作声明区分 | 只读事实查询与已声明 `read` 的动作；`write` 动作会消耗额度或在 Agent 目录下写文件 |
 | Custom Tool | 注册它的宿主 | Agent Core 不猜测业务权限 |
 
 显式附件可以使用宿主选择的绝对路径，因为附件已经是本次 Prompt 的明确输入。这不会扩大模型 File/Search Tools 主动遍历文件系统的范围。

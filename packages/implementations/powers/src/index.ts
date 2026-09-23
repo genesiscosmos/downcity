@@ -7,7 +7,7 @@
  * - 注册、目录、HTTP、CLI、action 执行都由 `@downcity/agent` 的通用能力处理。
  */
 
-export * from "./chat.js";
+export * from "./messenger.js";
 export * from "./memory.js";
 export * from "./skill.js";
 export * from "./task.js";

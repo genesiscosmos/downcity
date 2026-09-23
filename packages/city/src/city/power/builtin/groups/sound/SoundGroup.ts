@@ -214,7 +214,6 @@ class TtsAction extends CityAction<z.infer<typeof sound_tts_input>> {
 /** `sound` 动作组。 */
 export class SoundGroup extends CityActionGroup {
   readonly group = "sound";
-  readonly summary = "Transcribe audio and synthesize speech through City-owned models.";
   protected readonly actions = [
     new SoundModelsAction(),
     new AsrAction(),

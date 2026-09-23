@@ -7,7 +7,7 @@
 
 import { fileURLToPath } from "node:url";
 import type { CityPowerRegistration } from "@downcity/city/power";
-import { ChatPower } from "@/chat.js";
+import { MessengerPower } from "@/messenger.js";
 import { MemoryPower } from "@/memory.js";
 import { SkillPower } from "@/skill.js";
 import { TaskPower } from "@/task.js";
@@ -37,11 +37,11 @@ export function create_builtin_power_registrations(): BuiltinPowerRegistration[]
       power: new TaskPower(),
     },
     {
-      readme: builtin_readme_path("chat"),
+      readme: builtin_readme_path("messenger"),
       has_config: false,
       has_sidebar: true,
       has_mainview: true,
-      power: new ChatPower(),
+      power: new MessengerPower(),
     },
     {
       readme: builtin_readme_path("memory"),

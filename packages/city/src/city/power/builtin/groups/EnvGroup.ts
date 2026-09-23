@@ -43,6 +43,5 @@ class GetEnvAction extends CityAction {
 /** `env` 动作组。 */
 export class EnvGroup extends CityActionGroup {
   readonly group = "env";
-  readonly summary = "Identity and runtime facts for the current agent, session and workspace.";
   protected readonly actions = [new GetEnvAction()];
 }

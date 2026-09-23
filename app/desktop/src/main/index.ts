@@ -393,7 +393,7 @@ async function reconnect_chat_accounts(): Promise<void> {
   const controller = agent_controller;
   if (!controller) return;
   try {
-    await controller.invoke_power_main("chat", "accounts.refresh_network");
+    await controller.invoke_power_main("messenger", "accounts.refresh_network");
   } catch (error) {
     // 关键点（中文）：插件尚未完成初始化时直接忽略，启动流程会使用已同步的代理环境变量。
     console.warn("Downcity chat accounts reconnect skipped", to_error_message(error));

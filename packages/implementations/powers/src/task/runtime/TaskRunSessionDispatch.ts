@@ -1,7 +1,7 @@
 /**
  * TaskRunSessionDispatch：把 task 最终结果写入关联 Session。
  *
- * Task runtime 不直接依赖 Chat Power。消息写入关联 Session 后，
+ * Task runtime 不直接依赖 Messenger Power。消息写入关联 Session 后，
  * 由 Session 自己的消息通知机制向订阅者发布变化。
  */
 

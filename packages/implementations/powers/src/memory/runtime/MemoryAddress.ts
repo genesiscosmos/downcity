@@ -2,8 +2,9 @@
  * Memory owner/subject 的稳定逻辑地址编码。
  *
  * 关键点（中文）
- * - 原始用户、Workspace、Agent ID 不直接拼接为路径。
- * - 逻辑地址用于 memory_id 与 Store Router，不暴露任何物理根路径。
+ * - 逻辑地址只描述「谁的数据」，与物理根目录、物理文件名无关。
+ * - Agent 使用原始 agent_id 段，因为它本身已经是受限标识符。
+ * - User 与 Workspace 的原始标识可能包含任意字符，统一编码为单层安全段。
  * - 写入目标只能解析为当前 AccessContext 中已经存在的 Subject。
  */
 
@@ -14,6 +15,9 @@ import type {
   MemoryWriteTarget,
 } from "@/memory/types/MemoryAccess.js";
 
+/** Agent 标识允许的字符集合，与本地 Agent 定义保持一致。 */
+const AGENT_SEGMENT_PATTERN = /^[a-z0-9_]+$/u;
+
 /** Provider 内部解析后的 owner/subject 地址。 */
 export interface MemorySubjectAddress {
   /** 当前记录的持久化所有者。 */
@@ -22,26 +26,15 @@ export interface MemorySubjectAddress {
   /** 当前记录描述的主体。 */
   subject: MemorySubject;
 
-  /** 可直接作为逻辑 memory_id 前缀的安全路径。 */
+  /** 可直接作为逻辑 memory_id 前缀的地址。 */
   prefix: string;
 }
 
-/** 把不可信标识编码为稳定、可逆的单目录段。 */
+/** 把不可信标识编码为稳定、可逆的单层安全段。 */
 export function encode_memory_id_segment(value: string): string {
   const normalized = String(value || "").trim();
   if (!normalized) throw new Error("Memory identity segment is required");
   return `id_${Buffer.from(normalized, "utf8").toString("base64url")}`;
-}
-
-/** 把 Memory 单目录段还原为原始标识。 */
-export function decode_memory_id_segment(value: string): string {
-  const segment = String(value || "").trim();
-  if (!/^id_[A-Za-z0-9_-]+$/u.test(segment)) {
-    throw new Error(`Invalid Memory identity segment: ${value}`);
-  }
-  const decoded = Buffer.from(segment.slice(3), "base64url").toString("utf8").trim();
-  if (!decoded) throw new Error(`Invalid Memory identity segment: ${value}`);
-  return decoded;
 }
 
 /** 返回当前调用允许读取的 Subject 地址，顺序同时表达默认上下文优先级。 */
@@ -103,10 +96,11 @@ export function resolve_readable_memory_address(
 
 /** 创建 Agent 私有地址。 */
 function create_agent_address(agent_id: string): MemorySubjectAddress {
+  const segment = normalize_agent_segment(agent_id);
   return {
-    owner: { kind: "agent", agent_id },
-    subject: { kind: "agent", agent_id },
-    prefix: `agent/${encode_memory_id_segment(agent_id)}`,
+    owner: { kind: "agent", agent_id: segment },
+    subject: { kind: "agent", agent_id: segment },
+    prefix: `agent/${segment}`,
   };
 }
 
@@ -115,7 +109,7 @@ function create_user_address(user_id: string): MemorySubjectAddress {
   return {
     owner: { kind: "city" },
     subject: { kind: "user", user_id },
-    prefix: `city/users/${encode_memory_id_segment(user_id)}`,
+    prefix: `user/${encode_memory_id_segment(user_id)}`,
   };
 }
 
@@ -124,7 +118,7 @@ function create_workspace_address(workspace_id: string): MemorySubjectAddress {
   return {
     owner: { kind: "city" },
     subject: { kind: "workspace", workspace_id },
-    prefix: `city/workspaces/${encode_memory_id_segment(workspace_id)}`,
+    prefix: `workspace/${encode_memory_id_segment(workspace_id)}`,
   };
 }
 
@@ -133,8 +127,17 @@ function create_city_address(): MemorySubjectAddress {
   return {
     owner: { kind: "city" },
     subject: { kind: "city" },
-    prefix: "city/shared",
+    prefix: "city",
   };
+}
+
+/** 校验一个原始 Agent 标识可以直接作为单层逻辑地址段与物理目录名。 */
+function normalize_agent_segment(value: string): string {
+  const segment = String(value || "").trim();
+  if (!AGENT_SEGMENT_PATTERN.test(segment)) {
+    throw new Error(`Invalid Memory agent_id: ${value}`);
+  }
+  return segment;
 }
 
 /** 保证 AccessContext 与当前 Agent 绑定。 */

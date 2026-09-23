@@ -174,7 +174,7 @@ export function registerControlSessionRoutes(
         }
 
         const result = await runtime.powers.run_action({
-          power: "chat",
+          power: "messenger",
           action: "history_clear",
           payload: { session_id },
         });

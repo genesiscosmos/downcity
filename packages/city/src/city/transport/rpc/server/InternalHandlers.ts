@@ -87,7 +87,7 @@ export async function handle_internal_rpc_request(params: {
       const session_id = String(request.params.session_id || "").trim();
       if (!session_id) throw new Error("Missing session_id");
       const result = await context.powers.run_action({
-        power: "chat",
+        power: "messenger",
         action: "history_clear",
         payload: { session_id: session_id },
       });

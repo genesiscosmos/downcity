@@ -72,6 +72,5 @@ class GetAgentAction extends CityAction<z.infer<typeof get_agent_input>> {
 /** `agent` 动作组。 */
 export class AgentGroup extends CityActionGroup {
   readonly group = "agent";
-  readonly summary = "Agents registered in this City, including the current one.";
   protected readonly actions = [new ListAgentsAction(), new GetAgentAction()];
 }

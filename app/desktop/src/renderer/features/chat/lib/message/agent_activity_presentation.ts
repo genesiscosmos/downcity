@@ -64,13 +64,21 @@ function count_text_lines(text: string): number {
 /**
  * 由 City 直接注册、不经过 Desktop Power catalog 的 power。
  *
- * 关键点（中文）：`city` 与 `shell` 在 City 启动时直接加入 PowerRuntime，Desktop 的
+ * 关键点（中文）：`context` / `ai` / `agent` / `shell` 在 City 启动时直接加入 PowerRuntime，Desktop 的
  * Power catalog 只包含随 package 发布的 5 个功能型 power（skill / task / chat / memory / web）。
  * 它们既没有 sidebar 也没有 mainview，不能塞进 catalog（会污染 Power 列表），
  * 但它们在活动行上必须与其它 power 一样有标题和语义图标，因此在这里显式登记。
- * 缺口是封闭的 2 项，静态登记是合理成本。
+ * 缺口是封闭的 4 项，静态登记是合理成本。
  */
-const CITY_OWNED_POWER_NAMES: ReadonlySet<string> = new Set(["city", "shell"]);
+const CITY_OWNED_POWER_NAMES: ReadonlySet<string> = new Set(["context", "ai", "agent", "shell"]);
+
+/** City 直接注册的 power 在活动行上的标题。 */
+const CITY_OWNED_POWER_TITLES: Readonly<Record<string, string>> = {
+  context: "Context",
+  ai: "AI",
+  agent: "Agent",
+  shell: "Shell",
+};
 
 /** 一个视觉种类需要的全部展示规则。 */
 interface AgentToolRule {
@@ -519,13 +527,13 @@ function object_value(value: unknown): Record<string, unknown> | undefined {
  * 解析活动行要用的 Power 事实表。
  *
  * 关键点（中文）：两处来源合并成一张表——Desktop Power catalog（含第三方安装的 power）
- * 与 City 直接注册的 `city` / `shell`。目录未加载时返回空表，判定会自动降级到输入契约，
+ * 与 City 直接注册的 `context` / `ai` / `agent` / `shell`。目录未加载时返回空表，判定会自动降级到输入契约，
  * 不会显示成未知工具。
  */
 export function resolve_chat_power_lookup(powers: readonly { power_id: string; title: string; icon_url?: string }[]): ChatPowerLookup {
   const lookup = new Map<string, { title: string; icon_url?: string }>();
   for (const power_id of CITY_OWNED_POWER_NAMES) {
-    lookup.set(power_id, { title: power_id === "city" ? "City" : "Shell" });
+    lookup.set(power_id, { title: CITY_OWNED_POWER_TITLES[power_id] || power_id });
   }
   for (const power of powers) {
     lookup.set(power.power_id, {

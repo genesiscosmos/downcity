@@ -78,6 +78,5 @@ class GetWorkspaceAction extends CityAction<z.infer<typeof get_workspace_input>>
 /** `workspaces` 动作组。 */
 export class WorkspacesGroup extends CityActionGroup {
   readonly group = "workspaces";
-  readonly summary = "Workspaces known to this City, including the current one.";
   protected readonly actions = [new ListWorkspacesAction(), new GetWorkspaceAction()];
 }

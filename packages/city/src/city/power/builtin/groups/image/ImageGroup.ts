@@ -258,7 +258,6 @@ class ImageResultAction extends CityAction<z.infer<typeof image_result_input>> {
 /** `image` 动作组。 */
 export class ImageGroup extends CityActionGroup {
   readonly group = "image";
-  readonly summary = "Generate images through City-owned image models.";
   protected readonly actions = [
     new ImageModelsAction(),
     new ImageCreateAction(),
