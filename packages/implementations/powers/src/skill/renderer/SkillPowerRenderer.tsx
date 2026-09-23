@@ -91,7 +91,7 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
               active={selected_agent_id === agent.agent_id && selected_skill_id === skill.id}
               on_select={() => navigation.navigate(agent_route(agent.agent_id, skill.id))}
             />)}</div> : null}
-            {expanded && agent.skills.length === 0 ? <SidebarSubText indent={1}>还没有 Skill</SidebarSubText> : null}
+            {expanded && agent.skills.length === 0 ? <SidebarSubText indent={1}>{agent.directory} 下还没有 Skill</SidebarSubText> : null}
           </div>;
         })}
         {!snapshot.agents.length ? <SidebarSubText>还没有 Agent</SidebarSubText> : null}
@@ -294,7 +294,7 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
           { value: "discover", label: "发现" },
         ]}
       />
-      {tab === "discover" ? <Section title="发现 Skills" description="通过 skills CLI 搜索公开目录，并安装到该 Agent。">
+      {tab === "discover" ? <Section title="发现 Skills" description={`从公开目录搜索并安装到 ${agent?.directory ?? "该 Agent 的技能目录"}。安装后这个 Agent 就能直接用。`}>
         <Inline fill>
           <Input value={query} placeholder="搜索 skills.sh" on_value_change={set_query} />
           <Button disabled={searching || !query.trim()} on_click={() => void search()}>{searching ? "搜索中…" : "搜索"}</Button>
@@ -308,7 +308,7 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
               trailing={<Button variant="primary" disabled={Boolean(busy_key)} on_click={() => void install(hit)}>{busy_key === `install:${hit.spec}` ? "安装中…" : "安装"}</Button>}
             />)}</Group>}
       </Section> : null}
-      {tab === "catalog" ? <Section title="全局目录" description="按来源分组：用户目录与各 Workspace 的 .agents/skills；关联后该 Agent 即可使用。">
+      {tab === "catalog" ? <Section title="全局目录" description={`按来源分组：用户目录与各 Workspace 的 .agents/skills。关联会在 ${agent?.directory ?? "该 Agent 的技能目录"} 下建软链接，来源目录不受影响。`}>
         <Input value={filter} placeholder="筛选 Skill" on_value_change={set_filter} />
         {!visible_catalog.length
           ? <EmptyState title={filter.trim() ? "没有匹配的 Skill" : "全局目录为空"} description="可以先在「发现」里安装，或把 Skill 放进 Workspace 的 .agents/skills。" size="compact" />
@@ -323,7 +323,7 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
               />)}
             </Group>)}</Stack>}
       </Section> : null}
-      {tab === "bound" ? <Section title="已绑定 Skills" description="该 Agent 目录中的全部 Skill，也是它默认可用的集合。">
+      {tab === "bound" ? <Section title="已绑定 Skills" description={`${agent?.directory ?? "该 Agent 的技能目录"} 中的全部 Skill，也是它默认可用的集合。`}>
         <Input value={filter} placeholder="筛选已绑定 Skills" on_value_change={set_filter} />
         {!visible_skills.length
           ? <EmptyState

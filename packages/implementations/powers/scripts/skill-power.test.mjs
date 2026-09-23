@@ -160,6 +160,21 @@ test("system prompt 只列出当前 Agent 的 skill 与来源", async () => {
   assert.match(prompt, /\[home\]/);
 });
 
+test("system prompt 说明安装位置与关联要求", async () => {
+  const fixture = create_fixture();
+  const power = await start_power(fixture.base);
+
+  const prompt = await power.system(create_skill_context(fixture.workspace_path));
+
+  // 模型必须知道技能装在哪，以及它自己不能写这个目录。
+  assert.match(prompt, /\/agents\/agent-a/);
+  assert.match(prompt, /Skills are installed or linked into this directory/);
+  assert.match(prompt, /You cannot write into it yourself/);
+  assert.match(prompt, /Ask the user to add a missing skill from the Skills page/);
+  // 只读来源不等于可用，必须显式说明。
+  assert.match(prompt, /Reading them does not make their skills available to you/);
+});
+
 test("system prompt 不再宣称 40 条上限", async () => {
   const fixture = create_fixture();
   const power = await start_power(fixture.base);

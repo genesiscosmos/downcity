@@ -96,6 +96,7 @@ async function create_snapshot(
     agents: agents.map((agent) => ({
       agent_id: agent.agent_id,
       name: agent.name,
+      directory: describe_agent_skill_dir(runtime, agent.agent_id),
       skills: list_agent_skills(runtime, agent.agent_id, origins),
     })),
     catalog: [],
@@ -468,6 +469,23 @@ function resolve_agent_skill_dir(
     throw new Error(`Invalid agent_id: ${agent_id}`);
   }
   return path.join(runtime.agent_root, agent_id);
+}
+
+/** 把 Agent Skill 目录折叠为带 `~` 的展示路径。 */
+function describe_agent_skill_dir(
+  runtime: SkillPowerHostRuntime,
+  agent_id: string,
+): string {
+  return collapse_home(resolve_agent_skill_dir(runtime, agent_id));
+}
+
+/** 把绝对路径中的用户目录折叠为 `~`，用于稳定展示。 */
+function collapse_home(value: string): string {
+  const home = os.homedir();
+  const normalized = path.normalize(value);
+  const relative = path.relative(home, normalized);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return normalized;
+  return relative ? `~/${relative}` : "~";
 }
 
 /** 构造宿主侧的扫描上下文。 */

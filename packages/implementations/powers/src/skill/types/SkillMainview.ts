@@ -96,6 +96,15 @@ export interface SkillMainviewAgent {
   readonly name: string;
 
   /**
+   * 该 Agent 的技能目录展示路径。
+   *
+   * 说明（中文）
+   * - 安装会写入这里，关联会在这里建软链接。
+   * - 界面用它回答「到底装到哪」，因此不能省略。
+   */
+  readonly directory: string;
+
+  /**
    * 该 Agent 私有目录中发现的 Skill。
    */
   readonly skills: SkillMainviewItem[];

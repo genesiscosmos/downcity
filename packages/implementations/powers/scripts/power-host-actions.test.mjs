@@ -273,6 +273,8 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
     // 初始状态：Agent 目录为空，但全局目录已能看到 Workspace 与用户目录 Skill。
     const before = await actions.get("skill.catalog").run({ agent_id: "test-agent" });
     assert.deepEqual(before.agents[0].skills, []);
+    // 界面必须能回答「装到哪」：目录由 Agent ID 派生并以 ~ 折叠。
+    assert.match(before.agents[0].directory, /\/agents\/test-agent$/);
     const before_demo = before.catalog.find((item) => item.id === "demo");
     assert.ok(before_demo, "全局目录未包含 Workspace Skill");
     assert.equal(before_demo.linked, false);

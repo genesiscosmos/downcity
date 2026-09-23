@@ -23,4 +23,19 @@ Available actions are `list` and `lookup`.
 
 The runtime inventory, `list`, and `lookup` all default to the same set, so the skill names shown to you are directly usable.
 
-You cannot install or link skills. Ask the user to add a skill from the Skills page when you need one that is not listed.
+## Your skill directory
+
+Your skills live in `~/.downcity/powers/skill/agents/<agent-id>/`. That directory is the authoritative set of skills you can use, and the runtime inventory lists exactly what it contains.
+
+An entry is either a directory copied into that location or a symlink pointing at a skill that lives elsewhere. A skill installed through the Skills page is copied in; a skill linked from the user directory or a workspace is a symlink.
+
+## Installing and linking
+
+You cannot install or link skills yourself. Writing into your skill directory is a user decision, not something you should do mid-task.
+
+When you need a skill that is not listed, tell the user what capability you need and that it must be added to your skill directory. The user adds it from the Skills page, which has two routes:
+
+- **Discover** installs a skill from the public catalog into your directory.
+- **Catalog** links an existing skill from the user directory `~/.agents/skills` or from a workspace `.agents/skills`.
+
+Both routes end with the skill appearing in your directory, so `list` shows it on your next call. A skill that exists in the user directory or a workspace is not available to you until it is linked, and `list` with `scope: "project"` or `scope: "home"` only reads those locations without making them available.

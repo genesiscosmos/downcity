@@ -30,7 +30,9 @@ When the same skill ID appears in more than one source, the Agent directory wins
 
 `lookup` returns the skill body as a standard context message, so the content reaches the model on the next step. It does not persist any session state.
 
-There are no `find` or `install` actions. Installation and linking are Desktop operations, because writing into the Agent directory is a user decision rather than something the model should do mid-task. The system prompt tells the Agent to ask the user to add a skill from the Skills page when it needs one that is not listed.
+There are no `find` or `install` actions. Installation and linking are Desktop operations, because writing into the Agent directory is a user decision rather than something the model should do mid-task. The system prompt states the Agent's own directory path and tells the model to ask the user to add a skill from the Skills page when it needs one that is not listed.
+
+Reading `project` or `home` through `scope` does not make those skills available. A skill that lives in the user directory or a workspace becomes usable only after the user links it into the Agent directory, and the linked entry is what `list` reports by default.
 
 Listing the Agent's skills:
 
@@ -86,8 +88,10 @@ The Skills page is organized by Agent. The Sidebar lists every registered Agent 
 The Mainview for an Agent has three views:
 
 - **Bound** shows the skills in that Agent's directory. Each entry says whether it was installed into the directory or linked from outside, and linked entries name their source (user directory or a specific Workspace).
-- **Catalog** groups every skill by source: one group for the user directory and one per Workspace. Each entry shows whether it is already linked to this Agent. Linking creates a symlink in the Agent directory, so the source directory stays untouched.
+- **Catalog** groups every skill by source: one group for the user directory and one per Workspace. Each entry shows whether it is already linked to this Agent. Linking creates a symlink under the Agent directory, so the source directory stays untouched.
 - **Discover** searches the public catalog through the official `skills` CLI and installs the result into this Agent's directory. Installation stages the download in a temporary directory and copies it in, because the CLI cannot install directly into an Agent directory.
+
+Each view names the destination directory in its description, so it is clear where an install or link will land.
 
 Removing a linked skill deletes only the symlink; removing an installed skill deletes the copy. Both operations stay inside the Agent directory.
 
