@@ -101,7 +101,7 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
   },
 
   mainview: function SkillPowerMainview({ power, navigation, ui }) {
-    const { Button, Callout, EmptyState, Group, Inline, Input, ItemMenu, LoadingState, Markdown, Page, Row, Section, Status, Tabs, Toolbar } = ui.components;
+    const { Button, Callout, EmptyState, Group, Inline, Input, ItemMenu, LoadingState, Markdown, Page, Row, Section, Stack, Status, Tabs, Toolbar } = ui.components;
     const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
     const [loading, set_loading] = useState(true);
     const [content, set_content] = useState("");
@@ -212,10 +212,10 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
         payload: {
           agent_id: agent.agent_id,
           skill_id: item.id,
-          scope: item.source,
-          ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
+          scope: item.origin.source,
+          ...(item.origin.workspace_id ? { workspace_id: item.origin.workspace_id } : {}),
         },
-        key: `link:${item.source}:${item.id}`,
+        key: link_key(item),
         success_message: "Skill 已关联",
       });
     };
@@ -268,7 +268,7 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
       <Group>
         <Row label="Agent" trailing={<Status>{agent.name}</Status>} />
         <Row label="Skill ID" trailing={<Status>{selected_skill.id}</Status>} />
-        <Row label="来源" trailing={<Status tone="muted">{selected_skill.is_link ? "已关联" : "已安装"}</Status>} />
+        <Row label="来源" trailing={<Status tone="muted">{skill_source_label(selected_skill)}</Status>} />
         {selected_skill.link_target ? <Row label="链接目标" trailing={<Status tone="muted">{selected_skill.link_target}</Status>} /> : null}
         <Row label="Allowed tools" trailing={<Status>{selected_skill.allowed_tools.length ? selected_skill.allowed_tools.join(", ") : "未限制"}</Status>} />
       </Group>
@@ -308,18 +308,20 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
               trailing={<Button variant="primary" disabled={Boolean(busy_key)} on_click={() => void install(hit)}>{busy_key === `install:${hit.spec}` ? "安装中…" : "安装"}</Button>}
             />)}</Group>}
       </Section> : null}
-      {tab === "catalog" ? <Section title="全局目录" description="来自用户目录与各 Workspace；关联后该 Agent 即可使用。">
+      {tab === "catalog" ? <Section title="全局目录" description="按来源分组：用户目录与各 Workspace 的 .agents/skills；关联后该 Agent 即可使用。">
         <Input value={filter} placeholder="筛选 Skill" on_value_change={set_filter} />
         {!visible_catalog.length
           ? <EmptyState title={filter.trim() ? "没有匹配的 Skill" : "全局目录为空"} description="可以先在「发现」里安装，或把 Skill 放进 Workspace 的 .agents/skills。" size="compact" />
-          : <Group>{visible_catalog.map((item) => <Row
-              key={catalog_key(item)}
-              label={item.name}
-              description={`${catalog_description(item)} · ${item.description || item.id}`}
-              trailing={item.linked
-                ? <Status tone="success">已关联</Status>
-                : <Button disabled={Boolean(busy_key)} on_click={() => void link_skill(item)}>{busy_key === `link:${item.source}:${item.id}` ? "关联中…" : "关联"}</Button>}
-            />)}</Group>}
+          : <Stack>{group_catalog(visible_catalog).map((group) => <Group key={group.key} label={group.label} count={group.items.length} collapsible default_expanded>
+              {group.items.map((item) => <Row
+                key={catalog_key(item)}
+                label={item.name}
+                description={item.description || item.id}
+                trailing={item.linked
+                  ? <Status tone="success">已关联</Status>
+                  : <Button disabled={Boolean(busy_key)} on_click={() => void link_skill(item)}>{busy_key === link_key(item) ? "关联中…" : "关联"}</Button>}
+              />)}
+            </Group>)}</Stack>}
       </Section> : null}
       {tab === "bound" ? <Section title="已绑定 Skills" description="该 Agent 目录中的全部 Skill，也是它默认可用的集合。">
         <Input value={filter} placeholder="筛选已绑定 Skills" on_value_change={set_filter} />
@@ -332,7 +334,7 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
           : <Group>{visible_skills.map((skill) => <Row
               key={skill.id}
               label={skill.name}
-              description={`${skill.is_link ? "已关联" : "已安装"} · ${skill.description || skill.id}`}
+              description={`${skill_source_label(skill)} · ${skill.description || skill.id}`}
               trailing={skill_menu(skill, true)}
               on_click={() => navigation.navigate(agent_route(agent?.agent_id ?? "", skill.id))}
             />)}</Group>}
@@ -362,12 +364,52 @@ function filter_catalog(catalog: SkillMainviewCatalogItem[], filter: string): Sk
 
 /** 构造全局目录条目的唯一键。 */
 function catalog_key(item: SkillMainviewCatalogItem): string {
-  return `${item.source}:${item.workspace_id ?? "home"}:${item.id}`;
+  return `${item.origin.source}:${item.origin.workspace_id ?? "home"}:${item.id}`;
 }
 
-/** 生成全局目录条目的来源说明。 */
-function catalog_description(item: SkillMainviewCatalogItem): string {
-  return item.source === "home" ? "用户目录" : item.workspace_name ?? "Workspace";
+/** 构造一条关联操作的忙态键。 */
+function link_key(item: SkillMainviewCatalogItem): string {
+  return `link:${catalog_key(item)}`;
+}
+
+/** 描述一条 Skill 的当前来源，用于已绑定列表与详情页。 */
+function skill_source_label(skill: SkillMainviewItem): string {
+  if (!skill.is_link) return "已安装到该 Agent 目录";
+  if (!skill.origin) return "已关联";
+  return skill.origin.source === "home"
+    ? "已关联 · 用户目录"
+    : `已关联 · ${skill.origin.workspace_name ?? skill.origin.workspace_id ?? "Workspace"}`;
+}
+
+/** 全局目录按来源分组后的一组条目。 */
+interface CatalogGroup {
+  /** 分组稳定键，用于渲染 key。 */
+  key: string;
+  /** 分组标题。 */
+  label: string;
+  /** 该组内的 Skill。 */
+  items: SkillMainviewCatalogItem[];
+}
+
+/**
+ * 把全局目录按来源分组。
+ *
+ * 关键点（中文）：用户目录一组，每个 Workspace 各自一组；project 与 home 不能在
+ * 同一个平铺列表里混着展示，否则用户无法判断一条 Skill 到底来自哪里。
+ */
+function group_catalog(catalog: SkillMainviewCatalogItem[]): CatalogGroup[] {
+  const groups = new Map<string, CatalogGroup>();
+  for (const item of catalog) {
+    const is_home = item.origin.source === "home";
+    const key = is_home ? "home" : `project:${item.origin.workspace_id ?? ""}`;
+    const label = is_home
+      ? "用户目录 · ~/.agents/skills"
+      : `Workspace · ${item.origin.workspace_name ?? item.origin.workspace_id ?? ""}`;
+    const existing = groups.get(key);
+    if (existing) existing.items.push(item);
+    else groups.set(key, { key, label, items: [item] });
+  }
+  return [...groups.values()];
 }
 
 /** 切换集合中的一个键，并返回新的不可变集合。 */

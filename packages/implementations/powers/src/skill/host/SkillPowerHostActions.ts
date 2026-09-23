@@ -15,7 +15,7 @@ import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power
 import { listSkills, lookupSkill } from "@/skill/Action.js";
 import { resolveSkillPowerOptions } from "@/skill/Config.js";
 import { create_skill_root_context } from "@/skill/runtime/AgentRoot.js";
-import type { SkillRootContext } from "@/skill/runtime/Paths.js";
+import { resolve_skill_root, type SkillRootContext } from "@/skill/runtime/Paths.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
 import type {
   SkillMainviewCatalogItem,
@@ -23,6 +23,7 @@ import type {
   SkillMainviewItem,
   SkillMainviewLinkInput,
   SkillMainviewMutationResult,
+  SkillMainviewOrigin,
   SkillMainviewReadInput,
   SkillMainviewRemoveInput,
   SkillMainviewScope,
@@ -89,13 +90,15 @@ async function create_snapshot(
   runtime: SkillPowerHostRuntime,
 ): Promise<SkillMainviewSnapshot> {
   const agents = await context.system.list_agents();
+  const origins = await list_catalog_origins(context, runtime, "");
   return {
     success: true,
     agents: agents.map((agent) => ({
       agent_id: agent.agent_id,
       name: agent.name,
-      skills: list_agent_skills(runtime, agent.agent_id),
+      skills: list_agent_skills(runtime, agent.agent_id, origins),
     })),
+    catalog: [],
   };
 }
 
@@ -103,12 +106,13 @@ async function create_snapshot(
 function list_agent_skills(
   runtime: SkillPowerHostRuntime,
   agent_id: string,
+  origins: CatalogOrigin[],
 ): SkillMainviewItem[] {
   return listSkills({
     scope: "agent",
     context: create_host_context(runtime, agent_id, process.cwd()),
     options: resolveSkillPowerOptions(),
-  }).skills.map(to_mainview_item);
+  }).skills.map((skill) => to_mainview_item(skill, resolve_link_origin(skill, origins)));
 }
 
 /**
@@ -122,80 +126,127 @@ async function read_catalog(
   runtime: SkillPowerHostRuntime,
   query: AgentQuery,
 ): Promise<SkillMainviewSnapshot> {
+  const origins = await list_catalog_origins(context, runtime, query.agent_id);
   const snapshot = await create_snapshot(context, runtime);
+  const agents = snapshot.agents.map((item) =>
+    item.agent_id === query.agent_id
+      ? { ...item, skills: list_agent_skills(runtime, query.agent_id, origins) }
+      : item,
+  );
   const linked_ids = new Set(
-    (snapshot.agents.find((agent) => agent.agent_id === query.agent_id)?.skills ?? [])
+    (agents.find((item) => item.agent_id === query.agent_id)?.skills ?? [])
       .map((skill) => skill.id),
   );
 
   const catalog: SkillMainviewCatalogItem[] = [];
-  for (const entry of await list_catalog_sources(context, runtime, query.agent_id)) {
-    for (const skill of entry.skills) {
+  for (const entry of origins) {
+    for (const skill of list_skills_in_origin(runtime, query.agent_id, entry)) {
       catalog.push({
         ...to_mainview_item(skill),
-        source: entry.source,
-        ...(entry.workspace_id ? { workspace_id: entry.workspace_id } : {}),
-        ...(entry.workspace_name ? { workspace_name: entry.workspace_name } : {}),
+        origin: entry.origin,
         linked: linked_ids.has(skill.id),
       });
     }
   }
 
-  return { ...snapshot, catalog };
+  return { ...snapshot, agents, catalog };
 }
 
-/** 一个可关联来源及其当前 Skill。 */
-interface CatalogSource {
+/** 一个可关联来源及其解析后的扫描根。 */
+interface CatalogOrigin {
   /**
-   * 来源类型。
+   * 来源标识。
    */
-  source: "project" | "home";
+  origin: SkillMainviewOrigin;
   /**
-   * 项目来源所属 Workspace ID。
+   * 该来源的绝对扫描根。
    */
-  workspace_id?: string;
+  root: string;
   /**
-   * 项目来源所属 Workspace 名称。
+   * 解析该来源所需的路径上下文。
    */
-  workspace_name?: string;
-  /**
-   * 该来源内发现的 Skill。
-   */
-  skills: SkillSummary[];
+  context: SkillRootContext;
 }
 
-/** 列出全部可关联来源及其 Skill。 */
-async function list_catalog_sources(
+/**
+ * 列出全部可关联来源。
+ *
+ * 关键点（中文）：空 `agent_id` 只用于解析根路径，不参与发现；
+ * 因此 home 与 project 根都能在不依赖具体 Agent 的前提下拿到。
+ */
+async function list_catalog_origins(
   context: PowerLifecycleContext,
   runtime: SkillPowerHostRuntime,
   agent_id: string,
-): Promise<CatalogSource[]> {
+): Promise<CatalogOrigin[]> {
   const workspaces = await context.system.list_workspaces();
-  const sources: CatalogSource[] = [];
-
-  for (const workspace of workspaces) {
-    sources.push({
-      source: "project",
-      workspace_id: workspace.workspace_id,
-      workspace_name: workspace.name,
-      skills: listSkills({
-        scope: "project",
-        context: create_host_context(runtime, agent_id, workspace.workspace_path),
-        options: resolveSkillPowerOptions(),
-      }).skills,
-    });
-  }
-
-  sources.push({
-    source: "home",
-    skills: listSkills({
-      scope: "home",
-      context: create_host_context(runtime, agent_id, process.cwd()),
-      options: resolveSkillPowerOptions(),
-    }).skills,
+  const origins: CatalogOrigin[] = workspaces.map((workspace) => {
+    const workspace_context = create_host_context(runtime, agent_id, workspace.workspace_path);
+    return {
+      origin: {
+        source: "project",
+        workspace_id: workspace.workspace_id,
+        workspace_name: workspace.name,
+      },
+      root: resolve_skill_root("project", workspace_context)?.resolved ?? "",
+      context: workspace_context,
+    };
   });
 
-  return sources;
+  const home_context = create_host_context(runtime, agent_id, process.cwd());
+  origins.push({
+    origin: { source: "home" },
+    root: resolve_skill_root("home", home_context)?.resolved ?? "",
+    context: home_context,
+  });
+
+  return origins;
+}
+
+/** 读取一个来源内的 Skill。 */
+function list_skills_in_origin(
+  runtime: SkillPowerHostRuntime,
+  agent_id: string,
+  entry: CatalogOrigin,
+): SkillSummary[] {
+  return listSkills({
+    scope: entry.origin.source,
+    context: entry.context,
+    options: resolveSkillPowerOptions(),
+  }).skills;
+}
+
+/**
+ * 由软链接目标反推外部来源。
+ *
+ * 关键点（中文）
+ * - 只根据已登记来源的扫描根判断，不信任任何由 Renderer 传入的路径。
+ * - 链接目标来自 `realpath`，因此比较前也要把根路径归一化，否则 macOS 上
+ *   `/var` 与 `/private/var` 这类等价路径会被判成不同目录。
+ */
+function resolve_link_origin(
+  skill: SkillSummary,
+  origins: CatalogOrigin[],
+): SkillMainviewOrigin | undefined {
+  const target = String(skill.link_target || "").trim();
+  if (!target) return undefined;
+  for (const entry of origins) {
+    if (!entry.root) continue;
+    const relative = path.relative(real_path_or_self(entry.root), target);
+    if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+      return entry.origin;
+    }
+  }
+  return undefined;
+}
+
+/** 读取真实路径；路径不存在时原样返回。 */
+function real_path_or_self(value: string): string {
+  try {
+    return fs.realpathSync(value);
+  } catch {
+    return path.normalize(value);
+  }
 }
 
 /** 重新发现后读取一个 Skill，避免信任 Renderer 传入的本地路径。 */
@@ -206,10 +257,34 @@ async function read_skill(
 ) {
   return await lookupSkill({
     scope: input.scope,
-    context: await resolve_query_context(context, runtime, input),
+    context: await resolve_read_context(context, runtime, input),
     options: resolveSkillPowerOptions(),
     request: { name: input.skill_id },
   });
+}
+
+/** 解析一次读取所需的路径上下文。 */
+async function resolve_read_context(
+  context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
+  input: { agent_id: string; scope: "agent" | SkillMainviewScope; workspace_id?: string },
+): Promise<SkillRootContext> {
+  if (input.scope === "agent") {
+    return create_host_context(runtime, input.agent_id, process.cwd());
+  }
+
+  const origins = await list_catalog_origins(context, runtime, input.agent_id);
+  const entry = origins.find((item) =>
+    item.origin.source === input.scope &&
+    (input.scope === "home" || item.origin.workspace_id === input.workspace_id));
+  if (!entry) {
+    throw new Error(
+      input.scope === "home"
+        ? "Home skill directory is unavailable"
+        : `Workspace not found: ${input.workspace_id ?? ""}`,
+    );
+  }
+  return entry.context;
 }
 
 /**
@@ -292,16 +367,25 @@ async function link_skill(
   runtime: SkillPowerHostRuntime,
   input: SkillMainviewLinkInput,
 ): Promise<SkillMainviewMutationResult> {
-  const query_context = await resolve_query_context(context, runtime, input);
-  const skill = listSkills({
-    scope: input.scope,
-    context: query_context,
-    options: resolveSkillPowerOptions(),
-  }).skills.find((item) => item.id === input.skill_id);
+  const origins = await list_catalog_origins(context, runtime, input.agent_id);
+  const entry = origins.find((item) =>
+    item.origin.source === input.scope &&
+    (input.scope === "home" || item.origin.workspace_id === input.workspace_id));
+  if (!entry) {
+    return {
+      ...await read_catalog(context, runtime, { agent_id: input.agent_id }),
+      operation_success: false,
+      error: input.scope === "home"
+        ? "Home skill directory is unavailable"
+        : `Workspace not found: ${input.workspace_id ?? ""}`,
+    };
+  }
 
+  const skill = list_skills_in_origin(runtime, input.agent_id, entry)
+    .find((item) => item.id === input.skill_id);
   if (!skill) {
     return {
-      ...await create_snapshot(context, runtime),
+      ...await read_catalog(context, runtime, { agent_id: input.agent_id }),
       operation_success: false,
       error: `Skill not found in ${input.scope}: ${input.skill_id}`,
     };
@@ -313,10 +397,13 @@ async function link_skill(
     await fs.ensureDir(target_root);
     await fs.remove(link_path);
     await fs.symlink(skill.directory_path, link_path, "junction");
-    return { ...await create_snapshot(context, runtime), operation_success: true };
+    return {
+      ...await read_catalog(context, runtime, { agent_id: input.agent_id }),
+      operation_success: true,
+    };
   } catch (reason) {
     return {
-      ...await create_snapshot(context, runtime),
+      ...await read_catalog(context, runtime, { agent_id: input.agent_id }),
       operation_success: false,
       error: to_error_message(reason),
     };
@@ -333,11 +420,12 @@ async function remove_skill(
   runtime: SkillPowerHostRuntime,
   input: SkillMainviewRemoveInput,
 ): Promise<SkillMainviewMutationResult> {
-  const exists = list_agent_skills(runtime, input.agent_id)
+  const origins = await list_catalog_origins(context, runtime, input.agent_id);
+  const exists = list_agent_skills(runtime, input.agent_id, origins)
     .some((skill) => skill.id === input.skill_id);
   if (!exists) {
     return {
-      ...await create_snapshot(context, runtime),
+      ...await read_catalog(context, runtime, { agent_id: input.agent_id }),
       operation_success: false,
       error: `Skill not found: ${input.skill_id}`,
     };
@@ -345,10 +433,13 @@ async function remove_skill(
 
   try {
     await fs.remove(path.join(resolve_agent_skill_dir(runtime, input.agent_id), input.skill_id));
-    return { ...await create_snapshot(context, runtime), operation_success: true };
+    return {
+      ...await read_catalog(context, runtime, { agent_id: input.agent_id }),
+      operation_success: true,
+    };
   } catch (reason) {
     return {
-      ...await create_snapshot(context, runtime),
+      ...await read_catalog(context, runtime, { agent_id: input.agent_id }),
       operation_success: false,
       error: to_error_message(reason),
     };
@@ -364,34 +455,6 @@ async function search_catalog(query: string): Promise<SkillMainviewSearchResult>
     return { success: false, query, hits: [], error: result.error };
   }
   return { success: true, query, hits: parse_search_hits(result.output) };
-}
-
-/**
- * 解析一个来源查询所需的路径上下文。
- *
- * 关键点（中文）：项目来源必须指向真实 Workspace，否则拒绝执行。
- */
-async function resolve_query_context(
-  context: PowerLifecycleContext,
-  runtime: SkillPowerHostRuntime,
-  input: { agent_id: string; scope: "agent" | SkillMainviewScope; workspace_id?: string },
-): Promise<SkillRootContext> {
-  if (input.scope === "home" || input.scope === "agent") {
-    return create_host_context(runtime, input.agent_id, process.cwd());
-  }
-
-  const workspaces = await context.system.list_workspaces();
-  const workspace = input.workspace_id
-    ? workspaces.find((item) => item.workspace_id === input.workspace_id)
-    : workspaces[0];
-  if (!workspace) {
-    throw new Error(
-      input.workspace_id
-        ? `Workspace not found: ${input.workspace_id}`
-        : "No Workspace is registered for project skills",
-    );
-  }
-  return create_host_context(runtime, input.agent_id, workspace.workspace_path);
 }
 
 /** 解析目标 Agent 的 Skill 目录，并拒绝非法 Agent ID。 */
@@ -421,13 +484,17 @@ function create_host_context(
 }
 
 /** 把内部摘要投影为 Mainview 不依赖路径的数据。 */
-function to_mainview_item(skill: SkillSummary): SkillMainviewItem {
+function to_mainview_item(
+  skill: SkillSummary,
+  origin?: SkillMainviewOrigin,
+): SkillMainviewItem {
   return {
     id: skill.id,
     name: skill.name,
     description: skill.description,
     is_link: skill.is_link,
     ...(skill.link_target ? { link_target: skill.link_target } : {}),
+    ...(origin ? { origin } : {}),
     allowed_tools: [...skill.allowed_tools],
   };
 }

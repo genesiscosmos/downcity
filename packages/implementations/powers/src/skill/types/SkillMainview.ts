@@ -12,6 +12,30 @@
 export type SkillMainviewScope = "project" | "home";
 
 /**
+ * 一个 Skill 的外部来源。
+ *
+ * 说明（中文）
+ * - `project` 指向某个 Workspace 的 `.agents/skills`。
+ * - `home` 指向用户目录的 `~/.agents/skills`。
+ */
+export interface SkillMainviewOrigin {
+  /**
+   * 来源类型。
+   */
+  readonly source: SkillMainviewScope;
+
+  /**
+   * 项目来源所属 Workspace ID；用户目录来源不设置。
+   */
+  readonly workspace_id?: string;
+
+  /**
+   * 项目来源所属 Workspace 名称；用户目录来源不设置。
+   */
+  readonly workspace_name?: string;
+}
+
+/**
  * 功能页展示的一条 Agent 已绑定 Skill。
  */
 export interface SkillMainviewItem {
@@ -44,6 +68,14 @@ export interface SkillMainviewItem {
   readonly link_target?: string;
 
   /**
+   * 软链接对应的外部来源；仅当链接目标落在已知来源根内时设置。
+   *
+   * 说明（中文）
+   * - 用于在界面上说明这条 Skill 来自 project 还是 home，而不是只给一个绝对路径。
+   */
+  readonly origin?: SkillMainviewOrigin;
+
+  /**
    * Skill 声明允许使用的工具名称。
    */
   readonly allowed_tools: string[];
@@ -74,19 +106,9 @@ export interface SkillMainviewAgent {
  */
 export interface SkillMainviewCatalogItem extends SkillMainviewItem {
   /**
-   * Skill 所属来源类型。
+   * Skill 所属来源。
    */
-  readonly source: SkillMainviewScope;
-
-  /**
-   * 项目来源所属 Workspace ID；用户目录来源不设置。
-   */
-  readonly workspace_id?: string;
-
-  /**
-   * 项目来源所属 Workspace 名称；用户目录来源不设置。
-   */
-  readonly workspace_name?: string;
+  readonly origin: SkillMainviewOrigin;
 
   /**
    * 该 Skill 是否已关联到当前 Agent。
@@ -112,9 +134,9 @@ export interface SkillMainviewSnapshot {
   readonly agents: SkillMainviewAgent[];
 
   /**
-   * 全局可关联目录；仅在 `skill.catalog` 中返回。
+   * 全局可关联目录，按来源分组前的平铺集合。
    */
-  readonly catalog?: SkillMainviewCatalogItem[];
+  readonly catalog: SkillMainviewCatalogItem[];
 }
 
 /**
