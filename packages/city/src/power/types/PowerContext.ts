@@ -228,6 +228,15 @@ export class PowerContext {
   /** 本步冻结的事实。 */
   readonly snapshot: StepSnapshot;
 
+  /**
+   * Downcity 用户级数据根目录。
+   *
+   * 关键点（中文）
+   * - Agent 私有数据位于其 `agents/<agent-id>/` 下，例如技能目录与记忆目录。
+   * - 这是容器事实，由 City 直接提供；Power 不应从自身存储路径向上推断。
+   */
+  readonly data_root_path: string;
+
   /** 本次调用的身份与执行面。 */
   readonly call: PowerCall;
 
@@ -256,6 +265,8 @@ export class PowerContext {
     readonly turn?: PowerTurnHandle;
     /** 本步冻结的事实。 */
     readonly snapshot: StepSnapshot;
+    /** Downcity 用户级数据根目录。 */
+    readonly data_root_path: string;
     /** 本次调用的身份与执行面。 */
     readonly call: PowerCall;
     /** 当前 Power 私有存储。 */
@@ -271,6 +282,7 @@ export class PowerContext {
     this.agent = input.agent;
     this.workspace = input.workspace;
     this.snapshot = input.snapshot;
+    this.data_root_path = input.data_root_path;
     this.call = input.call;
     this.storage = input.storage;
     this.config = input.config;

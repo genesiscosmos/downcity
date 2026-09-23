@@ -393,6 +393,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       workspace_path: workspace.path,
       workspace,
       data_path: power_storage.root_path,
+      data_root_path: this.options.storage.root_path,
       data_files: power_storage.files,
       ...(workspace.shell ? { shell: workspace.shell } : {}),
       sessions: create_power_session_collection({
@@ -692,6 +693,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
       }),
       config,
       storage,
+      data_root_path: this.options.storage.root_path,
       logger,
       notifications,
       system: Object.freeze({

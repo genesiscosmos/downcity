@@ -44,7 +44,7 @@ async function start_messenger_power() {
 }
 
 /** 启动 Skill Power，并注入测试 Agent 与 Workspace。 */
-async function start_skill_power(lifecycle_path, workspace_path) {
+async function start_skill_power(data_root_path, workspace_path) {
   const actions = new Map();
   await new SkillPower().initialize({
     power: {
@@ -53,7 +53,8 @@ async function start_skill_power(lifecycle_path, workspace_path) {
       config_action() {},
     },
     config: { get: () => ({}), set: async () => {} },
-    storage: { path: lifecycle_path, files: {} },
+    storage: { path: data_root_path, files: {} },
+    data_root_path,
     logger: {
       debug() {},
       info() {},
@@ -256,7 +257,6 @@ test("Messenger Power 拒绝没有凭据的新 Channel", async () => {
 
 test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
   const base_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-skill-main-"));
-  const lifecycle_path = path.join(base_path, "powers", "skill");
   const workspace_path = path.join(base_path, "workspace");
   const home_path = path.join(base_path, "home");
   const skill_path = path.join(workspace_path, ".agents", "skills", "demo");
@@ -269,7 +269,7 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
   const previous_home = process.env.HOME;
   process.env.HOME = home_path;
   try {
-    const actions = await start_skill_power(lifecycle_path, workspace_path);
+    const actions = await start_skill_power(base_path, workspace_path);
 
     // 初始状态：Agent 目录为空，但全局目录已能看到 Workspace 与用户目录 Skill。
     const before = await actions.get("skill.catalog").run({ agent_id: "test-agent" });

@@ -56,6 +56,8 @@ export interface CreatePowerContextInput {
   readonly turn?: PowerContext["turn"];
   /** 本步冻结的事实。 */
   readonly snapshot: StepSnapshot;
+  /** Downcity 用户级数据根目录。 */
+  readonly data_root_path: string;
   /** 本次调用的身份与执行面。 */
   readonly call: PowerCall;
   /** 当前 Power 业务配置。 */
@@ -99,6 +101,7 @@ export function create_power_context(input: CreatePowerContextInput): PowerConte
     ...(input.session ? { session: input.session } : {}),
     ...(input.turn ? { turn: input.turn } : {}),
     snapshot: input.snapshot,
+    data_root_path: input.data_root_path,
     call: input.call,
     storage: { path: input.data_path, files: input.data_files },
     config: input.config,

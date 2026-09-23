@@ -9,7 +9,7 @@ description: How the built-in skill power scopes skills per Agent, reads SKILL.m
 
 Skills live at `~/.downcity/agents/<agent-id>/skills`. Every entry is a directory containing `SKILL.md`. An entry is either a copy installed into the Agent directory or a symlink pointing at a skill that lives elsewhere.
 
-The directory sits inside the Agent's own data root, so removing the Agent removes its skills with it. Writing into it is granted to the Agent's shell, which means the Agent can install and link skills itself.
+The directory sits inside the Agent's own data root, so removing the Agent removes its skills with it. Writing into it is granted to the Agent's shell, which means the Agent can install and link skills itself. The root path comes from the container (`PowerContext.data_root_path` / `PowerLifecycleContext.data_root_path`), not from a constructor option.
 
 ## Scope
 

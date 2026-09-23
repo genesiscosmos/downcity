@@ -35,7 +35,7 @@ import type {
 /** 宿主动作运行所需的稳定路径事实。 */
 export interface SkillPowerHostRuntime {
   /**
-   * Agent 技能目录根，即 `<downcity_root>/agents`。
+   * Agent 技能目录根，即 `<data_root_path>/agents`。
    */
   agents_root: string;
 }

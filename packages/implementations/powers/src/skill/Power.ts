@@ -8,7 +8,6 @@
  * - skills overview 通过 `power.system` 注入，清单与 `list` 默认结果保持一致。
  */
 
-import path from "node:path";
 import { Power, create_action } from "@downcity/city/power";
 import type {
   PowerActions,
@@ -31,6 +30,7 @@ import { listSkills, lookupSkill } from "@/skill/Action.js";
 import {
   create_skill_root_context,
   resolve_agent_skill_dir,
+  resolve_agents_root,
 } from "@/skill/runtime/AgentRoot.js";
 import { build_skills_system_text } from "@/skill/runtime/SystemProvider.js";
 import { SKILL_POWER_PROMPT } from "@/skill/SkillPromptAssets.js";
@@ -54,10 +54,10 @@ function create_skill_power_actions(input: {
   /**
    * 读取当前 Agent 的技能目录。
    *
-   * 关键点（中文）：该目录在 `initialize` 时才能确定，而动作在构造期就已装配，
-   * 因此这里传 getter，避免闭包捕获空字符串。
+   * 关键点（中文）：数据根由每次调用的 context 提供，而动作在构造期就已装配，
+   * 因此这里传一个从 context 取值的函数，避免闭包捕获构造期的空值。
    */
-  get_agent_skill_dir: (agent_id: string) => string;
+  get_agent_skill_dir: (data_root_path: string, agent_id: string) => string;
   /**
    * 归一化后的 power 选项。
    */
@@ -95,7 +95,10 @@ function create_skill_power_actions(input: {
           data: listSkills({
             scope: read_scope(payload.scope),
             context: create_skill_root_context({
-              agent_skill_dir: input.get_agent_skill_dir(params.context.agent.id),
+              agent_skill_dir: input.get_agent_skill_dir(
+                params.context.data_root_path,
+                params.context.agent.id,
+              ),
               agent_id: params.context.agent.id,
               workspace_path: params.context.workspace.path,
             }),
@@ -152,7 +155,10 @@ function create_skill_power_actions(input: {
         const result = await lookupSkill({
           scope: read_scope(payload.scope),
           context: create_skill_root_context({
-            agent_skill_dir: input.get_agent_skill_dir(params.context.agent.id),
+            agent_skill_dir: input.get_agent_skill_dir(
+              params.context.data_root_path,
+              params.context.agent.id,
+            ),
             agent_id: params.context.agent.id,
             workspace_path: params.context.workspace.path,
           }),
@@ -215,9 +221,6 @@ export class SkillPower extends Power {
   /** 构造期解析后的选项。 */
   private readonly options: ResolvedSkillPowerOptions;
 
-  /** Agent 技能目录根（`<downcity_root>/agents`）；在 initialize 时由生命周期存储派生。 */
-  private agents_root = "";
-
   /** 当前 power 的完整动作集合。 */
   readonly actions: PowerActions;
 
@@ -225,7 +228,7 @@ export class SkillPower extends Power {
     super();
     this.options = resolveSkillPowerOptions(options);
     this.actions = create_skill_power_actions({
-      get_agent_skill_dir: (agent_id) => this.require_agent_skill_dir(agent_id),
+      get_agent_skill_dir: resolve_agent_skill_dir,
       options: this.options,
     });
   }
@@ -235,7 +238,7 @@ export class SkillPower extends Power {
     const dynamic_text = String(
       build_skills_system_text({
         context: create_skill_root_context({
-          agent_skill_dir: this.require_agent_skill_dir(context.agent.id),
+          agent_skill_dir: resolve_agent_skill_dir(context.data_root_path, context.agent.id),
           agent_id: context.agent.id,
           workspace_path: context.workspace.path,
         }),
@@ -245,17 +248,10 @@ export class SkillPower extends Power {
     return [SKILL_POWER_PROMPT, dynamic_text].filter(Boolean).join("\n\n");
   }
 
-  /** 注册 Skill Power 的宿主管理 actions，并固定 Agent 技能目录根。 */
+  /** 注册 Skill Power 的宿主管理 actions。 */
   initialize(context: PowerLifecycleContext): void {
-    this.agents_root = resolve_agent_skill_dir(context.storage.path, "");
-    register_skill_power_host_actions(context, { agents_root: this.agents_root });
-  }
-
-  /** 读取指定 Agent 的技能目录；未初始化时直接报错，避免静默写错目录。 */
-  private require_agent_skill_dir(agent_id: string): string {
-    if (!this.agents_root) {
-      throw new Error("SkillPower is not initialized: agent skill directory is unresolved");
-    }
-    return path.join(this.agents_root, String(agent_id || "").trim(), "skills");
+    register_skill_power_host_actions(context, {
+      agents_root: resolve_agents_root(context.data_root_path),
+    });
   }
 }

@@ -9,7 +9,7 @@ description: 说明 skill 内建 power 如何按 Agent 划分技能目录、读�
 
 技能存放在 `~/.downcity/agents/<agent-id>/skills`。每个条目是一个包含 `SKILL.md` 的目录，来源要么是复制进 Agent 目录的安装副本，要么是指向外部目录的软链接。
 
-该目录位于 Agent 自己的数据根下，因此删除 Agent 会一并删除它的技能。该目录已授权给 Agent 的 shell，所以 Agent 可以自己安装与关联技能。
+该目录位于 Agent 自己的数据根下，因此删除 Agent 会一并删除它的技能。该目录已授权给 Agent 的 shell，所以 Agent 可以自己安装与关联技能。根路径由容器提供（`PowerContext.data_root_path` / `PowerLifecycleContext.data_root_path`），不来自构造参数。
 
 ## 作用域
 

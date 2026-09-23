@@ -172,6 +172,14 @@ export interface PowerLifecycleContext {
   readonly config: PowerConfigStore;
   /** 当前 Power 在 City 中唯一的私有存储。 */
   readonly storage: PowerStorage;
+  /**
+   * Downcity 用户级数据根目录。
+   *
+   * 关键点（中文）
+   * - Agent 私有数据位于其 `agents/<agent-id>/` 下，例如技能目录与记忆目录。
+   * - 这是容器事实，由 City 直接提供；Power 不应从自身存储路径向上推断。
+   */
+  readonly data_root_path: string;
   /** Power 独享的结构化日志器。 */
   readonly logger: PowerLogger;
   /** 已绑定当前 Power 身份的宿主通知发布能力。 */
