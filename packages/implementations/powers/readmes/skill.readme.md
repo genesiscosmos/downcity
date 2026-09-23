@@ -1,13 +1,17 @@
 # Skills
 
-Discovers skills available to the Agent, reads their instructions, and adds guidance for selecting the right skill during a task.
+Discovers the skills assigned to an Agent, reads their instructions, and injects the Agent skill inventory into the system prompt.
 
 ## What it provides
 
-- Lists and inspects installed skills.
-- Loads skill instructions only when they are relevant.
+- Lists and reads the skills in the calling Agent's own skill directory.
+- Reads project and home skill directories on demand through an explicit scope.
 - Keeps skill discovery separate from the Agent definition.
+
+## Storage
+
+Each Agent owns `~/.downcity/powers/skill/agents/<agent-id>/`. A skill is a directory containing `SKILL.md`, either copied in or linked from another source.
 
 ## Desktop
 
-The Power page works without a Profile. Use its Workspace, Personal, and Discover tabs to read installed Skill instructions, search the public catalog, install Skills, or remove them from a selected scope.
+The Power page works without a Profile. Its Sidebar lists every Agent, and each Agent shows its own skills. The Agent Mainview has three views: Bound skills, the global catalog from the user directory and each Workspace with link state, and Discover for searching and installing through the `skills` CLI.

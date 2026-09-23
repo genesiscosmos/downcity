@@ -1,25 +1,27 @@
 /**
  * Skill Power 的宿主管理 actions。
  *
- * 宿主界面通过这些 Power 级动作浏览、读取、发现、安装和删除 Skill。它不依赖 Agent
- * 实例或 Config；Workspace 列表由宿主作为只读能力注入。
+ * 宿主界面通过这些 Power 级动作浏览 Agent、读取、安装、关联和删除 Skill。
+ * 权威数据是 Agent 私有目录 `agents/<agent-id>`；用户目录与各 Workspace 的
+ * `.agents/skills` 只作为可关联来源出现在全局目录里。
+ * 动作不依赖 Agent 运行实例，Agent 与 Workspace 列表由宿主作为只读能力注入。
  */
 
 import fs from "fs-extra";
 import os from "node:os";
 import path from "node:path";
 import { execa } from "execa";
-import {
-  type PowerJsonValue,
-  type PowerHostWorkspace,
-  type PowerLifecycleContext,
-} from "@downcity/city/power";
+import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";
 import { listSkills, lookupSkill } from "@/skill/Action.js";
+import { resolveSkillPowerOptions } from "@/skill/Config.js";
+import { create_skill_root_context } from "@/skill/runtime/AgentRoot.js";
+import type { SkillRootContext } from "@/skill/runtime/Paths.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
 import type {
+  SkillMainviewCatalogItem,
   SkillMainviewInstallInput,
-  SkillMainviewCliResult,
   SkillMainviewItem,
+  SkillMainviewLinkInput,
   SkillMainviewMutationResult,
   SkillMainviewReadInput,
   SkillMainviewRemoveInput,
@@ -29,78 +31,333 @@ import type {
   SkillMainviewSnapshot,
 } from "@/skill/types/SkillMainview.js";
 
+/** 宿主动作运行所需的稳定路径事实。 */
+export interface SkillPowerHostRuntime {
+  /**
+   * Agent 私有 skill 根目录绝对路径。
+   */
+  agent_root: string;
+}
+
+/** 一次宿主查询的公共输入。 */
+interface AgentQuery {
+  /**
+   * 目标 Agent 稳定标识。
+   */
+  agent_id: string;
+}
+
 /** 注册 Skill Power 的宿主管理 actions。 */
-export function register_skill_power_host_actions(context: PowerLifecycleContext): void {
+export function register_skill_power_host_actions(
+  context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
+): void {
   context.power.action({
-      id: "skills.list",
-      run: async () => as_json(await create_snapshot(context)),
-    });
-    context.power.action({
-      id: "skills.read",
-      run: async (input) => as_json(await read_skill(context, read_scope_input(input))),
-    });
-    context.power.action({
-      id: "skills.find",
-      run: async (input) => as_json(await find_skills(read_required_string(input, "query"))),
-    });
-    context.power.action({
-      id: "skills.install",
-      run: async (input) => as_json(await install_skill(context, read_install_input(input))),
-    });
-    context.power.action({
-      id: "skills.remove",
-      run: async (input) => as_json(await remove_skill(context, read_remove_input(input))),
+    id: "skill.snapshot",
+    run: async () => as_json(await create_snapshot(context, runtime)),
+  });
+  context.power.action({
+    id: "skill.catalog",
+    run: async (input) =>
+      as_json(await read_catalog(context, runtime, read_agent_query(input))),
+  });
+  context.power.action({
+    id: "skill.read",
+    run: async (input) => as_json(await read_skill(context, runtime, read_read_input(input))),
+  });
+  context.power.action({
+    id: "skill.install",
+    run: async (input) => as_json(await install_skill(context, runtime, read_install_input(input))),
+  });
+  context.power.action({
+    id: "skill.link",
+    run: async (input) => as_json(await link_skill(context, runtime, read_link_input(input))),
+  });
+  context.power.action({
+    id: "skill.remove",
+    run: async (input) => as_json(await remove_skill(context, runtime, read_remove_input(input))),
+  });
+  context.power.action({
+    id: "skill.search",
+    run: async (input) => as_json(await search_catalog(read_required_string(input, "query"))),
   });
 }
 
-/** 创建所有 Workspace 与个人 Skill 的稳定快照。 */
-async function create_snapshot(context: PowerLifecycleContext): Promise<SkillMainviewSnapshot> {
-  const workspaces = await context.system.list_workspaces();
+/** 读取全部 Agent 及其已绑定 Skill。 */
+async function create_snapshot(
+  context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
+): Promise<SkillMainviewSnapshot> {
+  const agents = await context.system.list_agents();
   return {
     success: true,
-    workspaces: workspaces.map((workspace) => ({
-      workspace_id: workspace.workspace_id,
-      name: workspace.name,
-      skills: listSkills(workspace.workspace_path, { use: ["project"] }).skills
-        .map((skill) => to_mainview_item(skill, "workspace", workspace.workspace_id)),
+    agents: agents.map((agent) => ({
+      agent_id: agent.agent_id,
+      name: agent.name,
+      skills: list_agent_skills(runtime, agent.agent_id),
     })),
-    home_skills: listSkills(process.cwd(), { use: ["home"] }).skills
-      .map((skill) => to_mainview_item(skill, "home")),
   };
 }
 
-/** 把 Agent 运行时摘要投影为 Mainview 不依赖路径的数据。 */
-function to_mainview_item(
-  skill: SkillSummary,
-  scope: SkillMainviewScope,
-  workspace_id?: string,
-): SkillMainviewItem {
-  return {
-    id: skill.id,
-    name: skill.name,
-    description: skill.description,
-    scope,
-    ...(workspace_id ? { workspace_id } : {}),
-    allowed_tools: [...skill.allowedTools],
-  };
+/** 读取一个 Agent 私有目录下已绑定的 Skill。 */
+function list_agent_skills(
+  runtime: SkillPowerHostRuntime,
+  agent_id: string,
+): SkillMainviewItem[] {
+  return listSkills({
+    scope: "agent",
+    context: create_host_context(runtime, agent_id, process.cwd()),
+    options: resolveSkillPowerOptions(),
+  }).skills.map(to_mainview_item);
 }
 
-/** 在重新发现后读取一个 Skill，避免信任 Renderer 传入的本地路径。 */
+/**
+ * 读取全局目录，并标出每个 Skill 是否已关联到目标 Agent。
+ *
+ * 说明（中文）
+ * - 来源是用户目录与宿主登记的全部 Workspace，不包含其它 Agent 的私有目录。
+ */
+async function read_catalog(
+  context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
+  query: AgentQuery,
+): Promise<SkillMainviewSnapshot> {
+  const snapshot = await create_snapshot(context, runtime);
+  const linked_ids = new Set(
+    (snapshot.agents.find((agent) => agent.agent_id === query.agent_id)?.skills ?? [])
+      .map((skill) => skill.id),
+  );
+
+  const catalog: SkillMainviewCatalogItem[] = [];
+  for (const entry of await list_catalog_sources(context, runtime, query.agent_id)) {
+    for (const skill of entry.skills) {
+      catalog.push({
+        ...to_mainview_item(skill),
+        source: entry.source,
+        ...(entry.workspace_id ? { workspace_id: entry.workspace_id } : {}),
+        ...(entry.workspace_name ? { workspace_name: entry.workspace_name } : {}),
+        linked: linked_ids.has(skill.id),
+      });
+    }
+  }
+
+  return { ...snapshot, catalog };
+}
+
+/** 一个可关联来源及其当前 Skill。 */
+interface CatalogSource {
+  /**
+   * 来源类型。
+   */
+  source: "project" | "home";
+  /**
+   * 项目来源所属 Workspace ID。
+   */
+  workspace_id?: string;
+  /**
+   * 项目来源所属 Workspace 名称。
+   */
+  workspace_name?: string;
+  /**
+   * 该来源内发现的 Skill。
+   */
+  skills: SkillSummary[];
+}
+
+/** 列出全部可关联来源及其 Skill。 */
+async function list_catalog_sources(
+  context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
+  agent_id: string,
+): Promise<CatalogSource[]> {
+  const workspaces = await context.system.list_workspaces();
+  const sources: CatalogSource[] = [];
+
+  for (const workspace of workspaces) {
+    sources.push({
+      source: "project",
+      workspace_id: workspace.workspace_id,
+      workspace_name: workspace.name,
+      skills: listSkills({
+        scope: "project",
+        context: create_host_context(runtime, agent_id, workspace.workspace_path),
+        options: resolveSkillPowerOptions(),
+      }).skills,
+    });
+  }
+
+  sources.push({
+    source: "home",
+    skills: listSkills({
+      scope: "home",
+      context: create_host_context(runtime, agent_id, process.cwd()),
+      options: resolveSkillPowerOptions(),
+    }).skills,
+  });
+
+  return sources;
+}
+
+/** 重新发现后读取一个 Skill，避免信任 Renderer 传入的本地路径。 */
 async function read_skill(
   context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
   input: SkillMainviewReadInput,
 ) {
-  const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
   return await lookupSkill({
-    project_root: workspace?.workspace_path ?? process.cwd(),
+    scope: input.scope,
+    context: await resolve_query_context(context, runtime, input),
+    options: resolveSkillPowerOptions(),
     request: { name: input.skill_id },
-    options: { use: [input.scope === "home" ? "home" : "project"] },
   });
+}
+
+/**
+ * 用官方 skills CLI 安装一个 Skill 到目标 Agent 目录。
+ *
+ * 关键点（中文）
+ * - CLI 只支持安装到项目或用户目录，因此先装到临时目录，再复制进 Agent 目录。
+ * - 全程在 power 进程执行，不依赖沙箱 HOME，也不要求模型自己跑命令。
+ */
+async function install_skill(
+  context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
+  input: SkillMainviewInstallInput,
+): Promise<SkillMainviewMutationResult> {
+  const staging = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-skill-install-"));
+  try {
+    const result = await run_skills_cli(["add", input.spec, "-y"], staging, 10 * 60_000);
+    if (!result.success) {
+      return {
+        ...await create_snapshot(context, runtime),
+        operation_success: false,
+        error: result.error,
+      };
+    }
+
+    const installed = find_staged_skill(staging);
+    if (!installed) {
+      return {
+        ...await create_snapshot(context, runtime),
+        operation_success: false,
+        error: `Installed skill directory was not found after running the skills CLI for ${input.spec}`,
+      };
+    }
+
+    const target_root = resolve_agent_skill_dir(runtime, input.agent_id);
+    const target_dir = path.join(target_root, path.basename(installed));
+    await fs.ensureDir(target_root);
+    await fs.remove(target_dir);
+    await fs.copy(installed, target_dir);
+    return { ...await create_snapshot(context, runtime), operation_success: true };
+  } catch (reason) {
+    return {
+      ...await create_snapshot(context, runtime),
+      operation_success: false,
+      error: to_error_message(reason),
+    };
+  } finally {
+    await fs.remove(staging).catch(() => undefined);
+  }
+}
+
+/** 在临时目录里定位 CLI 实际写出的 Skill 目录。 */
+function find_staged_skill(staging: string): string | null {
+  const candidates: string[] = [];
+  const walk = (directory: string, depth: number): void => {
+    if (depth > 4) return;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const full_path = path.join(directory, entry.name);
+      if (fs.existsSync(path.join(full_path, "SKILL.md"))) {
+        candidates.push(full_path);
+        continue;
+      }
+      walk(full_path, depth + 1);
+    }
+  };
+  walk(staging, 0);
+  return candidates[0] ?? null;
+}
+
+/** 把用户目录或 Workspace 中的 Skill 软链接进 Agent 目录。 */
+async function link_skill(
+  context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
+  input: SkillMainviewLinkInput,
+): Promise<SkillMainviewMutationResult> {
+  const query_context = await resolve_query_context(context, runtime, input);
+  const skill = listSkills({
+    scope: input.scope,
+    context: query_context,
+    options: resolveSkillPowerOptions(),
+  }).skills.find((item) => item.id === input.skill_id);
+
+  if (!skill) {
+    return {
+      ...await create_snapshot(context, runtime),
+      operation_success: false,
+      error: `Skill not found in ${input.scope}: ${input.skill_id}`,
+    };
+  }
+
+  const target_root = resolve_agent_skill_dir(runtime, input.agent_id);
+  const link_path = path.join(target_root, skill.id);
+  try {
+    await fs.ensureDir(target_root);
+    await fs.remove(link_path);
+    await fs.symlink(skill.directory_path, link_path, "junction");
+    return { ...await create_snapshot(context, runtime), operation_success: true };
+  } catch (reason) {
+    return {
+      ...await create_snapshot(context, runtime),
+      operation_success: false,
+      error: to_error_message(reason),
+    };
+  }
+}
+
+/**
+ * 从 Agent 目录移除一个 Skill。
+ *
+ * 关键点（中文）：只删除 Agent 目录内的条目；软链接只删链接本身，不动目标目录。
+ */
+async function remove_skill(
+  context: PowerLifecycleContext,
+  runtime: SkillPowerHostRuntime,
+  input: SkillMainviewRemoveInput,
+): Promise<SkillMainviewMutationResult> {
+  const exists = list_agent_skills(runtime, input.agent_id)
+    .some((skill) => skill.id === input.skill_id);
+  if (!exists) {
+    return {
+      ...await create_snapshot(context, runtime),
+      operation_success: false,
+      error: `Skill not found: ${input.skill_id}`,
+    };
+  }
+
+  try {
+    await fs.remove(path.join(resolve_agent_skill_dir(runtime, input.agent_id), input.skill_id));
+    return { ...await create_snapshot(context, runtime), operation_success: true };
+  } catch (reason) {
+    return {
+      ...await create_snapshot(context, runtime),
+      operation_success: false,
+      error: to_error_message(reason),
+    };
+  }
 }
 
 /** 使用官方 skills CLI 搜索公开目录。 */
-async function find_skills(query: string): Promise<SkillMainviewSearchResult> {
-  const cwd = path.join(os.tmpdir(), "downcity-skills-find");
+async function search_catalog(query: string): Promise<SkillMainviewSearchResult> {
+  const cwd = path.join(os.tmpdir(), "downcity-skills-search");
   await fs.ensureDir(cwd);
   const result = await run_skills_cli(["find", query], cwd, 120_000);
   if (!result.success) {
@@ -109,55 +366,70 @@ async function find_skills(query: string): Promise<SkillMainviewSearchResult> {
   return { success: true, query, hits: parse_search_hits(result.output) };
 }
 
-/** 使用官方 skills CLI 安装并返回刷新后的快照。 */
-async function install_skill(
+/**
+ * 解析一个来源查询所需的路径上下文。
+ *
+ * 关键点（中文）：项目来源必须指向真实 Workspace，否则拒绝执行。
+ */
+async function resolve_query_context(
   context: PowerLifecycleContext,
-  input: SkillMainviewInstallInput,
-): Promise<SkillMainviewMutationResult> {
-  const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
-  const cwd = workspace?.workspace_path ?? os.homedir();
-  const args = ["add", input.spec, ...(input.scope === "home" ? ["-g"] : []), "-y"];
-  const result = await run_skills_cli(args, cwd, 10 * 60_000);
-  return {
-    ...await create_snapshot(context),
-    operation_success: result.success,
-    ...(!result.success ? { error: result.error } : {}),
-  };
-}
-
-/** 删除重新发现得到的精确 Skill 目录。 */
-async function remove_skill(
-  context: PowerLifecycleContext,
-  input: SkillMainviewRemoveInput,
-): Promise<SkillMainviewMutationResult> {
-  const workspace = await resolve_workspace(context, input.scope, input.workspace_id);
-  const project_root = workspace?.workspace_path ?? process.cwd();
-  const options = { use: [input.scope === "home" ? "home" as const : "project" as const] };
-  const skill = listSkills(project_root, options).skills.find((item) => item.id === input.skill_id);
-  if (!skill) {
-    return {
-      ...await create_snapshot(context),
-      operation_success: false,
-      error: `Skill not found: ${input.skill_id}`,
-    };
+  runtime: SkillPowerHostRuntime,
+  input: { agent_id: string; scope: "agent" | SkillMainviewScope; workspace_id?: string },
+): Promise<SkillRootContext> {
+  if (input.scope === "home" || input.scope === "agent") {
+    return create_host_context(runtime, input.agent_id, process.cwd());
   }
-  await fs.remove(path.dirname(skill.skillMdPath));
-  return { ...await create_snapshot(context), operation_success: true };
+
+  const workspaces = await context.system.list_workspaces();
+  const workspace = input.workspace_id
+    ? workspaces.find((item) => item.workspace_id === input.workspace_id)
+    : workspaces[0];
+  if (!workspace) {
+    throw new Error(
+      input.workspace_id
+        ? `Workspace not found: ${input.workspace_id}`
+        : "No Workspace is registered for project skills",
+    );
+  }
+  return create_host_context(runtime, input.agent_id, workspace.workspace_path);
 }
 
-/** 解析 Workspace 范围，并拒绝不存在或缺少 ID 的输入。 */
-async function resolve_workspace(
-  context: PowerLifecycleContext,
-  scope: SkillMainviewScope,
-  workspace_id?: string,
-): Promise<PowerHostWorkspace | undefined> {
-  if (scope === "home") return undefined;
-  const id = String(workspace_id || "").trim();
-  if (!id) throw new Error("workspace_id is required for workspace skills");
-  const workspace = (await context.system.list_workspaces())
-    .find((item) => item.workspace_id === id);
-  if (!workspace) throw new Error(`Workspace not found: ${id}`);
-  return workspace;
+/** 解析目标 Agent 的 Skill 目录，并拒绝非法 Agent ID。 */
+function resolve_agent_skill_dir(
+  runtime: SkillPowerHostRuntime,
+  agent_id_input: string,
+): string {
+  const agent_id = String(agent_id_input || "").trim();
+  if (!agent_id) throw new Error("agent_id is required for agent skills");
+  if (agent_id.includes("/") || agent_id.includes("\\") || path.isAbsolute(agent_id)) {
+    throw new Error(`Invalid agent_id: ${agent_id}`);
+  }
+  return path.join(runtime.agent_root, agent_id);
+}
+
+/** 构造宿主侧的扫描上下文。 */
+function create_host_context(
+  runtime: SkillPowerHostRuntime,
+  agent_id: string,
+  workspace_path: string,
+): SkillRootContext {
+  return create_skill_root_context({
+    agent_root: runtime.agent_root,
+    agent_id,
+    workspace_path,
+  });
+}
+
+/** 把内部摘要投影为 Mainview 不依赖路径的数据。 */
+function to_mainview_item(skill: SkillSummary): SkillMainviewItem {
+  return {
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    is_link: skill.is_link,
+    ...(skill.link_target ? { link_target: skill.link_target } : {}),
+    allowed_tools: [...skill.allowed_tools],
+  };
 }
 
 /** 执行跨平台 skills CLI，并收敛超时和进程错误。 */
@@ -165,20 +437,19 @@ async function run_skills_cli(
   args: string[],
   cwd: string,
   timeout: number,
-): Promise<SkillMainviewCliResult> {
+): Promise<{ success: true; output: string } | { success: false; error: string }> {
   try {
-    const result = await execa(process.platform === "win32" ? "npx.cmd" : "npx", ["-y", "skills", ...args], {
-      cwd,
-      timeout,
-      reject: false,
-      all: true,
-    });
+    const result = await execa(
+      process.platform === "win32" ? "npx.cmd" : "npx",
+      ["-y", "skills", ...args],
+      { cwd, timeout, reject: false, all: true },
+    );
     const output = strip_ansi(result.all || "");
     return result.exitCode === 0
       ? { success: true, output }
       : { success: false, error: output || `skills CLI failed (${result.exitCode})` };
   } catch (reason) {
-    return { success: false, error: reason instanceof Error ? reason.message : String(reason) };
+    return { success: false, error: to_error_message(reason) };
   }
 }
 
@@ -200,56 +471,85 @@ function strip_ansi(value: string): string {
   return value.replace(/\u001B\[[0-9;]*[A-Za-z]/gu, "");
 }
 
-/** 解析 read/remove 共用的范围与 Skill ID。 */
-function read_scope_input(input: PowerJsonValue | undefined): SkillMainviewReadInput {
-  const record = read_record(input);
+/** 读取对象中的必填字符串。 */
+function read_required_string(input: PowerJsonValue | undefined, key: string): string {
+  const value = read_record(input)[key];
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${key} is required`);
+  return value.trim();
+}
+
+/** 要求输入为 Power JSON object。 */
+function read_record(value: PowerJsonValue | undefined): Record<string, PowerJsonValue> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Power action input must be an object");
+  }
+  return value as Record<string, PowerJsonValue>;
+}
+
+/** 解析只带 agent_id 的输入。 */
+function read_agent_query(input: PowerJsonValue | undefined): AgentQuery {
+  return { agent_id: read_required_string(input, "agent_id") };
+}
+
+/** 解析 read 输入。 */
+function read_read_input(input: PowerJsonValue | undefined): SkillMainviewReadInput {
+  const value = read_record(input).scope;
+  if (value !== undefined && value !== "agent" && value !== "project" && value !== "home") {
+    throw new Error("scope must be agent, project, or home");
+  }
   return {
-    scope: read_scope(record.scope),
-    skill_id: read_required_string(record, "skill_id"),
-    ...(typeof record.workspace_id === "string" ? { workspace_id: record.workspace_id.trim() } : {}),
+    agent_id: read_required_string(input, "agent_id"),
+    skill_id: read_required_string(input, "skill_id"),
+    scope: value ?? "agent",
+    ...read_optional_workspace_id(input),
   };
 }
 
 /** 解析安装输入。 */
 function read_install_input(input: PowerJsonValue | undefined): SkillMainviewInstallInput {
-  const record = read_record(input);
   return {
-    scope: read_scope(record.scope),
-    spec: read_required_string(record, "spec"),
-    ...(typeof record.workspace_id === "string" ? { workspace_id: record.workspace_id.trim() } : {}),
+    agent_id: read_required_string(input, "agent_id"),
+    spec: read_required_string(input, "spec"),
+  };
+}
+
+/** 解析关联输入。 */
+function read_link_input(input: PowerJsonValue | undefined): SkillMainviewLinkInput {
+  return {
+    agent_id: read_required_string(input, "agent_id"),
+    skill_id: read_required_string(input, "skill_id"),
+    scope: read_link_scope(read_record(input).scope),
+    ...read_optional_workspace_id(input),
   };
 }
 
 /** 解析删除输入。 */
 function read_remove_input(input: PowerJsonValue | undefined): SkillMainviewRemoveInput {
-  return read_scope_input(input);
+  return {
+    agent_id: read_required_string(input, "agent_id"),
+    skill_id: read_required_string(input, "skill_id"),
+  };
 }
 
-/** 要求一个值为 Power JSON object。 */
-function read_record(value: PowerJsonValue | undefined): Record<string, PowerJsonValue> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Power action input must be an object");
-  }
-  return value;
+/** 读取可选的 Workspace ID。 */
+function read_optional_workspace_id(
+  input: PowerJsonValue | undefined,
+): { workspace_id?: string } {
+  const value = read_record(input).workspace_id;
+  if (typeof value !== "string") return {};
+  const workspace_id = value.trim();
+  return workspace_id ? { workspace_id } : {};
 }
 
-/** 读取对象中的必填字符串。 */
-function read_required_string(
-  input: PowerJsonValue | Record<string, PowerJsonValue> | undefined,
-  key: string,
-): string {
-  const record = input && typeof input === "object" && !Array.isArray(input)
-    ? input as Record<string, PowerJsonValue>
-    : read_record(input as PowerJsonValue | undefined);
-  const value = record[key];
-  if (typeof value !== "string" || !value.trim()) throw new Error(`${key} is required`);
-  return value.trim();
+/** 读取并校验可关联的来源范围。 */
+function read_link_scope(value: PowerJsonValue | undefined): SkillMainviewScope {
+  if (value === "project" || value === "home") return value;
+  throw new Error("scope must be project or home");
 }
 
-/** 读取并校验 Skill 配置范围。 */
-function read_scope(value: PowerJsonValue | undefined): SkillMainviewScope {
-  if (value === "home" || value === "workspace") return value;
-  throw new Error("scope must be home or workspace");
+/** 把未知失败转换为稳定错误文本。 */
+function to_error_message(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 /** 把结构化协议显式收敛到 Power JSON 边界。 */

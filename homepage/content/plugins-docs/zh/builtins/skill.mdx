@@ -1,83 +1,52 @@
 ---
 title: Skills
-description: 说明 skill 内建 plugin 如何发现、验证和读取本地 Skill，以及如何根据扫描区域完成查找与安装
+description: 说明 skill 内建 power 如何按 Agent 划分技能目录、读取 SKILL.md，并把 Agent 技能清单暴露给 Desktop
 ---
 
 # Skills
 
-`skill` 是 Agent 的本地技能目录。它负责发现当前可见的 Skill、读取 `SKILL.md`，并把可用 Skill 与扫描区域注入 system prompt。
+`skill` 是 Agent 的技能目录。每个 Agent 拥有自己的技能目录，该目录就是它可用技能的权威集合。这个 power 负责发现目录内的技能、读取 `SKILL.md`，并把清单注入 system prompt。
 
-`find` 和 `install` 是纯提示 action：它们根据输入和 `SkillPlugin` 的实际扫描配置返回 Shell 操作提示，但不会执行命令、访问网络或修改文件。Agent 再按提示使用 `skills` CLI。
+技能存放在 `~/.downcity/powers/skill/agents/<agent-id>/`。每个条目是一个包含 `SKILL.md` 的目录，来源要么是复制进 Agent 目录的安装副本，要么是指向外部目录的软链接。
 
-## Desktop 工作区
+## 作用域
 
-Skill 不声明 Config。它仍会出现在 Plugins Catalog 中展示说明，同时在一级导航条贡献独立入口。打开该入口后，Sidebar 会像 Workspace 文件树一样列出所有已登记 Workspace：
+Agent 自己的目录是默认来源，也是权威来源。另有两条可按需读取的额外来源：
 
-- **Workspaces 树**：每个 Workspace 都是一个可展开根节点，展开后直接显示其中的 `.agents/skills`；选择根节点或 Skill 后，Mainview 同步显示对应列表或详情。
-- **个人**：管理 `~/.agents/skills` 中的个人 Skill。
-- **发现**：通过官方 `skills` CLI 搜索公开目录，并安装到个人目录或指定 Workspace。
+- `project` 读取 `<workspace>/.agents/skills`
+- `home` 读取 `~/.agents/skills`
+- `all` 返回 Agent 目录、project、home 的并集
 
-Workspace 选择不依赖 Desktop 当前工作区，也不在 Mainview 再提供重复的 Workspace 下拉选择。选择根节点会显示 Skill 列表；选择 Skill 会进入独立详情页，并安全渲染 `SKILL.md`。列表和树节点的删除等操作统一收进 Item Menu，写操作后 Sidebar 与 Mainview 会同步刷新。删除会永久移除所选范围内的 Skill 目录，Desktop 会先请求确认。
+同一个技能 ID 出现在多个来源时，Agent 目录优先，其次 project，最后 home。
 
-## 注册
-
-```ts
-import { Agent } from "@downcity/agent";
-import { City } from "@downcity/city";
-import { create_builtin_plugin_registrations } from "@downcity/plugins";
-
-const registrations = create_builtin_plugin_registrations();
-const city = new City({ plugins: registrations, workspaces: [workspace] });
-const agent = new Agent({ id: "skill-helper" });
-city.agents.add(agent);
-```
-
-默认只扫描当前项目的 `.agents/skills`。自定义扫描范围时，构造 `SkillPlugin` 实例并交给 City，
-不要把它交给 Agent。
-
-可以通过构造参数扩展扫描范围：
-
-```ts
-const skill_plugin = new SkillPlugin({
-  use: ["project", "home"],
-  paths: [".agents/shared-skills"],
-  ignore: ["legacy-skill"],
-});
-```
-
-- `use: ["project"]`：扫描 `<project>/.agents/skills`
-- `use: ["home"]`：扫描 `~/.agents/skills`
-- `paths`：添加自定义扫描目录；相对路径基于项目根目录解析
-- `ignore`：按 Skill ID、名称、正则或判断函数排除 Skill
-
-发生同 ID 冲突时，优先级为 `project > paths > home`。
+`list` 与 `lookup` 接受相同的 `scope` 参数，且都默认只看 Agent 目录。system prompt 里的清单也只列 Agent 目录，因此模型看到的技能名可以直接使用，不需要额外传 scope。
 
 ## Actions
 
-Skill Plugin 提供四个 action：
-
 | Action | Payload | 作用 |
 | --- | --- | --- |
-| `find` | `{ query: string }` | 返回查找 Skill 的 Shell 提示，不执行搜索 |
-| `install` | `{ spec: string }` | 返回扫描感知的安装提示，不执行安装 |
-| `list` | `{}` | 列出当前扫描范围内可发现的 Skill |
-| `lookup` | `{ name: string }` | 查找 Skill 并读取它的 `SKILL.md` |
+| `list` | `{ scope?: "agent" \| "project" \| "home" \| "all" }` | 列出指定作用域的技能，默认只看 Agent 目录 |
+| `lookup` | `{ name: string, scope?: ... }` | 读取技能的 `SKILL.md` |
 
-列出 Skill：
+`lookup` 把技能正文作为标准 context 消息返回，正文会在下一步进入模型上下文，不写入任何会话状态。
+
+模型侧没有 `find` 与 `install`。安装与关联属于 Desktop 操作：往 Agent 目录里写内容是用户的决定，不该由模型在任务中途完成。system prompt 会告诉模型，需要未列出的技能时请用户到 Skills 页面添加。
+
+列出 Agent 的技能：
 
 ```ts
 const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "skill",
+  power: "skill",
   action: "list",
   payload: {},
 });
 ```
 
-读取 Skill：
+读取技能：
 
 ```ts
 const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "skill",
+  power: "skill",
   action: "lookup",
   payload: {
     name: "web-access",
@@ -88,112 +57,42 @@ const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: work
 模型在 Session 中使用相同协议：
 
 ```ts
-plugin_call({
-  plugin: "skill",
+skill({
   action: "lookup",
-  payload: {
+  args: {
     name: "web-access",
   },
 });
 ```
 
-## 查找和安装
+## 配置
 
-调用 `find` 获取查找提示：
+Skill 没有 Config 面板。作用域由 Agent 目录与 `scope` 参数决定，因此唯一的构造参数是 `ignore`：
 
 ```ts
-const find_instructions = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "skill",
-  action: "find",
-  payload: {
-    query: "web access",
-  },
+const skill_power = new SkillPower({
+  ignore: ["legacy-skill", /^internal-/],
 });
 ```
 
-调用 `install` 获取安装提示：
+- 字符串会同时匹配技能 ID 与名称。
+- `RegExp` 用于批量过滤。
+- 判断函数返回 `true` 表示排除该技能。
 
-```ts
-const install_instructions = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "skill",
-  action: "install",
-  payload: {
-    spec: "owner/repository@web-access",
-  },
-});
-```
+## Desktop
 
-两个 action 都只在返回结果的 `data.prompt` 中提供操作说明。system prompt 会列出实际扫描目录，并引导 Agent 调用这两个 action；`install` 提示再根据当前实例的 `use / paths` 动态列出：
+Skills 页面按 Agent 组织。Sidebar 把每个已登记的 Agent 作为可展开根节点，展开后显示绑定到该 Agent 的技能。选择 Agent 进入它的技能配置，选择技能进入对应的 `SKILL.md`。
 
-- 实际扫描目录和扫描顺序
-- 每类扫描目录对应的安装方式
-- 安装后的验证要求
+单个 Agent 的 Mainview 有三个视图：
 
-`find` 提示会引导 Agent 使用当前可用的 Web 或浏览器能力搜索以下 Skill 目录：
+- **已绑定**：显示该 Agent 目录中的技能，每条标明是安装还是关联，并可移除。
+- **全局目录**：显示用户目录与各个 Workspace 中的全部技能，并标明是否已关联到当前 Agent。关联会在 Agent 目录里创建软链接，来源目录不受影响。
+- **发现**：通过官方 `skills` CLI 搜索公开目录，并安装到当前 Agent 目录。CLI 无法直接安装进 Agent 目录，因此安装会先落到临时目录再复制进去。
 
-- [skills.sh](https://www.skills.sh/)
-- [LobeHub Skill 社区](https://app.lobehub.com/community/skill)
-
-同时也会提供 `npx skills find` 命令，便于结合目录页面与 CLI 结果确定安装 spec。
-
-查找缺失 Skill 使用 Shell：
-
-```bash
-npx -y skills find "<query>"
-```
-
-安装到项目扫描区域：
-
-```bash
-npx -y skills add "<spec>" -y
-```
-
-只有配置包含 `use: ["home"]` 时，才应选择全局安装：
-
-```bash
-npx -y skills add "<spec>" -g -y
-```
-
-自定义 `paths` 没有统一的 `skills` CLI 目标参数。安装或复制后，最终结构必须是：
-
-```text
-<configured-root>/<skill-id>/SKILL.md
-```
-
-## 安装验证提示
-
-`install` action 不会在代码层执行或验证安装。它返回的提示词会要求 Agent 在 Shell 命令完成后调用：
-
-```ts
-plugin_call({
-  plugin: "skill",
-  action: "list",
-  payload: {},
-});
-```
-
-如果新 Skill 出现在 `list` 结果中，提示词会继续引导 Agent 调用 `lookup`。整个流程由提示词驱动，不是 action 内部的强制状态机。
-
-完整流程是：
-
-1. 调用 `list` 确认本地是否已经存在。
-2. 缺失时调用 `find`，再按返回提示通过 Shell 执行查找。
-3. 选定 spec 后调用 `install`，再按返回提示选择扫描区域并执行安装。
-4. 再次调用 `list` 验证是否可发现。
-5. 调用 `lookup` 读取 `SKILL.md`。
-
-## System Prompt
-
-每次构建 Session system prompt 时，Skill Plugin 会重新扫描配置的根目录，并注入：
-
-- 当前可用 Skill 的名称与描述
-- 当前扫描根及其解析后的真实路径
-- 缺失 Skill 应调用 `find/install` action 的工作流
-
-具体命令和安装后的 `list` 检查提示由 action 返回。`install` action 使用同一份扫描配置，不会把项目安装或全局安装写死。
+移除关联技能只删除软链接；移除安装技能才删除副本。两种操作都不会越出 Agent 目录。
 
 ## 相关文档
 
-- [内建 Plugin 总览](/zh/plugins-docs/builtins/overview)
+- [内建 Power 总览](/zh/plugins-docs/builtins/overview)
 - [Plugin Actions](/zh/agent-sdk-docs/plugins/plugin-actions)
 - [Plugin System](/zh/agent-sdk-docs/plugins/plugin-system)

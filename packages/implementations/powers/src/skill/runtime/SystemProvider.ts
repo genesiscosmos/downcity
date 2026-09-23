@@ -2,47 +2,46 @@
  * Skill power system 文本构建器。
  *
  * 关键点（中文）
- * - 只负责输出“可用技能概览”提示词
- * - 不再读取/写入 pinnedSkillIds，不做会话级技能注入
- * - `lookup` 行为为无状态：由 action 读取 SKILL.md 后通过协议注入 user message
+ * - 只输出「当前 Agent 可用 skill」概览，不写入任何会话级状态。
+ * - `lookup` 由 action 读取 `SKILL.md` 后通过标准消息协议注入。
  */
 
-import type { StepSnapshot } from "@downcity/city/power";
-import { discoverSkillsSync } from "./Discovery.js";
+import type { SkillDefinition } from "@/skill/types/SkillDefinition.js";
+import type { ResolvedSkillPowerOptions } from "@/skill/types/SkillPower.js";
+import { discover_skills } from "./Discovery.js";
+import { resolve_skill_root, type SkillRootContext } from "./Paths.js";
 import { render_skills_prompt_section } from "./Prompt.js";
-import { setSessionAvailableSkills } from "./Store.js";
-import type { SkillPowerOptions } from "@/skill/types/SkillPower.js";
-
-type SkillSystemRuntime = {
-  rootPath: string;
-  options?: SkillPowerOptions | null;
-};
 
 /**
  * 构建 skill power system 文本。
  *
  * 算法流程（中文）
- * 1) 扫描可用 skills
- * 2) 更新 session 的可用技能快照（仅用于观察态）
- * 3) 输出 skills overview 文本
+ * 1) 解析当前 Agent 的私有扫描根。
+ * 2) 扫描该根下的 skill，作为默认可用集合。
+ * 3) 渲染清单、Agent 目录与额外可读来源。
  */
-export async function buildSkillsSystemText(
-  runtime: SkillSystemRuntime,
-  execution_context?: StepSnapshot,
-): Promise<string> {
-  const session_id = String(execution_context?.session_id || "").trim();
-  const discoveredSkills = discoverSkillsSync(
-    runtime.rootPath,
-    runtime.options,
-  );
+export function build_skills_system_text(input: {
+  /**
+   * 当前 Agent 与 Workspace 的路径事实。
+   */
+  context: SkillRootContext;
+  /**
+   * 归一化后的 power 选项。
+   */
+  options: ResolvedSkillPowerOptions;
+}): string {
+  const agent_root = resolve_skill_root("agent", input.context);
+  const skills: SkillDefinition[] = agent_root
+    ? discover_skills([agent_root], input.options)
+    : [];
 
-  if (session_id) {
-    setSessionAvailableSkills(session_id, discoveredSkills);
-  }
+  const extra_roots = (["project", "home"] as const)
+    .map((source) => resolve_skill_root(source, input.context))
+    .filter((root): root is NonNullable<typeof root> => Boolean(root));
 
-  return render_skills_prompt_section(
-    runtime.rootPath,
-    runtime.options,
-    discoveredSkills,
-  ).trim();
+  return render_skills_prompt_section({
+    skills,
+    agent_root,
+    extra_roots,
+  }).trim();
 }

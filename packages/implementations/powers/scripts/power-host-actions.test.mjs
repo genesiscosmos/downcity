@@ -43,8 +43,8 @@ async function start_chat_power() {
   return actions;
 }
 
-/** 启动 Skill Power，并注入测试 Workspace。 */
-async function start_skill_power(workspace_path) {
+/** 启动 Skill Power，并注入测试 Agent 与 Workspace。 */
+async function start_skill_power(lifecycle_path, workspace_path) {
   const actions = new Map();
   await new SkillPower().initialize({
     power: {
@@ -52,14 +52,17 @@ async function start_skill_power(workspace_path) {
       action(action) { actions.set(action.id, action); },
       config_action() {},
     },
+    config: { get: () => ({}), set: async () => {} },
+    storage: { path: lifecycle_path, files: {} },
     logger: {
       debug() {},
       info() {},
       warn() {},
       error() {},
     },
+    notifications: { publish: async () => {} },
     system: {
-      async list_agents() { return []; },
+      async list_agents() { return [{ agent_id: "test-agent", name: "Test Agent" }]; },
       async list_workspaces() {
         return [{ workspace_id: "test", name: "Test", workspace_path }];
       },
@@ -251,25 +254,48 @@ test("Chat Power 拒绝没有凭据的新 Channel", async () => {
   );
 });
 
-test("Skill Power 不需要配置即可浏览和读取 Workspace Skill", async () => {
-  const workspace_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-skill-main-"));
+test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
+  const base_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-skill-main-"));
+  const workspace_path = path.join(base_path, "workspace");
   const skill_path = path.join(workspace_path, ".agents", "skills", "demo");
   fs.mkdirSync(skill_path, { recursive: true });
   fs.writeFileSync(path.join(skill_path, "SKILL.md"), "---\nname: Demo\ndescription: Example\n---\n\n# Demo\n");
   try {
-    const actions = await start_skill_power(workspace_path);
-    const snapshot = await actions.get("skills.list").run();
-    assert.deepEqual(snapshot.workspaces[0].skills.map((skill) => skill.id), ["demo"]);
+    const actions = await start_skill_power(base_path, workspace_path);
 
-    const result = await actions.get("skills.read").run({
-      scope: "workspace",
-      workspace_id: "test",
+    // 初始状态：Agent 目录为空，但全局目录已能看到 Workspace Skill。
+    const before = await actions.get("skill.catalog").run({ agent_id: "test-agent" });
+    assert.deepEqual(before.agents[0].skills, []);
+    const before_demo = before.catalog.find((item) => item.id === "demo");
+    assert.ok(before_demo, "全局目录未包含 Workspace Skill");
+    assert.equal(before_demo.linked, false);
+    assert.equal(before_demo.source, "project");
+
+    // 关联后该 Agent 即可见，且标记为软链接。
+    const linked = await actions.get("skill.link").run({
+      agent_id: "test-agent",
       skill_id: "demo",
+      scope: "project",
+      workspace_id: "test",
+    });
+    assert.equal(linked.operation_success, true);
+    assert.deepEqual(linked.agents[0].skills.map((skill) => `${skill.id}:${skill.is_link}`), ["demo:true"]);
+
+    const result = await actions.get("skill.read").run({
+      agent_id: "test-agent",
+      skill_id: "demo",
+      scope: "agent",
     });
     assert.equal(result.success, true);
     assert.match(result.content, /# Demo/u);
+
+    // 移除只删链接，不动来源目录。
+    const removed = await actions.get("skill.remove").run({ agent_id: "test-agent", skill_id: "demo" });
+    assert.equal(removed.operation_success, true);
+    assert.deepEqual(removed.agents[0].skills, []);
+    assert.equal(fs.existsSync(path.join(skill_path, "SKILL.md")), true);
   } finally {
-    fs.rmSync(workspace_path, { recursive: true, force: true });
+    fs.rmSync(base_path, { recursive: true, force: true });
   }
 });
 

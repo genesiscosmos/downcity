@@ -2,16 +2,18 @@
  * Skill 命令协议类型。
  *
  * 关键点（中文）
- * - 统一描述 skill list / lookup 相关的 CLI、API 与 power action 数据结构。
+ * - 统一描述 skill list / lookup 的 power action 数据结构。
  * - 这些类型不绑定具体实现模块，避免再次退回到历史 service 目录。
  */
+
+import type { SkillPowerScope } from "@/skill/types/SkillPower.js";
 
 /**
  * skill 摘要信息。
  */
 export type SkillSummary = {
   /**
-   * skill 稳定标识。
+   * skill 稳定标识，通常等于目录名。
    */
   id: string;
   /**
@@ -23,21 +25,33 @@ export type SkillSummary = {
    */
   description: string;
   /**
-   * skill 根目录来源类型。
-   *
-   * 说明（中文）
-   * - 例如 user/project/builtin 等来源标识。
-   * - 这里只保留稳定字符串，不在类型层强绑定目录实现细节。
+   * skill 所属扫描根来源类型。
    */
   source: string;
   /**
+   * skill 所属扫描根的绝对路径。
+   */
+  source_root: string;
+  /**
+   * skill 目录的绝对路径。
+   */
+  directory_path: string;
+  /**
    * `SKILL.md` 的绝对路径。
    */
-  skillMdPath: string;
+  skill_md_path: string;
+  /**
+   * 该 skill 目录是否为软链接。
+   */
+  is_link: boolean;
+  /**
+   * 软链接指向的绝对路径；非软链接时不设置。
+   */
+  link_target?: string;
   /**
    * 归一化后的允许工具列表。
    */
-  allowedTools: string[];
+  allowed_tools: string[];
 };
 
 /**
@@ -49,7 +63,11 @@ export type SkillListResponse = {
    */
   success: true;
   /**
-   * 当前可发现的 skill 摘要集合。
+   * 本次读取实际使用的作用域。
+   */
+  scope: SkillPowerScope;
+  /**
+   * 当前作用域内可发现的 skill 摘要集合。
    */
   skills: SkillSummary[];
 };

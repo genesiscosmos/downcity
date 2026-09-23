@@ -9,9 +9,8 @@
 export { SkillPower } from "./skill/Power.js";
 export type {
   ResolvedSkillPowerOptions,
-  SkillPowerFindPayload,
-  SkillPowerIgnoreRule,
-  SkillPowerInstallPayload,
+  SkillPowerListPayload,
   SkillPowerLookupPayload,
   SkillPowerOptions,
+  SkillPowerScope,
 } from "./skill/types/SkillPower.js";

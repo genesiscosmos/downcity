@@ -2,308 +2,200 @@
  * Skill Power。
  *
  * 关键点（中文）
- * - skill 不再作为 service 存在，而是作为显式 action + system 提供者接入 power 体系。
- * - `find/install` action 只返回 Shell 操作提示，不执行命令或修改文件。
- * - `list/lookup` action 负责读取当前可发现的本地 skill。
- * - skills overview 文本通过 `power.system` 注入，不再依赖 power.system。
+ * - Skill 按 Agent 划分：权威来源是 `~/.downcity/powers/skill/agents/<agent-id>/`。
+ * - 模型侧只有 `list` 与 `lookup`：默认只看自己目录，可用 `scope` 读取 project / home。
+ * - 安装与关联只由宿主动作完成，模型不写文件。
+ * - skills overview 通过 `power.system` 注入，清单与 `list` 默认结果保持一致。
  */
 
-import { Power } from "@downcity/city/power";
-import { create_action } from "@downcity/city/power";
-import { z } from "zod";
+import { Power, create_action } from "@downcity/city/power";
 import type {
   PowerActions,
   PowerContext,
-  StepSnapshot,
   PowerJsonObject,
-  PowerJsonValue,
   PowerLifecycleContext,
 } from "@downcity/city/power";
 import type { PowerActionResult } from "@downcity/city/power";
+import { z } from "zod";
 import type {
-  SkillPowerFindPayload,
-  SkillPowerInstallPayload,
+  SkillPowerListPayload,
   SkillPowerLookupPayload,
   SkillPowerOptions,
+  ResolvedSkillPowerOptions,
+  SkillPowerScope,
 } from "@/skill/types/SkillPower.js";
 import { SKILL_POWER_ACTIONS } from "@/skill/types/SkillPower.js";
 import { resolveSkillPowerOptions } from "@/skill/Config.js";
-import {
-  listSkills,
-  lookupSkill,
-} from "@/skill/Action.js";
-import { buildSkillsSystemText } from "@/skill/runtime/SystemProvider.js";
-import {
-  render_skill_find_prompt,
-  render_skill_install_prompt,
-} from "@/skill/runtime/Prompt.js";
+import { listSkills, lookupSkill } from "@/skill/Action.js";
+import { create_skill_root_context, resolve_agent_skills_root } from "@/skill/runtime/AgentRoot.js";
+import { build_skills_system_text } from "@/skill/runtime/SystemProvider.js";
 import { SKILL_POWER_PROMPT } from "@/skill/SkillPromptAssets.js";
 import { register_skill_power_host_actions } from "@/skill/host/SkillPowerHostActions.js";
 
-/**
- * 读取 JSON object。
- */
-function readJsonObject(value: PowerJsonValue): PowerJsonObject {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Invalid JSON body");
-  }
-  return value as PowerJsonObject;
+/** 读取一个可选的作用域参数。 */
+function read_scope(value: unknown): SkillPowerScope {
+  return value === "project" || value === "home" || value === "all" ? value : "agent";
 }
 
-/**
- * XML 属性转义。
- */
-function sanitizeXmlAttr(value: string): string {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
+/** 作用域参数的 JSON Schema。 */
+const scope_json_schema = {
+  type: "string",
+  enum: ["agent", "project", "home", "all"],
+  description:
+    "Skill scope. agent (default) reads this agent's own skill directory; project reads the workspace .agents/skills; home reads ~/.agents/skills; all returns the union with agent winning conflicts.",
+};
 
 /** 构造 Skill Power 的完整动作集合。 */
-function createSkillPowerActions(options: SkillPowerOptions): PowerActions {
+function create_skill_power_actions(input: {
+  /**
+   * 读取 Agent 私有 skill 根目录。
+   *
+   * 关键点（中文）：该根在 `initialize` 时才能确定，而动作在构造期就已装配，
+   * 因此这里传 getter，避免闭包捕获空字符串。
+   */
+  get_agent_root: () => string;
+  /**
+   * 归一化后的 power 选项。
+   */
+  options: ResolvedSkillPowerOptions;
+}): PowerActions {
+  const options = input.options;
+
   return {
-      [SKILL_POWER_ACTIONS.find]: create_action({
-        description:
-          "Return shell instructions for finding a skill. This action does not execute the search.",
-        returns: "skill search instructions. Contains no search results: the caller must run the returned shell steps.",
-        access: "read",
-        input_schema: {
-          zod: z.object({
-            query: z.string().trim().min(1),
-          }),
-          json_schema: {
-            type: "object",
-            required: ["query"],
-            properties: {
-              query: {
-                type: "string",
-                description: "Skill search query.",
-              },
-            },
-          },
+    [SKILL_POWER_ACTIONS.list]: create_action({
+      description: "List skills visible to this agent.",
+      returns: "skills(id, name, description, source, is_link, link_target, allowed_tools)",
+      access: "read",
+      input_schema: {
+        zod: z.object({ scope: z.string().optional() }).passthrough(),
+        json_schema: {
+          type: "object",
+          properties: { scope: scope_json_schema },
         },
-        examples: [
-          {
-            title: "Get skill search instructions",
-            payload: { query: "web access" },
-          },
-        ],
-        command: {
-          description:
-            "Return shell instructions for finding a skill without executing the search.",
-          configure(command) {
-            command.argument("<query>");
-          },
-          map_input({ args }): SkillPowerFindPayload {
-            const query = String(args[0] || "").trim();
-            if (!query) throw new Error("Missing query");
-            return { query };
-          },
+      },
+      examples: [
+        { title: "List this agent's skills", payload: {} },
+        { title: "List project skills", payload: { scope: "project" } },
+      ],
+      command: {
+        description: "List skills visible to this agent.",
+        map_input({ args }): SkillPowerListPayload {
+          return { ...(args[0] ? { scope: read_scope(args[0]) } : {}) };
         },
-        execute(params): PowerActionResult<PowerJsonObject> {
-          const payload = params.input as SkillPowerFindPayload;
-          return {
-            success: true,
-            message: "Skill search instructions ready; no search was executed.",
-            data: {
-              kind: "instructions",
-              query: payload.query,
-              prompt: render_skill_find_prompt(payload.query),
-            },
-          };
-        },
-      }),
-      [SKILL_POWER_ACTIONS.install]: create_action({
-        description:
-          "Return scan-aware shell instructions for installing a skill. This action does not install anything.",
-        returns: "installation instructions with resolved scan roots. Installs nothing by itself.",
-        access: "read",
-        input_schema: {
-          zod: z.object({
-            spec: z.string().trim().min(1),
-          }),
-          json_schema: {
-            type: "object",
-            required: ["spec"],
-            properties: {
-              spec: {
-                type: "string",
-                description: "Skill installation source or spec.",
-              },
-            },
-          },
-        },
-        examples: [
-          {
-            title: "Get skill installation instructions",
-            payload: { spec: "owner/repository@skill-name" },
-          },
-        ],
-        command: {
-          description:
-            "Return scan-aware shell instructions without installing a skill.",
-          configure(command) {
-            command.argument("<spec>");
-          },
-          map_input({ args }): SkillPowerInstallPayload {
-            const spec = String(args[0] || "").trim();
-            if (!spec) throw new Error("Missing spec");
-            return { spec };
-          },
-        },
-        execute(params): PowerActionResult<PowerJsonObject> {
-          const payload = params.input as SkillPowerInstallPayload;
-          return {
-            success: true,
-            message: "Skill installation instructions ready; no files were changed.",
-            data: {
-              kind: "instructions",
-              spec: payload.spec,
-              prompt: render_skill_install_prompt(
-                params.context.workspace.path,
-                options,
-                payload.spec,
-              ),
-            },
-          };
-        },
-      }),
-      [SKILL_POWER_ACTIONS.list]: create_action({
-        description: "List currently learned skills discoverable locally.",
-        returns: "skills(name, description, path, root, source, discovered_at)",
-        access: "read",
-        input_schema: {
-          zod: z.object({}).passthrough(),
-          json_schema: {
-            type: "object",
-            properties: {},
-          },
-        },
-        examples: [
-          {
-            title: "List skills",
-            payload: {},
-          },
-        ],
-        command: {
-          description: "List currently learned skills discoverable locally.",
-          map_input() {
-            return {};
-          },
-        },
-        api: {
-          method: "GET",
-        },
-        execute(params): PowerActionResult<PowerJsonObject> {
-          return {
-            success: true,
-            data: listSkills(params.context.workspace.path, options) as unknown as PowerJsonObject,
-          };
-        },
-      }),
-      [SKILL_POWER_ACTIONS.lookup]: create_action({
-        description: "Read learned skill content (SKILL.md).",
-        returns: "skill(name, description, path, content)",
-        access: "read",
-        input_schema: {
-          zod: z.object({
-            name: z.string(),
-          }),
-          json_schema: {
-            type: "object",
-            required: ["name"],
-            properties: {
-              name: { type: "string", description: "Skill name." },
-            },
-          },
-        },
-        examples: [
-          {
-            title: "Read skill",
-            payload: { name: "web-search" },
-          },
-        ],
-        command: {
-          description: "Read learned skill content (SKILL.md).",
-          configure(command) {
-            command.argument("<name>");
-          },
-          map_input({ args }): SkillPowerLookupPayload {
-            const name = String(args[0] || "").trim();
-            if (!name) throw new Error("Missing name");
-            return { name };
-          },
-        },
-        api: {
-          method: "POST",
-          async map_input(c): Promise<SkillPowerLookupPayload> {
-            const body = readJsonObject(await c.req.json());
-            const name = String(body.name || "").trim();
-            if (!name) throw new Error("Missing name");
-            return { name };
-          },
-        },
-        async execute(params): Promise<PowerActionResult<PowerJsonObject>> {
-          const payload = params.input as SkillPowerLookupPayload;
-          const result = await lookupSkill({
-            project_root: params.context.workspace.path,
-            request: {
-              name: payload.name,
-            },
+      },
+      api: { method: "GET" },
+      execute(params): PowerActionResult<PowerJsonObject> {
+        const payload = params.input as SkillPowerListPayload;
+        return {
+          success: true,
+          data: listSkills({
+            scope: read_scope(payload.scope),
+            context: create_skill_root_context({
+              agent_root: input.get_agent_root(),
+              agent_id: params.context.agent.id,
+              workspace_path: params.context.workspace.path,
+            }),
             options,
-          });
-          if (!result.success) {
-            return {
-              success: false,
-              error: result.error || "skill lookup failed",
-            };
-          }
-
-          const skillName = String(result.skill?.name || result.skill?.id || "").trim();
-          const openingTag = skillName
-            ? `<skill name="${sanitizeXmlAttr(skillName)}">`
-            : "<skill>";
-          const skillUserMessage = [
-            openingTag,
-            String(result.content || "").trim(),
-            "</skill>",
-          ]
-            .filter(Boolean)
-            .join("\n")
-            .trim();
-
-          return {
-            success: true,
-            data: {
-              success: true,
-              ...(result.skill ? { skill: result.skill } : {}),
-              message: "Skill content is ready. Next it will be injected as a `<skill>...</skill>` user message.",
-              __ship: {
-                injectUserMessages: [
-                  {
-                    text: skillUserMessage,
-                    note: "skill_lookup",
-                  },
-                ],
-                suppressToolOutput: true,
-                toolOutputMessage:
-                  "skill lookup success; content injected as <skill> user message.",
-              },
-            } as PowerJsonObject,
-          };
+          }) as unknown as PowerJsonObject,
+        };
+      },
+    }),
+    [SKILL_POWER_ACTIONS.lookup]: create_action({
+      description: "Read skill content (SKILL.md).",
+      returns: "skill(name, description, path) plus the SKILL.md body injected as a context message.",
+      access: "read",
+      input_schema: {
+        zod: z.object({ name: z.string().trim().min(1), scope: z.string().optional() }),
+        json_schema: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string", description: "Skill name or directory id." },
+            scope: scope_json_schema,
+          },
         },
-      }),
+      },
+      examples: [
+        { title: "Read a skill", payload: { name: "web-access" } },
+      ],
+      command: {
+        description: "Read skill content (SKILL.md).",
+        configure(command) {
+          command.argument("<name>");
+          command.argument("[scope]");
+        },
+        map_input({ args }): SkillPowerLookupPayload {
+          const name = String(args[0] || "").trim();
+          if (!name) throw new Error("Missing name");
+          return { name, ...(args[1] ? { scope: read_scope(args[1]) } : {}) };
+        },
+      },
+      api: {
+        method: "POST",
+        async map_input(context): Promise<SkillPowerLookupPayload> {
+          const body = await context.req.json();
+          if (!body || typeof body !== "object" || Array.isArray(body)) {
+            throw new Error("Invalid JSON body");
+          }
+          const record = body as Record<string, unknown>;
+          const name = String(record.name || "").trim();
+          if (!name) throw new Error("Missing name");
+          return { name, ...(record.scope ? { scope: read_scope(record.scope) } : {}) };
+        },
+      },
+      async execute(params): Promise<PowerActionResult<PowerJsonObject>> {
+        const payload = params.input as SkillPowerLookupPayload;
+        const result = await lookupSkill({
+          scope: read_scope(payload.scope),
+          context: create_skill_root_context({
+            agent_root: input.get_agent_root(),
+            agent_id: params.context.agent.id,
+            workspace_path: params.context.workspace.path,
+          }),
+          options,
+          request: { name: payload.name },
+        });
+        if (!result.success || !result.skill || !result.content) {
+          return {
+            success: false,
+            error: result.error || "skill lookup failed",
+          };
+        }
+
+        const skill = result.skill;
+        return {
+          success: true,
+          message: `Loaded skill "${skill.name}". Its content is injected as a context message for this turn.`,
+          data: {
+            success: true,
+            skill,
+          } as unknown as PowerJsonObject,
+          messages: [
+            {
+              role: "user",
+              parts: [
+                {
+                  type: "context",
+                  tag: "skill",
+                  context: [
+                    `name: ${skill.name}`,
+                    `id: ${skill.id}`,
+                    `path: ${skill.skill_md_path}`,
+                    "",
+                    result.content,
+                  ].join("\n"),
+                },
+              ],
+            },
+          ],
+        };
+      },
+    }),
   };
 }
 
 /**
- * SkillPower：技能发现、读取与扫描感知的 system 注入。
- *
- * 关键点（中文）
- * - 继承 `Power` 基类，与其它 power 同构。
- * - `actions` 与 `system` 在构造期一次性装配，不依赖 `Object.assign` 覆盖基类字段。
+ * SkillPower：按 Agent 划分的技能发现、读取与 system 注入。
  */
 export class SkillPower extends Power {
   /** Power 稳定名称，即模型侧工具名。 */
@@ -314,10 +206,13 @@ export class SkillPower extends Power {
 
   /** Power 用途说明。 */
   readonly description =
-    "Lists and reads local skills, and injects scan-aware discovery and installation guidance into system prompts.";
+    "Lists and reads the skills assigned to this agent, and injects the agent skill inventory into system prompts.";
 
-  /** 构造期解析后的选项，供 system 与动作共享。 */
-  private readonly options: SkillPowerOptions;
+  /** 构造期解析后的选项。 */
+  private readonly options: ResolvedSkillPowerOptions;
+
+  /** Agent 私有 skill 根目录；在 initialize 时由生命周期存储派生。 */
+  private agent_root = "";
 
   /** 当前 power 的完整动作集合。 */
   readonly actions: PowerActions;
@@ -325,22 +220,38 @@ export class SkillPower extends Power {
   constructor(options: SkillPowerOptions = {}) {
     super();
     this.options = resolveSkillPowerOptions(options);
-    this.actions = createSkillPowerActions(this.options);
+    this.actions = create_skill_power_actions({
+      get_agent_root: () => this.require_agent_root(),
+      options: this.options,
+    });
   }
 
-  /** 合并静态提示与当前项目可发现的技能说明。 */
-  async system(context: PowerContext, execution_context?: StepSnapshot): Promise<string> {
-    const dynamicText = String(
-      await buildSkillsSystemText({
-        rootPath: context.workspace.path,
+  /** 合并静态提示与当前 Agent 可用技能说明。 */
+  async system(context: PowerContext): Promise<string> {
+    const dynamic_text = String(
+      build_skills_system_text({
+        context: create_skill_root_context({
+          agent_root: this.require_agent_root(),
+          agent_id: context.agent.id,
+          workspace_path: context.workspace.path,
+        }),
         options: this.options,
-      }, execution_context),
+      }),
     ).trim();
-    return [SKILL_POWER_PROMPT, dynamicText].filter(Boolean).join("\n\n");
+    return [SKILL_POWER_PROMPT, dynamic_text].filter(Boolean).join("\n\n");
   }
 
-  /** 注册 Skill Power 的宿主管理 actions。 */
+  /** 注册 Skill Power 的宿主管理 actions，并固定 Agent 私有 skill 根。 */
   initialize(context: PowerLifecycleContext): void {
-    register_skill_power_host_actions(context);
+    this.agent_root = resolve_agent_skills_root(context.storage.path);
+    register_skill_power_host_actions(context, { agent_root: this.agent_root });
+  }
+
+  /** 读取 Agent 私有 skill 根；未初始化时直接报错，避免静默写错目录。 */
+  private require_agent_root(): string {
+    if (!this.agent_root) {
+      throw new Error("SkillPower is not initialized: agent skill root is unresolved");
+    }
+    return this.agent_root;
   }
 }

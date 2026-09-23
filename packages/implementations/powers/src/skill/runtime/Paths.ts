@@ -1,107 +1,127 @@
 /**
- * Skills roots resolution.
+ * Skill 扫描根解析。
  *
  * 关键点（中文）
- * - roots 分三类：项目内（project）、用户目录（home），以及构造参数路径（custom）
- * - SkillPower constructor 是唯一配置入口，不读取项目配置文件
- * - 兼容 `<any>/skills` 这种布局：如果 root basename 不是 `skills` 且其子目录 `skills/` 存在，则优先扫描 `<root>/skills`
+ * - 权威来源是 Agent 私有目录：`<agent_root>/<agent-id>`。
+ * - `project` 与 `home` 是额外可读来源，不参与 Agent 默认可用集合。
+ * - 同名 skill 按 `agent > project > home` 覆盖，因此优先级数值递增。
  */
 
-import fs from "fs-extra";
 import path from "node:path";
-import { resolveSkillPowerOptions } from "../Config.js";
-import type { SkillRoot } from "@/skill/types/SkillRoot.js";
-import type { SkillPowerOptions } from "@/skill/types/SkillPower.js";
-import { expandHome, uniqStrings } from "./Utils.js";
+import type { SkillRoot, SkillRootSource } from "@/skill/types/SkillRoot.js";
+import { expand_home } from "./Utils.js";
 
-function normalizeSkillRootCandidate(candidate: string): string {
-  const normalized = path.normalize(candidate);
-  const base = path.basename(normalized);
-  const skillsChild = path.join(normalized, "skills");
+/**
+ * Agent 私有 skill 根下的相对目录名。
+ *
+ * 说明（中文）
+ * - Agent 根由 Power 生命周期存储派生，见 `runtime/AgentRoot.ts`。
+ */
+export const AGENT_SKILLS_DIRECTORY = "agents";
 
-  if (base !== "skills" && fs.existsSync(skillsChild)) {
-    try {
-      if (fs.statSync(skillsChild).isDirectory()) return path.normalize(skillsChild);
-    } catch {
-      // ignore
-    }
+/** 项目内 skill 相对路径。 */
+const PROJECT_SKILLS_RELATIVE = path.join(".agents", "skills");
+
+/** 用户目录 skill 相对路径。 */
+const HOME_SKILLS_RELATIVE = path.join(".agents", "skills");
+
+/**
+ * 一次扫描所需的全部环境事实。
+ */
+export interface SkillRootContext {
+  /**
+   * 当前 Agent 的私有 skill 根目录绝对路径。
+   *
+   * 说明（中文）
+   * - 该路径下的 `<agent-id>` 子目录即当前 Agent 的可用 skill 集合。
+   */
+  agent_root: string;
+  /**
+   * 当前 Agent 稳定标识。
+   */
+  agent_id: string;
+  /**
+   * 当前 Workspace 根目录绝对路径。
+   */
+  workspace_path: string;
+  /**
+   * 用户目录绝对路径。
+   *
+   * 说明（中文）
+   * - 由调用方传入，便于测试与沙箱环境替换。
+   */
+  home_path: string;
+}
+
+/** 把绝对路径中的用户目录折叠为 `~`，用于稳定展示。 */
+function collapse_home(value: string, home_path: string): string {
+  const home = String(home_path || "").trim();
+  const normalized = path.normalize(value);
+  if (!home) return normalized;
+  const relative = path.relative(path.resolve(home), normalized);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return normalized;
+  return relative ? `~/${relative}` : "~";
+}
+
+/**
+ * 解析单个来源的扫描根。
+ *
+ * 关键点（中文）：返回 null 表示当前上下文没有该来源，调用方应跳过。
+ */
+export function resolve_skill_root(
+  source: SkillRootSource,
+  context: SkillRootContext,
+): SkillRoot | null {
+  if (source === "agent") {
+    const agent_id = String(context.agent_id || "").trim();
+    if (!agent_id) return null;
+    const resolved = path.join(context.agent_root, agent_id);
+    return {
+      source,
+      resolved: path.normalize(resolved),
+      display: collapse_home(resolved, context.home_path),
+      priority: 10,
+    };
   }
-  return normalized;
+
+  if (source === "project") {
+    const resolved = path.resolve(context.workspace_path, PROJECT_SKILLS_RELATIVE);
+    return {
+      source,
+      resolved: path.normalize(resolved),
+      display: PROJECT_SKILLS_RELATIVE,
+      priority: 20,
+    };
+  }
+
+  const resolved = path.join(expand_home("~", context.home_path), HOME_SKILLS_RELATIVE);
+  return {
+    source,
+    resolved: path.normalize(resolved),
+    display: `~/${HOME_SKILLS_RELATIVE}`,
+    priority: 30,
+  };
 }
 
-function resolveSkillRootPath(project_root: string, raw: string): string {
-  const expanded = expandHome(raw);
-  return path.isAbsolute(expanded)
-    ? path.normalize(expanded)
-    : path.resolve(project_root, expanded);
-}
-
-export function getSkillSearchRoots(
-  project_root: string,
-  options?: SkillPowerOptions | null,
+/**
+ * 解析一次查询实际要扫描的根集合。
+ *
+ * 算法（中文）
+ * 1) `agent` 只返回 Agent 私有根。
+ * 2) `project` / `home` 只返回对应来源。
+ * 3) `all` 返回三者，并按优先级去重与排序。
+ */
+export function resolve_skill_roots(
+  scope: "agent" | "project" | "home" | "all",
+  context: SkillRootContext,
 ): SkillRoot[] {
-  const skillPowerOptions = resolveSkillPowerOptions(options);
-  const configured = skillPowerOptions.paths.map((x) => String(x));
-
-  const defaultsProject = skillPowerOptions.use.includes("project")
-    ? [".agents/skills"]
-    : [];
-  const defaultsHome = skillPowerOptions.use.includes("home")
-    ? ["~/.agents/skills"]
-    : [];
-
-  const rawConfigured = uniqStrings(configured);
-  const rawProject = uniqStrings(defaultsProject);
-  const rawHome = uniqStrings(defaultsHome);
+  const sources: SkillRootSource[] =
+    scope === "all" ? ["agent", "project", "home"] : [scope];
 
   const roots: SkillRoot[] = [];
-
-  // 1) project roots（最高优先级）
-  for (const raw of rawProject) {
-    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(project_root, raw));
-    roots.push({
-      source: "project",
-      raw,
-      resolved,
-      display: raw,
-      priority: 10,
-      trustedWhenExternalDisabled: true,
-    });
+  for (const source of sources) {
+    const root = resolve_skill_root(source, context);
+    if (root) roots.push(root);
   }
-
-  // 2) constructor paths：用户显式传入的路径，统一视为 custom 来源
-  for (const raw of rawConfigured) {
-    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(project_root, raw));
-    roots.push({
-      source: "custom",
-      raw,
-      resolved,
-      display: raw,
-      priority: 12,
-      trustedWhenExternalDisabled: true,
-    });
-  }
-
-  // 3) home root（用户目录）
-  for (const raw of rawHome) {
-    const resolved = normalizeSkillRootCandidate(resolveSkillRootPath(project_root, raw));
-    roots.push({
-      source: "home",
-      raw,
-      resolved,
-      display: raw,
-      priority: 20,
-      trustedWhenExternalDisabled: true,
-    });
-  }
-
-  // 去重：同 resolved 只保留优先级更高的那个（display/raw 以优先级更高者为准）
-  const byResolved = new Map<string, SkillRoot>();
-  for (const r of roots) {
-    const key = path.normalize(r.resolved);
-    const prev = byResolved.get(key);
-    if (!prev || r.priority < prev.priority) byResolved.set(key, r);
-  }
-
-  return Array.from(byResolved.values()).sort((a, b) => a.priority - b.priority);
+  return roots.sort((left, right) => left.priority - right.priority);
 }

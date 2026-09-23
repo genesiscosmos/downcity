@@ -1,17 +1,20 @@
 /**
  * Skill Power 的功能工作区。
  *
- * Sidebar 以所有 Workspace 和个人目录为树根，只负责展开与业务选择；Mainview 根据共享
- * route 在集合、详情和发现页面之间互斥切换。文件与网络操作全部交给宿主 action。
+ * Sidebar 以宿主登记的全部 Agent 为树根，展开后直接显示该 Agent 已绑定的 Skill。
+ * Mainview 是单个 Agent 的 Skill 配置页：展示已绑定列表、全局目录、关联/取消关联，
+ * 以及公开目录搜索与安装。文件与网络操作全部交给宿主 action。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { define_power_renderer } from "@downcity/city/power/react";
+import type { PowerJsonObject } from "@downcity/city/power";
 import type {
+  SkillMainviewAgent,
+  SkillMainviewCatalogItem,
   SkillMainviewItem,
   SkillMainviewMutationResult,
   SkillMainviewReadResult,
-  SkillMainviewScope,
   SkillMainviewSearchHit,
   SkillMainviewSearchResult,
   SkillMainviewSnapshot,
@@ -20,24 +23,25 @@ import type {
 /** Skill Power Renderer 定义。 */
 export const SKILL_POWER_RENDERER = define_power_renderer({
   sidebar: function SkillPowerSidebar({ power, navigation, ui }) {
-    const { Callout, ItemMenu, LoadingState, Sidebar, SidebarItem, SidebarSection, SidebarSubText, SidebarTreeItem } = ui.components;
+    const { Callout, LoadingState, Sidebar, SidebarSection, SidebarSubText, SidebarTreeItem } = ui.components;
     const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
-    const [expanded_workspace_ids, set_expanded_workspace_ids] = useState<Set<string>>(new Set());
-    const [personal_expanded, set_personal_expanded] = useState(false);
+    const [expanded_agent_ids, set_expanded_agent_ids] = useState<Set<string>>(new Set());
     const [error, set_error] = useState("");
-    const auto_expanded_route_key = useRef("");
-    const scope = read_scope(navigation.route.scope);
-    const selected_workspace_id = read_route(navigation.route.workspace_id);
+    /** 已经自动展开过的 Agent；见下面那个 effect 的说明。 */
+    const auto_expanded_ref = useRef("");
+    const selected_agent_id = read_route(navigation.route.agent_id);
     const selected_skill_id = read_route(navigation.route.skill_id);
 
     useEffect(() => {
       let disposed = false;
       set_error("");
-      void power.invoke<SkillMainviewSnapshot>("skills.list")
+      void power.invoke<SkillMainviewSnapshot>("skill.snapshot")
         .then((next) => {
           if (disposed) return;
           set_snapshot(next);
-          set_expanded_workspace_ids((current) => new Set([...current].filter((workspace_id) => next.workspaces.some((workspace) => workspace.workspace_id === workspace_id))));
+          set_expanded_agent_ids((current) => new Set(
+            [...current].filter((agent_id) => next.agents.some((agent) => agent.agent_id === agent_id)),
+          ));
         })
         .catch((reason) => { if (!disposed) set_error(to_error_message(reason)); });
       return () => { disposed = true; };
@@ -45,112 +49,101 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
 
     useEffect(() => {
       if (!snapshot) return;
-      const route_key = `${scope}:${selected_workspace_id}:${selected_skill_id}`;
-      const should_auto_expand = auto_expanded_route_key.current !== route_key;
-      auto_expanded_route_key.current = route_key;
-      if (scope === "home") {
-        if (should_auto_expand) set_personal_expanded(true);
-        if (selected_skill_id && !snapshot.home_skills.some((skill) => skill.id === selected_skill_id)) navigation.navigate({ scope: "home" });
+      const next_agent_id = snapshot.agents.some((agent) => agent.agent_id === selected_agent_id)
+        ? selected_agent_id
+        : snapshot.agents[0]?.agent_id ?? "";
+      if (next_agent_id !== selected_agent_id) {
+        navigation.navigate(next_agent_id ? agent_route(next_agent_id) : {});
         return;
       }
-      if (scope !== "workspace") return;
-      const workspace = snapshot.workspaces.find((item) => item.workspace_id === selected_workspace_id);
-      if (!workspace) {
-        const first_workspace = snapshot.workspaces[0];
-        if (first_workspace) navigation.navigate(workspace_route(first_workspace.workspace_id));
-        return;
-      }
-      if (should_auto_expand) set_expanded_workspace_ids((current) => current.has(workspace.workspace_id) ? current : new Set(current).add(workspace.workspace_id));
-      if (selected_skill_id && !workspace.skills.some((skill) => skill.id === selected_skill_id)) navigation.navigate(workspace_route(workspace.workspace_id));
-    }, [navigation.navigate, scope, selected_skill_id, selected_workspace_id, snapshot]);
-
-    const remove_skill = async (skill: SkillMainviewItem) => {
-      const confirmed = await ui.confirm({ title: `删除 ${skill.name}？`, description: "对应 Skill 目录会从当前范围永久删除。", action: "删除", destructive: true });
-      if (!confirmed) return;
-      try {
-        const result = await power.invoke<SkillMainviewMutationResult>("skills.remove", skill_input(skill));
-        if (!result.operation_success) throw new Error(result.error || "删除 Skill 失败");
-        set_snapshot(result);
-        if (selected_skill_id === skill.id && selected_scope_matches(skill, scope, selected_workspace_id)) navigation.navigate(skill.scope === "workspace" ? workspace_route(skill.workspace_id ?? "") : { scope: "home" });
-        ui.invalidate();
-        ui.toast({ type: "success", message: "Skill 已删除" });
-      } catch (reason) {
-        const message = to_error_message(reason);
-        set_error(message);
-        ui.toast({ type: "error", message });
-      }
-    };
-
-    const skill_menu = (skill: SkillMainviewItem) => <ItemMenu label={`${skill.name} 操作`} reveal_on_hover actions={[{ action_id: "remove", label: "删除", destructive: true, on_select: () => remove_skill(skill) }]} />;
+      if (!next_agent_id) return;
+      // 只在**选中项变化时**自动展开一次。展开是“跟随选中”的一次性动作，
+      // 不是一个持续成立的不变量：用户有权收起自己正在看的那一项。
+      if (auto_expanded_ref.current === next_agent_id) return;
+      auto_expanded_ref.current = next_agent_id;
+      set_expanded_agent_ids((current) => current.has(next_agent_id) ? current : new Set(current).add(next_agent_id));
+    }, [navigation.navigate, selected_agent_id, snapshot]);
 
     if (!snapshot) return <Sidebar>{error
       ? <Callout tone="danger">{error}</Callout>
       : <LoadingState label="正在读取 Skills…" />}</Sidebar>;
 
     return <Sidebar>
-      <SidebarSection label="Workspaces">
-        {snapshot?.workspaces.map((workspace) => {
-          const expanded = expanded_workspace_ids.has(workspace.workspace_id);
-          return <div key={workspace.workspace_id}>
-            <SidebarTreeItem depth={0} kind="branch" label={workspace.name} trailing={workspace.skills.length} active={scope === "workspace" && selected_workspace_id === workspace.workspace_id && !selected_skill_id} expanded={expanded} on_toggle={() => set_expanded_workspace_ids((current) => toggle_key(current, workspace.workspace_id))} on_select={() => navigation.navigate(workspace_route(workspace.workspace_id))} />
-            {expanded ? <div className="flex flex-col gap-0.5">{workspace.skills.map((skill) => <SidebarTreeItem key={skill.id} kind="leaf" depth={1} label={skill.name} trailing={skill_menu(skill)} active={scope === "workspace" && selected_workspace_id === workspace.workspace_id && selected_skill_id === skill.id} on_select={() => navigation.navigate(workspace_route(workspace.workspace_id, skill.id))} />)}</div> : null}
-            {expanded && workspace.skills.length === 0 ? <SidebarSubText indent={1}>没有已安装的 Skill</SidebarSubText> : null}
+      <SidebarSection label="Agents">
+        {snapshot.agents.map((agent) => {
+          const expanded = expanded_agent_ids.has(agent.agent_id);
+          return <div key={agent.agent_id}>
+            <SidebarTreeItem
+              depth={0}
+              kind="branch"
+              label={agent.name}
+              trailing={agent.skills.length}
+              active={selected_agent_id === agent.agent_id && !selected_skill_id}
+              expanded={expanded}
+              on_toggle={() => set_expanded_agent_ids((current) => toggle_key(current, agent.agent_id))}
+              on_select={() => navigation.navigate(agent_route(agent.agent_id))}
+            />
+            {expanded ? <div className="flex flex-col gap-0.5">{agent.skills.map((skill) => <SidebarTreeItem
+              key={`${agent.agent_id}:${skill.id}`}
+              kind="leaf"
+              depth={1}
+              label={skill.name}
+              active={selected_agent_id === agent.agent_id && selected_skill_id === skill.id}
+              on_select={() => navigation.navigate(agent_route(agent.agent_id, skill.id))}
+            />)}</div> : null}
+            {expanded && agent.skills.length === 0 ? <SidebarSubText indent={1}>还没有 Skill</SidebarSubText> : null}
           </div>;
         })}
-        {!snapshot.workspaces.length ? <SidebarSubText>还没有 Workspace</SidebarSubText> : null}
+        {!snapshot.agents.length ? <SidebarSubText>还没有 Agent</SidebarSubText> : null}
       </SidebarSection>
-      <SidebarSection label="Personal">
-        <SidebarTreeItem depth={0} kind="branch" label="Personal Skills" trailing={snapshot.home_skills.length} active={scope === "home" && !selected_skill_id} expanded={personal_expanded} on_toggle={() => set_personal_expanded((current) => !current)} on_select={() => navigation.navigate({ scope: "home" })} />
-        {personal_expanded ? <div className="flex flex-col gap-0.5">{snapshot.home_skills.map((skill) => <SidebarTreeItem key={skill.id} kind="leaf" depth={1} label={skill.name} trailing={skill_menu(skill)} active={scope === "home" && selected_skill_id === skill.id} on_select={() => navigation.navigate({ scope: "home", skill_id: skill.id })} />)}</div> : null}
-        {personal_expanded && snapshot.home_skills.length === 0 ? <SidebarSubText indent={1}>没有已安装的 Skill</SidebarSubText> : null}
-      </SidebarSection>
-      <SidebarSection label="Discover"><SidebarItem label="发现 Skills" active={scope === "discover"} on_select={() => navigation.navigate({ scope: "discover" })} /></SidebarSection>
       {error ? <Callout tone="danger">{error}</Callout> : null}
     </Sidebar>;
   },
 
   mainview: function SkillPowerMainview({ power, navigation, ui }) {
-    const { Button, Callout, EmptyState, Group, Inline, Input, ItemMenu, LoadingState, Markdown, Page, Row, Section, Select, Status, Toolbar } = ui.components;
+    const { Button, Callout, EmptyState, Group, Inline, Input, ItemMenu, LoadingState, Markdown, Page, Row, Section, Status, Tabs, Toolbar } = ui.components;
     const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
+    const [loading, set_loading] = useState(true);
+    const [content, set_content] = useState("");
+    const [reading, set_reading] = useState(false);
     const [filter, set_filter] = useState("");
     const [query, set_query] = useState("");
     const [hits, set_hits] = useState<SkillMainviewSearchHit[]>([]);
-    const [install_target, set_install_target] = useState("home");
-    const [content, set_content] = useState("");
-    const [loading, set_loading] = useState(true);
-    const [reading, set_reading] = useState(false);
     const [searching, set_searching] = useState(false);
-    const [busy_spec, set_busy_spec] = useState("");
+    const [busy_key, set_busy_key] = useState("");
     const [error, set_error] = useState("");
-    const scope = read_scope(navigation.route.scope);
-    const workspace_id = read_route(navigation.route.workspace_id);
+    const agent_id = read_route(navigation.route.agent_id);
     const skill_id = read_route(navigation.route.skill_id);
+    const tab = read_tab(navigation.route.tab);
 
     const load_snapshot = useCallback(async () => {
       set_loading(true);
       set_error("");
       try {
-        const next = await power.invoke<SkillMainviewSnapshot>("skills.list");
-        set_snapshot(next);
-        set_install_target((current) => current === "home" || next.workspaces.some((workspace) => workspace.workspace_id === current) ? current : next.workspaces[0]?.workspace_id ?? "home");
+        set_snapshot(await power.invoke<SkillMainviewSnapshot>("skill.catalog", { agent_id }));
       } catch (reason) {
         set_error(to_error_message(reason));
       } finally {
         set_loading(false);
       }
-    }, [power]);
+    }, [agent_id, power]);
 
     useEffect(() => { void load_snapshot(); }, [load_snapshot, ui.revision]);
-    const workspace = snapshot?.workspaces.find((item) => item.workspace_id === workspace_id) ?? snapshot?.workspaces[0];
-    const skills = scope === "workspace" ? workspace?.skills ?? [] : snapshot?.home_skills ?? [];
+
+    const agent = snapshot?.agents.find((item) => item.agent_id === agent_id) ?? snapshot?.agents[0];
+    const skills = agent?.skills ?? [];
     const selected_skill = skills.find((skill) => skill.id === skill_id);
-    const visible_skills = useMemo(() => {
-      const normalized_filter = filter.trim().toLowerCase();
-      return normalized_filter ? skills.filter((skill) => `${skill.name} ${skill.id} ${skill.description}`.toLowerCase().includes(normalized_filter)) : skills;
-    }, [filter, skills]);
+    const visible_skills = useMemo(
+      () => filter_skills(skills, filter),
+      [filter, skills],
+    );
+    const visible_catalog = useMemo(
+      () => filter_catalog(snapshot?.catalog ?? [], filter),
+      [filter, snapshot],
+    );
 
     useEffect(() => {
-      if (!selected_skill) {
+      if (!selected_skill || !agent) {
         set_content("");
         set_reading(false);
         return;
@@ -158,32 +151,80 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
       let disposed = false;
       set_content("");
       set_reading(true);
-      void power.invoke<SkillMainviewReadResult>("skills.read", skill_input(selected_skill))
+      void power.invoke<SkillMainviewReadResult>("skill.read", {
+        agent_id: agent.agent_id,
+        skill_id: selected_skill.id,
+        scope: "agent",
+      })
         .then((result) => { if (!disposed) set_content(result.success ? result.content ?? "" : result.error ?? "读取 Skill 失败"); })
         .catch((reason) => { if (!disposed) set_content(to_error_message(reason)); })
         .finally(() => { if (!disposed) set_reading(false); });
       return () => { disposed = true; };
-    }, [power, selected_skill ? skill_key(selected_skill) : "", ui.revision]);
+    }, [agent, power, selected_skill?.id, ui.revision]);
 
-    const select_skill = (skill: SkillMainviewItem) => navigation.navigate(skill.scope === "workspace" ? workspace_route(skill.workspace_id ?? "", skill.id) : { scope: "home", skill_id: skill.id });
-    const remove_skill = async (skill: SkillMainviewItem) => {
-      const confirmed = await ui.confirm({ title: `删除 ${skill.name}？`, description: "对应 Skill 目录会从当前范围永久删除。", action: "删除", destructive: true });
-      if (!confirmed) return;
+    const run_mutation = async (input: {
+      action_id: string;
+      payload: PowerJsonObject;
+      key: string;
+      success_message: string;
+    }) => {
+      set_busy_key(input.key);
       set_error("");
       try {
-        const result = await power.invoke<SkillMainviewMutationResult>("skills.remove", skill_input(skill));
-        if (!result.operation_success) throw new Error(result.error || "删除 Skill 失败");
+        const result = await power.invoke<SkillMainviewMutationResult>(input.action_id, input.payload);
         set_snapshot(result);
-        if (selected_skill?.id === skill.id) navigation.navigate(skill.scope === "workspace" ? workspace_route(skill.workspace_id ?? "") : { scope: "home" });
+        if (!result.operation_success) throw new Error(result.error || "操作失败");
+        if (skill_id) navigation.navigate(agent_route(agent_id));
         ui.invalidate();
-        ui.toast({ type: "success", message: "Skill 已删除" });
+        ui.toast({ type: "success", message: input.success_message });
       } catch (reason) {
         const message = to_error_message(reason);
         set_error(message);
         ui.toast({ type: "error", message });
+      } finally {
+        set_busy_key("");
       }
     };
-    const skill_menu = (skill: SkillMainviewItem, reveal_on_hover = false) => <ItemMenu label={`${skill.name} 操作`} reveal_on_hover={reveal_on_hover} actions={[{ action_id: "remove", label: "删除", destructive: true, on_select: () => remove_skill(skill) }]} />;
+
+    const remove_skill = async (skill: SkillMainviewItem) => {
+      if (!agent) return;
+      const confirmed = await ui.confirm({
+        title: `移除 ${skill.name}？`,
+        description: skill.is_link
+          ? "只会删除该 Agent 目录中的关联，外部来源目录不受影响。"
+          : "该 Skill 会从当前 Agent 目录永久删除。",
+        action: "移除",
+        destructive: true,
+      });
+      if (!confirmed) return;
+      await run_mutation({
+        action_id: "skill.remove",
+        payload: { agent_id: agent.agent_id, skill_id: skill.id },
+        key: skill.id,
+        success_message: "Skill 已移除",
+      });
+    };
+
+    const link_skill = async (item: SkillMainviewCatalogItem) => {
+      if (!agent) return;
+      await run_mutation({
+        action_id: "skill.link",
+        payload: {
+          agent_id: agent.agent_id,
+          skill_id: item.id,
+          scope: item.source,
+          ...(item.workspace_id ? { workspace_id: item.workspace_id } : {}),
+        },
+        key: `link:${item.source}:${item.id}`,
+        success_message: "Skill 已关联",
+      });
+    };
+
+    const skill_menu = (skill: SkillMainviewItem, reveal_on_hover = false) => <ItemMenu
+      label={`${skill.name} 操作`}
+      reveal_on_hover={reveal_on_hover}
+      actions={[{ action_id: "remove", label: "移除", destructive: true, disabled: Boolean(busy_key), on_select: () => remove_skill(skill) }]}
+    />;
 
     const search = async () => {
       const normalized_query = query.trim();
@@ -191,7 +232,7 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
       set_searching(true);
       set_error("");
       try {
-        const result = await power.invoke<SkillMainviewSearchResult>("skills.find", { query: normalized_query });
+        const result = await power.invoke<SkillMainviewSearchResult>("skill.search", { query: normalized_query });
         if (!result.success) throw new Error(result.error || "搜索 Skill 失败");
         set_hits(result.hits);
       } catch (reason) {
@@ -202,74 +243,152 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
     };
 
     const install = async (hit: SkillMainviewSearchHit) => {
-      const target_scope: SkillMainviewScope = install_target === "home" ? "home" : "workspace";
-      set_busy_spec(hit.spec);
-      set_error("");
-      try {
-        const result = await power.invoke<SkillMainviewMutationResult>("skills.install", { scope: target_scope, spec: hit.spec, ...(target_scope === "workspace" ? { workspace_id: install_target } : {}) });
-        if (!result.operation_success) throw new Error(result.error || "安装 Skill 失败");
-        set_snapshot(result);
-        ui.invalidate();
-        ui.toast({ type: "success", message: "Skill 已安装" });
-      } catch (reason) {
-        const message = to_error_message(reason);
-        set_error(message);
-        ui.toast({ type: "error", message });
-      } finally {
-        set_busy_spec("");
-      }
+      if (!agent) return;
+      await run_mutation({
+        action_id: "skill.install",
+        payload: { agent_id: agent.agent_id, spec: hit.spec },
+        key: `install:${hit.spec}`,
+        success_message: "Skill 已安装",
+      });
     };
 
     if (loading && !snapshot) return <LoadingState label="正在读取 Skills…" />;
     if (!snapshot) return <Page>{error
       ? <Callout tone="danger">{error}</Callout>
       : <EmptyState title="无法读取 Skills" description="请刷新后重试。" />}</Page>;
-    if (scope === "discover") return <Page>
+    if (!snapshot.agents.length) return <Page><EmptyState title="还没有 Agent" description="先在 Downcity 中创建一个 Agent。" /></Page>;
+
+    if (selected_skill && agent) return <Page>
       {error ? <Callout tone="danger">{error}</Callout> : null}
-      <Toolbar title="发现 Skills" description="通过 skills CLI 搜索公开目录，并安装到个人目录或指定 Workspace。" actions={<Select value={install_target} options={[{ value: "home", label: "Personal Skills" }, ...(snapshot?.workspaces.map((item) => ({ value: item.workspace_id, label: item.name })) ?? [])]} on_value_change={set_install_target} />} />
-      <Inline fill><Input value={query} placeholder="搜索 skills.sh" on_value_change={set_query} /><Button disabled={searching || !query.trim()} on_click={() => void search()}>{searching ? "搜索中…" : "搜索"}</Button></Inline>
-      {!hits.length ? <EmptyState title="搜索并发现新的 Skill" description="输入能力关键词，例如 browser、slides 或 research。" size="compact" /> : <Group>{hits.map((hit) => <Row key={hit.spec} label={hit.skill || hit.spec} description={hit.spec} trailing={<Button variant="primary" disabled={Boolean(busy_spec)} on_click={() => void install(hit)}>{busy_spec === hit.spec ? "安装中…" : "安装"}</Button>} />)}</Group>}
-    </Page>;
-    if (scope === "workspace" && !snapshot?.workspaces.length) return <Page><EmptyState title="还没有 Workspace" description="先在 Downcity 中添加一个 Workspace。" /></Page>;
-    if (selected_skill) return <Page>
-      {error ? <Callout tone="danger">{error}</Callout> : null}
-      <Toolbar title={selected_skill.name} description={`${selected_skill.scope === "workspace" ? workspace?.name ?? "Workspace" : "Personal"} · ${selected_skill.id}`} actions={skill_menu(selected_skill)} />
+      <Toolbar
+        title={selected_skill.name}
+        description={`${agent.name} · ${selected_skill.id}`}
+        actions={<Inline><Button on_click={() => navigation.navigate(agent_route(agent.agent_id))}>返回列表</Button>{skill_menu(selected_skill)}</Inline>}
+      />
       <Group>
-        <Row label="Scope" trailing={<Status>{selected_skill.scope === "workspace" ? workspace?.name ?? "Workspace" : "Personal"}</Status>} />
+        <Row label="Agent" trailing={<Status>{agent.name}</Status>} />
         <Row label="Skill ID" trailing={<Status>{selected_skill.id}</Status>} />
+        <Row label="来源" trailing={<Status tone="muted">{selected_skill.is_link ? "已关联" : "已安装"}</Status>} />
+        {selected_skill.link_target ? <Row label="链接目标" trailing={<Status tone="muted">{selected_skill.link_target}</Status>} /> : null}
         <Row label="Allowed tools" trailing={<Status>{selected_skill.allowed_tools.length ? selected_skill.allowed_tools.join(", ") : "未限制"}</Status>} />
       </Group>
-      <Section title="SKILL.md">{reading ? <LoadingState label="正在读取 Skill…" /> : content ? <Markdown text={content} /> : <EmptyState title="Skill 内容为空" size="compact" />}</Section>
+      <Section title="SKILL.md">{reading
+        ? <LoadingState label="正在读取 Skill…" />
+        : content ? <Markdown text={content} /> : <EmptyState title="Skill 内容为空" size="compact" />}</Section>
     </Page>;
+
     return <Page>
       {error ? <Callout tone="danger">{error}</Callout> : null}
-      <Toolbar title={scope === "workspace" ? workspace?.name || "Workspace Skills" : "Personal Skills"} description={scope === "workspace" ? `.agents/skills · ${skills.length} Skills` : `~/.agents/skills · ${skills.length} Skills`} actions={<Button disabled={loading} on_click={ui.invalidate}>{loading ? "刷新中…" : "刷新"}</Button>} />
-      <Input value={filter} placeholder="搜索已安装 Skills" on_value_change={set_filter} />
-      {!visible_skills.length ? <EmptyState title={filter.trim() ? "没有匹配的 Skill" : "还没有 Skill"} size="compact" /> : <Group>{visible_skills.map((skill) => <Row key={skill_key(skill)} label={skill.name} description={skill.description || skill.id} trailing={skill_menu(skill, true)} on_click={() => select_skill(skill)} />)}</Group>}
+      <Toolbar
+        title={`${agent?.name ?? ""} 的 Skills`}
+        description={`${skills.length} 个已绑定 Skill`}
+        actions={<Button disabled={loading} on_click={ui.invalidate}>{loading ? "刷新中…" : "刷新"}</Button>}
+      />
+      <Tabs
+        label="Skill 视图"
+        value={tab}
+        on_value_change={(value) => navigation.navigate({ ...agent_route(agent?.agent_id ?? ""), tab: value })}
+        items={[
+          { value: "bound", label: "已绑定", count: skills.length },
+          { value: "catalog", label: "全局目录", count: snapshot.catalog?.length ?? 0 },
+          { value: "discover", label: "发现" },
+        ]}
+      />
+      {tab === "discover" ? <Section title="发现 Skills" description="通过 skills CLI 搜索公开目录，并安装到该 Agent。">
+        <Inline fill>
+          <Input value={query} placeholder="搜索 skills.sh" on_value_change={set_query} />
+          <Button disabled={searching || !query.trim()} on_click={() => void search()}>{searching ? "搜索中…" : "搜索"}</Button>
+        </Inline>
+        {!hits.length
+          ? <EmptyState title="搜索并发现新的 Skill" description="输入能力关键词，例如 browser、slides 或 research。" size="compact" />
+          : <Group>{hits.map((hit) => <Row
+              key={hit.spec}
+              label={hit.skill || hit.spec}
+              description={hit.spec}
+              trailing={<Button variant="primary" disabled={Boolean(busy_key)} on_click={() => void install(hit)}>{busy_key === `install:${hit.spec}` ? "安装中…" : "安装"}</Button>}
+            />)}</Group>}
+      </Section> : null}
+      {tab === "catalog" ? <Section title="全局目录" description="来自用户目录与各 Workspace；关联后该 Agent 即可使用。">
+        <Input value={filter} placeholder="筛选 Skill" on_value_change={set_filter} />
+        {!visible_catalog.length
+          ? <EmptyState title={filter.trim() ? "没有匹配的 Skill" : "全局目录为空"} description="可以先在「发现」里安装，或把 Skill 放进 Workspace 的 .agents/skills。" size="compact" />
+          : <Group>{visible_catalog.map((item) => <Row
+              key={catalog_key(item)}
+              label={item.name}
+              description={`${catalog_description(item)} · ${item.description || item.id}`}
+              trailing={item.linked
+                ? <Status tone="success">已关联</Status>
+                : <Button disabled={Boolean(busy_key)} on_click={() => void link_skill(item)}>{busy_key === `link:${item.source}:${item.id}` ? "关联中…" : "关联"}</Button>}
+            />)}</Group>}
+      </Section> : null}
+      {tab === "bound" ? <Section title="已绑定 Skills" description="该 Agent 目录中的全部 Skill，也是它默认可用的集合。">
+        <Input value={filter} placeholder="筛选已绑定 Skills" on_value_change={set_filter} />
+        {!visible_skills.length
+          ? <EmptyState
+              title={filter.trim() ? "没有匹配的 Skill" : "还没有 Skill"}
+              description="从「全局目录」关联，或在「发现」里安装。"
+              size="compact"
+            />
+          : <Group>{visible_skills.map((skill) => <Row
+              key={skill.id}
+              label={skill.name}
+              description={`${skill.is_link ? "已关联" : "已安装"} · ${skill.description || skill.id}`}
+              trailing={skill_menu(skill, true)}
+              on_click={() => navigation.navigate(agent_route(agent?.agent_id ?? "", skill.id))}
+            />)}</Group>}
+      </Section> : null}
     </Page>;
   },
 });
 
-/** 创建 Workspace 范围的稳定 Power route。 */
-function workspace_route(workspace_id: string, skill_id?: string) { return { scope: "workspace", workspace_id, ...(skill_id ? { skill_id } : {}) }; }
+/** 创建 Agent 范围的稳定 Power route。 */
+function agent_route(agent_id: string, skill_id?: string) {
+  return { agent_id, ...(skill_id ? { skill_id } : {}) };
+}
 
-/** 创建 Skill read/remove action 的稳定输入。 */
-function skill_input(skill: SkillMainviewItem) { return { scope: skill.scope, skill_id: skill.id, ...(skill.workspace_id ? { workspace_id: skill.workspace_id } : {}) }; }
+/** 按关键词筛选已绑定 Skill。 */
+function filter_skills(skills: SkillMainviewItem[], filter: string): SkillMainviewItem[] {
+  const normalized = filter.trim().toLowerCase();
+  if (!normalized) return skills;
+  return skills.filter((skill) => `${skill.name} ${skill.id} ${skill.description}`.toLowerCase().includes(normalized));
+}
 
-/** 判断当前 route 是否与一个 Skill 的范围一致。 */
-function selected_scope_matches(skill: SkillMainviewItem, scope: SkillMainviewScope | "discover", workspace_id: string): boolean { return skill.scope === scope && (skill.scope === "home" || skill.workspace_id === workspace_id); }
+/** 按关键词筛选全局目录。 */
+function filter_catalog(catalog: SkillMainviewCatalogItem[], filter: string): SkillMainviewCatalogItem[] {
+  const normalized = filter.trim().toLowerCase();
+  if (!normalized) return catalog;
+  return catalog.filter((item) => `${item.name} ${item.id} ${item.description}`.toLowerCase().includes(normalized));
+}
 
-/** 构造 Skill 在不同 Workspace 与个人范围间唯一的选中键。 */
-function skill_key(skill: SkillMainviewItem): string { return `${skill.scope}:${skill.workspace_id ?? "home"}:${skill.id}`; }
+/** 构造全局目录条目的唯一键。 */
+function catalog_key(item: SkillMainviewCatalogItem): string {
+  return `${item.source}:${item.workspace_id ?? "home"}:${item.id}`;
+}
 
-/** 切换树节点的展开状态，并返回新的不可变集合。 */
-function toggle_key(current: Set<string>, key: string): Set<string> { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }
+/** 生成全局目录条目的来源说明。 */
+function catalog_description(item: SkillMainviewCatalogItem): string {
+  return item.source === "home" ? "用户目录" : item.workspace_name ?? "Workspace";
+}
 
-/** 从宿主 JSON route 读取稳定 Skill 分区，未知值回退到 Workspace。 */
-function read_scope(value: unknown): SkillMainviewScope | "discover" { return value === "home" || value === "discover" ? value : "workspace"; }
+/** 切换集合中的一个键，并返回新的不可变集合。 */
+function toggle_key(current: Set<string>, key: string): Set<string> {
+  const next = new Set(current);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  return next;
+}
+
+/** 从宿主 JSON route 读取当前 Tab，未知值回退到已绑定。 */
+function read_tab(value: unknown): "bound" | "catalog" | "discover" {
+  return value === "catalog" || value === "discover" ? value : "bound";
+}
 
 /** 从宿主 JSON route 中读取一个可选字符串。 */
-function read_route(value: unknown): string { return typeof value === "string" ? value : ""; }
+function read_route(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
 
 /** 把未知失败转换为用户可见消息。 */
-function to_error_message(reason: unknown): string { return reason instanceof Error ? reason.message : String(reason); }
+function to_error_message(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}

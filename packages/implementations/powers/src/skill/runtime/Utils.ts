@@ -1,28 +1,20 @@
-import os from "os";
-import path from "path";
+/**
+ * Skill 运行时通用工具。
+ *
+ * 关键点（中文）
+ * - 只提供纯函数，不读取任何全局状态。
+ */
 
-export function uniqStrings(values: string[]): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const v of values) {
-    const s = String(v || "").trim();
-    if (!s) continue;
-    if (seen.has(s)) continue;
-    seen.add(s);
-    out.push(s);
-  }
-  return out;
-}
-
-export function expandHome(p: string): string {
-  const raw = String(p || "");
-  if (raw === "~") return os.homedir();
-  if (raw.startsWith("~/")) return path.join(os.homedir(), raw.slice(2));
+/**
+ * 展开 `~` 路径。
+ *
+ * 关键点（中文）：home 目录由调用方传入，便于测试与沙箱环境替换真实用户目录。
+ */
+export function expand_home(value: string, home_path: string): string {
+  const raw = String(value || "");
+  const home = String(home_path || "").trim();
+  if (!home) return raw;
+  if (raw === "~") return home;
+  if (raw.startsWith("~/")) return `${home}${raw.slice(1)}`;
   return raw;
 }
-
-export function isSubpath(parent: string, child: string): boolean {
-  const rel = path.relative(parent, child);
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
-}
-

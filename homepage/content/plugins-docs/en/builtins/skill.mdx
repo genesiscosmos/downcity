@@ -1,83 +1,52 @@
 ---
 title: Skills
-description: How the built-in skill plugin discovers, verifies, and loads local skills, and how scan roots guide search and installation
+description: How the built-in skill power scopes skills per Agent, reads SKILL.md, and exposes the agent skill catalog to the Desktop
 ---
 
 # Skills
 
-`skill` is the Agent's local skill catalog. It discovers visible skills, reads `SKILL.md`, and injects the available skills and scan roots into the system prompt.
+`skill` is an Agent's skill catalog. Each Agent has its own skill directory, and that directory is the authoritative set of skills the Agent can use. The power discovers those skills, reads `SKILL.md`, and injects the inventory into the system prompt.
 
-`find` and `install` are instruction-only actions. They use the input and active `SkillPlugin` scan configuration to return Shell guidance, but they never execute commands, access the network, or change files. The Agent follows the returned prompt with the `skills` CLI.
+Skills live at `~/.downcity/powers/skill/agents/<agent-id>/`. Every entry is a directory containing `SKILL.md`. An entry is either a copy installed into the Agent directory or a symlink pointing at a skill that lives elsewhere.
 
-## Desktop workspace
+## Scope
 
-Skill does not declare Config. It remains visible in the Plugins Catalog for its documentation and also contributes a top-level navigation entry. Opening that entry lists every registered Workspace in a tree matching the Workspace file-tree interaction:
+The Agent's own directory is the default and authoritative source. Two extra sources are readable on demand:
 
-- **Workspaces tree** makes each Workspace an expandable root. Expanding it reveals its `.agents/skills`; selecting a root or Skill synchronizes the list or detail in the Mainview.
-- **Personal** manages Skills under `~/.agents/skills`.
-- **Discover** searches the public catalog through the official `skills` CLI and installs into Personal or a selected Workspace.
+- `project` reads `<workspace>/.agents/skills`
+- `home` reads `~/.agents/skills`
+- `all` returns the union of the Agent directory, project, and home
 
-Workspace selection is independent of the Desktop's current Workspace, and the Mainview does not duplicate it with another Workspace select. Selecting a root shows its Skill list; selecting a Skill opens a dedicated detail page that safely renders `SKILL.md`. Delete and other row actions live in an Item Menu, and mutations refresh Sidebar and Mainview together. Removing a Skill permanently deletes its directory from the selected scope after confirmation.
+When the same skill ID appears in more than one source, the Agent directory wins, then project, then home.
 
-## Registration
-
-```ts
-import { Agent } from "@downcity/agent";
-import { City } from "@downcity/city";
-import { create_builtin_plugin_registrations } from "@downcity/plugins";
-
-const registrations = create_builtin_plugin_registrations();
-const city = new City({ plugins: registrations, workspaces: [workspace] });
-const agent = new Agent({ id: "skill-helper" });
-city.agents.add(agent);
-```
-
-By default, the plugin scans only `.agents/skills` in the current project. To customize scan roots,
-construct a `SkillPlugin` instance and provide it to City, never to Agent.
-
-Constructor options can extend the scan scope:
-
-```ts
-const skill_plugin = new SkillPlugin({
-  use: ["project", "home"],
-  paths: [".agents/shared-skills"],
-  ignore: ["legacy-skill"],
-});
-```
-
-- `use: ["project"]` scans `<project>/.agents/skills`
-- `use: ["home"]` scans `~/.agents/skills`
-- `paths` adds custom scan directories; relative paths resolve from the project root
-- `ignore` excludes skills by ID, name, regular expression, or predicate
-
-For duplicate IDs, precedence is `project > paths > home`.
+`list` and `lookup` accept the same `scope` argument, and both default to the Agent directory. The system prompt inventory lists the Agent directory only, so every skill name shown to the model is directly usable without a scope argument.
 
 ## Actions
 
-The Skill Plugin exposes four actions:
-
 | Action | Payload | Purpose |
 | --- | --- | --- |
-| `find` | `{ query: string }` | Return Shell guidance for finding a skill without searching |
-| `install` | `{ spec: string }` | Return scan-aware installation guidance without installing |
-| `list` | `{}` | List skills discoverable from the configured scan roots |
-| `lookup` | `{ name: string }` | Find a skill and read its `SKILL.md` |
+| `list` | `{ scope?: "agent" \| "project" \| "home" \| "all" }` | List skills in the given scope; defaults to the Agent directory |
+| `lookup` | `{ name: string, scope?: ... }` | Read a skill's `SKILL.md` |
 
-List skills:
+`lookup` returns the skill body as a standard context message, so the content reaches the model on the next step. It does not persist any session state.
+
+There are no `find` or `install` actions. Installation and linking are Desktop operations, because writing into the Agent directory is a user decision rather than something the model should do mid-task. The system prompt tells the Agent to ask the user to add a skill from the Skills page when it needs one that is not listed.
+
+Listing the Agent's skills:
 
 ```ts
 const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "skill",
+  power: "skill",
   action: "list",
   payload: {},
 });
 ```
 
-Read a skill:
+Reading a skill:
 
 ```ts
 const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "skill",
+  power: "skill",
   action: "lookup",
   payload: {
     name: "web-access",
@@ -85,115 +54,45 @@ const result = await city.plugins.scope({ agent_id: agent.id, workspace_id: work
 });
 ```
 
-The model uses the same protocol during a Session:
+The model uses the same protocol inside a Session:
 
 ```ts
-plugin_call({
-  plugin: "skill",
+skill({
   action: "lookup",
-  payload: {
+  args: {
     name: "web-access",
   },
 });
 ```
 
-## Search And Installation
+## Configuration
 
-Call `find` to get search instructions:
+Skill has no Config panel. Scope is determined by the Agent directory plus the `scope` argument, so the only constructor option is `ignore`:
 
 ```ts
-const find_instructions = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "skill",
-  action: "find",
-  payload: {
-    query: "web access",
-  },
+const skill_power = new SkillPower({
+  ignore: ["legacy-skill", /^internal-/],
 });
 ```
 
-Call `install` to get installation instructions:
+- A string matches both the skill ID and its name.
+- A `RegExp` filters in bulk.
+- A predicate returning `true` excludes the skill.
 
-```ts
-const install_instructions = await city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
-  plugin: "skill",
-  action: "install",
-  payload: {
-    spec: "owner/repository@web-access",
-  },
-});
-```
+## Desktop
 
-Both actions return instructions in `data.prompt` only. The system prompt lists the resolved scan roots and directs the Agent to these actions; the `install` prompt then derives the following from the active `use / paths` options:
+The Skills page is organized by Agent. The Sidebar lists every registered Agent as an expandable root, and expanding one shows the skills bound to that Agent. Selecting an Agent opens its skill configuration; selecting a skill opens its `SKILL.md`.
 
-- resolved scan directories and scan order
-- the installation method for each scan-root type
-- the required post-installation verification
+The Mainview for an Agent has three views:
 
-The `find` prompt directs the Agent to use its available web or browser capability to search these Skill catalogs:
+- **Bound** shows the skills in that Agent's directory, each marked as installed or linked, and each skill can be removed.
+- **Catalog** shows every skill from the user directory and each registered Workspace, marked with whether it is already linked to this Agent. Linking creates a symlink in the Agent directory, so the source directory stays untouched.
+- **Discover** searches the public catalog through the official `skills` CLI and installs the result into this Agent's directory. Installation stages the download in a temporary directory and copies it in, because the CLI cannot install directly into an Agent directory.
 
-- [skills.sh](https://www.skills.sh/)
-- [LobeHub Skill Community](https://app.lobehub.com/community/skill)
+Removing a linked skill deletes only the symlink; removing an installed skill deletes the copy. Both operations stay inside the Agent directory.
 
-It also provides the `npx skills find` command so the Agent can compare catalog and CLI results before choosing an installation spec.
+## Related documentation
 
-Search for a missing skill through the shell:
-
-```bash
-npx -y skills find "<query>"
-```
-
-Install into a project scan root:
-
-```bash
-npx -y skills add "<spec>" -y
-```
-
-Use global installation only when the configuration includes `use: ["home"]`:
-
-```bash
-npx -y skills add "<spec>" -g -y
-```
-
-Custom `paths` do not have a universal `skills` CLI destination flag. After installing or copying, the final layout must be:
-
-```text
-<configured-root>/<skill-id>/SKILL.md
-```
-
-## Installation Verification Guidance
-
-The `install` action does not execute or verify installation in code. Its returned prompt tells the Agent to call the following after the Shell command completes:
-
-```ts
-plugin_call({
-  plugin: "skill",
-  action: "list",
-  payload: {},
-});
-```
-
-If the new skill appears in the `list` result, the prompt continues by directing the Agent to call `lookup`. This workflow is prompt-driven rather than an action-level state machine.
-
-The complete workflow is:
-
-1. Call `list` to check whether the skill already exists locally.
-2. If missing, call `find`, then follow its returned prompt to search through the Shell.
-3. After choosing a spec, call `install`, then follow its returned prompt to select a scan root and install.
-4. Call `list` again to verify discovery.
-5. Call `lookup` to read `SKILL.md`.
-
-## System Prompt
-
-Whenever a Session system prompt is built, the Skill Plugin rescans the configured roots and injects:
-
-- names and descriptions of available skills
-- scan roots and their resolved filesystem paths
-- the workflow for calling `find/install` when a skill is missing
-
-Concrete commands and follow-up `list` guidance are returned by the actions. The `install` action uses the same scan configuration instead of hard-coding project or global installation.
-
-## Related Docs
-
-- [Built-in Plugin Overview](/en/plugins-docs/builtins/overview)
-- [Plugin Actions](/en/agent-sdk-docs/plugins/plugin-actions)
-- [Plugin System](/en/agent-sdk-docs/plugins/plugin-system)
+- [Built-in plugins overview](/plugins-docs/builtins/overview)
+- [Plugin actions](/agent-sdk-docs/plugins/plugin-actions)
+- [Plugin system](/agent-sdk-docs/plugins/plugin-system)
