@@ -33,25 +33,22 @@ export function resolve_local_agent_env(input: {
   workspace_path: string;
   /** 调用方显式环境；传入空对象即可禁止进程环境进入 Workspace。 */
   process_env?: NodeJS.ProcessEnv;
+  /**
+   * 子进程应使用的用户目录；省略时不注入 `HOME`。
+   *
+   * 说明（中文）
+   * - 沙箱子进程拿不到父进程的 `HOME`，而 npm、git 等工具链依赖它，因此宿主需显式传入。
+   * - 优先级最低：平台 `.env` 里的 `HOME` 可以覆盖它。
+   */
+  home_path?: string;
 }): Record<string, string> {
-  const home_path = resolve_home_path(input.root_path);
+  const home_path = String(input.home_path || "").trim();
   return {
     ...(home_path ? { HOME: home_path } : {}),
     ...read_local_global_env(input.root_path),
     ...load_project_dotenv(path.resolve(input.workspace_path)),
     ...read_explicit_env(input.process_env ?? process.env),
   };
-}
-
-/**
- * 解析 shell 应使用的用户目录。
- *
- * 说明（中文）
- * - 优先取宿主进程真实 HOME；取不到时退回当前进程用户目录。
- * - `.env` 中的 `HOME` 优先级更高，需要覆盖时在平台 Env 里显式声明。
- */
-function resolve_home_path(_root_path: string): string {
-  return String(process.env.HOME || "").trim() || os.homedir();
 }
 
 /** 读取平台全局 Env，供 City 宿主级配置使用。 */

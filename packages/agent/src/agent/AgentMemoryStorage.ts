@@ -175,7 +175,7 @@ export class AgentMemoryStorageProvider implements StorageProvider {
   private readonly scopes_by_key = new Map<string, StorageScope>();
 
   /** 当前 Provider 的逻辑根目录。 */
-  private readonly root_path: string;
+  readonly root_path: string;
 
   constructor(root_path = "/agent-memory") {
     this.root_path = root_path;

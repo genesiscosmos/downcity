@@ -12,6 +12,7 @@ import {
   resolve_local_agent_env,
   resolve_local_global_env,
 } from "@downcity/city/local";
+import os from "node:os";
 import { resolve_local_root_path } from "@downcity/city/local";
 import type { AgentOptions } from "@downcity/agent";
 import type { ModelClient } from "@downcity/type";
@@ -67,6 +68,8 @@ export async function create_desktop_workspace(
       root_path: data.root_path,
       workspace_path: config.workspace_path,
       process_env: {},
+      // 沙箱子进程拿不到父进程 HOME；由宿主显式提供，工具链才能定位用户目录。
+      home_path: os.homedir(),
     }),
     shell: new Shell({
       sandbox_provider: create_desktop_sandbox_provider(),

@@ -5,6 +5,7 @@
  * 对话投影的唯一实时事实源，IPC 运行态只负责表达提交、执行、停止和失败阶段。
  */
 
+import os from "node:os";
 import {
   Agent,
   Group,
@@ -302,6 +303,7 @@ export class AgentController {
         root_path: this.data.root_path,
         workspace_path: config.workspace_path,
         process_env: {},
+        home_path: os.homedir(),
       }));
     }
   }

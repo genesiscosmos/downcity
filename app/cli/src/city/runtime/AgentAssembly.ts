@@ -26,6 +26,7 @@ import { create_city_ai_model_client } from "@/city/runtime/city-model/CityAiSer
 import { resolve_local_agent_env } from "@downcity/city/local";
 import { resolve_local_root_path } from "@downcity/city/local";
 import { create_sandbox_provider } from "@/city/sandbox/PlatformSandbox.js";
+import os from "node:os";
 
 /** 创建 CLI 与 Desktop 可共享语义的官方 Power 注册集合。 */
 export function create_cli_builtin_power_registrations(): LocalPowerRegistration[] {
@@ -79,6 +80,8 @@ export async function create_cli_workspace(
       root_path,
       workspace_path: config.workspace_path,
       process_env: process.env,
+      // 沙箱子进程拿不到父进程 HOME；由宿主显式提供，工具链才能定位用户目录。
+      home_path: os.homedir(),
     }),
     shell: new Shell({
       sandbox_provider: create_sandbox_provider(),
@@ -132,6 +135,7 @@ export function reload_cli_workspace_env(
     root_path: resolve_local_root_path(root_path_input),
     workspace_path,
     process_env: process.env,
+    home_path: os.homedir(),
   });
 }
 
