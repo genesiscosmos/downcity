@@ -23,12 +23,12 @@ const powers = [
   power("files", "Files"),
   { ...power("hidden", "Hidden"), has_mainview: false },
   power("task", "Task"),
-  power("chat", "Channels"),
+  power("messenger", "Messengers"),
   power("skill", "Skills"),
 ] as DesktopPowerSummary[];
 
 test("官方功能型 Power 按固定优先级排序，其余按标题跟随", () => {
-  assert.deepEqual(order_rail_powers(powers).map((item) => item.power_id), ["skill", "chat", "task", "files"]);
+  assert.deepEqual(order_rail_powers(powers).map((item) => item.power_id), ["skill", "messenger", "task", "files"]);
 });
 
 test("无 Sidebar 的 Power 不进入 Rail 顺序", () => {

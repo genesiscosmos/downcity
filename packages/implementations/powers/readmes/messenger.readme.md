@@ -14,4 +14,4 @@ Connects Bot Accounts to Agent Sessions through Telegram, Feishu / Lark, and QQ.
 
 Each external Conversation maps to one real Agent Session. Session Messages are the canonical conversation history. Messenger only stores routing, delivery state, Access, and diagnostic Activity.
 
-In Desktop, use the plus button in the Channels Sidebar header to choose Telegram, Feishu/Lark, or QQ and create the corresponding Bot Account.
+In Desktop, use the plus button in the Messengers Sidebar header to choose Telegram, Feishu/Lark, or QQ and create the corresponding Bot Account.

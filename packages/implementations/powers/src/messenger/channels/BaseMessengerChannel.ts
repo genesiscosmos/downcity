@@ -230,7 +230,7 @@ export abstract class BaseMessengerChannel {
       "",
       `访问请求：${displayed_request_id}`,
       "",
-      "请管理员在 Desktop 的 Channels > Access 中批准此请求。",
+      "请管理员在 Desktop 的 Messengers > Access 中批准此请求。",
     ].join("\n");
   }
 

@@ -29,7 +29,7 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
       return () => { disposed = true; clearInterval(timer); };
     }, [power, ui.revision]);
 
-    const create_menu = <SidebarCreateMenu label="添加 Channel" actions={provider_options().map((provider) => ({
+    const create_menu = <SidebarCreateMenu label="添加 Bot Account" actions={provider_options().map((provider) => ({
       action_id: provider.value,
       label: provider.label,
       on_select: () => navigation.navigate(create_route(provider.value)),
@@ -45,7 +45,7 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
           active={selected_account_id === account.account_id}
           on_select={() => navigation.navigate(account_route(account.account_id))}
         />)}
-        {!snapshot ? <LoadingState label="正在读取 Channels…" /> : null}
+        {!snapshot ? <LoadingState label="正在读取 Messengers…" /> : null}
         {snapshot && snapshot.accounts.length === 0 ? <SidebarSubText>还没有 Bot Account</SidebarSubText> : null}
       </SidebarSection>
       {error ? <Callout tone="danger">{error}</Callout> : null}
@@ -250,7 +250,7 @@ export const MESSENGER_POWER_RENDERER = define_power_renderer({
     }
 
     if (!account_id || !detail) {
-      return <Page><EmptyState title="选择一个 Bot Account" description="从左侧选择现有 Bot，或者使用 Channels 标题栏中的加号添加 Channel。" /></Page>;
+      return <Page><EmptyState title="选择一个 Bot Account" description="从左侧选择现有 Bot，或者使用 Messengers 标题栏中的加号添加 Bot Account。" /></Page>;
     }
 
     const account = detail.account;

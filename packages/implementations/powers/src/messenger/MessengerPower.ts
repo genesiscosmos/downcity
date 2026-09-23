@@ -20,7 +20,7 @@ export class MessengerPower extends Power {
   readonly name = "messenger";
 
   /** Power 用户可见标题。 */
-  readonly title = "Channels";
+  readonly title = "Messengers";
 
   /** Power 用户可见说明。 */
   readonly description = "Connects Bot Accounts and external conversations to Agent Sessions.";

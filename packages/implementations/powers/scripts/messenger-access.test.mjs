@@ -79,7 +79,7 @@ test("Telegram 授权提示保留完整标识符并指向 Desktop Access", () =>
 
     assert.match(text, /Agent "`lucas_whitman`"/);
     assert.match(text, /访问请求：`req_dFij9rOzsDnDPOVJ`/);
-    assert.match(text, /Desktop 的 Channels > Access/);
+    assert.match(text, /Desktop 的 Messengers > Access/);
   } finally {
     remove_project_root(project_root);
   }
