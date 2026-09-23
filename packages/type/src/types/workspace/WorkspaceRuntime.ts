@@ -6,6 +6,7 @@
  */
 
 import type { WorkspaceShell } from "../shell/WorkspaceShell.js";
+import type { WorkspaceSandboxMountRequest } from "../shell/Sandbox.js";
 import type { FileSystem } from "./FileSystem.js";
 import type {
   WorkspaceEnvPatch,
@@ -42,6 +43,8 @@ export interface WorkspaceRuntime {
   bind_runtime?(input: {
     /** 当前 Workspace 的 Downcity 私有运行数据目录。 */
     runtime_path: string;
+    /** 除 Workspace 与运行目录之外额外授权给隔离环境的宿主目录。 */
+    granted_mounts?: readonly WorkspaceSandboxMountRequest[];
   }): void;
 
   /** 返回当前 Workspace 环境变量的独立快照。 */

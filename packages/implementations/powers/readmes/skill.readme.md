@@ -10,7 +10,7 @@ Discovers the skills assigned to an Agent, reads their instructions, and injects
 
 ## Storage
 
-Each Agent owns `~/.downcity/powers/skill/agents/<agent-id>/`. A skill is a directory containing `SKILL.md`, either copied in or linked from another source.
+Each Agent owns `~/.downcity/agents/<agent-id>/skills`. A skill is a directory containing `SKILL.md`, either copied in or linked from another source. The Agent's shell is granted write access to this path, so the Agent can install and link skills itself.
 
 ## Desktop
 

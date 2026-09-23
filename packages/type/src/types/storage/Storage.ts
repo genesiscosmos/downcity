@@ -27,6 +27,14 @@ export interface StorageScope {
 
 /** 不理解业务语义的底层存储后端。 */
 export interface StorageProvider {
+  /**
+   * 当前存储的根目录。
+   *
+   * 说明（中文）
+   * - 所有作用域都在这棵树内；宿主用它推导需要额外授权的同级目录。
+   */
+  readonly root_path: string;
+
   /** 按稳定路径片段打开一个受控私有存储作用域。 */
   open_scope(segments: readonly string[]): StorageScope;
 

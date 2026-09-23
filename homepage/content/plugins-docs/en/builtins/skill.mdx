@@ -7,7 +7,9 @@ description: How the built-in skill power scopes skills per Agent, reads SKILL.m
 
 `skill` is an Agent's skill catalog. Each Agent has its own skill directory, and that directory is the authoritative set of skills the Agent can use. The power discovers those skills, reads `SKILL.md`, and injects the inventory into the system prompt.
 
-Skills live at `~/.downcity/powers/skill/agents/<agent-id>/`. Every entry is a directory containing `SKILL.md`. An entry is either a copy installed into the Agent directory or a symlink pointing at a skill that lives elsewhere.
+Skills live at `~/.downcity/agents/<agent-id>/skills`. Every entry is a directory containing `SKILL.md`. An entry is either a copy installed into the Agent directory or a symlink pointing at a skill that lives elsewhere.
+
+The directory sits inside the Agent's own data root, so removing the Agent removes its skills with it. Writing into it is granted to the Agent's shell, which means the Agent can install and link skills itself.
 
 ## Scope
 
@@ -30,9 +32,11 @@ When the same skill ID appears in more than one source, the Agent directory wins
 
 `lookup` returns the skill body as a standard context message, so the content reaches the model on the next step. It does not persist any session state.
 
-There are no `find` or `install` actions. Installation and linking are Desktop operations, because writing into the Agent directory is a user decision rather than something the model should do mid-task. The system prompt states the Agent's own directory path and tells the model to ask the user to add a skill from the Skills page when it needs one that is not listed.
+There are no `find` or `install` actions. Installation and linking happen either through the Agent's own shell or from the Desktop, because the `skills` CLI cannot install directly into an Agent skill directory and the copy step needs a decision about what lands there.
 
-Reading `project` or `home` through `scope` does not make those skills available. A skill that lives in the user directory or a workspace becomes usable only after the user links it into the Agent directory, and the linked entry is what `list` reports by default.
+The Agent installs in two steps: run the `skills` CLI inside a temporary directory, then copy the resulting skill into its own directory. The system prompt carries the exact commands, including the `npm_config_cache` override that keeps `npx` working inside the sandbox.
+
+Reading `project` or `home` through `scope` does not make those skills available. A skill that lives in the user directory or a workspace becomes usable only after it is copied or linked into the Agent directory, and that entry is what `list` reports by default.
 
 Listing the Agent's skills:
 

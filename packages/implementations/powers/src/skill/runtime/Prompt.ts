@@ -59,11 +59,11 @@ export function render_skills_prompt_section(input: {
     "## Agent Skill Directory",
     input.agent_root ? `- ${input.agent_root.display}` : "- (not created yet)",
     "Skills are installed or linked into this directory. It is the only set you can use by default.",
-    "You cannot write into it yourself. Ask the user to add a missing skill from the Skills page.",
+    "You may install skills here yourself; see `Installing a skill yourself` in this power's prompt.",
     "",
     "## Extra Readable Sources",
     "These are readable on demand through `list` / `lookup` with an explicit scope.",
-    "Reading them does not make their skills available to you; the user must link them first.",
+    "Reading them does not make their skills available to you; copy or link them into your directory first.",
     extra_roots_section,
   ].join("\n");
 }

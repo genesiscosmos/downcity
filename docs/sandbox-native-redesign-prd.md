@@ -196,7 +196,9 @@ doctor 自己负责清理探针残留，不依赖探针命令自清理。围栏�
 
 Linux 侧的 `bwrap` 行为仍未实测。
 
-`sandbox.request_mount` 审批流尚未实现：目前 `granted_mounts` 只能由宿主在 `bind` 时传入，Agent 无法在执行中申请新目录。
+`sandbox.request_mount` 审批流尚未实现：`granted_mounts` 目前由宿主在 `bind` 时传入，Agent 无法在执行中申请新目录。
+
+已接线的唯一使用方是 `City.bind_workspace`：它为每个 Workspace 授权 `<downcity_root>/agents` 为 `rw`，因为 Agent 需要把 skill 安装进自己的技能目录，而 shell 是按 Workspace 绑定的，拿不到 agent 身份。代价是同机同用户下的 Agent 之间不隔离技能目录。
 
 `packages/city` 的迁移尚未完成，city 仍编译不过（详见第 12 节），因此 doctor 尚未接到 CLI 命令层；当前通过 `run_sandbox_doctor()` 程序化调用。
 

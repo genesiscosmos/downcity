@@ -7,7 +7,9 @@ description: 说明 skill 内建 power 如何按 Agent 划分技能目录、读�
 
 `skill` 是 Agent 的技能目录。每个 Agent 拥有自己的技能目录，该目录就是它可用技能的权威集合。这个 power 负责发现目录内的技能、读取 `SKILL.md`，并把清单注入 system prompt。
 
-技能存放在 `~/.downcity/powers/skill/agents/<agent-id>/`。每个条目是一个包含 `SKILL.md` 的目录，来源要么是复制进 Agent 目录的安装副本，要么是指向外部目录的软链接。
+技能存放在 `~/.downcity/agents/<agent-id>/skills`。每个条目是一个包含 `SKILL.md` 的目录，来源要么是复制进 Agent 目录的安装副本，要么是指向外部目录的软链接。
+
+该目录位于 Agent 自己的数据根下，因此删除 Agent 会一并删除它的技能。该目录已授权给 Agent 的 shell，所以 Agent 可以自己安装与关联技能。
 
 ## 作用域
 
@@ -30,9 +32,11 @@ Agent 自己的目录是默认来源，也是权威来源。另有两条可按�
 
 `lookup` 把技能正文作为标准 context 消息返回，正文会在下一步进入模型上下文，不写入任何会话状态。
 
-模型侧没有 `find` 与 `install`。安装与关联属于 Desktop 操作：往 Agent 目录里写内容是用户的决定，不该由模型在任务中途完成。system prompt 会给出该 Agent 自己的目录路径，并告诉模型需要未列出的技能时请用户到 Skills 页面添加。
+模型侧没有 `find` 与 `install`。安装与关联要么由 Agent 自己通过 shell 完成，要么在 Desktop 上完成：`skills` CLI 无法直接装进 Agent 技能目录，而且「往技能目录里放什么」需要有人做判断。
 
-用 `scope` 读取 `project` 或 `home` 并不会让那些技能变得可用。用户目录或 Workspace 里的技能，只有被关联进 Agent 目录之后才能使用，`list` 默认返回的也正是这些已关联的条目。
+Agent 自己安装分两步：在临时目录里跑 `skills` CLI，再把得到的技能拷进自己的目录。system prompt 里带了完整命令，包括让 `npx` 在沙箱内可用的 `npm_config_cache` 覆盖。
+
+用 `scope` 读取 `project` 或 `home` 并不会让那些技能变得可用。用户目录或 Workspace 里的技能，只有被复制或关联进 Agent 目录之后才能使用，`list` 默认返回的也正是这些条目。
 
 列出 Agent 的技能：
 

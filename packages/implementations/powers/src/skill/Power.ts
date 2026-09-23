@@ -2,12 +2,13 @@
  * Skill Power。
  *
  * 关键点（中文）
- * - Skill 按 Agent 划分：权威来源是 `~/.downcity/powers/skill/agents/<agent-id>/`。
- * - 模型侧只有 `list` 与 `lookup`：默认只看自己目录，可用 `scope` 读取 project / home。
- * - 安装与关联只由宿主动作完成，模型不写文件。
+ * - Skill 按 Agent 划分：权威来源是 `~/.downcity/agents/<agent-id>/skills`。
+ * - 模型侧只有 `list` 与 `lookup`：默认只看自己的目录，可用 `scope` 读取 project / home。
+ * - 安装与关联：模型可以自己装进自己的技能目录，用户也可以在 Skills 页面操作。
  * - skills overview 通过 `power.system` 注入，清单与 `list` 默认结果保持一致。
  */
 
+import path from "node:path";
 import { Power, create_action } from "@downcity/city/power";
 import type {
   PowerActions,
@@ -27,7 +28,10 @@ import type {
 import { SKILL_POWER_ACTIONS } from "@/skill/types/SkillPower.js";
 import { resolveSkillPowerOptions } from "@/skill/Config.js";
 import { listSkills, lookupSkill } from "@/skill/Action.js";
-import { create_skill_root_context, resolve_agent_skills_root } from "@/skill/runtime/AgentRoot.js";
+import {
+  create_skill_root_context,
+  resolve_agent_skill_dir,
+} from "@/skill/runtime/AgentRoot.js";
 import { build_skills_system_text } from "@/skill/runtime/SystemProvider.js";
 import { SKILL_POWER_PROMPT } from "@/skill/SkillPromptAssets.js";
 import { register_skill_power_host_actions } from "@/skill/host/SkillPowerHostActions.js";
@@ -48,12 +52,12 @@ const scope_json_schema = {
 /** 构造 Skill Power 的完整动作集合。 */
 function create_skill_power_actions(input: {
   /**
-   * 读取 Agent 私有 skill 根目录。
+   * 读取当前 Agent 的技能目录。
    *
-   * 关键点（中文）：该根在 `initialize` 时才能确定，而动作在构造期就已装配，
+   * 关键点（中文）：该目录在 `initialize` 时才能确定，而动作在构造期就已装配，
    * 因此这里传 getter，避免闭包捕获空字符串。
    */
-  get_agent_root: () => string;
+  get_agent_skill_dir: (agent_id: string) => string;
   /**
    * 归一化后的 power 选项。
    */
@@ -91,7 +95,7 @@ function create_skill_power_actions(input: {
           data: listSkills({
             scope: read_scope(payload.scope),
             context: create_skill_root_context({
-              agent_root: input.get_agent_root(),
+              agent_skill_dir: input.get_agent_skill_dir(params.context.agent.id),
               agent_id: params.context.agent.id,
               workspace_path: params.context.workspace.path,
             }),
@@ -148,7 +152,7 @@ function create_skill_power_actions(input: {
         const result = await lookupSkill({
           scope: read_scope(payload.scope),
           context: create_skill_root_context({
-            agent_root: input.get_agent_root(),
+            agent_skill_dir: input.get_agent_skill_dir(params.context.agent.id),
             agent_id: params.context.agent.id,
             workspace_path: params.context.workspace.path,
           }),
@@ -211,8 +215,8 @@ export class SkillPower extends Power {
   /** 构造期解析后的选项。 */
   private readonly options: ResolvedSkillPowerOptions;
 
-  /** Agent 私有 skill 根目录；在 initialize 时由生命周期存储派生。 */
-  private agent_root = "";
+  /** Agent 技能目录根（`<downcity_root>/agents`）；在 initialize 时由生命周期存储派生。 */
+  private agents_root = "";
 
   /** 当前 power 的完整动作集合。 */
   readonly actions: PowerActions;
@@ -221,7 +225,7 @@ export class SkillPower extends Power {
     super();
     this.options = resolveSkillPowerOptions(options);
     this.actions = create_skill_power_actions({
-      get_agent_root: () => this.require_agent_root(),
+      get_agent_skill_dir: (agent_id) => this.require_agent_skill_dir(agent_id),
       options: this.options,
     });
   }
@@ -231,7 +235,7 @@ export class SkillPower extends Power {
     const dynamic_text = String(
       build_skills_system_text({
         context: create_skill_root_context({
-          agent_root: this.require_agent_root(),
+          agent_skill_dir: this.require_agent_skill_dir(context.agent.id),
           agent_id: context.agent.id,
           workspace_path: context.workspace.path,
         }),
@@ -241,17 +245,17 @@ export class SkillPower extends Power {
     return [SKILL_POWER_PROMPT, dynamic_text].filter(Boolean).join("\n\n");
   }
 
-  /** 注册 Skill Power 的宿主管理 actions，并固定 Agent 私有 skill 根。 */
+  /** 注册 Skill Power 的宿主管理 actions，并固定 Agent 技能目录根。 */
   initialize(context: PowerLifecycleContext): void {
-    this.agent_root = resolve_agent_skills_root(context.storage.path);
-    register_skill_power_host_actions(context, { agent_root: this.agent_root });
+    this.agents_root = resolve_agent_skill_dir(context.storage.path, "");
+    register_skill_power_host_actions(context, { agents_root: this.agents_root });
   }
 
-  /** 读取 Agent 私有 skill 根；未初始化时直接报错，避免静默写错目录。 */
-  private require_agent_root(): string {
-    if (!this.agent_root) {
-      throw new Error("SkillPower is not initialized: agent skill root is unresolved");
+  /** 读取指定 Agent 的技能目录；未初始化时直接报错，避免静默写错目录。 */
+  private require_agent_skill_dir(agent_id: string): string {
+    if (!this.agents_root) {
+      throw new Error("SkillPower is not initialized: agent skill directory is unresolved");
     }
-    return this.agent_root;
+    return path.join(this.agents_root, String(agent_id || "").trim(), "skills");
   }
 }

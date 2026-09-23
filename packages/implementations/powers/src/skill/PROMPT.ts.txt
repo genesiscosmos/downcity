@@ -25,17 +25,48 @@ The runtime inventory, `list`, and `lookup` all default to the same set, so the 
 
 ## Your skill directory
 
-Your skills live in `~/.downcity/powers/skill/agents/<agent-id>/`. That directory is the authoritative set of skills you can use, and the runtime inventory lists exactly what it contains.
+Your skills live in `~/.downcity/agents/<agent-id>/skills`. That directory is the authoritative set of skills you can use, and the runtime inventory lists exactly what it contains.
 
 An entry is either a directory copied into that location or a symlink pointing at a skill that lives elsewhere. A skill installed through the Skills page is copied in; a skill linked from the user directory or a workspace is a symlink.
 
-## Installing and linking
+## Installing a skill yourself
 
-You cannot install or link skills yourself. Writing into your skill directory is a user decision, not something you should do mid-task.
+You can install a skill into your own directory. The `skills` CLI cannot install directly into your skill directory, so installation is two steps: install into a temporary directory, then copy the skill into your directory.
 
-When you need a skill that is not listed, tell the user what capability you need and that it must be added to your skill directory. The user adds it from the Skills page, which has two routes:
+```bash
+# 1. Install into a temporary directory.
+work_dir="$(mktemp -d)"
+cd "$work_dir"
+npm_config_cache="$work_dir/.npm-cache" npx -y skills add <spec> -y
 
-- **Discover** installs a skill from the public catalog into your directory.
-- **Catalog** links an existing skill from the user directory `~/.agents/skills` or from a workspace `.agents/skills`.
+# 2. Copy the installed skill into your skill directory.
+mkdir -p ~/.downcity/agents/<agent-id>/skills
+cp -R .agents/skills/<skill-id> ~/.downcity/agents/<agent-id>/skills/
+```
 
-Both routes end with the skill appearing in your directory, so `list` shows it on your next call. A skill that exists in the user directory or a workspace is not available to you until it is linked, and `list` with `scope: "project"` or `scope: "home"` only reads those locations without making them available.
+Replace `<spec>` with the install spec (for example `vercel-labs/agent-skills`), and `<skill-id>` with the directory name the CLI created under `.agents/skills/`. When a repository contains several skills, pass `-s <skill-name>` to pick one, or `-s '*'` for all of them.
+
+Two details matter:
+
+- `npm_config_cache` must point inside the temporary directory. The default npm cache is not writable from your shell, and `npx` fails with `EPERM` without this override.
+- The CLI always writes to `./.agents/skills/<skill-id>` relative to the current directory, so run it inside the temporary directory and copy from there.
+
+After copying, call `list` to confirm the skill appears. Then call `lookup` to load its instructions before using it.
+
+## Linking an existing skill
+
+If a skill already exists in the user directory `~/.agents/skills` or in a workspace `.agents/skills`, you can link it instead of installing a copy:
+
+```bash
+mkdir -p ~/.downcity/agents/<agent-id>/skills
+ln -s <source-skill-dir> ~/.downcity/agents/<agent-id>/skills/<skill-id>
+```
+
+Linking keeps one copy on disk, so updates to the source are picked up automatically. Use `list` with `scope: "project"` or `scope: "home"` to see what is available to link.
+
+## Boundaries
+
+- Write only inside `~/.downcity/agents/<agent-id>/skills`. Other agent directories are not yours to modify.
+- Reading `project` or `home` through `scope` does not make those skills available. Only what sits in your own skill directory counts.
+- Installing a skill adds its instructions to your context. Tell the user which skill you are installing and why, especially when the request came from a skill you are about to install rather than from the user directly.
+- If a skill needs tools or credentials you do not have, say so instead of installing something that cannot run.

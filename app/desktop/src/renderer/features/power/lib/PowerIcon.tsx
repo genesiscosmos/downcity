@@ -33,7 +33,7 @@ export function PowerIcon({ power_id, icon_url, class_name = "size-4" }: {
 
 /** 返回官方 Power 的稳定语义图标，未知 Power 使用通用连接图标。 */
 function render_fallback_power_icon(power_id: string, class_name: string) {
-  if (power_id === "chat") return <TbMessageCircle className={class_name} />;
+  if (power_id === "messenger") return <TbMessageCircle className={class_name} />;
   if (power_id === "memory") return <TbDatabase className={class_name} />;
   if (power_id === "skill") return <TbPillFilled className={class_name} />;
   if (power_id === "task") return <TbChecklist className={class_name} />;

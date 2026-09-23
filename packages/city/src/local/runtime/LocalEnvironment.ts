@@ -3,9 +3,12 @@
  *
  * 平台全局 `.env`、Workspace `.env` 与调用方显式环境在这里按固定优先级合并。
  * Federation 身份和 Agent 会话变量不会从平台 `.env` 注入 Workspace。
+ * `HOME` 由这里自动补上：它是 OS 事实，工具链（npm、git、shell）依赖它定位用户目录，
+ * 而沙箱子进程拿不到父进程的 `HOME`。
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { load_project_dotenv } from "@/workspace/index.js";
 import dotenv from "dotenv";
@@ -31,11 +34,24 @@ export function resolve_local_agent_env(input: {
   /** 调用方显式环境；传入空对象即可禁止进程环境进入 Workspace。 */
   process_env?: NodeJS.ProcessEnv;
 }): Record<string, string> {
+  const home_path = resolve_home_path(input.root_path);
   return {
+    ...(home_path ? { HOME: home_path } : {}),
     ...read_local_global_env(input.root_path),
     ...load_project_dotenv(path.resolve(input.workspace_path)),
     ...read_explicit_env(input.process_env ?? process.env),
   };
+}
+
+/**
+ * 解析 shell 应使用的用户目录。
+ *
+ * 说明（中文）
+ * - 优先取宿主进程真实 HOME；取不到时退回当前进程用户目录。
+ * - `.env` 中的 `HOME` 优先级更高，需要覆盖时在平台 Env 里显式声明。
+ */
+function resolve_home_path(_root_path: string): string {
+  return String(process.env.HOME || "").trim() || os.homedir();
 }
 
 /** 读取平台全局 Env，供 City 宿主级配置使用。 */

@@ -12,6 +12,7 @@ export type * from "./types/workspace/WorkspaceEnv.js";
 export type * from "./types/workspace/WorkspaceTools.js";
 export type * from "./types/workspace/WorkspaceToolResult.js";
 export type { WorkspaceRuntime } from "./types/workspace/WorkspaceRuntime.js";
+export type { WorkspaceSandboxMountRequest } from "./types/shell/Sandbox.js";
 export {
   WORKSPACE_FILE_MUTATION_EFFECT_TYPE,
   create_workspace_file_mutation_effect,

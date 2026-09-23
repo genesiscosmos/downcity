@@ -10,6 +10,7 @@
 import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import type { FileSystem, WorkspaceRuntime } from "@downcity/type/workspace";
+import type { WorkspaceSandboxMountRequest } from "@downcity/type/workspace";
 import { LocalFileSystem } from "@/workspace/LocalFileSystem.js";
 import type { WorkspaceOptions } from "@/types/workspace/Workspace.js";
 import type { WorkspaceTools } from "@downcity/type/workspace";
@@ -94,7 +95,10 @@ export class Workspace implements WorkspaceRuntime {
 
   /** 由 City 或独立宿主一次性注入运行目录，并绑定当前 Shell。 */
   bind_runtime(input: {
+    /** 当前 Workspace 的 Downcity 私有运行数据目录。 */
     runtime_path: string;
+    /** 除 Workspace 与运行目录之外额外授权给隔离环境的宿主目录。 */
+    granted_mounts?: readonly WorkspaceSandboxMountRequest[];
   }): void {
     const runtime_path = String(input?.runtime_path || "").trim();
     if (!runtime_path) throw new Error("Workspace.bind_runtime requires runtime_path");
@@ -112,6 +116,7 @@ export class Workspace implements WorkspaceRuntime {
       workspace_id: this.id,
       root_path: this.path,
       data_path: next_binding.runtime_path,
+      ...(input.granted_mounts ? { granted_mounts: input.granted_mounts } : {}),
     });
     this.runtime_binding = next_binding;
   }

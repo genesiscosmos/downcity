@@ -2,10 +2,10 @@
  * SkillPower action 目录、作用域与 system prompt 回归测试。
  *
  * 关键点（中文）
- * - 模型侧只暴露 list / lookup，且默认只看 Agent 私有目录。
+ * - 模型侧只暴露 list / lookup，且默认只看 Agent 技能目录。
  * - list 的 project / home / all 必须返回对应来源。
  * - lookup 必须通过标准 messages 协议注入 skill 正文，而不是自定义 payload。
- * - system prompt 只列出当前 Agent 的可用 skill。
+ * - system prompt 只列出当前 Agent 的可用 skill，并给出自装命令。
  */
 
 import assert from "node:assert/strict";
@@ -13,7 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { SkillPower } from "../bin/index.js";
+import { SkillPower } from "@downcity/powers/skill";
 
 /** 在指定根目录下创建一个最小可发现 Skill。 */
 function write_skill(root, id, name, description) {
@@ -26,19 +26,24 @@ function write_skill(root, id, name, description) {
   return directory;
 }
 
-/** 创建一个包含 Agent 私有目录与 Workspace 的临时环境。 */
+/**
+ * 创建一个包含 Agent 技能目录与 Workspace 的临时环境。
+ *
+ * 目录形状与真实布局一致：生命周期存储根是 `<downcity_root>/powers/skill`，
+ * 因此 `base` 即 Downcity 根，Agent 技能目录是 `<base>/agents/<agent-id>/skills`。
+ */
 function create_fixture() {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-skill-"));
-  // 生命周期存储根是 base；Agent 私有根是它的 agents 子目录。
-  const agent_root = path.join(base, "agents");
+  const lifecycle_path = path.join(base, "powers", "skill");
+  const agent_skill_dir = path.join(base, "agents", "agent-a", "skills");
   const workspace_path = path.join(base, "workspace");
   const home_path = path.join(base, "home");
 
-  write_skill(path.join(agent_root, "agent-a"), "own", "Own Skill", "agent only");
+  write_skill(agent_skill_dir, "own", "Own Skill", "agent only");
   write_skill(path.join(workspace_path, ".agents", "skills"), "proj", "Project Skill", "project only");
   write_skill(path.join(home_path, ".agents", "skills"), "home-skill", "Home Skill", "home only");
 
-  return { base, agent_root, workspace_path, home_path };
+  return { base, lifecycle_path, agent_skill_dir, workspace_path, home_path };
 }
 
 /** 创建 Skill 测试所需的公开 PowerContext。 */
@@ -53,7 +58,7 @@ function create_skill_context(workspace_path, agent_id = "agent-a") {
   };
 }
 
-/** 启动一个已初始化 Agent 根目录的 SkillPower。 */
+/** 启动一个已初始化 Agent 技能目录的 SkillPower。 */
 async function start_power(lifecycle_storage_path) {
   const power = new SkillPower();
   await power.initialize({
@@ -76,7 +81,7 @@ test("SkillPower 只暴露 list 与 lookup", () => {
 
 test("list 默认只返回当前 Agent 私有目录的 skill", async () => {
   const fixture = create_fixture();
-  const power = await start_power(fixture.base);
+  const power = await start_power(fixture.lifecycle_path);
 
   const result = await power.actions.list.execute({
     context: create_skill_context(fixture.workspace_path),
@@ -91,7 +96,7 @@ test("list 默认只返回当前 Agent 私有目录的 skill", async () => {
 
 test("list 的 project / home / all 返回对应来源", async () => {
   const fixture = create_fixture();
-  const power = await start_power(fixture.base);
+  const power = await start_power(fixture.lifecycle_path);
   const context = create_skill_context(fixture.workspace_path);
   const previous_home = process.env.HOME;
   process.env.HOME = fixture.home_path;
@@ -115,7 +120,7 @@ test("list 的 project / home / all 返回对应来源", async () => {
 
 test("lookup 通过标准 messages 注入 skill 正文", async () => {
   const fixture = create_fixture();
-  const power = await start_power(fixture.base);
+  const power = await start_power(fixture.lifecycle_path);
 
   const result = await power.actions.lookup.execute({
     context: create_skill_context(fixture.workspace_path),
@@ -134,7 +139,7 @@ test("lookup 通过标准 messages 注入 skill 正文", async () => {
 
 test("lookup 找不到 skill 时返回失败", async () => {
   const fixture = create_fixture();
-  const power = await start_power(fixture.base);
+  const power = await start_power(fixture.lifecycle_path);
 
   const result = await power.actions.lookup.execute({
     context: create_skill_context(fixture.workspace_path),
@@ -147,7 +152,7 @@ test("lookup 找不到 skill 时返回失败", async () => {
 
 test("system prompt 只列出当前 Agent 的 skill 与来源", async () => {
   const fixture = create_fixture();
-  const power = await start_power(fixture.base);
+  const power = await start_power(fixture.lifecycle_path);
 
   const prompt = await power.system(create_skill_context(fixture.workspace_path));
 
@@ -160,24 +165,27 @@ test("system prompt 只列出当前 Agent 的 skill 与来源", async () => {
   assert.match(prompt, /\[home\]/);
 });
 
-test("system prompt 说明安装位置与关联要求", async () => {
+test("system prompt 说明安装位置与自装命令", async () => {
   const fixture = create_fixture();
-  const power = await start_power(fixture.base);
+  const power = await start_power(fixture.lifecycle_path);
 
   const prompt = await power.system(create_skill_context(fixture.workspace_path));
 
-  // 模型必须知道技能装在哪，以及它自己不能写这个目录。
-  assert.match(prompt, /\/agents\/agent-a/);
+  // 模型必须知道技能装在哪，以及它允许自己装。
+  assert.match(prompt, /\/agents\/agent-a\/skills/);
   assert.match(prompt, /Skills are installed or linked into this directory/);
-  assert.match(prompt, /You cannot write into it yourself/);
-  assert.match(prompt, /Ask the user to add a missing skill from the Skills page/);
+  assert.match(prompt, /You may install skills here yourself/);
+  // 两步安装：临时目录 + 拷进技能目录，且 npm 缓存必须重定向。
+  assert.match(prompt, /npm_config_cache=/);
+  assert.match(prompt, /npx -y skills add <spec> -y/);
+  assert.match(prompt, /cp -R \.agents\/skills\/<skill-id> ~\/\.downcity\/agents\/<agent-id>\/skills\//);
   // 只读来源不等于可用，必须显式说明。
   assert.match(prompt, /Reading them does not make their skills available to you/);
 });
 
 test("system prompt 不再宣称 40 条上限", async () => {
   const fixture = create_fixture();
-  const power = await start_power(fixture.base);
+  const power = await start_power(fixture.lifecycle_path);
 
   const prompt = await power.system(create_skill_context(fixture.workspace_path));
 
@@ -188,9 +196,9 @@ test("软链接的 skill 会被发现并标记来源", async () => {
   const fixture = create_fixture();
   const external = path.join(fixture.base, "external", "linked");
   write_skill(path.join(fixture.base, "external"), "linked", "Linked Skill", "external");
-  fs.symlinkSync(external, path.join(fixture.agent_root, "agent-a", "linked"), "junction");
+  fs.symlinkSync(external, path.join(fixture.agent_skill_dir, "linked"), "junction");
 
-  const power = await start_power(fixture.base);
+  const power = await start_power(fixture.lifecycle_path);
   const result = await power.actions.list.execute({
     context: create_skill_context(fixture.workspace_path),
     input: {},
@@ -208,7 +216,7 @@ test("ignore 规则同时过滤 id 与 name", async () => {
   await power.initialize({
     power: { id: "skill", action() {}, config_action() {} },
     config: { get: () => ({}), set: async () => {} },
-    storage: { path: fixture.base, files: {} },
+    storage: { path: fixture.lifecycle_path, files: {} },
     logger: { log: async () => {}, debug() {}, info() {}, warn() {}, error() {} },
     notifications: { publish: async () => {} },
     system: {

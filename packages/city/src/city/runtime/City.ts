@@ -7,6 +7,7 @@
  */
 
 import { Agent, Group } from "@downcity/agent";
+import path from "node:path";
 import { CityPowerRuntime } from "@/city/power/CityPowerRuntime.js";
 import { CityPower } from "@/city/power/builtin/CityPower.js";
 import { ShellPower } from "@/city/power/builtin/shell/ShellPower.js";
@@ -540,10 +541,24 @@ export class City implements CityRuntime {
     return workspace;
   }
 
-  /** 将 City 分配的私有运行目录绑定到 Workspace。 */
+  /**
+   * 将 City 分配的私有运行目录绑定到 Workspace。
+   *
+   * 关键点（中文）
+   * - 额外授权 `<downcity_root>/agents`：Agent 需要把 skill 安装进自己的技能目录，
+   *   而 shell 是按 Workspace 绑定的，拿不到 agent 身份，因此只能授权整个 Agent 目录树。
+   * - 这是有意的取舍：同一台机器、同一个用户下的 Agent 之间不互相隔离技能目录。
+   */
   private bind_workspace(workspace: WorkspaceRuntime): void {
     workspace.bind_runtime?.({
       runtime_path: this.storage.open_scope(["workspaces", workspace.id]).root_path,
+      granted_mounts: [
+        {
+          host_path: path.join(this.storage.root_path, "agents"),
+          access: "rw",
+          reason: "Agent skill directories are written by the agent itself",
+        },
+      ],
     });
   }
 

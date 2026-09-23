@@ -19,7 +19,7 @@ import type {
 export class LocalStorageProvider implements StorageProvider {
   private readonly opened_scopes = new Map<string, StorageScope>();
 
-  constructor(private readonly root_path: string) {}
+  constructor(readonly root_path: string) {}
 
   /** 打开一个只能访问用户级根目录内的逻辑作用域。 */
   open_scope(segments: readonly string[]): StorageScope {

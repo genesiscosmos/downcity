@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ChatPower } from "@downcity/powers/chat";
+import { MessengerPower } from "@downcity/powers/messenger";
 import { SkillPower } from "@downcity/powers/skill";
 import { TaskPower } from "@downcity/powers/task";
 import { createTaskDefinition } from "../bin/task/Action.js";
@@ -13,12 +13,12 @@ import { TaskDefinitionRepository } from "../bin/task/runtime/TaskDefinitionRepo
 import { TaskExecutionCoordinator } from "../bin/task/runtime/TaskExecutionCoordinator.js";
 import { LocalStorageProvider } from "@downcity/city";
 
-/** 启动 Chat Power 并返回按 ID 注册的配置 action。 */
-async function start_chat_power() {
+/** 启动 Messenger Power 并返回按 ID 注册的配置 action。 */
+async function start_messenger_power() {
   const actions = new Map();
-  await new ChatPower().initialize({
+  await new MessengerPower().initialize({
     power: {
-      id: "chat",
+      id: "messenger",
       action() {},
       config_action(action) {
         actions.set(action.id, action);
@@ -199,8 +199,8 @@ function create_config_context(initial_config) {
   };
 }
 
-test("Chat Power 读取配置时不泄漏 Channel 凭据", async () => {
-  const actions = await start_chat_power();
+test("Messenger Power 读取配置时不泄漏 Channel 凭据", async () => {
+  const actions = await start_messenger_power();
   const store = create_config_context({
     channels: [
       { id: "telegram_main", type: "telegram", name: "Main", bot_token: "telegram-secret" },
@@ -215,8 +215,8 @@ test("Chat Power 读取配置时不泄漏 Channel 凭据", async () => {
   assert.deepEqual(config.channels.map((channel) => channel.secret_configured), [true, true]);
 });
 
-test("Chat Power 保存时为空的凭据输入会保留已有凭据", async () => {
-  const actions = await start_chat_power();
+test("Messenger Power 保存时为空的凭据输入会保留已有凭据", async () => {
+  const actions = await start_messenger_power();
   const store = create_config_context({
     channels: [
       { id: "telegram_main", type: "telegram", name: "Old", bot_token: "kept-secret" },
@@ -241,8 +241,8 @@ test("Chat Power 保存时为空的凭据输入会保留已有凭据", async () 
   assert.equal("bot_token" in result.channels[0], false);
 });
 
-test("Chat Power 拒绝没有凭据的新 Channel", async () => {
-  const actions = await start_chat_power();
+test("Messenger Power 拒绝没有凭据的新 Channel", async () => {
+  const actions = await start_messenger_power();
   const store = create_config_context({ channels: [] });
 
   await assert.rejects(

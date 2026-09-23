@@ -139,7 +139,7 @@ export class MemoryStorageProvider implements StorageProvider {
   private readonly root_files: MemoryFileSystem;
   private readonly scopes = new Map<string, StorageScope>();
 
-  constructor(root_path = "/memory") {
+  constructor(readonly root_path = "/memory") {
     this.root_files = new MemoryFileSystem(root_path);
   }
 

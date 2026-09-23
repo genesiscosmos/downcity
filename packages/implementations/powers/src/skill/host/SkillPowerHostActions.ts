@@ -14,7 +14,7 @@ import { execa } from "execa";
 import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";
 import { listSkills, lookupSkill } from "@/skill/Action.js";
 import { resolveSkillPowerOptions } from "@/skill/Config.js";
-import { create_skill_root_context } from "@/skill/runtime/AgentRoot.js";
+import { assert_safe_agent_id, create_skill_root_context } from "@/skill/runtime/AgentRoot.js";
 import { resolve_skill_root, type SkillRootContext } from "@/skill/runtime/Paths.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
 import type {
@@ -35,9 +35,9 @@ import type {
 /** 宿主动作运行所需的稳定路径事实。 */
 export interface SkillPowerHostRuntime {
   /**
-   * Agent 私有 skill 根目录绝对路径。
+   * Agent 技能目录根，即 `<downcity_root>/agents`。
    */
-  agent_root: string;
+  agents_root: string;
 }
 
 /** 一次宿主查询的公共输入。 */
@@ -90,13 +90,13 @@ async function create_snapshot(
   runtime: SkillPowerHostRuntime,
 ): Promise<SkillMainviewSnapshot> {
   const agents = await context.system.list_agents();
-  const origins = await list_catalog_origins(context, runtime, "");
+  const origins = await list_catalog_origins(context);
   return {
     success: true,
     agents: agents.map((agent) => ({
       agent_id: agent.agent_id,
       name: agent.name,
-      directory: describe_agent_skill_dir(runtime, agent.agent_id),
+      directory: collapse_home(resolve_agent_skill_dir(runtime, agent.agent_id)),
       skills: list_agent_skills(runtime, agent.agent_id, origins),
     })),
     catalog: [],
@@ -127,7 +127,7 @@ async function read_catalog(
   runtime: SkillPowerHostRuntime,
   query: AgentQuery,
 ): Promise<SkillMainviewSnapshot> {
-  const origins = await list_catalog_origins(context, runtime, query.agent_id);
+  const origins = await list_catalog_origins(context);
   const snapshot = await create_snapshot(context, runtime);
   const agents = snapshot.agents.map((item) =>
     item.agent_id === query.agent_id
@@ -172,17 +172,15 @@ interface CatalogOrigin {
 /**
  * 列出全部可关联来源。
  *
- * 关键点（中文）：空 `agent_id` 只用于解析根路径，不参与发现；
- * 因此 home 与 project 根都能在不依赖具体 Agent 的前提下拿到。
+ * 关键点（中文）：project 与 home 的扫描根与 Agent 无关，因此这里不接收 `agent_id`，
+ * 也不构造 Agent 技能目录上下文；调用方需要 Agent 上下文时自行拼接。
  */
 async function list_catalog_origins(
   context: PowerLifecycleContext,
-  runtime: SkillPowerHostRuntime,
-  agent_id: string,
 ): Promise<CatalogOrigin[]> {
   const workspaces = await context.system.list_workspaces();
   const origins: CatalogOrigin[] = workspaces.map((workspace) => {
-    const workspace_context = create_host_context(runtime, agent_id, workspace.workspace_path);
+    const workspace_context = create_origin_context(workspace.workspace_path);
     return {
       origin: {
         source: "project",
@@ -194,7 +192,7 @@ async function list_catalog_origins(
     };
   });
 
-  const home_context = create_host_context(runtime, agent_id, process.cwd());
+  const home_context = create_origin_context(process.cwd());
   origins.push({
     origin: { source: "home" },
     root: resolve_skill_root("home", home_context)?.resolved ?? "",
@@ -274,7 +272,7 @@ async function resolve_read_context(
     return create_host_context(runtime, input.agent_id, process.cwd());
   }
 
-  const origins = await list_catalog_origins(context, runtime, input.agent_id);
+  const origins = await list_catalog_origins(context);
   const entry = origins.find((item) =>
     item.origin.source === input.scope &&
     (input.scope === "home" || item.origin.workspace_id === input.workspace_id));
@@ -368,7 +366,7 @@ async function link_skill(
   runtime: SkillPowerHostRuntime,
   input: SkillMainviewLinkInput,
 ): Promise<SkillMainviewMutationResult> {
-  const origins = await list_catalog_origins(context, runtime, input.agent_id);
+  const origins = await list_catalog_origins(context);
   const entry = origins.find((item) =>
     item.origin.source === input.scope &&
     (input.scope === "home" || item.origin.workspace_id === input.workspace_id));
@@ -421,7 +419,7 @@ async function remove_skill(
   runtime: SkillPowerHostRuntime,
   input: SkillMainviewRemoveInput,
 ): Promise<SkillMainviewMutationResult> {
-  const origins = await list_catalog_origins(context, runtime, input.agent_id);
+  const origins = await list_catalog_origins(context);
   const exists = list_agent_skills(runtime, input.agent_id, origins)
     .some((skill) => skill.id === input.skill_id);
   if (!exists) {
@@ -464,19 +462,8 @@ function resolve_agent_skill_dir(
   agent_id_input: string,
 ): string {
   const agent_id = String(agent_id_input || "").trim();
-  if (!agent_id) throw new Error("agent_id is required for agent skills");
-  if (agent_id.includes("/") || agent_id.includes("\\") || path.isAbsolute(agent_id)) {
-    throw new Error(`Invalid agent_id: ${agent_id}`);
-  }
-  return path.join(runtime.agent_root, agent_id);
-}
-
-/** 把 Agent Skill 目录折叠为带 `~` 的展示路径。 */
-function describe_agent_skill_dir(
-  runtime: SkillPowerHostRuntime,
-  agent_id: string,
-): string {
-  return collapse_home(resolve_agent_skill_dir(runtime, agent_id));
+  assert_safe_agent_id(agent_id);
+  return path.join(runtime.agents_root, agent_id, "skills");
 }
 
 /** 把绝对路径中的用户目录折叠为 `~`，用于稳定展示。 */
@@ -488,15 +475,28 @@ function collapse_home(value: string): string {
   return relative ? `~/${relative}` : "~";
 }
 
-/** 构造宿主侧的扫描上下文。 */
+/** 构造宿主侧的 Agent 技能扫描上下文。 */
 function create_host_context(
   runtime: SkillPowerHostRuntime,
   agent_id: string,
   workspace_path: string,
 ): SkillRootContext {
   return create_skill_root_context({
-    agent_root: runtime.agent_root,
+    agent_skill_dir: resolve_agent_skill_dir(runtime, agent_id),
     agent_id,
+    workspace_path,
+  });
+}
+
+/**
+ * 构造仅用于解析 project / home 扫描根的上下文。
+ *
+ * 说明（中文）：agent 作用域在这里不参与，因此把技能目录置空，避免误依赖。
+ */
+function create_origin_context(workspace_path: string): SkillRootContext {
+  return create_skill_root_context({
+    agent_skill_dir: "",
+    agent_id: "",
     workspace_path,
   });
 }

@@ -2,7 +2,7 @@
  * Skill 扫描根解析。
  *
  * 关键点（中文）
- * - 权威来源是 Agent 私有目录：`<agent_root>/<agent-id>`。
+ * - 权威来源是 Agent 技能目录：`~/.downcity/agents/<agent-id>/skills`。
  * - `project` 与 `home` 是额外可读来源，不参与 Agent 默认可用集合。
  * - 同名 skill 按 `agent > project > home` 覆盖，因此优先级数值递增。
  */
@@ -10,14 +10,6 @@
 import path from "node:path";
 import type { SkillRoot, SkillRootSource } from "@/skill/types/SkillRoot.js";
 import { expand_home } from "./Utils.js";
-
-/**
- * Agent 私有 skill 根下的相对目录名。
- *
- * 说明（中文）
- * - Agent 根由 Power 生命周期存储派生，见 `runtime/AgentRoot.ts`。
- */
-export const AGENT_SKILLS_DIRECTORY = "agents";
 
 /** 项目内 skill 相对路径。 */
 const PROJECT_SKILLS_RELATIVE = path.join(".agents", "skills");
@@ -30,12 +22,12 @@ const HOME_SKILLS_RELATIVE = path.join(".agents", "skills");
  */
 export interface SkillRootContext {
   /**
-   * 当前 Agent 的私有 skill 根目录绝对路径。
+   * 当前 Agent 的技能目录绝对路径。
    *
    * 说明（中文）
-   * - 该路径下的 `<agent-id>` 子目录即当前 Agent 的可用 skill 集合。
+   * - 该目录下的 `<skill-id>/SKILL.md` 即当前 Agent 的可用技能集合。
    */
-  agent_root: string;
+  agent_skill_dir: string;
   /**
    * 当前 Agent 稳定标识。
    */
@@ -73,13 +65,12 @@ export function resolve_skill_root(
   context: SkillRootContext,
 ): SkillRoot | null {
   if (source === "agent") {
-    const agent_id = String(context.agent_id || "").trim();
-    if (!agent_id) return null;
-    const resolved = path.join(context.agent_root, agent_id);
+    const skill_dir = String(context.agent_skill_dir || "").trim();
+    if (!skill_dir) return null;
     return {
       source,
-      resolved: path.normalize(resolved),
-      display: collapse_home(resolved, context.home_path),
+      resolved: path.normalize(skill_dir),
+      display: collapse_home(skill_dir, context.home_path),
       priority: 10,
     };
   }
