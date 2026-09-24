@@ -21,34 +21,6 @@
   overflow-anchor: auto;
 }
 
-.reasoning-activity-content {
-  min-width: 0;
-  width: calc(100% - 1.4rem);
-  margin-left: 1.4rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--muted) 24%, transparent);
-}
-
-.reasoning-label {
-  margin-bottom: 0.25rem;
-  color: color-mix(in srgb, var(--foreground) 68%, transparent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: var(--text-3xs);
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-
-.reasoning-block {
-  max-height: 12rem;
-  overflow: auto;
-  color: var(--muted-foreground);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
 .agent-process-body {
   position: relative;
   display: flex;
@@ -89,6 +61,12 @@
   overflow: hidden;
   list-style: none;
   cursor: pointer;
+  /*
+   * 活动行是过程记录，不是正文：它不在 `data-chat-selectable-message` 里，
+   * 选中它不会得到任何引用入口，因此直接禁掉文本选中。
+   * 写在共享类上，工具行与思考行才会一致，不靠调用处逐个补 `select-none`。
+   */
+  user-select: none;
 }
 
 .activity-tool-summary::-webkit-details-marker {
@@ -929,10 +907,6 @@
   color: color-mix(in srgb, var(--foreground) 52%, transparent);
 }
 
-.thinking-dots-icon.is-highlighted {
-  color: var(--primary);
-}
-
 .thinking-dot {
   display: block;
   width: 3px;
@@ -988,5 +962,10 @@
 
   .activity-tool-input-caret {
     animation: none;
+  }
+
+  .thinking-dot {
+    animation: none;
+    opacity: 1;
   }
 }

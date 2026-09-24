@@ -1,21 +1,37 @@
 /** Agent Message canonical Parts 到单层 UI Block 的纯投影。 */
 
-import type { SessionAgentMessagePart } from "@downcity/agent";
+import type { SessionAgentMessagePart, SessionAgentReasoningPart } from "@downcity/agent";
 import { read_session_turn_file_diff_data } from "@downcity/agent/session";
 import type { AgentActivityPart, AgentMessageBlock, AgentMessageProjection } from "@/features/chat/types/AgentMessage";
 
 /**
- * 在一次遍历中完成可见内容分组、普通文本汇总和操作栏资格判断。
+ * 在一次遍历中完成可见内容分组、过程与内容切分与普通文本汇总。
+ *
+ * ## 过程与内容的切分点
+ *
+ * 切分点是**最后一个活动块的位置**：它及其之前的块属于过程（可折叠），它之后的块属于内容（常显）。
+ * 这保证「除了最后的内容都收起来」在任何 Part 排列下都成立，包括 `活动 → 正文 → 活动 → 正文`。
+ *
+ * ## Reasoning 是一个独立字段，不是块
+ *
+ * 推理在 canonical 顺序里的位置不再决定它在消息里的位置：它始终作为一行「过程」
+ * 平铺在内容之后（见 `AgentMessageContent`），因此不进 `blocks`，也不参与过程折叠。
+ * 否则像 `推理 → 工具` 这种排列会把思考行折进过程段，而它只应在推理正在输出时可见。
+ *
+ * 只有**正在流式输出**的推理会被保留；已收口的推理不保留，也不影响切分点
+ * （它不是活动，因此不会被 `find_last_activity_index` 计入）。
+ * 历史推理没有展示位置，因此不存在「已思考」这一态。
+ *
+ * ## 相邻性
  *
  * 未注册 Data 没有通用展示语义，也不能切断其两侧连续的活动 Part。
- *
- * Reasoning、Tool 与 Action 归入同一类连续活动块，因此 `agent_message_projection` 的
- * 迭代顺序决定它们的相邻性；这与 canonical sequence 一致。
+ * Tool 与 Action 归入同一类连续活动块，因此本函数的迭代顺序决定它们的相邻性；这与 canonical sequence 一致。
  */
 export function project_agent_message(parts: readonly SessionAgentMessagePart[]): AgentMessageProjection {
   const blocks: AgentMessageBlock[] = [];
   const text_parts: string[] = [];
-  let last_action_boundary: "text" | "other" | undefined;
+  // 思考行不是块：它始终平铺在内容之后，不参与过程折叠。
+  let thinking: SessionAgentReasoningPart | undefined;
 
   for (const part of order_agent_message_parts(parts)) {
     switch (part.type) {
@@ -23,23 +39,24 @@ export function project_agent_message(parts: readonly SessionAgentMessagePart[])
         if (!part.text.trim()) break;
         blocks.push({ type: "text", part });
         text_parts.push(part.text);
-        last_action_boundary = "text";
         break;
       }
-      case "reasoning":
+      case "reasoning": {
+        // 只保留正在输出的推理；收口后连字段都不保留。
+        thinking = part.state === "streaming" ? part : undefined;
+        break;
+      }
       case "tool": {
         append_activity_part(blocks, part);
-        last_action_boundary = "other";
         break;
       }
       case "action": {
-        // Action 是辅助活动记录：并入相邻活动，且不切断两侧正文的操作栏资格。
+        // Action 是辅助活动记录：并入相邻活动，不产生独立块。
         append_activity_part(blocks, part);
         break;
       }
       case "file": {
         blocks.push({ type: "file", part });
-        last_action_boundary = "other";
         break;
       }
       case "data": {
@@ -49,7 +66,6 @@ export function project_agent_message(parts: readonly SessionAgentMessagePart[])
       }
       case "error": {
         blocks.push({ type: "error", part });
-        last_action_boundary = "other";
         break;
       }
       default:
@@ -57,11 +73,22 @@ export function project_agent_message(parts: readonly SessionAgentMessagePart[])
     }
   }
 
+  // 最后一个活动块的位置决定切分点；找不到活动时整个过程为空，全部块都是内容。
+  const split_index = find_last_activity_index(blocks) + 1;
   return {
-    blocks,
+    process_blocks: split_index > 0 ? blocks.slice(0, split_index) : [],
+    content_blocks: blocks.slice(split_index),
     text: text_parts.join("\n"),
-    show_actions: last_action_boundary === "text",
+    thinking,
   };
+}
+
+/** 最后一个活动块的下标；没有活动块时返回 -1。 */
+function find_last_activity_index(blocks: readonly AgentMessageBlock[]): number {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    if (blocks[index]?.type === "activity") return index;
+  }
+  return -1;
 }
 
 /**

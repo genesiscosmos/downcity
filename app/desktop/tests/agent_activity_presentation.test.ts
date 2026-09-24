@@ -350,24 +350,18 @@ test("Action 不触发活动组自动展开", () => {
   assert.equal(should_auto_open_agent_activity([create_action("command", 1, "running")], power_names), false);
 });
 
-test("组摘要取最后一个非 Reasoning 项，Tool 与 Action 一视同仁", () => {
+test("组摘要取最后一个活动项，Tool 与 Action 一视同仁", () => {
   const read = create_tool("read", 1);
   const grep = create_tool("grep", 2);
   const action = create_action("history-fork", 3);
-  const reasoning = { part_id: "reasoning-4", sequence: 4, type: "reasoning" as const, text: "想一下", state: "done" as const };
 
   assert.equal(select_activity_summary_part([read, grep]), grep);
   // Action 与 Tool 同级：它发生在后，摘要就该是它，而不是更早的 Tool。
   assert.equal(select_activity_summary_part([read, action]), action);
   assert.equal(select_activity_summary_part([action, read]), read);
-  assert.equal(select_activity_summary_part([read, reasoning]), read);
 });
 
-test("组内全部为 Reasoning 或为空时，组摘要选择不抛错", () => {
-  const first = { part_id: "reasoning-1", sequence: 1, type: "reasoning" as const, text: "第一步", state: "done" as const };
-  const last = { part_id: "reasoning-2", sequence: 2, type: "reasoning" as const, text: "第二步", state: "done" as const };
-
-  assert.equal(select_activity_summary_part([first, last]), last);
+test("空活动集合的摘要选择不抛错", () => {
   assert.equal(select_activity_summary_part([]), undefined);
 });
 

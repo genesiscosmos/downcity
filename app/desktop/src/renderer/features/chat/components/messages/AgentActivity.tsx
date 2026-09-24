@@ -1,8 +1,8 @@
-/** Agent Message 中连续 Reasoning、Tool 与 Action 的活动展示。 */
+/** Agent Message 中连续 Tool 与 Action 的活动展示。 */
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
-import type { RespondSessionInteractionInput, SessionAgentActionPart, SessionAgentReasoningPart, SessionAgentToolPart } from "@downcity/agent";
-import { TbArrowsMinimize, TbBulb, TbChevronRight, TbCommand, TbFileSearch, TbGitFork, TbMessageQuestion, TbPencil, TbPencilPlus, TbPuzzle, TbSearch, TbTextScan2 } from "react-icons/tb";
+import type { RespondSessionInteractionInput, SessionAgentActionPart, SessionAgentToolPart } from "@downcity/agent";
+import { TbArrowsMinimize, TbChevronRight, TbCommand, TbFileSearch, TbGitFork, TbMessageQuestion, TbPencil, TbPencilPlus, TbPuzzle, TbSearch, TbTextScan2 } from "react-icons/tb";
 import { AgentInteraction } from "@/features/chat/components/messages/AgentInteraction";
 import { use_chat_power_lookup } from "@/features/chat/components/messages/ChatPowerLookup";
 import { use_open_interaction_tab } from "@/features/chat/panel/InteractionPanel";
@@ -13,13 +13,14 @@ import { cn } from "@/lib/utils";
 import { use_translation } from "@/locales/i18n";
 
 /**
- * 活动行图标；Reasoning、Tool 与 Action 共用一张表，新增种类由类型系统强制补全。
+ * 活动行图标；Tool 与 Action 共用一张表，新增种类由类型系统强制补全。
  *
  * `power` 不在这张表里：power 的图标由 `PowerIcon` 按 power 名解析，与 Sidebar、
  * 命令面板共用同一份事实源。同一个 power 在这三处必须长得一样。
+ *
+ * Reasoning 也不在这张表里：它不再是一条活动行，而是 Footer 里的一行思考摘要（见 `AgentMessage`）。
  */
 const AGENT_ACTIVITY_ICONS: Record<Exclude<AgentActivityVisualKind, "power">, ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
-  reasoning: TbBulb,
   read: TbTextScan2,
   write: TbPencilPlus,
   edit: TbPencil,
@@ -40,26 +41,24 @@ const AGENT_ACTIVITY_TONE_CLASS: Record<AgentActivityTone, string> = {
 };
 
 /**
- * 展示连续活动。Reasoning 显隐只改变可见项，不改变 canonical 活动块边界。
- * 零项不输出容器，一项直接显示，多项聚合为一个可展开日志。
+ * 展示连续活动。零项不输出容器，一项直接显示，多项聚合为一个可展开日志。
  *
  * Power 目录由 context 注入：它是全局事实，消息渲染树有七层，逐层传 prop 会让
  * 每一层都多一个与自身职责无关的参数。未注入时身份降级为注册名，不会报错。
  */
-export function AgentActivity({ parts, show_reasoning, streaming, respond_interaction }: { parts: readonly AgentActivityPart[]; show_reasoning: boolean; streaming: boolean; respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
+export function AgentActivity({ parts, respond_interaction }: { parts: readonly AgentActivityPart[]; respond_interaction(input: RespondSessionInteractionInput): Promise<void> }) {
   const power_lookup = use_chat_power_lookup();
   const power_names = useMemo(() => chat_power_names(power_lookup), [power_lookup]);
-  const visible_parts = parts.filter((part) => part.type !== "reasoning" || (show_reasoning && Boolean(part.text.trim())));
-  if (visible_parts.length === 0) return null;
+  if (parts.length === 0) return null;
   return <div className="agent-process-body">
-    {visible_parts.length === 1
-      ? <AgentActivityItem part={visible_parts[0]} message_streaming={streaming} respond_interaction={respond_interaction} lookup={power_lookup} power_names={power_names} />
-      : <AgentActivityGroup parts={visible_parts} message_streaming={streaming} respond_interaction={respond_interaction} lookup={power_lookup} power_names={power_names} />}
+    {parts.length === 1
+      ? <AgentActivityItem part={parts[0]} respond_interaction={respond_interaction} lookup={power_lookup} power_names={power_names} />
+      : <AgentActivityGroup parts={parts} respond_interaction={respond_interaction} lookup={power_lookup} power_names={power_names} />}
   </div>;
 }
 
-/** 多个连续活动共用的折叠摘要与展开状态。摘要始终取最后一个非 Reasoning 项。 */
-function AgentActivityGroup({ parts, message_streaming, respond_interaction, lookup, power_names }: { parts: readonly AgentActivityPart[]; message_streaming: boolean; respond_interaction(input: RespondSessionInteractionInput): Promise<void>; lookup: ChatPowerLookup; power_names: ReadonlySet<string> }) {
+/** 多个连续活动共用的折叠摘要与展开状态。摘要始终取最后一个活动项。 */
+function AgentActivityGroup({ parts, respond_interaction, lookup, power_names }: { parts: readonly AgentActivityPart[]; respond_interaction(input: RespondSessionInteractionInput): Promise<void>; lookup: ChatPowerLookup; power_names: ReadonlySet<string> }) {
   const translate_chat = use_translation("chat");
   const summary_part = select_activity_summary_part(parts) ?? parts[parts.length - 1];
   // Interaction 属于 Tool Part；待响应时自动展开一次，方便用户直接回答。
@@ -67,40 +66,22 @@ function AgentActivityGroup({ parts, message_streaming, respond_interaction, loo
     .flatMap((part) => part.type === "tool" ? (part.interactions ?? []) : [])
     .find((interaction) => interaction.status === "pending")?.interaction_id ?? "";
   return <ActivityRow
-    {...summarize_activity(summary_part, message_streaming, translate_chat, lookup, power_names)}
+    {...summarize_activity(summary_part, translate_chat, lookup, power_names)}
     badge={`+${parts.length - 1}`}
     auto_open={should_auto_open_agent_activity(parts, power_names)}
     auto_open_key={pending_interaction_id}
     summary_class_name="activity-tool-group-summary"
-    body={<div className="activity-tool-group-body">{parts.map((part, index) => <div key={part.part_id} className="activity-tool-log"><AgentActivityItem part={part} message_streaming={message_streaming && index === parts.length - 1} respond_interaction={respond_interaction} lookup={lookup} power_names={power_names} /></div>)}</div>}
+    body={<div className="activity-tool-group-body">{parts.map((part) => <div key={part.part_id} className="activity-tool-log"><AgentActivityItem part={part} respond_interaction={respond_interaction} lookup={lookup} power_names={power_names} /></div>)}</div>}
   />;
 }
 
 /** 对单个 canonical 活动 Part 做穷尽分发。 */
-function AgentActivityItem({ part, message_streaming, respond_interaction, lookup, power_names }: { part: AgentActivityPart; message_streaming: boolean; respond_interaction(input: RespondSessionInteractionInput): Promise<void>; lookup: ChatPowerLookup; power_names: ReadonlySet<string> }) {
+function AgentActivityItem({ part, respond_interaction, lookup, power_names }: { part: AgentActivityPart; respond_interaction(input: RespondSessionInteractionInput): Promise<void>; lookup: ChatPowerLookup; power_names: ReadonlySet<string> }) {
   switch (part.type) {
-    case "reasoning": return <AgentReasoning part={part} message_streaming={message_streaming} />;
     case "tool": return <AgentTool part={part} respond_interaction={respond_interaction} lookup={lookup} power_names={power_names} />;
     case "action": return <AgentAction part={part} />;
     default: return assert_never(part);
   }
-}
-
-/** 可展开的 Reasoning 活动行。 */
-function AgentReasoning({ part, message_streaming }: { part: SessionAgentReasoningPart; message_streaming: boolean }) {
-  const translate_chat = use_translation("chat");
-  const text = part.text.trim();
-  if (!text) return null;
-  const running = part.state === "streaming" || message_streaming;
-  return <ActivityRow
-    icon={<ActivityIcon visual_kind="reasoning" />}
-    tone={running ? "running" : "complete"}
-    diff_stat={null}
-    state={translate_chat(running ? "activity.thinking" : "activity.thought")}
-    identity={reasoning_preview(text)}
-    summary=""
-    body={<div className="reasoning-activity-content"><div className="reasoning-block">{text}</div></div>}
-  />;
 }
 
 /**
@@ -206,19 +187,10 @@ function row_from_presentation(presentation: AgentActivityPresentation, translat
   };
 }
 
-/** 由一条活动 Part 生成活动行内容；Tool 与 Action 走展示映射，Reasoning 用思考文案。 */
-function summarize_activity(part: AgentActivityPart, message_streaming: boolean, translate: (key: string, options?: Record<string, string>) => string, lookup: ChatPowerLookup, power_names: ReadonlySet<string>): ActivityRowSummary {
+/** 由一条活动 Part 生成活动行内容；Tool 与 Action 走展示映射。 */
+function summarize_activity(part: AgentActivityPart, translate: (key: string, options?: Record<string, string>) => string, lookup: ChatPowerLookup, power_names: ReadonlySet<string>): ActivityRowSummary {
   if (part.type === "tool") return row_from_presentation(resolve_agent_tool_presentation(part, power_names), translate, lookup);
-  if (part.type === "action") return row_from_presentation(resolve_agent_action_presentation(part), translate, lookup);
-  const running = part.state === "streaming" || message_streaming;
-  return {
-    icon: <ActivityIcon visual_kind="reasoning" />,
-    tone: running ? "running" : "complete",
-    diff_stat: null,
-    state: translate(running ? "activity.thinking" : "activity.thought"),
-    identity: reasoning_preview(part.text),
-    summary: "",
-  };
+  return row_from_presentation(resolve_agent_action_presentation(part), translate, lookup);
 }
 
 /**
@@ -350,5 +322,4 @@ function ActivityIcon({ visual_kind, power_name = "" }: { visual_kind: AgentActi
 }
 
 function split_lines(text: string): string[] { return text.split("\n"); }
-function reasoning_preview(text: string): string { return text.replace(/\s+/g, " ").trim(); }
 function assert_never(value: never): never { throw new Error(`不支持的 Agent Activity Part：${String((value as { type?: unknown }).type)}`); }

@@ -14,11 +14,12 @@ import type {
 /**
  * 参与连续活动展示的 canonical Agent Part。
  *
- * Reasoning、Tool 与 Action 共享同一个集合，因为它们都是「模型或 Session 做过一件事」的记录，
+ * Tool 与 Action 共享同一个集合，因为它们都是「模型或 Session 做过一件事」的记录，
  * 在时间线上必须按 canonical 顺序连续排列。Action 不是正文，因此不单独成块。
+ *
+ * Reasoning 不在这里：它有自己的 `thinking` 块，不参与活动分组。
  */
 export type AgentActivityPart =
-  | SessionAgentReasoningPart
   | SessionAgentToolPart
   | SessionAgentActionPart;
 
@@ -30,11 +31,33 @@ export type AgentMessageBlock =
   | { /** 展示块类型。 */ type: "file-diff"; /** 原始 Data Part。 */ part: SessionAgentDataPart; /** 校验后的文件改动数据。 */ data: SessionTurnFileDiffData }
   | { /** 展示块类型。 */ type: "error"; /** 原始错误 Part。 */ part: SessionAgentErrorPart };
 
-/** 一条 Agent Message 可随 canonical 数据重建的完整展示投影。 */
+/**
+ * 一条 Agent Message 可随 canonical 数据重建的完整展示投影。
+ *
+ * ## 为什么分成过程与内容两段
+ *
+ * 一条消息里的展示块不是同一种东西：中间的工具调用与叙述是「怎么做到的」，
+ * 最后一个活动之后的正文是「结论」。前者可以收起来，后者必须一直看得见，
+ * 所以投影直接给出两段，而不是让组件在渲染时再切一次。
+ *
+ * 切分点固定为**最后一个活动块之后**：过程 = 最后一个活动块及其之前的全部块，
+ * 内容 = 它之后的全部块。没有活动块时过程为空、全部块都是内容。
+ */
 export interface AgentMessageProjection {
-  /** 按 canonical Part 顺序排列的可见展示块。 */ blocks: AgentMessageBlock[];
+  /** 可折叠的过程块；没有活动时为空的。 */
+  process_blocks: AgentMessageBlock[];
+  /** 常显的最终内容块；为空表示这条消息没有结论正文。 */
+  content_blocks: AgentMessageBlock[];
   /** Copy 与 Quote 使用的普通文本，不包含 Reasoning 或 Tool 输出。 */ text: string;
-  /** 当前完成态消息是否具备文本结尾的操作栏资格。 */ show_actions: boolean;
+  /**
+   * 正在输出的推理；`undefined` 表示当前没有推理在输出。
+   *
+   * 它不是展示块，而是一个独立字段：思考行不参与过程折叠，也不与相邻活动合并，
+   * 因此没有块的身份。它由 canonical `state === "streaming"` 驱动：
+   * 推理一开始（`text` 还是空串）就出现，一收口就消失。
+   * 历史推理没有展示位置，因此不存在「已思考」这一态。
+   */
+  thinking: SessionAgentReasoningPart | undefined;
 }
 
 /**
@@ -81,10 +104,10 @@ export type AgentActionVisualKind = "command" | "fork" | "compaction" | "generic
 /**
  * 活动行的图标种类。
  *
- * 它是三种活动 Part 唯一的图标选择键：Tool 与 Action 各有自己的识别规则，Reasoning 固定为思考。
+ * 它是活动 Part 唯一的图标选择键：Tool 与 Action 各有自己的识别规则。
  * 图标表按 `Record<AgentActivityVisualKind, …>` 定义，新增种类由类型系统强制补全。
  */
-export type AgentActivityVisualKind = AgentToolVisualKind | AgentActionVisualKind | "reasoning";
+export type AgentActivityVisualKind = AgentToolVisualKind | AgentActionVisualKind;
 
 /** 一次编辑的旧文与新文。 */
 export interface AgentActivityEditPair {

@@ -187,11 +187,22 @@ export const chat_message_text_class_name = "text-base leading-reading text-fore
 export const user_message_text_class_name = "text-base leading-chat text-foreground";
 
 /**
- * Footer：运行状态与消息操作栏的共用行。
+ * 过程容器：可折叠的执行过程（正文叙述、工具调用、文件改动）。
+ *
+ * 它与正文容器同宽、同块间距，因此展开时过程与结论正文的排印完全一致；
+ * 折叠时整段不渲染，不占任何高度。
+ *
+ * 不给它另加缩进或背景：过程与结论是同一段输出的两段，不是两个层级。
+ * 层级感由 Footer 的思考摘要行与折叠开关表达。
+ */
+export const agent_message_process_class_name = "flex min-w-0 w-full flex-col gap-3 text-base text-foreground";
+
+/**
+ * Footer：运行状态、思考摘要与消息操作栏的共用行。
  *
  * 起点与正文相同（不要加 `pl-1`），高度固定，避免悬停出现操作栏时整行跳动。
  */
-export const agent_message_footer_class_name = "agent-message-footer flex h-6 min-h-6 shrink-0 items-center";
+export const agent_message_footer_class_name = "agent-message-footer flex h-6 min-h-6 shrink-0 items-center gap-2";
 
 // ---------------------------------------------------------------------------
 // 用户消息

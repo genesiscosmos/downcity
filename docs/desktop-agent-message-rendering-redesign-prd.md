@@ -1485,6 +1485,99 @@ cd app/desktop && npx tsc -p tsconfig.web.json --noEmit && npx tsc -p tsconfig.n
 推出来的区间解；若目测仍偏松，改 `--markdown-block-gap` 与 `--markdown-tight-gap` 即可，
 **不要动 `--markdown-flow-gap`**——它与消息内块间距的约束是硬的（见第二十四节）。
 
+---
+
+## 二十六、执行过程可折叠，推理收进 Footer 一行（2026-09-24）
+
+> 状态：已实施
+>
+> 范围：`features/chat/lib/message/agent_message_projection.ts`、`features/chat/types/AgentMessage.ts`、
+> `features/chat/components/messages/`（`AgentMessage`、`AgentMessageContent`、`AgentMessageFrame`、`AgentActivity`、`AgentRuntimeIndicator`）、
+> `features/chat/components/messages/message_layout.ts`、`styles/chat.css`、`locales/*/chat.json`
+
+### 26.1 触发原因
+
+1. **过程不能被收起。** 一条消息里的工具调用与中间叙述全部常显，长任务会把结论推到很下面；
+   结论与过程之间没有任何可操作的区别。
+2. **推理渲染错了位置。** Reasoning 此前是一条可展开的活动行，展开后是一块浅底正文
+   （`.reasoning-activity-content`，`max-height: 12rem` 可滚动）。它既不是正文也不是一次操作，
+   却占着正文位置，还会把两侧连续的工具活动切开。
+
+### 26.2 决策
+
+- **投影直接给两段，切在最后一个活动之后。** `AgentMessageProjection.blocks` 改为
+  `process_blocks` + `content_blocks`：过程 = 最后一个活动块及其之前的全部块，内容 = 其后的全部块。
+  切分点在投影里定，组件不在渲染时再切一次；`活动 → 正文 → 活动 → 正文` 这种排列也成立。
+- **渲染顺序与 canonical 顺序相反：结论在上、过程在下。** 展开过程时插入位置在内容**之后**，
+  因此内容的位置完全不变，过程向下生长；若按 canonical 顺序（过程在上）渲染，
+  展开会把正在读的结论推下去，而开关就在身份行里，点一下内容就跑了。
+  投影仍然按 canonical 顺序切分，渲染顺序只影响可见布局，不改变块的身份与顺序语义。
+- **推理是一个独立字段，不是块。** `AgentMessageProjection.thinking` 直接持有正在输出的
+  `SessionAgentReasoningPart`。思考行不参与过程折叠，也不与相邻活动合并，因此没有块的身份：
+  若把它当块，像 `推理 → 工具` 这种排列会让它落进过程段而被折起来，而它只应在推理输出时可见。
+- **只有正在流式输出的推理保留字段。** 由 canonical `state === "streaming"` 驱动，
+  而不是「消息是否流式」：推理一开始（`text` 还是空串）就出现，一收口连字段都不保留。
+  历史推理没有展示位置，因此**不存在「已思考」这一态**，`activity.thought` 文案一并删除。
+  它也不是活动，因此不会被 `find_last_activity_index` 计入，不改变过程切分点。
+  完整推理按产品决定不展示。
+- **思考行与工具行同一套结构与字号。** `AgentThinkingRow` 直接复用活动行的类名
+  （`activity-tool-row` / `activity-tool-summary` / `activity-tool-main`），不再自己写一套：
+  它在消息里的角色就是「一行过程」，字色、字号（`base`）与间距必须与工具行一致。
+  行内只有一个图标 + 一行内容：**没有状态文案**（这一行本身就是内容，再补一句「正在思考」只是噪声），
+  点阵图标已经在转，也不需要额外的事态修饰。它不可折叠（不用 `details`），也不可选中。
+- **`AgentActivityVisualKind` 去掉 `reasoning`。** 图标表、活动行、分组摘要都不再认识推理，
+  因此 `AGENT_ACTIVITY_ICONS` 与 `select_activity_summary_part` 的 reasoning 分支一并删除——
+  「最后一个非 Reasoning 项」现在就是「最后一项」。
+- **`show_actions` 删除。** 操作栏的资格改为「有可复制的正文文本」（`projection.text`），
+  与块边界无关；此前它由 `last_action_boundary` 维护，而那个状态同时服务两个语义。
+- **折叠开关在身份行里，不在内容里。** `AgentMessageFrame` 新增 `identity_trailing` 插槽；
+  它与 `suffix`（身份行的文案）分开，因为一个是可聚焦控件、一个是跟着名字读的说明。
+  Group 不传该插槽，行为不变。
+- **折叠状态跟随生命周期，手动优先。** `AgentMessage` 存的是「用户是否手动切换过」（`undefined` 为未切换）：
+  未切换时展开状态直接跟随流式生命周期，流式展开、收口自动收起，不需要一个只在状态迁移时生效的同步 effect。
+- **思考块不进 Footer，也不参与折叠。** 它跟工具活动、正文平级，在 `AgentMessageContent` 里
+  按块顺序渲染（受 `show_reasoning` 控制）；折叠只收「过程」段，思考行不在其中。
+- **`AgentThinkingStatus` 回到只渲染点阵 + 文案。** 它的两个场景（独立状态行、Group 输入状态）
+  都不需要内容摘要，`detail` 参数与 `.thinking-status-detail` 一并删除。
+- **活动行不可选中。** `user-select: none` 写在共享的 `.activity-tool-summary` 上：
+  活动行不在 `data-chat-selectable-message` 里，选中它拿不到引用入口，因此统一禁掉；
+  写在共享类上，工具行与思考行才会一致，不靠调用处逐个补 `select-none`。
+- **实时文件改动统计拆为 `AgentFileDiffChip`。** 它原先搭在思考行上，而思考行现在只在
+  推理输出期间存在，那样会在推理收口后丢掉改动统计。改动统计与「在想什么」是两件事，
+  出现与消失的时机不同，因此各自成组件：流式消息的 Footer 只放它。
+- **删除推理专用样式。** `.reasoning-activity-content` / `.reasoning-label` / `.reasoning-block` 已无引用，
+  连同 `desktop-dimension-scale-design.md` 中「`.reasoning-activity-content` 用 `6px` 圆角」那条待办一起消失。
+
+### 26.3 用户可见变化
+
+| 位置 | 改前 | 改后 |
+| --- | --- | --- |
+| 历史消息的执行过程 | 全部常显 | **默认收起**，只留结论正文 |
+| 展开时的位置 | — | 过程在**结论下方**展开，结论位置不动 |
+| 折叠开关 | 无 | 身份行最右端的箭头按钮（常显；折叠态朝右，展开态朝下） |
+| 推理 | 一条可展开的活动行，展开是浅底滚动块 | **一行与工具行同构的过程行**：图标 + 最新一行推理（无状态文案、不可折叠、不可选中） |
+| 推理收口后 | 变成一条「已思考」活动行 | **整行消失**（历史消息里没有思考行） |
+| 流式消息 | 过程常显 | 过程展开；收口时自动收起 |
+| Footer | 流式期间是状态行 + 改动统计 | 流式期间只有实时文件改动统计；完成后是悬停操作栏 |
+
+新增 i18n：`message.expand_process` / `message.collapse_process`；删除 `activity.thought`。
+
+### 26.4 验证
+
+```bash
+pnpm --filter @downcity/desktop typecheck
+cd app/desktop && node --test tests/agent_message_projection.test.ts tests/agent_activity_presentation.test.ts tests/chat_message_layout.test.ts
+```
+
+`agent_message_projection.test.ts` 重写为覆盖：过程/内容切分、无活动时过程为空、
+推理是独立字段且不进任何块、只有输出态保留字段（收口后连字段都不保留）、
+多段推理只保留最后一条的状态、Data 与 Action 不改变切分。
+`agent_activity_presentation.test.ts` 的组摘要用例去掉推理项。
+
+**本环境不能验证的事**：GUI 观感未经人工目测；全量 `tests/*.test.ts` 尚有 3 个
+与本次无关的既有失败（`power:chat` → `power:messenger` 改名进行中）。
+
+
 
 
 

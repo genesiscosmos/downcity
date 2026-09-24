@@ -42,6 +42,14 @@ export interface AgentMessageFrameProps {
   identity_label?: string;
   /** 名称之后的附加说明，例如「需要你的响应」。 */
   suffix?: ReactNode;
+  /**
+   * 身份行最右端的附加控件，例如 Agent Message 的折叠开关。
+   *
+   * 与 `suffix` 分开：`suffix` 是身份行的**文案**（跟着名字读），这里是**控件**
+   *（可聚焦、可点击），两者在键盘顺序与视觉位置上都不同。
+   * 不传时不渲染，Group 侧行为不变。
+   */
+  identity_trailing?: ReactNode;
   /** 是否为正在生成的消息（映射到 `aria-busy`）。 */
   busy?: boolean;
   /** 正文；为空表示这条行只有状态（如「正在输入」）。 */
@@ -60,7 +68,7 @@ export interface AgentMessageFrameProps {
 }
 
 /** 组装一条 Agent 侧行的身份行、正文与 Footer。 */
-export function AgentMessageFrame({ agent, created_at, identity_action, identity_title, identity_label, suffix, busy = false, children, footer, semantic = "message" }: AgentMessageFrameProps) {
+export function AgentMessageFrame({ agent, created_at, identity_action, identity_title, identity_label, suffix, identity_trailing, busy = false, children, footer, semantic = "message" }: AgentMessageFrameProps) {
   const name = agent.name || "Agent";
   const identity_content = <>
     <AgentAvatar agent={agent} class_name={agent_identity_avatar_class_name} />
@@ -72,6 +80,7 @@ export function AgentMessageFrame({ agent, created_at, identity_action, identity
         ? <button type="button" onClick={identity_action} title={identity_title} aria-label={identity_label ?? identity_title ?? name} className={cn("group/identity", agent_identity_row_class_name, "max-w-full rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring/30")}>{identity_content}</button>
         : <div className={agent_identity_row_class_name}>{identity_content}</div>}
       {suffix}
+      {identity_trailing}
       {created_at ? <ChatMessageTimestamp created_at={created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /> : null}
     </header>
     {children ? <div className={agent_message_body_class_name}>{children}</div> : null}

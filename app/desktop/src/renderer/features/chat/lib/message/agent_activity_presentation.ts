@@ -328,15 +328,11 @@ export function should_auto_open_agent_activity(parts: readonly AgentActivityPar
 /**
  * 活动组折叠摘要选中的 Part。
  *
- * Reasoning 只是过程说明，不是一次具体操作；Tool 与 Action 都是操作，因此两者一视同仁，
- * 摘要反映最后发生的那一件事。全部为 Reasoning 时回退到最后一项；空数组返回 undefined，
- * 调用方只在成组时使用它，组内至少有一项。
+ * Tool 与 Action 都是一次具体操作，因此两者一视同仁，摘要反映最后发生的那一件事。
+ * 活动集合里没有 Reasoning（它不进活动分组），所以最后一项就是最后发生的事；
+ * 空数组返回 undefined，调用方只在成组时使用它，组内至少有一项。
  */
 export function select_activity_summary_part(parts: readonly AgentActivityPart[]): AgentActivityPart | undefined {
-  for (let index = parts.length - 1; index >= 0; index -= 1) {
-    const part = parts[index];
-    if (part && part.type !== "reasoning") return part;
-  }
   return parts[parts.length - 1];
 }
 
