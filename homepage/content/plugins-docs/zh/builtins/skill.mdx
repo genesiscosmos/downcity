@@ -87,17 +87,16 @@ const skill_power = new SkillPower({
 
 ## Desktop
 
-Skills 页面按 Agent 组织。Sidebar 把每个已登记的 Agent 作为可展开根节点，展开后显示绑定到该 Agent 的技能。选择 Agent 进入它的技能配置，选择技能进入对应的 `SKILL.md`。
+Skills 页面按 Agent 组织。Sidebar 把每个已登记的 Agent 作为可展开根节点，展开后显示绑定到该 Agent 的技能。选择 Agent 进入它的技能页，选择技能进入对应的 `SKILL.md`。
 
-单个 Agent 的 Mainview 有三个视图：
+单个 Agent 的 Mainview 只有两个视图：
 
-- **已绑定**：显示该 Agent 目录中的技能。每条标明是安装进目录还是从外部关联，关联的还会写出具体来源（用户目录或某个 Workspace）。
-- **全局目录**：按来源分组展示技能——用户目录一组，每个 Workspace 各自一组。每条标明是否已关联到当前 Agent。关联会在 Agent 目录下创建软链接，来源目录不受影响。
-- **发现**：通过官方 `skills` CLI 搜索公开目录，并安装到当前 Agent 目录。CLI 无法直接安装进 Agent 目录，因此安装会先落到临时目录再复制进去。
+- **已绑定**：显示该 Agent 目录中的技能，每条标明是安装进目录还是从用户目录关联。
+- **添加**：列出用户目录 `~/.agents/skills` 中的技能，标明是否已关联；关联会在 Agent 目录下创建软链接，用户目录不受影响。
 
-三个视图都会在说明里写出目标目录，所以安装或关联会落到哪里一目了然。
+可关联来源只有用户目录。Workspace 的 `.agents/skills` 不进界面：一个 Skill 想给 Agent 用，先放进用户目录即可。
 
-移除关联技能只删除软链接；移除安装技能才删除副本。两种操作都不会越出 Agent 目录。
+移除关联技能只删除软链接，用户目录不受影响。操作不会越出 Agent 目录。
 
 ## 相关文档
 

@@ -87,17 +87,16 @@ const skill_power = new SkillPower({
 
 ## Desktop
 
-The Skills page is organized by Agent. The Sidebar lists every registered Agent as an expandable root, and expanding one shows the skills bound to that Agent. Selecting an Agent opens its skill configuration; selecting a skill opens its `SKILL.md`.
+The Skills page is organized by Agent. The Sidebar lists every registered Agent as an expandable root, and expanding one shows the skills bound to that Agent. Selecting an Agent opens its skill page; selecting a skill opens its `SKILL.md`.
 
-The Mainview for an Agent has three views:
+The Agent Mainview has two views:
 
-- **Bound** shows the skills in that Agent's directory. Each entry says whether it was installed into the directory or linked from outside, and linked entries name their source (user directory or a specific Workspace).
-- **Catalog** groups every skill by source: one group for the user directory and one per Workspace. Each entry shows whether it is already linked to this Agent. Linking creates a symlink under the Agent directory, so the source directory stays untouched.
-- **Discover** searches the public catalog through the official `skills` CLI and installs the result into this Agent's directory. Installation stages the download in a temporary directory and copies it in, because the CLI cannot install directly into an Agent directory.
+- **Bound** shows the skills in that Agent's directory, each marked as installed or linked from the user directory.
+- **Add** lists the skills in the user directory `~/.agents/skills`, marked with whether they are already linked. Linking creates a symlink under the Agent directory, so the user directory stays untouched.
 
-Each view names the destination directory in its description, so it is clear where an install or link will land.
+The only linkable source is the user directory. A workspace `.agents/skills` does not appear in the interface: to give a skill to an Agent, put it in the user directory first.
 
-Removing a linked skill deletes only the symlink; removing an installed skill deletes the copy. Both operations stay inside the Agent directory.
+Removing a linked skill deletes only the symlink. Operations stay inside the Agent directory.
 
 ## Related documentation
 

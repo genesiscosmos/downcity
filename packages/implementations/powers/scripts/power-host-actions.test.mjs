@@ -259,11 +259,8 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
   const base_path = fs.mkdtempSync(path.join(os.tmpdir(), "downcity-skill-main-"));
   const workspace_path = path.join(base_path, "workspace");
   const home_path = path.join(base_path, "home");
-  const skill_path = path.join(workspace_path, ".agents", "skills", "demo");
   const home_skill_path = path.join(home_path, ".agents", "skills", "home-demo");
-  fs.mkdirSync(skill_path, { recursive: true });
   fs.mkdirSync(home_skill_path, { recursive: true });
-  fs.writeFileSync(path.join(skill_path, "SKILL.md"), "---\nname: Demo\ndescription: Example\n---\n\n# Demo\n");
   fs.writeFileSync(path.join(home_skill_path, "SKILL.md"), "---\nname: Home Demo\ndescription: Home example\n---\n\n# Home Demo\n");
   // Skill 的用户目录来源读取真实 HOME，因此本用例内固定它，并在结束时恢复。
   const previous_home = process.env.HOME;
@@ -271,66 +268,40 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
   try {
     const actions = await start_skill_power(base_path, workspace_path);
 
-    // 初始状态：Agent 目录为空，但全局目录已能看到 Workspace 与用户目录 Skill。
-    const before = await actions.get("skill.catalog").run({ agent_id: "test-agent" });
+    // 初始状态：Agent 目录为空，但用户目录里已有可关联的 Skill。
+    const before = await actions.get("skill.snapshot").run({ agent_id: "test-agent" });
     assert.deepEqual(before.agents[0].skills, []);
     // 界面必须能回答「装到哪」：目录由 Agent ID 派生并以 ~ 折叠。
     assert.match(before.agents[0].directory, /\/agents\/test-agent\/skills$/);
-    const before_demo = before.catalog.find((item) => item.id === "demo");
-    assert.ok(before_demo, "全局目录未包含 Workspace Skill");
-    assert.equal(before_demo.linked, false);
-    assert.equal(before_demo.origin.source, "project");
-    assert.equal(before_demo.origin.workspace_id, "test");
+    const before_available = before.available.find((item) => item.id === "home-demo");
+    assert.ok(before_available, "可关联列表未包含用户目录 Skill");
+    assert.equal(before_available.linked, false);
 
-    const before_home = before.catalog.find((item) => item.id === "home-demo");
-    assert.ok(before_home, "全局目录未包含用户目录 Skill");
-    assert.equal(before_home.origin.source, "home");
-
-    // 关联后该 Agent 即可见，且标出来源与软链接。
+    // 关联后该 Agent 即可见，且标出软链接。
     const linked = await actions.get("skill.link").run({
       agent_id: "test-agent",
-      skill_id: "demo",
-      scope: "project",
-      workspace_id: "test",
+      skill_id: "home-demo",
     });
     assert.equal(linked.operation_success, true);
     assert.deepEqual(
       linked.agents[0].skills.map((skill) => `${skill.id}:${skill.is_link}`),
-      ["demo:true"],
+      ["home-demo:true"],
     );
-    assert.equal(linked.agents[0].skills[0].origin.source, "project");
-    assert.equal(linked.agents[0].skills[0].origin.workspace_id, "test");
-
-    // 用户目录来源同样会被标记。
-    const linked_home = await actions.get("skill.link").run({
-      agent_id: "test-agent",
-      skill_id: "home-demo",
-      scope: "home",
-    });
-    assert.equal(linked_home.operation_success, true);
-    const bound_home = linked_home.agents[0].skills.find((skill) => skill.id === "home-demo");
-    assert.equal(bound_home.origin.source, "home");
-    assert.equal(bound_home.origin.workspace_id, undefined);
-
-    // 变更后目录仍然完整，且关联状态被标出。
-    const after_link = await actions.get("skill.catalog").run({ agent_id: "test-agent" });
-    assert.equal(after_link.catalog.find((item) => item.id === "demo").linked, true);
-    assert.equal(after_link.catalog.find((item) => item.id === "home-demo").linked, true);
+    assert.equal(linked.available.find((item) => item.id === "home-demo").linked, true);
 
     const result = await actions.get("skill.read").run({
       agent_id: "test-agent",
-      skill_id: "demo",
-      scope: "agent",
+      skill_id: "home-demo",
     });
     assert.equal(result.success, true);
-    assert.match(result.content, /# Demo/u);
+    assert.match(result.content, /# Home Demo/u);
 
-    // 移除只删链接，不动来源目录。
-    const removed = await actions.get("skill.remove").run({ agent_id: "test-agent", skill_id: "demo" });
+    // 移除只删链接，不动用户目录。
+    const removed = await actions.get("skill.remove").run({ agent_id: "test-agent", skill_id: "home-demo" });
     assert.equal(removed.operation_success, true);
-    assert.deepEqual(removed.agents[0].skills.map((skill) => skill.id), ["home-demo"]);
-    assert.equal(removed.catalog.find((item) => item.id === "demo").linked, false);
-    assert.equal(fs.existsSync(path.join(skill_path, "SKILL.md")), true);
+    assert.deepEqual(removed.agents[0].skills, []);
+    assert.equal(removed.available.find((item) => item.id === "home-demo").linked, false);
+    assert.equal(fs.existsSync(path.join(home_skill_path, "SKILL.md")), true);
   } finally {
     if (previous_home === undefined) delete process.env.HOME;
     else process.env.HOME = previous_home;
