@@ -8,7 +8,6 @@
  */
 
 import fs from "fs-extra";
-import os from "node:os";
 import path from "node:path";
 import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";
 import { listSkills, lookupSkill } from "@/skill/Action.js";
@@ -17,7 +16,6 @@ import { assert_safe_agent_id, create_skill_root_context } from "@/skill/runtime
 import { resolve_skill_root, type SkillRootContext } from "@/skill/runtime/Paths.js";
 import type { SkillSummary } from "@/skill/types/SkillCommand.js";
 import type {
-  SkillMainviewAgent,
   SkillMainviewAvailableItem,
   SkillMainviewItem,
   SkillMainviewLinkInput,
@@ -42,8 +40,7 @@ export function register_skill_power_host_actions(
 ): void {
   context.power.action({
     id: "skill.snapshot",
-    run: async (input) =>
-      as_json(await create_snapshot(context, runtime, read_optional_agent_id(input))),
+    run: async () => as_json(await create_snapshot(context, runtime)),
   });
   context.power.action({
     id: "skill.read",
@@ -63,39 +60,31 @@ export function register_skill_power_host_actions(
 /**
  * 读取全部 Agent 及其已绑定 Skill，以及用户目录里可关联的 Skill。
  *
- * 关键点（中文）
- * - `agent_id` 只决定 `available` 里哪几条标为「已关联」；省略时全部标为未关联。
- * - 写操作后重算同一份快照，因此关联状态随操作一起刷新。
+ * 关键点（中文）：Sidebar 与 Mainview 共用这一份快照；写操作后重算同一份结果，
+ * 因此关联状态随操作一起刷新。
  */
 async function create_snapshot(
   context: PowerLifecycleContext,
   runtime: SkillPowerHostRuntime,
-  agent_id: string,
 ): Promise<SkillMainviewSnapshot> {
   const agents = await context.system.list_agents();
-  const linked_ids = agent_id
-    ? new Set(list_agent_skills(runtime, agent_id).map((skill) => skill.id))
-    : new Set<string>();
+  const views = agents.map((agent) => ({
+    agent_id: agent.agent_id,
+    name: agent.name,
+    skills: list_agent_skills(runtime, agent.agent_id),
+  }));
+
   return {
     success: true,
-    agents: agents.map((agent) => to_agent_view(runtime, agent.agent_id, agent.name)),
+    agents: views,
     available: list_home_skills(runtime).map((skill) =>
-      to_available_item(skill, linked_ids.has(skill.id)),
+      to_available_item(
+        skill,
+        views
+          .filter((view) => view.skills.some((bound) => bound.id === skill.id))
+          .map((view) => view.agent_id),
+      ),
     ),
-  };
-}
-
-/** 把一个 Agent 投影为界面视图。 */
-function to_agent_view(
-  runtime: SkillPowerHostRuntime,
-  agent_id: string,
-  name: string,
-): SkillMainviewAgent {
-  return {
-    agent_id,
-    name,
-    directory: collapse_home(resolve_agent_skill_dir(runtime, agent_id)),
-    skills: list_agent_skills(runtime, agent_id),
   };
 }
 
@@ -142,7 +131,7 @@ async function link_skill(
   const skill = list_home_skills(runtime).find((item) => item.id === input.skill_id);
   if (!skill) {
     return {
-      ...await create_snapshot(context, runtime, input.agent_id),
+      ...await create_snapshot(context, runtime),
       operation_success: false,
       error: `Skill not found in home directory: ${input.skill_id}`,
     };
@@ -154,12 +143,12 @@ async function link_skill(
     await fs.remove(link_path);
     await fs.symlink(skill.directory_path, link_path, "junction");
     return {
-      ...await create_snapshot(context, runtime, input.agent_id),
+      ...await create_snapshot(context, runtime),
       operation_success: true,
     };
   } catch (reason) {
     return {
-      ...await create_snapshot(context, runtime, input.agent_id),
+      ...await create_snapshot(context, runtime),
       operation_success: false,
       error: to_error_message(reason),
     };
@@ -180,7 +169,7 @@ async function remove_skill(
     .some((skill) => skill.id === input.skill_id);
   if (!exists) {
     return {
-      ...await create_snapshot(context, runtime, input.agent_id),
+      ...await create_snapshot(context, runtime),
       operation_success: false,
       error: `Skill not found: ${input.skill_id}`,
     };
@@ -191,12 +180,12 @@ async function remove_skill(
       path.join(resolve_agent_skill_dir(runtime, input.agent_id), input.skill_id),
     );
     return {
-      ...await create_snapshot(context, runtime, input.agent_id),
+      ...await create_snapshot(context, runtime),
       operation_success: true,
     };
   } catch (reason) {
     return {
-      ...await create_snapshot(context, runtime, input.agent_id),
+      ...await create_snapshot(context, runtime),
       operation_success: false,
       error: to_error_message(reason),
     };
@@ -234,15 +223,6 @@ function create_home_context(runtime: SkillPowerHostRuntime): SkillRootContext {
   });
 }
 
-/** 把绝对路径中的用户目录折叠为 `~`，用于稳定展示。 */
-function collapse_home(value: string): string {
-  const home = os.homedir();
-  const normalized = path.normalize(value);
-  const relative = path.relative(home, normalized);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) return normalized;
-  return relative ? `~/${relative}` : "~";
-}
-
 /** 把内部摘要投影为已绑定列表条目。 */
 function to_mainview_item(skill: SkillSummary): SkillMainviewItem {
   return {
@@ -258,13 +238,13 @@ function to_mainview_item(skill: SkillSummary): SkillMainviewItem {
 /** 把内部摘要投影为可关联列表条目。 */
 function to_available_item(
   skill: SkillSummary,
-  linked: boolean,
+  linked_agent_ids: string[],
 ): SkillMainviewAvailableItem {
   return {
     id: skill.id,
     name: skill.name,
     description: skill.description,
-    linked,
+    linked_agent_ids,
   };
 }
 
@@ -273,13 +253,6 @@ function read_required_string(input: PowerJsonValue | undefined, key: string): s
   const value = read_record(input)[key];
   if (typeof value !== "string" || !value.trim()) throw new Error(`${key} is required`);
   return value.trim();
-}
-
-/** 读取可选的 agent_id；省略时返回空字符串。 */
-function read_optional_agent_id(input: PowerJsonValue | undefined): string {
-  if (input === undefined) return "";
-  const value = read_record(input).agent_id;
-  return typeof value === "string" ? value.trim() : "";
 }
 
 /** 要求输入为 Power JSON object。 */

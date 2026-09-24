@@ -1,9 +1,9 @@
 /**
  * Skill Power 的功能工作区。
  *
- * Sidebar 以宿主登记的全部 Agent 为树根，展开后直接显示该 Agent 已绑定的 Skill。
- * Mainview 是单个 Agent 的 Skill 页：两个视图——已绑定、添加（从用户目录关联）。
- * 文件操作全部交给宿主 action。
+ * Sidebar 是两个平级入口：全局目录（用户目录里可关联的 Skill）与各个 Agent。
+ * Mainview 按入口分两种：全局页负责浏览用户目录并把 Skill 关联到某个 Agent；
+ * Agent 页只展示该 Agent 已绑定的 Skill，并可移除。文件操作全部交给宿主 action。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,45 +20,29 @@ import type {
 /** Skill Power Renderer 定义。 */
 export const SKILL_POWER_RENDERER = define_power_renderer({
   sidebar: function SkillPowerSidebar({ power, navigation, ui }) {
-    const { Callout, LoadingState, Sidebar, SidebarSection, SidebarSubText, SidebarTreeItem } = ui.components;
+    const { Callout, LoadingState, Sidebar, SidebarSection, SidebarItem, SidebarSubText } = ui.components;
     const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
-    const [expanded_agent_ids, set_expanded_agent_ids] = useState<Set<string>>(new Set());
     const [error, set_error] = useState("");
-    /** 已经自动展开过的 Agent；见下面那个 effect 的说明。 */
-    const auto_expanded_ref = useRef("");
+    /** 已经自动选过一次入口；避免用户切走后被反复拉回。 */
+    const auto_selected_ref = useRef(false);
     const selected_agent_id = read_route(navigation.route.agent_id);
-    const selected_skill_id = read_route(navigation.route.skill_id);
+    const view = read_sidebar_view(navigation.route.agent_id);
 
     useEffect(() => {
       let disposed = false;
       set_error("");
       void power.invoke<SkillMainviewSnapshot>("skill.snapshot")
-        .then((next) => {
-          if (disposed) return;
-          set_snapshot(next);
-          set_expanded_agent_ids((current) => new Set(
-            [...current].filter((agent_id) => next.agents.some((agent) => agent.agent_id === agent_id)),
-          ));
-        })
+        .then((next) => { if (!disposed) set_snapshot(next); })
         .catch((reason) => { if (!disposed) set_error(to_error_message(reason)); });
       return () => { disposed = true; };
     }, [power, ui.revision]);
 
     useEffect(() => {
-      if (!snapshot) return;
-      const next_agent_id = snapshot.agents.some((agent) => agent.agent_id === selected_agent_id)
-        ? selected_agent_id
-        : snapshot.agents[0]?.agent_id ?? "";
-      if (next_agent_id !== selected_agent_id) {
-        navigation.navigate(next_agent_id ? agent_route(next_agent_id) : {});
-        return;
-      }
-      if (!next_agent_id) return;
-      // 只在**选中项变化时**自动展开一次。展开是“跟随选中”的一次性动作，
-      // 不是一个持续成立的不变量：用户有权收起自己正在看的那一项。
-      if (auto_expanded_ref.current === next_agent_id) return;
-      auto_expanded_ref.current = next_agent_id;
-      set_expanded_agent_ids((current) => current.has(next_agent_id) ? current : new Set(current).add(next_agent_id));
+      if (!snapshot || auto_selected_ref.current) return;
+      // 首次进入时给一个确定的落点：有 Agent 就选第一个，否则落在全局页。
+      auto_selected_ref.current = true;
+      if (selected_agent_id || snapshot.agents.length === 0) return;
+      navigation.navigate(agent_route(snapshot.agents[0].agent_id));
     }, [navigation.navigate, selected_agent_id, snapshot]);
 
     if (!snapshot) return <Sidebar>{error
@@ -66,31 +50,22 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
       : <LoadingState label="正在读取 Skills…" />}</Sidebar>;
 
     return <Sidebar>
+      <SidebarSection label="Skills">
+        <SidebarItem
+          label="全局目录"
+          trailing={snapshot.available.length}
+          active={view === "global"}
+          on_select={() => navigation.navigate({ view: "global" })}
+        />
+      </SidebarSection>
       <SidebarSection label="Agents">
-        {snapshot.agents.map((agent) => {
-          const expanded = expanded_agent_ids.has(agent.agent_id);
-          return <div key={agent.agent_id}>
-            <SidebarTreeItem
-              depth={0}
-              kind="branch"
-              label={agent.name}
-              trailing={agent.skills.length}
-              active={selected_agent_id === agent.agent_id && !selected_skill_id}
-              expanded={expanded}
-              on_toggle={() => set_expanded_agent_ids((current) => toggle_key(current, agent.agent_id))}
-              on_select={() => navigation.navigate(agent_route(agent.agent_id))}
-            />
-            {expanded ? <div className="flex flex-col gap-0.5">{agent.skills.map((skill) => <SidebarTreeItem
-              key={`${agent.agent_id}:${skill.id}`}
-              kind="leaf"
-              depth={1}
-              label={skill.name}
-              active={selected_agent_id === agent.agent_id && selected_skill_id === skill.id}
-              on_select={() => navigation.navigate(agent_route(agent.agent_id, skill.id))}
-            />)}</div> : null}
-            {expanded && agent.skills.length === 0 ? <SidebarSubText indent={1}>暂无 Skill</SidebarSubText> : null}
-          </div>;
-        })}
+        {snapshot.agents.map((agent) => <SidebarItem
+          key={agent.agent_id}
+          label={agent.name}
+          trailing={agent.skills.length}
+          active={selected_agent_id === agent.agent_id}
+          on_select={() => navigation.navigate(agent_route(agent.agent_id))}
+        />)}
         {!snapshot.agents.length ? <SidebarSubText>还没有 Agent</SidebarSubText> : null}
       </SidebarSection>
       {error ? <Callout tone="danger">{error}</Callout> : null}
@@ -98,40 +73,43 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
   },
 
   mainview: function SkillPowerMainview({ power, navigation, ui }) {
-    const { Button, Callout, EmptyState, Group, Input, ItemMenu, LoadingState, Markdown, Page, Row, Section, Status, Tabs, Toolbar } = ui.components;
+    const { Button, Callout, EmptyState, Group, Inline, Input, ItemMenu, LoadingState, Markdown, Page, Row, Section, Select, Status, Toolbar } = ui.components;
     const [snapshot, set_snapshot] = useState<SkillMainviewSnapshot>();
     const [loading, set_loading] = useState(true);
     const [content, set_content] = useState("");
     const [reading, set_reading] = useState(false);
     const [filter, set_filter] = useState("");
+    const [target_agent_id, set_target_agent_id] = useState("");
     const [busy_key, set_busy_key] = useState("");
     const [error, set_error] = useState("");
     const agent_id = read_route(navigation.route.agent_id);
     const skill_id = read_route(navigation.route.skill_id);
-    const tab = read_tab(navigation.route.tab);
+    const view = read_sidebar_view(navigation.route.agent_id);
 
     const load_snapshot = useCallback(async () => {
       set_loading(true);
       set_error("");
       try {
-        set_snapshot(await power.invoke<SkillMainviewSnapshot>("skill.snapshot", { agent_id }));
+        set_snapshot(await power.invoke<SkillMainviewSnapshot>("skill.snapshot"));
       } catch (reason) {
         set_error(to_error_message(reason));
       } finally {
         set_loading(false);
       }
-    }, [agent_id, power]);
+    }, [power]);
 
     useEffect(() => { void load_snapshot(); }, [load_snapshot, ui.revision]);
 
-    const agent = snapshot?.agents.find((item) => item.agent_id === agent_id) ?? snapshot?.agents[0];
+    const agents = snapshot?.agents ?? [];
+    const agent = agents.find((item) => item.agent_id === agent_id);
     const skills = agent?.skills ?? [];
     const selected_skill = skills.find((skill) => skill.id === skill_id);
-    const visible_skills = useMemo(() => filter_by_name(skills, filter), [filter, skills]);
+    const available = snapshot?.available ?? [];
     const visible_available = useMemo(
-      () => filter_by_name(snapshot?.available ?? [], filter),
-      [filter, snapshot],
+      () => filter_by_name(available, filter),
+      [available, filter],
     );
+    const visible_skills = useMemo(() => filter_by_name(skills, filter), [filter, skills]);
 
     useEffect(() => {
       if (!selected_skill || !agent) {
@@ -151,6 +129,12 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
         .finally(() => { if (!disposed) set_reading(false); });
       return () => { disposed = true; };
     }, [agent, power, selected_skill?.id, ui.revision]);
+
+    // 关联目标默认取当前 Agent；没有 Agent 时留空，界面据此禁用关联。
+    useEffect(() => {
+      if (target_agent_id && agents.some((item) => item.agent_id === target_agent_id)) return;
+      set_target_agent_id(agents[0]?.agent_id ?? "");
+    }, [agents, target_agent_id]);
 
     const run_mutation = async (input: {
       action_id: string;
@@ -196,18 +180,17 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
     };
 
     const link_skill = async (item: SkillMainviewAvailableItem) => {
-      if (!agent) return;
+      if (!target_agent_id) return;
       await run_mutation({
         action_id: "skill.link",
-        payload: { agent_id: agent.agent_id, skill_id: item.id },
+        payload: { agent_id: target_agent_id, skill_id: item.id },
         key: item.id,
         success_message: "Skill 已关联",
       });
     };
 
-    const skill_menu = (skill: SkillMainviewItem, reveal_on_hover = false) => <ItemMenu
+    const skill_menu = (skill: SkillMainviewItem) => <ItemMenu
       label={`${skill.name} 操作`}
-      reveal_on_hover={reveal_on_hover}
       actions={[{ action_id: "remove", label: "移除", destructive: true, disabled: Boolean(busy_key), on_select: () => remove_skill(skill) }]}
     />;
 
@@ -215,7 +198,6 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
     if (!snapshot) return <Page>{error
       ? <Callout tone="danger">{error}</Callout>
       : <EmptyState title="无法读取 Skills" description="请刷新后重试。" />}</Page>;
-    if (!snapshot.agents.length) return <Page><EmptyState title="还没有 Agent" description="先在 Downcity 中创建一个 Agent。" /></Page>;
 
     if (selected_skill && agent) return <Page>
       {error ? <Callout tone="danger">{error}</Callout> : null}
@@ -229,51 +211,61 @@ export const SKILL_POWER_RENDERER = define_power_renderer({
         : content ? <Markdown text={content} /> : <EmptyState title="Skill 内容为空" size="compact" />}</Section>
     </Page>;
 
-    return <Page>
+    if (view === "global") return <Page>
       {error ? <Callout tone="danger">{error}</Callout> : null}
       <Toolbar
-        title={agent?.name ?? ""}
-        description={`${skills.length} 个 Skill`}
+        title="全局目录"
+        description={`~/.agents/skills · ${available.length} 个 Skill`}
         actions={<Button disabled={loading} on_click={ui.invalidate}>{loading ? "刷新中…" : "刷新"}</Button>}
       />
-      <Tabs
-        label="Skill 视图"
-        value={tab}
-        on_value_change={(value) => navigation.navigate({ ...agent_route(agent?.agent_id ?? ""), tab: value })}
-        items={[
-          { value: "bound", label: "已绑定", count: skills.length },
-          { value: "add", label: "添加", count: visible_available.filter((item) => !item.linked).length },
-        ]}
-      />
-      {tab === "add" ? <Section>
-        <Input value={filter} placeholder="搜索用户目录" on_value_change={set_filter} />
-        {!visible_available.length
-          ? <EmptyState title={filter.trim() ? "没有匹配的 Skill" : "用户目录里没有 Skill"} description="把 Skill 放进 ~/.agents/skills 后即可在这里关联。" size="compact" />
-          : <Group>{visible_available.map((item) => <Row
+      {agents.length
+        ? <Inline fill>
+            <Select
+              value={target_agent_id}
+              options={agents.map((item) => ({ value: item.agent_id, label: item.name }))}
+              on_value_change={set_target_agent_id}
+            />
+          </Inline>
+        : <Callout>还没有 Agent，先创建一个再关联 Skill。</Callout>}
+      <Input value={filter} placeholder="搜索" on_value_change={set_filter} />
+      {!visible_available.length
+        ? <EmptyState title={filter.trim() ? "没有匹配的 Skill" : "用户目录里没有 Skill"} description="把 Skill 放进 ~/.agents/skills 后即可在这里关联。" size="compact" />
+        : <Group>{visible_available.map((item) => {
+            const linked = item.linked_agent_ids.includes(target_agent_id);
+            return <Row
               key={item.id}
               label={item.name}
               description={item.description || item.id}
-              trailing={item.linked
+              trailing={linked
                 ? <Status tone="success">已关联</Status>
-                : <Button disabled={Boolean(busy_key)} on_click={() => void link_skill(item)}>{busy_key === item.id ? "关联中…" : "关联"}</Button>}
-            />)}</Group>}
-      </Section> : null}
-      {tab === "bound" ? <Section>
-        <Input value={filter} placeholder="搜索已绑定 Skill" on_value_change={set_filter} />
-        {!visible_skills.length
-          ? <EmptyState
-              title={filter.trim() ? "没有匹配的 Skill" : "还没有 Skill"}
-              description="到「添加」里从用户目录关联。"
-              size="compact"
-            />
-          : <Group>{visible_skills.map((skill) => <Row
-              key={skill.id}
-              label={skill.name}
-              description={skill.description || skill.id}
-              trailing={skill_menu(skill, true)}
-              on_click={() => navigation.navigate(agent_route(agent?.agent_id ?? "", skill.id))}
-            />)}</Group>}
-      </Section> : null}
+                : <Button disabled={Boolean(busy_key) || !target_agent_id} on_click={() => void link_skill(item)}>{busy_key === item.id ? "关联中…" : "关联"}</Button>}
+            />;
+          })}</Group>}
+    </Page>;
+
+    if (!agent) return <Page><EmptyState title="还没有 Agent" description="先在 Downcity 中创建一个 Agent。" /></Page>;
+
+    return <Page>
+      {error ? <Callout tone="danger">{error}</Callout> : null}
+      <Toolbar
+        title={agent.name}
+        description={`${skills.length} 个 Skill`}
+        actions={<Button disabled={loading} on_click={ui.invalidate}>{loading ? "刷新中…" : "刷新"}</Button>}
+      />
+      <Input value={filter} placeholder="搜索" on_value_change={set_filter} />
+      {!visible_skills.length
+        ? <EmptyState
+            title={filter.trim() ? "没有匹配的 Skill" : "还没有 Skill"}
+            description="到「全局目录」里关联。"
+            size="compact"
+          />
+        : <Group>{visible_skills.map((skill) => <Row
+            key={skill.id}
+            label={skill.name}
+            description={skill.description || skill.id}
+            trailing={skill_menu(skill)}
+            on_click={() => navigation.navigate(agent_route(agent.agent_id, skill.id))}
+          />)}</Group>}
     </Page>;
   },
 });
@@ -293,17 +285,9 @@ function filter_by_name<T extends { name: string; id: string; description: strin
   return items.filter((item) => `${item.name} ${item.id} ${item.description}`.toLowerCase().includes(normalized));
 }
 
-/** 切换集合中的一个键，并返回新的不可变集合。 */
-function toggle_key(current: Set<string>, key: string): Set<string> {
-  const next = new Set(current);
-  if (next.has(key)) next.delete(key);
-  else next.add(key);
-  return next;
-}
-
-/** 从宿主 JSON route 读取当前 Tab，未知值回退到已绑定。 */
-function read_tab(value: unknown): "bound" | "add" {
-  return value === "add" ? "add" : "bound";
+/** 判断当前选中入口：有 agent_id 就是 Agent 页，否则是全局页。 */
+function read_sidebar_view(value: unknown): "global" | "agent" {
+  return typeof value === "string" && value ? "agent" : "global";
 }
 
 /** 从宿主 JSON route 中读取一个可选字符串。 */

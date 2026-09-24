@@ -87,12 +87,12 @@ const skill_power = new SkillPower({
 
 ## Desktop
 
-The Skills page is organized by Agent. The Sidebar lists every registered Agent as an expandable root, and expanding one shows the skills bound to that Agent. Selecting an Agent opens its skill page; selecting a skill opens its `SKILL.md`.
+The Skills page has two levels. The Sidebar has two peer entries:
 
-The Agent Mainview has two views:
+- **Catalog** lists the skills in the user directory `~/.agents/skills`. Each entry shows whether it is already linked, and an Agent selector decides which Agent a link lands on.
+- **Agents** lists every registered Agent as a flat row, without expanding. Selecting one opens its skill list.
 
-- **Bound** shows the skills in that Agent's directory, each marked as installed or linked from the user directory.
-- **Add** lists the skills in the user directory `~/.agents/skills`, marked with whether they are already linked. Linking creates a symlink under the Agent directory, so the user directory stays untouched.
+An Agent page shows only that Agent's bound skills, each removable and each openable as `SKILL.md`.
 
 The only linkable source is the user directory. A workspace `.agents/skills` does not appear in the interface: to give a skill to an Agent, put it in the user directory first.
 

@@ -87,12 +87,12 @@ const skill_power = new SkillPower({
 
 ## Desktop
 
-Skills 页面按 Agent 组织。Sidebar 把每个已登记的 Agent 作为可展开根节点，展开后显示绑定到该 Agent 的技能。选择 Agent 进入它的技能页，选择技能进入对应的 `SKILL.md`。
+Skills 页面分两层。Sidebar 是两个平级入口：
 
-单个 Agent 的 Mainview 只有两个视图：
+- **全局目录**：用户目录 `~/.agents/skills` 里的 Skill。每条标明是否已关联，并有一个目标 Agent 选择器——选中哪个 Agent，关联就落到它那里。
+- **各个 Agent**：平铺列出每个已登记的 Agent，不展开；选中进入它的技能列表。
 
-- **已绑定**：显示该 Agent 目录中的技能，每条标明是安装进目录还是从用户目录关联。
-- **添加**：列出用户目录 `~/.agents/skills` 中的技能，标明是否已关联；关联会在 Agent 目录下创建软链接，用户目录不受影响。
+Agent 页只展示该 Agent 已绑定的 Skill，可移除、可点开看 `SKILL.md`。
 
 可关联来源只有用户目录。Workspace 的 `.agents/skills` 不进界面：一个 Skill 想给 Agent 用，先放进用户目录即可。
 

@@ -269,13 +269,11 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
     const actions = await start_skill_power(base_path, workspace_path);
 
     // 初始状态：Agent 目录为空，但用户目录里已有可关联的 Skill。
-    const before = await actions.get("skill.snapshot").run({ agent_id: "test-agent" });
+    const before = await actions.get("skill.snapshot").run();
     assert.deepEqual(before.agents[0].skills, []);
-    // 界面必须能回答「装到哪」：目录由 Agent ID 派生并以 ~ 折叠。
-    assert.match(before.agents[0].directory, /\/agents\/test-agent\/skills$/);
     const before_available = before.available.find((item) => item.id === "home-demo");
     assert.ok(before_available, "可关联列表未包含用户目录 Skill");
-    assert.equal(before_available.linked, false);
+    assert.deepEqual(before_available.linked_agent_ids, []);
 
     // 关联后该 Agent 即可见，且标出软链接。
     const linked = await actions.get("skill.link").run({
@@ -287,7 +285,10 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
       linked.agents[0].skills.map((skill) => `${skill.id}:${skill.is_link}`),
       ["home-demo:true"],
     );
-    assert.equal(linked.available.find((item) => item.id === "home-demo").linked, true);
+    assert.deepEqual(
+      linked.available.find((item) => item.id === "home-demo").linked_agent_ids,
+      ["test-agent"],
+    );
 
     const result = await actions.get("skill.read").run({
       agent_id: "test-agent",
@@ -300,7 +301,7 @@ test("Skill Power 按 Agent 浏览、关联与读取 Skill", async () => {
     const removed = await actions.get("skill.remove").run({ agent_id: "test-agent", skill_id: "home-demo" });
     assert.equal(removed.operation_success, true);
     assert.deepEqual(removed.agents[0].skills, []);
-    assert.equal(removed.available.find((item) => item.id === "home-demo").linked, false);
+    assert.deepEqual(removed.available.find((item) => item.id === "home-demo").linked_agent_ids, []);
     assert.equal(fs.existsSync(path.join(home_skill_path, "SKILL.md")), true);
   } finally {
     if (previous_home === undefined) delete process.env.HOME;

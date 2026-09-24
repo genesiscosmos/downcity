@@ -2,8 +2,8 @@
  * Skill Power Mainview 与宿主 action 之间的 JSON 协议。
  *
  * 关键点（中文）
- * - 页面以 Agent 为中心：每个 Agent 拥有自己的 Skill 目录。
- * - 可关联来源只有用户目录 `~/.agents/skills`；不再有 Workspace 维度。
+ * - 页面分两层：全局目录（用户目录里的 Skill）与单个 Agent（已绑定的 Skill）。
+ * - 可关联来源只有用户目录 `~/.agents/skills`；不做 Workspace 维度，也不在界面里安装。
  * - 该协议只描述用户管理 Skill 所需的稳定数据，不暴露 Agent 运行实例或本地路径。
  */
 
@@ -65,12 +65,13 @@ export interface SkillMainviewAvailableItem {
   readonly description: string;
 
   /**
-   * 该 Skill 是否已关联到当前 Agent。
+   * 该 Skill 已关联到哪些 Agent。
    *
    * 说明（中文）
    * - 按 Skill ID 判断，不比较路径。
+   * - 全局页用它标出状态，并避免对同一个 Agent 重复关联。
    */
-  readonly linked: boolean;
+  readonly linked_agent_ids: string[];
 }
 
 /**
@@ -88,14 +89,6 @@ export interface SkillMainviewAgent {
   readonly name: string;
 
   /**
-   * 该 Agent 的技能目录展示路径。
-   *
-   * 说明（中文）
-   * - 关联会在这里建软链接，界面用它回答「到底装到哪」。
-   */
-  readonly directory: string;
-
-  /**
    * 该 Agent 私有目录中发现的 Skill。
    */
   readonly skills: SkillMainviewItem[];
@@ -103,6 +96,8 @@ export interface SkillMainviewAgent {
 
 /**
  * Skill 功能页刷新得到的完整快照。
+ *
+ * 说明（中文）：全局目录与全部 Agent 一次读全，Sidebar 与 Mainview 共用同一份数据。
  */
 export interface SkillMainviewSnapshot {
   /**
