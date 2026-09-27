@@ -37,6 +37,41 @@ export function create_site_url(pathname: string) {
 }
 
 /**
+ * 判断 href 是否指向站外或非路径目标（外链、锚点、协议链接）。
+ */
+function is_external_href(href: string) {
+  return (
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(href) ||
+    href.startsWith("//") ||
+    href.startsWith("#")
+  );
+}
+
+/**
+ * 把站内 href 规范成带尾斜杠的最终公开路径。
+ *
+ * 为什么需要：站点规范 URL 一律带尾斜杠（见 normalize_site_path），但内链、MDX 正文
+ * 与组件里的 href 大量写成无尾斜杠形态。Cloudflare Pages 会对无尾斜杠路径返回 308，
+ * 导致每次站内跳转都多一跳、权重传递被削弱、抓取预算被浪费。
+ *
+ * 约束：外链、锚点、查询串与哈希片段原样保留；已有文件扩展名的路径不动。
+ */
+export function create_internal_href(href: string): string {
+  if (!href || is_external_href(href)) return href;
+
+  const hash_index = href.indexOf("#");
+  const hash = hash_index >= 0 ? href.slice(hash_index) : "";
+  const without_hash = hash_index >= 0 ? href.slice(0, hash_index) : href;
+  const query_index = without_hash.indexOf("?");
+  const query = query_index >= 0 ? without_hash.slice(query_index) : "";
+  const pathname = query_index >= 0 ? without_hash.slice(0, query_index) : without_hash;
+
+  if (!pathname.startsWith("/")) return href;
+
+  return `${normalize_site_path(pathname)}${query}${hash}`;
+}
+
+/**
  * 判断公开路径使用的页面语言。
  */
 export function get_path_locale(pathname: string): InterfaceLocale {

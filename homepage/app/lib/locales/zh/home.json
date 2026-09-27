@@ -60,6 +60,7 @@
     "description": "Agent 使用 Bureau 身份下的 CityModel 与 Plugin，通过 Session 绑定 Workspace；多个 Agent 在 City 中通过 Group 协作，并经由 Embassy 使用 Federation 提供的共享 Service。",
     "copyCode": "复制代码",
     "copiedCode": "已复制",
+    "filesLabel": "SDK 示例文件",
     "map": {
       "ariaLabel": "从 Agent、Workspace、Group 和 City 生长到 Federation Service 的领域地图",
       "labels": {
@@ -276,6 +277,8 @@
       "marketplace": "Agent 市场",
       "hosting": "托管服务",
       "examples": "示例",
+      "blog": "博客",
+      "whitepaper": "白皮书",
       "faq": "常见问题",
       "roadmap": "路线图",
       "discussions": "社区讨论"

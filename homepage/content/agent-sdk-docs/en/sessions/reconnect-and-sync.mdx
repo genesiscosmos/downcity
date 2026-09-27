@@ -2,9 +2,6 @@
 title: Reconnect and Sync
 description: Build a Session client that does not lose streaming events with snapshots and Mutations
 ---
-
-# Reconnect and Sync
-
 `subscribe()` only sends future changes and `messages()` returns a point-in-time snapshot. Combining them in the wrong order creates a race: a Delta can be lost between loading the snapshot and establishing the subscription.
 
 The reliable sequence is subscribe and buffer first, load snapshots second, then merge the buffered events.

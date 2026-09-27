@@ -66,6 +66,13 @@ export const links: Route.LinksFunction = () => [
   { rel: "shortcut icon", href: `/favicon.ico?v=${favicon_version}`, type: "image/x-icon" },
   { rel: "apple-touch-icon", href: "/icon-192.png", sizes: "180x180" },
   { rel: "manifest", href: "/site.webmanifest" },
+  // RSS feed 自动发现：聚合器与部分 AI 抓取器靠这个 link 找到 feed。
+  {
+    rel: "alternate",
+    type: "application/rss+xml",
+    title: "Downcity Blog",
+    href: "/feed.xml",
+  },
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
   {
     rel: "preconnect",

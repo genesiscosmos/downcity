@@ -14,6 +14,7 @@ import { pluginsDocsSource } from "@/lib/plugins-docs-source";
 import { uiSdkDocsSource } from "@/lib/ui-sdk-docs-source";
 import { blogSource } from "@/lib/blog-source";
 import { create_site_url, normalize_site_path } from "@/lib/seo";
+import { document_source_exists } from "@/lib/document-source";
 import type { SeoSitemapEntry } from "@/types/seo";
 
 const localized_marketing_paths = [
@@ -98,9 +99,17 @@ function create_marketing_entries(): SeoSitemapEntry[] {
 
 /**
  * 根据公开文档 URL 创建 sitemap 条目，并且仅关联真实存在的对应语言页面。
+ *
+ * `collection_directory` 是 `content/` 下的集合目录名（如 `city-sdk-docs`），用于回查
+ * 源文件是否真实存在。
  */
-function create_document_entries(pages: Array<{ url: string }>): SeoSitemapEntry[] {
-  const normalized_paths = pages.map((page) => normalize_site_path(page.url));
+function create_document_entries(
+  pages: Array<{ url: string }>,
+  collection_directory: string,
+): SeoSitemapEntry[] {
+  const normalized_paths = pages
+    .map((page) => normalize_site_path(page.url))
+    .filter((pathname) => document_source_exists(pathname, collection_directory));
   const path_set = new Set(normalized_paths);
 
   return normalized_paths.map((pathname) => {
@@ -118,6 +127,31 @@ function create_document_entries(pages: Array<{ url: string }>): SeoSitemapEntry
       chinese_pathname: path_set.has(chinese_pathname) ? chinese_pathname : undefined,
     };
   });
+}
+
+/**
+ * 判断某个路径是否为 fumadocs 生成的目录跳转壳页。
+ *
+ * 背景：文档目录（如 /en/city-sdk-docs/concepts/）在 loader 里会 302 到首个子文档，
+ * 但静态预渲染会把它先输出成一张 `<meta http-equiv="refresh">` + `noindex` 的壳页。
+ * 这类页面不能进 sitemap：它既被标记 noindex，又是无正文的跳转页，收录后只会
+ * 浪费抓取预算并制造 soft 404。
+ *
+ * 判定条件（与线上 30 个壳页实测完全一致，无误报）：
+ * - 路径深度 > 2（排除 /en/docs/ 这类空间根，它们自带内容不跳转）；
+ * - 存在以该路径为前缀的更长子路径，即 loader 一定会重定向。
+ */
+function is_redirect_stub_path(pathname: string, all_paths: ReadonlySet<string>) {
+  const normalized = normalize_site_path(pathname);
+  const segments = normalized.split("/").filter(Boolean);
+
+  if (segments.length <= 2) return false;
+
+  for (const candidate of all_paths) {
+    if (candidate !== normalized && candidate.startsWith(normalized)) return true;
+  }
+
+  return false;
 }
 
 /**
@@ -151,13 +185,13 @@ function serialize_entry(entry: SeoSitemapEntry) {
  */
 export function loader() {
   const document_entries = [
-    ...create_document_entries(source.getPages()),
-    ...create_document_entries(citySdkDocsSource.getPages()),
-    ...create_document_entries(agentSdkDocsSource.getPages()),
-    ...create_document_entries(paymentsSource.getPages()),
-    ...create_document_entries(pluginsDocsSource.getPages()),
-    ...create_document_entries(uiSdkDocsSource.getPages()),
-    ...create_document_entries(blogSource.getPages()),
+    ...create_document_entries(source.getPages(), "docs"),
+    ...create_document_entries(citySdkDocsSource.getPages(), "city-sdk-docs"),
+    ...create_document_entries(agentSdkDocsSource.getPages(), "agent-sdk-docs"),
+    ...create_document_entries(paymentsSource.getPages(), "payments"),
+    ...create_document_entries(pluginsDocsSource.getPages(), "plugins-docs"),
+    ...create_document_entries(uiSdkDocsSource.getPages(), "ui-sdk-docs"),
+    ...create_document_entries(blogSource.getPages(), "blog"),
   ];
   const unique_entries = new Map<string, SeoSitemapEntry>();
 
@@ -167,6 +201,25 @@ export function loader() {
     ...document_entries,
   ]) {
     unique_entries.set(normalize_site_path(entry.pathname), entry);
+  }
+
+  // 目录跳转壳页不能进 sitemap：它们被标记 noindex 且正文为空。
+  const all_document_paths = new Set(unique_entries.keys());
+  for (const [pathname, entry] of unique_entries) {
+    if (is_redirect_stub_path(pathname, all_document_paths)) {
+      unique_entries.delete(pathname);
+      continue;
+    }
+
+    // hreflang 只能指向真实存在的对应语言页面。文档空间里英文有、中文缺的页面
+    // （例如 /en/city-sdk-docs/service/feedback/）如果照旧声明 zh-CN，会把语言
+    // 聚类指向一个 404。
+    if (entry.english_pathname && !all_document_paths.has(entry.english_pathname)) {
+      entry.english_pathname = undefined;
+    }
+    if (entry.chinese_pathname && !all_document_paths.has(entry.chinese_pathname)) {
+      entry.chinese_pathname = undefined;
+    }
   }
 
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>

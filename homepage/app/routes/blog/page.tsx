@@ -20,6 +20,7 @@ import { getMDXComponents } from "@/components/docs/mdx-components";
 import browserCollections from "fumadocs-mdx:collections/browser";
 import { Footer } from "@/components/sections/Footer";
 import { create_page_meta } from "@/lib/seo";
+import { resolve_alternate_url } from "@/lib/document-source";
 import {
   create_article_structured_data,
   serialize_structured_data,
@@ -94,7 +95,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     title,
     description,
     keywords,
-    alternate_url: alternate_page?.url,
+    alternate_url: resolve_alternate_url(alternate_page, "blog"),
     article_jsonld,
   };
 }

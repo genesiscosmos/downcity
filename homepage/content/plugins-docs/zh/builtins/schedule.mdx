@@ -2,9 +2,6 @@
 title: schedule Plugin
 description: plugin action 延迟/定时重派发的内部调度基础设施
 ---
-
-# Action schedule
-
 `schedule` 是延迟 plugin action 的基础设施概念。
 
 它负责轮询调度任务，并把到点的 plugin action 重新派发执行。当前用户侧 CLI 里，它不是一个可以 start、stop 或执行业务 action 的独立 plugin。

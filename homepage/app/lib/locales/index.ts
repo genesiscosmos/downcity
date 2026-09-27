@@ -2,30 +2,19 @@ import i18n from "i18next";
 import { initReactI18next, I18nextProvider } from "react-i18next";
 
 // Import translation files
+//
+// 只保留实际被引用的 namespace。此前 13 个 namespace 全量载入，其中 8 个
+// （ecosystem / hero / models / platforms / stats / steps / tutorial / usecases）
+// 在 app 代码中没有任何 `t("ns:...")` 或 useTranslation("ns") 引用，
+// 却随 root chunk 发往全部 500+ 页面。移除后单次传输约省 6 KB（brotli）。
 import enCommon from "./en/common.json";
 import zhCommon from "./zh/common.json";
-import enHero from "./en/hero.json";
-import zhHero from "./zh/hero.json";
 import enFeatures from "./en/features.json";
 import zhFeatures from "./zh/features.json";
-import enStats from "./en/stats.json";
-import zhStats from "./zh/stats.json";
-import enSteps from "./en/steps.json";
-import zhSteps from "./zh/steps.json";
-import enTutorial from "./en/tutorial.json";
-import zhTutorial from "./zh/tutorial.json";
-import enUseCases from "./en/usecases.json";
-import zhUseCases from "./zh/usecases.json";
-import enModels from "./en/models.json";
-import zhModels from "./zh/models.json";
-import enEcosystem from "./en/ecosystem.json";
-import zhEcosystem from "./zh/ecosystem.json";
 import enResources from "./en/resources.json";
 import zhResources from "./zh/resources.json";
 import enCommunity from "./en/community.json";
 import zhCommunity from "./zh/community.json";
-import enPlatforms from "./en/platforms.json";
-import zhPlatforms from "./zh/platforms.json";
 import enHome from "./en/home.json";
 import zhHome from "./zh/home.json";
 
@@ -33,32 +22,16 @@ import zhHome from "./zh/home.json";
 const resources = {
   en: {
     common: enCommon,
-    hero: enHero,
     features: enFeatures,
-    stats: enStats,
-    steps: enSteps,
-    tutorial: enTutorial,
-    usecases: enUseCases,
-    models: enModels,
-    ecosystem: enEcosystem,
     resources: enResources,
     community: enCommunity,
-    platforms: enPlatforms,
     home: enHome,
   },
   zh: {
     common: zhCommon,
-    hero: zhHero,
     features: zhFeatures,
-    stats: zhStats,
-    steps: zhSteps,
-    tutorial: zhTutorial,
-    usecases: zhUseCases,
-    models: zhModels,
-    ecosystem: zhEcosystem,
     resources: zhResources,
     community: zhCommunity,
-    platforms: zhPlatforms,
     home: zhHome,
   },
 } as const;
@@ -70,21 +43,7 @@ i18n.use(initReactI18next).init({
   lng: "en", // Default language, will be overridden by URL path
   fallbackLng: "en",
   defaultNS: "common",
-  ns: [
-    "common",
-    "hero",
-    "features",
-    "stats",
-    "steps",
-    "tutorial",
-    "usecases",
-    "models",
-    "ecosystem",
-    "resources",
-    "community",
-    "platforms",
-    "home",
-  ],
+  ns: ["common", "features", "resources", "community", "home"],
   interpolation: {
     escapeValue: false, // React already escapes values
   },

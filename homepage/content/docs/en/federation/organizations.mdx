@@ -2,9 +2,6 @@
 title: Organizations
 description: Manage Federation-wide or Bureau-scoped Organizations and memberships
 ---
-
-# Organizations
-
 `OrganizationsService` owns Organizations, Memberships, Join Requests, and governance roles. Federation is the authority for these relationships.
 
 An Organization stores no product backend address and owns no product resources. Bureau reads its Bureau URL from trusted product configuration and sends the current `user_token` to that Bureau. Bureau verifies the user, checks Membership, and applies product resource permissions.

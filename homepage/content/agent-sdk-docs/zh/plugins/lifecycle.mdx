@@ -2,9 +2,6 @@
 title: Plugin 生命周期
 description: 理解 City 持有的 Plugin 实例、动态调用上下文与执行租约。
 ---
-
-# Plugin 生命周期
-
 Plugin 的所有权属于 City。`city.plugins.add(new MyPlugin())` 登记一个唯一实例；同一 Plugin ID
 不能在一个 City 中重复注册，Agent 也不保存 Plugin 实例或 Registry。
 

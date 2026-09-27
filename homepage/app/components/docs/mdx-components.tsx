@@ -1,7 +1,24 @@
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { Callout } from "fumadocs-ui/components/callout";
-import { lazy, Suspense, type FC } from "react";
+import { lazy, Suspense, type ComponentProps, type FC } from "react";
 import type { MDXComponents } from "mdx/types";
+import { create_internal_href } from "@/lib/seo";
+
+/**
+ * MDX 正文锚点组件。
+ *
+ * 为什么需要覆盖：站点规范 URL 一律带尾斜杠，但 MDX 正文里的站内链接大量写成
+ * 无尾斜杠形态（实测 6 个文档空间 + blog 共 359 个不同路径、841 处引用）。
+ * 每一条都会让 Cloudflare Pages 返回 308，使正文链接的权重传递被额外跳转削弱。
+ *
+ * 在这里集中规范化 href，比逐个修改 MDX 源文件更安全：新增内容也不会再写错，
+ * 且外链、锚点、查询串与哈希片段都原样保留。
+ */
+const DefaultAnchor = defaultMdxComponents.a as FC<ComponentProps<"a">>;
+
+const Anchor: FC<ComponentProps<"a">> = ({ href, ...props }) => (
+  <DefaultAnchor {...props} href={href ? create_internal_href(href) : href} />
+);
 
 /**
  * 按需加载 Mermaid。
@@ -34,6 +51,7 @@ const Mermaid: FC<{ chart: string }> = (props) => (
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
+    a: Anchor,
     Callout,
     Mermaid,
     ...components,

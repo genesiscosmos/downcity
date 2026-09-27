@@ -2,9 +2,6 @@
 title: Agent 生命周期
 description: Agent 的构造、就绪、执行与关闭
 ---
-
-# Agent 生命周期
-
 `new Agent(options)` 只创建 Agent 身份、模型、指令、自定义 Tool、Session 集合与 ActionSchedule。Plugin 不属于 Agent；City 注册 Agent 后，把自己持有的 Plugin 能力投影到 Agent 的执行入口。
 
 同一个 Agent ID 在同一物理 Workspace 中只能运行一个活动 runtime。ActionSchedule 是本地调度器，不负责协调重复启动的 Agent 进程。

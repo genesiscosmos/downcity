@@ -2,9 +2,6 @@
 title: session.set({ model })
 description: 本地 SDK Session 如何显式绑定默认模型实例
 ---
-
-# `session.set({ model })`
-
 `session.set({ model })` 让本地 SDK Session 使用自己的 `ModelClient` 覆盖 Agent 模型。这里可以直接传入 Federation 目录返回的 `CityModel`，或其他实现 Downcity Model Protocol 的客户端。
 
 ```ts

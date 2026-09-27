@@ -60,6 +60,7 @@
     "description": "An Agent uses a Bureau-scoped CityModel and Plugins, binds a Workspace through its Session, collaborates through Groups inside a City, and accesses shared Federation Services through Embassy.",
     "copyCode": "Copy code",
     "copiedCode": "Copied",
+    "filesLabel": "SDK example files",
     "map": {
       "ariaLabel": "A domain map growing from Agent, Workspace, Group, and City into Federation Services",
       "labels": {
@@ -276,6 +277,8 @@
       "marketplace": "Marketplace",
       "hosting": "Hosting",
       "examples": "Examples",
+      "blog": "Blog",
+      "whitepaper": "Whitepaper",
       "faq": "FAQ",
       "roadmap": "Roadmap",
       "discussions": "Discussions"

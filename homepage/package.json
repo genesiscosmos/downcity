@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "react-router build",
+    "build": "react-router build && node scripts/generate-markdown-endpoints.mjs",
     "dev": "react-router dev",
     "start": "react-router start",
     "test:seo": "node --test scripts/seo-ready.test.mjs",

@@ -12,7 +12,8 @@
     "build",
     "content",
     "node_modules",
-    "public"
+    "public",
+    "scripts"
   ],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],

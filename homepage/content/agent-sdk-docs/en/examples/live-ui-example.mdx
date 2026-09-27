@@ -2,9 +2,6 @@
 title: "Example: Live UI"
 description: Render the unified live Session Mutation stream with session.subscribe()
 ---
-
-# Example: Live UI
-
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
   if (mutation.variant === "delta" && mutation.type === "text") {

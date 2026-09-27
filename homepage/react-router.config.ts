@@ -83,6 +83,8 @@ function get_prerender_paths() {
       "/terms",
       "/privacy",
       "/sitemap.xml",
+      "/llms-full.txt",
+      "/feed.xml",
       "/features",
       "/zh/features",
       "/product",

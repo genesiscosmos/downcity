@@ -2,9 +2,6 @@
 title: 实时订阅
 description: 消费统一 SessionMutation 流，渲染流式文本、工具状态、Turn 与 Session 变化
 ---
-
-# 实时订阅
-
 `session.subscribe()` 是 Session 唯一的实时入口。它只广播订阅建立之后的变化，不缓存、不回放，也不提供背压控制。
 
 ```ts

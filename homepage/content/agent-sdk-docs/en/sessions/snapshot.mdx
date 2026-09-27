@@ -2,9 +2,6 @@
 title: session.snapshot()
 description: Explicitly persist the complete system fixed by a local Session
 ---
-
-# `session.snapshot()`
-
 A local Session fixes its system in memory the first time it is generated. Later Agent instruction or plugin registry changes do not alter an existing Session's system; newly created Sessions use the latest configuration.
 
 Call `snapshot()` to explicitly persist the complete system as the Session's `instruction.md`:

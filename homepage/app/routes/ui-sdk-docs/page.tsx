@@ -19,6 +19,7 @@ import {
   RawMarkdownContext,
 } from "@/components/docs/copy-markdown-button";
 import { create_page_meta } from "@/lib/seo";
+import { resolve_alternate_url } from "@/lib/document-source";
 import { create_doc_breadcrumb } from "@/lib/doc-breadcrumb";
 import { serialize_structured_data } from "@/lib/structured-data";
 
@@ -54,7 +55,9 @@ function findFirstChildDocUrl(lang: "en" | "zh", slugs: string[]) {
   collectPageUrls(tree, urls);
 
   const prefix = `/${lang}/ui-sdk-docs/${slugs.join("/")}/`;
-  return urls.find((item) => item.startsWith(prefix));
+  // 必须排除页面自身。页面树 URL 带尾斜杠后，页面自己的 URL 会等于自己的 prefix，
+  // 只靠 startsWith 会把页面当成自己的子页，导致无限重定向成空壳页。
+  return urls.find((item) => item !== prefix && item.startsWith(prefix));
 }
 
 export async function loader({ params, request }: Route.LoaderArgs) {
@@ -103,7 +106,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     path: page.path,
     url: page.url,
     breadcrumb_jsonld,
-    alternate_url: alternate_page?.url,
+    alternate_url: resolve_alternate_url(alternate_page, "ui-sdk-docs"),
     title: page.data.title ?? "UI SDK Docs",
     description: page.data.description ?? "",
     rawMarkdown,

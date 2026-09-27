@@ -2,9 +2,6 @@
 title: sound Plugin
 description: Use the FED model catalog to provide unified ASR, TTS, and automatic inbound voice transcription
 ---
-
-# sound Plugin
-
 `sound` is the unified speech capability plugin. It discovers models whose FED modalities include `asr` or `tts`, then performs the actual call through City AI Service.
 
 `sound` does not download or run local speech models. It has no Python, Whisper, Piper, or other local inference dependency. A local audio file is only read and converted to a data URL before it is sent to FED.

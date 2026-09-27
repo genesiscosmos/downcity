@@ -2,9 +2,6 @@
 title: Organizations
 description: 使用 Federation 管理全局或 Bureau 作用域的 Organization 与成员关系
 ---
-
-# Organizations
-
 `OrganizationsService` 管理 Organization、Membership、Join Request 和组织治理角色。Federation 是这些关系的唯一权威来源。
 
 Organization 不保存产品后端地址，也不管理 Space、文档、Repository 等产品资源。Bureau 从产品可信配置取得 Bureau 地址，并携带当前 `user_token` 请求 Bureau。Bureau 验证用户身份、查询 Membership，再执行自己的资源权限。

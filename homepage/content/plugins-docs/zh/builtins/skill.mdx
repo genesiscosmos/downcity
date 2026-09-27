@@ -2,9 +2,6 @@
 title: Skills
 description: 说明 skill 内建 power 如何按 Agent 划分技能目录、读取 SKILL.md，并把 Agent 技能清单暴露给 Desktop
 ---
-
-# Skills
-
 `skill` 是 Agent 的技能目录。每个 Agent 拥有自己的技能目录，该目录就是它可用技能的权威集合。这个 power 负责发现目录内的技能、读取 `SKILL.md`，并把清单注入 system prompt。
 
 技能存放在 `~/.downcity/agents/<agent-id>/skills`。每个条目是一个包含 `SKILL.md` 的目录，来源要么是复制进 Agent 目录的安装副本，要么是指向外部目录的软链接。

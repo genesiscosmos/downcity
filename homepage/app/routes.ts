@@ -16,6 +16,8 @@ export default [
   route("terms", "routes/terms.tsx"),
   route("privacy", "routes/privacy.tsx"),
   route("sitemap.xml", "routes/sitemap.xml.ts"),
+  route("llms-full.txt", "routes/llms-full.txt.ts"),
+  route("feed.xml", "routes/feed.xml.ts"),
 
   // Blog（信息型营销内容，不用文档侧边栏版式）
   // 列表页必须排在 splat 之前，否则 /en/blog 会被 en/blog/* 吃掉。

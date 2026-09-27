@@ -42,6 +42,10 @@ export const Footer: FC = () => {
   const marketplacePath = isZh ? "/zh/resources/marketplace" : "/resources/marketplace";
   const hostingPath = isZh ? "/zh/resources/hosting" : "/resources/hosting";
   const examplesPath = isZh ? "/zh/resources/examples" : "/resources/examples";
+  // Blog 与 whitepaper 此前在 Footer 与首页均无入链（孤岛），承载 `agent harness`
+  // 信息型长尾词的文章拿不到任何站内权重。放在 Resources 列可复用现有布局。
+  const blogPath = isZh ? "/zh/blog" : "/en/blog";
+  const whitepaperPath = isZh ? "/zh/whitepaper" : "/whitepaper";
   const communityPath = isZh ? "/zh/community" : "/community";
   const faqPath = isZh ? "/zh/community/faq" : "/community/faq";
   const roadmapPath = isZh ? "/zh/community/roadmap" : "/community/roadmap";
@@ -74,6 +78,8 @@ export const Footer: FC = () => {
     {
       title: t("footer.columns.resources"),
       links: [
+        { label: t("footer.links.blog"), path: blogPath },
+        { label: t("footer.links.whitepaper"), path: whitepaperPath },
         { label: t("footer.links.skills"), path: skillsPath },
         { label: t("footer.links.marketplace"), path: marketplacePath },
         { label: t("footer.links.hosting"), path: hostingPath },

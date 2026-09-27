@@ -94,6 +94,21 @@ export function HomeQuickstartSection() {
 
   return (
     <section ref={section_ref} id="quickstart" data-active-step={active_step} className="relative h-[900svh] scroll-mt-16 border-t border-line bg-background">
+      {/**
+       * 可读标题层。
+       *
+       * 为什么需要：本区块是纯滚动叙事（900svh + sticky），可见文本几乎都是
+       * aria-hidden 的地图标签与代码行。此前它没有任何标题，导致首页只有 3 个 H2，
+       * 且 `From Agent to City to Federation.` 等文案虽然存在于 i18n 却从未被渲染。
+       *
+       * 这里用 sticky 之外的独立层输出 H2 与引导段，不参与滚动动画，
+       * 既保证爬虫与 AI 能读到完整语义，也不影响现有视觉。
+       */}
+      <div className="sr-only">
+        <p>{t("quickstart.sectionLabel")}</p>
+        <h2>{t("quickstart.title")}</h2>
+        <p>{t("quickstart.description")}</p>
+      </div>
       <div className="sticky top-0 h-svh overflow-hidden">
         <div className="grid h-full min-h-0 grid-rows-[minmax(18rem,52svh)_minmax(0,1fr)] lg:grid-cols-2 lg:grid-rows-1">
           <div className="flex min-h-0 flex-col overflow-hidden border-b border-line lg:border-b-0 lg:border-r">

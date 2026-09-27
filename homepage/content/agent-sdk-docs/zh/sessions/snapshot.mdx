@@ -2,9 +2,6 @@
 title: session.snapshot()
 description: 显式固化本地 Session 首次生成后固定的完整 system
 ---
-
-# `session.snapshot()`
-
 本地 Session 第一次生成 system 后会在内存中固定这份结果。Agent instruction 或 plugin registry 后续发生变化时，已有 Session 的 system 不会改变；新 Session 才会使用最新配置生成自己的 system。
 
 调用 `snapshot()` 可以显式把当前 Session 的完整 system 固化到 `instruction.md`：

@@ -2,9 +2,6 @@
 title: Skills
 description: How the built-in skill power scopes skills per Agent, reads SKILL.md, and exposes the agent skill catalog to the Desktop
 ---
-
-# Skills
-
 `skill` is an Agent's skill catalog. Each Agent has its own skill directory, and that directory is the authoritative set of skills the Agent can use. The power discovers those skills, reads `SKILL.md`, and injects the inventory into the system prompt.
 
 Skills live at `~/.downcity/agents/<agent-id>/skills`. Every entry is a directory containing `SKILL.md`. An entry is either a copy installed into the Agent directory or a symlink pointing at a skill that lives elsewhere.

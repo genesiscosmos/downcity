@@ -2,9 +2,6 @@
 title: sound Plugin
 description: 使用 FED 模型目录统一提供 ASR 语音识别、TTS 语音合成和 chat 入站自动转写
 ---
-
-# sound Plugin
-
 `sound` 是统一的语音能力 plugin。它从 FED 模型目录发现支持 `asr` 或 `tts` 的模型，并通过 City AI Service 完成真实调用。
 
 `sound` 不下载或运行本地语音模型，也不依赖 Python、Whisper、Piper 等本地推理环境。本地音频文件只会被读取并转换成 data URL，然后发送给 FED。

@@ -1,0 +1,72 @@
+# Cloudflare Pages 响应头规则。
+#
+# 重要约束：Cloudflare Pages 的 _headers 是「合并」语义——一个请求命中多条规则时，
+# 会继承所有规则的响应头，而不是后者覆盖前者。因此这里的路径模式必须互不重叠，
+# 否则同一个 Cache-Control 会被写出两次，行为不可预期。
+#
+# 背景：站点是纯静态预渲染产物（build/client 直传）。内容哈希资源此前只有
+# 4 小时缓存，浏览器会反复重验证；哈希文件名天然不可变，应当长期缓存。
+
+# ── 内容哈希静态资源：文件名含内容哈希，可安全 immutable ──────────────
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── 图片与图标：不带哈希，使用 7 天缓存 ──────────────────────────────
+/*.png
+  Cache-Control: public, max-age=604800
+/*.svg
+  Cache-Control: public, max-age=604800
+/*.ico
+  Cache-Control: public, max-age=604800
+/*.webmanifest
+  Cache-Control: public, max-age=86400
+
+# ── SEO 与机器可读文件：1 小时，便于改动后快速生效 ────────────────────
+/robots.txt
+  Cache-Control: public, max-age=3600
+/sitemap.xml
+  Cache-Control: public, max-age=3600
+/llms.txt
+  Cache-Control: public, max-age=3600
+/llms-full.txt
+  Cache-Control: public, max-age=3600
+/feed.xml
+  Cache-Control: public, max-age=3600
+
+# ── 逐页原始 Markdown 端点：禁止索引 ──────────────────────────
+# 这些是给 AI 引擎与开发工具读取的正文副本，与 HTML 页面内容重复。
+# 若不声明，搜索引擎会把同一内容的两种形式都当成可索引页面。
+/*.md
+  X-Robots-Tag: noindex
+  Cache-Control: public, max-age=3600
+
+# ── React Router 内部数据端点：禁止索引 ──────────────────────────────
+# 这些 .data 文件是客户端路由的数据载荷，不是页面，被搜索引擎抓取只会浪费预算。
+/*.data
+  X-Robots-Tag: noindex
+  Cache-Control: public, max-age=3600
+
+# ── 下载接口必须回源 ────────────────────────────────────────────────
+# 稳定下载地址会 302 到当前版本，版本号随时变化，不能缓存重定向结果。
+/download/*
+  Cache-Control: no-store
+
+# ── 安全头 ──────────────────────────────────────────────────────────
+# 只声明平台未设置的头。X-Content-Type-Options 已由 Cloudflare Pages 默认输出
+# （实测响应头中已有 nosniff），重复声明在合并语义下可能产生重复值。
+/*
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# ── 关于 HTML 边缘缓存 ──────────────────────────────────────────────
+#
+# 预渲染 HTML 目前返回 `cache-control: public, max-age=0, must-revalidate`
+# 且 `cf-cache-status: DYNAMIC`，即每个请求都回源。这是当前 TTFB 偏高的主因。
+#
+# 但这里不能修：需要「所有 HTML 页面，但排除 /assets/*」这一条件，
+# 而 _headers 的 /* 会连静态资源一起命中，与上面的 /assets/* 规则冲突，
+# 在合并语义下会产生重复的 Cache-Control。
+#
+# 正确做法是在 Cloudflare 控制台配置一条 zone 级 Cache Rule：
+#   If  URL path does not start with "/assets" and does not contain "."
+#   Then  Edge TTL = 1 hour, Browser TTL = respect origin
+# 该规则不受 _headers 的路径匹配限制，是 Cloudflare 处理这类需求的标准方式。

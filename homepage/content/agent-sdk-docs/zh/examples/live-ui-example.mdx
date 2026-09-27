@@ -2,9 +2,6 @@
 title: 例子：实时 UI
 description: 用 session.subscribe() 实时渲染 Message Mutation
 ---
-
-# 例子：实时 UI
-
 ```ts
 const unsubscribe = session.subscribe((mutation) => {
   if (mutation.variant === "delta" && mutation.type === "text") {

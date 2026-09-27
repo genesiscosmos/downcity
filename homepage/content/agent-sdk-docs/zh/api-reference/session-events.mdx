@@ -2,9 +2,6 @@
 title: Session Mutation
 description: Session.subscribe() 返回的 Mutation 类型与 UI 使用方式
 ---
-
-# Session Mutation
-
 `session.subscribe()` 返回统一的 `SessionMutation`。Message 数据、流式增量、Turn 生命周期和 Session 状态都通过同一个订阅入口传递。
 
 所有 Mutation 都有 `mutation_id`、`session_id` 与 `created_at`。Message 相关 Mutation 还包含 `message_id` 与 `revision`，客户端用它们定位目标消息并防止旧快照覆盖新状态。

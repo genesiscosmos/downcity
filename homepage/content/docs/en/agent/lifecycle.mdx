@@ -2,9 +2,6 @@
 title: Agent Lifecycle
 description: Construct, ready, execute, and dispose an Agent
 ---
-
-# Agent Lifecycle
-
 `new Agent(options)` creates only the Agent identity, model, instructions, custom Tools, Session collection, and ActionSchedule. Plugins do not belong to Agent. After City registers the Agent, it projects City-owned Plugin capabilities into the Agent execution entry.
 
 Run only one active runtime for the same Agent ID in the same physical Workspace. ActionSchedule is a local scheduler and does not coordinate duplicate Agent processes.
