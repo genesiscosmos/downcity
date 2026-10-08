@@ -223,6 +223,7 @@ ipcMain.handle("group:archive-session", async (_event, group_id: string, session
 });
 ipcMain.handle("group:list-archived-sessions", (_event, group_id: string) => require_agent_controller().list_archived_group_sessions(group_id));
 ipcMain.handle("chat:list-sessions", (_event, agent_id: string, workspace_id?: string) => require_agent_controller().list_sessions(agent_id, workspace_id));
+ipcMain.handle("chat:open-agent-session", (_event, agent_id: string, workspace_id: string) => require_agent_controller().open_agent_session(agent_id, workspace_id));
 ipcMain.handle("chat:rebind-session-workspace", async (_event, agent_id: string, session_id: string, workspace_id: string) => {
   const result = await require_agent_controller().rebind_session_workspace(agent_id, session_id, workspace_id);
   // 换绑后旧通知里的 workspace_id 已失效，行内不再显示它；不清掉就会只剩图标在报警。

@@ -30,9 +30,11 @@
  * 行内各自订阅会让每一行都持有整张表，任何会话变化都要广播到所有行。
  */
 
-import { memo, useMemo, useState } from "react";
-import { TbEdit, TbGhost3, TbPlus, TbTrash, TbUsers } from "react-icons/tb";
+import { memo, useCallback, useMemo, useState } from "react";
+import { TbEdit, TbGhost3, TbPlus, TbSettings, TbTrash, TbUsers } from "react-icons/tb";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { use_baybar_open } from "@/layouts/BayBar";
+import { agent_config_tab } from "@/features/agent/AgentView";
 import { GroupAvatar } from "@/components/GroupAvatar";
 import { RowMenuButton } from "@/components/RowMenuButton";
 import { Button } from "@/components/ui/button";
@@ -71,6 +73,13 @@ interface AgentsSidebarProps {
  */
 export const AgentsSidebar = memo(function AgentsSidebar({ controller, open_create_agent, open_create_group, open_group_config }: AgentsSidebarProps) {
   const translate = use_translation("navigation");
+  const translate_resources = use_translation("resources");
+  // 侧栏在 BayBarProvider 内，所以能直接开配置面板：
+  // 配置不再是主视图，而是行菜单随手弹出的右侧标签页。
+  const open_baybar = use_baybar_open();
+  const open_agent_config = useCallback((agent: DesktopAgentSummary) => {
+    open_baybar(agent_config_tab(agent, controller, translate_resources));
+  }, [controller, open_baybar, translate_resources]);
   const selection = use_desktop_selector(controller.stores.navigation, (state) => state.selection);
   const agents = use_desktop_selector(controller.stores.catalog, (state) => state.agents);
   const groups = use_desktop_selector(controller.stores.catalog, (state) => state.groups);
@@ -105,7 +114,7 @@ export const AgentsSidebar = memo(function AgentsSidebar({ controller, open_crea
     <SidebarContent class_name="space-y-0.5">
       {/* 目录未就绪时不渲染列表：那时候顺序还没确定，先摆一个空列表等于把「还没读到」说成「没有」。 */}
       {hydrated ? subjects.map((subject) => subject.kind === "agent"
-        ? <AgentSubject key={subject.key} agent={subject.agent} controller={controller} active={subject.agent.agent_id === selected_agent_id} unread_attention={get_agent_unread_attention(notification_state, subject.agent.agent_id)} />
+        ? <AgentSubject key={subject.key} agent={subject.agent} controller={controller} active={subject.agent.agent_id === selected_agent_id} unread_attention={get_agent_unread_attention(notification_state, subject.agent.agent_id)} open_agent_config={open_agent_config} />
         : <GroupSubject key={subject.key} group={subject.group} controller={controller} agents={agents} active={subject.group.group_id === selected_group_id} unread_attention={get_group_unread_attention(notification_state, subject.group.group_id)} open_group_config={open_group_config} />)
         : <SidebarEmptyState icon={<TbGhost3 />} title={translate("sidebar.loading_subjects")} />}
       {hydrated && !loading && subjects.length === 0 ? <SidebarEmptyState
@@ -118,11 +127,12 @@ export const AgentsSidebar = memo(function AgentsSidebar({ controller, open_crea
 });
 
 /** Agent 主体行：点击进入 profile。 */
-const AgentSubject = memo(function AgentSubject({ agent, controller, active, unread_attention }: {
+const AgentSubject = memo(function AgentSubject({ agent, controller, active, unread_attention, open_agent_config }: {
   /** Agent 摘要。 */ agent: DesktopAgentSummary;
   /** 稳定控制器。 */ controller: DesktopController;
   /** 是否为当前 Agent。 */ active: boolean;
   /** 当前 Agent 未读通知表达的注意力等级。 */ unread_attention: ReturnType<typeof get_agent_unread_attention>;
+  /** 打开该 Agent 的配置标签页。 */ open_agent_config(agent: DesktopAgentSummary): void;
 }) {
   const translate = use_translation("navigation");
   const translate_common = use_translation();
@@ -140,13 +150,15 @@ const AgentSubject = memo(function AgentSubject({ agent, controller, active, unr
       // 而行高随之退回单行档。真正需要用户知道的只有「这个 Agent 是什么」，
       // 而它没有描述时，静默比复述一遍「没有」更诚实。
       description={agent.description || undefined}
-      // 点击进 profile：这一行现在只回答「这个 Agent 是谁」，会话入口在 Works 侧栏。
-      onSelect={() => controller.actions.select_agent(agent.agent_id)}
+      // 点击进它的会话：Agent 自己就是一条 Session，这一行就是与它对话的入口。
+      onSelect={() => controller.actions.open_agent_chat(agent.agent_id)}
       menu={<DropdownMenu>
         <DropdownMenuTrigger asChild><RowMenuButton status={status} label={translate("sidebar.subject_actions_for", { name: agent.name })} /></DropdownMenuTrigger>
         {/* 菜单里的点击不要冒泡到所在行，否则会顺带打开这个 Agent。 */}
         <DropdownMenuContent align="end" sideOffset={5} onClick={(event) => event.stopPropagation()}>
-          {/* 会话入口不在这里：它属于 Workspace，因此只有一个位置（见 WorksSidebar）。 */}
+          {/* 会话不在这里：点行就是进会话（Agent 自己就是一条 Session）。 */}
+          <DropdownMenuItem onClick={() => open_agent_config(agent)}><TbSettings /><span>{translate("sidebar.agent_settings")}</span></DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem className="text-destructive" onClick={() => set_delete_open(true)}><TbTrash /><span>{translate("sidebar.permanent_delete")}</span></DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>}

@@ -80,7 +80,6 @@ export function use_desktop_management_actions({ catalog, navigation, session, s
       const current_settings = settings.state_ref.current.settings;
       settings.set_settings(await window.downcity.settings.update({
         default_agent_id: current_settings.default_agent_id === agent_id ? "" : current_settings.default_agent_id,
-        agent_main_sessions: Object.fromEntries(Object.entries(current_settings.agent_main_sessions).filter(([current_agent_id]) => current_agent_id !== agent_id)),
       }));
     } catch (reason) {
       settings.set_error(to_error_message(reason));

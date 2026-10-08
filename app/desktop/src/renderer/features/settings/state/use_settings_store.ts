@@ -24,7 +24,6 @@ const default_settings: DesktopSettings = {
   proxy_url: "",
   default_text_model_id: "",
   default_image_model_id: "",
-  agent_main_sessions: {},
   group_main_sessions: {},
 };
 

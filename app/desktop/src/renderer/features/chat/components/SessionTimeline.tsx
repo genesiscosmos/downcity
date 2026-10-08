@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, type MouseEvent, type ReactNode } from "react";
 import type { RespondSessionInteractionInput, SessionMessage, SessionTurnFileDiffSummary } from "@downcity/agent";
-import { TbAlertTriangle, TbDots } from "react-icons/tb";
+import { TbAlertTriangle, TbDots, TbSettings } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
 import { ChatSurfaceLayout } from "@/features/chat/components/ChatLayout";
 import { ChatTextSelectionQuote } from "@/features/chat/components/ChatTextSelectionQuote";
@@ -20,6 +20,7 @@ import { resolve_chat_follow_indicator } from "@/features/chat/lib/chat_scroll";
 import { use_chat_scroll } from "@/features/chat/lib/use_chat_scroll";
 import { use_translation } from "@/locales/i18n";
 import { is_chat_busy, type ChatHistoryState } from "@/types/DesktopView";
+import { use_open_agent_config } from "@/features/agent/components/AgentChatDetails";
 import type { DesktopAgentSummary, DesktopChatRewriteInput, DesktopChatRuntime, DesktopSessionSummary, DesktopSettings, DesktopWorkspaceSummary } from "@common/types/DesktopApi";
 
 /** Session Chat 主视图属性。 */
@@ -82,6 +83,10 @@ const empty_powers: readonly { power_id: string; title: string; icon_url?: strin
 /** Session 对话主视图。 */
 export function SessionView(props: SessionViewProps) {
   const translate_chat = use_translation("chat");
+  const translate_resources = use_translation("resources");
+  // 只在 Agent 会话里存在：它由 AgentChatMainView 提供，Group 会话下为空，
+  // 因此同一个头部在两处都能复用，不需要额外的开关。
+  const open_agent_config = use_open_agent_config();
   const { session, messages, runtime, settings } = props;
   const scroll_surface_id = get_session_key(props.workspace_id, props.agent.agent_id, session.session_id);
   // 滚动锚点以「首条消息 ID」为内容标识：只有历史前插会改变它，追加消息不会。
@@ -119,7 +124,10 @@ export function SessionView(props: SessionViewProps) {
 
   return <ChatSurfaceLayout
     header_left={<div className="flex min-w-0 max-w-[min(100%,36rem)] items-center gap-2"><span className="min-w-0 truncate text-xs font-medium text-foreground" title={session_title}>{session_title}</span>{workspace_tag}</div>}
-    header_right={props.rename_session && props.archive_session && props.remove_session ? <div className="flex shrink-0 items-center gap-1"><SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<Button size="icon" title={translate_chat("conversation.actions")} aria-label={translate_chat("conversation.actions")}><TbDots /></Button>} /></div> : null}
+    header_right={<div className="flex shrink-0 items-center gap-1">
+      {open_agent_config ? <Button size="icon" title={translate_resources("agent_details.main_chat")} aria-label={translate_resources("agent_details.main_chat")} onClick={open_agent_config}><TbSettings /></Button> : null}
+      {props.rename_session && props.archive_session && props.remove_session ? <SessionActionsMenu session={session} on_rename={props.rename_session} on_archive={props.archive_session} on_remove={props.remove_session} trigger={<Button size="icon" title={translate_chat("conversation.actions")} aria-label={translate_chat("conversation.actions")}><TbDots /></Button>} /> : null}
+    </div>}
   >
     {/* MainViewBody 已经是纵向 flex 列，因此这里直接从视口开始，不再套一层同义的容器。
         视口外层保持 relative，供「回到最新」浮在列表底部之上、又不被滚动带走。 */}

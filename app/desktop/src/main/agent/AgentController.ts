@@ -935,6 +935,28 @@ export class AgentController {
     return await list_desktop_agent_models(this.data, resolve_desktop_city_env(this.data));
   }
 
+  /**
+   * 打开 Agent 自己的会话，不存在时创建。
+   *
+   * 关键点（中文）
+   * - 它的 session_id 就是 agent_id，角色为 `agent`，因此不需要记住「哪条是主会话」。
+   * - 首次打开时把当前 Workspace 注入给它；之后目录跟着会话自己走，
+   *   故 `workspace_id` 只在不一致时用于切换。
+   * - 它不属于 `work` 分区，因此不会被普通会话列表带出。
+   */
+  async open_agent_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary> {
+    await this.ready_promise;
+    const agent = this.require_native_agent(agent_id);
+    const workspace = this.city.workspaces.get(workspace_id)
+      ?? await this.require_workspace(agent_id, workspace_id);
+    const session = await agent.sessions.self({ workspace });
+    // 投影键必须用会话自己的目录：它可能属于另一个 Workspace，
+    // 用调用方传入的值会让订阅与后续读写落在不同的 cache key 上。
+    const session_workspace_id = session.get("workspace_id") ?? workspace_id;
+    this.observe_session(agent_id, session_workspace_id, session);
+    return to_desktop_session_summary(this.data.root_path, await session.get_info());
+  }
+
   /** 在当前 Workspace 创建 Session，并在返回前原子应用完整初始配置。 */
   async create_session(agent_id: string, workspace_id: string, configuration: DesktopSessionConfiguration): Promise<DesktopCreateSessionResult> {
     const agent = this.require_native_agent(agent_id);

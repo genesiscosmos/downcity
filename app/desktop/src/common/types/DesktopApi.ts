@@ -644,18 +644,8 @@ export interface DesktopSettings {
   default_text_model_id: string;
   /** 生图能力默认使用的模型；为空时使用目录第一项。 */
   default_image_model_id: string;
-  /** 每个 Agent 主 Session 所绑定的 Workspace 与 Session。 */
-  agent_main_sessions: Record<string, DesktopAgentMainSession>;
   /** 每个 Group 默认 Session 所绑定的 Workspace 与 Session。 */
   group_main_sessions: Record<string, DesktopGroupMainSession>;
-}
-
-/** Agent 主 Session 的本地绑定。 */
-export interface DesktopAgentMainSession {
-  /** 主 Session 使用的 Workspace 标识。 */
-  workspace_id: string;
-  /** 主 Session 的稳定标识。 */
-  session_id: string;
 }
 
 /** Desktop 安全存储中的一个 Federation 账户摘要。 */
@@ -896,6 +886,8 @@ export interface DesktopApi {
     list_models(): Promise<DesktopModelSummary[]>;
     /** 列出指定 Agent 的 Session；可传入 Workspace 过滤，不传时返回全部。 */
     list_sessions(agent_id: string, workspace_id?: string): Promise<DesktopSessionSummary[]>;
+    /** 打开 Agent 自己的会话，不存在时创建，并把传入的 Workspace 作为初始目录。 */
+    open_agent_session(agent_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
     /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的摘要。 */
     rebind_session_workspace(agent_id: string, session_id: string, workspace_id: string): Promise<DesktopSessionSummary>;
     /** 使用完整初始配置创建新的 Session。 */

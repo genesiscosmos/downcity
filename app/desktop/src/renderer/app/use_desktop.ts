@@ -30,7 +30,7 @@ import { use_desktop_group_actions } from "@/features/chat/hooks/use_group_actio
 import { use_desktop_navigation_actions } from "@/features/navigation/use_navigation_actions";
 import { update_group_session_title } from "@/features/chat/lib/group/group_session_projection";
 import { create_chat_composer, is_chat_composer_empty } from "@/features/chat/composer/editor/chatComposerCodec";
-import { group_agent_sessions_by_workspace, resolve_agent_chat_target, type AgentChatTarget } from "@/features/chat/lib/session_list_projection";
+import { group_agent_sessions_by_workspace } from "@/features/chat/lib/session_list_projection";
 import { translate } from "@/locales/i18n";
 
 const active_workspace_storage_key = "downcity.active_workspace_id";
@@ -61,8 +61,6 @@ export function use_desktop_controller(): DesktopController {
   // 组合层只保留跨领域导航引用；Chat 请求生命周期由 chat_lifecycle 统一拥有。
   const hydrated_navigation_keys_ref = useRef(new Set<string>());
   const active_group_session_ids_ref = useRef(new Map<string, string>());
-  // Agent 主体入口按“最近打开”恢复，而不是误用消息更新时间推断用户最后访问的对话。
-  const recent_agent_chat_targets_ref = useRef(new Map<string, AgentChatTarget>());
   const previous_selection_ref = useRef<NavigationTarget | null>(null);
   const selection_by_sidebar_mode_ref = useRef<Partial<Record<SidebarMode, NavigationTarget>>>({});
   const send_message_ref = useRef<(workspace_id: string, agent_id: string, session_id: string, input: JSONContent, mode: ChatSubmitMode, skip_orphan_check?: boolean) => Promise<void>>(async () => undefined);
@@ -170,18 +168,6 @@ export function use_desktop_controller(): DesktopController {
       })
       .catch((reason) => settings.set_user({ ...settings.state_ref.current.user, error: to_error_message(reason) }));
   }, [catalog, composer, navigation, session, settings]);
-
-  // 记录每个 Agent 最近实际打开的 Session 或 Draft，供主体入口恢复。
-  useEffect(() => {
-    const remember_agent_chat_target = () => {
-      const target = navigation.state_ref.current.selection;
-      if (target?.kind === "session" || target?.kind === "draft") {
-        recent_agent_chat_targets_ref.current.set(target.agent_id, target);
-      }
-    };
-    remember_agent_chat_target();
-    return navigation.store.subscribe(remember_agent_chat_target);
-  }, [navigation]);
 
   // ---- 队列发送循环 ----
   const commit_queue = useCallback((next: Record<string, QueuedChatMessage[]>) => {
@@ -557,37 +543,42 @@ export function use_desktop_controller(): DesktopController {
     }
   }, [chat_lifecycle, discard_session_render_state, navigation, reset_draft_configuration, session, settings]);
 
-  /** 打开 Agent 最近访问的对话；目标失效时回退到最近更新的 Session，没有历史时进入新对话。 */
+  /**
+   * 解析打开 Agent 会话时用作初始目录的 Workspace。
+   *
+   * 顺序：当前 active workspace → 第一个已登记 workspace → 宿主默认 workspace。
+   * 前两者都不可用时才问主进程，避免每次打开都多一次 IPC。
+   */
+  const resolve_active_workspace_id = useCallback(async (): Promise<string> => {
+    const current = catalog.state_ref.current.workspaces;
+    const active = current.find((workspace) => workspace.workspace_id === navigation.state_ref.current.active_workspace_id);
+    const target = active ?? current[0];
+    if (target) return target.workspace_id;
+    const fallback = await window.downcity.workspace.get_default();
+    catalog.add_workspace(fallback);
+    return fallback.workspace_id;
+  }, [catalog, navigation.state_ref]);
+
+  /**
+   * 打开 Agent 自己的会话：它就是 Agent 的对话入口。
+   *
+   * 关键点（中文）
+   * - 目标确定：session_id 就是 agent_id，不再靠「最近会话」启发式猜测。
+   * - 首次打开时把当前 active workspace 作为初始目录；之后目录跟着会话自己走，
+   *   因此这里回读摘要里的 workspace_id，而不是沿用调用时的值。
+   */
   const open_agent_chat = useCallback(async (agent_id: string) => {
     settings.set_error("");
     try {
-      const workspace_ids = new Set(catalog.state_ref.current.workspaces.map((workspace) => workspace.workspace_id));
-      const target = resolve_agent_chat_target(
-        session.state_ref.current.sessions_by_workspace,
-        workspace_ids,
-        agent_id,
-        recent_agent_chat_targets_ref.current.get(agent_id),
-      );
-      if (target?.kind === "session") {
-        await select_session(target.workspace_id, agent_id, target.session_id);
-        return;
-      }
-      if (target?.kind === "draft") {
-        await create_session(target.workspace_id, agent_id);
-        return;
-      }
-      const target_workspace = catalog.state_ref.current.workspaces.find((workspace) => workspace.workspace_id === navigation.state_ref.current.active_workspace_id)
-        ?? catalog.state_ref.current.workspaces[0]
-        ?? await window.downcity.workspace.get_default();
-      const workspace_id = target_workspace.workspace_id;
-      if (!catalog.state_ref.current.workspaces.some((workspace) => workspace.workspace_id === workspace_id)) {
-        catalog.add_workspace(target_workspace);
-      }
-      await create_session(workspace_id, agent_id);
+      const workspace_id = await resolve_active_workspace_id();
+      const summary = await window.downcity.chat.open_agent_session(agent_id, workspace_id);
+      // 会话可能属于另一个 Workspace：以它自己记录的为准，避免快照与投影落在不同键上。
+      const session_workspace_id = summary.workspace_id || workspace_id;
+      await select_session(session_workspace_id, agent_id, summary.session_id);
     } catch (reason) {
       settings.set_error(to_error_message(reason));
     }
-  }, [catalog, create_session, navigation, select_session, session, settings]);
+  }, [resolve_active_workspace_id, select_session, settings]);
 
   /** 加载一个更早历史 Segment。 */
   const load_earlier_history = useCallback(async (workspace_id: string, agent_id: string, session_id: string) => {

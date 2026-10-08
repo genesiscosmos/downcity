@@ -247,9 +247,7 @@ export interface DesktopStores {
 
 /** Renderer 对视图公开的稳定操作集合。 */
 export interface DesktopActions {
-  /** 选择 Agent 管理页。 */
-  select_agent(agent_id: string): void;
-  /** 打开 Agent 固定 Workspace 与持久化 Session 对话。 */
+  /** 进入该 Agent 自己的会话。 */
   open_agent_chat(agent_id: string): Promise<void>;
   /** 打开 Power 独立功能工作区。 */
   select_power_workspace(power_id: string): void;

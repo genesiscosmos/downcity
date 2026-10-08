@@ -84,13 +84,6 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
     settings.set_error(""); navigation.set_sidebar_mode("workspace"); navigation.set_active_workspace_id(workspace_id);
     localStorage.setItem(active_workspace_storage_key, workspace_id); navigation.set_selection({ kind: "workspace_file", workspace_id, relative_path, ...(line ? { line } : {}) });
   }, [catalog, navigation, settings]);
-  const select_agent = useCallback((agent_id: string) => {
-    settings.set_error("");
-    const selection: NavigationTarget = { kind: "agent", agent_id };
-    const sidebar_mode = get_sidebar_mode_for_target(selection);
-    if (sidebar_mode) navigation.set_sidebar_mode(sidebar_mode);
-    navigation.set_selection(selection);
-  }, [navigation, settings]);
   const open_create_agent = useCallback(() => {
     settings.set_error("");
     const selection: NavigationTarget = { kind: "create_agent" };
@@ -111,5 +104,5 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
     navigation.set_selection({ kind: "settings", section });
   }, [navigation, previous_selection_ref, settings]);
   const close_settings = useCallback(() => navigation.set_selection(previous_selection_ref.current ?? (catalog.state_ref.current.agents[0] ? { kind: "agent", agent_id: catalog.state_ref.current.agents[0].agent_id } : null)), [catalog, navigation, previous_selection_ref]);
-  return useMemo(() => ({ select_power_workspace, navigate_power, invalidate_power, set_sidebar_mode, select_workspace, select_workspace_file, select_agent, open_create_agent, select_group, open_settings, close_settings }), [close_settings, invalidate_power, navigate_power, open_create_agent, open_settings, select_agent, select_group, select_power_workspace, select_workspace, select_workspace_file, set_sidebar_mode]);
+  return useMemo(() => ({ select_power_workspace, navigate_power, invalidate_power, set_sidebar_mode, select_workspace, select_workspace_file, open_create_agent, select_group, open_settings, close_settings }), [close_settings, invalidate_power, navigate_power, open_create_agent, open_settings, select_group, select_power_workspace, select_workspace, select_workspace_file, set_sidebar_mode]);
 }
