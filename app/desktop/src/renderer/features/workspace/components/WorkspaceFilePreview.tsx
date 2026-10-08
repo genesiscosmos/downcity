@@ -31,6 +31,7 @@ import { resolve_workspace_language, type WorkspaceLanguage } from "@/lib/worksp
 import { resolve_default_view_mode, type WorkspaceFileViewMode } from "@/lib/workspace/workspace_file_preview";
 import { use_translation } from "@/locales/i18n";
 import { WorkspaceFileMetadataCard } from "./WorkspaceFileMetadata";
+import { use_workspace_file_revision } from "./use_workspace_file_revision";
 import type { DesktopWorkspaceTextFile } from "@common/types/DesktopApi";
 
 export type { WorkspaceFileViewMode };
@@ -48,25 +49,44 @@ export interface WorkspaceTextFileState {
  *
  * `relative_path` 为空时不发起读取（侧栏尚未打开任何文件时是常态），
  * 这样调用方可以无条件使用本 Hook，不需要在外部做条件渲染。
+ *
+ * ## 热更新
+ *
+ * 读取只发生在打开那一刻，因此磁盘上那份文件被外部改写后预览会停在旧内容上。
+ * 这里订阅该文件的磁盘变化，收到通知就重读一次（见 `use_workspace_file_revision`）。
+ *
+ * 重读**不清空已有内容**：旧内容留到新内容到达那一刻才被替换。
+ * 否则每次保存都会先闪一下「正在读取文件」并因内容被卸载而丢掉滚动位置，
+ * 而用户此时往往正看着文件中间某处。
  */
 export function use_workspace_text_file(workspace_id: string, relative_path: string): WorkspaceTextFileState {
-  const [file, set_file] = useState<DesktopWorkspaceTextFile>();
-  const [error, set_error] = useState("");
+  // 读取结果与它所属的路径一起存：换文件时旧结果自然失效，不需要额外的一轮清空渲染。
+  const [loaded, set_loaded] = useState<LoadedWorkspaceTextFile>({ key: "", error: "" });
+  const key = `${workspace_id}\n${relative_path}`;
+  const current = loaded.key === key ? loaded : undefined;
+  // 登记监听要带上已读到那一版的修改时间，用于收掉「读取」与「登记」之间的空窗。
+  const revision = use_workspace_file_revision(workspace_id, relative_path, current?.file?.modified_at);
   useEffect(() => {
-    if (!relative_path) {
-      set_file(undefined);
-      set_error("");
-      return;
-    }
     let active = true;
-    set_file(undefined);
-    set_error("");
+    // 同一文件的重读保留现有内容；换文件才回到加载态。
+    set_loaded((existing) => (existing.key === key ? existing : { key, error: "" }));
+    if (!relative_path) return;
     void window.downcity.workspace.read_text_file(workspace_id, relative_path)
-      .then((value) => { if (active) set_file(value); })
-      .catch((reason: unknown) => { if (active) set_error(reason instanceof Error ? reason.message : String(reason)); });
+      .then((value) => { if (active) set_loaded({ key, file: value, error: "" }); })
+      .catch((reason: unknown) => { if (active) set_loaded({ key, error: reason instanceof Error ? reason.message : String(reason) }); });
     return () => { active = false; };
-  }, [workspace_id, relative_path]);
-  return { file, error };
+  }, [workspace_id, relative_path, key, revision]);
+  return { file: current?.file, error: current?.error ?? "" };
+}
+
+/** 某个路径下的读取结果；`key` 把结果与它所属的 Workspace 与路径绑在一起。 */
+interface LoadedWorkspaceTextFile {
+  /** 结果所属的 Workspace 与路径合成键；与当前请求不一致时结果作废。 */
+  key: string;
+  /** 读取成功的文件内容；尚未返回或读取失败时为空。 */
+  file?: DesktopWorkspaceTextFile;
+  /** 读取失败信息；为空表示没有失败。 */
+  error: string;
 }
 
 /**
@@ -96,6 +116,13 @@ export function WorkspaceFilePlaceholder({ error }: {
  *
  * 整体放在一个 `<pre>` 里时无法定位某一行，因此每行都是独立块元素；
  * 末尾换行不代表最后一行存在，需要剔除，否则行号会整体偏一位。
+ *
+ * ## 定位只在首次打开时做一次
+ *
+ * 带行号的链接打开后会滚动到该行并高亮。但文件被外部改写时会热更新重读，
+ * 若定位跟着每次重读重跑，用户看到一半就会被拽回那一行。因此定位只在
+ * 「这个文件刚被打开」时生效一次：此后重读不再移动滚动位置。
+ * 行号高亮仍然保留——它标识的是「打开的是哪一行」，不随重读消失。
  */
 export function WorkspaceFileSourceBody({ file, relative_path, line, class_name }: {
   /** 已读取的文本文件。 */
@@ -108,6 +135,8 @@ export function WorkspaceFileSourceBody({ file, relative_path, line, class_name 
   class_name?: string;
 }) {
   const source_ref = useRef<HTMLDivElement>(null);
+  /** 已经执行过定位的目标；用于保证重读时不再移动滚动位置。 */
+  const anchored = useRef<string | undefined>(undefined);
   const language = useMemo(() => resolve_workspace_language(relative_path), [relative_path]);
   // 末尾换行不代表最后一行存在，需要剔除，否则行号会整体偏一位。
   const { lines: source_lines, trimmed_trailing_newline } = useMemo(() => {
@@ -117,10 +146,16 @@ export function WorkspaceFileSourceBody({ file, relative_path, line, class_name 
   }, [file]);
   const tokens = use_highlighted_lines(file.content, language, source_lines.length, trimmed_trailing_newline);
   // 行内容就位后把目标行对齐到视图中部；滚动容器与该行的行高都由这一层决定。
+  // 只在首次打开时执行一次：热更新重读不改动用户的阅读位置（理由见模块注释）。
   useEffect(() => {
     if (!line) return;
-    source_ref.current?.querySelector<HTMLElement>(`[data-line="${line}"]`)?.scrollIntoView({ block: "center" });
-  }, [file, line, tokens]);
+    const anchor_key = `${relative_path}:${line}`;
+    if (anchored.current === anchor_key) return;
+    const target_row = source_ref.current?.querySelector<HTMLElement>(`[data-line="${line}"]`);
+    if (!target_row) return;
+    anchored.current = anchor_key;
+    target_row.scrollIntoView({ block: "center" });
+  }, [relative_path, line, tokens]);
   return <div ref={source_ref} className={cn("workspace-file-source min-h-full w-full font-mono text-xs leading-5 text-foreground selection:bg-primary/20", class_name)}>
     {source_lines.map((text, index) => <div key={index + 1} data-line={index + 1} className={cn("min-h-5 whitespace-pre-wrap break-words", index + 1 === line && "bg-surface-brand")}>
       {tokens?.[index]?.map((token, token_index) => <span key={token_index} style={token.style}>{token.content}</span>) ?? text}

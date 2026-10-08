@@ -39,6 +39,7 @@ import {
   sidebar_text_indent_style,
   sidebar_tree_chevron_placeholder_class_name,
   sidebar_tree_indent_style,
+  sidebar_tree_trailing_class_name,
   type SidebarItemVariant,
   type SidebarLeadingShape,
 } from "./sidebarRow";
@@ -370,7 +371,9 @@ export const SidebarItem = React.forwardRef<HTMLButtonElement, SidebarItemProps>
       {...rest}
       ref={ref}
     />
-    {trailing != null ? <span className="shrink-0 text-2xs text-muted-foreground">{trailing}</span> : null}
+    {/* 树行的行内左右内边距是 4（箭头要四边等距），而 trailing 不是箭头：
+        文字与状态点没有自带内边距，贴到 4px 就顶住了行缘。这里补回普通行的 8px。 */}
+    {trailing != null ? <span className={cn("shrink-0 text-2xs text-muted-foreground", tree !== undefined && sidebar_tree_trailing_class_name)}>{trailing}</span> : null}
     {actions !== undefined || menu !== undefined ? <span className="flex shrink-0 items-center gap-0.5">
       {actions}
       {menu !== undefined ? <SidebarRowAction>{menu}</SidebarRowAction> : null}

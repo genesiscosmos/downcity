@@ -94,6 +94,7 @@ export class CliCityRuntime {
       powers: power_registrations,
       power_host: {
         config: (power_id) => ({
+          path: data.powers.config_path(power_id),
           get: () => structuredClone(data.powers.get_config(power_id)),
           set: async (config) => {
             data.powers.set_config(power_id, structuredClone(config));

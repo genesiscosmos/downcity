@@ -1,0 +1,199 @@
+---
+title: 自定义 Power
+description: 编写、打包并配置可安装的 Downcity Power
+---
+一个目录只定义一个 Power。Power ID 同时是安装目录名、City catalog 键和运行时身份，不需要再声明 Extension。
+
+## 两个可选入口
+
+```text
+Power
+├── main       提供 City 执行实例、生命周期、管理逻辑与 actions
+└── renderer   声明 Sidebar + Mainview 业务工作区和/或 Config
+```
+
+两个入口都可选，但至少提供一个。一个 Power 可以只提供 City 运行能力、只提供 Sidebar + Mainview 业务工作区、只提供 Config，或同时提供完整体验。
+
+推荐的开发目录：
+
+```text
+github-power/
+├── power.json
+├── package.json
+├── README.md
+├── assets/icon.svg
+├── src/
+│   ├── power.ts
+│   ├── main.ts
+│   └── renderer.tsx
+└── dist/
+    ├── main.js
+    └── renderer.js
+```
+
+两个入口都使用 ESM。`main.js` 必须自包含；`renderer.js` 是单文件浏览器 bundle，默认导出一个 Renderer 定义，其中可以声明成对的 `sidebar + mainview` 与独立的 `config`。Downcity 不安装依赖或运行构建脚本。
+
+## 直接用于 SDK
+
+SDK 用户可以直接构造 `CityPowerRegistration`，不经过 `power.json`：
+
+```ts
+const registration = {
+  id: "github",
+  title: "GitHub",
+  description: "GitHub integration",
+  readme: "/absolute/path/README.md",
+  has_config: false,
+  has_sidebar: false,
+  has_mainview: false,
+  power: new GithubPower(),
+};
+const city = new City({
+  powers: [registration],
+  workspaces: [workspace],
+});
+city.agents.add(agent);
+```
+
+只有需要被 CLI 或 Desktop 安装、发现和管理时，才需要下面的入口协议。
+
+## Power 定义
+
+```json
+{
+  "schema_version": 1,
+  "id": "github",
+  "version": "1.0.0",
+  "title": "GitHub",
+  "description": "GitHub 集成",
+  "readme": "./README.md",
+  "icon": "./assets/icon.svg",
+  "main": "./dist/main.js",
+  "renderer": {
+    "entry": "./dist/renderer.js",
+    "sidebar": true,
+    "mainview": true,
+    "config": true
+  }
+}
+```
+
+`renderer.sidebar` 与 `renderer.mainview` 必须同时为 `true` 或 `false`，`renderer.config` 可以独立声明；默认导出的实际组件必须与这三个静态能力完全一致。`package.json` 必须声明 `"type": "module"`。`readme` 必须声明 Power 根目录内的 `.md` 用户文档，Desktop 会在 Power Overview 中安全渲染它；文件名和子目录可自行组织，应写清用途、配置方式和必要凭据。图标可以是 HTTP(S) 地址或 Power 根目录内的相对文件，并会用于 Power 导航与 Overview。
+
+## 统一 Power 入口
+
+`main` 文件默认导出唯一 Power 实例；不再存在独立 `agent` 入口或第二个 main 生命周期。
+Power 在 `initialize()` 中通过 `power.action()` 注册 Sidebar/Mainview 动作，通过
+`power.config_action()` 注册 Config 动作：
+
+```ts
+import { Power, type PowerLifecycleContext } from "@downcity/city/power";
+
+class GithubPower extends Power {
+  readonly name = "github";
+  readonly title = "GitHub";
+  readonly description = "GitHub 集成";
+
+  initialize({ power, notifications }: PowerLifecycleContext) {
+    power.config_action({
+      id: "config.read",
+      run: async (_input, context) => {
+        const config = context.config.get();
+        return { api_url: config.api_url, token_configured: Boolean(config.token) };
+      },
+    });
+
+    power.config_action({
+      id: "config.save",
+      run: async (input, context) => {
+        const current = context.config.get();
+        const config = validate_and_restore_secret(input, current);
+        await context.config.set(config);
+        return { saved: true };
+      },
+    });
+
+    void notifications.publish({
+      topic_key: "sync:repository",
+      title: "仓库同步完成",
+      route: { repository: "downcity", view: "activity" },
+    });
+  }
+}
+
+export default new GithubPower();
+```
+
+一个 Power ID 在 City 中只对应一个实例、一套生命周期和一份配置。Config action 调用时由 City
+注入唯一 Config store，执行实例从 `PowerContext.config` 读取该配置的当前快照。
+
+`notifications.publish()` 与 `notifications.dismiss()` 始终绑定当前 Power。宿主会把 `topic_key` 放入 Power 命名空间，并把 `route` 解释为当前 Power 工作区路由，因此 Power 不能代表其他 Power 或跳转到任意 Desktop 页面。相同 `topic_key` 只保留最新一条未读通知。
+
+`PowerLifecycleContext.system` 只提供明确授权的 City 宿主能力。需要把后台结果写回既有 Session 时，使用 `append_agent_session_message({ agent_id, workspace_id, session_id, origin_type, text })`；四个身份字段必须来自已持久化的明确目标，不能扫描或猜测 Session。
+
+需要实现类似 Skill 管理器的功能主页时，可以通过 `system.list_workspaces()` 读取宿主已经登记的 Workspace 摘要。Power 是受信任本地 Node.js 代码；它负责验证 action 输入，并自行拥有文件、网络和长期资源的业务行为。
+
+## Renderer 入口
+
+Renderer 入口可以声明三个固定插槽。`sidebar` 与 `mainview` 共同构成 Power 工作区，必须成对出现，并共享宿主持有的 JSON route；宿主会为它动态增加一级导航入口。`config` 与功能工作区无关，只在 Power Catalog 详情中渲染。三者共用一个 bundle 和宿主 UI Components：
+
+```tsx
+import { useEffect, useState } from "react";
+import { define_power_renderer } from "@downcity/city/power/react";
+
+export default define_power_renderer({ config: function GithubConfig({ config, ui }) {
+  const { Button, Group, Input, LoadingState, Page, Row, Toolbar } = ui.components;
+  const [config_state, set_config_state] = useState<{ api_url: string }>();
+
+  useEffect(() => {
+    void config.invoke<{ api_url: string }>("config.read").then(set_config_state);
+  }, [config]);
+
+  if (!config_state) return <LoadingState label="正在读取配置…" />;
+  return <Page>
+    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void config.invoke("config.save", config_state).then(() => ui.toast({ type: "success", message: "已保存" }))}>保存</Button>} />
+    <Group>
+      <Row label="API URL" trailing={<Input value={config_state.api_url} on_value_change={(api_url) => set_config_state({ ...config_state, api_url })} />} />
+    </Group>
+  </Page>;
+} });
+```
+
+Renderer bundle 必须把 `react` 与 `react/jsx-runtime` 保留为宿主外部依赖，并分别映射到 `downcity-power://runtime/react` 与 `downcity-power://runtime/react/jsx-runtime`。其他前端依赖应打包进同一个 `renderer.js`。
+
+Desktop 在宿主 React 树中加载 Renderer。Sidebar 与 Mainview 通过 `power.invoke()` 调用 Power 级动作，并通过 `navigation` 协同导航；Config 通过 `config.invoke()` 调用当前 Power 的配置动作。三个插槽都只获得所需 gateway、`ui.components`、Toast 和 Confirm，不会获得 Desktop controller。Renderer 属于受信任本地 UI 代码；只安装可信来源。
+
+Sidebar 与 Mainview 还会获得当前 Power 的只读 `notifications` 数组。每项包含 Power 本地 `topic_key`、文案、route 和产生时间，可用于在对应导航对象旁显示未读状态。Renderer 通过导航到通知的完整 route 触发宿主已读收口，但没有发布或修改通知的权限。
+
+需要在 Sidebar 标题栏提供创建入口时，可以向 `Sidebar` 的 `actions` 传入宿主提供的 `SidebarCreateMenu`。宿主负责标题栏、加号与下拉菜单的统一视觉，Power 只声明创建类型以及选择后的业务导航。
+
+需要树状 Sidebar 时使用 `SidebarTreeItem`：`depth` 表达层级，`kind` 区分 `branch` 与 `leaf`，父节点通过 `expanded` 与 `on_toggle` 管理展开，`on_select` 通过共享 `navigation` 更新 Mainview。省略 `leading` 时宿主会为分支和叶子节点提供统一默认图标；没有子项的分支可以省略 `on_toggle`，此时不会显示折叠按钮。历史记录等多级导航也应继续放在 Power Sidebar 的树中，不占用 Mainview。行级操作使用 `ItemMenu`，Markdown 正文使用宿主安全的 `Markdown`。写操作完成后调用 `ui.invalidate()`，宿主会增加同一 Power 的 `ui.revision`，使 Sidebar 与 Mainview 重新读取快照；Power 不需要复制宿主样式或把刷新状态写入 route。
+
+## Config 交互
+
+```text
+进入 Powers Catalog 并选择 Power
+→ 在 Config 中编辑 Power 的唯一配置
+→ 保存后由 Power 刷新受影响的长期资源
+```
+
+每个 Power ID 只有一份 Config，与 Sidebar/Mainview 无关。宿主只负责持久化，不解释字段，也不根据 JSON Schema 生成表单。内容结构、校验、默认值、Secret 行为和保存后的资源刷新都属于 Power。
+
+配置保存在 `~/.downcity/powers/<power_id>/config.toml`，目录权限为 `0700`，文件权限为 `0600`。当前存储使用 TOML，因此配置必须是 TOML 可表达的 JSON object。Agent 的 `agent.json` 不保存 Power 引用；City 自动把全部 Power 和同一份配置提供给所有 Agent。
+
+## 安装
+
+```bash
+city power install ./github-power
+# 在 Desktop Powers Catalog 的 GitHub 详情中配置
+city power config github --set '{"api_url":"https://api.github.com"}'
+city power update github
+city power uninstall github
+```
+
+安装器只复制 `power.json`、`package.json`、`readme` 声明的 Markdown 文件、运行入口和可选本地图标，不执行依赖安装、构建脚本或任何入口。所有本地路径都不能逃逸 Power 根目录或使用 symlink，安装制品会生成 SHA-256 完整性摘要。只安装可信来源。
+
+继续阅读：
+
+- [CLI 命令](/zh/docs/cli/commands)
+- [Agent Powers Docs](/zh/powers-docs)

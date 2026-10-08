@@ -678,6 +678,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
     };
     const hosted_config = this.options.host?.config?.(power_id);
     const config = hosted_config ?? {
+      path: "",
       get: () => ({}),
       set: async () => {
         throw new Error("City does not provide Power config storage");

@@ -4,12 +4,6 @@ description: Display keyboard shortcuts and individual key hints
 ---
 `Kbd` uses semantic keyboard markup, while `KbdGroup` arranges multiple keys.
 
-```tsx
-import { Kbd, KbdGroup } from "@downcity/ui";
-
-export function SearchShortcut() {
-  return <KbdGroup><Kbd>⌘</Kbd><Kbd>K</Kbd></KbdGroup>;
-}
-```
+<ComponentPreview name="kbd" />
 
 It displays a shortcut but does not register or handle keyboard events.

@@ -69,6 +69,11 @@ function sidebar_row_padding_class_name(padding: number): string {
   return padding === 4 ? "px-1" : padding === 8 ? "px-2" : `px-[${padding / 4}rem]`;
 }
 
+/** 行右侧内边距的类名；用于只补偿右端内容的场合。 */
+function sidebar_row_padding_right_class_name(padding: number): string {
+  return padding === 4 ? "pr-1" : padding === 8 ? "pr-2" : `pr-[${padding / 4}rem]`;
+}
+
 /** 行自身左右内边距（行首是 32px 大槽的行：头像、单图标）。 */
 export const SIDEBAR_ROW_PADDING = 8;
 
@@ -85,6 +90,17 @@ export const SIDEBAR_ROW_VERTICAL_PADDING = 4;
  * 32px 的头像需要 8px 才不显拥挤，24px 的箭头只需要 4px。
  */
 export const SIDEBAR_TREE_ROW_PADDING = 4;
+
+/**
+ * 树行 trailing 内容的右侧补偿。
+ *
+ * 树行的行内左右内边距是 4（箭头在 24px 格子里四边等距），但 trailing **不是箭头**：
+ * 它是文字、状态点这类没有自带内边距的东西，贴到 4px 就顶住了行缘。
+ * 补到与普通行一致的 8（`SIDEBAR_ROW_PADDING`），让「行尾内容」在两处落在同一条线上。
+ *
+ * 带菜单的行不受影响：那时最右是一个 24px 按钮，它自己的内边距已经给出留白。
+ */
+export const sidebar_tree_trailing_class_name = sidebar_row_padding_right_class_name(SIDEBAR_ROW_PADDING - SIDEBAR_TREE_ROW_PADDING);
 
 /** 行首槽宽：不放槽。 */
 export const SIDEBAR_LEADING_NONE = 0;
@@ -150,41 +166,28 @@ export const SIDEBAR_ROW_ORIGIN = SHELL_SIDEBAR_RAIL_WIDTH + SIDEBAR_CONTENT_PAD
 /** 行**内容盒**起点（无边框变体）：`48 + 8 = 56`。 */
 export const SIDEBAR_ITEM_CONTENT_INSET = SIDEBAR_ROW_ORIGIN + SIDEBAR_ROW_PADDING;
 
-/**
- * 行首槽：带底块的图标（Power 目录页）。
- *
- * 图标（16）住在一个 28px 的圆角底块里，**底块居中在标准的 32 槽内**。
- * 因此它不引入新的文字线（仍是 97），而底块到文字的实际间距是 `2 + 8 = 10`——
- * 正好是历史实现的 `gap-2.5`。
- *
- * 底块不是装饰：它把「一个能启用的能力包」（Power）与「一个有头像的身份」（Chat 主体）
- * 区分开。把它改成裸图标不会报错，只会让 Power 列表看起来像另一份联系人列表。
- */
-export const sidebar_tile_class_name = "flex size-7 shrink-0 items-center justify-center rounded-item bg-surface-subtle text-muted-foreground [&_svg]:size-4";
 /** 行变体。 */
 export type SidebarItemVariant = "agent" | "default" | "settings";
 
 /**
  * 行首槽宽。
  *
- * 只有 0 / 16 / 32 三档：28px 的图标底块是**槽里的内容**，不是槽本身
- * （它居中在 32 槽内，见 `sidebar_tile_class_name`）。
+ * 只有 0 / 16 / 32 三档。
  */
 export type SidebarLeadingWidth = typeof SIDEBAR_LEADING_NONE | typeof SIDEBAR_LEADING_ICON | typeof SIDEBAR_LEADING_AVATAR;
 
 /**
  * 行首节点的形状。
  *
- * 三种形状回答同一个问题：“这是什么”，因此是一个枚举而不是三个布尔值——
- * 布尔值能表达出「既是头像又是底块」这种不存在的组合。
+ * 两种形状回答同一个问题：“这是什么”，因此是一个枚举而不是两个布尔值——
+ * 布尔值能表达出「既是头像又是图标」这种不存在的组合。
  *
  * | 形状 | 用在哪 |
  * | --- | --- |
  * | `icon` | 单个图标（设置条目） |
- * | `avatar` | 头像（Chat 主体）；槽位不声明图标尺寸，因为头像自己决定 |
- * | `tile` | 带圆角底块的图标（Power 条目）；底块把它与“一条记录”区分开 |
+ * | `avatar` | 头像（Agent / Group 主体行）；槽位不声明图标尺寸，因为头像自己决定 |
  */
-export type SidebarLeadingShape = "icon" | "avatar" | "tile";
+export type SidebarLeadingShape = "icon" | "avatar";
 
 /**
  * 行内容起点。

@@ -1,0 +1,52 @@
+---
+title: Power System Text
+description: Understand what power.system(context) is for and when it is injected into runtime prompt assembly
+---
+A power can implement:
+
+```ts
+system(context) {
+  return "power-level system text";
+}
+```
+
+## What it means
+
+`power.system()` expresses:
+
+- this power wants to contribute one system-level text block into runtime prompt assembly
+
+Typical uses:
+
+- provider-specific operating guidance
+- capability-specific usage constraints
+- telling the agent which installed capability surface is currently available
+
+In the full runtime prompt collection path, power system text is part of the formal runtime system assembly.
+
+The runtime currently:
+
+- iterates over built-in powers
+- only reads `system()` from registered powers
+- fail-opens if one power system loader throws
+
+## When power.system is a good fit
+
+Use it when the text belongs to:
+
+- one power's operating guidance
+- one provider's rules of engagement
+- one capability package's runtime instructions
+
+## Built-in powers that use it clearly
+
+- `skill`
+- `web`
+- `sound`
+
+These are all good examples of capability-description system text.
+
+## Related docs
+
+- [Built-in powers today](/en/agent-sdk-docs/powers/built-in-powers)
+- [Custom power](/en/agent-sdk-docs/powers/custom-power)

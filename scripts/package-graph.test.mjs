@@ -27,7 +27,7 @@ test("CLI 构建闭包完全来自 manifest 运行时依赖", () => {
       "type",
       "agent",
       "federation",
-      "sandbox-microsandbox",
+      "sandbox-native",
       "city",
       "powers",
       "cli",

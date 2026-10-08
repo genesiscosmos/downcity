@@ -41,3 +41,35 @@ Fallback checks file content only in the latest `role: "user"` message in `Model
 ## OpenAI-compatible clients
 
 Use `/v1/ai/chat/completions` for the OpenAI SDK, curl, or an existing gateway. The boundary adapter converts that request into the same `ModelCall`, so routing, fallback, reasoning, usage, and billing stay consistent.
+
+## Call a decision model
+
+A decision model takes raw state and typed questions, and returns answers with calibrated probabilities instead of generated text:
+
+```ts
+const { answers } = await city.ai.decision({
+  model: "jev-1.13",
+  state: { type: "text", text: "The customer has failed to connect Stripe for three days." },
+  questions: [
+    { id: "urgent", type: "boolean", instructions: "Does this message express urgency?" },
+    { id: "route", type: "choice", instructions: "Which queue should handle this?", options: ["billing", "support"] },
+    { id: "churn_risk", type: "score", instructions: "Churn risk", min: 0, max: 10 },
+  ],
+});
+
+answers[0].value;        // true
+answers[0].probability;  // 0.87
+answers[1].distribution; // { billing: 0.72, support: 0.28 }
+```
+
+`state` is either `{ type: "text", text }` or `{ type: "json", data }`. Three question types are supported, and none of them produces free text:
+
+| Type | Answer | Notes |
+| --- | --- | --- |
+| `boolean` | `true` / `false` | — |
+| `choice` | one of `options` | 1 to 255 unique options |
+| `score` | a number | requires `min < max` |
+
+Question ids must be unique and every question must be answered exactly once. Invalid input fails with 422 before any usage is recorded, and a Channel response that does not cover every question is rejected too.
+
+Decision models are not conversation models: they carry `modalities: ["decision"]` and cannot be passed to an Agent.

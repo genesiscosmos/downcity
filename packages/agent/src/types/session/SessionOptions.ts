@@ -55,11 +55,16 @@ export interface SessionOptions {
   /** 当前 Agent 一句话能力描述；进入工具与扩展的调用环境。 */
   agent_description: string;
 
-  /** 当前 Session 所属 Workspace 的绝对根目录。 */
-  workspace_path: string;
+  /**
+   * 当前 Session 的初始目录。
+   *
+   * 关键点（中文）：这是会话状态而非身份，可在会话中通过 `set_workspace()` 切换；
+   * 省略时该 Session 没有项目上下文。
+   */
+  workspace?: WorkspaceRuntime;
 
-  /** 当前 Session 创建时绑定的 Workspace 稳定标识；未传 Workspace 时为空。 */
-  workspace_id?: string;
+  /** 没有 Workspace 时用于 system 快照与项目根展示的回退路径。 */
+  workspace_path: string;
 
   /** 当前 Session 的创建来源与物理存储分区。 */
   origin: SessionOrigin;

@@ -3,8 +3,8 @@
  *
  * 关键点（中文）
  * - 逻辑地址只描述「谁的数据」，与物理根目录、物理文件名无关。
- * - Agent 使用原始 agent_id 段，因为它本身已经是受限标识符。
- * - User 与 Workspace 的原始标识可能包含任意字符，统一编码为单层安全段。
+ * - 只有两个 Subject：当前 Agent 私有，与整个 City 共享。
+ * - Agent 使用原始 agent_id 段，它本身已经是受限标识符，可直接作为物理目录名。
  * - 写入目标只能解析为当前 AccessContext 中已经存在的 Subject。
  */
 
@@ -30,51 +30,36 @@ export interface MemorySubjectAddress {
   prefix: string;
 }
 
-/** 把不可信标识编码为稳定、可逆的单层安全段。 */
-export function encode_memory_id_segment(value: string): string {
-  const normalized = String(value || "").trim();
-  if (!normalized) throw new Error("Memory identity segment is required");
-  return `id_${Buffer.from(normalized, "utf8").toString("base64url")}`;
-}
-
 /** 返回当前调用允许读取的 Subject 地址，顺序同时表达默认上下文优先级。 */
 export function resolve_readable_memory_addresses(
   access: MemoryAccessContext,
 ): MemorySubjectAddress[] {
   assert_access_agent(access);
-  const addresses: MemorySubjectAddress[] = [];
-  if (access.city_memory_available && access.user_id) {
-    addresses.push(create_user_address(access.user_id));
-  }
-  if (access.city_memory_available && access.workspace_id) {
-    addresses.push(create_workspace_address(access.workspace_id));
-  }
-  addresses.push(create_agent_address(access.agent_id));
+  const addresses: MemorySubjectAddress[] = [create_agent_address(access.agent_id)];
   if (access.city_memory_available) addresses.push(create_city_address());
   return addresses;
 }
 
-/** 把有限写入目标解析为真实 owner/subject 地址。 */
+/**
+ * 把有限写入目标解析为真实 owner/subject 地址。
+ *
+ * 关键点（中文）：`current_workspace` 与 `city` 共用同一个共享 Subject；调用方需要
+ * 自行把当前 `workspace_id` 写入记录 metadata，地址层不参与该语义。
+ */
 export function resolve_writable_memory_address(
   access: MemoryAccessContext,
   target: MemoryWriteTarget,
 ): MemorySubjectAddress {
   assert_access_agent(access);
   if (target === "agent") return create_agent_address(access.agent_id);
-  if (!access.city_memory_available) {
-    throw new Error(`Memory target ${target} requires City Memory`);
-  }
-  if (target === "current_user") {
-    if (!access.user_id) {
-      throw new Error("Memory target current_user requires an authenticated user");
-    }
-    return create_user_address(access.user_id);
-  }
   if (target === "current_workspace") {
     if (!access.workspace_id) {
       throw new Error("Memory target current_workspace requires a Workspace");
     }
-    return create_workspace_address(access.workspace_id);
+    if (!access.city_memory_available) {
+      throw new Error("Memory target current_workspace requires City Memory");
+    }
+    return create_city_address();
   }
   throw new Error(`Unsupported Memory write target: ${String(target)}`);
 }
@@ -104,25 +89,7 @@ function create_agent_address(agent_id: string): MemorySubjectAddress {
   };
 }
 
-/** 创建 City User 地址。 */
-function create_user_address(user_id: string): MemorySubjectAddress {
-  return {
-    owner: { kind: "city" },
-    subject: { kind: "user", user_id },
-    prefix: `user/${encode_memory_id_segment(user_id)}`,
-  };
-}
-
-/** 创建 City Workspace 地址。 */
-function create_workspace_address(workspace_id: string): MemorySubjectAddress {
-  return {
-    owner: { kind: "city" },
-    subject: { kind: "workspace", workspace_id },
-    prefix: `workspace/${encode_memory_id_segment(workspace_id)}`,
-  };
-}
-
-/** 创建 City Shared 地址。 */
+/** 创建 City 共享地址。 */
 function create_city_address(): MemorySubjectAddress {
   return {
     owner: { kind: "city" },

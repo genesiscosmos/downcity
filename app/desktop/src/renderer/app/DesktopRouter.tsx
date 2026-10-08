@@ -20,7 +20,7 @@ export function DesktopMainView({ selection, controller, sidebar_collapsed }: { 
   if (selection?.kind === "create_agent") return <CreateAgentMainView controller={controller} />;
   if (selection?.kind === "create_group") return <CreateGroupMainView controller={controller} />;
   if (selection?.kind === "settings") return <SettingsMainView key={`settings:${selection.section}`} controller={controller} section={selection.section} sidebar_collapsed={sidebar_collapsed} />;
-  if (selection?.kind === "power" || selection?.kind === "power_workspace") return <PowerRouteMainView selection={selection} controller={controller} />;
+  if (selection?.kind === "power_workspace") return <PowerRouteMainView selection={selection} controller={controller} />;
   if (selection?.kind === "workspace" || selection?.kind === "workspace_file") return <WorkspaceRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
   if (selection?.kind === "group_session" || selection?.kind === "group_draft") return <GroupChatRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;
   if (selection?.kind === "group") return <GroupRouteMainView selection={selection} controller={controller} sidebar_collapsed={sidebar_collapsed} />;

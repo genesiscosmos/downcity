@@ -44,7 +44,9 @@ test("存在的 Session 与 GroupSession 可以恢复", () => {
 test("已删除的子资源逐级退回所属页面", () => {
   assert.deepEqual(resolve_navigation_target({ kind: "session", workspace_id: "project", agent_id: "writer", session_id: "missing" }, catalog), { kind: "agent", agent_id: "writer" });
   assert.deepEqual(resolve_navigation_target({ kind: "group_session", group_id: "team", workspace_id: "project", session_id: "missing" }, catalog), { kind: "group", group_id: "team" });
-  assert.deepEqual(resolve_navigation_target({ kind: "power_workspace", power_id: "missing" }, catalog), { kind: "powers" });
+  // 功能型 Power 缺失或不再提供 Sidebar/Mainview 时退回默认 Workspace：
+  // 已删除的 Power 页面没有可去的目录面板，留在原地会让用户看到一个空壳页面。
+  assert.deepEqual(resolve_navigation_target({ kind: "power_workspace", power_id: "missing" }, catalog), { kind: "workspace", workspace_id: "project" });
 });
 
 test("一级侧栏由恢复目标唯一推导", () => {

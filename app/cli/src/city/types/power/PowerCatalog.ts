@@ -28,6 +28,6 @@ export interface PowerCatalogItem {
   /** Power 是否提供业务 Mainview。 */
   has_mainview: boolean;
 
-  /** Power 是否提供设置中心 Config。 */
+  /** Power 是否提供与工作区分离的设置中心 Config 面板。 */
   has_config: boolean;
 }

@@ -2,18 +2,14 @@
  * Web Power 的宿主管理 actions。
  *
  * 关键点（中文）
- * - 界面是只读状态页：只读取 Provider 解析结果、配置摘要与当前浏览器会话。
- * - 所有事实都通过本 Power 的领域 action 在指定 Agent + Workspace 上取得，
- *   因此界面看到的可用性与 Agent 实际执行时完全一致。
- * - 本模块不返回任何 API Key；密钥仍由 Config 面板写入。
+ * - 配置是 Power 级的单一存储，与 Agent / Workspace 无关，因此这些 action 不接收执行范围。
+ * - 状态视图只读取 Provider 解析结果与当前浏览器会话；密钥写入属于 `web.config.*`。
+ * - 解析可用性需要一个真实执行范围（Workspace env 可能提供 API Key），因此内部自动选用
+ *   宿主登记的第一个 Agent 与 Workspace；没有范围时只返回配置，不报错。
+ * - 本模块不返回任何 API Key。
  */
 
-import type {
-  PowerHostAgent,
-  PowerHostWorkspace,
-  PowerJsonValue,
-  PowerLifecycleContext,
-} from "@downcity/city/power";
+import type { PowerJsonValue, PowerLifecycleContext } from "@downcity/city/power";
 import type {
   BrowserListSessionsResult,
   WebPowerStatusResult,
@@ -21,64 +17,58 @@ import type {
 import { public_config } from "@/web/host/WebPowerConfigActions.js";
 import type {
   WebMainviewCapabilityStatus,
-  WebMainviewSessionsInput,
   WebMainviewSessionsResult,
   WebMainviewSnapshot,
-  WebMainviewSnapshotInput,
 } from "@/web/types/WebMainview.js";
 
-/** 注册 Web Power 的宿主只读 actions。 */
+/** 一次解析所用的执行范围。 */
+interface ResolvedScope {
+  /** 用于解析的 Agent 稳定 ID。 */
+  readonly agent_id: string;
+  /** 用于解析的 Workspace 稳定 ID。 */
+  readonly workspace_id: string;
+}
+
+/** 注册 Web Power 的状态 actions。 */
 export function register_web_power_host_actions(context: PowerLifecycleContext): void {
   context.power.action({
     id: "web.snapshot",
-    run: async (input) => as_json(await create_snapshot(context, read_snapshot_input(input))),
+    run: async () => as_json(await create_snapshot(context)),
   });
   context.power.action({
     id: "web.sessions",
-    run: async (input) => as_json(await list_sessions(context, read_sessions_input(input))),
+    run: async () => as_json(await list_sessions(context)),
   });
 }
 
-/** 创建 Web 状态页所需的只读快照。 */
-async function create_snapshot(
-  context: PowerLifecycleContext,
-  input: WebMainviewSnapshotInput,
-): Promise<WebMainviewSnapshot> {
-  const [agents, workspaces] = await Promise.all([
-    context.system.list_agents(),
-    context.system.list_workspaces(),
-  ]);
-  const scope = resolve_scope(agents, workspaces, input);
+/**
+ * 创建 Web 状态视图所需的快照。
+ *
+ * 配置始终可读；能力状态是尽力而为的：宿主还没有 Agent 或 Workspace 时，环境变量无法解析，
+ * 此时把能力标记为未知并给出说明，而不是让整个页面失败。
+ */
+async function create_snapshot(context: PowerLifecycleContext): Promise<WebMainviewSnapshot> {
+  const scope = await resolve_first_scope(context);
   const status = scope
     ? await invoke_domain_action<WebPowerStatusResult>(context, scope, "status")
     : undefined;
   return {
-    agents: agents.map((agent) => ({ agent_id: agent.agent_id, name: agent.name })),
-    workspaces: workspaces.map((workspace) => ({
-      workspace_id: workspace.workspace_id,
-      name: workspace.name,
-    })),
     config: public_config(context.config.get()),
+    config_path: context.config.path,
     search: capability_status("search", status?.search_provider ?? "", status),
     document: capability_status("document", status?.document_provider ?? "", status),
     browser: capability_status("browser", status?.browser_provider ?? "", status),
-    browser_provider: status?.browser_provider ?? "",
-    warnings: status?.reasons ?? ["请先创建一个 Agent 和 Workspace，才能解析当前 Web 能力。"],
+    warnings: scope
+      ? status?.reasons ?? []
+      : ["尚未创建 Agent 与 Workspace，能力状态暂按当前配置展示。"],
   };
 }
 
 /** 列出当前浏览器 Provider 拥有的会话。 */
-async function list_sessions(
-  context: PowerLifecycleContext,
-  input: WebMainviewSessionsInput,
-): Promise<WebMainviewSessionsResult> {
-  const [agents, workspaces] = await Promise.all([
-    context.system.list_agents(),
-    context.system.list_workspaces(),
-  ]);
-  const scope = resolve_scope(agents, workspaces, input);
+async function list_sessions(context: PowerLifecycleContext): Promise<WebMainviewSessionsResult> {
+  const scope = await resolve_first_scope(context);
   if (!scope) {
-    return { available: false, sessions: [], note: "请先创建一个 Agent 和 Workspace。" };
+    return { available: false, sessions: [], note: "尚未创建 Agent 与 Workspace。" };
   }
   const status = await invoke_domain_action<WebPowerStatusResult>(context, scope, "status");
   if (!status.browser_provider) {
@@ -102,50 +92,21 @@ async function list_sessions(
 }
 
 /**
- * 解析实际使用的执行范围。
+ * 取宿主登记的第一个 Agent 与 Workspace 作为解析范围。
  *
- * 界面首次打开时 route 可能还是空的，此时回退到宿主登记的第一个 Agent 与
- * Workspace；两者缺一时返回空，让界面展示明确空态而不是抛错。
+ * 两者缺一就返回空：没有执行范围时不能凭空推断可用性，也不能因此抛错。
  */
-function resolve_scope(
-  agents: readonly PowerHostAgent[],
-  workspaces: readonly PowerHostWorkspace[],
-  input: { readonly agent_id: string; readonly workspace_id: string },
-): { agent_id: string; workspace_id: string } | undefined {
-  const agent = agents.find((item) => item.agent_id === input.agent_id) ?? agents[0];
-  const workspace = workspaces.find((item) => item.workspace_id === input.workspace_id)
-    ?? workspaces[0];
+async function resolve_first_scope(
+  context: PowerLifecycleContext,
+): Promise<ResolvedScope | undefined> {
+  const [agents, workspaces] = await Promise.all([
+    context.system.list_agents(),
+    context.system.list_workspaces(),
+  ]);
+  const agent = agents[0];
+  const workspace = workspaces[0];
   if (!agent || !workspace) return undefined;
   return { agent_id: agent.agent_id, workspace_id: workspace.workspace_id };
-}
-
-/** 把领域状态投影为一个能力区说明。 */
-function capability_status(
-  kind: "search" | "document" | "browser",
-  provider: string,
-  status: WebPowerStatusResult | undefined,
-): WebMainviewCapabilityStatus {
-  if (provider) {
-    return {
-      provider,
-      available: true,
-      selection: provider,
-      note: "",
-    };
-  }
-  return {
-    provider: "",
-    available: false,
-    selection: kind === "browser" ? "已关闭" : "未配置",
-    note: status?.reasons[0] || unavailable_note(kind),
-  };
-}
-
-/** 返回各能力区不可用时的默认说明。 */
-function unavailable_note(kind: "search" | "document" | "browser"): string {
-  if (kind === "search") return "在设置中配置 Tavily 或 Exa API Key 后启用搜索。";
-  if (kind === "document") return "网页读取当前已关闭。";
-  return "浏览器 Provider 当前已关闭。";
 }
 
 /**
@@ -156,18 +117,12 @@ function unavailable_note(kind: "search" | "document" | "browser"): string {
  */
 async function invoke_domain_action<TResult>(
   context: PowerLifecycleContext,
-  scope: { readonly agent_id: string; readonly workspace_id: string },
+  scope: ResolvedScope,
   action_id: string,
 ): Promise<TResult> {
-  const agent = (await context.system.list_agents())
-    .find((item) => item.agent_id === scope.agent_id);
-  if (!agent) throw new Error(`Agent not found: ${scope.agent_id}`);
-  const workspace = (await context.system.list_workspaces())
-    .find((item) => item.workspace_id === scope.workspace_id);
-  if (!workspace) throw new Error(`Workspace not found: ${scope.workspace_id}`);
   const result = await context.system.invoke_agent_power({
-    agent_id: agent.agent_id,
-    workspace_id: workspace.workspace_id,
+    agent_id: scope.agent_id,
+    workspace_id: scope.workspace_id,
     power_id: context.power.id,
     action_id,
     input: {},
@@ -178,43 +133,27 @@ async function invoke_domain_action<TResult>(
   return result.data as TResult;
 }
 
-/** 读取必填执行范围。 */
-function read_scope(input: PowerJsonValue | undefined): {
-  agent_id: string;
-  workspace_id: string;
-} {
-  const source = read_record(input);
+/** 把领域状态投影为一个能力区说明。 */
+function capability_status(
+  kind: "search" | "document" | "browser",
+  provider: string,
+  status: WebPowerStatusResult | undefined,
+): WebMainviewCapabilityStatus {
+  if (provider) {
+    return { provider, available: true, note: "" };
+  }
   return {
-    agent_id: read_optional_string(source, "agent_id"),
-    workspace_id: read_optional_string(source, "workspace_id"),
+    provider: "",
+    available: false,
+    note: status?.reasons[0] || unavailable_note(kind),
   };
 }
 
-/** 解析快照输入。 */
-function read_snapshot_input(input: PowerJsonValue | undefined): WebMainviewSnapshotInput {
-  return read_scope(input);
-}
-
-/** 解析会话列表输入。 */
-function read_sessions_input(input: PowerJsonValue | undefined): WebMainviewSessionsInput {
-  return read_scope(input);
-}
-
-/** 要求输入是一个 Power JSON object。 */
-function read_record(value: PowerJsonValue | undefined): Record<string, PowerJsonValue> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Web host action input must be an object");
-  }
-  return value;
-}
-
-/** 读取对象中经过裁剪的可选字符串。 */
-function read_optional_string(
-  source: Record<string, PowerJsonValue>,
-  key: string,
-): string {
-  const value = source[key];
-  return typeof value === "string" ? value.trim() : "";
+/** 返回各能力区不可用时的默认说明。 */
+function unavailable_note(kind: "search" | "document" | "browser"): string {
+  if (kind === "search") return "配置 Tavily 或 Exa API Key 后启用搜索。";
+  if (kind === "document") return "网页读取当前已关闭。";
+  return "浏览器 Provider 当前已关闭。";
 }
 
 /** 把结构化协议显式收敛到 Power JSON 边界。 */

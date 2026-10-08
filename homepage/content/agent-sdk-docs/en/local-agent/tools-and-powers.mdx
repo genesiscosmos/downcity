@@ -1,0 +1,125 @@
+---
+title: Tools and Powers
+description: Configure Agent Tools and provide Powers through City
+---
+Tools and Powers both participate in Session execution, but ownership differs: Agent owns custom
+Tools; City owns unique Power instances, configuration projection, and lifecycle.
+
+## Custom Tools
+
+A local Agent directly receives custom Tools:
+
+```ts
+const agent = new Agent({
+  id: "repo-helper",
+  tools: {
+    my_tool,
+  },
+});
+```
+
+They are merged with the Tools of the Workspace selected by the Session. Name conflicts throw instead of silently replacing a Tool.
+
+## Workspace and Shell
+
+Workspace provides `grep`, `find`, `read`, `write`, and `edit`. Configure Shell explicitly when command execution is required:
+
+```ts
+import { Agent } from "@downcity/agent";
+import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
+import { Shell, Workspace } from "@downcity/city";
+
+const agent = new Agent({ id: "repo-helper" });
+const workspace = new Workspace({
+  id: "project",
+  path: "/path/to/project",
+  shell: new Shell({
+    sandbox_provider: new MicrosandboxProvider(),
+  }),
+  runtime_path: "/path/to/downcity-runtime/project",
+});
+```
+
+Shell adds `shell_exec` and `shell_session`. File and search Tools remain restricted to the Workspace root. Approvals and asynchronous questions belong to a specific Session and use `session.interactions()` and `session.respond(...)`.
+
+## City provides Powers
+
+The Agent constructor does not accept Powers. Once registrations are provided to City, every Agent receives them automatically:
+
+```ts
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
+import { create_builtin_power_registrations } from "@downcity/powers";
+import { Workspace } from "@downcity/city";
+
+const workspace = new Workspace({
+  id: "project",
+  path: "/path/to/project",
+});
+const agent = new Agent({ id: "repo-helper", model });
+const city = new City({
+  workspaces: [workspace],
+  powers: create_builtin_power_registrations(),
+});
+
+city.agents.add(agent);
+```
+
+City automatically exposes every registered Power to every Agent. A running City can update the
+collection through `city.powers.add()` and `city.powers.remove()`.
+
+Each Power ID identifies one instance inside a City with a City-level `initialize/dispose` lifecycle.
+Agents and Workspaces provide call context; they do not own Power lifecycle.
+
+## City-level configuration
+
+The host provides one Config store for each Power. Configuration does not enter Agent or determine
+instance count:
+
+```ts
+const city = new City({
+  power_host: {
+    config: (power_id) => open_power_config_store(power_id),
+  },
+});
+```
+
+Each Power ID has one configuration inside a City. A Power models its own account collection and
+selection rules when needed; City does not provide a generic named-configuration layer. After saving Config, the Power
+refreshes any affected long-lived resources.
+
+## Calling Powers
+
+Host code calls Actions and Hooks through an Agent/Workspace execution entry:
+
+```ts
+
+const result = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
+  power: "memory",
+  action: "search",
+  payload: { query: "project conventions" },
+});
+
+const enriched = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", input);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", enriched);
+```
+
+When a Power declares Actions, the host pushes one AgentTool named after that Power. The model calls it with `{ action, args }`, or omits `action` to read the action index with each schema. Power `system()` text is contributed at the `session.system_context` checkpoint.
+
+## Direct communication through PowerContext
+
+Power author APIs come from `@downcity/city/power`. Action, Hook, System, and Availability receive a `PowerContext` with restricted `city`, `agent`, `workspace`, `session`, `turn`, `config`, and `storage` handles.
+
+`context.session` and `context.agent.sessions` are directly callable in-process objects; a Power does not need to retain only `session_id` and query the host again. Use `context.workspace.files` for Workspace files and `context.storage.files` for private Power files.
+
+## HTTP
+
+A Power may declare structured HTTP routes. City mounts and authenticates them and injects the request-specific PowerContext. Powers do not create independent servers.
+
+## See also
+
+- [Power overview](/en/agent-sdk-docs/powers/overview)
+- [Power lifecycle](/en/agent-sdk-docs/powers/lifecycle)
+- [Power actions](/en/agent-sdk-docs/powers/power-actions)
+- [Built-in Powers](/en/powers-docs)
+- [Asynchronous user interactions](/en/agent-sdk-docs/sessions/approvals)

@@ -158,7 +158,7 @@ export function TurnFileDiffCard({ data }: { /** 当前 Turn 的 canonical 文�
   const review = use_turn_file_diff_review();
   const hidden_count = Math.max(0, data.files.length - DEFAULT_VISIBLE_FILE_COUNT);
   const visible_files = show_all ? data.files : data.files.slice(0, DEFAULT_VISIBLE_FILE_COUNT);
-  return <section className="mt-2 overflow-hidden rounded-surface bg-surface-subtle text-2xs text-foreground">
+  return <section className="overflow-hidden rounded-surface bg-surface-subtle text-2xs text-foreground">
     <div className="flex min-h-11 items-center gap-2 px-3.5">
       <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-4"><TbFileDiff aria-hidden /></span>
       <div className="min-w-0 flex-1 truncate text-base font-medium text-foreground">{translate_chat("message.files_changed", { count: data.files.length })}</div>

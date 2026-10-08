@@ -34,7 +34,7 @@ export const Footer: FC = () => {
   const docsPath = isZh ? "/zh/docs" : "/en/docs";
   const citySdkDocsPath = isZh ? "/zh/city-sdk-docs" : "/en/city-sdk-docs";
   const agentSdkDocsPath = isZh ? "/zh/agent-sdk-docs" : "/en/agent-sdk-docs";
-  const pluginsDocsPath = isZh ? "/zh/plugins-docs" : "/en/plugins-docs";
+  const powersDocsPath = isZh ? "/zh/powers-docs" : "/en/powers-docs";
   const uiSdkDocsPath = isZh ? "/zh/ui-sdk-docs" : "/en/ui-sdk-docs";
   const paymentsPath = isZh ? "/zh/payments" : "/en/payments";
   const resourcesPath = isZh ? "/zh/resources" : "/resources";
@@ -71,7 +71,7 @@ export const Footer: FC = () => {
         { label: t("footer.links.docs"), path: docsPath },
         { label: t("footer.links.agentDocs"), path: agentSdkDocsPath },
         { label: t("footer.links.cityDocs"), path: citySdkDocsPath },
-        { label: t("footer.links.plugins"), path: pluginsDocsPath },
+        { label: t("footer.links.powers"), path: powersDocsPath },
         { label: t("footer.links.payments"), path: paymentsPath },
       ],
     },

@@ -11,22 +11,25 @@
  * 两处各写一遍 DOM 时，Group 侧的头像列是 32px、Session 侧是 28px + 间距 8px，
  * 同一件事有两种视觉。几何全部来自 `message_layout`，这里只负责组装与语义。
  *
- * ## 与 Group 的差异只有两处，都用 props 表达
+ * ## 与 Group 的差异只有三处，都用 props 表达
  *
  * 1. **身份行的动作不同**：Session 是「打开 Agent 配置」，Group 是「@ 提及该成员」。
  *    传 `identity_action` 即为可点按钮，不传就是纯展示（如等待响应的状态行）。
  * 2. **身份行右侧可能要多一段说明**：Group 的待响应行需要在名字后补一句「需要你的响应」。
  *    这是 `suffix`，不是新的布局。
+ * 3. **身份行末尾可能要有控件**：Session 的折叠开关。
+ *
+ * 身份行的顺序固定：头像 + 名字 + `suffix` + 时间 + `identity_trailing`，整组靠左。
  *
  * 头像与名称是**同一个按钮**：它们做同一件事，拆成两个按钮会让键盘用户为同一动作
  * 按两次 Tab。可访问名称由调用方给出，语义不变。
  */
 
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { cn } from "@/lib/utils";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { ChatMessageTimestamp } from "@/features/chat/components/ChatMessageTimestamp";
-import { agent_identity_avatar_class_name, agent_identity_name_class_name, agent_identity_row_class_name, agent_message_body_class_name, agent_message_footer_class_name, agent_message_root_class_name, type MessageIdentity } from "@/features/chat/components/messages/message_layout";
+import { agent_identity_avatar_class_name, agent_identity_name_class_name, agent_identity_row_class_name, agent_message_body_class_name, agent_message_footer_class_name, agent_message_identity_header_class_name, agent_message_root_class_name, type MessageIdentity } from "@/features/chat/components/messages/message_layout";
 
 /** Agent 消息骨架属性。 */
 export interface AgentMessageFrameProps {
@@ -43,15 +46,22 @@ export interface AgentMessageFrameProps {
   /** 名称之后的附加说明，例如「需要你的响应」。 */
   suffix?: ReactNode;
   /**
-   * 身份行最右端的附加控件，例如 Agent Message 的折叠开关。
+   * 身份行末尾的附加控件，例如 Agent Message 的折叠开关。
    *
-   * 与 `suffix` 分开：`suffix` 是身份行的**文案**（跟着名字读），这里是**控件**
-   *（可聚焦、可点击），两者在键盘顺序与视觉位置上都不同。
+   * 它排在时间戳之后（时间先出现、开关紧接其右），两者都是身份行的直接子节点。
+   * 与 `suffix` 分开：`suffix` 是跟着名字读的文案，这里是可聚焦控件。
    * 不传时不渲染，Group 侧行为不变。
    */
   identity_trailing?: ReactNode;
-  /** 是否为正在生成的消息（映射到 `aria-busy`）。 */
+  /** 当前消息是否流式生成（映射到 `aria-busy`）。 */
   busy?: boolean;
+  /**
+   * 根元素引用；供需要保持视口位置的调用方测量行元素。
+   *
+   * 只有 Agent Message 的折叠开关用它（见 `AgentMessage`）：它需要在改布局前
+   * 拿到行元素交给滚动视口补偿。其它调用方（Group、状态行）不传。
+   */
+  row_ref?: Ref<HTMLElement>;
   /** 正文；为空表示这条行只有状态（如「正在输入」）。 */
   children?: ReactNode;
   /** Footer（运行状态或消息操作栏）；不传则不渲染。 */
@@ -68,24 +78,24 @@ export interface AgentMessageFrameProps {
 }
 
 /** 组装一条 Agent 侧行的身份行、正文与 Footer。 */
-export function AgentMessageFrame({ agent, created_at, identity_action, identity_title, identity_label, suffix, identity_trailing, busy = false, children, footer, semantic = "message" }: AgentMessageFrameProps) {
+export function AgentMessageFrame({ agent, created_at, identity_action, identity_title, identity_label, suffix, identity_trailing, busy = false, children, footer, semantic = "message", row_ref }: AgentMessageFrameProps) {
   const name = agent.name || "Agent";
   const identity_content = <>
     <AgentAvatar agent={agent} class_name={agent_identity_avatar_class_name} />
     <span className={cn(agent_identity_name_class_name, identity_action && "group-hover/identity:underline")}>{name}</span>
   </>;
   const content = <>
-    <header className="flex min-w-0 items-center gap-2">
+    <header className={agent_message_identity_header_class_name}>
       {identity_action
         ? <button type="button" onClick={identity_action} title={identity_title} aria-label={identity_label ?? identity_title ?? name} className={cn("group/identity", agent_identity_row_class_name, "max-w-full rounded-control outline-none focus-visible:ring-2 focus-visible:ring-ring/30")}>{identity_content}</button>
         : <div className={agent_identity_row_class_name}>{identity_content}</div>}
       {suffix}
-      {identity_trailing}
       {created_at ? <ChatMessageTimestamp created_at={created_at} class_name="opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" /> : null}
+      {identity_trailing}
     </header>
     {children ? <div className={agent_message_body_class_name}>{children}</div> : null}
     {footer ? <div className={agent_message_footer_class_name}>{footer}</div> : null}
   </>;
-  if (semantic === "status") return <div className={agent_message_root_class_name}>{content}</div>;
-  return <article className={agent_message_root_class_name} aria-busy={busy}>{content}</article>;
+  if (semantic === "status") return <div ref={row_ref as Ref<HTMLDivElement>} className={agent_message_root_class_name}>{content}</div>;
+  return <article ref={row_ref as Ref<HTMLElement>} className={agent_message_root_class_name} aria-busy={busy}>{content}</article>;
 }

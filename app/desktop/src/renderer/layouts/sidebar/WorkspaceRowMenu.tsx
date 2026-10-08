@@ -25,9 +25,8 @@
 
 import { useState } from "react";
 import { TbBrandFinder, TbBrandVscode, TbCopy, TbExternalLink, TbPlus, TbTrash } from "react-icons/tb";
-import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RowMenuButton } from "@/components/RowMenuButton";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSubmenu, DropdownMenuSubmenuTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { use_translation } from "@/locales/i18n";
 import type { ChatRowStatus } from "@/features/chat/lib/chat_row_status";
@@ -67,26 +66,11 @@ export function WorkspaceRowMenu({ workspace, status, default_agent_id, on_open_
   const translate_navigation = use_translation("navigation");
   const [copied, set_copied] = useState(false);
   const [remove_open, set_remove_open] = useState(false);
-  const [removing, set_removing] = useState(false);
-  const [remove_error, set_remove_error] = useState("");
 
   const copy_path = async () => {
     await navigator.clipboard.writeText(workspace.workspace_path);
     set_copied(true);
     window.setTimeout(() => set_copied(false), 1200);
-  };
-  const remove = async () => {
-    if (removing) return;
-    set_removing(true);
-    set_remove_error("");
-    try {
-      await on_remove(workspace.workspace_id);
-      set_remove_open(false);
-    } catch (reason) {
-      set_remove_error(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      set_removing(false);
-    }
   };
 
   return <>
@@ -111,15 +95,18 @@ export function WorkspaceRowMenu({ workspace, status, default_agent_id, on_open_
           </DropdownMenuContent>
         </DropdownMenuSubmenu>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-destructive" onClick={() => { set_remove_error(""); set_remove_open(true); }}><TbTrash /><span>{translate("workspace.remove")}</span></DropdownMenuItem>
+        <DropdownMenuItem className="text-destructive" onClick={() => set_remove_open(true)}><TbTrash /><span>{translate("workspace.remove")}</span></DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-    <Dialog open={remove_open} onOpenChange={(next_open) => { if (!removing) set_remove_open(next_open); }}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>{translate("workspace.remove_title", { name: workspace.name })}</DialogTitle><DialogDescription>{translate("workspace.remove_description")}</DialogDescription></DialogHeader>
-        <DialogBody>{remove_error ? <div className="text-xs text-destructive">{remove_error}</div> : <div className="text-xs text-muted-foreground">{translate("workspace.path_detail", { path: workspace.workspace_path })}</div>}</DialogBody>
-        <DialogFooter><Button disabled={removing} onClick={() => set_remove_open(false)}>{translate_common("actions.cancel")}</Button><Button className="text-destructive" disabled={removing} onClick={() => void remove()}>{translate(removing ? "workspace.removing" : "workspace.remove")}</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={remove_open}
+      set_open={set_remove_open}
+      title={translate("workspace.remove_title", { name: workspace.name })}
+      description={translate("workspace.remove_description")}
+      confirm_label={translate("workspace.remove")}
+      pending_label={translate("workspace.removing")}
+      cancel_label={translate_common("actions.cancel")}
+      on_confirm={() => on_remove(workspace.workspace_id)}
+    >{translate("workspace.path_detail", { path: workspace.workspace_path })}</ConfirmDialog>
   </>;
 }

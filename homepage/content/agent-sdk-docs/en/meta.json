@@ -3,7 +3,7 @@
   "pages": [
     "index",
     "local-agent",
-    "plugins",
+    "powers",
     "remote-agent",
     "sessions",
     "integration-patterns",

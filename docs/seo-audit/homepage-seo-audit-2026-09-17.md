@@ -23,6 +23,24 @@
 
 ## 二、问题清单（按严重程度排序）
 
+> **更正（后续复查）：本节 P0-1 的判定不成立。**
+>
+> 原文认为 `hrefLang="en"` 是「驼峰属性名泄漏，不是合法的 HTML 属性」并导致全站
+> hreflang 失效。复测结论：**不成立**。HTML 规范要求属性名大小写不敏感，浏览器与
+> 解析器一律归整为小写；实测 parse5 把 `hrefLang="en"` 与 `hreflang="en"` 解析为
+> 同一个 DOM 属性（两者都得到 `hreflang=en`）。因此驼峰拼写从未使 hreflang 失效，
+> 本节关于「只有 sitemap 里的 hreflang 还在工作」的判断是错的。
+>
+> 该改动真正的副作用是另一件事：React 的 `possibleStandardNames` 把小写 `hreflang`
+> 视为错误拼写，而 React Router 的 `<Meta />` 用 `createElement(tagName, props)`
+> 渲染 meta 描述符，属性键会直接进入 React，因此在开发期持续打印
+> `Invalid DOM property hreflang` 告警。
+>
+> **最终采用的做法**：`app/lib/seo.ts` 改用 React 接受的驼峰 `hrefLang`，产物由
+> 浏览器按小写解析，语义不变；`seo-ready.test.mjs` 不再断言属性名拼写，改为断言
+> hreflang 注解存在（含 `x-default`），因为真正的回归风险是注解缺失而非大小写。
+> 下方原文保留为当时记录。
+
 ### P0-1：预渲染 HTML 中 hreflang 属性名错误 —— 实际失效
 
 **问题诊断**

@@ -6,36 +6,7 @@ description: Choose one value from a grouped set of options
 
 ## Example
 
-```tsx
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@downcity/ui";
-
-export function ModelSelect() {
-  return (
-    <Select defaultValue="balanced">
-      <SelectTrigger>
-        <SelectValue placeholder="Select a mode" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectLabel>Response mode</SelectLabel>
-          <SelectItem value="concise">Concise</SelectItem>
-          <SelectItem value="balanced" description="Balance speed and context">
-            Balanced
-          </SelectItem>
-        </SelectGroup>
-      </SelectContent>
-    </Select>
-  );
-}
-```
+<ComponentPreview name="select" />
 
 ## Composition Rules
 

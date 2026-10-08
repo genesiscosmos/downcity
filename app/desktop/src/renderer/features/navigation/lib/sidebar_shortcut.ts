@@ -14,10 +14,11 @@ const rail_power_priority = ["skill", "messenger", "task", "memory", "web"] as c
 /**
  * 固定一级导航入口的快捷键顺序。
  *
- * 与 `SidebarNavigationItems` 的渲染顺序必须逐项一致：那张表就是 ⌘1 / ⌘2 / ⌘3 的映射，
+ * 与 `SidebarNavigationItems` 的渲染顺序必须逐项一致：那张表就是 ⌘1 / ⌘2 的映射，
  * 两边一分叉，用户按 ⌘1 就会落到 Rail 上的第二个图标。
+ * 功能型 Power 从 ⌘3 起按 Rail 顺序跟随。
  */
-const core_sidebar_modes: SidebarMode[] = ["workspace", "chat", "powers"];
+const core_sidebar_modes: SidebarMode[] = ["workspace", "chat"];
 
 /**
  * 按用户可见顺序排列 Rail 上的一级功能入口。

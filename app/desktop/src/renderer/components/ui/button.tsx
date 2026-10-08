@@ -15,6 +15,9 @@ const button_variants = cva(
       },
       size: {
         default: "h-6 w-auto min-w-0 gap-1 px-1.5 text-2xs leading-4 [&_svg]:size-3.5",
+        // 弹窗底部操作区的标准尺寸：比行内按钮大一档，与输入框同高。
+        // 曾经由 DialogFooter 用 `[&_button]:h-8` 反向覆盖子按钮尺寸，那是补丁式写法。
+        action: "h-8 w-auto min-w-0 gap-1.5 px-3 text-xs leading-4 [&_svg]:size-4",
         icon: "size-6 shrink-0 p-0 [&_svg]:size-3.5",
         full: "h-6 w-full justify-start gap-1 px-1.5 text-2xs leading-4 [&_svg]:size-3.5",
         sidebar: "h-8 w-full justify-start gap-2 rounded-control px-2 text-xs [&_svg]:size-4",

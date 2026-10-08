@@ -21,38 +21,7 @@ import {
 
 ## 最小示例
 
-```tsx
-import {
-  Button,
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@downcity/ui";
-
-export function DeleteDialog() {
-  return (
-    <Dialog>
-      <DialogTrigger render={<Button variant="destructive" size="sm" />}>
-        删除
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>确认删除</DialogTitle>
-          <DialogDescription>删除后无法恢复。</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" size="sm">取消</Button>
-          <Button variant="destructive" size="sm">确认删除</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-```
+<ComponentPreview name="dialog" />
 
 ## 关键导出
 

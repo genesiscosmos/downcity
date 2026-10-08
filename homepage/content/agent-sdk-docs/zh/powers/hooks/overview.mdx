@@ -1,0 +1,83 @@
+---
+title: Hooks 总览
+description: 从运行语义角度理解 pipeline、guard、effect、resolve 到底各自是什么
+---
+这一组能力最好不要按“代码长什么样”来理解，而要按“运行时到底发生了什么”来理解。
+
+## 共同点
+
+这四种能力都有一个共同前提：
+
+- Power 先声明 handler
+- 宿主代码后调用某个点
+
+例如：
+
+```ts
+const next = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", value);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", next);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).effect("audit.observe", next);
+const role = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).resolve("auth.resolve_role", {
+  userId: "owner",
+});
+```
+
+这段代码里，真正触发执行的是宿主，而不是 Power 自己。
+
+## 最大区别
+
+### `pipeline`
+
+重点是“接过一个值，再交出一个新值”。
+
+### `guard`
+
+重点是“允许继续，或者直接抛错阻断”。
+
+### `effect`
+
+重点是“主值不变，只做副作用”。
+
+### `resolve`
+
+重点是“这个问题最终只能有一个回答者”。
+
+## 把它们想成四种问题
+
+### `pipeline` 在回答
+
+“这份输入在进入下一步之前，要不要被加工一下？”
+
+### `guard` 在回答
+
+“这份输入现在有没有资格继续往后走？”
+
+### `effect` 在回答
+
+“这一步发生了之后，要不要顺手记录或同步一点东西？”
+
+### `resolve` 在回答
+
+“这个问题最终到底由谁给答案？”
+
+## 为什么 `resolve` 最容易写错
+
+因为很多人会把它写成“大家都来参与一点”。
+
+但 `resolve` 的语义不是：
+
+- 多个 Power 共同补一份答案
+
+而是：
+
+- 当前这个点，必须由一个 Power 作为唯一权威来返回结果
+
+所以它更像“查最终角色”“查最终 provider”“查最终路由决策”，而不像“给消息继续补字段”。
+
+## 下一步
+
+- [调用流](/zh/agent-sdk-docs/powers/hooks/call-flow)
+- [Pipeline](/zh/agent-sdk-docs/powers/hooks/pipeline)
+- [Guard](/zh/agent-sdk-docs/powers/hooks/guard)
+- [Effect](/zh/agent-sdk-docs/powers/hooks/effect)
+- [Resolve](/zh/agent-sdk-docs/powers/hooks/resolve)

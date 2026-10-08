@@ -18,28 +18,7 @@ import {
 
 ## 最小示例
 
-```tsx
-import {
-  Button,
-  TooltipProvider,
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@downcity/ui";
-
-export function RefreshTooltip() {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger render={<Button size="icon-sm" variant="ghost" />}>
-          R
-        </TooltipTrigger>
-        <TooltipContent>刷新数据</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-```
+<ComponentPreview name="tooltip" />
 
 ## 使用建议
 

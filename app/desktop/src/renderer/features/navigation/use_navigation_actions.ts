@@ -54,8 +54,6 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
     persist_selection();
     return navigation.store.subscribe(persist_selection);
   }, [navigation, selection_by_sidebar_mode_ref]);
-  const select_power = useCallback((power_id: string) => { settings.set_error(""); navigation.set_sidebar_mode("powers"); navigation.set_selection({ kind: "power", power_id }); }, [navigation, settings]);
-  const select_powers = useCallback(() => { settings.set_error(""); navigation.set_sidebar_mode("powers"); navigation.set_selection({ kind: "powers" }); }, [navigation, settings]);
   const select_power_workspace = useCallback((power_id: string) => {
     const power = catalog.state_ref.current.powers.find((item) => item.power_id === power_id);
     if (!power?.has_sidebar || !power.has_mainview) return;
@@ -71,7 +69,6 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
       const workspace = catalog.state_ref.current.workspaces.find((item) => item.workspace_id === navigation.state_ref.current.active_workspace_id) ?? catalog.state_ref.current.workspaces[0];
       return navigation.set_selection(workspace ? { kind: "workspace", workspace_id: workspace.workspace_id } : null);
     }
-    if (mode === "powers") return navigation.set_selection({ kind: "powers" });
     const power_id = mode.startsWith("power:") ? mode.slice("power:".length) : undefined;
     const power = power_id ? catalog.state_ref.current.powers.find((item) => item.power_id === power_id) : undefined;
     if (power?.has_sidebar && power.has_mainview) return navigation.set_selection({ kind: "power_workspace", power_id: power.power_id });
@@ -114,5 +111,5 @@ export function use_desktop_navigation_actions(dependencies: DesktopNavigationDe
     navigation.set_selection({ kind: "settings", section });
   }, [navigation, previous_selection_ref, settings]);
   const close_settings = useCallback(() => navigation.set_selection(previous_selection_ref.current ?? (catalog.state_ref.current.agents[0] ? { kind: "agent", agent_id: catalog.state_ref.current.agents[0].agent_id } : null)), [catalog, navigation, previous_selection_ref]);
-  return useMemo(() => ({ select_power, select_powers, select_power_workspace, navigate_power, invalidate_power, set_sidebar_mode, select_workspace, select_workspace_file, select_agent, open_create_agent, select_group, open_settings, close_settings }), [close_settings, invalidate_power, navigate_power, open_create_agent, open_settings, select_agent, select_group, select_power, select_power_workspace, select_powers, select_workspace, select_workspace_file, set_sidebar_mode]);
+  return useMemo(() => ({ select_power_workspace, navigate_power, invalidate_power, set_sidebar_mode, select_workspace, select_workspace_file, select_agent, open_create_agent, select_group, open_settings, close_settings }), [close_settings, invalidate_power, navigate_power, open_create_agent, open_settings, select_agent, select_group, select_power_workspace, select_workspace, select_workspace_file, set_sidebar_mode]);
 }

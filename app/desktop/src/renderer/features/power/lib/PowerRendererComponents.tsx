@@ -13,7 +13,7 @@
  */
 
 import { Fragment, useState, type KeyboardEvent, type ReactNode } from "react";
-import { TbChevronDown, TbDots, TbLoader2, TbPlus } from "react-icons/tb";
+import { TbChevronDown, TbDots, TbExternalLink, TbLoader2, TbPlus } from "react-icons/tb";
 import type { PowerRendererUiComponents } from "@downcity/city/power/react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
@@ -48,6 +48,19 @@ interface PowerRendererUiComponentOptions {
 function tree_trailing(trailing: ReactNode): ReactNode {
   if (typeof trailing !== "number") return trailing;
   return <span className="flex size-5 shrink-0 items-center justify-center rounded-chip bg-surface-emphasis text-3xs tabular-nums">{trailing}</span>;
+}
+
+/**
+ * 状态点的取色。
+ *
+ * 与 `Status` 的语义档位同名同义，只是换成点需要的不透明底色：
+ * `Status` 是文字色，点需要的是背景色，两者不能共用同一个类。
+ */
+function status_dot_tone_class_name(tone: "success" | "warning" | "danger" | "muted"): string {
+  if (tone === "success") return "bg-emerald-500";
+  if (tone === "warning") return "bg-amber-500";
+  if (tone === "danger") return "bg-destructive";
+  return "bg-muted-foreground";
 }
 
 /** 创建稳定的宿主 Power UI Components 集合。 */
@@ -246,5 +259,23 @@ export function create_power_renderer_ui_components(options: PowerRendererUiComp
     LoadingState: ({ label }) => <div className="flex min-h-40 items-center justify-center gap-2 text-xs text-muted-foreground"><TbLoader2 className="size-4 animate-spin" />{label}</div>,
     Callout: ({ children, tone = "default" }) => <div className={cn("rounded-item px-3 py-2 text-xs leading-5", tone === "default" && "bg-surface-subtle text-muted-foreground", tone === "warning" && "bg-amber-500/10 text-amber-700 dark:text-amber-400", tone === "danger" && "bg-destructive/10 text-destructive")}>{children}</div>,
     Status: ({ children, tone = "muted" }) => <span className={cn("text-2xs", tone === "muted" && "text-muted-foreground", tone === "success" && "text-emerald-600 dark:text-emerald-400", tone === "warning" && "text-amber-600 dark:text-amber-400", tone === "danger" && "text-destructive")}>{children}</span>,
+    // 与 AttentionRailDot 同一尺寸与形状；只颜色表达语义。
+    // 点没有文字，因此 `label` 同时是读屏名称与悬停提示，不允许为空。
+    StatusDot: ({ tone, label }) => <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className={cn("inline-block size-1.5 shrink-0 rounded-full", status_dot_tone_class_name(tone))}
+    />,
+    // 文字链接：不用按钮底色，靠颜色与悬停下划线表达可点。
+    Link: ({ children, on_click, external = false, disabled = false }) => <button
+      type="button"
+      disabled={disabled}
+      onClick={on_click}
+      className="inline-flex min-w-0 items-center gap-1 rounded-control text-2xs text-primary outline-none transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="truncate">{children}</span>
+      {external ? <TbExternalLink aria-hidden className="size-3 shrink-0 opacity-70" /> : null}
+    </button>,
   };
 }

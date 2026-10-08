@@ -44,15 +44,18 @@ export type {
   WebSearchProvider,
 } from "./web/types/WebPower.js";
 export type {
-  WebMainviewAgent,
+  WebCapability,
   WebMainviewCapabilityStatus,
   WebMainviewSession,
-  WebMainviewSessionsInput,
   WebMainviewSessionsResult,
   WebMainviewSnapshot,
-  WebMainviewSnapshotInput,
-  WebMainviewWorkspace,
 } from "./web/types/WebMainview.js";
+export type {
+  WebConfigPatch,
+  WebConfigTestInput,
+  WebConfigTestResult,
+  WebConfigView,
+} from "./web/types/WebPowerConfig.js";
 export type { PlaywrightBrowserProviderOptions } from "./web/types/PlaywrightBrowserProvider.js";
 export type {
   ExaSearchProviderOptions,

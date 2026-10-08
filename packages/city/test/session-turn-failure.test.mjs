@@ -48,7 +48,7 @@ async function create_turn_harness(execute_turn, options = {}) {
   const turn = new SessionLoop({
     session_id,
     session_origin,
-    workspace_path: root_path,
+    get_workspace_path: () => (root_path),
     executor: {
       execute: async ({ turn_context }) => await execute_turn(turn_context, root_path),
       is_executing: () => false,

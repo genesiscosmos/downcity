@@ -52,10 +52,25 @@ export interface ModelPricing {
   dimensions?: Record<string, string>;
 }
 
+/** 公开模型信息中的模型类别。 */
+export type CityModelType =
+  | "language"
+  | "decision"
+  | "image"
+  | "sound"
+  | "video";
+
 /** City 模型目录中的公开模型信息。 */
 export interface CityModelDescriptor {
   /** 模型唯一 ID，用于请求 City AIService。 */
   id: string;
+  /**
+   * 模型类别，决定该模型可执行的能力入口。
+   *
+   * 由 Federation 从模型的可执行能力推导，与 `modalities` 同源；
+   * 它只用于展示与分组，判断可执行能力应读取 `modalities`。
+   */
+  model_type: CityModelType;
   /** 模型展示名称，用于 Console、文档或产品 UI。 */
   name: string;
   /** 模型说明文本。 */

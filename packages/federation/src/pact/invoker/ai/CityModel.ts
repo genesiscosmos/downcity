@@ -20,6 +20,7 @@ import type { CityModelOptions } from "../../../types/AITransport.js";
 export class CityModel implements CityModelContract {
   readonly kind = CITY_MODEL_KIND;
   readonly id: string;
+  readonly model_type: CityModelContract["model_type"];
   readonly name: string;
   readonly description: string;
   readonly context_window?: number;
@@ -35,6 +36,7 @@ export class CityModel implements CityModelContract {
   constructor(options: CityModelOptions) {
     const descriptor = options.descriptor;
     this.id = descriptor.id;
+    this.model_type = descriptor.model_type;
     this.name = descriptor.name;
     this.description = descriptor.description;
     this.context_window = descriptor.context_window;

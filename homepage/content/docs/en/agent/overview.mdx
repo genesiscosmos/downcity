@@ -4,25 +4,25 @@ description: What the Agent SDK is and how it runs agent work
 ---
 The **Agent SDK** (`@downcity/agent`) is the core runtime for executing agent work. An Agent owns
 identity, model, instructions, Tools, and one `AgentSessions` collection. Each Session may receive a
-Workspace. `City` owns Workspaces, unique Plugin instances, Agent/Group collections, and transports.
+Workspace. `City` owns Workspaces, unique Power instances, Agent/Group collections, and transports.
 
 ## What an Agent does
 
 - Reads project config (constructor options or a project directory)
 - Maintains sessions and conversation history
 - Calls tools during execution
-- Uses Plugin capabilities projected by City into the current scope
+- Uses Power capabilities projected by City into the current scope
 - Binds to a model for inference
 
 ## Creating an Agent
 
-Selecting “Create Agent” opens a dedicated creation page. Describe the role in natural language to let the system default model draft its name, description, instructions, and recommended plugins, or choose manual configuration to start with an empty draft. AI output remains editable and nothing is persisted until you confirm creation.
+Selecting “Create Agent” opens a dedicated creation page. Describe the role in natural language to let the system default model draft its name, description, instructions, and recommended powers, or choose manual configuration to start with an empty draft. AI output remains editable and nothing is persisted until you confirm creation.
 
 The editor preselects the system default text model and only falls back when it is unavailable. Desktop surfaces display Agent names throughout the UI; stable IDs remain internal routing and storage references.
 
 The name and description identify the Agent in contacts and conversations. The generated ID remains the stable reference used by local directories, APIs, and runtime ownership. If the generated ID already exists, Desktop asks for another name instead of silently adding a random suffix.
 
-You can edit the name and description later without changing the stable Agent ID. Desktop also supports permanent deletion of the Agent definition, avatar, sessions, logs, schedules, and Agent-scoped plugin data. An Agent cannot be deleted while it is running or still belongs to a Group.
+You can edit the name and description later without changing the stable Agent ID. Desktop also supports permanent deletion of the Agent definition, avatar, sessions, logs, schedules, and Agent-scoped power data. An Agent cannot be deleted while it is running or still belongs to a Group.
 
 ## Desktop completion notifications
 
@@ -41,7 +41,7 @@ You only provide the visible Group name. Desktop derives the stable internal `gr
 ```ts
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
-import { create_builtin_plugin_registrations } from "@downcity/plugins";
+import { create_builtin_power_registrations } from "@downcity/powers";
 import { Workspace } from "@downcity/city";
 import { Shell } from "@downcity/city";
 import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
@@ -60,17 +60,17 @@ const workspace = new Workspace({
 });
 const city = new City({
   workspaces: [workspace],
-  plugins: create_builtin_plugin_registrations(),
+  powers: create_builtin_power_registrations(),
 });
 city.agents.add(agent);
 ```
 
 ## Key concepts
 
-- **City** — owns Workspaces, unique Plugin instances, Agent/Group collections, and unified transports.
+- **City** — owns Workspaces, unique Power instances, Agent/Group collections, and unified transports.
 - **Session** — one execution thread. The Agent creates sessions on demand and routes messages through them.
 - **Tool** — a function the Agent can call during execution. Passed directly to the constructor.
-- **Plugin** — an extension capability provided and owned by City, then projected to every Agent.
+- **Power** — an extension capability provided and owned by City, then projected to every Agent.
 - **Model** — the inference backend. The Agent holds the default instance, and a Session can override it with its own instance.
 
 ## What an Agent is not responsible for
@@ -86,7 +86,7 @@ Keeping these boundaries clear makes it easy to answer: where should I configure
 The Agent execution model is simple:
 
 1. Receive a message or task
-2. Load the session context (history, tools, plugins, prompts)
+2. Load the session context (history, tools, powers, prompts)
 3. Call the model
 4. If the model asks for a tool, execute it and continue
 5. Return the result

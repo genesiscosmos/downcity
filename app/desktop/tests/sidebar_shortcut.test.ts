@@ -36,17 +36,16 @@ test("无 Sidebar 的 Power 不进入 Rail 顺序", () => {
   assert.deepEqual(order_rail_powers(hidden_only), []);
 });
 
-test("前三个数字映射到固定一级导航", () => {
+test("前两个数字映射到固定一级导航，功能型 Power 从第三个数字起跟随", () => {
   assert.equal(resolve_sidebar_shortcut_mode("1", powers), "workspace");
   assert.equal(resolve_sidebar_shortcut_mode("2", powers), "chat");
-  assert.equal(resolve_sidebar_shortcut_mode("3", powers), "powers");
 });
 
 test("后续数字与 Rail 图标顺序一致", () => {
-  assert.equal(resolve_sidebar_shortcut_mode("4", powers), "power:skill");
-  assert.equal(resolve_sidebar_shortcut_mode("5", powers), "power:chat");
-  assert.equal(resolve_sidebar_shortcut_mode("6", powers), "power:task");
-  assert.equal(resolve_sidebar_shortcut_mode("7", powers), "power:files");
-  assert.equal(resolve_sidebar_shortcut_mode("8", powers), undefined);
+  assert.equal(resolve_sidebar_shortcut_mode("3", powers), "power:skill");
+  assert.equal(resolve_sidebar_shortcut_mode("4", powers), "power:messenger");
+  assert.equal(resolve_sidebar_shortcut_mode("5", powers), "power:task");
+  assert.equal(resolve_sidebar_shortcut_mode("6", powers), "power:files");
+  assert.equal(resolve_sidebar_shortcut_mode("7", powers), undefined);
   assert.equal(resolve_sidebar_shortcut_mode("0", powers), undefined);
 });

@@ -1,0 +1,45 @@
+---
+title: Task Power
+description: Task Power 如何调度和运行后台任务
+---
+Task Power 让 Agent 能够调度和运行后台任务。它适用于定期数据获取、报告生成，或任何应该在正常请求-响应流之外发生的工作。
+
+## 功能
+
+- 在特定时间或间隔调度任务
+- 在 City 级 Power Store 中统一保存 Task 定义与执行产物
+- 在 TaskPower initialize 时恢复已启用的调度
+- 阻止同一 Task 重叠执行
+
+## Desktop 工作区
+
+Task 不声明 Config。它仍会出现在 Powers Catalog 中展示说明，同时在一级导航条贡献独立入口。Power Sidebar 使用 `Task → 执行记录` 两级树；点击 Task 查看任务详情，展开 Task 时才读取执行记录。Mainview 用于查看任务定义、最终输出、执行状态、触发来源、耗时、结果校验和错误信息。
+
+Desktop 可以直接新建、编辑、启用、暂停、立即运行和删除 Task。Task 不按 Agent 或 Workspace 分组；每个 Task 显式保存一个 `agent_id` 和一个 `workspace_id` 作为可重新绑定的执行目标，界面只展示对应名称。目标失效后 Task 仍然可见、可编辑和可删除；Task 正在运行时会拒绝删除，避免同时移除其执行产物。定义、调度状态和 run 产物都从 TaskPower 统一的 City 生命周期存储读取，不再保存 Agent 级副本。
+
+定义写入成功但 scheduler 同步失败时，Desktop 会明确提示“Task 已保存，但调度器同步失败”；已经提交的定义不会回滚，也不会显示为完整成功。此时应修复故障后重载 Task scheduler。合法 Task 目录中的 `task.md` 缺失或损坏会在 Task 页面显示为错误项并停止该 Task 的调度，不会被静默隐藏，也不会阻止其他合法 Task 或 Desktop 启动；错误项可以从页面删除。
+
+Task 成功或失败并完成执行记录持久化后，会通过统一 Notification 模块产生未读通知；跳过的执行不会通知。同一 Task 只保留最新未读 Run。Desktop 会在 Task 一级图标、Task 条目和对应 Run 旁显示蓝点，并同步系统应用图标角标；打开该 Run 后自动标记为已读。
+
+## 定义任务
+
+每个 Task 只在 TaskPower 生命周期存储中定义一次。TaskPower initialize 时恢复已启用的定义，并且只在触发执行时进入 Task 声明的 Agent/Workspace 上下文。触发方式包括：
+
+- Cron 表达式
+- 一次性调度
+- 事件驱动触发
+
+## 使用场景
+
+- 每日数据同步
+- 定期报告生成
+- 后台文件处理
+- 定时通知
+
+任务执行时会创建独立的 task Session，并复用执行 Agent 的能力。从 Agent Session 调用 `create` 时，运行时会同时固化当前 Agent、Workspace、`session_id` 与 `origin.type` 作为交付目标。此后重新绑定执行 Agent 或 Workspace 只会改变执行目标，完成结果仍由 City 追加回原始 Session；只有执行目标与交付目标仍属于同一 Agent/Workspace 时，task Session 才继承原 Session 的模型。模型无需也不能填写 Session 路由。通过 CLI、HTTP 或宿主管理界面等无 Session 上下文入口创建的 Task 不绑定交付目标，结果保留在执行历史。任务 Agent 如需发送聊天消息，应在 task Session 内主动调用 Messenger Power。
+
+继续阅读：
+
+- [Messenger Power](/zh/docs/power/messenger)
+- [Memory Power](/zh/docs/power/memory)
+- [Agent Powers Docs](/zh/powers-docs)

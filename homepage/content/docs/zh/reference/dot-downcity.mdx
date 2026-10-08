@@ -14,7 +14,7 @@ description: 运行时数据目录结构与用途
 │   ├── sessions/<origin_type>/<session_id>/
 │   ├── archived-sessions/<origin_type>/<session_id>/
 │   └── logs/
-├── plugins/<plugin_id>/
+├── powers/<power_id>/
 │   └── config.toml
 ├── runtimes/city/
 └── downcity.db
@@ -33,15 +33,15 @@ description: 运行时数据目录结构与用途
 
 ### Memory
 
-长期 Memory 不属于 Workspace `.downcity/` 协议。Agent 私有内容位于 `agents/<agent_id>/plugins/memory/`；City 共享的 User/Workspace 内容位于 `memory/`，并由 `MemoryPlugin` 按 Subject 隔离。City 只提供共享根路径，不实现 Memory 数据逻辑。
+长期 Memory 不属于 Workspace `.downcity/` 协议。Agent 私有内容位于 `agents/<agent_id>/powers/memory/`；City 共享的 User/Workspace 内容位于 `memory/`，并由 `MemoryPower` 按 Subject 隔离。City 只提供共享根路径，不实现 Memory 数据逻辑。
 
-### Plugin 运行数据
+### Power 运行数据
 
-Plugin 自有运行数据使用 PluginContext 提供的 Agent 级存储作用域。Plugin 定义与唯一配置保存在 `~/.downcity/plugins/<plugin_id>/`。
+Power 自有运行数据使用 PowerContext 提供的 Agent 级存储作用域。Power 定义与唯一配置保存在 `~/.downcity/powers/<power_id>/`。
 
 ### Skills 目录位置
 
-`SkillPlugin` 默认扫描 `.agents/skills`（项目级）。如果在构造函数中启用 `use: ["home"]`，也会扫描 `~/.agents/skills`（用户级）。
+`SkillPower` 默认扫描 `.agents/skills`（项目级）。如果在构造函数中启用 `use: ["home"]`，也会扫描 `~/.agents/skills`（用户级）。
 
 ## 安全建议
 

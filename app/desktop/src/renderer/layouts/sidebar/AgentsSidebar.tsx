@@ -36,7 +36,7 @@ import { AgentAvatar } from "@/components/AgentAvatar";
 import { GroupAvatar } from "@/components/GroupAvatar";
 import { RowMenuButton } from "@/components/RowMenuButton";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { resolve_chat_row_status } from "@/features/chat/lib/chat_row_status";
@@ -151,7 +151,7 @@ const AgentSubject = memo(function AgentSubject({ agent, controller, active, unr
         </DropdownMenuContent>
       </DropdownMenu>}
     />
-    <SubjectDeleteDialog
+    <ConfirmDialog
       open={delete_open}
       set_open={set_delete_open}
       title={translate("sidebar.delete_agent_title", { name: agent.name })}
@@ -199,7 +199,7 @@ const GroupSubject = memo(function GroupSubject({ group, controller, agents, act
         </DropdownMenuContent>
       </DropdownMenu>}
     />
-    <SubjectDeleteDialog
+    <ConfirmDialog
       open={delete_open}
       set_open={set_delete_open}
       title={translate("sidebar.delete_group_title", { name: group.name })}
@@ -212,45 +212,3 @@ const GroupSubject = memo(function GroupSubject({ group, controller, agents, act
   </>;
 });
 
-/**
- * 主体删除前的确认 Dialog。
- *
- * 失败不吞掉：错误就地显示在这个对话框里，而不是抛到全局错误条——
- * 用户此刻的注意力在这个对话框上，错误出现在别处等于没提示。
- */
-function SubjectDeleteDialog({ open, set_open, title, description, confirm_label, pending_label, cancel_label, on_confirm }: {
-  /** 是否可见。 */ open: boolean;
-  /** 修改可见性。 */ set_open(open: boolean): void;
-  /** 标题。 */ title: string;
-  /** 风险说明。 */ description: string;
-  /** 确认按钮文案。 */ confirm_label: string;
-  /** 执行中的确认按钮文案。 */ pending_label: string;
-  /** 取消按钮文案。 */ cancel_label: string;
-  /** 执行删除。 */ on_confirm(): Promise<void> | void;
-}) {
-  const [pending, set_pending] = useState(false);
-  const [error, set_error] = useState("");
-  const confirm = async () => {
-    if (pending) return;
-    set_pending(true);
-    set_error("");
-    try {
-      await on_confirm();
-      set_open(false);
-    } catch (reason) {
-      set_error(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      set_pending(false);
-    }
-  };
-  return <Dialog open={open} onOpenChange={(next_open) => { if (!pending) set_open(next_open); }}>
-    <DialogContent>
-      <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>{description}</DialogDescription></DialogHeader>
-      <DialogBody>{error ? <div className="text-xs text-destructive">{error}</div> : null}</DialogBody>
-      <DialogFooter>
-        <Button disabled={pending} onClick={() => set_open(false)}>{cancel_label}</Button>
-        <Button variant="destructive" disabled={pending} onClick={() => void confirm()}>{pending ? pending_label : confirm_label}</Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>;
-}

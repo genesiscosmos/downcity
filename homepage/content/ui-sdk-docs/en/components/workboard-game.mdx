@@ -1,100 +1,67 @@
 ---
 title: Workboard Game
-description: Game-style map rendering components for the agent activity world
+description: How the composite Workboard renders the game-style agent world
 ---
-The workboard game components provide a game-style interactive map for agent activity visualization. They translate the `DowncityWorkboardGameMapConfig` into a playable world.
+`Workboard` composes a game-style interactive map for agent activity. The atlas, room, inspector, and
+pixel-sprite renderers are internal parts of that composition — they are not separate public
+components, so you do not import them individually.
 
-## Components
+## Game map config
 
-| Component | Description |
-|-----------|-------------|
-| `WorkboardGameAtlas` | Top-level zoomed-out view showing all zones and agent positions |
-| `WorkboardGameInspector` | Agent detail inspector panel |
-| `WorkboardGameRoom` | Focused room-level view inside a zone |
-| `WorkboardPixelAgent` | Pixel-art agent character rendered on the game map |
-| `WorkboardRoomField` | Room backdrop and field rendering |
-
-## WorkboardGameAtlas
-
-Atlas-level overview rendering all zones, corridors, and agents.
+The only game-specific value `@downcity/ui` exports is the map builder. Pass the same input the board
+uses to derive a `DowncityWorkboardGameMapConfig`:
 
 ```tsx
-import { WorkboardGameAtlas } from "@downcity/ui";
+import { buildWorkboardGameMapConfig, type DowncityWorkboardBoardSnapshot } from "@downcity/ui";
 
-<WorkboardGameAtlas
-  config={mapConfig}
-  hoveredAgentId={hoveredId}
-  onSelectZone={(id) => setZone(id)}
-  onHoverAgent={(id) => setHover(id)}
+const gameMap = buildWorkboardGameMapConfig({
+  board,
+  activeZoneId: "active",
+  selectedAgentId,
+});
+```
+
+| Option | Type | Meaning |
+|--------|------|---------|
+| `board` | `DowncityWorkboardBoardSnapshot` | Current board snapshot |
+| `activeZoneId` | `DowncityWorkboardZoneId` | Zone to focus |
+| `selectedAgentId` | `string` | Currently selected agent |
+
+The returned `DowncityWorkboardGameMapConfig` describes zones, actors, corridors, patrols, and points
+of interest. `Workboard` builds it internally; call the builder directly only when you need the same
+geometry for your own overlay.
+
+## Rendering the game
+
+Render the board and let it own the game mode, HUD, zone navigation, and motion:
+
+```tsx
+import { Workboard } from "@downcity/ui";
+import "@downcity/ui/styles.css";
+
+<Workboard
+  board={board}
+  selectedAgentId={selectedId}
+  onSelectAgent={(id) => setSelectedId(id)}
 />
 ```
 
-## WorkboardGameInspector
+## Public game types
 
-Inspector panel showing details for a selected agent.
+These types are exported for configuring and typing the map. The atlas, room, inspector, and sprite
+renderers consume them internally.
 
-```tsx
-import { WorkboardGameInspector } from "@downcity/ui";
+| Type | Purpose |
+|------|---------|
+| `DowncityWorkboardGameMapConfig` | Full game map config returned by the builder |
+| `DowncityWorkboardGameZone` | One zone on the map |
+| `DowncityWorkboardGameActor` | One agent actor with position and route |
+| `DowncityWorkboardGameRoute` | Patrol or corridor path |
+| `DowncityWorkboardGamePointOfInterest` | Named point on the map |
+| `DowncityWorkboardGameAreaLabel` | Area label rendered on the map |
 
-<WorkboardGameInspector
-  agent={selectedAgent}
-  open={true}
-/>
-```
+## Related
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `agent` | `DowncityWorkboardAgentItem` | Agent to inspect |
-| `open` | `boolean` | Panel visibility |
-
-## WorkboardGameRoom
-
-Zoomed-in room view for a specific zone.
-
-```tsx
-import { WorkboardGameRoom } from "@downcity/ui";
-
-<WorkboardGameRoom
-  skillState={{}}
-  actorResource={{
-    actors: config.actors,
-    routes: config.patrols,
-  }}
-  onActorClick={(agentId) => setSelected(agentId)}
-/>
-```
-
-## WorkboardPixelAgent
-
-Pixel-art agent sprite component.
-
-```tsx
-import { WorkboardPixelAgent } from "@downcity/ui";
-
-<WorkboardPixelAgent
-  agentId={id}
-  agentName={name}
-  active={isFocused}
-  variant="single"
-/>
-```
-
-| Prop | Type | Description |
-|------|------|-------------|
-| `agentId` | `string` | Agent identifier |
-| `agentName` | `string` | Display name |
-| `active` | `boolean` | Highlight as focused |
-| `variant` | `"single"` | Rendering variant |
-
-## WorkboardRoomField
-
-Room backdrop and environment rendering.
-
-```tsx
-import { WorkboardRoomField } from "@downcity/ui";
-
-<WorkboardRoomField
-  room={roomConfig}
-  tileSize={32}
-/>
-```
+- [Workboard](./workboard) — the composite board you render
+- [WorkboardStage](./workboard-stage) and [WorkboardStageMap](./workboard-stage-map) — the board's
+  internal stage layers

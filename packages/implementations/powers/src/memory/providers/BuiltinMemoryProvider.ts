@@ -336,7 +336,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         memory_id: revised.memory_id || memory_id,
         title: input.topic || "Memory Inbox",
         content: revised.content,
-      }, source_refs, input.memory_type || "fact", address);
+      }, source_refs, input.memory_type || "fact", address, input.access.workspace_id);
       return {
         memory_id: target_memory_id,
         evidence_id,
@@ -352,6 +352,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       source_refs,
       memory_type: input.memory_type || "fact",
       address,
+      ...(input.access.workspace_id ? { workspace_id: input.access.workspace_id } : {}),
     });
     return {
       memory_id,
@@ -417,6 +418,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       source_refs,
       memory_type: "episode",
       address,
+      ...(input.access.workspace_id ? { workspace_id: input.access.workspace_id } : {}),
     });
     return {
       memory_ids: [memory_id],
@@ -451,6 +453,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         evidence,
         address,
         `revision:${memory_id}`,
+        metadata.workspace_id,
       );
       source_refs.push({
         source_id: evidence_id,
@@ -469,7 +472,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         memory_id: revised.memory_id || memory_id,
         title: String(metadata.title || memory_id),
         content: revised.content,
-      }, source_refs, metadata.memory_type, address);
+      }, source_refs, metadata.memory_type, address, metadata.workspace_id);
       return {
         memory_id: target_memory_id,
         ...(evidence_id ? { evidence_id } : {}),
@@ -490,6 +493,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       content: `${strip_frontmatter(existing)}\n\n${addition}`,
       memory_type: metadata.memory_type,
       source_refs,
+      ...(metadata.workspace_id ? { workspace_id: metadata.workspace_id } : {}),
       tags: ["memory"],
       observed_at: metadata.observed_at,
     }));
@@ -522,7 +526,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     const max_chars = Math.max(0, Math.floor(input.max_chars || DEFAULT_MAX_CONTEXT_CHARS));
     if (max_items === 0 || max_chars === 0) return { items: [] };
     const relative_candidates = [
-      "wiki/user-preferences",
       "wiki/project-overview",
       "wiki/rules",
       INDEX_RELATIVE_MEMORY_ID,
@@ -592,8 +595,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       status: "pending",
       agent_id: input.access.agent_id,
       workspace_id: input.access.workspace_id,
-      user_id: input.access.user_id,
-      city_id: input.access.city_id,
       session_id,
       turn_id,
       messages,
@@ -627,12 +628,12 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     }
   }
 
-  /** revise/forget 只允许当前 Agent、User 或 Workspace，拒绝直接修改 City Shared。 */
+  /** revise/forget 只允许当前 Agent 与当前 Workspace 共享记忆，拒绝直接修改其他范围。 */
   private assert_address_writable(
     access: MemoryAccessContext,
     address: MemorySubjectAddress,
   ): void {
-    const targets: MemoryWriteTarget[] = ["agent", "current_user", "current_workspace"];
+    const targets: MemoryWriteTarget[] = ["agent", "current_workspace"];
     const writable = targets.some((target) => {
       try {
         return resolve_writable_memory_address(access, target).prefix === address.prefix;
@@ -664,6 +665,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     content: string,
     address: MemorySubjectAddress,
     label: string,
+    workspace_id?: string,
   ): Promise<void> {
     const normalized_id = normalize_memory_id(evidence_id);
     await this.active_storage.write(memory_id_to_key(normalized_id), create_markdown_record({
@@ -675,6 +677,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         source_type: label.startsWith("session:") ? "session" : "manual",
         label,
       }],
+      ...(workspace_id ? { workspace_id } : {}),
       tags: ["memory", "evidence", address.subject.kind],
     }));
   }
@@ -685,6 +688,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     source_refs: MemorySourceReference[],
     memory_type: MemoryType,
     address: MemorySubjectAddress,
+    workspace_id?: string,
   ): Promise<string> {
     const requested_memory_id = String(
       projection.memory_id || `wiki/${slugify(projection.title || "inbox")}`,
@@ -712,6 +716,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       content,
       memory_type,
       source_refs: merged_source_refs,
+      ...(workspace_id ? { workspace_id } : {}),
       tags: projection.tags || ["memory"],
     }));
     return memory_id;
@@ -725,6 +730,8 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     source_refs: MemorySourceReference[];
     memory_type: MemoryType;
     address: MemorySubjectAddress;
+    /** 当前记录关联的 Workspace；只作为 metadata。 */
+    workspace_id?: string;
   }): Promise<void> {
     const memory_id = normalize_memory_id(input.memory_id);
     const key = memory_id_to_key(memory_id);
@@ -734,7 +741,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         memory_id,
         title: input.title,
         content: input.content,
-      }, input.source_refs, input.memory_type, input.address);
+      }, input.source_refs, input.memory_type, input.address, input.workspace_id);
       return;
     }
     const metadata = parse_metadata(existing, input.memory_type);
@@ -756,6 +763,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       content: `${strip_frontmatter(existing)}\n\n${addition}`,
       memory_type: metadata.memory_type,
       source_refs: combined_source_refs,
+      ...(metadata.workspace_id ? { workspace_id: metadata.workspace_id } : {}),
       tags: ["memory"],
       observed_at: metadata.observed_at === new Date(0).toISOString()
         ? new Date().toISOString()

@@ -36,6 +36,7 @@ import type {
 import type {
   ListSessionMessagesInput,
   SessionMessagePage,
+  WorkspaceRuntime,
 } from "@downcity/type";
 import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js";
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
@@ -72,7 +73,7 @@ export interface AgentSessionActor {
   /** 当前 session 稳定标识。 */
   readonly id: string;
 
-  /** 当前 Session 创建时绑定的 Workspace ID；无 Workspace 时为空。 */
+  /** 当前 Session 创建时确定的当前目录；可在会话中切换。 */
   readonly workspace_id?: string;
   /** 当前 Session 的创建来源。 */
   readonly origin: SessionOrigin;
@@ -131,6 +132,16 @@ export interface AgentSession extends AgentSessionActor {
 
   /** 从当前 session 创建一个分叉会话。 */
   fork(input?: AgentSessionForkInput | string): Promise<AgentSession>;
+
+  /**
+   * 就地切换当前目录；传空表示脱离项目上下文。
+   *
+   * 关键点（中文）：Workspace 是本地执行资源，因此只有本地 Session 提供该能力。
+   */
+  set_workspace(workspace?: WorkspaceRuntime): Promise<void>;
+
+  /** 返回当前目录；没有项目上下文时为空。 */
+  get_workspace(): WorkspaceRuntime | undefined;
 }
 
 /**

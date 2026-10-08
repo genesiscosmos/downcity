@@ -49,17 +49,17 @@ try {
 
 ## 所有权
 
-- City 持有 Plugin 与登记资源，但不理解 Workspace 的执行后端。
+- City 持有 Power 与登记资源，但不理解 Workspace 的执行后端。
 - Workspace 持有项目资源、环境变量与可选 Shell。
 - Shell 持有 Sandbox Provider、Workspace 持久 Sandbox 与 Shell Sessions；`shell_id` 与 Chat `session_id` 相互独立。
 - Agent 持有 Chat Sessions。Chat Session 只借用选中的 Workspace，不拥有 Shell 或 Sandbox。
 
 Shell 命令默认使用 `target: "sandbox"`，项目固定挂载到 `/workspace`。同一 Workspace 会跨 Chat Session 保留 HOME 和已安装工具。`target: "host"` 必须提供原因并经过审批。Sandbox 启动失败不会降级成宿主执行。
 
-没有 Shell 时，Workspace 仍提供文件与搜索工具。`city.close()` 会释放 Agent、Plugin 与 Workspace；Workspace 再委托 Shell 停止 Sandbox 计算资源并保留其持久文件系统。
+没有 Shell 时，Workspace 仍提供文件与搜索工具。`city.close()` 会释放 Agent、Power 与 Workspace；Workspace 再委托 Shell 停止 Sandbox 计算资源并保留其持久文件系统。
 
 ## 下一步
 
 - [Shell 与 Sandbox](/zh/agent-sdk-docs/local-agent/shell-reference)
 - [Session 概览](/zh/agent-sdk-docs/sessions/overview)
-- [Tools 和 Plugins](/zh/agent-sdk-docs/local-agent/tools-and-plugins)
+- [Tools 和 Powers](/zh/agent-sdk-docs/local-agent/tools-and-powers)

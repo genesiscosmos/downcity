@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "@downcity/ui/source.css";
 @import "@downcity/ui/styles.css";
-@import "fumadocs-ui/css/shadcn.css";
-@import "fumadocs-ui/css/preset.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -55,7 +53,7 @@
   --sdk-world-foreground: var(--foreground);
   --sdk-world-muted: var(--text-soft);
   --sdk-map-origin: #a75d49;
-  --sdk-map-plugin: #3f7377;
+  --sdk-map-power: #3f7377;
   --sdk-map-neighbor: #476fa8;
   --sdk-map-third: #477b65;
   --sdk-map-federation: #705a9f;
@@ -147,7 +145,7 @@
   --sdk-world-foreground: var(--foreground);
   --sdk-world-muted: var(--text-soft);
   --sdk-map-origin: #dc8d75;
-  --sdk-map-plugin: #76afb1;
+  --sdk-map-power: #76afb1;
   --sdk-map-neighbor: #81a7df;
   --sdk-map-third: #7cb493;
   --sdk-map-federation: #aa98da;
@@ -440,5 +438,196 @@
   .dc-doc-arrow {
     min-height: 1.25rem;
     transform: rotate(90deg);
+  }
+}
+
+/*
+ * 文档正文排版。
+ *
+ * 为什么自己维护：正文排版原先由文档框架的 typography 插件提供，移除框架后需要本站
+ * 自己承担。这里只依赖 MDX 输出的语义标签（h2/h3/ul/table/pre），并使用站点语义令牌，
+ * 因此浅色与深色自动生效，不需要为两套主题各写一份。
+ *
+ * 一级标题由页面版式输出，正文里的 h1 不提供样式，避免出现第二个主标题。
+ */
+@layer components {
+  .docs-markdown {
+    color: var(--text-soft);
+    font-size: 0.9375rem;
+    line-height: 1.75;
+  }
+
+  .docs-markdown > * + * {
+    margin-top: 1.1rem;
+  }
+
+  .docs-markdown h2 {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+    color: var(--foreground);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    scroll-margin-top: 5rem;
+  }
+
+  .docs-markdown h3 {
+    margin-top: 2rem;
+    color: var(--foreground);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    line-height: 1.35;
+    scroll-margin-top: 5rem;
+  }
+
+  .docs-markdown h4 {
+    margin-top: 1.5rem;
+    color: var(--foreground);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+    scroll-margin-top: 5rem;
+  }
+
+  .docs-markdown strong {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+
+  .docs-markdown a {
+    color: var(--foreground);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .docs-markdown a:hover {
+    opacity: 0.75;
+  }
+
+  .docs-markdown ul,
+  .docs-markdown ol {
+    padding-left: 1.15rem;
+  }
+
+  .docs-markdown ul {
+    list-style: disc;
+  }
+
+  .docs-markdown ol {
+    list-style: decimal;
+  }
+
+  .docs-markdown li + li {
+    margin-top: 0.4rem;
+  }
+
+  .docs-markdown li::marker {
+    color: var(--text-subtle);
+  }
+
+  .docs-markdown blockquote {
+    padding-left: 1rem;
+    border-left: 2px solid var(--line-strong);
+    color: var(--text-soft);
+  }
+
+  .docs-markdown hr {
+    margin: 2.5rem 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .docs-markdown img {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+  }
+
+  .docs-markdown th {
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-soft);
+    color: var(--foreground);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .docs-markdown td {
+    padding: 0.6rem 0.85rem;
+    border-top: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+
+  /*
+   * Shiki 高亮输出。
+   *
+   * 编译期把明暗两套颜色写成内联 CSS 变量（--shiki-light / --shiki-dark），
+   * 这里只需按当前主题选用其中一套，不需要在浏览器里重新高亮。
+   *
+   * 关于 `.line`：shiki 把每行输出为行内 span，行与行之间用 `\n` 分隔，由 `pre` 的
+   * `white-space: pre` 渲染成换行。若给 `.line` 设 `display: block`，block 自身与后续
+   * 的 `\n` 会各占一行，行距直接翻倍（实测 13px 字号下每行 48px）。因此必须保持行内。
+   */
+  .docs-markdown .shiki code span {
+    color: var(--shiki-light);
+  }
+
+  .dark .docs-markdown .shiki code span {
+    color: var(--shiki-dark);
+  }
+
+  /*
+   * 代码块本体。
+   *
+   * 背景保持透明，由外层 `figure` 的 `bg-surface-soft` 提供：shiki 会在 `pre` 上写入
+   * `--shiki-light-bg: #fff`，若直接用它做背景，会在暖灰外框里套一块纯白，形成双层色面。
+   * 语法色仍用 shiki 的 `--shiki-light` / `--shiki-dark`，与高亮主题同源。
+   *
+   * 字号与行高用站点令牌固定：代码不跟随正文的 1.75 行高，需要更紧凑的行距。
+   * `white-space: pre` 是 shiki 换行的前提（行间用 `\n` 分隔）。
+   */
+  .docs-code-block {
+    margin: 0;
+    padding: 1rem 1.15rem;
+    background: transparent;
+    color: var(--shiki-light);
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    tab-size: 2;
+    white-space: pre;
+    overflow-wrap: normal;
+  }
+
+  .dark .docs-code-block {
+    color: var(--shiki-dark);
+  }
+
+  /*
+   * 围栏代码块内部的 `code` 必须清除行内代码的干扰。
+   *
+   * 行内代码的视觉样式已收进 `:not(pre) > code`，这里再显式重置字号、背景与内边距，
+   * 保证即使将来有人把样式写回元素级也不会影响代码块。
+   */
+  .docs-code-block code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font-size: 1em;
+    font-family: inherit;
+  }
+
+  /* 行内代码：只在非 pre 环境生效，避免命中围栏块内的 code。 */
+  .docs-markdown :not(pre) > code {
+    padding: 0.1rem 0.35rem;
+    border: 1px solid var(--line-soft);
+    border-radius: calc(var(--radius) * 0.6);
+    background: var(--surface-muted);
+    color: var(--foreground);
+    font-family: var(--font-mono);
+    font-size: 0.875em;
   }
 }

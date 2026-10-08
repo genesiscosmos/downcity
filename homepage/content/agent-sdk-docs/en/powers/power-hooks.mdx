@@ -1,0 +1,95 @@
+---
+title: Power Hooks and Resolve
+description: Use one overview page to distinguish pipeline, guard, effect, and resolve before going deeper
+---
+This area is easy to misunderstand because:
+
+- all four live inside power definitions
+- all four look like "register a function"
+- but their runtime semantics are very different
+
+If you only remember one line, start here:
+
+- `pipeline`: rewrite a value
+- `guard`: block a flow
+- `effect`: run side effects
+- `resolve`: produce one authoritative answer
+
+## Start with the comparison
+
+| Type | Who triggers it | Returns a value | Multiple handlers allowed | What failure means | Best fit |
+| --- | --- | --- | --- | --- | --- |
+| `pipeline` | host code calls it | yes | yes | throws and stops the current call | progressively transform one value |
+| `guard` | host code calls it | no | yes | any thrown error blocks the flow | pre-checks and authorization |
+| `effect` | host code calls it | no | yes | any thrown error stops the current effect call | logging, analytics, syncing |
+| `resolve` | host code calls it | yes | no, exactly one | missing, duplicate, or disabled resolution fails | provide one final answer |
+
+## The most important thing to remember
+
+Declaring a hook inside a power does not make it run automatically.
+
+What actually happens is: host code explicitly calls a named point at a specific time.
+
+For example:
+
+```ts
+const value = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", input);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", value);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).effect("audit.observe", value);
+const role = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).resolve("auth.resolve_role", {
+  userId: "owner",
+});
+```
+
+So the clean mental split is:
+
+- the power defines an extension point handler
+- the host decides when that extension point executes
+
+If the host never calls that point, the hook never runs.
+
+Hooks are declared by Power instances and dispatched by the City-owned Registry for the current Agent/Workspace scope. A Session captures one execution lease at each checkpoint, so the call observes a stable Power set; concurrent unbinding waits for active leases to finish.
+
+Inside a Power, `context.city.powers` exposes only `pipeline()`, `effect()`, and `run_action()` for collaboration. `guard` and `resolve` remain host-control and authority surfaces and are called from host execution entries such as `city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id })`.
+
+## Why `resolve` deserves separate attention
+
+Many readers naturally treat `resolve` as just another hook flavor.
+
+But it is really closer to:
+
+- an authority point
+- a "who gives the final answer?" question
+
+That is why it differs from the other three:
+
+- the first three allow several powers to participate
+- `resolve` allows exactly one power to be the final authority
+
+This is also why:
+
+- duplicate registration for one resolve point throws
+- missing resolvers throw
+- a disabled resolver power also causes failure
+
+## Recommended reading order
+
+1. [Mental model overview](/en/agent-sdk-docs/powers/hooks/overview)
+2. [Call flow](/en/agent-sdk-docs/powers/hooks/call-flow)
+3. [Pipeline](/en/agent-sdk-docs/powers/hooks/pipeline)
+4. [Guard](/en/agent-sdk-docs/powers/hooks/guard)
+5. [Effect](/en/agent-sdk-docs/powers/hooks/effect)
+6. [Resolve](/en/agent-sdk-docs/powers/hooks/resolve)
+7. [How to choose](/en/agent-sdk-docs/powers/hooks/choose-the-right-one)
+
+## Jump straight to scenarios
+
+- [One full message flow](/en/agent-sdk-docs/powers/hooks/examples/end-to-end-message-flow)
+- [Why role resolution must stay unique](/en/agent-sdk-docs/powers/hooks/examples/role-resolution-flow)
+- [Common bad vs good designs](/en/agent-sdk-docs/powers/hooks/examples/bad-vs-good-design)
+
+## Related docs
+
+- [Power overview](/en/agent-sdk-docs/powers/overview)
+- [Power actions](/en/agent-sdk-docs/powers/power-actions)
+- [Custom power](/en/agent-sdk-docs/powers/custom-power)

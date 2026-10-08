@@ -41,3 +41,35 @@ Fallback 只检查 `ModelCall.messages` 中最新一条 `role: "user"` 消息的
 ## OpenAI-compatible 客户端
 
 需要使用 OpenAI SDK、curl 或现有网关时，调用 `/v1/ai/chat/completions`。该端点会在边界把 OpenAI 请求转换为同一个 `ModelCall`，路由、fallback、reasoning、usage 和计费语义保持一致。
+
+## 调用决策模型
+
+决策模型接收原始状态与带类型的问题，返回带校准概率的判定，不生成文本：
+
+```ts
+const { answers } = await city.ai.decision({
+  model: "jev-1.13",
+  state: { type: "text", text: "客户连续三天未能连接 Stripe。" },
+  questions: [
+    { id: "urgent", type: "boolean", instructions: "这条消息是否表达紧急？" },
+    { id: "route", type: "choice", instructions: "应该由哪个队列处理？", options: ["billing", "support"] },
+    { id: "churn_risk", type: "score", instructions: "流失风险", min: 0, max: 10 },
+  ],
+});
+
+answers[0].value;        // true
+answers[0].probability;  // 0.87
+answers[1].distribution; // { billing: 0.72, support: 0.28 }
+```
+
+`state` 为 `{ type: "text", text }` 或 `{ type: "json", data }`。支持三种问题类型，都不产生自由文本：
+
+| 类型 | 答案 | 说明 |
+| --- | --- | --- |
+| `boolean` | `true` / `false` | — |
+| `choice` | `options` 中的一个 | 1 到 255 个不重复候选取值 |
+| `score` | 数值 | 需满足 `min < max` |
+
+问题 ID 必须唯一，且每个问题必须且只能被回答一次。非法输入在任何用量记录产生前返回 422；Channel 返回未覆盖全部问题的结果同样会被拒绝。
+
+决策模型不是对话模型：它的 `modalities` 只有 `decision`，不能交给 Agent。

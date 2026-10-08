@@ -3,18 +3,15 @@
  *
  * 关键说明：
  * 1. 只输出可直接访问的最终规范 URL，不输出会重定向的无尾斜杠地址。
- * 2. 文档 URL 使用 Fumadocs 的公开 page.url，禁止把 MDX 文件路径写入 sitemap。
- * 3. 同时存在中英文版本时输出双向 hreflang 与 x-default。
+ * 2. 文档 URL 来自文档索引的公开 `page.url`，禁止把 MDX 文件路径写入 sitemap。
+ * 3. hreflang 只指向真实存在的对应语言页面：索引的 `get_alternate_url` 已按
+ *    页面表校验，不存在时返回 undefined。
+ * 4. 目录跳转壳页（`index.mdx` 与子页共存的目录）被索引标记为 section，不进入
+ *    sitemap，因此这里不再需要按路径前缀推断。
  */
-import { source } from "@/lib/source";
-import { citySdkDocsSource } from "@/lib/city-sdk-docs-source";
-import { agentSdkDocsSource } from "@/lib/agent-sdk-docs-source";
-import { paymentsSource } from "@/lib/payments-source";
-import { pluginsDocsSource } from "@/lib/plugins-docs-source";
-import { uiSdkDocsSource } from "@/lib/ui-sdk-docs-source";
-import { blogSource } from "@/lib/blog-source";
+import { docs_index } from "@/lib/docs/docs-index";
+import { docs_locales, docs_spaces } from "@/lib/docs/spaces";
 import { create_site_url, normalize_site_path } from "@/lib/seo";
-import { document_source_exists } from "@/lib/document-source";
 import type { SeoSitemapEntry } from "@/types/seo";
 
 const localized_marketing_paths = [
@@ -44,7 +41,7 @@ const single_language_paths = ["/terms/", "/privacy/"] as const;
 /**
  * Blog 列表页的双语条目。
  *
- * 文章页由 create_document_entries 从 content/blog 自动采集，但列表页不是 MDX，
+ * 文章页由 `create_document_entries` 从内容目录自动采集，但列表页不是 MDX，
  * 不在其中，因此这里手工声明一对，保证 sitemap 里也带上 hreflang。
  */
 const blog_index_entries: SeoSitemapEntry[] = [
@@ -60,9 +57,7 @@ const blog_index_entries: SeoSitemapEntry[] = [
   },
 ];
 
-/**
- * 转义 XML 文本节点和属性值中的保留字符。
- */
+/** 转义 XML 文本节点和属性值中的保留字符。 */
 function escape_xml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -72,9 +67,7 @@ function escape_xml(value: string) {
     .replaceAll("'", "&apos;");
 }
 
-/**
- * 将英文营销页路径转换为对应中文路径。
- */
+/** 将英文营销页路径转换为对应中文路径。 */
 function create_chinese_marketing_path(english_pathname: string) {
   return english_pathname === "/"
     ? "/zh/"
@@ -83,6 +76,8 @@ function create_chinese_marketing_path(english_pathname: string) {
 
 /**
  * 创建营销页 sitemap 条目。
+ *
+ * 营销页的中英文入口都在预渲染列表里成对存在，因此直接声明双向 hreflang。
  */
 function create_marketing_entries(): SeoSitemapEntry[] {
   const localized_entries = localized_marketing_paths.flatMap((english_pathname) => {
@@ -98,60 +93,29 @@ function create_marketing_entries(): SeoSitemapEntry[] {
 }
 
 /**
- * 根据公开文档 URL 创建 sitemap 条目，并且仅关联真实存在的对应语言页面。
+ * 从文档索引创建全部文档 sitemap 条目。
  *
- * `collection_directory` 是 `content/` 下的集合目录名（如 `city-sdk-docs`），用于回查
- * 源文件是否真实存在。
+ * 每个可索引页面已经由索引排除了 section 与缺失语言的情况，这里只负责把语言配对
+ * 表达成 sitemap 的 `english_pathname` / `chinese_pathname`。
  */
-function create_document_entries(
-  pages: Array<{ url: string }>,
-  collection_directory: string,
-): SeoSitemapEntry[] {
-  const normalized_paths = pages
-    .map((page) => normalize_site_path(page.url))
-    .filter((pathname) => document_source_exists(pathname, collection_directory));
-  const path_set = new Set(normalized_paths);
+function create_document_entries(): SeoSitemapEntry[] {
+  const entries: SeoSitemapEntry[] = [];
 
-  return normalized_paths.map((pathname) => {
-    const is_chinese = pathname.startsWith("/zh/");
-    const english_pathname = is_chinese
-      ? normalize_site_path(pathname.replace(/^\/zh(?=\/)/, "/en"))
-      : pathname;
-    const chinese_pathname = is_chinese
-      ? pathname
-      : normalize_site_path(pathname.replace(/^\/en(?=\/)/, "/zh"));
+  for (const space of docs_spaces) {
+    for (const locale of docs_locales) {
+      for (const page of docs_index.list_space_pages(space.id, locale)) {
+        const alternate_pathname = docs_index.get_alternate_url(page);
 
-    return {
-      pathname,
-      english_pathname: path_set.has(english_pathname) ? english_pathname : undefined,
-      chinese_pathname: path_set.has(chinese_pathname) ? chinese_pathname : undefined,
-    };
-  });
-}
-
-/**
- * 判断某个路径是否为 fumadocs 生成的目录跳转壳页。
- *
- * 背景：文档目录（如 /en/city-sdk-docs/concepts/）在 loader 里会 302 到首个子文档，
- * 但静态预渲染会把它先输出成一张 `<meta http-equiv="refresh">` + `noindex` 的壳页。
- * 这类页面不能进 sitemap：它既被标记 noindex，又是无正文的跳转页，收录后只会
- * 浪费抓取预算并制造 soft 404。
- *
- * 判定条件（与线上 30 个壳页实测完全一致，无误报）：
- * - 路径深度 > 2（排除 /en/docs/ 这类空间根，它们自带内容不跳转）；
- * - 存在以该路径为前缀的更长子路径，即 loader 一定会重定向。
- */
-function is_redirect_stub_path(pathname: string, all_paths: ReadonlySet<string>) {
-  const normalized = normalize_site_path(pathname);
-  const segments = normalized.split("/").filter(Boolean);
-
-  if (segments.length <= 2) return false;
-
-  for (const candidate of all_paths) {
-    if (candidate !== normalized && candidate.startsWith(normalized)) return true;
+        entries.push({
+          pathname: page.url,
+          english_pathname: locale === "en" ? page.url : alternate_pathname,
+          chinese_pathname: locale === "zh" ? page.url : alternate_pathname,
+        });
+      }
+    }
   }
 
-  return false;
+  return entries;
 }
 
 /**
@@ -184,42 +148,14 @@ function serialize_entry(entry: SeoSitemapEntry) {
  * 返回构建期可预渲染的 XML sitemap。
  */
 export function loader() {
-  const document_entries = [
-    ...create_document_entries(source.getPages(), "docs"),
-    ...create_document_entries(citySdkDocsSource.getPages(), "city-sdk-docs"),
-    ...create_document_entries(agentSdkDocsSource.getPages(), "agent-sdk-docs"),
-    ...create_document_entries(paymentsSource.getPages(), "payments"),
-    ...create_document_entries(pluginsDocsSource.getPages(), "plugins-docs"),
-    ...create_document_entries(uiSdkDocsSource.getPages(), "ui-sdk-docs"),
-    ...create_document_entries(blogSource.getPages(), "blog"),
-  ];
   const unique_entries = new Map<string, SeoSitemapEntry>();
 
   for (const entry of [
     ...create_marketing_entries(),
     ...blog_index_entries,
-    ...document_entries,
+    ...create_document_entries(),
   ]) {
     unique_entries.set(normalize_site_path(entry.pathname), entry);
-  }
-
-  // 目录跳转壳页不能进 sitemap：它们被标记 noindex 且正文为空。
-  const all_document_paths = new Set(unique_entries.keys());
-  for (const [pathname, entry] of unique_entries) {
-    if (is_redirect_stub_path(pathname, all_document_paths)) {
-      unique_entries.delete(pathname);
-      continue;
-    }
-
-    // hreflang 只能指向真实存在的对应语言页面。文档空间里英文有、中文缺的页面
-    // （例如 /en/city-sdk-docs/service/feedback/）如果照旧声明 zh-CN，会把语言
-    // 聚类指向一个 404。
-    if (entry.english_pathname && !all_document_paths.has(entry.english_pathname)) {
-      entry.english_pathname = undefined;
-    }
-    if (entry.chinese_pathname && !all_document_paths.has(entry.chinese_pathname)) {
-      entry.chinese_pathname = undefined;
-    }
   }
 
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>

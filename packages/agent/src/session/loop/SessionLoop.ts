@@ -70,7 +70,8 @@ const QUEUED_PROMPT_CANCELLED_MESSAGE =
 export class SessionLoop {
   private readonly session_id: string;
   private readonly session_origin: SessionLoopOptions["session_origin"];
-  private readonly workspace_path: string;
+  /** 当前 Session 的目录解析器。 */
+  private readonly get_workspace_path: SessionLoopOptions["get_workspace_path"];
   private readonly step_input: StepInput | null;
   private readonly session_executor: SessionExecutorPort;
   private readonly maintain_context: SessionLoopOptions["maintain_context"];
@@ -93,7 +94,7 @@ export class SessionLoop {
   constructor(options: SessionLoopOptions) {
     this.session_id = String(options.session_id || "").trim();
     this.session_origin = options.session_origin;
-    this.workspace_path = String(options.workspace_path || "").trim();
+    this.get_workspace_path = options.get_workspace_path;
     this.maintain_context = options.maintain_context;
     this.state = options.state;
     this.messages = options.messages;
@@ -105,9 +106,6 @@ export class SessionLoop {
     this.interactions = options.interactions;
     if (!this.session_id) {
       throw new Error("SessionLoop requires a non-empty session_id");
-    }
-    if (!this.workspace_path) {
-      throw new Error("SessionLoop requires a non-empty workspace_path");
     }
     this.step_input = options.step_input ?? null;
     this.session_executor = options.executor ??
@@ -535,7 +533,7 @@ export class SessionLoop {
     await append_session_turn_file_diff({
       session_id: this.session_id,
       turn_id: input.active_turn.turn_id,
-      workspace_path: this.workspace_path,
+      workspace_path: this.get_workspace_path(),
       turn_context,
       assistant_output,
       logger: this.logger,
@@ -608,7 +606,7 @@ export class SessionLoop {
       turn_id: active_turn.turn_id,
       session_id: this.session_id,
       session_origin: this.session_origin,
-      project_root: this.workspace_path,
+      project_root: this.get_workspace_path(),
       commit_step_input: async () => {
         const had_pending_prompt = this.has_pending_prompt();
         await this.drain_queued_inputs();
@@ -630,7 +628,7 @@ export class SessionLoop {
         publish_session_turn_file_diff({
           session_id: this.session_id,
           turn_id: active_turn.turn_id,
-          workspace_path: this.workspace_path,
+          workspace_path: this.get_workspace_path(),
           effects,
           publish: (mutation) => this.events.publish(mutation),
           logger: this.logger,
@@ -656,7 +654,7 @@ export class SessionLoop {
     message_id?: string,
   ): Promise<SessionUserMessage> {
     const message = await this.messages.append_prompt_message({
-      project_root: this.workspace_path,
+      project_root: this.get_workspace_path(),
       prompt,
       turn_id,
       ...(message_id ? { message_id } : {}),

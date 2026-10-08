@@ -19,9 +19,10 @@ import { Service, type Context } from "../service.js";
 import { httpError } from "../../utils/helpers.js";
 import type { ActionFn } from "../action.js";
 import { sqliteAsyncJobs } from "../async-job/schema.js";
-import type { CityModelDescriptor, ModelCall } from "@downcity/type";
+import type { CityModelDescriptor, CityModelType, ModelCall } from "@downcity/type";
 import type {
   AIChannelStreamResult,
+  AIDecisionRequest,
   AIModelActions,
   AIModelDefinition,
   AIResolvedAction,
@@ -71,9 +72,10 @@ import {
   IMAGE_FETCH_ACTION,
 } from "./AIImageJobRuntime.js";
 import { AISettlementRuntime } from "./AISettlementRuntime.js";
+import { validate_ai_decision_request, validate_ai_decision_result } from "./decision-validation.js";
 
 /** AIService 直接暴露的 action 模态列表。模型流与图片任务使用独立 handler。 */
-const MODALITIES = ["video", "tts", "asr"] as const;
+const MODALITIES = ["video", "tts", "asr", "decision"] as const;
 /** 用户侧默认以 text 模态排序模型 */
 const DEFAULT_MODEL_MODE = "text";
 /** Downcity Model Protocol 原生运行模式。 */
@@ -252,6 +254,38 @@ export class AIService extends Service {
     return modalities.filter((mode) => mode !== "image_create" && mode !== "image_fetch" && mode !== "image_result");
   }
 
+  /**
+   * 从 runtime 能力推导模型类别。
+   *
+   * 关键点（中文）
+   * - 与 getModelModalities() 同源，都只读 runtime，避免出现第二个可写事实源。
+   * - 一个模型同时具备多种能力时按固定优先级取主类别；stream 优先，因此混合模型
+   *   对外仍是 language，与消费端「能否担任对话模型」的判断保持一致。
+   * - 注册阶段已校验至少有一个可执行能力，因此这里一定能得到结果。
+   */
+  private getModelType(model: AIModelDefinition): CityModelType {
+    if (model.runtime.stream) return "language";
+    if (model.runtime.actions.decision) return "decision";
+    if (model.runtime.actions.image_create) return "image";
+    if (model.runtime.actions.tts || model.runtime.actions.asr) return "sound";
+    return "video";
+  }
+
+  /**
+   * 各 modality 进入 Channel 前的协议校验。
+   *
+   * 关键点（中文）
+   * - 必须在 ensure_usage_id() 之前调用：被拒绝的请求不应留下用量事实。
+   * - 只有闭合且带类型的协议需要校验；tts / asr 之类是厂商形状透传，原样通过。
+   * - 返回归一化后的决策请求，供结果校验复用。
+   */
+  private prepare_modality_input(modality: Modality, ctx: Context): AIDecisionRequest | undefined {
+    if (modality !== "decision") return undefined;
+    const request = validate_ai_decision_request(ctx.input);
+    ctx.input = { ...ctx.input, ...request };
+    return request;
+  }
+
   /** 按媒体输入解析最终模型，推理强度必须在该步骤之后解析。 */
   private plan_text_execution(
     resolved: AIResolvedAction,
@@ -269,36 +303,35 @@ export class AIService extends Service {
   // ========== SDK 通路 ==========
 
   private async handleModality(modality: Modality, ctx: Context): Promise<unknown | Response> {
-    const initial_resolved = this.resolve({ model: this.normalizeModelId(ctx.input.model), mode: modality }, ctx.env);
-    const resolved = initial_resolved;
-    const fallback_from = undefined;
-    const fallback_reason = undefined;
-    const fallback_media_type = undefined;
-    const reasoning = undefined;
-    this.attachResolvedModel(ctx, resolved.model, modality, { fallback_from, fallback_reason, fallback_media_type });
-    attach_resolved_reasoning(ctx, reasoning);
+    const decision_request = this.prepare_modality_input(modality, ctx);
+    const resolved = this.resolve({ model: this.normalizeModelId(ctx.input.model), mode: modality }, ctx.env);
+    this.attachResolvedModel(ctx, resolved.model, modality);
     const started_at = Date.now();
     this.settlement_runtime.ensure_usage_id(ctx);
 
     try {
       const channel_output = await resolved.action(ctx);
       const { output, charge } = this.settlement_runtime.resolve_channel_output(channel_output);
-      this.settlement_runtime.attach_output_metering(ctx, output, modality, started_at);
+      // 上游异常形状同样属于协议违例，必须在计量前拦住，避免把脏数据写进账单。
+      const validated_output = decision_request
+        ? validate_ai_decision_result(output, decision_request)
+        : output;
+      this.settlement_runtime.attach_output_metering(ctx, validated_output, modality, started_at);
       const resolved_charge = charge ?? (resolved.model
-        ? resolved.model.bill?.(this.settlement_runtime.build_bill_input(ctx, resolved.model, output))
+        ? resolved.model.bill?.(this.settlement_runtime.build_bill_input(ctx, resolved.model, validated_output))
         : undefined);
       const settlement = this.settlement_runtime.settle_execution({
         ctx,
-        output,
+        output: validated_output,
         outcome: "succeeded",
         started_at,
         charge: resolved_charge,
       });
-      if (isResponse(output)) {
-        return await this.settlement_runtime.bind_settlement_response(ctx, output, settlement);
+      if (isResponse(validated_output)) {
+        return await this.settlement_runtime.bind_settlement_response(ctx, validated_output, settlement);
       }
       await settlement;
-      return output;
+      return validated_output;
     } catch (error) {
       await this.settlement_runtime.settle_execution({
         ctx,
@@ -496,6 +529,7 @@ export class AIService extends Service {
     return aiService.models.list_public({
       ...options,
       get_modalities: (model) => aiService.getModelModalities(model),
+      get_model_type: (model) => aiService.getModelType(model),
     });
   }
 }

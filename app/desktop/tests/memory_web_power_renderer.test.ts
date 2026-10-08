@@ -100,11 +100,27 @@ test("Memory 与 Web 都声明 Sidebar 与 Mainview", () => {
   }
 });
 
-test("Web 保留独立 Config，并与 Mainview、Sidebar 分离", () => {
+test("Web 把设置并入 Mainview，不再声明独立 Config", () => {
   const renderer = BUILTIN_POWER_RENDERERS.web;
-  assert.equal(typeof renderer?.config, "function");
-  assert.notEqual(renderer?.config, renderer?.mainview);
-  assert.notEqual(renderer?.config, renderer?.sidebar);
+  assert.equal(renderer?.config, undefined);
+  assert.equal(typeof renderer?.mainview, "function");
+  assert.equal(typeof renderer?.sidebar, "function");
+});
+
+test("Web 按 route 在能力视图与通用视图之间切换", () => {
+  const renderer = BUILTIN_POWER_RENDERERS.web!;
+  // 每个能力一屏，选中的能力由 route 决定。
+  const capability_markup = renderToStaticMarkup(createElement(
+    renderer.mainview!,
+    create_host({ route: { capability: "search" } }).props,
+  ));
+  // 通用视图承载跨能力配置与配置文件。
+  const general_markup = renderToStaticMarkup(createElement(
+    renderer.mainview!,
+    create_host({ route: { capability: "general" } }).props,
+  ));
+  assert.match(capability_markup, /正在读取 Web 配置/u);
+  assert.match(general_markup, /正在读取 Web 配置/u);
 });
 
 test("Memory 与 Web 在拿到数据前先渲染加载态，而不是报错", () => {

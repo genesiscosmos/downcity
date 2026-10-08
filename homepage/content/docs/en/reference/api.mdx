@@ -29,29 +29,29 @@ Request body:
 }
 ```
 
-## Managed plugin API
+## Managed power API
 
-### `GET /api/plugins/list`
+### `GET /api/powers/list`
 
-List managed plugin states.
+List managed power states.
 
-## Plugin API
+## Power API
 
-### `GET /api/plugins/catalog`
+### `GET /api/powers/catalog`
 
-List registered plugins.
+List registered powers.
 
-### `POST /api/plugins/availability`
+### `POST /api/powers/availability`
 
 ```json
-{ "plugin_name": "sound" }
+{ "power_name": "sound" }
 ```
 
-### `POST /api/plugins/action`
+### `POST /api/powers/action`
 
 ```json
 {
-  "plugin_name": "sound",
+  "power_name": "sound",
   "action_name": "models",
   "payload": { "capability": "asr" }
 }
@@ -59,16 +59,16 @@ List registered plugins.
 
 ## Console UI API (summary)
 
-### `GET /api/ui/plugins`
+### `GET /api/ui/powers`
 
-Returns plugin summary plus availability state (used by Console UI panels).
+Returns power summary plus availability state (used by Console UI panels).
 
 Example:
 
 ```json
 {
   "success": true,
-  "plugins": [
+  "powers": [
     {
       "name": "sound",
       "actions": ["models", "asr", "tts"],
@@ -121,16 +121,16 @@ Request body example with attachment:
 
 Notes:
 
-- `sessionId` should be the exact target session returned by agent. For chat sessions, this is an opaque ID managed by the chat plugin (not a parseable platform key).
+- `sessionId` should be the exact target session returned by agent. For chat sessions, this is an opaque ID managed by the chat power (not a parseable platform key).
 - Attachments are materialized by agent and injected as `<file ...>` tags before the user instruction.
-- If `sessionId` maps to a chat conversation, execution is enqueued into the same chat plugin queue (same behavior as platform inbound messages), and chat history is appended before execution.
+- If `sessionId` maps to a chat conversation, execution is enqueued into the same chat power queue (same behavior as platform inbound messages), and chat history is appended before execution.
 - Chat-context calls return immediately with queue metadata (`queued=true`, `queueItemId`, `queuePosition`).
 
 ## Action routes
 
-Plugin actions use:
+Power actions use:
 
-- `/api/plugins/action`
+- `/api/powers/action`
 
 Except for `GET /health`, Agent HTTP APIs require a Bearer Token issued for that Agent. Tokens do not contain Users, Roles, or Permissions; they only grant access to their owning Agent.
 

@@ -2,7 +2,7 @@
 title: Agent 类
 description: 本地 Agent SDK 的核心公开接口
 ---
-`Agent` 是本地 SDK 中可跨项目复用的执行主体，拥有稳定 ID、可见名称、能力描述、指令、模型、自定义 Tool 和 Session 集合。它不持有 Plugin，也不永久绑定 Workspace。
+`Agent` 是本地 SDK 中可跨项目复用的执行主体，拥有稳定 ID、可见名称、能力描述、指令、模型、自定义 Tool 和 Session 集合。它不持有 Power，也不绑定 Workspace；`chat()` 暴露属于 Agent 自己的那段对话。
 
 ## 公开 API
 
@@ -10,15 +10,21 @@ description: 本地 Agent SDK 的核心公开接口
 - `agent.id`
 - `agent.name`
 - `agent.description`
+- `agent.workspace`
+- `agent.chat({ workspace? })`
+- `agent.sessions.main({ workspace? })`
 - `agent.sessions.create({ workspace })`
 - `agent.set_instruction(input)`
 - `agent.get_instructions()`
 - `agent.get_logger()`
 - `agent.dispose()`
 
-Session 由 Agent 创建，并在创建时显式选择 Workspace：
+Agent 有一段属于自己的对话，使用 `chat()` 打开；所有会话（包括这段对话）都从 `agent.sessions` 创建与恢复：
 
 ```ts
+const chat = await agent.chat();
+const turn = await chat.send({ query: "这个仓库的结构怎么样" });
+
 const session = await agent.sessions.create({ workspace });
 ```
 
@@ -30,12 +36,14 @@ const session = await agent.sessions.create({ workspace });
 - `tools`：该 Agent 创建的 Session 可使用的自定义 Tool。
 - `instruction`：Agent 级静态基础指令。
 - `model`：默认 `ModelClient`，本地 Session 可以覆盖。
+- `workspace`：可选的新建 Session 默认目录；不是绑定，可在会话中切换。
 - `session_class`：可选的本地自定义 Session 类。
 
-构造参数中没有 `workspace`。宿主独立创建 Workspace，并在 Agent 需要进入项目执行时调用
-`agent.sessions.create({ workspace })`。
+`workspace` 只是新建会话的默认目录。它不影响 Agent 的身份，也不会限制 Agent 之后使用其他目录；
+省略时新建的会话没有项目上下文。每个 Session 都可以通过 `session.set_workspace()` 或在创建时
+传入 `{ workspace }` 选择自己的当前目录。详见 [Agent 对话](/zh/agent-sdk-docs/sessions/agent-chat) 与
+[管理 Session](/zh/agent-sdk-docs/sessions/session-management)。
 
-一个 Agent 可以在多个 Workspace 中创建 Session。Workspace 只在创建 Session 时传入，不会成为
-Agent 的公开对象。Plugin 由 City 提供，City 中全部 Plugin 自动对全部 Agent 可用；执行时从
-`city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })` 创建明确的执行视图。`agent.dispose()` 会释放 Session 与当前
+一个 Agent 可以在多个 Workspace 中工作。Power 由 City 提供，City 中全部 Power 自动对全部 Agent 可用；执行时从
+`city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id })` 创建明确的执行视图。`agent.dispose()` 会释放 Session 与当前
 City 绑定；网络 transport 仍由宿主负责关闭。

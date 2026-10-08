@@ -1,0 +1,114 @@
+---
+title: Pipeline
+description: Explain pipeline input-output semantics, ordering, and the kinds of problems it fits best
+---
+The core semantic of `pipeline` is:
+
+- receive one value
+- return a new value
+- the next handler receives the previous handler's output
+
+## It is not broadcast, it is relay
+
+This matters a lot.
+
+If three powers all attach to one `pipeline` point, the runtime model is not:
+
+- all three see the original input independently
+
+It is:
+
+- the first transforms it and passes it on
+- the second transforms that result
+- the third transforms the next result
+
+So `pipeline` is much closer to an assembly line than a fan-out event.
+
+## Minimal example
+
+```ts
+const next = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", {
+  text: "Please summarize this page",
+});
+```
+
+If one power is written like this:
+
+```ts
+hooks: {
+  pipeline: {
+    "chat.enrich_message": [
+      async ({ value }) => {
+        const body = value as Record<string, unknown>;
+        return {
+          ...body,
+          source: "web",
+        };
+      },
+    ],
+  },
+}
+```
+
+then the host receives a `next` value with the new `source` field attached.
+
+## Three especially good uses
+
+### add fields
+
+For example:
+
+- source
+- pageTitle
+- locale
+
+### normalize shape
+
+For example:
+
+- normalize booleans
+- turn empty strings into `null`
+- collapse aliases into stable field names
+
+### progressive enrichment
+
+For example:
+
+- one layer adds source context
+- another adds session context
+- another adds default policy
+
+## What it is not ideal for
+
+### permission blocking
+
+That fits `guard` better because the point is not to rewrite a value, but to decide whether the flow may continue.
+
+### plain logging
+
+That fits `effect` better because there is no reason to return a new value.
+
+### one final authoritative answer
+
+That is `resolve`, not `pipeline`.
+
+## Stable implementation practices
+
+- prefer returning a complete next object instead of relying on hidden shared state
+- keep the input-output shape more stable over time
+- keep it focused on value transformation instead of side effects
+
+## When to split responsibilities
+
+If your logic starts needing:
+
+- a lot of I/O
+- long-lived state
+- both blocking and recording responsibilities
+
+that is often a sign to keep transformation in `pipeline` and move the rest into `guard`, `effect`, or power `lifecycle`.
+
+## Related scenarios
+
+- [One full message flow](/en/agent-sdk-docs/powers/hooks/examples/end-to-end-message-flow)
+- [MessageAugmentPower scenario](/en/powers-docs/examples/message-augment-power)

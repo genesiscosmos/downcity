@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { TbChevronRight, TbFileText, TbMessageCircle, TbPhoto, TbRefresh, TbTrash, TbUser } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { LLMModelIcon } from "@/components/model/LLMModelIcon";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SettingActionItem, SettingGroup, SettingSection, SettingsContainer, SettingsMainContent } from "@/components/settings/SettingComponents";
@@ -224,7 +225,7 @@ export function AgentView({
         </SettingsContainer>
       </SettingsMainContent>
       <Dialog open={avatar_dialog_open} onOpenChange={set_avatar_dialog_open}>
-        <DialogContent>
+        <DialogContent size="sm">
           <DialogHeader>
             <DialogTitle>{translate_resources("agent_details.avatar_title")}</DialogTitle>
             <DialogDescription>
@@ -242,6 +243,7 @@ export function AgentView({
           </DialogBody>
           <DialogFooter>
             <Button
+              size="action"
               onClick={() =>
                 void controller.actions.generate_agent_avatar(agent.agent_id)
               }
@@ -310,7 +312,7 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
       />
     </label>
     <Dialog open={avatar_dialog_open} onOpenChange={set_avatar_dialog_open}>
-      <DialogContent>
+      <DialogContent size="sm">
         <DialogHeader>
           <DialogTitle>{translate_resources("agent_details.avatar_title")}</DialogTitle>
           <DialogDescription>{translate_resources("agent_details.avatar_description", { name: agent.name })}</DialogDescription>
@@ -321,8 +323,8 @@ function IdentityEditor({ agent, controller, definition, set_definition }: { /**
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button onClick={() => void controller.actions.generate_agent_avatar(definition.agent_id)}><TbRefresh />{translate_resources("agent_details.random")}</Button>
-          <Button variant="primary" onClick={() => void controller.actions.choose_agent_avatar(definition.agent_id)}><TbPhoto />{translate_resources("agent_details.upload_image")}</Button>
+          <Button size="action" onClick={() => void controller.actions.generate_agent_avatar(definition.agent_id)}><TbRefresh />{translate_resources("agent_details.random")}</Button>
+          <Button size="action" variant="primary" onClick={() => void controller.actions.choose_agent_avatar(definition.agent_id)}><TbPhoto />{translate_resources("agent_details.upload_image")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -335,16 +337,19 @@ function DeleteAgentButton({ agent, controller }: { /** 当前 Agent。 */ agent
   const translate_navigation = use_translation("navigation");
   const translate_resources = use_translation("resources");
   const [open, set_open] = useState(false);
-  const [removing, set_removing] = useState(false);
-  const [error, set_error] = useState("");
-  const remove_agent = async () => {
-    set_removing(true);
-    set_error("");
-    try { await controller.actions.remove_agent(agent.agent_id); set_open(false); }
-    catch (reason) { set_error(reason instanceof Error ? reason.message : String(reason)); }
-    finally { set_removing(false); }
-  };
-  return <><Button className="text-destructive" onClick={() => set_open(true)}><TbTrash />{translate_resources("agent.delete")}</Button><Dialog open={open} onOpenChange={(next_open) => { if (!removing) set_open(next_open); }}><DialogContent><DialogHeader><DialogTitle>{translate_navigation("sidebar.delete_agent_title", { name: agent.name })}</DialogTitle><DialogDescription>{translate_navigation("sidebar.delete_agent_description")}</DialogDescription></DialogHeader><DialogBody>{error ? <div className="text-xs text-destructive">{error}</div> : <div className="text-xs text-muted-foreground">{translate_resources("agent_details.delete_blocked")}</div>}</DialogBody><DialogFooter><Button disabled={removing} onClick={() => set_open(false)}>{translate_common("actions.cancel")}</Button><Button className="text-destructive" disabled={removing} onClick={() => void remove_agent()}>{translate_navigation(removing ? "sidebar.deleting" : "sidebar.permanent_delete")}</Button></DialogFooter></DialogContent></Dialog></>;
+  return <>
+    <Button className="text-destructive" onClick={() => set_open(true)}><TbTrash />{translate_resources("agent.delete")}</Button>
+    <ConfirmDialog
+      open={open}
+      set_open={set_open}
+      title={translate_navigation("sidebar.delete_agent_title", { name: agent.name })}
+      description={translate_navigation("sidebar.delete_agent_description")}
+      confirm_label={translate_navigation("sidebar.permanent_delete")}
+      pending_label={translate_navigation("sidebar.deleting")}
+      cancel_label={translate_common("actions.cancel")}
+      on_confirm={() => controller.actions.remove_agent(agent.agent_id)}
+    >{translate_resources("agent_details.delete_blocked")}</ConfirmDialog>
+  </>;
 }
 
 /** 默认模型编辑器。 */

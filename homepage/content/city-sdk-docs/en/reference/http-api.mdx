@@ -29,6 +29,7 @@ Each action declares which identities it allows. The default is `["user"]`; `[]`
 | `/v1/ai/video` | `POST` | Video generation | SDK |
 | `/v1/ai/tts` | `POST` | Text-to-speech | SDK |
 | `/v1/ai/asr` | `POST` | Speech recognition | SDK |
+| `/v1/ai/decision` | `POST` | Structured decision (System One) | SDK |
 | `/v1/ai/chat/completions` | `POST` | OpenAI-compatible endpoint | OpenAI |
 | `/v1/accounts/login/start` | `POST` | Create a login attempt; returns input, redirect, or done | — |
 | `/v1/accounts/login/continue` | `POST` | Submit an input login step | — |
@@ -129,6 +130,19 @@ Both paths consume the same standard event stream.
 When supplied, `call.reasoning.effort` must match the final model catalog's
 `reasoning.efforts`. AIService validates it again after fallback selects the
 execution model.
+
+## `POST /v1/ai/decision`
+
+Structured decision transport. Accepts
+`{ model, state, questions }` where `state` is `{ type: "text", text }` or
+`{ type: "json", data }`, and returns `{ answers, usage? }`. Each answer carries
+`value`, an optional `probability`, and a `distribution` for choice questions.
+
+Requests are validated before execution: question ids must be unique, choice
+questions require 1 to 255 unique options, and `score` requires `min < max`.
+Invalid input fails with 422 without recording usage.
+
+Product code should call `city.ai.decision({ model, state, questions })`.
 
 ## `POST /v1/ai/chat/completions`
 

@@ -1,48 +1,31 @@
 ---
 title: WorkboardStageMap
-description: Pixel-map village rendering for agent activity zones
+description: Workboard atlas 内部渲染的像素地图
 ---
-`WorkboardStageMap` renders a pixel-art village map where buildings and rooms represent agent activity zones. It translates agent states into a visual tile-based map.
+并不存在公开的 `WorkboardStageMap` 组件。它是组合式 [Workboard](./workboard) atlas 内部使用的
+像素村庄 renderer：依据游戏地图几何信息绘制建筑、房间与路径，用来表达 agent 活动分区。
 
-## Import
+`@downcity/ui` 不导出这个 renderer。渲染 `Workboard` 并交由它绘制 atlas 即可。
 
-```tsx
-import { WorkboardStageMap } from "@downcity/ui";
-```
+## 哪些是公开的
 
-## Usage
-
-```tsx
-<WorkboardStageMap
-  board={board}
-  config={mapConfig}
-  activeZoneId={zoneId}
-  hoveredAgentId={hoveredId}
-  onSelectZone={(id) => setZone(id)}
-  onHoverAgent={(id) => setHover(id)}
-/>
-```
-
-## Props
+这张地图所绘制的几何信息来自导出的构造函数：
 
 ```tsx
-interface WorkboardStageMapProps {
-  board: DowncityWorkboardBoardSnapshot;
-  config: WorkboardGameMapConfig;
-  activeZoneId: DowncityWorkboardZoneId;
-  hoveredAgentId?: string;
-  onSelectZone: (zoneId: string) => void;
-  onHoverAgent?: (agentId: string) => void;
-}
+import { buildWorkboardGameMapConfig } from "@downcity/ui";
+
+const gameMap = buildWorkboardGameMapConfig({
+  board,
+  activeZoneId: "active",
+  selectedAgentId,
+});
 ```
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `board` | `DowncityWorkboardBoardSnapshot` | Current board data |
-| `config` | `WorkboardGameMapConfig` | Map layout config with zone, building, and room definitions |
-| `activeZoneId` | `string` | Currently selected zone |
-| `hoveredAgentId` | `string` | Currently hovered agent (for tooltips) |
-| `onSelectZone` | `(zoneId) => void` | Zone selection callback |
-| `onHoverAgent` | `(id) => void` | Agent hover callback |
+`gameMap.zones`、`gameMap.pointsOfInterest` 与 `gameMap.actors` 就是像素地图所渲染的值。
+需要复用同一套布局时，构建一次并交给自己的覆盖层使用。
 
-The map config describes a tile-based grid with buildings (`WorkboardVillageBuilding`), rooms (`WorkboardRoomConfig`), and props (`WorkboardRoomProp` / `WorkboardVillageProp`).
+## 相关阅读
+
+- [Workboard](./workboard)：你要渲染的组合式 board
+- [WorkboardGame](./workboard-game)：导出的游戏地图构造函数与公开游戏类型
+- [WorkboardStage](./workboard-stage)：atlas 背后的舞台层

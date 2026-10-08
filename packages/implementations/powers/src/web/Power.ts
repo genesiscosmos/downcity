@@ -5,6 +5,7 @@
  * - 浏览器 provider 在 Action 首次使用时按执行作用域惰性创建。
  * - 搜索、文档读取与浏览器 session 是三个独立能力。
  * - 浏览器长期资源由 provider 拥有，并在 Power dispose 时统一释放。
+ * - 配置属于 Web 工作区，不声明独立的设置中心 Config 面板。
  */
 
 import { Power, create_action } from "@downcity/city/power";
@@ -133,7 +134,7 @@ export class WebPower extends Power {
     this.browser_provider_factory = options.browser_provider_factory;
   }
 
-  /** 注册 Web Power 的唯一配置 actions 与界面只读 actions。 */
+  /** 注册 Web Power 的状态与配置 actions。 */
   initialize(context: import("@downcity/city/power").PowerLifecycleContext): void {
     register_web_power_config_actions(context, {
       after_save: async () => await this.dispose_all_browser_providers(),

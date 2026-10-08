@@ -38,7 +38,7 @@ const PAGE: Record<"zh" | "en", ProductDetailContent> = {
       },
       {
         title: "显式组合 Plugin 与 Tool",
-        description: "让调用方自己决定要注入哪些 plugin 和 tool，而不是依赖平台自动装配。",
+        description: "让调用方自己决定要注入哪些 Power 和 tool，而不是依赖平台自动装配。",
       },
     ],
     scenesTitle: "典型场景",
@@ -57,9 +57,9 @@ const PAGE: Record<"zh" | "en", ProductDetailContent> = {
   en: {
     title: "Product · Agent SDK",
     subtitle:
-      "Compose local Agents, RemoteAgent clients, sessions, and plugins into your application flow so the agent becomes an embeddable execution layer.",
+      "Compose local Agents, RemoteAgent clients, sessions, and powers into your application flow so the agent becomes an embeddable execution layer.",
     docsCtaLabel: "Open Agent SDK Docs",
-    docsCtaHint: "Integration, sessions, plugins, and API guidance now live in the standalone agent-sdk-docs site.",
+    docsCtaHint: "Integration, sessions, powers, and API guidance now live in the standalone agent-sdk-docs site.",
     highlights: [
       {
         title: "Two entry points: local and remote",
@@ -71,14 +71,14 @@ const PAGE: Record<"zh" | "en", ProductDetailContent> = {
       },
       {
         title: "Explicit plugin and tool composition",
-        description: "Let the caller decide which plugins and tools are mounted instead of relying on automatic platform assembly.",
+        description: "Let the caller decide which powers and tools are mounted instead of relying on automatic platform assembly.",
       },
     ],
     scenesTitle: "Typical Scenarios",
     scenes: [
       "Local embedding: instantiate Agent inside a Node app and wire it into an existing business flow.",
       "Remote calling: use RemoteAgent against an HTTP-exposed agent runtime.",
-      "Capability composition: shape your own execution shell with sessions, plugins, and tools.",
+      "Capability composition: shape your own execution shell with sessions, powers, and tools.",
     ],
     factsTitle: "Facts",
     facts: [

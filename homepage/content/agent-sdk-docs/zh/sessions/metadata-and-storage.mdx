@@ -13,12 +13,16 @@ Session API 读写，不要把这些文件当作自己的数据库。
 
 一个 Session 对应一个 `session.db`。核心表为：
 
-- `session_state`：Session 身份、配置、标题、预览和 system snapshot。
+- `session_state`：Session 身份、当前目录、配置、标题、预览和 system snapshot。
 - `messages`：User/Agent Message 的 envelope。
 - `message_parts`：每个 Message 的独立 Part；一个 content 对应一个 Part。
 
 读取 API 返回聚合后的 `SessionMessage`，数据库表结构不会泄漏到 UI 或模型 Provider。Message 是
 canonical history，永远不会因为上下文压缩而删除或改写。
+
+`session_state.workspace_id` 记录的是该会话的当前目录，不是身份：它可以在会话中改变，
+改变不影响 `session_id`、历史与附件归属。Agent 自己的那段对话位于固定的 `main` 分区，
+路径为 `sessions/main/main/`。
 
 ## Composer 与派生上下文
 

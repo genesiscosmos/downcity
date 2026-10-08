@@ -1,0 +1,21 @@
+---
+title: SnapshotHttpPower 场景
+description: 用一个 runtime HTTP 场景说明 Power 如何注入自己的只读接口
+---
+## 场景
+
+你想让某个 Power 对外提供一个只读快照接口：
+
+- `GET /api/notes/snapshot`
+
+这类事情就很适合 `power.http.server`。
+
+## 当前边界
+
+这个能力针对的是完整 runtime HTTP 装配链。
+
+也就是说：
+
+- `power.http.server` 不是 `city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action(...)` 这一类显式调用
+- 当前由 Downcity 暴露 HTTP，并为运行中的 Agent 自动挂载 Power HTTP 路由
+- 如果你需要这一层，就应该把它理解成更完整的 host/runtime 集成能力

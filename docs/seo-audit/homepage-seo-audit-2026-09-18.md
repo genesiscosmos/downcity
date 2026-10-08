@@ -106,6 +106,13 @@ routes/resources.use-cases.tsx              useTranslation() 的 t
 
 ## 三、上一轮修复在线上仍未生效
 
+> **更正（后续复查）：下表 P0-1 一行的「未生效」判定有误。**
+>
+> 表格把小写 `hreflang` 计数为 0 当作缺陷证据，但属性名大小写不敏感（HTML 解析器
+> 统一归整为小写），因此 `<link hrefLang="en">` 并未使 hreflang 失效。该行列出
+> 的其他项（zh title、og:image、llms.txt、JSON-LD）是真实缺陷，不受影响。
+> 详见 `homepage-seo-audit-2026-09-17.md` 顶部的更正说明。
+
 仓库状态：
 
 ```
@@ -116,7 +123,7 @@ routes/resources.use-cases.tsx              useTranslation() 的 t
 
 | 上一轮声称已完成 | 代码库 | 线上实测（2026-09-18） | 判定 |
 |---|---|---|---|
-| P0-1 `hrefLang` → `hreflang` | ✅ 已改小写 | 页面输出 `<link rel="alternate" hrefLang="en" ...>`，小写 `hreflang` 计数 **0** | ❌ 未生效 |
+| P0-1 `hrefLang` → `hreflang` | ✅ 已改小写 | 页面输出 `<link rel="alternate" hrefLang="en" ...>`，小写 `hreflang` 计数 **0** | ❌ 未生效（**已更正：判定有误**，大小写不影响语义） |
 | P0-2 zh 首页 title 差异化 | ✅ 已差异化 | `/zh/` title 仍是 `Downcity — Agent Harness + Agent Productization Kits`，与英文完全相同 | ❌ 未生效 |
 | P1-2 默认分享图 1200×630 | ✅ 已改 | `og:image = https://downcity.ai/social-icon.png`，`twitter:card=summary` | ❌ 未生效 |
 | P1-3 `llms.txt` 上线 | ✅ 已入库 | `https://downcity.ai/llms.txt` → **404** | ❌ 未生效 |

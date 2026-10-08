@@ -1,0 +1,137 @@
+---
+title: Resolve
+description: 详细说明 resolve 的唯一答案语义、失败规则，以及它和普通 hook 的本质区别
+---
+`resolve` 是最容易被误解的一种扩展点。
+
+因为它写起来也像一个 handler，但它的语义不是“参与流程”，而是：
+
+- 对某个问题给出最终答案
+
+## 把它先和前三种分开
+
+前三种更像：
+
+- `pipeline`：大家一起加工
+- `guard`：大家一起审查
+- `effect`：大家一起做副作用
+
+而 `resolve` 更像：
+
+- 这个问题，最终谁说了算
+
+## 为什么必须只有一个 resolver
+
+因为它面对的问题通常不是“多个人都来补一点”。
+
+而是：
+
+- 最终角色是什么
+- 最终 provider 是哪个
+- 最终路由目标是谁
+
+这些问题都要求：
+
+- 一个确定答案
+- 一个最终权威
+
+所以当前实现里，同一个 `resolve` 点重复注册会直接报错。
+
+## 一个最小例子
+
+```ts
+const role = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).resolve<{ userId: string }, string>(
+  "auth.resolve_role",
+  { userId: "owner" },
+);
+```
+
+Power 可以这样定义：
+
+```ts
+resolves: {
+  "auth.resolve_role": async ({ value }) => {
+    const body = value as { userId?: unknown };
+    const userId = String(body.userId || "").trim();
+    if (!userId) {
+      throw new Error("userId is required");
+    }
+    if (userId === "owner") return "admin" as never;
+    return "member" as never;
+  },
+}
+```
+
+## 失败规则要单独记住
+
+### 重复注册
+
+直接报错。
+
+因为系统不允许一个点有两个最终裁决者。
+
+### 没有注册 resolver
+
+直接报错。
+
+因为宿主明确在问一个必须有答案的问题。
+
+### resolver 对应 Power 当前 disabled
+
+也会报错。
+
+因为这里不是“没人参与就算了”，而是“必须有一个 active 的最终回答者”。
+
+## 什么时候特别适合用 resolve
+
+### 最终角色解析
+
+例如：
+
+- 当前用户是 `admin`、`member` 还是 `guest`
+
+### 最终策略选择
+
+例如：
+
+- 当前 provider 最后选哪个
+- 当前模式最后落到哪个执行器
+
+### 唯一所有权决策
+
+例如：
+
+- 当前对象由哪个 Power 负责解释
+
+## 什么时候不要用 resolve
+
+### 多个 Power 都想补一点值
+
+这其实是 `pipeline`。
+
+### 想看看能不能继续
+
+这其实是 `guard`。
+
+### 只是想记录发生了什么
+
+这其实是 `effect`。
+
+## 一个最稳的判断句
+
+如果你的问题可以表述成：
+
+- “最终答案到底是什么？”
+
+那它很可能适合 `resolve`。
+
+如果你的问题更像：
+
+- “这个值要不要再加工一下？”
+
+那它大概率就不是 `resolve`。
+
+## 相关场景
+
+- [角色解析为什么必须唯一](/zh/agent-sdk-docs/powers/hooks/examples/role-resolution-flow)
+- [RoleResolverPower 场景](/zh/powers-docs/examples/role-resolver-power)

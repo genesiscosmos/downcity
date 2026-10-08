@@ -6,7 +6,7 @@ description: "区分 fed/downfed 与 city/downcity：一个管理 Federation 基
 `downcity` 包会安装两组命令：
 
 - `fed` / `downfed`：创建和部署 Federation，并在系统级 registry 中统一管理本地与远程实例。
-- `city` / `downcity`：管理本机 Agent、本地插件、chat/gateway，以及本机加入和登录某个 Federation 的用户态连接。
+- `city` / `downcity`：管理本机 Agent、本地 Power、chat/gateway，以及本机加入和登录某个 Federation 的用户态连接。
 
 如果你要部署一套共享后端，用 `fed`。如果你要让本机 Agent 连接、登录、运行和对话，用 `city`。
 
@@ -51,7 +51,7 @@ city on
 city agent chat
 ```
 
-它负责的是本机状态：选择哪个 Federation、保存用户登录态、运行本机 Agent、管理插件和 chat/gateway。
+它负责的是本机状态：选择哪个 Federation、保存用户登录态、运行本机 Agent、管理 Power 和 chat/gateway。
 
 ## 边界
 

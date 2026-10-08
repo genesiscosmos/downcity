@@ -1,39 +1,32 @@
 ---
 title: WorkboardStage
-description: Focused agent workboard view for inspecting individual agent state
+description: The internal stage layer behind the composite Workboard
 ---
-`WorkboardStage` is a focused panel that shows the detailed state of a single agent — its activity timeline, signals, and status indicators for one zone.
+There is no public `WorkboardStage` component. The stage is an internal layer of the composite
+[Workboard](./workboard): a fixed-size coordinate space where zones and agent nodes are positioned.
 
-## Import
+`@downcity/ui` does not export the stage component, its zone definitions, or its coordinate helpers.
+Render `Workboard` and let it own the stage.
 
-```tsx
-import { WorkboardStage } from "@downcity/ui";
-```
+## What is public
 
-## Usage
-
-```tsx
-<WorkboardStage
-  zoneId={zoneId}
-  agents={agents}
-  config={config}
-  zoneConfig={stageConfig}
-/>
-```
-
-### Zone config
+The board's game geometry is reachable through one exported builder:
 
 ```tsx
-interface WorkboardStageZoneConfig {
-  title: string;
-  subtitle: string;
-  badge: string;
-}
+import { buildWorkboardGameMapConfig } from "@downcity/ui";
+
+const gameMap = buildWorkboardGameMapConfig({
+  board,
+  activeZoneId: "active",
+  selectedAgentId,
+});
 ```
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `zoneId` | `string` | Current zone identifier |
-| `agents` | `DowncityWorkboardAgentItem[]` | Agents in this zone |
-| `config` | `DowncityWorkboardGameMapConfig` | Full game map config |
-| `zoneConfig` | `WorkboardStageZoneConfig` | Zone display config |
+`buildWorkboardGameMapConfig` returns a `DowncityWorkboardGameMapConfig` describing zones, actors,
+corridors, patrols, and points of interest — the same geometry the stage renders.
+
+## Related
+
+- [Workboard](./workboard) — the composite board you render
+- [WorkboardGame](./workboard-game) — the exported game map builder and public game types
+- [WorkboardStageMap](./workboard-stage-map) — the pixel map used inside the atlas

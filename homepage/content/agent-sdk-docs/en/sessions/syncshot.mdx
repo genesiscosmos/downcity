@@ -2,13 +2,13 @@
 title: session.syncshot()
 description: Manually regenerate a local Session system from the Agent's current configuration
 ---
-A local Session fixes its system in memory after the first generation. To explicitly adopt the Agent's latest instruction, managed system blocks, and plugin system text, call:
+A local Session fixes its system in memory after the first generation. To explicitly adopt the Agent's latest instruction, managed system blocks, and power system text, call:
 
 ```ts
 await session.syncshot();
 ```
 
-`syncshot()` replaces the Session's in-memory system snapshot. A provider request already in flight is unaffected; later steps use the new system. It refreshes only the system and does not change the Session's plugin execution view.
+`syncshot()` replaces the Session's in-memory system snapshot. A provider request already in flight is unaffected; later steps use the new system. It refreshes only the system and does not change the Session's power execution view.
 
 Persistence depends on whether the Session already has an `instruction.md` file:
 

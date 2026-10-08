@@ -17,7 +17,7 @@ The core relationship is:
 - `console`: global control plane
 - `agent`: one project runtime
 - `session`: one execution thread
-- `plugin`: one capability boundary
+- `power`: one capability boundary
 - `city`: the current package/runtime name for City infrastructure
 
 ## The shortest model
@@ -25,17 +25,17 @@ The core relationship is:
 - products create the experience
 - agents run the work
 - sessions execute turns
-- plugins expose capabilities
+- powers expose capabilities
 - City keeps repeated backend concerns out of every product
 
-## Plugin families
+## Power families
 
-### Local plugins
+### Local powers
 
 - attached directly to one SDK `Agent`
 - usually action-first or hook-oriented
 
-### Managed plugins
+### Managed powers
 
 - owned by one target agent runtime
 - may hold lifecycle-owned runtime state
@@ -46,5 +46,5 @@ When reading current code or docs, start with the product boundary:
 
 - if you need product operation, look at `downcity`, `console`, and product docs
 - if you need execution ownership, look at `agent` and `session`
-- if you need capability ownership, look at `plugin`
+- if you need capability ownership, look at `power`
 - if you need shared backend ownership, look at the City SDK and services docs

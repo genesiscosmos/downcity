@@ -63,7 +63,6 @@ export function AgentSessionChatSurface({ selection, agent, session, workspaces,
     workspace_missing={!workspaces.some((workspace) => workspace.workspace_id === workspace_id)}
     workspaces={workspaces}
     switch_workspace={switch_workspace}
-    agents={agents}
     session={session}
     messages={messages ?? empty_items}
     runtime={runtime}
@@ -73,7 +72,6 @@ export function AgentSessionChatSurface({ selection, agent, session, workspaces,
     rename_session={rename_session}
     archive_session={archive_session}
     remove_session={remove_session}
-    switch_draft_context={controller.actions.switch_draft_context}
     composer={<SessionComposer selection={selection} stores={controller.stores} actions={controller.actions} session_label={session.title} />}
     respond_interaction={respond_interaction}
     fork_message={fork_message}

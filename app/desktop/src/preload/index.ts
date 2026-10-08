@@ -37,6 +37,13 @@ const desktop_api: DesktopApi = {
     remove: (workspace_id) => ipcRenderer.invoke("workspace:remove", workspace_id),
     write_readme: (workspace_id, content) => ipcRenderer.invoke("workspace:write-readme", workspace_id, content),
     read_text_file: (workspace_id, relative_path) => ipcRenderer.invoke("workspace:read-text-file", workspace_id, relative_path),
+    watch_file: (workspace_id, relative_path, known_modified_at, subscription_id) => ipcRenderer.invoke("workspace:watch-file", workspace_id, relative_path, known_modified_at, subscription_id),
+    unwatch_file: (subscription_id) => ipcRenderer.invoke("workspace:unwatch-file", subscription_id),
+    on_file_changed: (callback) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof callback>[0]) => callback(value);
+      ipcRenderer.on("workspace:file-changed", handler);
+      return () => ipcRenderer.removeListener("workspace:file-changed", handler);
+    },
   },
   power: {
     list: () => ipcRenderer.invoke("power:list"),

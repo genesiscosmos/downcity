@@ -43,7 +43,7 @@ export function HomeQuickstartSection() {
   };
   const map_labels = {
     agent: t("quickstart.map.labels.agent"),
-    plugin: t("quickstart.map.labels.plugin"),
+    power: t("quickstart.map.labels.power"),
     workspace: t("quickstart.map.labels.workspace"),
     group: t("quickstart.map.labels.group"),
     group_session: t("quickstart.map.labels.groupSession"),
@@ -73,7 +73,7 @@ export function HomeQuickstartSection() {
     map_labels.workspace,
     `${map_labels.agent} · ${map_labels.workspace}`,
     map_labels.model,
-    map_labels.plugin,
+    map_labels.power,
     map_labels.city,
     map_labels.agent,
     map_labels.group,

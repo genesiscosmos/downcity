@@ -51,6 +51,7 @@ Once you ship a second or third AI product, these capabilities repeat everywhere
 - Model catalog and provider configuration
 - `user_token` validation
 - AI service calls such as `city.ai.stream()` and `city.ai.image_create()` / `city.ai.image_result()`
+- Structured decision calls such as `city.ai.decision()`
 - Usage records, logs, quotas, and business hooks
 - Call logic reused across multiple products
 
@@ -100,3 +101,9 @@ At the product layer, a model is more like a visible capability:
 - every AIService call must pass an explicit model id or `CityModel`
 
 This means the product sees stable model IDs, not upstream provider details.
+
+## Model type and modalities
+
+Every catalog entry carries a `model_type`: `language`, `decision`, `image`, `sound`, or `video`. Federation derives it from the capabilities the model actually implements, so it shares a source with `modalities`.
+
+The two answer different questions. `model_type` says what the model is, and is used for display and grouping. `modalities` says what it can do, and is what you read to decide whether a capability is available. A conversation model carries `text` / `stream`; a decision model carries only `decision`, which is why only the former can be passed to an Agent.

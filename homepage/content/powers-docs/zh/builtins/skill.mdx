@@ -1,0 +1,102 @@
+---
+title: Skills
+description: 说明 skill 内建 Power 如何按 Agent 划分技能目录、读取 SKILL.md，并把 Agent 技能清单暴露给 Desktop
+---
+`skill` 是 Agent 的技能目录。每个 Agent 拥有自己的技能目录，该目录就是它可用技能的权威集合。这个 Power 负责发现目录内的技能、读取 `SKILL.md`，并把清单注入 system prompt。
+
+技能存放在 `~/.downcity/agents/<agent-id>/skills`。每个条目是一个包含 `SKILL.md` 的目录，来源要么是复制进 Agent 目录的安装副本，要么是指向外部目录的软链接。
+
+该目录位于 Agent 自己的数据根下，因此删除 Agent 会一并删除它的技能。该目录已授权给 Agent 的 shell，所以 Agent 可以自己安装与关联技能。根路径由容器提供（`PowerContext.data_root_path` / `PowerLifecycleContext.data_root_path`），不来自构造参数。
+
+## 作用域
+
+Agent 自己的目录是默认来源，也是权威来源。另有两条可按需读取的额外来源：
+
+- `project` 读取 `<workspace>/.agents/skills`
+- `home` 读取 `~/.agents/skills`
+- `all` 返回 Agent 目录、project、home 的并集
+
+同一个技能 ID 出现在多个来源时，Agent 目录优先，其次 project，最后 home。
+
+`list` 与 `lookup` 接受相同的 `scope` 参数，且都默认只看 Agent 目录。system prompt 里的清单也只列 Agent 目录，因此模型看到的技能名可以直接使用，不需要额外传 scope。
+
+## Actions
+
+| Action | Payload | 作用 |
+| --- | --- | --- |
+| `list` | `{ scope?: "agent" \| "project" \| "home" \| "all" }` | 列出指定作用域的技能，默认只看 Agent 目录 |
+| `lookup` | `{ name: string, scope?: ... }` | 读取技能的 `SKILL.md` |
+
+`lookup` 把技能正文作为标准 context 消息返回，正文会在下一步进入模型上下文，不写入任何会话状态。
+
+模型侧没有 `find` 与 `install`。安装与关联要么由 Agent 自己通过 shell 完成，要么在 Desktop 上完成：`skills` CLI 无法直接装进 Agent 技能目录，而且「往技能目录里放什么」需要有人做判断。
+
+Agent 自己安装分两步：在临时目录里跑 `skills` CLI，再把得到的技能拷进自己的目录。system prompt 里带了完整命令，包括让 `npx` 在沙箱内可用的 `npm_config_cache` 覆盖。
+
+用 `scope` 读取 `project` 或 `home` 并不会让那些技能变得可用。用户目录或 Workspace 里的技能，只有被复制或关联进 Agent 目录之后才能使用，`list` 默认返回的也正是这些条目。
+
+列出 Agent 的技能：
+
+```ts
+const result = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
+  power: "skill",
+  action: "list",
+  payload: {},
+});
+```
+
+读取技能：
+
+```ts
+const result = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
+  power: "skill",
+  action: "lookup",
+  payload: {
+    name: "web-access",
+  },
+});
+```
+
+模型在 Session 中使用相同协议：
+
+```ts
+skill({
+  action: "lookup",
+  args: {
+    name: "web-access",
+  },
+});
+```
+
+## 配置
+
+Skill 没有 Config 面板。作用域由 Agent 目录与 `scope` 参数决定，因此唯一的构造参数是 `ignore`：
+
+```ts
+const skill_power = new SkillPower({
+  ignore: ["legacy-skill", /^internal-/],
+});
+```
+
+- 字符串会同时匹配技能 ID 与名称。
+- `RegExp` 用于批量过滤。
+- 判断函数返回 `true` 表示排除该技能。
+
+## Desktop
+
+Skills 页面分两层。Sidebar 是两个平级入口：
+
+- **全局目录**：用户目录 `~/.agents/skills` 里的 Skill。每条标明是否已关联，并有一个目标 Agent 选择器——选中哪个 Agent，关联就落到它那里。
+- **各个 Agent**：平铺列出每个已登记的 Agent，不展开；选中进入它的技能列表。
+
+Agent 页只展示该 Agent 已绑定的 Skill，可移除、可点开看 `SKILL.md`。
+
+可关联来源只有用户目录。Workspace 的 `.agents/skills` 不进界面：一个 Skill 想给 Agent 用，先放进用户目录即可。
+
+移除关联技能只删除软链接，用户目录不受影响。操作不会越出 Agent 目录。
+
+## 相关文档
+
+- [内建 Power 总览](/zh/powers-docs/builtins/overview)
+- [Power Actions](/zh/agent-sdk-docs/powers/power-actions)
+- [Power System](/zh/agent-sdk-docs/powers/power-system)

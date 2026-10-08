@@ -7,6 +7,9 @@ import type { FetchLike } from "../http.js";
 import type { FederationModelInput } from "../invoker/ai/types.js";
 import type {
   AIActionMessage,
+  AIDecisionQuestion,
+  AIDecisionResult,
+  AIDecisionState,
   AIImageCreateResult,
   AIImageResult,
   AIImageStatus,
@@ -182,6 +185,16 @@ export interface UserAsrInput extends FederationActionInput {
   /** Provider 私有参数，例如 `{ openai: {...}, groq: {...} }`。 */
   provider_options?: UserJsonObject;
 }
+
+/** 决策调用输入。 */
+export interface UserDecisionInput extends FederationActionInput {
+  /** 判定依据的原始状态。 */
+  state: AIDecisionState;
+  /** 本次需要模型判定的全部问题。 */
+  questions: AIDecisionQuestion[];
+}
+/** 决策调用结果。 */
+export type UserDecisionResult = AIDecisionResult;
 
 /** 发给图片、视频、语音等 action 的通用输入。 */
 export interface FederationActionInput {

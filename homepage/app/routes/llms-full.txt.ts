@@ -8,50 +8,40 @@
  * 输出体积约 1.2 MB（全部 MDX 正文），因此用 1 小时缓存，避免反复生成。
  */
 import { readFile } from "node:fs/promises";
-import { source } from "@/lib/source";
-import { citySdkDocsSource } from "@/lib/city-sdk-docs-source";
-import { agentSdkDocsSource } from "@/lib/agent-sdk-docs-source";
-import { paymentsSource } from "@/lib/payments-source";
-import { pluginsDocsSource } from "@/lib/plugins-docs-source";
-import { uiSdkDocsSource } from "@/lib/ui-sdk-docs-source";
-import { blogSource } from "@/lib/blog-source";
+import { docs_index } from "@/lib/docs/docs-index";
+import { docs_spaces } from "@/lib/docs/spaces";
 import { create_site_url } from "@/lib/seo";
 import { strip_frontmatter } from "@/lib/ai-content";
 
-type DocPage = {
-  url: string;
-  absolutePath?: string;
-  data: { title?: string; description?: string };
-};
+/** 每个文档空间在汇总文件中的分组标题。 */
+function collection_heading(space_id: string): string {
+  const space = docs_spaces.find((item) => item.id === space_id);
 
-const collections: Array<{ heading: string; pages: () => DocPage[] }> = [
-  { heading: "Documentation", pages: () => source.getPages() as unknown as DocPage[] },
-  { heading: "City SDK", pages: () => citySdkDocsSource.getPages() as unknown as DocPage[] },
-  { heading: "Agent SDK", pages: () => agentSdkDocsSource.getPages() as unknown as DocPage[] },
-  { heading: "Payments", pages: () => paymentsSource.getPages() as unknown as DocPage[] },
-  { heading: "Plugins", pages: () => pluginsDocsSource.getPages() as unknown as DocPage[] },
-  { heading: "UI SDK", pages: () => uiSdkDocsSource.getPages() as unknown as DocPage[] },
-  { heading: "Blog", pages: () => blogSource.getPages() as unknown as DocPage[] },
-];
+  return space ? space.label.en : space_id;
+}
 
-async function render_page(page: DocPage): Promise<string | null> {
-  if (!page.absolutePath) return null;
+/**
+ * 渲染单篇文档为可读正文块。
+ *
+ * 源文件读取失败时返回 null，调用方跳过该页。
+ */
+async function render_page(page_url: string): Promise<string | null> {
+  const page = docs_index.get_page(page_url);
+  if (!page?.absolute_path) return null;
 
   let raw: string;
   try {
-    raw = await readFile(page.absolutePath, "utf-8");
+    raw = await readFile(page.absolute_path, "utf-8");
   } catch {
     return null;
   }
 
   const { body } = strip_frontmatter(raw);
-  const title = page.data.title ?? page.url;
-  const url = create_site_url(page.url);
 
   return [
-    `### ${title}`,
+    `### ${page.title}`,
     "",
-    `Source: ${url}`,
+    `Source: ${create_site_url(page.url)}`,
     "",
     body.trim(),
     "",
@@ -67,15 +57,18 @@ export async function loader() {
     "",
   ];
 
-  for (const collection of collections) {
+  for (const space of docs_spaces) {
     const rendered: string[] = [];
-    for (const page of collection.pages()) {
-      const block = await render_page(page);
-      if (block) rendered.push(block);
+    // 逐语言按阅读顺序输出，保持与侧边栏一致的正文顺序。
+    for (const locale of ["en", "zh"] as const) {
+      for (const page of docs_index.list_space_pages(space.id, locale)) {
+        const block = await render_page(page.url);
+        if (block) rendered.push(block);
+      }
     }
     if (rendered.length === 0) continue;
 
-    sections.push(`## ${collection.heading}`, "", ...rendered);
+    sections.push(`## ${collection_heading(space.id)}`, "", ...rendered);
   }
 
   return new Response(sections.join("\n"), {

@@ -3,6 +3,9 @@
  *
  * 该测试在完整 build 后执行，验证 sitemap、canonical、hreflang 与静态 404
  * 确实进入 Cloudflare Pages 发布目录，而不只是在源码层看起来正确。
+ *
+ * 页面级 hreflang 断言只校验属性与值存在（大小写不敏感）：HTML 解析器会把属性名
+ * 归整为小写，所以拼写不是有效验收项，真正的风险是注解缺失。
  */
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
@@ -108,13 +111,15 @@ test("营销页与文档页输出 self canonical 和双向 hreflang", async () =
   for (const [relative_path, canonical_url, alternate_url] of cases) {
     const html = await read_build_file(relative_path);
     assert.match(html, new RegExp(`<link rel="canonical" href="${escape_regexp(canonical_url)}"`));
-    // hreflang 必须以小写属性名出现在构建产物中：React meta 描述符写驼峰
-    // hrefLang 会被原样序列化成非法属性名，而宽松的 href 存在性断言无法发现
-    // 该问题（2026-09 回归：全站页面级 hreflang 因此失效）。
+    // 属性名大小写不敏感：HTML 规范要求解析器把属性名归整为小写，实测 parse5 把
+    // hrefLang="en" 与 hreflang="en" 解析为同一个 DOM 属性，因此这里只断言属性
+    // 与值存在，不再断言拼写。历史背景：曾把驼峰拼写当成“非法属性”并断言小写，
+    // 但真正的回归风险是 hreflang 注解整个缺失（见下方 x-default 断言），
+    // 而不是它写成了哪种大小写。
     assert.match(
       html,
-      new RegExp(`<link rel="alternate" hreflang="[^"}]+" href="${escape_regexp(alternate_url)}"`),
-      `${relative_path} 缺少小写 hreflang 语言注解`,
+      new RegExp(`<link rel="alternate" hrefLang="[^"}]+" href="${escape_regexp(alternate_url)}"`, "i"),
+      `${relative_path} 缺少 hreflang 语言注解`,
     );
     assert.match(html, /<meta name="robots" content="index, follow"/);
   }
@@ -132,12 +137,12 @@ test("营销页与文档页输出 self canonical 和双向 hreflang", async () =
 
   for (const relative_path of hreflang_pages) {
     const html = await read_build_file(relative_path);
-    assert.doesNotMatch(
+    // 每个营销入口都必须声明 x-default；这正是过去真正失效的信号。
+    assert.match(
       html,
-      /<link[^>]*hrefLang=/,
-      `${relative_path} 输出了驼峰 hrefLang 非法属性`,
+      /<link rel="alternate" hrefLang="x-default"/i,
+      `${relative_path} 缺少 hreflang x-default 语言注解`,
     );
-    assert.match(html, /<link rel="alternate" hreflang="x-default"/);
   }
 });
 
@@ -377,10 +382,11 @@ test("sitemap 不收录 noindex 目录跳转壳页，且 hreflang 不指向缺�
   }
 
   // 英文有、中文缺的页面不得声明 zh-CN hreflang（否则语言聚类指向 404）。
+  // 属性名大小写不敏感，因此这里用 i 标记匹配（页面由 React 输出 hrefLang）。
   const feedback_html = await read_build_file("en/city-sdk-docs/service/feedback/index.html");
   assert.doesNotMatch(
     feedback_html,
-    /hreflang="zh-CN" href="https:\/\/downcity\.ai\/zh\/city-sdk-docs\/service\/feedback\/"/,
+    /hreflang="zh-CN" href="https:\/\/downcity\.ai\/zh\/city-sdk-docs\/service\/feedback\/"/i,
     "缺少中文对应页时不得输出 zh-CN hreflang",
   );
 
@@ -549,4 +555,73 @@ test("llms.txt 进入构建产物且包含文档地图", async () => {
   assert.match(llms_txt, /https:\/\/downcity\.ai\/en\/docs\//);
   assert.match(llms_txt, /https:\/\/downcity\.ai\/zh\/docs\//);
   assert.match(llms_txt, /https:\/\/github\.com\/genesiscosmos\/downcity/);
+});
+
+test("客户端路由包不包含服务端专用代码", async () => {
+  // 回归护栏（2026-09 真实事故）：文档 loader 与页面渲染曾被放在同一个模块，
+  // 导致 `node:fs` / `node:path` 被打进浏览器 chunk。产物构建与预渲染全部正常，
+  // 只有浏览器加载该路由时才抛错（`U.join is not a function`），
+  // 表现为点击文档导航无法跳转 —— 静态断言无法发现，所以在这里堵住。
+  //
+  // 判定方式：读取客户端 manifest，取出每个路由模块，再沿静态 import 走一遍
+  // 依赖闭包，确认其中没有任何文件包含服务端专用标记。
+  const assets_directory = fileURLToPath(new URL("../build/client/assets/", import.meta.url));
+  const manifest_name = (await readdir(assets_directory)).find(
+    (name) => name.startsWith("manifest-") && name.endsWith(".js"),
+  );
+  assert.ok(manifest_name, "构建产物必须包含客户端 manifest");
+
+  const asset_source = new Map();
+  const asset_dependencies = new Map();
+  for (const name of await readdir(assets_directory)) {
+    if (!name.endsWith(".js")) continue;
+
+    const source = await readFile(join(assets_directory, name), "utf8");
+    asset_source.set(name, source);
+    // 静态 import 在打包产物里表现为 `./chunk-x.js` 或 `/assets/chunk-x.js`。
+    const referenced = new Set();
+    for (const match of source.matchAll(/\.\/([A-Za-z0-9_.-]+\.js)/g)) referenced.add(match[1]);
+    for (const match of source.matchAll(/"\/assets\/([A-Za-z0-9_.-]+\.js)"/g)) referenced.add(match[1]);
+    asset_dependencies.set(name, referenced);
+  }
+
+  const manifest = asset_source.get(manifest_name);
+  const entry_modules = Array.from(manifest.matchAll(/"module":"\/assets\/([A-Za-z0-9_.-]+\.js)"/g)).map(
+    (match) => match[1],
+  );
+  assert.ok(entry_modules.length > 0, "manifest 必须列出路由模块");
+
+  // 服务端专用标记。取「压缩后仍会残留」且「只在服务端产物里出现」的特征：
+  // 模块名（node:fs / node:path）打包后不复存在，而 MDX 集合会把磁盘路径写到
+  // info.fullPath 上，该字段名在压缩后仍保留，且干净产物中为 0。
+  const server_only_markers = [
+    "fumadocs-mdx/runtime/server",
+    ".source/server",
+    "info.fullPath",
+  ];
+
+  const reachable = new Set();
+  const queue = [...entry_modules];
+  while (queue.length > 0) {
+    const current = queue.pop();
+    if (!current || reachable.has(current)) continue;
+    reachable.add(current);
+    for (const dependency of asset_dependencies.get(current) ?? []) {
+      if (!reachable.has(dependency)) queue.push(dependency);
+    }
+  }
+
+  const offenders = [];
+  for (const name of reachable) {
+    const source = asset_source.get(name) ?? "";
+    for (const marker of server_only_markers) {
+      if (source.includes(marker)) offenders.push(`${name} 包含 ${marker}`);
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `客户端路由依赖里不得包含服务端专用模块：${offenders.join(", ")}`,
+  );
 });

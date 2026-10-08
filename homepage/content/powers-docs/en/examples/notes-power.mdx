@@ -1,0 +1,43 @@
+---
+title: NotesPower Scenario
+description: Use a minimal NotesPower to combine an Action, System content, and City registration.
+---
+```ts
+import {
+  Power,
+  type PowerActions,
+  type PowerContext,
+} from "@downcity/city/power";
+
+class NotesPower extends Power {
+  readonly name = "notes";
+  readonly title = "Project Notes";
+  readonly description = "Describe the project notes folder.";
+
+  system(context: PowerContext) {
+    return `Project notes folder: ${context.workspace.path}/.notes`;
+  }
+
+  readonly actions: PowerActions = {
+    status: {
+      execute: async ({ context }) => ({
+        success: true,
+        data: {
+          workspace_path: context.workspace.path,
+          storage_path: context.storage.path,
+        },
+      }),
+    },
+  };
+}
+
+const notes_power = new NotesPower();
+```
+
+The host provides `notes_power` to City, which exposes it to every Agent. After entering a
+Workspace, host code may call
+`city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action()` explicitly. Sessions collect System content and Hooks from the same City
+execution view.
+
+This Power owns no long-lived resources, so it needs no Lifecycle. Use `context.workspace.files` for
+user project files and `context.storage.files` for private Power state.

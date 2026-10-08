@@ -567,8 +567,8 @@ test("内建 Power Catalog 暴露统一运行与 Renderer 能力", async () => {
     assert.equal(memory.has_mainview, true);
     const web = await catalog.resolve_power_catalog_item("web");
     assert.equal(web.has_main, true);
-    assert.equal(web.has_config, true);
-    // Web 的 Mainview 是只读状态页，同时保留独立 Config。
+    assert.equal(web.has_config, false);
+    // Web 的配置在 Sidebar + Mainview 工作区内完成，不再有独立 Config 面板。
     assert.equal(web.has_sidebar, true);
     assert.equal(web.has_mainview, true);
     const skill = await catalog.resolve_power_catalog_item("skill");

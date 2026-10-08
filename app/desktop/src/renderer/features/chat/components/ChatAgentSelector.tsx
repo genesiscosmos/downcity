@@ -1,23 +1,24 @@
 /**
- * 空白对话页的 Agent 切换入口。
+ * 输入区的联系人切换入口。
  *
  * ## 它换的是「和谁聊」，不是「在哪聊」
  *
- * 空白页的 Workspace 在**进入它的那一刻**就已经定了（侧栏 Workspace 行上的新建按钮长在那个
- * Workspace 上），因此这里只剩 Agent 这一件事可换。再给一个 Workspace 选择器等于把用户刚选定的
- * 目录重新问一遍，而且换 Workspace 会让他离开那个目录——那正是他按下新建时明确选中的东西。
+ * 草稿的 Workspace 在**进入它的那一刻**就已经定了（侧栏 Workspace 行上的新建按钮长在那个
+ * Workspace 上）。换 Agent 保留当前 Workspace（`switch_draft_context` 就是为这件事存在的），
+ * 也不改变执行边界；换目录是另一件事，由 `ChatWorkspaceSelector` 负责，两者并排给出。
  *
  * ## 与 `ChatWorkspaceSelector` 的关系
  *
- * 两者形状同源（`field` 那一档），但数据源与语义不同，因此不合并：那个换执行边界，
- * 这个换联系人。Group 草稿页仍然需要换 Workspace（群聊可以从任意目录开始），
- * 所以那个组件保留。
+ * 两者语义不同（换联系人 / 换执行边界），因此不合并；但**形状同源**，
+ * 都取 `composer_context_chip_class_name`。并排出现的两个控件只要有一处字号、圆角或内边距
+ * 不同，一眼就能看出是两套东西。
  */
 
 import { TbCheck, TbChevronDown } from "react-icons/tb";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown";
+import { composer_context_chip_class_name } from "@/features/chat/components/ComposerContextRow";
 import { use_translation } from "@/locales/i18n";
 import type { DesktopAgentSummary } from "@common/types/DesktopApi";
 
@@ -42,18 +43,18 @@ export function ChatAgentSelector({ agent_id, agents, disabled, switch_agent }: 
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button
-        className="h-9 min-w-52 max-w-72 justify-start gap-2 rounded-control border border-border-subtle bg-background px-3 text-xs font-normal text-foreground shadow-none hover:bg-interaction-hover"
+        className={composer_context_chip_class_name}
         disabled={!can_switch}
         title={current?.name || translate_chat("conversation.contact")}
         aria-label={translate_chat("conversation.select_contact")}
       >
-        {current ? <AgentAvatar agent={current} class_name="size-5" /> : null}
+        {current ? <AgentAvatar agent={current} class_name="size-3.5" /> : null}
         <span className="min-w-0 flex-1 truncate text-left">{current?.name || translate_chat("conversation.contact")}</span>
-        <TbChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+        <TbChevronDown />
       </Button>
     </DropdownMenuTrigger>
-    {/* 向上弹：这个入口住在正文底部，向下弹会被输入区压住。 */}
-    <DropdownMenuContent align="center" side="top" sideOffset={4}>
+    {/* 向上弹：这个入口住在输入区上方，向下弹会被输入框压住。 */}
+    <DropdownMenuContent align="start" side="top" sideOffset={4}>
       {agents.map((agent) => <DropdownMenuItem
         key={agent.agent_id}
         disabled={agent.agent_id === agent_id}

@@ -140,7 +140,7 @@ test("侧栏面板都必须包在 SidebarPanel 里", () => {
   // `SidebarFrame` 的 children 容器是**横向** flex（Rail 与 Panel 并排）。面板裸着返回一个
   // fragment，它的 Header 与列表就会成为那个横向容器的两个 flex 项，整个面板变成左右布局。
   // 这类错误不会被类型系统拦住（都是合法 JSX），只能靠这条约定守。
-  const offenders = ["AgentsSidebar.tsx", "WorkspaceSidebar.tsx", "PowerSidebar.tsx", "PowerWorkspaceSidebar.tsx", "SettingsSidebarPanel.tsx"]
+  const offenders = ["AgentsSidebar.tsx", "WorkspaceSidebar.tsx", "PowerWorkspaceSidebar.tsx", "SettingsSidebarPanel.tsx"]
     .filter((file) => !fs.readFileSync(path.join(sidebar_root, file), "utf8").includes("return <SidebarPanel"));
   assert.deepEqual(offenders, [], `这些面板没有包在 SidebarPanel 里，会变成左右布局：${offenders.join(", ")}`);
 });
@@ -161,20 +161,54 @@ test("行把 ref 与原生 button 属性交给标签按钮（否则 asChild 触�
 });
 
 /**
- * 空对话页换的是**联系人**，不是 Workspace。
+ * 新建对话的联系人与目录 chip 是**输入卡片的同级兄弟**，排在卡片上方。
  *
- * Workspace 在进入这个空对话的那一刻就已经定了（侧栏哪个 Workspace 上的新建按钮决定），
- * 在这里再给一个 Workspace 选择器等于把用户刚选定的目录重新问一遍，
- * 而换 Workspace 会让他离开那个目录。Group 草稿例外：群聊可以从任意目录开始。
+ * 页面正中那块是消息流的位置：发出第一条消息后它会被消息占满，选择器留在那里会随之消失、
+ * 位置也飘忽。而卡片内部的表头会与输入框挤成两行控件，因此它在卡片外面。
+ *
+ * 换 Agent 必须保留当前 Workspace（`switch_draft_context` 就是为这件事存在的）；
+ * 换 Workspace 才把草稿迁到另一个目录。两者都是草稿的上下文，因此并排给出。
  */
-test("空对话页换联系人，而不是换 Workspace", () => {
+test("新建对话的选择器排在输入卡片外，且只在草稿态出现", () => {
   const timeline = read_without_comments(path.join(renderer_root, "features/chat/components/SessionTimeline.tsx"));
-  // 换联系人用 Agent 选择器，且必须保留当前 Workspace。
-  assert.ok(/<ChatAgentSelector agent_id=\{agent\.agent_id\} agents=\{agents\} disabled=\{false\} switch_agent=\{\(agent_id\) => switch_context\(workspace\.workspace_id, agent_id\)\} \/>/.test(timeline), "空对话页没有换联系人的入口，或换联系人时改了 Workspace");
-  // Workspace 选择器只在群聊草稿出现（那时目录还没定）。
-  assert.ok(/workspace_draft_mode && switch_workspace \? <div className="mt-3">/.test(timeline), "Workspace 选择器没有按草稿态收口");
+  const draft_composer = read_without_comments(path.join(renderer_root, "features/chat/composer/DraftComposer.tsx"));
+  const group_composer = read_without_comments(path.join(renderer_root, "features/chat/composer/GroupComposer.tsx"));
+  const row = read_without_comments(path.join(renderer_root, "features/chat/components/ComposerContextRow.tsx"));
+  const base_css = fs.readFileSync(path.join(renderer_root, "styles/base.css"), "utf8");
+
+  // 两个 chip 由草稿输入区提供：换联系人保留当前 Workspace，换目录才迁草稿。
+  assert.ok(/switch_agent=\{\(next_agent_id\) => props\.actions\.switch_draft_context\(workspace_id, next_agent_id\)\}/.test(draft_composer), "新建对话没有换联系人的入口，或换联系人时改了 Workspace");
+  assert.ok(/<ChatWorkspaceSelector[\s\S]{0,200}?variant="chip"/.test(draft_composer), "新建对话没有换目录的 chip");
+
+  // 位置：上下文行与 `RichTextEditor` 是**同级兄弟**，且排在它前面。
+  // 这里必须读原始源码：`read_without_comments` 会把 `accept="image/*"` 里的 `/*` 当成
+  // 块注释起点，一直删到文件里下一个 `*/`，把输入框那段整个吃掉（该助手的已知边界）。
+  const draft_source = fs.readFileSync(path.join(renderer_root, "features/chat/composer/DraftComposer.tsx"), "utf8");
+  const row_index = draft_source.indexOf("<ComposerContextRow>");
+  const editor_index = draft_source.indexOf("<RichTextEditor");
+  assert.ok(row_index > 0 && editor_index > 0 && row_index < editor_index, "上下文行不在输入卡片之前");
+  // 它不再经编辑器插槽，因此编辑器不该认识这个概念。
+  assert.ok(!/context=\{/.test(draft_source), "草稿输入区又把 chip 塞回卡片内部了");
+  const editor_source = fs.readFileSync(path.join(renderer_root, "features/chat/composer/RichTextEditor.tsx"), "utf8");
+  assert.ok(!/props\.context/.test(editor_source), "编辑器又接住了上下文行：它会重新变成卡片内容");
+
+  // 群聊草稿同一处理（它只有目录 chip）。
+  assert.ok(/\{props\.selection\.kind === "group_draft" \? <ComposerContextRow>/.test(group_composer), "群聊草稿没有目录 chip");
+
+  // 几何与输入卡片同源：宽度、居中与上限抄的是 `.chat-composer` 那一份。
+  assert.ok(/\.chat-composer-context-row\s*\{[^}]*width: calc\(100% - 1rem\)[^}]*max-width: 840px[^}]*margin: 0 auto/.test(base_css), "上下文行没有与输入卡片对齐的几何");
+
+  // 形状只有一个出口：两个选择器都引用同一份 chip 类名，否则并排时一眼能看出是两套东西。
+  assert.ok(/export const composer_context_chip_class_name/.test(row), "上下文 chip 的形状不是共享出口");
+  for (const file of ["ChatAgentSelector.tsx", "ChatWorkspaceSelector.tsx"]) {
+    const source = read_without_comments(path.join(renderer_root, "features/chat/components", file));
+    assert.ok(/composer_context_chip_class_name/.test(source), `${file} 没有用共享的 chip 形状`);
+  }
+
   // 旧的「Chat 表面」二分已删：它曾让 Workspace 表面与 Agent 表面走两套空态。
   assert.ok(!/chat_surface/.test(timeline), "SessionView 又按 Chat 表面分支了");
+  // 中间的空态卡片（头像 / 名称 / 描述）已随选择器一起搬走，不得回流。
+  assert.ok(!/EmptyPrompts|min-h-\[56vh\]/.test(timeline), "中间又出现了空态卡片：选择器会重新变成页面正中");
 });
 
 test("根行的状态落在菜单入口上，不额外加第二个图形", () => {

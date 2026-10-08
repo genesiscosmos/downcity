@@ -1,0 +1,102 @@
+---
+title: Power Development
+description: Build a unified City Power module with @downcity/city/power.
+---
+Power author APIs live in `@downcity/city/power`. A Power is a long-lived instance owned by City;
+do not create one instance per Agent.
+
+## Execution instance
+
+```ts
+import { Power, create_action } from "@downcity/city/power";
+import { z } from "zod";
+
+class ExamplePower extends Power {
+  readonly name = "example";
+  readonly title = "Example";
+  readonly description = "An example Power.";
+
+  constructor(private readonly client: ExampleClient) {
+    super();
+  }
+
+  readonly actions = {
+    status: create_action({
+      description: "Return the current scope.",
+      input_schema: { zod: z.object({}) },
+      execute: async ({ context }) => ({
+        success: true,
+        data: {
+          agent_id: context.agent.id,
+          workspace_id: context.workspace.id,
+          session_id: context.session?.id ?? null,
+          tool_call_id: context.call.tool_call_id ?? null,
+        },
+      }),
+    }),
+  };
+}
+```
+
+Use `context.workspace.files` for user Workspace files and `context.storage.files` for private Power
+state. `context.session` and `context.agent.sessions` are directly callable restricted handles; a
+Power does not need to resolve objects from IDs alone.
+
+## Unified City module
+
+```ts
+export default new ExamplePower();
+```
+
+An SDK host places the instance in City and adds Agents:
+
+```ts
+const city = new City({ powers: [new ExamplePower()], workspaces: [workspace] });
+city.agents.add(agent);
+```
+
+## Lifecycle
+
+`initialize/dispose` belong to City's unique Power instance. Agent and Workspace are dynamic call
+context, not lifecycle boundaries. Key long-lived resources by their actual domain owner and close
+all of them in `dispose`. Every asynchronous Action should propagate `execution.abort_signal`.
+
+## Installable package
+
+```text
+example-power/
+├── power.json
+├── package.json
+├── README.md
+├── dist/main.js
+└── dist/renderer.js
+```
+
+```json
+{
+  "schema_version": 1,
+  "id": "example",
+  "version": "1.0.0",
+  "description": "A small example Power.",
+  "readme": "./README.md",
+  "main": "./dist/main.js",
+  "renderer": {
+    "entry": "./dist/renderer.js",
+    "sidebar": true,
+    "mainview": true,
+    "config": false
+  }
+}
+```
+
+`main` default-exports a Power instance or `{ power, main }`; there is no separate `agent` entry. A Renderer
+communicates only through the host action gateway and cannot access Node, Electron, Agent objects, or
+Power Config files directly.
+
+## Testing focus
+
+- Multiple Agents using one City Power initialize one instance and read the same configuration.
+- Repeated calls receive fresh Context objects with the correct Agent and Workspace.
+- `dispose` waits for the final execution lease.
+- Concurrent main calls activate once, and shutdown fully deactivates it.
+- Action input, JSON results, and cancellation signals remain valid.

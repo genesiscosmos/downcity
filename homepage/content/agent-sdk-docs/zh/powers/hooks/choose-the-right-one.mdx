@@ -1,0 +1,70 @@
+---
+title: 怎么选
+description: 用简短判断规则区分 action、pipeline、guard、effect、resolve 与 lifecycle runtime
+---
+这页只回答一个问题：
+
+- 这段能力到底应该放在哪里
+
+## 先看最短版本
+
+如果你想要：
+
+- 显式调用一个命名能力，用 `action`
+- 逐步变换一个值，用 `pipeline`
+- 在流程继续前阻断，用 `guard`
+- 不改主值，只顺手记录或同步一些东西，用 `effect`
+- 得到一个最终唯一答案，用 `resolve`
+- 持有长期状态、worker 或连接，用 Power `lifecycle`
+
+## 常见问题
+
+### “我想给输入补默认字段”
+
+用 `pipeline`。
+
+### “我想在没有权限时立刻拦住请求”
+
+用 `guard`。
+
+### “我想每次都写一条审计日志”
+
+用 `effect`。
+
+### “我想知道用户最终角色”
+
+用 `resolve`。
+
+### “我想让外部调用者触发一个具名命令”
+
+用 `action`。
+
+### “我想要长期缓存、连接池或后台 worker”
+
+用 Power `lifecycle`。
+
+## 常见坏拆分
+
+- 用 `resolve` 做多 Power 富化
+- 把 `effect` 当隐藏可靠任务队列
+- `guard` 一边阻断一边还改值
+
+## 一个实用拆分模式
+
+如果一个能力同时需要：
+
+- 显式命令入口
+- 运行链路扩展
+- 长期状态
+
+那更干净的拆法通常是：
+
+- `action` 负责显式调用
+- `pipeline / guard / effect / resolve` 负责链路扩展
+- `lifecycle` 负责长期状态
+
+## 相关场景
+
+- [完整消息流](/zh/agent-sdk-docs/powers/hooks/examples/end-to-end-message-flow)
+- [常见 bad vs good 设计](/zh/agent-sdk-docs/powers/hooks/examples/bad-vs-good-design)
+- [Power Runtime Composition](/zh/powers-docs/examples/power-runtime-composition)

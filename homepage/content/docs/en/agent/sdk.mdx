@@ -7,7 +7,7 @@ Use `@downcity/agent` to create an Agent, manage Sessions, and execute model cal
 ```ts
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
-import { create_builtin_plugin_registrations } from "@downcity/plugins";
+import { create_builtin_power_registrations } from "@downcity/powers";
 import { Workspace } from "@downcity/city";
 import { Shell } from "@downcity/city";
 import { MicrosandboxProvider } from "@downcity/sandbox-microsandbox";
@@ -28,7 +28,7 @@ const agent = new Agent({
 });
 const city = new City({
   workspaces: [workspace],
-  plugins: create_builtin_plugin_registrations(),
+  powers: create_builtin_power_registrations(),
 });
 city.agents.add(agent);
 
@@ -40,7 +40,7 @@ const result = await turn.finished;
 await agent.dispose();
 ```
 
-`Workspace` comes from `@downcity/city` and owns project files, search tools, Env, and an optional Shell. It does not own Agent identity, storage, Plugins, or Session semantics. `agent.sessions.create({ workspace })` creates the SessionStore inside the Agent scope supplied by City Storage.
+`Workspace` comes from `@downcity/city` and owns project files, search tools, Env, and an optional Shell. It does not own Agent identity, storage, Powers, or Session semantics. `agent.sessions.create({ workspace })` creates the SessionStore inside the Agent scope supplied by City Storage.
 
 An Agent is not configured with a Workspace. Each Session may use a Workspace, and multiple Agents may operate on the same physical directory by creating separate Workspace instances. `agent.dispose()` releases Agent resources and the Sessions' Workspace resources.
 
@@ -55,7 +55,7 @@ Local runtime state is centralized outside the project directory:
 `chat` is the default origin partition. Callers may attach any non-empty `origin.type` at creation and
 must pass the same type to `get(session_id, origin_type)` when restoring the Session.
 
-City starts shared Plugin instances and background work when it binds them. Session execution waits for initialization automatically. Use `await city.close()` to close the host or `city.agents.remove()` to remove one Agent. City also supplies HTTP and RPC.
+City starts shared Power instances and background work when it binds them. Session execution waits for initialization automatically. Use `await city.close()` to close the host or `city.agents.remove()` to remove one Agent. City also supplies HTTP and RPC.
 
 ## Streaming messages
 

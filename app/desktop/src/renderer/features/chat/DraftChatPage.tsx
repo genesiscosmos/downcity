@@ -23,12 +23,12 @@ export function AgentDraftRouteMainView({ selection, controller, sidebar_collaps
   const settings = use_desktop_selector(controller.stores.settings, (state) => state.settings);
   if (!agent) return <WelcomeView />;
   return <AgentChatMainView agent={agent} controller={controller} workspace_id={selection.workspace_id} workspace_path={workspaces.find((item) => item.workspace_id === selection.workspace_id)?.workspace_path} view_key={`agent-draft:${agent.agent_id}:${selection.draft_id}`} session_key={get_session_key(selection.workspace_id, agent.agent_id, selection.draft_id)}>
-    <AgentDraftChatSurface selection={selection} agent={agent} workspaces={workspaces} agents={agents} settings={settings} controller={controller} />
+    <AgentDraftChatSurface selection={selection} agent={agent} workspaces={workspaces} settings={settings} controller={controller} />
   </AgentChatMainView>;
 }
 
 /** Agent Draft 只组合空消息时间线与草稿输入能力。 */
-export function AgentDraftChatSurface({ selection, agent, workspaces, agents, settings, controller }: { /** 当前 Draft 导航目标。 */ selection: Extract<NavigationTarget, { kind: "draft" }>; /** Draft 所属 Agent。 */ agent: DesktopAgentSummary; /** 可用 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** 可用 Agent。 */ agents: DesktopAgentSummary[]; /** Chat 设置。 */ settings: DesktopSettings; /** Desktop 稳定控制器。 */ controller: DesktopController }) {
+export function AgentDraftChatSurface({ selection, agent, workspaces, settings, controller }: { /** 当前 Draft 导航目标。 */ selection: Extract<NavigationTarget, { kind: "draft" }>; /** Draft 所属 Agent。 */ agent: DesktopAgentSummary; /** 可用 Workspace。 */ workspaces: DesktopWorkspaceSummary[]; /** Chat 设置。 */ settings: DesktopSettings; /** Desktop 稳定控制器。 */ controller: DesktopController }) {
   const translate = use_translation("chat");
   const open_file = use_chat_file_panel();
   const { workspace_id, agent_id, draft_id } = selection;
@@ -44,11 +44,9 @@ export function AgentDraftChatSurface({ selection, agent, workspaces, agents, se
     workspaces={workspaces}
     workspace_draft_mode
     switch_workspace={switch_workspace}
-    agents={agents}
     session={draft_session}
     messages={empty_items}
     settings={settings}
-    switch_draft_context={controller.actions.switch_draft_context}
     composer={<DraftComposer selection={selection} stores={controller.stores} actions={controller.actions} session_label={draft_session.title} />}
     powers={powers}
   />;

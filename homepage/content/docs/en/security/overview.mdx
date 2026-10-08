@@ -6,13 +6,13 @@ Downcity security has three layers:
 
 1. Agent isolation: one running agent is bound to one `projectRoot`.
 2. Chat Access: per-Agent grants decide which external Chat users can send messages into the Agent.
-3. Local configuration: model, Workspace, Agent, and Plugin configuration is stored on the local machine and primarily isolated by file permissions.
+3. Local configuration: model, Workspace, Agent, and Power configuration is stored on the local machine and primarily isolated by file permissions.
 
 ## What to watch first
 
 1. Avoid stale `DC_CITY_HOST/DC_CITY_PORT` in your shell, or requests may hit the wrong agent.
 2. New users cannot enter an Agent by default, so review pending Access Requests after enabling a channel.
-3. Local configuration is plaintext. Do not copy `~/.downcity`, Agent configuration, or Plugin configuration to untrusted locations.
+3. Local configuration is plaintext. Do not copy `~/.downcity`, Agent configuration, or Power configuration to untrusted locations.
 
 ## Recommended reading
 

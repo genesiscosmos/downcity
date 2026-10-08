@@ -6,13 +6,13 @@ Downcity 的安全模型分为 3 层：
 
 1. Agent 隔离：一个运行中的 agent 绑定一个 `projectRoot`，默认不会跨项目串上下文。
 2. Chat Access：按 Agent、Chat 账号和平台用户身份决定消息能否进入 Agent。
-3. 本地配置：模型、Workspace、Agent 和 Plugin 配置保存在本机文件中，主要依靠文件权限隔离。
+3. 本地配置：模型、Workspace、Agent 和 Power 配置保存在本机文件中，主要依靠文件权限隔离。
 
 ## 你需要重点关注
 
 1. 不要在终端残留错误的 `DC_CITY_HOST/DC_CITY_PORT`，避免把命令路由到错误 runtime。
 2. 新用户默认不会进入 Agent，启用聊天渠道后先处理待批准的 Access Request。
-3. 本地配置以明文保存，不要把 `~/.downcity`、Agent 配置或 Plugin 配置复制到不受信任的位置。
+3. 本地配置以明文保存，不要把 `~/.downcity`、Agent 配置或 Power 配置复制到不受信任的位置。
 
 ## 推荐阅读顺序
 

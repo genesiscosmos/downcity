@@ -33,6 +33,12 @@
 /feed.xml
   Cache-Control: public, max-age=3600
 
+# ── 静态检索索引：1 小时，与文档正文一同更新 ────────────────────────
+/search-index.en.json
+  Cache-Control: public, max-age=3600
+/search-index.zh.json
+  Cache-Control: public, max-age=3600
+
 # ── 逐页原始 Markdown 端点：禁止索引 ──────────────────────────
 # 这些是给 AI 引擎与开发工具读取的正文副本，与 HTML 页面内容重复。
 # 若不声明，搜索引擎会把同一内容的两种形式都当成可索引页面。

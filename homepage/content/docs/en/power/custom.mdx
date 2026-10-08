@@ -1,0 +1,200 @@
+---
+title: Custom Power
+description: Build, package, and configure an installable Downcity Power
+---
+One directory defines one Power. The Power ID is its install directory, City catalog key, and runtime identity. There is no separate Extension identity.
+
+## Two optional entries
+
+```text
+Power
+├── main       provides City instances, lifecycle, management logic, and actions
+└── renderer   declares a Sidebar + Mainview workspace and/or Config
+```
+
+Each entry is optional, but at least one is required. A Power may provide only City runtime capabilities, only a Sidebar + Mainview workspace, only Config, or the complete experience.
+
+Recommended development layout:
+
+```text
+github-power/
+├── power.json
+├── package.json
+├── README.md
+├── assets/icon.svg
+├── src/
+│   ├── power.ts
+│   ├── main.ts
+│   └── renderer.tsx
+└── dist/
+    ├── main.js
+    └── renderer.js
+```
+
+Both entries use ESM. `main.js` must be self-contained. `renderer.js` is a single-file browser bundle that default-exports a Renderer definition with an optional `sidebar + mainview` pair and an independent `config`. Downcity does not install dependencies or run build scripts.
+
+## Direct SDK usage
+
+SDK users can construct a `CityPowerRegistration` directly without `power.json`:
+
+```ts
+const registration = {
+  id: "github",
+  title: "GitHub",
+  description: "GitHub integration",
+  readme: "/absolute/path/README.md",
+  has_config: false,
+  has_sidebar: false,
+  has_mainview: false,
+  power: new GithubPower(),
+};
+const city = new City({
+  powers: [registration],
+  workspaces: [workspace],
+});
+city.agents.add(agent);
+```
+
+The following entry protocol is only needed when CLI or Desktop must install, discover, and manage the Power.
+
+## Power definition
+
+```json
+{
+  "schema_version": 1,
+  "id": "github",
+  "version": "1.0.0",
+  "title": "GitHub",
+  "description": "GitHub integration",
+  "readme": "./README.md",
+  "icon": "./assets/icon.svg",
+  "main": "./dist/main.js",
+  "renderer": {
+    "entry": "./dist/renderer.js",
+    "sidebar": true,
+    "mainview": true,
+    "config": true
+  }
+}
+```
+
+`renderer.sidebar` and `renderer.mainview` must both be `true` or both be `false`; `renderer.config` is independent. The actual default export must exactly match these three static capabilities. `package.json` must declare `"type": "module"`. `readme` must point to a `.md` user document inside the Power root. Desktop safely renders that file in the Power Overview; its name and subdirectory are up to the author, and it should describe purpose, configuration, and required credentials. The icon may be an HTTP(S) URL or a file relative to the Power root and is used in Power navigation and the Overview.
+
+## Unified Power entry
+
+The `main` file default-exports one Power instance. There is no separate `agent` entry or second
+main lifecycle. During `initialize()`, `power.action()` registers Sidebar/Mainview Actions and
+`power.config_action()` registers Config Actions:
+
+```ts
+import { Power, type PowerLifecycleContext } from "@downcity/city/power";
+
+class GithubPower extends Power {
+  readonly name = "github";
+  readonly title = "GitHub";
+  readonly description = "GitHub integration";
+
+  initialize({ power, notifications }: PowerLifecycleContext) {
+    power.config_action({
+      id: "config.read",
+      run: async (_input, context) => {
+        const config = context.config.get();
+        return { api_url: config.api_url, token_configured: Boolean(config.token) };
+      },
+    });
+
+    power.config_action({
+      id: "config.save",
+      run: async (input, context) => {
+        const current = context.config.get();
+        const config = validate_and_restore_secret(input, current);
+        await context.config.set(config);
+        return { saved: true };
+      },
+    });
+
+    void notifications.publish({
+      topic_key: "sync:repository",
+      title: "Repository sync completed",
+      route: { repository: "downcity", view: "activity" },
+    });
+  }
+}
+
+export default new GithubPower();
+```
+
+One Power ID maps to one instance, one lifecycle, and one configuration per City. City injects the
+unique Config store into Config actions, while the execution instance reads its current snapshot from
+`PowerContext.config`.
+
+`notifications.publish()` and `notifications.dismiss()` are always bound to the current Power. The host namespaces `topic_key` and treats `route` as a route inside that Power workspace, so a Power cannot impersonate another Power or navigate to arbitrary Desktop pages. Only the latest unread notification for the same `topic_key` is retained.
+
+`PowerLifecycleContext.system` exposes only explicitly authorized City host capabilities. To append a background result to an existing Session, call `append_agent_session_message({ agent_id, workspace_id, session_id, origin_type, text })`. All four identity fields must come from an explicit persisted target; a Power must not scan for or guess a Session.
+
+For functional pages such as a Skill manager, `system.list_workspaces()` returns summaries of Workspaces registered by the host. A Power is trusted local Node.js code; it must validate action inputs and own its file, network, and long-lived resource behavior.
+
+## Renderer entry
+
+The Renderer has three fixed slots. `sidebar` and `mainview` form the Power workspace, must be declared together, share a host-owned JSON route, and cause the host to add a dynamic top-level navigation entry. `config` is independent from the workspace and appears only on the Power Catalog detail page. All slots share one bundle and host-provided UI Components:
+
+```tsx
+import { useEffect, useState } from "react";
+import { define_power_renderer } from "@downcity/city/power/react";
+
+export default define_power_renderer({ config: function GithubConfig({ config, ui }) {
+  const { Button, Group, Input, LoadingState, Page, Row, Toolbar } = ui.components;
+  const [config_state, set_config_state] = useState<{ api_url: string }>();
+
+  useEffect(() => {
+    void config.invoke<{ api_url: string }>("config.read").then(set_config_state);
+  }, [config]);
+
+  if (!config_state) return <LoadingState label="Reading Config…" />;
+  return <Page>
+    <Toolbar title="GitHub" actions={<Button variant="primary" on_click={() => void config.invoke("config.save", config_state).then(() => ui.toast({ type: "success", message: "Saved" }))}>Save</Button>} />
+    <Group>
+      <Row label="API URL" trailing={<Input value={config_state.api_url} on_value_change={(api_url) => set_config_state({ ...config_state, api_url })} />} />
+    </Group>
+  </Page>;
+} });
+```
+
+The Renderer bundle must leave `react` and `react/jsx-runtime` as host externals mapped to `downcity-power://runtime/react` and `downcity-power://runtime/react/jsx-runtime`. Bundle other frontend dependencies into the single `renderer.js` file.
+
+Desktop loads the Renderer in its host React tree. Sidebar and Mainview use `power.invoke()` for Power-level actions and coordinate through `navigation`; Config uses `config.invoke()` for the current Power's Config actions. Each slot receives only its required gateway, `ui.components`, Toast, and Confirm—never the Desktop controller. Renderer is trusted local UI code, so install only trusted sources.
+
+Sidebar and Mainview also receive a read-only `notifications` array scoped to the current Power. Each item includes the local `topic_key`, content, route, and creation time so navigation objects can render unread state. Navigating to the notification's exact route lets the host mark it read; the Renderer cannot publish or mutate notifications.
+
+When a Sidebar needs a creation entry in its header, pass the host-provided `SidebarCreateMenu` through the `Sidebar` component's `actions` prop. The host owns the header, plus button, and dropdown presentation; the Power declares only the creation types and the business navigation for each selection.
+
+Use `SidebarTreeItem` for a tree Sidebar: `depth` expresses hierarchy, `kind` distinguishes `branch` and `leaf`, parents own expansion through `expanded` and `on_toggle`, and `on_select` updates the Mainview through shared `navigation`. When `leading` is omitted, the host supplies consistent default icons for branches and leaves. A branch with no children can omit `on_toggle` and will not show a disclosure button. History and other deeper navigation should remain in this tree instead of consuming Mainview space. Use `ItemMenu` for row actions and the host-safe `Markdown` for Markdown content. After a mutation, call `ui.invalidate()`; the host increments `ui.revision` for that Power so Sidebar and Mainview reload their snapshots without copying host styles or putting refresh state in the route.
+
+## Config interaction
+
+```text
+Open the Powers Catalog and select a Power
+→ edit the Power's unique configuration in Config
+→ save and let the Power refresh affected long-lived resources
+```
+
+Each Power ID has one Config, independent from Sidebar/Mainview. The host only persists it and does not interpret fields or generate a form from JSON Schema. Structure, validation, defaults, Secret behavior, and resource refresh after save belong to the Power.
+
+Configuration is stored under `~/.downcity/powers/<power_id>/config.toml` with directory mode `0700` and file mode `0600`. The current store uses TOML, so values must be a TOML-compatible JSON object. `agent.json` stores no Power references; City automatically provides every Power and the same configuration to every Agent.
+
+## Install
+
+```bash
+city power install ./github-power
+# Configure GitHub on its detail page in Desktop Powers
+city power config github --set '{"api_url":"https://api.github.com"}'
+city power update github
+city power uninstall github
+```
+
+The installer copies only `power.json`, `package.json`, the Markdown file declared by `readme`, runtime entries, and an optional local icon. It never runs dependency installation, build scripts, or any entry. Local paths cannot escape the Power root or use symlinks. Installed artifacts receive a SHA-256 integrity digest. Install only trusted sources.
+
+Continue with:
+
+- [CLI Commands](/en/docs/cli/commands)
+- [Agent Powers Docs](/en/powers-docs)

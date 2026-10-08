@@ -9,7 +9,7 @@ import type {
   AIModelEnvRequirement,
   AIModelDefinition,
 } from "../../types/AI.js";
-import type { CityModelDescriptor } from "@downcity/type";
+import type { CityModelDescriptor, CityModelType } from "@downcity/type";
 import type { ModelPricing } from "@downcity/type";
 import { validate_model_context_window } from "./model-context-window.js";
 import { validate_model_reasoning } from "./reasoning.js";
@@ -25,6 +25,8 @@ interface ModelCatalogOptions {
   identity: "guest" | "user" | "bureau" | "admin";
   /** 根据运行时 action 计算模型公开模态。 */
   get_modalities: (model: AIModelDefinition) => string[];
+  /** 根据运行时能力计算模型类别。 */
+  get_model_type: (model: AIModelDefinition) => CityModelType;
 }
 
 /** AIService 使用的模型注册表。 */
@@ -42,6 +44,9 @@ export class AIModelRegistry {
       validate_model_context_window(config);
       validate_model_reasoning(config);
       validate_model_pricing(config.pricing);
+      // 能力校验放在最后：它约束的是推导出的整体形状，先让作者声明的字段错误
+      // 优先暴露，否则任何配置错误都会被「模型没有可执行能力」掩盖。
+      validate_model_capability(config);
       this.model_map.set(config.id, config);
     }
   }
@@ -77,6 +82,7 @@ export class AIModelRegistry {
 
     return configs.map((model) => ({
       id: model.id,
+      model_type: options.get_model_type(model),
       name: model.name,
       description: model.description ?? "",
       ...(model.context_window !== undefined
@@ -102,6 +108,23 @@ export class AIModelRegistry {
       description,
       required: true,
     }));
+  }
+}
+
+/**
+ * 校验模型至少具有一个可执行能力。
+ *
+ * 关键点（中文）
+ * - 目录里的 `modalities`、`model_type` 都从 runtime 能力推导，空 runtime 无法推导
+ *   出任何类别，属于注册错误。
+ * - 如果留到请求阶段才暴露，部署者只能看到一个「模型什么也不支持」的运行时失败。
+ */
+function validate_model_capability(model: AIModelDefinition): void {
+  const has_action = Object.values(model.runtime.actions).some(
+    (action) => action !== undefined,
+  );
+  if (!model.runtime.stream && !has_action) {
+    throw new Error(`Model ${model.id} has no executable capability`);
   }
 }
 

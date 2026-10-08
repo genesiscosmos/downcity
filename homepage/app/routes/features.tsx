@@ -13,7 +13,7 @@ export function meta({ location }: Route.MetaArgs) {
     : "Agent Harness Features: Runtime, Memory, Tools — Downcity";
   const description = is_chinese
     ? "了解 Downcity Agent Harness 的功能：运行时、Session、记忆、工具、插件、权限、用量与多端部署。"
-    : "Explore Downcity agent harness features: runtime, sessions, memory, tools, plugins, permissions, usage, and multi-surface deployment.";
+    : "Explore Downcity agent harness features: runtime, sessions, memory, tools, powers, permissions, usage, and multi-surface deployment.";
 
   return create_page_meta({
     title,

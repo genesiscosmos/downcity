@@ -3,6 +3,7 @@
 import { useState, type FormEvent, type ReactElement } from "react";
 import { TbArchive, TbCheckbox, TbCopy, TbFolder, TbPencil, TbTrash } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown";
 import type { DesktopSessionSummary } from "@common/types/DesktopApi";
@@ -46,17 +47,6 @@ export function SessionActionsMenu({ session, trigger, on_rename, on_archive, on
     }
   };
 
-  const remove = async () => {
-    if (pending) return;
-    set_pending(true);
-    try {
-      await on_remove();
-      set_remove_open(false);
-    } finally {
-      set_pending(false);
-    }
-  };
-
   return <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
@@ -73,20 +63,23 @@ export function SessionActionsMenu({ session, trigger, on_rename, on_archive, on
     </DropdownMenu>
 
     <Dialog open={rename_open} onOpenChange={set_rename_open}>
-      <DialogContent>
+      <DialogContent size="sm">
         <form onSubmit={(event) => void submit_rename(event)}>
           <DialogHeader><DialogTitle>{translate_chat("conversation.rename_title")}</DialogTitle><DialogDescription>{translate_chat("conversation.rename_description")}</DialogDescription></DialogHeader>
           <DialogBody><input autoFocus value={title} onChange={(event) => set_title(event.target.value)} className="h-8 w-full rounded-control border border-input bg-background px-2.5 text-xs text-foreground" /></DialogBody>
-          <DialogFooter><Button type="button" onClick={() => set_rename_open(false)}>{translate_common("actions.cancel")}</Button><Button type="submit" variant="primary" disabled={pending || !title.trim()}>{translate_common(pending ? "actions.saving" : "actions.save")}</Button></DialogFooter>
+          <DialogFooter><Button size="action" type="button" onClick={() => set_rename_open(false)}>{translate_common("actions.cancel")}</Button><Button size="action" type="submit" variant="primary" disabled={pending || !title.trim()}>{translate_common(pending ? "actions.saving" : "actions.save")}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
 
-    <Dialog open={remove_open} onOpenChange={set_remove_open}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>{translate_chat("conversation.delete")}</DialogTitle><DialogDescription>{translate_chat("conversation.delete_description", { title: session.title || translate_chat("conversation.new") })}</DialogDescription></DialogHeader>
-        <DialogFooter><Button onClick={() => set_remove_open(false)}>{translate_common("actions.cancel")}</Button><Button variant="destructive" disabled={pending} onClick={() => void remove()}>{pending ? translate_chat("conversation.deleting") : translate_common("actions.delete")}</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={remove_open}
+      set_open={set_remove_open}
+      title={translate_chat("conversation.delete")}
+      description={translate_chat("conversation.delete_description", { title: session.title || translate_chat("conversation.new") })}
+      confirm_label={translate_common("actions.delete")}
+      pending_label={translate_chat("conversation.deleting")}
+      on_confirm={on_remove}
+    />
   </>;
 }

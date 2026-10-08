@@ -60,6 +60,7 @@ import type {
   DesktopWorkspaceSummary,
   DesktopWorkspaceFile,
   DesktopWorkspaceTextFile,
+  DesktopWorkspaceFileChangedEvent,
   DesktopChatFileInput,
   DesktopCreateGroupInput,
   DesktopGenerateGroupDraftInput,
@@ -74,6 +75,8 @@ import type {
 import type { JSONContent } from "@tiptap/core";
 import { chat_input_to_session_query } from "./ChatInput.js";
 import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { WorkspaceFileWatcher } from "@/workspace/WorkspaceFileWatcher.js";
+import type { WorkspaceFileWatchRequest } from "@/types/workspace/WorkspaceFileWatcher.js";
 import {
   create_desktop_agent_model,
   create_desktop_group_model,
@@ -152,6 +155,8 @@ interface AgentControllerEvents {
   /** 广播 Group 共享消息。 */
   /** 广播 GroupSession 统一消息与状态事件。 */
   group_event(event: DesktopGroupEvent): void;
+  /** 广播一个被预览文件的磁盘变化。 */
+  workspace_file_changed(event: DesktopWorkspaceFileChangedEvent): void;
   /** 发布一个 Power 在 Agent 执行范围内产生的宿主通知。 */
   power_notification(power_id: string, agent_id: string, input: PowerNotificationInput): Promise<void>;
   /** 清除一个 Power 在 Agent 执行范围内产生的未读通知。 */
@@ -187,16 +192,22 @@ export class AgentController {
   private readonly rewriting_session_keys = new Set<string>();
   /** Desktop 首次访问前完成的本地 Agent 装配。 */
   private readonly ready_promise: Promise<void>;
+  /** 按需建立的文件监听；所有权在本控制器，dispose 时全部释放。 */
+  private readonly workspace_file_watcher: WorkspaceFileWatcher;
 
   constructor(
     private readonly data: DesktopLocalData,
     private readonly events: AgentControllerEvents,
   ) {
+    this.workspace_file_watcher = new WorkspaceFileWatcher((workspace_id, relative_path) => {
+      this.events.workspace_file_changed({ workspace_id, relative_path });
+    });
     this.city = new City({
       embassy: create_desktop_embassy(data, process.env),
       storage: new LocalStorageProvider(data.root_path),
       power_host: {
         config: (power_id) => ({
+          path: this.data.powers.config_path(power_id),
           get: () => structuredClone(this.data.powers.get_config(power_id)),
           set: async (config) => {
             this.data.powers.set_config(power_id, structuredClone(config));
@@ -913,7 +924,8 @@ export class AgentController {
     if (!config) throw new Error(`Workspace is not registered: ${workspace_id}`);
     const workspace = this.city.workspaces.get(workspace_id)
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
-    const session = await agent.sessions.workspace(session_id, workspace);
+    const session = await agent.sessions.get(session_id, "chat");
+    await session.set_workspace(workspace);
     return to_desktop_session_summary(this.data.root_path, await session.get_info());
   }
 
@@ -1156,7 +1168,30 @@ export class AgentController {
       name: path.basename(target_path),
       content: content.toString("utf8"),
       size: file_stat.size,
+      modified_at: file_stat.mtimeMs,
     };
+  }
+
+  /**
+   * 订阅一个 Workspace 文件的磁盘变化，供预览热更新。
+   *
+   * 路径校验与读取用同一条（`resolve_workspace_path`）：能读的文件才能监听，
+   * 越界或不存在时直接失败，不在主进程留下一个永远不会触发的监听。
+   * `subscription_id` 由渲染器生成，用于精确释放单个预览实例的订阅。
+   */
+  async watch_workspace_text_file(request: WorkspaceFileWatchRequest): Promise<void> {
+    const { target_path } = await this.resolve_workspace_path(request.workspace_id, request.relative_path);
+    await this.workspace_file_watcher.watch({ ...request, absolute_path: target_path });
+  }
+
+  /** 释放一个预览实例的文件监听。 */
+  unwatch_workspace_text_file(subscription_id: string): void {
+    this.workspace_file_watcher.release(subscription_id);
+  }
+
+  /** 释放一个窗口（webContents）持有的全部文件监听。 */
+  release_workspace_file_watches(subscriber_id: number): void {
+    this.workspace_file_watcher.release_subscriber(subscriber_id);
   }
 
   /** 解析并校验 Workspace 内部路径，同时阻止目录穿越与符号链接越界。 */
@@ -1308,6 +1343,7 @@ export class AgentController {
     this.group_unsubscribes.clear();
     this.runtimes.clear();
     this.restored_session_models.clear();
+    this.workspace_file_watcher.dispose();
     const results: PromiseSettledResult<unknown>[] = [];
     results.push(...await Promise.allSettled([this.city.close()]));
     results.push(...await Promise.allSettled([

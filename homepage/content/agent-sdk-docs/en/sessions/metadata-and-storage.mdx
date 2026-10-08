@@ -13,12 +13,16 @@ in-memory storage. Use the Session API instead of treating these files as an app
 
 Each Session has one `session.db` with three stable tables:
 
-- `session_state`: identity, configuration, title, preview, and the system snapshot.
+- `session_state`: identity, the current directory, configuration, title, preview, and the system snapshot.
 - `messages`: the User/Agent Message envelope.
 - `message_parts`: one row per Part; each content value belongs to one Part.
 
 The API reconstructs `SessionMessage` aggregates when reading. The table layout is not exposed to the UI
 or model providers. Canonical history is never deleted or rewritten by context compaction.
+
+`session_state.workspace_id` records the session's current directory, not its identity: it can change
+during a conversation without affecting the `session_id`, the history, or attachment ownership. The
+agent's own conversation lives in the fixed `main` partition at `sessions/main/main/`.
 
 ## Composer and derived context
 

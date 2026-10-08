@@ -16,11 +16,10 @@
 | 1 | Agents 主体行（Agent / Group） | `layouts/sidebar/AgentsSidebar.tsx` |
 | 2 | Workspace 行右端的「新建对话」加号按钮 | `layouts/sidebar/NewChatRow.tsx` |
 | 3 | 树行（根 / 会话） | `layouts/sidebar/WorkspaceSessionList.tsx` |
-| 4 | Power 目录条目 | `layouts/sidebar/PowerSidebar.tsx` |
-| 5 | 设置条目 | `layouts/sidebar/SettingsSidebarPanel.tsx` |
-| 6 | 注入给 Power 的 `SidebarItem` | `features/power/lib/PowerRendererComponents.tsx` |
-| 7 | 注入给 Power 的 `SidebarTreeItem` | 同上 |
-| 8 | （已删除的）空态与加载态 | 分散在 1 / 3 / 4 三处 |
+| 4 | 设置条目 | `layouts/sidebar/SettingsSidebarPanel.tsx` |
+| 5 | 注入给 Power 的 `SidebarItem` | `features/power/lib/PowerRendererComponents.tsx` |
+| 6 | 注入给 Power 的 `SidebarTreeItem` | 同上 |
+| 7 | （已删除的）空态与加载态 | 分散在 1 / 3 两处 |
 
 它们各自决定行高（28 / 32 / 40 / 44 / 48）、圆角（`item` / `control`）、
 内边距（4 / 6 / 8 / 10）、行首槽宽（16 / 20 / 24 / 28 / 32）与文字档位（10 / 11 / 12px）。
@@ -143,22 +142,15 @@ Workspace 会话树不占行首槽：它的行首是 24px 的箭头按钮（`tre
 
 ---
 
-### 2.8 Power 条目的图标底块：唯一的身份差别
+### 2.8 Power 工作区侧栏：适配层渲染同一个行
 
-```text
-Power      [ [ 28 底块 ] 图标 ] ──8── 名称 / 描述         ← agent 变体 + leadingTile
-Agents 主体  [ 32 头像            ] ──8── 名称 / 描述         ← agent 变体
-```
+功能型 Power 不再有「全部 Power」的目录面板——每个功能型 Power 自己就是一级入口，
+它的侧栏由 Power 用注入的 `SidebarItem` / `SidebarTreeItem` 组合而成，
+适配层直接渲染同一个 `SidebarItem`，因此它和内置面板共用行高、文字线与选中态。
 
-两者**行高与文字线完全同档**（都是「一个带身份的条目」），差别只有行首那个
-28px 的圆角底块（`size-7` + `rounded-item` + `bg-surface-subtle`）。
-
-- 底块**居中在标准的 32 槽内**，因此不引入新的文字线（仍是 97）；
-  底块到文字的实际间距是 `2 + 8 = 10`，正是历史实现的 `gap-2.5`。
-- 它的作用是把「一个能启用的**能力包**」（Power）与「一个有头像的**身份**」（Chat 主体）
-  区分开。删掉它不会报错，只会让 Power 列表看起来像另一份联系人列表。
-- 这是从历史实现里找回来的：重构过程中它曾被以“统一成裸图标”的理由删掉，
-  而那个理由本身是错的——统一的目标是**同类东西一致**，不是**所有东西一样**。
+这条路径证明了一件更容易被忽略的事：**几何只能有一个来源**。
+只要适配层自己拼 `<div>`、自己写字号与圆角，同一个 Power 在它自己的侧栏里
+就会与宿主面板分叉（本轮之前就是这么做的）。
 
 ## 三、各面板如何使用
 
@@ -168,10 +160,10 @@ Agents 主体  [ 32 头像            ] ──8── 名称 / 描述         �
 <SidebarItem
   variant="agent"
   active={active}
-  leading={<PowerIcon power_id={power.power_id} icon_url={power.icon_url} />}
-  title={power.title}
-  description={power.description}
-  onSelect={() => select_power(power.power_id)}
+  leading={<AgentAvatar agent={agent} />}
+  title={agent.name}
+  description={agent.description}
+  onSelect={() => select_agent(agent.agent_id)}
 />
 ```
 
@@ -187,7 +179,6 @@ Agents 主体  [ 32 头像            ] ──8── 名称 / 描述         �
 | --- | --- | --- |
 | Agents | `SidebarItem variant="agent"`；行首是头像，点击进 profile / 配置 | `SidebarHeader`「Agents」+ 加号菜单；空态 = 图标 + 「暂无聊天主体」+ 建立按钮 |
 | Works | `SidebarItem variant="default"` + 树形箭头 / `indent`；根行右端是「新建对话」图标按钮 + 菜单，叶子行首是归属头像（`tree.leading`） | 空态 = 图标 + 「还没有 Workspace」+ 「添加 Workspace」 |
-| Powers | `SidebarItem variant="agent"` | 空态与**加载态分开**：读到之前显示「加载中…」，而不是「暂无 Power」 |
 | Power 工作区 | 由 Power 用 `ui.Sidebar` / `SidebarItem`（`agent`）/ `SidebarTreeItem`（`default` + 32）组合——**适配层直接渲染同一个 `SidebarItem`** | 缺失插槽 / 错误由宿主渲染 |
 | 设置 | `SidebarItem variant="settings"` + 分组标签 | 返回动作是 Header 右侧的图标按钮，与其它面板同位置 |
 
@@ -300,6 +291,7 @@ Chat 顶栏的 `WorkspaceTagMenu` 里两个去向仍然直接铺开——那个�
 | B25 | 会话列表分页：一个 Workspace 默认只列最近 10 条，其余点「更多」继续加载；窗口覆盖当前打开项与已选项 | 小 |
 | B26 | **群聊归档能力**：`packages/agent` 的 `GroupSessions` 加 `archive` / `archived` / `clean_archive` / `purge`（目录搬迁，与 Agent Session 同形）；主进程 + IPC + 渲染层依次接上；侧栏的批量归档不再有「跳过群聊」分支；删 Group 时连同群聊数据一起清掉 | 中（见 `group-session-archive-design.md`） |
 | B27 | **侧栏改由目标推导**：导航入口不再硬编码切到 Agents 面板，也不再逐个调用点传 `preserve_sidebar` 才能避开它；会话类目标（会话 / 草稿 / GroupSession / Group 草稿）一律落 Works，推导函数上提到 `desktop_navigation_state` 与恢复共用同一份（修掉 ⌘R 新建对话把侧栏从 Works 拽到 Agents） | 小 |
+| B28 | **删掉 Powers 面板与 Power 详情页**：每个功能型 Power 已经是一级入口，目录面板与 README/Config 详情页不再需要；`SidebarMode` 去掉 `"powers"`、`NavigationTarget` 去掉 `{ kind: "powers" }` 与 `{ kind: "power" }`，恢复目标缺失时退回默认 Workspace；⌘1/⌘2 仍是 Works/Agents，功能型 Power 从 ⌘3 起跟随；命令面板删掉「打开 Powers」，保留可搜索的「打开 Power…」子页面；`tile` 行首形状随之失去调用点并删除 | 中 |
 
 ### 7.1 需要目检的清单
 
@@ -326,12 +318,12 @@ Chat 顶栏的 `WorkspaceTagMenu` 里两个去向仍然直接铺开——那个�
    菜单入口的图标在跑会话时变旋转、待处理时变问号，
    不应出现“状态图形 + 菜单”两个并列的东西。
 5. 树形行里点箭头只切换、点名称只打开（根）/ 只打开会话（叶子），两者不互相触发。
-6. **Power 目录条目**：图标应住在一个 28px 的圆角底块里（不是裸图标），
-   行高与文字线与 Agents 主体行一致；确认它读起来是「一个能启用的能力包」而不是「一条记录」。
+6. **Power 工作区侧栏**：注入的 `SidebarItem` 应与 Agents 主体行同一档（行高、文字线、选中底色），
+   确认它读起来与宿主面板是同一个东西。
 7. 设置条目 40 高、会话树 32 高：确认「略高」读起来是呼吸而不是错位。
 8. （已随展开卡片删除）
 9. 44 / 48 混排的 Agents 列表节奏。
-10. **所有行的两行排版**：标题与描述必须是上下两行（不是并排），且两种行（Power 与 Agents 主体）
+10. **所有行的两行排版**：标题与描述必须是上下两行（不是并排），
    描述到标题的间距一致；描述为空时行高退回单档，不留空位。
 11. **所有行的宽度**：每行的底色应铺满侧栏内容区（不是只有字那么长），
    且最右侧不溢出、不被裁掉；树行的右缘与根节点齐平。
@@ -562,7 +554,7 @@ Workspace A  [▶ 24]─4─名称                    ⏳  ⋯   根：箭头 + 
 ### 8.7 分层的硬边界
 
 ```
-面板（PowerSidebar / SettingsSidebarPanel / AgentsSidebar / NewChatRow / WorkspaceSessionList）
+面板（SettingsSidebarPanel / AgentsSidebar / NewChatRow / WorkspaceSessionList）
   │  只组装组件，不得 import sidebarRow.ts
   ▼
 组件（SidebarItem / SidebarRow / SidebarDisclosure / SidebarLeading / …）

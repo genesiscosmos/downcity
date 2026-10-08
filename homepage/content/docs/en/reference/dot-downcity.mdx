@@ -14,7 +14,7 @@ description: Runtime data layout and what each folder is for
 │   ├── sessions/<origin_type>/<session_id>/
 │   ├── archived-sessions/<origin_type>/<session_id>/
 │   └── logs/
-├── plugins/<plugin_id>/
+├── powers/<power_id>/
 │   └── config.toml
 ├── runtimes/city/
 └── downcity.db
@@ -33,15 +33,15 @@ The default origin partition is `chat`; custom non-empty origin types are encode
 
 ### Memory
 
-Long-term Memory is not part of the Workspace `.downcity/` contract. Agent-private content lives under `agents/<agent_id>/plugins/memory/`; City-shared User and Workspace content lives under `memory/` and is isolated by `MemoryPlugin` subjects. City only supplies the shared root and does not implement Memory data logic.
+Long-term Memory is not part of the Workspace `.downcity/` contract. Agent-private content lives under `agents/<agent_id>/powers/memory/`; City-shared User and Workspace content lives under `memory/` and is isolated by `MemoryPower` subjects. City only supplies the shared root and does not implement Memory data logic.
 
-### Plugin runtime data
+### Power runtime data
 
-Plugin-owned runtime data uses the Agent-level storage scope exposed by PluginContext. Plugin definitions and unique configuration remain under `~/.downcity/plugins/<plugin_id>/`.
+Power-owned runtime data uses the Agent-level storage scope exposed by PowerContext. Power definitions and unique configuration remain under `~/.downcity/powers/<power_id>/`.
 
 ### Skills location
 
-`SkillPlugin` scans `.agents/skills` (project) by default. If `use: ["home"]` is enabled in the constructor, it also scans `~/.agents/skills` (user).
+`SkillPower` scans `.agents/skills` (project) by default. If `use: ["home"]` is enabled in the constructor, it also scans `~/.agents/skills` (user).
 
 ## Security guidance
 

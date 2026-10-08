@@ -29,7 +29,7 @@ const file_accent: Record<HomeSdkFileKey, { line: string; background: string }> 
   federation: { line: "#9ebce8", background: "rgba(158, 188, 232, 0.13)" },
 };
 
-const plugin_accent = { line: "#4f9a98", background: "rgba(79, 154, 152, 0.2)" };
+const power_accent = { line: "#4f9a98", background: "rgba(79, 154, 152, 0.2)" };
 
 /** 返回当前叙事步骤应该自动打开的代码文件。 */
 export function home_sdk_file_for_step(active_step: number): HomeSdkFileKey {
@@ -48,12 +48,12 @@ function create_code_groups(locale: "zh" | "en") {
       { key: "agent-import", start_step: 0, order: 0, lines: ['import { Agent } from "@downcity/agent";', 'import { City } from "@downcity/city";'] },
       { key: "workspace-import", start_step: 2, order: 1, lines: ['import { Workspace } from "@downcity/city";'] },
       { key: "model-import", start_step: 4, order: 2, lines: ['import { Embassy } from "@downcity/federation";'] },
-      { key: "plugin-import", start_step: 5, order: 3, lines: ['import { create_builtin_plugin_registrations } from "@downcity/plugins";'] },
+      { key: "power-import", start_step: 5, order: 3, lines: ['import { create_builtin_power_registrations } from "@downcity/powers";'] },
       { key: "agent-create", start_step: 1, order: 10, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "});"] },
       { key: "workspace-create", start_step: 2, order: 11, lines: ["", "const workspace = new Workspace({", '  id: "project",', "  path: process.cwd(),", "});"] },
       { key: "session-create", start_step: 3, order: 13, lines: ["", "const session = await agent.sessions.create({ workspace });"] },
       { key: "model-resolve", start_step: 4, order: 14, lines: ["", `// ${locale === "zh" ? "User Token 已绑定登录时选择的 Bureau。" : "The User Token is bound to the Bureau selected at login."}`, "const embassy = new Embassy({", '  federation_url: "https://api.example.com",', "  user_token: process.env.FEDERATION_USER_TOKEN!,", "});", "const catalog = await embassy.user.ai.catalog();", 'const city_model = catalog.require("deepseek-chat");', "await session.set({ model: city_model });"] },
-      { key: "agent-with-plugins", start_step: 5, order: 12, replaces: "agent-create", highlight_from: 4, highlight_until: 11, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "});", "const plugins = create_builtin_plugin_registrations();", "const city = new City({", "  agents: [agent],", "  workspaces: [workspace],", "  plugins,", "});"] },
+      { key: "agent-with-powers", start_step: 5, order: 12, replaces: "agent-create", highlight_from: 4, highlight_until: 11, lines: ["", "const agent = new Agent({", '  id: "repo-helper",', `  instruction: "${locale === "zh" ? "你是可靠的项目助手。" : "You are a reliable project assistant."}",`, "});", "const powers = create_builtin_power_registrations();", "const city = new City({", "  agents: [agent],", "  workspaces: [workspace],", "  powers,", "});"] },
       { key: "user-prompt", start_step: 20, order: 20, lines: ["", `const turn = await session.prompt({ query: "${locale === "zh" ? "总结当前仓库" : "Summarize this repository"}" });`, "const result = await turn.finished;", "console.log(result.text);"] },
     ],
     city: [
@@ -116,7 +116,7 @@ export function HomeSdkCodePanel({ active_step, active_file, on_file_select, loc
         ? [visible_groups.at(-1)!.key]
         : [],
   );
-  const active_accent = active_file === "agent" && active_step === 5 ? plugin_accent : file_accent[active_file];
+  const active_accent = active_file === "agent" && active_step === 5 ? power_accent : file_accent[active_file];
   const visible_code = visible_groups.flatMap((group) => group.lines).join("\n");
 
   useEffect(() => {

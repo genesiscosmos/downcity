@@ -121,7 +121,6 @@ function register_config_command(power: Command): void {
     ) => {
       const catalog = await resolve_power_catalog_item(power_id);
       if (!catalog) throw new Error(`Power not found: ${power_id}`);
-      if (!catalog.has_config) throw new Error(`Power does not provide Config: ${power_id}`);
       if (options.set) {
         const config = parse_json_object(options.set, "config");
         const saved = await save_power_config(power_id, config);
@@ -206,7 +205,7 @@ async function print_power_list(as_json: boolean): Promise<void> {
       facts: [
         { label: "Description", value: item.description },
         { label: "Source", value: item.source },
-        { label: "Config", value: item.has_config ? "supported" : "none" },
+        { label: "Config panel", value: item.has_config ? "separate" : "in workspace" },
       ],
     })),
   });

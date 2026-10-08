@@ -30,7 +30,9 @@ import os from "node:os";
 
 /** 创建 CLI 与 Desktop 可共享语义的官方 Power 注册集合。 */
 export function create_cli_builtin_power_registrations(): LocalPowerRegistration[] {
-  return create_builtin_power_registrations();
+  return create_builtin_power_registrations({
+    platform_root_path: resolve_local_root_path(),
+  });
 }
 
 /** 创建 CLI 读取本地 Power 定义与入口的 Loader。 */

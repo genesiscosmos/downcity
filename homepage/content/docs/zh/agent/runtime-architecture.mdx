@@ -66,7 +66,7 @@ sequenceDiagram
 
 - User Prompt。
 - Workspace env 更新。
-- Plugin registry 更新。
+- Power registry 更新。
 - Session model 更新。
 - 显式 compact。
 
@@ -140,17 +140,17 @@ const unsubscribe = session.subscribe((mutation) => {
 
 Mutation 包括完整 Message、Assistant Part、文本/推理增量、Turn 状态和 Session 状态。断线后应先用 `messages()` 重新加载 canonical 快照，再建立新订阅。
 
-## Plugin runtime
+## Power runtime
 
-Plugin 属于 City，不属于 Agent 或 Workspace。City 按 Plugin ID 持有唯一实例，并向每个 Agent/Workspace 执行入口投影 Action、System、Hook、Resolve Point 与 HTTP 路由。
+Power 属于 City，不属于 Agent 或 Workspace。City 按 Power ID 持有唯一实例，并向每个 Agent/Workspace 执行入口投影 Action、System、Hook、Resolve Point 与 HTTP 路由。
 
-PluginRegistry 的投影变化在 Session 检查点生效。单个 Plugin 初始化失败只隔离自身，不阻断其他 Plugin。Agent 关闭时停止 Session 与 ActionSchedule；Plugin 的 `initialize/dispose` 生命周期由 City 收口。
+PowerRegistry 的投影变化在 Session 检查点生效。单个 Power 初始化失败只隔离自身，不阻断其他 Power。Agent 关闭时停止 Session 与 ActionSchedule；Power 的 `initialize/dispose` 生命周期由 City 收口。
 
-ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件存放在 Agent 的存储作用域中，Agent 重启时会把遗留的 running 状态恢复为 pending。它不是分布式调度系统，也不提供跨机器选主。
+ActionSchedule 是 Agent 持有的本地延迟 Power Action 调度器。事件存放在 Agent 的存储作用域中，Agent 重启时会把遗留的 running 状态恢复为 pending。它不是分布式调度系统，也不提供跨机器选主。
 
 ## City Power
 
-每个 Agent 都会获得三个 City 自有 power。它们既是「harness 自己知道、模型无法从文件或命令读到」那类运行时事实的出口，也承载 City 自己持有的生成能力。
+每个 Agent 都会获得三个 City 自有 Power。它们既是「harness 自己知道、模型无法从文件或命令读到」那类运行时事实的出口，也承载 City 自己持有的生成能力。
 
 ```jsonc
 { "action": "sandbox.explain_path", "args": { "path": "~/.downcity/powers/messenger" } }
@@ -162,9 +162,9 @@ ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件�
 | `ai` | `image`、`sound` | 生成图片；转写音频与合成语音 |
 | `agent` | `agent` | 当前 City 中登记的全部 Agent |
 
-动作 id 是 `组名.动作名`，与所属 power 名无关：`env.get` 属于 `context`，`image.*` 与 `sound.*` 同属 `ai`。不带参数调用一个 power 会列出它的全部动作；这里不会返回凭据的值，而且每个动作都声明了 `read` 或 `write`，因此调用前就能看出哪些会消耗额度或改变状态。
+动作 id 是 `组名.动作名`，与所属 Power 名无关：`env.get` 属于 `context`，`image.*` 与 `sound.*` 同属 `ai`。不带参数调用一个 Power 会列出它的全部动作；这里不会返回凭据的值，而且每个动作都声明了 `read` 或 `write`，因此调用前就能看出哪些会消耗额度或改变状态。
 
-可用性与 Plugin 同一口径：City 注册了什么，每个 Agent 就都能用，没有 per-agent 门控，也没有配置文件。
+可用性与 Power 同一口径：City 注册了什么，每个 Agent 就都能用，没有 per-agent 门控，也没有配置文件。
 
 ### Image 与 Sound
 
@@ -173,9 +173,9 @@ ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件�
 会取第一个可用模型。
 
 生图是两步式任务：`create` 返回 `job_id`，`result` 读取它。生图会消耗额度，所以模型必须先与你确认。
-`result` 把生成的图片写入 power 私有目录并返回本地路径，在回复里用 `![](path)` 引用即可。
+`result` 把生成的图片写入 Power 私有目录并返回本地路径，在回复里用 `![](path)` 引用即可。
 
-入站语音消息的自动转写属于 Messenger Power：当渠道送来语音或音频附件时，由它调用 `ai` power 的 `sound.asr`。
+入站语音消息的自动转写属于 Messenger Power：当渠道送来语音或音频附件时，由它调用 `ai` Power 的 `sound.asr`。
 单个附件转写失败不影响消息送达。
 
 ## 安全模型
@@ -187,7 +187,7 @@ ActionSchedule 是 Agent 持有的本地延迟 Plugin Action 调度器。事件�
 | File/Search Tools | Rooted LocalFileSystem | 只能主动访问 Workspace |
 | Sandbox Shell | Workspace Sandbox | 命令在当前 Workspace 独享、持久的隔离环境中执行 |
 | Host Shell | 审批网关 | 用户基于已记录的原因显式授权一次宿主命令 |
-| Plugin | Plugin 自身业务授权 | Workspace 不替 Plugin 负责全部资源访问 |
+| Power | Power 自身业务授权 | Workspace 不替 Power 负责全部资源访问 |
 | City Power | 按动作声明区分 | 只读事实查询与已声明 `read` 的动作；`write` 动作会消耗额度或在 Agent 目录下写文件 |
 | Custom Tool | 注册它的宿主 | Agent Core 不猜测业务权限 |
 
@@ -204,15 +204,15 @@ Node.js 已经统一文件、路径、网络、JSON、Timer、AbortController �
 ```mermaid
 flowchart LR
     Agent["new Agent"] --> Register["City 注册 Agent"]
-    Plugin["City 注册 Plugin"] --> Initialize["Plugin initialize"]
+    Power["City 注册 Power"] --> Initialize["Power initialize"]
     Register --> Running["执行 Session"]
     Initialize --> Running
     Running --> Close["city.close()"]
     Close --> Sessions["停止 Agent Sessions"]
-    Sessions --> Dispose["Plugin dispose"]
+    Sessions --> Dispose["Power dispose"]
     Dispose --> Workspace["释放 Workspace / Shell"]
 ```
 
-Session 执行前会等待 Agent 的 City 执行绑定就绪。`agent.dispose()` 不停止 City Plugin 实例；`city.close()` 统一关闭 Transport、Agent、Plugin、Workspace 与 Shell，并保证活跃 Hook/Action lease 先收口。
+Session 执行前会等待 Agent 的 City 执行绑定就绪。`agent.dispose()` 不停止 City Power 实例；`city.close()` 统一关闭 Transport、Agent、Power、Workspace 与 Shell，并保证活跃 Hook/Action lease 先收口。
 
 继续阅读：[Agent 生命周期](/zh/docs/agent/lifecycle)。

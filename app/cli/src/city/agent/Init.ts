@@ -190,7 +190,7 @@ export async function initCommand(
   const nextSteps: string[] = [
     "Add reusable capabilities under .agents/skills",
     "Use downcity agent model --set <model-id> to update the Agent default model",
-    "Open Agent Config > Powers to configure built-in or installed Powers",
+    "Use downcity power list to review installed Powers and their config status",
   ];
   if (primaryModelId) {
     nextSteps.push('Use "city agent chat <agent_id>" to confirm the Agent can reach its configured model');

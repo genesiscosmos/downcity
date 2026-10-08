@@ -29,6 +29,7 @@
 # Homepage
 
 1. 仅面向用户写文档，不需要写开发文档，开发文档在 docs 中
+2. UI 组件文档用 `<ComponentPreview name="…" />` 呈现真实组件，示例文件放在 `app/components/docs/previews/`，展示代码与运行代码必须同源
 
 
 # 其他开发

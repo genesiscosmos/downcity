@@ -1,30 +1,30 @@
 ---
 title: Agent SDK
-description: Build local or remote Agents with project files, sandboxed commands, plugins, and persistent Sessions
+description: Build local or remote Agents with project files, sandboxed commands, powers, and persistent Sessions
 ---
 `@downcity/agent` provides the local `Agent` execution runtime. `@downcity/city` provides the
-composition root, Workspace/Plugin resources, transports, and `RemoteAgent`. Both client shapes are
+composition root, Workspace/Power resources, transports, and `RemoteAgent`. Both client shapes are
 session-first: Agent composes execution capability, while Session owns a continuous conversation.
 
 ## One-minute mental model
 
 ```mermaid
 flowchart LR
-    Host["SDK host"] --> City["City<br/>resources and Plugin lifecycle"]
+    Host["SDK host"] --> City["City<br/>resources and Power lifecycle"]
     City --> Agent["Agent<br/>identity and execution"]
     Agent --> Session["agent.sessions.create({ workspace })<br/>Session"]
     Session --> Turn["Turn<br/>one prompt execution"]
-    City --> Plugin["Plugin<br/>extension capability"]
+    City --> Power["Power<br/>extension capability"]
 ```
 
 | Object | Owns | Does not own |
 | --- | --- | --- |
-| `Workspace` | Project files, env, Tools, and optional Shell | Agent identity, plugins, Session persistence, and Sandbox implementation |
+| `Workspace` | Project files, env, Tools, and optional Shell | Agent identity, powers, Session persistence, and Sandbox implementation |
 | `Shell` | Sandbox Provider, persistent Workspace Sandbox, and Shell Sessions | Chat Session identity and City lifecycle |
-| `Agent` | Model, instructions, custom Tools, and Sessions | Plugin instances, Workspace resources, HTTP/RPC transports |
-| `AgentSessions` | All Sessions owned by one Agent; each Session may receive a Workspace | Agent identity and Plugin definitions |
+| `Agent` | Model, instructions, custom Tools, and Sessions | Power instances, Workspace resources, HTTP/RPC transports |
+| `AgentSessions` | All Sessions owned by one Agent; each Session may receive a Workspace | Agent identity and Power definitions |
 | `Session` | Conversation state, message history, execution order, and approvals | Project resource ownership |
-| `City` | Workspace and Plugin resources, lifecycle, Storage, and transports | Session execution semantics |
+| `City` | Workspace and Power resources, lifecycle, Storage, and transports | Session execution semantics |
 | `SessionTurnContext` | Execution context and lifecycle for one Turn | Long-lived Agent state |
 | `RemoteAgent` | Access to a server-side Agent and its Sessions | Server-side model configuration |
 
@@ -33,7 +33,7 @@ flowchart LR
 | Scenario | Use |
 | --- | --- |
 | Agent and application run in the same Node.js process | `Agent` |
-| The application injects models, Tools, plugins, and Shell directly | `Agent` |
+| The application injects models, Tools, powers, and Shell directly | `Agent` |
 | Another process already exposes the Agent over HTTP/RPC | `RemoteAgent` |
 | The client only creates Sessions, sends prompts, and subscribes | `RemoteAgent` |
 
@@ -80,10 +80,10 @@ try {
 Remember this primary path:
 
 ```text
-Agent + Workspace + Shell → agent.sessions.create({ workspace }) → Session → prompt() → turn.finished → dispose()
+Agent + Workspace + Shell → agent.chat() / agent.sessions.create({ workspace }) → Session → send() / prompt() → turn.finished → dispose()
 ```
 
-`agent.dispose()` releases Session resources and the current City binding. City closes shared Plugin instances, lifecycle, and ActionSchedule resources. The project directory never receives `.downcity`.
+`agent.dispose()` releases Session resources and the current City binding. City closes shared Power instances, lifecycle, and ActionSchedule resources. The project directory never receives `.downcity`.
 
 ## Model ownership
 
@@ -99,7 +99,7 @@ In a Downcity project, the CLI host resolves the model from project configuratio
 1. [Local Agent quickstart](/en/agent-sdk-docs/local-agent/quickstart)
 2. [Sessions overview](/en/agent-sdk-docs/sessions/overview)
 3. [Shell and Sandbox](/en/agent-sdk-docs/local-agent/shell-reference)
-4. [Tools and plugins](/en/agent-sdk-docs/local-agent/tools-and-plugins)
+4. [Tools and powers](/en/agent-sdk-docs/local-agent/tools-and-powers)
 5. [Remote Agent](/en/agent-sdk-docs/remote-agent/quickstart)
 6. [SDK Surface](/en/agent-sdk-docs/api-reference/sdk-surface)
 7. [Agent SDK architecture](/en/docs/agent/sdk-architecture)

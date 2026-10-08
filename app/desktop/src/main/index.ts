@@ -31,6 +31,7 @@ import type {
   DesktopChatRuntimeEvent,
   DesktopLoginStartInput,
   DesktopGroupEvent,
+  DesktopWorkspaceFileChangedEvent,
 } from "../common/types/DesktopApi.js";
 import type { JSONContent } from "@tiptap/core";
 import type { DesktopNotificationState, DesktopNotificationViewState } from "../common/types/DesktopNotification.js";
@@ -59,7 +60,7 @@ register_power_renderer_scheme();
 register_local_file_scheme();
 
 /** 向全部仍存活的 Renderer 广播一条安全事件。 */
-function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupEvent | DesktopNotificationState): void {
+function broadcast(channel: string, payload: DesktopChatMutationEvent | DesktopChatRuntimeEvent | DesktopGroupEvent | DesktopNotificationState | DesktopWorkspaceFileChangedEvent): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.webContents.isDestroyed()) window.webContents.send(channel, payload);
   }
@@ -94,7 +95,11 @@ function create_window(): BrowserWindow {
   window.once("ready-to-show", () => window.show());
   // 关键点（中文）：窗口失焦由主进程同步撤销可见目标，避免 Renderer IPC 到达前误判为已读。
   window.on("blur", () => notification_center?.set_view_state(view_id, { visible: false }));
-  window.webContents.once("destroyed", () => notification_center?.remove_view(view_id));
+  window.webContents.once("destroyed", () => {
+    notification_center?.remove_view(view_id);
+    // 窗口没了就没人需要热更新：文件监听按 webContents 整批释放，不留常驻 watcher。
+    agent_controller?.release_workspace_file_watches(view_id);
+  });
   return window;
 }
 
@@ -173,6 +178,19 @@ ipcMain.handle("workspace:remove", async (_event, workspace_id: string) => {
 });
 ipcMain.handle("workspace:write-readme", (_event, workspace_id: string, content: string) => require_agent_controller().write_workspace_readme(workspace_id, content));
 ipcMain.handle("workspace:read-text-file", (_event, workspace_id: string, relative_path: string) => require_agent_controller().read_workspace_text_file(workspace_id, relative_path));
+ipcMain.handle("workspace:watch-file", async (event, workspace_id: string, relative_path: string, known_modified_at: number, subscription_id: string) => {
+  // 订阅方标识取发送方 webContents：窗口销毁时按它整批释放，渲染器无需在卸载时逐个退订。
+  await require_agent_controller().watch_workspace_text_file({
+    subscription_id,
+    subscriber_id: event.sender.id,
+    workspace_id,
+    relative_path,
+    known_modified_at,
+  });
+});
+ipcMain.handle("workspace:unwatch-file", (_event, subscription_id: string) => {
+  require_agent_controller().unwatch_workspace_text_file(subscription_id);
+});
 ipcMain.handle("agent:connect", (_event, agent_id: string, workspace_id: string) => require_agent_controller().connect_agent(agent_id, workspace_id));
 ipcMain.handle("group:list", () => require_agent_controller().list_groups());
 ipcMain.handle("group:create", (_event, input: import("../common/types/DesktopApi.js").DesktopCreateGroupInput) => require_agent_controller().create_group(input));
@@ -445,6 +463,7 @@ app.whenReady().then(async () => {
       next_notification_center.handle_group_event(event);
       broadcast("group:event", event);
     },
+    workspace_file_changed: (event) => broadcast("workspace:file-changed", event),
     power_notification: async (power_id, agent_id, input) => next_notification_center.publish_agent_power_notification(power_id, agent_id, input),
     power_notification_dismiss: async (power_id, topic_key) => next_notification_center.dismiss_power_notification(power_id, topic_key),
     power_host_notification: async (power_id, input) => next_notification_center.publish_power_notification(power_id, input),

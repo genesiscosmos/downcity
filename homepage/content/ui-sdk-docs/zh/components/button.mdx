@@ -12,48 +12,19 @@ import { Button } from "@downcity/ui";
 
 ## 最小示例
 
-```tsx
-import { Button } from "@downcity/ui";
-
-export function SaveButton() {
-  return <Button size="sm">保存</Button>;
-}
-```
+<ComponentPreview name="button-basic" />
 
 ## 常用变体
 
-- `default`
-- `outline`
-- `secondary`
-- `ghost`
-- `destructive`
-- `link`
+<ComponentPreview name="button-variants" />
 
 ## 常用尺寸
 
-- `default`
-- `xs`
-- `sm`
-- `lg`
-- `icon`
-- `icon-xs`
-- `icon-sm`
-- `icon-lg`
+<ComponentPreview name="button-sizes" />
 
 ## 图标按钮
 
-```tsx
-import { Button } from "@downcity/ui";
-import { SettingsIcon } from "lucide-react";
-
-export function SettingsAction() {
-  return (
-    <Button size="icon-sm" variant="ghost" aria-label="打开设置">
-      <SettingsIcon />
-    </Button>
-  );
-}
-```
+<ComponentPreview name="button-icon" />
 
 ## 使用建议
 

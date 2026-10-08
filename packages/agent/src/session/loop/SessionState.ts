@@ -28,13 +28,21 @@ import type { SessionStateOptions } from "@/types/session/SessionState.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { SessionApprovalMode } from "@downcity/type";
 import { create_session_model_request_warning } from "@/session/messages/SessionModelRequestWarning.js";
+import type { WorkspaceRuntime } from "@downcity/type";
 
 /** 创建单个 Session 唯一的可变内存状态。 */
-export function create_session_local_state(): SessionLocalState {
+export function create_session_local_state(input: {
+  /** Session 创建时的初始 Workspace；省略表示没有项目上下文。 */
+  workspace?: WorkspaceRuntime;
+  /** 没有 Workspace 时使用的目录回退值。 */
+  fallback_workspace_path: string;
+}): SessionLocalState {
   return {
     session_config: {},
     effective_session_config: {},
     configured_approval_mode: "ask",
+    ...(input.workspace ? { current_workspace: input.workspace } : {}),
+    fallback_workspace_path: input.fallback_workspace_path,
     created_at: Date.now(),
     timezone: resolve_system_timezone(),
     initialize_promise: null,
@@ -236,6 +244,49 @@ export class SessionState {
       });
     }
     return title;
+  }
+
+  /**
+   * 写入当前目录。
+   *
+   * 关键点（中文）
+   * - 以持久化值为比较基准：即使内存已持有同一实例，只要元数据不同就补写，
+   *   保证恢复时传入的目录真的落盘。
+   * - configured 值在返回前立即被 Session 接受，从下一个 Step 检查点起生效；
+   *   执行中的 Turn 不受影响，与 `set({ model })` 保持同一提交语义。
+   */
+  async set_workspace(workspace?: WorkspaceRuntime): Promise<boolean> {
+    const next_workspace_id = String(workspace?.id || "").trim() || undefined;
+    const changed = await this.run_metadata_mutation(async () => {
+      const metadata = await this.store.read_metadata();
+      const current_workspace_id = String(metadata.workspace_id || "").trim() || undefined;
+      if (current_workspace_id === next_workspace_id) return false;
+      const { workspace_id: _previous_workspace_id, ...rest } = metadata;
+      await this.store.write_metadata({
+        ...rest,
+        agent_id: this.agent_id,
+        updated_at: Date.now(),
+        ...(next_workspace_id ? { workspace_id: next_workspace_id } : {}),
+      });
+      return true;
+    });
+    if (workspace) {
+      this.state.current_workspace = workspace;
+    } else {
+      delete this.state.current_workspace;
+    }
+    return changed;
+  }
+
+  /** 返回当前 Session 正在使用的 Workspace；没有项目上下文时为空。 */
+  get_workspace_instance(): WorkspaceRuntime | undefined {
+    return this.state.current_workspace;
+  }
+
+  /** 返回当前目录路径；没有 Workspace 时使用回退值。 */
+  get_workspace_path(): string {
+    return String(this.state.current_workspace?.path || "").trim()
+      || this.state.fallback_workspace_path;
   }
 
   /** 在 Session Step 检查点提交模型配置。 */

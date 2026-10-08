@@ -1,0 +1,122 @@
+---
+title: 调用流
+description: 说明 hook 和 resolve 到底是谁触发、在什么时候触发，以及宿主代码通常怎么写
+---
+这篇最重要，就是把一个误区先拿掉：
+
+- hook 不是“注册之后自动跑”
+- hook 是“宿主代码在某个点主动调用”
+
+## 两个角色
+
+理解 hook / resolve，先分清两个角色：
+
+### Power 作者
+
+负责定义：
+
+- 哪个点有 handler
+- handler 收到什么值
+- handler 返回什么结果，或者什么时候抛错
+
+### 宿主代码作者
+
+负责决定：
+
+- 什么时候调用这个点
+- 传什么值进去
+- 接到返回值之后怎么继续
+
+## 一个最小调用流
+
+```ts
+const value1 = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", input);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", value1);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).effect("audit.observe", value1);
+const role = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).resolve("auth.resolve_role", {
+  userId: "owner",
+});
+```
+
+顺着这段代码看：
+
+1. `pipeline` 先拿到 `input`，可能返回一个更完整的 `value1`
+2. `guard` 决定 `value1` 有没有资格继续
+3. `effect` 在不改 `value1` 的前提下记录副作用
+4. `resolve` 单独回答另一个“唯一答案”问题
+
+## 为什么前三种是“链路点”
+
+因为前三种最常见的用法都是：
+
+- 当前流程走到某一步
+- 宿主把这一步的值交给 Power
+- Power 在这个流程点上参与
+
+这就像给执行链留了几个插槽。
+
+## 为什么 `resolve` 更像“查权威答案”
+
+因为它往往不是“链路继续往前加工同一个值”，而是：
+
+- 宿主现在需要一个最终答案
+- 它去某个命名点上拿答案
+
+例如：
+
+- 当前用户角色是什么
+- 当前 provider 应该选哪个
+- 当前某类请求最终交给谁处理
+
+## disabled Power 会发生什么
+
+这里也要分情况：
+
+### `pipeline / guard / effect`
+
+如果某个已注册 Power 当前是 disabled，这个 Power 的 handler 会被跳过。
+
+也就是：
+
+- 点还会继续执行
+- 但 disabled 的 Power 不参与
+
+### `resolve`
+
+如果 resolve 对应的唯一 Power 被 disabled，就不是“跳过后继续”。
+
+而是：
+
+- 当前这个 resolve 点直接失败
+
+因为它需要唯一权威答案，而不是“谁都不回答也可以”。
+
+## 没有 handler 会发生什么
+
+### `pipeline / guard / effect`
+
+如果这个点一个 handler 都没有：
+
+- `pipeline` 原样返回输入值
+- `guard` 直接通过
+- `effect` 直接结束
+
+### `resolve`
+
+如果没有注册 resolver：
+
+- 直接报错
+
+因为宿主明确在问一个必须有答案的问题。
+
+## 读完这篇之后最该记住的
+
+- hook 的本质是“宿主定义调用时机，Power 提供插入逻辑”
+- `resolve` 的本质是“宿主要一个最终答案，Power 提供唯一回答者”
+
+## 下一步
+
+- [Pipeline](/zh/agent-sdk-docs/powers/hooks/pipeline)
+- [Guard](/zh/agent-sdk-docs/powers/hooks/guard)
+- [Effect](/zh/agent-sdk-docs/powers/hooks/effect)
+- [Resolve](/zh/agent-sdk-docs/powers/hooks/resolve)

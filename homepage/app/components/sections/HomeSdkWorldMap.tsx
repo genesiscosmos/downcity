@@ -34,12 +34,12 @@ import type {
   HomeSdkWorldBoundaryKey,
   HomeSdkWorldCell,
   HomeSdkWorldMapProps,
-  HomeSdkWorldPluginKind,
+  HomeSdkWorldPowerKind,
 } from "@/types/home/HomeSdkWorld";
 
 /** 地块继承所属区域的身份色，职责差异只通过透明度表达。 */
 function get_cell_fill(cell: HomeSdkWorldCell) {
-  if (cell.tone === "plugin") return "var(--sdk-map-plugin)";
+  if (cell.tone === "power") return "var(--sdk-map-power)";
   if (cell.tone === "link") return cell.link_accent ?? "var(--sdk-map-stroke)";
   if (cell.boundary_key === "origin_city") return "var(--sdk-map-origin)";
   if (cell.boundary_key === "neighbor_city") return "var(--sdk-map-neighbor)";
@@ -50,7 +50,7 @@ function get_cell_fill(cell: HomeSdkWorldCell) {
 /** 延续完整地图的轻填充语言，避免六边形成为厚重色块。 */
 function get_cell_fill_opacity(cell: HomeSdkWorldCell) {
   if (cell.tone === "workspace") return 0.22;
-  if (cell.tone === "plugin") return 0.14;
+  if (cell.tone === "power") return 0.14;
   if (cell.tone === "link") return 0.07;
   if (cell.content === "agent") return 0.16;
   if (cell.tone === "storage" || cell.tone === "transport") return 0.12;
@@ -131,11 +131,11 @@ const plugin_icon = {
   task: IconChecklist,
   web: IconWorld,
   memory: IconBrain,
-} satisfies Record<HomeSdkWorldPluginKind, typeof IconBook2>;
+} satisfies Record<HomeSdkWorldPowerKind, typeof IconBook2>;
 
 /** 使用真实内置 Plugin 的图标区分周围能力地块。 */
 function PluginMark({ kind, x, y }: {
-  /** Plugin 的内置能力类别。 */ kind: HomeSdkWorldPluginKind;
+  /** Plugin 的内置能力类别。 */ kind: HomeSdkWorldPowerKind;
   /** 图标水平中心。 */ x: number;
   /** 图标垂直中心。 */ y: number;
 }) {
@@ -146,7 +146,7 @@ function PluginMark({ kind, x, y }: {
       y={y - 8}
       width={16}
       height={16}
-      color="var(--sdk-map-plugin)"
+      color="var(--sdk-map-power)"
       strokeWidth={1.45}
       aria-hidden="true"
     />
@@ -239,7 +239,7 @@ function WorldCell({ cell, active_step, emphasis, label }: {
       {cell.content === "user" && cell.agent_accent
         ? <IconUserCircle x={center.x - 9} y={center.y - 11} width={18} height={18} color={cell.agent_accent} strokeWidth={1.4} aria-hidden="true" />
         : null}
-      {cell.plugin_kind ? <PluginMark kind={cell.plugin_kind} x={center.x} y={center.y} /> : null}
+      {cell.power_kind ? <PluginMark kind={cell.power_kind} x={center.x} y={center.y} /> : null}
       <UnitMark cell={cell} x={center.x} y={center.y} />
       {label ? (
         <CellTooltip

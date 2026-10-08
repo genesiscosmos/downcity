@@ -1,0 +1,79 @@
+---
+title: 常见 Bad vs Good 设计
+description: 用短对比说明什么时候该选 pipeline、guard、effect、resolve 或 lifecycle runtime
+---
+## 误用 1
+
+需求：
+
+- 给消息补默认字段
+
+坏选择：
+
+- 用 `guard`
+
+更好选择：
+
+- 用 `pipeline`
+
+## 误用 2
+
+需求：
+
+- 权限缺失时立刻阻断请求
+
+坏选择：
+
+- 用 `effect`
+
+更好选择：
+
+- 用 `guard`
+
+## 误用 3
+
+需求：
+
+- 每次执行后写一条审计日志
+
+坏选择：
+
+- 用 `pipeline`
+
+更好选择：
+
+- 用 `effect`
+
+## 误用 4
+
+需求：
+
+- 判断用户最终角色
+
+坏选择：
+
+- 用 `pipeline`
+
+更好选择：
+
+- 用 `resolve`
+
+## 误用 5
+
+需求：
+
+- 维护长期缓存和后台同步 worker
+
+坏选择：
+
+- 把所有逻辑都塞进 Power hooks
+
+更好选择：
+
+- 让 Power `lifecycle` 拥有长期状态
+- 让 hooks 继续聚焦链路扩展
+
+## 相关文档
+
+- [怎么选](/zh/agent-sdk-docs/powers/hooks/choose-the-right-one)
+- [Power Runtime Composition](/zh/powers-docs/examples/power-runtime-composition)

@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PowerJsonObject, PowerJsonValue } from "@downcity/city/power";
 import type { PowerRendererConfirmInput, PowerRendererDefinition, PowerRendererUi } from "@downcity/city/power/react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { create_power_renderer_ui_components } from "@/features/power/lib/PowerRendererComponents";
 import { SidebarHeader } from "@/layouts/sidebar/SidebarHeader";
 import type { LoadedPowerRenderer, PowerRendererCapabilities, PowerRendererConfirmationState, PowerRendererHostProps, PowerRendererToastState } from "@/types/power/PowerRendererHost";
@@ -95,9 +94,16 @@ export function PowerRendererHost(props: PowerRendererHostProps) {
           ? Config ? <Config config={config} ui={ui} /> : <ui_components.EmptyState title={translate("missing_config")} size="compact" />
           : Workspace ? <Workspace {...workspace_props} /> : <ui_components.EmptyState title={translate("missing_slot", { slot: props.slot })} size="compact" />}
     {toast ? <div className="fixed bottom-5 left-1/2 z-40 max-w-xl -translate-x-1/2 rounded-surface border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">{toast.message}</div> : null}
-    <Dialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) close_confirmation(false); }}>
-      <DialogContent size="sm"><DialogHeader><div><DialogTitle>{confirmation?.input.title}</DialogTitle>{confirmation?.input.description ? <DialogDescription>{confirmation.input.description}</DialogDescription> : null}</div></DialogHeader><DialogFooter><Button onClick={() => close_confirmation(false)}>{translate("cancel")}</Button><Button variant={confirmation?.input.destructive ? "destructive" : "primary"} onClick={() => close_confirmation(true)}>{confirmation?.input.action || translate("confirm")}</Button></DialogFooter></DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={Boolean(confirmation)}
+      set_open={(open) => { if (!open) close_confirmation(false); }}
+      title={confirmation?.input.title ?? ""}
+      description={confirmation?.input.description ?? ""}
+      confirm_label={confirmation?.input.action || translate("confirm")}
+      cancel_label={translate("cancel")}
+      destructive={Boolean(confirmation?.input.destructive)}
+      on_confirm={() => close_confirmation(true)}
+    />
   </div>;
 }
 

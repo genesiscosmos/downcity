@@ -128,6 +128,11 @@ export class PowerRepository {
     return get_local_power_path(this.root_path, normalize_power_id(power_id_input));
   }
 
+  /** 返回 Power 配置文件的绝对路径；文件可能尚未创建。 */
+  config_path(power_id_input: string): string {
+    return this.config_file_path(normalize_power_id(power_id_input));
+  }
+
   /** 原子写入规范化 TOML。 */
   private write_config(power_id: string, config: LocalPowerConfig): void {
     this.write_atomic(

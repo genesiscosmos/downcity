@@ -54,6 +54,9 @@ export interface BuiltinMemoryMetadata {
   /** 文档内容最初形成或最近被明确保留的 ISO 时间。 */
   observed_at: string;
 
+  /** 文档关联的 Workspace；只作为 metadata，不参与 Subject 隔离。 */
+  workspace_id?: string;
+
   /** 支撑当前文档内容的可审计证据引用集合。 */
   source_refs: MemorySourceReference[];
 }

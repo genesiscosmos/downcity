@@ -17,7 +17,7 @@ description: 用一页文档解释 Downcity 作为 Agent 基础设施的产品�
 - `console`：全局控制面
 - `agent`：一个项目 runtime
 - `session`：一条执行线程
-- `plugin`：一个能力边界
+- `power`：一个能力边界
 - `city`：当前 Downcity runtime 的 package / runtime 名称
 
 ## 最短模型
@@ -25,17 +25,17 @@ description: 用一页文档解释 Downcity 作为 Agent 基础设施的产品�
 - 产品负责体验
 - agent 负责运行工作
 - session 负责执行轮次
-- plugins 负责暴露能力
+- Powers 负责暴露能力
 - City 负责把重复后端能力从每个产品里抽出来
 
-## plugin 的两类
+## Power 的两类
 
-### 本地 plugin
+### 本地 Power
 
 - 直接挂到一个 SDK `Agent`
 - 通常是 action-first 或 hook-oriented
 
-### 托管 plugin
+### 托管 Power
 
 - 归属于目标 agent runtime
 - 可以持有 lifecycle-owned runtime state
@@ -46,5 +46,5 @@ description: 用一页文档解释 Downcity 作为 Agent 基础设施的产品�
 
 - 需要产品操作，看 `downcity`、`console` 和产品文档
 - 需要执行拥有者，看 `agent` 与 `session`
-- 需要找能力拥有者，看 `plugin`
+- 需要找能力拥有者，看 `power`
 - 需要可复用后端能力，看 City SDK 和 services 文档

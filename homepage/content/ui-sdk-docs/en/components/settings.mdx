@@ -4,29 +4,7 @@ description: Compose compact and consistent settings screens
 ---
 The Settings component group defines information hierarchy without owning values or persistence.
 
-```tsx
-import {
-  SettingGroup,
-  SettingItem,
-  SettingSection,
-  SettingsContainer,
-  Switch,
-} from "@downcity/ui";
-
-export function AppearanceSettings() {
-  return (
-    <SettingsContainer>
-      <SettingSection title="Appearance" description="Control host presentation">
-        <SettingGroup>
-          <SettingItem label="Live preview" description="Update previews while editing">
-            <Switch defaultChecked aria-label="Enable live preview" />
-          </SettingItem>
-        </SettingGroup>
-      </SettingSection>
-    </SettingsContainer>
-  );
-}
-```
+<ComponentPreview name="settings" />
 
 ## Exports
 

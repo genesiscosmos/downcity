@@ -435,6 +435,11 @@ npx wrangler pages deploy build/client --project-name downcity --commit-dirty=tr
 
 ### 11.3 部署后线上复验（全部通过）
 
+> 更正：下表首行「页面级小写 `hreflang`」当时被当作通过标准，但属性名大小写不敏感
+> （HTML 解析器统一归整为小写），因此大小写不是有效验收项。正确的验收口径是
+> hreflang 注解数量与语言配对是否正确。详见 `homepage-seo-audit-2026-09-17.md`
+> 顶部的更正说明。
+
 线上 CSS 指纹已变为 `app-BQ3mq7BB.css`（部署前为 `app-CuDpOZoF.css`），确认切到新版本。
 
 | 复验项 | 修复前 | 部署后 |

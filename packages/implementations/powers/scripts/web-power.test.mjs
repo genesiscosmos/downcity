@@ -59,46 +59,87 @@ test("browser_act schema 强制 ref 代次协议并保留显式 selector", () =>
 });
 
 test("配置读取不回显 API Key，空输入保留密钥，显式清除才删除", async () => {
-  const config_actions = new Map();
+  const actions = new Map();
   let stored_config = {
     search_provider: "tavily",
     document_provider: "fetch",
     browser_provider: "disabled",
+    timeout_ms: 12_000,
     tavily_api_key: "secret-tavily-key",
   };
   const power = new WebPower();
   power.initialize({
     power: {
       id: "web",
-      action() {},
-      config_action(action) { config_actions.set(action.id, action); },
+      action(action) { actions.set(action.id, action); },
+      config_action() {},
     },
-    system: {},
-  });
-  const context = {
     config: {
       get() { return structuredClone(stored_config); },
       async set(next) { stored_config = structuredClone(next); },
     },
-  };
+    system: {},
+  });
 
-  const read = await config_actions.get("config.read").run(undefined, context);
+  const read = await actions.get("web.config.read").run(undefined);
   assert.equal(read.tavily_api_key_configured, true);
   assert.equal("tavily_api_key" in read, false);
 
-  const kept = await config_actions.get("config.save").run({
-    ...read,
-    tavily_api_key: "",
-  }, context);
+  const kept = await actions.get("web.config.save").run({ tavily_api_key: "" });
   assert.equal(stored_config.tavily_api_key, "secret-tavily-key");
   assert.equal("tavily_api_key" in kept, false);
 
-  const cleared = await config_actions.get("config.save").run({
-    ...kept,
-    clear_tavily_api_key: true,
-  }, context);
+  const cleared = await actions.get("web.config.save").run({ clear_tavily_api_key: true });
   assert.equal("tavily_api_key" in stored_config, false);
   assert.equal(cleared.tavily_api_key_configured, false);
+  await power.dispose();
+});
+
+test("配置保存是字段级增量：只改提交的字段，其余字段保持原值", async () => {
+  const actions = new Map();
+  let stored_config = {
+    search_provider: "tavily",
+    document_provider: "firecrawl",
+    browser_provider: "disabled",
+    timeout_ms: 12_000,
+    max_observation_chars: 8_000,
+    cdp_url: "https://browser.example.com/cdp",
+    tavily_api_key: "secret-tavily-key",
+  };
+  const power = new WebPower();
+  power.initialize({
+    power: {
+      id: "web",
+      action(action) { actions.set(action.id, action); },
+      config_action() {},
+    },
+    config: {
+      get() { return structuredClone(stored_config); },
+      async set(next) { stored_config = structuredClone(next); },
+    },
+    system: {},
+  });
+
+  // 侧栏只改一个下拉，就必须只动这一个字段。
+  await actions.get("web.config.save").run({ browser_provider: "cdp" });
+  assert.equal(stored_config.browser_provider, "cdp");
+  assert.equal(stored_config.search_provider, "tavily");
+  assert.equal(stored_config.document_provider, "firecrawl");
+  assert.equal(stored_config.timeout_ms, 12_000);
+  assert.equal(stored_config.max_observation_chars, 8_000);
+  assert.equal(stored_config.cdp_url, "https://browser.example.com/cdp");
+  assert.equal(stored_config.tavily_api_key, "secret-tavily-key");
+
+  // 高级参数只提交超时，其它字段同样不被清空。
+  await actions.get("web.config.save").run({ timeout_ms: 5_000 });
+  assert.equal(stored_config.timeout_ms, 5_000);
+  assert.equal(stored_config.browser_provider, "cdp");
+  assert.equal(stored_config.tavily_api_key, "secret-tavily-key");
+
+  // 空字符串是显式清除，而不是“保留”。
+  await actions.get("web.config.save").run({ cdp_url: "" });
+  assert.equal("cdp_url" in stored_config, false);
+  assert.equal(stored_config.tavily_api_key, "secret-tavily-key");
   await power.dispose();
 });
 
@@ -223,7 +264,7 @@ test("浏览器 Provider 按 Agent 与 Workspace 作用域隔离并惰性复用"
 });
 
 test("保存配置后释放旧浏览器 Provider，并在下一次调用惰性重建", async () => {
-  const config_actions = new Map();
+  const actions = new Map();
   let created_count = 0;
   let disposed_count = 0;
   const power = new WebPower({
@@ -255,20 +296,16 @@ test("保存配置后释放旧浏览器 Provider，并在下一次调用惰性�
   power.initialize({
     power: {
       id: "web",
-      action() {},
-      config_action(action) {
-        config_actions.set(action.id, action);
-      },
+      action(action) { actions.set(action.id, action); },
+      config_action() {},
     },
+    config: { async set() {}, get() { return {}; } },
     system: {},
   });
   const context = create_context();
 
   await power.actions.browser_create_session.execute({ context, input: {} });
-  await config_actions.get("config.save").run(
-    { timeout_ms: 5_000 },
-    { config: { async set() {}, get() { return {}; } } },
-  );
+  await actions.get("web.config.save").run({ timeout_ms: 5_000 });
   assert.equal(disposed_count, 1);
 
   await power.actions.browser_create_session.execute({ context, input: {} });

@@ -29,15 +29,15 @@ export interface StepInputOptions {
   session_id: string;
   /** 当前 Session 的创建来源。 */
   session_origin: SessionOrigin;
-  /** 当前 Session 使用的 Workspace 绝对根目录。 */
-  workspace_path: string;
+  /** 当前 Session 使用的目录解析器；目录是可变的会话状态。 */
+  get_workspace_path: () => string;
   /** 当前 Session 的领域持久化视图。 */
   store: SessionStorage;
   /** 当前 Session 使用的统一 Composer。 */
   composer: SessionComposer;
   /** 在每个 Step 检查点读取当前可用 Tool 集合。 */
   get_tools: () => Record<string, Tool>;
-  /** 读取当前 Session 绑定的 Workspace 实例；未绑定时返回 undefined。 */
+  /** 读取当前 Session 的当前目录；未绑定时返回 undefined。 */
   get_workspace?: () => WorkspaceRuntime | undefined;
   /** 当前 Session 创建时捕获的 instruction system blocks。 */
   instruction_system_blocks: AgentSessionSystemBlock[];

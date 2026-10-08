@@ -1,5 +1,5 @@
 {
-  "views": { "agent": "Agents", "workspaces": "Works", "powers": "Powers", "settings": "设置" },
+  "views": { "agent": "Agents", "workspaces": "Works", "settings": "设置" },
   "view_switcher": "侧边栏视图",
   "account": { "user": "Downcity 用户", "settings_login": "设置与登录" },
   "panels": { "collapse_left": "折叠左侧面板", "expand_left": "展开左侧面板", "collapse_right": "折叠右侧面板", "expand_right": "展开右侧面板", "close_right": "关闭右侧边栏", "rail": "右侧面板切换", "recent_empty": "暂无最近 Session", "resize_right": "调整右侧面板宽度", "empty_title": "暂无打开的标签页", "empty_description": "在对话里点击文件、Agent 名称或「审核」，内容会在这里以标签页打开。" },

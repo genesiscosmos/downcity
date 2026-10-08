@@ -34,11 +34,11 @@ const system = await session.system();
 
 - Agent 身份块，携带 Agent 的 `name` 与 `id`
 - 调用方传入的静态 `instruction`
-- Downcity Agent core 说明，包括 Harness 设计思路、Shell command 规则和 power 系统总规则
-- 已注册并启用的 power system 文本
+- Downcity Agent core 说明，包括 Harness 设计思路、Shell command 规则和 Power 系统总规则
+- 已注册并启用的 Power system 文本
 - 稳定的 session 上下文，包括 `session_id`、`project_root`、创建时间与时区
 
-返回内容和 `session.prompt()` 使用的是同一套稳定 system blocks。system 第一次生成后会固定在当前 Session 内存中；后续 Agent instruction 或 plugin registry 变化不会修改它。新 Session 才会使用最新配置生成 system。
+返回内容和 `session.prompt()` 使用的是同一套稳定 system blocks。system 第一次生成后会固定在当前 Session 内存中；后续 Agent instruction 或 Power registry 变化不会修改它。新 Session 才会使用最新配置生成 system。
 
 需要让已有本地 Session 显式采用 Agent 当前配置时，调用 [`session.syncshot()`](/zh/agent-sdk-docs/sessions/syncshot)。
 
@@ -50,8 +50,8 @@ session 创建时间和时区是当前会话的参考时间上下文。当前时
 
 1. `instruction` / `identity`：由 SDK 注入的 Agent `name` 与 `id`。同一个 Agent 的所有 Session 共享这份身份。
 2. `instruction` / `agent`：宿主传入的 Agent 角色、业务规则和回复偏好。
-3. `core`：Downcity Agent 固定运行说明，包括 Harness 设计思路、Shell command 与 power 系统总规则。
-4. `power`：每个已经启用、已 ready 且当前可用的 power 自己的 system prompt。
+3. `core`：Downcity Agent 固定运行说明，包括 Harness 设计思路、Shell command 与 Power 系统总规则。
+4. `power`：每个已经启用、已 ready 且当前可用的 Power 自己的 system prompt。
 5. `session`：当前 session 的稳定上下文。
 
 即使宿主传入了 `instruction`，`core` 也会继续注入，并紧跟在 `instruction` 后面。`session` 块只描述 session 自身，不重复 Agent 身份。

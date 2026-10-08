@@ -1,0 +1,22 @@
+---
+title: Power Availability
+description: Understand City registration state and runtime availability.
+---
+Two facts matter:
+
+- whether the Power is registered in City and therefore projected to every Agent;
+- whether the current Agent/Workspace satisfies the Power's `availability()` check.
+
+```ts
+const powers = city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id });
+powers.has("skill");
+powers.status("skill");
+await powers.availability("skill");
+```
+
+A newly added Power is `initializing` until `start` completes, then becomes `ready`. A failed start
+produces `error`. An ordinary Action business failure does not change the Power's global state.
+
+`availability()` only answers whether the Power can work in the current Context—for example whether
+a provider, dependency, model, or credential is ready. It does not bind Powers to Agents; all City
+Powers are always visible to all City Agents.

@@ -51,7 +51,7 @@ async function run_interactive_power_actions(power: PowerCatalogItem): Promise<v
     message: power.title,
     subtitle: power.description,
     choices: [
-      ...(power.has_config ? [{ title: "配置说明", description: "在 Desktop Power 页面编辑唯一配置", value: "config" }] : []),
+      ...(power.has_config ? [{ title: "配置说明", description: "使用 downcity power config 读写独立 Config", value: "config" }] : []),
       ...(power.source === "installed"
         ? [
             { title: "更新", description: "从已保存来源更新 Power", value: "update" },
@@ -66,7 +66,7 @@ async function run_interactive_power_actions(power: PowerCatalogItem): Promise<v
       tone: "info",
       title: "Power config",
       summary: power.power_id,
-      note: "请在 Downcity Desktop 的 Power 页面编辑配置，或使用 downcity power config --set。",
+      note: "使用 downcity power config --set 写入配置；配置由 City 持有，对所有 Agent 生效。",
     });
   }
   if (response.action === "update") {

@@ -16,7 +16,7 @@ city reset --yes                 # Skip confirmation
 
 The CLI City uses one HTTP port and one native TCP RPC port. Both protocols route all Agents by `agent_id`.
 
-`city reset` first stops the CLI City daemon, then removes `downcity.db`, `downcity.db-wal`, and `downcity.db-shm`. It preserves `.env`, Agent/Plugin configuration, and Session files inside Workspaces.
+`city reset` first stops the CLI City daemon, then removes `downcity.db`, `downcity.db-wal`, and `downcity.db-shm`. It preserves `.env`, Agent/Power configuration, and Session files inside Workspaces.
 
 ## Agent
 
@@ -29,7 +29,7 @@ city agent model [agent_id]
 city agent chat [agent_id]
 ```
 
-The bare `city` command opens the Agent list directly. It does not show Agent runtime status. `city agent list` prints every Agent as `name · agent_id`. Federation, global Plugins, language, and command help appear in a Settings group at the end of the same list.
+The bare `city` command opens the Agent list directly. It does not show Agent runtime status. `city agent list` prints every Agent as `name · agent_id`. Federation, global Powers, language, and command help appear in a Settings group at the end of the same list.
 
 Agents assembled by City enable the `ask_question` tool by default.
 Selecting an Agent in the `city agent` panel opens its most recent conversation and enters that Session's Workspace. When the Agent has no history yet, Chat opens in the current Workspace and creates a new Session. The model can present text, single-select, or multi-select
@@ -59,33 +59,33 @@ city agent token create [agent_id] --name temporary --expires-at 2026-08-01T00:0
 city agent token delete <token_id> [agent_id]
 ```
 
-## Plugins
+## Powers
 
-`city plugin list` shows each Plugin title, stable ID, purpose, source, and whether it provides Config.
+`city power list` shows each Power title, stable ID, purpose, source, and whether it provides Config.
 
 ```bash
-city plugin list
-city plugin install <local-directory|git-url|github:owner/repo#ref>
-city plugin update <plugin_id>
-city plugin uninstall <plugin_id>
-city plugin inspect <plugin_id>
-city plugin config <plugin_id>
-city plugin config <plugin_id> --set '{"key":"value"}'
-city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
+city power list
+city power install <local-directory|git-url|github:owner/repo#ref>
+city power update <power_id>
+city power uninstall <power_id>
+city power inspect <power_id>
+city power config <power_id>
+city power config <power_id> --set '{"key":"value"}'
+city power action <power_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-A third-party source directory defines exactly one Plugin. Its `plugin.json` declares `schema_version: 1`, a globally unique `id`, a version, a required relative `readme` path to a `.md` file, and optional `main` and `renderer` entries. `main` is a self-contained unified City Plugin ESM. The `renderer` object declares a single-file ESM entry and static `sidebar`, `mainview`, and `config` capabilities; Sidebar and Mainview must be paired. At least one of the two runtime entries is required. `package.json` must declare `"type": "module"`. The installed directory keeps only declared artifacts, documentation, an optional icon, and local `config.toml`. Installation never runs dependencies, build scripts, or any third-party entry.
+A third-party source directory defines exactly one Power. Its `power.json` declares `schema_version: 1`, a globally unique `id`, a version, a required relative `readme` path to a `.md` file, and optional `main` and `renderer` entries. `main` is a self-contained unified City Power ESM. The `renderer` object declares a single-file ESM entry and static `sidebar`, `mainview`, and `config` capabilities; Sidebar and Mainview must be paired. At least one of the two runtime entries is required. `package.json` must declare `"type": "module"`. The installed directory keeps only declared artifacts, documentation, an optional icon, and local `config.toml`. Installation never runs dependencies, build scripts, or any third-party entry.
 
-A Plugin that declares Config stores one configuration in `plugins/<plugin_id>/config.toml`. The Plugin
+A Power that declares Config stores one configuration in `powers/<power_id>/config.toml`. The Power
 owns its structure, validation, Secret projection, and Config UI. CLI `config --set` only replaces a
 complete JSON object explicitly; it does not generate a generic form or print credential values. Without
 `--set`, it reports only whether Config exists and its field names.
 
-City automatically provides every registered Plugin to every Agent; `agent.json` stores neither Plugin
-references nor configuration. A Plugin models its own account collection and selection rules when it
-needs multiple accounts. After Config is saved, the Plugin refreshes affected long-lived resources.
+City automatically provides every registered Power to every Agent; `agent.json` stores neither Power
+references nor configuration. A Power models its own account collection and selection rules when it
+needs multiple accounts. After Config is saved, the Power refreshes affected long-lived resources.
 
-The CLI, Agent `plugin_call`, HTTP, and scheduled jobs all invoke Plugin Actions. There is no `plugin command`, and Chat is not a top-level CLI special case.
+The CLI, Agent Power tools, HTTP, and scheduled jobs all invoke Power Actions. There is no `power command`, and Chat is not a top-level CLI special case.
 
 ## Env and Federation
 

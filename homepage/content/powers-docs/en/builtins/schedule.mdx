@@ -1,0 +1,40 @@
+---
+title: schedule Power
+description: Internal scheduling infrastructure for power actions and delayed or timed redispatch
+---
+`schedule` is an infrastructure concept for delayed power actions.
+
+It is responsible for polling scheduled jobs and redispatching due power actions. In the current user-facing CLI, it is not a standalone power that you start, stop, or call with business actions.
+
+## Main shape
+
+- persistent action jobs
+- runtime polling and recovery
+- no business actions
+
+## What it is for
+
+Use action scheduling as a mental model when you want to understand:
+
+- why scheduling belongs to power lifecycle instead of the top-level agent shell
+- how delayed power actions are re-invoked
+- why it belongs to the Power runtime rather than a top-level CLI command
+
+## How users use it
+
+Action scheduling is currently internal Power runtime infrastructure and has no standalone CLI management command. Use the `task` Power for user-managed, reusable automation.
+
+## Important semantics
+
+- it mainly polls `PowerScheduleStore`
+- it restarts interrupted running jobs back to pending on startup recovery
+- it is a core infrastructure pattern, not a normal user-facing business power
+
+## Public status
+
+Action scheduling is platform infrastructure rather than a normal public SDK capability power.
+
+## Related docs
+
+- [Power Lifecycle](/en/agent-sdk-docs/powers/lifecycle)
+- [Built-ins Overview](/en/powers-docs/builtins/overview)

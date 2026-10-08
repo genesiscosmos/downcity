@@ -111,83 +111,54 @@ export default [
     ],
   ),
 
-  // Docs routes with layout
-  layout("routes/docs/layout.tsx", [
-    // English docs
-    route("en/docs/*", "routes/docs/page.tsx", { id: "docs-en" }),
-    route("docs/*", "routes/docs/redirect.tsx", { id: "docs-redirect" }), // Redirect to /en/docs
+  // 文档路由：六个空间共用同一个页面实现，版式由组件层承担，不再需要 layout 路由。
+  route("en/docs/*", "routes/docs/page.tsx", { id: "docs-en" }),
+  route("docs/*", "routes/docs/redirect.tsx", { id: "docs-redirect" }),
+  route("zh/docs/*", "routes/docs/page.tsx", { id: "docs-zh" }),
 
-    // Chinese docs
-    route("zh/docs/*", "routes/docs/page.tsx", { id: "docs-zh" }),
-  ]),
+  route("en/city-sdk-docs/*", "routes/city-sdk-docs/page.tsx", {
+    id: "city-sdk-docs-en",
+  }),
+  route("city-sdk-docs/*", "routes/city-sdk-docs/redirect.tsx", {
+    id: "city-sdk-docs-redirect",
+  }),
+  route("zh/city-sdk-docs/*", "routes/city-sdk-docs/page.tsx", {
+    id: "city-sdk-docs-zh",
+  }),
 
-  // City SDK docs routes with layout
-  layout("routes/city-sdk-docs/layout.tsx", [
-    route("en/city-sdk-docs/*", "routes/city-sdk-docs/page.tsx", {
-      id: "city-sdk-docs-en",
-    }),
-    route("city-sdk-docs/*", "routes/city-sdk-docs/redirect.tsx", {
-      id: "city-sdk-docs-redirect",
-    }),
-    route("zh/city-sdk-docs/*", "routes/city-sdk-docs/page.tsx", {
-      id: "city-sdk-docs-zh",
-    }),
-  ]),
+  route("en/agent-sdk-docs/*", "routes/agent-sdk-docs/page.tsx", {
+    id: "agent-sdk-docs-en",
+  }),
+  route("agent-sdk-docs/*", "routes/agent-sdk-docs/redirect.tsx", {
+    id: "agent-sdk-docs-redirect",
+  }),
+  route("zh/agent-sdk-docs/*", "routes/agent-sdk-docs/page.tsx", {
+    id: "agent-sdk-docs-zh",
+  }),
 
-  // Agent SDK docs routes with layout
-  layout("routes/agent-sdk-docs/layout.tsx", [
-    route("en/agent-sdk-docs/*", "routes/agent-sdk-docs/page.tsx", {
-      id: "agent-sdk-docs-en",
-    }),
-    route("agent-sdk-docs/*", "routes/agent-sdk-docs/redirect.tsx", {
-      id: "agent-sdk-docs-redirect",
-    }),
-    route("zh/agent-sdk-docs/*", "routes/agent-sdk-docs/page.tsx", {
-      id: "agent-sdk-docs-zh",
-    }),
-  ]),
+  route("en/payments/*", "routes/payments/page.tsx", { id: "payments-en" }),
+  route("payments/*", "routes/payments/redirect.tsx", { id: "payments-redirect" }),
+  route("zh/payments/*", "routes/payments/page.tsx", { id: "payments-zh" }),
 
-  // Payments routes with layout
-  layout("routes/payments/layout.tsx", [
-    route("en/payments/*", "routes/payments/page.tsx", {
-      id: "payments-en",
-    }),
-    route("payments/*", "routes/payments/redirect.tsx", {
-      id: "payments-redirect",
-    }),
-    route("zh/payments/*", "routes/payments/page.tsx", {
-      id: "payments-zh",
-    }),
-  ]),
+  route("en/powers-docs/*", "routes/powers-docs/page.tsx", {
+    id: "powers-docs-en",
+  }),
+  route("powers-docs/*", "routes/powers-docs/redirect.tsx", {
+    id: "powers-docs-redirect",
+  }),
+  route("zh/powers-docs/*", "routes/powers-docs/page.tsx", {
+    id: "powers-docs-zh",
+  }),
 
-  // Plugins docs routes with layout
-  layout("routes/plugins-docs/layout.tsx", [
-    route("en/plugins-docs/*", "routes/plugins-docs/page.tsx", {
-      id: "plugins-docs-en",
-    }),
-    route("plugins-docs/*", "routes/plugins-docs/redirect.tsx", {
-      id: "plugins-docs-redirect",
-    }),
-    route("zh/plugins-docs/*", "routes/plugins-docs/page.tsx", {
-      id: "plugins-docs-zh",
-    }),
-  ]),
+  route("en/ui-sdk-docs/*", "routes/ui-sdk-docs/page.tsx", { id: "ui-sdk-docs-en" }),
+  route("ui-sdk-docs/*", "routes/ui-sdk-docs/redirect.tsx", {
+    id: "ui-sdk-docs-redirect",
+  }),
+  route("zh/ui-sdk-docs/*", "routes/ui-sdk-docs/page.tsx", { id: "ui-sdk-docs-zh" }),
 
-  // UI SDK docs routes with layout
-  layout("routes/ui-sdk-docs/layout.tsx", [
-    route("en/ui-sdk-docs/*", "routes/ui-sdk-docs/page.tsx", { id: "ui-sdk-docs-en" }),
-    route("ui-sdk-docs/*", "routes/ui-sdk-docs/redirect.tsx", {
-      id: "ui-sdk-docs-redirect",
-    }),
-    route("zh/ui-sdk-docs/*", "routes/ui-sdk-docs/page.tsx", { id: "ui-sdk-docs-zh" }),
-  ]),
+  // 静态检索索引：按语言各生成一份，由文档搜索在浏览器内检索，不再需要服务端搜索接口。
+  route("search-index.en.json", "routes/search-index.ts", { id: "search-index-en" }),
+  route("search-index.zh.json", "routes/search-index.ts", { id: "search-index-zh" }),
 
-  // API routes
-  route("api/search", "routes/docs/search.ts"),
-  route("api/city-sdk-docs/search", "routes/city-sdk-docs/search.ts"),
-  route("api/agent-sdk-docs/search", "routes/agent-sdk-docs/search.ts"),
-  route("api/payments/search", "routes/payments/search.ts"),
-  route("api/plugins-docs/search", "routes/plugins-docs/search.ts"),
-  route("api/ui-sdk-docs/search", "routes/ui-sdk-docs/search.ts"),
   route("api/webcap", "routes/api.webcap.ts"),
 ] satisfies RouteConfig;

@@ -227,7 +227,6 @@ test("路由级页面都包在 MainView 里", () => {
     "features/group/components/GroupChatDetails.tsx",
     "features/workspace/WorkspacePage.tsx",
     "features/workspace/WorkspaceFileView.tsx",
-    "features/power/PowerView.tsx",
     "features/power/PowerWorkspaceView.tsx",
     "features/settings/SettingsPage.tsx",
   ];

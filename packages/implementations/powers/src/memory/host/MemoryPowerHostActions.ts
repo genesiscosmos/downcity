@@ -16,14 +16,12 @@ import type {
 import type {
   MemoryListResult,
   MemoryReadResult,
-  MemoryRecallItem,
-  MemoryRecallResult,
   MemoryRememberResult,
   MemoryForgetResult,
   MemoryReviseResult,
   MemoryStatusResult,
 } from "@/memory/types/Memory.js";
-import type { MemorySubject, MemorySubjectKind } from "@/memory/types/MemoryAccess.js";
+import type { MemorySubject } from "@/memory/types/MemoryAccess.js";
 import type {
   MemoryMainviewForgetInput,
   MemoryMainviewListItem,
@@ -32,9 +30,10 @@ import type {
   MemoryMainviewMutationResult,
   MemoryMainviewReadInput,
   MemoryMainviewReadResult,
-  MemoryMainviewRecallInput,
   MemoryMainviewRememberInput,
   MemoryMainviewReviseInput,
+  MemoryMainviewScopeInput,
+  MemoryMainviewScopeKind,
   MemoryMainviewSnapshot,
 } from "@/memory/types/MemoryMainview.js";
 
@@ -50,10 +49,6 @@ export function register_memory_power_host_actions(context: PowerLifecycleContex
   context.power.action({
     id: "memory.list",
     run: async (input) => as_json(await list_memories(context, read_list_input(input))),
-  });
-  context.power.action({
-    id: "memory.recall",
-    run: async (input) => as_json(await recall_memories(context, read_recall_input(input))),
   });
   context.power.action({
     id: "memory.read",
@@ -94,8 +89,17 @@ async function create_snapshot(
   const status = resolved_agent && resolved_workspace
     ? await read_status(context, resolved_agent.agent_id, resolved_workspace.workspace_id)
     : undefined;
+  const counts = resolved_workspace
+    ? await read_scope_counts(context, resolved_agent.agent_id, agents, resolved_workspace.workspace_id)
+    : undefined;
   return {
-    agents: agents.map((agent) => ({ agent_id: agent.agent_id, name: agent.name })),
+    agents: agents.map((agent) => ({
+      agent_id: agent.agent_id,
+      name: agent.name,
+      ...(counts?.agents[agent.agent_id] === undefined
+        ? {}
+        : { memory_count: counts.agents[agent.agent_id] }),
+    })),
     workspaces: workspaces.map((workspace) => ({
       workspace_id: workspace.workspace_id,
       name: workspace.name,
@@ -107,7 +111,57 @@ async function create_snapshot(
       city_memory_available: status?.details?.city_memory_available === true,
       ...(status?.details ? { details: status.details } : {}),
     },
+    ...(counts?.city === undefined ? {} : { city_count: counts.city }),
   };
+}
+
+/**
+ * 读取共享范围与每个 Agent 私有范围的条目数量。
+ *
+ * 关键点（中文）：计数只用于导航副标题，单个范围失败不能让整个快照失败；
+ * 因此这里逐个吞掉错误并省略对应计数。共享计数借用一个真实 Agent 执行。
+ */
+async function read_scope_counts(
+  context: PowerLifecycleContext,
+  executor_agent_id: string,
+  agents: readonly { readonly agent_id: string }[],
+  workspace_id: string,
+): Promise<{
+  /** City 共享记忆条目数量。 */
+  city: number | undefined;
+  /** 按 Agent ID 索引的私有记忆条目数量。 */
+  agents: Record<string, number | undefined>;
+}> {
+  const [city, ...agent_counts] = await Promise.all([
+    count_scope(context, executor_agent_id, workspace_id, "city"),
+    ...agents.map((agent) => count_scope(context, agent.agent_id, workspace_id, "agent")),
+  ]);
+  return {
+    city,
+    agents: Object.fromEntries(
+      agents.map((agent, index) => [agent.agent_id, agent_counts[index]]),
+    ),
+  };
+}
+
+/** 统计一个执行范围内指定 Subject 的条目数量。 */
+async function count_scope(
+  context: PowerLifecycleContext,
+  agent_id: string,
+  workspace_id: string,
+  subject_kind: MemoryMainviewScopeKind,
+): Promise<number | undefined> {
+  try {
+    const result = await invoke_domain_action<MemoryListResult>(
+      context,
+      { scope: subject_kind, agent_id, workspace_id },
+      "list",
+      { subject_kinds: [subject_kind], limit: 1 },
+    );
+    return result.total;
+  } catch {
+    return undefined;
+  }
 }
 
 /** 枚举指定执行范围中的记忆。 */
@@ -117,8 +171,6 @@ async function list_memories(
 ): Promise<MemoryMainviewListResult> {
   const result = await invoke_domain_action<MemoryListResult>(context, input, "list", {
     ...(input.subject_kinds ? { subject_kinds: input.subject_kinds } : {}),
-    ...(input.memory_types ? { memory_types: input.memory_types } : {}),
-    ...(input.include_evidence === undefined ? {} : { include_evidence: input.include_evidence }),
     limit: input.limit ?? DEFAULT_LIST_LIMIT,
     ...(input.offset === undefined ? {} : { offset: input.offset }),
   });
@@ -171,7 +223,6 @@ async function remember_memory(
       target: input.target,
       ...(input.topic ? { topic: input.topic } : {}),
       ...(input.memory_type ? { memory_type: input.memory_type } : {}),
-      ...(input.source ? { source: input.source } : {}),
     },
   );
   return await mutation_result(context, input, result.memory_id, "记忆已保存。");
@@ -185,7 +236,6 @@ async function revise_memory(
   const result = await invoke_domain_action<MemoryReviseResult>(context, input, "revise", {
     memory_id: input.memory_id,
     instruction: input.instruction,
-    ...(input.evidence ? { evidence: input.evidence } : {}),
   });
   return await mutation_result(context, input, result.memory_id, "记忆已修订。");
 }
@@ -200,51 +250,6 @@ async function forget_memory(
   });
   const message = result.forgotten ? "记忆已删除。" : "该记忆已不存在。";
   return await mutation_result(context, input, result.memory_id, message);
-}
-
-/** 按关键词召回指定执行范围中的记忆。 */
-async function recall_memories(
-  context: PowerLifecycleContext,
-  input: MemoryMainviewRecallInput,
-): Promise<MemoryMainviewListResult> {
-  const result = await invoke_domain_action<MemoryRecallResult>(context, input, "search", {
-    query: input.query,
-    max_results: input.max_results ?? DEFAULT_LIST_LIMIT,
-    include_evidence: input.include_evidence === true,
-  });
-  return {
-    items: result.items.map((item) => ({
-      memory_id: item.memory.memory_id,
-      memory_type: item.memory.memory_type,
-      subject: item.memory.subject as unknown as MemorySubject,
-      title: recall_title(item),
-      snippet: item.snippet,
-      observed_at: item.memory.observed_at,
-      is_evidence: item.memory.memory_id.includes("/evidence/"),
-      ...(item.memory.citation ? { citation: item.memory.citation } : {}),
-    })),
-    total: result.items.length,
-    subject_counts: count_subjects(result.items.map((item) => item.memory.subject.kind)),
-  };
-}
-
-/** 返回召回结果的展示名称。 */
-function recall_title(item: MemoryRecallItem): string {
-  const title = item.memory.metadata?.title;
-  if (typeof title === "string" && title.trim()) return title.trim();
-  return item.memory.memory_id.split("/").pop() || item.memory.memory_id;
-}
-
-/** 统计召回结果中各 Subject 类别的条目数量。 */
-function count_subjects(kinds: MemorySubjectKind[]): Record<MemorySubjectKind, number> {
-  const counts: Record<MemorySubjectKind, number> = {
-    agent: 0,
-    user: 0,
-    workspace: 0,
-    city: 0,
-  };
-  for (const kind of kinds) counts[kind] += 1;
-  return counts;
 }
 
 /** 在指定执行范围读取 Provider 状态。 */
@@ -266,8 +271,10 @@ async function read_status(
 /**
  * 在界面选定的执行范围里调用本 Power 的领域 action。
  *
- * 领域 action 已经声明 `access` 与输入 schema；这里只负责把执行范围交给 City，
- * 并把稳定失败结果还原为异常，避免界面把失败当成空数据。
+ * 关键点（中文）：领域 action 必须绑定一个真实 Agent，即使要读的是 City 共享记忆；
+ * 因此 `agent_id` 缺失时回退到第一个可用 Agent，而不是拒绝请求。领域 action 已经
+ * 声明 `access` 与输入 schema；这里只负责把执行范围交给 City，并把稳定失败结果还原
+ * 为异常，避免界面把失败当成空数据。
  */
 async function invoke_domain_action<TResult>(
   context: PowerLifecycleContext,
@@ -276,11 +283,12 @@ async function invoke_domain_action<TResult>(
   input: PowerJsonObject,
 ): Promise<TResult> {
   const agents = await context.system.list_agents();
-  const agent = agents.find((item) => item.agent_id === scope.agent_id);
-  if (!agent) throw new Error(`Agent not found: ${scope.agent_id}`);
+  const agent = agents.find((item) => item.agent_id === scope.agent_id) ?? agents[0];
+  if (!agent) throw new Error("Memory requires at least one Agent as execution context");
   const workspaces = await context.system.list_workspaces();
-  const workspace = workspaces.find((item) => item.workspace_id === scope.workspace_id);
-  if (!workspace) throw new Error(`Workspace not found: ${scope.workspace_id}`);
+  const workspace = workspaces.find((item) => item.workspace_id === scope.workspace_id)
+    ?? workspaces[0];
+  if (!workspace) throw new Error("Memory requires at least one Workspace as execution context");
   const result = await context.system.invoke_agent_power({
     agent_id: agent.agent_id,
     workspace_id: workspace.workspace_id,
@@ -302,8 +310,10 @@ async function mutation_result(
   message: string,
 ): Promise<MemoryMainviewMutationResult> {
   const listed = await list_memories(context, {
+    scope: scope.scope,
     agent_id: scope.agent_id,
     workspace_id: scope.workspace_id,
+    subject_kinds: [scope.scope],
   });
   return {
     ...listed,
@@ -327,55 +337,33 @@ function to_list_result(result: MemoryListResult): MemoryMainviewListResult {
       ...(item.citation ? { citation: item.citation } : {}),
     })),
     total: result.total,
-    subject_counts: result.subject_counts,
   };
-}
-
-/** 界面 action 输入中的执行范围。 */
-interface MemoryMainviewScopeInput {
-  /** 目标 Agent 执行范围。 */
-  readonly agent_id: string;
-  /** 提供 Workspace 作用域的 Workspace ID。 */
-  readonly workspace_id: string;
 }
 
 /** 读取必填执行范围。 */
 function read_scope(input: PowerJsonValue | undefined): MemoryMainviewScopeInput {
   const source = read_record(input);
   return {
+    scope: read_scope_kind(source),
     agent_id: read_optional_string(source, "agent_id"),
     workspace_id: read_optional_string(source, "workspace_id"),
   };
 }
 
-/** 解析枚举输入。 */
-function read_list_input(input: PowerJsonValue | undefined): MemoryMainviewListInput {
-  const source = read_record(input);
-  const memory_types = Array.isArray(source.memory_types)
-    ? source.memory_types.filter((value): value is string => typeof value === "string")
-    : undefined;
-  return {
-    ...read_scope(input),
-    ...(read_subject_kinds(source) ? { subject_kinds: read_subject_kinds(source) } : {}),
-    ...(memory_types ? { memory_types } : {}),
-    ...(typeof source.include_evidence === "boolean"
-      ? { include_evidence: source.include_evidence }
-      : {}),
-    ...(typeof source.limit === "number" ? { limit: source.limit } : {}),
-    ...(typeof source.offset === "number" ? { offset: source.offset } : {}),
-  };
+/** 读取记忆范围类别；未声明时默认查看 Agent 私有记忆。 */
+function read_scope_kind(source: Record<string, PowerJsonValue>): MemoryMainviewScopeKind {
+  return read_optional_string(source, "scope") === "city" ? "city" : "agent";
 }
 
-/** 解析召回输入。 */
-function read_recall_input(input: PowerJsonValue | undefined): MemoryMainviewRecallInput {
+/** 解析枚举输入；Subject 过滤完全由范围类别决定。 */
+function read_list_input(input: PowerJsonValue | undefined): MemoryMainviewListInput {
   const source = read_record(input);
+  const scope = read_scope(input);
   return {
-    ...read_scope(input),
-    query: read_required_string(source, "query"),
-    ...(typeof source.max_results === "number" ? { max_results: source.max_results } : {}),
-    ...(typeof source.include_evidence === "boolean"
-      ? { include_evidence: source.include_evidence }
-      : {}),
+    ...scope,
+    subject_kinds: [scope.scope],
+    ...(typeof source.limit === "number" ? { limit: source.limit } : {}),
+    ...(typeof source.offset === "number" ? { offset: source.offset } : {}),
   };
 }
 
@@ -390,26 +378,22 @@ function read_remember_input(input: PowerJsonValue | undefined): MemoryMainviewR
   const source = read_record(input);
   const topic = read_optional_string(source, "topic");
   const memory_type = read_optional_string(source, "memory_type");
-  const origin = read_optional_string(source, "source");
   return {
     ...read_scope(input),
     content: read_required_string(source, "content"),
     target: read_required_string(source, "target"),
     ...(topic ? { topic } : {}),
     ...(memory_type ? { memory_type } : {}),
-    ...(origin ? { source: origin } : {}),
   };
 }
 
 /** 解析修订输入。 */
 function read_revise_input(input: PowerJsonValue | undefined): MemoryMainviewReviseInput {
   const source = read_record(input);
-  const evidence = read_optional_string(source, "evidence");
   return {
     ...read_scope(input),
     memory_id: read_required_string(source, "memory_id"),
     instruction: read_required_string(source, "instruction"),
-    ...(evidence ? { evidence } : {}),
   };
 }
 
@@ -422,12 +406,12 @@ function read_forget_input(input: PowerJsonValue | undefined): MemoryMainviewFor
 /** 读取可选 Subject 类别过滤条件。 */
 function read_subject_kinds(
   source: Record<string, PowerJsonValue>,
-): MemorySubjectKind[] | undefined {
+): string[] | undefined {
   if (!Array.isArray(source.subject_kinds)) return undefined;
-  const allowed: MemorySubjectKind[] = ["agent", "user", "workspace", "city"];
+  const allowed = ["agent", "city"];
   const kinds = source.subject_kinds
     .filter((value): value is string => typeof value === "string")
-    .filter((value): value is MemorySubjectKind => allowed.includes(value as MemorySubjectKind));
+    .filter((value) => allowed.includes(value));
   return kinds.length > 0 ? kinds : undefined;
 }
 

@@ -43,6 +43,15 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
   const programmatic_top_ref = useRef<number | undefined>(undefined);
   /** 历史前插前捕获的锚点，由 layout effect 消费。 */
   const pending_anchor_ref = useRef<ChatPrependAnchor | undefined>(undefined);
+  /**
+   * 就地布局变化（展开/收起过程）时要保住的元素，由 layout effect 消费。
+   *
+   * 与历史前插锚点分开：前插会在前面新增消息行，必须用稳定 `row_id` 定位；
+   * 就地变化不新增消息行，只需在提交后重测同一个元素的视口偏移。
+   */
+  const pending_element_ref = useRef<HTMLElement | undefined>(undefined);
+  /** 上面那个元素在登记时的视口偏移，用于算出补偿量。 */
+  const pending_element_offset_ref = useRef(0);
   const preserving_ref = useRef(false);
   const auto_scroll_ref = useRef(auto_scroll);
   const surface_id_ref = useRef(surface_id);
@@ -168,6 +177,31 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
     sync_latest_visible(container);
   }, [content_key, read_metrics, sync_following, sync_latest_visible, write_scroll_top]);
 
+  /**
+   * 就地布局变化的恢复点（目前只用于展开过程）。
+   *
+   * 调用方在改布局前登记要保住的元素，这里在提交后重测它的视口偏移并回写 scrollTop。
+   * 与历史前插同一条原理，但锚的是元素本身而不是行标识：就地变化不改变行序号。
+   * 只重测偏移，不重新判定跟随：展开是用户主动操作，不该因此退出或恢复自动跟随。
+   *
+   * 折叠**不**登记：过程消失后下方内容自然上移、scrollTop 不变，
+   * 用户直接落到本条 turn 的结果正文上（见 `AgentMessage` 的 `toggle_process`）。
+   *
+   * 不声明依赖数组（每次提交后都跑）：登记与提交分属两个事件，拿不到一个稳定的
+   * “本次提交”标识。开销由开头的早退承担：未登记时只读一次 ref 就返回，
+   * 不做任何测量，也不会写 scrollTop。
+   */
+  useLayoutEffect(() => {
+    const element = pending_element_ref.current;
+    pending_element_ref.current = undefined;
+    const container = scroll_ref.current;
+    if (!element || !container) return;
+    const offset = element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    write_scroll_top(container, resolve_chat_anchor_scroll_top(container.scrollTop, pending_element_offset_ref.current, offset));
+    last_scroll_top_ref.current = container.scrollTop;
+    sync_latest_visible(container);
+  });
+
   useEffect(() => {
     if (auto_scroll) schedule_scroll_to_bottom();
   }, [auto_scroll, schedule_scroll_to_bottom]);
@@ -249,7 +283,20 @@ export function use_chat_scroll(surface_id: string, auto_scroll: boolean, conten
     });
   }, []);
 
-  return { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, is_following, latest_visible, scroll_to_bottom: pin_to_bottom };
+  /**
+   * 登记一个要在下次提交后保持视口位置（就地展开/收起）的元素。
+   *
+   * 只记录元素与当前偏移，不等待、也不自行恢复：真正的回写交给下一次提交后的
+   * layout effect，避免与 React 的提交时序抢跑。
+   */
+  const preserve_element_position = useCallback((element: HTMLElement) => {
+    const container = scroll_ref.current;
+    if (!container) return;
+    pending_element_ref.current = element;
+    pending_element_offset_ref.current = element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+  }, []);
+
+  return { scroll_ref, content_ref, handle_scroll, preserve_prepend_position, preserve_element_position, is_following, latest_visible, scroll_to_bottom: pin_to_bottom };
 }
 
 /** 捕获当前首个可见消息行，避免历史前插依赖整体内容高度。 */

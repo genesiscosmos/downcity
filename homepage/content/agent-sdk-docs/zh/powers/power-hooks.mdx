@@ -1,0 +1,95 @@
+---
+title: Power Hooks 和 Resolve
+description: 用一页总览看清 pipeline、guard、effect、resolve 的区别，并进入更细的运行说明
+---
+这一组能力最容易让人混淆的原因是：
+
+- 它们都写在 Power 定义里
+- 看起来都像“注册一个函数”
+- 但运行语义完全不同
+
+如果只记一句话，可以先记这个：
+
+- `pipeline`：改值
+- `guard`：拦截
+- `effect`：做副作用
+- `resolve`：给唯一答案
+
+## 先看总对比
+
+| 类型 | 谁来触发 | 是否返回新值 | 是否允许多个 handler | 失败会怎样 | 最适合的事 |
+| --- | --- | --- | --- | --- | --- |
+| `pipeline` | 宿主代码主动调用 | 会 | 会 | 抛错并中断当前调用 | 逐步加工一份值 |
+| `guard` | 宿主代码主动调用 | 不会 | 会 | 任一 handler 抛错就中断 | 前置校验、权限判断 |
+| `effect` | 宿主代码主动调用 | 不会 | 会 | 任一 handler 抛错就中断当前 effect 调用 | 记录、埋点、同步 |
+| `resolve` | 宿主代码主动调用 | 会 | 不会，只能一个 | 没注册、重复注册、disabled 都会报错 | 提供唯一权威答案 |
+
+## 最容易忽略的一点
+
+Power 里声明了 hook，不代表它会自动执行。
+
+真正的执行方式是：宿主代码在某个明确时机，主动调用某个点。
+
+例如：
+
+```ts
+const value = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", input);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", value);
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).effect("audit.observe", value);
+const role = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).resolve("auth.resolve_role", {
+  userId: "owner",
+});
+```
+
+也就是说：
+
+- hook 是“扩展点定义”
+- 宿主调用是“扩展点执行”
+
+如果宿主从来不调用这个点，这个 hook 就永远不会跑。
+
+Hook 声明在 Power 实例上，由 City 持有的 Registry 按当前 Agent/Workspace 作用域调度。Session 在每个执行检查点捕获一次 execution lease，因此本次调用看到的是稳定的 Power 集合；并发解绑会等待活跃 lease 释放。
+
+Power 内部只能通过 `context.city.powers.pipeline()`、`effect()` 和 `run_action()` 协作，不能主动触发 `guard` 或 `resolve`。后两者代表宿主控制流和唯一权威决策，只从 `city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id })` 等宿主执行面调用。
+
+## 为什么 `resolve` 要单独看
+
+很多人会下意识把 `resolve` 当成“另一种 hook”。
+
+但它本质上更像：
+
+- 一个 authority point
+- 一个“最终到底谁说了算”的问题
+
+所以它和前三种最大的区别是：
+
+- 前三种允许多个 Power 一起参与
+- `resolve` 只允许一个 Power 成为最终回答者
+
+这就是为什么：
+
+- 重复注册同一个 `resolve` 点会直接报错
+- 没有 resolver 也会报错
+- resolver 对应的 Power 如果 disabled，也会报错
+
+## 推荐阅读顺序
+
+1. [总心智模型](/zh/agent-sdk-docs/powers/hooks/overview)
+2. [调用流](/zh/agent-sdk-docs/powers/hooks/call-flow)
+3. [Pipeline](/zh/agent-sdk-docs/powers/hooks/pipeline)
+4. [Guard](/zh/agent-sdk-docs/powers/hooks/guard)
+5. [Effect](/zh/agent-sdk-docs/powers/hooks/effect)
+6. [Resolve](/zh/agent-sdk-docs/powers/hooks/resolve)
+7. [怎么选](/zh/agent-sdk-docs/powers/hooks/choose-the-right-one)
+
+## 直接看完整场景
+
+- [一条消息的完整流转](/zh/agent-sdk-docs/powers/hooks/examples/end-to-end-message-flow)
+- [角色解析为什么必须唯一](/zh/agent-sdk-docs/powers/hooks/examples/role-resolution-flow)
+- [常见误用对比](/zh/agent-sdk-docs/powers/hooks/examples/bad-vs-good-design)
+
+## 相关文档
+
+- [Power 总览](/zh/agent-sdk-docs/powers/overview)
+- [Power Actions](/zh/agent-sdk-docs/powers/power-actions)
+- [自定义 Power](/zh/agent-sdk-docs/powers/custom-power)

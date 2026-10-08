@@ -5,7 +5,6 @@ import { SidebarFrame } from "./sidebar/SidebarFrame";
 import type { DesktopController, SidebarMode } from "@/types/DesktopView";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { AgentsSidebar } from "./sidebar/AgentsSidebar";
-import { PowerSidebar } from "./sidebar/PowerSidebar";
 import { PowerWorkspaceSidebar } from "./sidebar/PowerWorkspaceSidebar";
 import { WorkspaceSidebar } from "./sidebar/WorkspaceSidebar";
 import { SidebarRail } from "./sidebar/SidebarRail";
@@ -58,7 +57,6 @@ export const DesktopSidebar = memo(function DesktopSidebar({ controller, open_cr
     {settings_active ? <SettingsSidebarPanel controller={controller} /> : <>
       {sidebar_mode === "workspace" ? <WorkspaceSidebar controller={controller} open_create_workspace={open_create_workspace} /> : null}
       {sidebar_mode === "chat" ? <AgentsSidebar controller={controller} open_create_agent={() => open_create_agent()} open_create_group={open_create_group} open_group_config={open_group_config} /> : null}
-      {sidebar_mode === "powers" ? <PowerSidebar controller={controller} /> : null}
       {workspace_power_id ? <PowerWorkspaceSidebar controller={controller} power_id={workspace_power_id} notification_state={notification_state} /> : null}
     </>}
   </SidebarFrame>;

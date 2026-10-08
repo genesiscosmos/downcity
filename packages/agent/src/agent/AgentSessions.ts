@@ -38,6 +38,8 @@ import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { WorkspaceRuntime } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
 import { normalize_session_origin, normalize_session_origin_type } from "@downcity/type";
+import type { SessionContextResolution } from "@/types/agent/SessionContext.js";
+import { CHAT_ORIGIN, MAIN_SESSION_ID } from "@/agent/ChatOrigin.js";
 
 type AgentSessionsOptions = {
   /**
@@ -58,10 +60,10 @@ type AgentSessionsOptions = {
   /**
    * 按 Session 解析执行上下文。
    *
-   * AgentSessions 是 Agent 唯一的 Session 集合；Workspace 相关能力不能
-   * 固定在集合实例上，而应在创建或恢复单个 Session 时解析。
+   * AgentSessions 是 Agent 唯一的 Session 集合；Workspace 与工具集合不能
+   * 固定在集合实例上，而应在创建或恢复单个 Session 时按会话身份解析。
    */
-  resolve_session_context: (workspace?: WorkspaceRuntime) => {
+  resolve_session_context: (input?: SessionContextResolution) => {
     workspace_path: string;
     workspace_id?: string;
     logger: Logger;
@@ -108,6 +110,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
+  /** 主对话创建链；并发调用共享同一创建过程，避免产生第二条主对话。 */
+  private main_creation_chain: Promise<void> = Promise.resolve();
 
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
@@ -185,6 +189,72 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /**
+   * 打开 Agent 自己的那段对话；不存在时创建。
+   *
+   * 关键点（中文）
+   * - 身份就是 `origin.type = "main"`，因此不新增索引，也不维护额外状态。
+   * - 同一进程内并发调用会收敛到同一个创建过程，不会产生第二条主对话。
+   * - 主对话被归档或删除后，下一次调用自然重建一条。
+   */
+  async main(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
+    const existing = await this.find_main_session();
+    if (existing) return existing;
+    return await this.run_main_creation(async () => {
+      const cached = await this.find_main_session();
+      if (cached) return cached;
+      const context = this.resolve_session_context({
+        origin: CHAT_ORIGIN,
+        ...(input?.workspace ? { workspace: input.workspace } : {}),
+      });
+      // 固定标识：分区内只有一条主对话，因此用常量即可确定性定位，不需要索引。
+      const session_id = MAIN_SESSION_ID;
+      const session = this.get_or_create_session({
+        session_id,
+        origin: CHAT_ORIGIN,
+        ...(input?.workspace ? { workspace: input.workspace } : {}),
+        storage: context.store.create_session(
+          session_id,
+          CHAT_ORIGIN,
+          context.workspace_id,
+        ),
+      });
+      await session.initialize();
+      return session;
+    });
+  }
+
+  /**
+   * 尝试恢复已存在的主对话；不存在或已失效时返回空。
+   *
+   * 关键点（中文）：查找不传 Workspace，以持久化目录为准；传 Workspace 只在创建时生效，
+   * 否则「已存在时忽略该参数」会退化成一次静默切目录。
+   */
+  private async find_main_session(): Promise<AgentSession | undefined> {
+    const context = this.resolve_session_context({ origin: CHAT_ORIGIN });
+    try {
+      if (!(await context.store.has_session(MAIN_SESSION_ID, CHAT_ORIGIN.type))) {
+        return undefined;
+      }
+    } catch {
+      return undefined;
+    }
+    return await this.get(MAIN_SESSION_ID, CHAT_ORIGIN.type);
+  }
+
+  /** 串行化主对话创建；失败时释放链，使下一次调用可以重试。 */
+  private async run_main_creation(
+    create: () => Promise<AgentSession>,
+  ): Promise<AgentSession> {
+    const previous = this.main_creation_chain;
+    const operation = previous.then(create, create);
+    this.main_creation_chain = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await operation;
+  }
+
+  /**
    * 新建一个 session。
    */
   async create(
@@ -192,7 +262,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   ): Promise<AgentSession> {
     const origin = normalize_session_origin(input?.origin);
     const session_id = `session-${Date.now()}-${nanoid(8)}`;
-    const context = this.resolve_session_context(input?.workspace);
+    const context = this.resolve_session_context({
+      origin,
+      ...(input?.workspace ? { workspace: input.workspace } : {}),
+    });
     const session = this.get_or_create_session({
       session_id,
       workspace: input?.workspace,
@@ -209,6 +282,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
   /**
    * 获取一个已存在的 session。
+   *
+   * 关键点（中文）
+   * - 当前目录不是 Session 身份：传入的 Workspace 与持久化值不一致时不再报错，
+   *   而是以传入值为准成为该 Session 的新当前目录。
+   * - 省略 Workspace 时沿用持久化值；两者都为空时该 Session 没有项目上下文。
    */
   async get(
     session_id: string,
@@ -221,7 +299,10 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }
     const resolved_origin_type = normalize_session_origin_type(origin_type);
     const cache_key = this.session_cache_key(resolved_session_id, resolved_origin_type);
-    const context = this.resolve_session_context(input?.workspace);
+    const context = this.resolve_session_context({
+      origin: { type: resolved_origin_type },
+      ...(input?.workspace ? { workspace: input.workspace } : {}),
+    });
     const store = context.store;
     if (
       !this.sessions_by_id.has(cache_key) &&
@@ -233,29 +314,18 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }
     const storage = await store.open_session(resolved_session_id, resolved_origin_type);
     const persisted_metadata = await storage.read_metadata();
-    const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
-    const persisted_origin = persisted_metadata.origin;
-    const cached = this.sessions_by_id.get(cache_key);
-    const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
-    if (persisted_workspace_id !== requested_workspace_id) {
-      throw new Error(
-        persisted_workspace_id
-          ? `Session "${resolved_session_id}" requires Workspace "${persisted_workspace_id}"`
-          : `Session "${resolved_session_id}" is not bound to a Workspace`,
-      );
-    }
-    if (cached && cached.workspace_id !== requested_workspace_id) {
-      throw new Error(
-        `Session "${resolved_session_id}" is already bound to Workspace "${cached.workspace_id || ""}"`,
-      );
-    }
     const session = this.get_or_create_session({
       session_id: resolved_session_id,
-      workspace: input?.workspace,
-      origin: persisted_origin,
+      ...(input?.workspace ? { workspace: input.workspace } : {}),
+      origin: persisted_metadata.origin,
       storage,
     });
     await session.initialize();
+    const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
+    const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
+    if (requested_workspace_id && requested_workspace_id !== persisted_workspace_id) {
+      await session.set_workspace(input?.workspace);
+    }
     return session;
   }
 
@@ -316,7 +386,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     input?: AgentListSessionsInput,
   ): Promise<AgentSessionSummaryPage> {
     const origin_type = normalize_session_origin_type(input?.origin_type ?? "chat");
-    return await this.resolve_session_context().store.list_sessions(
+    return await this.resolve_session_context({ origin: { type: origin_type } }).store.list_sessions(
       { ...(input || {}), origin_type },
       new Set(this.list_executing_session_ids(undefined, origin_type)),
     );
@@ -363,46 +433,11 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /**
-   * 把 Session 重新绑定到另一个 Workspace。
+   * 删除：把 Session 重新绑定到另一个 Workspace。
    *
-   * 关键点（中文）
-   * - 只改写 session_state 中的 workspace_id 并清掉运行时缓存；
-   * - 之后用新 Workspace 恢复时不再触发严格的 workspace 归属校验。
+   * 删除理由：它表达的是「Workspace 是 Session 绑定」这个旧模型。目录切换改由
+   * `session.set_workspace()` 承担，恢复时不再校验归属，因此不需要第二条路径。
    */
-  async workspace(
-    session_id: string,
-    workspace: WorkspaceRuntime,
-  ): Promise<AgentSession> {
-    const resolved_session_id = String(session_id || "").trim();
-    if (!resolved_session_id) {
-      throw new Error("sessions.workspace requires a non-empty session_id");
-    }
-    const resolved_origin_type = normalize_session_origin_type("chat");
-    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin_type);
-    const cached = this.sessions_by_id.get(cache_key);
-    if (cached?.is_executing()) {
-      throw new Error(`Session "${resolved_session_id}" is currently executing`);
-    }
-    const context = this.resolve_session_context(workspace);
-    if (!(await context.store.has_session(resolved_session_id, resolved_origin_type))) {
-      throw new Error(`Session "${resolved_session_id}" not found`);
-    }
-    const store = await context.store.open_session(
-      resolved_session_id,
-      resolved_origin_type,
-    );
-    const metadata = await store.read_metadata();
-    if (metadata.agent_id !== this.agent_id) {
-      throw new Error(`Session "${resolved_session_id}" belongs to another Agent`);
-    }
-    await store.write_metadata({
-      ...metadata,
-      workspace_id: context.workspace_id,
-    });
-    this.sessions_by_id.delete(cache_key);
-    cached?.dispose_title_generation?.();
-    return await this.get(resolved_session_id, resolved_origin_type, { workspace });
-  }
 
   private get_or_create_session(input?: {
     /**
@@ -419,21 +454,24 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const resolved_session_id = String(
       input?.session_id || input?.storage?.session_id || "",
     ).trim() || `session-${Date.now()}-${nanoid(8)}`;
-    const origin = normalize_session_origin(input?.origin);
-    const cache_key = this.session_cache_key(resolved_session_id, origin.type);
+    const resolved_origin = normalize_session_origin(input?.origin);
+    const cache_key = this.session_cache_key(resolved_session_id, resolved_origin.type);
     const cached = this.sessions_by_id.get(cache_key);
     if (cached) return cached;
 
-    const context = this.resolve_session_context(input?.workspace);
+    const context = this.resolve_session_context({
+      ...(input?.origin ? { origin: input.origin } : {}),
+      ...(input?.workspace ? { workspace: input.workspace } : {}),
+    });
     const created = new this.session_class({
       agent_id: this.agent_id,
       agent_name: this.agent_name,
       agent_description: this.agent_description,
       workspace_path: context.workspace_path,
-      ...(context.workspace_id ? { workspace_id: context.workspace_id } : {}),
-      origin,
-      store: input?.storage || context.store.create_session(resolved_session_id, origin, context.workspace_id),
-      create_session_store: (session_id) => context.store.create_session(session_id, origin, context.workspace_id),
+      ...(context.get_workspace() ? { workspace: context.get_workspace() } : {}),
+      origin: resolved_origin,
+      store: input?.storage || context.store.create_session(resolved_session_id, resolved_origin, context.workspace_id),
+      create_session_store: (session_id) => context.store.create_session(session_id, resolved_origin, context.workspace_id),
       register_forked_session: (session) => this.register_forked_session(session),
       session_id: resolved_session_id,
       get_tools: () => context.get_tools(),

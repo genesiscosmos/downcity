@@ -8,9 +8,7 @@ import {
   ScrollRestoration,
   useLocation,
 } from "react-router";
-import { RootProvider } from "fumadocs-ui/provider/react-router";
 import { I18nextProvider } from "react-i18next";
-import { defineI18nUI } from "fumadocs-ui/i18n";
 import { useEffect } from "react";
 
 import type { Route } from "./+types/root";
@@ -18,9 +16,13 @@ import stylesheet from "./app.css?url";
 import { Toaster } from "@/components/ui/sonner";
 import { Navbar } from "@/components/sections/navbar";
 import { InterfaceLocaleProvider } from "@/components/providers/InterfaceLocaleProvider";
+import {
+  SiteThemeProvider,
+  site_theme_bootstrap_script,
+} from "@/components/docs/theme-provider";
 import { homepage_positioning } from "@/lib/homepage-positioning";
-import i18next from "@/lib/locales"; // naming conflict with fumadocs i18n
-import { i18n } from "@/lib/i18n";
+import { docs_spaces } from "@/lib/docs/spaces";
+import i18next from "@/lib/locales";
 import {
   get_path_interface_locale,
   interface_locale_bootstrap_script,
@@ -30,27 +32,6 @@ import {
 import { create_page_meta, get_path_locale } from "@/lib/seo";
 
 const favicon_version = "20260804";
-
-const { provider } = defineI18nUI(i18n, {
-  translations: {
-    en: {
-      search: "Search",
-      toc: "Table of Contents",
-      lastUpdate: "Last updated on",
-      chooseLanguage: "Choose a language",
-      nextPage: "Next",
-      previousPage: "Previous",
-    },
-    zh: {
-      search: "搜索文档",
-      toc: "目录",
-      lastUpdate: "最后更新于",
-      chooseLanguage: "选择语言",
-      nextPage: "下一页",
-      previousPage: "上一页",
-    },
-  },
-});
 
 export const links: Route.LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
@@ -104,32 +85,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const path = location.pathname;
   const locale = get_path_interface_locale(path);
 
-  // 文档页使用 fumadocs 自身导航，不展示站点全局 Header。
-  const isDocsPath =
-    path === "/docs" ||
-    path === "/city-sdk-docs" ||
-    path === "/agent-sdk-docs" ||
-    path === "/payments" ||
-    path === "/plugins-docs" ||
-    path === "/ui-sdk-docs" ||
-    path.startsWith("/docs/") ||
-    path.startsWith("/city-sdk-docs/") ||
-    path.startsWith("/agent-sdk-docs/") ||
-    path.startsWith("/payments/") ||
-    path.startsWith("/plugins-docs/") ||
-    path.startsWith("/ui-sdk-docs/") ||
-    path.startsWith("/en/docs") ||
-    path.startsWith("/zh/docs") ||
-    path.startsWith("/en/city-sdk-docs") ||
-    path.startsWith("/zh/city-sdk-docs") ||
-    path.startsWith("/en/agent-sdk-docs") ||
-    path.startsWith("/zh/agent-sdk-docs") ||
-    path.startsWith("/en/payments") ||
-    path.startsWith("/zh/payments") ||
-    path.startsWith("/en/plugins-docs") ||
-    path.startsWith("/zh/plugins-docs") ||
-    path.startsWith("/en/ui-sdk-docs") ||
-    path.startsWith("/zh/ui-sdk-docs");
+  // 文档页自带完整外壳（头部、侧边栏、目录），不再叠加营销站导航。
+  const isDocsPath = docs_spaces.some(
+    (space) =>
+      path === `/${space.id}` ||
+      path.startsWith(`/${space.id}/`) ||
+      path.startsWith(`/en/${space.id}`) ||
+      path.startsWith(`/zh/${space.id}`),
+  );
   const showGlobalChrome = !isDocsPath;
 
   useEffect(() => {
@@ -185,6 +148,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Meta />
         <Links />
         <script dangerouslySetInnerHTML={{ __html: interface_locale_bootstrap_script }} />
+        {/* 主题必须在 React 渲染前确定，否则深色用户会先看到一帧浅色页面。 */}
+        <script dangerouslySetInnerHTML={{ __html: site_theme_bootstrap_script }} />
         <script
           defer
           src="https://vibeloft.ai/telemetry/v1.js"
@@ -195,13 +160,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <body className="flex min-h-screen flex-col antialiased">
         <InterfaceLocaleProvider locale={locale}>
           <I18nextProvider i18n={i18next}>
-            <RootProvider i18n={provider(locale)}>
+            <SiteThemeProvider>
               <div className="relative flex min-h-screen flex-col">
                 <Toaster theme="system" richColors position="top-center" />
                 {showGlobalChrome ? <Navbar /> : null}
                 <div className="relative flex-1">{children}</div>
               </div>
-            </RootProvider>
+            </SiteThemeProvider>
           </I18nextProvider>
         </InterfaceLocaleProvider>
         <ScrollRestoration />

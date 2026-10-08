@@ -163,7 +163,7 @@ export class StepInput {
       session: {
         agent_id: this.options.agent_id,
         session_id: this.options.session_id,
-        project_root: this.options.workspace_path,
+        project_root: this.options.get_workspace_path(),
         created_at: new Date(this.options.get_created_at()).toISOString(),
         timezone: this.options.get_timezone(),
       },
@@ -181,7 +181,7 @@ export class StepInput {
     return {
       agent_id: this.options.agent_id,
       session_id: this.options.session_id,
-      project_root: this.options.workspace_path,
+      project_root: this.options.get_workspace_path(),
       created_at: this.options.get_created_at(),
       timezone: this.options.get_timezone(),
     };

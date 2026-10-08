@@ -1,0 +1,57 @@
+---
+title: Power Overview
+description: Understand City Power ownership, capabilities, context, and Session Hooks.
+---
+A Power is Downcity's unified extension product. It may provide Actions, Hooks, Resolves, System
+content, Availability, HTTP routes, lifecycle, and optional Mainview or Config surfaces.
+
+Powers do not belong to Agents. City owns the catalog, main modules, one instance per Power ID,
+and the complete lifecycle. Every registered Power is exposed to every Agent. A Session captures a
+stable Hook view at execution checkpoints.
+
+## SDK assembly
+
+```ts
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
+import { create_builtin_power_registrations } from "@downcity/powers";
+
+const registrations = create_builtin_power_registrations();
+const city = new City({ workspaces: [workspace], powers: registrations });
+const agent = new Agent({ id: "repo-helper", model });
+
+city.agents.add(agent);
+```
+
+`CityOptions.powers` or `city.powers.add()` registers Powers. `city.agents.add()` only registers
+the Agent.
+
+## PowerContext
+
+Actions, Hooks, System providers, and Availability checks use a scope-specific `PowerContext`. It
+provides restricted handles for:
+
+- `city`: Embassy and cross-Power collaboration ports.
+- `agent`: identity, instructions, and Sessions.
+- `workspace`: files, Shell, environment, and stable ID.
+- `session` / `turn`: direct communication handles when the call belongs to a Session or Turn.
+- `config`: a read-only snapshot of the current Power's City-level configuration.
+- `storage`: private storage for the current Agent/Power scope.
+
+Object handles support direct in-process communication; IDs provide stable identity and
+serialization. A Power does not need to receive only a `session_id` and resolve it through the host.
+
+## Unique instances and configuration
+
+One City creates one instance per Power ID with one `initialize/dispose` lifecycle. Agent and
+Workspace belong only to each call Context. Each Power ID also has one City-level configuration, and
+every Agent receives the same `context.config` snapshot.
+
+## Recommended reading
+
+1. [Power Lifecycle](/en/agent-sdk-docs/powers/lifecycle)
+2. [Power Actions](/en/agent-sdk-docs/powers/power-actions)
+3. [Power Hooks](/en/agent-sdk-docs/powers/power-hooks)
+4. [Power Configuration](/en/agent-sdk-docs/powers/configuration)
+5. [Power Development](/en/agent-sdk-docs/powers/power-development)
+6. [Built-in Power manuals](/en/powers-docs)

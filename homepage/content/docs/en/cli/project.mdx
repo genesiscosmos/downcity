@@ -2,7 +2,7 @@
 title: Project Structure
 description: Boundaries between Agent projects, global config, and runtime data
 ---
-Agent definitions, Plugin configuration, and runtime data use user-level files. A project directory is only a Workspace containing project env, Skills, and business source files.
+Agent definitions, Power configuration, and runtime data use user-level files. A project directory is only a Workspace containing project env, Skills, and business source files.
 
 ## Directory layout
 
@@ -27,12 +27,12 @@ The user-level configuration layout is:
 │       ├── <session_id>/
 │       ├── archived-sessions/
 │       └── logs/
-├── plugins/<plugin_id>/config.toml
+├── powers/<power_id>/config.toml
 ├── runtimes/city/
 └── downcity.db
 ```
 
-`downcity.db` stores Workspace IDs and paths, tokens, and platform state. It does not store Agent definitions, Plugin configuration, or Agent-to-Workspace bindings. CLI and Desktop read the same files and database.
+`downcity.db` stores Workspace IDs and paths, tokens, and platform state. It does not store Agent definitions, Power configuration, or Agent-to-Workspace bindings. CLI and Desktop read the same files and database.
 
 `agent_id` and `workspace_id` are independent global identities. A Session receives a Workspace only for a concrete execution. CLI City daemon state lives in `~/.downcity/runtimes/city/`; Sessions live under `~/.downcity/agents/<agent_id>/sessions/`. A Session's `meta.json` records `workspace_id` only when a Workspace was supplied.
 
@@ -42,7 +42,7 @@ Global Env is stored separately in `~/.downcity/.env`. Project `.env` overrides 
 
 ## Runtime data
 
-Downcity does not create `<project>/.downcity/`. Agent runtime data is centralized under the City-provided storage scope `agents/<agent_id>/`; without a City, it remains in memory. Plugin-owned data uses the Agent-level scope exposed through PluginContext.
+Downcity does not create `<project>/.downcity/`. Agent runtime data is centralized under the City-provided storage scope `agents/<agent_id>/`; without a City, it remains in memory. Power-owned data uses the Agent-level scope exposed through PowerContext.
 
 Continue with:
 

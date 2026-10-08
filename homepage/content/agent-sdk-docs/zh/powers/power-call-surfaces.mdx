@@ -1,0 +1,63 @@
+---
+title: Power 调用入口
+description: 区分 City 管理面、Workspace 执行面、PowerContext 与 Power 模型工具。
+---
+Power 有四类调用面，分别服务不同角色：
+
+| 入口 | 使用者 | 用途 |
+| --- | --- | --- |
+| `city.powers` | 宿主应用 | 添加或移除唯一实例、调用 host/config action |
+| `city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id })` | 宿主执行代码 | 在指定 Agent/Workspace 上调用 Action、Availability 或 Hook |
+| `context.city.powers` | Power 代码 | 在当前作用域调用其他 Power Action、pipeline 或 effect |
+| `skill` | Session 中的模型 | 调用 City 提供的 Power Action |
+
+## City 管理面
+
+```ts
+city.powers.add(skill_power);
+console.log(city.powers.snapshots());
+await city.powers.remove("skill");
+```
+
+`city.powers.invoke()` 与 `invoke_config()` 调用 Power 在 `start()` 中注册的宿主管理 Action，不是 Session
+执行 Action。
+
+## Workspace 执行面
+
+```ts
+const result = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action({
+  power: "skill",
+  action: "lookup",
+  payload: { name: "frontend-design" },
+});
+```
+
+这个入口显式绑定 Agent 与 Workspace，因此 City 能创建正确的 `PowerContext`。
+
+## PowerContext
+
+```ts
+const result = await context.city.powers.run_action({
+  power: "skill",
+  action: "list",
+  payload: {},
+});
+await context.city.powers.effect("audit.observe", result.data ?? null);
+```
+
+`context.session`、`context.agent.sessions` 和 `context.workspace` 是直接可调用句柄；ID 只用于稳定
+身份和序列化。
+
+## 模型 Tool
+
+每个声明了 Action 的 Power 都会编译成一个以 Power 名为工具名的模型侧工具。
+不存在共享的 `plugin_call` 入口：模型在这里调用的是 `skill` 工具，City 自有的图像与语音能力则通过 `ai` 工具调用。
+
+```ts
+skill({
+  action: "lookup",
+  args: { name: "frontend-design" },
+});
+```
+
+Tool 永远绑定当前 Session 的 Agent/Workspace execution lease，不会读到其他 Agent 的绑定。

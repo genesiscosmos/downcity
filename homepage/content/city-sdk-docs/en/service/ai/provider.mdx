@@ -84,3 +84,42 @@ ai.use(channel.model({
 AIService passes only files from the latest user message to fallback rules. After selecting the final model, it validates reasoning and preserves that latest user message unchanged. Historical files matched by the final model's fallback rules become filename, original URL, or MIME type text before the call reaches the target Channel.
 
 Channel and model `provider_options` are merged only on the server and interpreted by the selected Adapter. They are not part of the public model protocol.
+
+## Decision models (System One)
+
+A model that returns typed decisions instead of generated text implements `decision()` instead of `stream()`:
+
+```ts
+import {
+  AIChannel,
+  AIService,
+  type AIChannelActionInput,
+  type AIChargedResult,
+  type AIDecisionResult,
+} from "@downcity/federation";
+
+class JevChannel extends AIChannel {
+  constructor() {
+    super({ id: "typesafe", env: { TYPESAFE_API_KEY: "TypeSafe API Key" } });
+  }
+
+  async decision(input: AIChannelActionInput): Promise<AIChargedResult<AIDecisionResult>> {
+    const api_key = input.env("TYPESAFE_API_KEY");
+    if (!api_key) throw new Error("TYPESAFE_API_KEY is required");
+    return { output: await call_jev(api_key, input.input) };
+  }
+}
+
+const ai = new AIService();
+ai.use(new JevChannel().model({
+  id: "jev-1.13",
+  upstream_model: "typesafe/jev-1.13",
+  name: "Jev",
+  pricing: { currency: "USD", unit: "request", rates: { request: 0.0004 } },
+}));
+federation.use(ai);
+```
+
+Federation exposes `POST /v1/ai/decision` automatically and validates the request before the call reaches the Channel. The catalog reports `model_type: "decision"` with `modalities: ["decision"]`, and because the model does not implement `stream()`, it is not offered as an Agent conversation model.
+
+Metering and billing reuse the same path as every other capability: return `usage` from the Channel to record usage, and declare `pricing` to charge per request.

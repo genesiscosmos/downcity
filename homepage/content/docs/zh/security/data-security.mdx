@@ -6,11 +6,11 @@ description: 本地配置存储方式、文件权限与用户注意事项
 
 1. Workspace 索引、平台设置与本地 Token：`~/.downcity/downcity.db`
 2. Agent 定义与主体指令：`~/.downcity/agents/<agent_id>/agent.json`、`SOUL.md`
-3. Plugin 定义与唯一配置：`~/.downcity/plugins/<plugin_id>/plugin.json`、`config.toml`
+3. Power 定义与唯一配置：`~/.downcity/powers/<power_id>/power.json`、`config.toml`
 
 ## 文件权限与边界
 
-数据库文件、Agent 配置目录与 Plugin 配置文件默认限制为当前用户可读写（数据库和配置文件为 `0600`，目录为 `0700`）。这不是加密存储；能够读取本机用户文件的进程也能够读取这些配置。
+数据库文件、Agent 配置目录与 Power 配置文件默认限制为当前用户可读写（数据库和配置文件为 `0600`，目录为 `0700`）。这不是加密存储；能够读取本机用户文件的进程也能够读取这些配置。
 
 `city env` 是显式的文件配置能力：Global Env 以明文写入 `~/.downcity/.env`，Workspace Env
 以明文写入项目 `.env`。Global 文件权限限制为仅当前用户可读写；项目 `.env` 默认加入

@@ -15,6 +15,7 @@ export type {
   CityModelEnvRequirement,
   CityModelReasoning,
   CityModelReasoningEffort,
+  CityModelType,
   ModelPricing,
 } from "./types/CityModel.js";
 

@@ -501,8 +501,10 @@ export interface MemoryPowerOptions {
   provider?: "builtin";
   /** 当前启用的 Memory Storage。 */
   storage?: "file";
-  /** City 为当前 MemoryPower 唯一实例分配的私有绝对数据目录。 */
-  storage_root_path?: string;
+  /** City 为当前 MemoryPower 唯一实例分配的共享绝对数据目录；通常由 City 生命周期提供。 */
+  shared_root_path?: string;
+  /** 平台数据根目录；用于定位 `agents/<agent_id>/memory` 下的 Agent 私有记忆。 */
+  platform_root_path?: string;
 }
 
 /** Memory action 可以接受的公开 JSON payload 联合。 */

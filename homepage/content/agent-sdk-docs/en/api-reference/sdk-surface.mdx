@@ -2,7 +2,7 @@
 title: SDK Surface
 description: Understand the Agent SDK public surface in everyday, advanced, and framework-integration layers
 ---
-`@downcity/agent` exports Agent and Session execution APIs. Workspace, Plugin, and transport ownership
+`@downcity/agent` exports Agent and Session execution APIs. Workspace, Power, and transport ownership
 belongs to `@downcity/city`.
 
 ## Layer 1: everyday core
@@ -11,8 +11,9 @@ Most local applications need only:
 
 - `Workspace`: create the project resource and security boundary and receive Shell.
 - `Agent`: compose identity, model, instructions, Tools, and Sessions.
-- `City`: own Workspaces, unique Plugin instances, Agent/Group collections, and transports.
-- `agent.sessions.create({ workspace })` / `get()`: create or restore a Session in the current scope.
+- `City`: own Workspaces, unique Power instances, Agent/Group collections, and transports.
+- `agent.sessions.create({ workspace })` / `get()`: create or restore a Session in the current directory.
+- `agent.chat()` / `agent.sessions.main()`: open the conversation that belongs to the agent itself.
 - `session.prompt()`: start one Turn.
 - `turn.finished`: await the final result.
 - `agent.dispose()`: release the Agent's Sessions and detach it from its current City.
@@ -38,8 +39,8 @@ The local SDK is session-first: Agent performs composition, while Session owns i
 ### Agent and Workspace
 
 - `agent.set_instruction()`: update static Agent instructions.
-- `city.plugins`: add or remove Plugin instances and call host-management Actions.
-- `city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })`: inspect or call Plugins in an explicit Agent/Workspace execution scope.
+- `city.powers`: add or remove Power instances and call host-management Actions.
+- `city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id })`: inspect or call Powers in an explicit Agent/Workspace execution scope.
 - `workspace.get_env()` / `set_env()` / `patch_env()`: manage the project execution environment.
 - `agent.get_logger()`: access Agent-level logs; Shell is read from the selected Workspace.
 
@@ -59,11 +60,11 @@ For a live UI, load initial Session and Message snapshots before calling `subscr
 
 ## Layer 3: framework integration
 
-Use these capabilities only when building plugins, servers, or custom runtime components:
+Use these capabilities only when building powers, servers, or custom runtime components:
 
 - `CityRuntime` from `@downcity/type`: the minimal cross-package City contract used when embedding Agent in a custom composition root. The concrete `City` already implements it.
-- `PluginContext`: the restricted City projection for the current Agent/Workspace/Session/Turn, exported by `@downcity/city/plugin`.
-- `SessionTurnContext`: the execution context that coordinates identity, lifecycle, steps, input, and output for one Turn; plugins receive only its read-only `PluginExecutionContext` projection.
+- `PowerContext`: the restricted City projection for the current Agent/Workspace/Session/Turn, exported by `@downcity/city/power`.
+- `SessionTurnContext`: the execution context that coordinates identity, lifecycle, steps, input, and output for one Turn; powers receive only its read-only `PowerExecutionContext` projection.
 - `create_session_turn_context(...)`: the standard factory used by custom executors or runtime components to create that Turn Context.
 - `SessionExecutor` and `SessionExecutorPort`: the default executor for model requests and the tool loop, plus the port `SessionLoop` accepts when you inject your own.
 - Interfaces such as `AgentSession`: replace or extend default implementations.
@@ -78,7 +79,7 @@ Network server implementations belong to `@downcity/agent`. Local `Agent` does n
 | Create, get, and list Sessions | Yes | Yes |
 | Prompt, subscribe, messages, stop, approvals, and fork | Yes | Yes |
 | Inject Workspace, Shell, and Tools | Yes | No |
-| Bind Plugins through City | Yes | Server-owned |
+| Bind Powers through City | Yes | Server-owned |
 | Set the Agent default model | Yes | No |
 | `session.set({ model })` | Yes | No |
 | `session.set({ security })` / `session.status()` | Yes | Yes |
@@ -94,8 +95,8 @@ one Agent → multiple `agent.sessions.create({ workspace })` Sessions → one a
 ```
 
 - Agent is not bound to one Workspace; one Agent can enter multiple Workspaces.
-- `AgentSessions` owns the Agent's Sessions. Each Session receives its own Workspace context and Plugin projection.
-- `agent.dispose()` releases Session resources and its current City binding; City closes shared Plugin instances and lifecycle.
+- `AgentSessions` owns the Agent's Sessions. Each Session receives its own Workspace context and Power projection.
+- `agent.dispose()` releases Session resources and its current City binding; City closes shared Power instances and lifecycle.
 - `RemoteAgent.close()` closes only the client connection, not the server-side Agent.
 
 Continue with the [Agent API](/en/agent-sdk-docs/api-reference/agent-class) and [Sessions overview](/en/agent-sdk-docs/sessions/overview).

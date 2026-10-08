@@ -16,7 +16,7 @@ city reset --yes                 # 跳过确认
 
 CLI City 使用一个 HTTP 端口和一个原生 TCP RPC 端口，并在两个协议内按 `agent_id` 路由全部 Agent。
 
-`city reset` 会先停止 CLI City daemon，再删除 `downcity.db`、`downcity.db-wal` 和 `downcity.db-shm`。它不会删除 `.env`、Agent/Plugin 配置或 Workspace 中的 Session 文件。
+`city reset` 会先停止 CLI City daemon，再删除 `downcity.db`、`downcity.db-wal` 和 `downcity.db-shm`。它不会删除 `.env`、Agent/Power 配置或 Workspace 中的 Session 文件。
 
 ## Agent
 
@@ -29,7 +29,7 @@ city agent model [agent_id]
 city agent chat [agent_id]
 ```
 
-裸 `city` 命令直接打开 Agent 列表，不展示 Agent runtime 状态。`city agent list` 以 `名称 · agent_id` 展示每个 Agent。Federation、全局 Plugins、语言和命令帮助直接位于同一列表末尾的“设置”分组。
+裸 `city` 命令直接打开 Agent 列表，不展示 Agent runtime 状态。`city agent list` 以 `名称 · agent_id` 展示每个 Agent。Federation、全局 Powers、语言和命令帮助直接位于同一列表末尾的“设置”分组。
 
 City 装配的 Agent 默认启用 `ask_question` Tool。在
 `city agent` 面板选择 Agent 后会直接进入最近一次对话，并跟随该 Session 所属 Workspace；该 Agent 还没有历史时，在入口 Workspace 新建 Session。模型需要关键补充信息时会显示文本、单选或多选面板；CLI 将完整答案
@@ -58,31 +58,31 @@ city agent token create [agent_id] --name temporary --expires-at 2026-08-01T00:0
 city agent token delete <token_id> [agent_id]
 ```
 
-## Plugin
+## Power
 
-`city plugin list` 会展示每个 Plugin 的标题、稳定 ID、用途、来源和是否提供 Config。
+`city power list` 会展示每个 Power 的标题、稳定 ID、用途、来源和是否提供 Config。
 
 ```bash
-city plugin list
-city plugin install <local-directory|git-url|github:owner/repo#ref>
-city plugin update <plugin_id>
-city plugin uninstall <plugin_id>
-city plugin inspect <plugin_id>
-city plugin config <plugin_id>
-city plugin config <plugin_id> --set '{"key":"value"}'
-city plugin action <plugin_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
+city power list
+city power install <local-directory|git-url|github:owner/repo#ref>
+city power update <power_id>
+city power uninstall <power_id>
+city power inspect <power_id>
+city power config <power_id>
+city power config <power_id> --set '{"key":"value"}'
+city power action <power_id> <action_name> [agent_id] --input '{"key":"value"}' --token <token>
 ```
 
-一个第三方来源目录只定义一个 Plugin。`plugin.json` 声明 `schema_version: 1`、全局唯一 `id`、版本、必填的 `.md` `readme` 相对路径，以及可选的 `main`、`renderer`。`main` 是自包含的统一 City Plugin ESM；`renderer` 对象声明单文件 ESM 入口以及 `sidebar`、`mainview`、`config` 三项静态能力，Sidebar 与 Mainview 必须成对出现。两个运行入口至少提供一个。`package.json` 必须声明 `"type": "module"`。安装目录只保留声明制品、文档、可选图标与本地 `config.toml`；安装过程不会执行依赖安装、构建脚本或任何第三方入口。
+一个第三方来源目录只定义一个 Power。`power.json` 声明 `schema_version: 1`、全局唯一 `id`、版本、必填的 `.md` `readme` 相对路径，以及可选的 `main`、`renderer`。`main` 是自包含的统一 City Power ESM；`renderer` 对象声明单文件 ESM 入口以及 `sidebar`、`mainview`、`config` 三项静态能力，Sidebar 与 Mainview 必须成对出现。两个运行入口至少提供一个。`package.json` 必须声明 `"type": "module"`。安装目录只保留声明制品、文档、可选图标与本地 `config.toml`；安装过程不会执行依赖安装、构建脚本或任何第三方入口。
 
-声明 Config 的 Plugin 在 `plugins/<plugin_id>/config.toml` 中保存唯一配置。具体结构、校验、Secret
-投影和 Config UI 都由 Plugin 自己管理。CLI 的 `config --set` 仅用于显式替换完整 JSON，不生成
+声明 Config 的 Power 在 `powers/<power_id>/config.toml` 中保存唯一配置。具体结构、校验、Secret
+投影和 Config UI 都由 Power 自己管理。CLI 的 `config --set` 仅用于显式替换完整 JSON，不生成
 通用表单，也不会输出凭据原文；无 `--set` 时只显示是否已配置和字段名。
 
-City 自动把全部已注册 Plugin 提供给全部 Agent；`agent.json` 不保存 Plugin 引用或配置。需要多账号
-时，由 Plugin 在自己的配置结构中表达账号集合和选择规则。配置保存后，Plugin 负责刷新受影响的长期资源。
+City 自动把全部已注册 Power 提供给全部 Agent；`agent.json` 不保存 Power 引用或配置。需要多账号
+时，由 Power 在自己的配置结构中表达账号集合和选择规则。配置保存后，Power 负责刷新受影响的长期资源。
 
-CLI、Agent `plugin_call`、HTTP 与定时任务统一调用 Plugin Action。不存在 `plugin command`，Chat 也不再是顶层命令特例。
+CLI、Agent 的 Power 工具、HTTP 与定时任务统一调用 Power Action。不存在 `power command`，Chat 也不再是顶层命令特例。
 
 ## Env 与 Federation
 

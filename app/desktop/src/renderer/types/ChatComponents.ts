@@ -112,7 +112,7 @@ export interface AgentComposerProps {
   /** 输入区域按切片订阅的目录、草稿、配置与用户偏好。 */
   stores: Pick<import("./DesktopView").DesktopController["stores"], "catalog" | "composer" | "chat_stream" | "settings">;
   /** 输入配置与消息提交能力。 */
-  actions: Pick<import("./DesktopView").DesktopActions, "update_draft" | "send_message" | "set_session_model" | "set_session_reasoning_effort" | "set_session_approval_mode" | "stop_session" | "remove_queued_message" | "send_queued_message" | "update_queued_message" | "toggle_queued_message_paused" | "set_queue_paused" | "move_queued_message">;
+  actions: Pick<import("./DesktopView").DesktopActions, "update_draft" | "send_message" | "set_session_model" | "set_session_reasoning_effort" | "set_session_approval_mode" | "stop_session" | "remove_queued_message" | "send_queued_message" | "update_queued_message" | "toggle_queued_message_paused" | "set_queue_paused" | "move_queued_message" | "switch_draft_context">;
   /**
    * 当前对话名，用于展开后侧栏标签页的标题。
    *
@@ -132,8 +132,8 @@ export interface GroupComposerProps {
   selection: Extract<import("./DesktopView").NavigationTarget, { kind: "group_draft" | "group_session" }>;
   /** 群聊输入需要订阅的目录、输入、执行状态与偏好。 */
   stores: AgentComposerProps["stores"];
-  /** 群聊输入、发送、停止与切换会话操作。 */
-  actions: Pick<import("./DesktopView").DesktopActions, "update_group_draft" | "send_group_message" | "stop_group" | "open_group">;
+  /** 群聊输入、发送、停止、切换会话与草稿目录操作。 */
+  actions: Pick<import("./DesktopView").DesktopActions, "update_group_draft" | "send_group_message" | "stop_group" | "open_group" | "switch_group_draft_context">;
   /**
    * 当前群聊会话名，用于展开后侧栏标签页的标题。
    *

@@ -6,7 +6,7 @@ description: "Project resources, file tools, environment, and Shell."
 `@downcity/city/workspace` provides the Workspace implementation used by an Agent; common
 constructors are also exported from `@downcity/city`. A Workspace owns the
 project path, rooted file access, file and search tools, environment variables, and an optional Shell.
-It does not own Agent identity, Plugins, Sessions, storage, or model calls.
+It does not own Agent identity, Powers, Sessions, storage, or model calls.
 
 ```bash
 pnpm add @downcity/city @downcity/sandbox-microsandbox
@@ -38,12 +38,12 @@ const session = await agent.sessions.create({ workspace });
 - `Workspace` owns project resources and the optional Shell.
 - `Shell` owns its Sandbox Provider, persistent Workspace Sandbox, and Shell Sessions.
 - `City` owns registered Workspaces without understanding their execution backend.
-- `Agent` owns identity, instruction, model, custom tools, and Sessions; `City` owns Plugins.
+- `Agent` owns identity, instruction, model, custom tools, and Sessions; `City` owns Powers.
 - `AgentSessions` owns Sessions. A Workspace is only a resource that a Session may use.
 - Shell is a Workspace capability. There is no separate `@downcity/shell` package.
 
 An Agent can create Sessions with multiple Workspace resources. A Workspace may be registered in a
-City or managed by the host outside City. Agent-private Sessions and City-allocated Agent/Plugin
+City or managed by the host outside City. Agent-private Sessions and City-allocated Agent/Power
 execution data remain isolated.
 
 After an atomic file commit, the structured `write` and `edit` tools report a
@@ -61,11 +61,11 @@ project directories:
 ```text
 ~/.downcity/agents/<agent_id>/
 ├── sessions/
-└── plugins/
+└── powers/
 ```
 
 `StorageProvider` is intentionally domain-neutral. Agent runtime interprets Session data, while the
-City Plugin runtime interprets Plugin data. Workspace does not own or create this storage. Project
+City Power runtime interprets Power data. Workspace does not own or create this storage. Project
 File/Search tools remain rooted at the real project path and cannot read this private state.
 
 Edge adapters should import `WorkspaceRuntime` and protocol types from `@downcity/type/workspace`

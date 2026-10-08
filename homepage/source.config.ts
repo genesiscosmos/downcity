@@ -29,8 +29,8 @@ export const agentSdkDocs = defineDocs({
   dir: "content/agent-sdk-docs",
 });
 
-export const pluginsDocs = defineDocs({
-  dir: "content/plugins-docs",
+export const powersDocs = defineDocs({
+  dir: "content/powers-docs",
 });
 
 export const blog = defineDocs({

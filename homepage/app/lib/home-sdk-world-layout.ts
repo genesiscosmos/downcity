@@ -32,10 +32,10 @@ const hex_directions = [
 /** 地块按相邻坐标生长；任何区域都不能脱离这份布局单独使用像素坐标。 */
 export const home_sdk_world_cells: readonly HomeSdkWorldCell[] = [
   { key: "workspace", q: 0, row: 0, visible_step: 2, group: "agent", boundary_key: "origin_city", tone: "workspace", content: "workspace", label_key: "workspace", agent_accent: null },
-  { key: "plugin_north", q: 0, row: -1, visible_step: 5, group: "agent", boundary_key: "origin_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "skill" },
-  { key: "plugin_north_west", q: -1, row: 0, visible_step: 5, group: "agent", boundary_key: "origin_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "task" },
-  { key: "plugin_south_west", q: -1, row: 1, visible_step: 5, group: "agent", boundary_key: "origin_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "memory" },
-  { key: "plugin_south", q: 0, row: 1, visible_step: 5, group: "agent", boundary_key: "origin_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "web" },
+  { key: "power_north", q: 0, row: -1, visible_step: 5, group: "agent", boundary_key: "origin_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "skill" },
+  { key: "power_north_west", q: -1, row: 0, visible_step: 5, group: "agent", boundary_key: "origin_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "task" },
+  { key: "power_south_west", q: -1, row: 1, visible_step: 5, group: "agent", boundary_key: "origin_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "memory" },
+  { key: "power_south", q: 0, row: 1, visible_step: 5, group: "agent", boundary_key: "origin_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "web" },
   { key: "city_storage", q: 1, row: 1, visible_step: 6, group: "city", boundary_key: "origin_city", tone: "storage", content: "storage", label_key: "storage", agent_accent: null },
   { key: "city_transport", q: 2, row: 0, visible_step: 6, group: "city", boundary_key: "origin_city", tone: "transport", content: "transport", label_key: "transport", agent_accent: null },
   { key: "origin_agent_east", q: 2, row: -1, visible_step: 7, group: "city", boundary_key: "origin_city", tone: "city", content: "agent", label_key: "agent", agent_accent: "var(--sdk-map-neighbor)" },
@@ -44,14 +44,14 @@ export const home_sdk_world_cells: readonly HomeSdkWorldCell[] = [
   { key: "origin_user", q: -2, row: 0, visible_step: 20, group: "city", boundary_key: "origin_city", tone: "city", content: "user", label_key: "user", agent_accent: "var(--sdk-map-neighbor)" },
 
   { key: "neighbor_workspace", q: 4, row: -3, visible_step: 10, group: "city", boundary_key: "neighbor_city", tone: "workspace", content: "agent_workspace", label_key: "workspace", agent_accent: "var(--sdk-map-neighbor)" },
-  { key: "neighbor_north", q: 4, row: -4, visible_step: 10, group: "city", boundary_key: "neighbor_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "skill" },
-  { key: "neighbor_west", q: 3, row: -3, visible_step: 10, group: "city", boundary_key: "neighbor_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "web" },
-  { key: "neighbor_north_east", q: 5, row: -4, visible_step: 10, group: "city", boundary_key: "neighbor_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "memory" },
+  { key: "neighbor_north", q: 4, row: -4, visible_step: 10, group: "city", boundary_key: "neighbor_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "skill" },
+  { key: "neighbor_west", q: 3, row: -3, visible_step: 10, group: "city", boundary_key: "neighbor_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "web" },
+  { key: "neighbor_north_east", q: 5, row: -4, visible_step: 10, group: "city", boundary_key: "neighbor_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "memory" },
 
   { key: "third_workspace", q: 4, row: 1, visible_step: 11, group: "city", boundary_key: "third_city", tone: "workspace", content: "agent_workspace", label_key: "workspace", agent_accent: "var(--sdk-map-third)" },
-  { key: "third_west", q: 3, row: 1, visible_step: 11, group: "city", boundary_key: "third_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "task" },
-  { key: "third_south_west", q: 3, row: 2, visible_step: 11, group: "city", boundary_key: "third_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "memory" },
-  { key: "third_south", q: 4, row: 2, visible_step: 11, group: "city", boundary_key: "third_city", tone: "plugin", content: "none", label_key: "plugin", agent_accent: null, plugin_kind: "skill" },
+  { key: "third_west", q: 3, row: 1, visible_step: 11, group: "city", boundary_key: "third_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "task" },
+  { key: "third_south_west", q: 3, row: 2, visible_step: 11, group: "city", boundary_key: "third_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "memory" },
+  { key: "third_south", q: 4, row: 2, visible_step: 11, group: "city", boundary_key: "third_city", tone: "power", content: "none", label_key: "power", agent_accent: null, power_kind: "skill" },
 
   { key: "federation_database", q: 6, row: -2, visible_step: 12, group: "federation", boundary_key: "federation", tone: "federation", content: "storage", label_key: "database", agent_accent: null },
   { key: "federation_model", q: 7, row: -2, visible_step: 13, group: "federation", boundary_key: "federation", tone: "service", content: "none", label_key: "model", agent_accent: null },

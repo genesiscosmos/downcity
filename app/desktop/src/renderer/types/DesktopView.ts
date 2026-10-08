@@ -14,14 +14,18 @@ export type SettingsSection = "user" | "models" | "general" | "appearance" | "ch
 /** 功能型 Power 在一级导航中的动态模式。 */
 export type PowerWorkspaceSidebarMode = `power:${string}`;
 
-/** 主导航侧边栏当前展示的业务集合。 */
-export type SidebarMode = "chat" | "workspace" | "powers" | PowerWorkspaceSidebarMode;
+/**
+ * 主导航侧边栏当前展示的业务集合。
+ *
+ * 只有 Works 与 Agents 两张固定面板：每个功能型 Power 都是它自己的一级入口
+ * （`PowerWorkspaceSidebarMode`），不再有一张「全部 Power」的目录面板。
+ */
+export type SidebarMode = "chat" | "workspace" | PowerWorkspaceSidebarMode;
 
 /** 中间主视图当前展示的业务对象。 */
 export type NavigationTarget =
   | { /** Agent 创建页面。 */ kind: "create_agent" }
   | { /** Group 创建页面。 */ kind: "create_group" }
-  | { /** Power 工作区列表。 */ kind: "powers" }
   | { /** Workspace 管理页。 */ kind: "workspace"; /** Workspace 标识。 */ workspace_id: string }
   | { /** Workspace 文件只读预览。 */ kind: "workspace_file"; /** Workspace 标识。 */ workspace_id: string; /** Workspace 内的相对文件路径。 */ relative_path: string; /** 预览需要滚动并高亮的 1 基行号；未指定时按文件开头展示。 */ line?: number }
   | { /** Agent 管理页。 */ kind: "agent"; /** Agent 标识。 */ agent_id: string }
@@ -30,7 +34,6 @@ export type NavigationTarget =
   | { /** 尚未持久化的 Group 空对话。 */ kind: "group_draft"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** Draft 稳定标识。 */ draft_id: string }
   | { /** 具体 GroupSession Chat。 */ kind: "group_session"; /** Group 标识。 */ group_id: string; /** Workspace 标识。 */ workspace_id: string; /** GroupSession 标识。 */ session_id: string }
   | { /** Group 配置页。 */ kind: "group"; /** Group 标识。 */ group_id: string }
-  | { /** Power 详情页。 */ kind: "power"; /** Power 标识。 */ power_id: string }
   | { /** Power 独立功能工作区。 */ kind: "power_workspace"; /** Power 标识。 */ power_id: string }
   | { /** Desktop 设置页。 */ kind: "settings"; /** 当前设置分区。 */ section: SettingsSection };
 
@@ -248,10 +251,6 @@ export interface DesktopActions {
   select_agent(agent_id: string): void;
   /** 打开 Agent 固定 Workspace 与持久化 Session 对话。 */
   open_agent_chat(agent_id: string): Promise<void>;
-  /** 选择 Power 详情页。 */
-  select_power(power_id: string): void;
-  /** 返回完整 Power Catalog。 */
-  select_powers(): void;
   /** 打开 Power 独立功能工作区。 */
   select_power_workspace(power_id: string): void;
   /** 替换指定 Power 的工作区路由。 */

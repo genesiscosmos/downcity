@@ -2,7 +2,7 @@
 title: Agent Lifecycle
 description: Construct, ready, execute, and dispose an Agent
 ---
-`new Agent(options)` creates only the Agent identity, model, instructions, custom Tools, Session collection, and ActionSchedule. Plugins do not belong to Agent. After City registers the Agent, it projects City-owned Plugin capabilities into the Agent execution entry.
+`new Agent(options)` creates only the Agent identity, model, instructions, custom Tools, Session collection, and ActionSchedule. Powers do not belong to Agent. After City registers the Agent, it projects City-owned Power capabilities into the Agent execution entry.
 
 Run only one active runtime for the same Agent ID in the same physical Workspace. ActionSchedule is a local scheduler and does not coordinate duplicate Agent processes.
 
@@ -30,6 +30,6 @@ await turn.finished;
 await city.close();
 ```
 
-Sessions wait until the Agent's City execution binding is ready. `agent.dispose()` releases only Agent-owned Sessions, ActionSchedule, and execution bindings. `city.close()` first stops Agent Sessions, then stops the single City-owned Plugin instances and closes Workspaces, Shells, and Transports.
+Sessions wait until the Agent's City execution binding is ready. `agent.dispose()` releases only Agent-owned Sessions, ActionSchedule, and execution bindings. `city.close()` first stops Agent Sessions, then stops the single City-owned Power instances and closes Workspaces, Shells, and Transports.
 
 Continue with the [Agent SDK docs](/en/agent-sdk-docs).

@@ -17,7 +17,6 @@ export type ShortcutPlatform = "mac" | "windows" | "linux";
 export const command_shortcuts: Readonly<Record<string, readonly string[]>> = {
   "nav.open-workspace": ["Mod+1"],
   "nav.open-chat": ["Mod+2"],
-  "nav.open-powers": ["Mod+3"],
   "nav.toggle-sidebar": ["Mod+B"],
   "nav.toggle-baybar": ["Mod+L"],
   "nav.open-settings": ["Mod+,"],

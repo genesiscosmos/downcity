@@ -21,36 +21,7 @@ import {
 
 ## Basic Example
 
-```tsx
-import {
-  Button,
-  Sheet,
-  SheetTrigger,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@downcity/ui";
-
-export function SettingsSheet() {
-  return (
-    <Sheet>
-      <SheetTrigger render={<Button size="sm" />}>Open settings</SheetTrigger>
-      <SheetContent side="right">
-        <SheetHeader>
-          <SheetTitle>Model Settings</SheetTitle>
-          <SheetDescription>Edit runtime settings here.</SheetDescription>
-        </SheetHeader>
-        <div className="px-4">Form fields go here.</div>
-        <SheetFooter>
-          <Button size="sm">Save</Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
-  );
-}
-```
+<ComponentPreview name="sheet" />
 
 ## Supported Sides
 

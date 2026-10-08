@@ -13,6 +13,7 @@ import type {
   ModelJsonValue,
   ModelPricing,
   ModelStreamEvent,
+  ModelUsage,
 } from "@downcity/type";
 import type { ActionFn } from "../service/action.js";
 import type { Context } from "../service/service.js";
@@ -159,6 +160,8 @@ export interface AIModelActions {
   tts?: ActionFn;
   /** 语音识别 action。 */
   asr?: ActionFn;
+  /** 结构化决策 action，用于 System One 类模型。 */
+  decision?: ActionFn;
   /** 扩展 modality action。 */
   [modality: string]: ActionFn | undefined;
 }
@@ -343,6 +346,82 @@ export interface AIImageJobClaim {
   record: AsyncJobRecord;
   /** 本次领取写入的时间戳，也是后续 CAS 的所有权令牌。 */
   claimed_at: string;
+}
+
+// ===========================================================================
+// 结构化决策（System One）
+// ===========================================================================
+
+/**
+ * 决策模型输入的状态，描述模型需要判断的原始事实。
+ *
+ * 两种形态对应上游对 unstructured state 的支持；这里不引入 messages，
+ * 避免把 Agent 会话语义带进一条纯判定调用。
+ */
+export type AIDecisionState =
+  | {
+      /** 状态判别字段，纯文本。 */
+      type: "text";
+      /** 供模型判定的纯文本状态。 */
+      text: string;
+    }
+  | {
+      /** 状态判别字段，结构化数据。 */
+      type: "json";
+      /** 供模型判定的 JSON 可序列化状态。 */
+      data: ModelJsonValue;
+    };
+
+/** 单个决策问题的类型。 */
+export type AIDecisionQuestionType = "boolean" | "choice" | "score";
+
+/**
+ * 单个决策问题，描述一次需要模型给出的判定。
+ *
+ * 三种类型都不产生自由文本，与 System One 模型「不生成字符串、不会幻觉」
+ * 的定位一致。
+ */
+export interface AIDecisionQuestion {
+  /** 问题唯一 ID，用于把答案关联回问题。 */
+  id: string;
+  /** 问题类型，决定答案的取值范围与结果字段。 */
+  type: AIDecisionQuestionType;
+  /** 给模型的自然语言判定说明，例如 “这条消息是否表达紧急”。 */
+  instructions: string;
+  /** choice 类型的候选取值，顺序即展示顺序；其它类型必须省略。 */
+  options?: string[];
+  /** score 类型取值的下界，默认 0。 */
+  min?: number;
+  /** score 类型取值的上界，默认 1。 */
+  max?: number;
+}
+
+/** 决策模型单次调用请求。 */
+export interface AIDecisionRequest {
+  /** 判定依据的原始状态。 */
+  state: AIDecisionState;
+  /** 本次需要模型判定的全部问题。 */
+  questions: AIDecisionQuestion[];
+}
+
+/** 单个问题的判定结果。 */
+export interface AIDecisionAnswer {
+  /** 对应问题的 ID。 */
+  question_id: string;
+  /** 判定取值，类型与问题类型一致：boolean 为布尔、choice 为候选字符串、score 为数值。 */
+  value: boolean | string | number;
+  /** 模型对本次判定的校准概率，取值 0 到 1；上游未返回时省略。 */
+  probability?: number;
+  /** choice 类型的完整概率分布，键为候选取值；其它类型省略。 */
+  distribution?: Record<string, number>;
+}
+
+/** 决策模型单次调用结果。 */
+export interface AIDecisionResult {
+  /** 判定结果，与请求 questions 一一对应且顺序一致。 */
+  answers: AIDecisionAnswer[];
+  /** 上游计量信息，供 Federation 计费与用量统计使用。 */
+  usage?: ModelUsage;
 }
 
 // ===========================================================================

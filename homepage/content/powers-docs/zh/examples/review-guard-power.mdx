@@ -1,0 +1,56 @@
+---
+title: ReviewGuardPower 场景
+description: 用一个 guard 场景说明 Power 如何在现有链路里做阻断型检查
+---
+## 场景
+
+你希望在某条运行链路里强制执行一条规则：
+
+- 如果请求没有带 `reviewed = true`
+- 就直接阻断后续执行
+
+这类“前置阻断判断”就是最典型的 `guard` 场景。
+
+## 示例
+
+```ts
+import { Power, type PowerHooks } from "@downcity/city/power";
+
+class ReviewGuardPower extends Power {
+  readonly name = "review_guard";
+  readonly title = "Review Guard";
+  readonly description = "Blocks requests that were not reviewed.";
+
+  readonly hooks: PowerHooks = {
+    guard: {
+      "review.require_checked": [
+        async ({ value }) => {
+          const body = value as { reviewed?: unknown };
+          if (body.reviewed !== true) {
+            throw new Error("review is required before continuing");
+          }
+        },
+      ],
+    },
+  };
+}
+
+// City 已登记并把 review_guard 绑定到 entry 的 Agent/Workspace。
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", {
+  reviewed: true,
+});
+```
+
+## 为什么这里不是 pipeline
+
+因为你不是想“改值”，而是想：
+
+- 允许继续
+- 或者直接阻断
+
+这正是 guard 的语义。
+
+## 相关文档
+
+- [Power Hooks 和 Resolve](/zh/agent-sdk-docs/powers/power-hooks)
+- [自定义 Power](/zh/agent-sdk-docs/powers/custom-power)

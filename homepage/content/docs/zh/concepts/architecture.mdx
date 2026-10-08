@@ -1,6 +1,6 @@
 ---
 title: 架构
-description: "Downcity 的核心分层：console、agent、execution context、session 与 plugin runtime"
+description: "Downcity 的核心分层：console、agent、execution context、session 与 Power runtime"
 ---
 当前 Downcity 最好通过五层来理解：
 
@@ -8,7 +8,7 @@ description: "Downcity 的核心分层：console、agent、execution context、s
 2. `agent`
 3. `execution context`
 4. `session`
-5. `plugin runtime`
+5. `power runtime`
 
 ## 分层
 
@@ -21,32 +21,32 @@ description: "Downcity 的核心分层：console、agent、execution context、s
 ### `agent`
 
 - 拥有一个项目 runtime
-- 持有模型访问、session store、plugin registry 与 runtime host 状态
+- 持有模型访问、session store、Power registry 与 runtime host 状态
 
 ### `execution context`
 
 - 执行期间暴露出来的统一能力面
-- plugin 读取稳定运行时能力的地方
+- Power 读取稳定运行时能力的地方
 
 ### `session`
 
 - 拥有一条执行线程与其 prompt / run 状态
 - 真正跑 model + tool flow 的执行单元
 
-### `plugin runtime`
+### `power runtime`
 
-- 当前所有能力模块统一建模成 plugin
-- 有些是本地 action-first plugin
-- 有些是托管 lifecycle-owned plugin
+- 当前所有能力模块统一建模成 Power
+- 有些是本地 action-first Power
+- 有些是托管 lifecycle-owned Power
 
-## 托管 plugin 与本地 plugin
+## 托管 Power 与本地 Power
 
-### 本地 plugin
+### 本地 Power
 
 - 通常直接挂到一个 SDK `Agent` 上
 - 例如：`skill`、`web`、`sound`
 
-### 长期运行 plugin
+### 长期运行 Power
 
 - 由 `Agent` 在构造时装配，并在 `agent.dispose()` 时释放
 - 例如：`chat`、`task`、`memory`、`shell`、`schedule`
@@ -58,5 +58,5 @@ description: "Downcity 的核心分层：console、agent、execution context、s
 现在的真实模型是：
 
 - session 负责执行
-- plugin 负责暴露能力
-- 托管 plugin 负责长期运行模块
+- Power 负责暴露能力
+- 托管 Power 负责长期运行模块

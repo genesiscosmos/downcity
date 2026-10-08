@@ -4,7 +4,7 @@ description: City manages local Agents; Fed manages Federation Servers
 ---
 The Downcity package installs two independent tools:
 
-- `city` (alias `downcity`) is the local City container for Agents, plugins, environment variables, and Federation connections.
+- `city` (alias `downcity`) is the local City container for Agents, powers, environment variables, and Federation connections.
 - `fed` (alias `downfed`) is the Federation Server Manager. Its TUI manages registered servers, `fed web` starts the local Web control plane, and project commands read `federation.json` from the current project.
 
 ## City data model
@@ -13,14 +13,14 @@ Agents and Workspaces are independent global entities. An Agent is identified by
 
 Federation Admin configuration and Embassy User Sessions also live in `~/.downcity/downcity.db`. On upgrade, administration configuration in the legacy `~/.downcity/federation.db` is migrated once. The old file remains available for manual recovery but is no longer read at runtime.
 
-Each Plugin uses its stable ID as `~/.downcity/plugins/<plugin_id>/`, with one plaintext configuration in `config.toml`. A third-party installation contains one `plugin.json`, the `package.json` that establishes its ESM boundary, and optional self-contained `main` and `renderer` entries declared by the manifest—not source or build configuration. City provides every registered Plugin and the same configuration to every Agent; `agent.json` stores no Plugin reference. `downcity.db` stores Workspace indexes, tokens, and platform state, not Agent or Plugin configuration.
+Each Power uses its stable ID as `~/.downcity/powers/<power_id>/`, with one plaintext configuration in `config.toml`. A third-party installation contains one `power.json`, the `package.json` that establishes its ESM boundary, and optional self-contained `main` and `renderer` entries declared by the manifest—not source or build configuration. City provides every registered Power and the same configuration to every Agent; `agent.json` stores no Power reference. `downcity.db` stores Workspace indexes, tokens, and platform state, not Agent or Power configuration.
 
 ## City commands
 
 | Command | Purpose |
 |---|---|
 | `city agent` | Manage global Agents |
-| `city plugin` | Manage Plugin artifacts, unique configuration, and actions |
+| `city power` | Manage Power artifacts, unique configuration, and actions |
 | `city env` | Manage environment variables injected by City |
 | `city federation` | Manage Federation connections |
 

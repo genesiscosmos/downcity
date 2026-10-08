@@ -1,7 +1,7 @@
 /**
  * Agent 面向 SDK 用户的 Session 集合类型。
  *
- * Session 归 Agent 所有；Workspace 只在创建时声明本次执行使用的资源环境。
+ * Session 归 Agent 所有；Workspace 是会话的当前目录，不是会话身份。
  */
 
 import type { WorkspaceRuntime } from "@downcity/type";
@@ -20,18 +20,31 @@ import type {
 
 /** 创建 Agent Session 的公开参数。 */
 export interface AgentCreateSessionOptions extends AgentCreateSessionInput {
-  /** 本次 Session 可选使用的 Workspace 资源；未传入时使用内存执行上下文。 */
+  /** 新 Session 的初始目录；省略时使用 Agent 的默认目录，两者都没有则无项目上下文。 */
   workspace?: WorkspaceRuntime;
 }
 
-/** 恢复 Agent Session 时使用的本地执行上下文。 */
+/** 恢复 Agent Session 时使用的当前目录。 */
 export interface AgentGetSessionOptions {
-  /** 当前 Session 使用的 Workspace；必须与持久化 Metadata 一致。 */
+  /**
+   * 恢复后要使用的当前目录。
+   *
+   * 关键点（中文）：这与持久化值不一致时不再报错，而是以该值为准成为该 Session 的当前目录，
+   * 语义等同 `session.set_workspace()`。省略时沿用持久化值。
+   */
   workspace?: WorkspaceRuntime;
 }
 
 /** Agent 公开的 Session 创建入口。 */
 export interface AgentSessionCollection {
+  /**
+   * 打开 Agent 自己的那段对话；不存在时创建。
+   *
+   * 关键点（中文）：主对话是普通 Session，身份由 `origin.type = "main"` 表达；
+   * 一个 Agent 至多一条，被归档或删除后下一次调用自然重建。
+   */
+  main(options?: AgentGetSessionOptions): Promise<AgentSession>;
+
   /** 在指定 Workspace 中创建一个属于当前 Agent 的 Session。 */
   create(options?: AgentCreateSessionOptions): Promise<AgentSession>;
 
@@ -53,9 +66,6 @@ export interface AgentSessionCollection {
 
   /** 清空已归档 Session。 */
   clean_archive(): Promise<AgentCleanArchiveResult>;
-
-  /** 把 Session 重新绑定到另一个 Workspace，并返回新上下文下的 Session 实例。 */
-  workspace(session_id: string, workspace: WorkspaceRuntime): Promise<AgentSession>;
 
   /** 获取 Session runtime port。 */
   runtime(session_id: string, origin_type?: string): SessionPort;

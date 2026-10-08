@@ -284,8 +284,8 @@ test("行首形状是一个枚举，不是互斥的布尔值", () => {
   for (const dead of ["leadingWidth", "leadingAvatar", "leadingTile", "leadingSlot"]) {
     assert.ok(!new RegExp(dead).test(code), `SidebarItem 里还留着 ${dead}：形状应当只由一个参数表达`);
   }
-  // 枚举三档都有定义。
-  assert.match(row_source, /export type SidebarLeadingShape = "icon" \| "avatar" \| "tile";/, "形状枚举的定义变了");
+  // 枚举两档都有定义（Power 目录页删掉后 `tile` 已无调用点，随之移除）。
+  assert.match(row_source, /export type SidebarLeadingShape = "icon" \| "avatar";/, "形状枚举的定义变了");
 });
 
 /**
@@ -382,7 +382,6 @@ test("三个变体各有归属，且用途与设计一致", () => {
     assert.ok(new RegExp(`variant="${variant}"`).test(source), `${file} 没有使用 ${variant} 变体：${why}`);
   };
   expect_variant("AgentsSidebar.tsx", "agent", "Agent / Group 主体行是身份行，行首是头像");
-  expect_variant("PowerSidebar.tsx", "agent", "Power 条目与 Agent 主体行同一档");
   expect_variant("SettingsSidebarPanel.tsx", "settings", "设置条目比 default 高一档");
   expect_variant("WorkspaceSessionList.tsx", "default", "Workspace 会话列表是 default");
   // 注入给 Power 的两个组件也要落在同一套变体上，否则同一个 Power 在两处会长得不一样。

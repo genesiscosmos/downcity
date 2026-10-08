@@ -2,6 +2,7 @@
   "title": "Sessions",
   "pages": [
     "overview",
+    "agent-chat",
     "session-management",
     "set-model",
     "info",

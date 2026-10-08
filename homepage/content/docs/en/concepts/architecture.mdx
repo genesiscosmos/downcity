@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: "Core architecture layers in Downcity: console, agent, execution context, session, and plugin runtime"
+description: "Core architecture layers in Downcity: console, agent, execution context, session, and power runtime"
 ---
 Current Downcity is best understood through five layers:
 
@@ -8,7 +8,7 @@ Current Downcity is best understood through five layers:
 2. `agent`
 3. `execution context`
 4. `session`
-5. `plugin runtime`
+5. `power runtime`
 
 ## Layers
 
@@ -21,32 +21,32 @@ Current Downcity is best understood through five layers:
 ### `agent`
 
 - owns one project runtime
-- holds model access, session store, plugin registry, and runtime host state
+- holds model access, session store, power registry, and runtime host state
 
 ### `execution context`
 
 - shared capability surface exposed during execution
-- the place plugins read stable runtime abilities
+- the place powers read stable runtime abilities
 
 ### `session`
 
 - owns one execution thread and its prompt/run state
 - the unit that actually runs model + tool flow
 
-### `plugin runtime`
+### `power runtime`
 
-- all capability modules are modeled as plugins
+- all capability modules are modeled as powers
 - some are local and action-first
 - some are managed and lifecycle-owned
 
-## Managed vs local plugins
+## Managed vs local powers
 
-### Local plugins
+### Local powers
 
 - usually attached directly to one SDK `Agent`
 - examples: `skill`, `web`, `sound`
 
-### Managed plugins
+### Managed powers
 
 - runtime-owned modules that start and stop with one target agent
 - examples: `chat`, `task`, `memory`, `shell`, `schedule`
@@ -58,5 +58,5 @@ Do not use the old split-layer language for the current system.
 The current model is:
 
 - session executes
-- plugins expose capability
-- managed plugins own long-lived runtime modules
+- powers expose capability
+- managed powers own long-lived runtime modules

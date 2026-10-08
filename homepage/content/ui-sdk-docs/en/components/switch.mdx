@@ -4,17 +4,6 @@ description: Toggle a single boolean setting
 ---
 `Switch` is intended for settings that take effect immediately when enabled or disabled.
 
-```tsx
-import { Label, Switch } from "@downcity/ui";
-
-export function PreviewSwitch() {
-  return (
-    <Label>
-      Live preview
-      <Switch defaultChecked aria-label="Enable live preview" />
-    </Label>
-  );
-}
-```
+<ComponentPreview name="switch" />
 
 The host owns persistence. The component provides controlled, uncontrolled, form, and keyboard behavior.

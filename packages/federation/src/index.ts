@@ -158,6 +158,12 @@ export type {
   AIActionMessage,
   AIActionMessagePart,
   AIActionTextPart,
+  AIDecisionAnswer,
+  AIDecisionQuestion,
+  AIDecisionQuestionType,
+  AIDecisionRequest,
+  AIDecisionResult,
+  AIDecisionState,
   AIImageCreateResult,
   AIImageResult,
 } from "./types/AI.js";

@@ -46,7 +46,7 @@ import { SessionLoop } from "@/session/loop/SessionLoop.js";
 import { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
-import type { ToolCallContext, ToolHookSet } from "@downcity/type";
+import type { ToolCallContext, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
 import { SessionInteractions } from "@/session/messages/SessionInteractions.js";
 import { DefaultSessionComposer } from "@/session/input/composer/DefaultSessionComposer.js";
 import type { SessionComposer } from "@/types/session/SessionComposer.js";
@@ -76,12 +76,15 @@ export class Session implements AgentSession {
   readonly agent_name: string;
   /** 当前 Agent 一句话能力描述；进入工具与扩展的调用环境。 */
   readonly agent_description: string;
-  /** 当前 Session 创建时绑定的 Workspace ID。 */
-  readonly workspace_id?: string;
+  /**
+   * 当前 Session 正在使用的 Workspace ID。
+   *
+   * 关键点（中文）：这是可变的会话状态，不是身份；切换目录后随之改变。
+   */
+  workspace_id?: string;
   /** 当前 Session 的创建来源。 */
   readonly origin: SessionOptions["origin"];
 
-  private readonly workspace_path: string;
   private readonly store: SessionStorage;
   private readonly create_session_store: SessionOptions["create_session_store"];
   private readonly register_forked_session: SessionOptions["register_forked_session"];
@@ -95,8 +98,6 @@ export class Session implements AgentSession {
   private effective_approval_mode: SessionApprovalMode = "ask";
   private readonly local_state: SessionLocalState;
   private readonly get_workspace_env: SessionOptions["get_workspace_env"];
-  /** 读取当前 Session 绑定的 Workspace 实例。 */
-  private readonly get_workspace: SessionOptions["get_workspace"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
   private readonly get_hooks: SessionOptions["get_hooks"];
   private readonly get_instruction_system_blocks:
@@ -116,16 +117,14 @@ export class Session implements AgentSession {
     this.agent_id = String(options.agent_id || "").trim();
     this.agent_name = String(options.agent_name || "").trim() || this.agent_id;
     this.agent_description = String(options.agent_description || "").trim();
-    this.workspace_id = String(options.workspace_id || "").trim() || undefined;
+    this.workspace_id = String(options.workspace?.id || "").trim() || undefined;
     this.origin = options.origin;
-    this.workspace_path = String(options.workspace_path || "").trim();
     this.store = options.store;
     this.create_session_store = options.create_session_store;
     this.register_forked_session = options.register_forked_session;
     this.get_tools = options.get_tools;
     this.logger = options.logger;
     this.get_workspace_env = options.get_workspace_env;
-    this.get_workspace = options.get_workspace;
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
@@ -136,7 +135,7 @@ export class Session implements AgentSession {
     if (!this.agent_id) {
       throw new Error("Session requires a non-empty agent_id");
     }
-    if (!this.workspace_path) {
+    if (!String(options.workspace_path || "").trim()) {
       throw new Error("Session requires a non-empty workspace_path");
     }
 
@@ -155,14 +154,17 @@ export class Session implements AgentSession {
       // 审批入口读执行面当前模式；configured 与 effective 的区别保留。
       read_approval_mode: () => this.effective_approval_mode,
     });
-    this.local_state = create_session_local_state();
+    this.local_state = create_session_local_state({
+      ...(options.workspace ? { workspace: options.workspace } : {}),
+      fallback_workspace_path: String(options.workspace_path || "").trim(),
+    });
     this.step_input = new StepInput({
       agent_id: this.agent_id,
       agent_name: this.agent_name,
       agent_description: this.agent_description,
       session_id: this.id,
       session_origin: this.origin,
-      workspace_path: this.workspace_path,
+      get_workspace_path: () => this.get_workspace_path(),
       store: this.store,
       composer: this.composer,
       get_tools: this.get_tools,
@@ -170,7 +172,7 @@ export class Session implements AgentSession {
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_hooks: this.get_hooks,
       get_workspace_env: this.get_workspace_env,
-      get_workspace: this.get_workspace,
+      get_workspace: () => this.local_state.current_workspace,
       get_model: () => this.get_model(),
       get_model_context_window: () => this.get_model_context_window(),
       get_created_at: () => this.local_state.created_at,
@@ -192,7 +194,7 @@ export class Session implements AgentSession {
     this.session_loop = new SessionLoop({
       session_id: this.id,
       session_origin: this.origin,
-      workspace_path: this.workspace_path,
+      get_workspace_path: () => this.get_workspace_path(),
       step_input: this.step_input,
       advance_context: async (trigger) => await this.advance_context(trigger),
       maintain_context: async () => {
@@ -431,7 +433,7 @@ export class Session implements AgentSession {
       "",
     ).trim();
     return build_session_info({
-      project_root: this.workspace_path,
+      project_root: this.get_workspace_path(),
       agent_id: this.agent_id,
       session_id: this.id,
       metadata: {
@@ -447,6 +449,29 @@ export class Session implements AgentSession {
    */
   async messages(input?: ListSessionMessagesInput): Promise<SessionMessagePage> {
     return await this.session_messages.list_messages(input);
+  }
+
+  /**
+   * 就地切换当前目录，并同步元数据中的当前值。
+   *
+   * 关键点（中文）
+   * - 不迁移已有消息、附件或工具结果：那些属于这段对话发生时的目录。
+   * - 执行中的 Turn 沿用切换前的目录，从下一个 Step 检查点起生效。
+   */
+  async set_workspace(workspace?: WorkspaceRuntime): Promise<void> {
+    const changed = await this.state.set_workspace(workspace);
+    if (!changed) return;
+    this.workspace_id = String(workspace?.id || "").trim() || undefined;
+  }
+
+  /** 返回当前目录；没有项目上下文时为空。 */
+  get_workspace(): WorkspaceRuntime | undefined {
+    return this.local_state.current_workspace;
+  }
+
+  /** 返回当前目录路径；没有 Workspace 时使用回退值。 */
+  private get_workspace_path(): string {
+    return this.state.get_workspace_path();
   }
 
   /**
@@ -552,7 +577,7 @@ export class Session implements AgentSession {
     /** 当前 Turn 的取消信号。 */
     readonly abort_signal: AbortSignal;
   }): ToolCallContext {
-    const workspace = this.get_workspace();
+    const workspace = this.local_state.current_workspace;
     return Object.freeze({
       agent_id: this.agent_id,
       agent_name: this.agent_name,
@@ -575,8 +600,10 @@ export class Session implements AgentSession {
       agent_id: this.agent_id,
       agent_name: this.agent_name,
       agent_description: this.agent_description,
-      workspace_path: this.workspace_path,
-      ...(this.workspace_id ? { workspace_id: this.workspace_id } : {}),
+      workspace_path: this.local_state.fallback_workspace_path,
+      ...(this.local_state.current_workspace
+        ? { workspace: this.local_state.current_workspace }
+        : {}),
       origin: this.origin,
       store: this.create_session_store(session_id),
       create_session_store: this.create_session_store,
@@ -587,7 +614,7 @@ export class Session implements AgentSession {
       instruction_system_blocks: this.step_input.instruction_blocks(),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_workspace_env: this.get_workspace_env,
-      get_workspace: this.get_workspace,
+      get_workspace: () => this.local_state.current_workspace,
       get_hooks: this.get_hooks,
       get_agent_model: this.get_agent_model,
       composer: this.composer,

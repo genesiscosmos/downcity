@@ -40,11 +40,11 @@ export function notification_target_from_navigation(
   if (target?.kind === "group_session") {
     return create_group_session_notification_target(target.group_id, target.session_id);
   }
-  if (target?.kind === "power_workspace" || target?.kind === "power") {
+  if (target?.kind === "power_workspace") {
     return {
       kind: "power",
       power_id: target.power_id,
-      route: target.kind === "power_workspace" ? structuredClone(power_routes[target.power_id] ?? {}) : {},
+      route: structuredClone(power_routes[target.power_id] ?? {}),
     };
   }
   return undefined;

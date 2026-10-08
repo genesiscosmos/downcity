@@ -54,6 +54,11 @@
       }
     }
   },
+  "sdkTry": {
+    "label": "SDK preview",
+    "title": "Read the API before you scroll",
+    "description": "Pick a scenario to see what the real calls look like. The same code runs against the packages in this repository."
+  },
   "quickstart": {
     "sectionLabel": "Three core SDKs",
     "title": "From Agent to City to Federation.",
@@ -70,7 +75,7 @@
         "neighborCity": "City B",
         "thirdCity": "City C",
         "agent": "Agent",
-        "plugin": "Plugin",
+        "power": "Power",
         "workspace": "Workspace",
         "group": "Group",
         "groupSession": "Group Session",
@@ -126,7 +131,7 @@
       },
       "actions": {
         "title": "Give agents the ability to act",
-        "description": "Use tools, skills, and plugins so agents can search, write, execute, record, and connect to the services a product needs."
+        "description": "Use tools, skills, and powers so agents can search, write, execute, record, and connect to the services a product needs."
       },
       "continuity": {
         "title": "Keep work moving",
@@ -271,7 +276,7 @@
       "docs": "Documentation",
       "cityDocs": "City SDK Docs",
       "agentDocs": "Agent SDK Docs",
-      "plugins": "Plugins",
+      "powers": "Powers",
       "payments": "Payments",
       "skills": "Skills",
       "marketplace": "Marketplace",

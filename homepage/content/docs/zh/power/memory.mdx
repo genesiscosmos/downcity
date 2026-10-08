@@ -1,0 +1,20 @@
+---
+title: Memory Power
+description: Memory Power 如何共享长期知识并组装模型上下文
+---
+Memory Power 管理跨 Session 的长期事实、偏好和经验。Session 自己保存完整对话；MemoryPower 不接管 Session Messages。
+
+## 记忆范围
+
+- **Agent Memory** — 当前 Agent 的私有经验和长期状态，存放在 `agents/<agent_id>/memory` 下。
+- **City Memory** — 同一 City 内跨 Agent 共享；Workspace 相关事实也落在这里，并把当前 `workspace_id` 记为 metadata。
+
+Workspace 不是独立的记忆范围。Core Memory 进入独立 system block；当前问题的 Dynamic Recall 只进入本轮 User Message 的模型输入副本，不修改原始消息。
+
+City 只向 MemoryPower 提供共享根路径。Memory 的生成、持久化、召回和隔离策略都由 Power 内部负责。
+
+继续阅读：
+
+- [完整 Memory Power 文档](/zh/powers-docs/builtins/memory)
+- [Messenger Power](/zh/docs/power/messenger)
+- [Task Power](/zh/docs/power/task)

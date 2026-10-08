@@ -51,6 +51,7 @@ Downcity 最核心的心智不是“一个产品对应一个后端”，而是�
 - 模型目录和 provider 配置
 - `user_token` 校验
 - `city.ai.stream()`、`city.ai.image_create()` / `city.ai.image_result()` 这类 AI service 调用能力
+- `city.ai.decision()` 这类结构化决策调用
 - usage 记录、日志、限额和商业 hooks
 - 多个产品可以共用的调用逻辑
 
@@ -100,3 +101,9 @@ Downcity 最核心的心智不是“一个产品对应一个后端”，而是�
 - 每次 AIService 调用都必须显式传入模型 ID 或 `CityModel`
 
 这意味着产品端看到的是稳定模型 ID，而不是上游 provider 的具体细节。
+
+## 模型类别与能力
+
+目录中的每个模型都带一个 `model_type`，表示它属于哪一类：`language`、`decision`、`image`、`sound` 或 `video`。它由 Federation 从模型实际实现的能力推导，与 `modalities` 同源。
+
+两者分工不同：`model_type` 回答“它是什么”，用于展示与分组；`modalities` 回答“它能做什么”，判断可执行能力应读 `modalities`。例如对话模型带 `text` / `stream`，决策模型只带 `decision`，因此只有前者能交给 Agent。

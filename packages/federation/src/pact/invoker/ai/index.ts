@@ -21,6 +21,8 @@ import type {
   UserImageJobResultInput,
   UserAsrInput,
   UserAsrResult,
+  UserDecisionInput,
+  UserDecisionResult,
   FederationActionInput,
   UserStreamResult,
   UserTtsInput,
@@ -116,6 +118,11 @@ export class AIInvoker {
     return this.post<UserAsrResult>("/asr", input);
   }
 
+  /** 结构化决策 */
+  decision(input: UserDecisionInput): Promise<UserDecisionResult> {
+    return this.post<UserDecisionResult>("/decision", input);
+  }
+
   /** 获取当前用户可用的 CityModel 目录。 */
   async catalog(): Promise<ModelCatalog> {
     const body = await this.req<{ items: CityModelDescriptor[] }>(`${PREFIX}/models`, { method: "GET" });
@@ -135,6 +142,7 @@ export class AIInvoker {
     if (!model_id) throw new TypeError("model must be a non-empty string");
     return this.create_model({
       id: model_id,
+      model_type: "language",
       name: model_id,
       description: "",
       modalities: ["text", "stream"],

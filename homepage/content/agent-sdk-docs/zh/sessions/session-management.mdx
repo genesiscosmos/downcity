@@ -2,7 +2,7 @@
 title: 管理 Session
 description: 创建、打开、列表、归档和永久清理 Session
 ---
-`agent.sessions` 是本地 Session 集合入口，Session 在创建时选择 Workspace。
+`agent.sessions` 是本地 Session 集合入口。Session 在创建时可以选择一个 Workspace 作为初始目录，之后可以在会话中切换。
 
 ## 创建与打开
 
@@ -16,13 +16,35 @@ const task_session = await agent.sessions.create({
   origin: { type: "task", task_id: "daily-report" },
 });
 
-const existing = await agent.sessions.get("session-id-from-list", "chat", { workspace });
-const existing_task = await agent.sessions.get(task_session.id, "task", { workspace });
+const existing = await agent.sessions.get("session-id-from-list", "chat");
+const existing_task = await agent.sessions.get(task_session.id, "task");
 ```
 
 `create()` 始终由 SDK 内部生成 Session ID。恢复已有 Session 时，从 `list()` 或其他持久化引用
-取得 ID，再调用 `get(session_id, origin_type = "chat", { workspace })`。`origin.type` 可以是任意
+取得 ID，再调用 `get(session_id, origin_type = "chat")`。`origin.type` 可以是任意
 非空字符串，并可携带额外 JSON 元数据；`get()` 只读取指定分区，不会扫描其他来源。
+
+Workspace 是会话的当前目录，不是会话身份。`get()` 传入的 Workspace 与持久化值不同时不会报错，
+而是成为该会话新的当前目录：
+
+```ts
+const session = await agent.sessions.create({ workspace: repo_a });
+
+await session.set_workspace(repo_b);   // 带旧消息换到另一个仓库，session_id 不变
+await session.set_workspace();         // 脱离项目上下文
+
+const reopened = await agent.sessions.get(session.id, "chat", { workspace: repo_c });
+```
+
+切换目录不迁移已有消息、附件与工具结果；它们属于发生时的目录。正在执行的 Turn 沿用旧目录，
+从下一个 Step 检查点起生效。没有 Workspace 的 Session 是合法的：它没有文件工具与 Shell，
+但纯模型对话仍然可用。
+
+## Agent 自己的对话
+
+Agent 有一段属于自己的对话，位于 `main` 分区，用 `agent.chat()` 打开；`agent.sessions.main()`
+返回承载它的 Session。它不会出现在 `origin_type: "chat"` 的列表里。详见
+[Agent 对话](/zh/agent-sdk-docs/sessions/agent-chat)。
 
 ## 列表与搜索
 
@@ -66,7 +88,7 @@ console.log(removed.removed_session_ids);
 
 `clean_archive()` 会永久删除所有已归档 Session，适合明确的“清空回收站”操作；UI 必须在调用前要求用户确认。
 
-本地维护还可以使用 `remove(session_id, origin_type = "chat")` 永久删除一个活跃 Session 的 Agent 数据，或使用 `clear_messages(session_id, origin_type = "chat")` 只清空消息。Plugin 自有数据不会被隐式删除；需要同时清理领域数据时，应调用对应 Plugin。
+本地维护还可以使用 `remove(session_id, origin_type = "chat")` 永久删除一个活跃 Session 的 Agent 数据，或使用 `clear_messages(session_id, origin_type = "chat")` 只清空消息。Power 自有数据不会被隐式删除；需要同时清理领域数据时，应调用对应 Power。
 
 ## UI 建议
 

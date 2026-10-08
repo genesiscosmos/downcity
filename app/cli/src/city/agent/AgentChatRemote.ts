@@ -178,6 +178,7 @@ export async function createAgentSessionReader(params: {
 function create_local_power_host(data: CliLocalData): CityPowerHost {
   return {
     config: (power_id) => ({
+      path: data.powers.config_path(power_id),
       get: () => structuredClone(data.powers.get_config(power_id)),
       set: async (config) => {
         data.powers.set_config(power_id, structuredClone(config));

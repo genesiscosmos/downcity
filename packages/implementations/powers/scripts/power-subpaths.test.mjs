@@ -53,7 +53,7 @@ test("已删除的 Contact 与 Workboard Power 不再公开", async () => {
   await assert.rejects(() => import("@downcity/powers/contact"), /Package subpath/u);
   await assert.rejects(() => import("@downcity/powers/workboard"), /Package subpath/u);
   assert.deepEqual(
-    power_module.create_builtin_power_registrations()
+    power_module.create_builtin_power_registrations({ platform_root_path: "/tmp/downcity-subpaths" })
       .map((registration) => registration.power.name)
       .filter((power_id) => ["contact", "workboard"].includes(power_id)),
     [],
@@ -62,7 +62,9 @@ test("已删除的 Contact 与 Workboard Power 不再公开", async () => {
 
 test("内建 Power 注册使用随 package 发布的独立 README 资产", async () => {
   const power_module = await import("@downcity/powers");
-  const registrations = power_module.create_builtin_power_registrations();
+  const registrations = power_module.create_builtin_power_registrations({
+    platform_root_path: "/tmp/downcity-subpaths",
+  });
   for (const registration of registrations) {
     assert.equal(
       path.basename(registration.readme),

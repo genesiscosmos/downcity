@@ -2,7 +2,7 @@
 title: 项目结构
 description: Agent 项目目录、全局配置和运行数据的边界
 ---
-Agent 定义、Plugin 配置与运行数据都使用用户级文件。项目目录只作为 Workspace，保留项目环境、Skills 和业务源码。
+Agent 定义、Power 配置与运行数据都使用用户级文件。项目目录只作为 Workspace，保留项目环境、Skills 和业务源码。
 
 ## 目录布局
 
@@ -27,12 +27,12 @@ my-project/
 │       ├── <session_id>/
 │       ├── archived-sessions/
 │       └── logs/
-├── plugins/<plugin_id>/config.toml
+├── powers/<power_id>/config.toml
 ├── runtimes/city/
 └── downcity.db
 ```
 
-`downcity.db` 保存 Workspace ID 与路径、Token 和平台状态，不保存 Agent 定义、Plugin 配置或 Agent-Workspace 绑定。CLI 与 Desktop 读取同一套文件与数据库。
+`downcity.db` 保存 Workspace ID 与路径、Token 和平台状态，不保存 Agent 定义、Power 配置或 Agent-Workspace 绑定。CLI 与 Desktop 读取同一套文件与数据库。
 
 `agent_id` 与 `workspace_id` 是彼此独立的全局身份。Session 只在一次具体执行时接收 Workspace。CLI City 的 daemon 状态记录在 `~/.downcity/runtimes/city/`；Session 保存在 `~/.downcity/agents/<agent_id>/sessions/` 下。只有传入 Workspace 时，Session 的 `meta.json` 才记录 `workspace_id`。
 
@@ -42,7 +42,7 @@ Global Env 单独保存在 `~/.downcity/.env`。项目 `.env` 覆盖 Global Env�
 
 ## 运行数据
 
-Downcity 不再创建 `<project>/.downcity/`。Agent 运行数据统一保存在 City 提供的 `agents/<agent_id>/` 存储作用域；没有 City 时保存在内存中。Plugin 自有数据使用 PluginContext 提供的 Agent 级存储作用域。
+Downcity 不再创建 `<project>/.downcity/`。Agent 运行数据统一保存在 City 提供的 `agents/<agent_id>/` 存储作用域；没有 City 时保存在内存中。Power 自有数据使用 PowerContext 提供的 Agent 级存储作用域。
 
 继续阅读：
 

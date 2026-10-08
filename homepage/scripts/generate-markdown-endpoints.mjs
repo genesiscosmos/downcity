@@ -28,7 +28,7 @@ const collections = [
   { directory: "city-sdk-docs", prefix: "city-sdk-docs" },
   { directory: "agent-sdk-docs", prefix: "agent-sdk-docs" },
   { directory: "payments", prefix: "payments" },
-  { directory: "plugins-docs", prefix: "plugins-docs" },
+  { directory: "powers-docs", prefix: "powers-docs" },
   { directory: "ui-sdk-docs", prefix: "ui-sdk-docs" },
   { directory: "blog", prefix: "blog" },
 ];

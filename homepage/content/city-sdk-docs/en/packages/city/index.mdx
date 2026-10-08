@@ -1,27 +1,27 @@
 ---
 title: "City"
-description: The runtime environment that owns Agents, Workspaces, Plugins, and transports.
+description: The runtime environment that owns Agents, Workspaces, Powers, and transports.
 ---
 
 `City` is the composition root shared by the CLI, Desktop, and custom Node hosts. Applications
-create Agents. City owns Workspaces, one instance per Plugin ID,
+create Agents. City owns Workspaces, one instance per Power ID,
 lifecycle, Storage, Embassy services, and optional HTTP/RPC transports. Sessions remain owned by an
 Agent's `AgentSessions` collection.
 
 ```bash
-pnpm add @downcity/city @downcity/plugins
+pnpm add @downcity/city @downcity/powers
 ```
 
 ```ts
 import { Agent, City, Workspace } from "@downcity/city";
-import { create_builtin_plugin_registrations } from "@downcity/plugins";
+import { create_builtin_power_registrations } from "@downcity/powers";
 
 const workspace = new Workspace({ id: "project", path: process.cwd() });
-const registrations = create_builtin_plugin_registrations();
+const registrations = create_builtin_power_registrations();
 const city = new City({
   embassy,
   workspaces: [workspace],
-  plugins: registrations,
+  powers: registrations,
 });
 const agent = new Agent({ id: "lucas", model });
 
@@ -34,13 +34,13 @@ await city.close();
 
 ## Relationships and ownership
 
-- `City` owns the Plugin catalog, unique instances, lifecycle, and Hook scopes.
-- `Agent` owns identity, model, instructions, custom tools, and `AgentSessions`; it does not own Plugins.
-- `Session` belongs to an Agent and receives one Workspace execution context plus a City Plugin execution view.
-- `Workspace` owns project files, tools, environment, and an optional Shell. It does not own Agents, Sessions, or Plugins.
+- `City` owns the Power catalog, unique instances, lifecycle, and Hook scopes.
+- `Agent` owns identity, model, instructions, custom tools, and `AgentSessions`; it does not own Powers.
+- `Session` belongs to an Agent and receives one Workspace execution context plus a City Power execution view.
+- `Workspace` owns project files, tools, environment, and an optional Shell. It does not own Agents, Sessions, or Powers.
 
-An SDK host may call `city.plugins.add(plugin)` and `city.plugins.remove(plugin_id)` dynamically.
-One Plugin ID maps to one instance within a City, shared automatically by every registered Agent.
+An SDK host may call `city.powers.add(power)` and `city.powers.remove(power_id)` dynamically.
+One Power ID maps to one instance within a City, shared automatically by every registered Agent.
 
 ## Workspace management
 
@@ -51,26 +51,26 @@ the current City; Workspace delegates Shell Sessions and Sandbox cleanup to its 
 returns `null` when the Workspace does not exist. This
 only manages the runtime object; it never deletes the project directory.
 
-## Plugin lifecycle
+## Power lifecycle
 
-A Plugin instance has one City-owned lifecycle and may register host-management Actions during
+A Power instance has one City-owned lifecycle and may register host-management Actions during
 `initialize`. It has two lifecycle checkpoints:
 
-1. City calls `initialize` once when the Plugin is added.
-2. City calls `dispose` once when the Plugin is removed or City closes.
+1. City calls `initialize` once when the Power is added.
+2. City calls `dispose` once when the Power is removed or City closes.
 
-Agent, Session, and Workspace entry or removal do not trigger Plugin lifecycle callbacks. Each Plugin
+Agent, Session, and Workspace entry or removal do not trigger Power lifecycle callbacks. Each Power
 owns its long-lived connections, timers, schedulers, and workers according to its actual domain key,
 such as an account, Agent, or task definition.
 
-Each Action, System provider, Availability check, and Hook call receives a freshly projected `PluginContext`. It contains
-restricted `city`, `agent`, `workspace`, `session`, `turn`, `config`, and `storage` handles. A Plugin
+Each Action, System provider, Availability check, and Hook call receives a freshly projected `PowerContext`. It contains
+restricted `city`, `agent`, `workspace`, `session`, `turn`, `config`, and `storage` handles. A Power
 can therefore communicate through the current Session or Agent handle instead of resolving only a
 `session_id`.
 
 Hooks remain scheduled by City's execution Registry. A Session captures an immutable Hook scope at
-explicit checkpoints. New Steps stop seeing a dynamically removed Plugin immediately, while an
+explicit checkpoints. New Steps stop seeing a dynamically removed Power immediately, while an
 existing Step may finish before its scope triggers final cleanup.
 
 The CLI daemon and Desktop window own independent City lifecycles. Host coordination only controls
-listener ownership; it does not mutate persisted Agent, Plugin, or Session data.
+listener ownership; it does not mutate persisted Agent, Power, or Session data.

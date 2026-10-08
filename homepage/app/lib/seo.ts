@@ -5,6 +5,10 @@
  * 1. 全站只使用 apex 域名作为 canonical 来源。
  * 2. HTML 页面统一使用尾斜杠，避免 canonical 指向会再次 308 的 URL。
  * 3. 多语言页面同时输出 self canonical、双向 hreflang 与 x-default。
+ *
+ * 关于 hreflang 的写法：meta 描述符里的属性键必须用 React 的驼峰 `hrefLang`，
+ * 因为 React Router 的 `<Meta />` 会把属性透传给 React，小写写法会触发开发期告警；
+ * 产物语义不受影响，HTML 解析器会把属性名归整为小写（见下方具体注释）。
  */
 import type { MetaDescriptor } from "react-router";
 import { product } from "@/lib/product";
@@ -159,12 +163,18 @@ export function create_page_meta(options: SeoPageMetaOptions): MetaDescriptor[] 
 
     meta.push(
       { property: "og:locale:alternate", content: alternate_open_graph_locale },
-      // hreflang 必须使用小写属性名：React Router 会把 meta 描述符的属性原样序列化进
-      // HTML，驼峰 hrefLang 会输出非法属性名，导致全站语言注解被搜索引擎忽略
-      // （React 19.2 SSR 实测：hrefLang 输出 <link hrefLang=...>，小写才输出合法属性）。
-      { tagName: "link", rel: "alternate", hreflang: "en", href: english_url },
-      { tagName: "link", rel: "alternate", hreflang: "zh-CN", href: chinese_url },
-      { tagName: "link", rel: "alternate", hreflang: "x-default", href: english_url },
+      // hreflang 必须写成 React 的驼峰属性名 `hrefLang`。
+      //
+      // 为什么不能写小写：React Router 的 `<Meta />` 用 `createElement(tagName, props)`
+      // 渲染 meta 描述符，属性键会直接进入 React 的 DOM 属性表。React 把 `hreflang`
+      // 视为错误拼写（它会提示 “Did you mean hrefLang?”）并在开发期打印告警。
+      //
+      // 产物不受影响：HTML 规范要求属性名大小写不敏感，浏览器与解析器一律按小写归整，
+      // 实测 parse5 把 `hrefLang="en"` 与 `hreflang="en"` 解析为同一个 DOM 属性。
+      // 因此 `hrefLang` 既是 React 接受的写法，也是搜索引擎看到的 `hreflang`。
+      { tagName: "link", rel: "alternate", hrefLang: "en", href: english_url },
+      { tagName: "link", rel: "alternate", hrefLang: "zh-CN", href: chinese_url },
+      { tagName: "link", rel: "alternate", hrefLang: "x-default", href: english_url },
     );
   }
 

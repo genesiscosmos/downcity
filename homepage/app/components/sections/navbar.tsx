@@ -4,7 +4,7 @@ import * as React from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
-import { useTheme } from "fumadocs-ui/provider/base";
+import { use_site_theme, type SiteThemeMode } from "@/components/docs/theme-provider";
 import { use_interface_locale } from "@/components/providers/InterfaceLocaleProvider";
 import { use_auto_hide_header } from "@/hooks/use-auto-hide-header";
 import { create_interface_locale_path, persist_interface_locale } from "@/lib/interface-locale";
@@ -70,6 +70,8 @@ export function Navbar() {
   const t = i18n.getFixedT(locale, "common");
   const isZh = locale === "zh";
   const is_home_page = location.pathname === "/" || location.pathname === "/zh";
+  // 主题状态由站点主题提供器拥有，导航栏只负责展示与切换。
+  const { mode: theme_mode, set_mode: set_theme_mode } = use_site_theme();
 
   const change_language = (next_locale: "en" | "zh") => {
     persist_interface_locale(next_locale);
@@ -93,7 +95,7 @@ export function Navbar() {
   const docsPath = isZh ? "/zh/docs" : "/en/docs";
   const citySdkDocsPath = isZh ? "/zh/city-sdk-docs" : "/en/city-sdk-docs";
   const agentSdkDocsPath = isZh ? "/zh/agent-sdk-docs" : "/en/agent-sdk-docs";
-  const pluginsDocsPath = isZh ? "/zh/plugins-docs" : "/en/plugins-docs";
+  const powersDocsPath = isZh ? "/zh/powers-docs" : "/en/powers-docs";
   const uiSdkDocsPath = isZh ? "/zh/ui-sdk-docs" : "/en/ui-sdk-docs";
   const paymentsPath = isZh ? "/zh/payments" : "/en/payments";
   const cliDocsPath = isZh ? "/zh/docs/cli/cli" : "/en/docs/cli/cli";
@@ -104,7 +106,7 @@ export function Navbar() {
 
   const productGroup: NavGroup = {
     label: t("nav.product"),
-    activePaths: [productPath, startPath, productCitySdkPath, productFederationSdkPath, productAgentSdkPath, productUiSdkPath, pluginsDocsPath, paymentsPath],
+    activePaths: [productPath, startPath, productCitySdkPath, productFederationSdkPath, productAgentSdkPath, productUiSdkPath, powersDocsPath, paymentsPath],
     items: [
       { label: t("nav.productOverview"), description: isZh ? "完整产品矩阵" : "Full product index", path: productPath, icon: IconLayoutDashboard },
       { label: "CLI", description: isZh ? "命令行工具" : "Command-line interface", path: startPath, icon: IconTerminal },
@@ -112,20 +114,20 @@ export function Navbar() {
       { label: "Federation SDK", description: isZh ? "Agent 产品后端 SDK" : "Agent product backend SDK", path: productFederationSdkPath, icon: IconServer },
       { label: "Agent SDK", description: isZh ? "Agent 嵌入 SDK" : "Agent embedding SDK", path: productAgentSdkPath, icon: IconRobot },
       { label: "UI SDK", description: isZh ? "UI 组件 SDK" : "UI component SDK", path: productUiSdkPath, icon: IconLayoutDashboard },
-      { label: "Plugins", description: isZh ? "插件系统" : "Plugin system", path: pluginsDocsPath, icon: IconPuzzle },
+      { label: "Powers", description: isZh ? "能力系统" : "Capability system", path: powersDocsPath, icon: IconPuzzle },
       { label: "Services", description: isZh ? "服务与支付基础设施" : "Services & payment infrastructure", path: paymentsPath, icon: IconServer },
     ],
   };
 
   const docsGroup: NavGroup = {
     label: t("nav.docs"),
-    activePaths: [docsPath, cliDocsPath, citySdkDocsPath, agentSdkDocsPath, pluginsDocsPath, uiSdkDocsPath, paymentsPath],
+    activePaths: [docsPath, cliDocsPath, citySdkDocsPath, agentSdkDocsPath, powersDocsPath, uiSdkDocsPath, paymentsPath],
     items: [
       { label: "Overview", description: isZh ? "核心文档" : "Core docs", path: docsPath, icon: IconBook },
       { label: "CLI Docs", description: isZh ? "CLI 文档" : "CLI docs", path: cliDocsPath, icon: IconTerminal },
       { label: "City SDK", description: isZh ? "City SDK 文档" : "City SDK docs", path: citySdkDocsPath, icon: IconServer },
       { label: "Agent SDK", description: isZh ? "Agent SDK 文档" : "Agent SDK docs", path: agentSdkDocsPath, icon: IconRobot },
-      { label: "Plugins", description: isZh ? "Plugins 文档" : "Plugins docs", path: pluginsDocsPath, icon: IconPuzzle },
+      { label: "Powers", description: isZh ? "Powers 文档" : "Powers docs", path: powersDocsPath, icon: IconPuzzle },
       { label: "UI SDK", description: isZh ? "UI SDK 文档" : "UI SDK docs", path: uiSdkDocsPath, icon: IconLayoutDashboard },
       { label: "Services Docs", description: isZh ? "Services 文档" : "Services docs", path: paymentsPath, icon: IconLayoutDashboard },
     ],
@@ -220,7 +222,7 @@ export function Navbar() {
                         city_sdk_docs_path={citySdkDocsPath}
                         services_path={paymentsPath}
                         agent_sdk_docs_path={agentSdkDocsPath}
-                        plugins_docs_path={pluginsDocsPath}
+                        powers_docs_path={powersDocsPath}
                         ui_sdk_docs_path={uiSdkDocsPath}
                         dropdown_item_class={dropdownItemClass}
                         dropdown_item_icon_class={dropdownItemIconClass}
@@ -326,6 +328,8 @@ export function Navbar() {
             dropdown_separator_class={dropdownSeparatorClass}
             menu_select_item_class={menuSelectItemClass}
             on_language_change={change_language}
+            theme_mode={theme_mode}
+            set_theme_mode={set_theme_mode}
           />
         </div>
       </div>
@@ -390,7 +394,7 @@ function ThemeSwitcher({
   dropdown_content_class: string;
   dropdown_item_class: string;
 }) {
-  const { theme, resolvedTheme } = useTheme();
+  const { mode, resolved_theme, set_mode } = use_site_theme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -400,9 +404,9 @@ function ThemeSwitcher({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger aria-label={is_zh ? "切换主题" : "Switch theme"} title={is_zh ? "切换主题" : "Switch theme"} className={button_class}>
-        {mounted && resolvedTheme === "dark" ? (
+        {mounted && resolved_theme === "dark" ? (
           <IconMoon className="size-4" />
-        ) : mounted && resolvedTheme === "light" ? (
+        ) : mounted && resolved_theme === "light" ? (
           <IconSun className="size-4" />
         ) : (
           <IconSunMoon className="size-4" />
@@ -413,17 +417,25 @@ function ThemeSwitcher({
           <DropdownMenuLabel className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.12em] text-text-soft">
             {is_zh ? "主题" : "Theme"}
           </DropdownMenuLabel>
-          <ThemeMenuItems is_zh={is_zh} item_class={dropdown_item_class} />
+          <ThemeMenuItems is_zh={is_zh} item_class={dropdown_item_class} mode={mode} set_mode={set_mode} />
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function ThemeMenuItems({ is_zh, item_class }: { is_zh: boolean; item_class: string }) {
-  const { setTheme, theme } = useTheme();
+function ThemeMenuItems({
+  is_zh,
+  item_class,
+  mode,
+  set_mode,
+}: {
+  is_zh: boolean;
+  item_class: string;
+  mode: SiteThemeMode;
+  set_mode: (mode: SiteThemeMode) => void;
+}) {
   const [mounted, setMounted] = useState(false);
-  const current_theme = isThemeMode(theme) ? theme : "system";
 
   useEffect(() => {
     setMounted(true);
@@ -433,9 +445,9 @@ function ThemeMenuItems({ is_zh, item_class }: { is_zh: boolean; item_class: str
     <>
       {theme_options.map((option) => {
         const Icon = option.icon;
-        const selected = mounted && current_theme === option.value;
+        const selected = mounted && mode === option.value;
         return (
-          <DropdownMenuItem key={option.value} className={item_class} onClick={() => setTheme(option.value)}>
+          <DropdownMenuItem key={option.value} className={item_class} onClick={() => set_mode(option.value)}>
             <span className="flex items-center gap-2">
               <Icon className="size-4 text-text-soft" />
               <span>{is_zh ? option.zh_label : option.en_label}</span>
@@ -462,7 +474,7 @@ function DocsDropdownGroups({
   city_sdk_docs_path,
   services_path,
   agent_sdk_docs_path,
-  plugins_docs_path,
+  powers_docs_path,
   ui_sdk_docs_path,
   dropdown_item_class,
   dropdown_item_icon_class,
@@ -476,7 +488,7 @@ function DocsDropdownGroups({
   city_sdk_docs_path: string;
   services_path: string;
   agent_sdk_docs_path: string;
-  plugins_docs_path: string;
+  powers_docs_path: string;
   ui_sdk_docs_path: string;
   dropdown_item_class: string;
   dropdown_item_icon_class: string;
@@ -496,7 +508,7 @@ function DocsDropdownGroups({
   ];
   const agent_group: readonly DocsItem[] = [
     { label: "Agent SDK", description: is_zh ? "Agent SDK 文档" : "Agent SDK docs", path: agent_sdk_docs_path, icon: IconRobot },
-    { label: "Plugins", description: is_zh ? "Plugins 文档" : "Plugins docs", path: plugins_docs_path, icon: IconPuzzle },
+    { label: "Powers", description: is_zh ? "Powers 文档" : "Powers docs", path: powers_docs_path, icon: IconPuzzle },
   ];
   const ui_group: readonly DocsItem[] = [
     { label: "UI SDK", description: is_zh ? "UI SDK 文档" : "UI SDK docs", path: ui_sdk_docs_path, icon: IconLayoutDashboard },
@@ -549,6 +561,8 @@ function MobileMenu({
   dropdown_separator_class,
   menu_select_item_class,
   on_language_change,
+  theme_mode,
+  set_theme_mode,
 }: {
   is_zh: boolean;
   groups: readonly NavGroup[];
@@ -562,6 +576,10 @@ function MobileMenu({
   menu_select_item_class: string;
   /** 用户选择目标语言时同步更新翻译状态与公开页面路径。 */
   on_language_change: (locale: "en" | "zh") => void;
+  /** 当前主题模式，由站点主题提供器拥有。 */
+  theme_mode: SiteThemeMode;
+  /** 切换主题模式。 */
+  set_theme_mode: (mode: SiteThemeMode) => void;
 }) {
   return (
     <DropdownMenu>
@@ -631,7 +649,12 @@ function MobileMenu({
           <DropdownMenuLabel className="px-3 pb-1 pt-2 text-[0.65rem] uppercase tracking-[0.1em] text-text-soft">
             {is_zh ? "主题" : "Theme"}
           </DropdownMenuLabel>
-          <ThemeMenuItems is_zh={is_zh} item_class={menu_select_item_class} />
+          <ThemeMenuItems
+            is_zh={is_zh}
+            item_class={menu_select_item_class}
+            mode={theme_mode}
+            set_mode={set_theme_mode}
+          />
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

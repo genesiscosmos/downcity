@@ -14,7 +14,7 @@ const docs_collections: DocsCollection[] = [
   { directory: "city-sdk-docs", route_prefix: "city-sdk-docs" },
   { directory: "agent-sdk-docs", route_prefix: "agent-sdk-docs" },
   { directory: "payments", route_prefix: "payments" },
-  { directory: "plugins-docs", route_prefix: "plugins-docs" },
+  { directory: "powers-docs", route_prefix: "powers-docs" },
   { directory: "ui-sdk-docs", route_prefix: "ui-sdk-docs" },
   // blog 不是文档，但 MDX → `/{lang}/{route_prefix}/<slug>` 的路径映射与文档一致，
   // 复用同一套扫描可避免新增文章时漏配预渲染。
@@ -120,16 +120,13 @@ function get_prerender_paths() {
       "/city-sdk-docs",
       "/agent-sdk-docs",
       "/payments",
-      "/plugins-docs",
+      "/powers-docs",
       "/ui-sdk-docs",
       "/en/blog",
       "/zh/blog",
-      "/api/search",
-      "/api/city-sdk-docs/search",
-      "/api/agent-sdk-docs/search",
-      "/api/payments/search",
-      "/api/plugins-docs/search",
-      "/api/ui-sdk-docs/search",
+      // 静态检索索引：按语言各生成一份，供文档搜索在浏览器内检索。
+      "/search-index.en.json",
+      "/search-index.zh.json",
       ...docs_paths,
     ]),
   );

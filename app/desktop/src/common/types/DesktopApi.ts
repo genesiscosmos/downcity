@@ -325,7 +325,7 @@ export interface DesktopPowerSummary {
   /** Power 是否提供业务 Mainview。 */
   has_mainview: boolean;
 
-  /** Power 是否提供设置中心 Config。 */
+  /** Power 是否提供与工作区分离的设置中心 Config 面板。 */
   has_config: boolean;
 
   /** City 中 Power main 的当前生命周期状态；纯 Renderer Power 不提供。 */
@@ -523,6 +523,21 @@ export interface DesktopWorkspaceTextFile {
   content: string;
   /** 文件大小，单位为字节。 */
   size: number;
+  /**
+   * 读取到的版本修改时间戳，单位为毫秒。
+   *
+   * 渲染器登记文件监听时回传它：读文件与登记监听是两次 IPC，中间若被改写，
+   * 主进程据此补一次变化通知，订阅方不会停在旧内容上。
+   */
+  modified_at: number;
+}
+
+/** IPC 广播的一条 Workspace 文件内容变化。 */
+export interface DesktopWorkspaceFileChangedEvent {
+  /** 文件所属 Workspace。 */
+  workspace_id: string;
+  /** 与订阅时逐字一致的 Workspace 内相对路径。 */
+  relative_path: string;
 }
 
 /** 模型支持的推理强度档位。 */
@@ -845,6 +860,17 @@ export interface DesktopApi {
     write_readme(workspace_id: string, content: string): Promise<DesktopWorkspaceSummary>;
     /** 读取 Workspace 中的 UTF-8 文本文件用于只读预览。 */
     read_text_file(workspace_id: string, relative_path: string): Promise<DesktopWorkspaceTextFile>;
+    /**
+     * 订阅一个文件的磁盘变化，用于预览热更新。
+     *
+     * `known_modified_at` 传调用方刚读到那一版的修改时间：读文件与登记监听之间存在空窗，
+     * 主进程据此发现并补发通知。`subscription_id` 由调用方生成，用于精确释放。
+     */
+    watch_file(workspace_id: string, relative_path: string, known_modified_at: number, subscription_id: string): Promise<void>;
+    /** 释放一个预览实例的文件监听；同一订阅方的其它监听不受影响。 */
+    unwatch_file(subscription_id: string): Promise<void>;
+    /** 订阅 Workspace 文件内容变化。 */
+    on_file_changed(callback: (event: DesktopWorkspaceFileChangedEvent) => void): () => void;
   };
   /** 本地 Power catalog 能力。 */
   power: {

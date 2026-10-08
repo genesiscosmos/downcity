@@ -6,7 +6,7 @@
  * - RemoteAgent 与 Session 数据结构拆到独立类型文件。
  */
 
-import type { ModelClient, AgentTool as Tool, ToolHookSet } from "@downcity/type";
+import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
 import type {
   AgentManagedSession,
   SessionOptions,
@@ -87,6 +87,15 @@ export interface AgentOptions {
    * - Session 未显式设置模型时，执行自动回退到该实例。
    */
   model?: ModelClient;
+
+  /**
+   * 新建 Session 时使用的默认目录。
+   *
+   * 关键点（中文）
+   * - 这是默认值，不是绑定：单个 Session 可以通过 `session.set_workspace()` 换成别的目录或去掉。
+   * - 省略时新建的 Session 没有项目上下文：没有文件工具与 Shell，但纯模型对话仍可用。
+   */
+  workspace?: WorkspaceRuntime;
 
   /**
    * 当前 agent 使用的本地 Session 类。

@@ -46,9 +46,13 @@ import {
   build_memory_recall_context_block,
 } from "@/memory/runtime/SystemProvider.js";
 import { BuiltinMemoryProvider } from "@/memory/providers/BuiltinMemoryProvider.js";
-import { FileMemoryStorageAdapter } from "@/memory/adapters/FileMemoryStorageAdapter.js";
+import {
+  FileMemoryStorageAdapter,
+  get_default_file_memory_root_path,
+} from "@/memory/adapters/FileMemoryStorageAdapter.js";
+import { MemoryStorageRouter } from "@/memory/adapters/MemoryStorageRouter.js";
 import { select_memory_capture_messages } from "@/memory/runtime/CapturePolicy.js";
-import { MemoryAccessResolver } from "@/memory/runtime/AccessResolver.js";
+import { resolve_memory_access } from "@/memory/runtime/AccessResolver.js";
 import { register_memory_power_host_actions } from "@/memory/host/MemoryPowerHostActions.js";
 import type {
   MemoryPowerOptions,
@@ -70,15 +74,12 @@ const memory_type_schema = z.enum([
 ]);
 
 const memory_write_target_schema = z.enum([
-  "current_user",
   "current_workspace",
   "agent",
 ]);
 
 const memory_subject_kind_schema = z.enum([
   "agent",
-  "user",
-  "workspace",
   "city",
 ]);
 
@@ -179,19 +180,26 @@ export class MemoryPower extends Power {
   /** 当前 City 生命周期内唯一的 Memory Provider。 */
   private provider_instance?: MemoryProvider;
 
-  /** 从可信 PowerContext 解析当前可读写 Memory 范围。 */
-  private readonly access_resolver: MemoryAccessResolver;
+  /** 宿主显式提供的平台数据根目录；用于定位 Agent 私有记忆。 */
+  private readonly platform_root_path?: string;
 
   constructor(options: MemoryPowerOptions = {}) {
     super();
-    const storage_root_path = options.storage_root_path?.trim();
-    if (storage_root_path && !path.isAbsolute(storage_root_path)) {
-      throw new Error("MemoryPower storage_root_path must be an absolute path");
+    const shared_root_path = options.shared_root_path?.trim();
+    const platform_root_path = options.platform_root_path?.trim();
+    if (shared_root_path && !path.isAbsolute(shared_root_path)) {
+      throw new Error("MemoryPower shared_root_path must be an absolute path");
     }
-    if (storage_root_path) this.provider_instance = create_memory_provider(storage_root_path);
-    this.access_resolver = new MemoryAccessResolver({
-      city_memory_available: true,
-    });
+    if (platform_root_path && !path.isAbsolute(platform_root_path)) {
+      throw new Error("MemoryPower platform_root_path must be an absolute path");
+    }
+    if (shared_root_path) {
+      this.provider_instance = create_memory_provider({
+        shared_root_path,
+        ...(platform_root_path ? { platform_root_path } : {}),
+      });
+    }
+    this.platform_root_path = platform_root_path ? path.resolve(platform_root_path) : undefined;
   }
 
   /** 返回已经由 City 启动的唯一 Memory Provider。 */
@@ -211,7 +219,7 @@ export class MemoryPower extends Power {
     pipeline: {
       [SESSION_HOOK_POINTS.system_context]: [async ({ context, value, power }) => {
         const input = value as unknown as SessionSystemContextHookValue;
-        const access = await this.access_resolver.resolve(context, input.session_id);
+        const access = resolve_memory_access(context, { session_id: input.session_id });
         const core_blocks = await build_memory_core_system_content(this.provider, access);
         if (core_blocks.length === 0) return value;
         return {
@@ -228,7 +236,7 @@ export class MemoryPower extends Power {
       }],
       [SESSION_HOOK_POINTS.turn_context]: [async ({ context, value }) => {
         const input = value as unknown as SessionTurnContextHookValue;
-        const access = await this.access_resolver.resolve(context, input.session_id);
+        const access = resolve_memory_access(context, { session_id: input.session_id });
         const block = await build_memory_recall_context_block(
           this.provider,
           access,
@@ -260,7 +268,7 @@ export class MemoryPower extends Power {
     if (!this.provider.capabilities.capture_turn) return;
     const messages = select_memory_capture_messages(input);
     if (messages.length === 0) return;
-    const access = await this.access_resolver.resolve(context, input.session_id);
+    const access = resolve_memory_access(context, { session_id: input.session_id });
     const result = await this.provider.capture_turn({
       access,
       session_id: input.session_id,
@@ -277,7 +285,10 @@ export class MemoryPower extends Power {
 
   /** 启动当前 City 唯一的 Memory Provider，并注册界面管理 actions。 */
   async initialize(context: PowerLifecycleContext): Promise<void> {
-    this.provider_instance ??= create_memory_provider(context.storage.path);
+    this.provider_instance ??= create_memory_provider({
+      shared_root_path: context.storage.path,
+      ...(this.platform_root_path ? { platform_root_path: this.platform_root_path } : {}),
+    });
     await this.provider.initialize();
     register_memory_power_host_actions(context);
   }
@@ -305,7 +316,7 @@ export class MemoryPower extends Power {
       },
       execute: async ({ context }) => await status_memory_action(
         this.provider,
-        await this.access_resolver.resolve(context),
+        resolve_memory_access(context),
       ),
     }),
 
@@ -355,7 +366,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await search_memory_action(
           this.provider,
-          await this.access_resolver.resolve(context),
+          resolve_memory_access(context),
           {
           query: read_string(body, "query"),
           max_results: read_optional_number(body, "max_results"),
@@ -389,7 +400,7 @@ export class MemoryPower extends Power {
       },
       examples: [{
         title: "Read a memory",
-        payload: { memory_id: "agent/id_YWdlbnQ/wiki/user-preferences" },
+        payload: { memory_id: "agent/cheng_xu_yuan/wiki/user-preferences" },
       }],
       command: {
         description: "Read one exact memory.",
@@ -411,7 +422,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await read_memory_action(
           this.provider,
-          await this.access_resolver.resolve(context),
+          resolve_memory_access(context),
           {
           memory_id: read_string(body, "memory_id"),
           from_line: read_optional_number(body, "from_line"),
@@ -439,7 +450,7 @@ export class MemoryPower extends Power {
           properties: {
             subject_kinds: {
               type: "array",
-              items: { type: "string", enum: ["agent", "user", "workspace", "city"] },
+              items: { type: "string", enum: ["agent", "city"] },
               description: "Restrict results to these memory subjects.",
             },
             memory_types: {
@@ -464,7 +475,7 @@ export class MemoryPower extends Power {
         description: "List scoped long-term memories.",
         configure(command: Command) {
           command
-            .option("--subject <kind>", "Restrict to agent, user, workspace, or city.")
+            .option("--subject <kind>", "Restrict to agent or city.")
             .option("--memory-type <type>", "Restrict to one memory type.")
             .option("--include-evidence", "Include raw evidence records.")
             .option("--limit <number>", "Maximum result count.", parse_positive_integer)
@@ -484,7 +495,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await list_memory_action(
           this.provider,
-          await this.access_resolver.resolve(context),
+          resolve_memory_access(context),
           {
             subject_kinds: read_optional_subject_kind_list(body),
             memory_types: read_optional_memory_type_list(body),
@@ -516,8 +527,9 @@ export class MemoryPower extends Power {
             content: { type: "string", description: "Content to remember." },
             target: {
               type: "string",
-              enum: ["current_user", "current_workspace", "agent"],
-              description: "Semantic owner/subject target resolved from trusted runtime identity.",
+              enum: ["current_workspace", "agent"],
+              description:
+                "Semantic write target resolved from trusted runtime identity. current_workspace stores into City shared memory with the current workspace_id as metadata.",
             },
             topic: { type: "string", description: "Optional organization hint." },
             memory_type: {
@@ -531,10 +543,10 @@ export class MemoryPower extends Power {
       examples: [{
         title: "Remember a preference",
         payload: {
-          content: "User prefers concise answers.",
-          target: "current_user",
-          topic: "user-preferences",
-          memory_type: "preference",
+          content: "This Workspace always uses pnpm.",
+          target: "current_workspace",
+          topic: "project-overview",
+          memory_type: "decision",
         },
       }],
       command: {
@@ -542,7 +554,7 @@ export class MemoryPower extends Power {
         configure(command: Command) {
           command
             .requiredOption("--content <text>", "Content to remember.")
-            .requiredOption("--target <target>", "current_user, current_workspace, or agent.")
+            .requiredOption("--target <target>", "current_workspace or agent.")
             .option("--topic <topic>", "Optional organization hint.")
             .option("--memory-type <type>", "Memory type.")
             .option("--source <source>", "Optional evidence label.");
@@ -561,7 +573,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await remember_memory_action(
           this.provider,
-          await this.access_resolver.resolve(context),
+          resolve_memory_access(context),
           {
           content: read_string(body, "content"),
           target: read_memory_write_target(body),
@@ -612,7 +624,7 @@ export class MemoryPower extends Power {
         return await digest_memory_action(
           context,
           this.provider,
-          await this.access_resolver.resolve(context),
+          resolve_memory_access(context),
           {
           session_id: read_string(body, "session_id"),
           max_messages: read_optional_number(body, "max_messages"),
@@ -645,7 +657,7 @@ export class MemoryPower extends Power {
       examples: [{
         title: "Revise a preference",
         payload: {
-          memory_id: "agent/id_YWdlbnQ/wiki/user-preferences",
+          memory_id: "agent/cheng_xu_yuan/wiki/user-preferences",
           instruction: "Replace the old preference with the latest one.",
         },
       }],
@@ -669,7 +681,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await revise_memory_action(
           this.provider,
-          await this.access_resolver.resolve(context),
+          resolve_memory_access(context),
           {
           memory_id: read_string(body, "memory_id"),
           instruction: read_string(body, "instruction"),
@@ -709,7 +721,7 @@ export class MemoryPower extends Power {
         const body = read_body_object(input);
         return await forget_memory_action(
           this.provider,
-          await this.access_resolver.resolve(context),
+          resolve_memory_access(context),
           {
           memory_id: read_string(body, "memory_id"),
           },
@@ -719,10 +731,30 @@ export class MemoryPower extends Power {
   };
 }
 
-/** 使用 City 分配的生命周期存储创建内建 Memory Provider。 */
-function create_memory_provider(storage_root_path: string): MemoryProvider {
+/** 创建内建 Memory Provider，并把 Agent 私有根与共享根路由到不同物理目录。 */
+function create_memory_provider(input: {
+  /** City 为当前 MemoryPower 唯一实例分配的共享绝对目录。 */
+  shared_root_path: string;
+
+  /** 平台数据根目录；用于推导 `agents/<agent_id>/memory`。 */
+  platform_root_path?: string;
+}): MemoryProvider {
+  const platform_root_path = String(input.platform_root_path || "").trim();
+  if (!platform_root_path || !path.isAbsolute(platform_root_path)) {
+    throw new Error(
+      "MemoryPower requires an absolute platform_root_path to locate Agent private memory",
+    );
+  }
   return new BuiltinMemoryProvider({
     city_memory_available: true,
-    storage: new FileMemoryStorageAdapter({ root_path: storage_root_path }),
+    storage: new MemoryStorageRouter({
+      shared_storage: new FileMemoryStorageAdapter({ root_path: input.shared_root_path }),
+      create_agent_storage: (agent_id) => new FileMemoryStorageAdapter({
+        root_path: get_default_file_memory_root_path({
+          platform_root_path,
+          agent_id,
+        }),
+      }),
+    }),
   });
 }

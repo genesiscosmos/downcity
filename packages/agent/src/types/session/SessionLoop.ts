@@ -51,8 +51,12 @@ export interface SessionLoopOptions {
   session_id: string;
   /** 当前 Session 的完整来源元数据。 */
   session_origin: SessionOrigin;
-  /** 当前 Session 所属 Workspace 的绝对根目录。 */
-  workspace_path: string;
+  /**
+   * 当前 Session 的目录解析器。
+   *
+   * 关键点（中文）：目录是可变的会话状态，因此按需读取而不是构造时固定。
+   */
+  get_workspace_path: () => string;
   /**
    * 已装配的执行器。
    *

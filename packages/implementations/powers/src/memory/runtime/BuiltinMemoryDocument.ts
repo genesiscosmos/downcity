@@ -37,8 +37,6 @@ export function clamp_number(value: number, minimum: number, maximum: number): n
 /** 全部合法的 Subject 类别。 */
 const MEMORY_SUBJECT_KINDS: readonly MemorySubjectKind[] = [
   "agent",
-  "user",
-  "workspace",
   "city",
 ];
 
@@ -120,8 +118,6 @@ export function count_memory_subjects(
 ): Record<MemorySubjectKind, number> {
   const counts: Record<MemorySubjectKind, number> = {
     agent: 0,
-    user: 0,
-    workspace: 0,
     city: 0,
   };
   for (const item of items) counts[item.subject.kind] += 1;
@@ -171,7 +167,10 @@ export function normalize_memory_id(input: string): string {
     throw new Error(`Invalid memory_id: ${input}`);
   }
   const relative_start = segments.findIndex((segment) => segment === "wiki" || segment === "evidence");
-  if (relative_start < 2) throw new Error(`Unsupported Builtin memory_id: ${input}`);
+  // 前缀至少一段（`city/wiki/...`），至多三段（`user/<id>/wiki/...`）。
+  if (relative_start < 1 || relative_start > 3) {
+    throw new Error(`Unsupported Builtin memory_id: ${input}`);
+  }
   normalize_relative_memory_id(segments.slice(relative_start).join("/"));
   return segments.join("/");
 }
@@ -252,6 +251,7 @@ export function parse_metadata(
     ? raw_type as MemoryType
     : fallback_type;
   const raw_observed_at = read_frontmatter_json(content, "observed_at");
+  const raw_workspace_id = read_frontmatter_json(content, "workspace_id");
   const raw_source_refs = read_frontmatter_json(content, "source_refs");
   const source_refs = Array.isArray(raw_source_refs)
     ? raw_source_refs.flatMap((value) => {
@@ -275,6 +275,9 @@ export function parse_metadata(
     observed_at: typeof raw_observed_at === "string" && raw_observed_at.trim()
       ? raw_observed_at.trim()
       : new Date(0).toISOString(),
+    ...(typeof raw_workspace_id === "string" && raw_workspace_id.trim()
+      ? { workspace_id: raw_workspace_id.trim() }
+      : {}),
     source_refs,
   };
 }
@@ -286,6 +289,8 @@ export function create_markdown_record(input: {
   memory_type: MemoryType;
   source_refs?: MemorySourceReference[];
   observed_at?: string;
+  /** 当前记录关联的 Workspace；只作为 metadata，不参与 Subject 隔离。 */
+  workspace_id?: string;
   tags?: string[];
 }): string {
   const tags = input.tags?.map((tag) => String(tag || "").trim()).filter(Boolean) ?? [];
@@ -294,6 +299,7 @@ export function create_markdown_record(input: {
     `title: ${JSON.stringify(input.title)}`,
     `memory_type: ${JSON.stringify(input.memory_type)}`,
     `observed_at: ${JSON.stringify(input.observed_at || new Date().toISOString())}`,
+    `workspace_id: ${JSON.stringify(input.workspace_id || "")}`,
     `source_refs: ${JSON.stringify(input.source_refs || [])}`,
     `tags: ${JSON.stringify(tags)}`,
     "---",

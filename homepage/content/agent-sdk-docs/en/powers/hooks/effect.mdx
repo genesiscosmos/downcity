@@ -1,0 +1,114 @@
+---
+title: Effect
+description: Explain effect side-effect semantics, failure behavior, and why it is not a replacement for a full event bus
+---
+The core semantic of `effect` is:
+
+- keep the main value unchanged
+- do side effects only
+
+## What counts as a side effect
+
+Typical examples are:
+
+- logging
+- recording observed state
+- syncing something elsewhere
+- sending analytics events
+
+So the point is not to produce a new main result.
+
+The point is to do something in response to the current step.
+
+## Minimal example
+
+```ts
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).effect("audit.observe", {
+  event: "incoming_message",
+  session_id: "sess_001",
+});
+```
+
+A power can define it like this:
+
+```ts
+hooks: {
+  effect: {
+    "audit.observe": [
+      async ({ value, power }) => {
+        console.log(`[${power}] observed`, value);
+      },
+    ],
+  },
+}
+```
+
+## It resembles an event bus, but not completely
+
+Many people think of `effect` as a generic event bus.
+
+That is not entirely wrong, but two details matter:
+
+- it is still a named point explicitly called by the host
+- if a handler throws, the current effect call fails
+
+So it is not automatically a fire-and-forget queue with guaranteed independence from failure.
+
+## How multiple effect handlers run
+
+If one point has multiple effect handlers:
+
+- they run in registration order
+- handlers from active powers participate
+- if one throws, the current effect call stops
+
+## Best-fit scenarios
+
+### observation
+
+For example:
+
+- record who showed up
+- record which action happened
+
+### analytics
+
+For example:
+
+- how many times a feature was triggered
+- where an error appeared in the flow
+
+### syncing
+
+For example:
+
+- copy state into another store
+- write an audit event
+
+## Poor-fit scenarios
+
+### rewriting values
+
+That belongs in `pipeline`.
+
+### blocking the flow
+
+That belongs in `guard`.
+
+### producing one authoritative answer
+
+That belongs in `resolve`.
+
+## One practical recommendation
+
+If your effect is mission-critical and needs retries, durable storage, or guaranteed delivery, it may no longer be a simple effect concern.
+
+In that case, a healthier split is often:
+
+- the effect triggers something
+- power `lifecycle` or fuller background runtime owns the reliable processing
+
+## Related scenarios
+
+- [One full message flow](/en/agent-sdk-docs/powers/hooks/examples/end-to-end-message-flow)
+- [AuditEffectPower scenario](/en/powers-docs/examples/audit-effect-power)

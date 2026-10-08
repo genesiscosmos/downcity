@@ -1,0 +1,79 @@
+---
+title: Common Bad vs Good Designs
+description: Use short bad-vs-good comparisons to show when to choose pipeline, guard, effect, resolve, or lifecycle runtime
+---
+## Misuse 1
+
+Need:
+
+- add default fields to a message
+
+Bad choice:
+
+- use `guard`
+
+Better choice:
+
+- use `pipeline`
+
+## Misuse 2
+
+Need:
+
+- block the request if permission is missing
+
+Bad choice:
+
+- use `effect`
+
+Better choice:
+
+- use `guard`
+
+## Misuse 3
+
+Need:
+
+- write one audit log after each execution
+
+Bad choice:
+
+- use `pipeline`
+
+Better choice:
+
+- use `effect`
+
+## Misuse 4
+
+Need:
+
+- determine the user's final role
+
+Bad choice:
+
+- use `pipeline`
+
+Better choice:
+
+- use `resolve`
+
+## Misuse 5
+
+Need:
+
+- maintain a long-lived cache and background sync worker
+
+Bad choice:
+
+- put everything into power hooks
+
+Better choice:
+
+- let power `lifecycle` own the long-lived state
+- keep hooks focused on chain extension
+
+## Related docs
+
+- [How to choose](/en/agent-sdk-docs/powers/hooks/choose-the-right-one)
+- [Power Runtime Composition](/en/powers-docs/examples/power-runtime-composition)

@@ -8,7 +8,7 @@
  */
 
 import type { AgentSessionConfigSnapshot } from "@/types/agent/SessionTypes.js";
-import type { SessionApprovalMode } from "@downcity/type";
+import type { SessionApprovalMode, WorkspaceRuntime } from "@downcity/type";
 
 /**
  * 本地 Session 内存状态。
@@ -30,6 +30,23 @@ export interface SessionLocalState {
 
   /** 当前 Session 已接受并持久化的 Shell 审批模式。 */
   configured_approval_mode: SessionApprovalMode;
+
+  /**
+   * 当前 Session 正在哪个 Workspace 中干活。
+   *
+   * 关键点（中文）
+   * - 这是会话状态，不是会话身份：它可以在会话中切换，切换不改变 session_id 与历史。
+   * - 为空表示这段会话没有项目上下文，此时没有文件工具与 Shell。
+   */
+  current_workspace?: WorkspaceRuntime;
+
+  /**
+   * 没有 Workspace 时使用的目录回退值。
+   *
+   * 关键点（中文）：只用于 system 快照与项目根展示；没有 Workspace 就没有文件工具，
+   * 因此该值不会被当作可访问路径使用。
+   */
+  fallback_workspace_path: string;
 
   /**
    * 当前 session 创建时间（毫秒时间戳）。

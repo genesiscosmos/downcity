@@ -1,0 +1,21 @@
+---
+title: Power Availability
+description: 说明 City 注册状态和运行时 availability 的区别。
+---
+Power 当前需要区分两个事实：
+
+- 是否已经注册到 City，并因此投影到全部 Agent。
+- 当前 Agent/Workspace 环境是否满足 Power 自己的 `availability()` 检查。
+
+```ts
+const powers = city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id });
+powers.has("skill");
+powers.status("skill");
+await powers.availability("skill");
+```
+
+Power 加入 City 且 `start` 尚未完成时为 `initializing`；启动成功后为 `ready`；启动失败时为
+`error`。普通 Action 的业务失败不会改变整个 Power 的状态。
+
+`availability()` 只回答当前 Context 中是否真正可用，例如 Provider、依赖、模型或凭据是否就绪。
+它不控制 Agent 是否绑定 Power；City 中的全部 Power 始终对全部 Agent 可见。

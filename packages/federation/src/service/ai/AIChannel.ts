@@ -15,6 +15,7 @@ import type {
   AIBillInput,
   AICharge,
   AIChargedResult,
+  AIDecisionResult,
   AIImageCreateResult,
   AIImageResult,
   AIModelActions,
@@ -63,6 +64,8 @@ export abstract class AIChannel {
   tts?(input: AIChannelActionInput): Promise<AIChargedResult<Response>>;
   /** 语音识别 action。 */
   asr?(input: AIChannelActionInput): Promise<AIChargedResult<Response>>;
+  /** 结构化决策 action，用于 System One 类模型。 */
+  decision?(input: AIChannelActionInput): Promise<AIChargedResult<AIDecisionResult>>;
 
   /** 把当前 Channel 下的模型声明转换为 Federation 内部模型定义。 */
   model(spec: AIModelSpec): AIModelDefinition {
@@ -79,6 +82,7 @@ export abstract class AIChannel {
       "video",
       "tts",
       "asr",
+      "decision",
     ] as const;
 
     for (const modality of modalities) {

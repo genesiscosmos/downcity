@@ -1,0 +1,141 @@
+---
+title: Resolve
+description: Explain resolve as a single-authority answer point, including its failure rules and how it differs from ordinary hooks
+---
+`resolve` is the easiest extension point to misunderstand.
+
+It may look like just another handler, but its semantic job is not "participate in a flow."
+
+Its job is:
+
+- provide the final answer to a named question
+
+## Separate it from the first three
+
+The first three are closer to:
+
+- `pipeline`: several participants transform a value
+- `guard`: several participants inspect a value
+- `effect`: several participants trigger side effects
+
+`resolve` is closer to:
+
+- who is the final authority for this answer
+
+## Why there must be exactly one resolver
+
+Because the question it serves is usually not "let several powers each add something."
+
+It is more like:
+
+- what is the final role
+- which provider is finally selected
+- who is the final route owner
+
+These questions require:
+
+- one definite answer
+- one final authority
+
+That is why duplicate registration for the same `resolve` point throws immediately.
+
+## Minimal example
+
+```ts
+const role = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).resolve<{ userId: string }, string>(
+  "auth.resolve_role",
+  { userId: "owner" },
+);
+```
+
+A power can define it like this:
+
+```ts
+resolves: {
+  "auth.resolve_role": async ({ value }) => {
+    const body = value as { userId?: unknown };
+    const userId = String(body.userId || "").trim();
+    if (!userId) {
+      throw new Error("userId is required");
+    }
+    if (userId === "owner") return "admin" as never;
+    return "member" as never;
+  },
+}
+```
+
+## Failure rules are part of the design
+
+### duplicate registration
+
+It throws.
+
+The system does not allow two final authorities for one point.
+
+### no resolver registered
+
+It throws.
+
+The host explicitly asked a question that must have an answer.
+
+### resolver power is currently disabled
+
+It also throws.
+
+This is not a "skip if nobody participates" point.
+
+It is a "there must be one active final answer owner" point.
+
+## Strong use cases
+
+### final role resolution
+
+For example:
+
+- is the user `admin`, `member`, or `guest`
+
+### final strategy selection
+
+For example:
+
+- which provider should finally be used
+- which executor should finally own this mode
+
+### unique ownership decisions
+
+For example:
+
+- which power is responsible for interpreting this object
+
+## When not to use resolve
+
+### several powers each want to contribute a little
+
+That is really `pipeline`.
+
+### you only want to decide whether the flow may continue
+
+That is really `guard`.
+
+### you only want to record that something happened
+
+That is really `effect`.
+
+## One stable test sentence
+
+If your question naturally sounds like:
+
+- "what is the final answer?"
+
+then `resolve` is probably a good fit.
+
+If it sounds more like:
+
+- "should this value be enriched a bit more?"
+
+then it probably is not `resolve`.
+
+## Related scenarios
+
+- [Why role resolution must stay unique](/en/agent-sdk-docs/powers/hooks/examples/role-resolution-flow)
+- [RoleResolverPower scenario](/en/powers-docs/examples/role-resolver-power)

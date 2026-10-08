@@ -11,7 +11,7 @@ export type HomeSdkFileKey = "agent" | "city" | "federation";
 /** SDK 世界地块使用的领域视觉语义。 */
 export type HomeSdkWorldCellTone =
   | "workspace"
-  | "plugin"
+  | "power"
   | "city"
   | "storage"
   | "transport"
@@ -30,7 +30,7 @@ export type HomeSdkWorldCellContent =
   | "none";
 
 /** Plugin 地块用于区分真实内置能力的图标语义。 */
-export type HomeSdkWorldPluginKind = "skill" | "task" | "web" | "memory";
+export type HomeSdkWorldPowerKind = "skill" | "task" | "web" | "memory";
 
 /** SDK 世界中用于强调代码所属领域的分组。 */
 export type HomeSdkWorldCellGroup = "agent" | "city" | "link" | "federation";
@@ -63,7 +63,7 @@ export interface HomeSdkWorldCell {
   /** 连接地块继承的 City 身份色；普通地块不设置。 */
   link_accent?: string;
   /** Plugin 地块展示的内置能力图标；非 Plugin 地块不设置。 */
-  plugin_kind?: HomeSdkWorldPluginKind;
+  power_kind?: HomeSdkWorldPowerKind;
 }
 
 /** SDK 世界区域名称在轴向网格中的锚点。 */
@@ -99,7 +99,7 @@ export interface HomeSdkWorldMapProps {
 /** 地图内所有可见领域概念标签。 */
 export interface HomeSdkWorldLabels {
   /** Agent 居民名称。 */ agent: string;
-  /** Agent 能力扩展节点名称。 */ plugin: string;
+  /** Agent 能力扩展节点名称。 */ power: string;
   /** Workspace 地块名称。 */ workspace: string;
   /** Group 主体名称。 */ group: string;
   /** GroupSession 群聊上下文名称。 */ group_session: string;

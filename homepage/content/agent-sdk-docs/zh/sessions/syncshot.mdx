@@ -2,13 +2,13 @@
 title: session.syncshot()
 description: 使用 Agent 当前配置手动重新生成本地 Session system
 ---
-本地 Session 的 system 第一次生成后会固定在内存中。需要显式采用 Agent 当前最新 instruction、managed system blocks 和 plugin system 时，调用：
+本地 Session 的 system 第一次生成后会固定在内存中。需要显式采用 Agent 当前最新 instruction、managed system blocks 和 Power system 时，调用：
 
 ```ts
 await session.syncshot();
 ```
 
-`syncshot()` 会替换当前 Session 的内存 system snapshot。已经发给 provider 的请求不受影响，后续 step 使用新 system。它只刷新 system，不改变 Session 的 plugin execution view。
+`syncshot()` 会替换当前 Session 的内存 system snapshot。已经发给 provider 的请求不受影响，后续 step 使用新 system。它只刷新 system，不改变 Session 的 Power execution view。
 
 持久化规则取决于当前 Session 是否已经存在 `instruction.md`：
 

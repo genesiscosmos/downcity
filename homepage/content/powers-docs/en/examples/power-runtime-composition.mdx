@@ -1,0 +1,40 @@
+---
+title: Power Runtime Composition
+description: When a power should stay thin and when capability should move into lifecycle-owned power runtime
+---
+One of the most important design questions is:
+
+Should this logic live in power actions or hooks, or in lifecycle-owned power runtime?
+
+## Good thin-power cases
+
+- explicit user-facing actions
+- hook participation
+- system prompt injection
+- small runtime helper protocols
+- small runtime HTTP surfaces
+
+## Good lifecycle-owned runtime cases
+
+- queue workers
+- cron engines
+- durable session pools
+- long-lived connections
+- in-memory runtime state that must be cleaned up on stop
+
+## A practical rule
+
+If the thing must start, stop, recover, or be polled over time, it probably needs lifecycle-owned power runtime, not just one thin action.
+
+## Real built-in references
+
+- `messenger`: queue worker owned by the power instance
+- `task`: cron engine owned by the power instance
+- `schedule`: lifecycle-only infrastructure power
+- `shell`: long-lived shell sessions owned by the power instance
+
+## Related docs
+
+- [Power Design Patterns](/en/agent-sdk-docs/powers/design-patterns)
+- [Power Lifecycle](/en/agent-sdk-docs/powers/lifecycle)
+- [Built-ins Overview](/en/powers-docs/builtins/overview)

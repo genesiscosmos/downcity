@@ -66,7 +66,7 @@ const legal_pages = {
         paragraphs: [
           "To use parts of the Service, you may need to create an account or connect a workspace with accurate and complete information. You are responsible for maintaining the confidentiality of your login credentials and for all activity under your account.",
           `You must keep your billing email and account information up to date, protect API keys, tokens, secrets, and devices used with Downcity, and notify us immediately of any unauthorized use at ${contact_email}.`,
-          "You are responsible for how you configure, deploy, and operate Downcity, including the agents, plugins, models, tools, credentials, data sources, approvals, and workflows you connect to it.",
+          "You are responsible for how you configure, deploy, and operate Downcity, including the agents, powers, models, tools, credentials, data sources, approvals, and workflows you connect to it.",
         ],
       },
       {

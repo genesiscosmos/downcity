@@ -21,36 +21,7 @@ import {
 
 ## 最小示例
 
-```tsx
-import {
-  Button,
-  Sheet,
-  SheetTrigger,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@downcity/ui";
-
-export function SettingsSheet() {
-  return (
-    <Sheet>
-      <SheetTrigger render={<Button size="sm" />}>打开设置</SheetTrigger>
-      <SheetContent side="right">
-        <SheetHeader>
-          <SheetTitle>Model Settings</SheetTitle>
-          <SheetDescription>在这里编辑运行参数。</SheetDescription>
-        </SheetHeader>
-        <div className="px-4">这里放表单内容。</div>
-        <SheetFooter>
-          <Button size="sm">保存</Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
-  );
-}
-```
+<ComponentPreview name="sheet" />
 
 ## 可用方向
 

@@ -11,7 +11,9 @@
  * 更早的 Agent 布局是「头像占左侧一列、正文右移」，由此带出三个问题：
  *
  * 1. 正文左缘与身份行、与工具活动各错开一次，整列没有统一的左边缘；
- * 2. 头像带 `sticky`，长消息滚动时它脱离自己的 Header 悬在视口上；
+ * 2. 头像曾带 `sticky`，长消息滚动时它脱离自己的 Header 悬在视口上。
+ *    现在是**整个身份行**一起吸顶（见 `agent_message_identity_header_class_name`）：
+ *    头像与名字是一个按钮、一件事，分开动才是那个旧缺陷。
  * 3. 头像与名称是两个按钮却只做同一个动作，键盘用户要为同一件事按两次 Tab。
  *
  * 现在 Agent 消息是上下两段（身份在上、正文在下），用户消息是右侧气泡 + 下方元信息行。
@@ -45,7 +47,53 @@ export interface MessageIdentity {
 export const agent_message_root_class_name = "group is-agent flex w-full flex-col gap-1 py-2 !m-0 !p-0";
 
 /**
- * 身份行：头像 + 名称。
+ * 身份行容器：头像 + 名称 + 右侧附加控件，滚动时吸顶。
+ *
+ * ## 为什么吸顶
+ *
+ * 一条消息可以很长（长过程、长结论），滚到下半段时已经看不到这条消息是谁说的。
+ * 身份行吸顶后，「当前在谁的消息里」始终可见。
+ *
+ * 吸顶范围由**包含块**（也就是这条消息本身）决定：它只在本条消息占用的区间内吸住，
+ * 消息读完就被下一条顶走，不会跨消息悬浮。这是 `position: sticky` 的默认语义，不需要额外状态。
+ *
+ * ## 两个必须同时给的属性
+ *
+ * - `bg-background`：消息列的底色（`MainView` 的 `bg-background`）。不写背景时正文会从
+ *   身份行**背后**透出来，看起来像文字叠在一起；这是吸顶最容易漏的一步。
+ * - `z-10`：吸顶元素在 DOM 里排在正文之前，没有层级时后出现的正文会盖在它上面。
+ *
+ * `top-0` 相对滚动视口顶边，不相对正文列的 `p-2`：吸住时向上对齐到视口边缘，
+ * 与“吸顶”的字面意思一致。
+ */
+export const agent_message_identity_header_class_name = "sticky top-0 z-10 flex min-w-0 items-center gap-2 bg-background";
+
+/**
+ * 消息动作栏（复制 / 引用 / 分支）与它所属正文的间距。
+ *
+ * **比块间距小**：工具栏是它上面那段正文的附属动作，不是独立展示块。
+ * 用容器自己的 `gap-3`（与正文块同级）会把它与正文拉成两个块，
+ * 所以它跟正文包在同一组里，组内间距取更小的一档。
+ */
+export const agent_message_actions_group_class_name = "flex min-w-0 flex-col gap-1";
+
+/**
+ * 消息动作栏（复制 / 引用 / 分支）。
+ *
+ * **靠左**：它跟在它所作用的正文后面，不推到行末——推到行末会与下方消息的右缘对齐，
+ * 看起来像属于下一条消息。
+ *
+ * 高度固定 `h-6`（24px 目标尺寸），否则悬停出现时会把下方内容推一下。
+ * 默认隐藏、悬停或键盘焦点进入时显示：消息正文才是内容，工具栏是次要动作。
+ */
+export const agent_message_actions_class_name = "message-action-toolbar pointer-events-none flex h-6 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100";
+
+/**
+ * 身份行：头像 + 名称，后面跟时间与折叠开关。
+ *
+ * 顺序是「谁说的 → 什么时候 → 还能展开过程吗」，整组靠左，行右侧留空。
+ * 时间戳与开关都是**直接子节点**，不再包一层右侧元信息组：靠左排列时那层容器
+ * 与身份行的 `gap-2` 重复，去掉后少一个 DOM 层级。
  *
  * `py-0.5` 现在**不再是**触控垫高：头像 24px 本身已满足 WCAG 2.2 的
  * 24px 目标尺寸下限（20px 时代才需要靠它补到 24px）。它现在只负责身份行
@@ -193,12 +241,20 @@ export const user_message_text_class_name = "text-base leading-chat text-foregro
  * 折叠时整段不渲染，不占任何高度。
  *
  * 不给它另加缩进或背景：过程与结论是同一段输出的两段，不是两个层级。
- * 层级感由 Footer 的思考摘要行与折叠开关表达。
  */
 export const agent_message_process_class_name = "flex min-w-0 w-full flex-col gap-3 text-base text-foreground";
 
 /**
- * Footer：运行状态、思考摘要与消息操作栏的共用行。
+ * 正文区域容器：常显的结论正文（最后一个活动之后的块）。
+ *
+ * 与过程容器同值：两者是同一段输出的两段，排印必须一致。
+ * 它是**展开时被保住的锚点**（`data-chat-content-region`）：过程在它前面展开，
+ * 由滚动视口回写 scrollTop 让它原地不动（见 `ChatScrollAnchor`）。
+ */
+export const agent_message_content_class_name = "flex min-w-0 w-full flex-col gap-3 text-base text-foreground";
+
+/**
+ * Footer：运行状态、实时文件改动与消息操作栏的共用行。
  *
  * 起点与正文相同（不要加 `pl-1`），高度固定，避免悬停出现操作栏时整行跳动。
  */

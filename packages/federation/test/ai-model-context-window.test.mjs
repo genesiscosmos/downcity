@@ -13,7 +13,12 @@ import {
 } from "../bin/index.js"
 
 test("AIService exposes AIChannel model context_window in the public catalog", () => {
-  const channel = new (class extends AIChannel {})({ id: "catalog" })
+  // 注册阶段要求模型至少有一个可执行能力，因此这里使用带 stream 的 Channel。
+  const channel = new (class extends AIChannel {
+    async stream() {
+      return { stream: new ReadableStream({ start(controller) { controller.close() } }) }
+    }
+  })({ id: "catalog" })
   const ai = new AIService()
 
   ai.use(channel.model({

@@ -8,58 +8,14 @@
  *    避免再引入一套需要手工维护的权重字段。
  * 3. 文案从 page data 取（title / description 均为字符串），不直接遍历 page tree
  *    的 name/description，因为后者是 ReactNode，不适合当纯文本使用。
+ * 4. loader 位于 `index.loader.server.ts`：它访问文档索引（依赖 `node:*`），
+ *    不能与渲染代码同处一个模块。
  */
 import type { Route } from "./+types/index";
 import { Footer } from "@/components/sections/Footer";
-import { blogSource } from "@/lib/blog-source";
-import { create_page_meta, normalize_site_path } from "@/lib/seo";
+import { create_page_meta } from "@/lib/seo";
 
-type TreeNode = {
-  type?: string;
-  url?: string;
-  children?: TreeNode[];
-};
-
-/** 按 page tree 顺序收集文章 URL。 */
-function collect_page_urls(node: TreeNode | undefined, out: string[]) {
-  if (!node) return;
-  if (node.type === "page" && typeof node.url === "string") {
-    out.push(node.url);
-  }
-  if (!Array.isArray(node.children)) return;
-  for (const child of node.children) {
-    collect_page_urls(child, out);
-  }
-}
-
-export async function loader({ request }: Route.LoaderArgs) {
-  const url = new URL(request.url);
-  const lang: "en" | "zh" =
-    url.pathname.startsWith("/zh/") || url.pathname === "/zh" ? "zh" : "en";
-
-  const urls: string[] = [];
-  collect_page_urls(blogSource.getPageTree(lang) as TreeNode, urls);
-
-  const pages_by_url = new Map(
-    blogSource.getPages(lang).map((page) => [page.url, page]),
-  );
-
-  const articles = urls
-    .map((page_url) => {
-      const page = pages_by_url.get(page_url);
-      if (!page) return null;
-      return {
-        url: normalize_site_path(page.url),
-        title: page.data.title ?? page.url,
-        description: page.data.description ?? "",
-      };
-    })
-    .filter((item): item is { url: string; title: string; description: string } =>
-      item !== null,
-    );
-
-  return { lang, articles };
-}
+export { loader } from "./index.loader.server";
 
 export function meta({ location }: Route.MetaArgs) {
   const is_chinese = location.pathname.startsWith("/zh");

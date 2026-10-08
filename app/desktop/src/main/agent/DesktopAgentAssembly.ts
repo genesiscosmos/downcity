@@ -232,7 +232,7 @@ class DesktopReasoningModelClient implements ModelClient {
 export function create_desktop_builtin_power_registrations(
   data: DesktopLocalData,
 ): BuiltinPowerRegistration[] {
-  return create_builtin_power_registrations();
+  return create_builtin_power_registrations({ platform_root_path: data.root_path });
 }
 
 

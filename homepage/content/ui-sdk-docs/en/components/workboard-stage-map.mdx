@@ -1,48 +1,32 @@
 ---
 title: WorkboardStageMap
-description: Pixel-map village rendering for agent activity zones
+description: The pixel map rendered inside the Workboard atlas
 ---
-`WorkboardStageMap` renders a pixel-art village map where buildings and rooms represent agent activity zones. It translates agent states into a visual tile-based map.
+There is no public `WorkboardStageMap` component. It is the pixel-art village renderer used inside
+the composite [Workboard](./workboard) atlas: buildings, rooms, and paths are drawn from the game
+map geometry to represent agent activity zones.
 
-## Import
+`@downcity/ui` does not export this renderer. Render `Workboard` and let it draw the atlas.
 
-```tsx
-import { WorkboardStageMap } from "@downcity/ui";
-```
+## What is public
 
-## Usage
-
-```tsx
-<WorkboardStageMap
-  board={board}
-  config={mapConfig}
-  activeZoneId={zoneId}
-  hoveredAgentId={hoveredId}
-  onSelectZone={(id) => setZone(id)}
-  onHoverAgent={(id) => setHover(id)}
-/>
-```
-
-## Props
+The geometry this map draws comes from the exported builder:
 
 ```tsx
-interface WorkboardStageMapProps {
-  board: DowncityWorkboardBoardSnapshot;
-  config: WorkboardGameMapConfig;
-  activeZoneId: DowncityWorkboardZoneId;
-  hoveredAgentId?: string;
-  onSelectZone: (zoneId: string) => void;
-  onHoverAgent?: (agentId: string) => void;
-}
+import { buildWorkboardGameMapConfig } from "@downcity/ui";
+
+const gameMap = buildWorkboardGameMapConfig({
+  board,
+  activeZoneId: "active",
+  selectedAgentId,
+});
 ```
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `board` | `DowncityWorkboardBoardSnapshot` | Current board data |
-| `config` | `WorkboardGameMapConfig` | Map layout config with zone, building, and room definitions |
-| `activeZoneId` | `string` | Currently selected zone |
-| `hoveredAgentId` | `string` | Currently hovered agent (for tooltips) |
-| `onSelectZone` | `(zoneId) => void` | Zone selection callback |
-| `onHoverAgent` | `(id) => void` | Agent hover callback |
+`gameMap.zones`, `gameMap.pointsOfInterest`, and `gameMap.actors` are the values the pixel map
+renders. Build them once and pass them to your own overlay when you need the same layout.
 
-The map config describes a tile-based grid with buildings (`WorkboardVillageBuilding`), rooms (`WorkboardRoomConfig`), and props (`WorkboardRoomProp` / `WorkboardVillageProp`).
+## Related
+
+- [Workboard](./workboard) — the composite board you render
+- [WorkboardGame](./workboard-game) — the exported game map builder and public game types
+- [WorkboardStage](./workboard-stage) — the stage layer behind the atlas

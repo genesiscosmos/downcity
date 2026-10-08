@@ -1,0 +1,42 @@
+---
+title: NotesPower 场景
+description: 用一个最小 NotesPower 说明 Action、System 与 City 注册如何组合。
+---
+```ts
+import {
+  Power,
+  type PowerActions,
+  type PowerContext,
+} from "@downcity/city/power";
+
+class NotesPower extends Power {
+  readonly name = "notes";
+  readonly title = "Project Notes";
+  readonly description = "Describe the project notes folder.";
+
+  system(context: PowerContext) {
+    return `Project notes folder: ${context.workspace.path}/.notes`;
+  }
+
+  readonly actions: PowerActions = {
+    status: {
+      execute: async ({ context }) => ({
+        success: true,
+        data: {
+          workspace_path: context.workspace.path,
+          storage_path: context.storage.path,
+        },
+      }),
+    },
+  };
+}
+
+const notes_power = new NotesPower();
+```
+
+宿主把 `notes_power` 交给 City；全部 Agent 自动获得它。进入 Workspace 后，可以通过
+`city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).run_action()` 显式调用；
+Session 会从同一 City execution view 收集 System 与 Hook。
+
+这个 Power 没有长期资源，因此不需要 Lifecycle。用户项目文件应使用
+`context.workspace.files`，Power 私有状态应使用 `context.storage.files`。

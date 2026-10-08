@@ -16,14 +16,13 @@ export function is_restorable_navigation_target(target: NavigationTarget): targe
  *
  * 判据是**这个页面属于谁**：会话（含草稿与 GroupSession）住在某个 Workspace 里，
  * 因此归 Works；Agent profile 与 Group 配置回答「有哪些 Agent」，归 Agents；
- * Power 相关页面归 Powers 或该 Power 自己的入口。
+ * 功能型 Power 的页面归它自己的一级入口（`power:<id>`）。
  *
  * 这个函数是这条对应的唯一事实源：`use_navigation_actions` 里那份按目标推导模式
  * 的逻辑也走它，因此「打开一个页面时侧栏跳到哪」与「刷新后恢复到哪」不可能分叉。
  */
 export function get_sidebar_mode_for_navigation(target: RestorableNavigationTarget): SidebarMode {
   if (target.kind === "agent" || target.kind === "group") return "chat";
-  if (target.kind === "power" || target.kind === "powers") return "powers";
   if (target.kind === "power_workspace") return `power:${target.power_id}`;
   return "workspace";
 }
@@ -52,7 +51,6 @@ export function parse_navigation_target(serialized: string | null): RestorableNa
   try {
     const value: unknown = JSON.parse(serialized);
     if (!is_record(value) || typeof value.kind !== "string") return undefined;
-    if (value.kind === "powers") return { kind: "powers" };
     if (value.kind === "workspace" && has_string(value, "workspace_id")) return { kind: "workspace", workspace_id: value.workspace_id };
     if (value.kind === "workspace_file" && has_string(value, "workspace_id") && has_string(value, "relative_path")) {
       const line = read_positive_integer(value.line);
@@ -62,7 +60,6 @@ export function parse_navigation_target(serialized: string | null): RestorableNa
     if (value.kind === "session" && has_string(value, "workspace_id") && has_string(value, "agent_id") && has_string(value, "session_id")) return { kind: "session", workspace_id: value.workspace_id, agent_id: value.agent_id, session_id: value.session_id };
     if (value.kind === "group" && has_string(value, "group_id")) return { kind: "group", group_id: value.group_id };
     if (value.kind === "group_session" && has_string(value, "group_id") && has_string(value, "workspace_id") && has_string(value, "session_id")) return { kind: "group_session", group_id: value.group_id, workspace_id: value.workspace_id, session_id: value.session_id };
-    if (value.kind === "power" && has_string(value, "power_id")) return { kind: "power", power_id: value.power_id };
     if (value.kind === "power_workspace" && has_string(value, "power_id")) return { kind: "power_workspace", power_id: value.power_id };
   } catch {
     return undefined;
@@ -74,7 +71,6 @@ export function parse_navigation_target(serialized: string | null): RestorableNa
 export function resolve_navigation_target(target: RestorableNavigationTarget | undefined, catalog: DesktopNavigationCatalog, default_workspace_id = ""): RestorableNavigationTarget | undefined {
   const fallback_workspace = catalog.workspaces.find((workspace) => workspace.workspace_id === default_workspace_id) ?? catalog.workspaces[0];
   if (!target) return fallback_workspace ? { kind: "workspace", workspace_id: fallback_workspace.workspace_id } : undefined;
-  if (target.kind === "powers") return target;
   if (target.kind === "workspace" || target.kind === "workspace_file") {
     return catalog.workspaces.some((workspace) => workspace.workspace_id === target.workspace_id)
       ? target
@@ -97,8 +93,9 @@ export function resolve_navigation_target(target: RestorableNavigationTarget | u
     return { kind: "group", group_id: group.group_id };
   }
   const power = catalog.powers.find((item) => item.power_id === target.power_id);
-  if (!power) return { kind: "powers" };
-  if (target.kind === "power_workspace" && (!power.has_sidebar || !power.has_mainview)) return { kind: "powers" };
+  if (!power || !power.has_sidebar || !power.has_mainview) {
+    return fallback_workspace ? { kind: "workspace", workspace_id: fallback_workspace.workspace_id } : undefined;
+  }
   return target;
 }
 

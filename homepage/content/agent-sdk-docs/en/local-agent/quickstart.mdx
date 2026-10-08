@@ -51,17 +51,17 @@ try {
 
 ## Ownership
 
-- City owns Plugins and registered resources, but does not know the Workspace execution backend.
+- City owns Powers and registered resources, but does not know the Workspace execution backend.
 - Workspace owns its project resources, environment, and optional Shell.
 - Shell owns its Sandbox Provider, persistent Workspace Sandbox, and Shell Sessions; `shell_id` and Chat `session_id` are independent.
 - Agent owns Chat Sessions. A Chat Session borrows the selected Workspace but does not own its Shell or Sandbox.
 
 Shell commands default to `target: "sandbox"` with the project mounted at `/workspace`. The same Workspace preserves HOME and installed tools across Chat Sessions. `target: "host"` requires a reason and approval. Sandbox startup failure never falls back to host execution.
 
-Without Shell, Workspace still provides file and search tools. `city.close()` releases Agents, Plugins, and Workspaces; Workspace disposal delegates to Shell, which stops Sandbox compute while retaining its persistent filesystem.
+Without Shell, Workspace still provides file and search tools. `city.close()` releases Agents, Powers, and Workspaces; Workspace disposal delegates to Shell, which stops Sandbox compute while retaining its persistent filesystem.
 
 ## Next steps
 
 - [Shell and Sandbox](/en/agent-sdk-docs/local-agent/shell-reference)
 - [Sessions overview](/en/agent-sdk-docs/sessions/overview)
-- [Tools and plugins](/en/agent-sdk-docs/local-agent/tools-and-plugins)
+- [Tools and powers](/en/agent-sdk-docs/local-agent/tools-and-powers)

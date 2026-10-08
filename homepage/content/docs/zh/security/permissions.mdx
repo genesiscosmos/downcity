@@ -4,7 +4,7 @@ description: "了解 Chat 用户进入 Agent 前的准入模型"
 ---
 Chat Access 是 Messenger Power 的准入能力，只回答一个问题：某个外部 Chat 用户的私聊或群聊消息，是否可以进入指定 Agent。
 
-它不是 Agent Core 权限，也不是通用 Role/Permission 系统。用户通过准入后，Messenger Power 只把消息交给 Agent，不会向 Session 或其他 Plugin 传播角色和权限。
+它不是 Agent Core 权限，也不是通用 Role/Permission 系统。用户通过准入后，Messenger Power 只把消息交给 Agent，不会向 Session 或其他 Power 传播角色和权限。
 
 ## 核心规则
 
@@ -19,13 +19,13 @@ Chat Access 是 Messenger Power 的准入能力，只回答一个问题：某个
 未批准用户发送私聊消息时，Messenger Power 会创建或复用一个 pending Request，并返回类似命令：
 
 ```bash
-city plugin action chat access-approve assistant --input '{"request_id":"req_xxx"}' --token <token>
+city power action chat access-approve assistant --input '{"request_id":"req_xxx"}' --token <token>
 ```
 
 管理员也可以先查看请求：
 
 ```bash
-city plugin action chat access-snapshot assistant --input '{}' --token <token>
+city power action chat access-snapshot assistant --input '{}' --token <token>
 ```
 
 群聊中的未批准消息默认静默拒绝，pending Request 仍会进入同一个管理列表。
@@ -47,5 +47,5 @@ Agent Token 负责 HTTP 控制面认证。一个 Token 只属于一个 Agent，�
 ## 相关文档
 
 - [CLI 命令](/zh/docs/cli/commands)
-- [Messenger Power](/zh/docs/plugin/messenger)
+- [Messenger Power](/zh/docs/power/messenger)
 - [`.downcity` 目录](/zh/docs/reference/dot-downcity)

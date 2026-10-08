@@ -2,7 +2,7 @@
 title: session.snapshot()
 description: 显式固化本地 Session 首次生成后固定的完整 system
 ---
-本地 Session 第一次生成 system 后会在内存中固定这份结果。Agent instruction 或 plugin registry 后续发生变化时，已有 Session 的 system 不会改变；新 Session 才会使用最新配置生成自己的 system。
+本地 Session 第一次生成 system 后会在内存中固定这份结果。Agent instruction 或 Power registry 后续发生变化时，已有 Session 的 system 不会改变；新 Session 才会使用最新配置生成自己的 system。
 
 调用 `snapshot()` 可以显式把当前 Session 的完整 system 固化到 `instruction.md`：
 
@@ -16,7 +16,7 @@ await session.snapshot();
 ~/.downcity/agents/<agent_id>/sessions/<origin_type>/<session_id>/instruction.md
 ```
 
-恢复 Session 时，SDK 优先读取这个文件；文件不存在时使用 Agent 当前 instruction 和 plugin 重新生成。删除 `instruction.md` 即可取消持久化，后续恢复会重新生成。
+恢复 Session 时，SDK 优先读取这个文件；文件不存在时使用 Agent 当前 instruction 和 Power 重新生成。删除 `instruction.md` 即可取消持久化，后续恢复会重新生成。
 
 `snapshot()` 保存完整 system，包括 Agent 身份块、自定义 instruction、SDK core、Power system 和 Session context，但不包含消息历史、模型或环境变量。多个 system block 会按原顺序合并为一个 Markdown 文档；再次调用会原子覆盖现有文件。
 

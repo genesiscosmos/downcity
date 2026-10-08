@@ -66,7 +66,7 @@ Only one execution loop is active per Session. Every input that can affect the n
 
 - User Prompts.
 - Workspace environment updates.
-- Plugin registry updates.
+- Power registry updates.
 - Session model updates.
 - Explicit compaction.
 
@@ -140,13 +140,13 @@ const unsubscribe = session.subscribe((mutation) => {
 
 Mutations cover complete Messages, Assistant Parts, text/reasoning deltas, Turn state, and Session state. After a disconnect, reload the canonical snapshot with `messages()` before establishing a new subscription.
 
-## Plugin runtime
+## Power runtime
 
-Plugins belong to City, not Agent or Workspace. City owns one instance per Plugin ID and projects its Actions, System text, Hooks, Resolve Points, and HTTP routes into every Agent/Workspace execution entry.
+Powers belong to City, not Agent or Workspace. City owns one instance per Power ID and projects its Actions, System text, Hooks, Resolve Points, and HTTP routes into every Agent/Workspace execution entry.
 
-PluginRegistry projection changes take effect at Session checkpoints. A Plugin initialization failure isolates that Plugin without blocking others. Agent disposal stops Sessions and ActionSchedule; City closes the Plugin `initialize/dispose` lifecycle.
+PowerRegistry projection changes take effect at Session checkpoints. A Power initialization failure isolates that Power without blocking others. Agent disposal stops Sessions and ActionSchedule; City closes the Power `initialize/dispose` lifecycle.
 
-ActionSchedule is a local delayed Plugin Action scheduler owned by the Agent. Events are stored in the Agent's storage scope; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
+ActionSchedule is a local delayed Power Action scheduler owned by the Agent. Events are stored in the Agent's storage scope; after restart, abandoned running entries recover to pending. It is not a distributed scheduler and provides no cross-machine leader election.
 
 ## City Powers
 
@@ -164,7 +164,7 @@ Every Agent receives three City-owned powers. They are the single entry point fo
 
 An action id is `group.action`, independent of which power owns it: `env.get` belongs to `context`, and both `image.*` and `sound.*` belong to `ai`. Calling a power with no arguments lists its actions; nothing here returns credential values, and each action declares `read` or `write` so you can see which ones consume quota or change state before calling them.
 
-Availability follows the same rule as Plugins: everything City registers is available to every Agent, with no per-Agent gating and no configuration file.
+Availability follows the same rule as Powers: everything City registers is available to every Agent, with no per-Agent gating and no configuration file.
 
 ### Image and sound
 
@@ -183,7 +183,7 @@ Security is enforced at distinct capability boundaries:
 | File/Search Tools | Rooted LocalFileSystem | May actively access only the Workspace |
 | Sandbox Shell | Workspace Sandbox | Commands run in the Workspace's isolated, persistent environment |
 | Host Shell | Approval gateway | The user explicitly authorizes one host command with a recorded reason |
-| Plugin | Plugin business authorization | Workspace does not own all Plugin resource access |
+| Power | Power business authorization | Workspace does not own all Power resource access |
 | City Power | Declared per action | Answers runtime facts and runs declared `read` actions; `write` actions consume quota or write files under the Agent's directory |
 | Custom Tool | Registering host | Agent Core does not infer business permissions |
 
@@ -200,15 +200,15 @@ Isolation differences are contained by the neutral Sandbox Provider protocol. Ea
 ```mermaid
 flowchart LR
     Agent["new Agent"] --> Register["City registers Agent"]
-    Plugin["City registers Plugin"] --> Initialize["Plugin initialize"]
+    Power["City registers Power"] --> Initialize["Power initialize"]
     Register --> Running["execute Sessions"]
     Initialize --> Running
     Running --> Close["city.close()"]
     Close --> Sessions["stop Agent Sessions"]
-    Sessions --> Dispose["Plugin dispose"]
+    Sessions --> Dispose["Power dispose"]
     Dispose --> Workspace["release Workspace / Shell"]
 ```
 
-Sessions wait for the Agent's City execution binding before execution. `agent.dispose()` does not stop City Plugin instances. `city.close()` closes Transports, Agents, Plugins, Workspaces, and Shells after active Hook/Action leases finish.
+Sessions wait for the Agent's City execution binding before execution. `agent.dispose()` does not stop City Power instances. `city.close()` closes Transports, Agents, Powers, Workspaces, and Shells after active Hook/Action leases finish.
 
 Continue with [Agent Lifecycle](/en/docs/agent/lifecycle).

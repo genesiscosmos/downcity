@@ -23,8 +23,8 @@
 /agent-sdk-docs/* /en/agent-sdk-docs/:splat 301
 /payments        /en/payments/        301
 /payments/*      /en/payments/:splat  301
-/plugins-docs    /en/plugins-docs/    301
-/plugins-docs/*  /en/plugins-docs/:splat 301
+/powers-docs     /en/powers-docs/    301
+/powers-docs/*   /en/powers-docs/:splat 301
 /ui-sdk-docs     /en/ui-sdk-docs/     301
 /ui-sdk-docs/*   /en/ui-sdk-docs/:splat 301
 

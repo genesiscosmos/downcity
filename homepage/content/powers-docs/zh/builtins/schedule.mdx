@@ -1,0 +1,40 @@
+---
+title: schedule Power
+description: Power Action 延迟/定时重派发的内部调度基础设施
+---
+`schedule` 是延迟 Power Action 的基础设施概念。
+
+它负责轮询调度任务，并把到点的 Power Action 重新派发执行。当前用户侧 CLI 里，它不是一个可以 start、stop 或执行业务 action 的独立 Power。
+
+## 主要形状
+
+- 持久化 action job
+- runtime 轮询与恢复
+- 没有业务 action
+
+## 它主要解决什么问题
+
+如果你想理解这些问题，应该看 action scheduling：
+
+- 为什么调度能力归属于 Power lifecycle，而不是 agent 顶层壳
+- 延迟/定时 Power Action 是怎么被重新调用的
+- 为什么它属于 Power runtime，而不是顶层 CLI 命令
+
+## 用户怎么使用
+
+Action schedule 当前是 Power runtime 内部基础设施，不提供独立 CLI 管理命令。如果要做用户可管理、可复用的自动化，使用 `task` Power。
+
+## 关键语义
+
+- 它主要轮询 `PowerScheduleStore`
+- 启动恢复时会把中断的 running jobs 重置回 pending
+- 它是核心基础设施模式，不是普通用户业务型 Power
+
+## 公开性说明
+
+action scheduling 属于平台基础设施，不是典型公开 SDK 能力 Power。
+
+## 相关文档
+
+- [Power Lifecycle](/zh/agent-sdk-docs/powers/lifecycle)
+- [Built-ins Overview](/zh/powers-docs/builtins/overview)

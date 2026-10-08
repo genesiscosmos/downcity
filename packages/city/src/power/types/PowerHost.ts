@@ -37,6 +37,13 @@ export interface PowerConfigAction {
 
 /** 当前 Power 唯一配置的存储端口。 */
 export interface PowerConfigStore {
+  /**
+   * 当前 Power 配置的持久化文件绝对路径；无文件存储时为空。
+   *
+   * 物理布局属于 City，因此由宿主告知而不是让 Power 自己拼路径：
+   * 界面可以展示它并提供「在文件管理器中打开」，而不必知道目录规则。
+   */
+  readonly path: string;
   /** 同步读取当前 Power 的完整配置快照。 */
   get(): PowerJsonObject;
   /** 原子替换当前 Power 的完整配置。 */

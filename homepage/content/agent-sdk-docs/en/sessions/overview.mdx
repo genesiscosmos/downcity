@@ -2,7 +2,7 @@
 title: Session Overview
 description: What a Session owns, its lifecycle, and the shared local and remote workflow
 ---
-`Agent` owns identity, model, custom tools, and Plugins. `AgentSessions` owns the Session objects, while
+`Agent` owns identity, model, custom tools, and Powers. `AgentSessions` owns the Session objects, while
 each Session may receive a Workspace for project tools and environment. A `Session` owns one continuous
 conversation, its history, streaming output, and tool approvals.
 
@@ -69,7 +69,7 @@ Do not treat Messages and Mutations as interchangeable. Messages are recoverable
 ## Session runtime model
 
 A Session is the ordering and persistence boundary for its inputs. Prompts, model changes,
-environment updates, plugin updates, approval-mode changes, and compaction enter one
+environment updates, power updates, approval-mode changes, and compaction enter one
 server-side FIFO. They execute in submission order before a Turn starts or at a Model Step
 checkpoint. Remote clients call Session APIs and do not duplicate this scheduling logic.
 

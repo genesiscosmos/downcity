@@ -6,36 +6,7 @@ description: 用于从一组选项中选择单个值
 
 ## 示例
 
-```tsx
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@downcity/ui";
-
-export function ModelSelect() {
-  return (
-    <Select defaultValue="balanced">
-      <SelectTrigger>
-        <SelectValue placeholder="选择模式" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          <SelectLabel>响应模式</SelectLabel>
-          <SelectItem value="concise">精简</SelectItem>
-          <SelectItem value="balanced" description="兼顾速度与上下文">
-            平衡
-          </SelectItem>
-        </SelectGroup>
-      </SelectContent>
-    </Select>
-  );
-}
-```
+<ComponentPreview name="select" />
 
 ## 组合约束
 

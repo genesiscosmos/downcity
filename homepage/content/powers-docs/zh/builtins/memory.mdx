@@ -1,0 +1,85 @@
+---
+title: memory Power
+description: 支持 City 跨 Agent 共享和 Agent 私有知识的长期记忆
+---
+`memory` 为多个 Agent 提供长期记忆。City 持有共享 Power 实例并分配私有存储根目录；所有权限、召回和上下文组装逻辑都在 `MemoryPower` 内。
+
+## Memory 范围
+
+| 范围 | 用途 | 可见性 |
+|---|---|---|
+| `agent` | Agent 私有经验和长期状态 | 仅当前 Agent |
+| `current_workspace` | 项目事实和决策 | 写入 City 共享记忆，并把当前 `workspace_id` 记为记录 metadata |
+
+只有两个 Subject：当前 Agent 与整个 City。Workspace 不是独立的记忆范围，用 `current_workspace` 写入的内容与 `city` 共用同一个共享存储。
+
+## 存储
+
+Agent 私有记忆与共享记忆物理分离：
+
+```text
+<platform-root>/agents/<agent_id>/memory/   Agent 私有
+<platform-root>/powers/memory/              跨 Agent 共享
+```
+
+两个根都使用相同结构：`wiki/` 保存长期记忆，`evidence/` 保存原始证据，`capture-jobs/` 保存待处理的自动捕获。
+
+`memory_id` 始终是逻辑引用，例如 `agent/<agent_id>/wiki/<topic>` 或 `city/wiki/<topic>`，不是物理路径。后续 `read`、`revise` 和 `forget` 应原样使用该 ID。
+
+## 上下文行为
+
+- Core Memory 作为独立命名的 `system` block，在 Session system snapshot 中冻结。
+- Dynamic Recall 每个 Turn 最多执行一次，放入当前 User Message 的模型输入副本。
+- Tool Loop 和上下文超限重试复用同一份 Recall。
+- Recall 不写回 canonical Session Messages，也不会获得 system instruction 权限。
+- 成功 Turn 的 canonical User/Assistant 文本会形成幂等 Capture Job；失败、停止、寒暄和明显敏感内容会被跳过。
+
+## Actions
+
+Power 提供：`status`、`list`、`search`、`read`、`remember`、`digest`、`revise` 和 `forget`。
+
+`list` 按当前访问上下文枚举可读记忆，无需关键词；可选的 `subject_kinds`、`memory_types`、
+`include_evidence`、`limit` 与 `offset` 用于过滤和分页。`search` 需要关键词，适合按相关性召回。
+
+显式记忆必须选择有限语义目标：
+
+```json
+{
+  "content": "这个项目统一使用 pnpm。",
+  "target": "current_workspace",
+  "topic": "project-overview",
+  "memory_type": "decision"
+}
+```
+
+`remember` 返回完整逻辑 `memory_id`。后续 `read`、`revise` 和 `forget` 应原样使用该 ID，不要解析为物理路径。
+
+## Desktop 工作区
+
+Memory 在一级导航条贡献独立入口，提供 Sidebar 与 Mainview：
+
+- **Sidebar**：只做一件事，平铺列出记忆范围：先 `共享`，再是每个 Agent 一行，右侧只显示条目数量。选择范围同时决定 Mainview 展示什么、新记忆写到哪里。
+- **Mainview**：三个就地视图。列表展示当前范围的记忆；打开某条后是 Markdown 详情页，展示 `memory_id`、类型、Subject、观察时间、引用与证据数量；工具栏的 `设置` 按钮切到只读视图，展示 Provider、能力与存储统计。新建、修订与删除都在同一处完成。
+
+设置留在工作区内，打开设置不会离开 Memory 工作区跳到全局 Powers 目录。
+
+范围与执行 Agent 是两件事。选中 `共享` 仍然要经一个真实 Agent 执行，因为所有记忆 action 都绑定 Agent；未指定时回退到第一个已登记 Agent。
+
+所有读写都通过宿主 action 在所选 Agent 与 Workspace 上执行，因此工作区展示的内容与 Agent 实际可读的内容一致。
+
+## 装配
+
+直接构造即可；`MemoryPower.initialize()` 从 City 的 `PowerLifecycleContext.storage` 取得共享根。Agent 私有根需要平台数据根目录，因此构造时要显式提供：
+
+```ts
+const memory_power = new MemoryPower({ platform_root_path: "~/.downcity" });
+const city = new City({ powers: [memory_power] });
+```
+
+City 内建注册已经由 Desktop 与 CLI 装配层传入平台根，通常不需要手动处理。
+
+## 相关文档
+
+- [Power System](/zh/agent-sdk-docs/powers/power-system)
+- [Power Actions](/zh/agent-sdk-docs/powers/power-actions)
+- [Built-ins Overview](/zh/powers-docs/builtins/overview)

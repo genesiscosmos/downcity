@@ -1,4 +1,5 @@
 import { HomeHeroWorldSection } from "@/components/sections/HomeHeroWorldSection";
+import { HomeSdkTrySection } from "@/components/sections/HomeSdkTrySection";
 import { HomeQuickstartSection } from "@/components/sections/HomeQuickstartSection";
 import { HomeDefinitionSection } from "@/components/sections/HomeDefinitionSection";
 import { HomeFeaturesSection } from "@/components/sections/HomeFeaturesSection";
@@ -14,12 +15,11 @@ import type { Route } from "./+types/home";
 /**
  * 首页营销落地页路由。
  * 说明：
- * 1. 完整首页：Hero / Quick Start / 品类定义 / Features / Product Shapes / Learn / CTA / Footer。
+ * 1. 完整首页：Hero / SDK 试驾 / 品类定义 / Features / Product Shapes / Learn / CTA / Footer。
  * 2. 文案基于对 Downcity 的准确理解：Agent Harness 负责运行 Agent，Productization Kits
  *    负责把 Agent 组织成可交付产品；City 与 Federation 是其中的产品化基础。
  * 3. 所有行动路径收敛到安装命令、Quick Start 与 GitHub。
- * 4. 品类定义段提供可被 AI 答案引擎直接引用的定义句；Learn 段把首页权重导向
- *    blog 与 whitepaper（此前这两者是零入链的孤岛）。
+ * 4. SDK 试驾面板提供可直接点选的真实 API 形状；滚动叙事负责讲结构，两者分工不同。
  */
 export function meta({ location }: Route.MetaArgs) {
   const positioning = homepage_positioning[get_path_locale(location.pathname)];
@@ -40,6 +40,7 @@ export default function Home() {
       <HomeStructuredData />
       <main>
         <HomeHeroWorldSection />
+        <HomeSdkTrySection />
         <HomeQuickstartSection />
         <HomeDefinitionSection />
         <HomeFeaturesSection />

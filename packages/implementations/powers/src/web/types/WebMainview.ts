@@ -1,32 +1,25 @@
 /**
- * Web Power Mainview 与宿主 action 之间的 JSON 协议。
+ * Web Power 工作区与宿主动作之间的 JSON 协议。
  *
  * 关键点（中文）
- * - 界面是只读状态页：展示三类 Provider 的可用性与配置摘要，以及当前浏览器会话。
- * - API Key 永不进入本协议；这里只出现「是否已配置」与存储边界说明。
+ * - 配置是 Power 级的单一存储，与 Agent / Workspace 无关，因此协议里没有执行范围。
+ * - 配置按能力组织：Provider 选择与它自己的参数属于同一个能力分组。
+ * - API Key 永不进入本协议；这里只出现「是否已配置」。
  * - 所有事实都来自 WebPower 自己的 Provider 解析结果，界面不重复推断可用性。
  */
 
-import type { PowerJsonObject } from "@downcity/city/power";
-import type { WebPowerConfigView } from "@/web/types/WebPowerSettings.js";
+import type { WebConfigView } from "@/web/types/WebPowerConfig.js";
 
-/** 界面可切换的一个 Agent 执行范围。 */
-export interface WebMainviewAgent {
-  /** Agent 的稳定 ID。 */
-  readonly agent_id: string;
+/**
+ * 工作区的一个视图。
+ *
+ * 前三项是真实能力，各自有 Provider 子项与开关；`general` 是跨能力配置与配置文件的归属，
+ * 没有 Provider。
+ */
+export type WebCapability = "search" | "document" | "browser" | "general";
 
-  /** Agent 的用户可见名称。 */
-  readonly name: string;
-}
-
-/** 界面可切换的一个 Workspace 执行范围。 */
-export interface WebMainviewWorkspace {
-  /** Workspace 的稳定 ID。 */
-  readonly workspace_id: string;
-
-  /** Workspace 的用户可见名称。 */
-  readonly name: string;
-}
+/** 有 Provider 子项的真实能力；`general` 不在其中。 */
+export type WebProviderCapability = Exclude<WebCapability, "general">;
 
 /** 一个能力区的状态。 */
 export interface WebMainviewCapabilityStatus {
@@ -36,23 +29,21 @@ export interface WebMainviewCapabilityStatus {
   /** 当前是否已配置并可用。 */
   readonly available: boolean;
 
-  /** 用户可见的当前选择说明。 */
-  readonly selection: string;
-
   /** 不可用或需要注意时的说明。 */
   readonly note: string;
 }
 
 /** Web 工作区一次读取返回的完整快照。 */
 export interface WebMainviewSnapshot {
-  /** 当前可切换的 Agent 执行范围。 */
-  readonly agents: WebMainviewAgent[];
+  /** 已脱敏的配置，用于渲染各能力的 Provider 选择与参数。 */
+  readonly config: WebConfigView;
 
-  /** 当前可提供 Workspace 环境的 Workspace。 */
-  readonly workspaces: WebMainviewWorkspace[];
-
-  /** 已脱敏的配置摘要，复用 Config 的公开视图。 */
-  readonly config: WebPowerConfigView;
+  /**
+   * 当前配置的持久化文件绝对路径；无文件存储时为空。
+   *
+   * 由宿主告知，界面只展示与打开，不拼路径也不读写文件。
+   */
+  readonly config_path: string;
 
   /** 搜索能力状态。 */
   readonly search: WebMainviewCapabilityStatus;
@@ -62,9 +53,6 @@ export interface WebMainviewSnapshot {
 
   /** 浏览器能力状态。 */
   readonly browser: WebMainviewCapabilityStatus;
-
-  /** 当前实际生效的浏览器 Provider 类型；不可用时为空。 */
-  readonly browser_provider: string;
 
   /** Provider 返回的非致命警告。 */
   readonly warnings: string[];
@@ -95,22 +83,4 @@ export interface WebMainviewSessionsResult {
 
   /** 不可用时或读取失败时的说明。 */
   readonly note: string;
-}
-
-/** 快照读取输入。 */
-export interface WebMainviewSnapshotInput extends PowerJsonObject {
-  /** 用于解析当前配置与可用性的 Agent。 */
-  readonly agent_id: string;
-
-  /** 用于解析当前配置与可用性的 Workspace。 */
-  readonly workspace_id: string;
-}
-
-/** 浏览器会话列表输入。 */
-export interface WebMainviewSessionsInput extends PowerJsonObject {
-  /** 目标 Agent 执行范围。 */
-  readonly agent_id: string;
-
-  /** 提供 Workspace 环境与配置的 Workspace ID。 */
-  readonly workspace_id: string;
 }

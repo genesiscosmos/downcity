@@ -1,0 +1,53 @@
+---
+title: Power 总览
+description: 理解 City Power 的所有权、能力、上下文与 Session Hook。
+---
+Power 是 Downcity 的统一扩展产品单元，可以提供 Action、Hook、Resolve、System、Availability、
+HTTP Route、生命周期以及可选的 Mainview/Config。
+
+Power 不属于 Agent。City 持有 catalog、main、Power 唯一实例与完整生命周期；全部 Power 自动
+提供给全部 Agent，Session 在执行检查点取得稳定的 Hook 视图。
+
+## SDK 装配
+
+```ts
+import { Agent } from "@downcity/agent";
+import { City } from "@downcity/city";
+import { create_builtin_power_registrations } from "@downcity/powers";
+
+const registrations = create_builtin_power_registrations();
+const city = new City({ workspaces: [workspace], powers: registrations });
+const agent = new Agent({ id: "repo-helper", model });
+
+city.agents.add(agent);
+```
+
+`CityOptions.powers` 或 `city.powers.add()` 负责登记；`city.agents.add()` 只登记 Agent。
+
+## PowerContext
+
+Action、Hook、System 与 Availability 都使用当前作用域的 `PowerContext`。它提供受限的：
+
+- `city`：Embassy 与 Power 间协作端口。
+- `agent`：身份、指令和 Session 集合。
+- `workspace`：文件、Shell、env 与稳定 ID。
+- `session` / `turn`：当前调用存在 Session/Turn 时的直接通信句柄。
+- `config`：City 为当前 Power 投影的只读配置快照。
+- `storage`：当前 Agent/Power 私有存储。
+
+对象句柄用于进程内直接通信，ID 用于稳定身份和序列化；Power 不需要只拿 `session_id` 再绕回宿主查询。
+
+## 唯一实例与唯一配置
+
+一个 City 中每个 Power ID 只有一个实例和一套 `initialize/dispose` 生命周期。Agent/Workspace
+只属于每次调用的 Context。每个 Power ID 也只有一份 City 级配置，所有 Agent 获得相同的
+`context.config` 快照。Memory 和 Chat 等 Power 按自己的真实领域所有权隔离长期资源。
+
+## 推荐阅读
+
+1. [Power Lifecycle](/zh/agent-sdk-docs/powers/lifecycle)
+2. [Power Actions](/zh/agent-sdk-docs/powers/power-actions)
+3. [Power Hooks](/zh/agent-sdk-docs/powers/power-hooks)
+4. [Power 配置](/zh/agent-sdk-docs/powers/configuration)
+5. [Power 开发指南](/zh/agent-sdk-docs/powers/power-development)
+6. [内建 Power 手册](/zh/powers-docs)

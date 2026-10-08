@@ -4,7 +4,7 @@ description: City 管理本机 Agent，Fed 管理 Federation Server
 ---
 Downcity 安装包提供两个独立工具：
 
-- `city`（别名 `downcity`）是本机 City 容器，管理 Agent、Plugin、环境变量和 Federation 连接。
+- `city`（别名 `downcity`）是本机 City 容器，管理 Agent、Power、环境变量和 Federation 连接。
 - `fed`（别名 `downfed`）是 Federation Server Manager；TUI 管理已注册 Server，`fed web` 启动本地 Web 控制面，项目命令读取当前目录的 `federation.json`。
 
 ## City 数据模型
@@ -13,14 +13,14 @@ Agent 与 Workspace 是两个独立的全局实体。Agent 由 `agent_id` 标识
 
 Federation Admin 配置与 Embassy User Session 也统一保存在 `~/.downcity/downcity.db`。升级后，旧 `~/.downcity/federation.db` 中的管理配置会被一次性迁入；旧文件保留用于人工恢复，但运行时不再读取。
 
-每个 Plugin 使用稳定 ID 对应 `~/.downcity/plugins/<plugin_id>/`，唯一明文配置位于 `config.toml`。第三方 Plugin 的安装目录包含唯一 `plugin.json`、建立 ESM 边界的 `package.json`，以及清单声明的可选 `main`、`renderer` 自包含入口，不包含源码和构建配置。City 会把已登记的 Plugin 和同一份配置提供给全部 Agent；`agent.json` 不保存 Plugin 引用。`downcity.db` 只保存 Workspace 索引、Token 和平台状态，不保存 Agent 或 Plugin 配置。
+每个 Power 使用稳定 ID 对应 `~/.downcity/powers/<power_id>/`，唯一明文配置位于 `config.toml`。第三方 Power 的安装目录包含唯一 `power.json`、建立 ESM 边界的 `package.json`，以及清单声明的可选 `main`、`renderer` 自包含入口，不包含源码和构建配置。City 会把已登记的 Power 和同一份配置提供给全部 Agent；`agent.json` 不保存 Power 引用。`downcity.db` 只保存 Workspace 索引、Token 和平台状态，不保存 Agent 或 Power 配置。
 
 ## City 命令
 
 | 命令 | 说明 |
 |---|---|
 | `city agent` | 管理全局 Agent |
-| `city plugin` | 管理 Plugin 制品、唯一配置与 Action |
+| `city power` | 管理 Power 制品、唯一配置与 Action |
 | `city env` | 管理 City 注入的环境变量 |
 | `city federation` | 管理 Federation 连接 |
 

@@ -1,0 +1,107 @@
+---
+title: Agent Chat
+description: Talk to the agent itself with agent.chat(), and let it start and watch its other sessions
+---
+`agent.chat()` opens the conversation that belongs to the agent itself. It is the agent's identity entrance: the user talks through it, the agent starts work elsewhere from it, and the agent tracks that work through it.
+
+That conversation is an ordinary `Session`. It has no special type; the agent simply records it as its own. Reading history, subscribing, approvals, stopping, and forking all work exactly as they do for any session.
+
+## Open the conversation and talk
+
+```ts
+const agent = new Agent({
+  id: "coder",
+  model,
+  instruction: "Maintain this repository.",
+});
+
+const chat = await agent.chat();
+const turn = await chat.send({ query: "What does SessionMessages do?" });
+const result = await turn.finished;
+console.log(result.text);
+```
+
+`chat.send()` has the same shape as `session.prompt()`, returning the same `AgentSessionTurnHandle`. Waiting, subscribing to deltas, and handling approvals are unchanged:
+
+```ts
+const unsubscribe = chat.subscribe((mutation) => {
+  apply_mutation_to_ui(mutation);
+});
+
+const turn = await chat.send({ query: "Rename that method to snake_case" });
+await turn.finished;
+
+unsubscribe();
+```
+
+`chat.messages()` matches `session.messages()`. When you need session-only capabilities such as `fork()`, `system()`, or `snapshot()`, take the session itself:
+
+```ts
+const session = await agent.sessions.main();
+const snapshot = await session.system();
+```
+
+## One conversation per agent
+
+The first `agent.chat()` call creates it; every later call returns the same one. A different channel, a new process, or the next day all reach the same conversation and the same history:
+
+```ts
+// A new process, a Telegram channel, or the next day
+const chat = await agent.chat();
+const page = await chat.messages();
+```
+
+List it with `agent.sessions.list({ origin_type: "main" })`, or open it explicitly with `get("main", "main")`. If it is archived or deleted, the next `chat()` creates a new one.
+
+## The directory is not identity
+
+`agent.chat()` does not take a Workspace. Which directory the conversation is working in is session state, not a per-message argument:
+
+```ts
+const chat = await agent.chat();      // inherits new Agent({ workspace })
+chat.workspace();                     // current directory, or undefined
+
+chat.set_workspace(repo_b);           // switch inside this conversation
+await chat.send({ query: "The same problem exists in the other repo" });
+```
+
+Switching affects only this conversation. It does not change the `session_id`, the history, or attachment ownership. Messages and tool results already produced belong to the directory they happened in and are not migrated. A running turn keeps the previous directory; the change applies from the next step checkpoint.
+
+A conversation without a directory is valid: it has no file tools and no shell, but plain model conversation still works.
+
+## The agent starts its own work
+
+Work larger than one reply is started by the agent from this conversation. These capabilities exist only in the main conversation; ordinary sessions do not receive them, so work cannot spawn more work.
+
+| Tool | Purpose |
+| --- | --- |
+| `session_start` | Start a new session with a task and return immediately |
+| `session_check` | List every session and its state, or read one with `session_id` |
+| `session_reply` | Answer a pending user interaction on another session |
+| `session_stop` | Stop the turn running on another session |
+
+Once work is started, the conversation is free again and the user can keep talking; the new session inherits the current directory. The user does not need to know these tools exist or open another session — asking for progress makes the agent check:
+
+```text
+User: Three tests are failing on CI, fix them
+Agent: I'll take a look and report back
+User: Also switch the README install steps from npm to pnpm
+```
+
+```text
+User: How is that test fix going?
+Agent: (calls session_check) Still running, 4 files changed so far
+```
+
+When a session needs user confirmation, the user still answers in the same conversation and the agent routes the answer back with `session_reply`.
+
+## How it relates to application code
+
+`agent.sessions` remains the single entrance to every session. The main conversation is one of them, so host code can read and operate it with the same session APIs:
+
+```ts
+const page = await agent.sessions.list({ origin_type: "main" });
+const main = await agent.sessions.get("main", "main");
+```
+
+To list ordinary conversations, read `origin_type: "chat"`; the main conversation lives in its own `main` partition and does not mix into business lists.

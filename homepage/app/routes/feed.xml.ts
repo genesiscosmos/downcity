@@ -5,16 +5,11 @@
  * 文章 frontmatter 没有 date 字段，且实测全部 7 篇均由同一次提交引入
  * （git 首次提交日 2026-09-18），因此统一使用该固定日期，不伪造时间戳。
  */
-import { blogSource } from "@/lib/blog-source";
+import { docs_index } from "@/lib/docs/docs-index";
 import { create_site_url } from "@/lib/seo";
 
 /** 全部文章的首次发布日期（与 blog JSON-LD 的 datePublished 保持一致）。 */
 const PUBLISHED_AT = "2026-09-18";
-
-type BlogPage = {
-  url: string;
-  data: { title?: string; description?: string };
-};
 
 /** 转义 XML 文本节点中的保留字符。 */
 function escape_xml(value: string) {
@@ -27,12 +22,12 @@ function escape_xml(value: string) {
 }
 
 export function loader() {
-  const pages = blogSource.getPages() as unknown as BlogPage[];
+  const pages = docs_index.list_all_space_pages("blog");
 
   const items = pages
     .map((page) => {
-      const title = page.data.title ?? page.url;
-      const description = page.data.description ?? "";
+      const title = page.title;
+      const description = page.description;
       const url = create_site_url(page.url);
 
       return [

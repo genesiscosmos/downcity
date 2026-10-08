@@ -2,7 +2,7 @@
 title: Managing Sessions
 description: Create, open, list, archive, and permanently clean up Sessions
 ---
-`agent.sessions` is the local collection entry point. Each Session selects its Workspace at creation time.
+`agent.sessions` is the local collection entry point. A session may choose a Workspace as its initial directory, and may switch it later.
 
 ## Create and open
 
@@ -16,14 +16,37 @@ const task_session = await agent.sessions.create({
   origin: { type: "task", task_id: "daily-report" },
 });
 
-const existing = await agent.sessions.get("session-id-from-list", "chat", { workspace });
-const existing_task = await agent.sessions.get(task_session.id, "task", { workspace });
+const existing = await agent.sessions.get("session-id-from-list", "chat");
+const existing_task = await agent.sessions.get(task_session.id, "task");
 ```
 
 `create()` always generates the Session ID internally. To reopen an existing Session, obtain its ID from
-`list()` or another persisted reference and pass it to `get(session_id, origin_type = "chat", { workspace })`.
+`list()` or another persisted reference and pass it to `get(session_id, origin_type = "chat")`.
 `origin.type` may be any non-empty string and may carry additional JSON metadata. `get()` reads only the
 requested partition and never scans other origins.
+
+A Workspace is the session's current directory, not its identity. Passing a Workspace to `get()`
+different from the persisted one is not an error; it becomes the new current directory:
+
+```ts
+const session = await agent.sessions.create({ workspace: repo_a });
+
+await session.set_workspace(repo_b);   // move to another repo with history intact
+await session.set_workspace();         // leave the project context
+
+const reopened = await agent.sessions.get(session.id, "chat", { workspace: repo_c });
+```
+
+Switching does not migrate existing messages, attachments, or tool results; those belong to the
+directory they happened in. A running turn keeps the previous directory, and the change applies from
+the next step checkpoint. A session without a Workspace is valid: it has no file tools and no shell,
+while plain model conversation still works.
+
+## The agent's own conversation
+
+The agent has a conversation of its own in the `main` partition, opened with `agent.chat()`;
+`agent.sessions.main()` returns the session behind it. It does not appear under `origin_type: "chat"`.
+See [Agent chat](/en/agent-sdk-docs/sessions/agent-chat).
 
 ## List and search
 
@@ -67,7 +90,7 @@ Archiving removes a Session from the active list without immediately destroying 
 
 `clean_archive()` permanently deletes every archived Session. Treat it as an explicit empty-trash action and require user confirmation in a UI.
 
-For local maintenance, `remove(session_id, origin_type = "chat")` permanently deletes one active Session's Agent-owned data. `clear_messages(session_id, origin_type = "chat")` clears only its messages. Plugin-owned data is not deleted implicitly; call the owning Plugin when a workflow also needs to remove domain data.
+For local maintenance, `remove(session_id, origin_type = "chat")` permanently deletes one active Session's Agent-owned data. `clear_messages(session_id, origin_type = "chat")` clears only its messages. Power-owned data is not deleted implicitly; call the owning Power when a workflow also needs to remove domain data.
 
 ## UI guidance
 

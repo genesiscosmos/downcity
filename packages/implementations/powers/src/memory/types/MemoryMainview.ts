@@ -2,14 +2,18 @@
  * Memory Power Mainview 与宿主 action 之间的 JSON 协议。
  *
  * 关键点（中文）
- * - 界面只描述「在哪个 Agent / Workspace 上读写了哪条记忆」，不暴露 Provider 内部路径。
- * - 所有 mutation 都返回刷新后的快照，避免界面自己拼状态。
- * - 快照不包含 API Key 一类凭据；Memory 本身也没有需要脱敏的配置项。
+ * - 界面只描述「在哪个执行范围上读写了哪条记忆」，不暴露 Provider 内部路径。
+ * - 执行范围由两个字段组成：`scope` 决定看哪类记忆，`agent_id` 决定在哪个 Agent 上执行。
+ *   两者必须分开，因为 City 共享记忆也要绑定一个真实 Agent 才能调用领域 action。
+ * - 所有 mutation 都返回刷新后的列表，避免界面自己拼状态。
  */
 
 import type { PowerJsonObject } from "@downcity/city/power";
 import type { MemoryProviderState } from "@/memory/types/Memory.js";
-import type { MemorySubject, MemorySubjectKind } from "@/memory/types/MemoryAccess.js";
+import type { MemorySubject } from "@/memory/types/MemoryAccess.js";
+
+/** 界面可切换的记忆范围。 */
+export type MemoryMainviewScopeKind = "city" | "agent";
 
 /** 界面可切换的一个 Agent 执行范围。 */
 export interface MemoryMainviewAgent {
@@ -18,6 +22,9 @@ export interface MemoryMainviewAgent {
 
   /** Agent 的用户可见名称。 */
   readonly name: string;
+
+  /** 该 Agent 私有记忆的条目数量；读取失败时省略。 */
+  readonly memory_count?: number;
 }
 
 /** 界面可切换的一个 Workspace 执行范围。 */
@@ -57,6 +64,9 @@ export interface MemoryMainviewSnapshot {
 
   /** 当前 Provider 的状态摘要。 */
   readonly status: MemoryMainviewProviderStatus;
+
+  /** City 共享记忆的条目数量；读取失败时省略。 */
+  readonly city_count?: number;
 }
 
 /** 一次枚举返回的一条记忆摘要。 */
@@ -93,19 +103,34 @@ export interface MemoryMainviewListResult {
 
   /** 应用过滤条件后的条目总数。 */
   readonly total: number;
+}
 
-  /** 忽略过滤条件时，各 Subject 类别的条目数量。 */
-  readonly subject_counts: Record<MemorySubjectKind, number>;
+/** 一次读取的执行范围。 */
+export interface MemoryMainviewScopeInput {
+  /** 要查看的记忆范围类别。 */
+  readonly scope: MemoryMainviewScopeKind;
+
+  /** 执行领域 action 的 Agent 稳定标识；两种范围都必须提供一个真实 Agent。 */
+  readonly agent_id: string;
+
+  /** 提供 Workspace 上下文的 Workspace ID。 */
+  readonly workspace_id: string;
+}
+
+/** 枚举记忆的输入。 */
+export interface MemoryMainviewListInput extends MemoryMainviewScopeInput {
+  /** 只返回这些 Subject 类别的记忆。 */
+  readonly subject_kinds?: string[];
+
+  /** 最多返回的条目数量。 */
+  readonly limit?: number;
+
+  /** 跳过的条目数量，用于分页。 */
+  readonly offset?: number;
 }
 
 /** 读取一条记忆详情的输入。 */
-export interface MemoryMainviewReadInput {
-  /** 目标 Agent 执行范围。 */
-  readonly agent_id: string;
-
-  /** 提供 Workspace 作用域的 Workspace ID。 */
-  readonly workspace_id: string;
-
+export interface MemoryMainviewReadInput extends MemoryMainviewScopeInput {
   /** 目标稳定记忆标识。 */
   readonly memory_id: string;
 }
@@ -143,56 +168,8 @@ export interface MemoryMainviewReadResult {
   readonly error?: string;
 }
 
-/** 枚举记忆的输入。 */
-export interface MemoryMainviewListInput {
-  /** 目标 Agent 执行范围。 */
-  readonly agent_id: string;
-
-  /** 提供 Workspace 作用域的 Workspace ID。 */
-  readonly workspace_id: string;
-
-  /** 只返回这些 Subject 类别的记忆。 */
-  readonly subject_kinds?: MemorySubjectKind[];
-
-  /** 只返回这些领域分类的记忆。 */
-  readonly memory_types?: string[];
-
-  /** 是否把原始证据记录一并列出。 */
-  readonly include_evidence?: boolean;
-
-  /** 最多返回的条目数量。 */
-  readonly limit?: number;
-
-  /** 跳过的条目数量。 */
-  readonly offset?: number;
-}
-
-/** 按关键词召回记忆的输入。 */
-export interface MemoryMainviewRecallInput {
-  /** 目标 Agent 执行范围。 */
-  readonly agent_id: string;
-
-  /** 提供 Workspace 作用域的 Workspace ID。 */
-  readonly workspace_id: string;
-
-  /** 需要检索的自然语言查询。 */
-  readonly query: string;
-
-  /** 最多返回的条目数量。 */
-  readonly max_results?: number;
-
-  /** 是否把原始证据记录一并返回。 */
-  readonly include_evidence?: boolean;
-}
-
 /** 写入一条记忆的输入。 */
-export interface MemoryMainviewRememberInput {
-  /** 目标 Agent 执行范围。 */
-  readonly agent_id: string;
-
-  /** 提供 Workspace 作用域的 Workspace ID。 */
-  readonly workspace_id: string;
-
+export interface MemoryMainviewRememberInput extends MemoryMainviewScopeInput {
   /** 需要长期保留的原始内容。 */
   readonly content: string;
 
@@ -204,37 +181,19 @@ export interface MemoryMainviewRememberInput {
 
   /** 可选目标记忆分类。 */
   readonly memory_type?: string;
-
-  /** 可选的原始来源说明。 */
-  readonly source?: string;
 }
 
 /** 修订一条记忆的输入。 */
-export interface MemoryMainviewReviseInput {
-  /** 目标 Agent 执行范围。 */
-  readonly agent_id: string;
-
-  /** 提供 Workspace 作用域的 Workspace ID。 */
-  readonly workspace_id: string;
-
+export interface MemoryMainviewReviseInput extends MemoryMainviewScopeInput {
   /** 需要修订的稳定记忆标识。 */
   readonly memory_id: string;
 
   /** 描述目标变更的明确修订指令。 */
   readonly instruction: string;
-
-  /** 可选的新证据内容。 */
-  readonly evidence?: string;
 }
 
 /** 删除一条记忆的输入。 */
-export interface MemoryMainviewForgetInput {
-  /** 目标 Agent 执行范围。 */
-  readonly agent_id: string;
-
-  /** 提供 Workspace 作用域的 Workspace ID。 */
-  readonly workspace_id: string;
-
+export interface MemoryMainviewForgetInput extends MemoryMainviewScopeInput {
   /** 需要删除或失效的稳定记忆标识。 */
   readonly memory_id: string;
 }

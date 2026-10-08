@@ -54,6 +54,11 @@
       }
     }
   },
+  "sdkTry": {
+    "label": "SDK 速览",
+    "title": "先看 API，再看演示",
+    "description": "选一个场景，直接看真实调用长什么样。这些代码跑的就是本仓库里的包。"
+  },
   "quickstart": {
     "sectionLabel": "三套核心 SDK",
     "title": "从 Agent，到 City，再到 Federation。",
@@ -70,7 +75,7 @@
         "neighborCity": "City B",
         "thirdCity": "City C",
         "agent": "Agent",
-        "plugin": "Plugin",
+        "power": "Power",
         "workspace": "Workspace",
         "group": "Group",
         "groupSession": "Group Session",
@@ -271,7 +276,7 @@
       "docs": "产品文档",
       "cityDocs": "City SDK 文档",
       "agentDocs": "Agent SDK 文档",
-      "plugins": "Plugins 文档",
+      "powers": "Powers 文档",
       "payments": "Payments 文档",
       "skills": "Skills",
       "marketplace": "Agent 市场",

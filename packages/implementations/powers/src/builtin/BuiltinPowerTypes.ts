@@ -20,7 +20,10 @@ export type BuiltinPowerDefinition = CityPowerRegistration;
 export type BuiltinPowerRegistration = CityPowerRegistration;
 
 /** 创建 Downcity 官方 Power 注册集合。 */
-export function create_builtin_power_registrations(): BuiltinPowerRegistration[] {
+export function create_builtin_power_registrations(input: {
+  /** 平台数据根目录；Agent 私有记忆位于其 `agents/<agent_id>/memory` 下。 */
+  platform_root_path: string;
+}): BuiltinPowerRegistration[] {
   return [
     {
       readme: builtin_readme_path("skill"),
@@ -48,11 +51,11 @@ export function create_builtin_power_registrations(): BuiltinPowerRegistration[]
       has_config: false,
       has_sidebar: true,
       has_mainview: true,
-      power: new MemoryPower(),
+      power: new MemoryPower({ platform_root_path: input.platform_root_path }),
     },
     {
       readme: builtin_readme_path("web"),
-      has_config: true,
+      has_config: false,
       has_sidebar: true,
       has_mainview: true,
       power: new WebPower(),

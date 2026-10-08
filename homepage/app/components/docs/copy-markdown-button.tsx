@@ -1,45 +1,52 @@
-import React, { useContext, useState } from "react";
-import { Copy, Check } from "lucide-react";
-
 /**
- * 原始 Markdown 内容上下文。
- * 用于在 clientLoader 组件中传递当前页面的原始 Markdown 内容。
+ * 复制 Markdown 按钮。
+ *
+ * 把当前页面的原始 MDX 文本复制到剪贴板，并在开头补一条指向页面规范地址的注释，
+ * 便于直接粘贴给 AI Agent 时保留来源。与旧实现的区别：原始文本与页面地址由父组件
+ * 作为 props 传入，不再依赖隐式的 React context，组件本身可独立复用与测试。
  */
-export const RawMarkdownContext = React.createContext<string>("");
+import { useState } from "react";
+import { IconCheck, IconCopy } from "@tabler/icons-react";
+import { create_site_url } from "@/lib/seo";
 
-/**
- * 复制 Markdown 按钮组件。
- * 点击后将当前文档的原始 Markdown 内容复制到剪贴板，便于用户粘贴给 AI Agent 使用。
- */
-export function CopyMarkdownButton() {
-  const rawMarkdown = useContext(RawMarkdownContext);
-  const [copied, setCopied] = useState(false);
+export function CopyMarkdownButton({
+  raw_markdown,
+  page_url,
+}: {
+  /** 当前页面的原始 MDX 文本。 */
+  raw_markdown: string;
+  /** 当前页面公开 URL，用于在复制内容前附加来源。 */
+  page_url: string;
+}) {
+  const [copied, set_copied] = useState(false);
 
-  if (!rawMarkdown) return null;
+  if (!raw_markdown) return null;
 
-  const handleClick = async () => {
+  const copy = async () => {
+    const payload = `<!-- Source: ${create_site_url(page_url)} -->\n\n${raw_markdown}`;
+
     try {
-      await navigator.clipboard.writeText(rawMarkdown);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(payload);
+      set_copied(true);
+      window.setTimeout(() => set_copied(false), 1500);
     } catch {
-      // 忽略复制失败
+      // 剪贴板不可用时保持静默。
     }
   };
 
   return (
     <button
       type="button"
-      onClick={handleClick}
-      className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-fd-accent"
-      title="复制原始 Markdown 内容"
+      onClick={() => void copy()}
+      title="Copy page as Markdown"
+      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-[0.75rem] font-medium text-text-soft transition-colors hover:border-line-strong hover:text-foreground"
     >
       {copied ? (
-        <Check className="size-3.5 text-green-600" />
+        <IconCheck className="size-3.5 text-success" strokeWidth={2} />
       ) : (
-        <Copy className="size-3.5" />
+        <IconCopy className="size-3.5" strokeWidth={1.7} />
       )}
-      <span>{copied ? "已复制" : "复制 Markdown"}</span>
+      <span className="hidden sm:inline">{copied ? "Copied" : "Markdown"}</span>
     </button>
   );
 }

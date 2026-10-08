@@ -1,0 +1,8 @@
+{
+  "title": "Agent Powers Docs",
+  "pages": [
+    "index",
+    "builtins",
+    "examples"
+  ]
+}

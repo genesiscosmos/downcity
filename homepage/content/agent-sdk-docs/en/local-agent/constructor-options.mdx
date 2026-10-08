@@ -1,6 +1,6 @@
 ---
 title: Agent Constructor Options
-description: Detailed explanation of Workspace env, WorkspaceTools, and local Agent identity, description, instruction, model, tools, and plugins
+description: Detailed explanation of Workspace env, WorkspaceTools, and local Agent identity, description, instruction, model, tools, and powers
 ---
 The local Agent is constructed like this:
 
@@ -19,7 +19,7 @@ const agent = new Agent({
   model,
   instruction,
   tools,
-  plugins,
+  powers,
   Session,
 });
 // Session 在创建时选择 Workspace。
@@ -68,7 +68,7 @@ Both values are always given, so the model can use the readable name while hosts
 
 `description` does not become a regular AgentSession system instruction and does not replace `instruction`: the former says what the Agent is suited for, while the latter controls how it works. Group dispatch sees only member `id/name/description`, not the complete `instruction`.
 
-## `workspace` and `agent.sessions.create({ workspace })`
+## `workspace` and the session directory
 
 The project resource and security boundary available to the Agent. Workspace owns the project root, file and search tools, and an optional Shell:
 
@@ -86,8 +86,9 @@ Key points:
 - `path` is resolved to a real absolute directory during construction
 - file and search tools remain confined to the Workspace
 - Shell and file tools share the same project root
-- Agent is not bound to a Workspace at construction time; `agent.sessions.create({ workspace })` creates a Session execution scope
-- one Agent can enter multiple Workspaces, each with isolated Sessions, logs, Shell, and plugin context
+- `new Agent({ workspace })` sets the default directory for new sessions; it is not a binding
+- a session's current directory can be switched at any time with `session.set_workspace()` or by passing it to `get()`
+- one Agent can work across multiple Workspaces, each Session keeping its own current directory, history, Shell, and power context
 - multiple Agents may target the same directory, using distinct agent IDs and data partitions
 
 `Workspace` requires only a stable `id`, the real project `path`, and optional Shell and env values. The implementation resolves Downcity's internal data root automatically:
@@ -193,8 +194,8 @@ Key points:
 - `patch_env()` treats `null` / `undefined` as delete
 - `set_env()` replaces the current Workspace env
 - `agent.set_instruction()` affects only Sessions created afterwards and does not retroactively change existing in-memory Sessions
-- restored Sessions regenerate from the Agent's current instruction and plugins when `instruction.md` is absent; use `session.syncshot()` to refresh an existing Session and `session.snapshot()` to persist it
-- Workspace env and plugin changes commit in existing Sessions at the next Session step checkpoint
+- restored Sessions regenerate from the Agent's current instruction and powers when `instruction.md` is absent; use `session.syncshot()` to refresh an existing Session and `session.snapshot()` to persist it
+- Workspace env and power changes commit in existing Sessions at the next Session step checkpoint
 - an in-flight provider request and its tool calls keep the env that was effective for the current step
 - if the current Session turn has no later step, the queued change is committed when the next Session turn starts
 - the Session timeline emits a completed action message when the change becomes effective
@@ -238,34 +239,34 @@ const workspace = new Workspace({
 
 Key points:
 
-- Shell is not a plugin
+- Shell is not a power
 - Shell only mounts `shell_exec` and `shell_session`
 - Workspace mounts `grep`, `find`, `read`, `write`, and `edit`, even without Shell
 - session and turn context are wired internally
 - approvals belong to a specific Session; use `session.interactions()`, `session.respond(...)`, and `session.set({ security })`
 - file and search tools are always rooted in the Agent project and do not expose a host execution target
 
-## Plugins are not Agent constructor options
+## Powers are not Agent constructor options
 
-`AgentOptions` does not accept `plugins`. After City receives `CityPluginRegistration` objects, every registered Agent automatically receives every Plugin:
+`AgentOptions` does not accept `powers`. After City receives `CityPowerRegistration` objects, every registered Agent automatically receives every Power:
 
 ```ts
 import { Agent } from "@downcity/agent";
 import { City } from "@downcity/city";
-import { create_builtin_plugin_registrations } from "@downcity/plugins";
+import { create_builtin_power_registrations } from "@downcity/powers";
 
 const agent = new Agent({ id: "repo-helper", tools: {} });
 const city = new City({
   workspaces: [workspace],
-  plugins: create_builtin_plugin_registrations(),
+  powers: create_builtin_power_registrations(),
 });
 
 city.agents.add(agent);
 ```
 
-City owns unique Plugin instances, configuration projection, and lifecycle. Agent owns identity,
+City owns unique Power instances, configuration projection, and lifecycle. Agent owns identity,
 model, instructions, Tools, and Sessions. Web capabilities still require host configuration; see the
-[Web Plugin guide](/en/plugins-docs/builtins/web).
+[Web Power guide](/en/powers-docs/builtins/web).
 
 ## `session_composer`
 

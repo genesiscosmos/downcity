@@ -2,7 +2,7 @@
 title: Session 总览
 description: Session 的职责、生命周期，以及本地和远程模式的统一使用方式
 ---
-`Agent` 拥有身份、模型、自定义工具与 `AgentSessions`；Plugin 由 City 提供。每个 Session
+`Agent` 拥有身份、模型、自定义工具与 `AgentSessions`；Power 由 City 提供。每个 Session
 可以接收一个 Workspace，以获得项目 Tool 和环境。真正承载一次连续对话、历史、流式输出与
 工具审批的是 `Session`。
 
@@ -68,7 +68,7 @@ Message 和 Mutation 不要混用：Message 是可恢复的状态快照；Mutati
 
 ## Session 运行模型
 
-Session 是输入排序和持久化的一致性边界。Prompt、模型修改、环境更新、Plugin 更新、
+Session 是输入排序和持久化的一致性边界。Prompt、模型修改、环境更新、Power 更新、
 审批模式修改和 Compact 都在服务端进入同一个 FIFO，在 Turn 开始前或 Model Step
 检查点按提交顺序执行。远程客户端只调用 Session API，不在客户端复制调度逻辑。
 

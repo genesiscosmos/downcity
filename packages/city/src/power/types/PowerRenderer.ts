@@ -497,6 +497,26 @@ export interface PowerRendererCalloutProps {
   readonly tone?: "default" | "warning" | "danger";
 }
 
+/**
+ * Link 属性。
+ *
+ * 语义是「去别处」，与 `Button` 的「在这里做一件事」不同，因此单独一个组件：
+ * 按钮不会因为跳转就长得像链接，而链接也不应该看起来像按钮。
+ */
+export interface PowerRendererLinkProps {
+  /** 链接文字。 */
+  readonly children: ReactNode;
+
+  /** 点击回调；要打开外部页面时由 Power 调用自己的 host action。 */
+  readonly on_click: () => void;
+
+  /** 是否在文字后标记「会离开当前界面」。 */
+  readonly external?: boolean;
+
+  /** 是否禁止点击。 */
+  readonly disabled?: boolean;
+}
+
 /** Status 属性。 */
 export interface PowerRendererStatusProps {
   /** 状态正文。 */
@@ -504,6 +524,20 @@ export interface PowerRendererStatusProps {
 
   /** 状态语义类型。 */
   readonly tone?: "success" | "warning" | "danger" | "muted";
+}
+
+/**
+ * Status Dot 属性。
+ *
+ * 比 `Status` 更轻：只用一个点表达状态，不占文字宽度。适合行尾这类
+ * 「扫一眼就知道」的位置，不适合需要读出具体内容的地方。
+ */
+export interface PowerRendererStatusDotProps {
+  /** 状态语义类型，决定点的颜色。 */
+  readonly tone: "success" | "warning" | "danger" | "muted";
+
+  /** 无障碍名称；点没有文字，读屏与悬停提示都靠它。 */
+  readonly label: string;
 }
 
 /** 宿主注入的稳定 UI 组件集合。 */
@@ -562,6 +596,10 @@ export interface PowerRendererUiComponents {
   readonly Callout: (props: PowerRendererCalloutProps) => ReactNode;
   /** 轻量状态文本。 */
   readonly Status: (props: PowerRendererStatusProps) => ReactNode;
+  /** 只用一个点表达状态的轻量标记。 */
+  readonly StatusDot: (props: PowerRendererStatusDotProps) => ReactNode;
+  /** 跳转到别处的文字链接。 */
+  readonly Link: (props: PowerRendererLinkProps) => ReactNode;
 }
 
 /** 宿主注入的 Mainview 交互能力。 */

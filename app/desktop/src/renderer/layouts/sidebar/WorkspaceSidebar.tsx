@@ -3,7 +3,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { TbFolderPlus } from "react-icons/tb";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { use_desktop_selector } from "@/app/use_desktop";
 import { use_translation } from "@/locales/i18n";
 import type { DesktopController } from "@/types/DesktopView";
@@ -210,21 +210,16 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({ controller, ope
       session_selection={session_selection}
     />
     {/* 批量删除是唯一不可逆的批量动作，因此有确认步骤；归档可逆，不打扰。 */}
-    <Dialog open={remove_confirm_open} onOpenChange={(next_open) => { if (!batch_pending) set_remove_confirm_open(next_open); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{translate_navigation("sidebar.delete_selected_title", { count: session_selection.selected_keys.length })}</DialogTitle>
-          <DialogDescription>{translate_navigation("sidebar.delete_selected_description")}</DialogDescription>
-        </DialogHeader>
-        <DialogBody>{batch_error ? <div className="text-xs text-destructive">{batch_error}</div> : null}</DialogBody>
-        <DialogFooter>
-          <Button disabled={batch_pending} onClick={() => set_remove_confirm_open(false)}>{translate_common("actions.cancel")}</Button>
-          <Button variant="destructive" disabled={batch_pending} onClick={() => void remove_selected()}>
-            {translate_navigation(batch_pending ? "sidebar.deleting" : "sidebar.permanent_delete")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={remove_confirm_open}
+      set_open={set_remove_confirm_open}
+      title={translate_navigation("sidebar.delete_selected_title", { count: session_selection.selected_keys.length })}
+      description={translate_navigation("sidebar.delete_selected_description")}
+      confirm_label={translate_navigation("sidebar.permanent_delete")}
+      pending_label={translate_navigation("sidebar.deleting")}
+      cancel_label={translate_common("actions.cancel")}
+      on_confirm={remove_selected}
+    />
   </SidebarPanel>;
 });
 

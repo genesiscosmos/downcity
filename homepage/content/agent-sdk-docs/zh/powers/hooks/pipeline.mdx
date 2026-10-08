@@ -1,0 +1,116 @@
+---
+title: Pipeline
+description: 详细说明 pipeline 的输入输出语义、顺序语义，以及它适合解决什么问题
+---
+`pipeline` 最核心的语义是：
+
+- 输入一个值
+- 返回一个新值
+- 下一个 handler 接到的是上一个 handler 的输出
+
+## 它不是广播，而是接力
+
+这点特别重要。
+
+如果有三个 Power 都挂在同一个 `pipeline` 点上，运行方式不是：
+
+- 三个人都看到最初那份输入
+
+而是：
+
+- 第一个人改完，交给第二个
+- 第二个改完，再交给第三个
+
+所以 `pipeline` 最像一条装配线。
+
+## 最小例子
+
+```ts
+const next = await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).pipeline("chat.enrich_message", {
+  text: "Please summarize this page",
+});
+```
+
+如果一个 Power 写成这样：
+
+```ts
+hooks: {
+  pipeline: {
+    "chat.enrich_message": [
+      async ({ value }) => {
+        const body = value as Record<string, unknown>;
+        return {
+          ...body,
+          source: "web",
+        };
+      },
+    ],
+  },
+}
+```
+
+那么宿主拿到的 `next` 就会带上新的 `source` 字段。
+
+## 最适合的三类事
+
+### 补字段
+
+例如：
+
+- source
+- pageTitle
+- locale
+
+### 归一化
+
+例如：
+
+- 把布尔值统一
+- 把空字符串变成 `null`
+- 把别名字段收敛成稳定字段名
+
+### 逐步增强
+
+例如：
+
+- 第一层加来源信息
+- 第二层加会话信息
+- 第三层加默认策略
+
+## 最不适合的事
+
+### 权限拦截
+
+权限拦截更适合 `guard`，因为它的目的不是改值，而是决定能不能继续。
+
+### 单纯记录日志
+
+单纯记录更适合 `effect`，因为没有必要返回新值。
+
+### 给最终唯一答案
+
+那是 `resolve`，不是 `pipeline`。
+
+## 写 pipeline 时最稳的实践
+
+- 尽量返回完整新对象，不要隐式依赖外部共享状态
+- 尽量让输入输出 shape 更稳定，而不是越来越混乱
+- 只做“值加工”，不要顺手塞太多副作用
+
+## 什么时候该拆出去
+
+如果你的逻辑已经变成：
+
+- 要做很多 I/O
+- 要维护长期状态
+- 要同时负责拦截和记录
+
+那往往说明：
+
+- 值加工仍然留在 `pipeline`
+- 其他职责拆到 `guard`、`effect` 或 Power `lifecycle`
+
+## 相关场景
+
+- [一条消息的完整流转](/zh/agent-sdk-docs/powers/hooks/examples/end-to-end-message-flow)
+- [MessageAugmentPower 场景](/zh/powers-docs/examples/message-augment-power)

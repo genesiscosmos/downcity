@@ -6,7 +6,7 @@ description: "Separate fed/downfed from city/downcity: one manages Federation in
 The `downcity` package installs two command families:
 
 - `fed` / `downfed`: creates and deploys Federations, then manages local and remote instances in one system-level registry.
-- `city` / `downcity`: manages local Agents, local plugins, chat/gateway, and the local user's membership and login state for a Federation.
+- `city` / `downcity`: manages local Agents, local powers, chat/gateway, and the local user's membership and login state for a Federation.
 
 Use `fed` when you are deploying or operating the shared backend. Use `city` when you are connecting, signing in, running Agents, or working from a local user workspace.
 
@@ -51,7 +51,7 @@ city on
 city agent chat
 ```
 
-It owns local state: selecting a Federation, storing user login state, running local Agents, and managing plugins plus chat/gateway.
+It owns local state: selecting a Federation, storing user login state, running local Agents, and managing powers plus chat/gateway.
 
 ## Boundaries
 

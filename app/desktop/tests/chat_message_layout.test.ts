@@ -251,11 +251,28 @@ test("用户消息是右侧气泡 + 下方元信息行", () => {
   assert.ok(frames.UserMessageFrame.includes("user_message_meta_class_name"), "UserMessageFrame 没有使用共享的元信息行类名");
 });
 
-test("头像不再 sticky，也不再占一整列", () => {
-  // 并排消息行的旧签名是「一行 + 顶部对齐 + 头像与正文间距」。
-  // 不能只查 `items-start`：多处无关 UI（如弹窗里的多行选项按钮）合法地使用它。
+/**
+ * 身份行吸顶的守卫。
+ *
+ * 吸顶本身是有意的（长消息滚到下半段时要知道“这是谁说的”），但**只有整个身份行可以吸顶**：
+ * 历史上头像单独带过 `sticky`，于是它脱离自己的身份行悬在视口上，名字却滚走了——
+ * 头像与名称是同一个按钮、同一件事，不能分开动。
+ *
+ * 同时锁住两个容易漏的属性：没有背景时正文会从身份行背后透出来；
+ * 没有层级时后出现的正文会盖在它上面。
+ */
+test("身份行吸顶，但头像不单独 sticky", () => {
+  const header = read_class_name(layout_source, "agent_message_identity_header_class_name");
+  assert.ok(/\bsticky\b/.test(header), `身份行没有吸顶：${header}`);
+  assert.ok(/\btop-0\b/.test(header), `身份行吸顶没有给出 top 偏移：${header}`);
+  assert.ok(/\bbg-background\b/.test(header), `身份行吸顶没有背景：正文会从它背后透出来`);
+  assert.ok(/\bz-10\b/.test(header), `身份行吸顶没有层级：后出现的正文会盖在它上面`);
+  assert.ok(frames.AgentMessageFrame.includes("agent_message_identity_header_class_name"), "AgentMessageFrame 没有使用共享的身份行容器类名");
+
+  // 头像与身份行其余部分共用同一个容器，不得各自吸顶。
+  assert.ok(!/\bsticky\b/.test(read_class_name(layout_source, "agent_identity_avatar_class_name")), "头像自己吸顶：它会脱离身份行悬在视口上");
   for (const [name, source] of Object.entries({ ...frames, ...consumers })) {
-    assert.ok(!source.includes("sticky"), `${name} 仍有 sticky：长消息滚动时头像会脱离自己的身份行`);
+    assert.ok(!source.includes("sticky"), `${name} 就地写了 sticky：吸顶只能来自 message_layout 的身份行常量`);
     assert.ok(!source.includes("items-start gap-2"), `${name} 仍是顶部对齐的并排消息行`);
     // 旧写法的残留：给 Footer 加左内边距让「思考中」对齐正文列。
     assert.ok(!/\bpl-1\b/.test(source), `${name} 用左内边距对位：状态行会与相邻消息的正文错开`);
@@ -292,6 +309,49 @@ test("消息几何只有一个来源", () => {
   // 「思考中」的状态行也必须只有一个实现（Session 与 Group 共用）。
   assert.ok(consumers.AgentRuntimeIndicator.includes("export function AgentThinkingStatus"), "AgentThinkingStatus 没有被导出：Group 无法复用状态行");
   assert.ok(consumers.GroupView.includes("AgentThinkingStatus"), "Group 没有复用共享的状态行组件");
+});
+
+/**
+ * 动作栏靠左的守卫。
+ *
+ * 它跟在它所作用的正文后面，不能推到行末（推到行末会与下方消息的右缘对齐，
+ * 看起来像属于下一条消息）。`h-6` 是固定高度：悬停出现时不能把下方内容推一下。
+ *
+ * 间距同样要小：它与正文包成一组（`gap-1`），直接当容器的子节点会拿到与正文块同级的
+ * `gap-3`，工具栏就会被拉成一个独立展示块。
+ */
+test("消息动作栏靠左、高度固定，且贴近它上面的正文", () => {
+  const actions = read_class_name(layout_source, "agent_message_actions_class_name");
+  assert.ok(!/\bml-auto\b/.test(actions), `动作栏被推到行末：会与下方消息的右缘对齐：${actions}`);
+  assert.ok(/\bh-6\b/.test(actions), `动作栏没有固定高度：悬停出现时会把下方内容推走：${actions}`);
+  // 插在最后一条正文之后，而不是 Footer。
+  assert.ok(agent_message_content.includes("last_text_index"), "动作栏没有按「最后一条正文」定位");
+  assert.ok(!consumers.AgentMessage.includes("message-action-toolbar"), "AgentMessage 又内联了动作栏样式：它应走 message_layout 的常量");
+
+  // 与正文同组，组内间距必须小于块间距（`gap-3`），否则工具栏看起来是另一个展示块。
+  const group = read_class_name(layout_source, "agent_message_actions_group_class_name");
+  const group_gap = /\bgap-(\d+(?:\.\d+)?)\b/.exec(group);
+  assert.ok(group_gap, `动作栏与正文的组没有声明间距：${group}`);
+  assert.ok(Number(group_gap[1]) * TAILWIND_SPACING_REM < 0.75, `动作栏与正文的间距不小于块间距（0.75rem）：${group}`);
+  assert.ok(agent_message_content.includes("agent_message_actions_group_class_name"), "动作栏没有与正文包成一组");
+});
+
+/**
+ * 折叠开关的位置守卫。
+ *
+ * 它在身份行末尾、时间之后（顺序：谁说的 → 什么时候 → 还能展开过程吗），整组靠左。
+ * 开关必须在时间戳之后渲染，否则悬停出现的时间会把开关的位置推来推去。
+ */
+test("折叠开关在身份行末尾、时间之后，整组靠左", () => {
+  assert.ok(frames.AgentMessageFrame.includes("identity_trailing"), "AgentMessageFrame 没有渲染身份行末尾控件");
+  // 时间戳在前、开关在后。
+  assert.ok(/ChatMessageTimestamp[\s\S]*identity_trailing\b/.test(frames.AgentMessageFrame), "折叠开关没有排在时间戳之后：悬停出现的时间会把它推走");
+  // 身份行不把任何东西推到行末：整组靠左。
+  const header = read_class_name(layout_source, "agent_message_identity_header_class_name");
+  assert.ok(!/\bjustify-between\b/.test(header), `身份行把控件推到两端：时间与开关不再相邻：${header}`);
+  assert.ok(!layout_source.includes("agent_message_identity_meta_class_name"), "右侧元信息组已无人使用，应删除");
+  // 开关不得再出现在正文渲染器里。
+  assert.ok(!agent_message_content.includes("process_toggle"), "折叠开关又回到了正文渲染器");
 });
 
 test("两个形态共用同一份身份行与 Footer 几何", () => {

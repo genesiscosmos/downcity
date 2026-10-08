@@ -1,0 +1,56 @@
+---
+title: ReviewGuardPower Scenario
+description: Use a guard scenario to show how a power can block a flow before the main chain continues
+---
+## Scenario
+
+You want to enforce one rule in a runtime chain:
+
+- if a request does not carry `reviewed = true`
+- block the rest of the flow
+
+That is the most natural kind of `guard` scenario.
+
+## Example
+
+```ts
+import { Power, type PowerHooks } from "@downcity/city/power";
+
+class ReviewGuardPower extends Power {
+  readonly name = "review_guard";
+  readonly title = "Review Guard";
+  readonly description = "Blocks requests that were not reviewed.";
+
+  readonly hooks: PowerHooks = {
+    guard: {
+      "review.require_checked": [
+        async ({ value }) => {
+          const body = value as { reviewed?: unknown };
+          if (body.reviewed !== true) {
+            throw new Error("review is required before continuing");
+          }
+        },
+      ],
+    },
+  };
+}
+
+// City has registered review_guard and bound it to entry's Agent/Workspace.
+await city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id }).guard("review.require_checked", {
+  reviewed: true,
+});
+```
+
+## Why this is not a pipeline
+
+Because you are not trying to rewrite a value. You are trying to:
+
+- allow the flow
+- or stop it immediately
+
+That is exactly what guards are for.
+
+## Related docs
+
+- [Power hooks and resolve](/en/agent-sdk-docs/powers/power-hooks)
+- [Custom power](/en/agent-sdk-docs/powers/custom-power)

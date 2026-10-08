@@ -1,104 +1,24 @@
 /**
- * Downcity 文章（Blog）路由。
+ * Blog 文章页路由。
  *
  * 关键说明：
  * 1. 公开 URL 为 `/en/blog/<slug>/` 与 `/zh/blog/<slug>/`，与其它内容空间的
  *    语言路径约定一致，canonical、hreflang 与 sitemap 直接复用既有逻辑。
- * 2. 版式是营销文章，不是文档：不挂 DocsLayout 侧边栏，所以 root.tsx 的
- *    `showGlobalChrome` 判定会为真，navbar 与 Footer 正常显示。
- * 3. H1 由本页从 frontmatter 输出，MDX 正文因此禁止再写 `# 标题`，
- *    避免出现两个 h1（文档区当前就存在这个重复标题问题）。
+ * 2. 版式是营销文章，不是文档：不挂文档侧边栏，因此 root.tsx 的 `showGlobalChrome`
+ *    判定为真，navbar 与 Footer 正常显示。
+ * 3. H1 由本页从 loader 数据输出，MDX 正文因此禁止再写 `# 标题`，避免出现两个 h1。
+ * 4. loader 位于 `loader.server.ts`：它读取磁盘并访问文档索引，不能与渲染代码
+ *    同处一个模块，否则服务端依赖会被打进浏览器包。
  */
-import type { Route } from "./+types/page";
-import type { MDXComponents } from "mdx/types";
-import type { ComponentType } from "react";
-import React from "react";
+import { type Route } from "./+types/page";
+import { createElement, type ReactNode } from "react";
 import { Link } from "react-router";
-import { readFile } from "fs/promises";
-import { blogSource } from "@/lib/blog-source";
-import { getMDXComponents } from "@/components/docs/mdx-components";
-import browserCollections from "fumadocs-mdx:collections/browser";
+import { useTranslation } from "react-i18next";
+import { get_mdx_loader } from "@/lib/docs/mdx-client";
 import { Footer } from "@/components/sections/Footer";
 import { create_page_meta } from "@/lib/seo";
-import { resolve_alternate_url } from "@/lib/document-source";
-import {
-  create_article_structured_data,
-  serialize_structured_data,
-} from "@/lib/structured-data";
 
-/** 文章首次发布的固定日期，用于 JSON-LD 的 datePublished。 */
-const PUBLISHED_AT = "2026-09-18";
-
-/**
- * 从 MDX frontmatter 读取每篇文章自己的 keywords。
- *
- * 为什么要手工解析：fumadocs 的 `page.data` 只暴露内置字段，自定义 frontmatter
- * 不会透出，直接用 `page.data.keywords` 会静默拿到 undefined 并回退成硬编码值，
- * 让所有文章共用同一组关键词（这是之前存在的真实缺陷）。
- */
-function read_frontmatter_keywords(raw: string): string | undefined {
-  const match = raw.match(/^keywords:\s*(.+)$/m);
-  if (!match) return undefined;
-  const value = match[1].trim().replace(/^["']|["']$/g, "");
-  return value.length > 0 ? value : undefined;
-}
-
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const url = new URL(request.url);
-  const rawPath = params["*"] ?? "";
-  const lang =
-    url.pathname.startsWith("/zh/") || url.pathname === "/zh" ? "zh" : "en";
-
-  const slugs = rawPath.split("/").filter((value: string) => value.length > 0);
-  const langIndex = slugs.findIndex((slug: string) => slug === "en" || slug === "zh");
-  const cleanSlugs = langIndex >= 0 ? slugs.slice(langIndex + 1) : slugs;
-
-  const page = blogSource.getPage(cleanSlugs, lang);
-  if (!page) {
-    throw new Response("Not found", { status: 404 });
-  }
-
-  const alternate_page = blogSource.getPage(
-    cleanSlugs,
-    lang === "en" ? "zh" : "en",
-  );
-
-  const title = page.data.title ?? "Downcity Blog";
-  const description = page.data.description ?? "";
-
-  // keywords 按文章各自的 frontmatter 输出，避免所有文章共用同一组关键词。
-  let raw_markdown = "";
-  if (page.absolutePath) {
-    try {
-      raw_markdown = await readFile(page.absolutePath, "utf-8");
-    } catch {
-      // 读取失败不影响页面渲染，keywords 回退为通用值
-    }
-  }
-  const keywords =
-    read_frontmatter_keywords(raw_markdown) ??
-    "agent harness, agent runtime, Downcity";
-
-  const article_jsonld = serialize_structured_data(
-    create_article_structured_data({
-      title,
-      description,
-      pathname: page.url,
-      date_published: PUBLISHED_AT,
-      lang,
-    }),
-  );
-
-  return {
-    path: page.path,
-    url: page.url,
-    title,
-    description,
-    keywords,
-    alternate_url: resolve_alternate_url(alternate_page, "blog"),
-    article_jsonld,
-  };
-}
+export { loader } from "./loader.server";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   if (!loaderData) return [];
@@ -115,50 +35,58 @@ export function meta({ loaderData }: Route.MetaArgs) {
   });
 }
 
-const clientLoader = browserCollections.blog.createClientLoader({
-  id: "blog",
-  component: ({
-    default: Mdx,
-    frontmatter,
-  }: {
-    default: ComponentType<{ components?: MDXComponents }>;
-    frontmatter: { title?: string; description?: string };
-  }) => (
+/** 文章正文加载器：按内容路径取编译后的 MDX 组件。 */
+const client_loader = get_mdx_loader("blog");
+
+/**
+ * 用文章版式包裹正文。
+ *
+ * 标题与摘要在服务端输出：预渲染产物必须自带唯一的 H1，浏览器才能在不执行脚本时
+ * 也得到完整语义。加载器只提供正文组件。
+ */
+function ArticleBody({
+  title,
+  description,
+  children,
+}: {
+  /** 文章标题，输出为唯一的 H1。 */
+  title: string;
+  /** 文章摘要，为空时不渲染。 */
+  description: string;
+  /** MDX 正文。 */
+  children: ReactNode;
+}) {
+  const { i18n } = useTranslation("home");
+  const is_zh = i18n.language === "zh";
+
+  return (
     <article className="mx-auto max-w-[46rem] px-5 py-16 md:px-8 md:py-24">
-      <header className="space-y-4">
+      <header className="mb-12 space-y-4">
         <p className="text-[0.7rem] font-medium uppercase tracking-[0.12em] text-text-subtle">
-          Blog
+          {is_zh ? "文章" : "Blog"}
         </p>
         <h1 className="font-serif text-[clamp(2rem,4.5vw,3rem)] font-bold leading-[1.1] tracking-[-0.03em] text-foreground">
-          {frontmatter.title}
+          {title}
         </h1>
-        {frontmatter.description ? (
-          <p className="max-w-2xl text-base leading-[1.7] text-text-soft">
-            {frontmatter.description}
-          </p>
+        {description ? (
+          <p className="max-w-2xl text-base leading-[1.7] text-text-soft">{description}</p>
         ) : null}
       </header>
-      <div className="prose mt-12 max-w-none">
-        <Mdx components={getMDXComponents()} />
-      </div>
+      <div className="docs-markdown">{children}</div>
       <footer className="mt-16 border-t border-line pt-8">
         <Link
-          to="/en/blog/what-is-an-agent-harness/"
+          to={is_zh ? "/zh/blog/" : "/en/blog/"}
           className="text-sm font-medium text-foreground underline underline-offset-4"
         >
-          Back to top
+          {is_zh ? "返回文章列表" : "Back to all articles"}
         </Link>
       </footer>
     </article>
-  ),
-});
+  );
+}
 
 export default function Page({ loaderData }: Route.ComponentProps) {
-  // fumadocs 的 client loader 返回 `FC<undefined>`，与 React.ComponentType<{}> 不兼容，
-  // 这里收窄为无 props 的组件类型后渲染。
-  const Content = clientLoader.getComponent(loaderData.path) as unknown as
-    | React.ComponentType
-    | undefined;
+  const Content = client_loader.getComponent(loaderData.content_path);
 
   return (
     <div className="min-h-screen">
@@ -167,7 +95,11 @@ export default function Page({ loaderData }: Route.ComponentProps) {
         data-downcity-structured-data="article"
         dangerouslySetInnerHTML={{ __html: loaderData.article_jsonld }}
       />
-      <main>{Content ? <Content /> : null}</main>
+      <main>
+        <ArticleBody title={loaderData.title} description={loaderData.description}>
+          {Content ? createElement(Content) : null}
+        </ArticleBody>
+      </main>
       <Footer />
     </div>
   );

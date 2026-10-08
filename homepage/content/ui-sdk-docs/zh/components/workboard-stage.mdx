@@ -1,39 +1,32 @@
 ---
 title: WorkboardStage
-description: Focused agent workboard view for inspecting individual agent state
+description: 组合式 Workboard 内部的舞台层
 ---
-`WorkboardStage` is a focused panel that shows the detailed state of a single agent — its activity timeline, signals, and status indicators for one zone.
+并不存在公开的 `WorkboardStage` 组件。舞台层是组合式 [Workboard](./workboard) 的内部实现：
+它是一个固定尺寸的坐标空间，用来摆放分区与 agent 节点。
 
-## Import
+`@downcity/ui` 不导出这个舞台组件，也不导出它的分区定义与坐标辅助函数。渲染 `Workboard`
+并交由它管理舞台即可。
 
-```tsx
-import { WorkboardStage } from "@downcity/ui";
-```
+## 哪些是公开的
 
-## Usage
-
-```tsx
-<WorkboardStage
-  zoneId={zoneId}
-  agents={agents}
-  config={config}
-  zoneConfig={stageConfig}
-/>
-```
-
-### Zone config
+board 的游戏几何信息只能通过一个导出的构造函数获得：
 
 ```tsx
-interface WorkboardStageZoneConfig {
-  title: string;
-  subtitle: string;
-  badge: string;
-}
+import { buildWorkboardGameMapConfig } from "@downcity/ui";
+
+const gameMap = buildWorkboardGameMapConfig({
+  board,
+  activeZoneId: "active",
+  selectedAgentId,
+});
 ```
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `zoneId` | `string` | Current zone identifier |
-| `agents` | `DowncityWorkboardAgentItem[]` | Agents in this zone |
-| `config` | `DowncityWorkboardGameMapConfig` | Full game map config |
-| `zoneConfig` | `WorkboardStageZoneConfig` | Zone display config |
+`buildWorkboardGameMapConfig` 返回 `DowncityWorkboardGameMapConfig`，描述 zones、actors、
+corridors、patrols 与 points of interest，也就是舞台所渲染的同一套几何信息。
+
+## 相关阅读
+
+- [Workboard](./workboard)：你要渲染的组合式 board
+- [WorkboardGame](./workboard-game)：导出的游戏地图构造函数与公开游戏类型
+- [WorkboardStageMap](./workboard-stage-map)：atlas 内部使用的像素地图

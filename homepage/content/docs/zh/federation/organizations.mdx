@@ -12,7 +12,7 @@ Organization 不保存产品后端地址，也不管理 Space、文档、Reposit
 ## 安装
 
 ```ts
-import { Federation } from "@downcity/bureau";
+import { Federation } from "@downcity/federation";
 import { OrganizationsService } from "@downcity/services";
 
 const federation = new Federation({ database });
@@ -29,7 +29,14 @@ federation.use(new OrganizationsService({
 创建 Federation 全局 Organization：
 
 ```ts
-await bureau.service("organizations").action("create").invoke({
+import { Embassy } from "@downcity/federation";
+
+const embassy = new Embassy({
+  federation_url: process.env.DOWNCITY_FEDERATION_URL!,
+  user_token,
+});
+
+await embassy.user.service("organizations").action("create").invoke({
   name: "Genesis Research",
   scope_type: "federation",
 });
@@ -38,7 +45,7 @@ await bureau.service("organizations").action("create").invoke({
 创建当前 Bureau Organization：
 
 ```ts
-await bureau.service("organizations").action("create").invoke({
+await embassy.user.service("organizations").action("create").invoke({
   name: "Genesis Research",
   scope_type: "bureau",
 });
@@ -53,7 +60,7 @@ await bureau.service("organizations").action("create").invoke({
 Membership 表示一个 User 与 Organization 之间的一段成员关系。每次成功加入都会生成新的 `membership_id`。退出或被移除后，旧记录永久保持 `removed`；重新加入会创建另一条 Membership。
 
 ```ts
-await bureau.service("organizations").action("join-requests/create").invoke({
+await embassy.user.service("organizations").action("join-requests/create").invoke({
   organization_id: "org_01J...",
 });
 ```
@@ -65,7 +72,7 @@ Owner、Admin、Member 只表达 Organization 治理角色，不代表产品中�
 Bureau 把同一个 `user_token` 发送给产品预先配置的 HTTPS Bureau：
 
 ```ts
-await bureau.post("https://bureau.example.com/v1/projects", {
+await embassy.user.post("/v1/projects", {
   organization_id: "org_01J...",
 });
 ```

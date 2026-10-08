@@ -175,6 +175,21 @@ a,
   background: var(--interaction-active);
 }
 
+/*
+ * 输入卡片上方的上下文行（草稿的联系人与目录 chip）。
+ *
+ * 几何与 `.chat-composer` 同源：它是卡片的同级兄弟而不是卡片内容，但必须落在同一列上，
+ * 否则看起来会像两列。因此宽度与左右位置直接抄卡片那一份（居中 + 两侧各留 0.5rem + 840px 上限），
+ * 两者改一处就一起改。
+ *
+ * 内边距由组件给（`px-2`）：卡片内容自己带 `p-1` + `px-1`，chip 的左缘要与那里对齐。
+ */
+.chat-composer-context-row {
+  width: calc(100% - 1rem);
+  max-width: 840px;
+  margin: 0 auto;
+}
+
 /* 历史消息编辑只保留 Composer 自身一层表面，不再叠加 User Message 气泡。 */
 .user-message-rewrite-editor {
   width: 100%;

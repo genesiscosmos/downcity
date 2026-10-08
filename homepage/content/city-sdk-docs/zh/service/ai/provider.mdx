@@ -84,3 +84,42 @@ ai.use(channel.model({
 AIService 只把最新 user 消息的 `file` 依次交给规则。选出最终模型后再校验 reasoning；最新 user 保持原样，命中最终模型 fallback 规则的历史文件会降级为 filename、原始 URL 或 MIME type 文本，再交给目标 Channel。
 
 Channel 与模型的 `provider_options` 只在服务端合并，由对应 Adapter 解释，不进入公开模型协议。
+
+## 决策模型（System One）
+
+返回带类型判定而非生成文本的模型，实现 `decision()` 而不是 `stream()`：
+
+```ts
+import {
+  AIChannel,
+  AIService,
+  type AIChannelActionInput,
+  type AIChargedResult,
+  type AIDecisionResult,
+} from "@downcity/federation";
+
+class JevChannel extends AIChannel {
+  constructor() {
+    super({ id: "typesafe", env: { TYPESAFE_API_KEY: "TypeSafe API Key" } });
+  }
+
+  async decision(input: AIChannelActionInput): Promise<AIChargedResult<AIDecisionResult>> {
+    const api_key = input.env("TYPESAFE_API_KEY");
+    if (!api_key) throw new Error("TYPESAFE_API_KEY is required");
+    return { output: await call_jev(api_key, input.input) };
+  }
+}
+
+const ai = new AIService();
+ai.use(new JevChannel().model({
+  id: "jev-1.13",
+  upstream_model: "typesafe/jev-1.13",
+  name: "Jev",
+  pricing: { currency: "USD", unit: "request", rates: { request: 0.0004 } },
+}));
+federation.use(ai);
+```
+
+Federation 会自动暴露 `POST /v1/ai/decision`，并在请求到达 Channel 前完成校验。目录中该模型的 `model_type` 为 `decision`、`modalities` 为 `["decision"]`；由于它不实现 `stream()`，不会出现在 Agent 的对话模型选择器里。
+
+计量与计费与其它能力走同一条路径：从 Channel 返回 `usage` 即记录用量，声明 `pricing` 即按次计费。

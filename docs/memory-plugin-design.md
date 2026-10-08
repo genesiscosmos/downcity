@@ -1,6 +1,6 @@
 # MemoryPlugin 完整设计
 
-> 状态：目标设计；当前完成 Hook 接入、Agent/City Store 路由和最小 Capture Job
+> 状态：目标设计；当前完成 Hook 接入、Agent 私有与共享 Store 物理分离和最小 Capture Job
 >
 > 适用范围：`@downcity/agent` Plugin Runtime、`@downcity/plugins` MemoryPlugin、City 宿主装配与 Memory 持久化
 >
@@ -25,14 +25,13 @@
 
 - 基于现有 `hooks.pipeline/effect` 的三个 Session 检查点。
 - Core system block、每 Turn 一次 Dynamic Recall 及模型输入副本注入。
-- Agent Private、City User、City Workspace、City Shared 的 owner/subject 逻辑地址。
-- City 只通过 `PluginHostContext.extensions.city_memory_root_path` 提供共享根路径。
-- `remember(target)` 的有限目标解析、完整逻辑 `memory_id` 与跨 Agent User Memory 共享。
+- 只有两个 Subject：当前 Agent 私有与整个 City 共享；Workspace 仅作为记录 metadata。
+- Agent 私有与共享记忆的物理分离：Agent 记忆位于 `agents/<agent_id>/memory`，共享记忆位于 `powers/memory`。
+- `remember(target)` 的有限目标解析与完整逻辑 `memory_id`。
 - 成功 Turn 的 canonical 文本预检和 Agent Store 幂等 Capture Job。
 
 尚未完成：
 
-- 多用户 Session 的 per-Turn 可信 Principal；当前 City User 只使用 Embassy 当前认证用户，不能把聊天正文中的 `user_id` 当作可信身份。
 - SQLite Records、FTS、Core Markdown Projector、Formation Worker、publish 与跨库恢复。
 - 因此 Capture Job 当前只持久化为 `pending`，不会被伪装成已经形成的长期 Memory。
 

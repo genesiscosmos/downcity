@@ -2,7 +2,7 @@
 title: Agent Class
 description: The core public API of the local Agent SDK
 ---
-`Agent` is the reusable execution subject of the local SDK. It owns a stable ID, visible name, capability description, instruction, model, custom Tools, and its Session collection. It owns neither Plugins nor a permanent Workspace.
+`Agent` is the reusable execution subject of the local SDK. It owns a stable ID, visible name, capability description, instruction, model, custom Tools, and its Session collection. It owns neither Powers nor a Workspace; `chat()` exposes the conversation that belongs to the agent itself.
 
 ## Public API
 
@@ -10,15 +10,23 @@ description: The core public API of the local Agent SDK
 - `agent.id`
 - `agent.name`
 - `agent.description`
+- `agent.workspace`
+- `agent.chat({ workspace? })`
+- `agent.sessions.main({ workspace? })`
 - `agent.sessions.create({ workspace })`
+- `agent.chat({ workspace? })`
+- `agent.sessions.main({ workspace? })`
 - `agent.set_instruction(input)`
 - `agent.get_instructions()`
 - `agent.get_logger()`
 - `agent.dispose()`
 
-Sessions are created by the Agent and select the Workspace explicitly:
+The agent has a conversation of its own, opened with `chat()`; every session, including that one, is created and restored through `agent.sessions`:
 
 ```ts
+const chat = await agent.chat();
+const turn = await chat.send({ query: "How is this repository structured?" });
+
 const session = await agent.sessions.create({ workspace });
 ```
 
@@ -30,13 +38,16 @@ const session = await agent.sessions.create({ workspace });
 - `tools`: custom Tools available to Sessions created by this Agent.
 - `instruction`: static Agent-level base instruction.
 - `model`: default `ModelClient`; a local Session may override it.
+- `workspace`: optional default directory for new sessions; not a binding, and switchable per session.
 - `session_class`: optional custom local Session class.
 
-There is no `workspace` constructor option. The host creates Workspace independently and selects it
-when creating a Session.
+`workspace` only sets the default directory for new sessions. It does not affect the agent's identity
+and does not restrict which directories the agent may use later; when omitted, new sessions have no
+project context. Each session picks its own directory through `session.set_workspace()` or the
+`{ workspace }` option at creation. See [Agent chat](/en/agent-sdk-docs/sessions/agent-chat) and
+[Managing Sessions](/en/agent-sdk-docs/sessions/session-management).
 
-One Agent may create Sessions in multiple Workspaces. The Workspace is supplied to each Session and
-does not become an Agent-owned public object. City provides Plugins, and every City Plugin is
+One Agent may work across multiple Workspaces. City provides Powers, and every City Power is
 automatically available to every City Agent. Callers create an explicit execution view with
-`city.plugins.scope({ agent_id: agent.id, workspace_id: workspace.id })`. `agent.dispose()` releases Sessions and the current City binding. Network
+`city.powers.scope({ agent_id: agent.id, workspace_id: workspace.id })`. `agent.dispose()` releases Sessions and the current City binding. Network
 transports remain owned by the host.

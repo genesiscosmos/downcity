@@ -61,9 +61,10 @@ export type {
   MemoryMainviewProviderStatus,
   MemoryMainviewReadInput,
   MemoryMainviewReadResult,
-  MemoryMainviewRecallInput,
   MemoryMainviewRememberInput,
   MemoryMainviewReviseInput,
+  MemoryMainviewScopeInput,
+  MemoryMainviewScopeKind,
   MemoryMainviewSnapshot,
   MemoryMainviewWorkspace,
 } from "./memory/types/MemoryMainview.js";

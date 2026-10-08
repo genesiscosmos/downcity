@@ -1,8 +1,8 @@
 ---
 title: Agent SDK
-description: 使用 @downcity/agent 构建具备项目文件、受控命令、Plugin 与持久 Session 的本地或远程 Agent
+description: 使用 @downcity/agent 构建具备项目文件、受控命令、Power 与持久 Session 的本地或远程 Agent
 ---
-`@downcity/agent` 提供本地 `Agent` 执行运行时；`@downcity/city` 提供组合根、Workspace/Plugin
+`@downcity/agent` 提供本地 `Agent` 执行运行时；`@downcity/city` 提供组合根、Workspace/Power
 资源、transport 与 `RemoteAgent`。两种客户端形态都以 Session 为主要工作对象：Agent 组合执行
 能力，Session 承载持续对话及其执行状态。
 
@@ -10,22 +10,22 @@ description: 使用 @downcity/agent 构建具备项目文件、受控命令、Pl
 
 ```mermaid
 flowchart LR
-    Host["SDK 宿主"] --> City["City<br/>资源与 Plugin 生命周期"]
+    Host["SDK 宿主"] --> City["City<br/>资源与 Power 生命周期"]
     City --> Agent["Agent<br/>身份与执行"]
-    Agent --> Workspace["agent.sessions.create({ workspace })<br/>Session 作用域"]
+    Agent --> Workspace["agent.chat() / agent.sessions.create({ workspace })<br/>带当前目录的 Session"]
     Workspace --> Session["Session<br/>有状态执行容器"]
     Session --> Turn["Turn<br/>一次 prompt 执行"]
-    City --> Plugin["Plugin<br/>扩展能力"]
+    City --> Power["Power<br/>扩展能力"]
 ```
 
 | 对象 | 负责 | 不负责 |
 | --- | --- | --- |
-| `Workspace` | 项目文件、Env、Tools 与可选 Shell | Agent 身份、Plugin、Session 持久化与 Sandbox 实现 |
+| `Workspace` | 项目文件、Env、Tools 与可选 Shell | Agent 身份、Power、Session 持久化与 Sandbox 实现 |
 | `Shell` | Sandbox Provider、Workspace 持久 Sandbox 与 Shell Sessions | Chat Session 身份与 City 生命周期 |
-| `Agent` | 模型、指令、自定义 Tool 与 Session | Plugin 实例、Workspace 资源、HTTP/RPC transport |
-| `AgentSessions` | 当前 Agent 的全部 Session；每个 Session 可以接收一个 Workspace | Agent 身份与 Plugin 定义 |
+| `Agent` | 模型、指令、自定义 Tool 与 Session | Power 实例、Workspace 资源、HTTP/RPC transport |
+| `AgentSessions` | 当前 Agent 的全部 Session；每个 Session 可以接收一个 Workspace | Agent 身份与 Power 定义 |
 | `Session` | 对话状态、消息历史、执行顺序与审批 | 项目资源所有权 |
-| `City` | Workspace 与 Plugin 资源、生命周期、Storage 和 transport | Session 执行语义 |
+| `City` | Workspace 与 Power 资源、生命周期、Storage 和 transport | Session 执行语义 |
 | `SessionTurnContext` | 一个 Turn 的执行上下文与生命周期 | 保存长期 Agent 状态 |
 | `RemoteAgent` | 访问服务端 Agent 与 Session | 配置服务端模型 |
 
@@ -34,7 +34,7 @@ flowchart LR
 | 场景 | 使用 |
 | --- | --- |
 | Agent 与应用运行在同一个 Node.js 进程 | `Agent` |
-| 应用需要直接注入模型、Tool、Plugin 和 Shell | `Agent` |
+| 应用需要直接注入模型、Tool、Power 和 Shell | `Agent` |
 | Agent 已由另一个进程通过 HTTP/RPC 暴露 | `RemoteAgent` |
 | 客户端只需要创建 Session、发送 prompt 和订阅结果 | `RemoteAgent` |
 
@@ -81,10 +81,10 @@ try {
 只需要记住这条主链路：
 
 ```text
-Agent + Workspace + Shell → agent.sessions.create({ workspace }) → Session → prompt() → turn.finished → dispose()
+Agent + Workspace + Shell → agent.chat() / agent.sessions.create({ workspace }) → Session → send() / prompt() → turn.finished → dispose()
 ```
 
-`agent.dispose()` 会释放 Session 使用的资源并解除当前 City 绑定；City 负责收口 Plugin 唯一实例、
+`agent.dispose()` 会释放 Session 使用的资源并解除当前 City 绑定；City 负责收口 Power 唯一实例、
 lifecycle 与 ActionSchedule。项目目录不会创建 `.downcity`。
 
 ## 模型归属
@@ -101,7 +101,7 @@ Downcity 项目模式由 CLI 宿主根据项目配置和 City AIService 模型�
 1. [本地 Agent 快速开始](/zh/agent-sdk-docs/local-agent/quickstart)
 2. [Session 总览](/zh/agent-sdk-docs/sessions/overview)
 3. [Shell 与沙箱](/zh/agent-sdk-docs/local-agent/shell-reference)
-4. [Tools 与 Plugins](/zh/agent-sdk-docs/local-agent/tools-and-plugins)
+4. [Tools 与 Powers](/zh/agent-sdk-docs/local-agent/tools-and-powers)
 5. [远程 Agent](/zh/agent-sdk-docs/remote-agent/quickstart)
 6. [SDK Surface](/zh/agent-sdk-docs/api-reference/sdk-surface)
 7. [Agent SDK 架构](/zh/docs/agent/sdk-architecture)
