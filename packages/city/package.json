@@ -1,6 +1,6 @@
 {
   "name": "@downcity/city",
-  "version": "1.2.0",
+  "version": "1.5.0",
   "type": "module",
   "description": "Downcity City 组合根、Power 生命周期与 Agent transport 运行时",
   "files": [
