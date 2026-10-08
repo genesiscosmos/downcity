@@ -69,7 +69,7 @@ Workspace 的位置由所有权决定，不由调用便利性决定。
 
 **解析失败不是错误。** 历史会话指向本次宿主没有提供的目录属于正常情况：该会话没有项目上下文，没有文件工具与 Shell，但纯模型对话仍可用。
 
-**Agent 不参与。** `AgentOptions` 没有 `workspace`，也没有 `resolve_workspace`。Agent 不持有 registry，不回查 City。`CityRuntime` 保持现状——它刻意不含 Workspace 查询，因为「Workspace 由调用方在创建时显式传入」。
+**Agent 不参与。** `AgentOptions` 没有 `resolve_workspace`，Agent 不持有 registry，也不回查 City。它只保留 `workspace` 作为「新会话默认目录」，不参与恢复。`CityRuntime` 保持现状——它刻意不含 Workspace 查询，因为「Workspace 由调用方在创建时显式传入」。
 
 ### 2.4 一对读写手柄
 
@@ -123,14 +123,21 @@ Workspace 的位置由所有权决定，不由调用便利性决定。
 ```ts
 export interface Agent {
   /** Agent 自己的会话；不存在时创建。它就是 Agent。 */
-  session(): Promise<AgentSession>;
+  session(input?: AgentSessionInput): Promise<AgentSession>;
 
   /** 全部 Session 的操作入口。 */
   readonly sessions: AgentSessionCollection;
 }
 ```
 
-`AgentOptions` 回到 `Identity + Model + Instruction + Tools + Sessions`：
+```ts
+export interface AgentSessionInput {
+  /** 首次创建时注入的目录；省略时使用 `AgentOptions.workspace`，两者都无则没有项目上下文。 */
+  workspace?: WorkspaceRuntime;
+}
+```
+
+`AgentOptions` 回到 `Identity + Model + Instruction + Tools + Sessions`，只增加一个「新会话默认目录」：
 
 ```ts
 export interface AgentOptions {
@@ -149,6 +156,15 @@ export interface AgentOptions {
   /** 默认模型实例；Session 可覆盖。 */
   model?: ModelClient;
 
+  /**
+   * 新建 Session 时注入的默认目录。
+   *
+   * 关键点（中文）
+   * - 不是绑定：单个 Session 可用 `set({ workspace })` 换掉。
+   * - 不参与恢复：历史会话的目录由宿主在 `get()` 时注入。
+   */
+  workspace?: WorkspaceRuntime;
+
   /** Agent 自有的自定义工具。 */
   tools?: Record<string, Tool>;
 
@@ -163,7 +179,7 @@ export interface AgentOptions {
 }
 ```
 
-**删除 `workspace` 与 `resolve_workspace`。**
+**删除 `resolve_workspace`**：解析是持有 Workspace 一方的职责，不是 Agent 的。`workspace` 保留为「新会话默认目录」。
 
 ### 4.2 AgentSessionCollection
 
@@ -209,7 +225,7 @@ export interface AgentGetSessionOptions {
 }
 ```
 
-`origin_type` 默认值从 `"chat"` 改为 `"work"`。
+`origin_type` 默认值从 `"chat"` 改为 `"work"`；角色常量从 `@downcity/type` 导出（`SESSION_ORIGIN_TYPE_AGENT` / `SESSION_ORIGIN_TYPE_WORK`）。
 
 ### 4.3 Session
 
@@ -269,7 +285,88 @@ export interface AgentSessionSetInput {
 
 `RemoteAgentSession` 只能读到可序列化键（`workspace_id`、`model_label`、`approval_mode`、`title`、`timezone`、`created_at`、`updated_at`）。实例类键（`workspace`、`model`）在远程边界不成立，远程 `get()` 不接受它们。
 
-## 5. 模型侧能力
+## 5. 调用方式
+
+### 5.1 最小链路
+
+```ts
+const agent = new Agent({ id: "coder", model, workspace });
+
+// 取 Agent 自己那条会话；不存在则创建
+const session = await agent.session();
+
+const turn = await session.prompt({ query: "这个仓库结构怎么样" });
+const result = await turn.finished;
+
+session.messages();      // 读历史
+session.subscribe(fn);   // 订变动
+session.origin;          // { type: "agent" }
+```
+
+它没有专属方法：`prompt` / `messages` / `subscribe` / `stop` / `respond` / `status` 就是 Session 的原有接口，不存在额外的对话层。
+
+### 5.2 读写配置
+
+```ts
+await session.set({ model, security, workspace });   // 写
+session.get("workspace");                            // 运行时实例
+session.get("workspace_id");                         // 持久化标识
+session.get("model_label");
+session.get("title");
+```
+
+`get` 是同步只读，不解析也不落盘。实例类键（`workspace`、`model`）只在当前进程有效；持久化键跨进程可用。
+
+### 5.3 角色与分区
+
+```ts
+const work = await agent.sessions.create({ workspace });            // work（默认）
+const task = await agent.sessions.create({ origin: { type: "task" } });
+
+agent.sessions.list();                         // 默认只列 work
+agent.sessions.get(work.id, "work");
+agent.sessions.get(agent.id, "agent");         // Agent 自己那条，id 就是 agent id
+```
+
+### 5.4 目录由宿主注入
+
+Session 不还原 Workspace：`get()` 只接受注入。这是最容易踩错的一点。
+
+```ts
+// 跨进程重开，不注入：没有项目上下文，但 id 与历史仍在
+const without = await agent.sessions.get(session_id, "work");
+without.get("workspace");      // undefined
+without.get("workspace_id");   // "repo-a"
+
+// 注入：宿主把实例交给会话
+const injected = await agent.sessions.get(session_id, "work", { workspace: repo });
+injected.get("workspace");     // repo
+```
+
+宿主自己持有 Workspace registry，因此只有它能回答「现在有哪些目录可用」。Desktop 与 CLI 都是这么调的：先解析出实例，再作为 `get()` 参数传入。
+
+`new Agent({ workspace })` 只是**新会话的默认目录**，恢复时不生效：否则会用默认值顶替持久化值，变成一次静默换目录。内部用 `creating` 标志区分两条路径。
+
+### 5.5 模型侧安排活
+
+Agent 会话多四个工具，其他会话拿不到。用户不需要知道它们存在。
+
+```ts
+// 模型在 Agent 会话里收到「CI 挂了三个测试，帮我修了」时：
+// session_start({ query: "修 packages/agent 下挂掉的三个测试", title: "修 CI" })
+// → { session_id: "session-..." }   对话立刻空闲
+
+// 用户问「那个测试修得怎么样了」：
+// session_check()                   → 全部会话与状态
+// session_check({ session_id })     → 某条的详细进展
+
+// 某条会话在等审批时：
+// session_reply({ session_id, interaction_id, outcome, payload })
+```
+
+`session_start` 开出的会话继承调用点的当前目录（来源是 Turn 开始的冻结快照），之后各自独立。
+
+## 6. 模型侧能力
 
 Agent 自己的会话多一组工具，其他 Session 拿不到，因此「会话再派生会话」在结构上不会发生。
 
@@ -286,12 +383,12 @@ Agent 自己的会话多一组工具，其他 Session 拿不到，因此「会�
 
 `session_start` 开出的会话继承调用点那一段对话当前的目录，来源是 `ToolCallContext.workspace`——它已是该 Turn 的冻结快照。
 
-### 5.1 工具与 Power 怎么读会话状态
+### 6.1 工具与 Power 怎么读会话状态
 
 - **工具**：`ToolCallContext` 继续携带需要的那几个冻结值（`workspace`、`workspace_env`），它在 Turn 开始时成形，不随后续 `set` 变化。
 - **Power**：`SessionPort` 增加 `get(key)`，并把 `get_model()` 收进去。
 
-## 6. 生命周期与失败语义
+## 7. 生命周期与失败语义
 
 | 情形 | 行为 |
 | --- | --- |
@@ -303,7 +400,7 @@ Agent 自己的会话多一组工具，其他 Session 拿不到，因此「会�
 | `session_start` 后立即 `session_stop` | 排队输入被取消，状态记 `stopped`，与用户叫停可区分 |
 | `session_reply` 目标 Interaction 已失效 | 返回明确失败，由模型转述给用户，不静默丢弃 |
 
-## 7. 不变量
+## 8. 不变量
 
 1. 一个 Agent 至多一条 `origin.type === "agent"` 的会话，其 `session_id` 等于 Agent 的 `id`。
 2. 它是普通 Session，除角色、工具集合与固定存取入口外没有特殊行为。
@@ -313,7 +410,7 @@ Agent 自己的会话多一组工具，其他 Session 拿不到，因此「会�
 6. Agent 不持有 Workspace registry，不参与解析。
 7. `origin` 仍是唯一的分区与分类事实源；不新增并行索引。
 
-## 8. 存储
+## 9. 存储
 
 不改 schema。
 
@@ -322,26 +419,26 @@ Agent 自己的会话多一组工具，其他 Session 拿不到，因此「会�
 - `work` 取代 `chat` 后，新会话落在 `sessions/work/<session_id>/`。
 - 不做旧数据迁移；既有 `chat` 分区按新类型名读取（见第 10 节）。
 
-## 9. 非目标
+## 10. 非目标
 
 - 不做结论自动回流（推送）。当前是拉模式。
 - 不改 Desktop 与 CLI 的会话选择启发式。本设计只提供能力。
 - 不允许会话再派生会话。
 
-## 10. 待确认
+## 11. 待确认
 
 1. **`chat` 到 `work` 的旧数据如何处理。** 现有用户目录里已有 `sessions/chat/` 分区。选项：不迁移、重命名目录、或读取时兼容。这决定是否需要一次性迁移脚本。
 2. **`session.config` 是否一并收进 `get()`。** 它与 `get("model")` / `get("model_label")` 重复。建议删除，但改动面超出本次范围。
 3. **messenger 入站会话的类型。** 它带 `channel`、`chat_id` 元数据，语义上是「外部聊天」。是并入 `work`，还是保留独立类型。
 
-## 11. homepage 文档
+## 12. homepage 文档
 
 - 新增「Agent 会话」一页：`agent.session()`、角色模型、与其他 Session 的一致规则。
 - `sessions/session-management.mdx`：`create` / `get` 的 `workspace` 语义改为「宿主注入」，补 `set` / `get`。
 - `sessions/metadata-and-storage.mdx`：补角色分区与 `workspace_id` 的索引语义。
 - `api-reference/agent-class.mdx`、`api-reference/session-types.mdx`：补 `set` / `get`，删 `get_workspace()` / `set_workspace()`。
 
-## 12. 验收
+## 13. 验收
 
 | 场景 | 验收点 |
 | --- | --- |
