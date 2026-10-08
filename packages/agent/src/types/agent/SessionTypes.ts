@@ -9,6 +9,7 @@
 import type { ModelClient } from "@downcity/type";
 import type { SessionApprovalMode } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
+import type { WorkspaceRuntime } from "@downcity/type";
 import type {
   SessionSystemBlock,
   SessionSystemBlockSource,
@@ -24,7 +25,7 @@ export interface AgentCreateSessionInput {
   /**
    * 当前 Session 的创建来源。
    *
-   * 省略时使用 `{ type: "chat" }`；其他调用方可以使用任意稳定的非空类型。
+   * 省略时使用 `{ type: "work" }`；其他调用方可以使用任意稳定的非空类型。
    */
   readonly origin?: SessionOrigin;
 }
@@ -92,6 +93,17 @@ export interface AgentSessionSetInput {
    * - 执行面在下一 Session Step 检查点原子提交该值。
    */
   security?: AgentSessionSecurityConfig;
+
+  /**
+   * 当前 Session 的工作目录。
+   *
+   * 关键点（中文）
+   * - 与 `model` 同级：只接受宿主持有的运行时实例，持久化的是它的 `id`。
+   * - 传空值表示脱离项目上下文；此时没有文件工具与 Shell，但纯模型对话仍可用。
+   * - 不迁移已有消息、附件与工具结果；它们属于发生时的目录。
+   * - 执行中的 Turn 沿用旧目录，从下一 Step 检查点起生效。
+   */
+  workspace?: WorkspaceRuntime | null;
 }
 
 /** Session 配置提交后的 Action 可观测性选项。 */

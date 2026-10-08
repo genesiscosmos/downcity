@@ -13,7 +13,7 @@ Most local applications need only:
 - `Agent`: compose identity, model, instructions, Tools, and Sessions.
 - `City`: own Workspaces, unique Power instances, Agent/Group collections, and transports.
 - `agent.sessions.create({ workspace })` / `get()`: create or restore a Session in the current directory.
-- `agent.chat()` / `agent.sessions.main()`: open the conversation that belongs to the agent itself.
+- `agent.session()`: open the conversation that belongs to the agent itself.
 - `session.prompt()`: start one Turn.
 - `turn.finished`: await the final result.
 - `agent.dispose()`: release the Agent's Sessions and detach it from its current City.

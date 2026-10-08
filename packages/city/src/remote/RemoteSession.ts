@@ -5,13 +5,14 @@
  */
 
 import type {
-  AgentSessionConfigSnapshot,
+  AgentSessionInfo,
   AgentSessionSetOptions,
   AgentSessionForkInput,
-  AgentSessionInfo,
   AgentSessionStatus,
   AgentSessionSystemSnapshot,
   RemoteSessionSetInput,
+  RemoteSessionStateKey,
+  RemoteSessionStateValues,
 } from "@downcity/agent";
 import type { RemoteAgentSession } from "@downcity/agent";
 import type {
@@ -62,8 +63,10 @@ type RemoteTurnLifecycle = {
 export class RemoteSession implements RemoteAgentSession {
   readonly id: string;
   readonly agent_id: string;
-  readonly config: AgentSessionConfigSnapshot;
   readonly origin: SessionOrigin;
+
+  /** 创建时与详情刷新时的可序列化状态快照。 */
+  private state: RemoteSessionStateValues;
 
   private readonly transport: RemoteSessionTransport;
   private readonly event_hub: SessionEventHub;
@@ -79,15 +82,24 @@ export class RemoteSession implements RemoteAgentSession {
     this.id = info.session_id;
     this.agent_id = info.agent_id;
     this.origin = info.origin;
-    this.config = {
-      ...(info.model_label ? { model_label: info.model_label } : {}),
-    };
+    this.state = build_remote_state(info);
     this.event_hub = new SessionEventHub();
+  }
+
+  /**
+   * 读取当前远程 Session 的可序列化状态。
+   *
+   * 关键点（中文）：返回创建或最近一次刷新的快照，不发起网络请求。
+   */
+  get<K extends RemoteSessionStateKey>(key: K): RemoteSessionStateValues[K] {
+    return this.state[key];
   }
 
   /** 读取当前远程 Session 详情。 */
   async get_info(): Promise<AgentSessionInfo> {
-    return await this.transport.get_info(this.id, this.origin.type);
+    const info = await this.transport.get_info(this.id, this.origin.type);
+    this.state = build_remote_state(info);
+    return info;
   }
 
   /** 向当前远程 Session 追加 Prompt。 */
@@ -267,6 +279,22 @@ function create_deferred<T>(): Deferred<T> {
     resolve = inner_resolve;
   });
   return { promise, resolve };
+}
+
+/**
+ * 从详情快照提取可序列化状态。
+ *
+ * 关键点（中文）：只取远程边界能传递的字段；实例类状态（`workspace`、`model`）不存在于远程。
+ */
+function build_remote_state(info: AgentSessionInfo): RemoteSessionStateValues {
+  return {
+    workspace_id: info.workspace_id,
+    model_label: info.model_label,
+    title: info.title,
+    timezone: info.timezone ?? "UTC",
+    created_at: info.created_at ?? Date.now(),
+    updated_at: info.updated_at,
+  };
 }
 
 function create_turn_handle(lifecycle: RemoteTurnLifecycle): AgentSessionTurnHandle {

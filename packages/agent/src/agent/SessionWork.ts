@@ -1,25 +1,25 @@
 /**
- * ChatSessionWork：主对话安排与观察其他会话的实现。
+ * SessionWork：Agent 会话安排与观察其他会话的实现。
  *
  * 职责说明（中文）
  * - 把 AgentSessions 的能力投影成「一件活」的完整动作：开、看、答、停。
  * - 只读取公开的摘要与消息投影，不缓存会话，也不持有存储。
  *
  * 关键点（中文）
- * - 清单排除主对话本身，否则清单里会出现「自己」。
- * - `spawn` 不等待 Turn 结束：主对话必须立刻能接下一句话。
+ * - 清单排除 Agent 自己的会话，否则清单里会出现「自己」。
+ * - `spawn` 不等待 Turn 结束：派活的意义就是 Agent 会话立刻能继续。
  * - 详情按最近消息分页读取，让对话能回答「它做了什么」，而不把整段历史塞进上下文。
  */
 
 import type { SessionInteractionResponse, WorkspaceRuntime } from "@downcity/type";
-import type { ChatSessionWorkContract } from "@/types/agent/ChatSessions.js";
+import { is_agent_session_origin } from "@downcity/type";
+import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import type {
   SessionCheckDetailToolOutput,
   SessionToolState,
   SessionToolSummary,
-} from "@/types/tools/chat/SessionTools.js";
+} from "@/types/tools/session/SessionTools.js";
 import type { AgentSession } from "@/types/agent/SessionActor.js";
-import { is_chat_origin } from "@/agent/ChatOrigin.js";
 
 /** 清单默认返回的会话数量上限。 */
 const DEFAULT_SESSION_LIMIT = 20;
@@ -28,7 +28,7 @@ const DEFAULT_SESSION_LIMIT = 20;
 const DEFAULT_MESSAGE_LIMIT = 20;
 
 /** 清单中的一条会话列表项；由 AgentSessions 摘要投影而来。 */
-export interface ChatSessionListEntry {
+export interface SessionWorkListEntry {
   /** 会话稳定标识。 */
   session_id: string;
   /** 用户可见标题；未生成时省略。 */
@@ -43,11 +43,11 @@ export interface ChatSessionListEntry {
   executing?: boolean;
 }
 
-/** ChatSessionWork 构造参数。 */
-export interface ChatSessionWorkOptions {
+/** SessionWork 构造参数。 */
+export interface SessionWorkOptions {
   /** 列出活动会话摘要，`limit` 由本模块归一化后传入。 */
   list_sessions: (input: { limit: number }) => Promise<{
-    items: ChatSessionListEntry[];
+    items: SessionWorkListEntry[];
   }>;
   /** 恢复单条会话的运行时实例。 */
   get_session: (session_id: string, origin_type: string) => Promise<AgentSession>;
@@ -55,15 +55,15 @@ export interface ChatSessionWorkOptions {
   create_session: (input?: { workspace?: WorkspaceRuntime }) => Promise<AgentSession>;
 }
 
-/** 主对话的会话工作运行时。 */
-export class ChatSessionWork implements ChatSessionWorkContract {
-  private readonly options: ChatSessionWorkOptions;
+/** Agent 会话的会话工作运行时。 */
+export class SessionWork implements SessionWorkContract {
+  private readonly options: SessionWorkOptions;
 
-  constructor(options: ChatSessionWorkOptions) {
+  constructor(options: SessionWorkOptions) {
     this.options = options;
   }
 
-  /** 开一条会话并立刻把任务交给它。 */
+  /** 开一条工作会话并立刻把任务交给它。 */
   async spawn(input: {
     query: string;
     title?: string;
@@ -76,19 +76,19 @@ export class ChatSessionWork implements ChatSessionWorkContract {
     );
     const title = String(input.title || "").trim();
     if (title) await session.rename(title);
-    // 不等待 Turn 结束：派活的意义就是主对话立刻能继续。
+    // 不等待 Turn 结束：派活的意义就是 Agent 会话立刻能继续。
     void session.prompt({ query }).catch(() => undefined);
     return { session_id: session.id };
   }
 
-  /** 列出当前 Agent 除主对话外的全部会话。 */
+  /** 列出当前 Agent 除自己那条之外的全部会话。 */
   async list(input?: { limit?: number }): Promise<SessionToolSummary[]> {
     const page = await this.options.list_sessions({
       limit: normalize_limit(input?.limit, DEFAULT_SESSION_LIMIT),
     });
     const summaries: SessionToolSummary[] = [];
     for (const item of page.items) {
-      if (is_chat_origin(item.origin)) continue;
+      if (is_agent_session_origin(item.origin)) continue;
       const pending_interaction_count = await this.count_pending(item);
       summaries.push({
         session_id: item.session_id,
@@ -172,7 +172,7 @@ export class ChatSessionWork implements ChatSessionWorkContract {
   }
 
   /** 按标识取出属于当前 Agent 的一条会话；不存在时明确失败。 */
-  private async require_list_entry(session_id_input: string): Promise<ChatSessionListEntry> {
+  private async require_list_entry(session_id_input: string): Promise<SessionWorkListEntry> {
     const session_id = String(session_id_input || "").trim();
     if (!session_id) throw new Error("Session id is required");
     const page = await this.options.list_sessions({ limit: Number.MAX_SAFE_INTEGER });
@@ -182,7 +182,7 @@ export class ChatSessionWork implements ChatSessionWorkContract {
   }
 
   /** 读取一条会话当前待响应的 Interaction 数量；读取失败时按零处理。 */
-  private async count_pending(item: ChatSessionListEntry): Promise<number> {
+  private async count_pending(item: SessionWorkListEntry): Promise<number> {
     try {
       const session = await this.options.get_session(item.session_id, item.origin.type);
       return (await session.interactions()).length;

@@ -924,8 +924,8 @@ export class AgentController {
     if (!config) throw new Error(`Workspace is not registered: ${workspace_id}`);
     const workspace = this.city.workspaces.get(workspace_id)
       ?? this.city.workspaces.add(await create_desktop_workspace(this.data, config));
-    const session = await agent.sessions.get(session_id, "chat");
-    await session.set_workspace(workspace);
+    const session = await agent.sessions.get(session_id, "work");
+    await session.set({ workspace });
     return to_desktop_session_summary(this.data.root_path, await session.get_info());
   }
 
@@ -1445,7 +1445,7 @@ export class AgentController {
       const workspace = await this.require_workspace(agent_id, workspace_id);
       const session = await this.require_native_agent(agent_id).sessions.get(
         session_id,
-        "chat",
+        "work",
         { workspace },
       );
       this.observe_session(agent_id, workspace_id, session);
@@ -1461,9 +1461,9 @@ export class AgentController {
     const agent = this.require_native_agent(agent_id);
     const existing_workspace = this.city.workspaces.get(workspace_id);
     if (existing_workspace) {
-      return await agent.sessions.get(session_id, "chat", { workspace: existing_workspace });
+      return await agent.sessions.get(session_id, "work", { workspace: existing_workspace });
     }
-    return await agent.sessions.get(session_id, "chat", { workspace: await this.get_orphan_workspace(workspace_id) });
+    return await agent.sessions.get(session_id, "work", { workspace: await this.get_orphan_workspace(workspace_id) });
   }
 
   /** 为已移除登记的孤儿 Workspace 创建内存实例；使用默认目录，并纳入 City 索引以通过宿主校验。 */
@@ -1614,7 +1614,7 @@ export class AgentController {
     const agent_config = this.data.agents.get(session.agent_id);
     const default_model_id = typeof agent_config?.execution?.model_id === "string" ? agent_config.execution.model_id : "";
     const session_key = get_session_key(session.agent_id, workspace_id, session.id);
-    const configured_model = session.config.model as { modelId?: unknown } | undefined;
+    const configured_model = session.get("model") as { modelId?: unknown } | undefined;
     const runtime_model_id = typeof configured_model?.modelId === "string" ? configured_model.modelId : "";
     const reasoning_effort = this.read_session_reasoning_efforts()[session_key];
     return {

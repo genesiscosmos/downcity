@@ -7,6 +7,7 @@
  * - Workspace 由 City 在调用点注入，Power 不自行解析。
  */
 
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { AgentSession, AgentSessionCollection, SessionPort } from "@downcity/agent";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type {
@@ -58,9 +59,10 @@ export function create_power_session_collection(input: {
       source.origin_type,
       { workspace: input.workspace },
     );
-    if (!source_session.config.model) return;
+    const source_model = source_session.get("model");
+    if (!source_model) return;
     await session.set(
-      { model: source_session.config.model },
+      { model: source_model },
       { persist_action: false, publish_mutation: false },
     );
   };
@@ -74,13 +76,13 @@ export function create_power_session_collection(input: {
       await inherit_model(session, create_input?.inherit_model_from);
       return to_handle(session.id, session.origin, session.workspace_id);
     },
-    get: async (session_id, origin_type = "chat") => {
+    get: async (session_id, origin_type = SESSION_ORIGIN_TYPE_WORK) => {
       const session = await read_sessions().get(session_id, origin_type, {
         workspace: input.workspace,
       });
       return to_handle(session.id, session.origin, session.workspace_id);
     },
-    runtime: (session_id, origin_type = "chat") =>
+    runtime: (session_id, origin_type = SESSION_ORIGIN_TYPE_WORK) =>
       to_handle(session_id, { type: origin_type }, undefined),
     remove: async (session_id, origin_type) => {
       await read_sessions().get(session_id, origin_type, { workspace: input.workspace });

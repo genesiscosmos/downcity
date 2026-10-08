@@ -7,6 +7,7 @@
  * - 不复用 control API 的控制台语义，避免 transport 面混入非 SDK 约束。
  */
 
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { Hono } from "hono";
 import type {
   AgentListSessionsInput,
@@ -36,7 +37,7 @@ export function register_sdk_session_routes(
   workspace?: WorkspaceRuntime,
   runtime_options: AgentHttpRuntimeOptions = {},
 ): void {
-  const get_origin_type = (input: unknown): string => String(input || "chat").trim() || "chat";
+  const get_origin_type = (input: unknown): string => String(input || SESSION_ORIGIN_TYPE_WORK).trim() || SESSION_ORIGIN_TYPE_WORK;
   const get_session = async (session_id: string, origin_type?: string) => await sessions.get(
     session_id,
     get_origin_type(origin_type),

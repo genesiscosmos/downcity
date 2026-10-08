@@ -87,7 +87,7 @@ const workspace = new Workspace({
 - 文件和搜索工具固定限制在 Workspace 内
 - Shell 与文件工具使用同一个项目根目录
 - Agent 构造时可以传入 `workspace` 作为新建 Session 的默认目录；它不构成绑定
-- 会话的当前目录可以在创建后通过 `session.set_workspace()` 或在 `get()` 时指定，随时切换
+- 会话的当前目录可以在创建后通过 `session.set({ workspace })` 或在 `get()` 时指定，随时切换
 - 同一个 Agent 可以进入多个 Workspace，每个 Session 拥有独立的当前目录、历史、Shell 和 Power 上下文
 - 多个 Agent 可以指向同一目录，但使用各自的 `agent.id` 和数据分区
 

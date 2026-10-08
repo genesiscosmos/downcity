@@ -1,18 +1,30 @@
 /**
  * Session 来源元数据。
  *
- * Session 始终归 Agent 所有。来源类型同时承担业务分类与物理存储分区职责，
- * `chat` 是默认分区，Group、Task 或其他调用方可以声明自己的稳定类型。
+ * Session 始终归 Agent 所有。来源类型同时承担业务分类与物理存储分区职责。
+ * 角色只有少数几个稳定值：Agent 自己的会话、工作会话、任务会话、群聊会话；
+ * 其他调用方也可以声明自己的稳定类型。
+ *
+ * 关键点（中文）
+ * - `agent` 角色的 `session_id` 等于 Agent 的 `id`：会话由它属于谁来标识。
+ * - `work` 是默认角色：一段会话的存在意义就是干活。
  */
 
 import type { JsonValue } from "../json/Json.js";
+
+/** Agent 自己那条会话的来源类型。 */
+export const SESSION_ORIGIN_TYPE_AGENT = "agent";
+
+/** 工作会话的来源类型，也是未指定角色时的默认值。 */
+export const SESSION_ORIGIN_TYPE_WORK = "work";
 
 /** Session 的创建来源。 */
 export type SessionOrigin = {
   /**
    * 来源类型，同时作为 Session Store 的一级分区名。
    *
-   * 该值必须是非空字符串；`chat` 表示普通聊天，其他稳定值由创建方定义。
+   * 该值必须是非空字符串；`agent` 表示 Agent 自己的会话，`work` 表示普通工作会话，
+   * 其他稳定值由创建方定义。
    */
   readonly type: string;
   /**
@@ -30,9 +42,9 @@ export function normalize_session_origin_type(input: unknown): string {
   return origin_type;
 }
 
-/** 规范化创建输入；未指定来源时使用普通聊天分区。 */
+/** 规范化创建输入；未指定来源时使用默认工作会话角色。 */
 export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
-  const source = input ?? { type: "chat" };
+  const source = input ?? { type: SESSION_ORIGIN_TYPE_WORK };
   let serialized: unknown;
   try {
     serialized = JSON.parse(JSON.stringify(source));
@@ -47,6 +59,13 @@ export function normalize_session_origin(input?: SessionOrigin): SessionOrigin {
     ...origin,
     type: normalize_session_origin_type(origin.type),
   };
+}
+
+/** 判断一个来源是否表示 Agent 自己的会话。 */
+export function is_agent_session_origin(
+  origin: { type?: string } | undefined,
+): boolean {
+  return String(origin?.type || "").trim() === SESSION_ORIGIN_TYPE_AGENT;
 }
 
 /** 恢复 Metadata，并校验来源与目标物理分区一致。 */

@@ -30,7 +30,7 @@ export interface AgentGetSessionOptions {
    * 恢复后要使用的当前目录。
    *
    * 关键点（中文）：这与持久化值不一致时不再报错，而是以该值为准成为该 Session 的当前目录，
-   * 语义等同 `session.set_workspace()`。省略时沿用持久化值。
+   * 语义等同 `session.set({ workspace })`。省略时由 Agent 的 `resolve_workspace` 按持久化值还原。
    */
   workspace?: WorkspaceRuntime;
 }
@@ -40,10 +40,11 @@ export interface AgentSessionCollection {
   /**
    * 打开 Agent 自己的那段对话；不存在时创建。
    *
-   * 关键点（中文）：主对话是普通 Session，身份由 `origin.type = "main"` 表达；
+   * 关键点（中文）：它就是一条普通 Session，角色由 `origin.type = "agent"` 表达；
    * 一个 Agent 至多一条，被归档或删除后下一次调用自然重建。
    */
-  main(options?: AgentGetSessionOptions): Promise<AgentSession>;
+  /** 返回 Agent 自己的那条会话；不存在时创建。 */
+  self(options?: AgentGetSessionOptions): Promise<AgentSession>;
 
   /** 在指定 Workspace 中创建一个属于当前 Agent 的 Session。 */
   create(options?: AgentCreateSessionOptions): Promise<AgentSession>;

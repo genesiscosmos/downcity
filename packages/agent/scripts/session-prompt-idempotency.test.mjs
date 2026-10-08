@@ -45,7 +45,7 @@ function create_loop(request_id) {
   let execute_count = 0;
   const loop = new SessionLoop({
     session_id,
-    session_origin: { type: "chat" },
+    session_origin: { type: "work" },
     get_workspace_path: () => ("/tmp/downcity-idempotent-prompt"),
     executor: {
       execute: async () => {

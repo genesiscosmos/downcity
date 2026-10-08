@@ -45,6 +45,10 @@ import {
 import { SessionLoop } from "@/session/loop/SessionLoop.js";
 import { SessionQueue } from "@/session/loop/SessionQueue.js";
 import type { SessionLocalState } from "@/types/session/SessionLocalState.js";
+import type {
+  AgentSessionStateKey,
+  AgentSessionStateValues,
+} from "@/types/agent/SessionState.js";
 import type { SessionOptions } from "@/types/session/SessionOptions.js";
 import type { ToolCallContext, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
 import { SessionInteractions } from "@/session/messages/SessionInteractions.js";
@@ -97,7 +101,6 @@ export class Session implements AgentSession {
   /** 当前执行面生效的审批模式；在 Step 检查点从 configured 同步。 */
   private effective_approval_mode: SessionApprovalMode = "ask";
   private readonly local_state: SessionLocalState;
-  private readonly get_workspace_env: SessionOptions["get_workspace_env"];
   private readonly get_agent_model: SessionOptions["get_agent_model"];
   private readonly get_hooks: SessionOptions["get_hooks"];
   private readonly get_instruction_system_blocks:
@@ -124,7 +127,6 @@ export class Session implements AgentSession {
     this.register_forked_session = options.register_forked_session;
     this.get_tools = options.get_tools;
     this.logger = options.logger;
-    this.get_workspace_env = options.get_workspace_env;
     this.get_agent_model = options.get_agent_model;
     this.get_hooks = options.get_hooks;
     this.get_instruction_system_blocks = options.get_instruction_system_blocks;
@@ -171,7 +173,6 @@ export class Session implements AgentSession {
       instruction_system_blocks: options.instruction_system_blocks,
       get_instruction_system_blocks: this.get_instruction_system_blocks,
       get_hooks: this.get_hooks,
-      get_workspace_env: this.get_workspace_env,
       get_workspace: () => this.local_state.current_workspace,
       get_model: () => this.get_model(),
       get_model_context_window: () => this.get_model_context_window(),
@@ -262,9 +263,45 @@ export class Session implements AgentSession {
 
   /**
    * 读取当前 session 配置快照。
+   *
+   * 删除说明：它与 `get("model")` / `get("model_label")` 重复；
+   * 读取统一走 `get(key)`，不再保留属性形式的入口。
    */
-  get config(): AgentSessionConfigSnapshot {
-    return this.state.get_config();
+
+  /**
+   * 读取当前 Session 状态。
+   *
+   * 关键点（中文）
+   * - 持久化字段与运行时实例共用这一个入口；键名即语义。
+   * - 只读，不产生副作用：不解析、不落盘、不发布 mutation。
+   */
+  get<K extends AgentSessionStateKey>(key: K): AgentSessionStateValues[K] {
+    switch (key) {
+      case "workspace":
+        return this.local_state.current_workspace as AgentSessionStateValues[K];
+      case "workspace_id":
+        return this.workspace_id as AgentSessionStateValues[K];
+      case "model":
+        return this.get_selected_model() as AgentSessionStateValues[K];
+      case "model_label":
+        return this.state.get_config().model_label as AgentSessionStateValues[K];
+      case "model_context_window":
+        return this.state.get_config().model_context_window as AgentSessionStateValues[K];
+      case "approval_mode":
+        return this.state.get_approval_mode() as AgentSessionStateValues[K];
+      case "title":
+        return this.local_state.title as AgentSessionStateValues[K];
+      case "timezone":
+        return this.local_state.timezone as AgentSessionStateValues[K];
+      case "created_at":
+        return this.local_state.created_at as AgentSessionStateValues[K];
+      case "updated_at":
+        return this.local_state.updated_at as AgentSessionStateValues[K];
+      default: {
+        const unreachable: never = key;
+        throw new Error(`Unsupported session state key: ${String(unreachable)}`);
+      }
+    }
   }
 
   /**
@@ -274,8 +311,8 @@ export class Session implements AgentSession {
     input: AgentSessionSetInput,
     options?: AgentSessionSetOptions,
   ): Promise<void> {
-    if (!input.model && !input.security) {
-      throw new Error("session.set requires model or security");
+    if (!input.model && !input.security && input.workspace === undefined) {
+      throw new Error("session.set requires model, security, or workspace");
     }
     const requested_approval_mode = input.security?.approval_mode;
     if (
@@ -298,11 +335,28 @@ export class Session implements AgentSession {
     const model_result = input.model
       ? await this.state.set_model(input.model)
       : undefined;
+    const workspace_changed = input.workspace !== undefined
+      ? await this.state.apply_workspace(input.workspace ?? undefined)
+      : false;
+    const next_workspace = this.local_state.current_workspace;
     const next_approval_mode = requested_approval_mode;
     const security_changed = next_approval_mode !== undefined
       ? await this.state.set_approval_mode(next_approval_mode)
       : false;
-    if (!model_result && !security_changed) return;
+    if (!model_result && !security_changed && !workspace_changed) return;
+    if (workspace_changed) {
+      this.workspace_id = next_workspace?.id;
+    }
+    if (workspace_changed && publish_mutation) {
+      this.events.publish({
+        mutation_id: generate_id(),
+        variant: "session",
+        type: "workspace",
+        session_id: this.id,
+        created_at: Date.now(),
+        ...(next_workspace ? { workspace_id: next_workspace.id } : {}),
+      });
+    }
     if (model_result?.changed && publish_mutation) {
       this.events.publish({
         mutation_id: generate_id(),
@@ -321,6 +375,9 @@ export class Session implements AgentSession {
     const changed_fields = [
       ...(model_result?.changed
         ? [`model: ${String(model_result.config.model_label || "configured")}`]
+        : []),
+      ...(workspace_changed
+        ? [`workspace: ${String(next_workspace?.id || "none")}`]
         : []),
       ...(security_changed
         ? [`security.approval_mode: ${String(next_approval_mode)}`]
@@ -452,19 +509,10 @@ export class Session implements AgentSession {
   }
 
   /**
-   * 就地切换当前目录，并同步元数据中的当前值。
+   * 返回当前目录；没有项目上下文时为空。
    *
-   * 关键点（中文）
-   * - 不迁移已有消息、附件或工具结果：那些属于这段对话发生时的目录。
-   * - 执行中的 Turn 沿用切换前的目录，从下一个 Step 检查点起生效。
+   * 关键点（中文）：只读读取。修改走 `set({ workspace })`，与 `model` 同一手柄。
    */
-  async set_workspace(workspace?: WorkspaceRuntime): Promise<void> {
-    const changed = await this.state.set_workspace(workspace);
-    if (!changed) return;
-    this.workspace_id = String(workspace?.id || "").trim() || undefined;
-  }
-
-  /** 返回当前目录；没有项目上下文时为空。 */
   get_workspace(): WorkspaceRuntime | undefined {
     return this.local_state.current_workspace;
   }
@@ -591,8 +639,17 @@ export class Session implements AgentSession {
       turn_id: input.turn_id,
       abort_signal: input.abort_signal,
       interactions: this.session_interactions,
-      workspace_env: Object.freeze({ ...this.get_workspace_env() }),
+      workspace_env: Object.freeze({ ...this.read_workspace_env() }),
     });
+  }
+
+  /**
+   * 读取当前目录的环境变量快照。
+   *
+   * 关键点（中文）：环境属于目录（Workspace 实例），不是 Session 自身配置；没有目录时为空。
+   */
+  private read_workspace_env(): Record<string, string> {
+    return { ...(this.local_state.current_workspace?.get_env() ?? {}) };
   }
 
   private create_fork_session(session_id: string): this {
@@ -613,7 +670,6 @@ export class Session implements AgentSession {
       logger: this.logger,
       instruction_system_blocks: this.step_input.instruction_blocks(),
       get_instruction_system_blocks: this.get_instruction_system_blocks,
-      get_workspace_env: this.get_workspace_env,
       get_workspace: () => this.local_state.current_workspace,
       get_hooks: this.get_hooks,
       get_agent_model: this.get_agent_model,

@@ -12,7 +12,7 @@ description: 按日常使用、常用进阶和框架集成三个层级理解 Age
 - `Agent`：组合身份、模型、指令、Tools 与 Sessions。
 - `City`：持有 Workspaces、Power 唯一实例、Agent/Group 集合与 transport。
 - `agent.sessions.create({ workspace })` / `get()`：创建或恢复当前目录的 Session。
-- `agent.chat()` / `agent.sessions.main()`：打开 Agent 自己的那段对话。
+- `agent.session()`：打开 Agent 自己的那段对话。
 - `session.prompt()`：启动一次 Turn。
 - `turn.finished`：等待最终结果。
 - `agent.dispose()`：释放 Agent 的 Sessions 并解除当前 City 装配关系。

@@ -58,7 +58,7 @@ export interface SessionOptions {
   /**
    * 当前 Session 的初始目录。
    *
-   * 关键点（中文）：这是会话状态而非身份，可在会话中通过 `set_workspace()` 切换；
+   * 关键点（中文）：这是会话配置而非身份，可在会话中通过 `set({ workspace })` 切换；
    * 省略时该 Session 没有项目上下文。
    */
   workspace?: WorkspaceRuntime;
@@ -91,7 +91,6 @@ export interface SessionOptions {
 
   /** 在每个 Step 检查点读取当前可用 Tool 集合。 */
   get_tools: () => Record<string, Tool>;
-
   /**
    * 统一日志器。
    */
@@ -115,15 +114,7 @@ export interface SessionOptions {
    */
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
 
-  /**
-   * 读取当前 Workspace configured env。
-   *
-   * 关键点（中文）
-   * - 每个 Step 在检查点读取一次并形成不可变快照。
-   */
-  get_workspace_env: () => Record<string, string>;
-
-  /** 读取当前 Session 绑定的 Workspace 实例；未绑定时返回 undefined。 */
+  /** 读取当前 Session 的当前目录；未绑定时返回 undefined。 */
   get_workspace: () => WorkspaceRuntime | undefined;
 
   /** 在每个 Step 检查点读取当前生效的扩展处理器集合。 */

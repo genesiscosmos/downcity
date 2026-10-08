@@ -144,8 +144,21 @@ export type SessionConfigMutation = SessionMutationBase & {
   model_context_window?: number;
 };
 
+/** Session 当前目录变化 Mutation。 */
+export type SessionWorkspaceMutation = SessionMutationBase & {
+  /** Mutation 层级固定为 session。 */
+  variant: "session";
+  /** 当前 Session 属性变化类型。 */
+  type: "workspace";
+  /** 切换后的 Workspace 标识；脱离项目上下文时省略。 */
+  workspace_id?: string;
+};
+
 /** Session 自身属性变化 Mutation。 */
-export type SessionStateMutation = SessionTitleMutation | SessionConfigMutation;
+export type SessionStateMutation =
+  | SessionTitleMutation
+  | SessionConfigMutation
+  | SessionWorkspaceMutation;
 
 /** 模型请求失败 Warning Mutation。 */
 export type SessionModelRequestWarningMutation = SessionMutationBase & {

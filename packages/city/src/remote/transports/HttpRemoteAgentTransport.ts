@@ -6,6 +6,7 @@
  * - 不处理 RemoteSession 的 turn lifecycle，避免 transport 与 actor 逻辑混在一起。
  */
 
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type {
   AgentCreateSessionInput,
   AgentListSessionsInput,
@@ -271,7 +272,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
 
   async list_sessions(input?: AgentListSessionsInput): Promise<AgentSessionSummaryPage> {
     const query = new URLSearchParams();
-    query.set("origin_type", input?.origin_type || "chat");
+    query.set("origin_type", input?.origin_type || SESSION_ORIGIN_TYPE_WORK);
     if (input?.limit !== undefined) query.set("limit", String(input.limit));
     if (input?.cursor) query.set("cursor", input.cursor);
     if (input?.query) query.set("query", input.query);
@@ -304,7 +305,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
       session_id?: string;
       archived_at?: number;
     }>(
-      this.session_url(session_id, input.origin_type || "chat", "/archive"),
+      this.session_url(session_id, input.origin_type || SESSION_ORIGIN_TYPE_WORK, "/archive"),
       {
         method: "POST",
         headers: this.headers({
@@ -328,7 +329,7 @@ export class HttpRemoteAgentTransport implements RemoteAgentTransport {
     input?: AgentArchiveSessionsInput,
   ): Promise<AgentArchiveSessionsResult> {
     const query = new URLSearchParams();
-    query.set("origin_type", input?.origin_type || "chat");
+    query.set("origin_type", input?.origin_type || SESSION_ORIGIN_TYPE_WORK);
     if (input?.limit !== undefined) query.set("limit", String(input.limit));
     if (input?.cursor) query.set("cursor", input.cursor);
     if (input?.query) query.set("query", input.query);

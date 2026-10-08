@@ -80,7 +80,7 @@ try {
 Remember this primary path:
 
 ```text
-Agent + Workspace + Shell → agent.chat() / agent.sessions.create({ workspace }) → Session → send() / prompt() → turn.finished → dispose()
+Agent + Workspace + Shell → agent.session() / agent.sessions.create({ workspace }) → Session → send() / prompt() → turn.finished → dispose()
 ```
 
 `agent.dispose()` releases Session resources and the current City binding. City closes shared Power instances, lifecycle, and ActionSchedule resources. The project directory never receives `.downcity`.

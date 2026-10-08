@@ -11,23 +11,29 @@ description: The core public API of the local Agent SDK
 - `agent.name`
 - `agent.description`
 - `agent.workspace`
-- `agent.chat({ workspace? })`
-- `agent.sessions.main({ workspace? })`
+- `agent.session({ workspace? })`
 - `agent.sessions.create({ workspace })`
-- `agent.chat({ workspace? })`
-- `agent.sessions.main({ workspace? })`
+- `agent.sessions.get(session_id, origin_type?, { workspace? })`
 - `agent.set_instruction(input)`
 - `agent.get_instructions()`
 - `agent.get_logger()`
 - `agent.dispose()`
 
-The agent has a conversation of its own, opened with `chat()`; every session, including that one, is created and restored through `agent.sessions`:
+The agent itself is a session; get it with `session()`. Every session, including that one, is created and restored through `agent.sessions`:
 
 ```ts
-const chat = await agent.chat();
-const turn = await chat.send({ query: "How is this repository structured?" });
+const session = await agent.session({ workspace });
+const turn = await session.prompt({ query: "How is this repository structured?" });
 
-const session = await agent.sessions.create({ workspace });
+const work = await agent.sessions.create({ workspace });
+```
+
+A session writes configuration with `set` and reads state with `get`, sharing one handle:
+
+```ts
+await session.set({ model, workspace });   // write
+session.get("workspace");                   // runtime instance
+session.get("workspace_id");                // persisted identifier
 ```
 
 ## Constructor options
@@ -43,7 +49,7 @@ const session = await agent.sessions.create({ workspace });
 
 `workspace` only sets the default directory for new sessions. It does not affect the agent's identity
 and does not restrict which directories the agent may use later; when omitted, new sessions have no
-project context. Each session picks its own directory through `session.set_workspace()` or the
+project context. Each session picks its own directory through `session.set({ workspace })` or the
 `{ workspace }` option at creation. See [Agent chat](/en/agent-sdk-docs/sessions/agent-chat) and
 [Managing Sessions](/en/agent-sdk-docs/sessions/session-management).
 

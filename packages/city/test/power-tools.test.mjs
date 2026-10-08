@@ -25,7 +25,7 @@ function create_call_context(workspace_path = process.cwd()) {
     agent_description: "",
     agent_instructions: [],
     session_id: "session_test",
-    session_origin: { type: "chat" },
+    session_origin: { type: "work" },
     turn_id: "turn_test",
     tool_call_id: "call_test",
     messages: [],

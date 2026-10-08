@@ -17,7 +17,7 @@ function create_session(overrides = {}) {
   let initialize_promise;
   const store = {
     session_id: "initialization-session",
-    origin: { type: "chat" },
+    origin: { type: "work" },
     attachments: {},
     initialize: async () => {
       if (!initialize_promise) initialize_promise = (async () => {
@@ -62,7 +62,9 @@ function create_session(overrides = {}) {
     logger: { log: async () => {} },
     instruction_system_blocks: [],
     get_instruction_system_blocks: () => [],
-    get_workspace_env: () => ({}),
+    resolve_workspace: () => undefined,
+    get_workspace: () => undefined,
+    get_workspace_id: () => undefined,
     get_hooks: () => ({}),
     get_managed_power_system_blocks: async () => [],
     get_agent_model: () => undefined,

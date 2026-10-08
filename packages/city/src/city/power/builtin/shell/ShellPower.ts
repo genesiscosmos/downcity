@@ -11,6 +11,7 @@
  *   与其它 power 动作使用同一个审批端口。
  */
 
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import { z } from "zod";
 import type { AgentTool } from "@downcity/type";
 import type {
@@ -205,7 +206,7 @@ async function run_shell_tool(input: {
     agent_description: input.context.agent.description,
     agent_instructions: input.context.agent.instructions,
     session_id: snapshot.session_id ?? "",
-    session_origin: snapshot.session_origin ?? { type: "chat" },
+    session_origin: snapshot.session_origin ?? { type: SESSION_ORIGIN_TYPE_WORK },
     ...(snapshot.turn_id ? { turn_id: snapshot.turn_id } : {}),
     abort_signal: call.abort_signal,
     ...(call.tool_call_id ? { tool_call_id: call.tool_call_id } : {}),

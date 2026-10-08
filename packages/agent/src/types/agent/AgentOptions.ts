@@ -7,6 +7,7 @@
  */
 
 import type { ModelClient, AgentTool as Tool, ToolHookSet, WorkspaceRuntime } from "@downcity/type";
+
 import type {
   AgentManagedSession,
   SessionOptions,
@@ -89,11 +90,12 @@ export interface AgentOptions {
   model?: ModelClient;
 
   /**
-   * 新建 Session 时使用的默认目录。
+   * 新建 Session 时注入的默认目录。
    *
    * 关键点（中文）
-   * - 这是默认值，不是绑定：单个 Session 可以通过 `session.set_workspace()` 换成别的目录或去掉。
-   * - 省略时新建的 Session 没有项目上下文：没有文件工具与 Shell，但纯模型对话仍可用。
+   * - 它是宿主在构造 Agent 时声明的默认值，不是绑定；单个 Session 可用 `set({ workspace })` 换掉。
+   * - 它不参与恢复：历史会话的目录由宿主在 `get()` 时注入。
+   * - 省略时新建的 Session 没有项目上下文：没有文件工具与 Shell，纯模型对话仍可用。
    */
   workspace?: WorkspaceRuntime;
 

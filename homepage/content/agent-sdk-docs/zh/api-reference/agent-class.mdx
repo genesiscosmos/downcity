@@ -11,21 +11,29 @@ description: 本地 Agent SDK 的核心公开接口
 - `agent.name`
 - `agent.description`
 - `agent.workspace`
-- `agent.chat({ workspace? })`
-- `agent.sessions.main({ workspace? })`
+- `agent.session({ workspace? })`
 - `agent.sessions.create({ workspace })`
+- `agent.sessions.get(session_id, origin_type?, { workspace? })`
 - `agent.set_instruction(input)`
 - `agent.get_instructions()`
 - `agent.get_logger()`
 - `agent.dispose()`
 
-Agent 有一段属于自己的对话，使用 `chat()` 打开；所有会话（包括这段对话）都从 `agent.sessions` 创建与恢复：
+Agent 自己就是一条 Session，用 `session()` 取用；所有会话（包括它）都从 `agent.sessions` 创建与恢复：
 
 ```ts
-const chat = await agent.chat();
-const turn = await chat.send({ query: "这个仓库的结构怎么样" });
+const session = await agent.session({ workspace });
+const turn = await session.prompt({ query: "这个仓库的结构怎么样" });
 
-const session = await agent.sessions.create({ workspace });
+const work = await agent.sessions.create({ workspace });
+```
+
+会话用 `set` 写配置、`get` 读状态，两者共用同一个手柄：
+
+```ts
+await session.set({ model, workspace });   // 写
+session.get("workspace");                   // 运行时实例
+session.get("workspace_id");                // 持久化标识
 ```
 
 ## 构造参数
@@ -40,7 +48,7 @@ const session = await agent.sessions.create({ workspace });
 - `session_class`：可选的本地自定义 Session 类。
 
 `workspace` 只是新建会话的默认目录。它不影响 Agent 的身份，也不会限制 Agent 之后使用其他目录；
-省略时新建的会话没有项目上下文。每个 Session 都可以通过 `session.set_workspace()` 或在创建时
+省略时新建的会话没有项目上下文。每个 Session 都可以通过 `session.set({ workspace })` 或在创建时
 传入 `{ workspace }` 选择自己的当前目录。详见 [Agent 对话](/zh/agent-sdk-docs/sessions/agent-chat) 与
 [管理 Session](/zh/agent-sdk-docs/sessions/session-management)。
 

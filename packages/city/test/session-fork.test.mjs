@@ -61,7 +61,7 @@ test("Fork Session 由 AgentSessions 接管并持续发布 Turn 终态", async (
   assert.ok(target);
 
   const forked = await session.fork({ message_id: target.message_id, include_message: false });
-  const restored = await agent.sessions.get(forked.id, "chat", { workspace });
+  const restored = await agent.sessions.get(forked.id, "work", { workspace });
   assert.equal(restored, forked);
 
   const turn_mutations = [];
@@ -110,7 +110,7 @@ test("Fork 将源 Session 持有的附件复制到自己的生命周期", async 
   const forked_workspace_file = forked_message?.role === "user" ? forked_message.parts.find((part) => part.type === "file" && part.filename === "workspace.txt") : undefined;
   assert.equal(forked_workspace_file?.url, workspace_file);
 
-  await agent.sessions.get(session.id, "chat", { workspace });
+  await agent.sessions.get(session.id, "work", { workspace });
   await agent.sessions.archive({ id: session.id });
   assert.equal(await fs.readFile(forked_file.url, "utf8"), "hello");
 });

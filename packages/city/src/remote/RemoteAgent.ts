@@ -7,6 +7,7 @@
  * - `RemoteAgent` 只负责远程访问，不重复实现第二套会话编排器。
  */
 
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type {
   AgentArchiveSessionInput,
   AgentArchiveSessionsInput,
@@ -103,7 +104,7 @@ class RemoteAgentSessions implements AgentSessions<RemoteAgentSession> {
   }
 
   /** 获取一个远程 session。 */
-  async get(session_id: string, origin_type = "chat"): Promise<RemoteAgentSession> {
+  async get(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<RemoteAgentSession> {
     const info = await this.transport.get_info(session_id, origin_type);
     return new RemoteSession(this.transport, info);
   }

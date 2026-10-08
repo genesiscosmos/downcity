@@ -14,6 +14,7 @@ import {
   type AgentSessionCollection,
   type AgentSessionSetOptions,
   type RemoteSessionSetInput,
+  type RemoteSessionStateKey,
   type AgentListSessionsInput,
   type AgentSessionSummary,
   type RemoteAgentSession,
@@ -253,30 +254,34 @@ function create_local_chat_sessions(
   workspace: WorkspaceRuntime,
   resolve_model: (model_id: string) => Promise<ModelClient>,
 ): AgentSessions<RemoteAgentSession> {
-  const wrap = (session: AgentSession): RemoteAgentSession => ({
-    id: session.id,
-    workspace_id: session.workspace_id,
-    origin: session.origin,
-    get_info: async () => await session.get_info(),
-    prompt: async (input) => await session.prompt(input),
-    stop: async () => await session.stop(),
-    subscribe: (subscriber) => session.subscribe(subscriber),
-    messages: async (input) => await session.messages(input),
-    system: async () => await session.system(),
-    interactions: async () => await session.interactions(),
-    status: async () => await session.status(),
-    respond: async (input) => await session.respond(input),
-    set: async (
-      input: RemoteSessionSetInput,
-      options?: AgentSessionSetOptions,
-    ) => await session.set({
-      ...(input.model_id ? {
-        model: await resolve_model(input.model_id),
-      } : {}),
-      ...(input.security ? { security: input.security } : {}),
-    }, options),
-    fork: async (input) => wrap(await session.fork(input)),
-  });
+  const wrap = (session: AgentSession): RemoteAgentSession => {
+    return {
+      id: session.id,
+      workspace_id: session.get("workspace_id"),
+      origin: session.origin,
+      // 远程接口只暴露可序列化状态，本地包装直接转发同名键，不重新定义语义。
+      get: <K extends RemoteSessionStateKey>(key: K) => session.get(key),
+      get_info: async () => await session.get_info(),
+      prompt: async (input) => await session.prompt(input),
+      stop: async () => await session.stop(),
+      subscribe: (subscriber) => session.subscribe(subscriber),
+      messages: async (input) => await session.messages(input),
+      system: async () => await session.system(),
+      interactions: async () => await session.interactions(),
+      status: async () => await session.status(),
+      respond: async (input) => await session.respond(input),
+      set: async (
+        input: RemoteSessionSetInput,
+        options?: AgentSessionSetOptions,
+      ) => await session.set({
+        ...(input.model_id ? {
+          model: await resolve_model(input.model_id),
+        } : {}),
+        ...(input.security ? { security: input.security } : {}),
+      }, options),
+      fork: async (input) => wrap(await session.fork(input)),
+    };
+  };
   return {
     create: async () => wrap(await sessions.create({ workspace })),
     get: async (session_id, origin_type) => wrap(await sessions.get(

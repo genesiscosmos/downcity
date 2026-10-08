@@ -37,9 +37,9 @@ import type { SessionStore } from "@/types/store/SessionStore.js";
 import type { SessionStorage } from "@/types/store/SessionStorage.js";
 import type { WorkspaceRuntime } from "@downcity/type";
 import type { SessionOrigin } from "@downcity/type";
-import { normalize_session_origin, normalize_session_origin_type } from "@downcity/type";
+import { normalize_session_origin, normalize_session_origin_type, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { SessionContextResolution } from "@/types/agent/SessionContext.js";
-import { CHAT_ORIGIN, MAIN_SESSION_ID } from "@/agent/ChatOrigin.js";
+import { create_agent_session_origin, resolve_agent_session_id } from "@/agent/AgentSessionIdentity.js";
 
 type AgentSessionsOptions = {
   /**
@@ -68,7 +68,6 @@ type AgentSessionsOptions = {
     workspace_id?: string;
     logger: Logger;
     get_tools: () => Record<string, Tool>;
-    get_workspace_env: () => Record<string, string>;
     get_workspace: () => WorkspaceRuntime | undefined;
     get_hooks: () => ToolHookSet;
     store: SessionStore;
@@ -110,8 +109,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   private readonly session_composer: SessionComposer;
   private readonly get_agent_model: AgentSessionsOptions["get_agent_model"];
   private readonly sessions_by_id = new Map<string, AgentManagedSession>();
-  /** 主对话创建链；并发调用共享同一创建过程，避免产生第二条主对话。 */
-  private main_creation_chain: Promise<void> = Promise.resolve();
+  /** Agent 会话创建链；并发调用共享同一创建过程，避免产生第二条。 */
+  private agent_session_creation_chain: Promise<void> = Promise.resolve();
 
   constructor(options: AgentSessionsOptions) {
     this.agent_id = options.agent_id;
@@ -174,7 +173,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * runtime 是执行层的内部投影，不负责创建 Session。需要创建时必须
    * 通过 `create()` 获取内部生成的 ID；需要恢复时必须先调用 `get()`。
    */
-  runtime(session_id: string, origin_type = "chat"): SessionPort {
+  runtime(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): SessionPort {
     const resolved_session_id = String(session_id || "").trim();
     const resolved_origin_type = normalize_session_origin_type(origin_type);
     const session = this.sessions_by_id.get(
@@ -189,34 +188,32 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /**
-   * 打开 Agent 自己的那段对话；不存在时创建。
+   * 取用 Agent 自己那条会话；不存在时创建。
    *
    * 关键点（中文）
-   * - 身份就是 `origin.type = "main"`，因此不新增索引，也不维护额外状态。
-   * - 同一进程内并发调用会收敛到同一个创建过程，不会产生第二条主对话。
-   * - 主对话被归档或删除后，下一次调用自然重建一条。
+   * - 身份就是 `origin.type = "agent"`，`session_id` 就是 Agent 的 `id`：
+   *   因此不新增索引，也不维护额外状态。
+   * - 同一进程内并发调用会收敛到同一个创建过程，不会产生第二条。
+   * - 被归档或删除后，下一次调用自然重建一条。
    */
-  async main(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
-    const existing = await this.find_main_session();
+  async self(input?: { workspace?: WorkspaceRuntime }): Promise<AgentSession> {
+    const existing = await this.find_agent_session();
     if (existing) return existing;
-    return await this.run_main_creation(async () => {
-      const cached = await this.find_main_session();
+    return await this.run_agent_session_creation(async () => {
+      const cached = await this.find_agent_session();
       if (cached) return cached;
+      const origin = create_agent_session_origin();
       const context = this.resolve_session_context({
-        origin: CHAT_ORIGIN,
+        origin,
+        creating: true,
         ...(input?.workspace ? { workspace: input.workspace } : {}),
       });
-      // 固定标识：分区内只有一条主对话，因此用常量即可确定性定位，不需要索引。
-      const session_id = MAIN_SESSION_ID;
+      const session_id = resolve_agent_session_id(this.agent_id);
       const session = this.get_or_create_session({
         session_id,
-        origin: CHAT_ORIGIN,
+        origin,
         ...(input?.workspace ? { workspace: input.workspace } : {}),
-        storage: context.store.create_session(
-          session_id,
-          CHAT_ORIGIN,
-          context.workspace_id,
-        ),
+        storage: context.store.create_session(session_id, origin, context.workspace_id),
       });
       await session.initialize();
       return session;
@@ -224,30 +221,32 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   }
 
   /**
-   * 尝试恢复已存在的主对话；不存在或已失效时返回空。
+   * 尝试恢复已存在的 Agent 会话；不存在或已失效时返回空。
    *
-   * 关键点（中文）：查找不传 Workspace，以持久化目录为准；传 Workspace 只在创建时生效，
+   * 关键点（中文）：查找不传 Workspace；传 Workspace 只在创建时生效，
    * 否则「已存在时忽略该参数」会退化成一次静默切目录。
    */
-  private async find_main_session(): Promise<AgentSession | undefined> {
-    const context = this.resolve_session_context({ origin: CHAT_ORIGIN });
+  private async find_agent_session(): Promise<AgentSession | undefined> {
+    const origin = create_agent_session_origin();
+    const context = this.resolve_session_context({ origin });
+    const session_id = resolve_agent_session_id(this.agent_id);
     try {
-      if (!(await context.store.has_session(MAIN_SESSION_ID, CHAT_ORIGIN.type))) {
+      if (!(await context.store.has_session(session_id, origin.type))) {
         return undefined;
       }
     } catch {
       return undefined;
     }
-    return await this.get(MAIN_SESSION_ID, CHAT_ORIGIN.type);
+    return await this.get(session_id, origin.type);
   }
 
-  /** 串行化主对话创建；失败时释放链，使下一次调用可以重试。 */
-  private async run_main_creation(
+  /** 串行化 Agent 会话创建；失败时释放链，使下一次调用可以重试。 */
+  private async run_agent_session_creation(
     create: () => Promise<AgentSession>,
   ): Promise<AgentSession> {
-    const previous = this.main_creation_chain;
+    const previous = this.agent_session_creation_chain;
     const operation = previous.then(create, create);
-    this.main_creation_chain = operation.then(
+    this.agent_session_creation_chain = operation.then(
       () => undefined,
       () => undefined,
     );
@@ -264,6 +263,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     const session_id = `session-${Date.now()}-${nanoid(8)}`;
     const context = this.resolve_session_context({
       origin,
+      creating: true,
       ...(input?.workspace ? { workspace: input.workspace } : {}),
     });
     const session = this.get_or_create_session({
@@ -290,7 +290,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    */
   async get(
     session_id: string,
-    origin_type = "chat",
+    origin_type = SESSION_ORIGIN_TYPE_WORK,
     input?: { workspace?: WorkspaceRuntime },
   ): Promise<AgentSession> {
     const resolved_session_id = String(session_id || "").trim();
@@ -314,6 +314,12 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     }
     const storage = await store.open_session(resolved_session_id, resolved_origin_type);
     const persisted_metadata = await storage.read_metadata();
+    const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
+    const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
+    // 目录不是身份，也不在 Session 侧还原：
+    // - 宿主传了实例 → 用它；
+    // - 本进程有缓存 → 沿用内存实例；
+    // - 都没有 → 该会话没有项目上下文，但仍可正常读历史与对话。
     const session = this.get_or_create_session({
       session_id: resolved_session_id,
       ...(input?.workspace ? { workspace: input.workspace } : {}),
@@ -321,10 +327,8 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       storage,
     });
     await session.initialize();
-    const requested_workspace_id = String(input?.workspace?.id || "").trim() || undefined;
-    const persisted_workspace_id = String(persisted_metadata.workspace_id || "").trim() || undefined;
     if (requested_workspace_id && requested_workspace_id !== persisted_workspace_id) {
-      await session.set_workspace(input?.workspace);
+      await session.set({ workspace: input?.workspace ?? null });
     }
     return session;
   }
@@ -336,7 +340,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 正在执行的 Session 会先停止，避免删除后继续写入。
    * - 该方法不处理任何 Power 自有数据。
    */
-  async remove(session_id: string, origin_type = "chat"): Promise<boolean> {
+  async remove(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
       throw new Error("sessions.remove requires a non-empty session_id");
@@ -359,7 +363,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   /**
    * 清空一个 Session 的消息目录。
    */
-  async clear_messages(session_id: string, origin_type = "chat"): Promise<boolean> {
+  async clear_messages(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
       throw new Error("sessions.clear_messages requires a non-empty session_id");
@@ -385,7 +389,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
   async list(
     input?: AgentListSessionsInput,
   ): Promise<AgentSessionSummaryPage> {
-    const origin_type = normalize_session_origin_type(input?.origin_type ?? "chat");
+    const origin_type = normalize_session_origin_type(input?.origin_type ?? SESSION_ORIGIN_TYPE_WORK);
     return await this.resolve_session_context({ origin: { type: origin_type } }).store.list_sessions(
       { ...(input || {}), origin_type },
       new Set(this.list_executing_session_ids(undefined, origin_type)),
@@ -402,7 +406,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
     if (!session_id) {
       throw new Error("sessions.archive requires a non-empty id");
     }
-    const origin_type = normalize_session_origin_type(input.origin_type ?? "chat");
+    const origin_type = normalize_session_origin_type(input.origin_type ?? SESSION_ORIGIN_TYPE_WORK);
     const cache_key = this.session_cache_key(session_id, origin_type);
 
     const cached = this.sessions_by_id.get(cache_key);
@@ -436,7 +440,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * 删除：把 Session 重新绑定到另一个 Workspace。
    *
    * 删除理由：它表达的是「Workspace 是 Session 绑定」这个旧模型。目录切换改由
-   * `session.set_workspace()` 承担，恢复时不再校验归属，因此不需要第二条路径。
+   * `session.set({ workspace })` 承担，恢复时不再校验归属，因此不需要第二条路径。
    */
 
   private get_or_create_session(input?: {
@@ -461,6 +465,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
 
     const context = this.resolve_session_context({
       ...(input?.origin ? { origin: input.origin } : {}),
+      creating: true,
       ...(input?.workspace ? { workspace: input.workspace } : {}),
     });
     const created = new this.session_class({
@@ -478,7 +483,6 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
       logger: context.logger,
       instruction_system_blocks: this.load_instruction_system_blocks(),
       get_instruction_system_blocks: () => this.load_instruction_system_blocks(),
-      get_workspace_env: () => context.get_workspace_env(),
       get_workspace: () => context.get_workspace(),
       get_agent_model: () => this.get_agent_model(),
       get_hooks: () => context.get_hooks(),
@@ -497,7 +501,7 @@ export class AgentSessions implements AgentSessionsContract<AgentSession> {
    * - 返回是否真的释放。调用方必须先自行解除对该实例的订阅，否则重新 `get()` 会拿到新实例
    *   而旧订阅仍然挂在被丢弃的实例上。
    */
-  release(session_id: string, origin_type = "chat"): boolean {
+  release(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): boolean {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) return false;
     const cache_key = this.session_cache_key(

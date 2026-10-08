@@ -23,6 +23,7 @@ import {
 import {
   normalize_session_origin_type,
   restore_session_origin,
+  SESSION_ORIGIN_TYPE_WORK,
   type FileSystem,
   type SessionMessage,
 } from "@downcity/type";
@@ -219,7 +220,7 @@ async function list_session_summary_page(input: {
   /** 是否扫描归档目录。 */
   archived: boolean;
 }): Promise<AgentSessionSummaryPage> {
-  const origin_type = normalize_session_origin_type(input.input?.origin_type ?? "chat");
+  const origin_type = normalize_session_origin_type(input.input?.origin_type ?? SESSION_ORIGIN_TYPE_WORK);
   const sessions_path = input.archived
     ? get_agent_archived_sessions_path(input.project_root, origin_type)
     : get_agent_sessions_path(input.project_root, origin_type);

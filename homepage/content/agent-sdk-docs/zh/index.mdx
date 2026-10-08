@@ -12,7 +12,7 @@ description: 使用 @downcity/agent 构建具备项目文件、受控命令、Po
 flowchart LR
     Host["SDK 宿主"] --> City["City<br/>资源与 Power 生命周期"]
     City --> Agent["Agent<br/>身份与执行"]
-    Agent --> Workspace["agent.chat() / agent.sessions.create({ workspace })<br/>带当前目录的 Session"]
+    Agent --> Workspace["agent.session() / agent.sessions.create({ workspace })<br/>带当前目录的 Session"]
     Workspace --> Session["Session<br/>有状态执行容器"]
     Session --> Turn["Turn<br/>一次 prompt 执行"]
     City --> Power["Power<br/>扩展能力"]
@@ -81,7 +81,7 @@ try {
 只需要记住这条主链路：
 
 ```text
-Agent + Workspace + Shell → agent.chat() / agent.sessions.create({ workspace }) → Session → send() / prompt() → turn.finished → dispose()
+Agent + Workspace + Shell → agent.session() / agent.sessions.create({ workspace }) → Session → send() / prompt() → turn.finished → dispose()
 ```
 
 `agent.dispose()` 会释放 Session 使用的资源并解除当前 City 绑定；City 负责收口 Power 唯一实例、

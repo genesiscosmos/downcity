@@ -20,7 +20,7 @@ import { SessionLoop } from "../../agent/bin/session/loop/SessionLoop.js";
 import { SessionQueue } from "../../agent/bin/session/loop/SessionQueue.js";
 
 async function create_turn_harness(execute_turn, options = {}) {
-  const session_origin = options.session_origin ?? { type: "chat" };
+  const session_origin = options.session_origin ?? { type: "work" };
   const session_id = "session-turn-failure-test";
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-turn-failure-"));
   const files = new LocalFileSystem(root_path);

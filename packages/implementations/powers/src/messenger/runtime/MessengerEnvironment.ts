@@ -31,13 +31,14 @@ export function normalize_messenger_channel(
  *
  * 说明（中文）
  * - 仅供选择 platform prompt 使用；环境事实本身随消息持久化。
- * - 非 messenger session、尚无 route、或操作者不是 messenger 平台时返回 `null`。
+ * - 是否属于 messenger 由路由元数据本身决定（`chat_id` + 平台），不看会话类型名：
+ *   入站会话使用通用 `work` 角色，因此类型名无法区分来源。
  */
 export function resolve_current_messenger_channel(
   execution_context?: StepSnapshot,
 ): MessengerEnvironmentPromptInput["channel"] | null {
   const origin = execution_context?.session_origin;
-  if (origin?.type !== "chat") return null;
+  if (!origin) return null;
   if (!String(execution_context?.session_id || "").trim()) return null;
   if (!String(origin.chat_id || "").trim()) return null;
   return normalize_messenger_channel(origin.channel);

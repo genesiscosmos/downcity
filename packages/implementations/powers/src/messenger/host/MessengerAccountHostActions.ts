@@ -385,7 +385,7 @@ function conversation_origin(
   conversation: import("@/messenger/types/MessengerReliability.js").MessengerConversationRecord,
 ) {
   return {
-    type: "chat",
+    type: "work",
     account_id: conversation.account_id,
     channel: provider,
     chat_id: conversation.external_chat_id,

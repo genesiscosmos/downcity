@@ -1,86 +1,96 @@
 ---
-title: Agent 对话
-description: 用 agent.chat() 与 Agent 本人对话，并由它安排和照看其他 Session
+title: Agent 会话
+description: Agent 自己就是一条 Session；用 agent.session() 取用它，与其他会话共用同一套规则
 ---
-`agent.chat()` 打开 Agent 自己的那段对话。它是 Agent 的身份入口：用户通过它说话，Agent 通过它安排别处的活，也通过它掌握那些活的状态。
+`agent.session()` 返回 Agent 自己那条会话。**它就是 Agent**：一个 Agent 一条，`session_id` 等于 Agent 的 `id`，角色为 `origin.type = "agent"`。
 
-这段对话本身就是一个普通 `Session`。它没有特殊类型，只是被 Agent 记为「自己的那段」。因此读历史、订阅、审批、停止、分叉这些能力与普通 Session 完全一致。
+关键的一点是它没有特殊规则。它是一条普通 Session，与其他会话共用同一套机制与能力——包括工作区、`set` / `get`、消息、审批、订阅。
 
-## 打开对话并说话
+## 取用并说话
 
 ```ts
 const agent = new Agent({
   id: "coder",
   model,
-  instruction: "维护这个仓库。",
+  workspace,
 });
 
-const chat = await agent.chat();
-const turn = await chat.send({ query: "这个 SessionMessages 是干嘛的" });
+const session = await agent.session();
+const turn = await session.prompt({ query: "这个 SessionMessages 是干嘛的" });
 const result = await turn.finished;
 console.log(result.text);
 ```
 
-`chat.send()` 与 `session.prompt()` 同形，返回同一个 `AgentSessionTurnHandle`。等待结果、订阅增量、处理审批的写法不需要改：
+首次取用时创建，之后每次返回同一条。因此换渠道、换进程、隔天再打开，拿到的都是同一条会话与同一份历史：
 
 ```ts
-const unsubscribe = chat.subscribe((mutation) => {
-  apply_mutation_to_ui(mutation);
-});
-
-const turn = await chat.send({ query: "把这个方法名统一成 snake_case" });
-await turn.finished;
-
-unsubscribe();
+// 新的进程、Telegram 频道、第二天
+const session = await agent.session();
+const page = await session.messages();
 ```
 
-`chat.messages()` 与 `session.messages()` 同形。需要 `fork()`、`system()`、`snapshot()` 这类 Session 专属能力时，取到 Session 本身：
+它被归档或删除后，下一次取用会重建一条。
+
+## 会话角色
+
+全部会话只有一种概念，角色由 `origin.type` 区分：
+
+| 角色 | `origin.type` | `session_id` | 用途 |
+| --- | --- | --- | --- |
+| Agent 自己的会话 | `agent` | 等于 Agent 的 `id` | 用户与 Agent 的持续对话 |
+| 工作会话 | `work` | 生成的 id | Agent 派出去干的活 |
+| 任务会话 | `task` | 生成的 id | 定时任务触发 |
+| 群聊会话 | `group` | 生成的 id | 群聊中的成员会话 |
+
+`work` 是默认角色。`agent.sessions.list()` 默认只看 `work` 分区，因此 Agent 自己的会话不会混进业务列表：
 
 ```ts
-const session = await agent.sessions.main();
-const snapshot = await session.system();
+const work_sessions = await agent.sessions.list();
+const own = await agent.sessions.get(agent.id, "agent");
 ```
 
-## 一个 Agent 只有一段对话
+## 工作区能力
 
-首次调用 `agent.chat()` 时创建，之后每次返回同一段。因此换渠道、换进程、隔天重新打开，拿到的都是同一段对话和同一份历史：
+与所有会话一样，Agent 会话也带工作区能力。目录是宿主注入的执行资源，不是会话身份：
 
 ```ts
-// 新的进程、Telegram 频道、第二天的会话
-const chat = await agent.chat();
-const page = await chat.messages();
+const session = await agent.session({ workspace: repo_a });   // 创建时注入
+session.get("workspace");                                      // 当前实例
+session.get("workspace_id");                                   // 持久化标识
+
+await session.set({ workspace: repo_b });   // 换目录
+await session.set({ workspace: null });     // 脱离项目上下文
 ```
 
-`agent.sessions.list({ origin_type: "main" })` 可以列出它；`get("main", "main")` 可以显式打开。它被归档或删除后，下一次 `chat()` 会新建一段。
+`set` 与 `get` 是会话上唯一的配置读写入口，`model` 与 `workspace` 共用它。落盘的是 `workspace_id`；实例由宿主持有，不进 Session。
 
-## 目录不是身份
-
-`agent.chat()` 不接收 Workspace。对话当前在哪个目录是会话状态，不是每次输入的参数：
+恢复时目录不会自动还原——只有持有 Workspace 的一方知道现在有哪些目录可用：
 
 ```ts
-const chat = await agent.chat();      // 继承 new Agent({ workspace }) 的默认目录
-chat.workspace();                     // 当前目录；没有项目上下文时为空
+// 不注入：该会话没有项目上下文，但历史与 workspace_id 仍可读
+const without = await agent.sessions.get(session.id, "agent");
+without.get("workspace");      // undefined
+without.get("workspace_id");   // "repo-a"
 
-chat.set_workspace(repo_b);           // 就在这段对话里切过去
-await chat.send({ query: "另一个仓库里也有这个问题" });
+// 注入：宿主把实例交给会话
+const with_workspace = await agent.sessions.get(session.id, "agent", { workspace: repo_a });
+with_workspace.get("workspace");   // repo_a
 ```
 
-切换只影响这段对话，不改变它的 `session_id`、历史与附件归属。已经产生的消息与工具结果属于它们发生时的目录，不会被迁移。执行中的 Turn 沿用切换前的目录，从下一个 Step 检查点起生效。
-
-没有目录的对话是合法的：它没有文件工具与 Shell，但纯模型问答仍然可用。
+解析失败不是错误。历史会话指向本次宿主没有提供的目录属于正常情况：此时它没有文件工具与 Shell，但纯模型对话仍可用。
 
 ## Agent 自己安排活
 
-比一轮问答大的事情，由 Agent 在这段对话里自己派出去。这些能力只在主对话中可用，普通 Session 拿不到，因此活不会再派活。
+Agent 会话多一组工具，其他会话拿不到，因此活不会再派活。
 
 | 工具 | 用途 |
 | --- | --- |
-| `session_start` | 开一条新会话并把任务交给它，立即返回 |
+| `session_start` | 开一条工作会话并把任务交给它，立即返回 |
 | `session_check` | 列出全部会话与状态；带 `session_id` 读取某一条的详情 |
 | `session_reply` | 代答某条会话正在等待的用户响应 |
 | `session_stop` | 停止某条会话当前正在跑的 Turn |
 
-派出去之后对话立刻空闲，用户可以继续说别的事；新的会话继承当时的目录。用户不需要知道这些工具存在，也不需要打开别的会话——问进度时 Agent 自己去查：
+派出去之后 Agent 会话立刻空闲，用户可以继续说别的事；新会话继承当时的目录。关心进展时 Agent 自己调用 `session_check`，不需要每轮注入清单：
 
 ```text
 用户：CI 上挂了三个测试，帮我修了
@@ -94,14 +104,3 @@ Agent：（调用 session_check）还在跑，已经改了 4 个文件
 ```
 
 会话卡在需要用户确认时，用户仍在同一段对话里回答，Agent 用 `session_reply` 把答复送回那条会话。
-
-## 与应用代码的关系
-
-`agent.sessions` 依然是全部 Session 的唯一入口。主对话也在其中，因此宿主可以直接用统一的 Session API 读取和操作它：
-
-```ts
-const page = await agent.sessions.list({ origin_type: "main" });
-const main = await agent.sessions.get("main", "main");
-```
-
-需要把其它会话展示成列表时，用 `origin_type: "chat"` 读取普通会话即可；主对话位于独立的 `main` 分区，不会混进业务列表。

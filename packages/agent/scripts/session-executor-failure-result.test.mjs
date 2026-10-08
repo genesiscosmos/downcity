@@ -13,7 +13,7 @@ import { create_session_turn_context } from "../bin/session/loop/SessionTurnCont
 function create_turn_context(overrides = {}) {
   return create_session_turn_context({
     session_id: "executor-failure-test",
-    session_origin: { type: "chat" },
+    session_origin: { type: "work" },
     turn_id: "executor-failure-turn",
     ...overrides,
   });

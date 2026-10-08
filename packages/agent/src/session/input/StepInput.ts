@@ -15,6 +15,7 @@ import type {
   SessionHookContextBlock,
   SessionTurnContextHookValue,
   ToolCallContext,
+  WorkspaceRuntime,
 } from "@downcity/type";
 import type { BoundAgentTool, ToolCallSite } from "@/types/tool/BoundAgentTool.js";
 import type {
@@ -39,6 +40,10 @@ import { resolve_session_power_system_blocks } from "@/session/input/SessionSyst
 export class StepInput {
   private readonly options: StepInputOptions;
   private effective_instruction_blocks: AgentSessionSystemBlock[];
+  /** 当前目录对应的环境变量快照；由目录实例提供。 */
+  private readonly workspace_env_by_id = new Map<string, Record<string, string>>();
+  /** 当前目录变化时取消的旧订阅。 */
+  private workspace_env_unsubscribe?: () => void;
   /** 当前 Session 首次组装后冻结的完整 system；null 表示尚未冻结。 */
   private frozen_blocks: AgentSessionSystemBlock[] | null = null;
   /** 当前 Session 的一次性初始化任务。 */
@@ -128,8 +133,7 @@ export class StepInput {
   }
 
   /** 把当前完整 system 显式固化到 instruction.md。 */
-  async snapshot(): Promise<void> {
-    await this.run_mutation(async () => {
+  async snapshot(): Promise<void> {    await this.run_mutation(async () => {
       const system_snapshot = await this.read_system();
       await this.write_snapshot(system_snapshot.blocks);
     });
@@ -176,6 +180,32 @@ export class StepInput {
     return this.effective_instruction_blocks.map((block) => ({ ...block }));
   }
 
+  /**
+   * 读取当前目录的环境变量。
+   *
+   * 关键点（中文）
+   * - 目录是可变会话配置，环境订阅也随之切换：首次遇到某个目录时建立订阅，
+   *   后续读取直接取其快照，不再重建。
+   * - 没有目录时返回空对象。
+   */
+  private read_workspace_env(): Record<string, string> {
+    const workspace = this.options.get_workspace?.();
+    if (!workspace) {
+      this.workspace_env_unsubscribe?.();
+      this.workspace_env_unsubscribe = undefined;
+      return {};
+    }
+    const cached = this.workspace_env_by_id.get(workspace.id);
+    if (cached) return cached;
+    // 同一 Session 只保留当前目录的订阅，避免旧目录继续推送。
+    this.workspace_env_unsubscribe?.();
+    this.workspace_env_by_id.set(workspace.id, { ...workspace.get_env() });
+    this.workspace_env_unsubscribe = workspace.subscribe_env(() => {
+      this.workspace_env_by_id.set(workspace.id, { ...workspace.get_env() });
+    });
+    return this.workspace_env_by_id.get(workspace.id) as Record<string, string>;
+  }
+
   /** 创建 Composer 共用的稳定 Session 身份快照。 */
   identity(): SessionComposeIdentity {
     return {
@@ -196,7 +226,7 @@ export class StepInput {
     const instruction_system_blocks = refresh_system
       ? this.options.get_instruction_system_blocks().map((block) => ({ ...block }))
       : this.instruction_blocks();
-    const workspace_env = Object.freeze({ ...this.options.get_workspace_env() });
+    const workspace_env = Object.freeze({ ...this.read_workspace_env() });
     // Power system 参与 Compose，必须先看到当前检查点已确定的 env 与 instruction。
     turn_context?.step.commit({
       workspace_env,
@@ -401,7 +431,7 @@ export class StepInput {
   private create_session_call_context(
     workspace_env: Readonly<Record<string, string>>,
   ): ToolCallContext {
-    const workspace = this.options.get_workspace?.();
+    const workspace = this.resolve_active_workspace();
     return Object.freeze({
       agent_id: this.options.agent_id,
       agent_name: this.options.agent_name,
@@ -424,7 +454,7 @@ export class StepInput {
   ): ToolCallContext {
     const workspace_env = turn_context.step.workspace_env;
     const agent_systems = turn_context.step.agent_systems;
-    const workspace = this.options.get_workspace?.();
+    const workspace = this.resolve_active_workspace();
     return Object.freeze({
       agent_id: this.options.agent_id,
       agent_name: this.options.agent_name,
@@ -440,6 +470,11 @@ export class StepInput {
       interactions: turn_context.interactions,
       ...(workspace_env ? { workspace_env } : {}),
     });
+  }
+
+  /** 解析当前生效的 Workspace 实例。 */
+  private resolve_active_workspace(): WorkspaceRuntime | undefined {
+    return this.options.get_workspace?.();
   }
 }
 

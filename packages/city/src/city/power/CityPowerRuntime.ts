@@ -13,7 +13,7 @@
 import type { Hono } from "hono";
 import type { Agent, Logger } from "@downcity/agent";
 import { get_logger } from "@downcity/agent";
-import { EMPTY_TOOL_HOOK_SET, normalize_session_origin } from "@downcity/type";
+import { EMPTY_TOOL_HOOK_SET, normalize_session_origin, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import type { PowerSurface } from "@downcity/type";
 import type { WorkspaceRuntime } from "@/workspace/index.js";
 import type { AgentPowerRuntime } from "@/power/types/PowerExecutionRuntime.js";
@@ -428,7 +428,7 @@ export class CityPowerRuntime implements PowerRuntimeHost {
   ): PowerContext["session"] {
     const session_id = String(site.session_id || "").trim();
     if (!session_id) return undefined;
-    const origin = normalize_session_origin(site.session_origin ?? { type: "chat" });
+    const origin = normalize_session_origin(site.session_origin ?? { type: SESSION_ORIGIN_TYPE_WORK });
     try {
       const runtime = agent.sessions.runtime(session_id, origin.type);
       return create_power_session_handle(

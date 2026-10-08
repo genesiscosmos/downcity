@@ -39,14 +39,14 @@ export interface StepInputOptions {
   get_tools: () => Record<string, Tool>;
   /** 读取当前 Session 的当前目录；未绑定时返回 undefined。 */
   get_workspace?: () => WorkspaceRuntime | undefined;
+  /** 读取当前持久化的目录标识；内存实例不存在时用它触发还原。 */
+  /** 把持久化的 workspace_id 还原为当前可用实例；由宿主在注入时提供。 */
   /** 当前 Session 创建时捕获的 instruction system blocks。 */
   instruction_system_blocks: AgentSessionSystemBlock[];
   /** 显式刷新 system 时读取 Agent 最新 instruction system blocks。 */
   get_instruction_system_blocks: () => AgentSessionSystemBlock[];
   /** 在每个 Step 检查点读取当前生效的扩展处理器集合。 */
   get_hooks: () => ToolHookSet;
-  /** 在每个 Step 检查点读取 Workspace env。 */
-  get_workspace_env: () => Record<string, string>;
   /** 读取当前 Session 实际使用的模型。 */
   get_model: () => ModelClient | undefined;
   /** 读取当前模型声明的上下文窗口。 */

@@ -195,7 +195,7 @@ test("Agent instruction changes only affect newly created Sessions", async () =>
 
     // 未显式 snapshot 的 Session 重新装载时使用 Agent 当前 instruction。
     await agent.sessions.clear_messages(session.id);
-    const restored_session = await agent.sessions.get(session.id, "chat", { workspace });
+    const restored_session = await agent.sessions.get(session.id, "work", { workspace });
     const restored_system = await restored_session.system();
     const restored_system_text = restored_system.blocks
       .map((block) => block.content)
@@ -303,7 +303,7 @@ test("Session syncshot refreshes system and only rewrites an existing instructio
   const instruction_path = path.join(
     city.storage.open_scope(["agents", agent.id]).root_path,
     "sessions",
-    "chat",
+    "work",
     session_id,
     "instruction.md",
   );
@@ -389,7 +389,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
 
     const database_path = get_agent_session_database_path(
       city.storage.open_scope(["agents", first_agent.id]).root_path,
-      "chat",
+      "work",
       session_id,
     );
     const persisted_system = read_system_snapshot(database_path);
@@ -418,7 +418,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
   try {
     const restored_session = await restarted_agent.sessions.get(
       session_id,
-      "chat",
+      "work",
       { workspace },
     );
     const restored_system = await restored_session.system();
@@ -434,7 +434,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
 
   const database_path = get_agent_session_database_path(
     city.storage.open_scope(["agents", "instruction_restart_agent"]).root_path,
-    "chat",
+    "work",
     session_id,
   );
   write_system_snapshot(database_path, null);
@@ -448,7 +448,7 @@ test("Session snapshot explicitly persists the complete system to instruction.md
   try {
     const fallback_session = await fallback_agent.sessions.get(
       session_id,
-      "chat",
+      "work",
       { workspace },
     );
     const fallback_system = await fallback_session.system();
@@ -499,7 +499,7 @@ test("empty Session snapshot suppresses Agent instruction after restart", async 
   });
   city.agents.add(restarted_agent);
   try {
-    const session = await restarted_agent.sessions.get(session_id, "chat", {
+    const session = await restarted_agent.sessions.get(session_id, "work", {
       workspace,
     });
     const system = await session.system();
@@ -686,7 +686,7 @@ test("running session approval mode changes stay queued until the next Session s
       },
     });
 
-    const cached_session = await agent.sessions.get(session.id, "chat", { workspace });
+    const cached_session = await agent.sessions.get(session.id, "work", { workspace });
     assert.equal(cached_session, session);
     assert.deepEqual(await cached_session.status(), {
       session_id: session.id,
@@ -877,7 +877,7 @@ test("restored Session rebinds the same model without emitting a configuration M
   try {
     const session = await restored_agent.sessions.get(
       session_id,
-      "chat",
+      "work",
       { workspace },
     );
     assert.deepEqual((await session.status()).security, {

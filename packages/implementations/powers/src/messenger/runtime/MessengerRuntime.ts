@@ -444,7 +444,7 @@ export class MessengerRuntime {
           agent_id: current.agent_id,
           workspace_id: current.workspace_id,
           origin: {
-            type: "chat",
+            type: "work",
             account_id: account.account_id,
             channel: account.provider,
             chat_id: current.external_chat_id,
@@ -539,7 +539,7 @@ export class MessengerRuntime {
         agent_id: target.agent_id,
         workspace_id: target.workspace_id,
         origin: {
-          type: "chat",
+          type: "work",
           account_id: account.account_id,
           channel: account.provider,
           chat_id: input.chatId,
@@ -782,7 +782,7 @@ export class MessengerRuntime {
         agent_id: conversation.agent_id,
         workspace_id: conversation.workspace_id,
         session_id: conversation.session_id,
-        origin_type: "chat",
+        origin_type: "work",
         request_id: inbound.inbound_id,
         query,
       });

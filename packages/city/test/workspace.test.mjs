@@ -136,8 +136,13 @@ test("同一 Agent 的 Workspace Session 列表彼此隔离", async (t) => {
 test("恢复 Session 时目录随传入值切换，不是身份校验", async (t) => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-session-workspace-restore-"));
   t.after(async () => await fs.rm(root_path, { recursive: true, force: true }));
-  const agent = new Agent({ id: "workspace-restore-agent" });
-  const workspace = new Workspace({
+  const agent = new Agent({
+    id: "workspace-restore-agent",
+    // 目录只持久化 workspace_id；恢复时由宿主用它还原实例。
+    resolve_workspace: (workspace_id) =>
+      workspace_id === "restore-workspace" ? restore_workspace : undefined,
+  });
+  const restore_workspace = new Workspace({
     id: "restore-workspace",
     path: root_path,
     data_root_path: path.join(root_path, "data"),
@@ -148,20 +153,20 @@ test("恢复 Session 时目录随传入值切换，不是身份校验", async (t
     data_root_path: path.join(root_path, "data"),
   });
   try {
-    const session = await agent.sessions.create({ workspace });
+    const session = await agent.sessions.create({ workspace: restore_workspace });
 
-    // 不传 Workspace 恢复：沿用持久化的当前目录。
+    // 不传 Workspace 恢复：目录由持久化的 workspace_id 还原。
     const restored = await agent.sessions.get(session.id);
     assert.equal(restored.workspace_id, "restore-workspace");
+    assert.equal(restored.get_workspace()?.id, "restore-workspace");
 
-    // 传入另一个 Workspace：不是错误，而是切换当前目录，session_id 不变。
-    const switched = await agent.sessions.get(session.id, "chat", { workspace: other_workspace });
+    // 传入另一个 Workspace：不是错误，而是切换目录，session_id 不变。
+    const switched = await agent.sessions.get(session.id, "work", { workspace: other_workspace });
     assert.equal(switched.id, session.id);
     assert.equal(switched.workspace_id, "other-workspace");
-    assert.equal((await agent.sessions.get(session.id)).workspace_id, "other-workspace");
   } finally {
     await agent.dispose();
-    await workspace.dispose();
+    await restore_workspace.dispose();
     await other_workspace.dispose();
   }
 });

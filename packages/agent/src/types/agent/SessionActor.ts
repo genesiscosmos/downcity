@@ -42,6 +42,12 @@ import type { AgentSessionPromptInput } from "@/types/sdk/AgentSessionPrompt.js"
 import type { AgentSessionStopResult } from "@/types/sdk/AgentSessionStop.js";
 import type { AgentSessionTurnHandle } from "@/types/sdk/AgentSessionTurn.js";
 import type { SessionOrigin } from "@downcity/type";
+import type {
+  AgentSessionStateKey,
+  AgentSessionStateValues,
+  RemoteSessionStateKey,
+  RemoteSessionStateValues,
+} from "@/types/agent/SessionState.js";
 
 /**
  * SDK Session 集合入口。
@@ -115,11 +121,15 @@ export interface AgentSession extends AgentSessionActor {
   /** 当前 session 所属 agent_id。 */
   readonly agent_id: string;
 
-  /** 当前 session 配置快照。 */
-  readonly config: AgentSessionConfigSnapshot;
-
-  /** 写入当前 session 默认配置。 */
+  /** 写入持久化配置；`model`、`security`、`workspace` 共用这一个入口。 */
   set(input: AgentSessionSetInput, options?: AgentSessionSetOptions): Promise<void>;
+
+  /**
+   * 读取状态；持久化字段与运行时实例共用这一个入口。
+   *
+   * 关键点（中文）：只读且无副作用，不解析也不落盘。
+   */
+  get<K extends AgentSessionStateKey>(key: K): AgentSessionStateValues[K];
 
   /** 修改当前 Session 的用户可见标题并发布 canonical mutation。 */
   rename(title: string): Promise<string>;
@@ -132,16 +142,6 @@ export interface AgentSession extends AgentSessionActor {
 
   /** 从当前 session 创建一个分叉会话。 */
   fork(input?: AgentSessionForkInput | string): Promise<AgentSession>;
-
-  /**
-   * 就地切换当前目录；传空表示脱离项目上下文。
-   *
-   * 关键点（中文）：Workspace 是本地执行资源，因此只有本地 Session 提供该能力。
-   */
-  set_workspace(workspace?: WorkspaceRuntime): Promise<void>;
-
-  /** 返回当前目录；没有项目上下文时为空。 */
-  get_workspace(): WorkspaceRuntime | undefined;
 }
 
 /**
@@ -150,6 +150,13 @@ export interface AgentSession extends AgentSessionActor {
 export interface RemoteAgentSession extends AgentSessionActor {
   /** 写入当前远程 Session 的可序列化动态配置。 */
   set(input: RemoteSessionSetInput, options?: AgentSessionSetOptions): Promise<void>;
+
+  /**
+   * 读取当前远程 Session 的可序列化状态。
+   *
+   * 关键点（中文）：远程边界只传递可序列化值，因此进程内实例类键不可用。
+   */
+  get<K extends RemoteSessionStateKey>(key: K): RemoteSessionStateValues[K];
 
   /** 从当前远程 session 创建一个分叉会话。 */
   fork(input?: AgentSessionForkInput | string): Promise<RemoteAgentSession>;

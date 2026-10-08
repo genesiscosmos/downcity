@@ -7,6 +7,7 @@
  * - 当前只承载 Session actor 所需方法。
  */
 
+import { SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 import net from "node:net";
 import type {
   AgentCreateSessionInput,
@@ -121,7 +122,7 @@ export class RpcClient {
       method: "sdk.sessions.archive",
       params: {
         session_id: input.id,
-        origin_type: input.origin_type || "chat",
+        origin_type: input.origin_type || SESSION_ORIGIN_TYPE_WORK,
       },
     });
     return data.result;

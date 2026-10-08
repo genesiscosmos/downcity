@@ -1,14 +1,14 @@
 /**
- * 主对话的 Session 工具。
+ * Agent 会话的 Session 工具。
  *
  * 职责说明（中文）
  * - 把「Agent 手上的会话」变成模型可调用的四个动作：开一条、看状态、代答、收回。
- * - 工具与主对话的工作运行时（{@link ChatSessionWork}）解耦：运行时由 Agent 在装配时注入，
+ * - 工具与 Agent 会话的工作运行时（{@link SessionWork}）解耦：运行时由 Agent 在装配时注入，
  *   工具只调用协议，不接触 AgentSessions 或 Session 内部结构。
  * - 工具自带 description 与返回值说明，因此不需要向 instruction 注入额外文本。
  *
  * 关键点（中文）
- * - 这组工具只注册在主对话的会话上下文里；普通 Session 拿不到，所以不会递归派发。
+ * - 这组工具只注册在 `origin.type === "agent"` 的会话上下文里；其他 Session 拿不到，所以不会递归派发。
  */
 
 import {
@@ -17,19 +17,19 @@ import {
   type JsonValue,
   type ToolCallContext,
 } from "@downcity/type";
-import type { ChatSessionWorkContract } from "@/types/agent/ChatSessions.js";
+import type { SessionWorkContract } from "@/types/agent/SessionWork.js";
 import type {
   SessionCheckToolOutput,
   SessionReplyToolOutput,
   SessionStartToolOutput,
   SessionStopToolOutput,
-} from "@/types/tools/chat/SessionTools.js";
+} from "@/types/tools/session/SessionTools.js";
 import {
   session_check_input,
   session_reply_input,
   session_start_input,
   session_stop_input,
-} from "@/tools/chat/SessionToolSchemas.js";
+} from "@/tools/session/SessionToolSchemas.js";
 
 /** `session_start` 的输入。 */
 type SessionStartInput = { query: string; title?: string };
@@ -49,16 +49,16 @@ type SessionReplyInput = {
 /** `session_stop` 的输入。 */
 type SessionStopInput = { session_id: string };
 
-/** 会话工具集；由 Agent 在主对话上下文中注入。 */
+/** 会话工具集；由 Agent 在 Agent 会话上下文中注入。 */
 export type ChatSessionToolSet = ReturnType<typeof create_session_tools>;
 
 /**
- * 创建主对话的四个会话工具。
+ * 创建 Agent 会话的四个会话工具。
  *
  * 关键点（中文）
  * - 每个工具都没有附加 messages：会话状态通过工具结果返回，不追加到对话 canonical 消息。
  */
-export function create_session_tools(work: ChatSessionWorkContract) {
+export function create_session_tools(work: SessionWorkContract) {
   const session_start = define_agent_tool<SessionStartInput, ActionResult<SessionStartToolOutput>>({
     description:
       "Start a new session to carry out one piece of work, then return immediately. Use it when a request is larger than one reply: the user keeps talking with you while the work runs elsewhere. Write the query as a complete instruction, because the new session only sees that text.",
@@ -149,7 +149,7 @@ export function create_session_tools(work: ChatSessionWorkContract) {
  * 由这里从权威状态读出，避免让模型重复转述而写错。
  */
 async function resolve_interaction_type(
-  work: ChatSessionWorkContract,
+  work: SessionWorkContract,
   session_id: string,
   interaction_id: string,
 ): Promise<string> {

@@ -87,7 +87,7 @@ Key points:
 - file and search tools remain confined to the Workspace
 - Shell and file tools share the same project root
 - `new Agent({ workspace })` sets the default directory for new sessions; it is not a binding
-- a session's current directory can be switched at any time with `session.set_workspace()` or by passing it to `get()`
+- a session's current directory can be switched at any time with `session.set({ workspace })` or by passing it to `get()`
 - one Agent can work across multiple Workspaces, each Session keeping its own current directory, history, Shell, and power context
 - multiple Agents may target the same directory, using distinct agent IDs and data partitions
 

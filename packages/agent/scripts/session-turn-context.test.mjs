@@ -17,7 +17,7 @@ test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async (
   const internal_messages = [];
   const context = create_session_turn_context({
     session_id: "session-context-test",
-    session_origin: { type: "chat" },
+    session_origin: { type: "work" },
     turn_id: "turn-context-test",
     project_root: "/workspace",
     commit_step_input: async () => {
@@ -53,7 +53,7 @@ test("SessionTurnContext 在检查点消费输入并封装输出缓冲", async (
 test("SessionTurnContext 只按顺序收集当前 Turn 的 Tool effects", () => {
   const context = create_session_turn_context({
     session_id: "session-context-test",
-    session_origin: { type: "chat" },
+    session_origin: { type: "work" },
     turn_id: "turn-context-test",
   });
   context.effects.append([{
@@ -109,7 +109,7 @@ test("SessionTurnContext 把 Workspace env 与 Agent systems 固化为只读快�
 test("SessionTurnContext 不再承担 Power hook 装配", () => {
   const context = create_session_turn_context({
     session_id: "session-context-test",
-    session_origin: { type: "chat" },
+    session_origin: { type: "work" },
     turn_id: "turn-context-test",
   });
   for (const removed of ["replace_hooks", "hook_context", "release_extensions", "hooks"]) {
@@ -120,7 +120,7 @@ test("SessionTurnContext 不再承担 Power hook 装配", () => {
 test("SessionTurnContext 在整个 Turn 中只解析一次 Power Context", async () => {
   const context = create_session_turn_context({
     session_id: "session-context-test",
-    session_origin: { type: "chat" },
+    session_origin: { type: "work" },
     turn_id: "turn-context-test",
   });
   let resolve_count = 0;

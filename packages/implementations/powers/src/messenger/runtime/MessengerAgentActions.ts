@@ -56,7 +56,7 @@ export function create_messenger_agent_actions(
         if (!conversation || conversation.agent_id !== context.agent.id) {
           return { success: false, error: "Messenger conversation is not owned by the current Agent" };
         }
-        const session = await context.agent.sessions.get(session_id, "chat");
+        const session = await context.agent.sessions.get(session_id, "work");
         return { success: true, data: await session.messages() };
       },
     }),

@@ -23,7 +23,7 @@ async function create_storage(directory_path) {
     session_id: "session-1",
     agent_id: "agent-1",
     workspace_id: "workspace-1",
-    origin: { type: "chat" },
+    origin: { type: "work" },
     database_path: path.join(directory_path, "session.db"),
     database_location: { type: "file" },
     files: create_files(),
@@ -96,7 +96,7 @@ function insert_legacy_interaction(database_path, sequence) {
 
 test("旧格式交互在迁移前不可读，迁移后可读且归属正确", async () => {
   const root_path = await fs.mkdtemp(path.join(os.tmpdir(), "downcity-interaction-migration-"));
-  const directory_path = path.join(root_path, "agents", "agent-1", "sessions", "chat", "session-1");
+  const directory_path = path.join(root_path, "agents", "agent-1", "sessions", "work", "session-1");
   const database_path = path.join(directory_path, "session.db");
 
   const storage = await create_storage(directory_path);

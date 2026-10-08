@@ -47,7 +47,7 @@ export async function add_test_power(city, power) {
 export function create_test_power_context(options = {}) {
   const workspace_path = options.workspace_path || process.cwd();
   const data_path = options.data_path || workspace_path;
-  const session_runtime = (session_id, origin_type = "chat") => ({
+  const session_runtime = (session_id, origin_type = "work") => ({
     id: session_id,
     origin: { type: origin_type },
     prompt: async () => ({

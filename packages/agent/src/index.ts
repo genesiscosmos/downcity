@@ -9,9 +9,15 @@
 
 // Agent 入口
 export { Agent } from "./agent/Agent.js";
-export type { AgentChat, AgentChatInput } from "./types/agent/AgentChat.js";
-export type { ChatSessionWorkContract } from "./types/agent/ChatSessions.js";
+export type { AgentSessionInput } from "./types/agent/AgentSessionInput.js";
+export type { SessionWorkContract } from "./types/agent/SessionWork.js";
 export type { SessionContextResolution } from "./types/agent/SessionContext.js";
+export type {
+  AgentSessionStateKey,
+  AgentSessionStateValues,
+  RemoteSessionStateKey,
+  RemoteSessionStateValues,
+} from "./types/agent/SessionState.js";
 export type {
   SessionCheckDetailToolOutput,
   SessionCheckListToolOutput,
@@ -21,7 +27,7 @@ export type {
   SessionStopToolOutput,
   SessionToolState,
   SessionToolSummary,
-} from "./types/tools/chat/SessionTools.js";
+} from "./types/tools/session/SessionTools.js";
 export { Group } from "./group/Group.js";
 export type {
   DispatchAssignment,

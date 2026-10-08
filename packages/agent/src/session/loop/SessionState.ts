@@ -137,6 +137,11 @@ export class SessionState {
         });
         this.state.created_at = created_at;
         this.state.timezone = timezone;
+        this.state.updated_at =
+          typeof metadata.updated_at === "number" && metadata.updated_at > 0
+            ? metadata.updated_at
+            : undefined;
+        this.state.title = normalize_session_title(metadata.title);
         this.state.session_config = {
           ...(metadata.model_label ? { model_label: metadata.model_label } : {}),
         };
@@ -196,8 +201,10 @@ export class SessionState {
           ...(next_model_label ? { model_label: next_model_label } : {}),
         });
       });
+      this.state.updated_at = Date.now();
     }
     this.state.session_config = next_config;
+    this.state.updated_at = Date.now();
     return { config: next_config, changed };
   }
 
@@ -234,6 +241,8 @@ export class SessionState {
       return true;
     });
     if (changed) {
+      this.state.title = title;
+      this.state.updated_at = Date.now();
       this.publish_event({
         mutation_id: generate_id(),
         variant: "session",
@@ -247,15 +256,15 @@ export class SessionState {
   }
 
   /**
-   * 写入当前目录。
+   * 写入当前目录，并同步内存实例。
    *
    * 关键点（中文）
+   * - 这是 `session.set({ workspace })` 的内部实现，不对 Session 用户单独暴露写入口。
    * - 以持久化值为比较基准：即使内存已持有同一实例，只要元数据不同就补写，
    *   保证恢复时传入的目录真的落盘。
-   * - configured 值在返回前立即被 Session 接受，从下一个 Step 检查点起生效；
-   *   执行中的 Turn 不受影响，与 `set({ model })` 保持同一提交语义。
+   * - 传空值表示脱离项目上下文。
    */
-  async set_workspace(workspace?: WorkspaceRuntime): Promise<boolean> {
+  async apply_workspace(workspace?: WorkspaceRuntime): Promise<boolean> {
     const next_workspace_id = String(workspace?.id || "").trim() || undefined;
     const changed = await this.run_metadata_mutation(async () => {
       const metadata = await this.store.read_metadata();

@@ -37,7 +37,7 @@ import {
 import type { FileSystem } from "@downcity/type";
 import type { LocalSessionStoreOptions } from "@/types/store/LocalStore.js";
 import type { SessionOrigin } from "@downcity/type";
-import { normalize_session_origin, normalize_session_origin_type } from "@downcity/type";
+import { normalize_session_origin, normalize_session_origin_type, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
 
 /** 解码目录中经过 URL 编码的 Session 标识。 */
 function decode_session_id(input: string): string {
@@ -113,7 +113,7 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 打开已有 Session，并以数据库中的完整 origin 作为唯一事实。 */
-  async open_session(session_id: string, origin_type = "chat"): Promise<SessionStorage> {
+  async open_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<SessionStorage> {
     const resolved_session_id = String(session_id || "").trim();
     if (!resolved_session_id) {
       throw new Error("SessionStore.open_session requires a non-empty session_id");
@@ -151,7 +151,7 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 判断活动 Session 是否存在。 */
-  async has_session(session_id: string, origin_type = "chat"): Promise<boolean> {
+  async has_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
     const resolved_origin_type = normalize_session_origin_type(origin_type);
     const cache_key = this.session_cache_key(session_id, resolved_origin_type);
     if (this.database_location.type === "memory") return this.sessions.has(cache_key);
@@ -166,7 +166,7 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 永久删除活动 Session。 */
-  async remove_session(session_id: string, origin_type = "chat"): Promise<boolean> {
+  async remove_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
     const resolved_origin_type = normalize_session_origin_type(origin_type);
     const session_path = this.session_path(session_id, resolved_origin_type);
     const cache_key = this.session_cache_key(session_id, resolved_origin_type);
@@ -188,7 +188,7 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 清空活动 Session Message 数据。 */
-  async clear_session_messages(session_id: string, origin_type = "chat"): Promise<boolean> {
+  async clear_session_messages(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<boolean> {
     const resolved_origin_type = normalize_session_origin_type(origin_type);
     if (!(await this.has_session(session_id, resolved_origin_type))) return false;
     const storage = await this.open_session(session_id, resolved_origin_type);
@@ -215,7 +215,7 @@ export class LocalSessionStore implements SessionStore {
   }
 
   /** 将活动 Session 迁入归档区。 */
-  async archive_session(session_id: string, origin_type = "chat"): Promise<AgentArchiveSessionResult> {
+  async archive_session(session_id: string, origin_type = SESSION_ORIGIN_TYPE_WORK): Promise<AgentArchiveSessionResult> {
     const resolved_origin_type = normalize_session_origin_type(origin_type);
     const cache_key = this.session_cache_key(session_id, resolved_origin_type);
     if (this.database_location.type === "memory") {
@@ -372,7 +372,7 @@ export class LocalSessionStore implements SessionStore {
     executing_session_ids: ReadonlySet<string>,
     storages = this.sessions,
   ): Promise<AgentSessionSummaryPage> {
-    const origin_type = normalize_session_origin_type(input?.origin_type ?? "chat");
+    const origin_type = normalize_session_origin_type(input?.origin_type ?? SESSION_ORIGIN_TYPE_WORK);
     const query = String(input?.query || "").trim().toLowerCase();
     const summaries: AgentSessionSummary[] = [];
     for (const storage of storages.values()) {

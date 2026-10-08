@@ -1,9 +1,9 @@
 /**
- * 主对话的 Session 工具类型协议。
+ * Agent 会话的 Session 工具类型协议。
  *
  * 职责说明（中文）
  * - 这四个工具让 Agent 在自己的对话里安排、观察和收回其他会话。
- * - 它们只出现在主对话的会话上下文中，普通 Session 拿不到，因此不会递归派发。
+ * - 它们只出现在 `origin.type === "agent"` 的会话上下文中，其他 Session 拿不到，因此不会递归派发。
  *
  * 关键点（中文）
  * - 工具不接触 Session 内部结构，只消费公开的摘要、消息投影和交互入口。
@@ -46,7 +46,7 @@ export interface SessionStartToolOutput {
 
 /** `session_check` 清单模式的输出。 */
 export interface SessionCheckListToolOutput {
-  /** 当前 Agent 除主对话外的全部会话。 */
+  /** 当前 Agent 除自己那条会话外的全部会话。 */
   mode: "list";
   /** 全部会话摘要，按最近更新倒序。 */
   sessions: SessionToolSummary[];

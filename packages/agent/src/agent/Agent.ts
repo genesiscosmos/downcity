@@ -5,7 +5,7 @@
  * - Agent 不绑定 Workspace；`workspace` 只是创建 Session 时的默认目录，可在会话中切换。
  * - 能力与 Transport 由容器持有，Agent 只收下容器在绑定时推送的能力，不持有容器引用。
  * - Session 由 AgentSessions 统一持有；Workspace 只在单个 Session 创建或恢复时提供。
- * - Agent 自己的那段对话（主对话）由 `chat()` 暴露；它是一条普通 Session。
+ * - Agent 自己那条会话由 `session()` 暴露；它是一条普通 Session。
  */
 
 import type {
@@ -43,11 +43,11 @@ import {
 } from "@/session/input/SessionSystem.js";
 import type { AgentSessionSystemBlock } from "@/types/agent/SessionTypes.js";
 import { resolve_system_timezone } from "@/session/storage/Metadata.js";
-import { ChatSessionWork } from "@/agent/ChatSessionWork.js";
-import { AgentChat as AgentChatImpl } from "@/agent/AgentChat.js";
-import { is_chat_origin } from "@/agent/ChatOrigin.js";
-import { create_session_tools } from "@/tools/chat/SessionTools.js";
-import type { AgentChat, AgentChatInput } from "@/types/agent/AgentChat.js";
+import { SessionWork } from "@/agent/SessionWork.js";
+import { is_agent_session_origin, SESSION_ORIGIN_TYPE_WORK } from "@downcity/type";
+import { create_session_tools } from "@/tools/session/SessionTools.js";
+import type { AgentSessionInput } from "@/types/agent/AgentSessionInput.js";
+import type { AgentSession } from "@/types/agent/SessionActor.js";
 
 /** SDK Agent 主体。 */
 export class Agent {
@@ -64,10 +64,11 @@ export class Agent {
   readonly model?: ModelClient;
 
   /**
-   * 新建 Session 时使用的默认目录；不是绑定。
+   * 新建 Session 时注入的默认目录。
    *
-   * 关键点（中文）：单个 Session 可以在创建后通过 `session.set_workspace()` 切换；
-   * 该字段只决定新会话的初始目录。
+   * 关键点（中文）
+   * - 它是宿主在构造 Agent 时声明的默认值，不是绑定；单个 Session 可用 `set({ workspace })` 换掉。
+   * - 省略时新建的 Session 没有项目上下文：没有文件工具与 Shell，纯模型对话仍可用。
    */
   readonly workspace?: WorkspaceRuntime;
 
@@ -93,12 +94,12 @@ export class Agent {
   private readonly custom_hooks: ToolHookSet;
 
   /**
-   * 主对话可用的会话工具；延迟创建并复用。
+   * Agent 会话可用的会话工具；延迟创建并复用。
    *
    * 关键点（中文）：工具闭包住 AgentSessions，因此不需要从 ToolCallContext 回查主体；
-   * 它们只在主对话的会话上下文里注册。
+   * 它们只在 `origin.type === "agent"` 的会话上下文里注册。
    */
-  private chat_tools?: Record<string, Tool>;
+  private session_tools?: Record<string, Tool>;
 
   /** Agent 释放状态。 */
   private dispose_promise?: Promise<void>;
@@ -140,26 +141,27 @@ export class Agent {
       session_composer: this.session_composer,
       resolve_session_context: (input) => {
         const storage = this.resolve_storage();
-        const workspace = input?.workspace ?? this.workspace;
-        const is_chat = is_chat_origin(input?.origin);
+        // 默认目录只用于新建会话；恢复时目录由宿主在 get() 时注入，
+        // 用默认值顶替会变成一次静默换目录。
+        const workspace = input?.workspace
+          ?? (input?.creating ? this.workspace : undefined);
+        const is_agent_session = is_agent_session_origin(input?.origin);
         if (!workspace) return {
           workspace_path: ".",
           logger: this.logger,
-          get_tools: () => this.resolve_tools(undefined, is_chat),
-          get_workspace_env: () => ({}),
+          get_tools: () => this.resolve_tools(undefined, is_agent_session),
           get_workspace: () => undefined,
           get_hooks: () => this.resolve_hooks(),
           store: storage.sessions,
         };
         // 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，
         // 在装配时立即失败；执行时仍通过 getter 读取最新宿主扩展。
-        this.resolve_tools(workspace, is_chat);
+        this.resolve_tools(workspace, is_agent_session);
         return {
           workspace_path: workspace.path,
           workspace_id: workspace.id,
           logger: this.logger,
-          get_tools: () => this.resolve_tools(workspace, is_chat),
-          get_workspace_env: () => workspace.get_env(),
+          get_tools: () => this.resolve_tools(workspace, is_agent_session),
           get_workspace: () => workspace,
           get_hooks: () => this.resolve_hooks(),
           store: storage.sessions,
@@ -181,22 +183,15 @@ export class Agent {
   }
 
   /**
-   * 打开 Agent 自己的那段对话，不存在时先建立。
+   * 取用 Agent 自己那条会话，不存在时先建立。
    *
    * 关键点（中文）
-   * - 不接收 Workspace：对话当前在哪个目录是会话状态，由 `AgentOptions.workspace` 或
-   *   `chat.set_workspace()` 决定。
-   * - 返回的对话面与 Session 同名能力一一对应，需要 Session 的其余能力时用
-   *   `sessions.main()`。
-   */
-  async chat(input?: AgentChatInput): Promise<AgentChat> {
-    const session = await this.session_manager.main(
+   * - 它就是一条普通 Session：工作区能力、set/get、消息、审批与其他会话完全一致。
+   * - 不接收 Workspace：目录在创建时注入，之后用 `session.set({ workspace })` 切换。
+   */  async session(input?: AgentSessionInput): Promise<AgentSession> {
+    return await this.session_manager.self(
       input?.workspace ? { workspace: input.workspace } : undefined,
     );
-    return new AgentChatImpl({
-      session,
-      read_workspace: () => session.get_workspace(),
-    });
   }
 
   /** 返回 Agent 级日志器。 */
@@ -301,7 +296,7 @@ export class Agent {
         input.instruction_system_blocks.map((block) => block.content),
       ),
       session_id: input.session_id,
-      session_origin: { type: "chat" },
+      session_origin: { type: SESSION_ORIGIN_TYPE_WORK },
       workspace: input.workspace,
       messages: Object.freeze([]),
       workspace_env: Object.freeze({ ...input.workspace.get_env() }),
@@ -363,32 +358,26 @@ export class Agent {
    * - 容器 Power 工具从环境句柄实时读取，不缓存；容器增删 Power 后下一次求值即生效。
    * - 静态 Workspace Tool 与 Agent Tool 的命名冲突属于 Session 创建不变量，装配时立即失败。
    */
-  private resolve_tools(workspace?: WorkspaceRuntime, is_chat = false): Record<string, Tool> {
+  private resolve_tools(workspace?: WorkspaceRuntime, is_agent_session = false): Record<string, Tool> {
     const tools: Record<string, Tool> = {};
     if (workspace) register_tools(tools, workspace.tools, "WorkspaceTools");
     register_tools(tools, this.host?.power_tools ?? {}, "Power");
     register_tools(tools, this.custom_tools, "AgentOptions.tools");
-    if (is_chat) register_tools(tools, this.resolve_chat_tools(), "AgentChatTools");
+    if (is_agent_session) register_tools(tools, this.resolve_session_tools(), "AgentSessionTools");
     return tools;
   }
 
-  /** 返回主对话的会话工具集合；首次调用时创建。 */
-  private resolve_chat_tools(): Record<string, Tool> {
-    if (this.chat_tools) return this.chat_tools;
-    const work = new ChatSessionWork({
+  /** 返回 Agent 会话的会话工具集合；首次调用时创建。 */
+  private resolve_session_tools(): Record<string, Tool> {
+    if (this.session_tools) return this.session_tools;
+    const work = new SessionWork({
       list_sessions: async (input) => await this.session_manager.list(input),
       get_session: async (session_id, origin_type) =>
         await this.session_manager.get(session_id, origin_type),
-      create_session: async (input) => await this.session_manager.create(
-        input?.workspace
-          ? { workspace: input.workspace }
-          : this.workspace
-            ? { workspace: this.workspace }
-            : undefined,
-      ),
+      create_session: async (input) => await this.session_manager.create(input),
     });
-    this.chat_tools = create_session_tools(work);
-    return this.chat_tools;
+    this.session_tools = create_session_tools(work);
+    return this.session_tools;
   }
 
   /** 合并容器 Power hooks 与 Agent 自有 hooks。 */

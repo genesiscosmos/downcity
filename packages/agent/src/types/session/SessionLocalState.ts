@@ -53,6 +53,12 @@ export interface SessionLocalState {
    */
   created_at: number;
 
+  /** 当前 session 最近一次更新时间（毫秒时间戳）；尚未写入时为空。 */
+  updated_at?: number;
+
+  /** 当前 session 的用户可见标题；未生成时为空。 */
+  title?: string;
+
   /**
    * 当前 session 参考时区。
    */
